@@ -151,3 +151,4 @@ void sub_00171DEE(void) { recomp_icall_fail_log(0x00171DEEu); abort(); }
 void sub_00171EB7(void) { recomp_icall_fail_log(0x00171EB7u); abort(); }
 void sub_001783FE(void) { recomp_icall_fail_log(0x001783FEu); abort(); }
 void sub_0019F040(void) { recomp_icall_fail_log(0x0019F040u); abort(); }
+void sub_001BCB2B(void) { recomp_icall_fail_log(0x001BCB2Bu); abort(); }

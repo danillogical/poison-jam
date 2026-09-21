@@ -2803,4 +2803,123 @@ The 1228-entry manifest is still a **workaround** for the toolkit defect, and it
 reviewed manifest. The real repair remains: do not fold an alias whose body needs
 none of its parent's labels.
 
+---
+
+# The hang is a missing PFIFO watermark, and fixing it moves the guest a long way
+
+**Decision: make the trace report per-RIP, then read the loop instead of guessing
+at it.** Two instrumentation revisions were needed and both were my own errors,
+recorded so they are not repeated: keying by offset cannot tell a poll from a
+sweep, and a linear 256-slot table fills instantly on this title (3.19M of 3.2M
+accesses landed in "untracked", hiding the hot site entirely). The trace is now
+hashed by RIP with a per-site count and offset range.
+
+## What the corrected trace says
+
+`logs/runs/20260921-164122-057-mmio-hash/`, `untracked=0`:
+
+```
+rip=...DE7161 count=35222 off=0x003214 span=0x0 writes=0
+rip=...DE655E count=35222 off=0x002100 span=0x0 writes=0
+rip=...DE6B70 count=35221 off=0x002500 span=0x0 writes=35221
+rip=...DE6B58 count=35221 off=0x003250 span=0x0 writes=35221
+... 8 more sites, all ~35221, all span=0
+rip=...E67E33A count=5120  off=0x700000..0x704FFC writes=5120
+```
+
+**It is a register poll after all** — I had concluded the opposite one revision
+earlier and that was wrong. Twelve sites, each hitting one fixed offset ~35,221
+times: one loop body touching ~10 registers per iteration.
+
+The `0x700000` sweep is separate and **correct**: `0x00196967` "clears exactly
+0x5000 bytes" (5,120 dwords) and `0x00196E92` "clears 0xDFC dwords" (3,580), and
+each ran once.
+
+## The loop
+
+Every hot RIP resolves into `sub_00194300`, called from `sub_00194A72`, and the
+loop is in the caller:
+
+```
+00194A78 test byte [esi+0x3214], 0x10    ; PFIFO_CACHE1_STATUS bit 4  LOW_MARK
+00194A7F je   0x194A93
+00194A81 test byte [esi+0x2400], 0x10    ; PFIFO_RUNOUT_STATUS bit 4 LOW_MARK
+00194A88 je   0x194A93
+00194A8A test byte [esi+0x3220], 0x10    ; CACHE1_DMA_PUSH bit 4    STATE
+00194A91 je   0x194ABF                   ; EXIT
+00194A93 call 0x194300                   ; the push routine
+...
+00194AB4 je   0x194A78                   ; LOOP
+```
+
+It leaves only when **`CACHE1_STATUS` bit 4 AND `RUNOUT_STATUS` bit 4 are set** and
+`CACHE1_DMA_PUSH` bit 4 is clear — it waits for the PFIFO **low watermark**.
+
+**A correction I had to make on the way:** I first read the toolkit's constants
+(`NV_PFIFO_CACHE1_STATUS = 0x1214`) against the guest's offsets (`0x3214`) and
+concluded the register map was wrong by `0x2000`. It is not. `nv2a_core.c:1321`
+subtracts the block base (`blocktable` puts PFIFO at `0x2000`), so the guest's
+`0x3214` *is* block-local `0x1214`. The map is QEMU's and it is correct; the
+guest's `0x2100` is block-local `0x100` = `NV_PFIFO_INTR_0`, which the model does
+handle.
+
+## The fix
+
+`pfifo_read` handled only `NV_PFIFO_INTR_0` and `NV_PFIFO_INTR_EN_0`; everything
+else fell through to plain storage. So `CACHE1_STATUS` and `RUNOUT_STATUS` read 0
+and their LOW_MARK bits were **never set** — the exit condition was unsatisfiable,
+and the guest spun 3.2M MMIO accesses in 62 s with **no further kernel calls and
+no further recovered bodies**.
+
+Toolkit `nv2a_core.c` now reports, with the reasoning in the code:
+
+- `NV_PFIFO_CACHE1_STATUS` -> `LOW_MARK` set. The model consumes a submission
+  synchronously inside `nv2a_submit_pending`, so cache1 is always drained, and
+  "drained" is exactly what the low mark means.
+- `NV_PFIFO_RUNOUT_STATUS` -> `LOW_MARK` set, the same contract for the runout FIFO.
+- `NV_PFIFO_CACHE1_DMA_PUSH` -> `DMA_PUSH_STATE` (bit 4) forced clear, because the
+  same loop treats a set STATE bit as "still busy".
+
+## Result
+
+| | before | after |
+|---|---|---|
+| outcome | `diagnostic_deadline` (spin) | `unhandled_exception`, 3.4 s |
+| `ABI verified` | 98 | **112** then **119** |
+| ICALL count at the stop | 200 | **496** |
+
+Run `logs/runs/20260921-164423-649-lowmark-fix/`. The loop is gone and the guest
+resumes real work.
+
+## Then the manifest, converged automatically
+
+With the spin gone the guest exposed a series of mechanical manifest gaps, so I
+wrote a loop instead of fixing them by hand: run, parse the log, patch, rebuild,
+repeat. Both failure kinds are mechanical and the message states the answer:
+
+- `[ICALL] Failed to resolve VA 0xXXXXXXXX` -> a real function entry the
+  disassembler **missed entirely**; add it with the extent of its straight-line
+  body. `0x001BD274`, `0x001BCAA3`, `0x001BCB14`, `0x001BCBC9` are all real XPP
+  functions absent from `functions.json`, so nothing had ever emitted a body or a
+  dispatch tuple for them.
+- `[RECOVERED] ABI FAILURE 0xXXXXXXXX esp A->B expected +N` -> `stack_args` is
+  wrong; the real delta is `B - A`, so `stack_args = (B - A) - 4`.
+
+Converged in 7 steps to **119 verified, 0 mechanical defects left**. The manifest
+is now 1232 entries.
+
+## New stop, and it is a different kind
+
+A **wild read at `0x10000FFFF`** inside `sub_00151D70+0xBB`, with `esi =
+0xFFFFFFFF`. `sub_00151D70` is another `QueryInterface` (its `repe cmpsd` compares
+`riid` against the IID at `0x001E1350`), so it is being called with a **garbage
+`riid` of `0xFFFFFFFF`**. Caller `sub_0005F350+0x50E`. The guest stack also holds
+`0x00700010` — the same value that appeared at the very first ICALL failure, which
+is `device + 0x700010` in this title's instance-memory convention.
+
+**Next packet:** find who passes `0xFFFFFFFF` as the `riid`. It is either a wrong
+argument at the call site or a status value used as a pointer; the call site in
+`sub_0005F350` and the object whose vtable is being walked are the two places to
+look. Run `logs/runs/20260921-164904-004-post-converge/`.
+
 

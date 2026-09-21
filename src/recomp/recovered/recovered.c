@@ -2830,6 +2830,14 @@ extern void sub_001BB670(void);
 extern void sub_001BB750(void);
 extern void sub_001BB7C0(void);
 extern void sub_001BB9A0(void);
+extern void sub_001BCAA3(void);
+extern void sub_001BCB14(void);
+extern void sub_001BCB2B(void);
+extern void sub_001BCBC9(void);
+extern void sub_001BCCD3(void);
+extern void sub_001BCD0A(void);
+extern void sub_001BCD16(void);
+extern void sub_001BD274(void);
 extern void sub_001BD5FA(void);
 extern void sub_001BD5FF(void);
 extern void sub_001BDAA9(void);
@@ -167482,6 +167490,248 @@ void sub_0017CAC0(void) {
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x0017CAC0 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
 }
 
+/**
+ * sub_001BD274
+ * Original: 0x001BD274 - 0x001BD295 (33 bytes, 6 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_001BD274(void)
+{
+
+loc_001BD274: ;
+    MEM16(0x2649F2) = MEM16(0x2649F2) & 0;
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, 0);
+    PUSH32(esp, 0x2649A8);
+    MEM16(0x2649F0) = 6;
+    { uint32_t _icall_target = MEM32(0x1C401C); PUSH32(esp, 0x001BD292u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_001BD292: ;
+    esp += 8; return; /* ret 4 */
+
+}
+
+
+void sub_001BD274(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_001BD274();
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        fprintf(stderr,"[RECOVERED] ABI FAILURE 0x001BD274 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp); abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x001BD274 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_001BCAA3
+ * Original: 0x001BCAA3 - 0x001BCB14 (113 bytes, 28 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_001BCAA3(void)
+{
+    uint32_t ebp;
+    ebp = g_ebp;  /* frameless: caller's frame */
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
+
+loc_001BCAA3: ;
+    _fa = (uint32_t)(MEM32(0x1BC8CC)) & 0xFFFFFFFFu; _fb = (uint32_t)(0) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(0x1BC8CC), 0 (32-bit) */
+    if (CMP_NE(_fa, _fb)) { g_seh_ebp = ebp; sub_001BCBC9(); return; } /* jne: not equal / not zero */
+
+loc_001BCAB0: ;
+    PUSH32(esp, ebx);
+    PUSH32(esp, esi);
+    esi = MEM32(esp + 0xC);
+    ecx = esi;
+    MEM32(0x1BC8CC) = 1;
+    MEM16(0x2647B0) = 4;
+    PUSH32(esp, 0x001BCAD0u); RECOMP_ABI_CALL(0x001BCD0Au, sub_001BCD0A); /* call 0x001BCD0A */
+
+loc_001BCAD0: ;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    if (TEST_NZ(_fa, _fb)) { g_seh_ebp = ebp; sub_001BCB14(); return; } /* jne: not equal / not zero */
+
+loc_001BCAD4: ;
+    PUSH32(esp, 0x1BC860);
+    ecx = esi;
+    PUSH32(esp, 0x001BCAE0u); RECOMP_ABI_CALL(0x001BCCD3u, sub_001BCCD3); /* call 0x001BCCD3 */
+
+loc_001BCAE0: ;
+    PUSH32(esp, 0x1BC86C);
+    ecx = esi;
+    MEM8(0x1BC928) = LO8(eax);
+    ebx = ZX8(LO8(eax));
+    PUSH32(esp, 0x001BCAF4u); RECOMP_ABI_CALL(0x001BCCD3u, sub_001BCCD3); /* call 0x001BCCD3 */
+
+loc_001BCAF4: ;
+    MEM8(0x1BC940) = LO8(eax);
+    eax = ZX8(LO8(eax));
+    PUSH32(esp, 0x1BC878);
+    ecx = esi;
+    ebx = ebx + eax;
+    PUSH32(esp, 0x001BCB0Au); RECOMP_ABI_CALL(0x001BCCD3u, sub_001BCCD3); /* call 0x001BCCD3 */
+
+loc_001BCB0A: ;
+    MEM8(0x1BC958) = LO8(eax);
+    eax = ZX8(LO8(eax));
+    g_seh_ebp = ebp; sub_001BCB2B(); return; /* tail jmp 0x001BCB2B */
+
+}
+
+
+void sub_001BCAA3(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_001BCAA3();
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        fprintf(stderr,"[RECOVERED] ABI FAILURE 0x001BCAA3 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp); abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x001BCAA3 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_001BCB14
+ * Original: 0x001BCB14 - 0x001BCBCC (184 bytes, 50 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_001BCB14(void)
+{
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+
+loc_001BCB14: ;
+    eax = ZX8(MEM8(0x1BC940));
+    ebx = ZX8(MEM8(0x1BC958));
+    ebx = ebx + eax;
+    eax = ZX8(MEM8(0x1BC928));
+    ebx = ebx + eax;
+    eax = ZX16(MEM16(0x2647B0));
+    _fa = (uint32_t)(ebx) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp ebx, eax (32-bit) */
+    if (CMP_BE(_fa, _fb)) goto loc_001BCB3A; /* jbe: below or equal (unsigned <=) */
+
+loc_001BCB38: ;
+    ebx = eax;
+
+loc_001BCB3A: ;
+    ecx = ebx;
+    ecx = (uint32_t)((int32_t)ecx * (int32_t)0xA8);
+    eax = eax + eax * 8;
+    eax = ecx + eax * 2;
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, eax);
+    { uint32_t _icall_target = MEM32(0x1C4010); PUSH32(esp, 0x001BCB4Fu); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_001BCB4F: ;
+    ecx = 0; /* xor self */
+    _fa = (uint32_t)(ebx) & 0xFFFFFFFFu; _fb = (uint32_t)(ebx) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ebx, ebx (32-bit) */
+    MEM32(0x2647B8) = ecx;
+    if (CMP_BE(_fa & _fb, 0)) goto loc_001BCB73; /* jbe: below or equal (unsigned <=) */
+
+loc_001BCB5B: ;
+    edx = ebx;
+
+loc_001BCB5D: ;
+    MEM32(eax + 0xA4) = ecx;
+    ecx = eax;
+    eax = eax + 0xA8;
+    edx--;
+    if ((edx != 0)) goto loc_001BCB5D; /* jne: not equal / not zero */
+
+loc_001BCB6D: ;
+    MEM32(0x2647B8) = ecx;
+
+loc_001BCB73: ;
+    MEM16(0x2647B2) = MEM16(0x2647B2) & 0;
+    edx = 0; /* xor self */
+    _fa = (uint32_t)(MEM16(0x2647B0)) & 0xFFFFu; _fb = (uint32_t)(LO16(edx)) & 0xFFFFu;
+    _fas = (int32_t)(int16_t)(_fa); _fbs = (int32_t)(int16_t)(_fb); /* cmp MEM16(0x2647B0), LO16(edx) (16-bit) */
+    MEM32(0x2647B4) = eax;
+    if (CMP_BE(_fa, _fb)) goto loc_001BCBA8; /* jbe: below or equal (unsigned <=) */
+
+loc_001BCB8B: ;
+    ecx = 0; /* xor self */
+
+loc_001BCB8D: ;
+    eax = MEM32(0x2647B4);
+    eax = ecx + eax + 4;
+    MEM8(eax) = MEM8(eax) & 0xFE;
+    eax = ZX16(MEM16(0x2647B0));
+    edx++;
+    ecx = ecx + 0x12;
+    _fa = (uint32_t)(edx) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp edx, eax (32-bit) */
+    if (CMP_B(_fa, _fb)) goto loc_001BCB8D; /* jb: below (unsigned <) */
+
+loc_001BCBA8: ;
+    PUSH32(esp, 0x1BC8C0);
+    ecx = esi;
+    MEM8(0x1BC8C1) = LO8(ebx);
+    PUSH32(esp, 0x001BCBBAu); RECOMP_ABI_CALL(0x001BCD16u, sub_001BCD16); /* call 0x001BCD16 */
+
+loc_001BCBBA: ;
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, 0);
+    PUSH32(esp, 0x264808);
+    { uint32_t _icall_target = MEM32(0x1C401C); PUSH32(esp, 0x001BCBC7u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_001BCBC7: ;
+    POP32(esp, esi);
+    POP32(esp, ebx);
+    esp += 8; return; /* ret 4 */
+
+}
+
+
+void sub_001BCB14(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_001BCB14();
+    if (g_esp!=before_stack+16 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        fprintf(stderr,"[RECOVERED] ABI FAILURE 0x001BCB14 esp %08X->%08X expected +16; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp); abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x001BCB14 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_001BCBC9
+ * Original: 0x001BCBC9 - 0x001BCBCC (3 bytes, 1 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_001BCBC9(void)
+{
+
+loc_001BCBC9: ;
+    esp += 8; return; /* ret 4 */
+
+}
+
+
+void sub_001BCBC9(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_001BCBC9();
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        fprintf(stderr,"[RECOVERED] ABI FAILURE 0x001BCBC9 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp); abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x001BCBC9 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
 recomp_func_t jsrf_lookup_recovered(uint32_t va) {
 
     switch (va) {
@@ -169941,6 +170191,14 @@ recomp_func_t jsrf_lookup_recovered(uint32_t va) {
     case 0x0017B5D0u: return sub_0017B5D0;
 
     case 0x0017CAC0u: return sub_0017CAC0;
+
+    case 0x001BD274u: return sub_001BD274;
+
+    case 0x001BCAA3u: return sub_001BCAA3;
+
+    case 0x001BCB14u: return sub_001BCB14;
+
+    case 0x001BCBC9u: return sub_001BCBC9;
 
     default: return 0;
 

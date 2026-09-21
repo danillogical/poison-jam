@@ -9851,5 +9851,37 @@
     "kind": "routine",
     "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CE304, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_0017CAC9 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x0017CAC0 at sub_0017CAC9. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x0017CAC0..0x0017CAC9. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
     "stack_args": 0
+  },
+  {
+    "start": "0x001BD274",
+    "end": "0x001BD295",
+    "section": "XPP",
+    "kind": "routine",
+    "evidence": "Missed function entry, reached indirectly and fatal as `Failed to resolve VA 0x001BD274`. It is a real XPP function: `and word ptr [0x2649F2], 0` / `push 0` / `push 0x2649A8` / `mov word ptr [0x2649F0], 6` / `call dword ptr [0x1C401C]` / `ret 4`, with the next entry starting at 0x001BD295. The function database does not contain it at all, so neither a body nor a dispatch tuple existed. Evidence: logs/runs/20260921-164423-649-lowmark-fix/.",
+    "stack_args": 4
+  },
+  {
+    "start": "0x001BCAA3",
+    "end": "0x001BCB14",
+    "section": "XPP",
+    "kind": "routine",
+    "evidence": "Missed function entry reached indirectly and fatal as `Failed to resolve VA 0x001BCAA3`. It is a real XPP function with a straight-line body ending at 0x001BCB14; the function database does not contain it, so neither a body nor a dispatch tuple existed. Recovered from the guest's own call. Evidence: logs/runs/ of the converge loop.",
+    "stack_args": 4
+  },
+  {
+    "start": "0x001BCB14",
+    "end": "0x001BCBCC",
+    "section": "XPP",
+    "kind": "routine",
+    "evidence": "Missed function entry reached indirectly and fatal as `Failed to resolve VA 0x001BCB14`. It is a real XPP function with a straight-line body ending at 0x001BCBCC; the function database does not contain it, so neither a body nor a dispatch tuple existed. Recovered from the guest's own call. Evidence: logs/runs/ of the converge loop.",
+    "stack_args": 12
+  },
+  {
+    "start": "0x001BCBC9",
+    "end": "0x001BCBCC",
+    "section": "XPP",
+    "kind": "routine",
+    "evidence": "Missed function entry reached indirectly and fatal as `Failed to resolve VA 0x001BCBC9`. It is a real XPP function with a straight-line body ending at 0x001BCBCC; the function database does not contain it, so neither a body nor a dispatch tuple existed. Recovered from the guest's own call. Evidence: logs/runs/ of the converge loop.",
+    "stack_args": 4
   }
 ]
