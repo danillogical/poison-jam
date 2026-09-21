@@ -598,5 +598,306 @@
     "section": ".text",
     "kind": "routine",
     "evidence": "A C++ static initializer, and the first real guest failure after guest_entry. The initializer array runs from 0x001EB760 to 0x001EB76C; the walker 0x0014B50D calls every non-null, non-(-1) dword in that range, and slot 0x001EB764 holds 0x0017E58F. The body is self-contained and does not fall through into 0x0017E600: it calls 0x0017F1D7, tests EAX, allocates 0x84 bytes through 0x00180D39, stores the object pointer via fs:[4]/[0x264850], writes the vtable 0x0022F198 at +0x54 and 1 at +0x14, calls 0x00147FA7 and 0x00147E72, and returns through the plain ret at 0x0017E5F4. int3 padding fills 0x0017E5F5..0x0017E600. The translation pass classifies this address detection_method=tail_jump_alias and folds it into the next entry 0x0017E600, which deletes this body and points the dispatch tuple 0x0017E58F at sub_0017E600. 0x0017E600 is the three-argument catch-frame invoker, so it reads its handler/context/flags from its caller's stack; the zero-argument initializer call therefore reads [ebp+8]=0x00700010 and dies on call eax at 0x0017E625. Recovered here so the address keeps its own body and its own dispatch entry. kind=routine, not the initializer default, because this body calls other framed functions (0x00180D39, 0x00147FA7, 0x00147E72) and a generated epilogue emits POP32(esp, ebp) without restoring g_ebp, so g_ebp is a last-published-frame hint and is expected to drift across calls. Measured with the initializer check enabled: esp 0x00F7FF44->0x00F7FF48 (expected +4), ebx/esi/edi preserved, g_ebp 0x00F7FF0C->0x00F7FF1C. Guest EBP is preserved by construction - the body never assigns ebp. Evidence: logs/runs/20260921-154535-674-resume-check/ (stacks.txt guest registers esi=0x001EB764 edi=0x001EB76C, which are the walker's own loop pointers)."
+  },
+  {
+    "start": "0x0017BF79",
+    "end": "0x0017BF86",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the CRT hook global [0x0022ED2C], so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0017BF86 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0017BF79 at sub_0017BF86. The caller passes no arguments, so sub_0017BF86 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0017BF79..0x0017BF86 and terminates with ret at 0x0017BF85. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0017C4DD",
+    "end": "0x0017C505",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the CRT table 0x001EB840..0x001EB854 walked by _initterm 0x0014B4B5, slot 0x001EB844, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0017C505 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0017C4DD at sub_0017C505. The caller passes no arguments, so sub_0017C505 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0017C4DD..0x0017C505 and terminates with ret at 0x0017C4F4. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x00180760",
+    "end": "0x0018077E",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the CRT table 0x001EB840..0x001EB854 walked by _initterm 0x0014B4B5, slot 0x001EB850, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018077E under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x00180760 at sub_0018077E. The caller passes no arguments, so sub_0018077E reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x00180760..0x0018077E and terminates with ret at 0x00180771. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x00180772",
+    "end": "0x0018077E",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the table at 0x001EB854..0x001EB86C walked by _initterm 0x0014B4B5, slot 0x001EB868, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018077E under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x00180772 at sub_0018077E. The caller passes no arguments, so sub_0018077E reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x00180772..0x0018077E and terminates with ret at 0x0018077D. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x00180FE1",
+    "end": "0x00181009",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the CRT table 0x001EB840..0x001EB854 walked by _initterm 0x0014B4B5, slot 0x001EB848, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_00181009 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x00180FE1 at sub_00181009. The caller passes no arguments, so sub_00181009 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x00180FE1..0x00181009 and terminates with ret at 0x00181008. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x00181212",
+    "end": "0x00181277",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the CRT initializer table 0x001EB760..0x001EB76C walked by _initterm 0x0014B50D, slot 0x001EB768, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_00181277 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x00181212 at sub_00181277. The caller passes no arguments, so sub_00181277 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x00181212..0x00181277 and terminates with ret at 0x00181224. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018151B",
+    "end": "0x001815D8",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the CRT table 0x001EB840..0x001EB854 walked by _initterm 0x0014B4B5, slot 0x001EB84C, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_001815D8 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018151B at sub_001815D8. The caller passes no arguments, so sub_001815D8 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018151B..0x001815D8 and terminates with jmp at 0x0018152D. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x001815C4",
+    "end": "0x001815D8",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the table at 0x001EB854..0x001EB86C walked by _initterm 0x0014B4B5, slot 0x001EB85C, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_001815D8 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x001815C4 at sub_001815D8. The caller passes no arguments, so sub_001815D8 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x001815C4..0x001815D8 and terminates with jmp at 0x001815D2. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018ACF0",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB778, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018ACF0 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018ACF0..0x0018C900 and terminates with ret at 0x0018ACFB. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AD00",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB77C, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AD00 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AD00..0x0018C900 and terminates with ret at 0x0018AD15. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AD20",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB780, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AD20 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AD20..0x0018C900 and terminates with ret at 0x0018AD2B. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AD30",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB784, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AD30 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AD30..0x0018C900 and terminates with ret at 0x0018AD3B. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AD40",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB788, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AD40 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AD40..0x0018C900 and terminates with ret at 0x0018AD4B. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AD50",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB78C, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AD50 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AD50..0x0018C900 and terminates with ret at 0x0018AD5B. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AD60",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB790, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AD60 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AD60..0x0018C900 and terminates with ret at 0x0018AD75. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AD80",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB794, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AD80 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AD80..0x0018C900 and terminates with ret at 0x0018AD95. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018ADA0",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB798, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018ADA0 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018ADA0..0x0018C900 and terminates with ret at 0x0018ADAB. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018ADB0",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB79C, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018ADB0 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018ADB0..0x0018C900 and terminates with ret at 0x0018ADBB. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018ADC0",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7A0, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018ADC0 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018ADC0..0x0018C900 and terminates with ret at 0x0018ADCB. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018ADD0",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7A4, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018ADD0 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018ADD0..0x0018C900 and terminates with ret at 0x0018ADF2. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AE00",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7A8, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AE00 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AE00..0x0018C900 and terminates with ret at 0x0018AE0B. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AE10",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7AC, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AE10 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AE10..0x0018C900 and terminates with ret at 0x0018AE1B. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AE20",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7B0, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AE20 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AE20..0x0018C900 and terminates with ret at 0x0018AE46. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AE50",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7B4, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AE50 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AE50..0x0018C900 and terminates with ret at 0x0018AE6E. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AE70",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7B8, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AE70 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AE70..0x0018C900 and terminates with ret at 0x0018AE96. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AEA0",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7BC, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AEA0 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AEA0..0x0018C900 and terminates with ret at 0x0018AEAB. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AEB0",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7C0, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AEB0 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AEB0..0x0018C900 and terminates with ret at 0x0018AEE4. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AEF0",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7C4, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AEF0 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AEF0..0x0018C900 and terminates with ret at 0x0018AF05. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AF10",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7C8, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AF10 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AF10..0x0018C900 and terminates with ret at 0x0018AF1B. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AF20",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7CC, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AF20 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AF20..0x0018C900 and terminates with ret at 0x0018AF2B. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AF30",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7D0, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AF30 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AF30..0x0018C900 and terminates with ret at 0x0018AF45. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AF50",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7D4, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AF50 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AF50..0x0018C900 and terminates with ret at 0x0018AF65. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AF70",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7D8, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AF70 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AF70..0x0018C900 and terminates with ret at 0x0018AF85. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AF90",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7DC, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AF90 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AF90..0x0018C900 and terminates with ret at 0x0018AF9B. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018AFA0",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB7E0, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018AFA0 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018AFA0..0x0018C900 and terminates with jmp at 0x0018AFA5. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018BF30",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB804, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018BF30 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018BF30..0x0018C900 and terminates with ret at 0x0018BF92. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018BFA0",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB808, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018BFA0 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018BFA0..0x0018C900 and terminates with ret at 0x0018BFF2. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018C000",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB80C, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018C000 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018C000..0x0018C900 and terminates with ret at 0x0018C0B2. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018C0C0",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB810, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018C0C0 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018C0C0..0x0018C900 and terminates with ret at 0x0018C142. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018C150",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB814, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018C150 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018C150..0x0018C900 and terminates with ret at 0x0018C1C2. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018C5B0",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB820, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018C5B0 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018C5B0..0x0018C900 and terminates with ret at 0x0018C6E2. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018C6F0",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB824, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018C6F0 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018C6F0..0x0018C900 and terminates with ret at 0x0018C802. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
+  },
+  {
+    "start": "0x0018C810",
+    "end": "0x0018C900",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A CRT static initializer reached as a zero-argument function pointer through the C++ initializer table 0x001EB770..0x001EB83C walked by _initterm 0x0014B4B5, slot 0x001EB828, so it is a function entry by definition. The translation pass classified this address detection_method=tail_jump_alias and folded it into sub_0018C900 under the ff4d442 abutting-alias rule, which deleted the body and pointed the dispatch tuple 0x0018C810 at sub_0018C900. The caller passes no arguments, so sub_0018C900 reads its handler/context/flags from its caller's stack and faults. Recovered so the address keeps its own body and its own dispatch entry. The real body runs 0x0018C810..0x0018C900 and terminates with ret at 0x0018C8FC. Evidence: logs/runs/20260921-155635-882-alias-fix-verified/ and the alias-fold finding in report-deepseek.md (2026-09-21)."
   }
 ]
