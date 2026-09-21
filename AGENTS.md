@@ -855,14 +855,31 @@ events 78,441 runaway → 563, CTest 11/11. Run
   editing it**, or the change is invisible. And **reviewed values win over any
   derivation**; restore them from `96ca4e0` if a derivation overwrites them.
 
-**Next packet:** the new state is a **hang**, not a fault — **797,491 first-chance
-`C0000005`** access violations in a tight fault-and-retry loop, with the most
-frequent indirect target **`0x002652B0`**, an address in **no image section**
-(between `.data` end `0x0022FCD4` and `DOLBY` start `0x0027E080`). The guest stack
-is healthy (`esp=0x00F7FB98`). Find what produces `0x002652B0` and why the guest
-retries ~800k times instead of failing; ~800k handled faults also puts the
-collector's first-chance path on the hot path, so check it for correctness as well
-as cost.
+**The hang is a sweep of instance memory, not a register poll.** Toolkit
+revision **`dc79321`** adds `RECOMP_MMIO_TRACE` to `nv2a_mmio_hook.c`: distinct
+MMIO offsets with counts and the faulting RIP, each new offset printed once and
+the hottest reprinted every 200,000 accesses, so the answer survives a run killed
+at a deadline. It exists because a handled MMIO fault is otherwise invisible from
+every artifact a run produces — the hook returns `CONTINUE_EXECUTION`, the
+collector's `DEBUG_EXCEPTION` lines carry no address, and a deadline run writes no
+`ExceptionStream` to the minidump.
+
+Trace result (`logs/runs/20260921-162652-137-mmio-trace/`): **400,000+ MMIO
+accesses in 12.6s over 100+ distinct offsets, none above 8 occurrences, all from
+one RIP**, advancing `0x700000, 0x700004, 0x700008, …` — a **linear dword sweep of
+the PRAMIN / instance window** inside `body_00192090` → `sub_00191BA0` →
+`sub_0018E160` → `sub_00194C3F` → `sub_00194A72` → `sub_00194300`. So the guest is
+**scanning instance memory for something the model does not contain**: a GPU-model
+content gap, not a register contract and not a translation defect. `0x002652B0`
+was a red herring — it is `.data` BSS written at runtime.
+
+**Next packet:** identify the object the sweep searches for. Raise
+`MMIO_TRACE_SLOTS` past 96 (it filled, which is why the hottest count is only 8) to
+see whether the sweep terminates or wraps, then read the scanning site in
+`body_00192090` and compare its key against what the model writes into the claimed
+RAMIN window. **Do not chase the interrupt angle** — `PMC_INTR_0`, `PFIFO_INTR_0`,
+`PGRAPH_INTR` and `PCRTC_INTR` being zero is consistent with the sweep, not its
+cause.
 
 **Finding a vtable (reusable):** a data table whose entries are a run of
 **distinct** `.text` addresses, stored by a constructor as an immediate. Take

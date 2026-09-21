@@ -39,15 +39,22 @@ never satisfies the loop's exit condition. That is a **register-contract gap in
 the GPU model (11b territory), not a translation defect**, and it is the first
 time this port has reached live NV2A polling in device setup.
 
-**Next packet:** capture the polled register offset and the value the model
-returns. Instrument `nv2a_hook_handle_mmio` to record the first N distinct offsets
-per call site — the hook currently swallows the fault so the address never
-reaches any log. The captured register state narrows it: `PMC_INTR_0 = 0` with
-`PMC_INTR_EN_0 = 0x00000001`, `PFIFO_INTR_0 = 0`, `PGRAPH_INTR = 0`,
-`PCRTC_INTR = 0`, `PTIMER_TIME_0/1` ticking — the leading candidate is a wait on an
-interrupt/status bit the model never raises. **BSS mapping is already ruled out**:
-`xbox_memory_layout.c:1225` does `memset(XBOX_VA(sec_va), 0, sec_vsize)`, so the
-loader is correct and `0x002652B0` must have been written at runtime.
+**Next packet — and this corrects the guess above.** The ~800k faults are not a
+wait on one register. With toolkit `dc79321` (`RECOMP_MMIO_TRACE`) the trace shows
+**400,000+ MMIO accesses in 12.6s across 100+ distinct offsets with no offset above
+8 occurrences, all from a single RIP**, advancing `0x700000, 0x700004, 0x700008,
+…`. That is a **linear dword-by-dword sweep of the PRAMIN / instance-memory
+window** (`device+0x700000`) inside the GPU device-setup chain `body_00192090` →
+`sub_00191BA0` → `sub_0018E160` → `sub_00194C3F` → `sub_00194A72` →
+`sub_00194300`. So the guest is **scanning instance memory for something the model
+does not contain** — a GPU-model content gap, not a register contract and not a
+translation defect. **Next packet:** identify the object being searched for; raise
+`MMIO_TRACE_SLOTS` past 96 (it filled, which is why the hottest count is only 8) to
+see whether the sweep terminates or wraps, then read the scanning site in
+`body_00192090` and compare its key against what the model writes into the claimed
+RAMIN window. Do **not** chase the interrupt angle. **BSS mapping is already ruled
+out**: `xbox_memory_layout.c:1225` does `memset(XBOX_VA(sec_va), 0, sec_vsize)`, so
+the loader is correct and `0x002652B0` must have been written at runtime.
 
 Two manifest gaps were closed to get here, both mine rather than the game's:
 1. **The bound must be the next function entry inside the range, not the alias's

@@ -2746,13 +2746,54 @@ is a **register-contract gap in the GPU model (milestone 11b territory)**, not a
 translation defect — and it is the first time this port has reached live NV2A
 polling in device setup.
 
-**Next packet:** capture the polled register offset and the value the model
-returns. The captured register state gives the context — `PMC_INTR_0 = 0` with
-`PMC_INTR_EN_0 = 0x00000001`, `PFIFO_INTR_0 = 0`, `PGRAPH_INTR = 0`,
-`PCRTC_INTR = 0`, and `PTIMER_TIME_0/1` ticking — so the leading candidate is a
-wait on an interrupt/status bit that the model never raises. Instrument
-`nv2a_hook_handle_mmio` to record the first N distinct offsets per site rather
-than the first fault address, which the hook currently swallows.
+## The polled register — and it is not a register poll at all
+
+**Decision: instrument the hook rather than keep guessing.** A polled register is
+invisible from every artifact a run produces: `nv2a_hook_handle_mmio` handles the
+fault and returns `CONTINUE_EXECUTION`, so the address never reaches the game log,
+the collector's `DEBUG_EXCEPTION` lines carry no address, and a deadline run
+produces no `ExceptionStream` in the minidump at all (verified — the dump has 13
+streams and none of them is type 6). Toolkit `dc79321` adds
+`RECOMP_MMIO_TRACE`: distinct offsets with counts and the faulting RIP, each new
+offset printed once, and the hottest offset reprinted every 200,000 accesses so
+the answer survives a killed run.
+
+**Result, `logs/runs/20260921-162652-137-mmio-trace/`:**
+
+```
+[NV2A-TRACE] total=400000 hottest offset=0x000200 count=8 rip=0x7FF6DD47D985
+[NV2A-TRACE] new offset=0x700000 first_rip=0x7FF6DD47E33A (total=33)
+[NV2A-TRACE] new offset=0x700004 first_rip=0x7FF6DD47E33A (total=34)
+[NV2A-TRACE] new offset=0x700008 first_rip=0x7FF6DD47E33A (total=35)
+...
+[NV2A-TRACE] new offset=0x700118 first_rip=0x7FF6DD47E33A (total=103)
+```
+
+**This is not a wait on one register.** 400,000+ MMIO accesses in 12.6s, spread
+over 100+ distinct offsets with **no offset above 8 occurrences**, and every one
+of the `0x700000`-range accesses comes from **the same RIP**. The offsets advance
+`0x700000, 0x700004, 0x700008, …` — **a linear dword-by-dword sweep of the PRAMIN
+/ instance-memory window** (`device+0x700000`, the same window `0x00194913` /
+`0x001949E2` write instance objects through), inside the GPU device-setup chain
+`body_00192090` → `sub_00191BA0` → `sub_0018E160` → `sub_00194C3F` →
+`sub_00194A72` → `sub_00194300`.
+
+So the guest is **scanning instance memory for something our model does not
+contain**. The leading candidate is a search for a structure the guest itself
+wrote earlier through `device+0x700000` and which the model's RAMIN does not
+retain — the PRAMIN alias was only claimed for the top-of-contiguous range, and
+anything outside that claim reads as zero.
+
+**This corrects the previous paragraph's guess** (a wait on an interrupt/status
+bit). `PMC_INTR_0`, `PFIFO_INTR_0`, `PGRAPH_INTR` and `PCRTC_INTR` being zero is
+consistent with the sweep, but the sweep is the cause, not the symptom. Recorded
+so the next session does not chase the interrupt angle.
+
+**Next packet:** identify the object the sweep is looking for and why the model
+does not hold it. Raise `MMIO_TRACE_SLOTS` past 96 (it filled, which is why the
+hottest count is only 8) to see how far the sweep goes and whether it terminates
+or wraps; then read the scanning site in `body_00192090` and compare its search
+key against what the model writes into the claimed RAMIN window.
 
 ## Standing caveat
 
