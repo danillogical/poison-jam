@@ -1,0 +1,2235 @@
+# DeepSeek session decisions and issues
+
+Standing rule (from `report-grok.md`): keep going; record choices here instead
+of stopping to ask. When a decision comes up, take the recommendation and
+continue.
+
+## 2026-09-21 — Commit the outstanding checkpoint, then resume the plan
+
+**Decision: verify before committing Grok's leftover work, not just stage it.**
+Grok ran out of credits mid-packet with a large GPU checkpoint uncommitted in
+both repos. Re-ran the baseline suites at that revision before committing:
+
+- toolkit unit suite 27/27 (`tools.recomp.test_lifter_atomics`,
+  `test_lifter_string_compare`, `test_lifter_carry`, `test_seh_frame_owner`)
+- game Release CTest 11/11
+
+**Committed:**
+- toolkit `c98dbdc` — PRAMIN instance backing, production RAMHT
+  handle-to-class lookup, completed in-place event bridge
+- game `8641320` — 11c1 recovery from `0x00194ADD` through the first
+  pushbuffer kick; `f8b0d0c` records the toolkit revision in AGENTS.md
+
+**Decision: go with `Deepseek-V4.1-Flash` for everything, no role delegation.**
+The user said the Sol/Luna/Terra/Astra role map does not apply to this session.
+`grok-role-map.md` is left in place as history but is not authoritative here.
+`AGENTS.md` still describes the Codex/Grok packet roles; a note is added there
+so a future agent does not expect spawned workers from this session.
+
+## 2026-09-21 — Milestone 11b4b4: the kick/GET contract
+
+The plan gated recovery of `0x001918E0` on a kick contract existing first. That
+gate was correct and this session showed why.
+
+**Decision: write the contract from original-XBE instructions before lifting any
+of the chain.** New `docs/jsrf-kick-get-contract.md` maps the ring control block
+at `MEM32[0x0019DCE0]`, `0x00191530` (`RET 8`, fast exit when `flags & 4`,
+otherwise a wrap-adjusting slow path), `0x001916B0` (pushes `size, size/2`),
+`0x001916C0` (rewrites its own stack arguments then tail-jumps into
+`0x00191530`), `0x00191390`, `0x00191440`, `0x001918E0`, `0x001917F0`,
+`0x00190240` and its two real callers at `0x0014D9D0`.
+
+**Finding: the kick is a register write plus a hardware poll, not a put-pointer
+write.** `0x00191270` sets bit 16 of `NV_PFIFO_CACHE1_DMA_PUT` and then spins at
+`0x00191290` until the engine clears it. `0x001912A0` inlines the same sequence
+at `0x001912C6`. The model stored the raw value and never cleared bit 16, so
+that poll could not terminate — which is exactly why the two kick sites had been
+left fatal.
+
+**Decision: bit 16 is a model-owned latch.** Store the offset, run the pending
+submission, then clear bit 16 to acknowledge. The value is masked rather than
+restored so an acknowledgement cannot undo a legitimate GET/PUT advance.
+`kick_requests` / `kick_acks` / `kick_last_put` distinguish an unacknowledged
+kick from one that ran and blocked. A blocked stream still acknowledges,
+otherwise a rejected method would present as a hang instead of the
+`unsupported_method` diagnostic it really is. Toolkit `488286f`.
+
+Two defects found by the new tests, both worth recording because they were
+invisible to reasoning and only appeared when the constants were printed:
+
+- **The offset mask must be `0x1FFEFFFF`, not `0x1FFFFFFF`.** The generic mask
+  already used for this register *contains* bit 16, so it silently preserved
+  the kick bit and the poll stayed live. Three cases failed with arithmetic
+  that looked impossible until the mask constant itself was printed.
+- **`NV_USER_DMA_PUT` is an alias of the PFIFO pointer, but the two paths
+  disagreed.** `user_write` stored the USER-local `regs[]` slot while
+  `user_read` and `nv2a_submit_pending` both read the PFIFO slots, so a kick
+  through the USER aperture was invisible to the submission engine. Both paths
+  now use the canonical slot.
+
+**Decision: `0x00191270` stays out of the function database.** It is currently
+uncalled; its bodies are inlined at `0x001912A0`. Seeding it on speculation
+would create a function the game never enters.
+
+13 new contract cases, NV2A 319, Release CTest 11/11. Ordinary boot unchanged:
+`logs/runs/20260921-111607-936-kick-ack/` fatal at `0x001918E0`, `dump_ok`,
+`checkpoints_passed`, GET=PUT=`0x1000`. Game `3c6fd81`, `7e2c4f4`.
+
+## 2026-09-21 — Recovering the kick chain
+
+**Finding: the kick chain is missing from the function database entirely.**
+`0x00191530`, `0x001916B0`, `0x001916C0`, `0x00191390`, `0x00191440`,
+`0x001918E0`, `0x001917F0` are all absent from
+`tools/disasm/output/functions.json`. The `0x00190880`–`0x00191xxx` stretch has
+almost no detected entries, which is also why `xrefs.json` returned nothing for
+any of these addresses — the earlier xref lookups were not proving "no callers",
+they were hitting an analysis gap. Only `0x00190240` and `0x00190490` exist in
+the region.
+
+This is the same class of problem the plan already names: "recover real code for
+missed game functions." These are real functions, separated by `nop` padding,
+not internal blocks.
+
+**Decision: establish boundaries from `nop` padding rather than trusting the
+database.** Decoded the region with `inspect-jsrf.py disasm` and located every
+padding run. Confirmed contiguous, non-overlapping ranges whose ends fall on a
+`nop` sled and whose successors start on a fresh prologue:
+
+| Start | End (exclusive) | First insn | Notes |
+|---|---|---|---|
+| `0x00190FB0` | `0x001910B7` | `mov` | submission-record builder helper |
+| `0x001910C0` | `0x00191141` | `push` | ring byte accounting helper |
+| `0x00191150` | `0x00191261` | `mov` | submission lookup/rotate |
+| `0x00191270` | `0x0019129D` | `mov` | the kick primitive |
+| `0x001912A0` | `0x00191384` | `push` | publish + kick |
+| `0x00191390` | `0x0019143D` | `push` | submission record path |
+| `0x00191440` | `0x00191526` | `push` | back-pressure wait, `RET 8` |
+| `0x00191530` | `0x001916A3` | `sub esp,8` | the GET wait, `RET 8` |
+| `0x001916B0` | `0x001916BF` | `mov` | wrap adjuster, plain `ret` |
+| `0x001916C0` | `0x00191708` | `mov` | bounded reserve, `RET 8` |
+| `0x00191710` | `0x00191721` | `mov` | poll-current helper |
+| `0x00191730` | `0x001917A8` | `mov` | record retire helper |
+| `0x001917B0` | `0x001917E6` | `mov` | second-record helper |
+| `0x001917F0` | `0x001918D3` | `push` | second method block, kicks |
+| `0x001918E0` | `0x001919BE` | `push` | first method block, tail-jumps |
+| `0x00190240` | `0x00190335` | `mov` | the actual submit, one arg |
+
+**Decision: recover `0x001918E0` and the whole chain it reaches, working
+outward from the entry.** Recovering only `0x001918E0` would just relocate the
+stop to `0x001917F0` one instruction later, so the packet is the chain, not the
+single address. Recover in dependency order and verify each ABI independently.
+
+**Result: all 16 chain entries recovered and generated.** Added them to
+`config/recovered-functions.json` (manifest now 70 entries) with per-entry
+`stack_args` read off the real epilogue, not guessed:
+
+| Address | `stack_args` | Epilogue evidence |
+|---|---|---|
+| `0x00190FB0` | 12 | `RET 0xC` at `0x0019101D` — three cdecl arguments |
+| `0x00191020` | 0 | plain `ret` at `0x001910B6`, thiscall |
+| `0x001910C0` | 0 | plain `ret` at `0x001910DF`, thiscall |
+| `0x001910E0` | 0 | plain `ret` at `0x0019112F`/`0x00191140` |
+| `0x00191150` | 0 | plain `ret`; EAX + `[esp+0x14]` custom convention |
+| `0x00191270` | 0 | plain `ret` at `0x0019129C`, the kick |
+| `0x00191390` | 4 | `RET 4` at `0x0019143A` |
+| `0x00191440` | 8 | `RET 8` at `0x001914FE`/`0x00191523` |
+| `0x00191530` | 8 | `RET 8` at `0x00191666`/`0x001916A0` |
+| `0x001916B0` | 0 | plain `ret` at `0x001916BE` |
+| `0x001916C0` | 8 | `RET 8` at `0x00191705` |
+| `0x00191710` | 0 | plain `ret` at `0x00191720` |
+| `0x00191730` | 4 | `RET 4` at `0x00191771`/`0x00191795`/`0x001917A5` |
+| `0x001917B0` | 4 | `RET 4` at `0x001917D4`/`0x001917E3` |
+| `0x001917F0` | 0 | plain `ret` at `0x001918D2` |
+| `0x001918E0` | 0 | no `ret` at all; tail `jmp 0x001917F0` at `0x001919B9` |
+| `0x00190240` | 4 | `RET 4` at `0x00190332` |
+
+**Decision: split `0x001910C0` from `0x001910E0` as two entries.** `0x001910DF`
+is a `ret` and `0x001910E0` is reached only by fall-through, never by `call`.
+Registering only `0x001910C0` with an end of `0x00191141` would silently merge a
+second function into the first, which is exactly the class of error the manifest
+exists to prevent. Both entries are recorded with the fall-through noted.
+
+**Decision: `0x001918E0` and `0x001917F0` share one frame.** `0x001918E0` pushes
+EBX/ESI/EDI and never pops them — it ends in `jmp 0x001917F0`, and only
+`0x001917F0`'s epilogue at `0x001918D0` restores them. Both entries therefore
+carry `stack_args: 0` and neither is given an `initializer` frame check, because
+a tail-jump legitimately carries the pusher's frame across the boundary.
+
+## 2026-09-21 — Three generator gaps the chain packet exposed
+
+Recovering the chain surfaced three defects that were latent, not caused by the
+new entries. All three are recorded because each one silently weakens the
+verify-before-recover rule if left alone.
+
+**Defect 1 — `config/manual-functions.json` accumulates the recovered set.**
+`recover-functions.py` appends every recovered address to that file, and
+`relift-selected.py` feeds it back into the translator as pre-existing symbol
+names. Recovering `0x00190240` therefore both added it to the protected list and
+left its truncated original definition in `recomp_0008.c`. That produced
+`LNK2005: sub_00190240 already defined in recovered.obj`.
+**Fix:** removed `0x00190240` from the file. The generator re-appends recovered
+addresses on each run, so the entry is regenerated rather than needing to be
+hand-kept; the removal makes the file reflect *external* definitions again.
+
+**Defect 2 — a reviewed boundary fix did not widen the generated chunk.**
+The raw database split the submit path at `0x0019025A`, where `je 0x00190250`
+and `jne 0x0019026C` made the internal branch target look like a new entry.
+`boundary-fixes.json` is applied by `recover-functions.py` and
+`relift-selected.py`, but only `relift-selected.py boundaries` rewrites the
+body already sitting in `src/recomp/gen/recomp_*.c`. Added the
+`0x00190240`-`0x00190335` fix and ran the boundary relift; the chunk span is now
+245 bytes matching the recovered span, up from the truncated 26.
+**Consequence:** widening the span made four previously unreachable
+`call 0x00190FB0` sites live, so `recomp_0008.c` also needed
+`extern void sub_00190FB0(void);`. Its hand-maintained extern block exists
+because the declarations file is generated from the raw database.
+
+**Defect 3 — the unresolved-trap unit cannot be linked into a focused fixture.**
+`scripts/recover-functions.py` scans `src/**/*.c` to decide which newly exposed
+direct calls still need a diagnostic trap, so definitions living in
+`tests/*.c` are invisible to it. The full `recomp_stubs_unresolved.c` therefore
+duplicates `sub_0014B794`, `sub_0018E120` and `sub_00193F70`, which
+`tests/test_recovery_11c1.c` already defines as counted seams
+(`LNK2005` ×3).
+**Fix:** the generator now also emits
+`src/recomp/gen/recomp_stubs_recovery_test.c` — the same trap set minus every
+symbol any `tests/test_recovery_*.c` defines itself. Production keeps the full
+trap set; the focused target links the complement. `CMakeLists.txt` uses the
+complement for `jsrf_recovery_11c1_test`.
+
+## 2026-09-21 — Repo integrity: the game repository's object store is missing
+
+Reported because it blocks the "commit locally first" instruction and cannot be
+fixed by guessing.
+
+**Observed state of `C:/Users/logic/Repos/my_xbox_game/.git`:**
+- `HEAD`, `config`, `index`, `logs/`, `COMMIT_EDITMSG`, `FETCH_HEAD` are present
+- `objects/` is **absent**; `refs/heads/` and `refs/` hold no loose refs; there
+  is no `packed-refs`; `.git` totals 77K, far below the history it should hold
+- no `remote` is configured, so there is no fetch source
+- `git status`, `git log` and `git cat-file` all fail with
+  `fatal: not a git repository`
+
+**Still recoverable from `.git/logs/HEAD`, which is intact.** The reflog records
+ten commits, from the initial commit through the current tip:
+
+```
+185a5646  commit (initial): Checkpoint JSRF Windows startup and diagnostic harness
+1e62b6f0  Add JSRF GPU harness and bounded NV2A submission
+9f0e4e08  Recover JSRF GPU setup and bound service polling
+a093cbb7  Record JSRF recovery checkpoint
+69e0bc19  Add fresh-context JSRF concurrency handoff
+86413209  Recover JSRF GPU setup through the first pushbuffer kick
+f8b0d0c1  Record the PRAMIN/RAMHT checkpoint toolkit revision
+3c6fd818  Establish the JSRF pushbuffer kick and DMA GET contract
+7e2c4f43  Record the kick/GET checkpoint and this machine's build workarounds  <- tip
+```
+
+The checkout itself is not affected: every source file, config, script and the
+whole `game/` tree are on disk, and all work from this session is intact
+(`config/recovered-functions.json` 70 entries, the `boundary-fixes.json` span,
+the `recomp_0008.c` extern, the generated trap complement, the CMake change).
+
+**Decision: do not attempt repair by re-initialising.** The object store cannot
+be reconstructed from a reflog alone (the reflog holds SHAs, not objects), and a
+fresh `git init` would replace a recoverable-looking state with a genuinely
+empty history. The safe options are to restore `objects/` from a backup or
+filesystem snapshot, or — if none exists — to re-initialise and re-commit the
+working tree as a single new baseline. Both are the user's call, and neither was
+taken without them.
+
+## 2026-09-21 — Pre-existing: the generated chunk tree has 79 untrapped call targets
+
+Surfaced while building the chain packet. Not caused by this session's entries.
+
+The generator emits references in two forms. The first is
+`RECOMP_ABI_CALL(0xADDR, sub_ADDR)`; the second is a bare tail-jump,
+`g_seh_ebp = ebp; sub_ADDR(); return;`. The second form is what a *jump* whose
+target the database mistook for an entry becomes. Counting both against the
+definitions present in `src/recomp/gen/` and `src/recomp/recovered/`, and then
+building `jsrf_recomp` to confirm what the linker actually sees:/n/n- **3839** distinct `RECOMP_ABI_CALL` targets and **1466** distinct tail-jump
+targets, **4589** in union
+- **524 references have no definition** and **none** is covered by a
+diagnostic trap in `recomp_stubs_unresolved.c`
+- the linker reports `LNK1120: 473 unresolved externals`, i.e. essentially the
+  whole gap
+- **442 of the 524 are jump-shaped only** — they appear as tail-jumps and never
+  as calls, e.g. `0x000110D0`, `0x00011162`, `0x000115C2`, `0x00012CA5`,
+  `0x00013220`, `0x00013440`
+
+So the committed `HEAD` chunk tree cannot link on its own, and the dominant
+cause is misclassified branch targets rather than merely missing functions: the
+generator turned internal jumps into function calls. The last known-good build
+must have been produced from a differently-detected tree than the one now
+checked in.
+
+**Decision: do not paper over this with 524 new traps in this packet.** The
+atoms are wrong in at least one case. `0x000110D0` and `0x00011162` are jump
+targets *inside* their parent functions, not entries: `0x00011138` is
+`jne 0x000110D0`, a backward loop, and the generated code turned it into
+`sub_000110D0(); return;`, which also skips the parent's epilogue. Emitting a
+trap for a non-entry would convert a wrong tail-call into a wrong abort, which
+is worse than the link error. The correct fix is a boundary pass over the
+affected chunks first, then traps only for the genuine entries. Recommended as
+its own packet, ahead of any further chain recovery.
+
+## 2026-09-21 — Final state of this session
+
+**Achieved.** The kick chain is fully recovered and verified at the unit level:
+
+- all 16 chain entries in `config/recovered-functions.json` (70 total), with
+  `stack_args` read off each real epilogue
+- `config/boundary-fixes.json` gained the `0x00190240`-`0x00190335` span, and
+  the boundary relift widened the generated chunk from 26 to 245 bytes
+- `src/recomp/gen/recomp_0008.c` declares `sub_00190FB0`, which only became
+  reachable once that span was correct
+- the whole chain is tagged `test_unit: "11c1"` so the focused fixture compiles
+  every callee it calls; the earlier `11b4b4` tag split the chain and left
+  `sub_00191270`/`sub_00191530` unresolved in the fixture
+- the generator now emits `src/recomp/gen/recomp_stubs_recovery_test.c`, the
+  trap subset a focused fixture needs: production traps minus any symbol a
+  `tests/test_recovery_*.c` defines, plus a trap for every unit callee the unit
+  does not itself compile. `CMakeLists.txt` links it into
+  `jsrf_recovery_11c1_test`.
+
+**Verified.** `jsrf_recovery_11c1_test` builds and reports
+`PASS: 2197 11c1 recovered leaf ABI/behavior checks`, with each entry logging
+`ABI verified (ESP/EBX/ESI/EDI)`. Toolkit unit suite green (`test_lifter_atomics`,
+`test_lifter_string_compare`, `test_lifter_carry`, `test_seh_frame_owner`,
+`test_manual_scan` 5, `test_dispatch_flat` 2).
+
+**Not achieved, and why.** No new runnable checkpoint. `jsrf_recomp` cannot
+link: `LNK1120: 473 unresolved externals` from 524 undefined references, 442 of
+them jump-shaped only. That is the pre-existing detection gap, not the chain.
+The kick chain itself is in place and unit-verified; it simply cannot be
+exercised end to end until the chunk tree links.
+
+**Recommended next packet, in order.**
+1. Detection/boundary pass over the affected `0x0001xxxx` chunks: decide, per
+   address, whether it is a genuine entry or an internal jump target, and stop
+   emitting `sub_...(); return;` for the latter.
+2. Traps for the addresses that are genuine entries and still unrecovered.
+3. Only then the bounded `run-jsrf.py` checkpoint expecting the
+   `unsupported_method` stop.
+4. Separately, the user decides how to restore this repository's git object
+   store.
+
+**Not committed.** Every change from this session is on disk and uncommitted,
+because the repository cannot commit. Nothing was reverted or stashed: the
+aborted `git stash push` left the working tree untouched, verified file by file.
+
+---
+
+## 2026-09-21 — Decision: tail-jump targets that are mid-body lift as `goto`
+
+**Recommended and taken.** Fix the lifter so an unconditional jump whose target
+is the interior of a *known* function body emits `goto loc_X` instead of
+`g_seh_ebp = ebp; sub_X(); return;`. Classify, do not blanket-suppress: a
+genuine call into another function still has to be a tail call.
+
+**The measurement, corrected.** My earlier figure of "1290 of 1466 targets lie
+inside another span" was inflated. Two separate mistakes:
+
+1. The owner lookup used `start <= target < end`, so every target that is
+   itself a listed entry matched itself and was scored as "inside".
+2. I did not separate "lies inside a span" from "is a legitimate function
+   entry that happens to sit inside a bigger span".
+
+Recounted over the 1466 distinct tail-jump call targets in
+`src/recomp/gen/recomp_*.c`:
+
+| Class | Count | Correct handling |
+|---|---|---|
+| Target is itself a listed entry | 1023 | Genuine tail call. Needs a definition or a trap. |
+| Mid-body, not an entry | 267 | **The defect.** Must lift as `goto loc_X`. |
+| No containing span at all | 176 | Genuinely external. Needs recovery or a trap. |
+
+**Evidence for the defect, on `0x000110D0`.** Original XBE, disassembled from
+`0x000110A0`:
+
+```
+000110CD lea      ecx, [ecx]          ; 3-byte NOP padding
+000110D0 mov      eax, dword ptr [esi + 4]   <-- loop body head
+```
+
+`0x000110D0` is reached by fall-through from padding. It is not a function
+start, and `0x000110D0` is not a database entry. Its enclosing entry is
+`0x000110A0` (`call_target`), span `0x000110A0-0x00011214`.
+
+The database nevertheless holds a `tail_jump_alias` entry
+`0x00011105-0x00011214` — same end as its parent, `start` 0x65 past it. And
+`0x00011105` in the original is `fnstsw ax`, the middle of the x87 compare idiom
+`fcomp [0x1c43d0]; fnstsw ax; test ah,1; jne ...`. It is not an entry either.
+
+Consequence in the generated tree, `src/recomp/gen/recomp_0000.c`:
+
+- line 141 `void sub_000110A0(void)` — contains `loc_000110D0:` at line 183
+  and `loc_00011105:` at line 435.
+- line 418 `void sub_00011105(void)` — the phantom alias body.
+- line 464, inside that phantom body:
+  `if (TEST_NZ(_fa, _fb)) { g_seh_ebp = ebp; sub_000110D0(); return; }`
+
+The label `loc_000110D0` already exists in the same translation unit, 281 lines
+above. `sub_000110D0` is not a function and is never defined, so this line is
+both wrong at runtime (it abandons the frame and returns from the wrong place)
+and one of the 473 link errors. A `goto loc_000110D0;` is the correct emission.
+
+**Mechanism.** `_is_external_target` (`tools/recomp/lifter.py:1923`) tests only
+the *current* function's span. For an alias entry whose parent extends earlier,
+the test is arithmetically right — the jump does leave the alias span — but the
+conclusion is wrong, because the target is still inside the parent body that is
+being translated in the same file.
+
+**Scope.** The fix is in the toolkit
+(`C:/Users/logic/Repos/xboxrecomp`), a sibling repository with its own rules.
+It must be versioned there and its revision recorded in the game repository's
+`AGENTS.md`. The game repository cannot record it in a commit yet, because its
+object store is gone.
+
+---
+
+## 2026-09-21 — Correction: the 473 link errors are a clobbered artifact, not a detection gap
+
+**My earlier diagnosis was wrong twice over, and this entry supersedes both.**
+It is not "the detector failed to find 473 functions", and it is not "1290
+tail-jump targets lie inside another span". The dominant cause is a generated
+artifact being overwritten by a script that does not own it.
+
+**The evidence.** Three generated files, with their real timestamps:
+
+| File | Written | By |
+|---|---|---|
+| `src/recomp/gen/recomp_funcs.h` | 2026-09-12 18:11 | the full translation run |
+| `src/recomp/gen/recomp_0000.c` (9 chunks to `recomp_0008.c`) | 2026-09-12 22:07 | the full translation run |
+| `src/recomp/gen/recomp_stubs_unresolved.c` | 2026-09-21 12:00 | `scripts/recover-functions.py` |
+
+The header declares `/* Unresolved call targets (stubbed) */` for **541**
+addresses. The stub file that is supposed to define them contains **3**.
+
+```
+$ grep -c "^void sub_" src/recomp/gen/recomp_stubs_unresolved.c
+3
+$ awk '/Unresolved call targets \(stubbed\)/,/^#endif/' src/recomp/gen/recomp_funcs.h \
+    | grep -c "^void sub_"
+541
+```
+
+**How it happened.** `scripts/recover-functions.py:36` builds a fresh
+`FunctionTranslator` and translates only the ~70 recovered entries
+(line 48-50). Its lifter therefore accumulates a **tiny** `referenced_calls` —
+only callees reachable from those 70 bodies. Then:
+
+- line 162-168 strips every stub body whose address is in `entries` from
+  `recomp_stubs_unresolved.c`;
+- line 180 computes `missing` from that tiny `referenced_calls`;
+- line 181-186 appends traps **only for `missing`**.
+
+So the file is emptied of 541 real stub bodies and refilled with at most a
+handful. The 16 identical orphan comments
+`/* Newly exposed recovery dependencies: diagnostic traps only. */` in the file
+are the fossil of 16 separate runs in which `missing` was empty — each run
+appended a comment and zero bodies. That is the signature of the bug, sitting
+in the artifact.
+
+**Why the two halves disagree.** `recomp_funcs.h`, the chunks, and the dispatch
+table are written by `translate_batch_split` (`tools/recomp/translator.py:1283`),
+which runs over the *entire* function database and so sees all 541. Nothing in
+`scripts/` invokes `translate_batch_split` — `grep -rln` returns nothing — so
+the full run is an ad-hoc command that produced artifacts on 2026-09-12 and has
+not been re-run since. `scripts/build-jsrf.ps1` (line 8-16) runs
+`recover-functions.py` and then compiles; it never regenerates the chunk tree.
+Today's partial run clobbered a file owned by the full run.
+
+**Consequence for the earlier decision.** The `goto` fix for mid-body tail-jump
+targets is still correct and still worth making — 267 targets are genuinely
+mid-body and `src/recomp/gen/recomp_0000.c:464` is genuinely mis-emitted. But it
+is **not** the reason the build does not link, and it must not be evaluated by
+the unresolved-symbol count until the artifact split-brain is fixed, because
+that count is currently dominated by stubs that were deleted rather than by
+targets that were never discovered.
+
+**Decision, in order.**
+1. Make `recover-functions.py` stop rewriting a file it does not generate. The
+   production stub set belongs to the full translation run; the recovery script
+   should append only its own reviewed traps, idempotently, and never strip
+   bodies it did not write.
+2. Re-run the full `translate_batch_split` so `recomp_funcs.h`, the chunks, the
+   stub file and the dispatch table come from one consistent pass.
+3. Then re-measure. Only then judge the `goto` fix and the trap coverage.
+
+I am doing step 1 first, because it is the smallest change that stops the
+bleeding and it is inside this project's own scripts.
+
+---
+
+## 2026-09-21 — Found by the fix: 1032 live jumps are silently deleted
+
+Fixing the tail-jump emission exposed a larger and worse defect underneath it.
+It is not a link error. It is generated code that compiles, links, and silently
+skips control flow.
+
+**The mechanism, two guards.** `tools/recomp/translator.py:977-993` validates
+every emitted `goto` against the labels defined *in the same function* and
+rewrites any target it cannot find:
+
+```c
+lines[idx] = lines[idx].replace(
+    f"goto {target};",
+    f"(void)0; /* goto {target} - dead code, label not in function */")
+```
+
+The comment says "dead code after unconditional jumps". For a body that is a
+fragment of a larger function, that is simply false, and the guard has no way
+to tell the difference. It converts an unreachable-looking jump into a
+`(void)0` no-op and leaves a reassuring comment behind.
+
+**How much of it is wrong.** Across the nine chunks:
+
+| Shape | Count |
+|---|---|
+| `(void)0;` where a live `if`/block conditioned on it | **1032** |
+| `(void)0;` after a return or unconditional jump | 1591 |
+| Total rewrites | 2623 |
+
+1032 of them sit inside a live `if`, so the branch still tests, still takes the
+condition, and then does nothing.
+
+**Proof on `0x000110D0`, from the original XBE.** The alias `sub_00011105` was
+emitted at `recomp_0000.c:418`; its branch at line 464 became `(void)0`. The
+bytes it came from:
+
+```
+00011133 mov      esi, dword ptr [esi + 0x34]
+00011136 test     esi, esi
+00011138 jne      0x110d0          <-- backward branch to the loop head
+0001113A mov      ecx, dword ptr [0x22fce0]
+```
+
+That is a linked-list traversal: `esi = [esi+0x34]` walks a next-pointer and
+`jne 0x110d0` loops while it is non-null. With the branch replaced by `(void)0`
+the loop runs **once** and every remaining element is skipped. Not a crash, not
+a link error -- a silent wrong answer, which is the failure class this project's
+rules exist to prevent.
+
+`sub_00011105` is in the dispatch table (`recomp_dispatch.c:24`), so it is
+reachable by address, not only through the loop above it.
+
+**Why the two guards interact.** My `_is_external_target` change makes the
+lifter emit `goto` where it used to emit a tail call. For the *parent*
+(`sub_000110A0`) that is now correct: `recomp_0000.c:249` reads
+`if (TEST_NZ(_fa, _fb)) goto loc_000110D0;`. For the *alias*
+(`sub_00011105`) the label is genuinely not in its own body, so the second
+guard neuters it. The alias is not a function: it is a mid-body fragment whose
+control flow exits sideways into its parent. It cannot be lifted standalone,
+and it should not be an entry.
+
+**Decision.** Do not weaken the label guard -- it is protecting against real
+breakage, and a `goto` to a label in another translation unit would not
+compile. Instead, stop creating the aliases as independent bodies. A
+`tail_jump_alias` entry is by definition the target of a tail jump into an
+existing body; the correct translation is the one the parent already emits,
+plus an alias symbol that jumps to the parent's block. That is the packet to
+do next. Recording it here as the recommendation, since it is a design change
+to the detector's output rather than a small emitter fix.
+
+---
+
+## 2026-09-21 — The game links. `jsrf_recomp.exe` builds.
+
+**Achieved.** `build/Release/jsrf_recomp.exe`, 19,245,568 bytes, links for the
+first time in this repository's history. `LNK1120: 473 unresolved externals` is
+gone, and so is the `LNK1169` that replaced it.
+
+**Three separate causes had to be fixed, in this order.**
+
+1. **The clobbered stub file** (the dominant cause, 541 declared vs 3 defined).
+   `recover-functions.py` no longer writes `recomp_stubs_unresolved.c`; it
+   writes `src/recomp/gen/recomp_stubs_recovery.c`.
+2. **Mid-body tail-jump targets emitted as tail calls.** `set_batch_spans` +
+   the rewritten `_is_external_target` in `tools/recomp/lifter.py`. Measured
+   effect: 541 -> 274 unresolved.
+3. **The full pass was invoked without the project's manual-function list.**
+   The command that produced the 2026-09-12 artifacts was an ad-hoc run, and the
+   one I used to regenerate them omitted `--manual-functions` and
+   `--exclude-manual`. With them: 274 -> 262. `sub_0017CEC0` and
+   `sub_00190240` were the visible symptom.
+
+**Two further defects the build exposed, both now fixed.**
+
+4. **Fixture sources were being compiled into the game.** CMake globs
+   `src/recomp/gen/*.c` into `jsrf_recomp`, so `recomp_stubs_recovery_test.c`
+   (whose whole purpose is to define an overlapping trap subset for a fixture
+   binary) was linked into production. That is a guaranteed `LNK2005` once the
+   production stub file regains its bodies, which is exactly what happened:
+   ~45 duplicates, then `LNK1169`. Moved to `src/recomp/gen/fixtures/`, and
+   CMake now filters `recomp_.*_test\.c$` out of the production glob as a
+   standing guard. The generator deletes a stale copy from the old location so
+   an existing checkout cannot keep failing.
+
+5. **`defined` in `translate_batch_split` ignored manual addresses absent from
+   `func_list`.** `manual_decls` is only filled for addresses that appear in the
+   batch, and a reviewed entry recovered out of the middle of another function
+   never appears there -- it was never a detector candidate. So a stub was
+   emitted for a symbol the project defines by hand:
+   `LNK2005: sub_00191390 already defined in recovered.obj`. The set now also
+   carries `sub_<addr>` and the database name for every manual address.
+
+**Also fixed, and it was hiding five traps.** The scan that decides which
+recovery traps are still needed must skip both this script's own output and the
+fixture directory. It skipped only the former, so the fixture file's definitions
+convinced the script that `sub_0018CEB0`, `sub_0018CF00`, `sub_00190F90`,
+`sub_001919C0` and `sub_00193658` were already provided. They were not: nothing
+in production defined them. The trap file went 8 -> 3 bodies and would have
+produced five unresolved externals at link. Now 10 bodies (the original 8 plus
+`sub_0018E500` and `sub_001928D0`, previously suppressed the same way), and the
+generation is idempotent -- two consecutive runs produce a byte-identical file,
+which it was not before.
+
+**Standing command for the full pass.** This must be recorded, because running
+it without the two flags is what produced a tree that could not link:
+
+```
+python -m tools.recomp game/default.xbe --all --split 1000 \
+    --gen-dir src/recomp/gen --game-name "Jet Set Radio Future" \
+    --manual-functions config/manual-functions.json \
+    --exclude-manual src/recomp_manual.c
+```
+
+`--exclude-manual` scans the hand-written C source directly, so the manual set
+cannot drift from the file that defines it. It reported "Excluding 0" here
+because `src/recomp_manual.c` declares rather than defines, but the name pinning
+it performs is still correct to have.
+
+**Verified.** Toolkit unit suite green (16 tests across
+`test_tail_jump_into_batch` (7), `test_lifter_atomics`, `test_seh_frame_owner`,
+`test_dispatch_flat`, `test_manual_scan`). Recovery generation is idempotent.
+`recomp_stubs_unresolved.c` is 262 stubs and matches the header's 262
+declarations -- checked as a pair, because that mismatch was the original bug.
+
+**Not yet done.** No guest execution. `jsrf_recomp.exe` has never been run, so
+no claim is made that it reaches the kick chain or any checkpoint. The 1032
+silently deleted live jumps remain, and they are the next real defect: they do
+not stop the link and they will not stop the run, they will just make it compute
+the wrong answer.
+
+---
+
+## 2026-09-21 — The runner cannot archive the game repo, and that gates the guest
+
+**Where the next checkpoint stops.** `scripts/run-jsrf.py:166`:
+
+```python
+(run_dir / 'project.patch').write_bytes(run_git(ROOT, 'diff', '--binary', binary=True))
+```
+
+`run_git` raises `RuntimeError` when git exits outside `(0, 1)`. The game
+repository has no object store, so `git -C <game> diff` exits 128 and the runner
+dies **before launching the guest**. The identity guard already refuses a stale
+build, so between the two the guest is unreachable in the current state.
+
+The toolkit calls beside it are fine -- `C:/Users/logic/Repos/xboxrecomp` is
+healthy, and `toolkit_revision`, `toolkit.patch` and `toolkit-status.txt` all
+work. Only the game-repo calls fail.
+
+**This must not be worked around by deleting the archival.** Recording the exact
+source state next to every run is the mechanism this project uses to keep
+evidence honest; a run whose provenance is unknown is not evidence. The right
+change is to degrade explicitly: attempt the game-repo archival, and if the
+repository cannot answer, write a marker file that says so and carries the
+identity that *is* available. Then a later reader can tell "this run has no
+project patch because the repo had no object store on 2026-09-21" from "someone
+forgot to archive it", which is the difference between a gap in the record and
+a silent one.
+
+Implemented: `project.patch` and project status are now attempted and, on
+failure, replaced by `project-state-unavailable.txt` naming the git error, plus
+the build-identity stamp's `exe_sha256` which is the strongest available
+substitute for a revision. A healthy repository still archives both files
+exactly as before, and the fallback prints a warning so it cannot pass unnoticed.
+
+**Still the user's decision.** Restoring `.git/objects` from a backup or
+snapshot remains the real fix, and it is the only way to get `project.patch`
+back. The fallback exists so that the absence is recorded rather than blocking
+all guest work on it.
+
+---
+
+## 2026-09-21 — The guest runs. First viable checkpoint.
+
+**`logs/runs/20260921-122533-752-deepeek-first-run`.** `jsrf_recomp.exe`
+executes the guest for the first time in this repository's history.
+
+```
+{"outcome":"normal_exit","exit_code":0,"dump_ok":true,"native_threads":6,
+ "named_frames":35,"gpu_snapshots":1,"gpu_snapshots_dropped":0,
+ "missing_checkpoints":[],"checkpoints_passed":true,"duration_seconds":3.27,
+ "gpu_report_ok":true}
+```
+
+NV2A MMIO trap installed (16 MB serialized `PAGE_NOACCESS`), nine guest heap
+allocations served, the kernel bridge answered seven calls across ordinals 189,
+234, 225, 186 and 187 including a real `NtWaitForSingleObjectEx` with a finite
+timeout returning both `0x00000102` (timeout) and `0x00000000` (signalled), and
+the run exits cleanly with PTIMER service stopped and the memory layout released.
+
+**Scope of the claim.** This is the `healthy` probe, which drives the harness
+liveness path. It is **not** the kick-chain checkpoint and must not be read as
+one. The 11c1 acceptance condition is an `unsupported_method` stop on a
+`gpu-submit-*` probe, and that has not been attempted yet.
+
+**Runner fix that made this possible.** `scripts/run-jsrf.py` aborted before
+launching the guest because `project.patch` came from the game repo, which
+cannot answer git. Now `archive_project_state()` attempts it and, on failure,
+writes `project-state-unavailable.txt` naming the error plus the executable
+hash from the build-identity stamp, prints a warning, and records
+`project_archived: false` in `metadata.json`. The run directory shows this:
+`project-state-unavailable.txt` is present and `project.patch` is absent, which
+is exactly the distinction the file is for. Toolkit archival still works and
+both `toolkit.patch` and `toolkit-status.txt` are present.
+
+**Verified alongside.** All regression suites green on this build:
+`jsrf_recovery_11c1_test` `PASS: 2197 11c1 recovered leaf ABI/behavior checks`;
+`jsrf_crt_test` `PASS: 36900 memmove cases`; `jsrf_lifter_test` 288 atomic +
+300 string comparison + WBINVD; `jsrf_nv2a_test` `PASS: 319 NV2A
+register/clock contracts`; `jsrf_gpu_smoke` `{"outcome":"pass",
+"pixels_verified":4096,"debug_errors":0}` on the real adapter. Source/executable
+identity verified.
+
+**Next.** Run the `gpu-submit-*` probes and expect the `unsupported_method`
+stop, which is 11c1's stated success condition.
+
+---
+
+## 2026-09-21 — Correction: 11c1 does not want an `unsupported_method` stop.
+
+I ran the probe named as the acceptance test and it passed, but not in the way
+the criterion I wrote described. Recording this now because the wrong criterion
+would have made a passing packet look like a failure, and would have invited a
+"fix" to code that is already correct.
+
+**What I wrote.** In the plan row for 11c1 I said the acceptance condition is an
+`unsupported_method` stop on a `gpu-submit-*` probe. That is wrong.
+
+**What the probe actually asserts.** `tests/gpu_probes.c:105-185` runs three
+separate modes and only one of them is supposed to fail a submission:
+
+| Mode | Payload | Expected diagnostic | Expected queue |
+|---|---|---|---|
+| `gpu-submit-supported` | method `0x100`, one packet | `ok`, `sink=1`, `successes=1`, `atomic=accepted` | consumed, `GET == PUT` |
+| `gpu-submit-bound` | method `0x200`/`0x204`, three packets | `ok`, `sink=3`, `successes=1`, `atomic=accepted` | consumed, `GET == PUT` |
+| `gpu-submit-blocked` | subchannel 5, method `0x180` | `unsupported_method`, `sink=0`, `successes=0`, `atomic=blocked-unchanged` | **not** consumed, `GET != PUT` |
+
+`unsupported_method` is the `gpu-submit-blocked` expectation only. For
+`gpu-submit-supported` the assertion at line 76 is the opposite:
+
+```python
+assert 'diag=ok sink=1 successes=1 atomic=accepted' in log
+assert gpu['registers']['USER_DMA_GET']==gpu['registers']['USER_DMA_PUT']
+```
+
+and `normal_exit` with exit code 0 is the declared expected outcome for all
+three modes (`scripts/test-harness.py:114`). A stop would have been a defect.
+
+**The run.** `logs/runs/20260921-122557-411-deepeek-kickchain`, probe
+`gpu-submit-supported`, seconds 6:
+
+```
+GPU_SUBMISSION mode=gpu-submit-supported aperture=PAGE_NOACCESS get=00000008
+  put=00000008 diag=ok sink=1 successes=1 atomic=accepted
+[CHECKPOINT] ms=534927218 tid=21540 probe_gpu
+```
+
+Every field matches the pass contract: the aperture is `PAGE_NOACCESS` (line 74),
+`diag=ok` with `sink=1 successes=1 atomic=accepted` (line 76), and `USER_DMA_GET
+== USER_DMA_PUT == 0x00000008` (line 77) — the packet was consumed, not left
+pending. Four GPU snapshots, none dropped, `gpu_report_ok: true`,
+`checkpoints_passed: true`, `missing_checkpoints: []`, and the process exits 0.
+
+The captured artefact agrees that *no* command stream was decoded, which is the
+correct reading for this mode and not a failure: `gpu-report.md` says "Observed
+queue history: **equal_unchanged**" and "Final pending queue decode: **empty**",
+and closes with its own caveat that "GET == PUT is not proof of executed
+commands". The fixture writes two words and consumes them; there is nothing left
+to decode. The `unsupported_method` path is exercised by the separate
+`gpu-submit-blocked` run.
+
+**Decision.** Treat the kick-chain probe as passed on the supported-submission
+contract, and correct the plan text rather than the code. I am leaving
+`gpu_probes.c` untouched — it was right and the criterion was wrong. I will also
+run all three submission modes through the harness rather than the single
+supported mode, so the blocked path is verified in the same pass as the accepted
+one; a single mode never exercised the `unsupported_method` branch at all.
+
+**What this does and does not prove.** It proves the guest reaches the first
+NV2A pushbuffer submission, that the submission is accepted atomically, and that
+`GET`/`PUT` advance together. It does **not** prove the kick chain ran a real
+command stream: the preceding `healthy` run never touched the GPU aperture, and
+this one only exercises the harness fixture, which `gpu-report.md` labels
+"SYNTHETIC FIXTURE: pointer changes are test actions, not GPU work." The 1032
+silently-deleted jumps recorded earlier still stand as the reason a boot alone is
+not sufficient evidence.
+
+**Next.** Correct the 11c1 acceptance row to name the real contract, run the
+three submission modes together, then return to the alias-body change that stops
+the 1032 rewrites.
+
+**Done the same session.** Row 11c1 and the 11b4b5 next-step now name the
+accepted-submission contract and flag the old text as corrected. All three modes
+were re-run through the harness rather than hand-invoked, and all three pass:
+
+```
+PASS gpu-submit-supported: logs/runs/20260921-122740-543-test-gpu-submit-supported-0
+PASS gpu-submit-bound:     logs/runs/20260921-122744-598-test-gpu-submit-bound-0
+PASS gpu-submit-blocked:   logs/runs/20260921-122748-695-test-gpu-submit-blocked-0
+```
+
+The blocked run is the one that had never been exercised, and it produces the
+diagnostic exactly as designed:
+
+```
+GPU_SUBMISSION mode=gpu-submit-blocked aperture=PAGE_NOACCESS get=00000000
+  put=00000010 diag=unsupported_method sink=0 successes=0 atomic=blocked-unchanged
+GPU_UNSUPPORTED subchannel=5 method=00000180 param=ABCDEF01
+```
+
+`GET=0x00000000` against `PUT=0x00000010` is the blocked submission left pending,
+with the exact subchannel, method and parameter the fixture wrote. So the two
+halves of 11b4's contract are now both proven on one build: an accepted stream
+advances `GET` to `PUT` and increments `sink`/`successes`, and an unsupported
+method rolls back the whole stream without advancing either counter.
+
+**Decision.** Leave `gpu_probes.c` and its assertions unchanged. Both branches
+were already implemented and already correct; the only wrong artefact was the
+criterion, and it is now fixed in both places it appeared.
+
+---
+
+## 2026-09-21 — The alias bodies are gone. The 1032 live jumps are fixed.
+
+**Decision.** Stop emitting `tail_jump_alias` entries as standalone function
+bodies. Declare the symbol, fold the body into its parent.
+
+**Why.** An alias entry is not a function. It exists because a tail jump landed
+part-way into another body, and `_build_alias_entries` recorded the landing site
+using the *enclosing* function's end — 2539 of JSRF's 2548 overlapping entries
+share the parent's end exactly, so alias and parent cover the same bytes and
+differ only in where they start. Emitting it as `void sub_X(void)` was wrong
+twice: it duplicated the parent's tail as a second callable body (so a tail jump
+into the middle of a routine became a *call* that returned to a frame the guest
+still needed), and the duplicate could contain `goto loc_<addr>` for a label
+that only exists in the parent.
+
+I did **not** weaken the label validator. A `goto` to a label in another
+function is not valid C, so the validator was right to reject it — the generator
+was wrong to produce the situation.
+
+**Implementation** (`tools/recomp/translator.py` and `lifter.py`, committed as
+toolkit `58a9cf9`): three pieces, and the second and third only showed up
+because the build failed.
+
+```python
+# 1. group entries by end address; the alias folds into the nearest earlier start
+_candidate_parents.setdefault(_end, []).append(_addr)
+_earlier = [p for p in _candidate_parents.get(_end, ()) if p < _addr]
+if _earlier:
+    alias_parent[_addr] = max(_earlier)
+```
+
+The nearest earlier start wins, not the first — a test caught that. Folding into
+an unrelated body that merely shares an end address would point the symbol at a
+label that does not exist at that offset.
+
+```python
+# 2. an alias's parent can itself be an alias: follow the chain to a real body
+def _resolve_owner(addr):
+    seen = {addr}; cur = addr
+    while cur in alias_parent:
+        nxt = alias_parent[cur]
+        if nxt in seen: return None      # cycle guard
+        seen.add(nxt); cur = nxt
+    return cur
+```
+
+```python
+# 3. the dispatch entry names the owner; the VA stays the alias's
+dispatch_name = alias_redirect.get(addr, name)
+lines.append(f"    {{ 0x{addr:08X}u, (recomp_func_t){dispatch_name} }},")
+```
+
+**The failure sequence, because the end state alone would hide the design.**
+
+| Attempt | Build result | Cause |
+|---|---|---|
+| declare alias, no redirect | 2537 × `LNK2001` | aliases were in `manual_decls` and the dispatch table, and a declared-but-undefined symbol has no address |
+| redirect alias → parent | 1666 × `LNK2001` | the header still declared `void sub_X(void)` for every alias, so every including unit referenced it |
+| drop alias from header | 102 × `C2065` undeclared identifier | `0x0002B81F` was redirected to `sub_0002B340`, which is *itself* an alias |
+| resolve the chain | 1 × `LNK2019` | `sub_00040000` **falls through** past its end into the alias `sub_00040004` and emitted a direct call |
+| fall-through into an alias is implicit | **0 errors** | the parent's bytes already continue into the alias; no bridge is needed |
+
+Two of those are worth stating as rules, because both are invisible in the final
+diff: **a redirect target must terminate at a real body** (aliases nest), and
+**the fall-through path takes a different route than the jump path.** The lifter
+covers jumps via `_is_external_target`; `translate_function` decides the
+fall-through bridge separately, so fixing one did not fix the other.
+
+**Result.** `alias_entries = 2537`, the binary dropped from 19,245,568 to
+10,892,800 bytes (the 2537 duplicate bodies are no longer emitted), and the
+reference case is correct:
+
+```
+recomp_0000.c:183  loc_000110D0: ;
+recomp_0000.c:249      if (TEST_NZ(_fa, _fb)) goto loc_000110D0; /* jne */
+```
+
+Line 464's `sub_000110D0(); return;` and the phantom `sub_00011105` body are
+both gone — `grep "void sub_00011105(void)"` returns zero across all six chunks.
+The dispatch table points the VA at a real body:
+`{ 0x00011105u, (recomp_func_t)sub_000110A0 }`. Identity verified, sha256
+`c17b47126dc15a32398d9da0655c778420a4d27a918dbb8092db13fcefbb1ba1`.
+
+**Measured, before → after:**
+
+| Metric | Before | After |
+|---|---|---|
+| `dead code` rewrites, total | 2623 | 1309 |
+| …inside a live `if` | **1032** | **503** |
+| …inside a live `if`, label in the **same** function | 1032 | **0** |
+| Executable size | 19,245,568 | 10,892,800 |
+| Unresolved stubs | 262 | 259 |
+
+**I need to correct my own earlier claim in this entry.** I first wrote "zero
+live jumps are deleted now." That was wrong, and I caught it only by re-running
+the classification after the build succeeded — the 503 live-`if` rewrites
+persist. What actually changed is their *composition*: every one that could have
+been restored in place is gone (same-function: 1032 → 0), and what remains is 345
+whose label belongs to another function and 158 whose label exists nowhere.
+
+Classifying all 1309 by label ownership:
+
+| Target label is | Count | Of which inside a live `if` | Verdict |
+|---|---|---|---|
+| in the **same** function | 2 | 0 | restorable — not yet done |
+| in a **different** function | 628 | 345 | structural |
+| **absent** entirely | 679 | 158 | structural |
+
+The 628 are real: `sub_00011BE0` contains `goto loc_00012890`, and
+`loc_00012890` is a label inside a *different* function `sub_00012890`, 2300
+lines further down. C has no cross-function goto, so no rewrite rule can restore
+it — the two entries have to become one body, or the target has to be promoted
+to a real entry.
+
+**A second correction to my own reasoning.** While investigating I changed the
+label validator from one pass to two, on the hypothesis that it was deleting
+forward references within a single body. The re-run proved the hypothesis wrong:
+the count did not move. I kept the two-pass version because it is correct — a
+forward `goto` is ordinary C, and the one-pass form would delete one — and added
+three tests pinning forward, backward and genuinely-absent cases. Recording that
+it changed nothing measurable, so it is not mistaken for the fix.
+
+**What remains open.** The 2 same-function deletions are the only immediately
+restorable ones. The other 1307 need the entries merged or the target promoted,
+which is a larger change than a rewrite rule and I am not folding it into this
+one. The `tail_jump_alias` and `reachable_by_fallthrough` entries that share a
+parent's end are the merge candidates.
+
+**Status.** 11c1's second known defect is closed: `tail_jump_alias` bodies are no
+longer emitted, the executable is 43% smaller, and every live jump that *could*
+branch within its own body now does. The 1032 figure should be read as 1032 → 0
+for same-function targets, with 503 cross/absent rewrites carried forward as a
+separate structural issue rather than conflated with it.
+
+**Verified after the change.** All regression suites green on the new binary:
+`PASS: 2197 11c1 recovered leaf ABI/behavior checks`; `PASS: 36900 memmove cases
+(bytes, bounds, return value, cdecl stack)`; lifter 288 atomic + 300 string
+comparison + WBINVD; `PASS: 319 NV2A register/clock contracts`. Every target
+builds with **zero** errors. Source/executable identity verified.
+
+The guest still boots on the smaller binary —
+`logs/runs/20260921-124602-113-deepeek-alias-fix`, `normal_exit`, exit 0, all
+checkpoints passed, 4 GPU snapshots, and the accepted-submission contract holds:
+
+```
+GPU_SUBMISSION mode=gpu-submit-supported aperture=PAGE_NOACCESS get=00000008
+  put=00000008 diag=ok sink=1 successes=1 atomic=accepted
+[CHECKPOINT] ms=536131578 tid=5340 probe_gpu
+```
+
+That is necessary but not sufficient evidence on its own, and it is the one
+claim this entry is careful about: the run drives the harness fixture, not a
+game command stream. Removing 2537 duplicate bodies is verified by the build and
+the suites; that the guest now *behaves* differently in the subtler
+cross-function cases is not something this run can show.
+
+## A real tail call is not an intra-body goto
+
+The alias fold left 1309 rewritten jumps and I said 456 of them were "forward
+jumps into a batch span" that a two-pass validator would fix. That was wrong, and
+the way it was wrong matters. The two-pass validator changed nothing. What the
+456 actually were is this:
+
+```
+00011C0E  jmp 0x12890        ; original instruction
+```
+
+`0x12890` is `sub_00012890`, a real function (`0x12890-0x128B1`, 33 bytes) that is
+*also* reached by a direct call at `0x00011C5A`. The instruction is a **tail
+call**. My batch-span rule asked "is the target inside some span this batch
+emits", and a function start is inside its own span by construction, so every
+real tail call was classified as intra-body. The generator emitted
+`goto loc_00012890` — not valid C across functions — and the label validator
+deleted it. A tail call silently became `(void)0`.
+
+The fix discriminates on `detection_method` instead of on span membership:
+`tail_jump_alias` is a fragment and stays a `goto`; a real entry point is
+external and stays a tail call even when its span overlaps.
+
+```
+0x00011C0E  g_seh_ebp = ebp; sub_00012890(); return;  /* tail jmp 0x00012890 */
+```
+
+**Decision — one guard, not two.** I considered keeping the span test as an
+inner case and adding `detection_method` as an outer case, so that an entry
+inside a span would still fold. I did not, because the two conditions are not
+independent: "inside a span" is true of every entry, so the span test can only
+ever subtract from the `detection_method` answer, and the only thing it subtracts
+is genuine tail calls. Recording the measurement, since it is the whole argument:
+
+| | before | after |
+|---|---:|---:|
+| deleted gotos, total | 1309 | **309** |
+| — cross-function | 628 | 301 |
+| — label absent | 679 | 8 |
+| — same function | 2 | 0 |
+| live `if (…) (void)0;` | 503 | **273** |
+| real tail calls emitted | — | **864** |
+
+1000 sites stopped being deleted. Same-function deletions remain 0. The
+`test_tail_jump_into_batch.py` case that asserted `0x5000` was intra-body now
+asserts it is external, because `0x5000` is a span start and a span start is a
+real entry — the old assertion was encoding the bug.
+
+## The residual 309 are a different defect, and it is not my rewrite rule
+
+Classified by what the target actually is, all 309:
+
+| sites | class |
+|---:|---|
+| 239 | target is **not** an entry at all, but is inside a body |
+| 56 | target **is** an entry, contained in an overlapping entry |
+| 14 | target is an entry with no overlap |
+
+Every one of the 309 is accounted for by `vtable_scan` (117), `none` (110),
+`vtable_thunk` (66) and `vtable_ctor` (15). This is not a jump-rewriting problem.
+It is the entry database containing entries that overlap other entries:
+
+```
+0x00074004 - 0x0007402F   sub_00074004   method=none
+0x00074018 - 0x00074038   sub_00074018   method=vtable_thunk  vtable=0x00074030 idx=18
+0x0007402B - 0x0007404B   sub_0007402B   method=vtable_thunk  vtable=0x00074030 idx=17
+```
+
+Three entries, one address range, at most one of which can be the function. The
+jumps that die are `loc_0007402B`, which does get a label — inside
+`sub_00074004`'s body at `recomp_0001.c:29453`. The validator deletes the 12
+callers because *they are in a different function*: `sub_00073C20 -
+0x00074004` branches to a point past its own end. The block at `0x7402B` is
+reachable by jump but is not part of any function the database believes in, so
+either the containing function's end is wrong or the target is a separate
+function the scan mis-attributed to a vtable slot.
+
+This needs a function-boundary change, not a rewrite rule, and I am not folding
+it into the alias work. It is the same shape as the alias defect — a spurious
+entry splitting a real body — but the evidence for which entry is spurious is
+not in hand yet, so **Decision: record it as 11c1's remaining open defect and
+hand it to the plan, rather than guess at a boundary fix now.**
+
+**Status.** 11c1's second defect is closed a second time and this time the
+metric holds: same-function deletions 0, cross-function `goto` deletions 628 →
+301, absent-label 679 → 8. The 309 that remain are attributed to a named defect
+with a reproduction, not carried as an unexplained number.
+
+Toolkit change is uncommitted on top of `58a9cf9`: `tools/recomp/lifter.py`
+(`_is_external_target`) and `tools/recomp/test_tail_jump_into_batch.py`.
+
+## Root cause pin for the residual 309 (evidence, not yet a fix)
+
+I said the evidence for which overlapping entry is spurious was "not in hand".
+It is now, for the largest cluster, and it is a clean falsification.
+
+The cluster at `0x74000`, disassembled from the original XBE:
+
+```
+00073FFC  call 0x72990
+00074001  cmp  eax, 1
+00074004  jne  0x7402B          <-- database calls this "sub_00074004"
+00074006  cmp  edi, ebp
+00074008  je   0x7402B
+0007400A  pop  edi
+0007400B  pop  ebp
+0007400C  mov  dword ptr [esi + 0x90], 0x12
+00074016  pop  esi
+00074017  ret
+00074018  push esi              <-- vtable slot 18
+00074019  mov  ecx, esi
+0007401B  call 0x11be0
+00074020  mov  edx, dword ptr [esi + 0x28]
+00074023  push edx
+00074024  mov  ecx, esi
+00074026  call 0x11c20
+0007402B  pop  edi              <-- vtable slot 17
+0007402C  pop  ebp
+0007402D  pop  esi
+0007402E  ret
+0007402F  nop
+```
+
+The decisive fact: `0x74004` is `jne 0x7402B`. It is a **conditional branch in the
+middle of a function that starts at `0x73FF0`** (or earlier), not a function
+header. Nothing calls it and nothing jumps to it — I scanned the whole `.text`
+for `call`/`jmp`/`jcc` with `0x74004` as target and there are **zero** references.
+An address that no instruction transfers control to, in the middle of a decoded
+instruction stream, is not an entry point. The database manufactured it
+(`method=none`, `confidence=0.0`), and that phantom entry then:
+
+1. claimed `0x74004-0x7402F`, swallowing `0x7402B`'s vtable-slot-17 landing pad;
+2. gave `0x7402B` a body whose label is emitted in the wrong function;
+3. made the 12 real callers of `0x7402B` — all in `sub_00073C20-0x00074004`,
+   which is exactly the function that *ends* at `0x74004` — branch past their own
+   end, so the validator deleted them.
+
+So the true shape is: one function ending at `0x74017`, another beginning at
+`0x74018`, and a shared epilogue at `0x7402B` that both reach. The database has
+three entries where there should be two.
+
+**Generic test across all 309 sites, which is the part that matters:**
+
+| sites | target position in its enclosing entry |
+|---:|---|
+| 161 | **mid-instruction** — the entry is provably phantom |
+| 148 | a linear instruction boundary — needs per-case judgement |
+
+161 of 309 are the same defect as the `0x7402B` cluster with proof attached: the
+entry they land in cannot be an entry, because its start is not an instruction
+boundary. That is a rule, not a hunch — "an entry whose start is not a valid
+instruction start when decoding linearly from the enclosing entry, and which no
+branch targets, is not an entry." The remaining 148 are genuine boundaries
+(shared epilogues like `0x7402B`) and need the tail-merge treatment instead.
+
+**Decision: do not implement either yet.** Neither rule is safe to add blind:
+dropping a phantom entry changes a function's `end`, which changes every
+fall-through decision in the batch, and I would be re-measuring the whole tree.
+That is a packet of its own with its own acceptance test, and it is the right
+shape for 11c2 rather than a tail-end addition to 11c1. Recording the rule, the
+reproduction and the 161/148 split so the next session starts from evidence
+rather than from the 309.
+
+## Acceptance for the tail-call fix
+
+Committed as toolkit `a301962`. Full guarded pipeline run (configure, recovery,
+lifter-test generation, identity before, six-target build, identity after):
+
+```
+configure=0  recover=0  liftergen=0  before=0  build=0 (0 errors)  after=0
+```
+
+All suites green on the new binary:
+
+```
+PASS: 36900 memmove cases (bytes, bounds, return value, cdecl stack)
+PASS 288 atomic result/flag cases, including intervening writes
+PASS 300 string comparison/flag/direction/zero-count cases
+PASS WBINVD lowering calls ordering helper and preserves flags
+PASS: 319 NV2A register/clock contracts (no renderer)
+```
+
+22/22 toolkit unit tests pass (`test_tail_jump_into_batch`,
+`test_alias_body_suppression`).
+
+Guest run `logs/runs/20260921-125924-715-deepeek-tailcall-fix2`,
+`exe_sha256 ebd1d00a…bb77b`, `toolkit_rev a301962`:
+
+```
+[CHECKPOINT] ms=536933828 host_entry
+[CHECKPOINT] ms=536933828 memory_ready
+GPU_SUBMISSION mode=gpu-submit-supported aperture=PAGE_NOACCESS get=00000008
+  put=00000008 diag=ok sink=1 successes=1 atomic=accepted
+[CHECKPOINT] ms=536934093 probe_gpu
+{"outcome":"normal_exit","exit_code":0,"missing_checkpoints":[],
+ "checkpoints_passed":true,"gpu_snapshots":4,"gpu_report_ok":true}
+```
+
+The accepted-submission contract holds on the tail-call binary exactly as it did
+on the alias binary, and `named_frames` is 33 — identical to the previous run —
+so the 864 newly-emitted tail calls did not disturb the boot path.
+
+**A false alarm worth recording, because I nearly filed it as a regression.** The
+first run of this binary reported `checkpoints_passed: false`,
+`missing_checkpoints: ["guest_entry"]`. That is not the guest failing to reach
+its entry point. `--probe=` takes an early return in `main.c:148`, before
+`checkpoint("guest_entry")` at `main.c:162`, so a probe run never emits it — the
+probe is the guest entry. The default expectation is
+`['memory_ready', 'guest_entry']` (`run-jsrf.py:171`) and only makes sense for a
+non-probe run. The previous successful run passed
+`--expect-checkpoint probe_gpu`; I omitted the flag. Re-run with it:
+`missing_checkpoints: []`. The correct way to state the rule is that a probe run
+expects its probe checkpoint and nothing else.
+
+## Correction: the "phantom entry" story in the previous section is wrong
+
+The section above claims 161 of the 309 land mid-instruction and that
+`sub_00074004` is `method=none`, `confidence=0.0`. **Both claims are wrong** and I
+am leaving the section in place rather than deleting it, because how it was
+wrong is the useful part.
+
+The error was using the wrong database. There are two:
+
+| file | entries | used by |
+|---|---:|---|
+| `tools/func_id/output/identified_functions.json` | 11,570 | nothing in the current pipeline |
+| `tools/disasm/output/functions.json` | 8,437 | the generator (`__main__.py:268`) |
+
+I measured the phantom class against the **stale** `identified_functions.json`.
+`0x74004` in the stale file is `{"method": "none", "confidence": 0.0}`; in the
+live file it is `{"detection_method": "imm_ref_target", "confidence": 0.86}` — a
+real, well-evidenced entry. Re-run against the live DB, the mid-instruction
+count is **0**, not 161. And `0x74004` is contained by no entry at all, so my
+"three entries, one range" reading came from a containment scan that was itself
+wrong.
+
+Checked directly, every one of the four targets I named is a valid linear
+instruction boundary in its enclosing entry:
+
+```
+0x074004: contained by []                     (nothing overlaps it)
+0x07402B: contained by 0x74004-0x7402F  boundary=True
+0x0FCB16: contained by 0xFCB03-0xFCB19  boundary=True
+0x1025B0: contained by 0x102490-0x1026B0 boundary=True
+```
+
+I had also already written a `_pass_phantom_entries` pass into
+`tools/disasm/functions.py` to drop those entries. It is reverted
+(`git checkout`) — there was nothing to drop. Writing a pass on the strength of
+a metric I had not tied to the live pipeline was the mistake; the pass would
+have changed function `end` values and every fall-through decision that depends
+on them, for no reason.
+
+**What the 309 actually are, against the live DB:**
+
+| sites | class |
+|---:|---|
+| 287 | target is **not** an entry, but is inside a body |
+| 14 | target is an entry, no overlap |
+| 8 | target is an entry inside an overlapping entry |
+
+and by the `detection_method` of the entry that contains the target:
+`tail_jump_alias` 237, `gap_prologue` 169, `imm_ref_target` 26, `call_target`
+25. Of the 287, **218 are inside at least one non-alias entry** — a real
+function owns the bytes but never emits a label the jump can reach. 69 are
+inside alias bodies only.
+
+So the residual 309 are the **same defect family as the alias work**: a jump
+into a region that some entry claims but whose body does not emit the label.
+It is not an entry-overlap defect and it is not a phantom-entry defect. It is
+"a real function's span contains a sub-region that is genuinely reachable as a
+landing site but is not translated as part of that function", which is exactly
+the shape that `tail_jump_alias` and the alias fold were built for — 2,550 of
+8,437 entries are contained by two or more entries, so the overlap is systemic
+and is the norm for this binary, not an anomaly.
+
+**Decision: the next packet is to find why a label that this classification says
+should exist is not emitted.** The question is answerable and narrow: take the
+157 `gap_prologue`-contained sites, pick the enclosing function, and read the
+generated body to see whether the label is missing because the address is not a
+block leader in the recovered CFG. That is a code-reading task, not a
+heuristic-adding task, and it is the right opening for 11c2.
+
+## Root cause of the residual 309, resolved
+
+I said the next packet was to find why a label the classification says should
+exist is not emitted. Here it is, worked end to end on one case, and the answer
+is not a validator bug at all.
+
+Take the `gap_prologue`-contained case I picked: target `0x02E00C`, reported
+deleted once. In the generated tree:
+
+```
+recomp_0000.c:59116   inside void sub_0002DBE0(void)   (header line 58869)
+  if (TEST_Z(_fa, _fb)) (void)0; /* goto loc_0002E00C - dead code ... */
+recomp_0000.c:59349   inside void sub_0002DF76(void)   (header line 59280)
+  loc_0002E00C: ;
+```
+
+**Two different functions.** The label exists; it is emitted in
+`sub_0002DF76`. The validator deleted the `goto` because it is in
+`sub_0002DBE0`, and a `goto` into another function is genuinely invalid C. The
+validator is right, exactly as the earlier note in `translator.py` says.
+
+The original code, from the XBE:
+
+```
+0002DDF2  je 0x2e00c            <-- inside sub_0002DBE0
+...
+0002DF75  ret                   <-- sub_0002DBE0 ends
+0002DF76  push edi              <-- sub_0002DF76 begins (gap_prologue)
+...
+0002E00C  mov ecx, esi          <-- shared epilogue, inside sub_0002DF76
+0002E00E  call 0x255c0
+0002E013  pop edi
+...
+```
+
+Scanning every branch in the region, three instructions transfer control from
+`sub_0002DBE0` into `sub_0002DF76`'s byte range:
+
+```
+0x02DDF2 -> 0x02E00C
+0x02DF1F -> 0x02DF76    (its normal entry)
+0x02DF4B -> 0x02E026
+```
+
+Two of the three land *past* the entry, on shared epilogue blocks. This is the
+MSVC shared-tail pattern, and it is **precisely the shape `tail_jump_alias` was
+built to describe**: a jump into the interior of another function that must be
+callable as an alias rather than duplicated or dropped.
+
+`0x2DBE0` is classified `tail_jump_alias` but `0x2DF76` is `gap_prologue`, and
+`_build_alias_entries` only creates aliases for targets that land inside a
+function *start* it already knows. Here the jump target `0x2E00C` is not an
+entry, so no alias was ever created for it — `_pass_tail_jump_targets` records a
+tail jump only when it can prove the target is a function, and `0x2E00C` is
+reachable only as a mid-body branch target.
+
+**So the residual 309 are: interior branch targets that need alias entries but
+never got one, because the alias machinery is only driven by jumps it can prove
+are function entries.** The fix is not in the validator and not in
+`_is_external_target`; it is to teach `_build_alias_entries` (or a sibling pass)
+to create an alias for a branch target that is mid-body in *another* function,
+using that function's end — which is exactly what `_pass_seed_aliases` already
+does for `seed_vtable_thunk` seeds. That pass exists and is the template:
+
+```python
+if addr not in self._alias_entries:
+    self._alias_entries[addr] = body_end
+```
+
+**Decision: this is a well-scoped change to the alias-creation pass, and it is
+now the concrete next packet.** I am not implementing it in this session's tail:
+it mutates the entry database, which changes the dispatch table, the header, and
+every span the lifter consults, so it needs the full guarded pipeline plus a
+fresh set of metrics rather than a quick patch. What I have established is that
+the target is a *creation* gap with an existing template, not an unknown
+boundary problem — which is a materially better position than "309 unexplained
+deletions".
+
+---
+
+## The alias-creation fix works, and it is not enough — because the real defect is downstream
+
+**Decision: I implemented the alias-creation pass, verified it produces exactly
+the entries it was written to produce, and I am reporting that it did *not* move
+the 309. That is the correct outcome to report, not a failure to hide.** The
+packet was worth doing because it eliminated the alias-creation hypothesis with
+hard evidence; it does not fix the symptom, and the evidence says why.
+
+### What I changed (toolkit, uncommitted)
+
+Three edits in `tools/disasm/functions.py`, all reviewed in place:
+
+1. `_pass_cond_branch_orphans` no longer skips a target that is mid-body in
+   another function. It used to say "handled above", which was false —
+   `_pass_data_ptr_targets` only creates aliases for *data-table* targets, and a
+   branch target is not one. It now creates the alias:
+   ```python
+   if target not in self.engine.instructions:
+       continue
+   self._alias_entries[target] = bodies[j][1]
+   ```
+2. The pass is no longer called from inside `_pass_tail_jump_targets` (which
+   runs in an 8-round loop that rebuilds `functions` every round, so a body
+   discovered in a later round is never seen).
+3. A new `_pass_cond_branch_orphans_after(sections)` runs **once**, after
+   `_pass_gap_prologues` / `_pass_data_ptr_targets` / `_pass_seed_aliases` and
+   immediately before `_build_alias_entries`, and its body list includes alias
+   spans as well as `self.functions` spans.
+
+### Evidence that the fix does what it claims
+
+Entry database: **8,742 → 8,848** entries, `tail_jump_alias` **3,045 → 3,151**.
+
+The two worked-example addresses are now real entries, with the parent's end —
+exactly the shape `_pass_seed_aliases` produces:
+
+```
+0x0002DF76  sub_0002DF76  gap_prologue     0x0002DF76..0x0002E0C0
+0x0002E00C  sub_0002E00C  tail_jump_alias  0x0002E00C..0x0002E0C0   <- created
+0x0002E026  sub_0002E026  tail_jump_alias  0x0002E026..0x0002E0C0   <- created
+```
+
+So the alias-creation hypothesis is **confirmed at the database layer and
+eliminated as the cause of the symptom**.
+
+### Evidence that it does not fix the 309
+
+The generator's own marker is unchanged:
+
+```
+$ grep -ho 'goto loc_... - dead code, label not in function' src/recomp/gen/recomp_0*.c | wc -l
+309
+```
+
+And the specific case is still rewritten, with the label still emitted in a
+**different function body**:
+
+```
+recomp_0000.c:59116  in sub_0002DBE0:
+    if (TEST_Z(_fa, _fb)) (void)0; /* goto loc_0002E00C - dead code ... */
+
+recomp_0000.c:59349  in sub_0002DF76:
+    loc_0002E00C: ;
+```
+
+`sub_0002DBE0` is at line 58869 and `sub_0002DF76` at line 59280: two separate
+emitted `void sub_*(void)` bodies. C has no cross-function goto, so the
+validator is **correct** to delete it. Creating the alias changed nothing here
+because the alias target was already classified as non-external and the `goto`
+was already the right instruction — the problem is that the label is out of
+scope.
+
+### Root cause of the residual 309, and it is a bigger finding than the symptom
+
+Reading `translate_batch_split`'s own comment, an alias is supposed to be folded
+into its owner and **never emitted as its own body**. The parent is chosen by
+"an earlier start with the same end":
+
+```python
+_earlier = [p for p in _candidate_parents.get(_end, ()) if p < _addr]
+if _earlier:
+    alias_parent[_addr] = max(_earlier)
+```
+
+For the JSRF worked example that rule has no answer. Grouping the database by
+end address:
+
+```
+end 0x0002DF76:  0x2DBE0 sub_0002DBE0 tail_jump_alias
+                 0x2DC69 sub_0002DC69 tail_jump_alias      <- only other aliases
+end 0x0002E0C0:  0x2DF76 sub_0002DF76 gap_prologue        <- the real body
+                 0x2E00C sub_0002E00C tail_jump_alias
+                 0x2E026 sub_0002E026 tail_jump_alias
+```
+
+`0x2DBE0` and `0x2DC69` share end `0x2DF76`, and the **only** entries at that end
+are each other. There is no real body ending at `0x2DF76`. So `_resolve_owner`
+follows the chain, finds no body, and `0x2DBE0` is emitted as its own
+`void sub_0002DBE0(void)` — which is why line 58869 exists.
+
+The correct owner is `sub_0002DF76` itself: the alias **ends exactly where that
+function starts**. The same-end rule cannot see it, because here the alias's end
+*is* the parent's start.
+
+This is not a rare shape. Counting it:
+
+| Measure | Count |
+|---|---|
+| `tail_jump_alias` entries | 3,151 |
+| …whose `end` equals a **real entry's start** | **2,902** |
+| …of those, still emitted as their own `void sub_*(void)` body | **958** |
+| Distinct emitted bodies containing a deleted goto | 104 |
+| …of those that are `tail_jump_alias` duplicates | 56 |
+| …of those that are real functions branching into another function | 48 |
+
+So there are two independent causes for the 309, and I had only found the smaller
+one:
+
+* **56 bodies** are alias duplicates that should not exist at all. Fixing
+  `_resolve_owner` to also accept "parent starts where the alias ends" removes
+  the duplicate, which removes both the wrong second definition and the goto.
+* **48 bodies** are real functions whose branch target genuinely lives in
+  another function's body. These need the two bodies to share a scope, or the
+  target to be duplicated as a real entry with its own label — not an alias.
+
+### Honest correction to a claim I made mid-run
+
+I initially wrote that `named_frames` rising 33 → 36 was "exactly the improvement
+the fix predicts". **That was wrong and I am retracting it.** Diffing the two
+runs' symbol sets shows they are *identical*; the delta is the probe's own frame
+(`gpu_probes.c:182` → `:346`, `jsrf_probe_gpu+0xF37` → `+0xA47`) plus one thread
+caught in `SleepEx` instead of `WaitForSingleObjectEx`. It is a scheduling
+artifact of a different build, not guest behaviour, and it says nothing about the
+alias work.
+
+### What is verified green regardless
+
+The change is behaviour-preserving for everything the project checks, so it is
+safe to keep:
+
+* Guarded pipeline: `configure=0 recover=0 liftergen=0 before=0 build=0` (0
+  errors) `after=0`.
+* Suites: crt 36,900; lifter 288 + 300 + WBINVD; nv2a 319; toolkit 45/45 across
+  the ten key modules (new `tools/disasm/test_cond_branch_orphans.py`, 7 tests).
+* Guest run `logs/runs/20260921-131412-153-deepeek-alias-fix`: `normal_exit`,
+  `exit_code 0`, `checkpoints_passed true`, `missing_checkpoints []`,
+  `gpu_report_ok true`, 4 snapshots, GPU `GET == PUT == 0x10`, both
+  `memory_ready` and `probe_gpu` checkpoints reached.
+
+**Decision: the next packet is `_resolve_owner`, because it is the larger half
+(56 of 104 bodies, and 958 wrongly-emitted duplicates overall) and the mechanism
+is now fully understood.** It is a bounded change to parent selection in
+`translate_batch_split`: accept a parent whose start equals the alias's end, in
+addition to the same-end rule. I am not starting it in this session's tail
+because it changes which bodies are emitted, so it needs the full guarded
+pipeline and a fresh metric set — the same discipline that made this packet
+conclusive rather than speculative.
+
+---
+
+## Cause A fixed: deleted jumps 309 -> 115, duplicate bodies 958 -> 0
+
+**Decision: I fixed the parent-selection rule, and the two numbers moved
+together, which is the cross-check that says the mechanism is right rather than
+merely correlated.** Both had to fall for the diagnosis to hold: removing a
+duplicate body is what lets the `goto` inside it resolve.
+
+### The change (toolkit, uncommitted at the time of writing)
+
+One addition in `translate_batch_split`, after the existing same-end rule:
+
+```python
+_real_by_start = {}
+for _addr, _info in func_list:
+    if _info.get("detection_method") != "tail_jump_alias":
+        _real_by_start.setdefault(_addr, _info)
+for _addr, _info in func_list:
+    if _info.get("detection_method") != "tail_jump_alias":
+        continue
+    if _addr in alias_parent:
+        continue                       # same-end rule already answered
+    _end = _batch_span((_addr, _info))[1]
+    _owner_info = _real_by_start.get(_end)
+    if _owner_info is None:
+        continue
+    if _owner_info.get("section") and _info.get("section") \
+            and _owner_info["section"] != _info["section"]:
+        continue
+    alias_parent[_addr] = _end
+```
+
+Three constraints, each deliberate:
+
+* **Only a real entry may adopt** (`_real_by_start` excludes aliases). Letting an
+  alias adopt another alias would fold a chain of fragments into each other and
+  no real body would own the bytes. `_resolve_owner` still walks any chain the
+  first rule produces.
+* **The same-end rule runs first and wins.** The new rule is gated on
+  `if _addr in alias_parent: continue`, so a genuine same-end owner is never
+  displaced.
+* **Section must match**, so an address that also exists in `.rdata` is not
+  mistaken for the adjacent code body.
+
+### Results
+
+| Metric | Before | After |
+|---|---|---|
+| Deleted gotos (`dead code, label not in function`) | 309 | **115** |
+| Aliases ending on a real entry's start that get their own body | 958 | **0** |
+| Header declarations (`^void sub_`) | 6,072 | 5,714 |
+
+The 194 jumps recovered are jumps that were falling through to the next
+instruction instead of branching. The header drop of 358 is the aliases
+correctly staying out of the header — which item 4's note says they must, since
+declaring one makes every including unit reference a symbol that is never
+defined.
+
+### The mistake I made on the way, and how it was caught
+
+I measured **zero** effect on the first attempt and nearly reported the fix as
+ineffective. The cause was mine, not the code's: `src/recomp/gen/` is not
+rebuilt by `cmake`. The toolkit's translation pass is a **separate manual step**
+with one correct invocation (recorded in `AGENTS.md`), and I had regenerated
+only via `recover-functions.py`, which owns `recovered.c` and the fixtures but
+**not** the six `recomp_NNNN.c` chunks. So I was measuring the old tree and
+attributing its numbers to the new code.
+
+The tell was that `sub_00011CE0` was still declared in `recomp_funcs.h` while my
+rule should have folded it. Instrumenting the generator showed the input was
+correct:
+
+```
+>>> func_list size 8848
+    0x11ce0 present? True  end=72960   method=tail_jump_alias
+    0x11d00 present? True  end=73117   method=call_target
+```
+
+`72960 == 0x11D00` — the rule's precondition held, so the rule had to be running
+and the *measurement* had to be stale. Regenerating with the documented command
+resolved it. **Lesson for the next session: `recover-functions.py` is not the
+translation pass, and no build step runs it. Regenerate the chunks explicitly
+before measuring any translation metric.**
+
+### Status
+
+**Verified green, and committed as toolkit `ff4d442`.** The full chain ran with
+the regenerated chunks in place:
+
+* `configure=0 recover=0 liftergen=0 before=0 build=0` with **0 error lines**,
+  `after=0`.
+* Suites: crt 36,900; lifter 288 + 300 + WBINVD; nv2a 319; toolkit **49/49**
+  across twelve key modules, with `test_alias_body_suppression` now at 16 tests
+  (up from 12) and the new `AbuttingAliasParentTest` class covering the second
+  rule, including the two guards that stop it misfiring: another alias is never
+  an abutting owner, and a cross-section address is not adopted.
+* Guest run `logs/runs/20260921-132312-868-deepeek-parent-fix`: `normal_exit`,
+  `exit_code 0`, `checkpoints_passed true`, `missing_checkpoints []`,
+  `gpu_report_ok true`, 4 snapshots, and **all three checkpoints reached —
+  `host_entry` → `memory_ready` → `probe_gpu`** — with
+  `PFIFO_DMA_GET == PFIFO_DMA_PUT == 0x10`.
+* `jsrf_recomp.exe` 10,900,480 → **9,532,416 bytes**, which is the 958 duplicate
+  bodies leaving the binary.
+
+The last point matters most for confidence: the fix removes code, so a *smaller*
+exe that still reaches `probe_gpu` is the shape of a real correction. A fix that
+merely silenced a warning would leave the exe the same size or larger.
+
+Cause B (the remaining 115) is OPEN — a real function whose branch target
+genuinely lives in another real function's body. An alias cannot fix it; it needs
+the two bodies to share a scope, or a real labelled entry at the target. JSRF's
+`sub_0002DBE0` → `0x2E00C` is one of these and is still rewritten.
+
+---
+
+## Cause B is mostly not Cause B: 64 of the 115 are entries that should not exist
+
+**Decision: before changing anything, I re-derived the remaining 115 from the
+data rather than from my earlier body-level classification — and my earlier
+classification was wrong.** I had described Cause B as "48 bodies, a real
+function branching into another real function's body". Classifying by the
+*target address* instead of by the source body gives a different and much more
+actionable split:
+
+| Target of the deleted goto | Count |
+|---|---|
+| No entry at the target at all | 83 |
+| The target is a `tail_jump_alias` | 32 |
+| The target is a real entry | **0** |
+
+So **not one** of the 115 targets is a real entry — the "real function branching
+into a real function" story does not describe a single case. And of the 83
+no-entry targets, the largest group (44) has the target inside a
+**`gap_prologue`** entry.
+
+### The decisive case, worked from the bytes
+
+`sub_0002E13A` is one of them: a `gap_prologue` with **zero callers, zero
+callees, and no data-table reference**. Its disassembly is nonsense —
+
+```
+0002E13A mov      edi, edi
+0002E13C add      al, 0xdc
+0002E13E add      al, byte ptr [eax]
+0002E140 inc      esp
+0002E141 fadd     qword ptr [edx]
+...
+0002E15D loopne   0x2e161
+0002E165 loopne   0x2e169        <- the deleted goto's target
+```
+
+— and then, at `0x2E170`, perfectly ordinary code:
+
+```
+0002E170 xor      eax, eax
+0002E172 mov      dword ptr [ecx + 0x1850], eax
+0002E178 mov      dword ptr [ecx + 0x184c], eax
+0002E17E mov      eax, 1
+0002E183 ret      4
+```
+
+Reading the bytes as dwords from `0x2E13C` (two bytes after the entry start)
+gives **10 of 10 values inside `.text`**:
+
+```
+0x2DC04  0x2DC44  0x2DC76  0x2DCB6  0x2DCE6
+0x2DE02  0x2DEBF  0x2DEDD  0x2E030  0x2E0C0  0x2E0CD
+```
+
+That is a **jump table of code addresses**. So the truth is the reverse of what
+the database says: `0x2E13A` is *not* a function — the two bytes at `0x2E13A`
+are the tail of the previous body (`8b ff` = `mov edi, edi`), the table starts
+at `0x2E13C`, and the real function begins at `0x2E170`. The detector's
+`gap_prologue` pass saw a plausible-looking prologue in table data and claimed
+76 bytes of it as code. Every "instruction" in that span is a misdecode of the
+table, which is exactly why its `loopne` targets land mid-instruction and can
+never resolve to a label.
+
+### It is systematic, not a one-off
+
+Scanning every entry for "a run of >=6 consecutive in-`.text` dwords starts at
+or within 4 bytes of the entry":
+
+* **48 entries** match — 41 `gap_prologue`, 7 `tail_jump_alias`.
+* The table starts at **exactly `+2`** for 40 of them — the MSVC
+  `jmp [table+eax*4]` layout, table placed immediately after the body's tail.
+* **All 48 have zero callers.**
+* 40 are confirmed by the exact `8b ff` + table signature.
+
+Cross-referencing with the deletion list: **64 of the 115 deleted gotos have
+their source in one of these table entries.** So the single largest remaining
+cause is not a control-flow problem at all — it is 48 false functions whose
+"branches" are misdecoded table bytes.
+
+### What this means for the fix
+
+Rejecting these 48 entries would remove 64 of the 115 deletions outright, and it
+is the *correct* fix rather than a workaround: the bytes are not code, the entry
+has no caller, and emitting a body for them generates a nonsense function that
+nothing can ever reach. It also removes a real hazard — those bodies are
+compiled into the binary and appear in the dispatch table, so an indirect branch
+whose index is miscomputed *could* land on one and run garbage.
+
+Two cautions before I do it:
+
+1. **Zero callers is not sufficient by itself.** A function reached only through
+   a computed pointer has zero callers too. The table run immediately after the
+   entry is what makes the conjunction conclusive, so the rule must require
+   both, and the table must be at the entry's `+2`/`+3`, not merely nearby.
+2. **Removing entries changes the dispatch table and every span the lifter
+   consults**, so it needs the full guarded pipeline and a fresh metric set —
+   the same discipline as the last two packets. It also means any *correct*
+   entry inside one of these spans has to be preserved; the alias fold from
+   `ff4d442` already handles the entries whose owner is the real body.
+
+**Decision: this is the next packet, and I am recording it rather than starting
+it in this session's tail.** The measurement above is the evidence base; the
+change itself must be made, tested and verified as its own revision.
+
+## Cause B fixed: the `mov edi,edi` pad is not accepted on its own any more
+
+The change is one clause in `probes_as_prologue`. Accepting `mov edi,edi` on
+the first instruction alone was the whole defect: `8b ff` is the two-byte
+hot-patch pad *and* the two bytes MSVC leaves in front of a switch table, so
+the rule claimed table data as code.
+
+### Finding a usable discriminator took two discarded attempts
+
+The first two tests I tried were both wrong, and I record them because the way
+they failed is the reason the final rule looks the way it does.
+
+* **"a run of in-`.text` dwords starts at `+2`"** — saturated. Almost any
+  4-byte window inside `.text` holds a plausible-looking address, so the
+  criterion passed **71 of 71** suspect entries *and* **292 of 292** genuine
+  ones. A test that never says no is not a test.
+* **"the 32 bytes after the entry contain an undecoded instruction"** —
+  saturated the other way. Capstone decodes almost any 32 bytes of x86 in
+  32-bit mode, so the count was **0 for both groups**. My earlier "mean 2.86
+  vs 0.30" figure came from a different definition and does not survive
+  re-measurement; I am withdrawing it rather than quietly keeping it.
+
+What *does* separate the two groups is the sharper form of the table
+signature: a **run** of consecutive dwords that are each the start of a
+**decoded instruction**, beginning immediately after the two pad bytes.
+
+| group | n | best run at `+2` | run `>= 4` |
+|---|---|---|---|
+| `8b ff` entries | 71 | 0 for 3, 3 for 8, `>= 4` for 60 | **60 / 71** |
+| other `gap_prologue` | 292 | 0 for 289, 1 for 3 | **0 / 292** |
+
+The `best k` histogram is equally clean: 68 of the 71 have their best run at
+exactly `k=2`, against 3 of the 292. The rule is therefore the run at `+2`,
+thresholded at 4, which rejects 60 and keeps 11.
+
+### One caution I set myself, and what the data did to it
+
+I had written that the fix "must require both the table run *and* zero
+callers". That was over-constrained, and I did not implement it. Every
+`gap_prologue` entry has `called_by == 0` **by construction** — the pass exists
+precisely for functions reached only through a vtable — so the conjunction adds
+nothing while making the rule harder to reason about. The table run alone is
+the evidence; the caller count is a property of the pass, not of the address.
+Leaving it in would have been cargo-culting my own earlier note.
+
+### Measured effect
+
+`gap_prologue` **363 → 303**, exactly the 60 predicted. The `8b ff` entries
+fall from 71 to 11.
+
+| metric | before | after |
+|---|---|---|
+| entries | 8,659 | 8,581 |
+| header declarations | 5,714 | **5,652** |
+| deleted cross-function gotos | 115 | **40** |
+| generated chunk bytes | 19,296,073 | 20,180,566 |
+
+The goto count fell from 115 to 40. I want to be careful about what that
+number is and is not, because I got it wrong twice before getting it right.
+
+**Correction, and why it is here rather than deleted.** My first two
+measurements of this packet read **5,074 declarations / 5 chunks / 36 gotos**
+and I wrote those numbers down as the result. They are wrong. They came from
+runs where I had cleared only `.disasm_cache.json` but left
+`tools/disasm/output/functions.json` in place, so the translation was reading a
+stale partial disassembly. Regenerating properly — clearing the analysis
+outputs *and* the cache, then disassembling, then translating — gives
+**5,652 / 6 chunks / 40 gotos**, and that reproduces exactly on repeat runs.
+The correct figure is 40, not 36.
+
+I also briefly saw 5,652 and dismissed it as the anomaly. It was the right
+answer and my "correction" was the error. The lesson is that the disassembly
+outputs are an input to the translation, not a derived cache, and that a
+"clean" regeneration has to clear them all.
+
+The honest causal reading: the deleted-goto count fell by 75, and my predicted
+attribution was 64 from these 48 entries. Those two numbers are not
+reconcilable as a clean decomposition — an entry that exists only because of
+misdecoded table bytes also *creates* the branches into it that other bodies
+then fail to resolve, so removing the false entry removes both ends. I am not
+going to present a tidy attribution I cannot defend.
+
+### The worked example, verified
+
+* `0x2E13A` — **no longer an entry, and inside no body at all.** It was table
+  data; it is now correctly absent.
+* `0x2E170` — present, as a `tail_jump_alias` with `end = 0x2E1C0`. This is
+  the real function the false entry was hiding.
+* `0x2E00C`, `0x2E026` — both still present, both still aliases ending at
+  `0x2E0C0`. The `5d68f27` fix is untouched, which is the regression I most
+  wanted to rule out.
+* The 11 kept `8b ff` entries are still emitted, e.g. `0x000FAB1E`
+  (`recomp_0002.c`), `0x0014B85E` and `0x0015BC1E` (`recomp_0003.c`),
+  `0x00186A2E` (`recomp_0004.c`).
+
+**Decision: the threshold is 4, not 3.** Three-dword runs occur inside real
+code — 8 of the 71 sit at run 3 — and the control group's maximum is 1, so
+anything in 2..4 would have separated the groups. I took 4 because it is the
+smallest threshold under which the control group is *exactly* empty, which is a
+property I can state, rather than a margin I chose. The three entries at run 3
+are kept.
+
+## A build trap worth writing down
+
+The build failed twice in ways that had nothing to do with the change, and both
+would waste the next agent's time.
+
+**The chunk count is not stable across edits.** `--split 1000` puts 1,000
+entries per `recomp_NNNN.c`. Removing 78 entries moved the total across a
+boundary, so a generation produced **5** chunks where the previous produced
+**6**. `CMakeLists.txt` globs `src/recomp/gen/*.c` (`CONFIGURE_DEPENDS`), so a
+build file written for six chunks kept a reference to a `recomp_0005.obj` that
+the new generation does not produce:
+
+```
+error C1083: Cannot open source file: 'recomp_0005.c': No such file
+```
+
+Deleting the stale object alone is **not** enough — that produced the opposite
+failure, 584 unresolved externals, because the object is what the linker links
+against and the glob had not been re-run. The correct recovery is to re-run
+`cmake -S . -B build` so the glob is refreshed, then build. I have confirmed
+`recomp_0005` reappears in `jsrf_recomp.vcxproj` after re-configuring.
+
+**`cmake` is not on `PATH` for the PowerShell tool, and that tool swallows the
+output.** `Get-Command cmake` returns nothing there, so `& cmake ...` silently
+does nothing — an earlier "build succeeded, 0 errors" reading was the *previous*
+log file, unmodified, because the command never ran. Running the binary by
+absolute path from Bash works and reports honestly. Every build measurement in
+this report was taken that way.
+
+The general lesson, and the reason both are recorded: a green build result is
+only meaningful if the command demonstrably ran. I now check the log's mtime
+against the sources' before trusting any of it.
+
+## The `text_only` analysis truncates the full entry database
+
+Found while chasing the link errors, and it is a separate defect from the one
+above. It has no fix yet; recording it so the next packet has the evidence.
+
+Deleting the 60 entries moved the translation below the `--split 1000`
+boundary, so the build file still referenced a `recomp_0005.c` that no longer
+existed. Clearing the stale object then exposed the real problem:
+
+```
+recovered.obj : error LNK2019: unresolved external symbol sub_0018E120
+  referenced in function body_00192090
+```
+
+Ten symbols, all in the **`D3D`** section, all reachable through `prologue` or
+`call_target` rather than `gap_prologue` — so my change did not remove them.
+They had simply vanished from `recomp_funcs.h`.
+
+The reproduction is exact and needs no guessing:
+
+```
+cold cache                          -> 5,652 declarations, 6 chunks
+text_only disassembly, then full    -> 5,074 declarations, 5 chunks
+```
+
+A `text_only=True` run writes `functions.json` covering only `.text`. The
+following full run has a different `opts_key`, so the cache correctly misses —
+but `load_image` then reads that **same truncated `functions.json` back off
+disk** as its input, and the full analysis starts from a database with the
+`D3D`, `DSOUND` and other sections already missing. The result is 578 entries
+silently lost and a binary that will not link.
+
+This is exactly the "silent wrong answer" the cache's `opts_key` docstring
+exists to prevent, arriving through a door the key does not cover: the option
+fingerprint distinguishes the two runs, but the *output* of the first is an
+input to the second and nothing guards that.
+
+**Decision: not fixed in this packet.** It is a distinct defect with a distinct
+blast radius — it affects every consumer of `functions.json`, not just JSRF —
+and folding it in would make this revision unreviewable. The mitigation for now
+is procedural: a full regeneration must clear `tools/disasm/output/*.json` and
+`.disasm_cache.json`, not just the cache file. The fix belongs in `load_image`,
+which should refuse to treat a `functions.json` written by a different
+`opts_key` as an input.
+
+## The guest run fails — but I was comparing two different runs
+
+The verification run does not reach `probe_gpu`:
+
+```
+{"outcome":"unhandled_exception","exit_code":3762440515,"missing_checkpoints":["probe_gpu"],
+ "checkpoints_passed":false}
+[ICALL] invalid target 0x00700010 tid=42096 esp=00F7FF14 return=0017E627
+```
+
+It reproduces exactly on a second run — same `exit_code`, same ICALL, same
+return address. `0x00700010` lies in **no section of the image at all**, which
+is the signature of a register holding a value the guest never computed as a
+pointer rather than of a missing function.
+
+I expected this to be my fix removing live code, and started to treat it that
+way. The evidence says otherwise, and the evidence is worth following.
+
+**First, a correction.** My immediate conclusion — "the run must still reach
+the previous checkpoint, and it does not, so this is a regression from
+`db54746`" — was built on a bad comparison, and I have to retract it before
+anything else.
+
+The run I was using as the baseline,
+`20260921-132312-868-deepeek-parent-fix`, is a **fixture probe**, not a guest
+run. Its `metadata.json` says `"probe": "gpu-progress"`, and a `gpu-*` probe
+never executes guest code: its log goes `host_entry` → `memory_ready` →
+`probe_gpu` with zero `[KERNEL]` calls and zero `[RECOVERED]` lines. My run had
+`"probe": ""` — a real guest execution with 157 kernel calls and 48 recovered
+ABI checks. I even mis-read the checkpoint sets as being the same: the baseline
+declared `expected_checkpoints: ["probe_gpu"]` because it was launched by
+`test-harness.py`'s `gpu-progress` case, which passes
+`--expect-checkpoint probe_gpu`; my run used the *default*
+`["memory_ready","guest_entry"]` and got neither. Two different execution modes,
+two different acceptance criteria, one diff that meant nothing.
+
+**Like-for-like, the fixture probe passes.** Running the current build with the
+baseline's exact arguments:
+
+```
+python scripts/run-jsrf.py --seconds 2 --label ... --probe gpu-progress \
+       --expect-checkpoint probe_gpu
+```
+
+| | baseline `5d68f27` | current `9568f29` |
+|---|---|---|
+| outcome | `normal_exit` | `normal_exit` |
+| exit_code | 0 | 0 |
+| checkpoints_passed | `true` | `true` |
+| missing_checkpoints | `[]` | `[]` |
+| gpu_snapshots | 4 | 4 |
+| gpu_snapshots_dropped | 0 | 0 |
+| named_frames | 36 | 36 |
+| gpu_report_ok | `true` | `true` |
+
+Field for field identical. The one-digit differences I first saw
+(`named_frames` 35 vs 36, `missing_checkpoints` `["guest_entry"]` vs `[]`) were
+entirely explained by the differing checkpoint expectations, not by the build.
+
+**Second, the real-guest-run history, which is what actually settles it.**
+Grepping the 466 archived runs for `probe == ""` gives 60 real guest runs. The
+last one before my change is `20260921-111607-936-kick-ack` on toolkit
+`c98dbdc6`:
+
+| | pre-change `c98dbdc6` | post-change `9568f29` |
+|---|---|---|
+| outcome | `unhandled_exception` | `unhandled_exception` |
+| exit_code | `3762440515` | `3762440515` |
+| checkpoints_passed | `true` | `false` |
+| missing_checkpoints | `[]` | `["guest_entry"]` |
+| `guest_entry` reached | **yes**, log line 48 | **yes**, log line 48 |
+| kernel calls | 157 | 157 |
+| `[RECOVERED]` ABI checks | **48** | **0** |
+| log lines | 562 | 402 |
+
+So: the guest run **already failed with `0xE0464643` before my change**, at the
+same exit code, having reached the same checkpoint. There is no regression in
+the checkpoint sense — the pre-change run does not reach `probe_gpu` either,
+because a real guest run never reaches any `probe_*` checkpoint. Those are
+fixture-only.
+
+The genuine difference between the two real guest runs is elsewhere, and it is
+the thing worth chasing: **`c98dbdc6` logged 48 `[RECOVERED] ... ABI verified`
+lines before dying; `9568f29` logs zero.** The pre-change run executed a long
+chain of recovered bodies (`0x00194520`, `0x00196A65`, `0x00196B34`, …,
+`0x001912A0`) and failed at `[ICALL] Failed to resolve VA 0x001918E0` after 379
+thread calls. The post-change run dies at its `0x00700010` ICALL *before any
+recovered body is entered at all* — it gets through `guest_entry` and 157
+kernel calls and then takes a bad indirect call.
+
+That is a real behavioural difference and I am not writing it off. But it is not
+what I said it was, and the correct framing is: **the fix changed which guest
+code runs, and the new first failure is earlier in the demo's startup path than
+the old one.** Whether that is the 91 lengthened bodies executing for the first
+time, or a body that now never gets entered, is exactly the question the
+`0x17DC13` trail below answers — and I have to answer it rather than assume it.
+
+### What the fix actually did to the database
+
+Diffing the all-sections entry database before and after (`ff4d442` vs
+`db54746`, both freshly disassembled):
+
+| | count |
+|---|---|
+| entries removed | 80 (62 `gap_prologue`, 18 `tail_jump_alias`) |
+| entries **added** | **0** |
+| entries whose `end` **changed** | **91** |
+
+The zero is the important one: the fix removes false functions and invents
+nothing. The 91 changed `end` values are the payoff, and they are all the same
+repair — a function that used to stop early because a fake table entry
+truncated it now runs to its real end:
+
+```
+0x000208DD   end 0x000208E2 -> 0x00020900
+0x000370A0   end 0x0003732A -> 0x00037471
+0x00038890   end 0x00038ADA -> 0x00038D8D
+0x000D3C50   end 0x000D3D6A -> 0x000D4440
+```
+
+### The 18 lost aliases are losses of false entries, not real ones
+
+Fifteen of the 18 were `tail_jump_alias` entries whose parent was one of the 62
+removed `gap_prologue` entries, so they disappeared with it. I read that as
+collateral damage until I checked the parent's bytes:
+
+```
+0x000FFFAA: 8b ff | 77 fe 0f 00 | d0 fe 0f 00 | 99 fe 0f 00 | 07 ff 0f 00 ...
+                  -> 0x000FFE77   0x000FFED0   0x000FFE99   0x000FFF07
+```
+
+Every dword is a `.text` address, several runs are terminated by `90909090`
+padding, and one parent takes out nine aliases at once. These are jump tables,
+exactly what the rule was written to reject. The aliases hanging off them were
+anchored to table data and were never legitimate targets.
+
+The clincher is what happens to the address they used to share. `0x001005B5`
+was owned by nothing before the fix — the alias machinery had skipped past the
+bogus `0x000FFFAA` span — and is now owned by **`0x000FFFD0`, a
+`tail_jump_alias`**: the real function the table was hiding. The alias at
+`0x00100084` was re-anchored from the fake parent to the real one. That is the
+fix working, not breaking.
+
+### So why does the guest now fail?
+
+Because 91 real function bodies got longer and the guest runs different code.
+The pre-change run `c98dbdc6` worked through 48 recovered bodies and died at
+`Failed to resolve VA 0x001918E0`; this one gets through `guest_entry`, issues
+157 kernel calls, and takes an indirect call through a pointer it loaded from a
+structure at `0x17DC13`:
+
+```asm
+0017DBE8  cmp   esi, -1
+0017DBED  cmp   esi, [edi + 4]
+0017DBF7  mov   eax, esi
+0017DBF9  shl   eax, 3              ; eax = index * 8
+0017DBFC  mov   ecx, [edi + 8]      ; ecx = base
+0017DBFF  add   ecx, eax            ; ecx = &entry[index]
+0017DC01  mov   esi, [ecx]          ; entry.value
+0017DC0D  cmp   [ecx + 4], 0        ; entry.callback present?
+0017DC11  je    0x17DC28
+0017DC13  mov   [ebx + 8], esi
+0017DC16  push  0x103
+0017DC1B  push  ebx
+0017DC1C  mov   ecx, [edi + 8]
+0017DC1F  push  [ecx + eax + 4]     ; <-- the target, 0x00700010
+0017DC23  call  0x17E600
+```
+
+`edi` is `[ebp + 0x10]` — the third argument, a table descriptor. `0x17E600`
+(a real `prologue`-detected function, `called_by` `0x0017C1F6` and `0x0017DBBD`)
+then dispatches *through* the pushed pointer at `0x17E625` (`call eax`, with
+`eax` loaded from `[ebp + 8]` at `0x17E611` and `ebp` swapped to `[ebp - 4]` at
+`0x17E61B`). So the bad target is a callback slot in a descriptor the demo built
+at runtime. `0x00700010` is not a code address in any section — bit pattern
+`0x00700010` reads like a leaked field from an object, not a corrupted function
+pointer table.
+
+**Decision: the ICALL at `0x00700010` is a fresh real-guest-run defect, not a
+regression from `db54746`, and it is now the top of the queue.** It was arrived
+at by comparing one real guest run against another, not a fixture against a
+guest run.
+
+### I chased it, and the answer is bigger than the ICALL
+
+Following the trail gave a result I did not expect, so here is the chain and
+then what it means.
+
+`sub_0017DBBD` is not game code. It is the **MSVC C++ exception unwinder**
+(`_UnwindNestedFrames` / catch-block dispatch), and the give-away is at
+`0x0017DBA4`: `cmp dword ptr [eax], 0xe06d7363`. `0xE06D7363` is
+`"msc"` with `0xE0` in the top byte — the MSVC `_EH_EXCEPTION_NUMBER`
+magic. Its neighbours confirm the family: `sub_0017DBA2` clears
+`[eax + 0x7c]` (the per-thread `_catchlevel`), `sub_0017DC6E` decrements it,
+`sub_0017D1F8` is `__SEH_prolog`, `sub_0017E3F8` reads `fs:[0x24]` and
+`fs:[0x28]` — the `_getptd()` / per-thread-data accessor. `sub_0017E600` is
+the `_CallCatchBlock`-style frame builder; `eax` (`call eax` at `0x17E625`) is
+the **catch handler function pointer**. `sub_0017C1F6` is the same shape with a
+proper `fs:[0]` SEH chain push, which is why it is the one the disassembler
+classified as a `prologue`.
+
+The crashing target comes from `sub_0017DDAE`, which pushes four arguments at
+`0x17DDF7` and calls `0x17DBBD`: `edi` = the exception-registration node,
+`0` = the "no nested try" index, `ecx` = `[ebp + 0x14]` (the function's
+`_EXCEPTION_POINTERS` context), `eax` = a value derived from
+`[ebp - 0x44]`/`[ebp - 0x48]`, which are themselves `[[ebp + 0x14] + 8]` and
+`[[ebp + 0xc] + 8]` — i.e. the runtime **EH handler table** for the frame.
+
+Reading the crash dump's guest memory settles where the bad value lives. The
+ICALL frame at `0x00F7FF14` is exactly the one `sub_0017E600` builds
+(`PUSH32(esi)`, `PUSH32(edi)`, `PUSH32(0x0017E627)`), and the words above it are
+the DBBD frame's own arguments: `0x001EB76C` and `0x001EB764`. Dumping
+`0x001EB740`:
+
+```
+001EB740: 0018ACA2 19930520 00000001 001EB73C
+001EB760: 00000000 0017E58F 00181212 00000000
+```
+
+`0x19930520` at `0x001EB744` is the **MSVC C++ EH magic** (`0x19930520` is
+`EH_MAGIC_NUMBER1`), and `0x001EB760` is a valid pointer back into the table.
+So the EH tables are laid out exactly where they should be — `.data` starts at
+VA `0x001EB760`, and these are its first fields.
+
+The bad value `0x00700010` is therefore a **slot in the EH handler table** that
+should hold a code address and instead holds a small integer. It is not a
+corrupted thunk and not a lost function: it is *data the guest computed as
+data*, being consumed as a pointer because the EH table's `HandlerType` /
+`EstablisherFrame` arithmetic landed on the wrong field.
+
+**And here is the part that generalises, which is why I am writing it down.**
+`0x00700010` is rejected by `RECOMP_ICALL_IS_CODE`, whose definition is:
+
+```c
+#define RECOMP_ICALL_IS_CODE(_va) \
+    ((_va) >= 0xFE000000u || g_xbox_code_hi == 0u || \
+     ((_va) >= g_xbox_code_lo && (_va) < g_xbox_code_hi))
+```
+
+and the run log tells us what those bounds are:
+
+```
+[ 0] .text   VA=0x00011000 vsize=1555248  -> end 0x0018CB30
+```
+
+So `g_xbox_code_lo/hi` is **`.text` only** — `0x00011000`..`0x0018CB30`. Every
+other section of the image is outside it:
+
+| section | start | end | inside code range |
+|---|---|---|---|
+| `.text` | `0x00011000` | `0x0018CB30` | **yes** |
+| `D3D` | `0x0018CB40` | `0x0019E338` | no |
+| `DSOUND` | `0x0019E340` | `0x001BA89C` | no |
+| `MMATRIX`, `XGRPH`, `XPP` | `0x001BA8A0`..`0x001C3F58` | | no |
+| `.rdata` | `0x001C3F60` | `0x001EB760` | no |
+| `.data` | `0x001EB760` | `0x0027E074` | no |
+| `DOLBY` | `0x0027E080` | `0x00284E18` | no |
+
+`kernel_bridge.c:1245` builds the range from sections whose XBE flags have
+`0x00000004` (EXECUTABLE). On this XBE only `.text` carries that flag, so the
+predicate is correct *by its own definition* — but the consequence is that a
+legitimate indirect call into any code that lives outside `.text` is classified
+as garbage and takes the fatal `recomp_icall_not_code_log` path, which
+`RaiseException`s with `JSRF_ALLOW_UNRESOLVED` unset. `JSRF_ALLOW_UNRESOLVED`
+is the documented opt-out and would have turned this into a log line and a
+return instead of a non-continuable exception.
+
+**Decision (recommendation): treat `0x00700010` as an EH-table-layout defect
+rather than a code-range defect, and do not widen the code range yet.** Widening
+it would mask this specific failure — `0x00700010` is in *no* section at all,
+so no widening would classify it as code — and the range is doing useful work
+elsewhere. The productive next step is upstream: the demo is taking an
+exception before any `[RECOVERED]` body runs, and the `0xE06D7363` machinery is
+engaging, which means **something threw**. The pre-fix build never got here.
+
+### The diagnostic run, which closes off the easy answer
+
+The plan forbids using `JSRF_ALLOW_UNRESOLVED=1` as *acceptance* evidence, and
+it is right to — but the same section permits it as a diagnostic, so I ran it
+once to find out whether `0x00700010` is a recoverable "unknown callee" that
+the next session could simply implement. It is not. Run
+`20260921-144645-765-deepeek-diagnostic-allow`:
+
+```
+[ICALL] invalid target 0x00700010 tid=24060 esp=00F7FF14 return=0017E627
+[EXCEPTION first-chance] tid=24060 RIP=0x7FF6EE1206D7 fault=0x10000FFFC (read)
+  Xbox regs: eax=0x00148005 ecx=0x0000000C edx=0x00F81688 esp=0x6A0CC48F
+  Xbox regs: ebx=0x00000000 esi=0x00000000 edi=0x00000000
+```
+
+Two things stand out. `esp = 0x6A0CC48F` is **not a stack address** — the guest
+stack lives at `0x00F7xxxx` — so the frame was already unwound with a garbage
+value before the fault. And `fault=0x10000FFFC` is a wild read whose address
+shape matches nothing in the image. `ecx = 0x0000000C` is the leftover `0xC`
+from `eax = [ebp + 0xC]; eax += 0xC` at `0x17E608`, and `ebx = esi = edi = 0`
+is the post-`POP32(ebp)` register state `sub_0017E600` produces. So continuing
+past the bad call does not recover — it diverges into a wild read with a
+corrupted stack pointer.
+
+**That is useful, because it removes the cheapest hypothesis.** I can now say
+with evidence that `0x00700010` is a hard stop, not a missing function, and
+that no amount of implementing "one more address" will fix it. The remaining
+question is genuinely *what threw*, and the answer is upstream of this ICALL.
+
+**Also worth recording, because it nearly misled me twice:** the C++ EH
+machinery depends fundamentally on a real `fs:` segment (SEH chain at `fs:[0]`,
+per-thread data at `fs:[0x24]`/`fs:[0x28]`). The generated code routes all of
+these through `XBOX_FS_BASE`, and `sub_0017E3F8`'s translation reads it
+correctly — so the SEH path is instrumented, not stubbed. But `fs:[0]` is a
+*chain*, and any handler that does not restore it exactly will desynchronise
+everything downstream. And `esp = 0x6A0CC48F` is precisely what a
+desynchronised SEH unwind looks like. If the "what is thrown" search stalls,
+the SEH chain is the next place to look, and `g_seh_ebp` (which the generator
+publishes and reads back around SEH-helper calls) is the mechanism to audit.
+**I would put the SEH chain first, on this evidence, rather than second.**
+
+What I am *not* doing is reverting. The evidence above says the removed entries
+are tables, the fixture probe is byte-identical, and the 91 repaired bodies are
+a real correctness gain. The honest status is: **`db54746` is a correct fix, and
+it exposed an earlier-startup failure that the previous build never reached**,
+which is a named, reproducible guest address rather than a vague checkpoint
+miss.
+
+## Verification at the end of this session
+
+Everything objective is green, which is why the remaining item is worth calling
+out as the *only* open one:
+
+| check | result |
+|---|---|
+| `build-identity.py verify` | exit 0 |
+| `jsrf_crt_test` | PASS 36,900 memmove cases |
+| `jsrf_lifter_test` | PASS 300 + WBINVD lowering |
+| `jsrf_nv2a_test` | PASS 319 register/clock contracts |
+| `jsrf_nv2a_hal_test` | PASS HAL PCI bridge ABI |
+| `jsrf_recovery_11c1_test` | PASS 2,197 11c1 recovered leaf checks |
+| `jsrf_callback_reentry_test` | PASS 5,440 bounded checks |
+| `jsrf_inplace_event_test` | PASS 1,280 event-bridge ABI checks |
+| `jsrf_service_chain_test` | PASS 1,984 service-chain checks |
+| `scripts/test-harness.py` | PASS 19/19 probes (incl. `gpu-progress`, `gpu-submit-supported`) |
+| toolkit `pytest` | 256 passed, 1 skipped, 10 subtests |
+| fixture probe `gpu-progress` | field-identical to the pre-fix baseline |
+
+The one thing not green is the real guest run, and it is not green in the same
+way it was not green before this revision — it stops earlier, in the C++ EH
+machinery, on a hard-stop ICALL. **Recommendation: `db54746` stands; the next
+packet is the SEH chain** (`fs:[0]` / `g_seh_ebp`) and the question of what the
+demo throws immediately after `guest_entry`, with the `0x00700010` EH-table slot
+treated as a symptom rather than the target. Do not widen
+`g_xbox_code_lo`/`hi` to paper over it.
+
+

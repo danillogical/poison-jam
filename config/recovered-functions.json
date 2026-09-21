@@ -1,0 +1,595 @@
+[
+  {
+    "start": "0x00194520",
+    "end": "0x00194533",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 4,
+    "test_unit": "11c1",
+    "evidence": "Self-contained context tag increment helper called by 0x00196967. Reads one stack argument, increments context+0x19C by that value with x86 32-bit wrap, returns the prior dword in EAX, and RET 4 at 0x00194530. Preserves nonvolatile registers."
+  },
+  {
+    "start": "0x00194676",
+    "end": "0x00194780",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Integrated GPU setup helper called by 0x00194ADD with ECX=context and no stack arguments. Calls recovered 0x00196800, reduces the PTIMER numerator/denominator with the original truncating loops and rounded-half writes, then calls 0x00196967, 0x00196A65, 0x00194533(0), 0x00196B34, 0x00196B6A, and 0x00196B9A in exact order. Returns EAX=1 after RET at 0x0019477F."
+  },
+  {
+    "start": "0x0018AFB0",
+    "end": "0x0018B193",
+    "section": ".text",
+    "evidence": "Constructor pointer at 0x001EB7E4; previous routine tail-jumps at 0x0018AFA5; own RET at 0x0018B192."
+  },
+  {
+    "start": "0x0018B1A0",
+    "end": "0x0018B383",
+    "section": ".text",
+    "evidence": "Constructor pointer at 0x001EB7E8; 92-instruction straight-line mov/xor initializer; own RET at 0x0018B382."
+  },
+  {
+    "start": "0x0018B390",
+    "end": "0x0018B573",
+    "section": ".text",
+    "evidence": "Constructor pointer at 0x001EB7EC; 92-instruction straight-line mov/xor initializer; own RET at 0x0018B572."
+  },
+  {
+    "start": "0x0018B580",
+    "end": "0x0018B763",
+    "section": ".text",
+    "evidence": "Constructor pointer at 0x001EB7F0; 92-instruction straight-line mov/xor initializer; own RET at 0x0018B762."
+  },
+  {
+    "start": "0x0018B770",
+    "end": "0x0018B953",
+    "section": ".text",
+    "evidence": "Constructor pointer at 0x001EB7F4; 92-instruction straight-line mov/xor initializer; own RET at 0x0018B952."
+  },
+  {
+    "start": "0x0018B960",
+    "end": "0x0018BB43",
+    "section": ".text",
+    "evidence": "Constructor pointer at 0x001EB7F8; 92-instruction straight-line mov/xor initializer; own RET at 0x0018BB42."
+  },
+  {
+    "start": "0x0018BB50",
+    "end": "0x0018BD33",
+    "section": ".text",
+    "evidence": "Constructor pointer at 0x001EB7FC; 92-instruction straight-line mov/xor initializer; own RET at 0x0018BD32."
+  },
+  {
+    "start": "0x0018BD40",
+    "end": "0x0018BF23",
+    "section": ".text",
+    "evidence": "Constructor pointer at 0x001EB800; 92-instruction straight-line mov/xor initializer; own RET at 0x0018BF22."
+  },
+  {
+    "start": "0x0018C1D0",
+    "end": "0x0018C3B3",
+    "section": ".text",
+    "evidence": "Constructor pointer at 0x001EB818; 92-instruction straight-line mov/xor initializer; own RET at 0x0018C3B2."
+  },
+  {
+    "start": "0x0018C3C0",
+    "end": "0x0018C5A3",
+    "section": ".text",
+    "evidence": "Constructor pointer at 0x001EB81C; 92-instruction straight-line mov/xor initializer; own RET at 0x0018C5A2."
+  },
+  {
+    "start": "0x001BDAA9",
+    "end": "0x001BDAE1",
+    "section": "XPP",
+    "evidence": "Constructor pointer at 0x001EB82C; straight-line MOV initializer; RET at 0x001BDAE0."
+  },
+  {
+    "start": "0x0018E410",
+    "end": "0x0018E43D",
+    "section": "D3D",
+    "evidence": "Constructor pointer at 0x001EB830; straight-line MOV initializer; RET at 0x0018E43C."
+  },
+  {
+    "start": "0x001A5299",
+    "end": "0x001A52A4",
+    "section": "DSOUND",
+    "evidence": "Constructor pointer at 0x001EB834; straight-line MOV initializer; RET at 0x001A52A3."
+  },
+  {
+    "start": "0x001A52A4",
+    "end": "0x001A52AF",
+    "section": "DSOUND",
+    "evidence": "Constructor pointer at 0x001EB838; straight-line MOV initializer; RET at 0x001A52AE."
+  },
+  {
+    "start": "0x001935C0",
+    "end": "0x001935DF",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "evidence": "Direct CALL from distinct next routine at 0x001935E5; cached display setting query, RET at 0x001935DE."
+  },
+  {
+    "start": "0x001935DF",
+    "end": "0x00193658",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "evidence": "Direct calls from 0x0019983F/0x001998EB; separate prologue after preceding RET, all forward/backward branches bounded and final RET at 0x00193657. Selects video mode table entry from 0x0019A728."
+  },
+  {
+    "start": "0x00193580",
+    "end": "0x001935C0",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 4,
+    "evidence": "Direct CALL 0x001999AD in recovered enumeration path. Converts mode bits to display flags, final RET 4 at 0x001935BD."
+  },
+  {
+    "start": "0x0018CB40",
+    "end": "0x0018CB57",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 4,
+    "evidence": "Direct call 0x00199A54 from caps query; original copies 0x35 dwords from 0x0022E480 then RET 4 at 0x0018CB54."
+  },
+  {
+    "start": "0x00192090",
+    "end": "0x001925A0",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 4,
+    "evidence": "Direct CALL 0x0018E4C4, ECX points to guest device at 0x0019B200, one guest presentation-parameters pointer on stack. Original internal branches bounded to final RET 4 at 0x0019259D; includes GPU resource/queue initialization and fence wait at 0x00192460."
+  },
+  {
+    "start": "0x00191020",
+    "end": "0x001910B7",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "evidence": "Direct CALL at 0x00192112 with ECX=device. Allocates pushbuffer and bookkeeping from configured sizes, bounded shift loop, restores ESI and RET at 0x001910B6.",
+    "test_unit": "11c1"
+  },
+  {
+    "start": "0x0019460A",
+    "end": "0x00194635",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Leaf called by GPU setup; ECX=context, no stack arguments, RET at 0x00194634. Stores FD000000 and performs the original PCI/interrupt register writes, returning EAX=1."
+  },
+  {
+    "start": "0x00194635",
+    "end": "0x00194676",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Leaf called by GPU setup; ECX=context, no stack arguments, RET at 0x00194675. Reads PBUS/PFB fields through the context device pointer and stores the original derived fields and FE502A constant."
+  },
+  {
+    "start": "0x00196800",
+    "end": "0x00196967",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Self-contained PLL coefficient decoder called by GPU setup. ECX=context, no stack arguments, RET at 0x00196966. Reads device coefficients at +0x680504/+0x680508/+0x680500, stores decoded fields and truncated frequencies at context +0xC0..+0xF8, and leaves EAX equal to the final frequency stored at context +0xC8."
+  },
+  {
+    "start": "0x00196967",
+    "end": "0x00196A65",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Instance-memory setup helper called by GPU initialization. ECX=context, no stack arguments, RET at 0x00196A64. Calls ordinal 168 MmClaimGpuInstanceMemory(0x5000, &padding), copies device fields, derives masked instance addresses and clears exactly 0x5000 bytes before calling internal 0x00194520 with 8."
+  },
+  {
+    "start": "0x00196A65",
+    "end": "0x00196B34",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Self-contained port/register initializer. ECX=context, no stack arguments, RET at 0x00196B33. Captures the original device byte at +0x6013D5 for the final conditional, emits the exact selector/value sequence at +0x6013D4/+0x6013D5, applies staged masks and sets at device +0x8088/+0x808C, and updates +0x600804 with (old & ~5)|2."
+  },
+  {
+    "start": "0x00194533",
+    "end": "0x00194573",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 4,
+    "test_unit": "11c1",
+    "evidence": "Identity-ramp helper called by GPU setup. ECX=context, one stack argument at [esp+4], computes context+0x214+(arg*3*0x100), writes byte values 0..255 to each of three contiguous 256-byte ramps, preserves EBX/ESI/EDI, and returns with RET 4 at 0x00194570."
+  },
+  {
+    "start": "0x00196B34",
+    "end": "0x00196B6A",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Self-contained two-entry register table initializer. ECX points to a context whose first dword is the device pointer; the original loop runs exactly twice, writing 0x1000, 0x100000, 0 and 0xFFFFFFFF at device+0x8910/+0x8918/+0x8928/+0x8930 and then at each address plus four, with the remaining fields at +0x8938/+0x8940 and +0x893C/+0x8944. RET at 0x00196B69, no stack arguments, preserves nonvolatiles."
+  },
+  {
+    "start": "0x00196B6A",
+    "end": "0x00196B9A",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Self-contained instance-derived clear helper. ECX points to a context whose first dword is the device pointer and whose dword at +0x13C is the instance tag. Stores the tag low 16 bits as a dword at device+0x400780, computes device+((tag+0x70000)<<4) with 32-bit x86 wrap, clears exactly two consecutive dwords, and returns with RET at 0x00196B99 while preserving nonvolatiles."
+  },
+  {
+    "start": "0x00196B9A",
+    "end": "0x00196C0B",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Self-contained default-register initializer. ECX points to a context whose first dword is the device pointer. Writes context defaults at +0x11C/+0x120/+0x118, clears the exact device register list +0x3210/+0x3270/+0x3240/+0x3244/+0x3058/+0x3258, copies context +0x100 to device +0x2504, then clears +0x2508/+0x250C/+0x3228/+0x2410/+0x2420 before RET at 0x00196C0A."
+  },
+  {
+    "start": "0x00196E80",
+    "end": "0x00196E92",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Self-contained two-register setup leaf. ECX points to a context whose first dword is the device pointer; writes 1 to device offsets +0x600100 and +0x600140, leaves EAX equal to the device pointer, and returns with RET at 0x00196E91."
+  },
+  {
+    "start": "0x00196C83",
+    "end": "0x00196E80",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 4,
+    "test_unit": "11c1",
+    "restore_frame_metadata": true,
+    "evidence": "Exact channel-state snapshot/switch helper called by 0x00197BCF. ECX=context and [esp+4]=requested channel; saves device state at +0x2500/+0x3200/+0x3250, snapshots/restores the exact thirteen fields through the context slot table at +0x124, applies the original old-index and requested-channel mask branches, writes +0x204C=0x001FFFFF, returns the device pointer in EAX, and ends with RET 4 at 0x00196E7D. Raw requested values use (arg<<6) for table addressing while the active channel uses arg&31. The balanced prologue publishes g_ebp/g_seh_ebp and the opt-in wrapper restores both caller metadata after the body; tests assert distinct sentinels."
+  },
+  {
+    "start": "0x00197BCF",
+    "end": "0x00197C50",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Exact straight-line PGRAPH channel-1 setup helper. ECX=context whose first dword is the device pointer; writes device+0x3224=0x000F0078, +0x2044=0x0101FFFF and context+0x11C masked to 0x3FF at +0x2040; clears +0x2500/+0x3000/+0x3050/+0x3200, +0x3220/+0x3210/+0x3270, clears *device+0x3250, calls recovered 0x00196C83 with requested channel 1, then writes +0x3250/+0x3200/+0x2500 to 1 and finally clears +0x2500. Ends with plain RET at 0x00197C4F while preserving EBX/ESI/EDI and caller frame metadata."
+  },
+  {
+    "start": "0x00193C40",
+    "end": "0x00193C43",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Self-contained timestamp leaf confirmed by original disassembly as RDTSC at 0x00193C40 followed by RET at 0x00193C42. Uses the established runtime Xbox-scaled timestamp primitive, returning EDX:EAX exactly as the x86 instruction and preserving all other guest state."
+  },
+  {
+    "start": "0x00196C0B",
+    "end": "0x00196C4A",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Exact polling service loop confirmed by original disassembly. ECX=context whose first dword is the device pointer; while device+0x400700 is nonzero, snapshots device+0x100 once, calls 0x00194210 when bit 0x1000 is set, calls 0x00193D90 when bit 0x01000000 is set, then rereads device+0x400700. Plain RET at 0x00196C49; direct dependencies remain unresolved in production."
+  },
+  {
+    "start": "0x00193D10",
+    "end": "0x00193D85",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 8,
+    "test_unit": "11c1",
+    "evidence": "Exact queue submission helper confirmed by original disassembly. ECX=context, [esp+4]=payload passed to unresolved 0x0018E500, and [esp+8]=stored at context+0x210. Selects slot=(context+0x1F0)&1; when context+0x814+slot*4 equals 1, calls unresolved 0x0018E584(context, context+0x214+slot*0x300), then clears that status. Sets device+0x40071C bit 1, increments the context index with x86 wrap, copies context+0x1F4 to +0x1F8, stores the second argument at +0x210, leaves EAX equal to the copied context+0x1F4 value loaded at 0x00193D6D, and RET 8. Focused seams prove ordered helper calls, exact callback arguments and in-call status; production dependencies remain fatal and the wider service-chain concurrency contract remains open."
+  },
+  {
+    "start": "0x00193D90",
+    "end": "0x00193EE2",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "PCRTC service helper confirmed by original disassembly. ECX=context; calls 0x00193C40, updates timestamp delta at +0x208/+0x20C, increments +0x1F4, optionally calls 0x00193D10 for occupied slot (1F0&1), spins writing 1 to device+0x600100 while device+0x100 bit 0x01000000 is set, stdcall KeSetEvent(context+0x1C8, 1, FALSE) through IAT 0x001C4014, cdecl-calls context+0x1C4 with {1F4,1F0,reason} or skips if null, restores device+0x6013D4, returns EAX=0, RET. Production KeSetEvent remains the in-place Type-0 dispatcher contract; focused tests seam the IAT and callback."
+  },
+  {
+    "start": "0x00194210",
+    "end": "0x001942F8",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "PGRAPH context-switch service confirmed by original disassembly. ECX=context; FIFO 0x400720=0; when INTR bit 0x1000 set, W1C that bit, spin while 0x400700 nonzero, stdcall 0x00197AAC(channel from trapped_addr>>20). FIFO restored to 1 on the normal exit. NSOURCE/method-0x100 path calls unresolved 0x00193F70; the remaining error combination is INT3. RET, no stack arguments."
+  },
+  {
+    "start": "0x00197AAC",
+    "end": "0x00197BCF",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 4,
+    "test_unit": "11c1",
+    "restore_frame_metadata": true,
+    "evidence": "Channel-switch helper confirmed by original disassembly. ECX=context, [ebp+8]=channel, RET 4, EBP frame. Reenters 0x00194210 if INTR still nonzero, calls 0x00196C0B with FIFO off, calls 0x00196C4A when context+0x130 differs, stores the requested channel, and either restores FIFO|1 for channel 2 or programs CTX/RDI/CHANNEL registers and polls again."
+  },
+  {
+    "start": "0x00196C4A",
+    "end": "0x00196C83",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 4,
+    "test_unit": "11c1",
+    "evidence": "Channel-unload wrapper confirmed by original disassembly. ECX=context, [esp+4]=channel, RET 4. Channel 2 returns immediately. Other channels write device+0x400784 from context+0x134+channel*4 masked to 16 bits, write +0x400788=2, call recovered 0x00196C0B, then store 0x10000000 at +0x400144."
+  },
+  {
+    "start": "0x00194ADD",
+    "end": "0x00194C3F",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "restore_frame_metadata": true,
+    "evidence": "GPU hardware-setup parent confirmed by original disassembly. ECX=context, EBP frame, RET 0, EAX boolean. Initializes DPC at +0x84, Type-0 dispatchers at +0x1C8/+0x1D8, calls recovered 0x0019460A/0x00194635/0x00194676, HalGetInterruptVector(3)+KeInitializeInterrupt+KeConnectInterrupt, shutdown registration, identity ramps, OUT 0x80C0, PCI bus1/slot0 0x4C RMW, then 0x00194780. Failure paths return EAX=0."
+  },
+  {
+    "start": "0x00194780",
+    "end": "0x001948B9",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "restore_frame_metadata": true,
+    "evidence": "GPU enable/time-import helper confirmed by original disassembly. ECX=context, EBP frame, RET 0, EAX=1 on the fall-through path. Pulses PBUS 0x184C, enables PMC, programs PTIMER TIME from KeQuerySystemTime calendar math, disables PGRAPH FIFO, calls 0x00197C50, then W1C/enables PGRAPH and PFIFO."
+  },
+  {
+    "start": "0x00197C50",
+    "end": "0x00197EE3",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "PGRAPH debug/channel setup confirmed by original disassembly. ECX=context, two extra push ecx locals, RET 0. Clears PMC enable bit 0x1000 then sets it, programs debug/context slots, copies them to PGRAPH 0x40008x/0x400B8x, calls recovered 0x00196C0B, copies debug words through 0x400750/754, then stdcall 0x00197AAC(context+0x130). Service-chain callees are already recovered; idle STATUS makes 0x00196C0B a no-op."
+  },
+  {
+    "start": "0x001948B9",
+    "end": "0x00194913",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 16,
+    "test_unit": "11c1",
+    "restore_frame_metadata": true,
+    "evidence": "Address-class decoder called by 0x00194913. Stdcall four arguments, RET 0x10, no ECX. Arg0=input address, arg1=out address, arg2=out class, arg3=force-AGP flag. Flag nonzero stores (addr & 0x0FFFFFFF) | 0x40000000 and class 3. Flag zero with high nibble 0x80000000 stores addr & 0x03FFFFFF and class 1. Otherwise stores the raw address and class 2. EAX is left as the out-class pointer. Balanced EBP prologue uses restore_frame_metadata."
+  },
+  {
+    "start": "0x00194913",
+    "end": "0x001949E2",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 20,
+    "test_unit": "11c1",
+    "restore_frame_metadata": true,
+    "evidence": "RAMIN DMA-object allocator called eleven times by 0x00192090 after 0x00194ADD. Thiscall ECX=context, stdcall five arguments, RET 0x14, EAX=1. Args are handle, class selector, address, limit, dest object. Calls recovered 0x001948B9 with force-flag 0, increments context+0x19C by one, writes a 16-byte PRAMIN slot at device+(index+0x70000)<<4, and fills the dest object. Class dword is 2 when selector==2, 3 when selector==3, else 0x3D, then OR 0x3000, optional 0x20000/0x30000 from decoded class, and 0x8000. Balanced EBP prologue uses restore_frame_metadata."
+  },
+  {
+    "start": "0x00196E92",
+    "end": "0x0019701F",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 16,
+    "test_unit": "11c1",
+    "restore_frame_metadata": true,
+    "evidence": "Surface/channel RAMIN setup called by 0x00194573. Thiscall ECX=context, stdcall four arguments (width, height, depth, object), RET 0x10. Clears 0xDFC dwords at device+0x700000+tag*16, writes the tag into PRAMIN[context+0x13C] and context+0x134+4*FC, packs clamped width/height/depth into instance+0x14 and NV_PGRAPH 0x3224, then pulses 0x2500/0x3200/0x3250. Balanced EBP prologue uses restore_frame_metadata."
+  },
+  {
+    "start": "0x00194573",
+    "end": "0x001945D6",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 20,
+    "test_unit": "11c1",
+    "evidence": "First post-object GPU surface helper called by 0x00192090. Thiscall ECX=context, stdcall five arguments, RET 0x14, EAX=1. Zeros context+0xFC/0x100/0x10C/0x114, copies context+0x19C into +0x108 and adds 0x37F to the tag, calls recovered 0x00196E92(0x80,0x80,8,arg2), and stores ((context+0xFC+0x80)<<16)+device at *arg4."
+  },
+  {
+    "start": "0x0019701F",
+    "end": "0x00197058",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 20,
+    "test_unit": "11c1",
+    "restore_frame_metadata": true,
+    "evidence": "Eight-byte instance-pair writer called by 0x001945D6. Thiscall ECX=context, stdcall five arguments, RET 0x14. Writes at device+(context+0x12C)+arg0*8: word0=arg1, word1=((arg2|0xFFFFFF80)<<8|arg4)<<16|(arg3&0xFFFF). Balanced EBP prologue uses restore_frame_metadata."
+  },
+  {
+    "start": "0x001945D6",
+    "end": "0x0019460A",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 4,
+    "test_unit": "11c1",
+    "evidence": "RAMHT insert wrapper called repeatedly by 0x00192090 after 0x00194573. Thiscall ECX=context, stdcall one object pointer, RET 4, EAX=1. Hashes object dword0 with two 11-bit XOR-shifts, then calls recovered 0x0019701F(hash, dword0, context+0xFC, object+0xC, zero-extended object word+6)."
+  },
+  {
+    "start": "0x00197058",
+    "end": "0x001970CD",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 8,
+    "test_unit": "11c1",
+    "evidence": "Class RAMIN slot writer called by 0x001949E2. Thiscall ECX=context, stdcall (index, class), RET 8. Writes device+(index+0x70000)<<4 with class&0xFF, ORs 0x01000000 when class==0x39, and stores a class-specific second dword (0x201/0xB00/0xA00) plus two zero dwords."
+  },
+  {
+    "start": "0x001970CD",
+    "end": "0x00197AAC",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "restore_frame_metadata": true,
+    "evidence": "Kelvin context default filler called by 0x001949E2 only for class 0x97. Thiscall ECX=context, RET 0. ORs bit 0 into the current FC tag RAMIN word, then writes the original long default table through device+(tag+0x70000)<<4. Ends immediately before recovered 0x00197AAC. Balanced EBP prologue uses restore_frame_metadata."
+  },
+  {
+    "start": "0x001949E2",
+    "end": "0x00194A72",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 12,
+    "test_unit": "11c1",
+    "restore_frame_metadata": true,
+    "evidence": "Named-object allocator called by 0x00192090 after RAMHT inserts. Thiscall ECX=context, stdcall (handle, class, dest), RET 0xC, EAX=1. Class 0x97 allocates 0x330 bytes of instance tags and calls recovered 0x001970CD; other classes add 0x10>>4. Always calls recovered 0x00197058 and 0x001945D6, fills dest, and sets dest word+6 to 1."
+  },
+  {
+    "start": "0x001912A0",
+    "end": "0x00191390",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Framebuffer publish helper called by 0x00192090 after WBINVD. Thiscall ECX=D3D device, RET 0. When device+8 bit 0x2000 is clear it SFENCE-flushes NV_PFB_WBC at [*0x19DCE0+0x2268]+0x100410, then stores the masked primary address. When 0x19DED0 is zero it skips unresolved 0x0018E120. The 0x2000 path publishes 0x19DE88 into device+0x2264 without touching WBC. Keep 0x0018E120 fatal."
+  },
+  {
+    "start": "0x00190FB0",
+    "end": "0x001910B7",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 12,
+    "test_unit": "11c1",
+    "evidence": "Submission-record field copier called three times by 0x00190240 (0x001902BB, 0x001902CE, 0x001902E4, 0x001902FA) with three cdecl arguments: destination, destination-dword-index, and a 0x40-byte source record at 0x0019A170/0x0019A228. Re-lays the 16 sampled source dwords (offsets 0x00,0x10,0x20,0x30,0x04,0x14,...,0x3C) into 17 consecutive destination dwords, so destination+0x44 is exactly where the next call's destination starts. Ends RET 0xC at 0x0019101D; NOP padding runs 0x0019101D-0x0019101F."
+  },
+  {
+    "start": "0x001910C0",
+    "end": "0x00191141",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Ring teardown. Thiscall ECX=ring context, no stack arguments (plain RET at 0x001910DF). Frees the mapped region context+0x24 through the imported releaser at 0x001C404C when non-null, then frees the submission record table context+0x4C through 0x0014A85B when non-null. This entry owns only the 10 instructions at 0x001910C0-0x001910DF; the code at 0x001910E0 is a separate function that is reached by fall-through from 0x001910DF, so it must be registered as its own entry."
+  },
+  {
+    "start": "0x001910E0",
+    "end": "0x00191141",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Ring byte-accounting helper. Entered only by fall-through from 0x001910DF, never by CALL, so it is an internal entry that the lifter must still treat as a callable boundary because the preceding function RETs before it. ECX=ring context, EDX=submission record pointer, no stack arguments (plain RET at 0x0019112F and 0x00191140). Computes, modulo the wrap byte count context+0x44, the submitted dword distance between the record's start and end pointers, clamping negative results to zero, then adds the record's queue-depth field at record+0x08 minus context+0x2AB8. Returns the clamped total in EAX. Reached from 0x00191480/0x001914C1 inside the back-pressure wait."
+  },
+  {
+    "start": "0x00191150",
+    "end": "0x00191261",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Submission lookup/rotate. Custom convention: EAX carries the target ring position and one dword is read from [ESP+0x14] (the caller's first stack argument) at 0x0019116D; no RET immediate (plain RET at 0x001911C7, 0x00191256, 0x00191260), so the argument is read but never popped. Called by 0x00191473 with EAX=guest position and by 0x00191xxx publish paths. When the write cursor context+0x30 is within 0x80 dwords of the requested position it walks the submission record array context+0x4C with mask context+0x3C, comparing wrapped record start positions against the current cursor, and returns the matching record pointer in EAX or zero when the ring wraps past the queue head. Returns zero (0x00191257) when no record matches. All six exits restore EBX/EBP/ESI/EDI and leave the stack unchanged."
+  },
+  {
+    "start": "0x00191270",
+    "end": "0x0019129D",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "The kick primitive itself. No arguments at all (no prologue, plain RET at 0x0019129C). Loads the ring context from MEM32[0x0019DCE0], follows context+0x2268 to the mapped NV2A register base, issues SFENCE, then reads-modifies-writes NV_PFIFO_CACHE1_DMA_PUT (register base + 0x100410) with bit 16 set, and spins at 0x00191290 until the same bit reads back clear. This is exactly the latch contract documented in docs/jsrf-kick-get-contract.md and implemented in the toolkit by 0x00191270's counterpart NV_PFIFO_CACHE1_DMA_PUT_KICK. Called from 0x001914B8 and 0x001914DB inside the back-pressure wait. It is never called from the 0x001918E0/0x001917F0 method blocks; those publish through 0x00190240."
+  },
+  {
+    "start": "0x00191390",
+    "end": "0x0019143D",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 4,
+    "test_unit": "11c1",
+    "evidence": "Submission record path. Stdcall one argument (RET 4 at 0x0019143A) selecting the record mode. Reads the ring context from MEM32[0x0019DCE0] rather than ECX. If the write cursor has reached the commit limit it first reserves space through 0x00191530 with (MEM32[0x0019E328], MEM32[0x0019E328]>>1). Emits a two-dword command pair at the cursor carrying the kernel read pointer context+0x30, then advances context+0x30 by two dwords and records the new cursor in the submission slot selected by (context+0x30>>1)&0x3F at context+0x50 + slot*12, storing the pointer at +0x50 and the published context+0x40 value at +0x58. When the argument has bit 0 set it also advances the submission counter context+0x38 under mask context+0x3C and writes the three-dword record {read pointer, record, published PUT} into the table at context+0x4C. When bit 1 is clear it calls the kick path 0x001912A0; when bit 1 is set it returns without kicking. Returns the pre-update read pointer in EAX."
+  },
+  {
+    "start": "0x00191440",
+    "end": "0x00191526",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 8,
+    "test_unit": "11c1",
+    "evidence": "Back-pressure wait. RET 8 at 0x001914FE and 0x00191523 (one explicit add esp,8 before 0x0019144C's sibling) so it takes two dwords; the first is read as the target ring position at 0x00191441. Reads the GPU-side GET from [context+0x34] and compares it against the kernel write pointer context+0x30; when the ring is not already exhausted it loops over the submission records, and if the requested record has been retired it returns immediately (0x0019145E -> 0x001914FC). Otherwise it calls 0x00191150 to find the record, accounts its bytes through 0x001910E0, and when the accounted size reaches 0x8000 dwords it programs a 0x40110/0x40100 register pair into the record and kicks twice through 0x00191270. When the accounted size is still at or above 0x8000 on the second check it releases an OS wait object: it pushes the 1C4018 import target and calls through EDI with (1, 6, 1, 0, 0) until the call returns zero (0x00191510-0x0019151D), then returns. The final loop at 0x001914F0 re-reads GET until the write cursor distance is covered."
+  },
+  {
+    "start": "0x00191530",
+    "end": "0x001916A3",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 8,
+    "test_unit": "11c1",
+    "evidence": "The GET wait and ring reservation. RET 8 (0x00191666 and 0x001916A0) so it takes two dwords. Fast path: when bit 2 of the flags word context+0x08 is set it advances the kernel write pointer by the head record's start at [context+0x350]+4, adds the write-cursor delta into context+0x354, sets the write cursor to the head record's start, and returns that value in EAX (0x00191543-0x00191566) without touching the GPU. Otherwise it computes the reservation size as the requested size plus one dword, derives the effective ring position from context+0x2264's mapped descriptor at +0x44 ORed with 0x80000000 and clamped into [context+0x24, context+0x28) or taken from context+0x438+0x324C, folds the wrap byte count context+0x44, writes the next-submission marker into the cursor, and when the request crosses the ring end it rotates the cursor back to context+0x24 and publishes the remnant. It then scans the submission table context+0x4C for a record whose span covers the reservation and calls 0x00191440 with (record, 1) to retire it. Finally it stores the new commit limit context+0x04, and if bit 12 of the flags word is set it ORs 0x1000 into context+0x08 and calls the publish/kick path 0x001912A0, else it calls 0x00191390 with mode 1 first and then 0x001912A0. Returns the write cursor in EAX. This is the function that finally reaches the kick latch on the live boot path."
+  },
+  {
+    "start": "0x001916B0",
+    "end": "0x001916BF",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Ring wrap adjuster. No arguments (plain RET at 0x001916BE). Pushes MEM32[0x0019E328] and MEM32[0x0019E328]>>1 and calls the reservation path 0x00191530, so it is simply 0x00191530(ring_size, ring_size/2) with the frame's stack balanced by the callee's RET 8. Called from 0x001918F0, 0x001917FF, 0x0019186B and 0x00190283 immediately before a record is written at the cursor, which is why every one of those sites is guarded by 'cmp cursor, limit / jb skip'."
+  },
+  {
+    "start": "0x001916C0",
+    "end": "0x00191708",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 8,
+    "test_unit": "11c1",
+    "evidence": "Bounded reserve. RET 8 (0x00191705 and the fall-through into 0x00191530) so it takes two dwords: a pointer to a {cursor, limit} pair at [ESP+4] and a dword count at [ESP+8]. When cursor + count*4 is below limit+0x200 it returns immediately without reserving. Otherwise it raises the limit to max(limit, (count*4 + 0x204)/2) and re-enters 0x00191530 through the tail jmp at 0x00191700 with the adjusted pair, so the reserve is retried against the widened ring. No caller sites were found in the 0x0019xxxx region; it is an internal helper of the ring codec."
+  },
+  {
+    "start": "0x00191710",
+    "end": "0x00191721",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Poll-current helper. No arguments (plain RET at 0x00191720). Reads the ring context from MEM32[0x0019DCE0], takes the kernel write pointer context+0x30 and calls the back-pressure wait 0x00191440 with (pointer, 0). No caller sites were found; it is the 'wait for everything queued so far' entry point of the ring codec."
+  },
+  {
+    "start": "0x00191730",
+    "end": "0x001917A8",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 4,
+    "test_unit": "11c1",
+    "evidence": "Submission retire helper. RET 4 at 0x00191771, 0x00191795 and 0x001917A5, so one argument: a record pointer. Returns immediately when MEM32[0x0019DCE0] is null. Masks the record's flags dword with 0x70000 and, when the result is 0x50000 and record+0x14 is non-null, calls 0x001928D0 with the record and, if it fails, waits on the current kernel write pointer through 0x00191440. Otherwise it waits on record+0x08 first, and when that too fails and the returned value at 0x00191774 is non-zero it waits on that value. Every exit returns the record pointer in EAX after the wait, which is how callers learn the final position."
+  },
+  {
+    "start": "0x001917B0",
+    "end": "0x001917E6",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 4,
+    "test_unit": "11c1",
+    "evidence": "Second-record retire helper. RET 4 at 0x001917D4 and 0x001917E3, so one argument: a record pointer. Returns immediately when MEM32[0x0019DCE0] is null. When any of bits 19-22 of the record flags dword are set it waits on the current kernel write pointer through 0x00191440; otherwise it waits only when record+0x08 is non-zero. This is the sibling of 0x00191730 for records whose flags do not carry the 0x50000 class tag."
+  },
+  {
+    "start": "0x001917F0",
+    "end": "0x001918D3",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "Second pushbuffer method block. No arguments and no stack cleanup (plain RET at 0x001918D2). Reads the ring context from MEM32[0x0019DCE0], guards the cursor against the commit limit through 0x001916B0, then writes a 0x3C-byte (15-dword) method record at the cursor carrying NV2A methods 0xC0180/2, 0x3 and 0x3 header dwords, 0x180190/4, 9, 0xA, 0x3, 0x3, 8, 0x401A8/0xC, 0x41D6C and a zero terminator, advances the write cursor by 15 dwords, re-checks the limit through 0x001916B0, writes a second 15-dword record carrying 0x409FC/1, 0x100A50, three zero dwords, the float 1.0f at +0x18, 0x416BC, 1, 0x41E78, 0x210000, 0x41D80, 1, 0x41E68 and the float +inf at +0x38, advances the cursor again, and finally emits the block by pushing a zero argument and calling the submit path 0x00190240. Reached by the tail jmp at 0x001919B9 from 0x001918E0, which is why the preceding block has no RET of its own."
+  },
+  {
+    "start": "0x001918E0",
+    "end": "0x001919BE",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 0,
+    "test_unit": "11c1",
+    "evidence": "The first pushbuffer method block and the current boot stop. No arguments and no stack cleanup; it ends by tail-jumping to 0x001917F0 at 0x001919B9 instead of returning, so 0x001917F0 inherits its frame (EBX/ESI/EDI are pushed at 0x001918E0/0x001918E1/0x001918ED and only 0x001917F0's epilogue pops them). Saves EBX/ESI/EDI, reads the ring context from MEM32[0x0019DCE0], guards the cursor against the commit limit through 0x001916B0, then writes an 11-dword method record at the cursor: 0x42000/0xE, 0x44000/0x10, 0x46000/0x11, 0x40000/0xD, 0x42180/7 and 0x442FC/3, where the leading NV2A method IDs are 0x042000, 0x044000, 0x046000, 0x040000, 0x042180 and 0x0442FC. Advances the write cursor by 11 dwords, clears the 16-dword blocks at context+0x201C and context+0x203C with rep stosd, and writes the 15-dword pair-tag record 0x31C4184... starting with 0x86184/3/0xB at context+0x2030 through context+0x2040 and then eight 0x19 dwords, terminating with 0x11. This is the method block the live boot reaches, so recovering it is what turns the fatal unresolved-call into a real submission."
+  },
+  {
+    "start": "0x00190240",
+    "end": "0x00190335",
+    "section": "D3D",
+    "kind": "routine",
+    "stack_args": 4,
+    "test_unit": "11c1",
+    "evidence": "The actual submit path. RET 4 (0x00190332) so it takes one argument, a mode/flags dword. It is the only route from a method block to the GPU. ARG 0x00190240: reads the argument at 0x00190240, tests bit 4, and sets bit 9 of the flags word context+0x08 when the bit is present or clears it otherwise, storing the argument with bit 4 masked off into context+0x2018. ARG 0x0019025A-0x0019026C/NZ (0x19026C jne) takes a short path that ORs 0x1600 into the global at 0x0019DED8 and then locks the pushbuffer. It guards the cursor against the commit limit through 0x001916B0, writes a 0x30-dword (0xC0-byte) record at the cursor starting with 0x41EA4/0x3C/0x300B80, copies 12 dwords from the constant table at 0x0019A228 into the record, then lays down four 0x44-byte per-surface blocks built by 0x00190FB0 with source rule 0x0019A170 and targets 0x4008 40/80/C0/900. It terminates the record with the float constant 0x1009D0, two zero dwords, 1.0f at +0x11 8 and a zero, advances the write cursor by 0x124 bytes, and returns. Reached from 0x001918CB (inside 0x001917F0) with a zero argument and from other publish paths."
+  }
+]

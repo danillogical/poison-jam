@@ -1,0 +1,10 @@
+/build/
+/game/
+/logs/
+/saves/
+*.log
+*.dmp
+/tools/disasm/output/
+/tools/func_id/output/
+__pycache__/
+.git.broken-backup/
