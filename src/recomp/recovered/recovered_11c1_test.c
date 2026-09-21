@@ -8,9 +8,14 @@
 
 #include <stdlib.h>
 
+extern void sub_00147E72(void);
+extern void sub_00147FA7(void);
 extern void sub_0014A83E(void);
 extern void sub_0014A85B(void);
 extern void sub_0014B794(void);
+extern void sub_0017E58F(void);
+extern void sub_0017F1D7(void);
+extern void sub_00180D39(void);
 extern void sub_0018AFB0(void);
 extern void sub_0018B1A0(void);
 extern void sub_0018B390(void);

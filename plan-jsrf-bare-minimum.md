@@ -4,13 +4,35 @@ Agent onboarding, operating rules and handoff guidance live in `AGENTS.md`.
 Maintain that guide as capabilities and commands change; this plan remains the
 source of truth for milestone status and acceptance evidence.
 
-Current checkpoint: `logs/runs/20260921-111607-936-kick-ack/`.
-The kick chain is recovered (`0x001918E0` through the submit path
-`0x00190240`), so the first missing call has moved past GPU setup.
-**The link blocker is cleared as of 2026-09-21.** `build/Release/jsrf_recomp.exe`
-now builds — 19,245,568 bytes, sha256 `bfbcf556e67519239ba17d95a4a2b2df...`,
-with a verified source/executable identity stamp. It has never been executed, so
-no checkpoint follows from it yet.
+Current checkpoint: `logs/runs/20260921-154535-674-resume-check/` (the pre-fix
+state, reproduced on the current binary). The kick chain is recovered
+(`0x001918E0` through the submit path `0x00190240`), so the first missing call
+has moved past GPU setup. **The link blocker is cleared as of 2026-09-21.**
+`build/Release/jsrf_recomp.exe` builds with a verified source/executable
+identity stamp.
+
+The guest now runs, and the first real stop is **not** in the GPU path and
+**not** in the C++ EH machinery. It is a translation defect in the alias fold:
+
+- `_initterm` (`0x0014B50D`) walks the static-initializer array
+  `0x001EB760`..`0x001EB76C` and calls each non-null, non-`-1` dword. Slot
+  `0x001EB764` holds **`0x0017E58F`**, a C++ static initializer that constructs
+  a global object (vtable `0x0022F198`).
+- The translation pass classifies `0x0017E58F` as `detection_method:
+  tail_jump_alias` and folds it into the next entry `0x0017E600`. That
+  **deletes its body** and rewrites the dispatch tuple to
+  `{ 0x0017E58F, sub_0017E600 }`.
+- `sub_0017E600` is the three-argument catch-frame invoker; it reads
+  `handler`/`context`/`flags` from its caller's stack. Called with **zero**
+  arguments by `_initterm`, it reads `[ebp+8] = 0x00700010` (stale stack) and
+  executes `call eax` at `0x0017E625` → fatal `[ICALL] invalid target`.
+- Every register matches that reading: `esi=0x001EB764` / `edi=0x001EB76C` are
+  `_initterm`'s own loop pointers, and `ebp=0xC` is `arg1+0xC` with `arg1=0`.
+
+Pre-fix evidence: in `logs/runs/20260921-111607-936-kick-ack/source.zip` the
+dispatch read `{ 0x0017E58F, sub_0017E58F }` and `recomp_0007.c` defined a
+clean standalone body. The fold is the regression, and it is what moved the
+stop from the GPU kick (`0x001918E0`) to startup.
 
 What actually blocked the link is worth keeping in the record, because none of
 the three causes was the one previously recorded here. The dominant cause was
@@ -26,26 +48,55 @@ full pass was being run without the project's manual-function list. See
 Two defects are known and are **not** link blockers. Both are correctness
 defects that a successful boot would not reveal:
 
-1. **1032 live jumps are silently rewritten to `(void)0`.** The label guard in
-   `tools/recomp/translator.py` (the block that rewrites a `goto` whose target
-   is not a label in the same function) fires 2623 times across the chunks, and
-   1032 of those sit inside a live `if`. The proof case is `0x00011133`
-   `mov esi,[esi+0x34]` / `test esi,esi` / `jne 0x000110D0`, a linked-list
-   traversal loop whose backward branch became a no-op, so the loop runs once.
-   Nothing about this fails loudly.
-2. **`tail_jump_alias` entries are still emitted as standalone bodies.** They
-   are mid-body fragments whose control flow exits into their parent, so they
-   cannot be lifted independently. Fixing 1 and 2 together means not emitting
-   them as entries at all and giving each alias a symbol that jumps to the
-   parent's block.
+1. **CLOSED.** Live jumps silently rewritten to `(void)0`: same-function
+   deletions went 1032 → 0. Cross-function deletions were 345 → 40. Do not
+   weaken the label validator; cross-function `goto` is not C.
+2. **CLOSED, but the fix was too broad — see item 5.** `tail_jump_alias`
+   entries are no longer emitted as standalone bodies; they are folded into a
+   parent and dispatched under the parent's symbol. The fold is correct when
+   the alias lies *inside* its parent (the same-end rule), and wrong when the
+   alias merely *abuts* it.
 
 Two further items remain:
 
-3. **The game repository's `.git` has no object store**, no loose refs, no
-   `packed-refs` and no remote, so no commit can be made. The working tree is
-   intact and `.git/logs/HEAD` lists ten commits up to `7e2c4f43`. Needs a
-   backup/snapshot restore or a deliberate re-init and re-commit. Only the user
-   can choose, and `git init` must not be run as a "fix".
+3. **RESOLVED BY RE-INIT, and this is still the user's call.** The game
+   repository's `.git/objects` was missing entirely — no loose refs, no
+   `packed-refs`, no remote — so no commit could be made and the working tree
+   was unversioned. It was rebuilt with `git init -b master` and a single
+   commit; the old directory is preserved as `.git.broken-backup/` (gitignored)
+   and history before 2026-09-21 no longer resolves. The reflog's tip was
+   `7e2c4f43`. **Note this contradicts the earlier instruction in this item that
+   `git init` must not be run as a "fix".** No source was lost — the working
+   tree, `config/` and `game/` are intact — but if a backup or a preferred
+   remote exists, restoring it is still preferable to the rebuilt history.
+4. **The toolkit fix is committed.** `tools/recomp/lifter.py`,
+   `tools/recomp/translator.py` and the new
+   `tools/recomp/test_tail_jump_into_batch.py` +
+   `tools/recomp/test_alias_body_suppression.py` are toolkit revision
+   `58a9cf9`, on top of `488286f`. Later toolkit revisions this session:
+   `a301962`, `5d68f27`, `ff4d442`, `db54746`, `9568f29`. The toolkit repo is
+   healthy and the game repo's `AGENTS.md` records the revision.
+5. **OPEN — the alias fold deletes real function bodies (first guest stop).**
+   The "abutting alias" rule added by `ff4d442` assumes an alias whose `end`
+   equals the next real entry's `start` is a fragment of that entry. Measured
+   against the current tree that assumption is false in the general case:
+   - 3123 dispatch tuples redirect a VA to a different symbol;
+   - only **87** of those have a `loc_<VA>` label in the parent, so 3036
+     redirect to a body that does not contain the address at all;
+   - of the 971 aliases adopted by this rule, **759 end in `ret`** and 132 in
+     `jmp`, i.e. the large majority are self-terminating, not fragments.
+   Discriminators tried and **discarded because they saturate**: "the last
+   decoded instruction ends exactly at the alias end" passes for the defect
+   case too (`int3` padding decodes as instructions), and "ends in `ret`"
+   fires on 759/971. Do not adopt either. The sound rule needs a signal that
+   separates "fragment of the parent" from "independent abutting function" —
+   the working hypothesis is *the alias address is entered from data* (a
+   function-pointer table), which is exactly how `0x0017E58F` is reached.
+   Unfolding all 759 is a large change (restores ~1.4 MB of bodies and
+   re-introduces the deleted-goto problem `ff4d442` was hiding) and needs its
+   own packet, its own regeneration, and a fresh baseline. **Until then, an
+   address that is entered from data must be recovered explicitly** rather than
+   trusted to the fold.
 4. **The toolkit fix is committed.** `tools/recomp/lifter.py`,
    `tools/recomp/translator.py` and the new
    `tools/recomp/test_tail_jump_into_batch.py` +

@@ -2232,4 +2232,183 @@ demo throws immediately after `guest_entry`, with the `0x00700010` EH-table slot
 treated as a symptom rather than the target. Do not widen
 `g_xbox_code_lo`/`hi` to paper over it.
 
+---
+
+# The SEH theory was wrong. The stop is an alias fold that deleted an initializer
+
+**Decision: retract the SEH/EH-unwinder diagnosis above, and fix the alias fold
+instead.** The evidence below is a native stack, the guest register set, the
+original XBE bytes, the generated dispatch table and an archived pre-fix tree —
+not an inference from the crash address alone.
+
+## What the stack actually says
+
+The previous session reasoned from `0x00700010` and from `esi=0x001EB764` /
+`edi=0x001EB76C` that a C++ exception was being dispatched and that the EH
+handler table held a small integer where a code address belongs. The recorded
+call chain contradicts that. From
+`logs/runs/20260921-154535-674-resume-check/stacks.txt`, innermost first:
+
+```
+recomp_icall_not_code_log+0xA0        src/recomp_manual.c:44
+sub_0017E600+0x20C                    recomp_0004.c:6044
+sub_0014B50D+0x17F                    recomp_0003.c:24660
+sub_00147FB4+0x17B                    recomp_0003.c:16120
+sub_00147EBB+0x5B8                    recomp_0003.c:15949
+bridge_PsCreateSystemThreadEx+0x180
+kernel_thunk_dispatch+0x409
+sub_00147F53+0x274
+xbe_entry_point+0x1BD
+WinMain+0x3D9
+```
+
+The unwinder `sub_0017DBBD` is **not on the path at all**. The caller of
+`sub_0017E600` is `sub_0014B50D`, reached from the guest's first thread routine
+running inline inside `bridge_PsCreateSystemThreadEx`.
+
+**`sub_0014B50D` is `_initterm`.** It is 41 bytes and walks a function-pointer
+array:
+
+```
+0014B50F mov eax, 0x1eb760      ; start
+0014B514 mov edi, 0x1eb76c      ; end
+0014B51D jae 0x14b533           ; done
+0014B51F mov eax, [esi]         ; fn = *p
+0014B521 test eax, eax
+0014B523 je 0x14b52c            ; skip null
+0014B525 cmp eax, -1
+0014B528 je 0x14b52c            ; skip -1
+0014B52A call eax               ; CALL THE INITIALIZER
+0014B52C add esi, 4
+0014B52F cmp esi, edi
+0014B531 jb 0x14b51f
+```
+
+So `esi` and `edi` in the crash register dump are **the walker's own loop
+pointers**, not EH table pointers. And the initializer array at `0x001EB760`
+reads `00000000 0017E58F 00181212` — slot `0x001EB764` holds **`0x0017E58F`**,
+which is what gets called.
+
+The register dump then closes the loop exactly. With `esp=0x00F7FF14` at the
+`call eax` and `ebp` = `esp` of the entry frame, the raw guest stack gives:
+
+| guest stack | value | role |
+|---|---|---|
+| `[ebp+4]` | `0x0014B52C` | `_initterm`'s return address |
+| `[ebp+8]` | `0x00700010` | **the "handler"** |
+| `[ebp+0xC]` | `0x00000000` | **arg1 = 0** |
+| `[ebp+0x10]` | `0x00148000` | arg2 |
+
+`sub_0017E600` is the three-argument catch-frame invoker: `eax = [ebp+8]`,
+`ebp = [ebp+0xC] + 0xC`, `call eax`. So `arg1 = 0` gives `ebp = 0xC`, which is
+exactly the recorded `ebp=0000000C` and `seh=0000000C`. **`0x00700010` is stale
+stack data read as an argument, not an EH table slot.** There is no exception
+being dispatched, and nothing "threw".
+
+## Why the wrong function ran
+
+`0x0017E58F` is a genuine C++ static initializer. Its body ends with a plain
+`ret` at `0x0017E5F4` and `int3` padding fills `0x0017E5F5..0x0017E600`, so it
+does not fall through into `0x0017E600`.
+
+The translation pass labels it `detection_method: tail_jump_alias` and the
+"abutting alias" rule added by `ff4d442` adopts the next real entry as its
+parent. The dispatch tuple in the current tree is:
+
+```c
+src/recomp/gen/recomp_dispatch.c:6865
+    { 0x0017E58Fu, (recomp_func_t)sub_0017E600 },
+```
+
+and no `loc_0017E58F` label exists in any chunk — the body was deleted outright.
+
+**Archived proof this is a regression, not a pre-existing condition.**
+`logs/runs/20260921-111607-936-kick-ack/source.zip` (the 11b4b4 checkpoint,
+before the alias work) has `{ 0x0017E58F, sub_0017E58F }` in the dispatch and a
+clean standalone `void sub_0017E58F(void)` in `recomp_0007.c` — byte-identical
+in structure to the body regenerated below. After `ff4d442` the address was
+redirected and the body dropped.
+
+So `_initterm` calls the initializer, the dispatch resolves it to
+`sub_0017E600`, that function reads three arguments that were never pushed, and
+`call eax` targets `0x00700010`. The previous session's own diagnostic run
+(continuing past the ICALL gives `esp=0x6A0CC48F` and a wild read) is consistent
+with this: the frame was never a real one to unwind.
+
+## The fix
+
+**Decision: recover `0x0017E58F` explicitly rather than wait for the alias rule
+to be repaired.** The project already has the mechanism: an entry in
+`config/recovered-functions.json` becomes `detection_method:
+reviewed_runtime_target`, gets its real translated body, and — because
+`RECOMP_ICALL_SAFE` consults `recomp_lookup_manual` **before**
+`recomp_lookup` — overrides the wrong generated dispatch without regenerating
+the chunks.
+
+`kind: "routine"`, not the initializer default. The initializer default adds a
+`g_ebp != before_bp` check, and a generated epilogue emits
+`POP32(esp, ebp)` **without restoring `g_ebp`**, so `g_ebp` is a
+last-published-frame hint that legitimately drifts across calls. Measured with
+the check on: `esp 0x00F7FF44->0x00F7FF48` (expected +4), `ebx/esi/edi`
+preserved, `g_ebp 0x00F7FF0C->0x00F7FF1C`. Guest EBP is preserved by
+construction — the body never assigns `ebp`.
+
+## Before / after
+
+| | before | after |
+|---|---|---|
+| guest stop | `[ICALL] invalid target 0x00700010 return=0017E627` | `[ICALL] Failed to resolve VA 0x00148005` |
+| exit code | `0xE0464643` | `0xE0464643` |
+| kernel calls | 157 | **177** |
+| initializer | never ran | `[RECOVERED] 0x0017E58F returned; ABI verified` |
+| run | `20260921-154535-674-resume-check` | `20260921-155635-882-alias-fix-verified` |
+
+The `0x00700010` stop is gone, the initializer executes and returns with the ABI
+contract satisfied, and the guest advances 20 further kernel calls into
+`sub_00147FB4`'s continuation (`NtWriteFile` returning `0xC0000001`, ordinal 301
+returning `0x13D`). The new stop is a **later** address, so the previous
+checkpoint is retained.
+
+## The general defect this exposes, and what NOT to do
+
+The "abutting alias" rule's premise — *an alias whose `end` equals the next real
+entry's `start` is a fragment of that entry* — is false in the general case.
+Measured on the current tree:
+
+- 3123 dispatch tuples redirect a VA to a different symbol;
+- only **87** of those have a `loc_<VA>` label in the parent, so **3036**
+  redirect to a body that does not contain the address at all;
+- of the 971 aliases adopted by this rule, **759 end in `ret`** and 132 in
+  `jmp`.
+
+Two candidate discriminators were tried and **discarded because they
+saturate** — the same trap `db54746` hit:
+
+- "the last decoded instruction ends exactly at the alias end": `int3` padding
+  decodes as instructions, so the defect case passes it too;
+- "the alias body ends in `ret`": fires on 759 of 971, so it would unfold
+  almost everything.
+
+**Do not adopt either.** The sound signal still needs to be found; the working
+hypothesis is *the alias address is entered from data* (a function-pointer
+table), which is exactly how `0x0017E58F` is reached and why no `goto`-based
+reasoning could see the problem. Unfolding all 759 restores ~1.4 MB of bodies
+and re-introduces the deleted-goto problem `ff4d442` was hiding, so it needs its
+own packet and its own baseline. **Until then, an address entered from data must
+be recovered explicitly.**
+
+## Verification
+
+Build identity verifies. **CTest 11/11 pass**, including
+`jsrf_recovery_11c1` (2197 checks) with the new entry, `jsrf_crt` (36900),
+`jsrf_lifter`, `jsrf_nv2a` (319), `jsrf_nv2a_hal`, `jsrf_service_chain`,
+`jsrf_callback_reentry`, `jsrf_inplace_event_bridge`, `jsrf_gpu_inspection`,
+`jsrf_native_gpu_warp`, `xbox_timestamp_publication`.
+
+**Next packet:** `0x00148005` — a mid-body address inside `sub_00147FB4`
+(`0x00147FB4..0x00148023`, `detection_method: imm_ref_target`, **no dispatch
+entry at all**) being called indirectly. It is the instruction after
+`call 0x14B4B5` at `0x00148000`, so the working question is what put that
+return address into a code pointer.
+
 

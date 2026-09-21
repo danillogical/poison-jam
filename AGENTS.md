@@ -759,6 +759,56 @@ implementation must have behavior tests plus a bounded game run; a documentation
 contract audit alone needs no rebuild. Keep Nsight completeness as a separate
 optional tool task: it does not block original-XBE analysis or RenderDoc inspection.
 
+## Guest startup stop — the alias fold deleted a static initializer (2026-09-21)
+
+**This supersedes the "next packet is the SEH chain" note above. There is no
+exception, no unwinder and no EH-table defect on the path.**
+
+The first real guest stop after `guest_entry` was
+`[ICALL] invalid target 0x00700010 return=0017E627`. The previous session read
+`esi=0x001EB764` / `edi=0x001EB76C` as EH-table pointers and `0x00700010` as an
+EH handler slot. They are not. `sub_0014B50D` is **`_initterm`** — it walks the
+function-pointer array `0x001EB760`..`0x001EB76C`, so `esi`/`edi` are its own
+loop pointers — and slot `0x001EB764` holds **`0x0017E58F`**, a C++ static
+initializer. `0x00700010` is stale stack read as `[ebp+8]` because the
+three-argument `sub_0017E600` was called with zero arguments.
+
+`0x0017E58F` was classified `tail_jump_alias` and folded by the `ff4d442`
+"abutting alias" rule into the next entry `0x0017E600`: the dispatch tuple became
+`{ 0x0017E58F, sub_0017E600 }` and the body was deleted. Pre-fix evidence that
+this is a regression: `logs/runs/20260921-111607-936-kick-ack/source.zip` has
+`{ 0x0017E58F, sub_0017E58F }` and a clean body in `recomp_0007.c`.
+
+Fixed by recovering `0x0017E58F` in `config/recovered-functions.json`
+(`kind: "routine"`, entry 71). An entry there becomes
+`detection_method: reviewed_runtime_target`, gets its real translated body, and
+overrides the wrong generated dispatch because `RECOMP_ICALL_SAFE` consults
+`recomp_lookup_manual` **before** `recomp_lookup` — **no chunk regeneration was
+needed.** Use `kind: "routine"` for anything that calls other framed functions:
+a generated epilogue emits `POP32(esp, ebp)` without restoring `g_ebp`, so
+`g_ebp` is a last-published-frame hint and the initializer default's
+`g_ebp != before_bp` check fails spuriously.
+
+Before/after: kernel calls **157 -> 177**, initializer now logs
+`[RECOVERED] 0x0017E58F returned; ABI verified`, and the stop moves later to
+`[ICALL] Failed to resolve VA 0x00148005`. Runs:
+`logs/runs/20260921-154535-674-resume-check/` (before) and
+`logs/runs/20260921-155635-882-alias-fix-verified/` (after). CTest 11/11.
+
+**Open, and the next packet:** `0x00148005` is a mid-body address inside
+`sub_00147FB4` (`detection_method: imm_ref_target`, **no dispatch entry**) being
+called indirectly. It is the instruction after `call 0x14B4B5` at `0x00148000`.
+
+**Alias-fold defect, do not "fix" it blind.** 3123 dispatch tuples redirect a VA
+to a different symbol; only **87** have a `loc_<VA>` label in the parent, so
+**3036** redirect to a body that does not contain the address. Of the 971
+aliases adopted by the abutting rule, **759 end in `ret`**. Two discriminators
+were measured and **discarded because they saturate** — "last instruction ends
+exactly at the alias end" (`int3` padding decodes as instructions) and "ends in
+`ret`" (fires 759/971). The working hypothesis is *the alias address is entered
+from data* (a function-pointer table). Until the rule is repaired, **an address
+entered from data must be recovered explicitly.**
+
 ## GPU direction and bounded next packets
 
 Read `docs/jsrf-gpu-setup-contract.md` before this work. Milestone 11a is
