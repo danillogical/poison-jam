@@ -4,22 +4,52 @@ Agent onboarding, operating rules and handoff guidance live in `AGENTS.md`.
 Maintain that guide as capabilities and commands change; this plan remains the
 source of truth for milestone status and acceptance evidence.
 
-Current checkpoint: `logs/runs/20260921-160209-538-crt-initializers-bounds/`.
-The kick chain is recovered (`0x001918E0` through the submit path `0x00190240`),
-so the first missing call has moved past GPU setup. **The link blocker is cleared
-as of 2026-09-21.** `build/Release/jsrf_recomp.exe` builds with a verified
+Current checkpoint: `logs/runs/20260921-161420-136-vtable-final/`. The kick chain
+is recovered (`0x001918E0` through the submit path `0x00190240`), so the first
+missing call has moved past GPU setup. **The link blocker is cleared as of
+2026-09-21.** `build/Release/jsrf_recomp.exe` builds with a verified
 source/executable identity stamp.
 
-**CRT initialization now completes.** The guest runs every static initializer and
-reaches heap allocation (`[HEAP] #4..#7`, 4.2 MB of 50 MB used), 200 kernel
-calls, 56 `[RECOVERED] ... ABI verified` lines, no unresolved or invalid ICALL,
-CTest 11/11. The stop is now a **host stack overflow** (`0xC00000FD`) inside the
-toolkit's per-allocation `fprintf` in `xbox_HeapAlloc`
-(`xbox_memory_layout.c:2228`). At the fault `esp=0x00F27EC8` against a guest
-stack of `0x00780000`..`0x00F80000`, so ~360 KB of 512 KB of guest stack is in
-use: deep guest recursion whose recompiled frames cost far more host stack than
-guest stack. Deciding whether that recursion is guest-legitimate is the next
-packet; if it is, the port needs a much larger host stack for the guest thread.
+**The alias fold's real mechanism is identified, and both blocking classes are
+recovered.** The disassembler reads a data table of `.text` addresses as a switch
+table. A COM vtable looks identical by that test, so every vtable method was
+classified `tail_jump_alias` and folded into the next function — body deleted,
+dispatch tuple pointing at the wrong function. The two classes this broke, both
+now fixed by explicit recovery in `config/recovered-functions.json`
+(**1228 entries**, exe 9.4 MB → 13.2 MB):
+
+1. **The CRT initializer tables** (60 targets, 44 folded). Table B is exactly the
+   14 initializers milestones 02/03/04 recovered. The guest now completes CRT
+   initialization and reaches heap allocation.
+2. **COM vtable methods** (1120 with a redirected dispatch; 1111 recovered, 9 are
+   genuine fragments the translator refuses to lift standalone). Demonstrated
+   defect: the interface table at `0x001E0F00` is `[0x0014CF20 QueryInterface,
+   0x0014CF00 AddRef, 0x0014CF80 Release, ...]`, stored by its constructor
+   `0x0014CDB0`. `sub_0014CFB0` calls `vtable[0]` at `0x0014CFDE`, which the fold
+   redirected back to `sub_0014CFB0`, so the guest self-recursed 28 bytes of guest
+   stack per level (~13,000 levels) until the host stack overflowed.
+
+**How a vtable is identified** (reusable, and the discriminator that finally
+worked): a data table whose entries are a run of **distinct** `.text` addresses,
+stored by a constructor as an immediate in the generated code. **The read must
+stop at the first repeated target** — reading past the table into adjacent
+`.rdata` let an unrelated duplicate reject the whole table, which is why the count
+went 384 → 1120 on the second pass. A switch table repeats almost immediately, so
+a distinct run of ≥ 3 separates the two.
+
+**Verified now:** the self-recursion is gone (no `0xC00000FD`), 62
+`[RECOVERED] ... ABI verified` lines (up from 56), `AddRef` `0x0014CF00` passes,
+CTest 11/11.
+
+**Open and immediate:** `stack_args` for the 1113 mechanically-derived entries is
+computed from the translator's own epilogue (`esp += N; return;` →
+`stack_args = N - 4`) and validates 54/55 against the reviewed entries that already
+carried a value — **but it is not correct for every entry.** The wrapper caught
+`0x0014CF20` (both exits `RET 0xC`, corrected to 12) and now stops on `0x00150C00`,
+where the derived 16 is 8 on the taken path. **Functions with several distinct
+epilogues cannot be resolved statically from one number.** Until that is
+refined, treat the run as a work-in-progress manifest rather than a regression:
+the previous stop was an unbounded recursion and it is gone.
 
 The first real guest stop after `guest_entry` was **not** in the GPU path and
 **not** in the C++ EH machinery. It was a translation defect in the alias fold,

@@ -822,14 +822,49 @@ ICALL, **CRT initialization completes** and the guest reaches heap allocation
 (`[HEAP] #4..#7`, 4.2 MB of 50 MB). CTest 11/11. Run
 `logs/runs/20260921-160209-538-crt-initializers-bounds/`.
 
-**Next packet — a different class:** `0xC00000FD` **host stack overflow** inside
-the toolkit's per-allocation `fprintf` in `xbox_HeapAlloc`
-(`xbox_memory_layout.c:2228`). `esp=0x00F27EC8` against a guest stack of
-`0x00780000`..`0x00F80000` means ~360 KB of 512 KB of guest stack is in use: deep
-guest recursion whose recompiled frames cost far more host stack than guest
-stack. Decide first whether the recursion is guest-legitimate; if it is, the port
-needs a much larger host stack for the guest thread. **Do not fix it by
-silencing the log line.**
+**RESOLVED, and the previous "next packet" was wrong.** `0xC00000FD` was **not**
+a host-stack sizing problem. The disassembler reads a **data table of `.text`
+addresses as a switch table**; a COM vtable is exactly that shape, so every
+vtable method became `tail_jump_alias` and was folded into the next function. The
+interface table at `0x001E0F00` is `[0x0014CF20 QueryInterface, 0x0014CF00
+AddRef, 0x0014CF80 Release, ...]`, stored by constructor `0x0014CDB0` with
+`mov dword ptr [esi], 0x1E0F00`. `sub_0014CFB0` calls `vtable[0]` at
+`0x0014CFDE`, and the fold had written `{ 0x0014CF20, sub_0014CFB0 }` — so
+**`sub_0014CFB0` called itself**. Events 78418+ repeat `target=0014CF20
+site=0014CFE0` with `esp` descending **0x1C per cycle**, ~13,000 cycles × 28 =
+364 KB = the guest stack in use at the fault: an unbounded guest recursion.
+
+**1120 vtable methods had a redirected dispatch; 1111 are recovered** (9 are
+genuine fragments the translator refuses to lift standalone). With the CRT
+initializer class that is `config/recovered-functions.json` = **1228 entries**,
+exe 9.4 → 13.2 MB. **62** `ABI verified` lines, self-recursion gone, CTest 11/11.
+Run `logs/runs/20260921-161420-136-vtable-final/`.
+
+**Finding a vtable (reusable):** a data table whose entries are a run of
+**distinct** `.text` addresses, stored by a constructor as an immediate. Take
+candidates from the **generated C** (`= 0xADDRu;`) — a linear capstone sweep over
+`.text` desyncs and missed `0x1E0F00` entirely. **The read must stop at the first
+repeated target**; reading past the table into adjacent `.rdata` let one
+unrelated duplicate reject the whole table (384 → 1120 on the second pass). A
+switch table repeats almost immediately, so a distinct run of ≥ 3 separates them.
+
+**Immediate next step:** `stack_args` for the 1113 derived entries comes from the
+translator's own epilogue (`esp += N; return;` → `stack_args = N - 4`) and
+validates 54/55, but is wrong where a function has several distinct epilogues
+(`0x0014CF20` needed 12; `0x00150C00` derives 16, taken path 8). Needs an
+iterative measure-from-the-runtime loop or a per-path model.
+
+**This is a workaround, not the fix.** The real repair is
+`tools/recomp/translator.py`: do not fold an alias whose body needs none of its
+parent's labels. Needs its own regeneration and baseline; re-run the initializer
+and vtable audits afterwards to confirm the counts reach zero. Do not merge the
+config workaround and the toolkit repair in one change.
+
+**Two traps:** never put backticks in a string passed to `bash -c` through a
+double-quoted `python -c` (bash command-substitutes them and the text silently
+vanishes — write the script to a file). And `recover-functions.py` correctly
+raises `Incomplete translation at XXXXXXXX`; drive it in a loop that drops the
+offending entry rather than weakening the check.
 
 **Alias-fold defect, still open for the general rule.** 3123 dispatch tuples
 redirect a VA to a different symbol; only **87** have a `loc_<VA>` label in the

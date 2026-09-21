@@ -2514,4 +2514,93 @@ alias only when its body actually needs the parent's labels (it contains a
 fixing for 56 aliases, and it is the only test so far that separates the two
 shapes by construction rather than by correlation.
 
+---
+
+# The mechanism, and the 1120 COM vtable methods it deleted
+
+**Decision: stop guessing at the fold's discriminator and find out what the
+disassembler actually misreads.** It misreads a **data table of `.text`
+addresses as a switch table**. A COM vtable is exactly that shape. So every
+vtable method was classified `detection_method: tail_jump_alias`, folded into the
+next function by the abutting rule, and its body deleted.
+
+## The demonstrated defect
+
+The interface table at `0x001E0F00` reads, in the original `.data`:
+
+| slot | address | role |
+|---|---|---|
+| 0 | `0x0014CF20` | `QueryInterface` |
+| 1 | `0x0014CF00` | `AddRef` |
+| 2 | `0x0014CF80` | `Release` |
+| 3–7 | `0x00155A60`, `0x00155540`, `0x00155560`, `0x00155380`, `0x00154D70` | interface methods |
+
+`sub_0014CDB0` builds its object with `mov dword ptr [esi], 0x1E0F00` at
+`0x0014CDB7`. `sub_0014CFB0` then calls `vtable[0]` at `0x0014CFDE` — and the
+fold had written `{ 0x0014CF20, sub_0014CFB0 }`, so **`sub_0014CFB0` called
+itself**.
+
+The event history proves it beyond argument. Event 78418 onward:
+
+```
+target=0014CF20 site=0014CFE0 esp=00F2812C
+target=0014CF20 site=0014CFE0 esp=00F28110
+target=0014CF20 site=0014CFE0 esp=00F280F4
+target=0014CF20 site=0014CFE0 esp=00F280D8
+```
+
+`esp` descends **0x1C per cycle**, ~13,000 cycles, 13,000 × 28 = 364 KB — exactly
+the ~360 KB of the 512 KB guest stack that was in use at the fault. **So the
+previous stop was not a host-stack sizing problem at all.** It was an unbounded
+guest recursion created by the fold. I had recorded it as a candidate porting
+requirement ("the port may need a larger host stack"); that is retracted.
+
+## Identification, and the bug in my own scan
+
+A vtable is a data table whose entries are a run of **distinct** `.text`
+addresses, stored by a constructor as an immediate in the generated code (the
+generated C is a desync-free rendering, which a linear capstone sweep over
+`.text` is not — the sweep missed `0x1E0F00` entirely).
+
+**The read must stop at the first repeated target.** My first version read past
+the table into adjacent `.rdata`; one unrelated duplicate there failed the
+"all distinct" test and rejected the whole table. That is why `0x001E0F00` was
+missed and why the count went **384 → 1120** on the second pass. A switch table
+repeats almost immediately (`0x001C4390` is `[0x00011CE0, 0x00011C90,
+0x00011C90, ...]`), so a distinct run of ≥ 3 separates the two cleanly.
+
+## Result
+
+| | before | after |
+|---|---|---|
+| stop | `0xC00000FD` host stack overflow | `ABI FAILURE 0x00150C00` |
+| `ABI verified` lines | 56 | **62** |
+| `AddRef` `0x0014CF00` | never ran | **passes** |
+| config entries | 115 | **1228** |
+| exe | 9.4 MB | 13.2 MB |
+
+CTest 11/11. Run: `logs/runs/20260921-161420-136-vtable-final/`.
+
+## What is not finished
+
+`stack_args` for the 1113 mechanically-derived entries comes from the
+translator's own epilogue (`esp += N; return;` → `stack_args = N - 4`) and
+validates **54 of 55** against the reviewed entries that already carried a value.
+It is not correct for every entry: `0x0014CF20` has two exits both `RET 0xC` and
+needed 12; `0x00150C00` derives 16 where the taken path is 8. **A function with
+several distinct epilogues cannot be resolved statically from one number.** That
+refinement is the immediate next step, and until it is done the run should be
+read as a work-in-progress manifest — the previous stop was an unbounded
+recursion and it is gone.
+
+## This is a workaround, not the fix
+
+1120 recovered entries is 1120 workarounds. The real repair is in
+`tools/recomp/translator.py`: **do not fold an alias whose body needs none of its
+parent's labels.** That is what `ff4d442` was actually fixing for the 56 aliases
+that contained a cross-function `goto`. It needs its own regeneration, its own
+baseline, and a re-run of the initializer and vtable audits to confirm the counts
+go to zero. Do not merge the config workaround and the toolkit repair in one
+change.
+
 
