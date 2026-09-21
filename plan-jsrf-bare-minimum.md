@@ -4,11 +4,37 @@ Agent onboarding, operating rules and handoff guidance live in `AGENTS.md`.
 Maintain that guide as capabilities and commands change; this plan remains the
 source of truth for milestone status and acceptance evidence.
 
-Current checkpoint: `logs/runs/20260921-161420-136-vtable-final/`. The kick chain
-is recovered (`0x001918E0` through the submit path `0x00190240`), so the first
-missing call has moved past GPU setup. **The link blocker is cleared as of
-2026-09-21.** `build/Release/jsrf_recomp.exe` builds with a verified
-source/executable identity stamp.
+Current checkpoint: `logs/runs/20260921-161956-152-reviewed-restored/`.
+**The guest no longer crashes.** Outcome is `diagnostic_deadline` (exit 3) rather
+than an unhandled exception: CRT initialization completes, GPU setup completes,
+and the pushbuffer kick chain that this plan listed as the fatal stop now runs and
+returns — `0x00190FB0`, `0x00190240`, `0x001917F0` and `0x001918E0` all log
+`[RECOVERED] ... ABI verified`. So the previous checkpoint is **passed**, not
+merely retained. 98 recovered bodies verify, 0 ABI failures, guest events 78,441
+runaway → 563, CTest 11/11.
+
+The new state is a **hang, not a fault**: 797,491 first-chance `C0000005` access
+violations in a tight fault-and-retry loop, with the most frequent indirect target
+`0x002652B0` — an address in **no image section** (between `.data`'s end
+`0x0022FCD4` and `DOLBY`'s start `0x0027E080`). The guest stack is healthy at the
+deadline (`esp=0x00F7FB98` of `0x00780000`..`0x00F80000`). **Next packet:** what
+produces `0x002652B0`, and why the guest retries ~800k times instead of failing.
+Note that ~800k handled faults puts the collector's first-chance path on the hot
+path — check it for correctness as well as cost.
+
+Two manifest gaps were closed to get here, both mine rather than the game's:
+1. **The bound must be the next function entry inside the range, not the alias's
+   DB end.** `0x00150C00` is 112 bytes but its bound was `0x00150EA0`, so its body
+   swallowed `sub_00150C70` (560 bytes) and reported two epilogue deltas instead
+   of one. 636 of 1228 bounds were tightened. This answers the earlier range trap
+   from the other side too (there the bound was too small).
+2. **`stack_args` must be regenerated, not just edited.** It only affects the
+   wrapper text in `recovered.c`; editing it after `recover-functions.py` leaves
+   the old value in place and the fix looks inert. And **reviewed values win over
+   any derivation** — the re-derivation wrongly reset `0x00190FB0` from 12 to 0.
+
+**The link blocker is cleared as of 2026-09-21.** `build/Release/jsrf_recomp.exe`
+builds with a verified source/executable identity stamp.
 
 **The alias fold's real mechanism is identified, and both blocking classes are
 recovered.** The disassembler reads a data table of `.text` addresses as a switch

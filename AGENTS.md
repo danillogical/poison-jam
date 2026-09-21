@@ -837,8 +837,32 @@ site=0014CFE0` with `esp` descending **0x1C per cycle**, ~13,000 cycles × 28 =
 **1120 vtable methods had a redirected dispatch; 1111 are recovered** (9 are
 genuine fragments the translator refuses to lift standalone). With the CRT
 initializer class that is `config/recovered-functions.json` = **1228 entries**,
-exe 9.4 → 13.2 MB. **62** `ABI verified` lines, self-recursion gone, CTest 11/11.
-Run `logs/runs/20260921-161420-136-vtable-final/`.
+exe 9.4 → 13.2 MB.
+
+**The guest no longer crashes.** Outcome is `diagnostic_deadline` (exit 3), not an
+unhandled exception: CRT init and GPU setup complete, and **the pushbuffer kick
+chain this guide called the fatal stop now runs and returns** (`0x00190FB0`,
+`0x00190240`, `0x001917F0`, `0x001918E0`). 98 verified, 0 ABI failures, guest
+events 78,441 runaway → 563, CTest 11/11. Run
+`logs/runs/20260921-161956-152-reviewed-restored/`.
+
+**Two manifest rules learned the hard way:**
+- An entry's `end` is **the next function entry inside the range**, not the
+  alias's DB end. `0x00150C00` is 112 bytes but its bound was `0x00150EA0`, so its
+  body swallowed `sub_00150C70` (560 bytes) and had two epilogue deltas. 636 of
+  1228 bounds were tightened.
+- **`stack_args` only affects the wrapper text in `recovered.c` — regenerate after
+  editing it**, or the change is invisible. And **reviewed values win over any
+  derivation**; restore them from `96ca4e0` if a derivation overwrites them.
+
+**Next packet:** the new state is a **hang**, not a fault — **797,491 first-chance
+`C0000005`** access violations in a tight fault-and-retry loop, with the most
+frequent indirect target **`0x002652B0`**, an address in **no image section**
+(between `.data` end `0x0022FCD4` and `DOLBY` start `0x0027E080`). The guest stack
+is healthy (`esp=0x00F7FB98`). Find what produces `0x002652B0` and why the guest
+retries ~800k times instead of failing; ~800k handled faults also puts the
+collector's first-chance path on the hot path, so check it for correctness as well
+as cost.
 
 **Finding a vtable (reusable):** a data table whose entries are a run of
 **distinct** `.text` addresses, stored by a constructor as an immediate. Take
@@ -848,11 +872,10 @@ repeated target**; reading past the table into adjacent `.rdata` let one
 unrelated duplicate reject the whole table (384 → 1120 on the second pass). A
 switch table repeats almost immediately, so a distinct run of ≥ 3 separates them.
 
-**Immediate next step:** `stack_args` for the 1113 derived entries comes from the
-translator's own epilogue (`esp += N; return;` → `stack_args = N - 4`) and
-validates 54/55, but is wrong where a function has several distinct epilogues
-(`0x0014CF20` needed 12; `0x00150C00` derives 16, taken path 8). Needs an
-iterative measure-from-the-runtime loop or a per-path model.
+**Immediate next step:** see the "Next packet" above — the `stack_args` gap is
+closed (`0x0014CF20` corrected to 12; the `0x00150C00` bound tightened to
+`0x00150C70`; the reviewed `0x00190FB0` restored to 12), and the run now shows 0
+ABI failures.
 
 **This is a workaround, not the fix.** The real repair is
 `tools/recomp/translator.py`: do not fold an alias whose body needs none of its

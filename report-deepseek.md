@@ -2603,4 +2603,87 @@ baseline, and a re-run of the initializer and vtable audits to confirm the count
 go to zero. Do not merge the config workaround and the toolkit repair in one
 change.
 
+---
+
+# The guest stops crashing
+
+**Decision: fix the two mechanical gaps in the manifest rather than chase the
+next address.** Both were mine, not the game's.
+
+## Gap 1 — the bound was the parent's start, not the function's end
+
+An abutting alias's DB `end` is the *parent's* start, which can be many functions
+away. `0x00150C00` is 112 bytes, but its bound was `0x00150EA0`, so its generated
+body swallowed `sub_00150C70` (560 bytes) and reported **two** epilogue deltas
+(12 and 20) instead of one. That is why no single `stack_args` could be right.
+
+The tightest correct bound is **the next function entry strictly inside the
+range**. 636 of 1228 bounds were tightened. Bodies with a single epilogue delta:
+**1121** (31 still have several, 76 tail-jump with no local epilogue).
+
+This also answers the earlier range trap from the other side. There the bound was
+*too small* (`0x00181212` branches past its own `ret`); here it was *too large*.
+"Use the next real entry" is correct in both directions, because the translator
+still stops at the CFG's own terminator.
+
+## Gap 2 — two workflow traps, both of which made a correct change look inert
+
+1. **Setting `stack_args` *after* running `recover-functions.py` leaves the
+   generated wrapper holding the old value.** `stack_args` only affects the
+   wrapper text in `recovered.c`, so the run reproduces the identical failure and
+   the fix looks like it did nothing. Regenerate again after editing it. This cost
+   a full build-run cycle.
+2. **The re-derivation overwrote a reviewed value.** `0x00190FB0` was reviewed at
+   12 (`RET 0xC`); the derivation produced 0 because that body's *last* epilogue
+   belongs to a different exit. Reviewed values are restored from `96ca4e0` and
+   win over any derivation.
+
+## Result
+
+| | before | after |
+|---|---|---|
+| outcome | `unhandled_exception` `0xC0000409` | **`diagnostic_deadline`** (exit 3) |
+| `ABI verified` | 62 | **98** |
+| `ABI failures` | 1 | **0** |
+| guest events | 78,441 (runaway) | **563** |
+| native threads | 7 | 8 |
+
+**The guest no longer crashes.** CRT initialization completes, GPU setup
+completes, and the pushbuffer kick chain that the plan listed as the fatal stop
+now **runs and returns**:
+
+```
+[RECOVERED] 0x00190FB0 returned; ABI verified
+[RECOVERED] 0x00190240 returned; ABI verified
+[RECOVERED] 0x001917F0 returned; ABI verified
+[RECOVERED] 0x001918E0 returned; ABI verified
+```
+
+So the previous checkpoint is not merely retained — **it is passed**, which is
+what the project's rule actually asks for. Run:
+`logs/runs/20260921-161956-152-reviewed-restored/`.
+
+## New state, and it is a different shape
+
+A **hang**, not a fault, and the diagnostics say why: **797,491 first-chance
+`C0000005` access violations** in a tight fault-and-retry loop. The most frequent
+indirect target is **`0x002652B0`**, which is in **no image section** — it lies
+between `.data`'s end (`0x0022FCD4`) and `DOLBY`'s start (`0x0027E080`). The guest
+stack is healthy at the deadline (`esp=0x00F7FB98` of `0x00780000`..`0x00F80000`),
+so this is not stack exhaustion and not the old recursion.
+
+**Next packet:** identify what produces `0x002652B0`, and why the guest faults and
+retries ~800k times rather than failing. ~800k handled faults also means ~800k
+exceptions crossing the host/guest boundary, so the collector's first-chance
+handling is now on the hot path and is worth checking for correctness as well as
+cost.
+
+## Standing caveat
+
+The 1228-entry manifest is still a **workaround** for the toolkit defect, and its
+`stack_args` for the 1113 derived entries is inferred, not reviewed. It validates
+0 failures on this run and CTest stays green, but it is not equivalent to a
+reviewed manifest. The real repair remains: do not fold an alias whose body needs
+none of its parent's labels.
+
 
