@@ -795,19 +795,54 @@ Before/after: kernel calls **157 -> 177**, initializer now logs
 `logs/runs/20260921-154535-674-resume-check/` (before) and
 `logs/runs/20260921-155635-882-alias-fix-verified/` (after). CTest 11/11.
 
-**Open, and the next packet:** `0x00148005` is a mid-body address inside
-`sub_00147FB4` (`detection_method: imm_ref_target`, **no dispatch entry**) being
-called indirectly. It is the instruction after `call 0x14B4B5` at `0x00148000`.
+**CLOSED for the CRT-initializer class.** The same defect was then enumerated
+rather than chased. The CRT calls these function pointers with **no arguments**:
 
-**Alias-fold defect, do not "fix" it blind.** 3123 dispatch tuples redirect a VA
-to a different symbol; only **87** have a `loc_<VA>` label in the parent, so
-**3036** redirect to a body that does not contain the address. Of the 971
-aliases adopted by the abutting rule, **759 end in `ret`**. Two discriminators
-were measured and **discarded because they saturate** — "last instruction ends
-exactly at the alias end" (`int3` padding decodes as instructions) and "ends in
-`ret`" (fires 759/971). The working hypothesis is *the alias address is entered
-from data* (a function-pointer table). Until the rule is repaired, **an address
-entered from data must be recovered explicitly.**
+| table | range | walked by |
+|---|---|---|
+| A | `0x001EB760`..`0x001EB76C` | `_initterm` `0x0014B50D` |
+| B | `0x001EB770`..`0x001EB83C` | `_initterm` `0x0014B4B5` |
+| C | `0x001EB840`..`0x001EB854` | `_initterm` `0x0014B4B5` |
+| D | `0x001EB854`..`0x001EB86C` | `_initterm` `0x0014B4B5` |
+| hook | `[0x0022ED2C] = 0x0017BF79` | `sub_0014B4B5` |
+
+**Table B is exactly the 14 initializers milestones 02/03/04 recovered** — the
+rest of the same tables were never recovered because the fold had redirected
+them to something that resolved. 60 distinct targets, **44 folded**; all 44 are
+entries by definition (only the tables call them, with no arguments) and all 44
+are now in `config/recovered-functions.json` (`kind: "routine"`, 114 entries).
+
+**Range trap:** an entry's `end` must be **the alias's own DB end**, not the
+first terminator from linear disassembly. `0x00181212` ends in `ret` at
+`0x00181224` but branches to `0x00181225`, so a linear bound truncated the body
+and made the branch an unresolved call. 40 of 43 bounds were widened.
+
+Result: kernel calls 177 -> **200**, **56** `ABI verified` lines, no unresolved
+ICALL, **CRT initialization completes** and the guest reaches heap allocation
+(`[HEAP] #4..#7`, 4.2 MB of 50 MB). CTest 11/11. Run
+`logs/runs/20260921-160209-538-crt-initializers-bounds/`.
+
+**Next packet — a different class:** `0xC00000FD` **host stack overflow** inside
+the toolkit's per-allocation `fprintf` in `xbox_HeapAlloc`
+(`xbox_memory_layout.c:2228`). `esp=0x00F27EC8` against a guest stack of
+`0x00780000`..`0x00F80000` means ~360 KB of 512 KB of guest stack is in use: deep
+guest recursion whose recompiled frames cost far more host stack than guest
+stack. Decide first whether the recursion is guest-legitimate; if it is, the port
+needs a much larger host stack for the guest thread. **Do not fix it by
+silencing the log line.**
+
+**Alias-fold defect, still open for the general rule.** 3123 dispatch tuples
+redirect a VA to a different symbol; only **87** have a `loc_<VA>` label in the
+parent, so **3036** redirect to a body that does not contain the address; of the
+971 aliases adopted by the abutting rule, **759 end in `ret`**. Three
+discriminators were measured and **all three discarded because they saturate** —
+"last instruction ends exactly at the alias end" (`int3` padding decodes as
+instructions), "ends in `ret`" (fires 759/971), and "entered from data" (fires
+**2651/3123**, because a switch table is also a run of `.text` addresses).
+**Do not re-propose these without new evidence.** The remaining sound signal is
+structural: fold an alias only when its body actually needs the parent's labels.
+Until the rule is repaired, **an address entered from data must be recovered
+explicitly.**
 
 ## GPU direction and bounded next packets
 

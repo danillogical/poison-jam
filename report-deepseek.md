@@ -2411,4 +2411,107 @@ entry at all**) being called indirectly. It is the instruction after
 `call 0x14B4B5` at `0x00148000`, so the working question is what put that
 return address into a code pointer.
 
+---
+
+# Same defect, whole class: the 44 CRT initializers whose bodies were deleted
+
+**Decision: stop fixing this one address at a time and enumerate the class.**
+`0x00148005` turned out not to be an address at all — it is the *return address*
+`sub_00147FB4` pushed at `0x00148000` when it called `_initterm` `0x0014B4B5`.
+The failing call is `sub_0014B4B5` invoking a table entry, exactly as before.
+
+## The tables
+
+`sub_0014B4B5` is a second CRT walker. It calls `[0x22ED2C]` if set, then walks
+three more function-pointer tables. Reading the original `.data` gives the whole
+picture — and table B is the list the project already knows:
+
+| table | range | walked by | targets |
+|---|---|---|---|
+| A | `0x001EB760`..`0x001EB76C` | `_initterm` `0x0014B50D` | 3 |
+| B | `0x001EB770`..`0x001EB83C` | `_initterm` `0x0014B4B5` | 51 |
+| C | `0x001EB840`..`0x001EB854` | `_initterm` `0x0014B4B5` | 5 |
+| D | `0x001EB854`..`0x001EB86C` | `_initterm` `0x0014B4B5` | 6 |
+| hook | `[0x0022ED2C]` | `sub_0014B4B5` | `0x0017BF79` |
+
+**Table B contains exactly the 14 initializers milestones 02/03/04 recovered**
+(`0x0018AFB0`, `0x0018B1A0`, `0x0018B390`, `0x0018B580`, `0x0018B770`,
+`0x0018B960`, `0x0018BB50`, `0x0018BD40`, `0x0018C1D0`, `0x0018C3C0`,
+`0x001BDAA9`, `0x0018E410`, `0x001A5299`, `0x001A52A4`). Those were recovered
+because they were *fatal unresolved calls*; the others in the same tables were
+never recovered because the fold had redirected them to something that resolved.
+That is the whole reason this class hid for so long.
+
+## Scope
+
+60 distinct targets. **44 had been folded** into a later entry — body deleted,
+dispatch tuple pointing at the wrong function. All 44 are function entries **by
+definition**: nothing in the image calls them except these tables, and it calls
+them as zero-argument functions. All 44 are recovered in
+`config/recovered-functions.json` with `kind: "routine"` (114 entries total).
+
+## The range trap that cost a run
+
+An entry's `end` must be **the alias's own DB end**, not the first terminator a
+linear disassembly finds. `0x00181212` is:
+
+```
+00181212 push 0x500
+00181217 call 0x17C953        ; malloc(0x500)
+0018121C test eax, eax
+0018121E pop ecx
+0018121F jne 0x181225         ; <-- BRANCHES PAST ITS OWN ret
+00181221 or eax, -1
+00181224 ret
+00181225 mov [0x27DD00], eax
+```
+
+A linear-scan bound stopped at the `ret` at `0x00181224`, so the body was
+truncated and `jne 0x181225` became an unresolved call to `0x00181225`. 40 of
+the 43 bounds were widened to the alias's DB end after that failure.
+
+## Result
+
+| | before this packet | after |
+|---|---|---|
+| kernel calls | 177 | **200** |
+| `ABI verified` lines | 1 | **56** |
+| unresolved/invalid ICALL | `0x00148005` | **none** |
+| guest reaches | mid-`_initterm` | **heap allocation** |
+
+The guest now runs **every** static initializer, including all 14 the project
+recovered earlier, and then allocates: `[HEAP] #4..#7`, 4.2 MB of 50 MB used.
+CTest 11/11. Run: `logs/runs/20260921-160209-538-crt-initializers-bounds/`.
+
+## New stop, and it is a different class
+
+`0xC00000FD` — **host stack overflow**, faulting inside the toolkit's
+per-allocation `fprintf` in `xbox_HeapAlloc` (`xbox_memory_layout.c:2228`).
+At the fault `esp=0x00F27EC8` against a guest stack of `0x00780000`..`0x00F80000`,
+so **~360 KB of 512 KB of guest stack is in use** — deep guest recursion. Each
+recompiled guest frame costs far more host stack than guest stack, so the host
+stack runs out first. `sub_0014CFB0` appears twice in the native walk.
+
+**Do not "fix" this by silencing the log line.** The log is the messenger; the
+real question is whether the recursion is guest-legitimate. If it is, the port
+needs a much larger host stack for the guest thread (or a fiber), which is a
+porting requirement, not a diagnostic tweak.
+
+## Discriminators tried for the general rule, all three discarded
+
+Recorded so nobody re-proposes them. Each was measured on the current tree and
+each **saturates** — the same trap `db54746` hit:
+
+| candidate rule | result |
+|---|---|
+| last instruction ends exactly at the alias end | `int3` padding decodes as instructions, so the defect case passes |
+| the alias body ends in `ret` | fires on **759 of 971** |
+| the alias address is entered from data | fires on **2651 of 3123** — a switch table is also a run of `.text` addresses |
+
+The remaining sound signal is **structural, not a byte heuristic**: fold an
+alias only when its body actually needs the parent's labels (it contains a
+`goto loc_X` for a label the parent emits). That is what `ff4d442` was really
+fixing for 56 aliases, and it is the only test so far that separates the two
+shapes by construction rather than by correlation.
+
 

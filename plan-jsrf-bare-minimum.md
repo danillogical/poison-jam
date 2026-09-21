@@ -4,35 +4,55 @@ Agent onboarding, operating rules and handoff guidance live in `AGENTS.md`.
 Maintain that guide as capabilities and commands change; this plan remains the
 source of truth for milestone status and acceptance evidence.
 
-Current checkpoint: `logs/runs/20260921-154535-674-resume-check/` (the pre-fix
-state, reproduced on the current binary). The kick chain is recovered
-(`0x001918E0` through the submit path `0x00190240`), so the first missing call
-has moved past GPU setup. **The link blocker is cleared as of 2026-09-21.**
-`build/Release/jsrf_recomp.exe` builds with a verified source/executable
-identity stamp.
+Current checkpoint: `logs/runs/20260921-160209-538-crt-initializers-bounds/`.
+The kick chain is recovered (`0x001918E0` through the submit path `0x00190240`),
+so the first missing call has moved past GPU setup. **The link blocker is cleared
+as of 2026-09-21.** `build/Release/jsrf_recomp.exe` builds with a verified
+source/executable identity stamp.
 
-The guest now runs, and the first real stop is **not** in the GPU path and
-**not** in the C++ EH machinery. It is a translation defect in the alias fold:
+**CRT initialization now completes.** The guest runs every static initializer and
+reaches heap allocation (`[HEAP] #4..#7`, 4.2 MB of 50 MB used), 200 kernel
+calls, 56 `[RECOVERED] ... ABI verified` lines, no unresolved or invalid ICALL,
+CTest 11/11. The stop is now a **host stack overflow** (`0xC00000FD`) inside the
+toolkit's per-allocation `fprintf` in `xbox_HeapAlloc`
+(`xbox_memory_layout.c:2228`). At the fault `esp=0x00F27EC8` against a guest
+stack of `0x00780000`..`0x00F80000`, so ~360 KB of 512 KB of guest stack is in
+use: deep guest recursion whose recompiled frames cost far more host stack than
+guest stack. Deciding whether that recursion is guest-legitimate is the next
+packet; if it is, the port needs a much larger host stack for the guest thread.
 
-- `_initterm` (`0x0014B50D`) walks the static-initializer array
-  `0x001EB760`..`0x001EB76C` and calls each non-null, non-`-1` dword. Slot
-  `0x001EB764` holds **`0x0017E58F`**, a C++ static initializer that constructs
-  a global object (vtable `0x0022F198`).
-- The translation pass classifies `0x0017E58F` as `detection_method:
-  tail_jump_alias` and folds it into the next entry `0x0017E600`. That
-  **deletes its body** and rewrites the dispatch tuple to
-  `{ 0x0017E58F, sub_0017E600 }`.
-- `sub_0017E600` is the three-argument catch-frame invoker; it reads
-  `handler`/`context`/`flags` from its caller's stack. Called with **zero**
-  arguments by `_initterm`, it reads `[ebp+8] = 0x00700010` (stale stack) and
-  executes `call eax` at `0x0017E625` → fatal `[ICALL] invalid target`.
-- Every register matches that reading: `esi=0x001EB764` / `edi=0x001EB76C` are
-  `_initterm`'s own loop pointers, and `ebp=0xC` is `arg1+0xC` with `arg1=0`.
+The first real guest stop after `guest_entry` was **not** in the GPU path and
+**not** in the C++ EH machinery. It was a translation defect in the alias fold,
+and it is now fixed for the whole CRT-initializer class:
 
-Pre-fix evidence: in `logs/runs/20260921-111607-936-kick-ack/source.zip` the
-dispatch read `{ 0x0017E58F, sub_0017E58F }` and `recomp_0007.c` defined a
-clean standalone body. The fold is the regression, and it is what moved the
-stop from the GPU kick (`0x001918E0`) to startup.
+- The CRT calls a set of function pointers with **no arguments**:
+  table `0x001EB760`..`0x001EB76C` walked by `_initterm` `0x0014B50D`; tables
+  `0x001EB770`..`0x001EB83C`, `0x001EB840`..`0x001EB854` and
+  `0x001EB854`..`0x001EB86C` walked by `_initterm` `0x0014B4B5`; and the hook
+  global `[0x0022ED2C] = 0x0017BF79`.
+- 60 distinct targets. **44** had been folded into a later entry by the
+  `ff4d442` abutting-alias rule, which deleted the body and pointed the dispatch
+  tuple at the wrong function.
+- Proof case `0x0017E58F` (table `0x001EB764`): the fold wrote
+  `{ 0x0017E58F, sub_0017E600 }`, and `sub_0017E600` is the three-argument
+  catch-frame invoker, so the zero-argument call read `[ebp+8] = 0x00700010` off
+  the stack and executed `call eax` on it. Every register matches that reading:
+  `esi=0x001EB764` / `edi=0x001EB76C` are `_initterm`'s own loop pointers, and
+  `ebp=0xC` is `arg1+0xC` with `arg1=0`.
+- All 44 are function entries **by definition** — they are only ever reached
+  through those tables — so all 44 are recovered in
+  `config/recovered-functions.json` (`kind: "routine"`).
+- Pre-fix evidence that this is a regression: in
+  `logs/runs/20260921-111607-936-kick-ack/source.zip` the dispatch read
+  `{ 0x0017E58F, sub_0017E58F }` and `recomp_0007.c` defined a clean standalone
+  body. The fold is the regression, and it is what moved the stop from the GPU
+  kick (`0x001918E0`) to startup.
+
+**Range trap, worth not repeating:** an entry's `end` must be the alias's own DB
+end, not the first terminator found by linear disassembly. `0x00181212` ends in
+`ret` at `0x00181224` but branches to `0x00181225`, so a linear-scan bound
+truncated the body and turned the branch into an unresolved call to
+`0x00181225`. 40 of the 43 bounds had to be widened after that failure.
 
 What actually blocked the link is worth keeping in the record, because none of
 the three causes was the one previously recorded here. The dominant cause was
@@ -76,27 +96,40 @@ Two further items remain:
    `58a9cf9`, on top of `488286f`. Later toolkit revisions this session:
    `a301962`, `5d68f27`, `ff4d442`, `db54746`, `9568f29`. The toolkit repo is
    healthy and the game repo's `AGENTS.md` records the revision.
-5. **OPEN — the alias fold deletes real function bodies (first guest stop).**
-   The "abutting alias" rule added by `ff4d442` assumes an alias whose `end`
-   equals the next real entry's `start` is a fragment of that entry. Measured
-   against the current tree that assumption is false in the general case:
+5. **PARTLY FIXED — the alias fold deletes real function bodies.** The
+   "abutting alias" rule added by `ff4d442` assumes an alias whose `end` equals
+   the next real entry's `start` is a fragment of that entry. Measured against
+   the current tree that assumption is false in the general case:
    - 3123 dispatch tuples redirect a VA to a different symbol;
    - only **87** of those have a `loc_<VA>` label in the parent, so 3036
      redirect to a body that does not contain the address at all;
    - of the 971 aliases adopted by this rule, **759 end in `ret`** and 132 in
      `jmp`, i.e. the large majority are self-terminating, not fragments.
-   Discriminators tried and **discarded because they saturate**: "the last
-   decoded instruction ends exactly at the alias end" passes for the defect
-   case too (`int3` padding decodes as instructions), and "ends in `ret`"
-   fires on 759/971. Do not adopt either. The sound rule needs a signal that
-   separates "fragment of the parent" from "independent abutting function" —
-   the working hypothesis is *the alias address is entered from data* (a
-   function-pointer table), which is exactly how `0x0017E58F` is reached.
-   Unfolding all 759 is a large change (restores ~1.4 MB of bodies and
-   re-introduces the deleted-goto problem `ff4d442` was hiding) and needs its
-   own packet, its own regeneration, and a fresh baseline. **Until then, an
-   address that is entered from data must be recovered explicitly** rather than
-   trusted to the fold.
+
+   **Fixed for the class that actually blocks boot:** all 44 CRT initializer
+   targets whose bodies were deleted are now recovered explicitly (see the
+   checkpoint above). That is the complete set for the initializer tables, so
+   no further boot stop can come from this class.
+
+   **The general rule is still open.** Three discriminators have now been tried
+   and **all three discarded because they saturate** — do not re-propose them
+   without new evidence:
+   - "the last decoded instruction ends exactly at the alias end": `int3`
+     padding decodes as instructions, so the defect case passes it too;
+   - "the alias body ends in `ret`": fires on 759 of 971;
+   - "the alias address is entered from data": fires on **2651 of 3123**,
+     because a switch table is also a run of `.text` addresses, so this cannot
+     tell a function-pointer table from jump-table data.
+
+   What remains is a **structural** test rather than a byte heuristic: fold an
+   alias only when its body actually needs the parent's labels (it contains a
+   `goto loc_X` for a label the parent emits); otherwise emit it as its own
+   body. That is what `ff4d442` was really fixing for 56 aliases, and it is the
+   only signal so far that separates the two shapes by construction. Unfolding
+   the rest is a large change (restores ~1.4 MB of bodies, re-introduces the
+   deleted-goto problem the fold was hiding) and needs its own packet, its own
+   regeneration and a fresh baseline. **Until then, an address that is entered
+   from data must be recovered explicitly** rather than trusted to the fold.
 4. **The toolkit fix is committed.** `tools/recomp/lifter.py`,
    `tools/recomp/translator.py` and the new
    `tools/recomp/test_tail_jump_into_batch.py` +
