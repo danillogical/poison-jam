@@ -14,13 +14,40 @@ merely retained. 98 recovered bodies verify, 0 ABI failures, guest events 78,441
 runaway → 563, CTest 11/11.
 
 The new state is a **hang, not a fault**: 797,491 first-chance `C0000005` access
-violations in a tight fault-and-retry loop, with the most frequent indirect target
-`0x002652B0` — an address in **no image section** (between `.data`'s end
-`0x0022FCD4` and `DOLBY`'s start `0x0027E080`). The guest stack is healthy at the
-deadline (`esp=0x00F7FB98` of `0x00780000`..`0x00F80000`). **Next packet:** what
-produces `0x002652B0`, and why the guest retries ~800k times instead of failing.
-Note that ~800k handled faults puts the collector's first-chance path on the hot
-path — check it for correctness as well as cost.
+violations in a tight fault-and-retry loop (~43k/second), with the most frequent
+indirect target `0x002652B0` — an address in `.data`'s **BSS tail** (`.data` is
+`raw_size` 0x44574 but `virtual_size` 0x92914). The guest stack is healthy at the
+deadline (`esp=0x00F7FB98` of `0x00780000`..`0x00F80000`).
+
+**Where the guest is: inside `sub_00192090`, the GPU device-setup function this
+plan records as "has not returned".** The deadline dump shows
+`sub_00191BA0` → `sub_0018E160` → `sub_00194C3F` → `sub_00194A72` →
+`sub_00194300` beneath it, two recovered vtable methods live in the chain, and the
+last kernel calls coming from GPU-range sites. So the guest is **initialising its
+renderer**, not stalled in startup.
+
+**The ~800k first-chance `C0000005`s are not errors — they are the NV2A MMIO hook
+doing its job.** `src/main.c:73` offers every fault in guest range
+`0xFD000000`..`0xFE000000` to `nv2a_hook_handle_mmio` and continues execution when
+the hook handles it; `0xFD000000` is the NV2A register aperture, and the guest's
+`esi` at the deadline is exactly `0xFD000000`. No `[EXCEPTION first-chance]` line
+reaches the game log because the hook returns TRUE first.
+
+**So the hang is a GPU register poll that never terminates** — the guest reads an
+NV2A register ~43,000 times a second inside device setup and the modelled value
+never satisfies the loop's exit condition. That is a **register-contract gap in
+the GPU model (11b territory), not a translation defect**, and it is the first
+time this port has reached live NV2A polling in device setup.
+
+**Next packet:** capture the polled register offset and the value the model
+returns. Instrument `nv2a_hook_handle_mmio` to record the first N distinct offsets
+per call site — the hook currently swallows the fault so the address never
+reaches any log. The captured register state narrows it: `PMC_INTR_0 = 0` with
+`PMC_INTR_EN_0 = 0x00000001`, `PFIFO_INTR_0 = 0`, `PGRAPH_INTR = 0`,
+`PCRTC_INTR = 0`, `PTIMER_TIME_0/1` ticking — the leading candidate is a wait on an
+interrupt/status bit the model never raises. **BSS mapping is already ruled out**:
+`xbox_memory_layout.c:1225` does `memset(XBOX_VA(sec_va), 0, sec_vsize)`, so the
+loader is correct and `0x002652B0` must have been written at runtime.
 
 Two manifest gaps were closed to get here, both mine rather than the game's:
 1. **The bound must be the next function entry inside the range, not the alias's

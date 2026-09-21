@@ -2678,6 +2678,82 @@ exceptions crossing the host/guest boundary, so the collector's first-chance
 handling is now on the hot path and is worth checking for correctness as well as
 cost.
 
+## Where the guest actually is
+
+The deadline dump answers "what is it doing", and the answer is the best news in
+this session. The guest main thread at the deadline:
+
+```
+sub_00194300+0x6FC
+sub_00194A72+0x126
+sub_00194C3F+0x114
+sub_0018E160+0x421
+sub_00191BA0+0xCBE
+body_00192090+0x166E      <- recovered, running
+sub_00192090+0x5F
+sub_0018E460+0x219
+sub_00156AB0+0xCFA
+body_00155380+0x60A       <- a recovered vtable method, running
+sub_00155380+0x5F
+sub_0005F2C0+0x222
+sub_0005F350+0x361
+```
+
+**The guest is inside `sub_00192090` — the GPU device-setup function that this
+plan records as "has not returned".** It is executing D3D/GPU device setup
+(`sub_00194300`, `sub_00194A72`, `sub_00194C3F`, `sub_0018E160`, `sub_00191BA0`),
+and two of the recovered vtable methods are live in that chain. The last kernel
+calls come from GPU-range sites (`0x001969B6`, `0x00194C15`, `0x00194C27`,
+`0x001947C8`, `0x001947D6`, `0x00191DC5`). So this is not a stalled startup — it
+is the game initialising its renderer.
+
+Guest state is healthy: `esp=0x00F7FB98`, `ebp=0x00F7FBE8`, `seh=0x00F7FBE8`,
+8 threads. `esi=0xFD000000` is a kernel-space value worth a look.
+
+## One hypothesis eliminated
+
+**BSS is mapped correctly, so this is not an unmapped-memory bug.** Both
+suspicious addresses (`0x002652B0`, `0x0019D468`) do fall in BSS — `.data` is
+`raw_size` 0x44574 but `virtual_size` 0x92914, and `D3D` is 0xE6B0 vs 0x117F8 —
+and `xbox_memory_layout.c:1225` already does
+`memset(XBOX_VA(sec_va), 0, sec_vsize)` before copying the raw bytes. The loader
+is right. So `0x002652B0` being in BSS means something **wrote** it at runtime: it
+is a computed pointer, not a mis-mapped address.
+
+## The 797,491 faults explained, and they are not errors
+
+`src/main.c:73` offers every fault in the guest range **`0xFD000000`..`0xFE000000`**
+to the NV2A MMIO hook and continues execution if the hook handles it:
+
+```c
+if (guest_fault >= 0xFD000000u && guest_fault < 0xFE000000u &&
+    nv2a_hook_handle_mmio(exception->ContextRecord, fault,
+                          (uint32_t)guest_fault,
+                          (int)exception->ExceptionRecord->ExceptionInformation[0]))
+    return EXCEPTION_CONTINUE_EXECUTION;
+```
+
+`0xFD000000` is the **NV2A register aperture**, and the guest's `esi` at the
+deadline is **`0xFD000000`**. So the ~800k first-chance faults are **MMIO
+register accesses the hook is handling**, and the reason no
+`[EXCEPTION first-chance]` line reaches the game log is that the hook returns TRUE
+and the log line is never reached. Nothing is wrong with the fault handling.
+
+**So the hang is a GPU register poll that never terminates.** The guest is in
+device setup inside `sub_00192090`, reading an NV2A register roughly 43,000 times
+a second, and the modelled value never satisfies the loop's exit condition. That
+is a **register-contract gap in the GPU model (milestone 11b territory)**, not a
+translation defect — and it is the first time this port has reached live NV2A
+polling in device setup.
+
+**Next packet:** capture the polled register offset and the value the model
+returns. The captured register state gives the context — `PMC_INTR_0 = 0` with
+`PMC_INTR_EN_0 = 0x00000001`, `PFIFO_INTR_0 = 0`, `PGRAPH_INTR = 0`,
+`PCRTC_INTR = 0`, and `PTIMER_TIME_0/1` ticking — so the leading candidate is a
+wait on an interrupt/status bit that the model never raises. Instrument
+`nv2a_hook_handle_mmio` to record the first N distinct offsets per site rather
+than the first fault address, which the hook currently swallows.
+
 ## Standing caveat
 
 The 1228-entry manifest is still a **workaround** for the toolkit defect, and its
