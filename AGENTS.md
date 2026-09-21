@@ -714,6 +714,13 @@ stays fatal until its wait/wrap/kick contract is written.
 
 ## Fresh-context handoff — 2026-09-21
 
+**The repository history was rebuilt on 2026-09-21.** `.git/objects` had gone
+missing, so no git command worked and the plan/reports had been uncommitted. The
+old directory is kept as `.git.broken-backup/` (gitignored) and history now
+starts at `e336a1c`; SHAs before that do not resolve. When committing, put the
+**toolkit revision in the commit message** — that is the only record of which
+`xboxrecomp` revision a build came from now that history is truncated.
+
 Preserve the unrelated untracked `C:\Users\logic\Repos\xboxrecomp\recomp_run.log`.
 The current game binary stops at expected fatal `0x001918E0`. Latest bounded
 evidence: `logs/runs/20260921-100901-149-pramin-backing/`. `0x00192090` has
