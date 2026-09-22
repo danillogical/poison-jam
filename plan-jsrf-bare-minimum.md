@@ -22,17 +22,24 @@ was destroyed: the saved-ESI slot changes across `sub_0005F350`'s call to
 `sub_001680D0`, which therefore writes above its own frame. ESP inside
 `sub_0005F350` is constant, so it is not over-popping.
 
-**Next packet:** the causal chain is measured but not yet explained — see the
-"Chasing the 0x38" section of `report-deepseek.md`. Solid: the store writes `0x38`
-and `0x22FCE0` has exactly one writer; the constructor `sub_00012210` returns
-`eax = esi` with one `esi = ecx` assignment and one `return;`; the generated
-register names are macros for globals (`#define esi g_esi`), so a callee that fails
-to restore corrupts its caller. Probing `g_esi` after each of the constructor's
-nine calls shows it becomes `0x38` across the call to `sub_0005F350`; but watching
-one fixed address inside `sub_0005F350` shows its saved-ESI slot intact right
-before the pops. **Those two disagree and the report says so.** Arm the watch with
-the entry `g_esp` as a marker to tell invocations apart, and log `g_esi` at the
-single `return;` rather than only before the pops.
+**Next packet — the chain is now pinned to a call, one level short of an
+instruction.** An inner call returns with ESP **4 bytes too high**, so
+`sub_0005F350`'s epilogue pops read the wrong slots and restore `g_esi = 0x38`
+instead of the object. Measured: `sub_0005F350` returns +8 (frame base
+`0x00F7FEC0` → `0x00F7FEC8`) across `sub_001680D0`; inside it, the **indirect call
+at `0x168111` targets `0x001690A0`** (caught from inside the ICALL macro by matching
+the pushed return address `0x00168114`) and comes back +4. `0x001690A0`'s own
+`ret 4` delta is correct, so the over-pop is inside it or its callee `0x168F60`
+(whose epilogue also looks balanced). **Next:** probe `esp` at `0x001690A0`'s entry
+and return to settle which one, then read the offending body's `esp` adjustments.
+
+**The general fix is worth doing first — it is the same amount of work and finds
+all of them.** `RECOMP_ABI_CALL`'s `g_esp < _ap + 4` is a lower bound (deliberately
+— the header explains that no single value is correct in general), so an
+over-popping callee passes silently. Where the delta **is** known it can be
+compared exactly, and both sources exist already: `stack_args` for recovered
+entries, the body's own `esp += N` for generated ones. Generate a
+`va -> expected delta` table and check equality when the entry is present.
 
 **Three instrumentation errors are recorded so they are not repeated:** scope probe
 insertion to one function body (a whole-file pass interleaved probes from several

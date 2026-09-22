@@ -3288,4 +3288,91 @@ site is not where it appears to be.
 State: clean, `logs/runs/20260921-193636-988-restored/`, 154 verified, CTest 11/11,
 both repositories clean.
 
+---
+
+# Resolved: a callee returns with ESP 4 bytes too high, and the epilogue pops read the wrong slots
+
+**Decision: trust the measurement that reads memory at one fixed address, and use
+the entry frame base as the marker.** That resolved the contradiction in one run.
+
+## The resolution
+
+Anchoring the watch to `sub_0005F350`'s own frame base and logging `g_esi` at its
+single `return;`:
+
+```
+[PROBE] site=5F350000 value=00F7FEC0    <- entry marker: this frame's base
+[WATCH] site=0005F350 addr=00F7FEC4 value=01054A70   <- the saved-ESI slot holds the object
+[PROBE] site=5F350001 value=00000038    <- g_esi at the single return
+[WATCH] site=5F350002 addr=00F7FEC4 value=01054A70   <- the slot STILL holds the object
+```
+
+**The slot is intact and `g_esi` is still wrong.** So the epilogue's
+`POP32(esp, esi)` did not read that address. `esp` at the return is `0x4C` above
+the frame base when only `0x38` (frame) `+ 0xC` (three pops) of cleanup was
+emitted — **8 bytes too high**, so the pops read the wrong slots.
+
+Measurement A was right; my *explanation* of it was wrong. `sub_0005F350` does not
+clobber ESI — an inner call leaves its stack pointer wrong, and the epilogue then
+restores the wrong words.
+
+## Where the stack pointer goes wrong
+
+Probing `esp` after each call inside `sub_0005F350` (frame base `0x00F7FEC0`):
+
+```
+after 0x0014CAA0 .. 0x000696B0   esp = 0x00F7FEC0   correct, constant
+after 0x001680D0                 esp = 0x00F7FEC8   +8
+```
+
+`sub_001680D0` returns 8 bytes high. Probing inside it (entry `0x00F7FEAC`):
+
+```
+after 0x00168050                 esp = 0x00F7FEAC   correct (ret 20, five args)
+after the indirect call          esp = 0x00F7FEB0   +4
+```
+
+and the indirect call at `0x168111` — caught from inside the ICALL macro by
+matching the pushed return address `0x00168114` — **targets `0x001690A0`**.
+
+`0x001690A0` is `push esi` / `mov esi,ecx` / `call 0x168F60` / `test [esp+8],1` /
+`call 0x4A900` (free) / `mov eax,esi` / `pop esi` / `ret 4`, and its own delta is
+**correct** (`esp += 8`, `stack_args: 4`). So the over-pop is inside it or its
+callee `0x168F60`, whose generated epilogue (`POP32 edi`, `POP32 esi`,
+`esp += 0x10`, `esp += 4`) also looks balanced against the guest
+(`pop edi` / `pop esi` / `fs:[0]` / `add esp,0x10` / `ret`).
+
+**So the causal chain is now complete to the level of "which call returns with the
+wrong stack pointer", and one level short of "which instruction inside it":**
+
+```
+some instruction inside 0x001690A0 or 0x168F60 leaves ESP 4 too high
+  -> 0x001690A0 returns +4
+    -> sub_001680D0 returns +8
+      -> sub_0005F350's epilogue pops read the wrong slots: g_esi = 0x38
+        -> sub_00012210 returns eax = 0x38
+          -> stored into 0x22FCE0 (the game's central object)
+            -> [0x38] = 0 -> call NULL
+```
+
+## The general fix this points at
+
+`RECOMP_ABI_CALL`'s ESP test is `g_esp < _ap + 4` — a lower bound, and the header
+explains why a single value cannot be assumed in general. But where the callee's
+delta **is** known, the exact value can be compared, and that would have named
+`sub_001680D0` immediately instead of costing this many probe rounds. Both sources
+of the expected delta already exist: `stack_args` for recovered entries, and the
+body's own `esp += N` for generated ones. **Generate a `va -> expected delta` table
+and check equality when the entry is present.** That turns every over- and
+under-pop into a named failure at the call that causes it, which is the class this
+whole chain belongs to.
+
+**Next packet:** probe `esp` at `0x001690A0`'s entry and at its `return;` to settle
+whether it or `0x168F60` is the source, then read the offending body's `esp`
+adjustments. Better, do the table first — it is the same amount of work and finds
+all of them.
+
+State: clean, `logs/runs/20260921-210108-488-clean-final/`, 154 verified,
+CTest 11/11, both repositories clean.
+
 
