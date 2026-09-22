@@ -5405,3 +5405,47 @@ spin, `0x0013B1C0`/`0x0013B230` in `KeWaitForSingleObject`, `0x0013B2A0` in
 
 So the next measurement is whether this loop is *productive* or a livelock, and
 what `[eax+0x18]` resolves to. Neither is answered by a single stack sample.
+
+## Packet D -- 14 head spans extended, and the bodies can return now
+
+Exactly 40 generated bodies had no `return` statement (Packet C). The tool for it
+is `scripts/fix-fragment-spans.py`: decode forward from the entry start and take
+the first `ret` followed by padding. Three guards, each added because the naive
+rule was wrong on the first run:
+
+- **Stop at an `int3`.** A noreturn body legitimately has no `ret`. Without this
+  the scan walked past `0x0013B180` into the next function and proposed
+  `0x0013B4F4` for all four thread-startup trampolines, which would have glued
+  them together.
+- **Stop at the first function start past the current end** that is not itself a
+  return-less head, using both the manifest and
+  `tools/disasm/output/functions.recovered.json`. The manifest alone was not
+  enough: `0x0013B330` is a database function the manifest does not list.
+- **Require the `ret` to be followed by padding.**
+
+13 automatic proposals applied, plus `0x00014870 -> 0x00014955` measured by hand
+because the tool declines it (the disassembler also split this function at
+`0x00014885`, so the "next function start" guard fires; the real end is `ret` at
+`0x00014954` followed by `nop` at `0x00014955` and the whole range decodes
+cleanly).
+
+**Verified:** return-less bodies **40 -> 26**; all 14 changed bodies now contain a
+`return`; build succeeds; CTest 11/11; and the run is **unchanged** --
+`logs/runs/20260922-102544-799-p2-fragment-spans` versus
+`...-101710-964-p1b-178f40-end`: same 1422 log lines, same `diagnostic_deadline`
+at 31.8 s, 12 native threads, 109 named frames, **0 ABI failures**. The main
+thread is still in the DirectSound loop, at `0x001A2237`-`0x001A2239` inside
+`sub_001A216B`.
+
+**The 27 that remain are unresolved with a recorded reason each**, and the
+distribution is the useful part:
+
+| reason | count |
+|---|---|
+| ends at an `int3` (noreturn body, nothing to do) | 4 |
+| a `ret` exists but is not followed by padding | 6 |
+| blocked by a function start the disassembler placed inside the same real function | 17 |
+
+The last group is the same defect one level up -- the disassembler split a real
+function at an internal label, so the "next function" the rule refuses to cross
+is not a function at all. That needs per-entry review, not a rule.

@@ -56,18 +56,18 @@
   },
   {
     "start": "0x00014870",
-    "end": "0x00014880",
+    "end": "0x00014955",
     "section": ".text",
     "kind": "routine",
-    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001C4500, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_00014960 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00014870 at sub_00014960. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00014870..0x00014960. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
+    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001C4500, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_00014960 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00014870 at sub_00014960. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00014870..0x00014960. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21). END EXTENDED to 0x00014955, measured by hand rather than by scripts/fix-fragment-spans.py (which declines it because the disassembler also split this function at 0x00014885): the function runs 0x00014870..0x00014954 and ends `ret` at 0x00014954 followed by `nop` at 0x00014955, with the internal label 0x00014881 reached only from inside it. The previous end 0x00014880 stopped at the `cmp` at 0x0001487E, so the body had no branch, no epilogue and no return statement, and would have aborted like 0x00178F40 if called. Evidence: report-deepseek.md, 2026-09-22.",
     "stack_args": 0
   },
   {
     "start": "0x00014881",
-    "end": "0x00014885",
+    "end": "0x00014955",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00014960 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00014881..0x00014885, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00014960 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00014881..0x00014885, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. END EXTENDED to 0x00014955: the previous end 0x00014885 stopped inside the function, so the generated body had no epilogue and no return statement at all. `ret ` at 0x00014954 is the last `ret` before the inter-function padding, measured by scripts/fix-fragment-spans.py. Evidence: report-deepseek.md, 2026-09-22."
   },
   {
     "start": "0x00014E80",
@@ -424,10 +424,10 @@
   },
   {
     "start": "0x00021010",
-    "end": "0x00021024",
+    "end": "0x00021104",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00021320 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00021010..0x00021024, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00021320 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00021010..0x00021024, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. END EXTENDED to 0x00021104: the previous end 0x00021024 stopped inside the function, so the generated body had no epilogue and no return statement at all. `ret 0x10` at 0x00021101 is the last `ret` before the inter-function padding, measured by scripts/fix-fragment-spans.py. Evidence: report-deepseek.md, 2026-09-22."
   },
   {
     "start": "0x00021110",
@@ -2260,10 +2260,10 @@
   },
   {
     "start": "0x00042CA0",
-    "end": "0x00042CBB",
+    "end": "0x00042CBE",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00042CC0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00042CA0..0x00042CBB, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00042CC0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00042CA0..0x00042CBB, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. END EXTENDED to 0x00042CBE: the previous end 0x00042CBB stopped inside the function, so the generated body had no epilogue and no return statement at all. `ret 4` at 0x00042CBB is the last `ret` before the inter-function padding, measured by scripts/fix-fragment-spans.py. Evidence: report-deepseek.md, 2026-09-22."
   },
   {
     "start": "0x00042EC0",
@@ -2885,10 +2885,10 @@
   },
   {
     "start": "0x0004BAD0",
-    "end": "0x0004BB00",
+    "end": "0x0004BB01",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0004BE90 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x0004BAD0..0x0004BB00, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0004BE90 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x0004BAD0..0x0004BB00, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. END EXTENDED to 0x0004BB01: the previous end 0x0004BB00 stopped inside the function, so the generated body had no epilogue and no return statement at all. `ret ` at 0x0004BB00 is the last `ret` before the inter-function padding, measured by scripts/fix-fragment-spans.py. Evidence: report-deepseek.md, 2026-09-22."
   },
   {
     "start": "0x0004BB10",
@@ -3247,10 +3247,10 @@
   },
   {
     "start": "0x00052090",
-    "end": "0x000520B8",
+    "end": "0x000520CC",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00052640 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00052090..0x000520B8, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00052640 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00052090..0x000520B8, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. END EXTENDED to 0x000520CC: the previous end 0x000520B8 stopped inside the function, so the generated body had no epilogue and no return statement at all. `ret ` at 0x000520CB is the last `ret` before the inter-function padding, measured by scripts/fix-fragment-spans.py. Evidence: report-deepseek.md, 2026-09-22."
   },
   {
     "start": "0x000520D0",
@@ -5031,10 +5031,10 @@
   },
   {
     "start": "0x00080028",
-    "end": "0x00080040",
+    "end": "0x00080062",
     "section": ".text",
     "kind": "routine",
-    "evidence": "A method of the function-pointer table at 0x001F8670. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_00080020 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00080028 at sub_00080020. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x00080028..0x00080040, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+    "evidence": "A method of the function-pointer table at 0x001F8670. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_00080020 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00080028 at sub_00080020. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x00080028..0x00080040, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. END EXTENDED to 0x00080062: the previous end 0x00080040 stopped inside the function, so the generated body had no epilogue and no return statement at all. `ret 0x14` at 0x0008005F is the last `ret` before the inter-function padding, measured by scripts/fix-fragment-spans.py. Evidence: report-deepseek.md, 2026-09-22."
   },
   {
     "start": "0x00080076",
@@ -6343,10 +6343,10 @@
   },
   {
     "start": "0x00098CF0",
-    "end": "0x00098D17",
+    "end": "0x00098D7D",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00098DF0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00098CF0..0x00098D17, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00098DF0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00098CF0..0x00098D17, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. END EXTENDED to 0x00098D7D: the previous end 0x00098D17 stopped inside the function, so the generated body had no epilogue and no return statement at all. `ret ` at 0x00098D7C is the last `ret` before the inter-function padding, measured by scripts/fix-fragment-spans.py. Evidence: report-deepseek.md, 2026-09-22."
   },
   {
     "start": "0x00098D80",
@@ -8238,10 +8238,10 @@
   },
   {
     "start": "0x000C8300",
-    "end": "0x000C8303",
+    "end": "0x000C839E",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000C83A0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000C8300..0x000C8303, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000C83A0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000C8300..0x000C8303, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. END EXTENDED to 0x000C839E: the previous end 0x000C8303 stopped inside the function, so the generated body had no epilogue and no return statement at all. `ret ` at 0x000C839D is the last `ret` before the inter-function padding, measured by scripts/fix-fragment-spans.py. Evidence: report-deepseek.md, 2026-09-22."
   },
   {
     "start": "0x000C87B0",
@@ -8970,10 +8970,10 @@
   },
   {
     "start": "0x000D03F0",
-    "end": "0x000D03F1",
+    "end": "0x000D040E",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000D0410 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000D03F0..0x000D03F1, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000D0410 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000D03F0..0x000D03F1, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. END EXTENDED to 0x000D040E: the previous end 0x000D03F1 stopped inside the function, so the generated body had no epilogue and no return statement at all. `ret 4` at 0x000D040B is the last `ret` before the inter-function padding, measured by scripts/fix-fragment-spans.py. Evidence: report-deepseek.md, 2026-09-22."
   },
   {
     "start": "0x000D05C0",
@@ -11842,10 +11842,10 @@
   },
   {
     "start": "0x000F05C0",
-    "end": "0x000F0618",
+    "end": "0x000F066B",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000F0690 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000F05C0..0x000F0618, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000F0690 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000F05C0..0x000F0618, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. END EXTENDED to 0x000F066B: the previous end 0x000F0618 stopped inside the function, so the generated body had no epilogue and no return statement at all. `ret ` at 0x000F066A is the last `ret` before the inter-function padding, measured by scripts/fix-fragment-spans.py. Evidence: report-deepseek.md, 2026-09-22."
   },
   {
     "start": "0x000F0670",
@@ -11913,10 +11913,10 @@
   },
   {
     "start": "0x000F1E00",
-    "end": "0x000F1E23",
+    "end": "0x000F1FBB",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000F1C50 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000F1E00..0x000F1E23, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000F1C50 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000F1E00..0x000F1E23, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. END EXTENDED to 0x000F1FBB: the previous end 0x000F1E23 stopped inside the function, so the generated body had no epilogue and no return statement at all. `ret ` at 0x000F1FBA is the last `ret` before the inter-function padding, measured by scripts/fix-fragment-spans.py. Evidence: report-deepseek.md, 2026-09-22."
   },
   {
     "start": "0x000F1FC0",
@@ -12681,10 +12681,10 @@
   },
   {
     "start": "0x000F8AF0",
-    "end": "0x000F8B08",
+    "end": "0x000F8B0E",
     "section": ".text",
     "kind": "routine",
-    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001D07B0, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_000F9090 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000F8AF0 at sub_000F9090. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x000F8AF0..0x000F9090. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
+    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001D07B0, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_000F9090 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000F8AF0 at sub_000F9090. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x000F8AF0..0x000F9090. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21). END EXTENDED to 0x000F8B0E: the previous end 0x000F8B08 stopped inside the function, so the generated body had no epilogue and no return statement at all. `ret 4` at 0x000F8B0B is the last `ret` before the inter-function padding, measured by scripts/fix-fragment-spans.py. Evidence: report-deepseek.md, 2026-09-22.",
     "stack_args": 0
   },
   {
@@ -14085,10 +14085,10 @@
   },
   {
     "start": "0x00120400",
-    "end": "0x00120403",
+    "end": "0x0012041E",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00120420 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00120400..0x00120403, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00120420 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00120400..0x00120403, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. END EXTENDED to 0x0012041E: the previous end 0x00120403 stopped inside the function, so the generated body had no epilogue and no return statement at all. `ret 4` at 0x0012041B is the last `ret` before the inter-function padding, measured by scripts/fix-fragment-spans.py. Evidence: report-deepseek.md, 2026-09-22."
   },
   {
     "start": "0x00121960",
