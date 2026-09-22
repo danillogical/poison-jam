@@ -4540,3 +4540,325 @@ Worth stating plainly: a title exiting is not the same as the title being
 satisfied. It may be the "no display" path, which is milestone 12's work, or the
 failed volume open. Both are worth resolving, and the next run should distinguish
 them.
+
+---
+
+# Correction: the notify word wants the counter, and that is what ended the spin
+
+**Decision: keep the fence mirror, change what it publishes.** The registration
+recorded above as `xbox_Nv2aMirrorFence(0x0019DCE0, 0x00, 0x34)` was publishing
+the **push buffer position** into `*(device + 0x34)`. That is not the quantity the
+wait reads, and the run it was credited with ending had no built artifact behind
+it.
+
+## The wait, re-derived from the instruction that spins
+
+`0x001914F0`, disassembled with the range decoder now that it works:
+
+```
+001914F0 mov  ecx, [edx]          ; edx = *(dev+0x34) -- the notify word
+001914F3 mov  esi, edi
+001914F5 sub  esi, ecx            ; esi = (dev+0x30) - notify
+001914F7 cmp  eax, esi            ; eax = (dev+0x30) - fence
+001914F9 jb   0x1914f0
+```
+
+It exits when `(dev+0x30) - notify <= (dev+0x30) - fence`, i.e. when
+`notify >= fence`. `[dev+0x30]` is the fence **counter**, not a pointer. The
+title's own branch at `0x0019133B` publishes `[dev+0x30] - 2` into the same word,
+which is the same quantity by another route.
+
+Publishing `0x80001000` there makes the subtraction wrap: `5 - 0x80001000`
+inverts the comparison, and the loop can never end. So the previous registration
+did not end the spin -- it was never built (see the artifact audit below), and had
+it been built it would have kept the spin alive.
+
+## What the fix is
+
+`xbox_Nv2aMirrorFence(device_ptr_va, src_off, ptr_off)` now means
+
+```
+device = MEM32(device_ptr_va)
+fence  = MEM32(device + ptr_off)
+MEM32(fence) = MEM32(device + src_off)
+```
+
+`src_off` names the device field holding the **value the title compares against**
+and is not necessarily a push buffer position. The header says so now. The
+registration is `xbox_Nv2aMirrorFence(0x0019DCE0u, 0x30u, 0x34u)`.
+
+## Result: the spin is gone, and the submits succeed again
+
+`logs/runs/20260922-054824-982-p2-fence-counter`:
+
+```
+  NV2A fence mirror: device at 0x0019DCE0, +0x30 -> *(+0x34)
+[RECOVERED] 0x00191440 returned; ABI verified (ESP/EBX/ESI/EDI)
+  [PFIFO] user_write     DMA_PUT = 00001000
+  [PFIFO] submit_commit  DMA_GET = 00001000
+  [PFIFO] submit #0 diag=ok get=00001000 put=00001000 method=000 subch=0 param=00000000 at=00001000
+  [PFIFO] submit #1 diag=ok get=00001000 put=00001000 method=000 subch=0 param=00000000 at=00001000
+```
+
+`0x00191440` returns. Both submissions are `diag=ok`. The run reaches the title's
+deliberate exit at 1.8 s instead of hanging or being cut off.
+
+## Correction to the "empty push buffer" reading
+
+The earlier measurement in this report -- that the ring at `0x80001000` was all
+zeros and `diag=reserved_opcode` was therefore correct -- was a **side effect of
+the broken mirror**, not an independent regression. With the counter published,
+the walk commits from `0x1000` and reports `ok`. `reserved_opcode` came from
+walking at `GET = 0`, and `GET` was 0 because the guest never got past the wait
+that sits in front of the kick.
+
+So the P2 candidate recorded as "pass `guest_base = 0x80000000` to
+`nv2a_set_pushbuffer_window`" is **withdrawn**: the window base was never the
+problem, and changing it would have been a fix for a symptom of the mirror bug.
+
+## The device layout, measured
+
+From the same run's memory export:
+
+```
+[0x0019DCE0] = 0x0019B200                     the device
+0019B200: 80001000 80008DFC 00000000 00000000
+0019B210: 00000000 80001000 80081000 80001000
+0019B220: 00000005 80000000 00000000 0000000F
+```
+
+`+0x00 = 0x80001000` position, `+0x04 = 0x80008DFC` chunk end,
+`+0x24/+0x28 = 0x80001000/0x80081000` ring bounds, `+0x30 = 5` counter,
+`+0x34 = 0x80000000` notify word. This also disposes of the "unexplained 0x40
+offset" recorded above: it was a misreading of an unrelated DMA object, and
+nothing needs to resolve to `0x80000040`.
+
+## Artifact audit: the previous session's recorded result has no build behind it
+
+**Decision: record the audit rather than re-run the old configuration.** The
+recorded claim was that publishing the position ended the spin and produced a
+19 s `normal_exit`. The artifacts say otherwise.
+
+| run | exe | toolkit patch | toolchain hash |
+|---|---|---|---|
+| `20260922-004717-068-m11-limits` | `184ba8c6` | no mirror | `943d3479` |
+| `20260922-043722-336-mirrors-live` | -- | stray `+ }` inside `fence_mirrors_tick`, does not compile | `fa8a27d1` |
+| `20260922-043845-358-mirrors-live2` | `a61962ae` | no `fence_mirrors_tick` change | `943d3479` |
+| `20260922-054824-982-p2-fence-counter` | current | `+0x30 -> *(+0x34)` | current |
+
+`mirrors-live`'s patch contains a spurious brace as the first statement of the
+tick's loop body, so the tree it names cannot compile; the `diag=ok` reading
+attributed to it is not trustworthy. `mirrors-live2` used an exe whose recorded
+source hash is identical to the committed `7e308cc`, i.e. **without** the mirror
+change the record credits it with. Both are recorded here so the next session does
+not re-derive them.
+
+# The exit is an audio-init failure, and it is a timeout, not a crash
+
+**Decision: follow the timeout instead of guessing at the exit path.** The
+previous section left "why it quits" open with `NtOpenFile` on
+`\Device\Harddisk0\Partition5\` returning `0xC0000001` as the candidate. That
+open does not appear in the current runs at all. What does appear is a bounded
+poll that times out.
+
+## The stall loop, from the call sites
+
+`RECOMP_KERNEL_LOG_BUDGET=2000` (`logs/runs/20260922-054939-687-p3-klog`),
+aggregated by call site:
+
+```
+782  ordinal 151 (KeStallExecutionProcessor)  ret=0x001A6CD2
+ 27  ordinal 160/161 (KfRaiseIrql/KfLowerIrql) ret=0x001A1BA8/0x001A1BC0
+ 16  ordinal 166/180/173 (MmAllocateContiguousMemoryEx,
+                          MmQueryAllocationSize, MmGetPhysicalAddress)
+                          ret=0x001A0E55/0x001A0E62/0x001A5CCD
+```
+
+and the loop itself:
+
+```
+001A6C94 mov  eax, [0xFEC0012C]
+001A6CA8 or   eax, 2
+001A6CAB mov  [0xFEC0012C], eax      ; reset the codec
+001A6CBC mov  esi, 0x100
+001A6CC1 jmp  0x1A6CD2
+001A6CC3 mov  eax, edi
+001A6CC5 dec  edi                    ; 1000 attempts
+001A6CC8 je   0x1A6CDC              ; timeout -> ebx = 0
+001A6CCA push 0x14
+001A6CCC call [0x1C40E4]             ; KeStallExecutionProcessor(20 us)
+001A6CD2 test dword [0xFEC00130], esi ; wait for bit 8
+001A6CD8 je   0x1A6CC3
+```
+
+That is DirectSound resetting the AC'97 codec and polling `0xFEC00130` for the
+codec-ready bit, 1000 times at 20 us. The bit never sets, the poll times out, and
+the title shuts down and reboots:
+
+```
+[KERNEL] launch data page 0x80570000: type=1 titleid=0x5345000A path=''
+[KERNEL] HalReturnToFirmware: routine=2 - title is exiting
+```
+
+`0x5345000A` is a Sega title id, so the title is relaunching **itself** -- a clean
+shutdown and reboot, not a crash. The toolkit already documents this exact
+behaviour and the answer for it (`MCPX_AC97_CODEC_STATUS 0x00400130`,
+`MCPX_AC97_CODEC_READY 0x00000100`), but the switch that sets it also unmapped the
+APU, and nothing in either repository ever called `apu_hook_handle_mmio`. So
+asking for the codec bit guaranteed a fault on the first APU access.
+
+## The two switches are now separate
+
+**Decision: split `RECOMP_AC97_READY` from the APU trap.** They were one
+variable, which made the codec bit unusable:
+
+- `RECOMP_AC97_READY` sets only the codec-ready bit; the APU stays plain memory.
+- `RECOMP_APU_TRAP` additionally unmaps the APU's 512K, and is only meaningful
+  once a caller routes those faults.
+
+## Result: the codec bit alone moves the failure 200 calls later
+
+`logs/runs/20260922-055208-364-p5-ac97-only` (`RECOMP_AC97_READY=1`, no trap):
+
+```
+  AC97: codec reported ready at 0xFEC00130 (DirectSound will initialise)
+  ...
+  [KERNEL] #1390: ordinal 15 (slot 115) ret=0x001A0DF2
+  [HEAP] #26: size=17682440 tag='DSda' -> Xbox VA 0x010E9E60
+  [KERNEL] #1391: ordinal 23 (slot 114) ret=0x001A0DFF
+  ...
+```
+
+DirectSound initialises, allocates a 17.6 MB `DSda` buffer, and the run then dies
+with `0xC0000094` (STATUS_INTEGER_DIVIDE_BY_ZERO) instead of rebooting. The stall
+loop is gone. The kernel call count goes from 200 to past 1390.
+
+# The divide by zero, and where the zero comes from
+
+The VEH logged access violations only, so a divide by zero produced a stack trace
+and no registers. It now reports every non-breakpoint exception with the guest
+registers, for the reason a divide by zero needs answering: the fault address
+names the instruction, not the object.
+
+## The instruction
+
+`sub_001A2B85+0x335`, `src/recomp/gen/recomp_0005.c:10576`, and in the original:
+
+```
+001A2BF0 movzx esi, byte ptr [ecx + 0x64]   ; esi = 0
+001A2BF4 mov   eax, dword ptr [ecx + 0x78]
+001A2BF7 mov   eax, dword ptr [eax + 0x24]  ; eax = 20
+001A2BFA xor   edx, edx
+001A2BFC div   esi                          ; <-- divide by zero
+001A2C00 test  esi, esi
+001A2C05 jbe   0x1a2d39                     ; the guard is *after* the divide
+```
+
+## The guest state, and the object
+
+`logs/runs/20260922-055304-689-p6-ac97-ecx`:
+
+```
+[EXCEPTION] tid=15260 code=0xC0000094 RIP=0x7FF666269A85
+  Xbox regs: eax=0x803E4258 ecx=0x803E4344 edx=0x803E4358 esp=0x00F7FCF4
+  Xbox regs: ebx=0x803E4358 esi=0x00000000 edi=0x803E4350
+```
+
+Dumped out of the archived minidump with
+`scripts/inspect-jsrf.py memory <run-dir> <va> <length>`, which reads guest VAs
+straight out of a run's `process.dmp` and keeps them as VAs:
+
+```
+ecx = 0x803E4344
+  +0x00 = 0x001E0E48   vtable
+  +0x0C = 0xFFFFFFFF
+  +0x10 = 0x0001FFFF
+  +0x64 = 0x00         <- THE DIVISOR
+  +0x78 = 0x803E4258   the buffer object
+[ecx+0x78] = 0x803E4258
+  +0x00 = 0x001E0DFC   vtable
+  +0x04 = 3
+  +0x08 = 2            flags
+  +0x0C = 0            <- wFormatTag
+  +0x0E = 0            <- nChannels, the source of the zero
+  +0x1C = 0xFFFFFDA8
+  +0x20 = 0x00000258
+  +0x24 = 0x00000014
+  +0x28 = 0x00000014
+```
+
+## The chain, read off the code
+
+`0x001A29C0`, vtable slot 4 of the same class, computes the field:
+
+```
+001A29CA mov   ecx, [esi + 0x78]
+001A29CD movzx eax, byte ptr [ecx + 0x0e]   ; nChannels
+001A29D1 dec   eax
+001A29D2 sar   eax, 1
+001A29D4 inc   al                            ; (nChannels - 1) / 2 + 1
+001A29D6 cmp   al, [esi + 0x64]
+001A29D9 je    0x1a29ee
+001A29DB test  byte ptr [esi + 0x12], 1
+001A29DF je    0x1a29eb
+001A29E1 mov   edi, 0x88780032              ; DSERR_INVALIDPARAM
+001A29EB mov   byte ptr [esi + 0x64], al
+```
+
+So `[this+0x64]` is `ceil(nChannels/2)`, and with `nChannels = 0` the arithmetic
+yields 0. `0x88780032` is `DSERR_INVALIDPARAM`, and `[this+0x12] & 1` is set in
+this object, so this method *does* take the error path -- the crashing method
+simply has no such guard, and the `div` sits in front of the `test` that would
+have caught it.
+
+`0x001A06E4`, called from the buffer constructor, is `push 0x61645344` -- the tag
+`DSda` -- so the object at `+0x78` is a DirectSound buffer, and the two zero fields
+at `+0x0C`/`+0x0E` are its `WAVEFORMATEX`. The buffer is created at
+`0x001A0ADE call 0x1a4594` after `0x001A0AC4 push 0x118` (`operator new(0x118)`),
+and `sub_001A3CA4(this, [[outer+8]+0xC], [outer+0x1C])` is what should have filled
+the format in.
+
+**Conclusion: the buffer is constructed with a zero channel count.** That is the
+thing to chase, not the divide.
+
+## Next packet: why the buffer's format is empty
+
+Two candidates, and they are distinguishable by one dump each:
+
+1. `sub_001A3CA4` is handed a `WAVEFORMATEX` whose fields are already zero, i.e.
+   the caller's `[outer+8]` is not the structure it thinks. Dump `[edi+8]` at
+   `0x001A0AD6` from a run.
+2. `sub_001A09DE` -- the validator called at `0x001A0AB9`, whose `jl` failure
+   branch is skipped -- returns success for a format it should reject, so the
+   constructor runs with garbage.
+
+Worth noting for whoever picks this up: the two `WAVEFORMATEX` words are the first
+thing to check, because `wFormatTag = 0` is not a valid tag (`WAVE_FORMAT_PCM` is
+1, `WAVE_FORMAT_XBOX_ADPCM` is `0x69`, and `0x001A29F5 sub eax, 0x68` is the
+comparison against the latter).
+
+# State at the end of this session
+
+- Fence mirror fixed and **measured**: the wait at `0x00191440` returns, both
+  submissions are `diag=ok`, `GET` commits from `0x1000`.
+- `RECOMP_AC97_READY` and `RECOMP_APU_TRAP` separated; the APU trap now says so
+  when it fails, and no longer fires unless asked for.
+- The VEH reports non-memory exceptions with the guest registers.
+- `scripts/inspect-jsrf.py disasm` fixed (`decoder.skipdata = True`); it had been
+  printing an empty listing for every range.
+- The stale `-DRECOMP_ABI_CHECK` in `build/CMakeCache.txt` -- a leftover from the
+  canary experiment recorded above as reverted -- was removed by reconfiguring
+  with `-DCMAKE_C_FLAGS=`. That was the cause of `jsrf_recovery_11c1` failing to
+  link (`LNK2019` on `recomp_delta_ok`, `recomp_abi_regs_exempt`,
+  `jsrf_trace_delta_mismatch`, `recomp_abi_violation_log`).
+- `scripts/build-jsrf.ps1` now builds **every** target CTest runs. It built six,
+  so `jsrf_recovery_11c1_test` -- whose exe MSBuild deletes when a link fails --
+  was never rebuilt by a later successful build, and CTest reported it as
+  "Not Run" with nothing in the build log to explain it. That is the failure the
+  previous session could not account for.
+- CTest **11/11**, and the frontier reproduces on the reconfigured build
+  (`logs/runs/20260922-055716-423-p7-noabicheck`: `submit #0 diag=ok`, then the
+  same `0xC0000094`).
+- Toolkit `a02780d`; game commit records it.
+- **The blocker is now the zero channel count on the DirectSound buffer**, not the
+  push buffer, not the fence and not the ring wait.

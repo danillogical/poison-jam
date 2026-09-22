@@ -27,7 +27,14 @@ try:
         offset=int(section['raw_addr'],16)+args.start-int(section['virtual_addr'],16)
         with (root/'game/default.xbe').open('rb') as file:
             file.seek(offset); raw=file.read(args.end-args.start)
-        for insn in capstone.Cs(capstone.CS_ARCH_X86,capstone.CS_MODE_32).disasm(raw,args.start):
+        decoder=capstone.Cs(capstone.CS_ARCH_X86,capstone.CS_MODE_32)
+        # Skip undecodable bytes instead of stopping.  Capstone stops at the
+        # first invalid instruction and yields nothing at all, so an arbitrary
+        # range -- or a start that is not an instruction boundary -- printed an
+        # empty listing that looked like "no code here" rather than a decode
+        # failure.  Emitting `.byte` keeps the listing aligned and honest.
+        decoder.skipdata=True
+        for insn in decoder.disasm(raw,args.start):
             print(f'{insn.address:08X} {insn.mnemonic:8} {insn.op_str}')
     elif args.command=='memory':
         with DumpMemory(args.run) as dump: data=dump.read(args.start,args.length)
