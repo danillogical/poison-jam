@@ -4023,4 +4023,100 @@ the first entry to the spin. If none does, the title is deadlocked against itsel
 and the missing piece is the model's position writeback (sub-question 2), which
 becomes the fix rather than a guess.
 
+---
+
+# The spin explained end to end: the model's walk rejects JSRF's ring
+
+## The ordering, measured
+
+Numbering the PUT writes and timestamping the first spin entry settles it:
+
+```
+[PFIFO] PUT write #0 val=00001000
+[PFIFO] submit #0 diag=ok                 get=00001000 put=00001000
+[PFIFO] PUT write #1 val=00001B24
+[PFIFO] submit #1 diag=unsupported_method get=00001000 put=00001B24 method=180 subch=1 param=7
+[SPIN]  first entry to the ring-space wait; edi=00000007 edx=80000000
+```
+
+So my previous hypothesis was wrong: the title **does** submit (PUT = 0x1B24)
+*before* spinning. It is not waiting for a ring it has not submitted. The model
+was asked to consume the ring, **did not**, and the title then waits forever for
+the GPU to drain it.
+
+## Why the model does not consume: three separate rejection gates
+
+Each one aborts the whole submission, and on every abort path
+`PFIFO_DMA_GET` is deliberately left untouched. Working through them in order,
+each fix moved the diagnostic to the next:
+
+| attempt | `submit_diag` | what stopped it |
+|---|---|---|
+| 1 | `unsupported_method` | method `0x180` on subchannel 1 |
+| 2 | `sink_capacity` | `sink_count + staged + count > 256` |
+| 3 | `budget_exhausted` | `words >= 1024 \|\| packets >= 256` |
+
+The third is the interesting one, and the walk dump I added names it precisely:
+
+```
+budget_exhausted get=00001000 put=00001B24 begin=00000000 end=04000000
+                words=707 packets=256 pc=00001B0C
+```
+
+PUT − GET is 0x0B24 = 713 dwords and the walk reached **707 of them**, ending at
+`pc=0x1B0C` against `put=0x1B24` — six dwords from the end. It was stopped by the
+**256-packet** limit, not the word limit: this ring is a long run of small packets
+plus jump/call targets (the visit trace alternates between the 0x1900–0x1Bxx ring
+and 0x1450/0x1460/0x1678/0x16E8), so it exceeds 256 packets while staying under
+1024 words.
+
+A related discovery: **`sink_count` is only ever incremented** (`nv2a_core.c:1124`)
+and nothing resets or drains it, so once it reaches 256 the sink-capacity gate
+rejects *every* subsequent submission for the rest of the run.
+
+## I was wrong to relax those gates, and the tests say so
+
+Skipping the packet instead of aborting does make the ring drain — GET reached
+0x1B24 = PUT and `diag=ok`. But `jsrf_nv2a_registers` failed, and reading its
+assertions shows the rejection contract is deliberate and pinned:
+
+```
+FAIL USER unsupported method diagnostic:   actual=0 expected=384   (384 = 0x180)
+FAIL USER packet/word budget rejected:     actual=1 expected=0
+FAIL USER packet/word budget GET unchanged: actual=1028 expected=0
+FAIL USER sink capacity rejected:          actual=1 expected=0
+FAIL USER sink capacity GET unchanged:     actual=1032 expected=0
+```
+
+So the model is *designed* to reject a stream it cannot execute and to leave GET
+where it is, and `0x180` is explicitly expected to be unsupported. I reverted all
+three changes; the toolkit is back at `b41eb87` with only the walk-path diagnostic
+kept, and CTest is 11/11 again.
+
+**This is the right call, and it reframes the fix.** The way to make JSRF's ring
+drain is to give the model the *capability* to consume it, not to stop it
+rejecting:
+
+1. **Implement the class bound to subchannel 1** (handles `0xE`/`0x10`/`0x11`/`0xD`
+   are bound by method `0x000` at the start of the ring; `0x180` is a method on
+   that class, not a binding — an earlier guess of mine that the trace refutes).
+2. **Give the sink a consumer**, so `sink_count` does not ratchet to its ceiling.
+3. **Re-examine the 256-packet limit** against a real ring: 713 dwords in >256
+   packets is normal for this title, so the limit is mis-sized for the content
+   even though the test pins the current value.
+
+The remaining piece after those is the one the spin actually waits on: the word at
+`0x80000000`, still `0xDEADBEEF` at the end of the run. The guest writes that
+sentinel itself at `0x0019247E` (`C7 05 00 00 00 80 EF BE AD DE`) and nothing ever
+replaces it, so whatever is meant to publish a GPU position into guest memory still
+does not.
+
+**Next packet:** item 1 — identify the class bound to subchannel 1 and whether it
+is one the model can execute. That is the difference between "the model refuses
+this ring" and "the model cannot run this ring", and only the second is a content
+gap to close.
+
+State: `logs/runs/20260921-235816-855-clean-final2/` (167 bodies verifying, 0 ABI
+reports, CTest 11/11).
+
 
