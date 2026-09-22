@@ -175,9 +175,23 @@ The guarded chain is `scripts/build-jsrf.ps1`, but PowerShell here refuses it
 twice over: the execution policy blocks the script, and `cmake` is not on the
 PowerShell PATH. Run the same steps directly with the Bash tool — `cmake -S . -B
 build`, `recover-functions.py`, `generate-lifter-tests.py`, `build-identity.py
-before`, the six-target `cmake --build` with the `env -u` prefix, then
+before`, the full `cmake --build` target list with the `env -u` prefix, then
 `build-identity.py after` — which is what the chain does and produces the same
-artifacts.
+artifacts. Build **every** target CTest runs, not a subset: MSBuild deletes a
+target's output when its link fails, so a later successful build that does not
+name that target leaves the test permanently "Not Run" with nothing in the build
+log to explain it. That is what hid a stale `-DRECOMP_ABI_CHECK` in
+`build/CMakeCache.txt` behind a failing `jsrf_recovery_11c1` for a session.
+
+Two host quirks worth knowing before they cost time:
+
+- **Heredocs are blocked** by the command validator on this host, so
+  `git commit -F -` with a `<<'EOF'` body is rejected. Write the message to a file
+  and use `git commit -F <file>`.
+- **`logs/` is gitignored**, so a probe script written there does not survive.
+  Guest memory from an archived run is already reachable through
+  `scripts/inspect-jsrf.py memory <run-dir> <va> <length>`, which reads a run's
+  `process.dmp` and keeps guest VAs as VAs — prefer it over a new helper.
 
 **A probe run expects its probe checkpoint only.** `--probe=` returns early in
 `src/main.c:148`, before `checkpoint("guest_entry")` at `main.c:162`, so a probe
@@ -192,14 +206,16 @@ reach its entry point; only the expectation was wrong.
 are fixed and kept here as operating knowledge, because each one was invisible
 until it was diagnosed and each could return.
 
-1. **This repository's `.git` has no object store.** It holds `HEAD`, `config`,
-   `index` and `logs/` but no `objects/`, no loose refs and no `packed-refs`,
-   and no remote is configured, so `git status`, `git log` and `git cat-file`
-   all fail with `fatal: not a git repository`. The working tree is intact and
-   `.git/logs/HEAD` lists ten commits up to tip `7e2c4f43`. Do not "fix" this
-   with `git init`; restoring `objects/` from a backup or snapshot preserves the
-   history, and only the user can choose. The toolkit sibling
-   `C:\Users\logic\Repos\xboxrecomp` is healthy.
+1. **This repository's `.git` object store is present and working again, as of
+   2026-09-22.** Earlier notes said it held `HEAD`, `config`, `index` and `logs/`
+   but no `objects/`, no loose refs and no `packed-refs`, so `git status`,
+   `git log` and `git cat-file` all failed with `fatal: not a git repository`.
+   That is no longer true: `.git/objects` has entries, `git cat-file -t HEAD`
+   returns `commit`, and commits are being created normally (tip `638dd9e` at
+   that date). There is still **no remote configured**, so a commit is local
+   only — record the toolkit revision in each game commit message, as the
+   project does, because that is the only link between the two histories.
+   The toolkit sibling `C:\Users\logic\Repos\xboxrecomp` is healthy.
 2. **The generated chunk tree did not link, for a reason that was not the
    detector.** FIXED 2026-09-21: `jsrf_recomp.exe` builds, identity-verified.
    The header declared 541 unresolved stubs while
