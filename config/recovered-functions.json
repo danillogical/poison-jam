@@ -24273,5 +24273,33 @@
     "kind": "routine",
     "evidence": "Entered from data: the address is an aligned dword in a .rdata vtable, so it is a function entry by definition. The translation pass classified it tail_jump_alias and folded it into the next entry under the ff4d442 abutting-alias rule -- this entry's end equals that entry's start -- which deleted the body and pointed the dispatch tuple at the wrong function, so a virtual call through the slot executes an unrelated body. The body is a complete function that terminates before the fold target, so the original never fell through into it. Found by scripts/scan-alias-redirects.py, which lists every redirect in this shape. Here: slot 0 of the vtable at 0x001E0E60. Body 0x001A4A9B..0x001A4AD2 is a four-way dispatch on [ESP+4] ending RET 8, so its stack_args is 8, not 4. Evidence: report-deepseek.md, 2026-09-22.",
     "stack_args": 8
+  },
+  {
+    "start": "0x0013B180",
+    "end": "0x0013B1B8",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A thread-startup trampoline the disassembler never claimed: it sits in a 439-byte hole between sub_0013B110 (ends 0x0013B179) and sub_0013B330, and no entry covered it. The title passes these addresses as ctx1 to PsCreateSystemThreadEx, and the thread wrapper 0x00147EBB calls ctx1, so the call failed with [ICALL] Failed to resolve VA 0x0013B180 in run logs/runs/20260922-085953-527-tailthunk-fix-ac97. Shape: spin on a per-thread flag word in 0x25EFA8-0x25EFDC counting iterations, run the worker loop, then push 0xF0000001, set the completion word and call 0x147E4E, which is the noreturn thread exit (push 0; call 0x147C6B; push [esp+4]; call dword ptr [0x1C4084]; int3), so the body has no ret of its own. Extent is the straight-line body up to and including the int3 that follows the exit call."
+  },
+  {
+    "start": "0x0013B1C0",
+    "end": "0x0013B223",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A thread-startup trampoline the disassembler never claimed: it sits in a 439-byte hole between sub_0013B110 (ends 0x0013B179) and sub_0013B330, and no entry covered it. The title passes these addresses as ctx1 to PsCreateSystemThreadEx, and the thread wrapper 0x00147EBB calls ctx1, so the call failed with [ICALL] Failed to resolve VA 0x0013B180 in run logs/runs/20260922-085953-527-tailthunk-fix-ac97. Shape: spin on a per-thread flag word in 0x25EFA8-0x25EFDC counting iterations, run the worker loop, then push 0xF0000001, set the completion word and call 0x147E4E, which is the noreturn thread exit (push 0; call 0x147C6B; push [esp+4]; call dword ptr [0x1C4084]; int3), so the body has no ret of its own. Extent is the straight-line body up to and including the int3 that follows the exit call."
+  },
+  {
+    "start": "0x0013B230",
+    "end": "0x0013B293",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A thread-startup trampoline the disassembler never claimed: it sits in a 439-byte hole between sub_0013B110 (ends 0x0013B179) and sub_0013B330, and no entry covered it. The title passes these addresses as ctx1 to PsCreateSystemThreadEx, and the thread wrapper 0x00147EBB calls ctx1, so the call failed with [ICALL] Failed to resolve VA 0x0013B180 in run logs/runs/20260922-085953-527-tailthunk-fix-ac97. Shape: spin on a per-thread flag word in 0x25EFA8-0x25EFDC counting iterations, run the worker loop, then push 0xF0000001, set the completion word and call 0x147E4E, which is the noreturn thread exit (push 0; call 0x147C6B; push [esp+4]; call dword ptr [0x1C4084]; int3), so the body has no ret of its own. Extent is the straight-line body up to and including the int3 that follows the exit call."
+  },
+  {
+    "start": "0x0013B2A0",
+    "end": "0x0013B32B",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A thread-startup trampoline the disassembler never claimed: it sits in a 439-byte hole between sub_0013B110 (ends 0x0013B179) and sub_0013B330, and no entry covered it. The title passes these addresses as ctx1 to PsCreateSystemThreadEx, and the thread wrapper 0x00147EBB calls ctx1, so the call failed with [ICALL] Failed to resolve VA 0x0013B180 in run logs/runs/20260922-085953-527-tailthunk-fix-ac97. Shape: spin on a per-thread flag word in 0x25EFA8-0x25EFDC counting iterations, run the worker loop, then push 0xF0000001, set the completion word and call 0x147E4E, which is the noreturn thread exit (push 0; call 0x147C6B; push [esp+4]; call dword ptr [0x1C4084]; int3), so the body has no ret of its own. Extent is the straight-line body up to and including the int3 that follows the exit call."
   }
 ]

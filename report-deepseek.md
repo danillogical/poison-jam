@@ -5112,3 +5112,130 @@ guard against the rest of that class.
   merges it with the next helper.
 - After this packet: rebuild, rerun, and let `scripts/converge-manifest.py` drive
   whatever the title reaches next.
+
+## Packet D -- the missed thread-startup trampolines (0x0013B179-0x0013B330)
+
+With the tail-thunk corrections in, `RECOMP_AC97_READY=1` moved the run from the
+DirectSound divide-by-zero to a **clean named failure**, and then past it:
+
+```
+[RECOVERED] ABI FAILURE 0x00168FF0 ...            <- gone
+[KERNEL] PsCreateSystemThreadEx #2..#4            <- new: the title spawns workers
+[ICALL] Failed to resolve VA 0x0013B180 (thread calls: 5)
+[EXCEPTION] code=0xE0424943 RIP=0x7FFF284341CA
+```
+
+**A trap worth recording first.** The first run of the rebuilt tree exited 0 with
+`named_frames: 0` and looked like a regression. It was not: run
+`20260922-085326-672-fix-addref` had `RECOMP_AC97_READY` set in its environment
+and the new one did not. Without it the toolkit reports the AC'97 codec absent and
+the title takes its documented `DSERR_NODRIVER` (0x88780078) exit -- which is the
+*intended* default, per the long comment in
+`xboxrecomp/src/kernel/xbox_memory_layout.c`. `0x88780078` is not computed by the
+toolkit: `sub_001A73C7` loads it and `0x001A0C06` returns it. **Always compare runs
+under the same environment before calling a difference a regression.**
+
+**The defect.** `0x0013B180` is a thread-startup trampoline in a 439-byte hole the
+disassembler never claimed -- the database has `sub_0013B110` ending at
+`0x0013B179`, then nothing until `sub_0013B330`. The title passes these addresses
+as `ctx1` to `PsCreateSystemThreadEx`, and the thread wrapper `0x00147EBB` calls
+`ctx1`, so the unresolved call is the thread body itself.
+
+Shape of each one:
+
+```
+mov  eax, [0x25EFxx]     ; per-thread go flag
+test eax, eax
+jne  <exit>
+<spin: inc [0x25EFA8]; reload flag; je spin>
+<worker loop>
+push 0xF0000001
+mov  [0x25EFxx+4], 1     ; completion word
+call 0x147E4E            ; noreturn thread exit
+int3
+```
+
+`0x147E4E` is `push 0; call 0x147C6B; push [esp+4]; call dword ptr [0x1C4084];
+int3` -- an exit thunk that calls an import and never returns, which is why these
+bodies have no `ret` of their own and why `0x147E4E` has no entry in
+`recomp_abi_deltas.c`.
+
+**Four entries added** (extent = straight-line body up to and including the `int3`
+after the exit call):
+
+| entry | extent |
+|---|---|
+| `0x0013B180` | `0x0013B1B8` |
+| `0x0013B1C0` | `0x0013B223` |
+| `0x0013B230` | `0x0013B293` |
+| `0x0013B2A0` | `0x0013B32B` |
+
+`recover-functions.py` accepted all four (it validates by translating each entry
+standalone, so a bad extent fails the build rather than silently mis-lifting).
+
+**Measured effect** (`logs/runs/20260922-090256-907-trampoline-fix` vs
+`...-085953-527-tailthunk-fix-ac97`):
+
+| | before | after |
+|---|---|---|
+| named frames | 88 | **109** |
+| native threads | 9 | **11** |
+| `PsCreateSystemThreadEx` reached | #4 | further |
+| exception | `0xE0424943` | same code, later |
+
+The `0x0013B180` ICALL failure is gone. CTest 11/11.
+
+## Packet E -- next frontier, fully characterised (not yet applied)
+
+The trampoline fix exposed the next missed entry:
+
+```
+[ICALL] Failed to resolve VA 0x00178F40 (thread calls: 2622)
+```
+
+`0x00178F40` is a **real function with a normal prologue**
+(`sub esp,0x14; push ebx; mov ebx,[esp+0x1c]; mov eax,[ebx+0xC]; push ebp; xor
+ebp,ebp; cmp eax,-1; push esi; push edi; je 0x17919E`), sitting in the next hole:
+the database's last entry before it is `sub_00178E70`/`sub_00178E85` ending at
+`0x00178F34`, and the next is `0x001791C0`.
+
+Its epilogue is measured:
+
+```
+00179197 mov  eax, 0x80070057      ; E_INVALIDARG
+0017919E mov  eax, 0x800401F0      ; CO_E_NOTINITIALIZED
+001791A3 mov  ecx, [esp + 0x34]
+001791A7 test ecx, ecx
+001791A9 pop  edi
+001791AA pop  esi
+001791AB pop  ebp
+001791AC pop  ebx
+001791B5 add  esp, 0x14
+001791B8 ret  0x14
+001791BB nop  (padding to 0x001791C0)
+```
+
+So the entry is **`start 0x00178F40`, `end 0x001791BA`, `stack_args 20`** -- the
+`ret 0x14` is the source, and `0x14` matches the `sub esp,0x14` prologue. The
+argument slots confirm it: after `sub esp,0x14` and four pushes, `[esp+0x1C]` is
+arg1, `[esp+0x2C]` arg2, `[esp+0x30]` arg3, `[esp+0x34]` arg4 and `[esp+0x38]`
+arg5, and the body reads all five. Not applied this session only because the hour
+ran out mid-packet; the edit is mechanical and the values above are measured.
+
+Note the shape of this one is different from the trampolines: it is an ordinary
+function returning `E_INVALIDARG` / `CO_E_NOTINITIALIZED`, so it also carries the
+first `0x800401F0` in the log. `0xE0424943` is the exception raised *after* the
+failed ICALL, so it is a symptom of the unresolved call, not a separate defect --
+expect it to move or change once `0x00178F40` is added.
+
+## Method note: the detector for this class
+
+`scripts/check-tail-thunks.py` covers thunks. For *missing* entries the detector
+is `[ICALL] Failed to resolve VA`, and the tool is `scripts/converge-manifest.py`,
+which loops run -> patch -> rebuild -> run. Its build path is Python plus `cmake`
+directly (no shell script), so it works on this host; the broken
+`build-jsrf.ps1` is not in its path.
+
+A gap scan over `tools/disasm/output/functions.json` is **not** a substitute: 105
+`.text` gaps are 0x80 bytes or larger and most are alignment padding. The 439-byte
+hole at `0x0013B179` was only interesting because the title called into it.
