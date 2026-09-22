@@ -533,6 +533,14 @@
     "stack_args": 0
   },
   {
+    "start": "0x00024700",
+    "end": "0x00024970",
+    "section": ".text",
+    "kind": "routine",
+    "stack_args": 0,
+    "evidence": "A table target the alias fold swallowed: 0x000246E0's span ran to 0x00024970, past its own `ret 4` at 0x000246FB and across the nops at 0x000246FE, into this function. Found by the run rather than by a static sweep -- `[ICALL] Failed to resolve VA 0x00024700` in logs/runs/20260922-105305-975-apu-ack-7be30, the first failure after 0x0007BE30 and 0x0007C290 were fixed; the icall trace for that failure shows 0x0007BDD0 and 0x0007BE30 executing first, so those two fixes held. Verified as a separate function: 0x00024700 is `push esi` / `mov esi,ecx` / `mov eax,[esi+0xc0]`, a float-comparison method, and its epilogue `pop esi` / `ret` ends at 0x00024963, followed by nops to 0x00024970. The parent's end was cut to 0x00024700, where its `ret 4` cleanup ends. Evidence: report-deepseek.md, 2026-09-22."
+  },
+  {
     "start": "0x00024C70",
     "end": "0x00024C90",
     "section": ".text",
@@ -14282,6 +14290,34 @@
     "stack_args": 0
   },
   {
+    "start": "0x0013B180",
+    "end": "0x0013B1B8",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A thread-startup trampoline the disassembler never claimed: it sits in a 439-byte hole between sub_0013B110 (ends 0x0013B179) and sub_0013B330, and no entry covered it. The title passes these addresses as ctx1 to PsCreateSystemThreadEx, and the thread wrapper 0x00147EBB calls ctx1, so the call failed with [ICALL] Failed to resolve VA 0x0013B180 in run logs/runs/20260922-085953-527-tailthunk-fix-ac97. Shape: spin on a per-thread flag word in 0x25EFA8-0x25EFDC counting iterations, run the worker loop, then push 0xF0000001, set the completion word and call 0x147E4E, which is the noreturn thread exit (push 0; call 0x147C6B; push [esp+4]; call dword ptr [0x1C4084]; int3), so the body has no ret of its own. Extent is the straight-line body up to and including the int3 that follows the exit call."
+  },
+  {
+    "start": "0x0013B1C0",
+    "end": "0x0013B223",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A thread-startup trampoline the disassembler never claimed: it sits in a 439-byte hole between sub_0013B110 (ends 0x0013B179) and sub_0013B330, and no entry covered it. The title passes these addresses as ctx1 to PsCreateSystemThreadEx, and the thread wrapper 0x00147EBB calls ctx1, so the call failed with [ICALL] Failed to resolve VA 0x0013B180 in run logs/runs/20260922-085953-527-tailthunk-fix-ac97. Shape: spin on a per-thread flag word in 0x25EFA8-0x25EFDC counting iterations, run the worker loop, then push 0xF0000001, set the completion word and call 0x147E4E, which is the noreturn thread exit (push 0; call 0x147C6B; push [esp+4]; call dword ptr [0x1C4084]; int3), so the body has no ret of its own. Extent is the straight-line body up to and including the int3 that follows the exit call."
+  },
+  {
+    "start": "0x0013B230",
+    "end": "0x0013B293",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A thread-startup trampoline the disassembler never claimed: it sits in a 439-byte hole between sub_0013B110 (ends 0x0013B179) and sub_0013B330, and no entry covered it. The title passes these addresses as ctx1 to PsCreateSystemThreadEx, and the thread wrapper 0x00147EBB calls ctx1, so the call failed with [ICALL] Failed to resolve VA 0x0013B180 in run logs/runs/20260922-085953-527-tailthunk-fix-ac97. Shape: spin on a per-thread flag word in 0x25EFA8-0x25EFDC counting iterations, run the worker loop, then push 0xF0000001, set the completion word and call 0x147E4E, which is the noreturn thread exit (push 0; call 0x147C6B; push [esp+4]; call dword ptr [0x1C4084]; int3), so the body has no ret of its own. Extent is the straight-line body up to and including the int3 that follows the exit call."
+  },
+  {
+    "start": "0x0013B2A0",
+    "end": "0x0013B32B",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A thread-startup trampoline the disassembler never claimed: it sits in a 439-byte hole between sub_0013B110 (ends 0x0013B179) and sub_0013B330, and no entry covered it. The title passes these addresses as ctx1 to PsCreateSystemThreadEx, and the thread wrapper 0x00147EBB calls ctx1, so the call failed with [ICALL] Failed to resolve VA 0x0013B180 in run logs/runs/20260922-085953-527-tailthunk-fix-ac97. Shape: spin on a per-thread flag word in 0x25EFA8-0x25EFDC counting iterations, run the worker loop, then push 0xF0000001, set the completion word and call 0x147E4E, which is the noreturn thread exit (push 0; call 0x147C6B; push [esp+4]; call dword ptr [0x1C4084]; int3), so the body has no ret of its own. Extent is the straight-line body up to and including the int3 that follows the exit call."
+  },
+  {
     "start": "0x0013F950",
     "end": "0x0013F980",
     "section": ".text",
@@ -19767,11 +19803,19 @@
   },
   {
     "start": "0x00173D70",
+    "end": "0x00173DB0",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E3DE4, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_00174060 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00173D70 at sub_00174060. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00173D70..0x00174060. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21). CORRECTED 2026-09-22 (A2c): the end 0x00173ED0 ran over a function the disassembler never registered. The body ends `pop esi; add esp,0x14; ret 8` at 0x00173DA2..0x00173DA6, 0x00173DA9..0x00173DAF is padding, and the next function is 0x00173DB0. stack_args 8 is correct (the `ret 8` operand).",
+    "stack_args": 8
+  },
+  {
+    "start": "0x00173DB0",
     "end": "0x00173ED0",
     "section": ".text",
     "kind": "routine",
-    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E3DE4, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_00174060 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00173D70 at sub_00174060. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00173D70..0x00174060. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
-    "stack_args": 8
+    "evidence": "A COM vtable method reached only indirectly: it is a pointer-table entry (scripts/check-table-targets.py reports it first at 0x001E3E0C) and occurs in no call or jump, so tools/disasm never registered it at all and no alias fold could either. The preceding entry 0x00173D70 had its end tightened to the next *known* function start, 0x00173ED0, which ran straight over this one; an indirect call to it then trapped with `[ICALL] Failed to resolve VA 0x00173DB0`. Body 0x00173DB0..0x00173EC9: prologue `sub esp,0x44; push ebx; push ebp; push esi`, epilogue `pop edi/esi/ebp/ebx; add esp,0x44; ret 0x14` at 0x00173EBF..0x00173EC6, padding 0x00173EC9..0x00173ECF, next function 0x00173ED0. stack_args is the `ret N` operand, so 20. Evidence: logs/runs/20260922-162034-043-a2b-48190-sa12/.",
+    "stack_args": 20
   },
   {
     "start": "0x00173ED0",
@@ -19943,10 +19987,18 @@
   },
   {
     "start": "0x00175250",
+    "end": "0x00175300",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E3E80, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_001753D0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00175250 at sub_001753D0. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00175250..0x001753D0. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21). CORRECTED 2026-09-22 (A2c): the end 0x001753D0 ran over a function the disassembler never registered. The body ends `pop esi; ret 8` at 0x001752F0..0x001752F1, 0x001752F4..0x001752FF is padding, and the next function is 0x00175300. stack_args 8 is correct (the `ret 8` operand).",
+    "stack_args": 8
+  },
+  {
+    "start": "0x00175300",
     "end": "0x001753D0",
     "section": ".text",
     "kind": "routine",
-    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E3E80, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_001753D0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00175250 at sub_001753D0. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00175250..0x001753D0. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
+    "evidence": "A COM vtable method reached only indirectly: scripts/check-table-targets.py reports it as a pointer-table target inside the previous entry 0x00175250..0x001753D0, and it occurs in no call or jump, so tools/disasm never registered it. The preceding entry had its end tightened to the next *known* function start, 0x001753D0, which ran straight over this one; an indirect call then trapped with `[ICALL] Failed to resolve VA 0x00175300` (logs/runs/20260922-162410-613-a2c-173db0/). Body 0x00175300..0x001753CB: `mov eax,[esp+4]; mov ecx,[eax+0x34]; sub esp,8`, with early returns `add esp,8; ret 8` at 0x001753AF, 0x001753BA and 0x001753C5, then padding to 0x001753D0. stack_args is the `ret N` operand, so 8.",
     "stack_args": 8
   },
   {
@@ -20412,6 +20464,14 @@
     "kind": "routine",
     "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E406C, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_00178E22 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00178E00 at sub_00178E22. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00178E00..0x00178E22. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
     "stack_args": 8
+  },
+  {
+    "start": "0x00178F40",
+    "end": "0x001791BB",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A real function the disassembler never claimed, in a hole between sub_00178E70/sub_00178E85 (both end 0x00178F34) and 0x001791C0. The title calls it indirectly and the call failed with [ICALL] Failed to resolve VA 0x00178F40 in run logs/runs/20260922-090256-907-trampoline-fix, immediately before the 0xE0424943 exception -- so that exception is a symptom of this unresolved call, not a separate defect. Shape: normal prologue sub esp,0x14; push ebx; mov ebx,[esp+0x1C]; mov eax,[ebx+0xC]; push ebp; xor ebp,ebp; cmp eax,-1; push esi; push edi. It reads five stack arguments: arg1 at [esp+0x1C] right after the frame and the one push, then arg2 [esp+0x2C], arg3 [esp+0x30], arg4 [esp+0x34] and a byte arg5 at [esp+0x38] once all four registers are pushed. Epilogue measured: 0x001791A3 mov ecx,[esp+0x34]; test ecx,ecx; pop edi; pop esi; pop ebp; pop ebx; 0x001791B5 add esp,0x14; 0x001791B8 ret 0x14. The ret 0x14 matches the sub esp,0x14 prologue, so stack_args is 20. It returns E_INVALIDARG (0x80070057) and CO_E_NOTINITIALIZED (0x800401F0). END CORRECTED to 0x001791BB: end is exclusive and the original value 0x001791BA cut the last byte of the three-byte `ret 0x14` (C2 14 00 at 0x001791B8..0x001791BA), so the translator could not decode the return at all, emitted a body with no epilogue and no return statement, and the run aborted with `[RECOVERED] ABI FAILURE 0x00178F40 esp 00F7FDA0->00F7FDA0 expected +24` in logs/runs/20260922-101516-467-p1-178f40. Measured with scripts/inspect-jsrf.py data 0x001791B4 8 -> 1183C414 900014C2, i.e. bytes 11 83 C4 14 | C2 14 00 90. Evidence: report-deepseek.md, 2026-09-22.",
+    "stack_args": 20
   },
   {
     "start": "0x001791C0",
@@ -24213,6 +24273,38 @@
     "stack_args": 4
   },
   {
+    "start": "0x0019E5CC",
+    "end": "0x0019E613",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "Entered from data: the address is an aligned dword in a .rdata vtable, so it is a function entry by definition. The translation pass classified it tail_jump_alias and folded it into the next entry under the ff4d442 abutting-alias rule -- this entry's end equals that entry's start -- which deleted the body and pointed the dispatch tuple at the wrong function, so a virtual call through the slot executes an unrelated body. The body is a complete function that terminates before the fold target, so the original never fell through into it. Found by scripts/scan-alias-redirects.py, which lists every redirect in this shape. Here: slot 1 of the vtable at 0x001E0DC0 and slot 1 of 0x001E0DE8, so the fold sent AddRef to the unrelated body at 0x0019E613. Measured consequence (logs/runs/20260922-085020-240-trace-ee1f): the ICALL inside 0x0019EE1F -- `if (obj) return obj->vtable[1](obj)` -- ran that body, whose cleanup does not match a RET 4 callee, so 0x0019EE1F returned with the simulated ESP 4 bytes low; its POP ESI then read the pushed argument instead of the saved ESI, and the clobbered ESI made 0x0019F926 write the derived vtable into 0x010DD004 instead of 0x803E4224 and return 0x010DD004. 0x001A0B2B passed that object to 0x001A0A43 as the buffer descriptor, 0x001A09DE read [0x010DD004+0xC] -- the 0x778-byte sound object -- as lpwfxFormat, 0x001A4BC4 matched no format tag and wrote nothing, the device format stayed zero, and 0x001A2BFC divided by it. The real descriptor is the caller's stack struct at [EBP-0x20] in 0x001A0C06, whose +0xC is 0x001A77F0, a valid 48 kHz 16-bit PCM WAVEFORMATEX. Body 0x0019E5CC..0x0019E613 ends RET 4. Evidence: report-deepseek.md, 2026-09-22.",
+    "stack_args": 4
+  },
+  {
+    "start": "0x0019EAE3",
+    "end": "0x0019EB2D",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "Entered from data: the address is an aligned dword in a .rdata vtable, so it is a function entry by definition. The translation pass classified it tail_jump_alias and folded it into the next entry under the ff4d442 abutting-alias rule -- this entry's end equals that entry's start -- which deleted the body and pointed the dispatch tuple at the wrong function, so a virtual call through the slot executes an unrelated body. The body is a complete function that terminates before the fold target, so the original never fell through into it. Found by scripts/scan-alias-redirects.py, which lists every redirect in this shape. Here: slot 2 of the vtable at 0x001E0DE4. Body 0x0019EAE3..0x0019EB2D ends RET 4 and calls 0x0019E3C4 (Release) on its object. Evidence: report-deepseek.md, 2026-09-22.",
+    "stack_args": 4
+  },
+  {
+    "start": "0x0019EE34",
+    "end": "0x0019EE50",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "Entered from data: the address is an aligned dword in a .rdata vtable, so it is a function entry by definition. The translation pass classified it tail_jump_alias and folded it into the next entry under the ff4d442 abutting-alias rule -- this entry's end equals that entry's start -- which deleted the body and pointed the dispatch tuple at the wrong function, so a virtual call through the slot executes an unrelated body. The body is a complete function that terminates before the fold target, so the original never fell through into it. Found by scripts/scan-alias-redirects.py, which lists every redirect in this shape. Here: slot 0 of the vtable at 0x001E0DF0 and the immediate stored at 0x001E0DB0. Body 0x0019EE34..0x0019EE50 is the scalar deleting destructor -- TEST byte [ESP+4],1; MOV ESI,ECX; MOV [ESI],0x1E0DB0; conditional CALL 0x1A0F09; MOV EAX,ESI; POP ESI; RET 4 -- while the fold sent the slot to 0x0019EE50, an unrelated function. Evidence: report-deepseek.md, 2026-09-22.",
+    "stack_args": 4
+  },
+  {
+    "start": "0x001A4A9B",
+    "end": "0x001A4AD2",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "Entered from data: the address is an aligned dword in a .rdata vtable, so it is a function entry by definition. The translation pass classified it tail_jump_alias and folded it into the next entry under the ff4d442 abutting-alias rule -- this entry's end equals that entry's start -- which deleted the body and pointed the dispatch tuple at the wrong function, so a virtual call through the slot executes an unrelated body. The body is a complete function that terminates before the fold target, so the original never fell through into it. Found by scripts/scan-alias-redirects.py, which lists every redirect in this shape. Here: slot 0 of the vtable at 0x001E0E60. Body 0x001A4A9B..0x001A4AD2 is a four-way dispatch on [ESP+4] ending RET 8, so its stack_args is 8, not 4. Evidence: report-deepseek.md, 2026-09-22.",
+    "stack_args": 8
+  },
+  {
     "start": "0x001A5299",
     "end": "0x001A52A4",
     "section": "DSOUND",
@@ -24264,81 +24356,5 @@
     "section": "XPP",
     "evidence": "Constructor pointer at 0x001EB82C; straight-line MOV initializer; RET at 0x001BDAE0.",
     "stack_args": 0
-  },
-  {
-    "start": "0x0019E5CC",
-    "end": "0x0019E613",
-    "section": ".text",
-    "kind": "routine",
-    "evidence": "Entered from data: the address is an aligned dword in a .rdata vtable, so it is a function entry by definition. The translation pass classified it tail_jump_alias and folded it into the next entry under the ff4d442 abutting-alias rule -- this entry's end equals that entry's start -- which deleted the body and pointed the dispatch tuple at the wrong function, so a virtual call through the slot executes an unrelated body. The body is a complete function that terminates before the fold target, so the original never fell through into it. Found by scripts/scan-alias-redirects.py, which lists every redirect in this shape. Here: slot 1 of the vtable at 0x001E0DC0 and slot 1 of 0x001E0DE8, so the fold sent AddRef to the unrelated body at 0x0019E613. Measured consequence (logs/runs/20260922-085020-240-trace-ee1f): the ICALL inside 0x0019EE1F -- `if (obj) return obj->vtable[1](obj)` -- ran that body, whose cleanup does not match a RET 4 callee, so 0x0019EE1F returned with the simulated ESP 4 bytes low; its POP ESI then read the pushed argument instead of the saved ESI, and the clobbered ESI made 0x0019F926 write the derived vtable into 0x010DD004 instead of 0x803E4224 and return 0x010DD004. 0x001A0B2B passed that object to 0x001A0A43 as the buffer descriptor, 0x001A09DE read [0x010DD004+0xC] -- the 0x778-byte sound object -- as lpwfxFormat, 0x001A4BC4 matched no format tag and wrote nothing, the device format stayed zero, and 0x001A2BFC divided by it. The real descriptor is the caller's stack struct at [EBP-0x20] in 0x001A0C06, whose +0xC is 0x001A77F0, a valid 48 kHz 16-bit PCM WAVEFORMATEX. Body 0x0019E5CC..0x0019E613 ends RET 4. Evidence: report-deepseek.md, 2026-09-22.",
-    "stack_args": 4
-  },
-  {
-    "start": "0x0019EAE3",
-    "end": "0x0019EB2D",
-    "section": ".text",
-    "kind": "routine",
-    "evidence": "Entered from data: the address is an aligned dword in a .rdata vtable, so it is a function entry by definition. The translation pass classified it tail_jump_alias and folded it into the next entry under the ff4d442 abutting-alias rule -- this entry's end equals that entry's start -- which deleted the body and pointed the dispatch tuple at the wrong function, so a virtual call through the slot executes an unrelated body. The body is a complete function that terminates before the fold target, so the original never fell through into it. Found by scripts/scan-alias-redirects.py, which lists every redirect in this shape. Here: slot 2 of the vtable at 0x001E0DE4. Body 0x0019EAE3..0x0019EB2D ends RET 4 and calls 0x0019E3C4 (Release) on its object. Evidence: report-deepseek.md, 2026-09-22.",
-    "stack_args": 4
-  },
-  {
-    "start": "0x0019EE34",
-    "end": "0x0019EE50",
-    "section": ".text",
-    "kind": "routine",
-    "evidence": "Entered from data: the address is an aligned dword in a .rdata vtable, so it is a function entry by definition. The translation pass classified it tail_jump_alias and folded it into the next entry under the ff4d442 abutting-alias rule -- this entry's end equals that entry's start -- which deleted the body and pointed the dispatch tuple at the wrong function, so a virtual call through the slot executes an unrelated body. The body is a complete function that terminates before the fold target, so the original never fell through into it. Found by scripts/scan-alias-redirects.py, which lists every redirect in this shape. Here: slot 0 of the vtable at 0x001E0DF0 and the immediate stored at 0x001E0DB0. Body 0x0019EE34..0x0019EE50 is the scalar deleting destructor -- TEST byte [ESP+4],1; MOV ESI,ECX; MOV [ESI],0x1E0DB0; conditional CALL 0x1A0F09; MOV EAX,ESI; POP ESI; RET 4 -- while the fold sent the slot to 0x0019EE50, an unrelated function. Evidence: report-deepseek.md, 2026-09-22.",
-    "stack_args": 4
-  },
-  {
-    "start": "0x001A4A9B",
-    "end": "0x001A4AD2",
-    "section": ".text",
-    "kind": "routine",
-    "evidence": "Entered from data: the address is an aligned dword in a .rdata vtable, so it is a function entry by definition. The translation pass classified it tail_jump_alias and folded it into the next entry under the ff4d442 abutting-alias rule -- this entry's end equals that entry's start -- which deleted the body and pointed the dispatch tuple at the wrong function, so a virtual call through the slot executes an unrelated body. The body is a complete function that terminates before the fold target, so the original never fell through into it. Found by scripts/scan-alias-redirects.py, which lists every redirect in this shape. Here: slot 0 of the vtable at 0x001E0E60. Body 0x001A4A9B..0x001A4AD2 is a four-way dispatch on [ESP+4] ending RET 8, so its stack_args is 8, not 4. Evidence: report-deepseek.md, 2026-09-22.",
-    "stack_args": 8
-  },
-  {
-    "start": "0x0013B180",
-    "end": "0x0013B1B8",
-    "section": ".text",
-    "kind": "routine",
-    "evidence": "A thread-startup trampoline the disassembler never claimed: it sits in a 439-byte hole between sub_0013B110 (ends 0x0013B179) and sub_0013B330, and no entry covered it. The title passes these addresses as ctx1 to PsCreateSystemThreadEx, and the thread wrapper 0x00147EBB calls ctx1, so the call failed with [ICALL] Failed to resolve VA 0x0013B180 in run logs/runs/20260922-085953-527-tailthunk-fix-ac97. Shape: spin on a per-thread flag word in 0x25EFA8-0x25EFDC counting iterations, run the worker loop, then push 0xF0000001, set the completion word and call 0x147E4E, which is the noreturn thread exit (push 0; call 0x147C6B; push [esp+4]; call dword ptr [0x1C4084]; int3), so the body has no ret of its own. Extent is the straight-line body up to and including the int3 that follows the exit call."
-  },
-  {
-    "start": "0x0013B1C0",
-    "end": "0x0013B223",
-    "section": ".text",
-    "kind": "routine",
-    "evidence": "A thread-startup trampoline the disassembler never claimed: it sits in a 439-byte hole between sub_0013B110 (ends 0x0013B179) and sub_0013B330, and no entry covered it. The title passes these addresses as ctx1 to PsCreateSystemThreadEx, and the thread wrapper 0x00147EBB calls ctx1, so the call failed with [ICALL] Failed to resolve VA 0x0013B180 in run logs/runs/20260922-085953-527-tailthunk-fix-ac97. Shape: spin on a per-thread flag word in 0x25EFA8-0x25EFDC counting iterations, run the worker loop, then push 0xF0000001, set the completion word and call 0x147E4E, which is the noreturn thread exit (push 0; call 0x147C6B; push [esp+4]; call dword ptr [0x1C4084]; int3), so the body has no ret of its own. Extent is the straight-line body up to and including the int3 that follows the exit call."
-  },
-  {
-    "start": "0x0013B230",
-    "end": "0x0013B293",
-    "section": ".text",
-    "kind": "routine",
-    "evidence": "A thread-startup trampoline the disassembler never claimed: it sits in a 439-byte hole between sub_0013B110 (ends 0x0013B179) and sub_0013B330, and no entry covered it. The title passes these addresses as ctx1 to PsCreateSystemThreadEx, and the thread wrapper 0x00147EBB calls ctx1, so the call failed with [ICALL] Failed to resolve VA 0x0013B180 in run logs/runs/20260922-085953-527-tailthunk-fix-ac97. Shape: spin on a per-thread flag word in 0x25EFA8-0x25EFDC counting iterations, run the worker loop, then push 0xF0000001, set the completion word and call 0x147E4E, which is the noreturn thread exit (push 0; call 0x147C6B; push [esp+4]; call dword ptr [0x1C4084]; int3), so the body has no ret of its own. Extent is the straight-line body up to and including the int3 that follows the exit call."
-  },
-  {
-    "start": "0x0013B2A0",
-    "end": "0x0013B32B",
-    "section": ".text",
-    "kind": "routine",
-    "evidence": "A thread-startup trampoline the disassembler never claimed: it sits in a 439-byte hole between sub_0013B110 (ends 0x0013B179) and sub_0013B330, and no entry covered it. The title passes these addresses as ctx1 to PsCreateSystemThreadEx, and the thread wrapper 0x00147EBB calls ctx1, so the call failed with [ICALL] Failed to resolve VA 0x0013B180 in run logs/runs/20260922-085953-527-tailthunk-fix-ac97. Shape: spin on a per-thread flag word in 0x25EFA8-0x25EFDC counting iterations, run the worker loop, then push 0xF0000001, set the completion word and call 0x147E4E, which is the noreturn thread exit (push 0; call 0x147C6B; push [esp+4]; call dword ptr [0x1C4084]; int3), so the body has no ret of its own. Extent is the straight-line body up to and including the int3 that follows the exit call."
-  },
-  {
-    "start": "0x00178F40",
-    "end": "0x001791BB",
-    "section": ".text",
-    "kind": "routine",
-    "evidence": "A real function the disassembler never claimed, in a hole between sub_00178E70/sub_00178E85 (both end 0x00178F34) and 0x001791C0. The title calls it indirectly and the call failed with [ICALL] Failed to resolve VA 0x00178F40 in run logs/runs/20260922-090256-907-trampoline-fix, immediately before the 0xE0424943 exception -- so that exception is a symptom of this unresolved call, not a separate defect. Shape: normal prologue sub esp,0x14; push ebx; mov ebx,[esp+0x1C]; mov eax,[ebx+0xC]; push ebp; xor ebp,ebp; cmp eax,-1; push esi; push edi. It reads five stack arguments: arg1 at [esp+0x1C] right after the frame and the one push, then arg2 [esp+0x2C], arg3 [esp+0x30], arg4 [esp+0x34] and a byte arg5 at [esp+0x38] once all four registers are pushed. Epilogue measured: 0x001791A3 mov ecx,[esp+0x34]; test ecx,ecx; pop edi; pop esi; pop ebp; pop ebx; 0x001791B5 add esp,0x14; 0x001791B8 ret 0x14. The ret 0x14 matches the sub esp,0x14 prologue, so stack_args is 20. It returns E_INVALIDARG (0x80070057) and CO_E_NOTINITIALIZED (0x800401F0). END CORRECTED to 0x001791BB: end is exclusive and the original value 0x001791BA cut the last byte of the three-byte `ret 0x14` (C2 14 00 at 0x001791B8..0x001791BA), so the translator could not decode the return at all, emitted a body with no epilogue and no return statement, and the run aborted with `[RECOVERED] ABI FAILURE 0x00178F40 esp 00F7FDA0->00F7FDA0 expected +24` in logs/runs/20260922-101516-467-p1-178f40. Measured with scripts/inspect-jsrf.py data 0x001791B4 8 -> 1183C414 900014C2, i.e. bytes 11 83 C4 14 | C2 14 00 90. Evidence: report-deepseek.md, 2026-09-22.",
-    "stack_args": 20
-  },
-  {
-    "start": "0x00024700",
-    "end": "0x00024970",
-    "section": ".text",
-    "kind": "routine",
-    "stack_args": 0,
-    "evidence": "A table target the alias fold swallowed: 0x000246E0's span ran to 0x00024970, past its own `ret 4` at 0x000246FB and across the nops at 0x000246FE, into this function. Found by the run rather than by a static sweep -- `[ICALL] Failed to resolve VA 0x00024700` in logs/runs/20260922-105305-975-apu-ack-7be30, the first failure after 0x0007BE30 and 0x0007C290 were fixed; the icall trace for that failure shows 0x0007BDD0 and 0x0007BE30 executing first, so those two fixes held. Verified as a separate function: 0x00024700 is `push esi` / `mov esi,ecx` / `mov eax,[esi+0xc0]`, a float-comparison method, and its epilogue `pop esi` / `ret` ends at 0x00024963, followed by nops to 0x00024970. The parent's end was cut to 0x00024700, where its `ret 4` cleanup ends. Evidence: report-deepseek.md, 2026-09-22."
   }
 ]

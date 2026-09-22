@@ -4662,6 +4662,7 @@ extern void sub_00173B80(void);
 extern void sub_00173BB0(void);
 extern void sub_00173CF0(void);
 extern void sub_00173D70(void);
+extern void sub_00173DB0(void);
 extern void sub_00173ED0(void);
 extern void sub_00173F30(void);
 extern void sub_00173FC0(void);
@@ -4699,6 +4700,7 @@ extern void sub_00175170(void);
 extern void sub_001751A2(void);
 extern void sub_001751B0(void);
 extern void sub_00175250(void);
+extern void sub_00175300(void);
 extern void sub_001753D0(void);
 extern void sub_001754C0(void);
 extern void sub_001756E0(void);
@@ -14598,6 +14600,314 @@ void sub_000246E0(void) {
         if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x000246E0 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_00024700
+ * Original: 0x00024700 - 0x00024970 (624 bytes, 172 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_00024700(void)
+{
+    uint32_t ebp;
+    ebp = g_ebp;  /* frameless: caller's frame */
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+    #define fp_push(v) do { double _fp_value = (v); \
+        g_fp_top = (g_fp_top + 7u) & 7u; \
+        g_fp_stack[g_fp_top] = _fp_value; } while (0)
+    #define fp_pop() (g_fp_top = (g_fp_top + 1u) & 7u)
+    #define fp_top() g_fp_stack[g_fp_top]
+    #define fp_st(i) g_fp_stack[(g_fp_top + (i)) & 7u]
+    #define fp_st1() fp_st(1)
+    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
+
+loc_00024700: ;
+    PUSH32(esp, esi);
+    esi = ecx;
+    eax = MEM32(esi + 0xC0);
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    if (TEST_NZ(_fa, _fb)) goto loc_00024962; /* jne: not equal / not zero */
+
+loc_00024711: ;
+    fp_push(MEMF(esi + 0x98)); /* fld float */
+    edx = esi + 0x98;
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xA8)); fp_pop(); /* fcomp dword ptr [esi + 0xa8] */
+    ecx = 0; /* xor self */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x44) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x44 (8-bit) */
+    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_00024731; /* jp: parity */
+
+loc_0002472C: ;
+    ecx = 1;
+
+loc_00024731: ;
+    fp_push(MEMF(edx)); /* fld float */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xA8)); fp_pop(); /* fcomp dword ptr [esi + 0xa8] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(5) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 5 (8-bit) */
+    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_00024760; /* jp: parity */
+
+loc_00024740: ;
+    fp_push(MEMF(esi + 0xB8)); /* fld float */
+    fp_top() = fp_top() + MEMF(edx); /* fadd dword ptr [edx] */
+    MEMF(edx) = (float)fp_top(); /* fst */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xA8)); fp_pop(); /* fcomp dword ptr [esi + 0xa8] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(1) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 1 (8-bit) */
+    if (TEST_NZ(_fa, _fb)) goto loc_00024760; /* jne: not equal / not zero */
+
+loc_00024757: ;
+    eax = MEM32(esi + 0xA8);
+    MEM32(edx) = eax;
+    ecx++;
+
+loc_00024760: ;
+    fp_push(MEMF(edx)); /* fld float */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xA8)); fp_pop(); /* fcomp dword ptr [esi + 0xa8] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
+    if (TEST_NZ(_fa, _fb)) goto loc_0002478F; /* jne: not equal / not zero */
+
+loc_0002476F: ;
+    fp_push(MEMF(edx)); /* fld float */
+    fp_top() = fp_top() - MEMF(esi + 0xB8); /* fsub dword ptr [esi + 0xb8] */
+    MEMF(edx) = (float)fp_top(); /* fst */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xA8)); fp_pop(); /* fcomp dword ptr [esi + 0xa8] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
+    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_0002478F; /* jp: parity */
+
+loc_00024786: ;
+    eax = MEM32(esi + 0xA8);
+    MEM32(edx) = eax;
+    ecx++;
+
+loc_0002478F: ;
+    fp_push(MEMF(esi + 0x9C)); /* fld float */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xAC)); fp_pop(); /* fcomp dword ptr [esi + 0xac] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x44) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x44 (8-bit) */
+    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_000247A3; /* jp: parity */
+
+loc_000247A2: ;
+    ecx++;
+
+loc_000247A3: ;
+    fp_push(MEMF(esi + 0x9C)); /* fld float */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xAC)); fp_pop(); /* fcomp dword ptr [esi + 0xac] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(5) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 5 (8-bit) */
+    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_000247E2; /* jp: parity */
+
+loc_000247B6: ;
+    fp_push(MEMF(esi + 0xB8)); /* fld float */
+    fp_top() = fp_top() + MEMF(esi + 0x9C); /* fadd dword ptr [esi + 0x9c] */
+    MEMF(esi + 0x9C) = (float)fp_top(); /* fst */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xAC)); fp_pop(); /* fcomp dword ptr [esi + 0xac] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(1) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 1 (8-bit) */
+    if (TEST_NZ(_fa, _fb)) goto loc_000247E2; /* jne: not equal / not zero */
+
+loc_000247D5: ;
+    eax = MEM32(esi + 0xAC);
+    MEM32(esi + 0x9C) = eax;
+    ecx++;
+
+loc_000247E2: ;
+    fp_push(MEMF(esi + 0x9C)); /* fld float */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xAC)); fp_pop(); /* fcomp dword ptr [esi + 0xac] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
+    if (TEST_NZ(_fa, _fb)) goto loc_00024821; /* jne: not equal / not zero */
+
+loc_000247F5: ;
+    fp_push(MEMF(esi + 0x9C)); /* fld float */
+    fp_top() = fp_top() - MEMF(esi + 0xB8); /* fsub dword ptr [esi + 0xb8] */
+    MEMF(esi + 0x9C) = (float)fp_top(); /* fst */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xAC)); fp_pop(); /* fcomp dword ptr [esi + 0xac] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
+    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_00024821; /* jp: parity */
+
+loc_00024814: ;
+    eax = MEM32(esi + 0xAC);
+    MEM32(esi + 0x9C) = eax;
+    ecx++;
+
+loc_00024821: ;
+    fp_push(MEMF(esi + 0xA0)); /* fld float */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB0)); fp_pop(); /* fcomp dword ptr [esi + 0xb0] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x44) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x44 (8-bit) */
+    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_00024835; /* jp: parity */
+
+loc_00024834: ;
+    ecx++;
+
+loc_00024835: ;
+    fp_push(MEMF(esi + 0xA0)); /* fld float */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB0)); fp_pop(); /* fcomp dword ptr [esi + 0xb0] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(5) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 5 (8-bit) */
+    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_00024874; /* jp: parity */
+
+loc_00024848: ;
+    fp_push(MEMF(esi + 0xB8)); /* fld float */
+    fp_top() = fp_top() + MEMF(esi + 0xA0); /* fadd dword ptr [esi + 0xa0] */
+    MEMF(esi + 0xA0) = (float)fp_top(); /* fst */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB0)); fp_pop(); /* fcomp dword ptr [esi + 0xb0] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(1) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 1 (8-bit) */
+    if (TEST_NZ(_fa, _fb)) goto loc_00024874; /* jne: not equal / not zero */
+
+loc_00024867: ;
+    eax = MEM32(esi + 0xB0);
+    MEM32(esi + 0xA0) = eax;
+    ecx++;
+
+loc_00024874: ;
+    fp_push(MEMF(esi + 0xA0)); /* fld float */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB0)); fp_pop(); /* fcomp dword ptr [esi + 0xb0] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
+    if (TEST_NZ(_fa, _fb)) goto loc_000248B3; /* jne: not equal / not zero */
+
+loc_00024887: ;
+    fp_push(MEMF(esi + 0xA0)); /* fld float */
+    fp_top() = fp_top() - MEMF(esi + 0xB8); /* fsub dword ptr [esi + 0xb8] */
+    MEMF(esi + 0xA0) = (float)fp_top(); /* fst */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB0)); fp_pop(); /* fcomp dword ptr [esi + 0xb0] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
+    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_000248B3; /* jp: parity */
+
+loc_000248A6: ;
+    eax = MEM32(esi + 0xB0);
+    MEM32(esi + 0xA0) = eax;
+    ecx++;
+
+loc_000248B3: ;
+    fp_push(MEMF(esi + 0xA4)); /* fld float */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB4)); fp_pop(); /* fcomp dword ptr [esi + 0xb4] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x44) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x44 (8-bit) */
+    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_000248C7; /* jp: parity */
+
+loc_000248C6: ;
+    ecx++;
+
+loc_000248C7: ;
+    fp_push(MEMF(esi + 0xA4)); /* fld float */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB4)); fp_pop(); /* fcomp dword ptr [esi + 0xb4] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(5) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 5 (8-bit) */
+    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_00024906; /* jp: parity */
+
+loc_000248DA: ;
+    fp_push(MEMF(esi + 0xB8)); /* fld float */
+    fp_top() = fp_top() + MEMF(esi + 0xA4); /* fadd dword ptr [esi + 0xa4] */
+    MEMF(esi + 0xA4) = (float)fp_top(); /* fst */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB4)); fp_pop(); /* fcomp dword ptr [esi + 0xb4] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(1) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 1 (8-bit) */
+    if (TEST_NZ(_fa, _fb)) goto loc_00024906; /* jne: not equal / not zero */
+
+loc_000248F9: ;
+    eax = MEM32(esi + 0xB4);
+    MEM32(esi + 0xA4) = eax;
+    ecx++;
+
+loc_00024906: ;
+    fp_push(MEMF(esi + 0xA4)); /* fld float */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB4)); fp_pop(); /* fcomp dword ptr [esi + 0xb4] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
+    if (TEST_NZ(_fa, _fb)) goto loc_00024945; /* jne: not equal / not zero */
+
+loc_00024919: ;
+    fp_push(MEMF(esi + 0xA4)); /* fld float */
+    fp_top() = fp_top() - MEMF(esi + 0xB8); /* fsub dword ptr [esi + 0xb8] */
+    MEMF(esi + 0xA4) = (float)fp_top(); /* fst */
+    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB4)); fp_pop(); /* fcomp dword ptr [esi + 0xb4] */
+    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
+    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
+    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_00024945; /* jp: parity */
+
+loc_00024938: ;
+    eax = MEM32(esi + 0xB4);
+    MEM32(esi + 0xA4) = eax;
+    ecx++;
+
+loc_00024945: ;
+    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(4) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp ecx, 4 (32-bit) */
+    if (CMP_NE(_fa, _fb)) goto loc_00024954; /* jne: not equal / not zero */
+
+loc_0002494A: ;
+    MEM32(esi + 0xC0) = 1;
+
+loc_00024954: ;
+    PUSH32(esp, edx);
+    ecx = esi;
+    PUSH32(esp, 0x0002495Cu); RECOMP_ABI_CALL(0x000A4CF0u, sub_000A4CF0); /* call 0x000A4CF0 */
+
+loc_0002495C: ;
+    MEM32(esi + 0xBC) = eax;
+
+loc_00024962: ;
+    POP32(esp, esi);
+    esp += 4; return; /* ret */
+
+    g_seh_ebp = ebp; sub_00024970(); return; /* fallthrough 0x00024970 */
+
+    #undef fp_push
+    #undef fp_pop
+    #undef fp_top
+    #undef fp_st
+    #undef fp_st1
+}
+
+
+void sub_00024700(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_00024700();
+    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00024700 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x00024700 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
 }
 
 /**
@@ -236813,6 +237123,333 @@ void sub_00139B30(void) {
 }
 
 /**
+ * sub_0013B180
+ * Original: 0x0013B180 - 0x0013B1B8 (56 bytes, 13 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_0013B180(void)
+{
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+
+loc_0013B180: ;
+    eax = MEM32(0x25EFC0);
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    if (TEST_NZ(_fa, _fb)) goto loc_0013B1A4; /* jne: not equal / not zero */
+
+loc_0013B189: ;
+    /* nop */
+
+loc_0013B190: ;
+    eax = MEM32(0x25EFA8);
+    eax++;
+    MEM32(0x25EFA8) = eax;
+    eax = MEM32(0x25EFC0);
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    if (TEST_Z(_fa, _fb)) goto loc_0013B190; /* je: equal / zero */
+
+loc_0013B1A4: ;
+    PUSH32(esp, 0xF0000001u);
+    MEM32(0x25EFC4) = 1;
+    PUSH32(esp, 0x0013B1B8u); RECOMP_ABI_CALL(0x00147E4Eu, sub_00147E4E); /* call 0x00147E4E */
+
+}
+
+
+void sub_0013B180(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_0013B180();
+    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0013B180 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0013B180 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_0013B1C0
+ * Original: 0x0013B1C0 - 0x0013B223 (99 bytes, 25 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_0013B1C0(void)
+{
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+
+loc_0013B1C0: ;
+    eax = MEM32(0x25EFC8);
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    if (TEST_NZ(_fa, _fb)) goto loc_0013B20F; /* jne: not equal / not zero */
+
+loc_0013B1C9: ;
+    /* nop */
+
+loc_0013B1D0: ;
+    PUSH32(esp, 0x0013B1D5u); RECOMP_ABI_CALL(0x0018CE50u, sub_0018CE50); /* call 0x0018CE50 */
+
+loc_0013B1D5: ;
+    eax = MEM32(0x25EFAC);
+    eax++;
+    MEM32(0x25EFAC) = eax;
+    PUSH32(esp, 0x0013B1E5u); RECOMP_ABI_CALL(0x00141E50u, sub_00141E50); /* call 0x00141E50 */
+
+loc_0013B1E5: ;
+    ecx = MEM32(0x27D0E8);
+    PUSH32(esp, ecx);
+    PUSH32(esp, 0x0013B1F1u); RECOMP_ABI_CALL(0x00147DD2u, sub_00147DD2); /* call 0x00147DD2 */
+
+loc_0013B1F1: ;
+    eax = MEM32(0x25EFB8);
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    if (TEST_Z(_fa, _fb)) goto loc_0013B206; /* je: equal / zero */
+
+loc_0013B1FA: ;
+    edx = MEM32(0x25EFBC);
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, edx);
+    { uint32_t _icall_target = eax; PUSH32(esp, 0x0013B203u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_0013B203: ;
+    esp = esp + 4;
+
+loc_0013B206: ;
+    eax = MEM32(0x25EFC8);
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    if (TEST_Z(_fa, _fb)) goto loc_0013B1D0; /* je: equal / zero */
+
+loc_0013B20F: ;
+    PUSH32(esp, 0xF0000001u);
+    MEM32(0x25EFCC) = 1;
+    PUSH32(esp, 0x0013B223u); RECOMP_ABI_CALL(0x00147E4Eu, sub_00147E4E); /* call 0x00147E4E */
+
+}
+
+
+void sub_0013B1C0(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_0013B1C0();
+    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0013B1C0 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0013B1C0 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_0013B230
+ * Original: 0x0013B230 - 0x0013B293 (99 bytes, 25 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_0013B230(void)
+{
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+
+loc_0013B230: ;
+    eax = MEM32(0x25EFD0);
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    if (TEST_NZ(_fa, _fb)) goto loc_0013B27F; /* jne: not equal / not zero */
+
+loc_0013B239: ;
+    /* nop */
+
+loc_0013B240: ;
+    PUSH32(esp, 0x0013B245u); RECOMP_ABI_CALL(0x0018CE50u, sub_0018CE50); /* call 0x0018CE50 */
+
+loc_0013B245: ;
+    eax = MEM32(0x25EFAC);
+    eax++;
+    MEM32(0x25EFAC) = eax;
+    PUSH32(esp, 0x0013B255u); RECOMP_ABI_CALL(0x00141E70u, sub_00141E70); /* call 0x00141E70 */
+
+loc_0013B255: ;
+    ecx = MEM32(0x27D0E8);
+    PUSH32(esp, ecx);
+    PUSH32(esp, 0x0013B261u); RECOMP_ABI_CALL(0x00147DD2u, sub_00147DD2); /* call 0x00147DD2 */
+
+loc_0013B261: ;
+    eax = MEM32(0x25EFB8);
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    if (TEST_Z(_fa, _fb)) goto loc_0013B276; /* je: equal / zero */
+
+loc_0013B26A: ;
+    edx = MEM32(0x25EFBC);
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, edx);
+    { uint32_t _icall_target = eax; PUSH32(esp, 0x0013B273u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_0013B273: ;
+    esp = esp + 4;
+
+loc_0013B276: ;
+    eax = MEM32(0x25EFD0);
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    if (TEST_Z(_fa, _fb)) goto loc_0013B240; /* je: equal / zero */
+
+loc_0013B27F: ;
+    PUSH32(esp, 0xF0000001u);
+    MEM32(0x25EFD4) = 1;
+    PUSH32(esp, 0x0013B293u); RECOMP_ABI_CALL(0x00147E4Eu, sub_00147E4E); /* call 0x00147E4E */
+
+}
+
+
+void sub_0013B230(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_0013B230();
+    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0013B230 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0013B230 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_0013B2A0
+ * Original: 0x0013B2A0 - 0x0013B32B (139 bytes, 38 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_0013B2A0(void)
+{
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+
+loc_0013B2A0: ;
+    eax = MEM32(0x25EFD8);
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    PUSH32(esp, edi);
+    edi = 1;
+    if (TEST_NZ(_fa, _fb)) goto loc_0013B31B; /* jne: not equal / not zero */
+
+loc_0013B2AF: ;
+    /* nop */
+
+loc_0013B2B0: ;
+    eax = MEM32(0x25EFB0);
+    eax++;
+    MEM32(0x25EFB0) = eax;
+    PUSH32(esp, 0x0013B2C0u); RECOMP_ABI_CALL(0x00141E90u, sub_00141E90); /* call 0x00141E90 */
+
+loc_0013B2C0: ;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    if (TEST_Z(_fa, _fb)) goto loc_0013B2CC; /* je: equal / zero */
+
+loc_0013B2C4: ;
+    _fa = (uint32_t)(MEM32(0x25EFA4)) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(0x25EFA4), edi (32-bit) */
+    if (CMP_NE(_fa, _fb)) goto loc_0013B312; /* jne: not equal / not zero */
+
+loc_0013B2CC: ;
+    _fa = (uint32_t)(MEM32(0x25EFA4)) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(0x25EFA4), edi (32-bit) */
+    if (CMP_NE(_fa, _fb)) goto loc_0013B2F1; /* jne: not equal / not zero */
+
+loc_0013B2D4: ;
+    ecx = MEM32(0x25EF9C);
+    edx = MEM32(0x27D0E8);
+    PUSH32(esp, ecx);
+    PUSH32(esp, edx);
+    MEM32(0x25EFA4) = 0;
+    PUSH32(esp, 0x0013B2F1u); RECOMP_ABI_CALL(0x00147CC0u, sub_00147CC0); /* call 0x00147CC0 */
+
+loc_0013B2F1: ;
+    eax = MEM32(0x25EFB8);
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    if (TEST_Z(_fa, _fb)) goto loc_0013B306; /* je: equal / zero */
+
+loc_0013B2FA: ;
+    ecx = MEM32(0x25EFBC);
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, ecx);
+    { uint32_t _icall_target = eax; PUSH32(esp, 0x0013B303u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_0013B303: ;
+    esp = esp + 4;
+
+loc_0013B306: ;
+    edx = MEM32(0x27D0E8);
+    PUSH32(esp, edx);
+    PUSH32(esp, 0x0013B312u); RECOMP_ABI_CALL(0x00147DACu, sub_00147DAC); /* call 0x00147DAC */
+
+loc_0013B312: ;
+    eax = MEM32(0x25EFD8);
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    if (TEST_Z(_fa, _fb)) goto loc_0013B2B0; /* je: equal / zero */
+
+loc_0013B31B: ;
+    PUSH32(esp, 0xF0000001u);
+    MEM32(0x25EFDC) = edi;
+    PUSH32(esp, 0x0013B32Bu); RECOMP_ABI_CALL(0x00147E4Eu, sub_00147E4E); /* call 0x00147E4E */
+
+}
+
+
+void sub_0013B2A0(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_0013B2A0();
+    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0013B2A0 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0013B2A0 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
  * sub_0013F950
  * Original: 0x0013F950 - 0x0013F980 (48 bytes, 26 insns)
  * CC: cdecl, 0 params, returns int_or_void
@@ -309201,7 +309838,7 @@ void sub_00173CF0(void) {
 
 /**
  * sub_00173D70
- * Original: 0x00173D70 - 0x00173ED0 (352 bytes, 142 insns)
+ * Original: 0x00173D70 - 0x00173DB0 (64 bytes, 30 insns)
  * CC: cdecl, 0 params, returns int_or_void
  * Frame: fpo_leaf
  */
@@ -309255,6 +309892,60 @@ loc_00173DA2: ;
     esp = esp + 0x14;
     esp += 12; return; /* ret 8 */
 
+    g_seh_ebp = ebp; sub_00173DB0(); return; /* fallthrough 0x00173DB0 */
+
+}
+
+
+void sub_00173D70(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_00173D70();
+    if (g_esp!=before_stack+12 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00173D70 esp %08X->%08X expected +12; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x00173D70 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_00173DB0
+ * Original: 0x00173DB0 - 0x00173ED0 (288 bytes, 112 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_00173DB0(void)
+{
+    uint32_t ebp;
+    ebp = g_ebp;  /* frameless: caller's frame */
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
+
+loc_00173DB0: ;
+    esp = esp - 0x44;
+    PUSH32(esp, ebx);
+    PUSH32(esp, ebp);
+    PUSH32(esp, esi);
+    esi = MEM32(esp + 0x54);
+    eax = MEM32(esi);
+    PUSH32(esp, edi);
+    ecx = esp + 0x10;
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, ecx);
+    PUSH32(esp, esi);
+    { uint32_t _icall_target = MEM32(eax + 0x18); PUSH32(esp, 0x00173DC6u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_00173DC6: ;
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
     if (TEST_S(_fas, _fbs)) goto loc_00173EBF; /* jl: less (signed <) */
@@ -309300,10 +309991,10 @@ loc_00173E0A: ;
 loc_00173E0C: ;
     eax = MEM32(esi + 0xC);
     edx = MEM32(eax);
+    { uint32_t _icall_esp = g_esp;
     PUSH32(esp, ebx);
     ebp = esp + 0x5C;
     PUSH32(esp, ebp);
-    { uint32_t _icall_esp = g_esp;
     PUSH32(esp, ecx);
     ecx = MEM32(esp + 0x68);
     PUSH32(esp, ecx);
@@ -309410,21 +310101,21 @@ loc_00173EBF: ;
 }
 
 
-void sub_00173D70(void) {
+void sub_00173DB0(void) {
     uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
     static RECOMP_TLS int logged;
-    body_00173D70();
-    if (g_esp!=before_stack+12 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+    body_00173DB0();
+    if (g_esp!=before_stack+24 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
         /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
          * every ABI mismatch in the manifest instead of aborting at the first.
          * It is a convergence aid for scripts/converge-manifest.py, not an
          * acceptance mode: a run under it proves nothing about correctness. */
         static RECOMP_TLS int reported;
         if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00173D70 esp %08X->%08X expected +12; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00173DB0 esp %08X->%08X expected +24; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
         if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }
-    if (!logged++) fprintf(stderr,"[RECOVERED] 0x00173D70 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x00173DB0 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
 }
 
 /**
@@ -312028,7 +312719,7 @@ void sub_001751B0(void) {
 
 /**
  * sub_00175250
- * Original: 0x00175250 - 0x001753D0 (384 bytes, 146 insns)
+ * Original: 0x00175250 - 0x00175300 (176 bytes, 69 insns)
  * CC: cdecl, 0 params, returns int_or_void
  * Frame: fpo_leaf
  */
@@ -312154,6 +312845,53 @@ loc_001752EB: ;
     POP32(esp, esi);
     esp += 12; return; /* ret 8 */
 
+    g_seh_ebp = ebp; sub_00175300(); return; /* fallthrough 0x00175300 */
+
+}
+
+
+void sub_00175250(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_00175250();
+    if (g_esp!=before_stack+12 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00175250 esp %08X->%08X expected +12; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x00175250 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_00175300
+ * Original: 0x00175300 - 0x001753D0 (208 bytes, 77 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_00175300(void)
+{
+    uint32_t ebp;
+    ebp = g_ebp;  /* frameless: caller's frame */
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
+
+loc_00175300: ;
+    eax = MEM32(esp + 4);
+    ecx = MEM32(eax + 0x34);
+    esp = esp - 8;
+    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
+    if (TEST_Z(_fa, _fb)) goto loc_001753C0; /* je: equal / zero */
+
+loc_00175312: ;
     ecx = MEM32(esp + 0x10);
     _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
@@ -312285,10 +313023,10 @@ loc_001753C0: ;
 }
 
 
-void sub_00175250(void) {
+void sub_00175300(void) {
     uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
     static RECOMP_TLS int logged;
-    body_00175250();
+    body_00175300();
     if (g_esp!=before_stack+12 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
         /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
          * every ABI mismatch in the manifest instead of aborting at the first.
@@ -312296,10 +313034,10 @@ void sub_00175250(void) {
          * acceptance mode: a run under it proves nothing about correctness. */
         static RECOMP_TLS int reported;
         if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00175250 esp %08X->%08X expected +12; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00175300 esp %08X->%08X expected +12; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
         if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }
-    if (!logged++) fprintf(stderr,"[RECOVERED] 0x00175250 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x00175300 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
 }
 
 /**
@@ -319888,6 +320626,461 @@ void sub_00178E00(void) {
         if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x00178E00 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_00178F40
+ * Original: 0x00178F40 - 0x001791BB (635 bytes, 228 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_00178F40(void)
+{
+    uint32_t ebp;
+    ebp = g_ebp;  /* frameless: caller's frame */
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+    int _cf = 0; /* carry flag */
+    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
+
+loc_00178F40: ;
+    _cf = (int)((uint32_t)(esp) < (uint32_t)(0x14));
+    esp = esp - 0x14;
+    PUSH32(esp, ebx);
+    ebx = MEM32(esp + 0x1C);
+    eax = MEM32(ebx + 0xC);
+    PUSH32(esp, ebp);
+    _cf = 0; /* xor clears CF */
+    ebp = 0; /* xor self */
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(0xFFFFFFFFu) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, 0xFFFFFFFFu (32-bit) */
+    _cf = (int)(_fa < _fb);
+    PUSH32(esp, esi);
+    PUSH32(esp, edi);
+    MEM32(esp + 0x10) = ebp;
+    if (CMP_EQ(_fa, _fb)) goto loc_0017919E; /* je: equal / zero */
+
+loc_00178F5D: ;
+    edx = MEM32(esp + 0x2C);
+    _fa = (uint32_t)(edx) & 0xFFFFFFFFu; _fb = (uint32_t)(ebp) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp edx, ebp (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_EQ(_fa, _fb)) goto loc_00179197; /* je: equal / zero */
+
+loc_00178F69: ;
+    edi = MEM32(esp + 0x30);
+    _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fb = (uint32_t)(ebp) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp edi, ebp (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_EQ(_fa, _fb)) goto loc_00179197; /* je: equal / zero */
+
+loc_00178F75: ;
+    _fa = (uint32_t)(MEM8(esp + 0x38)) & 0xFFu; _fb = (uint32_t)(2) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test MEM8(esp + 0x38), 2 (8-bit) */
+    _cf = 0; /* test/cmp-logical clears CF */
+    if (TEST_Z(_fa, _fb)) goto loc_00179022; /* je: equal / zero */
+
+loc_00178F80: ;
+    eax = edi;
+    if (0xB) _cf = (int)(((eax) >> ((0xB) - 1)) & 1);
+    eax = eax >> 0xB;
+    esi = edi;
+    if (0xB) _cf = (int)(((eax) >> (32 - (0xB))) & 1);
+    eax = eax << 0xB;
+    _cf = 0; /* xor clears CF */
+    ecx = 0; /* xor self */
+    _cf = 0; /* logical op clears CF */
+    esi = esi & 0x7FF;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(ebp) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, ebp (32-bit) */
+    _cf = (int)(_fa < _fb);
+    MEM32(esp + 0x30) = ecx;
+    MEM32(esp + 0x28) = ebp;
+    if (CMP_EQ(_fa, _fb)) goto loc_00178FBB; /* je: equal / zero */
+
+loc_00178F9E: ;
+    ecx = esp + 0x30;
+    PUSH32(esp, ecx);
+    PUSH32(esp, eax);
+    PUSH32(esp, edx);
+    edx = ebx + 0x18;
+    PUSH32(esp, edx);
+    PUSH32(esp, ebx);
+    PUSH32(esp, 0x00178FAFu); RECOMP_ABI_CALL(0x00178E70u, sub_00178E70); /* call 0x00178E70 */
+
+loc_00178FAF: ;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(ebp) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, ebp (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_L(_fas, _fbs)) goto loc_00179008; /* jl: less (signed <) */
+
+loc_00178FB3: ;
+    ecx = MEM32(esp + 0x30);
+    MEM32(esp + 0x10) = ecx;
+
+loc_00178FBB: ;
+    _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(ebp) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp esi, ebp (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_EQ(_fa, _fb)) goto loc_00178FFD; /* je: equal / zero */
+
+loc_00178FBF: ;
+    edx = MEM32(ebx + 0x18);
+    ebp = MEM32(ebx + 0x1C);
+    _cf = 0; /* xor clears CF */
+    eax = 0; /* xor self */
+    _cf = (int)((((uint64_t)(edx) + (uint64_t)(ecx)) >> 32) & 1);
+    edx = edx + ecx;
+    { uint64_t _t = (uint64_t)(ebp) + (uint64_t)(eax) + (uint64_t)_cf; _cf = (int)((_t >> 32) & 1); ebp = (uint32_t)_t; }  /* adc */
+    eax = esp + 0x28;
+    PUSH32(esp, eax);
+    MEM32(esp + 0x20) = edx;
+    edx = MEM32(esp + 0x30);
+    PUSH32(esp, esi);
+    _cf = (int)((((uint64_t)(ecx) + (uint64_t)(edx)) >> 32) & 1);
+    ecx = ecx + edx;
+    PUSH32(esp, ecx);
+    eax = esp + 0x28;
+    PUSH32(esp, eax);
+    PUSH32(esp, ebx);
+    MEM32(esp + 0x34) = ebp;
+    PUSH32(esp, 0x00178FEBu); RECOMP_ABI_CALL(0x00178E70u, sub_00178E70); /* call 0x00178E70 */
+
+loc_00178FEB: ;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
+    _cf = 0; /* test/cmp-logical clears CF */
+    if (TEST_S(_fas, _fbs)) goto loc_00179008; /* jl: less (signed <) */
+
+loc_00178FEF: ;
+    eax = MEM32(esp + 0x10);
+    ecx = MEM32(esp + 0x28);
+    _cf = (int)((((uint64_t)(eax) + (uint64_t)(ecx)) >> 32) & 1);
+    eax = eax + ecx;
+    MEM32(esp + 0x10) = eax;
+
+loc_00178FFD: ;
+    ecx = MEM32(esp + 0x10);
+    _cf = 0; /* xor clears CF */
+    eax = 0; /* xor self */
+    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp ecx, edi (32-bit) */
+    _cf = (int)(_fa < _fb);
+    SET_LO8(eax, (CMP_NE(_fa, _fb)) ? 1 : 0); /* setne */
+
+loc_00179008: ;
+    esi = MEM32(ebx + 0x18);
+    edx = MEM32(esp + 0x10);
+    ecx = MEM32(ebx + 0x1C);
+    _cf = (int)((((uint64_t)(esi) + (uint64_t)(edx)) >> 32) & 1);
+    esi = esi + edx;
+    { uint64_t _t = (uint64_t)(ecx) + (uint64_t)(0) + (uint64_t)_cf; _cf = (int)((_t >> 32) & 1); ecx = (uint32_t)_t; }  /* adc */
+    MEM32(ebx + 0x18) = esi;
+    MEM32(ebx + 0x1C) = ecx;
+    goto loc_001791A3;
+
+loc_00179022: ;
+    eax = MEM32(ebx + 0x18);
+    esi = MEM32(ebx + 0x1C);
+    edx = edi;
+    edi = MEM32(ebx + 0x10);
+    ecx = eax;
+    _cf = (int)((((uint64_t)(edx) + (uint64_t)(eax)) >> 32) & 1);
+    edx = edx + eax;
+    eax = 0;
+    ebp = esi;
+    { uint64_t _t = (uint64_t)(eax) + (uint64_t)(esi) + (uint64_t)_cf; _cf = (int)((_t >> 32) & 1); eax = (uint32_t)_t; }  /* adc */
+    esi = MEM32(ebx + 0x14);
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(esi) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, esi (32-bit) */
+    _cf = (int)(_fa < _fb);
+    MEM32(esp + 0x1C) = ecx;
+    MEM32(esp + 0x20) = ebp;
+    if (CMP_A(_fa, _fb)) goto loc_00179059; /* ja: above (unsigned >) */
+
+loc_00179049: ;
+    if (CMP_B(_fa, _fb)) goto loc_0017904F; /* jb: below (unsigned <) */
+
+loc_0017904B: ;
+    _fa = (uint32_t)(edx) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp edx, edi (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_AE(_fa, _fb)) goto loc_00179059; /* jae: above or equal (unsigned >=) */
+
+loc_0017904F: ;
+    MEM32(esp + 0x14) = edx;
+    MEM32(esp + 0x18) = eax;
+    goto loc_00179061;
+
+loc_00179059: ;
+    MEM32(esp + 0x14) = edi;
+    MEM32(esp + 0x18) = esi;
+
+loc_00179061: ;
+    _fa = (uint32_t)(ebp) & 0xFFFFFFFFu; _fb = (uint32_t)(MEM32(esp + 0x18)) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp ebp, MEM32(esp + 0x18) (32-bit) */
+    _cf = (int)(_fa < _fb);
+    eax = 0x80004005u;
+    if (CMP_A(_fa, _fb)) goto loc_001791A3; /* ja: above (unsigned >) */
+
+loc_00179070: ;
+    if (CMP_B(_fa, _fb)) goto loc_0017907C; /* jb: below (unsigned <) */
+
+loc_00179072: ;
+    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(MEM32(esp + 0x14)) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp ecx, MEM32(esp + 0x14) (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_AE(_fa, _fb)) goto loc_001791A3; /* jae: above or equal (unsigned >=) */
+
+loc_0017907C: ;
+    eax = ebp;
+    ebp = ebx + 0x28;
+
+loc_00179081: ;
+    edx = MEM32(ebx + 0x30);
+    edi = MEM32(ebx + 0x34);
+    esi = ecx;
+    ecx = MEM32(ebp);
+    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(edx) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp ecx, edx (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_NE(_fa, _fb)) goto loc_00179095; /* jne: not equal / not zero */
+
+loc_00179090: ;
+    _fa = (uint32_t)(MEM32(ebp + 4)) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(ebp + 4), edi (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_EQ(_fa, _fb)) goto loc_001790AB; /* je: equal / zero */
+
+loc_00179095: ;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(MEM32(ebp + 4)) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, MEM32(ebp + 4) (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_B(_fa, _fb)) goto loc_001790AB; /* jb: below (unsigned <) */
+
+loc_0017909A: ;
+    if (CMP_A(_fa, _fb)) goto loc_001790A0; /* ja: above (unsigned >) */
+
+loc_0017909C: ;
+    _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp esi, ecx (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_B(_fa, _fb)) goto loc_001790AB; /* jb: below (unsigned <) */
+
+loc_001790A0: ;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, edi (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_B(_fa, _fb)) goto loc_00179109; /* jb: below (unsigned <) */
+
+loc_001790A4: ;
+    if (CMP_A(_fa, _fb)) goto loc_001790AB; /* ja: above (unsigned >) */
+
+loc_001790A6: ;
+    _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(MEM32(ebx + 0x30)) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp esi, MEM32(ebx + 0x30) (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_B(_fa, _fb)) goto loc_00179109; /* jb: below (unsigned <) */
+
+loc_001790AB: ;
+    edi = MEM32(ebx + 0x24);
+    _cf = 0; /* xor clears CF */
+    ecx = 0; /* xor self */
+    PUSH32(esp, ecx);
+    PUSH32(esp, edi);
+    PUSH32(esp, eax);
+    PUSH32(esp, esi);
+    PUSH32(esp, 0x001790B9u); RECOMP_ABI_CALL(0x0017D4D0u, sub_0017D4D0); /* call 0x0017D4D0 */
+
+loc_001790B9: ;
+    _cf = 0; /* xor clears CF */
+    ecx = 0; /* xor self */
+    PUSH32(esp, ecx);
+    PUSH32(esp, edi);
+    PUSH32(esp, edx);
+    PUSH32(esp, eax);
+    PUSH32(esp, 0x001790C4u); RECOMP_ABI_CALL(0x0017CA70u, sub_0017CA70); /* call 0x0017CA70 */
+
+loc_001790C4: ;
+    ecx = MEM32(ebx + 0x20);
+    MEM32(ebp) = eax;
+    eax = esp + 0x28;
+    PUSH32(esp, eax);
+    PUSH32(esp, edi);
+    PUSH32(esp, ecx);
+    PUSH32(esp, ebp);
+    PUSH32(esp, ebx);
+    MEM32(ebp + 4) = edx;
+    PUSH32(esp, 0x001790DBu); RECOMP_ABI_CALL(0x00178E70u, sub_00178E70); /* call 0x00178E70 */
+
+loc_001790DB: ;
+    _cf = 0; /* xor clears CF */
+    ecx = 0; /* xor self */
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, ecx (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_L(_fas, _fbs)) goto loc_001790F5; /* jl: less (signed <) */
+
+loc_001790E1: ;
+    edx = MEM32(esp + 0x28);
+    _cf = 0; /* xor clears CF */
+    edi = 0; /* xor self */
+    _cf = (int)((((uint64_t)(edx) + (uint64_t)(MEM32(ebp))) >> 32) & 1);
+    edx = edx + MEM32(ebp);
+    { uint64_t _t = (uint64_t)(edi) + (uint64_t)(MEM32(ebp + 4)) + (uint64_t)_cf; _cf = (int)((_t >> 32) & 1); edi = (uint32_t)_t; }  /* adc */
+    MEM32(ebx + 0x30) = edx;
+    MEM32(ebx + 0x34) = edi;
+    goto loc_00179101;
+
+loc_001790F5: ;
+    MEM32(ebp) = ecx;
+    MEM32(ebp + 4) = ecx;
+    MEM32(ebx + 0x30) = ecx;
+    MEM32(ebx + 0x34) = ecx;
+
+loc_00179101: ;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, ecx (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_L(_fas, _fbs)) goto loc_001791A3; /* jl: less (signed <) */
+
+loc_00179109: ;
+    edx = MEM32(ebp);
+    eax = MEM32(esp + 0x30);
+    edi = MEM32(esp + 0x10);
+    ecx = MEM32(ebx + 0x24);
+    _cf = (int)((uint32_t)(esi) < (uint32_t)(edx));
+    esi = esi - edx;
+    edx = esi;
+    _cf = (int)((uint32_t)(eax) < (uint32_t)(edi));
+    eax = eax - edi;
+    _cf = (int)((uint32_t)(ecx) < (uint32_t)(edx));
+    ecx = ecx - edx;
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, ecx (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_B(_fa, _fb)) goto loc_00179125; /* jb: below (unsigned <) */
+
+loc_00179123: ;
+    eax = ecx;
+
+loc_00179125: ;
+    esi = MEM32(ebx + 0x20);
+    _cf = (int)((((uint64_t)(esi) + (uint64_t)(edx)) >> 32) & 1);
+    esi = esi + edx;
+    edx = MEM32(esp + 0x2C);
+    _cf = (int)((((uint64_t)(edi) + (uint64_t)(edx)) >> 32) & 1);
+    edi = edi + edx;
+    ecx = eax;
+    edx = ecx;
+    if (2) _cf = (int)(((ecx) >> ((2) - 1)) & 1);
+    ecx = ecx >> 2;
+    if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
+      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
+      esi += ecx * 4; edi += ecx * 4; }
+    else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
+    ecx = 0; /* rep movsd */
+    ecx = edx;
+    edx = MEM32(esp + 0x18);
+    _cf = 0; /* logical op clears CF */
+    ecx = ecx & 3;
+    if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx;
+      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      else { uint32_t _i; for (_i = 0; _i < _n; _i++) _d[_i] = _s[_i]; }
+      esi += ecx; edi += ecx; }
+    else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }
+    ecx = 0; /* rep movsb */
+    ecx = MEM32(esp + 0x10);
+    edi = MEM32(esp + 0x1C);
+    esi = MEM32(esp + 0x20);
+    _cf = (int)((((uint64_t)(ecx) + (uint64_t)(eax)) >> 32) & 1);
+    ecx = ecx + eax;
+    MEM32(esp + 0x10) = ecx;
+    _cf = (int)((((uint64_t)(ecx) + (uint64_t)(edi)) >> 32) & 1);
+    ecx = ecx + edi;
+    eax = 0;
+    { uint64_t _t = (uint64_t)(eax) + (uint64_t)(esi) + (uint64_t)_cf; _cf = (int)((_t >> 32) & 1); eax = (uint32_t)_t; }  /* adc */
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(edx) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, edx (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_B(_fa, _fb)) goto loc_00179081; /* jb: below (unsigned <) */
+
+loc_00179167: ;
+    if (CMP_A(_fa, _fb)) goto loc_00179173; /* ja: above (unsigned >) */
+
+loc_00179169: ;
+    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(MEM32(esp + 0x14)) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp ecx, MEM32(esp + 0x14) (32-bit) */
+    _cf = (int)(_fa < _fb);
+    if (CMP_B(_fa, _fb)) goto loc_00179081; /* jb: below (unsigned <) */
+
+loc_00179173: ;
+    eax = MEM32(esp + 0x10);
+    edi = MEM32(ebx + 0x18);
+    esi = MEM32(ebx + 0x1C);
+    edx = MEM32(esp + 0x30);
+    _cf = (int)((((uint64_t)(edi) + (uint64_t)(eax)) >> 32) & 1);
+    edi = edi + eax;
+    { uint64_t _t = (uint64_t)(esi) + (uint64_t)(0) + (uint64_t)_cf; _cf = (int)((_t >> 32) & 1); esi = (uint32_t)_t; }  /* adc */
+    _cf = 0; /* xor clears CF */
+    ecx = 0; /* xor self */
+    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(edx) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, edx (32-bit) */
+    _cf = (int)(_fa < _fb);
+    SET_LO8(ecx, (CMP_NE(_fa, _fb)) ? 1 : 0); /* setne */
+    MEM32(ebx + 0x18) = edi;
+    MEM32(ebx + 0x1C) = esi;
+    eax = ecx;
+    goto loc_001791A3;
+
+loc_00179197: ;
+    eax = 0x80070057u;
+    goto loc_001791A3;
+
+loc_0017919E: ;
+    eax = 0x800401F0u;
+
+loc_001791A3: ;
+    ecx = MEM32(esp + 0x34);
+    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
+    _cf = 0; /* test/cmp-logical clears CF */
+    POP32(esp, edi);
+    POP32(esp, esi);
+    POP32(esp, ebp);
+    POP32(esp, ebx);
+    if (TEST_Z(_fa, _fb)) goto loc_001791B5; /* je: equal / zero */
+
+loc_001791AF: ;
+    edx = MEM32(esp);
+    MEM32(ecx) = edx;
+
+loc_001791B5: ;
+    _cf = (int)((((uint64_t)(esp) + (uint64_t)(0x14)) >> 32) & 1);
+    esp = esp + 0x14;
+    esp += 24; return; /* ret 20 */
+
+}
+
+
+void sub_00178F40(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_00178F40();
+    if (g_esp!=before_stack+24 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00178F40 esp %08X->%08X expected +24; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x00178F40 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
 }
 
 /**
@@ -349950,6 +351143,291 @@ void sub_0019E3B7(void) {
 }
 
 /**
+ * sub_0019E5CC
+ * Original: 0x0019E5CC - 0x0019E613 (71 bytes, 21 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_0019E5CC(void)
+{
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+
+loc_0019E5CC: ;
+    PUSH32(esp, 0x0019E5D1u); RECOMP_ABI_CALL(0x0019E438u, sub_0019E438); /* call 0x0019E438 */
+
+loc_0019E5D1: ;
+    _fa = (uint32_t)(MEM32(0x1BA04C)) & 0xFFFFFFFFu; _fb = (uint32_t)(0) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(0x1BA04C), 0 (32-bit) */
+    ecx = ZX8(LO8(eax));
+    if (CMP_EQ(_fa, _fb)) goto loc_0019E5F3; /* je: equal / zero */
+
+loc_0019E5DD: ;
+    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
+    if (TEST_Z(_fa, _fb)) goto loc_0019E5EC; /* je: equal / zero */
+
+loc_0019E5E1: ;
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, 0x1BA050);
+    { uint32_t _icall_target = MEM32(0x1C4060); PUSH32(esp, 0x0019E5ECu); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_0019E5EC: ;
+    eax = 0x80004005u;
+    goto loc_0019E610;
+
+loc_0019E5F3: ;
+    eax = MEM32(esp + 4);
+    MEM32(eax + 4) = MEM32(eax + 4) + 1;
+    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
+    PUSH32(esp, esi);
+    esi = MEM32(eax + 4);
+    if (TEST_Z(_fa, _fb)) goto loc_0019E60D; /* je: equal / zero */
+
+loc_0019E602: ;
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, 0x1BA050);
+    { uint32_t _icall_target = MEM32(0x1C4060); PUSH32(esp, 0x0019E60Du); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_0019E60D: ;
+    eax = esi;
+    POP32(esp, esi);
+
+loc_0019E610: ;
+    esp += 8; return; /* ret 4 */
+
+}
+
+
+void sub_0019E5CC(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_0019E5CC();
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0019E5CC esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0019E5CC returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_0019EAE3
+ * Original: 0x0019EAE3 - 0x0019EB2D (74 bytes, 23 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_0019EAE3(void)
+{
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+
+loc_0019EAE3: ;
+    PUSH32(esp, esi);
+    PUSH32(esp, 0x0019EAE9u); RECOMP_ABI_CALL(0x0019E438u, sub_0019E438); /* call 0x0019E438 */
+
+loc_0019EAE9: ;
+    _fa = (uint32_t)(MEM32(0x1BA04C)) & 0xFFFFFFFFu; _fb = (uint32_t)(0) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(0x1BA04C), 0 (32-bit) */
+    esi = ZX8(LO8(eax));
+    if (CMP_EQ(_fa, _fb)) goto loc_0019EB0B; /* je: equal / zero */
+
+loc_0019EAF5: ;
+    _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(esi) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test esi, esi (32-bit) */
+    if (TEST_Z(_fa, _fb)) goto loc_0019EB04; /* je: equal / zero */
+
+loc_0019EAF9: ;
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, 0x1BA050);
+    { uint32_t _icall_target = MEM32(0x1C4060); PUSH32(esp, 0x0019EB04u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_0019EB04: ;
+    eax = 0x80004005u;
+    goto loc_0019EB29;
+
+loc_0019EB0B: ;
+    PUSH32(esp, edi);
+    PUSH32(esp, MEM32(esp + 0xC));
+    PUSH32(esp, 0x0019EB15u); RECOMP_ABI_CALL(0x0019E3C4u, sub_0019E3C4); /* call 0x0019E3C4 */
+
+loc_0019EB15: ;
+    _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(esi) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test esi, esi (32-bit) */
+    edi = eax;
+    if (TEST_Z(_fa, _fb)) goto loc_0019EB26; /* je: equal / zero */
+
+loc_0019EB1B: ;
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, 0x1BA050);
+    { uint32_t _icall_target = MEM32(0x1C4060); PUSH32(esp, 0x0019EB26u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_0019EB26: ;
+    eax = edi;
+    POP32(esp, edi);
+
+loc_0019EB29: ;
+    POP32(esp, esi);
+    esp += 8; return; /* ret 4 */
+
+}
+
+
+void sub_0019EAE3(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_0019EAE3();
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0019EAE3 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0019EAE3 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_0019EE34
+ * Original: 0x0019EE34 - 0x0019EE50 (28 bytes, 10 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_0019EE34(void)
+{
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+
+loc_0019EE34: ;
+    _fa = (uint32_t)(MEM8(esp + 4)) & 0xFFu; _fb = (uint32_t)(1) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test MEM8(esp + 4), 1 (8-bit) */
+    PUSH32(esp, esi);
+    esi = ecx;
+    MEM32(esi) = 0x1E0DB0;
+    if (TEST_Z(_fa, _fb)) goto loc_0019EE4A; /* je: equal / zero */
+
+loc_0019EE44: ;
+    PUSH32(esp, esi);
+    PUSH32(esp, 0x0019EE4Au); RECOMP_ABI_CALL(0x001A0F09u, sub_001A0F09); /* call 0x001A0F09 */
+
+loc_0019EE4A: ;
+    eax = esi;
+    POP32(esp, esi);
+    esp += 8; return; /* ret 4 */
+
+}
+
+
+void sub_0019EE34(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_0019EE34();
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0019EE34 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0019EE34 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_001A4A9B
+ * Original: 0x001A4A9B - 0x001A4AD2 (55 bytes, 19 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_001A4A9B(void)
+{
+    int _flags = 0; /* fallback flag var */
+
+loc_001A4A9B: ;
+    eax = MEM32(esp + 4);
+    eax = eax - 0;
+    if ((eax == 0)) goto loc_001A4ACA; /* je: equal / zero */
+
+loc_001A4AA4: ;
+    eax--;
+    if ((eax == 0)) goto loc_001A4AC3; /* je: equal / zero */
+
+loc_001A4AA7: ;
+    eax--;
+    if ((eax == 0)) goto loc_001A4AB8; /* je: equal / zero */
+
+loc_001A4AAA: ;
+    eax--;
+    if ((eax != 0)) goto loc_001A4ACF; /* jne: not equal / not zero */
+
+loc_001A4AAD: ;
+    PUSH32(esp, MEM32(esp + 8));
+    PUSH32(esp, 0x001A4AB6u); RECOMP_ABI_CALL(0x001A46F0u, sub_001A46F0); /* call 0x001A46F0 */
+
+loc_001A4AB6: ;
+    goto loc_001A4ACF;
+
+loc_001A4AB8: ;
+    PUSH32(esp, MEM32(esp + 8));
+    PUSH32(esp, 0x001A4AC1u); RECOMP_ABI_CALL(0x001A490Du, sub_001A490D); /* call 0x001A490D */
+
+loc_001A4AC1: ;
+    goto loc_001A4ACF;
+
+loc_001A4AC3: ;
+    PUSH32(esp, 0x001A4AC8u); RECOMP_ABI_CALL(0x001A464Bu, sub_001A464B); /* call 0x001A464B */
+
+loc_001A4AC8: ;
+    goto loc_001A4ACF;
+
+loc_001A4ACA: ;
+    PUSH32(esp, 0x001A4ACFu); RECOMP_ABI_CALL(0x001A47ADu, sub_001A47AD); /* call 0x001A47AD */
+
+loc_001A4ACF: ;
+    esp += 12; return; /* ret 8 */
+
+}
+
+
+void sub_001A4A9B(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_001A4A9B();
+    if (g_esp!=before_stack+12 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x001A4A9B esp %08X->%08X expected +12; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x001A4A9B returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
  * sub_001A5299
  * Original: 0x001A5299 - 0x001A52A4 (11 bytes, 2 insns)
  * CC: cdecl, 0 params, returns int_or_void
@@ -350328,1381 +351806,6 @@ void sub_001BDAA9(void) {
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x001BDAA9 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
 }
 
-/**
- * sub_0019E5CC
- * Original: 0x0019E5CC - 0x0019E613 (71 bytes, 21 insns)
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-static void body_0019E5CC(void)
-{
-    int _flags = 0; /* fallback flag var */
-    uint32_t _fa = 0, _fb = 0;
-    int32_t _fas = 0, _fbs = 0;
-    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
-
-loc_0019E5CC: ;
-    PUSH32(esp, 0x0019E5D1u); RECOMP_ABI_CALL(0x0019E438u, sub_0019E438); /* call 0x0019E438 */
-
-loc_0019E5D1: ;
-    _fa = (uint32_t)(MEM32(0x1BA04C)) & 0xFFFFFFFFu; _fb = (uint32_t)(0) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(0x1BA04C), 0 (32-bit) */
-    ecx = ZX8(LO8(eax));
-    if (CMP_EQ(_fa, _fb)) goto loc_0019E5F3; /* je: equal / zero */
-
-loc_0019E5DD: ;
-    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
-    if (TEST_Z(_fa, _fb)) goto loc_0019E5EC; /* je: equal / zero */
-
-loc_0019E5E1: ;
-    { uint32_t _icall_esp = g_esp;
-    PUSH32(esp, 0x1BA050);
-    { uint32_t _icall_target = MEM32(0x1C4060); PUSH32(esp, 0x0019E5ECu); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
-    }
-
-loc_0019E5EC: ;
-    eax = 0x80004005u;
-    goto loc_0019E610;
-
-loc_0019E5F3: ;
-    eax = MEM32(esp + 4);
-    MEM32(eax + 4) = MEM32(eax + 4) + 1;
-    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
-    PUSH32(esp, esi);
-    esi = MEM32(eax + 4);
-    if (TEST_Z(_fa, _fb)) goto loc_0019E60D; /* je: equal / zero */
-
-loc_0019E602: ;
-    { uint32_t _icall_esp = g_esp;
-    PUSH32(esp, 0x1BA050);
-    { uint32_t _icall_target = MEM32(0x1C4060); PUSH32(esp, 0x0019E60Du); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
-    }
-
-loc_0019E60D: ;
-    eax = esi;
-    POP32(esp, esi);
-
-loc_0019E610: ;
-    esp += 8; return; /* ret 4 */
-
-}
-
-
-void sub_0019E5CC(void) {
-    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
-    static RECOMP_TLS int logged;
-    body_0019E5CC();
-    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
-        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
-         * every ABI mismatch in the manifest instead of aborting at the first.
-         * It is a convergence aid for scripts/converge-manifest.py, not an
-         * acceptance mode: a run under it proves nothing about correctness. */
-        static RECOMP_TLS int reported;
-        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0019E5CC esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
-        if (!getenv("JSRF_ABI_CONTINUE")) abort();
-    }
-    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0019E5CC returned; ABI verified (ESP/EBX/ESI/EDI)\n");
-}
-
-/**
- * sub_0019EAE3
- * Original: 0x0019EAE3 - 0x0019EB2D (74 bytes, 23 insns)
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-static void body_0019EAE3(void)
-{
-    int _flags = 0; /* fallback flag var */
-    uint32_t _fa = 0, _fb = 0;
-    int32_t _fas = 0, _fbs = 0;
-    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
-
-loc_0019EAE3: ;
-    PUSH32(esp, esi);
-    PUSH32(esp, 0x0019EAE9u); RECOMP_ABI_CALL(0x0019E438u, sub_0019E438); /* call 0x0019E438 */
-
-loc_0019EAE9: ;
-    _fa = (uint32_t)(MEM32(0x1BA04C)) & 0xFFFFFFFFu; _fb = (uint32_t)(0) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(0x1BA04C), 0 (32-bit) */
-    esi = ZX8(LO8(eax));
-    if (CMP_EQ(_fa, _fb)) goto loc_0019EB0B; /* je: equal / zero */
-
-loc_0019EAF5: ;
-    _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(esi) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test esi, esi (32-bit) */
-    if (TEST_Z(_fa, _fb)) goto loc_0019EB04; /* je: equal / zero */
-
-loc_0019EAF9: ;
-    { uint32_t _icall_esp = g_esp;
-    PUSH32(esp, 0x1BA050);
-    { uint32_t _icall_target = MEM32(0x1C4060); PUSH32(esp, 0x0019EB04u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
-    }
-
-loc_0019EB04: ;
-    eax = 0x80004005u;
-    goto loc_0019EB29;
-
-loc_0019EB0B: ;
-    PUSH32(esp, edi);
-    PUSH32(esp, MEM32(esp + 0xC));
-    PUSH32(esp, 0x0019EB15u); RECOMP_ABI_CALL(0x0019E3C4u, sub_0019E3C4); /* call 0x0019E3C4 */
-
-loc_0019EB15: ;
-    _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(esi) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test esi, esi (32-bit) */
-    edi = eax;
-    if (TEST_Z(_fa, _fb)) goto loc_0019EB26; /* je: equal / zero */
-
-loc_0019EB1B: ;
-    { uint32_t _icall_esp = g_esp;
-    PUSH32(esp, 0x1BA050);
-    { uint32_t _icall_target = MEM32(0x1C4060); PUSH32(esp, 0x0019EB26u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
-    }
-
-loc_0019EB26: ;
-    eax = edi;
-    POP32(esp, edi);
-
-loc_0019EB29: ;
-    POP32(esp, esi);
-    esp += 8; return; /* ret 4 */
-
-}
-
-
-void sub_0019EAE3(void) {
-    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
-    static RECOMP_TLS int logged;
-    body_0019EAE3();
-    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
-        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
-         * every ABI mismatch in the manifest instead of aborting at the first.
-         * It is a convergence aid for scripts/converge-manifest.py, not an
-         * acceptance mode: a run under it proves nothing about correctness. */
-        static RECOMP_TLS int reported;
-        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0019EAE3 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
-        if (!getenv("JSRF_ABI_CONTINUE")) abort();
-    }
-    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0019EAE3 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
-}
-
-/**
- * sub_0019EE34
- * Original: 0x0019EE34 - 0x0019EE50 (28 bytes, 10 insns)
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-static void body_0019EE34(void)
-{
-    int _flags = 0; /* fallback flag var */
-    uint32_t _fa = 0, _fb = 0;
-    int32_t _fas = 0, _fbs = 0;
-    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
-
-loc_0019EE34: ;
-    _fa = (uint32_t)(MEM8(esp + 4)) & 0xFFu; _fb = (uint32_t)(1) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test MEM8(esp + 4), 1 (8-bit) */
-    PUSH32(esp, esi);
-    esi = ecx;
-    MEM32(esi) = 0x1E0DB0;
-    if (TEST_Z(_fa, _fb)) goto loc_0019EE4A; /* je: equal / zero */
-
-loc_0019EE44: ;
-    PUSH32(esp, esi);
-    PUSH32(esp, 0x0019EE4Au); RECOMP_ABI_CALL(0x001A0F09u, sub_001A0F09); /* call 0x001A0F09 */
-
-loc_0019EE4A: ;
-    eax = esi;
-    POP32(esp, esi);
-    esp += 8; return; /* ret 4 */
-
-}
-
-
-void sub_0019EE34(void) {
-    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
-    static RECOMP_TLS int logged;
-    body_0019EE34();
-    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
-        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
-         * every ABI mismatch in the manifest instead of aborting at the first.
-         * It is a convergence aid for scripts/converge-manifest.py, not an
-         * acceptance mode: a run under it proves nothing about correctness. */
-        static RECOMP_TLS int reported;
-        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0019EE34 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
-        if (!getenv("JSRF_ABI_CONTINUE")) abort();
-    }
-    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0019EE34 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
-}
-
-/**
- * sub_001A4A9B
- * Original: 0x001A4A9B - 0x001A4AD2 (55 bytes, 19 insns)
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-static void body_001A4A9B(void)
-{
-    int _flags = 0; /* fallback flag var */
-
-loc_001A4A9B: ;
-    eax = MEM32(esp + 4);
-    eax = eax - 0;
-    if ((eax == 0)) goto loc_001A4ACA; /* je: equal / zero */
-
-loc_001A4AA4: ;
-    eax--;
-    if ((eax == 0)) goto loc_001A4AC3; /* je: equal / zero */
-
-loc_001A4AA7: ;
-    eax--;
-    if ((eax == 0)) goto loc_001A4AB8; /* je: equal / zero */
-
-loc_001A4AAA: ;
-    eax--;
-    if ((eax != 0)) goto loc_001A4ACF; /* jne: not equal / not zero */
-
-loc_001A4AAD: ;
-    PUSH32(esp, MEM32(esp + 8));
-    PUSH32(esp, 0x001A4AB6u); RECOMP_ABI_CALL(0x001A46F0u, sub_001A46F0); /* call 0x001A46F0 */
-
-loc_001A4AB6: ;
-    goto loc_001A4ACF;
-
-loc_001A4AB8: ;
-    PUSH32(esp, MEM32(esp + 8));
-    PUSH32(esp, 0x001A4AC1u); RECOMP_ABI_CALL(0x001A490Du, sub_001A490D); /* call 0x001A490D */
-
-loc_001A4AC1: ;
-    goto loc_001A4ACF;
-
-loc_001A4AC3: ;
-    PUSH32(esp, 0x001A4AC8u); RECOMP_ABI_CALL(0x001A464Bu, sub_001A464B); /* call 0x001A464B */
-
-loc_001A4AC8: ;
-    goto loc_001A4ACF;
-
-loc_001A4ACA: ;
-    PUSH32(esp, 0x001A4ACFu); RECOMP_ABI_CALL(0x001A47ADu, sub_001A47AD); /* call 0x001A47AD */
-
-loc_001A4ACF: ;
-    esp += 12; return; /* ret 8 */
-
-}
-
-
-void sub_001A4A9B(void) {
-    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
-    static RECOMP_TLS int logged;
-    body_001A4A9B();
-    if (g_esp!=before_stack+12 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
-        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
-         * every ABI mismatch in the manifest instead of aborting at the first.
-         * It is a convergence aid for scripts/converge-manifest.py, not an
-         * acceptance mode: a run under it proves nothing about correctness. */
-        static RECOMP_TLS int reported;
-        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x001A4A9B esp %08X->%08X expected +12; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
-        if (!getenv("JSRF_ABI_CONTINUE")) abort();
-    }
-    if (!logged++) fprintf(stderr,"[RECOVERED] 0x001A4A9B returned; ABI verified (ESP/EBX/ESI/EDI)\n");
-}
-
-/**
- * sub_0013B180
- * Original: 0x0013B180 - 0x0013B1B8 (56 bytes, 13 insns)
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-static void body_0013B180(void)
-{
-    int _flags = 0; /* fallback flag var */
-    uint32_t _fa = 0, _fb = 0;
-    int32_t _fas = 0, _fbs = 0;
-    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
-
-loc_0013B180: ;
-    eax = MEM32(0x25EFC0);
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    if (TEST_NZ(_fa, _fb)) goto loc_0013B1A4; /* jne: not equal / not zero */
-
-loc_0013B189: ;
-    /* nop */
-
-loc_0013B190: ;
-    eax = MEM32(0x25EFA8);
-    eax++;
-    MEM32(0x25EFA8) = eax;
-    eax = MEM32(0x25EFC0);
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    if (TEST_Z(_fa, _fb)) goto loc_0013B190; /* je: equal / zero */
-
-loc_0013B1A4: ;
-    PUSH32(esp, 0xF0000001u);
-    MEM32(0x25EFC4) = 1;
-    PUSH32(esp, 0x0013B1B8u); RECOMP_ABI_CALL(0x00147E4Eu, sub_00147E4E); /* call 0x00147E4E */
-
-}
-
-
-void sub_0013B180(void) {
-    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
-    static RECOMP_TLS int logged;
-    body_0013B180();
-    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
-        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
-         * every ABI mismatch in the manifest instead of aborting at the first.
-         * It is a convergence aid for scripts/converge-manifest.py, not an
-         * acceptance mode: a run under it proves nothing about correctness. */
-        static RECOMP_TLS int reported;
-        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0013B180 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
-        if (!getenv("JSRF_ABI_CONTINUE")) abort();
-    }
-    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0013B180 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
-}
-
-/**
- * sub_0013B1C0
- * Original: 0x0013B1C0 - 0x0013B223 (99 bytes, 25 insns)
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-static void body_0013B1C0(void)
-{
-    int _flags = 0; /* fallback flag var */
-    uint32_t _fa = 0, _fb = 0;
-    int32_t _fas = 0, _fbs = 0;
-    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
-
-loc_0013B1C0: ;
-    eax = MEM32(0x25EFC8);
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    if (TEST_NZ(_fa, _fb)) goto loc_0013B20F; /* jne: not equal / not zero */
-
-loc_0013B1C9: ;
-    /* nop */
-
-loc_0013B1D0: ;
-    PUSH32(esp, 0x0013B1D5u); RECOMP_ABI_CALL(0x0018CE50u, sub_0018CE50); /* call 0x0018CE50 */
-
-loc_0013B1D5: ;
-    eax = MEM32(0x25EFAC);
-    eax++;
-    MEM32(0x25EFAC) = eax;
-    PUSH32(esp, 0x0013B1E5u); RECOMP_ABI_CALL(0x00141E50u, sub_00141E50); /* call 0x00141E50 */
-
-loc_0013B1E5: ;
-    ecx = MEM32(0x27D0E8);
-    PUSH32(esp, ecx);
-    PUSH32(esp, 0x0013B1F1u); RECOMP_ABI_CALL(0x00147DD2u, sub_00147DD2); /* call 0x00147DD2 */
-
-loc_0013B1F1: ;
-    eax = MEM32(0x25EFB8);
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    if (TEST_Z(_fa, _fb)) goto loc_0013B206; /* je: equal / zero */
-
-loc_0013B1FA: ;
-    edx = MEM32(0x25EFBC);
-    { uint32_t _icall_esp = g_esp;
-    PUSH32(esp, edx);
-    { uint32_t _icall_target = eax; PUSH32(esp, 0x0013B203u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
-    }
-
-loc_0013B203: ;
-    esp = esp + 4;
-
-loc_0013B206: ;
-    eax = MEM32(0x25EFC8);
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    if (TEST_Z(_fa, _fb)) goto loc_0013B1D0; /* je: equal / zero */
-
-loc_0013B20F: ;
-    PUSH32(esp, 0xF0000001u);
-    MEM32(0x25EFCC) = 1;
-    PUSH32(esp, 0x0013B223u); RECOMP_ABI_CALL(0x00147E4Eu, sub_00147E4E); /* call 0x00147E4E */
-
-}
-
-
-void sub_0013B1C0(void) {
-    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
-    static RECOMP_TLS int logged;
-    body_0013B1C0();
-    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
-        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
-         * every ABI mismatch in the manifest instead of aborting at the first.
-         * It is a convergence aid for scripts/converge-manifest.py, not an
-         * acceptance mode: a run under it proves nothing about correctness. */
-        static RECOMP_TLS int reported;
-        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0013B1C0 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
-        if (!getenv("JSRF_ABI_CONTINUE")) abort();
-    }
-    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0013B1C0 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
-}
-
-/**
- * sub_0013B230
- * Original: 0x0013B230 - 0x0013B293 (99 bytes, 25 insns)
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-static void body_0013B230(void)
-{
-    int _flags = 0; /* fallback flag var */
-    uint32_t _fa = 0, _fb = 0;
-    int32_t _fas = 0, _fbs = 0;
-    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
-
-loc_0013B230: ;
-    eax = MEM32(0x25EFD0);
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    if (TEST_NZ(_fa, _fb)) goto loc_0013B27F; /* jne: not equal / not zero */
-
-loc_0013B239: ;
-    /* nop */
-
-loc_0013B240: ;
-    PUSH32(esp, 0x0013B245u); RECOMP_ABI_CALL(0x0018CE50u, sub_0018CE50); /* call 0x0018CE50 */
-
-loc_0013B245: ;
-    eax = MEM32(0x25EFAC);
-    eax++;
-    MEM32(0x25EFAC) = eax;
-    PUSH32(esp, 0x0013B255u); RECOMP_ABI_CALL(0x00141E70u, sub_00141E70); /* call 0x00141E70 */
-
-loc_0013B255: ;
-    ecx = MEM32(0x27D0E8);
-    PUSH32(esp, ecx);
-    PUSH32(esp, 0x0013B261u); RECOMP_ABI_CALL(0x00147DD2u, sub_00147DD2); /* call 0x00147DD2 */
-
-loc_0013B261: ;
-    eax = MEM32(0x25EFB8);
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    if (TEST_Z(_fa, _fb)) goto loc_0013B276; /* je: equal / zero */
-
-loc_0013B26A: ;
-    edx = MEM32(0x25EFBC);
-    { uint32_t _icall_esp = g_esp;
-    PUSH32(esp, edx);
-    { uint32_t _icall_target = eax; PUSH32(esp, 0x0013B273u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
-    }
-
-loc_0013B273: ;
-    esp = esp + 4;
-
-loc_0013B276: ;
-    eax = MEM32(0x25EFD0);
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    if (TEST_Z(_fa, _fb)) goto loc_0013B240; /* je: equal / zero */
-
-loc_0013B27F: ;
-    PUSH32(esp, 0xF0000001u);
-    MEM32(0x25EFD4) = 1;
-    PUSH32(esp, 0x0013B293u); RECOMP_ABI_CALL(0x00147E4Eu, sub_00147E4E); /* call 0x00147E4E */
-
-}
-
-
-void sub_0013B230(void) {
-    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
-    static RECOMP_TLS int logged;
-    body_0013B230();
-    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
-        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
-         * every ABI mismatch in the manifest instead of aborting at the first.
-         * It is a convergence aid for scripts/converge-manifest.py, not an
-         * acceptance mode: a run under it proves nothing about correctness. */
-        static RECOMP_TLS int reported;
-        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0013B230 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
-        if (!getenv("JSRF_ABI_CONTINUE")) abort();
-    }
-    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0013B230 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
-}
-
-/**
- * sub_0013B2A0
- * Original: 0x0013B2A0 - 0x0013B32B (139 bytes, 38 insns)
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-static void body_0013B2A0(void)
-{
-    int _flags = 0; /* fallback flag var */
-    uint32_t _fa = 0, _fb = 0;
-    int32_t _fas = 0, _fbs = 0;
-    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
-
-loc_0013B2A0: ;
-    eax = MEM32(0x25EFD8);
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    PUSH32(esp, edi);
-    edi = 1;
-    if (TEST_NZ(_fa, _fb)) goto loc_0013B31B; /* jne: not equal / not zero */
-
-loc_0013B2AF: ;
-    /* nop */
-
-loc_0013B2B0: ;
-    eax = MEM32(0x25EFB0);
-    eax++;
-    MEM32(0x25EFB0) = eax;
-    PUSH32(esp, 0x0013B2C0u); RECOMP_ABI_CALL(0x00141E90u, sub_00141E90); /* call 0x00141E90 */
-
-loc_0013B2C0: ;
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    if (TEST_Z(_fa, _fb)) goto loc_0013B2CC; /* je: equal / zero */
-
-loc_0013B2C4: ;
-    _fa = (uint32_t)(MEM32(0x25EFA4)) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(0x25EFA4), edi (32-bit) */
-    if (CMP_NE(_fa, _fb)) goto loc_0013B312; /* jne: not equal / not zero */
-
-loc_0013B2CC: ;
-    _fa = (uint32_t)(MEM32(0x25EFA4)) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(0x25EFA4), edi (32-bit) */
-    if (CMP_NE(_fa, _fb)) goto loc_0013B2F1; /* jne: not equal / not zero */
-
-loc_0013B2D4: ;
-    ecx = MEM32(0x25EF9C);
-    edx = MEM32(0x27D0E8);
-    PUSH32(esp, ecx);
-    PUSH32(esp, edx);
-    MEM32(0x25EFA4) = 0;
-    PUSH32(esp, 0x0013B2F1u); RECOMP_ABI_CALL(0x00147CC0u, sub_00147CC0); /* call 0x00147CC0 */
-
-loc_0013B2F1: ;
-    eax = MEM32(0x25EFB8);
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    if (TEST_Z(_fa, _fb)) goto loc_0013B306; /* je: equal / zero */
-
-loc_0013B2FA: ;
-    ecx = MEM32(0x25EFBC);
-    { uint32_t _icall_esp = g_esp;
-    PUSH32(esp, ecx);
-    { uint32_t _icall_target = eax; PUSH32(esp, 0x0013B303u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
-    }
-
-loc_0013B303: ;
-    esp = esp + 4;
-
-loc_0013B306: ;
-    edx = MEM32(0x27D0E8);
-    PUSH32(esp, edx);
-    PUSH32(esp, 0x0013B312u); RECOMP_ABI_CALL(0x00147DACu, sub_00147DAC); /* call 0x00147DAC */
-
-loc_0013B312: ;
-    eax = MEM32(0x25EFD8);
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    if (TEST_Z(_fa, _fb)) goto loc_0013B2B0; /* je: equal / zero */
-
-loc_0013B31B: ;
-    PUSH32(esp, 0xF0000001u);
-    MEM32(0x25EFDC) = edi;
-    PUSH32(esp, 0x0013B32Bu); RECOMP_ABI_CALL(0x00147E4Eu, sub_00147E4E); /* call 0x00147E4E */
-
-}
-
-
-void sub_0013B2A0(void) {
-    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
-    static RECOMP_TLS int logged;
-    body_0013B2A0();
-    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
-        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
-         * every ABI mismatch in the manifest instead of aborting at the first.
-         * It is a convergence aid for scripts/converge-manifest.py, not an
-         * acceptance mode: a run under it proves nothing about correctness. */
-        static RECOMP_TLS int reported;
-        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0013B2A0 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
-        if (!getenv("JSRF_ABI_CONTINUE")) abort();
-    }
-    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0013B2A0 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
-}
-
-/**
- * sub_00178F40
- * Original: 0x00178F40 - 0x001791BB (635 bytes, 228 insns)
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-static void body_00178F40(void)
-{
-    uint32_t ebp;
-    ebp = g_ebp;  /* frameless: caller's frame */
-    int _flags = 0; /* fallback flag var */
-    uint32_t _fa = 0, _fb = 0;
-    int32_t _fas = 0, _fbs = 0;
-    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
-    int _cf = 0; /* carry flag */
-    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
-
-loc_00178F40: ;
-    _cf = (int)((uint32_t)(esp) < (uint32_t)(0x14));
-    esp = esp - 0x14;
-    PUSH32(esp, ebx);
-    ebx = MEM32(esp + 0x1C);
-    eax = MEM32(ebx + 0xC);
-    PUSH32(esp, ebp);
-    _cf = 0; /* xor clears CF */
-    ebp = 0; /* xor self */
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(0xFFFFFFFFu) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, 0xFFFFFFFFu (32-bit) */
-    _cf = (int)(_fa < _fb);
-    PUSH32(esp, esi);
-    PUSH32(esp, edi);
-    MEM32(esp + 0x10) = ebp;
-    if (CMP_EQ(_fa, _fb)) goto loc_0017919E; /* je: equal / zero */
-
-loc_00178F5D: ;
-    edx = MEM32(esp + 0x2C);
-    _fa = (uint32_t)(edx) & 0xFFFFFFFFu; _fb = (uint32_t)(ebp) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp edx, ebp (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_EQ(_fa, _fb)) goto loc_00179197; /* je: equal / zero */
-
-loc_00178F69: ;
-    edi = MEM32(esp + 0x30);
-    _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fb = (uint32_t)(ebp) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp edi, ebp (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_EQ(_fa, _fb)) goto loc_00179197; /* je: equal / zero */
-
-loc_00178F75: ;
-    _fa = (uint32_t)(MEM8(esp + 0x38)) & 0xFFu; _fb = (uint32_t)(2) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test MEM8(esp + 0x38), 2 (8-bit) */
-    _cf = 0; /* test/cmp-logical clears CF */
-    if (TEST_Z(_fa, _fb)) goto loc_00179022; /* je: equal / zero */
-
-loc_00178F80: ;
-    eax = edi;
-    if (0xB) _cf = (int)(((eax) >> ((0xB) - 1)) & 1);
-    eax = eax >> 0xB;
-    esi = edi;
-    if (0xB) _cf = (int)(((eax) >> (32 - (0xB))) & 1);
-    eax = eax << 0xB;
-    _cf = 0; /* xor clears CF */
-    ecx = 0; /* xor self */
-    _cf = 0; /* logical op clears CF */
-    esi = esi & 0x7FF;
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(ebp) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, ebp (32-bit) */
-    _cf = (int)(_fa < _fb);
-    MEM32(esp + 0x30) = ecx;
-    MEM32(esp + 0x28) = ebp;
-    if (CMP_EQ(_fa, _fb)) goto loc_00178FBB; /* je: equal / zero */
-
-loc_00178F9E: ;
-    ecx = esp + 0x30;
-    PUSH32(esp, ecx);
-    PUSH32(esp, eax);
-    PUSH32(esp, edx);
-    edx = ebx + 0x18;
-    PUSH32(esp, edx);
-    PUSH32(esp, ebx);
-    PUSH32(esp, 0x00178FAFu); RECOMP_ABI_CALL(0x00178E70u, sub_00178E70); /* call 0x00178E70 */
-
-loc_00178FAF: ;
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(ebp) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, ebp (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_L(_fas, _fbs)) goto loc_00179008; /* jl: less (signed <) */
-
-loc_00178FB3: ;
-    ecx = MEM32(esp + 0x30);
-    MEM32(esp + 0x10) = ecx;
-
-loc_00178FBB: ;
-    _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(ebp) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp esi, ebp (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_EQ(_fa, _fb)) goto loc_00178FFD; /* je: equal / zero */
-
-loc_00178FBF: ;
-    edx = MEM32(ebx + 0x18);
-    ebp = MEM32(ebx + 0x1C);
-    _cf = 0; /* xor clears CF */
-    eax = 0; /* xor self */
-    _cf = (int)((((uint64_t)(edx) + (uint64_t)(ecx)) >> 32) & 1);
-    edx = edx + ecx;
-    { uint64_t _t = (uint64_t)(ebp) + (uint64_t)(eax) + (uint64_t)_cf; _cf = (int)((_t >> 32) & 1); ebp = (uint32_t)_t; }  /* adc */
-    eax = esp + 0x28;
-    PUSH32(esp, eax);
-    MEM32(esp + 0x20) = edx;
-    edx = MEM32(esp + 0x30);
-    PUSH32(esp, esi);
-    _cf = (int)((((uint64_t)(ecx) + (uint64_t)(edx)) >> 32) & 1);
-    ecx = ecx + edx;
-    PUSH32(esp, ecx);
-    eax = esp + 0x28;
-    PUSH32(esp, eax);
-    PUSH32(esp, ebx);
-    MEM32(esp + 0x34) = ebp;
-    PUSH32(esp, 0x00178FEBu); RECOMP_ABI_CALL(0x00178E70u, sub_00178E70); /* call 0x00178E70 */
-
-loc_00178FEB: ;
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    _cf = 0; /* test/cmp-logical clears CF */
-    if (TEST_S(_fas, _fbs)) goto loc_00179008; /* jl: less (signed <) */
-
-loc_00178FEF: ;
-    eax = MEM32(esp + 0x10);
-    ecx = MEM32(esp + 0x28);
-    _cf = (int)((((uint64_t)(eax) + (uint64_t)(ecx)) >> 32) & 1);
-    eax = eax + ecx;
-    MEM32(esp + 0x10) = eax;
-
-loc_00178FFD: ;
-    ecx = MEM32(esp + 0x10);
-    _cf = 0; /* xor clears CF */
-    eax = 0; /* xor self */
-    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp ecx, edi (32-bit) */
-    _cf = (int)(_fa < _fb);
-    SET_LO8(eax, (CMP_NE(_fa, _fb)) ? 1 : 0); /* setne */
-
-loc_00179008: ;
-    esi = MEM32(ebx + 0x18);
-    edx = MEM32(esp + 0x10);
-    ecx = MEM32(ebx + 0x1C);
-    _cf = (int)((((uint64_t)(esi) + (uint64_t)(edx)) >> 32) & 1);
-    esi = esi + edx;
-    { uint64_t _t = (uint64_t)(ecx) + (uint64_t)(0) + (uint64_t)_cf; _cf = (int)((_t >> 32) & 1); ecx = (uint32_t)_t; }  /* adc */
-    MEM32(ebx + 0x18) = esi;
-    MEM32(ebx + 0x1C) = ecx;
-    goto loc_001791A3;
-
-loc_00179022: ;
-    eax = MEM32(ebx + 0x18);
-    esi = MEM32(ebx + 0x1C);
-    edx = edi;
-    edi = MEM32(ebx + 0x10);
-    ecx = eax;
-    _cf = (int)((((uint64_t)(edx) + (uint64_t)(eax)) >> 32) & 1);
-    edx = edx + eax;
-    eax = 0;
-    ebp = esi;
-    { uint64_t _t = (uint64_t)(eax) + (uint64_t)(esi) + (uint64_t)_cf; _cf = (int)((_t >> 32) & 1); eax = (uint32_t)_t; }  /* adc */
-    esi = MEM32(ebx + 0x14);
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(esi) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, esi (32-bit) */
-    _cf = (int)(_fa < _fb);
-    MEM32(esp + 0x1C) = ecx;
-    MEM32(esp + 0x20) = ebp;
-    if (CMP_A(_fa, _fb)) goto loc_00179059; /* ja: above (unsigned >) */
-
-loc_00179049: ;
-    if (CMP_B(_fa, _fb)) goto loc_0017904F; /* jb: below (unsigned <) */
-
-loc_0017904B: ;
-    _fa = (uint32_t)(edx) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp edx, edi (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_AE(_fa, _fb)) goto loc_00179059; /* jae: above or equal (unsigned >=) */
-
-loc_0017904F: ;
-    MEM32(esp + 0x14) = edx;
-    MEM32(esp + 0x18) = eax;
-    goto loc_00179061;
-
-loc_00179059: ;
-    MEM32(esp + 0x14) = edi;
-    MEM32(esp + 0x18) = esi;
-
-loc_00179061: ;
-    _fa = (uint32_t)(ebp) & 0xFFFFFFFFu; _fb = (uint32_t)(MEM32(esp + 0x18)) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp ebp, MEM32(esp + 0x18) (32-bit) */
-    _cf = (int)(_fa < _fb);
-    eax = 0x80004005u;
-    if (CMP_A(_fa, _fb)) goto loc_001791A3; /* ja: above (unsigned >) */
-
-loc_00179070: ;
-    if (CMP_B(_fa, _fb)) goto loc_0017907C; /* jb: below (unsigned <) */
-
-loc_00179072: ;
-    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(MEM32(esp + 0x14)) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp ecx, MEM32(esp + 0x14) (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_AE(_fa, _fb)) goto loc_001791A3; /* jae: above or equal (unsigned >=) */
-
-loc_0017907C: ;
-    eax = ebp;
-    ebp = ebx + 0x28;
-
-loc_00179081: ;
-    edx = MEM32(ebx + 0x30);
-    edi = MEM32(ebx + 0x34);
-    esi = ecx;
-    ecx = MEM32(ebp);
-    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(edx) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp ecx, edx (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_NE(_fa, _fb)) goto loc_00179095; /* jne: not equal / not zero */
-
-loc_00179090: ;
-    _fa = (uint32_t)(MEM32(ebp + 4)) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(ebp + 4), edi (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_EQ(_fa, _fb)) goto loc_001790AB; /* je: equal / zero */
-
-loc_00179095: ;
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(MEM32(ebp + 4)) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, MEM32(ebp + 4) (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_B(_fa, _fb)) goto loc_001790AB; /* jb: below (unsigned <) */
-
-loc_0017909A: ;
-    if (CMP_A(_fa, _fb)) goto loc_001790A0; /* ja: above (unsigned >) */
-
-loc_0017909C: ;
-    _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp esi, ecx (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_B(_fa, _fb)) goto loc_001790AB; /* jb: below (unsigned <) */
-
-loc_001790A0: ;
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, edi (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_B(_fa, _fb)) goto loc_00179109; /* jb: below (unsigned <) */
-
-loc_001790A4: ;
-    if (CMP_A(_fa, _fb)) goto loc_001790AB; /* ja: above (unsigned >) */
-
-loc_001790A6: ;
-    _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(MEM32(ebx + 0x30)) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp esi, MEM32(ebx + 0x30) (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_B(_fa, _fb)) goto loc_00179109; /* jb: below (unsigned <) */
-
-loc_001790AB: ;
-    edi = MEM32(ebx + 0x24);
-    _cf = 0; /* xor clears CF */
-    ecx = 0; /* xor self */
-    PUSH32(esp, ecx);
-    PUSH32(esp, edi);
-    PUSH32(esp, eax);
-    PUSH32(esp, esi);
-    PUSH32(esp, 0x001790B9u); RECOMP_ABI_CALL(0x0017D4D0u, sub_0017D4D0); /* call 0x0017D4D0 */
-
-loc_001790B9: ;
-    _cf = 0; /* xor clears CF */
-    ecx = 0; /* xor self */
-    PUSH32(esp, ecx);
-    PUSH32(esp, edi);
-    PUSH32(esp, edx);
-    PUSH32(esp, eax);
-    PUSH32(esp, 0x001790C4u); RECOMP_ABI_CALL(0x0017CA70u, sub_0017CA70); /* call 0x0017CA70 */
-
-loc_001790C4: ;
-    ecx = MEM32(ebx + 0x20);
-    MEM32(ebp) = eax;
-    eax = esp + 0x28;
-    PUSH32(esp, eax);
-    PUSH32(esp, edi);
-    PUSH32(esp, ecx);
-    PUSH32(esp, ebp);
-    PUSH32(esp, ebx);
-    MEM32(ebp + 4) = edx;
-    PUSH32(esp, 0x001790DBu); RECOMP_ABI_CALL(0x00178E70u, sub_00178E70); /* call 0x00178E70 */
-
-loc_001790DB: ;
-    _cf = 0; /* xor clears CF */
-    ecx = 0; /* xor self */
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, ecx (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_L(_fas, _fbs)) goto loc_001790F5; /* jl: less (signed <) */
-
-loc_001790E1: ;
-    edx = MEM32(esp + 0x28);
-    _cf = 0; /* xor clears CF */
-    edi = 0; /* xor self */
-    _cf = (int)((((uint64_t)(edx) + (uint64_t)(MEM32(ebp))) >> 32) & 1);
-    edx = edx + MEM32(ebp);
-    { uint64_t _t = (uint64_t)(edi) + (uint64_t)(MEM32(ebp + 4)) + (uint64_t)_cf; _cf = (int)((_t >> 32) & 1); edi = (uint32_t)_t; }  /* adc */
-    MEM32(ebx + 0x30) = edx;
-    MEM32(ebx + 0x34) = edi;
-    goto loc_00179101;
-
-loc_001790F5: ;
-    MEM32(ebp) = ecx;
-    MEM32(ebp + 4) = ecx;
-    MEM32(ebx + 0x30) = ecx;
-    MEM32(ebx + 0x34) = ecx;
-
-loc_00179101: ;
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, ecx (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_L(_fas, _fbs)) goto loc_001791A3; /* jl: less (signed <) */
-
-loc_00179109: ;
-    edx = MEM32(ebp);
-    eax = MEM32(esp + 0x30);
-    edi = MEM32(esp + 0x10);
-    ecx = MEM32(ebx + 0x24);
-    _cf = (int)((uint32_t)(esi) < (uint32_t)(edx));
-    esi = esi - edx;
-    edx = esi;
-    _cf = (int)((uint32_t)(eax) < (uint32_t)(edi));
-    eax = eax - edi;
-    _cf = (int)((uint32_t)(ecx) < (uint32_t)(edx));
-    ecx = ecx - edx;
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, ecx (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_B(_fa, _fb)) goto loc_00179125; /* jb: below (unsigned <) */
-
-loc_00179123: ;
-    eax = ecx;
-
-loc_00179125: ;
-    esi = MEM32(ebx + 0x20);
-    _cf = (int)((((uint64_t)(esi) + (uint64_t)(edx)) >> 32) & 1);
-    esi = esi + edx;
-    edx = MEM32(esp + 0x2C);
-    _cf = (int)((((uint64_t)(edi) + (uint64_t)(edx)) >> 32) & 1);
-    edi = edi + edx;
-    ecx = eax;
-    edx = ecx;
-    if (2) _cf = (int)(((ecx) >> ((2) - 1)) & 1);
-    ecx = ecx >> 2;
-    if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
-      else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
-      esi += ecx * 4; edi += ecx * 4; }
-    else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
-    ecx = 0; /* rep movsd */
-    ecx = edx;
-    edx = MEM32(esp + 0x18);
-    _cf = 0; /* logical op clears CF */
-    ecx = ecx & 3;
-    if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
-      else { uint32_t _i; for (_i = 0; _i < _n; _i++) _d[_i] = _s[_i]; }
-      esi += ecx; edi += ecx; }
-    else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }
-    ecx = 0; /* rep movsb */
-    ecx = MEM32(esp + 0x10);
-    edi = MEM32(esp + 0x1C);
-    esi = MEM32(esp + 0x20);
-    _cf = (int)((((uint64_t)(ecx) + (uint64_t)(eax)) >> 32) & 1);
-    ecx = ecx + eax;
-    MEM32(esp + 0x10) = ecx;
-    _cf = (int)((((uint64_t)(ecx) + (uint64_t)(edi)) >> 32) & 1);
-    ecx = ecx + edi;
-    eax = 0;
-    { uint64_t _t = (uint64_t)(eax) + (uint64_t)(esi) + (uint64_t)_cf; _cf = (int)((_t >> 32) & 1); eax = (uint32_t)_t; }  /* adc */
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(edx) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, edx (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_B(_fa, _fb)) goto loc_00179081; /* jb: below (unsigned <) */
-
-loc_00179167: ;
-    if (CMP_A(_fa, _fb)) goto loc_00179173; /* ja: above (unsigned >) */
-
-loc_00179169: ;
-    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(MEM32(esp + 0x14)) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp ecx, MEM32(esp + 0x14) (32-bit) */
-    _cf = (int)(_fa < _fb);
-    if (CMP_B(_fa, _fb)) goto loc_00179081; /* jb: below (unsigned <) */
-
-loc_00179173: ;
-    eax = MEM32(esp + 0x10);
-    edi = MEM32(ebx + 0x18);
-    esi = MEM32(ebx + 0x1C);
-    edx = MEM32(esp + 0x30);
-    _cf = (int)((((uint64_t)(edi) + (uint64_t)(eax)) >> 32) & 1);
-    edi = edi + eax;
-    { uint64_t _t = (uint64_t)(esi) + (uint64_t)(0) + (uint64_t)_cf; _cf = (int)((_t >> 32) & 1); esi = (uint32_t)_t; }  /* adc */
-    _cf = 0; /* xor clears CF */
-    ecx = 0; /* xor self */
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(edx) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp eax, edx (32-bit) */
-    _cf = (int)(_fa < _fb);
-    SET_LO8(ecx, (CMP_NE(_fa, _fb)) ? 1 : 0); /* setne */
-    MEM32(ebx + 0x18) = edi;
-    MEM32(ebx + 0x1C) = esi;
-    eax = ecx;
-    goto loc_001791A3;
-
-loc_00179197: ;
-    eax = 0x80070057u;
-    goto loc_001791A3;
-
-loc_0017919E: ;
-    eax = 0x800401F0u;
-
-loc_001791A3: ;
-    ecx = MEM32(esp + 0x34);
-    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
-    _cf = 0; /* test/cmp-logical clears CF */
-    POP32(esp, edi);
-    POP32(esp, esi);
-    POP32(esp, ebp);
-    POP32(esp, ebx);
-    if (TEST_Z(_fa, _fb)) goto loc_001791B5; /* je: equal / zero */
-
-loc_001791AF: ;
-    edx = MEM32(esp);
-    MEM32(ecx) = edx;
-
-loc_001791B5: ;
-    _cf = (int)((((uint64_t)(esp) + (uint64_t)(0x14)) >> 32) & 1);
-    esp = esp + 0x14;
-    esp += 24; return; /* ret 20 */
-
-}
-
-
-void sub_00178F40(void) {
-    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
-    static RECOMP_TLS int logged;
-    body_00178F40();
-    if (g_esp!=before_stack+24 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
-        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
-         * every ABI mismatch in the manifest instead of aborting at the first.
-         * It is a convergence aid for scripts/converge-manifest.py, not an
-         * acceptance mode: a run under it proves nothing about correctness. */
-        static RECOMP_TLS int reported;
-        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00178F40 esp %08X->%08X expected +24; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
-        if (!getenv("JSRF_ABI_CONTINUE")) abort();
-    }
-    if (!logged++) fprintf(stderr,"[RECOVERED] 0x00178F40 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
-}
-
-/**
- * sub_00024700
- * Original: 0x00024700 - 0x00024970 (624 bytes, 172 insns)
- * CC: cdecl, 0 params, returns int_or_void
- * Frame: fpo_leaf
- */
-static void body_00024700(void)
-{
-    uint32_t ebp;
-    ebp = g_ebp;  /* frameless: caller's frame */
-    int _flags = 0; /* fallback flag var */
-    uint32_t _fa = 0, _fb = 0;
-    int32_t _fas = 0, _fbs = 0;
-    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
-    #define fp_push(v) do { double _fp_value = (v); \
-        g_fp_top = (g_fp_top + 7u) & 7u; \
-        g_fp_stack[g_fp_top] = _fp_value; } while (0)
-    #define fp_pop() (g_fp_top = (g_fp_top + 1u) & 7u)
-    #define fp_top() g_fp_stack[g_fp_top]
-    #define fp_st(i) g_fp_stack[(g_fp_top + (i)) & 7u]
-    #define fp_st1() fp_st(1)
-    ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
-
-loc_00024700: ;
-    PUSH32(esp, esi);
-    esi = ecx;
-    eax = MEM32(esi + 0xC0);
-    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, eax (32-bit) */
-    if (TEST_NZ(_fa, _fb)) goto loc_00024962; /* jne: not equal / not zero */
-
-loc_00024711: ;
-    fp_push(MEMF(esi + 0x98)); /* fld float */
-    edx = esi + 0x98;
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xA8)); fp_pop(); /* fcomp dword ptr [esi + 0xa8] */
-    ecx = 0; /* xor self */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x44) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x44 (8-bit) */
-    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_00024731; /* jp: parity */
-
-loc_0002472C: ;
-    ecx = 1;
-
-loc_00024731: ;
-    fp_push(MEMF(edx)); /* fld float */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xA8)); fp_pop(); /* fcomp dword ptr [esi + 0xa8] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(5) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 5 (8-bit) */
-    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_00024760; /* jp: parity */
-
-loc_00024740: ;
-    fp_push(MEMF(esi + 0xB8)); /* fld float */
-    fp_top() = fp_top() + MEMF(edx); /* fadd dword ptr [edx] */
-    MEMF(edx) = (float)fp_top(); /* fst */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xA8)); fp_pop(); /* fcomp dword ptr [esi + 0xa8] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(1) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 1 (8-bit) */
-    if (TEST_NZ(_fa, _fb)) goto loc_00024760; /* jne: not equal / not zero */
-
-loc_00024757: ;
-    eax = MEM32(esi + 0xA8);
-    MEM32(edx) = eax;
-    ecx++;
-
-loc_00024760: ;
-    fp_push(MEMF(edx)); /* fld float */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xA8)); fp_pop(); /* fcomp dword ptr [esi + 0xa8] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
-    if (TEST_NZ(_fa, _fb)) goto loc_0002478F; /* jne: not equal / not zero */
-
-loc_0002476F: ;
-    fp_push(MEMF(edx)); /* fld float */
-    fp_top() = fp_top() - MEMF(esi + 0xB8); /* fsub dword ptr [esi + 0xb8] */
-    MEMF(edx) = (float)fp_top(); /* fst */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xA8)); fp_pop(); /* fcomp dword ptr [esi + 0xa8] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
-    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_0002478F; /* jp: parity */
-
-loc_00024786: ;
-    eax = MEM32(esi + 0xA8);
-    MEM32(edx) = eax;
-    ecx++;
-
-loc_0002478F: ;
-    fp_push(MEMF(esi + 0x9C)); /* fld float */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xAC)); fp_pop(); /* fcomp dword ptr [esi + 0xac] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x44) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x44 (8-bit) */
-    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_000247A3; /* jp: parity */
-
-loc_000247A2: ;
-    ecx++;
-
-loc_000247A3: ;
-    fp_push(MEMF(esi + 0x9C)); /* fld float */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xAC)); fp_pop(); /* fcomp dword ptr [esi + 0xac] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(5) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 5 (8-bit) */
-    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_000247E2; /* jp: parity */
-
-loc_000247B6: ;
-    fp_push(MEMF(esi + 0xB8)); /* fld float */
-    fp_top() = fp_top() + MEMF(esi + 0x9C); /* fadd dword ptr [esi + 0x9c] */
-    MEMF(esi + 0x9C) = (float)fp_top(); /* fst */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xAC)); fp_pop(); /* fcomp dword ptr [esi + 0xac] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(1) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 1 (8-bit) */
-    if (TEST_NZ(_fa, _fb)) goto loc_000247E2; /* jne: not equal / not zero */
-
-loc_000247D5: ;
-    eax = MEM32(esi + 0xAC);
-    MEM32(esi + 0x9C) = eax;
-    ecx++;
-
-loc_000247E2: ;
-    fp_push(MEMF(esi + 0x9C)); /* fld float */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xAC)); fp_pop(); /* fcomp dword ptr [esi + 0xac] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
-    if (TEST_NZ(_fa, _fb)) goto loc_00024821; /* jne: not equal / not zero */
-
-loc_000247F5: ;
-    fp_push(MEMF(esi + 0x9C)); /* fld float */
-    fp_top() = fp_top() - MEMF(esi + 0xB8); /* fsub dword ptr [esi + 0xb8] */
-    MEMF(esi + 0x9C) = (float)fp_top(); /* fst */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xAC)); fp_pop(); /* fcomp dword ptr [esi + 0xac] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
-    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_00024821; /* jp: parity */
-
-loc_00024814: ;
-    eax = MEM32(esi + 0xAC);
-    MEM32(esi + 0x9C) = eax;
-    ecx++;
-
-loc_00024821: ;
-    fp_push(MEMF(esi + 0xA0)); /* fld float */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB0)); fp_pop(); /* fcomp dword ptr [esi + 0xb0] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x44) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x44 (8-bit) */
-    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_00024835; /* jp: parity */
-
-loc_00024834: ;
-    ecx++;
-
-loc_00024835: ;
-    fp_push(MEMF(esi + 0xA0)); /* fld float */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB0)); fp_pop(); /* fcomp dword ptr [esi + 0xb0] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(5) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 5 (8-bit) */
-    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_00024874; /* jp: parity */
-
-loc_00024848: ;
-    fp_push(MEMF(esi + 0xB8)); /* fld float */
-    fp_top() = fp_top() + MEMF(esi + 0xA0); /* fadd dword ptr [esi + 0xa0] */
-    MEMF(esi + 0xA0) = (float)fp_top(); /* fst */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB0)); fp_pop(); /* fcomp dword ptr [esi + 0xb0] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(1) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 1 (8-bit) */
-    if (TEST_NZ(_fa, _fb)) goto loc_00024874; /* jne: not equal / not zero */
-
-loc_00024867: ;
-    eax = MEM32(esi + 0xB0);
-    MEM32(esi + 0xA0) = eax;
-    ecx++;
-
-loc_00024874: ;
-    fp_push(MEMF(esi + 0xA0)); /* fld float */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB0)); fp_pop(); /* fcomp dword ptr [esi + 0xb0] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
-    if (TEST_NZ(_fa, _fb)) goto loc_000248B3; /* jne: not equal / not zero */
-
-loc_00024887: ;
-    fp_push(MEMF(esi + 0xA0)); /* fld float */
-    fp_top() = fp_top() - MEMF(esi + 0xB8); /* fsub dword ptr [esi + 0xb8] */
-    MEMF(esi + 0xA0) = (float)fp_top(); /* fst */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB0)); fp_pop(); /* fcomp dword ptr [esi + 0xb0] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
-    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_000248B3; /* jp: parity */
-
-loc_000248A6: ;
-    eax = MEM32(esi + 0xB0);
-    MEM32(esi + 0xA0) = eax;
-    ecx++;
-
-loc_000248B3: ;
-    fp_push(MEMF(esi + 0xA4)); /* fld float */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB4)); fp_pop(); /* fcomp dword ptr [esi + 0xb4] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x44) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x44 (8-bit) */
-    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_000248C7; /* jp: parity */
-
-loc_000248C6: ;
-    ecx++;
-
-loc_000248C7: ;
-    fp_push(MEMF(esi + 0xA4)); /* fld float */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB4)); fp_pop(); /* fcomp dword ptr [esi + 0xb4] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(5) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 5 (8-bit) */
-    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_00024906; /* jp: parity */
-
-loc_000248DA: ;
-    fp_push(MEMF(esi + 0xB8)); /* fld float */
-    fp_top() = fp_top() + MEMF(esi + 0xA4); /* fadd dword ptr [esi + 0xa4] */
-    MEMF(esi + 0xA4) = (float)fp_top(); /* fst */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB4)); fp_pop(); /* fcomp dword ptr [esi + 0xb4] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(1) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 1 (8-bit) */
-    if (TEST_NZ(_fa, _fb)) goto loc_00024906; /* jne: not equal / not zero */
-
-loc_000248F9: ;
-    eax = MEM32(esi + 0xB4);
-    MEM32(esi + 0xA4) = eax;
-    ecx++;
-
-loc_00024906: ;
-    fp_push(MEMF(esi + 0xA4)); /* fld float */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB4)); fp_pop(); /* fcomp dword ptr [esi + 0xb4] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
-    if (TEST_NZ(_fa, _fb)) goto loc_00024945; /* jne: not equal / not zero */
-
-loc_00024919: ;
-    fp_push(MEMF(esi + 0xA4)); /* fld float */
-    fp_top() = fp_top() - MEMF(esi + 0xB8); /* fsub dword ptr [esi + 0xb8] */
-    MEMF(esi + 0xA4) = (float)fp_top(); /* fst */
-    g_fp_cmp = RECOMP_FCMP(fp_top(), MEMF(esi + 0xB4)); fp_pop(); /* fcomp dword ptr [esi + 0xb4] */
-    eax = (eax & 0xFFFF0000u) | (uint32_t)(uint16_t)(((g_fp_top & 7u) << 11) | (g_fp_cmp == 2 ? 0x4500u : g_fp_cmp < 0 ? 0x0100u : g_fp_cmp > 0 ? 0x0000u : 0x4000u)); /* fnstsw ax <- fpu status */
-    _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(0x41) & 0xFFu;
-    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 0x41 (8-bit) */
-    if (RECOMP_PARITY8((_fa) & (_fb))) goto loc_00024945; /* jp: parity */
-
-loc_00024938: ;
-    eax = MEM32(esi + 0xB4);
-    MEM32(esi + 0xA4) = eax;
-    ecx++;
-
-loc_00024945: ;
-    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(4) & 0xFFFFFFFFu;
-    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp ecx, 4 (32-bit) */
-    if (CMP_NE(_fa, _fb)) goto loc_00024954; /* jne: not equal / not zero */
-
-loc_0002494A: ;
-    MEM32(esi + 0xC0) = 1;
-
-loc_00024954: ;
-    PUSH32(esp, edx);
-    ecx = esi;
-    PUSH32(esp, 0x0002495Cu); RECOMP_ABI_CALL(0x000A4CF0u, sub_000A4CF0); /* call 0x000A4CF0 */
-
-loc_0002495C: ;
-    MEM32(esi + 0xBC) = eax;
-
-loc_00024962: ;
-    POP32(esp, esi);
-    esp += 4; return; /* ret */
-
-    g_seh_ebp = ebp; sub_00024970(); return; /* fallthrough 0x00024970 */
-
-    #undef fp_push
-    #undef fp_pop
-    #undef fp_top
-    #undef fp_st
-    #undef fp_st1
-}
-
-
-void sub_00024700(void) {
-    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
-    static RECOMP_TLS int logged;
-    body_00024700();
-    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
-        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
-         * every ABI mismatch in the manifest instead of aborting at the first.
-         * It is a convergence aid for scripts/converge-manifest.py, not an
-         * acceptance mode: a run under it proves nothing about correctness. */
-        static RECOMP_TLS int reported;
-        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00024700 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
-        if (!getenv("JSRF_ABI_CONTINUE")) abort();
-    }
-    if (!logged++) fprintf(stderr,"[RECOVERED] 0x00024700 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
-}
-
 recomp_func_t jsrf_lookup_recovered(uint32_t va) {
 
     switch (va) {
@@ -351844,6 +351947,8 @@ recomp_func_t jsrf_lookup_recovered(uint32_t va) {
     case 0x00024400u: return sub_00024400;
 
     case 0x000246E0u: return sub_000246E0;
+
+    case 0x00024700u: return sub_00024700;
 
     case 0x00024C70u: return sub_00024C70;
 
@@ -355325,6 +355430,14 @@ recomp_func_t jsrf_lookup_recovered(uint32_t va) {
 
     case 0x00139B30u: return sub_00139B30;
 
+    case 0x0013B180u: return sub_0013B180;
+
+    case 0x0013B1C0u: return sub_0013B1C0;
+
+    case 0x0013B230u: return sub_0013B230;
+
+    case 0x0013B2A0u: return sub_0013B2A0;
+
     case 0x0013F950u: return sub_0013F950;
 
     case 0x0013F980u: return sub_0013F980;
@@ -356705,6 +356818,8 @@ recomp_func_t jsrf_lookup_recovered(uint32_t va) {
 
     case 0x00173D70u: return sub_00173D70;
 
+    case 0x00173DB0u: return sub_00173DB0;
+
     case 0x00173ED0u: return sub_00173ED0;
 
     case 0x00173F30u: return sub_00173F30;
@@ -356748,6 +356863,8 @@ recomp_func_t jsrf_lookup_recovered(uint32_t va) {
     case 0x001751B0u: return sub_001751B0;
 
     case 0x00175250u: return sub_00175250;
+
+    case 0x00175300u: return sub_00175300;
 
     case 0x00175900u: return sub_00175900;
 
@@ -356864,6 +356981,8 @@ recomp_func_t jsrf_lookup_recovered(uint32_t va) {
     case 0x00178D80u: return sub_00178D80;
 
     case 0x00178E00u: return sub_00178E00;
+
+    case 0x00178F40u: return sub_00178F40;
 
     case 0x001791C0u: return sub_001791C0;
 
@@ -357817,6 +357936,14 @@ recomp_func_t jsrf_lookup_recovered(uint32_t va) {
 
     case 0x0019E3B7u: return sub_0019E3B7;
 
+    case 0x0019E5CCu: return sub_0019E5CC;
+
+    case 0x0019EAE3u: return sub_0019EAE3;
+
+    case 0x0019EE34u: return sub_0019EE34;
+
+    case 0x001A4A9Bu: return sub_001A4A9B;
+
     case 0x001A5299u: return sub_001A5299;
 
     case 0x001A52A4u: return sub_001A52A4;
@@ -357830,26 +357957,6 @@ recomp_func_t jsrf_lookup_recovered(uint32_t va) {
     case 0x001BD274u: return sub_001BD274;
 
     case 0x001BDAA9u: return sub_001BDAA9;
-
-    case 0x0019E5CCu: return sub_0019E5CC;
-
-    case 0x0019EAE3u: return sub_0019EAE3;
-
-    case 0x0019EE34u: return sub_0019EE34;
-
-    case 0x001A4A9Bu: return sub_001A4A9B;
-
-    case 0x0013B180u: return sub_0013B180;
-
-    case 0x0013B1C0u: return sub_0013B1C0;
-
-    case 0x0013B230u: return sub_0013B230;
-
-    case 0x0013B2A0u: return sub_0013B2A0;
-
-    case 0x00178F40u: return sub_00178F40;
-
-    case 0x00024700u: return sub_00024700;
 
     default: return 0;
 
