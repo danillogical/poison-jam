@@ -1,8 +1,30 @@
 # JSRF bare-minimum port: live work report
 
+> **Where the current state lives.** This file is the audit / Grok-lineage report:
+> workflow decisions, the A1-A5 audit sequence and delegation policy, newest first.
+> The **current blocker, evidence revision and next packet** are maintained in the
+> `CURRENT STATE` block at the top of `report-deepseek.md`, which is where the
+> hourly automation and the DeepSeek sessions write. Read that block first, then
+> come back here for the reasoning behind a decision. Run profiles — what a run is
+> allowed to be evidence for — are in `docs/jsrf-run-profiles.md`.
+>
+> Both files are live and neither supersedes the other; they are two agent lines.
+
 This report is updated during the work. Bold **Decision** entries identify
 choices made on my own recommendation. Results distinguish implemented work
 from verified behavior. Milestone acceptance/status remains in the plan.
+
+### Audit follow-up plan — 2026-09-22
+
+**Decision: prioritize status/evidence reconciliation, interrupt-to-event delivery,
+GPU action semantics, and translation entry/branch correctness in that order.**
+The plan now begins with packets A1–A5, explicit acceptance criteria, Suggested
+Agent labels and independent review gates. Historical next-step claims are
+subordinate to that active sequence. As requested, unmet or ambiguous acceptance
+requires checking with the advisor before dependent work or a change to criteria.
+This update schedules the work; it does not claim any implementation packet passed.
+Validation: documentation diff and packet/acceptance structure checked; no code,
+build or runtime changes.
 
 ### Python bounded runner — 2026-09-21
 

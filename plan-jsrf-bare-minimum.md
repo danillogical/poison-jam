@@ -4,7 +4,215 @@ Agent onboarding, operating rules and handoff guidance live in `AGENTS.md`.
 Maintain that guide as capabilities and commands change; this plan remains the
 source of truth for milestone status and acceptance evidence.
 
-Current checkpoint: `logs/runs/20260921-174239-356-reverted-clean/` (clean,
+## Active audit follow-up sequence — 2026-09-22
+
+**Decision: execute A1 through A5 in the order below before advancing dependent
+GPU/rendering milestones.** This section owns the current next steps and overrides
+conflicting statuses, acceptance claims and "next packet" instructions in the
+historical material below and in `report-deepseek.md`. Existing completed fixture
+contracts remain evidence for those fixtures only; they do not establish whole-game
+GPU execution, audio completion or liveness. All packets below are pending.
+
+Audit baseline: source reviewed at game `6cb350e`, toolkit `18a0837`; archived
+exploratory run `logs/runs/20260922-110738-253-nv2a-1bcc/` records toolkit `cf03f46`.
+That run is not a fresh validation of the reviewed source. It records synthetic
+APU acknowledgment and command consumption through GET=PUT, with a diagnostic
+deadline and unresolved event waits. No rendered frame or absence of a hang is
+established by that outcome.
+
+### Acceptance and advisor rule — applies to every packet
+
+**If any acceptance criterion is unmet, ambiguous or contradicted by evidence,
+leave the packet unaccepted and check with the advisor before starting dependent
+work, weakening a criterion, adding a bypass or broadening scope.** Send the
+advisor the packet ID, failed criterion, both repository revisions, exact commands
+and environment, artifact paths, expected versus actual behavior, attempts made,
+and the proposed next action. Record the advisor's response in the live report.
+This is a technical review request to the project's advisor, not a routine request
+for user permission. If the advisor is unavailable, record that dependency and
+continue only independent work; do not silently waive the gate. An advisor-requested
+change to acceptance must be recorded explicitly in this plan with its rationale.
+
+Use the repository's Away role mapping for Codex and `grok-role-map.md` for Grok.
+Terra independently reviews each meaningful implementation packet before dependent
+work starts; the orchestrator adjudicates and resolves findings. Retain the
+two-attempt Luna-to-Sol escalation rule. Advisor consultation is additionally
+required whenever acceptance remains unmet; a passing test count alone cannot
+override a failed behavioral criterion.
+
+### A1 — Reconcile status, evidence profiles and known device mapping
+
+**Suggested Agent:** Luna (documentation and bounded metadata work).
+**Status:** Done 2026-09-22. **Depends on:** none. **Evidence:** game `6cb350e` plus
+the A1 commit; `docs/jsrf-run-profiles.md`; the CURRENT STATE block at the top of
+`report-deepseek.md`; `report-jsrf-bare-minimum.md` header; `AGENTS.md`.
+
+Done:
+- The three documents agree. `AGENTS.md` named only `report-jsrf-bare-minimum.md`
+  as the current status, while the sessions and the hourly automation write
+  `report-deepseek.md`; both are now named with their roles, and each carries a
+  pointer to the CURRENT STATE block. No superseded NULL-ICALL/SEH/PRAMIN claim is
+  an active instruction; the historical text is preserved with the corrections
+  marked.
+- The mapping is recorded: `device=0x0019B200`, `context=device+0x2268`,
+  `event=context+0x1C8=device+0x2430=0x0019D630`, producer `0x00193D90`, citing
+  `docs/jsrf-callback-reentry-contract.md`.
+- **The `0x0018CE80` stride is corrected to 24 bytes**, verified from the
+  instructions rather than taken on either party's word: `0x0018CE90 lea
+  eax,[eax+eax*2]` multiplies the index by 3 before `0x0018CE93 lea
+  esi,[ecx+eax*8+0x211c]`, so the address is `index*24`, and `rep movsd` with
+  `ecx=6` copies 24 bytes. The report had read the `*8` as the stride. The
+  work-queue inference drawn from the entry size is retracted: 24 bytes constrains
+  layout, never semantics.
+- **A further artifact was found while doing this**, and it invalidates a negative
+  result the report was treating as evidence: `0x0019D630` appearing in no data
+  table is *expected* under this mapping, because the event is only reached as a
+  device-relative displacement. The `+0x2430`/`+0x2434` "exactly one site"
+  reading has the same weakness. Only `KeSetEvent = 0 calls` survives, and its
+  ordinal mapping still needs re-checking.
+- Strict and exploratory profiles defined, with every override classified;
+  `RECOMP_APU_DSP_ACK` is named as synthetic completion. `diagnostic_deadline`
+  is described as bounded capture with liveness unresolved.
+- Advisor consulted on the A1 result before starting A2, as the acceptance rule
+  requires. Its ranked mechanisms for the A2 chain are recorded in the report;
+  the cheapest first move is a write-watch on `[0x0019D630..+0x20]` logging the
+  caller PC, plus a probe at `0x00193D90`.
+
+Update the current summaries in this plan, `report-deepseek.md` and `AGENTS.md`;
+separate historical investigations from current instructions. Record the existing
+D3D device/context/event relationship and distinguish strict runs from exploratory
+runs using synthetic completion. Reuse the environment captured by `run-jsrf.py`.
+
+Acceptance:
+
+- All three documents agree on the current blocker, evidence revision, next packet
+  and remaining limitations; superseded NULL-ICALL/SEH/PRAMIN investigations no
+  longer appear as active instructions. Preserve useful historical evidence.
+- Record `device=0x0019B200`, `context=device+0x2268`,
+  `event=context+0x1C8=0x0019D630`, and the producer `0x00193D90`, citing
+  `docs/jsrf-callback-reentry-contract.md` and original instructions. Correct the
+  `0x0018CE80` array stride to 24 bytes; do not infer a work queue from its size.
+- Define reproducible strict and exploratory configurations. Explicitly classify
+  `RECOMP_APU_DSP_ACK` as synthetic completion and record other overrides and
+  their effects. Bypass-enabled results cannot satisfy ordinary boot/audio/GPU
+  acceptance. A strict run may stop earlier; document that honestly.
+- Describe `diagnostic_deadline` as bounded capture with liveness unresolved unless
+  a separate semantic progress criterion is met. Each current claim links to an
+  artifact and its own revisions rather than borrowing newer source identity.
+
+### A2 — Trace and repair delivery to the known event producer
+
+**Suggested Agent:** Sol Medium for root-cause investigation; Luna for a bounded
+implementation once the contract is clear; Terra review.
+**Status:** Pending. **Depends on:** A1.
+
+Trace the modeled interrupt source through pending bits, masks, ISR registration,
+guest ISR `0x00193C50`, helper `0x00193D90`, acknowledgment and event waiters.
+Investigate the `RECOMP_VBLANK` gate without assuming that enabling it establishes
+correct source assertion or callback execution. Preserve guest thread context.
+
+Acceptance:
+
+- Evidence identifies the exact missing transition in the source-to-signal chain;
+  include the actual connected handler/context and relevant register state.
+- Deterministic tests prove source assertion, masked versus enabled delivery,
+  acknowledgment/clearing and absence of spurious repeated delivery. Guest callback
+  ABI and register/thread-context preservation are checked where delivery crosses
+  into translated code; tests do not use sleeps as proof of waiter registration.
+- The signal reaches `context+0x1C8` through the real guest producer, and the
+  intended waiter makes observable progress. Do not substitute direct host event
+  signaling, unconditional completion or forced register values for that path.
+- Archive an identity-verified bounded guest run with profile, event/interrupt
+  evidence and next stop. If an earlier strict-profile blocker prevents live
+  reachability, retain the focused evidence but consult the advisor before calling
+  this packet accepted on exploratory evidence alone.
+
+### A3 — Make GPU acceptance describe implemented behavior
+
+**Suggested Agent:** Luna for each small contract/implementation packet; Sol Medium
+only for unresolved semantics; Terra review before each dependent packet.
+**Status:** Pending. **Depends on:** A2.
+
+Split this work into sequential leaves so Luna can own one class/action at a time:
+
+- **A3a — Classification (Suggested Agent: Luna):** separate observed methods from
+  reviewed state setters and action executors. Acceptance: each accepted method has
+  a class-specific contract and implementation location; observed-only actions
+  remain explicitly unsupported. GET=PUT is labeled consumption, not proof of
+  completed work. Unsupported-stream tests preserve the documented rollback rules.
+- **A3b — First required action (Suggested Agent: Luna):** select the earliest
+  unsupported action from an archived real stream and establish its inputs,
+  ordering, memory effects and completion contract before implementing it.
+  Acceptance: an independently specified fixture verifies the observable effect
+  (for example destination bytes or notification/semaphore writeback), including
+  negative cases. Sink entries and register storage alone do not count. Verify
+  class binding at the time of each command, including a subchannel rebind.
+- **A3c — Repeat and integrate (Suggested Agent: Luna):** repeat A3b as separate
+  bounded packets for subsequent required actions. Acceptance: the reviewed real
+  stream reaches a documented semantic checkpoint, unsupported actions still stop
+  explicitly, and completion cannot outrun modeled execution. Preserve an explicit
+  renderer-pending status unless a guest rendering result is actually verified.
+
+For all leaves, run affected NV2A contracts and submission probes; archive a bounded
+guest run when claiming guest progress. Do not bulk-whitelist an observed inventory
+to make a ring drain. If the execution/queue design cannot represent the required
+ordering, consult the advisor for an architecture decision before implementation.
+
+### A4 — Repair translation entry and branch semantics
+
+**Suggested Agent:** Sol Medium defines ownership/control-flow contracts; Luna
+implements the following focused leaves; Terra independently reviews them.
+**Status:** Pending. **Depends on:** A3.
+
+- **A4a — Adjacent entries (Suggested Agent: Sol Medium then Luna):** replace the
+  assumption that abutting spans imply equivalent function entries with a proven
+  ownership/entry rule. Acceptance: a semantic fixture with distinct adjacent
+  `ret 8` and `ret 16` bodies dispatches each original VA correctly and preserves
+  stack/register behavior. Proven interior fragments remain supported; existing
+  recovered/manual overrides are not lost during regeneration.
+- **A4b — Missing branches (Suggested Agent: Luna under the A4 contract):** inventory
+  the current 40 generated missing-label rewrites and preserve taken-edge semantics.
+  Acceptance: each remaining edge is represented correctly, proven unreachable with
+  evidence, or produces a deterministic diagnostic. No potentially executable edge
+  silently becomes `(void)0`. A taken conditional cross-boundary fixture checks an
+  observable result rather than merely compilation or emitted text.
+- **A4c — Regeneration validation (Suggested Agent: Luna):** regenerate through the
+  documented full translation/recovery pipeline with one build owner. Acceptance:
+  generated declarations, definitions and dispatch agree; relevant toolkit semantic
+  regressions and all current game Release CTests pass; build identity is verified;
+  a same-profile bounded run is compared with the pre-change artifact. Report any
+  newly exposed diagnostic as an unresolved defect, not an acceptance success.
+
+Do not implement a broad alias heuristic merely to reduce a deletion count. If
+entry preservation needs a new translation interface, ask the advisor to review
+the architecture and return the resulting small implementation packets to Luna.
+
+### A5 — Independent acceptance reconciliation and return to the main milestones
+
+**Suggested Agent:** Terra review; orchestrator integrates and consults advisor on
+any unmet criterion. **Status:** Pending. **Depends on:** A1–A4.
+
+Acceptance:
+
+- Review artifacts establish the behavioral criteria above, not just passing
+  suite totals; resolve high-confidence correctness findings and explicitly record
+  any advisor-approved changes to the criteria.
+- Run the current Release CTest suite, affected toolkit regressions and harness
+  checks appropriate to the changed interfaces, with builds and runs serialized.
+  Archive strict and, when useful, separately labeled exploratory results.
+- Update 11b/11c and dependent milestone statuses from this evidence. Record what
+  consumes commands, what executes actions, what completes work and what renders.
+  Choose the next bounded milestone from the actual strict-profile stop.
+- Update the report and handoff guidance with both revisions, exact validation,
+  remaining risks and **bold Decision entries** for autonomous recommendations.
+
+## Historical checkpoints and original milestone detail
+
+The following investigation narrative and milestone snapshots predate the audit
+above. Their "current"/"next" wording is historical and does not override A1–A5.
+A1 must reconcile the relevant rows before they are used for new acceptance.
+
+Historical checkpoint: `logs/runs/20260921-174239-356-reverted-clean/` (clean,
 diagnostics reverted; 154 recovered bodies verify, CTest 11/11). Toolkit
 `f5fbdea`, game `d40e936`.
 

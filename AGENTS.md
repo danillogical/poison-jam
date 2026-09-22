@@ -8,8 +8,21 @@ then extend coverage to the whole game. Work in small, verifiable milestones.
 The user is learning the process: explain each defect, its evidence and result.
 
 Read this guide, the current milestone in `plan-jsrf-bare-minimum.md`, and the
-current status in `report-jsrf-bare-minimum.md` before selecting work. The plan
-owns acceptance criteria and statuses; this guide owns operating knowledge.
+`CURRENT STATE` block at the top of `report-deepseek.md` before selecting work.
+The plan owns acceptance criteria and statuses; this guide owns operating
+knowledge; that block owns the current blocker, evidence revision and next packet.
+
+Two reports are live and neither supersedes the other:
+`report-deepseek.md` (DeepSeek sessions and the hourly automation; the CURRENT
+STATE block lives here) and `report-jsrf-bare-minimum.md` (audit / Grok lineage;
+the A1-A5 sequence and delegation policy). Read the CURRENT STATE block first.
+
+`docs/jsrf-run-profiles.md` defines **strict** versus **exploratory** runs, and
+classifies the environment overrides. `RECOMP_APU_DSP_ACK`, `RECOMP_AC97_READY`,
+`RECOMP_GPU_ACK` and `RECOMP_VBLANK` are synthetic completion and cannot satisfy
+boot, audio, GPU or liveness acceptance. `diagnostic_deadline` means the capture
+was bounded, not that the guest was live; `normal_exit` means the entry point
+returned, not that the title was satisfied.
 When the session is Grok, also read `grok-role-map.md` for model, effort,
 and spawn mechanics. Keep the report updated during work, with **bold Decision
 entries for choices made on your own recommendation**. The user reads it live

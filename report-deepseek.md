@@ -6,55 +6,95 @@ continue.
 
 ## CURRENT STATE — read this first, then the sections below
 
-Last updated 2026-09-22 14:35. Everything below this block is **chronological**,
+Last updated 2026-09-22 15:10. Everything below this block is **chronological**,
 and where a later section corrects an earlier one the later one wins — several do
 (`Correction: ...`, `Retracted ...`). This block is the only place that states
 where things stand *now*; rewrite it in place each session rather than appending.
 
-**Repos.** Game `6060e3f`, toolkit `18a0837`. Both clean. Game CTest 11/11,
-toolkit standalone CTest 1/1 (the toolkit's own build tree needed its test target
-building — it had never been built, which read as a failure).
+**The plan's A1–A5 audit sequence owns the next steps** and overrides any
+"next packet" wording in the historical sections below.
+
+**Repos.** Game `6cb350e`, toolkit `18a0837`. Both clean. Game CTest 11/11,
+toolkit standalone CTest 1/1.
 
 **What works.** The title boots from the retail XBE, runs its CRT and initialisers,
-initialises D3D, and **drains the whole pushbuffer it submits**:
+initialises D3D, and drains the whole pushbuffer it submits
+(`[PFIFO] submit #1 diag=ok get=00002764 put=00002764`). No unresolved indirect
+calls in a run. 19 native threads, 151 named frames.
 
-```
-[PFIFO] submit #1 diag=ok get=00002764 put=00002764
-```
+**The known mapping (A1, from `docs/jsrf-callback-reentry-contract.md` and the
+original instructions).**
 
-No unresolved indirect calls anywhere in a run. 19 native threads, 151 named
-frames, `diagnostic_deadline` (no crash, no hang).
+| | value | note |
+|---|---|---|
+| device | `0x0019B200` | |
+| context | `device + 0x2268` | |
+| event | `context + 0x1C8` = `device + 0x2430` = `0x0019D630` | the in-guest KEVENT three threads wait on |
+| producer | `0x00193D90` | |
 
-**Where it stops.** Three guest threads block in `xbox_KeWaitInplaceEvent` on the
-in-guest KEVENT at `0x0019D630`, and **nothing signals it**: ordinal 145
-(`KeSetEvent`) is called 0 times, `NtPulseEvent` 0 times, `0x0019D630` occurs as no
-immediate and in no data table, and the field pair `+0x2430`/`+0x2434` occurs at
-exactly one site in the whole recompiled title.
+**Where it stops.** Three guest threads block in `xbox_KeWaitInplaceEvent` on that
+KEVENT, and nothing signals it.
 
-**Next packet.** Identify what the structure at `0x0019B200` describes. Its
-`+0x211C` array is indexed in 8-byte records and `sub_0018CE80(i, out)` copies 24
-bytes out of entry `i`, so it is a work-item queue; naming its subsystem names the
-producer of the missing signal. Do **not** re-derive the `+0x242C` callback — it is
-a trace hook over the counter at `0x265174`, already closed.
+**Two corrections to what this block previously claimed.**
 
-**Open, off the critical path.** The APU has no GP SGE engine. The APU is
-instantiated and routed (`apu_mmio_hook.h`, gated on `RECOMP_APU_TRAP`), but the
-SGE engine is not on the critical path while `RECOMP_APU_DSP_ACK=0x803C0810` is set.
+1. **The `0x0018CE80` array stride is 24 bytes, not 8.** `0x0018CE90 lea
+   eax,[eax+eax*2]` pre-multiplies the index by 3, then `0x0018CE93 lea
+   esi,[ecx+eax*8+0x211c]` yields `index*24`, and `rep movsd` with `ecx=6` copies
+   24 bytes. I read the `*8` as the stride and missed the `*3` before it.
+   **And do not infer a work queue from the entry size** — 24 bytes constrains
+   layout, never semantics; a descriptor table, a vtable bank and a queue can all
+   be 24 bytes per entry.
 
-**Milestones.** 00–05 done. 06a done; 06b **blocked on reachability** (the four
-unbridged ordinals are declared but never called). 07 in progress. 11's blocker is
-cleared — the fence/ring wait that held the title for days is gone; the renderer
-itself is still pending, which is 12 onward.
+2. **"`0x0019D630` appears in no data table" carries no information.** The audit's
+   own arithmetic makes that expected: the event is only ever reached as a
+   device-relative displacement, so a scan for the absolute literal is blind by
+   construction. The `+0x2430`/`+0x2434` "exactly one site" reading has the same
+   weakness — other sites may reach it through a different base. Only
+   `KeSetEvent = 0 calls` is trustworthy, and even that needs its ordinal mapping
+   re-checked.
+
+**Next packet.** A2 — trace the modelled interrupt source through pending bits,
+masks, ISR registration, guest ISR `0x00193C50`, helper `0x00193D90`,
+acknowledgment and the waiters. The advisor's ranked mechanisms, cheapest first:
+
+1. **direct dispatch-header write** — a bridge or the producer writes the KEVENT's
+   header directly, bypassing `KeSetEvent`. *Experiment:* watch writes to
+   `[0x0019D630..+0x20]` and log the caller PC.
+2. **host-delivered ISR/DPC** — *Experiment:* instrument the host wait-satisfy
+   primitive and log the guest PC/thread it woke.
+3. **computed-pointer signal** through an indirect call whose *argument* is
+   computed, so target resolution would not flag it.
+4. **another gate** — the producer runs but its signal sits behind a flag never
+   enabled (the same shape as the fence-mirror bug). *Experiment:* probe entry,
+   exit and the branch condition at `0x00193D90`.
+5. **object aliasing** — a different guest KEVENT maps to the same host object.
+6. **a wait satisfied without signalling** — spurious wake or predicate re-check.
+   *Experiment:* establish whether this is a true KEVENT block or a predicate poll.
+
+Start with 1 plus a probe at `0x00193D90`: together they separate "signalled by a
+direct header write" from "the producer never fired or is gated".
+
+**Run profiles.** `docs/jsrf-run-profiles.md` defines **strict** (no override that
+answers a poll the hardware did not answer) versus **exploratory**. `RECOMP_APU_DSP_ACK`,
+`RECOMP_AC97_READY`, `RECOMP_GPU_ACK` and `RECOMP_VBLANK` are **synthetic
+completion** and cannot satisfy boot, audio, GPU or liveness acceptance.
+`JSRF_ALLOW_UNRESOLVED` and `JSRF_ABI_CONTINUE` are bypasses. **`diagnostic_deadline`
+means the capture was bounded, not that the guest was live**; `normal_exit` means
+the entry point returned, not that the title was satisfied.
+
+**Open, off the critical path.** The APU has no GP SGE engine, and is not on the
+critical path while `RECOMP_APU_DSP_ACK` is set.
+
+**Milestones.** 00–05 done. 06a done; 06b blocked on reachability. 07 in progress.
+11's blocker cleared; the renderer itself still pending, which is 12 onward.
 
 **Running the title.** `RECOMP_KERNEL_LOG_BUDGET=100000`, or a live run looks
-frozen: the default 200 truncates the log and a truncated log reads as a hang.
-`git commit -F <file>` is needed for multi-line messages, and the path in `-F`
-must be a Windows path, not `/c/...`.
+frozen. `git commit -F <file>` for multi-line messages, with a Windows path.
 
 **Evidence retention.** `logs/` is gitignored and holds 638 runs (~93 GB). The
-report, plan and `docs/` cite 47 of them as evidence (~8 GB) — those must not be
-pruned. Anything older than the cited set and outside the most recent runs is
-disposable; there is no retention script yet.
+report, plan and `docs/` cite 47 of them as evidence (~8 GB) — never prune those.
+An artifact's toolkit revision is part of the claim: `20260922-110738-253-nv2a-1bcc`
+records toolkit `cf03f46`, not the reviewed source, so it does not validate it.
 
 ## 2026-09-21 — Commit the outstanding checkpoint, then resume the plan
 
@@ -6549,3 +6589,15 @@ next packet does not re-derive it.
 in `sub_0018CE80`, and twice more at `recomp_0004.c:39782` and `:39825`), and
 `sub_0018CE80(i, out)` copies 24 bytes out of entry `i`; that is a work-item
 queue. Naming the subsystem that owns it names the producer.
+
+**CORRECTED 2026-09-22 by A1 — two errors in the paragraph above, left in place
+because the shape of the mistake is worth keeping.**
+1. **The stride is 24 bytes, not 8.** `0x0018CE90 lea eax,[eax+eax*2]` multiplies
+   the index by 3 *before* `0x0018CE93 lea esi,[ecx+eax*8+0x211c]`, so the address
+   is `index*24`; `rep movsd` with `ecx=6` copies 24 bytes. Reading the `*8` as
+   the stride missed the multiply in front of it.
+2. **A work queue cannot be inferred from the entry size.** 24 bytes constrains
+   layout and never semantics — a descriptor table, a vtable bank and a queue can
+   all be 24 bytes per entry. The inference above is not evidence.
+
+The next packet A1 assigns is the device/context/event mapping, not this array.
