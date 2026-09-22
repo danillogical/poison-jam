@@ -4383,3 +4383,67 @@ there is no `SetDmaContext`-style import in the 120-entry table, so it is either
 RAMHT object or a register write, and that is what to instrument next. Guessing
 the value here would be exactly the "returns success without producing required
 state" the plan forbids.
+
+
+---
+
+# The notify handle resolves, but the address does not match yet
+
+## Handle 7 is a RAMHT handle, and the toolkit can already decode it
+
+A probe on `NV097_SET_CONTEXT_DMA_NOTIFIES` answers the question the last section
+left open -- the title passes a handle, and the model can resolve it:
+
+```
+[NOTIFY] class=39 subch=1 method=0x180 param=7 ramht_hit=1 class_of_handle=3D
+         ramht ctx=80000119 instance=00001190
+         object: 0402B03D 0000001F 00000043 00000043
+[NOTIFY] class=97 subch=0 method=0x180 param=2 ramht_hit=1 class_of_handle=03
+         ramht ctx=80000118 instance=00001180
+         object: 0202B003 0000001F 00000023 00000023
+```
+
+So `param` is a RAMHT handle, `ramht_lookup_class` already resolves it, and the
+object's class is **0x3D** -- which `nv2a_regs.h` names
+`NV_DMA_IN_MEMORY_CLASS`. The toolkit already has the decoder:
+`nv_dma_load()` reads `{flags, limit, frame}` from the object and returns
+`{dma_class, dma_target, address, limit}`.
+
+For the notify object that decodes to:
+
+| field | value |
+|---|---|
+| `dma_class` | `0x3D` = `NV_DMA_IN_MEMORY_CLASS` |
+| `dma_target` | `0x3` = `NV_DMA_TARGET_AGP` |
+| `address` | `(frame & NV_DMA_ADDRESS) \| GET_MASK(flags, NV_DMA_ADJUST)` = **`0x40`** |
+| `limit` | `0x1F` = 31 |
+
+## Where it stops, and why I am not guessing
+
+The model maps the contiguous window at `0x80000000` as physical page 0, so DMA
+address `0x40` would be guest VA **`0x80000040`**. But the word the title waits on
+is at **`0x80000000`** -- the address it stored in its own device structure and the
+one the sentinel write targets.
+
+Those are 0x40 apart, and nothing I have measured explains the offset. The two
+candidate readings are:
+
+1. **The DMA object is a different one than the wait uses.** The title registers
+   two notify contexts (subch1 handle 7, subch0 handle 2); the wait may be on a
+   third, or on the buffer's head rather than its base.
+2. **The window mapping differs from my assumption.** `nv_dma_map` masks
+   `address & 0x07FFFFFF` and maps into **VRAM**, not into the contiguous window,
+   so a DMA object may not denote a window address at all.
+
+Guessing either would produce exactly the "returns success without producing
+required state" the plan's working rules forbid, and a wrong write here would look
+like progress while corrupting a buffer the title is reading.
+
+**Next step:** resolve the offset. The cheapest experiment is to log, at the spin
+site, the value the title has stored at `[0x19dce0]+0x34` *and* the DMA object it
+registered, so the two can be compared directly rather than inferred. If they
+disagree, the wait is on a buffer whose registration has not been observed yet,
+and that registration is the thing to find.
+
+State: `logs/runs/20260922-004717-068-m11-limits/` (ring fully drained,
+CTest 11/11, 167 verifying, 0 ABI reports). Toolkit `bafffae`.
