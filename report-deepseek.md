@@ -3687,10 +3687,59 @@ remaining reports can now be trusted as signal rather than noise.
 its direct callee `0x001A0D9C` is one of the six, so the change reaches it from the
 same unknown source.
 
-**Next packet:** the three that also have delta mismatches — `0x0019EE1F`,
-`0x001A1BE2`, `0x001A5D51` — since a wrong ESP delta and a clobbered register in
-the same function is the signature of the `0x00168480` defect (a dispatch redirect
-to a function with a different contract). Compare each dispatch tuple's target
-against the guest `ret N` at the address, which is what named the last one.
+## The three now form an explicit call chain
+
+`jsrf_trace_delta_mismatch` was called with a constant site id, which is why the
+reports named only callees and left the call sites unknown. Passing the **return
+address** instead — `MEM32(_ap)` is the pushed return address — makes each report
+name the site. The same run then gives a complete chain:
+
+```
+[DELTA] site=001A0C62 callee=001A1BE2    0x001A0C06 -> 0x001A1BE2
+[DELTA] site=001A1C03 callee=001A5D51    0x001A1BE2 -> 0x001A5D51
+[DELTA] site=001A5D6B callee=0019EE1F    0x001A5D51 -> 0x0019EE1F   <- deepest
+```
+
+Each return address checks out against the guest: `0x001A5D6B` is the return of
+`call 0x19ee1f` at `0x001A5D66`, and `0x001A1C03` is the return of
+`call 0x1a5d51` at `0x001A1BFE`. So the error originates at `0x0019EE1F` and is
+inherited by every caller above it.
+
+## What is established about `0x0019EE1F`, and what is not
+
+**Established.** It is a complete, genuine function that the DB has no entry for
+(`push esi; mov esi,[esp+8]; test esi,esi; je; mov eax,[esi]; push esi;
+call [eax+4]; mov eax,esi; pop esi; ret 4`) — the same missed-entry class as
+`0x001BD274`, not a mid-body fragment. Its generated body is a **faithful 1:1
+translation**, and the delta table agrees with it (both say 8, which is right for
+`ret 4`). Two of its callers, `0x001A5D51` and `0x001A0D2F`, are also faithful
+1:1 translations with correct epilogues.
+
+**Not established.** Where the 4-byte error is introduced. Its only internal
+candidate is the indirect call at `0x0019EE2B` (`call [eax+4]`), but a probe armed
+on that site — the same technique that named `0x00168480` — **never fired**, while
+the run still reports both a wrong delta and a changed ESI for this function. Those
+two facts are hard to reconcile: with the `je` path taken (`esi == 0`) the epilogue
+restores ESI and the delta is 8; with the call path taken the probe should have
+fired. So one of the following is true and has not been distinguished:
+
+1. The probe did not fire because `RECOMP_ICALL_IS_CODE` breaks out of the macro
+   *before* the probe's position — but that path restores `g_esp = saved_esp`, so
+   it should not change ESI either.
+2. The report is produced by a *different* call to `0x0019EE1F`. It has five call
+   sites (`0x0019F3C2`, `0x0019F404`, `0x0019F432`, `0x0019F442`, `0x001A0D41`)
+   besides the one in the chain, and the chain only accounts for `0x001A5D6B`.
+3. The error is inherited from deeper than the probe site and the ICALL is a red
+   herring.
+
+**Next packet:** distinguish those three. The cheap discriminator is to log the
+`site` (return address) together with the *actual* delta and the expected one, so
+the exact 4 bytes can be attributed; and to move the ICALL probe to the top of
+`RECOMP_ICALL_SAFE`, before the `IS_CODE` check, so "the ICALL never ran" becomes a
+fact rather than an inference. Also worth doing: the general fix of deriving the
+expected delta from the guest's own `ret N` at each dispatch address rather than
+from the generated body, since the body and the table are currently derived from
+the same source and so cannot disagree — which is exactly why a self-consistent
+but guest-wrong `ret N` is invisible to this check.
 
 

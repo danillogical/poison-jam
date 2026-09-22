@@ -772,7 +772,7 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
     uint32_t _ab = g_ebx, _as = g_esi, _ad = g_edi, _ap = g_esp; \
     (fn)(); \
     if (!recomp_delta_ok((va), g_esp - _ap)) \
-        jsrf_trace_delta_mismatch(0xD00Du, (va)); /* exact-delta check */ \
+        jsrf_trace_delta_mismatch(MEM32(_ap), (va)); /* exact-delta check; site = return address */ \
     if (!recomp_abi_regs_exempt((va)) && \
         (g_ebx != _ab || g_esi != _as || g_edi != _ad || g_esp < _ap + 4)) \
         recomp_abi_violation_log((va), _ab, _as, _ad, _ap); \
