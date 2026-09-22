@@ -475,7 +475,7 @@ int main(void)
                     "USER rollback object registration");
         memset(pb, 0, 0x2000);
         pb[0] = (1u << 18); pb[1] = 0x9abc;
-        pb[2] = (3u << 18) | 0x0200u;
+        pb[2] = (3u << 18) | 0x03fcu;
         pb[3] = 0x07000007u; pb[4] = 0x08000008u;
         pb[5] = 0x04000004u;
         submit_reset(gpu, 0, 24);
@@ -487,9 +487,9 @@ int main(void)
                     "USER late unsupported state rollback");
         ok &= check(gpu->pgraph.regs[0x0204 / 4], old_clip_v,
                     "USER late unsupported vertical state rollback");
-        ok &= check(gpu->pfifo.submit_diag_method, 0x0208,
+        ok &= check(gpu->pfifo.submit_diag_method, 0x03fc,
                     "USER removed format exact method diagnostic");
-        ok &= check(gpu->pfifo.submit_diag_param, 0x04000004,
+        ok &= check(gpu->pfifo.submit_diag_param, 0x07000007,
                     "USER removed format exact parameter diagnostic");
 
         /* Binding on another subchannel is outside the fixture contract and
@@ -555,7 +555,7 @@ int main(void)
 
         memset(pb, 0, 0x2000);
         pb[0] = (1u << 18); pb[1] = 0xDu;
-        pb[2] = (3u << 18) | 0x0200u;
+        pb[2] = (3u << 18) | 0x03fcu;
         pb[3] = 0x07000007u; pb[4] = 0x08000008u;
         pb[5] = 0x04000004u;
         submit_reset(gpu, 0, 24);
@@ -567,7 +567,7 @@ int main(void)
                     "USER RAMHT late unsupported H rollback");
         ok &= check(gpu->pgraph.regs[0x0204 / 4], ramht_clip_v,
                     "USER RAMHT late unsupported V rollback");
-        ok &= check(gpu->pfifo.submit_diag_method, 0x0208,
+        ok &= check(gpu->pfifo.submit_diag_method, 0x03fc,
                     "USER RAMHT late format method diagnostic");
 
         memset(pb, 0, 0x2000);
@@ -698,11 +698,16 @@ int main(void)
         } while (0)
 
         {
+            /* Methods the title never submits, so they are absent from the
+             * generated table and must still reject. 0x208/0x20C/0x210/0x214 used
+             * to be here; decoding JSRF's own pushbuffer showed it does submit
+             * them, so they are implemented now. The assertion is the same -- an
+             * unimplemented method rejects the stream and rolls it back. */
             static const uint32_t removed_surface[][2] = {
-                { 0x0208u, 0x04000004u },
-                { 0x020cu, 0x00000800u },
-                { 0x0210u, 0x00100000u },
-                { 0x0214u, 0x00200000u },
+                { 0x03fcu, 0x04000004u },
+                { 0x04fcu, 0x00000800u },
+                { 0x0ffcu, 0x00100000u },
+                { 0x17fcu, 0x00200000u },
             };
             uint32_t clip_h = gpu->pgraph.regs[0x0200 / 4];
             uint32_t clip_v = gpu->pgraph.regs[0x0204 / 4];
@@ -754,16 +759,19 @@ int main(void)
         REJECT_CASE("USER control loop", 0, 4, "control_flow_loop");
 
         memset(pb, 0, 0x2000);
-        for (unsigned i = 0; i < 257; ++i) pb[i] = 0;
-        submit_reset(gpu, 0, 257 * 4);
-        REJECT_CASE("USER packet/word budget", 0, 257 * 4, "budget_exhausted");
+        /* Valid NOP packets (count 0, method 0x100), one word each, so the
+         * stream actually reaches the packet budget. All-zero words would fail
+         * earlier as a SET_OBJECT with handle 0 and never test the budget. */
+        for (unsigned i = 0; i < 1025; ++i) pb[i] = 0x100u;
+        submit_reset(gpu, 0, 1025 * 4);
+        REJECT_CASE("USER packet/word budget", 0, 1025 * 4, "budget_exhausted");
 
         memset(pb, 0, 0x2000); pb[0] = (2u << 18) | 0x1ffcu;
         submit_reset(gpu, 0, 12);
         REJECT_CASE("USER method range", 0, 12, "method_range_overflow");
 
-        memset(pb, 0, 0x2000); pb[0] = (257u << 18) | 0x100u;
-        submit_reset(gpu, 0, 0x408);
+        memset(pb, 0, 0x2000); pb[0] = (1025u << 18) | 0x100u;
+        submit_reset(gpu, 0, 0x1008);
         REJECT_CASE("USER sink capacity", 0, 0x408, "sink_capacity");
 
         memset(pb, 0, 0x2000); pb[0x3fe] = (2u << 18) | 0x100u; pb[0x3ff] = 1;

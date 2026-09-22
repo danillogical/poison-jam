@@ -78,7 +78,8 @@ if(BUILD_TESTING)
     add_executable(jsrf_lifter_test tests/lifter-regressions.c)
     add_test(NAME jsrf_lifter_flags COMMAND jsrf_lifter_test)
     add_executable(jsrf_nv2a_test tests/test_nv2a_contract.c
-        ${XBOXRECOMP_DIR}/src/nv2a/nv2a_core.c)
+        ${XBOXRECOMP_DIR}/src/nv2a/nv2a_core.c
+        ${XBOXRECOMP_DIR}/src/nv2a/nv2a_method_table.c)
     target_include_directories(jsrf_nv2a_test PRIVATE ${XBOXRECOMP_DIR}/src/nv2a)
     target_link_libraries(jsrf_nv2a_test PRIVATE platform)
     add_test(NAME jsrf_nv2a_registers COMMAND jsrf_nv2a_test)

@@ -4303,3 +4303,83 @@ The decoded packet sequence remains the specification, and the immediate first
 method to implement is `NV097_SET_CONTEXT_DMA_NOTIFIES` (0x180) on
 `NV_MEMORY_TO_MEMORY_FORMAT` (class 0x39), together with the notify writeback that
 ends the spin.
+
+
+---
+
+# Milestone 11: the model now consumes the title's whole pushbuffer
+
+## What changed
+
+Four things, in the order the walk met them. Each was found by decoding what the
+title actually submits (`docs/jsrf-nv2a-method-inventory.md`) rather than by
+guessing, and each moved the rejection to the next gate:
+
+1. **The walk is class-aware.** `nv2a_core.c` knew only `NV097_CLASS`, so a
+   subchannel bound to the blit engine or the 2D-surface class could never be
+   accepted. All four classes are named in `nv2a_regs.h` already.
+2. **The implemented-method table is generated from measurement.**
+   `scripts/gen-nv2a-method-inventory.py` decodes the pushbuffer and emits both
+   `docs/jsrf-nv2a-method-inventory.md` and
+   `xboxrecomp/src/nv2a/nv2a_method_table.c` -- 246 methods (235 NV097, 8 blit,
+   2 surfaces, 1 memcpy). Keeping them generated means the doc and the code cannot
+   drift, and "implemented" means "observed in a real submission".
+3. **The sink stopped ratcheting.** `sink_count` was only ever incremented and
+   nothing read or cleared it, so it climbed to its cap and rejected every later
+   submission for the rest of the run. The test harness already models it as
+   per-submission (`submit_reset` zeroes it), so the model was the odd one out.
+4. **The staging limits were sized to real content.** The title's first ring is
+   **259 packets / 713 words**; the model's limits were 256 packets and a
+   256-entry staging buffer, so a legitimate submission was rejected as
+   pathological. Now 1024 packets / 4096 words, roughly 4x headroom.
+
+The rejection contract is untouched. A method absent from the table still rejects
+the stream and rolls it back; an unbound subchannel still rejects; a stream still
+too large still rejects. `jsrf_nv2a_registers` was **extended**, not weakened: the
+methods it used to express "unmodeled" (0x208/0x20C/0x210/0x214) are ones the
+title does submit, so they are implemented now, and the test uses methods that
+appear nowhere in the inventory (0x03FC/0x04FC/0x0FFC/0x17FC).
+
+## Result
+
+```
+[PFIFO] submit #0 diag=ok get=00001000 put=00001000
+[PFIFO] submit #1 diag=ok get=00001B24 put=00001B24
+PFIFO_DMA_GET = 0x00001B24    PFIFO_DMA_PUT = 0x00001B24
+```
+
+The walk completes and the ring fully drains, where before GET was frozen at
+0x1000 for the whole run. CTest 11/11.
+
+## What is still blocking, and why it is the last piece
+
+The spin at `0x001914F0` is unchanged, and now it is the *only* thing standing
+between this and the next milestone. It waits on the **memory word** at
+`0x80000000`, which is the notify buffer the title registered with
+`NV097_SET_CONTEXT_DMA_NOTIFIES`. Draining the ring does not write it.
+
+The arithmetic explains what has to be written. The loop is
+
+```
+eax = [dev+0x30] - [ebx]          ; 7 - 5 = 2
+loop: ecx = [notify]; esi = [dev+0x30] - ecx; cmp eax, esi; jb loop
+```
+
+so it exits when `[notify] >= [ebx]`, and it only behaves that way while
+`[notify] <= [dev+0x30]`. With the sentinel `0xDEADBEEF` in place the subtraction
+wraps and the comparison inverts, which is why the wait is permanent. The model
+must publish a **small** value -- the fence sequence -- not a sentinel.
+
+## The one piece of information still missing
+
+The model cannot resolve the notify address from the method alone: the title
+passes **handle 7**, and the address (`0x80000000`, the contiguous window base,
+i.e. the first `MmAllocateContiguousMemory` result) lives only in the guest's own
+device structure at `[0x19dce0]+0x34`. Reading that address from the model would
+be hardcoding this title's layout, which the plan's working rules forbid.
+
+So the next step is to find where the guest associates handle 7 with the buffer --
+there is no `SetDmaContext`-style import in the 120-entry table, so it is either a
+RAMHT object or a register write, and that is what to instrument next. Guessing
+the value here would be exactly the "returns success without producing required
+state" the plan forbids.
