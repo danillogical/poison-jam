@@ -74,6 +74,26 @@ acknowledgment and the waiters. The advisor's ranked mechanisms, cheapest first:
 Start with 1 plus a probe at `0x00193D90`: together they separate "signalled by a
 direct header write" from "the producer never fired or is gated".
 
+**Advisor usage is under-target, measured 2026-09-22.** Five prompts ever, of
+which two were persistence tests, so **three substantive consults in ~18 hours** —
+and only one in the twelve hours to 15:12. Against the escalation triggers, that
+window met "two measurements contradict each other" (the highest-value case)
+**four times**, "a negative result that would change the plan" twice, and "the same
+class of mistake twice" once — with no consult. The four were all measurement
+artifacts found locally only after costing a run or a false alarm: a rebuilt tree
+that "looked like a regression" and differed only by an environment variable; a
+kernel-log budget that made a live run look frozen; `named_frames` sampled at the
+deadline and read as a before/after metric; a symbol+offset mislabel past a body's
+end.
+
+The plan's new acceptance gate does not cover this: it fires when a packet's
+acceptance is evaluated, and every one of those incidents happened *during*
+investigation. The automation prompt now carries all five triggers explicitly, and
+the plan records that they apply during a packet as well as at its acceptance.
+Cheapest way to keep this honest: count the advisor's user turns in its transcript
+rather than the log — `Using subagent model: kimi-k3` appears 47 times, but that is
+the phrase repeated across several log lines per turn, not 47 consults.
+
 **Run profiles.** `docs/jsrf-run-profiles.md` defines **strict** (no override that
 answers a poll the hardware did not answer) versus **exploratory**. `RECOMP_APU_DSP_ACK`,
 `RECOMP_AC97_READY`, `RECOMP_GPU_ACK` and `RECOMP_VBLANK` are **synthetic

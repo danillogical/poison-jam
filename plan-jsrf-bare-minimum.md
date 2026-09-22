@@ -33,6 +33,28 @@ for user permission. If the advisor is unavailable, record that dependency and
 continue only independent work; do not silently waive the gate. An advisor-requested
 change to acceptance must be recorded explicitly in this plan with its rationale.
 
+**Added 2026-09-22 after measuring the consult rate: the gate above is necessary but
+not sufficient.** It fires when a packet's acceptance is evaluated — but the
+consult that has actually paid here happens *during* investigation, before
+acceptance is reached. In the twelve hours to 2026-09-22 the following triggers
+were each met and no consult was made; all four were measurement artifacts found
+locally only after costing a run or a false alarm:
+
+- a rebuilt tree that "looked like a regression" and differed only by an
+  environment variable;
+- a kernel-log budget that made a live run look frozen;
+- `named_frames`/`native_threads` being sampled at the deadline and read as
+  before/after metrics;
+- a symbol+offset in a stack line being a mislabel past a body's end.
+
+So the escalation triggers apply **during** a packet as well as at its acceptance,
+and they are the five in `advisor-escalation`: two measurements contradicting each
+other (the highest-value case); a negative result that would change the plan; any
+"impossible"/"unproven"/"rules out" claim; two or more failed hypotheses, or the
+same class of mistake twice; and before an expensive investigation. A repeat is
+the strongest signal — this project has cancelled a packet on a detector artifact
+twice, and had a wrong triage list in two consecutive sessions.
+
 Use the repository's Away role mapping for Codex and `grok-role-map.md` for Grok.
 Terra independently reviews each meaningful implementation packet before dependent
 work starts; the orchestrator adjudicates and resolves findings. Retain the
