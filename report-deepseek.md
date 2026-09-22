@@ -4774,18 +4774,25 @@ ecx = 0x803E4344
   +0x0C = 0xFFFFFFFF
   +0x10 = 0x0001FFFF
   +0x64 = 0x00         <- THE DIVISOR
-  +0x78 = 0x803E4258   the buffer object
+  +0x78 = 0x803E4258   the DirectSound DEVICE
 [ecx+0x78] = 0x803E4258
   +0x00 = 0x001E0DFC   vtable
   +0x04 = 3
-  +0x08 = 2            flags
+  +0x08 = 2            dwFlags (DSSCL_PRIORITY)
   +0x0C = 0            <- wFormatTag
   +0x0E = 0            <- nChannels, the source of the zero
-  +0x1C = 0xFFFFFDA8
-  +0x20 = 0x00000258
+  +0x1C = 0xFFFFFDA8   -600, written by 0x001A062A
+  +0x20 = 0x00000258   600,  written by 0x001A062A
   +0x24 = 0x00000014
   +0x28 = 0x00000014
 ```
+
+The object at `+0x78` is the device, not a buffer: `0x001A062A` writes
+`[device+0x1C] = -[device+0x20]` with `[device+0x20] = 600`, and those are the two
+values found at `0x803E4258+0x1C`/`+0x20`. `0x001A09DE` is
+`DirectSoundCreate`-adjacent: it reads `dwFlags` at `+4`, `lpwfxFormat` at `+0xC`
+and `dwBufferBytes` at `+0x10` from the descriptor and calls
+`0x001A062A(device, dwFlags, lpwfxFormat, dwBufferBytes)`.
 
 ## The chain, read off the code
 
@@ -4811,31 +4818,86 @@ this object, so this method *does* take the error path -- the crashing method
 simply has no such guard, and the `div` sits in front of the `test` that would
 have caught it.
 
-`0x001A06E4`, called from the buffer constructor, is `push 0x61645344` -- the tag
-`DSda` -- so the object at `+0x78` is a DirectSound buffer, and the two zero fields
-at `+0x0C`/`+0x0E` are its `WAVEFORMATEX`. The buffer is created at
-`0x001A0ADE call 0x1a4594` after `0x001A0AC4 push 0x118` (`operator new(0x118)`),
-and `sub_001A3CA4(this, [[outer+8]+0xC], [outer+0x1C])` is what should have filled
-the format in.
+`0x001A06E4`, called from the device constructor, is `push 0x61645344` -- the tag
+`DSda` -- and the buffer that is created at `0x001A0ADE call 0x1a4594` follows
+`0x001A0AC4 push 0x118` (`operator new(0x118)`), so the object at `ecx` is the
+DirectSound buffer and the device hangs off it at `+0x78`. The two zero fields at
+`device+0x0C`/`+0x0E` are the device's `WAVEFORMATEX`.
 
 **Conclusion: the buffer is constructed with a zero channel count.** That is the
 thing to chase, not the divide.
 
 ## Next packet: why the buffer's format is empty
 
-Two candidates, and they are distinguishable by one dump each:
+**Answered in this session, and the answer is that it is not empty -- it was
+rejected.** `0x001A4BC4` is the XDK's format parser, reached as
+`0x0019F320(this = device, lpwfxFormat, ...)` from `0x001A062A`:
 
-1. `sub_001A3CA4` is handed a `WAVEFORMATEX` whose fields are already zero, i.e.
-   the caller's `[outer+8]` is not the structure it thinks. Dump `[edi+8]` at
-   `0x001A0AD6` from a run.
-2. `sub_001A09DE` -- the validator called at `0x001A0AB9`, whose `jl` failure
-   branch is skipped -- returns success for a format it should reject, so the
-   constructor runs with garbage.
+```
+0019F32E lea   eax, [esi + 0xc]      ; &device->format
+0019F331 push  eax
+0019F334 call  0x1a4bc4              ; parse(lpwfxFormat, &device->format)
+0019F339 mov   edi, eax
+0019F33D cmp   edi, edx
+0019F33F je    0x19f388              ; a return of 0 is not an error here
+```
 
-Worth noting for whoever picks this up: the two `WAVEFORMATEX` words are the first
-thing to check, because `wFormatTag = 0` is not a valid tag (`WAVE_FORMAT_PCM` is
-1, `WAVE_FORMAT_XBOX_ADPCM` is `0x69`, and `0x001A29F5 sub eax, 0x68` is the
-comparison against the latter).
+and the parser itself:
+
+```
+001A4BC4 mov   ecx, [esp + 8]        ; lpwfxFormat
+001A4BC8 movzx eax, word ptr [ecx]   ; wFormatTag
+001A4BCC xor   esi, esi              ; the return value, 0 unless a branch runs
+001A4BCE dec   eax
+001A4BCF je    0x1a4bf7              ; 1      -> WAVE_FORMAT_PCM
+001A4BD1 sub   eax, 0x68
+001A4BD4 je    0x1a4beb              ; 0x69   -> WAVE_FORMAT_XBOX_ADPCM
+001A4BD6 sub   eax, 0xff95
+001A4BDB jne   0x1a4c01              ; neither -> return 0, writing NOTHING
+```
+
+So a `WAVEFORMATEX` whose `wFormatTag` is 0 matches no branch: the parser returns
+0 **without touching the destination**, and `0x0019F320` treats a 0 return as
+"nothing to do" rather than as a failure. The device's format block keeps
+whatever the allocation held, which is zero.
+
+That is the whole chain, and every link is measured:
+
+```
+game passes wFormatTag = 0
+  -> 0x001A4BC4 has no branch for it, writes nothing, returns 0
+  -> device->wFormatTag = 0, device->nChannels = 0   (0x803E4258 +0x0C, +0x0E)
+  -> buffer->field64 = ceil(0/2) = 0                 (0x001A29EB)
+  -> 0x001A2BFC div esi with esi = 0                 (0xC0000094)
+```
+
+Note the shape of the mistake: `0x001A29DB` *does* guard this case and returns
+`DSERR_INVALIDPARAM`, so the XDK knows the format is bad. The crashing method
+just has no guard, and its `test esi, esi` sits **after** the `div`.
+
+**Also ruled out this session, with evidence:** the audio channel count does not
+come from the EEPROM. `ExQueryNonVolatileSetting` is never called at all --
+zero occurrences in `logs/runs/20260922-054939-687-p3-klog` -- so the `XC_AUDIO`
+value the toolkit returns is not in this path.
+
+## What is left to find
+
+Where the game's `wFormatTag = 0` comes from. The measured facts that bound it:
+
+- The `DSBUFFERDESC` asks for `dwBufferBytes = 17682440` (`0x10DE008`) -- the
+  `ExAllocatePoolWithTag: size=17682440 tag='DSda'` at kernel call #1390 -- so
+  the game does have *some* format information when it computes the size, and a
+  zero tag is not simply "the game never configured audio".
+- No audio file is read before this point. The last file traffic is the font at
+  `\Device\CdRom0\Media\Font\TNRoman.bin`.
+- The title id is confirmed as `0x5345000A` by its own UDATA path,
+  `\Device\Harddisk0\partition1\UDATA\5345000a\TitleImage.xbx`, which is the same
+  id the reboot's launch data page carries.
+
+The next measurement worth taking is a dump of the `lpwfxFormat` target itself --
+the pointer `[DSBUFFERDESC+0xC]` handed to `0x001A09DE` -- and of the
+`DSBUFFERDESC` around it, at the moment of the call. Everything downstream is now
+known, so that one structure answers the rest.
 
 # State at the end of this session
 
@@ -4860,5 +4922,11 @@ comparison against the latter).
   (`logs/runs/20260922-055716-423-p7-noabicheck`: `submit #0 diag=ok`, then the
   same `0xC0000094`).
 - Toolkit `a02780d`; game commit records it.
-- **The blocker is now the zero channel count on the DirectSound buffer**, not the
-  push buffer, not the fence and not the ring wait.
+- **Root cause of the current stop, fully measured:** the game hands DirectSound a
+  `WAVEFORMATEX` with `wFormatTag = 0`; `0x001A4BC4` has no branch for that tag,
+  writes nothing and returns 0; `0x0019F320` reads a 0 return as "nothing to do";
+  the device's format stays zeroed; `0x001A29EB` derives `ceil(0/2) = 0`; and
+  `0x001A2BFC div esi` faults. Not the push buffer, not the fence, not the ring
+  wait, and not the EEPROM -- `ExQueryNonVolatileSetting` is never called.
+- **Next measurement:** dump the `DSBUFFERDESC` and the `WAVEFORMATEX` it points
+  at, at `0x001A09DE`'s call site. Everything downstream is now known.

@@ -606,7 +606,7 @@ sequenced; it does not replace the suggested implementation agent.
 | 10 | Pending | Validate timers, threads and synchronization | Complete 10a and 10b; startup workers complete, waits unblock for a real reason, timing is monotonic and reproducible. | Luna + Terra review |
 | 10a | Pending | Verify timer and wait contracts | Test monotonic time, timeout boundaries, signal/reset and return statuses with bounded repeated probes. | Luna |
 | 10b | Pending | Verify startup worker lifecycle | Prove worker creation, wake, join/exit and synchronization isolation on the real startup path, with a captured next checkpoint. | Luna + Terra review |
-| 11 | **Blocker cleared**; renderer still pending | Select and wire graphics interception | Trace JSRF's D3D initialization and complete 11a–11d; decide which XDK entry points use host D3D8/D3D11 versus NV2A handling. **Measured scope (2026-09-22):** the title binds four classes — `NV_MEMORY_TO_MEMORY_FORMAT` 0x39 (subch1), `NV_CONTEXT_SURFACES_2D` 0x62 (subch3), `NV_IMAGE_BLIT` 0x9F (subch2), `NV_KELVIN_PRIMITIVE` 0x97 (subch0) — and the walk rejects its fifth packet, `subch1 method 0x180 (NV097_SET_CONTEXT_DMA_NOTIFIES) param 7`. That packet registers a DMA notify buffer the title then waits on, so 11 requires: name the four classes, implement `NV_MEMORY_TO_MEMORY_FORMAT` far enough to accept its methods, and implement the notify writeback. `jsrf_nv2a_registers` must be extended rather than weakened. Evidence: `scripts/decode-pushbuffer.py` on `logs/runs/20260922-001023-466-bind-class/`. | Sol Light orchestration; Luna + Terra review |
+| 11 | **Blocker cleared**; renderer still pending | Select and wire graphics interception | Trace JSRF's D3D initialization and complete 11a–11d; decide which XDK entry points use host D3D8/D3D11 versus NV2A handling. **Measured scope (2026-09-22):** the title binds four classes — `NV_MEMORY_TO_MEMORY_FORMAT` 0x39 (subch1), `NV_CONTEXT_SURFACES_2D` 0x62 (subch3), `NV_IMAGE_BLIT` 0x9F (subch2), `NV_KELVIN_PRIMITIVE` 0x97 (subch0) — and the walk rejects its fifth packet, `subch1 method 0x180 (NV097_SET_CONTEXT_DMA_NOTIFIES) param 7`. That packet registers a DMA notify buffer the title then waits on, so 11 requires: name the four classes, implement `NV_MEMORY_TO_MEMORY_FORMAT` far enough to accept its methods, and implement the notify writeback. `jsrf_nv2a_registers` must be extended rather than weakened. Evidence: `scripts/decode-pushbuffer.py` on `logs/runs/20260922-001023-466-bind-class/`. **Update (2026-09-22, later):** the notify packet is accepted and the walk commits — the ring-space wait at `0x00191440` returns and both submissions report `diag=ok` once the fence mirror publishes the device's counter rather than a push buffer position. Evidence: `logs/runs/20260922-054824-982-p2-fence-counter/`. What stops the run now is not graphics: it is DirectSound init, see the audio note below. | Sol Light orchestration; Luna + Terra review |
 | 12 | Pending | Create a window and present a clear | Host device and responsive window initialize, and an actual guest command repeatedly changes the presented framebuffer. | Luna + Terra review |
 | 13 | Pending | Draw one game-owned UI primitive | Correct vertex/index format, viewport, blend and texture sampling; compare with reference. | Luna + Terra review |
 | 14 | Pending | Load one actual menu texture | Decode the format JSRF requests, including swizzle/mips as needed; display with correct alpha/color. | Luna + Terra review |
@@ -636,6 +636,26 @@ sequenced; it does not replace the suggested implementation agent.
 Graphics, input and audio may be reordered when the real boot path requires
 them sooner. Do not call the minimum slice finished merely because a window
 opens, and do not call the whole game finished after one playable scene.
+
+### Audio is on the critical path now, not at milestone 23
+
+Measured 2026-09-22. The run does not reach rendering without DirectSound,
+because the title treats a failed audio initialisation as a reason to restart
+itself: it polls the AC'97 codec-ready bit at `0xFEC00130` 1000 times, times out,
+and calls `HalReturnToFirmware(2)` with a launch data page naming its own title id.
+Setting `RECOMP_AC97_READY=1` answers that poll and the run gets 200 kernel calls
+further, then faults at `0x001A2BFC div esi` with `esi = 0`.
+
+That zero is fully traced: the game passes a `WAVEFORMATEX` with
+`wFormatTag = 0`; `0x001A4BC4` has branches only for 1, `0x69` and `0x10001`,
+writes nothing and returns 0 for anything else; `0x0019F320` reads the 0 return as
+"nothing to do"; the device format stays zeroed; `0x001A29EB` computes
+`ceil(nChannels/2) = 0`. So milestones 23 and 24 are not "add sound later" — the
+audio device path has to answer correctly before the title will proceed, and the
+next packet is the `DSBUFFERDESC` and `lpwfxFormat` the game passes at
+`0x001A09DE`. Evidence: `logs/runs/20260922-055208-364-p5-ac97-only/`,
+`logs/runs/20260922-055304-689-p6-ac97-ecx/`, report "The divide by zero, and
+where the zero comes from".
 
 ## Historical initializer checkpoint (superseded below)
 
