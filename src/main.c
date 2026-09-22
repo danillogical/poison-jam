@@ -140,6 +140,27 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
         free(xbe_data);
         return 1;
     }
+    /* Publish the pushbuffer write position where the title waits for GPU
+     * completion.
+     *
+     * JSRF's D3D device lives at guest 0x0019DCE0. It keeps the pushbuffer write
+     * position at +0x00 and, at +0x34, a pointer to the notify word it polls.
+     * Measured from a run: the ring is 0x80001000..0x80081000, the current chunk
+     * ends at 0x80008DFC and the write position is 0x80001B24, so the free space
+     * 0x001910E0 computes is 29400 -- under the 0x8000 the caller requires -- and
+     * 0x00191440 therefore waits at 0x001914F0 for the GPU to publish completion
+     * into the notify word at 0x80000000. Nothing in the model wrote guest
+     * memory, so that word kept the title's own 0xDEADBEEF sentinel and the wait
+     * never ended.
+     *
+     * xbox_Nv2aMirrorFence does exactly this and had never been registered by any
+     * title; this is its first use. It follows the device pointer fresh on every
+     * poll through fence_readable, which handles the contiguous window, so
+     * registering before the device exists is fine.
+     */
+    if (xbox_Nv2aMirrorFence(0x0019DCE0u, 0x00u, 0x34u) != 0)
+        fprintf(stderr, "[NV2A] fence mirror registration failed\n");
+
     g_esp = XBOX_STACK_TOP;
     recomp_diag_thread_start(YOUR_GAME_ENTRY_POINT, XBOX_STACK_BASE, XBOX_STACK_TOP + 16);
 
