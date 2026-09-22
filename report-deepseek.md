@@ -6317,3 +6317,183 @@ should commit, `GET` should reach `PUT` (0x2764), and the
 `KeWaitForSingleObject` at `0x0018CE73` should return. If GET still stalls, the
 next `[PFIFO] submit` line names the method, and that is the next inventory
 entry -- the loop is now closed and mechanical.
+# Session 2026-09-22 12:40 onward: the run drains the ring, and the new frontier is a three-thread block on one in-place KEVENT
+
+## Packet N -- what the run does now, measured
+
+Run `logs/runs/20260922-110738-253-nv2a-1bcc`
+(`RECOMP_AC97_READY=1 RECOMP_APU_TRAP=1 RECOMP_APU_DSP_ACK=0x803C0810
+RECOMP_KERNEL_LOG_BUDGET=100000`, 40 s cap):
+
+```
+{"outcome":"diagnostic_deadline","exit_code":3,...,"duration_seconds":41.765761}
+[PFIFO] submit #1 diag=ok get=00002764 put=00002764 method=000 subch=0 param=00000000 at=00002764
+```
+
+**GET == PUT == 0x2764.** The ring drains, and it drains at the *larger* ring
+the title submits now -- 0x2764, not the 0x1B24 the plan previously recorded.
+That is the milestone-11 ring-drain goal, met on a ring 58% longer than the one
+it was written against. No `[ICALL] Failed to resolve VA` anywhere in the log.
+
+The run then blocks. `[KERNEL] #2156: ordinal 159 (slot 46) esp=0x00F7FEBC
+ret=0x0018CE73` is the last line, and ordinal 159 is `KeWaitForSingleObject`
+(`kernel_thunks.c:199`).
+
+## The thread dump is the decisive artifact, and it names the frontier exactly
+
+`stacks.txt` from that run shows **three guest threads blocked in the same
+place**:
+
+```
+THREAD 44948   (the main thread: WinMain -> xbe_entry_point -> PsCreateSystemThreadEx)
+  NtWaitForSingleObject
+  WaitForSingleObjectEx
+  xbox_KeWaitInplaceEvent            kernel_sync.c:446
+  bridge_KeWaitForSingleObject       kernel_bridge.c:1386
+  kernel_thunk_dispatch
+  sub_0018CE50                       recomp_0004.c:37134
+  sub_00198670                       recomp_0004.c:55646
+  sub_00198ED0
+  sub_00198F10
+  sub_0014D090
+
+THREAD 45244   (worker trampoline sub_0013B1C0)
+  ... xbox_KeWaitInplaceEvent
+  sub_0018CE50
+  body_0013B1C0 / sub_0013B1C0
+
+THREAD 46780   (worker trampoline sub_0013B230)
+  ... xbox_KeWaitInplaceEvent
+  sub_0018CE50
+  body_0013B230 / sub_0013B230
+```
+
+Three distinct entry paths converge on the one call inside `sub_0018CE50`, and
+the log confirms it: `ret=0x0018CE73` (the return address of that wait) occurs
+**exactly 3 times**.
+
+Not everything is blocked -- THREAD 26156 is running `sub_0013B180` and
+THREAD 49256 is inside `NtSuspendThread` -- so this is not "the whole guest
+stopped".
+
+## What the waited-on object actually is, read out of the minidump
+
+`sub_0018CE50` is 10 instructions:
+
+```
+0018CE50 mov eax, [0x19DCE0]
+0018CE55 push 0            ; Timeout = NULL
+0018CE57 push 0            ; Alertable = 0
+0018CE59 push 1            ; WaitMode = UserMode
+0018CE5B mov [eax+0x2434], 0     ; clear the signal state
+0018CE65 push 6            ; WaitReason
+0018CE67 add eax, 0x2430
+0018CE6C push eax          ; Object
+0018CE6D call [0x1C4018]   ; ordinal 159
+0018CE73 ret
+```
+
+Reading the run's guest memory:
+
+```
+[0x19DCE0]              = 0x0019B200      the structure base
+  +0x242C               = 0x0015F9D0      a .text address (a callback)
+  +0x2430               = 0x00040000
+  +0x2434               = 0x00000000
+  +0x2438               = 0x0019D638      == base + 0x2438, a self-linked empty list
+```
+
+`+0x2430` is a **DISPATCHER_HEADER**: byte 0 (Type) = 0, byte 2 (Size) = 4, and
+`+0x2438` is a `LIST_ENTRY` whose Flink and Blink both point at itself. That is
+exactly what `guest_va_is_inplace_kevent` (`kernel_bridge.c:1322`) tests for --
+`type <= 1`, `size == 4`, and a self-linked list -- and it accepts it. So the
+wait is routed to `xbox_KeWaitInplaceEvent` on guest VA `0x0019D630`, an
+in-guest KEVENT with `SignalState` at `+0x2434`.
+
+`sub_0018CE50` clears `+0x2434` and then waits with `Timeout = NULL`
+(INFINITE). That is a "wait for the next signal" idiom: the wait is
+unconditional by construction, and something else has to call `KeSetEvent` on
+`0x0019D630`.
+
+## Nothing does. Measured, three ways.
+
+1. **The guest never calls the signal primitive.** `ordinal 145`
+   (`KeSetEvent`) occurs **0 times** in the run. `ordinal 205`
+   (`NtPulseEvent`) occurs **0 times**. The single `ordinal 225`
+   (`NtSetEvent`) is the file-I/O completion path -- it is at `ret=0x00145B32`,
+   sandwiched between `NtReadFile` (219) and `NtWaitForSingleObjectEx` (234) --
+   and sets the read's own event, not this one.
+2. **No code addresses the object.** `0x0019D630` occurs as no immediate and in
+   no data table (`inspect-jsrf.py find 0x0019D630 --aligned` reports 0
+   occurrences), and the field offset pair `+0x2430`/`+0x2434` occurs at
+   **exactly one site in the whole recompiled title** -- the wait itself.
+3. **The one sibling helper is not a signaller.** `sub_0018CEB0`, which also
+   reads `[0x19DCE0]`, calls `[0x1C4100]`; the log identifies that thunk as
+   ordinal 2 = `MmAllocateContiguousMemoryEx` (`[KERNEL] #310: ordinal 2 ...
+   ret=0x0018CEDE`, preceded by `MmAllocateContiguousMemoryEx: size=1228800
+   align=16384 → Xbox VA 0x80248000`). It is an allocation helper.
+
+**Hypothesis retracted, and it was mine.** The first reading of this was that
+`xbox_KeWaitForSingleObject` was treating an in-guest dispatcher pointer as a
+host HANDLE -- `xbox_KeWaitForSingleObject` does do `(HANDLE)Object` with no
+dereference, so the reading looked sound. The stack disproves it: the wait went
+to `xbox_KeWaitInplaceEvent`, not to the handle path, because
+`guest_va_is_inplace_kevent` accepts the object. The toolkit's routing is
+correct; what is missing is the signal.
+
+## The next question, stated so it can be answered
+
+**Who is supposed to signal the in-place KEVENT at guest `0x0019D630`?**
+
+The three candidates, and what would distinguish them:
+
+- **A device or interrupt path the toolkit must drive.** The structure at
+  `0x0019B200` carries a callback at `+0x242C`, and the workers run `0x141e50` /
+  `0x141e70` as their work functions. A producer that lives behind a DPC or an
+  ISR would never appear in the ordinal histogram, which is what the
+  measurements show. The discriminating experiment is to find what device the
+  structure describes.
+- **A code hole.** If the producer is guest code the recompiler never claimed,
+  `check-table-targets.py` and `check-span-exits.py` are now both keyed to the
+  runtime's own resolution set, so they are the right instruments; the producer
+  would show as a `.text` address no table resolves.
+- **A worker-pool gate whose producer is another blocked guest thread.** The
+  main thread is in this wait too, which is consistent with a pool where every
+  member waits and a producer thread feeds it -- but THREAD 26156 and
+  THREAD 49256 are not blocked, so this is the weakest of the three.
+
+## The `+0x242C` callback, read out of the disassembly: a trace hook, not the producer
+
+Following the callback was the obvious first move and it closes cleanly, in the
+negative:
+
+```
+0015F9D0 inc dword ptr [0x265174]     <- the default handler: bump a counter
+0015F9D6 ret
+0015F9E0 mov eax, [esp+4]             <- the setter
+0015F9E4 test eax, eax
+0015F9E6 jne 0x15f9f6
+0015F9E8 mov eax, 0x15f9d0            <- NULL means "use the default"
+0015F9ED mov [esp+4], eax
+0015F9F1 jmp 0x18ce30                 <- tail call sub_0018CE30(pointer)
+0015F9F6 cmp eax, -1
+0015F9F9 jne 0x15f9fd
+0015F9FB xor eax, eax                 <- -1 means NULL
+0015F9FD mov [esp+4], eax
+0015FA01 jmp 0x18ce30
+0015FA10 mov eax, [0x265174]          <- the getter
+0015FA15 ret
+```
+
+So `0x0015F9E0` is a setter, `0x0015FA10` is a getter, and both are over the
+global counter `0x265174`; `sub_0018CE30` is the common tail that stores the
+pointer into `struct+0x242C`. The default handler `0x0015F9D0` does nothing but
+increment that counter, which makes the field a **progress or trace hook**, not
+a completion path. It cannot be the producer of the signal. Recorded so the
+next packet does not re-derive it.
+
+**Next packet: identify what the structure at `0x0019B200` describes.** Its
+`+0x211C` array is indexed in 8-byte records (`lea esi, [ecx + eax*8 + 0x211C]`
+in `sub_0018CE80`, and twice more at `recomp_0004.c:39782` and `:39825`), and
+`sub_0018CE80(i, out)` copies 24 bytes out of entry `i`; that is a work-item
+queue. Naming the subsystem that owns it names the producer.
