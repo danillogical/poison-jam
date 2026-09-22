@@ -4196,3 +4196,60 @@ weakening as the classes become known.
 implementation this session. The packet sequence above is the specification, and a
 guessed fence value or address would be exactly the "returns success without
 producing required state" that the plan's working rules forbid.
+
+
+---
+
+# The fence protocol, located: `0x001918E0` builds the pushbuffer
+
+The packet the model rejects is not assembled by the driver in some opaque place.
+`0x001918E0` builds the whole submission into the device's buffer, word by word,
+and the offending command is one of the literals:
+
+```
+001918E2 mov esi, [0x19dce0]        ; the D3D device
+001918E8 mov eax, [esi]             ; push write pointer
+001918EA cmp eax, [esi+4]           ; against the buffer end
+001918F0 call 0x1916b0              ; grow if needed
+001918F5 mov [eax+0],    0x42000    ; bind subch1 = handle 0xE
+001918FB mov [eax+4],    0xE
+00191902 mov [eax+8],    0x44000    ; bind subch2 = handle 0x10
+00191909 mov [eax+0xc],  0x10
+00191910 mov [eax+0x10], 0x46000    ; bind subch3 = handle 0x11
+00191917 mov [eax+0x14], 0x11
+0019191E mov [eax+0x18], 0x40000    ; bind subch0 = handle 0xD
+00191925 mov [eax+0x1c], 0xD
+0019192C mov [eax+0x20], 0x42180    ; <-- subch1 method 0x180 param 7
+00191933 mov [eax+0x24], 7
+0019193A mov [eax+0x28], 0x442fc    ; subch2 method 0x2FC param 3
+00191941 mov [eax+0x2c], 3
+...
+00191992 mov [edx], 0x1c4184        ; subch0 method 0x184 count 7
+001919B5 mov [esi], edx             ; publish the new PUT pointer
+001919B9 jmp 0x1917f0               ; tail-jump to the submit
+```
+
+Decoding the headers confirms the byte-exact match with the decoded pushbuffer:
+
+| literal | count | subch | method | param |
+|---|---|---|---|---|
+| `0x42000` | 1 | 1 | 0x0000 | 0xE |
+| `0x42180` | 1 | 1 | **0x0180** | **7** |
+| `0x442fc` | 1 | 2 | 0x02FC | 3 |
+| `0x1c4184` | 7 | 0 | 0x0184 | 0x19 x7 |
+
+So the model rejects a packet the title builds with a literal in its own driver
+code. Nothing about it is ambiguous, and `0x180` is
+`NV097_SET_CONTEXT_DMA_NOTIFIES` -- the title is registering the DMA notification
+buffer it will then wait on.
+
+Also learned: the device object at `0x19dce0` holds the push write pointer at
+`+0x00` and the buffer end at `+0x04`, which is why the submit path's `get`/`put`
+are physical offsets while the notify word lives in the contiguous window.
+
+**Status of milestone 11: specified, not implemented.** The remaining work is the
+three steps in the previous section, and step 3 (notify writeback) is the one that
+ends the spin. Implementing it means deciding what value the GPU writes and where
+-- which is derivable from `[dev+0x30]`/`[dev+0x34]` and the wait at `0x001914F0`,
+but it is a real piece of model work, not a patch, and it must come with an
+extension to `jsrf_nv2a_registers` rather than a weakening of it.
