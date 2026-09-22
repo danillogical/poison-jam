@@ -76,3 +76,58 @@ Next run should start at: add the already-measured entry for `0x00178F40` —
 `start 0x00178F40`, `end 0x001791BA`, `stack_args 20` (epilogue `ret 0x14`,
 matching the `sub esp,0x14` prologue). The `0xE0424943` exception is a symptom of
 that unresolved call, so expect it to move once the entry is added.
+
+## 2026-09-22 10:13–11:25 PDT (third recorded run)
+
+Outcome: the DirectSound stop is fully root-caused with a measured mechanism, and
+the APU — which the toolkit has always shipped and nothing has ever called — is
+now instantiated and routed. The remaining work is named as a **GP SGE engine in
+the APU model**, replacing the previous guess of "an APU MMIO hook".
+
+Done:
+- Corrected the previous run's register identification: `0xFE8020D4` is
+  `NV_PAPU_GPSMAXSGE` (an SGE **count**), not a DMA base. The base is `GPSADDR`
+  (`0xFE802040`), written by `sub_001A52F7` (the DMA kick).
+- Identified the waited-on object by arithmetic rather than assumption:
+  `[0x803C0804] + [0x803C080C]` = 3512 + 3358, times 4 plus `0x818`, lands on
+  `0x803C7370`, whose minidump value is the loop count the code reads next. So
+  `ebx = 0x803C0000`, the 48K contiguous allocation, whose base and size are
+  published at guest `0x1BA858` / `0x1BA860` and whose SGE table is the next
+  allocation at `0x803CC000` (`0x1BA868` / `0x1BA870`).
+- Proved exhaustively that no guest code can clear the pending word: `+0x810`
+  occurs in exactly three sites in the entire recompiled title (the waiter
+  `0x1A1769`, the stop `0x1A1747`, and the DSP stop `0x1A1F5D`), and `[0x1BA858]`
+  in exactly one. The acknowledgement must come from the APU.
+- Wired the APU: new toolkit header `apu_mmio_hook.h` declaring
+  `apu_hook_handle_mmio` and `g_apu_state`; `main.c` instantiates the APU and the
+  VEH routes `0xFE800000..0xFE880000` to it, both gated on `RECOMP_APU_TRAP`.
+- Measured the traffic (344 decoded accesses, `logs/runs/20260922-104131-686-apu-trace`):
+  the title programs VPSGEADDR/VPSLADDR, GPFADDR, `GPSADDR = 0x803CC000`,
+  EPSADDR, EPFADDR, then `GPSMAXSGE = 206` as its last APU access before the
+  spin, after a 12-page `MmGetPhysicalAddress` walk filling entries 194..205. The
+  SGE table is 8-byte `{physical address, flags}` entries, zero-terminated, with
+  entry 0 = the buffer that carries the pending word.
+- Reverted a wrong inference of my own in the same session: adding
+  `NV_PAPU_XGSCNT_DS` (0x2010) to `mcpx_apu_read` was dead code, because
+  `mcpx_apu_mmio_read` routes `0x20000..0x2FFFF` to `mcpx_apu_vp_read`, and
+  `0xFE820010` reads as `NV1BA0_PIO_FREE` (VP method 0x10), which is what the
+  title is satisfied by. Left no trace in the code.
+- Build clean, CTest 11/11. Commits: toolkit `cf03f46`; game `bd904c2` (toolkit
+  revision recorded in its message).
+
+Traps recorded:
+- **A kernel-log budget makes a live run look frozen.** Default 200 vs 100000
+  changed the same 30 s run from 1422 to 5116 log lines; never conclude "hang"
+  from a truncated log.
+- **Symbol+offset in a stack line is a mislabel past a body's end; the
+  `recomp_XXXX.c:NNNN` file:line on the same line is exact.** That file:line is
+  what located `0x001A18D0`.
+- `named_frames` and `native_threads` are sampled at the deadline and are not
+  before/after metrics. Compare log lines, and only under the same options and
+  the same budget.
+
+Next run should start at: give `apu_dsp.c` a GP SGE engine — on the `GPSMAXSGE`
+write, walk that many entries from `GPSADDR`, resolve each physical address
+through the APU's `ram_ptr`, complete the transfer, and write 0 to the pending
+word in the first page (`buffer+0x810`). Add an APU probe test rather than
+weakening `jsrf_nv2a_registers`.

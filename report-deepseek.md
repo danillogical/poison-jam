@@ -5805,3 +5805,515 @@ uses `buffer+0x810` consistently across all three of its own sites. Confirm
 against `apu_dsp.c`, whose header comment already says "GP: Stub - effects
 bypass", and extend `tests/gpu_probes.c`-style coverage with an APU probe rather
 than weakening the NV2A rejection contract.
+
+# Session 2026-09-22 11:30 onward: the doorbell was already implemented, and two spans that swallowed their neighbour
+
+## Packet G -- the toolkit's own doorbell answers the DSP handshake
+
+`src/apu/apu_dsp.c` already contains the mechanism this handshake needs, and it
+has been there since the APU was extracted -- from a *different* title:
+
+    RECOMP_APU_DSP_ACK=<addr>[,<addr>...] clears those guest dwords once per APU
+    frame, which is what "the command completed" looks like to the title.
+
+and its comment records the one thing that was missing: "The address is not
+derivable from the APU registers ... So it has to be observed."
+
+It has now been observed, and Packet E is the observation. The doorbell is
+`[0x1BA858] + 0x810` -- the title's own published base for the 48K program
+buffer plus the pending-word offset that all three of the title's own sites use.
+In these runs that is `0x803C0810`.
+
+With `RECOMP_APU_DSP_ACK=0x803C0810` the spin is released, and the log says so
+twice:
+
+```
+[APU] started by the title (SECTL=0000000F FECTL=0000100F)
+[APU] DSP doorbell ack: 1 address(es), first 0x803C0810
+[APU] DSP doorbell 0x803C0810: command 0x00000003 acknowledged
+```
+
+The command value is `3`, exactly what `sub_001A1769` writes at `0x001A18CE`
+before it spins. The mechanism, the address and the value all agree.
+
+**What this changes about the frontier.** The run no longer reaches a deadline
+while spinning. It now runs 3.2 s and dies on the game's own unresolved-call
+marker:
+
+```
+[ICALL] Failed to resolve VA 0x00141830 (thread calls: 2933, ...)
+[EXCEPTION] code=0xE0424943
+```
+
+`0xE0424943` is not a CRT code; it is raised by `src/recomp_manual.c` in
+`recomp_icall_fail_log` and `recomp_icall_not_code_log`, which is the project's
+own "an indirect call reached an address no entry covers" marker. So the audio
+hang is gone and what is left is an ordinary missing entry.
+
+**Trap for future comparisons:** the outcome string moved from
+`diagnostic_deadline` to `unhandled_exception`, the duration dropped from 31.7 s
+to 3.2 s, and `exit_code` became `3762440515`. Every one of those looks like a
+regression in a naive before/after diff and every one of them is progress: a hang
+that burned 30 s was replaced by a named failure that arrives in three seconds.
+Compare *which* failure, not how long the run lasted.
+
+## Packet H -- `end` that lands on a clean boundary and still cuts the function
+
+`0x00141810` was entered with `end 0x00141822`, and its own evidence said why:
+"end tightened to the next function entry inside the alias range". The
+disassembly shows the tightening was wrong:
+
+```
+00141810 mov  eax, [esp+4]
+00141814 mov  ecx, [eax+4]
+00141817 test ecx, ecx
+00141819 je   0x141837
+0014181B mov  ecx, [eax+8]
+0014181E test ecx, ecx
+00141820 jne  0x141830        <-- targets 14 bytes past the end
+00141822 push 0x1dfdd4
+00141827 call 0x143240
+0014182C add  esp, 4
+0014182F ret
+00141830 mov  ecx, [esp+8]    <-- an internal label, not an entry
+00141834 mov  [eax+0x10], ecx
+00141837 ret
+```
+
+`0x00141830` is reached only by the `jne` from inside the same function, and it
+continues that function. Because no entry covered it, the generator emitted a
+trap for it and the trap fired.
+
+**This is a class `scripts/check-entry-extents.py` cannot see.** That detector
+looks for `end` landing *inside* an instruction; here every instruction in the
+span decodes cleanly and the defect is entirely outside it. The new detector is
+`scripts/check-span-exits.py`: for each entry, decode within the span and report
+every conditional jump or `jmp` whose target is at or past `end` and is not a
+known function start.
+
+Getting the detector honest took two corrections, both worth keeping:
+
+- The first version included `call` in the branch set and reported **10554**
+  findings, because a call to a separate function is the normal case. Excluding
+  `call` left 4516.
+- The second version used only `recovered-functions.json` for "known function
+  start", so every forward jump to a real function the manifest does not list
+  was reported as a cut. Unioning `tools/disasm/output/functions.recovered.json`
+  -- the same fix `fix-fragment-spans.py` needed in the previous session --
+  left **381**.
+
+381 is a triage list, not a defect count: an entry that legitimately ends at an
+internal block boundary whose branch is a tail call into a hole, or a fragment
+head whose backward branch leaves the span, will appear in it. The one that
+mattered was found by the run, not by the script.
+
+Fixed: `0x00141810` end `0x00141822` -> `0x00141840`, the next function's start,
+which is the convention every sibling entry in the `0x0022DC8C` table uses. The
+detector's findings for that entry go to zero, `ctest` stays 11/11, and the run
+moves on.
+
+## Packet I -- the alias fold again, this time swallowing a dispatch target
+
+With `0x00141830` fixed the run dies 0.2 s later on a different address, and the
+`g_icall_trace` tail names the mechanism:
+
+```
+[ICALL] Failed to resolve VA 0x0007BE30 (thread calls: 3134, ...)
+```
+
+`0x0007BE30` is at exactly one aligned dword in the whole image --
+`inspect-jsrf.py find 0x0007BE30 --aligned` -> `0020D2B8  .data` -- and that is
+the table the enclosing function calls through:
+
+```
+0007BDD0 push esi
+0007BDD1 mov  esi, ecx
+0007BDD3 mov  eax, [esi+0x48]
+0007BDD6 cmp  eax, 0x40
+0007BDD9 jae  0x7bde2
+0007BDDB call dword ptr [eax*4 + 0x20d2b8]   <-- 64 entries, one is 0x0007BE30
+...
+0007BDF5 jmp  dword ptr [eax*4 + 0x7be08]    <-- its own switch table
+0007BE06 ret
+0007BE08 {0x0007BDFC, 0x0007BE06}            <-- table, so the body ends here
+...
+0007BE2C nop
+0007BE30 push -1                             <-- SEH prologue: a separate function
+```
+
+So `0x0007BDD0` is a state dispatcher whose span ran to `0x0007BFD0`: past its
+own `ret`, across two switch tables and into the next function, which the alias
+fold had therefore swallowed. Reading all 64 entries of the table instead of
+guessing which would fire gave the whole backlog in one measurement -- eight
+targets the manifest does not cover:
+
+| target | state |
+|---|---|
+| `0x0007BE30` | inside `0x0007BDD0`'s span -- alias-swallowed, **fixed** |
+| `0x0007C290` | inside `0x0007C270`'s span -- alias-swallowed, **fixed** |
+| `0x0007C4B0`, `0x0007C800`, `0x0007D000`, `0x0007D3D0`, `0x0007D120`, `0x0007D290` | no span at all -- latent, not yet reached |
+| `0x00011C90` | no span at all -- a shared default handler, latent |
+
+The two fixed ones were verified from the disassembly, not from the table alone:
+`0x0007BE30` is `push -1` / `push 0x187cb1` / `mov eax,fs:[0]` / `mov fs:[0],esp`
+with its epilogue at `0x0007BFC3`, and `0x0007C290` is
+`push ebx` / `push esi` / `push edi` / `mov ebx,ecx` with its epilogue at
+`0x0007C402`. Both parents' ends were cut to the next real function start
+(`0x0007BE08` and `0x0007C290`), so the switch tables belong to neither span.
+Both new entries carry `stack_args 0`, from a plain `ret` in each epilogue.
+
+**Next packet:** the six uncovered table targets plus `0x00011C90`. They are
+named and measured, so each is the same shape of work; the reason they are not
+done in this packet is that each needs its own span read out of the disassembly,
+and a guessed span is worse than a missing one.
+# Session 2026-09-22 12:00 onward: three span fixes confirmed by execution, and a detector that was looking the wrong way
+
+## Packet J -- the corrected spans are confirmed by the guest, not by the diff
+
+The previous packet ended with `config/recovered-functions.json` re-patched after
+a `git checkout` had silently reverted the `0x00141810` fix, and with a build
+that predated the repair. This packet rebuilt, re-ran, and read the log for the
+three functions that had only been checked on paper.
+
+Build: `scripts/build-jsrf.py` succeeded. `ctest --test-dir build -C Release`
+stayed **11/11**.
+
+Run `logs/runs/20260922-105928-501-apu-ack-spanfix`
+(`RECOMP_AC97_READY=1 RECOMP_APU_TRAP=1 RECOMP_APU_DSP_ACK=0x803C0810
+RECOMP_KERNEL_LOG_BUDGET=100000`, 40 s cap):
+
+```
+[RECOVERED] 0x0007BE30 returned; ABI verified (ESP/EBX/ESI/EDI)
+[RECOVERED] 0x0007BDD0 returned; ABI verified (ESP/EBX/ESI/EDI)
+[RECOVERED] 0x00024700 returned; ABI verified (ESP/EBX/ESI/EDI)
+[ICALL] Failed to resolve VA 0x001185B0 (thread calls: 3147, tid=48072, ms=616138000)
+  [13] 0x00024700
+  [14] 0x00042880
+  [15] 0x00118610
+```
+
+Three of the four span repairs are now confirmed by the guest: each entry
+*executed* and *returned with its ABI intact*, which is a stronger statement
+than "the span looks right in the disassembly". `0x00141830` does not appear
+anywhere in this run, so the fourth (`0x00141810`) is also gone from the
+frontier.
+
+**Outcome: `unhandled_exception`, 3.5 s, exit code 3762440515 = 0xE0424943** --
+the project's own icall trap. Not a hang.
+
+## Packet K -- the six "uncovered table targets" were a detector artefact, and the report's next packet was wrong
+
+The previous session's report named a next packet:
+
+> the six uncovered table targets plus `0x00011C90`
+
+Those were `0x0007C4B0`, `0x0007C800`, `0x0007D000`, `0x0007D3D0`,
+`0x0007D120`, `0x0007D290`. **They need no work at all, and the claim that they
+were uncovered was an artefact of the detector's own idea of what "covered"
+means.**
+
+The six are all entries of the same 64-entry pointer table, the one at
+`0x0020D2B8` that `0x0007BDD0` calls through -- the table whose entry 0 is
+`0x0007BE30`, the address fixed in the previous packet. Dumping all 64 entries
+and asking, for each, *which table answers it at run time* gives a clean answer:
+
+```
+ idx     target  resolution
+   0 0x0007BE30  RECOVERED span=0x0007BFD0
+  17 0x0007C4B0  gen-dispatch -> sub_0007C4B0
+  23 0x0007C800  gen-dispatch -> sub_0007C800
+  24 0x00011C90  gen-dispatch -> sub_00011C90
+  47 0x0007D000  gen-dispatch -> sub_0007D000
+  54 0x0007D3D0  gen-dispatch -> sub_0007D3D0
+  59 0x0007D120  gen-dispatch -> sub_0007D120
+  63 0x0007D290  gen-dispatch -> sub_0007D290
+unresolved: []
+```
+
+**Every one of the 64 entries resolves.** 58 through the recovered switch
+(3071 keys) and 6 through the generated dispatch (8768 keys).
+
+The mistake was structural, and it is the *same* mistake twice over.
+`check-table-targets.py` excluded addresses that appear in
+`config/recovered-functions.json` -- 3071 reviewed entries -- while the runtime
+also consults `manual-functions.json` and, crucially, the generated dispatch
+table, which covers 8768 addresses. An address that already works looked
+uncovered. `check-span-exits.py` had already been through one round of this
+(the previous session's 4516 -> 381 by unioning the disassembler's database);
+the union was still the wrong set, because the disassembler's database is an
+*input* to the pipeline and the dispatch is what *runs*.
+
+**New: `scripts/resolution_starts.py`.** One function, `runtime_starts(root)`,
+that parses the three tables in the order the runtime consults them and returns
+a VA -> table-name map:
+
+1. the generated `jsrf_lookup_recovered` switch in
+   `src/recomp/recovered/recovered.c` (`case 0x...u: return sub_...`),
+2. `config/manual-functions.json`,
+3. the generated dispatch `g_recomp_table` in
+   `src/recomp/gen/recomp_dispatch.c`.
+
+Reading the *generated sources* rather than the config files is deliberate: the
+question is what the binary resolves, and it needs no rebuild to be accurate.
+Both detectors now use it, and `check-table-targets.py` reports two classes
+separately -- `swallowed` (inside a span, so the alias fold chose a body that
+may not be its own) and `uncovered` (no span at all) -- because only the second
+is a guaranteed trap.
+
+Corrected output of `scripts/check-table-targets.py`:
+
+```
+unresolvable pointer-table candidates: 134 (65 swallowed, 69 uncovered)
+```
+
+against 65 before, which were *all* swallowed and *all* already resolvable by
+the dispatch. The 65-entry list was not a defect count in any direction.
+
+## Packet L -- the detector was looking the wrong way down the span
+
+The new frontier is `0x001185B0`, reached from `[15] 0x00118610`. That caller is
+a recovered COM vtable method, entry `0x00118610-0x00118630`, and its body ends:
+
+```
+00118610 push     esi
+00118611 mov      esi, ecx
+00118613 call     0x117fc0
+00118618 mov      ecx, esi
+0011861A call     0x118170
+0011861F mov      ecx, esi
+00118621 pop      esi
+00118622 jmp      0x1185b0
+00118627 nop ... (nine bytes)
+00118630 push     esi            <- next function
+```
+
+**`jmp 0x1185b0` at `0x00118622` is a tail call *below* the span start.** The
+callee is a complete function that nothing covers:
+
+```
+001185A9 ret
+001185AA nop x6
+001185B0 sub      esp, 8
+001185B3 push     esi
+001185B4 mov      esi, ecx
+...
+00118604 ret
+00118605 nop x11
+00118610 push     esi            <- next function
+```
+
+`check-span-exits.py` was built to catch exactly this class and did not catch
+it. Its rule was:
+
+```python
+if target < end:
+    continue               # inside the span, or a backward head jump
+```
+
+which reports only targets **at or past `end`**. A tail call to an address
+*before* the span start fell through the same `continue`. The script printed
+381 findings and `0x00118610` was not one of them -- verified by filtering its
+JSON output for that start address, which returned an empty list.
+
+The mirror of the defect is real and not rare: of the corrected 294 findings,
+**74 are backward**. The rule is now "outside the span, in either direction",
+with the `direction` recorded in both the text and JSON output:
+
+```
+entries checked: 3071
+CUT-TARGET findings: 294 (220 forward, 74 backward)
+  0x00118610 end 0x00118630  0x00118622 jmp -> 0x001185B0  (backward, 96)
+```
+
+The count moved 381 -> 294 because the resolution set grew (161 false positives
+removed) and the backward rule added 74.
+
+**The disassembler's own database missed `0x001185B0` too.** The body it knows
+before this one, `0x00118410`, is recorded as ending `0x001185AA` -- six
+padding bytes short of `0x001185B0`. So there was no entry to inherit from: the
+address is a function start by every test used elsewhere in this file (a `ret`
+at `0x001185A9`, six `0x90` bytes, a standard prologue) and it occurs in **no
+data table** (`inspect-jsrf.py find 0x001185B0 --aligned` reports 0
+occurrences), which is why the pointer-table sweep never proposed it either.
+The tail call is its only entry.
+
+**Decision (mine, on the report's recommendation):** add the entry rather than
+widen `0x00118610`. Widening the caller to `0x00118650` would have merged a
+second real function into it -- the same abutting-alias fold that caused the
+previous three defects. The sibling convention used everywhere in this region
+is `end` = the next function start, and `0x001185B0`'s own `ret` at `0x00118604`
+with eleven padding bytes after it fits that convention exactly.
+
+```
+config/recovered-functions.json: +1 entry, 3071 -> 3072
+  0x001185B0 - 0x00118610, section .text, kind routine
+```
+
+`recover-functions.py` auto-adds every manifest entry to
+`config/manual-functions.json` (line 317), so no hand edit is needed there.
+
+## Frontier
+
+```
+[ICALL] Failed to resolve VA 0x001185B0   <- this packet, now covered
+```
+
+Next run's trap address is the authority for what follows. The two detectors now
+agree on the resolution set, so a future mismatch between their output and the
+run's line is a detector bug and not a defect.
+
+## Recorded dead ends and corrections
+
+- **The report's "six uncovered table targets" were not a defect list.** They
+  were an artefact of testing resolvability against the reviewed manifest
+  instead of the runtime's three tables. Corrected in the report and in both
+  detectors; the packet that was going to work them is cancelled.
+- **`check-span-exits.py` only looked forward.** 381 findings, and the one
+  address the run actually trapped on was invisible to it. The rule is now
+  bidirectional.
+- **A detector's "covered" set is not its "reviewed" set.** This is the second
+  time in two sessions that a detector's known-start set was the whole cause of
+  a wrong triage list. Both now read `scripts/resolution_starts.py`.
+# Session 2026-09-22 12:20 onward: the ring no longer traps, and the model stops at method 0x1BCC
+
+## Packet M -- from "the guest traps" to "the model rejects a method", and the inventory generator was decoding a different stream than the model walks
+
+Packet J cleared the last icall trap. The run that followed did not trap at all:
+
+```
+logs/runs/20260922-110235-244-spanfix-1185b0
+{"outcome":"diagnostic_deadline","exit_code":3,...,"duration_seconds":41.8593}
+```
+
+41.9 s against a 40 s cap, and **no `[ICALL] Failed to resolve VA` anywhere in
+6063 lines of log**. `[RECOVERED] 0x001185B0 returned; ABI verified` is in there
+too, so the entry added in Packet L executed and returned.
+
+The run's last lines are the whole story:
+
+```
+[RECOVERED] 0x001916C0 returned; ABI verified (ESP/EBX/ESI/EDI)
+  [PFIFO] submit #1 diag=unsupported_method get=00001000 put=00002764 method=1BCC subch=0 param=00000000 at=00001000
+[RECOVERED] 0x00191440 returned; ABI verified (ESP/EBX/ESI/EDI)
+[RECOVERED] 0x00191710 returned; ABI verified (ESP/EBX/ESI/EDI)
+  [KERNEL] #2156: ordinal 159 (slot 46) esp=0x00F7FEBC ret=0x0018CE73
+```
+
+and then nothing, because **ordinal 159 is `KeWaitForSingleObject`**
+(`src/kernel/kernel_thunks.c:199`).
+
+The chain is closed and it is the model's own contract that explains it.
+`nv2a_submit_pending` commits `NV_PFIFO_CACHE1_DMA_GET` **only on success**
+(`nv2a_core.c:1170`, and the comment there says so: *"GET only moves on success,
+so when it stays put the reason is here and nowhere else"*). The title submits
+its second pushbuffer -- PUT 0x2764 against GET 0x1000 -- the walk meets
+`0x1BCC`, `nv2a_method_implemented(NV097_CLASS, 0x1BCC)` returns false, the
+whole stream is rolled back, GET stays at 0x1000, and the guest blocks forever
+waiting for the ring to drain.
+
+**Outcome moved from a named failure at 3.5 s to a block at 41.9 s.** In a naive
+diff that reads as a regression; it is the frontier moving forward. The trap is
+gone, and what is left is a *method* the model declines to execute -- which is
+the milestone-11 contract working as designed rather than a defect in it.
+
+### The method table was generated from the wrong walk
+
+`src/nv2a/nv2a_method_table.c` is generated, and its header states the rule:
+*"The lists are measured, not guessed: they come from decoding the pushbuffer
+the title actually submits. Adding a method therefore means it appeared in a real
+submission."* So the fix for `0x1BCC` is to decode the ring the title is
+submitting **now**, not to hand-add the method.
+
+Doing that found two defects in `scripts/gen-nv2a-method-inventory.py`, both
+about the same thing: **the generator was not decoding the stream the model
+walks.**
+
+1. **The ring ends were hardcoded** to `get 0x80001000, put 0x80001B24` -- the
+   first pushbuffer the title ever submitted. The ring now runs to
+   `0x80002764`. The generator reads `--put` from the run's own
+   `[PFIFO] submit #N ... put=` line when it is not given, so the two cannot
+   drift again, and it prints the ring it used.
+2. **The packet classifier was wrong.** The generator used `typ = h >> 30`, and
+   the model uses
+
+   ```c
+   if ((h & 0xe0000003u) == 0x20000000u || (h & 3u) == 1u || (h & 3u) == 2u || h == 0x00020000u)
+       ... call / return / jump, target = (h & 3) in (1,2) ? h & 0xfffffffc : h & 0x1fffffff
+   if ((h & 0xe0030003u) == 0u || (h & 0xe0030003u) == 0x40000000u)
+       ... method packet: count = (h >> 18) & 0x7ff, subchannel = (h >> 13) & 7, method = h & 0x1ffc
+   else
+       ... reserved
+   ```
+
+   These agree over the first 0x1B24 words of the ring and diverge after it. The
+   generator's walk is now a line-by-line port of `nv2a_submit_pending`,
+   including the call/return stack, the target masking and the bounds test. The
+   old walk, run against the current ring, dies with
+   `struct.error: offset -2144335848 out of range` -- it had followed a word the
+   model would have called a jump.
+
+**Consistency check that the port is faithful:** the new walk reaches PUT, and
+`put - get` = `0x2764 - 0x1000` = 5988 bytes = **1497 words**, which is exactly
+what the generator reports as `Total words: 1497`. The walk consumed the ring and
+stopped on its own end condition.
+
+Regenerated artefacts:
+
+```
+docs/jsrf-nv2a-method-inventory.md   377 distinct (subchannel, method) pairs, 1497 words
+xboxrecomp/src/nv2a/nv2a_method_table.c
+    NV097_CLASS         362 methods   (was 250)
+    NV_MEMCPY_CLASS       1
+    NV_IMAGEBLIT_CLASS    8
+    NV_SURFACES2D_CLASS   2
+```
+
+The NV097 transform-program range is now present, including the method that
+stopped the walk:
+
+```
+1B00 1B04 1B08 1B0C 1B10 1B14 1B1C 1B24 1B48 1B4C 1B54
+1B64 1B68 1B6C 1B70 1B74 1B78 1B7C 1B88 1B8C 1B94
+1BA4 1BA8 1BAC 1BB0 1BB4 1BB8 1BBC 1BC8 1BCC 1BD4
+1BE4 1BE8 1BEC 1BF0 1BF4 1BF8 1BFC
+```
+
+`0x1BCC` is `NV097_SET_TRANSFORM_PROGRAM_START` and `0x1BC8` is
+`NV097_SET_TRANSFORM_EXECUTION_MODE`; the pair is how a title starts a vertex
+program. Both were absent, and so were `0x1B00`/`0x1B04`/`0x1B08` (the
+transform-constant load and store) -- the whole programmable-vertex path.
+
+### The rejection contract is extended, not relaxed
+
+`nv2a_method_implemented` is unchanged; only the generated table it consults
+grew. `tests/test_nv2a_contract.c` (the `jsrf_nv2a_registers` CTest) gains an
+acceptance case for the new methods **and** a rejection case for the
+neighbouring method the title never submits, so implementing a method cannot
+quietly widen the contract:
+
+```
+USER NV097 transform execution mode accepted          (0x1BC8 + 0x1BCC, count 2)
+USER NV097 transform execution mode diagnostic        (diag == "ok")
+NV097 transform execution mode stored                 (regs[0x1BC8/4] == 2)
+NV097 transform program start stored                  (regs[0x1BCC/4] == 3)
+USER unimplemented transform neighbour rejected       (0x1BD0 -> unsupported_method)
+USER unimplemented transform neighbour exact method
+NV097 transform execution mode survives neighbour reject
+```
+
+`0x1BD0` is in the ring's neighbourhood but not in the inventory, so it is the
+right probe: it proves the table grew by measurement and not by widening.
+
+The methods are implemented the way every other register-setting NV097 method in
+this model is -- the parameter is captured into `pgraph.regs[method / 4]`, which
+*is* the implementation for state methods (`nv2a_core.c:1160`). Executing the
+vertex program is a separate, later concern; what this packet fixes is the
+model's refusal to walk past the upload.
+
+## What the next run is for
+
+The prediction is specific and falsifiable: with `0x1BCC` implemented, submit #1
+should commit, `GET` should reach `PUT` (0x2764), and the
+`KeWaitForSingleObject` at `0x0018CE73` should return. If GET still stalls, the
+next `[PFIFO] submit` line names the method, and that is the next inventory
+entry -- the loop is now closed and mechanical.

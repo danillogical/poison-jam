@@ -28,9 +28,43 @@ root = Path(r"C:\Users\logic\Repos\my_xbox_game")
 sys.path.insert(0, str(root / "scripts"))
 from jsrf_dump import DumpMemory
 
-run_name = sys.argv[1] if len(sys.argv) > 1 else "20260922-003730-313-m11-step2"
+# `run_name` is the run whose ring is decoded. `--put` is the ring's top, and
+# leaving it out asks the run's own log instead of assuming: the model prints
+# `[PFIFO] submit #N diag=... get=... put=...` on every kick, and the guest ring
+# lives at 0x80000000 + the PFIFO offset. The first version of this script
+# hardcoded both ends to the first pushbuffer the title ever submitted
+# (get 0x1000, put 0x1B24), which silently stopped covering the ring the moment
+# the title started submitting more of it -- the run
+# 20260922-110235-244-spanfix-1185b0 reaches put 0x2764 and rejects method
+# 0x1BCC, which the 0x1B24 decode could not see.
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+opts = dict(a[2:].split("=", 1) for a in sys.argv[1:] if a.startswith("--") and "=" in a)
+run_name = args[0] if args else "20260922-110235-244-spanfix-1185b0"
 run = root / "logs/runs" / run_name
-get, put = 0x80001000, 0x80001B24
+get = int(opts.get("get", "0x80001000"), 16)
+
+
+def ring_top_from_log():
+    """Highest PUT the run's own log reports, as a guest address."""
+    log = run / "jsrf_run.log"
+    if not log.exists():
+        return None
+    top = None
+    for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
+        if "[PFIFO] submit" not in line or "put=" not in line:
+            continue
+        field = line.split("put=", 1)[1].split()[0]
+        try:
+            top = max(top or 0, int(field, 16))
+        except ValueError:
+            pass
+    return None if top is None else 0x80000000 + top
+
+
+put = int(opts["put"], 16) if "put" in opts else ring_top_from_log()
+if put is None:
+    raise SystemExit("no [PFIFO] submit line in %s/jsrf_run.log; pass --put=" % run)
+print("ring 0x%08X..0x%08X from %s" % (get, put, run_name))
 
 d = DumpMemory(run)
 buf = d.read(get, put - get)
@@ -38,30 +72,79 @@ d.close()
 
 per = defaultdict(lambda: defaultdict(list))
 order = []
-pc, words = 0, 0
+words = 0
 pc = get
-while pc < put and words < 2048:
+ret = 0
+stop = None
+seen = set()
+
+# The walk mirrors `nv2a_submit_pending` in src/nv2a/nv2a_core.c word for word.
+# It used to classify packets by `h >> 30`, which is NOT the model's test -- the
+# model calls a word a jump when `(h & 3) == 1` (call) or `(h & 3) == 2`
+# (return), or the high form `(h & 0xe0000003) == 0x20000000`. The two agree
+# over the first 0x1B24 words of the ring and diverge past it, which is how a
+# decode that looked correct produced `offset -2144335848 out of range` on the
+# ring the title actually submits now. Keeping the two in step is the point:
+# this generator's whole claim is that its list is what the model will walk.
+while pc != put:
+    if words >= 4096 or (pc, ret) in seen:
+        stop = "budget" if words >= 4096 else "loop"
+        break
+    seen.add((pc, ret))
+    if pc < get or pc >= put or (pc - get) + 4 > len(buf):
+        stop = "out_of_ring pc=0x%08X" % pc
+        break
     off = pc - get
     h = struct.unpack_from("<I", buf, off)[0]
-    typ = h >> 30
-    if typ == 0:
+    pc += 4
+    words += 1
+    if (h & 0xE0000003) == 0x20000000 or (h & 3) == 1 or (h & 3) == 2 or h == 0x00020000:
+        if (h & 3) == 2:
+            if ret:
+                stop = "loop (double return)"
+                break
+            ret = pc
+        if h == 0x00020000:
+            if not ret:
+                stop = "bad_target (return with no call)"
+                break
+            pc = ret
+            ret = 0
+            continue
+        target = (h & 0xFFFFFFFC) if (h & 3) in (1, 2) else (h & 0x1FFFFFFF)
+        if target < get or target >= put or (target & 3):
+            stop = "bad_target 0x%08X" % target
+            break
+        pc = target
+        continue
+    if (h & 0xE0030003) == 0 or (h & 0xE0030003) == 0x40000000:
         count = (h >> 18) & 0x7FF
         sub = (h >> 13) & 7
         method = h & 0x1FFC
         for i in range(count):
+            if words >= 4096:
+                stop = "budget"
+                break
+            if pc == put:
+                stop = "truncated"
+                break
+            p = struct.unpack_from("<I", buf, pc - get)[0]
+            pc += 4
+            words += 1
             m = method + 4 * i
-            p = struct.unpack_from("<I", buf, off + 4 * (i + 1))[0]
             per[sub][m].append(p)
             if (sub, m) not in order:
                 order.append((sub, m))
-        pc += 4 * (count + 1)
-        words += count + 1
-    elif typ == 1:
-        pc = h & 0x1FFFFFFF
-        words += 1
-    else:
-        pc += 4
-        words += 1
+        if stop:
+            break
+        continue
+    stop = "reserved 0x%08X" % h
+    break
+
+if stop:
+    print("walk stopped: %s (pc=0x%08X, words=%d)" % (stop, pc, words))
+else:
+    print("walk reached PUT")
 
 CLASS = {0: "NV097_KELVIN_PRIMITIVE", 1: "NV_MEMORY_TO_MEMORY_FORMAT",
          2: "NV_IMAGE_BLIT", 3: "NV_CONTEXT_SURFACES_2D"}
@@ -70,12 +153,13 @@ CLASS_MACRO = {0: "NV097_CLASS", 1: "NV_MEMCPY_CLASS",
 
 # ---- the inventory document -------------------------------------------------
 out = ["# JSRF NV2A method inventory (milestone 11)\n",
-       "Every (subchannel, method) pair the title submits in its first real",
-       "pushbuffer, in the order the walk meets them. The model accepts a method",
+       "Every (subchannel, method) pair the title submits in one real pushbuffer,",
+       "in the order the walk meets them. The model accepts a method",
        "only if it is implemented, so this list is the specification: the walk stops",
        "at the first entry here that is not in the generated method table.",
        "",
-       "Generated by `scripts/gen-nv2a-method-inventory.py` from `%s`." % run_name,
+       "Generated by `scripts/gen-nv2a-method-inventory.py` from `%s`,",
+       "ring `0x%08X..0x%08X` (%d words)." % (run_name, get, put, words),
        "",
        "| # | subchannel | class | method | params seen |",
        "|---|---|---|---|---|"]
@@ -94,7 +178,12 @@ out += ["",
         "- Method numbers repeat across classes with different meanings, which is",
         "  why the sink record carries the class as well as the method.",
         "- `method 0x0000` is the PFIFO-level SET_OBJECT binding, not a class method,",
-        "  and is handled before this table is consulted."]
+        "  and is handled before this table is consulted.",
+        "- The walk here mirrors `nv2a_submit_pending` exactly, including its",
+        "  `(h & 3) == 1` call and `(h & 3) == 2` return tests and its target",
+        "  masking. An earlier version classified by `h >> 30`, which agrees over",
+        "  the first 0x1B24 words and diverges after, so the table it produced was",
+        "  not the list the model walks and the walk stopped at method 0x1BCC."]
 (root / "docs/jsrf-nv2a-method-inventory.md").write_text(
     "\n".join(out) + "\n", encoding="utf-8", newline="\n")
 

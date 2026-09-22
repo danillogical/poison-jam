@@ -436,6 +436,49 @@ int main(void)
         ok &= check(gpu->pgraph.regs[0x0204 / 4], 0xffffffffu,
                     "NV097 maximum clip fields stored");
 
+        /* The vertex-program methods the title submits are implemented, so the
+         * walk accepts them and stores them as NV097 register state. Decoding
+         * JSRF's own ring at 0x80001000..0x80002764 shows it submits the
+         * transform-execution-mode and transform-program-start pair, and the
+         * model rejected the whole stream at 0x1BCC
+         * (logs/runs/20260922-110235-244-spanfix-1185b0, `[PFIFO] submit #1
+         * diag=unsupported_method ... method=1BCC`), which left GET at 0x1000
+         * while PUT was 0x2764 and the guest blocked in
+         * `KeWaitForSingleObject` waiting for the ring to drain.
+         *
+         * The earlier inventory missed them because its walk classified packets
+         * by `h >> 30` rather than the model's own `(h & 3) == 1` call and
+         * `(h & 3) == 2` return test, so past 0x1B24 words it was decoding a
+         * different stream than the model walks. The generator now mirrors
+         * `nv2a_submit_pending` word for word. */
+        memset(pb, 0, 0x2000);
+        pb[0] = (2u << 18) | 0x1BC8u;
+        pb[1] = 0x00000002u; pb[2] = 0x00000003u;
+        submit_reset(gpu, 0, 12);
+        ok &= check(nv2a_submit_pending(gpu), 1,
+                    "USER NV097 transform execution mode accepted");
+        ok &= check(submit_diag_is(gpu, "ok"), 1,
+                    "USER NV097 transform execution mode diagnostic");
+        ok &= check(gpu->pgraph.regs[0x1BC8 / 4], 0x00000002u,
+                    "NV097 transform execution mode stored");
+        ok &= check(gpu->pgraph.regs[0x1BCC / 4], 0x00000003u,
+                    "NV097 transform program start stored");
+
+        /* Implementing a method must not weaken the rejection next door: the
+         * neighbours of 0x1BC8 that the title never submits still reject. */
+        memset(pb, 0, 0x2000);
+        pb[0] = (1u << 18) | 0x1BD0u;
+        pb[1] = 0x00000004u;
+        submit_reset(gpu, 0, 8);
+        ok &= check(nv2a_submit_pending(gpu), 0,
+                    "USER unimplemented transform neighbour rejected");
+        ok &= check(submit_diag_is(gpu, "unsupported_method"), 1,
+                    "USER unimplemented transform neighbour diagnostic");
+        ok &= check(gpu->pfifo.submit_diag_method, 0x1BD0u,
+                    "USER unimplemented transform neighbour exact method");
+        ok &= check(gpu->pgraph.regs[0x1BC8 / 4], 0x00000002u,
+                    "NV097 transform execution mode survives neighbour reject");
+
         /* Handle rebinding is per subchannel and commits with the stream. */
         ok &= check(nv2a_set_fixture_binding(gpu, 0, 0x5678, 0x97), 1,
                     "USER fixture rebind registration");

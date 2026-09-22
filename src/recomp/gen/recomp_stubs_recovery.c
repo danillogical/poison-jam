@@ -199,7 +199,6 @@ void sub_00110B91(void) { recomp_icall_fail_log(0x00110B91u); abort(); }
 void sub_00110ED1(void) { recomp_icall_fail_log(0x00110ED1u); abort(); }
 void sub_00111C10(void) { recomp_icall_fail_log(0x00111C10u); abort(); }
 void sub_00114080(void) { recomp_icall_fail_log(0x00114080u); abort(); }
-void sub_001185B0(void) { recomp_icall_fail_log(0x001185B0u); abort(); }
 void sub_00119C20(void) { recomp_icall_fail_log(0x00119C20u); abort(); }
 void sub_00119CE0(void) { recomp_icall_fail_log(0x00119CE0u); abort(); }
 void sub_00119DA0(void) { recomp_icall_fail_log(0x00119DA0u); abort(); }
@@ -228,8 +227,6 @@ void sub_00140086(void) { recomp_icall_fail_log(0x00140086u); abort(); }
 void sub_0014048E(void) { recomp_icall_fail_log(0x0014048Eu); abort(); }
 void sub_00140E88(void) { recomp_icall_fail_log(0x00140E88u); abort(); }
 void sub_00140EAC(void) { recomp_icall_fail_log(0x00140EACu); abort(); }
-void sub_00141830(void) { recomp_icall_fail_log(0x00141830u); abort(); }
-void sub_00141837(void) { recomp_icall_fail_log(0x00141837u); abort(); }
 void sub_001424B4(void) { recomp_icall_fail_log(0x001424B4u); abort(); }
 void sub_001424CA(void) { recomp_icall_fail_log(0x001424CAu); abort(); }
 void sub_0014252C(void) { recomp_icall_fail_log(0x0014252Cu); abort(); }
