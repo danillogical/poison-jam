@@ -4,6 +4,58 @@ Standing rule (from `report-grok.md`): keep going; record choices here instead
 of stopping to ask. When a decision comes up, take the recommendation and
 continue.
 
+## CURRENT STATE — read this first, then the sections below
+
+Last updated 2026-09-22 14:35. Everything below this block is **chronological**,
+and where a later section corrects an earlier one the later one wins — several do
+(`Correction: ...`, `Retracted ...`). This block is the only place that states
+where things stand *now*; rewrite it in place each session rather than appending.
+
+**Repos.** Game `6060e3f`, toolkit `18a0837`. Both clean. Game CTest 11/11,
+toolkit standalone CTest 1/1 (the toolkit's own build tree needed its test target
+building — it had never been built, which read as a failure).
+
+**What works.** The title boots from the retail XBE, runs its CRT and initialisers,
+initialises D3D, and **drains the whole pushbuffer it submits**:
+
+```
+[PFIFO] submit #1 diag=ok get=00002764 put=00002764
+```
+
+No unresolved indirect calls anywhere in a run. 19 native threads, 151 named
+frames, `diagnostic_deadline` (no crash, no hang).
+
+**Where it stops.** Three guest threads block in `xbox_KeWaitInplaceEvent` on the
+in-guest KEVENT at `0x0019D630`, and **nothing signals it**: ordinal 145
+(`KeSetEvent`) is called 0 times, `NtPulseEvent` 0 times, `0x0019D630` occurs as no
+immediate and in no data table, and the field pair `+0x2430`/`+0x2434` occurs at
+exactly one site in the whole recompiled title.
+
+**Next packet.** Identify what the structure at `0x0019B200` describes. Its
+`+0x211C` array is indexed in 8-byte records and `sub_0018CE80(i, out)` copies 24
+bytes out of entry `i`, so it is a work-item queue; naming its subsystem names the
+producer of the missing signal. Do **not** re-derive the `+0x242C` callback — it is
+a trace hook over the counter at `0x265174`, already closed.
+
+**Open, off the critical path.** The APU has no GP SGE engine. The APU is
+instantiated and routed (`apu_mmio_hook.h`, gated on `RECOMP_APU_TRAP`), but the
+SGE engine is not on the critical path while `RECOMP_APU_DSP_ACK=0x803C0810` is set.
+
+**Milestones.** 00–05 done. 06a done; 06b **blocked on reachability** (the four
+unbridged ordinals are declared but never called). 07 in progress. 11's blocker is
+cleared — the fence/ring wait that held the title for days is gone; the renderer
+itself is still pending, which is 12 onward.
+
+**Running the title.** `RECOMP_KERNEL_LOG_BUDGET=100000`, or a live run looks
+frozen: the default 200 truncates the log and a truncated log reads as a hang.
+`git commit -F <file>` is needed for multi-line messages, and the path in `-F`
+must be a Windows path, not `/c/...`.
+
+**Evidence retention.** `logs/` is gitignored and holds 638 runs (~93 GB). The
+report, plan and `docs/` cite 47 of them as evidence (~8 GB) — those must not be
+pruned. Anything older than the cited set and outside the most recent runs is
+disposable; there is no retention script yet.
+
 ## 2026-09-21 — Commit the outstanding checkpoint, then resume the plan
 
 **Decision: verify before committing Grok's leftover work, not just stage it.**

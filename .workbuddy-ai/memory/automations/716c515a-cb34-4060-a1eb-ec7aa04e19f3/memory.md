@@ -131,3 +131,48 @@ write, walk that many entries from `GPSADDR`, resolve each physical address
 through the APU's `ram_ptr`, complete the transfer, and write 0 to the pending
 word in the first page (`buffer+0x810`). Add an APU probe test rather than
 weakening `jsrf_nv2a_registers`.
+
+## 2026-09-22 10:57-12:50 PDT (fourth recorded run)
+
+Outcome: the indirect-call trap frontier is **cleared** and the NV2A pushbuffer
+model now **drains the whole ring the title submits**. The blocker moved from
+"the guest traps" to "three guest threads block on one in-place KEVENT that
+nothing signals". Two commits in each repo, CTest 11/11 throughout.
+
+Done:
+- Confirmed the previous session's four span repairs **by execution**: the log
+  shows `0x0007BE30`, `0x0007BDD0`, `0x00024700` and the new `0x001185B0` all
+  logging `returned; ABI verified`. No `[ICALL] Failed to resolve VA` anywhere in
+  the final run.
+- Fixed the last trap `0x001185B0`: a tail call **below** the span start of
+  `0x00118610`. `check-span-exits.py` was looking only forward; it is now
+  bidirectional (381 -> 294 findings).
+- Cancelled the previous run's stated next packet. New
+  `scripts/resolution_starts.py` reads the three tables the binary actually
+  consults; the "six uncovered table targets plus `0x00011C90`" were a detector
+  artefact -- all 64 entries of the class table at `0x0020D2B8` resolve.
+- Drained the ring. `scripts/gen-nv2a-method-inventory.py` had hardcoded ring
+  ends and a packet classifier that did not match `nv2a_submit_pending`; it is now
+  a word-for-word port. Regenerated the method table (NV097 250 -> 362 methods,
+  toolkit `18a0837`) and extended `jsrf_nv2a_registers` with both an acceptance
+  case (0x1BC8/0x1BCC) and a rejection case (0x1BD0).
+- Measured: `[PFIFO] submit #1 diag=ok get=00002764 put=00002764` -- the ring
+  drains at a ring 58% longer than the plan recorded.
+- Named the new frontier from the run's own thread dump: three guest threads in
+  `xbox_KeWaitInplaceEvent` on the in-guest KEVENT at `0x0019D630`, and nothing
+  signals it (ordinal 145 `KeSetEvent` 0 times, no data-table or immediate
+  reference, the field pair occurring at exactly one site).
+- Commits: toolkit `18a0837`; game `17522bf` and `6060e3f`.
+
+Next run should start at: **identify what the structure at `0x0019B200`
+describes.** Its `+0x211C` array is indexed in 8-byte records and
+`sub_0018CE80(i, out)` copies 24 bytes out of entry `i`, so it is a work-item
+queue; naming its subsystem names the producer of the missing signal. Do not
+re-derive the `+0x242C` callback -- it is a trace hook over the counter at
+`0x265174`, already closed.
+
+Notes for future runs: the APU GP SGE engine from the third run is still open but
+is not on the critical path while `RECOMP_APU_DSP_ACK=0x803C0810` is set. Use
+`RECOMP_KERNEL_LOG_BUDGET=100000` or a live run looks frozen. `git commit -F
+<file>` is needed for multi-line messages (heredocs are blocked), and the path in
+`-F` must be a Windows path, not `/c/...`.
