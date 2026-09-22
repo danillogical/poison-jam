@@ -4120,3 +4120,79 @@ State: `logs/runs/20260921-235816-855-clean-final2/` (167 bodies verifying, 0 AB
 reports, CTest 11/11).
 
 
+
+
+---
+
+# The GPU handshake decoded: a DMA notify buffer, and four unimplemented classes
+
+## The submitted pushbuffer, decoded
+
+Reading guest memory at the contiguous-window address (not low memory -- Xbox D3D
+writes PUT as `VA & 0x0FFFFFFF` and reads the position back as `GET | 0x80000000`,
+so the buffer is at 0x80001000 for GET=0x1000) gives the whole submission: 259
+packets, 713 words.
+
+| addr | subch | method | params | meaning |
+|---|---|---|---|---|
+| 80001000 | 1 | 0x0000 | 0E | bind subch1 = handle 0xE |
+| 80001008 | 2 | 0x0000 | 10 | bind subch2 = handle 0x10 |
+| 80001010 | 3 | 0x0000 | 11 | bind subch3 = handle 0x11 |
+| 80001018 | 0 | 0x0000 | 0D | bind subch0 = handle 0xD |
+| **80001020** | **1** | **0x0180** | **07** | **the packet the model rejects** |
+| 80001028 | 2 | 0x02FC | 03 | NV09F_SET_OPERATION = SRCCOPY |
+| 80001030 | 3 | 0x0184 | 03 0B | NV062 context DMA + colour format |
+| ... | | | | |
+| 8000105C | 0 | 0x0180 | 02 03 03 | the same method on NV097 |
+
+So the bindings use method 0x0000 (the PFIFO-level SET_OBJECT) and 0x180 is a
+*class* method, not a binding -- which refutes an earlier guess of mine. The
+rejection is the fifth packet, and everything after it is never walked.
+
+## What the classes and the method actually are
+
+`src/nv2a/nv2a_regs.h` already names all four, and the model's `nv2a_core.c` knows
+only the last of them (`NV097_CLASS 0x97u`):
+
+| class | name | subchannel |
+|---|---|---|
+| 0x0039 | `NV_MEMORY_TO_MEMORY_FORMAT` | 1 |
+| 0x0062 | `NV_CONTEXT_SURFACES_2D` | 3 |
+| 0x009F | `NV_IMAGE_BLIT` | 2 |
+| 0x0097 | `NV_KELVIN_PRIMITIVE` | 0 |
+
+and the method the walk rejects is
+
+```
+NV097_SET_CONTEXT_DMA_NOTIFIES   0x00000180
+```
+
+**So the guest is setting up a DMA notification buffer.** That closes the loop on
+the spin: the title writes a sentinel (0xDEADBEEF) into the notify buffer at
+0x80000000, submits a pushbuffer that registers that buffer and its context, and
+then waits at 0x001914F0 for the GPU to write a completion notification into it.
+The model has no DMA notify path at all, so the word is never written and the wait
+is permanent.
+
+## Scope this properly: it is milestone 11, not a gate fix
+
+Milestone 11 is "select and wire graphics interception", and this is its first
+concrete requirement. The work is:
+
+1. teach the walk the four classes (the header already names them, so this is
+   naming rather than reverse engineering);
+2. implement `NV_MEMORY_TO_MEMORY_FORMAT` far enough to accept its methods --
+   `SET_CONTEXT_DMA_NOTIFIES` (0x180), `SET_CONTEXT_DMA_BUFFER_IN`/`_OUT`
+   (0x184/0x188), `OFFSET_IN`/`_OUT`, `PITCH`, `LINE_LENGTH`, `LINE_COUNT`,
+   `FORMAT`, `BUFFER_NOTIFY`, `OPERATION` -- the memcpy/blit engine;
+3. implement the notify writeback, so a submitted fence publishes a value into the
+   notify buffer. That is the step which ends the spin.
+
+Step 3 is a *model capability*, not a relaxation: the rejection contract stays
+exactly as `jsrf_nv2a_registers` pins it. That test needs **extending** rather than
+weakening as the classes become known.
+
+**Decision (mine):** record the scope; do not attempt a speculative notify
+implementation this session. The packet sequence above is the specification, and a
+guessed fence value or address would be exactly the "returns success without
+producing required state" that the plan's working rules forbid.
