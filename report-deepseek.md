@@ -3143,4 +3143,63 @@ exact expected delta (it can look the callee's `stack_args` up) rather than a lo
 bound, which would turn this class of corruption into a named failure at the call
 that causes it.
 
+---
+
+# Two corrections the canary attempt produced
+
+**Decision: abandon the canary and record why, rather than tune it until it
+agrees with the hypothesis.** Both of the following are corrections to what I
+wrote above.
+
+## Correction 1 — the one-sided ESP check is deliberate, not an oversight
+
+I called `RECOMP_ABI_CALL`'s `g_esp < _ap + 4` test "one-sided" as if it were a
+bug. It is documented in the header, and the reasoning is sound:
+
+> esp is deliberately not checked: the convention decides whether the callee pops
+> arguments, so there is no single correct value -- but there is one invariant
+> that holds under every convention: the callee at least pops its own return
+> address, so esp must come back at least 4 higher than it went in.
+
+The improvement I proposed still stands — where a callee's `stack_args` **is**
+known, the exact delta can be compared, which is strictly stronger — but the
+existing test is not careless, and the report should not have implied it was.
+
+## Correction 2 — the ABI check is OFF by default, and that is why nothing fired
+
+The whole macro is behind `#ifdef RECOMP_ABI_CHECK`, which nothing in either
+CMakeLists defines. So every `RECOMP_ABI_CALL` in the tree compiles to a plain
+`(fn)()`. My canary was dead code, and the first two runs that reported "no hits"
+were reporting nothing at all — including a deliberate `0xDEADBEEF` plumbing check
+that also produced no output. **Enabling it (`-DCMAKE_C_FLAGS=-DRECOMP_ABI_CHECK`)
+made the canary fire immediately.**
+
+The header already warns about exactly this, and about this title's situation:
+
+> Generated code emits a direct call as a plain C call to the symbol, with no
+> macro to hook, so a direct callee that clobbers these registers is invisible
+> here. That matters more than it sounds -- CRT and static-initialiser paths are
+> almost entirely direct calls, so this found nothing at all on Half-Life 2's
+> static init, where the clobber demonstrably exists.
+
+## Why the canary cannot finish the job
+
+With the check enabled, the frame canary fires **400 times** — and it is not
+usable. `__SEH_prolog` (`0x0017D1F8`) builds the exception frame **inside its
+caller's frame by design**, so it trips any window-based test, and so do the other
+SEH helpers. The canary cannot separate "a callee legitimately extended the frame"
+from "a callee corrupted the frame", which is the same class of mistake as the
+three saturating alias discriminators earlier in this report.
+
+**What remains valid** is the direct observation from the previous section: the
+saved-ESI slot at `caller_esp+4` changes across `sub_001680D0` specifically, with
+ESP constant inside `sub_0005F350`. That is a *targeted* probe on one known
+address, not a window heuristic, and it should be repeated one level down —
+probe that one slot after each call inside `sub_001680D0`, then inside
+`sub_00168050`.
+
+State: reverted to clean, `logs/runs/20260921-174239-356-reverted-clean/`,
+154 verified bodies, no canary output, CTest 11/11, both repositories clean
+(game `d40e936`, toolkit `f5fbdea`).
+
 

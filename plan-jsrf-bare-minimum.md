@@ -4,7 +4,32 @@ Agent onboarding, operating rules and handoff guidance live in `AGENTS.md`.
 Maintain that guide as capabilities and commands change; this plan remains the
 source of truth for milestone status and acceptance evidence.
 
-Current checkpoint: `logs/runs/20260921-161956-152-reviewed-restored/`.
+Current checkpoint: `logs/runs/20260921-174239-356-reverted-clean/` (clean,
+diagnostics reverted; 154 recovered bodies verify, CTest 11/11). Toolkit
+`f5fbdea`, game `d40e936`.
+
+**Where the guest is now.** The PFIFO low-mark spin is fixed (toolkit
+`f5fbdea`), so the hang is gone and the guest runs a long way into startup: CRT
+initialization completes, GPU setup completes, the pushbuffer kick chain returns,
+and **154 recovered bodies verify with zero ABI failures**. The stop is a **NULL
+indirect call**: `[ICALL] invalid target 0x00000000 return=0006FA51`.
+
+**Root cause traced four levels down.** `sub_0006F9E0` builds an object and stores
+it in `0x22FCE0` (the game's central object, 2341 references, exactly one store in
+the whole tree), then calls `vtable[0](this, 1)`. A targeted probe shows the
+constructor `sub_00012210` returns `0x38` instead of the object because its `esi`
+was destroyed: the saved-ESI slot changes across `sub_0005F350`'s call to
+`sub_001680D0`, which therefore writes above its own frame. ESP inside
+`sub_0005F350` is constant, so it is not over-popping.
+
+**Next packet:** probe that one saved slot after each call inside `sub_001680D0`,
+then inside `sub_00168050`. Do **not** use a window-based frame canary: it fires
+400 times because `__SEH_prolog` builds the exception frame inside its caller's
+frame by design. And note **`RECOMP_ABI_CHECK` is off by default**, so every
+`RECOMP_ABI_CALL` compiles to a plain call unless the build passes
+`-DRECOMP_ABI_CHECK` — a diagnostic that reports "no hits" without it is reporting
+nothing.
+
 **The guest no longer crashes.** Outcome is `diagnostic_deadline` (exit 3) rather
 than an unhandled exception: CRT initialization completes, GPU setup completes,
 and the pushbuffer kick chain that this plan listed as the fatal stop now runs and
