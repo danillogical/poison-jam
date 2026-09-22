@@ -193,9 +193,41 @@ Acceptance:
 
 **Suggested Agent:** Sol Medium (translation/ownership semantics); Luna for the
 bounded fix; Terra review.
-**Status:** Pending. **Depends on:** A2 delivered.
-**Evidence:** `logs/runs/20260922-160535-643-a2-irq-line/` (strict) and
-`logs/runs/20260922-160615-567-a2-irq-line-abicont/` (diagnostic only).
+**Status:** **Delivered 2026-09-22, and the packet's own acceptance is met —
+see A2c for what it exposed.** **Depends on:** A2 delivered.
+**Evidence:** game `caef022`; `logs/runs/20260922-162034-043-a2b-48190-sa12/`
+(strict, 30 s). Baseline `logs/runs/20260922-160535-643-a2-irq-line/`, and the
+diagnostic set `logs/runs/20260922-160615-567-a2-irq-line-abicont/`.
+
+Delivered and measured:
+- The declared end `0x00048305` was a disassembler `tail_jump_alias` **phantom**
+  (`_build_alias_entries`), `has_prologue` false and no xref, sitting inside the
+  entry's own argument setup. The real body ends `pop edi/esi/ebp/ebx; add esp,8;
+  ret 0xc` at `0x00048385..0x0004838C`. Corrected to end `0x00048390`.
+- The over-long alias span had swallowed the body's own shared epilogue at
+  `0x00048371`, which is why it was trapped as an aborting stub; it is now an
+  internal label. Regeneration dropped five traps.
+- `stack_args` is the `ret N` operand, not an argument count — verified against
+  `0x0004A6C0` (declared 4, epilogue `ret 4`). So `ret 0xc` means 12. The first
+  corrected run measured `esp` exactly four bytes high with the callee-saved
+  registers already preserved, which is how the rule was found.
+- Two neighbours corrected with their own evidence: `0x00048390` (→ end
+  `0x00048570`, `ret 0xc`, stack_args 12) and `0x00048570` (→ end `0x00048690`,
+  `ret 8`, stack_args 8).
+- **`[RECOVERED] 0x00048190 returned; ABI verified`** and no ABI failure anywhere
+  in the run. `0x00025310`, the second diagnostic failure, did not recur: its
+  span was already correct, so it was collateral from the corrupted frame. That
+  prediction is now measured.
+- Strict 30 s run archived and compared against the baseline; the run's next stop
+  is named (`[ICALL] Failed to resolve VA 0x00173DB0`, which is A2c). Named
+  frames 109 → 180.
+
+**Method note worth keeping:** the detector for this class is the *emitted code* —
+a generated `body_XXXXXXXX` with no `return` statement at all — not the
+disassembler. `scripts/check-entry-extents.py` sees only an informational
+`NO-TERMINATOR`, because `end` is a clean instruction boundary. And
+`scripts/inspect-jsrf.py disasm` is the authority for evidence: capstone in a
+throwaway script desynced on bytes this tool decodes cleanly.
 
 A2 delivered the interrupt line, so guest code the baseline never reached now
 runs and stops 3.5 s in on:
@@ -223,6 +255,88 @@ shown by evidence to be an ownership/entry defect that A4a must fix; a strict
 30 s run is archived and compared against
 `logs/runs/20260922-160535-643-a2-irq-line/`; and the run's next stop is named.
 Do not silence the check and do not widen the body end without evidence.
+
+### A2c — Recover the functions only a pointer table reaches
+
+**Suggested Agent:** Luna for the generator and the bounded fixes; Sol Medium if
+the APU decode failure turns out to be an interface question; Terra review.
+**Status:** **Delivered 2026-09-22 for the first two candidates; 132 remain.**
+**Depends on:** A2b delivered.
+**Evidence:** game `50cc6a8`; `logs/runs/20260922-162410-613-a2c-173db0/` and
+`logs/runs/20260922-162546-668-a2c-175300/` (strict, 30 s).
+
+The class, and why it is not A2b's. A function reached **only** through a data
+table occurs in no call and no jump, so `tools/disasm` never registers it and no
+alias fold can create it either. The preceding reviewed entry's end, tightened
+to "the next function", then runs straight over it. The detector already exists:
+`scripts/check-table-targets.py` reports **134 unresolvable pointer-table
+candidates — 64 swallowed by a span, 70 with no span at all.**
+
+Delivered:
+- `0x00173D70` end `0x00173ED0` → `0x00173DB0` (real body ends `pop esi;
+  add esp,0x14; ret 8` at `0x00173DA2`, padding to `0x00173DAF`).
+- `0x00173DB0` **new entry**, `0x00173DB0..0x00173EC9`, `sub esp,0x44` prologue,
+  `add esp,0x44; ret 0x14` at `0x00173EC3`, `stack_args` 20. Measured:
+  `0x00173DB0 returned; ABI verified`, and the stop moved to `0x00175300`.
+- `0x00175250` end `0x001753D0` → `0x00175300` (real body ends `pop esi; ret 8`
+  at `0x001752F0`).
+- `0x00175300` **new entry**, `0x00175300..0x001753CB`, early `add esp,8; ret 8`
+  at `0x001753AF/BA/C5`, `stack_args` 8. Measured: `0x00175300 returned; ABI
+  verified`. Run duration 3.30 s → 4.13 s.
+
+Remaining work, and the decision taken on it: **do not fix these one run at a
+time.** Write a generator that proposes, per candidate,
+`{start, end, stack_args, evidence}` from the original XBE — start at the
+pointer-table entry, walk to the first `ret N`, take the padding up to the next
+known function start as the end, take `N` as `stack_args` — and review its output
+against `scripts/inspect-jsrf.py disasm` before anything is written into
+`config/recovered-functions.json`. `scripts/inspect-jsrf.py disasm` is the
+authority; capstone in a throwaway script disagreed with it on the same bytes.
+
+Acceptance: every candidate is either recovered with its own `ret N` evidence or
+explicitly recorded as a deliberate fragment with the reason; a strict 30 s run
+is archived; the run's next stop is named.
+
+**Known open risk from this packet:** `0x00048690` is a pointer-table target with
+no span and `0x00048570`'s corrected end now stops just short of it. Nothing has
+called it yet; if something does it traps **by name** rather than executing
+`0x00048570`'s body twice, which is the intended behaviour, but it needs its own
+entry. It is the first item for the generator.
+
+### A2d — The APU MMIO decode failure
+
+**Suggested Agent:** Sol Medium (interface/subsystem question); Luna for the
+bounded fix; Terra review.
+**Status:** Pending. **Depends on:** A2c delivered.
+**Evidence:** `logs/runs/20260922-162546-668-a2c-175300/`.
+
+The run stops 4.1 s in on:
+
+```
+[APU] MMIO decode fail at RIP=00007FFA628FCCA7 offset=0x30200: C5 FE 6F 02 C4 A1
+[EXCEPTION first-chance] tid=21528 code=0xC0000005 RIP=0x7FFA628FCCA7 fault=0xFE840200 (read)
+```
+
+Facts: the faulting RIP is in a system DLL, not in the recompiled image; the
+bytes there are a VEX-encoded AVX instruction (`C5 FE 6F 02` =
+`vmovdqu xmm0,[edx]`); the fault address is `0xFE840200`, inside the APU
+aperture. Guest regs at the fault: `eax 0x118 ecx 0x46 edx 0x13 ebx 0x118
+esi 0xFE830200 edi 0x010DF724 esp 0x00F7FE74`. The VEH instruction decoder in
+the toolkit's APU hook recognises legacy MOV/CMP/OR/AND/LEA forms only, so it
+could not emulate the access and the fault escaped as an access violation.
+
+First question to answer with evidence: is the guest legitimately handing a host
+CRT routine a pointer into the APU aperture, or is a host routine being used to
+touch MMIO at all? Both answers have different fixes.
+
+Acceptance: the mechanism is stated with the instruction that faults and the
+call path that put a pointer there; the fix either decodes the encoding or stops
+the access reaching a host routine; a strict 30 s run is archived and compared
+against `logs/runs/20260922-162546-668-a2c-175300/`; and the run's next stop is
+named.
+
+**Do not** make the aperture readable as the fix. That converts a named failure
+into a silent wrong read, which is worse than the trap.
 
 ### A3 — Make GPU acceptance describe implemented behavior
 

@@ -214,3 +214,47 @@ Traps recorded:
 - `nv2a_irq_line_asserted` must keep the upstream `pending && enabled`
   condition: `NV_PMC_INTR_EN_0` is a two-bit master enable, not a per-source
   mask. A per-source AND against it silently kills delivery.
+
+## 2026-09-22 16:10-16:35 PDT (sixth recorded run)
+
+Outcome: A2b delivered and measured -- the ABI failure at `0x00048190` is gone.
+Its root cause was a span cut short at a disassembler phantom, and the same
+failure mode then appeared twice more with a different trigger (A2c, delivered
+for two candidates). The stop is now a new class: an APU MMIO decode failure.
+
+Done:
+- A2b: `0x00048190`'s declared end `0x00048305` is a `tail_jump_alias` phantom
+  from `_build_alias_entries`, not a function start. Real body ends
+  `pop edi/esi/ebp/ebx; add esp,8; ret 0xc` at `0x0004838C`. Corrected to end
+  `0x00048390`. Neighbours `0x00048390` and `0x00048570` corrected the same way.
+  Game `caef022`.
+- **`stack_args` is the `ret N` operand**, not an argument count. Verified
+  against `0x0004A6C0` (declared 4, epilogue `ret 4`). A wrong value is invisible
+  in the span and appears only as an `esp` delta 4 high.
+- A2c: functions reached *only* through a data table are never registered by
+  `tools/disasm`, so the previous entry's end runs over them.
+  `scripts/check-table-targets.py` enumerates 134 candidates. Recovered
+  `0x00173DB0` (stack_args 20) and `0x00175300` (stack_args 8). Game `50cc6a8`.
+- Measured: `0x00048190`, `0x00173DB0` and `0x00175300` all log
+  `returned; ABI verified`; no ABI failure anywhere. Run duration 3.30 -> 4.13 s.
+  `0x00025310` did not recur, confirming it was collateral.
+- CTest 11/11 game, 1/1 toolkit. Toolkit unchanged at `008001f`.
+
+Next run should start at: **A2d** -- the APU MMIO decode failure. The run stops on
+`[APU] MMIO decode fail at RIP=00007FFA628FCCA7 offset=0x30200: C5 FE 6F 02 C4 A1`
+then `code=0xC0000005 fault=0xFE840200 (read)`. The faulting RIP is in a system
+DLL and the bytes are a VEX/AVX instruction (`vmovdqu xmm0,[edx]`), so a host
+routine faulted on the APU aperture and the VEH decoder (legacy MOV/CMP/OR/AND/LEA
+only) could not emulate it. Do NOT map the aperture readable -- that turns a named
+failure into a silent wrong read. Then A2c's generator for the remaining 132
+pointer-table candidates.
+
+Traps recorded:
+- capstone in a throwaway script desyncs on bytes that
+  `scripts/inspect-jsrf.py disasm` decodes cleanly. The repo tool is the authority
+  for evidence; do not build a span detector on raw capstone.
+- The detector for a cut-short span is the *emitted code*: a generated
+  `body_XXXXXXXX` with no `return` statement at all.
+  `scripts/check-entry-extents.py` sees only an informational `NO-TERMINATOR`.
+- `0x00048690` is a pointer-table target with no span and `0x00048570`'s corrected
+  end now stops just short of it: a latent named trap, not a silent wrong body.

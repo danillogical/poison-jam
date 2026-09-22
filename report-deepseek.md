@@ -6,7 +6,7 @@ continue.
 
 ## CURRENT STATE — read this first, then the sections below
 
-Last updated 2026-09-22 16:10. Everything below this block is **chronological**,
+Last updated 2026-09-22 16:30. Everything below this block is **chronological**,
 and where a later section corrects an earlier one the later one wins — several do
 (`Correction: ...`, `Retracted ...`). This block is the only place that states
 where things stand *now*; rewrite it in place each session rather than appending.
@@ -14,77 +14,101 @@ where things stand *now*; rewrite it in place each session rather than appending
 **The plan's A1–A5 audit sequence owns the next steps** and overrides any
 "next packet" wording in the historical sections below.
 
-**Repos.** Game `ad40029` (`225bb6b` is the substantive code commit), toolkit
-`008001f` (`7cfbe55` is the substantive commit). Both clean. Game CTest 11/11,
-toolkit standalone CTest 1/1.
+**Repos.** Game `50cc6a8` (`caef022` is A2b, `50cc6a8` is A2c), toolkit
+`008001f` (unchanged this session; `7cfbe55` is still the substantive toolkit
+commit). Both clean. Game CTest 11/11, toolkit standalone CTest 1/1.
 
 **What works.** The title boots from the retail XBE, runs its CRT and
 initialisers, initialises D3D, drains the whole pushbuffer it submits
-(`[PFIFO] submit #1 diag=ok get=00002764 put=00002764`), and **now receives the
-GPU interrupt**. No unresolved indirect calls in a run.
+(`[PFIFO] submit #1 diag=ok get=00002764 put=00002764`), receives the GPU
+interrupt, runs the frame producer, and now walks past the `0x00048190` COM
+method family and two pointer-table-only functions. No ABI failure and no
+unresolved indirect call in the last two runs until the new stop below.
 
-**A2 is delivered and measured. The GPU interrupt line exists and the frame
-producer runs.** The chain, with every link now measured rather than inferred:
+**A2b is delivered and measured.** `0x00048190` no longer fails:
 
 | stage | evidence |
 |---|---|
-| guest enables the vblank source | `0x00196E80` writes `NV_PCRTC_INTR_0 = 1` then `NV_PCRTC_INTR_EN_0 = 1`; logged as a recovered return |
-| model asserts the pending bit | new `nv2a_vblank_pulse` on the model's display clock |
-| PMC summary bit 24 | `nv2a_update_irq`, gated by `pcrtc.pending & pcrtc.enabled` |
-| the card's line | new `nv2a_set_irq_sink`; `pci_irq_assert`/`deassert` were no-op stubs |
-| guest ISR | `KeConnectInterrupt(vector 3, 0x00193C50, context 0x0019D468)`; run log |
-| DPC | `0x00193C50` ends in `KeInsertQueueDpc(context+0x84, 0, 0)`; thunk `[0x1C40F0]` = ordinal 119 |
-| DPC routine | `KeInitializeDpc(context+0x84, 0x00194480, context)`; thunk `[0x1C4020]` = ordinal 107, and the minidump at `0x0019D4EC` shows `Type 0x13`, routine `0x00194480`, context `0x0019D468` |
-| producer | `0x00193D90` -> `KeSetEvent(context+0x1C8, 1, FALSE)`, i.e. the event at `0x0019D630` |
-| **producer ran** | `[RECOVERED] 0x00193D90 returned; ABI verified` |
-| **waiter woke** | waiters on `0x0019D630` went **3 -> 2** |
+| old stop | `[RECOVERED] ABI FAILURE 0x00048190 esp 00F7FDA0->00F7FD80 expected +8`, all four callee-saved registers clobbered |
+| cause | declared `end 0x00048305` is a disassembler `tail_jump_alias` **phantom** (`_build_alias_entries`), `has_prologue false`, no xref, sitting mid-way through the entry's own argument setup (`push eax` 0x48300, `mov [esp+0x2c],ecx` 0x48301, `push edi` 0x48305, `mov ecx,esi` 0x48306, `mov [esp+0x2c],ebx` 0x48308, `call 0x00047D40` 0x4830C) |
+| real body | `pop edi/esi/ebp/ebx; add esp,8; ret 0xc` at 0x00048385..0x0004838C, padding 0x0004838F, next function 0x00048390 |
+| over-long span also swallowed | the body's own shared epilogue at 0x00048371, which is why `config/recovery-unresolved.json` had trapped it as an aborting stub |
+| **fixed** | `[RECOVERED] 0x00048190 returned; ABI verified`; no ABI failure anywhere in the run |
 
-Evidence: `logs/runs/20260922-160535-643-a2-irq-line/` (strict profile, 30 s).
+Evidence: `logs/runs/20260922-162034-043-a2b-48190-sa12/` (strict, 30 s).
 
-**The root cause that was fixed, and why the old path could never work.** The
-kernel asserted vblank by OR-ing into the aperture —
-`MEM32(0xFD060100) |= 1` and `MEM32(0xFD000100) |= (1<<24)`. Both registers are
-**write-1-to-clear** in the model, as on the card, so an OR against the
-read-back value *clears* every pending bit and sets none. Measured with that
-path on (`logs/runs/20260922-155540-785-a2-vblank-probe/`): the ISR ran and
-queued a DPC 968 times, the published model snapshot read `PMC_INTR_0 = 0` and
-`PCRTC_INTR_0 = 0`, and `0x00193D90` never ran. `RECOMP_VBLANK` no longer
-exists; the display clock is part of the model, and the guest's own W1C is the
-only acknowledgment.
+**`stack_args` is the `ret N` operand, not an argument count.** Verified against
+`0x0004A6C0`, declared `stack_args 4`, whose epilogue is `ret 4`. So `ret 0xc`
+means 12 and `ret 8` means 8. Getting this wrong is invisible in the span and
+shows up only as an `esp` delta four bytes high — that is exactly what
+`logs/runs/20260922-161834-509-a2b-48190-span/` measured before the correction
+(`esp 00F7FDA0->00F7FDB0 expected +12`, with ebx/esi/edi already preserved).
 
-**Where the run stops now, and it is a different defect.** The run dies 3.5 s
-in on `[RECOVERED] ABI FAILURE 0x00048190 esp 00F7FDA0->00F7FD80 expected +8` —
-a COM vtable method whose recovered body consumes 0x20 bytes it should not.
-A diagnostic run under `JSRF_ABI_CONTINUE` (permitted as a convergence aid, not
-as acceptance) collects three: `0x00048190` twice and `0x00025310`
-(`logs/runs/20260922-160615-567-a2-irq-line-abicont/`), then
-`[ICALL] invalid target 0x00000000 ... return=00011D6A` and `0xE0424943`.
-This is newly *reachable* code, not a regression of the interrupt mechanism:
-the baseline never got here.
+**Two neighbours in the same family were corrected the same way**, each proven
+by its own `ret N`: `0x00048390` (end 0x00048510 phantom → 0x00048570,
+`ret 0xc` at 0x0004856C, stack_args 4 → 12) and `0x00048570` (end 0x00048794
+overran → 0x00048690, `pop ebx; ret 8` at 0x00048684, stack_args 8 → 8).
 
-**Next packet (A2b).** Root-cause `0x00048190`. It is recovered with
-`stack_args: 4` and a body spanning `0x00048190..0x0004A6F0` — far longer than
-one function, and the entry exists because an earlier abutting-alias fold made
-a virtual call enter the wrong function. Check first whether the declared body
-end swallows a sub-function whose own epilogue cleans a different number of
-bytes; the failure signature (esp 0x20 low, all four callee-saved registers
-clobbered) is what a fall-through into a body with a different `ret N` looks
-like. Then re-run strict and compare against
-`logs/runs/20260922-160535-643-a2-irq-line/`.
+**A2c is delivered and measured: two functions only a pointer table reaches.**
+The class is distinct from A2b and has its own detector, already in the repo:
+`scripts/check-table-targets.py` reports 134 unresolvable pointer-table
+candidates (64 swallowed by a span, 70 with no span at all). A function reached
+only through a data table occurs in no call and no jump, so `tools/disasm` never
+registers it and no alias fold can create it; the preceding entry's
+"end tightened to the next function" then runs straight over it.
 
-**Advisor.** Consulted this run (resume of `agent-d3294b58`) before the
-implementation, because the fix reclassifies a pinned criterion and rests on a
-universal claim. It ranked six mechanisms, flagged the weakest inference
-("ISR repeats, therefore the DPC ran" — inference, not measurement; and "no
-decode failure" proves no error, not that a write took effect), and named the
-cheapest falsifier for "nothing ever asserts a pending bit": read the pending
-bits out of an existing artifact. **That falsifier was already available and
-confirms the claim** — the published model snapshot in the vblank-probe run
-reads both pending registers as 0. It also gave the discriminator that decides
-whether the fix is legitimate rather than synthetic: *if you can delete the
-guest's acknowledge path and things still advance, it is synthetic.* The
-guest's W1C is the only thing that clears the bit, and `jsrf_nv2a_registers`
-now pins that.
+| entry | old end | real body | new end | stack_args |
+|---|---|---|---|---|
+| `0x00173D70` | 0x00173ED0 | `pop esi; add esp,0x14; ret 8` at 0x00173DA2 | 0x00173DB0 | 8 (unchanged) |
+| `0x00173DB0` **new** | — | `sub esp,0x44` prologue, `add esp,0x44; ret 0x14` at 0x00173EC3 | 0x00173ED0 | 20 |
+| `0x00175250` | 0x001753D0 | `pop esi; ret 8` at 0x001752F0 | 0x00175300 | 8 (unchanged) |
+| `0x00175300` **new** | — | early `add esp,8; ret 8` at 0x001753AF/BA/C5 | 0x001753D0 | 8 |
+
+Evidence: `logs/runs/20260922-162410-613-a2c-173db0/` (`0x00173DB0 returned;
+ABI verified`, next stop `0x00175300`) and
+`logs/runs/20260922-162546-668-a2c-175300/` (`0x00175300 returned; ABI
+verified`, next stop below). Run duration 3.30 s → 4.13 s.
+
+**Where the run stops now, and it is a new class.** `[APU] MMIO decode fail at
+RIP=00007FFA628FCCA7 offset=0x30200: C5 FE 6F 02 C4 A1`, then
+`[EXCEPTION first-chance] code=0xC0000005 RIP=0x7FFA628FCCA7 fault=0xFE840200
+(read)`. The faulting RIP is in a system DLL, not in the recompiled image, and
+the bytes there are a VEX-encoded AVX instruction (`C5 FE 6F 02` =
+`vmovdqu xmm0,[edx]`). So a host routine faulted on the APU aperture at
+`0xFE840200`, and the VEH instruction decoder — legacy MOV/CMP/OR/AND/LEA forms
+only — could not emulate the access, so the fault escaped. Guest regs at the
+fault: eax 0x118 ecx 0x46 edx 0x13 ebx 0x118 esi 0xFE830200 edi 0x010DF724
+esp 0x00F7FE74. This is newly *reachable* code, not a regression of the
+interrupt or span work: the baseline never got here.
+
+**Next packet (A2d).** Two jobs, in this order.
+
+1. **The APU decode failure.** Decide, with evidence, whether the guest is
+   legitimately handing a host CRT routine a pointer into the APU aperture, or
+   whether a host routine is being used to touch MMIO at all. The VEH decoder
+   in the toolkit's APU hook only recognises legacy encodings, so an AVX/SSE
+   form must either be decoded too or the access must be prevented from
+   reaching a host routine. Do not simply map the aperture readable: that turns
+   a named failure into a silent wrong read.
+2. **The remaining pointer-table class.** 132 candidates are still open. Do not
+   hand-fix them one run at a time — write a generator that proposes, for each
+   candidate, `{start, end, stack_args, evidence}` from the original XBE
+   (start from the pointer-table entry, walk to the first `ret N`, take the
+   padding up to the next known start, take `N` as `stack_args`), and review its
+   output against `scripts/inspect-jsrf.py disasm` before it is written into
+   `config/recovered-functions.json`.
+
+**Known open risk introduced by A2c.** `0x00048690` is a pointer-table target
+with no span, and `0x00048570`'s corrected end now stops just short of it.
+Nothing has called it yet; if something does it will trap **by name** rather
+than execute `0x00048570`'s body a second time. That is the intended behaviour,
+but it needs its own entry — it is candidate #2 in the generator's list.
+
+**Advisor.** Last consulted in the A2 session (resume of `agent-d3294b58`). No
+trigger has been met since: the A2b/A2c failures were each explained by a
+measurement (the phantom boundary and the `ret N` operand), not by competing
+hypotheses. The next likely trigger is the APU decode failure, where the
+mechanism is genuinely unknown.
 
 **Run profiles.** `docs/jsrf-run-profiles.md` defines **strict** (no override
 that answers a poll the hardware did not answer) versus **exploratory**.
@@ -104,18 +128,174 @@ used, and no run has yet been checked for which it took.
 **Milestones.** 00–05 done. 06a done; 06b blocked on reachability. 07 in
 progress. 11's blocker cleared; the renderer itself still pending, which is 12
 onward. **A2 is delivered but not yet accepted**: its acceptance also requires
-a bounded identity-verified run whose *next* stop is the packet's own, and this
-one stops on `0x00048190`, which is A2b.
+a bounded identity-verified run whose *next* stop is the packet's own, and the
+runs since stop on `0x00048190` (A2b) and then on the APU decode failure (A2d).
 
 **Running the title.** `RECOMP_KERNEL_LOG_BUDGET=100000`, or a live run looks
-frozen. `git commit -F <file>` for multi-line messages, with a **Windows**
-path — `/tmp/...` fails with `could not read log file`.
+frozen. Strict runs this session used `RECOMP_AC97_READY=1`,
+`RECOMP_APU_DSP_ACK=0x803C0810`, `RECOMP_APU_TRAP=1`, 30 s, and the
+`--expect-checkpoint memory_ready --expect-checkpoint guest_entry` pair.
+`git commit -F <file>` for multi-line messages, with a **Windows** path —
+`/tmp/...` fails with `could not read log file`, and a message file written
+inside the repo is swept up by `git add -A`.
 
-**Evidence retention.** `logs/` is gitignored and holds 641 runs (~93 GB). The
-report, plan and `docs/` cite 50 of them as evidence — never prune those. An
+**Evidence retention.** `logs/` is gitignored and holds 645 runs (~93 GB). The
+report, plan and `docs/` cite 53 of them as evidence — never prune those. An
 artifact's toolkit revision is part of the claim:
-`20260922-160535-643-a2-irq-line` records toolkit `7cfbe55`.
+`20260922-160535-643-a2-irq-line` records toolkit `7cfbe55`, and the three runs
+from this session record toolkit `008001f`.
+## 2026-09-22 — A2b and A2c: spans that ran over functions the disassembler never registered
 
+**Decision: `stack_args` is the `ret N` operand, not an argument count.** Taken
+on my own recommendation after a measurement contradicted my first reading, and
+recorded here because the mistake is invisible in the span and cost one run.
+
+A2 left the run stopping on
+
+```
+[RECOVERED] ABI FAILURE 0x00048190 esp 00F7FDA0->00F7FD80 expected +8
+```
+
+with all four callee-saved registers clobbered. The `CURRENT STATE` block of
+that session had recorded the hypothesis that the declared body end swallows
+sub-functions whose epilogues clean a different number of bytes. **The first
+half of that was right and the numbers were wrong.**
+
+### What was actually wrong
+
+`0x00048190`'s declared end was `0x00048305`. Reading the original instructions:
+
+```
+00048300 push     eax
+00048301 mov      dword ptr [esp + 0x2c], ecx
+00048305 push     edi
+00048306 mov      ecx, esi
+00048308 mov      dword ptr [esp + 0x2c], ebx
+0004830C call     0x47d40
+```
+
+`0x00048305` is **not a function start**. It is a `tail_jump_alias` phantom that
+`tools/disasm/functions.py::_build_alias_entries` creates for every tail-jump
+target landing inside another function: `has_prologue` false, no xref, and here
+it sits in the middle of the entry's own argument setup. The real body ends
+
+```
+00048385 pop      edi
+00048386 pop      esi
+00048387 pop      ebp
+00048388 pop      ebx
+00048389 add      esp, 8
+0004838C ret      0xc
+0004838F nop
+00048390 sub      esp, 8        <- next function
+```
+
+Commit `ddb0697` ("Tighten entry bounds to the next function") had tightened the
+end to `0x00048305` because that is the next entry *the disassembler knows
+about*. The over-long alias span had also swallowed the body's own shared
+epilogue at `0x00048371`, which is why `config/recovery-unresolved.json` had
+trapped it as an aborting stub; the two branches that reach it are inside the
+corrected span. Regeneration dropped five traps: `0x00048371`, `0x00048533`,
+`0x00048551`, `0x000487E1`, `0x00048858`.
+
+**The method point worth keeping:** the detector for this class is the emitted
+code, not the disassembler. `scripts/check-entry-extents.py` reports it only as
+an informational `NO-TERMINATOR`, because `end` is a clean instruction boundary;
+what identifies it is that the generated `body_XXXXXXXX` has no `return`
+statement at all and the last statement is argument setup. My first attempt to
+build a span detector on capstone disagreed with the repo's own disassembler on
+the same bytes (it desynced at `0x483A2`, where `scripts/inspect-jsrf.py disasm`
+decodes `lea ecx,[esp+0x14]` cleanly), so **`scripts/inspect-jsrf.py disasm` is
+the authority for evidence and capstone in a throwaway script is not.**
+
+### The mistake, and what fixed it
+
+I mapped `ret N` to "N bytes of arguments" and set `stack_args` to 8 for
+`ret 0xc`. The first corrected run measured
+
+```
+[RECOVERED] ABI FAILURE 0x00048190 esp 00F7FDA0->00F7FDB0 expected +12;
+  bx 012EE060->012EE060 si 016F2030->016F2030 di 016F2000->016F2000
+```
+
+The epilogue now ran — ebx, esi and edi are preserved — but `esp` was exactly
+four bytes high. Checked against an entry whose contract is already known:
+`0x0004A6C0` is declared `stack_args 4` and its epilogue is `ret 4`. So
+`stack_args` **is** the `ret N` operand, `ret 0xc` means 12, and `ret 8` means 8.
+Corrected, and the failure disappeared
+(`logs/runs/20260922-162034-043-a2b-48190-sa12/`):
+
+```
+[RECOVERED] 0x00048190 returned; ABI verified (ESP/EBX/ESI/EDI)
+```
+
+Two neighbours were corrected the same way, each proven by its own `ret N`:
+`0x00048390` (end `0x00048510` phantom → `0x00048570`, `ret 0xc` at `0x0004856C`,
+`stack_args` 4 → 12) and `0x00048570` (end `0x00048794` overran the real end →
+`0x00048690`, `pop ebx; ret 8` at `0x00048684`, `stack_args` 8 → 8).
+
+**A prediction that held:** `0x00025310`, the second failure in A2's diagnostic
+run, did not recur. Its span and `stack_args` were already correct, so it was
+collateral damage from `0x00048190`'s corrupted frame — which is what the
+corrupted frame predicted, and it is now measured rather than assumed.
+
+### A2c — the same failure mode with a different trigger
+
+With A2b in, the stop moved to
+
+```
+[ICALL] Failed to resolve VA 0x00173DB0
+```
+
+`0x00173DB0` is **absent from `tools/disasm`'s database entirely**. It occurs in
+no call and no jump — only as an entry of a pointer table
+(`scripts/check-table-targets.py` reports it first at `0x001E3E0C`) — so no
+candidate and no alias fold could create it. The preceding reviewed entry
+`0x00173D70` had its end tightened to the next *known* start, `0x00173ED0`,
+which ran straight over it.
+
+Fixed the same way as A2b, with the same evidence standard: `0x00173D70` ends
+`pop esi; add esp,0x14; ret 8` at `0x00173DA2` (padding to `0x00173DAF`), and
+`0x00173DB0` becomes a new entry `0x00173DB0..0x00173EC9` with the
+`sub esp,0x44` prologue and `add esp,0x44; ret 0x14` epilogue at `0x00173EC3`,
+`stack_args` 20. That moved the stop to `0x00175300`, a second member of the
+class, which was recovered the same way (`0x00175250` ends `pop esi; ret 8` at
+`0x001752F0`; `0x00175300..0x001753CB`, early `add esp,8; ret 8`, `stack_args`
+8).
+
+**Decision: stop fixing these one run at a time.** The class is 134 candidates
+and `scripts/check-table-targets.py` already enumerates them (64 swallowed by a
+span, 70 with no span). The next session writes a generator that proposes
+`{start, end, stack_args, evidence}` per candidate from the original XBE, and
+reviews its output against `scripts/inspect-jsrf.py disasm` before writing the
+config. Run duration moved 3.30 s → 4.13 s across A2b → A2c.
+
+### The new stop, and why it is a different class
+
+```
+[APU] MMIO decode fail at RIP=00007FFA628FCCA7 offset=0x30200: C5 FE 6F 02 C4 A1
+[EXCEPTION first-chance] tid=21528 code=0xC0000005 RIP=0x7FFA628FCCA7 fault=0xFE840200 (read)
+```
+
+The faulting RIP is in a system DLL, not in the recompiled image, and the bytes
+there are a VEX-encoded AVX instruction (`C5 FE 6F 02` = `vmovdqu xmm0,[edx]`).
+So a host routine faulted on the APU aperture at `0xFE840200`, and the VEH
+instruction decoder — which handles legacy MOV/CMP/OR/AND/LEA forms only — could
+not emulate the access, so the fault escaped as an access violation. Guest regs
+at the fault: `eax 0x118 ecx 0x46 edx 0x13 ebx 0x118 esi 0xFE830200
+edi 0x010DF724 esp 0x00F7FE74`.
+
+Recorded as the next packet (A2d) with the explicit warning that mapping the
+aperture readable is not an acceptable fix: that converts a named failure into a
+silent wrong read.
+
+### Known open risk introduced here
+
+`0x00048690` is a pointer-table target with no span, and `0x00048570`'s
+corrected end now stops just short of it. Nothing has called it yet. If
+something does it will trap **by name** instead of executing `0x00048570`'s body
+a second time, which is the intended behaviour — but it needs its own entry and
+it is candidate #2 for the generator.
 ## 2026-09-22 — A2: the GPU interrupt line, and the producer that signals the frame event
 
 **Decision: replace the synthetic vblank override with a display clock inside the
