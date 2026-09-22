@@ -84,7 +84,14 @@ for entry in entries:
     static RECOMP_TLS int logged;
     body_{address:08X}();{frame_restore}
     if (g_esp!=before_stack+{stack_delta} || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di{frame_check}) {{
-        fprintf(stderr,"[RECOVERED] ABI FAILURE 0x{address:08X} esp %08X->%08X expected +{stack_delta}; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp); abort();
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x{address:08X} esp %08X->%08X expected +{stack_delta}; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }}
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x{address:08X} returned; ABI verified (ESP/EBX/ESI/EDI)\\n");
 }}'''

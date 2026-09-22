@@ -2922,4 +2922,225 @@ argument at the call site or a status value used as a pointer; the call site in
 `sub_0005F350` and the object whose vtable is being walked are the two places to
 look. Run `logs/runs/20260921-164904-004-post-converge/`.
 
+---
+
+# Nobody passes a garbage riid: the wrong function was dispatched
+
+**Decision: the call site, not the argument, was the lie.** The guest pushes
+`0xFFFFFFFF` deliberately — `edi = edi | 0xFFFFFFFF` then `push edi` at
+`loc_0005F418` in `sub_0005F350` — as the fifth argument to `vtable[61]` of the
+object at `[0x251D6C]`. It is a `-1` sentinel, not a stale stack word.
+
+The target was the problem. The dispatch table contains:
+
+```
+recomp_dispatch.c:5500   { 0x00151C40u, (recomp_func_t)sub_00151D70 },
+recomp_dispatch.c:5501   { 0x00151CA0u, (recomp_func_t)sub_00151D70 },
+recomp_dispatch.c:5502   { 0x00151D70u, (recomp_func_t)sub_00151D70 },
+```
+
+**`0x00151C40` is `Release()`** — decrement the refcount at `[esi+0x20]`, and at
+zero make a virtual call, free a buffer, write the vtable `0x001E1248` and `free`
+the object, `ret 4`. **`0x00151D70` is `QueryInterface`** — its `repe cmpsd`
+compares `riid` against the IID at `0x001E1350`. The fold had made `Release`
+dispatch to `QueryInterface`, so a `Release` call read the fifth argument as a
+`riid` pointer and faulted at `0x10000FFFF`. Same class as `0x0017E58F`,
+`0x0014CF20` and the CRT tables.
+
+## Two narrower filters, both incomplete — recorded so they are not retried
+
+1. **Constructor-immediate scan** (the 1120-entry batch): candidates from
+   `= 0xADDRu;` in the generated code. Unsound — a vtable referenced only from a
+   *deleted* body never appears there. `0x1E1248` is exactly that case: its
+   constructor is `0x00151C40`, itself a folded alias, so its
+   `mov dword ptr [esi], 0x1E1248` was never emitted and all 9 of its entries
+   stayed invisible.
+2. **Function-pointer-table scan** (1175 entries): a maximal run of ≥ 3
+   consecutive dwords in a data section that all point into `.text` **and are all
+   function entries**. This is the first filter that actually separates the two
+   shapes — a switch table fails it because its targets are case labels inside one
+   function — and it leaves 1948 of the 3123 redirects as genuine mid-body
+   fragments that folding handles correctly. But it is still incomplete:
+   `0x00151CA0` is reached from a vtable slot that is not a static run.
+
+## The complete workaround
+
+The defect is in `tools/recomp/translator.py` — an abutting alias is folded even
+when it is a **complete function** — so no filter over the symptom can be
+complete. Take the whole set of 3123 redirected dispatch entries and let the two
+mechanical checks prune it:
+
+- `recover-functions.py` refuses any entry it cannot lift standalone, which
+  removes the genuine mid-body fragments.
+- the generated wrapper's ABI check catches a wrong `stack_args` at runtime, and
+  `scripts/converge-manifest.py` fixes those from the message.
+
+1190 entries were added (122 redirects have no alias end to bound them);
+`config/recovered-functions.json` is now **3058 entries** and the exe is 14.5 MB.
+All of them translated standalone on the first pass — no prunes — which is itself
+evidence that the set is mostly real functions.
+
+`stack_args` is derived from each body's own epilogue, with **all previously known
+values preserved**: a value measured at runtime by the converge loop beats any
+static guess, and an earlier pass that re-derived everything clobbered four
+measured values (`0x001BCAA3`, `0x001BCB14`, `0x001BCBC9`, `0x001BD274`).
+
+**Result so far:** `ABI verified` goes **119 -> 153** on the first run after the
+recovery, and the stop is again purely mechanical (`ABI FAILURE 0x00168480`,
+`stack_args` 8 where the taken path is 8). Run
+`logs/runs/20260921-165624-598-all-redirects/`.
+
+## The runtime check turned out to be the discriminator
+
+The first converge run exposed something better than any static filter. Its
+handling of `ABI FAILURE 0x00168480` was wrong — it set `stack_args` to the value
+already there and spun — because the real mismatch was **not** the ESP delta:
+
+```
+ABI FAILURE 0x00168480 esp 00F7FE9C->00F7FEA8 expected +12;
+  bx 0105D2C0->01080E00  si 002589F4->002589F4
+  di FFFFFFFF->FFFFFFFF  bp 00F7FE6C->00F7FD94
+```
+
+ESP is correct (`+12` as expected) but **EBX and EBP changed**. A body that does
+not preserve the nonvolatile registers is not a function at all — it is a mid-body
+fragment, and for that address **the fold was right**. So the generated wrapper's
+ABI check is a *runtime* discriminator between the two shapes, and
+`scripts/converge-manifest.py` now uses it:
+
+- only the ESP delta differs -> the entry is a function with a wrong `stack_args`;
+  set it from the measured delta.
+- EBX/ESI/EDI/EBP differ -> the entry is a fragment; **remove it** so the dispatch
+  goes back to the parent, which is what folding was for.
+
+That is strictly better than the three static discriminators that were measured
+and discarded, because it is a direct observation of the property that matters
+rather than a correlate of it.
+
+## The toolkit fix this now makes concrete
+
+The rule that is wrong is `translator.py`'s rule 2 (adopt a parent whose `start`
+equals the alias's `end`). It should fold **only when the alias body is not a
+complete function**, where "complete function" means its last non-padding
+instruction is a terminator (`ret`/`jmp`) with only `int3`/`nop` padding after it.
+Measured earlier: 891 of the 971 rule-2 aliases end in `ret` or `jmp`, i.e. the
+large majority are complete functions and should never have been folded. Rule 1
+(same end, earlier start — the alias lies *inside* its parent) is the genuine
+duplicate case and stays as it is.
+
+Two static discriminators that look equivalent were measured and **saturate**:
+"the last decoded instruction ends exactly at the alias end" (because `int3`
+padding decodes as instructions, so the defect case passes) and "the alias address
+is entered from data" (2651 of 3123, because a switch table is also a run of
+`.text` addresses). Do not substitute either for the terminator test.
+
+---
+
+# The NULL call is a stack-frame corruption, four levels down
+
+**Decision: probe the guest's own saved-register slot instead of reasoning about
+the disassembly.** Every static route was tried first and every one was
+inconclusive or actively misleading; the probe answered it in one run. The
+temporary probes are reverted — `git checkout` on the four touched files — and the
+clean state is `logs/runs/20260921-172534-286-clean-state/` (154 verified bodies,
+CTest 11/11, same NULL call).
+
+## The symptom
+
+```
+[ICALL] invalid target 0x00000000 return=0006FA51
+```
+
+`sub_0006F9E0` builds an object with `malloc(0x8840)` + `call 0x12210`, stores the
+result in the global `0x22FCE0`, then calls `vtable[0](this, 1)` on it. The ICALL
+target is NULL, so `[0x22FCE0]` must be a pointer whose first dword is 0.
+
+## What the static analysis established, and where it failed
+
+- `0x22FCE0` has **2341 references and exactly one store** in the whole tree
+  (`mov dword ptr [0x22fce0], eax` at guest `0x0006FA2C`, by opcode `a3 e0 fc 22
+  00`). Nothing else writes it.
+- The dump is trustworthy: `.data`'s initializer table reads exactly as the XBE
+  says, and `0x2651EC = 0x00181009` — a value the recovered initializer writes at
+  runtime — proves runtime writes are captured.
+- `[0x22FCE0] = 0x00000038` and exactly **one** object in all 64 MB of guest RAM
+  carries the constructor's vtable (`0x1C4458`), at `0x01054A70`.
+- The constructor `sub_00012210` is well-formed: one exit, `eax = esi` then
+  `POP32(esp, esi)`, `ret 8`.
+- `RECOMP_ABI_CALL` does not touch EAX, so the return value survives the call.
+
+None of that explains `0x38`. Two hypotheses were tested and **both were wrong**,
+and both are worth recording because each looked convincing:
+
+1. *"The register map is off by 0x2000."* It is not. `nv2a_core.c:1321` subtracts
+   the block base (`blocktable` puts PFIFO at `0x2000`), so the guest's `0x3214`
+   *is* block-local `0x1214`. The map is QEMU's and it is correct.
+2. *"`sub_0005F350` has an ESI push/pop imbalance."* It does not —
+   `PUSH32(esp, esi)` is also how arguments are passed, and the function has a
+   single exit that does `POP32(esp, esi)`.
+
+## The probe
+
+`jsrf_trace_probe(site, value)` was added to `src/diagnostics.c` and declared next
+to `recomp_diag_record`, then called from the generated chunks. It logs to stderr
+in order and without bound — the event ring is only 128 deep and **overwrote the
+early probes**, which is what made the first attempt unreadable.
+
+Result, in order:
+
+```
+[PROBE] site=0001222B value=01054A70   <- constructor entry: esi = the object
+[PROBE] site=0004A8F0 value=01054A70   <- after malloc: still the object
+[PROBE] site=0005F180 value=01054A70   <- after 0x5F180: still the object
+[PROBE] site=0005F350 value=00000038   <- after 0x5F350: esi = 0x38
+[PROBE] site=0001237E value=00000038   <- constructor exit: esi = 0x38
+[PROBE] site=0006FA2C value=00000038   <- stored to 0x22FCE0
+```
+
+**`sub_0005F350` returns with ESI clobbered.** Probing the *saved slot* after each
+of its calls (`MEM32(esp+4)`) narrowed it further — the slot holds `0x01054A70`
+across every call until:
+
+```
+[PROBE] site=001680D0 value=00000038   <- the saved slot changed across 0x1680D0
+```
+
+**`sub_001680D0` writes over its caller's saved-ESI slot.** ESP inside
+`sub_0005F350` is constant across all ten calls, so it is not over-popping; the
+callee writes *above* its own frame.
+
+## The causal chain, complete
+
+```
+sub_001680D0          overwrites its caller's saved-ESI slot
+  -> sub_0005F350     restores 0x38 into ESI (and 0 into EDI)
+    -> sub_00012210   whose esi IS the object, so eax = 0x38 at its exit
+      -> 0x0006FA2C   stores 0x38 into 0x22FCE0, the central game-object pointer
+        -> 0x0006FA4F `call [eax]` reads [0x38] = 0 and calls NULL
+```
+
+`0x22FCE0` is the game's central object (2341 references), so a corrupted store
+there would misdirect the guest broadly, not just at this one call site.
+
+## Why the existing ABI check missed it
+
+`RECOMP_ABI_CALL`'s check is:
+
+```c
+if (g_ebx != _ab || g_esi != _as || g_edi != _ad || g_esp < _ap + 4)
+```
+
+The ESP test is a **lower bound only**. A callee that returns with ESP too *high*
+— or, as here, one that writes above its own frame — passes it silently. This is
+the second time a check that looked sufficient turned out to be one-sided.
+
+**Next packet:** find the instruction inside `sub_001680D0`'s subtree that writes
+above its frame. Its own generated body is balanced on every path (it pushes
+`esi`/`edi`, pops them on the matching paths, and `esp += 16` for `ret 12`), so the
+write is deeper — probe the saved slot after each call inside `sub_001680D0`, then
+inside `sub_00168050`. The generic fix is to make `RECOMP_ABI_CALL` compare the
+exact expected delta (it can look the callee's `stack_args` up) rather than a lower
+bound, which would turn this class of corruption into a named failure at the call
+that causes it.
+
 

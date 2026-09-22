@@ -137,7 +137,9 @@ for step in range(args.steps):
         break
 
     abi = re.findall(
-        r"ABI FAILURE 0x([0-9A-F]{8}) esp ([0-9A-F]{8})->([0-9A-F]{8}) expected \+(\d+)", log)
+        r"ABI FAILURE 0x([0-9A-F]{8}) esp ([0-9A-F]{8})->([0-9A-F]{8}) expected \+(\d+)"
+        r"; bx ([0-9A-F]{8})->([0-9A-F]{8}) si ([0-9A-F]{8})->([0-9A-F]{8})"
+        r" di ([0-9A-F]{8})->([0-9A-F]{8}) bp ([0-9A-F]{8})->([0-9A-F]{8})", log)
     unresolved = re.findall(r"Failed to resolve VA 0x([0-9A-F]{8})", log)
 
     if not abi and not unresolved:
@@ -147,16 +149,32 @@ for step in range(args.steps):
         break
 
     if abi:
-        addr = int(abi[0][0], 16)
-        want = (int(abi[0][2], 16) - int(abi[0][1], 16)) - 4
+        g = abi[0]
+        addr = int(g[0], 16)
+        esp_ok = (int(g[2], 16) - int(g[1], 16)) == int(g[3])
+        regs_ok = all(g[i] == g[i + 1] for i in (4, 6, 8, 10))
         entries = load()
         hit = [e for e in entries if int(e["start"], 16) == addr]
         if not hit:
             print(f"step {step}: ABI failure at 0x{addr:08X} is not a manifest entry")
             break
-        print(f"step {step}: 0x{addr:08X} stack_args {hit[0].get('stack_args')} -> {want}")
-        hit[0]["stack_args"] = want
-        save(entries)
+        if not regs_ok:
+            # The body does not preserve the nonvolatile registers, so it is a
+            # mid-body fragment, not a function: the fold was right for this
+            # address. Remove it and let the dispatch go back to the parent.
+            print(f"step {step}: 0x{addr:08X} does not preserve bx/si/di/bp -> "
+                  f"fragment, removing")
+            save([e for e in entries if int(e["start"], 16) != addr])
+        elif not esp_ok:
+            want = (int(g[2], 16) - int(g[1], 16)) - 4
+            print(f"step {step}: 0x{addr:08X} stack_args "
+                  f"{hit[0].get('stack_args')} -> {want}")
+            hit[0]["stack_args"] = want
+            save(entries)
+        else:
+            print(f"step {step}: 0x{addr:08X} ABI failure is neither the ESP delta "
+                  f"nor a clobbered register; stopping")
+            break
     else:
         addr = int(unresolved[0], 16)
         entries = load()
