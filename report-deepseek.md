@@ -4253,3 +4253,53 @@ ends the spin. Implementing it means deciding what value the GPU writes and wher
 -- which is derivable from `[dev+0x30]`/`[dev+0x34]` and the wait at `0x001914F0`,
 but it is a real piece of model work, not a patch, and it must come with an
 extension to `jsrf_nv2a_registers` rather than a weakening of it.
+
+
+---
+
+# Correction: the "dead" gate is the contract, not a bug
+
+I called the inner test in the method gate dead code and "fixed" it. It is
+redundant, but its *effect* is deliberate, and the tests say so in as many words.
+
+The gate reads:
+
+```
+} else if (method != 0x0100u &&
+           !(staged_class[subchannel] == NV097_CLASS &&
+             (method == M_SET_SURFACE_CLIP_H || method == M_SET_SURFACE_CLIP_V))) {
+    if (method != 0x0100u || subchannel != 0) { ... reject ... }
+}
+```
+
+Entering the else-if already requires `method != 0x0100u`, so the inner condition
+is always true. My reading was that the class check was therefore dead and every
+NV097 method was being rejected by accident. Changing it to test the class instead
+produces:
+
+```
+FAIL USER unmodeled surface method rejected:            actual=1 expected=0
+FAIL USER unmodeled surface method GET unchanged:       actual=8 expected=0
+FAIL USER removed surface format rollback:              actual=1 expected=0
+FAIL USER late unsupported binding rollback:            actual=39612 expected=22136
+FAIL USER unbound method state rollback:                actual=117440519 expected=83886085
+```
+
+So the model's contract is **"execute only methods that are implemented, and reject
+the whole stream otherwise"** -- not "accept anything on a bound subchannel". The
+redundant condition is how that is enforced, and `jsrf_nv2a_registers` pins it for
+unmodeled surface methods (0x208/0x20C/0x210/0x214), unbound subchannels, the
+budget, the sink and the RAMHT path alike.
+
+**Reverted; CTest 11/11, toolkit back at `b41eb87`.**
+
+What this means for milestone 11 is the opposite of what I wrote a section earlier:
+there is no gate to fix. The work is to **implement methods** -- each method added
+to the model widens what the walk accepts, one at a time, and the notify path is
+one of them. That is precisely what "select and wire graphics interception"
+charters, and it is a large body of work, not a patch.
+
+The decoded packet sequence remains the specification, and the immediate first
+method to implement is `NV097_SET_CONTEXT_DMA_NOTIFIES` (0x180) on
+`NV_MEMORY_TO_MEMORY_FORMAT` (class 0x39), together with the notify writeback that
+ends the spin.
