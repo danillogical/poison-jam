@@ -28,6 +28,26 @@ static int check(uint64_t actual, uint64_t expected, const char *name)
     return 0;
 }
 
+/* Interrupt-line capture. The model reports a line LEVEL on every update that
+ * changes it; the sink is the guest's host owner, so it must never see the
+ * same level twice in a row. Counting transitions is what makes "reported
+ * once" distinguishable from "reported every update". */
+struct irq_capture {
+    int transitions;
+    int last_level;
+};
+
+static void irq_capture_sink(void *opaque, int asserted)
+{
+    struct irq_capture *capture = (struct irq_capture *)opaque;
+    if (capture->last_level == asserted) {
+        fprintf(stderr, "FAIL: interrupt sink saw level %d twice\n", asserted);
+        abort();
+    }
+    capture->last_level = asserted;
+    capture->transitions++;
+}
+
 static void submit_reset(NV2AState *gpu, uint32_t get, uint32_t put)
 {
     gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET] = get;
@@ -885,6 +905,96 @@ int main(void)
                     "USER blocked stream leaves GET untouched");
 #undef REJECT_CASE
         VirtualFree(pb, 0, MEM_RELEASE);
+    }
+    /* ── Interrupt controller: source, masks, acknowledgment ──────────
+     *
+     * A2. The chain the title waits on is: display clock -> PCRTC pending bit
+     * -> PMC summary bit 24 -> the card's line -> the guest's ISR 0x00193C50
+     * -> KeInsertQueueDpc -> the DPC routine 0x00194480 -> 0x00193D90 ->
+     * KeSetEvent on the title's frame event. Everything downstream of the
+     * line is guest code; what this fixture pins is the model's half, and in
+     * particular that the guest's own write-1-to-clear is the only thing that
+     * clears a pending bit. A model that clears its own pending bit would
+     * make the guest's acknowledgment untestable and the whole run synthetic.
+     */
+    {
+        struct irq_capture capture = { 0, -1 };
+
+        /* Normalise: no block has anything pending or enabled, and the PMC
+         * aggregate reflects that. */
+        gpu->pfifo.pending_interrupts = 0;  gpu->pfifo.enabled_interrupts = 0;
+        gpu->pgraph.pending_interrupts = 0; gpu->pgraph.enabled_interrupts = 0;
+        gpu->ptimer.pending_interrupts = 0; gpu->ptimer.enabled_interrupts = 0;
+        gpu->pcrtc.pending_interrupts = 0;  gpu->pcrtc.enabled_interrupts = 0;
+        nv2a_mmio_write(gpu, 0x000140, 0, 4);          /* PMC master enable off */
+        nv2a_mmio_write(gpu, 0x600140, 0, 4);          /* PCRTC vblank enable off */
+        nv2a_mmio_write(gpu, 0x600100, 0xFFFFFFFFu, 4);
+        nv2a_mmio_write(gpu, 0x000100, 0xFFFFFFFFu, 4);
+        nv2a_set_irq_sink(gpu, irq_capture_sink, &capture);
+        ok &= check(nv2a_irq_line_asserted(gpu), 0, "line starts deasserted");
+        ok &= check((unsigned)capture.transitions, 0, "no line transition before a source");
+
+        /* The source is unconditional; the masks gate delivery, not the bit. */
+        nv2a_vblank_pulse(gpu);
+        ok &= check((gpu->pcrtc.pending_interrupts & NV_PCRTC_INTR_0_VBLANK) != 0, 1,
+                    "vblank pulse sets the PCRTC pending bit with everything disabled");
+        ok &= check((gpu->pmc.pending_interrupts & NV_PMC_INTR_0_PCRTC) != 0, 0,
+                    "block-disabled vblank does not reach the PMC summary");
+        ok &= check(nv2a_irq_line_asserted(gpu), 0, "block-disabled vblank asserts no line");
+        ok &= check((unsigned)capture.transitions, 0, "block-disabled vblank reports no transition");
+
+        /* Block enable, master still off: summary yes, line no. */
+        nv2a_mmio_write(gpu, 0x600140, 1, 4);
+        ok &= check((gpu->pmc.pending_interrupts & NV_PMC_INTR_0_PCRTC) != 0, 1,
+                    "block-enabled vblank reaches the PMC summary");
+        ok &= check(nv2a_irq_line_asserted(gpu), 0, "master-disabled summary asserts no line");
+        ok &= check((unsigned)capture.transitions, 0, "master-disabled summary reports no transition");
+
+        /* Master enable: now the line rises, once. */
+        nv2a_mmio_write(gpu, 0x000140, 1, 4);
+        ok &= check(nv2a_irq_line_asserted(gpu), 1, "master-enabled summary asserts the line");
+        ok &= check((unsigned)capture.transitions, 1, "line rise reported exactly once");
+
+        /* No spurious repeat: further frames while unacknowledged keep the
+         * same level and must not re-report it. */
+        nv2a_vblank_pulse(gpu);
+        nv2a_vblank_pulse(gpu);
+        ok &= check((gpu->pcrtc.pending_interrupts & NV_PCRTC_INTR_0_VBLANK) != 0, 1,
+                    "unacknowledged vblanks leave the source asserted");
+        ok &= check((unsigned)capture.transitions, 1, "unacknowledged vblanks do not re-report the line");
+
+        /* A W1C that does not name the vblank bit must not clear it. */
+        nv2a_mmio_write(gpu, 0x600100, 0xFFFFFFFEu, 4);
+        ok &= check((gpu->pcrtc.pending_interrupts & NV_PCRTC_INTR_0_VBLANK) != 0, 1,
+                    "W1C of another PCRTC bit leaves vblank pending");
+
+        /* The guest's acknowledgment: its own write-1-to-clear. */
+        nv2a_mmio_write(gpu, 0x600100, NV_PCRTC_INTR_0_VBLANK, 4);
+        ok &= check((gpu->pcrtc.pending_interrupts & NV_PCRTC_INTR_0_VBLANK) != 0, 0,
+                    "guest W1C clears the PCRTC pending bit");
+        ok &= check((gpu->pmc.pending_interrupts & NV_PMC_INTR_0_PCRTC) != 0, 0,
+                    "acknowledged vblank drops out of the PMC summary");
+        ok &= check(nv2a_irq_line_asserted(gpu), 0, "acknowledged vblank deasserts the line");
+        ok &= check((unsigned)capture.transitions, 2, "line fall reported exactly once");
+
+        /* And the next frame is delivered again. */
+        nv2a_vblank_pulse(gpu);
+        ok &= check((unsigned)capture.transitions, 3, "next frame re-raises the line");
+
+        /* Masking after the fact stops delivery without touching the source. */
+        nv2a_mmio_write(gpu, 0x600140, 0, 4);
+        ok &= check((gpu->pcrtc.pending_interrupts & NV_PCRTC_INTR_0_VBLANK) != 0, 1,
+                    "masking the block leaves the source asserted");
+        ok &= check(nv2a_irq_line_asserted(gpu), 0, "masking the block deasserts the line");
+        nv2a_set_irq_sink(gpu, NULL, NULL);
+    }
+    {
+        uint64_t frame_ns = nv2a_display_frame_ns(gpu);
+        ok &= check(frame_ns >= 1000000000ull / 240ull &&
+                    frame_ns <= 1000000000ull / 40ull, 1,
+                    "display frame period is a plausible refresh");
+        ok &= check(nv2a_display_frame_source() != NULL, 1,
+                    "display frame period reports its source");
     }
     if (ok) printf("PASS: %u NV2A register/clock contracts (no renderer)\n", checks);
     /* State is process-owned; the standalone core has no teardown API yet. */

@@ -196,6 +196,14 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
     xbox_path_init(YOUR_GAME_DIR, NULL);
     xbox_kernel_bridge_init();
     nv2a_hook_init(g_xbox_mem_offset);
+    /* Connect the card's interrupt line to the guest's GPU vector.
+     *
+     * The model asserts it from its own display clock when a pending bit is
+     * unmasked; the guest's ISR acknowledges by writing 1 back to the source.
+     * Without this the model aggregates its masks and tells nobody. */
+    if (xbox_Nv2aAttachIrqLine() != 0)
+        fprintf(stderr, "[NV2A] interrupt line not attached; the guest will"
+                        " not see GPU interrupts\n");
     if (!nv2a_hook_install_aperture((void *)(0xFD000000u + g_xbox_mem_offset),
                                     16u * 1024u * 1024u)) {
         fprintf(stderr, "[NV2A] failed to install MMIO state owner\n");
