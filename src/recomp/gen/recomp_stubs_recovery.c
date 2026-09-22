@@ -66,11 +66,6 @@ void sub_00044BA0(void) { recomp_icall_fail_log(0x00044BA0u); abort(); }
 void sub_00044C90(void) { recomp_icall_fail_log(0x00044C90u); abort(); }
 void sub_00045DBB(void) { recomp_icall_fail_log(0x00045DBBu); abort(); }
 void sub_00047850(void) { recomp_icall_fail_log(0x00047850u); abort(); }
-void sub_00048371(void) { recomp_icall_fail_log(0x00048371u); abort(); }
-void sub_00048533(void) { recomp_icall_fail_log(0x00048533u); abort(); }
-void sub_00048551(void) { recomp_icall_fail_log(0x00048551u); abort(); }
-void sub_000487E1(void) { recomp_icall_fail_log(0x000487E1u); abort(); }
-void sub_00048858(void) { recomp_icall_fail_log(0x00048858u); abort(); }
 void sub_00048D49(void) { recomp_icall_fail_log(0x00048D49u); abort(); }
 void sub_00048DA5(void) { recomp_icall_fail_log(0x00048DA5u); abort(); }
 void sub_00049669(void) { recomp_icall_fail_log(0x00049669u); abort(); }

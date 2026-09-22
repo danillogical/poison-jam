@@ -2464,26 +2464,26 @@
   },
   {
     "start": "0x00048190",
-    "end": "0x00048305",
+    "end": "0x00048390",
     "section": ".text",
     "kind": "routine",
-    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CAA8C, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_0004A6F0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00048190 at sub_0004A6F0. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00048190..0x0004A6F0. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
-    "stack_args": 4
+    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CAA8C, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_0004A6F0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00048190 at sub_0004A6F0. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00048190..0x0004A6F0. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21). CORRECTED 2026-09-22 (A2b): the previous end 0x00048305 and stack_args 4 were both wrong. 0x00048305 is not a function start -- it is a disassembler tail_jump_alias phantom created by tools/disasm/functions.py _build_alias_entries, has_prologue false and no xref, and it sits in the middle of this entry's own argument setup (`push eax` 0x48300, `mov [esp+0x2c],ecx` 0x48301, then `push edi` 0x48305, `mov ecx,esi` 0x48306, `mov [esp+0x2c],ebx` 0x48308, `call 0x00047D40` 0x4830C). The real body ends `pop edi/esi/ebp/ebx; add esp,8; ret 0xc` at 0x00048385..0x0004838C, and 0x0004838F is alignment padding before the next function 0x00048390. `ret 0xc` removes 16 bytes: the 4-byte return address plus 12. stack_args is the `ret N` operand, verified against 0x0004A6C0 (declared stack_args 4, epilogue `ret 4`), so it must be 12 and not 4. Evidence: logs/runs/20260922-160535-643-a2-irq-line/ stops on `[RECOVERED] ABI FAILURE 0x00048190 esp 00F7FDA0->00F7FD80 expected +8` with all four callee-saved registers clobbered -- exactly a body cut before its epilogue.",
+    "stack_args": 12
   },
   {
     "start": "0x00048390",
-    "end": "0x00048510",
+    "end": "0x00048570",
     "section": ".text",
     "kind": "routine",
-    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CA490, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_0004A6F0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00048390 at sub_0004A6F0. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00048390..0x0004A6F0. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
-    "stack_args": 4
+    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CA490, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_0004A6F0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00048390 at sub_0004A6F0. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00048390..0x0004A6F0. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21). CORRECTED 2026-09-22 (A2b): same defect as 0x00048190 in the same family. The previous end 0x00048510 is another tail_jump_alias phantom mid-body (`push ebp` 0x4850F, `push edi` 0x48510, `jne` 0x48511). The real body ends `pop edi/esi/ebp/ebx; add esp,8; ret 0xc` at 0x00048565..0x0004856C, 0x0004856F is padding, and the next function starts 0x00048570 (`push ebx; mov ebx,ecx`). `ret 0xc` means stack_args 12, not 4 (stack_args is the `ret N` operand, not the argument count).",
+    "stack_args": 12
   },
   {
     "start": "0x00048570",
-    "end": "0x00048794",
+    "end": "0x00048690",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0004A6F0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00048570..0x00048794, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0004A6F0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00048570..0x00048794, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. CORRECTED 2026-09-22 (A2b): the previous end 0x00048794 overran the real end. The body ends `pop ebx; ret 8` at 0x00048684..0x00048685, 0x00048688..0x0004868F is padding, and the next function starts 0x00048690 (`mov eax,[0x1FA1CC]`). `ret 8` means stack_args 8, not 4 (stack_args is the `ret N` operand). This is a frameless function (first instruction `push ebx`), so the wrapper expects esp = entry + 12.",
     "stack_args": 8
   },
   {
@@ -4392,7 +4392,7 @@
     "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CCEB8, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_0007C4B0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x0007BDD0 at sub_0007C4B0. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x0007BDD0..0x0007C4B0. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
     "stack_args": 0
   },
-{
+  {
     "start": "0x0007BE30",
     "end": "0x0007BFD0",
     "section": ".text",
@@ -4503,7 +4503,7 @@
     "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0007C4B0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x0007C270..0x0007C410, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
     "stack_args": 0
   },
-{
+  {
     "start": "0x0007C290",
     "end": "0x0007C410",
     "section": ".text",
@@ -24333,7 +24333,7 @@
     "evidence": "A real function the disassembler never claimed, in a hole between sub_00178E70/sub_00178E85 (both end 0x00178F34) and 0x001791C0. The title calls it indirectly and the call failed with [ICALL] Failed to resolve VA 0x00178F40 in run logs/runs/20260922-090256-907-trampoline-fix, immediately before the 0xE0424943 exception -- so that exception is a symptom of this unresolved call, not a separate defect. Shape: normal prologue sub esp,0x14; push ebx; mov ebx,[esp+0x1C]; mov eax,[ebx+0xC]; push ebp; xor ebp,ebp; cmp eax,-1; push esi; push edi. It reads five stack arguments: arg1 at [esp+0x1C] right after the frame and the one push, then arg2 [esp+0x2C], arg3 [esp+0x30], arg4 [esp+0x34] and a byte arg5 at [esp+0x38] once all four registers are pushed. Epilogue measured: 0x001791A3 mov ecx,[esp+0x34]; test ecx,ecx; pop edi; pop esi; pop ebp; pop ebx; 0x001791B5 add esp,0x14; 0x001791B8 ret 0x14. The ret 0x14 matches the sub esp,0x14 prologue, so stack_args is 20. It returns E_INVALIDARG (0x80070057) and CO_E_NOTINITIALIZED (0x800401F0). END CORRECTED to 0x001791BB: end is exclusive and the original value 0x001791BA cut the last byte of the three-byte `ret 0x14` (C2 14 00 at 0x001791B8..0x001791BA), so the translator could not decode the return at all, emitted a body with no epilogue and no return statement, and the run aborted with `[RECOVERED] ABI FAILURE 0x00178F40 esp 00F7FDA0->00F7FDA0 expected +24` in logs/runs/20260922-101516-467-p1-178f40. Measured with scripts/inspect-jsrf.py data 0x001791B4 8 -> 1183C414 900014C2, i.e. bytes 11 83 C4 14 | C2 14 00 90. Evidence: report-deepseek.md, 2026-09-22.",
     "stack_args": 20
   },
-{
+  {
     "start": "0x00024700",
     "end": "0x00024970",
     "section": ".text",
