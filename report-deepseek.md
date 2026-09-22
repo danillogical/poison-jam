@@ -14,7 +14,7 @@ where things stand *now*; rewrite it in place each session rather than appending
 **The plan's A1–A5 audit sequence owns the next steps** and overrides any
 "next packet" wording in the historical sections below.
 
-**Repos.** Game `c34507a` (`225bb6b` is the substantive commit), toolkit
+**Repos.** Game `ad40029` (`225bb6b` is the substantive code commit), toolkit
 `008001f` (`7cfbe55` is the substantive commit). Both clean. Game CTest 11/11,
 toolkit standalone CTest 1/1.
 
