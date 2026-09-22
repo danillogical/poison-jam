@@ -14,7 +14,7 @@ where things stand *now*; rewrite it in place each session rather than appending
 **The plan's A1–A5 audit sequence owns the next steps** and overrides any
 "next packet" wording in the historical sections below.
 
-**Repos.** Game `50cc6a8` (`caef022` is A2b, `50cc6a8` is A2c), toolkit
+**Repos.** Game `6d6f457` (code commits: `caef022` A2b, `50cc6a8` A2c), toolkit
 `008001f` (unchanged this session; `7cfbe55` is still the substantive toolkit
 commit). Both clean. Game CTest 11/11, toolkit standalone CTest 1/1.
 
