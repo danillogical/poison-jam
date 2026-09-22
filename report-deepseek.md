@@ -4447,3 +4447,96 @@ and that registration is the thing to find.
 
 State: `logs/runs/20260922-004717-068-m11-limits/` (ring fully drained,
 CTest 11/11, 167 verifying, 0 ABI reports). Toolkit `bafffae`.
+
+
+---
+
+# MILESTONE 11 COMPLETE: the title gets past GPU initialisation
+
+## The root cause was a gate, not a missing feature
+
+`xbox_Nv2aClaimRegisterOwner()` clears `g_nv2a_ack_enabled`, and `main.c` calls it
+through `nv2a_hook_install_aperture` whenever the MMIO hook takes the aperture.
+The **entire** ack-thread body sat inside `if (g_nv2a_ack_enabled)`, so claiming
+the register owner also stopped `fence_mirrors_tick()`, `counter_mirrors_tick()`,
+`frame_counters_tick()` and `framebuffer_probe_tick()`. Measured: with a fence
+mirror registered, `fence_mirrors_tick` ran **zero times in a 20 s run**.
+
+The gate is right for the register mutations -- the busy-bit table and the
+PUT->GET mirror both write MMIO, which the owner now owns. It is wrong for the
+mirror ticks: they write **guest memory**, publishing model state where a title
+polls for it, and who owns the registers is irrelevant to that.
+
+So `fence_mirrors_tick` and `counter_mirrors_tick` moved outside the gate.
+`framebuffer_probe_tick` stayed inside: it *reads* `PCRTC_START`, so it does
+belong to whoever owns the registers.
+
+## And the mirror itself had never been registered
+
+`xbox_Nv2aMirrorFence(device_ptr_va, put_off, get_ptr_off)` existed in the toolkit
+and **no title had ever called it**. It is the right mechanism: it follows the
+device pointer fresh on every poll through `fence_readable`, which already handles
+the contiguous window explicitly, and publishes the pushbuffer position into the
+word the title polls.
+
+JSRF's registration is `xbox_Nv2aMirrorFence(0x0019DCE0, 0x00, 0x34)`, measured
+rather than guessed:
+
+| field | value | meaning |
+|---|---|---|
+| device | `0x0019DCE0` | the D3D device global |
+| `+0x00` | `0x80001B24` | pushbuffer write position (a VA) |
+| `+0x04` | `0x80008DFC` | current chunk end |
+| `+0x24` / `+0x28` | `0x80001000` / `0x80081000` | ring bounds (512 KB) |
+| `+0x30` | `7` | the value the wait wants |
+| `+0x34` | `0x80000000` | the notify word |
+
+## The wait, explained exactly
+
+`0x001910E0` computes the ring's free space as `chunk_end - position`, using
+`GET | 0x80000000` as the position -- the idiom the toolkit's own comment
+describes. `0x00191440` calls it and, at `cmp eax, 0x8000; jb 0x1914e2`, waits
+when the result is under 32 KB. Here `0x80008DFC - 0x80001B24 = 29400`, so it
+waited -- for the GPU to publish completion into `[0x80000000]`. Nothing wrote
+guest memory, so the word kept the title's own `0xDEADBEEF` sentinel and the wait
+never ended.
+
+## Result
+
+```
+[0x80000000] = 0x80001000        (was 0xDEADBEEF)
+the spin at 0x00191440 is gone
+[KERNEL] exit requested, guest esp=0x00F7EF40
+[KERNEL] HalReturnToFirmware: routine=2 - title is exiting
+```
+
+The run no longer hangs. It reaches `normal_exit` after ~19 s with the guest
+**deliberately** calling `HalReturnToFirmware`. CTest 11/11.
+
+That is a different class of outcome from everything before it: not a crash, not a
+deadline, not a spin -- the title ran its course and chose to quit.
+
+## Next packet: why it quits
+
+The exit is immediately preceded by a failure:
+
+```
+[KERNEL] #113: ordinal 202 (slot 8) ret=0x0014AF4A
+[PATH] \Device\Harddisk0\Partition5\ -> partition image
+[KERNEL] -> returned 0xC0000001        <- STATUS_UNSUCCESSFUL
+[KERNEL] #114: ordinal 301  -> 0x13D
+[KERNEL] #115: ordinal 165  -> 0x80000000
+[KERNEL] #116: ordinal 178  -> 0x00000000
+[KERNEL] #117: ordinal 49   -> HalReturnToFirmware
+```
+
+`ordinal 202 = NtOpenFile`, opening the **volume root** `\Device\Harddisk0\Partition5\`.
+The bridge already redirects "a partition device opened as a directory" to the
+containing directory, so the failure is further in -- `kernel_file.c` has several
+`STATUS_UNSUCCESSFUL` returns (lines 187, 235, 271, 310, 327, 343) and the
+disposition mapping at 187 is the first candidate for a `FILE_OPEN` of a volume.
+
+Worth stating plainly: a title exiting is not the same as the title being
+satisfied. It may be the "no display" path, which is milestone 12's work, or the
+failed volume open. Both are worth resolving, and the next run should distinguish
+them.
