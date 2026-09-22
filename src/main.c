@@ -9,6 +9,8 @@
 #include <xbox/xboxrecomp.h>
 #include "diagnostics.h"
 #include "nv2a_mmio_hook.h"
+#include "apu.h"
+#include "apu_mmio_hook.h"
 
 extern RECOMP_TLS uint32_t g_eax, g_ecx, g_edx, g_esp;
 extern RECOMP_TLS uint32_t g_ebx, g_esi, g_edi;
@@ -74,6 +76,16 @@ static LONG CALLBACK veh_handler(PEXCEPTION_POINTERS exception)
             nv2a_hook_handle_mmio(exception->ContextRecord, fault,
                                   (uint32_t)guest_fault,
                                   (int)exception->ExceptionRecord->ExceptionInformation[0]))
+            return EXCEPTION_CONTINUE_EXECUTION;
+        /* The APU's own 512K, which only faults when RECOMP_APU_TRAP unmapped
+         * it. Nothing else routes these: the aperture is otherwise plain
+         * memory, so a register write is accepted and discarded, which is how
+         * the DSP command block at 0x803C0800 gets a status word written to it
+         * that nothing ever answers. */
+        if (guest_fault >= 0xFE800000u && guest_fault < 0xFE880000u &&
+            apu_hook_handle_mmio(exception->ContextRecord, fault,
+                                 (uint32_t)guest_fault,
+                                 (int)exception->ExceptionRecord->ExceptionInformation[0]))
             return EXCEPTION_CONTINUE_EXECUTION;
         _lock_file(stderr);
         fprintf(stderr, "[EXCEPTION first-chance] tid=%lu code=0x%08lX RIP=0x%llX fault=0x%llX (%s)\n",
@@ -151,6 +163,35 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
     }
     g_xbox_mem_offset = xbox_GetMemoryOffset();
     checkpoint("memory_ready");
+
+    /* The emulated APU, which the toolkit has shipped all along and which no
+     * caller has ever initialised -- so every APU register write in this title
+     * has landed in the plain MCPX aperture and been thrown away.
+     *
+     * What that costs is now measured rather than assumed. DirectSound hands
+     * the GP DSP a 24-byte command block in guest RAM (the 48K contiguous
+     * allocation at 0x803C0000; its base is published at guest 0x1BA858), sets
+     * the status dword at +0x810 to 3, and spins at 0x001A18D0 until the DSP
+     * writes 0 back. The only code in the title that ever writes 0 there is the
+     * DSP stop path (0x001A1F9B and 0x001A1747), so in the original the
+     * hardware is the one that answers. Nothing here can answer yet, but the
+     * register traffic that precedes the wait is only observable once the APU
+     * is instantiated and its window is trapped, and that traffic is the next
+     * measurement.
+     *
+     * Instantiated only under RECOMP_APU_TRAP, the same switch that unmaps the
+     * window. Without the trap no APU access can fault, so the hook is
+     * unreachable and the APU would be a background waveOut thread nothing
+     * talks to; with it, the emulated APU owns the registers instead of the
+     * plain-memory stand-in. One switch, one behaviour, and the default run
+     * unchanged. */
+    if (getenv("RECOMP_APU_TRAP")) {
+        g_apu_state = mcpx_apu_init_standalone((uint8_t *)xbox_GetMemoryBase());
+        if (!g_apu_state)
+            fprintf(stderr, "[APU] init failed; trapped APU registers will"
+                            " fault with no handler\n");
+    }
+
     xbox_kernel_init();
     xbox_path_init(YOUR_GAME_DIR, NULL);
     xbox_kernel_bridge_init();

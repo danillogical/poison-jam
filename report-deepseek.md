@@ -5449,3 +5449,359 @@ distribution is the useful part:
 The last group is the same defect one level up -- the disassembler split a real
 function at an internal label, so the "next function" the rule refuses to cross
 is not a function at all. That needs per-entry review, not a rule.
+
+# Session 2026-09-22 10:13 onward, part 2: the stop is an APU DMA handshake, not a spin in DirectSound
+
+## Trap: the default kernel log budget makes a running title look frozen
+
+Everything above said the main thread was livelocked in a DirectSound
+notification loop. It was not. `RECOMP_KERNEL_LOG_BUDGET` defaults to **200
+kernel calls**; once the budget is spent the log prints a summary and goes
+quiet. Measured, same binary and same environment:
+
+| run | `RECOMP_KERNEL_LOG_BUDGET` | log lines | last kernel call seen |
+|---|---|---|---|
+| `...-102544-799-p2-fragment-spans` | default (200) | 1422 | 201 total, then silence |
+| `...-103144-215-p4-klog-high` | 100000 | **5116** | **#1964 and climbing** |
+
+So the 1422-line logs from every earlier run in this session were a **capped**
+view, not the frontier, and the "log stopped growing" argument for a livelock was
+worthless. The `events=4272` counter was a red herring too: it counts instrumented
+guest events, and this path's work is done through kernel bridges, which the
+counter does not tally.
+
+**Rule for next time: a run whose log looks frozen must be re-run with
+`RECOMP_KERNEL_LOG_BUDGET` raised before any conclusion about hanging is drawn.**
+
+## The real stop, from the collector's own source line
+
+The stack line is
+
+```
+00007FF694FB686E sub_001A1769+0xACE C:\Users\logic\Repos\my_xbox_game\src\recomp\gen\recomp_0005.c:6748
+```
+
+The **symbol and offset are both wrong** (`sub_001A1769` is
+`0x001A1769-0x001A18DE`, 373 bytes, so `+0xACE` is outside it), but the
+**file:line is exact** and it is the authoritative locator:
+
+```
+src/recomp/gen/recomp_0005.c:6748
+    if (CMP_NE(_fa, _fb)) goto loc_001A18D0; /* jne: not equal / not zero */
+```
+
+which is guest `0x001A18D0` inside `sub_001A1769`. The original:
+
+```
+001A18C1 push 3
+001A18C3 pop  eax
+001A18C6 add  ebx, 0x810
+001A18CC rep movsb
+001A18CE mov  dword ptr [ebx], eax     ; *ebx = 3
+001A18D0 cmp  dword ptr [ebx], 0       <-- spin here
+001A18D3 jne  0x1a18d0
+```
+
+A plain `while (*ebx != 0)` wait on a word the title has just set to 3.
+
+`ebx` is measured, not inferred: the guest snapshot gives `ebx = 0x803C0810` and
+the minidump shows `803C0810: 00000003 00000000 0065F400 00000080` -- the store
+is visible, so the snapshot is live for this thread. `0x803C0810` is
+`0x803C0000 + 0x810`, and the log says where `0x803C0000` came from:
+
+```
+[KERNEL] MmAllocateContiguousMemoryEx: size=49152 align=16384 → Xbox VA 0x803C0000
+```
+
+So the waited-on word lives in a 48 KB contiguous allocation the title made
+itself, and **something else is expected to zero it**.
+
+## What is expected to zero it: the APU DMA
+
+`sub_001A1769` is the DirectSound buffer commit. Its call at `0x001A17D6` goes to
+`0x001A5424`, which is where the hardware is programmed:
+
+```
+001A5496 mov  ecx, [ebp-4]          ; page count
+001A54A6 loc: mov eax, [ebx+0x14]   ; buffer base
+001A54A9 add  eax, [ebp+8]          ; + page offset
+001A54AC push eax
+001A54AD call dword ptr [0x1c40e8]  ; MmGetPhysicalAddress
+001A54B3 and  [esi+4], 0
+001A54B7 add  [ebp+8], 0x1000       ; offset += 4096
+001A54BE mov  [esi], eax            ; store the physical address
+001A54C0 add  esi, 8
+001A54C3 dec  [ebp-4]
+001A54C6 jne  0x1a54a6              ; next page
+...
+001A54D4 mov  [0xfe8020d4], eax     ; program the DMA base register
+```
+
+An 8-byte-per-entry physical page table, one `MmGetPhysicalAddress` per 4 KB page,
+then a write to **`0xFE8020D4`**. That address is APU MMIO: the toolkit's own
+`apu_mmio_hook.c` defines `APU_MMIO_BASE 0xFE800000u`, and `apu.h` documents the
+512 KB APU window there. The incrementing returns in the log
+(`0x014AD000`, `0x014AE000`, `0x014AF000`, ...) are that walk, one page per call.
+
+So the shape of the stop is:
+
+```
+title builds a physical scatter-gather table for the sound buffer
+  -> programs the APU DMA base (0xFE8020D4)
+  -> copies the data, sets the completion word to 3
+  -> spins until the APU writes 0 there
+```
+
+and nothing answers, because **the APU emulation is not installed**. `src/main.c`
+calls no `apu_*` symbol at all, and `apu_hook_handle_mmio` -- the VEH decoder for
+`0xFE800000+` that the toolkit ships -- has never been called by either
+repository. That is the same shape as the NV2A fence mirror before milestone 11:
+the mechanism exists in the toolkit, the title is waiting on it, and nothing wires
+it up.
+
+**Next packet:** install the APU MMIO hook for the `0xFE8020xx` DMA registers and
+make the DMA completion write the notification word. The measurement to take
+first is the register set the title actually programs -- `0xFE802040`,
+`0xFE802048`, `0xFE8020D4`, `0xFE8020DC` all appear in the generated
+`recomp_0005.c` -- decoded from a run rather than from the APU documentation.
+
+## Trap: this title's progress is timing-sensitive, and the stack summary is sampled
+
+Three runs of the same binary, same environment, differed:
+
+| run | seconds | extra options | native threads | named frames | log lines |
+|---|---|---|---|---|---|
+| `...-101710-964-p1b-178f40-end` | 30 | -- | 12 | 109 | 1422 |
+| `...-102903-995-p3-livelock-60s` | 60 | `RECOMP_TRACE_PROFILE=1` | 12 | 110 | **815** |
+| `...-103020-410-p3b-60s-noprof` | 60 | -- | 11 | 105 | 1429 |
+
+The profiler run **took a different branch**: lines 673-695 of the default path
+(`sub_0019E438` -> `sub_001A0D2F` -> ... -> the DirectSound buffer construction)
+are simply absent, and the run stopped logging 600 lines earlier. Enabling the
+profiler perturbs timing enough to change which branch the title takes.
+
+`native_threads` and `named_frames` also differ between runs because they are
+**sampled at the deadline** -- a thread mid-creation is counted or not, and a
+symbol is resolved or not, depending on where the sampler lands. They are not
+stable metrics for a before/after claim.
+
+**Consequences to keep:** compare runs under the same environment *and* the same
+options, and do not treat `named_frames`/`native_threads` deltas of one or two as
+evidence of anything. The `log lines` and `log diff` comparison is the useful one,
+and only when the kernel log budget is the same.
+
+## Correction to the earlier "trap" note in this report
+
+The note above said a `+0xNNN` past a body's own end is a mislabel. That is right
+about the symbol but wrong to discard the line: the **`src/recomp/.../recomp_XXXX.c:NNNN`
+half of the same line is exact** and is what identified `0x001A18D0`. Use the
+file:line, ignore the symbol+offset.
+
+# Session 2026-09-22 11:00 onward: the waited-on word is answered by hardware, and the APU is wired
+
+## Packet E -- what the spin actually waits for, identified exhaustively
+
+The previous section left the stop as "the APU emulation is not installed" and
+named the next measurement. Both halves needed correcting, and the correction is
+what makes the fix possible.
+
+**First correction: `0xFE8020D4` is not the DMA base.** The register block names
+it (`src/apu/apu_regs.h`):
+
+```
+NV_PAPU_GPSADDR    0x2040   GP scatter-gather table address
+NV_PAPU_GPFADDR    0x2044
+NV_PAPU_EPSADDR    0x2048   EP scatter-gather table address
+NV_PAPU_GPSMAXSGE  0x20D4   GP max SGE
+NV_PAPU_EPSMAXSGE  0x20DC   EP max SGE
+```
+
+`0x20D4` is the SGE *count*, not an address. The kick is the pair
+(`GPSADDR`, `GPSMAXSGE`), and the code that writes the pair is `sub_001A52F7`
+(0x001A52F7-0x001A53AA):
+
+```
+001A5386: MEM32(0xFE802040) = eax   ; GPSADDR  = the SGE table's physical address
+          eax = [esi] - [esi+4]     ; SGE entry count
+          MEM32(0xFE8020D4) = eax   ; GPSMAXSGE -> the GP DMA runs
+          goto 0x001A53A3
+001A5397: MEM32(0xFE802048) = eax   ; EPSADDR, the EP half of the same shape
+          eax = [esi]
+          MEM32(0xFE8020DC) = eax
+```
+
+and it is called from guest `0x001A172E` inside `sub_001A16D2`
+(0x001A16D2-0x001A1747) -- the function immediately *before* the two that matter
+here. So the title's own layout is: start (`0x001A16D2`), stop
+(`0x001A1747`), commit (`0x001A1769`).
+
+**Second, and decisive: the waited-on object is the 48K contiguous allocation,
+and its identity is confirmed by arithmetic rather than by the report's earlier
+reasoning.** `sub_001A1769` computes
+
+```
+001A177A mov ebx, [[[edi+8]+0x10]]      ; ebx = the object
+001A177C mov eax, [ebx+0x80C]
+001A1782 add eax, [ebx+0x804]
+001A178B lea esi, [ebx + eax*4 + 0x818] ; esi = past two index tables
+```
+
+and the minidump gives `[0x803C0804] = 0x00000DB8` (3512) and
+`[0x803C080C] = 0x00000D1E` (3358). Their sum is 6870, and
+`0x803C0000 + 6870*4 + 0x818 = 0x803C7370` -- and the minidump at `0x803C7370`
+holds `0x00000014` = 20, which is exactly the loop count `[esi]` the code reads
+next, with `[esi+4] = 0x000C2000` as the size it passes to the DMA setup. Four
+independent numbers agree, so `ebx = 0x803C0000` is the 48K contiguous
+allocation, not a coincidence of the `+0x810`.
+
+The globals confirm it from the other side. `[0x1BA858]` (read only by the DSP
+stop path) is the base of that allocation, and the pair of structs at 0x1BA850
+is:
+
+```
+001BA850: 00001000 00000001 803C0000 803C0000
+001BA858: 803C0000   <- the GP program/DSP buffer, 48K
+001BA860: 0000C000   <- its size, 49152 = the MmAllocateContiguousMemoryEx above
+001BA868: 803CC000   <- the SGE table (the next allocation, contiguous after it)
+001BA870: 00001060   <- its size, 4192 = 524 entries of 8 bytes
+```
+
+So the DMA target is a 48K buffer, and the word the title spins on is at
+`buffer+0x810`.
+
+**Third, and the one that settles it: no guest code clears that word except the
+stop path.** `+0x810` occurs in exactly three places in the entire recompiled
+title (all 6 generated units plus `recovered.c`):
+
+| site | function | what it does |
+|---|---|---|
+| `recomp_0005.c:6521` | `sub_001A1747` (0x001A1747) | `and [edi+0x810], 0` -- zeroes it |
+| `recomp_0005.c:6736` | `sub_001A1769` (0x001A1769) | `add ebx, 0x810` then `[ebx] = 3`, spin |
+| `recomp_0005.c:8097` | `sub_001A1F5D` (0x001A1F5D) | `[edi+0x10] = 0`, then `[edi+0x10] = 3` |
+
+and `[0x1BA858]` occurs exactly once, in that same `sub_001A1F5D`. There is no
+other reader and no other writer. The commit path writes 3 and waits for 0; the
+only 0 in the binary is written by the two functions that *stop* the DSP, which
+also write `NV_PAPU_GPRST` (0xFE83FFFC) and 0xFE85FFFC to zero:
+
+```
+001A1F9B mov edi, [0x1BA858]
+001A1FA1 add edi, 0x800
+001A1FA7 mov [edi+0x10], ebp        ; buffer+0x810 = 0
+001A1FAA mov [edi], ebp             ; buffer+0x800 = 0
+001A1FAC mov [0xfe83fffc], ebp      ; GPRST  = 0
+001A1FB4 mov [0xfe85fffc], ebp
+001A1FBA call 0x1a1bc6
+001A1FBF mov ecx, [esi+0x14]
+001A1FC2 call 0x1a1747              ; zeroes buffer+0x810 again
+001A1FC7 mov [edi+0x10], 3          ; and leaves 3 pending
+```
+
+So on the commit path the answer has to come from the APU. The shape is: the
+title DMAs a program into the APU through the SGE table, marks the buffer with a
+pending command, and waits for the GP DSP to acknowledge by writing 0.
+
+**Trap recorded (supersedes the previous section's wording):** the previous
+section called `0xFE8020D4` "the DMA base register" and said the title
+"programs the APU DMA base". It is the SGE count; the base is `0xFE802040`,
+written by `0x001A52F7`. The conclusion that the APU is missing was right, the
+register identification was not.
+
+## Packet F -- the APU is instantiated and its window is routed
+
+`apu_hook_handle_mmio` has existed since the APU emulation was extracted and has
+never had a caller in either repository, so it has never run once. That is now
+wired:
+
+- Toolkit: `src/apu/apu_mmio_hook.h` (new) declares `apu_hook_handle_mmio` and
+  `extern MCPXAPUState *g_apu_state` under the same `_WIN32` guard as the
+  definition; `apu_mmio_hook.c` includes its own header so a signature drift is
+  a compile error instead of a link-time surprise.
+- Toolkit: `NV_PAPU_XGSCNT_DS` (0x2010) is answered by the same
+  `qemu_clock_get_ns()/100` as `NV_PAPU_XGSCNT` (0x200C). JSRF reads
+  `0xFE820010` in eleven places in `recomp_0005.c` and it is the address
+  `xbox_memory_layout.c` has been ticking by hand under `MCPX_COUNTERS`; once
+  the window is trapped that hand-tick is skipped on purpose, so without this
+  the counter would freeze at zero.
+- Game: `src/main.c` instantiates the APU when `RECOMP_APU_TRAP` is set -- the
+  same switch that unmaps the window, so the hook can never be unreachable and
+  the default run is unchanged -- and the VEH routes guest faults in
+  `[0xFE800000, 0xFE880000)` to the APU hook, next to the existing NV2A branch.
+
+Verified: build clean, `ctest --test-dir build -C Release` **11/11**.
+
+## Packet F (cont.) -- the measurement, and the APU traffic decoded
+
+Wiring the hook is what makes the traffic visible, and the run
+`20260922-104131-686-apu-trace` (`RECOMP_AC97_READY=1 RECOMP_APU_TRAP=1
+RECOMP_APU_TRACE=1 RECOMP_KERNEL_LOG_BUDGET=100000`, 30 s) captured 344 decoded
+APU accesses with `outcome=diagnostic_deadline`. The title programs the whole
+VP/GP/EP DMA block, in this order:
+
+| line | write | value | register |
+|---|---|---|---|
+| 2953 | `0x02030` | `80398000` | `NV_PAPU_VPSGEADDR` |
+| 2954 | `0x02034` | `8039C000` | `NV_PAPU_VPSSLADDR` |
+| 3059 | `0x02044` | `803B4000` | `NV_PAPU_GPFADDR` |
+| **3121** | **`0x02040`** | **`803CC000`** | **`NV_PAPU_GPSADDR`** |
+| 3122 | `0x020D4` | `00000008` | `NV_PAPU_GPSMAXSGE` |
+| 3194 | `0x02048` | `803E4000` | `NV_PAPU_EPSADDR` |
+| 3195 | `0x020DC` | `00000013` | `NV_PAPU_EPSMAXSGE` (19) |
+| 3197 | `0x0204C` | `803B8000` | `NV_PAPU_EPFADDR` |
+| **5455** | **`0x020D4`** | **`000000CE`** | **`NV_PAPU_GPSMAXSGE` (206) -- last APU access before the spin** |
+
+Two facts fall out of that table.
+
+**`GPSADDR = 0x803CC000` is the SGE table, and it is the value of the global at
+guest 0x1BA868.** The base the APU is told to walk and the base the title keeps
+in its own device struct agree exactly, which closes the loop on the allocation
+identification in Packet E.
+
+**The last APU access of the run is `GPSMAXSGE = 206`, immediately after kernel
+call #1964.** The 12 kernel calls before it are `MmGetPhysicalAddress` from
+`0x001A54B3` returning `0x014A4000` through `0x014AF000` -- twelve consecutive
+4K pages, and twelve is exactly `206 - 194`. So the title fills entries 194..205
+of a 206-entry table and then kicks the GP DMA by writing the count. The next
+thing it does is spin at `0x001A18D0`.
+
+The table itself, read out of the minidump, is a plain array of 8-byte
+`{physical address, flags}` entries with `flags = 0` throughout and a zero
+terminator at index 206:
+
+```
+803CC000: 803C0000 00000000   <- entry 0 is the 48K program buffer itself
+803CC008: 803C1000 00000000
+...
+803CC058: 803BC000 00000000
+...
+803CC660: 014AE000 00000000   <- entries 194..205: the walk just performed
+803CC668: 014AF000 00000000
+803CC670: 00000000 00000000   <- index 206, the terminator
+```
+
+Entry 0 is the buffer the spin is inside, so the transfer *reads the buffer that
+carries the pending word*: the DSP is being handed the program, and writing 0
+back to `buffer+0x810` is its acknowledgement. That is the handshake the title
+is waiting for, and the emulated APU has no GP SGE engine to perform it.
+
+**Correction recorded -- a wrong inference, reverted.** This session briefly
+added `NV_PAPU_XGSCNT_DS` (0x2010) to `mcpx_apu_read` on the reasoning that
+`MCPX_COUNTERS[0] = 0x020010` in `xbox_memory_layout.c` ("APU GP sample
+counter") was a register the APU should answer. The trace disproves it: reads of
+`0xFE820010` return `00000080` and that is `NV1BA0_PIO_FREE` (VP method 0x10),
+because `mcpx_apu_mmio_read` routes `0x20000..0x2FFFF` to `mcpx_apu_vp_read`
+with the offset rebased, so the new case in `mcpx_apu_read` was unreachable dead
+code. It was reverted rather than left in. The two repositories disagree about
+what 0x020010 is -- `xbox_memory_layout.c` ticks it as a sample counter, the APU
+model reads it as the VP queue's free count -- and the trace says the APU model
+is the one the title is satisfied by (58 reads, no spin on it).
+
+**Next packet:** give the APU a GP SGE engine. On the `GPSMAXSGE` write, walk
+`GPSMAXSGE` entries from `GPSADDR`, resolve each `physical address` through the
+APU's `ram_ptr`, perform the transfer (the program lands in APU memory), and
+write 0 back to the pending word in the first page. The pending word's address
+does not need to be guessed: entry 0 is the buffer that holds it, and the title
+uses `buffer+0x810` consistently across all three of its own sites. Confirm
+against `apu_dsp.c`, whose header comment already says "GP: Stub - effects
+bypass", and extend `tests/gpu_probes.c`-style coverage with an APU probe rather
+than weakening the NV2A rejection contract.
