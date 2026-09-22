@@ -3867,4 +3867,47 @@ from `MEM32(edi + 0x34)`, so the probe is: log `edx` and `[edx]` at the spin sit
 then find every writer of that address. If it is a GPU/audio buffer position, the
 model has another content gap of the same kind as the PFIFO watermark.
 
+---
+
+# The spin target: `[0x80000000]`, holding `0xDEADBEEF`
+
+Probing the spin site (`recovered.c:343325`, guest `0x001914F0`) gives:
+
+```
+[SEQ] site=001914F0 value=80000000   <- edx, the pointer being read
+[SEQ] site=001914F1 value=DEADBEEF   <- [edx], the value being waited on
+```
+
+and, unchanged across iterations: `edi = 7`, `eax = 2`, `esi = 0x21524118`
+(= `7 - 0xDEADBEEF` mod 2^32). So `eax < edi - [edx]` is permanently true and the
+loop can never exit. Confirmed in the dump: `[0x80000000] = 0xDEADBEEF` with the
+rest of that page zero, and `0x00000000` is not captured at all.
+
+**`0x80000000` is not a wild pointer — it is the toolkit's contiguous/physical
+memory window.** `xbox_memory_layout.c` documents it: `MmAllocateContiguousMemory`
+hands back addresses there, "physical page P is visible at `0x80000000 + P`", and
+the toolkit backs it with *separate storage* deliberately rather than aliasing RAM,
+because the XBE image is loaded at the low addresses of the RAM mapping.
+
+So the object field at `edi+0x34` points at a **DMA/ring buffer pinned at the
+window base**, and the loop is waiting for the word at its head — a
+producer/consumer position — to advance to about 5. It holds `0xDEADBEEF`, a
+sentinel, and never advances.
+
+**This is a content gap, not a translation defect** — the same shape as the PFIFO
+low-mark wait fixed earlier in this session: the guest spins on a value that some
+other agent is supposed to publish, and the model never publishes it. The loop's
+translation is exact (raw bytes `8B 0A 8B F7 2B F1 3B C6 72 F6`), so there is
+nothing to fix in the recompiled code.
+
+**Next packet:** identify the ring and its producer. Two candidate owners, and the
+distinguishing question is which one is supposed to write the window base:
+(1) the GPU — the toolkit already notes that Xbox D3D writes DMA_PUT as
+`VA & 0x0FFFFFFF` and reads the GPU position back as `GET | 0x80000000`, so a
+pushbuffer ring is plausible; (2) an APU/DMA ring fed by a kernel callback.
+The cheap discriminator is to find every writer of `0x80000000` in the generated
+guest code and in the toolkit, and check whether that writer is on a path the run
+reaches — if it is reached and the value still does not change, the writer is being
+skipped, which points at the model rather than the guest.
+
 
