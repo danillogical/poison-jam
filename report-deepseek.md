@@ -3611,4 +3611,86 @@ the call site instead of corrupting a caller.
 State: `logs/runs/20260921-215352-204-fixed-clean/`, CTest 11/11, no ad-hoc probes
 in the tree, both repositories clean.
 
+---
+
+# Separating the false positives from the real ones
+
+The `[ABI] ...: ebx` reports above looked like one family. They are two different
+things, and only one of them is a defect.
+
+## The scan
+
+A static scan for generated bodies that write the EBX global with **no**
+`PUSH32(esp, ebx)` / `POP32(esp, ebx)` anywhere returns exactly **5** functions —
+a small enough set to read one at a time:
+
+```
+sub_00149F5E  writes=4  recomp_0003.c
+sub_001816B0  writes=4  recomp_0004.c
+sub_00147EBB  writes=2  recomp_0003.c
+sub_00148164  writes=1  recomp_0003.c
+sub_00180EC0  writes=1  recomp_0004.c
+```
+
+## Three of them are legitimate, and the check was wrong
+
+- **`0x001816B0` is MSVC's 64-bit unsigned divide helper.** Its guest code loads a
+  64-bit dividend and divisor from the stack, `div`s twice, and uses EBX as scratch
+  between them (`mov ebx, eax` at `0x001816C5`, `mov eax, ebx` at `0x001816CF`).
+  The MSVC x86 64-bit integer helpers deliberately do **not** preserve EBX; they
+  are only ever called from compiler-generated code, which keeps nothing live in
+  EBX across the call.
+- **The other four are SEH functions.** Each opens
+  `push <frame>; push <scopetable>; call 0x17D1F8`, and `0x17D1F8` is
+  `__SEH_prolog`. Reading the pair settles it:
+
+  ```
+  __SEH_prolog 0x17D1F8:  ... sub esp, eax; push ebx; push esi; push edi; ... ret
+  __SEH_epilog 0x17D231:  ... pop ecx; pop edi; pop esi; pop ebx; leave; push ecx; ret
+  ```
+
+  The prolog **saves** ebx/esi/edi and the epilog **restores** them, so the body's
+  own EBX writes are not a clobber. And `__SEH_epilog` is entered by **tail jump**,
+  and its entire job is to change those three registers — so a before/after
+  comparison across a call to it *must* differ. Reporting it is meaningless.
+
+Both are the same shape as the SEH helpers' delta anomaly: a documented convention
+the check does not model. Fixed by emitting `recomp_abi_regs_exempt()` from the
+same exempt list `gen-abi-deltas.py` already used for the delta check, and gating
+the ebx/esi/edi comparison on it.
+
+**Result: 9 `[ABI]` reports drop to 6.** `sub_0017D1F8`, `sub_0017D231` and
+`sub_001816B0` stop being reported; nothing else changes.
+
+## The other six are still real, and the scan did not find them
+
+```
+[ABI] sub_0019EE1F: esi
+[ABI] sub_001A5D51: esi
+[ABI] sub_001A1BE2: ebx esi edi
+[ABI] sub_001A0C06: ebx esi edi
+[ABI] sub_001A0D2F: ebx
+[ABI] sub_001A0D9C: ebx
+[DELTA] 0019EE1F, 001A1BE2, 001A5D51   <- these three also have wrong ESP deltas
+```
+
+None of these six is among the five the scan found, and their generated bodies do
+not write EBX at all — so they are **victims**: something deeper in their call tree
+clobbers the register and the change propagates out through every function in the
+chain that does not itself save it.
+
+So the scan's value was negative but real: it **eliminated** the literal-write
+hypothesis for this family and identified the CRT/SEH exemptions, which is why the
+remaining reports can now be trusted as signal rather than noise.
+
+`sub_00168480`'s recovered wrapper still aborts on EBX/EBP, which is consistent:
+its direct callee `0x001A0D9C` is one of the six, so the change reaches it from the
+same unknown source.
+
+**Next packet:** the three that also have delta mismatches — `0x0019EE1F`,
+`0x001A1BE2`, `0x001A5D51` — since a wrong ESP delta and a clobbered register in
+the same function is the signature of the `0x00168480` defect (a dispatch redirect
+to a function with a different contract). Compare each dispatch tuple's target
+against the guest `ret N` at the address, which is what named the last one.
+
 

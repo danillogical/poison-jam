@@ -5010,12 +5010,34 @@ static const RecompDeltaEntry g_recomp_deltas[] = {
     { 0x0027E920u, { 4u, 0u, 0u, 0u } },
 };
 
-/* Addresses whose ESP delta is legitimately whatever they like. Checked first so
- * their constant traffic cannot crowd out a real mismatch. */
-static const uint32_t g_recomp_delta_exempt[] = {
-    0x0017D1F8u, /* SEH __SEH_prolog-style helper; adjusts the stack itself */
-    0x0017D231u, /* SEH helper; adjusts the stack itself */
+/* Addresses exempt from BOTH the delta check and the register check, checked
+ * first so their constant traffic cannot crowd out a real finding. The
+ * generator script records why each one is here. */
+static const uint32_t g_recomp_abi_exempt[] = {
+    0x00147EBBu, /* SEH function; ebx is the frame register, saved by __SEH_prolog */
+    0x00148164u, /* SEH function; ebx is the frame register, saved by __SEH_prolog */
+    0x00149F5Eu, /* SEH function; ebx is the frame register, saved by __SEH_prolog */
+    0x0017D1F8u, /* SEH __SEH_prolog; adjusts the stack and the caller's frame itself */
+    0x0017D231u, /* SEH __SEH_epilog; tail-jumped, and its job is to change ebx/esi/edi */
+    0x00180EC0u, /* SEH function; ebx is the frame register, saved by __SEH_prolog */
+    0x001816B0u, /* 64-bit integer divide helper; uses ebx as scratch, never preserves it */
 };
+
+static int recomp_va_exempt(uint32_t va)
+{
+    size_t i;
+    for (i = 0; i < sizeof(g_recomp_abi_exempt) / sizeof(g_recomp_abi_exempt[0]); i++)
+        if (g_recomp_abi_exempt[i] == va) return 1;
+    return 0;
+}
+
+/* 1 = skip the ebx/esi/edi preservation check for this address. The SEH epilog
+ * and the integer helpers change those registers by design, so comparing them
+ * before and after the call reports a difference that is not a defect. */
+int recomp_abi_regs_exempt(uint32_t va)
+{
+    return recomp_va_exempt(va);
+}
 
 /* 1 = the observed delta is one this function can produce, the address is exempt,
  * or the address is unknown to this table. 0 = it cannot, which means a caller's
@@ -5024,9 +5046,7 @@ static const uint32_t g_recomp_delta_exempt[] = {
 int recomp_delta_ok(uint32_t va, uint32_t actual)
 {
     size_t lo = 0, hi = sizeof(g_recomp_deltas) / sizeof(g_recomp_deltas[0]);
-    size_t i;
-    for (i = 0; i < sizeof(g_recomp_delta_exempt) / sizeof(g_recomp_delta_exempt[0]); i++)
-        if (g_recomp_delta_exempt[i] == va) return 1;
+    if (recomp_va_exempt(va)) return 1;
     while (lo < hi) {
         size_t mid = lo + (hi - lo) / 2;
         const RecompDeltaEntry *e = &g_recomp_deltas[mid];

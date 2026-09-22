@@ -763,6 +763,7 @@ recomp_func_t recomp_lookup_manual(uint32_t xbox_va);
  */
 #ifdef RECOMP_ABI_CHECK
 int recomp_delta_ok(uint32_t va, uint32_t actual);
+int recomp_abi_regs_exempt(uint32_t va);
 void jsrf_trace_delta_mismatch(uint32_t site, uint32_t value);
 void jsrf_trace_seq(uint32_t site, uint32_t value);
 void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
@@ -772,7 +773,8 @@ void recomp_abi_violation_log(uint32_t va, uint32_t ebx0, uint32_t esi0,
     (fn)(); \
     if (!recomp_delta_ok((va), g_esp - _ap)) \
         jsrf_trace_delta_mismatch(0xD00Du, (va)); /* exact-delta check */ \
-    if (g_ebx != _ab || g_esi != _as || g_edi != _ad || g_esp < _ap + 4) \
+    if (!recomp_abi_regs_exempt((va)) && \
+        (g_ebx != _ab || g_esi != _as || g_edi != _ad || g_esp < _ap + 4)) \
         recomp_abi_violation_log((va), _ab, _as, _ad, _ap); \
 } while(0)
 #else

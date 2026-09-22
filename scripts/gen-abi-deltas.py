@@ -19,13 +19,32 @@ from pathlib import Path
 root = Path(r"C:\Users\logic\Repos\my_xbox_game")
 chunks = sorted(glob.glob(str(root / "src/recomp/gen/recomp_0*.c")))
 
-# The Windows SEH helpers adjust the stack themselves by design, so their delta is
-# whatever the exception path needs. They fire constantly, and a first version of
-# the check let them exhaust its cap -- which is how a real mismatch in
-# sub_001680D0 went unreported. Exempt them so the signal is not drowned.
+# Addresses whose ESP delta is legitimately whatever they like, and which the
+# register-preservation check must also skip. Checked first, so their constant
+# traffic cannot crowd out a real finding.
+#
+# Two distinct reasons, both verified against the guest code:
+#
+#  * The SEH pair. __SEH_prolog (0x17D1F8) pushes ebx/esi/edi and __SEH_epilog
+#    (0x17D231) pops them. __SEH_epilog is entered by TAIL JUMP and its whole
+#    purpose is to change those three registers, so a before/after comparison
+#    across a call to it must differ. Flagging it is meaningless.
+#  * The integer runtime helpers. MSVC's 64-bit divide/multiply helpers use EBX as
+#    scratch and deliberately do not preserve it; they are only ever called from
+#    compiler-generated code, which keeps nothing live in EBX across the call.
+#    0x001816B0 is the 64-bit unsigned divide (7 div/mul, `mov ebx, eax` between
+#    two `div`s). The other four open with `push <frame>; push <scopetable>;
+#    call __SEH_prolog`, so they use EBX as a SEH frame register, and the prolog
+#    and epilog are what save and restore it -- the body's own EBX writes are not
+#    a clobber.
 EXEMPT = {
-    0x0017D1F8: "SEH __SEH_prolog-style helper; adjusts the stack itself",
-    0x0017D231: "SEH helper; adjusts the stack itself",
+    0x0017D1F8: "SEH __SEH_prolog; adjusts the stack and the caller's frame itself",
+    0x0017D231: "SEH __SEH_epilog; tail-jumped, and its job is to change ebx/esi/edi",
+    0x001816B0: "64-bit integer divide helper; uses ebx as scratch, never preserves it",
+    0x00180EC0: "SEH function; ebx is the frame register, saved by __SEH_prolog",
+    0x00149F5E: "SEH function; ebx is the frame register, saved by __SEH_prolog",
+    0x00147EBB: "SEH function; ebx is the frame register, saved by __SEH_prolog",
+    0x00148164: "SEH function; ebx is the frame register, saved by __SEH_prolog",
 }
 
 deltas = {}
@@ -61,14 +80,31 @@ for va in sorted(deltas):
 lines += [
     "};",
     "",
-    "/* Addresses whose ESP delta is legitimately whatever they like. Checked first so",
-    " * their constant traffic cannot crowd out a real mismatch. */",
-    "static const uint32_t g_recomp_delta_exempt[] = {",
+    "/* Addresses exempt from BOTH the delta check and the register check, checked",
+    " * first so their constant traffic cannot crowd out a real finding. The",
+    " * generator script records why each one is here. */",
+    "static const uint32_t g_recomp_abi_exempt[] = {",
 ]
 for va in sorted(EXEMPT):
     lines.append("    0x%08Xu, /* %s */" % (va, EXEMPT[va]))
 lines += [
     "};",
+    "",
+    "static int recomp_va_exempt(uint32_t va)",
+    "{",
+    "    size_t i;",
+    "    for (i = 0; i < sizeof(g_recomp_abi_exempt) / sizeof(g_recomp_abi_exempt[0]); i++)",
+    "        if (g_recomp_abi_exempt[i] == va) return 1;",
+    "    return 0;",
+    "}",
+    "",
+    "/* 1 = skip the ebx/esi/edi preservation check for this address. The SEH epilog",
+    " * and the integer helpers change those registers by design, so comparing them",
+    " * before and after the call reports a difference that is not a defect. */",
+    "int recomp_abi_regs_exempt(uint32_t va)",
+    "{",
+    "    return recomp_va_exempt(va);",
+    "}",
     "",
     "/* 1 = the observed delta is one this function can produce, the address is exempt,",
     " * or the address is unknown to this table. 0 = it cannot, which means a caller's",
@@ -77,9 +113,7 @@ lines += [
     "int recomp_delta_ok(uint32_t va, uint32_t actual)",
     "{",
     "    size_t lo = 0, hi = sizeof(g_recomp_deltas) / sizeof(g_recomp_deltas[0]);",
-    "    size_t i;",
-    "    for (i = 0; i < sizeof(g_recomp_delta_exempt) / sizeof(g_recomp_delta_exempt[0]); i++)",
-    "        if (g_recomp_delta_exempt[i] == va) return 1;",
+    "    if (recomp_va_exempt(va)) return 1;",
     "    while (lo < hi) {",
     "        size_t mid = lo + (hi - lo) / 2;",
     "        const RecompDeltaEntry *e = &g_recomp_deltas[mid];",
