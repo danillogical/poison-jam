@@ -5467,6 +5467,7 @@ extern void sub_00199AE0(void);
 extern void sub_00199BC0(void);
 extern void sub_00199BE0(void);
 extern void sub_00199DB0(void);
+extern void sub_0019E3B7(void);
 extern void sub_0019E4BC(void);
 extern void sub_0019E4C1(void);
 extern void sub_0019E4C6(void);
@@ -349054,6 +349055,41 @@ void sub_00197C50(void) {
 }
 
 /**
+ * sub_0019E3B7
+ * Original: 0x0019E3B7 - 0x0019E3C4 (13 bytes, 4 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_0019E3B7(void)
+{
+
+loc_0019E3B7: ;
+    eax = MEM32(esp + 4);
+    MEM32(eax + 4) = MEM32(eax + 4) + 1;
+    eax = MEM32(eax + 4);
+    esp += 8; return; /* ret 4 */
+
+}
+
+
+void sub_0019E3B7(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_0019E3B7();
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0019E3B7 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0019E3B7 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
  * sub_001A5299
  * Original: 0x001A5299 - 0x001A52A4 (11 bytes, 2 insns)
  * CC: cdecl, 0 params, returns int_or_void
@@ -355537,6 +355573,8 @@ recomp_func_t jsrf_lookup_recovered(uint32_t va) {
     case 0x00197BCFu: return sub_00197BCF;
 
     case 0x00197C50u: return sub_00197C50;
+
+    case 0x0019E3B7u: return sub_0019E3B7;
 
     case 0x001A5299u: return sub_001A5299;
 

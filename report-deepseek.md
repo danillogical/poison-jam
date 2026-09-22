@@ -3742,4 +3742,129 @@ from the generated body, since the body and the table are currently derived from
 the same source and so cannot disagree — which is exactly why a self-consistent
 but guest-wrong `ret N` is invisible to this check.
 
+---
+
+# FIXED: `0x0019E3B7`, the same fold class, and it cleared the whole family
+
+## Attribution
+
+The report now prints `actual` and `expected`, and names the call site:
+
+```
+[DELTA] site=001A5D6B callee=0019EE1F actual=12 expected=8
+[DELTA] site=001A1C03 callee=001A5D51 actual=12 expected=8
+[DELTA] site=001A0C62 callee=001A1BE2 actual=12 expected=8
+```
+
+A uniform **+4**, three levels deep. Two checks eliminated the obvious candidates:
+
+- **The guest really is `ret 4`.** Raw bytes at `0x0019EE31` are `C2 04 00`, and the
+  caller's `FF 74 24 08` is exactly one argument push. So `esp += 8` is correct, and
+  the table agreeing with the body proves nothing — the table is generated *from*
+  the body.
+- **The internal ICALL does run.** A probe placed before the `IS_CODE` check (the
+  earlier one sat after it) shows target `0x0019E3B7` and `IS_CODE` = 1.
+
+Then a five-point `g_esp` snapshot localised it to four bytes:
+
+```
+AA01 capture _ap                 esp=00F7FDC4
+EE10 after prologue push         esp=00F7FDC0   (-4 correct)
+1EE2E the ICALL, target=0019E3B7
+EE20 before epilogue pop         esp=00F7FDC4   <-- 4 HIGH, should be 00F7FDC0
+AA02 after fn()                  esp=00F7FDD0   delta 12, should be 8
+```
+
+The ICALL pushed 8 (one arg plus the return address) and its callee returned 12.
+The callee is `sub_0019E3C4`, because the dispatch tuple reads
+`{ 0x0019E3B7u, (recomp_func_t)sub_0019E3C4 }` — and the guest at `0x0019E3B7` is a
+complete 13-byte `ret 4` function of its own:
+
+```
+0019E3B7 mov eax, [esp+4]
+0019E3BB inc dword ptr [eax+4]
+0019E3BE mov eax, [eax+4]
+0019E3C1 ret 4
+0019E3C4 mov ecx, [esp+4]      <- a different function starts here
+```
+
+`0x0019E3C4` is the *next* function, which the DB did find, so the address
+`0x0019E3B7` was folded into it and the virtual call `call [eax+4]` from
+`0x0019EE1F` entered the wrong body. **Third instance of the `0x00168480` class.**
+
+Worth noting: the two functions' ESP deltas *coincide* (both `ret 4`), so the
+exact-delta check could never have detected this one. Only executing the wrong code
+revealed it. The delta check found `0x00168480` because that redirect happened to
+change the argument count; this one needed the manual descent.
+
+## The fix and its effect
+
+Recover `0x0019E3B7` with `end=0x0019E3C4` and `stack_args=4`, so the address keeps
+its own body and its own dispatch tuple. Re-running the same probes:
+
+```
+BEFORE  EE20 before epilogue pop  esp=00F7FDC4   (+4 wrong)
+        AA02 after fn()           esp=00F7FDD0   delta 12
+AFTER   EE20 before epilogue pop  esp=00F7FDC0   correct
+        AA02 after fn()           esp=00F7FDCC   delta 8   <- expected
+```
+
+And the whole family clears at once:
+
+| | before | after |
+|---|---|---|
+| `[DELTA]` reports | 3 | **0** |
+| `[ABI]` reports | 6 | **0** |
+| recovered wrapper ABI failures | 1 | **0** |
+| recovered bodies verifying | 154 | **167** |
+| outcome (clean build) | `unhandled_exception`, 3.6 s | **`diagnostic_deadline`, 33.1 s** |
+
+The six `[ABI] ...: ebx` reports and the `sub_00168480` wrapper abort were all
+downstream of this one address: `0x0019E3B7` is called from `0x0019EE1F`, which
+sits in the same subtree as `0x001A0D2F` → `0x001A0D9C` → `sub_00168480`. One
+redirect explained every symptom, which is why they all looked like one family and
+why fixing the innermost cleared them together.
+
+**Decision (mine, per the standing instruction):** recover this address rather than
+exempt it. The two functions' deltas coincide, so it cannot be argued to be
+harmless by contract — a virtual call executing the wrong body is wrong regardless
+of what it does to ESP.
+
+## The new state: a spin, not a crash, and not slow
+
+The run no longer faults out; it reaches the deadline. It is **not** merely slow —
+doubling the runtime changes nothing at all:
+
+| | 33 s run | 73 s run |
+|---|---|---|
+| kernel calls | 200 | 200 |
+| recovered bodies verifying | 167 | 167 |
+| handled faults | 12,702 | 12,702 |
+| distinct ICALL targets | — | 9 |
+
+So it completes an initial phase and then spins. The guest thread stack names it:
+`body_00191440+0xA4D`, `recovered.c:343325`.
+
+```
+loc_001914E2: edx = MEM32(edi + 0x34);
+              edi = MEM32(edi + 0x30);
+              eax = edi - esi;
+loc_001914F0: ecx = MEM32(edx);
+              esi = edi - ecx;
+              if (CMP_B(eax, esi)) goto loc_001914F0;
+```
+
+**This loop is a faithful translation and it is not the bug.** The raw bytes at
+`0x001914F0` are `8B 0A 8B F7 2B F1 3B C6 72 F6` — `mov ecx,[edx]; mov esi,edi;
+sub esi,ecx; cmp eax,esi; jb 0x1914f0` — so the guest really does loop on a
+condition that its own body cannot change. The only thing that can change it is
+`[edx]`, a **memory location**: this is a wait for another agent to advance a
+counter, exactly like the PFIFO low-mark wait fixed earlier, and it hangs because
+whatever should advance it never does.
+
+**Next packet:** identify `[edx]` and who is supposed to advance it. `edx` comes
+from `MEM32(edi + 0x34)`, so the probe is: log `edx` and `[edx]` at the spin site,
+then find every writer of that address. If it is a GPU/audio buffer position, the
+model has another content gap of the same kind as the PFIFO watermark.
+
 

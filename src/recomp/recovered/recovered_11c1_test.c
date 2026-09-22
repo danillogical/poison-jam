@@ -5467,6 +5467,7 @@ extern void sub_00199AE0(void);
 extern void sub_00199BC0(void);
 extern void sub_00199BE0(void);
 extern void sub_00199DB0(void);
+extern void sub_0019E3B7(void);
 extern void sub_0019E4BC(void);
 extern void sub_0019E4C1(void);
 extern void sub_0019E4C6(void);

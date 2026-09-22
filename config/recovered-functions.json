@@ -24175,6 +24175,14 @@
     "evidence": "PGRAPH debug/channel setup confirmed by original disassembly. ECX=context, two extra push ecx locals, RET 0. Clears PMC enable bit 0x1000 then sets it, programs debug/context slots, copies them to PGRAPH 0x40008x/0x400B8x, calls recovered 0x00196C0B, copies debug words through 0x400750/754, then stdcall 0x00197AAC(context+0x130). Service-chain callees are already recovered; idle STATUS makes 0x00196C0B a no-op."
   },
   {
+    "start": "0x0019E3B7",
+    "end": "0x0019E3C4",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A vtable method: reached as an indirect call target from 0x0019EE1F (`call dword ptr [eax+4]`, probed at runtime as 0x0019E3B7). The guest body is a complete 13-byte function ending `ret 4` at 0x0019E3C1, and 0x0019E3C4 starts a different function. The DB has no entry here, so the translation pass folded this address into sub_0019E3C4 and the dispatch tuple read `{ 0x0019E3B7u, sub_0019E3C4 }` -- a virtual call therefore entered the wrong body. Recovered so the address keeps its own body and dispatch entry. Third instance of the 0x00168480 class; note the two functions' ESP deltas coincide (both ret 4), so the exact-delta check cannot detect this one -- only entering the wrong code does. Found while attributing a +4 ESP error in logs/runs/20260921-231106-878-esp-window/.",
+    "stack_args": 4
+  },
+  {
     "start": "0x001A5299",
     "end": "0x001A52A4",
     "section": "DSOUND",

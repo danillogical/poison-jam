@@ -63,14 +63,18 @@ void jsrf_trace_seq(uint32_t site, uint32_t value)
 
 /* Reports a callee whose ESP delta the table does not allow. Only reachable with
  * -DRECOMP_ABI_CHECK; see scripts/gen-abi-deltas.py for why the check exists. */
-void jsrf_trace_delta_mismatch(uint32_t site, uint32_t value)
+void jsrf_trace_delta_mismatch(uint32_t site, uint32_t va, uint32_t actual)
 {
     /* Per-callee, not global. The first version capped the whole trace at 300
      * lines, and the two Windows SEH helpers -- which legitimately adjust the
      * stack themselves -- produced 151 + 149 = exactly 300. The cap was therefore
      * exhausted by known-benign noise and a real mismatch (sub_001680D0, delta 24
      * where its body allows 16) was dropped unreported. Every distinct callee now
-     * gets named. */
+     * gets named.
+     *
+     * Prints the observed delta AND the delta the table allows, because "the delta
+     * is wrong" does not say by how much or in which direction, and the size of
+     * the error is what identifies the instruction that caused it. */
     enum { SLOTS = 64, PER_CALLEE = 2 };
     static RECOMP_TLS uint32_t seen[SLOTS];
     static RECOMP_TLS unsigned hits[SLOTS];
@@ -78,17 +82,24 @@ void jsrf_trace_delta_mismatch(uint32_t site, uint32_t value)
     int i;
 
     for (i = 0; i < count; i++)
-        if (seen[i] == value) break;
+        if (seen[i] == va) break;
     if (i == count) {
         if (count == SLOTS) return;
-        seen[count] = value;
+        seen[count] = va;
         hits[count] = 0;
         count++;
     }
     if (hits[i]++ >= PER_CALLEE) return;
     _lock_file(stderr);
-    fprintf(stderr, "[DELTA] site=%08X callee=%08X esp=%08X hit=%u\n",
-            site, value, g_esp, hits[i]);
+    {
+        uint32_t allowed[4];
+        int n = recomp_delta_allowed(va, allowed), k;
+        fprintf(stderr, "[DELTA] site=%08X callee=%08X actual=%u expected=",
+                site, va, actual);
+        if (!n) fprintf(stderr, "?");
+        for (k = 0; k < n; k++) fprintf(stderr, "%s%u", k ? "," : "", allowed[k]);
+        fprintf(stderr, " esp=%08X hit=%u\n", g_esp, hits[i]);
+    }
     _unlock_file(stderr);
 }
 
