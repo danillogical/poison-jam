@@ -3202,4 +3202,90 @@ State: reverted to clean, `logs/runs/20260921-174239-356-reverted-clean/`,
 154 verified bodies, no canary output, CTest 11/11, both repositories clean
 (game `d40e936`, toolkit `f5fbdea`).
 
+---
+
+# Chasing the 0x38: three instrumentation errors and one unresolved contradiction
+
+**Decision: stop probing and record both measurements rather than pick one.** I
+made three instrumentation mistakes in a row, each of which produced a confident
+and wrong intermediate conclusion. The raw observations are solid; the
+explanation is not, and pretending otherwise would be worse than leaving it open.
+
+## What is solid
+
+- `[0x22FCE0] = 0x38` at the store, and `0x22FCE0` has **exactly one writer** in
+  the whole tree (`mov dword ptr [0x22fce0], eax` at guest `0x0006FA2C`, encoding
+  `a3 e0 fc 22 00`). Verified by opcode, not by regex.
+- `eax` at that store is `0x38` — probed with `recomp_diag_record(9u, eax, ...)`,
+  so the value comes from the guest register, not from a stale global.
+- Exactly **one** object in all 64 MB of guest RAM carries the constructor's
+  vtable `0x1C4458`, at `0x01054A70`, and it is fully constructed.
+- `sub_00012210` returns `eax = esi`, has exactly one `esi = ecx` assignment, one
+  `return;`, and no tail-jump exit.
+- `#define esi g_esi` — the generated register names are macros for globals, so the
+  guest ABI is enforced purely by save/restore, and any callee that fails to
+  restore corrupts its caller's view of the register.
+
+## The two measurements that disagree
+
+**Measurement A** — probing `g_esi` after each of `sub_00012210`'s nine calls,
+with the insertion scoped to that function's body only (the earlier attempt
+instrumented the whole file, which is error #1):
+
+```
+after 0x0004A8F0  g_esi = 0x01054A70
+after 0x0005F180  g_esi = 0x01054A70
+after 0x0005F350  g_esi = 0x00000038   <- clobbered
+```
+
+**Measurement B** — watching one fixed address, anchored once as `esp + 4` right
+after `sub_0005F350`'s own three register saves, then read after every call inside
+it and again immediately before its epilogue pops:
+
+```
+[WATCH] site=001680D0 addr=00F7FEC4 value=01054A70
+[WATCH] site=EEEE0001 addr=00F7FEC4 value=01054A70   <- just before the pops
+```
+
+The slot is **intact** at the moment `sub_0005F350` restores ESI from it, and that
+function has a single `return;` and no tail-jump exit — so it should return
+`g_esi = 0x01054A70`, contradicting A.
+
+## The three instrumentation errors, recorded so they are not repeated
+
+1. **The probe conversion ran over the whole file, not one function.** The
+   sequence I read as "one constructor invocation" interleaved probes from several
+   functions that call the same callees. That is what produced the earlier
+   confident-but-wrong claim that `sub_0005F350` clobbers ESI. **Scope probe
+   insertion to the function body.**
+2. **`MEM32(esp + 4)` at each probe site is a different address at each site**,
+   because `esp` differs per site. Comparing them across sites is meaningless. That
+   produced the equally wrong claim that the saved slot "changed across
+   `sub_001680D0`". **Anchor one address once, then read that address.**
+3. **A static push/pop count is not a per-path count.** `sub_0005F350` shows 4
+   pushes and 1 pop and is balanced, because three of those pushes are arguments;
+   `sub_0006E360` shows 1 push and 2 pops and is also balanced, because the two
+   pops are on different exit paths. Both looked like imbalances and neither is.
+   **And `returns=0` can just mean the exit is a tail jump** (`sub_00065940`,
+   `sub_0015F9E0` both end `sub_X(); return;`), which my `esp += N; return;` regex
+   missed.
+
+## What the contradiction most likely means
+
+One of the two measurements must be reading the wrong thing, and A is the simpler
+of the two: it reads `g_esi` directly after the macro returns. The likeliest
+resolution is that `sub_0005F350`'s epilogue restore is correct **on the path the
+watch caught**, and the call from `sub_00012210` takes a different one — but that
+function has only one `return;`, so this needs the watch to be armed on the slot
+belonging to *that* invocation rather than assuming one invocation.
+
+**Next packet:** arm the watch inside `sub_0005F350` with a marker that also
+records `g_esp` at entry, so the two invocations (if there are two) can be told
+apart, and log `g_esi` at the single `return;` rather than only before the pops.
+If the values agree there and A still reads `0x38`, then A is wrong and the probe
+site is not where it appears to be.
+
+State: clean, `logs/runs/20260921-193636-988-restored/`, 154 verified, CTest 11/11,
+both repositories clean.
+
 

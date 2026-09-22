@@ -22,10 +22,27 @@ was destroyed: the saved-ESI slot changes across `sub_0005F350`'s call to
 `sub_001680D0`, which therefore writes above its own frame. ESP inside
 `sub_0005F350` is constant, so it is not over-popping.
 
-**Next packet:** probe that one saved slot after each call inside `sub_001680D0`,
-then inside `sub_00168050`. Do **not** use a window-based frame canary: it fires
-400 times because `__SEH_prolog` builds the exception frame inside its caller's
-frame by design. And note **`RECOMP_ABI_CHECK` is off by default**, so every
+**Next packet:** the causal chain is measured but not yet explained — see the
+"Chasing the 0x38" section of `report-deepseek.md`. Solid: the store writes `0x38`
+and `0x22FCE0` has exactly one writer; the constructor `sub_00012210` returns
+`eax = esi` with one `esi = ecx` assignment and one `return;`; the generated
+register names are macros for globals (`#define esi g_esi`), so a callee that fails
+to restore corrupts its caller. Probing `g_esi` after each of the constructor's
+nine calls shows it becomes `0x38` across the call to `sub_0005F350`; but watching
+one fixed address inside `sub_0005F350` shows its saved-ESI slot intact right
+before the pops. **Those two disagree and the report says so.** Arm the watch with
+the entry `g_esp` as a marker to tell invocations apart, and log `g_esi` at the
+single `return;` rather than only before the pops.
+
+**Three instrumentation errors are recorded so they are not repeated:** scope probe
+insertion to one function body (a whole-file pass interleaved probes from several
+functions); anchor one watch address once instead of reading `MEM32(esp+4)` at
+sites with different `esp`; and never treat a static push/pop count as a per-path
+count (`sub_0005F350` is 4/1 and balanced because three pushes are arguments;
+`sub_0006E360` is 1/2 and balanced because the pops are on different exits), nor
+`returns=0` as "no exit" (a tail jump is an exit). Do **not** use a window-based
+frame canary: `__SEH_prolog` builds the exception frame inside its caller's frame
+by design. And note **`RECOMP_ABI_CHECK` is off by default**, so every
 `RECOMP_ABI_CALL` compiles to a plain call unless the build passes
 `-DRECOMP_ABI_CHECK` — a diagnostic that reports "no hits" without it is reporting
 nothing.
