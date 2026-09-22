@@ -14,19 +14,29 @@ disasm.add_argument('start',type=integer); disasm.add_argument('end',type=intege
 memory=commands.add_parser('memory')
 memory.add_argument('run',type=Path); memory.add_argument('start',type=integer); memory.add_argument('length',type=integer)
 memory.add_argument('--out',type=Path,help='export exactly these captured bytes as a binary file')
+data=commands.add_parser('data')
+data.add_argument('start',type=integer); data.add_argument('length',type=integer)
+find=commands.add_parser('find')
+find.add_argument('value',type=integer,help='dword value to locate in the original XBE image')
+find.add_argument('--section',default=None,help='restrict to one section name, e.g. .data')
+find.add_argument('--aligned',action='store_true',help='only 4-byte aligned offsets (pointer tables)')
 gpu=commands.add_parser('gpu'); gpu.add_argument('run',type=Path)
 args=parser.parse_args()
+def xbe_bytes(start,end):
+    """Original bytes of the retail XBE for a virtual address range."""
+    if not 0<=start<end<=0x100000000 or end-start>1024*1024:
+        raise CaptureError('range must be positive and at most 1 MiB')
+    sections=json.loads((root/'game/mygame_analysis.json').read_text())['sections']
+    section=next((s for s in sections if int(s['virtual_addr'],16)<=start and end<=int(s['virtual_addr'],16)+s['raw_size']),None)
+    if section is None: raise CaptureError('range is not contained in one file-backed XBE section')
+    offset=int(section['raw_addr'],16)+start-int(section['virtual_addr'],16)
+    with (root/'game/default.xbe').open('rb') as file:
+        file.seek(offset); return file.read(end-start)
+
 try:
     if args.command=='disasm':
         import capstone
-        if not 0 <= args.start < args.end <= 0x100000000 or args.end-args.start>1024*1024:
-            raise CaptureError('instruction range must be positive and at most 1 MiB')
-        sections=json.loads((root/'game/mygame_analysis.json').read_text())['sections']
-        section=next((s for s in sections if int(s['virtual_addr'],16)<=args.start and args.end<=int(s['virtual_addr'],16)+s['raw_size']),None)
-        if section is None: raise CaptureError('range is not contained in one file-backed XBE section')
-        offset=int(section['raw_addr'],16)+args.start-int(section['virtual_addr'],16)
-        with (root/'game/default.xbe').open('rb') as file:
-            file.seek(offset); raw=file.read(args.end-args.start)
+        raw=xbe_bytes(args.start,args.end)
         decoder=capstone.Cs(capstone.CS_ARCH_X86,capstone.CS_MODE_32)
         # Skip undecodable bytes instead of stopping.  Capstone stops at the
         # first invalid instruction and yields nothing at all, so an arbitrary
@@ -48,6 +58,28 @@ try:
                     rendered=' '.join(f'{v:08X}' for v in struct.unpack('<'+'I'*(len(chunk)//4),chunk))
                 else: rendered=chunk.hex(' ')
                 print(f'{args.start+i:08X}: {rendered}')
+    elif args.command=='data':
+        raw=xbe_bytes(args.start,args.start+args.length)
+        for i in range(0,len(raw),16):
+            chunk=raw[i:i+16]
+            if len(chunk)%4==0:
+                rendered=' '.join(f'{v:08X}' for v in struct.unpack('<'+'I'*(len(chunk)//4),chunk))
+            else: rendered=chunk.hex(' ')
+            print(f'{args.start+i:08X}: {rendered}')
+    elif args.command=='find':
+        sections=json.loads((root/'game/mygame_analysis.json').read_text())['sections']
+        needle=struct.pack('<I',args.value&0xFFFFFFFF)
+        hits=0
+        with (root/'game/default.xbe').open('rb') as file:
+            for section in sections:
+                if args.section and section['name']!=args.section: continue
+                file.seek(int(section['raw_addr'],16)); raw=file.read(section['raw_size'])
+                base=int(section['virtual_addr'],16)
+                for at in range(0,len(raw)-3,4 if args.aligned else 1):
+                    if raw[at:at+4]==needle:
+                        print(f'{base+at:08X}  {section["name"]}')
+                        hits+=1
+        print(f'{hits} occurrence(s) of 0x{args.value:08X}')
     else:
         from jsrf_gpu import analyze, markdown
         print(markdown(analyze(args.run)))

@@ -5468,6 +5468,8 @@ extern void sub_00199BC0(void);
 extern void sub_00199BE0(void);
 extern void sub_00199DB0(void);
 extern void sub_0019E3B7(void);
+extern void sub_0019E3C4(void);
+extern void sub_0019E438(void);
 extern void sub_0019E4BC(void);
 extern void sub_0019E4C1(void);
 extern void sub_0019E4C6(void);
@@ -5475,6 +5477,9 @@ extern void sub_0019E4F2(void);
 extern void sub_0019E4F7(void);
 extern void sub_0019E50D(void);
 extern void sub_0019E523(void);
+extern void sub_0019E5CC(void);
+extern void sub_0019EAE3(void);
+extern void sub_0019EE34(void);
 extern void sub_0019F024(void);
 extern void sub_0019F040(void);
 extern void sub_0019F083(void);
@@ -5516,7 +5521,13 @@ extern void sub_001A0905(void);
 extern void sub_001A0929(void);
 extern void sub_001A095E(void);
 extern void sub_001A0D9C(void);
+extern void sub_001A0F09(void);
 extern void sub_001A24A3(void);
+extern void sub_001A464B(void);
+extern void sub_001A46F0(void);
+extern void sub_001A47AD(void);
+extern void sub_001A490D(void);
+extern void sub_001A4A9B(void);
 extern void sub_001A5299(void);
 extern void sub_001A52A4(void);
 extern void sub_001BA8A0(void);
@@ -118084,14 +118095,14 @@ void sub_000B6ED0(void) {
     uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
     static RECOMP_TLS int logged;
     body_000B6ED0();
-    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
         /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
          * every ABI mismatch in the manifest instead of aborting at the first.
          * It is a convergence aid for scripts/converge-manifest.py, not an
          * acceptance mode: a run under it proves nothing about correctness. */
         static RECOMP_TLS int reported;
         if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x000B6ED0 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x000B6ED0 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
         if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x000B6ED0 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
@@ -161296,14 +161307,14 @@ void sub_000DC490(void) {
     uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
     static RECOMP_TLS int logged;
     body_000DC490();
-    if (g_esp!=before_stack+17 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
         /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
          * every ABI mismatch in the manifest instead of aborting at the first.
          * It is a convergence aid for scripts/converge-manifest.py, not an
          * acceptance mode: a run under it proves nothing about correctness. */
         static RECOMP_TLS int reported;
         if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x000DC490 esp %08X->%08X expected +17; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x000DC490 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
         if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x000DC490 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
@@ -169886,14 +169897,14 @@ void sub_000E0BF0(void) {
     uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
     static RECOMP_TLS int logged;
     body_000E0BF0();
-    if (g_esp!=before_stack+16 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
         /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
          * every ABI mismatch in the manifest instead of aborting at the first.
          * It is a convergence aid for scripts/converge-manifest.py, not an
          * acceptance mode: a run under it proves nothing about correctness. */
         static RECOMP_TLS int reported;
         if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x000E0BF0 esp %08X->%08X expected +16; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x000E0BF0 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
         if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x000E0BF0 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
@@ -175285,14 +175296,14 @@ void sub_000E5450(void) {
     uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
     static RECOMP_TLS int logged;
     body_000E5450();
-    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
         /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
          * every ABI mismatch in the manifest instead of aborting at the first.
          * It is a convergence aid for scripts/converge-manifest.py, not an
          * acceptance mode: a run under it proves nothing about correctness. */
         static RECOMP_TLS int reported;
         if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x000E5450 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x000E5450 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
         if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x000E5450 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
@@ -244097,14 +244108,14 @@ void sub_0014B774(void) {
     uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
     static RECOMP_TLS int logged;
     body_0014B774();
-    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
         /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
          * every ABI mismatch in the manifest instead of aborting at the first.
          * It is a convergence aid for scripts/converge-manifest.py, not an
          * acceptance mode: a run under it proves nothing about correctness. */
         static RECOMP_TLS int reported;
         if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0014B774 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0014B774 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
         if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x0014B774 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
@@ -247303,14 +247314,14 @@ void sub_0014FB20(void) {
     uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
     static RECOMP_TLS int logged;
     body_0014FB20();
-    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+    if (g_esp!=before_stack+12 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
         /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
          * every ABI mismatch in the manifest instead of aborting at the first.
          * It is a convergence aid for scripts/converge-manifest.py, not an
          * acceptance mode: a run under it proves nothing about correctness. */
         static RECOMP_TLS int reported;
         if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0014FB20 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0014FB20 esp %08X->%08X expected +12; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
         if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x0014FB20 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
@@ -247387,14 +247398,14 @@ void sub_0014FBB0(void) {
     uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
     static RECOMP_TLS int logged;
     body_0014FBB0();
-    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+    if (g_esp!=before_stack+12 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
         /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
          * every ABI mismatch in the manifest instead of aborting at the first.
          * It is a convergence aid for scripts/converge-manifest.py, not an
          * acceptance mode: a run under it proves nothing about correctness. */
         static RECOMP_TLS int reported;
         if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0014FBB0 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0014FBB0 esp %08X->%08X expected +12; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
         if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x0014FBB0 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
@@ -247429,14 +247440,14 @@ void sub_0014FDA0(void) {
     uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
     static RECOMP_TLS int logged;
     body_0014FDA0();
-    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+    if (g_esp!=before_stack+12 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
         /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
          * every ABI mismatch in the manifest instead of aborting at the first.
          * It is a convergence aid for scripts/converge-manifest.py, not an
          * acceptance mode: a run under it proves nothing about correctness. */
         static RECOMP_TLS int reported;
         if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0014FDA0 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0014FDA0 esp %08X->%08X expected +12; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
         if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x0014FDA0 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
@@ -255748,14 +255759,14 @@ void sub_00153780(void) {
     uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
     static RECOMP_TLS int logged;
     body_00153780();
-    if (g_esp!=before_stack+20 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
         /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
          * every ABI mismatch in the manifest instead of aborting at the first.
          * It is a convergence aid for scripts/converge-manifest.py, not an
          * acceptance mode: a run under it proves nothing about correctness. */
         static RECOMP_TLS int reported;
         if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00153780 esp %08X->%08X expected +20; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00153780 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
         if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x00153780 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
@@ -290242,14 +290253,14 @@ void sub_00168FF0(void) {
     uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
     static RECOMP_TLS int logged;
     body_00168FF0();
-    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
         /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
          * every ABI mismatch in the manifest instead of aborting at the first.
          * It is a convergence aid for scripts/converge-manifest.py, not an
          * acceptance mode: a run under it proves nothing about correctness. */
         static RECOMP_TLS int reported;
         if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00168FF0 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00168FF0 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
         if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x00168FF0 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
@@ -311840,14 +311851,14 @@ void sub_00175BA0(void) {
     uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
     static RECOMP_TLS int logged;
     body_00175BA0();
-    if (g_esp!=before_stack+4 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
         /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
          * every ABI mismatch in the manifest instead of aborting at the first.
          * It is a convergence aid for scripts/converge-manifest.py, not an
          * acceptance mode: a run under it proves nothing about correctness. */
         static RECOMP_TLS int reported;
         if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
-            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00175BA0 esp %08X->%08X expected +4; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x00175BA0 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
         if (!getenv("JSRF_ABI_CONTINUE")) abort();
     }
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x00175BA0 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
@@ -349468,6 +349479,291 @@ void sub_001BDAA9(void) {
     if (!logged++) fprintf(stderr,"[RECOVERED] 0x001BDAA9 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
 }
 
+/**
+ * sub_0019E5CC
+ * Original: 0x0019E5CC - 0x0019E613 (71 bytes, 21 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_0019E5CC(void)
+{
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+
+loc_0019E5CC: ;
+    PUSH32(esp, 0x0019E5D1u); RECOMP_ABI_CALL(0x0019E438u, sub_0019E438); /* call 0x0019E438 */
+
+loc_0019E5D1: ;
+    _fa = (uint32_t)(MEM32(0x1BA04C)) & 0xFFFFFFFFu; _fb = (uint32_t)(0) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(0x1BA04C), 0 (32-bit) */
+    ecx = ZX8(LO8(eax));
+    if (CMP_EQ(_fa, _fb)) goto loc_0019E5F3; /* je: equal / zero */
+
+loc_0019E5DD: ;
+    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
+    if (TEST_Z(_fa, _fb)) goto loc_0019E5EC; /* je: equal / zero */
+
+loc_0019E5E1: ;
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, 0x1BA050);
+    { uint32_t _icall_target = MEM32(0x1C4060); PUSH32(esp, 0x0019E5ECu); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_0019E5EC: ;
+    eax = 0x80004005u;
+    goto loc_0019E610;
+
+loc_0019E5F3: ;
+    eax = MEM32(esp + 4);
+    MEM32(eax + 4) = MEM32(eax + 4) + 1;
+    _fa = (uint32_t)(ecx) & 0xFFFFFFFFu; _fb = (uint32_t)(ecx) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test ecx, ecx (32-bit) */
+    PUSH32(esp, esi);
+    esi = MEM32(eax + 4);
+    if (TEST_Z(_fa, _fb)) goto loc_0019E60D; /* je: equal / zero */
+
+loc_0019E602: ;
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, 0x1BA050);
+    { uint32_t _icall_target = MEM32(0x1C4060); PUSH32(esp, 0x0019E60Du); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_0019E60D: ;
+    eax = esi;
+    POP32(esp, esi);
+
+loc_0019E610: ;
+    esp += 8; return; /* ret 4 */
+
+}
+
+
+void sub_0019E5CC(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_0019E5CC();
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0019E5CC esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0019E5CC returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_0019EAE3
+ * Original: 0x0019EAE3 - 0x0019EB2D (74 bytes, 23 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_0019EAE3(void)
+{
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+
+loc_0019EAE3: ;
+    PUSH32(esp, esi);
+    PUSH32(esp, 0x0019EAE9u); RECOMP_ABI_CALL(0x0019E438u, sub_0019E438); /* call 0x0019E438 */
+
+loc_0019EAE9: ;
+    _fa = (uint32_t)(MEM32(0x1BA04C)) & 0xFFFFFFFFu; _fb = (uint32_t)(0) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(0x1BA04C), 0 (32-bit) */
+    esi = ZX8(LO8(eax));
+    if (CMP_EQ(_fa, _fb)) goto loc_0019EB0B; /* je: equal / zero */
+
+loc_0019EAF5: ;
+    _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(esi) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test esi, esi (32-bit) */
+    if (TEST_Z(_fa, _fb)) goto loc_0019EB04; /* je: equal / zero */
+
+loc_0019EAF9: ;
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, 0x1BA050);
+    { uint32_t _icall_target = MEM32(0x1C4060); PUSH32(esp, 0x0019EB04u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_0019EB04: ;
+    eax = 0x80004005u;
+    goto loc_0019EB29;
+
+loc_0019EB0B: ;
+    PUSH32(esp, edi);
+    PUSH32(esp, MEM32(esp + 0xC));
+    PUSH32(esp, 0x0019EB15u); RECOMP_ABI_CALL(0x0019E3C4u, sub_0019E3C4); /* call 0x0019E3C4 */
+
+loc_0019EB15: ;
+    _fa = (uint32_t)(esi) & 0xFFFFFFFFu; _fb = (uint32_t)(esi) & 0xFFFFFFFFu;
+    _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test esi, esi (32-bit) */
+    edi = eax;
+    if (TEST_Z(_fa, _fb)) goto loc_0019EB26; /* je: equal / zero */
+
+loc_0019EB1B: ;
+    { uint32_t _icall_esp = g_esp;
+    PUSH32(esp, 0x1BA050);
+    { uint32_t _icall_target = MEM32(0x1C4060); PUSH32(esp, 0x0019EB26u); RECOMP_ICALL_SAFE(_icall_target, _icall_esp); } /* indirect call */
+    }
+
+loc_0019EB26: ;
+    eax = edi;
+    POP32(esp, edi);
+
+loc_0019EB29: ;
+    POP32(esp, esi);
+    esp += 8; return; /* ret 4 */
+
+}
+
+
+void sub_0019EAE3(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_0019EAE3();
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0019EAE3 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0019EAE3 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_0019EE34
+ * Original: 0x0019EE34 - 0x0019EE50 (28 bytes, 10 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_0019EE34(void)
+{
+    int _flags = 0; /* fallback flag var */
+    uint32_t _fa = 0, _fb = 0;
+    int32_t _fas = 0, _fbs = 0;
+    (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
+
+loc_0019EE34: ;
+    _fa = (uint32_t)(MEM8(esp + 4)) & 0xFFu; _fb = (uint32_t)(1) & 0xFFu;
+    _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test MEM8(esp + 4), 1 (8-bit) */
+    PUSH32(esp, esi);
+    esi = ecx;
+    MEM32(esi) = 0x1E0DB0;
+    if (TEST_Z(_fa, _fb)) goto loc_0019EE4A; /* je: equal / zero */
+
+loc_0019EE44: ;
+    PUSH32(esp, esi);
+    PUSH32(esp, 0x0019EE4Au); RECOMP_ABI_CALL(0x001A0F09u, sub_001A0F09); /* call 0x001A0F09 */
+
+loc_0019EE4A: ;
+    eax = esi;
+    POP32(esp, esi);
+    esp += 8; return; /* ret 4 */
+
+}
+
+
+void sub_0019EE34(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_0019EE34();
+    if (g_esp!=before_stack+8 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x0019EE34 esp %08X->%08X expected +8; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x0019EE34 returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
+/**
+ * sub_001A4A9B
+ * Original: 0x001A4A9B - 0x001A4AD2 (55 bytes, 19 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+static void body_001A4A9B(void)
+{
+    int _flags = 0; /* fallback flag var */
+
+loc_001A4A9B: ;
+    eax = MEM32(esp + 4);
+    eax = eax - 0;
+    if ((eax == 0)) goto loc_001A4ACA; /* je: equal / zero */
+
+loc_001A4AA4: ;
+    eax--;
+    if ((eax == 0)) goto loc_001A4AC3; /* je: equal / zero */
+
+loc_001A4AA7: ;
+    eax--;
+    if ((eax == 0)) goto loc_001A4AB8; /* je: equal / zero */
+
+loc_001A4AAA: ;
+    eax--;
+    if ((eax != 0)) goto loc_001A4ACF; /* jne: not equal / not zero */
+
+loc_001A4AAD: ;
+    PUSH32(esp, MEM32(esp + 8));
+    PUSH32(esp, 0x001A4AB6u); RECOMP_ABI_CALL(0x001A46F0u, sub_001A46F0); /* call 0x001A46F0 */
+
+loc_001A4AB6: ;
+    goto loc_001A4ACF;
+
+loc_001A4AB8: ;
+    PUSH32(esp, MEM32(esp + 8));
+    PUSH32(esp, 0x001A4AC1u); RECOMP_ABI_CALL(0x001A490Du, sub_001A490D); /* call 0x001A490D */
+
+loc_001A4AC1: ;
+    goto loc_001A4ACF;
+
+loc_001A4AC3: ;
+    PUSH32(esp, 0x001A4AC8u); RECOMP_ABI_CALL(0x001A464Bu, sub_001A464B); /* call 0x001A464B */
+
+loc_001A4AC8: ;
+    goto loc_001A4ACF;
+
+loc_001A4ACA: ;
+    PUSH32(esp, 0x001A4ACFu); RECOMP_ABI_CALL(0x001A47ADu, sub_001A47AD); /* call 0x001A47AD */
+
+loc_001A4ACF: ;
+    esp += 12; return; /* ret 8 */
+
+}
+
+
+void sub_001A4A9B(void) {
+    uint32_t before_stack=g_esp, before_bx=g_ebx, before_si=g_esi, before_di=g_edi, before_bp=g_ebp;
+    static RECOMP_TLS int logged;
+    body_001A4A9B();
+    if (g_esp!=before_stack+12 || g_ebx!=before_bx || g_esi!=before_si || g_edi!=before_di) {
+        /* JSRF_ABI_CONTINUE turns the check into a report so one run can collect
+         * every ABI mismatch in the manifest instead of aborting at the first.
+         * It is a convergence aid for scripts/converge-manifest.py, not an
+         * acceptance mode: a run under it proves nothing about correctness. */
+        static RECOMP_TLS int reported;
+        if (reported++ < 4 || !getenv("JSRF_ABI_CONTINUE"))
+            fprintf(stderr,"[RECOVERED] ABI FAILURE 0x001A4A9B esp %08X->%08X expected +12; bx %08X->%08X si %08X->%08X di %08X->%08X bp %08X->%08X\n",before_stack,g_esp,before_bx,g_ebx,before_si,g_esi,before_di,g_edi,before_bp,g_ebp);
+        if (!getenv("JSRF_ABI_CONTINUE")) abort();
+    }
+    if (!logged++) fprintf(stderr,"[RECOVERED] 0x001A4A9B returned; ABI verified (ESP/EBX/ESI/EDI)\n");
+}
+
 recomp_func_t jsrf_lookup_recovered(uint32_t va) {
 
     switch (va) {
@@ -355589,6 +355885,14 @@ recomp_func_t jsrf_lookup_recovered(uint32_t va) {
     case 0x001BD274u: return sub_001BD274;
 
     case 0x001BDAA9u: return sub_001BDAA9;
+
+    case 0x0019E5CCu: return sub_0019E5CC;
+
+    case 0x0019EAE3u: return sub_0019EAE3;
+
+    case 0x0019EE34u: return sub_0019EE34;
+
+    case 0x001A4A9Bu: return sub_001A4A9B;
 
     default: return 0;
 

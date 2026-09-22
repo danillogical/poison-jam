@@ -7301,7 +7301,8 @@
     "end": "0x000B7150",
     "section": ".text",
     "kind": "routine",
-    "evidence": "A method of the function-pointer table at 0x00215D48. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_000B7170 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000B6ED0 at sub_000B7170. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x000B6ED0..0x000B7150, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+    "evidence": "A method of the function-pointer table at 0x00215D48. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_000B7170 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000B6ED0 at sub_000B7170. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x000B6ED0..0x000B7150, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
+    "stack_args": 4
   },
   {
     "start": "0x000B7150",
@@ -10267,7 +10268,7 @@
     "section": ".text",
     "kind": "routine",
     "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CE780, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_000DCBC0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000DC490 at sub_000DCBC0. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x000DC490..0x000DCBC0. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
-    "stack_args": 13
+    "stack_args": 0
   },
   {
     "start": "0x000DC750",
@@ -10860,7 +10861,7 @@
     "section": ".text",
     "kind": "routine",
     "evidence": "A COM vtable method: an entry of the function-pointer table at 0x00217DFC, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_000E1007 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000E0BF0 at sub_000E1007. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x000E0BF0..0x000E1110. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
-    "stack_args": 12
+    "stack_args": 0
   },
   {
     "start": "0x000E0C80",
@@ -11131,7 +11132,7 @@
     "section": ".text",
     "kind": "routine",
     "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CED80, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_000E5A90 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000E5450 at sub_000E5A90. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x000E5450..0x000E5A90. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
-    "stack_args": 0
+    "stack_args": 4
   },
   {
     "start": "0x000E55D0",
@@ -15020,7 +15021,8 @@
     "end": "0x0014B77C",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0014B77C while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x0014B774..0x0014B77C, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0014B77C while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x0014B774..0x0014B77C, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
+    "stack_args": 4
   },
   {
     "start": "0x0014CF00",
@@ -15307,21 +15309,24 @@
     "end": "0x0014FBB0",
     "section": ".text",
     "kind": "routine",
-    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E0F00, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_0014FC20 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x0014FB20 at sub_0014FC20. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x0014FB20..0x0014FC20. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21)."
+    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E0F00, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_0014FC20 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x0014FB20 at sub_0014FC20. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x0014FB20..0x0014FC20. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
+    "stack_args": 8
   },
   {
     "start": "0x0014FBB0",
     "end": "0x0014FC20",
     "section": ".text",
     "kind": "routine",
-    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E0F00, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_0014FC20 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x0014FBB0 at sub_0014FC20. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x0014FBB0..0x0014FC20. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21)."
+    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E0F00, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_0014FC20 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x0014FBB0 at sub_0014FC20. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x0014FBB0..0x0014FC20. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
+    "stack_args": 8
   },
   {
     "start": "0x0014FDA0",
     "end": "0x0014FDB0",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0014FE1C while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x0014FDA0..0x0014FDB0, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0014FE1C while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x0014FDA0..0x0014FDB0, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
+    "stack_args": 8
   },
   {
     "start": "0x0014FDB0",
@@ -16086,7 +16091,7 @@
     "section": ".text",
     "kind": "routine",
     "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E12F8, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_001537C0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00153780 at sub_001537C0. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00153780..0x001537C0. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
-    "stack_args": 16
+    "stack_args": 4
   },
   {
     "start": "0x00153790",
@@ -18763,7 +18768,8 @@
     "end": "0x00169000",
     "section": ".text",
     "kind": "routine",
-    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E3A5C, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_00169000 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00168FF0 at sub_00169000. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00168FF0..0x00169000. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21)."
+    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E3A5C, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_00169000 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00168FF0 at sub_00169000. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00168FF0..0x00169000. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
+    "stack_args": 4
   },
   {
     "start": "0x001690A0",
@@ -19933,7 +19939,8 @@
     "end": "0x00175BB0",
     "section": ".text",
     "kind": "routine",
-    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E3E80, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_00175BB0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00175BA0 at sub_00175BB0. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00175BA0..0x00175BB0. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21)."
+    "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E3E80, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_00175BB0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00175BA0 at sub_00175BB0. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00175BA0..0x00175BB0. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
+    "stack_args": 4
   },
   {
     "start": "0x00175C90",
@@ -24234,5 +24241,37 @@
     "section": "XPP",
     "evidence": "Constructor pointer at 0x001EB82C; straight-line MOV initializer; RET at 0x001BDAE0.",
     "stack_args": 0
+  },
+  {
+    "start": "0x0019E5CC",
+    "end": "0x0019E613",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "Entered from data: the address is an aligned dword in a .rdata vtable, so it is a function entry by definition. The translation pass classified it tail_jump_alias and folded it into the next entry under the ff4d442 abutting-alias rule -- this entry's end equals that entry's start -- which deleted the body and pointed the dispatch tuple at the wrong function, so a virtual call through the slot executes an unrelated body. The body is a complete function that terminates before the fold target, so the original never fell through into it. Found by scripts/scan-alias-redirects.py, which lists every redirect in this shape. Here: slot 1 of the vtable at 0x001E0DC0 and slot 1 of 0x001E0DE8, so the fold sent AddRef to the unrelated body at 0x0019E613. Measured consequence (logs/runs/20260922-085020-240-trace-ee1f): the ICALL inside 0x0019EE1F -- `if (obj) return obj->vtable[1](obj)` -- ran that body, whose cleanup does not match a RET 4 callee, so 0x0019EE1F returned with the simulated ESP 4 bytes low; its POP ESI then read the pushed argument instead of the saved ESI, and the clobbered ESI made 0x0019F926 write the derived vtable into 0x010DD004 instead of 0x803E4224 and return 0x010DD004. 0x001A0B2B passed that object to 0x001A0A43 as the buffer descriptor, 0x001A09DE read [0x010DD004+0xC] -- the 0x778-byte sound object -- as lpwfxFormat, 0x001A4BC4 matched no format tag and wrote nothing, the device format stayed zero, and 0x001A2BFC divided by it. The real descriptor is the caller's stack struct at [EBP-0x20] in 0x001A0C06, whose +0xC is 0x001A77F0, a valid 48 kHz 16-bit PCM WAVEFORMATEX. Body 0x0019E5CC..0x0019E613 ends RET 4. Evidence: report-deepseek.md, 2026-09-22.",
+    "stack_args": 4
+  },
+  {
+    "start": "0x0019EAE3",
+    "end": "0x0019EB2D",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "Entered from data: the address is an aligned dword in a .rdata vtable, so it is a function entry by definition. The translation pass classified it tail_jump_alias and folded it into the next entry under the ff4d442 abutting-alias rule -- this entry's end equals that entry's start -- which deleted the body and pointed the dispatch tuple at the wrong function, so a virtual call through the slot executes an unrelated body. The body is a complete function that terminates before the fold target, so the original never fell through into it. Found by scripts/scan-alias-redirects.py, which lists every redirect in this shape. Here: slot 2 of the vtable at 0x001E0DE4. Body 0x0019EAE3..0x0019EB2D ends RET 4 and calls 0x0019E3C4 (Release) on its object. Evidence: report-deepseek.md, 2026-09-22.",
+    "stack_args": 4
+  },
+  {
+    "start": "0x0019EE34",
+    "end": "0x0019EE50",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "Entered from data: the address is an aligned dword in a .rdata vtable, so it is a function entry by definition. The translation pass classified it tail_jump_alias and folded it into the next entry under the ff4d442 abutting-alias rule -- this entry's end equals that entry's start -- which deleted the body and pointed the dispatch tuple at the wrong function, so a virtual call through the slot executes an unrelated body. The body is a complete function that terminates before the fold target, so the original never fell through into it. Found by scripts/scan-alias-redirects.py, which lists every redirect in this shape. Here: slot 0 of the vtable at 0x001E0DF0 and the immediate stored at 0x001E0DB0. Body 0x0019EE34..0x0019EE50 is the scalar deleting destructor -- TEST byte [ESP+4],1; MOV ESI,ECX; MOV [ESI],0x1E0DB0; conditional CALL 0x1A0F09; MOV EAX,ESI; POP ESI; RET 4 -- while the fold sent the slot to 0x0019EE50, an unrelated function. Evidence: report-deepseek.md, 2026-09-22.",
+    "stack_args": 4
+  },
+  {
+    "start": "0x001A4A9B",
+    "end": "0x001A4AD2",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "Entered from data: the address is an aligned dword in a .rdata vtable, so it is a function entry by definition. The translation pass classified it tail_jump_alias and folded it into the next entry under the ff4d442 abutting-alias rule -- this entry's end equals that entry's start -- which deleted the body and pointed the dispatch tuple at the wrong function, so a virtual call through the slot executes an unrelated body. The body is a complete function that terminates before the fold target, so the original never fell through into it. Found by scripts/scan-alias-redirects.py, which lists every redirect in this shape. Here: slot 0 of the vtable at 0x001E0E60. Body 0x001A4A9B..0x001A4AD2 is a four-way dispatch on [ESP+4] ending RET 8, so its stack_args is 8, not 4. Evidence: report-deepseek.md, 2026-09-22.",
+    "stack_args": 8
   }
 ]

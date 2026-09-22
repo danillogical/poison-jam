@@ -59421,17 +59421,20 @@ loc_0019E35F: ;
  */
 void sub_0019E363(void)
 {
+    RECOMP_TRACE_ENTER("sub_0019E363", 0x0019E363);
 
 loc_0019E363: ;
     PUSH32(esp, 1);
     PUSH32(esp, MEM32(esp + 8));
     PUSH32(esp, 0x626F5344);
     PUSH32(esp, 0x0019E373u); RECOMP_ABI_CALL(0x001A0EA1u, sub_001A0EA1); /* call 0x001A0EA1 */
+    RECOMP_TRACE_ESP("sub_0019E363", "after call 0x001A0EA1");
 
 loc_0019E373: ;
-    esp += 4; return; /* ret */
+    RECOMP_TRACE_EXIT("sub_0019E363", 0x0019E363); esp += 4; return; /* ret */
 
 }
+
 
 /**
  * sub_0019E374
@@ -59580,6 +59583,7 @@ loc_0019E3E7: ;
  */
 void sub_0019E438(void)
 {
+    RECOMP_TRACE_ENTER("sub_0019E438", 0x0019E438);
     int _flags = 0; /* fallback flag var */
     uint32_t _fa = 0, _fb = 0;
     int32_t _fas = 0, _fbs = 0;
@@ -59593,7 +59597,7 @@ loc_0019E438: ;
 
 loc_0019E444: ;
     eax = 0; /* xor self */
-    esp += 4; return; /* ret */
+    RECOMP_TRACE_EXIT("sub_0019E438", 0x0019E438); esp += 4; return; /* ret */
 
 loc_0019E447: ;
     { uint32_t _icall_esp = g_esp;
@@ -59604,9 +59608,10 @@ loc_0019E447: ;
 loc_0019E452: ;
     eax = 0; /* xor self */
     eax++;
-    esp += 4; return; /* ret */
+    RECOMP_TRACE_EXIT("sub_0019E438", 0x0019E438); esp += 4; return; /* ret */
 
 }
+
 
 /**
  * sub_0019E456
@@ -60028,6 +60033,7 @@ loc_0019E5AC: ;
  */
 void sub_0019E5AF(void)
 {
+    RECOMP_TRACE_ENTER("sub_0019E5AF", 0x0019E5AF);
 
 loc_0019E5AF: ;
     eax = ecx;
@@ -60037,9 +60043,10 @@ loc_0019E5AF: ;
     MEM32(0x1BA6F0) = eax;
     MEM32(eax + 0x14) = ecx;
     MEM32(ecx) = ecx;
-    esp += 4; return; /* ret */
+    RECOMP_TRACE_EXIT("sub_0019E5AF", 0x0019E5AF); esp += 4; return; /* ret */
 
 }
+
 
 /**
  * sub_0019E613
@@ -61663,6 +61670,7 @@ loc_0019EE1B: ;
  */
 void sub_0019EE1F(void)
 {
+    RECOMP_TRACE_ENTER("sub_0019EE1F", 0x0019EE1F);
     int _flags = 0; /* fallback flag var */
     uint32_t _fa = 0, _fb = 0;
     int32_t _fas = 0, _fbs = 0;
@@ -61684,10 +61692,12 @@ loc_0019EE28: ;
 
 loc_0019EE2E: ;
     eax = esi;
+    RECOMP_TRACE_ESP("sub_0019EE1F", "pop esi");
     POP32(esp, esi);
-    esp += 8; return; /* ret 4 */
+    RECOMP_TRACE_EXIT("sub_0019EE1F", 0x0019EE1F); esp += 8; return; /* ret 4 */
 
 }
+
 
 /**
  * sub_0019EE50
@@ -62839,6 +62849,7 @@ loc_0019F31C: ;
  */
 void sub_0019F320(void)
 {
+    RECOMP_TRACE_ENTER("sub_0019F320", 0x0019F320);
     uint32_t ebp;
     int _flags = 0; /* fallback flag var */
     uint32_t _fa = 0, _fb = 0;
@@ -62862,6 +62873,7 @@ loc_0019F320: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
     PUSH32(esp, 0x0019F339u); RECOMP_ABI_CALL(0x001A4BC4u, sub_001A4BC4); /* call 0x001A4BC4 */
+    RECOMP_TRACE_ESP("sub_0019F320", "after call 0x001A4BC4");
 
 loc_0019F339: ;
     edi = eax;
@@ -62896,6 +62908,7 @@ loc_0019F35B: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
     PUSH32(esp, 0x0019F362u); RECOMP_ABI_CALL(0x0019E35Fu, sub_0019E35F); /* call 0x0019E35F */
+    RECOMP_TRACE_ESP("sub_0019F320", "after call 0x0019E35F");
 
 loc_0019F362: ;
     MEM32(ebp + edx * 8 + -72) = eax;
@@ -62916,24 +62929,30 @@ loc_0019F37D: ;
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
     PUSH32(esp, 0x0019F388u); RECOMP_ABI_CALL(0x0019E82Du, sub_0019E82D); /* call 0x0019E82D */
+    RECOMP_TRACE_ESP("sub_0019F320", "after call 0x0019E82D");
 
 loc_0019F388: ;
     PUSH32(esp, MEM32(esi + 0x10));
     g_ebp = ebp; /* frame stays current across calls */
     g_seh_ebp = ebp;
     PUSH32(esp, 0x0019F390u); RECOMP_ABI_CALL(0x0019E542u, sub_0019E542); /* call 0x0019E542 */
+    RECOMP_TRACE_ESP("sub_0019F320", "after call 0x0019E542");
 
 loc_0019F390: ;
+    RECOMP_TRACE_ESP("sub_0019F320", "pop edi");
     POP32(esp, edi);
     MEM32(esi + 0x18) = eax;
+    RECOMP_TRACE_ESP("sub_0019F320", "pop esi");
     POP32(esp, esi);
     eax = ebx;
+    RECOMP_TRACE_ESP("sub_0019F320", "pop ebx");
     POP32(esp, ebx);
     esp = ebp;
     POP32(esp, ebp); /* leave */
-    esp += 12; return; /* ret 8 */
+    RECOMP_TRACE_EXIT("sub_0019F320", 0x0019F320); esp += 12; return; /* ret 8 */
 
 }
+
 
 /**
  * sub_0019F39C
@@ -62997,6 +63016,7 @@ loc_0019F3DF: ;
  */
 void sub_0019F3E3(void)
 {
+    RECOMP_TRACE_ENTER("sub_0019F3E3", 0x0019F3E3);
 
 loc_0019F3E3: ;
     PUSH32(esp, esi);
@@ -63008,14 +63028,17 @@ loc_0019F3E3: ;
     MEM32(esi + 0x18) = eax;
     MEM32(eax) = eax;
     PUSH32(esp, 0x0019F404u); RECOMP_ABI_CALL(0x0019EE1Fu, sub_0019EE1F); /* call 0x0019EE1F */
+    RECOMP_TRACE_ESP("sub_0019F3E3", "after call 0x0019EE1F");
 
 loc_0019F404: ;
     MEM32(esi + 8) = eax;
     eax = esi;
+    RECOMP_TRACE_ESP("sub_0019F3E3", "pop esi");
     POP32(esp, esi);
-    esp += 8; return; /* ret 4 */
+    RECOMP_TRACE_EXIT("sub_0019F3E3", 0x0019F3E3); esp += 8; return; /* ret 4 */
 
 }
+
 
 /**
  * sub_0019F40D
@@ -63813,20 +63836,24 @@ loc_0019F902: ;
  */
 void sub_0019F926(void)
 {
+    RECOMP_TRACE_ENTER("sub_0019F926", 0x0019F926);
 
 loc_0019F926: ;
     PUSH32(esp, esi);
     PUSH32(esp, MEM32(esp + 8));
     esi = ecx;
     PUSH32(esp, 0x0019F932u); RECOMP_ABI_CALL(0x0019F3E3u, sub_0019F3E3); /* call 0x0019F3E3 */
+    RECOMP_TRACE_ESP("sub_0019F926", "after call 0x0019F3E3");
 
 loc_0019F932: ;
     MEM32(esi) = 0x1E0DE4;
     eax = esi;
+    RECOMP_TRACE_ESP("sub_0019F926", "pop esi");
     POP32(esp, esi);
-    esp += 8; return; /* ret 4 */
+    RECOMP_TRACE_EXIT("sub_0019F926", 0x0019F926); esp += 8; return; /* ret 4 */
 
 }
+
 
 /**
  * sub_0019F93E

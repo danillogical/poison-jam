@@ -4930,3 +4930,185 @@ known, so that one structure answers the rest.
   wait, and not the EEPROM -- `ExQueryNonVolatileSetting` is never called.
 - **Next measurement:** dump the `DSBUFFERDESC` and the `WAVEFORMATEX` it points
   at, at `0x001A09DE`'s call site. Everything downstream is now known.
+
+# Session 2026-09-22 08:41 onward: the abutting-alias fold, part 2
+
+## Packet A -- the DirectSound divide-by-zero is fixed (root cause: a virtual AddRef dispatched to the wrong body)
+
+This closes the "next measurement" the previous section left open. The
+`wFormatTag = 0` was never the game's value: it was read from the wrong object.
+
+The chain, every link measured:
+
+1. `src/recomp/gen/recomp_dispatch.c` line 8119 read
+   `{ 0x0019E5CCu, (recomp_func_t)sub_0019E613 }`. `0x0019E5CC` is slot 1 of the
+   vtable at `0x001E0DC0` -- it is the **AddRef** for the sound object.
+2. `0x0019EE1F` is `if (obj) return obj->vtable[1](obj); return obj;` and executes
+   `call dword ptr [esi+4]`, i.e. it calls `0x0019E5CC`.
+3. Because of the redirect it ran `0x0019E613` instead, a `push esi` ... `ret 4`
+   body. `RECOMP_ICALL_SAFE` pushes a return address, so the net was **-4**: the
+   call balanced when it should have left 4 bytes consumed, and the `POP32(esp,
+   esi)` at `loc_0019EE2E` popped the *pushed argument* instead of the saved ESI.
+4. Measured consequence in `logs/runs/20260922-073009-106-trace-alloc`: `esi`
+   became `0x010DD004` where it should have been the object `0x803E4224`.
+5. `0x0019F3E3` then wrote the derived vtable `0x1E0DD8` into `0x010DD004` and
+   returned that pointer. `0x001A0B2B` handed it to `0x001A0A43` as the object;
+   `0x001A09DE` read `lpwfxFormat = [0x010DD004+0xC] = 0x010DF604` and took
+   `[0x010DF604] = 0x00010001` -- the bogus tag. `0x001A4BC4` matched no branch,
+   wrote nothing, and the device format stayed zero.
+6. The **real** `DSBUFFERDESC` was the caller's stack struct at `[EBP-0x20]` in
+   `0x001A0C06`, whose `+0xC` is `0x001A77F0`, a valid 48 kHz/16-bit/stereo PCM
+   `WAVEFORMATEX` (`00010001 0000BB80 00017700 00100002`).
+
+**Root cause: the `ff4d442` abutting-alias fold.** The translator merges an entry
+into the function that starts where the entry ends. That is right for a fragment
+and wrong for a complete function whose successor happens to abut it. Two modes
+were identified:
+
+- **Mode A** -- the victim ends in a conditional `jmp` to its own final `ret N`,
+  which the translator emits as `epilogue (esp += N); return;`, making the victim
+  *look* like a frameless tail-jump fragment.
+  Victims fixed: `0x0019E5CC` (-> `0x0019E613`), `0x0019EAE3` (-> `0x0019EB2D`),
+  `0x001A4A9B` (-> `0x001A4AD2`).
+- **Mode B** -- the victim's *prologue* (`test byte [esp+4],1; push esi; mov
+  esi,ecx`) looks like a tail-jump fragment.
+  Victim fixed: `0x0019EE34` (-> `0x0019EE50`).
+
+**Fix applied.** Four entries appended to `config/recovered-functions.json` and to
+`config/manual-functions.json`, so the addresses keep their own bodies and their
+own dispatch entries. `0x001A4A9B`'s `stack_args` is **8**, not 4: its guest body
+is a four-way dispatch ending `ret 8`.
+
+**Verified in `logs/runs/20260922-085326-672-fix-addref`:**
+
+```
+[RECOVERED] 0x0019E5CC returned; ABI verified (ESP/EBX/ESI/EDI)   line 857
+803E4258: 001E0DFC 00000004 80000000 10010001
+803E4268: 0000BB80 00000002 00000000 FFFFFDA8
+```
+
+`wFormatTag = 1` (PCM), `nChannels = 2`, `nSamplesPerSec = 0xBB80` (48000),
+`wBitsPerSample = 0x10` (16). `0x001A4BC4` now takes the `wFormatTag == 1` branch
+and calls `0x001A4B2B`, whose body is `mov word [eax],1; mov dl,[ecx+2]; ...;
+ret 8`. **`0x001A2BFC div esi` no longer faults.** The device also gained
+`DSBCAPS_CTRLVOLUME` (`+0x04 = 4`, was 3).
+
+## Packet B -- `build-jsrf.ps1` cannot run on this host (environment defect)
+
+`scripts/build-jsrf.ps1` fails with
+
+```
+MSB6001: Invalid command line switch for "CL.exe".
+System.ArgumentException: Item has already been added.
+  Key in dictionary: 'Path'  Key being added: 'PATH'
+```
+
+The host process environment block contains three case variants of PATH. Measured
+with `[System.Environment]::GetEnvironmentVariables().Keys` -> `Path`, `PATH`,
+`path`; `Get-ChildItem env:` itself throws "An item with the same key has already
+been added". No shell session can repair a malformed environment block it
+inherited, and CL.exe's `ProcessStartInfo` dictionary throws on the duplicate.
+
+**Workaround:** `scripts/build-jsrf.py` -- same steps, same order, same guards as
+the shell script, driven from Python, whose `os.environ` collapses the case
+variants into one key. It also uses `sys.executable` rather than assuming `python`
+on PATH. Builds succeed (~1m02s). This is a host workaround, not a change of
+intent; the shell script stays as the documented entry point.
+
+## Packet C -- the tail-thunk ABI class (this is the current frontier)
+
+After the fix the run went ~130 log lines further and stopped on a **new**
+recovered-entry ABI failure:
+
+```
+[RECOVERED] ABI FAILURE 0x00168FF0 esp 00F7FE94->00F7FE9C expected +4
+```
+
+`0x00168FF0` is a **this-adjusting thunk**:
+
+```
+00168FF0 sub  dword ptr [esp + 4], 4
+00168FF5 jmp  0x174c20
+```
+
+The manifest entry had no `stack_args`, so the wrapper expected `+4`. But the
+emitted body is `MEM32(esp+4) -= 4; sub_00174C20(); return;`, and `0x00174C20` is
+itself recovered with `ret 4`, so the nested call already adds 8. **A pure tail
+thunk inherits its target's cleanup:** observed = `4 + target_stack_args`, and the
+declaration must equal the target's.
+
+`scripts/check-tail-thunks.py` was written to find the whole class statically
+rather than one abort at a time. Ground truth is the *generated* code, because
+that is what the wrapper executes:
+
+- a pure thunk body is `...; sub_TARGET(); return;` and nothing reachable before
+  it, and
+- the target's net cleanup is `4 + stack_args` if the target is recovered, else
+  the entry in `src/recomp/gen/recomp_abi_deltas.c` -- the per-VA delta table
+  `scripts/gen-abi-deltas.py` parses out of the emitted bodies.
+
+Two false-positive traps, both found by looking at the output rather than
+trusting it:
+
+- **Dead padding.** `0x00154130` ends `ret 0xc` at `0x0015416F`, then has
+  `jmp 0x154180` alignment padding inside its range. The padding is unreachable,
+  so its tail jmp must not be counted. Fixed by requiring that no `return;`
+  appears before the tail call in the body.
+- **Unreachable trailing code.** `last_cleanup()` -- taking the *last*
+  `esp += K; return;` -- is wrong for a body that continues past its real `ret`.
+  `0x000E5450`'s last such line is the unreachable `esp += 4; return; /* ret */`,
+  while its reachable exits are `esp += 8`. That is why the target's cleanup comes
+  from `g_recomp_deltas` (which accepts several exits) rather than from a
+  position-based guess.
+
+**Airtight test used for each candidate:** if the entry's guest range contains
+**no `ret` at all**, its cleanup is entirely inherited from its tail target(s) and
+the target's delta is the whole answer. Measured per entry with
+`inspect-jsrf.py disasm | grep -E 'ret|jmp'`.
+
+**11 corrections applied** (`stack_args = target_delta - 4`):
+
+| entry | guest shape | target | target delta | old -> new |
+|---|---|---|---|---|
+| `0x000B6ED0` | no `ret`; tail jmp | `0x00016240` | 8 | absent -> 4 |
+| `0x000DC490` | no `ret`; 4 tail jmps | `0x001BAA50` | 4 | 13 -> 0 |
+| `0x000E0BF0` | no `ret`; tail jmp | `0x000C1E60` | 4 | 12 -> 0 |
+| `0x000E5450` | `ret 4` + tail jmp, both 8 | `0x000C1770` | 8 | 0 -> 4 |
+| `0x0014B774` | `sub ecx,8; jmp` | `0x001A24A3` | 8 | absent -> 4 |
+| `0x0014FB20` | no `ret`; tail jmp | `0x0018DC00` | 12 | absent -> 8 |
+| `0x0014FBB0` | no `ret`; tail jmp | `0x0018DDE0` | 12 | absent -> 8 |
+| `0x0014FDA0` | `mov [esp+4],0; jmp` | `0x0018DDE0` | 12 | absent -> 8 |
+| `0x00153780` | `mov [esp+4],0; jmp` | `0x00199BE0` | 8 | 16 -> 4 |
+| `0x00168FF0` | `sub [esp+4],4; jmp` | `0x00174C20` | 8 | absent -> 4 |
+| `0x00175BA0` | `sub [esp+4],4; jmp` | `0x00174C40` | 8 | absent -> 4 |
+
+`0x000E5450` is the useful control: it is the only one of the eleven with a `ret`
+in range, and that `ret 4` agrees with its tail jmp (both 8). The two independent
+readings matching is what makes the rule trustworthy.
+
+**Decision (mine, recorded because it changes a declared contract):** correcting
+`stack_args` here does **not** weaken the check. The wrapper still compares the
+whole net delta against `4 + stack_args` and still aborts on a mismatch; what
+changes is that the *declaration* is now taken from the emitted code and the
+guest disassembly instead of from a guess. Three of the eleven (`13`, `12`, `16`)
+were plainly impossible values -- `13` is not even a multiple of 4 -- so the
+declarations were the defect, not the check. Any value I got wrong will still
+abort on the next run, which is the point.
+
+**Also worth recording:** the values `13`, `12`, `16` and `0` were *present* on
+those entries, so a prior session wrote them. `stack_args` cannot be derived from
+the guest's own `ret` for a thunk (there is no `ret`), so any bulk-filled value on
+a thunk entry is suspect by construction. `scripts/check-tail-thunks.py` is the
+guard against the rest of that class.
+
+## Unresolved / next
+
+- `scripts/check-tail-thunks.py` reports **44 thunks with a target that cannot be
+  resolved statically** (stub, import or fragment). Those need the runtime
+  measurement instead.
+- `scripts/scan-alias-redirects.py` still lists ~40 alias-fold candidates in the
+  Direct3D thunk region (`0x00188FB0`-`0x0018ACA2`) plus 26 x87-helper victims in
+  `0x0018xxxx` that misclassify because an FPU body ends `fstp`/`ret` and the fold
+  merges it with the next helper.
+- After this packet: rebuild, rerun, and let `scripts/converge-manifest.py` drive
+  whatever the title reaches next.
