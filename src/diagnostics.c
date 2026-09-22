@@ -48,6 +48,50 @@ void recomp_diag_record(uint32_t kind, uint32_t target, uint32_t site, uint32_t 
     InterlockedExchange((volatile LONG *)&current->count, (LONG)(count + 1));
 }
 
+/* Sequenced temporary probe: prints a running count so multiplicity and ordering
+ * are visible. A single-shot probe cannot tell "the constructor returned 0x38"
+ * from "the store ran twice and the second one wrote 0x38". */
+void jsrf_trace_seq(uint32_t site, uint32_t value)
+{
+    static RECOMP_TLS unsigned count;
+    if (count++ >= 2000) return;
+    _lock_file(stderr);
+    fprintf(stderr, "[SEQ] n=%u site=%08X value=%08X esp=%08X esi=%08X edi=%08X eax=%08X\n",
+            count, site, value, g_esp, g_esi, g_edi, g_eax);
+    _unlock_file(stderr);
+}
+
+/* Reports a callee whose ESP delta the table does not allow. Only reachable with
+ * -DRECOMP_ABI_CHECK; see scripts/gen-abi-deltas.py for why the check exists. */
+void jsrf_trace_delta_mismatch(uint32_t site, uint32_t value)
+{
+    /* Per-callee, not global. The first version capped the whole trace at 300
+     * lines, and the two Windows SEH helpers -- which legitimately adjust the
+     * stack themselves -- produced 151 + 149 = exactly 300. The cap was therefore
+     * exhausted by known-benign noise and a real mismatch (sub_001680D0, delta 24
+     * where its body allows 16) was dropped unreported. Every distinct callee now
+     * gets named. */
+    enum { SLOTS = 64, PER_CALLEE = 2 };
+    static RECOMP_TLS uint32_t seen[SLOTS];
+    static RECOMP_TLS unsigned hits[SLOTS];
+    static RECOMP_TLS int count;
+    int i;
+
+    for (i = 0; i < count; i++)
+        if (seen[i] == value) break;
+    if (i == count) {
+        if (count == SLOTS) return;
+        seen[count] = value;
+        hits[count] = 0;
+        count++;
+    }
+    if (hits[i]++ >= PER_CALLEE) return;
+    _lock_file(stderr);
+    fprintf(stderr, "[DELTA] site=%08X callee=%08X esp=%08X hit=%u\n",
+            site, value, g_esp, hits[i]);
+    _unlock_file(stderr);
+}
+
 void recomp_diag_thread_end(void)
 {
     if (!current) return;

@@ -3375,4 +3375,240 @@ all of them.
 State: clean, `logs/runs/20260921-210108-488-clean-final/`, 154 verified,
 CTest 11/11, both repositories clean.
 
+---
+
+# ROOT CAUSE CONFIRMED: `sub_001680D0` returns with its frame 8 bytes too high
+
+The chain is now measured end to end — by the program's own ABI check, not by my
+probes. Three `[ABI]` reports, identical across three separate runs
+(`20260921-210541-472-delta-check`, `-210839-800-delta-infra`,
+`-213736-264-ecx-entry`):
+
+```
+[ABI] sub_001680D0: esi edi
+      ebx 0105D2C0->0105D2C0 esi 00000004->00000000 edi FFFFFFFF->0005F51D esp 00F7FEB0->00F7FEC8
+      esp delta +24, recent icall targets: 00168230 001690A0 FE000104 FE000100
+[ABI] sub_0005F350: esi edi
+      ebx 00000000->00000000 esi 01054A70->00000038 edi 00700010->00000000 esp 00F7FF04->00F7FF18
+      esp delta +20, recent icall targets: 00168230 001690A0 FE000104 FE000100
+[ABI] sub_00012210: ebx esi edi
+      ebx 00000000->00186BAB esi 00000000->00F7FF38 edi 00700010->00000000 esp 00F7FF28->00F7FF3C
+      esp delta +20, recent icall targets: 0014F720 FE000104 FE000100 FE000198
+```
+
+Reading the direction: a report is emitted by `RECOMP_ABI_CALL(va, fn)` in the
+**caller**, after `fn()` returns. So each line names a function that came back
+having changed ESI/EDI/ESP.
+
+- `sub_001680D0` returns with **ESP delta 0x18 (24) where its own body allows 16** —
+  **8 bytes too high** — and clobbers ESI and EDI.
+- `sub_0005F350` returns with **ESI `0x01054A70` -> `0x00000038`**. That is the
+  `0x38`. Its delta is +20 where 12 is expected: the same 8 bytes, propagated.
+- `sub_00012210`, the constructor, returns with ESI `0x00000000` -> `0x00F7FF38`,
+  delta +20 where 12 is expected: the same 8 bytes again.
+
+That is self-consistent as a single fault with propagation: `sub_001680D0` leaves
+its caller's ESP 8 high, so `sub_0005F350`'s epilogue pops read slots that have
+shifted, and "restore" ESI to `0x38` instead of the object. The store at `0x6FA2C`
+writes `eax = 0x38` into `0x22FCE0`; `mov eax,[0x38]` yields the null call. Each
+level reports the same +8, which is what a single origin looks like.
+
+**This confirms the conclusion I retracted two rounds ago.** `sub_001680D0` is the
+culprit. The retraction was the error, not the original finding.
+
+## Why the retraction happened, and what it means
+
+I retracted because "the ABI check reports zero violations" — and I measured that by
+grepping the run logs for the string `ABI VIOLATION`. **That string never appears
+anywhere.** The logger writes `[ABI] sub_%08X: ...` to stderr
+(`xboxrecomp/src/kernel/xbox_memory_layout.c:763`). So the grep matched nothing in
+every run, and I read "nothing" as "no violations".
+
+This is the same failure this report already warns about — *a diagnostic that
+reports "no hits" without the right enablement is reporting nothing at all* — one
+level further down. Here the check **was** enabled and **was** firing; I was reading
+for the wrong text. The generalisation is worth stating plainly:
+
+> When a check reports nothing, verify the reporting path before believing the
+> negative. Grep for a string the logger is *known* to emit, or assert the logger
+> fires at least once under a condition known to trigger it. "Zero hits" and "zero
+> occurrences of the string I searched for" are different claims.
+
+## The delta check did fire — its own cap hid the signal
+
+`[DELTA]` reported exactly two callees, 151 and 149 times: the Windows SEH helpers
+`0x0017D1F8` and `0x0017D231`, which legitimately adjust the stack themselves.
+151 + 149 = **300**, precisely `jsrf_trace_delta_mismatch`'s cap. The cap was
+exhausted by known-benign noise, so `sub_001680D0`'s mismatch was dropped on the
+floor even though `recomp_delta_ok(0x001680D0, 24)` returns 0.
+
+Two fixes, both needed: exclude the SEH helpers from the check, and make the cap
+per-callee rather than global so one noisy address cannot hide every other.
+
+## The advisor escalation
+
+Escalated this to an independent model (Kimi-K3) rather than continuing to guess.
+Its top-ranked hypothesis was that `ecx` — the this-pointer — was **already** `0x38`
+at constructor entry, i.e. the caller computed `[null + 0x38]`.
+
+**Eliminated by measurement.** A sequenced probe at the constructor's entry gives
+`ecx = 0x01054A70`, the correct object; at the exit, `esi = 0x38`. So the caller is
+innocent and the corruption is inside the callee chain — the opposite of its
+prediction, and it ranked "a callee corrupts ESI" *lowest*.
+
+Two things it got right, and they were the useful part:
+
+1. My ABI check says nothing about **ECX/EAX (caller-saved)**, nothing about the
+   **absolute** value of ESP, and nothing about anything **inside** a function body.
+   So "no violations" could never have excluded an in-body or caller-saved
+   mechanism — I had been treating it as broader than it is.
+2. It was right that a value which "looks like garbage" should be read as a
+   plausible **offset**. `0x38` is exactly `MEM32(esi + 0x38) = ebx`'s offset in the
+   constructor, and the real `0x38` here is a *displaced stack slot*, which is the
+   same idea: not garbage, but a wrong-but-meaningful slot.
+
+Sequenced probing was adopted from its critique and immediately paid off: it
+separated "the store ran twice" from "the store ran once with a bad value" (once),
+and it is what pinned `ecx` at entry.
+
+**Next packet:** find the extra 8 bytes inside `sub_001680D0`. Its own generated
+body emits `esp += 16; return;` and the actual delta is 24, so the extra 8 comes
+from a call inside it or from a second `esp` adjustment. The `recent icall targets`
+on its report name `0x001690A0` — the 30-byte `tail_jump_alias` that the dispatch
+table redirects to `sub_00169020` while the manifest recovers it as its own
+`routine` — so that indirect call is the first place to look. Fix the delta check's
+cap and SEH exclusion first, so the report is complete rather than truncated.
+
+---
+
+# FIXED: a COM vtable method was folded into the wrong function
+
+`0x00168480` was classified `tail_jump_alias` and folded into `sub_001685F8`. The
+guest calls it as a virtual method, got `sub_001685F8`, and the two functions have
+different argument counts, so every caller's frame came back 8 bytes too high.
+That is the whole of the `0x38` chain.
+
+## The measurement chain
+
+1. **Both checks named the same three functions.** With the SEH helpers exempted and
+   the delta cap made per-callee, the exact-delta check reports exactly
+   `001680D0`, `0005F350`, `00012210` — the same three the register-preservation
+   check named, from a different mechanism. Two independent checks converging is
+   what made this tractable.
+2. **Staged probes inside `sub_001680D0`** localised the +8 to one instruction:
+
+   ```
+   n=2 entry (after push esi)     esp=00F7FEAC
+   n=3 after call 0x168050        esp=00F7FEAC   balanced
+   n=4 after ICALL [ecx+0xC]      esp=00F7FEB0   <-- +8, the excess
+   n=5 after ICALL [ecx+8]        esp=00F7FEB0
+   n=6 before the epilogue pops   esp=00F7FEB0
+   ```
+3. **A probe inside `RECOMP_ICALL_SAFE`** named the target and the resolution path:
+   `_va = 0x00168480`, lookup source `0x10` — dispatch only, *not* `recomp_lookup_manual`.
+4. **The dispatch tuple read `{ 0x00168480u, (recomp_func_t)sub_001685F8 }`.**
+5. **The guest code settles it.** At `0x00168480`: `push esi; push edi; ...; ret 8`
+   — 2 args, delta 12. At the redirect target `sub_001685F8`:
+   `mov eax,0x800710d8; ret 0x10` — 4 args, delta 20. Measured delta: **20**. Exact.
+6. **`0x00168480` is slot [8] of the COM vtable at `0x001E3A5C`** — a table of
+   distinct `.text` addresses, so it is a function entry by definition. And the
+   manifest *already* documents this identical defect for slot [3] (`0x00168400`),
+   recovered earlier for the same reason.
+
+So the convergence loop's "fragment" heuristic — an ABI failure where EBX/EBP
+change means the body is a mid-body fragment, remove it — **was wrong here**. The
+loop had hit exactly `0x00168480`, seen EBX/EBP change, and pruned it. The ESP
+delta was correct all along (12), which should have argued against pruning: a
+fragment does not have a correct epilogue.
+
+## The fix, and what it changed
+
+Recover `0x00168480` as its own entry so the address keeps its own body and its own
+dispatch tuple. The end boundary matters: `0x001685F8` swallowed four other
+manifest entries (`0x001684E0`, `0x00168500`, `0x00168550`, `0x001685B0`), and the
+body must stop at the first of them, `0x001684E0`.
+
+Result, same run length:
+
+| | before | after |
+|---|---|---|
+| `[0x22FCE0]` value | `0x38` | **`0x01054A70`, the object** |
+| vtable at that object | unreachable | **`0x001C4458`, correct** |
+| `0x38` anywhere in the log | present | **0** |
+| `sub_001680D0` ESP delta | 24 (expected 16) | **16** |
+| `sub_00168480` ESP delta | 20 (expected 12) | **12** |
+| `[ABI]`/`[DELTA]` callees | 6, the whole chain | 3 new ones, further along |
+| outcome | `unhandled_exception`, null call at ~4 s | **`diagnostic_deadline`, exit 3, 29.6 s** |
+| native threads / named frames | 7 / 49 | **8 / 65** |
+| CTest | 11/11 | 11/11 |
+
+**How that was verified matters.** In the plain build the run now aborts *earlier*
+— at the newly-recovered entry's EBX/EBP check — and never reaches the store, so
+`[0x22FCE0]` reads `0` and proves nothing. The decisive run is
+`logs/runs/20260921-215450-797-verify-continue/`, made with `JSRF_ABI_CONTINUE=1`
+so the abort becomes a report and execution continues past it. Only there does the
+store run and the pointer read back correctly. `JSRF_ABI_CONTINUE` is a
+verification aid, not an acceptance mode: a green run under it is not evidence of
+correctness, which is why the plain build still stops at the EBX defect below.
+
+So: the `0x38` chain is **fixed and confirmed end to end**, and the run advances to
+a different failure. Recovered bodies verifying reads 153 rather than 154 because
+the new entry's wrapper now stops the plain build — see below.
+
+## The next defect, now unmasked
+
+`sub_00168480`'s own body is a complete, self-contained function that never touches
+EBX or EBP (`push esi; push edi; ...; pop edi; pop esi; ret 8`). Yet its wrapper
+reports EBX and EBP changed. The cause is one of its callees:
+
+```
+[ABI] sub_0019EE1F: esi
+[ABI] sub_001A5D51: esi
+[ABI] sub_001A1BE2: ebx esi edi
+[ABI] sub_001A0C06: ebx esi edi
+[ABI] sub_001A0D2F: ebx
+[ABI] sub_001A0D9C: ebx      <-- called directly by 0x00168480
+```
+
+A family of functions in the `0x001A0xxx` region does not preserve EBX (and
+`0x001A1BE2`/`0x001A0C06` do not preserve ESI or EDI either). Previously masked:
+the run died of the null call before reaching them. These are the next packet, and
+they are the same defect class the ABI check was built to find — a function whose
+epilogue was never lifted, or a lifted body whose end boundary is too long.
+
+## Two measurement lessons, both now fixed in the tooling
+
+- **The delta check's cap hid the signal.** A global 300-line cap was consumed
+  entirely by the two Windows SEH helpers (151 + 149 = exactly 300), so
+  `sub_001680D0`'s mismatch was dropped. Fixed: the SEH helpers are exempt, and the
+  cap is per-callee so no single noisy address can hide the rest.
+- **A negative needs its own verification.** "Zero violations" came from grepping
+  for `ABI VIOLATION`, a string the logger never emits (it writes `[ABI]`). The
+  check was enabled and firing the whole time. Recorded in the section above; the
+  general rule is to grep for a string the logger is *known* to produce, or assert
+  it fires under a known trigger.
+
+## The advisor
+
+Escalated to Kimi-K3 at the point where two measurements contradicted. Its
+top-ranked hypothesis (the this-pointer `ecx` was already `0x38` at entry) was
+**eliminated by measurement** — `ecx = 0x01054A70`, correct. It ranked "a callee
+corrupts ESI" lowest, and that was the answer.
+
+What it contributed that mattered: it named the blind spots precisely (the check
+says nothing about caller-saved registers, nothing about the *absolute* value of
+ESP, nothing about anything inside a body), and it introduced sequenced probing,
+which immediately separated "the store ran twice" from "the store ran once with a
+bad value" and pinned `ecx` at entry. The protocol is saved as the
+`advisor-escalation` skill.
+
+**Next packet:** the `0x001A0xxx` family — `0x001A0D9C` first, since `0x00168480`
+calls it directly and its `[ABI]` report is `ebx` alone. Then the general fix: build
+the delta table from the guest's `ret N` at **every dispatch-table address**, not
+just the generated bodies, so a redirect whose stack contract differs is named at
+the call site instead of corrupting a caller.
+
+State: `logs/runs/20260921-215352-204-fixed-clean/`, CTest 11/11, no ad-hoc probes
+in the tree, both repositories clean.
+
 
