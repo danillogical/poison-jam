@@ -126,7 +126,47 @@ Acceptance:
 
 **Suggested Agent:** Sol Medium for root-cause investigation; Luna for a bounded
 implementation once the contract is clear; Terra review.
-**Status:** Pending. **Depends on:** A1.
+**Status:** **Delivered 2026-09-22, not accepted — see A2b.** **Depends on:** A1.
+**Evidence:** game `225bb6b`, toolkit `7cfbe55`;
+`logs/runs/20260922-160535-643-a2-irq-line/` (strict, 30 s).
+
+Delivered and measured:
+- The exact missing transition was that the card had **no interrupt source**.
+  `kernel_vblank_tick` asserted vblank by OR-ing into `NV_PCRTC_INTR_0` and
+  `NV_PMC_INTR_0`, both of which are write-1-to-clear, so it cleared pending
+  bits instead of setting them. Measured with that path enabled
+  (`logs/runs/20260922-155540-785-a2-vblank-probe/`): the ISR queued 968 DPCs
+  while the published model snapshot read both pending registers as 0, and the
+  producer `0x00193D90` never ran.
+- The model now has a display clock (`nv2a_vblank_pulse`) and a real interrupt
+  line (`nv2a_set_irq_sink`, replacing two no-op `pci_irq_*` stubs). The
+  guest's own write-1-to-clear is the only acknowledgment; `NV_PCRTC_INTR_EN_0`
+  and `NV_PMC_INTR_EN_0` are the guest's and both gate delivery. `RECOMP_VBLANK`
+  is removed, so this is a strict-profile result rather than an exploratory one.
+- Connected handler and context: `KeConnectInterrupt(vector 3, routine
+  `0x00193C50`, context `0x0019D468`)`, read from the run log. The DPC routine is
+  `0x00194480` (`KeInitializeDpc(context+0x84, 0x00194480, context)`, confirmed
+  from the minidump at `0x0019D4EC`), and the producer is `0x00193D90` ->
+  `KeSetEvent(context+0x1C8)`.
+- **`[RECOVERED] 0x00193D90 returned; ABI verified`** — the producer ran and its
+  spin exited, which requires the guest's own W1C to have cleared the pending
+  bit. **Waiters on `0x0019D630` went 3 -> 2**: an intended waiter made
+  observable progress.
+- Deterministic fixture added to `jsrf_nv2a_registers`: source assertion with
+  every mask off, block-mask versus master-mask delivery, guest W1C
+  acknowledgment, W1C of an unrelated bit not clearing, and no spurious repeat
+  while unacknowledged. No sleeps; no direct host signalling.
+
+Why not accepted: the packet also requires the archived run's *next* stop to be
+this packet's own, and this run stops on `0x00048190` — newly reachable code
+that the baseline never entered. That is A2b.
+
+Advisor: resumed `agent-d3294b58` before implementing. Its cheapest falsifier
+(read the pending bits out of an existing artifact) confirmed the root cause
+without a new run; its synthetic/legitimate discriminator (delete the guest's
+acknowledge path and see whether anything still advances) is what justified
+removing `RECOMP_VBLANK` rather than keeping it. Full adopt/reject list in
+`report-deepseek.md`.
 
 Trace the modeled interrupt source through pending bits, masks, ISR registration,
 guest ISR `0x00193C50`, helper `0x00193D90`, acknowledgment and event waiters.
@@ -148,6 +188,41 @@ Acceptance:
   evidence and next stop. If an earlier strict-profile blocker prevents live
   reachability, retain the focused evidence but consult the advisor before calling
   this packet accepted on exploratory evidence alone.
+
+### A2b — Root-cause the newly reachable ABI failure at `0x00048190`
+
+**Suggested Agent:** Sol Medium (translation/ownership semantics); Luna for the
+bounded fix; Terra review.
+**Status:** Pending. **Depends on:** A2 delivered.
+**Evidence:** `logs/runs/20260922-160535-643-a2-irq-line/` (strict) and
+`logs/runs/20260922-160615-567-a2-irq-line-abicont/` (diagnostic only).
+
+A2 delivered the interrupt line, so guest code the baseline never reached now
+runs and stops 3.5 s in on:
+
+```
+[RECOVERED] ABI FAILURE 0x00048190 esp 00F7FDA0->00F7FD80 expected +8
+```
+
+The diagnostic run collects three failures — `0x00048190` twice and
+`0x00025310` once — then `[ICALL] invalid target 0x00000000 ...
+return=00011D6A` and exception `0xE0424943`.
+
+`0x00048190` is recovered with `stack_args: 4` and a declared body spanning
+`0x00048190..0x0004A6F0` (0x2570 bytes). Its own evidence records that the entry
+exists because the `ff4d442` abutting-alias fold had pointed the dispatch tuple
+at `sub_0004A6F0`. First hypothesis to test: the declared body end swallows one
+or more sub-functions whose epilogues clean a different number of bytes, so a
+path that runs past the real end returns with a desynchronised stack. The
+signature — `esp` 0x20 below entry instead of 8 above, all four callee-saved
+registers clobbered — is what a fall-through into a different `ret N` looks
+like.
+
+Acceptance: the failing entry either returns with its declared contract or is
+shown by evidence to be an ownership/entry defect that A4a must fix; a strict
+30 s run is archived and compared against
+`logs/runs/20260922-160535-643-a2-irq-line/`; and the run's next stop is named.
+Do not silence the check and do not widen the body end without evidence.
 
 ### A3 — Make GPU acceptance describe implemented behavior
 

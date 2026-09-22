@@ -6,7 +6,7 @@ continue.
 
 ## CURRENT STATE — read this first, then the sections below
 
-Last updated 2026-09-22 15:10. Everything below this block is **chronological**,
+Last updated 2026-09-22 16:10. Everything below this block is **chronological**,
 and where a later section corrects an earlier one the later one wins — several do
 (`Correction: ...`, `Retracted ...`). This block is the only place that states
 where things stand *now*; rewrite it in place each session rather than appending.
@@ -14,107 +14,272 @@ where things stand *now*; rewrite it in place each session rather than appending
 **The plan's A1–A5 audit sequence owns the next steps** and overrides any
 "next packet" wording in the historical sections below.
 
-**Repos.** Game `6cb350e`, toolkit `18a0837`. Both clean. Game CTest 11/11,
+**Repos.** Game `c34507a` (`225bb6b` is the substantive commit), toolkit
+`008001f` (`7cfbe55` is the substantive commit). Both clean. Game CTest 11/11,
 toolkit standalone CTest 1/1.
 
-**What works.** The title boots from the retail XBE, runs its CRT and initialisers,
-initialises D3D, and drains the whole pushbuffer it submits
-(`[PFIFO] submit #1 diag=ok get=00002764 put=00002764`). No unresolved indirect
-calls in a run. 19 native threads, 151 named frames.
+**What works.** The title boots from the retail XBE, runs its CRT and
+initialisers, initialises D3D, drains the whole pushbuffer it submits
+(`[PFIFO] submit #1 diag=ok get=00002764 put=00002764`), and **now receives the
+GPU interrupt**. No unresolved indirect calls in a run.
 
-**The known mapping (A1, from `docs/jsrf-callback-reentry-contract.md` and the
-original instructions).**
+**A2 is delivered and measured. The GPU interrupt line exists and the frame
+producer runs.** The chain, with every link now measured rather than inferred:
 
-| | value | note |
-|---|---|---|
-| device | `0x0019B200` | |
-| context | `device + 0x2268` | |
-| event | `context + 0x1C8` = `device + 0x2430` = `0x0019D630` | the in-guest KEVENT three threads wait on |
-| producer | `0x00193D90` | |
+| stage | evidence |
+|---|---|
+| guest enables the vblank source | `0x00196E80` writes `NV_PCRTC_INTR_0 = 1` then `NV_PCRTC_INTR_EN_0 = 1`; logged as a recovered return |
+| model asserts the pending bit | new `nv2a_vblank_pulse` on the model's display clock |
+| PMC summary bit 24 | `nv2a_update_irq`, gated by `pcrtc.pending & pcrtc.enabled` |
+| the card's line | new `nv2a_set_irq_sink`; `pci_irq_assert`/`deassert` were no-op stubs |
+| guest ISR | `KeConnectInterrupt(vector 3, 0x00193C50, context 0x0019D468)`; run log |
+| DPC | `0x00193C50` ends in `KeInsertQueueDpc(context+0x84, 0, 0)`; thunk `[0x1C40F0]` = ordinal 119 |
+| DPC routine | `KeInitializeDpc(context+0x84, 0x00194480, context)`; thunk `[0x1C4020]` = ordinal 107, and the minidump at `0x0019D4EC` shows `Type 0x13`, routine `0x00194480`, context `0x0019D468` |
+| producer | `0x00193D90` -> `KeSetEvent(context+0x1C8, 1, FALSE)`, i.e. the event at `0x0019D630` |
+| **producer ran** | `[RECOVERED] 0x00193D90 returned; ABI verified` |
+| **waiter woke** | waiters on `0x0019D630` went **3 -> 2** |
 
-**Where it stops.** Three guest threads block in `xbox_KeWaitInplaceEvent` on that
-KEVENT, and nothing signals it.
+Evidence: `logs/runs/20260922-160535-643-a2-irq-line/` (strict profile, 30 s).
 
-**Two corrections to what this block previously claimed.**
+**The root cause that was fixed, and why the old path could never work.** The
+kernel asserted vblank by OR-ing into the aperture —
+`MEM32(0xFD060100) |= 1` and `MEM32(0xFD000100) |= (1<<24)`. Both registers are
+**write-1-to-clear** in the model, as on the card, so an OR against the
+read-back value *clears* every pending bit and sets none. Measured with that
+path on (`logs/runs/20260922-155540-785-a2-vblank-probe/`): the ISR ran and
+queued a DPC 968 times, the published model snapshot read `PMC_INTR_0 = 0` and
+`PCRTC_INTR_0 = 0`, and `0x00193D90` never ran. `RECOMP_VBLANK` no longer
+exists; the display clock is part of the model, and the guest's own W1C is the
+only acknowledgment.
 
-1. **The `0x0018CE80` array stride is 24 bytes, not 8.** `0x0018CE90 lea
-   eax,[eax+eax*2]` pre-multiplies the index by 3, then `0x0018CE93 lea
-   esi,[ecx+eax*8+0x211c]` yields `index*24`, and `rep movsd` with `ecx=6` copies
-   24 bytes. I read the `*8` as the stride and missed the `*3` before it.
-   **And do not infer a work queue from the entry size** — 24 bytes constrains
-   layout, never semantics; a descriptor table, a vtable bank and a queue can all
-   be 24 bytes per entry.
+**Where the run stops now, and it is a different defect.** The run dies 3.5 s
+in on `[RECOVERED] ABI FAILURE 0x00048190 esp 00F7FDA0->00F7FD80 expected +8` —
+a COM vtable method whose recovered body consumes 0x20 bytes it should not.
+A diagnostic run under `JSRF_ABI_CONTINUE` (permitted as a convergence aid, not
+as acceptance) collects three: `0x00048190` twice and `0x00025310`
+(`logs/runs/20260922-160615-567-a2-irq-line-abicont/`), then
+`[ICALL] invalid target 0x00000000 ... return=00011D6A` and `0xE0424943`.
+This is newly *reachable* code, not a regression of the interrupt mechanism:
+the baseline never got here.
 
-2. **"`0x0019D630` appears in no data table" carries no information.** The audit's
-   own arithmetic makes that expected: the event is only ever reached as a
-   device-relative displacement, so a scan for the absolute literal is blind by
-   construction. The `+0x2430`/`+0x2434` "exactly one site" reading has the same
-   weakness — other sites may reach it through a different base. Only
-   `KeSetEvent = 0 calls` is trustworthy, and even that needs its ordinal mapping
-   re-checked.
+**Next packet (A2b).** Root-cause `0x00048190`. It is recovered with
+`stack_args: 4` and a body spanning `0x00048190..0x0004A6F0` — far longer than
+one function, and the entry exists because an earlier abutting-alias fold made
+a virtual call enter the wrong function. Check first whether the declared body
+end swallows a sub-function whose own epilogue cleans a different number of
+bytes; the failure signature (esp 0x20 low, all four callee-saved registers
+clobbered) is what a fall-through into a body with a different `ret N` looks
+like. Then re-run strict and compare against
+`logs/runs/20260922-160535-643-a2-irq-line/`.
 
-**Next packet.** A2 — trace the modelled interrupt source through pending bits,
-masks, ISR registration, guest ISR `0x00193C50`, helper `0x00193D90`,
-acknowledgment and the waiters. The advisor's ranked mechanisms, cheapest first:
+**Advisor.** Consulted this run (resume of `agent-d3294b58`) before the
+implementation, because the fix reclassifies a pinned criterion and rests on a
+universal claim. It ranked six mechanisms, flagged the weakest inference
+("ISR repeats, therefore the DPC ran" — inference, not measurement; and "no
+decode failure" proves no error, not that a write took effect), and named the
+cheapest falsifier for "nothing ever asserts a pending bit": read the pending
+bits out of an existing artifact. **That falsifier was already available and
+confirms the claim** — the published model snapshot in the vblank-probe run
+reads both pending registers as 0. It also gave the discriminator that decides
+whether the fix is legitimate rather than synthetic: *if you can delete the
+guest's acknowledge path and things still advance, it is synthetic.* The
+guest's W1C is the only thing that clears the bit, and `jsrf_nv2a_registers`
+now pins that.
 
-1. **direct dispatch-header write** — a bridge or the producer writes the KEVENT's
-   header directly, bypassing `KeSetEvent`. *Experiment:* watch writes to
-   `[0x0019D630..+0x20]` and log the caller PC.
-2. **host-delivered ISR/DPC** — *Experiment:* instrument the host wait-satisfy
-   primitive and log the guest PC/thread it woke.
-3. **computed-pointer signal** through an indirect call whose *argument* is
-   computed, so target resolution would not flag it.
-4. **another gate** — the producer runs but its signal sits behind a flag never
-   enabled (the same shape as the fence-mirror bug). *Experiment:* probe entry,
-   exit and the branch condition at `0x00193D90`.
-5. **object aliasing** — a different guest KEVENT maps to the same host object.
-6. **a wait satisfied without signalling** — spurious wake or predicate re-check.
-   *Experiment:* establish whether this is a true KEVENT block or a predicate poll.
-
-Start with 1 plus a probe at `0x00193D90`: together they separate "signalled by a
-direct header write" from "the producer never fired or is gated".
-
-**Advisor usage is under-target, measured 2026-09-22.** Five prompts ever, of
-which two were persistence tests, so **three substantive consults in ~18 hours** —
-and only one in the twelve hours to 15:12. Against the escalation triggers, that
-window met "two measurements contradict each other" (the highest-value case)
-**four times**, "a negative result that would change the plan" twice, and "the same
-class of mistake twice" once — with no consult. The four were all measurement
-artifacts found locally only after costing a run or a false alarm: a rebuilt tree
-that "looked like a regression" and differed only by an environment variable; a
-kernel-log budget that made a live run look frozen; `named_frames` sampled at the
-deadline and read as a before/after metric; a symbol+offset mislabel past a body's
-end.
-
-The plan's new acceptance gate does not cover this: it fires when a packet's
-acceptance is evaluated, and every one of those incidents happened *during*
-investigation. The automation prompt now carries all five triggers explicitly, and
-the plan records that they apply during a packet as well as at its acceptance.
-Cheapest way to keep this honest: count the advisor's user turns in its transcript
-rather than the log — `Using subagent model: kimi-k3` appears 47 times, but that is
-the phrase repeated across several log lines per turn, not 47 consults.
-
-**Run profiles.** `docs/jsrf-run-profiles.md` defines **strict** (no override that
-answers a poll the hardware did not answer) versus **exploratory**. `RECOMP_APU_DSP_ACK`,
-`RECOMP_AC97_READY`, `RECOMP_GPU_ACK` and `RECOMP_VBLANK` are **synthetic
+**Run profiles.** `docs/jsrf-run-profiles.md` defines **strict** (no override
+that answers a poll the hardware did not answer) versus **exploratory**.
+`RECOMP_APU_DSP_ACK`, `RECOMP_AC97_READY` and `RECOMP_GPU_ACK` are **synthetic
 completion** and cannot satisfy boot, audio, GPU or liveness acceptance.
-`JSRF_ALLOW_UNRESOLVED` and `JSRF_ABI_CONTINUE` are bypasses. **`diagnostic_deadline`
-means the capture was bounded, not that the guest was live**; `normal_exit` means
-the entry point returned, not that the title was satisfied.
+`RECOMP_VBLANK` is gone. `JSRF_ALLOW_UNRESOLVED` and `JSRF_ABI_CONTINUE` are
+bypasses. **`diagnostic_deadline` means the capture was bounded, not that the
+guest was live**; `normal_exit` means the entry point returned, not that the
+title was satisfied.
 
-**Open, off the critical path.** The APU has no GP SGE engine, and is not on the
-critical path while `RECOMP_APU_DSP_ACK` is set.
+**Open, off the critical path.** The APU still has no GP SGE engine (not on the
+critical path while `RECOMP_APU_DSP_ACK` is set). The display clock's frame
+period falls back to 60 Hz unless the guest programs a video PLL and flat-panel
+timing that yield 40–240 Hz; `nv2a_display_frame_source()` reports which was
+used, and no run has yet been checked for which it took.
 
-**Milestones.** 00–05 done. 06a done; 06b blocked on reachability. 07 in progress.
-11's blocker cleared; the renderer itself still pending, which is 12 onward.
+**Milestones.** 00–05 done. 06a done; 06b blocked on reachability. 07 in
+progress. 11's blocker cleared; the renderer itself still pending, which is 12
+onward. **A2 is delivered but not yet accepted**: its acceptance also requires
+a bounded identity-verified run whose *next* stop is the packet's own, and this
+one stops on `0x00048190`, which is A2b.
 
 **Running the title.** `RECOMP_KERNEL_LOG_BUDGET=100000`, or a live run looks
-frozen. `git commit -F <file>` for multi-line messages, with a Windows path.
+frozen. `git commit -F <file>` for multi-line messages, with a **Windows**
+path — `/tmp/...` fails with `could not read log file`.
 
-**Evidence retention.** `logs/` is gitignored and holds 638 runs (~93 GB). The
-report, plan and `docs/` cite 47 of them as evidence (~8 GB) — never prune those.
-An artifact's toolkit revision is part of the claim: `20260922-110738-253-nv2a-1bcc`
-records toolkit `cf03f46`, not the reviewed source, so it does not validate it.
+**Evidence retention.** `logs/` is gitignored and holds 641 runs (~93 GB). The
+report, plan and `docs/` cite 50 of them as evidence — never prune those. An
+artifact's toolkit revision is part of the claim:
+`20260922-160535-643-a2-irq-line` records toolkit `7cfbe55`.
+
+## 2026-09-22 — A2: the GPU interrupt line, and the producer that signals the frame event
+
+**Decision: replace the synthetic vblank override with a display clock inside the
+NV2A model, and give the model a real interrupt line.** Taken on the advisor's
+review, which is recorded below.
+
+### What was wrong
+
+The title's frame event at guest `0x0019D630` is signalled by `0x00193D90`.
+That producer is reachable only from the DPC routine `0x00194480`, which is
+queued only by the guest ISR `0x00193C50`, which is entered only from the card's
+interrupt line. **The line had no source.**
+
+The kernel's `kernel_vblank_tick` asserted vblank by poking the aperture:
+
+```
+MEM32(0xFD060100) |= 1;          /* NV_PCRTC_INTR_0 */
+MEM32(0xFD000100) |= (1 << 24);  /* NV_PMC_INTR_0  */
+```
+
+Both registers are **write-1-to-clear** in the model, as they are on the card
+(`pcrtc_write`/`pmc_write` do `pending &= ~val`). An OR against the read-back
+value therefore *clears* every bit already pending and sets nothing. It cannot
+assert anything, ever.
+
+Measured, both ways:
+
+- **Static.** The two handlers above, read from `src/nv2a/nv2a_core.c`.
+- **Runtime.** `logs/runs/20260922-155540-785-a2-vblank-probe/` (RECOMP_VBLANK
+  on, otherwise identical to the baseline): the ISR ran and queued a DPC 968
+  times (`[KERNEL] #N: ordinal 119 (slot 100) ... ret=0x00193CFD`), the
+  published model snapshot read `PMC_INTR_0 = 0` and `PCRTC_INTR_0 = 0`, and
+  `0x00193D90` appeared **zero** times in the log. The DPC routine's
+  `test esi, 0x01000000` never took its branch, so the producer was never
+  called.
+
+The second measurement is the one that matters: it is a *negative* result about
+the check as much as about the system, and the advisor named it as such.
+
+### The chain, measured rather than inferred
+
+Every link was established independently this session:
+
+| link | how |
+|---|---|
+| guest programs the source | `0x00196E80` disassembles to `eax = [ecx]` (the register base), then `[eax+0x600100] = 1` and `[eax+0x600140] = 1` — clear the stale vblank, enable it. It returns in the run log. |
+| guest registers the ISR | run log: `KeConnectInterrupt: vector 3 -> routine 0x00193C50 context 0x0019D468` |
+| the ISR queues a DPC | disassembly: the tail is `push 0; push 0; push esi+0x84; call [0x1C40F0]`, and `[0x1C40F0]` is slot 100 of the title's own import table at `0x001C3F60`, holding `0x80000077` = ordinal 119 = `KeInsertQueueDpc` (3 args, 12 bytes cleanup — which is exactly why the epilogue is `ret 8` plus the callee's 12). |
+| the DPC routine | `0x00194ADD` calls `[0x1C4020]` = slot 48 = ordinal 107 = `KeInitializeDpc`, with `Dpc = context+0x84`, `DeferredRoutine = 0x00194480`, `DeferredContext = context`. **Independently confirmed from the minidump**: `0x0019D4EC` holds `Type 0x13`, `+12 = 0x00194480`, `+16 = 0x0019D468`. |
+| the DPC reaches the producer | `0x00194480` reads `NV_PMC_INTR_0` into `esi` and calls `0x00193D90` when `esi & 0x01000000` |
+| the producer signals the event | `0x00193D90` ends `lea eax,[esi+0x1c8]; push eax; push 1; push 0; call [0x1C4014]`, and `[0x1C4014]` is slot 45 = ordinal 145 = `KeSetEvent` |
+| the producer's spin can exit | `0x193E40` writes `1` to `[ebx+0x600100]` (the W1C) then loops while `[ebx+0x100] & 0x01000000`. It exits **only** if the guest's own write clears the pending bit and the summary follows. |
+
+That last row is the discriminator. A model that cleared its own pending bit
+would let the spin exit and would make the guest's acknowledgment untestable.
+
+### What changed
+
+Toolkit `7cfbe55`:
+
+- `nv2a_vblank_pulse` asserts the PCRTC pending bit from the model's display
+  clock. The source is unconditional; the masks gate delivery, never the bit.
+- `nv2a_display_frame_ns` derives the frame period from the guest-programmed
+  video PLL (`NV_PRAMDAC_VPLL_COEFF`, decoded as the core PLL is) and the
+  flat-panel timing (`fp_hcrtc * fp_vcrtc / pixel_clock`), clamped to 40–240 Hz
+  with a 60 Hz fallback, and `nv2a_display_frame_source()` says which was used.
+- `pci_irq_assert`/`pci_irq_deassert` were compiled-in **no-op stubs**, so the
+  model computed its masks and told nobody. `nv2a_set_irq_sink` routes the line
+  to a host owner, and the sink is called on *transitions only* — reporting a
+  level on every update would re-enter the guest ISR for a line the guest has
+  not cleared yet, which is a livelock rather than a level-triggered interrupt.
+- The standalone service thread drives the display clock, resyncs instead of
+  emitting a catch-up burst after a long gap, and never sleeps a zero-length
+  wait (which would spin between frames).
+- `NV_PCRTC_INTR_EN_0` joins the published diagnostic snapshot.
+
+Kernel: `kernel_vblank_tick` is **deleted**; `xbox_Nv2aAttachIrqLine` connects
+the model's line to vector 3 and the timer thread — which already has a guest
+stack and a TIB — delivers it and drains the DPC queue in the same iteration,
+so the guest's acknowledgment lands before the line is sampled again.
+
+**Correction to my own first attempt.** I first wrote
+`nv2a_irq_line_asserted` as `pending & enabled`. That is wrong and the fixture
+caught it: `NV_PMC_INTR_EN_0` is a **two-bit hardware/software master enable**
+(`NV_PMC_INTR_EN_0_HARDWARE = 1`), not a per-source mask, and the per-source
+masks are the block registers, which `nv2a_update_irq` has already folded into
+the summary. The upstream `pending && enabled` is correct. The measured value
+of `PMC_INTR_EN_0` in a live run is `1`, i.e. hardware enabled.
+
+### Result — strict profile, 30 s
+
+`logs/runs/20260922-160535-643-a2-irq-line/`, toolkit `7cfbe55`, game `225bb6b`.
+No override that answers a poll.
+
+- **`[RECOVERED] 0x00193D90 returned; ABI verified`.** The producer ran. Its
+  spin exited, which can only happen if the guest's own W1C cleared the model's
+  pending bit.
+- **The waiters on `0x0019D630` went from 3 to 2.** One intended waiter left the
+  wait and made progress.
+- The run then died 3.5 s in on a **newly reachable** defect:
+  `[RECOVERED] ABI FAILURE 0x00048190 esp 00F7FDA0->00F7FD80 expected +8`.
+
+### The new stop, and why it is not this packet's failure
+
+`JSRF_ABI_CONTINUE=1` (a convergence aid, **not** acceptance) collects the set:
+`logs/runs/20260922-160615-567-a2-irq-line-abicont/` gives three failures —
+`0x00048190` twice and `0x00025310` once — then
+`[ICALL] invalid target 0x00000000 ... return=00011D6A` and exception
+`0xE0424943`.
+
+`0x00048190` is recovered with `stack_args: 4` and a declared body spanning
+`0x00048190..0x0004A6F0`. That span is 0x2570 bytes, far longer than one
+function, and its own evidence says the entry exists because the `ff4d442`
+abutting-alias fold had made a virtual call enter the wrong function. The
+failure signature — `esp` 0x20 *below* entry rather than 8 above, with all four
+callee-saved registers clobbered — is what falling through into a body whose
+epilogue cleans a different number of bytes looks like.
+
+This is the next packet (A2b), not a regression: the baseline never reached this
+code, because the baseline never received an interrupt.
+
+### Advisor consult, and what was adopted
+
+Resumed `agent-d3294b58` (kimi-k3) **before** implementing, because the change
+reclassifies a pinned criterion and rests on a universal claim. Briefed as a
+delta: the ISR/DPC/producer chain, the two contradicting measurements, and the
+proposed fix.
+
+Adopted:
+
+- **The cheapest falsifier for "nothing ever asserts a pending bit": read the
+  pending bits out of an existing artifact.** This was available and I had not
+  used it. The published model snapshot in the vblank-probe run reads
+  `PMC_INTR_0 = 0` and `PCRTC_INTR_0 = 0`, which confirms the claim without a
+  new run.
+- **"No decode failure" proves no error, not that the write took effect.** The
+  snapshot is what makes the write's *effect* measurable, so both were kept.
+- **"`0x00193D90` appears zero times" measures returns, not entries.** A body
+  that spins logs nothing while running. Weakened the claim accordingly, and
+  the new run's `0x00193D90 returned` is the positive measurement that closes
+  it.
+- **The synthetic/legitimate discriminator:** *if you can delete the guest's
+  acknowledge path and things still advance, it is synthetic.* The guest's W1C
+  is the only thing that clears the pending bit, both enables are the guest's,
+  and `jsrf_nv2a_registers` now pins all of that. On that basis
+  `RECOMP_VBLANK` was **removed** rather than kept: the source is now model
+  state, not an override, so `docs/jsrf-run-profiles.md` no longer lists it.
+- **"The ISR repeats, therefore the DPC ran" is inference, not measurement.**
+  Accepted; it is now stated as inference wherever it appears, and the run's
+  positive `0x00193D90 returned` line supersedes it.
+
+Rejected, with reason: its mechanism #5 ("`0x00193D90` is entered but never
+returns"). Already weakly excluded — the deadline dump showed the timer thread
+in `kernel_vblank_tick`, not inside `0x00193D90` — and now positively excluded
+by the returned line. Its mechanism #3 (a read-decode mismatch at
+`0xFD000100`) was also excluded by the snapshot: the read returns the model's
+`pmc.pending_interrupts`, and that value is 0 because nothing ever set it, not
+because the read is misrouted.
+
+### Not accepted yet
+
+A2's acceptance also requires the archived bounded run's *next* stop to be the
+packet's own. This run's next stop is `0x00048190`, which is A2b. A2 is
+**delivered and measured**, not accepted.
 
 ## 2026-09-21 — Commit the outstanding checkpoint, then resume the plan
 

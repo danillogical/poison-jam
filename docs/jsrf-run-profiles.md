@@ -40,7 +40,7 @@ so in the same sentence that states it.
 | `RECOMP_APU_DSP_ACK=<addr>[,<addr>...]` | Clears those guest dwords once per APU tick. | The title's DSP pending word goes to 0 without the GP DSP having run anything. This is the override the audit names explicitly: it makes the audio path *look* complete. |
 | `RECOMP_AC97_READY` | Sets the AC'97 codec-ready bit. | The codec-ready poll succeeds with no codec. Measured effect: the run gets ~200 kernel calls further and then faults at `0x001A2BFC` on a zero `WAVEFORMATEX`. |
 | `RECOMP_GPU_ACK` | The busy-bit ack table: clears busy bits and mirrors `USER_DMA_PUT` into `USER_DMA_GET`. | Register handshakes complete with no engine behind them. Note this also gates the memory mirrors — see the register-owner gate below. |
-| `RECOMP_VBLANK` | Enables the vblank source. | Assertion is not delivery; enabling it does not establish that a guest callback runs. |
+| ~~`RECOMP_VBLANK`~~ | **Removed 2026-09-22 (A2).** It used to assert vblank by OR-ing into `NV_PCRTC_INTR_0` and `NV_PMC_INTR_0`, both of which are write-1-to-clear — so it cleared pending bits instead of setting them and could never assert anything. The vblank source is now part of the model (`nv2a_vblank_pulse` on the display clock), the guest's own W1C is the only acknowledgment, and both of the guest's enables gate delivery. There is nothing left to override. |
 
 ### Bypass — continues past a failure rather than completing work
 
