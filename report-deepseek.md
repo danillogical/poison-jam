@@ -3910,4 +3910,117 @@ guest code and in the toolkit, and check whether that writer is on a path the ru
 reaches — if it is reached and the value still does not change, the writer is being
 skipped, which points at the model rather than the guest.
 
+---
+
+# The spin is a ring-space wait, and the model never publishes a GPU position
+
+## The ring, identified
+
+`0x00191440` is the D3D pushbuffer submission function:
+
+```
+00191446 mov edi, [0x19dce0]     ; the D3D device global
+0019144C mov eax, [edi+0x34]     ; -> the ring
+0019144F mov ecx, [eax]          ; the waited-on position word
+00191451 mov eax, [edi+0x30]     ; a count (7)
+0019145C cmp ecx, edx
+0019145E jae 0x1914fc            ; proceed when position has caught up
+...
+001914A9 mov ebp, 0x40100        ; NV2A pushbuffer method words
+001914AE mov [esi+0x10], ebp
+```
+
+and it writes command words (`0x40100`, `0x40110`) into a buffer. The spin at
+`0x001914F0` is the ring-full path: `edi = [edi+0x30]` is the ring size, `[ebx]` the
+dword count to write, and the loop exits only when the position word reaches that
+count. So it is a **ring-space wait**: the title is waiting for the GPU to drain the
+ring before it can write more.
+
+## The sentinel is the guest's own, and nothing ever replaces it
+
+`[0x80000000] = 0xDEADBEEF` is written **by the guest**, at `0x0019247E`:
+
+```
+0019247E mov dword ptr [0x80000000], 0xdeadbeef
+raw bytes: C7 05 00 00 00 80 EF BE AD DE
+```
+
+The emitted `MEM32(-2147483648) = 0xDEADBEEFu` is therefore faithful — the
+recompiler is not at fault. And the dump shows the word still holding `0xDEADBEEF`
+at the end of the run, so **nothing ever changes it**: not the guest, not the model.
+
+## Why that hangs, precisely
+
+The loop exits when `[ring] >= count`, using an unsigned subtraction
+(`V - [ring]` vs `V - count`). With `[ring] = 0xDEADBEEF` the subtraction wraps,
+so the comparison stays true forever. The guest's arithmetic assumes
+`[ring] <= size`; a sentinel breaks that assumption.
+
+## What the model does instead
+
+The model tracks the GPU position **only as registers**:
+
+```
+gpu-report.md:  PFIFO_DMA_GET = 0x00001000   PFIFO_DMA_PUT = 0x00001B24
+                USER_DMA_GET  = 0x00001000   USER_DMA_PUT  = 0x00001B24
+Final pending queue decode: budget_exhausted
+```
+
+and a grep of `nv2a_core.c` finds **no write of any kind into guest memory** — the
+model never publishes its position where a title can read it. The toolkit's own
+comment describes the contract the title expects: "Xbox D3D writes its pushbuffer
+position to the NV2A as `VA & 0x0FFFFFFF` and reads the GPU's position back as
+`GET | 0x80000000`, then compares the two." The register side of that exists; the
+memory side does not.
+
+Separately, `PFIFO_DMA_GET` is **stuck at 0x1000** with `PUT` at `0x1B24`, and the
+final queue decode is `budget_exhausted` — `nv2a_submit_pending` bails at
+`words >= 1024 || packets >= 256` and, on that path, does **not** advance GET (GET
+is only written at line 1108 on success). So the model's consumption has stopped
+too.
+
+## Two concrete, testable sub-questions, in order
+
+1. **Why does the walk exceed the budget?** PUT − GET is 0x0B24 = 713 dwords, well
+   under the 1024 limit, so a straight-line walk should not hit it. That means the
+   walk is being *redirected* — a jump/call target inside the ring takes it past
+   `put` and it keeps consuming. Worth logging the walk's path when the budget is
+   hit, since a bad jump target would also explain the frozen GET.
+2. **Should the model publish its position into guest memory?** The toolkit has
+   `xbox_Nv2aMirrorCounter` for exactly the "title waits on a GPU-owned counter"
+   shape, but **zero mirrors were registered in this run** and the model does not
+   know the device global `0x19dce0`. If the title's fence word is meant to be
+   GPU-written, this is a model content gap of the same class as the PFIFO low-mark
+   status fixed earlier — and unlike that one, the model currently has no writeback
+   mechanism at all, so it would need one rather than a fix.
+
+**Decision (mine):** do not add a mirror yet. Sub-question 1 is cheap and would
+explain the frozen GET without touching the model, and a mirror registered on a
+guessed offset could mask a real defect. Resolve 1 first; only if the ring is
+genuinely fine does 2 become the fix.
+
+## Sub-question 1 answered: `budget_exhausted` is a red herring
+
+`nv2a_submit_pending` now dumps its walk path when it hits the budget — the last 32
+visit addresses, plus GET/PUT/begin/end/words/packets. **It fired zero times in a
+30-second run.** So the budget is never hit during execution: `budget_exhausted` in
+`gpu-report.md` is the *collector's post-mortem* decode of whatever queue was left
+pending at capture, not a live stall.
+
+That eliminates the "the model gives up mid-walk" explanation and sharpens the
+question. PUT − GET = 0x0B24 = 713 dwords is un-consumed at capture, so the ring
+genuinely has outstanding work — but the model is not refusing to walk it.
+
+**So the remaining explanation for the frozen GET is that the walk is never
+*asked* to run** — i.e. the guest writes PUT and does not kick, because it is
+spinning in the ring-space wait *before* submitting. That closes the loop
+consistently: the title waits for the GPU to drain a ring it has not yet submitted,
+because the word it waits on was never going to be written by anyone.
+
+**Next packet:** confirm that ordering — log the ring-space wait and every
+`NV_USER_DMA_PUT` write with a timestamp, and check whether any PUT write follows
+the first entry to the spin. If none does, the title is deadlocked against itself
+and the missing piece is the model's position writeback (sub-question 2), which
+becomes the fix rather than a guess.
+
 
