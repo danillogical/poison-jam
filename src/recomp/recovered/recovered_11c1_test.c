@@ -4797,6 +4797,8 @@ extern void sub_00178D80(void);
 extern void sub_00178E00(void);
 extern void sub_00178E22(void);
 extern void sub_00178E2A(void);
+extern void sub_00178E70(void);
+extern void sub_00178F40(void);
 extern void sub_001791C0(void);
 extern void sub_00179210(void);
 extern void sub_00179232(void);

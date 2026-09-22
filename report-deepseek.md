@@ -5239,3 +5239,169 @@ directly (no shell script), so it works on this host; the broken
 A gap scan over `tools/disasm/output/functions.json` is **not** a substitute: 105
 `.text` gaps are 0x80 bytes or larger and most are alignment padding. The 439-byte
 hole at `0x0013B179` was only interesting because the title called into it.
+
+# Session 2026-09-22 10:13 onward: `0x00178F40` applied, and the `end`-cuts-an-instruction class
+
+## Packet A -- the entry the last session left unapplied is in, and it needed one byte more
+
+The previous session added `0x00178F40` to `config/recovered-functions.json`
+(`start 0x00178F40`, `end 0x001791BA`, `stack_args 20`) and never built it. Built
+as written, it **aborted**:
+
+```
+[RECOVERED] ABI FAILURE 0x00178F40 esp 00F7FDA0->00F7FDA0 expected +24
+```
+
+`logs/runs/20260922-101516-467-p1-178f40`, 2.1 s, `0xC0000409`.
+
+Observed `esp` delta **0** against an expected 24. That is not a wrong
+`stack_args`: it is a body with **no epilogue at all**. The generated body ended
+
+```
+loc_001791B5: ;
+    esp = esp + 0x14;
+}
+```
+
+-- no `return` statement anywhere in 634 bytes -- so the net was
+`-0x14 -0x10 +0x10 +0x14 = 0`. The `ret 0x14` had been silently dropped.
+
+**Root cause: `end` is exclusive, and `0x001791BA` cut the last byte of the
+three-byte `ret 0x14`.** Measured:
+
+```
+$ python scripts/inspect-jsrf.py data 0x001791B4 8
+001791B4: 1183C414 900014C2
+```
+
+i.e. bytes `11 83 C4 14 | C2 14 00 90` -- `add esp,0x14` at `0x001791B5` and
+`ret 0x14` = `C2 14 00` at `0x001791B8..0x001791BA`. With `end = 0x001791BA` the
+decoder is handed `C2 14` and cannot decode a `ret imm16`, so it stops, and the
+translator emits nothing for it. `tools/recomp/translator.py:597` reads
+`end = recovered["end"]` and line 607 reads exactly `end - start` bytes, so the
+convention is unambiguous.
+
+`end` corrected to **`0x001791BB`**. The body is now 635 bytes / 228 insns and
+ends `esp += 24; return; /* ret 20 */`.
+
+**Measured effect** (`logs/runs/20260922-101710-964-p1b-178f40-end`):
+
+| | before | after |
+|---|---|---|
+| `0x00178F40` | ABI FAILURE, abort | `returned; ABI verified` |
+| outcome | `unhandled_exception` (2.1 s) | `diagnostic_deadline` (31.7 s) |
+| native threads | 11 | 12 |
+| named frames | 109 | 109 |
+| log lines | 1407 | 1422 |
+
+The run now goes past the unresolved call and past the abort, and the title keeps
+running to the deadline instead of dying. CTest 11/11.
+
+## Packet B -- a detector for the class, and what it found
+
+`scripts/check-entry-extents.py`. Decode linearly from `start`, accept every
+instruction that fits entirely inside `end`, then classify the leftover bytes:
+
+- **TRUNCATED** -- the leftover is neither empty nor padding and the last
+  accepted instruction is not a terminator, so a real instruction is cut in half.
+  This is the `0x00178F40` class; `end` must move to that instruction's end.
+- **PADDING** -- everything after a terminator, i.e. unreachable bytes. Reported
+  with `--show-padding`. This is what keeps the checker honest: a single trailing
+  `0x00` is padding after a `ret` and the first byte of a cut `add` after a
+  fall-through, and byte values alone cannot tell the two apart. Position can.
+- **NO-TERMINATOR** -- informational.
+
+**Trap recorded:** the first version of the checker flagged 20 entries, 12 of them
+by decoding alignment padding as an instruction (`add byte ptr [eax - 0x746f6f70], dl`
+is `00 90 90 90 90 8F`). Reporting padding as a defect would have buried the one
+real entry. The reachability rule above is what separates them.
+
+Current output: **19 TRUNCATED**, and every one of the 19 has a `return` in its
+generated body, so the cut bytes are a trailing pointer/jump table, not code --
+for example `0x00031160-0x00031360` ends `... C2 12 03 00 FF 12 03 00 | 90 90 90
+90 | 8B 44 ...`, i.e. a 4-byte pointer table followed by four-nop alignment and
+then real code, and the entry's `end` lands one byte inside the last pointer.
+Those are candidates for tidying `end`, not defects: nothing the body needed is
+missing.
+
+## Packet C -- the real second class: 40 bodies with no `return` at all
+
+Cross-referencing the generated bodies is the sounder signal, and it found a class
+the extent check alone does not explain. Exactly 40 of the 3068 bodies in
+`src/recomp/recovered/recovered.c` contain **no `return` statement**, and that set
+is disjoint from the 19 above.
+
+`0x00014870` is the shape, measured:
+
+```
+00014870 push ecx / push ebx / push ebp / push esi
+00014874 mov  esi, ecx
+00014876 mov  eax, [esi+0xB0]
+0001487C xor  ebp, ebp
+0001487E cmp  eax, ebp
+00014880 push edi                      <-- not covered by ANY entry
+00014881 mov  [esp+0x10], ebp          <-- entry 0x00014881 starts here
+00014885 jbe  0x14909
+```
+
+The head entry is `0x00014870-0x00014880` and the fragment entry is
+`0x00014881-0x00014885`. The head's range therefore stops at the `cmp`, and the
+branch that follows is outside it, so the body has no `goto`, no epilogue and no
+return: if the title ever calls `0x00014870` the wrapper aborts exactly the way
+`0x00178F40` did. It is latent only because nothing has called it yet.
+
+That is the mechanism `config/boundary-fixes.json` exists for -- the guide's rule
+is "reviewed parent spans; internal labels are not entries" -- and only 7 fixes
+are recorded so far. So the 40 are the *next 40* `0x00178F40`s, and the fix is to
+extend each head's span over its internal labels and drop the labels as entries.
+
+**Decision: record this class now and fix it as its own packet rather than
+guessing 40 spans in the same session as the `0x00178F40` fix.** The evidence
+needed per entry is mechanical (decode from the head to the first `ret`, confirm
+the internal labels are jump targets and not call targets) and the change is large
+enough to deserve its own build, its own run and its own commit.
+
+## Trap: the collector's guest symbols resolve to the nearest preceding symbol
+
+The new stop reports the main thread at
+
+```
+00007FF6F2124300 sub_001A1769+0xAD0   src/recomp/gen/recomp_0005.c:6748
+```
+
+but `sub_001A1769` is `0x001A1769-0x001A18DE`, 373 bytes. `0x001A1769+0xAD0` is
+`0x001A2239`, and the body that actually contains it is **`sub_001A216B`
+(`0x001A216B-0x001A2285`)**, found by scanning the generated sources for the
+`Original: 0x... - 0x...` comment that covers the address. The same is true of the
+next frame, reported as `sub_001A19D6+0x38D` when it is inside `sub_001A1C8A`.
+**A `+0xNNN` that runs past the body's own end is a mislabel, not an offset.**
+
+## The new frontier, characterised
+
+With the abort gone the main thread is inside DirectSound and loops:
+
+```
+001A2229 call 0x1a1baf                 ; loc_001A2229, the loop body
+001A222E push [esi+0x14]
+001A2231 mov  ecx, [esi+0xc]
+001A2234 push [esi+0x10]
+001A2237 mov  eax, [ecx]
+001A2239 call dword ptr [eax+0x18]     <-- RIP here at the deadline
+...
+001A2268 push [ebp-8]
+001A226B call 0x19e340                 ; pop the next queued entry
+001A2270 mov  esi, eax
+001A2275 cmp  esi, [ebp-8]
+001A227A jne  0x1a2229                 ; back edge
+```
+
+It pops entries from a temporary list and performs a virtual call on each, and it
+was still there when the 30 s deadline stopped the run. Nothing in the log
+explains it: only 15 lines were added between the abort point of the previous run
+and the deadline, the last being `sub_001A0DE3` returning `eax=013EE000`. The
+other guest threads are all accounted for and idle (`0x0013B180` in its go-flag
+spin, `0x0013B1C0`/`0x0013B230` in `KeWaitForSingleObject`, `0x0013B2A0` in
+`NtSuspendThread`).
+
+So the next measurement is whether this loop is *productive* or a livelock, and
+what `[eax+0x18]` resolves to. Neither is answered by a single stack sample.

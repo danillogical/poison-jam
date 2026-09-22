@@ -24301,5 +24301,13 @@
     "section": ".text",
     "kind": "routine",
     "evidence": "A thread-startup trampoline the disassembler never claimed: it sits in a 439-byte hole between sub_0013B110 (ends 0x0013B179) and sub_0013B330, and no entry covered it. The title passes these addresses as ctx1 to PsCreateSystemThreadEx, and the thread wrapper 0x00147EBB calls ctx1, so the call failed with [ICALL] Failed to resolve VA 0x0013B180 in run logs/runs/20260922-085953-527-tailthunk-fix-ac97. Shape: spin on a per-thread flag word in 0x25EFA8-0x25EFDC counting iterations, run the worker loop, then push 0xF0000001, set the completion word and call 0x147E4E, which is the noreturn thread exit (push 0; call 0x147C6B; push [esp+4]; call dword ptr [0x1C4084]; int3), so the body has no ret of its own. Extent is the straight-line body up to and including the int3 that follows the exit call."
+  },
+  {
+    "start": "0x00178F40",
+    "end": "0x001791BB",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "A real function the disassembler never claimed, in a hole between sub_00178E70/sub_00178E85 (both end 0x00178F34) and 0x001791C0. The title calls it indirectly and the call failed with [ICALL] Failed to resolve VA 0x00178F40 in run logs/runs/20260922-090256-907-trampoline-fix, immediately before the 0xE0424943 exception -- so that exception is a symptom of this unresolved call, not a separate defect. Shape: normal prologue sub esp,0x14; push ebx; mov ebx,[esp+0x1C]; mov eax,[ebx+0xC]; push ebp; xor ebp,ebp; cmp eax,-1; push esi; push edi. It reads five stack arguments: arg1 at [esp+0x1C] right after the frame and the one push, then arg2 [esp+0x2C], arg3 [esp+0x30], arg4 [esp+0x34] and a byte arg5 at [esp+0x38] once all four registers are pushed. Epilogue measured: 0x001791A3 mov ecx,[esp+0x34]; test ecx,ecx; pop edi; pop esi; pop ebp; pop ebx; 0x001791B5 add esp,0x14; 0x001791B8 ret 0x14. The ret 0x14 matches the sub esp,0x14 prologue, so stack_args is 20. It returns E_INVALIDARG (0x80070057) and CO_E_NOTINITIALIZED (0x800401F0). END CORRECTED to 0x001791BB: end is exclusive and the original value 0x001791BA cut the last byte of the three-byte `ret 0x14` (C2 14 00 at 0x001791B8..0x001791BA), so the translator could not decode the return at all, emitted a body with no epilogue and no return statement, and the run aborted with `[RECOVERED] ABI FAILURE 0x00178F40 esp 00F7FDA0->00F7FDA0 expected +24` in logs/runs/20260922-101516-467-p1-178f40. Measured with scripts/inspect-jsrf.py data 0x001791B4 8 -> 1183C414 900014C2, i.e. bytes 11 83 C4 14 | C2 14 00 90. Evidence: report-deepseek.md, 2026-09-22.",
+    "stack_args": 20
   }
 ]
