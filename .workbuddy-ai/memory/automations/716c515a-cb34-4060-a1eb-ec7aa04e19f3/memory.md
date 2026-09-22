@@ -176,3 +176,41 @@ is not on the critical path while `RECOMP_APU_DSP_ACK=0x803C0810` is set. Use
 `RECOMP_KERNEL_LOG_BUDGET=100000` or a live run looks frozen. `git commit -F
 <file>` is needed for multi-line messages (heredocs are blocked), and the path in
 `-F` must be a Windows path, not `/c/...`.
+
+## 2026-09-22 15:51–16:35 PDT (fifth recorded run)
+
+Outcome: packet A2 delivered and measured. The GPU interrupt line now exists and
+the frame producer runs; the run's stop moved from "three threads wait forever"
+to a newly reachable ABI failure in code the baseline never entered.
+
+Done:
+- Root-caused the missing transition: the NV2A had no interrupt source at all.
+  `kernel_vblank_tick` asserted vblank by OR-ing into `NV_PCRTC_INTR_0` and
+  `NV_PMC_INTR_0`, both write-1-to-clear, so it cleared pending bits and set
+  none. Confirmed statically and from the published model snapshot.
+- Toolkit `7cfbe55` + `008001f`: `nv2a_vblank_pulse`, `nv2a_display_frame_ns`,
+  `nv2a_set_irq_sink` (replacing two no-op `pci_irq_*` stubs), display clock in
+  the standalone service thread, `NV_PCRTC_INTR_EN_0` published. Kernel: the
+  synthetic `kernel_vblank_tick` is deleted and `xbox_Nv2aAttachIrqLine` delivers
+  the line on the timer thread. `RECOMP_VBLANK` removed.
+- Game `225bb6b`: attach the line; deterministic interrupt-controller fixture in
+  `jsrf_nv2a_registers` (assertion, both masks, guest W1C, no spurious repeat).
+- Measured strict: `[RECOVERED] 0x00193D90 returned; ABI verified`, waiters on
+  `0x0019D630` 3 -> 2. `logs/runs/20260922-160535-643-a2-irq-line/`.
+- Advisor consulted (resume `agent-d3294b58`) before implementing; its cheapest
+  falsifier and its synthetic/legitimate discriminator both adopted and recorded.
+- CTest 11/11 game, 1/1 toolkit. Report CURRENT STATE rewritten; plan A2 marked
+  delivered-not-accepted with a new A2b packet.
+
+Next run should start at: A2b — root-cause the ABI failure at `0x00048190`
+(declared body `0x00048190..0x0004A6F0`, `stack_args: 4`, esp 0x20 low with all
+callee-saved registers clobbered). Second failure in the diagnostic set is
+`0x00025310`.
+
+Traps recorded:
+- `git commit -F /tmp/msg.txt` fails with "could not read log file"; the path
+  must be a Windows path. A message file written inside the repo gets committed
+  by `git add -A` — remove it before committing, or place it outside.
+- `nv2a_irq_line_asserted` must keep the upstream `pending && enabled`
+  condition: `NV_PMC_INTR_EN_0` is a two-bit master enable, not a per-source
+  mask. A per-source AND against it silently kills delivery.
