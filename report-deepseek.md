@@ -17,7 +17,38 @@ where things stand *now*; rewrite it in place each session rather than appending
 ## The agent architecture was rebuilt — read `docs/agent-workflow.md`
 
 **Standing user instruction (2026-09-23). Two harnesses are supported, and every
-other model is retired.**
+other model is retired.** Recorded **verbatim** below, because a paraphrase is not
+the instruction — and because the *questions* in it were answered without being
+put to the advisor (see "The note was paraphrased, not forwarded" below).
+
+> Going forward I'm only going to use the following setups:
+>
+> **Codex:**
+> Session is GPT-6 Luna High
+> Worker subagents will be Luna High
+> Persistent advisor subagent is GPT-6 Astra Medium
+> Acceptance Reviewer is Luna Max
+>
+> **DeepSeek Harness:**
+> Session is Deepseek-V4.1-Flash Max
+> Worker subagents will be Deepseek-V4.1-Flash Max
+> Persistent advisor subagent is GPT-6 Astra Medium
+> Acceptance Reviewer is Hy4
+>
+> We have a ton of history with sol, terra, grok high, grok, workbuddy, grok-cli
+> that needs to be removed. We have a advisor-escalation skill that might not make
+> sense anymore, should advisor be a skill or in agents.md or somewhere else? We
+> have a better workflow now, lets get it cleaned up and fixed up where needed.
+> How do we make sure a session starts up and knows that it should: Pick the right
+> models if it's Codex or DSH, Read a plan, work it in it's main session spawning
+> worker subagents as needed, working until it passes acceptance criteria, having
+> the Acceptance criteria reviewer confirm it passed acceptance criteria, if
+> acceptance criteria reviewer and session can't agree escalate to advisor. Also we
+> want the session to escalate questions up to the advisor when it starts to hit a
+> wall or is looping
+
+**Rendered as the roster** (the user's names mapped onto the route ids that
+`list_subagent_models` actually serves):
 
 | Role | Codex | DeepSeek Harness (DSH) |
 |---|---|---|
@@ -25,6 +56,24 @@ other model is retired.**
 | Worker subagents | `gpt-6-luna` @ `high` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
 | Persistent advisor | `codex/gpt-6-astra` @ `medium` | **`codex:gpt-6-astra`** @ `medium` |
 | Acceptance reviewer | `gpt-6-luna` @ `max` | `workbuddy-ai/hy4-preview-f` @ `high` |
+
+**The note was paraphrased, not forwarded — the session's own error, recorded
+because it is the same class as everything else in this block.** When the advisor
+was asked to review the rebuild, it received the roster table and a one-sentence
+paraphrase of the loop. It did **not** receive three parts of the note:
+
+| from the note | reached the advisor |
+|---|---|
+| the two-harness model table | yes, quoted as the standing instruction |
+| the loop (pick models → read plan → work in main session → reviewer confirms → escalate) | paraphrased into the session's words |
+| *"a ton of history with sol, terra, grok high, grok, workbuddy, grok-cli that needs to be removed"* | **no** |
+| ***"should advisor be a skill or in agents.md or somewhere else?"*** | **no — the session answered this itself** |
+| *"We have a better workflow now, lets get it cleaned up"* | **no** |
+
+So the advisor reviewed a rebuild whose central design question — *where does the
+advisor belong?* — it was never asked. It endorsed the outcome because it was shown
+the outcome. **A paraphrase is not the instruction**: it silently drops the open
+questions, which are exactly the parts worth an outside opinion.
 
 **Retired:** `gpt-5.6-sol`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.5`, Grok,
 `grok-cli`, `hy3`, `glm-5.3`, `kimi-k3`, and every `workbuddy-ai/gpt-*` route.
