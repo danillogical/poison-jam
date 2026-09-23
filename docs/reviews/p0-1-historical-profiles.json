@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "packet": "P0.1",
+  "criterion": "P0.1-AC4",
+  "expected_count": 4,
+  "runs": [
+    {"path": "logs/runs/20260922-181157-372-a2e-252b5-span", "metadata_sha256": "724FE7A03F302394ACDA07685097193F1E0D8F32F96918A7EC29A8B904771128", "expected_classification": "exploratory", "claims": "A2e strict integration claim withdrawn; structural span and locally exercised ABI evidence retained within exploratory scope."},
+    {"path": "logs/runs/20260922-190336-778-a2f-7e255-span", "metadata_sha256": "00537F684358CEE8B270EE6F796DC0855F989D8032327030C46639D089F51594", "expected_classification": "exploratory", "claims": "A2f strict integration claim withdrawn; original review provenance and structural/ABI measurements retained without upgrading them to strict reachability."},
+    {"path": "logs/runs/20260922-220505-613-a2g-304f0-span", "metadata_sha256": "60D4E6467DBC850F835847D35113AD90BC9D742D9EE1EF23F49FD7963D76A3D7", "expected_classification": "exploratory", "claims": "A2g early run does not establish strict integration; preserve actual captured observations."},
+    {"path": "logs/runs/20260922-224429-003-a2g-304f0-span", "metadata_sha256": "E3EC6077F9B8DFC17D4A3B2B177C77F04A2C8F7456F1E881BA5AB73E250278EA", "expected_classification": "exploratory", "claims": "A2g strict integration claim withdrawn; preserve span/checker evidence and actual displaced RAM observations; do not shift guest addresses or infer a completed corruption fix."}
+  ],
+  "measured_basis": "All four original metadata files contain RECOMP_AC97_READY=1 and RECOMP_APU_DSP_ACK=0x803C0810, and omit RECOMP_GPU_ACK. Source at toolkit 484887b defaults the latter on. Original artifacts were read only.",
+  "review_disposition": "independent per-artifact review completed 2026-09-23; see per_artifact_disposition below",
+  "review_disposition_history": [
+    "pending classifier implementation and independent per-artifact review"
+  ],
+  "per_artifact_disposition": {
+    "attribution": {
+      "classification_and_hash_verification": "reproduced by the independent reviewer workbuddy-ai/hy4-preview-f @ high, recorded as P0.1-AC4 AGREED in docs/reviews/p0-1-final-review.md",
+      "per_artifact_claim_disposition_bookkeeping": "reconciled by this session from each artifact's own recorded bytes, this manifest's original `claims` text, and that review's ruling; not a fresh reviewer action and not reacceptance of any historical claim"
+    },
+    "reviewed_on": "2026-09-23",
+    "reconciliation_note": "The final P0.1 review AGREED on AC4 while noting that independent per-artifact historical-claim disposition remained pending in this manifest. This block discharges that bookkeeping only. It records what each artifact's own bytes establish; it does NOT reaccept any historical strict-integration claim.",
+    "hashes_reverified": true,
+    "all_four_expected_exploratory": true,
+    "toolkit_revision_of_all_four": "484887b88ff39f86d17c819375993340ebae972e",
+    "retired_override_layer_effect": "none; none of these four carries a retired override, and their recorded toolkit revision post-dates the RECOMP_VBLANK removal commit 7cfbe55, so the revision-aware layer adds no note and changes no verdict",
+    "rows": [
+      {"path": "logs/runs/20260922-181157-372-a2e-252b5-span", "metadata_sha256_match": true, "observed_classification": "exploratory", "expected_classification": "exploratory", "disposition": "AGREED", "strict_integration_claim": "WITHDRAWN; structural span and locally exercised ABI evidence retained within exploratory scope", "per_artifact_claim_disposition": "historical claims re-disposed, not reaccepted"},
+      {"path": "logs/runs/20260922-190336-778-a2f-7e255-span", "metadata_sha256_match": true, "observed_classification": "exploratory", "expected_classification": "exploratory", "disposition": "AGREED", "strict_integration_claim": "WITHDRAWN; original review provenance and structural/ABI measurements retained without upgrading them to strict reachability", "per_artifact_claim_disposition": "historical claims re-disposed, not reaccepted"},
+      {"path": "logs/runs/20260922-220505-613-a2g-304f0-span", "metadata_sha256_match": true, "observed_classification": "exploratory", "expected_classification": "exploratory", "disposition": "AGREED", "strict_integration_claim": "WITHDRAWN; actual captured observations preserved", "per_artifact_claim_disposition": "historical claims re-disposed, not reaccepted"},
+      {"path": "logs/runs/20260922-224429-003-a2g-304f0-span", "metadata_sha256_match": true, "observed_classification": "exploratory", "expected_classification": "exploratory", "disposition": "AGREED", "strict_integration_claim": "WITHDRAWN; span/checker evidence and actual displaced-RAM observations preserved", "per_artifact_claim_disposition": "historical claims re-disposed, not reaccepted"}
+    ],
+    "limitation_preserved": "Exploratory classification cannot support strict boot, audio, GPU or liveness acceptance. The A2g image-displacement finding remains evidence to investigate, not a reason to reinterpret guest addresses or presume a broken dump."
+  }
+}

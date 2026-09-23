@@ -6,26 +6,34 @@ source of truth for milestone status and acceptance evidence.
 
 ## P0 — Repair the execution and evidence loop before continuing A2h
 
-**Status:** Proposed; not delivered or accepted.
+**Contract:** `docs/packets/p0-acceptance-contract.md`, revision `P0-AC-r1`.
+**Status:** **P0.1, P0.S and P0.2 accepted.** P0.2's interface amendment is **ADEQUATE** at `r14`, and its **implementation review returned all four criteria AGREED** at round 5 — after four rounds of refutation that found five AC2 defects, four of them in the fix for the previous one. P0.3–P0.7: **all 18 criteria AGREED** on one evidence revision. Evidence: `docs/reviews/p0-1-vblank-adjudication.md`, `p0-2-acceptance.md`, `p0-3-to-p0-7-acceptance.md`.
+**Next action:** record the P0.2 implementation review when it returns, then work P0.7-AC4's bounded deliverable at `docs/packets/a2h-writer-investigation.md` (ADEQUATE at `A2h-r4`). That packet authorizes one observation-only trace and one strict run — not a recovery pass, and not a whole-image census. Later A1–A5 material remains deferred.
+**Scope:** bounded execution/evidence tooling, not a renderer or full translation regeneration.
+**Authority:** criteria and statuses live here and in the linked contract; roster, session loop, reviewer and advisor policy live only in `docs/agent-workflow.md`.
 
-**Order:** P0.1–P0.7 sequentially. These are bounded prerequisite packets,
-not a renderer or full-regeneration project. The main session owns
-implementation/build/run. Models and escalation policy come only from
-`docs/agent-workflow.md`; do not reproduce the roster here.
+**Advisor-approved prerequisite adjustment:** before P0.1's live baseline, complete
+P0.S (`docs/packets/p0-save-isolation.md`) for disposable save-root selection and
+real-path verification. Its AC5-r2 amendment preserves strict/profile criteria and
+adds observed save-root identity. This moves only save isolation ahead of P0.6;
+the rest of P0.6 remains pending. No baseline may write the existing save root.
+P0.S is accepted: all four criterion dispositions are AGREED after native replay
+and 12/12 Release CTest; record `docs/reviews/p0-1-execution.md`. P0.1's isolated
+baseline is reviewed. Its VBLANK coverage disagreement was adjudicated by the
+persistent advisor and a bounded correction applied inside frozen `P0-AC-r1`
+(no criterion text rewritten); AC1–AC3 are reopened for re-review on the
+corrected revision. See `docs/reviews/p0-1-vblank-adjudication.md`.
 
-**Evidence convention:** MEASURED identifies inspected source/artifacts or
-an explicitly attributed historical measurement. INFERRED identifies proposed
-changes and their expected benefit. Citations below refer to the advisory
-inspection baseline; locate the named sections if subsequent edits move lines.
-
-Each packet must retain its exact criteria, evidence revision and reviewer
-disposition. Missing review or CANNOT VERIFY leaves acceptance pending.
-An advisor ruling can resolve scope or an interpretation dispute; it cannot
-turn a failed measurement into a passing result.
+`MEASURED` identifies inspected source/artifacts or an attributed historical
+measurement. `INFERRED` identifies a proposal and expected benefit. A packet record
+must bind stable criterion IDs to evidence revision, exact procedure and reviewer
+disposition. `PASS`, `FAIL` and `UNKNOWN` are per criterion; missing or
+`CANNOT VERIFY` evidence remains pending. An advisor may resolve an interpretation
+or scope dispute but cannot turn a failed measurement into a pass.
 
 ### P0.1 — Enforce strict/exploratory classification at launch and in archive checks
 
-**MEASURED basis:** A2g's
+**Pre-packet measured basis:** A2g's
 `logs/runs/20260922-224429-003-a2g-304f0-span/metadata.json:25-31`
 enables `RECOMP_AC97_READY=1` and
 `RECOMP_APU_DSP_ACK=0x803C0810`. Both are synthetic completion under
@@ -57,28 +65,41 @@ runner/checker tests, affected plan/report acceptance records.
 **INFERRED benefit:** the fresh DSH session can trust a machine-checked
 classification rather than a copied human label.
 
-**INFERRED acceptance:**
-1. Tests include the actual list-valued `settings` shape, any supported older
-   shape, missing/malformed metadata, duplicates, enabled/disabled values,
-   inherited bypasses and runtime defaults.
-2. A positive control containing the two A2g overrides is classified exploratory;
-   the former wrong-shape parser would fail this test.
-3. Strict rejects prohibited effective settings before launching the title;
-   exploratory archives the reasons; fixture results remain separately labeled.
-4. The reviewer checks affected A2 criteria against original artifacts.
-   Valid focused fix/detector evidence is retained; unsupported strict claims
-   are corrected explicitly.
-5. Archive a genuinely strict baseline even if it stops earlier. Do not call
-   that earlier stop a regression against an exploratory run.
+**Acceptance:** `P0.1-AC1`–`P0.1-AC5` in the linked contract. Runtime flag
+semantics must be checked per variable at the source call sites. In particular,
+`RECOMP_AC97_READY`, `JSRF_ALLOW_UNRESOLVED` and `JSRF_ABI_CONTINUE` are
+presence-enabled; `RECOMP_GPU_ACK` is active by default and only the caller's
+explicit exact value `0` disables it. Strict launch rejects an absent
+`RECOMP_GPU_ACK`; the runner must not supply it silently.
+
+**Post-delivery amendment (2026-09-23), inside this same frozen contract.**
+Review found a coverage gap: a retired override (`RECOMP_VBLANK`) was neither
+classified nor rejected, so `RECOMP_GPU_ACK=0` plus `RECOMP_VBLANK=1` classified
+strict. The advisor ruled the correction is an **implementation change within
+`P0-AC-r1`, not a criterion change**, because AC1 commands classification from
+actual runtime semantics and a name the current binary never reads has none.
+Added: a `RETIRED_OVERRIDES` registry, a revision-aware resolver using the
+removal boundary commit, fail-closed strict rejection of retired names at launch
+and in records/archives, and a new "Retired overrides" section naming
+`docs/jsrf-run-profiles.md` the single authority for override classification.
+`AGENTS.md` carries a pointer, not a duplicate enumeration. Full ruling,
+measured basis, applied change and hashes: `docs/reviews/p0-1-vblank-adjudication.md`.
 
 ### P0.2 — Make review ingestion a durable acceptance transaction
 
-**MEASURED basis:** `report-deepseek.md:58-66,128-154` records the lost
-A2f verdict and duplicated diagnosis.
-`scripts/check-recorded-reviews.py:18-55` hardcodes a session, does not
-filter parentage, examines only the first turn and matches generic verdict
-text anywhere in the report.
-`docs/agent-workflow.md:83-96` lacks an explicit CANNOT VERIFY closure path.
+Executable interface amendment: `docs/packets/p0-review-records.md`, reviewed
+adequate at SHA256 `BAD23C071647EE4B7674820EEF501928E3B764AE6C82348E44EBB2246226432A`.
+The subsequent structured per-criterion source-verdict addition awaits adequacy
+re-review; that earlier hash is not approval of the changed amendment.
+Implementation remains pending P0.1 acceptance. This amendment supplies concrete
+schema, validator/export commands and source-backed Codex/DSH review procedures.
+
+**MEASURED basis:** `report-deepseek.md` CURRENT STATE records the lost A2f
+verdict and duplicated diagnosis. `scripts/check-recorded-reviews.py` is tied to a
+specific DSH session, does not establish actual parentage, examines only the first
+turn and matches generic verdict text anywhere in the report. The workflow's former
+CANNOT VERIFY gap is historical: current closure behavior is defined in
+`docs/agent-workflow.md` §2.7.
 
 **INFERRED change:**
 - Add a tracked review index under `docs/reviews/`, keyed by packet and evidence
@@ -103,10 +124,9 @@ plan/report status links.
 **INFERRED benefit:** settled children and new findings survive context changes,
 and the session cannot mistake another packet's ACCEPT for its own.
 
-**INFERRED acceptance:** fixtures cover two parents, identical labels, unrelated
-ACCEPT text, later-turn verdicts, unreadable cache, unknown schema and an
-unrecorded review. Missing/incomplete cases remain pending. Recover the exact
-A2f/A2g review records; mark unavailable provenance unknown rather than inventing it.
+**Acceptance:** `P0.2-AC1`–`P0.2-AC4` in the linked contract. Durable recording and
+per-criterion transaction behavior are the gap; do not restate the workflow's
+current closure policy as missing.
 
 ### P0.3 — Finish the single-authority split and bound onboarding
 
@@ -134,11 +154,9 @@ operating history, new `scripts/check-agent-docs.py` and fixtures.
 **INFERRED benefit:** the fresh DSH session receives one actionable instruction
 set instead of resolving several generations of policy.
 
-**INFERRED acceptance:** the checker passes current documents and fails injected
-stale reviewer policy, broken command path and oversized instruction fixtures.
-Set a conservative budget below 65,536 bytes with headroom for other loaded
-instructions. A cold-read handoff identifies the same next packet and no retired
-active role assignments. Historical records remain preserved as history.
+**Acceptance:** `P0.3-AC1`–`P0.3-AC3` in the linked contract. The checker must
+include positive and injected-negative controls, report UTF-8 size against a
+conservative budget below 65,536 bytes, and preserve historical records.
 
 ### P0.4 — Separate capture validity from guest-memory integrity
 
@@ -164,11 +182,9 @@ dump to return success.
 **INFERRED benefit:** the next session can use the corruption evidence without
 discarding it or accidentally shifting the intact stack.
 
-**INFERRED acceptance:** fixtures distinguish intact image content, validly
-captured overwritten RAM, malformed/truncated capture and missing dump.
-The failing archived run remains readable at actual VAs: original thunk slot
-zero, relocated patched slot preserved, stack return at original ESP.
-A single stack control or 16-byte .text match must not certify every region.
+**Acceptance:** `P0.4-AC1`–`P0.4-AC3` in the linked contract. Structural
+readability, stack/register location and image-content integrity remain separate;
+all actual-VA reads and malformed/missing controls are required.
 
 ### P0.5 — Make the Python wrapper the single guarded build entry point
 
@@ -199,11 +215,10 @@ wrapper tests.
 **INFERRED benefit:** DeepSeek can build all required artifacts without
 reconstructing missing-script/Bash workarounds or forgetting a test executable.
 
-**INFERRED acceptance:** tests cover missing tools, invalid parallel counts,
-environment normalization, ordinary compiler failures and silent-failure
-classification. Under available full access, validate the guarded parallel build
-and expected CTest executable inventory. Do not fabricate a confined-policy
-remeasurement. Report passed/failed/blocked/not-run against the discovered total.
+**Acceptance:** `P0.5-AC1`–`P0.5-AC4` in the linked contract. Build every
+discovered CTest target; report the full test inventory and each
+passed/failed/unknown/not-run result. Do not fabricate a confined-policy
+remeasurement.
 
 ### P0.6 — Make harness permissions and probe expectations explicit
 
@@ -227,11 +242,9 @@ environment diagnostics and onboarding.
 **INFERRED benefit:** a permission failure or probe checkpoint mismatch is
 identified before it becomes another guest-regression investigation.
 
-**INFERRED acceptance:** tests cover permitted and denied scratch/image access,
-cleanup, ordinary and every probe's default checkpoints, and explicit overrides.
-Run affected existing probes and offline tests. If one test is blocked, report
-the full denominator—for example "10 passed, 1 blocked, 11 expected"—not a
-substitute green 10/10.
+**Acceptance:** `P0.6-AC1`–`P0.6-AC4` in the linked contract. Probe coverage is
+the enumerated probe set, and blocked tests remain in the denominator. Original
+assets and existing saves must remain byte-identical.
 
 ### P0.7 — Guard regeneration provenance and publish the bounded next packet
 
@@ -259,180 +272,41 @@ onboarding, plan and CURRENT STATE.
 **INFERRED benefit:** the next A2h instrumentation build cannot unknowingly
 replace its translation baseline or erase diagnostics.
 
-**INFERRED acceptance:** no-op recovery is reproducible apart from explicitly
-enumerated permitted differences; changed recipe/input or missing protected ABI
-instrumentation trips the check. Check-only generation leaves production chunks
-unchanged. After P0 acceptance, resume the bounded write-watch investigation,
-not another whole-image census. A protective trap is containment, not proof of
-a completed behavioral fix.
+**Acceptance:** `P0.7-AC1`–`P0.7-AC4` in the linked contract. No-op/check-only
+generation must leave production chunks byte-identical; mutations to inputs,
+recipe or protected instrumentation must fail closed. After P0 acceptance, resume
+only the bounded A2h writer investigation. A protective trap is containment, not
+proof of a completed behavioral fix.
 
-## Active audit follow-up sequence — 2026-09-22
+## Deferred roadmap and historical audit records — not executable
 
-**Decision: execute A1 through A5 in the order below before advancing dependent
-GPU/rendering milestones.** This section owns the current next steps and overrides
-conflicting statuses, acceptance claims and "next packet" instructions in the
-historical material below and in `report-deepseek.md`. Existing completed fixture
-contracts remain evidence for those fixtures only; they do not establish whole-game
-GPU execution, audio completion or liveness. All packets below are pending.
+**Current next packet: P0.1** as defined in the P0 contract above. This A1–A5
+sequence is a superseded planning snapshot retained for evidence and accepted
+history; its old ordering, statuses, “next packet” statements and open work do not
+authorize execution. No A1–A5 item may be resumed from this text. Before any is
+reactivated, write a bounded packet with stable criterion IDs, admissible evidence,
+verified commands or explicit tooling prerequisites, positive/negative/missing
+controls, scope and a decision rule; obtain plan adequacy review under
+`docs/agent-workflow.md`.
 
-Audit baseline: source reviewed at game `6cb350e`, toolkit `18a0837`; archived
-exploratory run `logs/runs/20260922-110738-253-nv2a-1bcc/` records toolkit `cf03f46`.
-That run is not a fresh validation of the reviewed source. It records synthetic
-APU acknowledgment and command consumption through GET=PUT, with a diagnostic
-deadline and unresolved event waits. No rendered frame or absence of a hang is
-established by that outcome.
+Snapshot baseline: game `6cb350e`, toolkit `18a0837`; exploratory run
+`logs/runs/20260922-110738-253-nv2a-1bcc/` records toolkit `cf03f46`. It is not a
+fresh validation of the reviewed source and establishes neither rendering nor
+liveness. Preserve its original classification and evidence limits.
 
-### Acceptance and advisor rule — applies to every packet
+**Historical run-label correction:** older A2e/A2f/A2g text calls four runs
+“strict.” That label is contradicted by their original metadata and is not valid
+strict-profile evidence. `docs/reviews/p0-1-historical-profiles.json` fixes the
+four run paths, metadata hashes and expected `exploratory` classification for
+P0.1-AC4. Existing reviewer identities/verdicts remain historical provenance;
+they do not validate the profile claim. The per-artifact adjudication is pending.
 
-**Review gate (added 2026-09-22, standing user instruction).** Meeting a packet's
-acceptance criteria is no longer sufficient to accept it. Three steps, in order:
+### Review authority
 
-1. **Spawn the acceptance reviewer for your harness** — `workbuddy-ai` /
-   `hy4-preview-f` on DSH, `gpt-6-luna` at `max` on Codex; the roster in
-   `docs/agent-workflow.md` is the authority, and this line named only the DSH
-   route until 2026-09-23. On DSH the reviewer is a third model family, so it
-   shares neither the session's nor the advisor's blind spots. **On Codex it is
-   the session's own family at higher effort — a careful second pass, not
-   independent confirmation**, and it must not be described as independently
-   verified. Brief it with the claim, the criteria and the
-   evidence paths, and require it to **verify or refute each criterion
-   independently** — reproducing the load-bearing measurements itself — and to
-   return a per-criterion verdict of AGREED / DISAGREED / CANNOT VERIFY with the
-   command or `file:line` behind it. Ask explicitly for the falsification, not the
-   confirmation, and require a **positive control** wherever it checks that
-   something is absent.
-2. **If the reviewer agrees**, the packet is accepted; record the review and what
-   it independently reproduced in `report-deepseek.md`.
-3. **If the session and the reviewer disagree**, both positions and their evidence
-   go to the **Astra advisor**, whose call is final. Do not out-vote the reviewer,
-   and do not let it out-vote the session: an unresolved disagreement usually
-   means a measurement is broken, which is the case the advisor exists for.
-
-**The reviewer route is frozen per session.** `subagent-model-selection` samples
-the allow-list when a fresh top-level session is composed and leaves it *"unchanged
-by later settings edits"*, so editing `~/.dsh/settings.yaml` mid-session does not
-take effect. `hy4-preview-f` was added to the allow-list on 2026-09-22 and is
-available to sessions composed after that; the session that added it could not use
-it. Confirm with `list_subagent_models` before promising a review, and if the route
-is unavailable, say so plainly rather than substituting a model this rule did not
-ask for.
-
-**If any acceptance criterion is unmet, ambiguous or contradicted by evidence,
-leave the packet unaccepted and check with the advisor before starting dependent
-work, weakening a criterion, adding a bypass or broadening scope.** Send the
-advisor the packet ID, failed criterion, both repository revisions, exact commands
-and environment, artifact paths, expected versus actual behavior, attempts made,
-and the proposed next action. Record the advisor's response in the live report.
-This is a technical review request to the project's advisor, not a routine request
-for user permission. If the advisor is unavailable, record that dependency and
-continue only independent work; do not silently waive the gate. An advisor-requested
-change to acceptance must be recorded explicitly in this plan with its rationale.
-
-**The advisor route, in the DeepSeek/DSH session (2026-09-22).** The advisor is
-`codex` / `gpt-6-astra` at `medium` reasoning effort, reached with the `subagent`
-tool (`provider: "codex"`, `model: "gpt-6-astra"`, `reasoning_effort: "medium"`,
-**`run_in_background: true`**). It is briefed
-fresh — never via `subagent_fork`, which would seed it with this conversation and
-destroy the independence that makes it worth consulting. Continue the same
-advisor with `send_message` to its durable agent id from `list_agents`, which
-preserves the earlier exchange and needs only the delta. Full briefing contract,
-triggers and adopt/reject discipline: **`docs/agent-workflow.md` §4** — the
-`advisor-escalation` skill was retired 2026-09-23 and folded into that file,
-because a short template used only by this workflow did not earn a separate
-discovery path across both harnesses.
-
-> **`run_in_background: false` is a trap and this line used to recommend it.**
-> It was corrected 2026-09-22 after a controlled measurement: `false` yields a
-> **one-shot** child, so `send_message` to it fails with *"has no supported
-> continuation state"* and the whole advisor has to be re-briefed from scratch.
-> `resolveDelegationRun` returns
-> `{ runInBackground: request.run_in_background ?? options.continuable }`
-> (`dsh-tool-subagent/lib/index.js:360`) and only the `true` branch consults
-> `continuable` (`:521-526`). **Spawn with `true` whenever the advisor is meant to
-> be continued, even when its answer gates the next action** — "gating" means do
-> not start other work until its notice arrives, not that the call must be
-> foreground. The measurement is recorded in `report-deepseek.md` and the
-> mechanism in `docs/agent-workflow.md` §4.
-
-**Added 2026-09-22 after measuring the consult rate: the gate above is necessary but
-not sufficient.** It fires when a packet's acceptance is evaluated — but the
-consult that has actually paid here happens *during* investigation, before
-acceptance is reached. In the twelve hours to 2026-09-22 the following triggers
-were each met and no consult was made; all four were measurement artifacts found
-locally only after costing a run or a false alarm:
-
-- a rebuilt tree that "looked like a regression" and differed only by an
-  environment variable;
-- a kernel-log budget that made a live run look frozen;
-- `named_frames`/`native_threads` being sampled at the deadline and read as
-  before/after metrics;
-- a symbol+offset in a stack line being a mislabel past a body's end.
-
-So the escalation triggers apply **during** a packet as well as at its acceptance,
-and they are the ones in **`docs/agent-workflow.md` §3** — the policy, not the
-briefing skill, which only describes how to write the brief once you have decided
-to send one: two measurements contradicting each
-other (the highest-value case); a negative result that would change the plan; any
-"impossible"/"unproven"/"rules out" claim; two or more failed hypotheses, or the
-same class of mistake twice; and before an expensive investigation. A repeat is
-the strongest signal — this project has cancelled a packet on a detector artifact
-twice, and had a wrong triage list in two consecutive sessions.
-
-**Escalate on a *material* unresolved claim, not on every failing test.** The
-trigger is the shape of the problem — looping, a wall, a contradiction, an
-impending universal claim — not an ordinary red result that the next measurement
-will explain. Escalating on routine failures stalls the main-session loop, which
-is the thing the loop exists to keep moving.
-
-**Delegation and models (2026-09-22).** **`docs/agent-workflow.md` is the single
-authority** — the roster, the session loop and the escalation triggers. Read it at
-session start. The rule in brief:
-
-| Role | Codex | DeepSeek Harness (DSH) |
-|---|---|---|
-| Session | `gpt-6-luna` @ `high` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
-| Worker subagents | `gpt-6-luna` @ `high` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
-| Persistent advisor | `codex/gpt-6-astra` @ `medium` | `codex:gpt-6-astra` @ `medium` |
-| Acceptance reviewer | `gpt-6-luna` @ `max` | `workbuddy-ai/hy4-preview-f` @ `high` |
-
-**Everything else is retired:** `gpt-5.6-sol`, `gpt-5.6-luna`, `gpt-5.6-terra`,
-`gpt-5.5`, Grok, `grok-cli`, `hy3`, `glm-5.3`, `kimi-k3`, and every
-`workbuddy-ai/gpt-*` route. The role vocabulary that appears throughout this plan
-and the reports describes **what kind of work** a packet is, not a roster to spawn.
-
-**This table listed only two routes until 2026-09-22 23:40, and that was stale.**
-The context-isolation and advisor routes were written first (`8b1aada`, 17:12);
-the user's acceptance-review gate added the reviewer (`cb24223`, 18:16) but this
-table was not updated, so for five hours the plan contradicted its own acceptance
-section. `.dsh/skills/advisor-escalation/SKILL.md` was stale in the same way — it
-claimed the advisor was "the only subagent this session is allowed to spawn",
-which would have forbidden the reviewer the gate demands. **Both are corrected,
-and the skill is now a briefing *procedure* only**; policy lives in
-`docs/agent-workflow.md` so it cannot go stale against a file it does not contain.
-
-A worker is a reader, not a decider: it returns file:line evidence marked
-*measured* or *inferred*, and the session adjudicates. Workers are for **context
-isolation only** — never to implement. **One owner performs build, regeneration
-and run — never a worker.**
-
-**Conflict avoidance (measured 2026-09-22).** This harness's `subagent` tool has
-no `isolation` parameter, so a worker shares the session's tree. Git worktrees
-exist and do isolate commits, but a worktree of this repository is unusable for a
-worker because `game/`, `logs/`, `build/` and `tools/disasm/output/` are all
-gitignored and therefore absent. The isolation that actually works is procedural,
-and it is three rules: **brief every worker read-only by default; keep one writing
-owner; and commit by explicit path, never `git add -A`.**
-
-The advisor gate is unaffected and remains mandatory — a passing test count alone
-cannot override a failed behavioral criterion, and consultation is required
-whenever acceptance remains unmet.
-
+The historical packets below were written under earlier review and advisor wording. Do not use that copied policy. Current reviewer selection, per-criterion review, CANNOT VERIFY handling, escalation and packet closure come from `docs/agent-workflow.md`. Existing reviewer identities and evidence provenance remain as originally recorded; they are not current route instructions.
 ### A1 — Reconcile status, evidence profiles and known device mapping
 
-**Suggested Agent:** Luna (documentation and bounded metadata work).
-**Status:** Done 2026-09-22. **Depends on:** none. **Evidence:** game `6cb350e` plus
-the A1 commit; `docs/jsrf-run-profiles.md`; the CURRENT STATE block at the top of
-`report-deepseek.md`; `report-jsrf-bare-minimum.md` header; `AGENTS.md`.
+
 
 Done:
 - The three documents agree. `AGENTS.md` named only `report-jsrf-bare-minimum.md`
@@ -489,11 +363,7 @@ Acceptance:
 
 ### A2 — Trace and repair delivery to the known event producer
 
-**Suggested Agent:** Sol Medium for root-cause investigation; Luna for a bounded
-implementation once the contract is clear; Terra review.
-**Status:** **Delivered 2026-09-22, not accepted — see A2b.** **Depends on:** A1.
-**Evidence:** game `225bb6b`, toolkit `7cfbe55`;
-`logs/runs/20260922-160535-643-a2-irq-line/` (strict, 30 s).
+
 
 Delivered and measured:
 - The exact missing transition was that the card had **no interrupt source**.
@@ -556,13 +426,7 @@ Acceptance:
 
 ### A2b — Root-cause the newly reachable ABI failure at `0x00048190`
 
-**Suggested Agent:** Sol Medium (translation/ownership semantics); Luna for the
-bounded fix; Terra review.
-**Status:** **Delivered 2026-09-22, and the packet's own acceptance is met —
-see A2c for what it exposed.** **Depends on:** A2 delivered.
-**Evidence:** game `caef022`; `logs/runs/20260922-162034-043-a2b-48190-sa12/`
-(strict, 30 s). Baseline `logs/runs/20260922-160535-643-a2-irq-line/`, and the
-diagnostic set `logs/runs/20260922-160615-567-a2-irq-line-abicont/`.
+
 
 Delivered and measured:
 - The declared end `0x00048305` was a disassembler `tail_jump_alias` **phantom**
@@ -623,12 +487,7 @@ Do not silence the check and do not widen the body end without evidence.
 
 ### A2c — Recover the functions only a pointer table reaches
 
-**Suggested Agent:** Luna for the generator and the bounded fixes; Sol Medium if
-the APU decode failure turns out to be an interface question; Terra review.
-**Status:** **Delivered 2026-09-22 for the first two candidates; 132 remain.**
-**Depends on:** A2b delivered.
-**Evidence:** game `50cc6a8`; `logs/runs/20260922-162410-613-a2c-173db0/` and
-`logs/runs/20260922-162546-668-a2c-175300/` (strict, 30 s).
+
 
 The class, and why it is not A2b's. A function reached **only** through a data
 table occurs in no call and no jump, so `tools/disasm` never registers it and no
@@ -670,20 +529,7 @@ entry. It is the first item for the generator.
 
 ### A2d — The APU MMIO decode failure
 
-**Suggested Agent:** Sol Medium (interface/subsystem question); Luna for the
-bounded fix; Terra review.
-**Status:** **ACCEPTED 2026-09-22.** A2d.1 and A2e were delivered on 2026-09-22 and
-the hy4 review gate could not then run (`hy4-preview-f` was added to the allow-list
-in the same session, and the route list is frozen at session composition). A session
-composed after the settings edit ran that review: `workbuddy-ai/hy4-preview-f` at
-`high` effort returned **AGREED on all six A2e criteria**, independently reproducing
-the load-bearing measurements with positive controls on both absence claims. Its two
-corrections were applied (an over-claim that zero literal dwords excludes a computed
-address, and a `push ecx` wording slip in the stack-arithmetic evidence), and its one
-CANNOT VERIFY (CTest) was closed by the owner at **11/11**. Review record in
-`report-deepseek.md` under "A2e ACCEPTED". **Depends on:** A2c delivered.
-**Evidence:** `logs/runs/20260922-174141-780-a2d-movs-mmio/` (before) and
-`logs/runs/20260922-181157-372-a2e-252b5-span/` (after).
+
 
 **A2d.1 delivered.** The mechanism is neither of the two the packet posed: the
 guest never handed a pointer to a CRT routine, and no host routine was chosen to
@@ -865,25 +711,23 @@ into a silent wrong read, which is worse than the trap.
 
 ### A3 — Make GPU acceptance describe implemented behavior
 
-**Suggested Agent:** Luna for each small contract/implementation packet; Sol Medium
-only for unresolved semantics; Terra review before each dependent packet.
-**Status:** Pending. **Depends on:** A2.
+
 
 Split this work into sequential leaves so Luna can own one class/action at a time:
 
-- **A3a — Classification (Suggested Agent: Luna):** separate observed methods from
+- **A3a — Classification :** separate observed methods from
   reviewed state setters and action executors. Acceptance: each accepted method has
   a class-specific contract and implementation location; observed-only actions
   remain explicitly unsupported. GET=PUT is labeled consumption, not proof of
   completed work. Unsupported-stream tests preserve the documented rollback rules.
-- **A3b — First required action (Suggested Agent: Luna):** select the earliest
+- **A3b — First required action :** select the earliest
   unsupported action from an archived real stream and establish its inputs,
   ordering, memory effects and completion contract before implementing it.
   Acceptance: an independently specified fixture verifies the observable effect
   (for example destination bytes or notification/semaphore writeback), including
   negative cases. Sink entries and register storage alone do not count. Verify
   class binding at the time of each command, including a subchannel rebind.
-- **A3c — Repeat and integrate (Suggested Agent: Luna):** repeat A3b as separate
+- **A3c — Repeat and integrate :** repeat A3b as separate
   bounded packets for subsequent required actions. Acceptance: the reviewed real
   stream reaches a documented semantic checkpoint, unsupported actions still stop
   explicitly, and completion cannot outrun modeled execution. Preserve an explicit
@@ -896,11 +740,9 @@ ordering, consult the advisor for an architecture decision before implementation
 
 ### A4 — Repair translation entry and branch semantics
 
-**Suggested Agent:** Sol Medium defines ownership/control-flow contracts; Luna
-implements the following focused leaves; Terra independently reviews them.
-**Status:** Pending. **Depends on:** A3.
 
-- **A4a — Adjacent entries (Suggested Agent: Sol Medium then Luna):** replace the
+
+- **A4a — Adjacent entries :** replace the
   assumption that abutting spans imply equivalent function entries with a proven
   ownership/entry rule. Acceptance: a semantic fixture with distinct adjacent
   `ret 8` and `ret 16` bodies dispatches each original VA correctly and preserves
@@ -917,13 +759,13 @@ implements the following focused leaves; Terra independently reviews them.
   it with an explicit **negative control** (`0x30570`, a genuine adjacent entry,
   keeps its own body and dispatch after the widening) and that control must be part
   of A4a's acceptance, not only of its investigation.
-- **A4b — Missing branches (Suggested Agent: Luna under the A4 contract):** inventory
+- **A4b — Missing branches :** inventory
   the current 40 generated missing-label rewrites and preserve taken-edge semantics.
   Acceptance: each remaining edge is represented correctly, proven unreachable with
   evidence, or produces a deterministic diagnostic. No potentially executable edge
   silently becomes `(void)0`. A taken conditional cross-boundary fixture checks an
   observable result rather than merely compilation or emitted text.
-- **A4c — Regeneration validation (Suggested Agent: Luna):** regenerate through the
+- **A4c — Regeneration validation :** regenerate through the
   documented full translation/recovery pipeline with one build owner. Acceptance:
   generated declarations, definitions and dispatch agree; relevant toolkit semantic
   regressions and all current game Release CTests pass; build identity is verified;
@@ -936,8 +778,7 @@ the architecture and return the resulting small implementation packets to Luna.
 
 ### A5 — Independent acceptance reconciliation and return to the main milestones
 
-**Suggested Agent:** Terra review; orchestrator integrates and consults advisor on
-any unmet criterion. **Status:** Pending. **Depends on:** A1–A4.
+
 
 Acceptance:
 

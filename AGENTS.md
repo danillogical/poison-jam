@@ -18,11 +18,11 @@ STATE block lives here) and `report-jsrf-bare-minimum.md` (audit lineage; the
 A1-A5 sequence). Read the CURRENT STATE block first.
 
 `docs/jsrf-run-profiles.md` defines **strict** versus **exploratory** runs, and
-classifies the environment overrides. `RECOMP_APU_DSP_ACK`, `RECOMP_AC97_READY`,
-`RECOMP_GPU_ACK` and `RECOMP_VBLANK` are synthetic completion and cannot satisfy
-boot, audio, GPU or liveness acceptance. `diagnostic_deadline` means the capture
-was bounded, not that the guest was live; `normal_exit` means the entry point
-returned, not that the title was satisfied.
+classifies the environment overrides. `RECOMP_APU_DSP_ACK`, `RECOMP_AC97_READY`
+and `RECOMP_GPU_ACK` are synthetic completion and cannot satisfy boot, audio, GPU
+or liveness acceptance. `diagnostic_deadline` means the capture was bounded, not
+that the guest was live; `normal_exit` means the entry point returned, not that
+the title was satisfied.
 **`docs/agent-workflow.md` owns the model roster, the session loop and the
 escalation triggers — read it at session start** (the next section summarises it).
 Keep the report updated during work, with **bold Decision entries for choices made
@@ -38,16 +38,26 @@ happened to this file's own tail before 2026-09-22.
 
 ## Start here: `docs/agent-workflow.md`
 
+Latest user-requested handoff: `docs/handoffs/20260923-p0-dsh.md`.
+P0.S and P0.1 are accepted; P0.2–P0.7 tooling is implemented and acceptance-reviewed.
+Read that handoff for the DSH resume context, but take the current packet and status
+from `plan-jsrf-bare-minimum.md` and the `CURRENT STATE` block — a handoff is a
+snapshot of the moment it was written, not a status.
+
 **Before selecting a packet or delegating, read `docs/agent-workflow.md`.** It is the
 single authority for the supported harness/model setup, the main-session execution
 loop, the required acceptance review, and advisor escalation for disagreements or a
 stalled investigation. Then read the active plan section and the `CURRENT STATE` block
-in `report-deepseek.md`. Complete the workflow's five startup checks before
+in `report-deepseek.md`. Complete the workflow's startup checklist and persist
+its receipt before
 implementing. **If the workflow is unavailable, report that as a blocker rather than
 reconstructing policy from historical documents.**
 
 In brief, so you know what you are going to read:
 
+- **Fresh-session readiness is measured:** actually invoke the harness's reviewer
+  (HY4 in DSH), create the persistent advisor and verify a same-child continuation.
+  Follow `docs/session-start-template.md`; historical IDs are not readiness.
 - **Two harnesses** (Codex, DeepSeek/DSH), each with a fixed roster for session,
   workers, advisor and acceptance reviewer. Everything else is retired.
 - **The session works the packet and owns integration, build and run.** Workers are
@@ -388,8 +398,10 @@ until it was diagnosed and each could return.
    two and published a regression that was not one.
    *The open defect, measured against a real guest run* (`probe=""`,
    `20260921-111607-936-kick-ack` on `c98dbdc6` vs `20260921-143443-445-run` on
-   `9568f29`): both are `unhandled_exception` with `exit_code 0xE0464643`, both
-   reach `guest_entry` at log line 48, both issue 157 kernel calls. The real
+   `9568f29`): both are `unhandled_exception` with `exit_code 0xE0424943` — the code
+   `src/recomp_manual.c` raises for an unresolved or invalid call — both
+   reach `guest_entry` at log line 48, and the pre-fix run issued **200** kernel
+   calls against the post-fix run's **157**. The real
    difference is that the pre-fix run logged **48** `[RECOVERED] ... ABI verified`
    checks and died at `[ICALL] Failed to resolve VA 0x001918E0` after 379 thread
    calls, while the post-fix run logs **0** and dies at

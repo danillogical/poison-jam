@@ -1,0 +1,118 @@
+{
+  "child_id": "ee31290c-bfb6-48a1-8305-f331f6098355",
+  "contract_sha256": "e91a44e0f2dc2cb15fa217ed79b5dc17c846a68270a2dd8a2b865667e55c2c10",
+  "contradiction_evidence": "Reproduction complete. Sending the review.\n\n## Consolidated P0.1 acceptance review\n\n**Contract:** `docs/packets/p0-acceptance-contract.md` = `E91A44E0F2DC2CB15FA217ED79B5DC17C846A68270A2DD8A2B865667E55C2C10` \u2014 **unchanged**. All six frozen source/artifact hashes match the brief; `p0-1-vblank-adjudication.md` now `F7250758\u2026` (record-only edit, noted below).\n\n### Per-criterion\n\n**P0.1-AC1 \u2014 AGREED.** Per-variable semantics are encoded at `scripts/jsrf_run_profile.py:380-413` and match the runtime call sites I read directly: `xbox_memory_layout.c:684-686` (`!(ack && strcmp(ack,\"0\")==0)` \u21d2 enabled unless exactly `0`), `:1613` (`if (getenv(\"RECOMP_AC97_READY\"))` \u21d2 presence-only), `apu_dsp.c:61-76` (comma list, \u22648, zeros dropped). Measured: absent GPU_ACK\u2192exploratory; `0`\u2192strict; `00`/`0x0`/`false`/empty\u2192exploratory; AC97 `0`\u2192exploratory; APU `0`\u2192strict, `0x803C0810`\u2192exploratory, `zz`\u2192UNKNOWN; ALLOW_UNRESOLVED `0` and ABI_CONTINUE `false`\u2192exploratory (presence). Malformed/dup/non-dict/None\u2192UNKNOWN. `RECOMP_VBLANK` is deliberately **excluded** from the semantic enumeration and resolved revision-relatively instead \u2014 correct per AC1's own method.\n\n**P0.1-AC2 \u2014 AGREED.** `validate_launch_profile` at `jsrf_run_profile.py:445-472`; `run-jsrf.py:237` calls it before `mkdir` (255/261) and `Popen` (329). Retired-name refusal fires for `RECOMP_VBLANK` (any case). Over-rejection controls pass: `RECOMP_KERNEL_LOG_BUDGET`, `RECOMP_MMIO_TRACE`, `RECOMP_NEVER_DOCUMENTED_X`, `RECOMP_VBLANKX` all still launch strict.\n\n**P0.1-AC3 \u2014 AGREED.** Reclassification reproduced end-to-end. `honored_by_that_binary` is `None` \u2014 never `False` \u2014 for `None`, `''`, `'not-a-rev'`, `'ZZZZZZZ'`, and a nonexistent toolkit root; each yields `UNKNOWN`. `RETIRED_OVERRIDES` is revision-relative, not a fixed label.\n\n**P0.1-AC4 \u2014 AGREED.** All four manifests rows verified independently: hash_ok=True for all four (`724FE7A0`, `00537F68`, `60D4E646`, `E3EC6077`), all classify `exploratory`, artifacts unmodified (mtimes 2026-09-22). `per_artifact_disposition` reaccepts nothing \u2014 every row keeps `WITHDRAWN`. Attribution is honest: `classification_and_hash_verification` \u2192 reviewer; `per_artifact_claim_disposition_bookkeeping` \u2192 session, explicitly \"not a fresh reviewer action\".\n\n**P0.1-AC5 \u2014 AGREED.** `logs/runs/20260923-013448-357-p0-strict-baseline`: `check-run-profile.py` \u2192 STRICT (exit 0); `build-identity.py verify` exit 0. `metadata.json` records `requested_profile=strict`, inherited `[RECOMP_GPU_ACK=0]` only, `resolved_defaults` GPU_ACK=disabled, `seconds=30`. `result.json`: `normal_exit`, `exit_code 0`, `dump_ok false`, 989 log lines, `memory_ready`+`guest_entry` present, ends at `HalReturnToFirmware`. No boot/GPU/liveness wording anywhere in `report-deepseek.md`, `p0-1-final-review.md:13`, or the adjudication record.\n\n### Falsification attempts that failed\n\n1. **Strict + retired, every path.** Launch (any case) rejected; strict record rejected on inherited, effective, and both; forged archive with retired in inherited/effective/both \u2192 `UNKNOWN`; retired in top-level `metadata['settings']` only \u2192 `UNKNOWN` (\"top-level and profile settings conflict\"). Archive-wide: **0** strict archives carry a retired name.\n2. **Over-breadth.** Observation/undocumented/near-miss names launch and record strict; registry-stripped differential over 649 archives \u2192 **0 verdict changes** (443 exploratory / 205 UNKNOWN / 1 strict both ways).\n3. **VBLANK pinned exploratory?** No \u2014 `RETIRED_OVERRIDES` is keyed on toolkit revision; `classify_settings({VBLANK:1, GPU_ACK:0})` \u2192 **strict**.\n4. **Silent `False`?** No \u2014 verified above.\n5. **AC4 overclaim / AC5 overclaim** \u2014 both checked above; clean.\n\n### Residual uncertainty\n\n- A trailing-space env var name (`RECOMP_VBLANK `) is settable on Windows and passes the exact-string launch guard. Not a criterion breach: the binary `getenv`s nothing, and the archive side still returns UNKNOWN for it. Worth normalizing names, not a defect.\n- `docs/reviews/p0-1-vblank-adjudication.md` was edited mid-review (CTest 12/12 row). Record-only; every reviewed source hash stayed fixed; CMakeLists has no dependency on the profile scripts.\n- AC5's run ends early (1.9 s, no dump) \u2014 consistent with AC5's scope, but it is not guest-progress evidence.\n\nREVIEW_CRITERIA_JSON: [{\"id\":\"P0.1-AC1\",\"disposition\":\"AGREED\"},{\"id\":\"P0.1-AC2\",\"disposition\":\"AGREED\"},{\"id\":\"P0.1-AC3\",\"disposition\":\"AGREED\"},{\"id\":\"P0.1-AC4\",\"disposition\":\"AGREED\"},{\"id\":\"P0.1-AC5\",\"disposition\":\"AGREED\"}]\nReview delivered and sent to the parent agent.\n\n**Result: all five criteria AGREED.**\n\n- Contract hash `E91A44E0\u2026` unchanged; all six frozen source/artifact hashes matched (adjudication record accepted at its new `F7250758\u2026` \u2014 record-only edit).\n- 31/31 tests OK exit 0; vblank-probe EXPLORATORY (citing toolkit `18a0837`), strict baseline STRICT; `build-identity.py verify` exit 0.\n- AC1 semantics verified against the actual runtime call sites I read (`xbox_memory_layout.c:684-686,1613`, `apu_dsp.c:61-76`).\n- AC2 launch gate precedes `Popen` (`run-jsrf.py:237` vs `:329`).\n- AC3 `honored_by_that_binary` is `None`, never `False`, for missing tree and garbage/missing revisions.\n- AC4: all four hashes match, all exploratory, every row keeps `WITHDRAWN`, attribution correctly split reviewer vs session.\n- AC5: STRICT, provenance only \u2014 no boot/GPU/liveness wording anywhere.\n\nFalsification attempts that failed: forged archives with the retired name in inherited/effective/both/top-level-settings; a registry-stripped differential over all 649 archives (0 verdict changes); over-breadth controls for `RECOMP_KERNEL_LOG_BUDGET`, `RECOMP_MMIO_TRACE`, an undocumented name and `RECOMP_VBLANKX`.\n\nResidual uncertainty: a trailing-space env var name (`RECOMP_VBLANK `) is settable on Windows and slips the exact-string launch guard \u2014 harmless (the binary reads nothing by it, and the archive side still returns UNKNOWN), so I did not raise it to DISAGREE; the record document was edited mid-review; the AC5 run ends at 1.9 s with no dump.",
+  "covers_packets": [
+    "P0.1"
+  ],
+  "criteria": [
+    {
+      "disposition": "AGREED",
+      "evidence": [
+        {
+          "path": "docs/reviews/P0.1/p0-1-consolidated-review-source.txt",
+          "sha256": "3c0a9f5c02d8d3fdfadd4366960aeb2a68d7f3f65aeadcbeea007dc1864f949f"
+        }
+      ],
+      "id": "P0.1-AC1",
+      "observed_result": "the reviewer footer states AGREED",
+      "procedure": "read the reviewer's own completed turn 2 of child ee31290c-bfb6-48a1-8305-f331f6098355"
+    },
+    {
+      "disposition": "AGREED",
+      "evidence": [
+        {
+          "path": "docs/reviews/P0.1/p0-1-consolidated-review-source.txt",
+          "sha256": "3c0a9f5c02d8d3fdfadd4366960aeb2a68d7f3f65aeadcbeea007dc1864f949f"
+        }
+      ],
+      "id": "P0.1-AC2",
+      "observed_result": "the reviewer footer states AGREED",
+      "procedure": "read the reviewer's own completed turn 2 of child ee31290c-bfb6-48a1-8305-f331f6098355"
+    },
+    {
+      "disposition": "AGREED",
+      "evidence": [
+        {
+          "path": "docs/reviews/P0.1/p0-1-consolidated-review-source.txt",
+          "sha256": "3c0a9f5c02d8d3fdfadd4366960aeb2a68d7f3f65aeadcbeea007dc1864f949f"
+        }
+      ],
+      "id": "P0.1-AC3",
+      "observed_result": "the reviewer footer states AGREED",
+      "procedure": "read the reviewer's own completed turn 2 of child ee31290c-bfb6-48a1-8305-f331f6098355"
+    },
+    {
+      "disposition": "AGREED",
+      "evidence": [
+        {
+          "path": "docs/reviews/P0.1/p0-1-consolidated-review-source.txt",
+          "sha256": "3c0a9f5c02d8d3fdfadd4366960aeb2a68d7f3f65aeadcbeea007dc1864f949f"
+        }
+      ],
+      "id": "P0.1-AC4",
+      "observed_result": "the reviewer footer states AGREED",
+      "procedure": "read the reviewer's own completed turn 2 of child ee31290c-bfb6-48a1-8305-f331f6098355"
+    },
+    {
+      "disposition": "AGREED",
+      "evidence": [
+        {
+          "path": "docs/reviews/P0.1/p0-1-consolidated-review-source.txt",
+          "sha256": "3c0a9f5c02d8d3fdfadd4366960aeb2a68d7f3f65aeadcbeea007dc1864f949f"
+        }
+      ],
+      "id": "P0.1-AC5",
+      "observed_result": "the reviewer footer states AGREED",
+      "procedure": "read the reviewer's own completed turn 2 of child ee31290c-bfb6-48a1-8305-f331f6098355"
+    }
+  ],
+  "delta": {
+    "affected_criteria": [],
+    "changed_files": [],
+    "criterion_text_anchors_still_present": {
+      "and `RECOMP_GPU_ACK` are synthetic completion": true,
+      "docs/jsrf-run-profiles.md defines **strict** versus **exploratory**": true
+    },
+    "note": "a re-bind is not a re-review: the dispositions below are unchanged and the delta requires the reviewer to confirm it is confined to non-criterion text",
+    "reason": "a later, unrelated edit to AGENTS.md changed its bytes after the P0.1 review; the post-review rule invalidated the record",
+    "retired_override_still_absent_from_agents": true
+  },
+  "harness": "dsh",
+  "identity_evidence": {
+    "kind": "turn_text",
+    "path": "docs/reviews/P0.1/p0-1-consolidated-review-source.txt",
+    "sha256": "3c0a9f5c02d8d3fdfadd4366960aeb2a68d7f3f65aeadcbeea007dc1864f949f",
+    "source_session": "C:\\Users\\logic\\.dsh\\sessions\\--C-Users-logic-Repos-my_xbox_game--\\ee31290c-bfb6-48a1-8305-f331f6098355\\session.v3.jsonl.zstd"
+  },
+  "packet_id": "P0.1",
+  "parent_id": "session-b0d76210-871a-4899-884f-6cddb99f6ab4",
+  "requested_effort": "high",
+  "requested_model": "workbuddy-ai/hy4-preview-f",
+  "review_id": "p0-1-consolidated-review",
+  "reviewed_files": [
+    {
+      "path": "scripts/jsrf_run_profile.py",
+      "sha256": "d3c13af75234539bc9875d66d235c0ae500c2fbf433369e1e4657b296e5305e9"
+    },
+    {
+      "path": "tests/test_run_profiles.py",
+      "sha256": "eab616f5d9425294cdf296bd4d9fa7e2fdbea37fb1b6eab17102e5e326cb2ae3"
+    },
+    {
+      "path": "docs/jsrf-run-profiles.md",
+      "sha256": "aed9918be188f03306a32bddb0d786614aedf63690bf017920407700ba5b9125"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "c7520372d76e4e967de275f83e2ef4e1a875676d6e0c687e4675d6e4acc5a0b4"
+    },
+    {
+      "path": "docs/reviews/p0-1-historical-profiles.json",
+      "sha256": "4f639bdabe2918d59c86c9d094754f0ead4237e3292aa03761779c63425fa6dd"
+    }
+  ],
+  "schema_version": 1,
+  "turn_id": "2",
+  "verdict_text": "Reproduction complete. Sending the review.\n\n## Consolidated P0.1 acceptance review\n\n**Contract:** `docs/packets/p0-acceptance-contract.md` = `E91A44E0F2DC2CB15FA217ED79B5DC17C846A68270A2DD8A2B865667E55C2C10` \u2014 **unchanged**. All six frozen source/artifact hashes match the brief; `p0-1-vblank-adjudication.md` now `F7250758\u2026` (record-only edit, noted below).\n\n### Per-criterion\n\n**P0.1-AC1 \u2014 AGREED.** Per-variable semantics are encoded at `scripts/jsrf_run_profile.py:380-413` and match the runtime call sites I read directly: `xbox_memory_layout.c:684-686` (`!(ack && strcmp(ack,\"0\")==0)` \u21d2 enabled unless exactly `0`), `:1613` (`if (getenv(\"RECOMP_AC97_READY\"))` \u21d2 presence-only), `apu_dsp.c:61-76` (comma list, \u22648, zeros dropped). Measured: absent GPU_ACK\u2192exploratory; `0`\u2192strict; `00`/`0x0`/`false`/empty\u2192exploratory; AC97 `0`\u2192exploratory; APU `0`\u2192strict, `0x803C0810`\u2192exploratory, `zz`\u2192UNKNOWN; ALLOW_UNRESOLVED `0` and ABI_CONTINUE `false`\u2192exploratory (presence). Malformed/dup/non-dict/None\u2192UNKNOWN. `RECOMP_VBLANK` is deliberately **excluded** from the semantic enumeration and resolved revision-relatively instead \u2014 correct per AC1's own method.\n\n**P0.1-AC2 \u2014 AGREED.** `validate_launch_profile` at `jsrf_run_profile.py:445-472`; `run-jsrf.py:237` calls it before `mkdir` (255/261) and `Popen` (329). Retired-name refusal fires for `RECOMP_VBLANK` (any case). Over-rejection controls pass: `RECOMP_KERNEL_LOG_BUDGET`, `RECOMP_MMIO_TRACE`, `RECOMP_NEVER_DOCUMENTED_X`, `RECOMP_VBLANKX` all still launch strict.\n\n**P0.1-AC3 \u2014 AGREED.** Reclassification reproduced end-to-end. `honored_by_that_binary` is `None` \u2014 never `False` \u2014 for `None`, `''`, `'not-a-rev'`, `'ZZZZZZZ'`, and a nonexistent toolkit root; each yields `UNKNOWN`. `RETIRED_OVERRIDES` is revision-relative, not a fixed label.\n\n**P0.1-AC4 \u2014 AGREED.** All four manifests rows verified independently: hash_ok=True for all four (`724FE7A0`, `00537F68`, `60D4E646`, `E3EC6077`), all classify `exploratory`, artifacts unmodified (mtimes 2026-09-22). `per_artifact_disposition` reaccepts nothing \u2014 every row keeps `WITHDRAWN`. Attribution is honest: `classification_and_hash_verification` \u2192 reviewer; `per_artifact_claim_disposition_bookkeeping` \u2192 session, explicitly \"not a fresh reviewer action\".\n\n**P0.1-AC5 \u2014 AGREED.** `logs/runs/20260923-013448-357-p0-strict-baseline`: `check-run-profile.py` \u2192 STRICT (exit 0); `build-identity.py verify` exit 0. `metadata.json` records `requested_profile=strict`, inherited `[RECOMP_GPU_ACK=0]` only, `resolved_defaults` GPU_ACK=disabled, `seconds=30`. `result.json`: `normal_exit`, `exit_code 0`, `dump_ok false`, 989 log lines, `memory_ready`+`guest_entry` present, ends at `HalReturnToFirmware`. No boot/GPU/liveness wording anywhere in `report-deepseek.md`, `p0-1-final-review.md:13`, or the adjudication record.\n\n### Falsification attempts that failed\n\n1. **Strict + retired, every path.** Launch (any case) rejected; strict record rejected on inherited, effective, and both; forged archive with retired in inherited/effective/both \u2192 `UNKNOWN`; retired in top-level `metadata['settings']` only \u2192 `UNKNOWN` (\"top-level and profile settings conflict\"). Archive-wide: **0** strict archives carry a retired name.\n2. **Over-breadth.** Observation/undocumented/near-miss names launch and record strict; registry-stripped differential over 649 archives \u2192 **0 verdict changes** (443 exploratory / 205 UNKNOWN / 1 strict both ways).\n3. **VBLANK pinned exploratory?** No \u2014 `RETIRED_OVERRIDES` is keyed on toolkit revision; `classify_settings({VBLANK:1, GPU_ACK:0})` \u2192 **strict**.\n4. **Silent `False`?** No \u2014 verified above.\n5. **AC4 overclaim / AC5 overclaim** \u2014 both checked above; clean.\n\n### Residual uncertainty\n\n- A trailing-space env var name (`RECOMP_VBLANK `) is settable on Windows and passes the exact-string launch guard. Not a criterion breach: the binary `getenv`s nothing, and the archive side still returns UNKNOWN for it. Worth normalizing names, not a defect.\n- `docs/reviews/p0-1-vblank-adjudication.md` was edited mid-review (CTest 12/12 row). Record-only; every reviewed source hash stayed fixed; CMakeLists has no dependency on the profile scripts.\n- AC5's run ends early (1.9 s, no dump) \u2014 consistent with AC5's scope, but it is not guest-progress evidence.\n\nREVIEW_CRITERIA_JSON: [{\"id\":\"P0.1-AC1\",\"disposition\":\"AGREED\"},{\"id\":\"P0.1-AC2\",\"disposition\":\"AGREED\"},{\"id\":\"P0.1-AC3\",\"disposition\":\"AGREED\"},{\"id\":\"P0.1-AC4\",\"disposition\":\"AGREED\"},{\"id\":\"P0.1-AC5\",\"disposition\":\"AGREED\"}]"
+}

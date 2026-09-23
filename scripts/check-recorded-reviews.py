@@ -1,69 +1,108 @@
-"""Every subagent child of this session, its route, and whether its verdict is recorded.
+"""Validate one durable review record against its required-criterion manifest.
 
-`list_agents` shows only *current* children, so a review spawned earlier in this
-session and already settled is invisible there.  The projection cache keeps every
-session, including settled children, with its label, route and final response --
-which is how a completed review can be found after the fact.
+Usage::
 
-Cross-checking those verdicts against `report-deepseek.md` is the point: a review
-that was run but never recorded is work that will be duplicated, and this session
-has already done exactly that once (the A2f review had identified the 0x000304f0
-defect that A2g later re-derived from scratch).
+    python -X utf8 scripts/check-recorded-reviews.py \
+        --contract docs/reviews/contracts/P0.2.json \
+        --review docs/reviews/P0.2/<review-id>.json
+
+Exit status: 0 acceptance-eligible, 1 failed criterion or stale evidence,
+2 invalid or unverifiable input.  The command is read-only and never changes plan
+status.
+
+This replaces the earlier session-specific heuristic, which was tied to one
+hardcoded session id, examined only a child's first turn, and matched generic
+verdict words anywhere in the report.  It is a *transaction*: the record's
+declared identity, ancestry, route, evidence and per-criterion verdicts must all
+bind to real bytes, and the verdicts must come from an authoritative footer in the
+reviewer's own completed turn.
 """
+from __future__ import annotations
+
+import argparse
 import json
-import re
+import sys
 from pathlib import Path
 
-CACHE = Path.home() / '.dsh' / 'storages' / 'session_projcache' / 'sessions'
-SESSION = '237565f1-5b30-45ff-b6df-058195974de8'
-report = (Path(__file__).resolve().parents[1] / 'report-deepseek.md').read_text(
-    encoding='utf-8', errors='replace')
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-rows = []
-for path in sorted(CACHE.glob('*.json')):
-    sid = path.stem.replace('session-', '')
-    if sid == SESSION:
-        continue
+from jsrf_review_records import (  # noqa: E402
+    ELIGIBLE,
+    EXIT_ELIGIBLE,
+    EXIT_FAILED,
+    EXIT_INVALID,
+    INVALID,
+    ReviewError,
+    load_json_unique,
+    load_required_manifest,
+    validate_record,
+)
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--contract', required=True,
+                        help='required-criterion manifest, e.g. docs/reviews/contracts/P0.2.json')
+    parser.add_argument('--review', required=True,
+                        help='durable review record, e.g. docs/reviews/P0.2/<review-id>.json')
+    parser.add_argument('--json', action='store_true', help='emit the result as JSON')
+    args = parser.parse_args()
+
+    contract_path = Path(args.contract)
+    if not contract_path.is_absolute():
+        contract_path = ROOT / contract_path
+    review_path = Path(args.review)
+    if not review_path.is_absolute():
+        review_path = ROOT / review_path
+
     try:
-        rec = json.loads(path.read_text(encoding='utf-8', errors='replace'))
-    except Exception:
-        continue
-    r = rec.get('record', {})
-    rws = r.get('rows', {})
-    ident = ((rws.get('subagent') or {}).get('val') or {}).get('identity')
-    if not ident:
-        continue                                  # not a child of any session
-    label = ident.get('label') or '(no label)'
-    mode = ident.get('mode')
-    sel = ((rws.get('modelSelection') or {}).get('val') or {}).get('lastUsed') or {}
-    turns = ((rws.get('turnOutline') or {}).get('val') or {}).get('turns') or []
-    response = turns[0].get('response', '') if turns else ''
-    created = r.get('identity', {}).get('createdAt')
+        manifest = load_required_manifest(contract_path)
+    except ReviewError as error:
+        print(f'INVALID: {error}', file=sys.stderr)
+        return EXIT_INVALID
 
-    verdict = ''
-    for pat in (r'Verdict:\s*\*{0,2}(ACCEPT|REJECT)', r'\b(ACCEPT|REJECT)\b'):
-        m = re.search(pat, response)
-        if m:
-            verdict = m.group(1)
-            break
-    if not verdict:
-        for pat in ('AGREED', 'DISAGREED', 'CANNOT VERIFY'):
-            if pat in response:
-                verdict = pat.lower()
-                break
+    if not review_path.is_file():
+        print(f'INVALID: review record is missing: {review_path}', file=sys.stderr)
+        return EXIT_INVALID
 
-    recorded = label in report or (verdict and verdict in report)
-    rows.append((created or 0, sid, label, '%s/%s' % (sel.get('provider'), sel.get('model')),
-                 sel.get('reasoningEffort'), mode, verdict, recorded, len(response)))
+    try:
+        record = load_json_unique(review_path)
+    except Exception as error:
+        print(f'INVALID: review record is unreadable: {error}', file=sys.stderr)
+        return EXIT_INVALID
 
-rows.sort()
-print('%-8s %-38s %-30s %-6s %-11s %-9s %-6s' %
-      ('created', 'child', 'route', 'effort', 'mode', 'verdict', 'in rpt'))
-print('-' * 130)
-for created, sid, label, route, effort, mode, verdict, recorded, n in rows:
-    print('%-8s %-38s %-30s %-6s %-11s %-9s %-6s' %
-          (str(created)[-6:], sid[:36], route, effort or '?', mode or '?',
-           verdict or ('(%d ch)' % n), 'yes' if recorded else 'NO'))
-print()
-print('total children: %d ; verdicts not found in the report: %d'
-      % (len(rows), sum(1 for r in rows if not r[7])))
+    try:
+        result = validate_record(record, manifest, ROOT)
+    except ReviewError as error:
+        print(f'INVALID: {error}', file=sys.stderr)
+        return EXIT_INVALID
+
+    if args.json:
+        print(json.dumps({'review': str(review_path), 'contract': str(contract_path),
+                          **result}, indent=2, sort_keys=True))
+    else:
+        print(f'review   : {review_path}')
+        print(f'contract : {contract_path} (packet {manifest.get("packet_id")})')
+        print(f'status   : {result["status"]}')
+        for cid, value in sorted(result.get('criteria', {}).items()):
+            print(f'  {cid:<12} {value["disposition"]:<14} {value["reason"]}')
+        for reason in result.get('reasons', []):
+            print(f'  reason: {reason}')
+
+    if result['status'] == ELIGIBLE:
+        return EXIT_ELIGIBLE
+    # The interface distinguishes *invalid input* from *failed criteria*: exit 2
+    # means the record could not be validated (missing fields, unknown schema, a
+    # contract conflict, an unverifiable source), exit 1 means it was validated and
+    # does not establish acceptance.  Measured before this fix: every non-eligible
+    # status returned 1, so an INVALID record was indistinguishable from a FAILED
+    # one -- the distinction the contract requires.
+    if result['status'] == INVALID:
+        return EXIT_INVALID
+    return EXIT_FAILED
+
+
+if __name__ == '__main__':
+    sys.exit(main())

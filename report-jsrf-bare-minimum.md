@@ -14,6 +14,111 @@ This report is updated during the work. Bold **Decision** entries identify
 choices made on my own recommendation. Results distinguish implemented work
 from verified behavior. Milestone acceptance/status remains in the plan.
 
+### P0.1–P0.7 all accepted — 2026-09-23 (later)
+
+**Superseding the entry below.** The paragraph that follows this one records the state
+at the handoff: P0.1 unaccepted with a live reviewer dispute, P0.2–P0.7 unimplemented.
+Every part of that has since been resolved, and this entry is the current state.
+
+| packet | disposition | evidence |
+|---|---|---|
+| P0.S | AC1–AC4 AGREED | `docs/reviews/p0-1-execution.md` |
+| P0.1 | AC1–AC5 AGREED, contract `P0-AC-r1` unchanged | `docs/reviews/p0-1-vblank-adjudication.md` |
+| P0.2 | **AC1–AC4 AGREED** at review round 5; amendment `r14` ADEQUATE | `docs/reviews/p0-2-acceptance.md` |
+| P0.3–P0.7 | **all 18 criteria AGREED** on one evidence revision | `docs/reviews/p0-3-to-p0-7-acceptance.md` |
+
+**The P0.1 dispute was resolved, not overridden.** The reviewer's AC1–AC3 disagreement
+went to the persistent advisor, whose call is final; the ruling held that the
+classification defect was real and that the **implementation change was inside the
+frozen contract rather than a change to it** — a retired-override layer resolved
+relative to a boundary commit. The reviewer re-reviewed and AGREED all five.
+
+**Decision: P0.2's review was allowed to run five rounds rather than being closed when
+it first looked adequate.** Four rounds refuted it, and **four of the five AC2 defects
+were in the fix for the previous one**. The sequence is a single mistake reproduced at
+five levels: every attempt tried to separate a citation from a qualification by
+*vocabulary* — a hedge word list (12 of 18 leaked), a citation allowlist (14 of 20
+leaked, defeated by the session's own attacks), a noun-only list (`(line 0)` and
+`(tests 0/0)` are identical in shape to the honest `(tests 21/21)`), and a
+verifiable-path rule (absolute paths escaped the repository, 5 of 5). What finally held
+was asking a question about the world: does this path resolve **inside the repository
+the review is about**.
+
+**Decision: two of the defects were found by attacking my own fix rather than waiting
+for the reviewer**, and both had the same shape — *a transformation applied before the
+guard that needed the original*. `lstrip('./')` ate the dots of `..` before the `..`
+check ran, and the word test ran on the string after paths were stripped, so a hedge in
+path shape was deleted before it was examined. Self-attack is now the first step after
+any rule change here, not the last.
+
+**One earlier claim of mine was wrong and is corrected in place.** `report-deepseek.md`
+briefly recorded P0.2's AC1–AC4 as AGREED, citing a reviewer that had in fact reviewed
+the *amendment document* and returned INADEQUATE. Its only `REVIEW_CRITERIA_JSON` line
+was a **quoted counterexample inside a fenced block**, placed there to show that a
+naive scanner would promote it. The validator refuses that line end-to-end, but the
+session had read it by eye. **A reviewer's verdict is about the revision it saw, and
+nothing else** — two artefacts, two reviews.
+
+Three durable records now validate `acceptance-eligible`:
+`docs/reviews/P0.1/`, `docs/reviews/P0.2/`, `docs/reviews/P0.3/`. 377 Python tests
+across 8 suites, Release CTest 12/12, all 17 pinned generated files byte-identical,
+identity verify 0. No generated or recovered guest code was touched.
+
+### Two-harness workflow hardening — 2026-09-23
+
+**Superseded by the entry above; kept for the reasoning at the handoff.**
+**Stopped at the user's request; handoff: `docs/handoffs/20260923-p0-dsh.md`.**
+P0.S is accepted. P0.1 final review disagrees on AC1–AC3's RECOMP_VBLANK coverage
+and agrees on AC4/AC5. **Decision: leave P0.1 unaccepted and preserve the dispute
+for DSH's persistent advisor, rather than silently override the reviewer.** The
+earlier runtime-removal observation and broader active profile policy both need
+to be considered. P0.2–P0.7 remain unimplemented. All changes are uncommitted.
+
+P0.S is accepted after reviewer reproduction of all four criteria. The first new
+strict baseline is `logs/runs/20260923-013448-357-p0-strict-baseline`, with verified
+build and disposable-root identity. It exits through HalReturnToFirmware(2) after
+1.92 seconds, without a dump. **Decision: record this as profile/provenance
+evidence only; normal_exit/0 does not establish title success or liveness.**
+P0.1 review adjudication is pending; the corrected profile regression suite is 19/19.
+
+**Decision: install user-scoped Python `zstandard==0.25.0` to read original DSH
+review logs.** `C:\Python313\python.exe -m pip install --user zstandard` succeeded.
+This avoids relying on truncated projection-cache summaries; no GUI software or
+user action was needed. Reading the originals is reconnaissance until P0.2 opens.
+
+P0 initial integration: localized Release build passed, all **12/12 CTests passed**,
+profile regressions **17/17 passed**, and all 17 pinned generated files stayed
+byte-identical. The new native test exercised disposable root selection, real
+toolkit partition/T/U/Z mapping, access denial, sentinels and cleanup. Two fixture
+link failures were resolved after advisor consultation by linking real path and
+symbolic-link code; only logging is stubbed in that fixture.
+
+**Decision: withdraw strict-integration claims for the four named historical A2
+runs while retaining their bounded structural/ABI/captured-memory observations.**
+The classifier reproduced all four as exploratory with original metadata hashes
+unchanged (`logs/p0-1-historical-profiles.log`). This reclassification preceded
+the fresh strict baseline recorded above; P0.1's VBLANK disagreement remains open.
+
+**Decision: execute P0 with Luna Max workers, with the advisor-approved disposable
+save-root prerequisite before the first new strict run.** Current packet details
+and acceptance evidence are in `docs/reviews/p0-1-execution.md`. The parent
+configured/built localized native changes without a full translation or recovery
+regeneration; generated-code provenance is a later P0 obligation and this harness
+change does not justify replacing the guest baseline. The later isolated launch
+is recorded above.
+
+**Decision: use the current Luna Max / DeepSeek Flash Max worker roster, require
+an actual reviewer invocation and same-child Astra continuation at startup, and
+harden the P0 prerequisite contracts before resuming guest work.** Roster and
+mechanics live only in `docs/agent-workflow.md`; AGENTS points to the startup gate.
+The receipt template is `docs/session-start-template.md`. Luna Max workers were
+used for plan editing and DSH-session analysis; Astra advised and passed a Codex
+continuation check. DSH probes must still run inside a fresh DSH session.
+
+This is workflow/plan delivery, not acceptance of P0 implementation or a new game
+checkpoint. Preserve original historical reviews and classify their evidence rather
+than replacing their provenance with current model names.
+
 ### Audit follow-up plan — 2026-09-22
 
 **Decision: prioritize status/evidence reconciliation, interrupt-to-event delivery,

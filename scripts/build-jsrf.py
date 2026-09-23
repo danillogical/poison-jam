@@ -36,6 +36,7 @@ exactly the mistake to avoid.
 """
 from pathlib import Path
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -46,18 +47,35 @@ logs.mkdir(exist_ok=True)
 env = dict(os.environ)
 python = sys.executable
 
+sys.path.insert(0, str(root / 'scripts'))
+import jsrf_build  # noqa: E402
+
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--parallel', type=int, default=4,
                     help='MSBuild node count; use 1 where the sandbox blocks '
                          'MSBuild named pipes (default: 4)')
+parser.add_argument('--allow-regeneration', action='store_true',
+                    help='permit recovery regeneration (off by default until the '
+                         'P0.7 provenance guard exists)')
 args = parser.parse_args()
 
-TARGETS = [
-    'jsrf_recomp', 'jsrf_collect', 'jsrf_crt_test', 'jsrf_lifter_test',
-    'jsrf_nv2a_test', 'jsrf_recovery_11c1_test', 'jsrf_service_chain_test',
-    'jsrf_callback_reentry_test', 'jsrf_nv2a_hal_test', 'jsrf_inplace_event_test',
-    'jsrf_gpu_smoke',
-]
+# The build set is DERIVED from CMake/CTest, not hand-maintained.  Measured: the
+# previous literal list named 11 targets while CTest discovers 12 tests --
+# `xbox_timestamp_test` comes from the toolkit subdirectory and no list in this
+# repository can know about it.  MSBuild deletes a target's output when its link
+# fails, so omitting it leaves that test permanently "Not Run" with nothing in the
+# log to explain it.
+ARTIFACT_TARGETS = ['jsrf_recomp', 'jsrf_collect']
+
+
+def build_targets():
+    """Every target CTest needs, plus the artifacts the runner copies."""
+    derived = jsrf_build.discover_required_targets()
+    targets = list(derived['targets'])
+    for name in ARTIFACT_TARGETS:
+        if name not in targets:
+            targets.append(name)
+    return sorted(set(targets)), derived
 
 
 def run(argv, log_name):
@@ -73,22 +91,87 @@ def run(argv, log_name):
     return True
 
 
+def run_build(targets, parallel, log_name):
+    """Build, and retry serially ONLY on the measured confined signature."""
+    argv = ['cmake', '--build', 'build', '--config', 'Release', '--target', *targets,
+            '--parallel', str(parallel)]
+    with (logs / log_name).open('w', encoding='utf-8', errors='replace') as log:
+        proc = subprocess.run(argv, cwd=root, env=env, stdout=log,
+                              stderr=subprocess.STDOUT, text=True)
+    text = (logs / log_name).read_text(encoding='utf-8', errors='replace')
+    failure = jsrf_build.classify_build_failure(proc.returncode, text)
+    if failure == 'success':
+        return True, 'success'
+    if failure == 'confined_silent' and parallel != 1:
+        # Preserve the first log; never overwrite the evidence of the original run.
+        print('Build died with the measured confined-sandbox signature '
+              '(silent, stopped at "Checking File Globs"). Retrying serially; '
+              f'the original log is preserved at logs/{log_name}.')
+        serial_log = f'{Path(log_name).stem}-serial.log'
+        argv_serial = ['cmake', '--build', 'build', '--config', 'Release',
+                       '--target', *targets, '--parallel', '1']
+        with (logs / serial_log).open('w', encoding='utf-8', errors='replace') as log:
+            proc_serial = subprocess.run(argv_serial, cwd=root, env=env, stdout=log,
+                                         stderr=subprocess.STDOUT, text=True)
+        if proc_serial.returncode == 0:
+            return True, 'success_after_serial_retry'
+        print(f'Serial retry also failed; see logs/{serial_log}.')
+        return False, 'confined_silent_serial_retry_failed'
+    print(f'Build failed ({failure}). See logs/{log_name}.')
+    return False, failure
+
+
+# ── preflight ────────────────────────────────────────────────────────────────
+report = jsrf_build.preflight(args.parallel)
+print(f'python   : {report["python"]} ({report["python_version"]})')
+print(f'cmake    : {report["cmake"]}')
+print(f'ctest    : {report["ctest"]}')
+print(f'toolkit  : {report["toolkit"]}')
+print(f'parallel : {report["parallel"]}')
+if report['duplicate_case_keys']:
+    print(f'environment: collapsed duplicate-case keys {report["duplicate_case_keys"]}')
+if not report['ok']:
+    for problem in report['problems']:
+        print(f'PREFLIGHT FAILED: {problem}')
+    raise SystemExit('Preflight failed; nothing was built or regenerated.')
+
+if not args.allow_regeneration:
+    # Recovery regeneration can erase current ABI instrumentation, so it is off
+    # until the P0.7 provenance guard exists.  The pinned generated baseline is
+    # what gets compiled.
+    print('regeneration: disabled (pass --allow-regeneration to permit it; '
+          'the P0.7 guard does not exist yet)')
+
 if not run(['cmake', '-S', '.', '-B', 'build'], 'configure-current.log'):
     raise SystemExit('CMake configure failed; see logs/configure-current.log.')
 
-for script, message in (('scripts/recover-functions.py', 'Recovery generation failed; refusing to compile older generated output.'),
-                        ('scripts/generate-lifter-tests.py', 'Lifter regression generation failed.')):
-    if not run([python, '-X', 'utf8', script], f'{Path(script).stem}-current.log'):
-        raise SystemExit(message)
+if args.allow_regeneration:
+    for script, message in (
+            ('scripts/recover-functions.py',
+             'Recovery generation failed; refusing to compile older generated output.'),
+            ('scripts/generate-lifter-tests.py',
+             'Lifter regression generation failed.')):
+        if not run([python, '-X', 'utf8', script], f'{Path(script).stem}-current.log'):
+            raise SystemExit(message)
+
+# Inventory AFTER configure, because configure is what writes CTestTestfile.cmake.
+try:
+    targets, derived = build_targets()
+    inventory = jsrf_build.write_inventory()
+except jsrf_build.BuildError as error:
+    raise SystemExit(f'Target inventory could not be derived: {error}')
+print(f'targets  : {len(targets)} derived from CTest ({derived["test_count"]} tests)')
+print(f'inventory: {jsrf_build.INVENTORY_PATH.relative_to(root)}')
 
 if not run([python, 'scripts/build-identity.py', 'before'], 'build-identity-before.log'):
     raise SystemExit('Source fingerprint failed.')
 
-if not run(['cmake', '--build', 'build', '--config', 'Release', '--target', *TARGETS,
-            '--parallel', str(args.parallel)], 'build-current.log'):
+ok, outcome = run_build(targets, args.parallel, 'build-current.log')
+if not ok:
     raise SystemExit('Build failed. Game was not launched.')
 
 if not run([python, 'scripts/build-identity.py', 'after'], 'build-identity-after.log'):
     raise SystemExit('Build identity validation failed.')
 
-print('Build succeeded; source/executable identity recorded. See logs/build-current.log.')
+print(f'Build succeeded ({outcome}); source/executable identity recorded. '
+      f'See logs/build-current.log.')

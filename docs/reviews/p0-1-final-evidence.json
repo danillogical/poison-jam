@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "phase": "P0.1 delivered, final review pending",
+  "run": "logs\\runs\\20260923-013448-357-p0-strict-baseline",
+  "criteria": {
+    "P0.1-AC1": "PASS focused profile19",
+    "P0.1-AC2": "PASS prelaunch sentinels",
+    "P0.1-AC3": "PASS archive byte/witness controls",
+    "P0.1-AC4": "PASS four originals exploratory",
+    "P0.1-AC5": "PASS strict profile baseline only"
+  },
+  "files": {
+    "scripts/run-jsrf.py": "419628c16658094ddc566657495bc67364fc6686ad41949ab01f4546c7b5cdc5",
+    "scripts/jsrf_run_profile.py": "5cfda1a24c8466d6e847b3abe4ff5dc7946b1b40b11d9c56b7f0241e099926b8",
+    "scripts/check-run-profile.py": "105a8fdc67b9a415c7d61c1c62c0805ba2f961b347e2c0cb57dde9681bcb68a1",
+    "tests/test_run_profiles.py": "b9e5a0264df812695b75dc14870f22c1cd630042dbda20056380d1e63aea37d1",
+    "docs/jsrf-run-profiles.md": "3f3fddbf8517816c0fb9efce194ebb89c17888c6a83bc01cd7dfc66808b92c20",
+    "logs/p0-1-profile-tests-final.log": "110cf0340966d7b9b54c2ce1c50c90135ac6a32dd3405b574e46dd0bb3c6e6d7",
+    "logs/p0-1-historical-final.log": "e7882702938ecd27dc4e40e1918764a4d5fbfa7cba130a0a2778b5fd00600b43",
+    "logs/p0-1-strict-launch.log": "0aa4079cfb368e0c5e1aea30b489601d5fd5021a4929569db90997abfb657b15",
+    "logs/p0-1-strict-check.log": "50341935e0c609dd1f2f33c685bb09211a1ce810cf0828c8fbe64e4aeac10d75",
+    "logs\\runs\\20260923-013448-357-p0-strict-baseline\\metadata.json": "4230b9042dedb365c9e54b8573c727c2df8e5a6a0a12aca29a97820b4c9a9fa7",
+    "logs\\runs\\20260923-013448-357-p0-strict-baseline\\result.json": "5701e802b1f516c321301cd025753c41d3620fb7318cc62b515639b576dc11dc",
+    "logs\\runs\\20260923-013448-357-p0-strict-baseline\\jsrf_run.log": "ca95ad3d5a9757d6acea4b471af2a542295750fdc1ceee763ae8f328af42ec71",
+    "logs\\runs\\20260923-013448-357-p0-strict-baseline\\build-source.json": "396e83477209a1d45b6ae9f7829bb9bc9be4aa50047c4b222c0135fcd3b54cd0"
+  },
+  "limitations": [
+    "normal_exit0 after HalReturnToFirmware2 in1.92s is not liveness/title success",
+    "no dump on early normalexit",
+    "fresh disposable root has different save state from historical runs",
+    "DSH live readiness UNKNOWN"
+  ]
+}

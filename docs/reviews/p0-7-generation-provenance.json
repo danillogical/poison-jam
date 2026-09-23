@@ -1,0 +1,165 @@
+{
+  "checker_version": "jsrf-generation-provenance/1",
+  "full_translation_command": "python -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name \"Jet Set Radio Future\" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c",
+  "generated_outputs": {
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "7393f32bc953c01f293609d4a77abc1ddfc6118082bc2c3db04c7511ec3eec38",
+    "src/recomp/gen/recomp_0000.c": "2e1b6082fe691411301217332b3c2c561fb6b8faef4f6a4dd6b1d5fea07168a6",
+    "src/recomp/gen/recomp_0001.c": "e81ea53fb6b90b123fb88e089436902063ed0b052f38c4370abdc3b6171ca1f6",
+    "src/recomp/gen/recomp_0002.c": "c753efecb13b2c1218e6668c9c96c75e0116386df8a4da253870051125e47872",
+    "src/recomp/gen/recomp_0003.c": "bec987663e12743be735c57211b2cd219d2377451f909cc23b2cf3c5dce914b3",
+    "src/recomp/gen/recomp_0004.c": "5b8e7c218bb1b9e2da23fac35de78a3e6f56858d1bd0dcd337f8615126983412",
+    "src/recomp/gen/recomp_0005.c": "57b7138e9b20e2433a1a3a17b7984b8bde2f772e80ee90de1732923a747cb93a",
+    "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
+    "src/recomp/gen/recomp_dispatch.c": "b61fa0c759966a8c1c91acabdd2cc7dc6d11e60dac345591d48a7fe86b17696c",
+    "src/recomp/gen/recomp_funcs.h": "e7ae9afad3ca1c823b056813aa4e9b978aefd83a858e3cb024be847c59dd8664",
+    "src/recomp/gen/recomp_stubs_recovery.c": "77d2c5decf6a815c9c2b1400b37a189d4419bef07baeab3836437e19beb9d345",
+    "src/recomp/gen/recomp_stubs_unresolved.c": "eabd1f8872da1cf8aaca65d7aea349df9476a701f1cda7004dc00cc5d39f66fb",
+    "src/recomp/gen/recomp_types.h": "4122e4f536370b675240b401f6bcf0a353d5200c03b4c0d67b2fbac542119c67",
+    "src/recomp/recovered/recovered.c": "3210117dccf0a909cf3f7f881919001d976e14922aea6d1025312df5b1f22fe9",
+    "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
+    "src/recomp/recovered/recovered_11c1_test.c": "88f6f654cd5a615c76838332884d0131a178718a9680e77f6e57fda8f2761621",
+    "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
+  },
+  "generation_mode": "pinned-baseline (no regeneration)",
+  "generators": {
+    "project": {
+      "dirty": true,
+      "revision": "40ae5bdfd85f9547a80bd4f89109934d7f4182e7",
+      "state": "MEASURED",
+      "status_sha256": "0c5bb835ccc138d3ac093a6ea708f311387b1fe1a7d3465b4b084c419dd847dc"
+    },
+    "scripts/recover-functions.py": "5397c8b0ab5a857b5dc46f3522e99adb89191b39071b03a5014a244e3dd02fc1",
+    "scripts/relift-selected.py": "b5dde0b04f0c25f2e7dc1d41e1f47729df65a9b353acb210c37b91985418ca6b",
+    "toolkit": {
+      "dirty": false,
+      "revision": "484887b88ff39f86d17c819375993340ebae972e",
+      "state": "MEASURED",
+      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "tools/recomp/lifter.py": "86cfbdbcfb686fe624bf961177c35b3978f25068bb4b820b07fce0c224dce049",
+    "tools/recomp/translator.py": "43aadf4e41602aad180d8cf7643937a2a547c0e9aa7f6e6e4c056fd1c0d48f5a"
+  },
+  "inputs": {
+    "config/boundary-fixes.json": {
+      "bytes": 2142,
+      "present": true,
+      "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
+    },
+    "config/manual-functions.json": {
+      "bytes": 101480,
+      "present": true,
+      "sha256": "4d515e6082a61443c9ab942cb01ca07a73388603df35f2b7d93576884d0a1d9f"
+    },
+    "config/recovered-functions.json": {
+      "bytes": 2821750,
+      "present": true,
+      "sha256": "277f96bd41853efb3e5cc76b4737a34b99f5271a1cab2a6a8080b4a009a178de"
+    },
+    "config/recovery-unresolved.json": {
+      "bytes": 8387,
+      "present": true,
+      "sha256": "3a5af64103f17d708b7931b052ce5786dde6bfd727c39c139c0b3bd88888f5db"
+    },
+    "game/default.xbe": {
+      "bytes": 2281472,
+      "present": true,
+      "sha256": "fd19055756719893c466302809b433b785ecf5732df0441286f3f605f0f3ef9c"
+    },
+    "tools/disasm/output/functions.json": {
+      "bytes": 3840761,
+      "present": true,
+      "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
+    },
+    "tools/disasm/output/functions.recovered.json": {
+      "bytes": 6012250,
+      "present": true,
+      "sha256": "1f7abb1bba4db039456efd844568b5f57ac90b5f5cbc8ff78dd1922c37e37a4b"
+    }
+  },
+  "known_unknowns": [],
+  "ownership": {
+    "recovery_owns": [
+      "src/recomp/recovered/recovered.c",
+      "src/recomp/gen/recomp_stubs_recovery.c"
+    ],
+    "rule": "recover-functions.py owns only recomp_stubs_recovery.c and recovered.c; the full pass owns recomp_funcs.h, the chunks, the dispatch table and recomp_stubs_unresolved.c. Never let one write the other's files.",
+    "translation_owns": [
+      "src/recomp/gen/recomp_funcs.h",
+      "src/recomp/gen/recomp_dispatch.c",
+      "src/recomp/gen/recomp_stubs_unresolved.c",
+      "src/recomp/gen/recomp_types.h"
+    ]
+  },
+  "protected_markers": {
+    "names": [
+      "RECOMP_ABI_CALL",
+      "JSRF_ABI_CONTINUE",
+      "g_seh_ebp",
+      "RECOMP_GENERATED_CODE"
+    ],
+    "per_file": {
+      "src/recomp/gen/recomp_dispatch.c": {
+        "markers": {
+          "JSRF_ABI_CONTINUE": 0,
+          "RECOMP_ABI_CALL": 0,
+          "RECOMP_GENERATED_CODE": 0,
+          "g_seh_ebp": 0
+        },
+        "present": true
+      },
+      "src/recomp/gen/recomp_funcs.h": {
+        "markers": {
+          "JSRF_ABI_CONTINUE": 0,
+          "RECOMP_ABI_CALL": 0,
+          "RECOMP_GENERATED_CODE": 0,
+          "g_seh_ebp": 0
+        },
+        "present": true
+      },
+      "src/recomp/gen/recomp_stubs_recovery.c": {
+        "markers": {
+          "JSRF_ABI_CONTINUE": 0,
+          "RECOMP_ABI_CALL": 0,
+          "RECOMP_GENERATED_CODE": 1,
+          "g_seh_ebp": 0
+        },
+        "present": true
+      },
+      "src/recomp/gen/recomp_stubs_unresolved.c": {
+        "markers": {
+          "JSRF_ABI_CONTINUE": 0,
+          "RECOMP_ABI_CALL": 0,
+          "RECOMP_GENERATED_CODE": 1,
+          "g_seh_ebp": 0
+        },
+        "present": true
+      },
+      "src/recomp/gen/recomp_types.h": {
+        "markers": {
+          "JSRF_ABI_CONTINUE": 0,
+          "RECOMP_ABI_CALL": 6,
+          "RECOMP_GENERATED_CODE": 2,
+          "g_seh_ebp": 6
+        },
+        "present": true
+      },
+      "src/recomp/recovered/recovered.c": {
+        "markers": {
+          "JSRF_ABI_CONTINUE": 9222,
+          "RECOMP_ABI_CALL": 9541,
+          "RECOMP_GENERATED_CODE": 1,
+          "g_seh_ebp": 6311
+        },
+        "present": true
+      }
+    },
+    "totals": {
+      "JSRF_ABI_CONTINUE": 9222,
+      "RECOMP_ABI_CALL": 9547,
+      "RECOMP_GENERATED_CODE": 5,
+      "g_seh_ebp": 6317
+    }
+  },
+  "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",
+  "schema_version": 1
+}

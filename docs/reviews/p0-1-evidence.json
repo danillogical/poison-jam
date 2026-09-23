@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "phase": "pre-strict-baseline",
+  "game_revision": "40ae5bdfd85f9547a80bd4f89109934d7f4182e7",
+  "toolkit_revision": "484887b88ff39f86d17c819375993340ebae972e",
+  "files": {
+    "src/main.c": "f0957dbfce9b57c249e36999511c87fe32cd03ce44d7c1fd091cda62f8aa263a",
+    "src/jsrf_save_root.c": "80a8910faef546971e76adbdb571e65cd18d50a425f2aa6f7b7684f48e2d4d8f",
+    "src/jsrf_save_root.h": "a3d9208ac8860f8b6c5e4fd151eb1cfdb0c48347dd4ec9c05364e9bbe90d2926",
+    "tests/test_save_root.c": "91b490e122ee3a6ac7e1a91e862e70973f173e88ecc71f4fe5413366948e4f00",
+    "CMakeLists.txt": "408dd73545f369dd6a3b208e4d450c8ce52d71c19f931d103c1b4b521c3194c6",
+    "tools/harness/collect.c": "599f667c9694401a5c4e70819ddec0d15a19a512136725ebcc4e7e3e35fdc63e",
+    "scripts/build-jsrf.py": "0fef2f406d3dfab743b642263ecdd4247588b5957a28284825ac91c718a9808e",
+    "scripts/run-jsrf.py": "419628c16658094ddc566657495bc67364fc6686ad41949ab01f4546c7b5cdc5",
+    "scripts/check-run-profile.py": "fd7b0f87618d1bfe31df7ddc351b3e4df1a559646fad6e27779fcbe2643779ba",
+    "scripts/jsrf_run_profile.py": "6ca713ca38c6d3d3e2c2435b2c97adba9927b531dabba7491b3617bfdba39c60",
+    "tests/test_run_profiles.py": "062fa45e2169a7a3b8571accb35fd75e5b4c3f579a2ae6a480358235cc1d1530",
+    "logs/p0-s-build-3.log": "c501218d991d5e4a34efb5acaebbb45bfca255163ead283b06ac64e04cfd72aa",
+    "logs/p0-s-ctest.log": "132645ed48a75138294585ab6c5204c84087b1f8da73a36ba42175f6648c6165",
+    "logs/p0-s-ctest.xml": "6d3a042fb319f4b979cb1279eca51d06423fa8ed79a6d947742037caaf15d936",
+    "logs/p0-1-profile-tests.log": "3cd243f063ca446e527dc04d491a474aa694b7d789a819ad03370dbdbd73c54d",
+    "logs/p0-1-historical-profiles.log": "e7882702938ecd27dc4e40e1918764a4d5fbfa7cba130a0a2778b5fd00600b43",
+    "build/Release/build-source.json": "396e83477209a1d45b6ae9f7829bb9bc9be4aa50047c4b222c0135fcd3b54cd0",
+    "build/Release/jsrf_recomp.exe": "09b42eb65184fc5b1c12f1926eefd9b5392d03bb8504021cdc5d7e0fbc032a9c",
+    "build/Release/jsrf_collect.exe": "77794833d13aa4606a97e0d457480e397b322d2961caf9ad26e139185a201882",
+    "build/Release/jsrf_save_root_test.exe": "a8d35afb1f3ddcdde89acb031d55bd98433626e70a3e2ccb2eab6feba809e93d"
+  },
+  "results": {
+    "release_ctest": "12/12",
+    "profile_tests": "17/17",
+    "historical_profiles": "4/4 exploratory, metadata hashes unchanged",
+    "build_identity": "verified",
+    "generated_preservation": "17/17 unchanged"
+  }
+}

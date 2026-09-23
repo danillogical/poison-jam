@@ -33,6 +33,7 @@ list(FILTER RECOMP_GEN_SOURCES EXCLUDE REGEX "recomp_.*_test\\.c$")
 
 add_executable(${PROJECT_NAME} WIN32
     src/main.c
+    src/jsrf_save_root.c
     src/recomp_manual.c
     src/jsrf_crt.c
     src/diagnostics.c
@@ -59,6 +60,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     xinput
     winmm
     dbghelp
+    shell32
 )
 
 if(MSVC)
@@ -66,12 +68,24 @@ if(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE /bigobj)
 endif()
 
-add_executable(jsrf_collect tools/harness/collect.c)
-target_link_libraries(jsrf_collect PRIVATE dbghelp)
+add_executable(jsrf_collect tools/harness/collect.c src/jsrf_save_root.c)
+target_include_directories(jsrf_collect PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(jsrf_collect PRIVATE dbghelp shell32)
 target_compile_definitions(jsrf_collect PRIVATE _CRT_SECURE_NO_WARNINGS)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(jsrf_save_root_test
+        tests/test_save_root.c
+        src/jsrf_save_root.c
+        ${XBOXRECOMP_DIR}/src/kernel/kernel_path.c
+        ${XBOXRECOMP_DIR}/src/kernel/kernel_io.c)
+    target_include_directories(jsrf_save_root_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${XBOXRECOMP_DIR}/src
+        ${XBOXRECOMP_DIR}/src/kernel)
+    target_link_libraries(jsrf_save_root_test PRIVATE shell32 advapi32)
+    add_test(NAME jsrf_save_root COMMAND jsrf_save_root_test)
     add_executable(jsrf_crt_test tests/test_memmove.c src/jsrf_crt.c)
     target_include_directories(jsrf_crt_test PRIVATE src)
     add_test(NAME jsrf_memmove COMMAND jsrf_crt_test)

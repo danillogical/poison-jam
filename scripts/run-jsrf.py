@@ -11,6 +11,7 @@ import argparse
 import ctypes
 import hashlib
 import json
+import ntpath
 import os
 import re
 import shutil
@@ -19,6 +20,15 @@ import sys
 from ctypes import wintypes
 from datetime import datetime, timezone
 from pathlib import Path
+
+from jsrf_run_profile import (
+    ProfileError,
+    environment_settings,
+    make_profile_record,
+    parse_save_root_markers,
+    resolve_requested_profile,
+    validate_launch_profile,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build' / 'Release'
@@ -55,6 +65,10 @@ class PROCESSENTRY32W(ctypes.Structure):
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def digest_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
 
 
 def run_git(repo: Path, *args: str, binary: bool = False) -> bytes | str:
@@ -159,6 +173,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--seconds', type=int, default=15)
     parser.add_argument('--label', default='run')
     parser.add_argument('--probe', default='')
+    parser.add_argument('--profile', choices=('strict', 'exploratory', 'fixture'),
+                        help='evidence profile; defaults to strict for a guest run and fixture for --probe')
     parser.add_argument('--expect-checkpoint', action='append', dest='expect_checkpoint')
     args = parser.parse_args()
     if not 1 <= args.seconds <= 300:
@@ -167,13 +183,41 @@ def parse_args() -> argparse.Namespace:
         parser.error('--label must match [a-zA-Z0-9_-]+')
     if args.probe not in PROBES:
         parser.error(f'unknown --probe {args.probe!r}')
+    try:
+        args.profile, args.profile_source = resolve_requested_profile(args.profile, args.probe)
+    except ProfileError as error:
+        parser.error(str(error))
     if not args.expect_checkpoint:
         args.expect_checkpoint = ['memory_ready', 'guest_entry']
     return args
 
 
+def repository_identity(repo: Path, patch_path: Path, status_path: Path) -> dict[str, str]:
+    """Bind a run to each repository revision and archived working-tree state."""
+    revision = run_git(repo, 'rev-parse', 'HEAD').strip()
+    return {
+        'revision': revision,
+        'patch_sha256': digest(patch_path),
+        'status_sha256': digest(status_path),
+    }
+
+
+def save_root_observation(log: str, expected_path: str) -> tuple[str | None, str | None, bool]:
+    """Require both option resolution and a path-layer translation witness."""
+    resolved_path, path_layer_path = parse_save_root_markers(log)
+    if not resolved_path or not path_layer_path:
+        return resolved_path, path_layer_path, False
+    normalize = ntpath.normcase
+    verified = (normalize(resolved_path) == normalize(expected_path)
+                and normalize(path_layer_path) == normalize(expected_path)
+                and normalize(path_layer_path) == normalize(resolved_path))
+    return resolved_path, path_layer_path, verified
+
+
 def classify_exit(result: dict) -> int:
     if result.get('outcome') == 'collector_failure':
+        return 2
+    if result.get('save_root_verified') is False:
         return 2
     if 'gpu_report_ok' in result and not result['gpu_report_ok']:
         return 2
@@ -188,6 +232,12 @@ def classify_exit(result: dict) -> int:
 
 def main() -> int:
     args = parse_args()
+    inherited_settings = environment_settings(dict(os.environ))
+    try:
+        validate_launch_profile(args.profile, args.probe, inherited_settings)
+    except ProfileError as error:
+        print(f'Refusing {args.profile} launch: {error}', file=sys.stderr)
+        return 2
     previous = {key: os.environ.get(key) for key in ENV_KEYS}
     collector = None
     started = datetime.now()
@@ -201,7 +251,21 @@ def main() -> int:
         if project_game_running(ROOT):
             print('A project game instance is already running; inspect it before another run.', file=sys.stderr)
             return 2
-        run_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            run_dir.mkdir(parents=True, exist_ok=False)
+        except OSError as error:
+            print(f'Could not create fresh run directory: {error}', file=sys.stderr)
+            return 2
+        save_root = run_dir / 'save-root'
+        try:
+            save_root.mkdir(exist_ok=False)
+        except OSError as error:
+            print(f'Could not create disposable save root: {error}', file=sys.stderr)
+            return 2
+        if next(save_root.iterdir(), None) is not None:
+            print('Refusing to launch with a non-empty disposable save root.', file=sys.stderr)
+            return 2
+        resolved_save_root = str(save_root.resolve(strict=True))
         for name in ARTIFACTS:
             shutil.copy2(BUILD / name, run_dir / name)
         (run_dir / 'toolkit.patch').write_bytes(run_git(TOOLKIT, 'diff', '--binary', 'HEAD', binary=True))
@@ -212,21 +276,49 @@ def main() -> int:
             os.environ['RECOMP_GPU_ACK'] = '0'
         os.environ['JSRF_LOG_PATH'] = str(run_dir / 'jsrf_run.log')
         os.environ.pop('RECOMP_WATCHDOG_SECS', None)
+        effective_settings = environment_settings(dict(os.environ))
+        profile_record = make_profile_record(
+            args.profile, inherited_settings, effective_settings, args.probe)
+        command = [str(run_dir / 'jsrf_collect.exe'), str(args.seconds), str(run_dir),
+                   str(run_dir / 'jsrf_recomp.exe'), f'--save-root={resolved_save_root}']
+        if args.probe:
+            command.append(f'--probe={args.probe}')
+        project_identity = repository_identity(
+            ROOT, run_dir / 'project.patch', run_dir / 'project-status.txt') if project_archived else None
+        toolkit_identity = repository_identity(
+            TOOLKIT, run_dir / 'toolkit.patch', run_dir / 'toolkit-status.txt')
         metadata = {
             'started_utc': datetime.now(timezone.utc).isoformat(),
             'cwd': str(ROOT),
             'seconds': args.seconds,
             'probe': args.probe,
+            'profile_source': args.profile_source,
             'expected_checkpoints': args.expect_checkpoint,
-            'toolkit_revision': run_git(TOOLKIT, 'rev-parse', 'HEAD').strip(),
             'project_archived': project_archived,
             'configuration': 'Release',
+            'xbe_path': str(ROOT / 'game' / 'default.xbe'),
             'xbe_sha256': digest(ROOT / 'game' / 'default.xbe'),
             'exe_sha256': digest(run_dir / 'jsrf_recomp.exe'),
             'pdb_sha256': digest(run_dir / 'jsrf_recomp.pdb'),
-            'settings': [{'name': name, 'value': value}
-                         for name, value in sorted(os.environ.items())
-                         if name.startswith(('RECOMP_', 'JSRF_'))],
+            'map_sha256': digest(run_dir / 'jsrf_recomp.map'),
+            'collector_sha256': digest(run_dir / 'jsrf_collect.exe'),
+            'build_source_sha256': digest(run_dir / 'build-source.json'),
+            'artifact_sha256': {name: digest(run_dir / name) for name in ARTIFACTS},
+            'settings': effective_settings,
+            'run_profile': profile_record,
+            'command': command,
+            'repository_identities': {
+                'project': project_identity,
+                'toolkit': toolkit_identity,
+            },
+            'save_root': {
+                'archive_root': str(run_dir.resolve()),
+                'expected_resolved_path': resolved_save_root,
+                'observed_resolved_path': None,
+                'observed_path_layer_root': None,
+                'disposable': True,
+                'verified': False,
+            },
             'sources': source_entries(),
         }
         (run_dir / 'metadata.json').write_text(json.dumps(metadata, indent=2), encoding='utf-8')
@@ -234,10 +326,6 @@ def main() -> int:
         if archive.returncode != 0:
             print('Source archiving failed.', file=sys.stderr)
             return 2
-        command = [str(run_dir / 'jsrf_collect.exe'), str(args.seconds), str(run_dir),
-                   str(run_dir / 'jsrf_recomp.exe')]
-        if args.probe:
-            command.append(f'--probe={args.probe}')
         collector = subprocess.Popen(
             command, cwd=str(ROOT),
             creationflags=CREATE_NO_WINDOW if os.name == 'nt' else 0)
@@ -256,6 +344,18 @@ def main() -> int:
             result = {'outcome': 'collector_failure', 'reason': 'missing collector result'}
         log_path = run_dir / 'jsrf_run.log'
         log = log_path.read_text(encoding='utf-8', errors='replace') if log_path.is_file() else ''
+        metadata['run_log_sha256'] = digest(log_path) if log_path.is_file() else None
+        observed_root, observed_path_layer, save_root_verified = save_root_observation(
+            log, resolved_save_root)
+        metadata['save_root']['observed_resolved_path'] = observed_root
+        metadata['save_root']['observed_path_layer_root'] = observed_path_layer
+        metadata['save_root']['verified'] = save_root_verified
+        if not save_root_verified:
+            result['save_root_verified'] = False
+            result['save_root_reason'] = (
+                'runtime did not report exactly one matching resolved save root')
+        else:
+            result['save_root_verified'] = True
         if log_path.is_file():
             shutil.copy2(log_path, ROOT / 'jsrf_run.log')
         missing = [name for name in args.expect_checkpoint
@@ -272,6 +372,7 @@ def main() -> int:
                     stdout=log_file, stderr=subprocess.STDOUT)
             result['gpu_report_ok'] = gpu.returncode == 0
         (run_dir / 'result.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
+        (run_dir / 'metadata.json').write_text(json.dumps(metadata, indent=2), encoding='utf-8')
         print(f'Artifacts: {run_dir}')
         print(json.dumps(result, separators=(',', ':')))
         return classify_exit(result)

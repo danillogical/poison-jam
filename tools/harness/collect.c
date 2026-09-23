@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../../src/diagnostics.h"
+#include "../../src/jsrf_save_root.h"
 
 static HANDLE process;
 static DWORD process_id;
@@ -261,17 +262,30 @@ int main(int argc, char **argv)
     PROCESS_INFORMATION child = {0};
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits = {0};
     HANDLE job;
-    char command[2048], path[MAX_PATH];
+    char command[32767], path[MAX_PATH];
+    size_t command_used = 0;
     ULONGLONG deadline, break_deadline = 0;
     DWORD exit_code = 0;
     const char *outcome = "collector_failure";
     int initial_break = 1, dump_ok = 0, finished = 0;
-    if (argc < 4) { fprintf(stderr, "usage: jsrf_collect seconds output-dir executable [probe]\n"); return 2; }
+    if (argc < 4) { fprintf(stderr, "usage: jsrf_collect seconds output-dir executable [game-arg ...]\n"); return 2; }
     out_dir = argv[2];
     snprintf(path, sizeof(path), "%s\\stacks.txt", out_dir);
     report = fopen(path, "w");
     if (!report) return 2;
-    snprintf(command, sizeof(command), "\"%s\" %s", argv[3], argc > 4 ? argv[4] : "");
+    command[0] = '\0';
+    if (!jsrf_append_windows_arg(command, sizeof(command), &command_used, argv[3])) {
+        fprintf(report, "Child command line exceeds the Windows command limit.\n");
+        fclose(report);
+        return 2;
+    }
+    for (int arg = 4; arg < argc; ++arg) {
+        if (!jsrf_append_windows_arg(command, sizeof(command), &command_used, argv[arg])) {
+            fprintf(report, "Child command line exceeds the Windows command limit.\n");
+            fclose(report);
+            return 2;
+        }
+    }
     startup.dwFlags = STARTF_USESHOWWINDOW;
     startup.wShowWindow = SW_HIDE;
     job = CreateJobObjectA(NULL, NULL);
@@ -318,7 +332,8 @@ int main(int argc, char **argv)
                 capture_gpu_event(event.dwThreadId, exception->ExceptionRecord.NumberParameters ?
                                   exception->ExceptionRecord.ExceptionInformation[0] : 0);
                 continuation = DBG_EXCEPTION_NOT_HANDLED;
-            } else if (code == 0xE0424243 && exception->dwFirstChance && argc > 4) {
+            } else if (code == 0xE0424243 && exception->dwFirstChance &&
+                       jsrf_argv_has_probe(argc, argv)) {
                 /* Explicit fixture snapshot request; the fixture handles it. */
                 dump_ok = capture(0, NULL);
                 continuation = DBG_EXCEPTION_NOT_HANDLED;

@@ -1,0 +1,178 @@
+{
+  "contract_name_deviations": {
+    "P0.4-AC1": {
+      "contract_names": "tests/test_dump_mapping.py",
+      "implemented_as": "tests/test_dump_controls.py",
+      "reason": "the checker was extended to report structural validity and image-content integrity separately, so \"controls\" names it better than \"mapping\"; scripts/check-dump-mapping.py still exists unchanged"
+    },
+    "P0.6-AC2": {
+      "contract_names": "tests/test_probe_expectations.py",
+      "implemented_as": "tests/test_harness_permissions.py",
+      "reason": "probe expectations and the permission/result-schema fixtures share one module because they exercise one library (scripts/jsrf_harness.py)"
+    },
+    "note": "Two criteria name a test file that does not exist; the substance is implemented under a different name. Recorded rather than silently renamed, because the contract is frozen."
+  },
+  "contract_sha256": "e91a44e0f2dc2cb15fa217ed79b5dc17c846a68270a2dd8a2b865667e55c2c10",
+  "packets": {
+    "P0.3": {
+      "criteria": {
+        "AC1": {
+          "claim": "Cold-read of AGENTS.md, the plan and CURRENT STATE resolves the same next packet and evidence revision; no active duplicated roster remains.",
+          "command": "C:\\Python313\\python.exe -X utf8 scripts/check-agent-docs.py --check",
+          "expected": [
+            "roster_single_authority",
+            "next_packet"
+          ]
+        },
+        "AC2": {
+          "claim": "The checker passes current documents and fails each injected stale-policy control for its intended reason.",
+          "command": "C:\\Python313\\python.exe -X utf8 tests/test_agent_docs.py",
+          "expected": "all controls pass"
+        },
+        "AC3": {
+          "claim": "AGENTS.md stays below the 65,536-byte budget with headroom; the measured UTF-8 byte count is reported.",
+          "command": "C:\\Python313\\python.exe -X utf8 scripts/check-agent-docs.py --check",
+          "expected": [
+            "agents_budget"
+          ]
+        }
+      },
+      "packet": "P0.3"
+    },
+    "P0.4": {
+      "criteria": {
+        "AC1": {
+          "claim": "Results separate structural readability, stack support, image-content MATCH/CONTENT_MISMATCH, UNREADABLE and MISSING.",
+          "command": "C:\\Python313\\python.exe -X utf8 tests/test_dump_controls.py",
+          "expected": "all controls pass"
+        },
+        "AC2": {
+          "claim": "Positive intact control matches the documented .text bytes; the displaced-image control is detected while preserving actual guest bytes; malformed/missing fail closed.",
+          "command": "C:\\Python313\\python.exe -X utf8 scripts/check-dump-controls.py logs/runs/20260921-111607-936-kick-ack logs/runs/20260922-224429-003-a2g-304f0-span",
+          "expected": "all controls pass"
+        },
+        "AC3": {
+          "claim": "On the cited A2g artifact, actual guest-VA reads retain the zero thunk slot and the logged return VA is checked at its recorded ESP.",
+          "command": "C:\\Python313\\python.exe -X utf8 tests/test_dump_controls.py",
+          "expected": "all controls pass"
+        }
+      },
+      "packet": "P0.4"
+    },
+    "P0.5": {
+      "criteria": {
+        "AC1": {
+          "claim": "Preflight reports resolved Python/CMake/CTest and dependencies, and distinguishes the failure classes.",
+          "command": "C:\\Python313\\python.exe -X utf8 tests/test_build_jsrf.py",
+          "expected": "all controls pass"
+        },
+        "AC2": {
+          "claim": "Build target inventory is generated from CMake/CTest, and the built inventory covers the discovered required targets.",
+          "command": "C:\\Python313\\python.exe -X utf8 -c \"import sys; sys.path.insert(0, 'scripts'); import jsrf_build as B, json; print(json.dumps(B.discover_required_targets(), sort_keys=True))\"",
+          "expected": "test_count 12 and targets include xbox_timestamp_test; the build entry point derives its list via jsrf_build.discover_required_targets()",
+          "note": "inventory_gaps() compares the derived set against a hand-maintained list; that list no longer exists in build-jsrf.py, so the comparison reports itself as unavailable rather than raising. The gap is pinned against a reconstructed legacy list in tests/test_build_jsrf.py."
+        },
+        "AC3": {
+          "claim": "Fresh configure, guarded Release build and full CTest pass, with every test name and result recorded.",
+          "command": "ctest --test-dir build -C Release --output-on-failure",
+          "expected": "all controls pass"
+        },
+        "AC4": {
+          "claim": "Before/after build identity binds source, executable, collector, PDB/map, configuration and interpreter.",
+          "command": "C:\\Python313\\python.exe scripts/build-identity.py verify",
+          "expected": "all controls pass"
+        }
+      },
+      "packet": "P0.5"
+    },
+    "P0.6": {
+      "criteria": {
+        "AC1": {
+          "claim": "A permitted scratch-root control succeeds and a denied root returns ENVIRONMENT_BLOCKED; cleanup is verified.",
+          "command": "C:\\Python313\\python.exe -X utf8 tests/test_harness_permissions.py",
+          "expected": "all controls pass"
+        },
+        "AC2": {
+          "claim": "Every defined probe has one centralized expected checkpoint; probe runs do not inherit guest_entry.",
+          "command": "C:\\Python313\\python.exe -X utf8 -c \"import sys; sys.path.insert(0,'scripts'); import jsrf_harness as H; print(H.probe_map_gaps())\"",
+          "expected": "all controls pass"
+        },
+        "AC3": {
+          "claim": "Preflight checks emulated disk access without changing bytes; a denied access is ENVIRONMENT_BLOCKED; all six images enumerated.",
+          "command": "C:\\Python313\\python.exe -X utf8 -c \"import sys; sys.path.insert(0,'scripts'); import jsrf_harness as H; print(H.preflight_disk())\"",
+          "expected": "all controls pass"
+        },
+        "AC4": {
+          "claim": "Result schema keeps launch, capture, profile and semantic outcomes separate; deadline and normal exit never imply liveness.",
+          "command": "C:\\Python313\\python.exe -X utf8 tests/test_harness_permissions.py",
+          "expected": "all controls pass"
+        }
+      },
+      "packet": "P0.6"
+    },
+    "P0.7": {
+      "criteria": {
+        "AC1": {
+          "claim": "Provenance manifest identifies both repositories, XBE and analysis-input hashes, exact command, generator versions, mode, outputs and protected ABI markers.",
+          "command": "C:\\Python313\\python.exe -X utf8 scripts/check-generation-provenance.py --check",
+          "expected": "all controls pass"
+        },
+        "AC2": {
+          "claim": "Check-only generation writes only isolated candidate output; production chunks are byte-identical before/after.",
+          "command": "C:\\Python313\\python.exe -X utf8 scripts/check-generation-provenance.py --check-only",
+          "expected": "all controls pass"
+        },
+        "AC3": {
+          "claim": "Negative controls changing an input hash or removing a protected marker are rejected; a missing manifest cannot pass.",
+          "command": "C:\\Python313\\python.exe -X utf8 tests/test_generation_provenance.py",
+          "expected": "all controls pass"
+        },
+        "AC4": {
+          "claim": "Publish only a bounded A2h writer-investigation packet with identity, profile, existing evidence, attempt count, instrumented address and next discriminating experiment.",
+          "command": "read docs/packets/a2h-writer-investigation.md",
+          "expected": "all controls pass"
+        }
+      },
+      "packet": "P0.7"
+    }
+  },
+  "purpose": "Per-criterion evidence for the implemented P0 packets. Each row names a command the reviewer can re-run.",
+  "schema_version": 1,
+  "suites": {
+    "test_agent_docs": {
+      "command": "C:\\Python313\\python.exe -X utf8 tests/test_agent_docs.py",
+      "exit": 0,
+      "log": "logs\\test_agent_docs-final.log",
+      "log_sha256": "6d75cc7aa2a012494276270a20b08e8f47abb611a29e53502c4a4f92afd34159",
+      "summary": "Ran 26 tests in 0.766s"
+    },
+    "test_build_jsrf": {
+      "command": "C:\\Python313\\python.exe -X utf8 tests/test_build_jsrf.py",
+      "exit": 0,
+      "log": "logs\\test_build_jsrf-final.log",
+      "log_sha256": "3bb4dbeedf16107b3df21a5101efc6d49d8bf50bca351ba3ae8cede75b66ab7f",
+      "summary": "Ran 27 tests in 1.561s"
+    },
+    "test_dump_controls": {
+      "command": "C:\\Python313\\python.exe -X utf8 tests/test_dump_controls.py",
+      "exit": 0,
+      "log": "logs\\test_dump_controls-final.log",
+      "log_sha256": "d34207dbf8d0f3e2a09549c7ff28509f3beae17ffd2609787929808887515915",
+      "summary": "Ran 21 tests in 0.452s"
+    },
+    "test_generation_provenance": {
+      "command": "C:\\Python313\\python.exe -X utf8 tests/test_generation_provenance.py",
+      "exit": 0,
+      "log": "logs\\test_generation_provenance-final.log",
+      "log_sha256": "3a6b30396edbccac5fd8c3c3d63639448e5ff4d2f29d82b190be11457d785827",
+      "summary": "Ran 29 tests in 3.720s"
+    },
+    "test_harness_permissions": {
+      "command": "C:\\Python313\\python.exe -X utf8 tests/test_harness_permissions.py",
+      "exit": 0,
+      "log": "logs\\test_harness_permissions-final.log",
+      "log_sha256": "4a86b6b9a95bb62b3a48849b57766ed8af8fc5d99ccb7cd163ca061fb3ffad66",
+      "summary": "Ran 31 tests in 0.078s"
+    }
+  }
+}

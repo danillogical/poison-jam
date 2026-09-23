@@ -13,47 +13,84 @@ twice, on 2026-09-22 — so "read once" is not enough.
 
 ## 0. Startup checks — do these before selecting work
 
-Five cheap checks. They exist because every failure this workflow addresses happened
-at a transition, not from ignorance of the rules.
+Complete this checklist in every new top-level session before implementing game
+packets. Revalidate affected checks after a route/policy change or loss of child
+state. A catalog entry, old child ID or previous session's PASS is not readiness.
+Read-only diagnosis and repairing this workflow may proceed while readiness is
+blocked, but cannot be presented as accepted game work.
 
-1. **Which harness am I, and which routes may I spawn?** Read the table in §1 and
-   work out your column. You **cannot select your own session model** — that is
-   launcher configuration, fixed before you start; this file cannot change it. What
-   you control is what you *spawn*.
-2. **Confirm the routes you will need.** On DSH, verify the acceptance-reviewer route
-   with `list_subagent_models` **before** promising a review. Route availability and
-   successful invocation are different things, so a catalog entry is not proof.
-3. **Read the plan, then reconcile it against current state.**
-   `plan-jsrf-bare-minimum.md` owns acceptance criteria and statuses;
-   `report-deepseek.md`'s `CURRENT STATE` block owns the current blocker, evidence
-   revision and next packet. **If they disagree, say so and reconcile explicitly**
-   rather than silently picking one. The plan's statuses win on acceptance; the
-   `CURRENT STATE` block wins on what happened most recently.
-4. **Record a compact startup acknowledgement** in the report: harness, the
-   configured session model if verifiable, the selected packet, and reviewer/advisor
-   availability. This is what makes "the session knew what it was doing" checkable
-   instead of assumed.
-5. **Open a packet record** before implementing (§2.1). Criteria, evidence revision
-   and attempts belong somewhere durable, not in working memory.
+1. **Identify the harness and instructions.** Read this file, the active plan,
+   `report-deepseek.md` CURRENT STATE and `docs/jsrf-run-profiles.md`. Record their
+   Git revision plus working-tree diff identity. Identify the configured session
+   model/effort from actual metadata, or record UNKNOWN; documentation cannot
+   change an already running model. Use only the current column in §1.
+2. **Actually invoke the reviewer.** DSH: discover with `list_subagent_models`,
+   then create `workbuddy-ai/hy4-preview-f` at `high` for a read-only readiness
+   challenge. Codex: create a separate `gpt-6-luna` at `max` for that challenge.
+   Ask it to return a fresh session-specific token and identify one way an empty
+   evidence set must fail acceptance. Record requested/returned route, child ID,
+   response and error if any. PASS requires an actual completed response from the
+   intended route, not just successful dispatch. HY4 is a **DSH** prerequisite;
+   do not invent a Codex HY4 route. A smoke reply is readiness, not packet review.
+3. **Create and verify the persistent advisor now.** Use §4 with a fresh
+   self-contained brief and a unique marker. Record the child ID. After its first
+   reply, send a continuation to the same child asking for that marker without
+   supplying it again. PASS requires the correct reply on that same child. A
+   replacement one-shot answer is FAIL. Reuse this advisor for subsequent delta
+   briefs in this top-level session; a new session creates/revalidates its own.
+4. **Reconcile state and repository ownership.** Inspect both Git working trees;
+   preserve unrelated edits. Select the first unaccepted executable packet whose
+   dependencies are accepted. The plan owns acceptance; CURRENT STATE owns the
+   latest observed stop. Reconcile contradictions explicitly. Do not resume a
+   historical "next packet" or repeat delivered work solely because review is
+   missing. Assign one build/run owner and disjoint worker write scopes.
+5. **Check packet readiness.** Exact criterion IDs/revision, real commands or an
+   explicitly scheduled tooling prerequisite, admissible profile, controls and
+   reviewer must exist. If they do not, refine the contract with the advisor before
+   implementation. No executor may invent an oracle while claiming the packet met
+   its old criteria. Record attempts and evidence in a packet record (§2.1).
+6. **Persist the startup receipt.** Use `docs/session-start-template.md`, saving a
+   filled receipt under `docs/reviews/startup-<date>-<session-id>.md` and linking it
+   from the live report. Include reviewer probe, advisor continuation, selected
+   packet, both repository identities, dirty files and remaining blockers. Missing
+   or unverifiable evidence means BLOCKED/UNKNOWN, never an inferred PASS.
+
+If a required spawn/continuation fails, record its exact error and consult the
+available advisor; do not substitute Sol, Terra or another unlisted route. If the
+advisor itself is unavailable, record the startup blocker and the manual route/auth
+repair needed. Continue only independent diagnosis/documentation. Never put secrets
+or full provider configuration into the receipt.
 
 ---
 
 ## 1. The two supported harnesses
 
 Exactly two harnesses are supported. Use only your column's routes.
+This repository roster implements the user's latest instruction and supersedes
+older personal-skill defaults naming Sol/Terra or Luna High. Keep Away cloud-only
+behavior; do not restore retired roles when loading a personal workflow skill.
 
 | Role | Codex | DeepSeek Harness (DSH) |
 |---|---|---|
-| **Session** | `gpt-6-luna` @ `high` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
-| **Worker subagents** | `gpt-6-luna` @ `high` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
-| **Planner** | `codex/gpt-6-astra` @ `medium` | `codex:gpt-6-astra` @ `medium` |
-| **Persistent advisor** | `codex/gpt-6-astra` @ `medium` | `codex:gpt-6-astra` @ `medium` |
+| **Session** | `gpt-6-luna` @ `max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
+| **Worker subagents** | `gpt-6-luna` @ `max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
+| **Planner** | `gpt-6-astra` @ `medium` | `workbuddy-ai/kimi-k3` |
+| **Persistent advisor** | `gpt-6-astra` @ `medium` | `workbuddy-ai/kimi-k3` |
 | **Acceptance reviewer** | `gpt-6-luna` @ `max` | `workbuddy-ai/hy4-preview-f` @ `high` |
 
-**The Planner and the advisor are the same model at the same effort.** That is
-acceptable, with three safeguards, because the risk is real: **the advisor is not
-model-diverse relative to the plan author**, so a bad plan can be endorsed by a
-same-model reviewer.
+**The DSH advisor changed on 2026-09-23 by direct user instruction.** Astra ran out
+of tokens; the user replaced it with `workbuddy-ai/kimi-k3`. This supersedes the
+`codex:gpt-6-astra` cell for DSH only — the Codex advisor is still
+`gpt-6-astra` @ `medium`. The consequence is recorded honestly below: the DSH
+advisor is now on the **same provider as the session and the reviewer**, so it no
+longer supplies model diversity by itself.
+
+**The Planner and the advisor are the same model.** That is acceptable, with three
+safeguards, because the risk is real: **the advisor is not model-diverse relative to
+the plan author**, so a bad plan can be endorsed by a same-model reviewer. In DSH
+this is now doubly true — after the 2026-09-23 substitution, session, workers,
+Planner, advisor and reviewer all sit on `workbuddy-ai`, so the advisor adds
+**procedural** independence only.
 
 - **Separate children.** When a plan is disputed, do not continue the Planner under
   an "Advisor" label. Spawn a fresh child with the user's objective, the disputed
@@ -75,22 +112,39 @@ satisfy these checks while failing the objective?*
 
 
 **Everything else is retired.** Do not select `gpt-5.6-sol`, `gpt-5.6-luna`,
-`gpt-5.6-terra`, `gpt-5.5`, Grok, `grok-cli`, `hy3`, `glm-5.3`, `kimi-k3`, or any
+`gpt-5.6-terra`, `gpt-5.5`, Grok, `grok-cli`, `hy3`, `glm-5.3`, or any
 `workbuddy-ai/gpt-*` route. Those names fill the historical sections of the reports
 and old commit messages; read them as history, never as a roster. **Historical review
 identities and evidence provenance keep their original names** — do not retroactively
 rename an old reviewer to a current one.
 
+> **Correction (2026-09-23).** `kimi-k3` was listed as retired in the paragraph
+> above. The user has since named it as the DSH advisor after Astra exhausted its
+> tokens, so it is now **current** for that one role. The retirement list is not
+> authority over a later direct user instruction. Do not extend this to any other
+> role: `kimi-k3` is the DSH advisor and nothing else.
+
 ### Measured constraints on this table
 
-Verified with `list_subagent_models` 2026-09-22. These are not preferences; they are
+Verified with `list_subagent_models` 2026-09-23. These are not preferences; they are
 what the routes actually serve:
 
-- **In DSH the advisor is `codex:gpt-6-astra`** — the one cross-provider call, stated
-  by the user directly. `workbuddy-ai` does **not** serve `gpt-6-astra` (it advertises
-  only `hy4-preview-f`, `deepseek-v4.1-flash`, `gpt-5.5`). Reaching across providers
-  is what makes the DSH advisor independent of the session. Do not "fix" this by
-  looking for an Astra route on `workbuddy-ai`.
+- **In DSH the advisor is `workbuddy-ai/kimi-k3`** (user instruction, 2026-09-23),
+  replacing `codex:gpt-6-astra` after that route exhausted its tokens.
+  `list_subagent_models` reports it as advertised with **no reasoning-effort
+  levels**, so do not pass `reasoning_effort` for it — the session's own startup
+  invocation omitted the field and the child reported
+  `agentProvider: workbuddy-ai`, `agentModel: kimi-k3` with no effort key.
+  **Independence caveat, measured not assumed:** the DSH session
+  (`workbuddy-ai/deepseek-v4.1-flash`), the reviewer
+  (`workbuddy-ai/hy4-preview-f`) and now the advisor are all on `workbuddy-ai`.
+  The advisor therefore still gives **procedural independence** (separate child,
+  no shared context, asked to adjudicate rather than confirm) but **not model
+  diversity in the provider sense**. Treat its rulings as decision authority, not
+  as third-family confirmation.
+- **`workbuddy-ai` does not serve `gpt-6-astra`** (it advertises only
+  `hy4-preview-f`, `deepseek-v4.1-flash`, `gpt-5.5` and `kimi-k3`). If an Astra
+  advisor is ever wanted in DSH again, it must come from `codex`.
 - **`workbuddy-ai/hy4-preview-f` advertises exactly one effort: `high`.** Do not try
   to raise it; there is no such setting and the attempt fails.
 - `workbuddy-ai/deepseek-v4.1-flash` serves up to `max`; `codex/gpt-6-luna` up to
@@ -107,8 +161,8 @@ review, and under-crediting a same-family reviewer that genuinely re-ran a test.
 | **procedural independence** | the reviewer did not write the change and is asked to falsify, not confirm | any reviewer, including the Codex one |
 | **evidence reproduction** | the reviewer re-ran the load-bearing measurement itself | any reviewer that actually re-runs it |
 
-**The Codex reviewer is the session's own model family** (`gpt-6-luna` at `max` vs
-`high`), so it has procedural independence and can reproduce evidence, but **not**
+**The Codex reviewer is the session's own model family** (both use `gpt-6-luna`
+at `max`), so it has procedural independence and can reproduce evidence, but **not**
 model diversity. Say *"the reviewer reproduced the measurement"* when that is what
 happened, and reserve *"independently verified"* for a different-family check. If a
 Codex packet's acceptance is genuinely load-bearing, send it to the advisor rather
@@ -255,11 +309,13 @@ about the facts you gave it, so a wrong input yields a confidently wrong answer.
 
 ### 4.1 Shared policy (both harnesses)
 
-**Brief it fresh, then keep it.** The first consult is a self-contained brief; later
-consults go to the same child with only the delta, because the earlier exchange is
-preserved. **"Persistent" means reuse the advisor once created — it does not require
-spawning one ceremonially at startup**, and a new top-level session must not assume an
-old session's child is reachable.
+**Brief it fresh at startup, verify continuation, then keep it.** The first consult
+is a self-contained brief; later consults go to the same child with only the delta.
+The user's 2026-09-23 instruction requires an existing, tested advisor at startup;
+it supersedes the earlier lazy-creation policy. A new top-level session must not
+assume an old session's child is reachable. Durable briefs/decisions transfer
+knowledge between sessions; child persistence is only promised within the session
+where continuation was actually tested.
 
 **Never use `subagent_fork` for the advisor.** Seeding it with this conversation
 destroys the independence that makes it worth consulting.
@@ -271,6 +327,12 @@ distinguished from hindsight.
 
 ### 4.2 Invocation — DeepSeek Harness (DSH)
 
+- Discover the installed subagent creation tool and read its current schema; do
+  not copy Codex's `collaboration.spawn_agent` arguments into DSH. Select the route
+  from §1 using that tool's advertised provider/model/effort fields. If the schema
+  or required route is unavailable, mark startup BLOCKED rather than inventing an
+  invocation. The supplied 2026-09-23 transcript is an Astra **child** log and does
+  not contain its parent's creation call, so it cannot establish the spawn schema.
 - **Spawn with `run_in_background: true`, always.** Getting this wrong is silent:
   `false` produces a **one-shot** child that answers its first question perfectly and
   then rejects every continuation with *"has no supported continuation state and
@@ -281,19 +343,24 @@ distinguished from hindsight.
   `continuable` (`:521-526`). "The answer gates my next action" is **not** a reason to
   pass `false` — it means do not start other work until the notice arrives.
 - **Keep the child id** (`started subagent <id>`) and continue it with `send_message`.
+  The supplied child transcript demonstrates `send_message` arguments
+  `{ "agent_id": "<existing child id>", "message": "<delta or challenge>" }`;
+  replace placeholders with the current session's returned identity and message.
+  The log demonstrates repeated child continuation, not live HY4 availability.
 - **The tell:** a foreground one-shot returns its answer inline; a continuable spawn
-  returns `started subagent <id>`. Confirm persistence with `list_agents` — a
-  continuable child appears there, a one-shot child does not.
+  returns `started subagent <id>`. Confirm child registration with `list_agents`;
+  confirm continuation with the same-child marker exchange required by §0.
+  A listed child alone does not prove that its next turn works.
 
 ### 4.3 Invocation — Codex
 
-**Not yet measured in this project.** The DSH mechanics above were established by a
-controlled experiment and by reading the tool's source; the equivalent Codex
-continuation behaviour has **not** been verified here, and the DSH semantics must not
-be projected onto it. Before relying on a persistent Codex advisor, measure it the
-same way: spawn, record what the tool returns, then attempt a continuation and record
-whether it succeeded. Until that is done, treat the Codex advisor as
-consult-and-re-brief.
+Use `collaboration.spawn_agent` with `fork_turns="none"`,
+`model="gpt-6-astra"`, `reasoning_effort="medium"` and a self-contained brief.
+Keep the returned canonical task name. Use `collaboration.followup_task` to resume
+the same idle child; `send_message` alone does not start an idle Codex turn. For a
+running child use `send_message`; collect its reply before relying on it. Run the
+marker continuation check in §0 and record the result. Do not project DSH's
+`run_in_background` argument onto Codex or claim cross-session persistence.
 
 ### 4.4 The briefing template
 

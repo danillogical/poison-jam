@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <dbghelp.h>
+#include <shellapi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -8,6 +9,7 @@
 
 #include <xbox/xboxrecomp.h>
 #include "diagnostics.h"
+#include "jsrf_save_root.h"
 #include "nv2a_mmio_hook.h"
 #include "apu.h"
 #include "apu_mmio_hook.h"
@@ -130,6 +132,13 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
     void *xbe_data = NULL;
     size_t xbe_size = 0;
     extern void xbox_path_init(const char *game_dir, const char *save_dir);
+    JsrfLaunchOptions launch;
+    LPWSTR *wide_argv = NULL;
+    int wide_argc = 0;
+    WCHAR resolved_root[MAX_PATH];
+    char save_root_utf8[JSRF_SAVE_ROOT_UTF8_CAP];
+    char probe_utf8[JSRF_PROBE_NAME_CAP * 4];
+    DWORD save_error = ERROR_SUCCESS;
 
     (void)instance;
     (void)previous;
@@ -145,6 +154,58 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
     setvbuf(stderr, NULL, _IONBF, 0);
     printf("=== Jet Set Radio Future - Static Recompilation ===\n");
     checkpoint("host_entry");
+
+    /* Parse the process command line as argv tokens. Substring scanning the
+     * raw WinMain tail made a save path containing "--probe=" look like a
+     * probe request and could enter fixture code instead of the title. */
+    wide_argv = CommandLineToArgvW(GetCommandLineW(), &wide_argc);
+    if (!wide_argv ||
+        !jsrf_parse_launch_args_w(wide_argc, wide_argv, &launch, &save_error)) {
+        if (!save_error)
+            save_error = GetLastError();
+        fprintf(stderr, "[SAVE] root rejected: missing, duplicate, or unknown launch argument (winerror=%lu)\n",
+                (unsigned long)save_error);
+        if (wide_argv)
+            LocalFree(wide_argv);
+        return 2;
+    }
+    if (!jsrf_preflight_save_root(launch.save_root, resolved_root, &save_error)) {
+        const char *reason = "directory preflight failed";
+        if (save_error == ERROR_BAD_PATHNAME)
+            reason = "root must be an absolute Windows path";
+        else if (save_error == ERROR_FILENAME_EXCED_RANGE)
+            reason = "root does not fit toolkit MAX_PATH buffers";
+        else if (save_error == ERROR_PATH_NOT_FOUND || save_error == ERROR_FILE_NOT_FOUND)
+            reason = "requested directory does not exist";
+        else if (save_error == ERROR_DIRECTORY)
+            reason = "requested root is not a directory";
+        else if (save_error == ERROR_ACCESS_DENIED)
+            reason = "requested directory is not writable";
+        else if (save_error == ERROR_INVALID_NAME)
+            reason = "volume root or reserved profile path is not allowed";
+        else if (save_error == ERROR_CANT_RESOLVE_FILENAME)
+            reason = "root resolves through a junction or symbolic link";
+        else if (save_error == ERROR_NOT_READY)
+            reason = "cannot resolve LocalAppData safety boundary";
+        fprintf(stderr, "[SAVE] root rejected: %s (winerror=%lu)\n",
+                reason, (unsigned long)save_error);
+        LocalFree(wide_argv);
+        return 2;
+    }
+    if (!jsrf_save_root_to_utf8(resolved_root, save_root_utf8,
+                                sizeof(save_root_utf8), &save_error) ||
+        (launch.has_probe &&
+         !jsrf_save_root_to_utf8(launch.probe, probe_utf8,
+                                 sizeof(probe_utf8), &save_error))) {
+        fprintf(stderr, "[SAVE] launch rejected: UTF-8 conversion failed (winerror=%lu)\n",
+                (unsigned long)save_error);
+        LocalFree(wide_argv);
+        return 2;
+    }
+    LocalFree(wide_argv);
+    wide_argv = NULL;
+    printf("[SAVE] resolved_root=%s\n", save_root_utf8);
+    fflush(stdout);
 
     SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME);
     SymInitialize(GetCurrentProcess(), NULL, TRUE);
@@ -193,7 +254,37 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
     }
 
     xbox_kernel_init();
-    xbox_path_init(YOUR_GAME_DIR, NULL);
+    xbox_path_init(YOUR_GAME_DIR, save_root_utf8);
+    {
+        WCHAR actual_partition0[MAX_PATH];
+        WCHAR expected_partition0[MAX_PATH];
+        extern BOOL xbox_translate_path(const char *xbox_path,
+                                        WCHAR *host_path_buf, DWORD buf_size);
+        int written = swprintf_s(expected_partition0, MAX_PATH,
+                                 L"%s\\Partition0.img", resolved_root);
+        DWORD path_error = ERROR_SUCCESS;
+        if (written < 0) {
+            path_error = ERROR_FILENAME_EXCED_RANGE;
+        } else if (!xbox_translate_path("\\Device\\Harddisk0\\Partition0",
+                                        actual_partition0, MAX_PATH)) {
+            /* The toolkit BOOL API does not promise to set last-error. */
+            path_error = ERROR_INVALID_DATA;
+        } else if (_wcsicmp(actual_partition0, expected_partition0) != 0) {
+            path_error = ERROR_INVALID_DATA;
+        } else if (GetFileAttributesW(actual_partition0) == INVALID_FILE_ATTRIBUTES) {
+            path_error = GetLastError();
+        }
+        if (path_error != ERROR_SUCCESS) {
+            fprintf(stderr, "[SAVE] path_layer=FAIL winerror=%lu\n",
+                    (unsigned long)path_error);
+            xbox_kernel_shutdown();
+            xbox_MemoryLayoutShutdown();
+            free(xbe_data);
+            return 2;
+        }
+        printf("[SAVE] path_layer_root=%s\n", save_root_utf8);
+        fflush(stdout);
+    }
     xbox_kernel_bridge_init();
     nv2a_hook_init(g_xbox_mem_offset);
     /* Connect the card's interrupt line to the guest's GPU vector.
@@ -252,9 +343,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
     g_esp = XBOX_STACK_TOP;
     recomp_diag_thread_start(YOUR_GAME_ENTRY_POINT, XBOX_STACK_BASE, XBOX_STACK_TOP + 16);
 
-    const char *probe = strstr(command_line, "--probe=");
-    if (probe) {
-        int result = jsrf_run_probe(probe + 8);
+    if (launch.has_probe) {
+        int result = jsrf_run_probe(probe_utf8);
         recomp_diag_thread_end();
         xbox_kernel_shutdown();
         nv2a_hook_shutdown();

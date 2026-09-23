@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "scope": "Preservation of current diagnostics only; no acceptance of behavioral ABI correctness",
+  "markers": [
+    {
+      "id": "src/recomp/gen/recomp_types.h#1",
+      "path": "src/recomp/gen/recomp_types.h",
+      "literal": "int recomp_delta_ok(uint32_t va, uint32_t actual);",
+      "expected_count": 1
+    },
+    {
+      "id": "src/recomp/gen/recomp_types.h#2",
+      "path": "src/recomp/gen/recomp_types.h",
+      "literal": "int recomp_delta_allowed(uint32_t va, uint32_t out[4]);",
+      "expected_count": 1
+    },
+    {
+      "id": "src/recomp/gen/recomp_types.h#3",
+      "path": "src/recomp/gen/recomp_types.h",
+      "literal": "int recomp_abi_regs_exempt(uint32_t va);",
+      "expected_count": 1
+    },
+    {
+      "id": "src/recomp/gen/recomp_types.h#4",
+      "path": "src/recomp/gen/recomp_types.h",
+      "literal": "if (!recomp_delta_ok((va), g_esp - _ap))",
+      "expected_count": 1
+    },
+    {
+      "id": "src/recomp/gen/recomp_types.h#5",
+      "path": "src/recomp/gen/recomp_types.h",
+      "literal": "jsrf_trace_delta_mismatch(MEM32(_ap), (va), g_esp - _ap);",
+      "expected_count": 1
+    },
+    {
+      "id": "src/recomp/gen/recomp_types.h#6",
+      "path": "src/recomp/gen/recomp_types.h",
+      "literal": "if (!recomp_abi_regs_exempt((va)) &&",
+      "expected_count": 1
+    },
+    {
+      "id": "src/recomp/gen/recomp_types.h#7",
+      "path": "src/recomp/gen/recomp_types.h",
+      "literal": "recomp_abi_violation_log((va), _ab, _as, _ad, _ap);",
+      "expected_count": 1
+    },
+    {
+      "id": "src/recomp/recovered/recovered.c#1",
+      "path": "src/recomp/recovered/recovered.c",
+      "literal": "RECOMP_ABI_CALL(",
+      "expected_count": 9541
+    },
+    {
+      "id": "src/recomp/recovered/recovered.c#2",
+      "path": "src/recomp/recovered/recovered.c",
+      "literal": "if (!getenv(\"JSRF_ABI_CONTINUE\")) abort();",
+      "expected_count": 3074
+    },
+    {
+      "id": "src/recomp/recovered/recovered.c#3",
+      "path": "src/recomp/recovered/recovered.c",
+      "literal": "ABI FAILURE",
+      "expected_count": 3074
+    },
+    {
+      "id": "src/recomp/recovered/recovered.c#4",
+      "path": "src/recomp/recovered/recovered.c",
+      "literal": "ABI verified (ESP/EBX/ESI/EDI)",
+      "expected_count": 3074
+    }
+  ]
+}

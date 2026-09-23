@@ -1,0 +1,30 @@
+## Round-5 re-review
+
+Reproduced: `tests/test_recorded_reviews.py` **176 tests, OK, exit 0**; both real records `acceptance-eligible` exit 0; both suites read-only (0 files added/deleted/changed repo-wide).
+
+### P0.2-AC1 — AGREED
+Unchanged and re-run: every identity falsification exits 2; schema enforced; exit codes 2/1/0 correct.
+
+### P0.2-AC2 — AGREED
+**Containment holds.** I traced each admitted token to its actual resolution rather than trusting the boolean. `....//AGENTS.md`, `docs//packets`, `docs/`, `./docs`, `AGENTS.MD`, `docs\packets`, `docs/./packets`, `DOCs/packets` all resolve **inside** repo root. `....` is not an escape: Windows strips trailing dots, so N repetitions nest literal `....` directories inside the repo (measured 1–6 deep — all `inside=True`, only N=1 hits an existing file). UNC `\\?\C:\…`, `file:///`, `.%2e/`, trailing space and trailing dot all refuse; `docs/../AGENTS.md` refuses.
+
+**Prior attack sets all closed:** my six path-shaped hedges → **0 leaks**; my five absolute-path forms → **0 leaks**; honest controls **5 of 5** admitted.
+
+**Tokenisation held** — `(....//AGENTS.md)` and `(docs//packets)` are admitted but resolve inside the repo to real targets, so they are genuine citations, not escapes. No separator merges two tokens into one that resolves, or splits a hedge into two resolving tokens.
+
+**Symlink: untestable here** (`WinError 1314`, privilege not held), but safe by construction — `.resolve()` at line 628 follows symlinks *before* the `base in resolved.parents` check at line 631, so a repo symlink pointing outside resolves outward and is refused. Worth a code comment so a future reader doesn't drop `.resolve()` as an optimisation.
+
+**`_normalise_text` sharing held** — `_same_text` and `_contains_text` agree on every pair (CRLF, whitespace, distinct texts). Because one normaliser feeds both, they cannot disagree; I could not construct a text where containment is true and binding false. The asymmetry I probed (`_contains_text('  A  ','A')` vs reverse) is True/True — correct, containment is the looser relation by design.
+
+**Codex route held** — `requested_model='gpt-9-moon'` → 2, `requested_effort='low'` → 2, plus parent/child/turn/harness → 2; control → 0.
+
+### P0.2-AC3 — AGREED
+`delta` non-empty → 1; empty `procedure`/`evidence`/`observed_result` → 1; per-criterion `DISAGREED`/`CANNOT VERIFY` → 1.
+
+### P0.2-AC4 — AGREED
+Unchanged; hashes, verdict lengths and the no-footer claim re-verified against both original sessions.
+
+### Residual uncertainty
+1. The validator proves a record is **self-consistent**, not that the review happened — a party who can author both the session log and the tracked source file satisfies every binding. Now recorded in the amendment and schema; I do not score it a defect. 2. `(docs/archive)` and real blocked-run directories are admitted as citations — correct, and now documented. 3. Symlink containment is argued from code, not measured (privilege denied). 4. I did not re-audit the r14 amendment prose.
+
+REVIEW_CRITERIA_JSON: [{"id":"P0.2-AC1","disposition":"AGREED"},{"id":"P0.2-AC2","disposition":"AGREED"},{"id":"P0.2-AC3","disposition":"AGREED"},{"id":"P0.2-AC4","disposition":"AGREED"}]
