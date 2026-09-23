@@ -336,9 +336,10 @@ fresh — never via `subagent_fork`, which would seed it with this conversation 
 destroy the independence that makes it worth consulting. Continue the same
 advisor with `send_message` to its durable agent id from `list_agents`, which
 preserves the earlier exchange and needs only the delta. Full briefing contract,
-triggers and adopt/reject discipline: `.dsh/skills/advisor-escalation/SKILL.md`
-(the authoritative copy for this harness; the `~/.workbuddy-ai/skills/` copy
-documents the older WorkBuddy harness and its `Agent(resume=...)` invocation).
+triggers and adopt/reject discipline: **`docs/agent-workflow.md` §4** — the
+`advisor-escalation` skill was retired 2026-09-23 and folded into that file,
+because a short template used only by this workflow did not earn a separate
+discovery path across both harnesses.
 
 > **`run_in_background: false` is a trap and this line used to recommend it.**
 > It was corrected 2026-09-22 after a controlled measurement: `false` yields a

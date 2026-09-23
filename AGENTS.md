@@ -36,69 +36,35 @@ dated narrative belongs in `docs/jsrf-operating-history.md` or the reports. A
 section appended past the budget is silently never read — which is exactly what
 happened to this file's own tail before 2026-09-22.
 
-## Models and the session loop — `docs/agent-workflow.md` is the authority
+## Start here: `docs/agent-workflow.md`
 
-**`docs/agent-workflow.md` owns the roster, the session loop and the escalation
-triggers. Read it at session start.** The summary below is the whole policy on one
-screen; the file has the reasoning, the measured constraints and the briefing
-contract. It replaces `grok-role-map.md` and `deepseek-harness.md`, both retired
-2026-09-22.
+**Before selecting a packet or delegating, read `docs/agent-workflow.md`.** It is the
+single authority for the supported harness/model setup, the main-session execution
+loop, the required acceptance review, and advisor escalation for disagreements or a
+stalled investigation. Then read the active plan section and the `CURRENT STATE` block
+in `report-deepseek.md`. Complete the workflow's five startup checks before
+implementing. **If the workflow is unavailable, report that as a blocker rather than
+reconstructing policy from historical documents.**
 
-**Two harnesses are supported. Pick your row and use only those models.**
+In brief, so you know what you are going to read:
 
-| Role | Codex | DeepSeek Harness (DSH) |
-|---|---|---|
-| Session | `gpt-6-luna` @ `high` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
-| Worker subagents | `gpt-6-luna` @ `high` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
-| Persistent advisor | `codex/gpt-6-astra` @ `medium` | **`codex:gpt-6-astra`** @ `medium` |
-| Acceptance reviewer | `gpt-6-luna` @ `max` | `workbuddy-ai/hy4-preview-f` @ `high` |
+- **Two harnesses** (Codex, DeepSeek/DSH), each with a fixed roster for session,
+  workers, advisor and acceptance reviewer. Everything else is retired.
+- **The session works the packet and owns integration, build and run.** Workers are
+  spawned **as needed** — for context isolation, or bounded scoped implementation.
+- **Passing the criteria makes a packet *delivered*, not *accepted*.** An acceptance
+  reviewer must independently verify or refute each criterion, and the review is
+  recorded before the status advances.
+- **A review disagreement goes to the advisor, whose call is final** — do not
+  out-vote the reviewer or let it out-vote you.
+- **Escalate on your own when looping or walled** — the same failure after two
+  attempts, contradicting measurements, an impending universal claim, or an
+  expensive investigation on an unverified premise.
 
-**Everything else is retired:** `gpt-5.6-sol`, `gpt-5.6-luna`, `gpt-5.6-terra`,
-`gpt-5.5`, Grok, `grok-cli`, `hy3`, `glm-5.3`, `kimi-k3`, and every
-`workbuddy-ai/gpt-*` route. Those names fill the historical sections of the reports
-and old commit messages — read them as history, never as a roster to spawn.
-
-Three measured constraints, because each one looks like a mistake otherwise:
-
-- **In DSH the advisor is `codex:gpt-6-astra`.** `workbuddy-ai` does not serve that
-  model, so the DSH advisor is the one deliberate cross-provider call — which is
-  also what makes it independent of the session.
-- **`workbuddy-ai/hy4-preview-f` advertises exactly one effort, `high`.** The DSH
-  reviewer's effort is not a choice; do not try to raise it.
-- **The Codex reviewer is the session's own model family** (`gpt-6-luna` at `max`
-  rather than `high`). That is a weaker check than DSH's third-family reviewer —
-  treat it as a careful second pass, not independent confirmation, and do not
-  describe it as "independently verified".
-
-**The loop.** (1) Confirm the roster and, on DSH, confirm the reviewer route with
-`list_subagent_models` before promising a review. (2) Read the plan, then the
-`CURRENT STATE` block in `report-deepseek.md`. (3) **Work the next packet in the
-main session**; spawn workers only for context isolation — reading a big artifact
-and returning a bounded summary — never to implement. One owner performs build,
-regeneration and run. (4) Work until the plan's acceptance criteria pass: that is
-*delivered*, not *accepted*. (5) Spawn the acceptance reviewer and require it to
-**verify or refute each criterion independently**, reproducing the load-bearing
-measurements itself, returning per-criterion AGREED / DISAGREED / CANNOT VERIFY
-with the command or `file:line` behind it, and a **positive control** wherever it
-checks that something is absent. (6) **On disagreement, escalate — do not
-out-vote.** Both positions and their evidence go to the advisor, whose call is
-final.
-
-**Escalate to the advisor when you are looping or hit a wall** — the same failure
-after two attempts, no new measurement changing your mind, two measurements
-contradicting, an impending universal claim ("impossible", "unproven", "rules
-out", or a negative result), an expensive investigation resting on an unverified
-premise, a review disagreement, or an acceptance criterion that is unmet or
-ambiguous. The trigger is the *shape* of the problem, not frustration. The advisor
-returns ranked mechanisms plus the cheapest discriminating experiment for each.
-
-**Spawn the advisor with `run_in_background: true`, always.** `false` yields a
-**one-shot** child that answers once and then rejects every continuation with *"has
-no supported continuation state"*, forcing a full re-brief. "The answer gates my
-next action" is not a reason to pass `false` — it means do not start other work
-until the notice arrives. Keep the child id and continue it with `send_message`.
-Never use `subagent_fork` for the advisor: seeding it with this conversation
-destroys the independence that makes it worth consulting.
+The full roster, the measured route constraints, the packet-closing state machine and
+the advisor briefing template are all in that file. **Do not duplicate them here** —
+a copied roster is how five stale claims survived on 2026-09-22, including one that
+forbade the reviewer the policy required.
 
 Keep original assets and existing saves unchanged.
 
@@ -148,7 +114,6 @@ and `lessons-learned.md` as needed. Other-title examples are not JSRF evidence.
 | `docs/agent-workflow.md` | **Authority for the model roster, the session loop and escalation.** |
 | `docs/jsrf-operating-history.md` | Dated checkpoints and handoffs, moved out of this file (read on demand). |
 | `docs/archive/` | Retired docs: `grok-role-map.md`, `deepseek-harness.md`, `report-grok.md`. History only. |
-| `.dsh/skills/` | Tracked local skills; `advisor-escalation` is the advisor **briefing procedure** only. |
 | `game/default.xbe`, `game/Media/` | Original executable/assets; do not modify. |
 | `tools/disasm/output/`, `tools/func_id/output/` | Original analysis/classification. |
 | `jsrf_run.log` | Latest log, overwritten by a launch. |

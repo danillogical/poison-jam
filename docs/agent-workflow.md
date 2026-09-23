@@ -1,211 +1,355 @@
 # Agent workflow: models, the session loop, and escalation
 
 This file is the **single authority** for how a JSRF session is staffed and how it
-works. It replaces `grok-role-map.md` and `deepseek-harness.md`, both retired
-2026-09-22. `AGENTS.md` carries the one-screen version of this at its head,
-because that is the only file loaded automatically; everything below is the detail
-behind it.
+works. It replaces `grok-role-map.md`, `deepseek-harness.md` (retired 2026-09-22) and
+`.dsh/skills/advisor-escalation/` (folded in 2026-09-23). `AGENTS.md` carries a short
+mandatory pointer to it, because that is the only file loaded automatically.
 
-Read this once at session start, then work. Do not re-read it per packet.
+**Read this at session start, and again when its revision changes or when you resume
+with uncertain context.** A policy can change during a long-lived session — it did,
+twice, on 2026-09-22 — so "read once" is not enough.
+
+---
+
+## 0. Startup checks — do these before selecting work
+
+Five cheap checks. They exist because every failure this workflow addresses happened
+at a transition, not from ignorance of the rules.
+
+1. **Which harness am I, and which routes may I spawn?** Read the table in §1 and
+   work out your column. You **cannot select your own session model** — that is
+   launcher configuration, fixed before you start; this file cannot change it. What
+   you control is what you *spawn*.
+2. **Confirm the routes you will need.** On DSH, verify the acceptance-reviewer route
+   with `list_subagent_models` **before** promising a review. Route availability and
+   successful invocation are different things, so a catalog entry is not proof.
+3. **Read the plan, then reconcile it against current state.**
+   `plan-jsrf-bare-minimum.md` owns acceptance criteria and statuses;
+   `report-deepseek.md`'s `CURRENT STATE` block owns the current blocker, evidence
+   revision and next packet. **If they disagree, say so and reconcile explicitly**
+   rather than silently picking one. The plan's statuses win on acceptance; the
+   `CURRENT STATE` block wins on what happened most recently.
+4. **Record a compact startup acknowledgement** in the report: harness, the
+   configured session model if verifiable, the selected packet, and reviewer/advisor
+   availability. This is what makes "the session knew what it was doing" checkable
+   instead of assumed.
+5. **Open a packet record** before implementing (§2.1). Criteria, evidence revision
+   and attempts belong somewhere durable, not in working memory.
 
 ---
 
 ## 1. The two supported harnesses
 
-Exactly two harnesses are supported. Pick the row that matches the harness you are
-running in, and use only those models.
+Exactly two harnesses are supported. Use only your column's routes.
 
 | Role | Codex | DeepSeek Harness (DSH) |
 |---|---|---|
 | **Session** | `gpt-6-luna` @ `high` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
 | **Worker subagents** | `gpt-6-luna` @ `high` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
-| **Persistent advisor** | `codex/gpt-6-astra` @ `medium` | `codex/gpt-6-astra` @ `medium` |
+| **Persistent advisor** | `codex/gpt-6-astra` @ `medium` | `codex:gpt-6-astra` @ `medium` |
 | **Acceptance reviewer** | `gpt-6-luna` @ `max` | `workbuddy-ai/hy4-preview-f` @ `high` |
 
 **Everything else is retired.** Do not select `gpt-5.6-sol`, `gpt-5.6-luna`,
 `gpt-5.6-terra`, `gpt-5.5`, Grok, `grok-cli`, `hy3`, `glm-5.3`, `kimi-k3`, or any
-`workbuddy-ai/gpt-*` route. Those names appear throughout the historical sections
-of the reports and in old commit messages; read them as history, never as a roster.
+`workbuddy-ai/gpt-*` route. Those names fill the historical sections of the reports
+and old commit messages; read them as history, never as a roster. **Historical review
+identities and evidence provenance keep their original names** — do not retroactively
+rename an old reviewer to a current one.
 
 ### Measured constraints on this table
 
-Verified with `list_subagent_models` 2026-09-22. These are not preferences; they
-are what the routes actually serve, and two of them change how you work:
+Verified with `list_subagent_models` 2026-09-22. These are not preferences; they are
+what the routes actually serve:
 
-- **In DSH the advisor is `codex:gpt-6-astra` — stated by the user directly, and
-  it is the one cross-provider call in the table.** `workbuddy-ai` does **not**
-  serve `gpt-6-astra` (measured: that provider advertises only `hy4-preview-f`,
-  `deepseek-v4.1-flash` and `gpt-5.5`). So the DSH advisor comes from the `codex`
-  provider even though the session itself is on `workbuddy-ai`. That is deliberate:
-  reaching across providers is exactly what makes the advisor independent of the
-  session. Do not "fix" this by looking for an Astra route on `workbuddy-ai`.
-- **`workbuddy-ai/hy4-preview-f` advertises exactly one effort: `high`.** The
-  reviewer's effort is not a choice on DSH. Do not "raise it to max"; there is no
-  such setting, and the attempt fails.
-- `workbuddy-ai/deepseek-v4.1-flash` serves up to `max`; `codex/gpt-6-luna` serves
-  up to `max`; `codex/gpt-6-astra` serves up to `ultra`.
+- **In DSH the advisor is `codex:gpt-6-astra`** — the one cross-provider call, stated
+  by the user directly. `workbuddy-ai` does **not** serve `gpt-6-astra` (it advertises
+  only `hy4-preview-f`, `deepseek-v4.1-flash`, `gpt-5.5`). Reaching across providers
+  is what makes the DSH advisor independent of the session. Do not "fix" this by
+  looking for an Astra route on `workbuddy-ai`.
+- **`workbuddy-ai/hy4-preview-f` advertises exactly one effort: `high`.** Do not try
+  to raise it; there is no such setting and the attempt fails.
+- `workbuddy-ai/deepseek-v4.1-flash` serves up to `max`; `codex/gpt-6-luna` up to
+  `max`; `codex/gpt-6-astra` up to `ultra`.
 
-**Independence, stated honestly, because the two rows are not equivalent.** The
-DSH reviewer (`hy4-preview-f`) is a **third model family** — it shares neither the
-session's nor the advisor's blind spots, which is the strongest form of the check.
-The **Codex reviewer is `gpt-6-luna`, the same model family as the Codex session**,
-differing only in effort (`max` vs `high`). That is a weaker check: a higher effort
-of the same model can still share a systematic misreading with the session. Treat a
-Codex review as a careful second pass, not as independent confirmation, and when a
-Codex packet's acceptance is genuinely load-bearing, send the disagreement to the
-advisor rather than relying on the reviewer's agreement. Do not silently upgrade
-the claim to "independently verified".
+### Independence is three different things, and only one is model diversity
+
+Conflating them has already caused two opposite errors here — overclaiming a Codex
+review, and under-crediting a same-family reviewer that genuinely re-ran a test.
+
+| kind | what it means | who has it |
+|---|---|---|
+| **model diversity** | a different model family, so systematic misreadings are less likely to correlate | DSH reviewer (`hy4-preview-f`, third family); the advisor in both harnesses |
+| **procedural independence** | the reviewer did not write the change and is asked to falsify, not confirm | any reviewer, including the Codex one |
+| **evidence reproduction** | the reviewer re-ran the load-bearing measurement itself | any reviewer that actually re-runs it |
+
+**The Codex reviewer is the session's own model family** (`gpt-6-luna` at `max` vs
+`high`), so it has procedural independence and can reproduce evidence, but **not**
+model diversity. Say *"the reviewer reproduced the measurement"* when that is what
+happened, and reserve *"independently verified"* for a different-family check. If a
+Codex packet's acceptance is genuinely load-bearing, send it to the advisor rather
+than leaning on the reviewer's agreement.
 
 ---
 
 ## 2. The session loop
 
-A session does this, in order, without being asked:
+### 2.1 Open a packet record first
 
-1. **Confirm the roster.** Read this table and resolve your own route. On DSH,
-   confirm the reviewer route exists with `list_subagent_models` **before**
-   promising a review, and say plainly if it is missing rather than substituting a
-   model this policy did not ask for. The route list is frozen at session
-   composition: a route added to settings mid-session is not usable by that
-   session.
-2. **Read the plan.** `plan-jsrf-bare-minimum.md` owns acceptance criteria and
-   statuses. Then read the `CURRENT STATE` block at the top of
-   `report-deepseek.md`, which owns the current blocker, the evidence revision and
-   the next packet. The plan overrides any "next packet" wording in the report's
-   historical sections.
-3. **Work the next packet in the main session.** The session does the work itself.
-   It does not hand implementation to a worker and wait. Spawn a worker only for
-   **context isolation** — reading a large log, dump or artifact and returning a
-   bounded summary so the raw content never enters the session's window. A worker
-   is a reader, not a decider: it returns `file:line` evidence marked *measured* or
-   *inferred*, and the session adjudicates. **One owner performs build,
-   regeneration and run — never a worker.**
-4. **Work until the packet's acceptance criteria pass.** The plan defines them.
-   When they pass, the packet is *delivered*, not *accepted*.
-5. **Get the acceptance reviewer to confirm it.** Spawn the reviewer from the
-   table above and require it to **verify or refute each criterion independently** —
-   reproducing the load-bearing measurements itself — returning per-criterion
-   AGREED / DISAGREED / CANNOT VERIFY with the command or `file:line` behind it.
-   Ask for the falsification rather than the confirmation, and require a
-   **positive control** wherever it checks that something is absent. Record the
-   review in `report-deepseek.md`.
-6. **Escalate a disagreement, do not out-vote it.** If session and reviewer
-   disagree, both positions and their evidence go to the advisor, whose call is
-   **final**. Do not out-vote the reviewer; do not let it out-vote the session. An
-   unresolved disagreement usually means a *measurement* is broken, which is
-   exactly the case the advisor exists for.
+Before implementing, record: the packet, its **exact acceptance criteria** (quoted,
+not paraphrased), the evidence revision, the reviewer you will use, and an attempt
+log. The attempt log is what makes "I am looping" a *checkable state* rather than a
+feeling — see §3. Keep it in the plan or the report; keep it durable.
 
-### Closing a packet — the transitions, including the awkward ones
+### 2.2 Then work the packet, with the session owning integration
 
-"Delivered" and "accepted" are different states and the gap between them has more
-than one exit. All of these are legitimate; only the first is success.
+The session owns the plan, the primary implementation, and **integration, build and
+run** — a worker never performs those, and the session adjudicates every result.
+Beyond that, **delegate what is useful**:
+
+- **Context isolation** — read a large log, dump or artifact and return a bounded
+  summary so the raw content never enters the session's window. Highest-value use;
+  reach for it first.
+- **Bounded scoped implementation** — a well-specified piece of work with a clear
+  contract, expected behavior and its own acceptance check. Give it exact files,
+  facts-vs-hypotheses, and what "done" means.
+
+A worker returns `file:line` evidence marked *measured* or *inferred*. **The session
+integrates and runs the acceptance test; it does not hand a whole packet away and
+wait.** Shared-tree write ownership stays explicit: one writing owner at a time.
+
+> **Correction (2026-09-23).** This step used to read *"spawn a worker **only** for
+> context isolation"* and *"a worker is a reader, not a decider"*, with "never to
+> implement" in `AGENTS.md`. **That restriction was never authorized.** The user's
+> note says *"spawning worker subagents **as needed**"*, and the instruction it
+> descends from authorized *unlimited workers*, not readers-only. The narrowing was
+> introduced by the session and then treated as policy — the same failure mode as the
+> stale claims below, with the session as the author of the stale claim. What is
+> genuinely required is that **one owner holds integration, build and run**; that is
+> a different rule, and conflating them removed useful capacity for no stated reason.
+
+### 2.3 Work until the criteria pass
+
+The plan defines them. When they pass the packet is **delivered**, not **accepted**.
+Attach criterion-specific evidence to the packet record — a criterion with no
+evidence behind it is not met, however green the suite looks.
+
+### 2.4 Get the reviewer to confirm
+
+Spawn the reviewer from §1 and require it to **verify or refute each criterion
+independently** — reproducing the load-bearing measurements itself — returning
+per-criterion AGREED / DISAGREED / CANNOT VERIFY with the command or `file:line`
+behind it. Ask for the falsification rather than the confirmation, and require a
+**positive control** wherever it checks that something is absent. Record the review
+in `report-deepseek.md` **before** advancing the packet's status.
+
+### 2.5 Escalate a disagreement — do not out-vote it
+
+If session and reviewer disagree, both positions and their evidence go to the
+advisor, whose call is **final**. Do not out-vote the reviewer; do not let it
+out-vote the session. An unresolved disagreement usually means a *measurement* is
+broken, which is the case the advisor exists for.
+
+### 2.6 Close the packet, then continue
+
+After a review or an advisor ruling: **apply the required changes, re-run the
+affected criteria, obtain re-review of those criteria, persist the disposition, then
+select the next packet.** A ruling that is not applied and re-verified has closed
+nothing.
+
+### 2.7 Closing a packet — the transitions, including the awkward ones
+
+"Delivered" and "accepted" are different states, and the gap has more than one exit.
+All of these are legitimate; only the second is success.
 
 | state | meaning | what unblocks it |
 |---|---|---|
-| **delivered** | criteria met as measured by the session | a reviewer must verify |
+| **delivered** | criteria met as measured by the session, with evidence attached | a reviewer must verify |
 | **accepted** | the reviewer reproduced the criteria and AGREED | nothing — record it |
-| **pending — CANNOT VERIFY** | the reviewer could not reproduce a measurement | **new evidence, or an explicit advisor ruling on that criterion.** The session's own green test does *not* close it |
+| **pending — CANNOT VERIFY** | the reviewer could not reproduce a measurement | **new evidence that the reviewer then evaluates, or an explicit advisor ruling on that criterion.** The session's own green test does *not* close it, and merely supplying evidence does not either — it must be assessed |
 | **pending — reviewer unavailable** | the route is missing or the spawn failed | escalate; **do not substitute a model the policy did not name** |
 | **pending — post-review edits** | the tree changed after the review | re-review the affected criteria; a review covers the revision it saw |
-| **escalated** | session and reviewer disagree | the advisor's ruling, recorded with both positions |
+| **escalated** | session and reviewer disagree | the advisor's ruling, recorded with both positions, then §2.6 |
 | **exploratory evidence** | the run carried synthetic-completion or bypass overrides | the *profile* criterion is unmet. Re-label, and re-open only the claims that depended on it |
 
 **Advisor finality is decision authority, not proof.** Its ruling settles *who
 decides*; it does not make a failed measurement pass, and no verdict changes what a
-measurement says. Record the ruling with the criterion it addresses.
+measurement says. Record the ruling against the criterion it addresses.
 
-**Two limits worth stating plainly, because the workflow above could imply
-otherwise:**
-
-- **Independence is a matter of degree.** A third model family reduces correlated
-  error; it does not eliminate it, and it is not a guarantee. The Codex reviewer is
-  the session's *own* family, so its agreement is weaker evidence than DSH's — treat
-  it accordingly rather than calling both "independently verified".
-- **A review covers the revision it saw.** If the tree changes afterwards, the
-  affected criteria are unreviewed again. Say which revision was reviewed.
+**A review covers the revision it saw.** If the tree changes afterwards, the affected
+criteria are unreviewed again. Always say which revision was reviewed.
 
 ---
 
 ## 3. When to escalate to the advisor
 
-Escalate on any of these. Do not wait to be asked, and do not wait until you have
-exhausted the obvious ideas — the trigger is the *shape* of the problem, not your
-frustration level.
+Escalate on **material unresolved uncertainty that blocks a decision** — not on every
+expected failing test. An ordinary red result during implementation is the work, not
+a trigger; escalating it stalls the loop.
 
 - **You are going in circles.** The same failure has survived two attempts, or you
-  are re-deriving something you already tried. This is the "looping" trigger and it
-  is the most common one. Two failed attempts at the same root cause is the limit;
-  a third attempt is a guess.
+  are re-deriving something you already tried. **Check your attempt log (§2.1): two
+  entries for the same root cause means escalate before a third.** A third attempt
+  from memory is a guess.
 - **You are hitting a wall.** Progress has stopped: no new measurement is changing
   your mind, or every next step is another guess.
 - **Two measurements contradict each other** and neither is obviously the artifact.
-  Highest-value case — it almost always means one *measurement method* is broken,
-  and an outside view finds it faster than more measurements do.
-- **You are about to say "impossible", "unproven", "cannot", or "rules out"** — any
-  universal claim, including a negative result. A check that finds nothing is a
-  claim about the *check* as much as about the system.
-- **Before an expensive investigation** — a long build, a large recovery pass, a
-  full regeneration — where a wrong premise wastes hours.
-- **A review disagreement** (step 6 above).
-- **An acceptance criterion is unmet, ambiguous, or contradicted by evidence.**
-  That gate is a technical review request to the advisor, not a request for user
-  permission.
+  Highest-value case — it almost always means one *measurement method* is broken, and
+  an outside view finds it faster than more measurements do.
+- **You are about to make a universal claim** — "impossible", "cannot", "rules out" —
+  or to treat a **negative result** as settled. A check that finds nothing is a claim
+  about the *check* as much as about the system. Honest uncertainty ("I have not
+  proven X") is not itself a trigger; *relying* on the unproven thing is.
+- **Before an expensive investigation** — a long build, a large recovery pass, a full
+  regeneration — where a wrong premise wastes hours.
+- **A review disagreement** (§2.5).
+- **An acceptance criterion is unmet and you cannot close it**, ambiguous, or
+  contradicted by evidence. Unfinished work is not a trigger; a criterion you cannot
+  resolve is.
 
-The advisor returns **ranked mechanisms plus the cheapest discriminating experiment
-for each**. Adopt or reject each with a recorded reason; do not adopt a
-recommendation you cannot test.
+### Two kinds of consult — ask for the right one
+
+The default is fault diagnosis. Architecture and policy questions need a different
+ask, and using the fault template for them gets a fault-shaped answer.
+
+**(a) Fault diagnosis** — *"rank the mechanisms that could produce this, and give the
+cheapest experiment that discriminates each."* Use for a defect, a contradiction, a
+stall.
+
+**(b) Architecture / policy** — *"give me the options, their trade-offs, your
+recommendation, and how I would verify the choice."* Use for "where should this live",
+"is this structure right", "should we keep X". Do not ask a fault template where the
+question is design.
+
+Adopt or reject each recommendation with a recorded reason. **Do not adopt one you
+cannot test**, and do not treat the advisor's confidence as evidence — it is reasoning
+about the facts you gave it, so a wrong input yields a confidently wrong answer.
 
 ---
 
 ## 4. The advisor contract
 
-**Brief it fresh, then keep it.** The first consult is a self-contained brief; every
-consult after that goes to the same child with only the delta, because the earlier
-exchange is preserved.
+### 4.1 Shared policy (both harnesses)
 
-- **Never use `subagent_fork` for the advisor.** Seeding it with this conversation
-  destroys the independence that makes it worth consulting.
-- **Spawn it with `run_in_background: true`, always.** This is not a style choice
-  and getting it wrong is silent: `false` produces a **one-shot** child that
-  answers its first question perfectly and then rejects every continuation with
-  *"has no supported continuation state and cannot be resumed"*, forcing a full
-  re-brief. Measured, with source: `resolveDelegationRun` returns
+**Brief it fresh, then keep it.** The first consult is a self-contained brief; later
+consults go to the same child with only the delta, because the earlier exchange is
+preserved. **"Persistent" means reuse the advisor once created — it does not require
+spawning one ceremonially at startup**, and a new top-level session must not assume an
+old session's child is reachable.
+
+**Never use `subagent_fork` for the advisor.** Seeding it with this conversation
+destroys the independence that makes it worth consulting.
+
+**Record the prediction before testing it.** When the advisor predicts a specific
+value, address or mechanism, write it down first. A confirmed specific prediction is
+far stronger evidence than a plausible explanation, and an unrecorded one cannot be
+distinguished from hindsight.
+
+### 4.2 Invocation — DeepSeek Harness (DSH)
+
+- **Spawn with `run_in_background: true`, always.** Getting this wrong is silent:
+  `false` produces a **one-shot** child that answers its first question perfectly and
+  then rejects every continuation with *"has no supported continuation state and
+  cannot be resumed"*, forcing a full re-brief. Measured, with source:
+  `resolveDelegationRun` returns
   `{ runInBackground: request.run_in_background ?? options.continuable }`
   (`dsh-tool-subagent/lib/index.js:360`) and only the `true` branch consults
-  `continuable` (`:521-526`). "The answer gates my next action" is **not** a reason
-  to pass `false` — it means do not start other work until the notice arrives.
-- **Keep the child id.** It is printed as `started subagent <id>`. Continue it with
-  `send_message`. Confirm persistence with `list_agents`: a continuable child
-  appears there, a one-shot child does not.
-- **A foreground one-shot returns its answer inline; a continuable spawn returns
-  `started subagent <id>`.** That is the tell, and it is the only one.
+  `continuable` (`:521-526`). "The answer gates my next action" is **not** a reason to
+  pass `false` — it means do not start other work until the notice arrives.
+- **Keep the child id** (`started subagent <id>`) and continue it with `send_message`.
+- **The tell:** a foreground one-shot returns its answer inline; a continuable spawn
+  returns `started subagent <id>`. Confirm persistence with `list_agents` — a
+  continuable child appears there, a one-shot child does not.
 
-The briefing template lives in `.dsh/skills/advisor-escalation/SKILL.md`, which is
-a **procedure** (how to brief) and not a policy (who to spawn, when). The policy is
-this file.
+### 4.3 Invocation — Codex
+
+**Not yet measured in this project.** The DSH mechanics above were established by a
+controlled experiment and by reading the tool's source; the equivalent Codex
+continuation behaviour has **not** been verified here, and the DSH semantics must not
+be projected onto it. Before relying on a persistent Codex advisor, measure it the
+same way: spawn, record what the tool returns, then attempt a continuation and record
+whether it succeeded. Until that is done, treat the Codex advisor as
+consult-and-re-brief.
+
+### 4.4 The briefing template
+
+**First consult — self-contained.** The advisor has no context:
+
+```
+You are the independent advisor on a static-recompilation project. You have NOT
+seen this conversation; everything you need is below.
+
+Repository: <path>   Toolkit (read-only for you): <path>
+Python: <path>  (Windows; PowerShell. PYTHONPATH=<site-packages> for capstone.)
+
+FACTS (measured, each with the command or file:line that produced it):
+  - <fact>  [evidence]
+  - <fact>  [evidence]
+
+HYPOTHESES already tried, and how each failed:
+  - <hypothesis> -> <what it predicted> vs <what was measured>
+
+WHAT CONTRADICTS WHAT:
+  - <measurement A> says <X>; <measurement B> says <Y>.
+
+THE QUESTION: <one sentence>
+
+WHAT I WANT: rank the mechanisms that could produce this, and for each give the
+cheapest experiment that would DISCRIMINATE it from the others. Say explicitly
+which of my facts you are treating as unreliable, and why.
+```
+
+For a **policy or architecture** question, replace the last paragraph with: *"give me
+the options, their trade-offs, your recommendation, and how I would verify the
+choice."*
+
+**Follow-ups — the delta only.** Send to the same child id. It retains the earlier
+exchange, so re-briefing is waste: state what is new, the result, and the question it
+raises.
+
+**Mark every claim MEASURED (with its evidence) or INFERRED.** Ask the advisor to do
+the same — it is what lets you tell its reasoning from its reading, and it caught a
+wrong fact of mine more than once.
 
 ---
 
-## 5. Why this is one file and not three
+## 5. Why this is one file and not four
 
-Three documents previously described the delegation policy — `AGENTS.md`,
-`grok-role-map.md` and `deepseek-harness.md` — and a fourth,
-`.dsh/skills/advisor-escalation/SKILL.md`, described the advisor. On 2026-09-22 the
+Four documents previously described this policy — `AGENTS.md`, `grok-role-map.md`,
+`deepseek-harness.md` and `.dsh/skills/advisor-escalation/SKILL.md`. On 2026-09-22 the
 policy changed twice within an hour (routes added 17:12, the acceptance-review gate
 added 18:16) and **five separate claims went stale**, including two that actively
 contradicted the new gate: the skill said the advisor was "the only subagent this
 session is allowed to spawn", which forbade the reviewer the gate requires, and the
-plan's own delegation table listed two routes while its acceptance section demanded
-a third.
+plan's own delegation table listed two routes while its acceptance section demanded a
+third. A sixth was authored by the session itself — the readers-only worker rule in
+§2.2, which no user instruction ever asked for.
 
 The lesson is not "write more carefully". It is that **a fact copied into several
-files is not corroboration** — three of those five claims were restatements of the
-first, and none were found by reading the file being edited. They were found by
-sweeping every document for the claim after the policy changed.
+files is not corroboration** — most of those claims were restatements of the first,
+and none were found by reading the file being edited. They were found by sweeping
+every document for the claim after the policy changed.
 
-So: **one authority per fact.** This file owns the roster and the loop. `AGENTS.md`
-owns operating knowledge and carries only a pointer plus the one-screen summary.
-The skill owns the briefing procedure. `plan-jsrf-bare-minimum.md` owns acceptance
-criteria and statuses. `report-deepseek.md`'s `CURRENT STATE` block owns the current
-blocker and next packet. When a policy changes, **grep every document for the old
-claim** before considering the change done.
+So: **one authority per fact.**
+
+| fact | owner |
+|---|---|
+| roster, session loop, escalation triggers, advisor contract | **this file** |
+| operating knowledge, build/test commands, guest-code discipline | `AGENTS.md` |
+| acceptance criteria and statuses | `plan-jsrf-bare-minimum.md` |
+| current blocker, evidence revision, next packet | `report-deepseek.md` `CURRENT STATE` |
+| what happened and why | `docs/jsrf-operating-history.md`, the reports |
+
+**The skill was retired 2026-09-23 and folded into §4.** It did not earn its place:
+its briefing template is short, it is used only by this workflow, and it provided no
+independent discovery path across both harnesses — a session had to already know to
+load it. **Reintroduce a skill only if it later provides a real capability** (a
+validated evidence-brief assembler, required-field checking, multi-project reuse),
+and even then the *obligation to escalate* must stay discoverable without loading it.
+
+`AGENTS.md` carries a **short startup pointer**, not a replica of this file. A
+duplicated roster is the exact failure mechanism described above, even when labelled
+"summary". If a quick-reference table is ever wanted there, **generate it from this
+file and test that it stays in sync**.
+
+**When a policy changes, grep every document for the old claim** before considering
+the change done — and check the plan and the reports, not just the file you edited.
