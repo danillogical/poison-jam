@@ -486,8 +486,8 @@ it as a missing-function problem before that is settled.
 
 **Status:** **ROOT-CAUSED 2026-09-22; the fix is a separate packet.** **Depends
 on:** A2g. **Evidence:** `logs/runs/20260922-224429-003-a2g-304f0-span/`; controls
-and probes in `logs/probe-dump-control-all.py`, `probe-h1-h2.py`,
-`probe-advisor-prediction.py`, `probe-reloc-extent.py`.
+and probes in `scripts/check-dump-mapping.py`, `check-displaced-ram.py`,
+`check-thunk-relocation.py`, `check-thunk-survival.py`.
 
 The stop was **not** a missing thunk. The run's own log says the loader resolved
 every slot (`120/120 resolved`, `Synthetic VA range: 0xFE000000-0xFE0001DC`), so

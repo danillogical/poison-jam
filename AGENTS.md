@@ -169,7 +169,8 @@ and `lessons-learned.md` as needed. Other-title examples are not JSRF evidence.
 | `scripts/build-identity.py` | Source, executable, collector and PDB/map identity verified. |
 | `scripts/run-jsrf.py` | Bounded debugger launch and full artifact archive. |
 | `scripts/resolution_starts.py` | What the runtime resolves; `genuine_starts()` is own-symbol only. |
-| `scripts/check-span-exits.py` | Spans that cut a branch target; `--selfcheck` is its positive control. |
+| `scripts/check-span-exits.py` | Spans that cut a branch target; `--selfcheck` is its positive **and** negative control. |
+| `scripts/check-dump-mapping.py` | Gate: does each archived dump map guest VAs to the right bytes? |
 | `src/diagnostics.c`, `src/diagnostics.h` | Guest thread registry and event histories. |
 | `tools/harness/collect.c` | External debugger, all-thread stacks and minidumps. |
 | `tests/harness_probes.c`, `tests/video_probes.c` | Concurrency/failure/video contracts. |
@@ -280,8 +281,8 @@ C:\Python313\python.exe -X utf8 scripts\inspect-jsrf.py memory <run-dir> 0x00011
 # .text[0] must be 8b512c85d28b4130c70190431c00741c
 ```
 
-`logs/probe-dump-control-all.py` runs it across every archived run and prints
-`matches XBE` / `DIFFERS` per run. Run it before any dump-based claim; a `DIFFERS`
+`scripts/check-dump-mapping.py` runs it across every archived run (or named ones)
+and exits nonzero on any failure. Run it before any dump-based claim; a `DIFFERS`
 dump is not evidence, and its addresses are **not** guest addresses.
 
 **Sandbox limits — policy-dependent, and they look exactly like code failures.**

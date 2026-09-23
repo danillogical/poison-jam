@@ -36,7 +36,7 @@ body, own dispatch) and not in the sense of non-overlap. Also corrected: a stale
 `283 -> 464` in `check-span-exits.py`'s own docstring; the measured figure is 446.
 
 **Route check, read from the session projections rather than asked of the models**
-(`logs/probe-routes.py`; the harness rule is that a model's self-report is not
+(`scripts/check-subagent-routes.py`; the harness rule is that a model's self-report is not
 evidence). All three children of this session dispatched exactly as intended:
 
 | child | requested route | effort | mode |
@@ -108,7 +108,7 @@ never initialised" — was **wrong, and the dump it came from is why.**
 log proves the guest really saw the displaced content.** The reader is controlled
 by requiring a dump to reproduce the XBE's own `.text` at guest VA `0x00011000`,
 which the loader never patches: **545 of 546 archived dumps pass; only the A2g
-dump fails** (`logs/probe-dump-control-all.py`). In it, **460 of 545 XBE-backed
+dump fails** (`scripts/check-dump-mapping.py`). In it, **460 of 545 XBE-backed
 pages read as `original[VA + 0x37608]` and 0 read as `original[VA]`**, uniformly
 across every section (`.text` 370, `.rdata` 36, DSOUND 25, D3D 14, `.data` 11,
 XPP 4), and the XBE header magic `XBEH` occurs **0 times** in the whole file.
@@ -136,7 +136,7 @@ survive *relocated* at guest VA `0x001C3F60 - 0x37608 = 0x0018C958`, slot 65 at
 `0x0018CA5C`. **Measured: 110 of 120 slots survive at exactly that address**, slot
 65 reads `0xFE000104`, and an 8-dword run of the synthetic-VA sequence occurs at
 `0x0018C958` and **nowhere else in the 64 MiB window**
-(`logs/probe-advisor-prediction.py`, `logs/probe-reloc-extent.py`). It also warned
+(`scripts/check-thunk-relocation.py`, `scripts/check-thunk-survival.py`). It also warned
 that the byte count is a *separation*, not a copy length — a 226,824-byte copy
 cannot span the whole image, so the transfer removed that much and slid a much
 larger tail.
@@ -1012,9 +1012,11 @@ CONTROL PASSED: the old rule was blind to all three known-true cases and the new
 rule detects all three.
 ```
 
-The negative control is `logs/probe-selfcheck-control.py`, which runs the **same**
-detector twice changing only the entry set and **fails** if the old rule was not
-blind. Without it the self-check would be unfalsifiable. And the three fixed
+The negative control is **built into the same tracked file**:
+`check-span-exits.py --selfcheck` runs the identical decision procedure a second
+time against the **old** entry set and fails if the old rule was not blind. It is
+there rather than in a throwaway script because the whole A2g claim rests on it.
+Without it the self-check would be unfalsifiable. And the three fixed
 entries are now clean under the new rule (0 findings on
 `0x00025040`/`0x0007E180`/`0x000304F0`), so the detector is not merely noisier.
 

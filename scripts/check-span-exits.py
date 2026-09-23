@@ -171,6 +171,40 @@ KNOWN_TRUE = [
 ]
 
 
+def old_entry_starts():
+    """The entry set this script used before A2g, kept only as a control.
+
+    It unions `runtime_starts()` -- "can the runtime resolve this address" --
+    which is what made the detector blind to all three known cases.  It exists so
+    `--selfcheck` can prove the new rule is what makes them detectable; it is
+    never used to produce findings.
+    """
+    starts = set(runtime_starts(root))
+    for entry in entries:
+        starts.add(int(entry['start'], 16))
+    database = root / 'tools' / 'disasm' / 'output' / 'functions.recovered.json'
+    if database.exists():
+        for item in json.loads(database.read_text()):
+            if isinstance(item, dict) and 'start' in item:
+                starts.add(int(item['start'], 16))
+    for name in ('manual-functions.json', 'boundary-fixes.json'):
+        path = root / 'config' / name
+        if not path.exists():
+            continue
+        data = json.loads(path.read_text())
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict) and 'start' in item:
+                    starts.add(int(item['start'], 16))
+        elif isinstance(data, dict):
+            for key in data:
+                try:
+                    starts.add(int(key, 16))
+                except ValueError:
+                    pass
+    return starts
+
+
 def branch_targets(start, end, md):
     """Direct branch targets reached by instructions inside the span."""
     targets = []
@@ -204,19 +238,30 @@ def selfcheck(md):
     target given the span that was actually declared at the time -- which is the
     only form in which the miss can be reproduced.
 
-    Returns 0 if every case is reported, 1 otherwise.
+    **And the positive control is worthless without a negative control for it.**
+    A self-check that passes under both the old and the new entry rule proves
+    nothing, so the same decision procedure is run a second time against the OLD
+    entry set -- `runtime_starts()` unioned with the same sources, i.e. the rule
+    that was in force when all three cases were missed -- and the check FAILS if
+    the old rule was not blind.  That is the measurement the whole A2g claim
+    rests on, so it lives here rather than in a throwaway script.
+
+    Returns 0 if the new rule finds every case and the old rule finds none.
     """
-    starts = entry_starts()
+    new_starts = entry_starts()
+    old_starts = old_entry_starts()
     failures = 0
+
     print('self-check: the detector against the three known-true cases, '
           'at their pre-fix spans')
+    old_hits = 0
     for case in KNOWN_TRUE:
         start = int(case['entry'], 16)
         end = int(case['prefix_end'], 16)
         target = int(case['target'], 16)
         reported = []
         for site, mnemonic, tgt in branch_targets(start, end, md):
-            if start <= tgt < end or tgt in starts:
+            if start <= tgt < end or tgt in new_starts:
                 continue
             reported.append(tgt)
         ok = target in reported
@@ -227,13 +272,31 @@ def selfcheck(md):
         if not ok:
             print('        reported instead: %s'
                   % (', '.join('0x%08X' % t for t in reported) or '(nothing)'))
+
+        old_reported = []
+        for site, mnemonic, tgt in branch_targets(start, end, md):
+            if start <= tgt < end or tgt in old_starts:
+                continue
+            old_reported.append(tgt)
+        if target in old_reported:
+            old_hits += 1
+            print('        NEGATIVE CONTROL FAILED: the old entry rule also '
+                  'reports %s, so this case does not discriminate.' % case['target'])
+
     if failures:
         print('self-check FAILED: %d of %d known cases are not detectable; the '
               'entry test or the branch rule has lost sensitivity.'
               % (failures, len(KNOWN_TRUE)))
         return 1
-    print('self-check passed: all %d known cases are detectable at their '
-          'pre-fix spans.' % len(KNOWN_TRUE))
+    if old_hits:
+        print('self-check FAILED: the OLD entry rule detects %d of %d cases, so '
+              'the new rule is not what makes them detectable and this control '
+              'proves nothing.' % (old_hits, len(KNOWN_TRUE)))
+        return 1
+    print('self-check passed: all %d known cases are detectable at their pre-fix '
+          'spans.' % len(KNOWN_TRUE))
+    print('negative control passed: the OLD entry rule detects 0 of %d, so the '
+          'new rule is what makes them detectable.' % len(KNOWN_TRUE))
     return 0
 
 
