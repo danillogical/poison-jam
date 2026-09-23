@@ -85,6 +85,16 @@ work** — that is what the free route is for. A worker is a reader, not a decid
 it returns file:line evidence marked *measured* or *inferred*, and the parent
 adjudicates. **One owner performs build, regeneration and run — never a worker.**
 
+**Conflict avoidance (measured 2026-09-22).** This harness's `subagent` tool has
+no `isolation` parameter, so the `isolation: worktree` instruction in
+`grok-role-map.md` cannot be followed here — a worker shares the session's tree.
+Git worktrees exist and do isolate commits, but a worktree of this repository is
+unusable for a worker because `game/`, `logs/`, `build/` and
+`tools/disasm/output/` are all gitignored and therefore absent. The isolation
+that actually works is therefore procedural, and it is three rules: **brief every
+worker read-only by default; keep one writing owner; and commit by explicit path,
+never `git add -A`.** Details and the size table are in `deepseek-harness.md` §3.
+
 The advisor gate is unaffected and remains mandatory — a passing test count alone
 cannot override a failed behavioral criterion, and consultation is required
 whenever acceptance remains unmet.

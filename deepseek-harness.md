@@ -108,8 +108,54 @@ subagent(
   seeds the child with this conversation, which destroys the independence that
   makes the advisor worth consulting.
 
-### Continuable versus one-shot — silent until it matters
+### Isolation, and why it is the *parent's* job
 
+`grok-role-map.md` says to use `isolation: worktree` for implementation that
+edits manifests, recovered bodies, tests or toolkit sources. **That option does
+not exist in this harness.** The `subagent` tool exposes exactly these fields:
+`provider`, `model`, `reasoning_effort`, `description`, `prompt`,
+`run_in_background`. There is no `isolation` parameter and no worktree support.
+A worker inherits the session's working directory and edits the same tree.
+
+So the policy has to be enforced by the parent, in the briefing:
+
+- **Default a worker to read-only.** State it explicitly: "Do not modify, create
+  or delete any file. Do not build or run the game." A reader that edits is a
+  liability, and the honest default for a context-isolation worker is that it
+  never writes at all.
+- **Never let a worker build, regenerate or run.** One owner performs those — the
+  parent. Two writers in one tree is how a build becomes unattributable.
+- **Serialise the parent's own writes.** Spawn workers, wait for the evidence,
+  then edit. Do not edit the report while a worker is reading it.
+
+Git worktrees are available (`git worktree add`, git 2.39.2) and *do* isolate
+commits — verified: a commit made in a worktree left the parent's `HEAD`, status
+and working files untouched. But **a worktree of this repository is not usable
+as-is for a worker**, because everything a worker needs to read is gitignored:
+
+| Path | Size | In a fresh worktree |
+|---|---|---|
+| `game/` (the XBE and assets) | 2,382 MB | **absent** |
+| `logs/` (all run evidence) | 96,050 MB | **absent** |
+| `tools/disasm/output/` | 62.6 MB | **absent** |
+| `build/` | 138.5 MB | **absent** |
+| `AGENTS.md`, `src/` | — | present |
+
+The ignored paths can be bridged with directory junctions (`mklink /J`), which
+was verified to work, but that points the worktree at the *same* files, so it
+buys isolation of commits and nothing else. For a read-only worker — the default
+— it buys nothing at all, and it costs 96 GB of apparent duplication and a
+cleanup hazard.
+
+**Conclusion: do not use worktrees for workers in this project.** The isolation
+that actually prevents conflicts here is (a) read-only briefings, (b) a single
+writing owner, and (c) the parent committing only its own files by explicit path
+— never `git add -A`, which would sweep a worker's or another session's
+half-finished edits into an unrelated commit. Worktrees remain the right tool if
+a *future* need is concurrent write-isolated branches; they are the wrong tool
+for readers.
+
+### Continuable versus one-shot — silent until it matters
 A one-shot child answers its first question perfectly and only fails at the first
 attempt to continue it. Nothing in the result announces the difference except the
 wording:
@@ -219,7 +265,9 @@ A worker has **none** of this conversation. A prompt that assumes shared context
 returns generic advice. Include:
 
 1. **Read-only or not, stated explicitly.** "Do not modify, create or delete any
-   file. Do not build or run the game." A reader that edits is a liability.
+   file. Do not build or run the game." A reader that edits is a liability, and
+   since the harness cannot isolate a worker's writes (§3), the briefing is the
+   only thing standing between a worker and the tree.
 2. **The system**, including the non-obvious conventions that invalidate normal
    intuition — for JSRF: guest code is 32-bit Xbox VAs via runtime macros; a
    guest VA is a *host* address plus a constant offset; generated functions are
@@ -261,6 +309,10 @@ Recorded because each cost real time here, and each will recur.
   concluding there is a concurrency problem.
 - **Trusting a catalog over a call.** See §2.
 - **Treating a self-report as evidence.** See §3.
+- **`git add -A` in a shared tree.** It commits whatever else is modified —
+  a worker's draft, another session's half-written paragraph. Commit by explicit
+  path. This is the concrete conflict risk in this project, and no worktree
+  setting prevents it because the tool has none.
 - **A worker's confident conclusion is still a claim.** The worker that reported
   "the fix is already in the tree" was right — but it was checked against
   `git log` before being believed, which is the standard to hold every one to.
