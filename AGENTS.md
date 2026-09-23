@@ -25,7 +25,7 @@ was bounded, not that the guest was live; `normal_exit` means the entry point
 returned, not that the title was satisfied.
 When the session is Grok, also read `grok-role-map.md` for model, effort,
 and spawn mechanics. When the session is DeepSeek (DSH), read
-`deepseek-harness.md` instead — it owns the model routes, the two delegation
+`deepseek-harness.md` instead — it owns the model routes, the three delegation
 routes and their selection rule, and the harness mechanics (continuable versus
 one-shot children, `send_message` reach, watching workers in DSH Web, the
 per-response output cap, and how to verify a route). Keep the report updated
@@ -80,16 +80,20 @@ architecture. Codex spawn flags (`collaboration.spawn_agent`,
 prompt. Children inherit the parent model.
 
 **Decision (2026-09-22): DeepSeek sessions do the work themselves and delegate
-only to two routes — free DeepSeek workers for context isolation, and the Astra
-advisor for independent judgement.** Supersedes the earlier "no subagents at all"
+only through the three routes below.** Supersedes the earlier "no subagents at all"
 note from the same session, which the user lifted.
 
 The session model is `workbuddy-ai/deepseek-v4.1-flash`, and it owns
 orchestration, adjudication and acceptance directly. The table above and the role
 vocabulary in the plan and reports describe **what kind of work** a packet is,
 not a roster to spawn; neither this table nor `grok-role-map.md` names a model to
-delegate to from this session. Two routes exist, and they exist for different
-reasons:
+delegate to from this session. Three routes exist, and they exist for different
+reasons — and they were introduced in two steps, which is why this count moved
+from two to three: the context-isolation and advisor routes came first
+(`8b1aada`, 17:12), and the user's acceptance-review gate added the reviewer
+(`cb24223`, 18:16). `.dsh/skills/advisor-escalation/SKILL.md` still said "the
+advisor is the only subagent" until 23:35; it governs the advisor route only, and
+that stale sentence is removed.
 
 | Need | Route | Why this one |
 |---|---|---|

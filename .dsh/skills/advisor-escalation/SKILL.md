@@ -1,7 +1,7 @@
 ---
 name: advisor-escalation
-description: Escalate a stuck or high-stakes JSRF problem to the independent Astra advisor (codex/gpt-6-astra at medium effort) — the only subagent this session is allowed to spawn. Use when two measurements contradict each other, when two or more hypotheses have failed, before an expensive investigation, when about to claim something is impossible or unproven, or when a negative result would change the plan. Ask for ranked mechanisms plus the cheapest discriminating experiment for each.
-whenToUse: A JSRF packet is stuck, two measurements contradict, a universal claim is about to be made, or a packet's acceptance criterion is unmet or ambiguous and the advisor gate in plan-jsrf-bare-minimum.md applies.
+description: Escalate a stuck or high-stakes JSRF problem to the independent Astra advisor (codex/gpt-6-astra at medium effort). Use when two measurements contradict each other, when two or more hypotheses have failed, before an expensive investigation, when about to claim something is impossible or unproven, or when a negative result would change the plan. Ask for ranked mechanisms plus the cheapest discriminating experiment for each. This skill governs the ADVISOR route only; the separate acceptance-review route (workbuddy-ai/hy4-preview-f) is required by the review gate and is NOT this skill's subject.
+whenToUse: A JSRF packet is stuck, two measurements contradict, a universal claim is about to be made, or a packet's acceptance criterion is unmet or ambiguous and the advisor gate in plan-jsrf-bare-minimum.md applies. Note this skill covers the advisor; for the mandatory post-packet acceptance review use workbuddy-ai/hy4-preview-f instead.
 ---
 
 # Advisor escalation (DeepSeek session)
@@ -14,19 +14,32 @@ That copy documents the WorkBuddy/Codex harness and its `Agent(resume=...)`
 mechanism; this copy documents the DSH harness. Keep both — they are not
 interchangeable, and the invocation differs.
 
-## Who the advisor is, and the one rule about subagents
+## Who the advisor is, and how it relates to the other routes
 
 **The advisor is `codex` / `gpt-6-astra` at `medium` reasoning effort.**
 
-Standing user instruction for this project (2026-09-22): **this session runs
-everything itself on `workbuddy-ai/deepseek-v4.1-flash`. The advisor is the only
-subagent it spawns. No worker, reviewer, or architect subagents.**
+**This skill owns one route, not the whole delegation policy.** The project has
+**three** routes, defined in `deepseek-harness.md` §1 and `AGENTS.md`:
 
-That retires the Sol / Luna / Terra packet roles *as delegation targets* in this
-session. The role vocabulary still appears in `AGENTS.md`, the plan and older
-reports; read it as describing **what kind of work** a packet is, not as a roster
-to spawn. `grok-role-map.md` maps those names onto Grok and does not apply here
-either.
+| Need | Route | Effort |
+|---|---|---|
+| context isolation (read a big artifact, return a bounded summary) | `workbuddy-ai` / `deepseek-v4.1-flash` | `high` |
+| **acceptance review (mandatory gate, after a packet)** | `workbuddy-ai` / `hy4-preview-f` | `high` |
+| **independent judgement — this skill's subject** | `codex` / `gpt-6-astra` | `medium` |
+
+**Correction (2026-09-22 23:35).** This file previously asserted a standing user
+instruction that *"The advisor is the only subagent it spawns. No worker,
+reviewer, or architect subagents."* That was accurate when written (`8b1aada`,
+17:12) and was **superseded at 18:16** by the user's standing acceptance-review
+gate (`cb24223`), which **requires** spawning a `workbuddy-ai/hy4-preview-f`
+reviewer on every completed packet. The claim was never revisited, so for five
+hours this skill told fresh sessions that they could not spawn the reviewer the
+gate demands. The stale sentence is removed rather than reworded, because the
+route table above is the single place that answers "what may I spawn".
+
+The Sol / Luna / Terra role vocabulary in `AGENTS.md`, the plan and older reports
+describes **what kind of work** a packet is, not a roster to spawn.
+`grok-role-map.md` maps those names onto Grok and does not apply here either.
 
 Independence is the point. Astra is a different model family from DeepSeek, and
 it is briefed fresh rather than handed this conversation — a same-model agent

@@ -111,13 +111,23 @@ twice, and had a wrong triage list in two consecutive sessions.
 **Delegation, in the DeepSeek/DSH session (2026-09-22).** See
 `deepseek-harness.md` for the full mechanics; the rule in brief: the session
 model `workbuddy-ai/deepseek-v4.1-flash` owns orchestration, adjudication and
-acceptance, and delegates on exactly two routes chosen by *why* the work is
+acceptance, and delegates on exactly three routes chosen by *why* the work is
 being delegated:
 
 | Need | Route | Why |
 |---|---|---|
 | **Context isolation** — read a large file, log or artifact and return a bounded summary so the raw content never enters the parent's window | `workbuddy-ai` / `deepseek-v4.1-flash` (`high`), unlimited | Same model, so no diversity is lost, and **free (x0.00)**. |
-| **Independent judgement** — contradicting measurements, two failed hypotheses, an impending universal claim, or a fired acceptance gate | `codex` / `gpt-6-astra` (`medium`) | A *different* model family is the point; a same-model agent shares the blind spot. |
+| **Acceptance review** — a packet's criteria are met and must be independently verified before acceptance | `workbuddy-ai` / `hy4-preview-f` (`high`) | A *third* model family: shares neither the session's nor the advisor's blind spots. **Required by the review gate** — see "Acceptance" above. |
+| **Independent judgement** — contradicting measurements, two failed hypotheses, an impending universal claim, or a fired acceptance gate | `codex` / `gpt-6-astra` (`medium`) | A *different* model family is the point; a same-model agent shares the blind spot. Its call is **final** on a review disagreement. |
+
+**This table listed only two routes until 2026-09-22 23:40, and that was stale.**
+The context-isolation and advisor routes were written first (`8b1aada`, 17:12);
+the user's acceptance-review gate added the third (`cb24223`, 18:16) but this
+table was not updated, so for five hours the plan contradicted its own
+acceptance section. `.dsh/skills/advisor-escalation/SKILL.md` was stale in the
+same way — it claimed the advisor was "the only subagent this session is allowed
+to spawn", which would have forbidden the reviewer the gate demands. Both are
+corrected; the route table in `deepseek-harness.md` §1 is the single authority.
 
 The role names below (`Luna`, `Sol`, `Terra`, `Astra`) describe **what kind of
 work** a packet is, not a roster to spawn; `grok-role-map.md` maps those names
