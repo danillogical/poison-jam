@@ -89,12 +89,25 @@ subagent(
   route to resolve. `reasoning_effort: "medium"` is the configured level for this
   role — `gpt-6-astra` also advertises low/high/xhigh/max/ultra, and medium is
   the deliberate choice, so do not silently raise it.
-- **Omit `run_in_background`, or pass `true`, to get a durable child.** Under this
-  session's preset the tool is configured `backgroundMode: continuable`, so the
-  call returns `started subagent <childId>` immediately and the child stays
-  addressable. **`run_in_background: false` waits in the foreground but the call
-  still yields a continuable child**, so use it when the answer gates your next
-  action.
+- **Omit `run_in_background`, or pass `true`, to get a durable child. `false`
+  gives you a ONE-SHOT child — measured 2026-09-22, and it corrects what this
+  file used to say.** Two advisor spawns differing in nothing else:
+
+  | spawn | `run_in_background` | recorded `mode` | in `list_agents` | continuation |
+  |---|---|---|---|---|
+  | `32266b9a` | `false` | **`one-shot`** | absent | rejected |
+  | `8808aa38` | `true` | `continuable` | present | **delivered** |
+
+  Source: `resolveDelegationRun` returns
+  `{ runInBackground: request.run_in_background ?? options.continuable }`
+  (`dsh-tool-subagent/lib/index.js:360`), and only the `runInBackground === true`
+  branch consults `continuable` (`:521-526`); `false` short-circuits to
+  `settleForegroundRun` (`:557`) and the durable path is never taken. So
+  **spawn with `run_in_background: true` whenever you intend to continue the
+  advisor, even when its answer gates your next action** — waiting is a matter of
+  not doing other work until its notice arrives, not of passing `false`. The cost
+  of getting this wrong is silent: a one-shot child answers its first question
+  perfectly and fails only at the first `send_message`.
 - **`run_in_background: true` does NOT create a background *job*.** Under
   `continuable` policy there is no `job_output` to collect: the runtime sends one
   settlement notice when the child's turn ends, and the answer arrives as that

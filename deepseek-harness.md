@@ -224,8 +224,31 @@ subagent(
 - **Under `continuable` policy there is no background *job*.** A spawn returns
   `started subagent <childId>`; there is nothing to collect with `job_output`
   (that errors with `unknown job`). The answer arrives as a settlement notice.
-- **Omit `run_in_background`, or pass `true`.** `false` waits in the foreground
-  and still yields a continuable child.
+- **Omit `run_in_background`, or pass `true`, to get a durable child. `false`
+  gives you a ONE-SHOT child, and this corrects what this file used to say.**
+  Measured 2026-09-22 with a controlled pair — two advisor spawns differing in
+  nothing else:
+
+  | spawn | `run_in_background` | recorded `mode` | `list_agents` | continuation |
+  |---|---|---|---|---|
+  | `32266b9a` | `false` | **`one-shot`** | absent | rejected |
+  | `8808aa38` | `true` | `continuable` | present | **delivered** |
+
+  The source agrees: `resolveDelegationRun` returns
+  `{ runInBackground: request.run_in_background ?? options.continuable }`
+  (`dsh-tool-subagent/lib/index.js:360`), and only the `runInBackground === true`
+  branch consults `continuable` at all (`:521-526`). So `false` short-circuits to
+  `settleForegroundRun` (`:557`) and the durable path is never taken. The old
+  wording here — *"`false` waits in the foreground and still yields a continuable
+  child"* — was wrong, and the skill's `advisor-escalation/SKILL.md:95` repeats it.
+  **The cost is silent:** a one-shot child answers its first question perfectly and
+  only fails at the first `send_message`, with *"has no supported continuation
+  state and cannot be resumed"*.
+- **Therefore: spawn the advisor with `run_in_background: true` when you intend to
+  continue it, even though the answer gates your next action.** Waiting for a
+  continuable child is a matter of not doing other work until its notice arrives;
+  it does not require `false`. Confirm with `list_agents` before relying on it —
+  a continuable child appears there, a one-shot child does not.
 - **Use `subagent`, never `subagent_fork`, for the advisor.** `subagent_fork`
   seeds the child with this conversation, which destroys the independence that
   makes the advisor worth consulting.
@@ -280,12 +303,19 @@ for readers.
 ### Continuable versus one-shot — silent until it matters
 A one-shot child answers its first question perfectly and only fails at the first
 attempt to continue it. Nothing in the result announces the difference except the
-wording:
+shape of what comes back:
 
-| Result wording | Meaning |
+| Result | Meaning |
 |---|---|
+| the child's **answer inline** in the tool result | **foreground / one-shot — not reusable** |
 | `started subagent <id>` | continuable — reusable |
-| `started background subagent job <id>` | one-shot — not reusable |
+| `started background subagent job <id>` | background job — not reusable |
+
+Measured 2026-09-22: the `run_in_background: false` advisor returned its whole
+answer inline and was one-shot; the `run_in_background: true` one returned
+`started subagent 8808aa38` and was continuable. Under this preset `continuable` is
+true, so the third row cannot occur here — the choice is entirely yours, made by
+that one flag (see "Spawning a worker" above).
 
 **Confirm with `list_agents`** whenever the child is meant to be reused: a
 continuable child appears there with a status; a one-shot child does not appear

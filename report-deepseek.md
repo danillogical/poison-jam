@@ -52,6 +52,31 @@ label, route and final response) and check their verdicts against this report.
 `list_agents` is not sufficient for that. The enumeration is
 `logs/check-recorded-reviews.py`.
 
+**The advisor is persistent, and the one-shot earlier was my own doing.**
+Smoke-tested on request: `send_message` to `8808aa38` was **delivered**, the child
+went `ready -> running`, and it answered a follow-up **recalling the earlier
+exchange without being re-briefed** — it restated the displacement (`0x37608` /
+226,824 bytes) and its own predicted addresses (`0x0018C958`, slot 65 at
+`0x0018CA5C`) from the previous turn. So there is a durable Astra advisor for the
+rest of this session, addressable by that id.
+
+The contrast is a controlled pair, and the cause is not the model or the route:
+
+| spawn | `run_in_background` | recorded `mode` | in `list_agents` | continuation |
+|---|---|---|---|---|
+| `32266b9a` | `false` | **`one-shot`** | absent | rejected |
+| `8808aa38` | `true` | `continuable` | present | **delivered** |
+
+`resolveDelegationRun` returns `{ runInBackground: request.run_in_background ??
+options.continuable }` (`dsh-tool-subagent/lib/index.js:360`) and only the
+`runInBackground === true` branch consults `continuable` (`:521-526`); `false`
+short-circuits to `settleForegroundRun` (`:557`). **Both `deepseek-harness.md`
+and `.dsh/skills/advisor-escalation/SKILL.md` had taught the opposite** — that
+`false` "still yields a continuable child" — and both are corrected, with the
+table above. The practical rule is now: **spawn the advisor with
+`run_in_background: true` whenever it is meant to be continued, even when its
+answer gates the next action.**
+
 **A2g's acceptance review PASSED, with one correction and one nuance.** The
 `workbuddy-ai/hy4-preview-f` reviewer (`high`) returned **AGREED on all eight
 criteria**, reproducing the load-bearing measurements itself: it wrote its own
