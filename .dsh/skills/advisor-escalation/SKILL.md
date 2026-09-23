@@ -237,6 +237,17 @@ measurement and bad at knowing this system's specifics.
 - **An advisor-requested change to acceptance criteria must be recorded
   explicitly in the plan with its rationale.** It does not silently rewrite a
   criterion.
+- **Do not ask the advisor what model it is, and do not treat its answer as
+  routing evidence if you do.** Asked directly, it declined to name itself: it has
+  no introspective access to which model served the request, and a name visible in
+  its own context is a label rather than verification. That is the correct answer,
+  not evasion — a confident self-identification would have been *less*
+  trustworthy, because the name is already sitting in the briefing. To verify a
+  route, read the session log instead: `subagent/descriptor` carries
+  `agentProvider`/`agentModel`/`agentReasoningEffort` at spawn, and each
+  `request/header` repeats the resolved `config` per turn. Those record what DSH
+  **requested**; confirming what the provider **served** needs provider-side
+  metadata, which is not available locally.
 
 ## Cost note
 

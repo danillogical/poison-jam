@@ -6,7 +6,7 @@ continue.
 
 ## CURRENT STATE — read this first, then the sections below
 
-Last updated 2026-09-22 17:19. Everything below this block is **chronological**,
+Last updated 2026-09-22 17:24. Everything below this block is **chronological**,
 and where a later section corrects an earlier one the later one wins — several do
 (`Correction: ...`, `Retracted ...`). This block is the only place that states
 where things stand *now*; rewrite it in place each session rather than appending.
@@ -339,6 +339,44 @@ Both rules are now written into the skill, including the error-message table, so
 later session reads the failure correctly instead of retrying: *"has no supported
 continuation state"* means you spawned it wrong; *"belongs to another parent
 session"* means you are the wrong session and retrying cannot help.
+
+## 2026-09-22 — What the advisor's route claim rests on, and what it does not
+
+The user asked which model the standing advisor is, and then asked it directly.
+Worth recording because the tempting answer and the supportable answer differ.
+
+**Supportable, from the session log.** `subagent/descriptor` (seq 0) records
+`agentProvider: codex`, `agentModel: gpt-6-astra`, `agentReasoningEffort: medium`;
+each `request/header` (seq 14 and 39, one per turn) repeats the resolved
+`config` as `{provider: codex, model: gpt-6-astra, reasoningEffort: medium,
+maxTokens: 128000}`; `request/context` (seq 15) agrees. `gpt-6-astra` is a real
+`codex` catalog entry (priority 1, 272k context). So the claim is: **DSH
+dispatched every turn to `codex` requesting `gpt-6-astra` at medium.**
+
+**Not supportable, and now stated as a caveat.** The log records what DSH
+*requested*, not what the provider *served*. Nothing local confirms the backend
+that answered. Corroboration is indirect only: `codex` rejects unknown model ids
+rather than ignoring the field, and this id returns answers.
+
+**Asked directly, the advisor declined to name itself** — "I don't reliably know my
+own deployment name… a supplied label would not establish that" — and answered the
+methodological question the same way: a model's self-reported identity is not proof
+of the serving model; provider-side metadata is stronger. **That is the correct
+answer, not evasion, and it is the more useful one.** A confident "I am GPT-6-Astra"
+would have been *weaker* evidence than this refusal, because the name was already
+in the briefing the advisor was given: a model asked "what model are you?" will
+echo the label it can see in context. The refusal also removes a confound — the
+answer could not have been contaminated by my own prompt, because it did not
+depend on introspecting anything.
+
+**Decision: the advisor is `codex`/`gpt-6-astra`/`medium` as dispatched, and that
+is the strongest local claim; do not upgrade it to "confirmed served by".** Recorded
+in the skill so no later session asks the advisor to identify itself as a
+verification step, and so the distinction between *dispatched* and *served* survives
+into future work. This is the same discipline the project already applies to its own
+runs — `ABI verified` means the wrapper's invariants held, not equivalence to the
+original XBE — and it is the advisor's own first prediction about this project,
+turned on the advisor itself.
 
 ## 2026-09-22 — A2b and A2c: spans that ran over functions the disassembler never registered
 
