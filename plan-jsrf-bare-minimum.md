@@ -68,14 +68,21 @@ the strongest signal — this project has cancelled a packet on a detector artif
 twice, and had a wrong triage list in two consecutive sessions.
 
 **Delegation, in the DeepSeek/DSH session (2026-09-22).** The session model
-`workbuddy-ai/deepseek-v4.1-flash` does the work itself and spawns **no** worker,
-reviewer or architect subagents; it owns implementation and acceptance directly.
-The role names below (`Luna`, `Sol`, `Terra`, `Astra`) therefore describe **what
-kind of work** a packet is, not a roster to spawn. `grok-role-map.md` maps those
-names onto Grok and does not apply here. The **only** subagent this session
-spawns is the advisor above. The `Suggested Agent` line in each packet is a
-difficulty label: read it as a description of the work, and do that work in this
-session.
+`workbuddy-ai/deepseek-v4.1-flash` owns orchestration, adjudication and
+acceptance, and delegates on exactly two routes chosen by *why* the work is
+being delegated:
+
+| Need | Route | Why |
+|---|---|---|
+| **Context isolation** — read a large file, log or artifact and return a bounded summary so the raw content never enters the parent's window | `workbuddy-ai` / `deepseek-v4.1-flash` (`high`), unlimited | Same model, so no diversity is lost, and **free (x0.00)**. |
+| **Independent judgement** — contradicting measurements, two failed hypotheses, an impending universal claim, or a fired acceptance gate | `codex` / `gpt-6-astra` (`medium`) | A *different* model family is the point; a same-model agent shares the blind spot. |
+
+The role names below (`Luna`, `Sol`, `Terra`, `Astra`) describe **what kind of
+work** a packet is, not a roster to spawn; `grok-role-map.md` maps those names
+onto Grok and does not apply here. **Do not spend Codex-lineage quota on reading
+work** — that is what the free route is for. A worker is a reader, not a decider:
+it returns file:line evidence marked *measured* or *inferred*, and the parent
+adjudicates. **One owner performs build, regeneration and run — never a worker.**
 
 The advisor gate is unaffected and remains mandatory — a passing test count alone
 cannot override a failed behavioral criterion, and consultation is required

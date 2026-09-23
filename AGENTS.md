@@ -74,19 +74,36 @@ architecture. Codex spawn flags (`collaboration.spawn_agent`,
 `fork_turns`) do not apply; use `spawn_subagent` with a self-contained
 prompt. Children inherit the parent model.
 
-**Decision (2026-09-22): DeepSeek sessions do the work themselves and spawn no
-worker, reviewer or architect subagents.** The session model is
-`workbuddy-ai/deepseek-v4.1-flash`, and it owns orchestration, implementation,
-review and acceptance directly. The table above and the role vocabulary in the
-plan and reports describe **what kind of work** a packet is, not a roster to
-spawn; neither this table nor `grok-role-map.md` names a model to delegate to
-from this session. The **single exception** is the independent advisor —
-`codex` / `gpt-6-astra` at `medium` effort — which is consulted when a packet is
-stuck or its acceptance gate fires. That route, its triggers and its briefing
-contract are in `.dsh/skills/advisor-escalation/SKILL.md`, which is the
-authoritative advisor document for this harness; `~/.workbuddy-ai/skills/`
-holds the older WorkBuddy-harness copy and its `Agent(resume=...)` invocation
-does not apply here.
+**Decision (2026-09-22): DeepSeek sessions do the work themselves and delegate
+only to two routes — free DeepSeek workers for context isolation, and the Astra
+advisor for independent judgement.** Supersedes the earlier "no subagents at all"
+note from the same session, which the user lifted.
+
+The session model is `workbuddy-ai/deepseek-v4.1-flash`, and it owns
+orchestration, adjudication and acceptance directly. The table above and the role
+vocabulary in the plan and reports describe **what kind of work** a packet is,
+not a roster to spawn; neither this table nor `grok-role-map.md` names a model to
+delegate to from this session. Two routes exist, and they exist for different
+reasons:
+
+| Need | Route | Why this one |
+|---|---|---|
+| **Context isolation** — read a large file, log or artifact and return a bounded summary so the raw content never enters the parent's window | `workbuddy-ai` / `deepseek-v4.1-flash` (`high` effort) | Same model, so no diversity is lost, and it is **free (x0.00)**. Spawn as many as the work needs. |
+| **Independent judgement** — two measurements contradict, two hypotheses failed, a universal claim is about to be made, or an acceptance gate fires | `codex` / `gpt-6-astra` (`medium`) | A *different* model family, which is the whole point: a same-model agent shares the blind spot you are trying to escape. |
+
+**Do not reach for a Codex-lineage model (Sol/Luna/Terra/Astra) to do reading
+work.** Those names are packet vocabulary here, and they draw on paid Codex
+subscription quota to duplicate something the free route does as well. Conversely,
+do not use a DeepSeek worker where the question is judgement rather than
+extraction — it will reproduce the parent's error rather than catch it.
+
+A worker is a reader, not a decider: it returns evidence with file:line citations
+and explicit *measured* versus *inferred* marking, and the parent adjudicates.
+One owner performs build, regeneration and run — never a worker. The advisor's
+route, triggers and briefing contract are in
+`.dsh/skills/advisor-escalation/SKILL.md`, the authoritative advisor document for
+this harness; `~/.workbuddy-ai/skills/` holds the older WorkBuddy-harness copy and
+its `Agent(resume=...)` invocation does not apply here.
 
 Default mode is Away, with no local-provider calls. Select Home explicitly for
 optional Qwen capacity. Each worker receives the mode and stays in its assigned
