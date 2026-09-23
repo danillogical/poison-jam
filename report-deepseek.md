@@ -50,9 +50,21 @@ is the shared interior epilogue `pop edi; pop ebx; pop esi; ret` of the region
    site in it, and find what computes `0x000252B5`.
 2. **`0x000252B5` is not among the 132 pointer-table candidates**
    (`scripts/check-table-targets.py`: 132 unresolvable, 62 swallowed, 70
-   uncovered). Treat that as a claim about the *detector* as much as about the
-   system — it scans static XBE tables, and a target computed at run time would
-   not appear. It is not evidence that nothing points at it.
+   uncovered). And a **literal scan of the whole XBE image finds it zero
+   times**, as an absolute VA and as an RVA, along with `0x0002524D` and
+   `0x000252B8`. The scan is validated by a positive control: the same code
+   finds `0x00025310` **five** times as an absolute VA (`0x0019D812`,
+   `0x001326FF`, `0x001BE29A`, `0x001C2844`, `0x001C4044`) and zero times as an
+   RVA. So nothing in the static image holds `0x000252B5`; the target is
+   computed at run time. Both negatives are still claims about their *detectors*
+   — a computed target appears in neither — so this rules out a static
+   function-pointer table, not every possible pointer.
+   *(Two earlier attempts at this scan returned zero hits for everything,
+   including the `0x00025310` control. They were wrong for header-layout
+   reasons: `NumberOfSections` is at `0x11C` and `SectionHeadersAddress` at
+   `0x120` is a VA that must have the image base subtracted before use. Recorded
+   because a scan that finds nothing is the failure mode this project has
+   already been burned by twice.)*
 
 Then decide, with evidence, whether the enclosing `0x0002524A..0x000252E0`
 needs its own entry, or whether `0x000252B5` is a mis-derived pointer. Do not
