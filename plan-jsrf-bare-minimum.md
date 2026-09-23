@@ -64,7 +64,7 @@ change to acceptance must be recorded explicitly in this plan with its rationale
 **The advisor route, in the DeepSeek/DSH session (2026-09-22).** The advisor is
 `codex` / `gpt-6-astra` at `medium` reasoning effort, reached with the `subagent`
 tool (`provider: "codex"`, `model: "gpt-6-astra"`, `reasoning_effort: "medium"`,
-`run_in_background: false` when the answer gates the next action). It is briefed
+**`run_in_background: true`**). It is briefed
 fresh — never via `subagent_fork`, which would seed it with this conversation and
 destroy the independence that makes it worth consulting. Continue the same
 advisor with `send_message` to its durable agent id from `list_agents`, which
@@ -72,6 +72,19 @@ preserves the earlier exchange and needs only the delta. Full briefing contract,
 triggers and adopt/reject discipline: `.dsh/skills/advisor-escalation/SKILL.md`
 (the authoritative copy for this harness; the `~/.workbuddy-ai/skills/` copy
 documents the older WorkBuddy harness and its `Agent(resume=...)` invocation).
+
+> **`run_in_background: false` is a trap and this line used to recommend it.**
+> It was corrected 2026-09-22 after a controlled measurement: `false` yields a
+> **one-shot** child, so `send_message` to it fails with *"has no supported
+> continuation state"* and the whole advisor has to be re-briefed from scratch.
+> `resolveDelegationRun` returns
+> `{ runInBackground: request.run_in_background ?? options.continuable }`
+> (`dsh-tool-subagent/lib/index.js:360`) and only the `true` branch consults
+> `continuable` (`:521-526`). **Spawn with `true` whenever the advisor is meant to
+> be continued, even when its answer gates the next action** — "gating" means do
+> not start other work until its notice arrives, not that the call must be
+> foreground. The measurement is recorded in `report-deepseek.md` and the
+> mechanism in `deepseek-harness.md` §3.
 
 **Added 2026-09-22 after measuring the consult rate: the gate above is necessary but
 not sufficient.** It fires when a packet's acceptance is evaluated — but the

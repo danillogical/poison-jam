@@ -293,10 +293,16 @@ assumption that turned out to need checking.
   `workbuddy-ai`, even though the WorkBuddy catalog advertises that name. A
   wrong-provider error looks like an entitlement problem if you only read the
   catalog.
-- **The child is continuable.** The tool is configured `backgroundMode:
-  continuable` in the `standard` preset, so a spawn returns `started subagent
-  <id>` and the child appears in `list_agents`. Confirmed by continuing it with
-  `send_message` and getting a reply that restated the original brief.
+- **The child is continuable — but only if you ask for it.** The tool is configured
+  `backgroundMode: continuable` in the `standard` preset, yet that setting is
+  consulted **only on the `run_in_background: true` branch**; passing `false`
+  bypasses it entirely. Confirmed 2026-09-22 by a controlled pair differing in
+  nothing else: `32266b9a` (`false`) recorded `mode: one-shot`, was absent from
+  `list_agents`, and rejected `send_message`; `8808aa38` (`true`) recorded
+  `mode: continuable`, appeared in `list_agents`, and answered a follow-up that
+  restated the original brief. **This appendix previously presented the setting
+  alone as sufficient, and the body of this file recommended `false` for a
+  gating consult — both were wrong and are corrected above.**
 - **One-shot vs continuable is silent until it matters.** An earlier smoke-test
   spawn in this session came back one-shot and never appeared in `list_agents`;
   it answered its question correctly and would only have failed at the first

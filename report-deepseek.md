@@ -77,6 +77,35 @@ table above. The practical rule is now: **spawn the advisor with
 `run_in_background: true` whenever it is meant to be continued, even when its
 answer gates the next action.**
 
+**Provenance of the wrong instruction, traced — and the plan was the real cause.**
+Asked why a one-shot advisor was spawned, the answer is that the **plan itself
+said to**: `plan-jsrf-bare-minimum.md`'s advisor-route paragraph read
+*"`run_in_background: false` when the answer gates the next action"*, introduced by
+`8b1aada` (17:12) and never revisited. The two supporting documents then agreed
+with it, and the way they agreed is the interesting part:
+
+| document | the claim | introduced |
+|---|---|---|
+| `plan-jsrf-bare-minimum.md` | use `false` when the answer gates the next action | `8b1aada` 17:12 |
+| `deepseek-harness.md` | "`false` waits in the foreground and **still yields a continuable child**" | `68fd722` 17:50 |
+| `.dsh/skills/advisor-escalation/SKILL.md` | same sentence, *"so use it when the answer gates your next action"* | `00b2390` 17:17 |
+
+**So the documents did not disagree — they agreed on something false.** Two of them
+went further and restated the same wrong sentence, which is how a guess in one file
+became a "verified" rule in three. Worse, the skill **contradicted itself**: its
+appendix (line ~287) recorded *"An earlier smoke-test spawn in this session came
+back one-shot and never appeared in `list_agents`"* — the very observation that
+falsifies its own body text — while its appendix also claimed *"The child is
+continuable… Confirmed by continuing it with `send_message`."* Both cannot hold for
+one spawn, and the contradiction sat in one file unremarked.
+
+**What that teaches:** a claim repeated across files is not corroboration when all
+three trace to one authoring moment. The check that would have caught this is cheap
+and is now the recorded rule — read the tool's own source for the branch condition,
+and verify `mode` in the projection cache after spawning rather than trusting prose.
+The skill's appendix now says the `backgroundMode` setting is consulted **only** on
+the `true` branch, which is the fact that makes the whole confusion impossible.
+
 **A2g's acceptance review PASSED, with one correction and one nuance.** The
 `workbuddy-ai/hy4-preview-f` reviewer (`high`) returned **AGREED on all eight
 criteria**, reproducing the load-bearing measurements itself: it wrote its own
