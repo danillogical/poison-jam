@@ -6,7 +6,7 @@ continue.
 
 ## CURRENT STATE — read this first, then the sections below
 
-Last updated 2026-09-22 18:13. Everything below this block is **chronological**,
+Last updated 2026-09-22 18:25. Everything below this block is **chronological**,
 and where a later section corrects an earlier one the later one wins — several do
 (`Correction: ...`, `Retracted ...`). This block is the only place that states
 where things stand *now*; rewrite it in place each session rather than appending.
@@ -14,9 +14,9 @@ where things stand *now*; rewrite it in place each session rather than appending
 **The plan's A1–A5 audit sequence owns the next steps** and overrides any
 "next packet" wording in the historical sections below.
 
-**Repos.** Game `0697dc2` + the A2e change below; toolkit `484887b` (unchanged —
-A2e is a game-side span correction, no toolkit edit). Both trees clean. Game CTest
-11/11.
+**Repos.** Game `b9c0e74` (A2e plus the review gate and harness docs); toolkit
+`484887b` (unchanged — A2e is a game-side span correction, no toolkit edit). Both
+trees clean. Game CTest 11/11.
 
 *(The earlier note here — that `AGENTS.md` and `plan-jsrf-bare-minimum.md` were
 "modified by another session and deliberately uncommitted" — was wrong and is
@@ -68,42 +68,12 @@ candidates; write a generator that proposes `{start, end, stack_args, evidence}`
 from the original XBE and review its output before writing it into
 `config/recovered-functions.json`. Do not hand-fix them one run at a time.
 
-**Next packet (A2e), concretely.** *(SUPERSEDED — A2e is delivered above. Kept
-because two of its three claims are still instructive: the "computed at run time"
-inference was wrong (see the A2e conflict note), and the ring read as a stack was
-wrong. The third claim — that `0x000252B5` is not a function entry — was right,
-but for branch-bytes reasons, not for the scan.)* `0x000252B5` is **not a
-function entry**: it is the shared interior epilogue `pop edi; pop ebx; pop esi;
-ret` of the region `0x0002524A..0x000252E0`, which is **inside no entry in
-`tools/disasm/output/functions.json`** (the nearest are `0x25233`
-`gap_prologue` ending `0x2524A`, and `0x252E0`). Two leads as originally written:
-
-1. The ICALL diagnostic's `[3] 0x00025310` — this is `g_icall_trace`, a ring of
-   recent indirect-call targets, **not a stack**; it records a prior target, and
-   the recovered `0x00025310` body's own indirect call reads a table at
-   `0x001EC0F0` that cannot yield `0x000252B5`.
-2. **`0x000252B5` is not among the 132 pointer-table candidates**
-   (`scripts/check-table-targets.py`: 132 unresolvable, 62 swallowed, 70
-   uncovered). And a **literal scan of the whole XBE image finds it zero
-   times**, as an absolute VA and as an RVA, along with `0x0002524D` and
-   `0x000252B8`. The scan is validated by a positive control: the same code
-   finds `0x00025310` **five** times as an absolute VA (`0x0019D812`,
-   `0x001326FF`, `0x001BE29A`, `0x001C2844`, `0x001C4044`) and zero times as an
-   RVA. **The inference drawn from this — "so the target is computed at run
-   time" — is retracted:** the literal lives in the recompiled *host* binary
-   (`recomp_stubs_recovery.c:36`), which a guest-image scan cannot see, so zero
-   XBE hits was expected and proved nothing. The scan ruled out a static
-   guest-side pointer, not runtime computation.
-   *(Two earlier attempts at this scan returned zero hits for everything,
-   including the `0x00025310` control. They were wrong for header-layout
-   reasons: `NumberOfSections` is at `0x11C` and `SectionHeadersAddress` at
-   `0x120` is a VA that must have the image base subtracted before use. Recorded
-   because a scan that finds nothing is the failure mode this project has
-   already been burned by twice.)*
-
-Then decide, with evidence, whether the enclosing `0x0002524A..0x000252E0`
-needs its own entry, or whether `0x000252B5` is a mis-derived pointer. Do not
-add an entry for an epilogue on the assumption that it is one.
+**A2e's original lead is superseded and its full text now lives in the A2e
+sections below.** Two of its three claims were wrong and are retracted there: the
+`[n] 0x…` ring was read as a stack, and "zero literal hits in the XBE" was read as
+"computed at run time". The third — that `0x000252B5` is not a function entry —
+was right, but for branch-bytes reasons rather than for the scan. Do not act on
+the lead as originally written.
 
 **A2d.1 is delivered and measured.** The APU decode failure was a guest
 `rep movsd` lowered to a host `memcpy`: a device window is answered by the VEH

@@ -13,18 +13,20 @@ Read this with `AGENTS.md`, the current plan row, and the CURRENT STATE block in
 
 ## 1. The session shape
 
-**Decision (2026-09-22): one DeepSeek parent, free DeepSeek workers for reading,
-and the Astra advisor for judgement.** The parent is
-`workbuddy-ai/deepseek-v4.1-flash` and owns orchestration, adjudication and
-acceptance. It is the only writer of the report, the plan and the commit history.
+**Decision (2026-09-22): one DeepSeek parent, free DeepSeek workers for reading, an
+hy4-preview-f reviewer for acceptance, and the Astra advisor for judgement.** The
+parent is `workbuddy-ai/deepseek-v4.1-flash` and owns orchestration, adjudication
+and acceptance. It is the only writer of the report, the plan and the commit
+history.
 
-There are exactly two delegation routes, and they exist for **different reasons**.
-Choosing the wrong one is the most common mistake in this harness:
+There are exactly three delegation routes, and they exist for **different
+reasons**. Choosing the wrong one is the most common mistake in this harness:
 
 | Need | Route | Effort | Why this one |
 |---|---|---|---|
 | **Context isolation** — read a large file, log, dump or artifact and return a bounded summary so the raw content never enters the parent's window | `workbuddy-ai` / `deepseek-v4.1-flash` | `high` | Same model, so no diversity is lost; **free (x0.00)**; unlimited. |
-| **Independent judgement** — two measurements contradict, two hypotheses failed, a universal claim is about to be made, or an acceptance gate fires | `codex` / `gpt-6-astra` | `medium` | A *different* model family is the whole point: a same-model agent shares the blind spot you are trying to escape. |
+| **Acceptance review** — a packet's criteria are met and must be independently verified before acceptance | `workbuddy-ai` / `hy4-preview-f` | `high` | A *third* model family, so it shares neither the parent's nor the advisor's blind spots. Required, not optional — see the gate below. |
+| **Independent judgement** — two measurements contradict, two hypotheses failed, a universal claim is about to be made, an acceptance gate fires, or the session and the hy4 reviewer disagree | `codex` / `gpt-6-astra` | `medium` | A *different* model family is the whole point: a same-model agent shares the blind spot you are trying to escape. On a review disagreement its call is **final**. |
 
 ### The acceptance review gate
 
@@ -54,6 +56,56 @@ Two things make this gate worth its cost, and both are about the briefing:
 - **Give it a positive control.** If the review checks that something is *absent*,
   it must also check that its detector finds something *present*. This project has
   twice published a "found nothing" result from a broken scanner.
+
+**Reviewer prompt skeleton** (fill the bracketed parts; keep the rest verbatim,
+because each clause is there for a reason measured in this project):
+
+```
+READ-ONLY independent review. Do not modify, create or delete any file. Do not
+build or run the game. Verify or refute an acceptance claim.
+
+Project: <one paragraph — what is being built, and the conventions that make it
+unusual: guest code is 32-bit Xbox VAs via runtime macros; generated functions are
+void(void) and use a SIMULATED guest register file, not the host CPU registers.>
+Repos: game <path>, toolkit <path>. Python: C:\Python313\python.exe -X utf8 with
+PYTHONPATH=C:\Users\logic\AppData\Roaming\Python\Python313\site-packages.
+The project's own disassembler is authoritative:
+  C:\Python313\python.exe -X utf8 scripts/inspect-jsrf.py disasm <start> <end>
+
+The claim: <what was fixed and how, in two or three sentences>
+Claimed criteria, all asserted MET: <numbered list>
+Claimed measured result: <before/after table with run paths>
+Load-bearing measurements: <the specific numbers the claim rests on>
+
+Your task: independently verify or refute each criterion. Do not take this summary
+as evidence — read the artifacts and the machine code yourself.
+
+Attack these, in priority order:
+1. <the strongest falsifiable claim, and how to reproduce it>
+2. <any "found nothing" claim — reproduce it AND run a positive control: the same
+   scanner must find something known present. Report the control result explicitly.
+   A scanner that finds nothing for everything is this project's known failure mode.>
+3. <any arithmetic or decode claim, with the tool that settles it>
+4. <boundary questions: is the chosen end correct, does it swallow or cut anything?>
+5. <regression: read result.json and confirm the run is what it claims; if you
+   cannot verify CTest from files, say so rather than accepting it.>
+
+Deliverable, under 600 words: a verdict per criterion (AGREED / DISAGREED / CANNOT
+VERIFY) each with the evidence you personally checked and the command or file:line
+behind it; any counter-evidence or alternative reading, even if it does not change
+the verdict; explicitly what you could not verify; and mark each of your own
+conclusions measured or inferred.
+
+If you disagree with any part, say so plainly and give the reason. A review that
+agrees with everything without independently reproducing the load-bearing
+measurements is not useful — the strongest thing you can do is falsify the
+load-bearing claim. Do not propose code changes.
+```
+
+**A review prompt for A2e is already written** — see the A2e sections in
+`report-deepseek.md`; it is the concrete instance of this skeleton and was
+rejected only because the route was frozen, not because anything was wrong with
+it. Reuse its structure.
 
 **The reviewer route is frozen per session, and a restart does not unfreeze it.**
 Read from `dsh-tool-subagent/lib/index.js` rather than inferred, because the
@@ -112,29 +164,40 @@ is a trap.**
 
 | Provider | Catalog file | Auth | Models |
 |---|---|---|---|
-| `workbuddy-ai` | `~/.dsh/.workbuddy-ai-catalog.json` | WorkBuddy app | 22, including `deepseek-v4.1-flash` |
+| `workbuddy-ai` | `~/.dsh/.workbuddy-ai-catalog.json` | WorkBuddy app | 22, including `deepseek-v4.1-flash` and `hy4-preview-f` |
 | `codex` | `~/.dsh/plugins/subscriptions/models.json` | ChatGPT subscription | 7 |
 
 `deepseek-v4.1-flash`: context 300,000, `maxTokens` 128,000, cost **x0.00 (free)**.
+`hy4-preview-f`: context 300,000, `maxTokens` 64,000.
 
 **A catalog listing is not a routing guarantee.** Measured in an earlier session:
 `gpt-6-astra` serves on `codex` but **not** on `workbuddy-ai`, even though the
 WorkBuddy catalog advertises that name. A wrong-provider call fails in a way that
 looks like an entitlement problem if you only read the catalog. `codex` rejects
 unknown model ids rather than ignoring the field, which is why the positive
-results are meaningful.
+results are meaningful. The same test applies to `hy4-preview-f`: it is in the
+WorkBuddy catalog, but a session must confirm the route resolves before promising
+a review.
 
 `settings.yaml` holds the session default and the subagent allow-list:
 
 ```yaml
 agent-default-model:
   provider: workbuddy-ai
-  model: deepseek-v4.1-flash
+  model: deepseek-v4.1-flash     # the implementer, NOT the reviewer
   reasoningEffort: max
 subagent-model-selection:
   enabled: true
-  allowedModels: [ ...codex/* and workbuddy-ai/deepseek-v4.1-flash... ]
+  allowedModels: [ ...codex/*, workbuddy-ai/deepseek-v4.1-flash,
+                   workbuddy-ai/gpt-5.5, workbuddy-ai/hy4-preview-f ]
 ```
+
+**Check the whole file, not just the key you meant to change.** `agent-default-model`
+is a separate key in the same document and decides which model *implements* work.
+Setting it to the reviewer's model would make the reviewer review its own output,
+defeating the third-family gate. On 2026-09-22 an edit to `allowedModels` was
+accompanied by an unrelated change to `agent-default-model` (to `hy4-preview-f`),
+which was reverted. Read the file after editing it.
 
 ---
 
@@ -375,6 +438,18 @@ Recorded because each cost real time here, and each will recur.
 - **A worker's confident conclusion is still a claim.** The worker that reported
   "the fix is already in the tree" was right — but it was checked against
   `git log` before being believed, which is the standard to hold every one to.
+- **Discovering a new route mid-session and expecting to use it.** The allow-list
+  is frozen at session composition, so the session that adds a route can never use
+  it, and a restart does not help either — only a new session does. Confirm with
+  `list_subagent_models` *before* promising a review, and if the route is missing,
+  say so rather than substituting a model the workflow did not ask for.
+- **Editing one settings key and getting another changed.** The settings watcher
+  rewrites the whole document, so mtime moves even when content does not — and a
+  concurrent editor (including a settings UI) can change a key you never touched.
+  Read the file back after editing it. See §2 on `agent-default-model`.
+- **Treating "the reviewer agreed" as the goal.** The gate exists to falsify, not
+  to ratify. If a review agrees without reproducing the load-bearing numbers, the
+  review failed even though its verdict was AGREED.
 
 ---
 

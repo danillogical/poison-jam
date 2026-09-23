@@ -94,7 +94,24 @@ reasons:
 | Need | Route | Why this one |
 |---|---|---|
 | **Context isolation** — read a large file, log or artifact and return a bounded summary so the raw content never enters the parent's window | `workbuddy-ai` / `deepseek-v4.1-flash` (`high` effort) | Same model, so no diversity is lost, and it is **free (x0.00)**. Spawn as many as the work needs. |
-| **Independent judgement** — two measurements contradict, two hypotheses failed, a universal claim is about to be made, or an acceptance gate fires | `codex` / `gpt-6-astra` (`medium`) | A *different* model family, which is the whole point: a same-model agent shares the blind spot you are trying to escape. |
+| **Acceptance review** — a packet's criteria are met and must be independently verified before it is accepted | `workbuddy-ai` / `hy4-preview-f` (`high`) | A *third* model family, so it shares neither the implementing session's blind spots nor the advisor's. Required, not optional — see the review gate below. |
+| **Independent judgement** — two measurements contradict, two hypotheses failed, a universal claim is about to be made, an acceptance gate fires, or the session and the hy4 reviewer disagree | `codex` / `gpt-6-astra` (`medium`) | A *different* model family, which is the whole point: a same-model agent shares the blind spot you are trying to escape. On a review disagreement its call is **final**. |
+
+**The acceptance review gate (standing instruction, 2026-09-22).** Meeting a
+packet's acceptance criteria is not sufficient to accept it. Spawn an
+`hy4-preview-f` reviewer on the completed packet and require it to **verify or
+refute each criterion independently** — reproducing the load-bearing measurements
+itself — returning per-criterion AGREED / DISAGREED / CANNOT VERIFY with the
+command or `file:line` behind it. Ask for the falsification rather than the
+confirmation, and require a **positive control** wherever it checks that something
+is absent. If it agrees, the packet is accepted and the review is recorded in
+`report-deepseek.md`. **If it disagrees, both positions and their evidence go to
+the Astra advisor, whose call is final** — do not out-vote the reviewer, and do
+not let it out-vote the session. An unresolved disagreement usually means a
+measurement is broken, which is the case the advisor exists for. The route list is
+frozen at session composition, so a session must confirm the route with
+`list_subagent_models` before promising a review, and say so plainly if it is
+missing rather than substituting a model this rule did not ask for.
 
 **Do not reach for a Codex-lineage model (Sol/Luna/Terra/Astra) to do reading
 work.** Those names are packet vocabulary here, and they draw on paid Codex
