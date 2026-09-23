@@ -1,3 +1,12 @@
+> **RETIRED 2026-09-22. Archived for history only. Do not follow this file.**
+>
+> The model roster and delegation policy now live in **\docs/agent-workflow.md\**,
+> which supports exactly two harnesses (Codex and DeepSeek/DSH). This document
+> describes a superseded harness and names models that are retired
+> (Grok, \gpt-5.6-sol\, \gpt-5.6-luna\, \gpt-5.6-terra\, \gpt-5.5\,
+> \workbuddy-ai/gpt-*\). It is kept because its harness mechanics may still
+> explain an old log or commit message. Nothing here is a current instruction.
+
 # DeepSeek harness map for JSRF
 
 This is the DeepSeek/DSH overlay for this project, the counterpart to

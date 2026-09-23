@@ -84,7 +84,7 @@ documents the older WorkBuddy harness and its `Agent(resume=...)` invocation).
 > be continued, even when its answer gates the next action** — "gating" means do
 > not start other work until its notice arrives, not that the call must be
 > foreground. The measurement is recorded in `report-deepseek.md` and the
-> mechanism in `deepseek-harness.md` §3.
+> mechanism in `docs/agent-workflow.md` §4.
 
 **Added 2026-09-22 after measuring the consult rate: the gate above is necessary but
 not sufficient.** It fires when a packet's acceptance is evaluated — but the
@@ -108,43 +108,44 @@ same class of mistake twice; and before an expensive investigation. A repeat is
 the strongest signal — this project has cancelled a packet on a detector artifact
 twice, and had a wrong triage list in two consecutive sessions.
 
-**Delegation, in the DeepSeek/DSH session (2026-09-22).** See
-`deepseek-harness.md` for the full mechanics; the rule in brief: the session
-model `workbuddy-ai/deepseek-v4.1-flash` owns orchestration, adjudication and
-acceptance, and delegates on exactly three routes chosen by *why* the work is
-being delegated:
+**Delegation and models (2026-09-22).** **`docs/agent-workflow.md` is the single
+authority** — the roster, the session loop and the escalation triggers. Read it at
+session start. The rule in brief:
 
-| Need | Route | Why |
+| Role | Codex | DeepSeek Harness (DSH) |
 |---|---|---|
-| **Context isolation** — read a large file, log or artifact and return a bounded summary so the raw content never enters the parent's window | `workbuddy-ai` / `deepseek-v4.1-flash` (`high`), unlimited | Same model, so no diversity is lost, and **free (x0.00)**. |
-| **Acceptance review** — a packet's criteria are met and must be independently verified before acceptance | `workbuddy-ai` / `hy4-preview-f` (`high`) | A *third* model family: shares neither the session's nor the advisor's blind spots. **Required by the review gate** — see "Acceptance" above. |
-| **Independent judgement** — contradicting measurements, two failed hypotheses, an impending universal claim, or a fired acceptance gate | `codex` / `gpt-6-astra` (`medium`) | A *different* model family is the point; a same-model agent shares the blind spot. Its call is **final** on a review disagreement. |
+| Session | `gpt-6-luna` @ `high` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
+| Worker subagents | `gpt-6-luna` @ `high` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
+| Persistent advisor | `codex/gpt-6-astra` @ `medium` | `codex:gpt-6-astra` @ `medium` |
+| Acceptance reviewer | `gpt-6-luna` @ `max` | `workbuddy-ai/hy4-preview-f` @ `high` |
+
+**Everything else is retired:** `gpt-5.6-sol`, `gpt-5.6-luna`, `gpt-5.6-terra`,
+`gpt-5.5`, Grok, `grok-cli`, `hy3`, `glm-5.3`, `kimi-k3`, and every
+`workbuddy-ai/gpt-*` route. The role vocabulary that appears throughout this plan
+and the reports describes **what kind of work** a packet is, not a roster to spawn.
 
 **This table listed only two routes until 2026-09-22 23:40, and that was stale.**
 The context-isolation and advisor routes were written first (`8b1aada`, 17:12);
-the user's acceptance-review gate added the third (`cb24223`, 18:16) but this
-table was not updated, so for five hours the plan contradicted its own
-acceptance section. `.dsh/skills/advisor-escalation/SKILL.md` was stale in the
-same way — it claimed the advisor was "the only subagent this session is allowed
-to spawn", which would have forbidden the reviewer the gate demands. Both are
-corrected; the route table in `deepseek-harness.md` §1 is the single authority.
+the user's acceptance-review gate added the reviewer (`cb24223`, 18:16) but this
+table was not updated, so for five hours the plan contradicted its own acceptance
+section. `.dsh/skills/advisor-escalation/SKILL.md` was stale in the same way — it
+claimed the advisor was "the only subagent this session is allowed to spawn",
+which would have forbidden the reviewer the gate demands. **Both are corrected,
+and the skill is now a briefing *procedure* only**; policy lives in
+`docs/agent-workflow.md` so it cannot go stale against a file it does not contain.
 
-The role names below (`Luna`, `Sol`, `Terra`, `Astra`) describe **what kind of
-work** a packet is, not a roster to spawn; `grok-role-map.md` maps those names
-onto Grok and does not apply here. **Do not spend Codex-lineage quota on reading
-work** — that is what the free route is for. A worker is a reader, not a decider:
-it returns file:line evidence marked *measured* or *inferred*, and the parent
-adjudicates. **One owner performs build, regeneration and run — never a worker.**
+A worker is a reader, not a decider: it returns file:line evidence marked
+*measured* or *inferred*, and the session adjudicates. Workers are for **context
+isolation only** — never to implement. **One owner performs build, regeneration
+and run — never a worker.**
 
 **Conflict avoidance (measured 2026-09-22).** This harness's `subagent` tool has
-no `isolation` parameter, so the `isolation: worktree` instruction in
-`grok-role-map.md` cannot be followed here — a worker shares the session's tree.
-Git worktrees exist and do isolate commits, but a worktree of this repository is
-unusable for a worker because `game/`, `logs/`, `build/` and
-`tools/disasm/output/` are all gitignored and therefore absent. The isolation
-that actually works is therefore procedural, and it is three rules: **brief every
-worker read-only by default; keep one writing owner; and commit by explicit path,
-never `git add -A`.** Details and the size table are in `deepseek-harness.md` §3.
+no `isolation` parameter, so a worker shares the session's tree. Git worktrees
+exist and do isolate commits, but a worktree of this repository is unusable for a
+worker because `game/`, `logs/`, `build/` and `tools/disasm/output/` are all
+gitignored and therefore absent. The isolation that actually works is procedural,
+and it is three rules: **brief every worker read-only by default; keep one writing
+owner; and commit by explicit path, never `git add -A`.**
 
 The advisor gate is unaffected and remains mandatory — a passing test count alone
 cannot override a failed behavioral criterion, and consultation is required

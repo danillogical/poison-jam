@@ -6,13 +6,120 @@ continue.
 
 ## CURRENT STATE — read this first, then the sections below
 
-Last updated 2026-09-22 22:55. Everything below this block is **chronological**,
+Last updated 2026-09-23 00:10. Everything below this block is **chronological**,
 and where a later section corrects an earlier one the later one wins — several do
 (`Correction: ...`, `Retracted ...`). This block is the only place that states
 where things stand *now*; rewrite it in place each session rather than appending.
 
 **The plan's A1–A5 audit sequence owns the next steps** and overrides any
 "next packet" wording in the historical sections below.
+
+## The agent architecture was rebuilt — read `docs/agent-workflow.md`
+
+**Standing user instruction (2026-09-23). Two harnesses are supported, and every
+other model is retired.**
+
+| Role | Codex | DeepSeek Harness (DSH) |
+|---|---|---|
+| Session | `gpt-6-luna` @ `high` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
+| Worker subagents | `gpt-6-luna` @ `high` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
+| Persistent advisor | `codex/gpt-6-astra` @ `medium` | **`codex:gpt-6-astra`** @ `medium` |
+| Acceptance reviewer | `gpt-6-luna` @ `max` | `workbuddy-ai/hy4-preview-f` @ `high` |
+
+**Retired:** `gpt-5.6-sol`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.5`, Grok,
+`grok-cli`, `hy3`, `glm-5.3`, `kimi-k3`, and every `workbuddy-ai/gpt-*` route.
+Those names fill the historical sections of this report and old commit messages;
+read them as **history, never as a roster to spawn**.
+
+**`docs/agent-workflow.md` is the single authority** for the roster, the session
+loop and the escalation triggers. `AGENTS.md` carries a one-screen summary plus a
+pointer. The skill is now a **briefing procedure only**. This split is deliberate —
+see "Why the policy was in four places, and what that cost" below.
+
+**The loop a session follows without being asked:** confirm the roster (and on DSH
+confirm the reviewer route with `list_subagent_models` *before* promising a
+review) → read the plan, then this block → work the packet **in the main session**,
+spawning workers only for context isolation → work until the plan's criteria pass
+(*delivered*, not *accepted*) → spawn the acceptance reviewer to verify or refute
+each criterion independently → **on disagreement, escalate to the advisor, whose
+call is final; do not out-vote.**
+
+**Escalate when looping or walled** — same failure after two attempts, no new
+measurement changing your mind, contradicting measurements, an impending
+universal claim, an expensive investigation on an unverified premise, a review
+disagreement, or an unmet/ambiguous acceptance criterion.
+
+### What went wrong, and it was all documentation
+
+Three failures, found in sequence, each caused by the previous one's fix being
+incomplete. **None was a code defect; every one was a document that disagreed with
+another document.**
+
+1. **I published a false claim.** This report said *"A2f has not yet had its hy4
+   review."* A2f **had** been reviewed and **ACCEPTED** at 21:20 by a child of this
+   same session (`2aa4b25a`) — and that review's closing section, headed *"LOUD NEW
+   FINDING"*, had **already diagnosed the `0x000304F0` defect** that A2g then
+   re-derived from scratch. The verdict was simply never written here. Two harness
+   facts hid it: `list_agents` lists only **current** children, so a child that
+   settled earlier is invisible; and the projection cache that does hold it was
+   never consulted. **A2g's fix, strict run and detector finding are real; its
+   diagnosis was duplicated work.**
+2. **The advisor came back one-shot, and three documents said that was correct.**
+   `plan-jsrf-bare-minimum.md` said *"`run_in_background: false` when the answer
+   gates the next action"* (`8b1aada`, 17:12); `deepseek-harness.md` and the skill
+   both restated that `false` *"still yields a continuable child"* (`00b2390`
+   17:17, `68fd722` 17:50). All three were **wrong**, and the skill **contradicted
+   itself** — its appendix recorded the one-shot observation that falsifies its own
+   body text, six lines below the claim, and nobody noticed.
+3. **The skill forbade the reviewer the policy requires.** It asserted *"The
+   advisor is the only subagent this session is allowed to spawn. No worker,
+   reviewer, or architect subagents."* True at 17:12; **superseded at 18:16** by the
+   user's acceptance-review gate, which *requires* spawning `hy4-preview-f` on every
+   completed packet. For five hours it told fresh sessions they could not spawn the
+   reviewer the gate demands.
+
+### Why the policy was in four places, and what that cost
+
+Four documents described delegation — `AGENTS.md`, `grok-role-map.md`,
+`deepseek-harness.md`, and `.dsh/skills/advisor-escalation/SKILL.md` — and the
+policy changed twice within an hour. **Five separate claims went stale.** Three of
+them were restatements of the first, and **none was found by reading the file being
+edited**; all five were found by *sweeping every document for the claim* after the
+policy changed.
+
+**The lesson is not "write more carefully." It is that a fact copied into several
+files is not corroboration.** The fix is structural: **one authority per fact.**
+`docs/agent-workflow.md` owns the roster and loop; `AGENTS.md` owns operating
+knowledge; the skill owns the briefing procedure; the plan owns acceptance criteria
+and statuses; this block owns the current blocker and next packet. **When a policy
+changes, grep every document for the old claim before calling the change done.**
+
+### Also found and fixed: `AGENTS.md` was silently truncating its own tail
+
+`AGENTS.md` is loaded automatically with a **65,536-byte budget** and had grown to
+**70,101 bytes**. Everything from byte 67,281 — the section `## GPU direction and
+bounded next packets`, including the then-current "Next packet" — **was never read
+by any session.** It was not an error message; the file simply ended early.
+
+Fixed by splitting **by kind, not by size**: dated checkpoints and handoff
+narratives moved to `docs/jsrf-operating-history.md` (21 KB, read on demand, no
+content lost), leaving 50,017 bytes of operating knowledge. `AGENTS.md` now states
+its own budget so the next session does not repeat it.
+
+### Consequences now recorded as rules
+
+- **Enumerate this session's settled children before diagnosing a packet.** Read
+  `~/.dsh/storages/session_projcache/sessions/` — each child keeps its label, route
+  and final response. `list_agents` is not sufficient. `scripts/check-recorded-reviews.py`
+  does the enumeration; a review that was run but never recorded is work that will
+  be duplicated.
+- **A transcript is a multi-frame zstd stream**, and node's `zstdDecompressSync`
+  returns only the **first frame** — the trap already recorded in the (now archived)
+  harness doc. Reading the A2f verdict needed all 176 frames. `logs/zstd-frames.js`.
+- **Verify a claim against the tool's source, not against other documents.** The
+  `run_in_background` bug was settled by reading `dsh-tool-subagent/lib/index.js:360`
+  and `:521-526`, then confirming the recorded `mode` field — not by counting how
+  many files agreed.
 
 **Repos.** Game `74a43a6` plus the A2g change below; toolkit `484887b`
 (unchanged — A2g is a game-side span correction and a game-side script fix, no
