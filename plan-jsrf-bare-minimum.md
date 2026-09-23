@@ -67,8 +67,9 @@ same class of mistake twice; and before an expensive investigation. A repeat is
 the strongest signal — this project has cancelled a packet on a detector artifact
 twice, and had a wrong triage list in two consecutive sessions.
 
-**Delegation, in the DeepSeek/DSH session (2026-09-22).** The session model
-`workbuddy-ai/deepseek-v4.1-flash` owns orchestration, adjudication and
+**Delegation, in the DeepSeek/DSH session (2026-09-22).** See
+`deepseek-harness.md` for the full mechanics; the rule in brief: the session
+model `workbuddy-ai/deepseek-v4.1-flash` owns orchestration, adjudication and
 acceptance, and delegates on exactly two routes chosen by *why* the work is
 being delegated:
 

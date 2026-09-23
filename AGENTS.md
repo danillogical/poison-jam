@@ -24,8 +24,13 @@ boot, audio, GPU or liveness acceptance. `diagnostic_deadline` means the capture
 was bounded, not that the guest was live; `normal_exit` means the entry point
 returned, not that the title was satisfied.
 When the session is Grok, also read `grok-role-map.md` for model, effort,
-and spawn mechanics. Keep the report updated during work, with **bold Decision
-entries for choices made on your own recommendation**. The user reads it live
+and spawn mechanics. When the session is DeepSeek (DSH), read
+`deepseek-harness.md` instead — it owns the model routes, the two delegation
+routes and their selection rule, and the harness mechanics (continuable versus
+one-shot children, `send_message` reach, watching workers in DSH Web, the
+per-response output cap, and how to verify a route). Keep the report updated
+during work, with **bold Decision entries for choices made on your own
+recommendation**. The user reads it live
 in Grok Build (historical Codex sessions used this same guide). Proceed
 through ordinary implementation choices without repeatedly asking permission;
 current user instructions take precedence. Preserve unrelated changes.
@@ -163,6 +168,8 @@ and `lessons-learned.md` as needed. Other-title examples are not JSRF evidence.
 | `docs/jsrf-callback-reentry-contract.md` | Original-XBE `0x00193D90`/`0x00194210`/`0x00197AAC` ABI, KeSetEvent, reentry. |
 | `tests/test_callback_reentry.c` | Bounded 5,440-check callback/signal/reentry contract fixture. |
 | `grok-role-map.md` | Grok 4.7 xhigh overlay for Codex role names, review, and spawn. |
+| `deepseek-harness.md` | DeepSeek/DSH overlay: model routes, delegation rules, harness mechanics. |
+| `.dsh/skills/` | Tracked local skills, including `advisor-escalation`. |
 | `report-grok.md` | Session decisions and issues while executing without stopping to ask. |
 | `game/default.xbe`, `game/Media/` | Original executable/assets; do not modify. |
 | `tools/disasm/output/`, `tools/func_id/output/` | Original analysis/classification. |
