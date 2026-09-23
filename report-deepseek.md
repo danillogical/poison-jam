@@ -6,7 +6,7 @@ continue.
 
 ## CURRENT STATE — read this first, then the sections below
 
-Last updated 2026-09-22 16:30. Everything below this block is **chronological**,
+Last updated 2026-09-22 17:12. Everything below this block is **chronological**,
 and where a later section corrects an earlier one the later one wins — several do
 (`Correction: ...`, `Retracted ...`). This block is the only place that states
 where things stand *now*; rewrite it in place each session rather than appending.
@@ -104,11 +104,18 @@ Nothing has called it yet; if something does it will trap **by name** rather
 than execute `0x00048570`'s body a second time. That is the intended behaviour,
 but it needs its own entry — it is candidate #2 in the generator's list.
 
-**Advisor.** Last consulted in the A2 session (resume of `agent-d3294b58`). No
-trigger has been met since: the A2b/A2c failures were each explained by a
-measurement (the phantom boundary and the `ret N` operand), not by competing
-hypotheses. The next likely trigger is the APU decode failure, where the
-mechanism is genuinely unknown.
+**Advisor.** Route is now **`codex` / `gpt-6-astra` at `medium`** effort, spawned
+with the `subagent` tool and briefed fresh; continued with `send_message` on its
+durable id. This session spawns **no other subagent** — no worker, reviewer or
+architect — and does not use `subagent_fork` for the advisor, because seeding it
+with this conversation would destroy the independence that is the whole point.
+The contract lives in `.dsh/skills/advisor-escalation/SKILL.md`. The A2 consult
+used the older WorkBuddy route (`agent-d3294b58`, kimi-k3); that agent id is not
+reachable from this harness, so the next consult is a fresh briefing, not a
+resume. No trigger has been met since the A2 session: the A2b/A2c failures were
+each explained by a measurement (the phantom boundary and the `ret N` operand),
+not by competing hypotheses. The next likely trigger is the APU decode failure,
+where the mechanism is genuinely unknown.
 
 **Run profiles.** `docs/jsrf-run-profiles.md` defines **strict** (no override
 that answers a poll the hardware did not answer) versus **exploratory**.
@@ -144,6 +151,49 @@ report, plan and `docs/` cite 53 of them as evidence — never prune those. An
 artifact's toolkit revision is part of the claim:
 `20260922-160535-643-a2-irq-line` records toolkit `7cfbe55`, and the three runs
 from this session record toolkit `008001f`.
+## 2026-09-22 — The advisor route: DeepSeek does the work, Astra is the only subagent
+
+**Decision: this session runs everything itself on `workbuddy-ai/deepseek-v4.1-flash`
+and spawns no worker, reviewer or architect subagents. The single exception is the
+independent advisor — `codex` / `gpt-6-astra` at `medium` effort.** The user's
+instruction, and it supersedes the standing "price-conscious delegation"
+authorization for this session: no Sol/Luna/Terra packets, and no `subagent_fork`
+for the advisor.
+
+What that changes, and what it does not:
+
+- **The role vocabulary stays as a difficulty label.** `AGENTS.md`, this plan and
+  `report-jsrf-bare-minimum.md` name `Luna`/`Sol`/`Terra`/`Astra` per packet. From
+  this session those name **what kind of work** a packet is — the `Suggested
+  Agent` line is no longer a spawn instruction. `grok-role-map.md` maps the same
+  names onto Grok and does not apply here either.
+- **The advisor gate is untouched.** `plan-jsrf-bare-minimum.md` requires a
+  consult when a packet's acceptance is unmet, ambiguous or contradicted, and the
+  five in-session triggers still apply. This decision changes *who* is consulted,
+  never *whether*.
+- **The A2 consult is not resumable here.** It used the WorkBuddy harness route
+  (`agent-d3294b58`, kimi-k3) with `Agent(resume=...)`. That mechanism does not
+  exist in DSH; the equivalent is `send_message` on a durable child id, and the
+  old id belongs to another harness's store. The next consult is therefore a
+  **fresh briefing**, not a resume — which is what the skill's briefing contract
+  is written for. The prior exchange's substance is preserved in the report
+  regardless, including what was adopted and what was rejected and why.
+
+**Decision: port the advisor protocol to a DSH-native skill rather than edit the
+WorkBuddy copy.** `.dsh/skills/advisor-escalation/SKILL.md` is discovered at rank
+100 (`<projectRoot>/.dsh/skills`) and appeared in the session catalog on write.
+The original at `~/.workbuddy-ai/skills/advisor-escalation/SKILL.md` is kept
+unchanged: it documents a different harness's invocation (`Agent` with `resume`,
+and the claim that `SendMessage` is unavailable — the opposite is true in DSH),
+so rewriting it in place would make it wrong for the harness that still uses it.
+Two copies with explicit, opposite invocation sections beat one that is silently
+wrong in half the sessions.
+
+The port also carries the parts that are harness-independent and were expensive
+to learn: the six triggers, the briefing contract, the "ask which measurement is
+more likely an artifact" question that produced the single most valuable reply in
+this project's history, and the adopt/reject-and-record discipline.
+
 ## 2026-09-22 — A2b and A2c: spans that ran over functions the disassembler never registered
 
 **Decision: `stack_args` is the `ret N` operand, not an argument count.** Taken

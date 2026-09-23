@@ -33,6 +33,18 @@ for user permission. If the advisor is unavailable, record that dependency and
 continue only independent work; do not silently waive the gate. An advisor-requested
 change to acceptance must be recorded explicitly in this plan with its rationale.
 
+**The advisor route, in the DeepSeek/DSH session (2026-09-22).** The advisor is
+`codex` / `gpt-6-astra` at `medium` reasoning effort, reached with the `subagent`
+tool (`provider: "codex"`, `model: "gpt-6-astra"`, `reasoning_effort: "medium"`,
+`run_in_background: false` when the answer gates the next action). It is briefed
+fresh — never via `subagent_fork`, which would seed it with this conversation and
+destroy the independence that makes it worth consulting. Continue the same
+advisor with `send_message` to its durable agent id from `list_agents`, which
+preserves the earlier exchange and needs only the delta. Full briefing contract,
+triggers and adopt/reject discipline: `.dsh/skills/advisor-escalation/SKILL.md`
+(the authoritative copy for this harness; the `~/.workbuddy-ai/skills/` copy
+documents the older WorkBuddy harness and its `Agent(resume=...)` invocation).
+
 **Added 2026-09-22 after measuring the consult rate: the gate above is necessary but
 not sufficient.** It fires when a packet's acceptance is evaluated — but the
 consult that has actually paid here happens *during* investigation, before
@@ -55,12 +67,19 @@ same class of mistake twice; and before an expensive investigation. A repeat is
 the strongest signal — this project has cancelled a packet on a detector artifact
 twice, and had a wrong triage list in two consecutive sessions.
 
-Use the repository's Away role mapping for Codex and `grok-role-map.md` for Grok.
-Terra independently reviews each meaningful implementation packet before dependent
-work starts; the orchestrator adjudicates and resolves findings. Retain the
-two-attempt Luna-to-Sol escalation rule. Advisor consultation is additionally
-required whenever acceptance remains unmet; a passing test count alone cannot
-override a failed behavioral criterion.
+**Delegation, in the DeepSeek/DSH session (2026-09-22).** The session model
+`workbuddy-ai/deepseek-v4.1-flash` does the work itself and spawns **no** worker,
+reviewer or architect subagents; it owns implementation and acceptance directly.
+The role names below (`Luna`, `Sol`, `Terra`, `Astra`) therefore describe **what
+kind of work** a packet is, not a roster to spawn. `grok-role-map.md` maps those
+names onto Grok and does not apply here. The **only** subagent this session
+spawns is the advisor above. The `Suggested Agent` line in each packet is a
+difficulty label: read it as a description of the work, and do that work in this
+session.
+
+The advisor gate is unaffected and remains mandatory — a passing test count alone
+cannot override a failed behavioral criterion, and consultation is required
+whenever acceptance remains unmet.
 
 ### A1 — Reconcile status, evidence profiles and known device mapping
 

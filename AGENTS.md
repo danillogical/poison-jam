@@ -74,6 +74,20 @@ architecture. Codex spawn flags (`collaboration.spawn_agent`,
 `fork_turns`) do not apply; use `spawn_subagent` with a self-contained
 prompt. Children inherit the parent model.
 
+**Decision (2026-09-22): DeepSeek sessions do the work themselves and spawn no
+worker, reviewer or architect subagents.** The session model is
+`workbuddy-ai/deepseek-v4.1-flash`, and it owns orchestration, implementation,
+review and acceptance directly. The table above and the role vocabulary in the
+plan and reports describe **what kind of work** a packet is, not a roster to
+spawn; neither this table nor `grok-role-map.md` names a model to delegate to
+from this session. The **single exception** is the independent advisor —
+`codex` / `gpt-6-astra` at `medium` effort — which is consulted when a packet is
+stuck or its acceptance gate fires. That route, its triggers and its briefing
+contract are in `.dsh/skills/advisor-escalation/SKILL.md`, which is the
+authoritative advisor document for this harness; `~/.workbuddy-ai/skills/`
+holds the older WorkBuddy-harness copy and its `Agent(resume=...)` invocation
+does not apply here.
+
 Default mode is Away, with no local-provider calls. Select Home explicitly for
 optional Qwen capacity. Each worker receives the mode and stays in its assigned
 role; it does not recursively launch this pipeline.
