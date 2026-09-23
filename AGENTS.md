@@ -181,10 +181,11 @@ poll until the engine clears bit 16 (original `0x00191270`, inlined at
 `0x001912A0`), so the model must clear it or the guest spins forever. The
 offset mask is `0x1FFEFFFF`, NOT the generic `0x1FFFFFFF`, which contains bit
 16. `NV_USER_DMA_PUT` writes route through the canonical PFIFO register slots.
-NV2A contracts 319, Release CTest 11/11, ordinary stop
-`logs/runs/20260921-111607-936-kick-ack/` unchanged at `0x001918E0`. The chain
-is now unblocked for recovery; expect the next packet to stop on
-`unsupported_method` and treat that stop as the intended result.
+NV2A contracts 319, Release CTest 11/11. The kick chain is unblocked for
+recovery; a stop on `unsupported_method` is the intended result, not a fault.
+**For where the guest stops today, read the `CURRENT STATE` block — not this
+paragraph.** It previously named `0x001918E0` as the current stop, which stopped
+being true once the chain ran and returned.
 
 The pre-harness source snapshot remains `logs/snapshots/before-harness.zip`.
 Game baseline commit: `185a564`. The historical GPU section below predates the
@@ -673,10 +674,14 @@ unwound frames. Dumps preserve matching binaries/PDBs/maps and source archives.
 ## GPU harness: commands, interpretation and installed tools
 
 The completed harness pass is milestone 01f. It improves diagnosis, not guest
-GPU emulation. Ordinary startup now stops at `0x001918E0` inside `0x00192090`
-after WBINVD and framebuffer publish. The latest GPU report has USER GET/PUT
-both `0x1000` and an empty pending queue.
-Do not classify that pre-submission state as a corrupt packet or successful work.
+GPU emulation.
+
+**Where the guest actually stops is dated information and does not belong here** —
+this file said "ordinary startup now stops at `0x001918E0`" long after that had
+stopped being true (the kick chain now runs and returns, and the outcome is a
+`diagnostic_deadline`). Read the `CURRENT STATE` block in `report-deepseek.md` for
+the current stop. What belongs here is only the *method*: the commands below, and
+how to read what they produce.
 
 ```powershell
 # Ordinary failure capture and offline inspection; replace RUN with its directory.
