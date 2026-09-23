@@ -147,11 +147,13 @@ criterion of those packets was never met, and the hy4 review that returned
 all-AGREED did not check it.
 
 **Scope, measured:** `scripts/check-run-profile.py --all` reports **247 of 649
-archived runs carry overrides**. **That is not 247 mislabelled runs** — it means
-247 runs *cannot be called strict*, and any run among them whose claim depended on
-the strict profile needs its claim re-checked. Only the A2 runs have been checked
-so far, and all three fail. The honest generalisation is that **the strict label
-was unverified everywhere**, not that it was wrong everywhere.
+archived runs carry overrides**. **The advisor explicitly qualified this and I am
+adopting the qualification: "247 exploratory runs" does NOT establish "247
+mislabelled runs"** — that requires comparing each run's *associated claims*, not
+just its settings. What it does establish is that **the strict label was
+unverified everywhere**, and that any run among them whose claim depended on the
+strict profile must be re-checked. Only the A2 runs have been checked so far, and
+all four fail.
 
 **What survives, and what does not.** The A2 fixes themselves are **not**
 invalidated: the span correction, the emitted-body change, the detector finding
@@ -174,6 +176,28 @@ exploratory.**
    question. It now reads both shapes and says which it found. This is the third
    time in this project that a check's own failure mode mattered more than what
    it was checking.
+
+### And the dump checker had two defects of its own, one of which I introduced
+
+The advisor found that `check-dump-mapping.py` **let a named missing dump exit 0**
+(`:69-71` skipped it into a `missing` counter that never reached the failure list),
+and that its docstring carried the wrong "a `DIFFERS` dump is not evidence"
+verdict. Fixed: four separate verdicts — `MATCH`, `CONTENT_MISMATCH`,
+`UNREADABLE`, `MISSING` — and any of the last three exits nonzero.
+
+**Then, fixing that, I introduced a worse bug and caught it with a positive
+control.** To derive the expected bytes I read the XBE header field at `0x118` —
+which is the **certificate address**, not the base address (`0x104`). The derived
+file offset was wrong by `0x10178`, and the checker reported **all three test dumps
+as `CONTENT_MISMATCH`, including the two known-good ones.** A checker that fails
+everything looks like a dramatic finding; it was arithmetic. The derivation now
+cross-checks itself against the documented control constant and **refuses to
+report any verdict if they disagree**, which is the only reason the bug surfaced
+rather than becoming a fourth false alarm in this project.
+
+Verified after the fix: `matches: 545   content-mismatch: 1   unreadable: 0
+missing: 104` across the archive — the original A2h finding preserved exactly, and
+104 dumps that previously passed silently now report `MISSING`.
 
 ### Consequences now recorded as rules
 

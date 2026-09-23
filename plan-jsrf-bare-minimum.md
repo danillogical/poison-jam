@@ -6,183 +6,265 @@ source of truth for milestone status and acceptance evidence.
 
 ## P0 — Repair the execution and evidence loop before continuing A2h
 
-**Status:** Proposed; not delivered or accepted. **Order:** P0.1–P0.7 sequentially.
-These are bounded prerequisite packets, not a renderer or full-regeneration
-project. The main session owns implementation/build/run; roles and routes come
-only from `docs/agent-workflow.md`. Each packet uses its reviewer and escalates
-unresolved disagreements. A missing reviewer leaves acceptance pending; it is not
-permission to substitute another model.
+**Status:** Proposed; not delivered or accepted.
 
-*Provenance: proposed by the independent advisor (`codex:gpt-6-astra`) on
-2026-09-23 and adopted by the session. MEASURED items are direct inspection of
-cited text/code/artifacts; INFERRED items are its diagnoses and proposals.*
+**Order:** P0.1–P0.7 sequentially. These are bounded prerequisite packets,
+not a renderer or full-regeneration project. The main session owns
+implementation/build/run. Models and escalation policy come only from
+`docs/agent-workflow.md`; do not reproduce the roster here.
 
-### P0.1 — Make policy and current state genuinely singular
+**Evidence convention:** MEASURED identifies inspected source/artifacts or
+an explicitly attributed historical measurement. INFERRED identifies proposed
+changes and their expected benefit. Citations below refer to the advisory
+inspection baseline; locate the named sections if subsequent edits move lines.
 
-- **MEASURED basis:** `plan-jsrf-bare-minimum.md:28,64-107,115-140` repeats policy;
-  `.dsh/skills/advisor-escalation/SKILL.md:23-39` repeats route/spawn rules;
-  `report-deepseek.md:488-524` retains retired/current-looking instructions;
-  `AGENTS.md:393-407,645-701` retains historical next steps.
-- **INFERRED change/files:** retain roster/loop/escalation only in
-  `docs/agent-workflow.md`; replace plan/skill/report copies with links. Make the
-  AGENTS summary generated or mechanically checked. Distinguish DSH-specific
-  continuation mechanics from Codex mechanics, and separate capability
-  observations from standing policy. Move dated state into history; bound CURRENT
-  STATE to current packet, revisions, criterion status, evidence, blockers and next
-  experiment. Remove obsolete suggested-model assignments from active A1–A5. Move
-  APU text out of A2h and remove "all packets pending." Add
-  `scripts/check-agent-docs.py` and fixtures for active-policy contradictions,
-  broken local links, duplicated authority and UTF-8 instruction budget.
-- **INFERRED session benefit:** a fresh DSH session gets one actionable roster and
-  one next packet without resolving historical contradictions.
-- **INFERRED verification:** checker passes current documents and fails injected
-  stale reviewer policy, broken link and over-budget AGENTS fixtures. Use a
-  conservative onboarding budget below 65,536 bytes, with room for other loaded
-  instructions. A cold read names the intended DSH roles and the same pending
-  packet in plan/report. Do not rewrite historical observations as present
-  instructions.
+Each packet must retain its exact criteria, evidence revision and reviewer
+disposition. Missing review or CANNOT VERIFY leaves acceptance pending.
+An advisor ruling can resolve scope or an interpretation dispute; it cannot
+turn a failed measurement into a passing result.
 
-### P0.2 — Persist review results and close the acceptance state machine
+### P0.1 — Enforce strict/exploratory classification at launch and in archive checks
 
-- **MEASURED basis:** `report-deepseek.md:58-66,396-401`;
-  `scripts/check-recorded-reviews.py:18-55`; `scripts/check-subagent-routes.py:15-42`;
-  `docs/agent-workflow.md:83-96`.
-- **INFERRED change/files:** add a tracked packet review index under `docs/reviews/`,
-  keyed by packet and evidence revision, linking exact parent/child/turn IDs,
-  requested/recorded route and effort, criteria, artifacts, full verdict and
-  follow-up findings. Persist a result before updating accepted status or beginning
-  dependent work. Replace hardcoded session IDs with explicit parameters; filter
-  actual ancestry, inspect all relevant completed turns, and match exact review keys
-  rather than ACCEPT substrings. Missing/unreadable cache data must report
-  incomplete, not silently succeed. Define CANNOT VERIFY, reviewer-unavailable,
-  post-review edits and advisor-unavailable transitions in workflow. Separate
-  reviewer evidence reproduction from implementation ownership; serialize any
-  runtime tests it needs with the owner.
-- **INFERRED session benefit:** settled children cannot disappear from the project's
-  memory, and new findings become the next packet rather than duplicated
-  investigation.
-- **INFERRED verification:** fixtures cover two parents, identical review labels,
-  unrelated ACCEPT text, later-turn verdicts, unknown projection schema, unreadable
-  cache and an unrecorded review. All missing/incomplete cases remain unaccepted.
-  Recover A2f/A2g records by exact IDs; record missing provenance as unknown. Verify
-  the persistent advisor with an actual follow-up on the authorized route, recording
-  harness version; do not trust model self-report.
+**MEASURED basis:** A2g's
+`logs/runs/20260922-224429-003-a2g-304f0-span/metadata.json:25-31`
+enables `RECOMP_AC97_READY=1` and
+`RECOMP_APU_DSP_ACK=0x803C0810`. Both are synthetic completion under
+`docs/jsrf-run-profiles.md:36-43`, despite the plan's strict label.
+`scripts/run-jsrf.py:157-172` has no profile argument.
+The owner's wider audit reports the same overrides in A2e, A2f and both
+A2g runs, and 247 exploratory runs among 649 inspected. That count does
+not itself establish that all 247 were mislabeled.
 
-### P0.3 — Correct dump-integrity semantics before another A2h read
+**INFERRED change:**
+- Add explicit strict/exploratory/fixture selection to `scripts/run-jsrf.py`.
+- Share a tested classifier between the runner and
+  `scripts/check-run-profile.py`; maintain effective-setting semantics in
+  one source used by `docs/jsrf-run-profiles.md`.
+- Strict must reject enabled synthetic completion and bypasses, including
+  inherited settings and relevant runtime defaults. Never silently downgrade
+  a requested strict run.
+- Archive requested profile, effective settings, classification, reasons and
+  classifier version. Where possible, verify runtime-reported effective state.
+- Missing metadata, unknown schema, malformed settings and conflicting duplicate
+  keys produce UNKNOWN/INVALID, not CLEAN. Support only explicitly tested
+  historical metadata shapes.
+- Annotate historical profile findings separately; preserve original artifacts.
+  Reopen only acceptance criteria unsupported by the corrected classification.
 
-- **MEASURED basis:** `report-deepseek.md:303-348`;
-  `scripts/check-dump-mapping.py:16-22,69-94`; `AGENTS.md:227-245`; A2h acceptance
-  in this plan.
-- **INFERRED change/files:** split structural capture/mapping validation from XBE
-  image-content comparison in `scripts/check-dump-mapping.py`, `scripts/jsrf_dump.py`,
-  `scripts/inspect-jsrf.py` and relevant documentation. Preserve actual guest-VA
-  reads for corrupt but structurally valid captures; permit explicit, labeled
-  comparison against original-image offsets, never a global displacement correction.
-  Report MATCH, CONTENT_MISMATCH, UNREADABLE and MISSING separately. Named missing
-  inputs must not pass. Change A2h state to "displacement characterized; writer
-  unknown."
-- **INFERRED session benefit:** the next session can diagnose the writer without
-  discarding its strongest evidence or shifting the intact stack.
-- **INFERRED verification:** fixtures distinguish valid original content, valid
-  overwritten guest RAM, malformed/truncated capture and absent dump. The archived
-  failing run remains readable at actual VAs: original thunk slot is zero, relocated
-  slot contains its patched value, stack return remains at original ESP. A .text
-  mismatch must not establish capture mis-mapping, and a 16-byte match must not
-  certify the whole image.
+**Files:** runner, profile checker/shared module, profile documentation,
+runner/checker tests, affected plan/report acceptance records.
 
-### P0.4 — Enforce run profiles and reconcile only affected acceptance claims
+**INFERRED benefit:** the fresh DSH session can trust a machine-checked
+classification rather than a copied human label.
 
-- **MEASURED basis:** A2g `metadata.json:25-31` enables synthetic completion;
-  `docs/jsrf-run-profiles.md:36-43` classifies it; plan A2g requires strict;
-  `scripts/run-jsrf.py:157-172,227-229` lacks profile enforcement.
-- **INFERRED change/files:** add explicit strict/exploratory/fixture selection and a
-  tested effective-setting classifier to `scripts/run-jsrf.py`, with profile
-  definitions in one shared source used by `docs/jsrf-run-profiles.md`. Strict
-  rejects enabled synthetic completion/bypasses, including inherited values and
-  runtime defaults; it never silently relabels them. Archive requested/effective
-  settings, classification and reasons, plus profile-specific semantic acceptance.
-  Audit existing A2 run metadata and annotate mislabeled runs without modifying
-  original artifacts. Submit affected criterion dispositions to reviewer/advisor;
-  retain valid focused evidence rather than invalidating unrelated work.
-- **INFERRED session benefit:** "strict" becomes a reproducible property rather than
-  a label copied into prose.
-- **INFERRED verification:** tests inject both synthetic overrides, inherited
-  bypasses, disabled values and defaults; strict rejects prohibited effective
-  settings before launch, exploratory archives reasons, fixture is separate.
-  Reclassify the A2g artifact exploratory under the documented definitions. Archive
-  a true strict baseline even if it stops earlier; no earlier stop may be labeled a
-  regression against exploratory evidence alone.
+**INFERRED acceptance:**
+1. Tests include the actual list-valued `settings` shape, any supported older
+   shape, missing/malformed metadata, duplicates, enabled/disabled values,
+   inherited bypasses and runtime defaults.
+2. A positive control containing the two A2g overrides is classified exploratory;
+   the former wrong-shape parser would fail this test.
+3. Strict rejects prohibited effective settings before launching the title;
+   exploratory archives the reasons; fixture results remain separately labeled.
+4. The reviewer checks affected A2 criteria against original artifacts.
+   Valid focused fix/detector evidence is retained; unsupported strict claims
+   are corrected explicitly.
+5. Archive a genuinely strict baseline even if it stops earlier. Do not call
+   that earlier stop a regression against an exploratory run.
 
-### P0.5 — Provide one guarded, environment-aware Windows build entry point
+### P0.2 — Make review ingestion a durable acceptance transaction
 
-- **MEASURED basis:** `scripts/build-jsrf.py:3-28,43-85`,
-  `scripts/build-identity.py:26-32`, `CMakeLists.txt:73-122`; missing
-  `scripts/build-jsrf.ps1`; `report-deepseek.md:355-371` scopes the three
-  environment failures to policy.
-- **INFERRED change/files:** make `scripts/build-jsrf.py` canonical; fix onboarding
-  and identity error messages. Add a nonmutating diagnostic mode reporting
-  interpreter, resolved CMake/CTest, dependency availability, policy when known, and
-  tool versions. Preserve child environment normalization. Support explicit
-  parallelism and retain each attempt's log; identify the measured silent
-  confined-build signature without asserting every exit 1 is sandbox failure. Serial
-  retry must preserve the original failure and may not bypass an explicit sandbox
-  denial. Move CTest executable dependencies to a CMake aggregate acceptance-build
-  target rather than a second Python inventory; bind CTest Python to the configured
-  interpreter. Record cache/configuration/tool provenance with build identity.
-- **INFERRED session benefit:** DeepSeek need not reconstruct Bash workarounds,
-  guess missing tools or forget a test executable.
-- **INFERRED verification:** wrapper tests cover missing CMake, invalid parallel
-  counts, malformed environment variants, compiler failure and silent failure
-  classification. Under the available full-access policy, verify the guarded build
-  at --parallel 4 and all expected CTest executables; do not invent a confined-policy
-  remeasurement. Explicit denials remain blocked. CTest's discovered inventory is
-  authoritative; report passed/failed/blocked/not-run against that total.
+**MEASURED basis:** `report-deepseek.md:58-66,128-154` records the lost
+A2f verdict and duplicated diagnosis.
+`scripts/check-recorded-reviews.py:18-55` hardcodes a session, does not
+filter parentage, examines only the first turn and matches generic verdict
+text anywhere in the report.
+`docs/agent-workflow.md:83-96` lacks an explicit CANNOT VERIFY closure path.
 
-### P0.6 — Make harness prerequisites and probe expectations explicit
+**INFERRED change:**
+- Add a tracked review index under `docs/reviews/`, keyed by packet and evidence
+  revision. Record exact parent/child/turn IDs, route/effort, criteria, artifact
+  paths, full verdict and follow-up findings.
+- Persist the review before updating accepted status or starting dependent work.
+- Parameterize and repair `scripts/check-recorded-reviews.py` and
+  `scripts/check-subagent-routes.py`: filter actual ancestry, inspect relevant
+  completed turns, and match exact review IDs rather than words such as ACCEPT.
+- Treat missing/unreadable projection data as incomplete. Projection caches are
+  recovery inputs, not the acceptance authority.
+- Define delivered, review-pending, changes-requested, verification-blocked and
+  accepted transitions in the workflow. Post-review changes invalidate affected
+  criterion dispositions.
+- Define how reviewer measurements are serialized with the one build/run owner.
+  Owner-supplied new evidence must be checked by the reviewer, or receive an
+  explicit criterion-specific advisor disposition.
 
-- **MEASURED basis:** `tests/test_gpu_inspection.py:68,77`;
-  `scripts/run-jsrf.py:170-171`; `scripts/test-harness.py:105-108`;
-  `AGENTS.md:247-280`.
-- **INFERRED change/files:** support an explicitly configured, policy-permitted
-  scratch root for offline tests with cleanup and a clear preflight diagnostic. Do
-  not switch creation APIs to evade a denial. Add runner preflight for the configured
-  emulated-disk directory and existing image access without modifying save/image
-  contents; failure is ENVIRONMENT_BLOCKED, not guest regression. Centralize
-  per-probe checkpoint defaults shared by runner and harness tests. Keep launch,
-  capture, semantic behavior and environment outcomes distinct.
-- **INFERRED session benefit:** missing permissions or a probe/guest checkpoint
-  mismatch is diagnosed before another misleading game investigation.
-- **INFERRED verification:** test default and configured scratch roots, injected
-  permission errors, cleanup, and missing/denied image access without touching
-  original assets/saves. Verify ordinary-run and every probe's default checkpoints,
-  plus explicit override behavior. Run the offline suite and affected existing
-  collector probes; report "10 passed, 1 blocked, 11 expected" if that is the
-  observed inventory, never a substituted all-green denominator.
+**Files:** workflow, review index, both inspection scripts, their tests,
+plan/report status links.
 
-### P0.7 — Guard regeneration and hand off one bounded writer investigation
+**INFERRED benefit:** settled children and new findings survive context changes,
+and the session cannot mistake another packet's ACCEPT for its own.
 
-- **MEASURED basis:** `report-deepseek.md:532-553` records non-reproducible full
-  generation and overwritten ABI instrumentation; `AGENTS.md:424-460` distinguishes
-  full translation from recovery; `scripts/build-identity.py:12-24` fingerprints
-  emitted sources but not the generation recipe.
-- **INFERRED change/files:** add a generation-provenance/check-only entry point and
-  manifest for toolkit revision, original XBE/analysis hashes, commands, generation
-  mode and protected local instrumentation. Tie it to `scripts/build-jsrf.py`,
-  `scripts/build-identity.py`, `scripts/recover-functions.py` and onboarding without
-  automatically invoking full translation. Check full-generation candidates only in
-  an isolated output area; reject unrelated drift or loss of ABI checks. Keep full
-  semantic regeneration in A4c. Repair A2 acceptance wording so naming a later
-  unrelated defect does not silently add a new criterion; record any real scope
-  change through the gate.
-- **INFERRED session benefit:** the next A2h instrumentation build cannot unknowingly
-  replace the translation baseline or erase diagnostics.
-- **INFERRED verification:** no-op recovery is reproducible apart from explicitly
-  enumerated permitted differences; changed recipe/input or missing protected ABI
-  instrumentation trips the check. Working production chunks remain untouched by
-  check-only generation. After P0 acceptance, publish a short handoff: exact
-  two-repository/build identities, effective run profile, review records, and A2h
-  writer experiment. Resume the write-watch investigation, not another whole-image
-  census. A protective trap is containment, not a completed behavioral fix.
+**INFERRED acceptance:** fixtures cover two parents, identical labels, unrelated
+ACCEPT text, later-turn verdicts, unreadable cache, unknown schema and an
+unrecorded review. Missing/incomplete cases remain pending. Recover the exact
+A2f/A2g review records; mark unavailable provenance unknown rather than inventing it.
+
+### P0.3 — Finish the single-authority split and bound onboarding
+
+**MEASURED basis:** the inspected plan repeats reviewer/route policy at
+lines 28 and 64-140; the skill repeats route/spawn rules at lines 23-39.
+The inspected CURRENT STATE retains retired/current-looking instructions at
+`report-deepseek.md:488-524`; AGENTS retains dated next-packet instructions.
+
+**INFERRED change:**
+- Keep roster/loop/escalation authority only in `docs/agent-workflow.md`.
+  Replace plan, skill and report replicas with pointers.
+- Generate or mechanically check any AGENTS summary.
+- Scope continuation mechanics to the relevant harness/version; verify persistence
+  with an actual follow-up rather than route availability alone.
+- Remove retired suggested-model assignments from active A1–A5.
+- Shorten CURRENT STATE to current packet, revisions, criterion status, evidence,
+  blockers and next experiment. Move narratives into history.
+- Remove "all packets pending" and move old APU text out of A2h.
+- Add a documentation check for active-policy contradictions, missing local
+  command paths, stale authority links and UTF-8 instruction size.
+
+**Files:** workflow, AGENTS, plan, CURRENT STATE, procedure skill,
+operating history, new `scripts/check-agent-docs.py` and fixtures.
+
+**INFERRED benefit:** the fresh DSH session receives one actionable instruction
+set instead of resolving several generations of policy.
+
+**INFERRED acceptance:** the checker passes current documents and fails injected
+stale reviewer policy, broken command path and oversized instruction fixtures.
+Set a conservative budget below 65,536 bytes with headroom for other loaded
+instructions. A cold-read handoff identifies the same next packet and no retired
+active role assignments. Historical records remain preserved as history.
+
+### P0.4 — Separate capture validity from guest-memory integrity
+
+**MEASURED basis:** `report-deepseek.md:303-348` describes real displaced image
+content with an intact stack. The inspected `scripts/check-dump-mapping.py:16-22`
+then rejects that dump as evidence; lines 69-94 also permit a named missing
+dump to return success.
+
+**INFERRED change:**
+- Separate structural capture checks, address mapping checks and image-content
+  comparisons in the dump checker/reader documentation and diagnostics.
+- Preserve actual guest-VA reads for structurally readable corrupted captures.
+  Never apply a global displacement correction.
+- Label shifted comparisons as byte-provenance analysis, not repaired memory.
+- Report MATCH, CONTENT_MISMATCH, UNREADABLE and MISSING separately.
+  Named missing inputs must not pass.
+- Describe A2h as "displacement characterized; writer unknown," not a completed
+  root-cause/fix packet.
+
+**Files:** `scripts/check-dump-mapping.py`, `scripts/jsrf_dump.py`,
+`scripts/inspect-jsrf.py`, relevant tests, AGENTS, plan and report.
+
+**INFERRED benefit:** the next session can use the corruption evidence without
+discarding it or accidentally shifting the intact stack.
+
+**INFERRED acceptance:** fixtures distinguish intact image content, validly
+captured overwritten RAM, malformed/truncated capture and missing dump.
+The failing archived run remains readable at actual VAs: original thunk slot
+zero, relocated patched slot preserved, stack return at original ESP.
+A single stack control or 16-byte .text match must not certify every region.
+
+### P0.5 — Make the Python wrapper the single guarded build entry point
+
+**MEASURED basis:** `scripts/build-jsrf.ps1` was absent at inspection while
+onboarding and `scripts/build-identity.py:26-32` recommended it.
+`scripts/build-jsrf.py:22-28` generalized a confined-policy failure to DSH.
+The report and AGENTS correctly scope the failures to policy.
+The wrapper owns a manual target list; `CMakeLists.txt:112` invokes unqualified
+`python`.
+
+**INFERRED change:**
+- Make `scripts/build-jsrf.py` canonical and correct command references.
+- Add diagnostic/preflight output for resolved interpreter, CMake/CTest,
+  dependencies, tool versions and known execution policy.
+- Preserve environment normalization and explicit parallelism.
+- Retain logs for every attempt. Diagnose the measured silent confined-build
+  signature without claiming every exit 1 is a sandbox failure.
+- A permitted serial retry must preserve the original failure; an explicit
+  sandbox denial must not be bypassed.
+- Define an aggregate acceptance-build target in CMake so the Python wrapper
+  does not maintain a separate executable inventory.
+- Bind CTest Python to the configured interpreter and include configuration/tool
+  provenance in build identity.
+
+**Files:** build wrapper, identity script, CMakeLists, onboarding,
+wrapper tests.
+
+**INFERRED benefit:** DeepSeek can build all required artifacts without
+reconstructing missing-script/Bash workarounds or forgetting a test executable.
+
+**INFERRED acceptance:** tests cover missing tools, invalid parallel counts,
+environment normalization, ordinary compiler failures and silent-failure
+classification. Under available full access, validate the guarded parallel build
+and expected CTest executable inventory. Do not fabricate a confined-policy
+remeasurement. Report passed/failed/blocked/not-run against the discovered total.
+
+### P0.6 — Make harness permissions and probe expectations explicit
+
+**MEASURED basis:** `tests/test_gpu_inspection.py:68,77` uses temporary
+directories; `scripts/run-jsrf.py:170-171` defaults every launch to guest-entry
+checkpoints, while `scripts/test-harness.py:105-108` already knows probe-specific
+checkpoints. `report-deepseek.md:355-371` records policy-dependent temporary-file,
+parallel-build and emulated-disk access failures.
+
+**INFERRED change:**
+- Support an explicit policy-permitted scratch root for offline tests, with
+  preflight and cleanup. Do not switch creation APIs to evade a denial.
+- Check configured emulated-disk directory/image access without changing original
+  image or save contents. Classify failure as ENVIRONMENT_BLOCKED.
+- Centralize probe checkpoint defaults shared by runner and harness tests.
+- Keep launch, capture, environment and semantic outcomes distinct.
+
+**Files:** runner, harness tests, offline GPU tests, shared probe definitions,
+environment diagnostics and onboarding.
+
+**INFERRED benefit:** a permission failure or probe checkpoint mismatch is
+identified before it becomes another guest-regression investigation.
+
+**INFERRED acceptance:** tests cover permitted and denied scratch/image access,
+cleanup, ordinary and every probe's default checkpoints, and explicit overrides.
+Run affected existing probes and offline tests. If one test is blocked, report
+the full denominator—for example "10 passed, 1 blocked, 11 expected"—not a
+substitute green 10/10.
+
+### P0.7 — Guard regeneration provenance and publish the bounded next packet
+
+**MEASURED basis:** `report-deepseek.md:532-553` records non-reproducible full
+generation and overwritten ABI instrumentation. `scripts/build-identity.py:12-24`
+fingerprints emitted sources but not the generation recipe.
+
+**INFERRED change:**
+- Add generation provenance/check-only support covering toolkit revision,
+  original XBE/analysis hashes, commands, generation mode and protected ABI
+  instrumentation.
+- Integrate checks with build identity without automatically invoking full
+  translation.
+- Generate comparison candidates only in isolated output; reject unexplained
+  drift or missing protected instrumentation. Keep full semantic regeneration
+  in A4c rather than expanding this cleanup.
+- Freeze packet criteria. Naming an unrelated later defect does not silently add
+  a new criterion; any actual scope change goes through the review/advisor gate.
+- Publish a short final handoff with exact two-repository/build identities,
+  effective profile, review records and the A2h writer experiment.
+
+**Files:** build/identity/recovery scripts, provenance manifest/checker,
+onboarding, plan and CURRENT STATE.
+
+**INFERRED benefit:** the next A2h instrumentation build cannot unknowingly
+replace its translation baseline or erase diagnostics.
+
+**INFERRED acceptance:** no-op recovery is reproducible apart from explicitly
+enumerated permitted differences; changed recipe/input or missing protected ABI
+instrumentation trips the check. Check-only generation leaves production chunks
+unchanged. After P0 acceptance, resume the bounded write-watch investigation,
+not another whole-image census. A protective trap is containment, not proof of
+a completed behavioral fix.
 
 ## Active audit follow-up sequence — 2026-09-22
 
