@@ -6,7 +6,7 @@ continue.
 
 ## CURRENT STATE — read this first, then the sections below
 
-Last updated 2026-09-22 17:12. Everything below this block is **chronological**,
+Last updated 2026-09-22 17:16. Everything below this block is **chronological**,
 and where a later section corrects an earlier one the later one wins — several do
 (`Correction: ...`, `Retracted ...`). This block is the only place that states
 where things stand *now*; rewrite it in place each session rather than appending.
@@ -104,18 +104,27 @@ Nothing has called it yet; if something does it will trap **by name** rather
 than execute `0x00048570`'s body a second time. That is the intended behaviour,
 but it needs its own entry — it is candidate #2 in the generator's list.
 
-**Advisor.** Route is now **`codex` / `gpt-6-astra` at `medium`** effort, spawned
-with the `subagent` tool and briefed fresh; continued with `send_message` on its
-durable id. This session spawns **no other subagent** — no worker, reviewer or
-architect — and does not use `subagent_fork` for the advisor, because seeding it
-with this conversation would destroy the independence that is the whole point.
-The contract lives in `.dsh/skills/advisor-escalation/SKILL.md`. The A2 consult
-used the older WorkBuddy route (`agent-d3294b58`, kimi-k3); that agent id is not
-reachable from this harness, so the next consult is a fresh briefing, not a
-resume. No trigger has been met since the A2 session: the A2b/A2c failures were
-each explained by a measurement (the phantom boundary and the `ret N` operand),
-not by competing hypotheses. The next likely trigger is the APU decode failure,
-where the mechanism is genuinely unknown.
+**Advisor.** Route is **`codex` / `gpt-6-astra` at `medium`**, spawned with the
+`subagent` tool and briefed fresh; continued with `send_message` on its durable
+id. This session spawns **no other subagent** — no worker, reviewer or architect
+— and does not use `subagent_fork` for the advisor, because seeding it with this
+conversation would destroy the independence that is the whole point. The contract
+lives in `.dsh/skills/advisor-escalation/SKILL.md`.
+
+**A standing advisor is live for this session: `cace75bf-78cf-4130-9c4c-0080f93b651c`.**
+It holds the project brief and is reused with `send_message` — do not re-brief it
+or spawn a second one. It is **session-scoped**: a later session cannot reach this
+child, and no model-facing tool messages another session or another session's
+child, so a new session starts with a fresh brief. The A2 consult used the older
+WorkBuddy route (`agent-d3294b58`, kimi-k3); that id is not reachable from this
+harness either.
+
+Consult #1 (2026-09-22) returned a predicted recurring mistake and two corrections
+to the brief — see the consult section below. Its sharpest point is that the
+boundary guess, alias ownership, dispatch generation and the wrapper's
+expectation all derive from the **same function database**, so the checks agree by
+construction and `ABI verified` is not equivalence. Not yet tested against a
+measurement.
 
 **Run profiles.** `docs/jsrf-run-profiles.md` defines **strict** (no override
 that answers a poll the hardware did not answer) versus **exploratory**.
@@ -193,6 +202,97 @@ The port also carries the parts that are harness-independent and were expensive
 to learn: the six triggers, the briefing contract, the "ask which measurement is
 more likely an artifact" question that produced the single most valuable reply in
 this project's history, and the adopt/reject-and-record discipline.
+
+**Measured, not assumed, about the mechanism itself.** Four things were checked
+because each was a plausible assumption that turned out to need verifying:
+
+- The route resolves: a live consult returned an answer. Enumeration is not
+  authentication — `list_subagent_models` listing `gpt-6-astra` proves nothing
+  about whether the route serves it. (An earlier session measured the trap
+  directly: `gpt-6-astra` serves on `codex` but **not** on `workbuddy-ai`, whose
+  catalog advertises the name anyway. A wrong-provider error reads as an
+  entitlement problem if you only consult the catalog.)
+- The child is **continuable**: the `standard` preset configures the tool
+  `backgroundMode: continuable`, so a spawn returns `started subagent <id>` and
+  the child appears in `list_agents`; `send_message` to it was answered with a
+  restatement of the original brief.
+- **One-shot vs continuable is silent until it matters.** The first spawn in this
+  session came back *one-shot* — it answered correctly and simply never appeared
+  in `list_agents`. It would only have failed at the first attempt to continue
+  it. Confirm with `list_agents` whenever the child is meant to be reused.
+- **An advisor is session-scoped.** `send_message` needs exact adjacency (a direct
+  continuable child, or your direct parent), so a child spawned in one session
+  cannot be messaged from another. DSH does ship a cross-session *session
+  reference* service and the host serves a cross-session child query to the
+  browser, but the reference service is **user-initiated** — it snapshots a
+  session the human mentions — and there is no model-facing tool for either. The
+  skill now says so, so no future session burns a turn hunting for an advisor it
+  cannot reach.
+
+## 2026-09-22 — Advisor consult #1: the standing brief, and what it returned
+
+The advisor was spawned with a standing brief (the recompilation architecture, the
+guest-ABI-by-save/restore convention, the boundary-guess and `tail_jump_alias`
+defect classes, `stack_args` semantics, the run-profile vocabulary, and the current
+APU decode blocker) and asked a single question: **what class of mistake is this
+project most likely to make repeatedly and not notice, and is any stated
+"structural fact" itself wrong?** Child `cace75bf-78cf-4130-9c4c-0080f93b651c`,
+`codex`/`gpt-6-astra`/`medium`. Reusable for the rest of this session via
+`send_message`.
+
+**Its predicted recurring mistake, adopted.** *Treating successful address
+resolution and a balanced guest return as proof that the correct guest computation
+executed.* A VA redirected to a plausible body can preserve ESP/EBX/ESI/EDI and
+return cleanly while running the wrong entry, omitting initialization, or
+corrupting semantically important state. The sharp part is the corollary: **the
+boundary guess, the alias ownership, the dispatch generation and the wrapper's
+expectation all derive from the same function database, so apparently independent
+checks agree by construction.** `ABI verified` means the wrapper's selected
+invariants held — not equivalence to the original XBE.
+
+That is a claim about *this project's* instrumentation, and it is testable against
+evidence already in the report: the A2b `0x00048190` failure was found only
+because a *declared span* was wrong, and the `stack_args` error was invisible in
+the span and surfaced only as a four-byte `esp` delta. Both are cases where the
+metadata agreed with itself. Its cheapest discriminator is therefore adopted as
+the standing check for any suspect dynamic transfer: **record the requested guest
+VA, the selected host symbol, and the actual guest entry the symbol represents;
+then independently decode the original bytes at that VA and compare the first
+observable state transition — never using the same function database as the
+oracle.**
+
+**Its correction to my brief, adopted and important.** I stated as a structural
+fact that "`tail_jump_alias` entries are fragments, not functions." The advisor
+rejected the framing: that is an **untrusted classifier label**, not an
+architectural fact, and this project has already measured it being wrong — the
+CRT initializer and COM vtable classes were exactly entries that the classifier
+labelled aliases and the fold then mis-owned. It adds a sharper point than the
+report currently makes: **even a genuine fragment cannot generally dispatch to its
+owner's *start*.** It needs the correct *interior* entry and the incoming machine
+state, unless equivalence is separately proved. `AGENTS.md`'s open rule ("fold an
+alias only when its body actually needs the parent's labels") is a necessary
+condition, not a sufficient one — label-need does not establish interior-entry
+equivalence. Recorded here; not yet acted on, and it does not change any accepted
+packet.
+
+**Its second correction, adopted as a caveat.** The saved-register list
+(ESP/EBX/ESI/EDI) is **not** a general guest-ABI claim. Architectural EBP and
+other applicable architectural state remain obligations even though the current
+wrappers do not check them. `AGENTS.md` already records the EBP caveat; the
+advisor's point is that the caveat is load-bearing rather than cosmetic, because
+an `ABI verified` line is being read as broader than it is.
+
+**Its APU guidance, adopted as the framing for A2d.1.** *"AVX decode failure
+explains why the exception escaped, not yet why a host DLL touched MMIO."* Those
+are two questions and only the first is currently answered. Validate the caller,
+address, access width and intended device transaction **before** extending the
+decoder — otherwise the decoder work is aimed at the symptom. This agrees with
+the plan's own instruction not to map the aperture readable, and it sharpens job 1
+of A2d.
+
+**Not yet tested.** No discriminator above has been run; the consult produced
+hypotheses and a framing, which is what it is for. The APU caller question is the
+first thing to measure under it.
 
 ## 2026-09-22 — A2b and A2c: spans that ran over functions the disassembler never registered
 

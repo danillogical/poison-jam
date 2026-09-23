@@ -89,30 +89,65 @@ subagent(
   route to resolve. `reasoning_effort: "medium"` is the configured level for this
   role — `gpt-6-astra` also advertises low/high/xhigh/max/ultra, and medium is
   the deliberate choice, so do not silently raise it.
-- **`run_in_background: false` when the answer gates your next action** (the
-  usual case for a stuck packet). Use `true` only when you have genuinely
-  independent work to do while it thinks, then collect it with `job_output`.
-- The result is the child's final message. It also carries a **durable agent id**
-  — keep it, it is the handle for the follow-up.
+- **Omit `run_in_background`, or pass `true`, to get a durable child.** Under this
+  session's preset the tool is configured `backgroundMode: continuable`, so the
+  call returns `started subagent <childId>` immediately and the child stays
+  addressable. **`run_in_background: false` waits in the foreground but the call
+  still yields a continuable child**, so use it when the answer gates your next
+  action.
+- **`run_in_background: true` does NOT create a background *job*.** Under
+  `continuable` policy there is no `job_output` to collect: the runtime sends one
+  settlement notice when the child's turn ends, and the answer arrives as that
+  notice. Do not go looking for a job id.
+- **The child id is the handle. Keep it.** It is printed as
+  `started subagent <id>`, and `list_agents` lists it.
+
+### Confirming you have a continuable child, not a one-shot
+
+Check `list_agents`. A continuable child appears there with its status
+(`running`, `idle`, or `ready`); a one-shot child does **not** appear at all.
+This distinction is worth one call, because it is silent otherwise: a one-shot
+child still answers the first question correctly and only fails later, at the
+first attempt to continue it. In this session the tool is `continuable`, so a
+child that is missing from `list_agents` means the spawn did not take the
+durable path.
 
 ### Continuing an advisor: `send_message`, not a re-brief
 
-Unlike the WorkBuddy harness, DSH **does** expose `send_message`. To continue the
-same advisor, send to its durable agent id:
+DSH exposes `send_message`. To continue the same advisor, send to its durable
+agent id:
 
 ```
 send_message(agent_id: "<id from list_agents>", message: "<short follow-up>")
 ```
 
 A working target receives the message at its nearest step; an idle or ready
-target starts a new turn with its earlier exchange intact. `list_agents` shows
-the ids and statuses — `running`, `idle` (loaded, between turns), or `ready`
-(resumable from storage).
+target starts a new turn with its earlier exchange intact.
 
 Because the earlier exchange survives, a follow-up can be two sentences instead
 of a fresh briefing. **Prefer this when continuing the same investigation.**
 Re-brief only when the new question is unrelated: carrying stale, unrelated
 context into a fresh problem makes the advisor worse, not better.
+
+### Reach: the advisor belongs to the session that spawned it
+
+`send_message` requires **exact adjacency**: you may target a *direct continuable
+child*, or your direct parent if you are a resident child. `list_agents` shows
+your own children only. So an advisor spawned in session A is addressable for the
+rest of session A, but **a later session cannot message it** — that session is not
+its parent, and the id will not appear in its `list_agents`.
+
+Practical consequence: **spawn the advisor when you first need it, and keep using
+that one child for the rest of the session.** Do not expect to inherit an advisor
+from an earlier session, and do not spend a turn hunting for one in `list_agents`
+— it will not be there. A fresh session starts with a fresh brief.
+
+(The host *does* keep a cross-session child query surface that the browser UI uses
+to follow up a subagent. That is a host capability, not a model-facing one: no
+tool in this session's catalog reaches it. Treat the child as session-scoped.)
+
+Do not spawn a second advisor while one is alive — list the children first and
+send the delta to the one already holding context.
 
 ## How to brief
 
@@ -198,3 +233,30 @@ above is actually met.
 This skill is prose only: no scripts, no bundled files, no network or credential
 access. It spawns one subagent through the existing `subagent` tool and adds no
 new capability or privilege.
+
+## Appendix: what was verified, and how
+
+Measured 2026-09-22 in this session, because each item was a plausible-sounding
+assumption that turned out to need checking.
+
+- **The route resolves.** A live consult to `codex`/`gpt-6-astra`/`medium`
+  returned an answer. Enumeration is not authentication: `list_subagent_models`
+  listing a model proves nothing about whether the route serves it. Separately
+  measured in an earlier session: `gpt-6-astra` serves on `codex` but **not** on
+  `workbuddy-ai`, even though the WorkBuddy catalog advertises that name. A
+  wrong-provider error looks like an entitlement problem if you only read the
+  catalog.
+- **The child is continuable.** The tool is configured `backgroundMode:
+  continuable` in the `standard` preset, so a spawn returns `started subagent
+  <id>` and the child appears in `list_agents`. Confirmed by continuing it with
+  `send_message` and getting a reply that restated the original brief.
+- **One-shot vs continuable is silent until it matters.** An earlier smoke-test
+  spawn in this session came back one-shot and never appeared in `list_agents`;
+  it answered its question correctly and would only have failed at the first
+  attempt to continue it. Always confirm with `list_agents` if you intend to
+  reuse the child.
+- **Cross-session is not reachable from the model.** DSH ships a session
+  reference service (`dsh-session-reference`) and the host serves a cross-session
+  child query to the browser, but the reference service is **user-initiated**: it
+  turns a mention the *human* types into a read-only snapshot. There is no
+  model-facing tool to message another session or another session's child.
