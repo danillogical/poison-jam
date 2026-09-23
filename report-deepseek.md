@@ -38,15 +38,23 @@ the new stop below.
 trap: eax 0, ecx `0x012EE060`, edx `0x00038ED0`, esp `0x00F7FEE4`. Evidence:
 `logs/runs/20260922-181157-372-a2e-252b5-span/` (strict, 30 s, toolkit `484887b`).
 
-**A2e is delivered and measured.** The previous stop, `0x000252B5`, was **not an
-unresolved indirect call**: it was the shared epilogue of the switch at
-`0x00025040`, emitted as a tail call because the entry's declared span stopped
-0x82 bytes early at a `gap_prologue` **false entry**. Widening the span to
-`0x00025040..0x000252B9` in `config/recovered-functions.json` made it an internal
-label: `0x00025040 returned; ABI verified`, three traps dropped, the emitted switch
-went from 6 to **8 of 8** targets, and the stop moved. Full reasoning, the three
-branch-bytes exclusivity tests, the advisor consult, and the worker conflict are in
-the A2e sections below.
+**A2e is delivered and measured — but NOT accepted.** The review gate the user
+added (hy4-preview-f reviewer, Astra as final call on disagreement) could not run:
+`hy4-preview-f` was added to the allow-list during this same session, and
+`subagent-model-selection` freezes its route list at session composition, so the
+route was rejected with `child LLM route "workbuddy-ai/hy4-preview-f" is not
+allowed for this Session`. The next session must run that review and record it
+before A2e is accepted. The evidence below stands on its own; only the independent
+review is outstanding.
+
+The previous stop, `0x000252B5`, was **not an unresolved indirect call**: it was
+the shared epilogue of the switch at `0x00025040`, emitted as a tail call because
+the entry's declared span stopped 0x82 bytes early at a `gap_prologue` **false
+entry**. Widening the span to `0x00025040..0x000252B9` in
+`config/recovered-functions.json` made it an internal label: `0x00025040 returned;
+ABI verified`, three traps dropped, the emitted switch went from 6 to **8 of 8**
+targets, and the stop moved. Full reasoning, the three branch-bytes exclusivity
+tests, the advisor consult, and the worker conflict are in the A2e sections below.
 
 **Next packet (A2f).** `0x0007E255`, with `0x0007E360`, `0x0007E180` and
 `0x00038ED0`/`0x00038EB0` in the ring immediately before it. First question: is

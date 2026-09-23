@@ -26,6 +26,43 @@ Choosing the wrong one is the most common mistake in this harness:
 | **Context isolation** — read a large file, log, dump or artifact and return a bounded summary so the raw content never enters the parent's window | `workbuddy-ai` / `deepseek-v4.1-flash` | `high` | Same model, so no diversity is lost; **free (x0.00)**; unlimited. |
 | **Independent judgement** — two measurements contradict, two hypotheses failed, a universal claim is about to be made, or an acceptance gate fires | `codex` / `gpt-6-astra` | `medium` | A *different* model family is the whole point: a same-model agent shares the blind spot you are trying to escape. |
 
+### The acceptance review gate
+
+**Standing instruction (2026-09-22): after a packet's acceptance criteria are met,
+do not accept it alone.** Three steps, in order:
+
+1. **Spawn a `workbuddy-ai` / `hy4-preview-f` reviewer** on the completed packet.
+   It is a *third* model family, so it does not share either the parent's or the
+   advisor's blind spots. Brief it with the claim, the criteria, and the evidence
+   paths, and ask it to **verify or refute each criterion independently** — not to
+   summarise. Tell it explicitly to reproduce the load-bearing measurements
+   itself, and to give a per-criterion verdict of AGREED / DISAGREED / CANNOT
+   VERIFY with the command or `file:line` that produced it.
+2. **If the reviewer agrees**, the packet is accepted. Record the review and what
+   it independently reproduced in `report-deepseek.md`.
+3. **If you and the reviewer disagree**, send the disagreement — both positions
+   and the evidence each rests on — to the **Astra advisor**, whose call is final.
+   Do not simply out-vote the reviewer, and do not let it out-vote you: an
+   unresolved disagreement is a signal that a measurement is broken, which is
+   exactly the case the advisor exists for.
+
+Two things make this gate worth its cost, and both are about the briefing:
+
+- **Ask for the falsification, not the confirmation.** The strongest reviewer
+  behaviour is destroying a load-bearing measurement. A review that agrees with
+  everything without reproducing the numbers is worthless — say so in the prompt.
+- **Give it a positive control.** If the review checks that something is *absent*,
+  it must also check that its detector finds something *present*. This project has
+  twice published a "found nothing" result from a broken scanner.
+
+**The reviewer route is frozen per session.** `subagent-model-selection` samples
+the allow-list when a **fresh top-level session** is composed, records it in that
+session, and — per the tool's own documentation — leaves it *"unchanged by later
+settings edits."* So editing `~/.dsh/settings.yaml` mid-session does **not** take
+effect: a route added now is available to the next session, not this one. Confirm
+with `list_subagent_models` before promising a review; if the route is missing,
+say so plainly rather than substituting a model the workflow did not ask for.
+
 Two rules follow, and both are easy to violate by reflex:
 
 - **Do not reach for a Codex-lineage name (Sol / Luna / Terra / Astra) to do

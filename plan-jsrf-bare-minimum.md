@@ -22,6 +22,34 @@ established by that outcome.
 
 ### Acceptance and advisor rule — applies to every packet
 
+**Review gate (added 2026-09-22, standing user instruction).** Meeting a packet's
+acceptance criteria is no longer sufficient to accept it. Three steps, in order:
+
+1. **Spawn a `workbuddy-ai` / `hy4-preview-f` reviewer** on the completed packet.
+   It is a third model family, so it shares neither the implementing session's nor
+   the advisor's blind spots. Brief it with the claim, the criteria and the
+   evidence paths, and require it to **verify or refute each criterion
+   independently** — reproducing the load-bearing measurements itself — and to
+   return a per-criterion verdict of AGREED / DISAGREED / CANNOT VERIFY with the
+   command or `file:line` behind it. Ask explicitly for the falsification, not the
+   confirmation, and require a **positive control** wherever it checks that
+   something is absent.
+2. **If the reviewer agrees**, the packet is accepted; record the review and what
+   it independently reproduced in `report-deepseek.md`.
+3. **If the session and the reviewer disagree**, both positions and their evidence
+   go to the **Astra advisor**, whose call is final. Do not out-vote the reviewer,
+   and do not let it out-vote the session: an unresolved disagreement usually
+   means a measurement is broken, which is the case the advisor exists for.
+
+**The reviewer route is frozen per session.** `subagent-model-selection` samples
+the allow-list when a fresh top-level session is composed and leaves it *"unchanged
+by later settings edits"*, so editing `~/.dsh/settings.yaml` mid-session does not
+take effect. `hy4-preview-f` was added to the allow-list on 2026-09-22 and is
+available to sessions composed after that; the session that added it could not use
+it. Confirm with `list_subagent_models` before promising a review, and if the route
+is unavailable, say so plainly rather than substituting a model this rule did not
+ask for.
+
 **If any acceptance criterion is unmet, ambiguous or contradicted by evidence,
 leave the packet unaccepted and check with the advisor before starting dependent
 work, weakening a criterion, adding a bypass or broadening scope.** Send the
@@ -344,7 +372,11 @@ entry. It is the first item for the generator.
 
 **Suggested Agent:** Sol Medium (interface/subsystem question); Luna for the
 bounded fix; Terra review.
-**Status:** **Delivered 2026-09-22 (A2d.1), and A2e with it.** **Depends on:** A2c delivered.
+**Status:** **Delivered 2026-09-22 (A2d.1), and A2e with it. NOT ACCEPTED — the
+review gate above could not run: `hy4-preview-f` was added to the allow-list in
+the same session, and the route list is frozen at session composition.** A session
+composed after 2026-09-22 must run the hy4 review on A2e and record it before this
+packet is accepted. **Depends on:** A2c delivered.
 **Evidence:** `logs/runs/20260922-174141-780-a2d-movs-mmio/` (before) and
 `logs/runs/20260922-181157-372-a2e-252b5-span/` (after).
 
