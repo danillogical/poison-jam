@@ -46,8 +46,33 @@ Exactly two harnesses are supported. Use only your column's routes.
 |---|---|---|
 | **Session** | `gpt-6-luna` @ `high` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
 | **Worker subagents** | `gpt-6-luna` @ `high` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
+| **Planner** | `codex/gpt-6-astra` @ `medium` | `codex:gpt-6-astra` @ `medium` |
 | **Persistent advisor** | `codex/gpt-6-astra` @ `medium` | `codex:gpt-6-astra` @ `medium` |
 | **Acceptance reviewer** | `gpt-6-luna` @ `max` | `workbuddy-ai/hy4-preview-f` @ `high` |
+
+**The Planner and the advisor are the same model at the same effort.** That is
+acceptable, with three safeguards, because the risk is real: **the advisor is not
+model-diverse relative to the plan author**, so a bad plan can be endorsed by a
+same-model reviewer.
+
+- **Separate children.** When a plan is disputed, do not continue the Planner under
+  an "Advisor" label. Spawn a fresh child with the user's objective, the disputed
+  criterion, and *both* positions and their evidence — not just the Planner's
+  rationale.
+- **Never count their agreement as model-diverse confirmation.** Separate contexts
+  reduce commitment to an argument; they do not remove correlated reasoning errors.
+  If the advisor cannot resolve a dispute with a discriminating measurement, the
+  uncertainty stays.
+- **Planning authority is not acceptance authority.** The Planner authors proposed
+  packets; the session owns integration into the active plan and execution; the
+  reviewer owns the evidence. **Neither the Planner nor the advisor may make a
+  failed check pass by rewriting its meaning** — a criterion change needs a new
+  revision, a reason, and re-review.
+
+**Plan adequacy is reviewed before execution**, separately from the later review of
+implementation evidence. The question for that review is: *could an implementation
+satisfy these checks while failing the objective?*
+
 
 **Everything else is retired.** Do not select `gpt-5.6-sol`, `gpt-5.6-luna`,
 `gpt-5.6-terra`, `gpt-5.5`, Grok, `grok-cli`, `hy3`, `glm-5.3`, `kimi-k3`, or any
@@ -309,6 +334,202 @@ raises.
 **Mark every claim MEASURED (with its evidence) or INFERRED.** Ask the advisor to do
 the same — it is what lets you tell its reasoning from its reading, and it caught a
 wrong fact of mine more than once.
+
+---
+
+## 4b. The Planner, and what a criterion must contain
+
+The **Planner** authors proposed packets. The session integrates and executes them;
+the reviewer checks the evidence. See §1 for the same-model safeguards.
+
+**The recurring structural defect is an incomplete chain:**
+
+> **Claim -> admissible evidence -> reproducible procedure -> decision rule ->
+> recorded disposition**
+
+The executor ends up inventing one of those links. Prose is not the problem —
+*"the result must equal `0x1234` at this address after this stimulus"* is prose and
+is checkable. What is missing when a criterion fails is usually **inputs, domain,
+or oracle**.
+
+| missing element | the accidental pass it allows |
+|---|---|
+| exact claim and scope | a local ABI result becomes "guest progress" |
+| evidence eligibility | an exploratory artifact satisfies a strict criterion |
+| required exercise of the behavior | no error appears because the target never ran |
+| oracle independent of the implementation | a generated answer compared with itself |
+| input population and coverage | "all entries" means whichever ones were enumerated |
+| expected failure behavior | missing metadata becomes an empty set, hence success |
+| stable criterion identity | a reviewer evaluates a paraphrase, not the obligation |
+| scope boundary | an unrelated next defect becomes a new requirement |
+| tool readiness | the executor invents a parser and trusts it untested |
+
+**Split these four obligations — they are different claims with different admissible
+evidence, and conflating them is what let A2 be "accepted" on a run that could not
+carry the claim:**
+
+1. **Structural correction** — the intended branch targets and bodies are emitted.
+2. **Exercised ABI behavior** — the target actually executes and satisfies the
+   specified register/stack checks. An exploratory run *can* establish this.
+3. **Strict integration reachability** — the target is reached under validated
+   strict conditions. An exploratory run **cannot**.
+4. **Downstream semantics** — the intended modeled effect occurs.
+
+### The rulebook
+
+### Planner rules
+
+The Planner authors proposed packets. The session executes and integrates them;
+the designated reviewer checks the evidence. Planner and Advisor may use the
+same model, but must be separate children when the plan itself is disputed.
+Agreement between them is not model-diverse confirmation.
+
+1. **Start from the user objective.**
+   Quote or link the governing requirement. State the packet's bounded claim
+   and explicit non-goals. Do not replace an open user question with an assumed
+   answer.
+
+2. **Give every criterion a stable ID and revision.**
+   One criterion should express one independently decidable obligation.
+   Reviewers and status records refer to IDs, not paraphrased summaries.
+
+3. **Specify evidence eligibility before the measurement.**
+   Name the allowed run profile, fixture/live scope, source/build identity,
+   required instrumentation and permitted overrides. A valid measurement in an
+   ineligible artifact does not pass the criterion.
+
+4. **Specify the procedure completely enough to reproduce.**
+   Give working directory, tools, inputs, command/test identifiers, environment,
+   bounds and artifact destination. Define how any run ID is obtained.
+   Commands that do not exist are labeled TOOLING REQUIRED, not presented as ready.
+
+5. **Define the decision rule.**
+   Name exact fields/observations and expected values, relations or tolerances.
+   Define PASS, FAIL and BLOCKED/UNKNOWN. Missing, malformed, stale, truncated or
+   unexercised evidence never becomes PASS through an empty set or default value.
+
+6. **Prove the target was exercised.**
+   An absence claim requires an exposure/coverage witness and an observation
+   completeness check. "No failures" is insufficient when the path never ran.
+
+7. **Validate the checker and the oracle.**
+   Include a known-good control and a known-bad control that the checker rejects.
+   For regression checks, demonstrate rejection of the pre-fix defect or a
+   representative controlled mutation. Expected answers must not be derived
+   solely from the implementation under test.
+
+8. **Separate local behavior from integration claims.**
+   Structural correctness, exercised ABI behavior, strict reachability, device
+   semantics and liveness are separate obligations. State what each artifact
+   does and does not establish.
+
+9. **Bound universal and causal claims.**
+   Name the input population, schedules, time/step window and coverage limits.
+   To claim causation, isolate the change or use a discriminating intervention.
+   Otherwise report association or bounded evidence, not a universal proof.
+
+10. **Freeze scope before implementation.**
+    Status writing cannot add, remove or reinterpret criteria. Unrelated downstream
+    defects become follow-up findings unless they violate an existing criterion.
+    A changed criterion gets a new revision, reason, authorization and affected
+    re-review; retain the old failed or unverified disposition.
+
+11. **Make closure mechanical where feasible.**
+    Bind each criterion to artifact paths/hashes, checker version and reviewer
+    disposition. Packet acceptance requires all mandatory criteria on the same
+    declared evidence revision. UNKNOWN and CANNOT VERIFY remain pending.
+    Advisor judgment cannot turn a failed measurement into PASS.
+
+12. **Do not hide missing observability inside an implementation packet.**
+    If no existing observation can distinguish success from failure, create a
+    tooling/fixture prerequisite first. Validate it before using it to accept
+    the behavioral change.
+
+Before releasing a plan, perform a counterexample review:
+"Could broken behavior, an unexercised path, an exploratory run, stale evidence,
+or an empty/malformed input satisfy these checks?"
+Revise the contract until each realistic accidental-pass path is addressed.
+
+Prescriptive implementation detail should be proportional to certainty.
+When the mechanism is unknown, write an investigation packet with hypotheses,
+discriminating experiments and decision branches—not invented implementation steps.
+
+### The packet contract
+
+Every proposed packet uses this shape, so the executor does not have to invent
+anything:
+
+```markdown
+## <Packet ID> — <bounded outcome>
+
+**Contract revision:** <revision/hash>
+**Status:** Proposed
+**Owner:** main session
+**Governing requirement:** <verbatim requirement or durable link>
+**Depends on:** <accepted packet IDs/revisions>
+**Baseline:** <game revision + dirty-state identity; toolkit identity; artifact>
+
+### Claim and boundaries
+- Establishes: <precise capability or fact>
+- Does not establish: <explicit exclusions>
+- Non-goals: <work not authorized by this packet>
+- Known facts: <MEASURED, citations>
+- Assumptions/open questions: <INFERRED; how each is tested>
+
+### Readiness
+- Existing tools/tests: <paths, verified invocation>
+- Missing tooling: <prerequisite packet, or NONE>
+- Required environment/access: <policy-dependent requirements>
+- Stop before implementation if: <unmet prerequisites>
+
+### Execution
+1. <bounded action, files/interfaces, expected intermediate result>
+2. <next action>
+- Allowed implementation choices: <executor discretion>
+- Escalate/replan if: <specific ambiguity, contradiction or repeated failure>
+- Worker scopes, if useful: <bounded tasks and file ownership>
+- Build/run owner and serialization: <explicit>
+
+### AC-<ID> — <single claim>
+- Mandatory: yes/no
+- Evidence class/profile: <fixture/exploratory/strict/manual audit>
+- Identity prerequisites: <source/build/checker/input identities>
+- Stimulus and coverage: <inputs, target-exercised witness, bounds>
+- Procedure:
+  - Working directory: <path>
+  - Command/test: <exact invocation>
+  - Environment: <explicit values/default policy>
+- Artifact: <path rule; schema/version; required fields>
+- Oracle: <reference basis independent of implementation>
+- PASS: <Boolean predicate or bounded manual audit rubric>
+- FAIL: <observations contradicting claim>
+- BLOCKED/UNKNOWN: <missing access, malformed evidence, insufficient coverage>
+- Controls: <good case; bad case; expected rejection>
+- Claim limits: <what passing cannot establish>
+
+<Repeat criterion record as needed.>
+
+### Closure
+- Required test inventory: <versioned list, not an unexplained suite total>
+- Evidence index: <criterion ID -> artifact/hash -> result>
+- Reviewer: <role from workflow, never copied model roster>
+- Criterion change procedure: <revision and re-review>
+- Unrelated next stop: record follow-up; do not expand this packet
+- Next packet selection: <decision rule>
+
+### Planner self-check
+- Counterexamples attempted: <ways broken behavior might pass>
+- Unresolved design decisions: <none, or explicit investigation branches>
+- Plan-review disposition: <review record; pending until obtained>
+```
+
+**Before releasing a plan, run the counterexample review:** *could broken behavior,
+an unexercised path, an exploratory run, stale evidence, or an empty/malformed input
+satisfy these checks?* Revise until each realistic accidental-pass path is closed.
+
+**Prescriptive detail must be proportional to certainty.** When the mechanism is
+unknown, write an investigation packet with hypotheses, discriminating experiments
+and decision branches — not invented implementation steps.
 
 ---
 
