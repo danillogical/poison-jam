@@ -6,7 +6,7 @@ continue.
 
 ## CURRENT STATE — read this first, then the sections below
 
-Last updated 2026-09-22 17:16. Everything below this block is **chronological**,
+Last updated 2026-09-22 17:19. Everything below this block is **chronological**,
 and where a later section corrects an earlier one the later one wins — several do
 (`Correction: ...`, `Retracted ...`). This block is the only place that states
 where things stand *now*; rewrite it in place each session rather than appending.
@@ -113,11 +113,13 @@ lives in `.dsh/skills/advisor-escalation/SKILL.md`.
 
 **A standing advisor is live for this session: `cace75bf-78cf-4130-9c4c-0080f93b651c`.**
 It holds the project brief and is reused with `send_message` — do not re-brief it
-or spawn a second one. It is **session-scoped**: a later session cannot reach this
-child, and no model-facing tool messages another session or another session's
-child, so a new session starts with a fresh brief. The A2 consult used the older
-WorkBuddy route (`agent-d3294b58`, kimi-k3); that id is not reachable from this
-harness either.
+or spawn a second one. **Watch it in DSH Web via this session's header `/` trigger**
+(descendant catalog); the sidebar omits subagent conversations by design. It is
+**session-scoped**: a later session cannot reach this child, and neither can a
+session the human creates — a top-level session is a sibling, not a child, and
+sending to it is rejected `belongs to another parent session` (measured). The A2
+consult used the older WorkBuddy route (`agent-d3294b58`, kimi-k3); that id is not
+reachable from this harness either.
 
 Consult #1 (2026-09-22) returned a predicted recurring mistake and two corrections
 to the brief — see the consult section below. Its sharpest point is that the
@@ -293,6 +295,50 @@ of A2d.
 **Not yet tested.** No discriminator above has been run; the consult produced
 hypotheses and a framing, which is what it is for. The APU caller question is the
 first thing to measure under it.
+
+## 2026-09-22 — Reachability measured: what this session can and cannot message
+
+Prompted by a direct question — whether the advisor session could be created by
+the human so its traffic shows in DSH Web. The answer changed the setup, so it was
+measured rather than reasoned about. Four `send_message` attempts, one per case:
+
+| Target | Result |
+|---|---|
+| `cace75bf…` — my direct **continuable** child | **delivered**; replied `CONTROL-OK` |
+| `385c5451…` — my own **one-shot** child | `has no supported continuation state and cannot be resumed; choose a different target` |
+| `session-a3f7714d…` — **another session's** child (the Astra-reuse session's advisor) | `belongs to another parent session` |
+| `session-ff9b623e…` — a **top-level session** | `belongs to another parent session` |
+
+The control probe matters: the live channel answered, so the three rejections are
+about **adjacency**, not about a broken tool or an unavailable provider. The rule
+is exact adjacency — a direct continuable child, or your direct parent if you are
+a resident child — and nothing else. A user-created session has
+`delegationDepth: 0` and is a sibling, not a child, so it is rejected identically
+to another session's child.
+
+**Decision: the human-created advisor session is rejected as a design.** It cannot
+work: the moment the advisor is a separate top-level session, this session cannot
+send to it, so the consult would have to be relayed by hand and would stop being a
+consult the agent can run when a trigger fires. The visibility requirement is met
+a different way, at no cost: **the session header's `/` count trigger** opens the
+descendant catalog for any session with subagent descendants, and selecting a row
+opens that child's conversation. The `standard` preset's child is continuable, so
+with a live parent it keeps the ordinary composer — the human can read the advisor
+exchange **and type into it directly**, while it runs. The ordinary sidebar omits
+subagent conversations by design, which is why the header is the entry point.
+
+**Caveat that follows from the same measurement.** The child is addressable only
+while its exact parent is live, and the UI reflects that: a continuable child
+whose parent is unavailable and which is not running elects a read-only composer.
+So the advisor's context and this session's ability to reach it both end with the
+session. That is acceptable — a fresh brief is cheap and the report carries the
+substance — but it is the reason not to treat the advisor as a durable project
+asset.
+
+Both rules are now written into the skill, including the error-message table, so a
+later session reads the failure correctly instead of retrying: *"has no supported
+continuation state"* means you spawned it wrong; *"belongs to another parent
+session"* means you are the wrong session and retrying cannot help.
 
 ## 2026-09-22 — A2b and A2c: spans that ran over functions the disassembler never registered
 

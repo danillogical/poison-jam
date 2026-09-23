@@ -142,12 +142,35 @@ that one child for the rest of the session.** Do not expect to inherit an adviso
 from an earlier session, and do not spend a turn hunting for one in `list_agents`
 — it will not be there. A fresh session starts with a fresh brief.
 
-(The host *does* keep a cross-session child query surface that the browser UI uses
-to follow up a subagent. That is a host capability, not a model-facing one: no
-tool in this session's catalog reaches it. Treat the child as session-scoped.)
+**A user-created session cannot be used as the advisor.** It is tempting to have
+the human create the advisor session themselves so it shows up in their sidebar,
+but that session is a *separate top-level session* (its own `delegationDepth: 0`),
+not a child of yours, so sending to it is rejected exactly like another session's
+child. Verified 2026-09-22: sending to a top-level session id and to another
+session's child both return `belongs to another parent session`. There is no
+model-facing tool that adopts or messages a session you do not parent.
 
-Do not spawn a second advisor while one is alive — list the children first and
-send the delta to the one already holding context.
+**To watch the advisor in the Web UI, use the session header, not a new session.**
+When a session has subagent descendants, the header appends a `/` count trigger
+next to the title; it opens the descendant catalog, and selecting a row opens that
+child's conversation. A continuable child with a live parent keeps the ordinary
+composer, so the human can read the exchange **and type into it directly** — while
+it runs. The ordinary sidebar deliberately omits subagent conversations, which is
+why the header is the entry point. This is the supported way to make advisor
+traffic visible; it needs no setup and costs no capability.
+
+**A failed send says which of the two problems you have**, so read the error
+rather than guessing:
+
+| Target | Result |
+|---|---|
+| your direct **continuable** child | delivered |
+| your own **one-shot** child | `has no supported continuation state and cannot be resumed; choose a different target` |
+| **another session's** child, or a **top-level session** | `belongs to another parent session` |
+
+So `has no supported continuation state` means *you spawned it wrong* (re-spawn
+continuable); `belongs to another parent session` means *you are the wrong
+session* and no amount of retrying will help — brief a fresh advisor instead.
 
 ## How to brief
 
