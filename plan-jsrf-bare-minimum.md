@@ -419,7 +419,13 @@ from a genuinely absent function and cost nothing.
 
 ### A2f — The false entry at `0x0007E242`
 
-**Status:** **Delivered 2026-09-22; acceptance review pending with A2g's.**
+**Status:** **ACCEPTED 2026-09-22.** Independently reviewed by `workbuddy-ai` /
+`hy4-preview-f` at `high` (child `2aa4b25a`): **"Verdict: ACCEPT. All 7 criteria
+AGREED on measurements I reproduced myself"**, CTest 11/11. That review also
+independently identified the `0x000304F0` defect as its closing "LOUD NEW FINDING",
+which is A2g below — so A2g's *diagnosis* was a re-derivation of work already done,
+and its real additions are the fix, the strict run and the detector finding. The
+verdict went unrecorded for a session; see the correction in `report-deepseek.md`.
 **Depends on:** A2e accepted. **Evidence:**
 `logs/runs/20260922-190336-778-a2f-7e255-span/` (strict, 30 s).
 
@@ -438,8 +444,12 @@ Measured: `0x0007E180 returned; ABI verified`, `0x0007E255` absent, stop moved.
 
 ### A2g — The span that ended at its own switch dispatch
 
-**Status:** **Delivered 2026-09-22; acceptance review pending.** **Depends on:**
-A2f delivered. **Evidence:** `logs/runs/20260922-224429-003-a2g-304f0-span/`
+**Status:** **ACCEPTED 2026-09-22.** Independently reviewed by `workbuddy-ai` /
+`hy4-preview-f` at `high` (child `1415063e`): **AGREED on all eight criteria**, with
+one correction applied (`[ICALL]` is 1, not 0 — only the trap addresses are absent)
+and one nuance recorded (the widened span now duplicates `0x30570`'s bytes; its own
+entry, body and dispatch are preserved). **Depends on:**
+A2f accepted. **Evidence:** `logs/runs/20260922-224429-003-a2g-304f0-span/`
 (strict, 30 s); baseline `logs/runs/20260922-190336-778-a2f-7e255-span/`.
 
 The A2f fix exposed an ABI failure at `0x000304F0`, and it was **not** an ABI

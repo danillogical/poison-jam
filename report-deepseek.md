@@ -18,6 +18,40 @@ where things stand *now*; rewrite it in place each session rather than appending
 (unchanged — A2g is a game-side span correction and a game-side script fix, no
 toolkit edit). Game CTest **11/11**, build identity verified.
 
+**CORRECTION — A2f was already reviewed and ACCEPTED, and this report said
+otherwise.** The claim further down that "A2f has not yet had its hy4 review" is
+**false and is retracted.** A2f was reviewed by `workbuddy-ai` / `hy4-preview-f` at
+`high` (child `2aa4b25a`, continuable, settled 21:20) and returned **"Verdict:
+ACCEPT. All 7 criteria AGREED on measurements I reproduced myself"** — including
+CTest **11/11**, and with the same discipline this session has been using: its own
+byte-level scanner (129,435 encodings) reproducing the controls (`0x252B5` 8,
+`0x25233` 1, `0x11C20` 305 calls), the dword scan with `0x00025040` as its positive
+control, and a **symbolic stack simulation** that *measured* `0x11BE0`/`0x11C20`
+as `ret 4` rather than assuming it.
+
+**And it had already found A2g's defect.** Its closing section is headed *"⚠️ LOUD
+NEW FINDING — the new stop is the same defect class"* and gives the diagnosis A2g
+later re-derived: `0x000304F0`'s declared `end 0x00030508` excludes its own switch
+dispatcher, the emitted body is prologue-only, and the log delta is exactly
+`−0x108 = −(0x104 + 4)`. It even recorded the honest caveat that `0x30508`'s Test
+2 is *not* clean (2 DSound hits) and that Test 1 carries the proof — the same
+qualification A2g's own evidence text now carries.
+
+**Why it was missed, and the lesson.** The verdict was never written into this
+report — that is the real defect, and it is the one `deepseek-harness.md` §6 names
+(*"Duplicating your own worker"*). Two harness facts combined to hide it:
+`list_agents` lists only **current** children, so a child that settled earlier in
+the same session is invisible there; and the projection cache, which does hold it,
+was never consulted. A2g's diagnosis step therefore repeated work already done.
+What A2g added beyond that review is still real — the fix, the strict run, and the
+detector-blindness finding — but the *diagnosis* was duplicated.
+
+**Standing rule added:** before diagnosing a packet, enumerate this session's own
+settled children from `~/.dsh/storages/session_projcache/sessions/` (each keeps its
+label, route and final response) and check their verdicts against this report.
+`list_agents` is not sufficient for that. The enumeration is
+`logs/check-recorded-reviews.py`.
+
 **A2g's acceptance review PASSED, with one correction and one nuance.** The
 `workbuddy-ai/hy4-preview-f` reviewer (`high`) returned **AGREED on all eight
 criteria**, reproducing the load-bearing measurements itself: it wrote its own
@@ -64,8 +98,9 @@ tail calls — one into the wrong function, three into a deliberate trap. Wideni
 `0x0007E180`'s end `0x0007E242 -> 0x0007E257` made both addresses internal
 labels. Measured in `logs/runs/20260922-190336-778-a2f-7e255-span/`:
 `0x0007E180 returned; ABI verified`, `0x0007E255` absent from the log, and the
-stop moved to a new ABI failure at `0x000304F0`. **A2f has not yet had its hy4
-review**; that is part of A2g's review, below.
+stop moved to a new ABI failure at `0x000304F0`. **A2f's hy4 review was run and
+returned ACCEPT** (child `2aa4b25a`, 21:20) — see the correction at the top of this
+block; the earlier wording here claimed it had not been reviewed, which was wrong.
 
 **A2g (this session) — `0x000304F0`, the same class a third time, and the
 detector that should have caught all three was blind to all three.** The ABI
