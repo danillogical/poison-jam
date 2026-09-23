@@ -6,7 +6,7 @@ continue.
 
 ## CURRENT STATE — read this first, then the sections below
 
-Last updated 2026-09-22 17:24. Everything below this block is **chronological**,
+Last updated 2026-09-22 17:52. Everything below this block is **chronological**,
 and where a later section corrects an earlier one the later one wins — several do
 (`Correction: ...`, `Retracted ...`). This block is the only place that states
 where things stand *now*; rewrite it in place each session rather than appending.
@@ -14,119 +14,79 @@ where things stand *now*; rewrite it in place each session rather than appending
 **The plan's A1–A5 audit sequence owns the next steps** and overrides any
 "next packet" wording in the historical sections below.
 
-**Repos.** Game `6d6f457` (code commits: `caef022` A2b, `50cc6a8` A2c), toolkit
-`008001f` (unchanged this session; `7cfbe55` is still the substantive toolkit
-commit). Both clean. Game CTest 11/11, toolkit standalone CTest 1/1.
+**Repos.** Game `5e756a7` (A2d.1), toolkit `484887b` (the substantive half of the
+same change). Both clean **for this session's files**. `AGENTS.md` and
+`plan-jsrf-bare-minimum.md` are **modified in the working tree and deliberately
+uncommitted**: another session wrote them at 17:41 during this run, and
+`AGENTS.md`'s own rule is to preserve unrelated changes. Do not `git add -A`
+here. Game CTest 11/11, toolkit standalone CTest 1/1, 12/12 Python tests in the
+two touched lifter modules.
 
 **What works.** The title boots from the retail XBE, runs its CRT and
-initialisers, initialises D3D, drains the whole pushbuffer it submits
-(`[PFIFO] submit #1 diag=ok get=00002764 put=00002764`), receives the GPU
-interrupt, runs the frame producer, and now walks past the `0x00048190` COM
-method family and two pointer-table-only functions. No ABI failure and no
-unresolved indirect call in the last two runs until the new stop below.
+initialisers, initialises D3D, drains the whole pushbuffer it submits, receives
+the GPU interrupt, runs the frame producer, walks past the `0x00048190` COM
+method family (A2b) and the two pointer-table-only functions (A2c), and now
+**walks past the APU decode failure** (A2d.1): the guest completes a 280-byte
+copy out of the APU GP window, issues DSP doorbell command `0x00000003` and then
+`0x00000002`, both acknowledged. No ABI failure and no unresolved call before
+the new stop below.
 
-**A2b is delivered and measured.** `0x00048190` no longer fails:
+**Where the run stops now, by name.** `[ICALL] Failed to resolve VA 0x000252B5`
+(thread calls 7567, tid 22940) → the project's `0xE0424943` trap. Guest regs at
+the trap: eax 0, ecx `0x015A0870`, edx `0x3F800000`, esp `0x00F7FEDC`, ebx 0,
+esi `0x015A0870`, edi `0x00700010`. Evidence:
+`logs/runs/20260922-174141-780-a2d-movs-mmio/` (strict, 30 s, toolkit `484887b`).
 
-| stage | evidence |
-|---|---|
-| old stop | `[RECOVERED] ABI FAILURE 0x00048190 esp 00F7FDA0->00F7FD80 expected +8`, all four callee-saved registers clobbered |
-| cause | declared `end 0x00048305` is a disassembler `tail_jump_alias` **phantom** (`_build_alias_entries`), `has_prologue false`, no xref, sitting mid-way through the entry's own argument setup (`push eax` 0x48300, `mov [esp+0x2c],ecx` 0x48301, `push edi` 0x48305, `mov ecx,esi` 0x48306, `mov [esp+0x2c],ebx` 0x48308, `call 0x00047D40` 0x4830C) |
-| real body | `pop edi/esi/ebp/ebx; add esp,8; ret 0xc` at 0x00048385..0x0004838C, padding 0x0004838F, next function 0x00048390 |
-| over-long span also swallowed | the body's own shared epilogue at 0x00048371, which is why `config/recovery-unresolved.json` had trapped it as an aborting stub |
-| **fixed** | `[RECOVERED] 0x00048190 returned; ABI verified`; no ABI failure anywhere in the run |
+**Next packet (A2e), concretely.** `0x000252B5` is **not a function entry**: it
+is the shared interior epilogue `pop edi; pop ebx; pop esi; ret` of the region
+`0x0002524A..0x000252E0`, which is **inside no entry in
+`tools/disasm/output/functions.json`** (the nearest are `0x25233`
+`gap_prologue` ending `0x2524A`, and `0x252E0`). Two measured leads:
 
-Evidence: `logs/runs/20260922-162034-043-a2b-48190-sa12/` (strict, 30 s).
+1. The ICALL diagnostic's own stack has **`[3] 0x00025310`** on it — the COM
+   vtable method already recovered into `config/recovered-functions.json` (its
+   evidence entry describes the `0x001C4F68` table and the `ff4d442`
+   abutting-alias fold). So read that recovered body, find the indirect call
+   site in it, and find what computes `0x000252B5`.
+2. **`0x000252B5` is not among the 132 pointer-table candidates**
+   (`scripts/check-table-targets.py`: 132 unresolvable, 62 swallowed, 70
+   uncovered). Treat that as a claim about the *detector* as much as about the
+   system — it scans static XBE tables, and a target computed at run time would
+   not appear. It is not evidence that nothing points at it.
+
+Then decide, with evidence, whether the enclosing `0x0002524A..0x000252E0`
+needs its own entry, or whether `0x000252B5` is a mis-derived pointer. Do not
+add an entry for an epilogue on the assumption that it is one.
+
+**A2d.2 (the remaining pointer-table class) is still open and unchanged.** 132
+candidates; write a generator that proposes `{start, end, stack_args, evidence}`
+from the original XBE and review its output before writing it into
+`config/recovered-functions.json`. Do not hand-fix them one run at a time.
+
+**A2d.1 is delivered and measured.** The APU decode failure was a guest
+`rep movsd` lowered to a host `memcpy`: a device window is answered by the VEH
+decoding the faulting *guest* instruction, and a library copy raises the fault
+at its own RIP in its own VEX encoding, which the decoder cannot read. The
+lifter now guards the `movs`/`stosb` block forms with `recomp_range_is_mmio` on
+both ends and falls back to the element-wise path; the APU model now **names** a
+read of an unimplemented block instead of returning 0 in silence. Deltas:
+decode failure gone, no `0xC0000005`, named frames 109 → **147**, native
+threads 11 → **17**, 4.13 s → 4.50 s.
 
 **`stack_args` is the `ret N` operand, not an argument count.** Verified against
 `0x0004A6C0`, declared `stack_args 4`, whose epilogue is `ret 4`. So `ret 0xc`
 means 12 and `ret 8` means 8. Getting this wrong is invisible in the span and
-shows up only as an `esp` delta four bytes high — that is exactly what
-`logs/runs/20260922-161834-509-a2b-48190-span/` measured before the correction
-(`esp 00F7FDA0->00F7FDB0 expected +12`, with ebx/esi/edi already preserved).
+shows up only as an `esp` delta four bytes high.
 
-**Two neighbours in the same family were corrected the same way**, each proven
-by its own `ret N`: `0x00048390` (end 0x00048510 phantom → 0x00048570,
-`ret 0xc` at 0x0004856C, stack_args 4 → 12) and `0x00048570` (end 0x00048794
-overran → 0x00048690, `pop ebx; ret 8` at 0x00048684, stack_args 8 → 8).
-
-**A2c is delivered and measured: two functions only a pointer table reaches.**
-The class is distinct from A2b and has its own detector, already in the repo:
-`scripts/check-table-targets.py` reports 134 unresolvable pointer-table
-candidates (64 swallowed by a span, 70 with no span at all). A function reached
-only through a data table occurs in no call and no jump, so `tools/disasm` never
-registers it and no alias fold can create it; the preceding entry's
-"end tightened to the next function" then runs straight over it.
-
-| entry | old end | real body | new end | stack_args |
-|---|---|---|---|---|
-| `0x00173D70` | 0x00173ED0 | `pop esi; add esp,0x14; ret 8` at 0x00173DA2 | 0x00173DB0 | 8 (unchanged) |
-| `0x00173DB0` **new** | — | `sub esp,0x44` prologue, `add esp,0x44; ret 0x14` at 0x00173EC3 | 0x00173ED0 | 20 |
-| `0x00175250` | 0x001753D0 | `pop esi; ret 8` at 0x001752F0 | 0x00175300 | 8 (unchanged) |
-| `0x00175300` **new** | — | early `add esp,8; ret 8` at 0x001753AF/BA/C5 | 0x001753D0 | 8 |
-
-Evidence: `logs/runs/20260922-162410-613-a2c-173db0/` (`0x00173DB0 returned;
-ABI verified`, next stop `0x00175300`) and
-`logs/runs/20260922-162546-668-a2c-175300/` (`0x00175300 returned; ABI
-verified`, next stop below). Run duration 3.30 s → 4.13 s.
-
-**Where the run stops now, and it is a new class.** `[APU] MMIO decode fail at
-RIP=00007FFA628FCCA7 offset=0x30200: C5 FE 6F 02 C4 A1`, then
-`[EXCEPTION first-chance] code=0xC0000005 RIP=0x7FFA628FCCA7 fault=0xFE840200
-(read)`. The faulting RIP is in a system DLL, not in the recompiled image, and
-the bytes there are a VEX-encoded AVX instruction (`C5 FE 6F 02` =
-`vmovdqu xmm0,[edx]`). So a host routine faulted on the APU aperture at
-`0xFE840200`, and the VEH instruction decoder — legacy MOV/CMP/OR/AND/LEA forms
-only — could not emulate the access, so the fault escaped. Guest regs at the
-fault: eax 0x118 ecx 0x46 edx 0x13 ebx 0x118 esi 0xFE830200 edi 0x010DF724
-esp 0x00F7FE74. This is newly *reachable* code, not a regression of the
-interrupt or span work: the baseline never got here.
-
-**Next packet (A2d).** Two jobs, in this order.
-
-1. **The APU decode failure.** Decide, with evidence, whether the guest is
-   legitimately handing a host CRT routine a pointer into the APU aperture, or
-   whether a host routine is being used to touch MMIO at all. The VEH decoder
-   in the toolkit's APU hook only recognises legacy encodings, so an AVX/SSE
-   form must either be decoded too or the access must be prevented from
-   reaching a host routine. Do not simply map the aperture readable: that turns
-   a named failure into a silent wrong read.
-2. **The remaining pointer-table class.** 132 candidates are still open. Do not
-   hand-fix them one run at a time — write a generator that proposes, for each
-   candidate, `{start, end, stack_args, evidence}` from the original XBE
-   (start from the pointer-table entry, walk to the first `ret N`, take the
-   padding up to the next known start, take `N` as `stack_args`), and review its
-   output against `scripts/inspect-jsrf.py disasm` before it is written into
-   `config/recovered-functions.json`.
-
-**Known open risk introduced by A2c.** `0x00048690` is a pointer-table target
-with no span, and `0x00048570`'s corrected end now stops just short of it.
-Nothing has called it yet; if something does it will trap **by name** rather
-than execute `0x00048570`'s body a second time. That is the intended behaviour,
-but it needs its own entry — it is candidate #2 in the generator's list.
-
-**Advisor.** Route is **`codex` / `gpt-6-astra` at `medium`**, spawned with the
-`subagent` tool and briefed fresh; continued with `send_message` on its durable
-id. This session spawns **no other subagent** — no worker, reviewer or architect
-— and does not use `subagent_fork` for the advisor, because seeding it with this
-conversation would destroy the independence that is the whole point. The contract
-lives in `.dsh/skills/advisor-escalation/SKILL.md`.
-
-**A standing advisor is live for this session: `cace75bf-78cf-4130-9c4c-0080f93b651c`.**
-It holds the project brief and is reused with `send_message` — do not re-brief it
-or spawn a second one. **Watch it in DSH Web via this session's header `/` trigger**
-(descendant catalog); the sidebar omits subagent conversations by design. It is
-**session-scoped**: a later session cannot reach this child, and neither can a
-session the human creates — a top-level session is a sibling, not a child, and
-sending to it is rejected `belongs to another parent session` (measured). The A2
-consult used the older WorkBuddy route (`agent-d3294b58`, kimi-k3); that id is not
-reachable from this harness either.
-
-Consult #1 (2026-09-22) returned a predicted recurring mistake and two corrections
-to the brief — see the consult section below. Its sharpest point is that the
-boundary guess, alias ownership, dispatch generation and the wrapper's
-expectation all derive from the **same function database**, so the checks agree by
-construction and `ABI verified` is not equivalence. Not yet tested against a
-measurement.
+**Advisor.** Route in **this** harness: `agent-d3294b58` on `kimi-k3`, continued
+with the Agent tool's `resume`. Consult #2 was made this run (a delta brief on
+the APU decode failure). Its load-bearing contribution was a caveat: because the
+APU model returns 0 for every offset ≥ `0x30000`, forcing the element-wise path
+yields zeros under *both* hypotheses, so "the copy succeeds" cannot discriminate
+them — only provenance can. Adopted, and it is why the model now names the
+unimplemented read. Full adopt/reject record in the A2d section below. The DSH
+session's `cace75bf…` child is a different harness's advisor and is not
+reachable from here.
 
 **Run profiles.** `docs/jsrf-run-profiles.md` defines **strict** (no override
 that answers a poll the hardware did not answer) versus **exploratory**.
@@ -137,31 +97,60 @@ bypasses. **`diagnostic_deadline` means the capture was bounded, not that the
 guest was live**; `normal_exit` means the entry point returned, not that the
 title was satisfied.
 
-**Open, off the critical path.** The APU still has no GP SGE engine (not on the
-critical path while `RECOMP_APU_DSP_ACK` is set). The display clock's frame
-period falls back to 60 Hz unless the guest programs a video PLL and flat-panel
-timing that yield 40–240 Hz; `nv2a_display_frame_source()` reports which was
-used, and no run has yet been checked for which it took.
+**Open, off the critical path.** The APU still has no GP SGE engine and no model
+for the GP/EP DSP blocks at all (now named in the log rather than silent). The
+display clock's frame period falls back to 60 Hz unless the guest programs a
+video PLL and flat-panel timing that yield 40–240 Hz;
+`nv2a_display_frame_source()` reports which was used, and no run has yet been
+checked for which it took.
 
 **Milestones.** 00–05 done. 06a done; 06b blocked on reachability. 07 in
 progress. 11's blocker cleared; the renderer itself still pending, which is 12
-onward. **A2 is delivered but not yet accepted**: its acceptance also requires
-a bounded identity-verified run whose *next* stop is the packet's own, and the
-runs since stop on `0x00048190` (A2b) and then on the APU decode failure (A2d).
+onward. **A2 is delivered but not yet accepted**: acceptance also requires a
+bounded identity-verified run whose *next* stop is the packet's own, and the
+runs since stop on `0x00048190` (A2b), then the APU decode failure (A2d), and
+now on the unresolved call at `0x000252B5` (A2e).
 
 **Running the title.** `RECOMP_KERNEL_LOG_BUDGET=100000`, or a live run looks
 frozen. Strict runs this session used `RECOMP_AC97_READY=1`,
 `RECOMP_APU_DSP_ACK=0x803C0810`, `RECOMP_APU_TRAP=1`, 30 s, and the
 `--expect-checkpoint memory_ready --expect-checkpoint guest_entry` pair.
+`RECOMP_APU_TRAP=1` matters for the GP-window read: without it the aperture is
+plain mapped memory and the element-wise path reads it **silently** instead of
+faulting into the hook, so the new diagnostic does not fire.
 `git commit -F <file>` for multi-line messages, with a **Windows** path —
 `/tmp/...` fails with `could not read log file`, and a message file written
 inside the repo is swept up by `git add -A`.
 
-**Evidence retention.** `logs/` is gitignored and holds 645 runs (~93 GB). The
-report, plan and `docs/` cite 53 of them as evidence — never prune those. An
+**Tooling traps discovered this run — both measured, both costly.**
+
+1. **The documented full-translation invocation does not reproduce the
+   committed tree.** Run exactly as `AGENTS.md` records it, it produces a
+   **6,695-line** diff (2,989 purely additive declarations in `recomp_funcs.h`,
+   5,978 rewritten lines in `recomp_dispatch.c`, 506/198/102/213/157/193 in the
+   chunks). Measured cause: `tools/disasm/output/functions.json` now holds
+   **8,437** entries against the committed header's **5,653** declarations, so
+   the raw database has grown ~2,900 entries since that tree was generated.
+   **Revert it and forward-port a lifter change textually instead** — otherwise
+   the run measures the regeneration, not the change. A deliberate regeneration
+   baseline is its own packet.
+2. **The translation pass overwrites project-local edits in
+   `src/recomp/gen/recomp_types.h`** — specifically the exact-delta ABI
+   instrumentation (`recomp_delta_ok`, `recomp_delta_allowed`,
+   `recomp_abi_regs_exempt`, `jsrf_trace_delta_mismatch`, `jsrf_trace_seq`, and
+   the `RECOMP_ABI_CALL` body that calls them). `AGENTS.md` warned; it is now
+   measured. Re-apply after any sync. Not silent — the build fails on undeclared
+   `recomp_delta_ok` — but do not forget it.
+   `recover-functions.py` **does** reproduce: the regenerated `recovered.c`
+   differs from the committed one by exactly the 207 guard lines and nothing
+   else.
+
+**Evidence retention.** `logs/` is gitignored and holds 646 runs (~93 GB). The
+report, plan and `docs/` cite 54 of them as evidence — never prune those. An
 artifact's toolkit revision is part of the claim:
-`20260922-160535-643-a2-irq-line` records toolkit `7cfbe55`, and the three runs
-from this session record toolkit `008001f`.
+`20260922-160535-643-a2-irq-line` records toolkit `7cfbe55`; the three A2 runs
+record `008001f`; `20260922-174141-780-a2d-movs-mmio` records `484887b`.
+
 ## 2026-09-22 — The advisor route: DeepSeek does the work, Astra is the only subagent
 
 **Decision: this session runs everything itself on `workbuddy-ai/deepseek-v4.1-flash`
