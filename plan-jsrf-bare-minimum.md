@@ -482,6 +482,49 @@ immediately after `xbox_HeapAlloc: out of memory (requested 598869040, used
 uninitialised thunk or a consequence of that failed allocation. **Do not** treat
 it as a missing-function problem before that is settled.
 
+### A2h — The displaced-RAM defect, root-caused
+
+**Status:** **ROOT-CAUSED 2026-09-22; the fix is a separate packet.** **Depends
+on:** A2g. **Evidence:** `logs/runs/20260922-224429-003-a2g-304f0-span/`; controls
+and probes in `logs/probe-dump-control-all.py`, `probe-h1-h2.py`,
+`probe-advisor-prediction.py`, `probe-reloc-extent.py`.
+
+The stop was **not** a missing thunk. The run's own log says the loader resolved
+every slot (`120/120 resolved`, `Synthetic VA range: 0xFE000000-0xFE0001DC`), so
+slot 65 should hold `0xFE000104`. My first reading — "the slot is zero" — came
+from a dump whose guest RAM is **displaced by exactly `0x37608` bytes**. The
+control: a dump must reproduce the XBE's own `.text` at guest VA `0x00011000`,
+which the loader never patches. **545 of 546 archived dumps pass; only this one
+fails**, and in it 460 of 545 XBE-backed pages read as `original[VA + 0x37608]`
+with **0** reading as `original[VA]`, uniformly across every section; `XBEH`
+occurs 0 times in the file.
+
+**This is a guest defect, not a capture artifact**, and the live log settles it:
+`original[0x1C4064] = 0xFE000104` and `original[0x1C4064 + 0x37608] = 0x00000000`
+(both from a mapping-verified dump), and the ICALL macro logged `0x00000000` — so
+the **guest** read the displaced value. A capture mis-mapping would have made it
+read `0xFE000104`. The stack did not move (`dump[esp=0x00F7FD00] = 0x0014982E`,
+the return VA the ICALL pushed, occurring once in the 64 KiB window).
+
+**The advisor's prediction was confirmed exactly.** Consulted on the
+contradiction, it ranked an overlapping bulk transfer with
+`source = destination + 0x37608` first and predicted the patched thunk table would
+survive *relocated* at `0x001C3F60 - 0x37608 = 0x0018C958`. Measured: **110 of 120
+slots survive at exactly that address**, slot 65 reads `0xFE000104`, and the
+8-dword synthetic-VA sequence occurs there and **nowhere else** in the 64 MiB
+window. It also warned that `0x37608` is a *separation*, not a copy length.
+
+Acceptance for the fix packet: identify the writer of the transfer with evidence
+(the advisor's cheapest experiment is a hardware write-watch on host
+`0x001D4064`, armed after loader patching, inspecting the **simulated** guest
+registers `ESI`/`EDI`/`ECX`/`DF`, not native ones); state its contract; fix it or
+trap it; and archive a strict run whose thunk table is intact at its own address.
+A `.text` control must pass for any dump used as evidence.
+
+**Standing rule added:** `jsrf_dump.py` validates that a capture *has* a
+`guest_ram=` identity but cannot tell whether that identity matches the payload.
+Run the one-read `.text` control before any dump-based claim.
+
 The run stops 4.1 s in on:
 
 ```

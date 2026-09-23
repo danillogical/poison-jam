@@ -18,6 +18,45 @@ where things stand *now*; rewrite it in place each session rather than appending
 (unchanged — A2g is a game-side span correction and a game-side script fix, no
 toolkit edit). Game CTest **11/11**, build identity verified.
 
+**A2g's acceptance review PASSED, with one correction and one nuance.** The
+`workbuddy-ai/hy4-preview-f` reviewer (`high`) returned **AGREED on all eight
+criteria**, reproducing the load-bearing measurements itself: it wrote its own
+`.text` scanner and reproduced the control figures exactly (`0x252B5` 8 refs,
+`0x25233` 1, `0x11C20` 305 calls) before confirming `0x30508` 0 refs and
+`0x3060E` 3 refs at the three stated sites; it reproduced 283 -> 446 findings by
+running both entry rules; and it read the pre-fix `end` out of the *archived*
+`source.zip` rather than the working tree, which is the right way to check a
+before/after. **Correction applied:** criterion 7's "`[ICALL]` absent" was wrong —
+`[ICALL]` is **1, not 0**; the *trap addresses* are absent. That is a real
+distinction and the packet text now says it. **Nuance recorded:** the widened span
+`0x304F0..0x30618` fully contains `0x30570`'s body, so those bytes are emitted
+twice (once in each function). Harmless — separate C functions, nothing calls
+`0x30570` — but "did not swallow it" is true in the sense claimed (own entry, own
+body, own dispatch) and not in the sense of non-overlap. Also corrected: a stale
+`283 -> 464` in `check-span-exits.py`'s own docstring; the measured figure is 446.
+
+**Route check, read from the session projections rather than asked of the models**
+(`logs/probe-routes.py`; the harness rule is that a model's self-report is not
+evidence). All three children of this session dispatched exactly as intended:
+
+| child | requested route | effort | mode |
+|---|---|---|---|
+| `9a029485` log reader | `workbuddy-ai` / `deepseek-v4.1-flash` | `high` | continuable |
+| `1415063e` A2f+A2g reviewer | `workbuddy-ai` / `hy4-preview-f` | `high` | continuable |
+| `32266b9a` advisor | `codex` / `gpt-6-astra` | `medium` | **one-shot** |
+
+`modelSelection.lastUsed` and the spawn descriptor agree for all three, and
+`agent-default-model` is still `deepseek-v4.1-flash`, so the reviewer is not
+reviewing its own output. **One deviation found, and it is the known trap:** the
+advisor came back **one-shot**, so `send_message` to it fails with *"has no
+supported continuation state and cannot be resumed"* — exactly the failure
+`deepseek-harness.md` §3 documents, and it is silent until the first attempt to
+continue. The cause is that I passed `run_in_background: false`, which the skill
+says still yields a continuable child; it did not. **Record it as measured: on
+this harness, `run_in_background: false` produced a one-shot advisor.** Continue
+an advisor only after confirming it appears in `list_agents`; otherwise re-brief
+fresh, which is what the A2h follow-up did (`8808aa38`).
+
 **A2f is DELIVERED and its own criteria are met.** `0x0007E255` was the A2e
 class again: a `gap_prologue` false entry `0x0007E242` truncated the true parent
 `0x0007E180`, so four forward branches fell outside the span and were lifted as
@@ -57,15 +96,65 @@ negative control proves the old rule detected **0 of 3** while the new rule
 detects **3 of 3** — a self-check that passes under both rules would prove
 nothing.
 
-**Next packet (A2h).** `[ICALL] invalid target 0x00000000` at `return=0014982E`,
-on the main guest stack (tid 2948, esp `00F7FD00`). The site is
-`call dword ptr [0x1C4064]` — thunk-table slot **65**, i.e. kernel ordinal
-**277** (`KeSetEvent` family), which the preceding `[HEAP]` line shows being
-reached with an out-of-memory return `0xC0000017` from a 598,869,040-byte
-allocation request. So the first question is whether the NULL is a real
-uninitialised thunk or a consequence of the failed allocation, and the `[HEAP]`
-line immediately before it is the place to start. **Do not** treat the NULL as
-a missing-function problem until that is settled.
+**A2h is ROOT-CAUSED, and the answer is not what the first reading said.** The
+stop is `[ICALL] invalid target 0x00000000 return=0014982E`, site
+`call dword ptr [0x1C4064]` — slot 65 of the 120-entry kernel thunk table at
+`0x001C3F60`. The run's own log says the loader resolved every slot at startup
+(`120/120 resolved`, `Synthetic VA range: 0xFE000000-0xFE0001DC`), so slot 65
+should hold `0xFE000104`. My first reading — "the slot is zero, so the thunk was
+never initialised" — was **wrong, and the dump it came from is why.**
+
+**The A2g dump's guest RAM is displaced by exactly `0x37608` bytes, and the live
+log proves the guest really saw the displaced content.** The reader is controlled
+by requiring a dump to reproduce the XBE's own `.text` at guest VA `0x00011000`,
+which the loader never patches: **545 of 546 archived dumps pass; only the A2g
+dump fails** (`logs/probe-dump-control-all.py`). In it, **460 of 545 XBE-backed
+pages read as `original[VA + 0x37608]` and 0 read as `original[VA]`**, uniformly
+across every section (`.text` 370, `.rdata` 36, DSOUND 25, D3D 14, `.data` 11,
+XPP 4), and the XBE header magic `XBEH` occurs **0 times** in the whole file.
+
+The decisive step is that this is **not** a capture artifact, and the live log
+settles it because it records what the *guest* read, independently of the dump:
+
+| quantity | value | witness |
+|---|---|---|
+| `original[0x1C4064]` | `0xFE000104` | A2f dump (mapping verified) |
+| `original[0x1C4064 + 0x37608]` | `0x00000000` | A2f dump |
+| what the ICALL macro logged | `0x00000000` | the A2g run log |
+
+So the guest read the **displaced** value. A capture-side mis-mapping would have
+made it read `0xFE000104` and contradicted the log. **The capture is faithful;
+the guest's RAM really moved.** The stack did *not* move:
+`dump[esp=0x00F7FD00] = 0x0014982E`, exactly the return VA the ICALL pushed, and
+that value occurs once in the whole 64 KiB stack window.
+
+**The advisor called it, including the address.** Consulted on the contradiction
+(the trigger is met exactly: two measurements disagree and neither is obviously
+the artifact), it ranked an **overlapping bulk transfer with
+`source = destination + 0x37608`** first and predicted the patched table would
+survive *relocated* at guest VA `0x001C3F60 - 0x37608 = 0x0018C958`, slot 65 at
+`0x0018CA5C`. **Measured: 110 of 120 slots survive at exactly that address**, slot
+65 reads `0xFE000104`, and an 8-dword run of the synthetic-VA sequence occurs at
+`0x0018C958` and **nowhere else in the 64 MiB window**
+(`logs/probe-advisor-prediction.py`, `logs/probe-reloc-extent.py`). It also warned
+that the byte count is a *separation*, not a copy length — a 226,824-byte copy
+cannot span the whole image, so the transfer removed that much and slid a much
+larger tail.
+
+**So A2h's real shape is:** a guest-side bulk transfer displaced canonical RAM
+downward by `0x37608`, moving the thunk table off its own address; the table is
+collateral, not the cause; the loader's work was done and then moved. The next
+packet is to find the writer — the advisor's cheapest experiment is a hardware
+write-watch on host `0x001D4064` (guest `0x001C4064` + the `0x10000` mapping),
+armed after loader patching, inspecting the **simulated** guest registers
+(`ESI`/`EDI`/`ECX`/`DF`) rather than native ones. **Do not** re-read the A2g dump
+without the `- 0x37608` correction, and do not treat any A2g-dump address as a
+guest address.
+
+**This is also a standing trap for the whole project.** `jsrf_dump.py` validates
+that a capture *has* a `guest_ram=` identity; it cannot tell whether that identity
+matches the payload. The `.text` control above costs one read and catches it, and
+it should be run before any dump-based claim.
 
 **Sandbox limits that cost this session time — all three were artifacts of the
 confined file policy, not defects, and all three vanished when the policy changed
@@ -100,7 +189,10 @@ copy out of the APU GP window, issues DSP doorbell command `0x00000003` and then
 `0x00000002`, both acknowledged. No ABI failure and no unresolved call before
 the new stop below.
 
-**Where the run stops now, by name.** `[ICALL] Failed to resolve VA 0x0007E255`
+**Where the run stops now, by name.** `[ICALL] invalid target 0x00000000` at
+`return=0014982E` — root-caused above as the displaced-RAM defect, **not** a
+missing thunk. The line below is the superseded A2e-era stop, kept for the record:
+`[ICALL] Failed to resolve VA 0x0007E255`
 (thread calls 7838, tid 14080) → the project's `0xE0424943` trap. Guest regs at the
 trap: eax 0, ecx `0x012EE060`, edx `0x00038ED0`, esp `0x00F7FEE4`. Evidence:
 `logs/runs/20260922-181157-372-a2e-252b5-span/` (strict, 30 s, toolkit `484887b`).
@@ -948,10 +1040,15 @@ xbox_HeapAlloc: out of memory (requested 598869040, used 12715008/50855936)
 ```
 
 `598869040` = `0x23B20430`, a garbage size against 12.7 MB used of 50.8 MB — so
-the allocation failed on a nonsense request, not on exhaustion. Whether the NULL
-is a genuinely uninitialised thunk or a downstream consequence of that failure is
-**not yet established**, and it is the first question for A2h. Do not treat it as
-a missing-function problem before that is settled.
+the allocation failed on a nonsense request, not on exhaustion.
+
+**Both of the framings above were superseded by measurement.** The NULL was
+neither an uninitialised thunk nor a consequence of the failed allocation: the
+thunk *was* initialised, and the read that returned 0 came from guest RAM that a
+bulk transfer had displaced by `0x37608` bytes. See "A2h is ROOT-CAUSED" in the
+CURRENT STATE block. The garbage allocation size is plausibly a *second symptom of
+the same displacement* — a length or pointer read from moved bytes — which is a
+hypothesis for the fix packet, not a finding.
 
 ### Environment traps, measured here — and one of them was mine
 

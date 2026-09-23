@@ -38,7 +38,7 @@ when `0x3060E` is not an entry at all -- entering it runs `sub_00030570` from it
 first byte.  All three known instances of this class were found by a *run* and
 none by this script, and this is why.  The rule is now `genuine_starts()`: an
 address counts only when the symbol answering it is its own.  Findings go
-283 -> 464; the three known-true cases are asserted present below.
+283 -> 446; the three known-true cases are asserted present below.
 
 The same defect points the other way as well, and the first version of this
 script only looked forward.  `0x00118610` was entered with `end 0x00118630`

@@ -264,6 +264,26 @@ Two host quirks worth knowing before they cost time:
   `scripts/inspect-jsrf.py memory <run-dir> <va> <length>`, which reads a run's
   `process.dmp` and keeps guest VAs as VAs — prefer it over a new helper.
 
+**Control every dump read with one read of `.text` (added 2026-09-22, A2h).** A
+dump can carry a well-formed `guest_ram=<base>+<size>` identity in `stacks.txt`
+and still map guest VAs to the wrong bytes. Measured: one run in 546 has its whole
+canonical window **displaced by 0x37608 bytes** — 460 of 545 XBE-backed pages read
+as `original[VA + 0x37608]`, 0 as `original[VA]`, and `XBEH` occurs 0 times in the
+file — while its identity line is byte-identical to a good run's. `jsrf_dump.py`
+validates that an identity *exists*; it cannot tell whether it matches the payload.
+
+The control is one read: the loader never patches `.text`, so a correct dump must
+return the XBE's own bytes at guest VA `0x00011000`.
+
+```powershell
+C:\Python313\python.exe -X utf8 scripts\inspect-jsrf.py memory <run-dir> 0x00011000 16
+# .text[0] must be 8b512c85d28b4130c70190431c00741c
+```
+
+`logs/probe-dump-control-all.py` runs it across every archived run and prints
+`matches XBE` / `DIFFERS` per run. Run it before any dump-based claim; a `DIFFERS`
+dump is not evidence, and its addresses are **not** guest addresses.
+
 **Sandbox limits — policy-dependent, and they look exactly like code failures.**
 Measured 2026-09-22 under a **workspace-write** DSH file policy, and **all three
 disappear under full access**. Recorded because a session that runs confined will
