@@ -95,6 +95,35 @@ A session does this, in order, without being asked:
    unresolved disagreement usually means a *measurement* is broken, which is
    exactly the case the advisor exists for.
 
+### Closing a packet — the transitions, including the awkward ones
+
+"Delivered" and "accepted" are different states and the gap between them has more
+than one exit. All of these are legitimate; only the first is success.
+
+| state | meaning | what unblocks it |
+|---|---|---|
+| **delivered** | criteria met as measured by the session | a reviewer must verify |
+| **accepted** | the reviewer reproduced the criteria and AGREED | nothing — record it |
+| **pending — CANNOT VERIFY** | the reviewer could not reproduce a measurement | **new evidence, or an explicit advisor ruling on that criterion.** The session's own green test does *not* close it |
+| **pending — reviewer unavailable** | the route is missing or the spawn failed | escalate; **do not substitute a model the policy did not name** |
+| **pending — post-review edits** | the tree changed after the review | re-review the affected criteria; a review covers the revision it saw |
+| **escalated** | session and reviewer disagree | the advisor's ruling, recorded with both positions |
+| **exploratory evidence** | the run carried synthetic-completion or bypass overrides | the *profile* criterion is unmet. Re-label, and re-open only the claims that depended on it |
+
+**Advisor finality is decision authority, not proof.** Its ruling settles *who
+decides*; it does not make a failed measurement pass, and no verdict changes what a
+measurement says. Record the ruling with the criterion it addresses.
+
+**Two limits worth stating plainly, because the workflow above could imply
+otherwise:**
+
+- **Independence is a matter of degree.** A third model family reduces correlated
+  error; it does not eliminate it, and it is not a guarantee. The Codex reviewer is
+  the session's *own* family, so its agreement is weaker evidence than DSH's — treat
+  it accordingly rather than calling both "independently verified".
+- **A review covers the revision it saw.** If the tree changes afterwards, the
+  affected criteria are unreviewed again. Say which revision was reviewed.
+
 ---
 
 ## 3. When to escalate to the advisor

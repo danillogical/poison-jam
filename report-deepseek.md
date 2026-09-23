@@ -94,6 +94,28 @@ knowledge; the skill owns the briefing procedure; the plan owns acceptance crite
 and statuses; this block owns the current blocker and next packet. **When a policy
 changes, grep every document for the old claim before calling the change done.**
 
+**And that fix is necessary but NOT sufficient — the advisor's critique, which I
+accept.** Naming a winner still leaves independently maintained *replicas*: this
+commit reduced the copies but did not eliminate them, and a grep sweep tests text,
+not meaning. Measured right now, after the fix: `plan:28` still mandates
+`hy4-preview-f` universally while `plan:115` gives Codex a different reviewer;
+`plan:104` still attributes the escalation triggers to the *procedure* skill rather
+than the policy; and the skill still restates spawn mechanics. Those are semantic
+divergences a grep cannot see. The real remedy is to **delete the copies or
+generate/check them**, and to give the policy a **revision** that reopens the
+authority when it changes — not to treat "read this once at session start" as
+permanent. A `scripts/check-agent-docs.py` that fails on a stale replica is the
+concrete form; it is not written yet, and until it is, the sweep is manual.
+
+**Three more of the advisor's points that I am recording rather than fixing now:**
+(a) *advisor finality is decision authority, not proof* — its ruling settles who
+decides, it does not make a failed measurement pass, and no verdict changes a
+measurement; (b) *"independent" is a matter of degree* — the Codex reviewer is the
+session's own model family, so it reduces correlated error, it does not remove it,
+and `docs/agent-workflow.md` should not imply otherwise; (c) *escalation must be
+scoped to material unresolved claims*, or a session consults on every ordinary
+failing test and the main-session loop stalls.
+
 ### Also found and fixed: `AGENTS.md` was silently truncating its own tail
 
 `AGENTS.md` is loaded automatically with a **65,536-byte budget** and had grown to
@@ -105,6 +127,53 @@ Fixed by splitting **by kind, not by size**: dated checkpoints and handoff
 narratives moved to `docs/jsrf-operating-history.md` (21 KB, read on demand, no
 content lost), leaving 50,017 bytes of operating knowledge. `AGENTS.md` now states
 its own budget so the next session does not repeat it.
+
+### The A2 packets were labelled "strict" and are not — the advisor caught it
+
+**The most serious finding of this rebuild, and it invalidates an acceptance
+basis rather than a document.** A2e, A2f and both A2g runs are described as
+**strict** in the plan. Their `metadata.json` says otherwise:
+
+```
+RECOMP_AC97_READY   = 1
+RECOMP_APU_DSP_ACK  = 0x803C0810
+```
+
+`docs/jsrf-run-profiles.md` classifies both as **synthetic completion** — the
+codec-ready poll succeeding with no codec, and the DSP pending word cleared
+without the DSP having run — and says explicitly that a run carrying them
+**"cannot satisfy boot, audio, GPU or liveness acceptance"**. So the *profile*
+criterion of those packets was never met, and the hy4 review that returned
+all-AGREED did not check it.
+
+**Scope, measured:** `scripts/check-run-profile.py --all` reports **247 of 649
+archived runs carry overrides**. **That is not 247 mislabelled runs** — it means
+247 runs *cannot be called strict*, and any run among them whose claim depended on
+the strict profile needs its claim re-checked. Only the A2 runs have been checked
+so far, and all three fail. The honest generalisation is that **the strict label
+was unverified everywhere**, not that it was wrong everywhere.
+
+**What survives, and what does not.** The A2 fixes themselves are **not**
+invalidated: the span correction, the emitted-body change, the detector finding
+and the focused measurements are all local, structural claims that do not depend
+on the profile. What fails is the narrower claim that those runs demonstrate
+*guest-level* progress under strict conditions. The honest restatement is: **the
+A2 packets are accepted for their span/body/detector content, and their runs are
+exploratory.**
+
+**Two process defects made this possible, and both are fixed:**
+
+1. **Nothing checked the artifact.** `run-jsrf.py` has no profile argument and no
+   enforcement — only `--seconds`, `--label`, `--probe`, `--expect-checkpoint`
+   (measured). It archives the environment but never classifies it, so "strict"
+   was a human claim with nothing verifying it.
+2. **My own first check reported the opposite.** `scripts/check-run-profile.py`'s
+   initial version read `metadata.json` as `settings.environment` and printed
+   CLEAN for every run — because `settings` is stored as the **list itself**. A
+   false negative that would have *blessed* the mislabelled run and closed the
+   question. It now reads both shapes and says which it found. This is the third
+   time in this project that a check's own failure mode mattered more than what
+   it was checking.
 
 ### Consequences now recorded as rules
 
@@ -343,14 +412,35 @@ collateral, not the cause; the loader's work was done and then moved. The next
 packet is to find the writer — the advisor's cheapest experiment is a hardware
 write-watch on host `0x001D4064` (guest `0x001C4064` + the `0x10000` mapping),
 armed after loader patching, inspecting the **simulated** guest registers
-(`ESI`/`EDI`/`ECX`/`DF`) rather than native ones. **Do not** re-read the A2g dump
-without the `- 0x37608` correction, and do not treat any A2g-dump address as a
-guest address.
+(`ESI`/`EDI`/`ECX`/`DF`) rather than native ones.
+
+**CORRECTION — the A2g dump is usable, and my first two attempts to describe it
+were both wrong.** This block first said *"do not re-read the A2g dump without the
+`- 0x37608` correction, and do not treat any A2g-dump address as a guest address"*;
+`AGENTS.md` rejected `DIFFERS` dumps wholesale. I then "fixed" that by saying
+"apply the displacement" — **which is still wrong, and the advisor caught the
+second error too.** The correct statement:
+
+| property | A2g dump | how it is measured |
+|---|---|---|
+| **structural validity** — the capture recorded the regions it claims | **VALID at that location** | the stack did not move: the ICALL's own pushed return VA `0x0014982E` is present at the logged `esp`. **One stack word supports *that* location, not every region.** |
+| **image-content integrity** — XBE pages match `original[VA]` | **differs, displaced by `0x37608`** | `.text[0]` at VA `0x11000` is not the XBE's bytes |
+
+**Read a corrupted image at its actual guest VA. A faithful dump of corrupt RAM is
+evidence *of the corruption*** — the thunk slot really is zero where the guest
+looked, and that is the finding. A shifted comparison against `original[VA +
+0x37608]` recovers **byte provenance** (which original bytes ended up where) and
+nothing more; it does **not** reconstruct repaired runtime state and must never be
+applied as a read correction. So: use the dump for structure, read image content
+at actual VAs, and compare against shifted offsets only to attribute bytes — and
+say so when you do.
 
 **This is also a standing trap for the whole project.** `jsrf_dump.py` validates
-that a capture *has* a `guest_ram=` identity; it cannot tell whether that identity
-matches the payload. The `.text` control above costs one read and catches it, and
-it should be run before any dump-based claim.
+that a capture *has* a `guest_ram=` identity; it cannot tell whether the identity
+matches the payload. The `.text` control costs one read and catches the content
+case; `scripts/check-dump-mapping.py` runs it across the archive. Run it before
+any **image-content** claim — and read the table above before discarding a dump
+entirely.
 
 **Sandbox limits that cost this session time — all three were artifacts of the
 confined file policy, not defects, and all three vanished when the policy changed

@@ -1,31 +1,38 @@
 """Build the game and every target CTest runs, from a sanitized environment.
 
-`scripts/build-jsrf.ps1` is the documented entry point and does exactly these
-steps. It cannot be used from a host whose environment block carries the same
-variable under several cases: this machine's block contains `Path`, `PATH` and
-`path`, and MSBuild's CL task builds a case-sensitive dictionary out of that
-block and dies with
+This is the working entry point. The PowerShell wrapper it once mirrored no
+longer exists (`scripts/build-jsrf.ps1` was never committed), so this script is
+the only implementation -- see the note at the end.
+
+It cannot be run from a host whose environment block carries the same variable
+under several cases: this machine's block contains `Path`, `PATH` and `path`, and
+MSBuild's CL task builds a case-sensitive dictionary out of that block and dies
+with
 
     MSB6001: Invalid command line switch for "CL.exe".
     System.ArgumentException: Item has already been added.
     Key in dictionary: 'Path'  Key being added: 'PATH'
 
-The duplicates arrive with the host process, so no PowerShell session can
-remove them -- the block is already malformed by the time PowerShell starts,
-and `Get-ChildItem env:` itself fails on it. Python's `os.environ` collapses
-the case variants to one key, so launching the same command sequence from here
-hands the toolchain a well-formed environment.
+The duplicates arrive with the host process, so no PowerShell session can remove
+them -- the block is already malformed by the time PowerShell starts, and
+`Get-ChildItem env:` itself fails on it. Python's `os.environ` collapses the case
+variants to one key, so launching the same command sequence from here hands the
+toolchain a well-formed environment.
 
-Same steps, same order and the same guards as the PowerShell wrapper; the two
-must be kept in step.
+**`--parallel N` for N > 1 fails under a CONFINED file policy, and works under
+full access -- this is policy-dependent, not a property of the tree.** MSBuild's
+multi-node workers talk over named pipes, which a confined DSH sandbox blocks.
+The failure is silent and looks like a code defect: exit 1 with **no error text at
+all**, the log stopping at `Checking File Globs`, and `-- /verbosity:diagnostic`
+reporting `Done building target "ResolveProjectReferences" ... -- FAILED` with
+`0 Error(s)`. `MSBUILDDISABLENODEREUSE=1` does not help.
 
-**`--parallel 1` under the DSH harness.** MSBuild's multi-node workers talk over
-named pipes, which that harness's sandbox blocks, so any `--parallel N` with
-`N > 1` fails with exit 1 and **no error text at all** -- the log stops at
-`Checking File Globs`, and `-- /verbosity:diagnostic` reports
-`Done building target "ResolveProjectReferences" ... -- FAILED` with
-`0 Error(s)`. `MSBUILDDISABLENODEREUSE=1` does not help. Single-node builds are
-slower and correct; the default stays 4 for hosts where it works.
+Measured both ways 2026-09-22: `--parallel 1` builds cleanly when confined, and
+`--parallel 4` builds cleanly under full access. **So: if a build dies silently at
+`Checking File Globs`, retry with `--parallel 1` before investigating the tree** --
+and do not record the parallel limit as a hard fact, because it is not one. An
+earlier version of this docstring stated the restriction unconditionally, which is
+exactly the mistake to avoid.
 """
 from pathlib import Path
 import argparse

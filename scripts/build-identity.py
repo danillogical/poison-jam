@@ -23,11 +23,11 @@ elif mode=='after':
     stamp.write_text(json.dumps({'sources':current,'exe_sha256':digest(output/'jsrf_recomp.exe'),
                                 'artifacts':{name:digest(output/name) for name in artifact_names}},indent=2))
 elif mode=='verify':
-    if not stamp.exists():raise SystemExit('Missing build identity. Run scripts/build-jsrf.ps1 first.')
+    if not stamp.exists():raise SystemExit('Missing build identity. Run scripts/build-jsrf.py first.')
     built=json.loads(stamp.read_text());current=sources()
     changed=[p for p in set(built['sources'])|set(current) if built['sources'].get(p)!=current.get(p)]
     artifacts=built.get('artifacts',{})
     mismatched=[name for name in artifact_names if not (output/name).is_file() or artifacts.get(name)!=digest(output/name)]
     if changed or mismatched:
-        raise SystemExit('Build/source/symbol mismatch. Run scripts/build-jsrf.ps1. Changed: '+', '.join((changed+mismatched)[:4]))
+        raise SystemExit('Build/source/symbol mismatch. Run scripts/build-jsrf.py. Changed: '+', '.join((changed+mismatched)[:4]))
 else:raise SystemExit('expected before/after/verify')

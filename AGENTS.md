@@ -200,15 +200,15 @@ scripts additionally need `capstone`, which lives in
 `C:\Users\logic\AppData\Roaming\Python\Python313\site-packages`; set
 `PYTHONPATH` to that path (Windows form) and use `C:\Python313\python.exe`.
 Neither workaround changes any project source.
-The guarded chain is `scripts/build-jsrf.ps1`, but PowerShell here refuses it
-twice over: the execution policy blocks the script, and `cmake` is not on the
-PowerShell PATH. Run the same steps directly with the Bash tool — `cmake -S . -B
-build`, `recover-functions.py`, `generate-lifter-tests.py`, `build-identity.py
-before`, the full `cmake --build` target list with the `env -u` prefix, then
-`build-identity.py after` — which is what the chain does and produces the same
-artifacts. `scripts/build-jsrf.py` is that sequence in one command and is the
-easier entry point; **if a build dies silently at `Checking File Globs`, retry
-with `--parallel 1`** — see "Sandbox limits" below. Build **every** target CTest runs, not a subset: MSBuild
+The guarded chain is `scripts/build-jsrf.py`. The PowerShell wrapper this guide
+used to name (`scripts/build-jsrf.ps1`) is **not in the repo at all**, and
+PowerShell would refuse it here anyway — the execution policy blocks scripts and
+`cmake` is not on the PowerShell PATH. `build-jsrf.py` runs those same steps in
+one command: `cmake -S . -B build`, `recover-functions.py`,
+`generate-lifter-tests.py`, `build-identity.py before`, the full `cmake --build`
+target list with the `env -u` prefix, then `build-identity.py after`. **If a build
+dies silently at `Checking File Globs`, retry with `--parallel 1`** — see
+"Sandbox limits" below. Build **every** target CTest runs, not a subset: MSBuild
 deletes a target's output when its link fails, so a later successful build that
 does not name that target leaves the test permanently "Not Run" with nothing in
 the build log to explain it. That is what hid a stale `-DRECOMP_ABI_CHECK` in
@@ -241,8 +241,38 @@ C:\Python313\python.exe -X utf8 scripts\inspect-jsrf.py memory <run-dir> 0x00011
 ```
 
 `scripts/check-dump-mapping.py` runs it across every archived run (or named ones)
-and exits nonzero on any failure. Run it before any dump-based claim; a `DIFFERS`
-dump is not evidence, and its addresses are **not** guest addresses.
+and exits nonzero on any failure.
+
+**But do not generalise `DIFFERS` into "this dump is not evidence", and do not
+"correct" reads by shifting them — both errors would destroy real evidence.** The
+control measures **image-content integrity** only, and a dump has two independent
+properties:
+
+| property | what it means | measured by |
+|---|---|---|
+| **structural validity** — the capture recorded the regions it claims | the stack and registers are usable **at that location**; one stack word supports *that* location, not every region | the recorded return VA being present at the logged `esp` |
+| **image-content integrity** — XBE-backed pages differ from `original[VA]` | the guest's RAM content is displaced; **that is a finding about the guest, not a fault in the capture** | the `.text` control above |
+
+**Read a corrupted image at its actual guest VA.** A faithful dump of corrupt RAM
+is *evidence of the corruption* — the thunk slot really is zero where the guest
+looked. A shifted comparison against `original[VA + 0x37608]` recovers **byte
+provenance** (which original bytes ended up where) and nothing more; it does not
+reconstruct repaired runtime state and must never be applied as a read
+correction. The one stack control supports the stack's location, not blanket
+validity of all regions.
+
+Measured on the A2g dump: structurally **valid** (the ICALL's own pushed return VA
+was at the logged `esp`), image content **displaced by `0x37608`**. Use it for
+structure; read image content at actual VAs; compare against shifted offsets only
+to attribute bytes, and say so when you do.
+
+**And check the run's profile before quoting it as acceptance evidence.**
+`scripts/check-run-profile.py` reads `metadata.json` and reports whether a run
+carries synthetic-completion or bypass overrides. Measured 2026-09-22: **247 of
+649 archived runs are exploratory**, including all three A2 runs — which were
+labelled strict. A run that is not strict cannot satisfy boot, audio, GPU or
+liveness acceptance, and `run-jsrf.py` currently has **no** profile argument or
+enforcement, so the label is a human claim with nothing checking it.
 
 **Sandbox limits — policy-dependent, and they look exactly like code failures.**
 Measured 2026-09-22 under a **workspace-write** DSH file policy, and **all three
@@ -454,7 +484,7 @@ python -m tools.recomp game/default.xbe --all --split 1000 \
 ```
 
 `--exclude-manual` reads the hand-written C source directly so the manual set
-cannot drift from the file that defines it. `scripts/build-jsrf.ps1` does NOT
+cannot drift from the file that defines it. `scripts/build-jsrf.py` does NOT
 run this pass; it runs `recover-functions.py`, which owns only
 `src/recomp/recovered/recovered.c`, the focused fixtures, the trap file and the
 run inputs. Regenerate the chunks deliberately, not as part of a routine build.
@@ -526,7 +556,7 @@ once it is recovered.
 Run from the game root:
 
 ```powershell
-.\scripts\build-jsrf.ps1
+python -X utf8 scripts/build-jsrf.py
 ctest --test-dir build -C Release --output-on-failure
 python -X utf8 scripts/run-jsrf.py --seconds 5 --label gpu-setup
 Get-Content .\jsrf_run.log -Tail 50
