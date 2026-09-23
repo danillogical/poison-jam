@@ -494,7 +494,7 @@ loc_000E6B60: ;
     edi = esi + 0xC;
     PUSH32(esp, 5);
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -8643,7 +8643,7 @@ loc_000EDD8E: ;
     esi = 0x21A950;
     edi = 0x231D40;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -8652,7 +8652,7 @@ loc_000EDD8E: ;
     esi = 0x21A950;
     edi = 0x231D58;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -14210,7 +14210,7 @@ loc_000F42EE: ;
     ecx = 8;
     edi = esp + 0x20;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -14511,7 +14511,7 @@ loc_000F461A: ;
     eax = eax + 4;
     ecx = 8;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -17410,7 +17410,7 @@ loc_000F7D3A: ;
     ecx = 6;
     MEM32(ebx + 0xC8) = 1;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -18782,7 +18782,8 @@ loc_000F90E1: ;
     ecx = 0; /* rep stosd */
     ecx = edx;
     ecx = ecx & 3;
-    if (!g_df) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    if (!g_df && !recomp_range_is_mmio(edi, ecx)) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    else if (!g_df) { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi + _i) = LO8(eax); edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = LO8(eax); edi -= ecx; }
     ecx = 0; /* rep stosb */
     edi = MEM32(esp + 0x14);
@@ -19346,7 +19347,7 @@ loc_000F9740: ;
     MEM32(ebx + 0x4C) = eax;
     edi = eax;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -19356,7 +19357,7 @@ loc_000F9740: ;
     edx = MEM32(esp + 0x48);
     ecx = ecx & 3;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < _n; _i++) _d[_i] = _s[_i]; }
       esi += ecx; edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }
@@ -21278,7 +21279,7 @@ loc_000FA9F6: ;
     eax = ecx;
     ecx = ecx >> 2;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -21286,7 +21287,7 @@ loc_000FA9F6: ;
     ecx = eax;
     ecx = ecx & 3;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < _n; _i++) _d[_i] = _s[_i]; }
       esi += ecx; edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }
@@ -22217,7 +22218,7 @@ loc_000FB75C: ;
     ecx = ecx >> 2;
     edi = ebp;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -22228,7 +22229,7 @@ loc_000FB75C: ;
     ebp = ebp + ebx;
     eax = eax + 2;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < _n; _i++) _d[_i] = _s[_i]; }
       esi += ecx; edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }
@@ -23200,7 +23201,7 @@ loc_000FD8D8: ;
     edi = eax;
     eax = MEM32(esp + 0x48);
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -23208,7 +23209,7 @@ loc_000FD8D8: ;
     ecx = edx;
     ecx = ecx & 3;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < _n; _i++) _d[_i] = _s[_i]; }
       esi += ecx; edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }
@@ -25042,7 +25043,7 @@ loc_000FEA0F: ;
     eax = ecx;
     ecx = ecx >> 2;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -25051,7 +25052,7 @@ loc_000FEA0F: ;
     eax = MEM32(esp + 0x14);
     ecx = ecx & 3;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < _n; _i++) _d[_i] = _s[_i]; }
       esi += ecx; edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }
@@ -35063,7 +35064,7 @@ loc_00107F4D: ;
     edi = ecx + eax + 0x1AC;
     ecx = 0x10;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -46170,7 +46171,7 @@ loc_001138C3: ;
     ecx = 0x1C;
     edi = esp + 0x40;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -52843,7 +52844,8 @@ loc_00117BEC: ;
     ecx = 0; /* rep stosd */
     ecx = edx;
     ecx = ecx & 3;
-    if (!g_df) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    if (!g_df && !recomp_range_is_mmio(edi, ecx)) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    else if (!g_df) { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi + _i) = LO8(eax); edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = LO8(eax); edi -= ecx; }
     ecx = 0; /* rep stosb */
     eax = MEM32(esi + 4);
@@ -52863,7 +52865,8 @@ loc_00117C13: ;
     ecx = 0; /* rep stosd */
     ecx = edx;
     ecx = ecx & 3;
-    if (!g_df) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    if (!g_df && !recomp_range_is_mmio(edi, ecx)) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    else if (!g_df) { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi + _i) = LO8(eax); edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = LO8(eax); edi -= ecx; }
     ecx = 0; /* rep stosb */
     eax = MEM32(esi + 4);
@@ -52883,7 +52886,8 @@ loc_00117C3A: ;
     ecx = 0; /* rep stosd */
     ecx = edx;
     ecx = ecx & 3;
-    if (!g_df) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    if (!g_df && !recomp_range_is_mmio(edi, ecx)) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    else if (!g_df) { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi + _i) = LO8(eax); edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = LO8(eax); edi -= ecx; }
     ecx = 0; /* rep stosb */
     eax = MEM32(esi + 4);
@@ -52903,7 +52907,8 @@ loc_00117C61: ;
     ecx = 0; /* rep stosd */
     ecx = edx;
     ecx = ecx & 3;
-    if (!g_df) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    if (!g_df && !recomp_range_is_mmio(edi, ecx)) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    else if (!g_df) { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi + _i) = LO8(eax); edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = LO8(eax); edi -= ecx; }
     ecx = 0; /* rep stosb */
     eax = MEM32(esi + 4);
@@ -52923,7 +52928,8 @@ loc_00117C88: ;
     ecx = 0; /* rep stosd */
     ecx = edx;
     ecx = ecx & 3;
-    if (!g_df) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    if (!g_df && !recomp_range_is_mmio(edi, ecx)) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    else if (!g_df) { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi + _i) = LO8(eax); edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = LO8(eax); edi -= ecx; }
     ecx = 0; /* rep stosb */
     eax = MEM32(esi + 4);
@@ -52950,7 +52956,8 @@ loc_00117CBE: ;
     ecx = 0; /* rep stosd */
     ecx = edx;
     ecx = ecx & 3;
-    if (!g_df) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    if (!g_df && !recomp_range_is_mmio(edi, ecx)) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    else if (!g_df) { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi + _i) = LO8(eax); edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = LO8(eax); edi -= ecx; }
     ecx = 0; /* rep stosb */
     eax = MEM32(esi + 4);
@@ -52970,7 +52977,8 @@ loc_00117CE5: ;
     ecx = 0; /* rep stosd */
     ecx = edx;
     ecx = ecx & 3;
-    if (!g_df) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    if (!g_df && !recomp_range_is_mmio(edi, ecx)) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    else if (!g_df) { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi + _i) = LO8(eax); edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = LO8(eax); edi -= ecx; }
     ecx = 0; /* rep stosb */
     eax = MEM32(esi + 4);
@@ -54817,7 +54825,7 @@ loc_00118982: ;
     ecx = ecx >> 2;
     esi = ebx + esi * 4 + 0x3F20;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -54825,7 +54833,7 @@ loc_00118982: ;
     ecx = edx;
     ecx = ecx & 3;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < _n; _i++) _d[_i] = _s[_i]; }
       esi += ecx; edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }
@@ -55421,7 +55429,8 @@ loc_00118DC0: ;
     ecx = 0; /* rep stosd */
     ecx = edx;
     ecx = ecx & 3;
-    if (!g_df) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    if (!g_df && !recomp_range_is_mmio(edi, ecx)) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    else if (!g_df) { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi + _i) = LO8(eax); edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = LO8(eax); edi -= ecx; }
     ecx = 0; /* rep stosb */
     eax = MEM32(esp + 0x18);
@@ -57282,7 +57291,7 @@ loc_0011A4E7: ;
     ecx = 0x1C;
     edi = esp + 0x14;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -58241,7 +58250,7 @@ loc_0011B240: ;
     ecx = 0xC0;
     esi = 0x225110;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -61159,7 +61168,7 @@ loc_0011DD84: ;
     ecx = 0x1C;
     edi = esp + 0x40;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -105712,7 +105721,7 @@ loc_0013B3C7: ;
     ecx = 5;
     edi = 0x25EF8C;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -106158,7 +106167,7 @@ loc_0013B6B1: ;
     edi = edi + 0x58;
     ecx = ecx >> 2;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -106166,7 +106175,7 @@ loc_0013B6B1: ;
     ecx = edx;
     ecx = ecx & 3;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < _n; _i++) _d[_i] = _s[_i]; }
       esi += ecx; edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }
@@ -111062,7 +111071,8 @@ loc_0013D160: ;
     ecx = 0; /* rep stosd */
     ecx = edx;
     ecx = ecx & 3;
-    if (!g_df) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    if (!g_df && !recomp_range_is_mmio(edi, ecx)) { memset((void*)XBOX_PTR(edi), (uint8_t)eax, ecx); edi += ecx; }
+    else if (!g_df) { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi + _i) = LO8(eax); edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = LO8(eax); edi -= ecx; }
     ecx = 0; /* rep stosb */
     eax = MEM32(esi);
@@ -112844,7 +112854,7 @@ loc_0013DB58: ;
     ecx = ecx >> 2;
     esi = ebp;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -112852,7 +112862,7 @@ loc_0013DB58: ;
     ecx = eax;
     ecx = ecx & 3;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < _n; _i++) _d[_i] = _s[_i]; }
       esi += ecx; edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }
@@ -112999,7 +113009,7 @@ loc_0013DC08: ;
     ecx = ecx >> 2;
     esi = 0x261108;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -113007,7 +113017,7 @@ loc_0013DC08: ;
     ecx = eax;
     ecx = ecx & 3;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < _n; _i++) _d[_i] = _s[_i]; }
       esi += ecx; edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }
@@ -113869,7 +113879,7 @@ loc_0013E028: ;
     ecx = ecx >> 2;
     edi = edx + 0x26138C;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -113877,7 +113887,7 @@ loc_0013E028: ;
     ecx = eax;
     ecx = ecx & 3;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < _n; _i++) _d[_i] = _s[_i]; }
       esi += ecx; edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }
@@ -114017,7 +114027,7 @@ loc_0013E0DF: ;
     ecx = ecx >> 2;
     edi = 0x261108;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -114025,7 +114035,7 @@ loc_0013E0DF: ;
     ecx = edx;
     ecx = ecx & 3;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < _n; _i++) _d[_i] = _s[_i]; }
       esi += ecx; edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }
@@ -114094,7 +114104,7 @@ loc_0013E12E: ;
     esi = 0x261108;
     edi = ebx;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx * 4;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi + _i*4) = MEM32(esi + _i*4); }
       esi += ecx * 4; edi += ecx * 4; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM32(edi - _i*4) = MEM32(esi - _i*4); esi -= ecx * 4; edi -= ecx * 4; }
@@ -114102,7 +114112,7 @@ loc_0013E12E: ;
     ecx = eax;
     ecx = ecx & 3;
     if (!g_df) { uint8_t *_d = (uint8_t*)XBOX_PTR(edi), *_s = (uint8_t*)XBOX_PTR(esi); uint32_t _n = ecx;
-      if (_d + _n <= _s || _s + _n <= _d) memcpy(_d, _s, _n);
+      if ((_d + _n <= _s || _s + _n <= _d) && !recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)) memcpy(_d, _s, _n);
       else { uint32_t _i; for (_i = 0; _i < _n; _i++) _d[_i] = _s[_i]; }
       esi += ecx; edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }

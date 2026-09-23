@@ -7200,3 +7200,183 @@ because the shape of the mistake is worth keeping.**
    all be 24 bytes per entry. The inference above is not evidence.
 
 The next packet A1 assigns is the device/context/event mapping, not this array.
+
+## 2026-09-22 — A2d.1: the APU decode failure was a `rep movs` lowered to a host `memcpy`
+
+**The guest never made an AVX access.** The faulting RIP was in a CRT DLL, and
+the instruction there was VEX-encoded — but that instruction is not the guest's
+access. The lifter lowers guest `rep movsd`/`rep movsb` to a host `memcpy`
+whenever the ranges provably do not overlap, and a host library's copy raises
+its own fault, at its own RIP, in its own encoding. The VEH decoder only reads
+legacy forms, so the fault escaped. The defect is in the **lowering**, not in
+the APU model and not in the decoder.
+
+**Register reconciliation, which is what makes it measured rather than
+inferred.** Guest 0x001A1B18 is a 4-argument byte-copy helper:
+
+```
+001A1B18 push ebp; mov ebp,esp
+001A1B1B lea eax,[ebp+8]; push eax; push [ebp+8]; call 0x001A18DE   ; resolve arg0 by reference
+001A1B27 test eax,eax; jl 0x001A1B4E
+001A1B2B mov eax,[ebp+8]      ; resolved entry
+001A1B2E mov ecx,[ebp+0x14]   ; byte count
+001A1B32 mov esi,[eax+8]      ; source base
+001A1B35 add esi,[ebp+0xC]    ; + offset
+001A1B3B mov edi,[ebp+0x10]   ; destination
+001A1B3E shr ecx,2
+001A1B41 rep movsd
+001A1B43 mov ecx,eax; and ecx,3
+001A1B48 rep movsb
+001A1B4A pop edi; xor eax,eax; pop esi; pop ebp; ret 0x10
+```
+
+The call site 0x001A2079 pushes four arguments — `eax`, `0`, `esi+0x70`,
+`0x118` — which the callee's own `ret 0x10` confirms. **Every register in the
+fault dump then follows:** `eax = 0x118` is `mov eax,ecx` before the shift,
+`ecx = 0x46` is `0x118 >> 2`, `ebx = 0x118` is the caller's constant,
+`edi = 0x010DF724` is the caller's `esi + 0x70`, and `esi = 0xFE830200` is the
+source. So the copy is **280 bytes from the APU aperture into a RAM structure**,
+and the 70-element dword loop is what a `rep movsd` of 280 bytes is.
+
+**The apparent address contradiction is not one.** The fault printed
+`0xFE840200` and the decode-fail line printed offset `0x30200` (i.e.
+`0xFE830200`); these are the same address in two spaces, because the guest RAM
+base is mapped at host `+0x10000` (`[APU] RAM pointer: 0000000000010000`).
+`g_xbox_mem_offset = 0x10000` reconciles them exactly. Recorded because the
+mismatch reads as a bug and is not one.
+
+**Where the source pointer comes from.** `sub_001A18DE` is a handle→pointer
+resolver, not a device accessor: it takes the table object in ECX, reads
+`[[ecx+0x20]]` as a count, bounds-checks the index and returns
+`table + 8 + index*32`, or `DSERR_INVALIDPARAM` (0x88780032). Read out of the
+minidump: the table is at guest `0x803E4B44`, count `0x14`, and entry 0 is
+
+```
+{ 0xFE83A5CC, 0x12EC, 0xFE830200, 0x8A8, 0xFE836000, 0, 0x013EE000, 0x5CC60 }
+```
+
+so the copy source is entry-0 field `+8`. Fields `+0x18`/`+0x1C` tile a RAM
+region contiguously (`0x013EE000 + 0x5CC60 = 0x0144AC60`, the next entry's
+pointer), so the table maps RAM ranges to APU-window addresses — the guest's own
+GP-window descriptor bank. `0xFE830200` is APU base `0xFE800000` + `0x30200`,
+inside the **GP DSP block** (`0x30000`–`0x3FFFF`), and the title also writes
+`0xFE83FF00`/`0xFE83FF04`/`0xFE83FFFC` there directly.
+
+*Inference, marked as such:* that the table is built at runtime by
+`add dword ptr [edi+0x10], 0xFE836000` at `0x001A1870`, which is why `+0x10`
+holds that constant in every entry. The advisor rejected this linkage as the
+most likely artifact in the brief; its stated reason ("applying that add again
+would give `0xFD06C000`") **assumes the field already held `0xFE836000` before
+the add**, which is not the claim — stored 0 plus the constant gives exactly
+what the dump shows. The objection is rejected, the *warning* is adopted: the
+linkage is an inference and nothing depends on it.
+
+**Advisor consult #2 (`agent-d3294b58`, kimi-k3, resumed).** Its ranked answer
+put the genuine-GP-window-read mechanism first, and its load-bearing point was
+a caveat rather than a hypothesis: **because the APU model returns 0 for every
+offset ≥ 0x30000, forcing the element-wise path yields zeros under *both*
+hypotheses, so "the copy succeeds" cannot discriminate them — only provenance
+can.** Adopted, and it changed the design: the model now *names* the
+unimplemented block read instead of returning 0 in silence, so the gap is a fact
+in the log rather than an inference from an empty buffer. That is the same rule
+the run profiles already apply when they refuse to map the aperture readable.
+Its "index 0 is an assumption" point is **rejected as stated and adopted as
+advice**: the index is not assumed, it is `push eax` with
+`eax = MEM32(MEM32(esi+0xC)+0xC)` read out of the minidump as 0 — measured. Its
+suggested experiments (log the index, validate the destination, check the alias)
+are not needed: the register reconciliation above pins all four arguments.
+
+### The fix
+
+- `tools/recomp/lifter.py`: the `movs` block-copy fast path is now guarded by
+  `!recomp_range_is_mmio(edi, _n) && !recomp_range_is_mmio(esi, _n)`, and the
+  `stosb` `memset` fast path by `!recomp_range_is_mmio(edi, ecx)`. Both ends are
+  checked, because a device window on either side is unemulatable through a
+  library call. A copy over a window takes the existing element-wise
+  `MEM8`/`MEM16`/`MEM32` path, so every access is a guest instruction the hook
+  can read.
+- `templates/runtime/recomp_types.h`: `recomp_range_is_mmio` plus the two window
+  constants, so the generated code and the VEH have one place to agree. A range
+  that wraps the 32-bit space counts as a window.
+- `src/apu/apu_core.c`: `mcpx_apu_mmio_read` names a read of an unimplemented
+  block (GP `0x30000`, EP `0x50000`) once per 64K. `apu_mmio_hook.c`'s
+  `RECOMP_APU_TRACE` display path uses the new `mcpx_apu_mmio_read_quiet`, so a
+  diagnostic read cannot fabricate the report.
+- Tests: the direction-flag suite asserts the guard on all three `movs` widths
+  and on `stosb`; `test_runtime_helpers_defined.py` asserts the runtime really
+  defines the helper the lifter emits. **12/12 Python tests in the two touched
+  modules, toolkit CTest 1/1, game CTest 11/11.**
+
+### Measured result
+
+`logs/runs/20260922-174141-780-a2d-movs-mmio/` (strict, 30 s, toolkit
+`484887b`, `RECOMP_AC97_READY=1`, `RECOMP_APU_DSP_ACK=0x803C0810`,
+`RECOMP_APU_TRAP=1`, `RECOMP_KERNEL_LOG_BUDGET=100000`):
+
+| signal | before (`…-a2c-175300`) | after |
+|---|---|---|
+| APU decode failure | `MMIO decode fail … C5 FE 6F 02` | **gone** |
+| exception | `0xC0000005` in a CRT DLL | `0xE0424943` (the project's named trap) |
+| GP window read | not reached | `[APU] read of unimplemented GP DSP block at offset 0x30200 (size 4) -> 0; no model for this block` |
+| DSP doorbell | `command 0x00000003` | `0x00000003` **and then `0x00000002` acknowledged** |
+| named frames | 109 | **147** |
+| native threads | 11 | **17** |
+| duration | 4.13 s | 4.50 s |
+
+**Where it stops now, by name.** `[ICALL] Failed to resolve VA 0x000252B5`
+(thread 7567 calls, tid 22940) → `0xE0424943`. Guest regs at the trap:
+eax 0, ecx 0x015A0870, edx 0x3F800000, esp 0x00F7FEDC, ebx 0,
+esi 0x015A0870, edi 0x00700010. So A2d.1 is delivered, the frontier is a
+**named unresolved indirect call**, and the next packet is to recover
+`0x000252B5` — not the pointer-table class, which A2d.2 still owns.
+
+### Two tooling traps found, both measured
+
+**1. The documented full-translation invocation does not reproduce the
+committed tree.** Run exactly as `AGENTS.md` records it, it produces a
+**6,695-line** diff whose only intended change is the guard:
+
+```
+recomp_funcs.h     | 2989 +++++++++  (all insertions, all new declarations)
+recomp_dispatch.c  | 5978 +++++----- (rewritten)
+recomp_0000..0005  | 506/198/102/213/157/193
+recomp_types.h     |   52
+```
+
+Measured explanation: `tools/disasm/output/functions.json` holds **8,437**
+entries while the committed `recomp_funcs.h` declares **5,653** functions (4,873
+of which still match a name in the current database), so the raw database has
+grown by roughly 2,900 entries since the committed tree was generated and the
+regenerated tree declares and dispatches them. **The regeneration was therefore
+reverted, not used**: attributing a run to the guard on top of a 6,695-line
+unrelated change would have measured nothing.
+
+**Decision: forward-port the guard textually into the chunk tree instead of
+regenerating.** The transformation is exactly what the generator now emits
+(printed from the lifter, not transcribed): 463 `movs` sites and 95 `stosb`
+sites in `src/recomp/gen/recomp_*.c`, verified by count. This is equivalent to a
+clean regeneration *for this change only* and leaves the tree identical
+otherwise, which is what makes the run above attributable. A deliberate
+regeneration baseline is its own packet and is not on the critical path.
+`recover-functions.py` **does** reproduce its output: the regenerated
+`recovered.c` differs from the committed one by exactly the 207 guard lines and
+nothing else (226 insertions, 207 deletions), so its 188 `movs` + 19 `stosb`
+sites picked the guard up from the lifter with no hand edit.
+
+**2. The translation pass overwrites project-local edits in the generated
+runtime header.** `src/recomp/gen/recomp_types.h` is refreshed from
+`templates/runtime/recomp_types.h` on every run, and the committed game copy
+carried a project-local hunk the template does not have — the exact-delta ABI
+instrumentation (`recomp_delta_ok`, `recomp_delta_allowed`,
+`recomp_abi_regs_exempt`, `jsrf_trace_delta_mismatch`, `jsrf_trace_seq` and the
+`RECOMP_ABI_CALL` body that calls them). `AGENTS.md` warns this header "is not
+necessarily refreshed by regeneration; synchronize it deliberately without
+losing edits"; it is now measured, and the re-applied hunk carries a comment
+saying so. Losing it is not silent — the build fails on undeclared
+`recomp_delta_ok` — but it is a step a future run must not forget.
+
+**Dead end, recorded.** The first forward-port matched only the `if` line of the
+`stosb` rule and left the original `else` line in place, producing a duplicated
+`else` and three `error C2181: illegal else without matching if`. The rule
+replaces a **two-line** block with three lines; the fix is to consume both.
+

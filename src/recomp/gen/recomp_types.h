@@ -338,6 +338,48 @@ void recomp_trace_esp(const char *name, const char *tag);
 #define MEM16(addr)  (*(volatile uint16_t *)XBOX_PTR(addr))
 #define MEM32(addr)  (*(volatile uint32_t *)XBOX_PTR(addr))
 
+/* Device windows that a hook answers for, rather than plain host memory.
+ *
+ * Two halves of one contract name the same ranges: the VEH in the project's
+ * main.c is what traps and emulates a register access, and these constants are
+ * what the generated code consults before taking a library shortcut over a
+ * range. A window the generated code thinks is ordinary memory is an
+ * access violation raised inside memcpy or memset, at a RIP the hook's
+ * instruction decoder cannot read; a window the VEH does not know about is a
+ * silent host read. Keep them in step.
+ *
+ * The test is on the guest VA, never on the translated host pointer: what
+ * matters is what the VEH is prepared to answer for. */
+#define RECOMP_MMIO_NV2A_BASE  0xFD000000u
+#define RECOMP_MMIO_NV2A_END   0xFE000000u
+#define RECOMP_MMIO_APU_BASE   0xFE800000u
+#define RECOMP_MMIO_APU_END    0xFE880000u
+
+/**
+ * Does [va, va + len) intersect a hooked device window?
+ *
+ * Used by the lifted `rep movs`/`rep stosb` to decide whether the block form
+ * is legal. The block form is not merely an optimisation here: it is the only
+ * way a copy over a device window can be emulated at all, because the hook
+ * reads the faulting guest instruction and a host library instruction is not
+ * one. An empty range is not a device access, and a range that wraps the
+ * 32-bit space is not a plain RAM copy, so it is treated as one.
+ */
+static inline int recomp_range_is_mmio(uint32_t va, uint32_t len)
+{
+    uint32_t end;
+    if (len == 0u)
+        return 0;
+    end = va + len;
+    if (end < va)
+        return 1;
+    if (va < RECOMP_MMIO_NV2A_END && end > RECOMP_MMIO_NV2A_BASE)
+        return 1;
+    if (va < RECOMP_MMIO_APU_END && end > RECOMP_MMIO_APU_BASE)
+        return 1;
+    return 0;
+}
+
 /** Signed memory reads. */
 #define SMEM8(addr)  (*(volatile int8_t   *)XBOX_PTR(addr))
 #define SMEM16(addr) (*(volatile int16_t  *)XBOX_PTR(addr))
@@ -762,6 +804,12 @@ recomp_func_t recomp_lookup_manual(uint32_t xbox_va);
  * for vtable-dispatch-heavy code and the wrong one for early boot.
  */
 #ifdef RECOMP_ABI_CHECK
+/* Project-local additions. The toolkit template tracks the runtime model and is
+ * refreshed from templates/runtime/recomp_types.h by the translation pass, so
+ * these lines have to be re-applied after a regeneration -- AGENTS.md says so
+ * and this is what it means. They are the exact-delta ABI instrumentation this
+ * project's evidence rests on: the `ABI verified` line is produced by the
+ * macro below, and the delta hooks let a site be exempted or traced by name. */
 int recomp_delta_ok(uint32_t va, uint32_t actual);
 int recomp_delta_allowed(uint32_t va, uint32_t out[4]);
 int recomp_abi_regs_exempt(uint32_t va);
