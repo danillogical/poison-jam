@@ -258,3 +258,57 @@ Traps recorded:
   `scripts/check-entry-extents.py` sees only an informational `NO-TERMINATOR`.
 - `0x00048690` is a pointer-table target with no span and `0x00048570`'s corrected
   end now stops just short of it: a latent named trap, not a silent wrong body.
+
+## 2026-09-22 17:29–17:56 PDT (fourth recorded run)
+
+Outcome: **A2d.1 delivered and measured.** The APU decode failure was not an APU
+problem at all — it was a guest `rep movs` lowered to a host `memcpy`. The run now
+walks past it and stops on a new *named* failure.
+
+Done:
+- Traced the fault to the instruction, not the symptom: guest 0x001A1B41
+  `rep movsd`, src ESI 0xFE830200 (APU GP window), dst a RAM buffer, 280 bytes,
+  ranges provably non-overlapping so the lifter's `memcpy` fast path was taken.
+  The VEH can only decode the faulting *guest* instruction, so a library copy
+  raises the fault at its own RIP in its own VEX encoding and escapes.
+- Reconciled every register in the fault dump against the 4-argument call site
+  (0x001A2079 pushes eax, 0, esi+0x70, 0x118; the callee's `ret 0x10` confirms).
+  Also resolved an apparent address contradiction: guest 0xFE830200 and host
+  fault 0xFE840200 are the same address, guest RAM base is at host +0x10000.
+- Fix: lifter guards the `movs`/`stosb` block forms with `recomp_range_is_mmio`
+  on both ends; `recomp_range_is_mmio` + the two window constants live in
+  `templates/runtime/recomp_types.h`; the APU model now **names** a read of an
+  unimplemented block (GP 0x30000 / EP 0x50000) instead of returning 0 silently.
+- Commits: toolkit `484887b`, game `5e756a7` (A2d.1) and `a82f679` (CURRENT STATE).
+  CTest 11/11 game, 1/1 toolkit, 12/12 Python in the touched modules.
+- Measured deltas: decode failure gone, no 0xC0000005, named frames 109 -> 147,
+  native threads 11 -> 17, 4.13 s -> 4.50 s, and DSP doorbell command 0x02
+  acknowledged after 0x03. Evidence
+  `logs/runs/20260922-174141-780-a2d-movs-mmio/` (toolkit `484887b`).
+
+Next run should start at: **A2e — the unresolved indirect call to `0x000252B5`**.
+That VA is an interior shared epilogue (`pop edi; pop ebx; pop esi; ret`) inside
+**no** database entry; the enclosing region `0x0002524A..0x000252E0` is
+unclaimed. The ICALL stack has `[3] 0x00025310` on it (a recovered COM vtable
+method), so read that recovered body and find the indirect call site. It is NOT
+among the 132 pointer-table candidates — a claim about the detector too. A2d.2
+(that 132-candidate generator) is still open.
+
+Traps recorded (both new, both measured):
+- **The documented full-translation invocation does NOT reproduce the committed
+  tree**: a 6,695-line diff (2,989 additive declarations in `recomp_funcs.h`,
+  5,978 in `recomp_dispatch.c`). Cause: `functions.json` now has 8,437 entries vs
+  the committed header's 5,653 declarations. **Revert it and forward-port a
+  lifter change textually into `src/recomp/gen/*.c`** (463 movs + 95 stosb sites
+  here), or the run measures the regeneration instead of the change.
+  `recover-functions.py` DOES reproduce `recovered.c` exactly.
+- **The translation pass overwrites project-local edits in
+  `src/recomp/gen/recomp_types.h`** (the exact-delta ABI instrumentation:
+  `recomp_delta_ok`, `jsrf_trace_delta_mismatch`, `jsrf_trace_seq`, and the
+  `RECOMP_ABI_CALL` body). Re-apply after any header sync.
+- Another session was writing `AGENTS.md` and `plan-jsrf-bare-minimum.md` at
+  17:41 during this run. They are left uncommitted on purpose — never
+  `git add -A` in this repo.
+- `RECOMP_APU_TRAP=1` matters for the GP-window read: without it the aperture is
+  plain mapped memory, the element-wise path reads it silently, and the new
+  diagnostic does not fire.
