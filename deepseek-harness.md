@@ -55,13 +55,35 @@ Two things make this gate worth its cost, and both are about the briefing:
   it must also check that its detector finds something *present*. This project has
   twice published a "found nothing" result from a broken scanner.
 
-**The reviewer route is frozen per session.** `subagent-model-selection` samples
-the allow-list when a **fresh top-level session** is composed, records it in that
-session, and — per the tool's own documentation — leaves it *"unchanged by later
-settings edits."* So editing `~/.dsh/settings.yaml` mid-session does **not** take
-effect: a route added now is available to the next session, not this one. Confirm
-with `list_subagent_models` before promising a review; if the route is missing,
-say so plainly rather than substituting a model the workflow did not ask for.
+**The reviewer route is frozen per session, and a restart does not unfreeze it.**
+Read from `dsh-tool-subagent/lib/index.js` rather than inferred, because the
+distinction decides whether the human has to restart DSH:
+
+- The settings document itself **hot-reloads** (`dsh-settings-file`, `watch: true`),
+  so an edit to `~/.dsh/settings.yaml` is live in the running host immediately.
+- But the subagent tool reads it **once per session**. The projection is
+  `init: () => null` with `apply: (policy, event) => { if (policy !== null …)
+  return policy; … }`, and the writer's own comment is *"Append the route policy
+  once, before its definition can reach a model request."*
+
+| action | effect |
+|---|---|
+| edit `settings.yaml` | live for the host, but **not** for a session already composed |
+| restart DSH, **resume** the session | **still the old routes** — the durable policy short-circuits |
+| start a **new** session | samples the live settings; new routes available |
+
+So adding a route needs **a new session, not a restart** — and the session that
+added it can never use it. Confirm with `list_subagent_models` before promising a
+review; if the route is missing, say so plainly rather than substituting a model
+the workflow did not ask for.
+
+**Watch `agent-default-model` when editing settings.** It is a separate key in the
+same file, and it decides which model *implements* work rather than which reviews
+it. Setting it to the reviewer's model would make the reviewer review its own
+output, defeating the point of a third-family gate. Verified 2026-09-22: an edit
+to `allowedModels` was accompanied by an unrelated change to `agent-default-model`
+from `deepseek-v4.1-flash` to `hy4-preview-f`, which was reverted. Check the whole
+file, not just the key you meant to change.
 
 Two rules follow, and both are easy to violate by reflex:
 
