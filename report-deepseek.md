@@ -6,7 +6,7 @@ continue.
 
 ## CURRENT STATE — read this first, then the sections below
 
-Last updated 2026-09-22 17:52. Everything below this block is **chronological**,
+Last updated 2026-09-22 18:13. Everything below this block is **chronological**,
 and where a later section corrects an earlier one the later one wins — several do
 (`Correction: ...`, `Retracted ...`). This block is the only place that states
 where things stand *now*; rewrite it in place each session rather than appending.
@@ -14,13 +14,15 @@ where things stand *now*; rewrite it in place each session rather than appending
 **The plan's A1–A5 audit sequence owns the next steps** and overrides any
 "next packet" wording in the historical sections below.
 
-**Repos.** Game `5e756a7` (A2d.1), toolkit `484887b` (the substantive half of the
-same change). Both clean **for this session's files**. `AGENTS.md` and
-`plan-jsrf-bare-minimum.md` are **modified in the working tree and deliberately
-uncommitted**: another session wrote them at 17:41 during this run, and
-`AGENTS.md`'s own rule is to preserve unrelated changes. Do not `git add -A`
-here. Game CTest 11/11, toolkit standalone CTest 1/1, 12/12 Python tests in the
-two touched lifter modules.
+**Repos.** Game `0697dc2` + the A2e change below; toolkit `484887b` (unchanged —
+A2e is a game-side span correction, no toolkit edit). Both trees clean. Game CTest
+11/11.
+
+*(The earlier note here — that `AGENTS.md` and `plan-jsrf-bare-minimum.md` were
+"modified by another session and deliberately uncommitted" — was wrong and is
+retracted. There was no second session: the extra session directories were this
+session's own DeepSeek workers, and those two files were this session's own
+delegation-policy edit. They were committed as `405dd08`, `68fd722` and `0697dc2`.)*
 
 **What works.** The title boots from the retail XBE, runs its CRT and
 initialisers, initialises D3D, drains the whole pushbuffer it submits, receives
@@ -31,23 +33,47 @@ copy out of the APU GP window, issues DSP doorbell command `0x00000003` and then
 `0x00000002`, both acknowledged. No ABI failure and no unresolved call before
 the new stop below.
 
-**Where the run stops now, by name.** `[ICALL] Failed to resolve VA 0x000252B5`
-(thread calls 7567, tid 22940) → the project's `0xE0424943` trap. Guest regs at
-the trap: eax 0, ecx `0x015A0870`, edx `0x3F800000`, esp `0x00F7FEDC`, ebx 0,
-esi `0x015A0870`, edi `0x00700010`. Evidence:
-`logs/runs/20260922-174141-780-a2d-movs-mmio/` (strict, 30 s, toolkit `484887b`).
+**Where the run stops now, by name.** `[ICALL] Failed to resolve VA 0x0007E255`
+(thread calls 7838, tid 14080) → the project's `0xE0424943` trap. Guest regs at the
+trap: eax 0, ecx `0x012EE060`, edx `0x00038ED0`, esp `0x00F7FEE4`. Evidence:
+`logs/runs/20260922-181157-372-a2e-252b5-span/` (strict, 30 s, toolkit `484887b`).
 
-**Next packet (A2e), concretely.** `0x000252B5` is **not a function entry**: it
-is the shared interior epilogue `pop edi; pop ebx; pop esi; ret` of the region
-`0x0002524A..0x000252E0`, which is **inside no entry in
+**A2e is delivered and measured.** The previous stop, `0x000252B5`, was **not an
+unresolved indirect call**: it was the shared epilogue of the switch at
+`0x00025040`, emitted as a tail call because the entry's declared span stopped
+0x82 bytes early at a `gap_prologue` **false entry**. Widening the span to
+`0x00025040..0x000252B9` in `config/recovered-functions.json` made it an internal
+label: `0x00025040 returned; ABI verified`, three traps dropped, the emitted switch
+went from 6 to **8 of 8** targets, and the stop moved. Full reasoning, the three
+branch-bytes exclusivity tests, the advisor consult, and the worker conflict are in
+the A2e sections below.
+
+**Next packet (A2f).** `0x0007E255`, with `0x0007E360`, `0x0007E180` and
+`0x00038ED0`/`0x00038EB0` in the ring immediately before it. First question: is
+this the **same class as A2e** — a span that stops at a false entry and turns an
+intra-body jump into a tail call — or a genuinely absent function? Check whether
+`0x0007E255` lies inside a declared span before doing anything else, since that
+single check separated the two cases last time and cost nothing.
+
+**A2d.2 (the remaining pointer-table class) is still open and unchanged.** 132
+candidates; write a generator that proposes `{start, end, stack_args, evidence}`
+from the original XBE and review its output before writing it into
+`config/recovered-functions.json`. Do not hand-fix them one run at a time.
+
+**Next packet (A2e), concretely.** *(SUPERSEDED — A2e is delivered above. Kept
+because two of its three claims are still instructive: the "computed at run time"
+inference was wrong (see the A2e conflict note), and the ring read as a stack was
+wrong. The third claim — that `0x000252B5` is not a function entry — was right,
+but for branch-bytes reasons, not for the scan.)* `0x000252B5` is **not a
+function entry**: it is the shared interior epilogue `pop edi; pop ebx; pop esi;
+ret` of the region `0x0002524A..0x000252E0`, which is **inside no entry in
 `tools/disasm/output/functions.json`** (the nearest are `0x25233`
-`gap_prologue` ending `0x2524A`, and `0x252E0`). Two measured leads:
+`gap_prologue` ending `0x2524A`, and `0x252E0`). Two leads as originally written:
 
-1. The ICALL diagnostic's own stack has **`[3] 0x00025310`** on it — the COM
-   vtable method already recovered into `config/recovered-functions.json` (its
-   evidence entry describes the `0x001C4F68` table and the `ff4d442`
-   abutting-alias fold). So read that recovered body, find the indirect call
-   site in it, and find what computes `0x000252B5`.
+1. The ICALL diagnostic's `[3] 0x00025310` — this is `g_icall_trace`, a ring of
+   recent indirect-call targets, **not a stack**; it records a prior target, and
+   the recovered `0x00025310` body's own indirect call reads a table at
+   `0x001EC0F0` that cannot yield `0x000252B5`.
 2. **`0x000252B5` is not among the 132 pointer-table candidates**
    (`scripts/check-table-targets.py`: 132 unresolvable, 62 swallowed, 70
    uncovered). And a **literal scan of the whole XBE image finds it zero
@@ -55,10 +81,11 @@ is the shared interior epilogue `pop edi; pop ebx; pop esi; ret` of the region
    `0x000252B8`. The scan is validated by a positive control: the same code
    finds `0x00025310` **five** times as an absolute VA (`0x0019D812`,
    `0x001326FF`, `0x001BE29A`, `0x001C2844`, `0x001C4044`) and zero times as an
-   RVA. So nothing in the static image holds `0x000252B5`; the target is
-   computed at run time. Both negatives are still claims about their *detectors*
-   — a computed target appears in neither — so this rules out a static
-   function-pointer table, not every possible pointer.
+   RVA. **The inference drawn from this — "so the target is computed at run
+   time" — is retracted:** the literal lives in the recompiled *host* binary
+   (`recomp_stubs_recovery.c:36`), which a guest-image scan cannot see, so zero
+   XBE hits was expected and proved nothing. The scan ruled out a static
+   guest-side pointer, not runtime computation.
    *(Two earlier attempts at this scan returned zero hits for everything,
    including the `0x00025310` control. They were wrong for header-layout
    reasons: `NumberOfSections` is at `0x11C` and `SectionHeadersAddress` at
@@ -69,11 +96,6 @@ is the shared interior epilogue `pop edi; pop ebx; pop esi; ret` of the region
 Then decide, with evidence, whether the enclosing `0x0002524A..0x000252E0`
 needs its own entry, or whether `0x000252B5` is a mis-derived pointer. Do not
 add an entry for an epilogue on the assumption that it is one.
-
-**A2d.2 (the remaining pointer-table class) is still open and unchanged.** 132
-candidates; write a generator that proposes `{start, end, stack_args, evidence}`
-from the original XBE and review its output before writing it into
-`config/recovered-functions.json`. Do not hand-fix them one run at a time.
 
 **A2d.1 is delivered and measured.** The APU decode failure was a guest
 `rep movsd` lowered to a host `memcpy`: a device window is answered by the VEH
@@ -378,6 +400,128 @@ into future work. This is the same discipline the project already applies to its
 runs — `ABI verified` means the wrapper's invariants held, not equivalence to the
 original XBE — and it is the advisor's own first prediction about this project,
 turned on the advisor itself.
+
+## 2026-09-22 — A2e diagnosed: `0x000252B5` is a switch epilogue, not an ICALL
+
+**Decision: the frontier is not an unresolved indirect call, and the candidate fix
+is an entry-span correction, not a new function.** Measured from the XBE, the
+generated C and the run's own diagnostic.
+
+**What the message actually is.** `src/recomp_manual.c:18-33` is the trap, and
+`recomp_stubs_recovery.c:36` defines `sub_000252B5` as
+`recomp_icall_fail_log(0x000252B5u); abort();`. So the trap fired **by name** —
+nothing performed an indirect call to it. `[ICALL]` is the trap's message text,
+not a description of the mechanism. The 16 `[n] 0x…` lines under it are
+**`g_icall_trace`, a 16-entry ring of recent ICALL targets**
+(`recomp_types.h:260, 858-861`), **not a stack**; the earlier reading of
+"the diagnostic's own stack has `[3] 0x00025310`" reads a ring as a stack.
+`0x000252B5` is **absent from its own ring**, which is consistent with no
+indirect call having occurred.
+
+**The real mechanism.** `0x00025040` is a switch function. Its dispatcher is
+`push ebx; push edi; jmp dword ptr [eax*4+0x252bc]` at `0x2504F..0x25051`, guarded
+by `cmp eax,7; ja 0x252b7`. The table at `0x252BC`, read from the XBE (image base
+`0x00010000`, section 1), has 8 entries:
+
+| case | target |
+|---|---|
+| 0–5 | `0x25058`, `0x25078`, `0x2515E`, `0x25193`, `0x251DC`, `0x25203` |
+| 6 | `0x2524A` |
+| 7 | `0x25263` |
+
+`0x252B5` is the function's **shared epilogue**: bytes `5f 5b 5e c3` =
+`pop edi; pop ebx; pop esi; ret`, balancing the dispatcher's
+`push ebx; push edi` and the prologue's `push esi`. Blocks across the switch
+branch to it (`je 0x252b5` at `0x2525A` and `0x25272`; `jb 0x252b2` at `0x252AD`;
+and the `jne`/`jb` from the case-0 block at `0x25058`).
+
+**Why it became a trap.** `0x00025040`'s declared span is
+`0x00025040..0x00025233` — it stops **0x82 bytes early**. `0x25233` is a
+`gap_prologue` **false entry**: its body pushes one register and pops three
+(`push esi` … `pop edi; pop ebx; pop esi; ret`), which balances only if entered
+with the dispatcher's `push ebx; push edi` still in effect. The "end is the next
+function entry" rule therefore truncated the parent **at that false entry**,
+leaving cases 6 and 7 and the shared epilogue **outside every entry**. Branches
+to `0x252B5` from inside the body were then lifted as tail calls —
+`recovered.c:15070, 15207, 15246, 15261, 15326, 15340` each emit
+`{ g_seh_ebp = ebp; sub_000252B5(); return; }` — and `0x252B5` is listed in
+`config/recovery-unresolved.json` as a deliberate trap, so the trap fired.
+
+**This is the A4a class, and it is the mirror image of `AGENTS.md` item 5.** There,
+a real tail call was mistaken for an intra-body goto; here, an intra-body jump to
+a shared epilogue was emitted as a tail call to a non-entry. Both come from
+classifying on span membership instead of on what the entry *is*.
+
+Evidence: `logs/runs/20260922-174141-780-a2d-movs-mmio/jsrf_run.log:12935`;
+`src/recomp/recovered/recovered.c:15037-15349`;
+`src/recomp/gen/recomp_stubs_recovery.c:36`; `src/recomp_manual.c:18-33`;
+the XBE jump table at `0x252BC`; `scripts/inspect-jsrf.py disasm 0x00025020 0x000252F0`.
+
+### A2e fixed and measured
+
+**Decision: widen the entry to `0x00025040..0x000252B9` in
+`config/recovered-functions.json`, not `config/boundary-fixes.json`.** The
+boundary-fix file is applied to the raw database *before* the reviewed manifests
+overwrite it (`recover-functions.py:23-25` then `:30-34`), so for a **recovered**
+address a boundary fix is silently discarded. The manifest owns the span.
+
+**The advisor was consulted before implementing, and it changed the bar.** Consult
+#2 asked whether the unbalanced push/pop was sufficient to call `0x25233` a false
+entry. Its answer: **no** — and the useful part was *"you need not prove
+exclusivity merely to include shared code."* It also named the artifact risk
+precisely: my "outside every entry" was a **metadata** claim, not a branch-bytes
+claim. So exclusivity was then *measured from the image*, three independent ways:
+
+| test | result |
+|---|---|
+| control-transfer references to `0x25233` in all of `.text` | **exactly one** — a `jcc8` from `0x0002521A`, inside the body |
+| `0x25233` present as a 4-byte dword anywhere in the image | **zero** — never address-taken, so unreachable by a computed pointer either |
+| stack arithmetic | balances **only** when entered with the dispatcher's `push ebx; push edi` outstanding |
+
+The third is the decisive one, and it is a falsifiable prediction that held:
+`0x25233` does `push esi; push ecx; call 0x11C20; pop edi; pop ebx; pop esi; ret`,
+and `0x11C20` ends `pop edi; pop esi; ret 4` — **`stdcall`, callee-cleans** — so
+`push ecx` is consumed by the callee and the three pops balance the parent's two
+pushes plus the prologue's own. Entered as an ordinary `call`, it would consume
+its own return address as register data.
+
+The worker independently reached the same mechanism and reported a further
+finding this fix resolves: **the emitted switch had only 6 of the 8 table
+targets**, because the lifter truncates a switch at the first target outside the
+span. After widening, `recovered.c:15054` reads `/* switch: 8 entries, 8 targets */`
+and all eight measured targets are present.
+
+**Measured result** (strict, 30 s, `logs/runs/20260922-181157-372-a2e-252b5-span/`):
+
+| | before (A2d.1) | after |
+|---|---|---|
+| `0x00025040` | tail-called `sub_000252B5` → trap | **`returned; ABI verified (ESP/EBX/ESI/EDI)`** |
+| `0x000252B5` in the log | the stop | **absent** |
+| traps for `0x252B2`/`0x252B5`/`0x252B7` | 3 | **0** (`recovery-unresolved.json` 259 → 256) |
+| switch targets emitted | 6 of 8 | **8 of 8** |
+| next stop | `0x000252B5` | **`0x0007E255`** |
+
+Game CTest **11/11**, build identity verified, toolkit unchanged at `484887b`.
+
+**A conflict the worker raised, recorded rather than smoothed over.** It flagged
+that the earlier session's inference — *"`0x000252B5` has zero literal hits in the
+XBE, therefore it is computed at run time"* — is **wrong**. The literal lives in
+the **recompiled host** binary (`recomp_stubs_recovery.c:36`), which a guest-image
+scan cannot see, so zero XBE hits was expected and proved nothing. That corrects
+the A2e lead as written: the scan ruled out a static guest-side pointer, not
+runtime computation. The conclusion it was used for (the target is not a guest
+function entry) still holds — but for the three branch-bytes reasons above, not
+for the scan.
+
+**A second coincidence explained.** `edi = 0x00700010` also appeared in the
+earlier, unrelated `0x0017E627` defect. It is `FAKE_RWDATA_VA` (`0x00700000`) plus
+`0x10`, the toolkit's synthetic RW-data base (`xbox_memory_layout.c:1390`) — a
+legitimate guest pointer into emulated globals. Both incidents are startup code
+touching the same globals; there is no shared mechanism.
+
+**Next stop: `0x0007E255`.** Its ring shows `0x0007E360`, `0x0007E180` and
+`0x00038ED0`/`0x00038EB0` immediately before, so the enclosing family is
+`0x0007E1xx`–`0x0007E3xx`. Not yet investigated.
 
 ## 2026-09-22 — A2b and A2c: spans that ran over functions the disassembler never registered
 

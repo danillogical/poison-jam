@@ -32,9 +32,6 @@ void sub_00021317(void) { recomp_icall_fail_log(0x00021317u); abort(); }
 void sub_00021319(void) { recomp_icall_fail_log(0x00021319u); abort(); }
 void sub_00022043(void) { recomp_icall_fail_log(0x00022043u); abort(); }
 void sub_00022F30(void) { recomp_icall_fail_log(0x00022F30u); abort(); }
-void sub_000252B2(void) { recomp_icall_fail_log(0x000252B2u); abort(); }
-void sub_000252B5(void) { recomp_icall_fail_log(0x000252B5u); abort(); }
-void sub_000252B7(void) { recomp_icall_fail_log(0x000252B7u); abort(); }
 void sub_0002711B(void) { recomp_icall_fail_log(0x0002711Bu); abort(); }
 void sub_00027147(void) { recomp_icall_fail_log(0x00027147u); abort(); }
 void sub_000272EC(void) { recomp_icall_fail_log(0x000272ECu); abort(); }

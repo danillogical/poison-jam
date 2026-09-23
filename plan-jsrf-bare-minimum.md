@@ -344,8 +344,41 @@ entry. It is the first item for the generator.
 
 **Suggested Agent:** Sol Medium (interface/subsystem question); Luna for the
 bounded fix; Terra review.
-**Status:** Pending. **Depends on:** A2c delivered.
-**Evidence:** `logs/runs/20260922-162546-668-a2c-175300/`.
+**Status:** **Delivered 2026-09-22 (A2d.1), and A2e with it.** **Depends on:** A2c delivered.
+**Evidence:** `logs/runs/20260922-174141-780-a2d-movs-mmio/` (before) and
+`logs/runs/20260922-181157-372-a2e-252b5-span/` (after).
+
+**A2d.1 delivered.** The mechanism is neither of the two the packet posed: the
+guest never handed a pointer to a CRT routine, and no host routine was chosen to
+touch MMIO. **The recompiler** lowered a guest `rep movsd` over an APU-sourced VA
+into a host `memcpy`, which faulted inside `VCRUNTIME140` in VEX encoding the
+guest-instruction VEH decoder cannot read, so the access violation escaped. Fixed
+by guarding the `movs`/`stosb` block forms with `recomp_range_is_mmio` (toolkit
+`484887b`; forward-ported into the generated chunks). The GP read is now named
+rather than silently zeroed. Full detail in `report-deepseek.md`.
+
+**A2e delivered in the same session.** The next stop, `[ICALL] Failed to resolve
+VA 0x000252B5`, was not an unresolved indirect call either: it was the shared
+epilogue of the switch at `0x00025040`, emitted as a tail call because that
+entry's declared span stopped 0x82 bytes early at a `gap_prologue` **false
+entry**. Widening the span to `0x00025040..0x000252B9` made it an internal label:
+`0x00025040 returned; ABI verified`, three traps dropped, the emitted switch went
+from 6 to **8 of 8** targets, and the stop moved to `0x0007E255`.
+
+This is the **A4a class** arriving early: a span boundary that mis-states
+ownership. It was fixed with evidence rather than a heuristic — exclusivity of the
+false entry was measured three ways from the image (one control-transfer
+reference, and that from inside the body; zero dword occurrences anywhere, so
+never address-taken; and stack arithmetic that balances only under the parent's
+pushes, because the callee is `stdcall`). The advisor was consulted first and
+raised the bar to *necessary CFG inclusion*, explicitly **not** exclusive
+ownership; the extra two tests were then added to meet it. Do not generalise this
+into a broad "widen the span" rule — A4a still owns that, and this packet only
+established one entry.
+
+**Next stop, named: `0x0007E255`.** The next packet (A2f) should first check
+whether it lies inside a declared span — that single check separated the A2e class
+from a genuinely absent function and cost nothing.
 
 The run stops 4.1 s in on:
 
