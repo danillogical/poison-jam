@@ -1,24 +1,32 @@
-"""Gate: does an archived run carry synthetic-completion overrides?
+"""Gate: does an archived run carry synthetic-completion or bypass overrides?
 
 `docs/jsrf-run-profiles.md` splits runs into **strict** (no overrides) and
 **exploratory** (any override). The distinction is load-bearing: a synthetic
 override answers a poll without doing the work, so a run carrying one **cannot
-satisfy boot, audio, GPU or liveness acceptance**, and a packet that claims a
-strict run must not be resting on an artifact that has one.
+satisfy boot, audio, GPU or liveness acceptance**, and a packet claiming a strict
+run must not rest on an artifact that has one.
 
 This exists because the claim was wrong once. A2g was recorded as a strict run in
 the plan and accepted by a reviewer on that basis, while its artifact carries
-`RECOMP_AC97_READY=1` and `RECOMP_APU_DSP_ACK=0x803C0810`. Nothing checked the
-artifact, and a first attempt at this check reported CLEAN for every run because
-it looked for `settings.environment` while `metadata.json` stores `settings` as
-the **list itself** -- a false negative that would have blessed the bad run. So
-this reads both shapes and says which it found.
+`RECOMP_AC97_READY=1` and `RECOMP_APU_DSP_ACK=0x803C0810`.
+
+**Three defects this file had, all found by the advisor, all now fixed:**
+
+1. It looked for `settings.environment` while `metadata.json` stores `settings`
+   as the **list itself** -- so it printed CLEAN for every run. A false negative
+   that would have blessed the bad run and closed the question.
+2. It flagged a variable **by name regardless of value**, so `RECOMP_AC97_READY=0`
+   -- an override explicitly *disabled* -- was reported as exploratory. A
+   disabled override is not an override.
+3. It let a **named run with no metadata exit 0**, and silently dropped malformed
+   environment entries and collapsed duplicate names. Missing input must not pass.
 
 Usage:
     python -X utf8 scripts/check-run-profile.py [run-dir ...]
     python -X utf8 scripts/check-run-profile.py --all
 
-Exits 0 when every named run is strict, 1 when any is exploratory or unreadable.
+Exit status is 1 if any run is exploratory, unreadable, has no environment
+recorded, or was named and not found -- so this is usable as a gate.
 """
 import argparse
 import json
@@ -40,13 +48,25 @@ BYPASS = {
     'JSRF_ABI_CONTINUE': 'continues past an ABI contract failure',
 }
 
+# A value that means "this override is not actually doing anything". Setting a
+# flag to 0 is how a run turns an override OFF, and that is a strict run.
+DISABLED_VALUES = {'', '0', 'false', 'no', 'off', 'none'}
+
+STRICT = 'strict'
+EXPLORATORY = 'exploratory'
+UNKNOWN = 'UNKNOWN'
+MISSING = 'MISSING'
+
 
 def environment_of(metadata):
-    """The run's environment as a name->value dict, or None if absent.
+    """The run's environment as a list of (name, value, raw) triples, or None.
 
     `metadata.json` has stored `settings` two ways: as the environment list
     itself, and nested as `settings.environment`. Read both -- assuming only one
     is how this check silently passed a run it should have failed.
+
+    Returns a **list**, not a dict, so duplicate names stay visible instead of
+    one silently overwriting the other.
     """
     settings = metadata.get('settings')
     entries = None
@@ -64,17 +84,55 @@ def environment_of(metadata):
                 break
     if entries is None:
         return None
-    out = {}
+
+    out = []
+    malformed = 0
     for entry in entries:
         if isinstance(entry, dict) and 'name' in entry:
-            out[entry['name']] = entry.get('value')
-    return out
+            out.append((entry['name'], entry.get('value'), entry))
+        else:
+            malformed += 1
+    return out, malformed
 
 
-def classify(env):
-    synthetic = {k: v for k, v in env.items() if k in SYNTHETIC}
-    bypass = {k: v for k, v in env.items() if k in BYPASS}
-    return synthetic, bypass
+def is_enabled(value):
+    """Is this override actually in effect?
+
+    Absent value counts as enabled -- a bare name in an environment block is how
+    a flag is normally set. Explicit 0/false/off does not.
+    """
+    if value is None:
+        return True
+    return str(value).strip().lower() not in DISABLED_VALUES
+
+
+def classify(pairs):
+    """Split (name, value, raw) triples into active synthetic and bypass hits.
+
+    **The lookup tables are read-only here.** An earlier version wrote results
+    into `table[name]`, which is `SYNTHETIC` or `BYPASS` itself -- so it both
+    failed to populate the output dicts (reporting every run strict, including
+    the four known-exploratory A2 runs) and mutated the module's own table.
+    """
+    synthetic, bypass, disabled, duplicates = {}, {}, [], []
+    seen = {}
+    for name, value, _raw in pairs:
+        seen.setdefault(name, []).append(value)
+        if name in SYNTHETIC:
+            target = synthetic
+        elif name in BYPASS:
+            target = bypass
+        else:
+            continue
+        if is_enabled(value):
+            target[name] = value
+        else:
+            disabled.append('%s=%s' % (name, value))
+    for name, values in seen.items():
+        if len(values) > 1 and name in {**SYNTHETIC, **BYPASS}:
+            duplicates.append('%s appears %d times (%s)'
+                              % (name, len(values), ', '.join(str(v) for v in values)))
+    return synthetic, bypass, disabled, duplicates
 
 
 def main():
@@ -99,39 +157,67 @@ def main():
 
     failures = 0
     checked = 0
+    tally = {STRICT: 0, EXPLORATORY: 0, UNKNOWN: 0, MISSING: 0}
     for run in targets:
         metadata_path = run / 'metadata.json'
-        if not metadata_path.exists():
-            print('%-52s NO metadata.json (not a run)' % run.name)
+        if not run.is_dir() or not metadata_path.exists():
+            # A named run that does not exist is a FAILURE, not a silent pass.
+            tally[MISSING] += 1
+            failures += 1
+            print('%-52s %s (no metadata.json)' % (run.name, MISSING))
             continue
         checked += 1
         try:
             metadata = json.loads(metadata_path.read_text(encoding='utf-8', errors='replace'))
         except Exception as exc:
-            print('%-52s UNREADABLE: %s' % (run.name, exc))
+            tally[UNKNOWN] += 1
             failures += 1
+            print('%-52s %s: unreadable metadata (%s)' % (run.name, UNKNOWN, exc))
             continue
-        env = environment_of(metadata)
-        if env is None:
-            print('%-52s NO environment recorded -> cannot call it strict' % run.name)
+        parsed = environment_of(metadata)
+        if parsed is None:
+            tally[UNKNOWN] += 1
             failures += 1
+            print('%-52s %s: no environment recorded -> cannot call it strict'
+                  % (run.name, UNKNOWN))
             continue
-        synthetic, bypass = classify(env)
+        pairs, malformed = parsed
+        synthetic, bypass, disabled, duplicates = classify(pairs)
+
+        notes = []
+        if malformed:
+            notes.append('%d malformed env entr%s ignored'
+                         % (malformed, 'y' if malformed == 1 else 'ies'))
+        if duplicates:
+            notes.extend(duplicates)
+            failures += 1
         if synthetic or bypass:
+            tally[EXPLORATORY] += 1
             failures += 1
-            labels = ['%s=%s (%s)' % (k, v, SYNTHETIC.get(k) or BYPASS.get(k))
-                      for k, v in sorted({**synthetic, **bypass}.items())]
-            print('%-52s EXPLORATORY' % run.name)
-            for label in labels:
-                print('      %s' % label)
+            print('%-52s %s' % (run.name, EXPLORATORY.upper()))
+            for name, value in sorted({**synthetic, **bypass}.items()):
+                reason = SYNTHETIC.get(name) or BYPASS.get(name)
+                print('      %s=%s (%s)' % (name, value, reason))
+        elif disabled:
+            tally[STRICT] += 1
+            print('%-52s %s (%s explicitly disabled)'
+                  % (run.name, STRICT, ', '.join(disabled)))
         else:
-            print('%-52s strict' % run.name)
+            tally[STRICT] += 1
+            print('%-52s %s' % (run.name, STRICT))
+        for note in notes:
+            print('      note: %s' % note)
 
     print()
-    print('checked %d run(s); %d not strict' % (checked, failures))
+    print('checked %d; strict %d, exploratory %d, unknown %d, missing %d'
+          % (checked, tally[STRICT], tally[EXPLORATORY], tally[UNKNOWN], tally[MISSING]))
     if failures:
+        print()
         print('A run that is not strict cannot satisfy boot, audio, GPU or liveness '
               'acceptance. See docs/jsrf-run-profiles.md.')
+        print('This is a FLAGGED-RUN count, not an audited total: a run flagged here '
+              'must have its claims re-checked, but flagging does not by itself '
+              'establish that any particular claim was wrong.')
     return 1 if failures else 0
 
 

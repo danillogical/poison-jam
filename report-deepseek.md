@@ -195,14 +195,40 @@ without the DSP having run — and says explicitly that a run carrying them
 criterion of those packets was never met, and the hy4 review that returned
 all-AGREED did not check it.
 
-**Scope, measured:** `scripts/check-run-profile.py --all` reports **247 of 649
-archived runs carry overrides**. **The advisor explicitly qualified this and I am
-adopting the qualification: "247 exploratory runs" does NOT establish "247
-mislabelled runs"** — that requires comparing each run's *associated claims*, not
-just its settings. What it does establish is that **the strict label was
-unverified everywhere**, and that any run among them whose claim depended on the
-strict profile must be re-checked. Only the A2 runs have been checked so far, and
-all four fail.
+**Scope, corrected twice.** The first version of `scripts/check-run-profile.py`
+reported **CLEAN for every run** (it looked for `settings.environment`; the file
+stores `settings` as the list itself). The second version fixed that but **flagged
+a variable by name regardless of value**, so `RECOMP_GPU_ACK=0` — an override
+explicitly *disabled*, which is how every GPU fixture runs — counted as
+exploratory. Corrected numbers, with the advisor having caught both errors:
+
+| | count |
+|---|---|
+| runs checked | 649 |
+| **strict** | **607** |
+| **exploratory (flagged)** | **41** |
+| unknown (no environment recorded) | 1 |
+| missing (named, no metadata) | 1 |
+
+**The four A2 runs are all in the 41 and are unequivocal** — they carry
+`RECOMP_AC97_READY=1` and `RECOMP_APU_DSP_ACK=0x803C0810`, both *enabled*. The 205
+runs that moved from "exploratory" to "strict" between versions are almost all
+`RECOMP_GPU_ACK=0` fixtures.
+
+**And the advisor's qualification stands, now more so: this is a FLAGGED-RUN count,
+not an audited total.** A run flagged here must have its claims re-checked;
+flagging does not by itself establish that any particular claim was wrong. The
+script prints that qualification itself so the number cannot be quoted bare.
+
+**Third defect in the same file, also the advisor's find:** it let a **named run
+with no metadata exit 0** — the same missing-input bug I had just fixed in
+`check-dump-mapping.py`, repeated. Now `MISSING` and nonzero.
+
+**And a fourth, which I introduced while fixing the others.** My first repair
+wrote results into the lookup table (`table[name] = value`) instead of the output
+dict — so it reported all four A2 runs **strict** while mutating the module's own
+table. The positive control caught it: the four runs are the known-exploratory
+fixtures, and they came back wrong.
 
 **What survives, and what does not.** The A2 fixes themselves are **not**
 invalidated: the span correction, the emitted-body change, the detector finding
