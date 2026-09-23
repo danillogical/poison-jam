@@ -6,7 +6,7 @@ continue.
 
 ## CURRENT STATE — read this first, then the sections below
 
-Last updated 2026-09-22 18:25. Everything below this block is **chronological**,
+Last updated 2026-09-22 22:55. Everything below this block is **chronological**,
 and where a later section corrects an earlier one the later one wins — several do
 (`Correction: ...`, `Retracted ...`). This block is the only place that states
 where things stand *now*; rewrite it in place each session rather than appending.
@@ -14,9 +14,76 @@ where things stand *now*; rewrite it in place each session rather than appending
 **The plan's A1–A5 audit sequence owns the next steps** and overrides any
 "next packet" wording in the historical sections below.
 
-**Repos.** Game `b9c0e74` (A2e plus the review gate and harness docs); toolkit
-`484887b` (unchanged — A2e is a game-side span correction, no toolkit edit). Both
-trees clean. Game CTest 11/11.
+**Repos.** Game `74a43a6` plus the A2g change below; toolkit `484887b`
+(unchanged — A2g is a game-side span correction and a game-side script fix, no
+toolkit edit). Game CTest **11/11**, build identity verified.
+
+**A2f is DELIVERED and its own criteria are met.** `0x0007E255` was the A2e
+class again: a `gap_prologue` false entry `0x0007E242` truncated the true parent
+`0x0007E180`, so four forward branches fell outside the span and were lifted as
+tail calls — one into the wrong function, three into a deliberate trap. Widening
+`0x0007E180`'s end `0x0007E242 -> 0x0007E257` made both addresses internal
+labels. Measured in `logs/runs/20260922-190336-778-a2f-7e255-span/`:
+`0x0007E180 returned; ABI verified`, `0x0007E255` absent from the log, and the
+stop moved to a new ABI failure at `0x000304F0`. **A2f has not yet had its hy4
+review**; that is part of A2g's review, below.
+
+**A2g (this session) — `0x000304F0`, the same class a third time, and the
+detector that should have caught all three was blind to all three.** The ABI
+failure `0x000304F0 esp 00F7FEE0->00F7FDD8 expected +4` was not an ABI defect:
+the declared end `0x00030508` was **the switch dispatch instruction itself**
+(`FF 24 85 18 06 03 00` = `jmp [eax*4+0x30618]`), so the emitted body was
+prologue + `cmp` + `ja` and nothing else — no case, no epilogue, so the 0x104 it
+subtracted was never restored. The `ja 0x3060E` fell outside the span and became
+a tail call into the trap at `recomp_stubs_recovery.c`. Widening the end
+`0x00030508 -> 0x00030618` made it an internal label: the body is a 4-case switch
+state machine with two epilogues, **4 of 4** switch targets are emitted, the trap
+is gone (`recovery-unresolved.json` 255 -> 254), and the run measures
+`0x000304F0 returned; ABI verified` with **0 ABI failures**. Stop moved to
+`[ICALL] invalid target 0x00000000 return=0014982E`.
+
+**The durable finding is the detector, not the entry.** `scripts/check-span-exits.py`
+exists for exactly this class and reported **none of A2e, A2f or A2g** — all
+three were found by a *run*. Cause, measured: its `entry_starts()` unions
+`runtime_starts()`, which answers "can the runtime resolve this address", and a
+`tail_jump_alias` folded into its parent resolves **fine** because the dispatch
+tuple names the *parent's* symbol (`{ 0x0003060Eu, sub_00030570 }`). So a branch
+to a folded alias looks like "a tail call to a real entry" and is skipped. New
+`resolution_starts.genuine_starts()` counts an address only when the symbol
+answering it is its own; `runtime_starts()` is unchanged for its existing
+consumers. Findings **283 -> 446**; the three fixed entries are now clean. A
+`--selfcheck` positive control replays each case at its **pre-fix** span, and the
+negative control proves the old rule detected **0 of 3** while the new rule
+detects **3 of 3** — a self-check that passes under both rules would prove
+nothing.
+
+**Next packet (A2h).** `[ICALL] invalid target 0x00000000` at `return=0014982E`,
+on the main guest stack (tid 2948, esp `00F7FD00`). The site is
+`call dword ptr [0x1C4064]` — thunk-table slot **65**, i.e. kernel ordinal
+**277** (`KeSetEvent` family), which the preceding `[HEAP]` line shows being
+reached with an out-of-memory return `0xC0000017` from a 598,869,040-byte
+allocation request. So the first question is whether the NULL is a real
+uninitialised thunk or a consequence of the failed allocation, and the `[HEAP]`
+line immediately before it is the place to start. **Do not** treat the NULL as
+a missing-function problem until that is settled.
+
+**Sandbox limits that cost this session time — all three were artifacts of the
+confined file policy, not defects, and all three vanished when the policy changed
+to full access mid-session. Recorded because a confined session will meet them.**
+(1) `cmake --build … --parallel N` for any N > 1 fails with exit 1 and **no error
+text at all** — MSBuild's multi-node workers communicate over named pipes, which
+the sandbox blocks; `--parallel 1` builds cleanly, and under full access
+`--parallel 4` does too. (2) `tempfile.mkdtemp` directories are not writable, so
+CTest `jsrf_gpu_inspection` fails with `PermissionError` on `process.dmp`; under a
+`Path.mkdir` substitute the same 20 tests pass with **0 errors**, and under full
+access the real test passes. (3) The title needs write access to
+`%LOCALAPPDATA%\xboxrecomp\Partition0.img`; without it `NtOpenFile` returns
+`ACCESS_DENIED` and the guest quits via `HalReturnToFirmware` after 1.8 s with only
+515 log lines, which reads exactly like a catastrophic regression and is not one.
+**A fourth trap is not environmental and will recur: I published the first two as
+durable facts before testing them against the changed policy.** Both were
+policy-dependent. Measure a suspected environment limit against a second policy
+before writing it into the guide as a property of the machine.
 
 *(The earlier note here — that `AGENTS.md` and `plan-jsrf-bare-minimum.md` were
 "modified by another session and deliberately uncommitted" — was wrong and is
@@ -38,14 +105,49 @@ the new stop below.
 trap: eax 0, ecx `0x012EE060`, edx `0x00038ED0`, esp `0x00F7FEE4`. Evidence:
 `logs/runs/20260922-181157-372-a2e-252b5-span/` (strict, 30 s, toolkit `484887b`).
 
-**A2e is delivered and measured — but NOT accepted.** The review gate the user
-added (hy4-preview-f reviewer, Astra as final call on disagreement) could not run:
-`hy4-preview-f` was added to the allow-list during this same session, and
-`subagent-model-selection` freezes its route list at session composition, so the
-route was rejected with `child LLM route "workbuddy-ai/hy4-preview-f" is not
-allowed for this Session`. The next session must run that review and record it
-before A2e is accepted. The evidence below stands on its own; only the independent
-review is outstanding.
+**A2e is ACCEPTED — the first packet in this project to pass the independent review
+gate.** The `workbuddy-ai/hy4-preview-f` reviewer returned **AGREED on all six
+criteria**, reproducing every load-bearing measurement itself with positive controls
+on both absence claims; its two corrections (an over-claim about computed addresses,
+and a `push ecx` wording slip) were verified by me and applied. Its single CANNOT
+VERIFY (CTest) was closed by the owner: **CTest 11/11**. Full record in "A2e
+ACCEPTED" below. The route is unblocked and verified; see "The hy4 route" for why
+the two earlier sessions failed (they were composed *before* the settings edit) and
+for the corrected root cause.
+
+**The two earlier failures were not an anomaly — the freeze worked exactly as
+documented.** Both failing sessions were composed *before* the settings edit:
+
+| session | `createdAt` (composition) | hy4 in its frozen policy? | result |
+|---|---|---|---|
+| `session-b788f5ef` — "the session that added the route" | **17:08:22** | no (8 routes) | rejected |
+| `session-ff9b623e` | **17:11:11** | no (8 routes) | rejected |
+| `session-237565f1` — **this** session | **18:36:39** | **yes (9 routes)** | **spawned** |
+
+`~/.dsh/settings.yaml` was edited at **18:19:13**, so both failing sessions
+predate the edit by over an hour and this session postdates it. The previous
+session's "this session *was* composed after the edit" rested on the transcript's
+**mtime** (`18:33:41`), which is when the file was last *written*, not when the
+session was composed. `createdAt` is the composition time, and it sits before the
+edit in both failing cases. **The "unresolved" reading in the previous version of
+this block is retracted**: there is no parent/registry path capturing a stale
+projection, and the documented rule — a new session, not a restart, samples the
+live settings — holds exactly.
+
+The mechanism is unchanged and re-confirmed in the harness source:
+`dsh-tool-subagent/lib/index.js:589` computes `freshSession = target.firstLiveSeq
+=== 0 && …`; `:590` reads the *recorded* projection first, falling back to
+`settings.current()` only for a fresh session at `:598-600`; and a child inherits
+its parent's recorded policy at `:592-597`. `~/.dsh/.workbuddy-ai-catalog.json`
+offers `hy4-preview-f` (context 300,000, `maxTokens` 64,000,
+`supportedEfforts: ["high"]`, `billing: { credits: "x0.00", free: true }`), and
+`agent-default-model` is correctly still `deepseek-v4.1-flash`, so the reviewer is
+not reviewing its own output.
+
+**Consequence for the plan: the standing gap is closed, not merely worked around.**
+"No reviewer has ever confirmed this project's work" was true of every packet; it
+is now a runnable step rather than a blocked one. A2e has now been reviewed and
+accepted, and every later packet's acceptance should carry the same gate.
 
 The previous stop, `0x000252B5`, was **not an unresolved indirect call**: it was
 the shared epilogue of the switch at `0x00025040`, emitted as a tail call because
@@ -56,12 +158,17 @@ ABI verified`, three traps dropped, the emitted switch went from 6 to **8 of 8**
 targets, and the stop moved. Full reasoning, the three branch-bytes exclusivity
 tests, the advisor consult, and the worker conflict are in the A2e sections below.
 
-**Next packet (A2f).** `0x0007E255`, with `0x0007E360`, `0x0007E180` and
+**Next packet (A2f) — DONE, kept for the record; the live next packet is A2h at
+the top of this block.** `0x0007E255`, with `0x0007E360`, `0x0007E180` and
 `0x00038ED0`/`0x00038EB0` in the ring immediately before it. First question: is
 this the **same class as A2e** — a span that stops at a false entry and turns an
 intra-body jump into a tail call — or a genuinely absent function? Check whether
 `0x0007E255` lies inside a declared span before doing anything else, since that
 single check separated the two cases last time and cost nothing.
+
+*Answer, measured: it was inside a span, but a **false entry's** span, so it was
+the A2e class. Fixed and delivered; see the A2g section at the top of this block.
+**Span membership is not ownership** — that is the mistake this answer records.*
 
 **A2d.2 (the remaining pointer-table class) is still open and unchanged.** 132
 candidates; write a generator that proposes `{start, end, stack_args, evidence}`
@@ -162,6 +269,103 @@ report, plan and `docs/` cite 54 of them as evidence — never prune those. An
 artifact's toolkit revision is part of the claim:
 `20260922-160535-643-a2-irq-line` records toolkit `7cfbe55`; the three A2 runs
 record `008001f`; `20260922-174141-780-a2d-movs-mmio` records `484887b`.
+
+## 2026-09-22 — The hy4 route: smoke-tested and unblocked
+
+**Decision: the reviewer route is verified working, and the review gate can now be
+run.** The user asked to smoke-test a hy4 subagent before trusting it with a real
+review, which was the right order: the route had failed twice and had never once
+produced an answer, so the route itself was the first thing to falsify.
+
+**The spawn succeeded from this session.** Child `99715d68-43bd-4d64-a559-2b74e56a9842`:
+
+```
+subagent(description: "hy4 route smoke test", provider: "workbuddy-ai",
+         model: "hy4-preview-f", reasoning_effort: "high", run_in_background: true)
+→ started subagent 99715d68-43bd-4d64-a559-2b74e56a9842
+```
+
+`started subagent <id>` — not `started background subagent job <id>` — so it is
+**continuable**, and `list_agents` listed it with a live status. Route as
+**dispatched**, read from the transcript rather than asked of the model:
+
+| artifact | value |
+|---|---|
+| `subagent/descriptor` | `agentProvider: workbuddy-ai`, `agentModel: hy4-preview-f`, `agentReasoningEffort: high`, `mode: continuable` |
+| `request/header` → `config` | `{"provider":"workbuddy-ai","model":"hy4-preview-f","reasoningEffort":"high"}` |
+| `subagent/model-selection-policy` | 9 routes, `hy4` **present** |
+
+That is *dispatched*, not *confirmed served by* — the same discipline this project
+applies to its own runs, and the distinction `deepseek-harness.md` §3 requires.
+
+**The smoke test was built to be gradable, not just runnable.** The task was a
+question whose answer I established independently *before* reading the reply, by a
+different method than the one I had already used: `config/recovery-unresolved.json`
+holds **256** top-level entries, first keys `0x000110D0`, `0x0001120D`,
+`0x0001478C`, last keys `0x00184E8A`, `0x0019F040`, `0x001BCB2B`, 258 lines.
+
+| check | ground truth | hy4 answer | verdict |
+|---|---|---|---|
+| entry count | 256 | **256** (two methods) | correct |
+| first three keys | `0x000110D0`, `0x0001120D`, `0x0001478C` | same three | correct |
+| last three keys (continuation) | `0x00184E8A`, `0x0019F040`, `0x001BCB2B` | same three | correct |
+| line count (continuation) | 258 | **258** | correct |
+| continuation works | — | yes, with context | **passed** |
+
+Both answers were marked *measured* with the method named, it reported no conflict
+where there was none, and it volunteered its own gap (*"I did not independently
+verify the middle 200 lines' value shape"*) rather than papering over it. The
+continuation is the part that mattered: a one-shot child answers its first question
+perfectly and fails only on the second, so **a spawn alone would not have verified
+this route.**
+
+**Two of my own checks were wrong, and both are worth keeping.**
+
+1. **A "found nothing" scan that was really a broken scanner.** I first checked the
+   failing sessions with a helper I had *already deleted*, so `node` failed, the
+   variable came back empty and `-match` returned false — a clean-looking
+   "hy4 ABSENT". That is this project's twice-published failure mode, self-inflicted.
+   Re-run **with a positive control in the same invocation** (this session, expected
+   present) it read: two sessions `hy4=false`, control `hy4=true`, `policyEvent=yes`,
+   `routes=9`. The control is what makes the negative meaningful.
+2. **A `FILE-MISSING` result that was my own typo.** My target list omitted the
+   `session-` prefix, so the two "absent" rows were the scanner looking at paths that
+   do not exist. Caught only because the positive control still passed, which proved
+   the scanner itself was sound and the *inputs* were wrong.
+
+**Root cause of the two earlier failures — measured, and it retires the previous
+block's "unresolved" reading.** `createdAt` is the composition time and `mtime` is
+only the last write. The previous session compared the settings edit against the
+transcript **mtime** (`18:33:41`) and concluded the session was composed after the
+edit; `createdAt` says otherwise:
+
+| session | `createdAt` | routes in frozen policy | outcome |
+|---|---|---|---|
+| `session-b788f5ef` | 17:08:22 | 8, no hy4 | rejected |
+| `session-ff9b623e` | 17:11:11 | 8, no hy4 | rejected |
+| `session-237565f1` (this) | 18:36:39 | **9, hy4 present** | **spawned** |
+
+`settings.yaml` was edited at **18:19:13**. Both failing sessions were composed over
+an hour *before* it; this one is 17 minutes after. So the documented rule is exact —
+**a new session, not a restart, samples the live settings** — and there is no
+parent/registry path capturing a stale projection. Source, re-read rather than
+recalled: `dsh-tool-subagent/lib/index.js:589` (`freshSession = firstLiveSeq === 0`),
+`:590` (recorded projection wins), `:592-597` (children inherit the parent's
+recorded policy), `:598-600` (fallback to `settings.current()` only when fresh).
+
+**A trap avoided.** `agent-default-model` is still `deepseek-v4.1-flash`, verified
+by reading the file back — the reviewer is not the implementer, so the gate is not
+self-review.
+
+**What this does and does not establish.** The route resolves, the child is
+continuable, it reads files correctly, and it answers with method-level honesty.
+It does **not** establish that a full acceptance review will be adversarial enough —
+that is the real risk in `deepseek-harness.md` §6 (*"treating 'the reviewer agreed'
+as the goal"*), and it can only be settled by running the A2e review with the
+falsification-first prompt skeleton and grading whether it reproduces the
+load-bearing numbers. **Next: run that review.** Temporary decode helpers used for
+the transcript analysis were deleted; nothing outside `report-deepseek.md` was
+written.
 
 ## 2026-09-22 — The advisor route: DeepSeek does the work, Astra is the only subagent
 
@@ -453,7 +657,7 @@ claim. So exclusivity was then *measured from the image*, three independent ways
 | test | result |
 |---|---|
 | control-transfer references to `0x25233` in all of `.text` | **exactly one** — a `jcc8` from `0x0002521A`, inside the body |
-| `0x25233` present as a 4-byte dword anywhere in the image | **zero** — never address-taken, so unreachable by a computed pointer either |
+| `0x25233` present as a 4-byte dword anywhere in the image | **zero** — never a literal address-taken dword. **Corroborating only:** this does *not* exclude a computed address (`base+0x25233`, or a runtime-built value), so tests 1 and 3 carry the proof, not this one |
 | stack arithmetic | balances **only** when entered with the dispatcher's `push ebx; push edi` outstanding |
 
 The third is the decisive one, and it is a falsifiable prediction that held:
@@ -481,6 +685,79 @@ and all eight measured targets are present.
 
 Game CTest **11/11**, build identity verified, toolkit unchanged at `484887b`.
 
+### A2e ACCEPTED — the first packet in this project to pass the independent review gate
+
+**Decision: accept A2e.** The `hy4-preview-f` reviewer returned **AGREED on all six
+criteria**, reproducing every load-bearing measurement itself, and the one
+correction it raised was verified by me and applied. This is the first time the
+review gate has ever run in this project; the two previous sessions were blocked by
+the frozen route list, which is now resolved (see "The hy4 route" above).
+
+Reviewer child `a294dd66-5db4-4971-9c2a-32493668c251`, `workbuddy-ai/hy4-preview-f`
+at `high` effort, dispatched route confirmed from the transcript. It was briefed
+**read-only** and told explicitly not to build or run, with the falsification
+requested rather than the confirmation and a **positive control required on both
+absence claims**.
+
+| # | criterion | verdict | what it reproduced itself |
+|---|---|---|---|
+| 1 | span widened in the reviewed manifest, not `boundary-fixes.json` | **AGREED** | read the entry (`end 0x000252B9`, `kind routine`); read all 7 `boundary-fixes.json` entries, highest start `0x00190240`, none for `0x00025040` |
+| 2a | exactly one control-transfer ref to `0x25233` | **AGREED** | wrote its own **byte-level scan of all of `.text`** for every `E8/E9 rel32`, `0F 8x rel32`, `EB/70-7F rel8` at *every* offset, deliberately avoiding the disassembler's decoder (desync risk) |
+| 2b | zero dword occurrences of `0x25233` | **AGREED** | ran the scanner **and** an independent whole-file unaligned scan |
+| 2c | stack arithmetic balances only under the parent's pushes | **AGREED** | derived 16 bytes out vs 4 in = net consumer of 12, matching the parent's 8 + prologue 4 |
+| 3 | jump table 8 entries; emitted switch 8 of 8 | **AGREED** | read `0x252BC` itself; confirmed `0x252B9` = `8D 49 00` padding so the end cuts nothing |
+| 4 | traps 3 → 0; 259 → 256; ABI verified | **AGREED** | read the **before** state out of the archived `source.zip` rather than taking the delta on trust |
+| 5 | regression, next stop `0x0007E255` | **AGREED** | both `result.json`, both stop addresses, exit code converted |
+| 6 | widened span swallows no genuine function | **AGREED** | scanned all 8,437 DB entries; only `0x00025233` starts strictly inside, no entry in `[0x252B9, 0x252D0]` |
+
+**The positive controls are the part that matters**, because this project has twice
+published a "found nothing" result from a broken scanner:
+
+- **2b control, same invocation:** `find 0x25040` → **1 occurrence at `.rdata
+  0x001C4D5C`** — exactly slot [1] of the table at `0x001C4D58`. A second
+  independent whole-file scan agreed (`0x25040`=1, `0x25058`=1, `0x2524A`=1).
+- **2a control:** the same reference scanner found `0x252B5` **8** times,
+  `0x252B7` once, `0x252B2` three times — so the method demonstrably detects
+  references and the single hit for `0x25233` is meaningful.
+- **Honest negative it reported:** the 8 switch targets each score **0** direct
+  references, which is correct — they are reached only through the indirect
+  `jmp [eax*4+0x252BC]` — so it used the epilogue addresses as controls instead.
+  It said so rather than quietly dropping the awkward case.
+
+**Two corrections it raised, both verified by me and both now applied:**
+
+1. **An over-claim in the evidence.** The manifest said zero dword occurrences means
+   `0x25233` *"cannot be reached by a computed pointer either"*. It does not:
+   a zero literal count excludes an address-taken **literal dword**, not a computed
+   address. The Astra advisor independently flagged the identical over-claim
+   (*"computed addresses remain possible"*). Corrected in
+   `config/recovered-functions.json` and in the table above, with tests 1 and 3
+   named as the ones carrying the proof. **This is exactly the class of error the
+   gate exists to catch, and it took a third model family to catch it** — I had
+   written that sentence myself and read it as sound twice.
+2. **A wording slip in 2c.** The evidence read `push esi; push ecx; call 0x11C20`.
+   The image has `push esi; mov ecx,esi; call 0x11BE0; mov ecx,[esi+0x28];
+   push ecx; mov ecx,esi; call 0x11C20` — the `push ecx` is the **stdcall argument**
+   to `0x11C20`, which `ret 4` cleans, not a register spill. Verified by me at
+   `0x25233..0x25249`; the arithmetic conclusion is unchanged (16 out, 4 in).
+
+**Its one CANNOT VERIFY, closed by the owner.** It could not check "CTest 11/11" —
+correctly, since the briefing forbade building and running. **One owner performs
+build and run**, so I ran it: `ctest --test-dir build -C Release` → **100% tests
+passed out of 11** (21.57 s). Recorded as verified by the owner, not by the
+reviewer.
+
+**What the review did not establish, stated plainly.** It did not re-run the guest
+to isolate that the widened span *caused* the improvement — it read the archived
+before/after artifact pair, which supports the causal claim but does not isolate
+it. That is the same limit the reviewer itself flagged as *inferred*. And it did not
+test A2f's region at all.
+
+**Gate outcome:** reviewer AGREED, no disagreement to escalate, so per
+`deepseek-harness.md` §1 the packet is accepted. **The standing gap recorded in the
+CURRENT STATE block — "no reviewer has ever confirmed this project's work" — is
+closed.**
+
 **A conflict the worker raised, recorded rather than smoothed over.** It flagged
 that the earlier session's inference — *"`0x000252B5` has zero literal hits in the
 XBE, therefore it is computed at run time"* — is **wrong**. The literal lives in
@@ -500,6 +777,429 @@ touching the same globals; there is no shared mechanism.
 **Next stop: `0x0007E255`.** Its ring shows `0x0007E360`, `0x0007E180` and
 `0x00038ED0`/`0x00038EB0` immediately before, so the enclosing family is
 `0x0007E1xx`–`0x0007E3xx`. Not yet investigated.
+
+## 2026-09-22 — A2g: `0x000304F0` was cut at its own switch dispatch, and the detector written for this class had never caught one
+
+**Decision: fix the entry the same evidence-backed way as A2e and A2f, and treat
+the detector's blindness as the packet's real deliverable.** The entry fix is the
+third instance of one rule; the detector is why all three reached a run before
+anyone knew. Fixing only the entry would leave the fourth instance to be found the
+same expensive way.
+
+### The stop, and why it was not an ABI defect
+
+`logs/runs/20260922-190336-778-a2f-7e255-span/` ends with exactly one failure:
+
+```
+[RECOVERED] ABI FAILURE 0x000304F0 esp 00F7FEE0->00F7FDD8 expected +4; bx … si … di … bp …
+```
+
+A 264-byte `esp` deficit reads like a stack-contract defect. It is not. The
+declared span was `0x000304F0..0x00030508`, and `0x00030508` is **the switch
+dispatch instruction itself**:
+
+```
+000304F0 sub  esp, 0x104
+000304F6 push esi
+000304F7 mov  esi, ecx
+000304F9 mov  eax, [esi+0x1a4]
+000304FF cmp  eax, 3
+00030502 ja   0x3060E
+00030508 jmp  dword ptr [eax*4+0x30618]      <- the declared end
+```
+
+So the emitted body was prologue + `cmp` + `ja` and **nothing else** — no case, no
+epilogue. The `sub esp,0x104` is never undone on any path, which is the whole of
+the 264-byte delta (`0x104` = 260, plus the unpopped `esi` and return). The
+`ja 0x3060E` fell outside the span, was classified external, and was emitted as a
+tail call to `sub_0003060E` — a deliberate trap in
+`config/recovery-unresolved.json`, so the run died on the first `eax > 3`.
+
+**This is A2e and A2f again, one level down.** There, a false entry truncated the
+parent. Here the "next database entry inside the alias range" — the convention
+that produced the end — *was* an internal instruction. The evidence field even
+records the reasoning that produced it: *"end tightened to the next function entry
+inside the alias range."*
+
+### The fix, and the negative control the advisor required
+
+One line: `end 0x00030508 -> 0x00030618` in `config/recovered-functions.json`. The
+body is a 4-case switch state machine; the table read from the XBE at `0x30618` is
+`0x3050F, 0x30592, 0x305B9, 0x30601`, the cases fall through into one another
+(`0x3056D` into `0x30570`, `0x30588` into case 1), and there are two epilogues —
+`0x30601 mov eax,1 / pop esi / add esp,0x104 / ret` and `0x3060E xor eax,eax /
+pop esi / add esp,0x104 / ret`. `0x30618` is the table's first entry, so the table
+stays data.
+
+Exclusivity of the false entry, measured from the image rather than asserted:
+
+| test | `0x30508` | `0x3060E` |
+|---|---|---|
+| control-transfer refs, all of `.text` | **0** | **3** — `0x30502 ja`, `0x30582 je`, `0x3059B je`, all inside this body |
+| 4-byte dword occurrences | 2, both in **DSOUND** (`0x001AE0E8`, `0x001AF56B`) — not `.text`, not `.data` | **0** |
+
+`0x30508`'s own six bytes are the dispatch, so it is an instruction and never a
+code pointer in this image. `0x3060E` is reached only from inside the body.
+
+**The advisor's negative control, honoured explicitly.** Consult #3 (recorded
+below) required that a genuine adjacent function must not be swallowed. `0x30570`
+is exactly that case: a database `imm_ref_target` with its **own** dispatch entry
+(`{ 0x00030570u, sub_00030570 }`) and a `.text` dword reference at `0x3B33C`. It
+is **not** in the manifest, so widening `0x000304F0` does not remove its entry or
+its body — measured after the change, not argued: `sub_00030570` is still defined
+at `recomp_0000.c:51843`, still dispatched at `recomp_dispatch.c:557`, and appears
+in no trap file.
+
+Measured result (`logs/runs/20260922-224429-003-a2g-304f0-span/`, strict 30 s):
+
+| | A2f baseline | A2g |
+|---|---|---|
+| outcome | `unhandled_exception` | `unhandled_exception` |
+| ABI failures | 1 | **0** |
+| `ABI verified` lines | 335 | **345** |
+| kernel calls | 6,308 | **6,709** |
+| log lines | 16,008 | **17,003** |
+| duration | 4.39 s | **4.95 s** |
+| `0x000304F0` | ABI FAILURE | **`returned; ABI verified`** |
+| traps `3060E` / `252B5` / `7E255` in the log | 1 / 0 / 0 | **0 / 0 / 0** |
+
+`recovery-unresolved.json` 255 -> **254**. The switch emits **4 of 4** targets.
+A2f's fix held: `0x0007E180 returned; ABI verified`, `0x0007E255` absent.
+
+### The durable finding: the detector was blind to all three, and here is why
+
+`scripts/check-span-exits.py` exists for precisely this class — *"Find reviewed
+recovery entries whose span cuts a branch target"* — and it reported **none of
+A2e, A2f or A2g**. Every one of the three was found by a run. That is not bad luck;
+it is a defect in the entry test.
+
+Its rule is: report a branch target outside the span **unless** it is a known
+entry start, because a jump to a real entry is a tail call. The entry set came from
+`resolution_starts.runtime_starts()`, which answers *"can the runtime resolve this
+address"* — and for a `tail_jump_alias` folded into its parent by the `ff4d442`
+abutting-alias rule the answer is **yes**, because the dispatch tuple names the
+**parent's** symbol:
+
+```
+{ 0x0003060Eu, (recomp_func_t)sub_00030570 },   <- resolves, but is not an entry
+{ 0x00030570u, (recomp_func_t)sub_00030570 },   <- the actual entry
+```
+
+So a branch into a body the fold reassigned is indistinguishable from a tail call
+to a real function, and is skipped. The same held for `0x000252B5` and
+`0x0007E255`. The two questions — *resolvable* and *an entry in its own right* —
+had been collapsed into one, and the difference between them **is** this defect
+class.
+
+**Fix.** `resolution_starts.genuine_starts()` counts an address only when the
+symbol answering it is its own (`sub_<that address>`), plus every reviewed manifest
+entry. `runtime_starts()` is left unchanged for its existing consumers
+(`check-table-targets.py`, `check-span-exits.py`'s database union), so this is
+additive. `check-span-exits.py` now uses the genuine set.
+
+| | findings | distinct entries |
+|---|---|---|
+| old rule | 283 | 134 |
+| genuine rule | **446** | **187** |
+
+**Positive control, and a negative control for the control.** A self-check that
+passes under both the old and the new rule proves nothing, so
+`check-span-exits.py --selfcheck` replays each known case at its **pre-fix** span —
+the real manifest now carries the corrected end, so the defect is no longer there
+to find, and the declared-at-the-time span is the only form in which the miss
+reproduces. Both directions were measured:
+
+```
+self-check: the detector against the three known-true cases, at their pre-fix spans
+  PASS  0x00025040  span 0x00025040..0x00025233  target 0x000252B5  A2e …
+  PASS  0x0007E180  span 0x0007E180..0x0007E242  target 0x0007E255  A2f …
+  PASS  0x000304F0  span 0x000304F0..0x00030508  target 0x0003060E  A2g …
+
+old rule detects 0 of 3; new rule detects 3 of 3
+CONTROL PASSED: the old rule was blind to all three known-true cases and the new
+rule detects all three.
+```
+
+The negative control is `logs/probe-selfcheck-control.py`, which runs the **same**
+detector twice changing only the entry set and **fails** if the old rule was not
+blind. Without it the self-check would be unfalsifiable. And the three fixed
+entries are now clean under the new rule (0 findings on
+`0x00025040`/`0x0007E180`/`0x000304F0`), so the detector is not merely noisier.
+
+**What this does not claim.** 446 findings is a shape count, not 446 defects —
+the advisor's warning about the 759-candidate census applies here unchanged. What
+is established is that the detector now detects the class it was written for,
+proven on three cases with known answers, and that its previous blindness is
+explained rather than merely observed.
+
+### Next stop, named: `0x00000000` from `0x0014982E`
+
+`[ICALL] invalid target 0x00000000 tid=2948 esp=00F7FD00 return=0014982E`, on the
+**main guest stack** (not the interrupt stack, which runs at `0x007BFxxx`). The
+site is `call dword ptr [0x1C4064]` — kernel thunk slot **65** = ordinal **277**,
+the `KeSetEvent` family — and the lines immediately before it are:
+
+```
+xbox_HeapAlloc: out of memory (requested 598869040, used 12715008/50855936)
+[KERNEL] → returned 0xC0000017
+[KERNEL] #5520: ordinal 294 (slot 64) esp=0x00F7FCFC ret=0x00149F5D
+[KERNEL] → returned 0x00000000
+[ICALL] invalid target 0x00000000 …
+```
+
+`598869040` = `0x23B20430`, a garbage size against 12.7 MB used of 50.8 MB — so
+the allocation failed on a nonsense request, not on exhaustion. Whether the NULL
+is a genuinely uninitialised thunk or a downstream consequence of that failure is
+**not yet established**, and it is the first question for A2h. Do not treat it as
+a missing-function problem before that is settled.
+
+### Environment traps, measured here — and one of them was mine
+
+Three cost real time. **All three were artifacts of the confined file policy and
+all three disappeared when the policy changed to full access mid-session**; they
+are recorded as a warning about confined sessions, not as properties of this
+machine:
+
+1. **`cmake --build … --parallel N` fails for every N > 1** — exit 1, and **no
+   error text at all**; the log stops at `Checking File Globs`. Diagnostic
+   verbosity shows `Done building target "ResolveProjectReferences" … -- FAILED`
+   with `0 Error(s)`. MSBuild's multi-node workers use named pipes, which the
+   confined sandbox blocks. `--parallel 1` builds cleanly; under full access
+   `--parallel 4` also builds cleanly.
+2. **`tempfile.mkdtemp` directories are not writable.** CTest
+   `jsrf_gpu_inspection` failed with `PermissionError` writing `process.dmp`. Under
+   a `Path.mkdir` substitute the same 20 tests passed with **0 errors**, and under
+   full access the real test passes. **CTest is 11/11.**
+3. **The title needs write access to `%LOCALAPPDATA%\xboxrecomp\Partition0.img`.**
+   Without it `NtOpenFile` returns `ACCESS_DENIED`, the guest calls
+   `HalReturnToFirmware(2)` after **1.8 s / 515 lines**, and the run looks like a
+   catastrophic regression when nothing is wrong. The tell is
+   `[KERNEL] → returned 0xC0000022` right after
+   `[PATH] \Device\Harddisk0\partition0 -> partition image`, and the absence of any
+   `[KERNEL] #5xxx` call.
+
+**And the mistake worth recording is mine.** I wrote items 1 and 2 into `AGENTS.md`
+as durable facts about the machine before checking them against a second policy.
+Both were policy-dependent, and the guide asserted something false within the same
+session. The rule that follows: **a suspected environment limit is a hypothesis
+until it has been tested under a second policy** — measure it twice before writing
+it down as a property of the host.
+
+
+**Decision: A2f is the same class as A2e — a false `gap_prologue` entry truncating
+its true parent — and it is fixed the same way, by widening the true parent's span
+in the reviewed manifest. This corrects an earlier draft of this section, which
+called it a third class; the correction is recorded rather than quietly replaced.**
+
+The plan's first check was: *does `0x0007E255` lie inside a declared span?* **Yes** —
+exactly one span contains it, `0x0007E242..0x0007E257`, a 21-byte `gap_prologue`
+entry. My first reading took that as proof the address was legitimately owned and
+therefore "not the A2e shape". **That was wrong**, and the error is instructive:
+being *inside a span* is not the same as being inside the span of the **function it
+belongs to**. Here the containing span belongs to a **false entry**, so the address
+is owned by the wrong body — which is precisely A2e's defect.
+
+**The decisive test is the one the project already uses: does the suspect block's
+stack arithmetic balance when entered as a function?** It does not, and it is the
+same shape as `0x25233` in every measured respect:
+
+| criterion | `0x25233` (A2e, false) | `0x7E242` (A2f) |
+|---|---|---|
+| control-transfer refs, all of `.text` | **1**, from `0x2521A`, inside the parent | **1**, from `0x7E19B`, inside the parent |
+| occurrences as a 4-byte dword | **0** | **0** |
+| balances entered standalone | **no** | **no** |
+| address-taken | no | no |
+| true parent (from the vtable) | `0x25040`, slot [1] of `0x001C4D58` | `0x7E180`, at `.rdata 0x001CCF7C` |
+| parent's declared end | `0x25233` (truncated) | `0x7E242` (truncated) |
+
+The stack walk, done by hand for both entry states:
+
+```
+ENTERED VIA je FROM 0x7E19B  (0x7E180's push esi outstanding)
+  0x7E242 push esi          -> E-4
+  0x7E245 call 0x11BE0      -> 0x11BE0 is stdcall ret 4, cleans its argument
+  0x7E24D push ecx          -> the stdcall argument to 0x11C20
+  0x7E250 call 0x11C20      -> 0x11C20 is stdcall ret 4, cleans it
+  0x7E255 pop esi           -> restores the esi that 0x7E180 pushed
+  0x7E256 ret               -> returns to the REAL return address   BALANCED
+
+ENTERED AS A STANDALONE call (return address at E)
+  0x7E255 pop esi           -> pops THE RETURN ADDRESS into esi     CORRUPTION
+  0x7E256 ret               -> returns to garbage                   NOT BALANCED
+```
+
+**A second, independent confirmation the A2e case did not have.** `0x7E180`'s own
+body contains a **21-byte inline copy of the same block** at `0x7E22D..0x7E241`,
+ending in its own `pop esi; ret`. Byte-for-byte it is the same instruction sequence
+as `0x7E242..0x7E256` (identical except for the four relative-displacement bytes of
+the two `call`s, which differ only because the two copies sit at different
+addresses):
+
+```
+0x7E22D: 56 8b ce e8 ab 39 f9 ff 8b 46 28 50 8b ce e8 e0 39 f9 ff 5e c3
+0x7E242: 56 8b ce e8 96 39 f9 ff 8b 4e 28 51 8b ce e8 cb 39 f9 ff 5e c3
+```
+
+So the compiler emitted this tail once inline inside `0x7E180` and once out of line
+at `0x7E242`, and the out-of-line copy is reached only by `je` from inside
+`0x7E180`. That is a **tail-merge**, not a function — the same conclusion the
+branch census reaches, from a different direction.
+
+**All three branch sites agree.** A byte-level scan of all of `.text` (decoding
+`E8/E9 rel32`, `0F 8x rel32`, `EB/70-7F rel8` at *every* offset) finds:
+
+| target | refs | sites |
+|---|---|---|
+| `0x7E242` | 1 | `0x7E19B` (`je`) — inside the parent |
+| `0x7E255` | 3 | `0x7E1DF`, `0x7E20F`, `0x7E22B` — all inside the parent |
+| `0x7E180` | 0 branch refs | address-taken at `.rdata 0x001CCF7C`, a vtable slot |
+
+**Scanner controls, run in the same invocation** — this is the check that makes the
+zeros meaningful, and it is also what caught my own error: the same scanner
+reproduces the reviewer's independently measured A2e figures exactly, `0x252B5` →
+**8** refs and `0x25233` → **1** ref, and finds `0x11C20` called **305** times. A
+scanner that finds nothing for everything is this project's known failure mode; this
+one demonstrably finds things.
+
+**The defect, precisely.** `recomp_dispatch.c:1857-1859` maps three addresses to one
+function:
+
+```
+{ 0x0007E180u, (recomp_func_t)sub_0007E242 },
+{ 0x0007E242u, (recomp_func_t)sub_0007E242 },
+{ 0x0007E255u, (recomp_func_t)sub_0007E242 },
+```
+
+`0x7E180` is `detection_method: tail_jump_alias` with declared `end = 0x7E242` —
+exactly `0x7E242`'s start — so the `ff4d442` **abutting-alias rule** adopted
+`0x7E242` as its parent and pointed the alias's dispatch at the parent's body. The
+recovered manifest then gave `0x7E180` its own body (`end 0x7E242`, `kind routine`),
+but `body_0007E180` branches forward to `0x7E242` and `0x7E255`, which lie **beyond
+its declared end**, so those branches were classified as external and emitted as
+tail calls:
+
+| `recovered.c` line | emitted | original |
+|---|---|---|
+| 78039 | `sub_0007E242(); return;` | `je 0x7e242` at `0x7E19B` |
+| 78069 | `sub_0007E255(); return;` | `je 0x7e255` at `0x7E1DF` |
+| 78091 | `sub_0007E255(); return;` | `je 0x7e255` at `0x7E20F` |
+| 78104 | `sub_0007E255(); return;` | `jb 0x7e255` at `0x7E22B` |
+
+`sub_0007E242` happens to be defined (`recomp_0001.c:17382`) because the dispatch
+entry gives it a body, so the first tail call silently enters the wrong function —
+the guest would run the out-of-line tail as a *function* and corrupt its return
+address. `sub_0007E255` is a deliberate trap
+(`recomp_stubs_recovery.c:98` → `recomp_icall_fail_log(0x0007E255u); abort()`), so
+the run dies on the first branch taken to it. The trap's `[ICALL]` text describes
+the *message*, not the mechanism — no indirect call occurs.
+
+**The fix is the A2e fix**: widen `0x0007E180`'s span in
+`config/recovered-functions.json` from `0x0007E242` to `0x0007E257`, so `0x7E242`
+and `0x7E255` become internal labels of the function that owns them, and the four
+forward branches become `goto` rather than tail calls.
+
+**Scale, and why this is the third instance of one rule.** The same census that
+found A2e finds this one; the class is the alias-fold/truncation rule, now seen in a
+CRT initializer table, a COM vtable, and ordinary game code. The Astra advisor's
+ranking (see consult #3) is explicit that per-entry widening is **containment, not
+elimination**, and that the translator-level repair needs its own differential
+experiment before either is applied broadly. A2f is therefore fixed the same
+evidence-backed way as A2e, **one entry**, with the structural question left to A4a.
+
+**Withdrawn from the earlier draft of this section, and why.** I had written that
+`0x7E255` being inside a declared span made this "a third mechanism, not A2e", and
+that "widening would make it worse". Both claims are wrong: the containing span is a
+false entry's, and widening the *true* parent is exactly right. The error came from
+treating span membership as ownership — the same mistake `AGENTS.md` item 5 records
+for tail calls ("classify on what the entry *is*, never on where its span falls").
+Also withdrawn: a first attempt to split the 759-candidate census into "false
+boundary" vs "genuine abutting function" by call edges. It **failed its own positive
+control** — it scored the known-true A2e case `0x00025040` as "genuine-like",
+because it tested the *parent's* edges rather than the boundary entry's. The
+discriminator is withdrawn rather than patched; the census is a shape count, not a
+defect count, and the advisor independently named it as the number most likely to be
+an artifact.
+
+## 2026-09-22 — Advisor consult #3: is the A2e/A2f class a manifest problem or a translator problem?
+
+**Decision: adopt the advisor's ranking — run the bounded structural experiment
+before adding manifest entries — and adopt its artifact warning, which named my
+least trusted number correctly.**
+
+Route as **dispatched**, read from the transcript rather than asked of the model:
+child `8ad7d0e0-6bad-4f81-b6a8-2d64c7b79e76`, `agentProvider: codex`,
+`agentModel: gpt-6-astra`, `agentReasoningEffort: medium`, `mode: continuable`,
+and `request/header` → `config` `{"provider":"codex","model":"gpt-6-astra",
+"reasoningEffort":"medium","maxTokens":128000}`. Consulted via `subagent` (never
+`subagent_fork`) so the child is briefed fresh and shares none of this
+conversation's context.
+
+**The question asked.** With A2e fixed and A2f's first check showing `0x0007E255`
+inside a declared span, the live question was whether to keep adding reviewed
+manifest spans (the pattern that already accounts for 3,074 entries) or to repair
+the translator. My brief described the A2f mechanism as I then understood it, and
+that understanding was **wrong** — see the A2f section: the containing span belongs
+to a *false* entry, so A2f is the A2e class after all. The ranking below is still
+exactly on point, because the question it answers is the same either way: per-entry
+containment or a structural repair. Both fixes rest on a *negative* result and on a
+shape census, so the brief asked for ranked mechanisms with a cheapest
+discriminating experiment each, plus the standing artifact question.
+
+**Its ranking, and what each is worth:**
+
+| # | mechanism | advisor confidence | disposition |
+|---|---|---|---|
+| 1 | Repair entry classification / CFG ownership **before emission**; a false entry must not truncate its parent and a genuine one must not be swallowed | high on direction, medium on location | **adopted as the next action** |
+| 2 | Restrict alias folding — necessary but **not established as sufficient** for this case | high for the independent-function defect, **low** that it alone fixes A2e/A2f | adopted as a *component to test*, not as the fix |
+| 3 | Continue reviewed manifest overrides as **containment** | high as containment, low as class elimination | **retained**, but no automatic 156 additions |
+
+**The sharpest thing it said, and the reason the consult was worth its cost:**
+*"preserving genuine independent entries and absorbing internal false entries are
+opposite operations."* That is a real objection to my framing. My brief had treated
+A2e's fix and the alias-fold guard as one family; the advisor separates them, and it
+is right that "do not fold a self-contained alias" and "reject a false boundary and
+absorb its dependent blocks" pull in opposite directions. A rule that fixes one can
+break the other. That is precisely why the next action is a **differential**
+experiment (boundary correction alone vs folding guard alone vs both) rather than
+either fix applied globally.
+
+**Adopted verbatim as the experiment's acceptance condition:** all eight switch
+targets present and `0x252B5` local, **and** a genuine adjacent function not
+swallowed, as a negative control. My A2e evidence only ever checked the first half.
+
+**Adopted on the artifact question.** Asked which of my measurements was most
+likely an artifact, it named the **759-candidate estimate**, *"especially its
+interpretation as defect prevalence"*, and required independent reproduction with
+positive and negative controls. It also observed that *"603 covered" needs a precise
+coverage definition*. I then ran exactly that control, and **my discriminator failed
+it** — see the A2f section above; it classified the known-true A2e case as
+"genuine-like" and is withdrawn. The advisor's warning was correct and arrived
+before I had published the number as a defect count.
+
+**Adopted on the second artifact.** On the zero-dword scan it said the measurement
+supports *"no literal dword occurrence, not 'never address-taken'"* — *"computed
+addresses remain possible without explaining this failure."* That matches what the
+earlier worker conflict already established, and the A2f write-up now states the
+limit explicitly rather than implying more.
+
+**Adopted on the invariant.** Its proposed mechanical gate: every reachable guest
+control-flow edge must resolve to an emitted block with compatible incoming guest
+state, or be an explicitly justified interprocedural transfer satisfying the
+destination's entry contract — with symbolic tracking of guest ESP, saved-register
+provenance and the entry return-address token, modelling callee cleanup including
+`0x11C20`'s `ret 4`, and with **unknown stack effects left unresolved rather than
+counted as verified**. That is a testable formulation of the rule A4a needs, and it
+is recorded here for that packet.
+
+**Adopted on ordering.** *"Independent A2e review first is sensible acceptance
+discipline. It need not block the tiny structural experiment. The wrong ordering is
+review → 156 workarounds → investigate architecture."* So the A2e review runs as
+task 1 while the A2f diagnosis proceeds, and no manifest entries are queued behind
+it.
+
+**Rejected:** nothing outright. Mechanism 3 is retained as containment rather than
+elimination, which is a demotion rather than a rejection, and its own confidence
+rating agrees with that reading.
 
 ## 2026-09-22 — A2b and A2c: spans that ran over functions the disassembler never registered
 

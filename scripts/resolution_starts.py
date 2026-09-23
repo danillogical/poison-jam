@@ -27,7 +27,7 @@ from pathlib import Path
 import json
 import re
 
-RECOVERED_SWITCH = re.compile(r'case 0x([0-9A-Fa-f]+)u:\s*return sub_')
+RECOVERED_SWITCH = re.compile(r'case 0x([0-9A-Fa-f]+)u:\s*return (\w+);')
 DISPATCH_ENTRY = re.compile(r'\{\s*0x([0-9A-Fa-f]+)u,\s*\(recomp_func_t\)(\w+)\s*\}')
 
 
@@ -63,3 +63,65 @@ def runtime_starts(root):
             covered.setdefault(int(match.group(1), 16), 'dispatch')
 
     return covered
+
+
+def genuine_starts(root):
+    """Addresses whose *own* symbol answers them, not a folded parent's.
+
+    `runtime_starts()` answers "can the runtime resolve this address", and for a
+    `tail_jump_alias` folded into its parent by the `ff4d442` abutting-alias rule
+    the answer is **yes** -- the dispatch tuple names the parent's symbol.  That
+    makes the two questions indistinguishable to a caller that only asks
+    `target in starts`, and the difference is exactly the A2e/A2f/A2g defect:
+
+        { 0x0003060Eu, (recomp_func_t)sub_00030570 },
+
+    `0x0003060E` resolves, so a branch to it looks like a tail call to a real
+    entry.  It is not: entering it runs `sub_00030570`'s body from its first
+    byte, which is a different function.
+
+    This returns the subset where the answering symbol is the address's own, so
+    a caller can tell "a tail call to a real entry" from "a branch into a body
+    that the fold reassigned".  Callers that want *resolvability* keep using
+    `runtime_starts()`; this is for callers asking whether an address is an
+    entry in its own right.
+    """
+    root = Path(root)
+    genuine = {}
+
+    recovered = root / 'src' / 'recomp' / 'recovered' / 'recovered.c'
+    if recovered.exists():
+        text = recovered.read_text(encoding='utf-8', errors='replace')
+        marker = text.find('recomp_func_t jsrf_lookup_recovered')
+        if marker >= 0:
+            for match in RECOVERED_SWITCH.finditer(text[marker:]):
+                va = int(match.group(1), 16)
+                if match.group(2).lower() == 'sub_%08x' % va:
+                    genuine.setdefault(va, 'recovered')
+
+    manual = root / 'config' / 'manual-functions.json'
+    if manual.exists():
+        for key, name in json.loads(manual.read_text()).items():
+            try:
+                va = int(key, 16)
+            except ValueError:
+                continue
+            if str(name).lower() == 'sub_%08x' % va:
+                genuine.setdefault(va, 'manual')
+
+    dispatch = root / 'src' / 'recomp' / 'gen' / 'recomp_dispatch.c'
+    if dispatch.exists():
+        text = dispatch.read_text(encoding='utf-8', errors='replace')
+        for match in DISPATCH_ENTRY.finditer(text):
+            va = int(match.group(1), 16)
+            if match.group(2).lower() == 'sub_%08x' % va:
+                genuine.setdefault(va, 'dispatch')
+
+    # A reviewed manifest entry is an entry by definition: it was added because
+    # the address needs its own body and its own dispatch tuple.
+    entries = root / 'config' / 'recovered-functions.json'
+    if entries.exists():
+        for entry in json.loads(entries.read_text()):
+            genuine.setdefault(int(entry['start'], 16), 'manifest')
+
+    return genuine

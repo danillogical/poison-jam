@@ -372,11 +372,16 @@ entry. It is the first item for the generator.
 
 **Suggested Agent:** Sol Medium (interface/subsystem question); Luna for the
 bounded fix; Terra review.
-**Status:** **Delivered 2026-09-22 (A2d.1), and A2e with it. NOT ACCEPTED — the
-review gate above could not run: `hy4-preview-f` was added to the allow-list in
-the same session, and the route list is frozen at session composition.** A session
-composed after 2026-09-22 must run the hy4 review on A2e and record it before this
-packet is accepted. **Depends on:** A2c delivered.
+**Status:** **ACCEPTED 2026-09-22.** A2d.1 and A2e were delivered on 2026-09-22 and
+the hy4 review gate could not then run (`hy4-preview-f` was added to the allow-list
+in the same session, and the route list is frozen at session composition). A session
+composed after the settings edit ran that review: `workbuddy-ai/hy4-preview-f` at
+`high` effort returned **AGREED on all six A2e criteria**, independently reproducing
+the load-bearing measurements with positive controls on both absence claims. Its two
+corrections were applied (an over-claim that zero literal dwords excludes a computed
+address, and a `push ecx` wording slip in the stack-arithmetic evidence), and its one
+CANNOT VERIFY (CTest) was closed by the owner at **11/11**. Review record in
+`report-deepseek.md` under "A2e ACCEPTED". **Depends on:** A2c delivered.
 **Evidence:** `logs/runs/20260922-174141-780-a2d-movs-mmio/` (before) and
 `logs/runs/20260922-181157-372-a2e-252b5-span/` (after).
 
@@ -411,6 +416,71 @@ established one entry.
 **Next stop, named: `0x0007E255`.** The next packet (A2f) should first check
 whether it lies inside a declared span — that single check separated the A2e class
 from a genuinely absent function and cost nothing.
+
+### A2f — The false entry at `0x0007E242`
+
+**Status:** **Delivered 2026-09-22; acceptance review pending with A2g's.**
+**Depends on:** A2e accepted. **Evidence:**
+`logs/runs/20260922-190336-778-a2f-7e255-span/` (strict, 30 s).
+
+`0x0007E255` **was** inside a declared span, and that was not enough to clear it:
+the containing span belonged to a **false** `gap_prologue` entry `0x0007E242`,
+which had truncated the true parent `0x0007E180` at exactly that address. So this
+is the A2e class again, not a third mechanism — **span membership is not
+ownership**. Four forward branches out of `0x0007E180` fell beyond its declared
+end and were emitted as tail calls: one into the wrong function (`sub_0007E242`,
+which happens to be defined) and three into the deliberate trap at `0x0007E255`.
+An independent confirmation the A2e case lacked: `0x7E180`'s body contains a
+21-byte **inline copy** of the same tail at `0x7E22D..0x7E241`, byte-identical to
+`0x7E242..0x7E256` except for two call displacements — a compiler tail-merge, not
+a function. Fixed by widening `0x0007E180`'s end `0x0007E242 -> 0x0007E257`.
+Measured: `0x0007E180 returned; ABI verified`, `0x0007E255` absent, stop moved.
+
+### A2g — The span that ended at its own switch dispatch
+
+**Status:** **Delivered 2026-09-22; acceptance review pending.** **Depends on:**
+A2f delivered. **Evidence:** `logs/runs/20260922-224429-003-a2g-304f0-span/`
+(strict, 30 s); baseline `logs/runs/20260922-190336-778-a2f-7e255-span/`.
+
+The A2f fix exposed an ABI failure at `0x000304F0`, and it was **not** an ABI
+defect: the declared end `0x00030508` was the **switch dispatch instruction
+itself** (`FF 24 85 18 06 03 00` = `jmp [eax*4+0x30618]`), so the emitted body was
+prologue + `cmp` + `ja` with no case and no epilogue, and the `0x104` it
+subtracted was never restored. The `ja 0x3060E` fell outside the span and became a
+tail call into the trap at `recomp_stubs_recovery.c`. Widening the end
+`0x00030508 -> 0x00030618` made it an internal label. Measured: ABI failures
+1 -> **0**, `ABI verified` 335 -> **345**, kernel calls 6,308 -> **6,709**,
+duration 4.39 s -> **4.95 s**, switch targets **4 of 4**, traps
+`3060E`/`252B5`/`7E255` all **absent**, `recovery-unresolved.json` 255 -> **254**,
+build identity verified, **CTest 11/11**. Negative control honoured: `0x30570` is
+a genuine adjacent entry and keeps its own body and dispatch entry.
+
+**The packet's real deliverable is the detector, not the entry.**
+`scripts/check-span-exits.py` exists for exactly this class and had reported
+**none of A2e, A2f or A2g** — all three were found by a run. Measured cause: its
+entry set came from `resolution_starts.runtime_starts()`, which answers *"can the
+runtime resolve this"*, and a folded `tail_jump_alias` resolves **fine** because
+the dispatch tuple names the **parent's** symbol. A branch into a reassigned body
+therefore looked like a tail call to a real entry. New
+`genuine_starts()` counts an address only when its own symbol answers it;
+`runtime_starts()` is unchanged for existing consumers. Findings **283 -> 446**;
+the three fixed entries are now clean. `--selfcheck` replays each case at its
+**pre-fix** span, and the negative control measures the old rule at **0 of 3**
+against the new rule's **3 of 3** — a self-check that passed under both rules
+would prove nothing.
+
+Acceptance: each of the three entries is recovered with its own branch-census,
+dword-occurrence and stack-arithmetic evidence; a genuine adjacent function is
+shown not to be swallowed; the detector detects all three at their pre-fix spans
+with a negative control proving it previously did not; a strict 30 s run is
+archived and compared against the A2f baseline; and the run's next stop is named.
+
+**Next stop, named: `[ICALL] invalid target 0x00000000 return=0014982E` (A2h).**
+The site is `call dword ptr [0x1C4064]` — thunk slot 65 = ordinal 277 — reached
+immediately after `xbox_HeapAlloc: out of memory (requested 598869040, used
+12715008/50855936)`. The first question is whether the NULL is a real
+uninitialised thunk or a consequence of that failed allocation. **Do not** treat
+it as a missing-function problem before that is settled.
 
 The run stops 4.1 s in on:
 
@@ -483,6 +553,17 @@ implements the following focused leaves; Terra independently reviews them.
   `ret 8` and `ret 16` bodies dispatches each original VA correctly and preserves
   stack/register behavior. Proven interior fragments remain supported; existing
   recovered/manual overrides are not lost during regeneration.
+  **A2g supplies the detector this packet should be built on, and one hard
+  constraint.** `resolution_starts.genuine_starts()` already separates *resolvable*
+  from *an entry in its own right* — the distinction whose absence let A2e, A2f and
+  A2g all reach a run undetected — and `check-span-exits.py --selfcheck` is a
+  positive control that fails if that sensitivity is lost. Reuse both rather than
+  writing a fourth census. The constraint is the advisor's, from consult #3:
+  *"preserving genuine independent entries and absorbing internal false entries are
+  opposite operations"*, so a rule that fixes one can break the other. A2g honoured
+  it with an explicit **negative control** (`0x30570`, a genuine adjacent entry,
+  keeps its own body and dispatch after the widening) and that control must be part
+  of A4a's acceptance, not only of its investigation.
 - **A4b — Missing branches (Suggested Agent: Luna under the A4 contract):** inventory
   the current 40 generated missing-label rewrites and preserve taken-edge semantics.
   Acceptance: each remaining edge is represented correctly, proven unreachable with

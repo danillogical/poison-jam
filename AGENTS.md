@@ -165,10 +165,11 @@ and `lessons-learned.md` as needed. Other-title examples are not JSRF evidence.
 | `config/recovery-unresolved.json` | Trapped dependencies of recovered functions. |
 | `scripts/recover-functions.py` | Recovery generation, TODO rejection, merged database. |
 | `scripts/relift-selected.py` | Targeted atomics, wide comparisons and boundary relifts. |
-| `scripts/build-jsrf.ps1` | Recovery/test generation and guarded Release build. |
+| `scripts/build-jsrf.py` | The guarded Release build; `--parallel 1` if a confined build dies silently. |
 | `scripts/build-identity.py` | Source, executable, collector and PDB/map identity verified. |
 | `scripts/run-jsrf.py` | Bounded debugger launch and full artifact archive. |
-| `scripts/run-jsrf.ps1` | Thin forwarder to `run-jsrf.py` for existing PowerShell commands. |
+| `scripts/resolution_starts.py` | What the runtime resolves; `genuine_starts()` is own-symbol only. |
+| `scripts/check-span-exits.py` | Spans that cut a branch target; `--selfcheck` is its positive control. |
 | `src/diagnostics.c`, `src/diagnostics.h` | Guest thread registry and event histories. |
 | `tools/harness/collect.c` | External debugger, all-thread stacks and minidumps. |
 | `tests/harness_probes.c`, `tests/video_probes.c` | Concurrency/failure/video contracts. |
@@ -245,10 +246,12 @@ PowerShell PATH. Run the same steps directly with the Bash tool — `cmake -S . 
 build`, `recover-functions.py`, `generate-lifter-tests.py`, `build-identity.py
 before`, the full `cmake --build` target list with the `env -u` prefix, then
 `build-identity.py after` — which is what the chain does and produces the same
-artifacts. Build **every** target CTest runs, not a subset: MSBuild deletes a
-target's output when its link fails, so a later successful build that does not
-name that target leaves the test permanently "Not Run" with nothing in the build
-log to explain it. That is what hid a stale `-DRECOMP_ABI_CHECK` in
+artifacts. `scripts/build-jsrf.py` is that sequence in one command and is the
+easier entry point; **if a build dies silently at `Checking File Globs`, retry
+with `--parallel 1`** — see "Sandbox limits" below. Build **every** target CTest runs, not a subset: MSBuild
+deletes a target's output when its link fails, so a later successful build that
+does not name that target leaves the test permanently "Not Run" with nothing in
+the build log to explain it. That is what hid a stale `-DRECOMP_ABI_CHECK` in
 `build/CMakeCache.txt` behind a failing `jsrf_recovery_11c1` for a session.
 
 Two host quirks worth knowing before they cost time:
@@ -260,6 +263,32 @@ Two host quirks worth knowing before they cost time:
   Guest memory from an archived run is already reachable through
   `scripts/inspect-jsrf.py memory <run-dir> <va> <length>`, which reads a run's
   `process.dmp` and keeps guest VAs as VAs — prefer it over a new helper.
+
+**Sandbox limits — policy-dependent, and they look exactly like code failures.**
+Measured 2026-09-22 under a **workspace-write** DSH file policy, and **all three
+disappear under full access**. Recorded because a session that runs confined will
+hit them, and because each one was briefly misread here as a project defect:
+
+1. **`cmake --build … --parallel N` fails for every N > 1** — exit 1 with **no
+   error text**, the log stopping at `Checking File Globs`; `-- /verbosity:diagnostic`
+   shows `Done building target "ResolveProjectReferences" … -- FAILED` with
+   `0 Error(s)`. MSBuild's multi-node workers use named pipes, which the confined
+   sandbox blocks. `--parallel 1` builds cleanly; under full access `--parallel 4`
+   also builds cleanly. **If a build dies silently at `Checking File Globs`, try
+   `--parallel 1` before investigating the tree.**
+2. **`tempfile.mkdtemp` directories are not writable** (though `Path.mkdir` in the
+   same location is), so CTest `jsrf_gpu_inspection` fails with `PermissionError`
+   writing `process.dmp`. Under full access it passes: **CTest 11/11**. Under
+   workspace-write, report the real count as 10/10 with the eleventh blocked by
+   the environment, and do not call it a regression.
+3. **The title needs write access to `%LOCALAPPDATA%\xboxrecomp\`**, where its
+   emulated hard-disk images live (`Partition0.img` … `Partition5.img`). Without
+   it `NtOpenFile` returns `ACCESS_DENIED`, the guest calls
+   `HalReturnToFirmware(2)`, and the run ends after **1.8 s with ~515 log lines** —
+   which reads exactly like a catastrophic regression. The tell is
+   `[KERNEL] → returned 0xC0000022` immediately after
+   `[PATH] \Device\Harddisk0\partition0 -> partition image`, plus the absence of
+   any `[KERNEL] #5xxx` call. A real run reaches ~6,700 kernel calls in ~5 s.
 
 **A probe run expects its probe checkpoint only.** `--probe=` returns early in
 `src/main.c:148`, before `checkpoint("guest_entry")` at `main.c:162`, so a probe

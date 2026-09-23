@@ -18,8 +18,17 @@ hands the toolchain a well-formed environment.
 
 Same steps, same order and the same guards as the PowerShell wrapper; the two
 must be kept in step.
+
+**`--parallel 1` under the DSH harness.** MSBuild's multi-node workers talk over
+named pipes, which that harness's sandbox blocks, so any `--parallel N` with
+`N > 1` fails with exit 1 and **no error text at all** -- the log stops at
+`Checking File Globs`, and `-- /verbosity:diagnostic` reports
+`Done building target "ResolveProjectReferences" ... -- FAILED` with
+`0 Error(s)`. `MSBUILDDISABLENODEREUSE=1` does not help. Single-node builds are
+slower and correct; the default stays 4 for hosts where it works.
 """
 from pathlib import Path
+import argparse
 import os
 import subprocess
 import sys
@@ -29,6 +38,12 @@ logs = root / 'logs'
 logs.mkdir(exist_ok=True)
 env = dict(os.environ)
 python = sys.executable
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--parallel', type=int, default=4,
+                    help='MSBuild node count; use 1 where the sandbox blocks '
+                         'MSBuild named pipes (default: 4)')
+args = parser.parse_args()
 
 TARGETS = [
     'jsrf_recomp', 'jsrf_collect', 'jsrf_crt_test', 'jsrf_lifter_test',
@@ -63,7 +78,7 @@ if not run([python, 'scripts/build-identity.py', 'before'], 'build-identity-befo
     raise SystemExit('Source fingerprint failed.')
 
 if not run(['cmake', '--build', 'build', '--config', 'Release', '--target', *TARGETS,
-            '--parallel', '4'], 'build-current.log'):
+            '--parallel', str(args.parallel)], 'build-current.log'):
     raise SystemExit('Build failed. Game was not launched.')
 
 if not run([python, 'scripts/build-identity.py', 'after'], 'build-identity-after.log'):

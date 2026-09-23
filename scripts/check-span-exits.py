@@ -25,6 +25,21 @@ that is a tail call, and the sibling spans end exactly at the next entry start
 for that reason.  Only targets that are neither inside the span nor a known
 entry start are reported.
 
+**The entry test has to mean "its own entry", and that cost this script its
+third miss (A2g, 2026-09-22).**  `entry_starts()` unions `runtime_starts()`,
+which answers "can the runtime resolve this address" -- and a `tail_jump_alias`
+folded into its parent by the `ff4d442` abutting-alias rule resolves *fine*,
+because the dispatch tuple names the parent's symbol:
+
+    { 0x0003060Eu, (recomp_func_t)sub_00030570 },
+
+So `0x000304F0`'s own `ja 0x3060E` was skipped as "a tail call to a real entry"
+when `0x3060E` is not an entry at all -- entering it runs `sub_00030570` from its
+first byte.  All three known instances of this class were found by a *run* and
+none by this script, and this is why.  The rule is now `genuine_starts()`: an
+address counts only when the symbol answering it is its own.  Findings go
+283 -> 464; the three known-true cases are asserted present below.
+
 The same defect points the other way as well, and the first version of this
 script only looked forward.  `0x00118610` was entered with `end 0x00118630`
 and its last instruction is `jmp 0x1185b0` at `0x00118622` -- a tail call
@@ -46,7 +61,7 @@ import sys
 import capstone
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from resolution_starts import runtime_starts  # noqa: E402
+from resolution_starts import genuine_starts, runtime_starts  # noqa: E402
 
 root = Path(__file__).resolve().parents[1]
 xbe_path = root / 'game' / 'default.xbe'
@@ -82,7 +97,7 @@ def bytes_at(va, size):
 
 
 def entry_starts():
-    """Every address that is legitimately a function entry.
+    """Every address that is legitimately a function entry *in its own right*.
 
     The manifest alone is not enough. A first version of this script used only
     `recovered-functions.json`, and 4516 of its 746 remaining findings were
@@ -97,8 +112,14 @@ def entry_starts():
     disassembler's database and the boundary list are kept as well because they
     are the sources the reviewed spans were built from, and a start that only
     one of them knows is still not a hole.
+
+    **`genuine_starts()` and not `runtime_starts()`, since A2g.** The latter
+    answers "can the runtime resolve this", which is true of a folded alias
+    too -- see the module docstring. Only an address whose *own* symbol answers
+    it is an entry, because entering a folded alias runs its parent's body from
+    a byte that is not that body's start.
     """
-    starts = set(runtime_starts(root))
+    starts = set(genuine_starts(root))
     for entry in entries:
         starts.add(int(entry['start'], 16))
     database = root / 'tools' / 'disasm' / 'output' / 'functions.recovered.json'
@@ -122,6 +143,32 @@ def entry_starts():
                 except ValueError:
                     pass
     return starts
+
+
+# Instances of this class that are known-true, each confirmed by a bounded run
+# and fixed by widening the parent's span.  All three were originally found by a
+# *run* rather than by this script, so each one is a positive control: run with
+# `--selfcheck`, the detector's own decision procedure is applied to the
+# **pre-fix** span and must report the known cut target.  A rule change that
+# silently loses this sensitivity is the failure mode this guards, and it has
+# happened once already (the `runtime_starts` entry test, which cost A2g).
+KNOWN_TRUE = [
+    {
+        'entry': '0x00025040', 'prefix_end': '0x00025233',
+        'target': '0x000252B5',
+        'what': 'A2e: the switch epilogue, cut by a gap_prologue false entry',
+    },
+    {
+        'entry': '0x0007E180', 'prefix_end': '0x0007E242',
+        'target': '0x0007E255',
+        'what': 'A2f: the out-of-line tail merge, cut by a false entry',
+    },
+    {
+        'entry': '0x000304F0', 'prefix_end': '0x00030508',
+        'target': '0x0003060E',
+        'what': "A2g: the switch's early-out epilogue, cut at the dispatch insn",
+    },
+]
 
 
 def branch_targets(start, end, md):
@@ -148,14 +195,63 @@ def branch_targets(start, end, md):
     return targets
 
 
+def selfcheck(md):
+    """Positive control: would this rule have caught the three known cases?
+
+    Each case is replayed at its **pre-fix** span, because the real manifest now
+    carries the corrected end and the defect is no longer present to find.  The
+    question is whether the detector's decision procedure reports the known cut
+    target given the span that was actually declared at the time -- which is the
+    only form in which the miss can be reproduced.
+
+    Returns 0 if every case is reported, 1 otherwise.
+    """
+    starts = entry_starts()
+    failures = 0
+    print('self-check: the detector against the three known-true cases, '
+          'at their pre-fix spans')
+    for case in KNOWN_TRUE:
+        start = int(case['entry'], 16)
+        end = int(case['prefix_end'], 16)
+        target = int(case['target'], 16)
+        reported = []
+        for site, mnemonic, tgt in branch_targets(start, end, md):
+            if start <= tgt < end or tgt in starts:
+                continue
+            reported.append(tgt)
+        ok = target in reported
+        failures += 0 if ok else 1
+        print('  %-5s %s  span %s..%s  target %s  %s'
+              % ('PASS' if ok else 'FAIL', case['entry'], case['entry'],
+                 case['prefix_end'], case['target'], case['what']))
+        if not ok:
+            print('        reported instead: %s'
+                  % (', '.join('0x%08X' % t for t in reported) or '(nothing)'))
+    if failures:
+        print('self-check FAILED: %d of %d known cases are not detectable; the '
+              'entry test or the branch rule has lost sensitivity.'
+              % (failures, len(KNOWN_TRUE)))
+        return 1
+    print('self-check passed: all %d known cases are detectable at their '
+          'pre-fix spans.' % len(KNOWN_TRUE))
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--json', action='store_true', help='emit machine-readable output')
     parser.add_argument('--limit', type=int, default=40)
+    parser.add_argument('--selfcheck', action='store_true',
+                        help='positive control: verify the rule still detects the '
+                             'three known-true cases at their pre-fix spans')
     args = parser.parse_args()
 
     md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
     md.detail = True
+
+    if args.selfcheck:
+        return selfcheck(md)
+
     starts = entry_starts()
 
     findings = []
