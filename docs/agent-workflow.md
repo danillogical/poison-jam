@@ -413,8 +413,9 @@ The one file the Planner writes is its own draft packet.
 most about 15 lines: claim, class (discovery or change), unknowns, the experiment, and
 the outcome rows. It writes the sketch at the top of its draft packet file, under a
 `Sketch` heading, where it survives compaction and the owner can read it. The full
-packet then replaces the sketch without further investigation. The sketch is not sent
-to the Session, which does not judge or answer it.
+packet then replaces the sketch without further investigation. The sketch goes to the
+Advisor at the checkpoints below, never to the Session, which does not judge or answer
+it.
 
 Checkpoints count **tool calls, not reasoning**. The Planner should think as long as
 the decision needs; the checkpoints limit investigation. Each one is heavier than the
@@ -423,8 +424,12 @@ last:
 | At | The Planner must | To keep investigating |
 |---|---|---|
 | **20 calls** | stop and decide: sketch now, or continue | one line in the draft's `DECISIONS`: the specific read and how it could change the packet's class or shape |
-| **40 calls** | write its current sketch into the draft, with unknowns stated as unknowns | name there each unknown it is still resolving and why that unknown cannot be left to the packet |
-| **60 calls** | stop investigating and send the sketch plus what is still missing to the Advisor (directly if the harness allows; otherwise the Session relays it unchanged) | only if the Advisor extends planning, naming the reads allowed; otherwise it writes the packet with the gaps as its subject |
+| **40 calls** | write its current sketch into the draft, with unknowns stated as unknowns, and send the same sketch to the Advisor | name each unknown it is still resolving and why that unknown cannot be left to the packet; it continues unless the Advisor redirects it |
+| **60 calls** | stop investigating, update the sketch in the draft, and send it plus what is still missing to the Advisor | only if the Advisor extends planning, naming the reads allowed; otherwise it writes the packet with the gaps as its subject |
+
+The Planner messages the Advisor directly when the harness allows; otherwise the
+Session relays the message unchanged. At 40 calls the Advisor may answer, redirect,
+or stay silent; at 60 it must decide.
 
 Every checkpoint decision is written into the draft, so the trail shows why planning
 ran long. A Planner that reaches 40 or 60 is a signal to the owner and the Advisor, not
