@@ -422,9 +422,11 @@ wall-clock time.
    decision rows. It may write them itself or accept a Session draft.
 2. The **Session** fills the mechanical parts (commands, paths, hashes, environment)
    and verifies that every command runs before submitting the revision.
-3. Adequacy review is by a Planner child. If that child wrote or materially rewrote the
-   criteria or rows of the revision, the review goes to a **fresh** Planner child.
-   Independence in the end comes from the Acceptance reviewer reproducing the evidence.
+3. **Change packets:** adequacy review is by a Planner child. If that child wrote or
+   materially rewrote the criteria or rows of the revision, the review goes to a
+   **fresh** Planner child. **Discovery packets:** the writing Planner reviews its own
+   packet against §5.3's two questions; no second Planner is spawned. Either way,
+   independence in the end comes from the Acceptance reviewer reproducing the evidence.
 
 ### 5.2 States
 
@@ -462,9 +464,13 @@ VERDICT:           ADEQUATE | INADEQUATE
 `FAIL`. There are no other counts or conditions: the number of advisories or prose
 defects has no effect on the verdict.
 
-For a **discovery packet** (§5.8) the review asks only two questions: could an outcome
-be misread into the wrong row, and is the packet safe and reversible? A blocking defect
-is one that answers either question badly.
+For a **discovery packet** (§5.8) the writing Planner reviews its own packet, and the
+review asks only two questions: could an outcome be misread into the wrong row, and is
+the packet safe and reversible? A blocking defect is one that answers either question
+badly. The Planner returns the same block, with `READ` naming what it read and
+`VERDICT` its answer; the Session confirms every command runs, records the block, and
+freezes and promotes on ADEQUATE as for any packet. A misread outcome row is caught
+again at acceptance, where the reviewer checks the row selection.
 
 **ADEQUATE ends plan iteration.** The Session freezes that exact revision, records the
 review, and promotes it into `CURRENT PACKET` in the same step, with no discretion to
@@ -533,7 +539,7 @@ pointer to it.
 | May do | read anything; add diagnostic-only instrumentation; run exploratory or fixture profiles | anything its contract authorizes |
 | Instrumentation | reversible, trace-only or behind an environment variable, off by default at closure | production code under full review |
 | Contract | about one page (§6.3) | full contract (§6.1–6.2) |
-| Adequacy review | two questions (§5.3) | full review (§5.3) |
+| Adequacy review | the writing Planner, two questions (§5.3) | a Planner that did not write it, full review (§5.3) |
 | Acceptance | reviewer confirms the artifacts exist, match the commands, and select the recorded outcome row | every criterion reproduced |
 | Can claim | "observed X under profile Y" | what its criteria establish |
 
