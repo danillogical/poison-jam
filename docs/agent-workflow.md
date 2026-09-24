@@ -407,11 +407,14 @@ facts.
 runs. Running the guest, building, writing tools or scripts, fetching external source,
 and multi-step analysis of dumps or binaries are execution: they belong inside a packet.
 A question that needs outside knowledge goes to the Advisor as one bounded question.
+The one file the Planner writes is its own draft packet.
 
 **4. Sketch first, with escalating checkpoints.** The Planner's goal is a sketch of at
 most about 15 lines: claim, class (discovery or change), unknowns, the experiment, and
-the outcome rows. The Session records it, and the full packet follows without further
-investigation.
+the outcome rows. It writes the sketch at the top of its draft packet file, under a
+`Sketch` heading, where it survives compaction and the owner can read it. The full
+packet then replaces the sketch without further investigation. The sketch is not sent
+to the Session, which does not judge or answer it.
 
 Checkpoints count **tool calls, not reasoning**. The Planner should think as long as
 the decision needs; the checkpoints limit investigation. Each one is heavier than the
@@ -419,13 +422,14 @@ last:
 
 | At | The Planner must | To keep investigating |
 |---|---|---|
-| **20 calls** | stop and decide: sketch now, or continue | one line in `DECISIONS`: the specific read and how it could change the packet's class or shape |
-| **40 calls** | send its current sketch to the Session, with unknowns stated as unknowns | name each unknown it is still resolving and why that unknown cannot be left to the packet; the Session records this |
-| **60 calls** | stop investigating and send the sketch plus what is still missing to the Advisor | only if the Advisor extends planning, naming the reads allowed; otherwise it writes the packet with the gaps as its subject |
+| **20 calls** | stop and decide: sketch now, or continue | one line in the draft's `DECISIONS`: the specific read and how it could change the packet's class or shape |
+| **40 calls** | write its current sketch into the draft, with unknowns stated as unknowns | name there each unknown it is still resolving and why that unknown cannot be left to the packet |
+| **60 calls** | stop investigating and send the sketch plus what is still missing to the Advisor (directly if the harness allows; otherwise the Session relays it unchanged) | only if the Advisor extends planning, naming the reads allowed; otherwise it writes the packet with the gaps as its subject |
 
-Every checkpoint decision is recorded, so the trail shows why planning ran long. A
-Planner that reaches 40 or 60 is a signal to the Session and the owner, not a failure
-by itself. The budget counts tool calls because models do not see wall-clock time.
+Every checkpoint decision is written into the draft, so the trail shows why planning
+ran long. A Planner that reaches 40 or 60 is a signal to the owner and the Advisor, not
+a failure by itself. The budget counts tool calls because models do not see wall-clock
+time.
 
 **5. Authorship.**
 
