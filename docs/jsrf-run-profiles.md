@@ -177,3 +177,117 @@ A claim must link to an artifact produced by the source it describes. The archiv
 run `logs/runs/20260922-110738-253-nv2a-1bcc/` records toolkit `cf03f46`, which is
 **not** the reviewed source — it is not a validation of the current tree. Where a
 claim borrows a newer revision than its artifact, say so or re-run.
+
+## Unconditional modeled hardware causes
+
+Strict evidence needs an answer the emulated hardware really produces. Some of that
+behaviour is **autonomous**: real hardware produces it by itself, with no guest action and
+no host shortcut. Modelling it is not an override, because there is no poll the model
+answers *instead of* the hardware — the model **is** the hardware's own behaviour.
+
+An **unconditional modeled cause** may support strict evidence when it represents
+behaviour that real hardware produces autonomously and is supported by the evidence rule
+below.
+
+### Evidence rule
+
+A modelled cause requires **either**:
+
+- one credible **primary** hardware source — a datasheet or vendor specification for the
+  relevant device; **or**
+- at least **two independent corroborating secondary sources of meaningfully different
+  provenance** — for example a reference emulator's device model plus an operating-system
+  driver for hardware implementing the same register interface.
+
+Under the secondary-source path, all of these are required:
+
+- at least one source is specific to **Xbox/MCPX**, or to a demonstrably relevant
+  implementation of the same interface;
+- the sources are **independent of our own `xboxrecomp` implementation**. Our own code,
+  comments, prior decisions and accepted packets are not sources — an implementation
+  cannot corroborate itself;
+- the exact **source, version, commit and line** evidence is recorded durably;
+- **observed guest behaviour may corroborate an interpretation but does not count as one
+  of the two independent sources.** Guest code is evidence about the title, not about the
+  hardware.
+
+Where no usable primary source is publicly available for the relevant device, the
+secondary-source path is the operative one. That is a **recorded limitation, not a
+waiver**: the corroboration requirement is what stands in for the datasheet, so a model
+admitted this way must say so in its own record.
+
+### Admission criteria
+
+All four are required.
+
+1. **Unconditional.** Always active. Not enabled by an environment variable, a diagnostic
+   switch, a build option or a command-line flag. A model behind any switch is an override
+   and is classified as one under the tables below.
+2. **Grounded in cited hardware/device behaviour**, per the evidence rule above.
+3. **Limited to the modeled state or event itself.** It writes only the register fields it
+   models and touches nothing else.
+4. **Incapable of standing in for actual work** whose resulting data or side effects the
+   guest later consumes. If the guest reads back a *result* of computation, the model must
+   not supply that result.
+
+### Allowed classes
+
+1. **Device state resulting truthfully from modeled prior state** — a register field whose
+   value follows from state the model already tracks, including state the guest itself
+   wrote.
+2. **Autonomous clocks and counters** — a value that advances on its own on real hardware.
+3. **Periodic modeled device events** — an event the device generates on its own schedule.
+
+### This is not synthetic completion
+
+The distinction is what the model is standing in for. **Synthetic completion answers a poll
+without doing the work the poll requests** — `RECOMP_APU_DSP_ACK` clears the title's DSP
+pending word although no DSP ran, so the guest proceeds on a result that does not exist.
+An admitted modeled cause supplies **state the hardware presents on its own**, and there is
+no computation behind it whose output the guest later consumes. If a candidate model
+supplies a *result of work*, it is synthetic completion however it is written.
+
+### Listed models
+
+| Model | Class | Basis |
+|---|---|---|
+| `KeTickCount` advance (kernel/APU clock worker) | autonomous clock | pre-existing accepted practice; reasoning in its source comment |
+| MCPX APU GP sample counter `0xFE820010` (`MCPX_COUNTERS`) | autonomous counter | pre-existing accepted practice; reasoning in its source comment |
+| NV2A vblank pulse (`nv2a_vblank_pulse`, display clock) | periodic device event | pre-existing accepted practice; the guest's own W1C is the only acknowledgment |
+| AC'97 primary-codec-ready, `GLOB_STA` bit 8 (`0xFEC00130`) | device state from modeled prior state | `docs/reviews/ac97-codec-ready-evidence.md` — secondary-source path, two independent sources |
+
+The first three rows are recorded for **classification continuity**: they predate this
+section and were already accepted as always-on models. Their listed basis is their existing
+status and source comments, **not** evidence gathered under the rule above, and **they have
+not been re-adjudicated against it**. Two consequences follow, and are stated rather than
+left implicit:
+
+- **Their eligibility for strict evidence is unchanged by this section.** They were accepted
+  before it and remain accepted; this section neither re-grants nor withdraws it. Formally
+  re-adjudicating them is an owner decision and is **not** done here.
+- **At least one would not satisfy criterion 1 as written.** The APU GP sample counter's tick
+  loop sits inside `if (g_mcpx_regs && !g_apu_mmio_trapped)` (`xbox_memory_layout.c:652`), so
+  `RECOMP_APU_TRAP` switches it off — it is not unconditional in that configuration. That is a
+  **known discrepancy between a grandfathered row and the criteria**, recorded so it is not
+  mistaken for a rule the row satisfies. It does not affect the AC'97 row below, which is
+  unconditional.
+
+The AC'97 row is the first model **admitted under this section**. It is admitted by owner
+decision on the recorded secondary-source evidence, and it is **prospectively listed**: the
+admission is a statement that the model is admissible as strict evidence, not a claim that
+it is implemented. Its implementation is the subject of a packet, which must still satisfy
+its own adequacy and acceptance rules.
+
+**Any model added from now on must meet the evidence rule and record its sources.** A packet
+may **cite** this section; it must not amend its criteria or this table to suit itself. An
+admission recorded here is a policy determination about *evidence eligibility* only — it
+does not accept any packet, and it does not establish that any wait has actually been
+satisfied.
+
+### Claim limits
+
+A wait satisfied by an admitted modeled cause proves **only** that the specific wait was
+satisfied by that modeled cause. It does **not** by itself prove downstream device
+fidelity, liveness, audio output, DSP execution, DirectSound success, or general boot
+correctness. Those remain separate obligations, and a packet that relies on a listed model
+must state in its own claim limits which of them it is **not** establishing.
