@@ -408,13 +408,24 @@ runs. Running the guest, building, writing tools or scripts, fetching external s
 and multi-step analysis of dumps or binaries are execution: they belong inside a packet.
 A question that needs outside knowledge goes to the Advisor as one bounded question.
 
-**4. Sketch first.** Within about 20 tool calls the Planner returns a sketch of at most
-about 15 lines: claim, class (discovery or change), unknowns, the experiment, and the
-outcome rows. The Session records it. The full packet follows without further
-investigation. If the Planner cannot sketch within that budget, it returns what is
-missing, and the Advisor decides whether to plan with the gap or to make the gap the
-subject of a discovery packet. The budget counts tool calls because models do not see
-wall-clock time.
+**4. Sketch first, with escalating checkpoints.** The Planner's goal is a sketch of at
+most about 15 lines: claim, class (discovery or change), unknowns, the experiment, and
+the outcome rows. The Session records it, and the full packet follows without further
+investigation.
+
+Checkpoints count **tool calls, not reasoning**. The Planner should think as long as
+the decision needs; the checkpoints limit investigation. Each one is heavier than the
+last:
+
+| At | The Planner must | To keep investigating |
+|---|---|---|
+| **20 calls** | stop and decide: sketch now, or continue | one line in `DECISIONS`: the specific read and how it could change the packet's class or shape |
+| **40 calls** | send its current sketch to the Session, with unknowns stated as unknowns | name each unknown it is still resolving and why that unknown cannot be left to the packet; the Session records this |
+| **60 calls** | stop investigating and send the sketch plus what is still missing to the Advisor | only if the Advisor extends planning, naming the reads allowed; otherwise it writes the packet with the gaps as its subject |
+
+Every checkpoint decision is recorded, so the trail shows why planning ran long. A
+Planner that reaches 40 or 60 is a signal to the Session and the owner, not a failure
+by itself. The budget counts tool calls because models do not see wall-clock time.
 
 **5. Authorship.**
 
