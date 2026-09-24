@@ -122,7 +122,8 @@ question itself.
 **Session** — owns integration, build, run, evidence collection, and record keeping.
 It drafts the mechanical parts of a packet (commands, paths, hashes, environment) and
 verifies that every command in a draft actually runs before submitting it for review.
-It does not author criteria or decision rows on its own authority (§5.1). It does not
+It does not author criteria or decision rows on its own authority (§5.1), and while
+the Planner works it keeps the brief frozen (§5.1). It does not
 write causal or historical claims that a decision will rely on; it supplies artifacts
 and lets the Planner or Advisor draw the conclusion.
 
@@ -171,6 +172,9 @@ what is enough, and what to do next; they do not decide what happened (§2.4).
 
 - write or rewrite a packet's claim, criteria, and decision rows, and hand the Session
   a rewrite instead of a defect list;
+- stop investigating as soon as the planning test in §5.1 is met, leave the remaining
+  unknowns to the packet, and choose a discovery packet (§5.8) when the next
+  implementation depends on facts nobody has observed;
 - simplify an over-engineered packet and delete requirements that protect nothing;
 - waive a drafting-checklist item (§6.1) with a one-line reason;
 - classify every finding it raises as blocking or advisory (§3.1–3.2);
@@ -312,6 +316,10 @@ Advisor  -> Owner     (§3.4 only; everything else ends at the Advisor)
 If the Advisor is unavailable, that is a staffing blocker; the Planner still decides
 within its own authority.
 
+**The owner may message any agent directly**, including a child. Such a message is an
+owner instruction, not an injection: follow it, record it, and tell the Session if it
+changes scope. It outranks every role's ruling.
+
 ### 4.2 When a contract role escalates
 
 - the same root-cause failure survives **two attempts**, or each next step is a guess;
@@ -371,7 +379,44 @@ schema is unavailable, startup is `BLOCKED`; do not invent an invocation.
 
 ## 5. Packet lifecycle
 
-### 5.1 Authorship
+### 5.1 Planning and authorship
+
+Planning decides **what to find out or build next**. It does not find it out. The
+Planner is not required to solve a technical problem before designing the packet that
+investigates it.
+
+**1. The brief is frozen.** The Session opens planning with one evidence brief: the
+blocker, the runs and artifacts that show it, and anything already measured. It may
+gather that evidence first, including bounded diagnostic runs. Once the brief is sent,
+the Session sends the Planner nothing new unless it **refutes the brief's premise**;
+other findings wait for the packet. Policy edits also wait, unless the Planner asks for
+one. A planner working against a brief that changes every few minutes cannot finish.
+
+**2. Planning is done when three things can be stated:**
+
+- the blocker, from existing evidence;
+- the unknowns that would change what to build;
+- the cheapest experiment that tells those unknowns apart.
+
+At that point the Planner writes the packet, and the remaining unknowns become its
+subject. If the evidence cannot yet specify an implementation safely, that is not a
+planning failure: the packet is a discovery packet (§5.8) that obtains the missing
+facts.
+
+**3. The Planner only reads.** It reads existing source, docs, disassembly and archived
+runs. Running the guest, building, writing tools or scripts, fetching external source,
+and multi-step analysis of dumps or binaries are execution: they belong inside a packet.
+A question that needs outside knowledge goes to the Advisor as one bounded question.
+
+**4. Sketch first.** Within about 20 tool calls the Planner returns a sketch of at most
+about 15 lines: claim, class (discovery or change), unknowns, the experiment, and the
+outcome rows. The Session records it. The full packet follows without further
+investigation. If the Planner cannot sketch within that budget, it returns what is
+missing, and the Advisor decides whether to plan with the gap or to make the gap the
+subject of a discovery packet. The budget counts tool calls because models do not see
+wall-clock time.
+
+**5. Authorship.**
 
 1. The **Planner** states the bounded claim and non-goals and owns the criteria and
    decision rows. It may write them itself or accept a Session draft.
@@ -416,6 +461,10 @@ VERDICT:           ADEQUATE | INADEQUATE
 `VERDICT` is `ADEQUATE` exactly when `BLOCKING` is `NONE` and `PREMISE_FRESHNESS` is not
 `FAIL`. There are no other counts or conditions: the number of advisories or prose
 defects has no effect on the verdict.
+
+For a **discovery packet** (§5.8) the review asks only two questions: could an outcome
+be misread into the wrong row, and is the packet safe and reversible? A blocking defect
+is one that answers either question badly.
 
 **ADEQUATE ends plan iteration.** The Session freezes that exact revision, records the
 review, and promotes it into `CURRENT PACKET` in the same step, with no discretion to
@@ -476,12 +525,32 @@ or rationale about earlier revisions. Those go in one log,
 for accuracy, and loses to the contract on any conflict. The packet carries a one-line
 pointer to it.
 
+### 5.8 Packet classes
+
+| | **Discovery packet** | **Change packet** |
+|---|---|---|
+| Output | knowledge: what was observed | a behaviour change, or an acceptance claim |
+| May do | read anything; add diagnostic-only instrumentation; run exploratory or fixture profiles | anything its contract authorizes |
+| Instrumentation | reversible, trace-only or behind an environment variable, off by default at closure | production code under full review |
+| Contract | about one page (§6.3) | full contract (§6.1–6.2) |
+| Adequacy review | two questions (§5.3) | full review (§5.3) |
+| Acceptance | reviewer confirms the artifacts exist, match the commands, and select the recorded outcome row | every criterion reproduced |
+| Can claim | "observed X under profile Y" | what its criteria establish |
+
+A discovery packet never satisfies a strict criterion and never claims anything works.
+Its outcome table names the next packet for each result, so closing it hands the
+Planner its next brief directly. Prefer a discovery packet whenever the next
+implementation depends on facts nobody has observed. Keep it small enough to execute
+in one session. Leaving its instrumentation enabled after closure requires a change
+packet.
+
 ## 6. Packet construction
 
 ### 6.1 Drafting checklist
 
-Whoever drafts works through this list; the Planner may waive an item with a one-line
-reason (for example, "no controls: the oracle is an existing tested tool").
+This list is for change packets; a discovery packet uses §6.3. Whoever drafts works
+through it; the Planner may waive an item with a one-line reason (for example, "no
+controls: the oracle is an existing tested tool").
 
 1. **Objective first.** State the bounded claim and explicit non-goals.
 2. **Stable IDs.** One criterion = one independently decidable obligation.
@@ -559,6 +628,34 @@ Before release ask both questions:
 - Evidence index: <criterion -> artifact/hash -> result>
 - Post-review edits reopen affected criteria.
 - Unrelated next stop: record as follow-up; do not expand scope.
+```
+
+### 6.3 Discovery packet template
+
+```markdown
+## <Packet ID> — discover <what>
+
+**Class:** discovery   **Contract revision:** <revision>   **Status:** draft
+**Starts from:** <blocker + run/artifact that shows it>
+**Baseline:** <game/toolkit revisions>
+
+### Question
+<the one decision this packet unblocks, and the unknowns behind it>
+
+### Experiments
+1. <instrumentation, if any: file, what it records, how it is enabled; off by default>
+2. <exact command(s), profile, bounds, artifact destination>
+
+### Outcomes
+| ID | Observed | Means | Next packet |
+|---|---|---|---|
+| O-1 | <observable pattern> | <interpretation> | <next packet> |
+| O-UNKNOWN | none of the above, or evidence missing/unreadable | not decided | <re-plan> |
+
+### Limits and stops
+- Does not establish: <limits; never a strict or "it works" claim>
+- Stop if: <conditions>
+- Closure: instrumentation off by default or removed; artifacts listed.
 ```
 
 ## 7. Independence vocabulary

@@ -43,9 +43,7 @@ AGENTS_BODY = """# Guide
 
 Read `docs/agent-workflow.md` for the roster.
 
-Read `plan-jsrf-bare-minimum.md` for acceptance.
-
-Read `report-deepseek.md` for the current blocker.
+Read `plan-jsrf-bare-minimum.md` for acceptance and the current blocker.
 
 Run `C:\\Python313\\python.exe -X utf8 scripts\\check-agent-docs.py --check`.
 """
@@ -55,19 +53,6 @@ PLAN_BODY = """# Plan
 **Status:** P0.3 in progress. P0.4 pending.
 
 **Next action:** finish P0.3.
-"""
-
-REPORT_BODY = """# Report
-
-## CURRENT STATE
-
-Last updated today. P0.3 is the active packet; P0.4 is next.
-
-**Next action:** finish P0.3.
-
-## Historical session narrative
-
-Old material.
 """
 
 TEMPLATE_BODY = """# Startup receipt
@@ -87,7 +72,6 @@ class CorpusMixin:
         self.write('docs/agent-workflow.md', WORKFLOW_BODY)
         self.write('AGENTS.md', AGENTS_BODY)
         self.write('plan-jsrf-bare-minimum.md', PLAN_BODY)
-        self.write('report-deepseek.md', REPORT_BODY)
         self.write('docs/session-start-template.md', TEMPLATE_BODY)
         self.write('scripts/check-agent-docs.py', '# placeholder\n')
 
@@ -238,10 +222,9 @@ class AuthorityLinkTests(CorpusMixin, unittest.TestCase):
     def test_agents_status_contradicting_the_plan_is_rejected(self):
         """AGENTS.md must not still treat an accepted packet as outstanding.
 
-        Measured blind spot: the docstring named AGENTS.md but the code only
-        compared PLAN against REPORT, so AGENTS.md said "P0.1 awaits advisor
-        adjudication … do not begin P0.2 yet" while the plan and CURRENT STATE
-        both recorded P0.1 accepted, and the checker returned no findings. A stale
+        Measured blind spot: AGENTS.md said "P0.1 awaits advisor adjudication …
+        do not begin P0.2 yet" while the plan recorded P0.1 accepted, and the
+        checker returned no findings. A stale
         status in the one file every session loads automatically is the exact
         failure that file's own header warns about.
         """
@@ -275,32 +258,27 @@ class AuthorityLinkTests(CorpusMixin, unittest.TestCase):
 
 
 class NextPacketTests(CorpusMixin, unittest.TestCase):
-    def test_status_disagreement_is_rejected(self):
-        self.write('report-deepseek.md', REPORT_BODY.replace('P0.3', 'P0.6'))
+    def test_plan_without_a_status_line_still_detects_contradiction(self):
+        """Regression: the condensed plan records acceptance in a section, with
+        no `**Status:**` line. The check must still read it."""
         self.write('plan-jsrf-bare-minimum.md',
-                   PLAN_BODY.replace('P0.3', 'P0.4').replace('P0.4', 'P0.5'))
+                   '# Plan\n\n## CURRENT PACKET — none\n\n## P0 — ACCEPTED\n\n'
+                   'P0.1 accepted with the rest of P0.\n')
+        self.write('AGENTS.md', AGENTS_BODY
+                   + '\nP0.1 awaits advisor adjudication; do not begin P0.2 yet.\n')
         findings = self.audit()
-        self.assertIn('status_disagreement', self.reasons(findings))
-
-    def test_missing_current_state_is_rejected(self):
-        self.write('report-deepseek.md', '# Report\n\nNo state block.\n')
-        findings = self.audit()
-        self.assertIn('unreadable_status', self.reasons(findings))
-
-    def test_large_current_state_block_is_still_found(self):
-        """Regression: a fixed character window silently missed a grown block.
-
-        The real CURRENT STATE passed 4,000 characters, and the check reported
-        "no CURRENT STATE block" -- a false failure that would have been blamed
-        on the documents rather than on the checker.
-        """
-        padding = '\n'.join(f'line {i} of narrative detail' for i in range(400))
-        self.write('report-deepseek.md',
-                   '# Report\n\n## CURRENT STATE\n\nP0.3 active. P0.4 next.\n\n'
-                   + padding + '\n\n## Historical narrative\n\nOld.\n')
-        findings = self.audit()
+        self.assertIn('agents_status_disagreement', self.reasons(findings))
         self.assertNotIn('unreadable_status', self.reasons(findings))
-        self.assertNotIn('status_disagreement', self.reasons(findings))
+
+    def test_missing_plan_is_rejected(self):
+        (self.root / 'plan-jsrf-bare-minimum.md').unlink()
+        findings = self.audit()
+        self.assertIn('missing_input', self.reasons(findings))
+
+    def test_no_session_report_is_required(self):
+        """Session reports are not kept in the repository; none is needed."""
+        self.assertFalse((self.root / 'report-deepseek.md').exists())
+        self.assertEqual(self.audit(), [])
 
 
 class CliTests(CorpusMixin, unittest.TestCase):

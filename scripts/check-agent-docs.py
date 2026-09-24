@@ -22,12 +22,11 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CHECKER_VERSION = 'jsrf-agent-docs/1'
+CHECKER_VERSION = 'jsrf-agent-docs/2'
 
 AGENTS = 'AGENTS.md'
 WORKFLOW = 'docs/agent-workflow.md'
 PLAN = 'plan-jsrf-bare-minimum.md'
-REPORT = 'report-deepseek.md'
 STARTUP_TEMPLATE = 'docs/session-start-template.md'
 
 AGENTS_BUDGET = 65536
@@ -74,7 +73,6 @@ KNOWN_ABSENT_OK = {'build-jsrf.ps1'}
 AUTHORITY_LINKS = (
     (AGENTS, WORKFLOW),
     (AGENTS, PLAN),
-    (AGENTS, REPORT),
     (STARTUP_TEMPLATE, WORKFLOW),
 )
 
@@ -246,9 +244,14 @@ def check_authority_links() -> list[dict]:
 
 
 def check_next_packet_agreement() -> list[dict]:
-    """AGENTS.md, the plan and CURRENT STATE must name the same next packet."""
+    """AGENTS.md must not treat a packet as outstanding that the plan accepts.
+
+    This used to also compare the plan with a session report's CURRENT STATE
+    block.  Session reports are no longer kept in the repository, so the plan is
+    the only status source and the comparison is AGENTS.md against the plan.
+    """
     findings: list[dict] = []
-    for name in (AGENTS, PLAN, REPORT):
+    for name in (AGENTS, PLAN):
         path = ROOT / name
         if not path.is_file():
             findings.append({'check': 'next_packet', 'reason': 'missing_input',
@@ -256,53 +259,17 @@ def check_next_packet_agreement() -> list[dict]:
     if findings:
         return findings
 
-    def packets(text: str, pattern: re.Pattern[str]) -> set[str]:
-        return set(pattern.findall(text))
-
-    def section_after_heading(text: str, heading: str) -> str | None:
-        """Text from a heading up to the next top-level heading.
-
-        A fixed character window is a bug waiting to happen: the CURRENT STATE
-        block legitimately grew past 4,000 characters and the check silently
-        reported "no CURRENT STATE block".  Bound by the next heading instead.
-        """
-        start = re.search(re.escape(heading), text)
-        if not start:
-            return None
-        rest = text[start.end():]
-        end = re.search(r'(?m)^## ', rest)
-        return rest[:end.start()] if end else rest
-
-    plan_status = re.search(r'\*\*Status:\*\*(.{0,600})', read(ROOT / PLAN), re.DOTALL)
-    report_state_text = section_after_heading(read(ROOT / REPORT), '## CURRENT STATE')
-    if not plan_status:
-        findings.append({'check': 'next_packet', 'reason': 'unreadable_status',
-                         'detail': f'{PLAN} has no Status line'})
-    if report_state_text is None:
-        findings.append({'check': 'next_packet', 'reason': 'unreadable_status',
-                         'detail': f'{REPORT} has no CURRENT STATE block'})
-    if findings:
-        return findings
-
-    packet_re = re.compile(r'P0\.\d')
-    plan_packets = packets(plan_status.group(1), packet_re)
-    report_packets = packets(report_state_text, packet_re)
-    # They need not be identical, but they must overlap: a status naming a packet
-    # the report's CURRENT STATE never mentions means one of them is stale.
-    if plan_packets and report_packets and not (plan_packets & report_packets):
-        findings.append({
-            'check': 'next_packet', 'reason': 'status_disagreement',
-            'detail': f'{PLAN} status names {sorted(plan_packets)} while CURRENT STATE '
-                      f'names {sorted(report_packets)}',
-        })
+    # Read acceptance from the whole plan, not from one `**Status:**` line: the
+    # plan records accepted packets in its own sections, and a condensed plan has
+    # no single Status line to anchor on.
+    plan_status_text = read(ROOT / PLAN)
 
     # AGENTS.md must not carry a *status* claim that contradicts the plan.
     #
-    # The docstring above always named AGENTS.md, but the code never checked it --
-    # measured, AGENTS.md said "P0.1 awaits advisor adjudication ... do not begin
-    # P0.2 yet" while the plan and CURRENT STATE both said P0.1 accepted, and this
-    # checker returned no findings.  A stale status in the one file every session
-    # loads automatically is the exact failure the file's own header warns about.
+    # Measured before this check existed: AGENTS.md said "P0.1 awaits advisor
+    # adjudication ... do not begin P0.2 yet" while the plan said P0.1 accepted.
+    # A stale status in the one file every session loads automatically is the
+    # exact failure the file's own header warns about.
     #
     # The comparison is on the **verb for the same packet**, not on whether the
     # packet is mentioned: an earlier version only flagged packets absent from the
@@ -313,7 +280,6 @@ def check_next_packet_agreement() -> list[dict]:
         r'not\s+accepted|do\s+not\s+begin|in\s+progress|blocked)\b'
         r'|\b(awaits?|awaiting|pending|not\s+accepted|do\s+not\s+begin|blocked)\b'
         r'[^.\n]{0,80}?\b(P0\.\d)\b')
-    plan_status_text = plan_status.group(1)
     for line_number, line in enumerate(agents_text.split('\n'), start=1):
         stripped = line.strip()
         if stripped.startswith('>') or stripped.startswith('|'):
