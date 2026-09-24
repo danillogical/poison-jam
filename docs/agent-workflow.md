@@ -421,15 +421,23 @@ Checkpoints count **tool calls, not reasoning**. The Planner should think as lon
 the decision needs; the checkpoints limit investigation. Each one is heavier than the
 last:
 
-| At | The Planner must | To keep investigating |
-|---|---|---|
-| **20 calls** | stop and decide: sketch now, or continue | one line in the draft's `DECISIONS`: the specific read and how it could change the packet's class or shape |
-| **40 calls** | write its current sketch into the draft, with unknowns stated as unknowns, and send the same sketch to the Advisor | name each unknown it is still resolving and why that unknown cannot be left to the packet; it continues unless the Advisor redirects it |
-| **60 calls** | stop investigating, update the sketch in the draft, and send it plus what is still missing to the Advisor | only if the Advisor extends planning, naming the reads allowed; otherwise it writes the packet with the gaps as its subject |
+At every checkpoint the Planner writes its **current sketch** into the draft, however
+rough, with unknowns stated as unknowns. It also writes a **forecast** if it continues:
+the specific reads it will make next, and what it expects them to change in the sketch
+(class, claim, an unknown resolved, an outcome row). From 40 calls on it writes a
+**yield** as well: what the last 20 calls actually changed, compared with the forecast.
 
-The Planner messages the Advisor directly when the harness allows; otherwise the
-Session relays the message unchanged. At 40 calls the Advisor may answer, redirect,
-or stay silent; at 60 it must decide.
+| At | The Planner | The Advisor |
+|---|---|---|
+| **20 calls** | writes sketch 1; either writes the packet, or writes a forecast and continues | not involved |
+| **40 calls** | writes sketch 2, the yield against the 20-call forecast, and a new forecast; sends all three to the Advisor, then continues unless redirected | may answer, redirect, or stay silent |
+| **60 calls** | stops investigating; writes sketch 3 and the yield against the 40-call forecast; sends both, plus what is still missing, to the Advisor | must decide: extend planning, naming the reads allowed, or have the Planner write the packet with the gaps as its subject |
+
+The yield is what tells the Advisor whether investigation is still paying. If a
+20-call stretch changed nothing that matters in the sketch, that is the signal to stop,
+and the Planner should say so rather than wait to be told. The Planner messages the
+Advisor directly when the harness allows; otherwise the Session relays the message
+unchanged.
 
 Every checkpoint decision is written into the draft, so the trail shows why planning
 ran long. A Planner that reaches 40 or 60 is a signal to the owner and the Advisor, not
