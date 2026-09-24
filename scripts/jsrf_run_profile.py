@@ -388,7 +388,7 @@ def classify_settings(entries: Any) -> dict[str, Any]:
             active.append(f'{GPU_ACK} defaults to enabled when absent')
 
     for name, reason in (
-        (AC97_READY, 'forces the AC97 codec-ready bit when present'),
+        (AC97_READY, 'was: forced the AC97 codec-ready bit; the runtime no longer reads it'),
         (ALLOW_UNRESOLVED, 'continues after unresolved indirect calls when present'),
         (ABI_CONTINUE, 'continues after ABI failures when present'),
     ):
