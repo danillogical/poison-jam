@@ -1,6 +1,46 @@
-# A2h — bounded writer investigation for the unresolved ICALL at `0x0017DBBD`
+# A2h — bounded descriptor/slot discriminator for the unresolved ICALL at `0x0017DBBD`
 
-**Packet:** `A2h-r5`. **Status:** Proposed (investigation packet; no fix authorized).
+> ## RETIRED — DO NOT EXECUTE
+>
+> **`A2h-r6` was reviewed for plan adequacy on 2026-09-23 and returned
+> INADEQUATE. It is retired, not revised. It was never implemented: no build and
+> no guest run was performed under it.**
+>
+> Full record: `docs/reviews/a2h-r6-adequacy-review.md`. Startup receipt:
+> `docs/reviews/startup-20260923-dsh-a2h-r6.md`.
+>
+> **Why.** The failure this packet is built around
+> (`invalid target 0x00700010 ... return=0017E627`) did **not** come from the
+> `0x0017DC23` call this packet instruments. It came from the C++ static-initializer
+> walker `0x0014B50D`, which called slot `0x001EB764 = 0x0017E58F`; the
+> translation's `tail_jump_alias` fold mapped that address onto `sub_0017E600`
+> (`src/recomp/gen/recomp_dispatch.c:6865`), which then read `[ebp+8]=0x00700010`
+> and executed it. That defect was already fixed by commit `cb7cae2`
+> (2026-09-21 15:58), an ancestor of both HEAD and this packet's recorded
+> evidence revision `40ae5bd`. Every run that ever logged the failure predates it.
+>
+> Two consequences, both fatal and independent:
+> 1. **PASS is unsatisfiable by construction.** There is no known failing instance
+>    at `0x0017DC23` to observe, so the required last-line-before-the-ICALL
+>    predicate has nothing to match.
+> 2. **The instrument cannot be placed within this packet's own rules.** The
+>    instrumented sites are lifted statements inside the provenance-pinned
+>    generated chunk `src/recomp/gen/recomp_0004.c`; step 0 forbids editing it and
+>    step 2 requires the P0.7 guard to pass. No interior/basic-block trace seam
+>    exists, and the required "last N" cap is a "first N" countdown
+>    (toolkit `src/kernel/recomp_trace.c:29-38`).
+>
+> Further recorded defects: the `0x00700010` value is misattributed to the A2f/A2g
+> runs (which contain no such failure line); the packet omits the dispatch-alias
+> entry route that actually failed; and the decision table has uncovered cells.
+>
+> **The text below is retained for provenance and audit only. It is not current
+> work authorization.** Any future work in this area requires a new packet with
+> stable criterion IDs, its own adequacy review, and — for any observation inside
+> a generated function — a separate tooling prerequisite packet first. See the
+> `CURRENT PACKET` block of `plan-jsrf-bare-minimum.md`.
+
+**Packet:** `A2h-r6`. **Status:** **RETIRED — adequacy review returned INADEQUATE** (investigation packet; no fix authorized).
 **Depends on:** accepted P0.7 (provenance guard and candidate generation).
 **Governing requirement:** `plan-jsrf-bare-minimum.md` A2's open defect, carried
 through P0.7-AC4 as *"publish only a bounded A2h writer-investigation packet with
@@ -18,15 +58,18 @@ the failing invocation, an overstated profile claim, and a missing positive
 control), `r3` (PASS and row 1 no longer pinned to the *literal* `0x00700010`, row
 3 marked unselectable under PASS, the heap/window test given bounds, the trace cap
 required to retain the most recent lines, and strict reachability recorded as
-**unproven**), `r4` (the decision table is a **complete partition** —
-the heap-base-with-bogus-slot cell was uncovered — the call-site record at
+**unproven**), `r4` (the decision table was expanded after the heap-base-with-bogus-slot
+cell was uncovered; it was not yet exhaustive — the call-site record at
 `0x0017DC23` is required because the return address is shared with a second
 dispatcher caller, and the measured/inferred wording is harmonized), `r5`
 (this revision: PASS requires the call-site record's slot value to equal the
 logged invalid target, which closes the last misattribution path; `0x0017DC23`
 added to the instrumented-address list; and two MEASURED numbers corrected —
 the exit code is `0xE0424943`, not `0xE0464643`, and the kernel-call counts are
-200 pre-fix and 157 post-fix, not "both 157").
+200 pre-fix and 157 post-fix, not "both 157"), `r6` (this revision: the
+decision table covers the previously missing image-base/valid-slot cell; execution
+is made mechanical with explicit readiness/build/run/check commands and fail-closed
+instrumentation-seam discovery; status resets to pending adequacy review).
 
 ## Claim and boundaries
 
@@ -182,15 +225,64 @@ read, rather than to speculate about the value:
    record from `0x0017DC23` whose slot value equals the logged invalid target**. A
    slot record not followed by its own failing ICALL — or whose slot differs from
    the logged target — is not the failing invocation.
-3. Decide by the table above.
+3. Decide by the decision table below.
 
-- **Allowed implementation choices:** the trace's exact format and its cap, subject
-  to the last-N requirement above.
-- **Escalate/replan if:** the descriptor is unreadable, the trace never fires, or
-  the slot holds a valid in-image address (row 4, which moves the defect into the
-  dispatcher).
+### Exact procedure — do not improvise around a failed step
+
+Run from `C:\Users\logic\Repos\my_xbox_game` in PowerShell.
+
+0. **Readiness / owner discovery before mutation.** Run:
+
+```powershell
+C:\Python313\python.exe -X utf8 scripts\check-generation-provenance.py --check
+Get-ChildItem src,tests,config,scripts -Recurse -File |
+  Select-String -Pattern 'sub_0017DBBD|0017DC0D|0017DC1F|0017DC23' 
+```
+
+Record the exact production source owner and the existing instrumentation seam you
+will use. Do **not** hand-edit or regenerate production generated chunks merely to
+make the trace easy. If there is no unique production owner/seam, or the P0.7 guard
+would have to be bypassed, stop `BLOCKED` and create a tooling prerequisite packet.
+
+1. Add only the bounded observation trace described above. The exact text format is
+   an implementation choice, but it must retain the most recent N records and must
+   include an explicit `0x0017DC23` call-site record. No control-flow change.
+2. Run the provenance guard again. Any unexplained production/generated drift is
+   `BLOCKED`; do not weaken the guard.
+3. Build once:
+
+```powershell
+C:\Python313\python.exe -X utf8 scripts\build-jsrf.py --parallel 1
+C:\Python313\python.exe -X utf8 scripts\build-identity.py verify
+```
+
+4. Run exactly once, strict:
+
+```powershell
+$env:RECOMP_GPU_ACK='0'
+C:\Python313\python.exe -X utf8 scripts\run-jsrf.py --profile strict --seconds 30 --label a2h-r6-slot-trace
+```
+
+Use the run directory printed by the runner as `<run-dir>`. Do not run a second guest
+attempt inside this packet simply because the site was not reached.
+
+5. Validate/archive the run:
+
+```powershell
+C:\Python313\python.exe -X utf8 scripts\check-run-profile.py <run-dir>
+C:\Python313\python.exe -X utf8 scripts\build-identity.py verify
+```
+
+Then record the trace hit count, the map/PDB witness for the instrument, the failing
+ICALL (if any), the selected decision row, repository/dirty identities and exact
+artifact paths in the packet record.
+
+- **Allowed implementation choices:** trace text format and bounded last-N capacity.
+- **Escalate/replan if:** owner/seam discovery is ambiguous; provenance guard fails;
+  descriptor is unreadable; trace never fires; site is not reached; or the observation
+  does not satisfy a named row.
 - **Worker scopes:** none required; this is a single bounded change.
-- **Build/run owner:** the session. Serialize: one build and one run.
+- **Build/run owner:** the Session. Serialize exactly one guarded build and one guest run.
 
 ### Reachability is not established, and the plan must allow for that
 
@@ -223,17 +315,15 @@ of those two answered.
 | base is in a named image section **or** in the heap/contiguous window (the evidence records which), and the slot is **not a valid address in any image section** | the **table content** is wrong: a writer put a computed value in the slot | investigate the writer; this packet does not name it |
 | base is unreadable, **or** is in neither an image section nor the heap/contiguous window | the **descriptor** is wrong: whoever supplied `[ebp+0x10]` is the defect | trace the descriptor's supplier |
 | *(pre-failure diagnostic only — see note)* `[ecx+4]` is 0 and the branch at `0x0017DC11` is taken | the slot is *intentionally* empty and the call should not happen | the defect is upstream of this site |
-| the trace fires with a base in the heap/contiguous window and a slot that **is** a valid in-image address | the table is runtime-built and the slot is legitimate | the defect is in the dispatcher's use of it, not the table |
+| base is in a named image section **or** in the heap/contiguous window, and the slot **is** a valid in-image address | descriptor/table storage and target are structurally plausible at this site | re-scope to dispatcher/target behavior; do not blame table corruption |
 | **any other observation, or the trace never fires** | undetermined | **`UNKNOWN` — re-scope before further work** |
 
-**Rows 1–4 are a complete partition**, which is what makes row 5 a genuine
-catch-all rather than a likely outcome: base ∈ {image section, heap/window,
-neither-or-unreadable} × slot ∈ {bogus, valid, zero}. An earlier revision put
-"base in a named image section" in row 1 and left the **heap base with a bogus
-slot** cell uncovered — and that is the *most likely* case for a runtime-built
-table, which this packet itself argues for. Measured counterexample: heap base
-`0x00A40000` with slot `0x00700010` matched no row and returned `UNKNOWN`, the same
-failure mode as keying row 1 to a literal address.
+**For a failing invocation, rows 1, 2 and 4 cover every classified nonzero-slot
+case:** a plausible base (image or heap/window) paired with either a bogus or valid
+in-image slot, or an implausible/unreadable base. Row 3 is a pre-failure zero-slot
+diagnostic where no failing call occurs. Row 5 is reserved for non-exercise, malformed
+or otherwise uncategorizable evidence. An earlier revision omitted the image-base +
+valid-slot cell; r6 closes that gap by making row 4 cover every plausible base.
 
 > **Note on row 3.** It is a *pre-failure* diagnostic, not a row PASS can select:
 > if the branch is taken there is no call and therefore no failing ICALL line to

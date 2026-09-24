@@ -1,10 +1,10 @@
 # JSRF pushbuffer kick / DMA GET contract
 
-Status: contract established from original-XBE instructions, 2026-09-21.
-This is the packet that had to exist before `0x001918E0` could be recovered.
-It is written from `python -X utf8 scripts/inspect-jsrf.py disasm` on the
-retail XBE plus the already-committed PRAMIN/RAMHT toolkit work. No recovery
-of the chain is included yet.
+**Scope:** technical pushbuffer kick/DMA-GET contract derived from the original
+XBE; not a current packet/status authority. It was established before historical
+recovery work on `0x001918E0`. Current recovery/acceptance state lives in the plan and
+review records. The instruction basis is `python -X utf8 scripts/inspect-jsrf.py disasm`
+on the retail XBE plus the PRAMIN/RAMHT toolkit work used for this contract.
 
 Source ranges (end exclusive): `0x00191530..0x001916A3`,
 `0x001916B0..0x001916BF`, `0x001917F0..0x001918D3`,

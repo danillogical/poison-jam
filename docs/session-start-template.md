@@ -6,12 +6,17 @@ roster, startup procedure and failure handling. Never store credentials here.
 
 For a fresh DSH session, open the repository root and use this handoff prompt:
 
-> Read AGENTS.md and the current docs/agent-workflow.md. Complete and record the
-> startup checklist, including a real HY4 response and same-child persistent-advisor
-> continuation. Read CURRENT STATE and the active plan. Resume the first unaccepted
-> executable packet whose dependencies are accepted; preserve existing edits and
-> reviews. Work to the frozen criteria, then obtain the required acceptance review.
-> Do not treat historical next-step notes or a readiness probe as packet acceptance.
+> Read `AGENTS.md`, `docs/agent-workflow.md`, `plan-jsrf-bare-minimum.md`, and
+> `docs/jsrf-run-profiles.md`. Complete the workflow startup checklist (§0) using
+> the roles designated in workflow §1, including live route resolution, the
+> acceptance-reviewer probe, and the combined persistent-advisor probe.
+>
+> You are a contract role (§2.2): execute the frozen contract exactly, stop at
+> ambiguity or any stop boundary, and escalate technical questions to the Advisor.
+> Treat other agents' summaries as leads, never as evidence.
+>
+> Execute only the exact packet/revision explicitly promoted by the plan's
+> `CURRENT PACKET` block.
 
 The prompt does not set the model or provider credentials: configure the session
 and routes in the DSH launcher using the current workflow roster. A route failure
@@ -21,39 +26,48 @@ must be reported precisely; it is not permission to switch to a retired model.
 
 - Session ID/date/harness:
 - Actual main model/effort (metadata evidence, or UNKNOWN):
-- Workflow/plan/CURRENT STATE revisions and dirty diff identity:
+- Workflow/plan/run-profile revisions and dirty diff identity:
 - Game revision/status; toolkit revision/status:
 - Unrelated edits preserved:
-- Selected packet and contract revision:
+- CURRENT PACKET copied from plan (packet + exact revision + SHA-256), or NONE:
 - Dependencies and their recorded acceptance reviews:
-- Last attempt/result; next exact action:
+- Next exact authorized action:
 - Build/run owner and worker write ownership:
 
-## Reviewer invocation — PASS / FAIL / UNKNOWN
+## Route resolution — PASS / BLOCKED
 
-- Requested route/effort; tool and returned route identity:
-- Child ID; fresh challenge token:
-- Completed response/turn reference:
-- Empty-evidence rejection answer:
+- Planner: requested route/effort; returned route identity:
+- Persistent advisor: requested route/effort; returned route identity:
+- Acceptance reviewer (first stage): requested route/effort; returned route identity:
+- Acceptance reviewer (second stage): requested route/effort; returned route identity:
+- Workers: requested route/effort; returned route identity:
+- Exact error or ambiguity, if any:
+
+## Acceptance reviewer probes — PASS / FAIL / UNKNOWN
+
+Probe each stage listed in workflow §1 separately.
+
+- First stage — child ID; fresh token; response reference; empty-evidence answer; result:
+- Second stage — child ID; fresh token; response reference; empty-evidence answer; result:
 - Exact error or missing evidence:
 
-## Persistent advisor — PASS / FAIL / UNKNOWN
+## Persistent advisor probe — PASS / FAIL / UNKNOWN
 
-- Requested route/effort; tool and returned route identity:
-- Child ID; initial brief/response reference:
-- Initial unique marker:
-- Follow-up invocation/turn reference (same child, marker not in prompt):
-- Returned marker and comparison:
-- Decision log/brief location for later sessions:
+- Child ID:
+- Turn 1 reference; unique marker given:
+- Named file and the fact deliberately omitted from the brief:
+- Advisor's answer; checked against the file:
+- Turn 2 reference (same child, marker not repeated); returned marker:
+- Result:
 - Exact error or missing evidence:
 
 ## Packet readiness — PASS / BLOCKED / UNKNOWN
 
-- Required criterion IDs and frozen contract revision:
-- Existing procedure/tool checks and any TOOLING REQUIRED prerequisites:
-- Evidence profile, source/build identity and positive/negative controls:
-- State/plan disagreements and resolution:
-- Reviewer/advisor availability limitations:
+- Frozen revision/hash matches `CURRENT PACKET`:
+- Adequacy review record and verdict:
+- Deferred advisories (recorded, not acted on):
+- Prerequisites / tooling checks:
+- State/plan disagreements and how they were escalated:
 - Overall disposition and next action:
 
 Do not mark readiness PASS with a failed or unknown required item. A provider

@@ -1,10 +1,9 @@
 # JSRF run profiles: strict, exploratory and fixture
 
-Milestone packet **A1**. This document defines what a run is allowed to be
-evidence *for*. It exists because the project has been reading `diagnostic_deadline`
-and `normal_exit` as progress when neither establishes liveness, and because
-several environment overrides answer a hardware poll without doing the work the
-poll is asking about.
+This document is the **permanent evidence-profile policy** for JSRF runs; it is not
+tied to a current packet. It defines what a run is allowed to be evidence *for*.
+`diagnostic_deadline` and `normal_exit` do not establish liveness, and several
+environment overrides answer a hardware poll without doing the work the poll requests.
 
 The runner records one of three profiles. A claim is only as strong as the
 profile that produced it.
@@ -88,7 +87,7 @@ so in the same sentence that states it.
 | Override | What it does | Why it cannot satisfy acceptance |
 |---|---|---|
 | `RECOMP_APU_DSP_ACK=<addr>[,<addr>...]` | Clears those guest dwords once per APU tick. | The title's DSP pending word goes to 0 without the GP DSP having run anything. This is the override the audit names explicitly: it makes the audio path *look* complete. |
-| `RECOMP_AC97_READY` | Sets the AC'97 codec-ready bit. | The codec-ready poll succeeds with no codec. Measured effect: the run gets ~200 kernel calls further and then faults at `0x001A2BFC` on a zero `WAVEFORMATEX`. |
+| `RECOMP_AC97_READY` | Deleted; replaced by the always-on modeled cause listed in §"Unconditional modeled hardware causes". | Historical: it set the bit with no codec modelled behind it. The replacement models codec presence as device state, which is admitted under the always-on section; this name no longer exists in the runtime. Measured effect of the old override: the run got ~200 kernel calls further and then faulted at `0x001A2BFC` on a zero `WAVEFORMATEX`. |
 | `RECOMP_GPU_ACK` | The busy-bit ack table: clears busy bits and mirrors `USER_DMA_PUT` into `USER_DMA_GET`. It is enabled by default unless its value is exactly `0`. | Register handshakes complete with no engine behind them. Strict launches must explicitly set `0`; absence is exploratory. Note this also gates the memory mirrors — see the register-owner gate below. |
 | ~~`RECOMP_VBLANK`~~ | **Removed 2026-09-22 (A2).** It used to assert vblank by OR-ing into `NV_PCRTC_INTR_0` and `NV_PMC_INTR_0`, both of which are write-1-to-clear — so it cleared pending bits instead of setting them and could never assert anything. The vblank source is now part of the model (`nv2a_vblank_pulse` on the display clock), the guest's own W1C is the only acknowledgment, and both of the guest's enables gate delivery. There is nothing left to override. |
 

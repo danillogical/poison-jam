@@ -1,11 +1,11 @@
 # JSRF GPU setup: reviewed contract and integration gaps
 
-Status: milestone 11a contract audit, 2026-09-13, with 11c1 setup recovery
-through framebuffer publish as of 2026-09-21. This is instruction/source
-evidence, not a completed GPU implementation. Ordinary startup now reaches
-missing `0x001918E0` inside device initializer `0x00192090` after WBINVD.
-The game device is `0x0019B200`; the hardware context passed in ECX is
-device + `0x2268`. Confirm pointers from each new capture.
+**Scope:** reviewed GPU setup instruction/source contract and integration-gap
+reference; not a current packet/status authority. Historical captures used during this
+contract reached `0x001918E0` inside device initializer `0x00192090`, but that is not a
+claim about the current guest stop. Current execution state lives in the plan. The game
+device is `0x0019B200`; the hardware context passed in ECX is device + `0x2268`.
+Confirm pointers from each new capture.
 
 Every NV2A address written or read by the four setup functions is now decoded
 to a named register or a standard/vendor-specific PCI field (see Decoded

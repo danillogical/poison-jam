@@ -1,10 +1,11 @@
 # JSRF callback / signal / reentry contract
 
-Status: 11c1 recovery plus kernel in-place event pass, 2026-09-21.
-Instruction evidence from `python -X utf8 scripts/inspect-jsrf.py disasm`
-on the original XBE. Production bodies for `0x00193D90`, `0x00194210`,
-`0x00197AAC`, and `0x00196C4A` are recovered. Independent review of the
-event bridge is still required before treating this packet as accepted.
+**Scope:** technical ABI/signal/reentry contract and historical measurement;
+not a current packet/status authority. Current acceptance and execution state live in
+`plan-jsrf-bare-minimum.md` and review records. Instruction evidence was produced with
+`python -X utf8 scripts/inspect-jsrf.py disasm` on the original XBE. The contract records
+the recovered production bodies for `0x00193D90`, `0x00194210`, `0x00197AAC`, and
+`0x00196C4A` without making a current acceptance claim.
 
 Source ranges (end exclusive): `0x00193D90..0x00193EE2`,
 `0x00194210..0x001942F8`, `0x00197AAC..0x00197BCF`,
