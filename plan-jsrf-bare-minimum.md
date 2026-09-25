@@ -6,31 +6,69 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4a-r2` (discovery, promoted 2026-09-24)
+## CURRENT PACKET — none (A4a-r2 ACCEPTED 2026-09-24)
+
+**Next action:** the `A4a-r2` outcome row **`O-6`** selects the next packet — **`A4b`, the
+GP DSP56300 engine** — so the Planner designs that against a frozen brief
+(`docs/agent-workflow.md` §5.1). Nothing is executable until an adequacy review returns
+`ADEQUATE` and that frozen revision is promoted here. Two questions gate `A4b` and must be
+answered first (see below).
+
+## Last closed packet — `A4a-r2` (discovery, ACCEPTED 2026-09-24)
 
 - **Packet:** `docs/packets/a4a-dsp-pending-word.md`, revision `A4a-r2`, class
   **discovery**, frozen SHA-256
   `2366E18C583B3ED82124F0E5D3AAD14DB38B4D3CA493F1695E44FFE779722FBC`.
-- **Question:** is the next packet the GP DSP56300 engine (`A4b`), and what must its
-  scope include? Unknowns U1–U4: the last `GPRST` value; whether the title reads GP/EP at
-  all; whether scratch page 0 holds the XBE `0x001BA0A0` image with the pending word `3`
-  at `+0x810`; whether the stop holds on the instrumented build.
-- **What it does:** two trace-only additions inside the existing `RECOMP_APU_TRACE` block
-  of toolkit `src/apu/apu_mmio_hook.c` (off by default), then two strict runs — `R1`
-  (trap + trace) and `R0` (default path).
+- **Question:** is the next packet the GP DSP56300 engine (`A4b`), and what must its scope
+  include? Unknowns U1–U4: the last `GPRST` value; whether the title reads GP/EP at all;
+  whether scratch page 0 holds the XBE `0x001BA0A0` image with the pending word `3` at
+  `+0x810`; whether the stop holds on the instrumented build.
+- **Result — selected outcome row `O-6`** ("the start write is the only GP interaction; the
+  image is in place"), from two strict runs on game `5b58d13` / toolkit `0d7929c`:
+  - `U1` answered: `last_GPRST = 0x00000003` (`&3 = 3`), and the trace now reports the
+    values the guest actually wrote. The value oracle matched the original XBE immediates
+    exactly: `write 0x3FF14 = 000000FF` (`0x001A582A`) and `write 0x3FFFC = 00000003`
+    (`0x001A585E`), where the pre-change build logged `00000000` for both.
+  - `U2` answered: **zero** GP/EP reads, with a coverage witness (the once-per-block read
+    note is unbounded by the trace cap and never fired).
+  - `U3` answered: `G = 803CC000`, `S0 = MEM32(G) = 803C0000 = B`, and all `0x5CC` bytes
+    equal the XBE image at file offset `0x1A7D60`.
+  - `U4` answered: both runs `diagnostic_deadline` with `F = 2` on the offset-unpinned
+    frame pattern, i.e. the stop holds with and without the trap.
+- **Instrumentation:** toolkit `0d7929c` (`src/apu/apu_mmio_hook.c` only, 39+/6−). T1
+  reports the value the access moved; T2 names the 400-line cap when reached. Both sit
+  inside the existing `RECOMP_APU_TRACE` block, off by default; the R0 leak check is their
+  witness (0/0/0). exe `87971604…7ef` → `9597ff7c…c553`; `ctest` 12/12.
+- **Claim limits:** a discovery packet claims observations only and never satisfies a
+  strict criterion (§5.8). R1 reached the spin only after its `0xFE820010` polls were
+  answered by the `PIO_FREE` stub constant `0x80`, so **its arrival at the spin is
+  exploratory-grade however R1 classifies** (Advisor ruling B). Nothing here shows the GP
+  would clear `+0x810` if it ran — only real GP DSP56300 execution can (ruling D).
 - **Records:** adequacy `docs/reviews/a4a-r2-adequacy-review.md` (`ADEQUATE`,
-  `BLOCKING: NONE`); revision log `docs/reviews/a4a-revision-history.md`
-  (non-authoritative). Superseded `A4a-r1` is preserved at game commit `5e739f6`.
-- **Claim limits:** a discovery packet establishes observations only. It never satisfies a
-  strict criterion and never claims anything works (`docs/agent-workflow.md` §5.8).
-  Reaching the spin under trap is **exploratory-grade however R1 classifies**, because the
-  guest's `0xFE820010` polls are answered by the `PIO_FREE` stub constant `0x80`
-  (`docs/jsrf-run-profiles.md` §"Feature enablement", Advisor ruling B). Only real GP
-  DSP56300 execution can clear `+0x810` (ruling D).
-- **Outcome rows hand off directly:** `O-3` → `A4c` (scratch upload path), `O-4` → `A4d`
-  (GP start path), `O-5`/`O-6` → `A4b` (GP engine brief), `O-1` → Advisor ruling first,
-  `O-2` → Session repairs once, `O-UNKNOWN` → rerun once then re-plan. IDs `A4b`/`A4c`/
-  `A4d` are placeholders assigned when briefed.
+  `BLOCKING: NONE`); execution `docs/reviews/a4a-execution-evidence.md`; acceptance
+  (`ACCEPT`, first stage, final) `docs/reviews/a4a-r2-acceptance-review.md`; revision log
+  `docs/reviews/a4a-revision-history.md` (non-authoritative). Superseded `A4a-r1` is
+  preserved at game commit `5e739f6`.
+
+**Follow-ups carried forward (not authorized until promoted in a packet):**
+
+- **Gates `A4b`, answer first:** **Q1** (Advisor) — does the upstream `PIO_FREE` stub
+  contamination taint `A4b`'s strict claim, requiring a sourced `PIO_FREE` model first?
+  **Q2** (owner via Advisor, §3.4) — licensing of a DSP56300 core: the only known one,
+  xemu `hw/xbox/mcpx/apu/dsp/`, is reported GPL-2.0-or-later, while the toolkit is MIT with
+  LGPL APU files.
+- **Scope `A4b` to the whole GP block, not just GPRST:** R1 shows five GP offsets written
+  (`0x3FF00`, `0x3FF04`, `0x3FF10`, `0x3FF14`, `0x3FFFC`×3). Recorded as an acceptance
+  advisory.
+- `gp_ep_reads` (as defined in `A4a-r2`) counts only `[APUMMIO] read` lines, so a GP
+  read-modify-write logged as a write would not register. It did not bite here. Tighten if
+  the row is reused.
+- Archive raw `ctest` output in run directories; the packet's Closure named it but only
+  `CTestCostData.txt` survives.
+- `P0.1-AC1` re-review; moving `RECOMP_AC97_READY` into the classifier's
+  `RETIRED_OVERRIDES` registry; the unmodelled AC'97 registers `0xFEC0017C` / `0xFEC00100`.
+- Owner-reserved, unchanged: the `0xFE820010` "GP sample counter" / `PIO_FREE` naming
+  conflict (`docs/jsrf-run-profiles.md:288-292`).
 
 **Measured blocker (unchanged):** the guest spins at `loc_001A18D0`
 (`recomp_0005.c:6748-6751`, live frame in `sub_001A1769`) on a DSP pending word at
@@ -38,11 +76,6 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 `RECOMP_APU_DSP_ACK` stays forbidden as acceptance evidence. **Caution:** A3a's predicted
 next stop (`div@0x001A2BFC`) came from an exploratory run with `RECOMP_GPU_ACK` enabled,
 whose synthetic completion cleared this word; it is not a prediction of strict behaviour.
-
-**Next action:** the Session executes `A4a-r2` exactly, collects the artifacts, selects
-the outcome row, and runs two-stage acceptance (§5.8: the reviewer confirms the artifacts
-exist, match the commands, and that the recorded row selection is right). The selected
-row's next packet then becomes the next frozen brief (§5.1).
 
 **Baseline (2026-09-24).** The accepted A3a work is committed: toolkit `c97ce2c`
 (`src/kernel/xbox_memory_layout.c`) and game `a16350f` (`scripts/jsrf_run_profile.py`,
