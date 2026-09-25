@@ -47,23 +47,41 @@ toolkit-only writes; `A4b2` = the strict trap+trace run (boot, run, clear, no-CP
 game-only writes, with preconditions P1 (`A4p-r1` ACCEPTED `O-GATE`) and P2 (`A4b1`
 ACCEPTED).
 
-## Draft packets — `A4b1`/`A4b2` (split of `A4b`; awaiting the sync)
+## Draft packets — `A4b1`/`A4b2` (revised to r2; awaiting fresh review)
 
-- **`A4b1`:** `docs/packets/a4b1-gp-core-port.md`, `A4b1-r1`, SHA-256
-  `90FA44103FAD4077411E9137775C2934E755E392CE6E33B6AC2399F7F4BE7233`. Claim: the pinned xemu
-  GP core, GP MMIO routing and address-translated GP DMA are in tree with per-file
+- **`A4b1`:** `docs/packets/a4b1-gp-core-port.md`, `A4b1-r2`, SHA-256
+  `839E9BEC932AA7C8DF83817D1EC5307CB7F1686F333207CDB75A6ACE638D2BB7` (345 lines). Claim: the
+  pinned xemu GP core, GP MMIO routing and address-translated GP DMA are in tree with per-file
   provenance; synthetic ack removed; licence recorded; build+ctest green including a fixture;
   one strict default run matches A4a R0. No guest GP-behaviour claim; toolkit-only writes.
-- **`A4b2`:** `docs/packets/a4b2-gp-clears-pending-word.md`, `A4b2-r1`, SHA-256
-  `BD3718E639A6484216F89E245D185F2245CC5231788953F77B735C6EC528CBC1`. Claim: in one strict
-  run (`RECOMP_GPU_ACK=0`, `RECOMP_APU_TRAP=1`) the `loc_001A18D0` wait was satisfied by
-  modelled GP execution of the guest's own command. Preconditions P1/P2. Game-only writes.
+  **Now depends on `A4s`** for its baseline.
+- **`A4b2`:** `docs/packets/a4b2-gp-clears-pending-word.md`, `A4b2-r2`, SHA-256
+  `F8348C5CB122A33B16FD4E7095903F12DA26147D846CDDD6C7A9FB74D66914EB` (298 lines). Claim: in one
+  strict run (`RECOMP_GPU_ACK=0`, `RECOMP_APU_TRAP=1`) the `loc_001A18D0` wait was satisfied by
+  modelled GP execution of the guest's own command. Preconditions P1 (`A4p` `O-GATE`) and P2
+  (`A4b1` ACCEPTED). Game-only writes.
+- **The §5.5 redesign is in both.** Device semantics 6 is now a **write-once watched-word
+  ledger** (atomic `seq`, uncapped counters, per-class latches — `GP_CLEAR`,
+  `GP_ZERO_OVER_ZERO`, `GP_ZERO_OVER_OTHER`, `GP_NONZERO_OVER`, `GP_PARTIAL`; CPU
+  `ANCHOR`/`ZERO`/`ZERO_OVERFLOW`/`OTHER` via an exported `apu_watch_cpu_store`), and Device
+  semantics 7 is trace-only. The "exempt line" and "cap reached" rules are **deleted**.
+  `A4b2`'s `AC-CLEAR` decides on latches; `R2-CPU` needs a positive witness; the new
+  **`R2-UNATTRIBUTED`** row replaces the old "no deciding line + W=0 → R-CPU" rule; the
+  `[A4BSTORE]` lines are dropped.
 - **Split decision (Planner, one line):** split, because the port's scale risk is settled by
   build+ctest+one default run and should not wait for, or be reviewed with, the run criteria.
+  The Advisor confirmed **do not merge the packets** — the leak was a decision rule placed in a
+  packet that cannot change the code producing its input, not the split itself.
 - **`AC-PIO` and `R-PIO-DATA` are deleted** from both — `A4p`'s `O-GATE` discharged Q1
   condition 3, so the criterion is retired rather than repaired.
 - The former `docs/packets/a4b-gp-dsp-engine.md` (`A4b-r3`) is **superseded** by this split
   and retained as provenance only.
+- **Open:** `A4s` is not accepted, so neither packet has a baseline yet. If a pinned xemu write
+  path cannot route through the single GP write function, `A4b1` stops and goes to the Advisor.
+- **Records:** `docs/reviews/a4b-watch-ledger-ruling.md` (the §5.5 redesign, verbatim);
+  `docs/reviews/a4b1-a4b2-adequacy-review.md` (both `INADEQUATE`);
+  `docs/reviews/a4b-pio-methodology-ruling.md`; `docs/reviews/a4b-xemu-pin.md`;
+  `docs/reviews/a4b-q1-advisor-ruling.md`; `docs/reviews/a4b-q2-owner-decision.md`.
 
 ## Last closed packet — `A4p-r1` (discovery, ACCEPTED 2026-09-24)
 
