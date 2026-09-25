@@ -82,6 +82,15 @@
 | MIXBUF base `0x001400` | `apu_regs.h:322` | **Confirmed** |
 | MIXBUF size 1024 words | `apu_state.h:36` `DSP_MIXBUFFER_SIZE 1024` | **Confirmed** — and `0x1800−0x1400 = 1024` |
 | The r3 table (256) is smaller than the universe (1024) | arithmetic | **Confirmed** — the r3 B1 defect is real |
+| MIXBUF is bin-major `32×32` | `apu_regs.h:333` `NUM_SAMPLES_PER_FRAME 32`; `:334` `NUM_MIXBINS 32` | **Confirmed** — `32×32 = 1024 = DSP_MIXBUFFER_SIZE`, so `bin = (addr − 0x1400)/32` is arithmetically consistent |
+| FIFO universe is 6 | `apu_regs.h:324` `GP_OUTPUT_FIFO_COUNT 4`; `:325` `GP_INPUT_FIFO_COUNT 2` | **Confirmed** — `4 + 2 = 6` |
+| PERIPH universe is 128 | `apu_state.h:37` `DSP_PERIPH_SIZE 128`; `:64` `uint32_t periph[DSP_PERIPH_SIZE]` | **Confirmed** |
+
+All six constants the redesign's finite universes rest on are **Session-verified against the
+toolkit source**, so the universes (32 / 128 / 6 / 4) are derived from source, not assumed —
+which is exactly what §6.1.6b requires. The one remaining uncertainty is the Advisor's own:
+whether the pinned FIFO path ever sources anything other than SGE guest memory (the static
+classification decides it, fail-closed).
 
 ## Session note
 
