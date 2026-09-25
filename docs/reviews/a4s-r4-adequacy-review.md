@@ -65,3 +65,33 @@ Advisor (already engaged on the `[GPIN]` question) is not burdened twice.
    fail-closed). Zero hits at `75083476`.
 4. The `MIXDOWN_ALL` guest-visibility uncertainty and the macro/concatenation limit stay as claim
    limits, consistent with making no APU claim.
+
+## Session verification of the r5 fix (mechanical, read-only)
+
+Run against the merge tree `75083476` (`git merge-tree --write-tree 0d7929c 766ecef`), comparing
+each range's unique first-line anchor and extracting the same line count:
+
+| Range at `0d7929c` | Length | Anchor hits at `M` | `M` start | Byte-identical (raw tree) | Shifted start differs |
+|---|---|---|---|---|---|
+| 261–267 | 7 | **1** | 442 | **yes** | yes |
+| 664–719 | 56 | **1** | 890 | **yes** | yes |
+| 1716–1740 | 25 | **1** | 2103 | **no** | yes |
+
+**This confirms three things and one necessity:**
+
+1. **All three first-line anchors are unique** at `M` (exactly 1 hit each), so the r5 anchoring rule
+   is well-founded — the reviewer's measured `442 / 890 / 2103` reproduce exactly.
+2. **The can-fail control works for all three ranges**: starting the extraction one line later
+   produces a different byte sequence in every case, so the comparison is **not vacuous**.
+3. **Two of three ranges are byte-identical at the raw merge tree**, as expected for a preserved
+   merge.
+4. **Necessity of the `HA`-resolution clause — now measured, not assumed.** Range 1716–1740 is
+   **not** byte-identical at the raw tree because it **contains the conflict markers** (the tree
+   has exactly one `<<<<<<<` and one `>>>>>>>`). The packet requires this range's comparison to run
+   on the **committed, `HA`-resolved `M`**, and that requirement is therefore **load-bearing**: a
+   reviewer or executor who compared the raw conflict-marked tree would get a false FAIL on a
+   correctly preserved model. This is the same defect shape as B1-r4, one layer down.
+
+**Consequence for the `A4s-r5` review:** the anchoring fix is sound and its control is real. The
+one thing the review must still confirm is that the packet's wording makes the `HA`-resolved
+comparison **unambiguous** — i.e. that it cannot be read as comparing the conflict-marked tree.
