@@ -6,15 +6,23 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — none (toolkit sync `A4s` in revision)
+## CURRENT PACKET — none (toolkit sync `A4s-r5` awaiting re-review)
 
-**Next action — TOOLKIT SYNC (`A4s`), by owner instruction.** `A4s-r2` passed its §5.4
-re-review **ADEQUATE**, but is **not promotable**: the Advisor's AC'97 hunk ruling
-(`docs/reviews/a4s-ac97-hunk-ruling.md`) adds obligations the packet must carry — the hunk
-disposition (resolve to the **local** `A3a-r25` model; upstream's NABM trap enters **unarmed**
-with zero call sites), three preservation checks including the `[A3A]` witness in the strict
-run, and a rule-(d) inventory covering **clean** hunks too. A Planner is revising to `A4s-r3`;
-a fresh Planner then reviews it.
+**Next action — TOOLKIT SYNC (`A4s`), by owner instruction.** `A4s-r5` (SHA-256
+`09DA9413C028D61BD28D9E4007AF6DDE3474ED6869F77B0095D03DB2C4FB86FB`) is written and awaiting a
+fresh Planner's §5.4 re-review. **Blocked on the `claude` route**, which is exhausted again
+(`docs/reviews/route-failure-20260924-claude-pool.md`).
+
+**Revision history of this packet** (each round's blocker was in the same criterion, so the
+Session ruled the last fix a **simplification** under §5.5, not a patch):
+
+| Rev | Verdict | Blocker |
+|---|---|---|
+| `r1` | INADEQUATE | a false `R-MOVED` on a shifted `B` |
+| `r2` | **ADEQUATE** | — (but the fork premise then changed) |
+| `r3` | INADEQUATE | the new greps matched a **comment** and an **unbuilt scaffold** → guaranteed false FAIL |
+| `r4` | INADEQUATE | `AC-KEEP` (iv)'s **end anchors were not unique** (`        }` ×37, `            }` ×20) → false FAIL on a preserved merge |
+| `r5` | *pending* | fix: unique-first-line anchor + fixed length (7/56/25) + byte compare |
 
 **The sync itself:** merge **`upstream/main`** (**v0.11.0**, `766ecef`) into local `main`,
 rebuild **without regenerating `src/recomp/gen`**, run both repositories' tests, rerun **one
@@ -23,8 +31,13 @@ next brief.** Verified facts and the conflict surface: `docs/reviews/toolkit-syn
 
 **Expected first result: `R-CONFLICT`.** The Planner's read-only merge preview found at least
 six undecidable hunks, so it deliberately did not pre-rule them; one attempt yields the
-complete inventory for `A4s-r3`, which then names a resolution per hunk. That is fail-closed and
-was endorsed by the re-reviewer.
+complete inventory for the follow-up. That is fail-closed and was endorsed by the re-reviewer.
+
+**The AC'97 hunk is pre-ruled** (`HA`): it resolves to the **LOCAL** `A3a-r25` model; upstream's
+NABM trap enters **unarmed** with zero call sites. The Advisor's **"Interpretation ruling 2:
+scope"** fixes the check's scope: `SCOPE` = the toolkit's **`src/` and `include/`**, deleted
+names match only as **quoted string literals**, and comments/docs/tests/unbuilt scaffolds are
+**inventoried, never failed**. See `docs/reviews/a4s-ac97-hunk-ruling.md`.
 
 **Push policy (owner):** push toolkit `main` to **`origin`** (the owner's fork) **when a packet
 closes**, then confirm `origin/main` equals the merge commit. **Never push to `upstream`** (its
@@ -57,27 +70,34 @@ toolkit-only writes; `A4b2` = the strict trap+trace run (boot, run, clear, no-CP
 game-only writes, with preconditions P1 (`A4p-r1` ACCEPTED `O-GATE`) and P2 (`A4b1`
 ACCEPTED).
 
-## Draft packets — `A4b1`/`A4b2` (revised to r2; awaiting fresh review)
+## Draft packets — `A4b1`/`A4b2` (at r3; r4 revision blocked on the route)
 
-- **`A4b1`:** `docs/packets/a4b1-gp-core-port.md`, `A4b1-r2`, SHA-256
-  `839E9BEC932AA7C8DF83817D1EC5307CB7F1686F333207CDB75A6ACE638D2BB7` (345 lines). Claim: the
+- **`A4b1`:** `docs/packets/a4b1-gp-core-port.md`, `A4b1-r3`, SHA-256
+  `321ABCF7C9319B5AC4661B384A21CA2D2CE39C792D9820C9C322B7979EC7AFDA` (373 lines). Claim: the
   pinned xemu GP core, GP MMIO routing and address-translated GP DMA are in tree with per-file
   provenance; synthetic ack removed; licence recorded; build+ctest green including a fixture;
   one strict default run matches A4a R0. No guest GP-behaviour claim; toolkit-only writes.
-  **Now depends on `A4s`** for its baseline.
-- **`A4b2`:** `docs/packets/a4b2-gp-clears-pending-word.md`, `A4b2-r2`, SHA-256
-  `F8348C5CB122A33B16FD4E7095903F12DA26147D846CDDD6C7A9FB74D66914EB` (298 lines). Claim: in one
+  **Depends on `A4s`** for its baseline.
+- **`A4b2`:** `docs/packets/a4b2-gp-clears-pending-word.md`, `A4b2-r3`, SHA-256
+  `CFB8C0EBFBC9BE3CFB62677C4C756694DDE9663542E239570B639DED9F5BFCE9` (310 lines). Claim: in one
   strict run (`RECOMP_GPU_ACK=0`, `RECOMP_APU_TRAP=1`) the `loc_001A18D0` wait was satisfied by
   modelled GP execution of the guest's own command. Preconditions P1 (`A4p` `O-GATE`) and P2
   (`A4b1` ACCEPTED). Game-only writes.
-- **The §5.5 redesign is in both.** Device semantics 6 is now a **write-once watched-word
-  ledger** (atomic `seq`, uncapped counters, per-class latches — `GP_CLEAR`,
+- **The ledger (ruling 1) is sound and unchanged.** Device semantics 6 is a **write-once
+  watched-word ledger** (atomic `seq`, uncapped counters, per-class latches — `GP_CLEAR`,
   `GP_ZERO_OVER_ZERO`, `GP_ZERO_OVER_OTHER`, `GP_NONZERO_OVER`, `GP_PARTIAL`; CPU
-  `ANCHOR`/`ZERO`/`ZERO_OVERFLOW`/`OTHER` via an exported `apu_watch_cpu_store`), and Device
-  semantics 7 is trace-only. The "exempt line" and "cap reached" rules are **deleted**.
-  `A4b2`'s `AC-CLEAR` decides on latches; `R2-CPU` needs a positive witness; the new
-  **`R2-UNATTRIBUTED`** row replaces the old "no deciding line + W=0 → R-CPU" rule; the
-  `[A4BSTORE]` lines are dropped.
+  `ANCHOR`/`ZERO`/`ZERO_OVERFLOW`/`OTHER` via an exported `apu_watch_cpu_store`); Device
+  semantics 7 is trace-only. Three independent reviews confirmed it faithful to the ruling and
+  closed all seven r1 blocking defects.
+- **The input accounting (`[GPIN]`) is being redesigned (ruling 3, §5.5 third trigger).** Three
+  consecutive blocking verdicts: a lossy once-per-key log decided `AC-INPUTS`; the fix was a
+  256-entry table; and that table's key universe is **1024 words** for MIXBUF alone
+  (`GP_DSP_MIXBUF_BASE 0x001400` + `DSP_MIXBUFFER_SIZE 1024`, Session-verified), so one frame's
+  mixbin sweep overflows it → false `R2-UNKNOWN`. The redesign keys **provenance classes over
+  statically enumerated finite universes** (MIXBUF 32 bins, PERIPH 128, FIFO 6, DMA region
+  class 4), with counters that **cannot overflow by construction**, a write-once `at_clear`
+  freeze at `GP_CLEAR`, and `GPIN_OUT_OF_UNIVERSE` as a **bug detector**. See
+  `docs/reviews/a4b-gpin-accounting-ruling.md`.
 - **Split decision (Planner, one line):** split, because the port's scale risk is settled by
   build+ctest+one default run and should not wait for, or be reviewed with, the run criteria.
   The Advisor confirmed **do not merge the packets** — the leak was a decision rule placed in a
@@ -88,8 +108,9 @@ ACCEPTED).
   and retained as provenance only.
 - **Open:** `A4s` is not accepted, so neither packet has a baseline yet. If a pinned xemu write
   path cannot route through the single GP write function, `A4b1` stops and goes to the Advisor.
-- **Records:** `docs/reviews/a4b-watch-ledger-ruling.md` (the §5.5 redesign, verbatim);
-  `docs/reviews/a4b1-a4b2-adequacy-review.md` (both `INADEQUATE`);
+- **Records:** `docs/reviews/a4b-watch-ledger-ruling.md` (ruling 1, verbatim);
+  `docs/reviews/a4b-gpin-accounting-ruling.md` (ruling 3, verbatim);
+  `docs/reviews/a4b1-a4b2-r2-adequacy-review.md` and `…-r3-…` (both `INADEQUATE`);
   `docs/reviews/a4b-pio-methodology-ruling.md`; `docs/reviews/a4b-xemu-pin.md`;
   `docs/reviews/a4b-q1-advisor-ruling.md`; `docs/reviews/a4b-q2-owner-decision.md`.
 
