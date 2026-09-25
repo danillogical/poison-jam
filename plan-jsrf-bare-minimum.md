@@ -9,16 +9,17 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 ## CURRENT PACKET — none (toolkit sync `A4s-r5` awaiting re-review)
 
 **ROUTE STATE — both senior-judgment routes are BLOCKED; work is queued, nothing is mid-flight.**
-Claude Opus 5.5 is rate-limited (second outage today). The **owner authorized a temporary
-substitution** to `workbuddy-ai/GPT-5.6 sol` @ `high`, but **that route is not resolvable for this
+The senior judgment route is rate-limited (second outage today; see
+`docs/reviews/route-failure-20260924-claude-pool.md`). The **owner authorized a temporary
+substitution** to a WorkBuddy-hosted senior route, but **that route is not resolvable for this
 Session**: every spelling returns `child LLM route "…" is not allowed for this Session`, because
-`gpt-5.6-sol` is permitted **only under the `codex` provider** in
+the substitute model id is permitted **only under the `codex` provider** in
 `C:\Users\logic\.dsh\settings.yaml` (`subagent-model-selection.allowedModels`) — and the owner
 explicitly forbade a Codex-hosted GPT route. The WorkBuddy provider itself is healthy (a
-`workbuddy-ai/gpt-5.5` control answered `ROUTE-OK`). Per the owner's instruction the Session
+`workbuddy-ai` control model answered `ROUTE-OK`). Per the owner's instruction the Session
 **STOPPED and reported** rather than choosing another substitute; it did **not** edit the
-allow-list (model policy is owner-reserved). **Remedy:** add
-`{provider: workbuddy-ai, model: gpt-5.6-sol}` to that allow-list. Full diagnosis:
+allow-list (model policy is owner-reserved). **Remedy:** add the substitute model id to that
+allow-list under the `workbuddy-ai` provider. Full diagnosis:
 `docs/reviews/route-failure-20260924-workbuddy-substitute.md`.
 
 **Queued in order:** (1) the `A4s-r5` re-review → freeze/promotion if `ADEQUATE` with zero
