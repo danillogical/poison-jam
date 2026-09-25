@@ -11,14 +11,21 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 **Next action — TOOLKIT SYNC, by owner instruction (2026-09-24).** Before any `A4b` code is
 written, the next packet is a **change packet that syncs the toolkit with upstream**:
 
-- merge `origin/main` (**v0.11.0**, `766ecef`) into local `main`, resolving conflicts;
+- merge **`upstream/main`** (**v0.11.0**, `766ecef`) into local `main`, resolving conflicts —
+  no fetch is needed, `upstream/main` is already `766ecef`;
 - rebuild **without regenerating `src/recomp/gen`**;
 - run both repositories' tests;
 - rerun **one strict baseline** to show whether the stop is still the DSP pending-word spin;
-- **do not push anything to origin.**
+- during execution **nothing is pushed**, and `upstream/main` stays `766ecef`.
 
 The Planner designs it. **If the strict stop moves, that is the next brief.** Verified facts
 and the conflict surface: `docs/reviews/toolkit-sync-instruction.md`.
+
+**Push policy (owner):** push toolkit `main` to **`origin`** (the owner's fork,
+`danillogical/xboxrecomp`) **when a packet closes**, with `git push -u origin main`, then
+confirm `origin/main` equals the merge commit. **Never push to `upstream`** (its push URL is
+`DISABLED`). The game repository has no remote; do not add one. Recorded in `AGENTS.md`
+"Toolkit remotes" (game commit `3ec4563`).
 
 **Why the ordering matters (Session-observed, not in the instruction):** upstream also
 changed **`src/apu/apu_dsp.c`** (+56 lines, 148→199) and **`src/apu/CMakeLists.txt`** — the

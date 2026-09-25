@@ -1,5 +1,36 @@
 # Toolkit sync — owner instruction and Session verification
 
+## PREMISE_CHANGED (2026-09-24, owner) — the toolkit was forked and the remotes reconfigured
+
+**The owner forked the toolkit and reconfigured the remotes.** Session-verified:
+
+```text
+origin    https://github.com/danillogical/xboxrecomp.git  (fetch + push)   <- the owner's fork
+upstream  https://github.com/sp00nznet/xboxrecomp.git     (fetch)
+upstream  DISABLED                                        (push)
+```
+
+| Ref | Commit | Note |
+|---|---|---|
+| `origin/main` | `766ecef` | the **fork**, currently equal to v0.11.0 |
+| `upstream/main` | `766ecef` | the same commit — **no fetch is needed** |
+| `main` | `0d7929c` | now **tracks `upstream/main`**, not `origin/main` |
+
+**Recorded in** `AGENTS.md` "Toolkit remotes", added by game commit **`3ec4563`** ("AGENTS:
+record the toolkit fork and push rule"), which is the current game HEAD.
+
+**Push policy (owner, verbatim):** *"push toolkit main to origin when a packet closes; never
+push to `upstream`. The game repository has no remote; do not add one."*
+
+**Consequence for `A4s-r1`:** the draft merges from `origin/main` and gates on
+`origin/main` staying `766ecef`. Both are now wrong — the merge source is `upstream/main`,
+and closure is *supposed* to move `origin/main`. Returned to the authoring Planner to revise
+before adequacy review. **Everything else in the draft stands** (owner's words).
+
+---
+
+# Toolkit sync — the original instruction and Session verification
+
 **Instruction (owner, 2026-09-24, direct to the Session):** local `xboxrecomp` `main` has
 diverged from `origin/main`. After `A4p` closes and **before any `A4b` code is written**, the
 next packet is a change packet that merges `origin/main` (v0.11.0) into local `main`,
@@ -7,6 +38,10 @@ resolving conflicts; rebuilds **without regenerating `src/recomp/gen`**; runs bo
 repositories' tests; and reruns one strict baseline to show whether the stop is still the
 DSP pending-word spin. The Planner designs it. If the strict stop moves, that is the next
 brief. **Do not push anything to origin.**
+
+> The instruction above predates the fork. Its "`origin/main`" means the commit that is now
+> **`upstream/main`** (`766ecef`, v0.11.0), and its "do not push" is superseded by the push
+> policy recorded above: push to the fork at closure, never to `upstream`.
 
 ## Session verification of the stated facts (all observed, 2026-09-24)
 
