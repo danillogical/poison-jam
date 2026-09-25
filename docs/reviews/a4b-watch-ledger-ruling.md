@@ -24,6 +24,8 @@
 >    - CPU_ANCHOR: the first store of 3 from the control site (recomp_0005.c:6746). A4b2 passes the control-site VA; A4b1 does not hard-code it.
 >    - CPU_ZERO: the first store of 0, latched per site. Use a bounded site table (say 16 entries) plus one CPU_ZERO_OVERFLOW latch. Overflow is itself a recorded event, never silent.
 >    - CPU_OTHER: counters only.
+>
+>    **Premise (added 2026-09-24):** the bounded site table is safe **only because** the site universe is finite, enumerated in source, and independent of run length — the instrumented `jsrf_watch_store` call sites. Applying this same "bounded table + overflow latch" pattern to a key whose universe is *not* so bounded produced a third `INADEQUATE` verdict; see `docs/reviews/a4b-gpin-accounting-ruling.md` and `docs/agent-workflow.md` §6.1.6b.
 > 4. Emission, under RECOMP_APU_TRACE:
 >    - exactly one `[GPWATCH] latch class=<C> seq=%u va=%08X observed=%08X payload=%08X site=%08X frame=%u insns=%llu dsp_addr=%06X` at the moment each latch fires, fflush'd. The number of classes is fixed, so this needs no cap and cannot lose a line;
 >    - `[GPWATCH] counts seq=%u <class>=%u …` every 256th frame, and again immediately after GP_CLEAR latches.

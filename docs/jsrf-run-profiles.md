@@ -234,8 +234,15 @@ never a positive attribution; it selects `UNKNOWN` or an explicit unattributed r
 row that blames a specific agent. See `docs/agent-workflow.md` §6.1.6 and
 `docs/reviews/a4b-watch-ledger-ruling.md`.
 
-A modelled cause requires **either**:
+**A decision input must also be bounded by construction.** Its size must be fixed by a finite
+universe stated and derived from source, independent of run length and input volume; it is keyed
+by the property the decision classifies (a provenance class, a bin, a region), not by the identity
+of individual events (an address, a page, a value). A table whose key universe is not shown finite
+is observation only, and an overflow counter is a bug detector — if a record can overflow because
+the run was long or busy, the key is wrong. See `docs/agent-workflow.md` §6.1.6b and
+`docs/reviews/a4b-gpin-accounting-ruling.md`.
 
+A modelled cause requires **either**:
 - one credible **primary** hardware source — a datasheet or vendor specification for the
   relevant device; **or**
 - at least **two independent corroborating secondary sources of meaningfully different

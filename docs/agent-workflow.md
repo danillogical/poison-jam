@@ -640,6 +640,19 @@ evidence semantics".
    input's semantics; a consuming packet only reads it. Measured cost of not doing this:
    two consecutive `INADEQUATE` verdicts on one mechanism
    (`docs/reviews/a4b-watch-ledger-ruling.md`).
+6b. **Decision inputs are bounded by construction.** A record a row decides from must have a
+   size fixed by a **finite universe that is stated and derived from source** (a register
+   file, a FIFO count, a fixed set of classes, the enumerated instrumentation sites),
+   **independent of run length and input volume**. Key it by the **property the decision
+   classifies** (provenance class, bin, region), not by the identity of individual events
+   (address, page, value). A table whose key universe is not shown finite is **observation
+   only**. An overflow or out-of-universe counter is a **bug detector**; if a record can
+   overflow because the run was long or busy, **the key is wrong**. Completeness of
+   instrumentation is established **structurally** (enumerated hook sites, each with a
+   fixture case), not by counting distinct keys at run time. A criterion whose only role is
+   to qualify a PASS is **evaluated only when that PASS holds**. Measured cost of not doing
+   this: a third consecutive `INADEQUATE` verdict on one mechanism, where a 256-entry table
+   faced a 1024-word key universe (`docs/reviews/a4b-gpin-accounting-ruling.md`).
 7. **Exercise and controls.** Absence claims need a coverage witness; a new checker
    needs known-good and known-bad controls; the oracle is not derived solely from the
    implementation under test.
