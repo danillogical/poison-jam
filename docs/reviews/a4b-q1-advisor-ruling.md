@@ -124,20 +124,136 @@ A4b.
 >   strict liveness or boot-progress criterion past the spin. Include the xemu
 >   self-described-pretence finding.
 
-## Session verification of the ruling's load-bearing claims
+## PREMISE_CHANGED addendum (2026-09-24) — the site population is 28, not 10
 
-Independently reproduced by the Session before recording (workflow §2.4.2):
+**Added after the original ruling above. The original text is not overwritten.**
+
+The A4b adequacy reviewer (a Planner that did not write the packet) ran out of context
+before returning a verdict, but its recovered reasoning contained this finding; the Session
+reproduced it and put it to the Advisor as a `PREMISE_CHANGED` under §4.3. **The Advisor
+confirmed the error was its own**: it built the Q1 site list by grepping the hex spelling
+of the address, so the list covered **10 of 28** sites.
+
+**The measurement (observed, independently reproduced by the Session):**
+
+- `0xFE820010 - 2^32 = -25034736` — the same guest VA, two spellings.
+- `MEM32(0xFE820010u)` = **10** occurrences in `src/recomp/gen/recomp_*.c`.
+- `MEM32(-25034736)` = **18** occurrences, at `recomp_0005.c:10365, 11307, 11449, 11883,
+  12018, 12132, 12396, 12547, 12658, 12782, 12882, 13120, 13246, 13770, 14291, 14399,
+  15755, 18358`.
+- Overlap: **0**. No other spelling exists. Distinct total: **28**.
+
+**Why the spellings differ (observed lifter behaviour, now recorded as operating
+knowledge):** an `A1` moffs load — always into `eax` — is emitted as `MEM32(0xFE820010u)`,
+while a ModRM `disp32` operand is emitted as signed decimal `MEM32(-25034736)`. That is why
+all 10 hex sites load `eax` and all 18 decimal sites load other registers. **Every address
+≥ `0x80000000` is exposed to this**, which covers all MMIO and the contiguous window.
+
+### Advisor ruling on the premise change (verbatim)
+
+> First, the error is mine. I built the Q1 site list by grepping the hex spelling of the address, so the list covered 10 of 28 sites.
+>
+> RULING:
+> (a) Q1's conclusion STANDS. What changes is the work condition 3 requires and the evidence that backs it; it does not need re-deciding.
+> - The ruling is about the address, not a list of sites: PIO_FREE is only a gate.
+> - I checked all 18 additional sites myself. Every one has the same threshold re-poll shape: `(v & ~3) < N` with N ∈ {8, 0xC, 0x48, 0x4C}, or `(v >> 2) < reg`, followed by a jump back to the read on below.
+> - So the corrected population does not trigger reversal (a) on the evidence available.
+> - Still, Q1 is only as good as condition 3 executed over the COMPLETE population. Until AC-PIO passes over 28 sites whose completeness is itself witnessed, the Q1 conclusion is only provisional. A4b-r1 cannot be ADEQUATE as written.
+>
+> (b) What AC-PIO must require, so that a literal executor cannot pass it over a subset:
+> 1. Build the population from the ORIGINAL XBE, not from the generated C text.
+>    - Command: `python -X utf8 scripts\inspect-jsrf.py find 0xFE820010`. Record it verbatim, with its output and the XBE SHA-256.
+>    - I ran it: it returns exactly 28 occurrences, all in section DSOUND, 0x001A2297 … 0x001A611D.
+>    - Decode each hit as the 32-bit memory operand of an instruction starting 1 byte earlier (opcode A1, `mov eax,[moffs]`) or 2 bytes earlier (8B /r disp32). A hit that does not decode that way is UNKNOWN; it is never dropped.
+> 2. The packet must freeze the population count (28) and the list of instruction VAs. The PASS predicate must be conditioned on: count found == frozen count, AND every listed VA is evaluated. Any difference makes the criterion UNKNOWN, not PASS.
+> 3. Reconcile against the generated tree.
+>    - Parse every integer literal inside MEM8/16/32 in `src/recomp/gen/recomp_*.c` and normalise it mod 2^32. Do not match text.
+>    - Every XBE site must map to exactly one generated read (`loc_<insnVA>` label). The normalised count must be 28, with no leftovers in either direction.
+> 4. Define "the value is not used after the loop" precisely:
+>    - no flow of the polled register into a guest store, MMIO store, branch condition or address, on any path, until the register is overwritten;
+>    - a callee-save push/pop pair is not a use;
+>    - if a `call` happens while the register still holds the polled value, the criterion must either show the callee does not read it as input or mark the site UNKNOWN. Sites 0x001A3414 (esi) and 0x001A4325 (ebx) exit through `lea ecx,[ebp-8]; call 0x1A1BAF` with the register still live until `pop`.
+> 5. State the static method's limit, in the same sentence as the claim: it cannot exclude register-indirect access to 0xFE820010.
+>    - Required supporting evidence: the other MCPX-window base forms found in the XBE. I found exactly one: 0xFE800000 used as a displacement at 0x001A2E4A…0x001A2FA4, with base registers loaded from the table at 0x001B9ECC, whose entries read 0x2054…0x2074. That is inferred to be the voice-list registers, not PIO_FREE.
+>    - One stray 0x00020010 at .rdata 0x001E4888 has no pointer references, which is inferred to be data.
+>    - If any of this can reach PIO_FREE, the criterion is UNKNOWN.
+>
+> (c) General rule, worth recording. The trap is systematic, not a one-off.
+> - Observed lifter behaviour: an `A1` moffs load (always into eax) is spelled `MEM32(0xFE820010u)`, while a ModRM disp32 operand is spelled as signed decimal `MEM32(-25034736)`. That is why all 10 hex sites load eax and all 18 decimal sites load other registers.
+> - Every address ≥ 0x80000000 is exposed to this, which covers all MMIO and the contiguous window.
+> - Rule: a claim that enumerates guest accesses to an address must:
+>   (i) derive the population from the original XBE instruction stream, with operands normalised to uint32;
+>   (ii) reconcile it against the generated code after normalising literals, never by spelling;
+>   (iii) freeze the count and the generating command in the criterion;
+>   (iv) state what the method cannot see: register-indirect, computed, and table-driven accesses.
+>   A text grep is admissible as a lead, never as a completeness witness.
+>
+> Dependent-ruling reconsideration (§4.3). Checkpoint-40 constraint 3(ii) relies on an enumeration of guest CPU stores that write 0 to +0x810 (0x001A1751 and 0x001A1FA7). Those stores are register-indirect (B+0x810), so no literal enumeration can prove the set is complete. Amend 3(ii) as follows:
+> - Demote the stop-path counters to corroboration.
+> - Make the primary witness atomic: the GP DMA write to the single dword at B+0x810 is done as InterlockedCompareExchange(expected 3 → 0).
+>   - A successful exchange proves the GP's own write made the 3→0 transition, and no CPU store could have come in between.
+>   - On failure, do the ordinary store and log the observed value; that routes to UNKNOWN / FAIL-cleared-by-CPU.
+>   - The final memory result is the same as an ordinary store in both cases, so no device semantics change.
+> - 3(i) (payload word is 0) and 3(iii) (no RECOMP_APU_DSP_ACK) still apply.
+>
+> BASIS:
+> - Observed: my own counts in src/recomp/gen/recomp_*.c: `MEM32(0xFE820010u)` = 10; `-25034736` = 18, at the 18 recomp_0005.c lines you listed; no other spelling.
+> - Observed: `inspect-jsrf.py find 0xFE820010` = 28 occurrences, all in DSOUND. Each hit is at label+1 (A1 form) or label+2 (8B form) of the 28 generated `loc_` labels.
+> - Observed: the generated loop bodies at all 18 lines.
+> - Observed: XBE disassembly of the exits at 0x1A3414, 0x1A4325, 0x1A579E, 0x1A3F24, 0x1A38F4, 0x1A3B69 and 0x1A4242.
+> - Observed: `find 0xFE800000` = 7 hits (six displacements at 0x1A2E4A–0x1A2FA4 plus .data 0x22DB72); table 0x1B9EC0 data; `find 0x00020010` = 1 hit at .rdata 0x1E4888, and 0 references to that address.
+> - Inferred: the 0x2054–0x2074 table is voice-list registers, and 0x1E4888 is data.
+> - Uncertain: whether sub_001A1BAF reads esi or ebx as input. I did not audit this; AC-PIO item 4 must.
+> - Uncertain: runtime-computed accesses to 0xFE820010 outside the forms found. The dynamic trace cannot attribute a read to an instruction, so this cannot be settled at runtime yet.
+>
+> REVERSED BY:
+> - Any of the 28 sites where the polled value flows into data, a store or a branch other than its own loop test. Q1 then flips, and a PIO_FREE model becomes a prerequisite for A4b.
+> - A register-indirect or table-driven read of 0xFE820010 whose value is used as data.
+> - Evidence that the XBE-find method misses an encoding form, for example the address split across an instruction boundary or built at runtime. The enumeration rule then needs another method.
+>
+> RECORD IN:
+> - The case ruling, verbatim with this child ID and route, in docs/reviews/a4b-q1-advisor-ruling.md, as a dated PREMISE_CHANGED addendum. Do not overwrite the original text.
+> - Cross-reference it from docs/reviews/a4b-planning-rulings.md for the constraint-3(ii) amendment.
+> - A4b-r1 must be revised: AC-PIO per (b), and constraint 3 per the amendment. Then run a fresh adequacy review.
+> - General rule (c): as a separate policy edit in docs/agent-workflow.md, in the section governing packet criteria and executor-literal predicates.
+> - The lifter spelling fact (A1 moffs → hex, disp32 → signed decimal): one line in AGENTS.md under "Generated-source rules", as operating knowledge.
+
+### Session verification of the addendum's claims
+
+| Claim | Session check | Result |
+|---|---|---|
+| `find 0xFE820010` returns 28 | ran the command | **`28 occurrence(s) of 0xFE820010`**, all `DSOUND`, `001A2297` … `001A611D` — matches the Advisor exactly |
+| Each hit maps to a generated `loc_` label at hit−1 or hit−2 | mapped all 28 against `recomp_0005.c` | **28/28 mapped**, none unmapped — the reconciliation procedure is mechanically sound |
+| `find 0xFE800000` = 7 hits | ran it | **`7 occurrence(s)`**, last two `001A2FA4 DSOUND`, `0022DB72 .data` |
+| `find 0x00020010` = 1 hit | ran it | **`1 occurrence(s)`** at `001E4888 .rdata` |
+| The `0x1B9ECC` table holds `0x2054…0x2074` | read the XBE as data at that VA | **`00002054 00002058 0000205C 00002060 00002064 00002068 0000206C 00002070`** — voice-list registers (`NV_PAPU_VPVADDR` `0x202C`… family), **not** `PIO_FREE` (`0x20010`). The Advisor's inference is confirmed. |
+
+The Advisor's escape-hatch analysis therefore holds on the evidence available: the only
+other MCPX-window base form addresses voice-list registers, and the stray `0x00020010` is
+data. The method's blind spot (register-indirect and computed access) is real and must be
+stated with the claim.
+
+**Status of Q1:** the conclusion stands, but it is **provisional** until `AC-PIO` passes
+over a population whose completeness is itself witnessed. `A4b-r1` cannot be `ADEQUATE` as
+written.
+
+## Session verification of the ORIGINAL ruling's claims (superseded in part — see the addendum)
+
+Independently reproduced by the Session before the original ruling was recorded (workflow
+§2.4.2). **Superseded in scope by the PREMISE_CHANGED addendum above:** the first row below
+counted only the hex spelling and therefore covered 10 of the 28 sites. The other three rows
+stand, and the addendum extends the loop-shape finding to all 28.
 
 | Claim | Check | Result |
 |---|---|---|
-| Ten `0xFE820010` read sites in `recomp_0005.c` | `Select-String 'MEM32\(0xFE820010u\)'` | **exactly 10**, at the ten lines the Advisor named |
+| ~~Ten `0xFE820010` read sites in `recomp_0005.c`~~ | `Select-String 'MEM32\(0xFE820010u\)'` | **exactly 10 of that spelling** — but the population is **28**. Corrected by the addendum; do not use this row as a completeness claim. |
 | Each is a threshold re-poll loop | read the loop bodies | `L8667`: `eax &= 0xFFFFFFFC` → `cmp eax,4` → `jb loc_001A2296` (re-poll). `L14172`: `eax >>= 2` → `cmp eax,ecx` → `jb loc_001A4181`. `L19885`: same form as `L8667`. Confirmed. |
 | The value is dead after the loop exits | read the exit targets | `L8667` exits to `loc_001A22A3: eax = MEM32(ebp + 8)` — `eax` immediately overwritten. `L14172` exits to `loc_001A418D: edi = 0` — `eax` unused. `L19885` exits to `loc_001A6129: MEM32(-25034484) = 1` — `eax` unused. Confirmed at the three sites sampled. |
 | `apu_vp.c` returns the constant with no queue | read `mcpx_apu_vp_read` | `case NV1BA0_PIO_FREE: return 0x80; /* Always pretend queue is empty */`, and `mcpx_apu_vp_write` dispatches through `fe_method` synchronously. Confirmed. |
 
-The Session did **not** re-verify the Advisor's full ten-site dead-after-exit audit (the
-Advisor itself marks that uncertain at the three sites where a call follows the loop);
-A4b's condition 3 closes it. That uncertainty is carried, not resolved.
+The Session did **not** re-verify the Advisor's full dead-after-exit audit (the Advisor
+itself marks that uncertain at the sites where a call follows the loop). `A4b`'s `AC-PIO`
+closes it, now over the complete 28-site population.
 
 ## General clarification recorded in its owning document
 

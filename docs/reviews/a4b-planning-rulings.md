@@ -3,6 +3,21 @@
 Binding on `A4b`. Recorded verbatim per the Advisor's own RECORD IN clause. The packet
 cites this path.
 
+> **AMENDMENT (2026-09-24) — constraint 3(ii) is amended by a later ruling.**
+> The constraint-40 text below relies on a complete enumeration of guest CPU stores that
+> write `0` to `+0x810`. Those stores are register-indirect (`B+0x810`), so no literal
+> enumeration can prove the set complete. The Advisor therefore amended 3(ii):
+> **demote the stop-path counters to corroboration**, and make the primary witness
+> **atomic** — the GP's DMA write to the single dword at `B+0x810` must be performed as
+> `InterlockedCompareExchange(expected 3 → 0)`, so a successful exchange proves the GP's own
+> write made the 3→0 transition with no CPU store in between. On failure, do the ordinary
+> store and log the observed value, routing to `UNKNOWN` / `FAIL-cleared-by-CPU`. Memory
+> ends up identical either way, so no device semantics change. 3(i) and 3(iii) still apply.
+> The full amended ruling, and the `PREMISE_CHANGED` finding that caused it (the `PIO_FREE`
+> population is 28 sites, not 10), are recorded verbatim in
+> `docs/reviews/a4b-q1-advisor-ruling.md` under its dated PREMISE_CHANGED addendum. The
+> text below is the original and is **not** overwritten.
+
 **Advisor:** Persistent advisor child `407c54a3-6ca4-4a65-835b-faf5355195cd`, route
 `claude` / `claude-opus-5-5` @ `high`, marker `DSH-JSRF-ADVISOR-7Q4M2XK9`.
 **Planner:** child `fa3b28a7-8f76-491e-a359-f523a7a45b7b` (A4b).

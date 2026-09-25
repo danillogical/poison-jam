@@ -586,6 +586,20 @@ This list is for change packets; a discovery packet uses §6.3. Whoever drafts w
 through it; the Planner may waive an item with a one-line reason (for example, "no
 controls: the oracle is an existing tested tool").
 
+**Enumerating guest accesses to an address.** A criterion that claims something about
+*every* access to an address must not build its population by searching text. One address
+can be spelled more than one way in the generated code, so a text search silently covers a
+subset and a literal executor returns PASS over it. Derive the population from the original
+XBE instruction stream with operands normalised to `uint32`, reconcile it against the
+generated code by normalised **value** rather than spelling, freeze the count and the
+command that produced it inside the criterion, and make the PASS predicate conditional on
+`count found == frozen count` with every listed site evaluated — any difference is
+`UNKNOWN`, never PASS. State in the same sentence what the method cannot see:
+register-indirect, computed, and table-driven accesses. A text search is admissible as a
+lead, never as a completeness witness. This was measured: a `PIO_FREE` enumeration built by
+grepping one spelling found 10 of 28 sites (`docs/reviews/a4b-q1-advisor-ruling.md`,
+PREMISE_CHANGED addendum).
+
 1. **Objective first.** State the bounded claim and explicit non-goals.
 2. **Stable IDs.** One criterion = one independently decidable obligation.
 3. **Guards against.** Each criterion names the wrong outcome it prevents. A criterion

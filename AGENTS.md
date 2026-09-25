@@ -184,6 +184,13 @@ chunks.
 - `scripts/recover-functions.py` owns reviewed recovery output, not the full chunk tree.
 - Files under `src/recomp/gen/*.c` are linked into production. Test fixtures belong in
   `src/recomp/gen/fixtures/`, never beside production chunks.
+- **One address can be spelled two ways.** The lifter emits an `A1` moffs load (always into
+  `eax`) as hex — `MEM32(0xFE820010u)` — but a ModRM `disp32` operand as signed decimal —
+  `MEM32(-25034736)` — for the same guest VA. Every address at or above `0x80000000` is
+  exposed, which covers all MMIO and the contiguous window. **Never enumerate guest
+  accesses by grepping one spelling**; derive them from the original XBE and normalise to
+  `uint32`. Measured cost of getting this wrong: a `PIO_FREE` site list built by spelling
+  covered 10 of 28 sites (`docs/reviews/a4b-q1-advisor-ruling.md`).
 - Boundary changes require both manifest editing **and**:
 
 ```powershell
