@@ -8,10 +8,26 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
 ## CURRENT PACKET — none (toolkit sync `A4s-r5` awaiting re-review)
 
+**ROUTE STATE — both senior-judgment routes are BLOCKED; work is queued, nothing is mid-flight.**
+Claude Opus 5.5 is rate-limited (second outage today). The **owner authorized a temporary
+substitution** to `workbuddy-ai/GPT-5.6 sol` @ `high`, but **that route is not resolvable for this
+Session**: every spelling returns `child LLM route "…" is not allowed for this Session`, because
+`gpt-5.6-sol` is permitted **only under the `codex` provider** in
+`C:\Users\logic\.dsh\settings.yaml` (`subagent-model-selection.allowedModels`) — and the owner
+explicitly forbade a Codex-hosted GPT route. The WorkBuddy provider itself is healthy (a
+`workbuddy-ai/gpt-5.5` control answered `ROUTE-OK`). Per the owner's instruction the Session
+**STOPPED and reported** rather than choosing another substitute; it did **not** edit the
+allow-list (model policy is owner-reserved). **Remedy:** add
+`{provider: workbuddy-ai, model: gpt-5.6-sol}` to that allow-list. Full diagnosis:
+`docs/reviews/route-failure-20260924-workbuddy-substitute.md`.
+
+**Queued in order:** (1) the `A4s-r5` re-review → freeze/promotion if `ADEQUATE` with zero
+blocking defects; (2) the `A4b1-r4`/`A4b2-r4` revision per the binding `[GPIN]` redesign. The
+existing Advisor rulings are **binding** and are not reopened by a provider change.
+
 **Next action — TOOLKIT SYNC (`A4s`), by owner instruction.** `A4s-r5` (SHA-256
 `09DA9413C028D61BD28D9E4007AF6DDE3474ED6869F77B0095D03DB2C4FB86FB`) is written and awaiting a
-fresh Planner's §5.4 re-review. **Blocked on the `claude` route**, which is exhausted again
-(`docs/reviews/route-failure-20260924-claude-pool.md`).
+fresh Planner's §5.4 re-review.
 
 **Revision history of this packet** (each round's blocker was in the same criterion, so the
 Session ruled the last fix a **simplification** under §5.5, not a patch):
