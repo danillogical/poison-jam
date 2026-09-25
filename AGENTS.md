@@ -26,6 +26,11 @@ Keep original assets and existing saves unchanged. Preserve unrelated edits.
 Game repo: `C:\Users\logic\Repos\my_xbox_game`  
 Toolkit: `C:\Users\logic\Repos\xboxrecomp`
 
+Toolkit remotes: `origin` is the owner's fork (`danillogical/xboxrecomp`); `upstream` is
+`sp00nznet/xboxrecomp`, fetch-only (its push URL is `DISABLED`). Push toolkit `main` to
+`origin` when a packet closes; never push to `upstream`. The game repository has no
+remote; do not add one.
+
 Inspect both working trees before editing. Toolkit instructions live in
 `docs/GETTING_STARTED.md`, `docs/technical/indirect-calls.md`, and `lessons-learned.md`.
 
