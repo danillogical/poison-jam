@@ -327,6 +327,30 @@ admission recorded here is a policy determination about *evidence eligibility* o
 does not accept any packet, and it does not establish that any wait has actually been
 satisfied.
 
+### Upstream merges never silently change admitted evidence semantics
+
+A merge from upstream can change what counts as admissible evidence without anyone choosing
+it — a hunk can restore a deleted override, re-gate an always-on model, or arm new device
+behaviour, and a **clean** hunk can do it as silently as a conflicting one. Therefore:
+
+1. For every hunk, conflicting or clean, that touches a mechanism in this document's
+   admitted-models table, a classifier-listed variable, or a deleted variable: **the local
+   admitted form wins**, and the hunk is listed in the merge packet's inventory with that
+   disposition.
+2. Upstream device behaviour that is new relative to the merge base (a new trap, a new ack,
+   new register semantics) enters **dormant only** — not armed, not on by default, and not
+   behind a variable that means synthetic completion. Enabling it is a change packet with
+   admission evidence under §"Unconditional modeled hardware causes", or an exploratory
+   classification.
+3. Every merge packet **greps the merged tree** for all deleted and classifier-listed
+   variable names and for arming call sites. A reintroduced name is a merge **FAIL**, not a
+   warning.
+4. The inventory covers device- and profile-relevant hunks **by content, not by conflict
+   status**.
+
+Measured cost of not doing this: a merge hunk would have restored `RECOMP_AC97_READY` and
+re-gated the accepted always-on codec model (`docs/reviews/a4s-ac97-hunk-ruling.md`).
+
 ### Claim limits
 
 A wait satisfied by an admitted modeled cause proves **only** that the specific wait was

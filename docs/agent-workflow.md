@@ -598,8 +598,7 @@ This list is for change packets; a discovery packet uses §6.3. Whoever drafts w
 through it; the Planner may waive an item with a one-line reason (for example, "no
 controls: the oracle is an existing tested tool").
 
-**Enumerating guest accesses to an address.** A criterion that claims something about
-*every* access to an address must not build its population by searching text. One address
+**Enumerating guest accesses to an address.** A criterion that claims something about*every* access to an address must not build its population by searching text. One address
 can be spelled more than one way in the generated code, so a text search silently covers a
 subset and a literal executor returns PASS over it. Derive the population from the original
 XBE instruction stream with operands normalised to `uint32`, reconcile it against the
@@ -611,6 +610,14 @@ register-indirect, computed, and table-driven accesses. A text search is admissi
 lead, never as a completeness witness. This was measured: a `PIO_FREE` enumeration built by
 grepping one spelling found 10 of 28 sites (`docs/reviews/a4b-q1-advisor-ruling.md`,
 PREMISE_CHANGED addendum).
+
+**Merge packets.** A packet that merges upstream must inventory device- and
+profile-relevant hunks **by content, not by conflict status**, because a clean hunk can
+restore a deleted override or arm new device behaviour as silently as a conflict can hide it.
+The local admitted form wins for anything touching an admitted model or a classifier-listed
+or deleted variable, and the merged tree is grepped for those names and for arming call
+sites. See `docs/jsrf-run-profiles.md` §"Upstream merges never silently change admitted
+evidence semantics".
 
 1. **Objective first.** State the bounded claim and explicit non-goals.
 2. **Stable IDs.** One criterion = one independently decidable obligation.
