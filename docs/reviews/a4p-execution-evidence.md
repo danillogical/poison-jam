@@ -124,7 +124,46 @@ The conclusion is unaffected — `T` empties at `4E68` via C1 regardless.
 
 ## Selected outcome row
 
-**Not selected.** The Session did not choose between `O-GATE` and `O-UNKNOWN (sites)`,
-because Flag 1 is an ambiguity in the frozen contract that changes the row and §2.2.6
-forbids a contract role resolving it. Escalated to the Advisor; the row will be recorded
-here once ruled.
+**`O-GATE`** — E0–E2 clean, all 28 sites PASS, E3 clean.
+
+### Advisor interpretation ruling on Flag 1 (§5.4)
+
+Advisor child `407c54a3-6ca4-4a65-835b-faf5355195cd`, route `claude` / `claude-opus-5-5`
+@ `high`. **Ruling:** the different route at `001A34EA` is **not** a "disagreement" under
+the E4 cross-check clause. A disagreement is a different **conclusion** (PASS/FAIL/UNKNOWN);
+a different **route** to the same conclusion under the frozen rule is not one. The clause
+exists to catch a rule or executor defect that changes a verdict at a hand-worked site; the
+hand-worked example is a lead and does not dictate the route. **Site PASS; row `O-GATE`.**
+
+**The route difference was the Advisor's own hand-trace error**, which it corrected in the
+same ruling: its methodology ruling said C3 finds `edx` dead at `001A363E`, having missed
+the `call 0x1A1BAF` on the path to the `ret`. It re-disassembled `3562 pop edi` /
+`3563 lea ecx,[ebp-0x10]` / `3566 call 0x1a1baf` / `356B xor eax,eax` / `356D pop esi` /
+`356E leave` / `356F ret` and confirmed the executor's route (C2 then C1) is the correct
+one. The conclusion is PASS by either route, and the fall-through exit also passes
+(`34FD lea edx,[esi+0xc]`). **Both routes are recorded in the `001A34EA` row above.**
+
+**Reversed by:** any site whose recorded conclusion does not match the disassembly — that
+is a conclusion disagreement, making the site `UNKNOWN` and the row `O-UNKNOWN (sites)`;
+or evidence that `sub_001A1BAF` reads `edx` on some path.
+
+### Deferred advisory — C3 caller-enumeration text is defective (no revision)
+
+The packet's C3 caller rule says to find "generated-tree calls to `sub_<ENTRY>(`". The
+generated tree spells a call as `PUSH32(esp, 0x001A363Eu); RECOMP_ABI_CALL(0x001A347Au,
+sub_001A347A);` — no `(` after the name (`recomp_0005.c:12234`), so a literal search matches
+only the definition and finds zero callers, which the rule maps to `UNKNOWN`.
+
+**Advisor ruling:** defective, but **no revision of the frozen `A4p-r1`**. C3 ran at **0 of
+28** sites, so no verdict depended on it and §5.4's blocking test is not met. **Any future
+use of C3 must enumerate callers by value:** the authoritative source is XBE `call rel32`
+whose target is the entry, cross-checked against the generated tree by the normalised target
+literal in `RECOMP_ABI_CALL(0x<ENTRY>u, sub_<ENTRY>)`, never by a name-plus-paren spelling.
+This is a second instance of the `AGENTS.md` rule against enumerating by one spelling.
+
+### Advisory — earlier-record VA correction
+
+`docs/reviews/a4b-r3-adequacy-review.md` cited the `001A4E4C` caller overwrite at `0x1A5119`.
+The return address is `1A5128` and the overwrite is `1A5130 mov eax,edi`; `1A5119 movzx
+eax,si` precedes the call at `1A5123`. Conclusion unaffected — `T` empties at `4E68` via C1.
+

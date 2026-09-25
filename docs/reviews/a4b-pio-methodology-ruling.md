@@ -94,6 +94,22 @@ exit/callee handling. §5.5 forbids a third patch of the same shape.
 > - The plan: A4p inserted before A4b promotion; the A4b gate updated.
 > - General rule, as a separate policy edit to docs/agent-workflow.md §5.5 (or §5.1.2): "A criterion whose evaluation is itself a multi-step static or dynamic analysis that the Planner cannot complete by reading belongs in a discovery packet that runs first; the change packet cites its accepted outcome as a precondition."
 
+## Correction appended by the Advisor (2026-09-24), after A4p executed
+
+> **The `001A34EA` worked example's route was incomplete** (it missed `call 0x1A1BAF` at
+> `001A3566`); C2 and C1 empty `T` there; **the conclusion is unchanged** (PASS).
+
+The ruling's worked case above says C3 finds `edx` dead at the return address `001A363E`.
+Executing the packet's rule literally, `T={edx}` first reaches `call 0x1A1BAF` at
+`001A3566`, where C2 finds `edx` is not an argument and C1 removes it, so `T` is empty
+before the `ret` and C3 is never reached. The Advisor re-disassembled the path and confirmed
+the executor's route is the correct one; its own hand-trace had skipped an instruction. The
+site is PASS either way, and the fall-through exit also passes.
+
+**Related interpretation, recorded with that ruling:** in `A4p`'s E4 cross-check clause, "a
+disagreement" means a different **conclusion** for the site, not a different **route** to the
+same conclusion. Full ruling in `docs/reviews/a4p-execution-evidence.md`.
+
 ## Session verification of the ruling's two worked cases
 
 The ruling's claim that C1–C4 resolves the sites that defeated r3 depends on two
