@@ -8,15 +8,49 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
 ## CURRENT PACKET — none (`A4p-r1` ACCEPTED 2026-09-24)
 
-**Next action:** the `A4p-r1` outcome row **`O-GATE`** selects an **`A4b` revision** that
-deletes `AC-PIO` and `R-PIO-DATA`, adds the precondition "`A4p` ACCEPTED with `O-GATE` on
-XBE SHA-256 `FD190557…EF9C`" plus the claim limits, and folds in the ordinary repairs. The
-**first** planning question is whether `A4b` should be **split into smaller change packets**
-so that code is built and tested sooner — e.g. `A4b1` (port, licence, fixture tests, the
-unchanged default path, no guest-run claims) and `A4b2` (bootstrap, run, clear, no-CPU and
-inputs in a strict run). A fresh Planner decides that against a frozen brief and records the
-decision in one line. Nothing is executable until an adequacy review returns `ADEQUATE` and
-that frozen revision is promoted here.
+**Next action — TOOLKIT SYNC, by owner instruction (2026-09-24).** Before any `A4b` code is
+written, the next packet is a **change packet that syncs the toolkit with upstream**:
+
+- merge `origin/main` (**v0.11.0**, `766ecef`) into local `main`, resolving conflicts;
+- rebuild **without regenerating `src/recomp/gen`**;
+- run both repositories' tests;
+- rerun **one strict baseline** to show whether the stop is still the DSP pending-word spin;
+- **do not push anything to origin.**
+
+The Planner designs it. **If the strict stop moves, that is the next brief.** Verified facts
+and the conflict surface: `docs/reviews/toolkit-sync-instruction.md`.
+
+**Why the ordering matters (Session-observed, not in the instruction):** upstream also
+changed **`src/apu/apu_dsp.c`** (+56 lines, 148→199) and **`src/apu/CMakeLists.txt`** — the
+exact files `A4b1` modifies. So the sync is a genuine prerequisite: `A4b1`'s baseline
+(`9597ff7c…`) and its `src/apu` starting state are both invalidated by the merge. The 24
+local commits include `c97ce2c` (`A3a-r25`'s accepted AC'97 change) and `0d7929c` (`A4a-r2`'s
+trace fix), so the merge must preserve accepted work.
+
+**Then:** `A4b1`/`A4b2` (drafted, split by a fresh Planner from `A4b`) resume with
+re-established baselines. Their in-flight adequacy verdicts remain useful as design
+feedback. `A4b1` = port, licence, fixtures, unchanged default path, no guest-run claim,
+toolkit-only writes; `A4b2` = the strict trap+trace run (boot, run, clear, no-CPU, inputs),
+game-only writes, with preconditions P1 (`A4p-r1` ACCEPTED `O-GATE`) and P2 (`A4b1`
+ACCEPTED).
+
+## Draft packets — `A4b1`/`A4b2` (split of `A4b`; awaiting the sync)
+
+- **`A4b1`:** `docs/packets/a4b1-gp-core-port.md`, `A4b1-r1`, SHA-256
+  `90FA44103FAD4077411E9137775C2934E755E392CE6E33B6AC2399F7F4BE7233`. Claim: the pinned xemu
+  GP core, GP MMIO routing and address-translated GP DMA are in tree with per-file
+  provenance; synthetic ack removed; licence recorded; build+ctest green including a fixture;
+  one strict default run matches A4a R0. No guest GP-behaviour claim; toolkit-only writes.
+- **`A4b2`:** `docs/packets/a4b2-gp-clears-pending-word.md`, `A4b2-r1`, SHA-256
+  `BD3718E639A6484216F89E245D185F2245CC5231788953F77B735C6EC528CBC1`. Claim: in one strict
+  run (`RECOMP_GPU_ACK=0`, `RECOMP_APU_TRAP=1`) the `loc_001A18D0` wait was satisfied by
+  modelled GP execution of the guest's own command. Preconditions P1/P2. Game-only writes.
+- **Split decision (Planner, one line):** split, because the port's scale risk is settled by
+  build+ctest+one default run and should not wait for, or be reviewed with, the run criteria.
+- **`AC-PIO` and `R-PIO-DATA` are deleted** from both — `A4p`'s `O-GATE` discharged Q1
+  condition 3, so the criterion is retired rather than repaired.
+- The former `docs/packets/a4b-gp-dsp-engine.md` (`A4b-r3`) is **superseded** by this split
+  and retained as provenance only.
 
 ## Last closed packet — `A4p-r1` (discovery, ACCEPTED 2026-09-24)
 
