@@ -89,7 +89,10 @@ apply: (policy, event) => {
 So the policy is appended **once**, before the definition can reach a model request, and
 `assertAllowedModelSelection` then enforces that frozen list for the life of the session. The
 stored row is `record.rows.subagentModelSelectionPolicy` — 11 entries, none
-`workbuddy-ai / gpt-5.6-sol`. **`settings.yaml` is never consulted again after capture.**
+`workbuddy-ai / gpt-5.6-sol`. **`settings.yaml` is never consulted again after capture.** The
+config service's own doc comment states the contract: *"Read a detached selection preference for
+the **next eligible Session composition**"* — i.e. the list is snapshotted when a session is
+composed, not read per delegation.
 
 **Confirmed empirically.** The Session added the missing route to
 `settings.yaml`, validated the YAML, and re-probed: the route was **still refused** with the same
