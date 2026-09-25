@@ -9,16 +9,10 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 ## CURRENT PACKET — none (A4a-r2 ACCEPTED 2026-09-24)
 
 **Next action:** the `A4a-r2` outcome row **`O-6`** selects the next packet — **`A4b`, the
-GP DSP56300 engine** — so the Planner designs that against a frozen brief
-(`docs/agent-workflow.md` §5.1). Nothing is executable until an adequacy review returns
-`ADEQUATE` and that frozen revision is promoted here.
-
-**BLOCKED on an owner decision (workflow §3.4).** Q1 is answered (below), but **Q2 is a
-licensing choice reserved to the owner**: whether to port xemu's **GPL-2.0-or-later**
-DSP56300 core (`hw/xbox/mcpx/apu/dsp/`) into this **MIT** toolkit (which already carries
-**LGPL-2.1-or-later** APU files), or to implement a core independently. That choice
-determines A4b's entire shape, so A4b cannot be designed until it is made. The Session
-stopped here rather than guessing.
+GP DSP56300 engine**. Both gates are now answered (Q1 by the Advisor, Q2 by the owner), so
+the Planner designs `A4b` against a frozen brief (`docs/agent-workflow.md` §5.1). Nothing is
+executable until an adequacy review returns `ADEQUATE` and that frozen revision is promoted
+here.
 
 ## Last closed packet — `A4a-r2` (discovery, ACCEPTED 2026-09-24)
 
@@ -66,14 +60,16 @@ stopped here rather than guessing.
   general clarification is in `docs/jsrf-run-profiles.md` §"Feature enablement". A4b must
   still establish the ruling's four conditions (who wrote the 0; the GP's input
   provenance; that `PIO_FREE` only gates; the claim limits) and must cite the ruling.
-  **Q2 — OPEN, owner decision (§3.4):** licensing of a DSP56300 core. The only known
-  implementation, xemu `hw/xbox/mcpx/apu/dsp/` (`dsp.c`, `interp/dsp_cpu.c`), carries
-  **GPL-2.0-or-later** headers (verified this session by fetching the sources), while this
-  toolkit is **MIT** with **LGPL-2.1-or-later** APU files (`LICENSE`, `NOTICE`,
-  `LICENSES/README.md`). GPL-2.0 is stronger copyleft than the LGPL already in the tree, so
-  importing it is a licensing choice reserved to the owner. A4b cannot be designed until
-  this is decided, because it determines whether A4b ports an existing core or implements
-  one independently.
+  **Q2 — ANSWERED, owner decision (§3.4), 2026-09-24:** the owner accepts
+  **GPL-2.0-or-later** for this open-source project, so porting xemu's DSP56300 core is
+  permitted. Recorded in `docs/reviews/a4b-q2-owner-decision.md`. The licensing obstacle is
+  removed; whether A4b ports the existing core or implements one independently is now a
+  **technical** choice for the Planner. **Mechanical consequence for A4b's closure:** a
+  binary linking a GPL-2.0-or-later core is a combined work that must ship under
+  GPL-2.0-or-later, so closure must update `NOTICE` and the licence files (verbatim GPL text
+  alongside the existing LGPL text). That is bookkeeping following from the decision, not a
+  further owner question. A4b should also **pin** the xemu commit it ports; the sources
+  fetched this session were `master` and are not pinned.
 - **`PIO_FREE` model packet (Advisor-directed prerequisite):** required before the **first**
   strict liveness or boot-progress criterion past the spin (e.g. "the title reaches
   <checkpoint> in a strict run"). It is its own packet, placed before that criterion, not
