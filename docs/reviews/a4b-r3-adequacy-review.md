@@ -82,6 +82,12 @@ relied on the r2 reviewer for the Q1 and planning rulings.
 
 ## Next step
 
-Advisor consult on the methodology (§5.5), then a redesign of `AC-PIO` per the ruling, with
-B2 and the deferred items folded into the same revision. `A4b-r3` is **not** frozen and
-**not** promoted; `CURRENT PACKET` remains `none`.
+**SUPERSEDED — see `docs/reviews/a4b-pio-methodology-ruling.md`.** The §5.5 trigger recorded
+here was taken to the Advisor, which ruled that `AC-PIO` changes both its **shape** and its
+**home**: the r3 exit-trace rule is sound but asks for a whole-program dataflow proof, so it
+is replaced by a locally-checked calling-convention rule (C1–C4) and moves into a new
+**discovery packet `A4p`** that runs before `A4b` is promoted. `A4b` then deletes `AC-PIO`
+and `R-PIO-DATA` and cites `A4p`'s accepted `O-GATE` as a precondition. **`A4b-r3` is not
+patched a third time.**
+
+`A4b-r3` is **not** frozen and **not** promoted; `CURRENT PACKET` remains `none`.

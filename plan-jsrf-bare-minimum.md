@@ -8,37 +8,46 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
 ## CURRENT PACKET — none (A4a-r2 ACCEPTED 2026-09-24)
 
-**Next action:** the `A4a-r2` outcome row **`O-6`** selects the next packet — **`A4b`, the
-GP DSP56300 engine**. Both gates are answered (Q1 by the Advisor, Q2 by the owner). `A4b` is
-drafted but **not** promoted, and it is on its third revision:
+**Next action:** the `A4a-r2` outcome row **`O-6`** selects **`A4b`, the GP DSP56300
+engine**. Both gates are answered (Q1 by the Advisor, Q2 by the owner). `A4b` has now had
+**three revisions and two `INADEQUATE` verdicts**, both on the same mechanism — its
+`AC-PIO` criterion — so §5.5's redesign trigger was met and the methodology went to the
+Advisor. **The Advisor ruled that the criterion changes both shape and home:**
 
-- `A4b-r1` — adequacy review returned `pending — reviewer unavailable` (the child exhausted
-  its context without a verdict), but the findings recovered from it exposed a
-  **`PREMISE_CHANGED`**: `AC-PIO` enumerated the `PIO_FREE` population by one spelling and
-  so covered **10 of 28** sites, a false-PASS path.
-- `A4b-r2` — the repair. A fresh Planner ruled it **`INADEQUATE`** with four blocking
-  defects (B1–B4) in `AC-PIO`'s new callee/exit rule, `AC-CLEAR`'s predicate ordering, and a
-  decision-row gap. It confirmed the population repair itself works, the atomic witness is
-  sound in kind, and `AC-NOCPU` is not vacuous.
-- `A4b-r3` — in revision by the authoring Planner; B1+B2 are being repaired as **one
-  redesign**, not two patches (§5.5), since they are the same mechanism.
+- **New discovery packet `A4p` runs first.** It answers: are the 28 direct reads of
+  `0xFE820010` gate-only under the locally-checked calling-convention rule C1–C4? Its
+  outcomes are `O-GATE` (all 28 pass → `A4b` proceeds), `O-DATA` (some site uses the value
+  → a `PIO_FREE`-model packet comes before `A4b`), and `O-UNKNOWN`. It is a discovery
+  packet (§5.8), about one page, self-reviewed per §5.3.
+- **`A4b` loses `AC-PIO` and `R-PIO-DATA`** and gains a precondition: `A4p` ACCEPTED with
+  `O-GATE` on XBE SHA-256 `FD19055756719893C466302809B433B785ECF5732DF0441286F3F605F0F3EF9C`.
+  Its other criteria may be adequacy-reviewed meanwhile; **promotion waits for `O-GATE`.**
+- **Q1 condition 3 is discharged by `A4p`**, not by `A4b`.
+- **Ordinary repairs fold into the next `A4b` revision** (different mechanism, §5.4): the
+  `[GPDMA] watch` cap must exempt the deciding `payload=0` line, plus r3 deferred D1, D2,
+  D4, D5. D3 is superseded by C4 and moves to `A4p`.
 
-The Advisor's `PREMISE_CHANGED` ruling stands: Q1's conclusion holds, but it is
-**provisional** until `AC-PIO` passes over a population whose completeness is itself
-witnessed. The Advisor also amended checkpoint-40 constraint 3(ii) to make the GP's
-clearing write an atomic compare-and-exchange.
+**Ruling:** `docs/reviews/a4b-pio-methodology-ruling.md` (verbatim, with the Session's
+reproduction of its two worked cases — `sub_001A1BAF` never reads `edx`, and
+`0x1A3630`–`0x1A3689` reaches its boundaries without reading `edx`, which is what makes the
+convention resolve the sites that defeated r3).
+
+**Records:** `docs/reviews/a4b-r3-adequacy-review.md` (second `INADEQUATE`, verbatim);
+`docs/reviews/a4b-r2-adequacy-review.md` (first `INADEQUATE`); `docs/reviews/a4b-r2-session-checks.md`
+(the import at `0x1C4004` = kernel ordinal 161 `KfLowerIrql`); `docs/reviews/a4b-r1-adequacy-attempt-1.md`
+(`pending — reviewer unavailable`); `docs/reviews/a4b-q1-advisor-ruling.md` (Q1 plus the
+PREMISE_CHANGED addendum and the condition-3 handoff); `docs/reviews/a4b-planning-rulings.md`
+(checkpoint-40 plus the 3(ii) amendment); `docs/reviews/a4b-xemu-pin.md`;
+`docs/reviews/a4b-q2-owner-decision.md`; `docs/reviews/a4b-revision-history.md`
+(non-authoritative).
+
+**General rule recorded** (Advisor-directed, `docs/agent-workflow.md` §5.5): a criterion
+whose evaluation is itself a multi-step static or dynamic analysis the Planner cannot
+complete by reading belongs in a discovery packet that runs first; the change packet cites
+its accepted outcome as a precondition.
 
 Nothing is executable until an adequacy review returns `ADEQUATE` and that frozen revision
-is promoted here.
-
-**Records:** `docs/reviews/a4b-r2-adequacy-review.md` (`INADEQUATE`, verbatim);
-`docs/reviews/a4b-r2-session-checks.md` (the import at `0x1C4004` resolved to kernel
-ordinal 161 = `KfLowerIrql`, `__fastcall` on `ecx`, which makes the B1 rule decidable);
-`docs/reviews/a4b-r1-adequacy-attempt-1.md`; `docs/reviews/a4b-q1-advisor-ruling.md` (Q1
-plus the PREMISE_CHANGED addendum, verbatim); `docs/reviews/a4b-planning-rulings.md`
-(checkpoint-40 plus the 3(ii) amendment); `docs/reviews/a4b-xemu-pin.md` (xemu pin
-`67cc79e663038d1f55448c0f566b37dde016adf6`); `docs/reviews/a4b-q2-owner-decision.md`;
-`docs/reviews/a4b-revision-history.md` (non-authoritative).
+is promoted here. `CURRENT PACKET` remains `none`.
 
 **General rule recorded** (Advisor-directed, `docs/agent-workflow.md` §6.1): a criterion
 claiming something about *every* access to an address must derive its population from the

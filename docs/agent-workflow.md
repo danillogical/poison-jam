@@ -533,6 +533,18 @@ that criterion (change what it measures, split it, or delete it) or take the
 methodology to the Advisor. A third patch of the same shape is not allowed. The Planner
 or Advisor may also stop a loop at any time by recording the decision (§2.3).
 
+**A criterion whose evaluation is itself an analysis belongs in a discovery packet.** If
+deciding a criterion requires multi-step static or dynamic analysis of a binary or a run —
+work the Planner cannot complete by reading — then the criterion is asking a contract to
+*produce* evidence rather than to check it, and its verdict cannot be known at planning
+time. Put that analysis in a discovery packet (§5.8) that runs first, and have the change
+packet cite the accepted outcome as a precondition. Two symptoms identify it: consecutive
+adequacy reviewers must effectively execute the criterion to review it, and the criterion's
+own procedure contains an unbounded enumeration ("apply this rule to every site and show
+each one terminates"). Measured cost of not doing this: two consecutive `INADEQUATE`
+verdicts and a §5.5 redesign on one criterion
+(`docs/reviews/a4b-pio-methodology-ruling.md`).
+
 ### 5.6 Premise freshness
 
 Before an adequacy verdict the Planner judges whether the evidence that motivates the

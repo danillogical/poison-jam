@@ -237,6 +237,14 @@ stated with the claim.
 over a population whose completeness is itself witnessed. `A4b-r1` cannot be `ADEQUATE` as
 written.
 
+> **Condition 3 now moves to `A4p`.** After two consecutive `INADEQUATE` verdicts on
+> `A4b`'s `AC-PIO` (§5.5), the Advisor ruled that condition 3's analysis is itself
+> execution and belongs in a **discovery packet**, not in a change-packet criterion:
+> `AC-PIO` is replaced by a locally-checked calling-convention rule (C1–C4) and moves to a
+> new packet **`A4p`**, which runs before `A4b` is promoted. `A4b` deletes `AC-PIO` and
+> cites `A4p`'s accepted `O-GATE` as a precondition. **Condition 3 is therefore discharged
+> by `A4p`, not by `A4b`.** Full ruling: `docs/reviews/a4b-pio-methodology-ruling.md`.
+
 ## Session verification of the ORIGINAL ruling's claims (superseded in part — see the addendum)
 
 Independently reproduced by the Session before the original ruling was recorded (workflow
