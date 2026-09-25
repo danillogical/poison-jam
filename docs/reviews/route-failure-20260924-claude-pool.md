@@ -1,5 +1,34 @@
 # Route failure: Claude Opus 5.5 pool exhausted (2026-09-24)
 
+## Second occurrence (same day, later)
+
+The route recovered, three jobs ran to completion on it (`A4s-r3` review, the Advisor's
+"Interpretation ruling 2: scope", the Advisor's `[GPIN]` redesign ruling), and then it failed
+again:
+
+```text
+pool "claude-opus-5-5" exhausted: every member is unavailable or failed
+code: RATE_LIMIT
+providerRetryAfterMs: 11889788   (~3.30 hours)
+```
+
+| Child | Role | State |
+|---|---|---|
+| `5319cfbd-a39a-4654-b22f-c20c9d880273` | `A4b1-r4`/`A4b2-r4` revisor (Planner) | failed at turn 1, **0 tool calls** |
+| `daa38d9e-ee38-41ad-aa5a-a378a8ab124d` | `A4s-r5` re-reviewer (Planner) | failed at turn 1, **0 tool calls** |
+
+Both died before doing anything, so **nothing was written and nothing is mid-flight**. The three
+packets are unchanged at their expected hashes (`A4b1-r3` `321ABCF7…`, `A4b2-r3` `CFB8C0EB…`,
+`A4s-r5` `09DA9413…`), and the game tree is clean at `7f63c45`.
+
+**Note for the next Session:** the outage recurs on a multi-hour cycle. Probe the route before
+queueing Planner or Advisor work, and prefer **one job at a time** while it is unstable —
+dispatching two in parallel only doubles the loss when the pool is already exhausted.
+
+---
+
+## First occurrence (same day)
+
 **What failed.** Every child on the `claude` / `claude-opus-5-5` route failed with the same
 provider error:
 
