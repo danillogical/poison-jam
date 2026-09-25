@@ -1,6 +1,7 @@
 ## A4b1 — the pinned GP DSP56300 core, and its watched-word ledger, are ported, licensed and fixture-tested, and the default strict path is unchanged
 
-**Class:** change   **Contract revision:** `A4b1-r2`   **Status:** draft
+**Class:** change   **Contract revision:** `A4b1-r3`   **Status:** draft
+**r3 delta (not a redesign; `docs/reviews/a4b1-a4b2-r2-adequacy-review.md`):** DS6 defines every latch field; `AC-FIX` asserts each latch line and the counts line equal the snapshot; `[GPIN]` becomes lossless ledger accounting (bounded table + uncapped overflow counter + write-once `GPIN_OVERFLOW` latch), cleared by `apu_watch_reset()`, with an `AC-FIX` case per kind and for overflow; the `[GPDMA] watch` count is reset too; advisory D1 (DS5 CAS race) taken; D5–D7 wording fixed.
 **Split decision:** `A4b` is split into `A4b1` (port, ledger, licence, fixtures, unchanged default path; no guest-run claim) and `A4b2` (the strict trap+trace run: boot, run, clear, no-CPU, inputs), because build, ctest and one default run settle the port's scale risk, so it should not wait for the run criteria or be reviewed with them.
 **Governing requirement:**
 - `A4a-r2` row `O-6` (`docs/packets/a4a-dsp-pending-word.md`);
@@ -74,19 +75,31 @@
 5. **One GP write choke point, with an atomic store.**
    - Every GP DMA write to guest memory, from every pinned write callback, passes through **one** function.
    - That function reads `W_va = MEM32(0x001BA858)+0x810` at write time.
-   - If the write covers the aligned dword `W_va` and the payload for that dword is `0`, it stores that dword with `InterlockedCompareExchange(host(W_va), 0, 3)`. The rest of the transfer is written as usual.
-   - If that exchange fails, it stores the payload with an ordinary write.
-   - Guest memory ends up identical either way. This is always on.
+   - The choke point receives the guest destination start, the length, and the DSP-side address of the transfer's first word.
+   - If the write covers the aligned dword `W_va` and the payload for that dword is `0`, that dword is **never** written with an ordinary store. Instead (the rest of the transfer is written as usual):
+     1. `o = InterlockedCompareExchange(host(W_va), 0, 3)`. If `o = 3` the exchange succeeded; classify on `observed=3`.
+     2. If `o = 0`, the dword already holds the payload: **skip the write**; classify on `observed=0`.
+     3. Otherwise `o2 = InterlockedCompareExchange(host(W_va), 0, o)`. If `o2 = o` it succeeded; classify on `observed=o`. Else set `o = o2` and repeat from 1.
+   - This closes advisory D1 (a guest store of `3` landing between a failed exchange and an ordinary write of `0` can no longer be overwritten unclassified): every `0` the GP lands on `W_va` is landed by an exchange whose replaced value is the classification.
+   - Guest memory ends up identical to a plain write. This is always on.
 6. **Watched-word ledger (the decision record).** It is always computed: a few atomics per event, with no effect visible to the guest. It lives in a toolkit struct, written only by the choke point (5) and by `apu_watch_cpu_store`.
    - **Shared state**
      - `seq` is a 32-bit counter, incremented with `InterlockedIncrement` once per ledger event.
      - Each class has one **uncapped** counter.
-     - Each class has one **write-once latch**. The thread that wins `InterlockedCompareExchange` on the latch's `latched` word fills in `seq`, `va`, `observed`, `payload`, `site`, `frame` (the global `se_frame` count), `insns` and `dsp_addr`, then emits the latch line.
-     - GP classes record `site=0`. CPU classes record `insns=0` and `dsp_addr=0`.
-   - **GP classes,** classified at the choke point, at the same point as the compare-exchange:
-     - `GP_CLEAR`: zero payload, the exchange succeeded, `observed=3`.
-     - `GP_ZERO_OVER_ZERO`: zero payload, the exchange failed, `observed=0`. It is counted and latched, but never decides anything.
-     - `GP_ZERO_OVER_OTHER`: zero payload, the exchange failed, `observed ∉ {0,3}`.
+     - Each latched class has one **write-once latch** (`CPU_OTHER` has none). The thread that wins `InterlockedCompareExchange` on the latch's `latched` word fills in the fields below, then emits the latch line.
+     - **Latch fields (every one defined; the latch line prints exactly these values):**
+       - `seq`: the value **that event's own** `InterlockedIncrement(&seq)` returned, taken once per event before classification. It is never re-read when the latch is filled or the line printed.
+       - `va`: for GP classes, **`W_va` as read by the choke point at that event** (never the DMA destination start); for CPU classes, the call's `target_va` (which equals `W_va`, since other targets are ignored).
+       - `observed`: GP — the value the classifying exchange replaced (DS5), or for `GP_NONZERO_OVER`/`GP_PARTIAL` the dword at `W_va` read immediately before the write; CPU — `0` (the store has not happened yet: record-before-store).
+       - `payload`: GP — the dword the transfer writes at `W_va` (for `GP_PARTIAL`, the dword `W_va` would hold after the write); CPU — the call's `value`.
+       - `site`: CPU — the call's `site_va`; GP — `0`.
+       - `frame`: the global `se_frame` count at the event.
+       - `insns`: GP — `gp_insns` at the event; CPU — `0`.
+       - `dsp_addr`: GP — the DSP-side address (24-bit, in the DSP memory space the DMA reads from) of the word that lands on the dword at `W_va`, or for `GP_PARTIAL` of the first overlapping word; CPU — `0`.
+   - **GP classes,** classified at the choke point, from the `observed` of the exchange that landed the zero (DS5):
+     - `GP_CLEAR`: zero payload, `observed=3`.
+     - `GP_ZERO_OVER_ZERO`: zero payload, `observed=0` (write skipped). It is counted and latched, but never decides anything.
+     - `GP_ZERO_OVER_OTHER`: zero payload, `observed ∉ {0,3}`.
      - `GP_NONZERO_OVER`: a non-zero payload covering the dword; `observed` is the value before the write.
      - `GP_PARTIAL`: the write overlaps `W_va`'s 4 bytes without covering the aligned dword.
    - **CPU classes,** recorded through the exported `void apu_watch_cpu_store(uint32_t site_va, uint32_t target_va, uint32_t value)`.
@@ -100,12 +113,22 @@
      - `boots`: the total number of bootstraps;
      - `gp_frames`: GP frame-function calls since the latest bootstrap;
      - `gp_insns`: instructions the core retired since the latest bootstrap.
+   - **GP input accounting (`[GPIN]`), lossless by construction.** This is the watched-word rule applied to inputs: no first-N or first-per-key record decides anything unless its loss is itself counted.
+     - Every GP input hook calls one exported recording function, `apu_watch_gp_input(kind, addr, value)`, with `kind ∈ {PERIPH, DMA_READ, FIFO_READ, MIXBUF}`:
+       - `PERIPH`: a core read of a GP peripheral register; `addr` = the DSP peripheral address.
+       - `DMA_READ`: a GP DMA read of guest memory, including the bootstrap's; `addr` = the guest VA of each 4 KiB page read (`va & ~0xFFF`); `value` = the first dword read from that page.
+       - `FIFO_READ`: a GP read of a FIFO; `addr` = the FIFO's register/index as the pinned source names it.
+       - `MIXBUF`: a GP read of the VP mix buffer; `addr` = the DSP address; the entry also records `vp_active_voices` at the read.
+     - Recording is always computed (so both registrations can check it) and stops once `GP_CLEAR` is latched; the cut-off is **derived from the `GP_CLEAR` latch**, so `apu_watch_reset()` clears it.
+     - A **fixed 256-entry table** of distinct `(kind, addr)` keys holds, per entry: `kind`, `addr`, `first` (value at first read), `frame`, `seq` (that read's own `InterlockedIncrement` value) and, for `MIXBUF`, `vp_active_voices`. The counter `gpin` (uncapped) counts inserted entries.
+     - A read of a key **not** in the full table increments the **uncapped** counter `GPIN_OVERFLOW` and, the first time, fires the write-once **`GPIN_OVERFLOW` latch** (fields as DS6 latches: `seq`, `frame`, `va` = `addr`, `observed` = `value`, `payload` = kind index 0–3, `site=0`, `insns` = `gp_insns`, `dsp_addr=0`). No key is ever dropped silently: each distinct key read before the cut-off is either an entry or counted in `GPIN_OVERFLOW`.
    - **Accessors,** exported for fixtures:
-     - `apu_watch_snapshot(struct apu_watch_snapshot *)` copies every counter, latch, CPU-site record and run counter.
-     - `apu_watch_reset()` returns all of them to their initial state.
+     - `apu_watch_snapshot(struct apu_watch_snapshot *)` copies every counter, latch, CPU-site record, run counter, the `[GPIN]` table, `gpin` and `GPIN_OVERFLOW`.
+     - `apu_watch_reset()` returns all of them to their initial state. It **also** clears the `[GPIN]` table (and hence its cut-off, which follows `GP_CLEAR`), the process-scoped `[GPDMA] watch` line count (DS7), and the `[GPDMA] unmapped` once-per-address set. After it, no trace or ledger state from an earlier case survives. (GP core state is not reset by it; see follow-up D4.)
    - **Emission,** only under `RECOMP_APU_TRACE` (read once and cached). Every line is `fflush`ed.
-     - `[GPWATCH] latch class=<C> seq=%u va=%08X observed=%08X payload=%08X site=%08X frame=%u insns=%llu dsp_addr=%06X` is emitted exactly once, when a latch fires. The number of latches is fixed (16 CPU-site latches plus one per other class), so this line has no cap and none can be lost.
-     - `[GPWATCH] counts seq=%u boots=%u gp_frames=%u gp_insns=%llu GP_CLEAR=%u GP_ZERO_OVER_ZERO=%u GP_ZERO_OVER_OTHER=%u GP_NONZERO_OVER=%u GP_PARTIAL=%u CPU_ANCHOR=%u CPU_ZERO=%u CPU_ZERO_OVERFLOW=%u CPU_OTHER=%u frame=%u` is emitted:
+     - `[GPWATCH] latch class=<C> seq=%u va=%08X observed=%08X payload=%08X site=%08X frame=%u insns=%llu dsp_addr=%06X` is emitted exactly once, when a latch fires, with the latch's own field values. The number of latches is fixed (16 `CPU_ZERO` site latches, plus one each for `CPU_ANCHOR`, `CPU_ZERO_OVERFLOW`, the five GP classes and `GPIN_OVERFLOW`; `CPU_OTHER` is never latched), so this line has no cap and none can be lost.
+     - `[GPIN] kind=<PERIPH|DMA_READ|FIFO_READ|MIXBUF> seq=%u addr=%08X first=%08X frame=%u` (plus `vp_active_voices=%u` for `MIXBUF`) is emitted exactly once per table insertion, with the entry's values. It is lossless because every non-inserted key is counted in `GPIN_OVERFLOW`.
+     - `[GPWATCH] counts seq=%u boots=%u gp_frames=%u gp_insns=%llu GP_CLEAR=%u GP_ZERO_OVER_ZERO=%u GP_ZERO_OVER_OTHER=%u GP_NONZERO_OVER=%u GP_PARTIAL=%u CPU_ANCHOR=%u CPU_ZERO=%u CPU_ZERO_OVERFLOW=%u CPU_OTHER=%u gpin=%u GPIN_OVERFLOW=%u frame=%u` is emitted:
        - at each bootstrap, after the run counters reset;
        - at the first GP frame after each bootstrap;
        - immediately after any latch fires;
@@ -118,22 +141,22 @@
    - `[GPRUN] frame=%u se_frame_after_boot=%u cycles=%u insns=%llu pc=%06X halt=%d tone=%d` is one line carrying all fields.
      - It is emitted for the first 8 GP frames after each bootstrap, then every 256th frame.
      - `se_frame_after_boot` is equal to `gp_frames`.
-   - `[GPDMA] watch …` is emitted per covering write, for the first 16 in the process. It is observation only, with no exemption rule and no cap line.
+   - `[GPDMA] watch …` is emitted per covering write, for the first 16 since the latest `apu_watch_reset()` (process start in a run). It is observation only, with no exemption rule and no cap line.
    - `[GPDMA] frame=%u reads=%u writes=%u rbytes=%llu wbytes=%llu` is emitted every 256th frame.
-   - `[GPIN] kind=<PERIPH|DMA_READ|FIFO_READ|MIXBUF> addr=%08X first=%08X frame=%u` is emitted once per distinct (kind, addr), **until `GP_CLEAR` latches or the run ends**. `MIXBUF` lines also carry `vp_active_voices=%u`.
+   - `[GPIN]` is **not** a trace line of this section: it is the ledger's lossless input accounting, defined and emitted under Device semantics 6. A reader decides from `[GPIN]` lines only together with the counts line's `gpin` and `GPIN_OVERFLOW`.
 
 ### Readiness
 
 - **Tools:** `python -X utf8 scripts\build-jsrf.py`; `ctest --test-dir build -C Release --output-on-failure`; `scripts\run-jsrf.py … --profile strict`; `scripts\check-run-profile.py`; `scripts\check-dump-mapping.py`; `scripts\inspect-jsrf.py memory|disasm`. All are verified by `A4s` at the baseline.
 - **Prerequisites:** the pin record's files at the pinned SHA. The emulated disk images must be accessible, so the run is non-confined.
-- **Stop if** any of these holds (select no row):
+- **Stop if** any of these holds (select no row, except where a bullet names a row explicitly):
   - `A4s` is not accepted, or its strict baseline stop is not the `loc_001A18D0` spin.
   - At the baseline, `dsp_ack_frame`/`RECOMP_APU_DSP_ACK` is absent from `src/apu`, or GP writes are no longer dropped. The premise has changed → Planner.
   - Any of `RECOMP_APU_DSP_ACK`, `RECOMP_AC97_READY`, `JSRF_ALLOW_UNRESOLVED` or `JSRF_ABI_CONTINUE` is in a launch environment.
   - The runner refuses `--profile strict`.
   - The port needs a change outside the write scope.
   - A GP write path to guest memory cannot be routed through the choke point (5) → Advisor.
-  - The same build or ctest root cause survives two attempts (→ R1-PORT-FAIL).
+  - The same build or ctest root cause survives two attempts: this is the one bullet that selects a row, R1-PORT-FAIL.
   - Any code path would let the APU write guest memory other than through the choke point, `FEMEMDATA` or VP.
 
 ### Execution
@@ -168,7 +191,7 @@
    - It maps guest memory for low RAM (below `0x04000000`) and for the `0x80000000` window.
    - It seeds `MEM32(0x001BA858)` so that `W_va` falls in mapped memory.
    - It captures its own `stderr`, for example by redirecting it to a file that it then reads.
-   - **Every case begins with `apu_watch_reset()` and decides on `apu_watch_snapshot()`, so no case depends on the order of other cases or on cumulative counts.** Where a case checks log text, it reads only the output emitted during that case.
+   - **Every case begins with `apu_watch_reset()` and decides on `apu_watch_snapshot()`, so no case depends on the order of other cases or on cumulative counts.** Because the reset also clears the `[GPIN]` table, its cut-off, the `[GPDMA] watch` count and the unmapped set (DS6), this now holds for trace state too. Where a case checks log text, it reads only the output emitted during that case. Cases that bootstrap or run a frame first reset GP state the way the production reset path does (GPRST with a bit clear).
 9. **Record.**
    - Run `ctest --test-dir build -C Release --output-on-failure > logs\a4b1-ctest.txt`.
    - Then run R0 and copy `a4b1-ctest.txt` into R0's run directory.
@@ -210,7 +233,7 @@ Gates are checked before any AC. A failing gate stops evaluation and selects R1-
   1. Check that `a4b-xemu-pin.md` is complete: SHA, per-file SHA-256, licence, and the local-modification list.
   2. Run `git -C <toolkit> ls-files --eol src/apu/dsp`. It must show `attr/-text` for every vendored file.
   3. Hash each vendored file **byte-exact** at the vendor commit. Either pipe `git -C <toolkit> cat-file blob <vendor-commit>:src/apu/dsp/<f>` to a binary file (for example `cmd /c "git … > tmp"`) and run `Get-FileHash`, or hash a clean checkout of that commit under the `-text` rule.
-  4. The Session records the choke-point function and every pinned write callback that calls it, with source lines.
+  4. The Session records the choke-point function and every pinned write callback that calls it, with source lines; and every GP input path (peripheral read, DMA read, FIFO read, mix-buffer read) with the line where it calls `apu_watch_gp_input`.
   5. Run `python -X utf8 scripts\build-jsrf.py`, then ctest.
   6. Run `Select-String -Path <toolkit>\src\apu -Pattern 'RECOMP_APU_DSP_ACK|dsp_ack_' -Recurse`, and search the strings of `build\Release\jsrf_recomp.exe` for `RECOMP_APU_DSP_ACK`.
 - **Oracle:** the upstream LF hashes at the pinned SHA.
@@ -250,7 +273,7 @@ Gates are checked before any AC. A failing gate stops evaluation and selects R1-
   - a bootstrap that masks addresses, reads the wrong page, fires on the wrong transition, or reads unmapped memory silently;
   - a ledger that loses, misclassifies or double-latches the deciding event;
   - trace code that changes state;
-  - any `A4b2` decision input that no test has exercised.
+  - any `A4b2` decision input that no test has exercised, including a latch or counts line whose printed fields differ from the ledger, a `[GPIN]` kind with no hook, and a `[GPIN]` loss that is not counted.
 - **Evidence profile:** **fixture — a positive control, not acceptance evidence for the title.**
 - **Setup:**
   - A scratch page at a `0x80xxxxxx` VA holds a known pattern, and an SGE entry pointing to it sits at another `0x80xxxxxx` VA.
@@ -259,33 +282,37 @@ Gates are checked before any AC. A failing gate stops evaluation and selects R1-
   - The anchor site is set to a fixture constant `S_A`; `S_1…S_17` are other site VAs.
   - Every case starts from `apu_watch_reset()`, and PRAM is re-zeroed wherever it is checked.
 - **Oracle:** independent of the core. PRAM is checked against the pattern, `PRAM[i] == LE32(page + 4i) & 0xFFFFFF`, and the ledger is checked against the writes and stores the fixture made.
+- **Line-vs-snapshot rule (trace-on registration, applies to every latch that fires in (e), (i)–(v) and (ix)).** For each latch in the case's snapshot, the case's output contains **exactly one** `[GPWATCH] latch class=<C>` line for it, and that line's `class`, `seq`, `va`, `observed`, `payload` and `site` equal the snapshot's latch record, field by field (`frame`, `insns`, `dsp_addr` are also compared where the snapshot records them). No latch line appears for a latch the snapshot does not hold. Likewise each `[GPIN]` line in (viii)–(ix) equals its snapshot table entry, and there is exactly one line per entry.
 - **PASS (trace-on registration), every item:**
   - **(a)** After `1→3`, PRAM matches the pattern for `i < 0x800`, as far as the pattern covers.
   - **(b)** Known-bad: after `0→1` alone, PRAM is unchanged.
   - **(c)** Known-bad: an SGE entry at an unmapped VA produces `[GPDMA] unmapped`, leaves PRAM unchanged, and does not crash.
   - **(d)** Known-bad: when the pattern is placed only at `addr & 0x03FFFFFF`, in mapped and seeded low RAM, it is not loaded.
   - **(e)** A zero write over `3` gives `GP_CLEAR=1`, latched with `observed=00000003`. After a reset, the same write over `0` gives `GP_ZERO_OVER_ZERO=1` and `GP_CLEAR=0`. Final memory is identical in both cases.
-  - **(i)** Make 20 or more zero writes over `0`. Then call `apu_watch_cpu_store(S_A, W_va, 3)` and store `3`. Then make one GP zero write. Expect:
-    - `GP_CLEAR` latched, with `observed=3`;
+  - **(i)** Make 20 or more zero writes over `0`. Then call `apu_watch_cpu_store(S_A, W_va, 3)` and store `3`. Then make one GP zero write **whose destination starts at `W_va − 0x810` (= `B`) and whose length exceeds `0x814`**, so the destination start differs from `W_va`. Expect:
+    - `GP_CLEAR` latched, with `observed=3`, **`va = W_va`** (not `B`), `payload=0`, `site=0`, `insns` = the snapshot's `gp_insns` at the write, and `dsp_addr` = the DSP address of the word the fixture placed at offset `0x810`;
     - `GP_ZERO_OVER_ZERO ≥ 20`;
-    - `CPU_ANCHOR.seq < GP_CLEAR.seq`;
-    - exactly one `[GPWATCH] latch class=GP_CLEAR` line in the case's output.
+    - `CPU_ANCHOR` latched with `va = W_va`, `payload=3`, `site = S_A`;
+    - `CPU_ANCHOR.seq < GP_CLEAR.seq`, and both `seq` values equal those printed on their latch lines;
+    - exactly one `[GPWATCH] latch class=GP_CLEAR` line in the case's output, equal to the snapshot (line-vs-snapshot rule).
 
-    A further zero write leaves `GP_CLEAR=1` and its latch unchanged.
+    A further zero write leaves `GP_CLEAR=1` and its latch unchanged, and emits no second `GP_CLEAR` line.
   - **(ii)** A zero write over `7` gives `GP_ZERO_OVER_OTHER`, latched with `observed=7`, and no `GP_CLEAR`.
   - **(iii)** A 2-byte write at `W_va+2` gives `GP_PARTIAL` latched, and neither `GP_CLEAR` nor any `GP_ZERO_*`.
   - **(iv)** With the word at `3`, call `apu_watch_cpu_store(S_1, W_va, 0)` and store `0`, then make a GP zero write. Expect:
-    - `CPU_ZERO` latched for `S_1`;
+    - `CPU_ZERO` latched for `S_1`, with **`site = S_1`**, `va = W_va`, `payload=0`, and its latch line equal to the snapshot;
     - `GP_ZERO_OVER_ZERO` latched with `observed=0`;
     - `GP_CLEAR=0`.
-  - **(v)** Zero stores from `S_1…S_17` give 16 site latches plus a `CPU_ZERO_OVERFLOW` latch, and `CPU_ZERO=17`. A separate call, `apu_watch_cpu_store(S_1, W_va+4, 0)`, changes no counter.
+  - **(v)** Zero stores from `S_1…S_17` give 16 site latches (sites `S_1…S_16`) plus a `CPU_ZERO_OVERFLOW` latch with `site = S_17`, and counters `CPU_ZERO=17`, **`CPU_ZERO_OVERFLOW=1`**. The output holds 17 latch lines, each equal to its snapshot record. A separate call, `apu_watch_cpu_store(S_1, W_va+4, 0)`, changes no counter and emits no line.
   - **(vi)** After a bootstrap, one call to the production GP frame function gives, in the snapshot, `boots=1`, `gp_frames=1`, and `gp_insns` equal to the core's own counter. The case's output contains:
-    - a `[GPWATCH] counts` line with `boots=1 gp_frames=1`;
+    - a `[GPWATCH] counts` line whose **`boots`, `gp_frames` and `gp_insns` equal the snapshot's values** (so `boots=1 gp_frames=1`);
     - a `[GPRUN]` line with all seven fields;
-    - a `[GPIN] kind=DMA_READ` line for the scratch page.
+    - a `[GPIN] kind=DMA_READ` line for the scratch page, equal to its snapshot entry — although (a) read the same page earlier in the process (the reset cleared the table).
+  - **(viii)** **Every `[GPIN]` kind, through its production hook.** After a reset and a bootstrap, the fixture causes, through the production code paths (the pinned read callbacks, or a small DSP program in the bootstrap image run for one frame), one read of each kind: a GP peripheral register (`PERIPH`), a guest-memory DMA read (`DMA_READ`), a FIFO read (`FIFO_READ`), and a mix-buffer read (`MIXBUF`) once with the VP's active-voice count `0` and, after another reset, once with it `> 0`. Expect: the snapshot table holds exactly one entry per `(kind, addr)` with the fixture-known `addr` and `first`; the `MIXBUF` entries record `vp_active_voices` `0` and `> 0` respectively; `gpin` equals the entry count; `GPIN_OVERFLOW=0`; repeating a read adds no entry. Then latch `GP_CLEAR` (as in (e)) and repeat one read with a new `addr`: no entry is added (cut-off). After `apu_watch_reset()` the same key is recorded again. AC-PORT step 4 records each hook call site; a kind with no hook fails this case.
+  - **(ix)** **Overflow.** After a reset, call `apu_watch_gp_input` with 258 distinct `DMA_READ` keys. Expect: `gpin=256`, 256 `[GPIN]` lines each equal to its entry, counter `GPIN_OVERFLOW=2`, the `GPIN_OVERFLOW` latch fired once with `va` = the 257th key, its latch line equal to the snapshot, and a counts line showing `gpin=256 GPIN_OVERFLOW=2`. After `apu_watch_reset()`, `gpin=0` and `GPIN_OVERFLOW=0`.
   - **(vii)** The `1→3` write emits exactly one `[GPBOOT]` header with `gprst=00000003 prev=00000001`, plus 64 `pram` lines that match (a). All of this output is captured before the handler returns. The `0→1` write emits none.
 - **PASS (trace-off registration):**
-  - (a)–(e) and (i)–(vi) hold as snapshot, PRAM and memory checks.
+  - (a)–(e), (i)–(vi), (viii) and (ix) hold as snapshot, PRAM and memory checks (the ledger and the `[GPIN]` table are always computed; only their emission is trace-gated).
   - (c)'s `[GPDMA] unmapped` line is present, because it is unconditional.
   - The case output contains zero lines matching `\[GP(BOOT|RUN|IN|WATCH)\]|\[GPDMA\] (watch|frame=)`. The `unmapped` line is excluded from this count.
 - **FAIL:** any item is not met.
@@ -343,3 +370,4 @@ Gates are checked before any AC. A failing gate stops evaluation and selects R1-
   - EP routing;
   - GP→CPU interrupts;
   - the reviewer's deferred advisories: fixture infeasibility routes to R1-PORT-FAIL, and the ordering of `add_test` relative to `include(CTest)`.
+  - r2 review (`docs/reviews/a4b1-a4b2-r2-adequacy-review.md`): D1 (DS5 CAS race) **taken in r3** (skip on `0`, retry the exchange otherwise); D5–D7 fixed in r3 wording. Recorded, not fixed: D2 `GP_NONZERO_OVER` is never fixture-exercised (nothing decides on it); D4 `apu_watch_reset()` does not reset GP core state — cases that bootstrap reset it through GPRST.

@@ -1,6 +1,7 @@
 ## A4b2 — the ported GP engine clears the title's pending word in a strict run
 
-**Class:** change   **Contract revision:** `A4b2-r2`   **Status:** draft
+**Class:** change   **Contract revision:** `A4b2-r3`   **Status:** draft
+**r3 delta (not a redesign; `docs/reviews/a4b1-a4b2-r2-adequacy-review.md`):** P2 repinned to `A4b1-r3` with a per-decision-field map to `AC-FIX` cases; `AC-INPUTS` decides from `A4b1-r3`'s lossless `[GPIN]` accounting and is UNKNOWN on overflow or missing accounting; step 1 cites sites by content/VA. `AC-CLEAR`'s logic is unchanged.
 **Split decision:** `A4b` is split into `A4b1` (port, ledger, licence, fixtures, unchanged default path; no guest-run claim) and `A4b2` (this packet: the strict trap+trace run — boot, run, clear, no-CPU, inputs), because build, ctest and one default run settle the port's scale risk, so it should not wait for the run criteria or be reviewed with them.
 **Governing requirement:**
 - `A4a-r2` row `O-6` (`docs/packets/a4a-dsp-pending-word.md`).
@@ -8,7 +9,7 @@
 - Checkpoint-40 constraints `docs/reviews/a4b-planning-rulings.md`.
 - **Watch-ledger ruling `docs/reviews/a4b-watch-ledger-ruling.md` §(b).** This is the authority for AC-CLEAR, AC-NOCPU and R2-UNATTRIBUTED.
 
-**Depends on:** `A4b1-r2` (ACCEPTED, `R1-PASS`); `A4p-r1` (ACCEPTED, `O-GATE`); `A4a-r2` (ACCEPTED); `A3a-r25` (ACCEPTED).
+**Depends on:** `A4b1-r3` (ACCEPTED, `R1-PASS`); `A4p-r1` (ACCEPTED, `O-GATE`); `A4a-r2` (ACCEPTED); `A3a-r25` (ACCEPTED).
 **Baseline:** game and toolkit at `A4b1`'s accepted commits, plus the game commit that adds this packet. Both trees are clean. The Session records the SHAs and the exe SHA-256.
 **Revision log:** `docs/reviews/a4b-revision-history.md` (non-authoritative).
 
@@ -20,11 +21,14 @@
     - `A4p` rests on an **inferred** x86 register-convention premise, checked only at the boundaries it used.
     - It is **blind to register-indirect or computed access** to `0xFE820010`, beyond its E3 evidence.
     - It says nothing about **timing**, or about whether **`0x80` is the true device value**.
-- **P2.** `A4b1-r2` was ACCEPTED with `R1-PASS`, and the toolkit HEAD equals `A4b1`'s accepted toolkit commit. `A4b1` supplies, and its AC-FIX exercises, every toolkit behaviour this packet decides on:
-  - the ledger classes and latches: cases (e), (i)–(v);
-  - the `[GPWATCH] counts` run counters: case (vi);
-  - `[GPBOOT]` `gprst`/`prev`: case (vii);
-  - `[GPIN]`: case (vi).
+- **P2.** `A4b1-r3` was ACCEPTED with `R1-PASS`, and the toolkit HEAD equals `A4b1`'s accepted toolkit commit. `A4b1-r3` defines (Device semantics 6) and its AC-FIX asserts, **as printed line equal to snapshot** (AC-FIX line-vs-snapshot rule), every field this packet decides on:
+  - `GP_CLEAR.va` (= `W_va`, not the DMA destination start): case (i); `GP_CLEAR.observed`: (e), (i); `GP_CLEAR.insns` (= `gp_insns` at the event): (i); `GP_CLEAR.dsp_addr`: (i); `GP_CLEAR.seq`: (i);
+  - `CPU_ANCHOR.seq` and its ordering against `GP_CLEAR.seq`: (i);
+  - `CPU_ZERO.site`/`.seq`: (iv), (v); `CPU_ZERO_OVERFLOW` latch and counter: (v);
+  - `GP_ZERO_OVER_OTHER`: (ii); `GP_PARTIAL`: (iii);
+  - counts-line `boots`/`gp_frames`/`gp_insns` equal to the ledger: (vi);
+  - `[GPIN]` accounting, per kind classified by AC-INPUTS: `DMA_READ` — (vi), (viii); `PERIPH` — (viii); `FIFO_READ` — (viii); `MIXBUF` with `vp_active_voices` `0` and `> 0` — (viii); the cut-off at `GP_CLEAR` and its reset — (viii); counts `gpin`/`GPIN_OVERFLOW` and the `GPIN_OVERFLOW` latch — (ix);
+  - `[GPBOOT]` `gprst`/`prev`: (vii).
 
   This packet changes none of them.
 
@@ -83,11 +87,11 @@
      - It then calls `apu_watch_cpu_store(site_va, target_va, value)`.
      - It has no filtering, no cap, no output and no decision logic.
      - The toolkit prototypes are declared `extern` in `diagnostics.c`.
-   - Immediately before each of the following stores, insert `jsrf_watch_store(<site VA>, <target VA>, <value>)`:
-     - `recomp_0005.c:6746` (control site `0x001A18CE`);
-     - `recomp_0005.c:6524` (`0x001A1751`);
-     - `recomp_0005.c:8088` (`0x001A1FA7`);
-     - every other generated store that textually matches `MEM32\(.* \+ 0x810\) =`; at baseline these are `recomp_0000.c:135283, 135406, 135871`. The Session records each site's VA from its generated label.
+   - Immediately before each of the following stores, insert `jsrf_watch_store(<site VA>, <target VA>, <value>)`. Sites are located **by content and guest site VA** (the generated label/instruction for that VA), not by line number; the baseline line numbers are hints only:
+     - control site `0x001A18CE` `mov [ebx],eax` — the `MEM32(ebx) = eax;` immediately before `loc_001A18D0: ;` in `recomp_0005.c` (baseline ≈ `:6746`);
+     - `0x001A1751` `and dword [edi+0x810],0` in `recomp_0005.c` (baseline ≈ `:6524`);
+     - `0x001A1FA7` `mov [edi+0x10],ebp` in `recomp_0005.c` (baseline ≈ `:8088`);
+     - every other generated store that textually matches `MEM32\(.* \+ 0x810\) =`; at baseline these are in `recomp_0000.c` (≈ `:135283, 135406, 135871`). The Session records each site's VA from its generated label.
    - Each edited chunk gets one file-scope `extern void jsrf_watch_store(uint32_t, uint32_t, uint32_t);`. No generated header changes.
 2. Build, then run ctest.
 3. Make runs R1 and R0 (below).
@@ -244,17 +248,23 @@ If R1 selects R2-UNKNOWN, rerun R1 once with identical settings; the second resu
 - **Mandatory:** yes.
 - **Guards against:** a stub value shaping the GP's result. The candidates are GP/EP register zeros, `PIO_FREE`, stub-VP output, and the trap-disabled counter.
 - **Evidence profile:** strict (R1) + source reading.
-- **Procedure:** list every `[GPIN]` line. `A4b1` Device semantics 7 emits them once per distinct (kind, addr) until `GP_CLEAR` latches or the run ends. The Session classifies each line from the ported source and guest memory:
+- **Procedure:** the `[GPIN]` lines together with the counts lines' `gpin` and `GPIN_OVERFLOW`, and any `[GPWATCH] latch class=GPIN_OVERFLOW` line. `A4b1-r3` Device semantics 6 records one entry per distinct (kind, addr) until `GP_CLEAR` latches, and emits one `[GPIN]` line per entry; every key it does not record is counted in the uncapped `GPIN_OVERFLOW` counter and fires its write-once latch. The accounting is lossless only when checked against those counters, so the decision never rests on the bare absence of a line:
+  1. **Accounting present:** take the last counts line, `K` (after `GP_CLEAR` the table is frozen). It must carry `gpin` and `GPIN_OVERFLOW`, and the number of distinct `[GPIN]` lines (by `seq`) with `seq ≤ K.seq` must equal `K.gpin`. The inventory classified in step 3 is every `[GPIN]` line (any after `K`, possible only when `GP_CLEAR` never latched, are classified too).
+  2. **No overflow:** `GPIN_OVERFLOW = 0` in every counts line, and no `GPIN_OVERFLOW` latch line exists.
+  3. **Classify** each `[GPIN]` line from the ported source and guest memory:
   - **Guest-written:** guest RAM written by the guest or by the XBE load, including DSP memory filled by the bootstrap from the image.
   - **Modelled:** a register the core computes from state it tracks, including `MIXBUF` with `vp_active_voices = 0`.
   - **Stub/unknown:** a shim constant, `MIXBUF` with `vp_active_voices > 0`, the trap-disabled counter, or anything that cannot be classified.
 
   The evidence record gives, for each line: kind, addr, first value, class, source line.
-- **PASS:** every row is guest-written or modelled.
-- **FAIL (→ R2-EXPL-INPUT):** any row is stub/unknown.
-- **UNKNOWN:** AC-CLEAR passed, but there is no `[GPIN] kind=DMA_READ` line for the bootstrap's scratch read.
-- **Controls:** the `DMA_READ` of the scratch page is the presence witness. `A4b1` AC-FIX (vi) exercises it.
-- **Claim limits:** a per-value classification, not a data-flow proof.
+- **UNKNOWN** (checked first), if any of:
+  - step 1 fails: no counts line carries `gpin`/`GPIN_OVERFLOW`, or the `[GPIN]` line count differs from `gpin` (no complete `[GPIN]` accounting is present);
+  - step 2 fails: `GPIN_OVERFLOW` counter non-zero in any counts line, or a `GPIN_OVERFLOW` latch line exists;
+  - AC-CLEAR passed, but there is no `[GPIN] kind=DMA_READ` line for the bootstrap's scratch read.
+- **FAIL (→ R2-EXPL-INPUT):** steps 1–2 hold and any row is stub/unknown.
+- **PASS:** steps 1–2 hold and every row is guest-written or modelled.
+- **Controls:** the `DMA_READ` of the scratch page is the presence witness. `A4b1-r3` AC-FIX exercises each kind this AC classifies — `DMA_READ` in (vi) and (viii), `PERIPH`, `FIFO_READ` and `MIXBUF` (with `vp_active_voices` `0` and `> 0`) in (viii) — and the overflow counter/latch in (ix).
+- **Claim limits:** a per-value classification, not a data-flow proof. Inputs are recorded per distinct `(kind, addr)` with the first value only; a later different value at the same key is not classified (r2 review D5).
 
 ### Decision rows (evaluate in order; first match wins)
 
@@ -289,10 +299,12 @@ In every row except R2-DEFAULT-REGRESS, the step-1 edits stay committed. Without
   - the exe SHA-256;
   - the game and toolkit commits;
   - `L` from G4;
-  - all `[GPWATCH]` latch lines, verbatim.
+  - all `[GPWATCH]` latch lines, verbatim;
+  - all `[GPIN]` lines and the last counts line, verbatim.
 - Post-review edits reopen the affected criteria. An unrelated next stop is recorded as a follow-up; the scope does not expand.
 - Removing the forwarding calls later needs no packet. Keeping them after a regeneration requires re-applying them.
 - Follow-ups (record, do not do), from reviewer deferred items:
   - there is no R0 rerun when R0's own gate gives R2-UNKNOWN;
   - it is inferred, not guaranteed, that the `0x001A1751` / `0x001A1FA7` stores of 0 do not run between the anchor and the spin;
   - the `[APUMMIO]` 400-line cap. AC-BOOT reads `0x02040`/`0x3FFFC` lines, which were at about line 104 in A4a R1; if they are absent, the result is UNKNOWN, never a FAIL.
+  - r2 review (`docs/reviews/a4b1-a4b2-r2-adequacy-review.md`) advisories, recorded not fixed: D1 AC-BOOT could decide from `[GPBOOT]` `gprst`/`prev` plus counts `boots` instead of `[APUMMIO]`; D3 a site's first-zero latch hides a later zero from that site (→ R2-UNATTRIBUTED, safe); D4 AC-CLEAR step 4 precedes R2-CPU, so a pre-command `GP_ZERO_OVER_OTHER` can hide a CPU witness (conservative); D5 `MIXBUF`/`[GPIN]` record first value only; D6 PASS has no claim limit for a second command stopping at the spin again, or a clear by a periodic write-back. D2 (cite sites by content/VA) is fixed in r3.
