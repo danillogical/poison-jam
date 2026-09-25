@@ -6,48 +6,69 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — none (A4a-r2 ACCEPTED 2026-09-24)
+## CURRENT PACKET — `A4p-r1` (discovery, promoted 2026-09-24)
 
-**Next action:** the `A4a-r2` outcome row **`O-6`** selects **`A4b`, the GP DSP56300
-engine**. Both gates are answered (Q1 by the Advisor, Q2 by the owner). `A4b` has now had
-**three revisions and two `INADEQUATE` verdicts**, both on the same mechanism — its
-`AC-PIO` criterion — so §5.5's redesign trigger was met and the methodology went to the
-Advisor. **The Advisor ruled that the criterion changes both shape and home:**
+- **Packet:** `docs/packets/a4p-pio-gate-analysis.md`, revision `A4p-r1`, class
+  **discovery**, frozen SHA-256
+  `B8BDBFAEC31213AA43D7A2BC8771326A73BE6CC124B6E2993BD2D33C57687A4B`.
+- **Question:** at each of the **28** direct reads of `0xFE820010` in `DSOUND`, is the loop
+  a threshold re-poll whose polled value reaches no use under the locally-checked
+  calling-convention rule C1–C4? The answer decides whether `A4b` proceeds or whether a
+  modelled `PIO_FREE` must come first.
+- **What it does:** static analysis only — no build, no guest run, no instrumentation. The
+  executor writes one file, `docs/reviews/a4p-execution-evidence.md`.
+- **Why it is a discovery packet:** the Advisor ruled (§5.5 redesign,
+  `docs/reviews/a4b-pio-methodology-ruling.md`) that this analysis is itself execution
+  (§5.1.3) and that its result decides whether `A4b`'s claim is even the right one.
+- **Outcome rows hand off directly:** `O-DATA` → a `PIO_FREE`-model packet **before** `A4b`
+  (Advisor); `O-UNKNOWN (sites)` → Planner + Advisor decide per listed site; `O-GATE` →
+  `A4b` deletes `AC-PIO` and `R-PIO-DATA` and adds the precondition "`A4p` ACCEPTED with
+  `O-GATE` on XBE SHA-256 `FD190557…EF9C`".
+- **Claim limits:** a discovery packet never satisfies a strict criterion and never claims
+  anything works (§5.8). It rests on the **inferred** premise that DSOUND follows the
+  standard x86 register convention, checked at every boundary the analysis relies on but not
+  everywhere; it cannot see a custom `edx`-return convention passed on untouched; it covers
+  only the 28 direct reads, not register-indirect or computed access beyond E3, timing, or
+  whether `0x80` is the true device value.
+- **Records:** adequacy `docs/reviews/a4p-r1-adequacy-review.md` (`ADEQUATE`,
+  `BLOCKING: NONE`); revision log `docs/reviews/a4p-revision-history.md`
+  (non-authoritative).
 
-- **New discovery packet `A4p` runs first.** It answers: are the 28 direct reads of
-  `0xFE820010` gate-only under the locally-checked calling-convention rule C1–C4? Its
-  outcomes are `O-GATE` (all 28 pass → `A4b` proceeds), `O-DATA` (some site uses the value
-  → a `PIO_FREE`-model packet comes before `A4b`), and `O-UNKNOWN`. It is a discovery
-  packet (§5.8), about one page, self-reviewed per §5.3.
-- **`A4b` loses `AC-PIO` and `R-PIO-DATA`** and gains a precondition: `A4p` ACCEPTED with
-  `O-GATE` on XBE SHA-256 `FD19055756719893C466302809B433B785ECF5732DF0441286F3F605F0F3EF9C`.
-  Its other criteria may be adequacy-reviewed meanwhile; **promotion waits for `O-GATE`.**
-- **Q1 condition 3 is discharged by `A4p`**, not by `A4b`.
-- **Ordinary repairs fold into the next `A4b` revision** (different mechanism, §5.4): the
-  `[GPDMA] watch` cap must exempt the deciding `payload=0` line, plus r3 deferred D1, D2,
-  D4, D5. D3 is superseded by C4 and moves to `A4p`.
+**Next action:** the Session executes `A4p-r1` exactly, writes the per-site evidence to
+`docs/reviews/a4p-execution-evidence.md`, selects the outcome row, and runs acceptance
+(§5.8: the reviewer confirms the artifacts exist, reproduce, and that the recorded row
+selection is right). The selected row's next packet then becomes the next frozen brief
+(§5.1).
 
-**Ruling:** `docs/reviews/a4b-pio-methodology-ruling.md` (verbatim, with the Session's
-reproduction of its two worked cases — `sub_001A1BAF` never reads `edx`, and
-`0x1A3630`–`0x1A3689` reaches its boundaries without reading `edx`, which is what makes the
-convention resolve the sites that defeated r3).
+## `A4b` — parked, awaiting `A4p`'s outcome
+
+**`A4b`, the GP DSP56300 engine**, is the packet `A4a-r2`'s row `O-6` selects, and both its
+gates are answered (Q1 by the Advisor, Q2 by the owner). It is **not** promoted and has had
+three revisions and two `INADEQUATE` verdicts, both on its `AC-PIO` criterion — which is why
+the §5.5 redesign moved that criterion into `A4p`. When `A4p` returns `O-GATE`, the next
+`A4b` revision deletes `AC-PIO` and `R-PIO-DATA`, adds the `A4p` precondition, and folds in
+the ordinary repairs (different mechanism, §5.4): the `[GPDMA] watch` cap must exempt the
+deciding `payload=0` line, plus r3 deferred D1, D2, D4 and D5. D3 is superseded by C4 and
+lives in `A4p`. Its other criteria are otherwise unaffected.
 
 **Records:** `docs/reviews/a4b-r3-adequacy-review.md` (second `INADEQUATE`, verbatim);
 `docs/reviews/a4b-r2-adequacy-review.md` (first `INADEQUATE`); `docs/reviews/a4b-r2-session-checks.md`
 (the import at `0x1C4004` = kernel ordinal 161 `KfLowerIrql`); `docs/reviews/a4b-r1-adequacy-attempt-1.md`
 (`pending — reviewer unavailable`); `docs/reviews/a4b-q1-advisor-ruling.md` (Q1 plus the
-PREMISE_CHANGED addendum and the condition-3 handoff); `docs/reviews/a4b-planning-rulings.md`
-(checkpoint-40 plus the 3(ii) amendment); `docs/reviews/a4b-xemu-pin.md`;
-`docs/reviews/a4b-q2-owner-decision.md`; `docs/reviews/a4b-revision-history.md`
-(non-authoritative).
+PREMISE_CHANGED addendum and the condition-3 handoff to `A4p`); `docs/reviews/a4b-planning-rulings.md`
+(checkpoint-40 plus the 3(ii) amendment); `docs/reviews/a4b-xemu-pin.md` (xemu pin
+`67cc79e663038d1f55448c0f566b37dde016adf6`); `docs/reviews/a4b-q2-owner-decision.md`;
+`docs/reviews/a4b-revision-history.md` (non-authoritative).
 
-**General rule recorded** (Advisor-directed, `docs/agent-workflow.md` §5.5): a criterion
+**General rules recorded** (Advisor-directed): (`docs/agent-workflow.md` §5.5) a criterion
 whose evaluation is itself a multi-step static or dynamic analysis the Planner cannot
-complete by reading belongs in a discovery packet that runs first; the change packet cites
-its accepted outcome as a precondition.
-
-Nothing is executable until an adequacy review returns `ADEQUATE` and that frozen revision
-is promoted here. `CURRENT PACKET` remains `none`.
+complete by reading belongs in a discovery packet that runs first, and the change packet
+cites its accepted outcome as a precondition; (§6.1) a criterion claiming something about
+*every* access to an address must derive its population from the original XBE with operands
+normalised to `uint32`, reconcile by normalised **value** rather than spelling, freeze the
+count and generating command, condition PASS on `count == frozen count`, and state what the
+method cannot see. The lifter spelling fact is operating knowledge in `AGENTS.md` under
+"Generated-source rules".
 
 **General rule recorded** (Advisor-directed, `docs/agent-workflow.md` §6.1): a criterion
 claiming something about *every* access to an address must derive its population from the
