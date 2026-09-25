@@ -9,10 +9,33 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 ## CURRENT PACKET — none (A4a-r2 ACCEPTED 2026-09-24)
 
 **Next action:** the `A4a-r2` outcome row **`O-6`** selects the next packet — **`A4b`, the
-GP DSP56300 engine**. Both gates are now answered (Q1 by the Advisor, Q2 by the owner), so
-the Planner designs `A4b` against a frozen brief (`docs/agent-workflow.md` §5.1). Nothing is
-executable until an adequacy review returns `ADEQUATE` and that frozen revision is promoted
-here.
+GP DSP56300 engine**. Both gates are answered (Q1 by the Advisor, Q2 by the owner). `A4b-r1`
+is drafted but **not** promoted: its adequacy review returned
+`pending — reviewer unavailable` (the reviewer child exhausted its context without a
+verdict), and the findings recovered from that child exposed a **`PREMISE_CHANGED`** —
+`A4b-r1`'s `AC-PIO` enumerated the `PIO_FREE` population by one spelling and so covered
+**10 of 28** sites, a false-PASS path. The Advisor ruled Q1's conclusion stands but is
+provisional until the criterion passes over a witnessed-complete population, and amended
+checkpoint-40 constraint 3(ii) to make the GP's clearing write an atomic
+compare-and-exchange. The authoring Planner is revising `A4b-r1` → `A4b-r2`; a **fresh**
+Planner then reviews it (§5.1.5, change packet). Nothing is executable until an adequacy
+review returns `ADEQUATE` and that frozen revision is promoted here.
+
+**Records:** `docs/reviews/a4b-r1-adequacy-attempt-1.md` (the unavailable review and the
+recovered findings); `docs/reviews/a4b-q1-advisor-ruling.md` (Q1 plus the PREMISE_CHANGED
+addendum, verbatim); `docs/reviews/a4b-planning-rulings.md` (checkpoint-40 constraints plus
+the 3(ii) amendment); `docs/reviews/a4b-xemu-pin.md` (xemu pin
+`67cc79e663038d1f55448c0f566b37dde016adf6`); `docs/reviews/a4b-q2-owner-decision.md`;
+`docs/reviews/a4b-revision-history.md` (non-authoritative).
+
+**General rule recorded** (Advisor-directed, `docs/agent-workflow.md` §6.1): a criterion
+claiming something about *every* access to an address must derive its population from the
+original XBE with operands normalised to `uint32`, reconcile against the generated code by
+normalised **value** rather than spelling, freeze the count and generating command, condition
+PASS on `count == frozen count`, and state what the method cannot see. A text search is a
+lead, never a completeness witness. The lifter spelling fact (an `A1` moffs load → hex; a
+ModRM `disp32` → signed decimal; every address ≥ `0x80000000` exposed) is now operating
+knowledge in `AGENTS.md` under "Generated-source rules".
 
 ## Last closed packet — `A4a-r2` (discovery, ACCEPTED 2026-09-24)
 
