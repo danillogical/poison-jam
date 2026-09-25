@@ -47,3 +47,12 @@ DECISIONS: HA faithfully implements ruling (b); AC-KEEP (vi) correctly reuses th
 **Advisor question raised:** does the ruling's "anywhere" (zero `getenv("RECOMP_AC97_READY")` in the merged
 tree) reach an **unbuilt upstream scaffold** (`templates/new-game/src/main.c`), which `AC-MERGE` (b) also
 requires to be byte-exact upstream? The Session escalated this rather than narrowing a ruling's scope itself.
+
+> **ANSWERED — see "Interpretation ruling 2: scope" in `docs/reviews/a4s-ac97-hunk-ruling.md`.** The
+> ambiguity was the Advisor's own. **SCOPE = the toolkit's `src/` and `include/`**, with a fail-closed
+> boundary guard; a deleted name counts only as a **quoted string literal**; comments, docs, tests and
+> unbuilt scaffolds are **inventoried, never failed**; and every trigger needs a disposition for every hit
+> it can produce (a third disposition, "host mechanism, not device-aperture", with a mechanical aperture
+> test). `HA` is untouched. **Both B1 and B2 are packet defects fixed in `A4s-r4`** — the missing path scope
+> and the missing disposition. The Advisor explicitly ruled this an **interpretation**, so it does **not**
+> count toward §5.5 churn on `AC-INV`.

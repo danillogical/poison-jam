@@ -31,6 +31,16 @@ closes**, then confirm `origin/main` equals the merge commit. **Never push to `u
 push URL is `DISABLED`). The game repository has no remote. Recorded in `AGENTS.md` "Toolkit
 remotes" (game commit `3ec4563`).
 
+**Follow-up — two new upstream variables need a `jsrf-run-profiles.md` classification.** The sync brings
+in two environment names that did not exist locally (Advisor-observed at the merge tree `75083476`):
+**`RECOMP_APU_MIXDOWN_ALL`** (`apu_dsp.c:91`, **default ON**, sums all 32 mixbins into the host monitor
+buffer) and **`RECOMP_USB_PORT`** (`ohci.c:819`, selects the port the virtual pad appears on). Neither is a
+classifier-listed or deleted name, so neither fails the merge; they are recorded as **"new unclassified
+variable"** and need a classification edit. **Uncertain and load-bearing:** whether `MIXDOWN_ALL`'s
+default-on path writes anything the **guest reads back** — the Advisor did not verify that
+`monitor.frame_buf` is guest-invisible. **If it is guest-visible, it is new default-on device behaviour**,
+and `A4b1` (which rewrites `apu_dsp.c`) must classify it before any strict APU claim.
+
 **Candidate future blocker — the RR wait (Advisor lead, not a packet).** JSRF contains
 upstream's AC'97 "Reset Registers" pattern: `0x1A6F6F mov byte [eax+0xFEC0010B],2`, then
 `0x1A6F7F mov cl,[eax+0xFEC0010B]` / `and cl,2` / `0x1A6F88 test cl,cl` / `jne 0x1A6F88` — a

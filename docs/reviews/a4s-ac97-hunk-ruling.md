@@ -99,3 +99,105 @@ Session returned the packet for a focused `A4s-r3` revision rather than editing 
 **Also recorded per the ruling:** rule (d) goes to `docs/jsrf-run-profiles.md` beside the
 admitted-models table (policy edit by the Session), and the RR-wait lead goes to the plan as a
 candidate future blocker.
+
+---
+
+# Interpretation ruling 2: scope (Advisor, same child, 2026-09-24)
+
+**Question:** does the zero-occurrence rule ("no `getenv("RECOMP_AC97_READY")` anywhere") and the
+inventory rule ("a reintroduced name is a merge FAIL") reach an **unbuilt upstream scaffold** and a
+**comment**, when `AC-MERGE` (b) simultaneously requires upstream-only files to stay byte-exact?
+Raised after `A4s-r3` was ruled `INADEQUATE` (`docs/reviews/a4s-r3-adequacy-review.md` B1/B2).
+
+## Ruling (verbatim)
+
+> RULING, in brief: The conflict is mine. My ruling said "anywhere" and "a reintroduced name" without saying what counts as a reintroduction or where to look, and a faithful executor cannot satisfy it together with AC-MERGE (b). This interpretation is binding for A4s-r4 and for rule (d) in jsrf-run-profiles.md:
+> - Scope is the source that can execute in the evidence binary.
+> - A deleted variable name is matched as the thing that reads it, a quoted string literal, not as text.
+> - Comments, documentation, tests and unbuilt scaffolds are recorded, never FAIL.
+> - HA is untouched and correct, as the reviewer found.
+>
+> (a) Scope boundary, mechanical: SCOPE = the toolkit paths `src/` and `include/` at M. Nothing else.
+> - Why: these are the only toolkit inputs to jsrf_recomp.exe, the executable every strict run uses.
+>   - The root CMakeLists.txt at 766ecef adds only `src/*` subdirectories.
+>   - The game CMakeLists.txt adds the toolkit as a subdirectory and uses `${XBOXRECOMP_DIR}/include`, `/src`, `/src/kernel`, `/src/nv2a` and single .c files there.
+>   - Its one reference outside those, tests/kernel_inplace_event_test.c, is a test executable, not the game.
+>   - templates/, tests/, tools/, docs/ and cmake/ are outside SCOPE.
+> - Boundary guard (UNKNOWN, fail closed, back to the Advisor if it trips): any `+` line in `git diff 0d7929c M -- CMakeLists.txt cmake 'src/**/CMakeLists.txt'` that names `templates/` or `tools/`, or any `+` line in the game's CMakeLists.txt that does, means SCOPE is no longer the build boundary. Existing tests/ references (src/d3d → tests/d3d8_smoke, src/kernel → tests/kernel_timestamp_test.c) are test targets and do not trip it. Only added lines count.
+> - Hits outside SCOPE are listed in the AC-INV inventory with the disposition "out of scope (not built into jsrf_recomp.exe)" and a path. They never FAIL.
+>
+> (b) templates/new-game/src/main.c is out of SCOPE.
+> - AC-MERGE (b) stands: the file stays byte-exact upstream.
+> - No exception and no edit is needed, because the rule as scoped does not reach it.
+> - Its three occurrences (166, 203, 318) are listed in the inventory as out of scope.
+> - Defence in depth that makes this safe: the run-profile classifier treats any presence of RECOMP_AC97_READY in the environment as non-strict (jsrf-run-profiles.md:51), so even code derived from the template could not produce strict evidence with it set.
+>
+> (c) Comment versus live reintroduction, mechanical: an environment variable can only be read through its name as a string literal. So:
+> - Deleted names: FAIL if `git grep -n -F -f <file of quoted names> M -- src include` prints anything. The file holds `"RECOMP_AC97_READY"` and `"RECOMP_VBLANK"`, each with the double quotes, one per line.
+>   - The comment at xbox_memory_layout.c:409 (` * rest of RECOMP_AC97_READY: …`) has no quoted literal, so it is not a reintroduction.
+>   - Record it in the inventory as "comment mention". The executor leaves it, because HA's single authored line is unchanged.
+> - Classifier-listed names: the same quoted-literal form. FAIL if M has a trimmed matching line in SCOPE that 0d7929c does not.
+> - Code tokens (`|= MCPX_AC97_CODEC_READY`, `\bac97_arm_write_trap\s*\(`): a hit whose trimmed line starts with `*`, `/*` or `//` is a comment hit and is recorded. Every other hit counts as code, and the AC-KEEP (v) rules apply. This errs toward false-FAIL (a trailing comment on a code line counts as code), never false-PASS.
+> - Controls, run by me this turn over `src include templates/runtime tools/recomp`:
+>   - known-bad 766ecef: 2 hits (kernel_bridge.c:1983 `getenv("RECOMP_VBLANK")`, xbox_memory_layout.c:1960 `getenv("RECOMP_AC97_READY")`);
+>   - known-bad 051a128: 2 hits;
+>   - known-good 0d7929c: 0 hits;
+>   - the conflict-free tree 75083476: 0 hits.
+>   - The quoted classifier names give 2 trimmed lines at 0d7929c and 2 at 75083476, with no difference.
+>   - The packet should record these as its controls.
+> - Limit: a name built by macro pasting or runtime concatenation escapes the grep. This is stated as a claim limit, not closed.
+>
+> (d) The third AC-INV disposition, with a mechanical test. Replace the free triggers with:
+> 1. Inventory triggers, all within SCOPE only:
+>    - T1: any (d)1 name. These are the admitted-model tokens: MCPX_AC97_*, 0x0040012C, 0x00400130, g_apu_mmio_trapped, g_mcpx_regs, MCPX_COUNTERS, nv2a_vblank_pulse, KeTickCount. Plus the quoted classifier-listed and deleted names.
+>    - T2: a `+` line containing `AddVectoredExceptionHandler(`, `AddVectoredContinueHandler(`, `SetUnhandledExceptionFilter(` or `VirtualProtect(`.
+> 2. For each T2 hit, the "aperture test": does the call's text, on the hit line or its continuation up to the closing `)`, contain one of these device-aperture identifiers?
+>    `g_mcpx_memory g_mcpx_regs g_ac97_page g_nv2a_regs XBOX_MCPX_BASE XBOX_NV2A_BASE XBOX_FLASH_BASE XBOX_OHCI0_BASE XBOX_OHCI1_BASE AC97_ 0xFE 0xFD 0xFEC`
+>    For a handler registration, the test applies to the handler function's body instead.
+> 3. Dispositions:
+>    - "local admitted form kept": T1 hits in the HA region, as now.
+>    - "dormant": the aperture test is true, and the enclosing function has zero call sites in SCOPE (the definition line is the only hit for `\b<fn>\s*\(`). This replaces "reachable from runtime init", which is not a grep. It is conservative: any call site at all counts as armed, so no call-graph analysis is needed.
+>    - "host mechanism, not device-aperture" (new): a T2 hit whose aperture test is false. Record the protected expression. Worked examples, observed at 75083476:
+>      - kernel_bridge.c bridge_NtProtectVirtualMemory: `VirtualProtect(XBOX_TO_NATIVE(base_va), …)`. A guest-requested kernel service, no aperture identifier.
+>      - xbox_memory_layout.c: `VirtualProtect(g_memory_base, 0x1000, PAGE_NOACCESS, …)`. The RECOMP_TRAP_NULL guard, observation-only under jsrf-run-profiles.md:187, and already present at 0d7929c:1201.
+>      - win32_compat.c/.h: the compat declaration and stub of AddVectoredExceptionHandler, already present at 0d7929c.
+>    - "out of scope" / "comment mention": as in (b) and (c).
+>    - FAIL: an aperture-test-true T2 hit with any call site; any T1 code hit outside the HA region that changes an admitted model's text.
+>    Outcome for the known cases: ac97_write_veh and ac97_arm_write_trap are dormant; everything else the reviewer listed is host-mechanism or out of scope.
+> 4. New environment names. The quoted-literal comparison also finds names read at M but not at 0d7929c. Observed at 75083476:
+>    - RECOMP_APU_MIXDOWN_ALL: apu_dsp.c:91, default ON, sums all 32 mixbins into the host monitor buffer;
+>    - RECOMP_USB_PORT: ohci.c:819, selects which port the virtual pad appears on.
+>    Record each in the inventory as "new unclassified variable". This is not a merge FAIL, provided neither name is a classifier-listed or deleted name. The follow-up is a jsrf-run-profiles.md classification edit.
+>    Uncertain: whether MIXDOWN_ALL's default-on path writes anything the guest reads back. I did not verify that monitor.frame_buf is guest-invisible. If it is guest-visible, it is new default-on device behaviour under (d)2, and A4b1, which rewrites apu_dsp.c, must classify it before any strict APU claim.
+>
+> (e) Was the trigger list implied by (d)1? No. VirtualProtect, AddVectoredExceptionHandler and PAGE_READONLY are not (d)1 content. The packet reached for them to implement (d)2 ("a new trap … enters dormant only") and (d)4 ("by content"). That goal is legitimate, but the packet added triggers with no path scope and no disposition for non-device hits.
+> - The missing path scope and the missing disposition are packet defects: a trigger needs a verdict for everything it can match.
+> - The undefined terms "anywhere", "reintroduced" and "device-relevant" are ruling ambiguities, mine, resolved above.
+> - Both are fixed together in A4s-r4. This is an interpretation, so it does not count toward §5.5 churn on AC-INV.
+>
+> (f) General rule, recorded as a new rule 5 under jsrf-run-profiles.md §"Upstream merges never silently change admitted evidence semantics":
+> "Evidence-semantic scope is what the evidence binary can execute. A merge check (1) searches only the build inputs of the executable whose runs are evidence, named as a path list with a guard that fails closed if the build graph starts including anything else; (2) matches each name in the form that carries its semantics: environment variables as quoted string literals, code tokens only on non-comment lines, arming as call sites of the arming function; (3) gives every trigger a disposition for every hit it can produce, including a 'not relevant' disposition decided by a stated mechanical test. Mentions outside that scope or form — comments, docs, tests, unbuilt templates — are inventoried, never failed. A check whose trigger can match something it has no verdict for is a defective check, not a strict one."
+>
+> BASIS:
+> - Observed (run myself this turn in the toolkit):
+>   - `git grep RECOMP_AC97_READY 75083476` gives exactly xbox_memory_layout.c:409 (a comment) and templates/new-game/src/main.c:166, 203, 318 (318 is `if (getenv("RECOMP_AC97_READY")) {`).
+>   - The quoted-literal controls in (c).
+>   - 75083476 conflict markers at 2123/2128/2138; `\bac97_arm_write_trap\s*\(` hits the definition at :411 and the HA-hunk call at :2134 only.
+>   - The root CMakeLists.txt at 75083476 has only src/* add_subdirectory calls and no templates reference. src/d3d and src/kernel CMakeLists reference tests/ only.
+>   - The game CMakeLists.txt uses `${XBOXRECOMP_DIR}` include/src/src/kernel/src/nv2a plus one tests/ file for a test target.
+>   - VirtualProtect `+` lines in `git diff 0d7929c 75083476 -- src include`: kernel_bridge.c NtProtectVirtualMemory, the AC'97 trap (3 lines), and the TRAP_NULL guard (also present at 0d7929c:1201). AVEH registration in SCOPE at 75083476: only xbox_memory_layout.c:420 (ac97_write_veh), plus compat decl/stub also present at 0d7929c.
+>   - New getenv literals at 75083476 vs 0d7929c: RECOMP_APU_MIXDOWN_ALL (apu_dsp.c:91, default 1) and RECOMP_USB_PORT (ohci.c:819). None removed.
+> - Observed: the packet's AC-KEEP (v), AC-INV and AC-MERGE (b) text; the r3 review B1/B2; jsrf-run-profiles.md lines 51, 187 and 330–352.
+> - Inferred: that no build path compiles templates/new-game into jsrf_recomp.exe. This rests on the CMake reads above, not on a configured build graph, which is why the boundary guard exists.
+> - Uncertain: MIXDOWN_ALL guest-visibility; name construction by macro or concatenation (stated as a limit).
+>
+> REVERSED BY:
+> - Evidence that any file outside toolkit src/ and include/ is compiled or linked into jsrf_recomp.exe, for example a configured build's compile_commands.json listing one. SCOPE then widens to include it, and the boundary guard should have tripped.
+> - Evidence that the runtime reads environment variables other than through a quoted literal in SCOPE, for example a table of names assembled at run time. The quoted-literal test is then incomplete for that mechanism.
+> - Evidence that RECOMP_APU_MIXDOWN_ALL's default path changes guest-readable state. It then falls under (d)2 as armed new device behaviour, and A4s must either leave it dormant (an owner or Advisor decision on defaulting it off) or route it to R-CONFLICT.
+>
+> RECORD IN:
+> - This ruling, verbatim with this child's ID and route, appended to docs/reviews/a4s-ac97-hunk-ruling.md as "Interpretation ruling 2: scope". Cross-reference it from docs/reviews/a4s-r3-adequacy-review.md "Advisor question raised".
+> - A4s-r4: AC-KEEP (v) and AC-INV rewritten per (a)–(d), with the (c) controls and the boundary guard; the deferred items D1–D4 folded in.
+> - Rule (f) as rule 5 in docs/jsrf-run-profiles.md §"Upstream merges…". Clarify rule 3 there: "greps the merged tree" means "searches SCOPE for the semantic form".
+> - The two new variables go in the plan as a jsrf-run-profiles classification follow-up, and in A4b1's premise check, since A4b1 rewrites apu_dsp.c from a pre-merge baseline.

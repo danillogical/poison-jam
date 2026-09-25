@@ -342,14 +342,28 @@ behaviour, and a **clean** hunk can do it as silently as a conflicting one. Ther
    behind a variable that means synthetic completion. Enabling it is a change packet with
    admission evidence under §"Unconditional modeled hardware causes", or an exploratory
    classification.
-3. Every merge packet **greps the merged tree** for all deleted and classifier-listed
-   variable names and for arming call sites. A reintroduced name is a merge **FAIL**, not a
-   warning.
+3. Every merge packet **searches the scope for the semantic form**. "Grepping the merged tree"
+   means searching **SCOPE** — the build inputs of the evidence binary, named as a path list —
+   for each name **in the form that carries its semantics**: environment variables as quoted
+   string literals, code tokens only on non-comment lines, arming as call sites of the arming
+   function. A reintroduced name is a merge **FAIL**, not a warning.
 4. The inventory covers device- and profile-relevant hunks **by content, not by conflict
    status**.
+5. **Evidence-semantic scope is what the evidence binary can execute.** A merge check
+   1. searches only the build inputs of the executable whose runs are evidence, named as a path
+      list, with a **guard that fails closed** if the build graph starts including anything else;
+   2. matches each name in the form that carries its semantics (see rule 3);
+   3. gives **every trigger a disposition for every hit it can produce**, including a "not
+      relevant" disposition decided by a stated mechanical test.
+
+   Mentions outside that scope or form — comments, docs, tests, unbuilt templates — are
+   **inventoried, never failed**. A check whose trigger can match something it has no verdict
+   for is a **defective check, not a strict one**.
 
 Measured cost of not doing this: a merge hunk would have restored `RECOMP_AC97_READY` and
-re-gated the accepted always-on codec model (`docs/reviews/a4s-ac97-hunk-ruling.md`).
+re-gated the accepted always-on codec model, and the first scoped check then produced a
+false FAIL on an unbuilt scaffold and a comment
+(`docs/reviews/a4s-ac97-hunk-ruling.md`, including its "Interpretation ruling 2: scope").
 
 ### Claim limits
 
