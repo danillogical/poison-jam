@@ -6,7 +6,29 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — none (toolkit sync `A4s-r5` awaiting re-review)
+## CURRENT PACKET — `A4s-r5` (toolkit sync, PROMOTED 2026-09-25)
+
+- **Packet:** `docs/packets/a4s-toolkit-sync.md`, revision **`A4s-r5`**, class **change**, frozen
+  SHA-256 **`09DA9413C028D61BD28D9E4007AF6DDE3474ED6869F77B0095D03DB2C4FB86FB`** (263 lines).
+- **Adequacy:** **`ADEQUATE`**, `BLOCKING: NONE`, `PREMISE_FRESHNESS: BOUNDED`, `DEFERRED: NONE`
+  — `docs/reviews/a4s-r5-adequacy-review.md`, fresh Planner child
+  `f339b306-0473-4777-a211-78271453f2b9` (`workbuddy-ai/gpt-5.6-sol` @ `high`). r4's blocking
+  defect **B1-r4 is CLOSED** (reviewer-reproduced: fixed lengths 7/56/25 exact; anchors **1/1/1** at
+  merge-tree lines 442/890/2103; all three byte compares equal after `HA` LOCAL resolution; every
+  `+1` shifted extraction differs, so the can-fail control discriminates). `BOUNDED` is correct and
+  expected: the merge/build/tests/run are intentionally unexecuted, and a stale premise routes to
+  `R-PRE`/`R-INVALID`/`R-UNKNOWN`, never to a false `R-SAME`/`R-MOVED`.
+- **§5.5:** the fix is a **simplification** (end anchoring and hunk-overlap dropped entirely), not a
+  third patch of the same shape — r4's own reviewer recommended exactly that.
+- **Baseline recorded at promotion:** game **`b7d6af5`** (clean tree; the commit that adds this
+  promotion), toolkit `main` **`0d7929c`** (clean), `upstream/main` = `origin/main` =
+  `v0.11.0^{commit}` = **`766ecef`**, merge base `051a128`, no `a4s-*` branch exists.
+- **Status:** **promoted — Session executes.** Write scope, `Stop if` conditions, the `HA` hunk
+  disposition, the `SCOPE` boundary guard and the decision rows are the packet's own; nothing here
+  overrides them. **Expected first result: `R-CONFLICT`** (fail-closed, per the read-only merge
+  preview). The Closure push to `origin` happens **only after ACCEPT** and is **not** an execution
+  step; never push to `upstream`.
+- **Revision log:** `docs/reviews/a4s-revision-history.md` (non-authoritative).
 
 **ROUTE STATE — RESOLVED (2026-09-25, `session-910703eb`); the senior-judgment route is live.**
 The previous state (both senior routes BLOCKED; the substitute unresolvable) is **superseded**.
@@ -33,14 +55,22 @@ place to change it. **Role authority is unchanged and attaches to the role, not 
 Planner stops investigating as soon as §5.1's planning test is met and leaves remaining unknowns to
 the packet.
 
-**Queued in order:** (1) the `A4s-r5` re-review → freeze/promotion if `ADEQUATE` with zero
-blocking defects; (2) the `A4b1-r4`/`A4b2-r4` revision per the binding `[GPIN]` redesign. The
+**Queued in order:** (1) **DONE** — the `A4s-r5` re-review returned `ADEQUATE` and the revision is
+promoted (above); (2) the `A4b1-r4`/`A4b2-r4` revision per the binding `[GPIN]` redesign. The
 existing Advisor rulings are **binding** and are not reopened by a provider change.
 
-**Next action — TOOLKIT SYNC (`A4s`), by owner instruction.** `A4s-r5` (SHA-256
-`09DA9413C028D61BD28D9E4007AF6DDE3474ED6869F77B0095D03DB2C4FB86FB`) is written and its fresh
-Planner §5.4 re-review is **in flight** this session (Planner child `f339b306-0473-4777-a211-78271453f2b9`,
-`workbuddy-ai/gpt-5.6-sol` @ `high`). No verdict exists yet.
+**Next action — EXECUTE the promoted `A4s-r5`** (Session is the single build/run owner). Expected
+first result `R-CONFLICT`. On any row that leaves toolkit `main` at `0d7929c`, the rollback rebuild's
+exe SHA-256 is also recorded.
+
+**Session pause note (2026-09-25, `session-910703eb`).** The owner paused this session:
+`workbuddy-ai/gpt-5.6-sol` ran out of tokens during the `A4s-r5` review. **State at the pause:**
+`A4s-r5` is `ADEQUATE` and **promoted**; the review record is on disk; **no execution step has
+begun** — no merge, no build, no run, no push, and the toolkit is untouched at `0d7929c`. Nothing is
+mid-flight and nothing was lost. Resuming needs a Planner/Advisor route with available quota
+(`gpt-5.6-sol` was exhausted; the `claude/claude-opus-5-5` route's recovery state was **not**
+probed this session). **Execution of `A4s-r5` needs no senior route** — it is contract work owned by
+the Session — so it can proceed independently of that outage.
 
 **Revision history of this packet** (each round's blocker was in the same criterion, so the
 Session ruled the last fix a **simplification** under §5.5, not a patch):
@@ -51,7 +81,7 @@ Session ruled the last fix a **simplification** under §5.5, not a patch):
 | `r2` | **ADEQUATE** | — (but the fork premise then changed) |
 | `r3` | INADEQUATE | the new greps matched a **comment** and an **unbuilt scaffold** → guaranteed false FAIL |
 | `r4` | INADEQUATE | `AC-KEEP` (iv)'s **end anchors were not unique** (`        }` ×37, `            }` ×20) → false FAIL on a preserved merge |
-| `r5` | *pending* | fix: unique-first-line anchor + fixed length (7/56/25) + byte compare |
+| `r5` | **ADEQUATE** | — **promoted** (B1-r4 closed: unique-first-line anchor + fixed length 7/56/25 + byte compare; anchors 1/1/1) |
 
 **The sync itself:** merge **`upstream/main`** (**v0.11.0**, `766ecef`) into local `main`,
 rebuild **without regenerating `src/recomp/gen`**, run both repositories' tests, rerun **one
