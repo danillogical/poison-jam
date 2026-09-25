@@ -9,22 +9,34 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 ## CURRENT PACKET — none (A4a-r2 ACCEPTED 2026-09-24)
 
 **Next action:** the `A4a-r2` outcome row **`O-6`** selects the next packet — **`A4b`, the
-GP DSP56300 engine**. Both gates are answered (Q1 by the Advisor, Q2 by the owner). `A4b-r1`
-is drafted but **not** promoted: its adequacy review returned
-`pending — reviewer unavailable` (the reviewer child exhausted its context without a
-verdict), and the findings recovered from that child exposed a **`PREMISE_CHANGED`** —
-`A4b-r1`'s `AC-PIO` enumerated the `PIO_FREE` population by one spelling and so covered
-**10 of 28** sites, a false-PASS path. The Advisor ruled Q1's conclusion stands but is
-provisional until the criterion passes over a witnessed-complete population, and amended
-checkpoint-40 constraint 3(ii) to make the GP's clearing write an atomic
-compare-and-exchange. The authoring Planner is revising `A4b-r1` → `A4b-r2`; a **fresh**
-Planner then reviews it (§5.1.5, change packet). Nothing is executable until an adequacy
-review returns `ADEQUATE` and that frozen revision is promoted here.
+GP DSP56300 engine**. Both gates are answered (Q1 by the Advisor, Q2 by the owner). `A4b` is
+drafted but **not** promoted, and it is on its third revision:
 
-**Records:** `docs/reviews/a4b-r1-adequacy-attempt-1.md` (the unavailable review and the
-recovered findings); `docs/reviews/a4b-q1-advisor-ruling.md` (Q1 plus the PREMISE_CHANGED
-addendum, verbatim); `docs/reviews/a4b-planning-rulings.md` (checkpoint-40 constraints plus
-the 3(ii) amendment); `docs/reviews/a4b-xemu-pin.md` (xemu pin
+- `A4b-r1` — adequacy review returned `pending — reviewer unavailable` (the child exhausted
+  its context without a verdict), but the findings recovered from it exposed a
+  **`PREMISE_CHANGED`**: `AC-PIO` enumerated the `PIO_FREE` population by one spelling and
+  so covered **10 of 28** sites, a false-PASS path.
+- `A4b-r2` — the repair. A fresh Planner ruled it **`INADEQUATE`** with four blocking
+  defects (B1–B4) in `AC-PIO`'s new callee/exit rule, `AC-CLEAR`'s predicate ordering, and a
+  decision-row gap. It confirmed the population repair itself works, the atomic witness is
+  sound in kind, and `AC-NOCPU` is not vacuous.
+- `A4b-r3` — in revision by the authoring Planner; B1+B2 are being repaired as **one
+  redesign**, not two patches (§5.5), since they are the same mechanism.
+
+The Advisor's `PREMISE_CHANGED` ruling stands: Q1's conclusion holds, but it is
+**provisional** until `AC-PIO` passes over a population whose completeness is itself
+witnessed. The Advisor also amended checkpoint-40 constraint 3(ii) to make the GP's
+clearing write an atomic compare-and-exchange.
+
+Nothing is executable until an adequacy review returns `ADEQUATE` and that frozen revision
+is promoted here.
+
+**Records:** `docs/reviews/a4b-r2-adequacy-review.md` (`INADEQUATE`, verbatim);
+`docs/reviews/a4b-r2-session-checks.md` (the import at `0x1C4004` resolved to kernel
+ordinal 161 = `KfLowerIrql`, `__fastcall` on `ecx`, which makes the B1 rule decidable);
+`docs/reviews/a4b-r1-adequacy-attempt-1.md`; `docs/reviews/a4b-q1-advisor-ruling.md` (Q1
+plus the PREMISE_CHANGED addendum, verbatim); `docs/reviews/a4b-planning-rulings.md`
+(checkpoint-40 plus the 3(ii) amendment); `docs/reviews/a4b-xemu-pin.md` (xemu pin
 `67cc79e663038d1f55448c0f566b37dde016adf6`); `docs/reviews/a4b-q2-owner-decision.md`;
 `docs/reviews/a4b-revision-history.md` (non-authoritative).
 
