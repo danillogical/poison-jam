@@ -1,6 +1,6 @@
 ## A4b — the GP DSP56300 engine clears the title's pending word in a strict run
 
-**Class:** change   **Contract revision:** `A4b-r2`   **Status:** draft
+**Class:** change   **Contract revision:** `A4b-r3`   **Status:** draft
 **Governing requirement:** `A4a-r2` outcome row `O-6` (`docs/packets/a4a-dsp-pending-word.md`, frozen SHA-256 `2366E18C…22FBC`); Advisor Q1 ruling `docs/reviews/a4b-q1-advisor-ruling.md` (binding, four conditions); owner Q2 decision `docs/reviews/a4b-q2-owner-decision.md`; Advisor checkpoint-40 ruling to the A4b Planner (seven constraints; Session records it verbatim in `docs/reviews/a4b-planning-rulings.md`, child `407c54a3-6ca4-4a65-835b-faf5355195cd`, route `claude/claude-opus-5-5` @ `high`).
 **Depends on:** `A4a-r2` (ACCEPTED), `A3a-r25` (ACCEPTED).
 **Baseline:** game `825a62a` (the commit that adds this packet; supersedes `60df196`, which the draft named); toolkit `0d7929c86771dd0b971941592fd4f15436116e82`; both trees clean at promotion. Baseline exe SHA-256 `9597ff7c2a377265aba8dbb90b461ebe763e02d65432e9dfa13acd925539c553`.
@@ -136,7 +136,7 @@ G1: `check-run-profile.py` prints `STRICT` for R1 and R0. G2: `check-dump-mappin
 - Guards against: a loaded but never-clocked core (U5: frame gate closed, test tone path, halted core).
 - Evidence profile: strict (R1).
 - Procedure: `[GPRUN]` lines after the first `[GPBOOT]`.
-- PASS: some `[GPRUN]` line has `se_frame_after_boot ≥ 1`, `insns > 0`, `tone=0`. FAIL (→ R-NOFRAMES): `se_frame_after_boot = 0` on every line, or no `[GPRUN]` line although `[GPBOOT]` exists; FAIL (→ R-NOCLEAR evaluation continues): frames run but `insns = 0` throughout.
+- PASS: some `[GPRUN]` line has `se_frame_after_boot ≥ 1`, `insns > 0`, `tone=0`. FAIL (→ R-NOFRAMES): `se_frame_after_boot = 0` on every line, or no `[GPRUN]` line although `[GPBOOT]` exists; FAIL (→ R-NOEXEC): frames run (`se_frame_after_boot ≥ 1` on some line) but `insns = 0` on every line.
 - Controls: waived — retirement count comes from the ported core's own counter; its meaning is inherited from the pinned commit (limit).
 - Claim limits: retirement, not correctness.
 
@@ -146,9 +146,13 @@ G1: `check-run-profile.py` prints `STRICT` for R1 and R0. G2: `check-dump-mappin
 - Guards against: attributing the `0` to anything other than the GP write path, including a guest-CPU store that races the DMA write.
 - Evidence profile: strict (R1).
 - Procedure: `[GPDMA] watch` lines; `W` at freeze via `inspect-jsrf.py memory <R1> <MEM32(0x001BA858)+0x810> 4`; `F` as in AC-DEFAULT.
-- PASS: at least one `[GPDMA] watch` line has `va = B+0x810`, `payload=00000000`, **`cas=ok`** and `observed=00000003`, and records `dsp_addr` and `insns`. A successful compare-exchange (Device semantics 5) is the primary witness: the GP's own write performed the 3→0 transition, with no store in between. The `before`/`after` samples are recorded, not relied on. Corroboration only (recorded, not sufficient alone): `W = 0` at freeze. `F = 0` is recorded as an observation that the guest left the spin, and **anything after it is exploratory-grade, because it passes through PIO_FREE stub gates**.
-- FAIL (→ R-CPU): a watch line with `payload=00000000`, `cas=fail` and `observed=00000000` — the word was already 0 when the GP wrote. FAIL (→ R-NOCLEAR): no watch line with `payload=00000000`, and `W = 3` at freeze. FAIL (→ R-CPU): no such line, and `W = 0` at freeze.
-- UNKNOWN: `cas=fail` with `observed` neither `0` nor `3`.
+- **Deciding line:** the **first** `[GPDMA] watch` line in log order with `va = B+0x810` and `payload=00000000`. AC-CLEAR is decided on that line alone. Later lines (for example, a later frame rewriting the status word, which reports `cas=fail observed=00000000`) are recorded only.
+- PASS: the deciding line has **`cas=ok`** and `observed=00000003`, and records `dsp_addr` and `insns`. A successful compare-exchange (Device semantics 5) is the primary witness: the GP's own write performed the 3→0 transition, with no store in between. The `before`/`after` samples are recorded, not relied on. Corroboration only (recorded, not sufficient alone): `W = 0` at freeze. `F = 0` is recorded as an observation that the guest left the spin, and **anything after it is exploratory-grade, because it passes through PIO_FREE stub gates**.
+- FAIL (→ R-CPU):
+  - the deciding line has `cas=fail` and `observed=00000000`, i.e. the word was already 0 when the GP first wrote 0; or
+  - there is no deciding line and `W = 0` at freeze.
+- FAIL (→ R-NOCLEAR): there is no deciding line and `W = 3` at freeze.
+- UNKNOWN: the deciding line has `cas=fail` and `observed` neither `0` nor `3`; or there is no deciding line and `W` is neither `0` nor `3`.
 - Controls: known-good for the address computation — AC-NOCPU's control site. Known-bad — the baseline R1 artifact has no `[GPDMA]` line. The `cas` path is exercised by AC-FIX (e).
 - Claim limits: one store by one core. No claim about the DSP program's other effects.
 
@@ -183,12 +187,32 @@ G1: `check-run-profile.py` prints `STRICT` for R1 and R0. G2: `check-dump-mappin
   - `A1 moffs` (`mov eax,[0xFE820010]`, hit − 1), 10: `001A2296 001A22D0 001A3EB3 001A3FDB 001A4181 001A4E4C 001A5671 001A57CD 001A60B8 001A611C`.
   - `8B /r disp32` (`mov r32,[0xFE820010]`, hit − 2), 18: `001A2A7F(edx) 001A303D(edx) 001A30E4(edx) 001A3414(esi) 001A34EA(edx) 001A35AA(ecx) 001A3710(ecx) 001A3847(edx) 001A38F4(edx) 001A39AE(edx) 001A3A48(edx) 001A3B69(edx) 001A3C21(edx) 001A3F24(edx) 001A4242(edx) 001A4325(ebx) 001A4A34(edx) 001A579E(ebx)`.
 - Procedure:
-  1. **Population.** Run the `find` command and record its output verbatim with the XBE SHA-256. For each hit, decode the instruction starting at hit − 1 (`A1`) or hit − 2 (`8B /r` with `mod=00, r/m=101`). The instruction start is the one that has a `loc_<VA>: ;` label in the generated tree (step 2). Both candidates decode at hit `001A3FDC`, and the label resolves it to `001A3FDB`. A hit with neither decoding, or with no label, is recorded as `UNKNOWN`; it is never dropped.
+  1. **Population.** Run the `find` command and record its output verbatim with the XBE SHA-256. For each hit, decode the instruction starting at hit − 1 (`A1`) or hit − 2 (`8B /r` with `mod=00, r/m=101`). The instruction start is the one that has a `loc_<VA>: ;` label in the generated tree (step 2). At hit `001A3FDC` only the `A1` form decodes: the byte at hit − 2 is `0x65`, the displacement of the preceding `mov [esi+0x65],al`, so it is not an instruction start. The label confirms `001A3FDB`. A hit with neither decoding, or with no label, is recorded as `UNKNOWN`; it is never dropped.
   2. **Reconciliation by value, not text.** Parse every integer literal that is the operand of `MEM8(`/`MEM16(`/`MEM32(` in `src/recomp/gen/recomp_*.c`, decimal or hex, signed or unsigned, and normalise it mod 2^32. Keep those equal to `0xFE820010`. Map each one to the nearest preceding `loc_<VA>` label. The result must be exactly the 28 frozen VAs, one-to-one, with no leftovers in either direction. At baseline these are 10 spelled `MEM32(0xFE820010u)` and 18 spelled `MEM32(-25034736)`, all in `recomp_0005.c`.
   3. **Per site.** Disassemble the loop and every exit path with `inspect-jsrf.py disasm`. Record the threshold form and N, then trace the polled register `r` on every exit path until `r` is overwritten.
-  4. **Callee rule.** If a `call` occurs while `r` still holds the polled value, disassemble the callee (and its callees). Show that it does not read `r` as input before writing it, or saving it by `push`. An import thunk (`call [thunk]`) counts as not reading `r` only when `r` ∈ {`ebx`,`esi`,`edi`,`ebp`}, because the Xbox kernel ABI (stdcall/fastcall) passes arguments in `ecx`/`edx`/stack only. Otherwise the site is `UNKNOWN`. This rule applies at least to `0x001A3414` (`esi`) and `0x001A4325` (`ebx`). Both exit through `lea ecx,[ebp-8]; call 0x1A1BAF` with `r` live until `pop`. The Planner read `sub_001A1BAF` as `push esi; mov esi,ecx; cmp [esi+4],0; je; mov cl,[esi]; call [0x1C4004]; and [esi+4],0; pop esi; ret`. The executor re-records it, with the import name at `0x1C4004`, and applies the rule.
+  4. **Exit trace.** From each loop exit, apply the exit-trace rule below to every path, and record the trace per site as a list of instruction VAs with the tracked set at each call, `ret` and `jmp` out of the function.
   5. **Indirect-access supporting evidence.** Record `inspect-jsrf.py find` for `0xFE800000` (at planning: 7 hits, `001A2E4A 001A2E5F 001A2E65 001A2EDE 001A2F80 001A2FA4` in `DSOUND` and **`0022DB72` in `.data`**), `0xFE820000` (0 hits) and `0x00020010` (1 hit, `.rdata 001E4888`). For each `DSOUND` hit, show from disassembly that the base/index registers come from the table at `0x001B9ECC`, and record that table's entries as data (`0x2054`…`0x2074`, voice-list registers). For `0022DB72` and `001E4888`, show that nothing references them in a way that can form `0xFE820010`, or that they are not operands at all. Any of these that can reach `0xFE820010` makes the criterion `UNKNOWN`.
-- **"Not used after the loop"** means: on every path from the loop exit until `r` is overwritten, `r` does not flow into a guest store, an MMIO store, a branch condition, or an address computation. A callee-save `push r`/`pop r` pair is not a use. Calls are handled by the callee rule in step 4.
+- **Exit-trace rule ("not used after the loop").** The trace keeps a tracked set `T`: the registers and stack slots that may hold the polled value, or a value derived from it. It starts as `T = {r}` at the loop exit. Each instruction on the path is applied in execution order:
+  - **Derivation.** An instruction that reads a member of `T` and writes a register adds that register to `T`.
+  - **Overwrite.** An instruction that writes a member register with a value not derived from `T` removes it (for example `xor r,r`, `mov r,imm`, `mov r,[mem]` with no tracked operand, or `pop r` of an untracked slot).
+  - **Uses (→ FAIL):** a member of `T` flows into:
+    - the value or address of a guest store or MMIO store;
+    - a branch condition (flags set by an instruction that reads `T`);
+    - an address computation;
+    - the argument of a resolved import that reads it (below).
+  - **Stack.** `push t` with `t ∈ T` adds that stack slot to `T`, and the matching `pop x` makes `x` tracked. A callee-save `push`/`pop` pair is not a use. Any other read of a tracked slot is a use, unless shown to be the matching `pop`. Slots of a frame that has returned are dropped.
+  - **Direct call** (`call rel32`) with `T` non-empty: the trace continues into the callee with the same `T`, under the same rule. At the callee's `ret` it resumes at the return address with the callee's final `T`.
+  - **Import call** (`call [slot]`, where `slot` is a kernel thunk slot):
+    - *Input.* The import cannot read `r` when `r ∉ {ecx, edx}` and no tracked stack slot lies in its argument area. Otherwise the executor resolves the import from the XBE: ordinal = `MEM32(slot) & 0x7FFFFFFF` at the **exact slot VA the instruction references** (neighbouring slots may hold the same value). It then maps the ordinal via toolkit `src/kernel/kernel_thunks.c`, takes the prototype from `src/kernel/kernel.h`, and applies its convention: `__fastcall` reads `ecx` (arity ≥ 1), then `edx` (arity ≥ 2), then the stack; `__stdcall` reads the stack only. An argument read of a `T` member is a use. The site is `UNKNOWN` only if resolution fails.
+    - *Clobber convention after the import.* The import neither removes nor adds members of `T`. The volatile registers `eax`/`ecx`/`edx` are **not** assumed overwritten, so a member stays in `T`. The non-volatile `ebx`/`esi`/`edi`/`ebp` are preserved and keep their state. Exception: for a prototype with a non-`VOID` return that read no `T` member, `eax` is removed from `T`.
+    - *Observed at planning* (`docs/reviews/a4b-r2-session-checks.md`): `sub_001A1BAF` calls `[0x1C4004]`, which holds `0x800000A1` = ordinal 161 → `xbox_KfLowerIrql`, `VOID __fastcall (KIRQL NewIrql)`, with its argument in `cl` (`001A1BB8 mov cl,[esi]`). So `eax`, `edx`, `ebx`, `esi` and `edi` are not read, and every `T` member survives the call. `0x1C3FF8` holds the same value and is not the referenced slot.
+  - **Indirect call or jump** (`call reg`, `call [mem]` other than a thunk slot, `jmp reg`, `jmp [mem]`) with `T` non-empty: `UNKNOWN`, unless every target is resolved from the XBE and traced.
+  - **Leaving the function with `T` live.** A `ret`/`ret n` reached with any register in `T` is a **flow into the caller**; a callee-save `pop` just before it overwrites that register and so removes it. So is a `jmp` out of the function with `T` non-empty. The trace continues at the return address in **every** caller: every `call rel32` to the function's entry in the XBE, cross-checked against the generated tree's direct calls to `sub_<entry>`. It is `UNKNOWN` when:
+    - the entry VA appears in the XBE as an immediate or data value (the function may be called indirectly);
+    - the callers cannot be enumerated;
+    - or the trace would continue beyond **three** caller levels above the site's function.
+  - **Termination.** A path ends when `T` is empty. It ends in `UNKNOWN` at any instruction the executor cannot decode or resolve.
+  - **Outcome.** The site passes when every path ends with `T` empty and no use. It FAILs on any use, and is `UNKNOWN` otherwise.
 - PASS: **all** of the following hold:
   - the `find` count = **28**;
   - step 2 yields exactly the 28 frozen VAs, one-to-one;
@@ -197,19 +221,30 @@ G1: `check-run-profile.py` prints `STRICT` for R1 and R0. G2: `check-dump-mappin
   - step 5 shows no other path to `0xFE820010`.
 
   FAIL (→ R-PIO-DATA): any site uses the value as data. UNKNOWN: a count other than 28, a reconciliation mismatch, any site not evaluated or not resolved (including a callee not shown), or any step-5 item unresolved. UNKNOWN is never PASS.
-- Controls: known-good — the Session's three sampled sites (`001A2296`, `001A4181`, `001A611C`) in `a4b-q1-advisor-ruling.md`. Known-bad for the reconciliation — a text grep of `MEM32\(0xFE820010u\)` alone finds 10, not 28, and must be reported as a mismatch.
+- Controls: known-good **for the loop-shape classification (step 3)** — the Session's three sampled sites (`001A2296`, `001A4181`, `001A611C`) in `a4b-q1-advisor-ruling.md`. Their exit traces are evaluated under the exit-trace rule like every other site, not presumed. Known-bad for the reconciliation — a text grep of `MEM32\(0xFE820010u\)` alone finds 10, not 28, and must be reported as a mismatch.
 - Claim limits: static. **It covers only the 28 direct reads of `0xFE820010` and cannot exclude register-indirect or computed access to that address, beyond the supporting evidence in step 5.** It says nothing about timing or about whether the stub value is true.
 
 ### Decision rows (evaluate in order; first match wins)
 
 - **R-PORT-FAIL:** AC-PORT, AC-FIX or AC-LIC cannot be made to pass within two attempts on the same root cause → toolkit and game reverted to baseline (no GPL code left in tree) → Planner re-plans (candidate: a port-only packet `A4b-port`).
 - **R-DEFAULT-REGRESS:** AC-DEFAULT FAIL → revert → Planner.
-- **R-UNKNOWN:** any gate fails, or any AC is UNKNOWN after the one R1 rerun → evidence insufficient → Planner re-plans with the failing gate/AC as brief.
+- **R-UNKNOWN:** after the one R1 rerun, any gate fails, or any AC is UNKNOWN, or AC-CLEAR PASS while AC-BOOT or AC-RUN is not PASS (the evidence is inconsistent) → evidence insufficient → Planner re-plans with the failing gate/AC as brief.
 - **R-CPU:** AC-NOCPU FAIL, or AC-CLEAR FAIL routed to R-CPU (`cas=fail` with `observed=0`, or no `payload=0` watch line with `W = 0` at freeze) → the 0 did not come from the GP (Q1 reversal (c)) → **FAIL**, not a narrowed claim → Advisor.
 - **R-PIO-DATA:** AC-PIO FAIL → the claim needs a modelled `PIO_FREE` first → Advisor; landed code handled as R-LAND.
 - **R-NOBOOT:** AC-BOOT FAIL → **R-LAND** applies → next: `A4c` discovery of the bootstrap/SGE path.
 - **R-NOFRAMES:** AC-BOOT PASS, AC-RUN FAIL on frames → **R-LAND** → next: `A4c` discovery of the FE/SE frame gate after GPRST.
-- **R-NOCLEAR:** AC-BOOT and AC-RUN PASS, AC-CLEAR FAIL with `W = 3` → **R-LAND** → next: `A4c` discovery of what the GP program waits on (its `[GPIN]` inventory is the brief).
+- **R-NOEXEC:** AC-BOOT PASS, AC-RUN FAIL on `insns = 0` (frames run, the core retires nothing) → **R-LAND** → next: `A4c` discovery of the GP run/halt state after bootstrap (reset/halt bits, the pinned `mcpx_apu_dsp_frame` start condition; `[GPRUN] pc`/`halt` is the brief).
+- **R-NOCLEAR:** AC-BOOT and AC-RUN PASS, AC-CLEAR FAIL → R-NOCLEAR (no deciding line, `W = 3`) → **R-LAND** → next: `A4c` discovery of what the GP program waits on (its `[GPIN]` inventory is the brief).
+- **Coverage (AC-RUN × AC-CLEAR, with AC-BOOT PASS and every earlier row not matched):** each combination matches exactly one row.
+
+  | AC-RUN \ AC-CLEAR | PASS | FAIL → R-CPU | FAIL → R-NOCLEAR | UNKNOWN |
+  |---|---|---|---|---|
+  | PASS | R-EXPL-INPUT or R-PASS (decided by AC-INPUTS; NOCPU FAIL was already R-CPU) | R-CPU | R-NOCLEAR | R-UNKNOWN |
+  | FAIL, no frames | R-UNKNOWN (inconsistent) | R-CPU | R-NOFRAMES | R-UNKNOWN |
+  | FAIL, `insns = 0` | R-UNKNOWN (inconsistent) | R-CPU | R-NOEXEC | R-UNKNOWN |
+  | UNKNOWN | R-UNKNOWN | R-UNKNOWN | R-UNKNOWN | R-UNKNOWN |
+
+  With AC-BOOT FAIL: AC-CLEAR PASS or any UNKNOWN → R-UNKNOWN; AC-CLEAR → R-CPU → R-CPU; otherwise R-NOBOOT.
 - **R-EXPL-INPUT:** AC-BOOT, AC-RUN, AC-CLEAR, AC-NOCPU PASS; AC-INPUTS FAIL → the clearing is observed but **exploratory for the named input**; A4b's claim is **not** satisfied → **R-LAND** → Advisor decides whether that input needs its own model packet first.
 - **R-PASS:** every AC PASS → A4b accepted with exactly the "Establishes" claim → next: the `PIO_FREE` model packet before any strict liveness/boot criterion past the spin; the next stop after `loc_001A18D0` is recorded as an exploratory-grade observation only.
 - **R-LAND (pre-frozen landing-only outcome; never chosen during execution):** applies only when referenced above, and requires AC-PORT, AC-LIC, AC-FIX and AC-DEFAULT all PASS; the core stays in tree (reachable only under `RECOMP_APU_TRAP`). **It does not satisfy A4b's claim.** If any of those four fails, R-PORT-FAIL applies instead.
