@@ -225,6 +225,15 @@ below.
 
 ### Evidence rule
 
+**A decision input must be lossless by construction.** Where a criterion selects a row from
+something a run recorded, that record must be one that cannot drop the deciding event — a
+write-once latch or an uncapped counter, written at the event by the code that performs it.
+A capped, sampled, rate-limited or first-N **log** is observation only: it may corroborate,
+and no row may depend on the presence or absence of such a line. Absence of a witness is
+never a positive attribution; it selects `UNKNOWN` or an explicit unattributed row, never a
+row that blames a specific agent. See `docs/agent-workflow.md` §6.1.6 and
+`docs/reviews/a4b-watch-ledger-ruling.md`.
+
 A modelled cause requires **either**:
 
 - one credible **primary** hardware source — a datasheet or vendor specification for the

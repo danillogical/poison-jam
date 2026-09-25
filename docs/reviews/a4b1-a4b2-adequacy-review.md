@@ -58,3 +58,10 @@ or the run-profile docs, and it did not verify the baseline exe hash itself.
 **Next:** Advisor ruling on the watch-logging mechanism (§5.5), then a Planner revision of both
 packets together. Neither packet is frozen or promoted; `CURRENT PACKET` remains `none`, and the
 **toolkit sync** is still the next executable work.
+
+> **DONE — see `docs/reviews/a4b-watch-ledger-ruling.md`.** The Advisor ruled the mechanism
+> redesigned: a **write-once watched-word ledger** owned by `A4b1` (toolkit) replaces the
+> capped-log attribution; `A4b2` only calls its CPU-side entry point and reads its output; a
+> new `R2-UNATTRIBUTED` row replaces "no deciding line + W=0 → R-CPU", because **absence of a
+> witness is never a positive attribution**. The packets stay separate. The cheap fixes
+> (`A4b1` B1/B2/B4, `A4b2` B1/B2) fold into the same revisions.

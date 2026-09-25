@@ -623,6 +623,16 @@ PREMISE_CHANGED addendum).
    command. Every command has been run before freezing.
 6. **Decision rule.** PASS, FAIL, and UNKNOWN/BLOCKED are each defined; missing,
    malformed, stale, unexercised, or empty evidence never defaults to PASS.
+   **Decision inputs are lossless by construction.** A criterion may select a row only from
+   a record that cannot drop the deciding event: a write-once latch or an uncapped counter,
+   updated at the event by the code that performs it. Capped, sampled, rate-limited or
+   first-N logs are **observation only**, and no row may depend on the presence or absence
+   of such a line. Absence of a witness is never a positive attribution: it selects
+   `UNKNOWN` or an explicit unattributed row, never a row that blames a specific agent. The
+   packet that owns the code producing a decision input also owns and fixture-tests that
+   input's semantics; a consuming packet only reads it. Measured cost of not doing this:
+   two consecutive `INADEQUATE` verdicts on one mechanism
+   (`docs/reviews/a4b-watch-ledger-ruling.md`).
 7. **Exercise and controls.** Absence claims need a coverage witness; a new checker
    needs known-good and known-bad controls; the oracle is not derived solely from the
    implementation under test.

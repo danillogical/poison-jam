@@ -96,6 +96,13 @@ exit/callee handling. §5.5 forbids a third patch of the same shape.
 
 ## Correction appended by the Advisor (2026-09-24), after A4p executed
 
+> **SUPERSEDED in part:** the checkpoint-40 constraint-3(ii) amendment below — the
+> `InterlockedCompareExchange(3→0)` primary witness with the stop-path counters demoted to
+> corroboration — was **replaced** by the watched-word ledger ruling after the cap/exemption
+> shape failed a second time. The CAS remains the attribution authority, but the witness is
+> now a write-once latch, not a capped log line. See
+> `docs/reviews/a4b-watch-ledger-ruling.md`.
+
 > **The `001A34EA` worked example's route was incomplete** (it missed `call 0x1A1BAF` at
 > `001A3566`); C2 and C1 empty `T` there; **the conclusion is unchanged** (PASS).
 
