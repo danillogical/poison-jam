@@ -11,8 +11,14 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 **Next action:** the `A4a-r2` outcome row **`O-6`** selects the next packet — **`A4b`, the
 GP DSP56300 engine** — so the Planner designs that against a frozen brief
 (`docs/agent-workflow.md` §5.1). Nothing is executable until an adequacy review returns
-`ADEQUATE` and that frozen revision is promoted here. Two questions gate `A4b` and must be
-answered first (see below).
+`ADEQUATE` and that frozen revision is promoted here.
+
+**BLOCKED on an owner decision (workflow §3.4).** Q1 is answered (below), but **Q2 is a
+licensing choice reserved to the owner**: whether to port xemu's **GPL-2.0-or-later**
+DSP56300 core (`hw/xbox/mcpx/apu/dsp/`) into this **MIT** toolkit (which already carries
+**LGPL-2.1-or-later** APU files), or to implement a core independently. That choice
+determines A4b's entire shape, so A4b cannot be designed until it is made. The Session
+stopped here rather than guessing.
 
 ## Last closed packet — `A4a-r2` (discovery, ACCEPTED 2026-09-24)
 
@@ -52,14 +58,35 @@ answered first (see below).
 
 **Follow-ups carried forward (not authorized until promoted in a packet):**
 
-- **Gates `A4b`, answer first:** **Q1** (Advisor) — does the upstream `PIO_FREE` stub
-  contamination taint `A4b`'s strict claim, requiring a sourced `PIO_FREE` model first?
-  **Q2** (owner via Advisor, §3.4) — licensing of a DSP56300 core: the only known one,
-  xemu `hw/xbox/mcpx/apu/dsp/`, is reported GPL-2.0-or-later, while the toolkit is MIT with
-  LGPL APU files.
+- **Gates `A4b`:** **Q1 — ANSWERED** (Advisor, 2026-09-24): the upstream `PIO_FREE` stub
+  dependence does **not** contaminate A4b's strict claim, and a `PIO_FREE` model is neither
+  a prerequisite for A4b nor part of it. Case ruling recorded verbatim in
+  `docs/reviews/a4b-q1-advisor-ruling.md` (Advisor child
+  `407c54a3-6ca4-4a65-835b-faf5355195cd`, route `claude/claude-opus-5-5` @ `high`); its
+  general clarification is in `docs/jsrf-run-profiles.md` §"Feature enablement". A4b must
+  still establish the ruling's four conditions (who wrote the 0; the GP's input
+  provenance; that `PIO_FREE` only gates; the claim limits) and must cite the ruling.
+  **Q2 — OPEN, owner decision (§3.4):** licensing of a DSP56300 core. The only known
+  implementation, xemu `hw/xbox/mcpx/apu/dsp/` (`dsp.c`, `interp/dsp_cpu.c`), carries
+  **GPL-2.0-or-later** headers (verified this session by fetching the sources), while this
+  toolkit is **MIT** with **LGPL-2.1-or-later** APU files (`LICENSE`, `NOTICE`,
+  `LICENSES/README.md`). GPL-2.0 is stronger copyleft than the LGPL already in the tree, so
+  importing it is a licensing choice reserved to the owner. A4b cannot be designed until
+  this is decided, because it determines whether A4b ports an existing core or implements
+  one independently.
+- **`PIO_FREE` model packet (Advisor-directed prerequisite):** required before the **first**
+  strict liveness or boot-progress criterion past the spin (e.g. "the title reaches
+  <checkpoint> in a strict run"). It is its own packet, placed before that criterion, not
+  inside A4b. **Finding for it:** xemu master `hw/xbox/mcpx/apu/vp/vp.c` `vp_read` returns
+  `0x80` for `NV1BA0_PIO_FREE` with the comment *"we don't simulate the queue for now,
+  pretend to always be empty"* — the obvious secondary source describes itself as a
+  pretence, so it cannot corroborate `0x80` as device state, and our `apu_vp.c` is
+  xemu-derived and therefore not independent either. The `jsrf-run-profiles.md` reversal
+  condition (ii) most likely needs a real FIFO/free-count model or a primary source, not a
+  citation.
 - **Scope `A4b` to the whole GP block, not just GPRST:** R1 shows five GP offsets written
   (`0x3FF00`, `0x3FF04`, `0x3FF10`, `0x3FF14`, `0x3FFFC`×3). Recorded as an acceptance
-  advisory.
+  advisory on `A4a-r2`.
 - `gp_ep_reads` (as defined in `A4a-r2`) counts only `[APUMMIO] read` lines, so a GP
   read-modify-write logged as a write would not register. It did not bite here. Tighten if
   the row is reused.

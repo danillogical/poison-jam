@@ -164,6 +164,20 @@ Where a capability's stub answers are load-bearing for a packet, the packet stat
 in its claim limits. This rule is general and prospective; it changes no classification
 the classifier computes.
 
+**Stub dependence is judged one wait at a time.** A stub that only gates *whether* the
+guest reaches a point limits reachability and liveness claims, not the provenance of a
+later value produced by a model. Concretely: if a polled stub value is used only to decide
+when a wait-for-space loop exits, and is dead once the loop exits, then the stub determines
+*when* the guest arrives — it does not determine the data the guest later acts on. A claim
+about a value the guest itself supplies, or that a model produces, stays strict for that
+value even though the guest passed through stub gates to get there. The claims it does
+limit are stated in the packet's own claim limits: the guest's arrival, and everything
+after it, is exploratory-grade, and no boot-progress or liveness claim follows from it.
+
+Where a stub gates reachability of a wait whose *own* value is later relied on, the stub
+still has to be resolved before any strict claim about reaching beyond that point. Such a
+model is its own packet, placed before the first criterion that needs it.
+
 ### Observation only — no semantic effect
 
 `RECOMP_MMIO_TRACE`, `RECOMP_PFIFO_TRACE`, `RECOMP_NV2A_TRACE`, `RECOMP_PB_SCAN`,
