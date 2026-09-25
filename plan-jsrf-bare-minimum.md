@@ -6,33 +6,39 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — none (`A4p-r1` ACCEPTED 2026-09-24)
+## CURRENT PACKET — none (toolkit sync `A4s` in revision)
 
-**Next action — TOOLKIT SYNC, by owner instruction (2026-09-24).** Before any `A4b` code is
-written, the next packet is a **change packet that syncs the toolkit with upstream**:
+**Next action — TOOLKIT SYNC (`A4s`), by owner instruction.** `A4s-r2` passed its §5.4
+re-review **ADEQUATE**, but is **not promotable**: the Advisor's AC'97 hunk ruling
+(`docs/reviews/a4s-ac97-hunk-ruling.md`) adds obligations the packet must carry — the hunk
+disposition (resolve to the **local** `A3a-r25` model; upstream's NABM trap enters **unarmed**
+with zero call sites), three preservation checks including the `[A3A]` witness in the strict
+run, and a rule-(d) inventory covering **clean** hunks too. A Planner is revising to `A4s-r3`;
+a fresh Planner then reviews it.
 
-- merge **`upstream/main`** (**v0.11.0**, `766ecef`) into local `main`, resolving conflicts —
-  no fetch is needed, `upstream/main` is already `766ecef`;
-- rebuild **without regenerating `src/recomp/gen`**;
-- run both repositories' tests;
-- rerun **one strict baseline** to show whether the stop is still the DSP pending-word spin;
-- during execution **nothing is pushed**, and `upstream/main` stays `766ecef`.
+**The sync itself:** merge **`upstream/main`** (**v0.11.0**, `766ecef`) into local `main`,
+rebuild **without regenerating `src/recomp/gen`**, run both repositories' tests, rerun **one
+strict baseline**, and push nothing during execution. **If the strict stop moves, that is the
+next brief.** Verified facts and the conflict surface: `docs/reviews/toolkit-sync-instruction.md`.
 
-The Planner designs it. **If the strict stop moves, that is the next brief.** Verified facts
-and the conflict surface: `docs/reviews/toolkit-sync-instruction.md`.
+**Expected first result: `R-CONFLICT`.** The Planner's read-only merge preview found at least
+six undecidable hunks, so it deliberately did not pre-rule them; one attempt yields the
+complete inventory for `A4s-r3`, which then names a resolution per hunk. That is fail-closed and
+was endorsed by the re-reviewer.
 
-**Push policy (owner):** push toolkit `main` to **`origin`** (the owner's fork,
-`danillogical/xboxrecomp`) **when a packet closes**, with `git push -u origin main`, then
-confirm `origin/main` equals the merge commit. **Never push to `upstream`** (its push URL is
-`DISABLED`). The game repository has no remote; do not add one. Recorded in `AGENTS.md`
-"Toolkit remotes" (game commit `3ec4563`).
+**Push policy (owner):** push toolkit `main` to **`origin`** (the owner's fork) **when a packet
+closes**, then confirm `origin/main` equals the merge commit. **Never push to `upstream`** (its
+push URL is `DISABLED`). The game repository has no remote. Recorded in `AGENTS.md` "Toolkit
+remotes" (game commit `3ec4563`).
 
-**Why the ordering matters (Session-observed, not in the instruction):** upstream also
-changed **`src/apu/apu_dsp.c`** (+56 lines, 148→199) and **`src/apu/CMakeLists.txt`** — the
-exact files `A4b1` modifies. So the sync is a genuine prerequisite: `A4b1`'s baseline
-(`9597ff7c…`) and its `src/apu` starting state are both invalidated by the merge. The 24
-local commits include `c97ce2c` (`A3a-r25`'s accepted AC'97 change) and `0d7929c` (`A4a-r2`'s
-trace fix), so the merge must preserve accepted work.
+**Candidate future blocker — the RR wait (Advisor lead, not a packet).** JSRF contains
+upstream's AC'97 "Reset Registers" pattern: `0x1A6F6F mov byte [eax+0xFEC0010B],2`, then
+`0x1A6F7F mov cl,[eax+0xFEC0010B]` / `and cl,2` / `0x1A6F88 test cl,cl` / `jne 0x1A6F88` — a
+hoisted single read that spins on the RR bit self-clearing. The same RR write occurs at
+`0x1A7406`. **Uncertain whether current runs reach it**; the A3a/A4a runs stop at the DSP spin
+first, which is consistent with not reaching it. If a later run stalls at `0x1A6F88`, the RR
+self-clear becomes its own admission packet (the trap then becomes a precondition of `A4b`
+rather than a follow-up). It is **not** a reason to arm the trap in `A4s`.
 
 **Then:** `A4b1`/`A4b2` (drafted, split by a fresh Planner from `A4b`) resume with
 re-established baselines. Their in-flight adequacy verdicts remain useful as design
