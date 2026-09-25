@@ -8,27 +8,39 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
 ## CURRENT PACKET — none (toolkit sync `A4s-r5` awaiting re-review)
 
-**ROUTE STATE — both senior-judgment routes are BLOCKED; work is queued, nothing is mid-flight.**
-The senior judgment route is rate-limited (second outage today; see
-`docs/reviews/route-failure-20260924-claude-pool.md`). The **owner authorized a temporary
-substitution** to a WorkBuddy-hosted senior route, but **that route is not resolvable for this
-Session**: every spelling returns `child LLM route "…" is not allowed for this Session`, because
-the substitute model id is permitted **only under the `codex` provider** in
-`C:\Users\logic\.dsh\settings.yaml` (`subagent-model-selection.allowedModels`) — and the owner
-explicitly forbade a Codex-hosted GPT route. The WorkBuddy provider itself is healthy (a
-`workbuddy-ai` control model answered `ROUTE-OK`). Per the owner's instruction the Session
-**STOPPED and reported** rather than choosing another substitute; it did **not** edit the
-allow-list (model policy is owner-reserved). **Remedy:** add the substitute model id to that
-allow-list under the `workbuddy-ai` provider. Full diagnosis:
-`docs/reviews/route-failure-20260924-workbuddy-substitute.md`.
+**ROUTE STATE — RESOLVED (2026-09-25, `session-910703eb`); the senior-judgment route is live.**
+The previous state (both senior routes BLOCKED; the substitute unresolvable) is **superseded**.
+The owner's recorded remedy was applied — `workbuddy-ai` / `gpt-5.6-sol` is now present in
+`C:\Users\logic\.dsh\settings.yaml` (`subagent-model-selection.allowedModels`, lines 32–33) — and a
+**genuinely new top-level session** captured the new list (the allow-list is a **write-once
+per-session latch**, which is why the previous session could not pick the change up). This session
+resolves the route live (`list_subagent_models` → `workbuddy-ai/gpt-5.6-sol`, efforts
+`off`–`max`) and has **spawned and been answered by** children on it. The WorkBuddy provider was
+never the fault. Prior diagnoses, retained as provenance:
+`docs/reviews/route-failure-20260924-workbuddy-substitute.md`,
+`docs/reviews/route-failure-20260924-claude-pool.md`.
+
+**Staffing is a temporary owner-authorized exception, in force for this session only:**
+`workbuddy-ai/deepseek-v4.1-flash` @ `max` for Session/Workers/first-stage reviewer, and
+`workbuddy-ai/gpt-5.6-sol` @ `high` (Planner, Persistent Advisor) / @ `medium` (second-stage
+reviewer). **`docs/agent-workflow.md` §1 was not edited** — §1 is the only persisted staffing
+policy and changing it is an owner-reserved decision (§3.4); if this is meant to persist, §1 is the
+place to change it. **Role authority is unchanged and attaches to the role, not the model**, and
+**existing Advisor rulings are not reopened by the provider change**. Receipt:
+`docs/reviews/startup-20260925-session-910703eb.md`.
+
+**Planner research-sufficiency stopping rule (unchanged, restated for the r4 work below):** the
+Planner stops investigating as soon as §5.1's planning test is met and leaves remaining unknowns to
+the packet.
 
 **Queued in order:** (1) the `A4s-r5` re-review → freeze/promotion if `ADEQUATE` with zero
 blocking defects; (2) the `A4b1-r4`/`A4b2-r4` revision per the binding `[GPIN]` redesign. The
 existing Advisor rulings are **binding** and are not reopened by a provider change.
 
 **Next action — TOOLKIT SYNC (`A4s`), by owner instruction.** `A4s-r5` (SHA-256
-`09DA9413C028D61BD28D9E4007AF6DDE3474ED6869F77B0095D03DB2C4FB86FB`) is written and awaiting a
-fresh Planner's §5.4 re-review.
+`09DA9413C028D61BD28D9E4007AF6DDE3474ED6869F77B0095D03DB2C4FB86FB`) is written and its fresh
+Planner §5.4 re-review is **in flight** this session (Planner child `f339b306-0473-4777-a211-78271453f2b9`,
+`workbuddy-ai/gpt-5.6-sol` @ `high`). No verdict exists yet.
 
 **Revision history of this packet** (each round's blocker was in the same criterion, so the
 Session ruled the last fix a **simplification** under §5.5, not a patch):
