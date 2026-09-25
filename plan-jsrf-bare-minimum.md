@@ -6,24 +6,43 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — none
+## CURRENT PACKET — `A4a-r2` (discovery, promoted 2026-09-24)
 
-No packet is promoted, so implementation is **BLOCKED** until one is (workflow §5).
+- **Packet:** `docs/packets/a4a-dsp-pending-word.md`, revision `A4a-r2`, class
+  **discovery**, frozen SHA-256
+  `2366E18C583B3ED82124F0E5D3AAD14DB38B4D3CA493F1695E44FFE779722FBC`.
+- **Question:** is the next packet the GP DSP56300 engine (`A4b`), and what must its
+  scope include? Unknowns U1–U4: the last `GPRST` value; whether the title reads GP/EP at
+  all; whether scratch page 0 holds the XBE `0x001BA0A0` image with the pending word `3`
+  at `+0x810`; whether the stop holds on the instrumented build.
+- **What it does:** two trace-only additions inside the existing `RECOMP_APU_TRACE` block
+  of toolkit `src/apu/apu_mmio_hook.c` (off by default), then two strict runs — `R1`
+  (trap + trace) and `R0` (default path).
+- **Records:** adequacy `docs/reviews/a4a-r2-adequacy-review.md` (`ADEQUATE`,
+  `BLOCKING: NONE`); revision log `docs/reviews/a4a-revision-history.md`
+  (non-authoritative). Superseded `A4a-r1` is preserved at game commit `5e739f6`.
+- **Claim limits:** a discovery packet establishes observations only. It never satisfies a
+  strict criterion and never claims anything works (`docs/agent-workflow.md` §5.8).
+  Reaching the spin under trap is **exploratory-grade however R1 classifies**, because the
+  guest's `0xFE820010` polls are answered by the `PIO_FREE` stub constant `0x80`
+  (`docs/jsrf-run-profiles.md` §"Feature enablement", Advisor ruling B). Only real GP
+  DSP56300 execution can clear `+0x810` (ruling D).
+- **Outcome rows hand off directly:** `O-3` → `A4c` (scratch upload path), `O-4` → `A4d`
+  (GP start path), `O-5`/`O-6` → `A4b` (GP engine brief), `O-1` → Advisor ruling first,
+  `O-2` → Session repairs once, `O-UNKNOWN` → rerun once then re-plan. IDs `A4b`/`A4c`/
+  `A4d` are placeholders assigned when briefed.
 
-**Next action:** the Planner designs the next packet against the measured blocker
-below, following `docs/agent-workflow.md` §5. The Session supports it with evidence
-and mechanical drafting. Nothing is executable until an adequacy review returns
-`ADEQUATE` and that frozen revision is promoted here.
+**Measured blocker (unchanged):** the guest spins at `loc_001A18D0`
+(`recomp_0005.c:6748-6751`, live frame in `sub_001A1769`) on a DSP pending word at
+`+0x810` that nothing clears. The run ends `diagnostic_deadline`.
+`RECOMP_APU_DSP_ACK` stays forbidden as acceptance evidence. **Caution:** A3a's predicted
+next stop (`div@0x001A2BFC`) came from an exploratory run with `RECOMP_GPU_ACK` enabled,
+whose synthetic completion cleared this word; it is not a prediction of strict behaviour.
 
-**Measured blocker (strict run `logs/runs/20260924-100502-623-a3a-codec-model`):**
-the guest spins at `loc_001A18D0` (`recomp_0005.c:6748-6751`, live frame in
-`sub_001A1769`) on a DSP pending word at `+0x810` that nothing clears. The run ends
-`diagnostic_deadline`. The closed A3a packet's next-packet table names the candidate
-direction: make the GP (DSP) actually execute the uploaded program so it clears
-`+0x810` itself. `RECOMP_APU_DSP_ACK` stays forbidden as acceptance evidence.
-**Caution:** A3a's predicted next stop (`div@0x001A2BFC`) came from an exploratory
-run with `RECOMP_GPU_ACK` enabled, whose synthetic completion cleared this word. It is
-not a prediction of strict behaviour.
+**Next action:** the Session executes `A4a-r2` exactly, collects the artifacts, selects
+the outcome row, and runs two-stage acceptance (§5.8: the reviewer confirms the artifacts
+exist, match the commands, and that the recorded row selection is right). The selected
+row's next packet then becomes the next frozen brief (§5.1).
 
 **Baseline (2026-09-24).** The accepted A3a work is committed: toolkit `c97ce2c`
 (`src/kernel/xbox_memory_layout.c`) and game `a16350f` (`scripts/jsrf_run_profile.py`,

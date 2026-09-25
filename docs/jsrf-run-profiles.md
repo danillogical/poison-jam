@@ -143,6 +143,27 @@ exploratory.
 | `RECOMP_RASTER_TEST` | Draws one known triangle through the executor. |
 | `RECOMP_USB`, `RECOMP_FMV_HOST`, `RECOMP_FB_WINDOW` | USB, FMV host decode, window. |
 
+**Enabling a feature does not turn stub answers into modelled ones.** A claim is only
+as strict as the source of each value it relies on, so the run's label is necessary but
+not sufficient. Enabling a capability can put a *stub* in the path of a read the guest
+depends on — a constant returned by an unimplemented block is not device behaviour, and
+progress the guest makes because of it is at most exploratory however the run
+classifies. Two consequences:
+
+- A claim must be scoped to what actually answered each value. "The guest wrote X then
+  read Y then stopped at Z" stays strict; "the device path works" and "the wait was
+  satisfied by a modelled cause" do not, if a stub produced the value that let the guest
+  continue.
+- A capability that changes several things at once is not a single-variable comparison.
+  `RECOMP_APU_TRAP` instantiates the APU, replaces the `0xFE820010` tick-loop counter
+  with a constant served by the VP register map, and answers GP/EP reads with zero. A
+  difference between a trapped and an untrapped run must not be attributed to any one of
+  those without a measurement that separates them.
+
+Where a capability's stub answers are load-bearing for a packet, the packet states them
+in its claim limits. This rule is general and prospective; it changes no classification
+the classifier computes.
+
 ### Observation only — no semantic effect
 
 `RECOMP_MMIO_TRACE`, `RECOMP_PFIFO_TRACE`, `RECOMP_NV2A_TRACE`, `RECOMP_PB_SCAN`,
