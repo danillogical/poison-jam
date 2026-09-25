@@ -6,39 +6,66 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4p-r1` (discovery, promoted 2026-09-24)
+## CURRENT PACKET — none (`A4p-r1` ACCEPTED 2026-09-24)
+
+**Next action:** the `A4p-r1` outcome row **`O-GATE`** selects an **`A4b` revision** that
+deletes `AC-PIO` and `R-PIO-DATA`, adds the precondition "`A4p` ACCEPTED with `O-GATE` on
+XBE SHA-256 `FD190557…EF9C`" plus the claim limits, and folds in the ordinary repairs. The
+**first** planning question is whether `A4b` should be **split into smaller change packets**
+so that code is built and tested sooner — e.g. `A4b1` (port, licence, fixture tests, the
+unchanged default path, no guest-run claims) and `A4b2` (bootstrap, run, clear, no-CPU and
+inputs in a strict run). A fresh Planner decides that against a frozen brief and records the
+decision in one line. Nothing is executable until an adequacy review returns `ADEQUATE` and
+that frozen revision is promoted here.
+
+## Last closed packet — `A4p-r1` (discovery, ACCEPTED 2026-09-24)
 
 - **Packet:** `docs/packets/a4p-pio-gate-analysis.md`, revision `A4p-r1`, class
   **discovery**, frozen SHA-256
   `B8BDBFAEC31213AA43D7A2BC8771326A73BE6CC124B6E2993BD2D33C57687A4B`.
-- **Question:** at each of the **28** direct reads of `0xFE820010` in `DSOUND`, is the loop
-  a threshold re-poll whose polled value reaches no use under the locally-checked
-  calling-convention rule C1–C4? The answer decides whether `A4b` proceeds or whether a
-  modelled `PIO_FREE` must come first.
-- **What it does:** static analysis only — no build, no guest run, no instrumentation. The
-  executor writes one file, `docs/reviews/a4p-execution-evidence.md`.
-- **Why it is a discovery packet:** the Advisor ruled (§5.5 redesign,
-  `docs/reviews/a4b-pio-methodology-ruling.md`) that this analysis is itself execution
-  (§5.1.3) and that its result decides whether `A4b`'s claim is even the right one.
-- **Outcome rows hand off directly:** `O-DATA` → a `PIO_FREE`-model packet **before** `A4b`
-  (Advisor); `O-UNKNOWN (sites)` → Planner + Advisor decide per listed site; `O-GATE` →
-  `A4b` deletes `AC-PIO` and `R-PIO-DATA` and adds the precondition "`A4p` ACCEPTED with
-  `O-GATE` on XBE SHA-256 `FD190557…EF9C`".
+- **Question:** are the 28 direct reads of `0xFE820010` in `DSOUND` gate-only under the
+  locally-checked calling-convention rule C1–C4?
+- **Result — selected outcome row `O-GATE`:** E0–E2 clean, **all 28 sites PASS**, 0 FAIL,
+  0 UNKNOWN, E3 clean. Every loop is a threshold re-poll with no store; on every exit path
+  `T` empties before any use, by immediate overwrite, by a callee-save `pop`, or by C1 at a
+  call. **C3 was invoked at 0 of 28 sites.** The `0xFE800000` table resolves to voice-list
+  registers (`0x2054…0x2074`), not `PIO_FREE`, and the two stray constants are unreferenced.
+- **This discharges Q1 condition 3**, and therefore **retires `AC-PIO`**: `PIO_FREE` is
+  gate-only, so the stub decides whether the guest reaches a point but not the data it
+  writes. `A4b` cites this row as a precondition.
 - **Claim limits:** a discovery packet never satisfies a strict criterion and never claims
-  anything works (§5.8). It rests on the **inferred** premise that DSOUND follows the
-  standard x86 register convention, checked at every boundary the analysis relies on but not
+  anything works (§5.8). The result rests on the **inferred** premise that DSOUND follows
+  the standard x86 convention, checked at every boundary the analysis relies on but not
   everywhere; it cannot see a custom `edx`-return convention passed on untouched; it covers
   only the 28 direct reads, not register-indirect or computed access beyond E3, timing, or
   whether `0x80` is the true device value.
-- **Records:** adequacy `docs/reviews/a4p-r1-adequacy-review.md` (`ADEQUATE`,
-  `BLOCKING: NONE`); revision log `docs/reviews/a4p-revision-history.md`
-  (non-authoritative).
+- **Records:** adequacy `docs/reviews/a4p-r1-adequacy-review.md` (`ADEQUATE`);
+  execution `docs/reviews/a4p-execution-evidence.md` (SHA-256
+  `3DF5D833E89863E5E9BD0264CC64154C6FEADBD6FE10FC1806F6323FF20981F9`); acceptance
+  (`ACCEPT`, first stage, final) `docs/reviews/a4p-r1-acceptance-review.md`; revision log
+  `docs/reviews/a4p-revision-history.md`.
 
-**Next action:** the Session executes `A4p-r1` exactly, writes the per-site evidence to
-`docs/reviews/a4p-execution-evidence.md`, selects the outcome row, and runs acceptance
-(§5.8: the reviewer confirms the artifacts exist, reproduce, and that the recorded row
-selection is right). The selected row's next packet then becomes the next frozen brief
-(§5.1).
+**Follow-ups carried forward (not authorized until promoted in a packet):**
+
+- **`A4b` ordinary repairs** (§5.4, different mechanism from the retired `AC-PIO`): the
+  `[GPDMA] watch` cap must exempt the deciding `payload=0` line (Advisor ruling (d)), plus
+  r3 deferred D1, D2, D4, D5. D3 is superseded by C4 and is discharged by `A4p`.
+- **C3 caller-enumeration text** (in the frozen `A4p-r1`, deferred): it searches
+  `sub_<ENTRY>(`, which matches only the definition; any future C3 use must enumerate
+  callers by value — XBE `call rel32` to the entry, cross-checked by the normalised target
+  literal in `RECOMP_ABI_CALL(0x<ENTRY>u, sub_<ENTRY>)`. Second instance of the
+  `AGENTS.md` rule against enumerating by one spelling.
+- **`PIO_FREE` model packet:** still required before the **first strict liveness or
+  boot-progress criterion past the spin**. Finding for it: xemu's own `vp_read` calls its
+  `0x80` a pretence, so the obvious secondary source cannot corroborate it.
+- **Scope `A4b` to the whole GP block, not just GPRST:** R1 shows five GP offsets written.
+- `gp_ep_reads` counts only `[APUMMIO] read` lines, so a GP read-modify-write logged as a
+  write would not register. Tighten if the row is reused.
+- Archive raw `ctest` output in run directories.
+- `P0.1-AC1` re-review; moving `RECOMP_AC97_READY` into the classifier's
+  `RETIRED_OVERRIDES` registry; the unmodelled AC'97 registers `0xFEC0017C` / `0xFEC00100`.
+- Owner-reserved, unchanged: the `0xFE820010` "GP sample counter" / `PIO_FREE` naming
+  conflict (`docs/jsrf-run-profiles.md:288-292`).
 
 ## `A4b` — parked, awaiting `A4p`'s outcome
 
