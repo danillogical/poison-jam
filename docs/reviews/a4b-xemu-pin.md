@@ -94,6 +94,33 @@ were inferred from the Advisor's memory rather than read. Both are now read from
    `GP_DSP_MIXBUF_BASE` **before** running the GP — that is the `MIXBUF` input `AC-INPUTS`
    must classify.
 
+## A4b1 local modifications to the vendored files
+
+The vendored files are stored byte-exact (`src/apu/dsp/.gitattributes` sets `* -text`), so the
+**vendor commit** matches the pin record for all 17 files — verified in
+`docs/reviews/a4b1-execution-evidence.md`. The port then made **local modifications to 5 files**,
+each marked in-source with `A4b1 LOCAL MODIFICATION` and the upstream line it replaces. Extracted
+from the source, not transcribed from a report (`logs/a4b1/extract-modifications.py`).
+
+| File | Markers | What changed, and why |
+|---|---|---|
+| `dsp.c` | 4 | `:31` the toolkit's GP input-accounting hook in `read_peripheral`; `:79` the same before the trace call; `:140` the JIT branch removed so `dsp_c_init` is called **unconditionally** (`DS2` — the JIT is a non-goal); `:243` `dsp_set_engine` reduced |
+| `dsp_c.c` | 5 | `:31` the toolkit's ledger include; `:62, :72, :99, :195` a `s_last_cycle_count` delta so the ledger records the **per-frame** instruction count rather than a cumulative one |
+| `dsp_internal.h` | 1 | `:25` the `jit_dsp_ops` / `dsp_jit_init` declarations removed — `dsp_jit.*` is deliberately absent |
+| `interp/dsp_cpu.c` | 2 | `:32` the ledger include; `:910` the `MIXBUF` input hook on the mix-buffer read |
+| `gp_ep.c` | 13 | `:24` the ledger include; `:56` `scatter_gather_rw` routed through `DS3` + `DS5`; `:129` the bootstrap scratch-read accounting; `:241` the `FIFO_READ` hook; `:334` `proc_rst_write` per `DS1`; `:404, :470, :512, :544` **GNU case ranges → if/else-if in all four MMIO switches**; `:573` `mcpx_apu_dsp_frame` per `DS2`; `:641` the EP monitor passthrough kept **outside** the GP branch; `:664` `mcpx_apu_dsp_init`; `:689` the startup line |
+
+**Total: 25 markers across 5 files.**
+
+**The GNU case ranges were the first real build blocker.** The pinned `gp_ep.c` uses
+`case A ... B:` (a GCC extension) in four MMIO switches, which MSVC rejects. Each was rewritten as
+an `if`/`else if` chain with **identical tests, identical order and identical bodies**, so the
+behaviour is unchanged. This is the one modification class that is mechanical rather than semantic.
+
+**Files modified but carrying no marker are a defect**: `AC-PORT` step 1 requires this list to be
+complete, and the Session verified the working-tree modifications by hash against the pin
+(5 files differ, matching the 5 above).
+
 ## How to reproduce this record
 
 ```powershell
