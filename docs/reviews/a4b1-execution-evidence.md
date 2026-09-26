@@ -100,3 +100,75 @@ The pinned code also uses **131 distinct `DSP_*`/`NV_PAPU_*` constants** which t
 
 **Raw logs:** `logs/a4b1/fetch-pin.py`, `vendor.py`, `shim-surface.py`; fetched bytes under
 `logs/a4b1/pin/`.
+
+---
+
+## Steps 2–6 — the port: **COMPLETE**, implemented by a Worker, verified by the Session
+
+**Worker:** child `f9d0e439-58ea-4819-8317-94a965d6a1e9`, `workbuddy-ai/deepseek-v4.1-flash` @ `max`.
+**Commit:** `8f8f6e4` (24 files, +2492/−485). Full verification record:
+`docs/reviews/a4b1-r4-implementation-verification.md`.
+
+**The Session reproduced the load-bearing claims rather than accepting the Worker's summary:**
+
+| Check | Result |
+|---|---|
+| `python -X utf8 scripts\build-jsrf.py` | **succeeded**, 8 s |
+| exe SHA-256 | `CD9038188287C0A6CB9A7AFA161ECAD17DEE73560735D66DF9DC6D970C77412A` — **matches the Worker's report exactly** |
+| `ctest` | **100% passed out of 12** |
+| `AC-PORT` step 2 — `git ls-files --eol src/apu/dsp` | **18 files, all `attr/-text`** |
+| `AC-PORT` step 3 — every vendored file byte-exact **at the vendor commit** | **17/17 match the pin** |
+| `AC-PORT` step 6 — `git grep` over `src/apu` | **0 hits** |
+| `AC-PORT` step 6 — the string in the exe | **0 occurrences** |
+| `AC-PORT` step 6 — **positive control** | the archived `A4s` baseline `jsrf_recomp.exe` contains `RECOMP_APU_DSP_ACK` **once** → **control SATISFIED** |
+
+**The positive control mattered and nearly produced a false result.** The first run of the Session's
+checker globbed `*.exe` in the run directory and picked up **`jsrf_collect.exe`** — the 34 KB collector,
+which legitimately has no APU strings — so the control reported **False** and the script correctly
+refused to treat the zero-hit result as proven. The control the criterion names is the baseline
+**recompiler**, which is archived in the `A4s` run directory and does contain the string. Fixed.
+
+**Local modifications:** the **vendor commit** matches the pin for all 17 files; the **working tree**
+shows **5** locally modified (`dsp.c`, `dsp_c.c`, `dsp_internal.h`, `interp/dsp_cpu.c`, `gp_ep.c`),
+carrying **25 in-source `A4b1 LOCAL MODIFICATION` markers**. The first real build blocker was that the
+pinned `gp_ep.c` uses **GNU case ranges** (`case A ... B:`), which MSVC rejects, so all four MMIO
+switches were rewritten as `if`/`else if` with identical tests, order and bodies.
+
+**`DS3` was read line by line against the Advisor's ruling** (`apu_watch.c:306-349`): the four cases in
+the **mandated order** — window-VA first, then the high-water mark via `xbox_ContiguousAllocatedBytes()`,
+then mapped low-RAM identity, then fail closed — citing `dma_resolve` and `xbox_memory_layout.c:2694`,
+**not** importing `surface_hits_image`, and **not** using `& 0x03FFFFFF`, with `GPDMA_AMBIGUOUS` and the
+aliasing claim limit. **`DS5`** (`apu_watch.c:385+`) implements the exact CAS sequence including the D1
+retry loop, and the dword at `W_va` is **never ordinary-stored**.
+
+**One Worker decision the Session had to make:** the Worker **deleted `src/apu/apu_dsp.c`**. `DS2`+`DS4`
+had left it an empty translation unit (all three entry points are now the pinned `gp_ep.c` definitions;
+the ack is gone), and its surviving EP monitor mixdown moved to `apu_mixdown.c`. **The Session accepts
+the deletion** — a file with no purpose is worse than no file, and the path is in git if ever wanted.
+
+**Two Worker-reported ambiguities, both accepted:** the choke point gained a `const uint8_t *src`
+parameter (`DS5` names three parameters but also requires "the payload for that dword"), and
+`apu_guest_dma_ptr` gained a `translated_va` out-parameter (`DS6` needs the translated address out, and
+a second accessor could disagree with the one translation function `DS3` requires).
+
+**A Session checker error, recorded:** a crude grep-based script reported four `DS3` failures
+(`surface_hits_image` "imported", `0x03FFFFFF` "used", `:843` "not cited", case-1 ordering "wrong").
+**All four were the checker matching explanatory comments that say the opposite** — the comment
+*"surface_hits_image() … is NOT imported here"* contains the symbol, and *"No & 0x03FFFFFF anywhere in
+this function"* contains the mask. Reading the function settled it. **A grep is not a check for a
+semantic requirement** — the fourth occurrence of this failure mode in the project.
+
+---
+
+## Step 7 — licence bookkeeping: **COMPLETE** (commit `772d723`)
+
+| Deliverable | Result |
+|---|---|
+| `LICENSES/GPL-2.0.txt` | **added** — verbatim GPL v2 from `https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt`, 17984 bytes |
+| `NOTICE` GPL-2.0-or-later section | **added** — each ported file under its **own header's** licence with that header's copyright lines, **read from the files** rather than assumed; the Hatari/ARAnyM lineage is named; `trace.h` recorded as header-less |
+| `NOTICE` combined-work statement | **added** — the MIT licence covers this project's own code, **not** the whole binary; a binary linking `xbox_apu` is a **GPL-2.0-or-later combined work**, and the LGPL relinking permission does **not** extend to it |
+| `NOTICE` LGPL section | **corrected** for the new file set — `apu_dsp.c` removed, `apu_mixdown.c` recorded as its surviving part, and `apu_watch.*`/`dsp/shim/` noted as this project's own new work |
+| `LICENSES/README.md` | **names both texts** and which files each governs |
+| `a4b-xemu-pin.md` local-modification list | **added** — the **25** markers across **5** files, extracted from the source (`logs/a4b1/extract-modifications.py`), with what each changes and why |
+
+**Build re-verified green after these changes.**
