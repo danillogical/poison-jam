@@ -88,3 +88,32 @@ consistent.** `N_SITES = 16` (`apu_watch.h:110`) leaves room, as the ruling's "s
 **No discrepancy. The Session has nothing to correct in the sketch, and reports none to the Advisor
 beyond what it already sent.** The sketch's structure, its two questions (a) and (b), and its P3 decision
 stand on measured ground.
+
+---
+
+## Appendix — the Session's check of question (a), which sharpens it
+
+Question (a) asks whether the **printed** `at_clear` block is admissible as the `AC-INPUTS` decision
+input, given the fixture covers it "only on the snapshot, plus a count of at least 4 lines". The Session
+verified that description **exactly**, and it is right:
+
+| What the fixture asserts for `(xi)` | Line | Kind |
+|---|---|---|
+| `s.at_clear.taken == 1` | `apu_watch_fixture_test.c:1945` | **snapshot** field |
+| `s.at_clear.seq == s.latch[GP_CLEAR].seq` | `:1946` | **snapshot** field |
+| `s.at_clear.gpin.periph[0x45].reads == 1` | `:1949` | **snapshot** field |
+| `s.at_clear.gpin.periph[0x54].reads == 1` | `:1950` | **snapshot** field |
+| `s.at_clear.gpin.periph[0x56].reads == 0` (post-clear excluded) | `:1951` | **snapshot** field |
+| `cap_count("[GPIN] at_clear ") >= 4` | `:1956` | **LINE COUNT ONLY** |
+
+**So the snapshot side is solid and the printed side is a count.** The field-by-field
+line-vs-snapshot comparison (`check_gpin_summary`) runs against the **`summary`** tag only — and
+`apu_watch.c:919` (`emit_gpin_block("summary", …)`) and `:923` (`emit_gpin_block("at_clear", …)`) call the
+**same** `emit_gpin_block` (`:851`), differing only in the tag string.
+
+**That makes the Planner's question genuinely load-bearing and correctly framed**, and it is not
+hypothetical: `AC-INPUTS` would decide `PASS`/`FAIL`/`UNKNOWN` from printed `at_clear` fields
+(`out_of_universe`, `boot_scratch_read`, and the per-kind arrays), which the fixture currently validates
+only as a count. The Session takes no position on the answer — that is the Advisor's — but confirms the
+question is precise, the cited lines are correct, and the gap it describes is real rather than
+notional.
