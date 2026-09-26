@@ -126,7 +126,7 @@ From the ported `read_peripheral` (`src/apu/dsp/dsp.c:52-91`). The function init
 
 | Offset | Line | Classification |
 |---|---|---|
-| `0xFFFFB3` | `dsp.c:56` | **modelled** — `v = 0` |
+| `0xFFFFB3` | `dsp.c:56` | **modelled** — `v = 0` ⚠️ *decision class superseded — see the note below* |
 | `0xFFFFC5` | `dsp.c:59` | **modelled** — the interrupt register, from tracked state |
 | `0xFFFFD4` | `dsp.c:65` | **modelled** — `dsp_dma_read(DMA_NEXT_BLOCK)` |
 | `0xFFFFD5` | `dsp.c:68` | **modelled** — `dsp_dma_read(DMA_START_BLOCK)` |
@@ -136,6 +136,27 @@ From the ported `read_peripheral` (`src/apu/dsp/dsp.c:52-91`). The function init
 
 **6 of 128 modelled; 122 stub/unknown.** The index is `address - DSP_PERIPH_BASE` (`0xFFFF80`), so index
 0 is `0xFFFF80`; the universe is `DSP_PERIPH_SIZE = 128` (`dsp_cpu_regs.h:121`).
+
+> ### ⚠️ Note — `0xFFFFB3`'s **decision class** is superseded
+>
+> **Added 2026-09-26 at the Advisor's request** (`docs/reviews/a4b2-r4-planning-rulings.md`, ruling (b)).
+>
+> The **table above describes the source**, and for `0xFFFFB3` that description is accurate: the ported
+> `read_peripheral` does return a computed-looking `v = 0`. **But it is not a model of anything.**
+> `dsp.c:57` reads `v = 0; // core->num_inst; // ??` — **upstream's own `// ??` marks it an unknown
+> placeholder.**
+>
+> **For `AC-INPUTS` decision purposes the class is therefore STUB, not modelled.** A GP read of
+> `0xFFFFB3` before the clear gives **FAIL → `R2-EXPL-INPUT`**, which names the input and routes to the
+> Advisor — the honest result if the GP's clear followed a read of a placeholder.
+>
+> **The modelled set for decision purposes is FIVE offsets: `0x45` and `0x54`–`0x57`.**
+>
+> **Why this reopens nothing:** the "modelled" label above was a **Session record, not an Advisor ruling**,
+> and `A4b1`'s acceptance did not decide `A4b2`'s `AC-INPUTS` semantics. **No A4b1 text or code changes.**
+>
+> **Claim limit inherited with the five:** `0x56` (`DMA_CONTROL`) is upstream's **read-count completion
+> heuristic** (RUNNING→STOPPED after 3 reads) — a **timing heuristic, not a hardware model**.
 
 ## 5. Static per-FIFO source classification
 
