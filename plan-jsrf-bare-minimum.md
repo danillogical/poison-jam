@@ -52,28 +52,66 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
   from each execution's own step-2 run by test identity, never carried forward**.
 - **Next action: execute `A4s-r6` literally**, beginning with its **P0 preconditions**. `A4s` is not
   finished until it has a durable final disposition, so `A4b1-r4`/`A4b2-r4` remain blocked behind it.
-- **P0 preconditions run 2026-09-25: P0.1–P0.6 and P0.8–P0.10 PASS; P0.7 FAILS.** The packet says *"all
-  must hold, else stop before any write"*, so **execution is halted at P0 and no toolkit write has
-  occurred** (toolkit still clean at `0d7929c`). Record: `docs/reviews/a4s-r6-p0-preconditions.md`.
-  - **P0.7** requires `git branch --list "a4s-*"` to print **nothing**; it prints **`a4s-pre-sync`**.
-    Step 1 (`git branch a4s-pre-sync 0d7929c…`) therefore **cannot execute literally** — a dry run exits
-    **128**, `fatal: a branch named 'a4s-pre-sync' already exists`. **Cause measured: a leftover from the
-    `A4s-r5` execution, not a divergence** — reflog shows it was created from `0d7929c`, and it resolves
-    to **exactly the `A4s-r6` rollback target**. P0.7's stated purpose (*"so step 1 and the rollback cannot
-    overwrite an existing branch"*) is therefore **already satisfied**, and the other guarded branch,
-    `a4s-merge-attempt` (created with force), is **absent**. Only the literal exit code differs.
-  - **Two interpretation rulings are with the persistent Advisor** (both are questions about how to *read*
-    a frozen criterion, so §5.4's "an ambiguous but not wrong step is settled by an Advisor interpretation
-    ruling that execution follows, not by a revision" applies): (1) may step 1 be discharged as
-    **verify-and-reuse** of the existing `a4s-pre-sync` (assert it equals `0d7929c`, fail closed
-    otherwise), or does a failed P0.7 select `R-PRE`? (2) the **pinned-hash / line-ending hazard** — the
-    `AC-STRUCT` pin is a hash of **LF** bytes, but this repo has `core.autocrlf=true` and **no
-    `.gitattributes`**, and a fresh checkout writes **CRLF** (measured: blob `A1FDCE26…` vs checkout
-    `D572DB08…`), so hashing the working tree would **falsely fail** `AC-STRUCT` on a correct tree.
-    Record: `docs/reviews/a4s-r6-pinned-hash-eol-hazard.md`.
-  - **Nothing was mutated and no unilateral fix was applied:** no `git branch -f`, no branch
-    deletion/recreation, no silent skip of step 1, no packet edit, no `.gitattributes` added. After the
-    dry test the toolkit is still clean, `HEAD` is still `0d7929c`, and no `MERGE_HEAD` exists.
+- **P0 preconditions run 2026-09-25: P0.1–P0.6 and P0.8–P0.10 PASS; P0.7 FAILS literally but PASSES
+  under the Advisor's ruling.** The packet says *"all must hold, else stop before any write"*, so
+  execution halted at P0; **both questions were referred to the persistent Advisor and both rulings
+  arrived** (`docs/reviews/a4s-r6-execution-rulings.md`): **Q-A** — a pin on a tracked file identifies
+  the **committed blob**, and P0.10 passes by **branch (a)** (the literal working-tree hash, which
+  equals the pin today); **Q-B** — proceed, discharging P0.7 and step 1 as **verify-and-reuse** of the
+  pre-existing `a4s-pre-sync` under four fail-closed conditions, all of which hold. **Neither required a
+  packet revision** (§5.4 interpretation rulings). **No `.gitattributes` was added** (owner/packet-scope
+  work, per the Advisor).
+
+### `A4s-r6` execution — steps 1–6 complete, halted before the strict run
+
+- **Step 1 — recovery point: verify-and-reuse**, recorded as *"pre-existing from `A4s-r5` step 1,
+  verified and reused, not created."* `a4s-pre-sync` = `0d7929c`; no `branch -f`, no `-D`, no
+  re-creation, no other ref.
+- **Step 2 — pre-merge controls on `0d7929c`:** build OK; exe `AEC1F0FF…` (the known no-op-build
+  artifact — **record, not a gate**); `ctest` **12/12**; set **K4** 27 tests OK; set **KX** 33 modules /
+  Ran sum **133** with **zero** per-module differences; set **G** re-measured at **11 files, 10 pass /
+  1 fail**, carve-out derived by identity (`test_ac2_provenance.py` = E2).
+- **Step 3 — merge + guard + resolution:** the **9-hunk guard PASSED exactly** (5 files, 9 hunks, all
+  sections and line spans matching). All 9 hunks resolved **by exact text** per the pre-ruled table.
+  **`M` = `3f8bf67c450861aefcbc376698750bc1446bc9dd`** (parents `0d7929c`, `766ecef`).
+  - **`AC-STRUCT` caught a real defect in the Session's own first resolution** and it is recorded
+    (`docs/reviews/a4s-r6-ac-struct-catch.md`): edit (b) was first implemented as a blanket text delete,
+    but measured from the raw tree **both copies within a switch are the same form**, so text cannot
+    separate local's from upstream's. That left switch 4 with a duplicate case (compile error) and
+    **switch 5 with no `case 138` at all** — silently dropping ordinal-138 dispatch, which the **build
+    would never have caught**. The merge was aborted, re-run deterministically, and the rule replaced
+    with "keep the first occurrence per switch", reproducing the packet's named positions (`8040`,
+    `8502`). **Direct evidence for the Advisor's ruling that `AC-STRUCT` must run before the build.**
+- **Step 4 — `AC-STRUCT`: PASS** on the resolved tree (0 findings, 0 UNKNOWN), with all controls green.
+- **Step 5 — build: PASS** (relinked; no structural diagnostics, so the `R-BUILD` backstop never arose).
+- **Step 6 — `AC-TEST`:** **C 12/12** (incl. the named witness `jsrf_inplace_event_bridge`); **G**
+  unchanged by identity; **K4** 30 tests OK; **KX** 56 modules with all 33 step-2 modules present,
+  **0 regressed, 0 lost coverage**.
+- **All other gates PASS:** `AC-REC`, **`AC-MERGE`** (16/16 targeted checks; the `(d-twin)` deletion
+  witness took four attempts, all three failures mine — the word *"credited"* is load-bearing,
+  `docs/reviews/a4s-r6-ac-merge.md`), **`AC-KEEP` (iv)/(v)** (three ranges byte-identical with anchor
+  counts 1/1/1 and working can-fail controls; deleted names 0 in `SCOPE`; all four controls match
+  2/2/0/0; no call site for `ac97_arm_write_trap`; `SCOPE` guard not tripped), **`AC-INV`** (new env
+  names exactly `RECOMP_APU_MIXDOWN_ALL` + `RECOMP_USB_PORT`, none removed), **`AC-GEN`**, **`AC-NOPUSH`**
+  (`ahead 25`, remotes exact, no push/fetch during execution).
+- **`M` conforms to Appendix A verbatim** — HA-COMBINED-1/-2, Expected-5/6/9 all present byte-for-byte,
+  plus 10/10 structural checks (`docs/reviews/a4s-r6-appendix-a-conformance.md`).
+- **ONE OPEN ITEM, with the Advisor — the KX/pytest question.** 23 KX modules are **new** at `M` (from
+  upstream); **7 fail with `ModuleNotFoundError: No module named 'pytest'`**. All 7 are **byte-identical
+  to the upstream parent**, `pytest` is **not installed**, and upstream documents `pytest` (not
+  `unittest`) as its runner. `AC-TEST`'s FAIL clause ("a new KX module fails → `R-TEST`") and its
+  UNKNOWN clause ("a set cannot be run (environment, not code — e.g. `capstone` missing)") point
+  opposite ways, and the UNKNOWN clause's remedy would mean **installing** `pytest`, which the owner's
+  directive forbids. **The Session measured that the modules' tests are sound**: with a diagnostic
+  in-memory shim (**nothing installed, nothing written**), **14 tests pass and 0 fail**, 8 needing pytest
+  fixtures — so nothing is *broken* (`docs/reviews/a4s-r6-pytest-modules-sound.md`). **Rows 2–6 are all
+  unmatched except the possible `R-TEST`, which turns entirely on this ruling.** Records:
+  `docs/reviews/a4s-r6-kx-pytest-question.md`, `docs/reviews/a4s-r6-pytest-modules-sound.md`.
+- **Step 7 is staged and ready** the moment the ruling lands: the six synthetic-completion variables are
+  confirmed **absent**, `RECOMP_GPU_ACK='0'` will be set, the exe is `E45026C3…`, and the `[A3A]`
+  reference control (`gc=0x00000002 gs=0x00000100`) is available in the `A4a-r2` R0 run.
+
+**Current blocker / next action.** The Advisor's hunk rulings are **recorded and binding**
 
 ### Predecessor — `A4s-r5` — **EXECUTED 2026-09-25, selected `R-CONFLICT`** (superseded by `A4s-r6`)
 
