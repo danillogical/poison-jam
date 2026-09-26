@@ -73,11 +73,19 @@ A file-wide search for upstream's `none.json` form found **one survivor** in the
 | ours `0d7929c` | none |
 | base `051a128` | none |
 
-The **conflicted** function is `test_seeds_align_16`, and `M` has **no** `none.json` in it — so
-HA-LOCAL was applied correctly. The survivor is upstream's **second** occurrence, in a function that is
-**not part of any conflict**, where it is ordinary merged content. Scoped correctly, the omission is
-exact. (Recorded because a file-wide text search is the wrong instrument for a region-scoped criterion —
-the same lesson as the hunk-5/`none.json` distinction in the `(d)` witness.)
+The **conflicted** function is `test_seeds_drops_unaligned_targets` (defined L96), and `M` has **no**
+`none.json` in it — so HA-LOCAL was applied correctly. The survivor is upstream's **second** occurrence,
+in `test_seeds_align_zero_keeps_everything`, a function that is **not part of any conflict**, where it is
+ordinary merged content. Scoped correctly, the omission is exact. (Recorded because a file-wide text
+search is the wrong instrument for a region-scoped criterion — the same lesson as the hunk-5/`none.json`
+distinction in the `(d)` witness.)
+
+> **Correction — acceptance-review Advisory 4.** An earlier version of this record named the conflicted
+> function `test_seeds_align_16`. **That name does not exist in the file.** The stage-1 acceptance
+> reviewer caught it; the Session re-verified (`logs/a4s/verify-advisory4.py`): the hunk-8 assertion at
+> L116 sits in `test_seeds_drops_unaligned_targets`, whose body contains `--functions fns` and **no**
+> `none.json`, so **HA-LOCAL is correct**. This was a **documentation error in this record**, not a
+> resolution defect, and it changes no criterion result.
 
 ## What this establishes, and what it does not
 

@@ -6,12 +6,41 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4s-r6` (toolkit sync) — **EXECUTED 2026-09-25, selected `R-SAME`**
+## CURRENT PACKET — `A4s-r6` (toolkit sync) — **ACCEPTED 2026-09-25, `R-SAME`, PUSHED**
 
-> **RESULT: the merge succeeded and the strict stop is UNCHANGED.** Every gate passed. Toolkit `main`
-> is at **`M` = `3f8bf67c450861aefcbc376698750bc1446bc9dd`** (parents `0d7929c`, `766ecef`), clean.
-> **Selected row `R-SAME`.** Full evidence: `docs/reviews/a4s-r6-execution-evidence.md`; rulings:
-> `docs/reviews/a4s-r6-execution-rulings.md` (Q-A, Q-B, **Q-C**).
+> **RESULT: the merge succeeded, the strict stop is UNCHANGED, and `M` is ACCEPTED and PUSHED.**
+> Every gate passed. Toolkit `main` is at **`M` = `3f8bf67c450861aefcbc376698750bc1446bc9dd`** (parents
+> `0d7929c`, `766ecef`), clean, and now **published to the owner's fork**.
+>
+> - **Acceptance:** **stage-1 `ACCEPT`**, `BLOCKING: NONE`, **all ten mandatory criteria `AGREED`**
+>   (`docs/reviews/a4s-r6-acceptance-review-stage1.md`; reviewer child
+>   `f6ba7864-07ae-4388-9583-9a265e63c935`, `workbuddy-ai/hy4-preview-f` @ `high`, route verified live).
+>   Per §2.2 a first-stage `ACCEPT` is **final** and is not passed to a second stage. State: **accepted**.
+> - **Closure push — DONE** (owner policy, all five checks): `main` → `origin`, fast-forward
+>   `766ecef..3f8bf67`. Verified: `git rev-parse origin/main` = `M` and `git ls-remote origin
+>   refs/heads/main` = `M`. **No force, no `upstream` push** (`upstream/main` still `766ecef`, untouched).
+>   Tracking moved to `origin/main` (recorded, not reverted). Log:
+>   `docs/reviews/owner-push-policy-xboxrecomp-fork.md`.
+>
+> **The reviewer independently reproduced more than the Session measured** — worth keeping: positive
+> controls for `AC-MERGE` (b)/(c) (**143** and **28** excess on the two parents, so those checks *can*
+> fail); a positive control for the `|= MCPX_AC97_CODEC_READY` grep (**1** on `766ecef`, so the zero at
+> `M` is meaningful); **link falsification** for `AC-BUILD` (all **147** sources in the run's
+> `build-source.json` hash-match the `M` worktree); an independent conflict-set guard via
+> `git merge-tree --write-tree`; and **AST-based** verification of hunks 5/6/9 instead of text
+> comparison.
+>
+> **One documentation error it caught was CORRECTED:** `docs/reviews/a4s-r6-ac-merge.md` had named the
+> hunk-8 function `test_seeds_align_16`, which does not exist; the hunk sits in
+> `test_seeds_drops_unaligned_targets` (L96), where HA-LOCAL is correct. A record error, not a resolution
+> defect.
+>
+> **Deferred advisories (recorded, not reopening the packet):** step-4 evidence-table labelling (raw
+> preview **15** vs resolved-all-ours **3** should be labelled separately); the `AC-STRUCT`
+> duplicates-not-omissions limit; the pre-existing set-G failure; the 13-byte PE-timestamp exe delta; and
+> the reviewer's own disclosed instrument errors.
+>
+> **Two claim limits and one gated lead carry forward** — see the block at the end of this section.
 >
 > - **Step 1** — recovery point discharged as **verify-and-reuse** of the pre-existing `a4s-pre-sync`
 >   (per **Q-B**); nothing created, deleted, or force-moved.
@@ -152,10 +181,29 @@ at the top of this `CURRENT PACKET` section. Points worth keeping here:
   from the unrelated venv the Advisor identified. The claim limit and the gated lead are in the result
   block above and **must be shown to the acceptance reviewer**.
 
-**Current blocker / next action.** **None for `A4s`** — `A4s-r6` is executed with a durable final
-disposition (`R-SAME`, toolkit `main` at `M`). The next action is the **acceptance review** of this
-execution, which must be shown the **Q-C claim limit**; on `ACCEPT`, the Closure push of `M` to `origin`
-follows the owner's five pre-push checks. Then the Planner revises **`A4b1` → `A4b1-r2`**.
+**Current blocker / next action.** **`A4s` is COMPLETE** — `A4s-r6` is executed, **accepted** (`ACCEPT`,
+all ten criteria `AGREED`), and **pushed** to the owner's fork; the toolkit has a durable final
+disposition at `M`. **The next action is the Planner's revision of `A4b1` → `A4b1-r2`**
+(`PREMISE_CHANGED`, §5.4(2)), then `A4b2` — the GP/DSP area, no longer parked behind `A4s`.
+
+The new baseline for that revision: toolkit **`M`** = `3f8bf67c450861aefcbc376698750bc1446bc9dd`; exe
+`E45026C3DF5AACAF3D66FCC1E17D9C6C1A12247864D58D0911CDBA8435A2A3C7`; the run
+`logs/runs/20260925-210315-113-a4s-sync-strict` as the reference R0; upstream's
+`src/apu/apu_dsp.c`/`CMakeLists.txt` as the starting state.
+
+**Two claim limits and one gated lead carry forward into that planning:**
+
+1. **KX does not exercise 7 pytest-dependent upstream modules under `unittest`** — `test_block_dispatch`,
+   `test_incdec_carry`, `test_incdec_result`, `test_lifter_double_shift`, `test_lifter_result_clobber`,
+   `test_sar_width`, `test_x87_classification`. *The lifter/translator conflict resolutions (hunks 5–7 and
+   9) are therefore witnessed only by K4 and the existing KX modules, not by upstream's own tests of those
+   paths.* Harmless for `A4s-r6` only because `AC-GEN` held (no regeneration).
+2. **`AC-STRUCT` detects duplicates, not omissions** — it did not see that one switch had lost `case 138`
+   entirely; that class is excluded only by an explicit expected-count post-condition. **For any future
+   revision, each HA edit should carry such a post-condition, enforced as an `AC-MERGE` check.**
+3. **GATED LEAD (binding):** before **any** packet regenerates or relifts with the toolkit at `M` or
+   later, all **56+** KX modules — including these 7 — must run under **real `pytest`** in an
+   **owner-authorized** environment; parametrized and fixture tests included.
 
 ### Predecessor — `A4s-r5` — **EXECUTED 2026-09-25, selected `R-CONFLICT`** (superseded by `A4s-r6`)
 
@@ -218,13 +266,17 @@ until the `A4s` merge lands `766ecef` in local `main`'s history; the owner's bra
 exactly this case. Full record and all five pre-push checks:
 `docs/reviews/owner-push-policy-xboxrecomp-fork.md`.
 
-**`A4s-r6` packet delivered, adequacy review in flight.** `docs/packets/a4s-r6-toolkit-sync.md`,
+**`A4s-r6` packet delivered; adequacy review completed and superseded by execution.** (This paragraph and
+the ones that follow are the **planning-phase record**; the outcome is in the `CURRENT PACKET` result
+block at the top of this file.) `docs/packets/a4s-r6-toolkit-sync.md`,
 revision **`A4s-r6`**, SHA-256 **`75207C41B8E9964D3E1467F5E980D1B8DE4CB75A1E0AFE954F59D40FA27D86E3`**,
 **374 lines** (the Planner's reported "325" was a non-empty-line miscount; the project convention is
 total lines — `A4s-r5` is cited as 263, its LF count). The frozen `A4s-r5` is **untouched**
-(`09DA9413…86FB`). A **fresh Kimi Planner** is performing the binding §5.3 adequacy review of that exact
-SHA. Per §5.3, `ADEQUATE` requires only `BLOCKING = NONE` and `PREMISE_FRESHNESS` not `FAIL`; on
-`ADEQUATE` the revision is frozen and promoted in the same step, with no polishing pass.
+(`09DA9413…86FB`). A **fresh Kimi Planner** performed the binding §5.3 adequacy review of that exact
+SHA, returning **`ADEQUATE`** (`BLOCKING: NONE`, `PREMISE_FRESHNESS: BOUNDED`) — recorded in
+`docs/reviews/a4s-r6-adequacy-review.md`. Per §5.3, `ADEQUATE` requires only `BLOCKING = NONE` and
+`PREMISE_FRESHNESS` not `FAIL`; on `ADEQUATE` the revision was frozen and promoted in the same step,
+with no polishing pass.
 
 **Current blocker / next action.** The Advisor's hunk rulings are **recorded and binding**
 (`docs/reviews/a4s-r6-advisor-hunk-ruling.md`). The frozen `A4s-r6` planning brief was dispatched to the
@@ -456,14 +508,16 @@ toolkit-only writes; `A4b2` = the strict trap+trace run (boot, run, clear, no-CP
 game-only writes, with preconditions P1 (`A4p-r1` ACCEPTED `O-GATE`) and P2 (`A4b1`
 ACCEPTED).
 
-## Draft packets — `A4b1`/`A4b2` (at r3; r4 revision blocked on the route)
+## Draft packets — `A4b1`/`A4b2` (at r3; **the route is now live and `A4s` is complete, so the r4 revision is unblocked**)
 
 - **`A4b1`:** `docs/packets/a4b1-gp-core-port.md`, `A4b1-r3`, SHA-256
   `321ABCF7C9319B5AC4661B384A21CA2D2CE39C792D9820C9C322B7979EC7AFDA` (373 lines). Claim: the
   pinned xemu GP core, GP MMIO routing and address-translated GP DMA are in tree with per-file
   provenance; synthetic ack removed; licence recorded; build+ctest green including a fixture;
   one strict default run matches A4a R0. No guest GP-behaviour claim; toolkit-only writes.
-  **Depends on `A4s`** for its baseline.
+  **Its dependency on `A4s` is now SATISFIED** — `A4s-r6` is accepted and pushed, toolkit at `M`
+  = `3f8bf67c450861aefcbc376698750bc1446bc9dd`. The revision to **`A4b1-r2`** (or `-r4`) takes `M` as
+  its baseline, per the `CURRENT PACKET` next-action block above.
 - **`A4b2`:** `docs/packets/a4b2-gp-clears-pending-word.md`, `A4b2-r3`, SHA-256
   `CFB8C0EBFBC9BE3CFB62677C4C756694DDE9663542E239570B639DED9F5BFCE9` (310 lines). Claim: in one
   strict run (`RECOMP_GPU_ACK=0`, `RECOMP_APU_TRAP=1`) the `loc_001A18D0` wait was satisfied by

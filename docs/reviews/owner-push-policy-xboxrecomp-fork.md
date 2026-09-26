@@ -94,6 +94,44 @@ REMOTE_URL:
 RESULT:
 ```
 
+### Push 2 — the accepted `A4s-r6` merge `M` (2026-09-25)
+
+**The packet's Closure push**, executed only after the stage-1 acceptance review returned `ACCEPT`
+(`BLOCKING: NONE`, all ten mandatory criteria `AGREED`) — which is what satisfies pre-push check 3.
+
+```text
+PUSHED_TO:  https://github.com/danillogical/xboxrecomp.git   (remote `origin` — the owner's fork)
+BRANCH:     main
+COMMIT:     3f8bf67c450861aefcbc376698750bc1446bc9dd
+REMOTE_URL: https://github.com/danillogical/xboxrecomp.git
+RESULT:     SUCCESS — fast-forward `766ecef..3f8bf67  main -> main`, verified independently:
+            `git rev-parse origin/main` = 3f8bf67c… and
+            `git ls-remote origin refs/heads/main` = 3f8bf67c450861aefcbc376698750bc1446bc9dd
+```
+
+**All five pre-push checks, as run:**
+
+| # | Check | Result |
+|---|---|---|
+| 1 | toolkit working tree **clean** | **PASS** — `status --porcelain` empty |
+| 2 | commit is the **intended durable state** | **PASS** — `HEAD` = `M` = `3f8bf67c…` |
+| 3 | the active packet's **tests/acceptance passed** | **PASS** — stage-1 acceptance `ACCEPT`; the two **Q-C claim limits** were shown to the reviewer explicitly, as the Advisor required |
+| 4 | destination is the **fork, not `upstream`** | **PASS** — push URL `danillogical/xboxrecomp.git`; `upstream` push URL `DISABLED`, asserted before pushing |
+| 5 | local **SHA and branch recorded** | **PASS** — recorded above |
+
+**No force, no other refspec, no `upstream` push.** `-u` moved `main`'s tracking from `upstream/main` to
+`origin/main` — **recorded, not reverted**, exactly as the packet specifies. `upstream/main` is still
+`766ecef` (upstream's own release commit), verified untouched afterwards. The toolkit is clean at `M` and
+`a4s-pre-sync` still resolves to `0d7929c`.
+
+**What this push contains:** the accepted merge `M` (parents `0d7929c`, `766ecef`) — the whole `A4s`
+toolkit sync. It is the first push of `main` to the fork; the earlier `jsrf/integration` branch (push 1)
+still points at the accepted baseline `0d7929c` and is left in place.
+
+**This is the durable checkpoint the owner's policy asks for:** an accepted toolkit implementation, a
+successfully completed toolkit-sync/merge packet, and a clean milestone boundary before the substantially
+different `A4b1`/`A4b2` (GP/DSP) area begins.
+
 ## Push log
 
 ### Push 1 — the accepted JSRF toolkit baseline (2026-09-25)
