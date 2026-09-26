@@ -232,9 +232,12 @@ all ten criteria `AGREED`), and **pushed** to the owner's fork; the toolkit has 
 disposition at `M`. **The current work is the Planner's revision of `A4b1` → `A4b1-r4`**
 (`PREMISE_CHANGED`, §5.4(2)), then `A4b2`.
 
-**`A4b1-r4` — PACKET WRITTEN, full adequacy review in flight (2026-09-25).** The Advisor ruled
-**`SHAPE: PROCEED`** on the Planner's sketch; the packet body is written and a **full formal §5.3 review**
-by a fresh Kimi Planner is running.
+**`A4b1-r4` — ADEQUATE, PROMOTED, EXECUTING (2026-09-25).** The Advisor ruled **`SHAPE: PROCEED`** on
+the Planner's sketch; the packet body was written; a **full formal §5.3 review** by a fresh Planner
+returned **`ADEQUATE`** (`BLOCKING: NONE`, `PREMISE_FRESHNESS: PASS`); the packet was **promoted
+byte-identically** and **execution is in progress**. (Both the packet and its verdict were authored by
+Kimi K3 Planners, which was the roster in force at the time — recorded as **provenance**; see the
+staffing-state block below, which supersedes that arrangement for *future* Planner work.)
 
 - **Packet:** `docs/packets/a4b1-gp-core-port-r4.md`, revision **`A4b1-r4`**, class **change**, SHA-256
   **`6DD62A57E87445F5C12085210146204AA4E77D26FD316071FD41CAEC76835C38`**, **445 lines**. The canonical
@@ -482,15 +485,51 @@ for JSRF; an indirect-thunk-call search behind "not declared ⇒ unreachable"; c
 (local 36 vs upstream 40 — the merge silently took upstream's 40). Prior leads carry forward:
 `MIXDOWN_ALL`/`USB_PORT` classification, E2, the function-style KX modules, and the exe-relink advisory.
 
-**Staffing state — Planner route RESOLVED (owner instruction, 2026-09-25).** The new
-`docs/agent-workflow.md` §1 names **Kimi K3** for the Planner with a `max` effort qualifier.
-`workbuddy-ai/kimi-k3` resolves live as **exactly one** canonical match but advertises **no selectable
-reasoning efforts**; the owner ruled directly: *"kimi k3 doesn't take an effort, so don't worry about
-effort for kimi k3"*. Under §4.1 an owner instruction outranks every role's ruling, so **the row is
-satisfied by invoking `workbuddy-ai/kimi-k3` with `reasoning_effort` omitted**, and **no Planner
-blocker is in force**. `docs/agent-workflow.md` §1 was **not** edited (§3.4). Recorded in
-`docs/reviews/startup-20260925-session-58e86358.md` and
-`docs/reviews/a4s-r5-execution-startup-ruling.md`.
+**Staffing state — PLANNER CHANGED TO CLAUDE OPUS 5.5 @ `medium` (owner §3.4 decision, 2026-09-25).**
+The owner **replaced `docs/agent-workflow.md`** and directed a staffing change. The file was **re-read
+from disk**: its SHA-256 is now **`973CDDEF0C5206349E66DE15A6C0E830F85ACAD488231D3867F25B583E911748`**
+(previously `CBEF9041…`), so it genuinely changed. Full record:
+`docs/reviews/owner-staffing-update-20260925-planner-opus.md`.
+
+```text
+WORKFLOW_RELOADED: YES
+WORKFLOW_SHA256:   973CDDEF0C5206349E66DE15A6C0E830F85ACAD488231D3867F25B583E911748
+PLANNER_ROUTE:     claude/claude-opus-5-5
+PLANNER_EFFORT:    medium
+ADVISOR_CHILD:     5c555969-dea9-4b47-be05-62aa0835cde2
+ADVISOR_ROUTE:     claude/claude-opus-5-5 @ high
+```
+
+- **The Planner route resolves live and exactly** (§1 `LIVE_RESOLVE`): `list_subagent_models` returns
+  **one** canonical match, `claude/claude-opus-5-5`, and it advertises **`medium`** among its efforts
+  (`low, medium, high, xhigh, max`). **No fallback was used.**
+- **The §1 roster changed in three rows, not one** — found by diffing, not assumed. The **Planner** moved
+  to Opus 5.5 @ `medium`; and the **acceptance reviewers swapped** to stage 1 `workbuddy-ai/hy4-preview-f`
+  @ `high` and stage 2 `workbuddy-ai/deepseek-v4.1-flash` @ `max`, which is exactly the pairing the
+  session had already been using, so the revision **aligns the document with practice**.
+- **No in-flight Planner work existed to abandon.** Every Kimi Planner child had **finished** and its
+  output is durable: `3fbfef10` (`A4s-r6`), `7332c25d` (the `A4b1-r4` packet), `95429607` and `5db5fd71`
+  (the two `ADEQUATE` verdicts). The only running child, `f9d0e439`, is a **Worker** — a contract role
+  whose route (`workbuddy-ai/deepseek-v4.1-flash` @ `max`) is **unchanged** — so it continues.
+- **Durable work is preserved with its original model identity as provenance.** `A4b1-r4` remains the
+  promoted, authorized packet and **execution continues**; the owner explicitly forbids retroactive
+  invalidation of work completed before the change.
+- **Planner/Advisor separation (same model family, different roles):** the **Opus 5.5 Medium** child is
+  **Planner authority only**; the existing **Opus 5.5 High** persistent child
+  (`5c555969-…`) is **Advisor authority only**; **neither is reused for the other role in the same
+  decision**, and the Advisor child is **kept, not replaced or reprobed**. The **mandatory Advisor shape
+  preflight remains in force** for new change packets/material redesigns, and it is **not** the formal
+  adequacy review. For a change packet materially authored by an **Opus 5.5 Medium** Planner, the
+  **binding adequacy review goes to a fresh Opus 5.5 Medium Planner child** — not the authoring child and
+  not the Opus High Advisor.
+- **Going forward, no new Planner work goes to Kimi K3.** The next Planner dispatch — the `A4b2-r4`
+  revision the `A4b1-r4` boundary note calls for — goes to a **fresh `claude/claude-opus-5-5` @ `medium`**
+  child. The Session route is unchanged (`workbuddy-ai/deepseek-v4.1-flash` @ `max`).
+- **Superseded (provenance only):** the earlier Planner arrangement in which `docs/agent-workflow.md` §1
+  named **Kimi K3** with a `max` qualifier, and the owner's then-instruction *"kimi k3 doesn't take an
+  effort, so don't worry about effort for kimi k3"*. That arrangement is **no longer in force**; it is
+  retained here only because the packets and verdicts authored under it are durable and cite it.
+  `docs/agent-workflow.md` §1 was **not** edited by the Session (§3.4).
 
 **Execution rulings (binding, recorded).** `docs/reviews/a4s-r5-execution-startup-ruling.md`:
 **Q1** Planner effort (superseded by the owner instruction above); **Q2** P0.8 recorded as a literal
@@ -533,6 +572,15 @@ read-yourself probe; **Kimi K3** (`workbuddy-ai/kimi-k3`) resolved and answered 
 owner instruction); first-stage reviewer `workbuddy-ai/hy4-preview-f` @ `high` and second-stage
 `workbuddy-ai/deepseek-v4.1-flash` @ `max` both answered their probes. **No route was substituted.**
 Receipt: `docs/reviews/startup-20260925-session-58e86358.md`.
+
+> **SUPERSEDED FOR FUTURE PLANNER WORK (owner §3.4 decision, 2026-09-25, later the same day).** The
+> owner **replaced `docs/agent-workflow.md`** again and moved the **Planner** to
+> **`claude/claude-opus-5-5` @ `medium`**. The paragraph above remains an accurate **receipt of the
+> startup probes at the time it was written** — including the Kimi K3 Planner resolution — and is
+> **retained as provenance**, because the packets and verdicts authored under that roster are durable.
+> **For all future Planner dispatches the staffing-state block above governs: Opus 5.5 Medium, no Kimi.**
+> The Advisor row (`claude/claude-opus-5-5` @ `high`) is **unchanged**, and its existing child
+> `5c555969-…` is **kept, not reprobed**.
 
 **Preserved binding rulings.** The `A4s` AC'97 hunk rulings (`docs/reviews/a4s-ac97-hunk-ruling.md`,
 including "Interpretation ruling 2: scope") and the `A4b` rulings remain **binding** and were
