@@ -35,6 +35,23 @@ make every record that cites "`A4b1-r2`" ambiguous between two different documen
 
 ## The error is the Session's
 
+### The plan already hedged, which shows the doubt was present and not resolved
+
+`plan-jsrf-bare-minimum.md` **L548** — written earlier, when the `[GPIN]` ruling's `r4` target was
+already known — reads:
+
+> *"## Draft packets — `A4b1`/`A4b2` (at r3; the route is now live and `A4s` is complete, so the **r4**
+> revision is unblocked)"*
+
+and **L556** hedges outright:
+
+> *"The revision to **`A4b1-r2`** (or `-r4`) takes `M` as its baseline…"*
+
+So the plan is **internally inconsistent** — it says `r4` in one place and `A4b1-r2` in three others —
+and the Session wrote the hedge (*"or `-r4`"*) without ever resolving it. **The doubt was recorded and
+then not acted on**, which is worse than not noticing: the information needed to catch the error was
+already on the page the Session was editing.
+
 The Session wrote **`A4b1-r2`** into the `A4s-r6` planning brief, and from there it propagated into:
 
 - the **frozen `A4s` packet's `R-SAME` row** (SHA `75207C41…`, accepted and closed — cannot be edited);
