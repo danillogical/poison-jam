@@ -15,7 +15,43 @@ and exe; a thread-safe watched-word ledger is exported and fixture-exercised; th
 is recorded; the tree builds and every ctest passes; one STRICT default run matches the `A4s` baseline
 stop. **The core is reachable only through GP MMIO, which requires `RECOMP_APU_TRAP`.**
 
-**Next packet: `A4b2` → `A4b2-r4`** (its own revision; see the boundary note below).
+**Next packet: `A4b2` → `A4b2-r4` — ⛔ PLANNING SUSPENDED (owner decision, 2026-09-26).**
+
+> **BLOCKED: the Claude route is down.** The `§1` roster assigns the **Planner** (`@ medium`) and the
+> **persistent Advisor** (`@ high`) to `claude/claude-opus-5-5`, and **every** entry point on that route
+> fails: new spawns at every advertised effort (`low`/`medium`/`high`/default), a retry, **and
+> `send_message` to the existing persistent Advisor child** — while both `workbuddy-ai` routes answer
+> normally, so the harness and spawn mechanism are healthy and the fault is specific to `claude`. The
+> route still **lists** as one canonical match with all efforts advertised, so §1's `LIVE_RESOLVE`
+> **resolution** passes while the route is **not usable**; §1's *"an unavailable assignment is `BLOCKED`;
+> never fall back silently"* governs. Full diagnosis and the eight-probe ladder:
+> `docs/reviews/blocker-20260926-claude-route-down.md`.
+>
+> **Owner decision:** *"Suspend A4b2 planning; do available-route work only."* **No substitute
+> authorized** for either judgment role; the Session will not route Planner or Advisor work elsewhere and
+> does not write the packet body itself.
+>
+> **Preserved and still valid — nothing was lost:** the Planner's **complete sketch** (packet lines 1–26)
+> over the **intact `A4b2-r3` body** (27–334); the Advisor's **`SHAPE: PROCEED`** ruling recorded verbatim
+> in `docs/reviews/a4b2-r4-planning-rulings.md`; the Session's pre-preflight verification
+> (`a4b2-r4-sketch-verification.md`); and the `0xFFFFB3` decision-class note applied to
+> `a4b1-r4-acport-step4-enumeration.md`. **When the route returns, work resumes at "write the `A4b2-r4`
+> body" — no re-planning and no re-preflight**, because the sketch was already cleared and the ruling is
+> recorded. The Session re-probes on request.
+>
+> **What the `A4b2` planning already settled, so it is not re-litigated on resume:**
+> grounds are **§5.4(2) + §5.4 After-INADEQUATE + §5.4(3)** (not "only a re-bind"); five edits approved
+> in substance; the `803CC000` GPSADDR conjunct is demoted to a recorded value (the Advisor confirmed
+> **its own boundary note missed this**); `AC-INPUTS` decides from the **first `[GPIN] at_clear` block**
+> **on a stated inference plus two can-fail checks**; **`0xFFFFB3` is STUB, not modelled** — the modelled
+> set is **five** offsets (`0x45`, `0x54`–`0x57`) with a claim limit on `0x56`; **P3** (EP unreachability)
+> is bound to the **build-identity commit**, not "HEAD"; and the **NDEBUG** coverage claim is narrowed to
+> a claim limit on `R2-PASS`.
+
+**Work that continues on available routes:** Session work, Worker subagents
+(`workbuddy-ai/deepseek-v4.1-flash` @ `max`), and both acceptance stages (`hy4-preview-f` @ `high`,
+`deepseek-v4.1-flash` @ `max`). No `A4b2` planning, no shape preflight, and no adequacy review until the
+route returns.
 
 | Result | Value |
 |---|---|

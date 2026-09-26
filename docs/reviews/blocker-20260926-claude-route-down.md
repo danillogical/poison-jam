@@ -75,6 +75,26 @@ not functional. **§1's "unavailable assignment" clause governs, not the resolut
 
 **Not blocked:** Session work, Worker subagents, and both acceptance-reviewer stages.
 
+## Owner decision — 2026-09-26
+
+Asked to choose between waiting, authorizing a substitute, or suspending, the owner chose:
+
+> **"Suspend A4b2 planning; do available-route work only."**
+
+**Recorded and applied.** So:
+
+- **`A4b2` planning is SUSPENDED**, not abandoned. The Planner's sketch and the Advisor's `SHAPE: PROCEED`
+  ruling are **preserved** and remain valid; work resumes at *"write the `A4b2-r4` body"* when the route
+  returns, with **no re-planning and no re-preflight**.
+- **No substitute is authorized** for either judgment role. The Session will not route Planner or Advisor
+  work to another model.
+- **No fallback, no role violation.** The Session does not write the packet body.
+- The Session continues with **work that needs only the available routes**: Session, Worker subagents
+  (`workbuddy-ai/deepseek-v4.1-flash` @ `max`), and the two acceptance stages
+  (`hy4-preview-f` @ `high`, `deepseek-v4.1-flash` @ `max`).
+- **The Session will re-probe the Claude route on request** and resume `A4b2` planning immediately if it
+  recovers.
+
 ## What was NOT done, deliberately
 
 - **No fallback was substituted.** §1 is explicit: *"never fall back silently."* The Session did not
