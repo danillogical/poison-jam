@@ -6,17 +6,86 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4s-r6` (toolkit sync) — **PROMOTED 2026-09-25, ready to execute**
+## CURRENT PACKET — `A4s-r6` (toolkit sync) — **EXECUTED 2026-09-25, selected `R-SAME`**
+
+> **RESULT: the merge succeeded and the strict stop is UNCHANGED.** Every gate passed. Toolkit `main`
+> is at **`M` = `3f8bf67c450861aefcbc376698750bc1446bc9dd`** (parents `0d7929c`, `766ecef`), clean.
+> **Selected row `R-SAME`.** Full evidence: `docs/reviews/a4s-r6-execution-evidence.md`; rulings:
+> `docs/reviews/a4s-r6-execution-rulings.md` (Q-A, Q-B, **Q-C**).
+>
+> - **Step 1** — recovery point discharged as **verify-and-reuse** of the pre-existing `a4s-pre-sync`
+>   (per **Q-B**); nothing created, deleted, or force-moved.
+> - **Step 2** — controls: build OK; `ctest` 12/12; K4 27 tests OK; KX 33 modules / Ran sum 133 with zero
+>   per-module differences; set G 11 files / 10 pass / 1 fail (carve-out by identity).
+> - **Step 3** — the **9-hunk guard passed exactly** (5 files, 9 hunks, every section and line span
+>   matching); all 9 hunks resolved **by exact text** per the pre-ruled table.
+> - **Step 4 `AC-STRUCT` PASS** (0 findings, 0 UNKNOWN; all controls green) — and it **caught a real
+>   defect in the Session's own first resolution**: edit (b) implemented as a blanket text delete left
+>   switch 4 with a duplicate `case 138` and **switch 5 with none at all**, silently dropping ordinal-138
+>   dispatch, which the build would never have caught (`docs/reviews/a4s-r6-ac-struct-catch.md`). The
+>   merge was aborted, re-run deterministically, and the rule corrected to *keep the first occurrence per
+>   switch* — the **operative reading of edit (b)**, confirmed by the Advisor.
+> - **Step 5 build PASS** (relinked; no structural diagnostics, so the `R-BUILD` backstop never arose).
+> - **Step 6 `AC-TEST`** — C **12/12** incl. the named witness `jsrf_inplace_event_bridge`; G same
+>   failing identity as step 2; K4 30 tests OK; KX 56 modules with **0 regressions, 0 lost coverage**.
+> - **`AC-MERGE` PASS** (16/16 targeted checks; the `(d-twin)` deletion witness took four attempts and
+>   all three failures were mine — *"credited"* is load-bearing, `docs/reviews/a4s-r6-ac-merge.md`).
+> - **`AC-KEEP` (iv)/(v)/(vi) PASS** — three model ranges byte-identical (anchor counts 1/1/1, working
+>   can-fail controls); deleted names **0** in `SCOPE`; all four controls match **2/2/0/0**; and the
+>   **(vi) `[A3A]` witness on the run: `gc=0x00000002 gs=0x00000100`** — GC bit1 and GS bit8 both set,
+>   matching the reference control exactly.
+> - **`AC-INV` PASS** — new env names exactly `RECOMP_APU_MIXDOWN_ALL` + `RECOMP_USB_PORT`, none removed.
+> - **`AC-GEN` PASS**, **`AC-NOPUSH` PASS** (`ahead 25`, remotes exact, no push/fetch during execution).
+> - **`M` conforms to Appendix A verbatim** — HA-COMBINED-1/-2 and Expected-5/6/9 byte-for-byte, plus
+>   10/10 structural checks (`docs/reviews/a4s-r6-appendix-a-conformance.md`).
+> - **Step 7 — the one strict run:** `logs/runs/20260925-210315-113-a4s-sync-strict`. **V holds**
+>   (STRICT; dump `matches: 1, content-mismatch: 0`); **`outcome = diagnostic_deadline`**;
+>   **`B = 0x803C0000`**; **`W = 3`**; **`F = 2`** (identical to the `A4a-r2` R0 control). **No rerun.**
+> - **Row `R-SAME`:** V holds; `outcome = diagnostic_deadline`; `B` usable and `= 0x803C0000`; `W = 3`;
+>   `F ≥ 1`. All six gate rows and `R-INVALID`/`R-MOVED` were evaluated first and are unmatched. **The
+>   stop is unchanged — still the DSP pending-word spin** at `loc_001A18D0` (`recomp_0005.c`), pending
+>   word `MEM32(0x803C0810) = 3`.
+>
+> **Next packet:** Planner revises **`A4b1` → `A4b1-r2`** (`PREMISE_CHANGED`, §5.4(2)) — new baseline =
+> toolkit **`M`**, exe
+> `E45026C3DF5AACAF3D66FCC1E17D9C6C1A12247864D58D0911CDBA8435A2A3C7`, this run as the reference R0, and
+> upstream's `src/apu/apu_dsp.c`/`CMakeLists.txt` as the starting state; then `A4b2`. **`A4b1`/`A4b2` are
+> no longer parked behind `A4s`** — `A4s` now has a durable final disposition.
+>
+> **Closure push (owner policy) — after ACCEPT only.** `R-SAME` leaves `main` at `M`, so
+> `git push -u origin main` is permitted once acceptance returns `ACCEPT` and the five pre-push checks
+> hold. **The acceptance reviewer must be shown the Q-C claim limit explicitly**; acceptance with that
+> recorded limit satisfies the policy's "active packet's tests/acceptance passed" — not all 56 KX modules
+> passing.
+>
+> **CLAIM LIMIT (Q-C) — must appear in the acceptance review.** *KX does not exercise 7 pytest-dependent
+> upstream modules under `unittest`* (`test_block_dispatch`, `test_incdec_carry`, `test_incdec_result`,
+> `test_lifter_double_shift`, `test_lifter_result_clobber`, `test_sar_width`, `test_x87_classification`).
+> *The lifter/translator conflict resolutions (hunks 5–7 and 9) are therefore witnessed only by K4 and the
+> existing KX modules, not by upstream's own tests of those paths.* Harmless **for this packet only**
+> because `AC-GEN` holds — no regeneration, so `M`'s lifter produced none of the linked code. The 7 are
+> **not a FAIL**: per Q-C a module whose only error is an absent third-party import ran no test, and all
+> four fail-closed conditions were verified. **No `pytest` was installed and none was borrowed.**
+>
+> **GATED LEAD (binding on later planning).** Before **any** packet regenerates or relifts with the
+> toolkit at `M` or later, all **56+** KX modules — including these 7 — must run under **real `pytest`**
+> in an **owner-authorized** environment; parametrized and fixture tests included.
+>
+> **`AC-STRUCT` claim limit (Q-C).** It **detects duplicates, not omissions** — the switch-5 damage was
+> invisible to it, and is excluded only by the explicit post-condition (one `case 138` per switch). For
+> any future revision, **each HA edit should carry an expected-count post-condition enforced as an
+> `AC-MERGE` check**.
 
 - **Packet:** `docs/packets/a4s-toolkit-sync.md`, revision **`A4s-r6`**, class **change**, frozen
   SHA-256 **`75207C41B8E9964D3E1467F5E980D1B8DE4CB75A1E0AFE954F59D40FA27D86E3`** (**374 lines**).
-  **This is the packet to execute.** It replaced `A4s-r5` at the canonical path **byte-identically to
-  the reviewed revision**; `A4s-r5` remains recoverable from git
+  **This is the packet that was executed.** It replaced `A4s-r5` at the canonical path **byte-identically
+  to the reviewed revision**; `A4s-r5` remains recoverable from git
   (`git show HEAD:docs/packets/a4s-toolkit-sync.md`, blob `f918b998c20a5be2bcc832fbde527a5754634183`).
-- **Status: promoted, not yet executed.** Promotion was **byte-identical with no revision**, exactly as
-  §5.3 requires: `ADEQUATE` ends plan iteration, so the packet was **not** edited — the stale "358 lines"
-  note in the packet and its tool record (the scanner is really 355 lines) is a **recorded advisory only**
-  and is used in **no** predicate. Editing it would have changed the SHA and invalidated the review.
+- **Status: EXECUTED (see the result block above).** Promotion was **byte-identical with no revision**,
+  exactly as §5.3 requires: `ADEQUATE` ends plan iteration, so the packet was **not** edited — the stale
+  "358 lines" note in the packet and its tool record (the scanner is really 355 lines) is a **recorded
+  advisory only** and is used in **no** predicate. Editing it would have changed the SHA and invalidated
+  the review.
 - **Adequacy:** **`VERDICT: ADEQUATE`**, `BLOCKING: NONE`, `PREMISE_FRESHNESS: BOUNDED` — recorded
   **verbatim** with the reviewer's child ID and route in `docs/reviews/a4s-r6-adequacy-review.md`
   (fresh Planner child `95429607-3d77-44a9-8f38-47e978ece759`, `workbuddy-ai/kimi-k3`, effort omitted).
@@ -50,68 +119,43 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
   `tests/test_ac2_provenance.py`, pre-existing and pristine-HEAD-reproduced). It has moved **three times
   this session** (8/2 → 9/1 → 10/1), which is why the packet requires the carve-out to be **re-derived
   from each execution's own step-2 run by test identity, never carried forward**.
-- **Next action: execute `A4s-r6` literally**, beginning with its **P0 preconditions**. `A4s` is not
-  finished until it has a durable final disposition, so `A4b1-r4`/`A4b2-r4` remain blocked behind it.
-- **P0 preconditions run 2026-09-25: P0.1–P0.6 and P0.8–P0.10 PASS; P0.7 FAILS literally but PASSES
-  under the Advisor's ruling.** The packet says *"all must hold, else stop before any write"*, so
-  execution halted at P0; **both questions were referred to the persistent Advisor and both rulings
-  arrived** (`docs/reviews/a4s-r6-execution-rulings.md`): **Q-A** — a pin on a tracked file identifies
-  the **committed blob**, and P0.10 passes by **branch (a)** (the literal working-tree hash, which
-  equals the pin today); **Q-B** — proceed, discharging P0.7 and step 1 as **verify-and-reuse** of the
-  pre-existing `a4s-pre-sync` under four fail-closed conditions, all of which hold. **Neither required a
-  packet revision** (§5.4 interpretation rulings). **No `.gitattributes` was added** (owner/packet-scope
+- **Next action: Planner revises `A4b1` → `A4b1-r2`** (`PREMISE_CHANGED`, §5.4(2)), then `A4b2`.
+  `A4s` now has a durable final disposition, so **`A4b1`/`A4b2` are no longer parked behind it**.
+
+### `A4s-r6` execution — **COMPLETE**, steps 1–8 all run
+
+The full narrative is in `docs/reviews/a4s-r6-execution-evidence.md`; the summary is in the result block
+at the top of this `CURRENT PACKET` section. Points worth keeping here:
+
+- **P0 passed under the Advisor's interpretation rulings** — **Q-A** (a pin on a tracked file identifies
+  the **committed blob**; P0.10 passed by **branch (a)**, the literal working-tree hash, which equals the
+  pin) and **Q-B** (proceed, discharging P0.7/step 1 as **verify-and-reuse** of the pre-existing
+  `a4s-pre-sync` under four fail-closed conditions, all of which held). **Neither required a packet
+  revision** (§5.4 interpretation rulings), and **no `.gitattributes` was added** (owner/packet-scope
   work, per the Advisor).
+- **`AC-STRUCT` earned its place.** It caught a real defect in the **Session's own** first resolution —
+  a blanket text delete of `case 138` that left switch 4 with a duplicate (compile error) and **switch 5
+  with none at all**, silently dropping ordinal-138 dispatch. **The build would never have caught the
+  second one.** Direct evidence for the Advisor's ruling that `AC-STRUCT` must run **before** the build.
+- **The `AC-MERGE` `(d-twin)` deletion witness took four attempts and all three failures were mine** —
+  the word *"credited"* is load-bearing. Recorded in full, including the two false alarms caused by
+  over-broad file-wide text searches (`docs/reviews/a4s-r6-ac-merge.md`,
+  `docs/reviews/a4s-r6-appendix-a-conformance.md`).
+- **A recurring Session failure mode, recorded because it repeated:** every verification failure in this
+  execution was an **over-broad text match** — a file-wide search used where the criterion was
+  function-scoped, or a substring test matching a longer identifier. **No defect in `M` was ever found
+  by these.** The lesson is that each criterion's scope must be implemented literally, and the targeted
+  per-region checks are what make the results meaningful.
+- **The KX/`pytest` question was resolved by the Advisor as `Q-C`: NOT `R-TEST`.** The 7 modules are
+  *"not exercised: new at M, dependency absent (pytest)"* — **not a FAIL and not a PASS witness** — under
+  four fail-closed conditions, **all verified**. **No `pytest` was installed, and none was borrowed**
+  from the unrelated venv the Advisor identified. The claim limit and the gated lead are in the result
+  block above and **must be shown to the acceptance reviewer**.
 
-### `A4s-r6` execution — steps 1–6 complete, halted before the strict run
-
-- **Step 1 — recovery point: verify-and-reuse**, recorded as *"pre-existing from `A4s-r5` step 1,
-  verified and reused, not created."* `a4s-pre-sync` = `0d7929c`; no `branch -f`, no `-D`, no
-  re-creation, no other ref.
-- **Step 2 — pre-merge controls on `0d7929c`:** build OK; exe `AEC1F0FF…` (the known no-op-build
-  artifact — **record, not a gate**); `ctest` **12/12**; set **K4** 27 tests OK; set **KX** 33 modules /
-  Ran sum **133** with **zero** per-module differences; set **G** re-measured at **11 files, 10 pass /
-  1 fail**, carve-out derived by identity (`test_ac2_provenance.py` = E2).
-- **Step 3 — merge + guard + resolution:** the **9-hunk guard PASSED exactly** (5 files, 9 hunks, all
-  sections and line spans matching). All 9 hunks resolved **by exact text** per the pre-ruled table.
-  **`M` = `3f8bf67c450861aefcbc376698750bc1446bc9dd`** (parents `0d7929c`, `766ecef`).
-  - **`AC-STRUCT` caught a real defect in the Session's own first resolution** and it is recorded
-    (`docs/reviews/a4s-r6-ac-struct-catch.md`): edit (b) was first implemented as a blanket text delete,
-    but measured from the raw tree **both copies within a switch are the same form**, so text cannot
-    separate local's from upstream's. That left switch 4 with a duplicate case (compile error) and
-    **switch 5 with no `case 138` at all** — silently dropping ordinal-138 dispatch, which the **build
-    would never have caught**. The merge was aborted, re-run deterministically, and the rule replaced
-    with "keep the first occurrence per switch", reproducing the packet's named positions (`8040`,
-    `8502`). **Direct evidence for the Advisor's ruling that `AC-STRUCT` must run before the build.**
-- **Step 4 — `AC-STRUCT`: PASS** on the resolved tree (0 findings, 0 UNKNOWN), with all controls green.
-- **Step 5 — build: PASS** (relinked; no structural diagnostics, so the `R-BUILD` backstop never arose).
-- **Step 6 — `AC-TEST`:** **C 12/12** (incl. the named witness `jsrf_inplace_event_bridge`); **G**
-  unchanged by identity; **K4** 30 tests OK; **KX** 56 modules with all 33 step-2 modules present,
-  **0 regressed, 0 lost coverage**.
-- **All other gates PASS:** `AC-REC`, **`AC-MERGE`** (16/16 targeted checks; the `(d-twin)` deletion
-  witness took four attempts, all three failures mine — the word *"credited"* is load-bearing,
-  `docs/reviews/a4s-r6-ac-merge.md`), **`AC-KEEP` (iv)/(v)** (three ranges byte-identical with anchor
-  counts 1/1/1 and working can-fail controls; deleted names 0 in `SCOPE`; all four controls match
-  2/2/0/0; no call site for `ac97_arm_write_trap`; `SCOPE` guard not tripped), **`AC-INV`** (new env
-  names exactly `RECOMP_APU_MIXDOWN_ALL` + `RECOMP_USB_PORT`, none removed), **`AC-GEN`**, **`AC-NOPUSH`**
-  (`ahead 25`, remotes exact, no push/fetch during execution).
-- **`M` conforms to Appendix A verbatim** — HA-COMBINED-1/-2, Expected-5/6/9 all present byte-for-byte,
-  plus 10/10 structural checks (`docs/reviews/a4s-r6-appendix-a-conformance.md`).
-- **ONE OPEN ITEM, with the Advisor — the KX/pytest question.** 23 KX modules are **new** at `M` (from
-  upstream); **7 fail with `ModuleNotFoundError: No module named 'pytest'`**. All 7 are **byte-identical
-  to the upstream parent**, `pytest` is **not installed**, and upstream documents `pytest` (not
-  `unittest`) as its runner. `AC-TEST`'s FAIL clause ("a new KX module fails → `R-TEST`") and its
-  UNKNOWN clause ("a set cannot be run (environment, not code — e.g. `capstone` missing)") point
-  opposite ways, and the UNKNOWN clause's remedy would mean **installing** `pytest`, which the owner's
-  directive forbids. **The Session measured that the modules' tests are sound**: with a diagnostic
-  in-memory shim (**nothing installed, nothing written**), **14 tests pass and 0 fail**, 8 needing pytest
-  fixtures — so nothing is *broken* (`docs/reviews/a4s-r6-pytest-modules-sound.md`). **Rows 2–6 are all
-  unmatched except the possible `R-TEST`, which turns entirely on this ruling.** Records:
-  `docs/reviews/a4s-r6-kx-pytest-question.md`, `docs/reviews/a4s-r6-pytest-modules-sound.md`.
-- **Step 7 is staged and ready** the moment the ruling lands: the six synthetic-completion variables are
-  confirmed **absent**, `RECOMP_GPU_ACK='0'` will be set, the exe is `E45026C3…`, and the `[A3A]`
-  reference control (`gc=0x00000002 gs=0x00000100`) is available in the `A4a-r2` R0 run.
-
-**Current blocker / next action.** The Advisor's hunk rulings are **recorded and binding**
+**Current blocker / next action.** **None for `A4s`** — `A4s-r6` is executed with a durable final
+disposition (`R-SAME`, toolkit `main` at `M`). The next action is the **acceptance review** of this
+execution, which must be shown the **Q-C claim limit**; on `ACCEPT`, the Closure push of `M` to `origin`
+follows the owner's five pre-push checks. Then the Planner revises **`A4b1` → `A4b1-r2`**.
 
 ### Predecessor — `A4s-r5` — **EXECUTED 2026-09-25, selected `R-CONFLICT`** (superseded by `A4s-r6`)
 

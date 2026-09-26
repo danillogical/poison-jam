@@ -277,3 +277,129 @@ four additions, which is not the criterion.
 | `remote -v` | the four P0 lines exactly |
 | game `git remote` | prints nothing |
 | Session attestation | no `git push` or `git fetch` during execution (the one push this session was the owner-authorized baseline push to `jsrf/integration`, **before** execution began) |
+
+---
+
+## Step 7 — the one strict run
+
+**Run directory:** `logs/runs/20260925-210315-113-a4s-sync-strict`
+**Command:** the packet's exact form — the six synthetic-completion variables cleared,
+`RECOMP_GPU_ACK='0'`, `RECOMP_KERNEL_LOG_BUDGET='100000'`,
+`python -X utf8 scripts\run-jsrf.py --seconds 30 --profile strict --label a4s-sync-strict`.
+**One run. No rerun was needed or made.**
+
+### `AC-RUN` reads
+
+| Read | Value |
+|---|---|
+| **V** (validity) | **HOLDS** — `check-run-profile.py` prints **STRICT** (checked 1; strict 1, exploratory 0, fixture 0, unknown 0, missing 0); `result.json` readable; `check-dump-mapping.py` → **matches: 1, content-mismatch: 0** |
+| **outcome** | `diagnostic_deadline` |
+| **B** = `MEM32(0x001BA858)` | `0x803C0000` — **usable** (readable, ≠ 0) and **equal to the expected value** |
+| **W** = `MEM32(B+0x810)` = `MEM32(0x803C0810)` | **`3`** |
+| **F** = `stacks.txt` `sub_001A1769` frames on `recomp_0005.c:67(48\|49\|50\|51)` | **2** — **identical to the `A4a-r2` R0 reference control (2)**; both runs have exactly 2 `sub_001A1769` lines, at `recomp_0005.c:6749` |
+| **A3A** (`AC-KEEP` (vi)) | **PASS** — `[A3A] ac97 witness: gc=0x00000002 gs=0x00000100`; GC bit1 set (`gc & 0x2`) and GS bit8 set (`gs & 0x100`), **matching the reference control exactly** |
+
+**Artifact SHA-256:**
+
+| Artifact | SHA-256 |
+|---|---|
+| `result.json` | `C662254D150E4778CE44CC7F83072413BD47D71583BFD75590C0F2C8AADE0152` |
+| `stacks.txt` | `D7791C014EBDE39F5D7A5E762265BC929346BE6841592DEA3CD8E03BB17BB83B` |
+| `jsrf_run.log` | `DFA320441DEDEB7E0DC7693DC1FC4B82821CE5EAFA03EEFE4E5969FE75747B5B` |
+| `process.dmp` | `3898C72C107F1A86EC55E7E0E9C247815B34F4D399BC8D11BC0D20D69F3C9E1C` |
+
+`outcome = diagnostic_deadline` means capture was bounded, **not** that the guest was live; `exit_code`
+was 3 and `dump_ok` true.
+
+---
+
+## Row selection — **`R-SAME`**
+
+Evaluated in order; the first match wins. All six gate rows are unmatched:
+
+| Row | Condition | Result |
+|---|---|---|
+| `R-PUSH` | P0 passed **and** `AC-NOPUSH` FAIL/UNKNOWN | **no** — `AC-NOPUSH` PASS |
+| `R-CONFLICT` | conflict outside the 10 / set differs / text differs / UNDECIDED / `AC-STRUCT`/`AC-MERGE`/`AC-KEEP`/`AC-INV` FAIL / build backstop | **no** — all PASS |
+| `R-REGEN` | build failure meeting the regeneration test, or `AC-GEN` FAIL | **no** — build OK, `AC-GEN` PASS |
+| `R-BUILD` | `AC-BUILD` FAIL | **no** — build succeeded |
+| `R-TEST` | `AC-TEST` FAIL | **no** — C 12/12; G same identity; K4 OK; KX disposed by **Q-C** |
+| `R-PRE` | P0 fails | **no** — P0 passed under **Q-A**/**Q-B** |
+
+| Run row | Condition | Result |
+|---|---|---|
+| `R-INVALID` | V fails, or `result.json` unreadable | **no** — V holds |
+| `R-MOVED` | (i) `outcome ≠ diagnostic_deadline`; or (ii) `outcome = diagnostic_deadline` **and** `B` usable **and** `B = 0x803C0000` **and** `W` readable **and** `W ≠ 3` **and** `F = 0` | **no** — (i) it *is* `diagnostic_deadline`; (ii) `W = 3` (not ≠ 3) and `F = 2` (not 0) |
+| **`R-SAME`** | V holds; `outcome = diagnostic_deadline`; `B` usable and `B = 0x803C0000`; `W = 3`; `F ≥ 1` | **MATCH — all five hold** |
+
+**Selected row: `R-SAME`.** The strict stop is **unchanged**: still the DSP pending-word spin at
+`loc_001A18D0` (`recomp_0005.c`), pending word `MEM32(0x803C0810) = 3`.
+
+| Field | Value |
+|---|---|
+| **Toolkit `main` left at** | **`M` = `3f8bf67c450861aefcbc376698750bc1446bc9dd`** |
+| **Next packet** | Planner revises **`A4b1` → `A4b1-r2`** (`PREMISE_CHANGED`, §5.4(2)): new baseline = toolkit `M`, this exe SHA, this run as the reference R0, and upstream's `src/apu/apu_dsp.c`/`CMakeLists.txt` as the starting state; then `A4b2` |
+| **Push** | **not an execution step.** `R-SAME` leaves `main` at `M`, so a Closure push to `origin` is permitted **only after ACCEPT** and after the five pre-push checks — and the acceptance reviewer **must see the Q-C claim limit explicitly** |
+
+---
+
+## `AC-GEN` and `AC-NOPUSH` re-checked at closure (step 8)
+
+| Check | Result |
+|---|---|
+| `git diff --quiet HEAD -- src/recomp config tools/disasm/output` | **exit 0** |
+| `git status --porcelain -- src/recomp config` | **empty** |
+| `check-generation-provenance.py --check` | **ok: True**, exit 0 |
+| `origin/main` / `upstream/main` | both `766ecef…` |
+| `@{u}` | `upstream/main` |
+| `git status -sb` | `## main...upstream/main [ahead 25]` — the **success path**, no `behind` |
+| game `git remote` | prints nothing |
+| toolkit final | `HEAD` = `M`, **clean**, `a4s-pre-sync` = `0d7929c` |
+
+---
+
+## `AC-TEST` — KX detail (per Q-C)
+
+**C:** all 12 baseline names discovered and passing, including the named hunk-1/2 witness
+`jsrf_inplace_event_bridge`. **G:** 11 files, 10 pass / 1 fail — `test_ac2_provenance.py`, the **same
+failing identity** as step 2 (carve-out derived by identity, never carried forward). **K4:** 30 tests, OK.
+**KX:** 56 modules; all **33** step-2 modules present with **0** regressions and **0** lost coverage.
+
+**Per-module disposition at `M`:**
+
+| Class | Count | Disposition |
+|---|---|---|
+| step-2 modules | 33 | **PASS** (all present; `Ran ≥` step-2 count) |
+| new, exit 0 | 9 | **PASS** |
+| new, exit 5 (`Ran 0`) | 7 | **not exercised (new, recorded)** |
+| new, exit 1 (`pytest` absent) | 7 | **not exercised: new at M, dependency absent (pytest)** — per **Q-C** |
+
+**The 7 pytest-dependent modules** (all four Q-C conditions verified — see
+`docs/reviews/a4s-r6-execution-rulings.md`): `test_block_dispatch`, `test_incdec_carry`,
+`test_incdec_result`, `test_lifter_double_shift`, `test_lifter_result_clobber`, `test_sar_width`,
+`test_x87_classification`.
+
+**CLAIM LIMIT (per Q-C, and the acceptance reviewer must see it):** *KX does not exercise 7
+pytest-dependent upstream modules (listed above) under `unittest`. The lifter/translator conflict
+resolutions (hunks 5–7 and 9) are therefore witnessed only by K4 and the existing KX modules, not by
+upstream's own tests of those paths.* This is harmless **for this packet only** because `AC-GEN` holds —
+there is no regeneration, so `M`'s lifter produced none of the linked code.
+
+**GATED LEAD (binding on later planning):** before **any** packet regenerates or relifts with the toolkit
+at `M` or later, all **56+** KX modules — including these 7 — must run under **real `pytest`** in an
+**owner-authorized** environment; parametrized and fixture tests included.
+
+---
+
+## `AC-STRUCT` claim limit (per Q-C)
+
+**`AC-STRUCT` detects duplicates, not omissions.** The switch-5 damage (ordinal 138 reduced to **zero**
+cases) was **invisible** to the scanner; it was found only because the duplicate in switch 4 prompted a
+fuller look. It is now excluded for this merge by the explicit **post-condition count** — exactly one
+`case 138` site per switch — not by the scanner. **For any future revision, each HA edit should carry an
+expected-count post-condition enforced as an `AC-MERGE` check.**
+
+**Operative reading of HA edit (b)** (confirmed by the Advisor): *within each switch containing
+`case 138`, keep the FIRST occurrence and delete the rest* — which reproduces the positions the ruling
+named (`8040`, `8502`). The packet's original *"locate each by text"* was insufficient because both
+copies within a switch are byte-identical.
