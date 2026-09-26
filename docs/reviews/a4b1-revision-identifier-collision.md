@@ -87,3 +87,27 @@ Either way the **name is `r4`**; the `[GPIN]` ruling decides only *what `r4` con
   pending the ruling.
 - **The frozen `A4s` packet was not touched** — it is accepted, closed, and its hash is unchanged.
 - **The Planner is holding the packet header**, correctly, pending the ruling.
+
+## Correction scope — inventoried now, to be applied in ONE pass after the ruling
+
+Complete inventory of every file mentioning `a4b1-r2` (measured, excluding `logs/`, `.git/`, `build/`),
+with the disposition each needs. **Two entries must NOT be changed** — their `A4b1-r2` correctly denotes
+the *historical* revision.
+
+| File | Occurrences | Disposition |
+|---|---|---|
+| `docs/reviews/a4b1-a4b2-r2-adequacy-review.md` | 3 | **DO NOT CHANGE** — this *is* the historical `A4b1-r2` review (its title, its hash `839E9BEC…D2BB7`, and its `A4b2` `P2` note all correctly name the historical revision) |
+| `docs/packets/a4s-toolkit-sync.md` | 1 | **DO NOT CHANGE** — frozen, accepted, hash-pinned (`75207C41…`); its `R-SAME` row is a **stale record**, corrected by pointer in the plan instead |
+| `docs/reviews/a4s-r6-execution-evidence.md` | 1 | **correction note, not a silent edit** — it is the *accepted* `A4s` evidence; its "Next packet" cell is a forward pointer, so a dated correction line is safer than rewriting an accepted record |
+| `docs/reviews/a4s-r5-execution-startup-ruling.md` | 1 | **historical record** — L411 refers to the then-future `A4b1` revision inside a past ruling's applicability note; leave as written, since it records what was anticipated at that time |
+| `plan-jsrf-bare-minimum.md` | 9 | **correct** — the plan is the execution authority and must name the real identifier |
+| `docs/packets/a4b1-gp-core-port-r2.md` | 4 | **rename the file and correct** — the Planner's draft (untracked, sketch only) |
+| `docs/reviews/a4b1-r2-planning-brief.md` | 7 | **rename the file and correct** |
+| `docs/reviews/a4b1-r2-premise-recheck.md` | 4 | **rename the file and correct** |
+| `docs/reviews/a4b1-r2-inverse-precision.md` | 4 | **rename the file and correct** |
+| `docs/reviews/a4b1-r2-gpin-lineage-conflict.md` | 8 | **rename the file and correct** |
+| `docs/reviews/a4b1-revision-identifier-collision.md` | 18 | **this record** — its `A4b1-r2` mentions are deliberate (it documents the collision), so it stays as written, with the resolution appended |
+
+**The distinction that makes this safe:** the historical `A4b1-r2` and the in-flight revision differ in
+**referent**, not spelling. A blanket find-and-replace would corrupt the historical review — which is
+exactly why the correction is a reviewed pass over an inventoried list rather than a mechanical rename.
