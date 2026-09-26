@@ -6,71 +6,275 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4s-r5` (toolkit sync, PROMOTED 2026-09-25)
+## CURRENT PACKET — `A4s-r6` (toolkit sync) — **PROMOTED 2026-09-25, ready to execute**
 
-- **Packet:** `docs/packets/a4s-toolkit-sync.md`, revision **`A4s-r5`**, class **change**, frozen
-  SHA-256 **`09DA9413C028D61BD28D9E4007AF6DDE3474ED6869F77B0095D03DB2C4FB86FB`** (263 lines).
+- **Packet:** `docs/packets/a4s-toolkit-sync.md`, revision **`A4s-r6`**, class **change**, frozen
+  SHA-256 **`75207C41B8E9964D3E1467F5E980D1B8DE4CB75A1E0AFE954F59D40FA27D86E3`** (**374 lines**).
+  **This is the packet to execute.** It replaced `A4s-r5` at the canonical path **byte-identically to
+  the reviewed revision**; `A4s-r5` remains recoverable from git
+  (`git show HEAD:docs/packets/a4s-toolkit-sync.md`, blob `f918b998c20a5be2bcc832fbde527a5754634183`).
+- **Status: promoted, not yet executed.** Promotion was **byte-identical with no revision**, exactly as
+  §5.3 requires: `ADEQUATE` ends plan iteration, so the packet was **not** edited — the stale "358 lines"
+  note in the packet and its tool record (the scanner is really 355 lines) is a **recorded advisory only**
+  and is used in **no** predicate. Editing it would have changed the SHA and invalidated the review.
+- **Adequacy:** **`VERDICT: ADEQUATE`**, `BLOCKING: NONE`, `PREMISE_FRESHNESS: BOUNDED` — recorded
+  **verbatim** with the reviewer's child ID and route in `docs/reviews/a4s-r6-adequacy-review.md`
+  (fresh Planner child `95429607-3d77-44a9-8f38-47e978ece759`, `workbuddy-ai/kimi-k3`, effort omitted).
+  It independently re-verified both pinned tool hashes and found the hunk-1/2 C text **byte-identical**
+  to the Advisor's ruling, the 9-hunk table complete, and H2 to be the Advisor's **edit-application**
+  version rather than the rejected precondition.
+- **The review's one persistence risk is CLOSED** (`DEFERRED 1`). The reviewer asked the Session to
+  confirm `logs/a4s/conflicted-*` survive until the `AC-STRUCT` positive control runs. Rather than merely
+  confirming existence — they are in **gitignored** `logs/`, so nothing guarantees them — the Session
+  tested whether the risk is real, and **it is not**:
+  - the fidelity source is **durable in git**: the raw preview **`75083476` is a git tree object**,
+    recoverable with `git show 75083476:<path>`;
+  - the saved files are **not** byte-identical to the preview blobs, and the reason matters: the saved
+    files are **diff3** (3 `|||||||` base markers) while `git merge-tree --write-tree` emits **2-way**
+    markers (0 base markers) — the same 2-way/diff3 distinction that caused an earlier Session error;
+  - **it does not change the control**: resolving **both** sources to all-ours gives **byte-identical
+    content for all five conflicted files**, and both give **exactly 3 findings, 0 UNKNOWN** over `SCOPE`
+    (`dup-case case 138 [8019,8322]`, `dup-case case 138 [8481,8847]`, `dup-def bridge_KeResetEvent
+    [1377,6713]`) — precisely the 2 + 1 the criterion expects.
+  - **A Session error found and corrected while closing it:** the first attempt resolved **all five**
+    conflicted files, including three under `tools/recomp/` that are **outside `SCOPE`** (toolkit tooling,
+    not build inputs of `jsrf_recomp.exe`). Feeding Python to a C-oriented scanner produced **79 spurious
+    `dup-def` findings and one UNKNOWN** in `lifter.py`. The corrected control scans only the two in-scope
+    files. Recorded because it is exactly the mistake the `SCOPE` guard exists to prevent.
+- **Readiness gates the Session has already verified:** both pinned gating tools match their pins —
+  `scripts/check-merge-structure.py` = `A1FDCE26755DAB3A0B6AA6E23D380A8F95E097439C2BE91D6318BF4402AA1AFF`
+  and `tests/test_merge_structure.py` = `A42F4A1E2C473892DC28A0F5B21923F4BC0AEFCFFE859C7FC20006F49DB0744C`
+  — and the scanner's four controls reproduce (`0d7929c` 87/109/**0**, `766ecef` 87/111/**0**,
+  `75083476` raw 90/111/**15**, worktree 87/109/**0**; fixtures **14/14 OK**).
+- **Set-G baseline at this revision: 11 files, 10 pass / 1 fail** (the one failure is `E2 =
+  `tests/test_ac2_provenance.py`, pre-existing and pristine-HEAD-reproduced). It has moved **three times
+  this session** (8/2 → 9/1 → 10/1), which is why the packet requires the carve-out to be **re-derived
+  from each execution's own step-2 run by test identity, never carried forward**.
+- **Next action: execute `A4s-r6` literally**, beginning with its **P0 preconditions**. `A4s` is not
+  finished until it has a durable final disposition, so `A4b1-r4`/`A4b2-r4` remain blocked behind it.
+
+### Predecessor — `A4s-r5` — **EXECUTED 2026-09-25, selected `R-CONFLICT`** (superseded by `A4s-r6`)
+
+- **Packet (superseded):** `docs/packets/a4s-toolkit-sync.md`, revision **`A4s-r5`**, class **change**,
+  frozen SHA-256 **`09DA9413C028D61BD28D9E4007AF6DDE3474ED6869F77B0095D03DB2C4FB86FB`** (263 lines).
+  Recoverable from git; no longer the file at that path.
+- **Status: executed. Selected row `R-CONFLICT`** (fail-closed, as predicted). **Toolkit `main` is left
+  at `0d7929c`** (rolled back; working tree clean). **No push was performed at execution** — `main` at
+  `0d7929c` is not a descendant of `origin/main`, so per the Closure rule: **"no push: main at
+  `0d7929c`"**. (The accepted **baseline** was later published to the fork's `jsrf/integration` branch
+  under the owner's standing push policy — see the push log above; `main` itself is still unpushed.)
+- **Execution evidence:** `docs/reviews/a4s-execution-evidence.md`. **Conflict inventory:**
+  `docs/reviews/a4s-r5-conflict-inventory.md` + raw hunk text in `logs/a4s/conflict-hunk-inventory.txt`.
+- **Result:** the merge attempt produced **5 conflicted files, all inside the packet's 10-file set**
+  (`kernel_bridge.c`, `xbox_memory_layout.c`, `lifter.py`, `test_icall_feedback.py`, `translator.py`)
+  and **9 conflict hunks: 1 × HA, 1 × H1, 2 × H2, 5 × UNDECIDED**. Five UNDECIDED hunks select
+  `R-CONFLICT`; the packet does not authorize choosing a side by judgment for them. `AC-MERGE`,
+  `AC-KEEP`, `AC-INV`, `AC-BUILD`, `AC-TEST` and the strict run were **not reached** (row 2 precedes
+  them); their read-only pre-checks are recorded as non-binding supporting evidence.
+- **Pre-merge controls (step 2, all on `0d7929c`):** build OK; pre-merge exe
+  `9597FF7C2A377265ABA8DBB90B461EBE763E02D65432E9DFA13ACD925539C553` (matches the recorded
+  expectation); `ctest` **12/12**; set K4 **27 tests OK**; set KX **33 modules, Ran sum = 133**;
+  set G **8 pass / 2 fail**, both failures **measured pre-existing** (see the `E1`/`E2` follow-ups
+  below — `E1` now passes, so the current set-G baseline is **9 pass / 1 fail**).
+- **Rollback rebuild exe SHA-256:** `AEC1F0FF7FB944DA44487EA15C3E94FF342751D4168E699F544A58895CF083C3`
+  — **differs** from step 2; the packet says record, not gate, so no row turns on it. Cause **measured**:
+  `/Zi` + `/DEBUG:FULL` with no `/Brepro`, so a **relink** stamps fresh PE timestamps. Step 2's build
+  found the tree already up to date and **did not relink** (which is why it matched the archived
+  `9597FF7C…`); the merge attempt and `merge --abort` then rewrote **58 toolkit files** (mtimes only —
+  `git status` clean, `git diff HEAD` empty), forcing the rollback build to relink. A **no-op build was
+  measured not to relink**. The two exes are identical in size, layout and all but **13 bytes** (four
+  PE timestamp fields plus one stamp byte).
+  Analysis: `docs/reviews/a4s-r5-rollback-exe-hash.md`. *(An earlier note here called the rebuild
+  "deterministic"; that inference was wrong and is retracted — see that record.)*
 - **Adequacy:** **`ADEQUATE`**, `BLOCKING: NONE`, `PREMISE_FRESHNESS: BOUNDED`, `DEFERRED: NONE`
-  — `docs/reviews/a4s-r5-adequacy-review.md`, fresh Planner child
-  `f339b306-0473-4777-a211-78271453f2b9` (`workbuddy-ai/gpt-5.6-sol` @ `high`). r4's blocking
-  defect **B1-r4 is CLOSED** (reviewer-reproduced: fixed lengths 7/56/25 exact; anchors **1/1/1** at
-  merge-tree lines 442/890/2103; all three byte compares equal after `HA` LOCAL resolution; every
-  `+1` shifted extraction differs, so the can-fail control discriminates). `BOUNDED` is correct and
-  expected: the merge/build/tests/run are intentionally unexecuted, and a stale premise routes to
-  `R-PRE`/`R-INVALID`/`R-UNKNOWN`, never to a false `R-SAME`/`R-MOVED`.
-- **§5.5:** the fix is a **simplification** (end anchoring and hunk-overlap dropped entirely), not a
-  third patch of the same shape — r4's own reviewer recommended exactly that.
-- **Baseline recorded at promotion:** game **`b7d6af5`** (clean tree; the commit that adds this
-  promotion), toolkit `main` **`0d7929c`** (clean), `upstream/main` = `origin/main` =
-  `v0.11.0^{commit}` = **`766ecef`**, merge base `051a128`, no `a4s-*` branch exists.
-- **Status:** **promoted — Session executes.** Write scope, `Stop if` conditions, the `HA` hunk
-  disposition, the `SCOPE` boundary guard and the decision rows are the packet's own; nothing here
-  overrides them. **Expected first result: `R-CONFLICT`** (fail-closed, per the read-only merge
-  preview). The Closure push to `origin` happens **only after ACCEPT** and is **not** an execution
-  step; never push to `upstream`.
+  — `docs/reviews/a4s-r5-adequacy-review.md`, fresh Planner child `f339b306-0473-4777-a211-78271453f2b9`.
+- **Baseline recorded at execution:** game **`c1cdb91`** (the commit that adds the promotion;
+  the plan previously named `b7d6af5`, which is the preceding startup-receipt commit — advisory,
+  not revised), toolkit `main` **`0d7929c`**, `upstream/main` = `origin/main` = `v0.11.0^{commit}` =
+  `766ecef`, merge base `051a128`, no `a4s-*` branch existed before step 1 (`a4s-pre-sync` now exists
+  at `0d7929c` and still resolves to it).
 - **Revision log:** `docs/reviews/a4s-revision-history.md` (non-authoritative).
 
-**ROUTE STATE — RESOLVED (2026-09-25, `session-910703eb`); the senior-judgment route is live.**
-The previous state (both senior routes BLOCKED; the substitute unresolvable) is **superseded**.
-The owner's recorded remedy was applied — `workbuddy-ai` / `gpt-5.6-sol` is now present in
-`C:\Users\logic\.dsh\settings.yaml` (`subagent-model-selection.allowedModels`, lines 32–33) — and a
-**genuinely new top-level session** captured the new list (the allow-list is a **write-once
-per-session latch**, which is why the previous session could not pick the change up). This session
-resolves the route live (`list_subagent_models` → `workbuddy-ai/gpt-5.6-sol`, efforts
-`off`–`max`) and has **spawned and been answered by** children on it. The WorkBuddy provider was
-never the fault. Prior diagnoses, retained as provenance:
+**Push log — first durable-checkpoint push (owner-authorized, 2026-09-25).**
+
+```text
+PUSHED_TO:  https://github.com/danillogical/xboxrecomp.git   (remote `origin` = the owner's fork)
+BRANCH:     jsrf/integration   (NEW branch; `main` cannot fast-forward yet)
+COMMIT:     0d7929c86771dd0b971941592fd4f15436116e82
+REMOTE_URL: https://github.com/danillogical/xboxrecomp.git
+RESULT:     SUCCESS — verified independently with `git ls-remote origin`, which reports
+            0d7929c…  refs/heads/jsrf/integration and 766ecef…  refs/heads/main (unchanged)
+```
+
+The 24 commits published are the **accepted toolkit baseline** (`A4a-r2`, `A3a-r25`, `A4p-r1` all
+accepted on `0d7929c`; baseline tests re-measured this session: ctest 12/12, K4 27 OK, KX 133 OK). The
+`A4s-r5` `R-CONFLICT` attempt produced **no commit**, so none of its output is in this push. **No force,
+no `upstream` push, `main` untouched.** `main` stays at `766ecef` because it cannot be fast-forwarded
+until the `A4s` merge lands `766ecef` in local `main`'s history; the owner's branch-handling rule covers
+exactly this case. Full record and all five pre-push checks:
+`docs/reviews/owner-push-policy-xboxrecomp-fork.md`.
+
+**`A4s-r6` packet delivered, adequacy review in flight.** `docs/packets/a4s-r6-toolkit-sync.md`,
+revision **`A4s-r6`**, SHA-256 **`75207C41B8E9964D3E1467F5E980D1B8DE4CB75A1E0AFE954F59D40FA27D86E3`**,
+**374 lines** (the Planner's reported "325" was a non-empty-line miscount; the project convention is
+total lines — `A4s-r5` is cited as 263, its LF count). The frozen `A4s-r5` is **untouched**
+(`09DA9413…86FB`). A **fresh Kimi Planner** is performing the binding §5.3 adequacy review of that exact
+SHA. Per §5.3, `ADEQUATE` requires only `BLOCKING = NONE` and `PREMISE_FRESHNESS` not `FAIL`; on
+`ADEQUATE` the revision is frozen and promoted in the same step, with no polishing pass.
+
+**Current blocker / next action.** The Advisor's hunk rulings are **recorded and binding**
+(`docs/reviews/a4s-r6-advisor-hunk-ruling.md`). The frozen `A4s-r6` planning brief was dispatched to the
+Planner (`workbuddy-ai/kimi-k3`, effort omitted per the owner's instruction). The Planner wrote its
+**sketch** (`docs/packets/a4s-r6-toolkit-sync.md`, 14 lines, ≤20 tool calls) and the Session relayed it
+for the **mandatory shape preflight**. The Advisor returned **`SHAPE: PROCEED`** with three bounded
+policy items to write into the packet:
+
+1. **Gating tools must be tracked and pinned.** `AC-STRUCT`'s scanner, and any verifier the packet
+   relies on, must live at a **tracked** path (e.g. the game repo's `scripts/`) pinned by SHA-256 —
+   **not** in `logs/a4s/`, which is gitignored and which `AGENTS.md` forbids for durable helper source.
+   Its controls must be packet criteria (positive on the merge preview; zero on both parents; UNKNOWN
+   for an unparseable merge-changed file).
+2. **The pre-ruled table does not exempt run-profiles rules 1–5.** Keep `AC-INV` and the `SCOPE` guard
+   exactly as they are; and if the real merge produces a hunk outside the recorded 9, **or** a recorded
+   hunk whose base/ours/theirs text differs from `logs/a4s/conflict-hunk-inventory.txt`, the result is
+   **`R-CONFLICT`** — never resolved by analogy.
+3. **"Expected `R-SAME`" is a forecast only** — no criterion may assume it. `R-PUSH` follows the owner
+   push policy: all five pre-push checks, and **never** after `R-CONFLICT`, a rollback, or `INADEQUATE`.
+
+The Advisor's stated **REVERSED_BY** conditions, which return the packet to sketch: the real merge's
+conflict set differing from the 9 recorded hunks; the verifier showing edit-application H2 changes any
+recorded classification other than hunk 5's; or the scanner failing its positive/negative control on the
+pinned trees.
+
+**Session support already delivered to the Planner** (`docs/reviews/a4s-r6-ac-struct-controls.md`):
+measured control numbers for the scanner over `SCOPE` — `0d7929c` and `766ecef` both **0 findings**;
+the raw preview **15** (12 marker lines + 3 structural); the resolved all-ours preview **3 structural,
+0 markers**; resolved all-theirs **2** (resolving hunk 1 to upstream removes the duplicate
+`bridge_KeResetEvent` that lives inside it). Two wording traps are recorded there: the criterion must
+say **which tree** each number belongs to, and must name the **resolution** the control uses.
+
+**The Advisor's rulings, in one line each** (full text and BASIS in the ruling record):
+
+1. **Hunks 1–2 — COMBINED form**, fixed precedence: (1) in-place KEVENT if `guest_va_is_inplace_kevent`
+   accepts, (2) `ke_shadow_lookup` handle if non-NULL, (3) `XBOX_TO_NATIVE` fallback. **Upstream's
+   `bridge_resolve_handle` tier is NOT carried over** (for a nonzero VA it returns the token itself,
+   which would pass a guest VA as a host HANDLE and make tier 3 unreachable). The ruling supplies the
+   **exact C text** for all three functions; **exactly one** `bridge_KeResetEvent` survives, with the
+   same three tiers. Two further edits are pre-ruled HA: delete upstream's duplicate clean-hunk
+   `bridge_KeResetEvent`, and keep **one** `case 138` per switch (local's positions), located **by exact
+   text, not line number**.
+   - *Why not upstream alone:* the accepted, gating ctest `jsrf_inplace_event_bridge` asserts guest
+     `SignalState` and previous-state values that only local's bodies write.
+   - *Why not local alone:* upstream's timer model arrives in a **clean hunk** and registers timers only
+     in the shadow table; ordinals 113 and 159 are both declared, so a wait on a timer would never see
+     the event that fires it.
+   - *Why in-place first:* `ke_shadow_remove` has **zero callers**, so shadow entries are never retired;
+     and every reachable shadow populator writes type 8/9, which the sniffer rejects — so in-place-first
+     never takes an object away from the shadow tier. It also defuses the `Size` hazard without deciding
+     the `Size` question.
+2. **Hunk 5 — per-line combined form** (derived by rule): `_FLAGS_UNDEFINED` loses `"lock xadd"`, keeps
+   upstream's `"popfd"` and its comment; `_EFLAGS_SETTERS` keeps local's line; hunk 6's H2 result stands.
+3. **Hunk 8 — LOCAL** (`"--functions", fns,`), pinned.
+4. **Hunk 9 — full union**, local's members then upstream's, upstream's `_RESULT_SNAPSHOT_SETTERS` clause
+   kept.
+5. **H1 — accepted as proposed**: containment must include deletions.
+   **H2 — the Advisor REJECTED the Session's added delete-vs-keep precondition** and kept the original
+   one; H2's **action** must be defined as **EDIT APPLICATION** (apply each side's per-line edit to the
+   base, then insert each side's insertions, local first), **not** a union of line presence. Ambiguous
+   attribution → UNDECIDED. The Session **verified the Advisor's prediction exactly**: hunk 5 changes
+   from UNDECIDED to H2 applies, every other hunk keeps its classification, and edit application
+   produces the ruled `_FLAGS_UNDEFINED` text.
+6. **`AC-MERGE`(d) gains a twin witness:** every base line a credited side deleted is absent from the
+   result unless the other side replaced it.
+7. **Post-resolution structural check required** (conflict markers; duplicate `case` values per switch
+   per branch path; duplicate file-scope definitions per branch path), on the **resolved** tree
+   **before** the build, over `SCOPE`, with positive and negative controls, selecting **`R-CONFLICT`,
+   never `R-BUILD`**, plus a C2084/C2196/C2371 backstop. The Advisor ruled **against** a broader semantic
+   review as unbounded. **H3 is not audited** (no corpus) — the packet must say so.
+
+**Follow-up leads the Advisor recorded (NOT `A4s-r6` obligations):** the correct `Size` convention
+(4 vs 16/40 — needs a primary source); tier 3's handle-typed treatment of a non-handle Ke* object
+(pre-existing); `ke_shadow_remove` having no callers; the upstream timer model's observable behaviour
+for JSRF; an indirect-thunk-call search behind "not declared ⇒ unreachable"; case 207's argument count
+(local 36 vs upstream 40 — the merge silently took upstream's 40). Prior leads carry forward:
+`MIXDOWN_ALL`/`USB_PORT` classification, E2, the function-style KX modules, and the exe-relink advisory.
+
+**Staffing state — Planner route RESOLVED (owner instruction, 2026-09-25).** The new
+`docs/agent-workflow.md` §1 names **Kimi K3** for the Planner with a `max` effort qualifier.
+`workbuddy-ai/kimi-k3` resolves live as **exactly one** canonical match but advertises **no selectable
+reasoning efforts**; the owner ruled directly: *"kimi k3 doesn't take an effort, so don't worry about
+effort for kimi k3"*. Under §4.1 an owner instruction outranks every role's ruling, so **the row is
+satisfied by invoking `workbuddy-ai/kimi-k3` with `reasoning_effort` omitted**, and **no Planner
+blocker is in force**. `docs/agent-workflow.md` §1 was **not** edited (§3.4). Recorded in
+`docs/reviews/startup-20260925-session-58e86358.md` and
+`docs/reviews/a4s-r5-execution-startup-ruling.md`.
+
+**Execution rulings (binding, recorded).** `docs/reviews/a4s-r5-execution-startup-ruling.md`:
+**Q1** Planner effort (superseded by the owner instruction above); **Q2** P0.8 recorded as a literal
+**FAIL** and execution proceeded under a **process exception** (the only dirty path is the owner's
+`docs/agent-workflow.md`, a non-build, non-evidence file outside every path-scoped check) — the file was
+**not** committed or normalized; **Q3** the `AC-INV` "new environment names" command cannot run as
+written on PowerShell 5.1 (embedded `"` is stripped), so an **interpretation ruling** authorized one
+substitute form with three controls (42 / 44 / empty-and-exit-1), all of which passed;
+**Q4** two pre-existing set-G failures (`E1` `test_agent_docs.py`, `E2` `test_ac2_provenance.py`) are
+**named exceptions** — measured byte-identically on a pristine HEAD extraction, hence not
+merge-relevant — and the KX carve-out was **not** extended to set G wholesale. `AC-TEST` was not
+reached, so Q4 is prospective.
+
+**Follow-ups (recorded, not authorized work):**
+
+- **E1 — RESOLVED as a side effect of this closure; recorded as `PREMISE_CHANGED`.** Four
+  current-tense mentions of a since-retired route name tripped `scripts/check-agent-docs.py`'s
+  `RETIRED_NAMES` check. They sat in the superseded staffing block that this closure rewrite replaced,
+  so they are gone and `tests/test_agent_docs.py` now **passes** (`Ran 30 tests, OK`); the checker
+  reports **0 findings**. No test, script, packet or frozen artifact was edited to achieve this.
+  **Any re-run of `A4s-r5` must re-measure the set-G baseline** — it is now **9 pass / 1 fail**, not the
+  8/2 measured at step 2. Full record: `docs/reviews/a4s-execution-evidence.md`, "Premise change to
+  `Q4`'s E1 exception".
+- **E2** — `tests/test_ac2_provenance.py` fails on `A0` and `P1` with clause-D reason "the classifier
+  was NOT edited; step 3 requires line 391 to be corrected". Cause unconfirmed; diagnose before anyone
+  relies on the AC2 provenance tool.
+- **KX claim limit** — ≥16 function-style toolkit test modules are not exercised by `unittest`, before
+  or after the merge; run them under their own runner (they have `__main__` blocks) or convert them.
+- **CRLF working-tree drift** — the merge/abort rewrote 4 toolkit files to CRLF (`core.autocrlf = true`).
+  `git status` reports no change and the CRLF→LF bytes hash exactly to the archived `A4a-r2` reference;
+  recorded so a future raw-hash comparison is not misread as a regression.
+
+**ROUTE STATE — RESOLVED (2026-09-25, `session-58e86358`); the senior-judgment routes are live.**
+The previous state (both senior routes BLOCKED; the substitute unresolvable) is **superseded**, as is
+the temporary owner-authorized staffing exception recorded in
+`docs/reviews/startup-20260925-session-910703eb.md` — the owner replaced `docs/agent-workflow.md`, and
+its §1 roster is now the only persisted staffing policy. This session resolved every §1 DSH row live:
+**Claude Opus 5.5 @ `high`** (`claude/claude-opus-5-5`) spawned and passed the two-turn continuity and
+read-yourself probe; **Kimi K3** (`workbuddy-ai/kimi-k3`) resolved and answered (effort omitted per the
+owner instruction); first-stage reviewer `workbuddy-ai/hy4-preview-f` @ `high` and second-stage
+`workbuddy-ai/deepseek-v4.1-flash` @ `max` both answered their probes. **No route was substituted.**
+Receipt: `docs/reviews/startup-20260925-session-58e86358.md`.
+
+**Preserved binding rulings.** The `A4s` AC'97 hunk rulings (`docs/reviews/a4s-ac97-hunk-ruling.md`,
+including "Interpretation ruling 2: scope") and the `A4b` rulings remain **binding** and were
+**preserved, not reopened** — the packet *cites* them rather than restating them, and the model/provider
+change does not reopen a ruling.
+
+**Superseded route state (historical).** The earlier `ROUTE STATE` and temporary-staffing blocks
+recorded in this plan and in `docs/reviews/startup-20260925-session-910703eb.md` are **superseded**.
+They described a since-replaced staffing arrangement under the previous workflow revision, including a
+now-retired route that ran out of quota during the `A4s-r5` review. The owner has since replaced
+`docs/agent-workflow.md`, whose §1 roster is the only persisted staffing policy. Prior route-failure
+diagnoses are retained as provenance only:
 `docs/reviews/route-failure-20260924-workbuddy-substitute.md`,
-`docs/reviews/route-failure-20260924-claude-pool.md`.
+`docs/reviews/route-failure-20260924-claude-pool.md`. **`docs/agent-workflow.md` §1 was not edited**
+by this session — §1 is an owner-reserved decision (§3.4).
 
-**Staffing is a temporary owner-authorized exception, in force for this session only:**
-`workbuddy-ai/deepseek-v4.1-flash` @ `max` for Session/Workers/first-stage reviewer, and
-`workbuddy-ai/gpt-5.6-sol` @ `high` (Planner, Persistent Advisor) / @ `medium` (second-stage
-reviewer). **`docs/agent-workflow.md` §1 was not edited** — §1 is the only persisted staffing
-policy and changing it is an owner-reserved decision (§3.4); if this is meant to persist, §1 is the
-place to change it. **Role authority is unchanged and attaches to the role, not the model**, and
-**existing Advisor rulings are not reopened by the provider change**. Receipt:
-`docs/reviews/startup-20260925-session-910703eb.md`.
+**Planner research-sufficiency stopping rule (unchanged):** the Planner stops investigating as soon as
+§5.1's planning test is met and leaves remaining unknowns to the packet.
 
-**Planner research-sufficiency stopping rule (unchanged, restated for the r4 work below):** the
-Planner stops investigating as soon as §5.1's planning test is met and leaves remaining unknowns to
-the packet.
-
-**Queued in order:** (1) **DONE** — the `A4s-r5` re-review returned `ADEQUATE` and the revision is
-promoted (above); (2) the `A4b1-r4`/`A4b2-r4` revision per the binding `[GPIN]` redesign. The
-existing Advisor rulings are **binding** and are not reopened by a provider change.
-
-**Next action — EXECUTE the promoted `A4s-r5`** (Session is the single build/run owner). Expected
-first result `R-CONFLICT`. On any row that leaves toolkit `main` at `0d7929c`, the rollback rebuild's
-exe SHA-256 is also recorded.
-
-**Session pause note (2026-09-25, `session-910703eb`).** The owner paused this session:
-`workbuddy-ai/gpt-5.6-sol` ran out of tokens during the `A4s-r5` review. **State at the pause:**
-`A4s-r5` is `ADEQUATE` and **promoted**; the review record is on disk; **no execution step has
-begun** — no merge, no build, no run, no push, and the toolkit is untouched at `0d7929c`. Nothing is
-mid-flight and nothing was lost. Resuming needs a Planner/Advisor route with available quota
-(`gpt-5.6-sol` was exhausted; the `claude/claude-opus-5-5` route's recovery state was **not**
-probed this session). **Execution of `A4s-r5` needs no senior route** — it is contract work owned by
-the Session — so it can proceed independently of that outage.
+**Queued in order:** (1) **DONE** — the `A4s-r5` re-review returned `ADEQUATE`, the revision was
+promoted, and it has now been **executed** (row `R-CONFLICT`, above); (2) **`A4s-r6`** — the Planner
+revision that resolves the five UNDECIDED hunks from the inventory above, with hunks 1, 2, 5, 8 and 9
+going to the Advisor first and hunk 5's `H1` rule gap clarified; (3) the `A4b1-r4`/`A4b2-r4` revision
+per the binding `[GPIN]` redesign. The existing Advisor rulings are **binding** and are not reopened by
+a provider or staffing change.
 
 **Revision history of this packet** (each round's blocker was in the same criterion, so the
 Session ruled the last fix a **simplification** under §5.5, not a patch):
@@ -81,30 +285,49 @@ Session ruled the last fix a **simplification** under §5.5, not a patch):
 | `r2` | **ADEQUATE** | — (but the fork premise then changed) |
 | `r3` | INADEQUATE | the new greps matched a **comment** and an **unbuilt scaffold** → guaranteed false FAIL |
 | `r4` | INADEQUATE | `AC-KEEP` (iv)'s **end anchors were not unique** (`        }` ×37, `            }` ×20) → false FAIL on a preserved merge |
-| `r5` | **ADEQUATE** | — **promoted** (B1-r4 closed: unique-first-line anchor + fixed length 7/56/25 + byte compare; anchors 1/1/1) |
+| `r5` | **ADEQUATE** | — promoted, then **executed** → `R-CONFLICT` (B1-r4 closed: unique-first-line anchor + fixed length 7/56/25 + byte compare; anchors 1/1/1) |
 
 **The sync itself:** merge **`upstream/main`** (**v0.11.0**, `766ecef`) into local `main`,
 rebuild **without regenerating `src/recomp/gen`**, run both repositories' tests, rerun **one
 strict baseline**, and push nothing during execution. **If the strict stop moves, that is the
 next brief.** Verified facts and the conflict surface: `docs/reviews/toolkit-sync-instruction.md`.
 
-**Expected first result: `R-CONFLICT`.** The Planner's read-only merge preview found at least
-six undecidable hunks, so it deliberately did not pre-rule them; one attempt yields the
-complete inventory for the follow-up. That is fail-closed and was endorsed by the re-reviewer.
-
 **The AC'97 hunk is pre-ruled** (`HA`): it resolves to the **LOCAL** `A3a-r25` model; upstream's
 NABM trap enters **unarmed** with zero call sites. The Advisor's **"Interpretation ruling 2:
 scope"** fixes the check's scope: `SCOPE` = the toolkit's **`src/` and `include/`**, deleted
 names match only as **quoted string literals**, and comments/docs/tests/unbuilt scaffolds are
-**inventoried, never failed**. See `docs/reviews/a4s-ac97-hunk-ruling.md`.
+**inventoried, never failed**. See `docs/reviews/a4s-ac97-hunk-ruling.md`. In the executed attempt this
+was the **only** pre-ruled hunk and it was classified `HA`; the five UNDECIDED hunks are the blocker.
 
-**Push policy (owner):** push toolkit `main` to **`origin`** (the owner's fork) **when a packet
-closes**, then confirm `origin/main` equals the merge commit. **Never push to `upstream`** (its
-push URL is `DISABLED`). The game repository has no remote. Recorded in `AGENTS.md` "Toolkit
-remotes" (game commit `3ec4563`).
+**Push policy (owner) — superseded and broadened 2026-09-25.** The previous wording was *"push toolkit
+`main` to `origin` when a packet closes"*. The owner has now made **durable-checkpoint pushes the
+standing practice** for toolkit work: push after an accepted toolkit implementation, a completed
+sync/merge packet, a materially useful commit later packets depend on, or a clean milestone boundary —
+not only at the end of the project. Full text, the verified remote table, and the pre-push checklist:
+**`docs/reviews/owner-push-policy-xboxrecomp-fork.md`**; operating summary in `AGENTS.md` "Toolkit
+remotes".
+
+**Remotes verified this session with `git remote -v` (names were not assumed):** the owner's fork is
+**`origin`** → `https://github.com/danillogical/xboxrecomp.git` (fetch **and** push); `upstream` →
+`https://github.com/sp00nznet/xboxrecomp.git` (fetch; push `DISABLED`). **The fork is already
+configured, so no remote was added, renamed, or altered, and `upstream` was not touched.** The
+instruction's suggested name `fork` was deliberately **not** used — a second name for the same URL is a
+way to push to the wrong destination by accident. The game repository has no remote.
+
+**A measured constraint that decides how a future push works.** `origin/main` is `766ecef` (*"Release
+v0.11.0"*, i.e. upstream's release line) and is **not** an ancestor of local `main`; the two have
+diverged **169 upstream-only / 24 local-only**. So `git push origin main` is currently **non-fast-forward
+and would be rejected**. It becomes a valid fast-forward only once the `A4s` merge lands `766ecef` in
+local `main`'s history — which is exactly what `A4s` is for, and what the packet's Closure clause
+already assumes. Nothing is manufactured to force it; the workflow decides when a merge is valid.
+
+**No push occurred in this execution** — `main` is at `0d7929c`, which is not a descendant of
+`origin/main`, and `R-CONFLICT` is a **no-push state** under the new policy as well.
 
 **Follow-up — two new upstream variables need a `jsrf-run-profiles.md` classification.** The sync brings
-in two environment names that did not exist locally (Advisor-observed at the merge tree `75083476`):
+in two environment names that did not exist locally (Advisor-observed at the merge tree `75083476`, and
+**independently re-measured by this session** with the authorized `-f` pattern-file form: 42 unique
+names at `0d7929c`, 44 at `75083476`, difference exactly these two, none removed):
 **`RECOMP_APU_MIXDOWN_ALL`** (`apu_dsp.c:91`, **default ON**, sums all 32 mixbins into the host monitor
 buffer) and **`RECOMP_USB_PORT`** (`ohci.c:819`, selects the port the virtual pad appears on). Neither is a
 classifier-listed or deleted name, so neither fails the merge; they are recorded as **"new unclassified

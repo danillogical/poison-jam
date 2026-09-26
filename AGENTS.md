@@ -26,10 +26,22 @@ Keep original assets and existing saves unchanged. Preserve unrelated edits.
 Game repo: `C:\Users\logic\Repos\my_xbox_game`  
 Toolkit: `C:\Users\logic\Repos\xboxrecomp`
 
-Toolkit remotes: `origin` is the owner's fork (`danillogical/xboxrecomp`); `upstream` is
-`sp00nznet/xboxrecomp`, fetch-only (its push URL is `DISABLED`). Push toolkit `main` to
-`origin` when a packet closes; never push to `upstream`. The game repository has no
-remote; do not add one.
+Toolkit remotes (**verify with `git remote -v`; do not assume names**): `origin` is the owner's fork
+(`https://github.com/danillogical/xboxrecomp`); `upstream` is
+`https://github.com/sp00nznet/xboxrecomp`, fetch-only (its push URL is `DISABLED`). The game repository
+has no remote; do not add one.
+
+**Push policy (owner instruction, 2026-09-25 — full text in
+`docs/reviews/owner-push-policy-xboxrecomp-fork.md`).** Treat regular pushes to the fork as part of
+**normal durable closure** for toolkit work, not only at the end of the project: push after an accepted
+toolkit implementation, a completed sync/merge packet, a materially useful commit later packets depend
+on, or a clean milestone boundary. Before every push, verify all five of: the toolkit tree is **clean**;
+the commit/branch is the **intended durable state**; the **active packet's tests/acceptance passed**;
+the destination is **the fork, not `upstream`**; and record the local SHA and branch. **Never push**
+failed/rolled-back states, temporary conflict branches, incomplete experiments, pending-acceptance
+commits, or dirty trees — `R-CONFLICT`, rollback and `INADEQUATE` are **no-push** states. **Never**
+`--force`/`--force-with-lease` and **never** push to `upstream` without explicit owner authorization.
+Record each push as `PUSHED_TO: / BRANCH: / COMMIT: / REMOTE_URL: / RESULT:`.
 
 Inspect both working trees before editing. Toolkit instructions live in
 `docs/GETTING_STARTED.md`, `docs/technical/indirect-calls.md`, and `lessons-learned.md`.
@@ -52,6 +64,7 @@ Inspect both working trees before editing. Toolkit instructions live in
 | `scripts/run-jsrf.py` | bounded debugger launch and artifact archive |
 | `scripts/check-run-profile.py` | strict/exploratory profile classification |
 | `scripts/check-dump-mapping.py` | XBE-backed dump-content integrity gate |
+| `scripts/check-merge-structure.py` | structural merge check: conflict markers, duplicate `case` labels, duplicate file-scope definitions |
 | `scripts/inspect-jsrf.py` | original-XBE disassembly and guest-memory reads |
 | `scripts/jsrf_dump.py`, `scripts/jsrf_gpu.py` | dump/GPU offline inspection |
 | `tools/harness/collect.c` | external debugger, all-thread capture, minidumps |
