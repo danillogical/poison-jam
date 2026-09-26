@@ -52,6 +52,28 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
   from each execution's own step-2 run by test identity, never carried forward**.
 - **Next action: execute `A4s-r6` literally**, beginning with its **P0 preconditions**. `A4s` is not
   finished until it has a durable final disposition, so `A4b1-r4`/`A4b2-r4` remain blocked behind it.
+- **P0 preconditions run 2026-09-25: P0.1–P0.6 and P0.8–P0.10 PASS; P0.7 FAILS.** The packet says *"all
+  must hold, else stop before any write"*, so **execution is halted at P0 and no toolkit write has
+  occurred** (toolkit still clean at `0d7929c`). Record: `docs/reviews/a4s-r6-p0-preconditions.md`.
+  - **P0.7** requires `git branch --list "a4s-*"` to print **nothing**; it prints **`a4s-pre-sync`**.
+    Step 1 (`git branch a4s-pre-sync 0d7929c…`) therefore **cannot execute literally** — a dry run exits
+    **128**, `fatal: a branch named 'a4s-pre-sync' already exists`. **Cause measured: a leftover from the
+    `A4s-r5` execution, not a divergence** — reflog shows it was created from `0d7929c`, and it resolves
+    to **exactly the `A4s-r6` rollback target**. P0.7's stated purpose (*"so step 1 and the rollback cannot
+    overwrite an existing branch"*) is therefore **already satisfied**, and the other guarded branch,
+    `a4s-merge-attempt` (created with force), is **absent**. Only the literal exit code differs.
+  - **Two interpretation rulings are with the persistent Advisor** (both are questions about how to *read*
+    a frozen criterion, so §5.4's "an ambiguous but not wrong step is settled by an Advisor interpretation
+    ruling that execution follows, not by a revision" applies): (1) may step 1 be discharged as
+    **verify-and-reuse** of the existing `a4s-pre-sync` (assert it equals `0d7929c`, fail closed
+    otherwise), or does a failed P0.7 select `R-PRE`? (2) the **pinned-hash / line-ending hazard** — the
+    `AC-STRUCT` pin is a hash of **LF** bytes, but this repo has `core.autocrlf=true` and **no
+    `.gitattributes`**, and a fresh checkout writes **CRLF** (measured: blob `A1FDCE26…` vs checkout
+    `D572DB08…`), so hashing the working tree would **falsely fail** `AC-STRUCT` on a correct tree.
+    Record: `docs/reviews/a4s-r6-pinned-hash-eol-hazard.md`.
+  - **Nothing was mutated and no unilateral fix was applied:** no `git branch -f`, no branch
+    deletion/recreation, no silent skip of step 1, no packet edit, no `.gitattributes` added. After the
+    dry test the toolkit is still clean, `HEAD` is still `0d7929c`, and no `MERGE_HEAD` exists.
 
 ### Predecessor — `A4s-r5` — **EXECUTED 2026-09-25, selected `R-CONFLICT`** (superseded by `A4s-r6`)
 
