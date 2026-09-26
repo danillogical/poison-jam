@@ -35,6 +35,22 @@ from source text without checking the configuration the artifact ships in.
 Evidence: `docs/reviews/a4b1-execution-evidence.md` (the index), `a4b1-r4-implementation-verification.md`,
 `a4b1-r4-fixture-green.md`, `a4b1-r4-acport-step4-enumeration.md`, `a4b1-r4-execution-rulings.md`.
 
+**Stage-1 acceptance returned `NOT ACCEPTED`, blocking on `AC-PORT`** — recorded verbatim in
+`docs/reviews/a4b1-r4-stage1-acceptance-review.md`. The reviewer found the step-4 enumeration's
+write-callback row factually wrong (`ep_scratch_rw` recorded as not reaching the choke point, with a
+reason citing an `is_gp` gate in `scatter_gather_rw` that **does not exist**). **The Session verified it
+in the source and found the error larger than reported: three false cells, not one** — `gp_fifo_rw` and
+`ep_fifo_rw` also reach the choke point via `circular_scatter_gather_rw` and were not listed. **All four
+pinned write callbacks reach it.** Root cause: the generating script computed no reachability, so that
+column was hand-written. The enumeration is rewritten with the edges derived from source. Stage-2 review
+(`workbuddy-ai/deepseek-v4.1-flash` @ `max`) re-reviews **`AC-PORT` alone**.
+
+**New `A4b2` decision input, carried forward (do not silently absorb).** Because `ep_scratch_rw` and
+`ep_fifo_rw` reach the choke point, **an enabled EP can land an exchange on `W_va` and take
+`GP_CLEAR`**. The EP is gated on `EPRST` (`gp_ep.c:650`) and runs every 8th frame (`:652`), but the path
+is real. The Session does **not** rule on whether it is benign — that is a Planner/Advisor judgment, and
+`DS5`'s text ("from every pinned write callback") already requires the shared choke point, which holds.
+
 - **Packet:** `docs/packets/a4b1-gp-core-port.md`, revision **`A4b1-r4`**, class **change**, frozen
   SHA-256 **`6DD62A57E87445F5C12085210146204AA4E77D26FD316071FD41CAEC76835C38`** (**445 lines**).
   **This is the packet to execute.** Promotion was **byte-identical with no revision**, as §5.3
