@@ -53,18 +53,24 @@ Exactly two harnesses are supported. Use only the assignments in the active colu
 |---|---|---|
 | **Session** | `gpt-6-luna` @ `max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
 | **Worker subagents** | `gpt-6-luna` @ `max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
-| **Planner** | `gpt-6-astra` @ `medium` | **Claude Opus 5.5** @ `high` (`route: LIVE_RESOLVE`) |
+| **Planner** | `gpt-6-astra` @ `medium` | **Claude Opus 5.5** @ `medium` (`route: LIVE_RESOLVE`) |
 | **Persistent advisor** | `gpt-6-astra` @ `medium` | **Claude Opus 5.5** @ `high` (`route: LIVE_RESOLVE`) |
-| **Acceptance reviewer** | `gpt-6-luna` @ `max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
-| **Acceptance reviewer — second stage** | `gpt-6-astra` @ `low` | **Claude Opus 5.5** @ `medium` (`route: LIVE_RESOLVE`) |
+| **Acceptance reviewer** | `gpt-6-luna` @ `max` | `workbuddy-ai/hy4-preview-f` @ `high` |
+| **Acceptance reviewer — second stage** | `gpt-6-astra` @ `low` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
 
 The second stage runs **only** when the first-stage review does not return `ACCEPT`
 (§2.2). A first-stage `ACCEPT` is final and is not passed on.
 
-**Authority attaches to the role, not the model.** An Opus Acceptance reviewer is a
-contract role and is bound exactly like a Luna reviewer. An Opus Advisor has Advisor
-authority. One child holds one role per decision: a child that reviewed a packet's
-acceptance does not also rule as Advisor on a dispute about that review.
+**DSH review ordering:** Hy4 is the first-stage adversarial gatekeeper. DeepSeek is
+the second-stage reproducer for only the criteria Hy4 did not `AGREE`. This ordering
+is deliberate: conservative first-stage rejections receive an independent second
+look, while an accepted packet does not spend a second review.
+
+**Authority attaches to the role, not the model.** A Hy4 or DeepSeek Acceptance
+reviewer is a contract role and is bound exactly like any other Acceptance reviewer.
+An Opus Planner has Planner authority; an Opus Advisor has Advisor authority. One child
+holds one role per decision: a child that reviewed a packet's acceptance does not also
+rule as Advisor on a dispute about that review.
 
 ### Live verification
 
@@ -127,11 +133,51 @@ the Planner works it keeps the brief frozen (§5.1). It does not
 write causal or historical claims that a decision will rely on; it supplies artifacts
 and lets the Planner or Advisor draw the conclusion.
 
+When spawning a bounded implementation worker, the Session includes the
+implementation-worker progress gate below in the brief. A worker's no-progress stop is
+not permission to spawn an identical replacement automatically; the Session first
+routes the returned blocker through the normal escalation ladder.
+
 **Worker subagents** — used for context isolation (summarize a large log or dump) or
 bounded implementation (explicit files, contract, and check). Workers keep disjoint
 write scopes, never touch policy documents, stop at ambiguity or at the edge of their
 scope, and return `file:line` or artifact evidence marked **MEASURED** or
 **INFERRED**. A worker never owns final integration, build, or run.
+
+**Implementation-worker progress gate.** This gate applies to bounded implementation
+workers, not read-only/log-analysis workers.
+
+- By **15 tool calls**, the worker must have produced at least one concrete execution
+  artifact: an edit, compile/build attempt, test run, generated fixture, or a bounded
+  blocker report.
+- If it has not, it stops broad investigation and either performs the smallest safe
+  implementation/compile step immediately or returns `BLOCKED`.
+- After the first implementation attempt, further source reads must be tied to a
+  **specific observed compiler, linker, test, or runtime failure** and state what that
+  read is expected to resolve.
+- A worker may not restart architecture/source exploration from first principles after
+  an implementation failure unless new contradictory evidence invalidates the prior
+  design premise.
+- If **two consecutive 10-call stretches** produce no new artifact, measurement, or
+  narrowed blocker, the worker stops and returns control to the Session.
+- Re-reading the same files or reconsidering already-settled design alternatives
+  without new contradictory evidence counts as **no progress**.
+- On genuine ambiguity, required scope/policy change, or inability to proceed inside
+  the assigned write scope, the worker returns:
+
+```text
+STATUS: BLOCKED
+EXACT REQUIREMENT:
+EXACT BLOCKER:
+EVIDENCE:
+WHY CURRENT WRITE SCOPE CANNOT SATISFY IT:
+SMALLEST DECISION/CHANGE NEEDED:
+```
+
+A no-progress or blocker return is an escalation signal. The Session does **not**
+automatically spawn an identical replacement worker on the same brief; it first
+decides whether the blocker belongs to the Planner, Advisor, or a revised bounded
+worker brief.
 
 **Acceptance reviewer** — checks delivered evidence against the **frozen contract
 only**:
@@ -181,7 +227,16 @@ what is enough, and what to do next; they do not decide what happened (§2.4).
 - accept bounded uncertainty that cannot change the decision;
 - redesign a failing evidence strategy instead of patching it again (§5.5);
 - stop revision churn and declare that enough evidence exists to proceed;
-- recommend retiring a packet whose premise has failed.
+- recommend retiring a packet whose premise has failed;
+- keep initiative bounded by the packet decision: adjacent improvements, cleanups,
+  architecture opportunities, and newly noticed defects stay follow-up leads unless
+  omitting them can plausibly cause this packet's bounded claim to false-PASS,
+  false-FAIL, choose a wrong implementation, bind the wrong evidence, or execute
+  unsafely;
+- not improve architecture merely because a better design is visible while planning;
+  an architectural change enters the packet only when it is necessary to make the
+  bounded claim mechanically decidable or to avoid one of the concrete wrong outcomes
+  above.
 
 **Persistent advisor** — the project's senior technical decision-maker. Everything
 the Planner may do, plus:
@@ -409,13 +464,45 @@ and multi-step analysis of dumps or binaries are execution: they belong inside a
 A question that needs outside knowledge goes to the Advisor as one bounded question.
 The one file the Planner writes is its own draft packet.
 
-**4. Sketch first, with escalating checkpoints.** The Planner's goal is a sketch of at
-most about 15 lines: claim, class (discovery or change), unknowns, the experiment, and
-the outcome rows. It writes the sketch at the top of its draft packet file, under a
-`Sketch` heading, where it survives compaction and the owner can read it. The full
-packet then replaces the sketch without further investigation. The sketch goes to the
-Advisor at the checkpoints below, never to the Session, which does not judge or answer
-it.
+**4. Sketch first, with an early Advisor shape preflight and escalating checkpoints.**
+The Planner's goal is a sketch of at most about 15 lines: claim, class (discovery or
+change), unknowns, the experiment, and the outcome rows. It writes the sketch at the
+top of its draft packet file, under a `Sketch` heading, where it survives compaction and
+the owner can read it.
+
+For every **new change packet or material redesign**, the first viable sketch goes to
+the Persistent Advisor **as soon as it exists and no later than 20 tool calls**, before
+the Planner expands it into the full packet. This is a mandatory **shape/policy
+preflight**, not a second adequacy review. The Advisor reads only the smallest source
+set that could change these four judgments:
+
+1. Is this the right packet class: change vs discovery?
+2. Is the bounded claim the right size, or is it combining independently decidable work?
+3. Are the stated unknowns actually the ones that can change what should be built?
+4. Can the proposed experiment/evidence decide the claim without inventing new policy?
+
+The Advisor returns only:
+
+```text
+SHAPE: PROCEED | REDIRECT | DISCOVERY_FIRST
+REASON: <short>
+POLICY_ISSUE: NONE | <bounded issue>
+REVERSED_BY: <evidence that would change this>
+```
+
+`PROCEED` authorizes the Planner to expand the sketch into the full packet without
+another general Advisor review. `REDIRECT` or `DISCOVERY_FIRST` is binding technical
+direction under §2.3. This preflight does **not** replace the fresh-Planner adequacy
+review required by §5.1.5 for a change packet.
+
+A routine discovery packet does not require the mandatory preflight unless it creates
+or changes technical/evidence policy, the Planner cannot state a discriminating
+experiment, or an existing Advisor ruling requires consultation.
+
+After the shape preflight, the full packet replaces the sketch **without further
+investigation unless the forecast below names a specific unresolved fact that can still
+change the sketch**. The sketch goes to the Advisor at the checkpoints below, never to
+the Session, which does not judge or answer it.
 
 Checkpoints count **tool calls, not reasoning**. The Planner should think as long as
 the decision needs; the checkpoints limit investigation. Each one is heavier than the
@@ -429,15 +516,22 @@ the specific reads it will make next, and what it expects them to change in the 
 
 | At | The Planner | The Advisor |
 |---|---|---|
-| **20 calls** | writes sketch 1; either writes the packet, or writes a forecast and continues | not involved |
-| **40 calls** | writes sketch 2, the yield against the 20-call forecast, and a new forecast; sends all three to the Advisor, then continues unless redirected | may answer, redirect, or stay silent |
-| **60 calls** | stops investigating; writes sketch 3 and the yield against the 40-call forecast; sends both, plus what is still missing, to the Advisor | must decide: extend planning, naming the reads allowed, or have the Planner write the packet with the gaps as its subject |
+| **first viable sketch / ≤20 calls** | writes sketch 1 and, for a change packet/material redesign, sends it for shape preflight before expanding the packet; after `PROCEED`, either writes the packet or writes a specific forecast and continues | returns `PROCEED`, `REDIRECT`, or `DISCOVERY_FIRST`; expands into a technical ruling only if a policy/architecture question is actually present |
+| **40 calls** | writes sketch 2, the yield against the prior forecast, and a new forecast; sends all three to the Advisor, then continues unless redirected | decides whether the investigation is still paying; may answer, redirect, or stop it |
+| **60 calls** | stops investigating; writes sketch 3 and the yield against the 40-call forecast; sends both, plus what is still missing, to the Advisor | must decide: extend planning with an explicit bounded list of allowed reads, or have the Planner write the packet with the gaps as its subject |
 
 The yield is what tells the Advisor whether investigation is still paying. If a
 20-call stretch changed nothing that matters in the sketch, that is the signal to stop,
 and the Planner should say so rather than wait to be told. The Planner messages the
 Advisor directly when the harness allows; otherwise the Session relays the message
 unchanged.
+
+The Advisor does **not** perform a full second review of every completed Planner packet.
+After `PROCEED`, it becomes involved again only at the checkpoints above or when the
+Planner encounters a genuine Advisor-class question: architecture/device semantics,
+evidence admissibility, workflow methodology, deletion/waiver of a previously
+protective requirement, acceptance of material uncertainty, fidelity tradeoff,
+conflict with an existing ruling, or repeated failure requiring a methodology change.
 
 Every checkpoint decision is written into the draft, so the trail shows why planning
 ran long. A Planner that reaches 40 or 60 is a signal to the owner and the Advisor, not
@@ -452,9 +546,11 @@ time.
    and verifies that every command runs before submitting the revision.
 3. **Change packets:** adequacy review is by a Planner child. If that child wrote or
    materially rewrote the criteria or rows of the revision, the review goes to a
-   **fresh** Planner child. **Discovery packets:** the writing Planner reviews its own
-   packet against §5.3's two questions; no second Planner is spawned. Either way,
-   independence in the end comes from the Acceptance reviewer reproducing the evidence.
+   **fresh** Planner child. In DSH this means a fresh Claude Opus 5.5 Medium Planner under the §1 roster;
+   the Opus shape preflight is not the adequacy review and does not replace it.
+   **Discovery packets:** the writing Planner reviews its own packet against §5.3's two
+   questions; no second Planner is spawned. Either way, independence in the end comes
+   from the Acceptance reviewer reproducing the evidence.
 
 ### 5.2 States
 
