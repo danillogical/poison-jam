@@ -97,6 +97,22 @@ make a broken tree look fixed.
 | Precedes START with `DMA_CONTROL_ACTION_STOP` | **Correct** — `dsp_reset` does not clear `dsp->dma`, so a prior case could leave RUNNING set |
 | **INFERRED:** that `buf_id = 5` landing in the reserved output range is the mistake the reserved-slot guard exists to catch | **Accepted as stated.** The ruling fixes slots 2..5 as output places and requires the twin but does not spell out this interaction; the Worker connected them and marked it INFERRED. Mutation 2 confirms the guard does catch it |
 
+## Advisory — the fixture leaves a stderr file in its working directory
+
+The fixture captures its own `stderr` by `freopen`-ing to **`apu_watch_fixture_stderr.txt`** in the
+**current working directory**, which the packet's step 8 requires (*"It captures its own `stderr`, for
+example by redirecting it to a file that it then reads"*).
+
+- Under `ctest` the CWD is the build directory, so the file lands in `build/` — harmless, and gitignored
+  by location.
+- Run **manually from the game root** it lands in the game root as an **untracked** file. The Session's
+  own positive-control run did exactly that; the stray file was removed.
+
+**Advisory, not a defect:** the criterion does not say where the capture goes, and the file is a
+legitimate part of the mechanism. Recorded so a future reader does not mistake it for a stray artifact,
+and so a future revision can direct it to a temp path if the litter matters. **No effect on the
+disposition.**
+
 ## The Worker's one open item was already closed
 
 The Worker reported that `docs/reviews/a4b-xemu-pin.md` still needed the `dsp_dma.c` read-arm entry. **It
