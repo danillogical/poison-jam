@@ -104,13 +104,39 @@ from the source, not transcribed from a report (`logs/a4b1/extract-modifications
 
 | File | Markers | What changed, and why |
 |---|---|---|
-| `dsp.c` | 4 | `:31` the toolkit's GP input-accounting hook in `read_peripheral`; `:79` the same before the trace call; `:140` the JIT branch removed so `dsp_c_init` is called **unconditionally** (`DS2` — the JIT is a non-goal); `:243` `dsp_set_engine` reduced |
+| `dsp.c` | 5 | `:31` the toolkit's GP input-accounting hook in `read_peripheral`; `:79` the same before the trace call; `:140` the JIT branch removed so `dsp_c_init` is called **unconditionally** (`DS2` — the JIT is a non-goal); `:243` `dsp_set_engine` reduced; **`dsp_init` sets `dsp->dma.is_gp`**, the DMA's copy of the side flag (see `dsp_dma.h` below) |
 | `dsp_c.c` | 5 | `:31` the toolkit's ledger include; `:62, :72, :99, :195` a `s_last_cycle_count` delta so the ledger records the **per-frame** instruction count rather than a cumulative one |
 | `dsp_internal.h` | 1 | `:25` the `jit_dsp_ops` / `dsp_jit_init` declarations removed — `dsp_jit.*` is deliberately absent |
+| `dsp_dma.h` | 1 | **`DSPDMAState` gained `bool is_gp`** — which DSP the DMA belongs to. `dsp_dma.c` is shared by the GP and the EP (both run frames, `gp_ep.c:599` and `:649`) and `rw_opaque` does not identify the side, so the `FIFO_READ` hook must be gated. Nothing `memcpy`s or serializes `DSPDMAState`, so the added field cannot disturb state sync |
+| `dsp_dma.c` | 2 | `:27` the ledger include; **the read arm's `else` branch** — the `FIFO_READ` input hook (see below) |
 | `interp/dsp_cpu.c` | 2 | `:32` the ledger include; `:910` the `MIXBUF` input hook on the mix-buffer read |
 | `gp_ep.c` | 13 | `:24` the ledger include; `:56` `scatter_gather_rw` routed through `DS3` + `DS5`; `:129` the bootstrap scratch-read accounting; `:241` the `FIFO_READ` hook; `:334` `proc_rst_write` per `DS1`; `:404, :470, :512, :544` **GNU case ranges → if/else-if in all four MMIO switches**; `:573` `mcpx_apu_dsp_frame` per `DS2`; `:641` the EP monitor passthrough kept **outside** the GP branch; `:664` `mcpx_apu_dsp_init`; `:689` the startup line |
 
-**Total: 25 markers across 5 files.**
+**Total: 28 markers across 7 files.**
+
+**The `dsp_dma.c` read-arm hook — the Advisor's ruling (C), 2026-09-26.** The pinned read arm
+implements only `buf_id` `0xE`/`0xF`. For any other id it prints `"Unhandled DSP DMA buffer"` and then
+**falls through**, because the following `assert(!"Unhandled dsp dma buffer")` is **compiled out** — the
+APU library is built with **`NDEBUG`** (`build/xboxrecomp/src/apu/xbox_apu.vcxproj`, every Release
+`PreprocessorDefinitions`). The loop then `mem_write`s `scratch_buf` into DSP memory, and `scratch_buf`
+is the file-static intermediate buffer, so the DSP **consumes stale bytes as its input**. That is a real
+GP input, and `DS6` requires every GP input path to be recorded. The hook records it:
+
+- `buf_id < GP_INPUT_FIFO_COUNT` → `apu_gpin_fifo_read(buf_id, transfer_size)`;
+- any other `buf_id` → `apu_gpin_record_out_of_universe(APU_WATCH_GPIN_FIFO, buf_id)`, failing closed
+  to `UNKNOWN` rather than silently unaccounted;
+- **gated on `s->is_gp`** — without the gate an EP fall-through would be recorded as a GP input, a
+  false `R2-EXPL-INPUT` path in the opposite direction from the gap being closed.
+
+The `gp_fifo_rw` hook (`gp_ep.c:251`, `if (!dir)`) is **kept** even though it is unreachable at this
+pin: it covers a future pin that wires input FIFOs through `fifo_rw`. The two can never both fire for
+one transfer, because the read arm never calls `fifo_rw`. Upstream `master` is **identical** here (the
+`FIXME` and the hardcoded `1` are still present), so the unimplemented read arm is not a pin artefact.
+
+**This closed a hook-completeness gap that `AC-FIX (viii)` found.** The Session's first reading was that
+`FIFO_READ` was structurally 0 and the criterion needed a claim limit; the Advisor's ruling (C) reversed
+that, and the Session verified `NDEBUG` before implementing. See
+`docs/reviews/a4b1-r4-execution-rulings.md`.
 
 **The GNU case ranges were the first real build blocker.** The pinned `gp_ep.c` uses
 `case A ... B:` (a GCC extension) in four MMIO switches, which MSVC rejects. Each was rewritten as
@@ -118,8 +144,7 @@ an `if`/`else if` chain with **identical tests, identical order and identical bo
 behaviour is unchanged. This is the one modification class that is mechanical rather than semantic.
 
 **Files modified but carrying no marker are a defect**: `AC-PORT` step 1 requires this list to be
-complete, and the Session verified the working-tree modifications by hash against the pin
-(5 files differ, matching the 5 above).
+complete, and the Session verified the working-tree modifications by hash against the pin.
 
 ## How to reproduce this record
 
