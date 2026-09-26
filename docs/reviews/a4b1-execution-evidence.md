@@ -29,6 +29,7 @@
 | `a4b1-ctest.txt` | `logs/a4b1-ctest.txt` **and copied into R0's dir** | 14/14 | AC-PORT, AC-FIX |
 | `ls-files --eol` output | `src/apu/dsp`, 27 files | all `attr/-text` | AC-PORT step 2 |
 | pin record | `docs/reviews/a4b-xemu-pin.md` | complete, incl. 28 local modifications | AC-PORT step 1 |
+| **AC-PORT step 4 enumeration** | **`docs/reviews/a4b1-r4-acport-step4-enumeration.md`** | choke point + callbacks + all input paths + `PERIPH`/FIFO classifications | **AC-PORT step 4** |
 | exe SHA-256 | `build/Release/jsrf_recomp.exe` | **`B13521858A344919731E73F6E602186E951A49D7E57CA4E929BEA15CC2736ADD`** | AC-PORT |
 | toolkit vendor commit | `090682ef81627cc42c2e70288dd58722aaea4152` | 17 files byte-exact | AC-PORT step 3 |
 | toolkit head commit | **`3a3c7c1fa9461d6a9cc7279180aacaaaf979ab7d`** | — | — |
@@ -88,6 +89,7 @@ transformation. `git ls-files --eol` reports **`attr/-text`** on every file. `ds
 | `DS3` four-case inverse | read line by line against the Advisor's ruling — **window-VA first**, then high-water, then low-RAM identity, then fail closed; cites `dma_resolve` and `xbox_memory_layout.c:2694`; does **not** import `surface_hits_image`; does **not** use `& 0x03FFFFFF` |
 | `DS5` choke point | exact CAS sequence with the D1 retry loop; the dword at `W_va` never ordinary-stored |
 | Single choke point | **exactly one** call site: `gp_ep.c:144` |
+| **`AC-PORT` step 4 enumeration** | **`a4b1-r4-acport-step4-enumeration.md`** — derived from source, not asserted. It surfaced two things a summary had hidden: **`MIXBUF` has two** call sites (`dsp_cpu.c:916`, `:922`) and **`FIFO_READ` has two** (`gp_ep.c:252` and `dsp_dma.c:333`), the second existing only because `AC-FIX (viii)` found the first insufficient |
 
 **The Worker deleted `src/apu/apu_dsp.c`** (`DS2`+`DS4` left it an empty translation unit; its mixdown
 moved to `apu_mixdown.c`). **The Session accepted the deletion.**
