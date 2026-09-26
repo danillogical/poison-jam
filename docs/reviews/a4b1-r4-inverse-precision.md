@@ -1,7 +1,13 @@
-# A4b1-r2: the inverse is already documented in the toolkit — Device semantics 3's precision
+# A4b1-r4: the inverse is already documented in the toolkit — Device semantics 3's precision
+
+> **Identifier note (Advisor ruling, part 3).** This record's subject is the revision numbered
+> **`A4b1-r4`**. Its filename and any earlier `A4b1-r4` spelling were a Session naming error: the
+> revision identifier `A4b1-r4` is already taken by an earlier revision (commit `127d203`, itself
+> adequacy-reviewed at `839E9BEC…D2BB7`), so it must not be reused. See
+> `docs/reviews/a4b1-r4-planning-rulings.md` and `docs/reviews/a4b1-revision-identifier-collision.md`.
 
 **Prepared by:** Session `session-58e86358-bf35-4317-82a7-7f5fd0c28dd3`, 2026-09-25.
-**Supports:** `docs/reviews/a4b1-r2-premise-recheck.md` (premise P-F) and the `A4b1-r2` planning brief.
+**Supports:** `docs/reviews/a4b1-r4-premise-recheck.md` (premise P-F) and the `A4b1-r4` planning brief.
 **Script:** `logs/a4b1/inverse-precision.py`. **Source read, not an execution.**
 
 ## The constants
@@ -62,7 +68,7 @@ occurrences** of that pattern, and they are in **A4b1's own write scope**:
 | `src/apu/apu_vp.c:846` | `memcpy(adpcm_block, &d->ram_ptr[addr & 0x03FFFFFF], …)` |
 | `src/kernel/README.md:44` | a memory-map table row, not code |
 
-**This matters for `A4b1-r2`:** the shim's masking is a *different* mask from the toolkit's documented
+**This matters for `A4b1-r4`:** the shim's masking is a *different* mask from the toolkit's documented
 `& 0x0FFFFFFF` round trip. `apu_shim.h` masks to 26 bits (`0x03FFFFFF`), while the window round trip uses
 26 bits of the *physical* offset — `0x0FFFFFFF` is 28 bits. These are **not the same operation**, and the
 distinction is exactly the defect A4b1's Device semantics 3 exists to prevent. The Planner should confirm

@@ -1,4 +1,10 @@
-# A4b1-r2 planning brief — FROZEN
+# A4b1-r4 planning brief — FROZEN
+
+> **Identifier note (Advisor ruling, part 3).** This record's subject is the revision numbered
+> **`A4b1-r4`**. Its filename and any earlier `A4b1-r4` spelling were a Session naming error: the
+> revision identifier `A4b1-r4` is already taken by an earlier revision (commit `127d203`, itself
+> adequacy-reviewed at `839E9BEC…D2BB7`), so it must not be reused. See
+> `docs/reviews/a4b1-r4-planning-rulings.md` and `docs/reviews/a4b1-revision-identifier-collision.md`.
 
 **Dispatched to:** `workbuddy-ai/kimi-k3`, `reasoning_effort` **omitted** (per the owner's instruction:
 *"kimi k3 doesn't take an effort"*).
@@ -7,7 +13,7 @@
 
 ## THE ONE TASK
 
-> Produce the **smallest `A4b1-r2` packet necessary to re-bind the GP/DSP investigation to toolkit
+> Produce the **smallest `A4b1-r4` packet necessary to re-bind the GP/DSP investigation to toolkit
 > baseline `3f8bf67c…`**, incorporating **only** premise changes that can affect the
 > implementation/evidence decision.
 
@@ -30,7 +36,7 @@
 
 ## READ THESE, IN THIS ORDER
 
-1. **`docs/reviews/a4b1-r2-premise-recheck.md`** — **the Session's premise re-check at the new
+1. **`docs/reviews/a4b1-r4-premise-recheck.md`** — **the Session's premise re-check at the new
    baseline. This is your starting point and the core input.** It classifies every `A4b1-r3` premise as
    HOLDS / UNCHANGED / CHANGED / NEW, with the measurement behind each.
 2. `docs/packets/a4b1-gp-core-port.md` — the **current `A4b1-r3`** packet (373 lines,
@@ -111,7 +117,7 @@ and `mixer_render`.
 
 **So it is not new default-on *device* behaviour and needs no new criterion.** It remains a
 `jsrf-run-profiles.md` **classification** item (a new unclassified variable) — a documentation
-follow-up already in the plan. **`A4b1-r2` is nonetheless the natural place to record the disposition**,
+follow-up already in the plan. **`A4b1-r4` is nonetheless the natural place to record the disposition**,
 since it lives in the file you are rewriting.
 
 ## WHAT TO DO WITH EACH PREMISE (the owner's four questions, answered)
@@ -139,9 +145,9 @@ since it lives in the file you are rewriting.
 >   must run under real `pytest` in an owner-authorized environment.**
 > - **Do not install, borrow, or otherwise introduce `pytest` without owner authorization.**
 
-**This is a gated lead, not permission to change the environment now.** `A4b1-r2` does **not** regenerate
+**This is a gated lead, not permission to change the environment now.** `A4b1-r4` does **not** regenerate
 (the port edits source by hand; the packet's own non-goals already forbid regeneration), so **do not
-manufacture `pytest` work merely to clear the lead early.** State in the packet whether `A4b1-r2`
+manufacture `pytest` work merely to clear the lead early.** State in the packet whether `A4b1-r4`
 regenerates anything; if it does not, the lead stays gated and unexercised.
 
 ## MANDATORY WORKFLOW (owner's directive — follow exactly)
@@ -163,7 +169,7 @@ REVERSED_BY: <evidence>
 `PROCEED` means you finish the packet **without** another general Advisor review.
 `REDIRECT`/`DISCOVERY_FIRST` is binding. **After `PROCEED`, the Advisor does not redo the full plan.**
 
-**Step 2 — write the packet** to a **NEW** file `docs/packets/a4b1-gp-core-port-r2.md`. **Do not
+**Step 2 — write the packet** to a **NEW** file `docs/packets/a4b1-gp-core-port-r4.md`. **Do not
 overwrite** `docs/packets/a4b1-gp-core-port.md`; the Session handles promotion.
 
 **Step 3 — checkpoints.** At 40 tool calls: sketch 2, the yield against your forecast, and a new
@@ -175,7 +181,7 @@ and remaining unknowns. Only the Advisor may authorize an extension.
 will spawn it. Return your §5.3 self-check block.
 
 **Bounded scope.** Do not fold adjacent cleanup, architecture opportunities, or newly noticed defects
-into `A4b1-r2` unless omitting them could plausibly cause a false PASS, a false FAIL, a wrong
+into `A4b1-r4` unless omitting them could plausibly cause a false PASS, a false FAIL, a wrong
 implementation, a wrong evidence binding, or unsafe execution. Everything else is a **follow-up lead**.
 
 **Constraints:** never push; the Session pushes accepted durable toolkit checkpoints to `origin` (the

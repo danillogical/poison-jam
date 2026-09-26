@@ -75,7 +75,7 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 >   stop is unchanged — still the DSP pending-word spin** at `loc_001A18D0` (`recomp_0005.c`), pending
 >   word `MEM32(0x803C0810) = 3`.
 >
-> **Next packet:** Planner revises **`A4b1` → `A4b1-r2`** (`PREMISE_CHANGED`, §5.4(2)) — new baseline =
+> **Next packet:** Planner revises **`A4b1` → `A4b1-r4`** (`PREMISE_CHANGED`, §5.4(2)) — new baseline =
 > toolkit **`M`**, exe
 > `E45026C3DF5AACAF3D66FCC1E17D9C6C1A12247864D58D0911CDBA8435A2A3C7`, this run as the reference R0, and
 > upstream's `src/apu/apu_dsp.c`/`CMakeLists.txt` as the starting state; then `A4b2`. **`A4b1`/`A4b2` are
@@ -148,7 +148,7 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
   `tests/test_ac2_provenance.py`, pre-existing and pristine-HEAD-reproduced). It has moved **three times
   this session** (8/2 → 9/1 → 10/1), which is why the packet requires the carve-out to be **re-derived
   from each execution's own step-2 run by test identity, never carried forward**.
-- **Next action: Planner revises `A4b1` → `A4b1-r2`** (`PREMISE_CHANGED`, §5.4(2)), then `A4b2`.
+- **Next action: Planner revises `A4b1` → `A4b1-r4`** (`PREMISE_CHANGED`, §5.4(2)), then `A4b2`.
   `A4s` now has a durable final disposition, so **`A4b1`/`A4b2` are no longer parked behind it**.
 
 ### `A4s-r6` execution — **COMPLETE**, steps 1–8 all run
@@ -183,16 +183,16 @@ at the top of this `CURRENT PACKET` section. Points worth keeping here:
 
 **Current blocker / next action.** **`A4s` is COMPLETE** — `A4s-r6` is executed, **accepted** (`ACCEPT`,
 all ten criteria `AGREED`), and **pushed** to the owner's fork; the toolkit has a durable final
-disposition at `M`. **The current work is the Planner's revision of `A4b1` → `A4b1-r2`**
+disposition at `M`. **The current work is the Planner's revision of `A4b1` → `A4b1-r4`**
 (`PREMISE_CHANGED`, §5.4(2)), then `A4b2`.
 
-**`A4b1-r2` — IN FLIGHT (2026-09-25).** The Session completed the premise reconnaissance and froze the
+**`A4b1-r4` — IN FLIGHT (2026-09-25).** The Session completed the premise reconnaissance and froze the
 brief; the Kimi K3 Planner is writing the packet.
 
-- **Frozen brief:** `docs/reviews/a4b1-r2-planning-brief.md` (the task, the verified baseline, the
+- **Frozen brief:** `docs/reviews/a4b1-r4-planning-brief.md` (the task, the verified baseline, the
   ordered reading list, the measured premise delta, the four premise answers, the pytest lead, and the
   mandatory sketch → Opus shape-preflight workflow).
-- **Premise re-check:** `docs/reviews/a4b1-r2-premise-recheck.md`. **A4s changed exactly two of the files
+- **Premise re-check:** `docs/reviews/a4b1-r4-premise-recheck.md`. **A4s changed exactly two of the files
   `A4b1` touches** — `src/apu/apu_dsp.c` (+56/−3) and `src/apu/CMakeLists.txt` (+7/−1);
   `apu_core.c`, `apu_state.h`, `apu.h` and `apu_mmio_hook.c` are **byte-identical**. So the APU surface
   is almost untouched, which is why this is a premise re-check and not a redesign.
@@ -202,7 +202,7 @@ brief; the Kimi K3 Planner is writing the packet.
     unchanged outside the contiguous arena, `va − XBOX_CONTIG_BASE` inside it. The address premise
     **holds and is better founded**, because A4s removed a real inconsistency where the bridge translated
     and the delegate did not.
-  - **The inverse is already documented in-tree** (`docs/reviews/a4b1-r2-inverse-precision.md`):
+  - **The inverse is already documented in-tree** (`docs/reviews/a4b1-r4-inverse-precision.md`):
     `XBOX_CONTIG_BASE = 0x80000000` = the contiguous window, and `xbox_memory_layout.c:843-845` states the
     round trip — *"The contiguous window IS the physical-address view, so OR-ing its base is the
     documented round trip, not a guess"* → `physical P → XBOX_CONTIG_BASE | (P & 0x0FFFFFFF)`. So Device
@@ -225,13 +225,22 @@ The new baseline for that revision: toolkit **`M`** = `3f8bf67c450861aefcbc37669
 `E45026C3DF5AACAF3D66FCC1E17D9C6C1A12247864D58D0911CDBA8435A2A3C7`; the run
 `logs/runs/20260925-210315-113-a4s-sync-strict` as the reference R0.
 
+**Identifier correction (Advisor ruling, part 3; 2026-09-25).** This revision is **`A4b1-r4`**, not
+`A4b1-r2`. The Session named it `A4b1-r2` in error and that label propagated into the frozen `A4s-r6`
+packet's `R-SAME` cell. `A4b1-r2` is already taken: `r1` (commit `8735165`), `r2` (`127d203`, itself
+adequacy-reviewed at `839E9BEC…D2BB7`) and `r3` (`fea49f1`) all exist, and an identifier that names a
+reviewed document must never be reused. The frozen `A4s` packet is a closed record and owes nothing
+(§5.4: record pointers never reopen a frozen packet); the label is corrected here. Full ruling:
+`docs/reviews/a4b1-r4-planning-rulings.md`; the Session's error record:
+`docs/reviews/a4b1-revision-identifier-collision.md`.
+
 **Two claim limits and one gated lead carry forward into that planning:**
 
 1. **KX does not exercise 7 pytest-dependent upstream modules under `unittest`** — `test_block_dispatch`,
    `test_incdec_carry`, `test_incdec_result`, `test_lifter_double_shift`, `test_lifter_result_clobber`,
    `test_sar_width`, `test_x87_classification`. *The lifter/translator conflict resolutions (hunks 5–7 and
    9) are therefore witnessed only by K4 and the existing KX modules, not by upstream's own tests of those
-   paths.* Harmless for `A4s-r6` only because `AC-GEN` held (no regeneration). **`A4b1-r2` does not
+   paths.* Harmless for `A4s-r6` only because `AC-GEN` held (no regeneration). **`A4b1-r4` does not
    regenerate either** (regeneration is already one of its non-goals), so this lead stays **gated and
    unexercised** — no `pytest` work is manufactured to clear it early.
 2. **`AC-STRUCT` detects duplicates, not omissions** — it did not see that one switch had lost `case 138`
@@ -553,7 +562,7 @@ ACCEPTED).
   provenance; synthetic ack removed; licence recorded; build+ctest green including a fixture;
   one strict default run matches A4a R0. No guest GP-behaviour claim; toolkit-only writes.
   **Its dependency on `A4s` is now SATISFIED** — `A4s-r6` is accepted and pushed, toolkit at `M`
-  = `3f8bf67c450861aefcbc376698750bc1446bc9dd`. The revision to **`A4b1-r2`** (or `-r4`) takes `M` as
+  = `3f8bf67c450861aefcbc376698750bc1446bc9dd`. The revision to **`A4b1-r4`** takes `M` as
   its baseline, per the `CURRENT PACKET` next-action block above.
 - **`A4b2`:** `docs/packets/a4b2-gp-clears-pending-word.md`, `A4b2-r3`, SHA-256
   `CFB8C0EBFBC9BE3CFB62677C4C756694DDE9663542E239570B639DED9F5BFCE9` (310 lines). Claim: in one

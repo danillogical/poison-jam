@@ -1,9 +1,15 @@
-# A4b1-r2: premise re-check at the accepted A4s baseline
+# A4b1-r4: premise re-check at the accepted A4s baseline
+
+> **Identifier note (Advisor ruling, part 3).** This record's subject is the revision numbered
+> **`A4b1-r4`**. Its filename and any earlier `A4b1-r4` spelling were a Session naming error: the
+> revision identifier `A4b1-r4` is already taken by an earlier revision (commit `127d203`, itself
+> adequacy-reviewed at `839E9BEC…D2BB7`), so it must not be reused. See
+> `docs/reviews/a4b1-r4-planning-rulings.md` and `docs/reviews/a4b1-revision-identifier-collision.md`.
 
 **Prepared by:** Session `session-58e86358-bf35-4317-82a7-7f5fd0c28dd3`, 2026-09-25.
 **Purpose:** identify **which A4b1-r3 premises actually depended on the old toolkit baseline**
 (`0d7929c`), which are unchanged, and which measurements must be repeated — so the Planner's
-`A4b1-r2` brief carries measured facts rather than assumptions. This is **reconnaissance for planning**,
+`A4b1-r4` brief carries measured facts rather than assumptions. This is **reconnaissance for planning**,
 not the investigation itself; behaviour questions belong in the packet.
 **Old baseline:** toolkit `0d7929c86771dd0b971941592fd4f15436116e82` (what `A4b1-r3` assumed).
 **New baseline:** toolkit **`M` = `3f8bf67c450861aefcbc376698750bc1446bc9dd`** (A4s accepted, pushed).
@@ -112,7 +118,7 @@ The plan (`plan-jsrf-bare-minimum.md:490-493`) recorded this as **uncertain and 
 - its only consumers are host-side: `memcpy` into the audio output buffer (`apu_core.c:302, 352`) and
   `mixer_render`.
 
-**Consequence for `A4b1-r2`:** the `MIXDOWN_ALL` default-on path writes **only** host monitor storage.
+**Consequence for `A4b1-r4`:** the `MIXDOWN_ALL` default-on path writes **only** host monitor storage.
 It is therefore **not** new default-on *device* behaviour, and it does **not** require a new A4b1
 criterion. It remains a `jsrf-run-profiles.md` **classification** item (a new unclassified variable),
 which is a **documentation** follow-up already recorded in the plan — not a packet obligation.
@@ -129,7 +135,7 @@ which is a **documentation** follow-up already recorded in the plan — not a pa
   depended on the toolkit baseline's APU internals.
 - **Genuinely new and needing a decision:** (i) Device semantics 3's inverse must account for
   `XBOX_CONTIG_BASE`; (ii) `MIXDOWN_ALL` must be *classified* somewhere, and since it lives in the file
-  A4b1 rewrites, `A4b1-r2` is the natural place to record the disposition even though no criterion
+  A4b1 rewrites, `A4b1-r4` is the natural place to record the disposition even though no criterion
   changes.
 - **Do NOT** treat "A4s changed 4814 lines under `src/kernel/`" as a reason to redesign `A4b1`: the
   kernel changes are the event/AC'97/NABM work, and `A4b1`'s own write scope is the APU.

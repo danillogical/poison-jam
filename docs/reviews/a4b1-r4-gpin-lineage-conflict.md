@@ -1,13 +1,19 @@
-# A4b1-r2: the `[GPIN]` lineage conflict (raised by the Planner, verified by the Session)
+# A4b1-r4: the `[GPIN]` lineage conflict (raised by the Planner, verified by the Session)
+
+> **Identifier note (Advisor ruling, part 3).** This record's subject is the revision numbered
+> **`A4b1-r4`**. Its filename and any earlier `A4b1-r4` spelling were a Session naming error: the
+> revision identifier `A4b1-r4` is already taken by an earlier revision (commit `127d203`, itself
+> adequacy-reviewed at `839E9BEC…D2BB7`), so it must not be reused. See
+> `docs/reviews/a4b1-r4-planning-rulings.md` and `docs/reviews/a4b1-revision-identifier-collision.md`.
 
 **Prepared by:** Session `session-58e86358-bf35-4317-82a7-7f5fd0c28dd3`, 2026-09-25.
 **Status:** **open Advisor-class question.** Referred to the persistent Opus 5.5 Advisor with the
-`A4b1-r2` shape preflight. Recorded now so the facts cannot be lost while the ruling is pending.
+`A4b1-r4` shape preflight. Recorded now so the facts cannot be lost while the ruling is pending.
 **Not** a packet revision and **not** a Session decision.
 
 ## The conflict
 
-Two authorities that the `A4b1-r2` brief tells the Planner to preserve are **at different lineage
+Two authorities that the `A4b1-r4` brief tells the Planner to preserve are **at different lineage
 points**, and the packet on disk pre-dates one of them.
 
 | | Authority | What it says | On disk as a packet? |
@@ -29,7 +35,7 @@ points**, and the packet on disk pre-dates one of them.
   *"`A4b2-r4`: AC-INPUTS per (b); rows and exhaustiveness per (c); P2 repinned with the new fields
   mapped."*
 - **No `A4b1-r4` packet exists.** `docs/packets/` holds only `a4b1-gp-core-port.md` (35240 bytes) and
-  the Planner's new `a4b1-gp-core-port-r2.md` (2670 bytes, sketch only). No `*r4*` packet exists
+  the Planner's new `a4b1-gp-core-port-r4.md` (2670 bytes, sketch only). No `*r4*` packet exists
   anywhere under `docs/packets/`.
 - The on-disk `A4b1-r3` **still carries the ruled-against design** at L123-124 and L312.
 
@@ -63,21 +69,21 @@ durable disposition.
 
 ## The question put to the Advisor
 
-1. For `A4b1-r2`'s `[GPIN]` text, is the correct base **(i)** the on-disk `A4b1-r3` DS6 (256-entry
+1. For `A4b1-r4`'s `[GPIN]` text, is the correct base **(i)** the on-disk `A4b1-r3` DS6 (256-entry
    table) — which would resurrect a ruled-against mechanism — or **(ii)** the provenance-class /
    finite-universe design of `a4b-gpin-accounting-ruling.md` (the `r4` design, never written into a
    packet)?
-2. If (ii), confirm that `A4b1-r2` must incorporate the `r4` `[GPIN]` redesign as part of this
+2. If (ii), confirm that `A4b1-r4` must incorporate the `r4` `[GPIN]` redesign as part of this
    revision — since a baseline-only re-bind cannot faithfully revise an `INADEQUATE`-r3 mechanism — and
    give a **bounded statement** the Planner can write into the packet's governing-requirement block.
-3. If `A4b1-r2` should **not** carry it, say where it should go instead, given the owner wants `A4b2`
+3. If `A4b1-r4` should **not** carry it, say where it should go instead, given the owner wants `A4b2`
    only after `A4b1` reaches a durable disposition.
-4. If the answer means `A4b1-r2` is **larger than a pure re-baseline**, say so explicitly — it affects
+4. If the answer means `A4b1-r4` is **larger than a pure re-baseline**, say so explicitly — it affects
    the packet class statement and the adequacy review's scope.
 
 ## Session framing (offered as context, explicitly not a decision)
 
-The owner's directive was to produce *"the smallest `A4b1-r2` packet necessary to re-bind the GP/DSP
+The owner's directive was to produce *"the smallest `A4b1-r4` packet necessary to re-bind the GP/DSP
 investigation to toolkit baseline `3f8bf67c…`, incorporating only premise changes that can affect the
 implementation/evidence decision"* and *"Do not redesign `A4b1` merely because A4s changed many
 files."*
