@@ -6,7 +6,34 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4b1-r4` (GP/DSP core port) — **PROMOTED 2026-09-25, ready to execute**
+## CURRENT PACKET — `A4b1-r4` (GP/DSP core port) — **EXECUTED, `R1-PASS`, awaiting stage-1 acceptance**
+
+**Execution is complete: every gate (G1–G4, F) and all four criteria (`AC-PORT`, `AC-LIC`, `AC-FIX`,
+`AC-DEFAULT`) PASS, and the packet's own decision rows give `R1-PASS`.** The stage-1 acceptance review
+(child `fb109c49-2039-434d-b665-a604e84cacae`, `workbuddy-ai/hy4-preview-f` @ `high`) is **in flight**.
+**No push has occurred** — the closure push waits on `ACCEPT`.
+
+| Result | Value |
+|---|---|
+| Gates | **G1** `STRICT`; **G2** `matches 1, content-mismatch 0`; **G3** readable; **G4** `L = 6748` with `goto` at `6751`; **`F = 2`** (matches the `A4s` baseline) |
+| `AC-PORT` | **PASS** — 17 files byte-exact at the vendor commit; `attr/-text` on all 27; both searches 0 hits **with the baseline-exe positive control** |
+| `AC-LIC` | **PASS** — GPL text verbatim (`EDAEF632…`); all 17 files listed under their own header's licence (11 GPL / 5 LGPL / 1 header-less); combined-work stated |
+| `AC-FIX` | **PASS** — **14/14 ctest**, 17 cases, both can-fail twins **mutation-proven** |
+| `AC-DEFAULT` | **PASS** — `diagnostic_deadline`, `W = 3`, `F = 2`, all three counts 0, **positive control 954 vs 0** |
+| R0 | `logs/runs/20260926-010303-411-a4b1-default` |
+| Toolkit | HEAD `3a3c7c1fa9461d6a9cc7279180aacaaaf979ab7d`, clean, 8 commits |
+| exe | `B13521858A344919731E73F6E602186E951A49D7E57CA4E929BEA15CC2736ADD` |
+
+**Two Advisor rulings were needed during execution**, both recorded verbatim in
+`docs/reviews/a4b1-r4-execution-rulings.md`: the `FIFO_READ` ruling **(C)** — `AC-FIX (viii)` found a
+**genuine hook-completeness gap** (the pinned DMA read arm falls through because its `assert` is
+`NDEBUG`-elided, consuming stale bytes as a GP input, unrecorded) — and its **addendum**, which caught a
+defect in the Session's own fix (`dsp_dma.c` is shared by the GP and the EP, so the hook needed an
+`is_gp` gate). **Twice in this packet the Session's first reading was wrong**, both times by reasoning
+from source text without checking the configuration the artifact ships in.
+
+Evidence: `docs/reviews/a4b1-execution-evidence.md` (the index), `a4b1-r4-implementation-verification.md`,
+`a4b1-r4-fixture-green.md`, `a4b1-r4-acport-step4-enumeration.md`, `a4b1-r4-execution-rulings.md`.
 
 - **Packet:** `docs/packets/a4b1-gp-core-port.md`, revision **`A4b1-r4`**, class **change**, frozen
   SHA-256 **`6DD62A57E87445F5C12085210146204AA4E77D26FD316071FD41CAEC76835C38`** (**445 lines**).
