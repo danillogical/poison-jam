@@ -123,6 +123,26 @@ if(BUILD_TESTING)
     target_link_libraries(jsrf_inplace_event_test PRIVATE xboxrecomp)
     add_test(NAME jsrf_inplace_event_bridge COMMAND jsrf_inplace_event_test)
     set_tests_properties(jsrf_inplace_event_bridge PROPERTIES TIMEOUT 20)
+    # A4b1 step 8 (AC-FIX).  Registered TWICE, on purpose: the trace is read
+    # once and cached (apu_watch_trace_enabled), so one process can only ever
+    # exercise one arm.  The trace-on arm checks the line-vs-snapshot rule; the
+    # trace-off arm is the negative control -- the ledger and the [GPIN] arrays
+    # are always computed, so every snapshot/PRAM/memory check must still hold
+    # while the emission is absent (only the unconditional [GPDMA] unmapped line
+    # survives).
+    add_executable(jsrf_apu_watch_fixture_test
+        ${XBOXRECOMP_DIR}/tests/apu_watch_fixture_test.c)
+    target_include_directories(jsrf_apu_watch_fixture_test PRIVATE
+        ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/apu
+        ${XBOXRECOMP_DIR}/src/apu/dsp ${XBOXRECOMP_DIR}/src/apu/dsp/shim
+        ${XBOXRECOMP_DIR}/src/kernel
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/gen)
+    target_link_libraries(jsrf_apu_watch_fixture_test PRIVATE xboxrecomp)
+    add_test(NAME jsrf_apu_watch_fixture_trace_on COMMAND jsrf_apu_watch_fixture_test)
+    set_tests_properties(jsrf_apu_watch_fixture_trace_on PROPERTIES
+        TIMEOUT 60 ENVIRONMENT "RECOMP_APU_TRACE=1")
+    add_test(NAME jsrf_apu_watch_fixture_trace_off COMMAND jsrf_apu_watch_fixture_test)
+    set_tests_properties(jsrf_apu_watch_fixture_trace_off PROPERTIES TIMEOUT 60)
     add_test(NAME jsrf_gpu_inspection COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_gpu_inspection.py)
     add_executable(jsrf_gpu_smoke tests/native_gpu_smoke.c)
     target_link_libraries(jsrf_gpu_smoke PRIVATE d3d11 dxgi dxguid)
