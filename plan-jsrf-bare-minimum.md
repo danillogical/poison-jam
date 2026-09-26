@@ -6,22 +6,29 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4b1-r4` (GP/DSP core port) — **EXECUTED, `R1-PASS`, awaiting stage-1 acceptance**
+## CURRENT PACKET — `A4b1-r4` (GP/DSP core port) — **ACCEPTED 2026-09-26, `R1-PASS`, PUSHED (complete)**
 
-**Execution is complete: every gate (G1–G4, F) and all four criteria (`AC-PORT`, `AC-LIC`, `AC-FIX`,
-`AC-DEFAULT`) PASS, and the packet's own decision rows give `R1-PASS`.** The stage-1 acceptance review
-(child `fb109c49-2039-434d-b665-a604e84cacae`, `workbuddy-ai/hy4-preview-f` @ `high`) is **in flight**.
-**No push has occurred** — the closure push waits on `ACCEPT`.
+**`A4b1-r4` is accepted and its closure push is done. It must not be reopened.** `A4b1` is accepted with
+exactly its "Establishes" claim: the pinned xemu GP core (interpreter only), GP MMIO routing and one GP
+DMA write choke point are in the toolkit with per-file provenance; the synthetic ack is gone from source
+and exe; a thread-safe watched-word ledger is exported and fixture-exercised; the combined work's licence
+is recorded; the tree builds and every ctest passes; one STRICT default run matches the `A4s` baseline
+stop. **The core is reachable only through GP MMIO, which requires `RECOMP_APU_TRAP`.**
+
+**Next packet: `A4b2` → `A4b2-r4`** (its own revision; see the boundary note below).
 
 | Result | Value |
 |---|---|
-| Gates | **G1** `STRICT`; **G2** `matches 1, content-mismatch 0`; **G3** readable; **G4** `L = 6748` with `goto` at `6751`; **`F = 2`** (matches the `A4s` baseline) |
-| `AC-PORT` | **PASS** — 17 files byte-exact at the vendor commit; `attr/-text` on all 27; both searches 0 hits **with the baseline-exe positive control** |
-| `AC-LIC` | **PASS** — GPL text verbatim (`EDAEF632…`); all 17 files listed under their own header's licence (11 GPL / 5 LGPL / 1 header-less); combined-work stated |
+| Gates | **G1** `STRICT`; **G2** `matches 1, content-mismatch 0`; **G3** readable; **G4** `L = 6748`, `goto` at `6751`; **`F = 2`** (matches the `A4s` baseline) |
+| `AC-PORT` | **PASS** — stage 1 `DISAGREED` (correctly), corrected, **stage 2 `AGREED`** |
+| `AC-LIC` | **PASS** |
 | `AC-FIX` | **PASS** — **14/14 ctest**, 17 cases, both can-fail twins **mutation-proven** |
-| `AC-DEFAULT` | **PASS** — `diagnostic_deadline`, `W = 3`, `F = 2`, all three counts 0, **positive control 954 vs 0** |
+| `AC-DEFAULT` | **PASS** — `diagnostic_deadline`, `W = 3`, `F = 2`, all counts 0, **positive control 954 vs 0** |
+| Row | **`R1-PASS`** |
 | R0 | `logs/runs/20260926-010303-411-a4b1-default` |
-| Toolkit | HEAD `3a3c7c1fa9461d6a9cc7279180aacaaaf979ab7d`, clean, 8 commits |
+| Acceptance | stage 1 `NOT ACCEPTED` (`fb109c49-…`, Hy4 @ `high`) → stage 2 **`ACCEPT`** (`f3f02108-…`, DeepSeek @ `max`) |
+| **Pushed** | **`origin` (the fork), `main`, `3a3c7c1fa9461d6a9cc7279180aacaaaf979ab7d`**, fast-forward `3f8bf67..3a3c7c1`, 8 commits. **`upstream` untouched** at `766ecef`. No force used. |
+| Toolkit | HEAD `3a3c7c1…`, clean |
 | exe | `B13521858A344919731E73F6E602186E951A49D7E57CA4E929BEA15CC2736ADD` |
 
 **Two Advisor rulings were needed during execution**, both recorded verbatim in
@@ -29,27 +36,41 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 **genuine hook-completeness gap** (the pinned DMA read arm falls through because its `assert` is
 `NDEBUG`-elided, consuming stale bytes as a GP input, unrecorded) — and its **addendum**, which caught a
 defect in the Session's own fix (`dsp_dma.c` is shared by the GP and the EP, so the hook needed an
-`is_gp` gate). **Twice in this packet the Session's first reading was wrong**, both times by reasoning
-from source text without checking the configuration the artifact ships in.
+`is_gp` gate).
 
-Evidence: `docs/reviews/a4b1-execution-evidence.md` (the index), `a4b1-r4-implementation-verification.md`,
-`a4b1-r4-fixture-green.md`, `a4b1-r4-acport-step4-enumeration.md`, `a4b1-r4-execution-rulings.md`.
+**Stage-1 acceptance then blocked on `AC-PORT`**, and the block was correct: the step-4 enumeration's
+write-callback row was factually wrong (`ep_scratch_rw` recorded as not reaching the choke point, citing
+an `is_gp` gate that does not exist). The Session verified it and found the error **larger than reported —
+three false cells, not one**; `gp_fifo_rw` and `ep_fifo_rw` also reach it via
+`circular_scatter_gather_rw` and were not listed. **All four pinned write callbacks reach the choke
+point.** Root cause: the generating script computed no reachability, so that column was hand-written.
 
-**Stage-1 acceptance returned `NOT ACCEPTED`, blocking on `AC-PORT`** — recorded verbatim in
-`docs/reviews/a4b1-r4-stage1-acceptance-review.md`. The reviewer found the step-4 enumeration's
-write-callback row factually wrong (`ep_scratch_rw` recorded as not reaching the choke point, with a
-reason citing an `is_gp` gate in `scatter_gather_rw` that **does not exist**). **The Session verified it
-in the source and found the error larger than reported: three false cells, not one** — `gp_fifo_rw` and
-`ep_fifo_rw` also reach the choke point via `circular_scatter_gather_rw` and were not listed. **All four
-pinned write callbacks reach it.** Root cause: the generating script computed no reachability, so that
-column was hand-written. The enumeration is rewritten with the edges derived from source. Stage-2 review
-(`workbuddy-ai/deepseek-v4.1-flash` @ `max`) re-reviews **`AC-PORT` alone**.
+> **Pattern recorded for the next packet.** **Three** completeness/correctness claims in this packet were
+> wrong and **all three were caught by adversarial review, not by the Session's own checking**: the
+> missing `FIFO_READ` hook, the enumeration, and (twice) the Session's first reading of a premise being
+> reversed by the Advisor. Two were "every X" claims. **For `A4b2`, derive enumerations and reachability
+> from source rather than writing them by hand, and treat any "every"/"all" claim as the highest-risk
+> sentence in the document.**
 
 **New `A4b2` decision input, carried forward (do not silently absorb).** Because `ep_scratch_rw` and
 `ep_fifo_rw` reach the choke point, **an enabled EP can land an exchange on `W_va` and take
 `GP_CLEAR`**. The EP is gated on `EPRST` (`gp_ep.c:650`) and runs every 8th frame (`:652`), but the path
 is real. The Session does **not** rule on whether it is benign — that is a Planner/Advisor judgment, and
 `DS5`'s text ("from every pinned write callback") already requires the shared choke point, which holds.
+
+**Follow-up leads carried into `A4b2` planning (recorded, not done):**
+1. **`NDEBUG`-elided asserts** — enumerate those in `src/apu/dsp/` that change GP state or inputs. Known:
+   `unk2`/`unk13`, the `format` default, `dsp_offset` out of range. *(Advisor follow-up lead.)*
+2. The classifier's treatment of the inert `RECOMP_APU_DSP_ACK`.
+3. The game repository has no licence file.
+4. EP routing.
+5. `gp_ep.c:382-387` (the `GPBOOT` trace block) reads guest memory via `apu_guest_dma_ptr` **without**
+   `apu_gp_dma_read` — trace-gated, feeds only the printed line, not a consumed GP input. *(Stage-2
+   advisory 2.)*
+
+Evidence: `docs/reviews/a4b1-execution-evidence.md` (the index), `a4b1-r4-implementation-verification.md`,
+`a4b1-r4-fixture-green.md`, `a4b1-r4-acport-step4-enumeration.md`, `a4b1-r4-execution-rulings.md`,
+`a4b1-r4-stage1-acceptance-review.md`, `a4b1-r4-stage2-acceptance-review.md`.
 
 - **Packet:** `docs/packets/a4b1-gp-core-port.md`, revision **`A4b1-r4`**, class **change**, frozen
   SHA-256 **`6DD62A57E87445F5C12085210146204AA4E77D26FD316071FD41CAEC76835C38`** (**445 lines**).
