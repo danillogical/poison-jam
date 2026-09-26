@@ -42,13 +42,31 @@ re-check and not a redesign.
 | P-C | `apu_state.h` carries stale `DSPState` layouts | **UNCHANGED** | `apu_state.h` **byte-identical** |
 | P-D | Guest MMIO reaches the APU only under `RECOMP_APU_TRAP` | **HOLDS** (line numbers shifted 1728→2115) | the trap gate is textually identical; A4s changed the AC'97 model around it, not the gate |
 | P-E | The `0x80000000` window is separate storage, not an alias | **HOLDS** | window-mapping lines unchanged; occurrence count rose 5→7 via the AC'97 region |
-| P-F | `MmGetPhysicalAddress` returns the VA (`kernel_bridge.c:1700-1707`) | **CHANGED IN FORM — premise STRENGTHENED** | see below |
+| P-F | `MmGetPhysicalAddress` returns the VA (`kernel_bridge.c:1700-1707`) | **CHANGED — the map is now NON-INJECTIVE** (corrected; see below) | **form change is non-injective; see `a4b1-r4-planning-rulings.md`** |
 | P-G | The GP runs on the APU frame thread (`apu_core.c:557`) | **UNCHANGED** | `apu_core.c` byte-identical |
 | P-STOP | The strict stop is still the `loc_001A18D0` spin | **UNCHANGED** | A4s `R-SAME`: `B=0x803C0000`, `W=3`, `F=2` |
 | **P-NEW-1** | **`RECOMP_APU_MIXDOWN_ALL` is default-ON inside `apu_dsp.c`** — the file A4b1 rewrites | **NEW PREMISE** | resolved below |
 | **P-NEW-2** | `RECOMP_USB_PORT` (`ohci.c`) | **NEW, OUT OF A4b1 SCOPE** | inventoried only; `ohci.c` is not in A4b1's write scope |
 
-### P-F — the one premise whose *form* changed, and it moved in A4b1's favour
+### P-F — CORRECTED BY THE ADVISOR: the form change is **non-injective**, not merely a wording fix
+
+> **Correction (Advisor ruling part 4, 2026-09-25).** This section's original conclusion — *"premise
+> STRENGTHENED … a wording/precision correction, not a redesign"* — **understates the change and is
+> superseded.** **Form change is non-injective; see `a4b1-r4-planning-rulings.md`.** The Advisor's ruling:
+>
+> - the forward map went from **identity** to **non-injective**: at `M`, low-RAM VA `X` and window VA
+>   `0x80000000+X` **both** map to physical `X`;
+> - JSRF imports ordinal 173 and calls it from the DSOUND range, so at `M` the title plausibly writes
+>   window **offsets** into `GPSADDR`/the SGE entries where `A4a` observed **VAs**;
+> - planning ruling 2's admissibility premise (*"this kernel's `MmGetPhysicalAddress` returns the VA"*)
+>   is therefore **false at `M`**; the adaptation stays admissible on its real ground — the SGE values are
+>   what our kernel told the title was physical;
+> - **the formula below is WRONG** for any identity-passed low-RAM address, and must not be used.
+>
+> The correct inverse, `DS3`'s new text, `GPDMA_AMBIGUOUS`, the two-form `sge0` fixture and the `A4b2`
+> boundary note are all in `docs/reviews/a4b1-r4-planning-rulings.md` part 4. **Read that, not this.**
+
+The original analysis follows, retained only as the reasoning trail.
 
 **Old (`0d7929c`)** — the bridge returned the VA itself, and its comment warned against the call:
 
