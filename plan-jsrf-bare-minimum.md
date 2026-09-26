@@ -183,13 +183,47 @@ at the top of this `CURRENT PACKET` section. Points worth keeping here:
 
 **Current blocker / next action.** **`A4s` is COMPLETE** — `A4s-r6` is executed, **accepted** (`ACCEPT`,
 all ten criteria `AGREED`), and **pushed** to the owner's fork; the toolkit has a durable final
-disposition at `M`. **The next action is the Planner's revision of `A4b1` → `A4b1-r2`**
-(`PREMISE_CHANGED`, §5.4(2)), then `A4b2` — the GP/DSP area, no longer parked behind `A4s`.
+disposition at `M`. **The current work is the Planner's revision of `A4b1` → `A4b1-r2`**
+(`PREMISE_CHANGED`, §5.4(2)), then `A4b2`.
+
+**`A4b1-r2` — IN FLIGHT (2026-09-25).** The Session completed the premise reconnaissance and froze the
+brief; the Kimi K3 Planner is writing the packet.
+
+- **Frozen brief:** `docs/reviews/a4b1-r2-planning-brief.md` (the task, the verified baseline, the
+  ordered reading list, the measured premise delta, the four premise answers, the pytest lead, and the
+  mandatory sketch → Opus shape-preflight workflow).
+- **Premise re-check:** `docs/reviews/a4b1-r2-premise-recheck.md`. **A4s changed exactly two of the files
+  `A4b1` touches** — `src/apu/apu_dsp.c` (+56/−3) and `src/apu/CMakeLists.txt` (+7/−1);
+  `apu_core.c`, `apu_state.h`, `apu.h` and `apu_mmio_hook.c` are **byte-identical**. So the APU surface
+  is almost untouched, which is why this is a premise re-check and not a redesign.
+  - **One premise changed in form, in `A4b1`'s favour:** `bridge_MmGetPhysicalAddress` no longer returns
+    the VA itself; it delegates to `xbox_MmGetPhysicalAddress`, and the *deleted* comment had warned the
+    delegate *"would return a native pointer"*. **Read directly, it returns no native pointer** — the VA
+    unchanged outside the contiguous arena, `va − XBOX_CONTIG_BASE` inside it. The address premise
+    **holds and is better founded**, because A4s removed a real inconsistency where the bridge translated
+    and the delegate did not.
+  - **The inverse is already documented in-tree** (`docs/reviews/a4b1-r2-inverse-precision.md`):
+    `XBOX_CONTIG_BASE = 0x80000000` = the contiguous window, and `xbox_memory_layout.c:843-845` states the
+    round trip — *"The contiguous window IS the physical-address view, so OR-ing its base is the
+    documented round trip, not a guess"* → `physical P → XBOX_CONTIG_BASE | (P & 0x0FFFFFFF)`. So Device
+    semantics 3 needs a **citable wording correction, not an invention**.
+  - **The `& 0x03FFFFFF` hazard is real and pre-existing:** 8 live sites, including `apu_shim.h:101-123`
+    and `apu_vp.c:846` — both **byte-identical** across the baseline move. Note the masks differ
+    (`0x03FFFFFF` = 26 bits vs the round trip's `0x0FFFFFFF` = 28 bits), which is exactly the distinction
+    Device semantics 3 exists to prevent.
+  - **The `MIXDOWN_ALL` question is RESOLVED by source read** — it was the plan's flagged *uncertain and
+    load-bearing* item. `monitor.frame_buf` is `int16_t[256][2]` at `apu_state.h:500` inside the **host**
+    `MCPXAPUState` struct, its instances are host allocations, and there are **zero** guest-mapping
+    references to it. So the default-on path writes only host monitor storage: **not new device
+    behaviour, no new criterion.** It remains a `jsrf-run-profiles.md` classification item.
+- **Everything else holds:** P-B, P-C, P-G (byte-identical), P-E, P-D's gate, and the strict stop. All
+  `A4a` R0/R1 observations, the watch-ledger ruling, the Q1/Q2 rulings, the checkpoint-40 constraints
+  and the `[GPIN]` redesign remain **admissible and un-reopened** — a baseline change alone does not
+  reopen a technical ruling.
 
 The new baseline for that revision: toolkit **`M`** = `3f8bf67c450861aefcbc376698750bc1446bc9dd`; exe
 `E45026C3DF5AACAF3D66FCC1E17D9C6C1A12247864D58D0911CDBA8435A2A3C7`; the run
-`logs/runs/20260925-210315-113-a4s-sync-strict` as the reference R0; upstream's
-`src/apu/apu_dsp.c`/`CMakeLists.txt` as the starting state.
+`logs/runs/20260925-210315-113-a4s-sync-strict` as the reference R0.
 
 **Two claim limits and one gated lead carry forward into that planning:**
 
@@ -197,13 +231,16 @@ The new baseline for that revision: toolkit **`M`** = `3f8bf67c450861aefcbc37669
    `test_incdec_carry`, `test_incdec_result`, `test_lifter_double_shift`, `test_lifter_result_clobber`,
    `test_sar_width`, `test_x87_classification`. *The lifter/translator conflict resolutions (hunks 5–7 and
    9) are therefore witnessed only by K4 and the existing KX modules, not by upstream's own tests of those
-   paths.* Harmless for `A4s-r6` only because `AC-GEN` held (no regeneration).
+   paths.* Harmless for `A4s-r6` only because `AC-GEN` held (no regeneration). **`A4b1-r2` does not
+   regenerate either** (regeneration is already one of its non-goals), so this lead stays **gated and
+   unexercised** — no `pytest` work is manufactured to clear it early.
 2. **`AC-STRUCT` detects duplicates, not omissions** — it did not see that one switch had lost `case 138`
    entirely; that class is excluded only by an explicit expected-count post-condition. **For any future
    revision, each HA edit should carry such a post-condition, enforced as an `AC-MERGE` check.**
 3. **GATED LEAD (binding):** before **any** packet regenerates or relifts with the toolkit at `M` or
    later, all **56+** KX modules — including these 7 — must run under **real `pytest`** in an
-   **owner-authorized** environment; parametrized and fixture tests included.
+   **owner-authorized** environment; parametrized and fixture tests included. **Do not install, borrow, or
+   otherwise introduce `pytest` without owner authorization.**
 
 ### Predecessor — `A4s-r5` — **EXECUTED 2026-09-25, selected `R-CONFLICT`** (superseded by `A4s-r6`)
 
