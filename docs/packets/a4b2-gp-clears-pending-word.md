@@ -1,5 +1,29 @@
 ## A4b2 — the ported GP engine clears the title's pending word in a strict run
 
+### Sketch (A4b2-r4, for the Advisor shape preflight — body below is still r3 until PROCEED)
+
+1. **Claim:** unchanged from r3 (one STRICT trap+trace run: boot, run, GP clear, no CPU/ack, inputs). Re-bind only; not a redesign.
+2. **Class:** change. Grounds: §5.4(2) `PREMISE_CHANGED` (A4b1-r4 replaced the `[GPIN]` mechanism, added `sge0_va`, and re-baselined the toolkit to `M`→`3a3c7c1`). r3 was never ADEQUATE, so this is a draft revision.
+3. **Edit 1: P2.** Repin to `A4b1-r4` at toolkit `3a3c7c1`. The field map uses r4 AC-FIX cases: `at_clear` (xi); PERIPH/FIFO/MIXBUF/DMA (viii); `BOOT_SCRATCH_READ` (vi); out-of-universe (x); `sge0_va` (vii), both placements.
+4. **Edit 2: AC-BOOT.** Compare `sge0_va = B`, never raw `sge0`. **Also demote** the r3 PASS conjunct "last `0x02040` write = `803CC000`" to a recorded value. Under P-F, at `M` GPSADDR may hold the physical form `003CC000`, which would give a deterministic false UNKNOWN. **The boundary note missed this item.**
+5. **Edit 3: AC-INPUTS.** Rewritten on the first `[GPIN] at_clear` block, which A4b1 emits at the freeze.
+   - It is **evaluated only when AC-CLEAR is PASS** (§6.1 6b).
+   - **UNKNOWN** if any of these holds: the block is missing; its header `seq ≠ GP_CLEAR.seq`; `out_of_universe ≠ 0`; or `boot_scratch_read ≠ 1`.
+   - **FAIL** on a stub read: any PERIPH offset with reads > 0 outside the six offsets A4b1 classified as modelled (`0x33, 0x45, 0x54–0x57`); FIFO slots 0–1 with reads > 0; MIXBUF `reads_while_stub > 0` or the `mixbuf_stub_read` flag; or DMA reads in `DEVICE`/`OTHER_MAPPED`.
+   - **UNKNOWN** if FIFO slots 2–5 are non-zero.
+   - **PASS** otherwise. `LOW_RAM`/`CONTIG` count as guest-written.
+6. **Edit 4: rows/exhaustiveness.** When AC-CLEAR is not PASS, AC-INPUTS is `NOT EVALUATED`, which is not UNKNOWN. The R2-NOCLEAR brief becomes the running `[GPIN] summary` block.
+7. **Edit 5: EP (the carried-forward input) → a structural precondition P3, not a lead.**
+   - The EP is unreachable at `3a3c7c1`. EP MMIO is unrouted (`apu_core.c:648`), `ep_ops` has no caller, and `ep.regs[EPRST]` is written only in `ep_write` (`gp_ep.c:557-559`). The state is calloc'd (`apu_core.c:543`), so the EP never runs (`gp_ep.c:650`).
+   - If the EP were reachable, the ledger could not tell an EP `GP_CLEAR` from a GP one, which is a false PASS.
+   - P3 is a toolkit text check that EP routing is absent. It fails closed.
+8. **Unchanged:** AC-DEFAULT2 (oracle repointed to A4b1 R0 `20260926-010303-411`), AC-RUN, AC-CLEAR, AC-NOCPU, the step-1 sites, gates, and runs.
+9. **Unknowns (subject of execution, not planning):** whether R1 boots, runs, and clears, and which inputs it reads.
+10. **Experiment:** unchanged. R1 (trap+trace) and R0 (default), 30 s each, with one R1 rerun on UNKNOWN.
+11. **Questions for the Advisor:**
+    - **(a)** The printed `at_clear` block is fixture-tested only on the snapshot (xi) plus a line count. Its field values are covered through the shared `emit_gpin_block` emitter, which the `summary` line-vs-snapshot check exercises, not by a direct at_clear line-vs-snapshot check. Is that admissible as a decision input?
+    - **(b)** PERIPH `0xFFFFB3`: the pin returns a constant `0` (`dsp.c:57`, `// core->num_inst ??`), and A4b1 classified it as modelled. Does A4b2 inherit that classification, or treat it as a shim constant?
+
 **Class:** change   **Contract revision:** `A4b2-r3`   **Status:** draft
 **r3 delta (not a redesign; `docs/reviews/a4b1-a4b2-r2-adequacy-review.md`):** P2 repinned to `A4b1-r3` with a per-decision-field map to `AC-FIX` cases; `AC-INPUTS` decides from `A4b1-r3`'s lossless `[GPIN]` accounting and is UNKNOWN on overflow or missing accounting; step 1 cites sites by content/VA. `AC-CLEAR`'s logic is unchanged.
 **Split decision:** `A4b` is split into `A4b1` (port, ledger, licence, fixtures, unchanged default path; no guest-run claim) and `A4b2` (this packet: the strict trap+trace run — boot, run, clear, no-CPU, inputs), because build, ctest and one default run settle the port's scale risk, so it should not wait for the run criteria or be reviewed with them.
