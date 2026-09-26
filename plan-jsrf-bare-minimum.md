@@ -500,6 +500,41 @@ ADVISOR_CHILD:     5c555969-dea9-4b47-be05-62aa0835cde2
 ADVISOR_ROUTE:     claude/claude-opus-5-5 @ high
 ```
 
+**SECOND RELOAD, same day — implementation-worker progress gate (2026-09-26).** The owner replaced
+`docs/agent-workflow.md` **again**; re-read from disk, its SHA-256 is now
+**`F4F5D029D45A96CE5E4CA61ED106C0EFDF7CFD3FC99EB5F331E4D22D12F04A0C`** (was `973CDDEF…`). Full record:
+`docs/reviews/owner-workflow-update-20260926-worker-gate.md`.
+
+```text
+WORKFLOW_RELOADED: YES
+WORKFLOW_SHA256:   F4F5D029D45A96CE5E4CA61ED106C0EFDF7CFD3FC99EB5F331E4D22D12F04A0C
+PLANNER_ROUTE:     claude/claude-opus-5-5 @ medium
+ADVISOR_CHILD:     5c555969-dea9-4b47-be05-62aa0835cde2
+ACTIVE_WORKER_PROGRESS_GATE_APPLIED: YES
+```
+
+- **Staffing is unchanged** — the Session read the new `§1` roster rather than assuming; all six DSH
+  rows are identical to the previous reload, so **no route re-resolution was needed** and the existing
+  Planner resolution (`claude/claude-opus-5-5`, `medium`) and Advisor child stand.
+- **The only substantive addition** is the `§2.2` **implementation-worker anti-loop progress gate**: by
+  **15 tool calls** a bounded implementation worker must have produced a concrete execution artifact
+  (edit, compile/build attempt, test run, generated fixture, or bounded blocker report); after the first
+  attempt further reads must be tied to a **specific observed** compiler/linker/test/runtime failure;
+  **two consecutive 10-call stretches** with no new artifact/measurement/narrowed blocker mean the worker
+  stops; re-reading the same files or re-litigating settled alternatives counts as **no progress**; and
+  a blocker returns the fixed `STATUS: BLOCKED` form. **A no-progress or blocker return is an escalation
+  signal — the Session does not auto-spawn an identical replacement**, but routes it through the
+  escalation ladder first.
+- **Applied immediately to the active worker** (`1fe1b4f2-…`, rewriting the `AC-FIX` fixture for the
+  `FIFO_READ` ruling (C)). It had **already exceeded the new first-artifact budget**, so per the owner it
+  was **not** given a fresh 15-call window; the owner's bounded correction
+  (*"STOP RESEARCH CHURN AND EXECUTE OR REPORT A BLOCKER"*, next 3 tool calls: produce the smallest safe
+  artifact and compile/test it, **or** return the bounded `BLOCKED` report) was sent, with the production
+  changes listed factually so no re-derivation was needed. **The correction was recorded as issued under
+  the new workflow.**
+- **Packet, baseline, Advisor child and every durable ruling are preserved**; scope is unchanged. The
+  workflow change alone reopens nothing.
+
 - **The Planner route resolves live and exactly** (§1 `LIVE_RESOLVE`): `list_subagent_models` returns
   **one** canonical match, `claude/claude-opus-5-5`, and it advertises **`medium`** among its efforts
   (`low, medium, high, xhigh, max`). **No fallback was used.**
