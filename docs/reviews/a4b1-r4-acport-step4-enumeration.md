@@ -44,7 +44,7 @@
 **`apu_gp_dma_write`** — defined at **`src/apu/apu_watch.c:385`**, declared at `src/apu/apu_watch.h:341`.
 It does **not** distinguish GP from EP; it is called by both.
 
-**Exactly one call site in the tree:**
+**Exactly one call site in production code:**
 
 | Call site | Containing function |
 |---|---|
@@ -80,9 +80,15 @@ at `:141-148`; the read arm takes `apu_gp_dma_read` instead.
 function" holds**, and more strongly than the first version of this file claimed: there is one choke
 point, one call site, and **four** callbacks feeding it, of which two are the EP's.
 
-**No other write path exists in `src/apu/**`** — verified in `a4b1-r4-implementation-verification.md`
-item 8: the only other writers are `FEMEMDATA` (`apu_core.c:165`) and VP (`apu_vp.c`), both pre-existing
-and permitted by the packet.
+**No other write path exists in `src/apu/**`** — **re-derived by the second-stage reviewer**
+(`f3f02108-…`), who is the authority for this: every guest-memory writer in `src/apu/**` is
+`stl/stw/stb_*_phys` (`apu_shim.h:181-192`), used **only** at `apu_core.c:165` (`FEMEMDATA`) and
+`apu_vp.c:57,58,119,432,445,527` (VP) — exactly the two the packet permits (line 170). No
+`ram_ptr[...] =` writes and no `MEM32` stores exist; `apu_vp.c:846` is a `memcpy` **from** `ram_ptr`,
+i.e. a read, correctly excluded; the remaining `g_apu_ram_ptr` sites (`apu_watch.c:413/426/488`) are
+inside the choke point itself, and `:994` is a read for the trace line. (The first version of this file
+**asserted** this by reference to another document rather than showing it — the reviewer flagged that,
+and re-derived it.)
 
 ### Consequence the reviewer identified, and the Session confirms
 

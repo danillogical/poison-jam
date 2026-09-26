@@ -9,12 +9,33 @@
 
 | AC | Verdict |
 |---|---|
-| **AC-PORT** | **PASS** |
+| **AC-PORT** | **PASS** — stage 1 `DISAGREED`, corrected, **stage 2 `AGREED`** |
 | **AC-LIC** | **PASS** |
 | **AC-FIX** | **PASS** (14/14, both can-fail twins mutation-proven) |
 | **AC-DEFAULT** | **PASS** |
 | **Gates G1–G4** | **all PASS** |
 | **Row** | **`R1-PASS`** |
+
+## Acceptance — **`ACCEPT` (final)**; closure push done
+
+| Stage | Reviewer | Disposition |
+|---|---|---|
+| **1** | `fb109c49-…`, `workbuddy-ai/hy4-preview-f` @ `high` | **`NOT ACCEPTED`** — `AGREED` on G1–G4, F, `AC-LIC`, `AC-FIX`, `AC-DEFAULT`; **`DISAGREED` on `AC-PORT`** |
+| **2** | `f3f02108-…`, `workbuddy-ai/deepseek-v4.1-flash` @ `max` | **`ACCEPT`** — `AC-PORT` **`AGREED`**, `BLOCKING: NONE` |
+
+Records: `a4b1-r4-stage1-acceptance-review.md`, `a4b1-r4-stage2-acceptance-review.md`.
+
+**The stage-1 block was correct, and the Session verified it in the source before accepting it.** The
+step-4 enumeration recorded `ep_scratch_rw` as not reaching the DMA choke point, justified by an `is_gp`
+gate in `scatter_gather_rw` **that does not exist**. Re-deriving the call graph showed the error was
+**larger than reported — three false cells, not one**: `gp_fifo_rw` and `ep_fifo_rw` also reach the choke
+point via `circular_scatter_gather_rw` and were **not listed at all**. **All four pinned write callbacks
+reach it.** **Root cause:** the generating script computed no reachability, so that column was
+**hand-written** — and a hand-written column can be wrong independently of the code it describes. The
+enumeration is rewritten with the edges derived from source.
+
+**Two completeness claims in this packet were wrong, and both were caught by adversarial review rather
+than by the Session's own checking:** the missing `FIFO_READ` hook (`AC-FIX (viii)`) and this enumeration.
 
 ---
 
@@ -205,3 +226,36 @@ accounting ruling, xemu pin `67cc79e663038d1f55448c0f566b37dde016adf6`, the `A4s
 4. EP routing.
 5. **`A4b2` boundary** — `A4b2-r3`'s `P2` and `AC-INPUTS` are **stale**; `A4b2-r4` is re-briefed later
    (its own revision), per the packet's Closure.
+
+---
+
+## Closure push — `A4b1-r4` accepted
+
+Recorded per the owner's push policy (`docs/reviews/owner-push-policy-xboxrecomp-fork.md`).
+
+```text
+PUSHED_TO:   origin
+BRANCH:      main
+COMMIT:      3a3c7c1fa9461d6a9cc7279180aacaaaf979ab7d
+REMOTE_URL:  https://github.com/danillogical/xboxrecomp.git
+RESULT:      SUCCESS - fast-forward 3f8bf67..3a3c7c1, 8 commits
+```
+
+**All five pre-push checks verified PASS before pushing:**
+
+| Check | Result |
+|---|---|
+| 1. Toolkit tree **clean** | **PASS** |
+| 2. Commit/branch is the **intended durable state** | **PASS** — `main` at `3a3c7c1`; `merge-base --is-ancestor origin/main HEAD` exits **0**, so it is a **fast-forward** and **no force was needed** |
+| 3. **Active packet's tests/acceptance passed** | **PASS** — `A4b1-r4` `ACCEPT` (stage 2 final); build succeeded; **ctest 14/14** re-run at the exact commit to be pushed |
+| 4. Destination is **the fork, not `upstream`** | **PASS** — `origin` = `danillogical/xboxrecomp`; `upstream` push is **`DISABLED`** |
+| 5. **Local SHA and branch recorded** | **PASS** — `main` @ `3a3c7c1fa9461d6a9cc7279180aacaaaf979ab7d` |
+
+**Post-push verification:** `origin/main` now equals local HEAD (`3a3c7c1…`); **`upstream/main` is
+unchanged at `766ecefcd7fb2a9b344de8ec891f6fe9ea14261b`**; the toolkit tree is still clean.
+
+**No `--force` / `--force-with-lease` was used, and nothing was pushed to `upstream`.**
+
+The 8 commits: `6e8b8b3` (.gitattributes) ? `090682e` (vendor) ? `8f8f6e4` (port) ? `772d723` (licences) ?
+`2333b6e` (latch mirror) ? `231596b` (FIFO hook) ? `4d841d0` (NOTICE fix) ? `3a3c7c1` (fixture).
+41 files changed, +19156/-390.

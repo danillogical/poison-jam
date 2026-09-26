@@ -98,7 +98,7 @@ were inferred from the Advisor's memory rather than read. Both are now read from
 
 The vendored files are stored byte-exact (`src/apu/dsp/.gitattributes` sets `* -text`), so the
 **vendor commit** matches the pin record for all 17 files — verified in
-`docs/reviews/a4b1-execution-evidence.md`. The port then made **local modifications to 5 files**,
+`docs/reviews/a4b1-execution-evidence.md`. The port then made **local modifications to 7 files**,
 each marked in-source with `A4b1 LOCAL MODIFICATION` and the upstream line it replaces. Extracted
 from the source, not transcribed from a report (`logs/a4b1/extract-modifications.py`).
 
@@ -112,7 +112,7 @@ from the source, not transcribed from a report (`logs/a4b1/extract-modifications
 | `interp/dsp_cpu.c` | 2 | `:32` the ledger include; `:910` the `MIXBUF` input hook on the mix-buffer read |
 | `gp_ep.c` | 13 | `:24` the ledger include; `:56` `scatter_gather_rw` routed through `DS3` + `DS5`; `:129` the bootstrap scratch-read accounting; `:241` the `FIFO_READ` hook; `:334` `proc_rst_write` per `DS1`; `:404, :470, :512, :544` **GNU case ranges → if/else-if in all four MMIO switches**; `:573` `mcpx_apu_dsp_frame` per `DS2`; `:641` the EP monitor passthrough kept **outside** the GP branch; `:664` `mcpx_apu_dsp_init`; `:689` the startup line |
 
-**Total: 28 markers across 7 files.**
+**Total: 29 markers across 7 files.**
 
 **The `dsp_dma.c` read-arm hook — the Advisor's ruling (C), 2026-09-26.** The pinned read arm
 implements only `buf_id` `0xE`/`0xF`. For any other id it prints `"Unhandled DSP DMA buffer"` and then
