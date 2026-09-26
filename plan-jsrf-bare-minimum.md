@@ -818,21 +818,28 @@ toolkit-only writes; `A4b2` = the strict trap+trace run (boot, run, clear, no-CP
 game-only writes, with preconditions P1 (`A4p-r1` ACCEPTED `O-GATE`) and P2 (`A4b1`
 ACCEPTED).
 
-## Draft packets — `A4b1`/`A4b2` (at r3; **the route is now live and `A4s` is complete, so the r4 revision is unblocked**)
+## Draft packets — `A4b2` only (`A4b1` is **ACCEPTED and PUSHED**; see `CURRENT PACKET` above)
 
-- **`A4b1`:** `docs/packets/a4b1-gp-core-port.md`, `A4b1-r3`, SHA-256
-  `321ABCF7C9319B5AC4661B384A21CA2D2CE39C792D9820C9C322B7979EC7AFDA` (373 lines). Claim: the
-  pinned xemu GP core, GP MMIO routing and address-translated GP DMA are in tree with per-file
-  provenance; synthetic ack removed; licence recorded; build+ctest green including a fixture;
-  one strict default run matches A4a R0. No guest GP-behaviour claim; toolkit-only writes.
-  **Its dependency on `A4s` is now SATISFIED** — `A4s-r6` is accepted and pushed, toolkit at `M`
-  = `3f8bf67c450861aefcbc376698750bc1446bc9dd`. The revision to **`A4b1-r4`** takes `M` as
-  its baseline, per the `CURRENT PACKET` next-action block above.
-- **`A4b2`:** `docs/packets/a4b2-gp-clears-pending-word.md`, `A4b2-r3`, SHA-256
-  `CFB8C0EBFBC9BE3CFB62677C4C756694DDE9663542E239570B639DED9F5BFCE9` (310 lines). Claim: in one
-  strict run (`RECOMP_GPU_ACK=0`, `RECOMP_APU_TRAP=1`) the `loc_001A18D0` wait was satisfied by
-  modelled GP execution of the guest's own command. Preconditions P1 (`A4p` `O-GATE`) and P2
-  (`A4b1` ACCEPTED). Game-only writes.
+> **Corrected 2026-09-26.** This block previously described **both** packets as drafts at r3. **`A4b1` is
+> no longer a draft:** `A4b1-r4` was **accepted (`R1-PASS`)** and **pushed** to the fork at
+> `3a3c7c1fa9461d6a9cc7279180aacaaaf979ab7d`. Its history is preserved below rather than deleted, because
+> the `A4b2` revision cites it.
+
+- **`A4b1` — ACCEPTED, PUSHED, COMPLETE (historical entry).** Was `A4b1-r3`, SHA-256
+  `321ABCF7C9319B5AC4661B384A21CA2D2CE39C792D9820C9C322B7979EC7AFDA` (373 lines); **superseded by
+  `A4b1-r4`** (`6DD62A57E87445F5C12085210146204AA4E77D26FD316071FD41CAEC76835C38`, 445 lines), which
+  passed **all four criteria** and every gate and was **accepted by the two-stage review** — stage 1
+  `NOT ACCEPTED` on `AC-PORT`, corrected, **stage 2 `ACCEPT`**. `A4b1-r3` remains recoverable from git
+  (`git cat-file blob 3f05c0f95205bfef06c0d75a0ba1038b670e9550`). **Do not reopen.**
+- **`A4b2`:** `docs/packets/a4b2-gp-clears-pending-word.md`, currently `A4b2-r3`, SHA-256
+  `CFB8C0EBFBC9BE3CFB62677C4C756694DDE9663542E239570B639DED9F5BFCE9` (334 lines, including the appended
+  r4 sketch). Claim: in one strict run (`RECOMP_GPU_ACK=0`, `RECOMP_APU_TRAP=1`) the `loc_001A18D0` wait
+  was satisfied by modelled GP execution of the guest's own command. Preconditions P1 (`A4p` `O-GATE`) and
+  P2 (`A4b1` ACCEPTED) are **satisfied** — but **P2 pins `A4b1-r3` and its `AC-INPUTS` decides from the
+  retired per-key `[GPIN]` lines and `GPIN_OVERFLOW`, so the packet is stale against the accepted
+  baseline.** Its revision to **`A4b2-r4`** is planned and its **sketch was cleared by the Advisor
+  (`SHAPE: PROCEED`)**; **the body is not yet written because the Claude route is down** — see the
+  `CURRENT PACKET` block. Game-only writes.
 - **The ledger (ruling 1) is sound and unchanged.** Device semantics 6 is a **write-once
   watched-word ledger** (atomic `seq`, uncapped counters, per-class latches — `GP_CLEAR`,
   `GP_ZERO_OVER_ZERO`, `GP_ZERO_OVER_OTHER`, `GP_NONZERO_OVER`, `GP_PARTIAL`; CPU
