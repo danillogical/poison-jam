@@ -186,8 +186,42 @@ all ten criteria `AGREED`), and **pushed** to the owner's fork; the toolkit has 
 disposition at `M`. **The current work is the Planner's revision of `A4b1` → `A4b1-r4`**
 (`PREMISE_CHANGED`, §5.4(2)), then `A4b2`.
 
-**`A4b1-r4` — IN FLIGHT (2026-09-25).** The Session completed the premise reconnaissance and froze the
-brief; the Kimi K3 Planner is writing the packet.
+**`A4b1-r4` — PACKET WRITTEN, full adequacy review in flight (2026-09-25).** The Advisor ruled
+**`SHAPE: PROCEED`** on the Planner's sketch; the packet body is written and a **full formal §5.3 review**
+by a fresh Kimi Planner is running.
+
+- **Packet:** `docs/packets/a4b1-gp-core-port-r4.md`, revision **`A4b1-r4`**, class **change**, SHA-256
+  **`6DD62A57E87445F5C12085210146204AA4E77D26FD316071FD41CAEC76835C38`**, **445 lines**. The canonical
+  `docs/packets/a4b1-gp-core-port.md` (`A4b1-r3`, `321ABCF7…`) is **untouched** — promotion is the
+  Session's step.
+- **Advisor rulings (binding, verbatim):** `docs/reviews/a4b1-r4-planning-rulings.md`. Four parts:
+  **shape `PROCEED`**; **`[GPIN]` = the finite-universe/provenance-class design in full** (part 2);
+  **identifier = `A4b1-r4`** (part 3); and **part 4 — P-F is load-bearing, not a wording fix.**
+- **The packet is LARGER than a pure re-baseline, and the class statement says so:** it is *both* a
+  **§5.4 After-INADEQUATE repair** of `A4b1-r3`'s blocking defects B1/B2 *and* a **§5.4(2)
+  `PREMISE_CHANGED`** re-bind to `M`. **No `A4b1` revision has ever been `ADEQUATE`; `A4b1-r3` is
+  superseded.** Hence a **full** adequacy review, not a delta re-review.
+- **What the packet carries:** DS3 rewritten for the **non-injective** forward map (four-case inverse —
+  window-VA first, then high-water `XBOX_CONTIG_BASE + P`, then mapped low-RAM identity, then fail closed
+  — citing `dma_resolve` **and** `xbox_memory_layout.c:843`, with `GPDMA_AMBIGUOUS` and the aliasing claim
+  limit); DS6 with the **full** finite-universe `[GPIN]` design (MIXBUF `[NUM_MIXBINS = 32]`, PERIPH
+  `[128]`, FIFO `[6]`, DMA region classes `[4]`, `BOOT_SCRATCH_READ`, `GPIN_OUT_OF_UNIVERSE` as a bug
+  detector, `at_clear` freeze at `GP_CLEAR`, capped observation, fixed-count emission) with the r3
+  table/`GPIN_OVERFLOW`/per-key lines/cut-off **retired and named as must-not-reappear**; DS5's CPU-site
+  table sized one-per-enumerated-`jsrf_watch_store`-site with `CPU_ZERO_OVERFLOW` a bug detector; DS7's
+  `[GPBOOT]` printing **both** `sge0` (raw) and `sge0_va` (translated); and AC-FIX `(viii)` kept with
+  `(ix′)/(x)/(xi)` replacing `(ix)`, `(vii)` in **two** forms that can fail in both directions.
+- **`A4b2` boundary note is in the packet** (`A4b2-r3`'s P2 and `AC-INPUTS` become stale; `A4b2-r4`
+  re-brief items recorded). **`A4b2` is not revised here.**
+- **Regeneration is a non-goal**, so the pytest gated lead **stays gated and unexercised** — no `pytest`
+  work is manufactured.
+- **Session verifications supporting the packet:** the Advisor's one **inferred** claim is now
+  **OBSERVED** (slot `0x001C40E8` holds `0x800000AD` = ordinal 173 `MmGetPhysicalAddress`, with exactly
+  **10** calls through it and exactly **6** returning into the DSOUND range
+  `0x1A4E42–0x1A70C6`); and the DS3 citations are verified with the **ordering nuance** that DS3 must test
+  window-VA **before** the high-water mark (`docs/reviews/a4b1-r4-ds3-citations-verified.md`).
+
+**The premise reconnaissance (below) remains the measured basis for the re-bind.**
 
 - **Frozen brief:** `docs/reviews/a4b1-r4-planning-brief.md` (the task, the verified baseline, the
   ordered reading list, the measured premise delta, the four premise answers, the pytest lead, and the
@@ -196,17 +230,18 @@ brief; the Kimi K3 Planner is writing the packet.
   `A4b1` touches** — `src/apu/apu_dsp.c` (+56/−3) and `src/apu/CMakeLists.txt` (+7/−1);
   `apu_core.c`, `apu_state.h`, `apu.h` and `apu_mmio_hook.c` are **byte-identical**. So the APU surface
   is almost untouched, which is why this is a premise re-check and not a redesign.
-  - **One premise changed in form, in `A4b1`'s favour:** `bridge_MmGetPhysicalAddress` no longer returns
-    the VA itself; it delegates to `xbox_MmGetPhysicalAddress`, and the *deleted* comment had warned the
-    delegate *"would return a native pointer"*. **Read directly, it returns no native pointer** — the VA
-    unchanged outside the contiguous arena, `va − XBOX_CONTIG_BASE` inside it. The address premise
-    **holds and is better founded**, because A4s removed a real inconsistency where the bridge translated
-    and the delegate did not.
-  - **The inverse is already documented in-tree** (`docs/reviews/a4b1-r4-inverse-precision.md`):
-    `XBOX_CONTIG_BASE = 0x80000000` = the contiguous window, and `xbox_memory_layout.c:843-845` states the
-    round trip — *"The contiguous window IS the physical-address view, so OR-ing its base is the
-    documented round trip, not a guess"* → `physical P → XBOX_CONTIG_BASE | (P & 0x0FFFFFFF)`. So Device
-    semantics 3 needs a **citable wording correction, not an invention**.
+  - **P-F is CORRECTED by the Advisor (part 4):** the Session's original reading — *"premise
+    strengthened, a wording correction"* — **understated the change.** The forward map went from
+    **identity** to **non-injective**, so low-RAM VA `X` and window VA `0x80000000+X` both map to physical
+    `X`; the Session's proposed inverse formula was **wrong** and is superseded by the Advisor's four-case
+    rule. The record carries a correction banner.
+  - The other premises **hold or are unchanged**, including the strict stop.
+  - **The inverse the packet needs is documented in-tree** (`docs/reviews/a4b1-r4-inverse-precision.md`,
+    now superseded in its *formula* by the Advisor's part 4): `XBOX_CONTIG_BASE = 0x80000000` **is** the
+    contiguous window, and `xbox_memory_layout.c:843-845` states the round trip — *"The contiguous window
+    IS the physical-address view, so OR-ing its base is the documented round trip, not a guess."*
+    **The Advisor's four-case inverse replaces the Session's `XBOX_CONTIG_BASE | (P & 0x0FFFFFFF)` form,
+    which is wrong for any identity-passed low-RAM address.**
   - **The `& 0x03FFFFFF` hazard is real and pre-existing:** 8 live sites, including `apu_shim.h:101-123`
     and `apu_vp.c:846` — both **byte-identical** across the baseline move. Note the masks differ
     (`0x03FFFFFF` = 26 bits vs the round trip's `0x0FFFFFFF` = 28 bits), which is exactly the distinction
