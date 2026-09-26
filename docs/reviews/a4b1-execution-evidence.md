@@ -148,9 +148,25 @@ fixed it; a clean rebuild then confirmed the result does not rest on incremental
 | `[GP(BOOT\|RUN\|DMA\|IN\|WATCH)]` count = 0 | **0** |
 | `[A4BSTORE]` count = 0 | **0** |
 
-**The zero counts are meaningful because the patterns are not dead:** `AC-FIX`'s trace-on arm asserts
-those exact lines exist and match the snapshot when `RECOMP_APU_TRACE=1`. The `A4s` accepted baseline
-shows the same three zero counts, so the default path is unchanged.
+**The zero counts are meaningful because the patterns are not dead — verified with a positive control.**
+`AC-DEFAULT`'s Controls name `AC-FIX`'s trace-on output as the known-bad for `[GP*]`, so the Session
+measured it:
+
+| Source | `[GPBOOT]` | `[GPRUN]` | `[GPIN]` | `[GPWATCH]` | `[GPDMA]` | `[GP(BOOT\|RUN\|DMA\|IN\|WATCH)]` |
+|---|---|---|---|---|---|---|
+| **R0 (strict, trace off)** | 0 | 0 | 0 | 0 | 0 | **0** |
+| **`AC-FIX` trace-on** (`apu_watch_fixture_stderr.txt`) | 650 | 2 | 175 | 104 | 23 | **954** |
+
+**954 vs 0.** The regex finds the lines when they exist, so the zero in R0 is a **genuine absence**, not a
+dead pattern. The `A4s` accepted baseline shows the same three zero counts, so the default path is
+unchanged.
+
+**A false start on this control, recorded.** The Session's first attempt ran the fixture executable
+directly and counted **0** `[GP*]` lines, which would have "confirmed" a dead pattern. The fixture
+**`freopen`s its own stderr** to `apu_watch_fixture_stderr.txt` (as the packet's step 8 requires), so its
+trace output never reaches the parent's captured stream. Counting the right artifact gave 954.
+**The control was one indirection away from being read backwards** — an absence check that appears to
+confirm itself is exactly the failure mode the control exists to catch.
 
 ---
 
