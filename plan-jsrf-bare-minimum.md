@@ -6,7 +6,53 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4s-r6` (toolkit sync) — **ACCEPTED 2026-09-25, `R-SAME`, PUSHED**
+## CURRENT PACKET — `A4b1-r4` (GP/DSP core port) — **PROMOTED 2026-09-25, ready to execute**
+
+- **Packet:** `docs/packets/a4b1-gp-core-port.md`, revision **`A4b1-r4`**, class **change**, frozen
+  SHA-256 **`6DD62A57E87445F5C12085210146204AA4E77D26FD316071FD41CAEC76835C38`** (**445 lines**).
+  **This is the packet to execute.** Promotion was **byte-identical with no revision**, as §5.3
+  requires. The superseded `A4b1-r3` (`321ABCF7…`) remains recoverable from git
+  (`git cat-file blob 3f05c0f95205bfef06c0d75a0ba1038b670e9550`).
+- **Adequacy:** **`VERDICT: ADEQUATE`**, `BLOCKING: NONE`, `PREMISE_FRESHNESS: PASS` — recorded
+  **verbatim** with the reviewer's child ID and route in `docs/reviews/a4b1-r4-adequacy-review.md`
+  (fresh Planner child `5db5fd71-b1db-479d-9e5c-14043d54e211`, `workbuddy-ai/kimi-k3`). It was the
+  **full formal §5.3 review** the Advisor mandated, not a delta re-review, and it checked **all six**
+  mandated scope items individually. It independently re-verified the packet SHA, reproduced the
+  load-bearing toolkit citations at `M`, confirmed the **8 live `0x03FFFFFF` sites**, and confirmed the
+  packet uses the **Advisor's** DS3 rather than the Session's superseded formula.
+- **Why this packet is larger than a re-baseline — and correctly so.** It carries **two** revision
+  grounds: **(1)** a **§5.4 After-INADEQUATE** repair of `A4b1-r3`'s blocking defects **B1** (the
+  `[GPIN]` 256-entry table's key space exceeded the MIXBUF universe → false `R2-UNKNOWN`) and **B2**
+  (`sge0` and the counts-line `seq` undefined and unasserted → false `R2-NOBOOT`); and **(2)** a
+  **§5.4(2) `PREMISE_CHANGED`** re-bind to `M`. **No `A4b1` revision had ever been `ADEQUATE`; `A4b1-r3`
+  is superseded.** The Planner found the `[GPIN]` lineage conflict; the Advisor ruled the redesign **in
+  scope**, because it is caused by the inadequate verdict, **not** by A4s changing files.
+- **Advisor rulings (binding, verbatim):** `docs/reviews/a4b1-r4-planning-rulings.md` — shape
+  **`PROCEED`**; `[GPIN]` = the **finite-universe/provenance-class design in full**; identifier
+  **`A4b1-r4`**; and **part 4 — P-F is load-bearing**, the forward map is now **non-injective**, so DS3's
+  inverse is rewritten (the Session's earlier formula was **wrong** and is superseded).
+- **What the packet carries:** DS3's four-case inverse (window-VA **first**, then high-water
+  `XBOX_CONTIG_BASE + P`, then mapped low-RAM identity, then fail closed), citing `dma_resolve` **and**
+  `xbox_memory_layout.c:843`, with `GPDMA_AMBIGUOUS` and the aliasing claim limit; DS6's **full**
+  finite-universe `[GPIN]` design (MIXBUF `[NUM_MIXBINS = 32]`, PERIPH `[128]`, FIFO `[6]`, DMA region
+  classes `[4]`, `BOOT_SCRATCH_READ`, `GPIN_OUT_OF_UNIVERSE` as a bug detector, `at_clear` freeze at
+  `GP_CLEAR`, capped observation, fixed-count emission) with the r3 table / `GPIN_OVERFLOW` / per-key
+  lines / cut-off **retired and named as must-not-reappear**; DS5's CPU-site table sized
+  one-per-enumerated-`jsrf_watch_store`-site with `CPU_ZERO_OVERFLOW` a bug detector; DS7's `[GPBOOT]`
+  printing **both** `sge0` (raw) and `sge0_va` (translated); and AC-FIX `(viii)` kept with
+  `(ix′)/(x)/(xi)` replacing `(ix)`, and `(vii)` in **two** forms that can fail in **both** directions.
+- **`A4b2` boundary note is in the packet** — `A4b2-r3`'s precondition P2 and its `AC-INPUTS` become
+  **stale**; the `A4b2-r4` re-brief items are recorded there. **`A4b2` is not revised here.**
+- **Regeneration is a non-goal**, so the pytest gated lead **stays gated and unexercised** — no `pytest`
+  work is manufactured.
+- **Deferred advisories (recorded, not reopening the packet):** AC-FIX `(v)`'s `CPU_ZERO_OVERFLOW ≥ 1`
+  is a deliberate lower bound under finite-universe sizing (the can-fail property is preserved by `(x)`);
+  a soft "where the snapshot records them" qualifier carried from r3; and two observation-only subfields
+  that **no row reads**.
+- **Next action: execute `A4b1-r4` literally**, beginning with its **P0/Readiness** gates. `A4s` is
+  complete; `A4b1` reaching a durable disposition is the precondition for `A4b2`.
+
+### Predecessor — `A4s-r6` (toolkit sync) — **ACCEPTED 2026-09-25, `R-SAME`, PUSHED** (complete)
 
 > **RESULT: the merge succeeded, the strict stop is UNCHANGED, and `M` is ACCEPTED and PUSHED.**
 > Every gate passed. Toolkit `main` is at **`M` = `3f8bf67c450861aefcbc376698750bc1446bc9dd`** (parents
