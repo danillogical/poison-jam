@@ -354,6 +354,39 @@ immediate leaves **CLOSE**. Therefore:
 while looking like hex `0x12`. My first pass read `0018` as hex and identified the wrong descriptor. **The
 correct descriptor was found only by measurement.**
 
+### Independent re-derivation — deliberately not reusing my own scripts
+
+Because this analysis produced six self-caught errors, the block-24 claim was **re-derived from the raw
+artifacts with fresh code that reuses none of the earlier tooling**. Results:
+
+| Check | Result |
+|---|---|
+| **A.** The trace line, verbatim | `[GPDMADESC] GP_CLEAR produced by block_addr=0018 (dsp_addr=000800)` |
+| **B.** Block 24 present in the artifact | **yes** — and it is the **last read before the exchange** |
+| **C.** `P 000E`'s registers, read straight from the decode | `P 0009 move #$18,r0` / `P 000A move #$00,r1` / `P 000B move #$000800,r2` / `P 000D move #$06,r3` |
+| **D.** Builder B's store offsets | `x:(r0+0)`, `+1`, `+2`, `+3`, `+4` — matching the DMA's field layout |
+| **E.** The arithmetic | `0 + 0x800 = 0x800` = observed `dsp_addr` — **MATCH** |
+| **F.** Stub inputs in any field source | **none** |
+
+**And the sharpest independent detail:** within the **first 766 events** (up to the exchange), block 24 is
+read **exactly once**, at **ordinal 765** — the **final read before the exchange fires at 766**. That is
+exactly the signature a once-only exchange should have, and it was found by reading the artifact, not by
+reasoning about it.
+
+### A counting subtlety found during that check, and stated so it is not misused
+
+The **artifact** contains **8 251** data lines; the **freeze terminal** reported **events=766**. Both are
+correct and they measure different windows:
+
+- the **terminal** count (766) is the tally **at the exchange** (frame 256 of 768);
+- the **artifact** keeps appending until the run ends (frame 768, crash at ~4.6 s), so it is a
+  **whole-run** tally.
+
+The block frequencies differ accordingly — up to the exchange there are **6** distinct blocks, whole-run
+**14**. **Any tally quoted from the artifact is a whole-run tally and must not be mixed with the
+terminal's up-to-exchange numbers.** Recorded because the two were nearly conflated in my own first read of
+the artifact (which reported 8 181 lines and I had taken as the trace total).
+
 ## Row: referred to the Advisor — the frontier now closes on measured evidence
 
 **What the evidence now shows:**
