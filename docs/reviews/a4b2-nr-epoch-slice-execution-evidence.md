@@ -315,19 +315,34 @@ GP_CLEAR latch now reports the block it was consuming:
 [GPWATCH] latch class=GP_CLEAR seq=198852 va=803C0810 observed=00000003 payload=00000000 ... dsp_addr=000800
 ```
 
-**`block_addr=0018` is DECIMAL 24** (`dsp_dma.c` uses `block_addr` directly as an X address). **Block 24 is
-the `P 000E` call's descriptor**, built by builder B (`P 00EB`) with:
+**`block_addr` is printed with `%04X` — it is HEX.** So `0018` is **hex `0x18` = block 24 decimal**, the
+descriptor built by the **`P 000E`** call (builder B, `P 00EB`).
+
+> **RADIX CORRECTION (Advisor-ordered, applied).** An earlier version of this record said *"`block_addr` is
+> decimal, so that is 24"* and framed the coincidence as *"`#$18` and `block_addr=0018` are both decimal
+> 24"*. **Both statements were wrong.** The print format is `%04X` (`apu_watch.c:657`), i.e. **hex**, and
+> DSP immediates are hex throughout (`#$18` = `0x18` = 24). The **value 24 is correct** — `0x18` = 24 — but
+> the *reasoning* was backwards, and a reader doing decimal arithmetic would re-derive **block 18** →
+> region `[18..22]` → **the wrong descriptor again**, which is the exact failure this correction exists to
+> prevent. The whole system closes consistently under **hex**: the chain is `0x06 → 0x25 → 0x1E`,
+> `r0 = #$18` = `0x18` = 24, and `#$000012` = `0x12` = 18 → region `[18..22]`.
+
+**Every field of that descriptor is an immediate:**
 
 | Field | Value | Source |
 |---|---|---|
-| `+0` next_block | `(24 & 0x3fff) \| 0x4000` = `0x4018`, **EOL set** | builder's own computation |
+| `+0` next_block | `(0x18 & 0x3fff) \| 0x4000` = `0x4018`, **EOL set** | builder's own computation |
 | `+1` control | `0x59E2` | `P 00F1` **immediate** |
 | `+2` count | **`6`** | `P 000D move #$06,r3` — **immediate** |
 | `+3` dsp_offset | **`0`** | `P 000A move #$00,r1` — **immediate** |
 | `+4` scratch_offset | **`0x000800`** | `P 000B move #$000800,r2` — **immediate** |
 
-**`scratch_offset = 0x000800` reproduces the observed `dsp_addr=000800` exactly** (with `scratch_base = 0`),
-and **every field is an immediate**. **Neither stub input appears in any of them.**
+**Neither stub input appears in any field.** Per the packet's own leaf classification, immediate leaves
+**CLOSE**.
+
+> **FORBIDDEN (Advisor `R2`):** citing the region-counter tallies (`in_doorbell_region`, `in_mixbin_region`)
+> as evidence of **block identity**. Those labels predate the radix correction and their region bounds are
+> unverified here. **Cite only the latch-attributed line and the ordinal analysis.**
 
 ### What this settles
 
@@ -350,9 +365,13 @@ immediate leaves **CLOSE**. Therefore:
 2. **My "neither descriptor reproduces `dsp_addr`" claim was wrong**, and so was my follow-up correction that
    `x:[6..10]`'s was the match. **Block 24's `scratch_offset = 0x800` is the one that matches**, exactly.
 
-**A trap worth naming:** `#$18` and `block_addr=0018` are both **decimal 24**, but `#$000012` is decimal 18
-while looking like hex `0x12`. My first pass read `0018` as hex and identified the wrong descriptor. **The
-correct descriptor was found only by measurement.**
+**A trap worth naming, and my first account of it was backwards.** I originally wrote that `#$18` and
+`block_addr=0018` are *both decimal 24* while `#$000012` is decimal 18. **That was wrong.** DSP immediates
+are **hex** (`#$18` = `0x18` = 24; `#$000012` = `0x12` = 18) and the trace print is **hex** (`%04X`). The two
+agree because **both are hex**, not because both are decimal. **The real trap is the opposite one:** a
+reader who takes `0018` as decimal computes block 18 → region `[18..22]` → **the wrong descriptor** — the
+same misidentification this whole correction exists to kill. **The correct descriptor was found only by
+measurement.**
 
 ### The `scratch_base = 0` assumption — checked, because it was load-bearing
 

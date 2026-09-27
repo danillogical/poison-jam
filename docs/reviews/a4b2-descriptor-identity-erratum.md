@@ -17,11 +17,19 @@ Several records — including four **frozen packets** — refer to `x:[6..10]`, 
 [GPDMADESC] GP_CLEAR produced by block_addr=0018 (dsp_addr=000800)
 ```
 
-`block_addr` is **decimal**, so that is **block 24** — the descriptor built by the **`P 000E`** call
-(builder B, `P 00EB`), whose fields are `r1 = 0`, `r2 = 0x000800`, `r3 = 6`, **all immediates**, and whose
-`scratch_offset = 0x800` reproduces the observed `dsp_addr=000800` exactly.
+`block_addr` is printed with **`%04X` — hex** (`apu_watch.c:657`), so `0018` is **hex `0x18` = block 24
+decimal** — the descriptor built by the **`P 000E`** call (builder B, `P 00EB`), whose fields are `r1 = 0`,
+`r2 = 0x000800`, `r3 = 6`, **all immediates**, and whose `scratch_offset = 0x800` reproduces the observed
+`dsp_addr=000800` exactly.
 
-**The correct identifier: block 24, built by the `P 000E` call.**
+> **RADIX NOTE (Advisor-ordered correction).** An earlier version of this erratum said `block_addr` is
+> **decimal**. **That was wrong** — the format is `%04X`, i.e. hex, and DSP immediates are hex throughout.
+> The **value 24 is correct** (`0x18` = 24), but the *reasoning* was backwards, and a reader doing decimal
+> arithmetic would re-derive **block 18** → region `[18..22]` → **the wrong descriptor again**. The system
+> closes consistently under hex: chain `0x06 → 0x25 → 0x1E`, `r0 = #$18` = 24, `#$000012` = `0x12` = 18 →
+> `[18..22]`.
+
+**The correct identifier: block 24 (`0x18`), built by the `P 000E` call.**
 
 ## Why it went unnoticed for four packets
 
