@@ -69,13 +69,68 @@ strict criterion is discharged; `A4b2-r7` stays `R2-EXPL-INPUT`.
 **Next authorized action:** **`A4b2-NR-next-edge`** — the row the followup's own outcome table names for
 `O-INCONCLUSIVE` — scoped to the **full executed program** (`0x0000`–`0x0F28`, 2 340 PCs, 3 964 decoded
 instructions), building the PC-indexed CFG/def-use slice over every feasible route to the first doorbell
-descriptor and DMA write. The followup's closure duties also remain: remove the predecessor's retained
-`bad-output` arm after preserving its bite, and run a final absent-env default-control to establish every
-diagnostic gate is inert.
+descriptor and DMA write.
+
+### Advisor ruling on this execution — binding on the next packet
+
+`docs/reviews/a4b2-nr-followup-advisor-ruling.md` (handle `muse_FkNhGaXtV9P5`, `muse-spark-1.3-contributor`,
+effort `max`). **Row call `O-INCONCLUSIVE` CONFIRMED.** No contract impact; **no `§5.4(2)` anywhere** — the
+predecessor never premised "the program is 512 words", so nothing downstream relied on an invalidated
+premise. The scope defect only strengthens the direction already recorded.
+
+**The `A4b2-NR-next-edge` Planner brief MUST carry the Advisor's Q2 lists.**
+
+**SUSPENDED — every completeness/negative claim from the 512-word analysis. What died is every
+"only / never / every / no-other" uttered over a 16% enumeration.** Must be re-derived over the full
+3 881-word program before next-edge may rely on any of it:
+
+1. All `0xFFFFB3` read sites — the **"four reads" count is forbidden** until re-enumerated.
+2. Full def-use of `x:$007c`–`x:$007f` — **"loop-control-only" suspended** (upper code may read them).
+3. All callers of builder `P 00DB` + all reaching definitions of `r0`–`r3` at entry — **"sole builder /
+   all-immediate" suspended**.
+4. All DMA-register writes + trigger sequences — **"sole trigger" suspended**.
+5. All X-writes to `$0000`–`$0004` — **"mailbox never written" suspended**.
+6. All branch/call targets program-wide — the **"none targets `00CC`–`00D1`" *feasibility* ground
+   suspended** (its *execution* ground stands).
+7. `r1` reaching-definitions at `P 00B9` including `P 008C` and any upper writers — feasibility closure of
+   the measured edge (the trace answers this run's reads, not all feasible mailbox values).
+
+**CARRIES without re-derivation:** the 512-word decode bytes; the `op =` execution-absence
+(window-independent: the interpreter decodes on opcache miss during execution, so every executed PC was
+decoded, and `op =` fired 0× across execution runs against the decode run's 6× positive control); the
+`P 00B9` measurement table; the six table words' values and bin-alignment arithmetic; the doorbell tuple;
+literal readings (`P 0004`/`P 000B`, `dor #$0006`); per-instruction semantics within the window.
+
+**FORBIDDEN:** citing any 512-word-era "only/never/every" claim; citing `P 00B9` as open; treating trace
+absence as feasibility proof. The 2 340-PC histogram may be used **only** as a cross-check lower bound
+(executed ⊆ slice-covered) — the `PROVEN` bar remains **feasibility**-based.
+
+**`L2` status:** the r2 four-arm same-exe series **STANDS** as the `L2` core (window-independent). The
+eight followup runs are **admissible as cross-build transfer/robustness corroboration but FORBIDDEN as
+perturbation evidence** — they test instrumentation/build-invariance, a different counterfactual. They
+bridge r2's `L2` to the next identity, so only **one** fresh absent-gate baseline is required there (the
+closure control doubles as it). **Condition:** if next-edge changes GP-path behaviour with gates absent, a
+fresh same-exe mini-series is required (baseline + one changed-input arm with changed-counters +
+comparator-validity recheck).
+
+**`bad-output` removal: authorized** (bite preserved and re-verified).
+
+**Q4 guardrails — Planner must place in next-edge scope or a bounded commit:** source comments at both
+field declarations (`dsp_cpu.h:49` — never populated, do not read; `dsp.h:105` — clobbered by
+`sync_to_vm` in traced runs, do not read) plus a canonical-GP-test note (`DSPState.is_gp` via `opaque`;
+`dma.is_gp` in DMA paths). **Future classification by either core field is FORBIDDEN.** Deleting the dead
+`is_gp` copies in both sync functions is **permitted, not required** (zero observable change; Planner's
+call). `A4b1-r4` is **unaffected** and must not be touched.
+
+**Session correction accepted:** my §8 account said `core->is_gp` is "permanently 0"; the accurate picture
+is that `dsp_init` sets the **VM** field correctly but `dsp_c_sync_to_vm` **clobbers it** with the
+interpreter core's unwritten `0` on every traced GP frame, so **both** fields read `0` in traced runs.
+Contained (VM field has zero readers; interpreter field's only readers are the corrupting copy, a
+compiled-out trace macro, and my fixed helper). The evidence record is corrected accordingly.
 
 ---
 
-## Previous packet — `A4b2-NR-followup-r1` (**discovery**: close the three gaps that kept `L1` open) — **PROMOTED 2026-09-27, `ADEQUATE`**
+## Previous packet — `A4b2-NR-followup-r1` **EXECUTED 2026-09-27 → gap 1 CLOSED; `O-INCONCLUSIVE` stands, reason now quantified**
 
 - **Packet:** `docs/packets/a4b2-nr-followup.md`, revision **`A4b2-NR-followup-r1`**, class **discovery**,
   frozen SHA-256 **`886620CC6797FC89130B1F89310E6B41C92E809F32820A8133609FBEEC9CC5F5`** (**33 lines**).

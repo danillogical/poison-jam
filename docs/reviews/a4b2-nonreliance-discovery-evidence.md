@@ -525,14 +525,30 @@ now has the whole executed program available.
 The first B9 run reported **`gp_exec_total=0`** and zero events, while its own PC histogram showed 288
 distinct PCs of the GP image executing. Cause: `b9_core_is_gp()` originally read **`core->is_gp`**, which
 is **only ever written by `dsp_c_sync_from_vm()`** — a function that is registered in the ops table
-(`dsp_c.c:324`) but **never called** on this path, so the field is permanently `0`. The reliable source is
-`core->opaque`, which `dsp_c_init()` points back at the `DSPState` (`dsp_c.c:282`) and whose `is_gp` *is*
-set at `dsp_init()` (`dsp.c:143`).
+(`dsp_c.c:324`) but **never called** on this path, so the field is `0`.
+
+**Session correction, from the Advisor's audit.** I first wrote that this field is "permanently 0". The
+accurate picture is **worse and differently shaped** (`docs/reviews/a4b2-nr-followup-advisor-ruling.md`
+Q4): there are **two** core structs. `dsp_init()` **does** set the VM field `dsp->core.is_gp` correctly
+(`dsp.c:144`) — but `dsp_c_sync_to_vm()` **overwrites it with the interpreter core's unwritten `0` on
+every traced GP frame** (`dsp_c.c:215` ← `gp_ep.c:651`), while `dsp_c_sync_from_vm()` — the sole writer of
+the interpreter field (`dsp_c.c:252`) — has **zero callers** anywhere in `src/`. So in traced runs **both**
+fields read `0`. The reliable source is `core->opaque` → `DSPState.is_gp` (`dsp.c:143`, never
+overwritten), which is what the fix uses.
 
 **This is a latent defect in the pinned toolkit, not in this packet's instrumentation alone:** any code
-that classifies work by `core->is_gp` on the interpreter core will silently see "not the GP". It is
-recorded here because a future reader could otherwise repeat it. It also means the *first* B9 run is
-**not** evidence of anything — it is preserved only as the record of the defect.
+that classifies work by either core field will silently see "not the GP". It is recorded here because a
+future reader could otherwise repeat it. It also means the *first* B9 run is **not** evidence of anything —
+it is preserved only as the record of the defect.
+
+**A4b1 is unaffected, and the Advisor verified this.** The VM field has **zero readers** in `src/`; the
+interpreter field's only readers are the corrupting copy itself, a trace macro that compiles to
+`((void)0)`, and this packet's fixed helper. Write-write-never-read plus a dead registration is
+unobservable and behaviour-neutral. Every live classifier reads `DSPState.is_gp` (`dsp.c:203`,
+`dsp_c.c:111`, `gp_ep.c:364,366`) or `dma.is_gp` (`dsp_dma.c:331`), neither of which is overwritten.
+**`A4b1-r4`'s acceptance is not affected and it was not touched.** The Advisor requires guardrail comments
+at both field declarations and **forbids** future classification by either core field; that obligation is
+tracked for the next packet.
 
 ### What gap 1's closure does and does not license
 
