@@ -100,7 +100,48 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — **`A4b2-r8` DRAFT committed, awaiting non-authoring §5.3 adequacy** (not promoted)
+## CURRENT PACKET — `A4b2-r8` (**change**: the ported GP engine clears the pending word, now carrying the two-leg non-reliance) — **PROMOTED 2026-09-27, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a4b2-gp-clears-pending-word.md`, revision **`A4b2-r8`**, class **change**,
+  frozen SHA-256 **`4D4AFC304F571971EB180C19D6832D56A2CC62FF6EAAFB9E4928716125397C62`** (**161 lines**).
+  **This is the packet to execute.** Promotion byte-identical with no revision (§5.3); hash verified
+  **3× over 10 s** immediately before, matching the author's report and the reviewer's independent check.
+- **Adequacy:** **`VERDICT: ADEQUATE`**, `BLOCKING: NONE`, `PREMISE_FRESHNESS BOUNDED` — by a
+  **non-authoring** Planner (child `bedc4a02-…`), as a **change** packet requires under §5.3. The authoring
+  Planner flagged that its own self-check was **not** the required review, and the Session did **not**
+  freeze on it. Review: `docs/reviews/a4b2-r8-adequacy-review.md`. Verification:
+  `docs/reviews/a4b2-r8-session-verification.md`.
+- **What it carries** (the Advisor's Q3 list): the terminal conditional **`O-TWO-LEG`** after clean V2 with
+  `L1=PROVEN`/`L2=INVARIANT` + the earlier input-specific conditional ruling; **`r7` stays
+  `R2-EXPL-INPUT`, no retroactivity**; the **block-24 identity with corrected radix** (`%04X` is hex, so
+  `0018 = 0x18 = block 24`; the old `P 0007`/`x:[6..10]` identifier expressly retired); the **leaf table**;
+  and the **second-image boundary** (interface enumerated per V2, **internals unanalyzed and unneeded**,
+  `B3-ID` deferred).
+- **The substantive change** — the restated **`AC-INPUTS`** qualifier — was ruled by the reviewer as
+  *"sound only as exchange-specific substitution under recorded Advisor conditional ruling, **not a value
+  model or retroactive PASS**"*: `r7` stays `R2-EXPL-INPUT`, **all other stubs retain `FAIL`**, and P2/P4
+  **stop** on unverifiable proof transfer. The two named stub classes get **non-reliance by measurement**,
+  **not** a relabelling as modelled.
+- **Verified by the reviewer:** packet hash matched before and after; **25 manifest entries checked, zero
+  missing or mismatched**; all four Q3 items carried; **neither** DMA chain-restart theory **nor**
+  region-counter tallies used for block identity; the seven acknowledged analysis errors *"do not defeat
+  independently measured closure."*
+- **Two `DEFERRED` items recorded, not dismissed** (both go into the r8 execution record): (1)
+  `independent-block24.py`'s final verdict is **hard-coded always-positive** and its stub check is textual —
+  it is **not** an independent proof, and the packet relies on the **measured** evidence instead; (2)
+  `v2-cross-boundary.out.txt` individually says `NOT CLEAN`, honest for what it computes, with the
+  resolution in `v2-pre-vs-post-exchange.out.txt`.
+
+**Next authorized action:** **execute `A4b2-r8`** — implement/run, classify by its decision rows, then
+**Hy4 acceptance stage 1** → **DeepSeek Max stage 2** for any non-AGREE criteria → **fresh Sol High
+adjudication** for any remaining frozen-contract dispute. **Then `PIO_FREE`**, which the Advisor confirmed
+is genuinely next.
+
+**Toolkit:** pushed `c151d4e`. **Game:** `28a51db`.
+
+---
+
+## Previous — **`A4b2-r8` DRAFT committed, awaiting non-authoring §5.3 adequacy** (superseded by promotion)
 
 - **Packet:** `docs/packets/a4b2-gp-clears-pending-word.md`, revision **`A4b2-r8`**, class **change**,
   **161 lines**, SHA-256 **`4D4AFC304F571971EB180C19D6832D56A2CC62FF6EAAFB9E4928716125397C62`** — committed
