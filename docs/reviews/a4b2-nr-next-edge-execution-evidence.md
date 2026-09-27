@@ -142,7 +142,12 @@ that its author has stopped writing.** Repaired by re-promoting against the stab
 twice, unchanged); the packet was never edited by the Session. Recorded in
 `docs/reviews/a4b2-nr-next-edge-r1-session-verification.md`.
 
-## 6. Selected row: `O-INCONCLUSIVE`
+## 6. Selected row: `O-INCONCLUSIVE` — **confirmed by the Advisor**
+
+**Advisor ruling:** `docs/reviews/a4b2-nr-next-edge-advisor-ruling.md` (handle `muse_FkNhGaXtV9P5`,
+`muse-spark-1.3-contributor`, effort `max`). **Row `O-INCONCLUSIVE` CONFIRMED**, and the ruling adds a
+binding **withdraw/re-scope list** and a **loader-first mandate** for the next packet, both summarised in
+§7 below.
 
 **`L2 = INVARIANT` stands** (carried; the doorbell tuple is unchanged at
 `seq=198852 va=803C0810 observed=3 payload=0 dsp_addr=000800`).
@@ -152,14 +157,56 @@ twice, unchanged); the packet was never edited by the Session. Recorded in
 - The full-program feasibility slice the packet requires was **not** completed — the CFG reaches only 194
   of 2 340 executed PCs from a single entry, and interrupt entry is not modelled.
 - More importantly, the slice's **input was wrong**: it was built on the bootstrap snapshot, and the
-  executed program is a **later-loaded second image**. A correct slice must be built on the at-exchange
-  image, or on a per-epoch model that accounts for both.
+  executed program is a **later-loaded second image**.
 - No concrete feasible causal chain from either stub input to the named doorbell was found, so
   **`O-REFUTED` is not selected** — and the packet is explicit that an in-range read is not by itself
   refutation.
 
-**Per the packet's outcome table, `O-INCONCLUSIVE` selects `A4b2-NR-next-edge-followup`**, targeted at the
-recorded specific unknown. The specific unknown is now: **the second image's provenance, load mechanism and
-extent, and a slice built on the correct bytes.**
+**Per the packet's outcome table, `O-INCONCLUSIVE` selects `A4b2-NR-next-edge-followup`.** The Advisor
+confirmed the target and **mandated its phase order** (§7).
 
 **`A4b2-r7` remains `R2-EXPL-INPUT`.** No strict criterion is discharged.
+
+## 7. The Advisor's binding consequences for this record
+
+**Withdrawn or re-scoped — may NOT be relied on in current form (W1–W4):**
+
+1. **`full_decode.txt` as a slice input above `0x172`** — wrong bytes. Kept, **relabeled**
+   `bootstrap_state_decode.txt`/`.json`, as the bootstrap-state record (that role is cross-validated and
+   valid). A `README.md` now sits in the artifact directory stating the withdrawal.
+2. **The §3 CFG edge set and reachability numbers as claims about the executed program.** The **method**,
+   both **tooling fixes**, and the finding that a single-entry linear CFG undercovers interrupt/vector
+   entry all stand — that gap is about the entry model, not the bytes.
+3. **The seven Q2 re-derivations' scope** ("over all 3881 words" of *one* image). The seven **tasks**
+   survive; their **input bytes** are void pending the loader/epoch work.
+4. **The "one 3881-word program" framing.** It is **≥2 images/epochs** until the loader work says
+   otherwise.
+
+**Not reached (still valid):** every local reading inside unchanged `0x000`–`0x172` — the doorbell path,
+the `0xFFFFB3` sites and scratch flows, the `00CC`–`00D1` table, `P 00B9`/`P 00A2`/`P 0086`–`008C`; the §8
+measurement table; the doorbell tuple; `L2`; the `op =` non-execution inference; `A4b2-r7`'s
+`EXPL-INPUT`; `A4b1-r4`. **No `§5.4(2)` anywhere.**
+
+**Forbidden (F1–F3):**
+
+- **F1** — citing the doorbell instructions' byte-identity as **path-independence**. Two gaps byte-identity
+  cannot close: **transient modification** between snapshots, and the fact that **the doorbell path may
+  extend into the second image** (who calls `P 0000`–`0007`, what guards the trigger, and whether *those*
+  depend on stub inputs is entirely open). **Instruction survival ≠ path survival.**
+- **F2** — building the slice directly on the at-exchange image. If P-memory is modified continuously
+  (overlays/staging), at-exchange bytes are wrong for parts of the execution too.
+- **F3** — a fudged single-image slice if P-memory never quiesces. Record per-epoch slicing or
+  `O-INCONCLUSIVE` with the reason.
+
+**The next packet must be phased (N1–N3):** **phase 1** establishes the load event(s) — trigger, source
+bytes, extent — **ruling a second GPRST bootstrap in or out from existing logs first** (`boots` +
+`[GPBOOT]` block count, before any new run), plus **epoch structure and a P-write watch** over image `I`
+showing quiescence or mapping every modification (this watch also closes Q2's transient gap). **Phase 2**
+(the slice) proceeds only on phase-1-covered bytes.
+
+**Admissibility of this run's instrumentation (Q5):** the Advisor ruled the two-image finding
+**admissible as relied-on diagnostic fact on four observed legs** — GP attribution structural *and*
+measured (exactly one core, `is_gp=1`), read-only, no-perturbation (the decode runs after the latch and
+freeze, so it cannot touch the recorded tuple), and bootstrap-snapshot cross-validation with arithmetic
+closure. **No extra absent-control is required as a reliance condition**, though standard closure (final
+absent-env run, zero diagnostic tags, tuple intact) still applies.

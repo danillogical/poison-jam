@@ -1,5 +1,27 @@
 # `A4b2-NR-next-edge` — Session preparation of the Advisor's Q2 re-derivations
 
+> ## ⚠ SCOPE WITHDRAWN — READ THIS FIRST
+>
+> **The Advisor has re-scoped this document** (`docs/reviews/a4b2-nr-next-edge-advisor-ruling.md` W3,
+> 2026-09-27). The seven **tasks** below survive and remain the correct list. Their **input bytes are
+> void**: this document re-derived them over the **bootstrap-time** decode of a **single** image, and the
+> `A4b2-NR-next-edge-r1` execution showed the GP **loads a second program into P-memory after the
+> bootstrap** — 99.4% of all executions were at a PC whose bootstrap-snapshot word was zero or `0xCACACA`
+> memset fill.
+>
+> **Therefore:** the enumeration counts below (`0xFFFFB3` = 4 reads, `x:$007c`–`$007f` = 8 refs, 27
+> DMA-register refs, 20 branch targets, six `r1` writers, the `P 00DB` three-caller finding and its
+> disjointness argument) are **statements about the bootstrap-time image**, not about the program the GP
+> executed. They must be **re-derived over epoch-stable bytes** once the loader/epoch work establishes
+> which bytes are stable over the slice window.
+>
+> **What this document is still good for:** the *method* of each re-derivation, and the finding that the
+> `P 00DB` builder has multiple call sites writing disjoint regions — a question the next slice must answer
+> again on correct bytes, and now knows to ask.
+>
+> **Not withdrawn:** the `P 00B9` measurement table (a runtime measurement, not a decode reading) and the
+> six table words' values (identical in both snapshots).
+
 **Session:** `session-9f8c9988-38fb-4cc9-a188-a6881a52559a`, 2026-09-27, DSH.
 **Mandate:** `docs/reviews/a4b2-nr-followup-advisor-ruling.md` Q2 — *"every completeness/negative claim from
 the 512-word analysis is SUSPENDED … must be re-derived over the full 3881-word program before next-edge
