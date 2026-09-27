@@ -490,6 +490,31 @@ A **remaining limitation, stated rather than hidden:** the toolkit writes the tr
 chooses, defaulting to the game root. The next packet should have the instrumentation write into the run
 directory by default, so this class of gap cannot recur.
 
+### Durable slice inputs prepared, and the decode verified to cover the executed program
+
+Two artifacts are archived alongside the trace so the next packet's slice work does not have to re-derive
+them from a log:
+
+| Artifact | Size | Contents |
+|---|---|---|
+| `full_decode.txt` | 135 412 B | 3 964 decoded instructions, `PC WORD  text` per line |
+| `full_decode.json` | 316 684 B | the same, structured, with provenance fields |
+| `gpb9_trace.txt` | 336 991 B | the complete P 00B9 event trace plus PC histograms |
+
+**Coverage check — the full decode covers 100% of the executed program:**
+
+| Check | Result |
+|---|---|
+| Decoded instructions | 3 964 (PC range `0000..0FFF`) |
+| Undecoded words | **6**, all at `00CC`–`00D1` — the known data table |
+| Executed GP PCs (from the archived trace) | 2 340 |
+| **Executed PCs missing from the decode** | **0** |
+| **Coverage of executed PCs** | **100.0%** |
+
+So the widened decode is sufficient for the slice: every PC the GP actually executed is present and
+decoded. The Advisor's ruling permits the 2 340-PC histogram as a **lower bound** cross-check
+(executed ⊆ slice-covered), and this confirms that relation holds exactly.
+
 ### The answer to gap 1
 
 **`P 00B9` reads internal scratch `0x24` on every execution. It never reads the mix buffer.**
