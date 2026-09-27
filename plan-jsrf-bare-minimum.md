@@ -100,7 +100,74 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A4b2-r8` (**change**: the ported GP engine clears the pending word, now carrying the two-leg non-reliance) — **PROMOTED 2026-09-27, `ADEQUATE`**
+## CURRENT PACKET — `A4b2-r8` **EXECUTED 2026-09-27 → `R2-PASS`** (the claim is established for this revision)
+
+**`A4b2-r8` (`4D4AFC30…397C62`) executed. Row: `R2-PASS`.** Preconditions **P1–P4 all PASS**:
+`docs/reviews/a4b2-r8-preconditions.md`. Execution evidence: `docs/reviews/a4b2-r8-execution-evidence.md`.
+
+### Identity
+
+| Item | Value |
+|---|---|
+| Game | `b3f22cb210f453940953fc357f00ab4d57e7d259` |
+| Toolkit (both builds) | **`c151d4e32a782e4e5adcecbc68afe61ed5fc7e52`**, clean — the discovery-final commit (P2) |
+| XBE | `FD19055756719893C466302809B433B785ECF5732DF0441286F3F605F0F3EF9C` |
+| **exe (R1 and R0)** | **`BC8E288DD54D8A09DA1630AB933EB1A808AEC9C60CEE2C64B9742B5C0CB8DC51`** |
+| R1 / R0 | `20260927-160330-655-a4b2-gp-trap-trace` / `20260927-160335-562-a4b2-default` — **both STRICT** |
+| ctest | **18/18** |
+
+### The decision record
+
+`GP_CLEAR seq=198852 va=803C0810 observed=00000003 payload=00000000 dsp_addr=000800`, with
+**`CPU_ANCHOR.seq=198851 < GP_CLEAR.seq=198852`**. **The tuple matches the proved exchange.**
+
+### All six criteria PASS
+
+| AC | Result | Basis |
+|---|---|---|
+| **AC-DEFAULT2** | **PASS** | R0 `diagnostic_deadline`, `Wf0=3`, `F0=2`, **0** `[GP*]` lines, TRAP/TRACE absent, R0 mapping `matches:1 content-mismatch:0` |
+| **AC-BOOT** | **PASS** | `N=1` complete block, last counts `boots=1` reconciles, `gprst=3`, `prev=1` (both clear), `sge0_va=803C0000`=T, **371 words compared vs `I`, 0 mismatches**; negative control (offset `0x1A7D64`) differs on all 371 with word 0 differing |
+| **AC-RUN** | **PASS** | `boots=1`, `gp_frames=768`, `gp_insns=33120534` |
+| **AC-CLEAR** | **PASS** | step 2: correct VA, `observed=3`, `insns>0`, `dsp_addr` recorded, anchor before clear |
+| **AC-NOCPU** | **PASS** | no ack token in exe or source; **0** `CPU_ZERO` latches (no contested zero); **six-site reconciliation `6 == 6`**, `N_SITES=16≥6`, every site matched to its XBE instruction |
+| **AC-INPUTS** | **PASS** | steps 1–2 valid (**6/6** `at_clear` and **9/9** `summary` blocks complete after reconstruction; all blocks identical; **0** monotonicity violations; `out_of_universe=0`, `boot_scratch_read=1`, FIFO all zero); step 3: only the two **proved-non-reliant** classes are nonzero (`PERIPH 0x33` = 1017, MIXBUF 26 bins / `mixbuf_stub_read=1`), **every other stub counter/flag is zero** |
+
+**The two exempted classes are recorded as stub reads — never described as modelled or guest-written.**
+
+### What is established, and what is not
+
+**Established** (only what the packet's Claim permits): in one strict run with `RECOMP_GPU_ACK=0`,
+`RECOMP_APU_TRAP=1` and observation-only APU trace, the `3→0` transition at `B+0x810` was performed by the
+GP engine's memory-write path while executing validated image `I`, after the anchored store was recorded,
+with no synthetic ack or instrumented competing CPU zero — with the **restated input qualifier** the
+discovery earned.
+
+**Not established:** no guest observation of the `0`, no spin exit or progress past `loc_001A18D0`, no
+boot/liveness/audio/timing/instruction-level-correctness claim. `CPU_ANCHOR` corroborates the exchanged
+`3`'s identity without proving it supplied it. `LOW_RAM`/`CONTIG` DMA is guest-written **by region, not by
+writer**. `0x56` is a timing heuristic. `unk2`/`unk13`, the `format` default and `dsp_offset` range
+fall-throughs remain **unaudited**.
+
+**`A4b2-r7` remains `R2-EXPL-INPUT` — this is not a retroactive PASS of r7.**
+
+### Two honest notes
+
+1. **R1's dump is `CONTENT_MISMATCH`** (the known A2h displacement), so **`Wf` is not reported from R1** and
+   nothing is routed to CPU/`UNATTRIBUTED` from it — the packet's rule. **`R2-PASS` rests on the latch and
+   counts**, which are log-bound. R0's dump **is** mapping-valid, which `AC-DEFAULT2` needs.
+2. **Six Session parser errors** were found and corrected while evaluating `AC-INPUTS`; all produced
+   **false** step-1 results that would have forced an unnecessary `R2-UNKNOWN`. They are recorded in the
+   evidence record so a reader does not mistake the corrected result for one that was right first time.
+
+**Next authorized action:** the packet's **Closure** section — then **`Hy4` acceptance stage 1** →
+**DeepSeek Max stage 2** for any non-AGREE criteria → **fresh Sol High adjudication** for any remaining
+frozen-contract dispute. **Then `PIO_FREE`**, which the Advisor confirmed is genuinely next.
+
+**Toolkit:** pushed `c151d4e` (unchanged — no toolkit change was needed). **Game:** pending commit.
+
+---
+
+## Previous — `A4b2-r8` (**change**) — **PROMOTED 2026-09-27, `ADEQUATE`** (now executed → `R2-PASS`)
 
 - **Packet:** `docs/packets/a4b2-gp-clears-pending-word.md`, revision **`A4b2-r8`**, class **change**,
   frozen SHA-256 **`4D4AFC304F571971EB180C19D6832D56A2CC62FF6EAAFB9E4928716125397C62`** (**161 lines**).
