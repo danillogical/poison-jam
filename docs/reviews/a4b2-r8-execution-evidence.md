@@ -136,6 +136,28 @@ classes are recorded as **stub reads** and are **not described as modelled or gu
 source/bytes/guard continuity **all agree with the proved exchange**. **No discrepancy**; no new feasible
 stub→clear field/guard chain was found.
 
+## Independent falsification attempt on `AC-INPUTS`, run ahead of acceptance
+
+Because `AC-INPUTS` is the criterion the whole discovery existed for, and because the Session's own parser
+had failed six times during its evaluation, the Session ran a **separate, independently written**
+falsification check rather than trusting its first script. It looks specifically for any nonzero value that
+would break the PASS:
+
+| Check | Result |
+|---|---|
+| **Positive control** — can the parser see a nonzero at all? | **Yes**: PERIPH `0x33`=1017, `0x45`=1020, `0x56`=3065 all detected. **So a zero elsewhere is a real zero, not a parse failure.** |
+| PERIPH nonzero indices **outside** {modelled `0x45`,`0x54`–`0x57`} and {exempt `0x33`} | **0** |
+| MIXBUF | 26 of 32 bins nonzero, 26 with `reads_while_stub>0` — **the EXEMPT class** |
+| FIFO slots, all six arrays | **`[0,0,0,0,0,0]`** in every array |
+| DMA `LOW_RAM` / `CONTIG` / `DEVICE` / `OTHER_MAPPED` | `0` / **`2311`** / `0` / `0` in every array |
+
+**The positive control matters most**: without it, "every other stub counter is zero" could be a parser
+reporting zero because it failed to parse. The control shows the parser detects the three known-nonzero
+indices, so the zeros are genuine.
+
+**Verdict of the falsification attempt: CONSISTENT with `AC-INPUTS` PASS.** No nonzero value outside the
+two exempted classes, no FIFO slot, and no `DEVICE`/`OTHER_MAPPED` read.
+
 ## Row: `R2-PASS`
 
 Per the packet's decision rows, `AC-DEFAULT2`, `AC-BOOT`, `AC-RUN`, `AC-CLEAR`, `AC-NOCPU` and
