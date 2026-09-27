@@ -6,7 +6,56 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4b2-NR-next-edge-followup-r1` (**discovery**: GP load epochs before any slice) — **PROMOTED 2026-09-27, `ADEQUATE`**
+## CURRENT PACKET — `A4b2-NR-next-edge-followup-r1` **EXECUTED 2026-09-27 → `O-INCONCLUSIVE`** (phase 1 complete, closure verified, slice attempted and bounded)
+
+**`A4b2-NR-next-edge-followup-r1` (`62A1BB38…`) executed.** Row: **`O-INCONCLUSIVE`**. Evidence:
+`docs/reviews/a4b2-nr-next-edge-followup-phase1-evidence.md`. Verification:
+`docs/reviews/a4b2-nr-next-edge-followup-r1-session-verification.md`.
+
+### Phase 1 — complete, and it answered the questions the Advisor made gating
+
+| Finding | Result |
+|---|---|
+| **N1 — second GPRST bootstrap?** | **NO.** From existing logs before any new run: `boots=1`, exactly one `[GPBOOT] n=1` block. |
+| **The loader** | A **DMA transfer the GP itself triggers** at `P 011C` (`movep #$000001,x:$ffffd6` = DMA_CONTROL). **Correction:** `P 011C` executes ×2 306, so the 3 512 writes are *not* one bulk pass from one trigger — the accurate statement is about the **destination addresses**. |
+| **The load's shape** | **Strictly increasing, contiguous, ZERO duplicate writes** over `0x171`–`0x0F28`; even 878/878/878/878 across the window; completes inside it. Old values: `0xCACACA` ×1 833, `zero` ×1 678, one other. |
+| **Image `I` stability** | **Only 2 writes, both at the boundary** (`0x171`, `0x172`). **ZERO writes in `0x000`–`0x170`** — including every doorbell-path instruction. Closes the Advisor's Q2 transient gap **by watch, not by sample**. |
+| **Why two snapshots could not have shown this** | The region was being written **during** the interval between snapshots — now measured rather than argued. |
+
+**Closure — performed and verified.** `bad-output` arm **removed** (bite preserved and archived:
+`GP_CLEAR=0`, `GP_NONZERO_OVER=1`); new watch fixture arm (xiii) added; **closure control PASSED** — one
+fresh absent-gate baseline at the final identity with **zero** `[GPPERTURB]`/`[GPDECODE]`/`[GPB9]`/
+`[GPWRITE]` lines, no artifacts, tuple unchanged (`seq=198852 … dsp_addr=000800`). **ctest 18/18 green.**
+
+### Phase 2 — the slice, on phase-1-covered bytes, and its honest verdict
+
+The gate is satisfied **for image `I`**, so the slice proceeded on those bytes only (`F2` honoured). CFG:
+239 nodes, **194 reachable from entry**, **0 UNKNOWN control transfers**. **`0xFFFFB3`'s four reads walk
+2–3 instructions into scratch and reach NO doorbell site.**
+
+**The same trap, walked into and caught.** The slice reports *"MIXBUF operand references inside image I:
+0"* — **true and misleading**, exactly the error recorded in `a4b2-nonreliance-discovery-evidence.md` §3.
+**The mixbin table `P 00CC`–`00D1` is *inside* image `I`** (`0xCC` ≤ `0x172`) and its six words **are
+MIXBUF addresses** (`0x1400`, `0x1440`, `0x1420`, `0x1480`, `0x14A0`, `0x1460` = bins 0,2,1,4,5,3), read by
+`movem p:(r2)+,x0`. **An operand scan cannot see them because they are data.** So MIXBUF reaches the GP by
+a **table-and-DMA path inside the slice** — the "0 references" line must not be read as "MIXBUF is not
+consumed".
+
+**Row `O-INCONCLUSIVE`.** Not `O-TWO-LEG` — phase-1 coverage is achieved but the **reaching-definitions
+closure is not**: (1) the mixbin table-and-DMA dependency is unproven; (2) the doorbell path's **callers and
+guards** remain open (`F1`: instruction survival ≠ path survival); (3) the slice is over image `I` only. Not
+`O-REFUTED` — no concrete feasible causal chain to the named doorbell was found.
+
+**Next authorized action:** **`A4b2-NR-epoch-slice-followup`** — the row the packet's own table names —
+targeted at the **mixbin table-and-DMA def-use closure** and the **doorbell path's callers/guards**.
+`A4b2-r7` stays `R2-EXPL-INPUT`; no strict criterion discharged.
+
+**Toolkit:** pushed `c20fc75` (watch) → `aaedd57` (bad-output removal + fixture). **Game:** `e13a68b`,
+`11e7d8f`.
+
+---
+
+## Previous packet — `A4b2-NR-next-edge-followup-r1` (**discovery**: GP load epochs before any slice) — **PROMOTED 2026-09-27, `ADEQUATE`**
 
 - **Packet:** `docs/packets/a4b2-nr-next-edge-followup.md`, revision **`A4b2-NR-next-edge-followup-r1`**,
   class **discovery**, frozen SHA-256

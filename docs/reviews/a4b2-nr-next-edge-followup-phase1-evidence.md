@@ -231,6 +231,70 @@ counts on the `0xFFFFB3` sites show the housekeeping loop runs per frame while t
 discharged, and per the packet phase 2 still requires the feasible callers/guards/reaching-definitions
 closure over phase-1-covered bytes.
 
+## Phase 2 — the slice, built on phase-1-covered bytes, and its honest verdict
+
+**The phase-1 gate is satisfied for this claim.** Phase 1 proved image `I` (`0x000`–`0x170`) receives
+**zero** writes from the authenticated bootstrap boundary through the first exchange, and the doorbell path
+lies entirely inside image `I`. So a slice may proceed **on image `I`'s bytes only** — which is what the
+Advisor's `N3` permits and what `F2` requires (no slicing of the unstable upper region).
+
+**Slice universe:** 239 instructions, PC `0x000`–`0x172`, with `0x000`–`0x170` write-free and the two
+boundary words `0x171`/`0x172` written by the second-image load.
+
+| Slice result | Value |
+|---|---|
+| CFG nodes | 239 |
+| Reachable from entry `0x0000` | **194** |
+| **UNKNOWN control transfers** | **0** |
+| `0xFFFFB3` read sites in image `I` | **4** — `P 002D`, `0033`, `003A`, `004D` |
+| Forward walk from each `0xFFFFB3` read | 2–3 instructions, terminating at a control transfer |
+| **`0xFFFFB3` reaches a doorbell site** | **NO** |
+
+The `0xFFFFB3` walks terminate quickly and cleanly: each read's value goes to scratch
+(`x:$007c`–`x:$007f`) and the walk hits `cmpu`/`blt` loop control, never a doorbell site. That is the same
+confinement the earlier packets found, now re-derived over the phase-1-covered bytes.
+
+### The trap this slice walked into, and did not fall for this time
+
+The slice reports **"MIXBUF operand references inside image I: 0"**. That statement is **true and
+misleading**, and it is the *same* trap recorded earlier in
+`docs/reviews/a4b2-nonreliance-discovery-evidence.md` §3:
+
+**The mixbin data table at `P 00CC`–`00D1` is *inside* image `I`** (`0xCC` ≤ `0x172`). Its six words are
+MIXBUF addresses (`0x1400`, `0x1440`, `0x1420`, `0x1480`, `0x14A0`, `0x1460` — bins 0, 2, 1, 4, 5, 3), read
+by `movem p:(r2)+,x0` with `r2 = #$0000CC`. **A scan for MIXBUF addresses in *instruction operands* cannot
+see them**, because they are **data**.
+
+So the correct statement is: **MIXBUF data reaches the GP through a table-and-DMA path, not through an
+instruction operand, and that path is inside the slice universe.** The slice's "0 references" line must
+**not** be read as "MIXBUF is not consumed" — it means only that no instruction names a MIXBUF address
+directly.
+
+### Verdict: `O-INCONCLUSIVE` — and precisely why
+
+**Not `O-TWO-LEG`.** The packet requires, for `L1 = PROVEN`, *"closure of **all** feasible named-output/
+guard reaching definitions against both input classes"*, plus phase-1 coverage. Phase-1 coverage is
+achieved for image `I`. **The reaching-definitions closure is not:**
+
+1. **The mixbin path's dependency is unproven.** The table+DMA path inside the slice is real, and whether
+   the *doorbell's* fields depend on it has not been settled by a full def-use closure — only the
+   `0xFFFFB3` walks were completed. This is the specific gap the earlier packets also left.
+2. **The doorbell path's callers and guards are still open** — per `F1`, *instruction survival ≠ path
+   survival*. Who reaches `P 0000`–`0007`, and what gates the trigger, are not established by this slice;
+   the CFG covers image `I` but the slice did not close the reaching-definitions question for the
+   descriptor's consumers.
+3. The slice is over **image `I` only**. Anything the doorbell path might touch in the second image is
+   outside it by construction — correct per `F2`, but it means the slice cannot claim whole-program
+   closure.
+
+**Not `O-REFUTED`.** No concrete feasible causal chain from either stub input to the named doorbell was
+found. Per the packet, an in-range read is not by itself refutation, and none was found anyway.
+
+**So `O-INCONCLUSIVE` selects `A4b2-NR-epoch-slice-followup`**, targeted at the recorded specific unknown:
+the **mixbin table-and-DMA def-use closure** and the **doorbell path's callers/guards**.
+
+**`A4b2-r7` remains `R2-EXPL-INPUT`.** No strict criterion is discharged.
+
 ## What this establishes, and what it does not
 
 **Establishes:**
