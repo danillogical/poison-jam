@@ -100,7 +100,62 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A4b2-r8` **ACCEPTED 2026-09-27** (`ACCEPT`, stage 1, final — no second stage)
+## CURRENT PACKET — `A4b2-r8` **CLOSED 2026-09-27** (`ACCEPT`, stage 1, final) — next authorized work is **`PIO_FREE`**
+
+**Acceptance transaction reconciled and closed.** The Hy4 stage-1 review is **complete and durably
+recorded**; the Session did **not** launch a duplicate review.
+
+| Item | Value |
+|---|---|
+| Disposition | **`ACCEPT`**, **`BLOCKING: NONE`** |
+| Criterion verdicts | **all 10 `AGREED`** — `P1`–`P4` and all six `AC`s |
+| `DISAGREED` / `CANNOT VERIFY` | **0 occurrences** |
+| Packet hash | independently reconfirmed by the reviewer: `4D4AFC30…397C62` |
+| Stage 2 | **correctly NOT run** — §2.2: *"A first-stage `ACCEPT` is final and is not passed on."* |
+| Recorded in | `docs/reviews/a4b2-r8-acceptance-review.md`, `docs/reviews/a4b2-r8-acceptance-record.md` |
+| Closed at | game `510da98`, toolkit `c151d4e` (clean; origin synced; upstream `766ecef` untouched) |
+
+**`A4b2-r8` is accepted and closed.** `A4b2-r7` remains `R2-EXPL-INPUT`; `A4b1-r4` untouched. Neither may
+be reopened absent a workflow-valid ground (`PREMISE_CHANGED`).
+
+**Carried constraints for the next work** (owner-stated, and consistent with the records):
+
+- The accepted `A4b2` claim establishes the **GP-engine `3→0` transition under its bounded contract** — it
+  does **not** establish guest observation of the zero, spin exit, or later liveness.
+- The **non-reliance discovery is an established dependency** unless one of its pinned premises changes.
+- **P4 is toolkit-identity-sensitive**: any toolkit advance requires **re-establishing the discovery-transfer
+  bridge** before P4 can be inherited.
+- **Strict execution currently terminates in the known A2h heap-OOM class at ≈4.8 s** despite a longer
+  requested deadline. This is an **observed current horizon, not a guaranteed constant** — and per the
+  Hy4 advisory it is *"not a violation"* for `A4b2-r8` because every decision input is log-bound and
+  emitted before it.
+
+### Next authorized work — the `PIO_FREE` model
+
+`PIO_FREE` is the next admissible PIO/device-model boundary required **before any stronger strict
+boot/progress claim**. Its purpose is to establish that boundary — **not** to introduce synthetic completion
+merely to obtain progress.
+
+**Starting context:** `A4p` was ACCEPTED with **`O-GATE`** on XBE
+`FD19055756719893C466302809B433B785ECF5732DF0441286F3F605F0F3EF9C` — all 28 direct reads of
+`0xFE820010` are gate-only under `C1`–`C4` (`docs/packets/a4p-pio-gate-analysis.md`,
+`docs/reviews/a4p-execution-evidence.md`). `A4p`'s own limits stand: it rests on an **inferred**
+register-convention premise, it cannot see a whole-program custom convention, it covers **only the 28
+direct reads** (not register-indirect/computed/table-driven access beyond E3), it is **static**, and it
+never claims that audio, the GP, or anything else works.
+
+**`A4b2-r8`'s own text** names the next step: a **`PIO_FREE` model packet before a strict liveness/boot
+claim beyond the bounded `A4b2` contract**, and lists the `PIO_FREE` model as an explicit **non-goal of
+r8** (so it is new packet work, not a revision of r8).
+
+**Planning is in progress** — the Planner is determining, **from the actual unknowns**, whether this is a
+**discovery** or a **change** packet, per the owner's instruction. A shape preflight is required only if it
+is a **new change packet**; a discovery packet follows the §5.8 path and must not be given a manufactured
+preflight requirement.
+
+---
+
+## Previous — `A4b2-r8` **ACCEPTED 2026-09-27** (`ACCEPT`, stage 1, final — no second stage)
 
 **`A4b2-r8` executed → `R2-PASS` → acceptance stage 1 returned `ACCEPT` with `BLOCKING: NONE`.** All six
 mandatory criteria and all four preconditions `AGREED`. Acceptance record:
