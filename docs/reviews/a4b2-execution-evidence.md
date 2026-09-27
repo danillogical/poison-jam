@@ -234,7 +234,78 @@ is `UNKNOWN`, and under the selected row it is not reached.
 Each run directory holds `result.json`, `stacks.txt`, `jsrf_run.log`, `process.dmp`, `metadata.json`,
 `build-source.json`, `project.patch`, `source.zip` and the copied exe/PDB/map/collector.
 
-## 10. Notes for the Planner's brief
+---
+
+# `A4b2-r8` execution evidence — **`R2-PASS`**
+
+**Added 2026-09-27.** This section preserves r6's terminal row above and records the **r8** revision's
+execution. Full detail: `docs/reviews/a4b2-r8-execution-evidence.md`; preconditions:
+`docs/reviews/a4b2-r8-preconditions.md`.
+
+**Packet:** revision **`A4b2-r8`**, frozen SHA-256
+**`4D4AFC304F571971EB180C19D6832D56A2CC62FF6EAAFB9E4928716125397C62`** — verified before execution, not
+edited. **Adequacy:** `ADEQUATE` by a **non-authoring** Planner (`docs/reviews/a4b2-r8-adequacy-review.md`).
+
+## Evidence index
+
+| Item | Value / path |
+|---|---|
+| **R1** (trap+trace, strict) | `logs/runs/20260927-160330-655-a4b2-gp-trap-trace/` — **STRICT** |
+| **R0** (default, strict) | `logs/runs/20260927-160335-562-a4b2-default/` — **STRICT** |
+| R1 reruns | **none** — R1 did **not** select `R2-UNKNOWN`, so the one permitted rerun was not used |
+| `result.json` | R1 `unhandled_exception` / exit `3762440515`; R0 `diagnostic_deadline` / exit `3` |
+| `stacks.txt` | R0 `F0 = 2`; R1 present (not used as evidence — see the displaced-dump note) |
+| `jsrf_run.log` | both, complete and untruncated |
+| `process.dmp` | both |
+| `build-source.json`, `project.patch`, `source.zip` | both |
+| **exe SHA-256 (R1 and R0)** | **`BC8E288DD54D8A09DA1630AB933EB1A808AEC9C60CEE2C64B9742B5C0CB8DC51`** |
+| Game commit | `b3f22cb210f453940953fc357f00ab4d57e7d259` |
+| **Toolkit commit (both builds)** | **`c151d4e32a782e4e5adcecbc68afe61ed5fc7e52`** (clean) — the **discovery-final** commit per P2 |
+| XBE SHA-256 | `FD19055756719893C466302809B433B785ECF5732DF0441286F3F605F0F3EF9C` |
+| `L` (this build) | **6754** (`loc_001A18D0`); the store at `6751`; matched `F0` line `6755` = `L+1` |
+| R0 mapping check | **`matches: 1   content-mismatch: 0   unreadable: 0   missing: 0`** |
+| `B0` / `Wf0` | `B0 = 0x803C0000`; **`Wf0 = MEM32(0x803C0810) = 3`** |
+| R1 mapping check / `Wf` | **`CONTENT_MISMATCH`** — *not usable for an image-content claim*. **`Wf` explicitly NOT evaluated or reported from R1** |
+| ctest | **18/18 passed** |
+
+### Full `[GPWATCH]` records (R1)
+
+```
+latch class=GP_CLEAR   seq=198852 va=803C0810 observed=00000003 payload=00000000 site=00000000 frame=256 insns=124652 dsp_addr=000800
+latch class=CPU_ANCHOR seq=198851 va=803C0810 observed=00000000 payload=00000003 site=001A18CE frame=256 insns=0      dsp_addr=000000
+counts (last) seq=1610629 boots=1 gp_frames=768 gp_insns=33120534 GP_CLEAR=1 GP_ZERO_OVER_ZERO=0 GP_ZERO_OVER_OTHER=1 GP_NONZERO_OVER=0 GP_PARTIAL=0 CPU_ANCHOR=1 CPU_ZERO=0 CPU_ZERO_OVERFLOW=0 CPU_OTHER=0 GPIN_OUT_OF_UNIVERSE=0 frame=768
+```
+
+**Anchor `va=803C0810` cross-checks against the log-bound `B+0x810`** ✓. **Last counts `boots=1`** ✓.
+
+### `[GPBOOT]` header and its 64-line block (R1)
+
+```
+[GPBOOT] n=1 sge0=003C0000 sge0_va=803C0000 gprst=00000003 prev=00000001
+```
+
+**64 `pram` lines = 512 words.** Word-by-word comparison for `0≤i<0x173`: **371 compared, 0 mismatches**.
+Negative control (offset `0x1A7D64`): **371 mismatches**, word 0 differs ✓.
+
+### Criteria
+
+| AC | Result | Decisive artifact |
+|---|---|---|
+| `AC-DEFAULT2` | **PASS** | R0 `result.json` + R0 mapping + `Wf0` + `F0` + zero `[GP*]` lines |
+| `AC-BOOT` | **PASS** | R1 `[GPBOOT]` header + 64-line block + XBE comparison + last counts `boots` |
+| `AC-RUN` | **PASS** | R1 last `counts` line |
+| `AC-CLEAR` | **PASS** | R1 `GP_CLEAR` + `CPU_ANCHOR` latch lines (step 2) |
+| `AC-NOCPU` | **PASS** | R1 latches + exe strings + toolkit `src/apu` at `c151d4e` + six XBE disassembly ranges |
+| `AC-INPUTS` | **PASS** | R1 `[GPIN] at_clear` blocks (6) and `[GPIN] summary` blocks (9) |
+
+### Row and reviewer disposition
+
+**`R2-PASS`** — the first matching row, with all six mandatory criteria PASS and P1–P4 PASS.
+
+**Awaiting:** the acceptance stage (**Hy4** stage 1, then DeepSeek Max stage 2 for any non-AGREE
+criteria). **`A4b2-r7` remains `R2-EXPL-INPUT`; this is not a retroactive PASS of r7.**
+
+## 11. Notes for the Planner's brief
 
 1. **The packet's own subject was observed and is positive**: the ported GP engine's DMA write path took
    the `3→0` CAS at `0x803C0810` while executing image `I` (`GP_CLEAR` `seq=198852`, `insns=124652`),
