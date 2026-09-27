@@ -354,6 +354,32 @@ immediate leaves **CLOSE**. Therefore:
 while looking like hex `0x12`. My first pass read `0018` as hex and identified the wrong descriptor. **The
 correct descriptor was found only by measurement.**
 
+### The `scratch_base = 0` assumption — checked, because it was load-bearing
+
+My arithmetic above said `scratch_addr = scratch_base + scratch_offset` and concluded `0 + 0x800 = 0x800`.
+**`scratch_base` comes from descriptor slot `+5`, and block 24's builder does NOT write that slot** — so I
+was **assuming** it was zero. That is precisely the kind of unverified premise that produced the six errors
+in this analysis, so I instrumented the descriptor's own fields and **measured** them:
+
+```
+#FIELDS block=24 base=0x0    offset=0x800 size=0x401F dsp_off=0x0    count=6  scratch_addr=0x800
+#FIELDS block=6  base=0x0    offset=0x800 size=0x1    dsp_off=0x0    count=6  scratch_addr=0x800
+#FIELDS block=37 base=0x8000 offset=0x0   size=0x800  dsp_off=0x1400 count=32 scratch_addr=0x8000
+```
+
+| Block | `scratch_base` | `scratch_offset` | **`scratch_addr`** | Matches `dsp_addr=0x800`? |
+|---|---|---|---|---|
+| **24 — the exchange block** | **`0x0`** | `0x800` | **`0x800`** | **YES — exact** |
+| 6 — `x:[6..10]` | `0x0` | `0x800` | `0x800` | yes, but this block does not produce the exchange |
+| 37 — mixbin | `0x8000` | `0x0`/`0x80` | `0x8000`/`0x8080` | **NO** |
+
+**`scratch_base` really is `0x0` for block 24 — measured, not assumed — and `scratch_addr = 0x800` matches
+the observed `dsp_addr` exactly.** The mixbin block's `scratch_addr` is `0x8000`, which does **not** match.
+
+**This is now the third independent confirmation of the same conclusion**, each by a different method:
+the block-identity trace, the fresh-code re-derivation from raw artifacts, and this direct measurement of
+the descriptor's own scratch fields.
+
 ### Independent re-derivation — deliberately not reusing my own scripts
 
 Because this analysis produced six self-caught errors, the block-24 claim was **re-derived from the raw
