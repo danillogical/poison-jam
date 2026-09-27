@@ -12,3 +12,8 @@ __pycache__/
 # Transient capture: the APU-watch fixture freopen()s its own stderr to this
 # path on every ctest run, so it is regenerated output, not durable evidence.
 /apu_watch_fixture_stderr.txt
+
+# Diagnostic trace artifacts written to the game root by default when the
+# instrumentation gate is set. Durable copies belong in logs/runs/<run>/, which
+# is itself gitignored; these root-level ones are scratch.
+/gpb9_trace.txt

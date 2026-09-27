@@ -78,6 +78,38 @@ completed text. No concurrent send was made.
 
 ---
 
+## Session verification addendum — the Q4 line references are inverted
+
+**Found by the `A4b2-NR-next-edge` Planner while reading the headers; verified independently by the
+Session.** The ruling's Q4 guardrail paragraph names the two `is_gp` field declarations in the wrong
+order. This is a **line-reference error only** — the ruling's *intent* is unambiguous and is confirmed by
+the same paragraph's separate requirement for a "canonical-GP-test note (`DSPState.is_gp` via `opaque`)",
+which names the correct field.
+
+**Verified against the toolkit at `c9c2b5a`:**
+
+| Line | Declaration | Struct | Actual status |
+|---|---|---|---|
+| `dsp.h:79` | `bool is_gp;` | `DspCoreState` (opens `:75`, closes `:94`) | **Dead / clobbered** — this is `vm->is_gp` at `dsp_c.c:215`, written from `core->is_gp`, whose sole writer `dsp_c_sync_from_vm` (`dsp_c.c:252`) has **zero callers**. **The warning belongs here.** |
+| `dsp.h:105` | `bool is_gp;` | `DSPState` (opens `:96`) | **CANONICAL** — its only writer anywhere is `dsp.c:143` (`dsp_init`). The `sync_to_vm` clobber writes `dsp->core.is_gp`, a *different* field, and does **not** touch `dsp->is_gp`. **This is the field to USE; it must not be labelled unsafe.** |
+| `dsp_cpu.h:49` | `bool is_gp;` | `dsp_core_t` | **Dead** — never populated. The warning here is correct as ruled. |
+
+**Complete writer set, verified with no truncation:** `dsp.c:143` (canonical, correct), `dsp_c.c:215`
+(`vm->is_gp` ← dead core field), `dsp_c.c:252` (`core->is_gp` ← `vm->is_gp`, no callers). **Nothing else
+writes either field.**
+
+**Ruling text as recorded above is left verbatim** (it is the Advisor's own words and must not be
+rewritten); this addendum corrects it. **Corrected obligation O7:** warning at `dsp.h:79`, distinguishing
+source comment at `dsp.h:105` marking it canonical, warning at `dsp_cpu.h:49`, plus the canonical-GP-test
+note. The Planner independently reached the same reading and declined to label the canonical field unsafe
+— **the right call**, and it is what prompted this verification.
+
+**Why this is recorded rather than silently fixed:** a reader following the ruling verbatim would add a
+"do not read" comment to the one field that is safe to read, and a warning-free comment to the one that is
+dead. The correction matters precisely because the erroneous version is plausible.
+
+---
+
 ## Session obligations arising from this ruling
 
 | # | Obligation | Status |
@@ -88,7 +120,7 @@ completed text. No concurrent send was made.
 | O4 | Q3: **one** fresh absent-gate baseline at the next pinned identity | **Pending** (next-edge closure control doubles as it) |
 | O5 | Q3 condition: if next-edge changes GP-path behaviour with gates absent → fresh same-exe mini-series | **Conditional** — watch next-edge's diff |
 | O6 | Q3: `bad-output` removal **authorized** | **Pending** — next packet |
-| O7 | Q4 guardrails: source comments at `dsp_cpu.h:49` and `dsp.h:105` + canonical-GP-test note; **forbid** classification by either core field | **Pending** — Planner places it |
+| O7 | Q4 guardrails — **as corrected by the Session verification addendum above**: warning at **`dsp.h:79`** (`DspCoreState.is_gp`, dead/clobbered), distinguishing source comment at **`dsp.h:105`** (`DSPState.is_gp`, **canonical — do not label unsafe**), warning at **`dsp_cpu.h:49`** (`dsp_core_t.is_gp`, dead), plus the canonical-GP-test note. **Forbid** classification by either core field. No sync-function deletion. | **In progress** — Planner has it in the `A4b2-NR-next-edge` brief |
 
 **Session correction accepted.** My §8 account said `core->is_gp` is "permanently 0". The Advisor's
 audit shows the accurate picture is worse and differently shaped: `dsp_init` sets the **VM** field

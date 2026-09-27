@@ -457,8 +457,38 @@ toolkit.
 
 **Packet:** `docs/packets/a4b2-nr-followup.md`, revision **`A4b2-NR-followup-r1`**, frozen SHA-256
 **`886620CC6797FC89130B1F89310E6B41C92E809F32820A8133609FBEEC9CC5F5`**. Gate:
-`RECOMP_APU_GP_B9_TRACE=1`. Run: `logs/runs/20260927-132641-253-a4b2-nrf-b9-final` (and the
+`RECOMP_APU_GP_B9_TRACE=1`. Runs: `logs/runs/20260927-132641-253-a4b2-nrf-b9-final` (and the
 full-range rerun `20260927-132808-143-a4b2-nrf-b9-full`).
+
+### Archived artifact, and a provenance gap the Session found and repaired
+
+**The trace artifact is now archived with its run:** `logs/runs/20260927-134343-777-a4b2-nrf-b9-arch/`
+contains **`gpb9_trace.txt` (336 991 bytes)** alongside the full `jsrf_run.log`.
+
+**Gap found by the Session.** The earlier B9 runs wrote `gpb9_trace.txt` to the **game root**, not into the
+run directory, and the Session deleted it before the inertness control — so the load-bearing PC-range and
+event claims in this section were, at first, **not reproducible from any archived artifact**. That is a
+real defect in this packet's own evidence discipline, found by asking "can a reader re-derive this from
+the archive?" and answering no. **Repaired** by pointing `RECOMP_APU_GP_B9_TRACE_FILE` at an archived path
+and re-running, then copying the artifact into the run directory.
+
+**The regeneration reproduces every decisive figure exactly** — so the claims stand on an archived
+artifact, not on the Session's word:
+
+| Quantity | Original | Archived regeneration |
+|---|---|---|
+| B9 read events | 6 | **6** |
+| effective address, all events | `000024` | **`000024`** |
+| values | `008000`→`00A800`, step `0x800` | **identical** |
+| GP distinct PCs | 2 340 | **2 340** |
+| GP PC range | `0000..0F28` | **`0000..0F28`** |
+| GP PCs ≥ `0x200` | 2 052 | **2 052** |
+| terminal | `events=6 execs=6 in_mixbuf=0 in_alias=0 invalid=0` | **identical** |
+| doorbell | `seq=198852 … dsp_addr=000800` | **identical** |
+
+A **remaining limitation, stated rather than hidden:** the toolkit writes the trace to a path the *caller*
+chooses, defaulting to the game root. The next packet should have the instrumentation write into the run
+directory by default, so this class of gap cannot recur.
 
 ### The answer to gap 1
 
