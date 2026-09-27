@@ -6,7 +6,304 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4b1-r4` (GP/DSP core port) — **ACCEPTED 2026-09-26, `R1-PASS`, PUSHED (complete)**
+## CURRENT PACKET — `A4b2-NR-r2` **EXECUTED 2026-09-27 → `O-INCONCLUSIVE`** (`L1=INCONCLUSIVE`, `L2=INVARIANT`)
+
+**`A4b2-NR-r2` executed under its frozen contract. Row selected: `O-INCONCLUSIVE`.** Evidence:
+`docs/reviews/a4b2-nonreliance-discovery-evidence.md`.
+
+**The packet's rule applied faithfully.** `O-TWO-LEG` requires **`L1 = PROVEN` *and* `L2 = INVARIANT`**.
+`L2` is satisfied; **`L1` is not**, and the packet's own `L1 = INCONCLUSIVE` definition names the exact
+situation — *"unresolved register-indirect/computed/table-driven branch"* — and warns *"do not treat an
+indirect edge's absence in one trace as a proof of all feasible edges."* **No strict criterion is
+discharged; `A4b2-r7` remains `R2-EXPL-INPUT` and is not retroactively PASS.**
+
+**What was established — every measurement points one way, away from reliance:**
+
+| Finding | Basis |
+|---|---|
+| **`L2 = INVARIANT`** | Six 30 s runs (baseline, `zero`, `max`, `prng:1`, `prng:2`, `bad-output`). The doorbell tuple `va=803C0810 observed=3 payload=0 dsp_addr=000800` is **bit-identical** across all four input-perturbation arms and the baseline. |
+| **The hook demonstrably fired** | 1 623 104 mix-bin reads and 3068 `0xFFFFB3` reads in **every** run; `max`/`prng` changed **1.3M–1.6M** consumed values; first-substituted values differ per seed. `zero` correctly reports `changed=0` (originals were already zero). |
+| **The known-bad control bites** | `bad-output` leaves both stub inputs untouched and **suppresses `GP_CLEAR`** (`GP_NONZERO_OVER` latches instead) — so the comparator *can* see a changed doorbell. |
+| **`0xFFFFB3` is confined to scratch** | Its four reads (`P 002D`, `0033`, `003A`, `004D`) flow only into `x:$007c`–`x:$007f`, used solely for `cmpu`/`blt` loop control. Nothing reaches `r2`/`r3`, the DMA registers, or the descriptor. |
+| **The doorbell descriptor is all immediates** | `P 0004 move #$000800,r2` → `P 00E8 move r2,x:(r0 + 4)`. `dsp_addr=000800` is a literal, matching the observed value exactly. |
+| **The image does consume mix bins** | Via a **P-memory data table** at `P 00CC`–`00D1` (`001400 001440 001420 001480 0014A0 001460` = MIXBUF bins 0,2,1,4,5,3), read by `movem p:(r2)+,x0` under `dor #$0006`. That feeds a **different** descriptor (the audio output path), not the doorbell. |
+| **Decode identity** | 380 instructions decoded, **0 mismatches** vs `I[i]=LE32(xbe[0x1A7D60+4i])&0xFFFFFF`; one-offset-shift negative control differs on 238 words. |
+
+**The gap that keeps `L1` open:** one unresolved computed read, `P 00B9 move x:(r1),b`, where
+`r1 = 0x80 + x:$0000` and `x:$0000` is a guest-written mailbox value. A static decode cannot bound it, so it
+cannot be excluded from `0x1400..0x17FF`. The packet forbids treating that as benign.
+
+**A Session error, corrected and recorded.** A first Leg 1 pass claimed *"the image never addresses the mix
+buffer"* on the strength of a text search over instruction operands. **That was wrong** — the addresses are
+in a **data table**, invisible to an operand grep. It is the same class of error `AGENTS.md` records for the
+`PIO_FREE` enumeration. The corrected reading is in the evidence record, and the superseded reading is kept
+visible rather than deleted so a reader can tell which stands.
+
+**Next authorized action:** **`A4b2-NR-followup`** discovery packet, targeted at the three gaps the evidence
+record names in priority order: (1) the unresolved `P 00B9` computed read — close it with an instrumented
+read trace recording the actual `r1`, or bound `x:$0000` from its writer; (2) the decode-rejection of the
+six table words, which the Session resolved as data on three independent grounds; (3) the **completeness
+argument** — the packet's `PROVEN` bar is a full PC-indexed CFG/def-use slice, and what exists is a targeted
+dependency trace. Whether the targeted trace suffices, or the full slice is required, is a **Planner**
+judgment.
+
+**Not reopened:** `A4b1-r4` stays accepted and closed; no toolkit file outside the discovery packet's
+declared scope was modified (one out-of-scope declaration was made and **reverted** before building).
+
+---
+
+## Previous packet — `A4b2-NR-r2` (**discovery**, promoted 2026-09-27; executed → `O-INCONCLUSIVE`)
+
+- **Packet:** `docs/packets/a4b2-nonreliance-discovery.md`, revision **`A4b2-NR-r2`**, class **discovery**,
+  frozen SHA-256 **`7EF30508CCC2588748EAA92E9B56B12D038D425CA925CA360AA9059DFAF33E38`** (**33 lines**).
+  **This is the packet to execute.** Promotion was byte-identical with no revision (§5.3).
+- **Adequacy:** **`VERDICT: ADEQUATE`**, `BLOCKING: NONE` — the **writing Planner's own** review, as §5.8
+  requires for a discovery packet (child `2565775c-9aa9-436b-b917-1efb2d01784a`, `codex/gpt-6-sol` @
+  `high`). No second Planner was spawned; no Muse shape preflight was repeated, because the mechanism is
+  the one the Advisor itself mandated.
+- **Question:** are the `B+0x810` GP DMA doorbell write's **payload, address and executed-path write guards
+  independent of both** VP-produced MIXBUF samples **and** placeholder `0xFFFFB3` reads? Output is a
+  two-leg **discovery finding**, never a strict `A4b2` verdict.
+- **The Advisor's two-leg standard** (`docs/reviews/a4b2-r7-expl-input-ruling.md`): **Leg 1** static
+  mechanism from image `I`; **Leg 2** empirical invariance under adversarial perturbation. **Either leg
+  failing REFUTES non-reliance.**
+- **Outcome rows:** **`O-REFUTED`** (the death branch — strict `A4b2` **BLOCKED** until real VP
+  implementation plus `0xFFFFB3` resolution; next `A4b-VP-real-implementation` and
+  `A4b-B3-register-resolution`); **`O-TWO-LEG`** (both legs valid → `A4b2-r8` may cite both and the
+  Advisor's input-specific conditional ruling); **`O-INCONCLUSIVE`** (→ `A4b2-NR-followup`). An unresolved
+  leg **never rounds up**.
+- **Bounded toolkit write scope:** `src/apu/dsp/interp/dsp_cpu.c`, `src/apu/dsp/dsp.c`,
+  `src/apu/dsp/gp_ep.c`, `src/apu/apu_watch.c`, `src/apu/apu_watch.h`,
+  `tests/apu_watch_fixture_test.c` (selector-control assertions only). **Bounded game write scope:**
+  `CMakeLists.txt` (only new process-isolated CTest registrations for that existing fixture target). No
+  other toolkit or game source. **`A4b1-r4` is NOT reopened** — this is new packet work.
+- **Session verification:** `docs/reviews/a4b2-nr-r2-session-verification.md` — every command verified to
+  run; one **blocking** scope defect found in `r1` and repaired in `r2`.
+- **Closure:** instrumentation off by default; the `bad-output` control arm removed at closure; final
+  absent-env control run verifies inertness. Evidence record:
+  `docs/reviews/a4b2-nonreliance-discovery-evidence.md`. **Exploratory/diagnostic evidence is knowledge
+  only, never acceptance of a strict criterion.**
+
+---
+
+## Previous packet — `A4b2-r7` **EXECUTED 2026-09-27 → `R2-EXPL-INPUT`** (claim NOT established; Advisor ruled)
+
+**`A4b2-r7` executed under its frozen contract. Row selected: `R2-EXPL-INPUT`.** Evidence:
+`docs/reviews/a4b2-r7-execution-evidence.md`. The row was **predicted in advance** by the adequacy
+reviewer (`docs/reviews/a4b2-r7-adequacy-review.md`) and independently by the Session from the archived
+`r6` bytes, so it is not a surprise.
+
+**Four of five criteria PASS — the GP clear is real and well-attributed:**
+
+| Criterion | Result |
+|---|---|
+| `AC-DEFAULT2` | **PASS** — R0 `diagnostic_deadline`, `Wf0=3`, `F0=2`, zero `[GP*]` lines, no TRAP/TRACE in env |
+| `AC-BOOT` | **PASS** — one complete `n=1` block, 64 pram lines, last counts `boots=1=N`, common `sge0_va = T = 0x803C0000`, anchor cross-check `0x803C0810 − 0x810 = B`, **371/371 image words equal**, control differs |
+| `AC-RUN` | **PASS** — `boots=1, gp_frames=768, gp_insns=33120534` |
+| `AC-CLEAR` | **PASS** — `GP_CLEAR seq=198852 va=803C0810 observed=00000003 insns=124652 dsp_addr=000800`, `CPU_ANCHOR seq=198851` immediately before, `[GPDMA] watch … cas=ok` |
+| `AC-NOCPU` | **PASS** — six-site reconciliation exact (6 found = 6 frozen, 0 missing/extra); no ack in env, source or exe; `CPU_ZERO=0` everywhere, no contested zero |
+| **`AC-INPUTS`** | **FAIL** — steps 1–2 valid; step 3 finds named stub reads |
+
+**Why `AC-INPUTS` fails — three named stub conditions, all in the `at_clear` freeze:** PERIPH index
+**`0x33` (`0xFFFFB3`) reads = 1017** (the placeholder `v = 0; // core->num_inst; // ??`); MIXBUF
+**`reads_while_stub` nonzero in 26 of 32 bins** (each `7648`); and **`mixbuf_stub_read = 1`**. The only
+other nonzero PERIPH offsets (`0x45`, `0x56`) are inside the five-offset modelled set. DMA's nonzero class
+is `CONTIG`, guest-written by region.
+
+**So: the `3→0` GP memory-write-path transition at `B+0x810` is observed and attributed, but it is
+EXPLORATORY for the named stub inputs — the packet's *Establishes* claim is NOT satisfied.** No `R2-PASS`.
+
+**Next action (the row's own direction): the Advisor has ruled.** Verbatim:
+`docs/reviews/a4b2-r7-expl-input-ruling.md`.
+
+> **Next packet: ONE discovery packet** (§5.8) proving or refuting **non-reliance** of the doorbell exchange
+> on **both** stub inputs, to a **two-leg standard**: **Leg 1 (static mechanism)** — from image `I`
+> (`0x173` words), identify the doorbell write(s) and show its payload, address and every branch guarding
+> the write on the executed path are independent of mixbin and `0xFFFFB3` values; **Leg 2 (empirical
+> invariance)** — perturbation runs varying consumed stub values adversarially (all-zero, all-ones/max,
+> pseudorandom) must reproduce the **identical** doorbell latch (`va`, `observed=3`, `payload=0`,
+> `dsp_addr`) with frames advancing. **Either leg failing REFUTES non-reliance.**
+>
+> **The discovery's outcome table must carry an explicit death branch:** if non-reliance is refuted, the
+> strict `A4b2` claim is **BLOCKED** until real VP implementation (not a model) plus `0xFFFFB3` resolution,
+> and `A4b2` retires or waits.
+>
+> **A MIXBUF value-model is RULED OUT** — inadmissible under `docs/jsrf-run-profiles.md` criterion 4
+> (mixbin contents are the *result* of VP voice-mixing work consumed by the GP whose execution is being
+> certified, so supplying them without the VP is synthetic completion). The "idle bins read 0" escape is
+> **closed by measurement**: the `MIXBUF_STUB_READ` latch reads `observed=1` (a VP voice was genuinely
+> active). **A `0xFFFFB3` model is PREMATURE** until the register is identified. **No Planner time goes
+> there.** `0xFFFFB3` register identification rides along as a parallel thread.
+>
+> **Conditional case ruling (confined to these two inputs):** Q1 condition 2's *purpose* — per its own
+> "Why" and its per-value "each value it **relies on**" rule — is satisfied for these two inputs by a
+> **completed two-leg non-reliance proof**; the follow-up `A4b2` revision may then cite the discovery and
+> restate its input qualifier accordingly, with **no model packet** for them. This substitutes a **higher**
+> bar (proof of non-reliance) for a blanket proxy (zero reads); it waives **no** evidence, sets **no**
+> precedent beyond inputs with a completed proof, and does not touch Q1's text for any other input.
+>
+> **The perturbation hook is discovery instrumentation** (§5.8: reversible, env-gated, off by default at
+> closure) — a **new packet's toolkit scope**, **not** a reopening of closed `A4b1`. **`PIO_FREE` ordering
+> is unconstrained**; natural order is this discovery first, `PIO_FREE` after, but **sequencing is the
+> Planner's call**.
+
+**`r7`'s `R2-EXPL-INPUT` is terminal for `r7`** — the strict claim is **not established**, and no part of
+the ruling converts it. `r6`'s `R2-UNKNOWN` remains terminal for `r6`.
+
+**Also recorded:** the A2h displacement did **not** block this decision. Under `r7` no PASS-path claim reads
+the R1 dump, so the R1 `content-mismatch: 1` was correctly **not** a gate; the displaced-dump `Wf` was not
+read, and the no-`GP_CLEAR` branches that would have required it were not reached. That is the `r7` repair
+working as designed. `r6`'s artifacts discharged nothing.
+
+**Open lead, unchanged:** the **A2h displacement writer** (characterized, never identified;
+`docs/jsrf-operating-history.md:1000-1045`). It no longer gates this claim but still gates later
+progress-past-spin claims — the trapped run dies at ~4.8 s.
+
+---
+
+## Previous packet — `A4b2-r7` (promoted 2026-09-27, `ADEQUATE`; executed → `R2-EXPL-INPUT`)
+
+- **Packet:** `docs/packets/a4b2-gp-clears-pending-word.md`, revision **`A4b2-r7`**, class **change**,
+  frozen SHA-256 **`93E410C3742D0E290A0C0BBA71DCFEC547A77ECAC497E389BA5D58026E551F95`** (**136 lines**).
+  **This is the packet to execute.** Promotion was **byte-identical with no revision**, as §5.3 requires —
+  the file still reads `Status: draft` in its own text, exactly as `A4b1-r4`'s and `A4b2-r6`'s frozen files do.
+- **Adequacy:** **`VERDICT: ADEQUATE`**, `BLOCKING: NONE`, `PREMISE_FRESHNESS: BOUNDED` — recorded
+  **verbatim** in `docs/reviews/a4b2-r7-adequacy-review.md` (fresh Planner child
+  `7c6fd178-49cf-4f00-af5f-3401f3b6d85c`, `codex/gpt-6-sol` @ `high`). The authoring child
+  `b430c48f-42ea-463f-99e6-97da5989e73a` did not review it.
+- **Why `r7` exists — §5.4(1):** `A4b2-r6` was executed and selected **`R2-UNKNOWN`** because gate **G2**
+  failed for R1. A **no-A4b2-edit control** reproduced that failure identically, proving the cause is a
+  **pre-existing guest defect** (the A2h dump displacement, exactly `0x37608`), not this packet's edits.
+  The Advisor ruled `AC-CLEAR`'s binding of `B` to the **post-mortem dump** a blocking defect with a
+  concretely realized **false UNKNOWN**, and mandated four repairs, all implemented:
+  **`B` rebound to log evidence** (common `sge0_va`, cross-checked against `anchor va − 0x810`); a new
+  **independent title-page oracle `T = 0x803C0000`** so `AC-BOOT` is not circular; **G2 deleted** as a
+  global PASS gate (no PASS-path claim reads the R1 dump); **`Wf`** meaningful only under a passing R1
+  mapping check, and the no-`GP_CLEAR` branches guarded so a displaced dump yields UNKNOWN rather than a
+  false `R2-UNATTRIBUTED`/`R2-CPU`/`R2-NOCLEAR`. Ruling:
+  `docs/reviews/a4b2-r6-execution-ruling.md`; execution record: `docs/reviews/a4b2-execution-evidence.md`.
+- **`r6`'s `R2-UNKNOWN` is terminal for `r6`** — not reopened, not rescored. **`r6`'s run archives are
+  STALE for `r7`** (`packet:42`, `:135`): `r7` re-executes **fresh** R1/R0 under this contract.
+- **Claim (Establishes, on `R2-PASS` only):** in one STRICT run with `RECOMP_GPU_ACK=0` and
+  `RECOMP_APU_TRAP=1` plus observation-only APU trace, the **`3→0` transition at `B+0x810` was performed by
+  the GP engine's memory-write path while executing validated image `I`**, after the anchored store was
+  recorded, with no synthetic ack, no instrumented competing CPU zero, and all pre-exchange GP inputs
+  guest-written by region or modelled. **It does not establish** that the guest observed the `0`, exited the
+  spin at `loc_001A18D0`, or progressed past it.
+- **Baseline:** game `a000662aef3bb4d7088f3fa367d19e7ce7c157df`, toolkit
+  `3a3c7c1fa9461d6a9cc7279180aacaaaf979ab7d` (clean). **Step 1's game-only edits are already applied** in
+  the working tree (40 insertions, 0 deletions) and `r7` says to verify and preserve them, not duplicate them.
+- **Write scope (game only):** `src/recomp/gen/recomp_0000.c`, `src/recomp/gen/recomp_0005.c` (step-1 calls
+  and their `extern` declarations only), `src/diagnostics.c` (the `jsrf_watch_store` forwarder only),
+  `docs/reviews/a4b2-*.md`. **No toolkit file.** Build/run owner: the Session.
+- **Expected row, stated in advance by the adequacy reviewer:** a faithful fresh repetition is predicted to
+  select **`R2-EXPL-INPUT` or `R2-UNKNOWN`, not `R2-PASS`** — the archived `r6` `at_clear` block already
+  prints `mixbuf_stub_read=1` with **26 of 32** MIXBUF bins showing nonzero `reads_while_stub` (Session
+  independently reproduced). `R2-EXPL-INPUT` routes to the **Advisor** to decide whether that named stub
+  input needs its own model packet first. This prediction is **not** a defect in `r7` and is **not**
+  permission to rescore `r6`.
+- **Next after `R2-PASS`:** the `PIO_FREE` model packet, **before** any strict liveness/boot claim past the
+  spin. `R2-NOBOOT`/`R2-NOFRAMES`/`R2-NOEXEC`/`R2-NOCLEAR` route to `A4c` discovery.
+- **Open lead, cross-referenced (not newly mandated):** the **A2h displacement writer** was characterized
+  (`docs/jsrf-operating-history.md:1000-1045`) but never identified; `A2h-r6` was retired on a *different*
+  refuted premise, so the writer investigation **stays open**. It is on the critical path for later
+  progress-past-spin claims — the trapped run dies at ~4.9 s — but it **does not gate** this claim.
+- **Planning history (non-authoritative):** `docs/reviews/a4b2-revision-history.md`. `r1`–`r3`
+  `INADEQUATE` on `[GPIN]` accounting; `r4`–`r5` `INADEQUATE` on `AC-BOOT`; `r6` `ADEQUATE` then executed
+  → `R2-UNKNOWN`; `r7` `ADEQUATE` on the §5.4(1) evidence-binding ground.
+
+**Route note:** the old `claude` route stays unusable and is not re-probed. Current DSH staffing is
+`docs/agent-workflow.md` §1: Session/Workers `workbuddy-ai/deepseek-v4.1-flash` @ `max`; Planner and final
+adjudicator **GPT-6 Sol** @ `high` (`provider: codex`); Advisor **Muse Spark 1.3** @ `max`
+(`muse-worker`, handle `muse_FkNhGaXtV9P5`); acceptance stage 1 `hy4-preview-f` @ `high`; stage 2
+`deepseek-v4.1-flash` @ `max`.
+
+---
+
+## Previous packet — `A4b2-r6` (promoted 2026-09-27, `ADEQUATE`; executed → `R2-UNKNOWN`; superseded by `r7`)
+
+**`A4b2-r6` was executed on 2026-09-27 and selected row `R2-UNKNOWN`** because gate **G2** failed for R1.
+**That UNKNOWN is terminal for `r6`** — failure stays failure, no rescoring, and no PASS survives from its
+artifacts. Evidence: `docs/reviews/a4b2-execution-evidence.md`. Ruling:
+`docs/reviews/a4b2-r6-execution-ruling.md`.
+
+**What execution established (observed, positive — the packet's own subject):** the ported GP engine's DMA
+write path took the `3→0` CAS at `0x803C0810` while executing image `I` — `GP_CLEAR seq=198852
+observed=00000003 insns=124652 dsp_addr=000800`, with `CPU_ANCHOR seq=198851` immediately before it,
+`[GPDMA] watch … cas=ok`, `CPU_ZERO_OVERFLOW=0`, no synthetic ack, and **`AC-BOOT`'s image comparison
+passing 371/371 words** with a differing control. The rerun reproduced `seq=198852` identically.
+`AC-DEFAULT2` is **PASS** (R0 `diagnostic_deadline`, `Wf=3`, `F=2`, zero `[GP*]` lines).
+
+**Why G2 failed — a pre-existing guest defect, not this packet's edits.** A **no-A4b2-edit control**
+(all three edits reverted, rebuilt, identical command) crashes **identically**: same
+`unhandled_exception`, same `[ICALL] invalid target 0x00000000 return=0014982E`, same
+`requested 598869040`, same `content-mismatch: 1`. The displacement is **exactly `0x37608`** — the A2h
+separation — and the same signature exists in a **pre-`A4b1`** archive (`20260922-224429-003-a2g-304f0-span`,
+2026-09-22). **`A4b1-r4` is not implicated and remains accepted and closed.**
+
+**Next packet: `A4b2-r7` — a §5.4(1) revision** (a blocking finding from execution with a concrete
+false-UNKNOWN scenario; **not** §5.4(2) — no load-bearing premise was invalidated). The Advisor's mandated
+repair shape:
+
+1. **Rebind `B` to validated log evidence** — e.g. `sge0_va` from the every-instance-validated `[GPBOOT]`
+   block(s), cross-checked against `anchor va − 0x810`; multi-boot `sge0_va` disagreement → UNKNOWN.
+   **`AC-BOOT`'s `sge0_va = B` conjunct must be restructured with it**, or it becomes tautological.
+2. **No PASS-path dependence on dump integrity** — **G2 as a PASS-gate goes with it** (delete or demote;
+   Planner's choice, one-line reason recorded).
+3. **Displaced-dump `Wf` (reads 0) must not be recorded as meaningful corroboration** — qualify by mapping
+   integrity or drop it.
+4. **`r6`'s run artifacts are STALE for the revision** (§2.2.5, §2.4.7): the revision **re-executes** new
+   R1/R0 runs under the new contract; the `r6` logs are leads and premise evidence only.
+
+**The Planner writes the predicates.** Next: revision → **full fresh §5.3 adequacy review by a
+non-authoring Planner** → re-execution → decision from log evidence.
+
+**Open lead, cross-referenced (not newly mandated):** the **A2h displacement writer** was characterized
+(`docs/jsrf-operating-history.md:1000-1045`) but never identified; `A2h-r6` was retired on a *different*
+refuted premise, so the writer investigation **stays open**. It remains on the critical path for later
+progress-past-spin claims — the trapped run dies at ~4.9 s — but it **does not gate** this claim.
+
+**Route note:** the old `claude` route stays unusable and is not re-probed. Current DSH staffing is
+`docs/agent-workflow.md` §1: Session/Workers `workbuddy-ai/deepseek-v4.1-flash` @ `max`; Planner and final
+adjudicator **GPT-6 Sol** @ `high` (`provider: codex`); Advisor **Muse Spark 1.3** @ `max`
+(`muse-worker`, handle `muse_FkNhGaXtV9P5`); acceptance stage 1 `hy4-preview-f` @ `high`; stage 2
+`deepseek-v4.1-flash` @ `max`.
+
+---
+
+## Previous packet — `A4b2-r6` (promoted 2026-09-27, `ADEQUATE`; executed → `R2-UNKNOWN`)
+
+- **Packet:** `docs/packets/a4b2-gp-clears-pending-word.md`, revision **`A4b2-r6`**, class **change**,
+  frozen SHA-256 **`3273409262437D42A500A1E988E39CB25234C2E5E2A96007A9BE74FEB6B250E5`** (**134 lines**).
+  **This is the packet to execute.** Promotion was **byte-identical with no revision**, as §5.3 requires —
+  the file still reads `Status: draft` in its own text, exactly as `A4b1-r4`'s frozen file does.
+- **Adequacy:** **`VERDICT: ADEQUATE`**, `BLOCKING: NONE`, `PREMISE_FRESHNESS: BOUNDED` — recorded
+  **verbatim** with the reviewer's child ID and route in `docs/reviews/a4b2-r6-adequacy-review.md` (fresh
+  Planner child `36e21ac4-ffcf-49b6-a3ae-80abe39da281`, `codex/gpt-6-sol` @ `high`). The authoring child
+  `636dc591-2e30-41fb-8cf6-46d108135165` did not review it.
+- **Claim (Establishes, on `R2-PASS` only):** in one STRICT run with `RECOMP_GPU_ACK=0` and
+  `RECOMP_APU_TRAP=1`, the **`3→0` transition at `B+0x810` was performed by the GP engine's memory-write
+  path while executing validated image `I`**, after the anchored store was recorded, with no synthetic ack,
+  no instrumented competing CPU zero, and all pre-exchange GP inputs guest-written by region or modelled.
+  Every recorded GPRST bootstrap loaded words equal to `I`. **It does not establish** that the guest
+  observed the `0`, exited the spin at `loc_001A18D0`, or progressed past it.
+- **Baseline:** game `a000662aef3bb4d7088f3fa367d19e7ce7c157df`, toolkit
+  `3a3c7c1fa9461d6a9cc7279180aacaaaf979ab7d` (clean).
+- **Write scope (game only):** `src/recomp/gen/recomp_0000.c`, `src/recomp/gen/recomp_0005.c` (step-1
+  calls and their `extern` declarations only), `src/diagnostics.c` (the `jsrf_watch_store` forwarder only),
+  `docs/reviews/a4b2-*.md`. **No toolkit file.** Build/run owner: the Session.
+- **Runs:** R1 (trap+trace) and R0 (default), 30 s each, `--profile strict`, archived under `logs/runs/`.
+- **Next after `R2-PASS`:** the `PIO_FREE` model packet, **before** any strict liveness/boot claim past the
+  spin. Rows `R2-NOBOOT`/`R2-NOFRAMES`/`R2-NOEXEC`/`R2-NOCLEAR` route to `A4c` discovery.
+- **Planning history (non-authoritative):** `docs/reviews/a4b2-revision-history.md`. `r1`–`r3` were
+  `INADEQUATE` on `[GPIN]` accounting; `r4` and `r5` were `INADEQUATE` on `AC-BOOT`. The binding rulings
+  that shaped `r6` are `docs/reviews/a4b2-r4-planning-rulings.md` and
+  `docs/reviews/a4b2-r4-advisor-blocker-ruling.md`; the two verdicts are
+  `docs/reviews/a4b2-r4-adequacy-review.md` and `docs/reviews/a4b2-r5-adequacy-review.md`.
+
+---
+
+## Last closed packet — `A4b1-r4` (GP/DSP core port) — **ACCEPTED 2026-09-26, `R1-PASS`, PUSHED (complete)**
 
 **`A4b1-r4` is accepted and its closure push is done. It must not be reopened.** `A4b1` is accepted with
 exactly its "Establishes" claim: the pinned xemu GP core (interpreter only), GP MMIO routing and one GP
@@ -15,29 +312,28 @@ and exe; a thread-safe watched-word ledger is exported and fixture-exercised; th
 is recorded; the tree builds and every ctest passes; one STRICT default run matches the `A4s` baseline
 stop. **The core is reachable only through GP MMIO, which requires `RECOMP_APU_TRAP`.**
 
-**Next packet: `A4b2` → `A4b2-r4` — ⛔ PLANNING SUSPENDED (owner decision, 2026-09-26).**
+**Next packet: `A4b2` → `A4b2-r4` — ✅ PLANNING RESUMED (owner decision, 2026-09-27).**
 
-> **BLOCKED: the Claude route is down.** The `§1` roster assigns the **Planner** (`@ medium`) and the
-> **persistent Advisor** (`@ high`) to `claude/claude-opus-5-5`, and **every** entry point on that route
-> fails: new spawns at every advertised effort (`low`/`medium`/`high`/default), a retry, **and
-> `send_message` to the existing persistent Advisor child** — while both `workbuddy-ai` routes answer
-> normally, so the harness and spawn mechanism are healthy and the fault is specific to `claude`. The
-> route still **lists** as one canonical match with all efforts advertised, so §1's `LIVE_RESOLVE`
-> **resolution** passes while the route is **not usable**; §1's *"an unavailable assignment is `BLOCKED`;
-> never fall back silently"* governs. Full diagnosis and the eight-probe ladder:
-> `docs/reviews/blocker-20260926-claude-route-down.md`.
+> **RESUMED: the staffing authority was replaced by owner decision.** The `§1` roster no longer assigns
+> the Planner or the persistent Advisor to `claude/claude-opus-5-5`; that route's failure and the
+> eight-probe ladder remain recorded in `docs/reviews/blocker-20260926-claude-route-down.md`, and the
+> suspension it produced is **lifted**. The owner instruction that replaced the staffing, the Advisor
+> ruling confirming the resumption, and the Session's re-verification that no load-bearing premise
+> changed are recorded together in **`docs/reviews/owner-staffing-resumption-20260927.md`**.
 >
-> **Owner decision:** *"Suspend A4b2 planning; do available-route work only."* **No substitute
-> authorized** for either judgment role; the Session will not route Planner or Advisor work elsewhere and
-> does not write the packet body itself.
+> **Current DSH staffing** (`docs/agent-workflow.md` §1): Session and Workers
+> `workbuddy-ai/deepseek-v4.1-flash` @ `max`; **Planner and final acceptance adjudicator GPT-6 Sol** @
+> `high` (`provider: codex`, `LIVE_RESOLVE`); **persistent Advisor Muse Spark 1.3** @ `max`
+> (`muse-worker`, handle `muse_FkNhGaXtV9P5`); acceptance stage 1 `hy4-preview-f` @ `high`; stage 2
+> `deepseek-v4.1-flash` @ `max`.
 >
-> **Preserved and still valid — nothing was lost:** the Planner's **complete sketch** (packet lines 1–26)
+> **Preserved and still valid — nothing was lost:** the Planner's **complete sketch** (packet lines 1–25)
 > over the **intact `A4b2-r3` body** (27–334); the Advisor's **`SHAPE: PROCEED`** ruling recorded verbatim
 > in `docs/reviews/a4b2-r4-planning-rulings.md`; the Session's pre-preflight verification
 > (`a4b2-r4-sketch-verification.md`); and the `0xFFFFB3` decision-class note applied to
-> `a4b1-r4-acport-step4-enumeration.md`. **When the route returns, work resumes at "write the `A4b2-r4`
-> body" — no re-planning and no re-preflight**, because the sketch was already cleared and the ruling is
-> recorded. The Session re-probes on request.
+> `a4b1-r4-acport-step4-enumeration.md`. **Work resumed at "write the `A4b2-r4` body" — no re-planning
+> and no re-preflight**, because the sketch was already cleared and the ruling is recorded. The old
+> Planner child `cee46374-…` is retired with the old configuration and is not reused.
 >
 > **What the `A4b2` planning already settled, so it is not re-litigated on resume:**
 > grounds are **§5.4(2) + §5.4 After-INADEQUATE + §5.4(3)** (not "only a re-bind"); five edits approved
@@ -48,10 +344,9 @@ stop. **The core is reachable only through GP MMIO, which requires `RECOMP_APU_T
 > is bound to the **build-identity commit**, not "HEAD"; and the **NDEBUG** coverage claim is narrowed to
 > a claim limit on `R2-PASS`.
 
-**Work that continues on available routes:** Session work, Worker subagents
-(`workbuddy-ai/deepseek-v4.1-flash` @ `max`), and both acceptance stages (`hy4-preview-f` @ `high`,
-`deepseek-v4.1-flash` @ `max`). No `A4b2` planning, no shape preflight, and no adequacy review until the
-route returns.
+**Route-availability note (unchanged in effect):** the old `claude` route stays unusable and is not
+re-probed; the current roster above is what §1 requires. A required route that is unavailable is still
+`BLOCKED` under §1 — never a silent fallback.
 
 | Result | Value |
 |---|---|

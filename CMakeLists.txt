@@ -143,6 +143,20 @@ if(BUILD_TESTING)
         TIMEOUT 60 ENVIRONMENT "RECOMP_APU_TRACE=1")
     add_test(NAME jsrf_apu_watch_fixture_trace_off COMMAND jsrf_apu_watch_fixture_test)
     set_tests_properties(jsrf_apu_watch_fixture_trace_off PROPERTIES TIMEOUT 60)
+
+    # A4b2-NR (xii): the diagnostic GP input perturbation selectors. The mode is
+    # cached read-once by apu_watch_perturb_mode(), so one process can only ever
+    # exercise ONE mode -- hence one registration per mode, each process-isolated.
+    # The `absent` arm is the trace_off registration above (it sets no perturb
+    # variable), so inertness is covered there as well as here.
+    foreach(_nr_mode "zero:0" "max:0" "prng:1" "bad-output:0")
+        string(REPLACE ":" "_" _nr_tag "${_nr_mode}")
+        add_test(NAME jsrf_apu_watch_fixture_perturb_${_nr_tag}
+                 COMMAND jsrf_apu_watch_fixture_test)
+        set_tests_properties(jsrf_apu_watch_fixture_perturb_${_nr_tag} PROPERTIES
+            TIMEOUT 60
+            ENVIRONMENT "RECOMP_APU_TRACE=1;RECOMP_APU_GP_INPUT_PERTURB=${_nr_mode}")
+    endforeach()
     add_test(NAME jsrf_gpu_inspection COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_gpu_inspection.py)
     add_executable(jsrf_gpu_smoke tests/native_gpu_smoke.c)
     target_link_libraries(jsrf_gpu_smoke PRIVATE d3d11 dxgi dxguid)

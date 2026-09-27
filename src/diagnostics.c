@@ -111,6 +111,32 @@ void recomp_diag_thread_end(void)
     current = NULL;
 }
 
+/* A4b observation — re-apply after regeneration.
+ *
+ * The A4b2 watch-ledger seam. This is a THIN FORWARDER and nothing else: no
+ * filtering, no cap, no output, no decision logic, and no value changes. It sets
+ * the toolkit's anchor site once and then forwards every call to the toolkit's
+ * apu_watch_cpu_store(), which itself ignores any call whose target_va is not
+ * MEM32(0x001BA858)+0x810. It is called BEFORE the guest store it observes, so
+ * the recorded value is the value about to land (record-before-store, Device
+ * semantics 6).
+ *
+ * The anchor site is the guest's control store of the pending word; the toolkit
+ * hard-codes no site, so A4b2 passes it here. Re-setting it is idempotent, so the
+ * one-shot flag needs no lock: a lost race only writes the same constant twice. */
+extern void apu_watch_set_anchor_site(uint32_t site_va);
+extern void apu_watch_cpu_store(uint32_t site_va, uint32_t target_va, uint32_t value);
+
+void jsrf_watch_store(uint32_t site_va, uint32_t target_va, uint32_t value)
+{
+    static int anchor_set;
+    if (!anchor_set) {
+        anchor_set = 1;
+        apu_watch_set_anchor_site(0x001A18CEu);
+    }
+    apu_watch_cpu_store(site_va, target_va, value);
+}
+
 /* Temporary investigation hook, disabled unless JSRF_TRACE_HEAP is set.
  * Arguments and registers are observed, never changed. Capped per thread. */
 void jsrf_trace_heap(uint32_t site, uint32_t frame)

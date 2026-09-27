@@ -1,334 +1,136 @@
 ## A4b2 — the ported GP engine clears the title's pending word in a strict run
 
-### Sketch (A4b2-r4, for the Advisor shape preflight — body below is still r3 until PROCEED)
-
-1. **Claim:** unchanged from r3 (one STRICT trap+trace run: boot, run, GP clear, no CPU/ack, inputs). Re-bind only; not a redesign.
-2. **Class:** change. Grounds: §5.4(2) `PREMISE_CHANGED` (A4b1-r4 replaced the `[GPIN]` mechanism, added `sge0_va`, and re-baselined the toolkit to `M`→`3a3c7c1`). r3 was never ADEQUATE, so this is a draft revision.
-3. **Edit 1: P2.** Repin to `A4b1-r4` at toolkit `3a3c7c1`. The field map uses r4 AC-FIX cases: `at_clear` (xi); PERIPH/FIFO/MIXBUF/DMA (viii); `BOOT_SCRATCH_READ` (vi); out-of-universe (x); `sge0_va` (vii), both placements.
-4. **Edit 2: AC-BOOT.** Compare `sge0_va = B`, never raw `sge0`. **Also demote** the r3 PASS conjunct "last `0x02040` write = `803CC000`" to a recorded value. Under P-F, at `M` GPSADDR may hold the physical form `003CC000`, which would give a deterministic false UNKNOWN. **The boundary note missed this item.**
-5. **Edit 3: AC-INPUTS.** Rewritten on the first `[GPIN] at_clear` block, which A4b1 emits at the freeze.
-   - It is **evaluated only when AC-CLEAR is PASS** (§6.1 6b).
-   - **UNKNOWN** if any of these holds: the block is missing; its header `seq ≠ GP_CLEAR.seq`; `out_of_universe ≠ 0`; or `boot_scratch_read ≠ 1`.
-   - **FAIL** on a stub read: any PERIPH offset with reads > 0 outside the six offsets A4b1 classified as modelled (`0x33, 0x45, 0x54–0x57`); FIFO slots 0–1 with reads > 0; MIXBUF `reads_while_stub > 0` or the `mixbuf_stub_read` flag; or DMA reads in `DEVICE`/`OTHER_MAPPED`.
-   - **UNKNOWN** if FIFO slots 2–5 are non-zero.
-   - **PASS** otherwise. `LOW_RAM`/`CONTIG` count as guest-written.
-6. **Edit 4: rows/exhaustiveness.** When AC-CLEAR is not PASS, AC-INPUTS is `NOT EVALUATED`, which is not UNKNOWN. The R2-NOCLEAR brief becomes the running `[GPIN] summary` block.
-7. **Edit 5: EP (the carried-forward input) → a structural precondition P3, not a lead.**
-   - The EP is unreachable at `3a3c7c1`. EP MMIO is unrouted (`apu_core.c:648`), `ep_ops` has no caller, and `ep.regs[EPRST]` is written only in `ep_write` (`gp_ep.c:557-559`). The state is calloc'd (`apu_core.c:543`), so the EP never runs (`gp_ep.c:650`).
-   - If the EP were reachable, the ledger could not tell an EP `GP_CLEAR` from a GP one, which is a false PASS.
-   - P3 is a toolkit text check that EP routing is absent. It fails closed.
-8. **Unchanged:** AC-DEFAULT2 (oracle repointed to A4b1 R0 `20260926-010303-411`), AC-RUN, AC-CLEAR, AC-NOCPU, the step-1 sites, gates, and runs.
-9. **Unknowns (subject of execution, not planning):** whether R1 boots, runs, and clears, and which inputs it reads.
-10. **Experiment:** unchanged. R1 (trap+trace) and R0 (default), 30 s each, with one R1 rerun on UNKNOWN.
-11. **Questions for the Advisor:**
-    - **(a)** The printed `at_clear` block is fixture-tested only on the snapshot (xi) plus a line count. Its field values are covered through the shared `emit_gpin_block` emitter, which the `summary` line-vs-snapshot check exercises, not by a direct at_clear line-vs-snapshot check. Is that admissible as a decision input?
-    - **(b)** PERIPH `0xFFFFB3`: the pin returns a constant `0` (`dsp.c:57`, `// core->num_inst ??`), and A4b1 classified it as modelled. Does A4b2 inherit that classification, or treat it as a shim constant?
-
-**Class:** change   **Contract revision:** `A4b2-r3`   **Status:** draft
-**r3 delta (not a redesign; `docs/reviews/a4b1-a4b2-r2-adequacy-review.md`):** P2 repinned to `A4b1-r3` with a per-decision-field map to `AC-FIX` cases; `AC-INPUTS` decides from `A4b1-r3`'s lossless `[GPIN]` accounting and is UNKNOWN on overflow or missing accounting; step 1 cites sites by content/VA. `AC-CLEAR`'s logic is unchanged.
-**Split decision:** `A4b` is split into `A4b1` (port, ledger, licence, fixtures, unchanged default path; no guest-run claim) and `A4b2` (this packet: the strict trap+trace run — boot, run, clear, no-CPU, inputs), because build, ctest and one default run settle the port's scale risk, so it should not wait for the run criteria or be reviewed with them.
-**Governing requirement:**
-- `A4a-r2` row `O-6` (`docs/packets/a4a-dsp-pending-word.md`).
-- Q1 ruling `docs/reviews/a4b-q1-advisor-ruling.md`. Conditions 1, 2 and 4 are discharged here; condition 3 was discharged by `A4p`.
-- Checkpoint-40 constraints `docs/reviews/a4b-planning-rulings.md`.
-- **Watch-ledger ruling `docs/reviews/a4b-watch-ledger-ruling.md` §(b).** This is the authority for AC-CLEAR, AC-NOCPU and R2-UNATTRIBUTED.
-
-**Depends on:** `A4b1-r3` (ACCEPTED, `R1-PASS`); `A4p-r1` (ACCEPTED, `O-GATE`); `A4a-r2` (ACCEPTED); `A3a-r25` (ACCEPTED).
-**Baseline:** game and toolkit at `A4b1`'s accepted commits, plus the game commit that adds this packet. Both trees are clean. The Session records the SHAs and the exe SHA-256.
-**Revision log:** `docs/reviews/a4b-revision-history.md` (non-authoritative).
-
-### Preconditions (checked before any step; if any fails, stop and select no row)
-
-- **P1.** `A4p-r1` was ACCEPTED with row **`O-GATE`** on XBE SHA-256 `FD19055756719893C466302809B433B785ECF5732DF0441286F3F605F0F3EF9C` (`docs/reviews/a4p-r1-acceptance-review.md`). `Get-FileHash game\default.xbe` must equal that hash.
-  - What `A4p` established: all 28 direct reads of `0xFE820010` are threshold re-polls, and the polled value reaches no use. So `PIO_FREE` gates reachability and does not shape guest-written data.
-  - Claim limits carried here:
-    - `A4p` rests on an **inferred** x86 register-convention premise, checked only at the boundaries it used.
-    - It is **blind to register-indirect or computed access** to `0xFE820010`, beyond its E3 evidence.
-    - It says nothing about **timing**, or about whether **`0x80` is the true device value**.
-- **P2.** `A4b1-r3` was ACCEPTED with `R1-PASS`, and the toolkit HEAD equals `A4b1`'s accepted toolkit commit. `A4b1-r3` defines (Device semantics 6) and its AC-FIX asserts, **as printed line equal to snapshot** (AC-FIX line-vs-snapshot rule), every field this packet decides on:
-  - `GP_CLEAR.va` (= `W_va`, not the DMA destination start): case (i); `GP_CLEAR.observed`: (e), (i); `GP_CLEAR.insns` (= `gp_insns` at the event): (i); `GP_CLEAR.dsp_addr`: (i); `GP_CLEAR.seq`: (i);
-  - `CPU_ANCHOR.seq` and its ordering against `GP_CLEAR.seq`: (i);
-  - `CPU_ZERO.site`/`.seq`: (iv), (v); `CPU_ZERO_OVERFLOW` latch and counter: (v);
-  - `GP_ZERO_OVER_OTHER`: (ii); `GP_PARTIAL`: (iii);
-  - counts-line `boots`/`gp_frames`/`gp_insns` equal to the ledger: (vi);
-  - `[GPIN]` accounting, per kind classified by AC-INPUTS: `DMA_READ` — (vi), (viii); `PERIPH` — (viii); `FIFO_READ` — (viii); `MIXBUF` with `vp_active_voices` `0` and `> 0` — (viii); the cut-off at `GP_CLEAR` and its reset — (viii); counts `gpin`/`GPIN_OVERFLOW` and the `GPIN_OVERFLOW` latch — (ix);
-  - `[GPBOOT]` `gprst`/`prev`: (vii).
-
-  This packet changes none of them.
+**Class:** change   **Contract revision:** `A4b2-r7`   **Status:** draft  
+**Governing requirement:** `A4a-r2` row `O-6` (`docs/packets/a4a-dsp-pending-word.md`); Q1 conditions 1, 2 and 4 (`docs/reviews/a4b-q1-advisor-ruling.md`; condition 3 was discharged by `A4p`); checkpoint-40 constraints (`docs/reviews/a4b-planning-rulings.md`); watch-ledger and finite-universe input-accounting rulings (`docs/reviews/a4b-watch-ledger-ruling.md`, `docs/reviews/a4b-gpin-accounting-ruling.md`); `docs/reviews/a4b2-r4-planning-rulings.md` (binding shape and input-class decisions); `docs/reviews/a4b2-r6-execution-ruling.md` (evidence-boundary ruling). A **full fresh §5.3 adequacy review by a non-authoring Planner** is required before freezing.  
+**Depends on:** `A4b1-r4` (ACCEPTED, `R1-PASS`); `A4p-r1` (ACCEPTED, `O-GATE`); `A4a-r2` (ACCEPTED); `A3a-r25` (ACCEPTED).  
+**Baseline:** game `a000662aef3bb4d7088f3fa367d19e7ce7c157df` on `master`, toolkit clean `3a3c7c1fa9461d6a9cc7279180aacaaaf979ab7d`. The Session records both build-source identities, their dirty-state manifests (including the already-applied step-1 game-only edits and unrelated changes), the built exe SHA-256, and **fresh** R1/R0 archive identities; any changed code premise is a stop, not an implicit repin.  
+**Revision log:** `docs/reviews/a4b2-revision-history.md` (non-authoritative pointer; no log is a prerequisite).
 
 ### Motivating evidence
 
-- **A4a R1** (`logs/runs/20260924-191833-331-a4a-r2-trap-trace`): STRICT, trap+trace.
-  - The guest wrote GPSADDR `0x02040 = 803CC000` (L3188), GPSMAXSGE `0x020D4 = 8` (L3189), and GPRST `0x3FFFC = 1` (L3190), then `= 3` (L3201).
-  - The FE/SE frame gate opened at L3286-3287, after GPRST=3.
-  - `MEM32(803CC000) = 803C0000 = B`, and `[B, B+0x5CC)` equals XBE file offset `0x1A7D60`. That range is image `I`.
-  - `MEM32(B+0x810) = 3`.
-  - The run ended `diagnostic_deadline`, spinning at `loc_001A18D0`.
-- **A4a R0** (`logs/runs/20260924-191906-091-a4a-r2-default`): STRICT, default. Same stop.
-- **Guest stores to the word** (XBE disassembly, read):
-  - the control store `0x001A18CE mov [ebx],eax` (`recomp_0005.c:6746`, immediately before `loc_001A18D0` at `0x001A18D0`);
-  - `0x001A1751 and dword [edi+0x810],0` (`recomp_0005.c:6524`);
-  - `0x001A1FA7 mov [edi+0x10],ebp` with `edi = MEM32(0x1BA858)+0x800` (`recomp_0005.c:8088`).
-- **Hook order** (`apu_mmio_hook.c:283` handles the access, `:300` prints it): `[APUMMIO] write 0x3FFFC = 00000003` is printed **after** the synchronous bootstrap. So the `[GPBOOT]` block precedes it (`docs/reviews/a4b1-a4b2-adequacy-review.md`, A4b2 B1).
+- **A4a R1** (`logs/runs/20260924-191833-331-a4a-r2-trap-trace`), STRICT trap+trace: guest wrote GPSADDR `0x02040 = 803CC000`, GPSMAXSGE `0x020D4 = 8`, GPRST `0x3FFFC = 1` then `3`; the FE/SE frame gate opened. `MEM32(803CC000) = 803C0000 = T`; `[T,T+0x5CC)` equals original XBE image `I` at file offset `0x1A7D60`; `MEM32(T+0x810) = 3`. It reached `diagnostic_deadline` at `loc_001A18D0`. The GPSADDR value is recorded context, **not** a required value in this packet: the accepted `M` address translation may allow a physical-form SGE entry.
+- **A4a R0** (`logs/runs/20260924-191906-091-a4a-r2-default`), STRICT default, reached the same stop. `A4b1-r4` accepted R0 is `logs/runs/20260926-010303-411-a4b1-default`: `diagnostic_deadline`, `W=3`, `F=2`, and zero trapped-device trace lines. These are historical oracles, not R1 results for this revision.
+- The original-XBE guest sites `0x001A18CE` (control store), `0x001A1751` (zero store), and `0x001A1FA7` (stop-path store), plus the three generated `+0x810` stores identified in Execution step 1, are the **six enumerated instrumentation sites**; this is not a complete enumeration of all computed guest writes. The GP's own clearing write is decided from a fresh strict R1 under this contract; earlier run archives are premise oracles, not acceptance evidence.
 
 ### Claim and boundaries
 
-- **Establishes (on R2-PASS only):** in one STRICT run with `RECOMP_GPU_ACK=0` and `RECOMP_APU_TRAP=1`, modelled GP execution of the guest's own command satisfied the wait at `loc_001A18D0`. Specifically:
-  - the guest's GPRST write bootstrapped the GP from the scratch pages named by the guest's SGE table, and the loaded words equal image `I`;
-  - the GP retired instructions in APU frames;
-  - the GP's own DMA write path exchanged the `3` at `B+0x810` for `0`. The ledger's `GP_CLEAR` latch witnesses this, after the guest's anchor store of `3`;
-  - no synthetic ack exists;
-  - every input the GP read before that write was guest-written or modelled.
-- **Does not establish:**
-  - Everything Q1 condition 4 lists. The guest's arrival at the spin, and everything after it, pass through `PIO_FREE` stub gates and are exploratory-grade.
-  - Boot progress, liveness, DirectSound init success, audio output, or behaviour under a modelled VP FIFO.
-  - Real-hardware state or timing at the spin. "The guest leaves `loc_001A18D0`" is an observation only.
-  - Anything beyond the `A4p` limits carried in P1.
-  - DSP56300 instruction-level correctness.
-  - Physical/VA aliasing, EP execution, or GP→CPU interrupts.
-  - A complete enumeration of CPU stores to the word. The CPU instrumentation is a text-matched lead; attribution rests on the compare-exchange alone.
-- **Non-goals:** any toolkit change; a `PIO_FREE` model; EP; audio; regeneration; changing `docs/jsrf-run-profiles.md`.
+- **Establishes only on `R2-PASS`:** in one STRICT run with `RECOMP_GPU_ACK=0`, `RECOMP_APU_TRAP=1` and observation-only APU trace, the `3→0` transition at `B+0x810` was performed by the GP engine's memory-write path while executing validated image `I`, after the anchored store was recorded, with no synthetic ack, no instrumented competing CPU zero, and all pre-exchange GP inputs guest-written by region or modelled at the pinned source. Every recorded GPRST bootstrap loaded words equal to `I` from its translated SGE-described scratch page, and GP instructions retired in APU frames. The anchor corroborates the identity of the exchanged `3`; it does not prove that the anchored store supplied it.
+- **Does not establish:** that the guest observed the `0`, exited the spin at `loc_001A18D0`, or progressed past it; boot progress or liveness, DirectSound init or audio output, real-hardware timing, instruction-level DSP56300 correctness, GP→CPU interrupts, EP execution, or a second command/periodic write-back's behavior. `CPU_ANCHOR` is recorded **before** the guest store: the CPU can pause after recording while the GP exchanges a pre-existing `3`, then resume and store `3`; sequence order corroborates the exchanged-`3` identity but does not prove the anchor caused that `3` or that the guest's wait ended. When its R1 dump mapping is independently valid, final `Wf=3` and `F≥1` are **compatible** with `R2-PASS` (later re-store or re-entry); `Wf` is not read or reported as corroboration from a displaced R1 dump, and `F` comes from `stacks.txt`. Neither is a wait-exit gate. `PIO_FREE` stub gates the guest's *arrival* at the spin and everything afterward (exploratory-grade), not necessarily the GP's later input values; `A4p`'s inferred register-convention boundary, incomplete computed-access coverage and lack of timing/true-`0x80` claim remain. `LOW_RAM`/`CONTIG` DMA is classed guest-written **by region, not by writer**: host writes into guest RAM (including HLE and VP stub writes) are not distinguished; this is not a data-flow proof. `0x56` (`DMA_CONTROL`) is upstream's RUNNING→STOPPED-after-three-reads completion **timing heuristic**, inherited in the five-offset modelled set but **not a hardware model**. For `R2-PASS`, only the read-arm FIFO `NDEBUG` fall-through is caught by the FIFO input hook; `unk2`/`unk13`, the `format` default and `dsp_offset` range fall-throughs are **unaudited**, not asserted covered. Their audit is a follow-up lead, not a packet obligation.
+- **Non-goals:** a toolkit change, `PIO_FREE` model, EP enablement, audio, regeneration, or evidence-profile policy changes. No complete enumeration of register-indirect/computed/table-driven accesses to the pending word is claimed; AC-CLEAR's atomic compare-exchange, not absence of CPU-site lines, establishes what its particular GP write replaced.
+
+### Preconditions (before any execution step; a failure stops with no row selected)
+
+- **P1 — XBE and reachability boundary.** `A4p-r1` was ACCEPTED with `O-GATE` on XBE SHA-256 `FD19055756719893C466302809B433B785ECF5732DF0441286F3F605F0F3EF9C` (`docs/reviews/a4p-r1-acceptance-review.md`). From the game root, `Get-FileHash game\default.xbe -Algorithm SHA256` must match. `A4p` found 28 direct reads of `0xFE820010` to be threshold re-polls with no use of the polled value. That finding rests on an inferred register-convention premise checked at its boundaries, is blind to register-indirect/computed accesses beyond E3 and establishes neither timing nor a true hardware `0x80` value.
+- **P2 — accepted implementation and exact decision fields.** Verify `A4b1-r4` is ACCEPTED with `R1-PASS`, and its accepted toolkit identity is `3a3c7c1fa9461d6a9cc7279180aacaaaf979ab7d`, clean before this game-only work. The R1/R0 archives and executable build-source manifests must identify that same toolkit commit, not a later HEAD. At this identity, `A4b1-r4` AC-FIX pins the following field/production-hook map (printed latch/counts/`summary` fields versus snapshot where applicable): `GP_CLEAR.va` = exchanged `W_va` (not DMA destination), `.observed`, `.insns`, `.dsp_addr`, `.seq` and `CPU_ANCHOR.seq` order — (e),(i); `CPU_ZERO.site/.seq` and `CPU_ZERO_OVERFLOW` — (iv),(v); `GP_ZERO_OVER_OTHER` — (ii); `GP_PARTIAL` — (iii); counts `seq`/`boots`/`gp_frames`/`gp_insns` — (vi),(ix′); `PERIPH`, `FIFO_READ`, `MIXBUF`, `DMA_READ` production hooks — (viii), volume/no overflow — (ix′), out-of-universe — (x), write-once `at_clear` snapshot — (xi), `BOOT_SCRATCH_READ` — (vi), and `sge0_va` on both SGE-entry placements with SGE entry and page at different VAs — (vii). The `at_clear` **printed** block is admitted on the stated inference in AC-INPUTS, with its two in-run can-fail checks; no direct fixture assertion of all its printed fields is claimed. Check the accepted pin and source, and stop if this map or identity does not hold.
+- **P3 — EP cannot impersonate a GP clear at the build identity.** Use the **toolkit commit in both R1/R0 builds' identities**, not `HEAD`, for this can-fail text check from the game root (substitute its verified full SHA for `<build-toolkit-sha>`):
+  `git -C C:\Users\logic\Repos\xboxrecomp grep -n -E 'ep_ops|ep\.regs\[|0x50000' <build-toolkit-sha> -- src/apu`.
+  Read **all** hits and enclosing functions; treat an incomplete/truncated command result as a stop. The fixed pattern set has exactly these permitted forms: `ep_ops` appears only in its definition (`dsp/gp_ep.c`), declaration (`dsp/gp_ep.h`), or comments (`apu_core.c`, `apu_state.h`), never a call/registration; writes to `d->ep.regs[` appear only inside `ep_write` (read occurrences are allowed); and `apu_core.c` has **no `0x50000` EP routing arm** (comment mentions are allowed, not executable arms). Positive controls: the definition, declaration, comments, and `ep_write`'s EPRST write must be visible. Also confirm `MCPXAPUState` is `calloc`'d (`apu_core.c`) and EP execution remains `EPRST`-gated (`dsp/gp_ep.c`); then unrouted MMIO plus no caller leaves EPRST unset. An unexpected hit, absent positive control, new EP route, mismatched build identities or uncheckable output means **stop and select no row**: an EP exchange can reach the shared DMA choke point and otherwise falsely latch `GP_CLEAR` as GP work.
 
 ### Readiness
 
-- **Tools:** those `A4b1` verified: `build-jsrf.py`, ctest, `run-jsrf.py --profile strict`, `check-run-profile.py`, `check-dump-mapping.py`, and `inspect-jsrf.py memory|disasm`.
-- **Stop if:**
-  - P1 or P2 fails;
-  - any of `RECOMP_APU_DSP_ACK`, `RECOMP_AC97_READY`, `JSRF_ALLOW_UNRESOLVED` or `JSRF_ABI_CONTINUE` is in a launch environment;
-  - the runner refuses `--profile strict`;
-  - any **toolkit** change would be needed (→ Planner; that is an `A4b1` defect);
-  - any step would set or clear `+0x810` other than through GP execution.
-
-  A session that ends mid-execution selects no row.
+- **Tools / working directory:** from game root: `python -X utf8 scripts\build-jsrf.py`; `ctest --test-dir build -C Release --output-on-failure`; `python -X utf8 scripts\run-jsrf.py --profile strict`; `python -X utf8 scripts\check-run-profile.py <run-dir>`; `python -X utf8 scripts\check-dump-mapping.py <run-dir>`; `python -X utf8 scripts\inspect-jsrf.py memory <run-dir> <VA> <bytes>` and `disasm <start-va> <end-va>`. These are established repository tools; the Session checks actual command availability before freezing, records commands/output, and stops rather than improvising a failed invocation.
+- **Stop if:** P1/P2/P3 fails; a launch carries `RECOMP_APU_DSP_ACK`, `RECOMP_AC97_READY`, `JSRF_ALLOW_UNRESOLVED` or `JSRF_ABI_CONTINUE`; the runner refuses strict; any toolkit change is needed (→ Planner as an `A4b1` defect); or any step would set/clear `+0x810` except through GP execution. A session ending mid-execution selects no row. Preserve original assets, saves and unrelated edits.
 
 ### Execution
 
-**Steps**
+1. **Game-only forwarding edits, no value changes.** Verify the already-applied step-1 calls/declarations/forwarder match this specification; preserve them rather than duplicate them, and apply only any missing specified edit. In `src/diagnostics.c`, define `void jsrf_watch_store(uint32_t site_va, uint32_t target_va, uint32_t value)`: on its first call set `apu_watch_set_anchor_site(0x001A18CEu)` once, then call `apu_watch_cpu_store(site_va, target_va, value)`; declare the toolkit prototypes `extern` there. This is a thin forwarder with no filter, cap, output or decision logic. Immediately before each of the six enumerated stores insert `jsrf_watch_store(<guest site VA>, <target VA>, <value>)`; record the actual instruction VA from the XBE, not a generated line number. Keep the comment `A4b observation — re-apply after regeneration` at each edit. Each edited generated chunk gets one file-scope `extern void jsrf_watch_store(uint32_t, uint32_t, uint32_t);`; do not change generated headers.
+   - Control `0x001A18CE mov [ebx],eax`: `MEM32(ebx) = eax;` immediately before `loc_001A18D0` (`recomp_0005.c`, baseline ≈6746).
+   - `0x001A1751 and dword [edi+0x810],0` (`recomp_0005.c`, ≈6524).
+   - `0x001A1FA7 mov [edi+0x10],ebp`, after `edi=MEM32(0x1BA858)+0x800` (`recomp_0005.c`, ≈8088).
+   - The **three other** stores at `recomp_0000.c` ≈135283 (`MEM32(eax + 0x810) = ecx`), ≈135406 and ≈135871 (each `MEM32(ecx + 0x810) = eax`). The text pattern `MEM32\(.* \+ 0x810\) =` hits **four**, because the `0x001A1751` store also matches; deduplicate by normalised guest instruction VA/value, giving three other sites, not four. Use the XBE-producing commands in AC-NOCPU, not a text search, as the population witness.
+2. Build and run ctest; record identities, outputs and hashes. No guest-memory mutation for the pending word is permitted.
+3. Make **fresh** R1 and R0 below under this revision; prior-revision run archives are premise leads only and cannot satisfy any gate or AC here. After archiving, verify profile, source and exe provenance for **both**; check R0 dump mapping for AC-DEFAULT2 and R1 mapping only before any optional R1 dump reading. R1 has `RECOMP_APU_TRACE=1`: a trace-off run has no `[GPBOOT]` blocks and is UNKNOWN here, not an occasion to substitute the dump. If R1 selects `R2-UNKNOWN`, rerun R1 **once** with identical settings; the second result stands. A source-identity or P3 stop cannot be cured by this rerun.
+4. Record the evidence and row in `docs/reviews/a4b2-execution-evidence.md`.
 
-1. **Game-side forwarding edits** (hand-applied; each is commented `A4b observation — re-apply after regeneration`; no value changes).
-   - In `src/diagnostics.c`, define `void jsrf_watch_store(uint32_t site_va, uint32_t target_va, uint32_t value)`. It is a **thin forwarder**:
-     - On its first call, it calls the toolkit's `apu_watch_set_anchor_site(0x001A18CEu)` once.
-     - It then calls `apu_watch_cpu_store(site_va, target_va, value)`.
-     - It has no filtering, no cap, no output and no decision logic.
-     - The toolkit prototypes are declared `extern` in `diagnostics.c`.
-   - Immediately before each of the following stores, insert `jsrf_watch_store(<site VA>, <target VA>, <value>)`. Sites are located **by content and guest site VA** (the generated label/instruction for that VA), not by line number; the baseline line numbers are hints only:
-     - control site `0x001A18CE` `mov [ebx],eax` — the `MEM32(ebx) = eax;` immediately before `loc_001A18D0: ;` in `recomp_0005.c` (baseline ≈ `:6746`);
-     - `0x001A1751` `and dword [edi+0x810],0` in `recomp_0005.c` (baseline ≈ `:6524`);
-     - `0x001A1FA7` `mov [edi+0x10],ebp` in `recomp_0005.c` (baseline ≈ `:8088`);
-     - every other generated store that textually matches `MEM32\(.* \+ 0x810\) =`; at baseline these are in `recomp_0000.c` (≈ `:135283, 135406, 135871`). The Session records each site's VA from its generated label.
-   - Each edited chunk gets one file-scope `extern void jsrf_watch_store(uint32_t, uint32_t, uint32_t);`. No generated header changes.
-2. Build, then run ctest.
-3. Make runs R1 and R0 (below).
-4. Record everything in `docs/reviews/a4b2-execution-evidence.md`.
-
-**Runs** (from the game root, 30 s each, archived under `logs/runs/`):
+**Runs** (game root; 30 seconds each; archived in `logs/runs/`):
 
 ```powershell
 Remove-Item Env:\RECOMP_APU_DSP_ACK,Env:\RECOMP_AC97_READY,Env:\JSRF_ALLOW_UNRESOLVED,Env:\JSRF_ABI_CONTINUE,Env:\RECOMP_APU_TRAP,Env:\RECOMP_APU_TRACE -ErrorAction SilentlyContinue
 $env:RECOMP_GPU_ACK='0'; $env:RECOMP_KERNEL_LOG_BUDGET='100000'
 $env:RECOMP_APU_TRAP='1'; $env:RECOMP_APU_TRACE='1'
-python -X utf8 scripts\run-jsrf.py --seconds 30 --profile strict --label a4b2-gp-trap-trace   # R1 (claim run)
+python -X utf8 scripts\run-jsrf.py --seconds 30 --profile strict --label a4b2-gp-trap-trace   # R1
 Remove-Item Env:\RECOMP_APU_TRAP,Env:\RECOMP_APU_TRACE
 python -X utf8 scripts\run-jsrf.py --seconds 30 --profile strict --label a4b2-default         # R0
 ```
 
-If R1 selects R2-UNKNOWN, rerun R1 once with identical settings; the second result stands.
+**Write scope (game only):** `src/recomp/gen/recomp_0000.c`, `src/recomp/gen/recomp_0005.c` (only step-1 calls/declarations), `src/diagnostics.c` (only the forwarder), `docs/reviews/a4b2-*.md`. No toolkit file, asset, save, policy or other generated file. **Build/run owner:** Session.
 
-- **Write scope (game only):**
-  - `src/recomp/gen/recomp_0000.c` and `recomp_0005.c`: the step-1 calls and their `extern` declarations only;
-  - `src/diagnostics.c`: the forwarder only;
-  - `docs/reviews/a4b2-*.md`.
+### Gates and definitions
 
-  Nothing else.
-- **Build/run owner:** the Session.
+- **G1:** `check-run-profile.py` reclassifies fresh R1 and R0 `STRICT`; archive XBE/exe/build-source hashes and environment agree with the declared identities. **G3:** each `result.json` is readable. **G4:** at the game **build commit after step 1**, `loc_001A18D0: ;` occurs exactly once in `src/recomp/gen/recomp_0005.c`, at line `L`; a line `L+1..L+3` contains `goto loc_001A18D0;`; the preceding nonblank store is `MEM32(ebx) = eax;`, optionally with the step-1 call on that line or immediately above. A failed gate → `R2-UNKNOWN` after the one R1 rerun, not PASS. **Dump boundary:** no GP-transition PASS-path claim reads the R1 dump; no global R1 dump-integrity gate is required because it would protect no PASS-path input. R1 mapping is checked only for no-`GP_CLEAR` dump-based branches, and the independent R0 default-control `Wf0` requires its own mapping check under AC-DEFAULT2. The `.text` control remains mandatory before **any** dump-based claim. Missing, malformed, stale, truncated or contradictory decision evidence is UNKNOWN unless a stronger precondition stop applies.
+- **Title-page oracle `T`:** `0x803C0000`, the title's contiguous scratch page measured in the accepted A4a strict run and associated with image `I` from the original XBE; independent of this run's `[GPBOOT]` headers. **`B` (R1):** the common `sge0_va` of **all** structurally complete `[GPBOOT]` blocks, only after the complete-log, contiguous `n=1..N` and **last** counts `boots=N` checks in AC-BOOT, with `N≥1`. This is the translated guest page address recorded at bootstrap, not a post-mortem `MEM32` value; bind it before testing the image/transition/T predicates so a complete divergent bootstrap can still select `R2-NOBOOT`. Require all `sge0_va` values identical and a complete write-once `CPU_ANCHOR` latch with its `va` equal to `B+0x810` in non-wrapping uint32 arithmetic (equivalently `B=anchor.va−0x810` without underflow). Missing/incomplete bootstrap or last counts, absent/malformed anchor `va`, disagreement between any two bootstrap page VAs, cross-check mismatch, or arithmetic wrap/underflow → **UNKNOWN**, never a dump fallback or PASS. A correctly reconciled common page VA different from `T` is instead AC-BOOT **FAIL**, not a binding failure; image/transition divergence likewise remains FAIL once structure and B cross-check are valid.
+- **R1 dump-only witnesses:** `Wf=MEM32(B+0x810)` via `inspect-jsrf.py memory` **only** if this R1 archive's `check-dump-mapping.py` reports `matches ≥ 1`, `content-mismatch: 0`; `F` counts `stacks.txt` lines matching `sub_001A1769\+0x[0-9A-Fa-f]+ .*recomp_0005\.c:(L|L+1|L+2|L+3)\b`, with `L` from **this** build. The A4a baseline uses its own line numbers. `Wf` is not meaningful corroboration when R1 mapping fails. **Cleared (only on no-`GP_CLEAR` branches):** after validated R1 mapping and a readable `Wf`, `Wf=0` or `F=0`; a mapping failure or missing `Wf` makes these branches UNKNOWN, even when `F=0`. **R0 independently:** its own `B0=MEM32(0x001BA858)`, `Wf0=MEM32(B0+0x810)` and `F0` from its own `stacks.txt`; require R0 `check-dump-mapping.py` `matches ≥ 1`, `content-mismatch: 0` before either dump read; no R1 B/mapping state substitutes for R0.
+- **Latch:** an uncapped, write-once `[GPWATCH] latch class=<C> …` record; read `<C>.seq` and its fields. Each instrumented CPU site has at most one `CPU_ZERO` latch. **Non-control** means `site ≠ 001A18CE`. **Counts:** `[GPWATCH] counts …`; ledger alive means at least one counts line. The trace's `[GPRUN]`, `[GPDMA]`, observation lists and capped `[APUMMIO]` lines cannot establish an absent deciding event.
 
-### Gates (checked before any AC; any failure → R2-UNKNOWN)
+### AC-DEFAULT2 — the default strict path is unchanged with forwarding edits
 
-- **G1:** `check-run-profile.py` prints `STRICT` for R1 and R0.
-- **G2:** `check-dump-mapping.py` gives `matches ≥ 1` and `content-mismatch: 0` for both.
-- **G3:** `result.json` is readable for both.
-- **G4:** in `src/recomp/gen/recomp_0005.c` **at the build commit (after the step-1 edits)**:
-  - `loc_001A18D0: ;` occurs exactly once, at line `L`;
-  - a line in `L+1..L+3` contains `goto loc_001A18D0;`;
-  - the non-blank line before `L` is `MEM32(ebx) = eax;`, optionally preceded on the same line or the line above by the step-1 call.
+- **Mandatory:** yes. **Guards against:** game-only observers leaking into the default run. **Evidence profile:** strict R0.
+- **Procedure / artifact:** R0 `result.json`, independently mapping-verified dump `B0`/`Wf0`, `stacks.txt` `F0` and `jsrf_run.log`. A missing or failed R0 mapping check makes AC-DEFAULT2 UNKNOWN, not a displaced-dump verdict. Count `\[GP(BOOT|RUN|DMA|IN|WATCH)\]` lines. Record any `[APUMMIO]` count **as observation only**; never select a row from this capped log's presence or absence. The untrapped launch/profile is the structural witness for no APU trap.
+- **Oracle:** accepted `A4b1-r4` R0 `20260926-010303-411-a4b1-default`: `diagnostic_deadline`, `W=3`, `F≥1` (`F=2` there), no `[GP*]` trace.
+- **PASS:** R0 outcome `diagnostic_deadline`, `Wf0=3`, `F0≥1`, zero `[GP*]` lines and archived `RECOMP_APU_TRAP`/`RECOMP_APU_TRACE` both absent. **FAIL:** a valid contrary value or unexpected `[GP*]` line. **UNKNOWN:** evidence absent, malformed or truncated. **Controls:** known-good accepted R0; known-bad trace-on R1 for the `[GP*]` count. **Claim limits:** one default run, not general liveness.
 
-### Definitions (all read from R1 unless stated)
+### AC-BOOT — every GPRST bootstrap loads the title's image
 
-- **`B`:** `MEM32(0x001BA858)` in the run's dump.
-- **`Wf`:** `MEM32(B+0x810)` in the dump, read with `inspect-jsrf.py memory`.
-- **`F`:** the number of matches in `stacks.txt` of `sub_001A1769\+0x[0-9A-Fa-f]+ .*recomp_0005\.c:(L|L+1|L+2|L+3)\b`, with `L` taken from G4 of **this** build. The A4a R0 oracle's `F` used that build's own line numbers, and the two are not compared by line.
-- **Latch:** a `[GPWATCH] latch class=<C> …` line. `<C>.seq` and the other fields are read from it. Each CPU site has at most one `CPU_ZERO` latch. "Non-control" means `site ≠ 001A18CE`.
-- **Counts line:** a `[GPWATCH] counts …` line. "Ledger alive" means at least one counts line exists.
-- **Cleared:** `Wf = 0` or `F = 0`.
+- **Mandatory:** yes. **Guards against:** a later GP bootstrap replacing validated image `I` before the clear, or treating raw physical SGE bytes as the translated page. **Evidence profile:** strict R1.
+- **Procedure / artifact:** parse the **complete, untruncated** R1 `jsrf_run.log`: enumerate **every** `[GPBOOT]` header (`n`, `gprst`, `prev`, `sge0`, `sge0_va`) and its own **64** contiguous `pram` lines (eight words per line, the full 0x200-word block), with no orphan, duplicate, malformed, overlapping or incomplete block. In log order require headers self-number contiguously `n=1..N`, where `N` is the number of complete headers; `n` is post-increment `s.boots`. Parse all uncapped `[GPWATCH] counts` lines and reconcile **`N` against `boots` on the LAST counts line**. The per-bootstrap counts emission **precedes** `boots++` (`gp_ep.c:364` emits counts, `:373` increments); never bind a header to an adjacent counts line or infer the header's boot ordinal from that line. Read the run's original `game/default.xbe` and for **each block independently** compare word `i` for every `0≤i<0x173` with `LE32(default.xbe[0x1A7D60+4i]) & 0xFFFFFF`. Bind common `B` and cross-check the write-once anchor as defined above, then for every header independently require `gprst=00000003`, `prev` with GPRST or GPDSPRST clear, and translated `sge0_va=T` (the independently pinned title page); record raw `sge0` and GPSADDR as context only. Capped `[APUMMIO]` lines neither establish bootstrap order nor decide completeness.
+- **Oracle:** original XBE words, accepted `A4b1-r4` AC-FIX (vii)'s two placement controls, the pinned `gprst`/`prev` bootstrap transition, and uncapped self-numbered `[GPBOOT]` headers plus last counts `boots`.
+- **PASS:** `N≥1`, every header/block and count is structurally complete, ordinals exactly `1..N`, **last** counts `boots=N`, a valid common `B` with anchor cross-check, and **every** block has the required transition, `sge0_va=T` and all `0x173` words equal to `I`. **FAIL → R2-NOBOOT:** after complete contiguous blocks, matching last-count reconciliation and valid common `B`/anchor cross-check, at least one complete block has a divergent transition, `sge0_va≠T`, or image word. **UNKNOWN:** no header/block (including last-count `boots=0`: that line could precede a later `boots++`); missing, non-contiguous, incomplete, malformed or contradictory header/block/count; no last counts line; `N≠` last-count `boots`; missing/invalid `B` or anchor cross-check; absent XBE bytes; or anything else that prevents deciding every instance. These integrity failures take precedence over a divergent block. **Controls:** comparing offset `0x1A7D64` instead must differ at word 0; AC-FIX (vii) confirms the raw-versus-translated distinction. **Claim limits:** all recorded bootstrap images are validated, not instruction correctness; no `[APUMMIO]` line is a decision input.
 
-### AC-DEFAULT2 — the default strict path is still unchanged with the forwarding edits
+### AC-RUN — GP instructions retire in APU frames after bootstrap
 
-- **Mandatory:** yes.
-- **Guards against:** the step-1 edits leaking into the default run.
-- **Evidence profile:** strict (R0).
-- **Procedure:**
-  - take R0's `result.json`, `Wf` and `F`;
-  - count the lines in R0's `jsrf_run.log` that match `\[APUMMIO\]` or `\[GP(BOOT|RUN|DMA|IN|WATCH)\]`.
-- **Oracle:** A4a R0 (`20260924-191906-091`), and `A4b1`'s accepted R0: `diagnostic_deadline`, `W = 3`, `F ≥ 1`.
-- **PASS:** `outcome = diagnostic_deadline`, `Wf = 3`, `F ≥ 1`, and both counts are 0.
-- **FAIL:** any of these differs.
-- **Controls:** known-good: `A4b1`'s R0. Known-bad for the counts: R1.
-- **Claim limits:** one run.
+- **Mandatory:** yes. **Guards against:** a loaded core never clocked (frame gate, test-tone path or halt). **Evidence profile:** strict R1.
+- **Procedure / artifact:** R1's uncapped `[GPWATCH] counts` lines, including the first GP-frame emission after bootstrap. `[GPRUN]` `pc`, `halt`, `tone` are observation for the next brief, not deciding lines.
+- **PASS:** some counts line has `boots≥1`, `gp_frames≥1`, `gp_insns>0`. **FAIL → R2-NOFRAMES:** some line has `boots≥1` and every counts line has `gp_frames=0`. **FAIL → R2-NOEXEC:** some line has `gp_frames≥1` and every counts line has `gp_insns=0`. **UNKNOWN:** otherwise, including no line with `boots≥1`. **Controls:** waived: inherited core retirement counter, exercised by `A4b1-r4` AC-FIX (vi). **Claim limits:** retirement, not correctness.
 
-### AC-BOOT — the guest's GPRST write bootstraps the GP from the title's image
+### AC-CLEAR — GP DMA path exchanged the anchored 3 for 0
 
-- **Mandatory:** yes.
-- **Guards against:** a GP running code other than the title's image.
-- **Evidence profile:** strict (R1).
-- **Procedure:**
-  - Take the first `[GPBOOT]` header and its 64 `pram` lines.
-  - Take the first `[APUMMIO] write 0x3FFFC` line after that block, and the last `[APUMMIO] write 0x02040` line before it.
-  - Compare PRAM word `i`, for `i < 0x173`, with `LE32(default.xbe[0x1A7D60 + 4i]) & 0xFFFFFF`. The Session records this one-off comparison and its output.
-- **Oracle:** the original XBE bytes.
-- **PASS:** all of the following hold:
-  - a `[GPBOOT]` header exists;
-  - it has `gprst=00000003`, and a `prev` that has `GPRST` or `GPDSPRST` clear (the pinned bootstrap transition);
-  - the first `0x3FFFC` write after the block has value `00000003`;
-  - the last `0x02040` write before it is `803CC000`;
-  - `sge0 = B`;
-  - all `0x173` words are equal.
-- **FAIL (→ R2-NOBOOT):** either
-  - there is no `[GPBOOT]` line, although a `write 0x3FFFC = 00000003` line exists; or
-  - a complete `[GPBOOT]` block exists with `sge0 ≠ B`, or with any word different.
-- **UNKNOWN:** any other case. For example: fewer than 64 `pram` lines; `gprst`/`prev` do not match the transition; no `0x3FFFC` line after the block; or no `write 0x3FFFC = 00000003` line at all.
-- **Controls:** known-bad: the same comparison at file offset `0x1A7D64` must differ at word 0.
-- **Claim limits:** shows what was loaded, not that it executes correctly.
+- **Mandatory:** yes. **Guards against:** non-GP attribution, a pre-command write-back called the clear, or blaming a CPU without a positive witness. **Evidence profile:** strict R1.
+- **Procedure / artifact:** R1's write-once `[GPWATCH]` latch lines, uncapped counts lines, log-bound `B`, and `F`; `Wf` is consulted only in no-`GP_CLEAR` branches after an independent passing R1 dump-mapping check. Evaluate in this order, first match wins. `GP_ZERO_OVER_ZERO` and `GP_NONZERO_OVER` are recorded only.
+  1. **UNKNOWN** if ledger not alive; `CPU_ZERO_OVERFLOW` latched; `CPU_ANCHOR` absent; R1 log-bound `B` or its anchor `va` cross-check is UNKNOWN; or latched `GP_CLEAR.seq < CPU_ANCHOR.seq` (the exchanged 3 came from an uninstrumented store).
+  2. **PASS** if `GP_CLEAR` has `va=B+0x810`, `observed=00000003`, `insns>0`, recorded `dsp_addr`, and `CPU_ANCHOR.seq < GP_CLEAR.seq`. Record `F` as corroboration; record `Wf` as corroboration **only if** the independently checked R1 dump mapping passes and `Wf` is readable. Do not run/check R1 dump mapping merely to qualify this PASS.
+  3. **UNKNOWN** if `GP_CLEAR` is latched but step 2 fails, including wrong VA, zero insns or incomplete fields/order.
+  Before steps 4–8, if no `GP_CLEAR`, require R1 `check-dump-mapping.py` to pass and a readable `Wf` at log-bound `B+0x810`; a failed/missing mapping check or unreadable word → **UNKNOWN**, not cleared/not-cleared. `F` is independent stack evidence but cannot by itself bypass this guard.
+  4. **R2-UNATTRIBUTED** if no `GP_CLEAR`, cleared, and `GP_PARTIAL` or `GP_ZERO_OVER_OTHER` is latched: a writer the CAS does not protect competes.
+  5. **FAIL → R2-CPU** if no `GP_CLEAR`, cleared, and a non-control `CPU_ZERO.seq > CPU_ANCHOR.seq` exists (positive witness).
+  6. **R2-UNATTRIBUTED** if no `GP_CLEAR`, cleared, and no such non-control positive CPU witness exists.
+  7. **FAIL → R2-NOCLEAR** if no `GP_CLEAR`, `Wf=3`, `F≥1`.
+  8. **UNKNOWN** otherwise, including `Wf∉{0,3}` with `F≥1`.
+- **Controls:** `A4b1-r4` AC-FIX (e),(i) GP_CLEAR; (ii) GP_ZERO_OVER_OTHER; (iii) GP_PARTIAL; (iv) CPU_ZERO; (v) CPU_ZERO_OVERFLOW; (i) CPU_ANCHOR order. **Claim limits:** one exchange on the shared choke point, conditional on P3; the pre-store anchor is corroboration, not proof that its store supplied the exchanged `3`. On PASS, `F` and a mapping-verified `Wf` are corroboration only: `Wf=3`/`F≥1` remains compatible with PASS after a later re-store or re-entry; on a displaced R1 dump do not report `Wf` as evidence or route its apparent zero to CPU/UNATTRIBUTED. No guest observation of the `0`, spin exit, progress past the spin, or other DSP-program effect is established.
 
-### AC-RUN — GP instructions retire in APU frames after the bootstrap
+### AC-NOCPU — no synthetic ack or instrumented competing CPU zero
 
-- **Mandatory:** yes.
-- **Guards against:** a core that is loaded but never clocked (frame gate closed, test-tone path, or halted).
-- **Evidence profile:** strict (R1).
-- **Procedure:** the counts lines. `gp_frames` and `gp_insns` are uncapped counters, and a counts line is emitted at the first GP frame after each bootstrap (`A4b1` Device semantics 6). `[GPRUN]` lines are observation only: `pc`, `halt` and `tone` are recorded for the next brief.
-- **PASS:** some counts line has `boots ≥ 1`, `gp_frames ≥ 1` and `gp_insns > 0`.
-- **FAIL (→ R2-NOFRAMES):** some counts line has `boots ≥ 1`, and every counts line has `gp_frames = 0`.
-- **FAIL (→ R2-NOEXEC):** some counts line has `gp_frames ≥ 1`, and every counts line has `gp_insns = 0`.
-- **UNKNOWN:** any other case, including no counts line with `boots ≥ 1`.
-- **Controls:** waived. The retirement count is the ported core's own counter, whose meaning is inherited from the pin; its path is exercised by `A4b1` AC-FIX (vi).
-- **Claim limits:** retirement, not correctness.
+- **Mandatory:** yes. **Guards against:** synthetic acknowledgement or an instrumented CPU zero racing the GP clear. **Evidence profile:** strict R1 plus structural source/XBE check.
+- **Procedure / artifact:** R1 archived launch environment, built exe strings, toolkit `src/apu` at the P2 build identity (`RECOMP_APU_DSP_ACK|dsp_ack_` token search, inspect hits as code versus comments), and `CPU_ANCHOR`/`CPU_ZERO`/`GP_CLEAR` latches. The accepted `A4b1-r4` no-ack source/exe result is the positive provenance baseline. Explicitly verify exe-string absence; a missing search output is UNKNOWN, not zero.
+- **Original-XBE site population and reconciliation:** the **frozen count is 6 enumerated instrumentation sites**, as listed in Execution step 1; `APU_WATCH_N_SITES=16 ≥ 6` (`apu_watch.h:85-110`). From the **unchanged original XBE**, run these producing commands at the game root and retain complete disassembly outputs: `python -X utf8 scripts\inspect-jsrf.py disasm 0x0006DAB0 0x0006DAE0`; `python -X utf8 scripts\inspect-jsrf.py disasm 0x0006DBB0 0x0006DBEA`; `python -X utf8 scripts\inspect-jsrf.py disasm 0x0006DEE0 0x0006DF00`; `python -X utf8 scripts\inspect-jsrf.py disasm 0x001A1747 0x001A1769`; `python -X utf8 scripts\inspect-jsrf.py disasm 0x001A18C0 0x001A18D5`; `python -X utf8 scripts\inspect-jsrf.py disasm 0x001A1F9B 0x001A1FBF`. Identify each store's original guest instruction VA and operand (including register-base derivation for `ebx`, `edi`, `eax`, `ecx`), normalise each address/operand displacement to **`uint32`**, then reconcile each of the **six** by normalised target **value** and guest site VA with its generated store and inserted `jsrf_watch_store` call. Treat `MEM32\(.* \+ 0x810\) =` as a text **lead only**; its four hits include an already-listed `recomp_0005.c` site. Count deduplicated original sites and matching calls: **PASS requires `count found == frozen count == 6`, each listed site evaluated, and `N_SITES≥count found`**. A difference, undecodable `.byte`, unmatched spelling/value, missing call, incomplete/truncated disassembly or unverified `N_SITES` is **UNKNOWN**, not PASS. The bounded site set is the instrumented call-site universe, not proof that all dynamic target writes were found: original-XBE direct-operand enumeration cannot see register-indirect, computed or table-driven addresses without the stated register-base reasoning.
+- **A contested zero:** a non-control `CPU_ZERO` with `CPU_ANCHOR.seq < seq < GP_CLEAR.seq`. Record only (do not condemn) a zero before the anchor, overwritten by the anchored 3, or after GP_CLEAR. A site's latch shows only its first zero, so a later same-site zero is counted but not separately attributed.
+- **PASS:** valid six-site reconciliation, ack absent from environment and executable/source semantics, no contested zero. **FAIL → R2-CPU:** ack present in environment or an executable/active-source ack search hits. **UNKNOWN:** contested zero or site/identity/search-integrity failure. **Controls:** `A4b1-r4` AC-FIX (iv) gives CPU zero before GP write and no GP_CLEAR; original XBE plus six generated call sites are the site-count positive witness. **Claim limits:** the six-site instrumentation is not a complete dynamic CPU-store census; AC-CLEAR's compare-exchange establishes attribution.
 
-### AC-CLEAR — the GP's own DMA write made the 3→0 transition (ledger decision)
+### AC-INPUTS — every GP input before the clearing exchange is guest-written by region or modelled
 
-- **Mandatory:** yes.
-- **Guards against:**
-  - attributing the `0` to anything other than the GP write path;
-  - a pre-command GP write-back read as the clear;
-  - blaming the CPU without a positive witness.
-- **Evidence profile:** strict (R1).
-- **Procedure:** the latch lines, the counts lines, `B`, `Wf` and `F`. `GP_ZERO_OVER_ZERO` and `GP_NONZERO_OVER` are recorded only, and never decide. Evaluate in this order; the first match wins:
-  1. **UNKNOWN** if any of the following holds:
-     - the ledger is not alive;
-     - `CPU_ZERO_OVERFLOW` is latched;
-     - there is no `CPU_ANCHOR` latch (instrumentation broken);
-     - `GP_CLEAR` is latched with `GP_CLEAR.seq < CPU_ANCHOR.seq` (the exchanged `3` came from a store that was not instrumented).
-  2. **PASS** if `GP_CLEAR` is latched with all of:
-     - `va = B+0x810`;
-     - `observed=00000003`;
-     - `insns > 0`;
-     - `dsp_addr` recorded;
-     - `CPU_ANCHOR.seq < GP_CLEAR.seq`.
+- **Mandatory:** yes, **evaluated only when AC-BOOT, AC-RUN, AC-CLEAR and AC-NOCPU all PASS**; otherwise record **`NOT EVALUATED`** (not UNKNOWN) and use the running `[GPIN] summary` as the `R2-NOCLEAR`/`NOEXEC`/`NOFRAMES` brief. **Guards against:** a stub value shaping the GP's clear or an integrity defect falsely certifying zero reads. **Evidence profile:** strict R1 plus pinned source classifications.
+- **Decision-record construction and oracle:** `A4b1-r4` production hooks increment uncapped counters at each GP read; the write-once GP_CLEAR freeze copies them to `at_clear`. Finite source-derived universes, keyed by **provenance**, not event identity: MIXBUF `NUM_MIXBINS=32` bins (`GP_DSP_MIXBUF_BASE=0x1400`, 32 samples/bin); PERIPH `DSP_PERIPH_SIZE=128` offsets (`DSP_PERIPH_BASE=0xFFFF80`); FIFO `GP_INPUT_FIFO_COUNT(2)+GP_OUTPUT_FIFO_COUNT(4)=6` slots; DMA **four translated-address region classes** `LOW_RAM`, `CONTIG`, `DEVICE`, `OTHER_MAPPED`; plus fixed out-of-universe and boot-scratch flags. This is fixed-size independent of run length and read volume. `GPIN_OUT_OF_UNIVERSE` is a bug detector, not a volume overflow; the retired 256-entry per-address table, its overflow latch and per-key lines are not inputs. Completeness comes from `A4b1-r4` AC-PORT step-4 hook enumeration and AC-FIX (viii),(ix′),(x),(xi), not from counting distinct keys at runtime. Capped DMA-page/PERIPH inventories are **observation only**.
+- **Printed-block inference (admitted):** the trace's `emit_gpin_block(tag, struct*)` prints both `summary` (`&s.gpin`) and `at_clear` (`&s.at_clear.gpin`), which is copied from `s.gpin` at the write-once freeze. The fixture compares `summary` lines field-by-field to the snapshot and tests `at_clear` snapshot values in (xi), but its direct printed `at_clear` fixture check is only a line count. **Inferred:** the common emitter formats the `at_clear` pointer's fields identically; that pointer link is not independently line-vs-snapshot tested. The following two can-fail in-run checks condition admission; any violation is UNKNOWN.
+- **Procedure / artifact, step 1 — block integrity:** from the **complete, untruncated** R1 `jsrf_run.log`, parse the **first emitted** `[GPIN] at_clear seq=<…> frame=<…>` header with its exactly five tagged lines (`mixbuf`, `periph`, `fifo`, `dma`, `flags`); require **every** emitted `at_clear` header to have exactly those five complete lines; reject missing/malformed/duplicate fields, wrong fixed array lengths or missing last complete `[GPIN] summary` block. Compare the header `seq` to `GP_CLEAR.seq`. (i) **Every emitted `at_clear` block** (header **including seq and frame**, plus all five lines) must be identical to the first; it is re-emitted at summary cadence and the freeze is write-once. (ii) **Every `at_clear` counter** must be ≤ the **matching element of the last `[GPIN] summary` block**, including every `reads`, `words`, `bytes`, `reads_while_stub`, and each `out_of_universe`, `mixbuf_stub_read`, `boot_scratch_read` flag; source counters are uncapped/monotone. Missing any block or violated equality/inequality → **UNKNOWN**. These checks are run inputs, not a substitute for the source/fixture map.
+- **Procedure / artifact, step 2 — integrity:** from the first `at_clear` block require `out_of_universe=0` (any nonzero → **UNKNOWN**) and `boot_scratch_read=1` (absent/zero → **UNKNOWN**, because AC-BOOT PASS needs the bootstrap scratch input). Nonzero `FIFO` slots **2–5** (output/reserved places that must never be recorded as inputs) → **UNKNOWN**. Any malformed/nonmonotone flag or array → UNKNOWN. The evidence record names each failing field.
+- **Procedure / artifact, step 3 — classify first-frozen counters:** PERIPH only **five modelled offsets** by zero-based array index: `0x45` (`0xFFFFC5`) and `0x54`–`0x57` (`0xFFFFD4`–`0xFFFFD7`); **all other 123 of 128 offsets are STUB/unknown**, including `0x33` (`0xFFFFB3`), whose `v=0; // core->num_inst; // ??` is a placeholder. The `A4b1-r4` step-4 enumeration's source-description label for `0xFFFFB3` is **superseded for `AC-INPUTS` decision purposes** by `docs/reviews/a4b2-r4-planning-rulings.md`: any read at index `0x33` is FAIL. FIFO slots **0–1** are stale-buffer stub inputs (read-arm `NDEBUG` fall-through): `reads>0` → FAIL. MIXBUF any bin's `reads_while_stub>0` or `mixbuf_stub_read=1` → FAIL. DMA `DEVICE` or `OTHER_MAPPED` `reads>0` → FAIL; `LOW_RAM`/`CONTIG` count as guest-written **by region**. Record all failing indices/classes and their counters. First values, first VAs, `[GPRUN]` and capped inventories never decide.
+- **PASS:** steps 1–2 valid and all step-3 stub counters/flags zero. **FAIL → R2-EXPL-INPUT:** steps 1–2 valid and any named step-3 stub read/flag is nonzero. **UNKNOWN:** any step-1/2 integrity failure or source-classification mismatch, taking precedence over FAIL. **Controls:** BOOT_SCRATCH_READ is the positive presence witness; AC-FIX (viii) exercises all four kinds and both MIXBUF voice conditions, (ix′) exact high-volume counters, (x) out-of-universe, (xi) freeze-before/after. **Claim limits:** the frozen at-clear decision is a region/provenance classification, not word-by-word writer or data-flow proof; `0x56` has the timing-heuristic limit stated above.
 
-     `Wf` and `F` are recorded as corroboration only.
-  3. **UNKNOWN** if `GP_CLEAR` is latched but step 2 fails, either because `va ≠ B+0x810` or because `insns = 0`.
-  4. **R2-UNATTRIBUTED** (not PASS, and not blamed on the CPU): there is no `GP_CLEAR`, the word is cleared, and `GP_PARTIAL` or `GP_ZERO_OVER_OTHER` is latched. A GP writer the CAS does not protect competes for the clear.
-  5. **FAIL → R2-CPU** (positive witness only): there is no `GP_CLEAR`, the word is cleared, and some non-control `CPU_ZERO` latch has `seq > CPU_ANCHOR.seq`.
-  6. **R2-UNATTRIBUTED:** there is no `GP_CLEAR`, the word is cleared, and no non-control `CPU_ZERO` latch has `seq > CPU_ANCHOR.seq`. Absence of a witness is never a positive attribution.
-  7. **FAIL → R2-NOCLEAR:** there is no `GP_CLEAR`, `Wf = 3`, and `F ≥ 1`.
-  8. **UNKNOWN** otherwise, for example when `Wf ∉ {0,3}` and `F ≥ 1`.
-- **Controls:**
-  - `A4b1` AC-FIX exercises every class used here: `GP_CLEAR` in (e) and (i), `GP_ZERO_OVER_OTHER` in (ii), `GP_PARTIAL` in (iii), `CPU_ZERO` in (iv), `CPU_ZERO_OVERFLOW` in (v), and `CPU_ANCHOR` ordering in (i).
-  - Known-bad for the old design: AC-FIX (i).
-- **Claim limits:** one store by one core; nothing about the DSP program's other effects.
+### Decision rows (in order, first match wins)
 
-### AC-NOCPU — no synthetic ack exists, and no instrumented CPU zero contests the clear
+- **R2-DEFAULT-REGRESS:** AC-DEFAULT2 FAIL → revert only `A4b2` game edits → Planner.
+- **R2-UNKNOWN:** after the one identical R1 rerun, any gate fails; **any AC other than AC-INPUTS** is UNKNOWN; or AC-INPUTS **is evaluated** and UNKNOWN → Planner with the failing gate/AC. A P1/P2/P3 failure is a **stop with no row**, not this row.
+- **R2-CPU:** AC-NOCPU FAIL or AC-CLEAR → R2-CPU → **FAIL** (Q1 reversal (c)), not a narrowed claim → Advisor.
+- **R2-UNATTRIBUTED:** AC-CLEAR → R2-UNATTRIBUTED: word cleared without an attributing GP/CPU witness; not PASS and not CPU blame → Advisor.
+- **R2-NOBOOT:** AC-BOOT FAIL → `A4c` discovery of bootstrap/SGE path.
+- **R2-NOFRAMES:** AC-RUN FAIL on frames → `A4c` discovery of FE/SE frame gate after GPRST.
+- **R2-NOEXEC:** AC-RUN FAIL on `gp_insns=0` → `A4c` discovery of GP run/halt state (`[GPRUN] pc`/`halt` are the brief).
+- **R2-NOCLEAR:** AC-BOOT and AC-RUN PASS, AC-CLEAR → R2-NOCLEAR → `A4c` discovery of what GP program waits on; **running** `[GPIN] summary` is the brief, not an `AC-INPUTS` verdict.
+- **R2-EXPL-INPUT:** AC-BOOT, AC-RUN, AC-CLEAR and AC-NOCPU PASS; AC-INPUTS FAIL → clear observed but exploratory for named stub input; not the claim → Advisor decides whether that input needs its own model packet.
+- **R2-PASS:** every mandatory AC PASS → accept only the `3→0` GP memory-write-path transition while executing validated image `I`, with the attribution, ordering and pre-exchange-input qualifiers in Establishes → next `PIO_FREE` model packet before a strict liveness/boot claim beyond the spin. **Claim limits:** the anchor only corroborates the exchanged `3`; `F≥1` and, only with independently valid R1 mapping, final `Wf=3` are compatible with this row; no R1 dump read or mapping pass is needed for this GP-transition PASS; no guest observation of `0`, spin exit or progress past the spin is established. The read-arm FIFO `NDEBUG` fall-through is caught; `unk2`/`unk13`, `format` default and `dsp_offset` range remain unaudited; do not assert coverage or downstream fidelity.
 
-- **Mandatory:** yes.
-- **Guards against:** a synthetic acknowledgement, and an instrumented CPU zero racing the GP clear.
-- **Evidence profile:** strict (R1) + structural.
-- **Procedure:**
-  - Take R1's launch environment from the archive.
-  - Run `Select-String -Path <toolkit>\src\apu -Pattern 'RECOMP_APU_DSP_ACK|dsp_ack_' -Recurse`.
-  - Search the strings of the exe for `RECOMP_APU_DSP_ACK`.
-  - Read the `CPU_ANCHOR`, `CPU_ZERO` and `GP_CLEAR` latches.
-- **A contested zero** is a non-control `CPU_ZERO` latch with `CPU_ANCHOR.seq < seq < GP_CLEAR.seq`. Two other cases are recorded only:
-  - a `CPU_ZERO` latched before the anchor, which the anchor's `3` superseded (a successful CAS proves `3` was the last value landed);
-  - a `CPU_ZERO` latched after `GP_CLEAR`, for example the stop path clearing an already-zero word.
-- **PASS:** `RECOMP_APU_DSP_ACK` is absent from the environment, both searches return zero hits, and there is no contested zero.
-- **FAIL (→ R2-CPU):** the ack is present, or a search hits.
-- **UNKNOWN:** a contested zero exists. Record-before-store makes that order indeterminate, so neither PASS nor a CPU FAIL can be claimed; the one-rerun rule applies.
-- **Controls:** `A4b1` AC-FIX (iv) (`CPU_ZERO` before a GP write gives no `GP_CLEAR`).
-- **Claim limits:**
-  - This covers only the instrumented, text-matched stores; it is not a complete enumeration.
-  - A site's `CPU_ZERO` latch records only that site's first zero, so a later zero from the same site is only counted.
-  - Attribution rests on AC-CLEAR's compare-exchange.
-
-### AC-INPUTS — every input the GP read before the clearing write is guest-written or modelled
-
-- **Mandatory:** yes.
-- **Guards against:** a stub value shaping the GP's result. The candidates are GP/EP register zeros, `PIO_FREE`, stub-VP output, and the trap-disabled counter.
-- **Evidence profile:** strict (R1) + source reading.
-- **Procedure:** the `[GPIN]` lines together with the counts lines' `gpin` and `GPIN_OVERFLOW`, and any `[GPWATCH] latch class=GPIN_OVERFLOW` line. `A4b1-r3` Device semantics 6 records one entry per distinct (kind, addr) until `GP_CLEAR` latches, and emits one `[GPIN]` line per entry; every key it does not record is counted in the uncapped `GPIN_OVERFLOW` counter and fires its write-once latch. The accounting is lossless only when checked against those counters, so the decision never rests on the bare absence of a line:
-  1. **Accounting present:** take the last counts line, `K` (after `GP_CLEAR` the table is frozen). It must carry `gpin` and `GPIN_OVERFLOW`, and the number of distinct `[GPIN]` lines (by `seq`) with `seq ≤ K.seq` must equal `K.gpin`. The inventory classified in step 3 is every `[GPIN]` line (any after `K`, possible only when `GP_CLEAR` never latched, are classified too).
-  2. **No overflow:** `GPIN_OVERFLOW = 0` in every counts line, and no `GPIN_OVERFLOW` latch line exists.
-  3. **Classify** each `[GPIN]` line from the ported source and guest memory:
-  - **Guest-written:** guest RAM written by the guest or by the XBE load, including DSP memory filled by the bootstrap from the image.
-  - **Modelled:** a register the core computes from state it tracks, including `MIXBUF` with `vp_active_voices = 0`.
-  - **Stub/unknown:** a shim constant, `MIXBUF` with `vp_active_voices > 0`, the trap-disabled counter, or anything that cannot be classified.
-
-  The evidence record gives, for each line: kind, addr, first value, class, source line.
-- **UNKNOWN** (checked first), if any of:
-  - step 1 fails: no counts line carries `gpin`/`GPIN_OVERFLOW`, or the `[GPIN]` line count differs from `gpin` (no complete `[GPIN]` accounting is present);
-  - step 2 fails: `GPIN_OVERFLOW` counter non-zero in any counts line, or a `GPIN_OVERFLOW` latch line exists;
-  - AC-CLEAR passed, but there is no `[GPIN] kind=DMA_READ` line for the bootstrap's scratch read.
-- **FAIL (→ R2-EXPL-INPUT):** steps 1–2 hold and any row is stub/unknown.
-- **PASS:** steps 1–2 hold and every row is guest-written or modelled.
-- **Controls:** the `DMA_READ` of the scratch page is the presence witness. `A4b1-r3` AC-FIX exercises each kind this AC classifies — `DMA_READ` in (vi) and (viii), `PERIPH`, `FIFO_READ` and `MIXBUF` (with `vp_active_voices` `0` and `> 0`) in (viii) — and the overflow counter/latch in (ix).
-- **Claim limits:** a per-value classification, not a data-flow proof. Inputs are recorded per distinct `(kind, addr)` with the first value only; a later different value at the same key is not classified (r2 review D5).
-
-### Decision rows (evaluate in order; first match wins)
-
-- **R2-DEFAULT-REGRESS:** AC-DEFAULT2 FAIL. → Revert `A4b2`'s game edits. → Planner.
-- **R2-UNKNOWN:** after the one R1 rerun, any of:
-  - a gate fails;
-  - any AC is UNKNOWN;
-  - AC-CLEAR PASS while AC-BOOT or AC-RUN is not PASS.
-
-  → Planner, with the failing gate or AC as the brief.
-- **R2-CPU:** AC-NOCPU FAIL, or AC-CLEAR → R2-CPU. → **FAIL** (Q1 reversal (c)), not a narrowed claim. → Advisor.
-- **R2-UNATTRIBUTED:** AC-CLEAR → R2-UNATTRIBUTED. The word was cleared, but no GP or CPU witness attributes it. Not PASS, and not blamed on the CPU. → Advisor.
-- **R2-NOBOOT:** AC-BOOT FAIL. → Next: `A4c`, discovery of the bootstrap/SGE path.
-- **R2-NOFRAMES:** AC-RUN FAIL on frames. → Next: `A4c`, discovery of the FE/SE frame gate after GPRST.
-- **R2-NOEXEC:** AC-RUN FAIL on `gp_insns = 0`. → Next: `A4c`, discovery of the GP run/halt state; the `[GPRUN] pc`/`halt` values are the brief.
-- **R2-NOCLEAR:** AC-BOOT and AC-RUN PASS, and AC-CLEAR → R2-NOCLEAR. → Next: `A4c`, discovery of what the GP program waits on; the `[GPIN]` inventory is the brief.
-- **R2-EXPL-INPUT:** AC-BOOT, AC-RUN, AC-CLEAR and AC-NOCPU PASS, and AC-INPUTS FAIL. → The clearing is observed but is **exploratory for the named input**; the claim is not satisfied. → Advisor decides whether that input needs its own model packet first.
-- **R2-PASS:** every AC PASS. → `A4b2` accepted with exactly its "Establishes" claim. → Next: the `PIO_FREE` model packet, before any strict liveness/boot criterion past the spin.
-
-**Exhaustiveness.** Once the first four rows fail to match, AC-CLEAR is either PASS or R2-NOCLEAR, and every other AC is PASS or FAIL.
-- AC-BOOT FAIL → R2-NOBOOT.
-- Otherwise, AC-RUN FAIL → R2-NOFRAMES or R2-NOEXEC. AC-CLEAR here is R2-NOCLEAR, because CLEAR PASS without RUN PASS matched R2-UNKNOWN.
-- Otherwise, AC-CLEAR R2-NOCLEAR → R2-NOCLEAR.
-- Otherwise, AC-INPUTS decides between R2-EXPL-INPUT and R2-PASS.
-
-In every row except R2-DEFAULT-REGRESS, the step-1 edits stay committed. Without trace they emit nothing, and R0 is the witness for that.
+**Exhaustiveness:** AC-INPUTS is evaluated only when AC-BOOT, AC-RUN, AC-CLEAR and AC-NOCPU all PASS; otherwise it is `NOT EVALUATED`, never UNKNOWN. After DEFAULT-REGRESS and UNKNOWN, AC-NOCPU FAIL or AC-CLEAR → R2-CPU selects CPU; otherwise AC-CLEAR → R2-UNATTRIBUTED selects UNATTRIBUTED; otherwise AC-BOOT FAIL selects NOBOOT, including when AC-CLEAR PASS; otherwise AC-RUN FAIL selects NOFRAMES or NOEXEC, including when AC-CLEAR PASS; otherwise AC-CLEAR → R2-NOCLEAR selects NOCLEAR. Only when BOOT/RUN/CLEAR/NOCPU PASS is AC-INPUTS evaluated, selecting EXPL-INPUT or PASS (or UNKNOWN above). In all rows except DEFAULT-REGRESS the step-1 edits remain committed; without trace they emit nothing and R0 is the witness. **No R1/R0 decision reads the capped `[APUMMIO]` log; the former D1 lossless-input tension is resolved.**
 
 ### Closure
 
-- Evidence index (`docs/reviews/a4b2-execution-evidence.md`): each AC → artifact path + SHA-256 → result → selected row. Artifacts:
-  - for both R1 and R0: `result.json`, `stacks.txt`, `jsrf_run.log`, `process.dmp`;
-  - the exe SHA-256;
-  - the game and toolkit commits;
-  - `L` from G4;
-  - all `[GPWATCH]` latch lines, verbatim;
-  - all `[GPIN]` lines and the last counts line, verbatim.
-- Post-review edits reopen the affected criteria. An unrelated next stop is recorded as a follow-up; the scope does not expand.
-- Removing the forwarding calls later needs no packet. Keeping them after a regeneration requires re-applying them.
-- Follow-ups (record, do not do), from reviewer deferred items:
-  - there is no R0 rerun when R0's own gate gives R2-UNKNOWN;
-  - it is inferred, not guaranteed, that the `0x001A1751` / `0x001A1FA7` stores of 0 do not run between the anchor and the spin;
-  - the `[APUMMIO]` 400-line cap. AC-BOOT reads `0x02040`/`0x3FFFC` lines, which were at about line 104 in A4a R1; if they are absent, the result is UNKNOWN, never a FAIL.
-  - r2 review (`docs/reviews/a4b1-a4b2-r2-adequacy-review.md`) advisories, recorded not fixed: D1 AC-BOOT could decide from `[GPBOOT]` `gprst`/`prev` plus counts `boots` instead of `[APUMMIO]`; D3 a site's first-zero latch hides a later zero from that site (→ R2-UNATTRIBUTED, safe); D4 AC-CLEAR step 4 precedes R2-CPU, so a pre-command `GP_ZERO_OVER_OTHER` can hide a CPU witness (conservative); D5 `MIXBUF`/`[GPIN]` record first value only; D6 PASS has no claim limit for a second command stopping at the spin again, or a clear by a periodic write-back. D2 (cite sites by content/VA) is fixed in r3.
+- Evidence index in `docs/reviews/a4b2-execution-evidence.md`: each precondition/gate/AC → exact **fresh-revision** artifact and SHA-256 → result → row and reviewer disposition; identify every fresh R1 (including rerun) and R0, `result.json`, `stacks.txt`, `jsrf_run.log`, `process.dmp`, source/patch/status/build manifest, exe SHA-256, game/toolkit commits, XBE SHA-256, `L`, R0 mapping check and `B0`/`Wf0` reads, any conditional R1 mapping check/`Wf` read (or explicitly not evaluated), full `[GPWATCH]` latch/counts records (including the last counts `boots` and anchor `va`), every `[GPBOOT]` header and its 64-line block with `n=1..N` reconciliation, common log-bound `B`/title-page `T`/anchor cross-check and per-block image results, full first and last `[GPIN]` `at_clear`/`summary` blocks plus every repeated at_clear integrity-check result, six original-XBE disassemblies and call-site reconciliation, and P3 pattern-check hits and dispositions. Missing required artifact/hash is UNKNOWN, not PASS; prior-revision logs do not replace fresh R1/R0 evidence.
+- Post-review edits reopen affected criteria; an unrelated next stop is a follow-up, not scope expansion. Removing the forwarding calls later needs no packet; keeping them after regeneration requires re-applying them. A full fresh independent Planner §5.3 review of these bytes is required before freezing and promotion.

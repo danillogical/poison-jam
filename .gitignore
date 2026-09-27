@@ -8,3 +8,7 @@
 /tools/func_id/output/
 __pycache__/
 .git.broken-backup/
+
+# Transient capture: the APU-watch fixture freopen()s its own stderr to this
+# path on every ctest run, so it is regenerated output, not durable evidence.
+/apu_watch_fixture_stderr.txt

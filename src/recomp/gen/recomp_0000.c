@@ -7,6 +7,10 @@
 #include "recomp_funcs.h"
 #include <math.h>
 
+/* A4b observation — re-apply after regeneration.
+ * The A4b2 watch-ledger seam: a thin forwarder defined in src/diagnostics.c. */
+extern void jsrf_watch_store(uint32_t site_va, uint32_t target_va, uint32_t value);
+
 /**
  * sub_00011000
  * Original: 0x00011000 - 0x0001106B (107 bytes, 31 insns)
@@ -135280,6 +135284,7 @@ loc_0006DAB0: ;
 loc_0006DAC2: ;
     ecx = eax + 0x80C;
     MEM32(ecx) = 0;
+    jsrf_watch_store(0x0006DACEu, eax + 0x810, ecx); /* A4b observation — re-apply after regeneration */
     MEM32(eax + 0x810) = ecx;
     MEM32(eax + 0x814) = 1;
     esp += 4; return; /* ret */
@@ -135403,6 +135408,7 @@ loc_0006DBB0: ;
     eax = ecx + 0x80C;
     edx = 0; /* xor self */
     MEM32(eax) = edx;
+    jsrf_watch_store(0x0006DBBAu, ecx + 0x810, eax); /* A4b observation — re-apply after regeneration */
     MEM32(ecx + 0x810) = eax;
     eax = MEM32(ecx + 0x804);
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(edx) & 0xFFFFFFFFu;
@@ -135868,6 +135874,7 @@ loc_0006DEE8: ;
     edx = MEM32(ecx + 0x810);
     MEM32(edx) = eax;
     eax = eax + 0x68;
+    jsrf_watch_store(0x0006DEF3u, ecx + 0x810, eax); /* A4b observation — re-apply after regeneration */
     MEM32(ecx + 0x810) = eax;
     MEM32(eax) = 0;
 

@@ -7,6 +7,10 @@
 #include "recomp_funcs.h"
 #include <math.h>
 
+/* A4b observation — re-apply after regeneration.
+ * The A4b2 watch-ledger seam: a thin forwarder defined in src/diagnostics.c. */
+extern void jsrf_watch_store(uint32_t site_va, uint32_t target_va, uint32_t value);
+
 /**
  * sub_0019F959
  * Original: 0x0019F959 - 0x0019F9A7 (78 bytes, 24 insns)
@@ -6521,6 +6525,7 @@ loc_001A1747: ;
     PUSH32(esp, esi);
     PUSH32(esp, edi);
     edi = MEM32(eax);
+    jsrf_watch_store(0x001A1751u, edi + 0x810, 0); /* A4b observation — re-apply after regeneration */
     MEM32(edi + 0x810) = MEM32(edi + 0x810) & 0;
     PUSH32(esp, 6);
     edi = edi + 0x800;
@@ -6743,6 +6748,7 @@ loc_001A18B2: ;
       esi += ecx; edi += ecx; }
     else { uint32_t _i; for (_i = 0; _i < ecx; _i++) MEM8(edi - _i) = MEM8(esi - _i); esi -= ecx; edi -= ecx; }
     ecx = 0; /* rep movsb */
+    jsrf_watch_store(0x001A18CEu, ebx, eax); /* A4b observation — re-apply after regeneration */
     MEM32(ebx) = eax;
 
 loc_001A18D0: ;
@@ -8085,6 +8091,7 @@ loc_001A1F94: ;
 loc_001A1F9B: ;
     edi = MEM32(0x1BA858);
     edi = edi + 0x800;
+    jsrf_watch_store(0x001A1FA7u, edi + 0x10, ebp); /* A4b observation — re-apply after regeneration */
     MEM32(edi + 0x10) = ebp;
     MEM32(edi) = ebp;
     MEM32(-24903684) = ebp;
