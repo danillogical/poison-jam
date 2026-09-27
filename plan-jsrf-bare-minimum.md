@@ -100,7 +100,40 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A4b2-r8` **EXECUTED 2026-09-27 → `R2-PASS`** (the claim is established for this revision)
+## CURRENT PACKET — `A4b2-r8` **ACCEPTED 2026-09-27** (`ACCEPT`, stage 1, final — no second stage)
+
+**`A4b2-r8` executed → `R2-PASS` → acceptance stage 1 returned `ACCEPT` with `BLOCKING: NONE`.** All six
+mandatory criteria and all four preconditions `AGREED`. Acceptance record:
+`docs/reviews/a4b2-r8-acceptance-record.md`; reviewer: `docs/reviews/a4b2-r8-acceptance-review.md` (368
+lines, child `c3d3eba7-…`, `workbuddy-ai/hy4-preview-f` @ `high`).
+
+**No second stage — and that is required, not an omission.** §2.2: *"The second stage runs only when the
+first-stage review does not return `ACCEPT`. A first-stage `ACCEPT` is final and is not passed on."* So the
+DeepSeek Max reproducer is **correctly not run**, and the Sol High adjudicator is not engaged (it exists
+only for a dispute surviving both stages).
+
+**The reviewer reproduced rather than accepted.** It rebuilt the `AC-INPUTS` blocks independently (*"I did
+NOT accept 'I fixed my parser'"*), checked the **full arrays** (PERIPH 128 with 125 zero, MIXBUF, FIFO, all
+four DMA classes — *"NO OTHER nonzero stub index/class exists"*), verified the wording compliance, ran the
+`AC-NOCPU` absence check **with a positive control**, reproduced the 371-word image comparison **and its
+negative control**, and **measured P4's bridge** by diffing the discovery toolkit against r8's (`--numstat`
+165/0 and 26/0 — purely additive, env-gated, never enabled in R1, so the relevant source is
+byte-identical). It confirmed the forbidden bridges were **not** used.
+
+**Advisories recorded (outside the contract, disposition unchanged).** The most consequential: **R1 ended
+`unhandled_exception` (`0xE0424943`) at 4.77 s, not the 30 s deadline** — the known A2h heap-OOM class. It
+is **not** a violation (the packet sets no R1 liveness requirement and every decision input is log-bound
+and already emitted), but **R1 is a 4.8 s prefix of a 30 s window and this OOM class will bound other
+strict criteria.** Also: block-24 identity still rests on one historical latch line; and **any future
+toolkit advance re-opens P4 and cannot be inherited silently.**
+
+**Next authorized action: the `PIO_FREE` model**, which the Advisor confirmed is genuinely next.
+
+**Toolkit:** `c151d4e` (unchanged — no toolkit change was needed). **Game:** pending commit.
+
+---
+
+## Previous — `A4b2-r8` **EXECUTED 2026-09-27 → `R2-PASS`** (the claim is established for this revision)
 
 **`A4b2-r8` (`4D4AFC30…397C62`) executed. Row: `R2-PASS`.** Preconditions **P1–P4 all PASS**:
 `docs/reviews/a4b2-r8-preconditions.md`. Execution evidence: `docs/reviews/a4b2-r8-execution-evidence.md`.
