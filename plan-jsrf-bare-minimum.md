@@ -6,7 +6,73 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4b2-NR-epoch-slice-followup-r1` (**discovery**: the FINAL `L1` attempt — backward demand-driven slice) — **PROMOTED 2026-09-27, `ADEQUATE`**
+## CURRENT PACKET — `A4b2-NR-epoch-slice-followup-r1` **EXECUTED 2026-09-27 → frontier CLOSED on measured evidence; row REFERRED to the Advisor (Muse unavailable)**
+
+**`A4b2-NR-epoch-slice-followup-r1` (`03CE475D…`) executed** with the Advisor-mandated **backward
+demand-driven slice**. Evidence: `docs/reviews/a4b2-nr-epoch-slice-execution-evidence.md`. Verification:
+`docs/reviews/a4b2-nr-epoch-slice-followup-r1-session-verification.md`.
+
+### The decisive measurement: which descriptor produces the exchange
+
+The slice closed every field-level question but could not settle **which DMA descriptor** produces the
+`B+0x810` exchange. Rather than argue it, the Session built the packet-authorized instrument
+(`RECOMP_APU_DMA_DESC_TRACE`) and **measured** it:
+
+```
+[GPDMADESC] GP_CLEAR produced by block_addr=0018 (dsp_addr=000800)
+```
+
+**`block_addr` is decimal → block 24**, the descriptor built by the **`P 000E`** call (builder B,
+`P 00EB`). **Every field is an immediate:** control `0x59E2`, count `6` (`P 000D`), dsp_offset `0`
+(`P 000A`), **scratch_offset `0x000800`** (`P 000B`) — which **reproduces the observed `dsp_addr=000800`
+exactly**. **Neither stub input appears in any field.** Per the packet's own leaf classification, immediate
+leaves **CLOSE**.
+
+**Measured chain:** `6 → 0x25 → 0x1E` cycling, 255 doorbell-region reads vs 254 mixbin-region reads,
+`events=766 ngp_skipped=0`. **The mixbin descriptor is a different block in the same chain and is not the
+one that produces the exchange** — resolving the Session's earlier mixbin concern.
+
+### What closed
+
+| Requirement | Status |
+|---|---|
+| Five field leaves | **all immediates** → CLOSED |
+| Trigger guards + **shared state** | CLOSED — `a` from `P 00C1 move #$000025,a`, masked |
+| **Computed readers** | CLOSED — image `I` has exactly **one** (`P 00B9`), `r1` an immediate `0x24` |
+| **Computed writers** | CLOSED — all outside every descriptor region |
+| **Alias-disjointness** | PROVEN for statically-targeted writers; all 39 direct X writes clear |
+| **Entry set** | PROVEN — `P 0000` has **0** incoming edges (reset-only) |
+| **Interrupts incl. faults** | excluded **per-vector**, not for being unobserved |
+| **Consumer** | **MEASURED** — block 24, all immediates |
+| `L2 = INVARIANT` | carried |
+
+### Row: **referred to the Advisor** — recommendation `O-TWO-LEG`
+
+**`O-REFUTED` is not available on this evidence**: it requires a concrete feasible stub-derived chain to a
+field or guard of the exchange-producing descriptor, and none exists. **My recommendation is
+`O-TWO-LEG`.**
+
+**Referred rather than selected** because the packet's terminal rows reserve the decision, and because the
+Session has now made **six** self-caught errors in this analysis (see the erratum below).
+
+### ⚠ `A4b2-r8` MUST NOT inherit the old descriptor identifier
+
+**The Session had identified the wrong descriptor for four packets.** `x:[6..10]` (the `P 0007` call) was
+called "the doorbell descriptor" throughout; **the exchange is produced by block 24** (the `P 000E` call).
+Erratum: **`docs/reviews/a4b2-descriptor-identity-erratum.md`** — lists the four frozen packets that carry
+the stale identifier (not edited; a frozen contract is the artifact its revision executed under), what is
+unaffected (the disjointness analysis, the field values, `L2`, image-`I` stability, the entry proof), and
+that **no `§5.4(2)` is raised** because no contract premised the identity.
+
+**Next authorized action:** **`A4b2-r8`** if the Advisor confirms `O-TWO-LEG`; otherwise the Advisor's final
+scope/defer/retire decision. **A fifth `L1` packet is forbidden (`F-D`).** `A4b2-r7` stays
+`R2-EXPL-INPUT`; no strict criterion discharged.
+
+**Toolkit:** pushed `d80069c` (DMA descriptor trace). **Game:** `525147b`.
+
+---
+
+## Previous packet — `A4b2-NR-epoch-slice-followup-r1` (**discovery**: the FINAL `L1` attempt — backward demand-driven slice) — **PROMOTED 2026-09-27, `ADEQUATE`**
 
 - **Packet:** `docs/packets/a4b2-nr-epoch-slice-followup.md`, revision
   **`A4b2-NR-epoch-slice-followup-r1`**, class **discovery**, frozen SHA-256

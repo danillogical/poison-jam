@@ -1,5 +1,26 @@
 # `A4b2-NR-epoch-slice-followup` — Session preparation: descriptor-disjointness, alias-closure, and the reader
 
+> ## ⚠ ERRATUM — the descriptor identifier used here is WRONG
+>
+> **Added 2026-09-27 after the `A4b2-NR-epoch-slice-followup-r1` execution measured the consumer.**
+>
+> This document calls `x:[6..10]` — the region built by the **`P 0007`** call with `r0 = 6` — *"the doorbell
+> descriptor"*. **It is not the descriptor that produces the `B+0x810` exchange.**
+>
+> **Measured:** `[GPDMADESC] GP_CLEAR produced by block_addr=0018 (dsp_addr=000800)` — i.e. **block 24**,
+> the descriptor built by the **`P 000E`** call (builder B, `P 00EB`), whose fields are `r1 = 0`,
+> `r2 = 0x000800`, `r3 = 6` — all immediates, and whose `scratch_offset = 0x800` reproduces the observed
+> `dsp_addr` exactly. See `docs/reviews/a4b2-nr-epoch-slice-execution-evidence.md`.
+>
+> **What survives:** the **disjointness and alias-closure analysis itself is unaffected** — it is a
+> statement about which writer can reach which X region, and that holds for `x:[6..10]` as written. The
+> five call sites, their `r0` values, the pairwise disjointness, the 39 direct X writes and the two
+> statically-unreachable blocks are all still correct.
+>
+> **What must change when citing this document:** do **not** carry the phrase *"the doorbell descriptor
+> `x:[6..10]`"* forward. The exchange-producing descriptor is **block 24**. Cite the identifier from the
+> execution evidence, not from here.
+
 **Session:** `session-9f8c9988-38fb-4cc9-a188-a6881a52559a`, 2026-09-27, DSH.
 **Mandate:** the Advisor's `R3` — *"descriptor-disjointness PROVED alias-closed (not assumed from the
 preparation note)"*, because it **graduates from a Session finding to a load-bearing premise**
