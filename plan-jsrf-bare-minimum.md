@@ -100,7 +100,41 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## Previous packet — `A4b2-NR-epoch-slice-followup-r1` (**discovery**: the FINAL `L1` attempt) — **EXECUTED 2026-09-27 → `O-TWO-LEG`**
+## CURRENT PACKET — **`A4b2-r8` DRAFT committed, awaiting non-authoring §5.3 adequacy** (not promoted)
+
+- **Packet:** `docs/packets/a4b2-gp-clears-pending-word.md`, revision **`A4b2-r8`**, class **change**,
+  **161 lines**, SHA-256 **`4D4AFC304F571971EB180C19D6832D56A2CC62FF6EAAFB9E4928716125397C62`** — committed
+  as a **draft** at `28a51db`, **NOT frozen and NOT promoted into `CURRENT PACKET`**.
+- **Why not promoted:** `A4b2` is a **change packet**, not a discovery packet. Under §5.8 a discovery
+  packet's adequacy may be the writing Planner's own review — which is what the Session used for the five
+  discovery packets. **A change packet requires the full §5.3 adequacy review by a NON-AUTHORING Planner**,
+  and the authoring Planner said so explicitly. Freezing on the author's self-check would skip a required
+  gate. **A fresh non-authoring reviewer is running now.**
+- **What r8 carries** (the Advisor's Q3 list): the terminal conditional **`O-TWO-LEG`** after clean V2 with
+  `L1=PROVEN`/`L2=INVARIANT` + the earlier input-specific conditional ruling; **`r7` stays
+  `R2-EXPL-INPUT`, no retroactivity**; the **block-24 identity with corrected radix** (`%04X` is hex, so
+  `0018 = 0x18 = block 24`, explicitly rejecting the old `P 0007`/`x:[6..10]` identifier); the **leaf
+  table**; and the **second-image boundary** (interface enumerated per V2, **internals intentionally
+  unanalyzed and unneeded**, `B3-ID` deferred).
+- **The substantive change** is the restated **`AC-INPUTS`** qualifier: only **clear-relevant feasible
+  reaching** inputs need guest-written/modelled provenance, while the two named stub classes (MIXBUF,
+  `0xFFFFB3`) instead have completed two-leg **non-reliance** — and are **not** relabelled as modelled.
+- **Forbids carried:** no region-counter tallies for block identity; **no DMA chain-restart theory**; no
+  fifth `L1` (`F-D`); `F1`–`F3` and `W1`–`W4`; no `0xFFFFB3` identification or model. **All seven
+  self-caught analysis errors are acknowledged rather than glossed.**
+- **Two gaps the authoring Planner found before freeze, both closed:** R3's **archived outputs and hashes**
+  (`docs/reviews/a4b2-epoch-slice-verification-scripts/`, 18 files incl. `MANIFEST.sha256`), and the stale
+  `(decimal 24)` in the evidence record.
+
+**Next:** promotion on `ADEQUATE` → implement/execute `A4b2-r8` → **Hy4 acceptance stage 1** →
+DeepSeek Max stage 2 for non-AGREE criteria → fresh Sol High adjudication for any remaining frozen-contract
+dispute. **Then `PIO_FREE`**, which the Advisor confirmed is genuinely next.
+
+**Toolkit:** pushed `c151d4e`. **Game:** `28a51db`.
+
+---
+
+## Previous — `A4b2-NR-epoch-slice-followup-r1` (**discovery**: the FINAL `L1` attempt) — **EXECUTED 2026-09-27 → `O-TWO-LEG`**
 
 ### ⚠ `A4b2-r8` MUST NOT inherit the old descriptor identifier
 
