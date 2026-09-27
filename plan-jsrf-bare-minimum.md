@@ -56,14 +56,51 @@ one that produces the exchange** — resolving the Session's earlier mixbin conc
 | **Consumer** | **MEASURED** — block 24, all immediates |
 | `L2 = INVARIANT` | carried |
 
-### Row: **referred to the Advisor** — recommendation `O-TWO-LEG`
+### Row: **`O-TWO-LEG` — SELECTED** (`L1 = PROVEN`, `L2 = INVARIANT`)
 
-**`O-REFUTED` is not available on this evidence**: it requires a concrete feasible stub-derived chain to a
-field or guard of the exchange-producing descriptor, and none exists. **My recommendation is
-`O-TWO-LEG`.**
+The Advisor's terminal ruling made this conditional: *"SELECT `O-TWO-LEG` upon V2 clean (Session records it
+without re-referral)."* **V2 is clean**, so the Session selects the row and records it, as authorized.
 
-**Referred rather than selected** because the packet's terminal rows reserve the decision, and because the
-Session has now made **six** self-caught errors in this analysis (see the erratum below).
+**V2 result** (`docs/reviews/a4b2-epoch-slice-v2-result.md`) — all four directions clean:
+
+| V2 direction | Result |
+|---|---|
+| **(out)** image-I static transfers targeting ≥ `0x173` | **0** |
+| **(out)** computed/indirect transfers in image `I` | **0** |
+| **(in)** second-image transfers targeting slice nodes or dead-block PCs | **0** |
+| **(data)** second-image direct X writes into a slice-read word | **0** |
+| **(data)** second-image computed X writes (296) | **MOOT** |
+
+**The decisive fact:** at the exchange, `gp_pc_range=0000..0172`, `gp_first_high=0000` — **only image `I`
+had executed**. The second image is **loaded** before the exchange (the P-write watch shows 3 510 writes
+above `0x172` inside the same window) but **not executed** at it. **Loaded ≠ executed**, cross-checked from
+two independent artifacts.
+
+**The Session's first V2 record concluded the opposite and was wrong** — it read the **last** histogram in
+the artifact (run-end, post-exchange) instead of the block after the `first-exchange` terminal. **Seventh
+self-caught error**, recorded in the V2 result. It produced a false `UNKNOWN` that would have triggered an
+unnecessary re-referral.
+
+**What this is:** `L1 = PROVEN` **for this discovery only**, with `L2 = INVARIANT` carried.
+**`A4b2-r7` stays `R2-EXPL-INPUT`** — no retroactive PASS. **No strict criterion is discharged**; this is
+discovery acceptance (artifacts + row selection).
+
+**Next authorized action:** **`A4b2-r8`** change revision, carrying the Advisor's Q3 list: (1) the two-leg
+outcome + the conditional-ruling citation; (2) the **block-24 identity with corrected radix**, so the wrong
+identifier dies here; (3) the leaf table as the input-qualifier restatement basis; (4) boundary statements —
+second-image **interface** enumerated per V2, **internals unanalyzed and unneeded** (state so, so a reader
+does not mistake scope for oversight), B3-ID still deferred. **Then `PIO_FREE`** — the Advisor confirmed the
+sequencing is unchanged. **A fifth `L1` packet is forbidden (`F-D`).**
+
+**Advisor-mandated record obligations, outstanding:** archive the fresh-code re-derivation (script, inputs,
+outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tallies for block identity;
+`A4b2-r8` must not depend on DMA chain-restart theory.
+
+**Toolkit:** pushed `c151d4e`. **Game:** `c493fdc`.
+
+---
+
+## Previous packet — `A4b2-NR-epoch-slice-followup-r1` (**discovery**: the FINAL `L1` attempt) — **EXECUTED 2026-09-27 → `O-TWO-LEG`**
 
 ### ⚠ `A4b2-r8` MUST NOT inherit the old descriptor identifier
 
