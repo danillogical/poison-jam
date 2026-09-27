@@ -6,7 +6,120 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4b2-NR-followup-r1` **EXECUTED 2026-09-27 → gap 1 CLOSED; `O-INCONCLUSIVE` stands, reason now quantified**
+## CURRENT PACKET — `A4b2-NR-next-edge-r1` **EXECUTED 2026-09-27 → `O-INCONCLUSIVE`; the GP loads a SECOND program image**
+
+**`A4b2-NR-next-edge-r1` (`7461AAA4…`) executed. Row: `O-INCONCLUSIVE`.** Evidence:
+`docs/reviews/a4b2-nr-next-edge-execution-evidence.md`. Verification:
+`docs/reviews/a4b2-nr-next-edge-r1-session-verification.md`.
+
+### The headline finding: there are TWO P-memory images, and the analysis used the wrong one
+
+The packet's premise was that the executed program is the boot image `I` (371 words) plus a region above
+it, and that the predecessor's error was analysing only its first 512 words. **That premise was
+incomplete.** Two full-PRAM decodes — one at bootstrap, one at the first exchange — show the GP **loads a
+second program into P-memory after the bootstrap**:
+
+| P-memory band | At bootstrap | At the first exchange |
+|---|---|---|
+| boot image `I` (`0x000`–`0x172`) | real code | **real code — unchanged** |
+| `0x173`–`0x7FF` | **1 677 zeros** | **real code** (25 zeros) |
+| `0x800`–`0xFFF` | **2 048 × `0xCACACA`** | **real code** (215 × `0xCACACA`) |
+
+`0xCACACA` is the toolkit's own `memset` fill (`dsp_cpu.c:299-301`), so `0x800`–`0xFFF` at bootstrap is
+**uninitialised fill**, not program. Of 2 957 words in both snapshots, **2 480 changed**.
+
+**Measured against the bootstrap snapshot:** only **193 of 2 340 executed PCs (8.2%)** lie inside image
+`I`. **99.4% of all executions** were at a PC whose bootstrap word was zero (**42.0%**) or `0xCACACA`
+fill (**57.4%**). So the bootstrap decode was not merely incomplete — for those PCs it was **wrong**, and
+the CFG in the evidence record, though methodologically sound, was built on those wrong bytes.
+
+### What survives: the doorbell code is in the FIRST image
+
+The doorbell's instructions are **word-for-word identical** in both snapshots — `P 0004` `62F400`
+(`move #$000800,r2`), `P 0007` `0BF080`, `P 00B9` `57E100`, `P 00DB` `220E00`, `P 00E8` `0A7092`. So the
+doorbell descriptor path lies entirely within image `I`, the `P 0004` immediate still matches the observed
+`dsp_addr=000800`, and **the predecessor's in-window doorbell readings are not invalidated** — they were
+unproven as a complete account of the program, which this run now shows is larger and later-loaded.
+
+### Row and next action
+
+**`O-INCONCLUSIVE`.** `L2 = INVARIANT` stands (tuple unchanged: `seq=198852 va=803C0810 observed=3
+payload=0 dsp_addr=000800`). `L1` is `INCONCLUSIVE`: the feasibility slice was not completed (the CFG
+reaches only 194 of 2 340 executed PCs from a single entry; interrupt/vector entry is not modelled), **and
+its input bytes were wrong**. No concrete feasible causal chain to the named doorbell was found, so
+`O-REFUTED` is **not** selected. `A4b2-r7` stays `R2-EXPL-INPUT`; no strict criterion discharged.
+
+**Next authorized action:** **`A4b2-NR-next-edge-followup`** — the row the packet's own table names —
+targeted at the specific unknown this run recorded: **the second image's provenance, load mechanism and
+extent, plus a slice built on the correct bytes.**
+
+### Instrumentation added (env-gated, GP-only, read-only, off by default)
+
+- `RECOMP_APU_GP_DECODE` **second decode at the first exchange** (`dsp56k_request_decode2`, tagged
+  `second-decode-at-exchange`) — **this is what produced the headline finding.**
+- **Per-core identity logging** (`b9_note_core_identity`): measured **one** core,
+  `opaque=00000239DED16900`, `is_gp=1`, so the trace's GP attribution is **verified, not assumed**.
+
+### Two tooling defects found and fixed in the Session's own analysis
+
+1. **Fall-through used `pc+1`** — DSP56300 instructions are 1–*N* words, so this is wrong for every
+   multi-word instruction. Fixed to the next *decoded* PC.
+2. **Any `(rN)` operand treated as an indirect jump** — misclassified **2 062 data moves** as control
+   transfers, yielding a bogus "2 083 unresolved edges". Only `jmp`/`jsr` with a computed operand are
+   indirect. After the fix: **0 indirect, 21 unresolved (returns only)**.
+
+### Session defect, corrected: the packet was promoted mid-write
+
+The promotion recorded 32 lines / `9E919866…`; the Planner's final file is **39 lines / `7461AAA4…`**. The
+Session polled, saw a complete-looking body with an `ADEQUATE` verdict, and promoted while the Planner's
+turn was still in flight. **A file that looks finished is not evidence its author has stopped writing.**
+Repaired by re-promoting against the stable bytes; the packet was never edited by the Session.
+
+---
+
+## Previous packet — `A4b2-NR-next-edge-r1` (**discovery**: the full-program PC-indexed CFG/def-use slice) — **PROMOTED 2026-09-27, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a4b2-nr-next-edge.md`, revision **`A4b2-NR-next-edge-r1`**, class **discovery**,
+  frozen SHA-256 **`7461AAA471D5EE0B78348AC17F7BF5B8CD333A860437705B65946B349311ACFF`** (**39 lines**).
+  **This is the packet to execute.** Promotion byte-identical with no revision (§5.3).
+  **Session defect, corrected:** the packet was first promoted **mid-write** at a 32-line draft
+  (`9E919866…`); the Planner's turn was still in flight and it extended the file to 39 lines. The hash above
+  is the **final, stable** artifact (re-read twice, unchanged). The packet was never edited by the Session.
+  Recorded in `docs/reviews/a4b2-nr-next-edge-r1-session-verification.md`.
+- **Adequacy:** **`VERDICT: ADEQUATE`** — the **writing Planner's own** review, as §5.8 requires for a
+  discovery packet (child `1aadbb20-4a2f-4a3c-9ca5-9699806d2820`, `codex/gpt-6-sol` @ `high`). No second
+  Planner; no Muse preflight repeated.
+- **Why it exists:** `A4b2-NR-followup-r1` executed → **`O-INCONCLUSIVE`**. The `P 00B9` gap was closed by
+  measurement, but the real obstacle is now quantified: the original Leg 1 reasoned over **380 of 2 340
+  executed PCs** — a 512-word window covering ~16% of the executed program (`0x0000`–`0x0F28`). Evidence:
+  `docs/reviews/a4b2-nonreliance-discovery-evidence.md` §8. Session verification:
+  `docs/reviews/a4b2-nr-next-edge-r1-session-verification.md`.
+- **The target:** the **PC-indexed CFG/def-use slice over every feasible route** to the first doorbell
+  descriptor and DMA write, across the **full 3 881-word program** (3 964 decoded instructions). The
+  Advisor's Q2 **SUSPENDED / CARRIES / FORBIDDEN** lists are carried, and the 2 340-PC histogram may be
+  used **only** as a lower-bound cross-check — the `PROVEN` bar stays **feasibility**-based.
+- **Q4 guardrails — carried with the Session's correction:** warning at `dsp_cpu.h:49`
+  (`dsp_core_t.is_gp`, never populated) and `dsp.h:79` (`DspCoreState.is_gp`, clobbered by
+  `dsp_c_sync_to_vm`); **`dsp.h:105` (`DSPState.is_gp`) is CANONICAL and must not be labelled unsafe** —
+  the Advisor's ruling had this reference inverted and the packet says so explicitly. Both headers are
+  **comments-only** new scope.
+- **Runs:** exactly **one** fresh absent-gate baseline at the pinned new identity, which doubles as the
+  final closure inertness control. **Condition (Advisor Q3):** if the packet's toolkit delta executes on
+  the GP path with gates absent, a fresh same-exe mini-series is required.
+- **Closure:** the retained `bad-output` arm is **removed** (bite preserved and re-verified); diagnostic
+  changes reverted; all gates off by default.
+- **Session preparation already done:** `docs/reviews/a4b2-nr-next-edge-q2-preparation.md` re-derives all
+  seven suspended items over the full program. **Six survive unchanged; the seventh (`P 00DB` "sole
+  builder") is refuted as to its reason** — there are **three** callers plus two for sibling `P 00EB` — but
+  the callers write **pairwise disjoint** descriptor regions (`x:[6..10]` doorbell, `x:[12..16]`,
+  `x:[18..22]`), so the original *conclusion* survives on a reason the original never stated. The open
+  question is the **reader**: whether a computed pointer can read another region as the doorbell's
+  descriptor. Durable slice inputs are archived (`full_decode.txt`/`.json`, `gpb9_trace.txt`) and the
+  decode is verified to cover **100%** of the 2 340 executed PCs.
+
+---
+
+## Previous packet — `A4b2-NR-followup-r1` **EXECUTED 2026-09-27 → gap 1 CLOSED; `O-INCONCLUSIVE` stands, reason now quantified**
 
 **`A4b2-NR-followup-r1` (`886620CC…C5F5`) executed.** Gap 1 — the unresolved `P 00B9` computed read — is
 **CLOSED BY MEASUREMENT**, and in closing it the run exposed a **larger** gap that now governs. Evidence:
