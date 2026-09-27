@@ -53,8 +53,41 @@ The `old` values confirm the two-image finding independently: the writes above `
 **What `P 011C` is.** In the boot image it decodes as `movep #$000001,x:$ffffd6` — a write of **1** to
 `x:$FFFFD6`, which the toolkit models as **DMA_CONTROL**. So the load is a **DMA transfer triggered by the
 GP program itself**: the GP writes DMA_CONTROL, the DMA engine moves a block into P-memory, and every
-word of that transfer arrives through `write_memory_raw` (verified below). The PC recorded is the
-triggering instruction, which is why one PC accounts for all 3 510.
+word of that transfer arrives through `write_memory_raw` (verified below).
+
+**Correction to the sentence above, made after checking the histogram.** `P 011C` is the **trigger** PC,
+but it is **not** executed once: the executed-PC histogram shows **`P 011C` × 2 306**. So the 3 512 writes
+are **not** one bulk pass from a single trigger; the trigger runs many times. **The correct statement is
+about the destination addresses, not the PC:** all 3 512 writes are attributed to that one trigger PC, and
+the destination pattern is what shows the load's shape (below).
+
+## The load's shape — a clean forward pass, and it completes inside the window
+
+Checked directly against the watch artifact (`20260927-140820-853-a4b2-nrf-pwrite2`):
+
+| Property | Result |
+|---|---|
+| Addresses **strictly increasing** in write order | **YES** |
+| Address range written | `0x0171`–`0x0F28` (3 512 words) |
+| **Contiguous** across that range | **YES** — no unwritten word in range |
+| **Duplicate writes** | **0** |
+| Distribution across the window | 878 / 878 / 878 / 878 writes per quartile — **even** |
+| Old values overwritten | `0xCACACA` × 1 833, `zero` × 1 678, **one** other (`0x172`: `00000C` → `000080`) |
+
+**So the load is a single monotone forward pass over a contiguous region, with no address written twice,
+and it reaches its highest address (`0x0F28`) inside the watch window** — the same extent the at-exchange
+decode observes. It is progressive across the window rather than instantaneous, which is exactly why a
+**two-snapshot comparison could not have established stability**: the region was being written *during* the
+interval between the snapshots. That is the Advisor's Q2 transient gap, now measured rather than argued.
+
+**Consequence for phase 2 — stated precisely, not overclaimed.** The evidence shows the *destination*
+pattern is a clean forward pass that completes by the exchange. It does **not** by itself prove the region
+is quiescent *for the whole window*: a word written early stays written, but a word written early could in
+principle be rewritten later — and the watch rules that out here only in the sense that **no address was
+written twice**. That is a strong, direct observation over the window. What remains for phase 2 is the
+Advisor's stated condition: bind **executed PCs to the word version live when fetched**, which the
+monotone-no-rewrite pattern makes tractable (a word's version is its single write), and confirm the same
+pattern holds for any window the slice claims to cover.
 
 **Consequence for the doorbell question:** the second image is loaded by **the GP's own code**, from a
 source the GP sets up — not by a host-side or guest-side write into PRAM. That is a materially different
@@ -164,6 +197,39 @@ was verified by **negative control**: with the gate absent, the marker is **not 
 
 So every diagnostic gate is inert when unset, no watch is left behind, and the final identity reproduces
 the baseline behaviour exactly. **ctest 18/18 green.**
+
+## Phase 2 preliminary — the doorbell path executes **exactly once**
+
+Before building any slice, the Session asked the question that decides its scope: does the doorbell
+descriptor get built once, or repeatedly? From the archived executed-PC histogram
+(`logs/runs/20260927-134343-777-a4b2-nrf-b9-arch/gpb9_trace.txt`):
+
+| Path | PCs | Executions |
+|---|---|---|
+| **Doorbell descriptor entry** `P 0000`, `0002`, `0003`, **`0004`** (`move #$000800,r2`), `0006`, **`0007`** (`jsr p:$00db`) | 6 | **each ×1** |
+| Sibling builder call `P 0009`–`000E` | 5 | each ×1 |
+| Builder `P 00DB` body (`00DB`…`00EA`) | 7 | **×4** — three call sites plus the sibling |
+| Mixbin loop entry `P 009E`, `00A0`, `00A2`, `00A4`, `00A5`, `00A7`, `00A9` | 7 | each ×1 |
+| Mixbin loop body `P 00AB`…`00C0` (incl. **`00B9`**) | 9 | **×6** — the `dor #$0006` count |
+| **Doorbell DMA trigger** `P 00C1`, **`00C3`**, `00C5`, `00C7`, `00C8`, `00CA`, `00CB` | 7 | **each ×1** |
+| Trigger subroutine `P 00D2`, `00D4`, `00D6`, `00D8`, `00D9`, `00DA` | 6 | each ×1 |
+| `0xFFFFB3` read sites `P 002D`, `0033`, `003A`, `004D` | 4 | each ×767 |
+
+**The doorbell's own path executes exactly once.** Every PC from the entry sequence through the DMA
+trigger — including the descriptor's `r2 = #$000800` immediate at `P 0004`, the builder call at `P 0007`,
+and the trigger at `P 00C3` — runs **×1**. The exchange latches at **frame 256 of 768**, consistent with a
+one-shot construction rather than a per-frame rebuild.
+
+**Why this matters for the slice's scope, and what it does not settle.** A one-shot path means a feasible
+slice need not model a per-frame rebuild loop — a real reduction in what must be covered. It does **not**
+mean the slice is done: the builder body runs ×4 (three callers plus the sibling, with the disjoint-region
+finding from `a4b2-nr-next-edge-q2-preparation.md`), and per **F1** the doorbell path's **callers and
+guards** — who reaches `P 0000`–`0007` and what gates the trigger — are still not established. The ×767
+counts on the `0xFFFFB3` sites show the housekeeping loop runs per frame while the doorbell path does not.
+
+**This is a preliminary observation from archived data, not the phase-2 slice.** No criterion is
+discharged, and per the packet phase 2 still requires the feasible callers/guards/reaching-definitions
+closure over phase-1-covered bytes.
 
 ## What this establishes, and what it does not
 
