@@ -125,6 +125,46 @@ PRAM outside the watch, and path 5 is excluded by timing rather than by a hook. 
 if PRAM is later shown not to quiesce, the answer is per-epoch slicing or `O-INCONCLUSIVE` — **never a
 fudged single-image slice**.
 
+## Closure — performed and verified
+
+**`bad-output` arm removed.** The known-bad control is gone from the perturbation selector, the
+choke-point classification, the header enum and the fixture, and its CTest registration was replaced by
+the watch arm (count unchanged at 18). **Its bite was preserved before removal** and remains archived:
+run `20260927-130142-334-a4b2-nr-badoutput` — `GP_CLEAR` latches **0**, `GP_NONZERO_OVER` latches **1**,
+two control log lines. The remaining modes (`zero`/`max`/`prng`) are untouched: they substitute the two
+stub inputs and never touched that classification.
+
+**New fixture arm (xiii) for the write watch — and it passed vacuously on its first version.** The arm
+writes one word inside image `I` (`0x40`) and one above it (`0x900`) through the same interpreter-core
+route the live run uses, then reads its own artifact back and asserts the terminal's counts.
+
+The first version reported **722 checks green while the watch recorded ZERO events**: the fixture passed
+`d->gp.dsp` (a `DSPState *`) where `dsp56k_write_memory` requires a `dsp_core_t *`. That compiles through a
+`void *` extern, and every write was classified non-GP and filtered — `ngp_skipped=2`, `events=0`. **A
+green test that measured nothing.** Fixed by fetching `DSPState.backend` (`dsp.h:117`) and passing the real
+core. The arm now asserts the **recorded counts** (`events=2 in_image_i=1 above_image_i=1 ngp_skipped=0
+invalid=0`) rather than merely that the call returned, and prints an `AC-PWRITE` marker that the game
+`CMakeLists.txt` matches via `PASS_REGULAR_EXPRESSION`.
+
+Two further details worth recording: the marker goes to **stdout, not stderr**, because the fixture
+`freopen`s its own stderr — a stderr-based `PASS_REGULAR_EXPRESSION` silently cannot match. And the guard
+was verified by **negative control**: with the gate absent, the marker is **not printed at all**.
+
+**Closure control — PASSED.** One fresh absent-gate baseline at the final identity
+(`logs/runs/20260927-141552-900-a4b2-nr-next-edge-followup-inert`), profile `EXPLORATORY`:
+
+| Check | Result |
+|---|---|
+| `[GPPERTURB]` lines | **0** |
+| `[GPDECODE]` lines | **0** |
+| `[GPB9]` lines | **0** |
+| `[GPWRITE]` lines | **0** |
+| artifacts created | **none** (`gpwrite_watch.txt`, `gpb9_trace.txt` both absent) |
+| doorbell tuple | `seq=198852 va=803C0810 observed=00000003 payload=00000000 dsp_addr=000800` — **unchanged** |
+
+So every diagnostic gate is inert when unset, no watch is left behind, and the final identity reproduces
+the baseline behaviour exactly. **ctest 18/18 green.**
+
 ## What this establishes, and what it does not
 
 **Establishes:**

@@ -149,7 +149,13 @@ if(BUILD_TESTING)
     # exercise ONE mode -- hence one registration per mode, each process-isolated.
     # The `absent` arm is the trace_off registration above (it sets no perturb
     # variable), so inertness is covered there as well as here.
-    foreach(_nr_mode "zero:0" "max:0" "prng:1" "bad-output:0")
+    #
+    # A4b2-NR-next-edge-followup closure: the `bad-output` known-bad control has
+    # been REMOVED. Its bite was preserved before removal -- archived run
+    # 20260927-130142-334-a4b2-nr-badoutput shows GP_CLEAR=0 and GP_NONZERO_OVER=1
+    # -- and the comparator validity it demonstrated is now carried by the
+    # retained archived record plus the fixture arms below.
+    foreach(_nr_mode "zero:0" "max:0" "prng:1")
         string(REPLACE ":" "_" _nr_tag "${_nr_mode}")
         add_test(NAME jsrf_apu_watch_fixture_perturb_${_nr_tag}
                  COMMAND jsrf_apu_watch_fixture_test)
@@ -157,6 +163,23 @@ if(BUILD_TESTING)
             TIMEOUT 60
             ENVIRONMENT "RECOMP_APU_TRACE=1;RECOMP_APU_GP_INPUT_PERTURB=${_nr_mode}")
     endforeach()
+
+    # A4b2-NR-next-edge-followup (xiii): the P-memory write watch. Process-isolated
+    # because the gate is read once. The `absent` arm is the trace_off registration
+    # above; this arm exercises the watch and asserts an image-I write, an above-I
+    # write, and terminal reconciliation.
+    #
+    # The PASS_REGULAR_EXPRESSION is the point: the first version of this arm passed
+    # VACUOUSLY (722 checks green) while the watch recorded ZERO events, because the
+    # fixture passed a DSPState* where a dsp_core_t* was required and every write was
+    # filtered as non-GP. The fixture now reads its own artifact back and prints this
+    # marker only when the counts reconcile, so a vacuous pass cannot satisfy it.
+    add_test(NAME jsrf_apu_watch_fixture_pwrite_watch
+             COMMAND jsrf_apu_watch_fixture_test)
+    set_tests_properties(jsrf_apu_watch_fixture_pwrite_watch PROPERTIES
+        TIMEOUT 60
+        ENVIRONMENT "RECOMP_APU_TRACE=1;RECOMP_APU_PWRITE_WATCH=1"
+        PASS_REGULAR_EXPRESSION "AC-PWRITE events=2 in_image_i=1 above_image_i=1 ngp_skipped=0 invalid=0")
     add_test(NAME jsrf_gpu_inspection COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_gpu_inspection.py)
     add_executable(jsrf_gpu_smoke tests/native_gpu_smoke.c)
     target_link_libraries(jsrf_gpu_smoke PRIVATE d3d11 dxgi dxguid)
