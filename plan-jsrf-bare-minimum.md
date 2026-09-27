@@ -24,9 +24,19 @@ The slice closed every field-level question but could not settle **which DMA des
 
 **`block_addr` is decimal → block 24**, the descriptor built by the **`P 000E`** call (builder B,
 `P 00EB`). **Every field is an immediate:** control `0x59E2`, count `6` (`P 000D`), dsp_offset `0`
-(`P 000A`), **scratch_offset `0x000800`** (`P 000B`) — which **reproduces the observed `dsp_addr=000800`
-exactly**. **Neither stub input appears in any field.** Per the packet's own leaf classification, immediate
-leaves **CLOSE**.
+(`P 000A`), **scratch_offset `0x000800`** (`P 000B`). **Neither stub input appears in any field.** Per the
+packet's own leaf classification, immediate leaves **CLOSE**.
+
+**THREE independent confirmations, each by a different method:**
+
+1. **Block-identity trace** — the GP_CLEAR latch reports `block_addr=0018`, and block 24 is read **once, at
+   ordinal 765** — the last read before the exchange fires at 766.
+2. **Fresh-code re-derivation from the raw artifacts**, reusing none of the earlier tooling — six checks,
+   all confirming.
+3. **Direct measurement of the descriptor's own fields** — `#FIELDS block=24 base=0x0 offset=0x800
+   → scratch_addr=0x800`, matching the observed `dsp_addr` **exactly** (the mixbin block gives `0x8000`,
+   which does **not** match). This checked a load-bearing assumption (`scratch_base = 0`) that I had
+   otherwise been taking on trust.
 
 **Measured chain:** `6 → 0x25 → 0x1E` cycling, 255 doorbell-region reads vs 254 mixbin-region reads,
 `events=766 ngp_skipped=0`. **The mixbin descriptor is a different block in the same chain and is not the
@@ -68,7 +78,14 @@ that **no `§5.4(2)` is raised** because no contract premised the identity.
 scope/defer/retire decision. **A fifth `L1` packet is forbidden (`F-D`).** `A4b2-r7` stays
 `R2-EXPL-INPUT`; no strict criterion discharged.
 
-**Toolkit:** pushed `d80069c` (DMA descriptor trace). **Game:** `525147b`.
+**⚠ ADVISOR ROUTE OUTAGE.** The terminal referral was attempted **four times** — three
+`MODEL_UNAVAILABLE` (model stream idle timeout, `retryable: false`) and a fourth still `in_flight`
+server-side. **No substitute model was used**, per the owner's staffing authority. Recorded in
+`docs/reviews/a4b2-epoch-slice-advisor-route-outage.md`. **The Session did NOT open `A4b2-r8` on its own
+recommendation** — the packet's terminal row and the Advisor's terminality ruling route that decision to the
+Advisor, and an unavailable route is not converted into a self-granted one.
+
+**Toolkit:** pushed `c151d4e` (DMA descriptor trace + scratch-field measurement). **Game:** `132a0cc`.
 
 ---
 
