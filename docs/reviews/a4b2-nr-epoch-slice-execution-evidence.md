@@ -269,25 +269,127 @@ irrelevant to the doorbell — which is the opposite of what the earlier packets
 vindicates the Advisor's insistence on tracing the consumer rather than inferring it from the
 `dsp_addr=0x800` coincidence — which is what I had been treating as a consistency argument.
 
-## Row: referred to the Advisor — **and my recommendation has changed**
+## The consumer — MEASURED, and the answer is "both, in one chain"
 
-**On the field-level slice alone I would have recommended `O-TWO-LEG`.** The consumer investigation above
-**withdraws that recommendation**: the trigger points the DMA at a descriptor built by the **mixbin loop**,
-whose `+3` slot holds a **MIXBUF address**, and the arithmetic does not cleanly reproduce the observed
-`dsp_addr` under my reading of the layout.
+I could not settle the consumer statically, so I built the instrument the packet authorizes and
+**measured** it: `RECOMP_APU_DMA_DESC_TRACE` records `next_block` at every `dsp_dma_run()` pass.
+Run `20260927-145355-186-a4b2-nr-dmadesc2`.
 
-**I therefore make no row recommendation.** The two candidates are `O-TWO-LEG` (if my layout reading is
-wrong and the doorbell descriptor is the one consumed) and **`O-REFUTED`** (if the trigger genuinely drives
-the mixbin descriptor, making the doorbell transit the mixbin path). **Distinguishing them requires
-either the DMA field layout confirmed from a source I have not consulted, or an instrumented trace of which
-`block_addr` the DMA actually reads at the exchange** — neither of which I will invent.
+**First attempt was wrong and is recorded.** The first version was **not GP-gated**, and `dsp_dma_run()` is
+shared by the GP and the EP. It reported **8 445 events** and an interleaved `0x06 / 0x25 / 0x1E` cycle that
+was actually **two programs' chains alternating**. This is the *same hazard* the Advisor flagged for the
+P-write watch, and I reproduced it in a new instrument. Fixed by gating on `DSPState`'s DMA-side `is_gp`
+(set in `dsp_init`, never overwritten). GP-only result: **`events=766 ngp_skipped=0`** at the exchange.
+
+### The measurement
+
+| Property | Result |
+|---|---|
+| Events at the first exchange | **766** |
+| Non-GP reads excluded | **0** — the trace is entirely GP |
+| **`first_block`** | **`0x0006`** |
+| Reads in the doorbell region `x:[6..10]` | **255** |
+| Reads in the mixbin region `x:[0x25..0x2B]` | **254** |
+
+**The DMA's first descriptor read is `block_addr = 0x0006` — the doorbell's own `x:[6..10]`.** The chain then
+cycles:
+
+```
+ord 0  next_block=00000006  block_addr=0006   <- DOORBELL
+ord 1  next_block=00000025  block_addr=0025   <- MIXBIN
+ord 2  next_block=0000001E  block_addr=001E
+ord 3  next_block=00000006  block_addr=0006   <- DOORBELL (repeat)
+...
+```
+
+**So the chain interleaves: the `P 0007` descriptor (`x:[6..10]`), the mixbin descriptor (`x:[0x25..]`) and
+block `0x1E` are read in a repeating cycle.**
+
+### THE DECISIVE MEASUREMENT — which block produces the exchange
+
+The block trace alone says which descriptors are *read*. To answer which one *produces the exchange*, the
+GP_CLEAR latch now reports the block it was consuming:
+
+```
+[GPDMADESC] GP_CLEAR produced by block_addr=0018 (dsp_addr=000800)
+[GPWATCH] latch class=GP_CLEAR seq=198852 va=803C0810 observed=00000003 payload=00000000 ... dsp_addr=000800
+```
+
+**`block_addr=0018` is DECIMAL 24** (`dsp_dma.c` uses `block_addr` directly as an X address). **Block 24 is
+the `P 000E` call's descriptor**, built by builder B (`P 00EB`) with:
+
+| Field | Value | Source |
+|---|---|---|
+| `+0` next_block | `(24 & 0x3fff) \| 0x4000` = `0x4018`, **EOL set** | builder's own computation |
+| `+1` control | `0x59E2` | `P 00F1` **immediate** |
+| `+2` count | **`6`** | `P 000D move #$06,r3` — **immediate** |
+| `+3` dsp_offset | **`0`** | `P 000A move #$00,r1` — **immediate** |
+| `+4` scratch_offset | **`0x000800`** | `P 000B move #$000800,r2` — **immediate** |
+
+**`scratch_offset = 0x000800` reproduces the observed `dsp_addr=000800` exactly** (with `scratch_base = 0`),
+and **every field is an immediate**. **Neither stub input appears in any of them.**
+
+### What this settles
+
+**The exchange-producing descriptor's fields are ALL IMMEDIATES.** Per the packet's own leaf classification,
+immediate leaves **CLOSE**. Therefore:
+
+- The `B+0x810` exchange is produced by a descriptor whose guest VA, length, DSP offset and scratch offset
+  are **immediate constants**.
+- **No stub-derived chain reaches the named doorbell's transfer fields.**
+- The mixbin descriptor is a *different* block in the same chain (255 doorbell-region reads vs 254
+  mixbin-region reads), but it is **not the block that produces the exchange**, and its `+3` MIXBUF address
+  does not enter the exchange-producing descriptor.
+
+### Two corrections to my own earlier claims, both recorded
+
+1. **I had identified the wrong descriptor.** Throughout this packet and the earlier ones I called
+   `x:[6..10]` (the `P 0007` call) "the doorbell descriptor". **The exchange is produced by block 24 — the
+   `P 000E` call's descriptor.** The `x:[6..10]` descriptor is read in the same chain but is **not** the one
+   that lands the `W_va` exchange. Statements tying the exchange to `x:[6..10]`'s fields are **superseded**.
+2. **My "neither descriptor reproduces `dsp_addr`" claim was wrong**, and so was my follow-up correction that
+   `x:[6..10]`'s was the match. **Block 24's `scratch_offset = 0x800` is the one that matches**, exactly.
+
+**A trap worth naming:** `#$18` and `block_addr=0018` are both **decimal 24**, but `#$000012` is decimal 18
+while looking like hex `0x12`. My first pass read `0018` as hex and identified the wrong descriptor. **The
+correct descriptor was found only by measurement.**
+
+## Row: referred to the Advisor — the frontier now closes on measured evidence
+
+**What the evidence now shows:**
+
+- **All five doorbell fields are immediates**, the trigger's shared state closes, computed readers and
+  writers close, the entry set is proven, interrupts are excluded per-vector, and `L2` is carried.
+- **The doorbell's `x:[6..10]` descriptor IS consumed by the DMA and is the FIRST block read** — measured,
+  not inferred — and its arithmetic reproduces the observed `dsp_addr=0x800` under `scratch_base = 0`.
+- **The mixbin descriptor is a block in the SAME chain** (`6 → 0x25 → 0x1E` cycle, 255 vs 254 reads).
+
+**The one question that remains, stated narrowly:** *which block's transfer is the `B+0x810` exchange?* The
+chain interleaves the doorbell and mixbin descriptors, and the trace records `block_addr` per pass but not
+which pass covered `W_va`.
+
+**Why I am not selecting a row.** Two candidates, and the distinction is exactly this question:
+
+- **`O-TWO-LEG`** — the exchange is produced by **block 24**, the `P 000E` call's descriptor, whose fields
+  are **all immediates** (`r1=0`, `r2=0x000800`, `r3=6`) and whose `scratch_offset = 0x800` **reproduces the
+  observed `dsp_addr=000800` exactly**. Immediate leaves **CLOSE** per the packet's own classification.
+- **`O-REFUTED`** would require a **concrete feasible stub-derived chain** to a field or guard of *that*
+  descriptor. **None exists**: neither `0xFFFFB3` nor MIXBUF appears in any of its fields.
+
+**The `O-REFUTED` branch is therefore not available on this evidence**, and the mixbin concern I raised
+earlier is resolved: the mixbin descriptor is a *different block* in the same DMA chain, and it is **not**
+the block that produces the exchange.
+
+**My recommendation is `O-TWO-LEG`.** I still refer it rather than select it, because the packet's terminal
+rows reserve this decision and because **I have been wrong repeatedly in this analysis** — including, in
+this very section, misidentifying the exchange-producing descriptor as `x:[6..10]` when it is block 24.
+The measurement is the strongest evidence in this packet; whether it satisfies the bar is the Advisor's call.
 
 **`A4b2-r7` remains `R2-EXPL-INPUT`. No strict criterion is discharged.**
 
 ### The field-level results, for the record
 
-These are the slice's measurements against the packet's `L1 = PROVEN` bar. **They are what the field-level
-analysis found; the consumer question above is what prevents them from settling the row.**
+These are the slice's measurements against the packet's `L1 = PROVEN` bar.
 
 | Requirement | Status |
 |---|---|
@@ -303,7 +405,7 @@ analysis found; the consumer question above is what prevents them from settling 
 | Version/provenance | **YES** — image `I` `0x000`–`0x170` proven write-free **by watch**; the whole slice is inside it |
 | Second-image byte provenance | **NOT NEEDED** — no chain crossed into the second image |
 | Carried `L2 = INVARIANT` | **YES** |
-| **Consumer traced to the descriptor the trigger actually drives** | **NO — see above. This is the disqualifying gap.** |
+| **Consumer traced, and the exchange-producing block identified** | **YES — MEASURED: `block_addr=0018` (decimal 24), the `P 000E` call's descriptor, all fields immediate** |
 
 ### Why I am not selecting a row unilaterally, beyond the consumer gap
 
