@@ -6,7 +6,54 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4b2-NR-next-edge-r1` **EXECUTED 2026-09-27 → `O-INCONCLUSIVE`; the GP loads a SECOND program image**
+## CURRENT PACKET — `A4b2-NR-next-edge-followup-r1` (**discovery**: GP load epochs before any slice) — **PROMOTED 2026-09-27, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a4b2-nr-next-edge-followup.md`, revision **`A4b2-NR-next-edge-followup-r1`**,
+  class **discovery**, frozen SHA-256
+  **`62A1BB38E4EA6FE4877EEDB6E37B27EFD01C88C50FFECC7924C7EF8F1226B3EE`** (**41 lines**).
+  **This is the packet to execute.** Promotion byte-identical with no revision (§5.3), and **verified
+  stable before promoting** (hash read 3× over 6 s, identical; author confirmed finished) — the mid-write
+  defect from the previous packet was **not** repeated. Verification:
+  `docs/reviews/a4b2-nr-next-edge-followup-r1-session-verification.md`.
+- **Adequacy:** **`VERDICT: ADEQUATE`** — the **writing Planner's own** review, as §5.8 requires for a
+  discovery packet (child `5416361e-11f8-4986-ae22-34a80d41c48d`, `codex/gpt-6-sol` @ `high`). No second
+  Planner; no Muse preflight repeated.
+- **Why it exists:** `A4b2-NR-next-edge-r1` → **`O-INCONCLUSIVE`** after finding the GP **loads a second
+  program into P-memory after the bootstrap**. The Advisor mandated **loader/epochs FIRST, slice SECOND**;
+  this packet is that phased work. Evidence: `docs/reviews/a4b2-nr-next-edge-execution-evidence.md`; binding
+  ruling: `docs/reviews/a4b2-nr-next-edge-advisor-ruling.md`.
+- **Phase 1a** — rule a second GPRST bootstrap in/out **from existing logs before any new run**.
+- **Phase 1b** — finish the GP-only `RECOMP_APU_PWRITE_WATCH`, with **complete** coverage accounting for the
+  direct PRAM-write bypasses (`dsp_c_bootstrap` scratch-to-PRAM, `sync_from_VM` copy, initial fill): show
+  they cannot modify PRAM inside the claimed interval **or** cover each with a narrow hook, **failing
+  closed** otherwise. Fixture a known image-`I` write and a known above-`I` write; reconcile terminal
+  counts to **every** ordinal; ordinal gap / unresolved bypass / wrong identity → **UNKNOWN, never
+  quiescence**.
+- **Phase 1c** — event/epoch proof: loader trigger, **actual source bytes**, extent, per-word deltas, epoch
+  boundaries, and executed PCs bound to **the word version live when fetched**. Image `I` must show zero
+  writes from the authenticated bootstrap boundary through the first exchange, or every modification must
+  be enumerated with timing.
+- **Phase 2** — the feasible CFG/def-use slice, **only** on phase-1-covered stable bytes or per fully
+  covered epoch. `L1=PROVEN` needs closure of all feasible named-output/guard reaching definitions against
+  both input classes plus image-`I` watch coverage and carried `L2`; `L1=REFUTED` needs a **concrete
+  feasible causal chain**, not an in-range read.
+- **Binding forbids carried:** **F1** never cite doorbell byte-identity as path-independence
+  (*instruction survival ≠ path survival*); **F2** never slice directly from the at-exchange snapshot;
+  **F3** never fudge a single-image slice if PRAM never quiesces. **W1–W4** withdraw/re-scope list also
+  carried.
+- **Closure:** `bad-output` removal (bite archived and re-verified); **exactly one** fresh absent-gate
+  baseline doubling as the final closure control; diagnostics off by default; no active watch left behind.
+- **Session phase-1 progress already made** (not a substitute for the packet's own criteria):
+  `docs/reviews/a4b2-nr-next-edge-followup-phase1-evidence.md` — **N1 answered negative from existing logs**
+  (`boots=1`, one `[GPBOOT]` block); the **loader identified** as a DMA transfer the GP itself triggers at
+  **`P 011C`**, writing 3 512 words once each sequentially `0x171`–`0x0F28`; **image `I` stable** (only 2
+  writes, both at the boundary `0x171`/`0x172`; **zero** writes in `0x000`–`0x170`, including every
+  doorbell-path instruction) — which closes the Advisor's Q2 transient gap by **watch**, not by sample.
+  Watch committed at toolkit `c20fc75` with the GP-only filter and bypass-coverage hooks.
+
+---
+
+## Previous packet — `A4b2-NR-next-edge-r1` **EXECUTED 2026-09-27 → `O-INCONCLUSIVE`; the GP loads a SECOND program image**
 
 **`A4b2-NR-next-edge-r1` (`7461AAA4…`) executed. Row: `O-INCONCLUSIVE`.** Evidence:
 `docs/reviews/a4b2-nr-next-edge-execution-evidence.md`. Verification:
