@@ -194,35 +194,121 @@ P 00D9  movep a,x:$ffffd4    ; the exchange
 **No stub input participates.** The `bsr p:$010a` handshake writes only `x:$FFFFD6` (DMA_CONTROL) and polls
 it — device state, not stub data.
 
-## Row: referred to the Advisor — the frontier appears closed, and I will not declare it myself
+## The consumer investigation — it did NOT close, and it raises a question that may matter
 
-**`L1 = PROVEN`** requires, per the packet, that **every** demanded field/guard frontier leaf close, plus
-alias-disjointness, entry/interrupt and version/provenance proof complete, with **no** stub-derived chain
-and carried valid `L2=INVARIANT`. Measured against that bar:
+I said above that the descriptor's **consumer** was the one thing this work did not verify. I then went and
+checked it. **It did not resolve cleanly, and what I found is material enough that it changes my
+recommendation.**
+
+### What the consumer chain is (verified from toolkit source)
+
+```
+P 00D9  movep a,x:$ffffd4          ; a = 0x25 & 0x3fff = 0x25
+   dsp.c:117-118   case 0xFFFFD4: dsp_dma_write(&dsp->dma, DMA_NEXT_BLOCK, value)
+   dsp_dma.c:426-427  case DMA_NEXT_BLOCK: s->next_block = v
+   dsp_dma.c:116-117  addr = s->next_block & NODE_POINTER_VAL (0x3fff)
+   dsp_dma.c:121-124  if (addr < 0x1800) block_space = X; block_addr = addr
+   dsp_dma.c:137-144  reads SEVEN words: x:[block_addr .. block_addr+6]
+```
+
+**So the descriptor the trigger causes the DMA to read is at `x:[0x25 .. 0x2B]` — NOT at `x:[6..10]`.**
+
+### And `x:[0x25..]` is the descriptor the **mixbin loop** builds
+
+`P 009E move #$000025,r4`, then the loop writes seven words through `x:(r4)+`:
+
+| Slot | Written by | Value |
+|---|---|---|
+| `+0` | `P 00AB` | `a`, starting `0x2C`, `+7` per iteration |
+| `+1` | `P 00B0` | `0x59D2` |
+| `+2` | `P 00B3` | `0x20` = **32 = NUM_MIXBINS** |
+| **`+3`** | **`P 00B5`** | **the `P 00CC`–`00D1` table value — a MIXBUF address** |
+| `+4` | `P 00B8` | `0` |
+| `+5` | `P 00BA` | `0x8000`, `+0x800` per iteration (the guest pointer walk) |
+| `+6` | `P 00C0` | `0x7FF` |
+
+### Why this is a genuine open question, not a resolved one
+
+Mapping both descriptors onto the DMA's field layout (`+0 next_block`, `+1 control`, `+2 count`,
+`+3 dsp_offset`, `+4 scratch_offset`, `+5 scratch_base`, `+6 scratch_size`):
+
+| Slot | Doorbell `x:[6..10]` | Mixbin `x:[0x25..0x2B]` |
+|---|---|---|
+| `+0` next_block | `0x4006` — **EOL set** | `0x2C` — no EOL |
+| `+1` control | `0x59E0` | `0x59D2` |
+| `+2` count | `6` | `0x20` = 32 |
+| `+3` dsp_offset | `0` | **MIXBUF address** |
+| `+4` scratch_offset | **`0x800`** | `0` |
+| `+5` scratch_base | **not written** | `0x8000` |
+| `+6` scratch_size | **not written** | `0x7FF` |
+
+**`dsp_addr` is a DSP-side *scratch* address** — `dsp_dma.c:93` computes
+`scratch_addr = scratch_base + *scratch_offset` and that value is what reaches `apu_gp_dma_write` as
+`dsp_addr` (`dsp.c:96` → `gp_scratch_rw` → `gp_ep.c:144`).
+
+- The **doorbell** descriptor has `scratch_offset = 0x800` (matching the observed `dsp_addr=0x800` if
+  `scratch_base` is 0) — **but its `+0` has the EOL bit set**, so as a chain it is terminal, and the
+  trigger's `next_block = 0x25` does **not** point at it.
+- The **mixbin** descriptor has `scratch_base = 0x8000`, `scratch_offset = 0`, giving
+  `scratch_addr = 0x8000` — **which is not `0x800` either**.
+
+**So neither descriptor's arithmetic reproduces `dsp_addr=0x800` under my reading of the field layout, and
+the trigger demonstrably points the DMA at the mixbin descriptor.** I am **not** going to assert which
+descriptor produces the observed transfer, and I am **not** going to assert that the mixbin path is
+irrelevant to the doorbell — which is the opposite of what the earlier packets concluded.
+
+**Two possibilities, and I cannot distinguish them on this evidence:**
+
+1. **My field-layout reading is wrong** — e.g. `+3`/`+4` are ordered differently, or `scratch_base` is
+   supplied from elsewhere (the doorbell builder does not write `+5`/`+6`).
+2. **The trigger genuinely drives the mixbin descriptor**, in which case the doorbell's `B+0x810` event
+   **does** transit the mixbin path, and the "non-reliance" conclusion of the earlier packets would need
+   re-examination — a potential `O-REFUTED`, not an `O-TWO-LEG`.
+
+**This is exactly the kind of question I must not decide alone**, and it is why the referral stands. It also
+vindicates the Advisor's insistence on tracing the consumer rather than inferring it from the
+`dsp_addr=0x800` coincidence — which is what I had been treating as a consistency argument.
+
+## Row: referred to the Advisor — **and my recommendation has changed**
+
+**On the field-level slice alone I would have recommended `O-TWO-LEG`.** The consumer investigation above
+**withdraws that recommendation**: the trigger points the DMA at a descriptor built by the **mixbin loop**,
+whose `+3` slot holds a **MIXBUF address**, and the arithmetic does not cleanly reproduce the observed
+`dsp_addr` under my reading of the layout.
+
+**I therefore make no row recommendation.** The two candidates are `O-TWO-LEG` (if my layout reading is
+wrong and the doorbell descriptor is the one consumed) and **`O-REFUTED`** (if the trigger genuinely drives
+the mixbin descriptor, making the doorbell transit the mixbin path). **Distinguishing them requires
+either the DMA field layout confirmed from a source I have not consulted, or an instrumented trace of which
+`block_addr` the DMA actually reads at the exchange** — neither of which I will invent.
+
+**`A4b2-r7` remains `R2-EXPL-INPUT`. No strict criterion is discharged.**
+
+### The field-level results, for the record
+
+These are the slice's measurements against the packet's `L1 = PROVEN` bar. **They are what the field-level
+analysis found; the consumer question above is what prevents them from settling the row.**
 
 | Requirement | Status |
 |---|---|
 | All five field leaves close | **YES** — all immediates (`0x59E0`, `0x06`, `0x00`, `0x000800`, and field 1 from `r0`) |
 | Trigger guards traced | **YES** — all ×1, `a` from `P 00C1 move #$000025,a`, masked |
 | **Shared-state reaching-defs** | **YES** — the trigger's `a` closes as an immediate; no stub participates |
-| No stub-derived chain to any field or guard | **YES** — none found |
+| No stub-derived chain to any of the five fields | **YES** — none found |
 | **Alias-disjointness** | **YES for all statically-targeted writers** — 5 builder call sites, all 10 pairs disjoint; **all 39 direct X writes** enumerated, **none** in `x:[6..10]`; the two extra builder blocks **statically unreachable** |
-| **Computed writers** | **CLOSED** — `x:(r0)+` with `r0=0`; `x:(r4)+` with `r4=0x25`; `x:(r1)` with `r1=0x24` — **all outside every descriptor region** |
+| **Computed writers** | **CLOSED** — `x:(r0)+` with `r0=0`; `x:(r4)+` with `r4=0x25`; `x:(r1)` with `r1=0x24` — all outside every descriptor region |
 | **Computed readers** | **CLOSED** — image `I` has **exactly one** (`P 00B9`), and its `r1` is the **immediate** `0x24` from `P 00A2`, statically fixed, outside every region |
 | **Entry-set proof** | **YES** — `P 0000` has **0** incoming edges (reset-only); `P 0007` has **1**, chaining from it; all ×1 |
 | **Interrupt scope incl. faults** | **YES, per-vector** — no interrupt machinery in either image; the table's four entries have no peripheral/DMA/timer/audio raiser; Reset *is* the entry; `0x02`/`0x04` execute only as entry fall-through, **not** as dispatches |
 | Version/provenance | **YES** — image `I` `0x000`–`0x170` proven write-free **by watch**; the whole slice is inside it |
 | Second-image byte provenance | **NOT NEEDED** — no chain crossed into the second image |
 | Carried `L2 = INVARIANT` | **YES** |
+| **Consumer traced to the descriptor the trigger actually drives** | **NO — see above. This is the disqualifying gap.** |
 
-**So the frontier appears closed, and the consistency check is strong:** the descriptor's field 5 is the
-immediate `0x000800`, which is **exactly** the `dsp_addr=000800` observed at the exchange — the value the
-DMA consumed matches the value the slice traced to an immediate.
+### Why I am not selecting a row unilaterally, beyond the consumer gap
 
-### Why I am NOT unilaterally selecting `O-TWO-LEG`
-
-**Because my analysis tooling produced four wrong answers in this session, and the Advisor should weigh
-that.** All four are recorded above or in the linked preparations:
+**My analysis tooling also produced four wrong answers in this session**, all recorded above or in the
+linked preparations:
 
 1. **`pc+1` fall-through** (CFG) — wrong for multi-word instructions.
 2. **`pc-1` backward walk** (disjointness) — wrong for the same reason.
@@ -230,20 +316,9 @@ that.** All four are recorded above or in the linked preparations:
 4. **4-digit address truncation** — fabricated **five false edges** into the reset vector, which would have
    meant the entry sequence could re-run.
 
-**Two of those four would have changed a row selection if they had stood** (#3 toward a false
-`INCONCLUSIVE`, #4 toward a false `INCONCLUSIVE` by a different route). Every one was found by re-checking,
-not by a test failing. The closure above rests on the **corrected** analyses, but the demonstrated error rate
-is itself material evidence about how much weight the closure can bear — and the Advisor is the right
-authority to weigh it.
-
-**Additionally, one thing this work did *not* verify:** the descriptor's **consumer**. The slice proves what
-the five fields *are* (immediates) and that nothing stub-derived reaches them. It does not independently
-prove that the DMA engine reads `x:[6..10]` and that this is the transfer producing the observed `B+0x810`
-event — that link is inferred from the `dsp_addr=000800` match, which is strong but is a **consistency
-argument**, not a traced consumer.
-
-**Therefore: referred to the Persistent Advisor for the final decision**, exactly as the packet's terminal
-rows provide. My recommendation is `O-TWO-LEG`; the two facts the Advisor should weigh against it are the
-four-bug tooling record and the untraced consumer.
+**Two of those four would have changed a row selection if they had stood.** Every one was found by
+re-checking, not by a test failing. The closure above rests on the **corrected** analyses, but the
+demonstrated error rate is material evidence about how much weight it can bear — and the consumer finding
+shows the concern was not hypothetical.
 
 **`A4b2-r7` remains `R2-EXPL-INPUT`. No strict criterion is discharged.**
