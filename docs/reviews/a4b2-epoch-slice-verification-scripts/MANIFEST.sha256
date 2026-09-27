@@ -1,0 +1,31 @@
+# A4b2-NR-epoch-slice-followup-r1 verification manifest
+# Advisor R3: script + inputs + outputs + hashes, archived before r8 cites it.
+#
+# scripts (script-sha  output-sha  exit)
+SCRIPT 0893698c28c435545d4894e65ff403dd82d743629f9385977a2f5bf6dd0d5b52 fe132056b723101290425a83cd14a0e9106e05a499f342ccbd35e2648fedb649 0
+  independent-block24.py
+SCRIPT 3bc3cc5c530258632bc3468927a10ab19a5780f64287b970c5ee2750e4ffa843 a1e49a219cba867dc55506bcdb30808fe1f7fad88e927d6fd879c14d24d8ccb1 0
+  disjointness-proof.py
+SCRIPT 562d929cac3c6e2190c5d418c87f45fdb2daf8e7cc89bf267b4768c98827a794 dd76efb915d55c32e5e3b2ca59742a77ff7fcac1057f7b5c2c0cbdd7e7547aa8 0
+  backward-slice.py
+SCRIPT c11f893083c1cbda11f7df9915cbc226b03e7e8a020bd982effac0fc51def109 087bd2d8629b5296676059bc285c6b39bdc7bf8d764beff235d8d271721e4ada 0
+  v2-cross-boundary.py
+SCRIPT 613e902a03ec5a8beea29bba849349794a35b6735079f51f74fad3071828117d 9a040c2a2b5d4d57611bc970c0c26b4f8fead3c8d1e25bfd066bc13efc101f33 0
+  v2-computed-writes.py
+SCRIPT 4ea30b5882eaf64bd85f943cac4953908d71db752428ce6d92af3a1ebc23d6bd 95a1ab7b236e3a5b2c26f05b0aa41d833874cc1d667b031de2f6fbbc22702fe4 0
+  v2-register-bounds.py
+SCRIPT 3e78cc22a9cfdeb9d1d8c632dd8ec1ffc5f6b982664781f0a50101dc2d04b3f4 5f193c3849eb4b64b7d9dd4cf43e2cbd773e73399f7fbde74a94eb454a146f1a 0
+  v2-pre-vs-post-exchange.py
+SCRIPT 98c135141ee15dc45681ca231f46bab38cd5985acb3a0875c5b777e23e77dae3 123649fe0d814f277fe5ebdb94d6b26260f452ac5559627ea24be08ea871be88 0
+  v2-cross-check-watch.py
+#
+# input artifacts (path-sha)
+INPUT e7a7d66842e0a1da2cc9c35088043dac97be72829fd0eb4a783b1dcf6d55634e logs\runs\20260927-134343-777-a4b2-nrf-b9-arch\bootstrap_state_decode.json
+INPUT 1808d5e3d5649cf4c9022acd833a510eba6f7ead0e350b3e2b3a1d0f1c4d0aed logs\runs\20260927-134343-777-a4b2-nrf-b9-arch\bootstrap_state_decode.txt
+INPUT c850c72599cf0b36ae4615d90f8de55a826938f2a5747ed64f79c0d13a226701 logs\runs\20260927-134343-777-a4b2-nrf-b9-arch\gpb9_trace.txt
+INPUT f94b617975d88acaa8ef588adda687624fc19059cb1781d456fa870d00d04c64 logs\runs\20260927-134343-777-a4b2-nrf-b9-arch\jsrf_run.log
+INPUT 2157f15e2ddb216b8681267e587f91588d2ffd51c4e65fbdcd6ad28900d7e87e logs\runs\20260927-135115-102-a4b2-nrf-decode2\jsrf_run.log
+INPUT 289006f4e664ace33b58b5cc894cf2bbe6ebda0bf5ad3d37aaee7c1fcbaaaa06 logs\runs\20260927-140820-853-a4b2-nrf-pwrite2\gpwrite_watch.txt
+INPUT e144d63ef0e810b8ab93661c8c94de5464c8d2bc01ba6fa81f1815f4a4767575 logs\runs\20260927-140820-853-a4b2-nrf-pwrite2\jsrf_run.log
+INPUT 8f9f3f45315e820773a03379d6b3d51ab0a4599d6fe5d1e8fbafe7623ab8f284 logs\runs\20260927-145605-040-a4b2-nr-blocklink\dma_desc_trace.txt
+INPUT 00769d5382ac45bf27e58fbedbe56c740f23cffc3364c4106017e266222ca464 logs\runs\20260927-145605-040-a4b2-nr-blocklink\jsrf_run.log

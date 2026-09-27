@@ -503,7 +503,7 @@ These are the slice's measurements against the packet's `L1 = PROVEN` bar.
 | Version/provenance | **YES** — image `I` `0x000`–`0x170` proven write-free **by watch**; the whole slice is inside it |
 | Second-image byte provenance | **NOT NEEDED** — no chain crossed into the second image |
 | Carried `L2 = INVARIANT` | **YES** |
-| **Consumer traced, and the exchange-producing block identified** | **YES — MEASURED: `block_addr=0018` (decimal 24), the `P 000E` call's descriptor, all fields immediate** |
+| **Consumer traced, and the exchange-producing block identified** | **YES — MEASURED: `block_addr=0018` (**hex** `0x18` = block 24), the `P 000E` call's descriptor, all fields immediate** |
 
 ### Why I am not selecting a row unilaterally, beyond the consumer gap
 

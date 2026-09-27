@@ -1,0 +1,28 @@
+$ python -X utf8 v2-cross-check-watch.py C:\Users\logic\Repos\my_xbox_game\logs\runs\20260927-140820-853-a4b2-nrf-pwrite2
+exit=0
+
+=== the P-write watch terminal (write window = bootstrap to first exchange) ===
+  # terminal reason=first-exchange events=3512 in_image_i=2 above_image_i=3510 ngp_skipped=0 invalid=0
+
+=== the loader's writes (pc = 0x011C) ===
+  loader writes in the window: 3512
+  first: ord=0 addr=0171 000000->65F400
+  last : ord=3511 addr=0F28 CACACA->00000C
+  writes above 0x172: 3510 (address range 0173..0F28)
+
+=== consistency check ===
+  the watch window ENDS at the first exchange (its terminal says so).
+  it shows the loader writing the second image INTO P-memory within that
+  window -- so the image is LOADED before the exchange.
+
+  the B9 histogram AT the first exchange shows gp_pc_range=0000..0172,
+  i.e. the image is loaded but NOT YET EXECUTED at the exchange.
+
+  these are consistent and mutually reinforcing: LOADED != EXECUTED.
+  the load completes, the exchange fires on image-I code, and the second
+  image begins executing afterwards.
+
+=== so the V2 (data) direction is moot ===
+  no second-image instruction executes before the exchange, therefore no
+  second-image X write can affect it, regardless of what its base register
+  holds.

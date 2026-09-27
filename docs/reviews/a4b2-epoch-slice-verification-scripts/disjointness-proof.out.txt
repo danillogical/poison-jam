@@ -1,0 +1,62 @@
+$ python -X utf8 disjointness-proof.py C:\Users\logic\Repos\my_xbox_game\logs\runs\20260927-134343-777-a4b2-nrf-b9-arch
+exit=0
+
+=== (1) every call site of the builders, enumerated ===
+  P 0007 -> P 00DB  (builder A)
+  P 000E -> P 00EB  (builder B)
+  P 0019 -> P 00EB  (builder B)
+  P 007E -> P 00DB  (builder A)
+  P 0090 -> P 00DB  (builder A)
+  total call sites: 5
+
+=== (2) r0 at entry for each call site (walk back to the last r0 write) ===
+  call P 0007: r0 <- P 0002  move #$06,r0  value=0x6
+  call P 000E: r0 <- P 0009  move #$18,r0  value=0x18
+  call P 0019: r0 <- P 0012  move #$1e,r0  value=0x1E
+  call P 007E: r0 <- P 0077  move #$000012,r0  value=0x12
+  call P 0090: r0 <- P 0086  move #$00000c,r0  value=0xC
+
+=== (3) are the descriptor regions pairwise disjoint? ===
+  call P 0007 x:[6..10] vs call P 000E x:[24..28]: disjoint
+  call P 0007 x:[6..10] vs call P 0019 x:[30..34]: disjoint
+  call P 0007 x:[6..10] vs call P 007E x:[18..22]: disjoint
+  call P 0007 x:[6..10] vs call P 0090 x:[12..16]: disjoint
+  call P 000E x:[24..28] vs call P 0019 x:[30..34]: disjoint
+  call P 000E x:[24..28] vs call P 007E x:[18..22]: disjoint
+  call P 000E x:[24..28] vs call P 0090 x:[12..16]: disjoint
+  call P 0019 x:[30..34] vs call P 007E x:[18..22]: disjoint
+  call P 0019 x:[30..34] vs call P 0090 x:[12..16]: disjoint
+  call P 007E x:[18..22] vs call P 0090 x:[12..16]: disjoint
+  PAIRWISE DISJOINT: True
+
+=== (4) alias-closure: does ANY other instruction write into those regions? ===
+  candidate writers touching the covered regions: 21
+     P 001D  move x0, x:(r0 + 1)                (computed x:(r0+1))
+     P 00E0  move a, x:(r0 + 0)                 (computed x:(r0+0))
+     P 00E3  move a, x:(r0 + 1)                 (computed x:(r0+1))
+     P 00E4  move r3, x:(r0 + 2)                (computed x:(r0+2))
+     P 00E6  move r1, x:(r0 + 3)                (computed x:(r0+3))
+     P 00E8  move r2, x:(r0 + 4)                (computed x:(r0+4))
+     P 00F0  move a, x:(r0 + 0)                 (computed x:(r0+0))
+     P 00F3  move a, x:(r0 + 1)                 (computed x:(r0+1))
+     P 00F4  move r3, x:(r0 + 2)                (computed x:(r0+2))
+     P 00F6  move r1, x:(r0 + 3)                (computed x:(r0+3))
+     P 00F8  move r2, x:(r0 + 4)                (computed x:(r0+4))
+     P 0138  move a, x:(r0 + 0)                 (computed x:(r0+0))
+     P 013B  move a, x:(r0 + 1)                 (computed x:(r0+1))
+     P 013E  move a, x:(r0 + 2)                 (computed x:(r0+2))
+     P 013F  move r1, x:(r0 + 3)                (computed x:(r0+3))
+     P 0141  move r2, x:(r0 + 4)                (computed x:(r0+4))
+     P 0149  move a, x:(r0 + 0)                 (computed x:(r0+0))
+     P 014C  move a, x:(r0 + 1)                 (computed x:(r0+1))
+     P 014F  move a, x:(r0 + 2)                 (computed x:(r0+2))
+     P 0150  move r1, x:(r0 + 3)                (computed x:(r0+3))
+
+=== (5) the READER -- can a computed pointer read one region as another? ===
+  computed X reads in image I: 1
+     P 00B9  move x:(r1),b
+
+  VERDICT on (5): the regions are written by fixed r0 values at distinct call
+  sites, but a computed READER could in principle address any of them. Whether
+  one does is NOT established by this script -- it is reported as UNKNOWN and
+  must be closed by the packet's demand-driven slice from the doorbell output.
