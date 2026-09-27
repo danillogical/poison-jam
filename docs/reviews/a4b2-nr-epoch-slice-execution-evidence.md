@@ -387,6 +387,26 @@ The block frequencies differ accordingly — up to the exchange there are **6** 
 terminal's up-to-exchange numbers.** Recorded because the two were nearly conflated in my own first read of
 the artifact (which reported 8 181 lines and I had taken as the trace total).
 
+## Closure — performed and verified at the final identity
+
+Run `logs/runs/20260927-151515-960-a4b2-nr-epoch-slice-inert2`, all gates absent, final build:
+
+| Check | Result |
+|---|---|
+| `[GPPERTURB]` lines | **0** |
+| `[GPDECODE]` lines | **0** |
+| `[GPB9]` lines | **0** |
+| `[GPWRITE]` lines | **0** |
+| `[GPDMADESC]` lines | **0** |
+| artifacts created | **none** (`gpwrite_watch.txt`, `gpb9_trace.txt`, `dma_desc_trace.txt` all absent) |
+| doorbell tuple | `seq=198852 va=803C0810 observed=00000003 payload=00000000 dsp_addr=000800` — **unchanged** |
+| profile | **EXPLORATORY** |
+
+**Every diagnostic gate added across this packet is inert when unset**, no artifact is left behind, and the
+final identity reproduces the baseline behaviour exactly. **ctest 18/18 green.**
+
+**Toolkit:** pushed `d80069c` (DMA descriptor trace). **Game:** `d0b33fe`.
+
 ## Row: referred to the Advisor — the frontier now closes on measured evidence
 
 **What the evidence now shows:**
