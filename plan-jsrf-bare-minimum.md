@@ -6,7 +6,113 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4b2-NR-r2` **EXECUTED 2026-09-27 → `O-INCONCLUSIVE`** (`L1=INCONCLUSIVE`, `L2=INVARIANT`)
+## CURRENT PACKET — `A4b2-NR-followup-r1` **EXECUTED 2026-09-27 → gap 1 CLOSED; `O-INCONCLUSIVE` stands, reason now quantified**
+
+**`A4b2-NR-followup-r1` (`886620CC…C5F5`) executed.** Gap 1 — the unresolved `P 00B9` computed read — is
+**CLOSED BY MEASUREMENT**, and in closing it the run exposed a **larger** gap that now governs. Evidence:
+`docs/reviews/a4b2-nonreliance-discovery-evidence.md` §8. Verification:
+`docs/reviews/a4b2-nr-followup-r1-session-verification.md`.
+
+### Gap 1: CLOSED — `P 00B9` reads internal scratch, never the mix buffer
+
+Gate `RECOMP_APU_GP_B9_TRACE=1`. Run `20260927-132641-253-a4b2-nrf-b9-final`, rerun
+`20260927-132808-143-a4b2-nrf-b9-full`. **All six executions** (matching `dor #$0006`) read effective
+address **`0x24`** — internal scratch — with `mixbuf=0 alias=0` on every event:
+
+| ord | `r1` | `x:$0000` | derived `0x80+x:$0000` | **effective** | value | mixbuf | alias |
+|---|---|---|---|---|---|---|---|
+| 0–5 | `000024` | `000000` | `000080` | **`000024`** | `008000`→`00A800` step `0x800` | 0 | 0 |
+
+Terminal `events=6 execs=6 in_mixbuf=0 in_alias=0 invalid=0` — **both counters agree**, so this is a
+*complete* record of every `P 00B9` execution in the bounded exchange, not a sample. Two surprises worth
+recording: the live `r1` comes from **`P 00A2 move #$000024,r1`**, *not* from the `P 0086`–`P 008C`
+`0x80 + x:$0000` computation the predecessor's gap was written around; and the six values are **guest DMA
+pointers advancing by exactly `0x800`** (`P 00BB add #$0800,b`), i.e. the audio output walk — not the
+doorbell, and not a mix-buffer read.
+
+### The larger gap this exposed: the executed program is ~12× the decoded window
+
+| Quantity | Value |
+|---|---|
+| GP distinct PCs executed | **2 340** |
+| GP PCs at or above `0x200` | **2 052** |
+| GP PC range | **`0000..0F28`** |
+| Predecessor's decode/analysis window | `0x0000..0x01FF` (**512 words**) |
+| Full-PRAM decode now available | **3 964 instructions**, 6 `<UNDECODED>` |
+
+**The predecessor's Leg 1 reasoned over 380 of the 2 340 executed PCs (~16%), and 512 of the 3 881 words
+the program spans (~13%).** That is the same partial-enumeration failure `AGENTS.md` records for the
+`PIO_FREE` list (10 of 28 sites via one spelling), and it is a **stronger** ground for `L1 = INCONCLUSIVE`
+than the one originally recorded. **Corrective action taken:** the decode range was widened to
+`DSP_PRAM_SIZE-1` and the diagnostic PC histogram from 512 to 4096 entries, so nothing above `0x1FF` is
+silently dropped. A follow-up slice now has the whole executed program available.
+
+### Two latent toolkit defects found and fixed
+
+1. **Decoder NULL dereference.** `lookup_opcode_slow()` ends in `assert(!"Invalid op code"); return NULL;`
+   and Release `assert` is a no-op, so an unrecognised word made `disasm_instruction()` dereference NULL and
+   killed the run (`0xC0000005`) — reachable only when decoding an image containing a **data table**. First
+   guard attempt tested `->template` on the NULL pointer and crashed again; the fix tests the pointer.
+2. **`core->is_gp` is never populated.** It is written only by `dsp_c_sync_from_vm()`, which is registered
+   in the ops table (`dsp_c.c:324`) but **never called**, so the field is permanently `0`. The first B9 run
+   reported `gp_exec_total=0` while its own histogram showed 288 GP-image PCs executing. The reliable source
+   is `core->opaque` → `DSPState.is_gp` (set at `dsp.c:143`). **Any code classifying work by `core->is_gp`
+   will silently see "not the GP"** — recorded because a future reader could repeat it.
+
+### Row: still `O-INCONCLUSIVE`, for a now-quantified reason
+
+`L2 = INVARIANT` is unchanged and reconfirmed (the doorbell tuple is again bit-identical:
+`seq=198852 va=803C0810 observed=3 payload=0 dsp_addr=000800`). `L1` remains short of `PROVEN` — but the
+`P 00B9` edge can no longer be cited, and what remains is a **scope** problem, not an unresolved edge. No
+strict criterion is discharged; `A4b2-r7` stays `R2-EXPL-INPUT`.
+
+**Next authorized action:** **`A4b2-NR-next-edge`** — the row the followup's own outcome table names for
+`O-INCONCLUSIVE` — scoped to the **full executed program** (`0x0000`–`0x0F28`, 2 340 PCs, 3 964 decoded
+instructions), building the PC-indexed CFG/def-use slice over every feasible route to the first doorbell
+descriptor and DMA write. The followup's closure duties also remain: remove the predecessor's retained
+`bad-output` arm after preserving its bite, and run a final absent-env default-control to establish every
+diagnostic gate is inert.
+
+---
+
+## Previous packet — `A4b2-NR-followup-r1` (**discovery**: close the three gaps that kept `L1` open) — **PROMOTED 2026-09-27, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a4b2-nr-followup.md`, revision **`A4b2-NR-followup-r1`**, class **discovery**,
+  frozen SHA-256 **`886620CC6797FC89130B1F89310E6B41C92E809F32820A8133609FBEEC9CC5F5`** (**33 lines**).
+  **This is the packet to execute.** Promotion byte-identical with no revision (§5.3).
+- **Adequacy:** **`VERDICT: ADEQUATE`** — the **writing Planner's own** review, as §5.8 requires for a
+  discovery packet (child `e537374a-aaaf-49c7-9f3a-247bec80e784`, `codex/gpt-6-sol` @ `high`). No second
+  Planner; no Muse preflight repeated.
+- **Why it exists:** `A4b2-NR-r2` executed → **`O-INCONCLUSIVE`** (`L2=INVARIANT`, `L1` open). Evidence:
+  `docs/reviews/a4b2-nonreliance-discovery-evidence.md`. Session verification:
+  `docs/reviews/a4b2-nr-followup-r1-session-verification.md`.
+- **The three gaps it closes:**
+  1. **The unresolved `P 00B9` computed read** (`move x:(r1),b`, `r1 = 0x80 + x:$0000`, guest-written
+     mailbox). Closed by exact env-gated GP-only `RECOMP_APU_GP_B9_TRACE=1` instrumentation recording **one
+     uncapped event per actual execution** at the `dsp56k_read_memory` call — actual effective address,
+     `r1`, `x:$0000`, the derived cross-check, returned value — classifying both `0x1400..0x17ff` **and**
+     the `0x0c00..0x0fff` alias, with an **independent execution counter**, contiguity and counter-equality
+     checks, no sampling/ring/first-N, trace INVALID on failure, and **no inference of a negative**.
+  2. **The six table words** at `P 00CC`–`00D1`: decided as P-memory **data**, **no decoder surgery** —
+     carried on the Session's three checks plus the `op =` diagnostic occurring 6× only during decode and
+     0× in execution, with the falsifier *"if the table is actually executed or altered, do not reuse this
+     conclusion."*
+  3. **The completeness bar:** the Planner **retains the full PC-indexed CFG/def-use slice** over every
+     feasible route to the first doorbell descriptor and DMA write, and rules the targeted trace
+     **insufficient**. An in-range read is **not** automatically `REFUTED` — a concrete feasible causal
+     chain to the **named doorbell** output or guard is required; influence on the other audio output is
+     not enough.
+- **Bounded toolkit scope:** `src/apu/dsp/interp/dsp_cpu.c`, `src/apu/dsp/gp_ep.c`, `src/apu/apu_watch.c`,
+  `src/apu/apu_watch.h`, `tests/apu_watch_fixture_test.c`. **Game:** `CMakeLists.txt` (CTest registrations
+  only). The committed `r2` work is **baseline, not an authorization**; `src/apu/dsp/dsp.c` is baseline but
+  **not** re-authorized. **`A4b1-r4` is not touched.**
+- **Closure:** the predecessor's retained `bad-output` control arm is removed at closure **after** its bite
+  is preserved; a final absent-env default-control run must establish every diagnostic gate is inert.
+- **Outcome rows:** name the next packet per result, including the death branch if non-reliance is refuted.
+
+---
+
+## Previous packet — `A4b2-NR-r2` **EXECUTED 2026-09-27 → `O-INCONCLUSIVE`** (`L1=INCONCLUSIVE`, `L2=INVARIANT`)
 
 **`A4b2-NR-r2` executed under its frozen contract. Row selected: `O-INCONCLUSIVE`.** Evidence:
 `docs/reviews/a4b2-nonreliance-discovery-evidence.md`.

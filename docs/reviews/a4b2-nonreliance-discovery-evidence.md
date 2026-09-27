@@ -18,8 +18,16 @@ would overclaim, so I do not.
 
 **This is the conservative, honest row, not a failure.** The evidence obtained is *strongly suggestive of
 non-reliance* and is recorded in full below; what is missing is the completeness argument, not the
-direction. `A4b2-r7` remains `R2-EXPL-INPUT` and is **not** retroactively PASS. Next packet:
-**`A4b2-NR-followup`**, targeted at the specific gaps named in §4.
+direction. `A4b2-r7` remains `R2-EXPL-INPUT` and is **not** retroactively PASS.
+
+**UPDATE after `A4b2-NR-followup-r1` executed (§8): the row is unchanged, but the reason is now precise.**
+Gap 1 — the unresolved `P 00B9` computed read — is **CLOSED by measurement**: the effective address is
+internal scratch `0x24` on all six executions, never the mix buffer, with `events == execs == 6`. In its
+place the followup exposed a **larger** gap: the GP executes **2 340 distinct PCs spanning `0x0000`–`0x0F28`**,
+while the Leg 1 analysis above reasoned over only the first **512 words** (`0x0000`–`0x01FF`). So `L1` stays
+`INCONCLUSIVE`, now for a quantified scope reason rather than an unresolved edge. Next packet:
+**`A4b2-NR-next-edge`** (the row the followup's own outcome table names for `O-INCONCLUSIVE`), scoped to the
+full executed program.
 
 **This is exploratory/diagnostic evidence — knowledge only, never acceptance of a strict criterion.**
 
@@ -32,8 +40,35 @@ direction. `A4b2-r7` remains `R2-EXPL-INPUT` and is **not** retroactively PASS. 
 | Game commit | `a000662aef3bb4d7088f3fa367d19e7ce7c157df` |
 | Toolkit commit (base) | `3a3c7c1fa9461d6a9cc7279180aacaaaf979ab7d` |
 | XBE SHA-256 | `FD19055756719893C466302809B433B785ECF5732DF0441286F3F605F0F3EF9C` |
-| **exe SHA-256 (all runs)** | **`11D33FC9897FDBB64DF3CF433E0D9A5C73DA76C8CCBE84AFE6D9EA96D9262B46`** |
+| exe SHA-256 — **Leg 2 runs** (all six) | `11D33FC9897FDBB64DF3CF433E0D9A5C73DA76C8CCBE84AFE6D9EA96D9262B46` |
+| exe SHA-256 — **Leg 1 decode run** | `7615E532FD67A2027C3464CA69D8D60C96F851F5490BB2C1BD9A71993E43224E` |
+| Toolkit commit (committed) | `fdd62fb2356936e12648e0341720af5757f5a911` — **pushed to the fork** (`3a3c7c1..fdd62fb`), upstream untouched at `766ecef` |
 | ctest | **18/18 passed** (14 pre-existing + 4 new selector arms) |
+
+### Provenance note — two exe hashes, and why that is sound
+
+Three builds occurred while fixing a decoder defect (§7). The **six Leg 2 runs** all used `11D33FC9…`;
+the **Leg 1 decode run** used `7615E532…`, which is the **current, reproducible** build from the committed
+toolkit (rebuilt twice from the clean tree at `fdd62fb` → identical hash both times).
+
+**This does not weaken either leg:**
+
+- **Leg 2's comparison is internally consistent** — all six runs, including the baseline and all four
+  perturbation arms, used the *same* exe `11D33FC9…`. A bit-identical doorbell tuple across arms is exactly
+  what that comparison requires, and no cross-build comparison is made.
+- **The only source difference between the two builds is the decode-path guard**, which executes **only**
+  when `RECOMP_APU_GP_DECODE` is set. Every Leg 2 run has the gate **absent**, and the measurement confirms
+  it: **`GPDECODE` line count = 0 in all six Leg 2 runs**, versus 382 in the decode run. So the guarded code
+  never ran in any Leg 2 run.
+- The Leg 1 decode evidence comes from the **committed, reproducible** build.
+
+| Run | exe (12) | `GPDECODE` lines | `GPPERTURB` lines |
+|---|---|---|---|
+| baseline | `11d33fc9897f` | 0 | **0** (gate absent → inert) |
+| `zero` / `max` / `prng:1` / `prng:2` / `bad-output` | `11d33fc9897f` | 0 | 12 each |
+| `decode3` (Leg 1) | `7615e532fd67` | **382** | 0 |
+
+## 2. Leg 2 — empirical invariance (`L2 = INVARIANT`)
 
 **Toolkit files changed** (all inside the packet's declared scope): `src/apu/apu_watch.c`,
 `src/apu/apu_watch.h`, `src/apu/dsp/dsp.c`, `src/apu/dsp/gp_ep.c`, `src/apu/dsp/interp/dsp_cpu.c`,
@@ -41,8 +76,6 @@ direction. `A4b2-r7` remains `R2-EXPL-INPUT` and is **not** retroactively PASS. 
 `A4b1-r4` was **not** reopened; no file outside the declared scope was modified. (One out-of-scope edit —
 a declaration in `dsp_cpu.h` — was made and **reverted** before building; the declaration was moved to a
 local `extern` in the in-scope `gp_ep.c`.)
-
-## 2. Leg 2 — empirical invariance (`L2 = INVARIANT`)
 
 Six runs, 30 s each, `--profile exploratory`, identical exe/XBE/bounds/environment apart from the mode
 variable. All six reproduce the **identical doorbell tuple**.
@@ -225,7 +258,7 @@ is written, at `P 0098`, to clear a flag). They are therefore **guest-written** 
 hands the GP work through them. That is consistent with the `A4b2` claim's own qualifier (*"guest-written
 by region or modelled"*); it is not a stub input.
 
-### The one path this analysis cannot close statically
+### The one path this analysis cannot close statically — **NOW CLOSED BY MEASUREMENT (§8)**
 
 ```
 P 0086  move #$00000c,r0
@@ -284,9 +317,12 @@ recorded here rather than silently deleted because the corrected reading above s
 comparing drafts must know which one stands. **The corrected reading stands: the image does consume mixbin
 data, via the descriptor table.**
 
-## 4. Limits of this finding — and what `A4b2-NR-followup` must close
+## 4. Limits of this finding — and what the follow-up had to close
 
-**The three gaps that keep `L1` at `INCONCLUSIVE`.** These are the follow-up's brief, in priority order:
+**Status of this list after `A4b2-NR-followup-r1` executed (§8).** Kept in its original form so a reader can
+see what was predicted against what was found; each item is annotated with its outcome.
+
+**The three gaps that kept `L1` at `INCONCLUSIVE`:**
 
 1. **The unresolved computed read at `P 00B9`.** `r1 = 0x80 + x:$0000`, where `x:$0000` is a guest-written
    mailbox value. A static decode cannot bound it, so it cannot be excluded from the mix-bin address range.
@@ -294,6 +330,9 @@ data, via the descriptor table.**
    `P 00B9` execution and shows it never lands in `0x1400..0x17FF`, **or** (b) a guest-side argument that
    bounds `x:$0000` (the CPU writes it — find the writer). (a) is a bounded toolkit/observation addition;
    (b) is guest analysis. **This is the single largest gap.**
+   → **CLOSED by (a) in §8.** Measured effective address `0x24` on all six executions, never the mix buffer,
+   `events == execs == 6`. Note the surprise: the live `r1` comes from `P 00A2 move #$000024,r1`, **not**
+   from the `P 0086`–`P 008C` computation this item was written around.
 2. **The 6 undecoded words at `P 00CC`–`00D1`.** Resolved in *this* record as a **data table** of MIXBUF
    addresses, on three independent grounds (no branch targets them; they are 32-word-aligned bin starts;
    `dor #$0006` reads exactly six words via `movem p:(r2)+,x0`). Additionally, the `op =` invalid-opcode
@@ -301,6 +340,9 @@ data, via the descriptor table.**
    the guest never executes them. **The remaining gap is only that the toolkit's decoder rejects them**,
    which is a decoder-scope limitation, not a live-code question. The follow-up should record the
    decode-rejection as understood rather than open.
+   → **CLOSED in the followup packet**, which decided no decoder surgery is required and added the falsifier
+   *"if the table is actually executed or altered, do not reuse this conclusion."* Corroborated by §8: the
+   six `P 00B9` reads walk guest pointers by `0x800` six times, consistent with a six-entry bin table.
 3. **The completeness argument.** The packet requires a *PC-indexed CFG/def-use slice covering every
    feasible executed-path write and guard*. What this record supplies is a **targeted dependency trace**
    of the two stub inputs to the doorbell, plus the two descriptor paths. Those are not the same artifact,
@@ -330,10 +372,208 @@ stand on the observed read-to-scratch confinement and the empirical invariance.
 
 ## 6. Instrumentation closure
 
-- The perturbation gate (`RECOMP_APU_GP_INPUT_PERTURB`) and decode gate (`RECOMP_APU_GP_DECODE`) are
-  **off by default**: absent → strict no-op, proven by the baseline run emitting zero `[GPPERTURB]` lines
-  and by the fixture's absent-gate identity assertions.
-- The `bad-output` control arm is **retained pending closure**: the packet requires it removed at closure.
-  It is inert unless the variable is set, and the final default-control run verifies that.
-- **Not yet done at the time of this record:** the final absent-env control run after any cleanup, and the
-  `0xFFFFB3` source search. Both are recorded as open rather than claimed.
+- The perturbation gate (`RECOMP_APU_GP_INPUT_PERTURB`), decode gate (`RECOMP_APU_GP_DECODE`) and B9 gate
+  (`RECOMP_APU_GP_B9_TRACE`) are **off by default**: absent → strict no-op, proven by the fixture's
+  absent-gate identity assertions and by the final control below.
+- **FINAL ABSENT-ENV INERTNESS CONTROL — PASSED.** Run
+  `logs/runs/20260927-133008-913-a4b2-nrf-inert`, all three gates absent, current build:
+
+  | Check | Result |
+  |---|---|
+  | `[GPPERTURB]` lines | **0** |
+  | `[GPDECODE]` lines | **0** |
+  | `[GPB9]` lines | **0** |
+  | `gpb9_trace.txt` created | **no** |
+  | Doorbell tuple | `seq=198852 va=803C0810 observed=00000003 payload=00000000 dsp_addr=000800` — **identical to every other run in this packet** |
+
+  So every diagnostic gate is inert when unset, and the instrumented build reproduces the unmodified
+  behaviour exactly.
+- **`bad-output` arm: bite preserved, removal is the next packet's duty.** Its effect is archived and
+  re-verified in the retained run `logs/runs/20260927-130142-334-a4b2-nr-badoutput`
+  (`GP_CLEAR` latches = **0**, `GP_NONZERO_OVER` latches = **1**, 2 control log lines). The arm remains
+  registered in `CMakeLists.txt` for now; the followup packet requires its removal **after** the bite is
+  preserved, which is now satisfied, so `A4b2-NR-next-edge` should remove it.
+- **`0xFFFFB3` source search: still open**, and still `UNRESOLVED` (§5). No qualifying hardware source was
+  consulted. Recorded as open rather than claimed.
+
+### `L2 = INVARIANT` independently reconfirmed
+
+A useful by-product of the followup: **all eight** of its runs — across **six different builds**, with the
+B9 gate absent, the B9 gate present, and the decode gate present — produce the **identical** doorbell tuple:
+
+```
+seq=198852 va=803C0810 observed=00000003 payload=00000000 frame=256 insns=124652 dsp_addr=000800
+```
+
+| Run | exe (12) | gate | `GP_CLEAR` |
+|---|---|---|---|
+| `-252-b9-absent` | `875f2b6882d5` | none | identical |
+| `-119-b9-trace` | `875f2b6882d5` | B9 | identical |
+| `-383-b9-hist` | `21a88a359983` | B9 | identical |
+| `-520-b9-hist2` | `221793e9b9bd` | B9 | identical |
+| `-549-b9-hist3` | `c4e913b40dd0` | B9 | identical |
+| `-253-b9-final` | `8d507016f11c` | B9 | identical |
+| `-143-b9-full` | `9e0a594e57d8` | B9 + decode | identical |
+| `-913-inert` | `9e0a594e57d8` | **none** | identical |
+
+This is stronger than the predecessor's Leg 2 in one respect worth stating: the predecessor's invariance was
+measured across **one** build with varying *inputs*; this is the same tuple across **six** builds with
+varying *instrumentation*, including builds whose decode path was rewritten. The doorbell outcome is
+insensitive to both.
+
+## 7. Defect found and fixed in the decoder path (recorded for the next reader)
+
+The first two decode attempts **crashed the run** with an access violation (`0xC0000005`) at ~2.8 s. Cause,
+found in the toolkit's own decoder:
+
+`lookup_opcode_slow()` ends in
+
+```c
+fprintf(stderr, "op = %08x\n", op);
+assert(!"Invalid op code in dsp_cpu");
+return NULL;
+```
+
+and in a **Release build `assert()` is a no-op**, so an unrecognised word returns **NULL**. The pre-existing
+`disasm_instruction()` path dereferenced it. This is a latent defect in the pinned decoder that only becomes
+reachable when something calls the decoder on a word that is not valid DSP56300 code — which is exactly what
+decoding a **program image containing a data table** does.
+
+**Two failed attempts, recorded honestly:**
+
+1. First guard tested `lookup_opcode(inst)->template == NULL` — **still a NULL dereference**, because the
+   pointer itself is NULL. The run crashed again with the identical signature.
+2. Correct guard tests **the pointer**: `lookup_opcode(inst) == NULL` → emit `<UNDECODED>` and skip.
+
+The corrected version decodes cleanly and the run then terminates with the **same** `unhandled_exception` at
+~4.75 s as every other run in this packet — i.e. the normal A2h end, not a decoder fault.
+
+**Why this matters beyond this packet:** the six `<UNDECODED>` words are *data*, and the decoder's rejection
+of them is what revealed that. A future packet that decodes a GP image must expect data tables inside
+P-memory and must not assume every word is an instruction. The guard is now permanent in the committed
+toolkit.
+
+## 8. `A4b2-NR-followup-r1` execution — gap 1 CLOSED (measured, not inferred)
+
+**Packet:** `docs/packets/a4b2-nr-followup.md`, revision **`A4b2-NR-followup-r1`**, frozen SHA-256
+**`886620CC6797FC89130B1F89310E6B41C92E809F32820A8133609FBEEC9CC5F5`**. Gate:
+`RECOMP_APU_GP_B9_TRACE=1`. Run: `logs/runs/20260927-132641-253-a4b2-nrf-b9-final` (and the
+full-range rerun `20260927-132808-143-a4b2-nrf-b9-full`).
+
+### The answer to gap 1
+
+**`P 00B9` reads internal scratch `0x24` on every execution. It never reads the mix buffer.**
+
+| ord | epoch | `r1` | `x:$0000` | derived `0x80+x:$0000` | **effective address** | value | mixbuf | alias |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 1 | `000024` | `000000` | `000080` | **`000024`** | `008000` | 0 | 0 |
+| 1 | 1 | `000024` | `000000` | `000080` | **`000024`** | `008800` | 0 | 0 |
+| 2 | 1 | `000024` | `000000` | `000080` | **`000024`** | `009000` | 0 | 0 |
+| 3 | 1 | `000024` | `000000` | `000080` | **`000024`** | `009800` | 0 | 0 |
+| 4 | 1 | `000024` | `000000` | `000080` | **`000024`** | `00A000` | 0 | 0 |
+| 5 | 1 | `000024` | `000000` | `000080` | **`000024`** | `00A800` | 0 | 0 |
+
+Terminal: `events=6 execs=6 in_mixbuf=0 in_alias=0 invalid=0`. **Both counters agree** (`events ==
+execs == 6`), so this is a *complete* record of every `P 00B9` execution in the bounded exchange, not a
+sample — the packet's completeness requirement is met by measurement, not by assertion.
+
+### Three things this settles
+
+1. **The unresolved edge is resolved.** The predecessor recorded `r1 = 0x80 + x:$0000` as an unbounded
+   computed pointer because `x:$0000` is guest-written. Measured: `x:$0000 = 0` at every one of the six
+   executions, and **the effective address is `0x24`, not `0x80`** — so the `P 0086`–`P 008C` computation
+   (`r1 = 0x80 + x:$0000`) is *not* the one in effect at `P 00B9`. The live path is `P 00A2
+   move #$000024,r1`, which the earlier static reading had listed but not connected to the executed edge.
+   `0x24` is internal scratch, far below `0x0C00`, so **the computed read cannot reach either mix-buffer
+   window** — for the observed values.
+2. **The read is a guest-pointer walk, not an audio read.** The six values are `0x8000`, `0x8800`,
+   `0x9000`, `0x9800`, `0xA000`, `0xA800` — advancing by exactly **`0x800`** per iteration, matching
+   `P 00BB add #$0800,b`. They are the **guest** DMA destination pointers the GP walks to hand audio
+   out, confirming the descriptor path is the audio output path and is *not* the doorbell.
+3. **The six iterations match `dor #$0006` exactly** — six reads, six bins. Consistent with the
+   `P 00CC`–`00D1` table's six MIXBUF entries, and consistent with the predecessor's finding that those
+   six words are table **data**.
+
+### A second, larger finding — the executed program far exceeds the decoded window
+
+The B9 trace's PC histogram exposed a **scope error in the predecessor's Leg 1**, which this run corrects:
+
+| Quantity | Value |
+|---|---|
+| GP distinct PCs executed | **2 340** |
+| GP PCs executed at or above `0x200` | **2 052** |
+| GP PC range | **`0000..0F28`** |
+| First GP PC at or above `0x200` | `02EC` |
+| Predecessor's decode window | `0x0000..0x01FF` (**512 words**) |
+| Full-PRAM decode (this run) | **3 964 instructions**, 6 `<UNDECODED>` |
+
+**The GP executes 2 340 distinct PCs spanning `0x0000`–`0x0F28`; the predecessor decoded and reasoned
+about only the first 512 words, containing 380 instructions.** So the predecessor's Leg 1 was performed
+over **380 of the 2 340 executed PCs (~16%)**, and over 512 of the 3 881 words the program spans (~13%).
+That is precisely the partial-enumeration failure `AGENTS.md` records for the `PIO_FREE` site list (10 of
+28 sites found by grepping one spelling), and it is a **stronger** reason for `L1 = INCONCLUSIVE` than the
+one originally recorded. The `P 00B9` gap is now closed; **this** gap is open and is the real obstacle to
+`L1 = PROVEN`.
+
+**Corrective action taken in this packet:** the decode range was widened from `0x1FF` to
+`DSP_PRAM_SIZE - 1` (4095), and the diagnostic PC histogram from 512 to 4096 entries, so nothing above
+`0x1FF` is silently dropped. The full-range decode produced **3 964 instructions**, so a follow-up slice
+now has the whole executed program available.
+
+### Instrumentation defect found and fixed (recorded for the next reader)
+
+The first B9 run reported **`gp_exec_total=0`** and zero events, while its own PC histogram showed 288
+distinct PCs of the GP image executing. Cause: `b9_core_is_gp()` originally read **`core->is_gp`**, which
+is **only ever written by `dsp_c_sync_from_vm()`** — a function that is registered in the ops table
+(`dsp_c.c:324`) but **never called** on this path, so the field is permanently `0`. The reliable source is
+`core->opaque`, which `dsp_c_init()` points back at the `DSPState` (`dsp_c.c:282`) and whose `is_gp` *is*
+set at `dsp_init()` (`dsp.c:143`).
+
+**This is a latent defect in the pinned toolkit, not in this packet's instrumentation alone:** any code
+that classifies work by `core->is_gp` on the interpreter core will silently see "not the GP". It is
+recorded here because a future reader could otherwise repeat it. It also means the *first* B9 run is
+**not** evidence of anything — it is preserved only as the record of the defect.
+
+### What gap 1's closure does and does not license
+
+- **Does:** removes the specific unresolved computed read from the predecessor's §4 gap list. The
+  `P 00B9` edge can no longer be cited as an open mix-buffer path.
+- **Does not:** establish `L1 = PROVEN`. The packet's `L1 = PROVEN` bar is a full PC-indexed CFG/def-use
+  slice over every feasible route to the first doorbell descriptor and DMA write — and that slice must now
+  cover **2 340 PCs across `0x0000`–`0x0F28`**, not 380 instructions of a 512-word window. The trace also
+  answers only what *this run* reads: it does not prove an address bound for all possible future mailbox
+  values, exactly as the packet states.
+
+**Corrected `L1` status: still `INCONCLUSIVE`, but for a different and now precisely quantified reason** —
+the executed-program scope, not the `P 00B9` edge.
+
+The first two decode attempts **crashed the run** with an access violation (`0xC0000005`) at ~2.8 s. Cause,
+found in the toolkit's own decoder:
+
+`lookup_opcode_slow()` ends in
+
+```c
+fprintf(stderr, "op = %08x\n", op);
+assert(!"Invalid op code in dsp_cpu");
+return NULL;
+```
+
+and in a **Release build `assert()` is a no-op**, so an unrecognised word returns **NULL**. The pre-existing
+`disasm_instruction()` path dereferenced it. This is a latent defect in the pinned decoder that only becomes
+reachable when something calls the decoder on a word that is not valid DSP56300 code — which is exactly what
+decoding a **program image containing a data table** does.
+
+**Two failed attempts, recorded honestly:**
+
+1. First guard tested `lookup_opcode(inst)->template == NULL` — **still a NULL dereference**, because the
+   pointer itself is NULL. The run crashed again with the identical signature.
+2. Correct guard tests **the pointer**: `lookup_opcode(inst) == NULL` → emit `<UNDECODED>` and skip.
+
+The corrected version decodes cleanly (382 `[GPDECODE]` lines, `end` marker present) and the run then
+terminates with the **same** `unhandled_exception` at ~4.75 s as every other run in this packet — i.e. the
+normal A2h end, not a decoder fault.
+
+**Why this matters beyond this packet:** the six `<UNDECODED>` words are *data*, and the decoder's rejection
+of them is what revealed that. A future packet that decodes a GP image must expect data tables inside
+P-memory and must not assume every word is an instruction. The guard is now permanent in the committed
+toolkit.
