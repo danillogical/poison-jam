@@ -64,40 +64,46 @@ P 007E x:[18..22] vs  P 0090 x:[12..16]   disjoint
 **So the doorbell's `x:[6..10]` cannot be written by any other builder call**, and the earlier
 preparation's claim is now a proof rather than an assertion.
 
-## (4) Alias-closure against other writers — **the honest limit**
+## (4) Alias-closure — now substantially closed
 
-The builder body itself writes through `x:(r0+N)` with computed `r0`, so "which instruction writes these
-regions" cannot be answered by address matching alone. **21 candidate writers** touch a `x:(r0+N)` form in
-image `I`:
+**Every X-memory write in image `I`, enumerated by form** (71 writes):
 
-- the two builder bodies `P 00DB`–`P 00EA` and `P 00EB`–`P 00FA`;
-- **three more builder-shaped blocks** at `P 0138`–`P 0141`, `P 0149`–`P 0150` (and `P 00F0`–`P 00F8`);
-- `P 001D  move x0, x:(r0 + 1)` — **not a builder**, a separate store through `r0`.
+| Form | Sites |
+|---|---|
+| Direct `x:$NNNN` | **39** |
+| Computed `x:(r0+N)` | 21 |
+| Computed `x:(r0)+` | 1 (`P 0167`) |
+| Computed `x:(r1)` | 2 (`P 00A4`, `P 00BD`) |
+| Computed `x:(r4)+` | 8 |
 
-**`P 001D` is the interesting one, and my first reading of it was WRONG — corrected here.** I initially
-wrote that `r0` at `P 001D` comes from the entry sequence's `P 0002` (`r0=6`), making `x:(r0+1)` land on
-`x:[7]` **inside the doorbell's region**. **That is false.** The instruction order is:
+**The 39 direct writes contain NO address in `x:[6..10]`.** They are `x:$0004` (the mailbox flag),
+`x:$007C`–`x:$007F` (the `0xFFFFB3` scratch), and `x:$FFFF*` (peripherals). **So no direct write can touch
+the doorbell's region.**
 
-```
-P 0010  jsr p:$009e        ; the call
-P 0012  move #$1e,r0       ; r0 := 0x1E   <- runs BEFORE P 001D
-P 0013  move #$001560,r1
-P 0015  move #$00b000,r2
-P 0017  move #$000280,r3
-P 0019  jsr p:$00eb        ; builder B, region x:[30..34]
-P 001B  move #$0049e2,x0
-P 001D  move x0, x:(r0 + 1)  ; writes x:[0x1E+1] = x:[31]
-```
+**Of the 21 computed `x:(r0+N)` sites, only the `P 0007` call has `r0` in range:**
 
-So `P 001D` writes **`x:[31]`, inside builder B's region `x:[30..34]`** — it is part of the `P 0019`
-descriptor's construction, **not** a write into the doorbell's `x:[6..10]`. **The doorbell's region is not
-touched by it.**
+| Block | `r0` | Region | Reaches `x:[6..10]`? |
+|---|---|---|---|
+| `P 00E0`–`00E8` via `P 0007` | `0x06` | `x:[6..10]` | **YES — this IS the doorbell's own construction** |
+| `P 00E0`–`00E8` via `P 007E` | `0x12` | `x:[18..22]` | no |
+| `P 00E0`–`00E8` via `P 0090` | `0x0C` | `x:[12..16]` | no |
+| `P 00F0`–`00F8` via `P 000E` | `0x18` | `x:[24..28]` | no |
+| `P 00F0`–`00F8` via `P 0019` | `0x1E` | `x:[30..34]` | no |
+| `P 001D` | `0x1E` | `x:[31]` | no |
+| `P 0138`–`0141` | — | **statically unreachable** | no |
+| `P 0149`–`0152` | — | **statically unreachable** | no |
 
-**Corrected statement:** on this evidence, no instruction outside the builder call for `P 0007` writes into
-`x:[6..10]`. **Alias-closure is therefore substantially stronger than my first draft claimed** — but it is
-still not a *proof* here, because the three further builder-shaped blocks (`P 00F0`–`P 00F8`,
-`P 0138`–`P 0141`, `P 0149`–`P 0150`) are reached by calls this preparation did not enumerate, and their
-`r0` values are not fixed here. The demand-driven slice must close that.
+**The two extra builder blocks are statically unreachable**, verified three ways: **no incoming
+branch/call target** anywhere in the program, their **predecessor is `rts`** (so no fall-through), and they
+execute **0 times**. They are dead code in the pinned image.
+
+**Therefore: the only writer that can reach `x:[6..10]` is the `P 0007` call — which is the doorbell's own
+descriptor construction.** Alias-closure holds for **all writers with a statically determined target**.
+
+**Residual, stated:** the remaining computed forms (`x:(r0)+` ×1, `x:(r1)` ×2, `x:(r4)+` ×8) depend on
+register values not fixed here, and the reader question (§5) is still `UNKNOWN`. Those are the slice's to
+close — but note the doorbell's region is **low** scratch (`6..10`), so a computed write reaches it only if
+its register holds `0..10` at that point, which is a narrow and checkable condition.
 
 ## (5) The reader — **UNKNOWN, and that is the point**
 
@@ -125,5 +131,16 @@ the **doorbell's own fields** depend on.
 | `r0` per call site | **PROVEN** — all immediates, statically known |
 | Regions pairwise disjoint | **PROVEN** — all 10 pairs |
 | Doorbell region `x:[6..10]` not written by another **builder** call | **PROVEN** |
-| Doorbell region not written by any **other** instruction | **Not proven here, but no counterexample found.** The one candidate (`P 001D`) was **misread on first pass and corrected**: it writes `x:[31]`, inside builder B's region, not the doorbell's. Three further builder-shaped blocks remain unenumerated. |
+| No **direct** X write touches `x:[6..10]` | **PROVEN** — all 39 direct writes enumerated, none in range |
+| The two extra builder blocks cannot reach it | **PROVEN** — statically unreachable (no incoming target, `rts` predecessor, 0 executions) |
+| **Only the `P 0007` call reaches `x:[6..10]`** | **PROVEN for all statically-targeted writers** |
+| Remaining computed writers (`x:(r0)+`, `x:(r1)`, `x:(r4)+`) | **UNKNOWN** — register-dependent; slice's to close |
 | Reader cannot alias one region as another | **UNKNOWN** — one computed read (`P 00B9`), measured `0x24`, feasibility unproven |
+
+### A Session analysis error, corrected
+
+My first draft of this section claimed **`P 001D` writes `x:[7]`, inside the doorbell's region**, and
+concluded alias-closure was unestablished. **That was wrong.** `P 0012` sets `r0 = 0x1E` **before** `P 001D`
+runs, so `P 001D` writes **`x:[31]`** — inside builder B's region `x:[30..34]`, part of the `P 0019`
+descriptor. Corrected above, with the instruction order shown. **Had this stood, it would have been a false
+negative on a load-bearing premise.**

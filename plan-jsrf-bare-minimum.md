@@ -6,7 +6,53 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4b2-NR-next-edge-followup-r1` **EXECUTED 2026-09-27 → `O-INCONCLUSIVE`** (phase 1 complete, closure verified, slice attempted and bounded)
+## CURRENT PACKET — `A4b2-NR-epoch-slice-followup-r1` (**discovery**: the FINAL `L1` attempt — backward demand-driven slice) — **PROMOTED 2026-09-27, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a4b2-nr-epoch-slice-followup.md`, revision
+  **`A4b2-NR-epoch-slice-followup-r1`**, class **discovery**, frozen SHA-256
+  **`03CE475DA2F48618BE93E6803F3168732A416DC38D00C4E649252BD87F6FEBA6`** (**34 lines**).
+  **This is the packet to execute.** Promotion byte-identical with no revision (§5.3); hash read **3× over
+  9 s**, identical, and matching the Planner's own reported hash, after the author confirmed finished.
+  Verification: `docs/reviews/a4b2-nr-epoch-slice-followup-r1-session-verification.md`.
+- **Adequacy:** **`VERDICT: ADEQUATE`** — the **writing Planner's own** review (§5.8), child
+  `f151b920-f96e-4fcb-b8fc-ea2e0fd71397`, `codex/gpt-6-sol` @ `high`. No second Planner.
+- **⚠ THIS IS THE LAST `L1` PACKET — terminality binds.** The Advisor ruled
+  (`docs/reviews/a4b2-nr-epoch-slice-advisor-ruling.md`) that the chain ends **either way**:
+  `O-TWO-LEG` → `A4b2-r8`; `O-REFUTED` → death branch (`A4b-VP-real-implementation` **and**
+  `A4b-B3-register-resolution`); `O-INCONCLUSIVE` → **back to the Advisor** for a final
+  scope/defer/retire decision. **A fifth `L1` attempt is FORBIDDEN (`F-D`).**
+- **Why the method changed:** four consecutive `O-INCONCLUSIVE` rows, each closing its target but each
+  discovering **more program**. The Advisor's diagnosis: the repeated shape was **forward whole-program
+  enumeration**, which **diverges by construction on a growing program**. The `L1=PROVEN` bar was always
+  correct and **interface-shaped**; the packet language pushed the Sessions into forward CFGs. **The claim
+  is NOT narrowed — the analysis direction is reversed.**
+- **The method:** **backward demand-driven slice** from the five doorbell field definitions + trigger
+  guards; expand **only** through may-reaching definitions; classify **every** frontier leaf as
+  **immediate / guest-written / modelled → CLOSED**, **stub-derived with a concrete feasible causal chain →
+  REFUTED**, or **unresolved → UNKNOWN with the precise node/address/edge/missing witness**. A mere read,
+  observed invariance, or unreachable trace does **not** close or refute.
+- **Advisor-mandated elements, all present:** descriptor-disjointness **proved alias-closed** (not assumed);
+  **interrupt scoping mandatory incl. fault vectors** (*"do not exclude fault vectors merely because they
+  were not observed"*); **entry-set proof** (reset + interrupt vectors + bounded second-image targets *into
+  slice nodes*); **B3 enumeration over correct bytes** (*"without asserting a total of four"*);
+  zero/fill decodability with a wrong-version control; **second-image byte provenance** if reached;
+  **executed counts as cross-check ONLY** (`F-C`).
+- **Forbids carried:** `F-A` no forward whole-program enumeration; `F-B` no assumed disjointness; `F-C` no
+  ×1-as-feasibility-exclusion; `F-D` no fifth `L1` round; plus `F1`–`F3` and `W1`–`W4`.
+- **Session preparation already done** (not a substitute for the packet's criteria):
+  - `docs/reviews/a4b2-nr-epoch-slice-interrupt-preparation.md` — **R4 answered**: no interrupt machinery in
+    either image; the interrupt table has only 4 entries (Reset/Illegal/Stack Error/Trap) with **no
+    peripheral/DMA/timer/audio raiser**. The 194-of-2 340 gap is therefore **cross-image**, not
+    interrupt-driven.
+  - `docs/reviews/a4b2-nr-epoch-slice-disjointness-preparation.md` — **R3 advanced**: 5 builder call sites
+    enumerated with statically known `r0` (`x:[6..10]`, `[18..22]`, `[12..16]`, `[24..28]`, `[30..34]`),
+    all 10 pairs disjoint; all 39 direct X writes enumerated, **none** in `x:[6..10]`; the two extra builder
+    blocks are **statically unreachable** (no incoming target, `rts` predecessor, 0 executions). **Only the
+    `P 0007` call reaches the doorbell region.** Remaining UNKNOWN: the computed writers and the **reader**.
+
+---
+
+## Previous packet — `A4b2-NR-next-edge-followup-r1` **EXECUTED 2026-09-27 → `O-INCONCLUSIVE`** (phase 1 complete, closure verified, slice attempted and bounded)
 
 **`A4b2-NR-next-edge-followup-r1` (`62A1BB38…`) executed.** Row: **`O-INCONCLUSIVE`**. Evidence:
 `docs/reviews/a4b2-nr-next-edge-followup-phase1-evidence.md`. Verification:
