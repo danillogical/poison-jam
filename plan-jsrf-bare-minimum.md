@@ -100,7 +100,79 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-slot-writer-attribution-r2` (**discovery**: LIVE attribution under the corrected shape) — **PROMOTED 2026-09-28, `ADEQUATE`**
+## CURRENT PACKET — `A2h-slot-writer-attribution-r2` **EXECUTED: 3 of N=5** — **COMPETITOR FOUND (K≥2), row withheld `O-OPEN`; successor specified**
+
+- **Packet:** `docs/packets/a2h-slot-writer-attribution.md`, **r2**, frozen
+  **`E209D1F4A4405F0B266E8D4DEFDA77A481A277D27615BFAE9ACB9F7A3A6C6378`** — **not edited**.
+- **Ruling (current authority):** `a2h-competitor-finding-row-ruling.md` (turn `01a0e979`) — **record, do not
+  revise; the row stays `O-OPEN`; NO execution in the closing window.**
+- **Evidence:** `a2h-attrib-exp1-competitor-found.md` (`75ee2e4`); `a2h-competitor-identity-sub-00038530.md`
+  (`12eb28c`); `a2h-attrib-exp2-competitor-reproduced.md` (`44cc1f2`);
+  `a2h-unknown-rips-are-crt-memset.md` (`a30d289`).
+
+### ✅✅ THE FINDING — the packet's question is ANSWERED
+
+> **The recompiled body of guest function `sub_00038530` (`0x00038530`) writes `0x001D5078` into
+> `software_device+0x242C`, reproducibly, in two independent runs at native RVA `0x52FE38`, with the identical
+> value — and it is NOT the static candidate `0x00199F45`.**
+
+| Run | image base | installer RVA | **competitor RVA** | value |
+|---|---|---|---|---|
+| **Exp1** | `0x7FF606630000` | `0xB3D82D` | **`0x52FE38`** | **`0x001D5078`** |
+| **Exp2-3b** | `0x7FF68B060000` | `0xB3D82D` | **`0x52FE38`** | **`0x001D5078`** |
+
+**K≥2 AGREED.** **And the REQUIRED positive control fired for the FIRST TIME on this line**
+(`installer_control_hits` = 2, 1, 2; `range=1`; `post=0x0015F9D0`).
+
+### ⚠ THE ROW IS WITHHELD — and the bar must NOT be relaxed
+
+**Criteria: writer-observed ✅ + controls green ✅ + MATCHING TERMINAL ❌.**
+
+> **The Advisor: *"Rows are frozen predicates, not free prose; minting a 'scoped row' post hoc violates §2.2
+> and pollutes the vocabulary future packets inherit."*** **And: *"the conjunctive bar is load-bearing —
+> writer-without-terminal answers 'who CAN write,' not 'who caused THIS death.'"***
+
+**⚠ The Session offered a "scoped row" option and the Advisor refused it.** **Recorded because the Session
+was one ruling away from minting a row shape the contract does not contain.**
+
+**Disqualifiers, all stated: no matching `0x001D5078` terminal; `unknown > 0`; Exp2-2's `ledger_mismatch=1`
+(contrast only, never a decision input).**
+
+### ⚠ THE `unknown` PREMISE IS REFUTED — record, do NOT revise
+
+**Three runs, three image bases, the SAME TWO unplaceable RIPs unmoved** (`0x00007FFA628FCC71`/`…C75`, 4 bytes
+apart). **The Session identified them: `VCRUNTIME140.dll`'s `memset`/`memmove`** (the run's own map lists both
+imports; that DLL loads in `0x7FFA…`).
+
+> **So `unknown > 0 ⇒ INFRA FAILURE` assumes *"every write to the watched page comes from the guest"* — and
+> a HOST CRT ROUTINE WRITES IT TOO.** **⚠ AND IT IS THE THIRD ACTOR: the zeroing the Session flagged as
+> unnamed IS the CRT `memset`.**
+
+**The Advisor: record suffices — *"no selected row depends on it: `O-OPEN` rests independently on terminal
+mismatch, so the frozen contract needs no amendment."*** **The correction goes in the SUCCESSOR's design: split
+`unknown` into host-identifiable (module-range classified, e.g. `VCRUNTIME140` → `HOST` with module cited) vs
+truly-unplaceable (fail closed).**
+
+### The successor — fully specified, writable next window
+
+| Element | Specification |
+|---|---|
+| **Goal** | **bounded runs for writer-observed + terminal-match + controls green** |
+| **Bound** | **pre-specified N, early stop; zero qualifying ⇒ report + RE-REFER** |
+| **Classifier** | **with the `unknown`-class split** |
+| **`ledger_mismatch` runs** | **contrast only, NEVER decision inputs** |
+| **The CRT lead** | **TEST it, never assert it** — *"memset write immediately preceding terminal-zero by tick order"* |
+| **NULL line** | **untouched** |
+
+### ⚠ And no execution in the closing window — for a methodological reason
+
+> ***"Bounded runs that cannot complete WITH VERIFICATION inside the window corrupt N accounting and
+> reviewability — partial evidence is worse than none here."***
+
+**The Session records that it would have been tempted to launch one more run, and why that is wrong: a run that
+cannot be verified and recorded inside the window is not evidence, it is an unaccounted draw against N.**
+
+**3 of N=5 used. Toolkit `d6e8f0b` local / `571982d` pushed (no-push state). Game: this commit.**
 
 - **Packet:** `docs/packets/a2h-slot-writer-attribution.md`, **r2**, **18 lines**, **7922 bytes**, frozen
   **`E209D1F4A4405F0B266E8D4DEFDA77A481A277D27615BFAE9ACB9F7A3A6C6378`** — **this is the packet to execute.**
