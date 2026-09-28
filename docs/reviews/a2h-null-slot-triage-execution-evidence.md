@@ -146,3 +146,68 @@ widened, the NULL call was not bypassed, and no guest error-handling change was 
 
 **Successor named by the row:** `A2h-slot-read-path-displacement` — test transient zero/recovery, a torn or
 displaced read, or a guest write between the last sample and the raw read.
+
+---
+
+## Offline work on the successor's hypotheses — three refuted, one lead recorded
+
+Bounded, offline, and **not** a substitute for the successor packet. Recorded because each item either
+narrows the successor or removes a hypothesis it would otherwise have to test.
+
+### Refuted offline
+
+| Hypothesis | Basis for refutation |
+|---|---|
+| **A macro mismatch** between the toolkit's sampler and the game's terminal read | **Identical in effect.** `BRIDGE_MEM32(a) = *(u32*)((uintptr_t)(a) + g_xbox_mem_offset)`; `MEM32(a) = *(u32*)XBOX_PTR(a)` where `XBOX_PTR(a) = (uintptr_t)(uint32_t)(a) + g_xbox_mem_offset`. **Both read the same location for the same VA** |
+| **A torn / partial read** | The slot is **4-byte aligned** (`0x001C4064 % 4 == 0`) and the access is a naturally-aligned `uint32`, which **cannot tear on x86** |
+| **A static VA displacement** | The install sample read **`0x80000115`** at that VA through the *toolkit's* macro, so the VA resolved to the image's `.rdata` correctly. **`g_xbox_mem_offset` is written only at init** (`src/main.c:225`, `xbox_memory_layout.c:1768`) and by nothing afterwards in either repository |
+
+**Also confirmed:** the terminal value was read **twice independently** — once by the generated
+`MEM32(0x1C4064)` at `recomp_0003.c:20155`, and once by the terminal hook's own `MEM32(0x001C4064)` — and
+**both produced `0`**.
+
+### What remains, and why the successor's instrument is the right one
+
+**Guest execution between the last bridge return and the faulting ICALL is invisible to this artifact.**
+The only sampler brackets **bridge calls**; the kernel log records **bridge** calls; and the gap contains
+exactly two lines (a bridge return and the ICALL). **So whether guest code wrote the slot to `0` in that gap
+is not decidable here** — which is precisely why the row's successor is a **page-guard write history**: it is
+the only instrument that observes guest writes to this page.
+
+### A lead that may connect the PARKED producer line to the current one
+
+**Recorded as a lead, NOT as a conclusion, and it does not reactivate the producer line.**
+
+`sub_001497DC` contains a bulk-zeroing loop **whose length is `arg2`** — the very slot whose ~571 MB value was
+the original A2h finding:
+
+```
+00149DE2  test  byte ptr [ebp+0xc], 8
+00149DE6  je    0x149f31          ; bit 8 clear -> skip the zeroing entirely
+00149DEC  mov   ecx, dword ptr [ebp+0x10]   ; LENGTH = arg2
+00149DF6  rep   stosd dword ptr es:[edi], eax
+00149DFD  rep   stosb byte ptr es:[edi], al
+00149DFF  jmp   0x149f31          ; and SKIP the ordinal-184 call
+```
+
+**The thunk table spans `0x001C3F60..0x001C4140` (120 entries), and the slot `0x001C4064` is inside it** —
+so a zeroing loop that reached that range would zero the slot.
+
+**But three facts cut against this being the mechanism, and they are why it stays a lead:**
+
+1. **The failing activation demonstrably TOOK the allocation path**, not the zeroing path: the log records
+   `#5554 ordinal 184 … ret=0x00149E50`, and `0x00149E4A` is the allocation call — which the zeroing branch
+   **jumps over** (`jmp 0x149f31`).
+2. **The OOM error path cannot reach the zeroing loop:** it starts at `0x00149E04` (after the loop) and
+   `jmp 0x149eec`; a byte-scan of its whole span found **0 backward branches** into `0x00149DEC..0x00149DFF`.
+3. **`edi` on that path is `[ebp-0x4C] + 0x10`**, a stack-derived value, not a `.rdata` constant — and the
+   callee contains **0** constant-`.rdata` stores.
+
+**So the loop exists, its length is arg2, and it is not on the path this run took.** Whether some *other*
+activation reached it with a large count, and whether its `edi` could ever land in the thunk table, is a
+**separate question the successor's write history would answer** — and it is recorded here so the successor
+does not have to rediscover it.
+
+**The producer line stays PARKED.** This lead does **not** satisfy either reactivation condition: the slot
+death is not shown to be downstream of allocation-failure handling, and no later gate yet needs the size
+explained.
