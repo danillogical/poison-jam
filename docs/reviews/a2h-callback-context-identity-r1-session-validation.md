@@ -49,8 +49,12 @@ already finished when the Session's redirect arrived, so the packet's line 4 sti
 
 - **Static-first 1:** the five containing functions are found — **`sub_00194300`, `sub_00194480`,
   `sub_00194A72`, `sub_00194EEF`, `sub_00196C0B`** — from **declared** `Original:` ranges.
-- **Static-first 3:** the field layout is **consistent across four of the five**, and the shape is
-  **`edi = ecx` (context), `esi = [edi]` (device), device fields through `esi`.**
+- **Static-first 3:** the field layout is **consistent across the five sites**, and the invariant is
+  **`device = [context]` — the context's FIRST DWORD** — with device fields read through that dereference.
+  **⚠ CORRECTED 2026-09-28: the Session's first version claimed `edi = ecx` for four of five and filed
+  `+0x100` as a CONTEXT offset. BOTH WERE WRONG** — **`sub_00194300` holds the context in `[esp+8]`, not
+  `edi`, and `[esi+0x100]` is `DEVICE+0x100` at every site except the callee.** **The Planner caught it; see
+  the correction at the head of `a2h-callback-context-identity-identified.md`.**
 - **Static-first 4, negative half:** **no site's `ecx` IS the device** — **the context HOLDS the device at
   `+0x00`.**
 

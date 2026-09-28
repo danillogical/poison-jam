@@ -1,5 +1,39 @@
 # `A2h` — the `edi` IDENTITY: **IDENTIFIED** (Session offline trace, static + XBE bytes only)
 
+> ## ⚠ CORRECTION 2026-09-28 — my `+0x100` field attribution was WRONG
+>
+> **The Planner (`6df57264`) challenged two claims and BOTH CHALLENGES ARE CORRECT.** **Verified by the
+> Session:**
+>
+> **(a) `[esi + 0x100]` is `DEVICE + 0x100`, NOT a context flag.** **The Session's original detection script
+> matched `mov dword ptr [esp + 8], ecx` as if it were `edi = ecx`, which corrupted the `edi ← ecx` column.**
+> **The real provenance at each site:**
+>
+> | Function | how `esi` is established | so `[esi+N]` is |
+> |---|---|---|
+> | `sub_00196C0B` (poller) | **`esi = [edi]`** (`0x00196C0F`) | **DEVICE** |
+> | `sub_00194300` | **`esi = [ecx]`** (`0x00194307`) | **DEVICE** |
+> | `sub_00194480` | `ebp = [ebx]` | **DEVICE** |
+> | `sub_00194A72` | **`esi = [edi]`** (`0x00194A76`) | **DEVICE** |
+> | `sub_00194EEF` | **`esi = [edi]`** (`0x00194EFA`) | **DEVICE** |
+> | **`sub_00193D90` (the callee)** | **`esi = ecx`** (`0x00193D96`) | **CONTEXT** |
+>
+> **So `[esi+0x100]`, `[esi+0x2100]`, `[esi+0x3214]`, `[esi+0x400700]` are ALL DEVICE offsets**, and
+> **`[esi+0x1C4]` in the callee is the ONLY context-relative field.** **The corrected table appears below.**
+>
+> **(b) `sub_00194300` does NOT set `edi = ecx`** — **it stores `ecx` to `[esp+8]` and leaves `edi` untouched**
+> until `push edi` at `0x00194314`. **So "four of five share `edi = ecx`" is FALSE.**
+>
+> **What SURVIVES unchanged and is the finding's core:** **every call site passes the context as a PARAMETER,
+> and the context's FIRST DWORD IS THE DEVICE** (`esi = [context]`, then device offsets through `esi`). **The
+> callback slot `+0x1C4` belongs to the CONTEXT, read by the callee via `esi = ecx`.** **The identification
+> stands; my field ATTRIBUTION table did not.**
+>
+> **Recorded as the FIFTH reading error this session, and the pattern is the same as the fourth: I derived a
+> table from a script whose match condition was too loose, and did not verify each row against the bytes.**
+> **The Planner caught it by checking the generated source line by line — which is what I should have done
+> before publishing the table.**
+
 **Session:** `session-9f8c9988-38fb-4cc9-a188-a6881a52559a`, 2026-09-28, DSH.
 **Status:** **the packet's named edge, answered offline from XBE bytes and generated source — no dump, no run.**
 **Authority:** `a2h-callback-slot-writer-r1-row-selection.md` (named edge = `edi`'s identity); Advisor input
@@ -10,18 +44,23 @@ restrictions `a2h-integrity-audit-remediation-advisor-ruling.md`.
 
 ## THE FINDING: the context is a distinct object whose FIRST DWORD IS THE DEVICE
 
-**All five incoming call sites to `sub_00193D90` receive `ecx` as a PARAMETER, and four of the five containing
-functions share one shape:**
+**All five incoming call sites to `sub_00193D90` receive `ecx` as a PARAMETER, and every one of them reaches
+the DEVICE by dereferencing that parameter's first dword:**
 
-| Function | `edi ← ecx` | `esi ← [edi]` | device offset via `esi` |
+| Function | how the context is held | how the DEVICE is reached | device offset read |
 |---|---|---|---|
-| **`sub_00196C0B`** (the poller) | **yes** | **yes** | **`[esi + 0x400700]`** |
-| **`sub_00194300`** | **yes** | *(stored to `[esp+8]`)* | **`[esi + 0x2100]`** |
-| **`sub_00194480`** | *(reads `[esp+0xC]`)* | `ebp = [ebx]` | `[ebp + 0x100]` |
-| **`sub_00194A72`** | **yes** | **yes** | **`[esi + 0x3214]`, `[esi + 0x2400]`** |
-| **`sub_00194EEF`** | **yes** | **yes** | **`[esi + 0x3214]`** |
+| **`sub_00196C0B`** (the poller) | **`edi = ecx`** | **`esi = [edi]`** | **`[esi + 0x400700]`, `[esi + 0x100]`** |
+| **`sub_00194300`** | **`[esp+8] = ecx`** *(NOT `edi`)* | **`esi = [ecx]`** | **`[esi + 0x2100]`** |
+| **`sub_00194480`** | **`ebx = [esp+0xC]`** | **`ebp = [ebx]`** | `[ebp + 0x100]` |
+| **`sub_00194A72`** | **`edi = ecx`** | **`esi = [edi]`** | **`[esi + 0x3214]`, `[esi + 0x2400]`** |
+| **`sub_00194EEF`** | **`edi = ecx`** | **`esi = [edi]`** | **`[esi + 0x3214]`** |
 
-**The shape is: `edi = ecx` (the context), `esi = [edi]` (the device), then device fields through `esi`.**
+**The invariant is: THE DEVICE IS `[context]` — the context's FIRST DWORD.** **The register holding the
+context differs (`edi`, `ecx`, `ebx`, `[esp+8]`), and `sub_00194300` does NOT use `edi` for it at all.**
+
+**⚠ The Session's original version of this table claimed `edi ← ecx` for four of five and filed `+0x100` as a
+CONTEXT offset. BOTH WERE WRONG** — **see the correction at the top of this record.** **The invariant above is
+what actually holds, and it is verified per-site against the bytes.**
 
 **And the failing callee confirms it:** `sub_00193D90` begins `mov esi, ecx` (`0x00193D96`), **so `esi` IS the
 incoming context**, and the callback read is:
@@ -38,19 +77,33 @@ incoming context**, and the callback read is:
 **This is exactly the `O-ALTERNATE-PATH` condition:** *"Verified distinct context identity
 (`edi≠device+0x2268`)"* — **and now the distinct object is CHARACTERISED, not merely distinguished.**
 
-## The context's field layout, established across the five sites
+## The context's field layout — CORRECTED
+
+> **⚠ The table below replaces the Session's original, which wrongly filed `+0x100` under the CONTEXT.**
+> **`[esi + 0x100]` is `DEVICE + 0x100` at every site except the callee, because `esi = [context]` there.**
+> **Only `+0x1C4` and the callee-read fields are CONTEXT-relative.**
+
+**CONTEXT-relative fields** (established inside `sub_00193D90`, where `esi = ecx` at `0x00193D96`):
 
 | Offset | Meaning | Evidence |
 |---|---|---|
-| **`+0x00`** | **the DEVICE pointer** | `esi = [edi]`, then device offsets through `esi` — **four functions agree** |
-| **`+0x100`** | **the polled flag word** | `[esi + 0x100]` tested against **`0x01000000`** before every `sub_00193D90` call |
-| **`+0x1C4`** | **THE CALLBACK SLOT** | `0x00193E62`, **NULL-tested before the call** — **the field that held `0x001D5078`** |
+| **`+0x00`** | **the DEVICE pointer** | **every site does `esi = [context]`**, then reads device fields through `esi` |
+| **`+0x1C4`** | **THE CALLBACK SLOT** | **`0x00193E62 mov eax,[esi+0x1C4]`**, **NULL-tested** — **the field that held `0x001D5078`** |
 | `+0x20C` | read by `sub_00193D90` | `0x00193DA0` |
 | `+0x208` | written by `sub_00193D90` | `0x00193DAE` |
 | `+0x1F4`, `+0x1F8`, `+0x1FC` | read by `sub_00193D90` | `0x00193DB4+` |
 
-**So the context is a per-`sub_00193D90`-consumer object that POINTS AT the device — a wrapper/adapter, not a
-device sub-object.** **That is why `[device+0x2268]` was never going to be it: the relationship is
+**DEVICE-relative fields** (reached as `[esi + N]` where **`esi = [context]`**):
+
+| Offset | Meaning | Site |
+|---|---|---|
+| **`+0x100`** | **the polled flag word**, tested against **`0x01000000`** | `sub_00196C0B` (`0x00196C1C`), `sub_00194480` |
+| `+0x2100` | a device status/flag word | `sub_00194300` (`0x00194309`) |
+| `+0x2400`, `+0x3214` | device flags | `sub_00194A72`, `sub_00194EEF` |
+| `+0x400700` | the "while nonzero" loop counter | `sub_00196C0B` (`0x00196C11`) |
+
+**So the context is a per-`sub_00193D90`-consumer object whose FIRST DWORD IS THE DEVICE — a wrapper/adapter,
+not a device sub-object.** **That is why `[device+0x2268]` was never going to be it: the relationship is
 `context → device`, not `device ⊃ context`.**
 
 ## Why this is coherent with everything already established
