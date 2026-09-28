@@ -1,0 +1,170 @@
+# `A2h-slot-within-run-attribution-r1` — execution evidence: **`O-COVERAGE`**, with a sharpened writer bound
+
+**Session:** `session-9f8c9988-38fb-4cc9-a188-a6881a52559a`, 2026-09-28, DSH.
+**Packet:** `A2h-slot-within-run-attribution-r1`, frozen
+**`3865FACC776BC64C6B0CFE8DF6C6BD0287DBD6EFC339C4E7FFAA7406667BEC27`** (33 lines).
+**Runs:** **five** pre-specified ON launches, same build, `--profile strict --seconds 8`,
+`JSRF_TRACE_A2H_DR=1` + `JSRF_TRACE_A2H_SLOT=1`, non-gate env identical
+(`RECOMP_GPU_ACK=0`, `RECOMP_APU_TRAP=1`, `RECOMP_KERNEL_LOG_BUDGET=100000`).
+
+| # | Run directory |
+|---|---|
+| 1 | `logs/runs/20260928-020421-240-a2h-within-run-on-1` |
+| 2 | `logs/runs/20260928-020448-975-a2h-within-run-on-2` |
+| 3 | `logs/runs/20260928-020456-595-a2h-within-run-on-3` |
+| 4 | `logs/runs/20260928-020504-433-a2h-within-run-on-4` |
+| 5 | `logs/runs/20260928-020512-239-a2h-within-run-on-5` |
+
+**All five share the same `jsrf_recomp.exe` (`a7e324642a41…`), the same OOM, and the same identity-1
+prefix — so the OFF control carries and every realization passes the deterministic anchors.**
+
+---
+
+## Classification — by terminal-event set, per the packet
+
+| # | Terminal set | Anchors | Install trap | Class |
+|---|---|---|---|---|
+| 1 | **`0x00000000@0014982E`** | PASS | PASS | **TARGET** |
+| 2 | **`0x00000000@0014982E`** | PASS | PASS | **TARGET** |
+| 3 | *(none observed)* | PASS | PASS | **NON-TARGET** |
+| 4 | **`0x00000000@0014982E`** | PASS | PASS | **TARGET** |
+| 5 | `0x00000001@0018CE73` | PASS | PASS | **NON-TARGET** |
+
+**Observed targets: 3 of 5. Complete-coverage TARGET realizations: K = 3** — **exceeds the packet's
+K ≥ 2 requirement.** Coverage-disqualified targets: **0**.
+
+**Every run's deterministic anchors are identical:** OOM `598869040` / `12715008/50855936`, status
+`0xC0000017`, **identity-1 dispatch prefix 5555**. **Terminal events vary** (as the packet anticipates), and
+**no target realization carried a competing terminal** — the packet's strict multi-terminal rule discarded
+**zero** target data, exactly as the Session's pre-run measurement predicted (0 of 26 archived target runs).
+
+**The install positive control PASSED in all five runs**, read from the frozen latch:
+`install_seen=1 install_raw=80000115 install_value=FE000104 install_ok=1`, index 65, plus
+`[A2HSLOT] install … raw=80000115 installed=FE000104`.
+
+---
+
+## The row: **`O-COVERAGE`** → `A2h-slot-write-coverage-provenance`
+
+**The all-thread-arming leg FAILS, and the packet makes that fail closed.** Every run reports:
+
+```
+GUEST_DR_ARM why=handshake ok=0 armed=10 failed=9 collision=0 canonical=00000000001D4064 aliases=28
+GUEST_DR_ARM_FAIL tid=… why=create_thread reason=no_mapping_offset      (×9)
+GUEST_DR_HIT …                                                          (ZERO, all five runs)
+```
+
+**Nine of ten threads failed to arm**, so the canonical DR0 write watch **did not cover the process**. Per
+the packet's predecessor line 45 and the Advisor's correction 3(i) — *"any unarmed observed tid → `UNKNOWN`,
+fail closed"* — **no absence or attribution claim is available**, and the target realizations select
+**`O-COVERAGE`**.
+
+**This is the Advisor's flagged uncertainty #1 and #3 arriving exactly as predicted.** The ruling and the
+implementation record both said the real DR0 arm path was **unverified against the live game**, and that a
+missing trap must select `O-COVERAGE` and **never** be read as "no write occurred." **That is what happened,
+and the instrument reported it honestly rather than silently under-covering** — `ok=0` is printed, the nine
+failures are individually named with a reason, and the tid list is archived.
+
+---
+
+## What the run nevertheless establishes — a SHARPENED writer bound
+
+**These are positive measurements, and they narrow the writer substantially even though the row is
+`O-COVERAGE`.**
+
+### 1. NO WRITE CAME THROUGH ANY OF THE 28 MIRRORS — the census is complete and found zero touches
+
+Every run: `[A2HSLOT] alias census armed=1 mapped=28 protected=28 mask=0FFFFFFF/0FFFFFFF`, and the frozen
+latch records **`touched_count = 0`, `publish_failed = 0`** in **all five runs**.
+
+**28 of 28 mirrors were mapped and protected** (the mask `0x0FFFFFFF` is 28 bits), so the census covered
+**every** alias page, and **not one was touched.** By the corrected ruling's first-touch argument — a page's
+first touch necessarily precedes its first single-step window — **a mirror write could not have been
+missed.** **So the zero did NOT arrive through an alias.**
+
+### 2. THE FAULTING THREAD WAS ARMED IN THREE OF FIVE RUNS — and produced no DR hit
+
+| # | Faulting tid | Was it armed? | DR hits |
+|---|---|---|---|
+| 1 | 50616 | **ARMED** | **0** |
+| 2 | 56204 | **ARMED** | **0** |
+| 3 | *(none)* | — | 0 |
+| 4 | 67512 | **ARMED** | **0** |
+| 5 | 66468 | **NOT ATTEMPTED** | 0 |
+
+**In runs 1, 2 and 4 the thread that faulted was the one thread that armed successfully — and it recorded
+zero canonical-slot writes.** So the faulting thread did not write the slot through the canonical address.
+
+### 3. **Run 5 POSITIVELY WITNESSED the slot becoming zero**
+
+**This is the strongest single observation in the A2h line so far, and it is new.** Run 5's log:
+
+```
+[A2HSLOT] tid=66468 call=#246 ordinal=224 slot=001C4064 value=FE000104 phase=after
+[A2HSLOT] tid=66468 call=#246 ordinal=224 slot=001C4064 value=00000000 phase=before
+[A2HSLOT] write tid=66468 slot=001C4064 before=FE000104 after=00000000 phase=boundary
+[ICALL] invalid target 0x00000001 tid=66468 esp=0126BF88 return=0018CE73
+[A2HSLOT] terminal tid=66468 target=00000001 slot=001C4064 live=00000000 call=#246 observed=0
+```
+
+**Within one bridge call** (ordinal 224, call `#246`) the slot went **`FE000104 → 00000000`**, and the very
+next event was a fatal call through a **different** slot with a **non-NULL** target.
+
+**The emitter is honest about what it can and cannot say** (`kernel_bridge.c:9021-9055`): it runs in host
+bridge code, the write happened **somewhere between the previous boundary and this one**, and **a native RIP
+would be needed to name the writer** — so it records **`JSRF_PROV_UNKNOWN`** and **does not guess**. **That is
+the packet's rule applied correctly.**
+
+**Is it real, or a per-thread sampling artifact?** The sampler compares the **live** slot against its own
+last read and reports **only on inequality**, so it **cannot** report a transition when the value is
+unchanged — **the memory genuinely changed.** *(The Session could not cross-check with post-boundary samples
+from other threads: the run terminates immediately after, so there are none. Recorded as a limit, not
+papered over.)*
+
+### 4. The deduction the three measurements support together
+
+**No alias touch** (census complete, 28/28) **+ no canonical write by the armed faulting thread** (DR0 armed,
+zero hits) **+ the slot demonstrably reached zero** ⇒ **the zero was written through the CANONICAL address by
+one of the NINE UNARMED threads.**
+
+**That is a bounded, evidence-backed narrowing — and it is precisely the region the coverage gap leaves
+open.** It is **not** an attribution: **no writer is named, no site is named, and the row stays
+`O-COVERAGE`.** But it converts "somebody zeroed it" into **"a canonical-address write from a thread the
+instrument failed to arm"**, which is a materially stronger statement than the predecessor row could make.
+
+**Recorded as a finding, explicitly NOT as a row.** The packet's rule is that an unarmed thread prevents
+absence claims; **this finding is consistent with that rule rather than an exception to it.**
+
+---
+
+## The coverage defect, precisely characterised for the successor
+
+**Root cause:** `GUEST_DR_ARM_FAIL … why=create_thread reason=no_mapping_offset`. The collector arms at
+`CREATE_THREAD` **before `ContinueDebugEvent`**, which is the correct **ordering** — but at that moment
+`g_xbox_mem_offset` is **not yet resolvable**, so **every thread created before the mapping is established
+fails to arm.** Only the thread that armed **via the install handshake** (after the mapping existed) succeeded.
+
+**So the defect is a TIMING dependency, not an ordering error:** the `CREATE_THREAD` arm path needs the
+mapping offset, and for early threads it does not yet exist. **The handshake path works; the birth path does
+not.** The successor should arm at `CREATE_THREAD` **when possible** and **re-arm at the handshake** for any
+thread that could not be armed at birth — and must **fail closed** if any observed tid remains unarmed, which
+the instrument already does.
+
+**Nothing here is a reason to distrust the census**, which is page-protection based, process-wide, and
+**independent of per-thread DR arming** — which is exactly why it delivered a complete, zero-touch result
+while the DR watch covered one thread.
+
+---
+
+## Prohibitions and status
+
+**No synthetic completion.** No guest semantics changed; the APU trap and `0x80` untouched; no allocation
+faked; arena not widened; NULL call not bypassed; guest error handling not edited. **No `src/recomp/gen/*.c`
+edit.** `RaiseException(0xE0424943, EXCEPTION_NONCONTINUABLE, …)` unchanged. **`PIO_FREE` stays DEFERRED**;
+**`A4b2-r7`/`A4b2-r8`/`A4b1-r4` not reopened**; **`0xFFFFB3` stays `UNRESOLVED`**. The toolkit diagnostic at
+`5528d00` remains **unpushed** (pending acceptance). **No sixth run** — `N = 5` was pre-specified and
+exhausted; extension requires Advisor re-referral.
+
+**K = 3 ≥ 2, so the packet's repetition requirement is MET** — but **all three targets select `O-COVERAGE`**
+on the arming leg, so **no attribution row is selected and generality is not the binding limit here; the
+coverage leg is.**
