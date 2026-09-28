@@ -295,42 +295,63 @@ def locate_registry_in_dump(raw: bytes, version: int, claimed_hint: int = None) 
 
 
 def locate_watch_in_dump(raw: bytes, reg_off: int, version: int):
-    """Locate the version-3 write watch inside the dump, by a signature unique to it.
+    """Locate the version-3 write watch by DERIVING its offset, then corroborating by content.
 
-    The signature is the watch's own arming record: `armed=1, alias_count>0` plus the mapped and
-    protect masks, which are equal by construction when arming succeeded. A v3 binary whose
-    diagnostic gate was OFF writes no such record -- and that is exactly the OFF-run inertness
-    control, so its absence is returned rather than raised.
+    WHY THIS IS DERIVED AND NOT SEARCHED. An earlier version searched the dump for the watch's own
+    arming record -- `(armed=1, alias_count, mapped_mask, protect_mask)` with `mapped == protect` --
+    and required the hit to be unique. That is unsound, and a real archive proved it: in a
+    GATE-OFF run the watch never arms, so the true record is all zeros, while the pattern for
+    small `alias_count` is not distinctive at all -- `alias_count == 1` produces `(1,1,1,1)`, which
+    occurs dozens of times in a 129 MB dump. The uniqueness guard therefore RAISED on the very
+    archive the successor packet must read: a fail-closed guard correctly rejecting an unsound
+    search.
 
-    The measured distance from the registry header must equal WATCH_OFF, which is the same
-    independent-bytes check that pins LATCH_OFF. Returns (watch_offset_or_None, present).
+    The sound technique is the one already used for `LATCH_OFF`: the registry header is verified
+    UNIQUE, `WATCH_OFF` is computed from the C layout, so the watch location is DERIVED from the
+    registry rather than searched for. Content is then only a CORROBORATING check that must match
+    one of the two states the writer can actually produce:
+
+      * gate OFF -- the watch is all zero, because the diagnostic never ran;
+      * gate ON  -- `armed` is exactly 0 or 1, `alias_count` is within capacity, and when armed
+                    the mapped and protect masks are equal (arming succeeds only if they agree).
+
+    A location whose content satisfies NEITHER still raises, so the fail-closed property is kept:
+    the check moved from "is the pattern unique" (unsound) to "does the derived location contain a
+    state the writer could have produced" (sound).
     """
     if version < 3:
         return None, False
-    # armed=1, alias_count, mapped_mask, protect_mask with mapped == protect (arming succeeded).
-    found = None
-    for alias_count in range(1, JSRF_ALIAS_CAPACITY + 1):
-        pat = struct.pack("<IIII", 1, alias_count, (1 << alias_count) - 1, (1 << alias_count) - 1)
-        i = 0
-        while True:
-            i = raw.find(pat, i)
-            if i < 0:
-                break
-            if found is not None and found != i:
-                raise RegistryError(
-                    "the write-watch arming signature is ambiguous (%d and %d); a search-based "
-                    "location is only sound when the signature is unique" % (found, i))
-            found = i
-            i += 1
-    if found is None:
-        return None, False
-    measured = found - reg_off
-    if measured != WATCH_OFF:
+
+    off = reg_off + WATCH_OFF
+    if off + WATCH_HEAD > len(raw):
         raise RegistryError(
-            "measured write-watch offset %d does not match the layout-derived WATCH_OFF %d -- the "
-            "version-3 struct layout is wrong, so every watch field would be misread"
-            % (measured, WATCH_OFF))
-    return found, True
+            "derived write-watch offset %d is past the end of the dump (%d bytes)"
+            % (off, len(raw)))
+
+    armed, alias_count, mapped_mask, protect_mask = struct.unpack_from("<IIII", raw, off)
+
+    if armed == 0 and alias_count == 0 and mapped_mask == 0 and protect_mask == 0:
+        # Gate OFF: the diagnostic never armed, so an all-zero record is legitimate. This is the
+        # OFF-run inertness state, and its presence is returned rather than raised.
+        return off, False
+
+    # Gate ON: only these states are producible.
+    if armed > 1:
+        raise RegistryError(
+            "write-watch at the derived offset %d has armed=%u, which the writer cannot produce "
+            "-- the version-3 struct layout is wrong, so every watch field would be misread"
+            % (off, armed))
+    if alias_count > JSRF_ALIAS_CAPACITY:
+        raise RegistryError(
+            "write-watch at the derived offset %d has alias_count=%u, above the capacity %d"
+            % (off, alias_count, JSRF_ALIAS_CAPACITY))
+    if armed == 1 and alias_count and mapped_mask != protect_mask:
+        raise RegistryError(
+            "write-watch at the derived offset %d is armed with mapped=%08X but protected=%08X; "
+            "arming only succeeds when those agree, so this is not a record the writer produced"
+            % (off, mapped_mask, protect_mask))
+
+    return off, True
 
 
 def read_registry(run_dir: Path) -> dict:
@@ -737,24 +758,58 @@ def self_test() -> int:
         except RegistryError:
             chk("dump/printed version disagreement raises", True)
 
-    # A v3 dump whose watch sits at the WRONG offset must RAISE: that is the whole point of the
-    # distance check, and a layout that drifted would otherwise be read as if it had not.
+    # THE WATCH LOCATION IS DERIVED, NOT SEARCHED, so the fail-closed property to test is now
+    # CONTENT-based: a derived location holding a state the writer cannot produce must RAISE.
+    # This replaced an earlier test that moved the arming record to a wrong offset and expected a
+    # distance mismatch -- that premise died with the search. The reason the search died is worth
+    # keeping visible: `alias_count == 1` yields the pattern (1,1,1,1), which occurs dozens of
+    # times in a real 129 MB dump, so requiring a unique hit RAISED on a legitimate gate-OFF
+    # archive. The uniqueness guard was right; the search was the defect.
+    for label, word0 in (("armed=5 (impossible)", 5), ("armed=2 (impossible)", 2)):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td)
+            bad = bytearray(build_registry(EXPECTED_VERSION))
+            struct.pack_into("<I", bad, WATCH_OFF, word0)
+            build_dump(p / "process.dmp", bytes(bad))
+            (p / "stacks.txt").write_text(
+                "GUEST_REGISTRY address=%016X version=%d claimed=5 overflow=0\n"
+                % (ADDR, EXPECTED_VERSION), encoding="utf-8")
+            try:
+                read_registry(p)
+                chk("v3 %s raises" % label, False)
+            except RegistryError:
+                chk("v3 %s raises" % label, True)
+
+    # An ARMED watch whose masks disagree is also unproducible: arming only succeeds when every
+    # mapped mirror page was protected, so mapped == protect is an invariant of a successful arm.
     with tempfile.TemporaryDirectory() as td:
         p = Path(td)
-        shifted = bytearray(build_registry(EXPECTED_VERSION))
-        # Move the arming record 8 bytes later, leaving the true offset empty.
-        rec = struct.pack("<IIII", 1, 28, (1 << 28) - 1, (1 << 28) - 1)
-        shifted[WATCH_OFF:WATCH_OFF + 16] = b"\x00" * 16
-        shifted[WATCH_OFF + 8:WATCH_OFF + 24] = rec
-        build_dump(p / "process.dmp", bytes(shifted))
+        bad = bytearray(build_registry(EXPECTED_VERSION))
+        struct.pack_into("<IIII", bad, WATCH_OFF, 1, 28, 0x0FFFFFFF, 0x0000FFFF)
+        build_dump(p / "process.dmp", bytes(bad))
         (p / "stacks.txt").write_text(
-            "GUEST_REGISTRY address=%016X version=%d claimed=5 overflow=0\n" % (ADDR, EXPECTED_VERSION),
-            encoding="utf-8")
+            "GUEST_REGISTRY address=%016X version=%d claimed=5 overflow=0\n"
+            % (ADDR, EXPECTED_VERSION), encoding="utf-8")
         try:
             read_registry(p)
-            chk("v3 wrong watch offset raises", False)
+            chk("v3 armed-with-mismatched-masks raises", False)
         except RegistryError:
-            chk("v3 wrong watch offset raises", True)
+            chk("v3 armed-with-mismatched-masks raises", True)
+
+    # And an ALL-ZERO watch is a LEGITIMATE state -- the gate-OFF inertness record -- so it must
+    # NOT raise. This is the case the old search could not read, and it is the one the successor
+    # packet depends on.
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td)
+        build_dump(p / "process.dmp", build_registry(EXPECTED_VERSION))
+        (p / "stacks.txt").write_text(
+            "GUEST_REGISTRY address=%016X version=%d claimed=5 overflow=0\n"
+            % (ADDR, EXPECTED_VERSION), encoding="utf-8")
+        try:
+            r = read_registry(p)
+            chk("v3 all-zero watch reads as gate-OFF, not an error", True)
+        except RegistryError as exc:
+            chk("v3 all-zero watch reads as gate-OFF, not an error (%s)" % str(exc)[:40], False)
 
     # An absent range must RAISE, not return zeros.
     with tempfile.TemporaryDirectory() as td:
