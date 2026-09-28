@@ -6,7 +6,7 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
-## CURRENT PACKET — `A4b2-NR-epoch-slice-followup-r1` **EXECUTED 2026-09-27 → frontier CLOSED on measured evidence; row REFERRED to the Advisor (Muse unavailable)**
+## Previous packet — `A4b2-NR-epoch-slice-followup-r1` **EXECUTED 2026-09-27 → frontier CLOSED on measured evidence; row `O-TWO-LEG`** (superseded; `A4b2-r8` accepted and closed)
 
 **`A4b2-NR-epoch-slice-followup-r1` (`03CE475D…`) executed** with the Advisor-mandated **backward
 demand-driven slice**. Evidence: `docs/reviews/a4b2-nr-epoch-slice-execution-evidence.md`. Verification:
@@ -100,7 +100,70 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `PIO_FREE-title-demand-bound-r1` **EXECUTED 2026-09-27 → `O-OPEN`** (Advisor scope/defer referral owed)
+## CURRENT PACKET — **`PIO_FREE` DEFERRED by Advisor ruling; next authorized work is `A2h`**
+
+**The `PIO_FREE` line is closed at `O-OPEN` and DEFERRED.** `PIO_FREE-title-demand-bound-r1` executed to
+`O-OPEN`, the Session made the scope/defer referral its row required, and the **Persistent Advisor ruled:
+object-identity analysis is OUT OF PROPORTION and is NOT authorized; DEFER the leaf, do not retire it.**
+Ruling verbatim: `docs/reviews/pio-free-advisor-scope-defer-ruling.md`.
+
+### The leaf's terminal entry (Advisor-confirmed, adopt as the recorded state)
+
+> *"The `0x80` stub passes all **13 constant gates** — two (`0x001A3EB3`, `0x001A3FDB`) at **exact
+> equality, zero margin** — and is **UNPROVEN for the 15 variable gates** (all `OPEN`: demand
+> `k × byte[+0x64]` needs byte ≤ `32/k`, i.e. 3–16, unproven). **Hardware semantics (units, capacity,
+> drain, overflow, ordering) remain `UNKNOWN` and unsourced.**"*
+
+**Carried premises:** `A4p`'s **inferred** C1–C4 convention premise; its E3 indirect-access limits; the
+**direct-read scope only**; and that this is **sufficiency relative to the stub value, never hardware
+truth**.
+
+**Why the hole is acceptable (Advisor):** *"it cannot bind"* — any later strict progress claim is blocked
+**harder** by sourcing (no admissible model exists) and by `A2h` (no trapped time past the prefix). *"The
+demand hole matters only once a model exists — i.e., after sourcing, which doesn't exist. Deferral loses
+nothing."*
+
+**Named reopen conditions (binding):**
+1. **Newly admitted hardware source evidence** — the only modelling unblocker.
+2. **A specific strict progress/liveness claim traversing named gates** → **demand-driven per-gate analysis
+   backward from that claim's checkpoint**, **never** the 185-writer forward census.
+3. **Observed title behaviour implicating a specific gate hang** → pursue candidate (a) first: the
+   `or_bit7` writer at `recomp_0002.c:56809`, since a single bit-7 set puts the field at ≥ 128 and exceeds
+   `32/k` at **every** site.
+
+**Durable assets inherited forward:** the checked-in tested classifier
+(`scripts/pio-free-demand.py` + `scripts/test_pio_free_demand.py`, **29 tests**, deterministic, hashed),
+which makes reopening cheap; and the concrete requirement any future model must satisfy (**≥ 128 at the two
+zero-margin gates**). **Prioritization note for any future attempt:** the tightest gate is the **k=10 site
+`0x001A4242`**, which needs byte ≤ 3.
+
+**`A4b2-r8` is UNAFFECTED** — Advisor-confirmed: its decision inputs precede the prefix end, its contract
+contains no `PIO_FREE`-demand premise, and the shared premises it *does* rely on (XBE identity, `A4p`'s
+28-site population) were **re-confirmed** here (28/28 reconcile), so this work **corroborates** it. It stays
+**accepted and closed**.
+
+### Next authorized work — `A2h`
+
+**The Advisor named the critical path plainly:** *"`PIO_FREE` is deferred. The critical-path work is
+**`A2h`** — the trapped crash at ≈4.77 s blocks all trapped observation past the prefix, which every future
+strict claim needing later behavior requires. Beyond that, the Planner's milestone order governs — not
+`PIO_FREE`."*
+
+**`A2h`** is the **known heap-OOM class** that ends instrumented strict runs at ≈4.77 s
+(`xbox_HeapAlloc: out of memory (requested 598869040, used 12715008/50855936)` → invalid ICALL
+`0x00000000` → `0xE0424943`). Measured in `docs/reviews/pio-free-strict-horizon.md`: it tracks the
+**recent-build + trap** combination (untrapped runs reach the full ≈31.7 s deadline), and the **trapped**
+run is the one making real progress (it boots the GP, drives the clear, and leaves the pending-word spin
+with `F=0`, whereas the untrapped 31.71 s is a **hang** with `F=2`, `Wf0=3`).
+
+**Planning for `A2h` is next.** Per the workflow, the Planner determines whether it is a **discovery** or a
+**change** packet; a shape preflight is required only for a new **change** packet.
+
+**Toolkit:** `c151d4e` (unchanged). **Game:** `452223b`.
+
+---
+
+## Previous packet — `PIO_FREE-title-demand-bound-r1` **EXECUTED 2026-09-27 → `O-OPEN`** (deferred by Advisor ruling; see above)
 
 **Row: `O-OPEN`.** Evidence: `docs/reviews/pio-free-title-demand-evidence.md`. Follow-up:
 `docs/reviews/pio-free-demand-slice-followup.md`. **No toolkit change, no game runtime change, no build, no
