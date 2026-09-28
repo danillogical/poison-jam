@@ -100,7 +100,53 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A4b2-r8` **CLOSED 2026-09-27** (`ACCEPT`, stage 1, final) — next authorized work is **`PIO_FREE`**
+## CURRENT PACKET — `PIO_FREE-model-r2` (**discovery**: the device boundary at `0xFE820010`) — **PROMOTED 2026-09-27, `ADEQUATE`**
+
+- **Packet:** `docs/packets/pio-free-model.md`, revision **`PIO_FREE-model-r2`**, class **discovery**,
+  frozen SHA-256 **`11D6ECB195D51159785D6E94C98439BD4AA6979FDEE6B8EC79B28A80961DDA9E`** (**36 lines**).
+  **This is the packet to execute.** Promotion byte-identical with no revision (§5.3); hash verified **3×
+  over ~10 s** immediately before.
+- **Adequacy:** the **writing Planner's** own §5.3 two-question review — **`ADEQUATE`**, `BLOCKING: NONE`,
+  `PREMISE_FRESHNESS: BOUNDED`. **Correct for a discovery packet**: §5.8 says the writing Planner reviews
+  its own packet and **no second Planner is spawned** (`docs/agent-workflow.md:615-617`, `:743`).
+  **No shape preflight** — that is triggered only for a **new change** packet. Verification:
+  `docs/reviews/pio-free-model-r2-session-verification.md`.
+- **The question:** for **trapped** guest reads at `0xFE820010` (= `APU+0x20010` = `VP+0x10` =
+  `NV1BA0_PIO_FREE`), what device/register and free-space unit, capacity, producer/consumer, reset and
+  update-order rules are supported by independent evidence, and can they specify a **non-synthetic** model
+  for the observed gate thresholds — or is some named semantic/coverage leaf still unknown?
+- **Rows:** `O-IDENTITY` (stale identity/premise → re-plan) · `O-CONFLICT` (incompatible sources →
+  **Advisor device-boundary ruling**, no model guessed) · `O-SPEC` (all leaves covered, independent-source
+  rule met, finite predictions distinguish truthful occupancy from always-`0x80` → **`PIO_FREE` change
+  packet**) · `O-UNKNOWN` (focused source/queue-interface discovery).
+- **Scope:** **offline only** — pinned source reads, original-XBE disassembly, bounded external sourcing.
+  **No guest run, no build, no toolkit change, no instrumentation.** Existing strict logs are **prefix
+  corroboration only**.
+- **Forbids carried:** no synthetic completion; no source can make `0x80` true by repetition; the
+  xemu-derived `return 0x80` is a **negative control**, not independent support; do not relabel the
+  variable `(v>>2)<reg` threshold as constant; `0xFFFFB3` stays `UNRESOLVED`; `A4b2-r7`/`A4b2-r8`/`A4b1-r4`
+  not reopened; any toolkit advance requires **re-establishing the P4 discovery-transfer bridge** first.
+- **A2h:** named as prerequisite **only** for a later claim needing **trapped** strict observation beyond
+  the captured pre-OOM prefix. The packet's own decision is decidable **offline** and needs **neither**
+  runtime horizon.
+
+### The Session's measured inputs to this packet (all committed)
+
+| Record | What it establishes |
+|---|---|
+| `docs/reviews/pio-free-device-boundary.md` | The route and current implementation, from pinned source + original XBE: the identity, the constant-`0x80` pretence, the **synchronous** write path (no queue), the guest's two threshold forms, the poll-then-push shape to `NV1BA0_PIO_SET_HRTF_HEADROOM`, and the untrapped counter route gated at `xbox_memory_layout.c:890`. **Explicitly NOT independent hardware evidence.** |
+| `docs/reviews/pio-free-strict-horizon.md` | All 20 archived strict runs: the OOM tracks the **recent-build + trap** combination; and the **corrected** finding that the untrapped 31.71 s is a **hang in the pending-word spin** (`F=2`, `Wf0=3`), not budget. Carries a correction banner for the Session's three errors. |
+| `docs/reviews/pio-free-model-r2-session-verification.md` | The promotion record and the three bounded revisions required. |
+
+**Next authorized action:** **execute `PIO_FREE-model-r2`** — the four Experiments, offline, producing
+`docs/reviews/pio-free-model-execution-evidence.md` and a first-match row; then §5.8 acceptance.
+
+**Toolkit:** `c151d4e` (unchanged — **no toolkit change is needed or permitted** by this packet).
+**Game:** pending commit.
+
+---
+
+## Previous — `A4b2-r8` **CLOSED 2026-09-27** (`ACCEPT`, stage 1, final)
 
 **Acceptance transaction reconciled and closed.** The Hy4 stage-1 review is **complete and durably
 recorded**; the Session did **not** launch a duplicate review.

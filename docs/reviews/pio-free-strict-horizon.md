@@ -112,18 +112,17 @@ trapped run has `F=0` — it is NOT in the spin**, because the GP cleared the wo
 
 **So the untrapped run's 31.7 s is a hang.** `F=2` places the guest at `loc_001A18D0`
 (`recomp_0005.c:6755`), which is the **pending-word** spin — `if (CMP_NE(MEM32(ebx), 0)) goto loc_001A18D0` —
-and `Wf0=3` confirms the word it is waiting on never became zero, because `GPBOOT=0` means the GP never
-booted to clear it. That is exactly the condition `main.c:82-86` describes: without the trap the APU
-aperture is plain memory, so the GPRST write *"is accepted and discarded, which is how the DSP command
-block at 0x803C0800 gets a status word written to it that nothing ever answers."* **The trapped run is the
-one that makes real progress**: it boots the GP, drives the clear twice, and leaves the spin — then dies at
-4.77 s.
+and `Wf0=3` confirms the word it is waiting on never became zero. That is exactly the condition
+`main.c:82-86` describes: without the trap the APU aperture is plain memory, so the GPRST write *"is
+accepted and discarded, which is how the DSP command block at 0x803C0800 gets a status word written to it
+that nothing ever answers."* **The trapped run is the one that makes real progress**: its tracing was on and
+it shows the GP booting, driving the clear twice, and leaving the spin — then dying at 4.77 s.
 
 **Precision note:** `F` witnesses the **pending-word** spin, not the `PIO_FREE` poll. Whether the untrapped
 guest also passes the `PIO_FREE` gate is a *separate* question — the untrapped route is labelled a
 `MCPX_COUNTERS[0x020010]` tick counter whose tick is gated off under the trap, so the two routes may return
 different things. **This record does not decide that**; it is the `PIO_FREE` packet's subject. The hang
-conclusion rests on `F=2` + `Wf0=3` + `GPBOOT=0`, which are all presence witnesses.
+conclusion rests on **`F=2` + `Wf0=3`** — the two witnesses that are independent of the tracing difference.
 
 **The corrected reading:**
 
