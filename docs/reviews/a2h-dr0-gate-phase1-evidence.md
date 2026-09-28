@@ -1,5 +1,27 @@
 # `A2h-dr0-delivery-gate-r1` — Phase 1 trial: **`P1-UNKNOWN`**, gate defect found, **STOP → Advisor**
 
+> ## ⚠ ADVISOR RULING APPLIED — two corrections to this record
+>
+> **Ruling:** `docs/reviews/a2h-dr0-gate-repair-advisor-ruling.md` (turn `01a0e7d4`). **One bounded repair
+> packet authorized, reshaped; the ceiling applies after it.**
+>
+> **Correction A — the post-continue ARRAY IS VOID IN BOTH DIRECTIONS.** The Session wrote that
+> `post_continue_reverted=13198` *"very likely measures the measurement."* **The Advisor voids the whole array,
+> *"including any no-revert reading,"*** because **`post_continue_ok=1216` does not establish that those 1216
+> were meaningful either.** **A race does not produce trustworthy positives just because it sometimes returns
+> the expected value.** **So no conclusion in this record may rest on `post_continue_*` at all — including the
+> `CONTEXT_LOSS` discriminator and the `seq=97` watch-set observation below.**
+>
+> **Correction B — the CARRY RULE.** This record proposes *"one ON trial"* for a repair. **The Advisor adds:
+> a new code change breaks the OFF carry rule, so the repair needs a FRESH OFF *and* one ON.** **The Session
+> had missed this.**
+>
+> **And the Advisor REFUSED the Session's own suggestion** that the underlying evidence might suffice for
+> `NON_FIRING` without the broken `complete` flag: ***"Strong ≠ decidable."*** **A zero-`#DB` observation needs
+> the delivery-completeness premise, and there is no evidence `#DB`s enter this debugger's stream at all —
+> which is the untested positive control.** **Declaring `NON_FIRING` by fiat would substitute judgment for the
+> packet's own decision rule.** **The Session accepts this without reservation.**
+
 **Session:** `session-9f8c9988-38fb-4cc9-a188-a6881a52559a`, 2026-09-28, DSH.
 **Packet:** `A2h-dr0-delivery-gate-r1`, frozen
 **`12A0B68EB550A96DCD4D2393DBC81262AC0CEE2838CC403A9FD99ED18D3BE537`**.
@@ -54,6 +76,12 @@ per-event history with a decision input.**
 
 ## A second defect: the post-continue readback measures a RUNNING thread
 
+> **⚠ EVERYTHING FROM HERE TO THE END OF THIS SECTION IS VOID** per the Advisor's Correction A: the whole
+> `post_continue_*` array is void **in both directions**, so the readings below are **not evidence of
+> anything**, including the "two candidates" framing. **The Session's reading was too generous — it treated the
+> `seq=97` non-zero reading as surviving, and the Advisor explicitly voided *"any no-revert reading"* too.**
+> **Retained below only to show what was observed, not as findings.**
+
 **The install thread (`tid 63568`) has 13 212 post-continue readbacks: 2 with `DR0` SET and 13 210 with
 `DR0` ZERO.** **Last non-zero at `seq=97` (`dr0=00000000001D4064 dr7=00000000000D0001`); first zero at
 `seq=110`.**
@@ -84,7 +112,11 @@ without suspending first.**
 | **Zero `#DB`, either chance** | `raw_single_step=0`, `ss_first_chance=0`, `ss_second_chance=0` | **not second-chance delivery** |
 | **The store executed, with correct values** | `install_exec … tid=63568 … raw=80000115 before=80000115 installed=FE000104` | the **latch is tied to the store itself** |
 | **The store wrote the EXACT watched address** | `host=00000000001D4064` **==** `canonical=00000000001D4064` | **the Worker's flagged third cause (`host != canonical`) is RULED OUT** |
-| **The watch was SET on the install thread** | `seq=97` → `dr0=00000000001D4064 dr7=00000000000D0001` | armed, correct address, correct `DR7` |
+| ~~The watch was SET on the install thread~~ | ~~`seq=97` → `dr0=00000000001D4064 dr7=00000000000D0001`~~ | **VOID per Correction A** — it is a `post_continue_*` reading, and the whole array is void in both directions |
+
+**The Advisor's scoping of what survives is precise:** *"Surviving independently: store executed, exact address
+match, zero-`#DB` as **observed series** (not as completeness)."* **So the `seq=97` watch-set observation does
+NOT survive** — it was the Session's own addition and it rests on the void array. **The Session withdraws it.**
 
 **So the picture is now: a proven store, at the proven watched address, on the proven armed thread, with the
 debug stream proven read, and zero `#DB` of either chance.** **That is much stronger than the previous
