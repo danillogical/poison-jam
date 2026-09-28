@@ -475,57 +475,41 @@ identified.
 ## The toolkit and the arena behaved correctly
 
 `xbox_HeapAlloc(598869040, 4096)` fails; `alloc_type = 0x801000` has **no `MEM_RESERVE`**, so neither
-reserve branch can run; the bridge returns **`0xC0000017` (`STATUS_NO_MEMORY`)**. **No arena change is
-warranted, and widening it would be synthetic completion** — it would not make a 571 MB *commit* correct.
+reserve branch can run; the bridge returns **`0xC0000017` (`STATUS_NO_MEMORY`)**. **The guest then does not
+check the result and calls through NULL**, raising `0xE0424943`. **No arena change is warranted, and
+widening it would be synthetic completion** — it would not make a 571 MB *commit* correct.
 
-> ### ⚠ CORRECTION (2026-09-27, found during `A2h-named-producer-frame-r1`) — the guest DOES check the result
+> **ERRATUM (2026-09-27, appended — the sentence above is preserved verbatim as originally reviewed).**
 >
-> **The sentence that stood here read:** *"The guest then does not check the result and calls through NULL,
-> raising `0xE0424943`."* **Its first clause is FALSE**, and the correction is recorded here rather than left
-> to be re-derived, because this record is accepted and other work cites it.
->
-> **The verified bytes immediately after the ordinal-184 call:**
+> **Its first clause is FALSE: the guest DOES check the result.** Verified bytes:
 >
 > ```
 > 00149E4A  call  dword ptr [0x1c3f88]   ; NtAllocateVirtualMemory
 > 00149E50  mov   dword ptr [ebp-0x12c], eax
 > 00149E56  test  eax, eax
-> 00149E58  jl    0x149eec               ; <-- A SIGNED CHECK ON THE RESULT
+> 00149E58  jl    0x149eec               ; <-- A SIGNED CHECK
 > ```
 >
-> **`0xC0000017` is negative as a signed 32-bit value** (top bit set), so **`jl` IS taken** on the failing
-> allocation. **The guest checks the result and enters a structured error path** which even materialises the
-> status and unwinds properly:
+> **`0xC0000017` is negative as a signed 32-bit value** (bit 31 set), so **`jl` IS taken**, and the error
+> path materialises the status and returns cleanly through `__SEH_epilog`:
+> `00149EF2 mov [ebp-0x188],0xc0000017` … `00149F35 call 0x149f4b` … `00149F40 call 0x17d231` …
+> `00149F45 ret 0xc`. **So the ~571 MB OOM is HANDLED, not fatal, and it is not the terminal event.**
 >
-> ```
-> 00149EEC  test  byte ptr [ebp+0xc], 4
-> 00149EF0  je    0x149f2a
-> 00149EF2  mov   dword ptr [ebp-0x188], 0xc0000017   ; <-- STATUS_NO_MEMORY, carried
-> 00149F14  mov   eax, dword ptr [ebp-0x24]
-> 00149F17  mov   dword ptr [ebp-0x174], eax
-> 00149F1D  lea   eax, [ebp-0x188]
-> 00149F23  push  eax
-> 00149F24  call  dword ptr [0x1c4080]                 ; a further call, not a NULL dereference
-> 00149F31  or    dword ptr [ebp-4], 0xffffffff
-> 00149F35  call  0x149f4b
-> 00149F40  call  0x17d231                             ; __SEH_epilog
-> 00149F45  ret   0xc
-> ```
+> **The second clause, "calls through NULL", is separately TRUE** — but **not on the failing allocation's
+> path**: the NULL call is at `0x00149828` (`call [0x1c4064]`) **near the TOP of the function**, whereas the
+> ordinal-184 call is at `0x00149E4A` near the **END**. **Different passes of the same function.**
 >
-> **So the OOM is HANDLED.** It is not the cause of the crash, and "the guest does not check the result" must
-> not be repeated.
+> **The circularity the Advisor identified:** the bare sequence (`0xC0000017` → NULL ICALL → `0xE0424943`)
+> was cited as *evidence* for "no check", and "no check" then explained the sequence. **Temporal
+> co-occurrence is not attribution.** The packet itself had warned that this inference *"must itself be
+> tested, not assumed"* (`a2h-oom-causal-slice.md:16`) — it was not, until now.
 >
-> **"Calls through NULL" is separately TRUE** — `[ICALL] invalid target 0x00000000 … return=0014982E` is real
-> — but **the NULL call is NOT on the failing allocation's path**: its return address `0x0014982E` is at the
-> **`call [0x1c4064]` site at `0x00149828`, near the TOP of the function**, whereas the ordinal-184 call is at
-> `0x00149E4A` near the **END**. **The two are different passes of the same function**, which is exactly the
-> activation-reuse finding recorded in `a2h-named-producer-frame-evidence.md`.
+> **Terminal event:** the `call [0x1c4064]` at `0x00149828` read **`0`**; `RECOMP_ICALL_IS_CODE` rejected it
+> as non-code and `recomp_icall_not_code_log` raised `0xE0424943` **NONCONTINUABLE**. **The original XBE
+> holds `0x80000115` there — a valid ordinal-277 kernel thunk.** Critical path has moved to *what zeroed /
+> what read as zero at `0x001C4064`*; see `docs/reviews/a2h-critical-path-advisor-ruling.md`.
 >
-> **What is NOT yet established, and must not be assumed:** *why* `[0x1c4064]` read `0` when the ICALL
-> executed. **In the original XBE that slot holds `0x80000115` — a valid ordinal-277 thunk** — and the log
-> records ordinal 277 being dispatched from this very call site (`ret=0x0014982E`) **1909 times**, including
-> `#5551` and `#5553` immediately before the failure. **So the slot held a working target and then did not.**
-> That is a **new, unowned question**, and it is recorded as a lead rather than a conclusion.
+> **Ruling authority:** Advisor `muse_FkNhGaXtV9P5` (`muse-spark-1.3-contributor`, `max`), Q4 Obligation 1.
 
 ## What this establishes, and what it does not
 

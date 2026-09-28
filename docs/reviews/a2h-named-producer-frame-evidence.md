@@ -220,10 +220,25 @@ is at `0x00149E4A` near the **END**. **They are different passes of the same fun
 |---|---|
 | Original XBE `.rdata` at `0x001C4064` | **`0x80000115`** — a valid **ordinal-277** kernel thunk (`0x80000000 \| 277`) |
 | The toolkit **patches** this table at runtime (`kernel_bridge.c:9198-9225`, `VirtualProtect` to `PAGE_READWRITE`, then rewrites entries) | so the runtime value is a **patched** target, not the raw thunk |
-| ordinal-277 dispatches from **this exact call site** (`ret=0x0014982E`) | **1177** |
+| ordinal-277 dispatches from **this exact call site** (`ret=0x0014982E`) | **COUNT WITHDRAWN — see below** |
 | …and then | **`[ICALL] invalid target 0x00000000 … return=0014982E`** |
 
-**So the slot worked 1177 times and then read as `0`.** The guard rejected `0` as non-code and logged.
+> ### ⚠ Two counts WITHDRAWN on Advisor ruling — neither is citable
+>
+> I reported **1177** and **1909** for ordinal-277 dispatch counts in two different scripts. **The Advisor
+> ruled both uncitable:** they are the *same claim with different numbers*, and **neither named the run and
+> method that produced it.** Two hand-counts disagreeing is not a measurement with an error bar; it is two
+> unverified numbers, and the honest move is to withdraw both rather than pick the one that fits.
+>
+> **This is the seventh instance of this project's hand-count failure mode**, so the Advisor made it binding:
+> **no hand counts in decision inputs — tool-computed quantities with positive controls and loss accounting.**
+> The next packet's Experiment 1 must compute these from a **named artifact** with the log's own cap and loss
+> accounting (`RECOMP_KERNEL_LOG_BUDGET` versus actual lines, and ordinal continuity) before either number is
+> used for anything.
+
+**So the slot held a working target many times and then read as `0`** — the *shape* of the finding stands on
+the two facts that are properly witnessed: the XBE value (`0x80000115`, verified bytes) and the terminal
+`invalid target 0x00000000` (the log's own line). **The exact multiplicity is an Experiment-1 deliverable.**
 
 ### What is NOT established — and must not be assumed
 
@@ -236,9 +251,12 @@ is at `0x00149E4A` near the **END**. **They are different passes of the same fun
   XBE-backed reads from it are displaced — the apparent `0` at `0x001C4060` in the dump is **not**
   admissible evidence. **This is exactly the "don't read a displaced dump as repaired memory" rule.**
 
-**Recorded as a lead with a positive-control structure** — the same slot demonstrably worked 1177 times, so a
-"what zeroed it" packet would have a strong baseline to compare against. **It is a separate question from this
-packet's, and the Session is routing the critical-path decision rather than silently switching packets.**
+**Recorded as a lead with a positive-control structure** — the same slot demonstrably worked before the
+failure (the exact multiplicity is an Experiment-1 deliverable, not a citable count), so a "what changed at
+the transition" packet has a strong baseline to compare against. **It is a separate question from this
+packet's, and the Session has routed the critical-path decision rather than silently switching packets** —
+the Advisor ruled that the critical path **has moved** here; see
+`docs/reviews/a2h-critical-path-advisor-ruling.md`.
 
 
 

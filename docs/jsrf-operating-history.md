@@ -2030,3 +2030,44 @@ The user requested a handoff focus due to remaining weekly usage. The corrected
 renderer implementation.
 Current GPU harness changes remain uncommitted in both repositories. Inspect and
 preserve them before proceeding; earlier commit hashes represent the baseline.
+
+---
+
+## 2026-09-27 — UPDATE: the A2h OOM is HANDLED; the critical path moves to the NULL thunk slot
+
+**Appended, not rewritten.** The A2h text earlier in this file framed an open question
+("whether ... or ...") plus temporal claims, and asserted nothing false; this entry records the
+answer. Nothing above has been edited.
+
+**What was believed:** that the ~571 MB allocation failure was the terminal event, because the
+guest "does not check the result and calls through NULL", raising `0xE0424943`.
+
+**What measurement showed.** Verified bytes after the ordinal-184 call:
+
+    00149E4A  call  dword ptr [0x1c3f88]   ; NtAllocateVirtualMemory
+    00149E50  mov   dword ptr [ebp-0x12c], eax
+    00149E56  test  eax, eax
+    00149E58  jl    0x149eec               ; a SIGNED check on the result
+
+`0xC0000017` is negative as signed 32-bit, so `jl` IS taken; the error path materialises
+`STATUS_NO_MEMORY` and returns cleanly through `__SEH_epilog`. **The OOM is handled, not fatal.**
+The earlier reasoning was circular: the bare sequence was cited as evidence for "no check", and
+"no check" then explained the sequence. The originating packet had warned this inference "must
+itself be tested, not assumed".
+
+**The actual terminal event.** `call dword ptr [0x1c4064]` at `0x00149828` — near the TOP of the
+same function, whereas the ordinal-184 call is near the END, so they are DIFFERENT PASSES. The
+slot read `0`; `RECOMP_ICALL_IS_CODE` rejected it as non-code and the guard raised
+`0xE0424943` NONCONTINUABLE. **The original XBE holds `0x80000115` at `0x001C4064` — a valid
+ordinal-277 kernel thunk** — and the toolkit patches that table at runtime.
+
+**Consequence.** The Advisor ruled that the **critical path has moved** to *what zeroed / what
+read as zero at `0x001C4064`*, and that the producer line is **PARKED, not retired**, with two
+named reactivation conditions. Ruling recorded verbatim in
+`docs/reviews/a2h-critical-path-advisor-ruling.md`; errata appended to
+`a2h-oom-causal-slice-evidence.md` and `a2h-mechanism.md`.
+
+**Also withdrawn:** two hand-counts (1177 and 1909) for the ordinal-277 dispatch multiplicity.
+They were the same claim with different numbers and neither named its run and method, so neither
+is citable. Binding lesson recorded: **no hand counts in decision inputs** — tool-computed
+quantities with positive controls and loss accounting.

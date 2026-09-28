@@ -1,4 +1,47 @@
-# `A2h` mechanism — the heap-OOM is a **guest allocation failure with no NULL guard**, and it **predates** the A4b2 trap work
+# `A2h` mechanism — the heap-OOM is a **guest allocation failure with no NULL guard**, and it **predates** the A4b2 trap
+
+> ## ⚠ DATED CORRECTION (2026-09-27, appended — the title and the text below are PRESERVED as written)
+>
+> **This document's title, its Defect B, and its mechanism steps 3–4 assert a mechanism that measurement has
+> since FALSIFIED.** They are preserved rather than rewritten, so that the record shows what was believed and
+> when it changed. **Read the correction before relying on any of it.**
+>
+> **What is FALSE: "the guest does not handle the failure" / "no NULL guard" / "Defect B is the crash."**
+>
+> Verified bytes immediately after the ordinal-184 call:
+>
+> ```
+> 00149E4A  call  dword ptr [0x1c3f88]   ; NtAllocateVirtualMemory
+> 00149E50  mov   dword ptr [ebp-0x12c], eax
+> 00149E56  test  eax, eax
+> 00149E58  jl    0x149eec               ; <-- A SIGNED CHECK ON THE RESULT
+> ```
+>
+> **`0xC0000017` is negative as a signed 32-bit value, so `jl` IS taken**, and the error path carries
+> `STATUS_NO_MEMORY` and returns cleanly through `__SEH_epilog` (`00149EF2 mov [ebp-0x188],0xc0000017` …
+> `00149F40 call 0x17d231` … `00149F45 ret 0xc`). **The OOM is HANDLED. It is not the crash.**
+>
+> **The circularity, named:** this document cited the bare sequence (`0xC0000017` → NULL ICALL →
+> `0xE0424943`) as *evidence* for "no check", and "no check" then explained the sequence. **Temporal
+> co-occurrence is not attribution.** The originating packet had itself warned this inference *"must itself
+> be tested, not assumed"* (`a2h-oom-causal-slice.md:16`).
+>
+> **What actually terminates the run:** the `call [0x1c4064]` at `0x00149828` read **`0`**;
+> `RECOMP_ICALL_IS_CODE` rejected it as non-code and `recomp_icall_not_code_log` raised `0xE0424943`
+> **NONCONTINUABLE**. **The original XBE holds `0x80000115` there — a valid ordinal-277 kernel thunk.**
+> The NULL call is at the **top** of the function; the ordinal-184 call is near the **end** — **different
+> passes.**
+>
+> **What STANDS:** **Defect A** (the 571 MB `MEM_COMMIT` with `BaseAddress = NULL` is not a legitimate
+> reservation) — **handling-independent, unaffected by this correction.** Also standing: the failure
+> **predates** the A4b2 trap work, and is **not trace-caused**.
+>
+> **What needs REFRAMING:** the baseline-variance paragraph at L94 — the variance between the OOM run and
+> `a2b-nr-baseline` is in the **NULL event**, not in OOM handling.
+>
+> **Authority:** Advisor `muse_FkNhGaXtV9P5` (`muse-spark-1.3-contributor`, `max`), Q4 Obligation 2. Full
+> ruling: `docs/reviews/a2h-critical-path-advisor-ruling.md`. Critical path is now *what zeroed / what read
+> as zero at `0x001C4064`*. work
 
 **Session:** `session-9f8c9988-38fb-4cc9-a188-a6881a52559a`, 2026-09-27, DSH.
 **Why this record exists:** the Advisor named `A2h` the critical path — *"the trapped crash at ≈4.77 s blocks

@@ -100,7 +100,79 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-named-producer-frame-r1` **EXECUTED 2026-09-27 → `O-OPEN`** (frame and caller BOUND; the failing allocation's read value is not in the artifact)
+## CURRENT PACKET — **NONE. Critical path MOVED by Advisor ruling: the `A2h` producer line is PARKED; the next packet is a NULL-slot triage discovery.**
+
+> ### Advisor ruling (2026-09-27): the critical path moved to `0x001C4064`
+>
+> **Recorded verbatim:** `docs/reviews/a2h-critical-path-advisor-ruling.md` (handle `muse_FkNhGaXtV9P5`,
+> `muse-spark-1.3-contributor`, `max`).
+>
+> **The premise several packets rested on is FALSE: the ~571 MB OOM does not kill the run.** The guest
+> **checks** it (`00149E56 test eax,eax` / `00149E58 jl 0x149eec`; `0xC0000017` is negative, so the branch is
+> **taken**) and returns cleanly through `__SEH_epilog` carrying `STATUS_NO_MEMORY`. **The OOM is HANDLED.**
+>
+> **The actual terminal event:** `call dword ptr [0x1c4064]` at `0x00149828` read **`0`**;
+> `RECOMP_ICALL_IS_CODE` rejected it as non-code and raised `0xE0424943` **NONCONTINUABLE**. **The original
+> XBE holds `0x80000115` there — a valid ordinal-277 kernel thunk** — and the toolkit patches that table at
+> runtime. The NULL call is near the **top** of the function; the ordinal-184 call is near the **end** —
+> **different passes.**
+>
+> **The lapse, named by the Advisor:** an untested lead **hardened into accepted fact**, and the reasoning was
+> circular — the bare sequence (`0xC0000017` → NULL ICALL → `0xE0424943`) was cited as *evidence* for "no
+> check", and "no check" then explained the sequence. **The packet itself had warned this inference "must
+> itself be tested, not assumed"** (`a2h-oom-causal-slice.md:16`). This is a **compliance failure with
+> existing discipline** (§2.4.1 observed/inferred labelling; §2.4.2 cheap direct checks) — **not a policy
+> gap, so no new policy**, but it **binds the next packet**.
+
+### `A2h` producer line — **PARKED, not retired**
+
+**Reactivation conditions (either one reopens it):** (i) the NULL investigation shows the slot death is
+**downstream of allocation-failure error handling**; or (ii) a later gate **needs the size explained** after
+the NULL issue resolves. **The byte-identical-35-runs anomaly stays unexplained and stays recorded.** **The
+producer work product transfers intact** — same function: frame/caller/ABI binding, the no-writer proof, the
+call-site census, and the tested tools **all directly serve the NULL analysis**.
+
+**Superseded:** `docs/packets/a2h-live-oom-arg2-bridge.md` (draft, never promoted). Its seam analysis is
+**validated and reused**, but its framing inherits the OOM premise the Advisor ruled against; **it is not the
+next packet.**
+
+### Next authorized work — a **NULL-slot triage discovery**, two phases, per the Advisor's Q2
+
+**Discovery, no behavior change.** Exp1 is **offline log mining at zero new code**; Exp2 uses the
+**existing** `RECOMP_KERNEL_WATCH` gate, also zero new code. **A new toolkit instrument is NOT first** —
+that is the Advisor's explicit redirection: decide toolkit-vs-guest-vs-neither **before** building anything.
+
+- **Exp1 (offline, zero new code):** OOM-vs-NULL ordering + last-N-ICALL context; **count provenance** —
+  the log's cap and loss accounting (`RECOMP_KERNEL_LOG_BUDGET` vs actual lines, ordinal continuity incl. the
+  `#5551`/`#5553` gap) and a **tool-computed** dispatch count from a **named artifact**; the **thread check**
+  (`tid=` is already in every ICALL line); the **nr-baseline contrast** (`20260927-130036-879-a2b-nr-baseline`
+  — establish comparability first); and backward-edge exclusion for the faulting region.
+- **Exp2 (`RECOMP_KERNEL_WATCH=0x1C4064`, existing gate):** samples the VA either side of every bridge call,
+  names a bridge ordinal that changed it, and distinguishes **bridge-change from guest-side change by timing**
+  (`kernel_bridge.c:8921-8937,9026-9094`). Plus a **write-once first-`0`-transition latch** (new,
+  off-by-default) as the authoritative transition record, with the KWATCH series as corroboration under a
+  completeness check.
+- **Outcomes route to named seconds, not back to the Advisor by default:** bridge-named change → toolkit
+  install/relocation audit; guest-side change → **page-guard write history** on the slot page from install
+  (install writes are the **positive control**; absence of a zero-write = never-zeroed); no transition at
+  boundaries → read-path/displacement analysis.
+
+**A toolkit change IS expected for the Exp2 latch and IS proportionate** (Advisor Q3), but it requires the
+**Muse Advisor shape preflight before promotion**, and **P4's discovery-transfer bridge must be
+re-established before any P4 inheritance**.
+
+### Binding discipline for the next packet (Advisor Q5)
+
+**No hand counts in decision inputs.** Every count must be **tool-computed, from a named artifact, with
+positive controls and loss accounting.** Two hand-counts for the same quantity (1177 and 1909) disagreed and
+**both are withdrawn as uncitable** — the seventh instance of this project's hand-count failure mode.
+
+**Also recorded:** the terminal-event rule — **attribute a terminal event by reading the instructions past the
+failing call, never by temporal co-occurrence.**
+
+---
+
+## Previous — `A2h-named-producer-frame-r1` **EXECUTED 2026-09-27 → `O-OPEN`** (frame and caller BOUND; the failing allocation's read value is not in the artifact)
 
 **Executed, not edited.** Frozen `2333B652…F88887`. Evidence:
 `docs/reviews/a2h-named-producer-frame-evidence.md`. **No guest run** — the packet allows one only if the
@@ -394,7 +466,7 @@ mistake and the byte-width writer census.
 | **The producer's function** | **`sub_001497DC`** (`0x001497DC`–`0x00149F48`), **frameless** (`fpo_leaf`, inherits the caller's frame), so `[ebp+0x10]` is an offset in the *caller's* frame |
 | **Dominance, doubly derived** | Two independent CFG methods agree: 46 reaching instructions, **2 writers**, single entry `0x001497DC`, call **unreachable** with writers removed; the `movzx` writer **never reaches the call** |
 | **The failing argument was pointer-shaped** | `≈0x23B20410`, far outside the 64 MB RAM window — **the caller passed a pointer-like value where a size belongs** |
-| **The arena and toolkit behaved correctly** | `alloc_type 0x801000` is `MEM_COMMIT`, no `MEM_RESERVE`, so no reserve branch applies; the bridge returns `0xC0000017`. The guest then does not check the result and calls through NULL |
+| **The arena and toolkit behaved correctly** | `alloc_type 0x801000` is `MEM_COMMIT`, no `MEM_RESERVE`, so no reserve branch applies; the bridge returns `0xC0000017`. ~~The guest then does not check the result and calls through NULL~~ **WITHDRAWN — the guest DOES check (`test eax,eax; jl 0x149eec`; `0xC0000017` is negative so the branch is taken) and the OOM is HANDLED. The NULL call is a different pass. See the erratum in `a2h-oom-causal-slice-evidence.md` and `a2h-critical-path-advisor-ruling.md`** |
 
 **Three hypotheses refuted in sequence, all recorded:** the horizon record's reading that the OOM *tracks the
 trap*; the Session's mid-execution **stale-stack-slot** hypothesis; and the Session's **"no-trap A2g"** claim.
