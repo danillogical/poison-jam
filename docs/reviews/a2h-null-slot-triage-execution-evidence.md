@@ -1,0 +1,148 @@
+# `A2h-null-slot-triage-r1` execution evidence — **`O-NO-BOUNDARY-TRANSITION`**
+
+**Session:** `session-9f8c9988-38fb-4cc9-a188-a6881a52559a`, 2026-09-28, DSH.
+**Packet:** `docs/packets/a2h-null-slot-triage.md`, revision **`A2h-null-slot-triage-r1`**, frozen SHA-256
+**`F9A6522E8579AD756701C150A0AF60275DCFF4158705CE5331BE3BF2EA7A9F20`** (80 lines) — verified before execution,
+**not edited**. **Class:** discovery (§5.8).
+
+**Selected row: `O-NO-BOUNDARY-TRANSITION`** — *"valid install and last nonzero samples, complete per-thread
+boundary series, raw-zero terminal ICALL, and **no** first-zero boundary transition before it; no missing
+sampled windows."*
+
+**Two runs, exactly as the packet pre-specified, same build.** Run 1 (gates OFF) is the live inertness
+control; Run 2 (gates ON) is authoritative. **No third run.**
+
+---
+
+## Artifacts
+
+| | Run 1 — inertness control | Run 2 — authoritative |
+|---|---|---|
+| Label | `a2h-null-slot-inert-off` | `a2h-null-slot-authoritative-on` |
+| Directory | `logs/runs/20260928-001502-101-…` | `logs/runs/20260928-001520-474-…` |
+| Profile | **STRICT** | **STRICT** |
+| Outcome | `unhandled_exception` | `unhandled_exception` |
+| Registry version archived | **2** | **2** |
+
+**Classifier:** `scripts/a2h-slot-triage-classify.py` (**8 fixture self-tests OK**) — the row is selected by
+tool, not by an operator reading a log. **Counts are citable only as `(artifact, query, value)` triples** per
+the Advisor's binding count discipline; the classifier reports the log's SHA-256 with every result.
+
+## The install positive control **PASSED**, exactly as predicted
+
+```
+[A2HSLOT] install tid=44768 slot=001C4064 raw=80000115 installed=FE000104 index=65
+```
+
+| Quantity | Observed | Predicted | |
+|---|---|---|---|
+| slot | `0x001C4064` | the packet's pinned slot | ✓ |
+| index | `65` | `(0x001C4064 − 0x001C3F60)/4` | ✓ |
+| raw image value | **`0x80000115`** | the ordinal-277 marker `0x80000000 \| 277` | ✓ |
+| installed value | **`0xFE000104`** | `KERNEL_VA_BASE + 65*4` | ✓ |
+
+**An image value, a logged event and a source transformation agree.** This is the independent control the
+packet required, and it is the reason the rest of the run is interpretable.
+
+## Run 1 is a valid live inertness control
+
+| Check | Result |
+|---|---|
+| `[A2HSLOT]` lines | **0** — the gate produced nothing |
+| `[KWATCH]` lines | **0** |
+| Non-gate env identical to Run 2 | `RECOMP_GPU_ACK=0`, `RECOMP_APU_TRAP=1`, `RECOMP_KERNEL_LOG_BUDGET=100000` — **all MATCH** |
+| Guest prefix through the OOM | **identical**: `#5549` 129, `#5550` 161, `#5551` 277, `#5552` 294, `#5553` 277, `#5554` 184 |
+| OOM / ICALL / exception | **identical**: `598869040`, `invalid target 0x00000000`, `0xE0424943` |
+
+**So the instrumentation is inert on the real guest** — which is exactly what a fixture cannot establish, and
+the reason the Advisor required a live Run 1 rather than fixture-tested inertness.
+
+## The decisive observation
+
+**The slot read `0xFE000104` at EVERY one of 15498 sampled bridge boundaries, on all six threads.**
+
+| Quantity (Run 2) | Value |
+|---|---|
+| `[A2HSLOT]` before-samples | **7751** (one per dispatch) |
+| `[A2HSLOT]` after-samples | **7743** |
+| distinct sampled values, all threads | **`0xFE000104` only** |
+| samples reading zero | **0** |
+| `[KWATCH]` change lines | **0** (the one KWATCH line is the initial *before* print) |
+| latch first-zero transitions recorded | **0** |
+| terminal read | **`0x00000000`** |
+
+**The last bridge boundary is `call=#5555 ordinal=294`, and it read `0xFE000104` — immediately before the
+terminal read of `0`:**
+
+```
+[A2HSLOT] tid=44768 call=#5555 ordinal=294 slot=001C4064 value=FE000104 phase=after
+[KERNEL] → returned 0x00000000
+[ICALL] invalid target 0x00000000 tid=44768 esp=00F7FD00 return=0014982E
+[A2HSLOT] terminal tid=44768 slot=001C4064 live=00000000 call=#5555 observed=0
+[EXCEPTION] tid=44768 code=0xE0424943
+```
+
+**So the slot was correct at the final bridge boundary and zero at the raw read, with no bridge call in
+between.** The change happened in a region the sampler does not bracket — which is precisely what this row
+names.
+
+## Completeness — measured the right way, and a Session error corrected
+
+> ### ⚠ The Session's first completeness test was WRONG and would have failed the row for the wrong reason
+>
+> The first version paired `after` lines to `before` lines **by call number** and reported **5 gaps** on the
+> terminating thread (calls 1, 1757, 1758, 1762, 1763) plus 595 nested `before→before` adjacencies. Under the
+> packet's wording — `O-OPEN` is selected on *"index gap/duplicate within a thread"* — that would have forced
+> `O-OPEN`.
+>
+> **It was a printing artifact of NESTED dispatch, not missing observations.** A bridge can re-enter the
+> dispatcher, which **increments the per-thread counter**, so an `after` line prints the **current** counter —
+> already advanced past its matching `before`. Measured **maximum nesting depth: 7**. Re-pairing by *ordinal*
+> instead of call number leaves exactly **one** unmatched ordinal per thread (the outermost call still on the
+> stack at capture).
+>
+> **The correct test is: does every `[KERNEL]` dispatch have a `before`-sample on that thread?** The
+> `before` series **is** the boundary series, because a `before` is emitted at dispatch entry before any
+> nested call can occur.
+>
+> | tid | dispatches | before-samples | missing |
+> |---|---|---|---|
+> | 44768 | 5555 | **5555** | 0 |
+> | 48528 | 259 | **259** | 0 |
+> | 60860 | 2 | **2** | 0 |
+> | 65292 | 328 | **328** | 0 |
+> | 65888 | 1385 | **1385** | 0 |
+> | 65956 | 222 | **222** | 0 |
+>
+> **No unsampled thread. No dispatch without a sample. The boundary series is COMPLETE.** The classifier now
+> measures completeness this way and **fails closed to `O-OPEN`** if a thread is unsampled or a dispatch lacks
+> a sample — both pinned by fixtures.
+
+## Row selection
+
+| Row | Applicable? | Why |
+|---|---|---|
+| `O-IDENTITY` | **No** | XBE/toolkit/exe pins verified; both runs STRICT; the install control passed; no malformed records |
+| `O-OPEN` | **No** | Run 1 is a valid inertness control, Run 2 has the terminal zero, the runs differ **only** in gate states, the install control passed, and the series is **complete** |
+| `O-BRIDGE` | **No** | Requires a first `nonzero→0` **inside** a bridge. **No sample ever read zero**; the latch recorded **no** transition |
+| `O-GUEST` | **No** | Requires an observed inter-bridge `previous-after != 0 → next-before == 0`. **No sample read zero**, so there is no such boundary pair |
+| **`O-NO-BOUNDARY-TRANSITION`** | **YES** | Valid install and last-nonzero samples, **complete** per-thread series, raw-zero terminal ICALL, and **no** first-zero boundary transition before it |
+
+## What this establishes, and what it does NOT
+
+**Establishes:** the install control is exact; the instrumentation is live-inert; the slot held
+`0xFE000104` at **every** one of 15498 sampled bridge boundaries across **six** threads; **no** sample and
+**no** latch record ever observed zero; the final boundary before the fault read `0xFE000104`; and the
+terminal raw read was `0`.
+
+**Does NOT establish — and the row's own wording forbids claiming:** that the slot was **never** zero. **A
+transient zero and recovery between the last sample and the raw read is precisely what the successor packet
+tests.** Also not established: any writer identity, any guest RIP, whether a bridge or guest code was
+responsible, that the OOM and the NULL slot are related, a repair, or any strict criterion. **No synthetic
+completion** — the trap and `0x80` were not suppressed, the allocation was not faked, the arena was not
+widened, the NULL call was not bypassed, and no guest error-handling change was made or proposed.
+**`PIO_FREE` remains DEFERRED**; `A4b2-r7`, accepted/closed `A4b2-r8` and `A4b1-r4` were **not** reopened;
+`0xFFFFB3` stays **`UNRESOLVED`**.
+
+**Successor named by the row:** `A2h-slot-read-path-displacement` — test transient zero/recovery, a torn or
+displaced read, or a guest write between the last sample and the raw read.
