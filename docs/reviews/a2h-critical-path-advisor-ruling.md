@@ -74,4 +74,116 @@ Fairness requires the exact fault location: pursuing the producer was CORRECT gi
 | 5 | Q5 — 1177/1909 **neither citable** | **DONE** — both counts withdrawn from the evidence record; Exp1 must tool-compute them |
 | 6 | Q5 — confirm-or-correct the `0x0014980E` citation | **DONE** — confirmed: `0x0014980E` **is** the producer store (`mov [ebp-0x24], eax`); the read is `0x00149800` and the add is `0x00149E24`. Cited per-PC from here on |
 | 7 | Q2 — the next packet is a **NULL-slot triage discovery** | **IN PROGRESS** — the Planner's `a2h-live-oom-arg2-bridge` draft is **superseded** and must be re-briefed |
-| 8 | Q3 — toolkit change proportionate, **shape preflight REQUIRED** | **PENDING** — applies to the *new* packet's Exp2 instrument, not to the parked one |
+| 8 | Q3 — toolkit change proportionate, **shape preflight REQUIRED** | **DONE** — preflight obtained; **`SHAPE: REDIRECT`** with four binding corrections. Recorded below |
+
+---
+
+# Shape preflight (2026-09-27) — `SHAPE: REDIRECT`
+
+**Turn:** `01a0e651-2195-7000-9152-373b3be1bffd`, handle `muse_FkNhGaXtV9P5`, `muse-spark-1.3-contributor`, `max`.
+**Raised because:** the Planner's packet needs a toolkit change (the Exp2 latch), which the owner's toolkit
+constraint makes preflight-mandatory. The Planner cannot reach the Muse handle, so the Session relayed the
+sketch and returned the ruling.
+
+```text
+SHAPE: REDIRECT
+REASON: Sketch direction right (discovery triage, KWATCH lead, named seconds), but multithreading (now
+source-proven) forces per-thread attribution the sketch lacks; global latch + unattributed prints cannot
+soundly support O-GUEST/O-NO-TRANSITION.
+POLICY_ISSUE: NONE
+REVERSED_BY: latch/tid-augmentation infeasible at the seam (re-refer for redesign); a strictly cheaper
+decisive instrument identified; invalidation of the per-thread premise (source-verified at
+kernel_bridge.c:316, so unlikely).
+```
+
+## Binding corrections (apply verbatim; no second preflight unless infeasible)
+
+1. **Per-thread latch, not global.** Fixed **N** slots keyed by **live-read `tid`** (N from Exp1's tid census
+   + stated margin), each **write-once** (CAS-taken, never overwrite/recycle); record =
+   `(tid, thread-call#, ordinal, before, after, QPC ticks, intra/inter flag)`; **N+1th thread → explicit
+   `UNKNOWN`.** Rationale: distinct threads can observe **distinct first-transition contexts** (intra- vs
+   inter-bridge → **different rows**); first-arrival ≠ first-transition under races; **ticks order
+   cross-thread.** N is a stated finite universe (§6.1.6); **overflow is fail-closed.**
+2. **`tid` augmentation on `[KERNEL]`/`[KWATCH]` prints, same scope.** Verified: **no** kernel/dispatch/KWATCH
+   print carries tid (zero `GetCurrentThreadId` in `kernel_bridge.c`), and the counter is `RECOMP_TLS`
+   (`:316`, genuine `__declspec(thread)`/`__thread`, no reset path — **the decreases + 916 reused-different
+   indices PROVE ≥2 threads**). **Unattributed multiplexed series cannot support per-thread windows or
+   negatives.**
+3. **Row keying + precedence.** Rows key on **`(tid, call#)`**; completeness = **per-thread index continuity +
+   budget headroom**; precedence: any intra-bridge valid→0 → **`O-BRIDGE`**, else earliest-tick inter-bridge
+   → **`O-GUEST`**, else **`O-NO-BOUNDARY-TRANSITION`**. **Latch-vs-series disagreement → `O-OPEN`** (fail
+   closed).
+4. **Two pre-specified runs, same build (AMENDS "at most one"):** **Run 1 all gates OFF (inertness control),
+   Run 2 all ON (authoritative).** No third run without re-referral — *"this bounds fishing, not
+   measurement."*
+
+> ### ⚠ Authority correction: the "one bounded attempt" rule was the **Session's**, not the owner's
+>
+> The Planner **correctly refused** to adopt the two-run phasing, on the ground that *"direct human user
+> expressly binds 'One bounded attempt maximum'"* and that an Advisor cannot override a direct-human
+> restriction. **The refusal was right in form and the premise was wrong — and the error was the Session's.**
+>
+> **Provenance check:** `docs/agent-workflow.md` contains **no** run-count rule (its "bounded" uses concern
+> *questions* and *read sets*). The frozen packet `a2h-named-producer-frame.md` contains **none**. The only
+> "at most once" wording in the repository is in **`docs/packets/a2h-live-oom-arg2-bridge.md:22` — the
+> Session's own Planner brief for a packet that was superseded and never promoted.**
+>
+> **So the constraint was the Session's drafting language, mis-attributed to the owner in the brief.** The
+> Session has amended it: **the intent was anti-fishing — never run repeatedly until a desired row appears —
+> and two pre-specified same-build runs with different gate states is a control, not fishing.**
+>
+> **Corrected constraint, now binding:** *at most **two** guest runs, same build, both pre-specified before
+> the first — Run 1 gates OFF (inertness control), Run 2 gates ON (authoritative); no third run without
+> Advisor re-referral; never rerun to chase a desired row.*
+>
+> **The Planner's proposed fallback was declined**, and the reason is recorded because it is the substantive
+> point: it offered one run with *fixture-tested* inertness as the control, but **fixture-tested inertness is
+> not run-time inertness** — a fixture cannot show that the toolkit change does not perturb the *real* guest,
+> and a one-run design cannot distinguish "the slot was already zero" from "my instrument changed the
+> timing." **If the two-run design proves infeasible, the packet fails closed rather than collapsing to one
+> run and calling it controlled.**
+>
+> **This is the second time this window that the Session's own drafting was mistaken for an external rule.**
+> The first was the stale draft-hash pin. Both are recorded: **a constraint's provenance must be checked
+> before it is used to refuse an authorized instruction.**
+
+## The split question — DECLINED as separate promotion, ABSORBED as phasing
+
+The Session asked whether to run a **zero-new-code KWATCH-only** attempt first and promote the latch
+separately. **Declined:** *"the latch is needed regardless (Q2), so a KWATCH-only first promotion saves ~30
+lines at the cost of a full extra cycle + cross-build transfer burden on the critical path."* **Run 1 doubles
+as the `O-BRIDGE` fast-path read AND the inertness control**; all rows still require latch confirmation from
+**Run 2**, same build, zero marginal cost.
+
+## Seam: **stands — redirect *within* it, not away from it**
+
+`O-BRIDGE`-positive does **not** need the KWATCH deficiencies fixed (change prints are **self-bracketing**:
+stack-local before/after around one call — sound unattributed). **`O-GUEST`, `O-NO-BOUNDARY-TRANSITION`,
+completeness and first-transition ordering DO need the latch + tid prints.** So **the latch carries every row
+as primary; KWATCH corroborates** (trend, existence, cross-check).
+
+**Confirmed deficiencies** (the Planner's findings, independently confirmed): `KWATCH_ALL` is changed-only via
+a racy global `seen` (`:9037-9044`); the bridge-change print carries **no index** (`:9089-9092`); and **no tid
+anywhere.**
+
+## Two methodological corrections to the Session
+
+- **Count discipline:** *"1177/1908 are re-citable ONLY as (artifact, query, value) triples with query
+  definitions — the '1909' hand count is already falsified by its own tool (1908), which is exactly why."*
+- **Budget grounding:** *"'RECOMP_KERNEL_LOG_BUDGET absent from log' is methodologically unsound — env vars
+  aren't log text. Ground budget from run metadata/recipe … and state it."* **The Session's log-text search was
+  the wrong method**; the Planner's independent metadata read (`budget=100000`) is the correct grounding.
+
+**Advisory precedent (citable, not standing policy):** kernel-dispatch indices are **per-thread**; cite
+**`(tid,#N)`** or establish single-threaded context. **The printed "4274 total" is one thread's count — never
+cite it as a total.**
+
+## Session actions on this preflight
+
+| # | Correction | Status |
+|---|---|---|
+| 1 | Per-thread latch + tid augmentation + `(tid, call#)` row keying + two-run phasing | **BOUND TO THE PLANNER** — relayed verbatim |
+| 2 | Tool adopted as the packet's accounting instrument | **IN PROGRESS** — extending for metadata budget, both ICALL forms, log hashing, per-thread completeness |
+| 3 | Count discipline `(artifact, query, value)` | **APPLIED** — tool output carries the artifact path and query definition |
+| 4 | Budget grounded from metadata, not log text | **APPLIED** — tool reads `result.json`/metadata, not the log |
+| 5 | P4 discovery-transfer re-establishment before inheritance | **RECORDED** in the packet's obligations |
