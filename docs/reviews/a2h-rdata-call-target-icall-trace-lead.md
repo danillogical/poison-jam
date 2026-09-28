@@ -116,3 +116,70 @@ the `loc_`-anchored `eax` definition at the position-3 call.**
 
 **Both searches are RAW BYTE SEARCHES — leads, not authority.** **The packet's rule stands: the chain must
 come from `loc_`-anchored code, and an unclosed edge is `O-OPEN`.**
+
+---
+
+## Third step: the installer IS `loc_`-anchored, and the field is `[0x19DCE0 + 0x242C]`
+
+**Tracing `0x0018CE30` into the generated source found a `loc_` anchor** (`src/recomp/gen/recomp_0004.c`):
+
+```c
+/**
+ * sub_0018CE30
+ * Original: 0x0018CE30 - 0x0018CE43 (19 bytes, 4 insns)
+ * CC: cdecl, 0 params, returns int_or_void
+ * Frame: fpo_leaf
+ */
+void sub_0018CE30(void)
+{
+loc_0018CE30: ;
+    eax = MEM32(esp + 4);
+    ecx = MEM32(0x19DCE0);
+    MEM32(ecx + 0x242C) = eax;
+    esp += 8; return; /* ret 4 */
+}
+```
+
+**So the handler is stored at `[singleton + 0x242C]`, where the singleton is the D3D global at
+`0x0019DCE0`.** **`sub_0018CE30` is an INSTALLER: it takes a handler and writes it into the singleton's
+field.**
+
+### What the generated source shows about that field
+
+| Search | Result |
+|---|---|
+| **callers of `sub_0018CE30`** | **2**, both tail jumps in `recomp_0003.c:49269,49281` |
+| **references to `[reg + 0x242C]`** | **exactly ONE — the store in the installer.** **Nothing in the generated source READS it.** |
+| **references to the global `0x0019DCE0`** | **many dozens**, across `recomp_0004.c` — **a heavily-used D3D singleton** |
+| **one notable assignment** | **`recomp_0004.c:40150`: `MEM32(0x19DCE0) = 0x19B200;`** — **the singleton is initialised to point at `0x0019B200`** |
+
+### Why this matters, and what it does NOT establish
+
+**The field that receives the refcount thunk is written by exactly one function and read by none in the
+generated source** — which means **the read is an INDIRECT call through that offset**, and **`loc_`-anchored
+searching for a plain `MEM32(reg + 0x242C)` read will not find it.** **The Worker should search for the CALL
+that dereferences the offset, not for a load.**
+
+**And the singleton `0x0019DCE0` is initialised to `0x0019B200`** — **so the field's absolute address at
+runtime is `0x0019B200 + 0x242C = 0x001BD62C`**, **which is a concrete, checkable address.**
+
+**This is the strongest `loc_`-anchored lead so far, and it is still a LEAD:** it identifies **where the
+handler should be installed and where it is read from**, **not why the value was wrong on the fourth
+iteration.** **The chain is not closed.**
+
+**The remaining question is exactly the packet's step 3:** **at the position-3 call, what loads `eax`?** **If it
+loads from `[singleton + 0x242C]`, then the installer's argument or the singleton pointer was wrong. If it
+loads from somewhere else, the cycle's position-3 call is a different site than the installer's field.**
+
+### The concrete next checks for the Worker
+
+1. **Find the CALL that dereferences `[singleton + 0x242C]`** — search generated source for an indirect call
+   whose target expression involves `0x242C`, or for `0x1BD62C` directly.
+2. **Identify the two tail-jump callers** at `recomp_0003.c:49269,49281` — **what do they pass as the
+   handler?**
+3. **Check whether `0x0015F9D0` is ever passed to `sub_0018CE30`.** **If it is not, the refcount thunk reaches
+   position 3 by a different route** — which would refute the installer-field hypothesis.
+4. **Check `0x0019B200 + 0x242C` in the archived dump** if a run's guest memory is available — **a runtime
+   check of what the field actually held.**
+
+**Recorded as the state of the search, with the chain explicitly NOT closed.**
