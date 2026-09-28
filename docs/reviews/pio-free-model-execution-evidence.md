@@ -34,10 +34,21 @@ unit/drain/reset/alias/variable-threshold leaf or missing coverage."*
 | Generated spelling `MEM32(-25034736)` (decimal) | **18** |
 | **Sum** | **28** — **reconciles one-to-one with the XBE population** |
 
+> **Reading note (advisory A-4).** The `find` addresses `001A2297 … 001A611D` are **operand offsets**, not
+> instruction starts — `A4p`'s own convention. The **instruction** begins at `hit−1` for an `A1` moffs load
+> or `hit−2` for an `8B /r` load, so the first site's instruction is at **`001A2296`** and the second's at
+> `001A2A7F`. Recorded so a reader does not disassemble from the wrong byte.
+
 **The two-spelling hazard is real and both spellings are required.** Verified independently:
 `-25034736 & 0xFFFFFFFF == 0xFE820010`. **The population is used as `A4p`'s frozen set, not newly
 enumerated**, per the packet. **No new trace-to-site classification was needed**, so the packet's
 checked-in-parser requirement was **not triggered**.
+
+**The acceptance reviewer closed the hazard positively rather than by assertion:** a normalised scan of
+**every** `MEM8`/`MEM16`/`MEM32` literal in `src/recomp/gen/*.c` modulo 2³² finds **only those two
+spellings** of `0xFE820010`, and **no third spelling at any address ≥ `0x80000000`**. So the `10 + 18` split
+**exhausts** the generated population — the two-spelling hazard `AGENTS.md` warns about is **positively
+closed** for this address, not merely assumed away.
 
 ### The trapped route and the current implementation
 
@@ -157,7 +168,16 @@ hardware truth. **It does, however, independently corroborate that the value is 
 | xemu `vp.c` | **toolkit ancestry — excluded as independent** | "don't simulate the queue … pretend" |
 | **xboxdevwiki, `APU`** (raw wikitext, 14 155 bytes; page rev `7415`, 2025-07-22) | **secondary, Xbox/MCPX-specific** | **SILENT** |
 
-**The wiki's silence is verified by term count on the page's own raw wikitext**, not by impression:
+**The wiki's silence is verified by term count on the page's own raw wikitext**, not by impression. The
+exact, re-runnable source (advisory A-2):
+
+```
+https://xboxdevwiki.net/index.php?title=APU&action=raw
+```
+
+fetched into a known file (`%TEMP%\piofree-wiki-raw.txt`, 14 155 bytes — matching the acceptance reviewer's
+independent byte count), page revision **`7415`**, last modified **2025-07-22** (page identity confirmed by
+the reviewer via the MediaWiki API). Term counts on that text:
 
 | Term | Occurrences in the page source |
 |---|---|
@@ -170,6 +190,9 @@ hardware truth. **It does, however, independently corroborate that the value is 
 **So the wiki documents the VP exhaustively** — 256 voices, 32 bins, voice lists, a `0x80`-byte voice
 structure, envelope segments with rate formulas, DLS2 filter coefficients, HRTF, LFO, the MIXBUF layout,
 and the GP's 6-channel DMA ringbuffer — **and says nothing whatever about a free-space register or a queue.**
+The acceptance reviewer reproduced this **with a positive control** (`NV1BA0` = 2, proving the search was
+live on the right document), and added a **site-wide** wiki search for `PIO_FREE` returning **no results at
+all**.
 
 > **A Session verification error, recorded.** My first attempt to check this grepped a **spill file that
 > actually held the xemu source**, not the wiki, and reported `PIO_FREE` = 1. That looked like it falsified
@@ -182,8 +205,20 @@ and the GP's 6-channel DMA ringbuffer — **and says nothing whatever about a fr
 or two independent secondary sources of different provenance with at least one Xbox/MCPX.** **Neither is
 satisfied:**
 
-- **No primary specification was found.** The 2001 NVIDIA nForce MCP technical brief is linked from the wiki
-  but **now returns HTTP 404** — no register-level `PIO_FREE` semantics were located.
+- **No primary specification was found *live*, but the primary specification exists in archive form and is
+  SILENT.** The 2001 NVIDIA nForce MCP technical brief's live URL returns **HTTP 404**; the acceptance
+  reviewer found an **archived copy that returns HTTP 200** — a **378 982-byte PDF** at
+  `https://web.archive.org/web/2019id_/http://www.nvidia.com/attach/9004` (**the Session re-verified this
+  independently: HTTP 200, `application/pdf`, `%PDF` magic present**). The reviewer extracted its text and
+  counted: **`PIO_FREE` = 0, `NV1BA0` = 0, `PIO` = 0, `queue` = 0, `free` = 0, `FIFO` = 0, `depth` = 0,
+  `front end` = 0** — **with live positive controls** (`Voice Processor` = 21, `register` = 2) proving the
+  document and the search terms were both live.
+  **So the primary source is obtainable and says nothing about this register.** That is a **stronger**
+  statement than "unavailable": the primary-specification branch is not merely unfound, it is **found and
+  silent**.
+  *(The reviewer's own caution, carried: its PDF text extraction was **partial** — 36 275 chars from 36
+  streams, some mojibake — so the zeros held under live positive controls but a cleaner extraction would
+  firm this up if the brief is ever relied on as primary.)*
 - **A first-party source was checked and is also silent.** The wiki's own citation for the 256-voice figure
   is Brian Schmidt's *"Designing the Boot Sound for the Original Xbox"* (Gamasutra, 2011-11-17; archived
   2019-01-23), whose author is described as *"the architect for the Xbox and Xbox 360 audio systems and
@@ -195,8 +230,18 @@ satisfied:**
   finding.
 - **Related wiki pages were also checked and are silent:** `MCPX` (1 684 bytes) and `DSP` (9 655 bytes)
   each contain **zero** occurrences of `PIO_FREE` and **zero** of `queue`.
+- **The acceptance reviewer additionally checked sources the Session had not, all negative:** a
+  **site-wide xboxdevwiki full-text search** for `PIO_FREE` returns *"no results"* — **no page on the wiki
+  mentions it at all**; `JayFoxRox/xbox-tools` (`inspect_apu_vp.py`, `trace_apu_mixbuf.py`);
+  **`Cxbx-Reloaded` — an independent second emulator** (`APUDevice.cpp`, `DirectSound.cpp`,
+  `XbInternalDSVoice.cpp`, `XbDSoundTypes.h`); the live NVIDIA APU page; and four search engines. **All
+  negative.**
 - **Only one admissible secondary source exists, and it is silent.** Silence is **not** a contrary finding —
   it simply leaves the leaves uncovered.
+
+**Both branches of the rule are therefore unmet on exhausted leads**, not on a single check. The reviewer's
+independent coverage of `Cxbx-Reloaded` matters: it is a **different emulator lineage** from xemu, so its
+silence is genuinely additional rather than the same provenance twice.
 
 **So the sourcing rule fails, and under the packet's own text that is explicitly an `O-UNKNOWN` condition**
 (*"including inadequate independent sourcing"*).

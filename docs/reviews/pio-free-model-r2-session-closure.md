@@ -11,14 +11,20 @@
 
 | Item | Value |
 |---|---|
-| Game revision at execution | `d54b5ff55e98f40c0a990858b543bcbf3b802af8` |
+| Game revision at execution | `d54b5ff55e98f40c0a990858b543bcbf3b802af8` — the execution commit |
+| **Game revision after advisory fixes** | **`a3300f1`** — **documentation only**, applying the acceptance advisories below; no code, no packet |
 | Toolkit revision | `c151d4e32a782e4e5adcecbc68afe61ed5fc7e52`, clean |
 | XBE SHA-256 | `FD19055756719893C466302809B433B785ECF5732DF0441286F3F605F0F3EF9C` — matches baseline |
 | ctest | **18/18** (unchanged; no build was performed) |
 | **Toolkit changes** | **NONE** — so **P4's discovery-transfer bridge is not re-opened** |
-| **Game code changes** | **NONE** — write scope was this evidence record only |
+| **Game code changes** | **NONE** — write scope was the evidence record only. The reviewer verified this: `git log --name-only` over the last five commits yields **zero** paths under `src/`, `game/`, `config/` or `scripts/` |
 | **Instrumentation** | **NONE exists**, so nothing is enabled at closure (§5.8) |
 | Guest runs / builds | **none**, as the packet requires |
+
+> **Advisory A-5, applied.** The closure originally named `d54b5ff` as the game revision while the tree had
+> advanced to `a3300f1` through documentation-only commits. **Both are recorded above with their roles**, so
+> a reader binding to bytes knows which revision the execution evidence belongs to and which only carries
+> post-acceptance documentation fixes.
 
 **§5.8 compliance:** the packet is a **discovery**, its output is **knowledge**, it **never satisfies a
 strict criterion and never claims anything works**, and its outcome table names the next packet. **No
