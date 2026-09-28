@@ -100,7 +100,45 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-rdata-call-target-r1` **ACCEPTED** (`ACCEPT-WITH-CORRECTIONS`, all three applied); **next edge named**
+## CURRENT PACKET — `A2h-callback-slot-writer-r1` (**discovery**: is the poller's `edi+0x1C4` really `device+0x242C`?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-callback-slot-writer.md`, **19 lines**, **7488 bytes**, frozen
+  **`D2CA02E17E2BACC1DE3726B3247965EA3A3B3061B504C06C9601F7FB4B894E3A`** — **this is the packet to execute.**
+  Validation: `docs/reviews/a2h-callback-slot-writer-r1-session-validation.md`.
+- **IT IS IDENTITY-FIRST, because the Session found the accepted packet's object identity is weaker than
+  "inferred."** Record: `docs/reviews/a2h-callback-slot-identity-redirect.md`. **The poller never loads the
+  device singleton `0x19DCE0`**; it does `edi = ecx` (its own `this`), `esi = [edi]` (**the device**), and passes
+  **`edi`** as `ecx` to the failing call. **So the context is `edi`, and the device is `[edi]` — a DIFFERENT
+  object.**
+- **The contradiction:** the predecessor's alias `0x2268 + 0x1C4 = 0x242C` is **ARITHMETIC** — it holds
+  **only if `esi` IS the device**, i.e. **only if `[device+0x2268] == device`**, which is **not established.**
+  **If `edi` is not `device+0x2268`, the slot read is `edi+0x1C4`, the installer chain is IRRELEVANT, and
+  searching for a `device+0x242C` writer answers the WRONG QUESTION.**
+- **The packet's first gate:** back-slice `ecx` at **all five** incoming `sub_00193D90` call sites
+  (`0x194419`, `0x1944D3`, `0x194AB8`, `0x194F71`, `0x196C38`) and trace the poller's own `edi` producer; test
+  **`[device+0x2268] == device`** statically and in an **integrity-checked archived dump**.
+- **Only then, and conditionally:** sweep **all** sections for device-derived stores, test the **buffered
+  selector** ranges at `0x0018CB78` (a **hypothesis**, not a finding), and trace **computed-base** stores.
+  **If identity fails, trace the REAL `edi+0x1C4` instead.**
+- **Rows:** `O-IDENTITY` → `NON-TARGET` → `O-DATA-AS-CALL` → **`O-ALTERNATE-PATH`** (now explicitly
+  covering *"verified distinct context identity (`edi≠device+0x2268`)"*) → `O-OPEN`.
+- **Instrumentation: NONE pre-authorized.** `loc_` anchors or **declared** boundaries only; **never byte-scan
+  from an inferred boundary**; `uint32` normalization; **UNKNOWN if alignment cannot be established.**
+- **Scope:** this terminal alone; float-bit siblings contrastive; **retired NULL line not reopened and no DR
+  record cited.**
+
+### ⚠ A concurrent-write incident, recorded against the Session
+
+**The Session's `git add -A` swept the Planner's IN-PROGRESS packet into commit `17a0d9e`.** The Planner
+**detected it** (the file showed `M` not `??`, and its commit landed as a 1-line delta) **and asked the Session
+to inspect history before promoting — which it did.** **No content was lost**; the current packet is the
+Planner's redirect-applied revision. **This is the SECOND time this session a broad `git add -A` captured work
+the Session did not author. When agents share a tree, adds must be scoped to files the Session authored.**
+
+**Next:** execute the packet's identity gate offline; then the conditional writer search.
+
+**Toolkit:** `37226b2` local / `571982d` pushed (a **no-push** state — see
+`docs/reviews/a2h-dr0-repair-push-decision.md`). **Game:** `537ab9a`.
 
 - **Packet:** `docs/packets/a2h-rdata-call-target.md`, **22 lines**, frozen
   **`31343C167746872A501A21C6D558F52B897A7CD571E43C9EB016D42341152593`** — **not edited**.
