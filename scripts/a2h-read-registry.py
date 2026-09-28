@@ -45,12 +45,21 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 # ── The JsrfRegistry layout, computed from src/diagnostics.h ────────────────────────────────
-# Version 2 appends JsrfSlotLatch. JSRF_REGISTRY_VERSION must match or the reader refuses.
-EXPECTED_VERSION = 2
+# Version 2 appends JsrfSlotLatch. Version 3 appends JsrfSlotWriteWatch. JSRF_REGISTRY_VERSION
+# must match or the reader refuses.
+#
+# BOTH VERSIONS ARE STILL UNDERSTOOD, and that is deliberate rather than convenience: the real
+# archived run that validated this layout is a VERSION-2 dump, so the check that pins the layout
+# against actual bytes can only be kept by continuing to read v2. The v3 layout is pinned the same
+# way, against a checked-in fixture, and both must agree with the arithmetic.
+EXPECTED_VERSION = 3
+KNOWN_VERSIONS = (2, 3)
 JSRF_THREAD_CAPACITY = 128
 JSRF_EVENT_CAPACITY = 128
 JSRF_REGISTER_COUNT = 10
 JSRF_LATCH_CAPACITY = 128
+JSRF_WRITE_CLASS_CAPACITY = 6
+JSRF_ALIAS_CAPACITY = 28
 
 # struct JsrfEvent { uint32 sequence, kind; uint64 ticks; uint32 target, site, esp, value; }
 #   sequence 0..3, kind 4..7, ticks 8..15 (8-aligned), target 16..19, site 20..23,
@@ -78,7 +87,38 @@ LATCH_SIZE = LATCH_HEAD + TRANSITION_SIZE * JSRF_LATCH_CAPACITY
 REGISTRY_HEAD = 4 * 4 + 8      # 24
 THREADS_OFF = REGISTRY_HEAD
 LATCH_OFF = REGISTRY_HEAD + THREAD_SIZE * JSRF_THREAD_CAPACITY
-REGISTRY_SIZE = LATCH_OFF + LATCH_SIZE
+REGISTRY_V2_SIZE = LATCH_OFF + LATCH_SIZE
+
+# ── Version 3 appends JsrfSlotWriteWatch ─────────────────────────────────────────────────────
+# struct JsrfWriteClass { 8 uint32; uint64 ticks; uint64 rip; } -> 32 + 8 + 8 = 48, 8-aligned
+WRITE_CLASS_SIZE = 8 * 4 + 8 + 8
+# struct JsrfAliasTouch { 6 uint32; uint64 rip; uint64 ticks; } -> 24 + 8 + 8 = 40, 8-aligned
+ALIAS_TOUCH_SIZE = 6 * 4 + 8 + 8
+# struct JsrfSlotWriteWatch {
+#     uint32 armed, alias_count, mapped_mask, protect_mask;
+#     uint32 touched_count, publish_failed, handshake_seen, class_overflow;
+#     uint32 terminal_seen, terminal_target, terminal_slot, terminal_flags;
+#     uint32 terminal_offset_lo, terminal_offset_hi, arm_offset_lo, arm_offset_hi;
+#     uint32 class_claimed, reserved;            <- 18 uint32 = 72 bytes
+#     uint64 handshake_ticks, terminal_ticks;    <- 16 bytes, 8-aligned
+#     uint64 class_counts[6];                    <- 48
+#     JsrfWriteClass classes[6];                 <- 288
+#     JsrfAliasTouch aliases[28];                <- 1120
+# }
+WATCH_HEAD = 18 * 4
+WATCH_SIZE = WATCH_HEAD + 2 * 8 + 8 * JSRF_WRITE_CLASS_CAPACITY \
+             + WRITE_CLASS_SIZE * JSRF_WRITE_CLASS_CAPACITY \
+             + ALIAS_TOUCH_SIZE * JSRF_ALIAS_CAPACITY
+WATCH_OFF = REGISTRY_V2_SIZE
+REGISTRY_SIZE = WATCH_OFF + WATCH_SIZE
+# struct JsrfRegistry { uint32 version, claimed, overflow, reserved; uint64 frequency;
+#                       JsrfThread threads[128]; JsrfSlotLatch latch; JsrfSlotWriteWatch watch; }
+REGISTRY_SIZE_V2 = REGISTRY_V2_SIZE
+
+# The compile-time size the C header asserts. A drift between this reader's arithmetic and the
+# struct the collector actually archived would not fail -- it would misattribute every field after
+# the drift -- so the two are required to agree rather than being allowed to differ quietly.
+JSRF_REGISTRY_SIZE_EXPECTED = 545344
 
 # ── Minidump constants ───────────────────────────────────────────────────────────────────────
 MDMP_SIGNATURE = b"MDMP"
@@ -167,16 +207,23 @@ def read_range(raw: bytes, ranges: list, addr: int, size: int) -> bytes:
     raise RegistryError("address 0x%016X (+%d bytes) is not present in this dump" % (addr, size))
 
 
-def find_registry_address(run_dir: Path) -> int:
-    """The registry's host address, from the run's own stacks.txt."""
+def find_registry_address(run_dir: Path):
+    """The registry's host address, printed version and claimed count, from the run's stacks.txt.
+
+    `claimed` is returned as well as the address because it is the second word of the header
+    signature this tool searches for: the collector prints it, so the search does not have to
+    guess it. Guessing was tolerable while only one archived dump existed; it stops being
+    tolerable once the layout is versioned and two versions must both be readable.
+    """
     p = run_dir / "stacks.txt"
     if not p.exists():
         raise RegistryError("no stacks.txt in %s" % run_dir)
-    m = re.search(r"GUEST_REGISTRY address=([0-9A-Fa-f]+)\s+version=(\d+)", p.read_text(
-        encoding="utf-8", errors="replace"))
+    text = p.read_text(encoding="utf-8", errors="replace")
+    m = re.search(r"GUEST_REGISTRY address=([0-9A-Fa-f]+)\s+version=(\d+)(?:\s+claimed=(\d+))?", text)
     if not m:
         raise RegistryError("no GUEST_REGISTRY line in stacks.txt")
-    return int(m.group(1), 16), int(m.group(2))
+    claimed = int(m.group(3)) if m.group(3) is not None else None
+    return int(m.group(1), 16), int(m.group(2)), claimed
 
 
 def locate_registry_in_dump(raw: bytes, version: int, claimed_hint: int = None) -> int:
@@ -197,6 +244,13 @@ def locate_registry_in_dump(raw: bytes, version: int, claimed_hint: int = None) 
     That third check is what makes the search sound rather than a guess: the two signatures are
     independent, and a wrong layout would put them at the wrong distance. The Session verified
     this on a real archived run: one header hit, one install hit, distance 538648 == LATCH_OFF.
+
+    THE SAME PROPERTY IS KEPT FOR VERSION 3. A v3 dump must additionally show the WATCH record at
+    exactly WATCH_OFF -- a second, independent distance check against a second pair of signatures
+    -- so the appended layout is validated against bytes rather than only against arithmetic. The
+    watch is located by its own distinctive tuple, and its absence is reported rather than raised,
+    because a v3 binary with the diagnostic gate off writes no watch fields at all and that is a
+    legitimate state, not a layout error.
     """
     hdr_pat = struct.pack("<IIII", version, claimed_hint if claimed_hint is not None else 5, 0, 0)
     hits = []
@@ -240,28 +294,86 @@ def locate_registry_in_dump(raw: bytes, version: int, claimed_hint: int = None) 
     return reg_off, True
 
 
+def locate_watch_in_dump(raw: bytes, reg_off: int, version: int):
+    """Locate the version-3 write watch inside the dump, by a signature unique to it.
+
+    The signature is the watch's own arming record: `armed=1, alias_count>0` plus the mapped and
+    protect masks, which are equal by construction when arming succeeded. A v3 binary whose
+    diagnostic gate was OFF writes no such record -- and that is exactly the OFF-run inertness
+    control, so its absence is returned rather than raised.
+
+    The measured distance from the registry header must equal WATCH_OFF, which is the same
+    independent-bytes check that pins LATCH_OFF. Returns (watch_offset_or_None, present).
+    """
+    if version < 3:
+        return None, False
+    # armed=1, alias_count, mapped_mask, protect_mask with mapped == protect (arming succeeded).
+    found = None
+    for alias_count in range(1, JSRF_ALIAS_CAPACITY + 1):
+        pat = struct.pack("<IIII", 1, alias_count, (1 << alias_count) - 1, (1 << alias_count) - 1)
+        i = 0
+        while True:
+            i = raw.find(pat, i)
+            if i < 0:
+                break
+            if found is not None and found != i:
+                raise RegistryError(
+                    "the write-watch arming signature is ambiguous (%d and %d); a search-based "
+                    "location is only sound when the signature is unique" % (found, i))
+            found = i
+            i += 1
+    if found is None:
+        return None, False
+    measured = found - reg_off
+    if measured != WATCH_OFF:
+        raise RegistryError(
+            "measured write-watch offset %d does not match the layout-derived WATCH_OFF %d -- the "
+            "version-3 struct layout is wrong, so every watch field would be misread"
+            % (measured, WATCH_OFF))
+    return found, True
+
+
 def read_registry(run_dir: Path) -> dict:
     dmp = run_dir / "process.dmp"
     if not dmp.exists():
         raise RegistryError("no process.dmp in %s" % run_dir)
     raw = dmp.read_bytes()
     hdr = parse_header(raw)
-    addr, printed_version = find_registry_address(run_dir)
+    addr, printed_version, printed_claimed = find_registry_address(run_dir)
 
-    reg_off, install_present = locate_registry_in_dump(raw, EXPECTED_VERSION)
-    blob = raw[reg_off:reg_off + REGISTRY_SIZE]
-    if len(blob) != REGISTRY_SIZE:
+    # LOCATE FIRST, using the version the collector printed: it is the version that is actually in
+    # the file, and it is the second word of the header signature this search keys on.
+    reg_off, install_present = locate_registry_in_dump(
+        raw, printed_version if printed_version in KNOWN_VERSIONS else EXPECTED_VERSION,
+        printed_claimed)
+
+    # THE VERSION IN THE DUMP DECIDES THE LAYOUT, not the version the reader prefers. A v2 dump
+    # must still be read as v2 -- the layout's byte-level validation lives in a v2 archive, and
+    # reading it as v3 would silently reinterpret the bytes after the latch. So the version is
+    # taken from the dump's own header word FIRST, and the number of bytes read follows from it:
+    # a v2 registry is genuinely 1544 bytes shorter, and demanding the v3 size from it would fail
+    # closed on a valid archive.
+    if reg_off + REGISTRY_HEAD > len(raw):
+        raise RegistryError("registry header at %d runs past the end of the dump" % reg_off)
+    dump_version = struct.unpack_from("<I", raw, reg_off)[0]
+    if dump_version not in KNOWN_VERSIONS:
+        raise RegistryError(
+            "registry version %d is not one this reader understands %s -- the layout is "
+            "version-tagged, so every field after the header would be misread"
+            % (dump_version, KNOWN_VERSIONS))
+    blob_size = REGISTRY_SIZE if dump_version >= 3 else REGISTRY_SIZE_V2
+    blob = raw[reg_off:reg_off + blob_size]
+    if len(blob) != blob_size:
         raise RegistryError("truncated registry: got %d bytes, expected %d"
-                            % (len(blob), REGISTRY_SIZE))
+                            % (len(blob), blob_size))
 
     version, claimed, overflow, reserved = struct.unpack_from("<IIII", blob, 0)
     frequency = struct.unpack_from("<Q", blob, 16)[0]
 
-    if version != EXPECTED_VERSION:
+    if version != printed_version:
         raise RegistryError(
-            "registry version %d does not match this reader's expected %d -- the layout is "
-            "version-tagged, so every field after the header would be misread"
-            % (version, EXPECTED_VERSION))
+            "the dump's registry version %d disagrees with the collector's printed version %d -- "
+            "the dump and the archive's text describe different layouts" % (version, printed_version))
 
     latch = blob[LATCH_OFF:LATCH_OFF + LATCH_SIZE]
     (install_seen, install_raw, install_value, install_ok,
@@ -290,7 +402,7 @@ def read_registry(run_dir: Path) -> dict:
                             "events": count,
                             "events_lost": max(0, count - JSRF_EVENT_CAPACITY)})
 
-    return {
+    result = {
         "run_dir": str(run_dir),
         "dump_sha256": hashlib.sha256(raw).hexdigest().upper(),
         "dump_bytes": len(raw),
@@ -321,9 +433,94 @@ def read_registry(run_dir: Path) -> dict:
         "layout": {
             "event_size": EVENT_SIZE, "thread_size": THREAD_SIZE,
             "transition_size": TRANSITION_SIZE, "latch_size": LATCH_SIZE,
+            "write_class_size": WRITE_CLASS_SIZE, "alias_touch_size": ALIAS_TOUCH_SIZE,
+            "watch_head": WATCH_HEAD, "watch_size": WATCH_SIZE,
             "threads_offset": THREADS_OFF, "latch_offset": LATCH_OFF,
+            "watch_offset": WATCH_OFF,
+            "registry_size_v2": REGISTRY_SIZE_V2,
             "registry_size": REGISTRY_SIZE,
         },
+    }
+
+    if version >= 3:
+        watch_off, watch_present = locate_watch_in_dump(raw, reg_off, version)
+        result["watch_record_present"] = watch_present
+        result["watch_file_offset"] = watch_off
+        result["watch"] = read_watch(blob)
+    else:
+        # A v2 archive genuinely has no watch. Reported as absent rather than as an empty watch, so
+        # a caller cannot mistake "this layout predates the field" for "the field was zero".
+        result["watch_record_present"] = False
+        result["watch_file_offset"] = None
+        result["watch"] = None
+    return result
+
+
+def read_watch(blob: bytes) -> dict:
+    """Decode the version-3 write watch from a registry blob already validated as v3."""
+    w = blob[WATCH_OFF:WATCH_OFF + WATCH_SIZE]
+    if len(w) != WATCH_SIZE:
+        raise RegistryError("truncated write watch: got %d bytes, expected %d" % (len(w), WATCH_SIZE))
+    (armed, alias_count, mapped_mask, protect_mask,
+     touched_count, publish_failed, handshake_seen, class_overflow,
+     terminal_seen, terminal_target, terminal_slot, terminal_flags,
+     term_lo, term_hi, arm_lo, arm_hi,
+     class_claimed, rsvd) = struct.unpack_from("<18I", w, 0)
+    handshake_ticks, terminal_ticks = struct.unpack_from("<QQ", w, WATCH_HEAD)
+    counts = list(struct.unpack_from("<%dQ" % JSRF_WRITE_CLASS_CAPACITY, w, WATCH_HEAD + 16))
+
+    classes = []
+    for i in range(JSRF_WRITE_CLASS_CAPACITY):
+        off = WATCH_HEAD + 16 + 8 * JSRF_WRITE_CLASS_CAPACITY + i * WRITE_CLASS_SIZE
+        (valid, class_id, tid, call_index, ordinal, before, after, crsvd) = struct.unpack_from(
+            "<IIIIIIII", w, off)
+        ticks, rip = struct.unpack_from("<QQ", w, off + 32)
+        classes.append({
+            "index": i, "valid": valid, "class_id": class_id, "tid": tid,
+            "call_index": call_index, "ordinal": ordinal,
+            "before": "0x%08X" % before, "after": "0x%08X" % after,
+            "ticks": ticks, "rip": "0x%016X" % rip,
+            "count": counts[i],
+        })
+
+    aliases = []
+    base = WATCH_HEAD + 16 + 8 * JSRF_WRITE_CLASS_CAPACITY + WRITE_CLASS_SIZE * JSRF_WRITE_CLASS_CAPACITY
+    for i in range(JSRF_ALIAS_CAPACITY):
+        off = base + i * ALIAS_TOUCH_SIZE
+        (valid, alias_index, mapped, published, fault_va, value) = struct.unpack_from("<IIIIII", w, off)
+        rip, ticks = struct.unpack_from("<QQ", w, off + 24)
+        if valid:
+            aliases.append({
+                "index": i, "valid": valid, "alias_index": alias_index, "mapped": mapped,
+                "published": published, "fault_va": "0x%08X" % fault_va,
+                "value": "0x%08X" % value, "rip": "0x%016X" % rip, "ticks": ticks,
+            })
+
+    return {
+        "armed": armed,
+        "alias_count": alias_count,
+        "mapped_mask": "0x%08X" % mapped_mask,
+        "protect_mask": "0x%08X" % protect_mask,
+        "touched_count": touched_count,
+        "publish_failed": publish_failed,
+        "handshake_seen": handshake_seen,
+        "class_overflow": class_overflow,
+        "class_claimed": class_claimed,
+        "terminal_seen": terminal_seen,
+        "terminal_target": "0x%08X" % terminal_target,
+        "terminal_slot": "0x%08X" % terminal_slot,
+        "terminal_flags": terminal_flags,
+        "terminal_offset": "0x%08X%08X" % (term_hi, term_lo),
+        "arm_offset": "0x%08X%08X" % (arm_hi, arm_lo),
+        "offset_stable": (term_lo, term_hi) == (arm_lo, arm_hi),
+        "handshake_ticks": handshake_ticks,
+        "terminal_ticks": terminal_ticks,
+        "class_counts": counts,
+        "classes": classes,
+        "class_witness_count": sum(1 for c in classes if c["valid"]),
+        "aliases": aliases,
+        "alias_touch_count": len(aliases),
+        "alias_write_count": sum(1 for a in aliases if a["published"]),
     }
 
 
@@ -339,17 +536,29 @@ def self_test() -> int:
     chk("transition size is 40", TRANSITION_SIZE == 40)
     chk("latch size is 5152", LATCH_SIZE == 5152)
     chk("latch offset is 538648", LATCH_OFF == 538648)
-    chk("registry size is 543800", REGISTRY_SIZE == 543800)
-    chk("registry size is latch offset + latch", REGISTRY_SIZE == LATCH_OFF + LATCH_SIZE)
+    chk("registry v2 size is 543800", REGISTRY_SIZE_V2 == 543800)
+    chk("registry v2 size is latch offset + latch", REGISTRY_SIZE_V2 == LATCH_OFF + LATCH_SIZE)
+    chk("write class size is 48", WRITE_CLASS_SIZE == 48)
+    chk("alias touch size is 40", ALIAS_TOUCH_SIZE == 40)
+    chk("watch head is 72", WATCH_HEAD == 72)
+    chk("watch size is 1544", WATCH_SIZE == 1544)
+    chk("watch offset is 543800", WATCH_OFF == 543800)
+    chk("watch offset is the v2 size", WATCH_OFF == REGISTRY_SIZE_V2)
+    chk("registry size is 545344", REGISTRY_SIZE == 545344)
+    chk("registry size is watch offset + watch", REGISTRY_SIZE == WATCH_OFF + WATCH_SIZE)
+    chk("registry size matches the C header's assertion",
+        REGISTRY_SIZE == JSRF_REGISTRY_SIZE_EXPECTED)
     chk("registry size is under 1 MiB", REGISTRY_SIZE < 1024 * 1024)
 
     # MEASURED-FROM-A-REAL-DUMP CONTROL. These constants were WRONG once (EVENT_SIZE 24), which
     # shifted every offset and made the reader report the latch absent from a dump containing it.
-    # The real archived run lets the layout be checked against bytes rather than arithmetic.
+    # The real archived run lets the layout be checked against bytes rather than arithmetic. It is
+    # a VERSION-2 dump, which is why v2 stays readable: this is the only byte-level pin that exists
+    # for the shared prefix, and it must not be retired just because the current version moved on.
     real = ROOT / "logs" / "runs" / "20260928-001520-474-a2h-null-slot-authoritative-on"
     if (real / "process.dmp").exists():
         raw = (real / "process.dmp").read_bytes()
-        hdr_pat = struct.pack("<IIII", EXPECTED_VERSION, 5, 0, 0)
+        hdr_pat = struct.pack("<IIII", 2, 5, 0, 0)
         reg_hits = []
         i = 0
         while True:
@@ -376,14 +585,39 @@ def self_test() -> int:
 
     # A synthetic minidump carrying one range, to prove the reader works and fails closed.
     import tempfile
-    body = struct.pack("<IIII", EXPECTED_VERSION, 5, 0, 0) + struct.pack("<Q", 10000000)
-    body += b"\x00" * (REGISTRY_SIZE - len(body))
-    # Give the latch an install record and one transition.
-    latch = bytearray(body[LATCH_OFF:])
-    struct.pack_into("<IIIIIIII", latch, 0, 1, 0x80000115, 0xFE000104, 1, 1, 0, 0, 2)
-    struct.pack_into("<IIIIIIII", latch, LATCH_HEAD, 1, 1234, 7, 277, 0xFE000104, 0, 1, 0)
-    struct.pack_into("<Q", latch, LATCH_HEAD + 32, 555)
-    body = body[:LATCH_OFF] + bytes(latch)
+
+    def build_registry(version: int) -> bytes:
+        body = struct.pack("<IIII", version, 5, 0, 0) + struct.pack("<Q", 10000000)
+        body += b"\x00" * (REGISTRY_SIZE - len(body))
+        latch = bytearray(body[LATCH_OFF:LATCH_OFF + LATCH_SIZE])
+        struct.pack_into("<IIIIIIII", latch, 0, 1, 0x80000115, 0xFE000104, 1, 1, 0, 0, 2)
+        struct.pack_into("<IIIIIIII", latch, LATCH_HEAD, 1, 1234, 7, 277, 0xFE000104, 0, 1, 0)
+        struct.pack_into("<Q", latch, LATCH_HEAD + 32, 555)
+        body = body[:LATCH_OFF] + bytes(latch)
+        if version >= 3:
+            # Re-extend to the full v3 size: the splice above truncated the buffer at the end of
+            # the latch, so the watch region does not exist yet.
+            body = body + b"\x00" * (REGISTRY_SIZE - len(body))
+            w = bytearray(body[WATCH_OFF:WATCH_OFF + WATCH_SIZE])
+            # The arming record: armed, alias_count=28, mapped==protect==(1<<28)-1.
+            struct.pack_into("<IIII", w, 0, 1, 28, (1 << 28) - 1, (1 << 28) - 1)
+            # touched_count=1, no publish failure, handshake seen, terminal seen.
+            struct.pack_into("<IIII", w, 16, 1, 0, 1, 0)
+            struct.pack_into("<IIII", w, 32, 1, 0x00000000, 0x00000000, 0x7)
+            struct.pack_into("<IIII", w, 48, 0x10000, 0x0, 0x10000, 0x0)
+            struct.pack_into("<II", w, 64, 1, 0)
+            struct.pack_into("<QQ", w, WATCH_HEAD, 111, 999)
+            struct.pack_into("<Q", w, WATCH_HEAD + 16 + 8 * 0, 3)     # class 0 write count
+            c0 = WATCH_HEAD + 16 + 8 * JSRF_WRITE_CLASS_CAPACITY
+            struct.pack_into("<IIIIIIII", w, c0, 1, 0, 4242, 9, 277, 0xFE000104, 0, 0)
+            struct.pack_into("<QQ", w, c0 + 32, 777, 0x00007FF700123456)
+            a0 = c0 + WRITE_CLASS_SIZE * JSRF_WRITE_CLASS_CAPACITY
+            struct.pack_into("<IIIIII", w, a0, 1, 0, 1, 1, 0x04000000 + 0x4064, 0xFE000104)
+            struct.pack_into("<QQ", w, a0 + 24, 0x00007FF700654321, 888)
+            body = body[:WATCH_OFF] + bytes(w)
+        return body
+
+    body = build_registry(EXPECTED_VERSION)
 
     ADDR = 0x00007FF700000000
 
@@ -428,6 +662,55 @@ def self_test() -> int:
     chk("fixture: one transition read", r["latch"]["transition_count"] == 1)
     chk("fixture: transition fields", r["latch"]["transitions"][0]["tid"] == 1234
         and r["latch"]["transitions"][0]["ordinal"] == 277)
+    # ── the version-3 watch, read back from fixture bytes ──────────────────────────────────────
+    w = r["watch"]
+    chk("v3 fixture: watch record present", r["watch_record_present"] is True)
+    chk("v3 fixture: watch at the computed offset",
+        r["watch_file_offset"] is not None and r["watch_file_offset"] - r["registry_file_offset"] == WATCH_OFF)
+    chk("v3 fixture: alias census armed", w["armed"] == 1 and w["alias_count"] == 28)
+    chk("v3 fixture: mapped == protected mask", w["mapped_mask"] == w["protect_mask"])
+    chk("v3 fixture: one alias touch", w["alias_touch_count"] == 1)
+    chk("v3 fixture: alias touch fields",
+        w["aliases"][0]["rip"] == "0x00007FF700654321" and w["aliases"][0]["value"] == "0xFE000104")
+    chk("v3 fixture: one class witness", w["class_witness_count"] == 1)
+    chk("v3 fixture: class witness fields",
+        w["classes"][0]["tid"] == 4242 and w["classes"][0]["before"] == "0xFE000104"
+        and w["classes"][0]["after"] == "0x00000000" and w["classes"][0]["ordinal"] == 277)
+    chk("v3 fixture: uncapped class counter", w["class_counts"][0] == 3)
+    chk("v3 fixture: handshake and terminal seen",
+        w["handshake_seen"] == 1 and w["terminal_seen"] == 1)
+    chk("v3 fixture: terminal target is zero (the raw-zero call)", w["terminal_target"] == "0x00000000")
+    chk("v3 fixture: offset stable arm->terminal", w["offset_stable"] is True)
+    chk("v3 fixture: terminal flags say armed+stable+published", w["terminal_flags"] == 0x7)
+
+    # A VERSION-2 ARCHIVE MUST STILL READ AS V2. This is the regression that matters most: the
+    # layout's only byte-level pin is a v2 dump, so a reader that "upgraded" by reinterpreting v2
+    # bytes as v3 would misread everything after the latch while still appearing to work.
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td)
+        build_dump(p / "process.dmp", build_registry(2))
+        (p / "stacks.txt").write_text(
+            "GUEST_REGISTRY address=%016X version=2 claimed=5 overflow=0\n" % ADDR, encoding="utf-8")
+        r2 = read_registry(p)
+    chk("v2 archive: read as version 2", r2["version"] == 2)
+    chk("v2 archive: install control still read", r2["latch"]["install_ok"] == 1)
+    chk("v2 archive: one transition read", r2["latch"]["transition_count"] == 1)
+    chk("v2 archive: no watch claimed", r2["watch"] is None and r2["watch_record_present"] is False)
+    chk("v2 archive: flagged as not the current version", r2["version_matches_reader"] is False)
+
+    # A v3 registry whose watch record is ABSENT (gate off) must report absence, not a zeroed watch.
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td)
+        no_watch = bytearray(build_registry(EXPECTED_VERSION))
+        no_watch[WATCH_OFF:WATCH_OFF + WATCH_SIZE] = b"\x00" * WATCH_SIZE
+        build_dump(p / "process.dmp", bytes(no_watch))
+        (p / "stacks.txt").write_text(
+            "GUEST_REGISTRY address=%016X version=%d claimed=5 overflow=0\n" % (ADDR, EXPECTED_VERSION),
+            encoding="utf-8")
+        r3 = read_registry(p)
+    chk("v3 gate-off: watch reported absent, not zeroed", r3["watch_record_present"] is False)
+    chk("v3 gate-off: watch still decodable", r3["watch"]["armed"] == 0
+        and r3["watch"]["alias_touch_count"] == 0)
 
     # A version mismatch must RAISE, not return misread fields.
     with tempfile.TemporaryDirectory() as td:
@@ -440,6 +723,38 @@ def self_test() -> int:
             chk("version mismatch raises", False)
         except RegistryError:
             chk("version mismatch raises", True)
+
+    # A dump whose version disagrees with the collector's printed version must RAISE: the two
+    # describe different layouts, and picking either one silently is how a field gets misread.
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td)
+        build_dump(p / "process.dmp", build_registry(EXPECTED_VERSION))
+        (p / "stacks.txt").write_text(
+            "GUEST_REGISTRY address=%016X version=2 claimed=5 overflow=0\n" % ADDR, encoding="utf-8")
+        try:
+            read_registry(p)
+            chk("dump/printed version disagreement raises", False)
+        except RegistryError:
+            chk("dump/printed version disagreement raises", True)
+
+    # A v3 dump whose watch sits at the WRONG offset must RAISE: that is the whole point of the
+    # distance check, and a layout that drifted would otherwise be read as if it had not.
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td)
+        shifted = bytearray(build_registry(EXPECTED_VERSION))
+        # Move the arming record 8 bytes later, leaving the true offset empty.
+        rec = struct.pack("<IIII", 1, 28, (1 << 28) - 1, (1 << 28) - 1)
+        shifted[WATCH_OFF:WATCH_OFF + 16] = b"\x00" * 16
+        shifted[WATCH_OFF + 8:WATCH_OFF + 24] = rec
+        build_dump(p / "process.dmp", bytes(shifted))
+        (p / "stacks.txt").write_text(
+            "GUEST_REGISTRY address=%016X version=%d claimed=5 overflow=0\n" % (ADDR, EXPECTED_VERSION),
+            encoding="utf-8")
+        try:
+            read_registry(p)
+            chk("v3 wrong watch offset raises", False)
+        except RegistryError:
+            chk("v3 wrong watch offset raises", True)
 
     # An absent range must RAISE, not return zeros.
     with tempfile.TemporaryDirectory() as td:

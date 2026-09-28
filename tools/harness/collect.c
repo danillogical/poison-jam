@@ -524,6 +524,38 @@ static void capture_guest_threads(void)
                     (unsigned long long)t->ticks);
         }
     }
+    /* Version 3: the slot-WRITE watch. Printed for the same reason the latch is printed -- these
+     * are DECISION INPUTS, and a reader must be able to see the coverage facts (was the alias
+     * census armed, was anything published, did the terminal witness run) in the archive's own
+     * text rather than having to extract them from the minidump first. The frozen bytes remain
+     * authoritative; this line is a cross-check that must reconcile with the extractor. */
+    if (registry->version >= 3) {
+        const JsrfSlotWriteWatch *w = &registry->watch;
+        fprintf(report, "GUEST_SLOT_WATCH armed=%u alias_count=%u mapped_mask=%08X protect_mask=%08X "
+                        "touched=%u publish_failed=%u handshake_seen=%u class_overflow=%u "
+                        "class_claimed=%u terminal_seen=%u terminal_target=%08X terminal_slot=%08X "
+                        "terminal_flags=%u arm_offset=%08X%08X terminal_offset=%08X%08X\n",
+                w->armed, w->alias_count, w->mapped_mask, w->protect_mask, w->touched_count,
+                w->publish_failed, w->handshake_seen, w->class_overflow, w->class_claimed,
+                w->terminal_seen, w->terminal_target, w->terminal_slot, w->terminal_flags,
+                w->arm_offset_hi, w->arm_offset_lo, w->terminal_offset_hi, w->terminal_offset_lo);
+        for (unsigned c = 0; c < JSRF_WRITE_CLASS_CAPACITY; c++) {
+            const JsrfWriteClass *k = &w->classes[c];
+            fprintf(report, "GUEST_SLOT_WRITE class=%u count=%llu valid=%u tid=%u call=%u ordinal=%u "
+                            "before=%08X after=%08X rip=%016llX ticks=%llu\n",
+                    c, (unsigned long long)w->class_counts[c], k->valid, k->tid, k->call_index,
+                    k->ordinal, k->before, k->after, (unsigned long long)k->rip,
+                    (unsigned long long)k->ticks);
+        }
+        for (unsigned a = 0; a < JSRF_ALIAS_CAPACITY; a++) {
+            const JsrfAliasTouch *t = &w->aliases[a];
+            if (!t->valid) continue;
+            fprintf(report, "GUEST_SLOT_ALIAS mirror=%u valid=%u mapped=%u published=%u fault_va=%08X "
+                            "value=%08X rip=%016llX ticks=%llu\n",
+                    a + 1, t->valid, t->mapped, t->published, t->fault_va, t->value,
+                    (unsigned long long)t->rip, (unsigned long long)t->ticks);
+        }
+    }
     for (unsigned i=0;i<registry->claimed && i<JSRF_THREAD_CAPACITY;i++) {
         JsrfThread *thread = &registry->threads[i];
         uint32_t registers[JSRF_REGISTER_COUNT] = {0};

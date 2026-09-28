@@ -38,21 +38,23 @@ void recomp_icall_not_code_log(uint32_t va)
     fprintf(stderr, "[ICALL] invalid target 0x%08X tid=%lu esp=%08X return=%08X\n",
         va, GetCurrentThreadId(), g_esp, MEM32(g_esp));
 
-    /* A2h terminal corroboration: the live value of the kernel thunk slot that was just called
-     * through, and this thread's latest dispatch index, at the moment of the raw-zero read.
+    /* A2h terminal witness: the raw target the generated code actually passed in, the LIVE value of
+     * the kernel thunk slot it called through, and g_xbox_mem_offset -- all re-read at this moment.
      *
-     * TWO FIELDS ONLY, and they are CORROBORATION -- not the authoritative record. The
-     * authoritative record is the write-once latch in src/diagnostics.c, because this line is a
-     * log line and a log line can be dropped (kernel-log budget, concurrent stderr, or the raise
-     * below terminating before a flush). It is printed here because this is the only point that
-     * runs at the exact instant of the terminal read, and the packet's O-NO-BOUNDARY-TRANSITION
-     * row would otherwise lack a same-moment control.
+     * The record is written FIRST and unconditionally, because the raise below is
+     * EXCEPTION_NONCONTINUABLE and a log line can be lost to the kernel-log budget, to concurrent
+     * stderr, or to the raise terminating before a flush. The record is a fixed field block inside
+     * g_jsrf_debug, which the collector archives by symbol, so it survives the raise. The print is
+     * corroboration only.
      *
-     * The read is guarded by a mapping check and cannot fault: 0x001C4064 is inside the guest
-     * image's .rdata, which the loader always maps. Off unless JSRF_TRACE_A2H_SLOT is set. */
+     * `va` is the target the generated code passed to this hook; the hook does NOT re-read it and
+     * does not substitute its own read for the generated one. The slot read inside
+     * jsrf_slot_watch_terminal is a SEPARATE, independent read of the same live slot, which is
+     * exactly why the two can be compared. Off unless JSRF_TRACE_A2H_SLOT is set. */
     if (getenv("JSRF_TRACE_A2H_SLOT")) {
-        fprintf(stderr, "  [A2HSLOT] terminal tid=%lu slot=%08X live=%08X call=#%u observed=%u\n",
-            GetCurrentThreadId(), 0x001C4064u, MEM32(0x001C4064u),
+        jsrf_slot_watch_terminal(va);
+        fprintf(stderr, "  [A2HSLOT] terminal tid=%lu target=%08X slot=%08X live=%08X call=#%u observed=%u\n",
+            GetCurrentThreadId(), va, 0x001C4064u, MEM32(0x001C4064u),
             jsrf_slot_latch_self_call_index(), jsrf_slot_latch_self_observed());
     }
     fflush(stderr);

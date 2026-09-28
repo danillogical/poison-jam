@@ -9,6 +9,14 @@
  * freeze the process at a debug event; no in-process live snapshot is allowed.
  * Odd sequence numbers mark events interrupted midway through publication. */
 JsrfRegistry g_jsrf_debug = {JSRF_REGISTRY_VERSION};
+
+/* The archived format is read by COMPUTED OFFSET (scripts/a2h-read-registry.py), so a silent drift
+ * between this struct's real size and the size that reader assumes would misattribute every field
+ * after the drift -- it would not fail, it would lie. This turns that drift into a build error.
+ * It is a typedef rather than _Static_assert so it compiles under every standard this target uses. */
+typedef char jsrf_registry_size_check[
+    (sizeof(JsrfRegistry) == JSRF_REGISTRY_SIZE_EXPECTED) ? 1 : -1];
+
 static RECOMP_TLS JsrfThread *current;
 
 /* ── A2h NULL-slot latch ───────────────────────────────────────────────────────
@@ -97,6 +105,138 @@ uint32_t jsrf_slot_latch_self_observed(void)
     /* Distinguishes "this thread recorded a transition" from "this thread never sampled".
      * A bare 0 from the call index would otherwise be ambiguous. */
     return self_slot ? 1u : 0u;
+}
+
+/* ── A2h slot-WRITE watch (version 3) ────────────────────────────────────────────────────────
+ *
+ * Same discipline as the latch above, applied to the writes rather than the boundary samples:
+ * fixed, class-keyed, write-once witnesses plus fixed-size censuses. Nothing here is sized by run
+ * length, nothing is first-N, and nothing is recycled.
+ *
+ * WHY CLASS-KEYED RATHER THAN A HISTORY: the deciding question is not "what was every write" but
+ * "was there a write at all, and what kind". Six classes cover that question exactly, and a class
+ * that has already been witnessed is immutable -- so a later write cannot overwrite the first
+ * witness for its class. The uncapped per-class counter preserves multiplicity without a log.
+ *
+ * THE TERMINAL WITNESS IS DELIBERATELY INDEPENDENT. It re-reads the LIVE slot and
+ * g_xbox_mem_offset at the fatal moment rather than trusting the last sampled value, because the
+ * whole point of the instrument is that the last sample and the terminal read DISAGREED.
+ */
+static volatile LONG g_a2h_watch_handshake = 0;
+
+void jsrf_slot_watch_handshake(uint32_t slot_va)
+{
+    LARGE_INTEGER now;
+    JsrfSlotWriteWatch *w = &g_jsrf_debug.watch;
+    (void)slot_va;   /* recorded by the toolkit's own print; the record needs only the fact */
+    if (InterlockedExchange(&g_a2h_watch_handshake, 1)) return;   /* write-once */
+    QueryPerformanceCounter(&now);
+    w->handshake_ticks = (uint64_t)now.QuadPart;
+    InterlockedExchange((volatile LONG *)&w->handshake_seen, 1);
+}
+
+void jsrf_slot_watch_alias_armed(uint32_t mapped_mask, uint32_t protect_mask, uint32_t alias_count)
+{
+    JsrfSlotWriteWatch *w = &g_jsrf_debug.watch;
+    extern ptrdiff_t g_xbox_mem_offset;
+    uint64_t offset = (uint64_t)(uintptr_t)g_xbox_mem_offset;
+    w->arm_offset_lo = (uint32_t)(offset & 0xFFFFFFFFu);
+    w->arm_offset_hi = (uint32_t)(offset >> 32);
+    w->mapped_mask = mapped_mask;
+    w->protect_mask = protect_mask;
+    w->alias_count = alias_count;
+    /* FAIL CLOSED ON A PRESENT BUT UNARMED VIEW. A mapped mirror that could not be protected is a
+     * hole in the census: an unwatched page can absorb a write that the census would then report
+     * as absent, which is the one error this instrument must not make. So `armed` is set only when
+     * every mapped view was protected, and the missing bits stay visible in protect_mask. */
+    InterlockedExchange((volatile LONG *)&w->armed,
+                        (mapped_mask != 0 && mapped_mask == protect_mask) ? 1 : 0);
+}
+
+int jsrf_slot_watch_alias_touch(uint32_t alias_index, uint32_t fault_va, uint64_t rip,
+                                uint32_t value, uint32_t published)
+{
+    JsrfSlotWriteWatch *w = &g_jsrf_debug.watch;
+    JsrfAliasTouch *t;
+    LARGE_INTEGER now;
+    /* THE RETURN VALUE IS THE PUBLICATION RESULT and the toolkit gates the page-open on it:
+     * RECORD-BEFORE-OPEN means a page may be opened ONLY after this returns 1. A page opened
+     * without a published record could absorb a concurrent write that is then neither recorded nor
+     * the first touch -- so "could not publish" must be an explicit, recorded failure rather than
+     * a silent absence that reads the same as "no touch happened". */
+    if (alias_index >= JSRF_ALIAS_CAPACITY || !published) {
+        InterlockedExchange((volatile LONG *)&w->publish_failed, 1);
+        return 0;
+    }
+    t = &w->aliases[alias_index];
+    if (!InterlockedExchange((volatile LONG *)&t->valid, 1)) {
+        QueryPerformanceCounter(&now);
+        t->alias_index = alias_index;
+        t->mapped = (w->mapped_mask >> alias_index) & 1u;
+        t->fault_va = fault_va;
+        t->value = value;
+        t->published = 1;
+        t->rip = rip;
+        t->ticks = (uint64_t)now.QuadPart;
+        InterlockedIncrement((volatile LONG *)&w->touched_count);
+    }
+    /* An already-valid slot is a record that already exists, which is a successful publication for
+     * the caller's purposes: the touch is recorded, so the page may be opened. */
+    return 1;
+}
+
+void jsrf_slot_watch_write(uint32_t provenance, uint32_t before, uint32_t after,
+                           uint64_t rip, uint32_t ordinal)
+{
+    JsrfSlotWriteWatch *w = &g_jsrf_debug.watch;
+    uint32_t cls, trans;
+    JsrfWriteClass *c;
+    LARGE_INTEGER now;
+    if (provenance > JSRF_PROV_UNKNOWN) provenance = JSRF_PROV_UNKNOWN;
+    /* The transition class is derived from the values themselves, so a caller cannot mislabel a
+     * restore as a zeroing. A before==after write is not a transition and claims nothing. */
+    if (before == after) return;
+    trans = (after == 0) ? JSRF_TRANS_TO_ZERO : JSRF_TRANS_RESTORE;
+    cls = JSRF_WRITE_CLASS(provenance, trans);
+    /* The counter is uncapped and updated at the event, so multiplicity survives without a log. */
+    InterlockedIncrement64((volatile LONG64 *)&w->class_counts[cls]);
+    c = &w->classes[cls];
+    if (InterlockedExchange((volatile LONG *)&c->valid, 1)) return;   /* first witness is immutable */
+    QueryPerformanceCounter(&now);
+    c->class_id = cls;
+    c->tid = GetCurrentThreadId();
+    c->call_index = jsrf_slot_latch_self_call_index();
+    c->ordinal = ordinal;
+    c->before = before;
+    c->after = after;
+    c->rip = rip;
+    c->ticks = (uint64_t)now.QuadPart;
+    InterlockedIncrement((volatile LONG *)&w->class_claimed);
+}
+
+void jsrf_slot_watch_terminal(uint32_t target)
+{
+    JsrfSlotWriteWatch *w = &g_jsrf_debug.watch;
+    extern ptrdiff_t g_xbox_mem_offset;
+    uint64_t offset = (uint64_t)(uintptr_t)g_xbox_mem_offset;
+    uint32_t flags = 0;
+    LARGE_INTEGER now;
+    /* INDEPENDENT RE-READS. `target` is what the generated code passed in; the slot below is read
+     * again here, and the mapping offset is read again here. Neither is copied from an earlier
+     * sample: the disagreement between the last boundary sample and this read is the phenomenon
+     * under investigation, so reusing a sampled value would assume away the question. */
+    w->terminal_target = target;
+    w->terminal_slot = MEM32(0x001C4064u);
+    w->terminal_offset_lo = (uint32_t)(offset & 0xFFFFFFFFu);
+    w->terminal_offset_hi = (uint32_t)(offset >> 32);
+    if (w->terminal_offset_lo == w->arm_offset_lo && w->terminal_offset_hi == w->arm_offset_hi)
+        flags |= 1u;                       /* mapping offset stable arm -> terminal */
+    if (w->armed) flags |= 2u;             /* alias census armed, every mapped view protected */
+    if (!w->publish_failed) flags |= 4u;   /* no publication was lost */
+    w->terminal_flags = flags;
+    QueryPerformanceCounter(&now);
+    w->terminal_ticks = (uint64_t)now.QuadPart;
+    InterlockedExchange((volatile LONG *)&w->terminal_seen, 1);
 }
 
 void recomp_diag_thread_start(uint32_t start, uint32_t low, uint32_t high)
