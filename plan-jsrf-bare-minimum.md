@@ -159,8 +159,7 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 byte assertions, obtains no further preflight (the ruling says none is needed if corrections are applied
 verbatim), then freezes and promotes.
 
-**Toolkit:** `c151d4e` **plus the uncommitted A2h diagnostic** (4 modified files, nothing pushed). **Game:**
-`0ee6782`.
+**Toolkit:** **`6f049ce`** — the A2h diagnostic is now **committed and pushed to the fork** (`origin/main` verified equal, `upstream` untouched at `766ecef`), because the packet's acceptance returned `ACCEPT` with `BLOCKING: NONE` and the change is therefore no longer pending-acceptance. Push recorded in `docs/reviews/owner-push-policy-xboxrecomp-fork.md`. **Game:** `9d2774a`.
 
 ---
 

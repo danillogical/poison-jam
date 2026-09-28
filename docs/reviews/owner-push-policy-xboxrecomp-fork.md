@@ -197,3 +197,34 @@ closes"*. That remains true and is **consistent** with this instruction — this
 push a **standing durable-checkpoint practice** rather than a once-at-closure event, and adds the
 explicit no-push list, the force prohibition, and the closure record format. `AGENTS.md` is updated to
 point here for the full policy.
+
+---
+
+## 2026-09-28 — Toolkit push: A2h NULL-slot diagnostic (`6f049ce`)
+
+**PUSHED_TO:** `origin` (the owner's fork)
+**BRANCH:** `main`
+**COMMIT:** `6f049ce5973eaed4e15b3ec19d94def67f7301fe`
+**REMOTE_URL:** `https://github.com/danillogical/xboxrecomp.git`
+**RESULT:** success — `c151d4e..6f049ce  main -> main`; `origin/main` verified equal to local;
+**`upstream` untouched** at `766ecef` (push URL `DISABLED`, never contacted).
+
+**Why this push is authorized.** The A2h diagnostic was the observation-only change the
+`A2h-null-slot-triage-r1` packet required. That packet's stage-1 acceptance returned **`ACCEPT`**
+with all three criteria `AGREED` and `BLOCKING: NONE`, so the change is **no longer
+pending-acceptance** — which is the specific condition the push policy excludes from durable
+closure.
+
+**All five preconditions verified immediately before pushing:** the toolkit tree was **clean**;
+the commit is the **intended durable state** (the accepted diagnostic, nothing experimental);
+the **active packet's tests and acceptance passed** (18/18 ctest, 30 toolkit tests, and the
+packet's own `ACCEPT`); the destination is **the fork, not `upstream`**; and the local SHA and
+branch were **recorded** (`6f049ce` on `main`). No force, no `--force-with-lease`, no push to
+`upstream`.
+
+**Contents of the pushed commit:** the gated per-thread first-zero latch callbacks, the install
+positive-control sample, `tid` appended to the `[KERNEL]` dispatch print, `tid` and call index
+added to both KWATCH prints, and inert stubs in two toolkit test files whose targets link
+`xbox_kernel` without the game's `diagnostics.c`. **Observation-only**; every new print and call
+is behind `JSRF_TRACE_A2H_SLOT`, and the packet's Run 1 (gates OFF) verified the instrumentation
+is live-inert.
