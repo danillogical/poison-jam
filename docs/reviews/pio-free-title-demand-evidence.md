@@ -141,16 +141,36 @@ withdrawn**: it asserted a reachable over-demand without a **feasibility** witne
 that *"an isolated unconstrained register value is **not** a witness."* The corrected slice returns `OPEN`
 with the missing witness named per site.
 
-## What the slice did establish about the field — a real narrowing
+## What the slice did establish about the field — and a correction to how far it goes
 
 The packet asked specifically to test the `k × byte[base+0x64]` lead, and the byte field's provenance was
-traced. **`MEM8(.. + 0x64)` has exactly three writers** in the generated source:
+traced. **A byte-width scan (`MEM8(.. + 0x64)`) finds three writers:**
 
 | Writer | Form |
 |---|---|
 | `recomp_0002.c:56809` | `MEM8(esi + 0x64) = MEM8(esi + 0x64) \| 0x80;` — sets **bit 7 only** |
 | `recomp_0005.c:10083` | `MEM8(esi + 0x64) = 1;` — constant 1 |
 | `recomp_0005.c:10282` | `MEM8(esi + 0x64) = LO8(eax);` — **a full byte** |
+
+> ### ⚠ CORRECTION: "three writers" was WRONG — a byte-width scan is not a writer census
+>
+> **A full-width scan finds 185 writers to offset `+0x64`** (`MEM8`/`MEM16`/`MEM32` across
+> `src/recomp/gen/*.c`). My first statement — *"exactly three writers"* — came from a scan that matched only
+> `MEM8(.. + 0x64)`, and **`+0x64` is an offset, not a field**: it appears in many unrelated structures.
+> **This is the same class of error as the two-spelling hazard `AGENTS.md` warns about** — enumerating
+> accesses by one spelling, or one width, and treating the result as complete.
+>
+> **What the 185 actually are:** inspecting the bases shows most are plainly **different objects** —
+> `esp + 0x64` (a stack slot), `ebp + 0x64` (a frame slot), and many `eax`/`ecx`/`edi`/`ebx + 0x64`
+> accesses with unrelated constant payloads (`0x3EED097B`, `0x44988000` — plausible floats, i.e. a
+> different structure's fields). **The DSOUND polls read `byte ptr [esi + 0x64]`**, so only writers
+> targeting *that* structure instance can matter.
+>
+> **But "most are different objects" is an inspection impression, not a proof**, and determining which of
+> the 185 can reach the DSOUND voice object requires **object-identity analysis** — aliasing, allocation and
+> interprocedural reachability — which **this packet did not perform and its offline scope does not
+> obviously contain.** **So the writer set for the polled object is NOT established**, and the `O-OPEN`
+> verdict is *more* open than the byte-width scan suggested, not less.
 
 **Tracing the `LO8(eax)` writer at `0x001A29EB`** (which sits in the same function as the first variable
 poll and is compared against the field at `0x001A29D6`):
@@ -164,18 +184,20 @@ poll and is compared against the field at `0x001A29D6`):
 001A29EB  mov   byte ptr [esi + 0x64], al
 ```
 
-**So at this writer the field is bounded by `128`, not `255`** — verified exhaustively over all 256 inputs:
-`byte[ecx+0xe]=255 → dec 254 → sar 127 → al 128`.
+**So at this writer the stored value is bounded by `128`, not `255`** — verified exhaustively over all 256
+inputs: `byte[ecx+0xe]=255 → dec 254 → sar 127 → al 128`. **This bound applies to this writer only**; the
+other 184 writers are not bounded by it.
 
 **Consequence, stated carefully.** With `k=2` at `0x001A2A7F`, a field value above **16** would make the
-demand exceed the stub's 32, and field values up to **128** are representable at this writer. **But that is
-an upper bound on the field, not a witness that a poll-reaching path actually carries a value above 16.**
-The source `byte[ecx+0xe]` is itself guest data loaded through a pointer (`[esi+0x78]`), so **feasibility is
-not established** and the row stays `OPEN`.
+demand exceed the stub's 32, and values up to **128** are representable at this writer. **But that is an
+upper bound on one writer's stored value, not a witness that a poll-reaching path carries a value above 16**
+— and the writer set for the polled object is itself unresolved (above). **So feasibility is not
+established and the row stays `OPEN`.**
 
-**This narrows the follow-up usefully:** the question is no longer "what is the hardware capacity?" but
-**"can `byte[[esi+0x78]+0xe]` exceed 32 (resp. 16) on a path that reaches the poll?"** — a finite question
-about the title's own data, which is admissible evidence about the title.
+**This narrows the follow-up usefully, but does not close it:** the question is no longer "what is the
+hardware capacity?" but **"which writers can reach the DSOUND polled object, and can any of them leave the
+field above `32/k` at the moment a poll reads it?"** — a finite question *if* object identity can be
+resolved offline, which is exactly what the follow-up must establish first.
 
 ## Experiment 4 — deliver and check
 
