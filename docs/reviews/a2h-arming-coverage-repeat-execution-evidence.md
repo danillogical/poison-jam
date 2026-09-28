@@ -1,4 +1,4 @@
-# \A2h-arming-coverage-repeat-r1\ — execution evidence: **K = 3, agreement complete, ROW \O-COVERAGE\** (Planner reversed \O-READ-PATH\)
+# `A2h-arming-coverage-repeat-r1` — execution evidence: **K = 3, agreement complete, ROW `O-COVERAGE`** (Planner reversed `O-READ-PATH`)
 
 **Session:** `session-9f8c9988-38fb-4cc9-a188-a6881a52559a`, 2026-09-28, DSH.
 **Packet:** `A2h-arming-coverage-repeat-r1`, frozen
