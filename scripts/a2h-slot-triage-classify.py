@@ -181,6 +181,52 @@ def coverage(p: dict) -> dict:
     }
 
 
+def index_integrity(p: dict, budget: int | None = None) -> dict:
+    """Does any thread show an index gap, a duplicate, or a cap? (the packet's O-OPEN clause.)
+
+    The packet selects O-OPEN on "cap or index gap/duplicate *within a thread*", so this must be
+    settled explicitly rather than inferred from the before/after pairing.
+
+    IMPORTANT -- the counter is PER-THREAD (`kernel_bridge.c:326-337` uses a RECOMP_TLS budget),
+    so both the contiguity test and the cap test are per-thread. A global test would report a
+    spurious gap the moment two threads interleave.
+
+    A DUPLICATE INDEX IS ONLY A DEFECT IF THE CONTENT DIFFERS: two log lines with the same index
+    and identical (ordinal, esp, ret) are the same event printed twice, which is a logging
+    artifact, not an index defect. The check therefore compares content, not just the number.
+    """
+    per = defaultdict(list)
+    for k in p["kernel"]:
+        per[k["tid"]].append(k)
+    threads, ok = {}, True
+    for tid in sorted(per):
+        recs = per[tid]
+        idx = [r["call"] for r in recs]
+        counts = Counter(idx)
+        dupes = {i: n for i, n in counts.items() if n > 1}
+        # A duplicate is a real defect only when the repeated index carries different content.
+        real_dupes = {}
+        for i in dupes:
+            rows = [(r["ordinal"], r["esp"], r["ret"]) for r in recs if r["call"] == i]
+            if len(set(rows)) > 1:
+                real_dupes[i] = len(rows)
+        contiguous = idx == list(range(1, len(idx) + 1))
+        capped = budget is not None and len(idx) >= budget
+        clean = contiguous and not real_dupes and not capped
+        ok = ok and clean
+        threads["%d" % tid] = {
+            "dispatches": len(idx), "min": min(idx), "max": max(idx),
+            "distinct_indices": len(counts),
+            "contiguous_from_1": contiguous,
+            "duplicate_indices": dupes,
+            "duplicate_indices_with_differing_content": real_dupes,
+            "cap_reached": capped,
+            "clean": clean,
+        }
+    return {"threads": threads, "all_threads_clean": ok and bool(threads),
+            "test": "per-thread contiguity 1..N + content-compared duplicates + per-thread cap"}
+
+
 def series(p: dict) -> dict:
     """The sampled slot-value series, per thread, with the distinct values seen."""
     by_thread = defaultdict(list)
@@ -208,6 +254,7 @@ def classify(p: dict) -> dict:
     ic = install_control(p)
     cov = coverage(p)
     ser = series(p)
+    idx = index_integrity(p)
 
     if not ic["present"] or ic["ok"] is not True:
         return {"row": "O-OPEN", "reason": "install positive control absent or failed",
@@ -215,6 +262,13 @@ def classify(p: dict) -> dict:
 
     if not p["terminals"]:
         return {"row": "O-OPEN", "reason": "no terminal A2HSLOT record; the event was not reached"}
+
+    if not idx["all_threads_clean"]:
+        # The packet's O-OPEN clause: "cap or index gap/duplicate within a thread".
+        dirty = {t: d for t, d in idx["threads"].items() if not d["clean"]}
+        return {"row": "O-OPEN", "reason": "index gap, duplicate, or cap within a thread",
+                "detail": dirty, "index_integrity": idx, "coverage": cov, "series": ser,
+                "install_control": ic}
 
     term = p["terminals"][-1]
     # The latch's own verdict for the terminating thread.
@@ -231,6 +285,7 @@ def classify(p: dict) -> dict:
         "row": None, "reason": None,
         "install_control": ic,
         "coverage": cov,
+        "index_integrity": idx,
         "series": ser,
         "terminal": {"tid": term["tid"], "live": "0x%08X" % term["live"],
                      "call": term["call"], "observed": term["observed"]},
@@ -377,7 +432,34 @@ def self_test() -> int:
                    r["coverage"]["multi_threaded"] is True
                    and r["coverage"]["series_complete"] is True))
 
-    # Case 8: NESTING must NOT be mistaken for incompleteness. The real Run 2 shape is: two
+    # Case 9: an index GAP within a thread must select O-OPEN (the packet's own clause)
+    with tempfile.TemporaryDirectory() as td:
+        p = mk(td, [INSTALL, K(1), B(1), K(3), B(3), TERM_ZERO])   # index 2 missing
+        r = run(p)
+    checks.append(("index gap within a thread -> O-OPEN",
+                   r["row"] == "O-OPEN" and r["index_integrity"]["all_threads_clean"] is False))
+
+    # Case 10: a duplicate index with DIFFERING content is a real defect
+    with tempfile.TemporaryDirectory() as td:
+        p = mk(td, [INSTALL, K(1), B(1),
+                    "[KERNEL] #1: ordinal 999 (slot 1) esp=0x00F7FD00 ret=0x0014982E tid=1",
+                    B(1, ordinal=999), TERM_ZERO])
+        r = run(p)
+    checks.append(("duplicate index, differing content -> O-OPEN",
+                   r["row"] == "O-OPEN"))
+
+    # Case 11: a duplicate index with IDENTICAL content is a logging artifact, not an index
+    # defect. NOTE the fixture shape: the two lines must be ADJACENT and carry the same content,
+    # and the surrounding sequence must still be contiguous -- a genuinely duplicated line is the
+    # same event printed twice, not an index reused for a new event. (An earlier version of this
+    # fixture wrote #1 twice with no #2, which is a GAP, not a duplicate; the tool was right to
+    # reject it and the fixture was wrong.)
+    with tempfile.TemporaryDirectory() as td:
+        p = mk(td, [INSTALL, K(1), K(1), B(1), K(2), B(2), TERM_ZERO])
+        r = run(p)
+    checks.append(("duplicate index, identical content -> not an index defect",
+                   r["index_integrity"]["threads"]["1"]
+                   ["duplicate_indices_with_differing_content"] == {}))
     # nested bridges are entered (before at #1, before at #2), and BOTH afters are printed after
     # the counter has advanced to #3. Every dispatch still has its own before-sample, so the
     # series is complete even though call-number pairing would report two "gaps".
