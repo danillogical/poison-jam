@@ -102,6 +102,22 @@ reverse it, and BFS from the call. Then re-run reachability with **all writer no
 | Candidate function entry reaching the call | **1** — `0x001497DC` |
 | **Call reachable with all writers removed?** | **FALSE** |
 
+**The dominance result was re-derived by a second, independent method** (a separate predecessor
+construction rather than the linear-sweep edge build), because this project has twice been burned by
+linear-disassembly assumptions:
+
+| Quantity | Method A | Method B | Agree? |
+|---|---|---|---|
+| instructions reaching the call | **46** | **46** | ✓ |
+| writers to `[ebp-0x24]` among them | **2** (`0x0014980E`, `0x00149E24`) | **2** (same) | ✓ |
+| producer `0x0014980E` present | yes | yes | ✓ |
+| candidate entries reaching the call | **1** (`0x001497DC`) | **1** (`0x001497DC`) | ✓ |
+| call reachable with writers removed | **FALSE** | **FALSE** | ✓ |
+
+**And an alignment check that matters here:** **zero** `.byte` instructions decode within `0x400` of the
+call, so the sweep is instruction-aligned across the region the conclusion depends on. **The result is
+robust to the failure mode that has produced plausible garbage before.**
+
 **So every path to the call passes a write, and the only *value-producing* writer on any reaching path is
 `0x0014980E`.** The `movzx` writer I had been chasing **cannot reach the call at all** — which explains why
 its 16-bit bound was irrelevant.
