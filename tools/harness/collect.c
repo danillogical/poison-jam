@@ -161,8 +161,15 @@ static unsigned dr_birth_count, dr_birth_overflow;
 static unsigned dr_raw_event_total, dr_raw_exception_total, dr_raw_single_step;
 static unsigned dr_ss_first_chance, dr_ss_second_chance;
 static unsigned dr_ss_routed_handler, dr_ss_routed_generic, dr_ss_routed_terminal;
-static unsigned dr_ss_filtered_other_code;   /* counted, but not a single-step: the filter boundary */
 static unsigned dr_ss_unrouted;              /* single-step that reached no branch at all */
+/* THE ANTI-POLLUTION COUNTER, and it is load-bearing. The live run delivers ~14k debug events per
+ * run, the overwhelming majority of them NOT single-steps (the initial breakpoint, the GPU and
+ * handshake exceptions, AC'97's page traps). If those were folded into dr_raw_single_step, then a
+ * run with ZERO delivered single-steps would read as a non-zero count and the Phase-1 answer would
+ * come out DELIVERED_UNCLAIMED instead of NON_FIRING -- destroying the exact decision this packet
+ * exists to make. So the single-step count is single-step ONLY, and every other raw exception is
+ * counted separately, in a counter that still proves the debug stream was read. */
+static unsigned dr_raw_exception_other_code;
 /* Continuation bookkeeping. `not_handled` is the SWALLOW discriminator: an event this instrument
  * passed on is one the target's own handlers then had to deal with. */
 static unsigned dr_continue_total, dr_continue_continue, dr_continue_not_handled;
@@ -607,7 +614,7 @@ static void a2h_delivery_terminal(void)
     fprintf(report, "GUEST_DR_DELIVERY_TERMINAL raw_events=%u raw_exceptions=%u raw_single_step=%u "
                     "ss_first_chance=%u ss_second_chance=%u ss_routed_handler=%u "
                     "ss_routed_generic_first=%u ss_routed_terminal_second=%u ss_unrouted=%u "
-                    "ss_records=%u ss_overflow=%u filtered_other_code=%u continue_total=%u "
+                    "ss_records=%u ss_overflow=%u other_code_exceptions=%u continue_total=%u "
                     "continue_continue=%u continue_not_handled=%u continue_failed=%u "
                     "post_continue_reads=%u post_continue_ok=%u post_continue_reverted=%u "
                     "post_continue_unreadable=%u post_continue_overflow=%u install_hit=%ld "
@@ -615,7 +622,7 @@ static void a2h_delivery_terminal(void)
             dr_raw_event_total, dr_raw_exception_total, dr_raw_single_step, dr_ss_first_chance,
             dr_ss_second_chance, dr_ss_routed_handler, dr_ss_routed_generic,
             dr_ss_routed_terminal, dr_ss_unrouted, dr_raw_ss_count, dr_raw_ss_overflow,
-            dr_ss_filtered_other_code, dr_continue_total, dr_continue_continue,
+            dr_raw_exception_other_code, dr_continue_total, dr_continue_continue,
             dr_continue_not_handled, dr_continue_failed, dr_post_continue_reads,
             dr_post_continue_ok, dr_post_continue_reverted, dr_post_continue_unreadable,
             dr_post_continue_overflow, (long)dr_install_hit_latch,
@@ -634,24 +641,29 @@ static void a2h_delivery_terminal(void)
      *                      registers were programmed and did not survive the continue.
      *   NO_RAW_EVENT       nothing arrived at all: only then do the before/after-continue readbacks
      *                      and the toolkit's store witness discriminate delivery from handling.
-     */
+     *
+     * EVERY CAUSE BELOW REQUIRES `complete`. A cause is a discrimination between hypotheses, and a
+     * truncated or unread ledger discriminates nothing -- so an incomplete ledger yields
+     * UNKNOWN_NOT_RECORDED even when single-steps WERE counted, rather than letting a partial count
+     * name a cause. The one exception is a hit: a claimed single-step is a positive observation that
+     * a lost row cannot un-observe. */
     {
         const char *cause;
         if (dr_install_hit_latch) cause = "HIT_OBSERVED";
+        else if (!complete) cause = "UNKNOWN_NOT_RECORDED";
         else if (dr_ss_second_chance && !dr_ss_first_chance) cause = "CHANCE_SEMANTICS";
         else if (dr_raw_single_step) cause = "DEBUGGER_SWALLOW";
         else if (dr_post_continue_reverted || dr_post_continue_unreadable) cause = "CONTEXT_LOSS";
-        else if (complete) cause = "NO_RAW_EVENT";
-        else cause = "UNKNOWN_NOT_RECORDED";
+        else cause = "NO_RAW_EVENT";
         fprintf(report, "GUEST_DR_CAUSE first_chance_ss=%u second_chance_ss=%u routed_handler=%u "
                         "routed_elsewhere=%u post_continue_reverted=%u post_continue_unreadable=%u "
                         "post_continue_last_tid=%lu post_continue_last_dr0=%016llX "
-                        "post_continue_last_dr7=%016llX cause=%s\n",
+                        "post_continue_last_dr7=%016llX complete=%d cause=%s\n",
                 dr_ss_first_chance, dr_ss_second_chance, dr_ss_routed_handler,
                 dr_ss_routed_generic + dr_ss_routed_terminal, dr_post_continue_reverted,
                 dr_post_continue_unreadable, dr_post_continue_last_tid,
                 (unsigned long long)dr_post_continue_last_dr0,
-                (unsigned long long)dr_post_continue_last_dr7, cause);
+                (unsigned long long)dr_post_continue_last_dr7, complete, cause);
     }
     for (unsigned i = 0; i < dr_raw_ss_count; i++)
         fprintf(report, "GUEST_DR_RAW_SS_ROW index=%u seq=%u tid=%lu code=%08lX chance=%s route=%s "
@@ -733,17 +745,32 @@ static int dr_tid_exited(DWORD tid)
  * exact absent-record failure this packet exists to close. Nothing here decides anything: it records
  * that the event was DELIVERED and which chance it was.
  *
+ * THE COUNTER IS SINGLE-STEP ONLY. A non-single-step exception is counted in
+ * dr_raw_exception_other_code instead, so the raw single-step count answers exactly one question --
+ * "did a #DB reach the debugger?" -- and cannot be polluted by the ~14k unrelated events a live run
+ * delivers. That separation is what makes a zero mean NON-FIRING rather than UNKNOWN.
+ *
  * `dr_raw_event_total` is incremented by the caller for EVERY debug event, so the raw single-step
  * count always has a completeness denominator next to it. */
 static void a2h_raw_single_step(DWORD tid, DWORD code, DWORD first_chance, DWORD64 address)
 {
     LARGE_INTEGER now;
-    unsigned seq = ++dr_seq;
+    unsigned seq;
     unsigned chance = first_chance ? A2H_CHANCE_FIRST : A2H_CHANCE_SECOND;
+    int is_single_step = (code == EXCEPTION_SINGLE_STEP);
+
+    /* THE COMPLETENESS DENOMINATOR IS BUMPED FIRST, before the code filter below can return early.
+     * If it were bumped only for single-steps, a run that delivered no single-step at all would show
+     * events=0 as well, and "the stream was read and contained no #DB" would be indistinguishable
+     * from "nothing was recorded" -- which is precisely the NON-FIRING / NOT-RECORDED confusion the
+     * packet's §6.1.6 losslessness clause forbids. */
+    if (is_single_step) dr_raw_single_step++;
+    else dr_raw_exception_other_code++;
+    if (!is_single_step) return;   /* counted; not a delivery this ledger classifies */
+
+    seq = ++dr_seq;
     QueryPerformanceCounter(&now);
-    dr_raw_single_step++;
     if (first_chance) dr_ss_first_chance++; else dr_ss_second_chance++;
-    if (code != EXCEPTION_SINGLE_STEP) dr_ss_filtered_other_code++;
     if (dr_raw_ss_count < A2H_RAW_SS_CAPACITY) {
         dr_raw_ss[dr_raw_ss_count].seq = seq;
         dr_raw_ss[dr_raw_ss_count].chance = chance;
@@ -1456,6 +1483,135 @@ void jsrf_a2h_test_delivery_terminal(void)
 
 int jsrf_a2h_test_install_hit_latch(void) { return (int)dr_install_hit_latch; }
 
+/* ── C1/C3 DELIVERY FIXTURE ─────────────────────────────────────────────────────────────────────
+ *
+ * WHY A FIXTURE MODE LIVES IN THE COLLECTOR. The packet requires the five delivery cases to be
+ * fixture-tested, and requires that no row read an untested or lossy counter. The decision semantics
+ * live in a2h_delivery_terminal(), so the only honest fixture is one that drives THAT function -- a
+ * Python reimplementation of the decision would test the reimplementation, not the instrument.
+ *
+ * It is reached only by an explicit argv token that scripts/run-jsrf.py never passes, it returns
+ * before CreateProcess, and every seam it calls is itself gated. Absent the token, main() is
+ * byte-for-byte the collector it was before.
+ *
+ * One case per process, on purpose: the install-hit latch is write-once and the counters accumulate,
+ * so a single process could only ever publish one decision. Each case therefore gets a clean ledger,
+ * which is also what makes the "absent hit" case a real zero rather than a leftover. */
+static int a2h_delivery_fixture(const char *case_name)
+{
+    HANDLE self;
+    DWORD tid = GetCurrentThreadId();
+    unsigned seq;
+    unsigned i;
+    int armed;
+
+    if (!dr_on()) {
+        /* GATE OFF IS COMPLETELY INERT, including here: no record, no counter, no line -- the
+         * artifact stays EMPTY, which is the same inertness the ctest arming fixture asserts. A
+         * gate-off run must be indistinguishable from a run of the collector before this existed. */
+        return 2;
+    }
+    /* No debuggee exists here, so the geometry is pinned rather than resolved from symbols -- the
+     * same pin the ctest arming fixture uses, and the only way this path is reachable at all.
+     * The canonical value is the address of a real object so the DR0 programming below is a real
+     * SetThreadContext against a real address, not a fabricated register value. */
+    process_id = GetCurrentProcessId();
+    jsrf_a2h_test_geometry((DWORD64)(uintptr_t)&report);
+
+    /* Arm the CURRENT thread for real, so the far-side readback has a thread it is entitled to
+     * verify and the fixture exercises the same arm path the collector uses. */
+    self = OpenThread(THREAD_GET_CONTEXT | THREAD_SET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, tid);
+    armed = self ? dr_arm_thread(self, tid, "fixture", NULL) : 0;
+
+    if (!strcmp(case_name, "hit")) {
+        /* An install event WITH a hit: a raw first-chance single-step, claimed by the handler, and
+         * the write-once install-hit latch published. */
+        jsrf_a2h_test_raw_event();
+        seq = jsrf_a2h_test_raw_single_step(tid, EXCEPTION_SINGLE_STEP, 1, dr_canonical);
+        jsrf_a2h_test_raw_ss_route(seq, A2H_ROUTE_HANDLER);
+        jsrf_a2h_test_publish_install_hit(tid, 0xF, A2H_DR7, dr_canonical);
+    } else if (!strcmp(case_name, "absent")) {
+        /* An install event with an INTENTIONALLY ABSENT hit: the debug stream was demonstrably read
+         * (two events of other kinds) and no single-step ever arrived. This is the NON_FIRING world,
+         * and it is the case the Phase-1 finding claims the live run is in. */
+        jsrf_a2h_test_raw_event();
+        jsrf_a2h_test_raw_event();
+    } else if (!strcmp(case_name, "second_chance")) {
+        /* Delivered as SECOND chance with no first-chance single-step: favors chance semantics. */
+        jsrf_a2h_test_raw_event();
+        seq = jsrf_a2h_test_raw_single_step(tid, EXCEPTION_SINGLE_STEP, 0, dr_canonical);
+        jsrf_a2h_test_raw_ss_route(seq, A2H_ROUTE_TERMINAL_SECOND);
+    } else if (!strcmp(case_name, "swallowed")) {
+        /* Delivered, then routed to a first-chance path that is not this instrument's: the event
+         * exists in the ledger but was consumed elsewhere. Favors debugger swallow. */
+        jsrf_a2h_test_raw_event();
+        seq = jsrf_a2h_test_raw_single_step(tid, EXCEPTION_SINGLE_STEP, 1, dr_canonical);
+        jsrf_a2h_test_raw_ss_route(seq, A2H_ROUTE_GENERIC_FIRST);
+    } else if (!strcmp(case_name, "filtered")) {
+        /* A raw event whose code is NOT a single-step, plus a real single-step: the non-single-step
+         * must be counted in the completeness denominator and in other_code_exceptions, and must
+         * NEVER inflate raw_single_step. That separation is what keeps the live ~14k-event run from
+         * turning a zero-single-step result into a false DELIVERED_UNCLAIMED. */
+        jsrf_a2h_test_raw_event();
+        seq = jsrf_a2h_test_raw_single_step(tid, EXCEPTION_BREAKPOINT, 1, dr_canonical);
+        jsrf_a2h_test_raw_ss_route(seq, A2H_ROUTE_GENERIC_FIRST);
+        jsrf_a2h_test_raw_event();
+        seq = jsrf_a2h_test_raw_single_step(tid, EXCEPTION_SINGLE_STEP, 1, dr_canonical);
+        jsrf_a2h_test_raw_ss_route(seq, A2H_ROUTE_GENERIC_FIRST);
+    } else if (!strcmp(case_name, "filtered_only")) {
+        /* ONLY non-single-step exceptions: the debug stream was demonstrably read (events and
+         * other_code_exceptions are non-zero) while raw_single_step is a complete zero. This is the
+         * live run's actual shape, and it must read NON_FIRING -- not DELIVERED_UNCLAIMED, and not
+         * UNKNOWN. */
+        jsrf_a2h_test_raw_event();
+        seq = jsrf_a2h_test_raw_single_step(tid, EXCEPTION_BREAKPOINT, 1, dr_canonical);
+        jsrf_a2h_test_raw_ss_route(seq, A2H_ROUTE_GENERIC_FIRST);
+        jsrf_a2h_test_raw_event();
+        seq = jsrf_a2h_test_raw_single_step(tid, 0xE0424750u, 1, dr_canonical);
+        jsrf_a2h_test_raw_ss_route(seq, A2H_ROUTE_GENERIC_FIRST);
+    } else if (!strcmp(case_name, "publication_failure")) {
+        /* PUBLICATION FAILURE: nothing was counted at all, so the completeness denominator is zero
+         * and a raw single-step count of 0 carries NO information. This must read
+         * UNKNOWN_NOT_RECORDED and must never read NON_FIRING -- that is the whole losslessness
+         * requirement, and it is the failure mode that would silently manufacture a negative. */
+        ;
+    } else if (!strcmp(case_name, "overflow")) {
+        /* PUBLICATION FAILURE by truncation: more single-steps than the bounded ledger can hold.
+         * The overflow flag is published, so the ledger is VISIBLY truncated and cannot be read as
+         * complete -- the same reason dr_arm_tid_overflow exists. */
+        jsrf_a2h_test_raw_event();
+        for (i = 0; i < A2H_RAW_SS_CAPACITY + 8; i++) {
+            seq = jsrf_a2h_test_raw_single_step(tid, EXCEPTION_SINGLE_STEP, 1, dr_canonical);
+            jsrf_a2h_test_raw_ss_route(seq, A2H_ROUTE_HANDLER);
+        }
+    } else {
+        fprintf(report, "A2H_DELIVERY_FIXTURE unknown_case=%s\n", case_name);
+        fflush(report);
+        if (self) CloseHandle(self);
+        return 2;
+    }
+
+    /* The far-side readback, exactly as the debug loop performs it after ContinueDebugEvent. */
+    jsrf_a2h_test_post_continue(tid, DBG_CONTINUE, 1);
+    jsrf_a2h_test_delivery_terminal();
+    fprintf(report, "A2H_DELIVERY_FIXTURE case=%s armed=%d canonical=%016llX\n",
+            case_name, armed, (unsigned long long)dr_canonical);
+    fflush(report);
+
+    /* Leave no residue: the fixture programmed real debug registers on a real thread. */
+    if (self) {
+        CONTEXT clear = {0};
+        clear.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+        if (GetThreadContext(self, &clear)) {
+            clear.Dr0 = clear.Dr1 = clear.Dr2 = clear.Dr3 = 0;
+            clear.Dr7 = 0;
+            SetThreadContext(self, &clear);
+        }
+        CloseHandle(self);
+    }
+    return 0;
+}
+
 /* The fixture links this file to drive the production branch bodies above, so its own main() is
  * compiled out there. Nothing in the production build defines JSRF_COLLECT_NO_MAIN, so the collector
  * entry point is unchanged. */
@@ -1477,6 +1633,16 @@ int main(int argc, char **argv)
     snprintf(path, sizeof(path), "%s\\stacks.txt", out_dir);
     report = fopen(path, "w");
     if (!report) return 2;
+    /* C1/C3 delivery fixture. Reached ONLY by an explicit token that scripts/run-jsrf.py never
+     * passes, and it returns before CreateProcess, so the collector's real behaviour is unchanged.
+     * Each case gets its own process because the install-hit latch is write-once. */
+    for (int arg = 1; arg < argc; ++arg) {
+        if (!strncmp(argv[arg], "--a2h-delivery-fixture=", 23)) {
+            int code = a2h_delivery_fixture(argv[arg] + 23);
+            fclose(report);
+            return code;
+        }
+    }
     command[0] = '\0';
     if (!jsrf_append_windows_arg(command, sizeof(command), &command_used, argv[3])) {
         fprintf(report, "Child command line exceeds the Windows command limit.\n");

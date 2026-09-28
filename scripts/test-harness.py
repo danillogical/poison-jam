@@ -1,5 +1,6 @@
 """Exercise real collector launches; inspect outcomes, stacks AND dump contents."""
 import json
+import os
 from pathlib import Path
 import re
 import struct
@@ -8,6 +9,7 @@ import sys
 from jsrf_dump import dump_ranges
 
 ROOT = Path(__file__).resolve().parents[1]
+BUILD = ROOT/'build'
 
 def check_dump(folder, mode):
     data = (folder/'process.dmp').read_bytes()
@@ -116,6 +118,72 @@ def check_dump(folder, mode):
             events = re.findall(r'kind=1 target=([0-9A-F]+)',block)
             assert len(events) == 127 and all(int(x,16)==expected for x in events), 'mixed thread histories'
 
+def delivery_fixture(case, expect_decision, expect_cause, **fields):
+    """Drive the collector's REAL delivery decision for one injected case.
+
+    The decision semantics live in the collector (a2h_delivery_terminal), so this launches the actual
+    jsrf_collect.exe rather than reimplementing the decision in Python -- a reimplementation would
+    test itself, not the instrument. Each case gets its own process because the install-hit latch is
+    write-once and the counters accumulate.
+
+    The point of the set is the packet's losslessness clause: a reader must be able to tell NON-FIRING
+    from NOT-RECORDED. `absent` and `filtered_only` are the two shapes a live run can have when no
+    #DB arrives; `publication_failure` and `overflow` are the shapes that must NEVER be read as a
+    negative. No assertion below reads a counter that no case exercises.
+    """
+    folder = Path(os.environ.get('TEMP') or '.')/f'a2h-delivery-{case}'
+    folder.mkdir(parents=True, exist_ok=True)
+    for stale in ('stacks.txt',):
+        (folder/stale).unlink(missing_ok=True)
+    env = dict(os.environ, JSRF_TRACE_A2H_DR='1')
+    command = [str(BUILD/'Release/jsrf_collect.exe'), '1', str(folder),
+               str(BUILD/'Release/jsrf_recomp.exe'), f'--a2h-delivery-fixture={case}']
+    completed = subprocess.run(command,cwd=ROOT,capture_output=True,text=True,timeout=60,env=env)
+    assert completed.returncode == 0, (case,completed.returncode,completed.stderr)
+    text = (folder/'stacks.txt').read_text(errors='replace')
+    terminal = next((l for l in text.splitlines() if l.startswith('GUEST_DR_DELIVERY_TERMINAL ')), None)
+    cause = next((l for l in text.splitlines() if l.startswith('GUEST_DR_CAUSE ')), None)
+    assert terminal, f'{case}: no terminal delivery record was published'
+    assert cause, f'{case}: no cause record was published'
+    assert f'decision={expect_decision} ' in terminal+' ', (case,terminal)
+    assert f'cause={expect_cause} ' in cause+' ', (case,cause)
+    for name,value in fields.items():
+        assert f'{name}={value} ' in terminal+' ' or terminal.endswith(f'{name}={value}'), \
+            (case,name,value,terminal)
+    # A cause must never be named from an incomplete ledger: that is the difference between a
+    # discrimination and a guess.
+    if 'complete=0' in terminal:
+        assert expect_cause == 'UNKNOWN_NOT_RECORDED' or expect_decision == 'HIT', (case,terminal)
+    print(f'PASS delivery-{case}: {expect_decision}/{expect_cause}',flush=True)
+    return terminal
+
+def delivery_fixtures():
+    """The five required cases plus the two loss modes that must never read as a negative."""
+    # 1. an install event WITH a hit -> the write-once latch, and a claimed single-step
+    delivery_fixture('hit','HIT','HIT_OBSERVED',install_hit='1',raw_single_step='1',
+                     ss_first_chance='1',ss_routed_handler='1',post_continue_ok='1')
+    # 2. an install event with an INTENTIONALLY ABSENT hit -> the NON-FIRING world
+    delivery_fixture('absent','NON_FIRING','NO_RAW_EVENT',install_hit='0',raw_single_step='0',
+                     complete='1',post_continue_ok='1',post_continue_reverted='0')
+    # 2b. the live run's actual shape: the stream WAS read (non-single-step exceptions counted) while
+    #     no single-step ever arrived. This must still be NON_FIRING -- if unrelated exceptions were
+    #     folded into raw_single_step it would read DELIVERED_UNCLAIMED and the Phase-1 answer would
+    #     be destroyed, so the separation is asserted, not assumed.
+    delivery_fixture('filtered_only','NON_FIRING','NO_RAW_EVENT',raw_single_step='0',
+                     other_code_exceptions='2',complete='1')
+    # 3. first vs second chance
+    delivery_fixture('second_chance','DELIVERED_UNCLAIMED','CHANCE_SEMANTICS',ss_first_chance='0',
+                     ss_second_chance='1',ss_routed_terminal_second='1')
+    # 4. a filtered / swallowed event: delivered, then consumed by a path that is not this one
+    delivery_fixture('swallowed','DELIVERED_UNCLAIMED','DEBUGGER_SWALLOW',ss_routed_handler='0',
+                     ss_routed_generic_first='1',complete='1')
+    # 5. publication failure -- nothing counted at all, so a zero carries NO information
+    delivery_fixture('publication_failure','UNKNOWN_NOT_RECORDED','UNKNOWN_NOT_RECORDED',
+                     raw_events='0',complete='0')
+    # 5b. publication failure by truncation -- the ledger overflowed and says so
+    delivery_fixture('overflow','UNKNOWN_NOT_RECORDED','UNKNOWN_NOT_RECORDED',ss_overflow='1',
+                     complete='0',ss_records='32')
+
 def run(mode, repetition=0):
     expected_checkpoint = 'probe_gpu' if mode.startswith('gpu-') else 'probe_video' if mode=='video' else 'probe_events' if mode=='healthy' else 'probe_handled' if mode=='handled' else 'probe_dispatch' if mode=='dispatch-race' else 'probe_started'
     command = [sys.executable, '-X', 'utf8', str(ROOT/'scripts/run-jsrf.py'),
@@ -140,7 +208,12 @@ def run(mode, repetition=0):
 
 if __name__=='__main__':
     folders=[]
+    # The A2h delivery fixtures run FIRST: they are cheap, they need no game launch, and a failure
+    # here means the delivery decision itself is unsound -- which would make every later observation
+    # uninterpretable.
+    delivery_fixtures()
     for i in range(3): folders.append(run('healthy',i))
     for mode in ('dispatch-race','handled','worker-crash','deadlock','spin','video','gpu-mmio-owner','gpu-mmio-lifecycle','gpu-ptimer-runtime','gpu-submit-supported','gpu-submit-bound','gpu-submit-blocked','gpu-progress','gpu-stall','gpu-corrupt','gpu-unreadable'): folders.append(run(mode))
     (ROOT/'logs/harness-test-results.json').write_text(json.dumps({'passed':True,'runs':folders},indent=2))
     print('PASS: 19 harness probes; trapped USER submission, MMIO ownership/lifecycle, PTIMER runtime, thread capture, GPU history/decoding, missing memory and stalled queues verified')
+    print('PASS: 7 A2h delivery fixtures; NON-FIRING distinguished from NOT-RECORDED, first/second chance, swallow and publication failure verified')
