@@ -100,7 +100,66 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-callback-context-identity-r2` (**discovery**: identify the context's PRODUCER) — **PROMOTED 2026-09-28, `ADEQUATE`**
+## CURRENT PACKET — `A2h-callback-context-identity-r2` **EXECUTED → `ACCEPT-WITH-CORRECTIONS`**; **row `O-OPEN` SUSTAINED, edge ADVANCED**; successor next
+
+- **Packet:** `docs/packets/a2h-callback-context-identity.md`, **r2**, frozen
+  **`94D4C08A56D9DF4F56524D9F56594E081BC6820CFF7877EE118EBFD7295ED17A`** — **not edited**.
+- **Evidence:** `docs/reviews/a2h-callback-context-producer-evidence.md` (`537437f`).
+- **Stage-1 review:** `docs/reviews/a2h-callback-context-producer-acceptance-review.md` (`58694a5`) —
+  **`ACCEPT-WITH-CORRECTIONS`**. Acceptance record:
+  `docs/reviews/a2h-callback-context-producer-acceptance-record.md` (`9bcfc93`).
+
+### ✅ ALL FIVE MANDATED BYTE CHECKS CONFIRMED — and the Session's refutation is RETRACTED on verified bytes
+
+| # | Claim | Verdict |
+|---|---|---|
+| 1 | `0x0019460A mov dword ptr [ecx], 0xfd000000` | **CONFIRMED** |
+| 2 | `0x001925FB lea edi, [esi + 0x2268]` | **CONFIRMED** |
+| 3 | `0x001925A2 mov esi, ecx` | **CONFIRMED** |
+| 4 | the DPC binding (`sub_00194ADD`) | **CONFIRMED** |
+| 5 | the thunk binding (`sub_001941E0`) | **CONFIRMED** |
+
+> **So the context IS LOCATED AT `device+0x2268`** — **it survived a falsification attempt**, and the
+> Session's `device+0x2268` refutation is **RETRACTED** (`a2h-device-2268-refutation-retracted.md`,
+> `a2h-device-2268-retraction-advisor-ruling.md`, `a2h-binding-reread-executed.md`).
+
+### ⚠ THE SESSION'S WORST ERROR THIS LINE, recorded because it nearly stood
+
+**The Session reported `MEM32(device+0x2268) = 0x000000FD` and called it *"a small INTEGER, not a pointer."***
+**The true value is `0xFD000000` — THE NV2A MMIO APERTURE BASE, documented 29 times in this repository.**
+
+**The byte-reversal is what made the refutation LOOK valid:** `0x000000FD` reads as a counter; `0xFD000000`
+is exactly what a device sub-object's first dword **should** hold. **The reversal DESTROYED THE CLUE.**
+
+**And the same reversal made the Session report the OPPOSITE of the truth for `device+0x242C`:**
+**the true value `0x0015F9D0` IS the refcount thunk, so the installer chain is CONFIRMED.**
+
+**The control that catches this class is an OFFSET-SHIFT test** (read a known string at `VA` and `VA+1`; a
+LE-DWORD reader gives `30766A64` then `3030766A`). **The Session's original single-address control was
+satisfied by BOTH byte orders and never discriminated.** **The Advisor made the offset-shift control BINDING,
+and it is now standard.** **Practice note: `docs/reviews/session-extraction-error-pattern.md`.**
+
+### The corrections — all in the evidence RECORD, none in the substance
+
+- **C-1:** the Worker's row `O-ALTERNATE-PATH` is **WRONG** — **its own finding contradicts that row's
+  predicate.** **Correct: `O-OPEN` SUSTAINED, edge advanced** — **exactly the Advisor's advance prediction,
+  confirmed independently.**
+- **C-2:** the Worker recorded only the **non-discriminating** control; the reviewer flagged it and ran the
+  discriminating one itself.
+- **C-3:** call-site addresses cited **off by one** (the instruction after the `call`).
+- **C-4:** `sub_00194C3F`'s *"`ecx = ebx + 0x2268`"* **is not in the bytes**; the `+0x1A0` arithmetic is
+  rendered as a **store** when it is a **`push`**.
+- **C-5:** **the producer chain is not closed at the TOP** — no caller of `sub_00194ADD` traced, no
+  `KeInsertQueueDpc` site located. **A real addition neither the Session nor the Advisor had named.**
+
+### The TWO edges the successor must carry
+
+1. **The WRITER of `device+0x242C`** — the callback slot's value. **The precise unknown now.**
+2. **The caller of `sub_00194ADD` / the `KeInsertQueueDpc` site** — **what starts the DPC** (C-5).
+
+**Next:** a successor packet for edge 1 (the writer), with edge 2 recorded.
+
+**Toolkit:** `37226b2` local / `571982d` pushed (**no-push state**). **Game:** `9bcfc93`.
 
 - **Packet:** `docs/packets/a2h-callback-context-identity.md`, **r2**, **16 lines**, **6979 bytes**, frozen
   **`94D4C08A56D9DF4F56524D9F56594E081BC6820CFF7877EE118EBFD7295ED17A`** — **this is the packet to execute.**
