@@ -292,3 +292,43 @@ the guest registry.** Concretely, the packet must:
 explicitly — **but it does mean the "all-threads-armed" leg cannot be satisfied by trusting the guest
 registry**, and a packet that assumed it could would have produced a silent coverage hole. **The gate is
 therefore recorded as PASSED WITH A REQUIRED DESIGN CHANGE, not as a re-referral trigger.**
+
+---
+
+## Session clarification — **how** the alias set must be derived live (the Advisor's binding requirement)
+
+The ruling requires alias VAs *"derived LIVE from `g_mirror_views` + slot offset with formula cross-check"*
+and forbids propagating a hand range. **The Session worked out the correct derivation and it is not the one
+the Session had been using.** Recorded so the packet specifies the right computation.
+
+**Reading the toolkit's own mapping call (`xbox_memory_layout.c:2234-2257`):**
+
+```c
+uintptr_t mirror_base = (uintptr_t)g_memory_base + (uintptr_t)(m + 1) * g_memory_size;
+g_mirror_views[m] = MapViewOfFileEx(g_mapping_handle, FILE_MAP_ALL_ACCESS,
+                                    0, 0,              /* file offset high, low = 0 */
+                                    g_memory_size, (LPVOID)mirror_base);
+```
+
+**`MapViewOfFileEx`'s third and fourth arguments are the file offset, and both are `0`.** So **every mirror
+maps the same file region — the whole RAM image — starting at its own host base.** Therefore:
+
+> **the offset within a view is IDENTICAL across views**, and the alias host address for a guest slot `S` is
+> **`g_mirror_views[m] + (slot_host − g_memory_base)`** — a **HOST** offset addition.
+
+**The guest-range formula `(m+1) * g_memory_size` describes which *guest* VAs reach a view. It is NOT an
+offset to add.** That is exactly the confusion that produced the Session's wrong hand range: the Session
+treated a guest-range expression as if it were a host-offset computation.
+
+**So the packet must, at arm time:**
+
+1. read `g_memory_base`, `g_memory_size`, `xbox_GetMappedSize()` from the toolkit;
+2. enumerate `g_mirror_views[m]` for `m` in `0..XBOX_NUM_MIRRORS-1`, **skipping NULL views**;
+3. compute each alias as **`g_mirror_views[m] + (slot_host − g_memory_base)`**;
+4. **cross-check** the count and each address with `VirtualQuery` (mapped, same region size), and **record
+   the mapped set** so unmapped mirrors are accounted for rather than assumed;
+5. **fail closed** if any present view is unarmed, or if the derived count differs from the source-derived
+   expectation.
+
+**The alias set IS derivable live** — which is what makes the corrected ruling's census leg implementable —
+**and the derivation is a host-offset addition, not a guest-range one.**
