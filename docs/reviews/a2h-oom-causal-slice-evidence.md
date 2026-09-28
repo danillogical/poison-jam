@@ -401,16 +401,18 @@ cause is established,"* and the caller's identity is not yet established.
 > structural inference that only measurement could settle**, which is why the next packet must carry a
 > witness rather than an argument.
 
-**`sub_001497DC` has 8 call sites** in the generated source. Only **two** push three arguments; the other
-six push one, so they cannot supply `arg2` at all.
+**`sub_001497DC` has 8 call sites** in the generated source. **Two of them push three arguments; the other six
+push one.** *(My original text continued "so they cannot supply `arg2` at all" — **that clause was WRONG and is
+withdrawn**; see the correction above. Because the function is frameless, **all eight sites can in principle
+supply the slot**, and these two are **leads**, not a candidate set.)*
 
-| Call site | guest `ret` | `arg2` expression |
+| Call site | guest `ret` | pushed `arg2` expression |
 |---|---|---|
 | `recomp_0003.c:21992` | `0x0014A6D6` | `MEM32(ebp + 0x14)` |
 | `recomp_0003.c:22281` | `0x0014A858` | `MEM32(esp + 8)` |
 
-**The second is structurally the more interesting**, because it sits inside **`sub_0014A83E`**
-(`recomp_0003.c:22271`), declared **`cdecl, 2 params`**, `Frame: fpo_leaf`:
+**The second is structurally the more interesting lead** — *as a lead only* — because it sits inside
+**`sub_0014A83E`** (`recomp_0003.c:22271`), declared **`cdecl, 2 params`**, `Frame: fpo_leaf`:
 
 ```
 loc_0014A83E:
@@ -450,8 +452,10 @@ pass-through, not a local computation. **`sub_0014A83E` is itself called from se
    callee's `arg2`** — a real parameter of a `cdecl, 2 params` function, not a read past its parameters.
 
 **This is exactly the shape the packet's `O-OTHER-INPUT` row describes** — *"distinguish title data,
-translated ABI, or another device at this one producer"* — and the remaining question is small and bounded:
-**which of the two 3-argument call sites was on the failing frame, and what supplied its `arg2`.**
+translated ABI, or another device at this one producer"* — and the remaining question is **bounded but NOT
+narrowed to two candidates**: **which call site was on the failing frame, and what value occupied
+`[ebp+0x10]` in that frame at that moment.** *(My original text said "which of the two 3-argument call sites"
+— **that framing is withdrawn**, because the frameless function makes all eight sites possible.)*
 
 ### Why `O-OPEN` was selected on the then-available evidence
 

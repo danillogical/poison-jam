@@ -144,11 +144,13 @@ catch both real defects.
 ### Next authorized work
 
 **An `A2h-named-producer` discovery** naming `[ebp+0x10]` of `sub_001497DC` at `0x0014980E`, with **the
-caller's identity** as its remaining question. **Bounded lead already recorded:** 8 call sites, only **two**
-push three arguments, and one (`sub_0014A83E`) **passes its own `arg1` through** as the callee's `arg2` —
-with the `PUSH32` macro's pre-decrement evaluation **verified in source**. **Whether that is the failing path
-is NOT established.** **No change packet is authorized** — *"consider a change only after cause is
-established."*
+caller's identity** as its remaining question. **The bounded caller lead was CORRECTED by the Planner and the
+correction is verified:** `sub_001497DC` is **FRAMELESS** (`Frame: fpo_leaf`; `ebp = g_seh_ebp`), so
+**`[ebp+0x10]` is a slot in the CALLER's frame, not necessarily the callee's pushed `arg2`** — **every one of
+the 8 call sites has a frame and can in principle supply it**, so the two three-push sites are **leads, not a
+candidate set**. The follow-up must require a **frame/register/stack identity witness**. **Whether any
+particular site is the failing path is NOT established.** **No change packet is authorized** — *"consider a
+change only after cause is established."*
 
 **Advisories carried forward:** the guard's **unclosed-backtick** latent edge case (zero current exposure;
 wire the predicate in if widened); and **three genuine malformed rows outside the guard's scope** at
@@ -274,10 +276,13 @@ trap*; the Session's mid-execution **stale-stack-slot** hypothesis; and the Sess
 ### Next authorized work
 
 **An `A2h-named-producer` discovery** naming `[ebp+0x10]` of `sub_001497DC` at `0x0014980E`, with **the
-caller's identity** as its remaining question. A **bounded lead** is already recorded: `sub_001497DC` has **8
-call sites**, only **two** push three arguments, and one of them (`sub_0014A83E`) **passes its own `arg1`
-through** as the callee's `arg2` — with the `PUSH32` macro's pre-decrement evaluation **verified in source**.
-**Whether that is the failing path is NOT established** (the other candidate is not excluded). **No change
+caller's identity** as its remaining question. **The Session's earlier "only two of the 8 call sites can
+supply `arg2`" narrowing was INVALID and is withdrawn** — the Planner refuted it and the Session verified the
+refutation from the generated source: `sub_001497DC` is **FRAMELESS** (`Frame: fpo_leaf`, `ebp = g_seh_ebp`),
+so **`[ebp+0x10]` belongs to the CALLER's frame**, and **every call site has a frame**. The two three-push
+sites are **leads, not a candidate set**, and the follow-up must require a **frame/register/stack identity
+witness** rather than assuming an argument list. **Whether any particular site is the failing path is NOT
+established.** **No change
 packet is authorized** — the packet says *"consider a change only after cause is established."*
 
 **Toolkit:** `c151d4e` (unchanged). **Game:** `e1dd3e2`.
