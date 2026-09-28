@@ -211,6 +211,42 @@ displaced read, or a guest write between the last sample and the raw read.
 
 ---
 
+## What the slot actually IS — the guest was entering a critical section
+
+**Characterised from the toolkit's ordinal table, which the Session had not consulted before:**
+
+| Quantity | Value |
+|---|---|
+| Slot `0x001C4064` | index **65** of the 120-entry table at `0x001C3F60` |
+| Image content | **`0x80000115`** = ordinal **277** |
+| **Ordinal 277 is** | **`RtlEnterCriticalSection`** (`kernel_bridge.c:8137` arg size, `:8443` bridge) |
+| Bridged? | **YES** — no `unbridged function thunk` warning anywhere in either run |
+
+**And the call site reads the lock pointer from the object the callee was given:**
+
+```
+00149822  push  dword ptr [esi + 0x580]   ; the CRITICAL_SECTION pointer
+00149828  call  dword ptr [0x1c4064]      ; RtlEnterCriticalSection, via the thunk slot
+```
+
+**So the terminal event is: the guest attempted to enter a critical section, and the thunk slot it
+dispatches through read `0`,** sending the call to address `0`. That is a **more concrete characterisation of the
+failure than "a NULL indirect call"** — it names the kernel service the guest was invoking and the object
+pointer it was passing.
+
+**Recorded as a characterisation, NOT as a cause.** It does **not** explain what zeroed the slot, and it does
+**not** establish that the critical section or its owner is implicated. **The successor packet owns that
+question**, and this detail is recorded so it does not have to rediscover what the slot means.
+
+**One observation worth carrying to the successor, offered as a lead and not a conclusion:** the zeroing loop
+the Session analysed earlier takes its **length from `arg2`** and its **destination from `edi`**, and the
+thunk table contains this slot. **The failing activation provably did NOT run that loop** (it took the
+allocation path, which the loop's guard jumps over). But the function is called **many** times, and the
+successor's write instrument is the first thing that could observe whether *another* activation ever reached
+it with a destination in the table. **No claim is made that it did.**
+
+---
+
 ## Offline work on the successor's hypotheses — three refuted, one lead recorded
 
 Bounded, offline, and **not** a substitute for the successor packet. Recorded because each item either
