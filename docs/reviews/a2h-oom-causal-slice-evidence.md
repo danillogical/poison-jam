@@ -26,31 +26,88 @@ and step 4 (instrumentation and the one bounded 8-second capture) were **not** e
 
 | Artifact | Role |
 |---|---|
-| `scripts/a2h-oom-slice.py` | The required checked-in parser/binder |
-| `scripts/test_a2h_oom_slice.py` | Its tests — **22 tests, OK** |
+| `scripts/a2h-oom-slice.py` | The required checked-in parser/binder **and** the instruction-boundary verifier |
+| `scripts/test_a2h_oom_slice.py` | Its tests — **31 tests, OK** |
 | `docs/reviews/a2h-oom-causal-slice-binding.json` | The parser's deterministic output |
 
 **Commands, exactly as run:**
 
 ```powershell
 python -X utf8 -m unittest scripts.test_a2h_oom_slice
-python -X utf8 scripts\a2h-oom-slice.py --log logs/runs/20260927-160330-655-a4b2-gp-trap-trace/jsrf_run.log --log logs/runs/20260922-224429-003-a2g-304f0-span/jsrf_run.log --out docs/reviews/a2h-oom-causal-slice-binding.json
+python -X utf8 scripts\a2h-oom-slice.py --log logs/runs/20260927-160330-655-a4b2-gp-trap-trace/jsrf_run.log --log logs/runs/20260922-224429-003-a2g-304f0-span/jsrf_run.log --verify 0x00149E24:8345dc20 --verify 0x00149E4A:ff15883f1c00 --verify 0x00149FB3:0fb707 --verify 0x0014980E:8945dc --out docs/reviews/a2h-oom-causal-slice-binding.json
 ```
+
+> ### Acceptance stage 1 returned `NOT ACCEPTED` on two criteria — both are now fixed
+>
+> The reviewer reproduced **every** load-bearing measurement independently, including writing **its own
+> capstone CFG** to test the dominance claim, and it **confirmed** the producer formula, the dominance
+> result, the `movzx` non-reachability, the frameless function, the arena behaviour, the identity, and that
+> **`O-OPEN` was correctly selected with an honest closure account**. It then found **two real defects**:
+>
+> **1. A required parser fixture was missing.** The packet names a *"mid-instruction disassembly start that
+> is REJECTED"* fixture; it existed **only in a docstring**, because the tool had **no disassembly surface at
+> all**. **Fixed:** `a2h-oom-slice.py` now exposes `verify_instruction` and a `--verify VA:BYTES` CLI, which
+> rejects a misaligned start, wrong bytes, a length mismatch, malformed bytes and out-of-section VAs. **Nine
+> new tests** cover it, against both a synthetic XBE and the **real** XBE. **31 tests, OK.**
+>
+> **2. The "no-trap" characterisation of A2g was FALSE.** Recorded in full in Experiment 1 above. **Fixed:**
+> both records are corrected and the strong claim is **withdrawn**.
+>
+> **Both defects were mine, and both were caught by the acceptance stage doing exactly its job.** The second
+> is the more instructive: I read `run_profile.effective_settings`, found it empty, and reported the setting
+> as **"ABSENT"** — **reading an absent record as a negative measurement**, the same error class as the
+> earlier `[GP*]`-zeros mistake and the byte-width writer census. **A census reading all plausible locations
+> now shows all 35 archived runs with this request are trapped.**
 
 ## Experiment 1 — archive-first binding
 
-| Check | R1 (trapped failing) | A2g (no-trap, historical) |
+| Check | R1 (trapped failing) | A2g (historical) |
 |---|---|---|
-| `check-run-profile.py` | **STRICT** | **EXPLORATORY** — as the packet anticipated, so it is used **only to contradict trap necessity at that earlier build**, never as strict validation |
+| `check-run-profile.py` | **STRICT** | **EXPLORATORY** — so it is used **only as historical corroboration**, never as strict validation |
 | `check-dump-mapping.py` | `CONTENT_MISMATCH` — structurally readable; **no shifted-offset substitution used** | `CONTENT_MISMATCH` — same |
-| exe | `bc8e288dd54d…` | `2cd0472a256e9d…` — **a different build** |
-| `RECOMP_APU_TRAP` | **1** | **ABSENT** |
+| exe | `bc8e288dd54d…` | `2cd0472a256e9d…` — **a different build, five days earlier** |
+| **`RECOMP_APU_TRAP`** | **`1`** | **`1`** — **BOTH RUNS ARE TRAPPED** (see the correction below) |
 | outcome | `unhandled_exception`, 4.77 s | `unhandled_exception`, 4.95 s |
 | log SHA-256 | `c52d71655c48c752ba275b3361d9abbafd7a8dea5de14cc70b26ad27c416c874` | `b9631ee5af44b40213f84c8645bdc6fb31f23a7462b41866ca9cfbe5f1176a04` |
 
+> ### ⚠ CORRECTION — I wrongly reported A2g as "no-trap", and the strong claim does not survive
+>
+> **The acceptance reviewer caught this and it is a real error.** My binding script read
+> `run_profile.effective_settings`, which is **empty** for the A2g run, and reported
+> `RECOMP_APU_TRAP` as **"ABSENT"**. The value actually lives in `metadata.json`'s top-level
+> **`settings`** dict:
+>
+> ```
+> settings.RECOMP_APU_TRAP      = 1
+> settings.RECOMP_APU_DSP_ACK   = 0x803C0810
+> ```
+>
+> **and the A2g log's own line 26 says `APU: 0xFE800000..0xFE880000 trapped for MMIO`.**
+>
+> **So A2g IS trapped**, and my claim *"the trap is not a necessary cause"* is **NOT established by this
+> archive pair — because both runs are trapped.** Re-censused across **every** archived run carrying the
+> `598869040` request, reading the trap state from **all** plausible locations:
+>
+> | Quantity | Value |
+> |---|---|
+> | runs with the request | **35** |
+> | log says the APU was **trapped** | **35** |
+> | log does **not** say trapped | **0** |
+>
+> **There is no untrapped run with this request anywhere in the archive.**
+>
+> **The error class is the one this project keeps producing: reading an absent record as a negative
+> measurement.** The value was in a different key, and I concluded "absent". It is the same shape as the
+> earlier `[GP*]`-zeros mistake and the byte-width writer census. **The reviewer's independent check is what
+> caught it, which is the acceptance stage working exactly as designed.**
+>
+> **What survives, in the narrower and still useful form:** the OOM **predates the A4b2 work** — it appears
+> on a **different exe five days earlier** with the same size, same type, same OOM tuple and same terminal
+> ICALL. **So it was not introduced by whatever A4b2 changed.** That is a real finding and it is what the
+> evidence supports. **The strong trap-necessity claim is withdrawn.**
+
 **The XBE hash matches in both archives and on disk.** *(A Session check reported a false mismatch by
-comparing a lowercase computed digest against an uppercase expected string; case-normalised, it matches. The
-error is recorded because it is the same class as the others — comparing the wrong representation.)*
+comparing a lowercase computed digest against an uppercase expected string; case-normalised, it matches.)*
 
 ### The causal chain is **semantically identical** across a trap run and a no-trap run
 
@@ -64,9 +121,15 @@ error is recorded because it is the same class as the others — comparing the w
 | OOM tuple | `(598869040, 12715008, 50855936)` | identical | ✓ |
 | ICALL `(target, esp, return)` | `(0x0, 00F7FD00, 0014982E)` | identical | ✓ |
 
-**This is the decisive answer to the packet's premise question: the trap is NOT a necessary cause.** A run
-with **no trap at all**, on a **different build**, **five days earlier**, reproduces the chain
-**byte-for-byte in every semantic field**. The trap makes the path reachable *sooner*; it does not create it.
+**This is the decisive answer to the packet's premise question, in its NARROWER form: the OOM predates the
+A4b2 work.** A run on a **different build five days earlier** reproduces the chain **byte-for-byte in every
+semantic field**. **So the failure was not introduced by whatever A4b2 changed** — it is older than the
+trap-era work that made it reachable sooner.
+
+> **The stronger claim — "the trap is not a necessary cause" — is WITHDRAWN** (see the correction in
+> Experiment 1). **Both runs are trapped**, and **all 35 archived runs carrying this request are trapped**,
+> so this archive pair cannot establish trap-necessity either way. **What the pair does establish is
+> build-independence across a five-day gap**, which is what is claimed above.
 
 > **Parser fix found by its own tests.** The first comparison compared whole invocation dicts, which include
 > the **byte offset into each log file** — necessarily different between runs — and so reported a spurious
@@ -118,6 +181,21 @@ linear-disassembly assumptions:
 call, so the sweep is instruction-aligned across the region the conclusion depends on. **The result is
 robust to the failure mode that has produced plausible garbage before.**
 
+> **Counting conventions, so nobody re-litigates them (reviewer advisory).** The reviewer's independent CFG
+> reports **47** reaching instructions against my **46**, and **1 607** decoded against my **1 609**. Both
+> differences are fully explained: one conditional node is counted differently, and two undecodable `.byte`
+> entries at `0x0014A3FE`/`0x0014A3FF` are included by one sweep and not the other. **There is no
+> disagreement about reachability, the writer set, or the entry.**
+>
+> **And one precision the reviewer supplied:** `0x00149E24` is a **read-modify-write**, not a pure writer —
+> `add [ebp-0x24], 0x20` reads the slot as well as writing it. That is consistent with, and actually
+> reinforces, the dominance result: the `add` **consumes** whatever the producer wrote, so a path reaching
+> the `add` must have passed a value-producing write.
+
+**The reviewer also noted its own CFG treats calls as fall-through, which is conservative** — it can only
+*add* paths, never remove them. So the unreachability result holds *a fortiori* under a stricter
+call-modelling. **A future caller-tracing packet should model calls explicitly.**
+
 **So every path to the call passes a write, and the only *value-producing* writer on any reaching path is
 `0x0014980E`.** The `movzx` writer I had been chasing **cannot reach the call at all** — which explains why
 its 16-bit bound was irrelevant.
@@ -140,11 +218,19 @@ its 16-bit bound was irrelevant.
 
 | Invocation | Observed `RegionSize` | Pre-add | Multiple of 16? | Implied `[ebp+0x10]` | Reproduces? |
 |---|---|---|---|---|---|
-| **index 89** (normal) | `2097200` = `0x00200030` | `0x00200010` | **yes** | `0x001FFFF2`–`0x00200010` | **YES** |
-| **index 93** (failing) | `598869040` = `0x23B20430` | `0x23B20410` | **yes** | `0x23B203F2`–`0x23B20410` | **YES** |
+| **index 89** (normal) | `2097200` = `0x00200030` | `0x00200010` | **yes** | `0x001FFFF1`–`0x00200010` (32 values) | **YES** |
+| **index 93** (failing) | `598869040` = `0x23B20430` | `0x23B20410` | **yes** | `0x23B203F1`–`0x23B20410` (32 values) | **YES** |
 
 **Both observations are reproduced by the same formula**, and the pre-add values are **exact multiples of
 16** as the `and 0xfffffff0` requires. **That is a positive check, not a fit.**
+
+*(The lower bounds are `…F1`, not `…F2`: `align16` maps any input in `(pre−0x20, pre]` to `pre`, which is 32
+values. Corrected per the acceptance reviewer's arithmetic advisory; the upper bounds and the verdict are
+unchanged.)*
+
+**A stronger witness than the single failing row, also from the reviewer:** **all 94 invocation sizes are
+identical index-for-index across both logs**, not merely the failing one. That makes the build-independence
+argument strictly stronger than the one-row comparison originally recorded.
 
 ### What this establishes — and it is a different answer from the stale-slot hypothesis
 

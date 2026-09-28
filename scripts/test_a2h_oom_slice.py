@@ -254,5 +254,129 @@ class ComparisonTests(unittest.TestCase):
             self.assertEqual(s["sites_reached_more_than_once"], [])
 
 
+class InstructionBoundaryTests(unittest.TestCase):
+    """The packet's mid-instruction-disassembly-start fixture.
+
+    The acceptance reviewer found this fixture was named in the packet but existed only in a
+    docstring: the tool had NO disassembly surface at all, so nothing implemented or exercised
+    the rejection. These tests close that gap against a synthetic XBE, and the real-XBE case is
+    exercised by the recorded binding command.
+    """
+
+    def _fixture(self, code: bytes, va: int = 0x00100000):
+        return _XbeFixture(code, va)
+
+    def test_correct_boundary_verifies(self):
+        # mov eax, [0xFE820010] is 5 bytes: A1 + disp32
+        import struct
+        code = b"\xA1" + struct.pack("<I", 0xFE820010) + b"\x90" * 8
+        with self._fixture(code) as fx:
+            sections = a2h.load_sections(fx.analysis)
+            r = a2h.verify_instruction(fx.xbe, sections, fx.va, "a1100082fe")
+            self.assertEqual(r["length"], 5)
+            self.assertEqual(r["bytes"], "a1100082fe")
+
+    def test_mid_instruction_start_is_rejected(self):
+        """Starting one byte late must be REJECTED, not silently decoded.
+
+        The bytes at va+1 are the low byte of the operand, which is not the instruction the
+        caller claims. A tool that decodes from there anyway returns plausible garbage -- the
+        exact hazard that produced a false result in an earlier session.
+        """
+        import struct
+        code = b"\xA1" + struct.pack("<I", 0xFE820010) + b"\x90" * 8
+        with self._fixture(code) as fx:
+            sections = a2h.load_sections(fx.analysis)
+            with self.assertRaises(a2h.LogError):
+                a2h.verify_instruction(fx.xbe, sections, fx.va + 1, "a1100082fe")
+
+    def test_wrong_bytes_at_a_valid_boundary_are_rejected(self):
+        code = b"\x90" * 16
+        with self._fixture(code) as fx:
+            sections = a2h.load_sections(fx.analysis)
+            with self.assertRaises(a2h.LogError):
+                a2h.verify_instruction(fx.xbe, sections, fx.va, "8345dc20")
+
+    def test_instruction_length_mismatch_is_rejected(self):
+        """A start whose decode runs LONGER than the claimed bytes is misaligned.
+
+        `83 45 dc 20` is `add dword ptr [ebp-0x24], 0x20` (4 bytes). Claiming only 3 bytes at
+        that address must fail rather than report a truncated instruction.
+        """
+        code = bytes.fromhex("8345dc20") + b"\x90" * 12
+        with self._fixture(code) as fx:
+            sections = a2h.load_sections(fx.analysis)
+            r = a2h.verify_instruction(fx.xbe, sections, fx.va, "8345dc20")
+            self.assertEqual(r["length"], 4)
+            with self.assertRaises(a2h.LogError):
+                a2h.verify_instruction(fx.xbe, sections, fx.va, "8345dc")
+
+    def test_malformed_expected_bytes_are_rejected(self):
+        with self._fixture(b"\x90" * 16) as fx:
+            sections = a2h.load_sections(fx.analysis)
+            with self.assertRaises(a2h.LogError):
+                a2h.verify_instruction(fx.xbe, sections, fx.va, "abc")  # odd length
+
+    def test_va_outside_any_section_is_rejected(self):
+        with self._fixture(b"\x90" * 16) as fx:
+            sections = a2h.load_sections(fx.analysis)
+            with self.assertRaises(a2h.LogError):
+                a2h.verify_instruction(fx.xbe, sections, 0x7F000000, "90")
+
+    def test_missing_xbe_is_rejected(self):
+        with self._fixture(b"\x90" * 16) as fx:
+            sections = a2h.load_sections(fx.analysis)
+            with self.assertRaises(a2h.LogError):
+                a2h.verify_instruction(fx.xbe.parent / "nope.xbe", sections, fx.va, "90")
+
+    def test_real_xbe_citations_verify(self):
+        """The four instruction-byte citations in the evidence record, against the REAL XBE."""
+        real_xbe = ROOT / "game" / "default.xbe"
+        real_analysis = ROOT / "game" / "mygame_analysis.json"
+        if not real_xbe.is_file() or not real_analysis.is_file():
+            self.skipTest("real XBE/analysis not present")
+        sections = a2h.load_sections(real_analysis)
+        for va, b in ((0x00149E24, "8345dc20"), (0x00149E4A, "ff15883f1c00"),
+                      (0x00149FB3, "0fb707"), (0x0014980E, "8945dc")):
+            r = a2h.verify_instruction(real_xbe, sections, va, b)
+            self.assertEqual(r["bytes"], b)
+
+    def test_real_xbe_mid_instruction_is_rejected(self):
+        """And the misaligned case against the REAL XBE."""
+        real_xbe = ROOT / "game" / "default.xbe"
+        real_analysis = ROOT / "game" / "mygame_analysis.json"
+        if not real_xbe.is_file() or not real_analysis.is_file():
+            self.skipTest("real XBE/analysis not present")
+        sections = a2h.load_sections(real_analysis)
+        with self.assertRaises(a2h.LogError):
+            a2h.verify_instruction(real_xbe, sections, 0x00149E23, "8345dc20")
+
+
+class _XbeFixture:
+    """A tiny synthetic XBE with one section, for boundary tests."""
+
+    def __init__(self, code: bytes, va: int = 0x00100000):
+        self.code = code
+        self.va = va
+
+    def __enter__(self):
+        self._dir = tempfile.TemporaryDirectory()
+        d = Path(self._dir.name)
+        self.xbe = d / "default.xbe"
+        self.analysis = d / "mygame_analysis.json"
+        self.xbe.write_bytes(self.code)
+        self.analysis.write_text(json.dumps({"sections": [{
+            "name": ".text",
+            "virtual_addr": f"0x{self.va:08X}",
+            "raw_addr": "0x00000000",
+            "raw_size": len(self.code),
+        }]}), encoding="utf-8")
+        return self
+
+    def __exit__(self, *exc):
+        self._dir.cleanup()
+        return False
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -19,21 +19,39 @@ original XBE only — no new run, no build, no toolkit change** — and the resu
 48.5 MB arena is not gradual memory pressure; it is a size that was **never plausible**, i.e. a size
 computed from a bad input.
 
-## 2. It is **not** caused by the trap
+## 2. It is **not** caused by the trap — corrected: it **predates** the A4b2 trap work
 
-**The earliest OOM run predates the trap work entirely:**
+> ### ⚠ CORRECTION — this section previously claimed A2g had NO trap. That was WRONG.
+>
+> **The acceptance reviewer caught it.** I read `run_profile.effective_settings`, which is **empty** for the
+> A2g run, and reported `RECOMP_APU_TRAP` as **"ABSENT"**. The value actually lives in `metadata.json`'s
+> top-level **`settings`** dict:
+>
+> ```
+> settings.RECOMP_APU_TRAP    = 1
+> settings.RECOMP_APU_DSP_ACK = 0x803C0810
+> ```
+>
+> **and the A2g log's own line 26 says `APU: 0xFE800000..0xFE880000 trapped for MMIO`.**
+>
+> **So A2g IS trapped.** Re-censused across every archived run carrying the `598869040` request, reading the
+> trap state from **all** plausible locations: **35 runs carry the request, all 35 are trapped, and ZERO are
+> untrapped.** **The error class is the one this project keeps producing — reading an absent record as a
+> negative measurement.**
 
-| Run | Trap | Trace | Exe |
+**The earliest OOM run still matters, for a narrower and defensible reason:**
+
+| Run | Trap | Exe | Date |
 |---|---|---|---|
-| **`20260922-224429-003-a2g-304f0-span`** | **ABSENT** | **ABSENT** | `2cd0472a256e9dad` |
+| **`20260922-224429-003-a2g-304f0-span`** | **`1` (trapped)** | `2cd0472a256e9dad` | **five days before the a4b2 work** |
 
-It is an **a2g** run, days before the a4b2 trap work and before `A2h` was named. **So the trap does not
-introduce this failure.** The trap makes the path **reachable sooner** in a4b2-era runs; the defect itself is
-older and trap-independent.
+**So the finding is: the OOM predates the A4b2 work.** It appears on a **different exe five days earlier**
+with the same size, same type, same OOM tuple and same terminal ICALL — **so it was not introduced by
+whatever A4b2 changed.** **The trap-era runs reach the same pre-existing failure sooner.**
 
-**This corrects the working hypothesis** in `docs/reviews/pio-free-strict-horizon.md`, which said the OOM
-*tracks* the recent-build + trap combination and offered a routing hypothesis. **The correlation is real but
-the causation is not the trap**: the trap simply reaches a path that was already broken.
+**What is NOT established:** that the trap is *necessary* for the failure. **All 35 archived runs with this
+request are trapped**, so the archive cannot separate trap-necessity either way. **The strong claim is
+withdrawn; the build-independence claim stands.**
 
 ## 3. The full chain, from the no-trap run
 

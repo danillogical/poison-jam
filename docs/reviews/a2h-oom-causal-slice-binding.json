@@ -1,6 +1,32 @@
 {
   "tool": "a2h-oom-slice",
   "schema_version": 1,
+  "verified_instructions": [
+    {
+      "va": "0x00149E24",
+      "bytes": "8345dc20",
+      "length": 4,
+      "text": "add dword ptr [ebp - 0x24], 0x20"
+    },
+    {
+      "va": "0x00149E4A",
+      "bytes": "ff15883f1c00",
+      "length": 6,
+      "text": "call dword ptr [0x1c3f88]"
+    },
+    {
+      "va": "0x00149FB3",
+      "bytes": "0fb707",
+      "length": 3,
+      "text": "movzx eax, word ptr [edi]"
+    },
+    {
+      "va": "0x0014980E",
+      "bytes": "8945dc",
+      "length": 3,
+      "text": "mov dword ptr [ebp - 0x24], eax"
+    }
+  ],
   "archives": [
     {
       "invocation_count": 94,

@@ -29,6 +29,10 @@ import json
 import re
 from pathlib import Path
 
+import capstone
+
+ROOT = Path(__file__).resolve().parents[1]
+
 ORDINAL_184 = re.compile(
     r"ordinal 184 \(slot \d+\) esp=(0x[0-9A-Fa-f]+) ret=(0x[0-9A-Fa-f]+)")
 ALLOC = re.compile(
@@ -184,24 +188,147 @@ def compare(a: dict, b: dict) -> dict:
     return out
 
 
+def load_sections(analysis: Path) -> list:
+    """The XBE section table, from the analysis JSON.
+
+    Local rather than imported so this module has no cross-tool dependency: the packet names
+    THIS tool as the checked-in reproducer, and a reader must be able to run it alone.
+    """
+    try:
+        data = json.loads(analysis.read_text(encoding="utf-8"))
+        sections = data["sections"]
+    except (OSError, ValueError, KeyError) as exc:
+        raise LogError(f"cannot read analysis {analysis}: {exc}") from exc
+    if not isinstance(sections, list) or not sections:
+        raise LogError(f"analysis {analysis} has no sections")
+    for s in sections:
+        for key in ("name", "virtual_addr", "raw_addr", "raw_size"):
+            if key not in s:
+                raise LogError(f"analysis section missing {key!r}")
+    return sections
+
+
+def xbe_window(xbe: Path, sections: list, start: int, want: int) -> bytes:
+    """Up to `want` bytes from `start`, clamped to the containing section's end."""
+    for s in sections:
+        va = int(s["virtual_addr"], 16)
+        size = int(s["raw_size"])
+        if va <= start < va + size:
+            off = int(s["raw_addr"], 16) + start - va
+            n = min(want, va + size - start)
+            try:
+                with xbe.open("rb") as fh:
+                    fh.seek(off)
+                    return fh.read(n)
+            except OSError as exc:
+                raise LogError(f"cannot read {xbe}: {exc}") from exc
+    raise LogError(f"0x{start:08X} is not inside a file-backed section")
+
+
+def verify_instruction(xbe: Path, sections: list, va: int, expect_bytes: str) -> dict:
+    """Verify that `va` is a genuine instruction boundary decoding to `expect_bytes`.
+
+    The packet requires a fixture proving that a MID-INSTRUCTION disassembly start is REJECTED
+    rather than silently decoded as plausible garbage.  That hazard is real here: an earlier
+    session began a decode one byte early and capstone returned plausible `.byte`/`jmp` output
+    instead of an error, which then looked like evidence.
+
+    So this is the disassembly surface the evidence record's instruction-byte citations rest
+    on.  It rejects, rather than reports, when:
+      * the requested bytes are not the bytes actually at `va`, or
+      * decoding from `va` does not produce an instruction starting exactly at `va`, or
+      * the decoded instruction's length differs from the expected bytes' length (which is what
+        a misaligned start looks like: the same bytes decode to a different, longer instruction).
+    """
+    want = expect_bytes.replace(" ", "").lower()
+    try:
+        n = len(want) // 2
+        if n == 0 or len(want) % 2:
+            raise LogError(f"malformed expected-bytes {expect_bytes!r}")
+        raw = xbe_window(xbe, sections, va, max(n, 16))
+    except LogError:
+        raise
+    if len(raw) < n:
+        raise LogError(f"0x{va:08X}: not enough bytes to verify")
+    actual = raw[:n].hex()
+    if actual != want:
+        raise LogError(
+            f"0x{va:08X}: bytes are {actual}, expected {want}")
+    insns = decode_from(raw, va, _md())
+    if not insns or insns[0].address != va:
+        raise LogError(f"0x{va:08X}: decode does not begin at the requested VA")
+    first = insns[0]
+    if len(first.bytes) != n:
+        raise LogError(
+            f"0x{va:08X}: expected {n} bytes but the instruction decodes to "
+            f"{len(first.bytes)} ({first.mnemonic} {first.op_str}) -- misaligned start?")
+    return {
+        "va": f"0x{va:08X}",
+        "bytes": actual,
+        "length": n,
+        "text": f"{first.mnemonic} {first.op_str}",
+    }
+
+
+def decode_from(raw: bytes, va: int, md) -> list:
+    """Decode instructions from `raw`, addressed starting at `va`."""
+    return list(md.disasm(raw, va))
+
+
+def _md():
+    md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
+    md.detail = True
+    return md
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
-        description="Bind the A2h ordinal-184 allocation-failure chain from archived logs.")
-    ap.add_argument("--log", type=Path, action="append", required=True,
+        description="Bind the A2h ordinal-184 allocation-failure chain from archived logs, "
+                    "and verify original-XBE instruction boundaries.")
+    ap.add_argument("--log", type=Path, action="append", default=None,
                     help="a jsrf_run.log (repeat for comparison)")
+    ap.add_argument("--xbe", type=Path, default=ROOT / "game" / "default.xbe")
+    ap.add_argument("--analysis", type=Path, default=ROOT / "game" / "mygame_analysis.json")
+    ap.add_argument("--verify", action="append", default=None, metavar="VA:BYTES",
+                    help="verify an instruction boundary, e.g. 0x00149E24:8345dc20 "
+                         "(repeatable)")
     ap.add_argument("--out", type=Path, default=None)
     args = ap.parse_args(argv)
 
-    try:
-        parsed = [parse_log(p) for p in args.log]
-    except LogError as exc:
-        print(f"binding failed: {exc}")
-        return 2
+    if not args.log and not args.verify:
+        ap.error("give --log and/or --verify")
 
-    result = {"tool": "a2h-oom-slice", "schema_version": 1,
-              "archives": [summarise(p) for p in parsed]}
-    if len(parsed) == 2:
-        result["comparison"] = compare(parsed[0], parsed[1])
+    result = {"tool": "a2h-oom-slice", "schema_version": 1}
+
+    if args.verify:
+        try:
+            sections = load_sections(args.analysis)
+        except LogError as exc:
+            print(f"binding failed: {exc}")
+            return 2
+        verified = []
+        for spec in args.verify:
+            if ":" not in spec:
+                print(f"binding failed: --verify needs VA:BYTES, got {spec!r}")
+                return 2
+            va_s, bytes_s = spec.split(":", 1)
+            try:
+                verified.append(verify_instruction(args.xbe, sections,
+                                                   int(va_s, 16), bytes_s))
+            except (LogError, ValueError) as exc:
+                print(f"instruction verification failed: {exc}")
+                return 2
+        result["verified_instructions"] = verified
+
+    if args.log:
+        try:
+            parsed = [parse_log(p) for p in args.log]
+        except LogError as exc:
+            print(f"binding failed: {exc}")
+            return 2
+        result["archives"] = [summarise(p) for p in parsed]
+        if len(parsed) == 2:
+            result["comparison"] = compare(parsed[0], parsed[1])
 
     text = json.dumps(result, indent=2) + "\n"
     if args.out:
