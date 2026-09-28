@@ -156,6 +156,47 @@ while the DR watch covered one thread.
 
 ---
 
+# The defect, precisely characterised — it is WORSE than "nine arms failed"
+
+**The Session dug one level further, and the failure is not a retry problem. The collector armed the WRONG
+THREADS ENTIRELY.**
+
+**Measured in run 1:**
+
+| tid | guest identity | attempted? | dispatched? | state |
+|---|---|---|---|---|
+| 50616 | **1** | yes | **yes** | **ARMED** |
+| 58620 | **3** | **NO** | **yes** | **NEVER ATTEMPTED** |
+| 60872 | **4** | **NO** | **yes** | **NEVER ATTEMPTED** |
+| 66492 | **2** | **NO** | **yes** | **NEVER ATTEMPTED** |
+| 67988 | **5** | **NO** | **yes** | **NEVER ATTEMPTED** |
+| 10904, 30120, 32108, 38516, 45168, 46648, 53916, 60208, 65644 | — | yes | **no** | arm FAILED |
+
+**Every one of the nine "attempts" was a thread that NEVER DISPATCHED a single guest kernel call** — transient
+or toolkit host threads. **And all FOUR of the other real guest threads (identities 2, 3, 4, 5) were never
+attempted at all**, yet **each dispatched guest code.**
+
+**So the coverage hole is total for guest threads:** the DR0 watch covered **exactly one** of the **five**
+guest threads that ran guest code. **This is not "9 of 10 arms failed" — it is "4 of 5 guest threads were
+never even attempted."**
+
+**Run 5 shows the same shape:** the one armed thread (`66428`, guest identity 4) plus **four guest threads
+never attempted** (`59716`, `62152`, `63812`, `66468`), and **`66468` is the thread that witnessed the
+transition and then faulted.**
+
+**Why the earlier characterisation was incomplete, and why that matters:** `GUEST_DR_ARM … armed=10 failed=9`
+reads as a 90% failure rate over a ten-thread population. **It is actually a 100% miss over the guest-thread
+population that matters**, plus nine wasted attempts on threads that never ran guest code. **The summary
+counts were true and the conclusion they invited was wrong** — the same absent-record-read-as-negative shape
+this project keeps meeting, and worth recording as such.
+
+**The fix shape is therefore a SWEEP, not a retry:** at the install handshake — the one point where the
+mapping offset is known to exist — the collector must **enumerate every live thread in the target and arm
+each**, rather than arming only the handshaking thread. **The fail-closed half is already correct** (`ok=0`,
+named failures, archived tid list); **only the enumeration is missing.**
+
+---
+
 ## Prohibitions and status
 
 **No synthetic completion.** No guest semantics changed; the APU trap and `0x80` untouched; no allocation
