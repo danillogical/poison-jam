@@ -58,6 +58,13 @@ static void capture_guest_threads(void);
  * masks to these, because the CPU forces reserved DR7 bit 10 to 1 and an exact compare would
  * report a correctly armed watch as a failure. */
 #define A2H_DR7_OWNED 0x000F03FFu
+/* ONLY THE MEANINGFUL DR6 BITS MAY BE TESTED. MEASURED, NOT ASSUMED: on this host a real data
+ * breakpoint delivers DR6 = 0xFFFF0FF1, because bits 4-11 and 12-15 are RESERVED on x86-64 and read
+ * as 1. A test of the form `dr6 & ~1` is therefore ALWAYS TRUE, and the first version of this file
+ * used exactly that -- so every genuine hit was classified "mixed" and never claimed, and the
+ * instrument would have reported a silent absence of writes for a run that had one. This mask is
+ * the set of bits the #DB contract actually gives meaning to: B0-B3, BD, BS, BT. */
+#define A2H_DR6_MEANINGFUL 0x0000E00Fu
 #define A2H_ARM_TID_CAPACITY 256
 #define A2H_DR_HIT_CAPACITY 64
 
@@ -107,7 +114,8 @@ static int dr_arm_thread(HANDLE thread, DWORD tid, const char *why)
         fprintf(report, "GUEST_DR_ARM_FAIL tid=%lu why=%s stage=get error=%lu\n", tid, why, GetLastError());
         return 0;
     }
-    if (context.Dr1 || context.Dr2 || context.Dr3 || (context.Dr7 & A2H_DR7_OWNED) || context.Dr6) {
+    if (context.Dr1 || context.Dr2 || context.Dr3 || (context.Dr7 & A2H_DR7_OWNED) ||
+        (context.Dr6 & A2H_DR6_MEANINGFUL)) {
         /* Another debug owner already holds breakpoint state on this thread. Do NOT clobber it:
          * an unreconciled DR owner makes every hit ambiguous, which is a coverage failure -- not a
          * reason to overwrite somebody else's watch. */
@@ -270,10 +278,13 @@ static DWORD dr_handle_single_step(DWORD tid)
                     "ticks=%llu\n", tid, (unsigned long long)dr6, (unsigned long long)context.Rip,
             (unsigned long long)dr_canonical, value, (unsigned long long)now.QuadPart);
     fflush(report);
-    if (dr6 & ~(DWORD64)0x1) {
-        /* MIXED STATUS: someone else's bit is set in the same DR6. Clearing B0 would be ours to
-         * do, but the event cannot be attributed to this watch alone, so it is not claimed. */
-        fprintf(report, "GUEST_DR_HIT_MIXED tid=%lu dr6=%016llX\n", tid, (unsigned long long)dr6);
+    if (dr6 & (A2H_DR6_MEANINGFUL & ~(DWORD64)0x1)) {
+        /* MIXED STATUS: someone else's meaningful bit is set in the same DR6. Clearing B0 would be
+         * ours to do, but the event cannot be attributed to this watch alone, so it is not claimed
+         * and the report says which bits were shared. */
+        fprintf(report, "GUEST_DR_HIT_MIXED tid=%lu dr6=%016llX shared=%04llX\n", tid,
+                (unsigned long long)dr6,
+                (unsigned long long)(dr6 & (A2H_DR6_MEANINGFUL & ~(DWORD64)0x1)));
         fflush(report);
         CloseHandle(handle);
         return DBG_EXCEPTION_NOT_HANDLED;
@@ -336,21 +347,21 @@ static void dr_disarm_all(void)
  * touched, and the toolkit's own VEH still receives the exception afterwards
  * (DBG_EXCEPTION_NOT_HANDLED).
  *
- * A FIRST-CHANCE #DB IS DELIBERATELY NOT CLAIMED, even with the gate on. The collector's own
- * DebugBreakProcess arrives as a first-chance breakpoint, and the AC'97 page trap relies on its own
- * VEH seeing its single-step -- swallowing either would break a mechanism that predates this
- * instrument. So the watch is serviced on the second-chance path, which is where an unclaimed data
- * breakpoint surfaces, and nothing that another handler owns is intercepted. */
-static DWORD dr_single_step(DWORD tid, int first_chance)
-{
-    if (first_chance) {
-        fprintf(report, "GUEST_DR_HIT_FIRSTCHANCE tid=%lu (left to the target's own handlers)\n", tid);
-        fflush(report);
-        return DBG_EXCEPTION_NOT_HANDLED;
-    }
-    return dr_handle_single_step(tid);
-}
-
+ * THE #DB CONTRACT IS DECIDED BY DR6, NOT BY THE CHANCE. A single-step exception carries three
+ * different meanings here and they are told apart by the status register, which is why the handler
+ * reads it before claiming anything:
+ *
+ *   pure B0        -> this instrument's data breakpoint. Claimed, and ONLY the owned bit is cleared.
+ *   B0 | BS or B1-3-> shared with another debug owner. Passed on untouched, reported as
+ *                     coverage-uncertain; clearing a bit this collector does not own would corrupt
+ *                     the other owner's watch.
+ *   BS (TF) alone  -> somebody's single-step, AC'97's page trap among them. Passed on, because
+ *                     swallowing it would stop AC'97 from ever re-protecting its page.
+ *
+ * Claiming on the first-chance event rather than waiting for second chance is deliberate: the
+ * game's own VEH (src/main.c:212) logs every non-breakpoint exception it sees, so letting our
+ * breakpoint fall through to it would both add ON-run log noise and hand a handler we do not own a
+ * say in the outcome. */
 static int read_remote(DWORD64 address, void *buffer, SIZE_T size)
 {
     SIZE_T got = 0;
@@ -719,11 +730,10 @@ int main(int argc, char **argv)
                 dump_ok = capture(0, NULL);
                 exit_code = 3;
                 finished = 1;
-            } else if (code == EXCEPTION_SINGLE_STEP && dr_on() && !exception->dwFirstChance) {
-                /* Only a SECOND-chance #DB is ours to service: an unclaimed data breakpoint. A
-                 * first-chance #DB belongs to the target's own handlers (the AC'97 page trap among
-                 * them) and is deliberately left alone. */
-                continuation = dr_single_step(event.dwThreadId, exception->dwFirstChance);
+            } else if (code == EXCEPTION_SINGLE_STEP && dr_on()) {
+                /* The handler decides ownership from DR6, not from the chance: pure B0 is ours,
+                 * BS alone or a mixed status is somebody else's and is passed on. */
+                continuation = dr_handle_single_step(event.dwThreadId);
             } else if (code == JSRF_A2H_DR_HANDSHAKE && exception->dwFirstChance && dr_on()) {
                 /* A2h install handshake. The toolkit raises this FIRST-CHANCE at its thunk-install
                  * callback and does not perform the install store until this thread is continued,
