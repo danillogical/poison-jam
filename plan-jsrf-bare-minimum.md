@@ -100,7 +100,86 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-slot-writer-terminal-r1` (**discovery**: **TERMINAL** — GAP A seed coverage, GAP B sole-caller argument) — **PROMOTED 2026-09-28, `ADEQUATE`**
+## ✅ CURRENT PACKET — `A2h-slot-writer-terminal-r1` **EXECUTED → `O-DATA-AS-CALL`** — **THE WRITER IS FOUND; THE LINE CLOSES**
+
+- **Packet:** `docs/packets/a2h-slot-writer-terminal.md`, frozen
+  **`116884E8D474A0238096ACD43111E089E5A1A89C87F861E9FCBA953B95E05E9F`** — **not edited**.
+- **Evidence:** `docs/reviews/a2h-slot-writer-terminal-evidence.md` (`f63dc53`); **Session verification**
+  `docs/reviews/a2h-slot-writer-terminal-session-verification.md` (`0becc28`).
+
+### ✅ THE ANSWER — `0x001D5078` is a **DATA-AS-CALL**
+
+**`software_device+0x242C` is written by:**
+
+```
+0x00199F45  mov dword ptr [esi + ebp*4 + 0x3ec], eax
+```
+
+**in `sub_00199DB0`** (declared `0x00199DB0..0x0019A037`): **`esi = MEM32(0x19DCE0)` = `software_device`**
+(`0x00199DB4`), **`ebp` = ARG1 = `2064`** (`0x00199DD9`), **`0x3EC + 2064·4 = 0x242C`** —
+**Session-verified EXACT.**
+
+**THE VALUE IS NOT AN ADDRESS.** **`sub_00199DB0` quantizes four float components** (`(int)(v*255.0f+0.5f)`)
+**and packs them:** `eax = (Q(edi+8)<<24) | (Q(edi-4)<<16) | (Q(edi+0)<<8) | Q(edi+4)`.
+**For `0x001D5078`: bytes `0x00,0x1D,0x50,0x78` = 0, 29, 80, 120.**
+
+> **A packed COLOUR WORD landed in the poll callback slot, and the guest executed `call eax` on it.**
+
+### THE COMPLETE CHAIN — every link instruction-anchored, no broken edge
+
+```
+install  0x0018CE3A  mov [ecx+0x242C], eax      ecx = MEM32(0x19DCE0), value 0x15F9D0
+write    0x00199F45  mov [esi+ebp*4+0x3EC],eax  esi = MEM32(0x19DCE0), ebp = ARG1 = 2064
+read     0x00193E62  mov eax, [esi+0x1C4]       esi = ecx = context, NULL-tested
+         0x00193E6A  je 0x193ECE                (a zeroed slot SKIPS the call)
+call     0x00193EB5  call eax                   -> 0x001D5078, the ADX filename
+```
+
+**LOG CORROBORATION (input, not inference):** `jsrf_run.log` shows **four identical
+`[0xFE000190, 0x00193D90, 0xFE0000B4, 0x0015F9D0]` groups, then `[15] 0x001D5078`** — **exactly the
+"fourth polling iteration."**
+
+### ⚠ WHY IT WAS INVISIBLE — and the §6.1 rule is what explains it
+
+| Store | Bytes | Form |
+|---|---|---|
+| **`0x0018CE3A`** (installer) | **`89 81 2C 24 00 00`** | **ModRM `disp32`** — carries the literal `2C 24 00 00` |
+| **`0x00199F45`** (THE WRITER) | **`89 84 AE EC 03 00 00`** | **SIB form** — **`disp32 = 0x3EC`** |
+
+**Session-verified: `2c240000` appears NOWHERE in the writer's bytes.**
+
+> **So the line's long-standing *"exactly ONE direct store"* was TRUE FOR ITS STATED ENCODING and
+> STRUCTURALLY BLIND to the SIB form** — **the writer computes the slot as `0x3EC + index·4` and never
+> contains the displacement.** **That is the Advisor's §6.1 refinement applied to the Session's own finding:
+> byte scans prove EXISTENCE alignment-free, but UNIQUENESS needs stated ENCODING COVERAGE.**
+
+### GAP B — the direct-store path was a DECOY
+
+**ARG1 at `0x00012319` is pushed from `ebx`, zeroed by `xor ebx,ebx` at `0x0001224F` and never reassigned.**
+**So ARG1 = 0, and `0x0015F9E0` substitutes the CONSTANT `0x0015F9D0`.**
+
+> **`0x001D5078` CANNOT be written by the direct-store path — it is the INSTALLER, and the line spent
+> several packets on it.** **Read at the DECLARED boundary `0x00012210`, because `0x000122E8` is
+> mid-`rep stosd` and decoding from it drifts.**
+
+### The Session's `+0x3C8` lead — REFUTED, empirically
+
+**The cluster's object carries vtable `0x001CB040`; the installer's carries `0x001CE478`.** **In the cluster's
+object `+0x3C8` is a COUNT used to size allocations and is NEVER DEREFERENCED.** **So `GAP_A_ENTRY8: NO`.**
+
+**The Session's warning that *"different object types can share an offset"* was RIGHT, and the barred
+offset-arithmetic inference would have been wrong.** **The Worker bound it empirically.**
+
+### THE LINE CLOSES HERE — per the packet's own terminality bound
+
+> **CLOSE the writer ⇒ mechanism consideration is a SEPARATE LATER DECISION.** **The Worker stopped there
+> and did NOT auto-chain.** **The new missing edge (the reader of table `0x257DE0`) was RECORDED and NOT
+> chased.**
+
+**Next:** **the mechanism — how a colour/palette element comes to be written into the callback slot — is a
+SEPARATE DECISION** requiring a fresh packet, not an automatic continuation.
+
+**Toolkit:** `37226b2` local / `571982d` pushed (**no-push state**). **Game:** `0becc28`.
 
 - **Packet:** `docs/packets/a2h-slot-writer-terminal.md`, **15 lines**, **6036 bytes**, frozen
   **`116884E8D474A0238096ACD43111E089E5A1A89C87F861E9FCBA953B95E05E9F`** — **this is the packet to execute.**
