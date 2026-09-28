@@ -100,7 +100,54 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `PIO_FREE-model-r2` (**discovery**: the device boundary at `0xFE820010`) — **PROMOTED 2026-09-27, `ADEQUATE`**
+## CURRENT PACKET — `PIO_FREE-model-r2` **EXECUTED 2026-09-27 → `O-UNKNOWN`** (awaiting §5.8 acceptance)
+
+**`PIO_FREE-model-r2` (`11D6ECB1…1DDA9E`) executed offline. Row: `O-UNKNOWN`.** Execution evidence:
+`docs/reviews/pio-free-model-execution-evidence.md`; closure: `docs/reviews/pio-free-model-r2-session-closure.md`.
+**No toolkit change, no game code change, no build, no guest run, no instrumentation.**
+
+### The finding
+
+| Fact | Value |
+|---|---|
+| **The address** | `0xFE820010` = `APU+0x20010` = **`VP+0x10`** = **`NV1BA0_PIO_FREE`** — the **same** address `A4p` called "PIO", not a second device |
+| **The current model** | constant **`0x80`**, comment *"Always pretend queue is empty"*; every other VP offset reads `0` |
+| **The write path** | **synchronous** via `fe_method` — **there is no queue at all** |
+| **The guest's forms** | one constant (`val & ~3` vs `4`) and one **variable** (`val >> 2` vs a register); the shift form reads the word as a **count in units of 4**, so `0x80` asserts **32 free units** |
+| **The site's shape** | **poll `0x10`, then push to VP `0x280`** = `NV1BA0_PIO_SET_HRTF_HEADROOM` — a producer against a free-space counter |
+| **Ledger** | **3 of 8 leaves** resolved/partial; **5 `UNKNOWN`** — units, capacity, drain, overflow, ordering |
+| **Sourcing** | **INADEQUATE.** No primary spec (the NVIDIA MCP brief is 404); the one admissible secondary source (xboxdevwiki `APU`) is **silent** — verified by term count on its raw wikitext (`PIO_FREE`=0, `queue`=0, `free`=0, `depth`=0) |
+
+**The negative control is an admission:** xemu's `vp_read` says *"we don't simulate the queue for now,
+pretend to always be empty"* — it confirms **a queue exists in hardware, is not simulated, and `0x80` is a
+pretence**. Being toolkit ancestry, it is **not independent support**.
+
+### Why `O-UNKNOWN`
+
+`O-IDENTITY` — no, everything reconciles. `O-CONFLICT` — **no**: conflict needs two authenticated sources
+with **incompatible concrete meanings**, and there is one admission plus one **silence**; silence is not
+conflict. `O-SPEC` — **no**: five leaves `UNKNOWN` **and** sourcing unmet. **`O-UNKNOWN` by first match.**
+
+**`A2h` is deliberately NOT named**: the missing witnesses are **documentation, not guest time**, so the
+successor is a **sourcing/interface discovery**, not a run.
+
+### Verified at closure
+
+XBE matches baseline; game `d54b5ff`, toolkit `c151d4e` clean; **ctest 18/18**; **no instrumentation
+exists**, so nothing is enabled at closure; §5.8 satisfied (knowledge output, no strict criterion
+satisfied, nothing claimed to work).
+
+### Next authorized action
+
+**A focused `PIO_FREE` source/queue-interface discovery** on the five `UNKNOWN` leaves — **units/bit
+encoding, capacity, drain/completion, overflow/backpressure, read-vs-write ordering** — carrying the
+false-model test as the positive prediction it must satisfy.
+
+**Toolkit:** `c151d4e` (unchanged). **Game:** pending commit.
+
+---
+
+## Previous — `PIO_FREE-model-r2` **PROMOTED 2026-09-27, `ADEQUATE`** (now executed → `O-UNKNOWN`)
 
 - **Packet:** `docs/packets/pio-free-model.md`, revision **`PIO_FREE-model-r2`**, class **discovery**,
   frozen SHA-256 **`11D6ECB195D51159785D6E94C98439BD4AA6979FDEE6B8EC79B28A80961DDA9E`** (**36 lines**).
