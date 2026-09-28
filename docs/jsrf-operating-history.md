@@ -2071,3 +2071,43 @@ named reactivation conditions. Ruling recorded verbatim in
 They were the same claim with different numbers and neither named its run and method, so neither
 is citable. Binding lesson recorded: **no hand counts in decision inputs** — tool-computed
 quantities with positive controls and loss accounting.
+
+---
+
+## 2026-09-28 — A frozen packet's stated uncertainty is a SCHEDULED VERIFICATION TASK, not a carried caveat
+
+**Advisor practice note** (`docs/reviews/a2h-fix-packet-advisor-shape-preflight.md`, turn `01a0e7b8`):
+
+> *"A frozen packet's stated uncertainty is a scheduled verification task, not a carried caveat — test it at
+> scoping time, before writing criteria around it, with a named owner."*
+
+**Planner adequacy decisions should map each uncertainty to its verification point.**
+
+**Why this is recorded.** `docs/packets/a2h-slot-within-run-attribution.md:19` said, in the frozen contract
+itself: *"A missing canonical install trap is `O-COVERAGE`, never no-write: **live `#DB` chance semantics and
+all-thread arming have not yet been proven in the game.**"* **That is a named uncertainty with a testable
+consequence — and it sat as a caveat through three packets.**
+
+**It was tested only when the Session asked what the NEXT packet would target and noticed that the toolkit's
+install store is a KNOWN canonical-slot write under an armed DR0 watch.** The result: **the DR0 write watch has
+never been observed to fire, not once, including for a write that demonstrably happened.** The acceptance
+reviewer strengthened it — **no `EXCEPTION_SINGLE_STEP` (`0x80000004`) was ever delivered to the debugger at
+all, across ~14k debug events per run, in every run of the line.**
+
+**The caveat was a scheduled test that nobody had scheduled.** Had it been mapped to a verification point when
+the packet was written, the failure would have surfaced **before** three packets and ten runs were built on
+the assumption that the channel worked.
+
+**The two-phase consequence, now binding on the fix packet:** Phase 1 is the install-trap gate — does a `#DB`
+hit arrive at a known canonical write under an armed watch? Phase 2 attribution runs **only if Phase 1
+passes**. **DR records are inadmissible for any row until a live install trap passes.** If the leg cannot be
+repaired in bounded effort, **it is dropped with an explicitly stated ceiling** rather than carried as
+decoration.
+
+**Related standing lessons this line has accumulated, kept together because they are the same shape:**
+- **no hand counts in decision inputs** — tool-computed quantities with positive controls and loss accounting;
+- **a decision input must be lossless by construction** (§6.1.6), and **absence of a witness is never positive
+  attribution**;
+- **a script outside the guard suite can rot silently across many commits** (`scripts/test-harness.py` was
+  broken from `009f624` until a packet happened to require it);
+- **"nothing observed on certified channels" is narrower than "nothing happened."**
