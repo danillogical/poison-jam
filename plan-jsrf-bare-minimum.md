@@ -100,7 +100,60 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `PIO_FREE-title-demand-bound-r1` (**discovery**: is the `0x80` stub sufficient for the title's 28 direct polls?) — **PROMOTED 2026-09-27, `ADEQUATE`**
+## CURRENT PACKET — `PIO_FREE-title-demand-bound-r1` **EXECUTED 2026-09-27 → `O-OPEN`** (Advisor scope/defer referral owed)
+
+**Row: `O-OPEN`.** Evidence: `docs/reviews/pio-free-title-demand-evidence.md`. Follow-up:
+`docs/reviews/pio-free-demand-slice-followup.md`. **No toolkit change, no game runtime change, no build, no
+guest run, no instrumentation.**
+
+### What was executed
+
+| Experiment | Result |
+|---|---|
+| **1 — bind population** | `find` → 28 operand offsets, all `DSOUND`; the classifier derives starts by **decoding** (never `offset−1`/`−2`) and **28/28 reconcile** with `A4p`'s frozen set. Two-spelling hazard closed **positively**: normalising every `MEM8/16/32` literal gives **hex 10 + decimal 18 = 28** by construction |
+| **2 — tested classifier** | `scripts/pio-free-demand.py` + `scripts/test_pio_free_demand.py`: **29 tests OK**, covering every fixture the packet names **including the mid-instruction hazard as a real fixture**. **The tests found two real defects** in the classifier that inspection missed: a fixed decode window overran short sections, and `absolute_memory_va` inspected only operand 0 — so **every ModRM load was unrecognised**, which would have rejected half the population |
+| **2 — census** | **28 found, 28 classified, 0 rejected. 13 CONSTANT, 15 VARIABLE.** Literals `0x4`×4, `0x8`×3, `0xC`, `0x20`, `0x48`, `0x4C`, **`0x80`×2**; **none fail the stub**; **TWO at ZERO margin** (`0x001A3EB3`, `0x001A3FDB`) — so `0x80` passes **at equality**, never *"any value ≥ 4 passes"*. Variable demand registers **`ecx`×11, `eax`×4**. Determinism verified byte-identical |
+| **3 — backward slice** | All 15 variable gates reach a **byte load** at `+0x64`, `k ∈ {2,3,6,7,8,9,10}`. **All 15 `OPEN`** |
+
+**The classifier corrected an off-by-one in the Session's earlier ad-hoc census**: the zero-margin site is
+`0x001A3FDB`, not `0x001A3FDA`.
+
+**A withdrawn verdict:** the first slice returned `EXCEED`×15 from the **generic** byte bound `0..255`. The
+packet is explicit that a generic byte bound gives **finiteness, not sufficiency**, and that an isolated
+unconstrained register value is **not a witness** — so the corrected slice returns `OPEN` with the missing
+witness named per site.
+
+### The follow-up found the leaf is **more** open than expected
+
+1. **A structural narrowing:** at the first poll's function, the `LO8(eax)` writer (`0x001A29EB`) and the
+   poll (`0x001A2A7F`) are **mutually exclusive within one pass** — both are gated on bit 0 of `[esi+0x12]`,
+   which is never written in that function, and they take **opposite** branches.
+2. **But the exclusion is escapable:** a full-width scan finds **16 writers to `+0x12`**, **nine** of which
+   set bit 0 from a register and the four masking writers all use masks with bit 0 **set**. So bit 0 **is**
+   mutable and the **cross-call route is open**: one pass writes the field with bit 0 clear, a later call
+   sets bit 0, the next pass polls what was left behind.
+3. **And a Session error, corrected:** the previous commit claimed `MEM8(..+0x64)` has *"exactly three
+   writers"*. **A full-width scan finds 185 writers to offset `+0x64`** — because **`+0x64` is an offset,
+   not a field**, appearing in `esp+0x64` stack slots, `ebp+0x64` frame slots and unrelated bases with
+   float-looking payloads. **The same error class as the two-spelling hazard: enumerating by one width and
+   treating the result as complete.** The three `MEM8` writers are real but are **not** the writer set for
+   the polled object. The invalid tool and its JSON were **removed**.
+
+**So the `O-OPEN` leaf reduces to: which of the 185 writers can reach the DSOUND voice object, and can any
+leave the field above `32/k` when a poll reads it?** That needs **object-identity/aliasing analysis** the
+packet did not perform.
+
+**Per the packet's own rule — *"if this is not a finite resolvable leaf, refer an explicit scope/defer
+decision to Advisor instead of iterating"* — the Session is making that referral rather than opening another
+round.** The question for the Advisor is whether object-identity analysis is in scope, deferred, or whether
+the boundary should be retired at `O-OPEN` with the stub documented as **sufficient for 13 constant sites
+and unproven for 15 variable ones**.
+
+**Toolkit:** `c151d4e` (unchanged). **Game:** `e3009e0`.
+
+---
+
+## Previous — `PIO_FREE-title-demand-bound-r1` **PROMOTED 2026-09-27, `ADEQUATE`** (now executed → `O-OPEN`)
 
 - **Packet:** `docs/packets/pio-free-title-demand-bound.md`, revision **`PIO_FREE-title-demand-bound-r1`**,
   class **discovery**, frozen SHA-256
