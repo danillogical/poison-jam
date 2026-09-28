@@ -772,6 +772,21 @@ lead, never as a completeness witness. This was measured: a `PIO_FREE` enumerati
 grepping one spelling found 10 of 28 sites (`docs/reviews/a4b-q1-advisor-ruling.md`,
 PREMISE_CHANGED addendum).
 
+**Stating the enumeration method.** Completeness and uniqueness claims state their enumeration
+method. Linear-sweep decode is inadmissible for completeness without a drift control (known
+instruction addresses demonstrably reached); use recursive descent or equivalent
+control-flow-following enumeration. Byte-pattern scans are alignment-independent for existence;
+for uniqueness ("exactly one") state the encoding coverage over all instruction forms that could
+carry the pattern. This was measured twice in one session: a linear decode of `.text` from its
+own start produced 29 548 plausible instructions and reached **neither** of two load-bearing
+addresses, so every later "instruction boundary" in that sweep was wrong
+(`docs/reviews/a2h-slot-writer-four-edges-session-verification.md`); and an `--aligned` dword scan
+reported **zero** references to a vtable base where the correct count is **three**, because the
+installs are `C7 06 70 12 1E 00` and the immediate sits off a 4-byte boundary
+(`docs/reviews/a2h-slot-writer-four-edges-evidence.md`). Raw-byte scans are the sound fallback for
+existence and for displacement uniqueness, and they are why this line's surviving findings
+withstood the defect.
+
 **Merge packets.** A packet that merges upstream must inventory device- and
 profile-relevant hunks **by content, not by conflict status**, because a clean hunk can
 restore a deleted override or arm new device behaviour as silently as a conflict can hide it.
