@@ -100,7 +100,71 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-null-slot-triage-r1` (**discovery**: what zeroed / what read as zero at `0x001C4064`?) — **PROMOTED 2026-09-27, `ADEQUATE`**
+## CURRENT PACKET — `A2h-null-slot-triage-r1` **EXECUTED 2026-09-28 → `O-NO-BOUNDARY-TRANSITION`**, **`ACCEPT`** (stage 1, `BLOCKING: NONE`); successor in planning
+
+- **Packet:** `docs/packets/a2h-null-slot-triage.md`, revision **`A2h-null-slot-triage-r1`**, frozen
+  **`F9A6522E8579AD756701C150A0AF60275DCFF4158705CE5331BE3BF2EA7A9F20`** (80 lines, 32704 bytes) —
+  **verified unchanged**, not edited. **Acceptance:** `docs/reviews/a2h-null-slot-triage-acceptance-review.md`
+  — all three criteria **`AGREED`**. **Evidence:** `docs/reviews/a2h-null-slot-triage-execution-evidence.md`.
+- **Two pre-specified same-build runs**, exactly as required: Run 1 `a2h-null-slot-inert-off` (gates OFF,
+  **live inertness control**) and Run 2 `a2h-null-slot-authoritative-on` (gates ON, authoritative).
+  **No third run.**
+- **The install positive control PASSED exactly:** `raw=80000115 installed=FE000104 index=65` — the
+  reviewer re-derived it from `game/default.xbe` directly.
+- **The decisive observation:** the slot read **`0xFE000104` at EVERY one of 15498 sampled bridge
+  boundaries, across all six threads.** **Zero** samples read zero; **zero** KWATCH change lines; **zero**
+  latch transitions. The **last** boundary (`call=#5555 ordinal=294`) read `0xFE000104` and the **very next
+  event** is the terminal raw read of `0` — **no bridge call in between.**
+- **The per-thread boundary series is COMPLETE**: dispatches == before-samples on all six threads
+  (5555/259/2/328/1385/222), every thread's index sequence exactly `1..N`, **no gap, no duplicate, no cap**.
+  *(The reviewer discharged the packet's `O-OPEN` "index gap/duplicate within a thread" clause by direct
+  measurement — it **does not apply** — and the Session has since added `index_integrity()` to the classifier
+  so the clause is tested mechanically and fails closed.)*
+- **A Session error the reviewer caught:** the apparent "5 gaps + 595 nested adjacencies" were **raw-log-order**
+  counts including **cross-thread interleaving**; **per-thread it is 5 adjacencies and depth 4** on the
+  terminating thread, 0 and 1 elsewhere. The **nesting mechanism is real** (a bridge re-enters the dispatcher,
+  advancing the counter, so an `after` prints the current number) and the conclusion is unchanged.
+- **Row `O-NO-BOUNDARY-TRANSITION`**, selected by `scripts/a2h-slot-triage-classify.py` (**11 self-tests**),
+  with `O-BRIDGE`/`O-GUEST` correctly rejected (no zero was ever sampled, so neither an intra- nor an
+  inter-bridge zero boundary exists).
+- **Refuted offline:** macro mismatch, torn read, static VA displacement, and the toolkit's worker-stack-over-
+  static-data class (image ends `~0x00288620`, lowest stack base `0x00780000` — no overlap).
+- **Measured coverage limit:** the gap is log lines `34632..34635`; **no `[TRACE]`, `[RECOVERED]` or `[READ]`
+  line falls inside it** (nearest 85/251/501 lines earlier), so **no instrument observed the guest code there.**
+
+### Successor: `A2h-slot-read-path-displacement` — **IN PLANNING**, two Advisor shape preflights recorded
+
+**`docs/reviews/a2h-slot-read-path-advisor-shape-preflight.md`** holds **two** rulings:
+1. **First (`SHAPE: REDIRECT`)**: DR0 primary, page-guard redirected away — **its instrument is superseded**;
+   the Advisor later stated plainly that it *"is wrong for absence claims as specified."*
+2. **Corrected (`SHAPE: REDIRECT`)**: **NO-WRITE IS reachable** via **DR0-canonical complete record + 28-alias
+   first-touch census, same run, fail-closed throughout.** The Planner's falsification was **accepted**: a
+   canonical DR0 misses alias writes (`xbox_memory_layout.c:2251-2257`, `:2362-2366`), and **4 comparators
+   cannot cover 29 linear addresses.** Rotated-4 DR is **forbidden for absence**; `xbox_ProtectMirrorsForDebug`
+   is **no as a function** (whole 64 MB views, count-only log, **no handler installed** — a tripwire, not a
+   trap) but **yes as a technique, implemented fresh** on the 28 specific pages.
+
+**Session errors recorded in this exchange, both caught by the Planner:**
+- **A false physics claim in my relay** — I turned the Advisor's true *"page-sharing is moot under DR"*
+  (neighbours on one page) into *"DR watches the physical page."* **DR compares LINEAR addresses.** Marked
+  **`PREMISE_CHANGED`** per §4.3 and re-referred; the ruling above is the result.
+- **A hand-derived alias range wrong by 4×** — I wrote `0x04000000..0x1C000000`; the real last alias base is
+  **`0x70000000`** (`g_memory_size` = 64 MB, `29 × 64 MB = 1856 MB` per the run's own log). **Alias VAs must
+  be derived live from `g_mirror_views`.** *Eighth instance of the hand-arithmetic pattern in this line.*
+- **An unsatisfiable condition** — the ruling's `IsDebuggerPresent` assert would fail **every** run, because
+  `collect.c:294-295` launches the target with `DEBUG_ONLY_THIS_PROCESS`. **Adopted:** no *additional/external*
+  debugger; verify the **expected** collector attachment and **DR ownership** instead.
+
+**Next:** the Planner expands the packet with the corrected design; the Session validates literal commands and
+byte assertions, obtains no further preflight (the ruling says none is needed if corrections are applied
+verbatim), then freezes and promotes.
+
+**Toolkit:** `c151d4e` **plus the uncommitted A2h diagnostic** (4 modified files, nothing pushed). **Game:**
+`0ee6782`.
+
+---
+
+## Previous — `A2h-null-slot-triage-r1` (**discovery**: what zeroed / what read as zero at `0x001C4064`?) — **PROMOTED 2026-09-27, `ADEQUATE`**
 
 - **Packet:** `docs/packets/a2h-null-slot-triage.md`, revision **`A2h-null-slot-triage-r1`**, class
   **discovery**, **80 lines**, frozen SHA-256
