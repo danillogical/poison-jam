@@ -38,6 +38,31 @@ static uint32_t a2h_slotw_classify_store(uint64_t rip)
 **⚠ The Session had reported that residual as evidence that *"the classifier's RIP→guest mapping needs
 verifying."*** **There is no such mapping.** **WITHDRAWN.**
 
+> ## ⚠⚠ PARADIGM CORRECTION — per the Advisor (turn `01a0e940`): **the whole approach is VOID**
+>
+> **The Session framed the remaining question as site-specific** — *"the classifier read the native bytes at
+> the installer's RIP and did not find `89 81 2C 24 00 00`; four possible causes"* — **and proposed Exp0 to
+> settle it AT THAT SITE.**
+>
+> **The Advisor's ruling is broader and decisive:**
+>
+> > **"Native RIPs in recompiled code NEVER carry guest encodings, so EVERY guest-byte classification ever
+> > emitted from a fault RIP is UNSOUND."**
+>
+> **So it is not a bug at one site — THE PARADIGM IS WRONG.** **`a2h_slotw_classify_store` reads NATIVE bytes
+> and tests for GUEST encodings, which can never match in recompiled code.**
+>
+> **And: *"the `0x7B3` residual dies with the paradigm — DO NOT FIX ITS ARITHMETIC."*** **So the residual is
+> not to be repaired; the approach is REPLACED.**
+>
+> **The replacement, per the ruling:** **range-based guest/host classification** — **`RIP ∈ recompiled-module
+> bounds` vs `toolkit/host image`, else unknown** — **plus optional native-disasm corroboration**, with
+> **"guest-byte expectations FORBIDDEN for native RIPs."**
+>
+> **⚠ And every encoding classification this line has recorded from a fault RIP is therefore unsound** —
+> **including the `enc=3` on ON-3's slot event and the `enc` fields on ON-1's and ON-2's events.** **The
+> Session records that scope explicitly so no successor cites them as encoding evidence.**
+
 **This is the fourth time in this line the Session has drawn a conclusion from arithmetic the code does not
 perform** — **and the correction is recorded rather than quietly dropped.**
 
