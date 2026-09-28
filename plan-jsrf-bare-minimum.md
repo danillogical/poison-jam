@@ -100,43 +100,54 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-arming-coverage-attribution-r2` (**discovery**: who zeroed the slot, with certified coverage?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+## CURRENT PACKET — `A2h-arming-coverage-attribution-r2` **EXECUTED (fresh OFF + 5 ON) → `O-COVERAGE`** on the K ≥ 2 requirement; **the arming fix WORKED**
 
-- **Packet:** `docs/packets/a2h-arming-coverage-attribution.md`, revision **`A2h-arming-coverage-attribution-r2`**,
-  class **discovery**, **23 lines**, **10965 bytes**, frozen SHA-256
-  **`80E9425977547BC1EE44DD95645F72ACF4F7941857A39B6DB67B427E7DD81D84`** — **this is the packet to execute.**
-  Validation: `docs/reviews/a2h-arming-coverage-r2-session-validation.md`.
-- **Authority:** `docs/reviews/a2h-arming-coverage-advisor-reruling.md` — the re-ruling that **shrank the fix to
-  reporting-only** after catching an error in the **Session's own** correction.
-- **THE FIX IS REPORTING-ONLY.** The sweep, the install-ordering and the `CREATE_THREAD` path **already exist**
-  (`collect.c:157-181`, `:198-218`, `:704-720`). **No new arming mechanism, no queue/drain, no second sweep.**
-- **The defect, corrected:** `GUEST_DR_ARM armed=10 failed=9` is a **handshake-time snapshot**; `failed=9` counts
-  failed **attempts**, and **all nine were recovered** by the sweep. **`cleared=17` counts live threads cleared
-  at teardown regardless of prior arming — NOT seventeen arms.** A successful post-handshake arm **prints
-  nothing**, so **"armed but unreported" and "never attempted" are indistinguishable.** **The armed population's
-  size is UNKNOWN: the tid list is a lower bound of 10, `cleared=17` is 17 threads existing, truth in between.**
-- **⇒ `O-COVERAGE`, because the RECORD cannot establish the positive continuous coverage the packet requires —
-  NOT because coverage was proven inadequate.**
-- **C1 — reporting-only:** print **every successful arm at the event** (`tid`, `why`, DR7 readback, seq/tick);
-  record the now-silent post-handshake successes; publish a **terminal full-list summary** reconciling all
-  outcomes rather than the handshake snapshot or the aggregate `cleared`.
-- **C2 — lossless per-birth reconciliation:** log **every** `CREATE_THREAD` event, not just attempts; an
-  explicit **operational dispatch criterion**; the **six-tid regression census** (**50616, 58620, 60872, 66492,
-  67988, 57376** — **Session-verified: all six dispatch guest code**); and the **pre-mapping-exit bound** (prove
-  no pre-handshake exit dispatched, or `UNKNOWN`).
-- **Run plan:** one **fresh OFF** (the code change breaks the carry rule), then **up to `N = 5`** ON, **early stop
-  only on two coverage-complete TARGETs that AGREE**; zero targets ⇒ report `0/5`, STOP, re-refer. **No
-  extension without Advisor referral.**
-- **Anchors unchanged:** OOM `598869040` / `12715008` / `50855936`, status `0xC0000017`, identity-1 prefix
-  `5555`. **Terminal excluded.** **`never infer a no-write or named writer from no DR hit`** is in the packet.
+- **Packet:** `docs/packets/a2h-arming-coverage-attribution.md`, revision `A2h-arming-coverage-attribution-r2`,
+  **23 lines**, frozen **`80E9425977547BC1EE44DD95645F72ACF4F7941857A39B6DB67B427E7DD81D84`** — **not edited**.
+- **Runs:** one **fresh OFF** + **five ON**, same build, all **STRICT**, identical anchors, install control
+  positive in all five, census **28/28** in all five.
+- **Classification: run 2 is the ONLY TARGET** (`0x00000000@0014982E`). Runs 1 and 5 NON-TARGET (unresolved
+  `0x001D5078`); runs 3 and 4 NON-TARGET (`0x00147DE2`, `0x00147D36`). **Observed TARGETs 1/5, K = 1.**
+- **Row `O-COVERAGE` on the K ≥ 2 requirement** — the packet requires K ≥ 2 for general attribution, and K = 1
+  *"preserves only its run-local row and `UNKNOWN` generality."* **No attribution row selected. No sixth run.**
+- **NOT a coverage failure — a YIELD failure.** **All five runs are coverage-complete.** The instrument now does
+  what the packet asked; **only one of five draws was a TARGET.** The previous five draws gave three. **That is
+  the terminal nondeterminism, and it is why N was bounded with an anti-optional-stopping rule.**
 
-**Next:** implement C1 + C2, fixtures, guards → fresh OFF → up to 5 ON → §5.8 acceptance.
+### ✅ THE ARMING FIX WORKED — and it settles what inference could not
 
-**Toolkit:** `5528d00` — **unpushed**, pending acceptance. **Game:** `8ccf5dc`.
+| Record | Value, **all five runs** |
+|---|---|
+| `GUEST_DR_ARM_TERMINAL` | `arms_recorded=17 armed_at_or_after_handshake=17 arm_attempt_failures=9 create_thread_events=16` |
+| `GUEST_DR_ARM_RECONCILE` | `arm_tid_list=17 arm_tid_overflow=0 disarm_cleared=17 distinct_armed_tids=17` |
+| **`GUEST_DR_ARM_OK`** | **17 per run — 10 `why=handshake`, 7 `why=create_thread`** |
+
+**Seventeen threads were armed all along, and SEVEN of those arms were post-handshake and completely invisible
+in the old record.** The old `armed=10` was exactly the handshake snapshot. **The Session had twice failed to
+get this number by inference — tid list (undercounts), then `cleared=17` (overcounts). The positive per-arm
+records settle it directly**, vindicating the Advisor's ruling. **`disarm_cleared=17` now coincides with the
+armed count and the record explicitly refuses to be read as an arm count** — the coincidence is why the guard
+exists. `GUEST_DR_ARM_PRE_MAPPING_BOUND` reports `decision=decidable_from_records` with an **EMPTY**
+pre-mapping-exit window. **Zero `GUEST_DR_HIT` in all five.**
+
+### A latent break found and fixed — and it was the Session's
+
+**The packet required rerunning the collector harness probes; they FAILED, and not because of this packet.**
+`scripts/test-harness.py` pinned the registry version **twice**, both correct only at version 1: the regex
+matched literal `version=1`, and it asserted the registry's first dump word `== 1` — **but that word IS the
+version.** The version moved 1→2 at `009f624` and 2→3 at `f5b709d`, so **the harness had been failing since
+`009f624`, BEFORE this packet**, and nothing surfaced it because **the guard suite never runs it.** **Fixed**
+(`2c8765c`) to compare against the version **the collector itself reported** — stronger than a constant.
+**All 19 harness probes now pass.** **Process finding: a script outside the guard suite can rot silently.**
+
+**Next:** stage-1 acceptance of this packet; then the K=1 outcome and the yield problem go to the Planner
+(and Advisor if the mechanism is affected). **No extension of N without Advisor referral.**
+
+**Toolkit:** `571982d` — **unpushed**, pending acceptance. **Game:** `e67fb86`.
 
 ---
 
-## Previous — `A2h-slot-within-run-attribution-r1` **EXECUTED (5 ON) → `O-COVERAGE`**, stage-1 **`ACCEPT-WITH-CORRECTIONS`** applied
+## Previous — `A2h-arming-coverage-attribution-r2` **PROMOTED**, then executed as above
 
 - **Packet:** `docs/packets/a2h-slot-read-path-displacement.md`, revision
   `A2h-slot-read-path-displacement-r1`, frozen
