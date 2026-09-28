@@ -107,6 +107,37 @@ archive's own map (`0x1929FC0`) — **giving `0x00007FF64C4C0000`, with no assum
 **And the archived `0x001D5078`-terminal event (`rip=0000000000000000`, a synthetic read sample) is
 `UNKNOWN` under the same rule** — correctly, since address zero is in no range.
 
+### ⚠ This places the installer's RIP under the PRODUCTION rule, not merely under map containment
+
+**The Session's verification record notes the one thing Exp0 could not settle:** *"whether the installer's
+write will classify `GAME_MODULE` at run time — the classifier is proven on the real modules offline, but the
+installer's own RIP has not been placed."* **It is placed here**, by running **the production rule itself**
+(consecutive published starts → image bound → `UNKNOWN`) over the **archived** artifacts:
+
+| Step | Value |
+|---|---|
+| **the published start set** | **4 849 entries**, extent **`[0x140003200, 0x140c156f0]`** |
+| **ON-3's installer RIP** | **`0x00007FF64CFFD5ED`**, RVA **`0xB3D5ED`** |
+| **classification by the PRODUCTION rule** | **`GAME_MODULE`** |
+| **the OWNING published start** | **`0x140B3D590` → `sub_0018CE30`**, guest **`0x0018CE30`** |
+| **offset into it** | **`+0x5D`** |
+| **the installer's store site** | guest **`0x0018CE3A`** = **`+0xA` into that same guest function**, whose dispatch entry is **`0x0018CE30 → sub_0018CE30`** |
+
+> ## **So the installer's own write WILL classify `GAME_MODULE`: its recorded RIP lies in the body of the installer's own generated function, found by the set, with the store site `+0xA` into the same guest function.** ✓
+
+**⚠ AND THE CROSS-BUILD MIX IS JUSTIFIED RATHER THAN ASSUMED.** That placement reads the **archive's** map for
+native addresses and the **current** build's generated dispatch for the guest-VA → function mapping, which is
+only sound if the two builds place the recompiled functions the same way. **MEASURED across all 8 920
+recompiler symbols: every one is present in both maps and every one has moved by EXACTLY `-0x240`** — **one
+uniform delta, so the two builds place the recompiled functions in the SAME ORDER at the SAME SPACING and only
+the block's start moved.** A varying delta would have meant the layouts genuinely differ and **no cross-build
+claim could be made**; the single delta is what licenses it.
+
+**⚠ AND A `GAME_MODULE` CLASSIFICATION IS NOT BY ITSELF PROOF THE RIP IS THE INSTALLER'S** — the residual above
+means any RIP in the stretched region classifies the same way. **What makes THIS placement specific is the
+containment**: the owning start is `sub_0018CE30`, **the installer's own function**, and the store site the
+packet names is `+0xA` into that same guest function.
+
 ---
 
 ## ⚠ WHAT THE SET TEST DOES **NOT** FIX — measured, asserted, and stated rather than claimed away
