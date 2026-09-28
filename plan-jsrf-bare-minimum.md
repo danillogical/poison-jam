@@ -100,7 +100,62 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `PIO_FREE-model-r2` **EXECUTED 2026-09-27 → `O-UNKNOWN`** (awaiting §5.8 acceptance)
+## CURRENT PACKET — `PIO_FREE-model-r2` **ACCEPTED 2026-09-27** (`O-UNKNOWN`) — successor planning open
+
+**`PIO_FREE-model-r2` (`11D6ECB1…1DDA9E`) executed → `O-UNKNOWN` → acceptance stage 1 `ACCEPT`,
+`BLOCKING: NONE`.** Review: `docs/reviews/pio-free-model-r2-acceptance-review.md`; evidence:
+`docs/reviews/pio-free-model-execution-evidence.md`; closure: `docs/reviews/pio-free-model-r2-session-closure.md`.
+**No toolkit change, no game code change, no build, no guest run, no instrumentation.**
+
+### The finding
+
+| Fact | Value |
+|---|---|
+| **The address** | `0xFE820010` = `APU+0x20010` = **`VP+0x10`** = **`NV1BA0_PIO_FREE`** — the **same** address `A4p` called "PIO" |
+| **The current model** | constant **`0x80`**, comment *"Always pretend queue is empty"*; every other VP offset reads `0` |
+| **The write path** | **synchronous** via `fe_method` — **there is no queue at all** |
+| **Threshold census** (stable ×3) | **15 VARIABLE** (`val >> 2` vs a register) vs **13 CONSTANT** (`val & ~3` vs `4`) — **the variable form is the majority**, so the word must be a *quantity that can be insufficient*, not a flag |
+| **Ledger** | **3 of 8 leaves** resolved/partial; **5 `UNKNOWN`** — units, capacity, drain, overflow, ordering |
+| **Sourcing** | **INADEQUATE on exhausted leads.** No primary spec *live*, and the **archived NVIDIA brief is silent** (`PIO_FREE`=0, `NV1BA0`=0, `queue`=0, `free`=0, `FIFO`=0, `depth`=0 with live positive controls); xboxdevwiki `APU` silent, **site-wide search returns no results**; first-party Brian Schmidt account silent; `Cxbx-Reloaded` (**independent emulator lineage**) silent; `JayFoxRox/xbox-tools` silent |
+
+**The negative control is an admission:** xemu's `vp_read` says *"we don't simulate the queue for now,
+pretend to always be empty"* — confirming **a queue exists in hardware, is not simulated, and `0x80` is a
+pretence**. Toolkit ancestry, so **not independent support**.
+
+**Why `O-UNKNOWN`:** `O-IDENTITY` no (all reconciles); `O-CONFLICT` **no** — conflict needs two
+authenticated sources with **incompatible concrete meanings**, and there is one admission plus **silences**,
+and silence is not conflict (reviewer independently upheld this); `O-SPEC` no on **two** grounds.
+
+**`A2h` deliberately NOT named** — the missing witnesses are **documentation, not guest time**.
+
+### ⚠ The constraint that shapes the successor
+
+**`docs/jsrf-run-profiles.md:245-267`** requires a modelled cause to rest on **either** one credible
+**primary** source **or two independent secondary sources of meaningfully different provenance**, and it is
+explicit that:
+
+> *"**observed guest behaviour may corroborate an interpretation but does not count as one of the two
+> independent sources.** Guest code is evidence about the title, not about the hardware."* (`:260-262`)
+
+**So the Session's 28-site census is a constraint on any model, not an admissible source for one.** The
+acceptance review has now established that **no admissible external source documents the five `UNKNOWN`
+leaves** — which means the successor the `O-UNKNOWN` row names (*"a focused `PIO_FREE`
+source/queue-interface discovery on the exact listed leaves"*) **may be infeasible as specified**, and that
+is the question the Planner must now answer rather than repeat the search.
+
+**A promising reframing for the Planner to consider (not decided here):** *specifying a truthful hardware
+model* needs external documentation and is blocked; but *whether the existing stub is **sufficient** for
+the guest to proceed* is a question about the **title**, and guest code **is** admissible evidence about the
+title. The census already bounds it: 13 sites pass on any value ≥ 4, and the 15 variable sites need
+`val >> 2 ≥ demand` — so the decidable question is **the maximum demand at those 15 sites**, which is finite
+and offline. **That serves the owner's stated purpose** (the next admissible boundary before a stronger
+strict boot/progress claim) without requiring a hardware datasheet.
+
+**Toolkit:** `c151d4e` (unchanged). **Game:** `c97fef9`.
+
+---
+
+## Previous — `PIO_FREE-model-r2` **EXECUTED 2026-09-27 → `O-UNKNOWN`** (now accepted)
 
 **`PIO_FREE-model-r2` (`11D6ECB1…1DDA9E`) executed offline. Row: `O-UNKNOWN`.** Execution evidence:
 `docs/reviews/pio-free-model-execution-evidence.md`; closure: `docs/reviews/pio-free-model-r2-session-closure.md`.
