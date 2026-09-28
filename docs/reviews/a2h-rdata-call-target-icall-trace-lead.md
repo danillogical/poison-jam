@@ -60,3 +60,59 @@ test whether the position-3 call indexes it.
 
 **Recorded so the Worker starts from the cycle position rather than re-deriving the trace, and so a reviewer
 can see the narrowing was available and was not treated as a conclusion.**
+
+---
+
+## Second constraint: **neither guest call target is a STATIC POINTER**
+
+**The Session searched the original XBE for the 4-byte little-endian value of each guest call target:**
+
+| Target | Raw occurrences | Where |
+|---|---|---|
+| **`0x0015F9D0`** (the refcount thunk position 3 SHOULD reach) | **exactly 1** | file `0x14F9E9` → VA `0x0015F9E9` |
+| **`0x00193D90`** (the D3D method at position 1) | **ZERO** | — |
+| **`0x001D5078`** (the `.rdata` filename — the failure) | **59, stride 8** | `.rdata` table at `0x001D4BD4` |
+
+**And the single `0x0015F9D0` hit is INSIDE CODE.** Disassembling across it:
+
+```
+0015F9E0  mov   eax, dword ptr [esp + 4]
+0015F9E4  test  eax, eax
+0015F9E6  jne   0x15f9f6
+0015F9E8  mov   eax, 0x15f9d0          <== the byte pattern falls HERE, as an IMMEDIATE
+0015F9ED  mov   dword ptr [esp + 4], eax
+0015F9F1  jmp   0x18ce30
+```
+
+**That is a function that SELECTS a handler:** if its argument is null it **substitutes `0x0015F9D0` and jumps
+to `0x0018CE30`.** **So `0x0015F9D0` is a DEFAULT HANDLER and `0x0018CE30` is the installer/setter.**
+
+### Why this rules out the obvious hypothesis
+
+**Neither guest call target is stored anywhere as a static function pointer.** **So the position-3 call target
+is COMPUTED or loaded from a RUNTIME-POPULATED structure** (a vtable, a callback array, an object field).
+
+> **⇒ A static table of function pointers whose entry was overwritten is REFUTED as the shape.**
+> **Do not search for one.**
+
+**Meanwhile the FAILING target — the `.rdata` filename — IS a static pointer, 59 times over.** **So the failing
+call reached a STATIC DATA address where a RUNTIME function pointer belonged.**
+
+**The asymmetry is itself a strong constraint:** a table-based design would have produced **many** occurrences
+of the refcount thunk; **it produced exactly one, as an immediate in a selector.**
+
+### The shape this suggests — a LEAD, not a conclusion
+
+**The loop looks like a COM-style object in use:** alternating kernel calls and vtable methods, with a
+**refcount thunk at position 3**. **On the 4th iteration the position-3 call loaded a filename pointer instead
+of the refcount thunk.**
+
+**Consistent with a FIELD OR SLOT holding a NAME where a FUNCTION POINTER belongs** — e.g. **a vtable/callback
+slot written with a string pointer**, or **a structure the guest misreads because a field offset is wrong.**
+
+**The `loc_`-anchored path to test:** **who calls the `0x0015F9E8`/`0x0018CE30` installer, and with what** —
+that is where the field that should hold the refcount thunk gets populated. **And step 3 must still produce
+the `loc_`-anchored `eax` definition at the position-3 call.**
+
+**Both searches are RAW BYTE SEARCHES — leads, not authority.** **The packet's rule stands: the chain must
+come from `loc_`-anchored code, and an unclosed edge is `O-OPEN`.**
