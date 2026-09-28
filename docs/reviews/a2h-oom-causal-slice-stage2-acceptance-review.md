@@ -557,3 +557,170 @@ $l -match 'no-trap|not trap-caused|red herring|not a necessary cause'       # Fa
 # census re-verification (35 trapped / 0 untrapped; 657-run positive control)
 #   read `settings` AND the log's "trapped for MMIO" line for every dir under logs/runs/
 ```
+
+---
+
+# Stage 2 re-verification (round 3) — repair commit `7d798af`
+
+**Scope:** the Session fixed my round-2 survivor (`plan:255`), additionally fixed the error ledger I had
+flagged as its context, broadened the sweep to a semantic pattern, and asked for the bounded re-check I
+offered. **Commit under verification: `7d798af`** (plus `c32cedf`, the evidence-record round-3 entry).
+`git status --porcelain` **empty**; **frozen packet `E9CDB1B3…41108C` re-verified and untouched**.
+
+**The withdrawn claim is now fully swept. No surviving assertion remains.** But **the fix commit introduced a
+new defect of its own** — a malformed table row — which I report below and which is the reason this round is
+still `NOT ACCEPTED`.
+
+## R3.1 The withdrawn claim — **no surviving assertion** (confirmed)
+
+**My own sweep**, run independently with the semantic pattern the Session adopted
+(`no[\s\-_.]*trap | not (the|a) cause | trap is not | trap not | without the trap | trap-caused | red herring |
+necessary cause`), case-insensitive, across the four documents and then **repo-wide** (excluding `logs/`,
+`build/`, the frozen packet, the two prior acceptance reviews, and the operating history):
+
+| Location | Hit | Classification — I read each one |
+|---|---|---|
+| `evidence.md:53,74-91,104,118,160` | `no-trap`, `not a necessary cause` | **correction banners / the new round-3 lesson block / a quoted WITHDRAWN sentence** — all inside a corrective frame |
+| `evidence.md:456` | `NOT established as unnecessary` | **corrected conclusions list** — the narrow form |
+| `mechanism.md:24` | `previously claimed A2g had NO trap. That was WRONG` | **correction banner** |
+| `mechanism.md:182` | `NOT established as a red herring` | **corrected** — the narrow form |
+| `session-verification.md:27` | `~~The no-trap A2g run~~` | **struck through**, corrected in place |
+| `session-verification.md:33` | `"trap is not necessary" claim is withdrawn` | **the withdrawal statement itself** |
+| `plan:121,124,158,177,261-262` | `no-trap` label | **defect lists / refuted-hypothesis lists / the corrected ledger** |
+| `plan:202,255` | `predates the A4b2 trap work` | **corrected** — the narrow form |
+| `plan:292` (`no trapped time`), `plan:1365` (`no TRAP/TRACE in env`), `plan:2542` (`without the trap`), `session-verification.md:94` (`assuming the trap caused them`) | pattern false positives | **I agree with all four of the Session's classifications** — each is unrelated text that merely contains the substring; none asserts the withdrawn claim |
+
+**I found no hit the Session misclassified, and no fifth false positive.** Their four hand classifications are
+correct. `plan:292` really is the A2h *horizon* (`no trapped time past the prefix`); `plan:1365` really is the
+R0 profile statement; `plan:2542` really is the A3-era `U4` frame-pattern note; and
+`session-verification.md:94` really describes what the *packet* does ("investigates the cause rather than
+counting OOMs or assuming the trap caused them"), which is the opposite of asserting trap causation.
+
+## R3.2 `plan:255` — the claim is fixed, **but the fix introduced a malformed table row**
+
+**The claim itself is correct.** `plan:255` now reads *"the earliest OOM run is five days and one build
+earlier … so **the failure predates the A4b2 trap work** … **The trap is NOT shown to be unnecessary** (all 35
+runs carrying this request are trapped)"*. `git blame` confirms `7d798af`. **The withdrawn claim is gone.**
+
+**However, the edit left a stray cell separator, and the row is now structurally malformed:**
+
+```
+L253: | Record | Establishes |            <- header, 2 columns (pipes=3)
+L255: | `docs/reviews/a2h-mechanism.md` | … are trapped) |; the chain is `NtAllocateVirtualMemory` … |   <- pipes=4
+L256: | same, §4 | … |                    <- pipes=3
+L257: | same, §5 | … |                    <- pipes=3
+```
+
+- **Provenance: introduced by `7d798af`.** `plan:255` had **3 pipes at `dd96963`** and has **4 at `7d798af`**.
+  The whole table was well-formed before this commit; every other row (L254, L256, L257) still has 3.
+- **It is the only such row in the file** — a repo-wide search for `\|\s*;` returns exactly this line.
+- **Effect:** the row now declares **three cells against a two-column header**, so the trailing text
+  (`; the chain is NtAllocateVirtualMemory … Two stacked defects: an implausible 571 MB commit, and no NULL
+  check on the result. The arena behaves correctly`) renders as a **third column** that the header does not
+  declare — in a strict CommonMark renderer it is dropped or spills outside the table.
+- **Mitigating, and I checked this rather than assuming it:** the **corrected claim is inside cell 2, before
+  the stray pipe**, so it renders normally; and the displaced text is **not** a re-assertion of the withdrawn
+  claim (it is the chain description and the two-defect summary, both still true and both preserved in
+  `a2h-mechanism.md:56-66` and `plan:202-206`). **So this is a presentation defect, not a truth defect.**
+- **No content is lost from the repository**, and no criterion depends on this table's rendering.
+
+**Why it still matters enough to report.** This is the **third consecutive round** in which a repair to this
+one claim carried a defect of the same family — a change applied to the sentence in front of the author
+without checking the structure it sits in. Round 1 fixed banners and missed the bodies; round 2 fixed a
+sentence and missed the ledger beneath it; round 3 fixed the sentence and ledger and malformed the table row
+above them. The pattern is worth naming for the Session, and the fix is a **one-character deletion**.
+
+## R3.3 The error ledger — fixed, and correctly
+
+`plan:259-264` now reads **"Three Session errors in that analysis are recorded and corrected in place"** and
+names all three, including *"**and the 'no-trap A2g' characterisation in this section's own table above — the
+A2g run IS trapped, so the strong 'the trap is not necessary' claim is withdrawn, and only the narrower
+'predates the A4b2 trap work' and 'not trace-caused' claims survive.**"*
+
+This was **not** one of my reported locations — the Session found it by acting on my observation that the
+survivor sat four lines above a ledger that omitted it. **Correct, and the right generalization.** A reader no
+longer meets an uncorrected finding followed by an error list that omits it. **Confirmed fixed.**
+
+## R3.4 The census still reproduces — confirmed (third independent run)
+
+| Quantity | R1 | R2 | **R3** |
+|---|---|---|---|
+| run directories | 719 | 719 | **719** |
+| carrying `598869040` | 35 | 35 | **35** |
+| **trapped** | 35 | 35 | **35** |
+| **untrapped** | 0 | 0 | **0** |
+| positive control (trap setting absent/`0`) | 657 | 657 | **657** |
+| …of those, carrying the request | 0 | 0 | **0** |
+
+**Unchanged.** The absence claim retains its coverage witness.
+
+## R3.5 Criterion 1 remains `AGREED` and was not reopened
+
+`git diff --stat e1dd3e2..HEAD -- scripts/ src/ config/ CMakeLists.txt` is **empty** — **no code has changed
+since I ruled criterion 1 `AGREED`**, so nothing reopens it (§2.4.7). As a sanity check only, the suite still
+reports **`Ran 31 tests … OK`, exit 0**. Files touched by `dd96963..HEAD` are
+`a2h-oom-causal-slice-evidence.md`, `plan-jsrf-bare-minimum.md` and my own review — documentation only.
+
+## R3.6 Round-3 disposition
+
+**(i) `plan:255` fixed and the ledger names three errors?** **YES to both** — the claim now states the narrow
+form and the ledger names the A2g error explicitly. **But the same edit introduced a malformed table row at
+`plan:255` (4 pipes against a 2-column header), which is a new defect introduced by the commit under
+verification.**
+
+**(ii) No surviving assertion of the withdrawn claim?** **CONFIRMED — none.** My independent semantic sweep,
+run repo-wide and with each hit classified, finds every occurrence inside a corrective frame or a
+correctly-identified false positive. **I agree with all four of the Session's false-positive classifications
+and found no misclassified hit.**
+
+**(iii) The census still reproduces?** **YES** — 35 trapped / 0 untrapped, 657-run positive control, third
+independent run.
+
+**DISPOSITION (round 3): NOT ACCEPTED** — criterion 1 `AGREED` (unchanged, not re-reviewed); criterion 2
+`DISAGREED` **only** on the newly-introduced malformed row at `plan:255`.
+
+### What the remaining repair needs
+
+**Delete one character.** `plan-jsrf-bare-minimum.md:255` contains `… are trapped) |; the chain is …`. Removing
+the stray `|` (so it reads `… are trapped); the chain is …`) restores the 2-column structure and renders the
+displaced text inside cell 2, where it belongs. **No re-measurement, no re-sweep of the claim is required** —
+the claim itself is correct and fully swept.
+
+**I state plainly what this means for acceptance:** the *substantive* defect that took three rounds — the
+false "no-trap" characterisation and its withdrawn strong claim — is **now fully corrected**. Every assertion
+of it is either removed, corrected to the narrow form, or inside an explicit correction frame, and the census
+holds. The only thing standing between this packet and `ACCEPT` is a malformed markdown table row introduced
+by the final fix. If the Session prefers, a Planner or Advisor could reasonably rule that one-character
+presentation defect non-blocking (§3.1/§3.2) — **I am not permitted to make that call (§2.2.6), and I am not
+making it.** My role is to report it.
+
+## Round-3 reproduction commands
+
+```powershell
+git log --oneline -3 ; git status --porcelain                  # HEAD = 7d798af, clean
+(Get-FileHash docs\packets\a2h-oom-causal-slice.md -Algorithm SHA256).Hash   # E9CDB1B3…41108C
+git diff --stat e1dd3e2..HEAD -- scripts/ src/ config/ CMakeLists.txt        # empty: criterion 1 not reopened
+
+# (i) the fix and the ledger
+(Get-Content plan-jsrf-bare-minimum.md)[254]                   # the corrected narrow claim
+(Get-Content plan-jsrf-bare-minimum.md)[258..263]              # "Three Session errors …"
+git blame -L 255,255 --date=short -- plan-jsrf-bare-minimum.md # 7d798afa
+
+# the NEW defect: pipe count on the row (3 = well-formed, 4 = extra cell)
+foreach ($i in 254,255,256) { $l=(Get-Content plan-jsrf-bare-minimum.md)[$i]; "L$($i+1): $(([regex]::Matches($l,'\|')).Count)" }
+git show dd96963:plan-jsrf-bare-minimum.md | Select-Object -Skip 254 -First 1   # pipes=3 BEFORE the fix
+git show 7d798af:plan-jsrf-bare-minimum.md | Select-Object -Skip 254 -First 1   # pipes=4 AFTER
+Select-String -Path plan-jsrf-bare-minimum.md -Pattern '\|\s*;'                 # only plan:255
+
+# (ii) my own semantic sweep, repo-wide
+Get-ChildItem . -Recurse -Include *.md -File |
+  Where-Object { $_.FullName -notmatch '\\logs\\|build\\|a2h-oom-causal-slice\.md|acceptance-review\.md|operating-history' } |
+  ForEach-Object { Select-String -Path $_.FullName -Pattern '(?i)no[\s\-_.]*trap|not (the|a) cause|trap is not|trap not|without the trap|trap-caused|red herring|necessary cause' } |
+  ForEach-Object { "$(Split-Path $_.Path -Leaf):$($_.LineNumber)" }
+
+# (iii) census, third run — 35 trapped / 0 untrapped, 657-run positive control
+#   read `settings` AND the log's "trapped for MMIO" line for every dir under logs/runs/
+
+# criterion 1 sanity only (not a re-review)
+python -X utf8 -m unittest scripts.test_a2h_oom_slice           # Ran 31 tests ... OK
+```
