@@ -100,7 +100,51 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-null-slot-triage-r1` **EXECUTED 2026-09-28 → `O-NO-BOUNDARY-TRANSITION`**, **`ACCEPT`** (stage 1, `BLOCKING: NONE`); successor in planning
+## CURRENT PACKET — `A2h-slot-read-path-displacement-r1` (**discovery**: did the slot become zero in the bridgeless gap, and by whom?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-slot-read-path-displacement.md`, revision **`A2h-slot-read-path-displacement-r1`**,
+  class **discovery**, **56 lines**, **30856 bytes**, frozen SHA-256
+  **`75E6AE7C9A26A2CF63F9AD19502A170B2960FE2C90523A566F3F382942BB9B6A`** — **this is the packet to execute.**
+  Hash read **3× over ~12 s**, identical, matching the Planner's report. Validation:
+  `docs/reviews/a2h-slot-read-path-r1-session-validation.md`.
+- **Shape preflight:** **obtained** — the superseded first ruling **and** the corrected one, the Session's
+  `PREMISE_CHANGED` correction, the collector-identity repair, the DR feasibility gate, and the alias
+  derivation, all in `docs/reviews/a2h-slot-read-path-advisor-shape-preflight.md`.
+- **The question:** did the installed slot at guest `0x001C4064` become zero **after the final bridge boundary
+  and before the terminal raw load**; was any uniquely proved writer guest or host; was a zero restored; or
+  does complete write coverage instead refer us to a read-path audit?
+- **Mechanism (corrected ruling):** **canonical DR0/LEN4 write watch** **plus** a **first-write census on the
+  corresponding 4 KiB page of every mapped mirror** (28 source-defined). **Any alias touch makes writer
+  absence `UNKNOWN`.** The key insight: a page's **first touch necessarily precedes its first single-step
+  window**, so the census is complete **despite** the race that disqualified the page-guard as a *write
+  history*.
+- **Rows:** `O-GUEST-ZERO` → `A2h-guest-slot-writer-cause` · `O-HOST-ZERO` → `A2h-host-slot-writer-cause` ·
+  `O-TRANSIENT` → `A2h-transient-slot-zero-cause` · `O-READ-PATH` → `A2h-terminal-read-path-audit` ·
+  `O-IDENTITY`/`O-COVERAGE` → `A2h-slot-write-coverage-provenance`.
+- **Runs:** exactly **two** pre-specified same-build runs, gates **OFF then ON**, no third without Advisor
+  re-referral. **Fail closed** on alias touch, unarmed thread, missed install control, unsafe DR event, torn
+  publication, mapping change, ambiguous writer, missing terminal event, or **ON/OFF divergence**.
+- **Four binding additions, all present and validated:** the extractor
+  **`scripts/a2h-read-registry.py`** named as authoritative **plus** a required **collector** latch summary
+  cross-check; **RECORD-BEFORE-OPEN** stated explicitly with the AC97 precedent **ruled insufficient**;
+  **ARM-TO-TERMINAL** armed-set equality; and the install control required to read the **latch's own
+  `install_ok`**.
+- **§5.1.5 — every named tool executed:** `a2h-read-registry.py` (**17 self-tests**, extracts **both real
+  archives**), `a2h-slot-triage-classify.py` (11), `a2h-null-slot-triage.py` (17), `a2h-frame-audit.py` (29),
+  `a2h-oom-slice.py` (31), `run-jsrf.py`. **The collector print was verified live** and **agrees with the
+  extractor**.
+- **A durable improvement made during validation:** the collector now **prints** the latch
+  (`tools/harness/collect.c`, guarded on `version >= 2`). Previously the latch was archived but **invisible in
+  the archive's own text**, so the extractor was the only path to a decision record.
+
+**Next:** implement the toolkit DR0 + alias-census diagnostic under the corrected ruling, then Run 1 (OFF) →
+Run 2 (ON) → §5.8 acceptance.
+
+**Toolkit:** `6f049ce` (pushed). **Game:** `9029a54`.
+
+---
+
+## Previous — `A2h-null-slot-triage-r1` **EXECUTED 2026-09-28 → `O-NO-BOUNDARY-TRANSITION`**, **`ACCEPT`** (stage 1, `BLOCKING: NONE`)
 
 - **Packet:** `docs/packets/a2h-null-slot-triage.md`, revision **`A2h-null-slot-triage-r1`**, frozen
   **`F9A6522E8579AD756701C150A0AF60275DCFF4158705CE5331BE3BF2EA7A9F20`** (80 lines, 32704 bytes) —

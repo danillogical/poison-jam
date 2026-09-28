@@ -94,3 +94,47 @@ promote.
 prohibitions.** **No synthetic completion** is present or proposed; the producer line stays **PARKED**;
 `PIO_FREE` stays **DEFERRED**; `A4b2-r7`/`A4b2-r8`/`A4b1-r4` are **not** reopened; `0xFFFFB3` stays
 **`UNRESOLVED`**.
+
+---
+
+# FROZEN — `A2h-slot-read-path-displacement-r1`
+
+**The Planner applied all four additions and returned the packet.** The Session has validated it and
+**frozen** it.
+
+| Item | Value |
+|---|---|
+| Revision | **`A2h-slot-read-path-displacement-r1`** (unchanged — the additions were within the same revision) |
+| Lines | **56** |
+| Bytes | **30856** |
+| **SHA-256 (frozen)** | **`75E6AE7C9A26A2CF63F9AD19502A170B2960FE2C90523A566F3F382942BB9B6A`** |
+
+**Hash read 3× over ~12 s and identical, matching the Planner's own reported value.**
+
+## The four additions — all present and validated
+
+| # | Addition | Verified |
+|---|---|---|
+| 1 | `scripts/a2h-read-registry.py` named as the authoritative frozen-latch extractor, plus a required **collector** versioned human-readable latch summary cross-check | present at L20/22/27/33/38/56; **the tool executes on both real archives** |
+| 2 | **RECORD-BEFORE-OPEN** stated explicitly, with the AC97 precedent explicitly ruled insufficient and a concurrent fixture required | present at L31, L38, L49 |
+| 3 | **ARM-TO-TERMINAL** mapped/armed set equality, with an at-event failure latch | present at L31 |
+| 4 | Frozen `install_ok=1` required ON, and **no** OFF install record, both read from the extractor | present at L20, L27, L40 |
+
+**Preserved unchanged, as instructed:** class (`discovery`), the row set, the two-run bound, the prohibitions,
+the **HOST-offset** alias formula `g_mirror_views[m] + (0x001C4064 & ~0xfff)`, and the six-vs-five registry
+feasibility section.
+
+## §5.1.5 — every named tool and fixture executed
+
+| Named item | Result |
+|---|---|
+| `scripts/a2h-read-registry.py` | **exists, 17 self-tests OK**, and **extracts both real archives**: Run 2 → `install_present=True install_ok=1`; Run 1 → `install_present=False install_ok=0` |
+| `scripts/a2h-slot-triage-classify.py` | **11 self-tests OK** |
+| `scripts/a2h-null-slot-triage.py` | **17-test suite + self-test OK** |
+| `scripts/a2h-frame-audit.py`, `scripts/a2h-oom-slice.py`, `scripts/run-jsrf.py` | exist; suites pass (29 / 31 tests) |
+| **The collector print the packet requires** | **VERIFIED LIVE** — a fresh strict run's `stacks.txt` carries `GUEST_SLOT_LATCH install_seen=1 install_raw=80000115 install_value=FE000104 install_ok=1 claimed=0 overflow=0 partial=0`, **and the extractor reads the same values from the minidump**, so the two paths agree |
+
+**A durable improvement the Session made while validating addition 1:** the collector now **prints** the
+latch's fields (`tools/harness/collect.c`, guarded on `registry->version >= 2`). Before this, the latch was
+archived but invisible in the archive's text, so the extractor was the only path to a decision record. **Both
+paths now agree**, which is the cross-check the packet requires.
