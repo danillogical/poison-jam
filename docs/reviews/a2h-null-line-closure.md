@@ -81,6 +81,24 @@ unreachable on this line.** **That should be stated rather than left as a silent
 **Per the Advisor: *"never carry the channel as decoration."*** **No row may cite a DR record in either
 direction — including the zero-`#DB` series.**
 
+## What happens to the DR code itself — a disposition, not a deletion
+
+**The Advisor's rule governs ROWS, not code.** **The DR instrumentation remains in the tree and is INERT:**
+
+| Property | State |
+|---|---|
+| **Default** | **OFF** — every DR path is behind `JSRF_TRACE_A2H_DR`, read once and cached |
+| **Behaviour with the gate absent** | **identical to before the instrument existed** — verified by record-level inertness in every OFF run |
+| **Effect on any current or future row** | **none permitted** — no row may cite a DR record in either direction |
+| **Authorized for removal?** | **NO** — deleting a large body of instrumentation is a **destructive change requiring its own packet**, and no packet has authorized it |
+
+**So the code stays, inert and unused, and the *decision* rule is what prevents it from lending false
+authority to a row.** **That is the operative meaning of "never carry the channel as decoration."**
+
+**Recorded because the two readings differ materially:** removing the code would be a **destructive action
+taken without authorization**, while leaving it gated off satisfies the Advisor's rule exactly.
+**The Session does not delete it.**
+
 ## The durable gains — recorded because they are real
 
 **Five packets and their preflights produced, beyond the negative result:**
