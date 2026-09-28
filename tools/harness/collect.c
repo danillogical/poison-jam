@@ -426,12 +426,13 @@ static void dr_print_terminal_summary(void)
                     "armed_at_or_after_handshake=%u arm_attempt_failures=%u collision=%u "
                     "create_thread_events=%u exit_events=%u deferred_births=%u failed_births=%u "
                     "recovered_by_sweep=%u failed_never_recovered=%u exited_unarmed=%u birth_rows=%u%s "
-                    "handshake_seq=%u last_seq=%u handshake_seen=%u terminal=%u\n",
+                    "handshake_seq=%u last_seq=%u handshake_seen=%u terminal=%u last_fail_reason=%s\n",
             dr_arm_ok_records, dr_armed_before_handshake, dr_armed_at_or_after_handshake, dr_failed,
             dr_collision, dr_create_thread_events, dr_exit_events, deferred_events, failed_events,
             recovered, failed_never_recovered, exited_unarmed, dr_birth_count,
             dr_birth_overflow ? " birth_overflow=1" : "",
-            dr_handshake_seq, dr_seq, dr_handshake_seen ? 1u : 0u, dr_terminal_seq);
+            dr_handshake_seq, dr_seq, dr_handshake_seen ? 1u : 0u, dr_terminal_seq,
+            a2h_reason_name(dr_last_fail_reason));
     /* The reconciliation the packet demands: what the artifact can and cannot prove. Every clause is
      * derived from records, never from a count that could be a snapshot or a superset. */
     fprintf(report, "GUEST_DR_ARM_RECONCILE arm_tid_list=%u arm_tid_overflow=%u "
