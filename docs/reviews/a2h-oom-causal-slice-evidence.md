@@ -236,6 +236,50 @@ respect that.
 question. **No change packet is authorized by this row** — the packet says *"consider a change only after
 cause is established,"* and the caller's identity is not yet established.
 
+### A bounded lead for that packet: the caller chain is short, and one site passes a parameter through
+
+**Recorded as a lead, not as a completed attribution.** The Session followed the caller chain only as far as
+the generated source names it, and **stopped there** rather than expanding scope beyond the packet.
+
+**`sub_001497DC` has 8 call sites** in the generated source. Only **two** push three arguments; the other
+six push one, so they cannot supply `arg2` at all.
+
+| Call site | guest `ret` | `arg2` expression |
+|---|---|---|
+| `recomp_0003.c:21992` | `0x0014A6D6` | `MEM32(ebp + 0x14)` |
+| `recomp_0003.c:22281` | `0x0014A858` | `MEM32(esp + 8)` |
+
+**The second is structurally the more interesting**, because it sits inside **`sub_0014A83E`**
+(`recomp_0003.c:22271`), declared **`cdecl, 2 params`**, `Frame: fpo_leaf`:
+
+```
+loc_0014A83E:
+  eax = MEM32(esp + 4);          ; arg0
+  PUSH32(esp, MEM32(esp + 8));   ; 1st push  -> the callee's arg2
+  eax = eax >> 3;
+  eax = eax & 8;
+  PUSH32(esp, eax);              ; 2nd push  -> the callee's arg1
+  PUSH32(esp, MEM32(0x27DCD4));  ; 3rd push  -> the callee's arg0
+  call sub_001497DC
+```
+
+**So `sub_0014A83E` passes its own `arg1` straight through as `sub_001497DC`'s `arg2`** — a
+pass-through, not a local computation. **`sub_0014A83E` is itself called from several sites** (e.g.
+`recomp_0003.c:23746` pushes `ebx` as its `arg1`; `:29959` pushes `edi`; `:31550` and `:31984` push `eax`).
+
+**Two cautions before anyone builds on this:**
+
+1. **Whether this is the failing path is NOT established.** The failing invocation ran from
+   `esp=0x00F7FCF0`; matching that frame to a caller requires the frame identity, which the archived logs do
+   not name. **The other candidate (`0x0014A6D6`, `arg2 = MEM32(ebp+0x14)`) is not excluded.**
+2. **The generated `PUSH32` macro's exact `esp` semantics were not read** — the offsets above are derived
+   from the *disassembly's* cdecl convention, which is the right basis, but a future packet should confirm
+   the macro matches rather than assume it. **That is a checked-in-tooling question, not a reasoning one.**
+
+**This is exactly the shape the packet's `O-OTHER-INPUT` row describes** — *"distinguish title data,
+translated ABI, or another device at this one producer"* — and the remaining question is small and bounded:
+**which of the two 3-argument call sites was on the failing frame, and what supplied its `arg2`.**
+
 ### Why `O-OPEN` was selected on the then-available evidence
 
 | Row | Applicable? | Why |
