@@ -100,7 +100,7 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-live-slot-write-r1` **EXECUTED: ON trial 1 → INFRA FAILURE**; **THE WATCH WORKS**; bounded repair + Q3(b)/(c) in progress
+## CURRENT PACKET — `A2h-live-slot-write-r1` **EXECUTED: ON trial 1 → INFRA FAILURE**; **THE WATCH WORKS**; **bounded repair + Q3(a)(b)(c) DONE — Q3(c) found a real wrong-page bug**; next = fresh OFF + N=5
 
 - **Packet:** `docs/packets/a2h-live-slot-write.md`, frozen
   **`8F3C6291C42ED3D9C3B96D879A9BB9D46391E5FEEA3F4BDC1E8712F46FFF7D4F`** — **not edited**.
@@ -144,8 +144,8 @@ the run died.**
 | # | Requirement | Status |
 |---|---|---|
 | **(a)** | **static inspection of the pre-read path** | ✅ **EXECUTED — the path is CORRECT** |
-| **(b)** | **a COMMITTED fixture proving value fidelity END-TO-END** | **in progress** |
-| **(c)** | **cross-validation where fault-record and hook reads overlap** | **in progress** |
+| **(b)** | **a COMMITTED fixture proving value fidelity END-TO-END** | ✅ **DONE — `fixture_value_fidelity()`: `pre`/`post` are the TRUE before/after values, confirmed against an independent read; also proves `pre` is read BEFORE the store executes** |
+| **(c)** | **cross-validation where fault-record and hook reads overlap** | ✅ **DONE — and it CAUGHT A REAL BUG (below)** |
 
 **Q3(a)'s result:** **`pre` is read at `g_a2h_slotw_pages[alias-1] + off` where `off` derives from `slot_va`,
 NOT from `fault`** — **so `pre` is the SLOT's value within whichever alias faulted, BY DESIGN.** **That
@@ -156,13 +156,58 @@ FAULTING address, when it is the SLOT's value at the fault.**
 the STEP record is what carries the slot's post-value.** **So the slot was `B8077500` before AND after all 128
 fills — the fill was NOT touching the slot.**
 
-**Next:** capacity repair (traffic→counters per the packet's own design) + Q3(b) + Q3(c); then **fresh OFF +
-NEW N=5** (a different experiment, per the ruling).
+### ⚠⚠ Q3(c) CAUGHT A REAL INSTRUMENT BUG: **THE WATCH WAS PROTECTING THE WRONG PAGE**
+
+**ARM's canonical alias used `g_memory_base + (slot - XBOX_BASE_ADDRESS)`, which assumes `g_memory_base` is
+the host address OF GUEST VA `0x10000`. IT IS NOT** — it is the host address of `XBOX_MAP_START` (`0`),
+because `g_memory_offset = g_memory_base - XBOX_MAP_START`. **The loader's own log states the ground truth:
+`XBE header: 2440 bytes at 0x0000000000020000 (Xbox VA 0x00010000)`, so guest VA `V` lives at host
+`V + g_memory_offset`.**
+
+**MEASURED: with `g_memory_offset = 0x10000` the canonical alias was protected 64 KiB BELOW the slot — host
+`0x0019D000` = guest `0x0018D000`, instead of host `0x001AD000` = guest `0x0019D000`.** **The 28 mirror
+aliases were already correct, which is why `aliases=29/29` looked healthy while the canonical view — the one
+a sub-64 MB guest VA actually uses — was pointed at the wrong page.** **The bug is INVISIBLE when the mapping
+lands at 0.**
+
+> **⚠ SO ON TRIAL 1'S `slot_hits=0` IS EXPLAINED BY THE WRONG PAGE, NOT BY AN ABSENCE OF WRITERS.** **The fill
+> it saw at host `0x0019D000`–`0x0019D1FC` was guest `0x0018D000`–`0x0018D1FC` — NOT the slot page.** **The
+> Advisor's falsifiable fill prediction must be RE-STATED against the corrected page.**
+
+**FIXED** in all three places that used the formula (ARM canonical, terminal cross-check, AC'97 fixture arm).
+**The TARGET is unchanged** — still `MEM32(0x19DCE0) + 0x242C` by checked addition, still slot-keyed.
+
+### ✅ TASK 1 — the capacity repair, implementing the packet's own design
+
+**Non-slot page writes are TRAFFIC: counted (`loss.nonslot_writes`) and censused (one first-touch entry per
+DISTINCT address), and they publish NO record — their step publishes none either.** **Detailed records remain
+for SLOT BYTE writes (fault + step, carrying `pre`/`post`) plus the first-touch census.** **So a page-write
+stream of any length consumes ZERO records once the page has been walked.** **Buffer also `256 → 1024`.**
+
+**THE FAIL-CLOSED PATH IS KEPT AND CANNOT FIRE ON TRAFFIC VOLUME:** publication still returns 0 when full,
+the page is still left CLOSED and the fault still propagates — **but ordinary traffic can no longer reach
+it.** **The fixture asserts both halves (128 traffic writes → 0 records, overflow latch clear; a slot store →
+2 records).**
+
+**⚠ A second defect the fixture caught in this repair:** the first-touch census claimed an entry per WRITE
+rather than per ADDRESS (64 writes to one address → 64 entries). **Now it looks the address up first.**
+
+**Verification:** build ✅ · **ctest 22/22** ✅ · **fixture 176 checks / 0 failures** ✅ · **all 9 guards** ✅ ·
+**collector reads v3** (`version=3 size=82360`) ✅.
+
+**⚠ `scripts/test-harness.py` has a PRE-EXISTING intermittent failure** (`healthy-1`, `exit_code=2`,
+save-root `winerror=5` at `jsrf_save_root.c:276`, ~50 lines before any touched code) — **PROVEN pre-existing
+by stashing every change and reproducing it on the clean baseline (1 of 4 runs).** **2 of 977 archived runs
+ever show `save_root_verified == False`, both from this session.** **Each failing probe passes in isolation.**
+
+**Next:** **fresh OFF + NEW N=5** (a different experiment, per the ruling) — **the Session owns the ON runs.**
+**The fill prediction must be re-stated against the CORRECTED page before it is used.**
 
 **⚠ N-accounting:** **the aborted run COUNTS toward N** — *"excluding it would license re-rolling until
 lucky."* **New N=5 for the new instrument.**
 
-**Toolkit:** `09db685` local / `571982d` pushed (**no-push state**). **Game:** `6a7f599`.
+**Toolkit:** `1fea7d1` local (**no-push state**). **Game:** `556d9b9` (`0afc21d`, `dc49f9c`).
+**Evidence:** `docs/reviews/a2h-live-slot-write-q3-repair-evidence.md`.
 
 - **Packet:** `docs/packets/a2h-live-slot-write.md`, **17 lines**, **8397 bytes**, frozen
   **`8F3C6291C42ED3D9C3B96D879A9BB9D46391E5FEEA3F4BDC1E8712F46FFF7D4F`** — **this is the packet to execute.**
