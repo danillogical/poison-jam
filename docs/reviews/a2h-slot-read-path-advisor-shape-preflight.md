@@ -240,3 +240,55 @@ unrunnable, and because the Planner caught it before it reached a frozen contrac
 **any alias write hit ⇒ `UNKNOWN`** — so a racing *subsequent* write cannot false-pass the row. That is the
 first-touch insight applied correctly, and it is why the single-step race that disqualified the page-guard as
 a *write history* does not disqualify it as a *touch census*.
+
+---
+
+## Session execution of the Advisor's **up-front DR feasibility gate** — answered offline
+
+The ruling required: *"Up-front feasibility gate (offline, before building): guest thread-birth path +
+archived-run tid census (ICALL lines carry tid). If churn defeats arming → re-refer THEN."* **Executed
+offline from both archived runs and the toolkit source. The gate PASSES with one binding design consequence.**
+
+### The arming universe is SIX threads, not five — and the guest registry is an incomplete census
+
+| Run | Guest registry records | Dispatching tids (log) | **Dispatched but NOT registered** |
+|---|---|---|---|
+| Run 1 (OFF) | 5 | 6 | **tid 43308** (180 dispatches) |
+| Run 2 (ON) | 5 | 6 | **tid 65292** (328 dispatches) |
+
+**Both runs show exactly one tid that made guest kernel dispatches yet never appears in the diagnostics
+thread registry the collector archives.** The registry is populated from the `PsCreateSystemThreadEx` path
+(`kernel_bridge.c:440`), so **a DR arming strategy keyed on the guest registry would miss this thread
+entirely** — precisely the *"unarmed observed tid"* case the ruling says must fail closed to `UNKNOWN`.
+
+### What that thread is — identified, and it is a HOST thread
+
+| Evidence | Value |
+|---|---|
+| Its dispatch return PCs | `0x00193CFD` and `0x00193E62` |
+| **Section containing them** | **`D3D`** (`0x0018CB40..0x0019E338`) |
+| Its ordinals | **119 and 145**, in **identical counts** across both runs (90/90 and 164/164) |
+| Its `esp` | `0x007BFFCC` / `0x007BFF94` — **the same value in both runs** |
+| Its dispatch pattern | a strict 119↔145 alternation, 180 and 328 times |
+
+**A repeating two-ordinal alternation at a fixed `esp`, from the D3D/DirectSound section, identical across two
+independent runs, is a toolkit-spawned host worker** (the toolkit creates host threads at
+`kernel_bridge.c:464`, `:2455`, and `apu_shim.h:148`), **not a guest thread**. It legitimately never appears
+in the *guest* thread registry.
+
+### The binding consequence for the packet
+
+**The arming universe must be enumerated from SOURCE — every thread-creating path in the toolkit — not from
+the guest registry.** Concretely, the packet must:
+
+1. enumerate **all** toolkit thread-creation sites (`kernel_bridge.c:464`, `:2455`, `apu_shim.h:148`, and any
+   others) plus every guest `PsCreateSystemThreadEx` thread, and state the finite total;
+2. arm each, and **fail closed to `UNKNOWN` if any observed tid is unarmed** — which is exactly the ruling's
+   own rule, now shown to be **load-bearing rather than theoretical**, because a real dispatching thread is
+   absent from the registry today;
+3. record the **tid census at arm and at terminal**, so an unarmed tid is detected rather than assumed away.
+
+**This does NOT defeat DR feasibility** — the toolkit knows its own host threads and can arm them
+explicitly — **but it does mean the "all-threads-armed" leg cannot be satisfied by trusting the guest
+registry**, and a packet that assumed it could would have produced a silent coverage hole. **The gate is
+therefore recorded as PASSED WITH A REQUIRED DESIGN CHANGE, not as a re-referral trigger.**
