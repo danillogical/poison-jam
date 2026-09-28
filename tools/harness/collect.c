@@ -24,6 +24,295 @@ static unsigned extra_count, extra_next;
 
 static void capture_guest_threads(void);
 
+/* ── A2h slot-write watch (observation only, OFF by default) ─────────────────────────────────
+ *
+ * WHY: the terminal event of the trapped run is a raw-zero indirect call through the kernel thunk
+ * slot at guest VA 0x001C4064 -- a slot whose image content is a valid ordinal-277 thunk and whose
+ * installed value is 0xFE000104. A prior run read 0xFE000104 at every one of 15498 sampled bridge
+ * boundaries and then read 0 at the terminal read, so the change happened in a gap with no
+ * bracketing sample. This watch exists to decide whether the slot was written in that gap, and
+ * whether a guest or a host thread did it.
+ *
+ * NO ADDRESS PAYLOAD CROSSES THE PROCESS BOUNDARY. The child maps the same backing at 29 linear
+ * addresses (canonical plus 28 mirrors) at a fixed stride, so every watched address is computable
+ * HERE from two symbols this collector already resolves:
+ *
+ *     canonical host = g_xbox_mem_offset + 0x001C4064
+ *     alias m host   = g_xbox_mem_offset + (m+1) * ram_size + 0x001C4064     (m = 0..27)
+ *
+ * DR0 matches a LINEAR native address, so the canonical watch does NOT cover the mirrors; the
+ * mirrors are covered by the toolkit's page census, not here. The handshake's job is therefore
+ * only signal -> arm -> acknowledge.
+ *
+ * OFF BY DEFAULT: JSRF_TRACE_A2H_DR is read once and cached. Absent it this file behaves exactly
+ * as before -- no DR is programmed, no single-step event is claimed, no handle mask changes. */
+#define JSRF_A2H_DR_GATE "JSRF_TRACE_A2H_DR"
+#define JSRF_A2H_DR_HANDSHAKE 0xE0424452u   /* distinct from 0xE0424750/0xE0424243/0xE0424943/0xE0424845 */
+#define A2H_SLOT_VA 0x001C4064u
+#define A2H_ALIASES 28u
+/* DR7 = L0 (enable DR0) | RW0 = 01 (write only) | LEN0 = 11 (4 bytes). LE/GE stay CLEAR so the
+ * processor reports the data breakpoint AFTER the storing instruction, which is the ordering the
+ * writer attribution assumes. */
+#define A2H_DR7 0x000D0001u
+/* Bits this instrument owns: L0-G3 (0-7), LE/GE (8-9), RW0/LEN0 (16-19). The readback check
+ * masks to these, because the CPU forces reserved DR7 bit 10 to 1 and an exact compare would
+ * report a correctly armed watch as a failure. */
+#define A2H_DR7_OWNED 0x000F03FFu
+#define A2H_ARM_TID_CAPACITY 256
+#define A2H_DR_HIT_CAPACITY 64
+
+static int read_remote(DWORD64 address, void *buffer, SIZE_T size);
+static DWORD64 symbol_address(const char *name);
+
+static int dr_gate_read, dr_enabled;
+static DWORD64 dr_canonical;
+static unsigned dr_armed, dr_failed, dr_collision, dr_disarmed, dr_disarm_failed;
+static DWORD dr_arm_tids[A2H_ARM_TID_CAPACITY];
+static unsigned dr_arm_tid_count, dr_arm_tid_overflow;
+static struct { DWORD tid; DWORD64 dr0, dr7; } dr_prev[A2H_ARM_TID_CAPACITY];
+static unsigned dr_prev_count, dr_prev_overflow;
+static struct { DWORD tid; DWORD64 dr6, rip; uint32_t value; DWORD64 ticks; } dr_hit[A2H_DR_HIT_CAPACITY];
+static unsigned dr_hits, dr_hit_overflow;
+
+static int dr_on(void)
+{
+    if (!dr_gate_read) { dr_enabled = getenv(JSRF_A2H_DR_GATE) != NULL; dr_gate_read = 1; }
+    return dr_enabled;
+}
+
+/* Resolve the mapping geometry from symbols the collector already reads. Returns 1 when the
+ * canonical host address is known. Called by capture() and, when gated, at the handshake. */
+static int resolve_geometry(void)
+{
+    uint64_t offset = 0, size = 0;
+    DWORD64 addr = symbol_address("g_xbox_mem_offset");
+    if (addr && read_remote(addr, &offset, sizeof(offset)) && offset) {
+        guest_offset = offset;
+        addr = symbol_address("g_xbox_total_ram");
+        if (addr && read_remote(addr, &size, sizeof(size)) && size <= 128 * 1024 * 1024) {
+            ram_base = offset + 0x10000;
+            ram_size = (ULONG)(size - 0x10000);
+        }
+    }
+    dr_canonical = guest_offset ? guest_offset + A2H_SLOT_VA : 0;
+    return dr_canonical != 0;
+}
+
+static int dr_arm_thread(HANDLE thread, DWORD tid, const char *why)
+{
+    CONTEXT context = {0}, back = {0};
+    context.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+    if (!GetThreadContext(thread, &context)) {
+        dr_failed++;
+        fprintf(report, "GUEST_DR_ARM_FAIL tid=%lu why=%s stage=get error=%lu\n", tid, why, GetLastError());
+        return 0;
+    }
+    if (context.Dr1 || context.Dr2 || context.Dr3 || (context.Dr7 & A2H_DR7_OWNED) || context.Dr6) {
+        /* Another debug owner already holds breakpoint state on this thread. Do NOT clobber it:
+         * an unreconciled DR owner makes every hit ambiguous, which is a coverage failure -- not a
+         * reason to overwrite somebody else's watch. */
+        dr_collision++;
+        fprintf(report, "GUEST_DR_ARM_FAIL tid=%lu why=%s stage=collision dr6=%016llX dr7=%016llX\n",
+                tid, why, (unsigned long long)context.Dr6, (unsigned long long)context.Dr7);
+        return 0;
+    }
+    if (dr_prev_count < A2H_ARM_TID_CAPACITY) {
+        dr_prev[dr_prev_count].tid = tid;
+        dr_prev[dr_prev_count].dr0 = context.Dr0;
+        dr_prev[dr_prev_count].dr7 = context.Dr7;
+        dr_prev_count++;
+    } else dr_prev_overflow = 1;
+    context.Dr0 = dr_canonical;
+    context.Dr1 = context.Dr2 = context.Dr3 = 0;
+    context.Dr7 = A2H_DR7;
+    if (!SetThreadContext(thread, &context)) {
+        dr_failed++;
+        fprintf(report, "GUEST_DR_ARM_FAIL tid=%lu why=%s stage=set error=%lu\n", tid, why, GetLastError());
+        return 0;
+    }
+    back.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+    if (!GetThreadContext(thread, &back) || back.Dr0 != dr_canonical ||
+        (back.Dr7 & A2H_DR7_OWNED) != A2H_DR7) {
+        dr_failed++;
+        fprintf(report, "GUEST_DR_ARM_FAIL tid=%lu why=%s stage=readback dr0=%016llX dr7=%016llX error=%lu\n",
+                tid, why, (unsigned long long)back.Dr0, (unsigned long long)back.Dr7, GetLastError());
+        return 0;
+    }
+    dr_armed++;
+    if (dr_arm_tid_count < A2H_ARM_TID_CAPACITY) dr_arm_tids[dr_arm_tid_count++] = tid;
+    else dr_arm_tid_overflow = 1;
+    return 1;
+}
+
+/* Arm every live thread of the child. Called with the install thread STOPPED at the handshake, so
+ * the toolkit's install store cannot execute before this returns. */
+static void dr_arm_all(const char *why)
+{
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    THREADENTRY32 entry = {sizeof(entry)};
+    if (snapshot == INVALID_HANDLE_VALUE) {
+        dr_failed++;
+        fprintf(report, "GUEST_DR_ARM_FAIL why=%s stage=snapshot error=%lu\n", why, GetLastError());
+        return;
+    }
+    if (Thread32First(snapshot, &entry)) do {
+        HANDLE handle;
+        if (entry.th32OwnerProcessID != process_id) continue;
+        handle = OpenThread(THREAD_GET_CONTEXT | THREAD_SET_CONTEXT | THREAD_QUERY_INFORMATION,
+                            FALSE, entry.th32ThreadID);
+        if (!handle) {
+            dr_failed++;
+            fprintf(report, "GUEST_DR_ARM_FAIL tid=%lu why=%s stage=open error=%lu\n",
+                    entry.th32ThreadID, why, GetLastError());
+            continue;
+        }
+        dr_arm_thread(handle, entry.th32ThreadID, why);
+        CloseHandle(handle);
+    } while (Thread32Next(snapshot, &entry));
+    CloseHandle(snapshot);
+}
+
+/* Greppable, self-describing coverage line: a reader must be able to see from stacks.txt alone
+ * whether arming SUCCEEDED, without running a tool. `ok=0` with failed>0 is a coverage failure. */
+static void dr_print_arm_summary(const char *why)
+{
+    fprintf(report, "GUEST_DR_ARM why=%s ok=%d armed=%u failed=%u collision=%u canonical=%016llX "
+                    "aliases=%u dr7=%08llX tids=%u%s%s\n",
+            why, (dr_failed == 0 && dr_armed > 0) ? 1 : 0, dr_armed, dr_failed, dr_collision,
+            (unsigned long long)dr_canonical, A2H_ALIASES, (unsigned long long)A2H_DR7,
+            dr_arm_tid_count, dr_arm_tid_overflow ? " tid_overflow=1" : "",
+            dr_prev_overflow ? " prev_overflow=1" : "");
+    for (unsigned i = 0; i < dr_arm_tid_count; i++)
+        fprintf(report, "GUEST_DR_ARM_TID index=%u tid=%lu\n", i, dr_arm_tids[i]);
+    fflush(report);
+}
+
+static void dr_handshake(DWORD tid)
+{
+    if (!dr_canonical) {
+        /* Symbol resolution needs an initialized symbol handler; capture() has not run yet at the
+         * handshake, so initialize it here. Same options capture() uses, so symbol lookups behave
+         * identically whichever path initializes first. */
+        SymSetOptions(SYMOPT_UNDNAME | SYMOPT_LOAD_LINES | SYMOPT_DEFERRED_LOADS |
+                      SYMOPT_FAIL_CRITICAL_ERRORS);
+        SymInitialize(process, out_dir, TRUE);
+        resolve_geometry();
+    }
+    if (!dr_canonical) {
+        dr_failed++;
+        fprintf(report, "GUEST_DR_ARM why=handshake ok=0 armed=0 failed=%u reason=no_mapping_offset "
+                        "handshake_tid=%lu\n", dr_failed, tid);
+        fflush(report);
+        return;
+    }
+    dr_arm_all("handshake");
+    dr_print_arm_summary("handshake");
+}
+
+/* A #DB in a watched thread. Services ONLY this instrument's DR6.B0: BS (0x4000), B1-B3
+ * (0x2,0x4,0x8) and TF belong to whoever else set them, so a mixed status is passed on and the run
+ * is coverage-uncertain rather than credited with a canonical write. */
+static DWORD dr_handle_single_step(DWORD tid)
+{
+    HANDLE handle = OpenThread(THREAD_GET_CONTEXT | THREAD_SET_CONTEXT | THREAD_QUERY_INFORMATION,
+                               FALSE, tid);
+    CONTEXT context = {0};
+    DWORD64 dr6;
+    uint32_t value = 0;
+    LARGE_INTEGER now;
+    if (!handle) {
+        fprintf(report, "GUEST_DR_HIT_UNSERVICED tid=%lu stage=open error=%lu\n", tid, GetLastError());
+        fflush(report);
+        return DBG_EXCEPTION_NOT_HANDLED;
+    }
+    context.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+    if (!GetThreadContext(handle, &context)) {
+        fprintf(report, "GUEST_DR_HIT_UNSERVICED tid=%lu stage=get error=%lu\n", tid, GetLastError());
+        CloseHandle(handle);
+        fflush(report);
+        return DBG_EXCEPTION_NOT_HANDLED;
+    }
+    dr6 = context.Dr6;
+    if (!(dr6 & 0x1)) {          /* not our B0: pass it on untouched */
+        CloseHandle(handle);
+        return DBG_EXCEPTION_NOT_HANDLED;
+    }
+    /* Post-hit read. The packet is explicit that this value can ALREADY reflect a competing write,
+     * so it is recorded as the raw observation it is; attribution happens offline. */
+    read_remote(dr_canonical, &value, sizeof(value));
+    QueryPerformanceCounter(&now);
+    if (dr_hits < A2H_DR_HIT_CAPACITY) {
+        dr_hit[dr_hits].tid = tid;
+        dr_hit[dr_hits].dr6 = dr6;
+        dr_hit[dr_hits].rip = context.Rip;
+        dr_hit[dr_hits].value = value;
+        dr_hit[dr_hits].ticks = (DWORD64)now.QuadPart;
+        dr_hits++;
+    } else dr_hit_overflow++;
+    fprintf(report, "GUEST_DR_HIT tid=%lu dr6=%016llX rip=%016llX canonical=%016llX value=%08X "
+                    "ticks=%llu\n", tid, (unsigned long long)dr6, (unsigned long long)context.Rip,
+            (unsigned long long)dr_canonical, value, (unsigned long long)now.QuadPart);
+    fflush(report);
+    if (dr6 & ~(DWORD64)0x1) {
+        /* MIXED STATUS: someone else's bit is set in the same DR6. Clearing B0 would be ours to
+         * do, but the event cannot be attributed to this watch alone, so it is not claimed. */
+        fprintf(report, "GUEST_DR_HIT_MIXED tid=%lu dr6=%016llX\n", tid, (unsigned long long)dr6);
+        fflush(report);
+        CloseHandle(handle);
+        return DBG_EXCEPTION_NOT_HANDLED;
+    }
+    context.Dr6 = dr6 & ~(DWORD64)0x1;   /* clear ONLY the owned status */
+    if (!SetThreadContext(handle, &context))
+        fprintf(report, "GUEST_DR_HIT_UNSERVICED tid=%lu stage=clear_dr6 error=%lu\n", tid, GetLastError());
+    CloseHandle(handle);
+    fflush(report);
+    return DBG_CONTINUE;
+}
+
+/* Teardown: the ruling requires STRUCTURAL proof the instrument is disarmed, so every thread's DR7
+ * is written back and read back, and the result is printed. */
+static void dr_disarm_all(void)
+{
+    HANDLE snapshot;
+    THREADENTRY32 entry = {sizeof(entry)};
+    if (!dr_on() || !dr_canonical) return;
+    snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) {
+        fprintf(report, "GUEST_DR_DISARM ok=0 reason=snapshot error=%lu\n", GetLastError());
+        fflush(report);
+        return;
+    }
+    if (Thread32First(snapshot, &entry)) do {
+        HANDLE handle;
+        CONTEXT context = {0}, back = {0};
+        if (entry.th32OwnerProcessID != process_id) continue;
+        handle = OpenThread(THREAD_GET_CONTEXT | THREAD_SET_CONTEXT | THREAD_QUERY_INFORMATION,
+                            FALSE, entry.th32ThreadID);
+        if (!handle) { dr_disarm_failed++; continue; }
+        context.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+        if (!GetThreadContext(handle, &context)) {
+            dr_disarm_failed++; CloseHandle(handle); continue;
+        }
+        context.Dr0 = context.Dr1 = context.Dr2 = context.Dr3 = 0;
+        context.Dr7 = 0;
+        if (!SetThreadContext(handle, &context)) {
+            dr_disarm_failed++; CloseHandle(handle); continue;
+        }
+        back.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+        if (!GetThreadContext(handle, &back) || (back.Dr7 & A2H_DR7_OWNED) || back.Dr0) {
+            dr_disarm_failed++;
+            fprintf(report, "GUEST_DR_DISARM_FAIL tid=%lu dr0=%016llX dr7=%016llX\n",
+                    entry.th32ThreadID, (unsigned long long)back.Dr0, (unsigned long long)back.Dr7);
+        } else dr_disarmed++;
+        CloseHandle(handle);
+    } while (Thread32Next(snapshot, &entry));
+    CloseHandle(snapshot);
+    fprintf(report, "GUEST_DR_DISARM ok=%d cleared=%u failed=%u dr7_nonzero=%u hits=%u hit_overflow=%u\n",
+            dr_disarm_failed == 0 ? 1 : 0, dr_disarmed, dr_disarm_failed, dr_disarm_failed,
+            dr_hits, dr_hit_overflow);
+    fflush(report);
+}
+
 static int read_remote(DWORD64 address, void *buffer, SIZE_T size)
 {
     SIZE_T got = 0;
@@ -129,18 +418,7 @@ static int capture(DWORD fault_tid, const EXCEPTION_DEBUG_INFO *fault)
     if (!SymInitialize(process, out_dir, TRUE))
         fprintf(report, "SymInitialize failed: %lu\n", GetLastError());
     /* Include the canonical guest RAM once, not all 32 mirror mappings. */
-    {
-        uint64_t offset = 0, size = 0;
-        DWORD64 addr = symbol_address("g_xbox_mem_offset");
-        if (addr && read_remote(addr, &offset, sizeof(offset)) && offset) {
-            guest_offset = offset;
-            addr = symbol_address("g_xbox_total_ram");
-            if (addr && read_remote(addr, &size, sizeof(size)) && size <= 128 * 1024 * 1024) {
-                ram_base = offset + 0x10000;
-                ram_size = (ULONG)(size - 0x10000);
-            }
-        }
-    }
+    resolve_geometry();
     capture_gpu_snapshot(fault ? "unhandled_exception" : "capture", fault_tid, 0);
     snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
     if (snapshot != INVALID_HANDLE_VALUE && Thread32First(snapshot, &thread)) do {
@@ -149,7 +427,12 @@ static int capture(DWORD fault_tid, const EXCEPTION_DEBUG_INFO *fault)
         STACKFRAME64 frame = {0};
         DWORD64 previous = 0;
         if (thread.th32OwnerProcessID != process_id) continue;
-        handle = OpenThread(THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, thread.th32ThreadID);
+        /* THREAD_SET_CONTEXT is REQUIRED for the gated A2h DR watch: without it SetThreadContext
+         * fails on every thread and the instrument would silently arm nothing. It is requested
+         * unconditionally because the flag is inert when the watch is off -- the collector's own
+         * behaviour with the gate absent is unchanged. */
+        handle = OpenThread(THREAD_GET_CONTEXT | THREAD_SET_CONTEXT | THREAD_QUERY_INFORMATION,
+                            FALSE, thread.th32ThreadID);
         if (!handle) continue;
         context.ContextFlags = CONTEXT_ALL;
         fprintf(report, "THREAD %lu%s\n", thread.th32ThreadID,
@@ -337,6 +620,23 @@ int main(int argc, char **argv)
         }
         if (event.dwDebugEventCode == CREATE_PROCESS_DEBUG_EVENT) {
             if (event.u.CreateProcessInfo.hFile) CloseHandle(event.u.CreateProcessInfo.hFile);
+        } else if (event.dwDebugEventCode == CREATE_THREAD_DEBUG_EVENT) {
+            /* A NEW THREAD MUST BE ARMED WHILE IT IS STOPPED. This event is delivered before the
+             * thread executes its first instruction, so arming here is the only point at which the
+             * gated watch can be complete for a thread's whole life. Arming after ContinueDebugEvent
+             * would leave a window in which the new thread could perform a watched write unarmed --
+             * which is exactly the UNKNOWN/coverage failure the packet refuses to accept. */
+            if (dr_on()) {
+                if (resolve_geometry()) {
+                    if (!dr_arm_thread(event.u.CreateThread.hThread, event.dwThreadId, "create_thread"))
+                        dr_print_arm_summary("create_thread");
+                } else {
+                    dr_failed++;
+                    fprintf(report, "GUEST_DR_ARM_FAIL tid=%lu why=create_thread reason=no_mapping_offset\n",
+                            event.dwThreadId);
+                }
+            }
+            if (event.u.CreateThread.hThread) CloseHandle(event.u.CreateThread.hThread);
         } else if (event.dwDebugEventCode == LOAD_DLL_DEBUG_EVENT) {
             if (event.u.LoadDll.hFile) CloseHandle(event.u.LoadDll.hFile);
         } else if (event.dwDebugEventCode == EXCEPTION_DEBUG_EVENT) {
@@ -349,6 +649,21 @@ int main(int argc, char **argv)
                 dump_ok = capture(0, NULL);
                 exit_code = 3;
                 finished = 1;
+            } else if (code == EXCEPTION_SINGLE_STEP && dr_on()) {
+                /* The only #DB this collector claims is the one it armed. Everything else (an
+                 * external single-step, a debugger's own breakpoint) is passed on untouched. */
+                continuation = dr_handle_single_step(event.dwThreadId);
+            } else if (code == JSRF_A2H_DR_HANDSHAKE && exception->dwFirstChance && dr_on()) {
+                /* A2h install handshake. The toolkit raises this FIRST-CHANCE at its thunk-install
+                 * callback and does not perform the install store until this thread is continued,
+                 * so arming here provably precedes the install write. Observation only: no guest
+                 * register, memory or device state is touched, and the toolkit's own VEH still
+                 * receives the exception afterwards (DBG_EXCEPTION_NOT_HANDLED).
+                 *
+                 * With the gate OFF this branch does not exist, so the exception takes the generic
+                 * first-chance path below and the child behaves exactly as it did before. */
+                dr_handshake(event.dwThreadId);
+                continuation = DBG_EXCEPTION_NOT_HANDLED;
             } else if (code == 0xE0424750 && exception->dwFirstChance) {
                 /* Cooperative GPU observation. The target's handler receives
                  * the exception afterward; this never indicates GPU success. */
@@ -377,6 +692,7 @@ int main(int argc, char **argv)
         ContinueDebugEvent(event.dwProcessId, event.dwThreadId, continuation);
     }
     CloseHandle(job); /* also kills the child on collector failure */
+    if (dr_on()) dr_disarm_all();
     CloseHandle(process);
     fclose(report);
     snprintf(path, sizeof(path), "%s\\result.json", out_dir);
