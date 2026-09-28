@@ -272,9 +272,22 @@ pass-through, not a local computation. **`sub_0014A83E` is itself called from se
 1. **Whether this is the failing path is NOT established.** The failing invocation ran from
    `esp=0x00F7FCF0`; matching that frame to a caller requires the frame identity, which the archived logs do
    not name. **The other candidate (`0x0014A6D6`, `arg2 = MEM32(ebp+0x14)`) is not excluded.**
-2. **The generated `PUSH32` macro's exact `esp` semantics were not read** — the offsets above are derived
-   from the *disassembly's* cdecl convention, which is the right basis, but a future packet should confirm
-   the macro matches rather than assume it. **That is a checked-in-tooling question, not a reasoning one.**
+2. ~~**The generated `PUSH32` macro's exact `esp` semantics were not read.**~~ **RESOLVED, and it CONFIRMS
+   the derivation.** `src/recomp/gen/recomp_types.h:670-674`:
+
+```c
+#define PUSH32(sp, val) do { \
+    uint32_t _pv = (uint32_t)(val); \
+    (sp) -= 4; \
+    MEM32(sp) = _pv; \
+} while(0)
+```
+
+   **`val` is evaluated BEFORE `esp` is decremented** — so in `PUSH32(esp, MEM32(esp + 8))` the read uses
+   the **pre-decrement** `esp`, which on entry is `arg1`. **The offset derivation above is therefore
+   correct, not assumed**, and the header even documents the convention (*"where push [esp+N] reads the
+   operand before adjusting ESP"*). **`sub_0014A83E` genuinely passes its own `arg1` through as the
+   callee's `arg2`** — a real parameter of a `cdecl, 2 params` function, not a read past its parameters.
 
 **This is exactly the shape the packet's `O-OTHER-INPUT` row describes** — *"distinguish title data,
 translated ABI, or another device at this one producer"* — and the remaining question is small and bounded:
