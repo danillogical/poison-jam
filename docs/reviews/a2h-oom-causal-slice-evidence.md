@@ -109,7 +109,7 @@ python -X utf8 scripts\a2h-oom-slice.py --log logs/runs/20260927-160330-655-a4b2
 **The XBE hash matches in both archives and on disk.** *(A Session check reported a false mismatch by
 comparing a lowercase computed digest against an uppercase expected string; case-normalised, it matches.)*
 
-### The causal chain is **semantically identical** across a trap run and a no-trap run
+### The causal chain is **semantically identical** across two runs five days and one build apart
 
 | Field | R1 | A2g | Same |
 |---|---|---|---|
@@ -419,7 +419,11 @@ widening it would be synthetic completion** — it would not make a 571 MB *comm
 
 ## What this establishes, and what it does not
 
-**Establishes:** the trap is **not a necessary cause** (reproduced without it on an older build); the chain
+**Establishes:** the failure **predates the A4b2 trap work** — it reproduces on a **different exe five days
+earlier**, with all 94 invocation sizes identical index-for-index, the same size, type, OOM tuple and
+terminal ICALL; and it is **not trace-caused** (R1 has `RECOMP_APU_TRACE` with 401 `[APUMMIO]` lines; A2g has
+none; trace is observation-only). **The trap is NOT established as unnecessary** — all 35 archived runs
+carrying this request are trapped; the chain
 is deterministic and semantically identical across builds; the failing invocation is uniquely bound
 (index 93, `0x00149E50`, `esp=0x00F7FCF0`, size `598869040`, type `0x801000`); the same site passes a normal
 `2097200` on its **first** visit from a **different frame**; the only in-region writer of `[ebp-0x24]` is a

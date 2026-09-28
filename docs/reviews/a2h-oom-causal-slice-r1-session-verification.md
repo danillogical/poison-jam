@@ -24,7 +24,14 @@ The Session characterised the OOM from archived runs and the original XBE (`docs
 and sent it to the Planner mid-authoring. **The Planner revised the packet around it**, and the revision is
 correct on three points:
 
-1. **It dropped the trap as a necessary cause.** The no-trap A2g run
+1. **It dropped the trap as a necessary cause.** ~~The no-trap A2g run~~
+   **CORRECTION (acceptance stage 2): the A2g run IS TRAPPED** — `metadata.json`'s `settings` dict sets
+   `RECOMP_APU_TRAP=1` and its log line 26 says *"trapped for MMIO"*. The Session had read
+   `run_profile.effective_settings`, found it empty, and reported "ABSENT".
+   **What survives is narrower and still correct: the failure predates the A4b2 trap work** — it reproduces
+   on a different exe five days earlier, with all 94 invocation sizes identical index-for-index. **The strong
+   "trap is not necessary" claim is withdrawn.** The Planner's decision to drop trap-*causation* as the
+   packet's premise remains right; only the evidentiary basis is narrowed.
    (`20260922-224429-003-a2g-304f0-span`) shows the identical request, refusal and NULL ICALL. The packet
    cites that log directly.
 2. **It made the primary question the size's producer** — *"which instruction and live input defined

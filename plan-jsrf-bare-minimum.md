@@ -130,6 +130,38 @@ OOM tuple and terminal ICALL).
 is **reading an absent record as a negative measurement** — the same error class as the earlier `[GP*]`-zeros
 mistake and the byte-width writer census.
 
+> ### Stage 2 (`deepseek-v4.1-flash`) also returned `NOT ACCEPTED`, on criterion 2 only — and it was right
+>
+> **Criterion 1 (the parser fixture) it ruled `AGREED`**, and it verified the fix more sharply than stage 1:
+> it **discriminated the two guards** rather than assuming. The bytes guard rejects `--verify
+> 0x00149E23:8345dc20`; **but the *alignment* guard is independently real** — supplying the bytes *genuinely
+> at* `0x00149E23` (`008345dc`) passes the bytes check and **still rejects**, decoding to
+> `add byte ptr [ebx + 0x6a20dc45], al` — *"precisely the plausible-garbage hazard the packet exists to
+> prevent."* It also confirmed the fix is **additive** (the pre-fix command still yields the identical
+> `A11C55FE…B8B600C` stage 1 recorded), and gave the census the **positive control stage 1 lacked**:
+> **657 runs are untrapped-observable, and 0 of them carry the request** — so the absence claim now has the
+> coverage witness §2.4.5 requires.
+>
+> **Criterion 2 it kept `DISAGREED`, correctly: the Session added correction BANNERS but never swept the
+> document BODIES.** The withdrawn claim survived **unflagged in six places**, including a **conclusions
+> list** re-asserting the exact sentence the banner declares withdrawn, a **section heading**, and a
+> **document title**. **All six are now corrected**, plus one more the Session found in this plan's own
+> findings table.
+>
+> **The lesson is a process one worth carrying:** a correction banner is not a correction. **When a claim is
+> withdrawn, every assertion of it must be swept, not just the section that discussed it.** The Session
+> treated the banner as sufficient and it was not.
+>
+> **Stage 2 advisories recorded:** (a) `verify_instruction` is a **citation verifier, not a boundary oracle**
+> — a 1-byte claim at a non-boundary can pass, because the guard only catches misalignment when the decoded
+> length differs from the claimed length; (b) **the frozen packet's own premise text** (`a2h-oom-causal-slice.md`
+> lines 7, 9, 16) still says "no-trap A2g" and is now known-false — **a frozen packet may not be edited
+> (§2.2.4), so it is recorded here** so a future reader does not take the premise as established;
+> (c) the measured **behavioural** trap difference (A2g *"STUBBED - passthrough mode"* with **0** `[APUMMIO]`
+> vs R1's pinned DSP56300 with **401**) is now measurable and is recorded as a **limit**: **how deeply A2g's
+> stub intercepted APU behaviour is not measured**, which is precisely why the **narrow** claim is the right
+> one.
+
 ### What was established
 
 | Finding | Witness |
@@ -167,7 +199,7 @@ steps 3–4 were not entered), **no toolkit change, no runtime change, no instru
 
 | Finding | Witness |
 |---|---|
-| **The trap is NOT a necessary cause** | The chain is **semantically identical** in a trapped run and a **no-trap** run on a **different exe** five days earlier: 94 invocations, failing index **93**, site `0x00149E50`, `esp=0x00F7FCF0`, size `598869040`, type `0x801000`, same OOM tuple, same ICALL `(0x0, 00F7FD00, 0014982E)` |
+| **The failure predates the A4b2 trap work** | The chain is **semantically identical** on a **different exe** five days earlier (`2cd0472a256e9d` vs `bc8e288dd54d`): **all 94 invocation sizes identical index-for-index**, failing index 93, site `0x00149E50`, `esp=0x00F7FCF0`, size `598869040`, type `0x801000`, same OOM tuple, same ICALL `(0x0, 00F7FD00, 0014982E)`. **It is also not trace-caused** (R1 has `RECOMP_APU_TRACE` with 401 `[APUMMIO]` lines; A2g has none). **The trap is NOT shown to be unnecessary** — all 35 archived runs carrying this request are trapped |
 | **The chain is now bound to the producer** | `RegionSize = align16([ebp+0x10]) + 0x20` — producer **`0x0014980E mov [ebp-0x24], eax`**, value from **`[ebp+0x10]`, the function's 3rd argument**. **Reproduces both observed sizes exactly**, both pre-add values exact multiples of 16 |
 | **The producer's function** | **`sub_001497DC`** (`0x001497DC`–`0x00149F48`, `recomp_0003.c:20105`). **It is frameless and inherits the caller's frame** (`ebp = g_seh_ebp; /* fpo_leaf */`), so `[ebp+0x10]` is an offset in the *caller's* frame |
 | **The failing argument was pointer-shaped** | `≈0x23B20410`, far outside the 64 MB RAM window (`0x04000000`) — **the caller passed a pointer-like value where a size belongs** |

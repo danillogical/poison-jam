@@ -1,4 +1,4 @@
-# `A2h` mechanism — the heap-OOM is a **guest allocation failure with no NULL guard**, and it is **not** trap-caused
+# `A2h` mechanism — the heap-OOM is a **guest allocation failure with no NULL guard**, and it **predates** the A4b2 trap work
 
 **Session:** `session-9f8c9988-38fb-4cc9-a188-a6881a52559a`, 2026-09-27, DSH.
 **Why this record exists:** the Advisor named `A2h` the critical path — *"the trapped crash at ≈4.77 s blocks
@@ -53,7 +53,7 @@ whatever A4b2 changed.** **The trap-era runs reach the same pre-existing failure
 request are trapped**, so the archive cannot separate trap-necessity either way. **The strong claim is
 withdrawn; the build-independence claim stands.**
 
-## 3. The full chain, from the no-trap run
+## 3. The full chain, from the A2g run (an earlier build, five days before the a4b2 work)
 
 ```
 [KERNEL] #5519: ordinal 184 (slot 10) esp=0x00F7FCF0 ret=0x00149E50
@@ -179,8 +179,11 @@ virtual request in this title is legitimate is a separate question the packet ma
   a correctly-reported failure.
 - **The implausible size (Defect A) is a bounded backward question** — `[ebp-0x24]` at `0x00149E24` — and it
   is the thing that actually needs explaining, because a *correct* size would not fail at all.
-- **The trap is a red herring for causation.** It is *how the path becomes reachable sooner* in a4b2-era
-  runs, which is why trapped runs die at 4.77 s and untrapped ones reach the pending-word hang instead.
+- **The trap is NOT established as a red herring.** The correlation is real — a4b2-era **trapped** runs die
+  at 4.77 s while **untrapped** ones reach the pending-word hang instead — but **all 35 archived runs carrying
+  this request are trapped**, so this archive **cannot separate trap-necessity either way**. **The withdrawn
+  strong claim is replaced by the narrow one:** the failure **predates** the A4b2 trap work, and is **not
+  trace-caused**.
   **So "fix A2h to extend trapped observation" may be the wrong frame**: the honest frame is *"the trapped
   path reaches a pre-existing guest defect at 4.77 s."*
 
