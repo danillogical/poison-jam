@@ -5,6 +5,7 @@
 #include <windows.h>
 #include "recomp/gen/recomp_types.h"
 #include "diagnostics.h"
+#include "xbox_memory_layout.h"
 
 extern void sub_0017CEC0(void);
 extern recomp_func_t jsrf_lookup_recovered(uint32_t va);
@@ -61,6 +62,31 @@ void recomp_icall_not_code_log(uint32_t va)
         fprintf(stderr, "  [A2HSLOT] terminal tid=%lu target=%08X slot=%08X live=%08X call=#%u observed=%u\n",
             GetCurrentThreadId(), va, 0x001C4064u, MEM32(0x001C4064u),
             jsrf_slot_latch_self_call_index(), jsrf_slot_latch_self_observed());
+    }
+
+    /* ── THE FOURTH READ, AND THE TERMINAL MARKER ──────────────────────────────────────────────
+     *
+     * THIS IS THE READ SITE'S OWN SEAM. `0x00193E62 mov eax,[esi+0x1C4]` loads the poll-callback
+     * slot; `0x00193E68 test eax,eax` skips the call when it is zero; `0x00193EB5 call eax` calls it
+     * otherwise. When that value is NOT code -- the observed failure, target 0x001D5078 -- the
+     * generated sequence routes through the hook that reaches this function, so `va` IS the value
+     * that read produced rather than a reconstruction of it:
+     *
+     *     loc_00193E62: eax = MEM32(esi + 0x1C4); ... RECOMP_ICALL_SAFE(eax, ...)
+     *
+     * THE READ INDEX IS NOT GUESSED. The value the installer deposits at the slot is 0x0015F9D0,
+     * whose body is `inc dword ptr [0x265174]; ret` (verified from the original XBE), so the dword
+     * at guest 0x00265174 counts exactly the NON-FATAL consumptions of this same call site. A raise
+     * is therefore read number `counter + 1`: the guest's own count, read live, rather than a
+     * sampled log's. Nothing is written to that counter and nothing about the call is altered.
+     *
+     * GATED SEPARATELY from the two older gates. This record belongs to the live slot-write watch, so
+     * it must appear whenever that watch is on and must be absent when it is off; the environment is
+     * read through the toolkit so the gate is consulted exactly once. */
+    if (xbox_A2hSlotWatchEnabled()) {
+        uint32_t handler_calls = MEM32(0x00265174u);
+        xbox_A2hSlotWatchNoteFourthRead(va, handler_calls + 1u);
+        xbox_A2hSlotWatchTerminal(va);
     }
     fflush(stderr);
     /* Preserve the first bad call before SAFE fallback can rewind arguments

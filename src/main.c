@@ -340,6 +340,22 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
     if (xbox_Nv2aMirrorFence(0x0019DCE0u, 0x30u, 0x34u) != 0)
         fprintf(stderr, "[NV2A] fence mirror registration failed\n");
 
+    /* ── THE A2h LIVE SLOT-WRITE WATCH ─────────────────────────────────────────────────────────
+     *
+     * ARMED HERE, AND ONLY HERE, because this is the first point at which the title's own device is
+     * known to be live: `MEM32(0x0019DCE0)` is a POINTER to an object JSRF allocates at runtime, so
+     * the slot `+0x242C` has no address before that allocation. Arming earlier would read a zero and
+     * protect nothing; hardcoding 0x0019D62C would protect whatever happened to be there. The
+     * toolkit re-reads the pointer, derives the slot by checked 32-bit addition, protects that page
+     * in the canonical view and in every mapped mirror alias, and re-derives it again at TERMINAL.
+     *
+     * It is called AFTER AddVectoredExceptionHandler above and AFTER the toolkit's own handlers are
+     * installed, so the VEH order a reader re-verifies is the order that was actually in force.
+     * Gated by JSRF_TRACE_A2H_SLOTW: with it unset this call returns immediately, no page is
+     * protected, no thread is created and nothing is printed -- the run is byte-for-byte the run it
+     * was before this existed. */
+    xbox_A2hSlotWatchStart();
+
     g_esp = XBOX_STACK_TOP;
     recomp_diag_thread_start(YOUR_GAME_ENTRY_POINT, XBOX_STACK_BASE, XBOX_STACK_TOP + 16);
 
@@ -364,6 +380,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
 
     xbox_kernel_shutdown();
     nv2a_hook_shutdown();
+    xbox_A2hSlotWatchStop();
     xbox_MemoryLayoutShutdown();
     free(xbe_data);
     return 0;
