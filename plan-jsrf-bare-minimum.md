@@ -100,7 +100,70 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-callback-slot-writer-trace-r1` (**discovery**: ONE edge — what writes `software_device+0x242C`?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+## CURRENT PACKET — `A2h-callback-slot-writer-trace-r1` **EXECUTED → `O-OPEN`**, `ACCEPT-WITH-CORRECTIONS`; **the corrections MOVE the edge — successor next**
+
+- **Packet:** `docs/packets/a2h-callback-slot-writer-trace.md`, frozen
+  **`C5FD9CAA405819255E0FF63DE35DB21E7F41E3F16E3B392842BF5CD44CD32A76`** — **not edited**.
+- **Evidence:** `docs/reviews/a2h-callback-slot-writer-trace-evidence.md` (`cb2715b`); **Session verification**
+  `docs/reviews/a2h-callback-slot-writer-trace-session-verification.md` (`fc0b389`); **stage-1 review**
+  `docs/reviews/a2h-callback-slot-writer-trace-acceptance-review.md` (`db5e197`); **acceptance record**
+  `docs/reviews/a2h-callback-slot-writer-trace-acceptance-record.md` (`4c36bcc`).
+
+### ✅ CONFIRMED — the strong results
+
+| Result | Value |
+|---|---|
+| **exactly ONE direct store covers `software_device+0x242C`** | **`0x0018CE3A`**, base `ecx = MEM32(0x19dce0)` |
+| **the alignment-INDEPENDENT backstop** | a raw scan for displacement **`2C 24 00 00`** returns **EXACTLY ONE hit image-wide** |
+| **the installer path** | `sub_0018CE30` reachable **only** by two constant-argument `jmp`s; single caller passes **`ebx = 0`** ⇒ installs **`0x15F9D0`** |
+| **the forwarding thunk `sub_00153790`** | **sole rel32 reference image-wide; ZERO raw dword occurrences** |
+
+### ⚠ THE CORRECTIONS — and they change WHICH edge a successor must resolve
+
+**CORRECTION A — the named edge pointed at the WRONG ARGUMENT.** The Worker said `ebp` derives from **arg3**;
+**it derives from ARG1.** *Verified from the stack arithmetic:* at `0x00199DC3` `mov eax,[esp+0x20]` resolves
+to `[E+0xC]` = **ARG3**, but after **two more pushes** the **SAME displacement** at `0x00199DD9` resolves to
+`[E+4]` = **ARG1**. **So the range is `[arg1, arg1+arg3−1]`, and a successor resolving the thunk's THIRD
+argument would close nothing.** **⚠ The Session's own verification record repeated this error.**
+
+**CORRECTION B — a SECOND genuinely open store, so "closed to a single store" is UNSUPPORTED.** The Worker
+excluded **`0x0018DF59`** because `0x242C − 0xa78 = 0x19B4` was said **not** to be divisible by 4.
+**`0x19B4 = 6580`, and `6580 / 4 = 1645` EXACTLY — the exclusion is FALSE.** That store has base
+`edi = MEM32(0x19DCE0)`, index **`esi = arg1` (unbounded)**, and writes **`ebx` — an arbitrary caller word.**
+
+> **TWO open stores, not one:**
+> **`0x00199F45`** — index **`arg1 = 2064`**; and **`0x0018DF59`** — index **`arg1 = 1645`**, **writing an
+> arbitrary value.**
+
+**Also corrected:** `0x0018DF87` reaches the slot **arithmetically** but writes the constant `0xFFFFFFFF`, so
+it is excluded on **that (value) ground**, not the ground given.
+
+**CORRECTION C — the shift-check: the SESSION was right, the Worker mis-computed.** Settled by a third party
+from the bytes: `v0 = 0x30766A64`, `v1 = 0x3030766A`, `(v1 & 0x00FFFFFF) = 0x0030766A == (v0 >> 8)`. **PASSES.**
+**The Worker reported `0x00766A`, dropping the `0x30` byte, and recorded a MANDATED CONTROL as FAILED when it
+passed.**
+
+**Row `O-OPEN` — correct**, and the reviewer notes Correction B makes it *"more clearly right."*
+
+### ⚠ The Session's own structural finding — the thunk is a VTABLE entry
+
+**`docs/reviews/a2h-thunk-parent-dispatch-table.md`** (`42dd8db`): **`sub_00153790` is entry 51 of a
+52-entry vtable at `0x001E1270`**, installed at **`object+0x00`** by a **teardown path**
+(`0x00152244 mov dword ptr [esi], 0x1e1270` after `dec [esi+0x608]` reaches zero).
+
+**So the thunk's argument question is really: where is vtable index 51 dispatched, and what does that caller
+pass?**
+
+### What the successor must carry — FOUR things, not one
+
+1. **`0x00199F45`** — index **`arg1 = 2064`**.
+2. **`0x0018DF59`** — index **`arg1 = 1645`**, **writes an arbitrary caller word.**
+3. **the thunk's argument question, now correctly ARG1** (and framed as vtable index 51).
+4. **the context alias at `[eax+0xc]`** — still independent.
+
+**Next:** a successor packet carrying all four edges.
+
+**Toolkit:** `37226b2` local / `571982d` pushed (**no-push state**). **Game:** `4c36bcc`.
 
 - **Packet:** `docs/packets/a2h-callback-slot-writer-trace.md`, **17 lines**, **7231 bytes**, frozen
   **`C5FD9CAA405819255E0FF63DE35DB21E7F41E3F16E3B392842BF5CD44CD32A76`** — **this is the packet to execute.**
