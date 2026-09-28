@@ -1,4 +1,4 @@
-# `A2h-arming-coverage-repeat-r1` — execution evidence: **K = 3, agreement complete, ROW `O-READ-PATH`**
+# \A2h-arming-coverage-repeat-r1\ — execution evidence: **K = 3, agreement complete, ROW \O-COVERAGE\** (Planner reversed \O-READ-PATH\)
 
 **Session:** `session-9f8c9988-38fb-4cc9-a188-a6881a52559a`, 2026-09-28, DSH.
 **Packet:** `A2h-arming-coverage-repeat-r1`, frozen
@@ -62,7 +62,48 @@ coverage-complete TARGETs (runs 2 and 5). **K = 3 ≥ 2.**
 
 ---
 
-## ✅ THE ROW IS SELECTED — **`O-READ-PATH`** → `A2h-terminal-read-path-audit`, narrowly
+## ⚠ ROW **SUPERSEDED** — the Planner REVERSED `O-READ-PATH` to **`O-COVERAGE`**
+
+**The Planner's first ruling (below) selected `O-READ-PATH`. It then REVERSED that ruling on the
+`PREMISE_CHANGED` from the DR0 positive control failure.** **The Session verified both of the Planner's source
+citations and they are exact.**
+
+**The predecessor frozen packet ALREADY required a native DR0 record and said the software control cannot
+substitute** — `docs/packets/a2h-slot-read-path-displacement.md:27`:
+
+> *"The install write **MUST cause a native DR0 record** … **the frozen latch's own `install_seen=1`,
+> `install_ok=1`, raw=`0x80000115` and installed=`0xFE000104` are required IN ADDITION TO the trapped write**,
+> not inferred from a printed line. The old `jsrf_slot_latch_install` callback at `:9325-31` occurs **BEFORE**
+> that store and **cannot itself count as a trapped-install witness**."*
+
+**And a missing trapped install selects `O-COVERAGE` — the packet SAW THIS COMING** —
+`docs/packets/a2h-slot-within-run-attribution.md:19`:
+
+> *"**A missing canonical install trap is `O-COVERAGE`, never no-write: live `#DB` chance semantics and
+> all-thread arming have not yet been proven in the game.**"*
+
+**So the frozen contract anticipated exactly this outcome and prescribed the row in advance.**
+
+**The Planner's own words:** *"I incorrectly treated software `install_ok` as a positive DR firing control.
+Aliases + reads remain certified but cannot satisfy the required canonical/DR leg; K=3 reproducibility of
+terminal/control/census, not a certified writer row."*
+
+### The corrected row
+
+| Row | Status |
+|---|---|
+| **`O-READ-PATH`** | **WITHDRAWN** — it required the DR leg to contribute, and the DR leg has never certified anything |
+| **`O-COVERAGE` → `A2h-slot-write-coverage-provenance`** | **SELECTED** — per the packet's own line 19/25 trigger |
+
+**What `K = 3` still buys, unchanged: REPRODUCIBILITY** of the terminal triple, the install control and the
+census across three independent realizations. **It does not buy a certified writer row, and it never did.**
+
+**The first ruling is retained below, superseded, per this line's rule that corrections name what they
+supersede.**
+
+---
+
+## Superseded — the Planner's first ruling, `O-READ-PATH` *(withdrawn above)*
 
 **Planner ruling (frozen-contract interpretation):** `docs/reviews/a2h-repeat-row-interpretation.md`,
 committed `1b0a7b8`. **The Session escalated the tension rather than deciding it; the Planner ruled, and its
