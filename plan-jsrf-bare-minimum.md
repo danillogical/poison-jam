@@ -100,13 +100,17 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-named-producer-frame-r1` **DRAFT committed, awaiting Session verification before promotion**
+## CURRENT PACKET — `A2h-named-producer-frame-r1` **DRAFT in progress; NOT verified, NOT promoted**
 
-**`A2h` is ACCEPTED and CLOSED** (stage 2, final). The Planner has authored the successor packet:
+**`A2h` is ACCEPTED and CLOSED** (stage 2, final). The Planner is authoring the successor packet
 **`docs/packets/a2h-named-producer-frame.md`**, revision **`A2h-named-producer-frame-r1`**, class
-**discovery**, **37 lines**, draft SHA-256
-**`CA0FDB6AACF1DF46108EC67A9BEEDE991C82657ADE7D790D90BD744C51DC7DF7`** — **committed as a draft at
-`6eb66ce`, NOT yet verified or promoted.**
+**discovery** — **currently `Status: draft` and still being written by the Planner child.**
+
+> **No hash is pinned here, deliberately.** An earlier revision of this block quoted a draft hash read
+> **while the Planner was still writing**, and the file changed underneath it. **A hash is pinned only at
+> freeze, after the authoring agent has settled and the value has been read stable three times** — the same
+> promotion discipline this project has had to learn more than once. The packet is **not verified and not
+> promoted**, and **no command or path in it has been validated yet.**
 
 **The Planner decided discovery, not change** — *"no cause-specific safe implementation while the
 pre-add local's producer remains unknown"* — so **no Muse shape preflight**. Its key finding, which the
@@ -117,8 +121,9 @@ packet requires a frame/register/stack identity witness and models call ABI expl
 three-push sites as leads rather than positive attribution.** **That refutes the Session's narrowing**, and
 the Session has swept the invalid claim out of the evidence record and the plan bodies.
 
-**Next:** verify the packet's exact commands, paths and identities, then freeze and promote (§5.3), then
-execute. **No change packet is authorized** — *"consider a change only after cause is established."*
+**Next:** wait for the Planner to settle, **then** verify the packet's exact commands, paths and identities,
+**then** freeze and promote (§5.3), **then** execute. **No change packet is authorized** — *"consider a
+change only after cause is established."*
 
 ---
 
