@@ -100,7 +100,50 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-named-producer-frame-r1` **DRAFT in progress; NOT verified, NOT promoted**
+## CURRENT PACKET — `A2h-named-producer-frame-r1` (**discovery**: which caller frame supplied the failing word?) — **PROMOTED 2026-09-27, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-named-producer-frame.md`, revision **`A2h-named-producer-frame-r1`**, class
+  **discovery**, frozen SHA-256
+  **`2333B6523B39866F1AEB9C1BEFFE1CCE42176E35BA3ADB86F8965A265BF88887`** (**37 lines**). **This is the packet
+  to execute.** Promotion byte-identical with no revision (§5.3); hash verified **3× over ~12 s**, matching
+  the Planner's own report. Verification:
+  `docs/reviews/a2h-named-producer-frame-r1-session-verification.md`.
+- **Adequacy:** the **writing Planner's** own §5.3 two-question review — **`ADEQUATE`**, `BLOCKING: NONE`,
+  `PREMISE_FRESHNESS: BOUNDED`. **Correct for a discovery**; **no shape preflight**.
+- **The question:** on the **same failing invocation** (index 93, `ret=0x00149E50`, `esp=0x00F7FCF0`,
+  `size=598869040`, `type=0x801000`), **which verified direct-call return PC and inherited frame address own
+  the word read at `0x00149800` as `[ebp+0x10]`, what value was actually read, and can a specific caller write
+  to that exact address be positively linked to it?**
+- **Rows:** `O-IDENTITY` (provenance discovery) · **`O-FRAME-ARG`** (a **proved reaching call-site write to
+  that exact address** → named-argument-origin discovery) · **`O-FRAME-OTHER`** (a **specific other witnessed
+  writer** → named-frame-writer discovery) · **`O-OPEN`** (no unique link, ambiguity, coverage gap, unsafe
+  seam, overflow → one missing-witness/tooling discovery; Advisor referral if bounded observation is
+  infeasible). **No row is a fix.**
+- **It applies the Planner's verified refutation of the Session's narrowing:** `sub_001497DC` is
+  **`fpo_leaf`** reading **inherited `g_seh_ebp`**, so `[ebp+0x10]` belongs to the **caller's frame** and
+  **all eight call sites have a frame**. The two three-push sites are **leads, not attribution**; the eight
+  must be reconciled against **all indirect/other entries** with an **explicit unresolved entry class** if
+  not exhaustive; **calls must be modelled as transfer/return/cleanup, not fall-through**; and
+  **`g_seh_ebp` must be traced across the helper `sub_0017D1F8`** rather than assumed preserved.
+- **It keeps the interval honest:** `0x23B20410` is the **aligned pre-add** value, **not** automatically the
+  exact unaligned input — the possible input interval is **`0x23B203F1..0x23B20410`**.
+- **It does NOT inherit the refuted premise:** the Planner states explicitly that the predecessor's
+  *"no-trap A2g"* text (lines 7, 9, 16) **is refuted by acceptance and not inherited** — verified.
+- **Deliverable:** extend the **existing tested** `scripts/a2h-oom-slice.py` + tests (31 OK), plus at most
+  **one** off-by-default `JSRF_TRACE_A2H_FRAME=1` observation-only hook **only if a safe non-generated seam
+  exists** — otherwise the row is **`O-OPEN`**, not permission to improvise. **No seam, no run.**
+- **Commands validated:** both checkers work on the R1 archive (which is correctly reported
+  *"Not usable for an IMAGE-CONTENT claim"*); `run-jsrf.py` accepts the named flags; and
+  **`JSRF_TRACE_A2H_FRAME` does not exist yet** — it is the packet's own deliverable.
+- **Forbids verified present:** no suppressing the trap or `0x80`, no faking the allocation, no widening the
+  arena, no bypassing the NULL call, no guest error-handling change; **`PIO_FREE` stays DEFERRED**;
+  `A4b2-r7`/`A4b2-r8`/`A4b1-r4` not reopened; `0xFFFFB3` **`UNRESOLVED`**; P4 bridge required before any
+  toolkit inheritance.
+
+**Next:** execute — the **offline bounded audit** first; a bounded 8-second diagnostic capture **only if** a
+safe seam exists; then §5.8 acceptance.
+
+**Toolkit:** `c151d4e` (unchanged). **Game:** `d82f388`.
 
 **`A2h` is ACCEPTED and CLOSED** (stage 2, final). The Planner is authoring the successor packet
 **`docs/packets/a2h-named-producer-frame.md`**, revision **`A2h-named-producer-frame-r1`**, class
