@@ -100,7 +100,75 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-live-slot-write-r1` **PARKED at ON-3**; **two structural defects adjudicated, packet being revised**
+## CURRENT PACKET — `A2h-slot-writer-attribution-r2` (**discovery**: LIVE attribution under the corrected shape) — **PROMOTED 2026-09-28, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-slot-writer-attribution.md`, **r2**, **18 lines**, **7922 bytes**, frozen
+  **`E209D1F4A4405F0B266E8D4DEFDA77A481A277D27615BFAE9ACB9F7A3A6C6378`** — **this is the packet to execute.**
+  Validation: `docs/reviews/a2h-slot-writer-attribution-r2-session-validation.md`.
+  **Supersedes the draft `d3cd8ae` (`C2DD3ED8…AA27`).**
+- **Authority:** `a2h-page-granularity-classifier-ruling.md` (`0709d5c`) — **the ruling IS the preflight; no
+  second preflight if applied verbatim.**
+
+### The ONE question
+
+**Does a writer other than the installer write `software_device+0x242C`, and with what value?**
+
+### ⚠⚠ DEFECT 1 — the page-granularity flaw is STRUCTURAL (found by the Planner)
+
+**`VirtualProtect` is PAGE-GRANULAR and the slot is at offset `0x62C` of page `0x0019D000`.** **So leaving the
+page RW after a NON-SLOT write ALSO makes the slot writable — the instrument would go BLIND after the first
+traffic write (ON-3 had 9 077).** **The Advisor: *"the dilemma is structural at page granularity, not
+choreography"***; **option (b) is *"strictly dominated."***
+
+> **ACCEPTED SHAPE: RE-ARM AFTER EVERY WRITE (option (a)) — accepting the window as a STATED LIMIT — PLUS A
+> REQUIRED TERMINAL-VALUE COHERENCE GATE.** **Last-recorded slot value vs terminal read; MISMATCH ⇒
+> `UNKNOWN`.** ***"Windows threaten only unrecorded writes; recorded positives stand."***
+>
+> **The worked example is ON-3's own numbers:** **last-recorded `0x0015F9D0` vs terminal `0x001D5078`
+> mismatches ⇒ `UNKNOWN`** — **the mismatch IS the gate working.**
+
+### ⚠⚠ DEFECT 2 — the classifier PARADIGM is VOID (categorically)
+
+> **"Native RIPs in recompiled code NEVER carry guest encodings, so EVERY guest-byte classification ever
+> emitted from a fault RIP is UNSOUND."**
+
+**⚠ NO ENCODING CLASSIFICATION FROM A FAULT RIP MAY BE CITED AS EVIDENCE — including `enc=3` on ON-3 and the
+`enc` fields on ON-1/ON-2.**
+
+**Replacement:** **range-based guest/host classification** (`RIP ∈ recompiled-module bounds` vs
+`toolkit/host image`, else UNKNOWN) **+ optional native-disasm corroboration.** **GUEST-BYTE EXPECTATIONS ARE
+FORBIDDEN FOR NATIVE RIPs.** **And *"the `0x7B3` residual dies with the paradigm — DO NOT FIX ITS
+ARITHMETIC."***
+
+### ✅ What the live phase already PROVED
+
+| Result | Value |
+|---|---|
+| **the page-protection watch WORKS** | **9 078 AVs, 9 035 steps, `rearm_failed=0`** — **the first write-watch on this line that ever fired** |
+| **Q3(c) caught a REAL bug** | **the canonical alias protected a page 64 KiB BELOW the slot** — fixed |
+| **the corrected page is right** | **the trap fired at host `0x001AD62C`** |
+| **values are trustworthy** | **cross-validation clean, 285–317 checks each, zero mismatches** |
+| **the `0x001D5078` terminal reproduced** | **with the ICALL 4-cycle and the same registers** |
+
+### The phases — ONE packet, fix + rerun together
+
+| Phase | What | Gate |
+|---|---|---|
+| **Exp0** | **range-based classifier proof** — **OFFLINE** | **proof passes** |
+| **Exp1** | **control run** — **installer trap MUST fire**, range-classified + loss accounting | **control GREEN** |
+| **Exp2** | **bounded attribution** — **N≤5 pre-specified, early-stop, K≥2-agree** | **zero qualifying ⇒ report + RE-REFER** |
+
+**Order: classifier fix → coherence gate → attribution read.** **No third-run extensions.**
+
+### ⚠ The Session's four withdrawn claims, recorded as ONE pattern
+
+**"no competitor wrote the slot"**, **"the control is green"**, **"the chain is tied"**, **and the `0x7B3`
+residual** — **all four were the same error: promoting an observation into a conclusion the instrument did
+not support.**
+
+**Next:** implement the corrected classifier + coherence gate; Exp0 → Exp1 → Exp2.
+
+**Toolkit:** `4f06907` local / `571982d` pushed (**no-push state**). **Game:** `b980f13`.
 
 - **Packet:** `docs/packets/a2h-live-slot-write.md`, frozen
   **`8F3C6291C42ED3D9C3B96D879A9BB9D46391E5FEEA3F4BDC1E8712F46FFF7D4F`** — **not edited**.
