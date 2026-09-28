@@ -95,6 +95,31 @@ under `jsrf-run-profiles.md:260-262`):
 **Sub-question 1 is the prerequisite and should be asked first**: it is what makes the others well-posed,
 and my own byte-width scan demonstrates how easily a writer census can be wrong by width.
 
+## A further measured fact: the gate byte **is** mutable, so cross-call state changes are real
+
+The mutual exclusion above holds **within one pass**, and its force depends on whether `[esi+0x12]`'s bit 0
+can change between passes. **It can.** A full-width scan finds **16 writers to offset `+0x12`**, of which
+the following target `[esi+0x12]` directly:
+
+| Writer | Form | Effect on bit 0 |
+|---|---|---|
+| `recomp_0005.c:10471`, `:11309`, `:12370`, `:12884`, `:13664`, `:14148` | `MEM16(esi+0x12) = LO16(eax)` | **sets it from a register** |
+| `recomp_0005.c:14946`, `:15330` | `MEM16(esi+0x12) = LO16(ecx)` | **sets it from a register** |
+| `recomp_0005.c:43740` | `MEM8(esi+0x12) = LO8(edx)` | **sets it from a register** |
+| `recomp_0005.c:11234` | `… & 0x7FFF` | preserves bit 0 |
+| `recomp_0005.c:12875`, `:15294` | `… & 0x111` | preserves bit 0 |
+| `recomp_0005.c:14160` | `… & 0xFDFF` | preserves bit 0 |
+| `recomp_0005.c:15224` | `… & 0xFEFF` | preserves bit 0 |
+
+**Nine writers set bit 0 from a register**, and the four masking writers all use masks whose bit 0 is set,
+so none of them clears it. **So bit 0 is genuinely mutable by other code**, and the cross-call route is
+**open, not excluded**: one pass could write `[esi+0x64]` with bit 0 clear, a later call could set bit 0,
+and the following pass would then poll the field the earlier pass left behind.
+
+**This is why the leaf cannot be closed from the enclosing function alone**, and why sub-question 1
+(object identity) is the prerequisite: without knowing which writers share the polled instance, neither the
+field's possible values nor the gate's cross-call history is defined.
+
 ## What this record does not establish
 
 **No hardware semantics** — the five leaves (units, capacity, drain, overflow, ordering) remain `UNKNOWN`.
