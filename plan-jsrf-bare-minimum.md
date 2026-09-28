@@ -132,10 +132,10 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
   `find 0xFE820010` works (28); the packet's claim that the **`0x` prefix is mandatory is correct** (bare hex
   is rejected); `game/mygame_analysis.json` exists (17 047 bytes) and `inspect-jsrf.py:29,70` really reads it;
   and the two "missing" paths are the packet's **own deliverables**, not prerequisites.
-- **Deliverables:** `scripts/pio-free-demand.py` + `scripts/test_pio_free_demand.py` — a **checked-in, tested
-  classifier** that must **fail on malformed input** and must **reject a mid-instruction start** rather than
-  silently decode. **The 15/13 census and the `k × byte[+0x64]` lead must be re-derived by that tool before
-  use**, and `001A3F24` specifically needs reaching-definition resolution.
+- **Deliverables (not yet existing — the packet creates them):** a checked-in, tested classifier under
+  `scripts/`, with a matching unit-test module, that must **fail on malformed input** and must **reject a
+  mid-instruction start** rather than silently decode. **The 15/13 census and the `k × byte[+0x64]` lead must
+  be re-derived by that tool before use**, and `001A3F24` specifically needs reaching-definition resolution.
 - **Scope:** offline only. Diagnostic parser/tests, JSON and an evidence record. **No guest run, no build, no
   toolkit runtime change, no instrumentation.**
 
