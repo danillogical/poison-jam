@@ -100,7 +100,37 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-dr0-terminal-snapshot-r1` **EXECUTED → `P1-UNKNOWN`** — **DR LEG DROPPED (terminal ceiling)**; line disposition pending Advisor
+## CURRENT PACKET — `A2h-rdata-call-target-r1` (**discovery**: why does the guest call a `.rdata` ADX filename?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-rdata-call-target.md`, **22 lines**, **7820 bytes**, frozen
+  **`31343C167746872A501A21C6D558F52B897A7CD571E43C9EB016D42341152593`** — **this is the packet to execute.**
+  Validation: `docs/reviews/a2h-rdata-call-target-r1-session-validation.md`.
+- **NEW LINE, opened because the NULL line is RETIRED at its ceiling** (`docs/reviews/a2h-null-line-closure.md`):
+  the slot read zero at two independent terminal reads, zero alias touches across a complete 28/28 census, and
+  **the canonical-write channel is UNCERTIFIABLE**. **DR is dead; read-path is DEAD, not deferred.**
+- **The question:** why does the guest perform an indirect call targeting **`0x001D5078`**, a `.rdata` address
+  containing **`"djv000_0.adx"`**?
+- **`STATIC-FIRST`, per the Advisor:** locate the labelled caller, validate the table boundary and indexing,
+  back-slice the `eax` definition, and bound the object from `ecx`/`esp` — **all from the XBE and generated
+  source, anchored to `loc_` labels.** *"NEVER byte-scan from an inferred code boundary or disassemble ASCII at
+  `0x001D5078` as code."* **Instrumentation: NONE pre-authorized**; a named static gap plus a separate scoped
+  proposal is required, and **`O-OPEN` if no safe lossless seam exists.**
+- **The Session's static analysis, carried as a LEAD:** **59 repetitions of `0x001D5078`, ALL stride 8**, in a
+  candidate `.rdata` table beginning guest **`0x001D4BD4`**; the strings are a **packed ADX filename table**
+  (`effect_*.adx`, then `djv*.adx`). **The table START is UNPROVEN** — the first hit may be interior — so the
+  packet is right to refuse to treat raw-scan alignment as authority.
+- **The registers are MORE deterministic than the packet claims:** **FOUR realizations**, across three run
+  sets, are **byte-identical** including `esp` — `eax=0x001D5078 ecx=0x007BFFBC edx=0x00000293 esp=0x007BFF9C`.
+  *(The packet says two; corrected in the validation record.)*
+- **Rows:** `O-IDENTITY` → `NON-TARGET` → **`O-DATA-AS-CALL`** → **`O-ALTERNATE-PATH`** → `O-OPEN`. **Both
+  positive rows require a COMPLETE reaching-definition chain**, so neither is reachable on partial evidence.
+- **Scope:** **this terminal alone.** Float-bit siblings (`0x3E800000`, `0x41200000`) stay **contrastive**;
+  per-terminal classification before any family claim. **The retired NULL line and its DR records are excluded
+  as row inputs.**
+
+**Next:** execute the static-first steps 1–4 offline; instrument only for a named gap; then §5.8 acceptance.
+
+**Toolkit:** `37226b2` (unpushed — pending acceptance). **Game:** `8ffa531`.
 
 - **Packet:** `docs/packets/a2h-dr0-terminal-snapshot.md`, frozen
   **`969E8827CC3D36AA8AFBF7D4FF7D43609BB750312723AAFBCE7ADFA5CA48F7EE`** — **not edited**.
