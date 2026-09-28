@@ -130,6 +130,42 @@ OOM tuple and terminal ICALL).
 is **reading an absent record as a negative measurement** — the same error class as the earlier `[GP*]`-zeros
 mistake and the byte-width writer census.
 
+> ### The acceptance took FOUR rounds, and every round found a real defect — none of them by the author
+>
+> **This is recorded because it is the strongest available argument for the acceptance stage existing.**
+> Four rounds, four real defects, **none found by the author re-reading his own work** — each found because a
+> reviewer with a different method replayed the claim against real bytes.
+>
+> | Round | Finding | Whose |
+> |---|---|---|
+> | 1 | **Banners added, bodies never swept** — the withdrawn claim survived unflagged in six places | **mine** |
+> | 2 | **The sweep's pattern was too narrow** — it searched `no-trap` while the survivor spelled it `NO trap` | **mine** |
+> | 3 | **The fix malformed a table row** — a stray `|` left 3 cells against a 2-cell header | **mine** |
+> | 4 | **The new guard failed on CORRECT input** — `cells()` promised escaped-pipe handling it did not have, so it passed *by luck of the corpus* | **mine** (new non-contract code) |
+>
+> **And the guard the reviewer's round-3 diagnosis prompted immediately found a fifth, pre-existing defect no
+> reviewer had reported:** `docs/jsrf-run-profiles.md:92` was **born malformed at `ad400294`** (2026-09-22),
+> missing its third cell, sitting in a durable evidence-rules document. **The reviewer corrected the
+> provenance** — `7f63c45` merely carried it forward.
+>
+> **Three distinct failure modes, each now guarded against rather than remembered:**
+> 1. **A correction banner is not a correction** — sweep the bodies.
+> 2. **A sweep is only as good as its pattern** — enumerate the claim, not a spelling of it.
+> 3. **A change applied to the sentence in front of you can break the structure it sits in** — hence
+>    `tests/test_markdown_tables.py`, a **machine check** rather than a resolution to be more careful.
+>
+> **The guard is correct by construction, not by luck.** Its first version passed only because none of the
+> four guarded documents happened to contain an escaped pipe; the reviewer demonstrated it would report
+> **correct** rows (`| \`A\|B\` | … |`, `| \`GS |= 1\` | … |`) as malformed. It now skips escaped characters
+> and backtick code spans, and **replaying it over the historical revisions still catches both real defects**
+> while HEAD is clean. **12 tests.**
+>
+> **Recorded for a possible future widening:** 767 markdown files scanned → 36 mismatching rows across 24
+> files, of which **27 are escaped-pipe artifacts, 6 backtick artifacts, and 3 genuine** —
+> `a4b2-r7-execution-evidence.md:54-56`, three real 2-cell rows under a 3-cell header **in an accepted
+> packet's execution evidence**, where a missing cell means a column of measurements is silently absent.
+> **Fix the counting first, then widen** — widening today would yield 3 real hits against 33 false positives.
+
 > ### Stage 2 (`deepseek-v4.1-flash`) also returned `NOT ACCEPTED`, on criterion 2 only — and it was right
 >
 > **Criterion 1 (the parser fixture) it ruled `AGREED`**, and it verified the fix more sharply than stage 1:
