@@ -905,3 +905,169 @@ python -X utf8 -c "import importlib.util as u;s=u.spec_from_file_location('g','t
 # scope scan: 767 markdown files, 36 mismatching rows in 24 files
 #   27 escaped-pipe artifacts, 6 backtick-span artifacts, 3 genuine (a4b2-r7-execution-evidence.md:54-56)
 ```
+
+---
+
+# Stage 2 re-verification (round 5, final) — repair commit `1e1e041` → HEAD `a19052c`
+
+**Scope:** the Session fixed the guard's counting and asked for the final bounded re-check of three items.
+**Commit under verification: `1e1e041`.** The tree advanced one further commit during my review
+(`a19052c`, plan documentation only — see R5.0). **Both are covered below.**
+
+**All three requested checks pass.** The packet's substantive obligations are fully discharged. **This round
+is `ACCEPT`.** One latent, unrealized edge case and one commit-identity note are recorded as advisories.
+
+## R5.0 Commit identity — HEAD is `a19052c`, not `1e1e041` (advisory, not a defect)
+
+The Session stated `1e1e041`. **`git rev-parse HEAD` returns `a19052c`** — one commit later
+(*"plan: record the four acceptance rounds, and the fifth defect the guard found"*), touching
+**`plan-jsrf-bare-minimum.md` only** (+36 lines, documentation). **The guard is byte-identical between the
+two** (`git diff 1e1e041..HEAD -- tests/test_markdown_tables.py` is empty), so **the verified artifact is the
+same one the Session submitted**; only the documentation moved. §2.4.7 does not reopen anything here — the
+code under review is unchanged — but I record the identity so the review binds to the right bytes.
+`git status --porcelain` is **empty**; **frozen packet `E9CDB1B3…41108C` re-verified and untouched**.
+
+## R5.1 (i) My counterexamples now count correctly — **CONFIRMED**
+
+I re-ran my exact round-4 counterexamples against the new `cells()`:
+
+| Input | True cells | New `cells()` | Verdict |
+|---|---|---|---|
+| `` \| `A\\\|B` \| clears it \| `` (escaped pipe inside backticks) | 2 | **2** | **PASS** |
+| `` \| `GS \|= 1` \| sets it \| `` (backtick span containing `\|=`) | 2 | **2** | **PASS** |
+| `\| x \\\| y \| 2 \|` (escaped pipe, plain text) | 2 | **2** | **PASS** |
+| `` \| `\|= 4` \| meaning \| `` (backtick `\|=` in first cell) | 2 | **2** | **PASS** |
+| `` \| first \| `GS \|= MCPX_AC97_CODEC_READY;` \| third \| `` (backtick `\|=` **middle** cell) | 3 | **3** | **PASS** |
+| `\| a \| b \| c \|` / `\| a \| b \|` (ordinary rows, controls) | 3 / 2 | **3 / 2** | **PASS** |
+
+**All seven correct.** The counting is now correct **by construction**: `cells()` walks the row, skips escaped
+characters (`\\` + next) and toggles on backtick spans, counting a `|` as a delimiter only when it is outside
+a code span and unescaped. **The docstring no longer promises a branch that does not exist** — the promised
+*"says so rather than guessing"* behaviour is now a real named predicate,
+`has_unescaped_pipe_ambiguity()`, which I confirmed exists and returns the right answers
+(`True` for both constructs, `False` for an ordinary row).
+
+## R5.2 (ii) The guard still catches both real defects — **CONFIRMED against real bytes**
+
+I replayed the **new** guard logic over the actual historical revisions, as I did in round 4:
+
+| Revision replayed | Required | Result |
+|---|---|---|
+| `7d798af` `plan-jsrf-bare-minimum.md` (my round-3 stray pipe) | CAUGHT | **CAUGHT** — `255: 3 cells vs header 2` |
+| `7f63c45` `docs/jsrf-run-profiles.md` (pre-existing missing cell) | CAUGHT | **CAUGHT** — `92: 2 cells vs header 3` |
+| `b183c79` HEAD, both files | clean | **clean** |
+| `1e1e041` HEAD, both files | clean | **clean** |
+
+**The counting fix did not blunt the guard.** I also attacked the new code adversarially to see whether the
+backtick handling could **hide** a genuinely malformed row: a stray pipe (`| a | b |; stray |` → flagged),
+extra cells with and without spans (`| a | `x` | b | c |` → flagged), and a span in the first cell
+(`` | `a` | b | c | `` → flagged) are **all still caught**. The positive control in the suite
+(`test_guard_still_catches_a_real_defect_alongside_escaped_pipes`) is real and meaningful.
+
+**And the fix is already proving itself in production.** The round-history table `a19052c` added to the plan
+contains the row `` > | 3 | **The fix malformed a table row** — a stray `|` left 3 cells against a 2-cell
+header | **mine** | ``, whose cell text contains **a literal pipe inside backticks**. I confirmed the **old**
+`cells()` scores that correct row as **4 cells against a 3-cell header — a false positive** — and the **new**
+one scores it **3, correctly**. **The Session's own prose about the defect would have tripped the buggy
+guard.** That is the clearest possible demonstration that the round-4 fix was necessary and works.
+
+## R5.3 (iii) The 12 tests pass, and all six suites — **CONFIRMED**
+
+| Suite | Result |
+|---|---|
+| `tests.test_markdown_tables` | **Ran 12 tests — OK**, exit 0 |
+| `tests.test_agent_docs` | Ran 30 tests — OK |
+| `tests.test_recorded_reviews` | Ran 178 tests — OK |
+| `tests.test_run_profiles` | Ran 31 tests — OK |
+| `scripts.test_pio_free_demand` | Ran 29 tests — OK |
+| `scripts.test_a2h_oom_slice` | Ran 31 tests — OK |
+
+**12 test methods** in the guard file, matching the count the runner reports. **The Session's "six suites
+pass" claim reproduces.**
+
+## R5.4 Both repaired rows remain correct at HEAD
+
+| Row | State |
+|---|---|
+| `plan-jsrf-bare-minimum.md:291` (moved from `:255` by `a19052c`) | **3 pipes against the 3-pipe header at L289**; contains the narrow claim (*"the failure predates the A4b2 trap work … The trap is NOT shown to be unnecessary"*); **contains no assertion of the withdrawn claim** |
+| `docs/jsrf-run-profiles.md:92` | **4 pipes against the 4-pipe header at L87** |
+
+**Criterion-2 sweep at HEAD** (semantic pattern, all four documents): every hit is inside a correction
+banner, the new round-history block, a defect list, the corrected ledger, a struck-through line, or the
+withdrawal statement itself. **No surviving assertion of the withdrawn claim.** The census reproduces a
+**fourth** time: 719 run directories → **35 carrying `598869040` → 35 trapped, 0 untrapped**; positive
+control **657** untrapped-observable runs, **0** carrying the request.
+
+## R5.5 Disposition — `ACCEPT`
+
+Every mandatory criterion is now `AGREED`:
+
+| Criterion | Disposition | Basis |
+|---|---|---|
+| **1** — parser tests cover the packet's named fixtures | **AGREED** (round 1, not reopened) | 31 tests OK; 9 boundary tests; mid-instruction start rejected against the real XBE by both a bytes guard and an independently-confirmed alignment guard; all named fixtures covered. No a2h tool/code change since (`git diff e1dd3e2..HEAD -- scripts/a2h-oom-slice.py` empty) |
+| **2** — artifacts match the commands / the A2g characterisation | **AGREED** (this round) | Trap state confirmed (`settings.RECOMP_APU_TRAP=1`; log line 26 trapped); the strong claim is **withdrawn and fully swept** — no surviving assertion in any document; the surviving narrow claim is build/trace-independence only and stays inside stage 1's behavioural caveat; census reproduces 35/0 with a coverage witness; correction banners, bodies, ledger and titles all corrected |
+
+Per §2.2, `ACCEPT` requires every mandatory criterion `AGREED`. **All are. `DISPOSITION: ACCEPT`.**
+
+**What this acceptance does and does not establish.** It establishes that the discovery packet's artifacts
+exist, match the commands, and select the recorded outcome row, and that its records now characterise A2g
+truthfully. **It satisfies no strict criterion** — no boot, audio, GPU, liveness or device claim — and
+nothing here says anything works (§5.8).
+
+**Note for the record:** the two criteria were both `DISAGREED` at stage 1 and were carried to stage 2 by
+§2.2. Criterion 1 was resolved in round 1; criterion 2 required four further rounds. **Every round found a
+real defect, and none of the four was found by the author re-reading his own work** — each was found by
+replaying a claim against real bytes rather than trusting a summary. That is the acceptance stage doing
+exactly what it exists for, and the Session has recorded it in the plan and the evidence record.
+
+## Advisories (outside the contract — do not change the disposition)
+
+1. **Latent edge case: an unclosed backtick span can hide a malformed row.** `cells("| a | b | `c |")`
+   returns **2** (matching a 2-cell header) so the row is **not flagged**, whereas CommonMark treats an
+   unclosed backtick as literal text, making the row genuinely 4 cells. **The `has_unescaped_pipe_ambiguity()`
+   predicate does detect it (`True`)** — but the predicate is exercised only in tests, not wired into the
+   document check, so it reports nothing in practice. **Measured exposure: zero today.** All four guarded
+   documents contain **0** rows with an odd backtick count; repo-wide there is exactly **1** such row
+   (`docs/packets/p0-review-records.md:391`), and it is **correctly flagged anyway** (0 cells vs header 2).
+   So this is a **latent class with no realized false negative**, and it does not affect this packet. **If the
+   guard is ever widened** (my round-4 scope note), consider gating on the predicate or rejecting rows with an
+   odd backtick count. **A guard whose diagnostic predicate is never called is a check that reports nothing.**
+2. **Commit identity.** HEAD is `a19052c`, one documentation-only commit past the stated `1e1e041`; the
+   verified guard is byte-identical between them (§R5.0).
+3. **Three genuine malformed rows remain outside the guard's scope**, found by my round-4 scope scan and
+   recorded by the Session: `docs/reviews/a4b2-r7-execution-evidence.md:54,55,56` — three real 2-cell rows
+   under a 3-cell `| Item | R1 | R0 |` header, in an **accepted** packet's execution evidence, where a
+   missing cell means a column of measurements is silently absent. **Not this packet's contract**; worth a
+   separate bounded look. The Session has recorded this and the "fix the counting first, then widen" ordering.
+
+## Uncertain
+
+1. **Whether the guard should be widened to `docs/**`.** I gave the scope data (767 files, 36 mismatching
+   rows: 27 escaped-pipe + 6 backtick artifacts + 3 genuine) and the recommendation to fix counting first —
+   which the Session followed. **Widening is a policy choice for the Session/Planner, not a criterion here.**
+2. **The disposition of advisories 1 and 3** is a judgment-layer call (§2.2.6). Neither affects any mandatory
+   criterion, and neither is in this packet's contract; I record them as leads.
+
+## Round-5 reproduction commands
+
+```powershell
+git rev-parse --short HEAD ; git status --porcelain        # a19052c, clean
+git diff 1e1e041..HEAD -- tests/test_markdown_tables.py    # empty: guard identical to the stated commit
+(Get-FileHash docs\packets\a2h-oom-causal-slice.md -Algorithm SHA256).Hash   # E9CDB1B3…41108C
+
+# (i) my counterexamples
+python -X utf8 -c "import importlib.util as u;s=u.spec_from_file_location('g','tests/test_markdown_tables.py');g=u.module_from_spec(s);s.loader.exec_module(g);print([g.cells(r) for r in [r'| `A\|B` | clears it |','| `GS |= 1` | sets it |',r'| x \| y | 2 |','| a | b | c |']])"   # [2, 2, 2, 3]
+# and the promised predicate:
+#   has_unescaped_pipe_ambiguity(r'| `A\|B` | x |') -> True ; ('| a | b |') -> False
+
+# (ii) replay over real bytes (new logic): 7d798af plan:255 CAUGHT, 7f63c45 profiles:92 CAUGHT, HEAD clean
+#      the fix in production: plan:143 contains a literal `|` inside backticks -> OLD cells()=4 (false
+#      positive), NEW cells()=3 (correct)
+
+# (iii) suites
+python -X utf8 -m unittest tests.test_markdown_tables        # Ran 12 tests ... OK
+python -X utf8 -m unittest tests.test_agent_docs tests.test_recorded_reviews tests.test_run_profiles `
+  scripts.test_pio_free_demand scripts.test_a2h_oom_slice    # all OK
+
+# census (4th run): 719 dirs -> 35 carrying 598869040 -> 35 trapped, 0 untrapped; control 657/0
+```

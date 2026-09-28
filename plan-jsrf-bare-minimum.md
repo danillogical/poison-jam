@@ -100,7 +100,66 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-oom-causal-slice-r1` **EXECUTED 2026-09-27 → `O-OPEN`**, chain bound to the producer; **acceptance: stage 1 `NOT ACCEPTED` → both defects fixed → stage 2 running**
+## CURRENT PACKET — `A2h-oom-causal-slice-r1` **ACCEPTED 2026-09-27** (`O-OPEN`, chain bound to the producer); next work is the caller identification
+
+**`ACCEPT`** — stage 2, final, every mandatory criterion `AGREED`. Acceptance record:
+`docs/reviews/a2h-oom-causal-slice-acceptance-record.md`. Reviews:
+`a2h-oom-causal-slice-acceptance-review.md` (stage 1) and `a2h-oom-causal-slice-stage2-acceptance-review.md`
+(stage 2, rounds 1–5). **No new guest run, no toolkit change, no runtime change, no instrumentation.**
+**Frozen packet `E9CDB1B3…41108C` verified unchanged and untouched through all five rounds.**
+
+**§5.8:** the acceptance confirms artifacts exist, match the commands, and select the recorded row.
+**It satisfies no strict criterion** — nothing here says anything works.
+
+### The acceptance took five rounds — recorded as the argument for the stage existing
+
+| Round | Finding | Whose |
+|---|---|---|
+| 1 | **Banners added, bodies never swept** — the withdrawn claim survived unflagged in **six** places | Session |
+| 1 | **A required parser fixture was missing** — it existed only in a docstring; the tool had no disassembly surface | Session |
+| 2 | **The sweep's pattern was too narrow** — searched `no-trap`, survivor spelled `NO trap` | Session |
+| 3 | **The fix malformed a table row** — a stray `|` left 3 cells against a 2-cell header | Session |
+| 4 | **The new guard failed on CORRECT input** — it passed *by luck of the corpus* | Session |
+
+**None of the five was found by the author re-reading his own work** — each came from a reviewer
+**replaying a claim against real bytes**. And the guard prompted by round 3 **immediately found a sixth,
+pre-existing defect no reviewer had reported**: `jsrf-run-profiles.md:92`, **born malformed at `ad400294`**,
+missing its third cell in a durable evidence-rules document.
+
+**Three failure modes, each now guarded rather than remembered:** (1) a correction banner is not a
+correction — sweep the bodies; (2) a sweep is only as good as its pattern — enumerate the **claim**;
+(3) a change applied to the sentence in front of you can break the structure it sits in — hence
+`tests/test_markdown_tables.py`, a **machine check**, now correct **by construction** and verified to still
+catch both real defects.
+
+### What was established
+
+| Finding | Witness |
+|---|---|
+| **The failure predates the A4b2 trap work** | Different exe (`2cd0472a256e9d` vs `bc8e288dd54d`), five days earlier, **all 94 invocation sizes identical index-for-index**, same size/type/OOM tuple/terminal ICALL. **Not trace-caused.** **The trap is NOT shown to be unnecessary** — **all 35** runs carrying the request are trapped |
+| **The chain is bound to the producer** | `RegionSize = align16([ebp+0x10]) + 0x20`; producer **`0x0014980E`**; value from **`[ebp+0x10]`, the 3rd argument**; **reproduces both observed sizes exactly** |
+| **Dominance, doubly derived** | Two independent CFG methods agree: 46 reaching, **2 writers**, single entry, call **unreachable** with writers removed; the `movzx` writer **never reaches the call** |
+| **The arena and toolkit behaved correctly** | `alloc_type 0x801000` is `MEM_COMMIT`, **no `MEM_RESERVE`**; bridge returns `0xC0000017`; the guest then calls through NULL |
+
+### Next authorized work
+
+**An `A2h-named-producer` discovery** naming `[ebp+0x10]` of `sub_001497DC` at `0x0014980E`, with **the
+caller's identity** as its remaining question. **Bounded lead already recorded:** 8 call sites, only **two**
+push three arguments, and one (`sub_0014A83E`) **passes its own `arg1` through** as the callee's `arg2` —
+with the `PUSH32` macro's pre-decrement evaluation **verified in source**. **Whether that is the failing path
+is NOT established.** **No change packet is authorized** — *"consider a change only after cause is
+established."*
+
+**Advisories carried forward:** the guard's **unclosed-backtick** latent edge case (zero current exposure;
+wire the predicate in if widened); and **three genuine malformed rows outside the guard's scope** at
+`a4b2-r7-execution-evidence.md:54-56`, in an accepted packet's evidence, where a missing cell means **a column
+of measurements is silently absent**.
+
+**Toolkit:** `c151d4e` (unchanged). **Game:** `a19052c`.
+
+---
+
+## Previous — `A2h-oom-causal-slice-r1` **EXECUTED 2026-09-27 → `O-OPEN`**, chain bound to the producer; **acceptance: five rounds → `ACCEPT`**
 
 **Row as selected: `O-OPEN`.** Evidence: `docs/reviews/a2h-oom-causal-slice-evidence.md`. Binding:
 `docs/reviews/a2h-oom-causal-slice-binding.json`. **No new guest run was needed or performed**, **no toolkit
