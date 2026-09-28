@@ -77,12 +77,34 @@ evidence is unambiguous:
 
 | Witness | trapped (4.77 s) | untrapped (31.71 s) |
 |---|---|---|
-| `[GPBOOT]` blocks | **1** | **0** |
-| `[GPWATCH]` latch lines | **5** | **0** |
-| `[APUMMIO] read 0x20010` (the `PIO_FREE` poll) | **58** | **0** |
-| `[GPDMA] watch va=803C0810` (the clear) | **2** — `cas=ok`, `3→0` then `2→0` | **0** |
-| `Wf` (pending word at end) | cleared | **still `3`** |
+| `[GPBOOT]` blocks | **1** | **0** — *but see the caveat below: tracing was off* |
+| `[GPWATCH]` latch lines | **5** | **0** — *same caveat* |
+| `[APUMMIO] read 0x20010` (the `PIO_FREE` poll) | **58** | **0** — *same caveat* |
+| `[GPDMA] watch va=803C0810` (the clear) | **2** — `cas=ok`, `3→0` then `2→0` | **0** — *same caveat* |
+| `Wf` (pending word at end) | **NOT reportable** — this run's dump is `CONTENT_MISMATCH` | **still `3`** (its dump **is** mapping-valid) |
 | **`F`** — `stacks.txt` lines in `sub_001A1769` | **0** | **2** |
+
+> ### ⚠ Which of these are actually evidence
+>
+> **The untrapped run has `RECOMP_APU_TRACE` absent and `RECOMP_APU_TRAP` absent**, so it emits **zero
+> `[GP*]` lines by design** — `AC-DEFAULT2` *requires* zero `[GP*]` lines in a default run. **So the four
+> zero columns above are NOT evidence that the GP never booted; they are the expected consequence of
+> tracing being off.** I initially read `GPBOOT=0` as evidence and it is not. Recorded because it is the
+> same error class as the rest of this project's: reading an absent record as a negative measurement.
+>
+> **The evidence that actually carries the hang conclusion is the two rows that come from artifacts
+> unaffected by tracing:**
+>
+> - **`F=2`** — `stacks.txt` places the untrapped guest inside the `loc_001A18D0` **pending-word** spin
+>   (`recomp_0005.c:6755`, `L+1` with `L=6754`), still comparing against zero.
+> - **`Wf0=3`** — read from the untrapped run's **own mapping-valid dump**
+>   (`check-dump-mapping.py`: `matches: 1, content-mismatch: 0`), so the pending word it is spinning on
+>   **never became zero**.
+>
+> **`F=2` and `Wf0=3` together are sufficient and tracing-independent**: the guest is in the pending-word
+> spin at the end of a 31.7 s window, and the word it waits on is unchanged. **The trapped run's
+> `GPBOOT=1`/clear witnesses are then corroboration that the trapped path is the one that resolves it** —
+> and those *are* valid presence witnesses, because the trapped run had tracing on.
 
 **`F=2` in the untrapped run means the guest is sitting inside the `loc_001A18D0` spin loop**
 (`recomp_0005.c:6755`, i.e. `L+1` with `L=6754`), still comparing the pending word against zero. **The
