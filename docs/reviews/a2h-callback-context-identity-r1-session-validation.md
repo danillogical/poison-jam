@@ -30,9 +30,22 @@ paid for:**
 | **no tainted caller bindings** | **OK** |
 | **pending acceptance is NOT clearance** | **OK** — *"not cleared by its silence"* |
 | **declared boundaries, never inferred** | **OK** |
-| **the alias is PERMANENTLY REFUTED** | **OK** |
+| **the alias is PERMANENTLY REFUTED** | ~~**OK**~~ **⚠ SUPERSEDED 2026-09-28 — see below** |
 | **no re-litigation** | **OK** |
 | **`device+0x242C` kept separate** | **OK** — *"it ran but does not feed this call"* |
+
+> ### ⚠ SUPERSEDED — the `device+0x2268` refutation is **RETRACTED**
+>
+> **This validation record passed the packet because it encoded *"the alias is PERMANENTLY REFUTED"* as a
+> requirement.** **That premise was WRONG**, and it is **retracted** on verified bytes:
+> `docs/reviews/a2h-device-2268-refutation-retracted.md` (`d0319d0`), Advisor ruling
+> `a2h-device-2268-retraction-advisor-ruling.md` (`0154c72`), binding re-read
+> `a2h-binding-reread-executed.md` (`701688c`), and stage-1 acceptance
+> `a2h-callback-context-producer-acceptance-record.md` (`9bcfc93`), **which confirmed all five byte checks.**
+>
+> **The context IS LOCATED AT `software_device+0x2268`.** **This record's validation was sound for the packet
+> as written; the PACKET'S PREMISE was what failed.** **Recorded so a reader does not treat this table as
+> current.**
 | **`O-ALTERNATE-PATH` needs VERIFIED identity** | **OK** |
 | **no positive row from a refutation alone** | **OK** |
 | **no run/build/test/instrumentation** | **OK** |

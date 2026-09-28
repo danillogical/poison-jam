@@ -164,7 +164,26 @@ PACKET rather than by the Session's discipline.**
 
 **Next:** execute the three searches; then §5.8 acceptance.
 
-**Toolkit:** `37226b2` local / `571982d` pushed (**no-push state**). **Game:** `ec108cf`.
+**Toolkit:** `37226b2` local / `571982d` pushed (**no-push state**). **Game:** `7425f72`.
+
+---
+
+# ⬇ SUPERSEDED PACKET HISTORY — everything below is retained for provenance and is NOT current
+
+> **⚠ The blocks below are the Session's running record of earlier packets in this line.** **They are kept
+> because they carry the reasoning and the corrections, but a reader must NOT treat them as current state.**
+>
+> **Two specific staleness traps, both corrected in the live record above:**
+>
+> 1. **`device+0x2268` is NOT refuted.** Any block below that says *"PERMANENTLY REFUTED — no re-litigation"*
+>    is **SUPERSEDED**: the refutation was **retracted on verified bytes** and **the context IS LOCATED AT
+>    `software_device+0x2268`.** See `a2h-device-2268-refutation-retracted.md` and
+>    `a2h-callback-context-producer-acceptance-record.md`.
+> 2. **"device" is ambiguous and must not be used bare.** **`software_device` = `0x0019B200`;
+>    `aperture` = `0xFD000000`.** See `a2h-acceptance-condition-a-satisfied.md`.
+>
+> **The authoritative current state is the `## CURRENT PACKET` section ABOVE this line, plus the review
+> records it cites.**
 
 - **Packet:** `docs/packets/a2h-callback-context-identity.md`, **r2**, frozen
   **`94D4C08A56D9DF4F56524D9F56594E081BC6820CFF7877EE118EBFD7295ED17A`** — **not edited**.
