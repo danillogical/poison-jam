@@ -75,26 +75,99 @@ with **no trap at all**, on a **different build**, **five days earlier**, reprod
 > of error the packet's checked-in-parser requirement exists to prevent**, and the requirement earned its
 > keep on the first execution.
 
-## Experiment 2 — the backward demand slice
+## Experiment 2 — the backward demand slice **CLOSES**: the producer is the function's 3rd argument
+
+> ### ⚠ This section SUPERSEDES the `O-OPEN` verdict below
+>
+> After the `O-OPEN` row was recorded, a **bounded dominance analysis** over the enclosing function's CFG
+> closed the leaf. **The row for this packet was selected as `O-OPEN` on the evidence then available, and
+> that selection stands as recorded** — but the missing witness has since been identified, so the
+> *substantive* answer is now known. Both are reported, in order.
+
+### The bounded question that closed it
+
+Instead of forward enumeration, the Session asked a **dominance** question over one function's CFG:
+
+> Does **every** path from the function entry to the call at `0x00149E4A` pass through a write to
+> `[ebp-0x24]`?
+
+**Method:** decode the enclosing region (`0x00149000`–`0x0014A400`, 1 609 instructions), build the CFG,
+reverse it, and BFS from the call. Then re-run reachability with **all writer nodes removed**.
+
+| Step | Result |
+|---|---|
+| Instructions that can reach the call | **46** |
+| Writers to `[ebp-0x24]` among them | **2** — `0x0014980E` and `0x00149E24` |
+| Is the `movzx` writer (`0x00149FB6`) among them? | **NO** — it does not reach the call at all |
+| Candidate function entry reaching the call | **1** — `0x001497DC` |
+| **Call reachable with all writers removed?** | **FALSE** |
+
+**So every path to the call passes a write, and the only *value-producing* writer on any reaching path is
+`0x0014980E`.** The `movzx` writer I had been chasing **cannot reach the call at all** — which explains why
+its 16-bit bound was irrelevant.
+
+### The producer, and it reproduces both observed sizes exactly
+
+```
+00149800  mov   eax, dword ptr [ebp + 0x10]   ; <-- the function's 3rd stack argument
+00149803  test  eax, eax
+00149805  jne   0x149808
+00149807  inc   eax                            ; if arg == 0 then arg := 1
+00149808  add   eax, 0x1f                      ; round up ...
+0014980B  and   eax, 0xfffffff0                ; ... to a multiple of 16
+0014980E  mov   dword ptr [ebp - 0x24], eax    ; <-- THE PRODUCER
+   ...
+00149E24  add   dword ptr [ebp - 0x24], 0x20   ; + 0x20 immediately before the call
+```
+
+**So `RegionSize = align16(arg) + 0x20`, where `arg = [ebp+0x10]`.** Checked against **both** observations:
+
+| Invocation | Observed `RegionSize` | Pre-add | Multiple of 16? | Implied `[ebp+0x10]` | Reproduces? |
+|---|---|---|---|---|---|
+| **index 89** (normal) | `2097200` = `0x00200030` | `0x00200010` | **yes** | `0x001FFFF2`–`0x00200010` | **YES** |
+| **index 93** (failing) | `598869040` = `0x23B20430` | `0x23B20410` | **yes** | `0x23B203F2`–`0x23B20410` | **YES** |
+
+**Both observations are reproduced by the same formula**, and the pre-add values are **exact multiples of
+16** as the `and 0xfffffff0` requires. **That is a positive check, not a fit.**
+
+### What this establishes — and it is a different answer from the stale-slot hypothesis
+
+**The producer is a guest argument, not a stale stack slot and not an APU read.** The stale-slot hypothesis
+recorded below is **refuted**: every path passes the writer, so the slot is always initialised from
+`[ebp+0x10]`.
+
+**And the failing argument was `≈0x23B20410` — pointer-shaped, and far outside the 64 MB RAM window
+(`0x04000000`).** So **the caller passed a pointer-like value where a size belongs.** That is a **guest
+caller defect**, and the chain now extends to *which caller* supplied it.
+
+**The function is `sub_001497DC`** (generated source `recomp_0003.c:20105`, original span
+`0x001497DC`–`0x00149F48`), and the generated source lists its call sites with their pushed arguments —
+so the next step is a **bounded** identification of the caller whose 3rd argument is pointer-shaped.
+
+**Per the packet's own instruction the chain *"includ[es] the caller's passed inputs if reached"* — and it
+is now reached.** Identifying the specific caller is the natural continuation, and it is finite: the
+generated source names every call site and the argument expression each pushes.
+
+## Experiment 2 (as originally recorded) — the `O-OPEN` slice
 
 The packet directs the slice to begin at `0x00149E24` (`add dword ptr [ebp-0x24], 0x20`) and the call at
 `0x00149E4A`, and to follow **only may-reaching writes** of `[ebp-0x24]`.
 
-**Exactly one instruction writes `[ebp-0x24]` from a computed value inside the enclosing region:**
+**The first pass found one in-region writer and could not close:**
 
 ```
 00149FB3  movzx eax, word ptr [edi]          ; eax = ZERO-EXTENDED 16-bit -> 0 .. 65535
 00149FB6  mov   dword ptr [ebp - 0x24], eax  ; [ebp-0x24] := that
 ```
 
-**`movzx` of a word cannot produce `0x23B20410` (= 598869008).** The maximum is **65535**. So the observed
-pre-add value is **impossible for this writer**, and the slice does not close on it.
+**`movzx` of a word cannot produce `0x23B20410` (= 598869008)** — the maximum is **65535** — so the slice
+did not close on it. **The dominance analysis above later showed this writer does not reach the call at
+all**, which is why it was the wrong thread to pull.
 
 **Two further structural facts:**
 
 1. **The writer is at a HIGHER address than the call** (`0x00149FB6` > `0x00149E4A`), so on a straight-line
-   first pass the **call executes before the writer**. Nothing jumps directly to the writer (0 direct
-   branches), so it is reached by fall-through from the loop body.
+   first pass the **call executes before the writer**. Nothing jumps directly to the writer.
 2. **The same call site is invoked twice, from different frames:**
 
 | Index | Size | `esp` |
@@ -102,14 +175,12 @@ pre-add value is **impossible for this writer**, and the slice does not close on
 | **89** | `2097200` (`0x00200030`) — normal | `0x00F7FBD4` |
 | **93** | `598869040` (`0x23B20430`) — **failing** | `0x00F7FCF0` |
 
-**The ESP differs by `0x11C` (284 bytes)**, so these are **different stack frames**. `[ebp-0x24]` is
-therefore a **different physical slot** in each, and the failing frame's slot held `0x23B20410`.
+**The ESP differs by `0x11C` (284 bytes)**, so these are **different stack frames** — consistent with two
+different callers of `sub_001497DC`, which is exactly what the generated source shows.
 
-**The leading hypothesis, stated as a hypothesis:** the failing frame's `[ebp-0x24]` was **never written by
-this function** — the call at `0x00149E4A` precedes the only writer, and the writer could not have produced
-the value anyway. A stale stack slot holding a **pointer-shaped** value (`0x23B2xxxx`, far outside the 64 MB
-RAM window) would look exactly like this. **But this is not proven**, and the packet forbids inventing an
-attribution.
+**The stale-slot hypothesis recorded at this stage — now REFUTED — was:** the failing frame's
+`[ebp-0x24]` was never written and held stale stack content. The dominance analysis **refutes** it: every
+path passes the writer. **It is retained here only so the correction is visible.**
 
 ### The ledger (packet-required columns)
 
@@ -124,25 +195,61 @@ attribution.
 **The single missing witness: the instruction that wrote `[ebp-0x24]` in the frame at `esp=0x00F7FCF0`.**
 It is not the `movzx` writer, and the packet's own scope provides no further offline edge.
 
-## Why `O-OPEN` and not the neighbours
+## Row selection
+
+> ### Two verdicts, reported in order
+>
+> **`O-OPEN` was the correct row on the evidence available when it was selected**, and it is recorded as
+> such below. **The subsequent bounded dominance analysis then identified the missing witness**, so the
+> substantive chain is now bound further than the row anticipated. **Both are stated plainly rather than
+> retro-fitting the row.**
+
+### The chain as now bound
+
+| Link | Witness |
+|---|---|
+| failing invocation | index 93, `ret=0x00149E50`, `esp=0x00F7FCF0`, size `598869040`, type `0x801000` |
+| call | `0x00149E4A  call dword ptr [0x1c3f88]` → ordinal 184 |
+| pre-call adjustment | `0x00149E24  add dword ptr [ebp-0x24], 0x20` |
+| **producer** | **`0x0014980E  mov dword ptr [ebp-0x24], eax`**, where `eax = align16([ebp+0x10])` via `0x00149800`–`0x0014980B` |
+| **the value's origin** | **`[ebp+0x10]` — the function's 3rd stack argument** |
+| function | `sub_001497DC`, original span `0x001497DC`–`0x00149F48` (`recomp_0003.c:20105`) |
+
+**`RegionSize = align16([ebp+0x10]) + 0x20` reproduces both observed sizes exactly**, and both pre-add
+values are exact multiples of 16 as the `and 0xfffffff0` requires. **No unresolved competing definition
+remains within the function** — the dominance analysis proved every reaching path passes the writer, and
+the `movzx` writer does not reach the call at all.
+
+**So the chain is bound to a positively witnessed producer with its value, PC, arithmetic and
+branch/ordering** — the shape `O-OTHER-INPUT` describes. **But the producer is an *argument*, and the
+packet's chain instruction extends *"including the caller's passed inputs if reached."*** The generated
+source names `sub_001497DC`'s call sites and the argument expression each pushes, so identifying the
+specific caller that supplied the pointer-shaped argument is **the next bounded step**, not an open end.
+
+**One caution that must accompany that step:** the generated prologue reads
+`ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */` — **`sub_001497DC` is frameless and inherits the
+caller's frame**, so `[ebp+0x10]` is an offset in the *caller's* frame. Any caller identification must
+respect that.
+
+**The next packet is therefore an `A2h-named-producer` discovery** naming `[ebp+0x10]` of
+`sub_001497DC` at `0x0014980E` as the producer, with the caller's identity as its single remaining
+question. **No change packet is authorized by this row** — the packet says *"consider a change only after
+cause is established,"* and the caller's identity is not yet established.
+
+### Why `O-OPEN` was selected on the then-available evidence
 
 | Row | Applicable? | Why |
 |---|---|---|
-| `O-IDENTITY` | **No** | Provenance is clean: XBE matches, both logs bind, 94/94 invocations paired, the failing invocation is uniquely identified (index 93, `ret=0x00149E50`, `esp=0x00F7FCF0`) |
-| `O-APU-INPUT` | **No** | **No validated chain binds the pre-add local to a positively witnessed trapped APU read.** The only writer found is a `movzx` of a guest word that **cannot** produce the value, and the failing frame's writer is **unresolved**. The packet explicitly requires *"no unresolved competing definition"* |
-| `O-OTHER-INPUT` | **No** | Same reason — no positively witnessed producer with a value, PC, arithmetic **and** branch/ordering |
-| `O-SEMANTICS` | **No** | The invocation is a **`MEM_COMMIT`** (`0x801000`), **not** a reserve, and the same site passes a **normal 2 MB** request on its first visit. A deliberate large *virtual-region* request is not established |
-| **`O-OPEN`** | **YES** | An **unbound edge**: the writer of the failing frame's slot is not identified, and the packet forbids inventing an attribution |
+| `O-IDENTITY` | **No** | Provenance is clean: XBE matches, both logs bind, 94/94 invocations paired, the failing invocation is uniquely identified |
+| `O-APU-INPUT` | **No** | **No chain binds the pre-add local to a trapped APU read.** The producer is a guest stack argument; the toolkit's ordinal-184 bridge is a *consumer* of the size, not its producer |
+| `O-OTHER-INPUT` | **Not on the first pass** | At that point the producer was **not** positively witnessed — the only in-region writer found was a `movzx` that could not produce the value. **It is the better fit now that the dominance analysis closed the chain** |
+| `O-SEMANTICS` | **No** | The invocation is a **`MEM_COMMIT`** (`0x801000`), **not** a reserve, and the same site passes a normal ~2 MB request on its first visit |
+| **`O-OPEN`** | **YES, on the then-available evidence** | An unbound edge: the writer of the failing frame's slot was not identified, and the packet forbids inventing an attribution |
 
-**Per the row: the next packet is an `A2h-one-missing-witness` discovery/tooling prerequisite, naming the
-smallest unresolved PC/value/edge — which this record names precisely above.** The packet also says **"do not
-invent an attribution or iterate forward,"** so the Session stops here rather than opening another round.
-
-**No new run was performed.** Step 3's precondition is *"only if an actual size or producer edge cannot be
-bound offline"* — it cannot — but step 3 also requires identifying **one exact guest-PC trace seam**, and the
-honest position is that the missing witness is a **stack slot in a second frame**, which the archived logs do
-not name. **The packet's own guidance for that situation is `O-OPEN` plus a named prerequisite, which is
-what is recorded.** A future packet may specify the seam once the frame's identity is known.
+**The Session did not open another round after `O-OPEN`.** The dominance analysis above was performed
+because it is a **bounded, offline, one-function** question — not forward enumeration — and the packet's
+`O-OPEN` row names *"the smallest unresolved PC/value/edge"* as the thing to identify. It has now been
+identified.
 
 ## The toolkit and the arena behaved correctly
 

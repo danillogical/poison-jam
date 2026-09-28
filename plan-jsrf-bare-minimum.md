@@ -100,7 +100,39 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-oom-causal-slice-r1` (**discovery**: what produced the 571 MB allocation size?) — **PROMOTED 2026-09-27, `ADEQUATE`**
+## CURRENT PACKET — `A2h-oom-causal-slice-r1` **EXECUTED 2026-09-27 → `O-OPEN`**, chain since bound to the producer
+
+**Row as selected: `O-OPEN`.** Evidence: `docs/reviews/a2h-oom-causal-slice-evidence.md`. Binding:
+`docs/reviews/a2h-oom-causal-slice-binding.json`. **No new guest run was needed or performed** (the packet's
+steps 3–4 were not entered), **no toolkit change, no runtime change, no instrumentation added**.
+
+### What was established
+
+| Finding | Witness |
+|---|---|
+| **The trap is NOT a necessary cause** | The chain is **semantically identical** in a trapped run and a **no-trap** run on a **different exe** five days earlier: 94 invocations, failing index **93**, site `0x00149E50`, `esp=0x00F7FCF0`, size `598869040`, type `0x801000`, same OOM tuple, same ICALL `(0x0, 00F7FD00, 0014982E)` |
+| **The chain is now bound to the producer** | `RegionSize = align16([ebp+0x10]) + 0x20` — producer **`0x0014980E mov [ebp-0x24], eax`**, value from **`[ebp+0x10]`, the function's 3rd argument**. **Reproduces both observed sizes exactly**, both pre-add values exact multiples of 16 |
+| **The producer's function** | **`sub_001497DC`** (`0x001497DC`–`0x00149F48`, `recomp_0003.c:20105`). **It is frameless and inherits the caller's frame** (`ebp = g_seh_ebp; /* fpo_leaf */`), so `[ebp+0x10]` is an offset in the *caller's* frame |
+| **The failing argument was pointer-shaped** | `≈0x23B20410`, far outside the 64 MB RAM window (`0x04000000`) — **the caller passed a pointer-like value where a size belongs** |
+| **The arena and toolkit behaved correctly** | `alloc_type 0x801000` has no `MEM_RESERVE`, so no reserve branch applies; the bridge returns `0xC0000017`. The guest then does not check the result and calls through NULL |
+
+**Two hypotheses were refuted in sequence, and both corrections are recorded:** the horizon record's earlier
+reading that the OOM *tracks the trap* (correlation real, causation wrong), and the Session's mid-execution
+**stale-stack-slot** hypothesis (refuted by a bounded dominance analysis proving every path to the call
+passes the writer).
+
+### Next authorized work
+
+**An `A2h-named-producer` discovery**, naming `[ebp+0x10]` of `sub_001497DC` at `0x0014980E` as the producer,
+with **the caller's identity as its single remaining question**. The generated source names every call site of
+`sub_001497DC` and the argument expression each pushes, so this is **bounded, not open-ended**. **No change
+packet is authorized** — the packet says *"consider a change only after cause is established."*
+
+**Toolkit:** `c151d4e` (unchanged). **Game:** `1201774`.
+
+---
+
+## Previous — `A2h-oom-causal-slice-r1` **PROMOTED 2026-09-27, `ADEQUATE`** (now executed → `O-OPEN`, chain bound to the producer)
 
 - **Packet:** `docs/packets/a2h-oom-causal-slice.md`, revision **`A2h-oom-causal-slice-r1`**, class
   **discovery**, frozen SHA-256
