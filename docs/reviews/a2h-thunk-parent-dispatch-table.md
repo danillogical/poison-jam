@@ -134,19 +134,27 @@ push / call` re-orders three stack arguments.**
 **Established:**
 
 1. **`sub_00153790` has zero direct callers and one absolute reference — it is a table entry.**
-2. **The table is `0x001E12A0..0x001E133C`, 40 entries, non-ascending — a vtable/dispatch table.**
-3. **`0x00153790` is the LAST entry (index 39).**
+2. **The table is `0x001E1270..0x001E133C`, 52 entries, non-ascending — a vtable.** *(⚠ CORRECTED: the
+   Session's first pass said `0x001E12A0`, 40 entries. That was its WINDOW, not the table. The true base is
+   `0x001E1270`, terminated by `0xC3000000` at `0x001E126C`.)*
+3. **`0x00153790` is the LAST entry — index 51 of 52.** *(⚠ CORRECTED: first pass said index 39 of 40.)*
 4. **`0x00199DB0` has zero absolute references**, so it is reached only through the thunk.
+5. **THE VTABLE IS INSTALLED AT `object+0x00`** by `0x00152244 mov dword ptr [esi], 0x1e1270`, on a
+   **teardown path** (`dec [esi+0x608]` → `jne` → install). **So `0x001E1270` is an object's vtable, not an
+   anonymous dispatch array.**
 
 **NOT established:**
 
-- **Which dispatcher reads this table**, and **what it passes as the three arguments.**
+- **Which dispatcher reads this table**, and **what it passes as the arguments.**
 - **Whether the table is indexed by a device field, a command code, or something else.**
-- **Whether entry 39 is ever selected** — **and if it is not, the `0x00199F45` store never executes.**
+- **Whether entry 51 is ever selected** — **and if it is not, the `0x00199F45` store never executes.**
 
-> **So the edge is not closed; it is RELOCATED.** **The Session records it as a better-posed question:
-> *what dispatcher reads the table at `0x001E12A0`, and what does it pass as the first of the three arguments
-> it pushes for entry 39?***
+> **So the edge is RELOCATED, and the better-posed question is: *where is a virtual call made through
+> `object+0x00` at INDEX 51, and what does that caller pass as the worker's ARG1?***
+>
+> **⚠ The Session's earlier phrasing — *"what dispatcher reads the table at `0x001E12A0`… for entry 39"* —
+> used the SUPERSEDED base and index.** **Corrected here.** **And note the argument question is ARG1, not the
+> first-of-three: the acceptance correction established that `ebp = ARG1`.**
 
 ## The method note, because this is the pattern that keeps paying
 

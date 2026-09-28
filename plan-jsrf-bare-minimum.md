@@ -100,7 +100,62 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-callback-slot-writer-trace-r1` **EXECUTED → `O-OPEN`**, `ACCEPT-WITH-CORRECTIONS`; **the corrections MOVE the edge — successor next**
+## CURRENT PACKET — `A2h-slot-writer-four-edges-r1` (**discovery**: FOUR named edges, not one) — **PROMOTED 2026-09-28, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-slot-writer-four-edges.md`, **17 lines**, **7947 bytes**, frozen
+  **`6C207AC90B853744A9C89B71C03187F5E000F0820C2D5D881994B4183A13FB9E`** — **this is the packet to execute.**
+  Validation: `docs/reviews/a2h-slot-writer-four-edges-r1-session-validation.md`.
+
+### ⚠ THE CORRECTIONS made this FOUR edges, not one — and the previous packet's headline was wrong
+
+**The writer trace claimed *"closed to a single store."* That is UNSUPPORTED:** **it excluded `0x0018DF59` on
+a false arithmetic claim.** **`0x242C − 0xa78 = 0x19B4 = 6580 = 4 × 1645` EXACTLY.** **Session-verified from
+the bytes** (`a2h-edge2-verified-from-bytes.md`, `948ad9c`).
+
+| Edge | Store | Index | Value written |
+|---|---|---|---|
+| **1** | **`0x00199F45`** `mov [esi+ebp*4+0x3ec],eax` | **`arg1 = 2064`** | **`eax`** |
+| **2** | **`0x0018DF59`** `mov [edi+esi*4+0xa78],ebx` | **`arg1 = 1645`** | **`ebx` = `[esp+0x1c]` — AN ARBITRARY CALLER WORD** |
+| **3** | **vtable index 51 dispatch** | — | — |
+| **4** | **the context alias `[eax+0xc]`** | — | — |
+
+> **EDGE 2 writes an ARBITRARY caller-supplied word, so it can place ANY VALUE in the slot — including a
+> `.rdata` filename pointer.** **Recorded as an OBSERVATION about the stores' shapes, NOT as an attribution.**
+
+### ⚠ EDGE 1's ARGUMENT IS ARG1, NOT ARG3 — and the Session's own record repeated the error
+
+**At `0x00199DC3` `[esp+0x20]` = `[E+0xC]` = ARG3; after TWO MORE PUSHES the SAME displacement at
+`0x00199DD9` = `[E+4]` = ARG1.** **Session-verified three-deep:** **`0x00199DDE`'s `[esp+0x28]` = `[E+8]` = ARG2
+confirms the shift.** **So `ebp = ARG1`, range `[arg1, arg1+arg3−1]`.**
+
+**The packet states this explicitly, including *"tracing only ARG3 does not close this edge."***
+
+### The Session's structural finding — EDGE 3
+
+**`sub_00153790` is entry 51 of a 52-entry vtable at `0x001E1270`**, installed at **`object+0x00`** by a
+**teardown path** (`0x00152244 mov dword ptr [esi],0x1e1270` after `dec [esi+0x608]` → zero).
+**So the question is: where is a virtual call through `object+0x00` at INDEX 51, and what ARG1 does that
+caller supply?**
+
+### Controls the packet makes BINDING
+
+- **`VA`/`VA+1` offset-shift** (`30766A64` / `3030766A`) — *"one-address control does NOT discriminate."*
+- **`int(text,16)`**, NOT a double reversal.
+- **`(v1 & 0x00FFFFFF) == (v0 >> 8)` PASSES** — *"do not drop the `0x30` byte."*
+- **`inspect-jsrf.py disasm` decodes from the REQUESTED start and can misalign** — decode each section from
+  its own start and slice.
+- **Sweep X-flagged sections including `.rdata`/`.data`.**
+- **Per-run gate; the 23/24 census BARRED per-row.**
+
+### ⚠ The Planner caught a staleness defect in the SESSION's own record
+
+**`a2h-thunk-parent-dispatch-table.md` had its corrected table extent in one section and the SUPERSEDED
+`0x001E12A0`/40-entries/index-39 figures still standing in its "Established" list.** **Fixed.** **Recorded
+because it is the same pattern: a correction applied where the error was found and not propagated.**
+
+**Next:** execute the four edges; then §5.8 acceptance.
+
+**Toolkit:** `37226b2` local / `571982d` pushed (**no-push state**). **Game:** `f2935d9`.
 
 - **Packet:** `docs/packets/a2h-callback-slot-writer-trace.md`, frozen
   **`C5FD9CAA405819255E0FF63DE35DB21E7F41E3F16E3B392842BF5CD44CD32A76`** — **not edited**.
