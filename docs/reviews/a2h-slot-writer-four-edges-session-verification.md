@@ -103,7 +103,13 @@ argument — and the value written would be ARG2 anyway.**
 | **1 — `0x00199F45`** | **ARG1 confirmed three-deep from the bytes; `2064` NOT ESTABLISHED as reachable.** Only three reachable uses of immediate `0x810` exist image-wide and **none is an argument** |
 | **2 — `0x0018DF59`** | **`1645` UNREACHABLE** — seven of twelve callers pass a literal `0/1/2/3`; **and the value is ARG2, not an arbitrary word** |
 | **3 — vtable index 51** | **DISPATCH LOCATED at `0x000D4DA2`** — **and it IS EDGE 1's ARG1** |
-| **4 — the context alias** | **REFUTED** — the alias exists but **does not reach the slot**; **118 stores at disp `0x1C4` image-wide, and the ONLY read of the slot uses `esi = context` DIRECTLY, never through the alias** |
+| **4 — the context alias** | **THE DESCRIPTOR PATH IS REFUTED** — the alias exists but **does not reach the slot**; **118 stores at disp `0x1C4` image-wide, and the ONLY read of the slot uses `esi = context` DIRECTLY, never through the alias** |
+
+> **⚠ PRECISION, per the Advisor (turn `01a0e89e`): *"edge-4 mechanism-refuted ≠ alias resolved."***
+> **What is refuted is that the DESCRIPTOR PATH reaches the slot.** **The alias's own IDENTITY — whether the
+> object carrying `[eax+0xc]` is what it appears to be — was never established and remains OPEN.** **The
+> Session's earlier one-word *"REFUTED"* was too broad, and the successor records the alias as a DOWNSTREAM
+> DEPENDENCY rather than as a closed question.**
 
 > ## **So EDGE 3's ARG1 IS EDGE 1's ARG1 — the four edges collapsed to ONE quantity.**
 
