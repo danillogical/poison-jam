@@ -100,47 +100,71 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-slot-read-path-displacement-r1` (**discovery**: did the slot become zero in the bridgeless gap, and by whom?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+## CURRENT PACKET — `A2h-slot-read-path-displacement-r1` **EXECUTED (Run 1 OFF only) → `O-COVERAGE`**; **successor re-scoped by Advisor to WITHIN-RUN attribution**
 
-- **Packet:** `docs/packets/a2h-slot-read-path-displacement.md`, revision **`A2h-slot-read-path-displacement-r1`**,
-  class **discovery**, **56 lines**, **30856 bytes**, frozen SHA-256
-  **`75E6AE7C9A26A2CF63F9AD19502A170B2960FE2C90523A566F3F382942BB9B6A`** — **this is the packet to execute.**
-  Hash read **3× over ~12 s**, identical, matching the Planner's report. Validation:
-  `docs/reviews/a2h-slot-read-path-r1-session-validation.md`.
-- **Shape preflight:** **obtained** — the superseded first ruling **and** the corrected one, the Session's
-  `PREMISE_CHANGED` correction, the collector-identity repair, the DR feasibility gate, and the alias
-  derivation, all in `docs/reviews/a2h-slot-read-path-advisor-shape-preflight.md`.
-- **The question:** did the installed slot at guest `0x001C4064` become zero **after the final bridge boundary
-  and before the terminal raw load**; was any uniquely proved writer guest or host; was a zero restored; or
-  does complete write coverage instead refer us to a read-path audit?
-- **Mechanism (corrected ruling):** **canonical DR0/LEN4 write watch** **plus** a **first-write census on the
-  corresponding 4 KiB page of every mapped mirror** (28 source-defined). **Any alias touch makes writer
-  absence `UNKNOWN`.** The key insight: a page's **first touch necessarily precedes its first single-step
-  window**, so the census is complete **despite** the race that disqualified the page-guard as a *write
-  history*.
-- **Rows:** `O-GUEST-ZERO` → `A2h-guest-slot-writer-cause` · `O-HOST-ZERO` → `A2h-host-slot-writer-cause` ·
-  `O-TRANSIENT` → `A2h-transient-slot-zero-cause` · `O-READ-PATH` → `A2h-terminal-read-path-audit` ·
-  `O-IDENTITY`/`O-COVERAGE` → `A2h-slot-write-coverage-provenance`.
-- **Runs:** exactly **two** pre-specified same-build runs, gates **OFF then ON**, no third without Advisor
-  re-referral. **Fail closed** on alias touch, unarmed thread, missed install control, unsafe DR event, torn
-  publication, mapping change, ambiguous writer, missing terminal event, or **ON/OFF divergence**.
-- **Four binding additions, all present and validated:** the extractor
-  **`scripts/a2h-read-registry.py`** named as authoritative **plus** a required **collector** latch summary
-  cross-check; **RECORD-BEFORE-OPEN** stated explicitly with the AC97 precedent **ruled insufficient**;
-  **ARM-TO-TERMINAL** armed-set equality; and the install control required to read the **latch's own
-  `install_ok`**.
-- **§5.1.5 — every named tool executed:** `a2h-read-registry.py` (**17 self-tests**, extracts **both real
-  archives**), `a2h-slot-triage-classify.py` (11), `a2h-null-slot-triage.py` (17), `a2h-frame-audit.py` (29),
-  `a2h-oom-slice.py` (31), `run-jsrf.py`. **The collector print was verified live** and **agrees with the
-  extractor**.
-- **A durable improvement made during validation:** the collector now **prints** the latch
-  (`tools/harness/collect.c`, guarded on `version >= 2`). Previously the latch was archived but **invisible in
-  the archive's own text**, so the extractor was the only path to a decision record.
+- **Packet:** `docs/packets/a2h-slot-read-path-displacement.md`, revision
+  `A2h-slot-read-path-displacement-r1`, frozen
+  **`75E6AE7C9A26A2CF63F9AD19502A170B2960FE2C90523A566F3F382942BB9B6A`** — **not edited**.
+- **Instrument: BUILT, TESTED and PROVEN INERT.** Game `110b544`/`f5b709d`/`0e461df`/`3cfde3c`/`93a00d5`;
+  toolkit `07f6b06`/`5528d00`. 18/18 ctest; all eight guard suites; extractor self-tests **43**; v2 archive
+  polarity preserved. Records: `docs/reviews/a2h-slot-read-path-implementation-record.md`,
+  `docs/reviews/a2h-slot-read-path-feasibility-assessment.md`.
+- **Run 1 (OFF)** `logs/runs/20260928-014526-583-a2h-slot-write-inert-off`: **gates inert at RECORD level**
+  (zero gated lines; collector latch `install_seen=0 install_ok=0 claimed=0 overflow=0 partial=0`), **OOM
+  identical** (`598869040`, `0xC0000017`), but **terminal site and auxiliary-thread prefix DIVERGENT**.
+  **Run 2 NOT LAUNCHED** — the packet's own gate fired. Evidence:
+  `docs/reviews/a2h-slot-read-path-run1-off-evidence.md`.
+- **Row `O-COVERAGE` → `A2h-slot-write-coverage-provenance`** correctly selected. **The Advisor then
+  WITHDREW that successor scope**, because it predicated a reproducible failure.
+- **The decisive finding: the divergence is PRE-EXISTING, not instrument-caused.** Three archived runs share
+  the identical `jsrf_recomp.exe` (`ddd7e353e769e073…`) and disagree on the terminal site — `0x0014982E`
+  (identity 1) twice, and `0x00147DE2` (identity 4) once. **The divergent run predates the DR/alias
+  instrument.** `0x00147DBC` also recurs in a different-binary run, so it is an alternative failure point.
+- **Advisor re-ruling (verbatim): `docs/reviews/a2h-slot-read-path-advisor-reruling-after-run1.md`.**
+  **Row stands** (run-scoped; cross-run variance cannot falsify within-run observations). **Instrument
+  stands.** **The comparison design is abandoned.** **No `DONE:no`** — the instrument exists and the question
+  is answerable.
 
-**Next:** implement the toolkit DR0 + alias-census diagnostic under the corrected ruling, then Run 1 (OFF) →
-Run 2 (ON) → §5.8 acceptance.
+### BINDING VALIDITY GATE — deterministic anchors only, terminal EXCLUDED
 
-**Toolkit:** `6f049ce` (pushed). **Game:** `9029a54`.
+**Measured across all five known runs, these are the anchors that DO reproduce:**
+
+| Anchor | Value |
+|---|---|
+| OOM request | `requested 598869040, used 12715008/50855936` |
+| OOM status | `0xC0000017` |
+| **Main-thread (identity 1) dispatch prefix through the OOM** | **5555** |
+
+**The terminal event is explicitly NOT a validity anchor.** Anchor mismatch ⇒ `O-COVERAGE` **for that
+realization**. **No run serves as a cross-run control for terminal behavior; controls must be structural
+(gates-off silence) or prefix-scoped (deterministic anchors only).**
+
+### Successor scope — WITHIN-RUN attribution + bounded repetition
+
+1. **Within-run rows only.** Classify each realization **first by its observed terminal event** (target
+   `0x0014982E` raw-zero **vs other**). Attribution rows apply **only** to target realizations with complete
+   coverage; **all others recorded in full as contrastive data, never forced into rows.**
+2. **Bounded repetition, pre-specified:** **N ON runs, same build** (N ≤ 5, Planner justifies); **need K ≥ 2
+   target realizations**; attribute each independently; general claims require agreement — disagreement ⇒
+   report both + `UNKNOWN` generality (per-realization findings stand as witnessed mechanisms). **Zero targets
+   in N ⇒ report the rate + STOP + re-refer** (anti-optional-stopping; no extension without referral). **This
+   supersedes the old two-run bound.**
+3. **OFF control:** the existing Run-1 inertness evidence **CARRIES** iff same build + no code changes
+   (**verify the exe hash**); a new build ⇒ **fresh OFF**. **No other OFF runs.**
+4. **Coverage per realization** (arming census, no gaps, mapping stability, install trap), **read-path three
+   legs**, closure discipline: **unchanged, applied per run.**
+5. **Second-slot observations** (`0x1C4078`, `0x3E800000`, target `0x1`): **contrastive data only. NO
+   second-slot attribution scope** — resist creep. **Pivot condition:** target rare + siblings dominate
+   across N ⇒ re-refer for a line pivot.
+6. **Routing record:** *"`O-COVERAGE` row named `A2h-slot-write-coverage-provenance`; Advisor redirected
+   scope to within-run attribution because the reproducible-failure premise was falsified."* **Coverage
+   questions survive as per-realization input checks, not as the packet.**
+
+**Next:** the Planner authors the within-run attribution packet; the Session validates, freezes, then executes
+the pre-specified N ON runs.
+
+**Toolkit:** `5528d00` (unpushed — the A2h diagnostic is **pending-acceptance**, so it is a **no-push**
+state until this packet is accepted). **Game:** `071e364`.
 
 ---
 
