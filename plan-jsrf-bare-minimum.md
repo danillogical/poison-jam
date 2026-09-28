@@ -100,7 +100,78 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## ✅ CURRENT PACKET — `A2h-slot-writer-terminal-r1` **EXECUTED → `O-DATA-AS-CALL`** — **THE WRITER IS FOUND; THE LINE CLOSES**
+## CURRENT PACKET — `A2h-slot-writer-terminal-r1` **EXECUTED → `REJECT`**; **row reverts to `O-OPEN`** — chain-completion successor next
+
+- **Packet:** `docs/packets/a2h-slot-writer-terminal.md`, frozen
+  **`116884E8D474A0238096ACD43111E089E5A1A89C87F861E9FCBA953B95E05E9F`** — **not edited**.
+- **Evidence:** `docs/reviews/a2h-slot-writer-terminal-evidence.md` (`f63dc53`); **Session verification**
+  `a2h-slot-writer-terminal-session-verification.md` (`0becc28`); **the unwitnessed-index record**
+  `a2h-terminal-index-unwitnessed.md` (`32ab436`); **stage-1 review**
+  `a2h-slot-writer-terminal-acceptance-review.md` (`7293383`); **acceptance record**
+  `a2h-slot-writer-terminal-acceptance-record.md` (`73facd4`).
+
+### ⚠ STAGE-1: **`REJECT`** — the writer SITE is real, the ROW is not
+
+**Eleven of twelve byte-level claims CONFIRMED** — the store bytes, `esi = MEM32(0x19DCE0)`, `ebp = ARG1`,
+the encoding difference, GAP B's `ARG1 = 0`, the log corroboration, both vtables.
+
+**THE CRUX — and THREE PARTIES NOW AGREE.** **`2064` appears on exactly FOUR lines of the evidence, all
+restatements of the assertion.** **The reviewer decoded the loop the Session had not:**
+
+```
+0x00199DC3  mov eax, [esp+0x20]   -> E+0xC = ARG3   <== THE TRIP COUNT
+0x00199DD9  mov ebp, [esp+0x20]   -> E+4   = ARG1   <== the index
+```
+
+> **The store visits `software_device + (ARG1+k)·4 + 0x3EC` for `k = 0..ARG3−1`, guarded by `ARG3 != 0`.**
+> **Index `2064` is written IFF `ARG1 ≤ 2064 < ARG1 + ARG3`. NEITHER operand is measured anywhere.**
+
+**The Advisor caught this first, the Session verified and recorded it (`32ab436`), and the reviewer reached it
+independently.** **Row reverts to `O-OPEN` + STOP.**
+
+### ⚠ TWO CONSEQUENCES THE RECORD NEVER FACED
+
+1. **`0x242C` is exactly ONE PAST the end of a 2064-element array** — indices `0..2063` span
+   `0x3EC..0x2428` — so line 13's *"ARG1 = 2064"* and line 299's *"2064-element colour write"*
+   **cannot both hold, and neither is sourced.**
+2. **The store writes a CONTIGUOUS RUN of `ARG3` dwords**, not *"the ONE slot."*
+
+### ⚠ THE COMPETING HYPOTHESIS — never excluded
+
+**The *"packed colour word"* reading is UNFALSIFIABLE as posed:** **any dword decomposes into four bytes in
+`0..255`.** **And on the bytes, `0x001D5078` is a POINTER to the string `djv000_0.adx`** — **which the
+Session's own record calls *"the ADX filename."*** **Both readings are of the same dword.**
+
+### ✅ WHAT SURVIVES — and it is a great deal
+
+| Survives | Status |
+|---|---|
+| **the writer SITE `0x00199F45`** | **a STRONG CANDIDATE**, byte-verified |
+| **base, index EXPRESSION, value formula** | **instruction-anchored** |
+| **the encoding difference** | **CONFIRMED** — the ModRM scan was encoding-scoped |
+| **GAP B: the direct-store path is the INSTALLER** | **CONFIRMED** — `ARG1 = 0` |
+| **the slot identity** | **NOW RUNTIME-CORROBORATED** |
+| **the `+0x3C8` refutation** | **CONFIRMED** |
+| **terminality, controls, scope** | **all judged correct** |
+
+**⚠ And a corroboration the REVIEWER found that the Session's record lacked — Session-verified, and it is
+MORE than the reviewer reported:** **the log line is**
+`Xbox regs: ebx=0xFD000000 esi=0x0019D468 edi=0x00000000`, **and `0x19D468 + 0x1C4 = 0x19D62C = 0x19B200 +
+0x242C`.** **So ONE log line corroborates the context register AND the `aperture` value the vocabulary rule
+separates from `software_device`.**
+
+### THE SUCCESSOR — chain-completion, per the Advisor's pre-stated handling
+
+**The Advisor's mechanism authorization was *"conditional on acceptance sustaining `O-DATA-AS-CALL`"*, and
+it pre-stated:** ***"If acceptance downgrades the row instead, the SAME evidence needs re-scope as
+chain-completion (ARG1/order/value first) — either way no new referral is needed to proceed."***
+
+> **So the successor is a CHAIN-COMPLETION packet:** **(1)** **`ARG1` and `ARG3` provenance at the
+> `0x00153790 → 0x00199DB0` forwarding site** — **the FIRST missing edge, named by the reviewer**;
+> **(2)** **the order binding**; **(3)** **the address-versus-bytes question**; **(4)** **the SIB sweep
+> FOLDED IN** per the Advisor's Q2.
+
+**Toolkit:** `37226b2` local / `571982d` pushed (**no-push state**). **Game:** `73facd4`.
 
 - **Packet:** `docs/packets/a2h-slot-writer-terminal.md`, frozen
   **`116884E8D474A0238096ACD43111E089E5A1A89C87F861E9FCBA953B95E05E9F`** — **not edited**.
