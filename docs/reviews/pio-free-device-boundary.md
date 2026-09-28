@@ -118,15 +118,38 @@ register really is a **free-slot count**, and that the "PIO" name is apt.
 > all. **The hand-decode was wrong; the tool was right.** The lesson is the one `AGENTS.md` already states:
 > **derive accesses from the original XBE with the tooling, never by ad-hoc byte arithmetic.**
 
-## 5. The untrapped route is a **different** thing at the same address
+## 5. The untrapped route is a **different** thing at the same address — verified in source
 
 `main.c:82-86` states that the APU's 512K *"only faults when `RECOMP_APU_TRAP` unmapped it. Nothing else
-routes these: the aperture is otherwise plain memory."* And the packet notes the untrapped label is
-**`MCPX_COUNTERS[0x020010]`**, a tick counter whose tick is **gated off under the trap**.
+routes these: the aperture is otherwise plain memory."* **The toolkit source confirms the counter route and
+its gate explicitly** (`xbox_memory_layout.c` at `c151d4e`):
 
-**So the same VA has two distinct behaviours** — a trapped VP register read, and an untrapped memory
-counter — and **they must not be merged.** The packet already says so; this record confirms the source
-basis for it.
+```c
+static const uint32_t MCPX_COUNTERS[] = {
+    0x020010,   /* APU GP sample counter, DirectSound SetupVoiceProcessor */   /* :438-439 */
+...
+if (g_mcpx_regs && !g_apu_mmio_trapped) {          /* :890 */
+    for (size_t i = 0; i < sizeof(MCPX_COUNTERS)/sizeof(MCPX_COUNTERS[0]); i++) {
+        volatile uint32_t *c = (volatile uint32_t *)((char *)g_mcpx_regs + MCPX_COUNTERS[i]);
+        *c += 1;                                    /* :891-895 */
+    }
+}
+```
+
+**Three facts, all pinned:**
+
+1. **`0x020010` is a `MCPX_COUNTERS` entry**, and its own comment identifies it as the **"APU GP sample
+   counter, DirectSound SetupVoiceProcessor"** — a **monotone tick**, not a queue depth.
+2. **The increment is gated on `!g_apu_mmio_trapped`**, so under `RECOMP_APU_TRAP` **the counter never
+   ticks** — which is precisely why the trapped route reaches `mcpx_apu_vp_read` and returns the constant
+   `0x80` instead.
+3. **The counter route is a memory write into the aperture, not a register read** — so the untrapped guest
+   reading `0xFE820010` reads *ticking memory*, and the trapped guest reads *the VP stub*.
+
+**So the same VA has two distinct behaviours, and they must not be merged.** The packet already says so;
+this record supplies the source basis. **The counter's own comment is also a caution for any future
+model:** it names the consumer as `DirectSound SetupVoiceProcessor`, which is consistent with the poll's
+shape but is **toolkit-authored labelling**, not independent hardware evidence.
 
 ## 6. What this establishes, and what it does not
 
