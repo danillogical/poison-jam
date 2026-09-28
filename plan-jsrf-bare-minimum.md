@@ -100,7 +100,58 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-slot-writer-attribution-r2` **EXECUTED: 3 of N=5** — **COMPETITOR FOUND (K≥2), row withheld `O-OPEN`; successor specified**
+## CURRENT PACKET — `A2h-slot-writer-attribution-r2` **ACCEPTED (stage 1, FINAL)** — **no successor started; repository-durability checkpoint**
+
+- **Packet:** `docs/packets/a2h-slot-writer-attribution.md`, **r2**, frozen
+  **`E209D1F4A4405F0B266E8D4DEFDA77A481A277D27615BFAE9ACB9F7A3A6C6378`** — **UNCHANGED, re-verified by the
+  reviewer.**
+- **Acceptance:** **`ACCEPT`, FINAL** — `docs/reviews/a2h-slot-writer-attribution-r2-acceptance-record.md`
+  (`d84c971`). **11 of 12 criteria `AGREED`; #11 escalated and ruled OUT OF SCOPE by the Advisor (turn
+  `01a0ea5b`), so every criterion is `AGREED`.** **Per §2.2 a first-stage `ACCEPT` is FINAL — no second
+  stage, no re-run.**
+- **Row:** **`O-OPEN`** — **correctly withheld; no promotion.** **3 of N=5 runs used; no extension.**
+
+### ✅ THE FINDING (recorded; the row stays `O-OPEN`)
+
+> **The recompiled body of guest function `sub_00038530` (`0x00038530`) writes `0x001D5078` into
+> `software_device+0x242C`, reproducibly, in two independent runs at native RVA `0x52FE38`, with the identical
+> value — and it is NOT the static candidate `0x00199F45`.**
+
+**K≥2 AGREED, recomputed by the reviewer from each run's OWN map.** **And the REQUIRED positive control
+fired for the FIRST TIME on this line** (`installer_control_hits` = 2, 1, 2; `range=1`; `post=0x0015F9D0`).
+
+### ⚠ THE SESSION'S ERROR IN THE ACCEPTANCE BRIEF, recorded
+
+**The Session imported two sub-items — the no-debugger condition and tiled/contiguous non-overlap — into the
+stage-1 brief from the SUPERSEDED packet's carry-forward list.** **They appear ZERO times in the frozen
+packet.** **The reviewer correctly marked `CANNOT VERIFY` and escalated rather than reinterpreting.** **The
+Advisor: *"Carry-forward lists must be re-justified per packet — that step was skipped."***
+
+**And the required STATIC non-overlap check was executed:** the contiguous pool is
+`0x80010000..0x84010000` and the slot page is `0x0019D000..0x0019DFFF` — **DISJOINT.** ✓
+
+### ⚠ THE `unknown` PREMISE IS REFUTED; the rule was NOT self-waived
+
+**`VCRUNTIME140.dll`'s `memset` writes the watched page** (three runs, three image bases, the same two
+unplaceable RIPs unmoved). **So `unknown > 0 ⇒ INFRA FAILURE` rests on a premise that is false.** **The rule
+was APPLIED, not waived; the correction is routed to the successor's design** (split `unknown` into
+host-identifiable vs truly-unplaceable).
+
+### ⚠ A CORRECTION TO THE LINE'S OWN DIAGNOSIS
+
+**The save-root `winerror=5` harness failures were attributed to a transient `CreateFileW` race. THE CAUSE IS
+DISK EXHAUSTION** — measured: **0.51 GB free → harness failed twice consecutively; ~62 GB free → FULL PASS.**
+**A stash-based clean-baseline control excludes the DIFF, not the MACHINE.** —
+`a2h-save-root-failure-was-disk-exhaustion.md` (`6a97c86`).
+
+### NEXT — NOT STARTED, per the owner's instruction
+
+**The successor is specified in `a2h-competitor-finding-row-ruling.md`:** bounded runs for writer-observed +
+terminal-match + controls green; **N pre-specified, early stop, zero qualifying ⇒ RE-REFER**; the
+`unknown`-class split; **`ledger_mismatch` runs as contrast only**; **the CRT-`memset` lead TESTED, never
+asserted**; **NULL line untouched.** **Do NOT begin it in this session.**
+
+**Toolkit:** `d6e8f0b` local / `571982d` pushed. **Game:** `d84c971`.
 
 - **Packet:** `docs/packets/a2h-slot-writer-attribution.md`, **r2**, frozen
   **`E209D1F4A4405F0B266E8D4DEFDA77A481A277D27615BFAE9ACB9F7A3A6C6378`** — **not edited**.
