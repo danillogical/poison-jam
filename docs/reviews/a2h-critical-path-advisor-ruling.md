@@ -187,3 +187,42 @@ cite it as a total.**
 | 3 | Count discipline `(artifact, query, value)` | **APPLIED** — tool output carries the artifact path and query definition |
 | 4 | Budget grounded from metadata, not log text | **APPLIED** — tool reads `result.json`/metadata, not the log |
 | 5 | P4 discovery-transfer re-establishment before inheritance | **RECORDED** in the packet's obligations |
+| 6 | Session proposed replacing the latch with a log-line record; **Planner refused with citations** | **SESSION WRONG — WITHDRAWN.** See below |
+
+---
+
+## A Session error the Planner caught: "reliably archived" is not "lossless"
+
+**What the Session proposed.** Arguing that `scripts/run-jsrf.py` sets
+`os.environ['JSRF_LOG_PATH'] = str(run_dir / 'jsrf_run.log')`, the Session suggested the **guaranteed
+archived log** could serve as the authoritative record, making the fixed per-thread CAS latch unnecessary and
+dissolving the 128-slot overflow concern.
+
+**The Planner refused, citing the rules verbatim.** The Session **verified both citations before conceding**:
+
+- **`docs/agent-workflow.md:794-798` (§6.1.6):** *"**Decision inputs are lossless by construction.** A
+  criterion may select a row only from a record that cannot drop the deciding event: **a write-once latch or
+  an uncapped counter, updated at the event by the code that performs it.** Capped, sampled, rate-limited or
+  first-N logs are **observation only**, and **no row may depend on the presence or absence of such a
+  line.** Absence of a witness is never a positive attribution."*
+- **`docs/jsrf-run-profiles.md:237-243`:** *"A decision input must also be **bounded by construction** …
+  **an overflow counter is a bug detector** — if a record can overflow because the run was long or busy, the
+  key is wrong."*
+
+**The Session's error, stated precisely:** it conflated **"the log is reliably archived"** with **"the log is
+lossless."** `JSRF_LOG_PATH` guarantees the file exists and receives what was **printed**; it says nothing
+about whether every event **was** printed. With a 100000-line budget, concurrent stderr, and a
+`RaiseException` that can terminate before a flush, **a line can be dropped — and a dropped line is exactly
+the deciding event.** **The proposal would have built a decision row on a capped log, which is the specific
+error §6.1.6 names.**
+
+**Resolution:** the **fixed per-thread CAS latch stands as the authoritative record**; the existing `[ICALL]`
+print gains **two gated fields** (live slot value, latest per-thread call #) as **corroboration and positive
+control only**; and the packet states that **`KWATCH` is observation-only for the same reason** — sampled and
+change-gated, so **no row may rest on the absence of a KWATCH sample.**
+
+**This is the third Session reasoning error this window caught by measurement or review rather than by
+self-check** (after the stale draft-hash pin, and the mis-attributed "one attempt" constraint). **The pattern
+is consistent: the Session has repeatedly treated a document's or a tool's *existence and reliability* as
+sufficient warrant for a *decision input*, when the rule requires the input to be lossless by construction.**
+Recorded so the next packet's design starts from the rule rather than rediscovering it.
