@@ -101,6 +101,53 @@ variance and this is **one** comparison; **a claim that A2h is nondeterministic 
 a pre-specified repeated-run design.** What is established is narrower and sufficient: **the accepted baseline
 is not reproducible, so it cannot serve as the OFF control this packet requires.**
 
+---
+
+# The divergence is PRE-EXISTING — proven from the archive, not inferred
+
+**After writing the above I checked whether the divergence was caused by my instrumentation. It was not, and
+the evidence is decisive: three archived runs share the IDENTICAL `jsrf_recomp.exe`
+(`ddd7e353e769e073…`) and they do NOT agree on where the run fails.**
+
+| Run | A2h gates | Terminal target | Terminal site | Thread |
+|---|---|---|---|---|
+| `20260928-001502-101` (accepted OFF) | none | `0x00000000` | **`0x0014982E`** | identity 1 |
+| `20260928-001520-474` (accepted ON) | `JSRF_TRACE_A2H_SLOT`, `RECOMP_KERNEL_WATCH*` | `0x00000000` | **`0x0014982E`** | identity 1 |
+| `20260928-011149-570` (**latch-print-verify**) | `JSRF_TRACE_A2H_SLOT` only | **`0x3E800000`** | **`0x00147DE2`** | **identity 4** |
+
+**Same binary. Same build. Three runs. Two different terminal sites, two different terminal targets, two
+different faulting threads.**
+
+**This establishes three things:**
+
+1. **The terminal failure site is nondeterministic across runs even with a byte-identical executable.** The
+   A2h failure is not a fixed point in the program; **which thread faults, and where, varies between runs.**
+2. **My instrumentation is NOT the cause.** The `latch-print-verify` run that diverged was made **before**
+   the DR/alias instrument existed, with only the earlier `JSRF_TRACE_A2H_SLOT` gate — and **the accepted ON
+   run had that same gate and still reached `0x0014982E`.** So the gate is not the differentiator either.
+3. **The packet's OFF-control premise was already false when the packet was written.** The Planner's design
+   assumed the accepted baseline could be reproduced with the new gates off. **It could not — not because of
+   the new gates, but because the baseline never reproduced.** The packet inherited an assumption the archive
+   already contradicted, and **the Session's Run 1 is what surfaced it.**
+
+**A cross-check that sharpens rather than weakens this:** an earlier archived run
+(`20260927-145605-040-a2b2-nr-blocklink`, a *different* binary) also failed at **two** sites including
+`0x00147DBC` — **the same site this run's first failure landed on.** So `0x00147DBC` is a **recurring
+alternative failure point**, not an artifact of this run.
+
+**What this does NOT say.** It does **not** invalidate the accepted `O-NO-BOUNDARY-TRANSITION` row: that row
+is a **discovery** statement about what **that run** observed — the slot read `0xFE000104` at all 15498
+sampled boundaries and `0` at the terminal read with no bridge call between — and the acceptance reviewer
+verified it was correctly selected from the frozen rows. **A discovery row about one realization survives its
+process being nondeterministic.** What the nondeterminism **does** defeat is **using that run as a control for
+a later run**, which is precisely what this packet required.
+
+**Implication for planning, recorded because it is the substantive consequence:** any successor design whose
+validity rests on **reproducing a specific failure site** must either (a) **pin the failure by construction**
+rather than by expectation, or (b) **treat site variation as an expected input** and select rows from
+**within-run** evidence only. **The Session is not choosing between those; that is the Planner's and, if the
+mechanism is affected, the Advisor's call.**
+
 ## Consequence for the successor
 
 **The packet's premise needs re-establishment before it can be executed.** Its OFF control is "the accepted
