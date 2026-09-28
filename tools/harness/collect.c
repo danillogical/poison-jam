@@ -69,6 +69,7 @@ static void capture_guest_threads(void);
  * and SIZE fields are checked before any field is read: a struct that changed without the version
  * moving is reported as unavailable rather than silently misread. */
 #define A2H_SLOTW_MAGIC          0x57533241u   /* 'A2SW' */
+#define A2H_SLOTW_VERSION        2u             /* must equal XBOX_A2H_SLOTW_VERSION in the toolkit */
 #define A2H_SLOTW_PAGES_MAX      (1 + XBOX_NUM_MIRRORS_COLLECTOR)
 #define XBOX_NUM_MIRRORS_COLLECTOR 28
 #define A2H_SLOTW_EVENTS_MAX     256
@@ -91,7 +92,7 @@ typedef struct {
     uint32_t magic, version, size, armed, arm_base, term_base, arm_slot, term_slot;
     uint32_t slot_stable, page_offset, mapped_mask, protect_mask, alias_count, protected_count;
     uint32_t event_count, event_overflow, thread_count, thread_overflow, terminal_seen;
-    uint32_t terminal_target, arm_reason, reserved;
+    uint32_t terminal_target, arm_reason, term_base_ok, reserved;
     uint64_t arm_ticks, terminal_ticks;
     uint32_t read_count, fourth_reached, fourth_value, fourth_seq;
     uint32_t last_write_seq, last_write_enc, last_write_alias, last_write_value;
@@ -100,16 +101,23 @@ typedef struct {
     XboxA2hSlotwEvent events[A2H_SLOTW_EVENTS_MAX];
 } XboxA2hSlotwLedger;
 
-/* THE CROSS-PROCESS LAYOUT PIN. The collector cannot include the toolkit's header, so this mirror
- * is the only thing standing between a struct change and a silently misread archive: every field
- * after a size change would be read at the wrong offset and reported as data. The toolkit's own
- * fixture prints its authoritative sizeof (14672 for version 1), and the run profile archives both
- * numbers, so a mismatch is visible -- but a mismatch that only shows up at RUN time is too late.
- * This assert makes it a BUILD failure instead, and the number moves only together with the
- * ledger's `version`, which is the same rule JSRF_REGISTRY_VERSION already follows. */
-_Static_assert(sizeof(XboxA2hSlotwLedger) == 14672u,
+/* THE CROSS-PROCESS LAYOUT PIN, AND AN HONEST NOTE ABOUT WHAT IT DOES AND DOES NOT CATCH.
+ *
+ * ⚠ MEASURED: this assert pins the MIRROR, so it catches a change to the mirror and NOT a change to
+ * the real struct in xbox_memory_layout.h. When `term_base_ok` was added there and not here, this
+ * assert still passed -- the mirror was self-consistent, just wrong about the object it describes.
+ * The assert is therefore necessary but NOT sufficient, and it is deliberately kept for what it
+ * does catch (accidental edits to the mirror).
+ *
+ * THE SUFFICIENT CHECK IS THE RUNTIME ONE, and it is why `size` exists in the ledger: the toolkit
+ * stamps sizeof(its own struct) into `size`, and the collector compares that against
+ * sizeof(this mirror) before reading any field. A drift between the two is caught at RUN time by
+ * construction, whatever the assert does -- and the toolkit's own fixture prints the authoritative
+ * number (14680) so the comparison is checkable from the archive too. Both numbers move together
+ * with XBOX_A2H_SLOTW_VERSION. */
+_Static_assert(sizeof(XboxA2hSlotwLedger) == 14680u,
                "XboxA2hSlotwLedger mirror does not match xbox_memory_layout.h -- "
-               "update this pin and A2H_SLOTW_MAGIC's version together");
+               "update this pin and XBOX_A2H_SLOTW_VERSION together");
 _Static_assert(sizeof(XboxA2hSlotwEvent) == 56u, "XboxA2hSlotwEvent mirror drifted");
 _Static_assert(sizeof(XboxA2hSlotwLoss) == 184u, "XboxA2hSlotwLoss mirror drifted");
 /* DR7 = L0 (enable DR0) | RW0 = 01 (write only) | LEN0 = 11 (4 bytes). LE/GE stay CLEAR so the
@@ -1727,20 +1735,33 @@ static void capture_guest_threads(void)
                         sw->magic, A2H_SLOTW_MAGIC);
             free(sw); sw = NULL;
         } else if (sw->size != sizeof(*sw)) {
-            fprintf(report, "GUEST_SLOTW unavailable reason=size read=%u collector=%u version=%u\n",
-                    sw->size, (unsigned)sizeof(*sw), sw->version);
+            /* ⚠ THIS IS THE CHECK THAT ACTUALLY CATCHES A STRUCT DRIFT, and the static assert above
+             * is not. The toolkit stamps sizeof(its own struct) into `size`; if the two ever differ,
+             * every field after the change would be read at the wrong offset, so the ledger is
+             * reported UNAVAILABLE rather than interpreted. The version is reported alongside so a
+             * reader can see whether the mirror is merely older or genuinely misaligned. */
+            fprintf(report, "GUEST_SLOTW unavailable reason=size read=%u collector=%u "
+                            "version=%u collector_version=%u\n",
+                    sw->size, (unsigned)sizeof(*sw), sw->version, A2H_SLOTW_VERSION);
+            free(sw); sw = NULL;
+        } else if (sw->version != A2H_SLOTW_VERSION) {
+            /* Same size, different version: the field MEANINGS may have changed even though the
+             * offsets did not, so this is reported as unavailable too rather than read on the
+             * assumption that an equal size implies an equal layout. */
+            fprintf(report, "GUEST_SLOTW unavailable reason=version read=%u collector=%u size=%u\n",
+                    sw->version, A2H_SLOTW_VERSION, sw->size);
             free(sw); sw = NULL;
         } else {
             extra_memory[extra_count].base = slotw_addr;
             extra_memory[extra_count++].size = sizeof(*sw);
             fprintf(report, "GUEST_SLOTW address=%016llX version=%u size=%u armed=%u arm_reason=%u "
                             "arm_base=%08X term_base=%08X arm_slot=%08X term_slot=%08X stable=%u "
-                            "page_offset=%03X alias_count=%u protected_count=%u mapped_mask=%08X "
-                            "protect_mask=%08X\n",
+                            "term_base_ok=%u page_offset=%03X alias_count=%u protected_count=%u "
+                            "mapped_mask=%08X protect_mask=%08X\n",
                     (unsigned long long)slotw_addr, sw->version, sw->size, sw->armed, sw->arm_reason,
                     sw->arm_base, sw->term_base, sw->arm_slot, sw->term_slot, sw->slot_stable,
-                    sw->page_offset, sw->alias_count, sw->protected_count, sw->mapped_mask,
-                    sw->protect_mask);
+                    sw->term_base_ok, sw->page_offset, sw->alias_count, sw->protected_count,
+                    sw->mapped_mask, sw->protect_mask);
             /* THE LOSS ACCOUNTING, ALL OF IT, ALWAYS. Counted at the event, never sampled. */
             fprintf(report, "GUEST_SLOTW_LOSS relevant_av=%llu slot_hits=%llu nonslot_writes=%llu "
                             "steps=%llu rearm_ok=%llu rearm_failed=%llu protected_intervals=%llu "
