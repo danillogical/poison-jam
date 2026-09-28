@@ -1,5 +1,36 @@
 # `A2h-null-slot-triage-r1` execution evidence — **`O-NO-BOUNDARY-TRANSITION`**
 
+> ## ✅ STAGE-1 ACCEPTANCE: **`ACCEPT`** (2026-09-28)
+>
+> All three criteria **`AGREED`**, **`BLOCKING: NONE`**. Review:
+> `docs/reviews/a2h-null-slot-triage-acceptance-review.md`.
+>
+> **The reviewer independently reproduced** the install control (reading `game/default.xbe` directly: `.rdata`
+> at VA `0x001C3F60`, `0x001C4064` → file offset `0x001B4104` = **`0x80000115`**; index 65; `KERNEL_VA_BASE +
+> 65*4` = **`0xFE000104`**), the **per-thread prefix identity** (all 5555 records on the terminating thread,
+> 0 differences), the **nesting mechanism** (from `jsrf_run.log:9130-9156`), the **counts**, the **complete
+> series** (0 missing), **`§6.1.6` compliance** (version 2 in both runs' `stacks.txt`), **synthetic completion
+> absent**, and the **frozen packet hash** (`F9A6522E…A9F20`, 80 lines, 32704 bytes). **It also ruled the
+> three toolkit test-file stubs WITHIN SCOPE** — *"the stop clause is about where diagnostic LOGIC lives, not
+> link closure."*
+>
+> **Six findings were raised; five were corrections to this record and one was already fixed. All are applied
+> below**, and the reviewer's verdict is that **none changes the row**:
+>
+> | # | Finding | Status |
+> |---|---|---|
+> | 1 | after-samples **7747**, not 7743 | **applied** (verified: 7751 before + 7747 after = 15498) |
+> | 2 | "595 nested adjacencies / depth 7" were **raw-order** counts including cross-thread interleaving; **per-thread it is 5 / 4** | **applied** (verified both measures; per-thread is correct) |
+> | 3 | "identical guest prefix" needed **per-thread on the terminating thread** precision | **applied** |
+> | 4 | `index_integrity(budget=None)` never evaluated the **cap** half of the `O-OPEN` clause | **fixed** — the classifier now reads the budget from metadata (`100000`) and the cap test is live |
+> | 5 | the collector prints the **thread** registry's `claimed`, not the latch's, so `install_ok`/`latch.claimed` are not readable from the archive | **recorded as an advisory** (the latch verdict reaches the record via the terminal print's `observed=0`, which suffices for this row) |
+> | 6 | commit the classifier addition | **done** |
+>
+> **The reviewer also discharged the packet's `O-OPEN` "index gap/duplicate within a thread" clause by direct
+> measurement** — which this record had argued past rather than tested — and confirmed **`DOES NOT APPLY`**.
+> **The Session has since added `index_integrity()` to the classifier (11 self-tests) so the clause is tested
+> mechanically from now on, failing closed to `O-OPEN`.**
+
 **Session:** `session-9f8c9988-38fb-4cc9-a188-a6881a52559a`, 2026-09-28, DSH.
 **Packet:** `docs/packets/a2h-null-slot-triage.md`, revision **`A2h-null-slot-triage-r1`**, frozen SHA-256
 **`F9A6522E8579AD756701C150A0AF60275DCFF4158705CE5331BE3BF2EA7A9F20`** (80 lines) — verified before execution,
@@ -51,8 +82,16 @@ packet required, and it is the reason the rest of the run is interpretable.
 | `[A2HSLOT]` lines | **0** — the gate produced nothing |
 | `[KWATCH]` lines | **0** |
 | Non-gate env identical to Run 2 | `RECOMP_GPU_ACK=0`, `RECOMP_APU_TRAP=1`, `RECOMP_KERNEL_LOG_BUDGET=100000` — **all MATCH** |
-| Guest prefix through the OOM | **identical**: `#5549` 129, `#5550` 161, `#5551` 277, `#5552` 294, `#5553` 277, `#5554` 184 |
+| Guest prefix through the OOM | **identical PER THREAD on the terminating thread**: all **5555** dispatch records match by `(call#, ordinal, slot, esp, ret PC)` with **0 differences**, identical through `#5555` (`#5551` 277, `#5552` 294, `#5553` 277, `#5554` 184→`0xC0000017`, `#5555` 294) |
 | OOM / ICALL / exception | **identical**: `598869040`, `invalid target 0x00000000`, `0xE0424943` |
+
+> **A precision correction the acceptance reviewer required.** This record said *"the numbered guest prefix
+> is identical"* without qualification. **That is not exactly right, and the reason matters:** both runs are
+> **six-threaded**, so a **whole-log** diff diverges immediately — that is **cross-thread interleaving**, not a
+> prefix difference. **The meaningful test is per-thread, on the terminating thread** (`Run 1` tid 65896,
+> `Run 2` tid 44768), where all 5555 records match exactly. The reviewer performed that comparison
+> independently and confirmed it. **The claim is true as stated above and would have been false as
+> originally worded.**
 
 **So the instrumentation is inert on the real guest** — which is exactly what a fixture cannot establish, and
 the reason the Advisor required a live Run 1 rather than fixture-tested inertness.
@@ -64,12 +103,16 @@ the reason the Advisor required a live Run 1 rather than fixture-tested inertnes
 | Quantity (Run 2) | Value |
 |---|---|
 | `[A2HSLOT]` before-samples | **7751** (one per dispatch) |
-| `[A2HSLOT]` after-samples | **7743** |
+| `[A2HSLOT]` after-samples | **7747** |
 | distinct sampled values, all threads | **`0xFE000104` only** |
 | samples reading zero | **0** |
 | `[KWATCH]` change lines | **0** (the one KWATCH line is the initial *before* print) |
 | latch first-zero transitions recorded | **0** |
 | terminal read | **`0x00000000`** |
+
+*(The after-sample count was first written here as 7743. The stage-1 acceptance reviewer recomputed it as
+**7747** and the Session has verified that — the total 15498 was correct, so the before/after split was
+simply mis-added. Corrected above.)*
 
 **The last bridge boundary is `call=#5555 ordinal=294`, and it read `0xFE000104` — immediately before the
 terminal read of `0`:**
@@ -97,9 +140,28 @@ names.
 >
 > **It was a printing artifact of NESTED dispatch, not missing observations.** A bridge can re-enter the
 > dispatcher, which **increments the per-thread counter**, so an `after` line prints the **current** counter —
-> already advanced past its matching `before`. Measured **maximum nesting depth: 7**. Re-pairing by *ordinal*
-> instead of call number leaves exactly **one** unmatched ordinal per thread (the outermost call still on the
-> stack at capture).
+> already advanced past its matching `before`. Re-pairing by *ordinal* instead of call number leaves exactly
+> **one** unmatched ordinal per thread (the outermost call still on the stack at capture).
+>
+> **A measurement correction the acceptance reviewer caught:** this record first reported **595 nested
+> adjacencies** and **maximum nesting depth 7**. **Those are raw-log-order counts and they include
+> CROSS-THREAD interleaving, which is not nesting.** Measured **per thread** — the correct basis, since the
+> counter is per-thread — the terminating thread shows **5 adjacencies and depth 4**, and **every other
+> thread shows 0 and depth 1**:
+>
+> | tid | samples | adjacencies | max depth |
+> |---|---|---|---|
+> | 44768 | 11109 | **5** | **4** |
+> | 48528 | 517 | 0 | 1 |
+> | 60860 | 4 | 0 | 1 |
+> | 65292 | 656 | 0 | 1 |
+> | 65888 | 2769 | 0 | 1 |
+> | 65956 | 443 | 0 | 1 |
+>
+> **The mechanism is real and the conclusion is unchanged** — the reviewer independently confirmed the
+> nesting from the log (`jsrf_run.log:9130-9156`: three `before` lines, then three `after` lines all stamped
+> `#1759` with ordinals 225→232→219). **Only the corroborating numbers were inflated, by measuring the
+> interleaved log instead of each thread.**
 >
 > **The correct test is: does every `[KERNEL]` dispatch have a `before`-sample on that thread?** The
 > `before` series **is** the boundary series, because a `before` is emitted at dispatch entry before any

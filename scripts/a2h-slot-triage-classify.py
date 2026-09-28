@@ -181,6 +181,50 @@ def coverage(p: dict) -> dict:
     }
 
 
+def metadata_budget(run_dir: Path) -> int | None:
+    """Read RECOMP_KERNEL_LOG_BUDGET from run METADATA.
+
+    The budget is an ENVIRONMENT VARIABLE, so searching the log for it is unsound -- an env var is
+    not log text and its absence from the log says nothing. The metadata stores env vars as
+    records with a `name` field, so a plain key lookup finds nothing even when the value is
+    present -- the same absent-record-read-as-negative shape this project keeps meeting.
+    """
+    import json
+    for name in ("metadata.json", "result.json"):
+        p = run_dir / name
+        if not p.exists():
+            continue
+        try:
+            data = json.loads(p.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            continue
+        found = []
+
+        def walk(o, depth=0):
+            if depth > 5:
+                return
+            if isinstance(o, dict):
+                n = o.get("name")
+                if isinstance(n, str) and "LOG_BUDGET" in n.upper():
+                    for vk in ("value", "val", "env_value"):
+                        if vk in o:
+                            found.append(o[vk])
+                for k, v in o.items():
+                    if isinstance(k, str) and "LOG_BUDGET" in k.upper():
+                        found.append(v)
+                    walk(v, depth + 1)
+            elif isinstance(o, list):
+                for v in o:
+                    walk(v, depth + 1)
+        walk(data)
+        for v in found:
+            try:
+                return int(str(v).strip())
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
 def index_integrity(p: dict, budget: int | None = None) -> dict:
     """Does any thread show an index gap, a duplicate, or a cap? (the packet's O-OPEN clause.)
 
@@ -254,7 +298,11 @@ def classify(p: dict) -> dict:
     ic = install_control(p)
     cov = coverage(p)
     ser = series(p)
-    idx = index_integrity(p)
+    # The budget MUST come from metadata, not be left None: the packet's O-OPEN clause includes a
+    # CAP test, and calling index_integrity() without a budget silently never evaluates it. The
+    # acceptance reviewer caught exactly that -- the cap half of the clause was unreachable.
+    budget = metadata_budget(Path(p["run_dir"]))
+    idx = index_integrity(p, budget=budget)
 
     if not ic["present"] or ic["ok"] is not True:
         return {"row": "O-OPEN", "reason": "install positive control absent or failed",
@@ -343,6 +391,9 @@ def run(run_dir: Path) -> dict:
     out = classify(p)
     out["log_sha256"] = p["log_sha256"]
     out["log_bytes"] = p["log_bytes"]
+    # Expose the budget at top level too, so a reader can see WHICH value the cap test used
+    # without digging into index_integrity.
+    out["budget"] = metadata_budget(run_dir)
     out["counts"] = {
         "install_lines": len(p["installs"]),
         "sample_lines": len(p["samples"]),
