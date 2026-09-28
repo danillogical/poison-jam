@@ -100,7 +100,58 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-arming-coverage-attribution-r2` **EXECUTED (fresh OFF + 5 ON) → `O-COVERAGE`** on the K ≥ 2 requirement; **the arming fix WORKED**
+## CURRENT PACKET — `A2h-arming-coverage-attribution-r2` **ACCEPTED** (`ACCEPT`, all criteria `AGREED`, `BLOCKING: NONE`); **successor ruled: ONE MORE N=5 run of the same design**
+
+- **Accepted packet:** `docs/packets/a2h-arming-coverage-attribution.md`, `A2h-arming-coverage-attribution-r2`,
+  **23 lines**, frozen **`80E9425977547BC1EE44DD95645F72ACF4F7941857A39B6DB67B427E7DD81D84`**.
+  Review: `docs/reviews/a2h-arming-coverage-acceptance-review.md` (`a7a6757`). **Stage-1 `ACCEPT` is final; no
+  stage 2.**
+- **Outcome `O-COVERAGE` on K ≥ 2** — observed TARGETs **1/5, K = 1**. **A YIELD shortfall, not a coverage
+  failure:** all five runs are coverage-complete.
+- **✅ The arming fix WORKED.** **17 `GUEST_DR_ARM_OK` per run — 10 `why=handshake`, 7 `why=create_thread`** —
+  where the old record showed only 10. **Seven arms had been invisible all along.** Verified three independent
+  ways by the reviewer. **Zero `GUEST_DR_HIT`** in all five. Fresh OFF **record-level inert**.
+- **A latent break found and fixed (the Session's):** `scripts/test-harness.py` pinned the registry version at
+  `1` in two ways; the version moved 1→2 (`009f624`) then 2→3 (`f5b709d`), so **it had been failing since
+  `009f624` — before this packet — and no guard runs it.** Fixed (`2c8765c`); **19/19 harness probes pass.**
+
+### ADVISOR RULING — `docs/reviews/a2h-null-line-yield-advisor-ruling.md` (verbatim)
+
+**(a) once, bounded — then the decision tree forks. (c) queued behind it. (b) rejected. (d) not now.**
+
+- **One more `N = 5` packet, r2 design repeated verbatim.** *"The design didn't fail — the yield did (66% hit
+  chance at p≈0.4); one bounded repeat is the cheapest path to a decision."* **Keep all anti-fishing structure**
+  (pre-specified N, early-stop only on agreeing K≥2, agreement rule).
+- **No code changes ⇒ same build (`a7e3246`, hash-verified) ⇒ the existing OFF inertness evidence CARRIES. No
+  fresh OFF.**
+- **The 40% figure is a PLANNING INPUT ONLY.** *"K counts only r2-qualifying realizations — set-A targets stay
+  leads, never K. Do not let '4/10' migrate into any K claim."*
+- **(b) raised yield REJECTED:** *"nothing predicts the terminal (anchor 5555 in every run of both classes —
+  measured, not assumed), so yield cannot be raised honestly; pinning the failure would change the system under
+  test."*
+- **(c) QUEUED WITH TRIGGERS:** **MISS (K<2 after the successor) → pivot to a `0x001D5078` packet; HIT → fix
+  packet → reassess siblings after.** *"The sibling line does not advance concurrently — one critical path,
+  ordered."* **The pivot condition as written does NOT fire** — 6 non-targets across 5 distinct terminals is
+  **fragmentation, not dominance**.
+- **Q4 — run 2 is NAMED** as a run-local record: `docs/reviews/a2h-run2-target-run-local-record.md`.
+  **Coverage-complete TARGET, zero DR hits, zero alias touches, terminal zero, mapping re-proved — consistent
+  with read-path, writer `UNKNOWN`, generality `UNKNOWN`.** It is the successor's **agreement comparator**.
+- **STOPPING POINT STATED IN ADVANCE:** *"If the next packet also misses K≥2: re-refer for pivot-or-defer with
+  10+ qualifying runs on record — that is the natural stopping point for the NULL line as framed."*
+
+### QUEUED SECOND — `0x001D5078` (characterised by the Session, not yet a packet)
+
+**`0x001D5078` lies in `.rdata` and the bytes are a FILENAME STRING — `"djv000_0.adx"`**, neighbours
+`effect_006.adx` / `effect_005.adx`. **The guest performs an indirect call whose target is a DATA address
+holding an ADX audio filename**, and `eax/ecx/edx/esp` are **byte-identical across two independent
+realizations**, so the pointer source is deterministic. **3/10 of same-build terminals.** **Recorded as a
+characterisation, not a cause.** *Lead (not finding): the float-bit terminals `0x3E800000`/`0x41200000` suggest
+a garbage-pointer **family** — a future packet checks for shared mechanism but classifies per terminal first.*
+
+**Next:** Planner authors the repeat-verbatim successor; Session validates, freezes, runs up to 5 ON (no fresh
+OFF), then §5.8 acceptance.
+
+**Toolkit:** `571982d` (pushed, `origin/main` verified). **Game:** `d369880`.
 
 - **Packet:** `docs/packets/a2h-arming-coverage-attribution.md`, revision `A2h-arming-coverage-attribution-r2`,
   **23 lines**, frozen **`80E9425977547BC1EE44DD95645F72ACF4F7941857A39B6DB67B427E7DD81D84`** — **not edited**.
@@ -146,7 +197,7 @@ version.** The version moved 1→2 at `009f624` and 2→3 at `f5b709d`, so **the
 
 ---
 
-## Previous — `A2h-arming-coverage-attribution-r2` **PROMOTED**, then executed as above
+## Previous — `A2h-slot-read-path-displacement-r1` **EXECUTED (Run 1 OFF only) → `O-COVERAGE`**; superseded by the within-run redesign
 
 - **Packet:** `docs/packets/a2h-slot-read-path-displacement.md`, revision
   `A2h-slot-read-path-displacement-r1`, frozen
