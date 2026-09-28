@@ -72,6 +72,33 @@ static void capture_guest_threads(void);
  * complete one. No run-length-sized history is kept anywhere in this file. */
 #define A2H_BIRTH_CAPACITY 256
 
+/* ── C1: event-time LOSSLESS DELIVERY ledger (A2h-dr0-delivery-gate) ────────────────────────────
+ *
+ * WHY THIS EXISTS. The Phase-1 finding is that the install store -- a known canonical write under an
+ * armed four-byte write watch, on the armed thread, after the arm -- produced no #DB. Before that can
+ * be read as NON-FIRING, the delivery side has to be provably LOSSLESS, because "no hit" and "no
+ * record of a hit" are different worlds:
+ *
+ *     install_executed=1 AND complete raw single-step count of 0   ->  NON-FIRING
+ *     missing latch, or any incomplete/lossy accounting            ->  NOT-RECORDED / UNKNOWN
+ *
+ * So the raw debug event is counted at the TOP of the exception branch, BEFORE any filtering, gating
+ * or routing -- a count taken after the gate would be exactly the dropped-record hazard the packet
+ * names. Every counter below is UNCAPPED; only the record array is bounded, and its overflow is an
+ * explicit published flag, never a silent truncation.
+ *
+ * BOUNDED, FIXED-SIZE ONLY. Same pattern as dr_arm_tids[A2H_ARM_TID_CAPACITY]: a fixed array plus an
+ * overflow flag. No run-length-sized history is kept anywhere in this file. */
+#define A2H_RAW_SS_CAPACITY 32
+/* Chance classification. The distinction is the packet's C3 discriminator: a raw 0x80000004 marked
+ * SECOND chance while first chance is absent favors chance semantics, whereas a raw event that is
+ * present but filtered, DBG_CONTINUE-consumed, or absent downstream favors debugger swallow. */
+enum { A2H_CHANCE_FIRST = 0, A2H_CHANCE_SECOND = 1 };
+/* Where the event went after it was counted. Recorded per event so a reader can tell a delivered
+ * event that was ROUTED from one that was merely COUNTED. */
+enum { A2H_ROUTE_NONE = 0, A2H_ROUTE_HANDLER = 1, A2H_ROUTE_GENERIC_FIRST = 2,
+       A2H_ROUTE_TERMINAL_SECOND = 3 };
+
 /* The three counters below answer three DIFFERENT questions and must never be substituted for one
  * another. Recorded here because all three were confused in this archive:
  *   dr_armed            -- successful arms this process performed. POSITIVE per-arm records back it.
@@ -127,6 +154,53 @@ static struct { unsigned seq, why, mapping_available, state, reason; DWORD tid; 
     dr_birth[A2H_BIRTH_CAPACITY];
 static unsigned dr_birth_count, dr_birth_overflow;
 
+/* C1 delivery ledger. Every counter here is UNCAPPED and every one of them is published, so a reader
+ * can distinguish a real zero from an unrecorded one. `dr_raw_event_total` counts EVERY debug event
+ * of any kind, which is the completeness denominator: if the raw single-step count is 0 while the
+ * total is also 0, nothing was recorded at all and the answer is UNKNOWN, not NON-FIRING. */
+static unsigned dr_raw_event_total, dr_raw_exception_total, dr_raw_single_step;
+static unsigned dr_ss_first_chance, dr_ss_second_chance;
+static unsigned dr_ss_routed_handler, dr_ss_routed_generic, dr_ss_routed_terminal;
+static unsigned dr_ss_filtered_other_code;   /* counted, but not a single-step: the filter boundary */
+static unsigned dr_ss_unrouted;              /* single-step that reached no branch at all */
+/* Continuation bookkeeping. `not_handled` is the SWALLOW discriminator: an event this instrument
+ * passed on is one the target's own handlers then had to deal with. */
+static unsigned dr_continue_total, dr_continue_continue, dr_continue_not_handled;
+static unsigned dr_continue_failed;
+/* The event-time records. Bounded array + explicit overflow flag, exactly like dr_arm_tids. */
+static struct { unsigned seq, chance, route, tid, code; DWORD64 ticks; DWORD64 address; }
+    dr_raw_ss[A2H_RAW_SS_CAPACITY];
+static unsigned dr_raw_ss_count, dr_raw_ss_overflow;
+/* The write-once INSTALL-HIT latch. Set when a claimed single-step arrives and the DR0 value read
+ * back at the event names the canonical watch, i.e. the delivery the Phase-1 gate requires. */
+static volatile LONG dr_install_hit_latch;
+static unsigned dr_install_hit_seq;
+static DWORD dr_install_hit_tid;
+static DWORD64 dr_install_hit_rip, dr_install_hit_dr6, dr_install_hit_dr7;
+/* The value the DR0 watch actually holds, as read back from the thread at the arm and re-read at
+ * every single-step. Published next to the toolkit's `host=` so a reader can decide whether the watch
+ * ever pointed at the address the install store wrote. */
+static DWORD64 dr_watch_armed_value;
+
+/* C3: the POST-CONTINUE readback.
+ *
+ * WHY THIS IS THE CRITICAL NEW MEASUREMENT. The pre-existing readback (dr_arm_thread) happens right
+ * after SetThreadContext and BEFORE ContinueDebugEvent. A thread context that reverts ACROSS the
+ * continue therefore explains zero hits while every existing check still passes -- the arm reads back
+ * correct, and the watch is gone by the time the store executes. Reading DR0/DR7/DR6 back on the FAR
+ * SIDE of ContinueDebugEvent is the only way to see that, and it is what separates "the registers
+ * were never programmed" from "they were programmed and then lost". */
+#define A2H_POST_CONTINUE_CAPACITY 16
+static struct { unsigned seq; DWORD tid; DWORD64 dr0, dr7, dr6; int ok; } 
+    dr_post_continue[A2H_POST_CONTINUE_CAPACITY];
+static unsigned dr_post_continue_count, dr_post_continue_overflow;
+static unsigned dr_post_continue_reads, dr_post_continue_ok, dr_post_continue_reverted;
+static unsigned dr_post_continue_unreadable;
+/* The armed tid whose DR0 was verified after a continue, and the last value read back: the two facts
+ * a reader compares against the toolkit's store witness. */
+static DWORD dr_post_continue_last_tid;
+static DWORD64 dr_post_continue_last_dr0, dr_post_continue_last_dr7;
+
 static int dr_on(void)
 {
     if (!dr_gate_read) { dr_enabled = getenv(JSRF_A2H_DR_GATE) != NULL; dr_gate_read = 1; }
@@ -159,6 +233,8 @@ static int resolve_geometry(void)
 
 static int dr_arm_thread(HANDLE thread, DWORD tid, const char *why, unsigned *reason);
 static int dr_was_armed(DWORD tid);
+/* C1/C3: defined after the terminal summary that publishes it, so declared here. */
+static void a2h_delivery_terminal(void);
 
 /* ── C1/C2 event-time ledger (observation only; every writer is behind the gate) ───────────────
  *
@@ -300,6 +376,10 @@ static int dr_arm_thread(HANDLE thread, DWORD tid, const char *why, unsigned *re
         return 0;
     }
     dr_armed++;
+    /* C1: the value the watch actually holds, as read back -- not the value written. This is what the
+     * install store's own witness is compared against to decide whether the watch ever pointed at the
+     * address the store targeted. */
+    dr_watch_armed_value = back.Dr0;
     if (dr_arm_tid_count < A2H_ARM_TID_CAPACITY) {
         int seen = 0;
         for (unsigned i = 0; i < dr_arm_tid_count; i++) if (dr_arm_tids[i] == tid) { seen = 1; break; }
@@ -492,6 +572,103 @@ static void dr_print_terminal_summary(void)
     for (unsigned i = 0; i < dr_arm_tid_count; i++)
         fprintf(report, "GUEST_DR_ARM_TID_TERMINAL index=%u tid=%lu source=%s\n", i,
                 dr_arm_tids[i], dr_arm_tid_why[i] == A2H_WHY_HANDSHAKE ? "handshake" : "create_thread");
+    a2h_delivery_terminal();
+    fflush(report);
+}
+
+/* ── C1/C3: the DELIVERY decision, published so a reader never has to combine counters ──────────
+ *
+ * The packet's losslessness requirement is that a reader must be able to tell NON-FIRING from
+ * NOT-RECORDED. This emits that as a DERIVED verdict with the evidence next to it, rather than two
+ * counts a reader might combine wrongly:
+ *
+ *   NON_FIRING          the raw debug stream was demonstrably read (events > 0), the raw single-step
+ *                       count is a complete zero, the ledger did not overflow, AND the far-side
+ *                       readback verified the watch survived the continue. The watch was programmed,
+ *                       stayed programmed, and did not fire for a write that provably happened.
+ *   CONTEXT_LOST        the same complete zero, but the post-continue readback found DR0/DR7 gone or
+ *                       unreadable. The registers were programmed and did not survive -- so the zero
+ *                       is explained by context loss, NOT by a watch that cannot fire.
+ *   DELIVERED_UNCLAIMED a raw single-step DID arrive but was not claimed by this instrument.
+ *   UNKNOWN_NOT_RECORDED nothing was counted at all, or the ledger overflowed, so a zero carries no
+ *                       information. NEVER read as absence.
+ *   HIT                 a claimed single-step arrived; the write-once install-hit latch is set.
+ *
+ * `complete=` is the single word a reader keys on, and it is derived, not asserted. */
+static void a2h_delivery_terminal(void)
+{
+    int complete = (dr_raw_event_total > 0) && !dr_raw_ss_overflow && !dr_post_continue_overflow;
+    const char *decision;
+    if (dr_install_hit_latch) decision = "HIT";
+    else if (!complete) decision = "UNKNOWN_NOT_RECORDED";
+    else if (dr_raw_single_step) decision = "DELIVERED_UNCLAIMED";
+    else if (dr_post_continue_reverted || dr_post_continue_unreadable) decision = "CONTEXT_LOST";
+    else decision = "NON_FIRING";
+    fprintf(report, "GUEST_DR_DELIVERY_TERMINAL raw_events=%u raw_exceptions=%u raw_single_step=%u "
+                    "ss_first_chance=%u ss_second_chance=%u ss_routed_handler=%u "
+                    "ss_routed_generic_first=%u ss_routed_terminal_second=%u ss_unrouted=%u "
+                    "ss_records=%u ss_overflow=%u filtered_other_code=%u continue_total=%u "
+                    "continue_continue=%u continue_not_handled=%u continue_failed=%u "
+                    "post_continue_reads=%u post_continue_ok=%u post_continue_reverted=%u "
+                    "post_continue_unreadable=%u post_continue_overflow=%u install_hit=%ld "
+                    "watch_armed_value=%016llX canonical=%016llX complete=%d decision=%s\n",
+            dr_raw_event_total, dr_raw_exception_total, dr_raw_single_step, dr_ss_first_chance,
+            dr_ss_second_chance, dr_ss_routed_handler, dr_ss_routed_generic,
+            dr_ss_routed_terminal, dr_ss_unrouted, dr_raw_ss_count, dr_raw_ss_overflow,
+            dr_ss_filtered_other_code, dr_continue_total, dr_continue_continue,
+            dr_continue_not_handled, dr_continue_failed, dr_post_continue_reads,
+            dr_post_continue_ok, dr_post_continue_reverted, dr_post_continue_unreadable,
+            dr_post_continue_overflow, (long)dr_install_hit_latch,
+            (unsigned long long)dr_watch_armed_value, (unsigned long long)dr_canonical,
+            complete, decision);
+    /* C3: THE DISCRIMINATOR VERDICT, derived from the same records. Each cause leaves a DIFFERENT
+     * trace, which is the whole point -- the packet refuses a hypothesis without a discriminating
+     * control:
+     *
+     *   CHANCE_SEMANTICS   a raw single-step arrived as SECOND chance while no first-chance
+     *                      single-step did. The event was delivered; the chance is the story.
+     *   DEBUGGER_SWALLOW   a raw single-step was delivered and then routed to a path that did not
+     *                      claim it (generic first-chance, or consumed with DBG_CONTINUE and no
+     *                      downstream hit). Delivered, then handled away.
+     *   CONTEXT_LOSS       the post-continue readback found DR0/DR7 reverted, or unreadable. The
+     *                      registers were programmed and did not survive the continue.
+     *   NO_RAW_EVENT       nothing arrived at all: only then do the before/after-continue readbacks
+     *                      and the toolkit's store witness discriminate delivery from handling.
+     */
+    {
+        const char *cause;
+        if (dr_install_hit_latch) cause = "HIT_OBSERVED";
+        else if (dr_ss_second_chance && !dr_ss_first_chance) cause = "CHANCE_SEMANTICS";
+        else if (dr_raw_single_step) cause = "DEBUGGER_SWALLOW";
+        else if (dr_post_continue_reverted || dr_post_continue_unreadable) cause = "CONTEXT_LOSS";
+        else if (complete) cause = "NO_RAW_EVENT";
+        else cause = "UNKNOWN_NOT_RECORDED";
+        fprintf(report, "GUEST_DR_CAUSE first_chance_ss=%u second_chance_ss=%u routed_handler=%u "
+                        "routed_elsewhere=%u post_continue_reverted=%u post_continue_unreadable=%u "
+                        "post_continue_last_tid=%lu post_continue_last_dr0=%016llX "
+                        "post_continue_last_dr7=%016llX cause=%s\n",
+                dr_ss_first_chance, dr_ss_second_chance, dr_ss_routed_handler,
+                dr_ss_routed_generic + dr_ss_routed_terminal, dr_post_continue_reverted,
+                dr_post_continue_unreadable, dr_post_continue_last_tid,
+                (unsigned long long)dr_post_continue_last_dr0,
+                (unsigned long long)dr_post_continue_last_dr7, cause);
+    }
+    for (unsigned i = 0; i < dr_raw_ss_count; i++)
+        fprintf(report, "GUEST_DR_RAW_SS_ROW index=%u seq=%u tid=%lu code=%08lX chance=%s route=%s "
+                        "address=%016llX ticks=%llu\n",
+                i, dr_raw_ss[i].seq, dr_raw_ss[i].tid, dr_raw_ss[i].code,
+                dr_raw_ss[i].chance == A2H_CHANCE_FIRST ? "first" : "second",
+                dr_raw_ss[i].route == A2H_ROUTE_HANDLER ? "handler" :
+                (dr_raw_ss[i].route == A2H_ROUTE_GENERIC_FIRST ? "generic_first" :
+                 (dr_raw_ss[i].route == A2H_ROUTE_TERMINAL_SECOND ? "terminal_second" : "unrouted")),
+                dr_raw_ss[i].address, (unsigned long long)dr_raw_ss[i].ticks);
+    for (unsigned i = 0; i < dr_post_continue_count; i++)
+        fprintf(report, "GUEST_DR_POST_CONTINUE_ROW index=%u seq=%u tid=%lu dr0=%016llX dr7=%016llX "
+                        "dr6=%016llX watch_intact=%d\n",
+                i, dr_post_continue[i].seq, dr_post_continue[i].tid,
+                (unsigned long long)dr_post_continue[i].dr0,
+                (unsigned long long)dr_post_continue[i].dr7,
+                (unsigned long long)dr_post_continue[i].dr6, dr_post_continue[i].ok);
     fflush(report);
 }
 
@@ -549,6 +726,146 @@ static int dr_tid_exited(DWORD tid)
     return 0;
 }
 
+/* ── C1: the RAW, PRE-FILTER single-step record ─────────────────────────────────────────────────
+ *
+ * Called from the TOP of the exception branch in the debug loop, before any gate, filter or routing
+ * decision. A count taken anywhere later could miss an event that a filter dropped, which is the
+ * exact absent-record failure this packet exists to close. Nothing here decides anything: it records
+ * that the event was DELIVERED and which chance it was.
+ *
+ * `dr_raw_event_total` is incremented by the caller for EVERY debug event, so the raw single-step
+ * count always has a completeness denominator next to it. */
+static void a2h_raw_single_step(DWORD tid, DWORD code, DWORD first_chance, DWORD64 address)
+{
+    LARGE_INTEGER now;
+    unsigned seq = ++dr_seq;
+    unsigned chance = first_chance ? A2H_CHANCE_FIRST : A2H_CHANCE_SECOND;
+    QueryPerformanceCounter(&now);
+    dr_raw_single_step++;
+    if (first_chance) dr_ss_first_chance++; else dr_ss_second_chance++;
+    if (code != EXCEPTION_SINGLE_STEP) dr_ss_filtered_other_code++;
+    if (dr_raw_ss_count < A2H_RAW_SS_CAPACITY) {
+        dr_raw_ss[dr_raw_ss_count].seq = seq;
+        dr_raw_ss[dr_raw_ss_count].chance = chance;
+        dr_raw_ss[dr_raw_ss_count].route = A2H_ROUTE_NONE;   /* updated by the router below */
+        dr_raw_ss[dr_raw_ss_count].tid = tid;
+        dr_raw_ss[dr_raw_ss_count].code = code;
+        dr_raw_ss[dr_raw_ss_count].ticks = (DWORD64)now.QuadPart;
+        dr_raw_ss[dr_raw_ss_count].address = address;
+        dr_raw_ss_count++;
+    } else dr_raw_ss_overflow = 1;
+    /* Corroboration only -- the counters above are the decision inputs. Printed for EVERY raw
+     * single-step, before any routing, so the log and the ledger agree by construction. */
+    fprintf(report, "GUEST_DR_RAW_SS seq=%u tid=%lu code=%08lX chance=%s address=%016llX "
+                    "raw_ss_total=%u raw_events=%u\n",
+            seq, tid, code, first_chance ? "first" : "second",
+            (unsigned long long)address, dr_raw_single_step, dr_raw_event_total);
+    fflush(report);
+}
+
+/* Records where a raw single-step went. Kept separate from the recorder above so that a reader can
+ * see an event that was COUNTED but never ROUTED -- that gap is the filter boundary made visible. */
+static void a2h_raw_ss_route(unsigned seq, unsigned route)
+{
+    for (unsigned i = dr_raw_ss_count; i > 0; i--)
+        if (dr_raw_ss[i - 1].seq == seq) { dr_raw_ss[i - 1].route = route; break; }
+    switch (route) {
+    case A2H_ROUTE_HANDLER:        dr_ss_routed_handler++; break;
+    case A2H_ROUTE_GENERIC_FIRST:  dr_ss_routed_generic++; break;
+    case A2H_ROUTE_TERMINAL_SECOND:dr_ss_routed_terminal++; break;
+    default:                       dr_ss_unrouted++; break;
+    }
+}
+
+/* ── C3: the POST-CONTINUE readback ─────────────────────────────────────────────────────────────
+ *
+ * THE CRITICAL NEW MEASUREMENT. The arm's own readback happens after SetThreadContext and BEFORE
+ * ContinueDebugEvent, so it cannot see a context that reverts ACROSS the continue -- and such a
+ * revert would produce exactly the observed signature: every existing check passes, the registers
+ * read back correct, and yet no #DB ever arrives for a store that provably happened.
+ *
+ * This runs AFTER ContinueDebugEvent returns, on the thread that was just continued, and reads
+ * DR0/DR7/DR6 back. Outcomes:
+ *   ok        the watch is still programmed on the far side of the continue
+ *   REVERTED  DR0 or the owned DR7 bits are gone -> the context did not survive the continue
+ *   unreadable the thread could not be opened or read -> UNKNOWN, never a negative
+ *
+ * Observation only: GetThreadContext reads, it never writes. Bounded array plus an overflow flag.
+ */
+static void a2h_post_continue_readback(DWORD tid, unsigned continue_status, int continue_ok)
+{
+    HANDLE handle;
+    CONTEXT context = {0};
+    LARGE_INTEGER now;
+    unsigned seq = ++dr_seq;
+    int ok = 0;
+    DWORD64 dr0 = 0, dr7 = 0, dr6 = 0;
+
+    (void)continue_status;
+    dr_continue_total++;
+    if (continue_status == DBG_CONTINUE) dr_continue_continue++;
+    else if (continue_status == DBG_EXCEPTION_NOT_HANDLED) dr_continue_not_handled++;
+    if (!continue_ok) dr_continue_failed++;
+
+    /* ONLY threads this instrument armed. An unarmed thread has no watch of ours to verify, and
+     * reading somebody else's DR state would produce a meaningless row. */
+    if (!dr_was_armed(tid)) return;
+
+    handle = OpenThread(THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, tid);
+    if (!handle) { dr_post_continue_unreadable++; return; }
+    context.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+    if (!GetThreadContext(handle, &context)) {
+        dr_post_continue_unreadable++;
+        CloseHandle(handle);
+        return;
+    }
+    dr0 = context.Dr0; dr7 = context.Dr7; dr6 = context.Dr6;
+    ok = (dr0 == dr_canonical) && ((dr7 & A2H_DR7_OWNED) == A2H_DR7);
+    dr_post_continue_reads++;
+    if (ok) dr_post_continue_ok++; else dr_post_continue_reverted++;
+    dr_post_continue_last_tid = tid;
+    dr_post_continue_last_dr0 = dr0;
+    dr_post_continue_last_dr7 = dr7;
+    QueryPerformanceCounter(&now);
+    if (dr_post_continue_count < A2H_POST_CONTINUE_CAPACITY) {
+        dr_post_continue[dr_post_continue_count].seq = seq;
+        dr_post_continue[dr_post_continue_count].tid = tid;
+        dr_post_continue[dr_post_continue_count].dr0 = dr0;
+        dr_post_continue[dr_post_continue_count].dr7 = dr7;
+        dr_post_continue[dr_post_continue_count].dr6 = dr6;
+        dr_post_continue[dr_post_continue_count].ok = ok;
+        dr_post_continue_count++;
+    } else dr_post_continue_overflow = 1;
+    CloseHandle(handle);
+    fprintf(report, "GUEST_DR_POST_CONTINUE seq=%u tid=%lu status=%s dr0=%016llX dr7=%016llX "
+                    "dr6=%016llX canonical=%016llX watch_intact=%d\n",
+            seq, tid, continue_ok ? (continue_status == DBG_CONTINUE ? "DBG_CONTINUE"
+                                                                     : "DBG_EXCEPTION_NOT_HANDLED")
+                                  : "continue_failed",
+            (unsigned long long)dr0, (unsigned long long)dr7, (unsigned long long)dr6,
+            (unsigned long long)dr_canonical, ok);
+    fflush(report);
+}
+
+/* The write-once install-hit latch, in its own function so the fixture drives THIS code rather than a
+ * copy of it. Called only when DR6.B0 -- this instrument's own watch bit -- is set on a thread this
+ * instrument armed. */
+static void a2h_publish_install_hit(DWORD tid, DWORD64 dr6, DWORD64 dr7, DWORD64 rip)
+{
+    if (InterlockedCompareExchange(&dr_install_hit_latch, 1, 0) != 0) return;
+    dr_install_hit_seq = dr_seq;
+    dr_install_hit_tid = tid;
+    dr_install_hit_rip = rip;
+    dr_install_hit_dr6 = dr6;
+    dr_install_hit_dr7 = dr7;
+    fprintf(report, "GUEST_DR_INSTALL_HIT seq=%u tid=%lu rip=%016llX dr6=%016llX "
+                    "dr7=%016llX canonical=%016llX watch_armed_value=%016llX\n",
+            dr_install_hit_seq, tid, (unsigned long long)rip, (unsigned long long)dr6,
+            (unsigned long long)dr7, (unsigned long long)dr_canonical,
+            (unsigned long long)dr_watch_armed_value);
+    fflush(report);
+}
+
 /* A #DB in a watched thread. Services ONLY this instrument's DR6.B0: BS (0x4000), B1-B3
  * (0x2,0x4,0x8) and TF belong to whoever else set them, so a mixed status is passed on and the run
  * is coverage-uncertain rather than credited with a canonical write. */
@@ -587,6 +904,12 @@ static DWORD dr_handle_single_step(DWORD tid)
         CloseHandle(handle);
         return DBG_EXCEPTION_NOT_HANDLED;
     }
+    /* C1: THE WRITE-ONCE INSTALL-HIT LATCH. This is the delivery the Phase-1 gate requires: a native
+     * single-step whose DR6.B0 -- this instrument's own watch bit -- is set, on a thread this
+     * instrument armed. Set ONCE, with the DR7 read back at the event, so a later event cannot
+     * overwrite the first one and a reader can compare the watch value here against the value the
+     * toolkit's install witness recorded for the same store. */
+    a2h_publish_install_hit(tid, dr6, context.Dr7, context.Rip);
     /* Post-hit read. The packet is explicit that this value can ALREADY reflect a competing write,
      * so it is recorded as the raw observation it is; attribution happens offline. */
     read_remote(dr_canonical, &value, sizeof(value));
@@ -1076,6 +1399,63 @@ void jsrf_a2h_test_terminal(void)
 DWORD jsrf_a2h_test_armed_count(void) { return dr_armed; }
 DWORD jsrf_a2h_test_failed_count(void) { return dr_failed; }
 
+/* ── C1/C3 fixture seams (A2h-dr0-delivery-gate) ────────────────────────────────────────────────
+ *
+ * Same pattern as the seams above, and the same reason: the fixture must drive the PRODUCTION branch
+ * bodies rather than a test-local copy, or the fixture proves nothing about the shipped instrument.
+ * These expose the delivery ledger so the packet's five required cases can be injected
+ * deterministically:
+ *
+ *   jsrf_a2h_test_raw_event()            the completeness denominator (dr_raw_event_total)
+ *   jsrf_a2h_test_raw_single_step(...)   a raw pre-filter single-step -> returns its seq
+ *   jsrf_a2h_test_raw_ss_route(seq, r)   where it went: 0 none, 1 handler, 2 generic_first,
+ *                                        3 terminal_second  (the A2H_ROUTE_* values)
+ *   jsrf_a2h_test_publish_install_hit()  the write-once hit latch
+ *   jsrf_a2h_test_post_continue(...)     the far-side readback
+ *   jsrf_a2h_test_delivery_terminal()    the published decision
+ *   jsrf_a2h_test_install_hit_latch()    the latch, so a fixture asserts the record not the print
+ *
+ * Nothing in the collector calls them, they add no behaviour, and the gate still decides everything:
+ * with JSRF_TRACE_A2H_DR unset they write into structures nothing ever publishes. */
+void jsrf_a2h_test_raw_event(void)
+{
+    if (!dr_on()) return;
+    dr_raw_event_total++;
+}
+
+unsigned jsrf_a2h_test_raw_single_step(DWORD tid, DWORD code, DWORD first_chance, DWORD64 address)
+{
+    if (!dr_on()) return 0;
+    a2h_raw_single_step(tid, code, first_chance, address);
+    return dr_seq;
+}
+
+void jsrf_a2h_test_raw_ss_route(unsigned seq, unsigned route)
+{
+    if (!dr_on()) return;
+    a2h_raw_ss_route(seq, route);
+}
+
+void jsrf_a2h_test_publish_install_hit(DWORD tid, DWORD64 dr6, DWORD64 dr7, DWORD64 rip)
+{
+    if (!dr_on()) return;
+    a2h_publish_install_hit(tid, dr6, dr7, rip);
+}
+
+void jsrf_a2h_test_post_continue(DWORD tid, unsigned status, int ok)
+{
+    if (!dr_on()) return;
+    a2h_post_continue_readback(tid, status, ok);
+}
+
+void jsrf_a2h_test_delivery_terminal(void)
+{
+    if (!dr_on()) return;
+    a2h_delivery_terminal();
+}
+
+int jsrf_a2h_test_install_hit_latch(void) { return (int)dr_install_hit_latch; }
+
 /* The fixture links this file to drive the production branch bodies above, so its own main() is
  * compiled out there. Nothing in the production build defines JSRF_COLLECT_NO_MAIN, so the collector
  * entry point is unchanged. */
@@ -1128,6 +1508,7 @@ int main(int argc, char **argv)
     while (!finished) {
         DEBUG_EVENT event;
         DWORD continuation = DBG_CONTINUE;
+        BOOL continue_ok;
         if (!break_deadline && GetTickCount64() >= deadline) {
             if (!DebugBreakProcess(process)) break;
             break_deadline = GetTickCount64() + 5000;
@@ -1136,6 +1517,10 @@ int main(int argc, char **argv)
             if (GetLastError() != ERROR_SEM_TIMEOUT) break;
             continue;
         }
+        /* C1 completeness denominator: EVERY debug event of ANY kind is counted here, before any
+         * dispatch below. Without it a raw single-step count of 0 could not be told apart from a
+         * debug stream that was never read. */
+        if (dr_on()) dr_raw_event_total++;
         if (event.dwDebugEventCode == CREATE_PROCESS_DEBUG_EVENT) {
             if (event.u.CreateProcessInfo.hFile) CloseHandle(event.u.CreateProcessInfo.hFile);
         } else if (event.dwDebugEventCode == CREATE_THREAD_DEBUG_EVENT) {
@@ -1153,7 +1538,18 @@ int main(int argc, char **argv)
         } else if (event.dwDebugEventCode == EXCEPTION_DEBUG_EVENT) {
             EXCEPTION_DEBUG_INFO *exception = &event.u.Exception;
             DWORD code = exception->ExceptionRecord.ExceptionCode;
+            unsigned raw_seq = 0;
             fprintf(report, "DEBUG_EXCEPTION tid=%lu code=%08lX first=%lu\n",event.dwThreadId,code,exception->dwFirstChance);
+            /* C1: COUNTED HERE, AT THE TOP OF THE BRANCH, BEFORE ANY FILTERING, GATING OR ROUTING.
+             * This is the one measurement that makes NON-FIRING decidable: an event counted here and
+             * dropped below is visibly a ROUTING outcome, whereas a count taken after the filter
+             * could not tell a dropped event from one that never arrived. */
+            if (dr_on()) {
+                dr_raw_exception_total++;
+                raw_seq = dr_seq + 1;
+                a2h_raw_single_step(event.dwThreadId, code, exception->dwFirstChance,
+                                    (DWORD64)(uintptr_t)exception->ExceptionRecord.ExceptionAddress);
+            }
             if (code == EXCEPTION_BREAKPOINT && initial_break) initial_break = 0;
             else if (code == EXCEPTION_BREAKPOINT && break_deadline) {
                 outcome = "diagnostic_deadline";
@@ -1163,6 +1559,7 @@ int main(int argc, char **argv)
             } else if (code == EXCEPTION_SINGLE_STEP && dr_on()) {
                 /* The handler decides ownership from DR6, not from the chance: pure B0 is ours,
                  * BS alone or a mixed status is somebody else's and is passed on. */
+                a2h_raw_ss_route(raw_seq, A2H_ROUTE_HANDLER);
                 continuation = dr_handle_single_step(event.dwThreadId);
             } else if (code == JSRF_A2H_DR_HANDSHAKE && exception->dwFirstChance && dr_on()) {
                 /* A2h install handshake. The toolkit raises this FIRST-CHANCE at its thunk-install
@@ -1187,20 +1584,34 @@ int main(int argc, char **argv)
                 dump_ok = capture(0, NULL);
                 continuation = DBG_EXCEPTION_NOT_HANDLED;
             } else if (!exception->dwFirstChance) {
+                if (dr_on()) a2h_raw_ss_route(raw_seq, A2H_ROUTE_TERMINAL_SECOND);
                 outcome = "unhandled_exception";
                 exit_code = code;
                 fprintf(report, "UNHANDLED tid=%lu exception=%08lX address=%p\n", event.dwThreadId,
                         code, exception->ExceptionRecord.ExceptionAddress);
                 dump_ok = capture(event.dwThreadId, exception);
                 finished = 1;
-            } else continuation = DBG_EXCEPTION_NOT_HANDLED;
+            } else {
+                /* THE SWALLOW BOUNDARY, made visible: a raw event that reached here was delivered to
+                 * the debugger and then consumed by a first-chance path that is not this
+                 * instrument's. A single-step landing here favors debugger swallow over a watch that
+                 * cannot fire. */
+                if (dr_on()) a2h_raw_ss_route(raw_seq, A2H_ROUTE_GENERIC_FIRST);
+                continuation = DBG_EXCEPTION_NOT_HANDLED;
+            }
         } else if (event.dwDebugEventCode == EXIT_PROCESS_DEBUG_EVENT) {
             exit_code = event.u.ExitProcess.dwExitCode;
             outcome = "normal_exit";
             finished = 1;
         }
         if (finished && strcmp(outcome, "normal_exit")) TerminateProcess(process, exit_code);
-        ContinueDebugEvent(event.dwProcessId, event.dwThreadId, continuation);
+        continue_ok = ContinueDebugEvent(event.dwProcessId, event.dwThreadId, continuation);
+        /* C3: THE FAR-SIDE READBACK, immediately after the continue returns. This is the measurement
+         * that did not exist before: the arm's own readback is taken before this point, so a context
+         * that reverts ACROSS the continue was invisible to every previous check while producing
+         * exactly the observed signature of a watch that never fires. Gated, so with the gate off no
+         * thread is opened and no context is read. */
+        if (dr_on()) a2h_post_continue_readback(event.dwThreadId, continuation, continue_ok != 0);
     }
     CloseHandle(job); /* also kills the child on collector failure */
     if (dr_on()) dr_disarm_all();
