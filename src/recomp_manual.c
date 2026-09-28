@@ -50,8 +50,13 @@ void recomp_icall_not_code_log(uint32_t va)
      * `va` is the target the generated code passed to this hook; the hook does NOT re-read it and
      * does not substitute its own read for the generated one. The slot read inside
      * jsrf_slot_watch_terminal is a SEPARATE, independent read of the same live slot, which is
-     * exactly why the two can be compared. Off unless JSRF_TRACE_A2H_SLOT is set. */
-    if (getenv("JSRF_TRACE_A2H_SLOT")) {
+     * exactly why the two can be compared.
+     *
+     * GATED ON EITHER DIAGNOSTIC. The terminal witness belongs to the version-3 WRITE watch, so it
+     * must be produced whenever that watch is on -- not only when the older boundary-sampling gate
+     * happens to be set too. Tying it to the old gate alone would let a run that armed the write
+     * watch silently omit the one record the packet requires at the fatal moment. */
+    if (getenv("JSRF_TRACE_A2H_SLOT") || getenv("JSRF_TRACE_A2H_DR")) {
         jsrf_slot_watch_terminal(va);
         fprintf(stderr, "  [A2HSLOT] terminal tid=%lu target=%08X slot=%08X live=%08X call=#%u observed=%u\n",
             GetCurrentThreadId(), va, 0x001C4064u, MEM32(0x001C4064u),
