@@ -174,6 +174,29 @@ exactly two lines (a bridge return and the ICALL). **So whether guest code wrote
 is not decidable here** — which is precisely why the row's successor is a **page-guard write history**: it is
 the only instrument that observes guest writes to this page.
 
+**This coverage limit is measured, not assumed.** The gap is lines `34632..34635`, and the run's *entire*
+instrumentation census is known (`KERNEL` 15960, `A2HSLOT` 15500, `TRACE` 1268, `ESP` 1221, `RECOVERED` 345,
+`READ` 14, …). **No `[TRACE]`, `[RECOVERED]` or `[READ]` line falls inside the gap** — the nearest are **85**,
+**251** and **501** lines earlier respectively. **So no instrument in this run observed the guest code that
+executed there**, and the artifact **cannot name it**.
+
+### A second hypothesis refuted: the toolkit's documented static-data-corruption class
+
+`xbox_memory_layout.c:2602-2615` documents a real failure mode — *"the worker spawned during engine init
+wrote its frames over the game's own static data. Nothing faults … so it shows up later as globals that were
+correct when written and wrong when read."* **That is the right shape for this symptom**, so it was checked
+rather than assumed:
+
+| Region | Extent |
+|---|---|
+| JSRF image (`.text` → `$$XSIMAGE` end) | `0x00011000` … **`~0x00288620`** |
+| Guest thread stacks (all five, from `stacks.txt`) | **`0x00780000`** … `0x012ED000` |
+| Bridge `esp` values observed (349 distinct) | `0x007BFF94` … `0x012ECF90` — **0 inside `.rdata`** |
+
+**The image ends at ~`0x00288620` and the lowest stack base is `0x00780000` — no overlap.** So this title does
+**not** exhibit that failure class, and the mechanism behind it is **refuted for this run**. *(Recorded because
+it is a plausible-looking explanation that the successor would otherwise have to re-test.)*
+
 ### A lead that may connect the PARKED producer line to the current one
 
 **Recorded as a lead, NOT as a conclusion, and it does not reactivate the producer line.**
