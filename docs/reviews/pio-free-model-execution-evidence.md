@@ -69,6 +69,46 @@ VP `+0x280` = **`NV1BA0_PIO_SET_HRTF_HEADROOM`** (`apu_regs.h:158`), which `fe_m
 producer pattern against a free-space counter** — structural evidence the register really is a free-slot
 count, and the source of the packet's false-model test.
 
+### Threshold-form census across all 28 sites — the **variable** form is the majority
+
+Every one of the 28 frozen sites was disassembled and classified by its own threshold form, applying
+`A4p`'s operand rule (`find` reports the **operand** address, so the instruction starts at `hit−1` for an
+`A1` moffs load or `hit−2` for an `8B /r` load):
+
+| Form | Sites |
+|---|---|
+| **VARIABLE** — `shr reg,2` then `cmp reg,ecx` / `jb` (count vs a register) | **15** |
+| **CONSTANT** — `and reg,0xFFFFFFFC` then `cmp reg,4` / `jb` | **13** |
+| other | **0** |
+| **total** | **28** |
+
+**The variable form is the majority, not the exception.** That matters: **at 15 of 28 sites the guest
+compares the polled word against a register-supplied demand**, so the word must behave as a *quantity that
+can be insufficient*, not merely as a non-zero flag. A constant `0x80` therefore has to satisfy
+`(0x80 >> 2) = 32 ≥ demand` at every such site — **which is only safe if 32 is genuinely at or above the
+maximum demand, and nothing establishes that.** The constant form is the weaker constraint (any value ≥ 4
+passes).
+
+### What the polls gate — **NOT resolved, and deliberately not tabulated**
+
+The intent was to read past each poll to the first MMIO **write** it guards, to identify the producer
+targets. **That extraction is not reliable and its result is withdrawn.** Two runs of the same script
+returned **different** push targets for the same sites, because the "first MMIO write within *N*
+instructions" heuristic is sensitive to where the window is cut and to whether the poll's own load is
+skipped. **A table that changes between runs is not evidence**, so **no push table is recorded here.**
+
+**What survives:** at the **one** site examined instruction-by-instruction earlier (`001A2296`), the guarded
+write is to `0xFE820280` = VP `+0x280` = `NV1BA0_PIO_SET_HRTF_HEADROOM`. **That single, hand-verified site
+stands.** The other 27 push targets are **`UNRESOLVED`**.
+
+> **Session process error, recorded because it is the packet's own warning made concrete.** My first two
+> attempts at the census **failed silently** — I passed bare hex to `inspect-jsrf.py`, whose parser requires
+> the `0x` prefix, and then mis-applied `A4p`'s operand rule (`find` reports the **operand** address, not the
+> instruction). Then the push extraction produced **run-to-run instability**. **Three failures of ad-hoc
+> parsing in one exercise**, which is precisely why the packet requires a **checked-in parser with good/bad
+> tests** before any trace-to-site decision. **The census below is offered as a lead to be re-derived that
+> way, not as a verified finding.**
+
 ## Experiment 2 — the finite ledger
 
 **Scope: only the interface needed to explain occupancy**, demand-driven from `NV1BA0_PIO_FREE`. No
