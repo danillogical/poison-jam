@@ -100,7 +100,67 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — **NONE. Critical path MOVED by Advisor ruling: the `A2h` producer line is PARKED; the next packet is a NULL-slot triage discovery.**
+## CURRENT PACKET — `A2h-null-slot-triage-r1` (**discovery**: what zeroed / what read as zero at `0x001C4064`?) — **PROMOTED 2026-09-27, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-null-slot-triage.md`, revision **`A2h-null-slot-triage-r1`**, class
+  **discovery**, **80 lines**, frozen SHA-256
+  **`F9A6522E8579AD756701C150A0AF60275DCFF4158705CE5331BE3BF2EA7A9F20`** — **this is the packet to execute.**
+  Promotion byte-identical with no revision (§5.3); hash read **3× over ~12 s** after the Planner settled
+  (an earlier read caught the file **still changing** — the stale-pin hazard, avoided this time).
+  Verification: `docs/reviews/a2h-null-slot-triage-r1-session-verification.md`.
+- **Shape preflight OBTAINED** (required because it changes the pinned toolkit): **`SHAPE: REDIRECT`** with
+  **four binding corrections, all adopted** — per-thread write-once CAS latch keyed by live-read `tid`;
+  `tid` augmentation on `[KERNEL]`/`[KWATCH]`; row keying on `(tid, call#)`; **two pre-specified same-build
+  runs** (Run 1 gates OFF = live inertness control, Run 2 gates ON = authoritative). Ruling:
+  `docs/reviews/a2h-critical-path-advisor-ruling.md`.
+- **The question:** what **live** value trajectory led from thunk installation at `0x001C4064` to the terminal
+  raw-zero read, and where was the first zero relative to bridge calls?
+- **Rows:** `O-BRIDGE` (intra-bridge valid→0, named ordinal) → thunk install/relocation audit · `O-GUEST`
+  (earliest-tick inter-bridge) → slot page-guard write history · `O-NO-BOUNDARY-TRANSITION` → slot read-path
+  displacement · `O-IDENTITY`/`O-OPEN` → trace-provenance discovery. **Latch-vs-series disagreement → `O-OPEN`.**
+- **Exp1 is ALREADY DONE** by the Session (offline, zero new runtime code):
+  `docs/reviews/a2h-null-slot-triage-exp1-evidence.md`, tool `scripts/a2h-null-slot-triage.py` (**17 tests**).
+  Key results: **the index is per-thread** (`kernel_bridge.c:316` `RECOMP_TLS`, source-proven) so the Advisor's
+  `#5551`/`#5553` "gap" is **per-thread restart, not loss**; budget **100000 from metadata**, headroom ~93.5k,
+  **neither log truncated**; R1 and baseline have **different terminal forms on different tids**
+  (`invalid target` tid 65356 vs `Failed to resolve 0xFFFFFFFF` tid 57592) so the baseline is an **earlier
+  terminal boundary, not survival**; and **the archived `[KERNEL]` lines carry no `tid`**, so archived
+  per-thread windows are **not reconstructable** — which makes `tid` augmentation a **precondition**.
+- **Artifact extraction PROVEN — no scope revision needed.** The Planner made promotion conditional on this.
+  `tools/harness/collect.c:207` resolves `g_jsrf_debug` **by symbol** and reads **`sizeof(JsrfRegistry)`** into
+  the archived dump; **both runs already contain** `GUEST_REGISTRY version=1 claimed=5 overflow=0` with 5
+  `GUEST_THREAD` lines. **So the latch extends a struct the collector already archives losslessly** — exactly
+  §6.1.6's "lossless by construction", and the packet's write scope suffices.
+  **Hard precondition the Session flags:** `JsrfRegistry` is **`version`-tagged** (`diagnostics.h:22`) and the
+  collector prints that version, so **adding a latch field REQUIRES a version bump** and a readout that refuses
+  an unknown version — otherwise collector and latch silently disagree about the layout.
+- **A Session error, corrected:** the Session proposed carrying the authoritative record on the archived
+  `jsrf_run.log` and dropping the latch. **The Planner refused with citations, and was right** —
+  `docs/agent-workflow.md:794-798` requires decision inputs to be **lossless by construction**, and capped logs
+  are **observation only**. **The Session had confused *archived* with *lossless*; the proposal is withdrawn.**
+  `KWATCH` is **observation-only for the same reason** — no row may rest on the **absence** of a KWATCH sample.
+- **Commands validated (§5.1.5):** the four named suites run **102 tests OK**; `--self-test` OK; both
+  `check-run-profile` calls work (**STRICT** / **EXPLORATORY**, matching the packet's stated profile
+  difference); both `check-dump-mapping` calls report **`content-mismatch`**, confirming the packet's
+  prohibition on using either dump for image-content claims; `a2h-frame-audit.py verify` = **ALL VERIFIED**;
+  and **`JSRF_TRACE_A2H_SLOT` does not exist yet** — it is the packet's own deliverable.
+- **Input correction:** the Advisor's ruling spelled the contrast archive `…-a2b-nr-baseline`; **the real
+  directory is `…-a4b2-nr-baseline`** — the Planner caught this and the packet uses the exact name.
+- **Forbids:** no synthetic completion; no generated-code edits; **`PIO_FREE` DEFERRED**;
+  `A4b2-r7`/`A4b2-r8`/`A4b1-r4` not reopened; `0xFFFFB3` `UNRESOLVED`; **P4's discovery-transfer bridge must be
+  re-established before any P4 inheritance**; **no third run** without Advisor re-referral.
+
+**Next:** implement the gated diagnostic under the four binding corrections (**including the `version` bump**),
+then Run 1 (gates OFF) → Run 2 (gates ON) → §5.8 acceptance.
+
+**Toolkit:** `c151d4e` — **a bounded diagnostic change is authorized by this packet** (install loop
+`:9198-9254`, dispatch/watch seam `:8944-9094`, `recomp_diagnostics.h`, game `diagnostics.c`/`.h`, and two
+gated fields on the existing `[ICALL]` print in `recomp_manual.c:35-43` with `RaiseException` untouched).
+**Game:** `50eaa00`.
+
+---
+
+## Previous — **NONE. Critical path MOVED by Advisor ruling: the `A2h` producer line is PARKED; the next packet is a NULL-slot triage discovery.**
 
 > ### Advisor ruling (2026-09-27): the critical path moved to `0x001C4064`
 >
