@@ -252,13 +252,16 @@ packet is authorized** — the packet says *"consider a change only after cause 
 
 | Record | Establishes |
 |---|---|
-| `docs/reviews/a2h-mechanism.md` | The request is a **byte-identical constant across 35 runs** (`598869040` = `0x23B20430` ≈ 571 MB vs a 48.5 MB arena); **the earliest OOM run has NO trap** (`20260922-224429-003-a2g-304f0-span`, a2g) so **the trap is not the cause** — it makes an already-broken path reachable sooner; the chain is `NtAllocateVirtualMemory` (ordinal 184, from `0x00149E50`) → **`0xC0000017`** → guest calls through **NULL** → `0xE0424943`. **Two stacked defects: an implausible 571 MB commit, and no NULL check on the result.** The arena behaves **correctly** |
+| `docs/reviews/a2h-mechanism.md` | The request is a **byte-identical constant across 35 runs** (`598869040` = `0x23B20430` ≈ 571 MB vs a 48.5 MB arena); **the earliest OOM run is five days and one build earlier** (`20260922-224429-003-a2g-304f0-span`), so **the failure predates the A4b2 trap work** — it makes an already-broken path reachable sooner. **The trap is NOT shown to be unnecessary** (all 35 runs carrying this request are trapped) |; the chain is `NtAllocateVirtualMemory` (ordinal 184, from `0x00149E50`) → **`0xC0000017`** → guest calls through **NULL** → `0xE0424943`. **Two stacked defects: an implausible 571 MB commit, and no NULL check on the result.** The arena behaves **correctly** |
 | same, §4 | The size is a **stack local** (`RegionSize = [ebp-0x24] + 0x20`), so its producer is a **bounded backward question**. The **same call site passes exactly two sizes**: `2097200` normally, `598869040` when it fails (**~285× larger**). The failing call is **`MEM_COMMIT` (`0x801000`)**, **not** a pure `MEM_RESERVE`, so the toolkit's reserve branches **cannot run for it** — the "legitimate large reservation" defence does **not** apply to this invocation, though it remains a correct general caution |
 | same, §5 | **`0xC0000017` is survivable**: `20260927-130036-879-a4b2-nr-baseline` returned `NO_MEMORY` **without** taking the NULL call, so the guest's own path decides whether the failure is fatal |
 
-**Two Session errors in that analysis are recorded and corrected in place:** a claim that the normal
-pre-add local was "exactly 2 MB" (it is `0x00200010`, withdrawn), and the horizon record's earlier causal
-reading that the OOM *tracks* the trap (correlation real, causation wrong).
+**Three Session errors in that analysis are recorded and corrected in place:** a claim that the normal
+pre-add local was "exactly 2 MB" (it is `0x00200010`, withdrawn); the horizon record's earlier causal
+reading that the OOM *tracks* the trap (correlation real, causation wrong); **and the "no-trap A2g"
+characterisation in this section's own table above — the A2g run IS trapped, so the strong "the trap is not
+necessary" claim is withdrawn, and only the narrower "predates the A4b2 trap work" and "not trace-caused"
+claims survive.**
 
 **Next authorized action:** **execute `A2h-oom-causal-slice-r1`** — the backward slice, producing
 `docs/reviews/a2h-oom-causal-slice-evidence.md` and a first-match row, then §5.8 acceptance.

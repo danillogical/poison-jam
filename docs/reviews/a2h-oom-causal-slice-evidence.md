@@ -68,12 +68,27 @@ python -X utf8 scripts\a2h-oom-slice.py --log logs/runs/20260927-160330-655-a4b2
 > **The lesson, recorded because it is a process one: a correction banner is not a correction.** When a claim
 > is withdrawn, **every assertion of it must be swept**, not just the section that discussed it.
 >
-> **And the sweep was then checked mechanically rather than by eye** — every line in the four A2h documents
-> mentioning the withdrawn claim was printed **with its surrounding context** and flagged unless that context
-> marks it as a correction, a withdrawal, a refuted hypothesis, or a quotation of the old claim. **Result: 10
-> mentions, all 10 legitimately flagged, zero unflagged.** The marker set is deliberately broad, so a mention
-> must be genuinely inside a corrective frame to pass. **It is a heuristic, not a proof — but it does not
-> depend on my reading the right lines, which is the failure mode stage 2 caught.**
+> **And the sweep was then checked mechanically rather than by eye — and it took TWO attempts.**
+>
+> **The second attempt failed for a different reason than the first.** My first pattern was
+> `no-trap|not trap-caused|red herring|not a necessary cause`, and stage 2 found **one survivor it could not
+> match**: the plan's findings table spelled the claim **`NO trap`** (space-separated) and **`the trap is not
+> the cause`**. **A sweep is only as good as its pattern.**
+>
+> **The reviewer's corollary is the durable lesson:** *"for a withdrawal, enumerate the CLAIM, not one
+> spelling of it."* The corrected sweep matches a **family** of formulations — `no[\s\-_.]*trap`,
+> `not (the|a) cause`, `trap is not`, `trap not`, `without the trap`, `trap-caused`, `red herring`,
+> `not a necessary cause` — case-insensitively and across separators.
+>
+> **Result: every hit is either inside a corrective frame or a false positive of the broadened pattern.** The
+> broadened pattern catches alternate spellings **at the cost of matching unrelated text** that merely
+> contains "no … trap": `no trapped time` (the A2h horizon), `no TRAP/TRACE in env` (an R0 profile
+> statement), and an A3-era frame-pattern note. **All four are classified by hand and recorded as false
+> positives rather than left implicit** — a sweep whose output is not classified is not a check.
+>
+> **Two rounds, two distinct failure modes, both recorded:**
+> 1. **A correction banner is not a correction** — the document bodies must be swept.
+> 2. **A sweep is only as good as its pattern** — enumerate the claim, not a spelling of it.
 
 ## Experiment 1 — archive-first binding
 

@@ -9,6 +9,14 @@
 `plan-jsrf-bare-minimum.md` carries, and the hash stage 1 verified.** The packet was **not** edited for this
 review; I did not edit it either.
 
+> **ROUND 2 (re-verification after repair commit `dd96963`).** The Session repaired criterion 2. **Six of my six
+> original locations are corrected, plus one more (`plan:202`). One additional survivor remains, at
+> `plan-jsrf-bare-minimum.md:255`** — a location outside my original six, whose phrasing (`NO trap` /
+> `the trap is not the cause`) the Session's grep pattern could not match. **Disposition is unchanged:
+> `NOT ACCEPTED`.** The round-2 record, with the full re-verification, is in the
+> **"Stage 2 re-verification (round 2)"** section at the end of this file. The body below is the round-1
+> record as written against `e1dd3e2` and is preserved unedited (§2.4.7).
+
 **Scope (§2.2, two-stage).** Stage 1 returned `NOT ACCEPTED` with **two** mandatory criteria `DISAGREED`. Per
 §2.2.3 I re-review **only those two**. Its other eleven `AGREED` criteria are **not** re-opened and are not
 reproduced here. Stage-1 findings are **leads, not evidence**; every claim below is something I measured in
@@ -393,4 +401,159 @@ git show e1dd3e2 -- docs/reviews/a2h-mechanism.md     # the fix touched only the
 # criterion 2 — the behavioural difference stage 1 could not measure
 Select-String -Path logs\runs\20260922-224429-003-a2g-304f0-span\jsrf_run.log -Pattern 'STUBBED|APUMMIO'
 Select-String -Path logs\runs\20260927-160330-655-a4b2-gp-trap-trace\jsrf_run.log -Pattern 'DSP56300|APUMMIO'
+```
+
+---
+
+# Stage 2 re-verification (round 2) — repair commit `dd96963`
+
+**Scope:** the Session repaired criterion 2 and asked me to verify **only that repair**. Criterion 1 was
+already `AGREED` and I did **not** re-review it (§2.2.3). **Commit under verification: `dd96963`**;
+`git status --porcelain` **empty** (clean) before and after.
+
+## R2.1 Integrity of the repair
+
+| Check | Result |
+|---|---|
+| HEAD | `dd96963` — *"A2h: sweep the document BODIES for the withdrawn claim -- stage 2 was right"* |
+| Working tree | **clean** |
+| **Frozen packet `E9CDB1B3…41108C`** | **UNCHANGED** — hash re-verified; `dd96963` does **not** touch `docs/packets/a2h-oom-causal-slice.md` (§2.2.4 respected) |
+| Files touched | the two review records, `session-verification.md`, `plan-jsrf-bare-minimum.md` |
+
+## R2.2 My six original locations — all six corrected
+
+| # | Location | Now reads | Verdict |
+|---|---|---|---|
+| 1 | `evidence.md:422` (conclusions list) | *"Establishes: the failure **predates the A4b2 trap work** … and it is **not trace-caused** … **The trap is NOT established as unnecessary** — all 35 archived runs carrying this request are trapped"* | **CORRECTED** |
+| 2 | `evidence.md:112` (heading) | *"### The causal chain is **semantically identical** across two runs five days and one build apart"* | **CORRECTED** |
+| 3 | `mechanism.md:1` (title) | *"…and it **predates** the A4b2 trap work"* | **CORRECTED** |
+| 4 | `mechanism.md:56` (heading) | *"## 3. The full chain, from the A2g run (an earlier build, five days before the a4b2 work)"* | **CORRECTED** |
+| 5 | `mechanism.md:182-186` | *"**The trap is NOT established as a red herring.** … **all 35 archived runs carrying this request are trapped**, so this archive **cannot separate trap-necessity either way**. **The withdrawn strong claim is replaced by the narrow one**"* | **CORRECTED** |
+| 6 | `session-verification.md:27-36` | *"~~The no-trap A2g run~~ **CORRECTION (acceptance stage 2): the A2g run IS TRAPPED** … **The strong 'trap is not necessary' claim is withdrawn.**"* | **CORRECTED** |
+
+All five of the round-1 residual assertions I named are gone, and the sixth is struck through with an in-place
+correction. **`git show dd96963` confirms these are the lines the commit changed.** The new text in each case
+states the **narrow** claim and explicitly declines the strong one — no softening, no replacement overclaim.
+
+## R2.3 The plan — one of two rows fixed; **one survivor remains**
+
+The Session found and fixed a seventh location I had **not** reported: `plan-jsrf-bare-minimum.md:202`
+(*"The failure predates the A4b2 trap work"*) and `:169`. **Good — that is a genuine addition to my list.**
+
+**But the plan carries a second, independent assertion of the withdrawn claim, at `plan-jsrf-bare-minimum.md:255`,
+and it was not swept:**
+
+> | `docs/reviews/a2h-mechanism.md` | … **the earliest OOM run has NO trap** (`20260922-224429-003-a2g-304f0-span`, a2g) so **the trap is not the cause** — it makes an already-broken path reachable sooner; … |
+
+**Evidence this is a real, unflagged survivor:**
+
+- **`git blame -L 255,255` → `b3bf2c1c`** (2026-09-27) — **untouched by `dd96963`**. The commit's hunks for the
+  plan are `@@ -130,6 +130,38 @@` and `@@ -167,7 +199,7 @@`; **line 255 is in neither.**
+- **It asserts both halves of the withdrawn claim**, not a neutral restatement: A2g "has **NO trap**" (the
+  refuted factual premise) **and** "the trap is **not the cause**" (the withdrawn conclusion).
+- **Nothing flags it.** The nearest heading is `### What the Session measured before planning (both records
+  committed)` (L251), inside the `## Previous — A2h-oom-causal-slice-r1 …` section (L224), which is **not**
+  marked superseded or historical. There is no correction banner, no strikethrough, and no cross-reference.
+- **It sits above the section's own error ledger, which does not cover it.** L259-261 reads *"Two Session
+  errors in that analysis are recorded and corrected in place"* and names exactly two: the *"exactly 2 MB"*
+  claim and the horizon record's *"OOM tracks the trap"* reading. **The A2g error is not among them** — so a
+  reader arriving at L255 sees an uncorrected "finding" and, six lines later, a list of the section's errors
+  that omits it.
+- **The Session's own sweep could not have caught it.** Their pattern was
+  `no-trap|not trap-caused|red herring|not a necessary cause`. Line 255 spells the claim
+  **`NO trap`** (space-separated, bolded) and **`the trap is not the cause`** — I verified the regex does not
+  match the line. This is the same failure mode as the original defect: a sweep that does not cover the
+  population it claims to cover.
+
+**Weight, stated honestly.** This is the plan's own index of what `a2h-mechanism.md` establishes, and the
+plan is the durable document the next session reads first. It is **narrower** than the six round-1 items (it
+is a document index rather than the record's conclusions list or its title), so the repair is genuinely
+substantial. But it is the **same defect**: an unflagged assertion of a claim the Session has formally
+withdrawn, in a live section, contradicting the corrected rows 47 lines above it.
+
+## R2.4 The narrow claim does not overclaim — confirmed
+
+Re-read at `evidence.md:422-426`, `mechanism.md:182-186` and `plan:124-127`: the surviving claim is
+**"the failure predates the A4b2 trap work"** (different exe `2cd0472a256e9d` vs `bc8e288dd54d`, five days
+earlier, same size/type/OOM tuple/terminal ICALL, all 94 invocation sizes identical) plus **"not
+trace-caused"**. Both are **build/trace-independence** claims. Neither asserts trap-necessity, and neither
+depends on how deeply A2g's stub intercepted APU behaviour — so **the narrow claim stays inside my own
+caveat**, exactly as the Session states. The newly added text at `mechanism.md:182-186` and
+`plan:160-163` records the behavioural difference as a **limit**, which is the correct treatment.
+**No overclaim found.**
+
+## R2.5 The census still reproduces — confirmed
+
+Re-run independently against the current tree:
+
+| Quantity | Round 1 | Round 2 | Session's claim |
+|---|---|---|---|
+| run directories | 719 | **719** | — |
+| with `jsrf_run.log` | 718 | **718** | — |
+| with `metadata.json` | — | **718** | — |
+| **carrying `598869040`** | 35 | **35** | 35 |
+| **trapped** | 35 | **35** | 35 |
+| **untrapped** | 0 | **0** | 0 |
+| positive control (trap setting absent/`0`, metadata present) | 657 | **657** | — |
+| …of those, carrying the request | 0 | **0** | — |
+
+**Unchanged and correct.** (The one directory lacking both `jsrf_run.log` and `metadata.json` is
+`20260921-122436-177-test-healthy-0`, a build-source snapshot; one further run's `metadata.json` is
+unparseable JSON. Neither carries the request, so neither affects the population.) The absence claim keeps
+the coverage witness §2.4.5 requires.
+
+## R2.6 Round-2 disposition
+
+**(i) No unflagged assertion of the withdrawn claim survives?** **NO — one does:**
+**`plan-jsrf-bare-minimum.md:255`**. The six locations I named are all corrected, and the Session
+independently found a seventh; but this eighth assertion remains, untouched by `dd96963`, unflagged, in a
+live section, asserting both the refuted premise ("NO trap") and the withdrawn conclusion ("not the cause").
+
+**(ii) The surviving claim is the narrow one and does not overclaim?** **YES** — confirmed at
+`evidence.md:422`, `mechanism.md:182-186` and `plan:124-127`. It stays inside my caveat, and the behavioural
+difference is now recorded as a limit.
+
+**(iii) The census still reproduces?** **YES** — 35 trapped / 0 untrapped, with the 657-run positive control.
+
+**DISPOSITION (round 2): NOT ACCEPTED** — criterion 1 `AGREED` (unchanged, not re-reviewed); criterion 2
+still `DISAGREED` on one surviving location.
+
+### What the remaining repair needs
+
+**One line.** `plan-jsrf-bare-minimum.md:255` needs the same treatment `:202` and `:169` already received —
+replace *"the earliest OOM run has NO trap … so the trap is not the cause"* with the narrow form, e.g. *"the
+earliest OOM run is five days and one build earlier, so the failure predates the A4b2 trap work; the trap is
+NOT shown to be unnecessary."* **No re-measurement is required** — the evidence is already correct everywhere
+else, and this is the last assertion of the withdrawn claim I can find.
+
+**A note on method, since it is now the second occurrence.** The round-1 lesson was *"a correction banner is
+not a correction."* This round adds its corollary: **a sweep is only as good as its pattern.** The Session
+searched for the *hyphenated* spelling `no-trap`; the surviving line uses `NO trap`. I found it by sweeping
+for the **claim's semantic content** (`NO trap`, `not the cause`, `without the trap`, `trap is not`) rather
+than a fixed string list. For a withdrawal, the sweep must enumerate the *claim*, not one spelling of it.
+
+## Round-2 reproduction commands
+
+```powershell
+git log --oneline -3                      # HEAD = dd96963
+git status --porcelain                    # must be empty
+(Get-FileHash docs\packets\a2h-oom-causal-slice.md -Algorithm SHA256).Hash   # E9CDB1B3…41108C (unchanged)
+git show --stat dd96963 -- docs/packets/a2h-oom-causal-slice.md              # no output = packet untouched
+
+# the six corrected locations
+git show dd96963 -- docs/reviews/a2h-mechanism.md
+(Get-Content docs\reviews\a2h-oom-causal-slice-evidence.md)[421..425]        # conclusions list
+(Get-Content docs\reviews\a2h-mechanism.md)[181..185]                       # the red-herring bullet
+(Get-Content docs\reviews\a2h-oom-causal-slice-r1-session-verification.md)[26..35]
+
+# THE SURVIVOR
+(Get-Content plan-jsrf-bare-minimum.md)[254]
+git blame -L 255,255 --date=short -- plan-jsrf-bare-minimum.md              # b3bf2c1c, NOT dd96963
+git show dd96963 -- plan-jsrf-bare-minimum.md | Select-String '^@@'         # hunks at 130 and 167/199 only
+# and the pattern gap:
+$l = (Get-Content plan-jsrf-bare-minimum.md)[254]
+$l -match 'no-trap|not trap-caused|red herring|not a necessary cause'       # False — the sweep misses it
+
+# census re-verification (35 trapped / 0 untrapped; 657-run positive control)
+#   read `settings` AND the log's "trapped for MMIO" line for every dir under logs/runs/
 ```
