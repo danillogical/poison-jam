@@ -162,7 +162,9 @@ NULL before use** — so the guest believed the field held a valid function poin
 * `call dword ptr [reg + 0x1c4]` — **five** sites (`0x00043FCB`, `0x00044220`, `0x0005F4D5`,
   `0x0010D4CB`, `0x0010D7C3`), **all in unrelated `.text` classes**.
 * **Within D3D, `[reg + 0x1C4]` has exactly ONE access in the entire section: the read at
-  `0x00193E62`.**
+  `0x00193E62`.** *(Corrected per acceptance §4(c): this omits **two `[esp+0x1C4]` STACK-LOCAL hits** at
+  `0x18D97D` and `0x18D98F`, which may be linear-disassembly artefacts. **The operative claim — that no
+  static write targets the OBJECT field — still holds.**)*
 
 **There is no static write to the field anywhere in the executable.** That is the first unclosed edge,
 and it is a genuine one, not a search failure: see §4.
@@ -253,20 +255,48 @@ generated source contains NO caller of `sub_0018CE30` other than the two tail ju
 `sub_0015F9E0`.** The remaining question — *why did the fourth iteration observe `0x001D5078` instead
 of `0x15F9D0`* — requires the object's **constructor**, which is not present in the translation:
 
-* `0x0018CB60` computes `lea edx, [eax + 0x2268]` and then `mov ecx, 0xC0` / `rep stosd` — it **zeroes**
-  the sub-object. A zeroed `[+0x1C4]` would make `loc_00193E62`'s NULL test branch to
-  `loc_00193ECE` and **skip the call**, so a zeroing constructor does not by itself explain the value.
+> ### ⚠ THREE CORRECTIONS APPLIED (acceptance review §4, and the Session independently found the first)
+>
+> **(a) `0x0018CB60` is `rep movsd`, NOT `rep stosd` — it COPIES, it does not zero.** Verified:
+> `0018CB88 mov ecx,0xc0` / `0018CB8D mov edi,ebx` / **`0018CB8F rep movsd`**, with **`esi = [esp+0x10]`, a
+> caller-supplied source.** **So the original "it zeroes the sub-object" statement and the entire
+> "a zeroing constructor does not explain the value" argument are VOID.** **The replacement reason is
+> STRONGER:** the context is **populated from caller data**, i.e. **an indirect write surface into the same
+> object** — which independently supports `O-OPEN`. **The destination range `[+0x214, +0x514)` does not
+> literally cover `+0x1C4`**, so it does not itself write the field, **but it establishes that the object IS
+> populated by non-constant data, which is precisely why the chain cannot close statically.** *(The Session
+> reached the same correction independently: `0x2268+0x214 = 0x247C`, and the `0x300`-byte copy spans
+> `0x247C..0x277C`, which **excludes** the callback field at `0x242C`.)*
+>
+> **(b) "the constructor/populator … is absent from the generated and recovered translation" is FALSE.**
+> **`sub_0018CB60` IS present** — `recomp_0004.c:36665` (*"Original: 0x0018CB60 - 0x0018CBBD"*), declared
+> `recovered.c:5336`, called `recovered.c:254405`. **What is genuinely absent is a CALLER of
+> `sub_0018CE30`** (only the two `jmp`s, no `call`). **Stating the populator is absent OVER-CLAIMS the gap:
+> the gap is absence of a WRITER PATH, not absence of the constructor.**
+>
+> **(c) "Within D3D, `[reg + 0x1C4]` has exactly ONE access in the entire section" omits two `[esp+0x1C4]`
+> stack-local hits** (`0x18D97D`, `0x18D98F`, possibly linear-disassembly artefacts). **The operative claim —
+> no write to the OBJECT field — still holds.**
+>
+> **NET EFFECT ON THE ROW: NONE. `O-OPEN` stands, and the gap is real and independently reproduced — but the
+> stated JUSTIFICATION is partly unsound and is corrected above.**
+
+* *(superseded text, retained so the correction is legible)* `0x0018CB60` computes `lea edx, [eax + 0x2268]`
+  and then `mov ecx, 0xC0` / `rep stosd` — it **zeroes** the sub-object. A zeroed `[+0x1C4]` would make
+  `loc_00193E62`'s NULL test branch to `loc_00193ECE` and **skip the call**, so a zeroing constructor does not
+  by itself explain the value.
 * The recovered-functions manifest names `sub_00196C0B` as the polling loop and lists its dependencies
   as *"direct dependencies remain unresolved in production"* — the very functions that populate the
   context are the ones the translation does not carry.
 
-**First unclosed edge, stated precisely:**
+**First unclosed edge, stated precisely** *(corrected per acceptance §4(b) — the populator is PRESENT; what is
+absent is a WRITER PATH)*:
 
 > **The reaching definition of `MEM32(device + 0x242C)` on the fourth polling iteration is not
 > statically determinable, because (a) the field's only static writer is `sub_0018CE30`, (b) its only
-> static callers pass the constant `0x15F9D0`, and (c) the constructor/populator of the
-> `device+0x2268` context is absent from the generated and recovered translation, so any write from
-> that path is invisible to static analysis.**
+> static callers pass the constant `0x15F9D0`, and (c) **the context IS populated from caller-supplied
+> data — `sub_0018CB60` is a `rep movsd` COPY from `[esp+0x10]` — so the object has an indirect write
+> surface**, and any write from that path is invisible to static analysis.
 
 **A second, independent reason the chain cannot close statically:** `0x0013AEB0` — the consumer of the
 `name` field of the very table in §2 — stores into `[esi+8]` (`0x0013AED9 mov dword ptr [esi+8], eax`)

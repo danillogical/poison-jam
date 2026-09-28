@@ -1,4 +1,10 @@
-# `A2h-rdata-call-target-r1` — execution evidence: **`O-OPEN`**, with the object identity CLOSED
+# `A2h-rdata-call-target-r1` — execution evidence: **`O-OPEN`**, with the object identity ESTABLISHED *(one hop inferred)*
+
+> **⚠ CORRECTION, per the acceptance review:** this record says the object identity is **"CLOSED"**, and **that
+> word is too strong.** **The alias arithmetic `0x2268+0x1C4 = 0x242C` is exact and verified, but the FINAL HOP
+> is INFERRED, not proved at the call site:** the immediate poller `0x00196C38` passes **`mov ecx, edi`**, not a
+> literal `lea ecx,[ebx+0x2268]`. **So `esi` at `0x00193D90` is *consistent with* `device+0x2268`, not proven to
+> be it.** **Recorded as a correction to the SESSION's own record, not only the Worker's.**
 
 **Session:** `session-9f8c9988-38fb-4cc9-a188-a6881a52559a`, 2026-09-28, DSH.
 **Packet:** `A2h-rdata-call-target-r1`, frozen
@@ -7,7 +13,7 @@
 **Finding:** `docs/reviews/a2h-rdata-call-target-execution-evidence.md`.
 
 **Row: `O-OPEN`** — the call site is **unique and `loc_`-anchored**, the table is **validated as a table and
-refuted as a code-target table**, **the object identity is CLOSED**, and **the writer edge does not close.**
+refuted as a code-target table**, **the object identity is ESTABLISHED with one hop INFERRED**, and **the writer edge does not close.**
 
 ---
 
@@ -27,7 +33,7 @@ because the first hit might be interior — and it was.** **The packet's line-6 
 
 ---
 
-## The strongest result: the OBJECT IDENTITY is closed
+## The strongest result: the OBJECT IDENTITY is established *(final hop inferred)*
 
 **This is the part worth recording as established, because it was the packet's step 4 and it is done:**
 
@@ -92,7 +98,7 @@ surface static.**
 
 1. **The call site is UNIQUE and provable** — `0x00193EB5 call eax` in D3D `sub_00193D90`, anchored to a
    **declared recovered boundary**, with a **unique ABI signature** across the executable.
-2. **The object identity is CLOSED** — the callback slot is `[device+0x2268+0x1C4]` = **`[device+0x242C]`**,
+2. **The object identity is ESTABLISHED** *(with the caveat above)* — the callback slot is `[device+0x2268+0x1C4]` = **`[device+0x242C]`**,
    the same field the Session's installer writes.
 3. **The mechanism is strongly suggested and explicitly NOT promoted** — a **filename pointer occupying a
    code-target slot**, with the writer edge unclosable from the current translation.
