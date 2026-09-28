@@ -129,7 +129,48 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 - **GENERAL LESSON:** *a positive demonstration that observation channels were continuously available makes
   "nothing observed on certified channels" NARROWER than "nothing happened."*
 
-**Next:** stage-1 acceptance of this packet, then the `0x001D5078` pivot decision (queued, not concurrent).
+### ⚠ POSITIVE CONTROL FAILURE — the DR0 write watch has NEVER been observed to fire
+
+**Found by the Session while scoping the fix packet. Record: `docs/reviews/a2h-dr0-positive-control-failure.md`
+(`61f813c`). This is the most consequential finding of the A2h line.**
+
+**The toolkit's install store is a KNOWN canonical-slot write under an armed DR0 watch, and it should have
+produced a `#DB` hit. Every link verified:**
+
+| # | Link | Evidence |
+|---|---|---|
+| 1 | the handshake (arms DR0) precedes the patch loop | `kernel_bridge.c:9395` before `:9411`/`:9468` |
+| 2 | the loop reads the slot | `:9412 current = BRIDGE_MEM32(va)` |
+| 3 | **the loop WRITES it UNCONDITIONALLY** | **`:9468 BRIDGE_MEM32(va) = synthetic;` — OUTSIDE the trace gate at `:9461-9467`** |
+| 4 | the write is to the **watched host address** | guest `0x001C4064` → host `0x1D4064` |
+| 5 | **DR0 watches it as a 4-byte WRITE watch** | `dr0=…1D4064`, `DR7=0x0D0001` = `L0=1`, `R/W0=01` (writes), `LEN0=11` (4 bytes) |
+| 6 | the store runs on the **armed** thread | `install tid=43016` = handshake tid = guest identity 1 = armed |
+| 7 | the store is **after** the arm | log line 50 ack, line 52 install |
+| 8 | **NO HIT** | `GUEST_DR_DISARM … hits=0`; `GUEST_DR_HIT` zero in **every** run |
+
+**⇒ zero DR hits CANNOT be read as "no write occurred" — they are equally consistent with a watch that
+cannot fire.** This is the Advisor's flagged uncertainty #1 arriving as a **positive result**, not a caveat.
+
+**NOT invalidated:** the **28-alias census** (page protection, process-wide, **no DR dependency**), the
+**mapping stability**, the **two software zero reads**, the **install control**, and the **arming records**
+(`DR7` really read back `0x0D0001` — the registers WERE programmed; the watch was armed and never fired).
+
+**INVALIDATED:** every statement resting on *"zero DR hits = no canonical write"*, including the Session's own
+phrasing. **The certified surface is now: 28 aliases + mapping + two software reads. The canonical-address
+write channel is instrumented-but-never-demonstrated.**
+
+**`PREMISE_CHANGED` for the `O-READ-PATH` ruling** — referred back to the Planner (§4.3); the stage-1
+reviewer has been told to incorporate it rather than review against the pre-finding text.
+
+**Constructive:** the install store is a **built-in positive control that has been present all along and was
+never recognised as one.** So: **make DR0 firing a REQUIRED positive control** — a `#DB` hit at the install
+store must be observed, or the DR leg is declared non-functional and every DR-based claim is `UNKNOWN`. **If it
+cannot be made to fire, drop the leg rather than carry a channel that certifies nothing.** Leading candidate
+cause, already flagged in the implementation record: **a data breakpoint under `DEBUG_ONLY_THIS_PROCESS` may
+surface as second-chance or be swallowed by the debugger's own handling.**
+
+**Next:** stage-1 acceptance (with the finding incorporated), then the Planner's re-ruling on the row scope,
+then the fix packet — which now has a concrete, cheap first task: **make the install store fire the watch.**
 
 **Toolkit:** `571982d` (pushed). **Game:** `6cc67a2`.
 
