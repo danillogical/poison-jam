@@ -100,7 +100,29 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-oom-causal-slice-r1` **ACCEPTED 2026-09-27** (`O-OPEN`, chain bound to the producer); next work is the caller identification
+## CURRENT PACKET — `A2h-named-producer-frame-r1` **DRAFT committed, awaiting Session verification before promotion**
+
+**`A2h` is ACCEPTED and CLOSED** (stage 2, final). The Planner has authored the successor packet:
+**`docs/packets/a2h-named-producer-frame.md`**, revision **`A2h-named-producer-frame-r1`**, class
+**discovery**, **37 lines**, draft SHA-256
+**`CA0FDB6AACF1DF46108EC67A9BEEDE991C82657ADE7D790D90BD744C51DC7DF7`** — **committed as a draft at
+`6eb66ce`, NOT yet verified or promoted.**
+
+**The Planner decided discovery, not change** — *"no cause-specific safe implementation while the
+pre-add local's producer remains unknown"* — so **no Muse shape preflight**. Its key finding, which the
+Session **verified from the generated source**: because `sub_001497DC` is **`fpo_leaf`** and reads
+**inherited `g_seh_ebp`**, the six one-push call sites **cannot** be discarded as infeasible for
+`[ebp+0x10]` — that slot is in the **caller's frame**, not necessarily the explicit pushed `arg2`. **So the
+packet requires a frame/register/stack identity witness and models call ABI explicitly, treating the two
+three-push sites as leads rather than positive attribution.** **That refutes the Session's narrowing**, and
+the Session has swept the invalid claim out of the evidence record and the plan bodies.
+
+**Next:** verify the packet's exact commands, paths and identities, then freeze and promote (§5.3), then
+execute. **No change packet is authorized** — *"consider a change only after cause is established."*
+
+---
+
+## Previous — `A2h-oom-causal-slice-r1` **ACCEPTED 2026-09-27** (`O-OPEN`, chain bound to the producer)
 
 **`ACCEPT`** — stage 2, final, every mandatory criterion `AGREED`. Acceptance record:
 `docs/reviews/a2h-oom-causal-slice-acceptance-record.md`. Reviews:
