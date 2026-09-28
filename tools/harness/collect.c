@@ -50,6 +50,68 @@ static void capture_guest_threads(void);
 #define JSRF_A2H_DR_HANDSHAKE 0xE0424452u   /* distinct from 0xE0424750/0xE0424243/0xE0424943/0xE0424845 */
 #define A2H_SLOT_VA 0x001C4064u
 #define A2H_ALIASES 28u
+
+/* ── A2h LIVE slot-write ledger: archived by symbol, and NOT part of the DR instrument ──────────
+ *
+ * The ledger lives in the TOOLKIT (src/kernel/xbox_memory_layout.c), which owns the page-protection
+ * mechanism. The collector is a separate process, so it reads the object BY SYMBOL out of the
+ * target's PDB -- exactly the treatment g_jsrf_debug gets -- and copies it into the minidump, so the
+ * frozen bytes travel with the archive and the printed summary is a cross-check on them.
+ *
+ * NOTHING HERE IS GATED ON JSRF_TRACE_A2H_DR. The DR channel is EXCLUDED from this packet, and its
+ * counters in this file are not this instrument's evidence channel: reusing them would make the
+ * live result depend on a channel the preflight removed. This block is unconditional, because
+ * whether the toolkit ever armed is a fact the ARCHIVE must carry either way -- and the "did it
+ * arm" question is answered by the object's own `armed` field, not by the presence of a log line.
+ *
+ * The layout below MUST match XboxA2hSlotwLedger in xbox_memory_layout.h. The collector does not
+ * include that header -- it links no toolkit code -- so the struct is mirrored here and the MAGIC
+ * and SIZE fields are checked before any field is read: a struct that changed without the version
+ * moving is reported as unavailable rather than silently misread. */
+#define A2H_SLOTW_MAGIC          0x57533241u   /* 'A2SW' */
+#define A2H_SLOTW_PAGES_MAX      (1 + XBOX_NUM_MIRRORS_COLLECTOR)
+#define XBOX_NUM_MIRRORS_COLLECTOR 28
+#define A2H_SLOTW_EVENTS_MAX     256
+#define A2H_SLOTW_EV_KIND_WRITE  1u
+
+typedef struct {
+    uint32_t seq, kind, alias_index, slot_hit, fault_va, pre_value, post_value, tid, enc, reserved;
+    uint64_t rip, ticks;
+} XboxA2hSlotwEvent;
+
+typedef struct {
+    uint64_t relevant_av, slot_hits, nonslot_writes, steps, rearm_ok, rearm_failed;
+    uint64_t protected_intervals, unprotected_intervals, concurrent_overlap;
+    uint64_t threads_new, threads_gone, publish_failed, protect_failed, dropped_events;
+    uint64_t unexpected_exception, db_unowned, db_own_serviced, db_ac97_serviced, db_dual_serviced;
+    uint64_t read_samples, installer_control_hits, overflow, base_changed;
+} XboxA2hSlotwLoss;
+
+typedef struct {
+    uint32_t magic, version, size, armed, arm_base, term_base, arm_slot, term_slot;
+    uint32_t slot_stable, page_offset, mapped_mask, protect_mask, alias_count, protected_count;
+    uint32_t event_count, event_overflow, thread_count, thread_overflow, terminal_seen;
+    uint32_t terminal_target, arm_reason, reserved;
+    uint64_t arm_ticks, terminal_ticks;
+    uint32_t read_count, fourth_reached, fourth_value, fourth_seq;
+    uint32_t last_write_seq, last_write_enc, last_write_alias, last_write_value;
+    uint64_t last_write_rip, last_write_ticks;
+    XboxA2hSlotwLoss loss;
+    XboxA2hSlotwEvent events[A2H_SLOTW_EVENTS_MAX];
+} XboxA2hSlotwLedger;
+
+/* THE CROSS-PROCESS LAYOUT PIN. The collector cannot include the toolkit's header, so this mirror
+ * is the only thing standing between a struct change and a silently misread archive: every field
+ * after a size change would be read at the wrong offset and reported as data. The toolkit's own
+ * fixture prints its authoritative sizeof (14672 for version 1), and the run profile archives both
+ * numbers, so a mismatch is visible -- but a mismatch that only shows up at RUN time is too late.
+ * This assert makes it a BUILD failure instead, and the number moves only together with the
+ * ledger's `version`, which is the same rule JSRF_REGISTRY_VERSION already follows. */
+_Static_assert(sizeof(XboxA2hSlotwLedger) == 14672u,
+               "XboxA2hSlotwLedger mirror does not match xbox_memory_layout.h -- "
+               "update this pin and A2H_SLOTW_MAGIC's version together");
+_Static_assert(sizeof(XboxA2hSlotwEvent) == 56u, "XboxA2hSlotwEvent mirror drifted");
+_Static_assert(sizeof(XboxA2hSlotwLoss) == 184u, "XboxA2hSlotwLoss mirror drifted");
 /* DR7 = L0 (enable DR0) | RW0 = 01 (write only) | LEN0 = 11 (4 bytes). LE/GE stay CLEAR so the
  * processor reports the data breakpoint AFTER the storing instruction, which is the ordering the
  * writer attribution assumes. */
@@ -591,6 +653,44 @@ static void dr_print_terminal_summary(void)
     fprintf(report, "GUEST_DR_ARM_RECONCILE_EXIT_RULE exits_recorded=%u exit_records_missing=%u "
                     "note=EXIT_THREAD_DEBUG_EVENT_is_not_delivered_to_a_DEBUG_ONLY_THIS_PROCESS_debugger\n",
             exit_rows, dr_exit_events);
+    /* ── THE ALL-THREAD CENSUS, RECONCILED AT THE TERMINAL POINT ────────────────────────────────
+     *
+     * The packet requires the census to account for arrivals AND exits, and the toolkit's own
+     * census thread cannot see a thread that both arrived and exited between two of its polls. The
+     * DEBUGGER can, because CREATE_THREAD_DEBUG_EVENT is delivered before the new thread runs its
+     * first instruction and the debug loop sees every one of them. So the two counts are printed
+     * side by side and RECONCILED here, and the reconciliation is a derived verdict rather than two
+     * numbers a reader must combine -- and might combine wrongly.
+     *
+     * ⚠ MEASURED LIMIT, STATED RATHER THAN HIDDEN: EXIT_THREAD_DEBUG_EVENT is NOT delivered to a
+     * DEBUG_ONLY_THIS_PROCESS debugger on this host (the RECONCILE_EXIT_RULE line above records the
+     * same fact for the DR instrument). So the DEBUGGER cannot count exits and does not pretend to:
+     * `debugger_exits` is that count, and when it is 0 while births are non-zero the exit side is
+     * NOT closed. That is exactly the "unobserved thread is a coverage hole, never a silent
+     * negative" rule, and it is reported as UNKNOWN rather than as a clean census.
+     *
+     * NOTHING HERE IS DR-GATED. The DR instrument's own birth ledger (dr_birth) is a different
+     * channel and is not cited: this reads the toolkit's ledger, which is the packet's instrument. */
+    {
+        DWORD64 slotw_addr = symbol_address("g_xbox_a2h_slotw");
+        XboxA2hSlotwLedger *sw = malloc(sizeof(*sw));
+        uint32_t tk_new = 0, tk_gone = 0, tk_live = 0;
+        if (sw && slotw_addr && read_remote(slotw_addr, sw, sizeof(*sw))
+                && sw->magic == A2H_SLOTW_MAGIC && sw->size == sizeof(*sw)) {
+            tk_new = (uint32_t)sw->loss.threads_new;
+            tk_gone = (uint32_t)sw->loss.threads_gone;
+            tk_live = sw->thread_count;
+        }
+        fprintf(report, "GUEST_SLOTW_CENSUS debugger_births=%u debugger_exits=%u "
+                        "toolkit_new=%u toolkit_gone=%u toolkit_live=%u toolkit_overflow=%u "
+                        "census_closed=%d exit_side_closed=%d "
+                        "note=EXIT_THREAD_DEBUG_EVENT_not_delivered_so_the_exit_side_is_UNKNOWN\n",
+                dr_create_thread_events, dr_exit_events, tk_new, tk_gone, tk_live,
+                sw ? sw->thread_overflow : 0u,
+                (dr_create_thread_events > 0 && dr_exit_events > 0) ? 1 : 0,
+                dr_exit_events > 0 ? 1 : 0);
+        free(sw);
+    }
     /* C2 PRE-MAPPING-EXIT BOUND, as a DERIVED decision rather than two counts a reader must combine
      * (and might combine wrongly). The packet's question is: could a tid born before mapping
      * availability have exited before the handshake having dispatched guest code -- uncovered by the
@@ -1581,6 +1681,157 @@ static void capture_guest_threads(void)
                             "value=%08X rip=%016llX ticks=%llu\n",
                     a + 1, t->valid, t->mapped, t->published, t->fault_va, t->value,
                     (unsigned long long)t->rip, (unsigned long long)t->ticks);
+        }
+    }
+    /* ── A2h LIVE slot-write ledger (page protection, no debug registers) ───────────────────────
+     *
+     * A SEPARATE OBJECT, resolved by its own symbol, and deliberately NOT part of JsrfRegistry: it
+     * is written by the TOOLKIT, whose write scope does not include the game's diagnostics, and the
+     * collector must archive it whether or not the game ever publishes a registry.
+     *
+     * ARCHIVED BY SYMBOL, like g_jsrf_debug, so the frozen BYTES travel in the minidump and the text
+     * below is a cross-check that must reconcile with them rather than a substitute. Every field
+     * printed here is a decision input: a reader must be able to see whether the watch armed, on
+     * which alias mask, with what loss accounting, and what the FOURTH read produced, without first
+     * extracting the minidump.
+     *
+     * THE LOSS ASYMMETRY IS STRUCTURAL, NOT DECORATIVE. Overflow or an unreconciled interval
+     * invalidates ABSENCE/ORDER rows; it does NOT invalidate a positive self-contained writer
+     * record. So the overflow latch is printed as its own field and every counter is printed
+     * unconditionally -- a reader decides which rows survive, and the archive must not pre-decide by
+     * omitting a counter that happens to be zero. */
+    {
+        DWORD64 slotw_addr = symbol_address("g_xbox_a2h_slotw");
+        XboxA2hSlotwLedger *sw = malloc(sizeof(*sw));
+        if (!sw) {
+            fprintf(report, "GUEST_SLOTW unavailable reason=alloc\n");
+        } else if (!slotw_addr || !read_remote(slotw_addr, sw, sizeof(*sw))) {
+            fprintf(report, "GUEST_SLOTW unavailable reason=symbol_or_read\n");
+            free(sw); sw = NULL;
+        } else if (sw->magic != A2H_SLOTW_MAGIC) {
+            /* ⚠ magic == 0 IS NOT A LAYOUT MISMATCH, AND REPORTING IT AS ONE WOULD BE WRONG.
+             *
+             * The ledger's magic is written by ARM. With the gate unset -- or with ARM refused
+             * because the title had not allocated its device yet -- the object is still all zeros,
+             * which is the CORRECT state for an inert run and is exactly what the OFF baseline
+             * looks like. A non-zero magic that does not match is the real defect: the struct
+             * changed without the version moving, or the symbol resolved to something else.
+             *
+             * The two are separated here so an OFF run cannot be misread as a broken instrument,
+             * and a broken instrument cannot be misread as an inert run. */
+            if (sw->magic == 0)
+                fprintf(report, "GUEST_SLOTW unarmed reason=never_initialised "
+                                "note=gate_unset_or_ARM_refused_ledger_is_all_zero\n");
+            else
+                fprintf(report, "GUEST_SLOTW unavailable reason=magic magic=%08X expected=%08X\n",
+                        sw->magic, A2H_SLOTW_MAGIC);
+            free(sw); sw = NULL;
+        } else if (sw->size != sizeof(*sw)) {
+            fprintf(report, "GUEST_SLOTW unavailable reason=size read=%u collector=%u version=%u\n",
+                    sw->size, (unsigned)sizeof(*sw), sw->version);
+            free(sw); sw = NULL;
+        } else {
+            extra_memory[extra_count].base = slotw_addr;
+            extra_memory[extra_count++].size = sizeof(*sw);
+            fprintf(report, "GUEST_SLOTW address=%016llX version=%u size=%u armed=%u arm_reason=%u "
+                            "arm_base=%08X term_base=%08X arm_slot=%08X term_slot=%08X stable=%u "
+                            "page_offset=%03X alias_count=%u protected_count=%u mapped_mask=%08X "
+                            "protect_mask=%08X\n",
+                    (unsigned long long)slotw_addr, sw->version, sw->size, sw->armed, sw->arm_reason,
+                    sw->arm_base, sw->term_base, sw->arm_slot, sw->term_slot, sw->slot_stable,
+                    sw->page_offset, sw->alias_count, sw->protected_count, sw->mapped_mask,
+                    sw->protect_mask);
+            /* THE LOSS ACCOUNTING, ALL OF IT, ALWAYS. Counted at the event, never sampled. */
+            fprintf(report, "GUEST_SLOTW_LOSS relevant_av=%llu slot_hits=%llu nonslot_writes=%llu "
+                            "steps=%llu rearm_ok=%llu rearm_failed=%llu protected_intervals=%llu "
+                            "unprotected_intervals=%llu concurrent_overlap=%llu threads_new=%llu "
+                            "threads_gone=%llu publish_failed=%llu protect_failed=%llu "
+                            "dropped_events=%llu unexpected_exception=%llu db_unowned=%llu "
+                            "db_own_serviced=%llu db_ac97_serviced=%llu db_dual_serviced=%llu "
+                            "read_samples=%llu installer_control_hits=%llu base_changed=%llu\n",
+                    (unsigned long long)sw->loss.relevant_av,
+                    (unsigned long long)sw->loss.slot_hits,
+                    (unsigned long long)sw->loss.nonslot_writes,
+                    (unsigned long long)sw->loss.steps,
+                    (unsigned long long)sw->loss.rearm_ok,
+                    (unsigned long long)sw->loss.rearm_failed,
+                    (unsigned long long)sw->loss.protected_intervals,
+                    (unsigned long long)sw->loss.unprotected_intervals,
+                    (unsigned long long)sw->loss.concurrent_overlap,
+                    (unsigned long long)sw->loss.threads_new,
+                    (unsigned long long)sw->loss.threads_gone,
+                    (unsigned long long)sw->loss.publish_failed,
+                    (unsigned long long)sw->loss.protect_failed,
+                    (unsigned long long)sw->loss.dropped_events,
+                    (unsigned long long)sw->loss.unexpected_exception,
+                    (unsigned long long)sw->loss.db_unowned,
+                    (unsigned long long)sw->loss.db_own_serviced,
+                    (unsigned long long)sw->loss.db_ac97_serviced,
+                    (unsigned long long)sw->loss.db_dual_serviced,
+                    (unsigned long long)sw->loss.read_samples,
+                    (unsigned long long)sw->loss.installer_control_hits,
+                    (unsigned long long)sw->loss.base_changed);
+            /* THE OVERFLOW LATCH, ON ITS OWN LINE. A reader keys on this one word to decide whether
+             * absence/order rows survive; it is never folded into a counter. */
+            fprintf(report, "GUEST_SLOTW_OVERFLOW latch=%llu dropped=%llu event_overflow=%u "
+                            "thread_overflow=%u event_count=%u thread_count=%u\n",
+                    (unsigned long long)sw->loss.overflow,
+                    (unsigned long long)sw->loss.dropped_events, sw->event_overflow,
+                    sw->thread_overflow, sw->event_count, sw->thread_count);
+            /* THE FOURTH READ, TIED BY ORDERED EVENT IDS. `last_write_seq` is the seq of the last
+             * slot-hit write at or before read #4 -- an event id, not a log timestamp, so the tie
+             * survives log truncation and interleaving. A reader compares fourth_seq against
+             * last_write_seq, and compares last_write_enc against the installer's ModRM encoding,
+             * rather than reconstructing the order from the text below. */
+            fprintf(report, "GUEST_SLOTW_FOURTH reached=%u read_count=%u value=%08X seq=%u "
+                            "last_write_seq=%u last_write_enc=%u last_write_alias=%u "
+                            "last_write_value=%08X last_write_rip=%016llX last_write_ticks=%llu "
+                            "terminal_seen=%u terminal_target=%08X\n",
+                    sw->fourth_reached, sw->read_count, sw->fourth_value, sw->fourth_seq,
+                    sw->last_write_seq, sw->last_write_enc, sw->last_write_alias,
+                    sw->last_write_value, (unsigned long long)sw->last_write_rip,
+                    (unsigned long long)sw->last_write_ticks, sw->terminal_seen,
+                    sw->terminal_target);
+            /* BOUNDED FULL EVENT RECORDS. A full record per event, never a sample and never
+             * first-N; `seq` is the ordering key and is written last, so a record with seq==0 was
+             * never completed and is skipped rather than printed as a zero-filled event. */
+            for (unsigned e = 0; e < A2H_SLOTW_EVENTS_MAX && e < sw->event_count; e++) {
+                const XboxA2hSlotwEvent *ev = &sw->events[e];
+                if (!ev->seq) continue;
+                fprintf(report, "GUEST_SLOTW_EVENT index=%u seq=%u kind=%u alias=%u slot_hit=%u "
+                                "fault_va=%08X pre=%08X post=%08X tid=%u enc=%u rip=%016llX "
+                                "ticks=%llu\n",
+                        e, ev->seq, ev->kind, ev->alias_index, ev->slot_hit, ev->fault_va,
+                        ev->pre_value, ev->post_value, ev->tid, ev->enc,
+                        (unsigned long long)ev->rip, (unsigned long long)ev->ticks);
+            }
+            /* THE RECONCILIATION, DERIVED RATHER THAN ASSERTED. A reader must not have to trust
+             * that the counters and the records agree; the agreement is computed here. `complete=1`
+             * means every event the counters claim is present as a record. */
+            {
+                unsigned records = 0;
+                unsigned hits_in_records = 0;
+                for (unsigned e = 0; e < A2H_SLOTW_EVENTS_MAX; e++) {
+                    if (!sw->events[e].seq) continue;
+                    records++;
+                    if (sw->events[e].kind == A2H_SLOTW_EV_KIND_WRITE && sw->events[e].slot_hit)
+                        hits_in_records++;
+                }
+                fprintf(report, "GUEST_SLOTW_RECONCILE records=%u counted=%u writes=%llu steps=%llu "
+                                "reads=%llu slot_hits=%llu hits_in_records=%u complete=%d "
+                                "overflow=%llu absence_rows_valid=%d positive_records_valid=1\n",
+                        records, sw->event_count,
+                        (unsigned long long)(sw->loss.relevant_av),
+                        (unsigned long long)sw->loss.steps,
+                        (unsigned long long)sw->loss.read_samples,
+                        (unsigned long long)sw->loss.slot_hits, hits_in_records,
+                        (records == sw->event_count && !sw->event_overflow) ? 1 : 0,
+                        (unsigned long long)sw->loss.overflow,
+                        (!sw->event_overflow && !sw->loss.overflow && sw->loss.rearm_failed == 0
+                         && sw->loss.publish_failed == 0 && sw->loss.protect_failed == 0
+                         && sw->loss.concurrent_overlap == 0) ? 1 : 0);
+            }
+            free(sw);
         }
     }
     for (unsigned i=0;i<registry->claimed && i<JSRF_THREAD_CAPACITY;i++) {
