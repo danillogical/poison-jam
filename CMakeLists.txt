@@ -205,6 +205,28 @@ if(BUILD_TESTING)
         TIMEOUT 30 ENVIRONMENT "JSRF_TRACE_A2H_DR=1")
     add_test(NAME jsrf_collect_arming_gate_off COMMAND jsrf_collect_arming_test)
     set_tests_properties(jsrf_collect_arming_gate_off PROPERTIES TIMEOUT 30)
+    # A2h-live-slot-write-r1. The mechanism is page protection, so the fixtures perform REAL stores
+    # and REAL loads against REAL PAGE_READONLY pages and let the REAL vectored handlers run: a
+    # fixture that called the handler by hand would prove nothing about whether the host delivers a
+    # write AV and withholds one for a read.
+    #
+    # Registered TWICE, on purpose, for the same reason the AC'97 arms above are: the gate
+    # (JSRF_TRACE_A2H_SLOTW) is read once and cached, so one process can only ever exercise one arm.
+    # The gate-on arm asserts every property; the gate-off arm is the inertness control and asserts
+    # that ARM is REFUSED and no page is protected -- record-level inertness, not log silence.
+    add_executable(jsrf_a2h_slotw_fixture_test
+        ${XBOXRECOMP_DIR}/tests/a2h_slotw_fixture_test.c)
+    target_include_directories(jsrf_a2h_slotw_fixture_test PRIVATE
+        ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/kernel
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/gen)
+    target_link_libraries(jsrf_a2h_slotw_fixture_test PRIVATE xboxrecomp)
+    add_test(NAME jsrf_a2h_slotw_fixture_gate_on COMMAND jsrf_a2h_slotw_fixture_test
+        ${CMAKE_CURRENT_SOURCE_DIR}/game/default.xbe)
+    set_tests_properties(jsrf_a2h_slotw_fixture_gate_on PROPERTIES
+        TIMEOUT 60 ENVIRONMENT "JSRF_TRACE_A2H_SLOTW=1")
+    add_test(NAME jsrf_a2h_slotw_fixture_gate_off COMMAND jsrf_a2h_slotw_fixture_test)
+    set_tests_properties(jsrf_a2h_slotw_fixture_gate_off PROPERTIES TIMEOUT 60)
+
     add_executable(jsrf_gpu_smoke tests/native_gpu_smoke.c)
     target_link_libraries(jsrf_gpu_smoke PRIVATE d3d11 dxgi dxguid)
     find_path(RENDERDOC_INCLUDE_DIR renderdoc_app.h PATHS "$ENV{ProgramFiles}/RenderDoc")

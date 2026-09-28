@@ -333,6 +333,13 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
      * and the counter is what is mirrored here. Nothing executes the push
      * buffer synchronously, so the counter is the honest answer.
      *
+     * This is a HOST-SIDE WRITER into guest memory and it is a plausible competitor for the
+     * software-device slot, so it is checked rather than assumed: the device pointer global is at
+     * 0x0019DCE0 and the slot is at device+0x242C, while the counter mirrored here is at
+     * device+0x30 -- 0x23FC bytes apart, on different pages, so this writer cannot reach the
+     * watched page at all. The watch does not exclude it and does not need to: a store from this
+     * thread would be caught by the same page protection as any other.
+     *
      * xbox_Nv2aMirrorFence follows the device pointer fresh on every poll
      * through fence_readable, which handles the contiguous window, so
      * registering before the device exists is fine.
