@@ -163,11 +163,11 @@ absence claims; **this finding is consistent with that rule rather than an excep
 ## The coverage defect, precisely characterised for the successor
 
 > **⚠ SUPERSEDED — read the correction at line 182 first.** This section's *counts* are right, but its
-> conclusion that guest threads were **"never attempted"** is **withdrawn**. `GUEST_DR_DISARM cleared=17`
-> proves **17** threads were armed (not 10), all nine failed attempts were **recovered** by the handshake
-> sweep, and a **successful post-handshake arm prints nothing** — so the tid list is a **handshake-time
-> snapshot** and cannot show which threads were armed. **The defect is a REPORTING gap, not a proven coverage
-> gap.**
+> conclusion that guest threads were **"never attempted"** is **withdrawn**, and my subsequent attempt to
+> repair it with `cleared=17` was **also wrong** (that call counts every live thread, armed or not). **The
+> armed population's size is UNKNOWN from this archive: the tid list is a lower bound of 10 at handshake
+> time, `cleared=17` is 17 threads existing at teardown, and the truth lies between them.** **The defect is a
+> REPORTING gap, not a proven coverage gap.**
 
 **Root cause:** `GUEST_DR_ARM_FAIL … why=create_thread reason=no_mapping_offset`. The collector arms at
 `CREATE_THREAD` **before `ContinueDebugEvent`**, which is the correct **ordering** — but at that moment
@@ -203,27 +203,51 @@ error by reading the collector's own source rather than defending the claim.
 
 **So the tid list in `stacks.txt` is a HANDSHAKE-TIME SNAPSHOT. Threads armed later are invisible in it.**
 
-## What the artifacts prove
+## What the artifacts prove — **and a SECOND inference error I made here, caught by the Advisor**
 
 | Evidence | Value, **identical in all five runs** |
 |---|---|
 | Summary at handshake | `armed=10 failed=9` |
 | Tids **listed** | 10 |
-| **`GUEST_DR_DISARM ok=1 cleared=17 …`** | **17** |
-| ⇒ armed **after** the summary, unreported | **7** |
+| `GUEST_DR_DISARM ok=1 cleared=17 failed=0 dr7_nonzero=0 hits=0` | **17** |
 
-**`cleared=17` is the decisive number:** seventeen threads had DR7 cleared at teardown, so **seventeen were
-armed** — not ten. **And all nine `failed=9` attempts were subsequently RECOVERED:** every one of the nine
-failed tids also appears in the armed list.
+**I first read `cleared=17` as "seventeen were armed." THAT IS WRONG, and the Advisor caught it.** Reading
+`dr_disarm_all` (`collect.c:300-341`) shows it walks **every** thread in the target, **unconditionally zeroes
+`Dr0`–`Dr3` and `Dr7`** (`:324-325`), and increments `dr_disarmed` whenever the **readback is clean**
+(`:330-334`). **A thread that was never armed already has `Dr7 == 0`, so zeroing it succeeds, the readback is
+clean, and it is counted.** **So `cleared=17` proves seventeen threads EXISTED at teardown with clean DR
+state — nothing about arming.**
 
-## The corrected conclusion
+**My "seven arms happened after the summary" was therefore unsupported, and I withdraw it. The size of the
+invisible population is UNKNOWN from this archive.**
 
-**`failed=9` counts failed ATTEMPTS, not unarmed threads.** The handshake sweep recovered all nine. **The
-four guest threads absent from the tid list are NOT PROVEN UNARMED** — they were created **after** the
-snapshot, and a successful post-handshake arm **prints nothing**. **The record cannot distinguish:**
+## **This is the THIRD instance of the same error class in one afternoon — and it is the point**
+
+| # | Claim | Why it failed |
+|---|---|---|
+| 1 | *The tid list is the set of armed threads* | **Undercounts** — a successful post-handshake arm prints nothing |
+| 2 | *`cleared=17` is the number armed* | **Overcounts** — it counts every live thread, armed or not |
+| 3 | *(the Advisor's conclusion)* | **Neither count is reliable; only POSITIVE PER-ARM RECORDS will do** |
+
+**I made error 1, then made error 2 while correcting error 1, and the Advisor caught error 2.** The
+artifact's own summary line was **true** in both cases; **the conclusion I drew from it was wrong both
+times.** This is precisely why the Advisor's correction 2 is now the **central** requirement rather than a
+secondary one: **without a positive per-arm record, no count in this archive can settle coverage.**
+
+## The corrected conclusion — stated at its true strength
+
+**`failed=9` counts failed ATTEMPTS, not unarmed threads, and all nine were RECOVERED** — every one of the
+nine failed tids also appears in the armed list, so the handshake sweep re-armed them. **That much stands.**
+
+**The four guest threads absent from the tid list are NOT PROVEN UNARMED** — the list is a **handshake-time
+snapshot** and a successful post-handshake arm **prints nothing**. **The record cannot distinguish:**
 
 - **(i) armed successfully, never reported** — from
 - **(ii) never attempted at all.**
+
+**And I cannot bound the armed population either way:** the tid list gives a **lower bound of 10 at
+handshake time**, `cleared=17` gives **17 threads existing at teardown**, and **the true armed count lies
+somewhere between them, unknown.**
 
 **So the defect is a REPORTING gap, not a proven coverage gap.** My "100% miss over the guest threads that
 matter" framing was **wrong**, and the sections below that assert it are **superseded by this correction**.
