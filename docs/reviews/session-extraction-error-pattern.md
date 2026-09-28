@@ -137,8 +137,10 @@ test.** **The practice note's value is not the confession; it is the CONTROL SET
 | 4 | **Geometry check: does another claim fall inside the same scope?** | scope errors (instance 4) |
 | 5 | **Addresses and values are COPIED, never retyped** | transpositions (instance 6) |
 | 6 | **A derived table is a HYPOTHESIS until each row is verified** | the whole family |
+| 7 | **ANCHOR EVERY DECODE TO A DECLARED FUNCTION BOUNDARY, not a section start** | **instance 12 — section-start decoding DRIFTED and produced 9945 plausible instructions while never reaching a known site** |
 
-**Six controls, seven errors, and each control exists because a specific error got past everything else.**
+**SEVEN controls, and instance 12 (the drifted section-start decode) added control 7.** **Each control exists
+because a specific error got past everything else.**
 **That is the systemic form the Advisor identified, and it is now written down as a SET rather than as
 anecdotes.**
 
