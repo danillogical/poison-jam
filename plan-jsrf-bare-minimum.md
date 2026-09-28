@@ -100,7 +100,62 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-rdata-call-target-r1` (**discovery**: why does the guest call a `.rdata` ADX filename?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+## CURRENT PACKET — `A2h-rdata-call-target-r1` **EXECUTED → `O-OPEN`**, **object identity CLOSED**; stage-1 acceptance pending
+
+- **Packet:** `docs/packets/a2h-rdata-call-target.md`, **22 lines**, frozen
+  **`31343C167746872A501A21C6D558F52B897A7CD571E43C9EB016D42341152593`** — **not edited**.
+- **Evidence:** `docs/reviews/a2h-rdata-call-target-execution-evidence.md` (Worker `eca26ed`);
+  **Session verification** `docs/reviews/a2h-rdata-call-target-session-verification.md` (`589cb6c`).
+
+### ✅ The call site is UNIQUE and PROVABLE
+
+**`0x00193EB5 call eax`** in D3D `sub_00193D90` — original bytes **`8d 4c 24 18 51 ff d0`**, anchored to a
+**declared recovered boundary** (`recovered.c:347479`, dispatch `recomp_dispatch.c:8006`, manifest
+`0x00193D90..0x00193EE2`). **Uniqueness proved:** a whole-executable sweep for *"`ecx ← [esp+N]` then
+`call reg`"* returns **4 sites, exactly ONE with `ecx−esp = 0x20`.** **And that `0x20` is DERIVED from the
+ABI, not matched** — which is what makes the site provable rather than plausible. **`NON-TARGET` refuted.**
+
+### ✅ The OBJECT IDENTITY is CLOSED — the packet's step 4, done
+
+| Step | Value |
+|---|---|
+| callback | **`eax = MEM32(esi + 0x1C4)`**, **NULL-tested before the call** |
+| `esi` | the incoming `ecx` — the context |
+| context | **`device + 0x2268`** (`0x0018CB60 lea edx,[eax+0x2268]`) |
+| **⇒ alias** | **`0x2268 + 0x1C4 = 0x242C`** — **the installer field and the callback field are THE SAME FIELD** |
+
+**This resolves the Session's own puzzle** (why a `MEM32(reg+0x242C)` load search finds nothing): **the field is
+CALLED, not loaded.** **And the Session's suggested falsification test came out AFFIRMATIVE** —
+`sub_0015F9E0`'s single caller (`0x00123319`, `sub_00012210`) passes **`ebx = 0`**, so the NULL path installs
+**`0x15F9D0`**, **exactly the refcount thunk the ICALL trace shows at cycle position 3.**
+
+### ⚠ `O-OPEN` — correctly selected, and the Worker was right to refuse promotion
+
+**The writer edge does not close.** `[reg+0x1C4]` has **exactly ONE access in the whole D3D section — the
+read.** The field's only static writer is `sub_0018CE30`, whose only static callers pass the constant
+`0x15F9D0`. **The constructor/populator of the `device+0x2268` context is ABSENT from the generated and
+recovered translation** (`0x0018CB60` only **zeroes** it), so any write from that path is **invisible to
+static analysis.** **Independently, `sub_0013AEB0` stores into `[esi+8]`/`[esi+0x14]`, so a non-static route
+cannot be excluded.** **Line 22 forbids promoting an unexercised branch — and "strongly suggested" is exactly
+what the packet says must not be promoted.**
+
+**FIRST UNCLOSED EDGE:** the reaching definition of `MEM32(device + 0x242C)` on the fourth polling iteration.
+**Smallest closable edge: the `device+0x2268` context constructor/populator — recovering those functions
+would make the write surface static.**
+
+### Session corrections, both recorded
+
+- **The Session's table claim was WRONG and the Worker refuted it correctly.** `0x001D4BD4` is **the `name`
+  field of the entry at `0x001D4BD0`**, not a table start. **The array is `{u32 id, char* name}` from
+  `0x001D37C8` to an `id=0xFFFFFFFF` sentinel at `0x001D4DA8`, and no entry is callable.** **The Session had
+  flagged the boundary as unproven precisely because the first hit might be interior — and it was.**
+- **`edx=0x293` indexes to entry `0x001D4C60`**, which reads `id=0x293 name=0x001D5078 'djv000_0.adx'` —
+  **Session-verified exactly**, along with the sentinel.
+
+**Next:** stage-1 acceptance; then the `device+0x2268` context constructor/populator is the named smallest
+closable edge for a successor.
+
+**Toolkit:** `37226b2` (unpushed — pending acceptance). **Game:** `589cb6c`.
 
 - **Packet:** `docs/packets/a2h-rdata-call-target.md`, **22 lines**, **7820 bytes**, frozen
   **`31343C167746872A501A21C6D558F52B897A7CD571E43C9EB016D42341152593`** — **this is the packet to execute.**
