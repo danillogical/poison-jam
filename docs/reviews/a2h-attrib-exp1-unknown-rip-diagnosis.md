@@ -37,6 +37,28 @@ not a scattering of unrelated faults. **That is a single foreign writer, not 264
 **For scale: the fixture's own foreign witness — a real `kernel32.dll` function address — is
 `0x00007FFA6F391EF0`, in the SAME `0x7FFA…` region.** **That is where the unplaceable RIPs live.**
 
+### ⚠⚠ And the SAME two RIPs appear in EVERY run, while OUR image base MOVES — that is decisive
+
+**A single run cannot distinguish "a separate module" from "an artifact of our own image's ASLR", because
+both would put a RIP outside the image.** **Three runs settle it:**
+
+| Run | **OUR image base** | occurrences | **distinct unplaceable RIPs** |
+|---|---|---|---|
+| **Exp1** `…120832-477` | **`0x00007FF606630000`** | **264** | **`0x00007FFA628FCC71`, `0x00007FFA628FCC75`** |
+| **Exp2-2** `…121122-790` | **`0x00007FF74A860000`** | **282** | **`0x00007FFA628FCC71`, `0x00007FFA628FCC75`** |
+| **Exp2-3b** `…121142-929` | **`0x00007FF68B060000`** | **262** | **`0x00007FFA628FCC71`, `0x00007FFA628FCC75`** |
+
+> ## **THREE DIFFERENT image bases. The SAME TWO unplaceable RIPs, byte for byte, in every run.** ✓
+
+**An artifact of our own image's ASLR would MOVE with our base.** **These do not move at all**, which is exactly
+what a **separately loaded module** looks like — **its address is independent of where our image lands.**
+
+**And the occurrence count VARIES (`264`, `282`, `262`) while the addresses do not** — **so the foreign writer
+is reached a different number of times per run, but it is the same writer at the same address.** ✓
+
+**⚠ SO THIS IS NOT AN INSTRUMENT DEFECT, AND IT IS NOT AN ASLR ARTIFACT.** **The classifier answered `UNKNOWN`
+CORRECTLY, three times, on a writer in another module.**
+
 ## ⚠ The packet's rule was written on an assumption this run contradicts
 
 **`unknown > 0` is `INFRA FAILURE` because the rule assumes EVERY write to the watched page comes from the
