@@ -100,7 +100,33 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-arming-coverage-attribution-r2` **ACCEPTED** (`ACCEPT`, all criteria `AGREED`, `BLOCKING: NONE`); **successor ruled: ONE MORE N=5 run of the same design**
+## CURRENT PACKET — `A2h-arming-coverage-repeat-r1` (**delta**: one bounded r2 yield repeat) — **PROMOTED 2026-09-28, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-arming-coverage-repeat.md`, **15 lines**, **5552 bytes**, frozen
+  **`4AC455E7F427ABCD9AEB6A81FA34B2A570A826964A6FB76EC3478ADA4B1174A1`** — **this is the packet to execute.**
+  Validation: `docs/reviews/a2h-arming-coverage-repeat-r1-session-validation.md`.
+- **It is a DELTA:** the r2 design repeats **verbatim** (Advisor: *"the design didn't fail — the yield did"*).
+  **Four deltas only:** **no fresh OFF** (reuse `…030751-407`, gated on the pinned binary hashes
+  `a7e32464…dead9` / `95440ec4…b3ef7`; **mismatch ⇒ `O-IDENTITY`/STOP**); **run 2 is the named comparator**,
+  pinned by **artifact hash**; a **K-scope anti-fishing guard**; and the **stopping point fixed in advance**.
+- **K-SCOPE RULED (i): RUN 2 COUNTS toward K.** It is same-instrument/same-build; **set-A does not** (different
+  instrument). The Planner implemented the stricter reading and **flagged it rather than deciding silently**;
+  the Session **escalated**; the Advisor ruled the stricter reading *"imports a restriction the text doesn't
+  contain, at zero protective value."* **Early stop: the first new coverage-complete TARGET agreeing with run 2
+  ⇒ K=2, general certified row, stop.** Disagreement ⇒ report both + `UNKNOWN` generality + re-refer, **no
+  majority-seeking**.
+- **Agreement is MECHANICAL:** same independently certified writer class/row, compatible mechanism/event order,
+  **terminal triple** (slot `0x001C4064`, target zero, site `0x0014982E`), assessed from **both raw artifacts**,
+  **re-assessed at adequacy AND acceptance.** **Shared silence is insufficient.** Run 2's `UNKNOWN` is **not**
+  upgraded by resemblance.
+- **STOPPING POINT:** K<2 ⇒ **re-refer for pivot-or-defer with 10+ qualifying runs on record.** The `0x001D5078`
+  pivot is **queued, not concurrent**.
+
+**Toolkit:** `571982d` (pushed). **Game:** `f391fc1`.
+
+---
+
+## Previous — `A2h-arming-coverage-attribution-r2` **ACCEPTED** (`ACCEPT`, all criteria `AGREED`, `BLOCKING: NONE`); **successor ruled: ONE MORE N=5 run of the same design**
 
 - **Accepted packet:** `docs/packets/a2h-arming-coverage-attribution.md`, `A2h-arming-coverage-attribution-r2`,
   **23 lines**, frozen **`80E9425977547BC1EE44DD95645F72ACF4F7941857A39B6DB67B427E7DD81D84`**.
