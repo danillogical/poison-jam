@@ -137,3 +137,71 @@ instrument limit rather than a packet.
 **The Planner's packet remains a 16-line NON-EXECUTABLE sketch and is NOT promoted.** Commit `d4dad33`
 records the superseded DR0 framing together with the Planner's safety warning; it is **historical**, not
 authorization.
+
+---
+
+# Corrected ruling (`SHAPE: REDIRECT`) — NO-WRITE **is** reachable; the Planner's falsification accepted
+
+**The Advisor reconsidered on the `PREMISE_CHANGED` referral and ruled again. Recorded verbatim. The first
+ruling above stands as history; this supersedes its instrument.**
+
+```text
+SHAPE: REDIRECT
+REASON: Canonical-DR0 cannot support absence (29 linear aliases, 4 comparators — Planner's falsification verified in source); page-guard shares the defect and adds single-step races. Sound design exists: DR0-canonical complete record + 28-alias first-touch census, same run, fail-closed throughout.
+POLICY_ISSUE: NONE
+REVERSED_BY: DR infeasible (host restriction; thread churn defeating census; #DB conflicts unresolvable) — re-refer, page-guard NOT pre-authorized as fallback; cheaper complete instrument identified.
+```
+
+**Plain admission first: my instrument is wrong for absence claims as specified, and the Planner is right.** Canonical-DR0 misses alias writes — verified at `xbox_memory_layout.c:2251-2257` (`MapViewOfFileEx`, separate PTEs per mirror) and stated verbatim in the toolkit's own Halo comment (`:2362-2366`). The Session's relay error ("DR watches the physical page") compounded it, but is not its source: **neither my ruling nor the sketch considered mirrors at all.** The correction is recorded here. (Relay discipline going forward: quote load-bearing sentences verbatim in briefs — paraphrase drift on a load-bearing claim is what turned my true neighbor-point into a false physics claim. The Planner catching it pre-packet is the system working.)
+
+**1. NO-WRITE is reachable — via DR-canonical + alias census, same run. The packet proceeds; `DONE:no` is wrong.** Soundness recipe, each leg required:
+
+- **DR0** on canonical slot bytes (write-only, `LEN4`), armed **before install** so the install write is the positive control (install untrapped → infra-failure, do not interpret); all-threads-armed proof + new-thread handling + fail-closed tid census (any unarmed observed tid → `UNKNOWN`); DR6 bit-protocol + synthetic fixtures + live order verification (carried from prior ruling); no-debugger run condition.
+- **Census:** the 28 alias 4KB pages guarded RO + write-filter (AC97 pattern), recording **first touch per page** (VA/RIP/value/tick). First-touch is complete *despite* single-step windows, because a page's first touch necessarily precedes its first window — windows hide only subsequent touches, which the census doesn't need. Fixed 28 records + per-page uncapped counters (§6.1.6).
+- **Completeness closure:** alias universe = {canonical} ∪ {mapped mirrors}, with mapped-set recorded at arm time; unmapped mirrors cannot sink writes silently (any use AV-crashes loudly — observable, not silent); tiled aperture excluded by separate storage **plus** a contiguity-pool-vs-slot-page non-overlap assert (not by citation alone).
+- **Claim rule:** zero alias touches + DR-canonical silent + all controls green ⇒ NO-WRITE sound for that run. ANY alias touch ⇒ coverage-provenance `UNKNOWN` with touched aliases named (a touch detects even what a window hides — first-touch can't miss).
+
+**2. Sub-candidates:** all-29-DR impossible — agreed. **Rotated-4 FORBIDDEN for absence** (time-division is sampling; §6.1.6 bars it from carrying a row — permit rotation only for existence-hunting, explicitly non-covering, which this packet doesn't need). Page-guard-with-explicit-race: NO — an explicit-but-unquantified race plus forbidden exclusion is not a design. Unmapped-mirrors equivalence run: legitimate idea, **deferred as recorded fallback lead** for a dirty-census followup only — not this packet.
+
+**3. `xbox_ProtectMirrorsForDebug`: NO as a function, YES as a technique, implemented FRESH.** Verified (`:2372-2385`): whole 64MB views + count-only log + **no handler installed** — calling it is a tripwire that crashes on first mirror write, not a trap. **Forbid whole-view protection in this packet.** Implement selective 28-page protection + per-fault records fresh; never call the whole-view function.
+
+**4. Not `DONE:no`.** No fundamental limit was found — only an incomplete instrument, now corrected. Proceed per above. (If DR proves infeasible → re-refer; *that* is the only path to `DONE:no`.)
+
+**Notes, binding where stated:** alias VAs derived LIVE from `g_mirror_views` + slot offset with formula cross-check — the brief's hand range (`0x04000000…0x1C000000`) is arithmetically inconsistent under either memory size and must not propagate (eighth instance of the hand-arithmetic pattern; live-derivation is the fix). The archived esp range stays compatibility-only, never coverage. Row bars from prior ruling carry (RIP-range classifier + fixtures; explicit restore predicate; read-path-audit needs the full three legs; infra failure → coverage-provenance; first-by-ticks precedence). Two-run OFF/ON shape unchanged. P4 bridge obligation stands.
+
+**The durable lesson** (candidate for `AGENTS.md` if it recurs — fourth instance after spelling, width, offset): *completeness claims enumerate by bytes affected — all spellings, widths, offsets, linear aliases — never by one form.*
+
+**BASIS:** observed — mirror `MapViewOfFileEx` + tiled exclusion (`:2220-2299`); Halo comment verbatim (`:2358-2366`); `ProtectMirrorsForDebug` body (`:2372-2385`); AC97 no-exclusion handler (prior turn); per-thread counter + no-reset + TLS defines (prior turn); empty DR-conflict search. Inferred — first-touch completeness despite windows; unmapped-loud soundness; rotation/sample bars. Uncertain — thread churn extent, guest thread-birth path (both gated to feasibility checks, not assumed).
+
+**RECORD IN:** Session records verbatim in the successor's planning-rulings/review record; no second preflight if applied verbatim — re-refer ONLY on infeasibility.
+
+## Session verification of the corrected ruling's new factual claims
+
+| Claim | Verification |
+|---|---|
+| Mirrors use `MapViewOfFileEx`, giving **separate PTEs** per mirror | **confirmed** (`xbox_memory_layout.c:2251-2257`) |
+| `xbox_ProtectMirrorsForDebug` protects **whole 64 MB views**, logs **only a count**, and installs **no handler** | **confirmed** (`:2372-2385`) — so it is a tripwire, not a trap |
+| The brief's hand-derived alias range `0x04000000…0x1C000000` is **arithmetically inconsistent** | **confirmed, and the Session accepts the correction.** The Session derived it from a 64 MB assumption while the toolkit's own mirror loop uses `(m+1) * g_memory_size` with `g_memory_size` set at runtime — so a hand range is unsound. **Alias VAs must be derived live from `g_mirror_views`.** |
+
+**Session error #2 in this exchange, recorded — and the Advisor's arithmetic correction is exact.** The
+Session hand-derived the alias range as `0x04000000 … 0x1C000000`. **Verified against the run's own log and
+the toolkit's loop:**
+
+| Quantity | Value |
+|---|---|
+| `g_memory_size` (run log) | *"mapped 65536 KB"* = **64 MB** = `0x04000000` |
+| Mirror count (run log) | *"RAM mirror: 28/28 views mapped (covers 1856 MB)"* — and `29 × 64 MB = 1856 MB` ✓ |
+| Mirror `m` (0-based) base | `(m+1) × g_memory_size` (`:2234-2237`) |
+| **First alias base** | `0x04000000` |
+| **Last alias base (m=27)** | **`0x70000000`** |
+| The Session's stated last base | `0x1C000000` — **only 7 mirror steps, not 28** |
+
+**So the Session under-counted the alias space by a factor of 4**, and the 28 alias bases run
+`0x04000000, 0x08000000, … 0x70000000` — i.e. **`0x041C4064 … 0x701C4064`** for this slot. **This is the
+eighth instance of the hand-arithmetic pattern in this line**, and the fix is the same one the project keeps
+re-learning: **derive from the source of truth (`g_mirror_views`), do not compute by hand.**
+
+**It also makes the Session's `esp`-range observation even weaker than it appeared:** the observed `esp`
+range is `0x007BFF94..0x012ECF90`, and the aliases extend to `0x70000000` — far above it. **The Advisor's
+instruction that the `esp` range is compatibility-only and never coverage is therefore doubly right**, and
+the Session withdraws any suggestion that it bounds alias reachability.
