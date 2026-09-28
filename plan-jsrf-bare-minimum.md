@@ -100,7 +100,53 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `PIO_FREE-model-r2` **ACCEPTED 2026-09-27** (`O-UNKNOWN`) — successor planning open
+## CURRENT PACKET — `PIO_FREE-title-demand-bound-r1` (**discovery**: is the `0x80` stub sufficient for the title's 28 direct polls?) — **PROMOTED 2026-09-27, `ADEQUATE`**
+
+- **Packet:** `docs/packets/pio-free-title-demand-bound.md`, revision **`PIO_FREE-title-demand-bound-r1`**,
+  class **discovery**, frozen SHA-256
+  **`977A96F708919F309AE01009BA64AB75AA344794950553530CCA1AF958A49ABB`** (**34 lines**). **This is the packet
+  to execute.** Promotion byte-identical with no revision (§5.3); hash verified **3× over ~12 s** immediately
+  before.
+- **Adequacy:** the **writing Planner's** own §5.3 two-question review — **`ADEQUATE`**, `BLOCKING: NONE`,
+  `PREMISE_FRESHNESS: BOUNDED`. **Correct for a discovery**; **no shape preflight**. Verification:
+  `docs/reviews/pio-free-title-demand-bound-r1-session-verification.md`.
+- **The question:** for this exact XBE, *under the current trapped VP implementation that always returns
+  `0x80`*, is every feasible **direct** `PIO_FREE` gate in the frozen 28-site set guaranteed an unsigned
+  compare demand at most the stub's value (`0x80 >> 2 = 32` variable, `0x80 & ~3 = 128` masked constant) — or
+  is a reachable demand above it witnessed, or a bound unprovable? **A question about the title against this
+  stub, never about hardware capacity, units, queue, ordering, or that the device works.**
+- **Rows:** `O-IDENTITY` (stale/malformed identity → repair discovery) · **`O-EXCEED`** (a reproducible
+  **feasible** demand `> 32`, or a verified constant `> 128`, with byte/definition/path witnesses →
+  reachability discovery **plus explicit Advisor hardware-sourcing/scope referral**) · **`O-BOUND`** (all 28
+  classified, every constant `≤ 128`, a universal `≤ 32` bound for every variable compare → **Advisor
+  scope/defer/retire ruling**; a change packet is conditional on **new** admissible hardware evidence) ·
+  `O-OPEN` (cannot prove all `≤ 32`, cannot exhibit `> 32`, or cannot reconcile → focused demand-slice
+  follow-up, or Advisor if not finite).
+- **Why this is not the exhausted search repeated:** the `O-UNKNOWN` row's named five-leaf
+  source/queue-interface successor is recorded as **not presently feasible as a hardware-specification
+  discovery**, because `jsrf-run-profiles.md:245-267` admits only external hardware documentation and every
+  lead is silent. Guest code is admissible **about the title** (`:260-262`), which is what this packet uses.
+- **Session validation before freeze:** the intervening commits between the Planner's planning pin
+  (`91c626a`) and HEAD are **documentation-only** (2 commits, **zero** paths under `src/`, `game/`,
+  `config/`, `scripts/`, `tools/`) — so the premise is intact. **All named commands validated**:
+  `find 0xFE820010` works (28); the packet's claim that the **`0x` prefix is mandatory is correct** (bare hex
+  is rejected); `game/mygame_analysis.json` exists (17 047 bytes) and `inspect-jsrf.py:29,70` really reads it;
+  and the two "missing" paths are the packet's **own deliverables**, not prerequisites.
+- **Deliverables:** `scripts/pio-free-demand.py` + `scripts/test_pio_free_demand.py` — a **checked-in, tested
+  classifier** that must **fail on malformed input** and must **reject a mid-instruction start** rather than
+  silently decode. **The 15/13 census and the `k × byte[+0x64]` lead must be re-derived by that tool before
+  use**, and `001A3F24` specifically needs reaching-definition resolution.
+- **Scope:** offline only. Diagnostic parser/tests, JSON and an evidence record. **No guest run, no build, no
+  toolkit runtime change, no instrumentation.**
+
+**Next authorized action:** **execute `PIO_FREE-title-demand-bound-r1`** — the four Experiments, producing
+`docs/reviews/pio-free-title-demand-sites.json` and the evidence record, then §5.8 acceptance.
+
+**Toolkit:** `c151d4e` (unchanged). **Game:** pending commit.
+
+---
+
+## Previous — `PIO_FREE-model-r2` **ACCEPTED 2026-09-27** (`O-UNKNOWN`) — successor planning opened
 
 **`PIO_FREE-model-r2` (`11D6ECB1…1DDA9E`) executed → `O-UNKNOWN` → acceptance stage 1 `ACCEPT`,
 `BLOCKING: NONE`.** Review: `docs/reviews/pio-free-model-r2-acceptance-review.md`; evidence:
