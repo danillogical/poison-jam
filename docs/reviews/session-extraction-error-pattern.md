@@ -78,10 +78,69 @@ table the Session DERIVED from its own script.**
 
 ## The honest summary
 
-**Five errors, three of them the same mechanism, caught by three different parties** — **the Session once, the
+**Six errors, four of them the same mechanism, caught by three different parties** — **the Session once, the
 Advisor twice, the Planner once.** **The line's review structure is what caught them, and that is the system
 working.** **But the Session's own contribution to catching its errors is the weakest link, and the mechanism
 above is where it fails.**
+
+---
+
+# INSTANCE 7 — the byte-reversal, and it is a NEW and more dangerous class
+
+**Added 2026-09-28 after the binding re-read (`a2h-binding-reread-executed.md`).**
+
+**The Session reported `MEM32(device+0x2268) = 0x000000FD` and concluded it was *"a small INTEGER, not a
+pointer"* — hence a counter, not a device sub-object — and built a "permanent" refutation on that.**
+**The true value is `0xFD000000`: THE NV2A MMIO APERTURE BASE, a hardware constant documented 29 times in
+this repository.**
+
+## Why this class is different from instances 3–6
+
+**Instances 3–6 were loose matches, a scope error, and a transposition.** **This one is:**
+
+> **The Session applied a TRANSFORMATION that produced a PLAUSIBLE-LOOKING value, then reasoned confidently
+> from the transformed value. The transformation was invisible because its OUTPUT was well-formed.**
+
+**`0x000000FD` looks exactly like a counter. `0xD0F91500` looks exactly like a junk pointer.** **Neither
+prompted doubt — and the second one made the Session report the OPPOSITE of the truth:** it said
+`MEM32(device+0x242C)` was **not** the refcount thunk, when the true value `0x0015F9D0` **is**.
+
+## The control that catches this class
+
+**An OFFSET-SHIFT test.** **Read a known string at `VA` and at `VA+1`:**
+
+| Read | LE-DWORD-VALUE reader | Memory-order reader |
+|---|---|---|
+| `0x001D5078` | `30766A64` | `646A7630` |
+| **`0x001D5079`** | **`3030766A`** | `6A763030` |
+
+**A byte-reversal does NOT shift correctly, so the second read discriminates.** **The Session's original
+control (`0x001D5078` alone) was satisfied by BOTH readings and never discriminated.**
+
+**This is why the Advisor made the offset-shift control BINDING rather than advisory.** **It is now the
+standard for every memory-derived value.**
+
+## The reframing the Session accepts
+
+**The Advisor wrote:** *"seven extraction failures with controls catching each is now a validated method, not
+just confessions."*
+
+**That is a fair reading and the Session adopts it.** **The controls caught all seven** — **one by the
+Session, twice by the Advisor, once by the Planner, and instance 7 by the Advisor's mandated offset-shift
+test.** **The practice note's value is not the confession; it is the CONTROL SET that emerged:**
+
+| # | Control | Catches |
+|---|---|---|
+| 1 | **Known-answer control for every extraction** | format errors (instance 3) |
+| 2 | **OFFSET-SHIFT control for every memory read** | **transformation errors (instance 7)** |
+| 3 | **Per-row verification against the underlying artifact** | loose matches (instance 5) |
+| 4 | **Geometry check: does another claim fall inside the same scope?** | scope errors (instance 4) |
+| 5 | **Addresses and values are COPIED, never retyped** | transpositions (instance 6) |
+| 6 | **A derived table is a HYPOTHESIS until each row is verified** | the whole family |
+
+**Six controls, seven errors, and each control exists because a specific error got past everything else.**
+**That is the systemic form the Advisor identified, and it is now written down as a SET rather than as
+anecdotes.**
 
 **Recorded because the Advisor's mandate is necessary and was not sufficient, and the gap is now identified
 rather than merely lamented.**
