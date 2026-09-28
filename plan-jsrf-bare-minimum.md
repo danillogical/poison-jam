@@ -100,7 +100,71 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-live-slot-write-r1` **EXECUTED: ON trial 1 → INFRA FAILURE**; **THE WATCH WORKS**; **bounded repair + Q3(a)(b)(c) DONE — Q3(c) found a real wrong-page bug**; next = fresh OFF + N=5
+## CURRENT PACKET — `A2h-live-slot-write-r1` **EXECUTED: PARKED at ON-3** — **blind spot found, absence rows DEAD, new packet required**
+
+- **Packet:** `docs/packets/a2h-live-slot-write.md`, frozen
+  **`8F3C6291C42ED3D9C3B96D879A9BB9D46391E5FEEA3F4BDC1E8712F46FFF7D4F`** — **not edited**.
+- **Evidence:** ON1 `a2h-live-slot-write-on1-evidence.md` (`f9a8534`); **wrong-page bug**
+  `a2h-q3c-wrong-page-bug.md` (`d4c59d0`); ON2/ON3 `a2h-live-slot-write-on2-evidence.md` +
+  `a2h-live-slot-write-on3-evidence.md` (`6ba5430`); **ON3 CORRECTED** `a2h-on3-corrected-blind-spot.md`
+  (`2f2be3c`); **ruling** `a2h-on3-blind-spot-advisor-ruling.md` (`ac07f2d`).
+
+### ✅ What the live phase PROVED
+
+| Result | Value |
+|---|---|
+| **the page-protection watch WORKS** | **9 078 AVs, 9 035 steps, `rearm_failed=0`** — **the first write-watch on this line that ever fired** |
+| **Q3(c) caught a REAL bug** | **the canonical alias protected a page 64 KiB BELOW the slot** — fixed |
+| **the corrected page is right** | **the trap fired at host `0x001AD62C`** |
+| **values are trustworthy** | **cross-validation clean, 285–317 checks each, zero mismatches** |
+| **the `0x001D5078` terminal reproduced** | **with the ICALL 4-cycle and the same registers** |
+
+### ⚠⚠ THE BLIND SPOT — and THREE of the Session's own claims WITHDRAWN
+
+**The trap opens the page READWRITE so the faulting store can execute.** **While open, ANY OTHER THREAD writing
+the slot DOES NOT FAULT and is never recorded.** **`steps=9035` → 9 035 open windows; `concurrent_overlap`
+does NOT cover this, because a write INTO a window produces no fault at all.**
+
+**WITHDRAWN:** **(1)** *"no competitor wrote the slot"* — **the terminal PROVES one did**; **(2)** *"the
+control is green"* — **`installer_control_hits=0`**; **(3)** *"the chain is tied"* — **`FOURTH reached=0`,
+`read_samples=1` while the read site ran 75 times.**
+
+**All three are the same error: promoting an observation into a conclusion the instrument did not support.**
+
+### ✅ THE NARROWING — the fix is LESS machinery
+
+> **non-slot bytes fault → record first-touch → LEAVE RW, NEVER RE-ARM OR STEP.**
+> **slot bytes keep full record + step + rearm. Every window logged open/close with ticks.**
+
+**The first-touch census needs only WHICH addresses were touched, not their values** — **so non-slot writes
+need no single-step.** **`steps=9035` → "a handful."** **The blind spot is narrowed from 9 035 windows to
+roughly the number of SLOT writes.**
+
+**Residual same-bytes race → terminal-value coherence** (last-recorded vs terminal; mismatch ⇒ `UNKNOWN`).
+
+### The park was MANDATORY, on stronger grounds than the Session gave
+
+**With `installer_control_hits=0`, EVERY run is `INFRA FAILURE` per the packet's own rule — *"including a
+lucky writer catch."*** **So trials 4–5 could not have produced a rowable result under ANY outcome.**
+**The Session parked for the blind spot; the control failure would have forced it anyway.**
+
+### The phased plan
+
+| Phase | What | Gate |
+|---|---|---|
+| **Exp0** | **classifier unit proof on known RIP↔guest pairs**, incl. the **`0x7B3` residual** | **OFFLINE** |
+| **Exp1** | **control run** — **installer trap MUST fire** + loss accounting | **control green** |
+| **Exp2** | **bounded attribution** — **N≤5 pre-specified, early-stop, K≥2-agree** | **zero qualifying ⇒ RE-REFER** |
+
+**Absence rows are DEAD under this instrument; positive attribution is viable.** **A NEW PACKET is required —
+the change is both code (mapping fix + window narrowing) AND rows (drop absence rows), and the frozen
+contract absorbs neither.**
+
+**Next:** Planner writes the new packet; then Exp0 → Exp1 → Exp2.
+
+**Toolkit:** `4f06907` local / `571982d` pushed (**no-push state**). **Game:** `ac07f2d`.
+
+## SUPERSEDED — previous CURRENT PACKET — `A2h-live-slot-write-r1` **EXECUTED: ON trial 1 → INFRA FAILURE**; **THE WATCH WORKS**; **bounded repair + Q3(a)(b)(c) DONE — Q3(c) found a real wrong-page bug**; next = fresh OFF + N=5
 
 - **Packet:** `docs/packets/a2h-live-slot-write.md`, frozen
   **`8F3C6291C42ED3D9C3B96D879A9BB9D46391E5FEEA3F4BDC1E8712F46FFF7D4F`** — **not edited**.
