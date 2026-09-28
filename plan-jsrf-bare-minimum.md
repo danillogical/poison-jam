@@ -100,7 +100,37 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-arming-coverage-repeat-r1` **EXECUTED (5 ON) → `O-COVERAGE`** (Planner reversed `O-READ-PATH`); stage-1 **`ACCEPT-WITH-CORRECTIONS`** applied, **`BLOCKING: NONE`**
+## CURRENT PACKET — `A2h-dr0-delivery-gate-r1` (**discovery**: repair or retire the DR0 observation leg) — **PROMOTED 2026-09-28, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-dr0-delivery-gate.md`, **16 lines**, frozen
+  **`12A0B68EB550A96DCD4D2393DBC81262AC0CEE2838CC403A9FD99ED18D3BE537`** — **this is the packet to execute.**
+  Validation: `docs/reviews/a2h-dr0-delivery-gate-r1-session-validation.md`.
+- **Two phases, and Phase 1 GATES Phase 2:** **Phase 1** asks one question — *does a `#DB` hit arrive at the
+  install store, a known canonical write under an armed DR0 watch?* **Phase 2 attribution runs ONLY if
+  Phase 1 passes.** **DR records are INADMISSIBLE for any row until a live install trap passes.**
+- **The losslessness split is the packet's most important line:** a write-once `install_executed` latch **plus
+  uncapped counters**, so **`install_executed=1` with a complete raw-event count of 0 means NON-FIRING**, while
+  **a missing latch or incomplete accounting means NOT-RECORDED / `UNKNOWN`.** **A software install comparison
+  alone NEVER passes.**
+- **Bounded: ONE packet only.** No verified install `#DB` by closure, unrepairable handling, or irreconcilable
+  evidence ⇒ **STOP → Advisor**. *"No serial speculative repairs."*
+- **THE DROP CEILING, stated explicitly:** if the leg is dropped, **census + software reads + install software
+  control stand**; **no row reads DR records in either direction**; **canonical-write attribution and the DR leg
+  of read-path become permanently unreachable on this line.** *"Never carry the channel as decoration."*
+- **Declared write scope:** toolkit `kernel_bridge.c` (install-site witness / DR context handling); game
+  `tools/harness/collect.c` (raw delivery / continuation / lossless ledger) and `scripts/test-harness.py`
+  (fixtures). **No other source without new authorization.**
+- **The Session stress-tested the finding's load-bearing link before freezing:** the zero-`0x80000004`
+  inference needs the collector to print **every** exception event, and **`collect.c:1156` prints at the top of
+  the branch, before any filtering** — the `EXCEPTION_SINGLE_STEP` check is at `:1163`. **The inference holds.**
+- **Most informative new measurement the packet requires:** a **DR6/DR7 and thread-context readback on the far
+  side of `ContinueDebugEvent`** — new, because **a context that reverts across the continue would explain zero
+  hits while every existing check passes.**
+
+**Next:** execute the packet (fixtures → fresh OFF if collector changes invalidate the carried one → one
+bounded strict ON trial → the C2 gate → §5.8 acceptance).
+
+**Toolkit:** `571982d` (pushed). **Game:** `00646db`.
 
 - **Stage-1 review:** `docs/reviews/a2h-arming-coverage-repeat-acceptance-review.md` (`6a0eb11`) — **all eight
   criteria pass on independent verification.** **The EXECUTION is clean; the corrections concerned the row
