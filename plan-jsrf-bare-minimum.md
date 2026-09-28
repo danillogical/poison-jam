@@ -100,7 +100,69 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-slot-writer-chain-completion-r1` (**discovery**: does `0x00199F45` ever write the slot, and with what value?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+## CURRENT PACKET — `A2h-live-slot-write-r1` (**discovery**: LIVE observation — does `0x00199F45` write the slot, or a competitor?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-live-slot-write.md`, **17 lines**, **8397 bytes**, frozen
+  **`8F3C6291C42ED3D9C3B96D879A9BB9D46391E5FEEA3F4BDC1E8712F46FFF7D4F`** — **this is the packet to execute.**
+  Validation: `docs/reviews/a2h-live-slot-write-r1-session-validation.md`.
+- **⚠ THE FIRST LIVE-INSTRUMENTATION PACKET IN THIS LINE since the NULL line was retired.** **PREFLIGHT
+  APPROVED** (`a2h-live-slot-write-preflight-ruling.md`, `52d327a`) — **apply verbatim, no second preflight
+  if applied verbatim.**
+
+### The mechanism — page-protection primary, DR EXCLUDED entirely
+
+> **DR is not demoted to corroboration; it is EXCLUDED:** *"a channel that failed its positive control
+> contributes **nothing**, not even 'support.' **Corroboration from a broken oracle is how false confidence
+> builds.**"*
+
+**The discriminator is RO protection itself:** **reads proceed silently, only writes fault — so the poll
+loop's read volume is free.**
+
+**And the NULL line's DR leg was DROPPED at its terminal ceiling** — **no DR record may be cited, and DR
+is not a mechanism here.**
+
+### The REQUIRED positive control
+
+**The LIVE INSTALLER TRAP at `0x0018CE3A` must fire on the derived slot** — **recording RIP, `0x0015F9D0`,
+alias/order and re-arm.** **NO HIT ⇒ `INFRA FAILURE`, fail closed, no outcome claim.**
+
+**Session-established signature:** **the installer writes `[ecx+0x242c]` with `ecx = MEM32(0x19DCE0)`, value
+the constant `0x0015F9D0`.** **The candidate writer's contrasting signature is `RIP = 0x00199F45` with the
+packed tuple `0x001D5078`** — **distinct in BOTH RIP and VALUE, which is what makes the trap clean.**
+(`a2h-positive-control-signature.md`, `8883a99`.)
+
+### The scope bound
+
+**Fresh OFF + pre-specified `N`, `1 ≤ N ≤ 5` ON, STOP at the first QUALIFYING run.** **Qualifying = a
+writer-observed slot RIP/value/order record + matching terminal `0x001D5078` failure + green controls
+including the installer trap.** **Zero qualifying in N ⇒ report + RE-REFER, NEVER extend.**
+
+### ✅ Two design points the Session especially endorses
+
+**1. The loss asymmetry is exactly right.** **Line 10:** *"overflow or any unreconciled interval
+**invalidates absence/order rows, not a positive self-contained writer record**."* **A positive record stands
+on its own evidence; an ABSENCE claim requires complete coverage.**
+
+**2. The candidate's earlier hit cannot be attribution.** **Line 14:** *"candidate's earlier hit, if any, is
+**contrastive, not attribution**"*; **line 15:** *"the packed tuple is **observed flowing into a call, not
+deduced from byte shape**."* **That directly answers the REJECT's over-claim.**
+
+### Carry-forward — RE-VERIFIED for the new page, NEVER inherited
+
+**`g_xbox_mem_offset` at TERMINAL; base `MEM32(0x19DCE0)` re-read at ARM AND TERMINAL with the slot
+re-derived both times (CHANGED BASE ⇒ RE-SCOPE, never silently compare the old VA); no-debugger
+condition; VEH order; alias/thread census; tiled/contiguous non-overlap.** **And line 7: do NOT preselect
+`0x0019D62C`.**
+
+### ⚠ A dependency the owner should see
+
+**This is the first packet in this line to touch TOOLKIT source since the NULL line's DR work — and that
+work is UNPUSHED in a no-push state.** **The new instrumentation builds ON TOP of those commits.**
+**Toolkit: `37226b2` local / `571982d` pushed.**
+
+**Next:** implement + fixtures; fresh OFF; up to 5 ON; then `O-DATA-AS-CALL` or `O-OPEN` + PARK.
+
+**Game:** `4cd115d`.
 
 - **Packet:** `docs/packets/a2h-slot-writer-chain-completion.md`, **16 lines**, frozen
   **`3F7AD922DADD5E8E1B3944EAFF6B461468C1C05DC2350973243022C16305C7FD`** — **this is the packet to execute.**
