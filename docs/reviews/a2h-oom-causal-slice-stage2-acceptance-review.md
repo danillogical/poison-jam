@@ -724,3 +724,184 @@ Get-ChildItem . -Recurse -Include *.md -File |
 # criterion 1 sanity only (not a re-review)
 python -X utf8 -m unittest scripts.test_a2h_oom_slice           # Ran 31 tests ... OK
 ```
+
+---
+
+# Stage 2 re-verification (round 4) — repair commit `b183c79`
+
+**Scope:** the Session fixed the stray pipe at `plan:255`, added a structural markdown guard
+(`tests/test_markdown_tables.py`), and — on the guard's first run — found and fixed a **pre-existing**
+malformed row at `docs/jsrf-run-profiles.md:92`. **Commit under verification: `b183c79`.** Tree clean;
+**frozen packet `E9CDB1B3…41108C` re-verified and untouched**.
+
+**Both rows are well-formed and the added cell is accurate. The withdrawn claim is gone.** But the new guard
+**has a real defect of its own**: it **contradicts its own docstring** and would **misreport legitimate
+markdown** as malformed. I report it below; it is the reason this round is still `NOT ACCEPTED`.
+
+## R4.1 `plan:255` — well-formed (confirmed)
+
+`plan:255` now has **3 pipes against the 3-pipe header at L253**, matching every sibling row (L254, L256,
+L257). The stray `|` is gone and the chain description is part of cell 2. `git blame` → `b183c79`.
+**Confirmed fixed.**
+
+## R4.2 `jsrf-run-profiles.md:92` — well-formed, and **the added cell is accurate, not invented**
+
+The row now has **4 pipes, matching the 4-pipe header at L87** (`| Override | What it does | Why it cannot
+satisfy acceptance |`). The Session asked me to check the **content** specifically. I verified each claim
+independently rather than reading it as plausible prose:
+
+| Claim in the added cell | My verification | Verdict |
+|---|---|---|
+| *"Removed, so it cannot satisfy acceptance at all"* | `RETIRED_OVERRIDES` in `scripts/jsrf_run_profile.py` registers `RECOMP_VBLANK` with `removed_on: '2026-09-22'` and `removed_commit: 7cfbe55a…`; the retired-override rule at `jsrf-run-profiles.md:96-103` states a retired name is *"not merely absent … it is retired"*, fails closed at launch and is `EXPLORATORY` in an archive | **ACCURATE** |
+| *"there is no override left to set"* | cell 2's own text ends *"There is nothing left to override."* — the added cell restates it consistently, not a new claim | **ACCURATE / consistent** |
+| *"vblank delivery is now modelled rather than asserted"* | `nv2a_vblank_pulse` exists at `nv2a_core.c:184`, is called from `nv2a_mmio_hook.c:584`, and `kernel_bridge.c:2073` documents it as *"The source now lives where it belongs"*; `RECOMP_VBLANK` returns **zero** hits anywhere in the toolkit `src/` | **ACCURATE** |
+| *"Recorded here because the audit named it"* | The row sits under `### Synthetic completion`; sibling row `:89` uses the identical construction (*"This is the override the audit names explicitly"*). The owner's wider audit is referenced at `jsrf-operating-history.md:390`, and one archived run (`20260922-155540-785-a2-vblank-probe`) carries `RECOMP_VBLANK` in its settings, with the coverage gap recorded at `jsrf-operating-history.md:423-427` | **CONSISTENT with the document's established usage** |
+
+**The added cell is accurate and stylistically consistent with its siblings.** No invention found. I also
+confirmed **no contradiction** with the `### Retired overrides` section 4 lines below — the two agree.
+
+**Provenance, corrected in the Session's favour and then some.** The Session attributed the defect to
+`7f63c45`. **`git blame` on the pre-fix row returns `ad400294` (2026-09-22), not `7f63c45`** — `7f63c45` is
+merely a later commit that carried the already-malformed row forward (its only change to that file was at
+`@@ -234,8 +234,15 @@`, unrelated). **The row was born malformed at `ad40029`**, which rewrote
+`| \`RECOMP_VBLANK\` | Enables the vblank source. | Assertion is not delivery… |` (4 pipes, correct) into the
+struck-through form **and dropped the third cell in the same edit**. So the defect is **older than the
+Session thought**, and its own guard still found it. That strengthens the case for the guard; it does not
+change the verdict on the row, which is now correct.
+
+## R4.3 The new guard — **it catches the real defects, but it contradicts its own docstring**
+
+**What works.** I ran it (`Ran 6 tests … OK`, exit 0) and, more importantly, **tested it against the real
+historical bytes** rather than trusting its own fixtures. Replaying the guard's logic over historical
+revisions:
+
+| Revision replayed | Expected | Result |
+|---|---|---|
+| `7d798af` `plan-jsrf-bare-minimum.md` (the stray pipe I found in round 3) | flagged | **CAUGHT** — `255: 3 cells vs header 2` |
+| `7f63c45` `docs/jsrf-run-profiles.md` (the pre-existing missing cell) | flagged | **CAUGHT** — `92: 2 cells vs header 3` |
+| `dd96963` plan (round-2 state, before the stray pipe) | clean | not flagged ✓ |
+| `b183c79` plan (HEAD) | clean | not flagged ✓ |
+| `b183c79` profiles (HEAD) | clean | not flagged ✓ |
+
+**The guard genuinely catches both real defects it was built for**, and does not flag the clean revisions.
+Its positive control, well-formed control, blockquote case and non-table-pipe case are all real tests. This
+is the right response to my pattern diagnosis, and it is already earning its keep.
+
+**The defect: `cells()` miscounts legitimate markdown, and the docstring claims it does not.** The function
+body is `return body.count("|") - 1` with **no detection branch**. Its docstring says:
+
+> *"Escaped pipes (`\|`) and pipes inside backtick spans are **NOT** treated specially … **If either appears,
+> the test says so rather than guessing.**"*
+
+**The code has no such "says so" path.** I demonstrated the consequence directly:
+
+| Input (well-formed markdown) | True cells | `cells()` returns | Guard's verdict |
+|---|---|---|---|
+| `\| \`A\\\|B\` \| clears it \|` | 2 | **3** | **reported malformed (false positive)** |
+| `\| \`GS \|= 1\` \| sets it \|` | 2 | **3** | **reported malformed (false positive)** |
+
+A **correctly written** table row containing an escaped pipe or a backtick span with `|=` (a *very* common
+form in this repository's toolkit-sync and register tables) is **reported as a defect**. The docstring
+promises the opposite behaviour, so the guard's stated contract and its behaviour disagree — and a future
+maintainer reading the docstring would trust a check that silently misfires.
+
+**Why this matters now rather than hypothetically.** The guard's `DOCUMENTS` list is exactly the four
+durable documents, and I confirmed **all four currently contain zero escaped pipes**, so the guard passes
+today **by luck of the current corpus, not by construction**. The moment anyone writes `\|` or a `|=` inside
+backticks in `plan-jsrf-bare-minimum.md`, `AGENTS.md`, `agent-workflow.md` or `jsrf-run-profiles.md` — all
+four of which are actively edited — the guard will **fail on a correct row**, and the natural fix under
+pressure is to delete the guard or mangle the row. That is the classic way a good guard dies.
+
+**This is a test-only defect and it has not corrupted any evidence.** It does not affect the packet's
+findings, the census, or criterion 1. It is in new code introduced by the commit under verification.
+
+## R4.4 Guard scope — my answer to the Session's direct question
+
+The Session asked whether the guard's scope (four documents) is right or should cover more. **My answer: the
+four-document scope is defensible and I would keep it, but the scope is not what needs changing — the
+counting is.**
+
+I scanned **all 767 markdown files** in the tree with the guard's own logic. **36 rows across 24 files**
+mismatch their header. Of those:
+
+- **27 are escaped-pipe artifacts** (`\|` in the row or header) — i.e. **the guard's own false-positive
+  class**, not real defects. This is direct evidence that widening the scope today would produce a flood of
+  false positives across `docs/reviews/` and `docs/packets/`.
+- **9 have no escaped pipe.** Inspecting each: **6 are backtick-span pipes** (`\`GS |= …\``, `` `|= 4` ``) —
+  again the same false-positive class — and **3 are genuine** (`docs/reviews/a4b2-r7-execution-evidence.md:54,
+  55, 56`, three real 2-cell rows under a 3-cell `| Item | R1 | R0 |` header).
+
+**So the honest position is:** widening to `docs/**` would surface **3 real defects** but **33 false
+positives** until `cells()` learns to skip escaped and backtick-span pipes. **Fix the counting first, then
+widen** — and the three real ones are worth a look on their own merits (they are in an accepted packet's
+execution evidence, where a missing cell means a column of measurements is silently absent).
+
+**Recommendation, in order:** (1) make `cells()` skip `\|` and pipes inside backtick spans, and **add a test
+asserting the "says so" behaviour the docstring already promises** — the docstring currently describes a
+guard that does not exist; (2) then widen `DOCUMENTS` to `docs/**/*.md`; (3) treat the 3 genuine
+`a4b2-r7` rows as a separate finding, not as part of this packet.
+
+## R4.5 Round-4 disposition
+
+**(i) `plan:255` well-formed?** **YES** — 3 pipes against a 3-pipe header. Confirmed fixed.
+
+**(ii) `jsrf-run-profiles.md:92` well-formed and the added cell accurate?** **YES to both.** 4 pipes against
+a 4-pipe header; every claim in the added cell verified against `RETIRED_OVERRIDES`, the toolkit source
+(`nv2a_vblank_pulse`), and the document's own retired-override section. **Accurate, not invented.** The
+defect's provenance is older than the Session reported (`ad40029`, not `7f63c45`).
+
+**(iii) The guard's scope right, or should it cover more?** **The scope is defensible; the counting is
+wrong.** The guard catches both real defects it was built for, but `cells()` miscounts escaped and
+backtick-span pipes **and its docstring claims it does not**. Fix the counting before widening.
+
+**DISPOSITION (round 4): NOT ACCEPTED** — criterion 1 `AGREED` (unchanged, not re-reviewed); criterion 2
+`DISAGREED` on the new guard's docstring/behaviour contradiction.
+
+### What the remaining repair needs
+
+**One function and one test.** Make `cells()` skip `\|` and pipes inside backtick spans (a few lines), and
+add a test asserting the docstring's promised "says so" behaviour — the docstring already describes the
+correct behaviour, so this is making the code match its own stated contract. **No re-measurement, no re-sweep
+of the withdrawn claim, and no change to either repaired row is needed** — those are all correct.
+
+**I state plainly what this means for acceptance, and I want to be precise about the boundary of my role.**
+The packet's **substantive** obligations are now fully discharged: the false "no-trap" characterisation is
+corrected everywhere and every assertion of the withdrawn claim is gone (§R3.1, unchanged); the parser
+fixture is covered (criterion 1, `AGREED`); the census holds (35/0, three independent runs); the evidence
+matches the commands; and the row selection is honest. **The only outstanding item is a defect in a
+brand-new test file that is not part of the packet's contract at all** — `tests/test_markdown_tables.py` is
+the Session's own initiative in response to my advisory, not something `A2h-oom-causal-slice-r1` requires.
+
+**That is a judgment call about materiality, and it is not mine to make (§2.2.6).** A Planner or Advisor
+could very reasonably rule that a false-positive-prone test in new, non-contract code is a **follow-up
+lead**, not a blocker on a discovery packet whose contract says nothing about markdown linting — in which
+case the disposition would be `ACCEPT` and the guard fix becomes a separate bounded task. I am reporting it
+because I found it and because a guard that fails on correct input is a real trap for the next session; I am
+**not** reclassifying it, and I am **not** withholding `ACCEPT` on a criterion the contract does not contain.
+If the Session or Planner wants `ACCEPT` with this recorded as an advisory, that ruling should come from the
+judgment layer, and I will record it.
+
+## Round-4 reproduction commands
+
+```powershell
+git log --oneline -3 ; git status --porcelain                  # HEAD = b183c79, clean
+(Get-FileHash docs\packets\a2h-oom-causal-slice.md -Algorithm SHA256).Hash   # E9CDB1B3…41108C
+
+# (i) plan:255 well-formed (3 pipes = 2-col table)
+$l=(Get-Content plan-jsrf-bare-minimum.md)[254]; ([regex]::Matches($l,'\|')).Count
+# (ii) profiles:92 well-formed (4 pipes = 3-col table)
+$p=(Get-Content docs\jsrf-run-profiles.md)[91]; ([regex]::Matches($p,'\|')).Count
+git blame -L 92,92 --date=short b183c79^ -- docs/jsrf-run-profiles.md   # ad400294, NOT 7f63c45
+
+# (iii) the guard, and its defect
+python -X utf8 -m unittest tests.test_markdown_tables                    # Ran 6 tests ... OK
+# replay the guard against the REAL historical defects:
+#   7d798af:plan-jsrf-bare-minimum.md   -> CAUGHT (255: 3 cells vs header 2)
+#   7f63c45:docs/jsrf-run-profiles.md   -> CAUGHT (92: 2 cells vs header 3)
+#    b183c79 (HEAD)                     -> clean
+# the false positive:
+python -X utf8 -c "import importlib.util as u;s=u.spec_from_file_location('g','tests/test_markdown_tables.py');g=u.module_from_spec(s);s.loader.exec_module(g);print(g.cells(r'| \`A\\|B\` | clears it |'))"   # 3, but the row has 2 cells
+
+# scope scan: 767 markdown files, 36 mismatching rows in 24 files
+#   27 escaped-pipe artifacts, 6 backtick-span artifacts, 3 genuine (a4b2-r7-execution-evidence.md:54-56)
+```

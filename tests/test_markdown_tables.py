@@ -43,18 +43,54 @@ ROW = re.compile(r"^\s*(?:>\s*)*\|.*\|\s*$")
 
 
 def cells(row: str) -> int:
-    """Count cells in a table row.
+    """Count cells in a table row, honouring escaped pipes and backtick code spans.
 
     A leading and trailing pipe delimit the row rather than delimiting cells, so the cell
-    count is (number of pipes - 1). Escaped pipes (\\|) and pipes inside backtick spans are
-    NOT treated specially -- the durable documents avoid both in table cells, and pretending
-    to parse them would give false confidence. If either appears, the test says so rather
-    than guessing.
+    count is (number of DELIMITING pipes - 1).
+
+    Two constructs must not be counted as delimiters, and both are common in this
+    repository's register and toolkit-sync tables:
+
+      * an ESCAPED pipe (`\\|`), which renders as a literal pipe inside a cell;
+      * a pipe inside a BACKTICK code span (`` `GS |= 1` ``), which renders literally.
+
+    An earlier version of this function was `return body.count("|") - 1` with no detection
+    branch at all, while its docstring promised that escaped pipes and backtick spans were
+    handled. That mismatch was caught in acceptance: the guard reported CORRECT rows as
+    malformed, and it passed only because none of the four guarded documents happened to
+    contain an escaped pipe yet. A guard that fails on correct input gets deleted under
+    pressure, so the counting is now correct by construction rather than by luck.
     """
-    body = row.strip()
-    # strip blockquote markers
-    body = re.sub(r"^(?:>\s*)+", "", body)
-    return body.count("|") - 1
+    body = re.sub(r"^(?:>\s*)+", "", row.strip())
+
+    delimiters = 0
+    in_code = False
+    i = 0
+    while i < len(body):
+        ch = body[i]
+        if ch == "\\" and i + 1 < len(body):
+            # An escaped character is literal; skip both characters.
+            i += 2
+            continue
+        if ch == "`":
+            in_code = not in_code
+            i += 1
+            continue
+        if ch == "|" and not in_code:
+            delimiters += 1
+        i += 1
+    return max(delimiters - 1, 0)
+
+
+def has_unescaped_pipe_ambiguity(row: str) -> bool:
+    """True when a row contains a construct whose cell count could be disputed.
+
+    Kept as a named predicate so the guard can REPORT such rows rather than silently
+    guessing -- the behaviour the docstring always promised. Currently the counter handles
+    both constructs, so this is a diagnostic aid, not a gate.
+    """
+    body = re.sub(r"^(?:>\s*)+", "", row.strip())
+    return "\\|" in body or "`" in body
 
 
 def table_blocks(lines: list[str]) -> list[tuple[int, int]]:
@@ -151,6 +187,57 @@ class MarkdownTableTests(unittest.TestCase):
         self.assertEqual(cells("| a | b |"), 2)
         self.assertEqual(cells("| a | b | c |"), 3)
         self.assertEqual(cells("> | a | b |"), 2)
+
+    def test_escaped_pipe_inside_a_cell_is_not_a_delimiter(self):
+        """`\\|` renders as a literal pipe, so it must not split the cell.
+
+        The acceptance reviewer demonstrated that the earlier counter reported these
+        CORRECT rows as malformed -- a guard that fails on correct input.
+        """
+        self.assertEqual(cells(r"| `A\|B` | clears it |"), 2)
+        self.assertEqual(cells(r"| x \| y | z |"), 2)
+        self.assertEqual(cells(r"| a | b \| c | d |"), 3)
+
+    def test_pipe_inside_a_backtick_span_is_not_a_delimiter(self):
+        self.assertEqual(cells("| `GS |= 1` | sets it |"), 2)
+        self.assertEqual(cells("| a | `b | c` | d |"), 3)
+
+    def test_guard_accepts_rows_with_escaped_pipes_and_code_spans(self):
+        """A well-formed table using either construct must pass the whole-document check."""
+        lines = [
+            "| Override | Effect | Why |",
+            "|---|---|---|",
+            r"| `A\|B` | clears it | cannot pass |",
+            "| `GS |= 1` | sets it | cannot pass |",
+        ]
+        blocks = table_blocks(lines)
+        self.assertEqual(len(blocks), 1)
+        header = cells(lines[0])
+        bad = [i for i in range(blocks[0][0], blocks[0][1]) if cells(lines[i]) != header]
+        self.assertEqual(bad, [], "correct rows using `\\|` or `|=` must not be flagged")
+
+    def test_guard_still_catches_a_real_defect_alongside_escaped_pipes(self):
+        """The positive control must survive the counting fix."""
+        lines = [
+            "| Override | Effect | Why |",
+            "|---|---|---|",
+            r"| `A\|B` | clears it | cannot pass |",
+            "| `GS |= 1` | sets it |",          # genuinely missing a cell
+        ]
+        blocks = table_blocks(lines)
+        header = cells(lines[0])
+        bad = [i for i in range(blocks[0][0], blocks[0][1]) if cells(lines[i]) != header]
+        self.assertEqual(bad, [3])
+
+    def test_ambiguity_predicate_reports_both_constructs(self):
+        """The diagnostic the docstring promised: say so rather than guess."""
+        self.assertTrue(has_unescaped_pipe_ambiguity(r"| a \| b | c |"))
+        self.assertTrue(has_unescaped_pipe_ambiguity("| `x | y` | z |"))
+        self.assertFalse(has_unescaped_pipe_ambiguity("| a | b |"))
+
+    def test_unterminated_code_span_does_not_crash(self):
+        """A malformed row must still produce a number, not an exception."""
+        self.assertIsInstance(cells("| `unclosed | b |"), int)
 
 
 if __name__ == "__main__":
