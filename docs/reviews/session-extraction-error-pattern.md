@@ -17,17 +17,24 @@ error whose cause is identical to the fourth, which means the mandate as written
 | **3** | Read `inspect-jsrf.py memory` output as memory-order bytes | **the tool prints little-endian DWORD VALUES** — the Session concluded `MEM32(0x19DCE0) = "djv0"`, **which would have collapsed the entire object identity** | **the Session, via a known-string control** |
 | **4** | Treated the corroboration **table** as the whole affected claim | **the caller return-address binding at `0x00F7FEA0` sits INSIDE the same tainted window** | **the Advisor** |
 | **5** | Published a field-attribution table claiming `edi = ecx` at four of five sites and filing `+0x100` as a CONTEXT offset | **`sub_00194300` holds the context in `[esp+8]`, and `[esi+0x100]` is `DEVICE+0x100`** — **the Session's detection script matched `mov dword ptr [esp + 8], ecx` as if it were `edi = ecx`** | **the Planner** |
+| **6** | Wrote the callee's context load as **`mov esi,ecx` at `0x00193D62`** in the promoted plan | **the actual address is `0x00193D96`** — **the digits are transposed** | **the Session, while re-verifying against the bytes for an unrelated check** |
 
-## The mechanism, which instances 3, 4 and 5 share
+**Instance 6 was caught only because the Session re-read the bytes for a different purpose.** **It is the same
+mechanism again — a value written from memory rather than copied from a verified read** — **and it is a useful
+data point: the error survived one commit and a promotion, and nothing in the review structure caught it.**
 
-**All three are the same failure: a LOOSE MATCH CONDITION in an extraction the Session wrote or trusted, with
-NO per-item verification against the underlying artifact.**
+## The mechanism, which instances 3, 4, 5 and 6 share
+
+**All four are the same failure: a value produced by a LOOSE OR UNVERIFIED STEP in an extraction the Session
+wrote or trusted, with NO per-item verification against the underlying artifact.**
 
 - **#3:** the Session trusted its own reading of a tool's output format **without a control on the format.**
 - **#4:** the Session trusted a **scope** it had been handed **without checking the geometry** — whether other
   claims fell inside the same window.
-- **#5:** the Session trusted a **regex** — `edi, ecx` matched a stack store because the pattern was
-  `mov\s+edi,\s*ecx` tested against `mov dword ptr [esp + 8], ecx` via a fallback branch that was too broad.
+- **#5:** the Session trusted a **regex** — `edi, ecx` matched a stack store because the pattern's fallback
+  branch was too broad.
+- **#6:** the Session **wrote an address from memory** instead of copying it from the verified read it had
+  already made. **The correct value was in the Session's own earlier output.**
 
 **In each case the artifact was CORRECT and the extraction was WRONG.** **And in each case the Session
 published the extracted result as a finding rather than as an extraction awaiting verification.**
@@ -64,6 +71,10 @@ table the Session DERIVED from its own script.**
   to `edi ← ecx: yes` would have made the error obvious at a glance.**
 - **The Session will state a derived table's provenance as DERIVED, distinct from READ**, so a reviewer knows
   where to aim.
+- **NEW, from instance 6: ADDRESSES AND VALUES ARE COPIED, NEVER RETYPED.** **Every hex address or measured
+  value that reaches a record will be copied from the verified output that produced it, not written from
+  memory.** **Instance 6 was a transposition of two digits in an address the Session had ALREADY verified
+  correctly elsewhere — the information was present and the Session did not use it.**
 
 ## The honest summary
 

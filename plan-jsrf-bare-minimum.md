@@ -115,7 +115,7 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 | **Five DECLARED containing functions** | `sub_00194300`, `sub_00194480`, `sub_00194A72`, `sub_00194EEF`, `sub_00196C0B` |
 | **The invariant** | **`device = [context]`** — **the context's FIRST DWORD** — **not `ecx = device`** |
 | **The register holding the context DIFFERS** | `edi` (poller, `sub_00194A72`, `sub_00194EEF`), `[esp+8]` (`sub_00194300`), `[esp+0xC]` (`sub_00194480`) |
-| **The callback slot** | **CONTEXT `+0x1C4`**, read by the callee via **`mov esi,ecx`** (`0x00193D62`), **NULL-tested** |
+| **The callback slot** | **CONTEXT `+0x1C4`**, read by the callee via **`mov esi,ecx`** (`0x00193D96`), **NULL-tested** |
 | **The polled flag** | **DEVICE `+0x100`** (via the dereferenced device pointer), bit **`0x01000000`** |
 
 ### ⚠ A Session error the PLANNER caught — recorded in place
