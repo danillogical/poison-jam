@@ -102,12 +102,18 @@ zero canonical-slot writes.** So the faulting thread did not write the slot thro
 **This is the strongest single observation in the A2h line so far, and it is new.** Run 5's log:
 
 ```
-[A2HSLOT] tid=66468 call=#246 ordinal=224 slot=001C4064 value=FE000104 phase=after
+[A2HSLOT] tid=66468 call=#245 ordinal=159 slot=001C4064 value=FE000104 phase=after
 [A2HSLOT] tid=66468 call=#246 ordinal=224 slot=001C4064 value=00000000 phase=before
+[A2HSLOT] tid=66468 call=#246 ordinal=224 slot=001C4064 value=00000000 phase=after
 [A2HSLOT] write tid=66468 slot=001C4064 before=FE000104 after=00000000 phase=boundary
 [ICALL] invalid target 0x00000001 tid=66468 esp=0126BF88 return=0018CE73
 [A2HSLOT] terminal tid=66468 target=00000001 slot=001C4064 live=00000000 call=#246 observed=0
 ```
+
+*(**Corrected per the post-review confirmation's D2 finding.** This block first attributed the
+`FE000104 phase=after` sample to call `#246`; **it is call `#245`'s**, and no `#246` line with that value
+exists. The sequence is now transcribed exactly as the log carries it, which is also what makes the bracket
+below legible.)*
 
 **Within one bridge call** (ordinal 224, call `#246`) the slot went **`FE000104 → 00000000`**, and the very
 next event was a fatal call through a **different** slot with a **non-NULL** target.
@@ -190,12 +196,17 @@ THREADS ENTIRELY.**
 | 10904, 30120, 32108, 38516, 45168, 46648, 53916, 60208, 65644 | — | yes | **no** | arm FAILED |
 
 **Every one of the nine "attempts" was a thread that NEVER DISPATCHED a single guest kernel call** — transient
-or toolkit host threads. **And all FOUR of the other real guest threads (identities 2, 3, 4, 5) were never
-attempted at all**, yet **each dispatched guest code.**
+or toolkit host threads. **And all FOUR of the other real guest threads recorded in the registry (identities
+2, 3, 4, 5) were never attempted at all**, yet **each dispatched guest code.**
 
-**So the coverage hole is total for guest threads:** the DR0 watch covered **exactly one** of the **five**
-guest threads that ran guest code. **This is not "9 of 10 arms failed" — it is "4 of 5 guest threads were
-never even attempted."**
+**So the coverage hole is total for guest threads: the DR0 watch covered exactly ONE of the guest threads that
+ran guest code — out of AT LEAST SIX.** *(This figure was first written here as "one of the five" and "4 of 5
+never attempted", taking the frozen registry's five threads as the population. **The post-review confirmation
+established that is wrong:** a **sixth** guest-dispatching thread, `tid 57376`, also ran guest code and was
+never attempted — see the C3 correction below. **The superseded figure is corrected here rather than only in
+the appended corrections, because a reader who stops before those would otherwise carry the wrong number.**)*
+**This is not "9 of 10 arms failed" — it is "at least 5 of at least 6 guest threads were never even
+attempted."**
 
 **Run 5 shows the same shape:** the one armed thread (`66428`, **guest identity 1** — corrected, see below)
 plus **four guest threads never attempted** (`59716`, `62152`, `63812`, `66468`), and **`66468` — guest
