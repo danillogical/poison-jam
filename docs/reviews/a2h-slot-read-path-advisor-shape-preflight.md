@@ -205,3 +205,38 @@ re-learning: **derive from the source of truth (`g_mirror_views`), do not comput
 range is `0x007BFF94..0x012ECF90`, and the aliases extend to `0x70000000` — far above it. **The Advisor's
 instruction that the `esp` range is compatibility-only and never coverage is therefore doubly right**, and
 the Session withdraws any suggestion that it bounds alias reachability.
+
+## Session correction #3 — the "no-debugger-attached" condition is unsatisfiable as literally written
+
+**The Planner caught this while expanding the packet, and it is a real contradiction in the ruling's
+correction 3(v).** The ruling requires a *"no-debugger-attached run condition (`IsDebuggerPresent` assert
+start/end)"*.
+
+**Verified: every archived guest run satisfies `IsDebuggerPresent() == TRUE` by construction.** The
+collector launches the target as its own debuggee:
+
+```c
+tools/harness/collect.c:294-295
+    if (!CreateProcessA(NULL, command, NULL, NULL, FALSE,
+            DEBUG_ONLY_THIS_PROCESS | CREATE_SUSPENDED, NULL, NULL, &startup, &child)) {
+```
+
+`DEBUG_ONLY_THIS_PROCESS` makes the calling process the debugger of the target, so **`IsDebuggerPresent()`
+inside the guest is necessarily true**. A literal assertion would **fail every prescribed OFF/ON run** — and
+the runner always goes through the collector (`scripts/run-jsrf.py:4,45`).
+
+**Corrected requirement, which the Planner proposed and the Session adopts:**
+
+> **No ADDITIONAL or EXTERNAL debugger may be attached; the collector's own expected attachment must be
+> verified rather than asserted absent.** Concretely: assert the debugger is **exactly** the expected
+> collector (by process identity), and assert **DR ownership** — that the four debug registers are owned by
+> the instrument and not by a third-party debugger — at start and at teardown.
+
+**This preserves the ruling's actual intent** (no *foreign* agent perturbing the run or stealing the DR
+registers) **while being satisfiable.** Recorded because a literal reading would have made the packet
+unrunnable, and because the Planner caught it before it reached a frozen contract.
+
+**Also noted from the Planner, and correct:** the alias guard's first-fault record is **coverage-only** —
+**any alias write hit ⇒ `UNKNOWN`** — so a racing *subsequent* write cannot false-pass the row. That is the
+first-touch insight applied correctly, and it is why the single-step race that disqualified the page-guard as
+a *write history* does not disqualify it as a *touch census*.
