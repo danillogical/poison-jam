@@ -67,7 +67,7 @@ not place.**
 
 ## Exp0 — the proof, on the REAL loaded modules
 
-**Run as the `jsrf_a2h_slotw_fixture_gate_on` arm, `216` checks, `0` failures.** The fixture reads the
+**Run as the `jsrf_a2h_slotw_fixture_gate_on` arm, `227` checks, `0` failures.** The fixture reads the
 **REAL image bounds from the real PE headers** and uses **REAL function addresses** — **not a synthetic
 range.**
 
@@ -240,7 +240,7 @@ SATISFIABLE, which is precisely what the void encoding test could never be.**
 |---|---|
 | **Build** | ✅ `python -X utf8 scripts/build-jsrf.py` — **succeeded**, source/executable identity recorded |
 | **CTest** | ✅ **22/22 passed** |
-| **Fixture (gate ON)** | ✅ **216 checks, 0 failed** |
+| **Fixture (gate ON)** | ✅ **227 checks, 0 failed** |
 | **Fixture (gate OFF)** | ✅ **3 checks, 0 failed** — arm refused, no page protected, ledger inert |
 | **Harness probes** | ✅ **19 probes + 9 A2h delivery fixtures + 1 native `#DB` control**, all PASS |
 | **Guards** | ✅ **9/9** — `test_agent_docs`, `test_recorded_reviews`, `test_run_profiles`, `test_markdown_tables`, `test_pio_free_demand`, `test_a2h_oom_slice`, `test_a2h_frame_audit`, `test_a2h_null_slot_triage`, `a2h-read-registry.py --self-test` |
