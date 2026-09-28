@@ -160,7 +160,40 @@ gated fields on the existing `[ICALL]` print in `recomp_manual.c:35-43` with `Ra
 
 ---
 
-## Previous — **NONE. Critical path MOVED by Advisor ruling: the `A2h` producer line is PARKED; the next packet is a NULL-slot triage discovery.**
+## Previous — `A2h-named-producer-frame-r1` **ACCEPTED 2026-09-27** (`ACCEPT`, all criteria `AGREED`; row `O-OPEN`) — frame and caller BOUND; the failing allocation's read value is not in the artifact *(this supersedes the "EXECUTED → O-OPEN" block further down: same row, now accepted with three corrections applied)*
+
+**`ACCEPT`** — stage 1, all three criteria `AGREED`, **no other row better supported**. Review:
+`docs/reviews/a2h-named-producer-frame-acceptance-review.md`. **Three required corrections applied and
+re-swept** (commit `379be56`); none changed the row. **Frozen packet `2333B652…F88887` verified unchanged.**
+
+**The reviewer independently reproduced the frame arithmetic** (`E = 0x00F7FEA0`, `ebp = 0x00F7FE9C`,
+`arg2 = 0x00F7FEAC`), **recomputed the row from the packet's own lines 26-31**, confirmed **synthetic
+completion absent**, and confirmed the **frozen packet / toolkit / generated code unchanged**.
+
+**What the reviewer caught that the Session did not — all three verified before applying:**
+1. **A tool bug that produced a wrong number in an accepted record.** The Session claimed *"12 of 13 call
+   sites pass three arguments; one passes two."* **It is 13 of 13.** `_safe_start` scanned backward for a `C3`
+   byte and hit one at `0x0016B8EB` — the **ModRM byte of `add ebx,0x12` (`83 c3 12`)**, not a `ret` — so the
+   decode swallowed a `push` and under-counted. **The fix uses the recompiler's own `loc_` labels as the
+   boundary set**, in `gen/` **and** `recovered/`, with **four regression tests** (29 tests OK).
+2. **A wrong pre-image interval and an unswept self-contradiction.** `V(0x4C000011) = 0x4C000030`, so the true
+   pre-image of the crash's `eax` is **`[0x4C000001, 0x4C000010]`**; the Session's line also asserted
+   `0x4C000010 + 0x20 = 0x4C000020` when it is `0x4C000030`, **contradicting its own earlier correct line.**
+3. **An over-broad dead-slot scope.** The slot is not a witness for the **failing** activation's `arg2` — it
+   **is** live caller argument space holding the **crash** activation's.
+
+**The reviewer also supplied corroboration the Session had missed:** the **dump layout**, where `E−16`,
+`E−12`, `E−8` and `E` hold exactly the predicted constants and return address. **The Session's "three
+independent facts" was an over-claim** (two were one relation displaced a slot, the third reused the first's
+`esp`); the dump layout is the genuinely independent check and the record now rests on it.
+
+**Lesson recorded:** the misaligned-decode failure mode **survived into an accepted record** — the tool's
+`verify()` was fail-closed but its **resynchronisation heuristic was not**. Fail-closed verification is only
+as good as the boundary you start from.
+
+---
+
+## Earlier — **Critical path MOVED by Advisor ruling: the `A2h` producer line is PARKED.**
 
 > ### Advisor ruling (2026-09-27): the critical path moved to `0x001C4064`
 >
