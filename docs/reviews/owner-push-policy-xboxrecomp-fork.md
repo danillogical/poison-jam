@@ -228,3 +228,44 @@ added to both KWATCH prints, and inert stubs in two toolkit test files whose tar
 `xbox_kernel` without the game's `diagnostics.c`. **Observation-only**; every new print and call
 is behind `JSRF_TRACE_A2H_SLOT`, and the packet's Run 1 (gates OFF) verified the instrumentation
 is live-inert.
+
+---
+
+## 2026-09-28 — Toolkit push: A2h slot-write watch + arming-coverage reporting (`571982d`)
+
+**PUSHED_TO:** `origin` (the owner's fork)
+**BRANCH:** `main`
+**COMMIT:** `571982d9b14df45b6f268af279c6aaf1b09633f0`
+**REMOTE_URL:** `https://github.com/danillogical/xboxrecomp.git`
+**RESULT:** success — `6f049ce..571982d  main -> main`; `origin/main` verified equal to local;
+**`upstream` untouched** at `766ecef` (push URL `DISABLED`, never contacted).
+
+**Three commits closed durably, covering three separately accepted packets:**
+
+| Commit | Packet | Acceptance |
+|---|---|---|
+| `07f6b06` | `A2h-slot-read-path-displacement-r1` | stage-1 **`ACCEPT`** |
+| `5528d00` | same (handshake acknowledgement VEH) | stage-1 **`ACCEPT`** |
+| `571982d` | `A2h-arming-coverage-attribution-r2` | stage-1 **`ACCEPT`**, all criteria `AGREED`, `BLOCKING: NONE` |
+
+**Why this push is authorized.** Each commit was **pending-acceptance** while its packet was open, which
+the policy makes a **no-push** state. All three packets have now been accepted — the most recent by an
+independent reviewer that returned **`ACCEPT`** with **all three mandatory criteria `AGREED`**,
+**`BLOCKING: NONE`** and **`EVIDENCE OUTRUNNING CLAIMS: NONE`** — so the work is **no longer
+pending-acceptance** and durable closure is due.
+
+**All five preconditions verified immediately before pushing:** the toolkit tree was **clean**; the
+commits are the **intended durable state**; the **active packet's tests and acceptance passed** (20/20
+ctest, all nine guard suites, 19/19 harness probes, and the packet's own `ACCEPT`); the destination is
+**the fork, not `upstream`**; and the local SHA and branch were **recorded**. No force, no
+`--force-with-lease`, no push to `upstream`.
+
+**Contents:** the gated install handshake with its in-target acknowledgement VEH; the 28-alias
+first-touch census with record-before-open; the collector DR0 write watch with per-thread arming; and
+the arming-coverage **reporting** fix that made every successful arm visible (17 recorded where 10 were
+previously reported), plus the `collect_arming_fixture_test.c` fixture that caught a real conflation in
+its own first draft.
+
+**Observation-only throughout.** Every new print and call is behind `JSRF_TRACE_A2H_DR` or
+`JSRF_TRACE_A2H_SLOT`, both OFF by default, and inertness was verified at the **record** level — zero
+gated lines and an all-zero frozen registry with the gate off.

@@ -140,10 +140,9 @@ version.** The version moved 1→2 at `009f624` and 2→3 at `f5b709d`, so **the
 (`2c8765c`) to compare against the version **the collector itself reported** — stronger than a constant.
 **All 19 harness probes now pass.** **Process finding: a script outside the guard suite can rot silently.**
 
-**Next:** stage-1 acceptance of this packet; then the K=1 outcome and the yield problem go to the Planner
-(and Advisor if the mechanism is affected). **No extension of N without Advisor referral.**
+**Next:** stage-1 acceptance of this packet — **`ACCEPT`** (all criteria `AGREED`, `BLOCKING: NONE`); then the K=1 outcome and the yield problem go to the Planner (and Advisor if the mechanism is affected). **No extension of N without Advisor referral.**
 
-**Toolkit:** `571982d` — **unpushed**, pending acceptance. **Game:** `e67fb86`.
+**Toolkit:** **`571982d`** — **committed and pushed to the fork** (`origin/main` verified equal, `upstream` untouched at `766ecef`). Three accepted packets back it, so the pending-acceptance no-push state has cleared. Push recorded in `docs/reviews/owner-push-policy-xboxrecomp-fork.md`. **Game:** `b0be4fa`.
 
 ---
 
