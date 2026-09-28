@@ -209,17 +209,34 @@ static void dr_handshake(DWORD tid)
     dr_print_arm_summary("handshake");
 }
 
+static int dr_was_armed(DWORD tid)
+{
+    for (unsigned i = 0; i < dr_arm_tid_count; i++)
+        if (dr_arm_tids[i] == tid) return 1;
+    return 0;
+}
+
 /* A #DB in a watched thread. Services ONLY this instrument's DR6.B0: BS (0x4000), B1-B3
  * (0x2,0x4,0x8) and TF belong to whoever else set them, so a mixed status is passed on and the run
  * is coverage-uncertain rather than credited with a canonical write. */
 static DWORD dr_handle_single_step(DWORD tid)
 {
-    HANDLE handle = OpenThread(THREAD_GET_CONTEXT | THREAD_SET_CONTEXT | THREAD_QUERY_INFORMATION,
-                               FALSE, tid);
+    HANDLE handle;
     CONTEXT context = {0};
     DWORD64 dr6;
     uint32_t value = 0;
     LARGE_INTEGER now;
+    /* ONLY THREADS THIS INSTRUMENT ARMED. A B0 on a thread we refused to arm means somebody else
+     * owns DR0 there; servicing it would clear their status bit and corrupt their watch. The
+     * collision check in dr_arm_thread already refused those threads, and this is the other half
+     * of that promise. */
+    if (!dr_was_armed(tid)) {
+        fprintf(report, "GUEST_DR_HIT_UNSERVICED tid=%lu reason=not_armed_by_this_collector\n", tid);
+        fflush(report);
+        return DBG_EXCEPTION_NOT_HANDLED;
+    }
+    handle = OpenThread(THREAD_GET_CONTEXT | THREAD_SET_CONTEXT | THREAD_QUERY_INFORMATION,
+                        FALSE, tid);
     if (!handle) {
         fprintf(report, "GUEST_DR_HIT_UNSERVICED tid=%lu stage=open error=%lu\n", tid, GetLastError());
         fflush(report);
@@ -311,6 +328,27 @@ static void dr_disarm_all(void)
             dr_disarm_failed == 0 ? 1 : 0, dr_disarmed, dr_disarm_failed, dr_disarm_failed,
             dr_hits, dr_hit_overflow);
     fflush(report);
+}
+
+/* A2h install handshake. The toolkit raises this FIRST-CHANCE at its thunk-install callback and
+ * does not perform the install store until this thread is continued, so arming here provably
+ * precedes the install write. Observation only: no guest register, memory or device state is
+ * touched, and the toolkit's own VEH still receives the exception afterwards
+ * (DBG_EXCEPTION_NOT_HANDLED).
+ *
+ * A FIRST-CHANCE #DB IS DELIBERATELY NOT CLAIMED, even with the gate on. The collector's own
+ * DebugBreakProcess arrives as a first-chance breakpoint, and the AC'97 page trap relies on its own
+ * VEH seeing its single-step -- swallowing either would break a mechanism that predates this
+ * instrument. So the watch is serviced on the second-chance path, which is where an unclaimed data
+ * breakpoint surfaces, and nothing that another handler owns is intercepted. */
+static DWORD dr_single_step(DWORD tid, int first_chance)
+{
+    if (first_chance) {
+        fprintf(report, "GUEST_DR_HIT_FIRSTCHANCE tid=%lu (left to the target's own handlers)\n", tid);
+        fflush(report);
+        return DBG_EXCEPTION_NOT_HANDLED;
+    }
+    return dr_handle_single_step(tid);
 }
 
 static int read_remote(DWORD64 address, void *buffer, SIZE_T size)
@@ -681,10 +719,11 @@ int main(int argc, char **argv)
                 dump_ok = capture(0, NULL);
                 exit_code = 3;
                 finished = 1;
-            } else if (code == EXCEPTION_SINGLE_STEP && dr_on()) {
-                /* The only #DB this collector claims is the one it armed. Everything else (an
-                 * external single-step, a debugger's own breakpoint) is passed on untouched. */
-                continuation = dr_handle_single_step(event.dwThreadId);
+            } else if (code == EXCEPTION_SINGLE_STEP && dr_on() && !exception->dwFirstChance) {
+                /* Only a SECOND-chance #DB is ours to service: an unclaimed data breakpoint. A
+                 * first-chance #DB belongs to the target's own handlers (the AC'97 page trap among
+                 * them) and is deliberately left alone. */
+                continuation = dr_single_step(event.dwThreadId, exception->dwFirstChance);
             } else if (code == JSRF_A2H_DR_HANDSHAKE && exception->dwFirstChance && dr_on()) {
                 /* A2h install handshake. The toolkit raises this FIRST-CHANCE at its thunk-install
                  * callback and does not perform the install store until this thread is continued,
