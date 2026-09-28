@@ -2111,3 +2111,50 @@ decoration.
 - **a script outside the guard suite can rot silently across many commits** (`scripts/test-harness.py` was
   broken from `009f624` until a packet happened to require it);
 - **"nothing observed on certified channels" is narrower than "nothing happened."**
+
+---
+
+## 2026-09-28 — A2h NULL line RETIRED at its ceiling; pivot to `0x001D5078`
+
+**Advisor ruling** (`docs/reviews/a2h-null-line-closure.md`, turn `01a0e7f9`): *"drop CONFIRMED — no
+re-referral for the contradiction (both branches terminate the leg); pivot to `0x001D5078` now DUE; NULL line
+exhausted."*
+
+**The line's honest final statement:** the slot read zero at **two independent terminal reads**; **zero alias
+touches** across a **complete 28/28 page-protection census**; **the canonical-write channel is
+UNCERTIFIABLE — which is not the same as "no write occurred," and that distinction is the whole finding.**
+
+**Why the ceiling was right, in the Advisor's own words:** *"Explanatory power is not decidability — both
+branches end at drop."* The install-thread contradiction was specific and interesting — a named thread whose
+DR state disagreed with its own successful arm record — and the Session offered it as possibly worth another
+look. The Advisor refused: a genuine clear **explains zero `#DB` but opens an unbounded "who cleared it"
+question while leaving the leg uncertifiable**, and a read artifact **voids the snapshot for exactly the
+thread that matters**. **Either way the leg ends uncertified, so another round would buy explanation, not
+decidability.** The diminishing-returns diagnosis — *"five packets plus preflights with each fix revealing the
+next caveat"* — is what the ceiling existed to stop.
+
+**The read-path leg is DEAD, not deferred.** It needs **complete canonical coverage**, which is now
+unachievable with any available instrument: **DR is dead, and the page-guard was already redirected away for
+its single-step races.** So `A2h-terminal-read-path-audit` is not merely unreached — **it is unreachable on
+this line.**
+
+**What survives:** the 28-alias census (page-protection based, **no DR dependency**), mapping stability, the
+two terminal software zero reads, the install software control, and the triage / `O-NO-BOUNDARY-TRANSITION`
+rows (**they never touched DR**). **The producer line stays PARKED** — nothing here produced link evidence
+either way. **Unreachable:** canonical-write attribution (guest/host/transient-as-write) and the DR leg of
+read-path.
+
+**The durable gains, recorded because they are real and outlive the negative result:**
+1. **The `#DB` delivery premise is PROVED on this host** — a genuine debugger-delivered `#DB` claimed from
+   `DR6.B0`. A long-standing open question is **closed permanently**, and it means the failure was
+   **game-context-specific**, not a host or collector incapability.
+2. **The gate defect is fixed and demonstrated** — `complete=1` where it was structurally 0, and a fixture
+   yielding `decision=NON_FIRING` that was impossible before.
+3. **The contradiction is LOCALISED to a named thread**, sharper than "zero hits, cause unknown."
+4. **Six defects were found by measurement** across the line — the handshake-fatal VEH, the always-true
+   `dr6 & ~1` test, the wrong terminal-witness gate, the `cleared=17` overcount, route-counter pollution
+   (`ss_routed_generic_first=14405` against `raw_single_step=0`), and a toolkit gate coupling that would have
+   made `NON_FIRING` unreachable again through a second env var.
+5. **The practice note** above: a frozen packet's stated uncertainty is a **scheduled verification task**,
+   not a carried caveat. **The frozen packet predicted this failure in writing and it sat as a caveat through
+   three packets.**
