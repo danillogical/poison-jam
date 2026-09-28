@@ -100,7 +100,77 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-live-slot-write-r1` **EXECUTED: PARKED at ON-3** — **blind spot found, absence rows DEAD, new packet required**
+## CURRENT PACKET — `A2h-live-slot-write-r1` **PARKED at ON-3**; **two structural defects adjudicated, packet being revised**
+
+- **Packet:** `docs/packets/a2h-live-slot-write.md`, frozen
+  **`8F3C6291C42ED3D9C3B96D879A9BB9D46391E5FEEA3F4BDC1E8712F46FFF7D4F`** — **not edited**.
+- **Successor draft (SUPERSEDED, being revised):** `docs/packets/a2h-slot-writer-attribution.md` (`d3cd8ae`,
+  `C2DD3ED8…AA27`).
+- **Rulings:** `a2h-on3-blind-spot-advisor-ruling.md` (`ac07f2d`); **`a2h-page-granularity-classifier-ruling.md`
+  (`0709d5c`) — the current authority**; `a2h-classifier-question-corrected.md` (`0709d5c`).
+
+### ✅ What the live phase PROVED
+
+| Result | Value |
+|---|---|
+| **the page-protection watch WORKS** | **9 078 AVs, 9 035 steps, `rearm_failed=0`** — **the first write-watch on this line that ever fired** |
+| **Q3(c) caught a REAL bug** | **the canonical alias protected a page 64 KiB BELOW the slot** — fixed |
+| **the corrected page is right** | **the trap fired at host `0x001AD62C`** |
+| **values are trustworthy** | **cross-validation clean, 285–317 checks each, zero mismatches** |
+| **the `0x001D5078` terminal reproduced** | **with the ICALL 4-cycle and the same registers** |
+
+### ⚠⚠ DEFECT 1 — THE PAGE-GRANULARITY FLAW IS **STRUCTURAL** (found by the Planner)
+
+**The approved narrowing said *"non-slot write → leave RW, never re-arm."*** **But `VirtualProtect` is
+PAGE-GRANULAR and the slot is at offset `0x62C` of page `0x0019D000`** — **so leaving the page RW after a
+NON-SLOT write ALSO makes the SLOT writable, and the instrument goes BLIND after the first traffic write.**
+**ON-3 had `nonslot_writes=9077`.**
+
+**The Advisor: *"the dilemma is structural at page granularity, not choreography"***; **option (b) is *"strictly
+dominated"*** (livelock without stepping, identical window plus double faults with it).
+
+> **THE ACCEPTED SHAPE: RE-ARM AFTER EVERY WRITE (option (a)), accepting the window as a STATED LIMIT — PLUS A
+> REQUIRED TERMINAL-VALUE COHERENCE GATE** (last-recorded slot write vs terminal read; **mismatch ⇒
+> `UNKNOWN`**). ***"Windows threaten only unrecorded writes; recorded positives stand."***
+
+**And the worked example is ON-3's OWN numbers:** **last-recorded `0x0015F9D0` vs terminal `0x001D5078`
+mismatches ⇒ `UNKNOWN`.** **So the mismatch the Session found IS the gate working.**
+
+### ⚠⚠ DEFECT 2 — THE CLASSIFIER PARADIGM IS **VOID** (categorically, not at one site)
+
+> **"Native RIPs in recompiled code NEVER carry guest encodings, so EVERY guest-byte classification ever
+> emitted from a fault RIP is UNSOUND."**
+
+**So `a2h_slotw_classify_store` — which reads native bytes and tests for GUEST encodings — cannot ever
+match.** **And *"the `0x7B3` residual dies with the paradigm — DO NOT FIX ITS ARITHMETIC."***
+
+**⚠ SO NO ENCODING CLASSIFICATION FROM A FAULT RIP MAY BE CITED AS EVIDENCE — including `enc=3` on ON-3 and
+the `enc` fields on ON-1/ON-2.**
+
+**The replacement:** **range-based guest/host classification** — **`RIP ∈ recompiled-module bounds` vs
+`toolkit/host image`, else UNKNOWN** — **plus optional native-disasm corroboration.** **GUEST-BYTE
+EXPECTATIONS ARE FORBIDDEN FOR NATIVE RIPs.**
+
+### The shape being revised into the packet
+
+**ONE PACKET (fix + rerun — *"splitting strands the fix unverified"*), order: classifier fix → coherence
+gate → attribution read.**
+
+| Phase | What | Gate |
+|---|---|---|
+| **Exp0** | **range-based classifier proof** (recompiled module vs toolkit/host, native-disasm corroboration) — **OFFLINE** | **proof passes** |
+| **Exp1** | **control run** — **installer trap MUST fire** (classified by RANGE) + loss accounting | **control GREEN** |
+| **Exp2** | **bounded attribution** — **N≤5 pre-specified, early-stop, K≥2-agree** | **zero qualifying ⇒ RE-REFER** |
+
+### The Planner's conduct, recorded as correct
+
+**It wrote the packet as ordered, marked its own §5.8 `INADEQUATE / BLOCKING`, and flagged stop and
+re-referral rather than silently redesigning an approved shape or freezing a packet it judged unsafe.** ✓
+**Its draft is SUPERSEDED and is being revised, not promoted.**
+
+**Next:** the revised packet; then Exp0 → Exp1 → Exp2.
+
+**Toolkit:** `4f06907` local / `571982d` pushed (**no-push state**). **Game:** `0709d5c`.
 
 - **Packet:** `docs/packets/a2h-live-slot-write.md`, frozen
   **`8F3C6291C42ED3D9C3B96D879A9BB9D46391E5FEEA3F4BDC1E8712F46FFF7D4F`** — **not edited**.
