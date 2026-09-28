@@ -369,10 +369,37 @@ respect that.
 question. **No change packet is authorized by this row** — the packet says *"consider a change only after
 cause is established,"* and the caller's identity is not yet established.
 
-### A bounded lead for that packet: the caller chain is short, and one site passes a parameter through
+### A bounded lead for that packet — **CORRECTED: my narrowing was invalid**
 
-**Recorded as a lead, not as a completed attribution.** The Session followed the caller chain only as far as
-the generated source names it, and **stopped there** rather than expanding scope beyond the packet.
+> ### ⚠ CORRECTION — the Planner refuted my "only two sites can supply `arg2`" narrowing
+>
+> **I originally wrote** that of `sub_001497DC`'s 8 call sites, *"only **two** push three arguments; the other
+> six push one, so they cannot supply `arg2` at all"*, and used that to reduce the caller search to two
+> candidates. **The Planner showed this is wrong, and the Session has verified it from the generated source.**
+>
+> **`sub_001497DC` is FRAMELESS.** Its generated prologue (`recomp_0003.c:20105-20113`) reads:
+>
+> ```c
+> void sub_001497DC(void)
+> {
+>     uint32_t ebp;
+>     ebp = g_ebp;     /* frameless: caller's frame */
+>     ...
+>     ebp = g_seh_ebp; /* fpo_leaf: inherit caller's frame */
+> ```
+>
+> and its own header comment says **`Frame: fpo_leaf`**. **So the function does not establish its own frame,
+> and `[ebp+0x10]` is an offset in the CALLER's frame — NOT necessarily the callee's pushed `arg2`.**
+>
+> **Every call site has a frame.** A caller that pushes only one explicit argument still has locals, saved
+> registers and spill slots at `+0x10`. **So all eight sites can in principle supply that slot, and the two
+> three-push sites are LEADS rather than a candidate set.** My exclusion was **invalid**, and the packet that
+> follows must require a **frame/register/stack identity witness** rather than assuming an argument list.
+>
+> **This is the fourth Session narrowing to be refuted by measurement in the `A2h` line** — after "the OOM
+> tracks the trap", "the failing frame's slot is stale", and "A2g is a no-trap run". **Each was a plausible
+> structural inference that only measurement could settle**, which is why the next packet must carry a
+> witness rather than an argument.
 
 **`sub_001497DC` has 8 call sites** in the generated source. Only **two** push three arguments; the other
 six push one, so they cannot supply `arg2` at all.
