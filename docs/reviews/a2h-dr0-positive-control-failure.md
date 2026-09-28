@@ -65,25 +65,53 @@ programmed.** **The watch was armed; it simply never fired.**
   mapping half is certified; the DR half has never certified anything**, because there is no demonstrated
   firing to reconcile against.
 
-## Consequence for the row just ruled
+## Consequence for the row just ruled — **the Planner REVERSED the ruling to `O-COVERAGE`**
 
-**The `O-READ-PATH` ruling rests on the claim that the observation surface was positively certified and
-within it no zero-write was observed.** **After this finding, the certified surface is narrower than the
-ruling assumed:**
+**The Planner re-ruled on this `PREMISE_CHANGED`, and it reversed its own `O-READ-PATH` ruling.** **Its
+reasoning is decisive, and its source citations are exact — the Session verified both:**
 
-| Channel | Status after this finding |
+**Citation 1 — the predecessor frozen packet ALREADY REQUIRED a native DR0 record, and explicitly said the
+software control cannot substitute.** `docs/packets/a2h-slot-read-path-displacement.md:27`:
+
+> *"The install write **MUST cause a native DR0 record** with expected before/after, site, tid, mapped VA and
+> index; **the frozen latch's own `install_seen=1`, `install_ok=1`, raw=`0x80000115` and
+> installed=`0xFE000104` are required IN ADDITION TO the trapped write**, not inferred from a printed line.
+> The old `jsrf_slot_latch_install` callback at `:9325-31` occurs **BEFORE** that store and **cannot itself
+> count as a trapped-install witness**."*
+
+**Citation 2 — a missing trapped install selects `O-COVERAGE`, and the packet SAW THIS COMING.**
+`docs/packets/a2h-slot-within-run-attribution.md:19`:
+
+> *"**A missing canonical install trap is `O-COVERAGE`, never no-write: live `#DB` chance semantics and
+> all-thread arming have not yet been proven in the game.**"*
+
+**And line 25 lists the row trigger:** *"target but alias touch, **arming/install**/rearm/mapping/three-leg/
+ledger/ordering/certification gap … ⇒ `O-COVERAGE`."*
+
+**So the frozen contract anticipated exactly this outcome and prescribed the row in advance.** **The install
+trap has never been demonstrated, and the packet says that is `O-COVERAGE` — *"never no-write."***
+
+**The Planner's own words on the reversal:** *"I incorrectly treated software `install_ok` as a positive DR
+firing control. Aliases + reads remain certified but cannot satisfy the required canonical/DR leg; K=3
+reproducibility of terminal/control/census, not a certified writer row."*
+
+## The corrected row
+
+| Row | Status |
 |---|---|
-| **28-alias census** | **certified** (page protection, process-wide, zero touches) |
-| **Mapping stability** | **certified** |
-| **Generated read + hook read both zero** | **certified** (software reads) |
-| **Canonical-address writes** | **NOT certified** — the only instrument for them has never been shown to fire |
+| **`O-READ-PATH`** | **WITHDRAWN** — it required the DR leg to contribute, and the DR leg has never certified anything |
+| **`O-COVERAGE` → `A2h-slot-write-coverage-provenance`** | **SELECTED** — per the packet's own line 19/25 trigger |
 
-**So the honest statement is narrower:** *no write was observed through any of the 28 aliases, and the
-canonical-address channel was instrumented but the instrument was never demonstrated to work.*
+**What K = 3 still buys, unchanged:** **reproducibility** of the terminal triple, the install control and the
+census across three independent realizations. **It does not buy a certified writer row**, and it never did.
 
-**The Session is NOT re-deciding the row.** This is a **`PREMISE_CHANGED`** for the ruling that selected it,
-and per `docs/agent-workflow.md` §4.3 it goes back to the Planner, and to the Advisor if the mechanism choice
-is affected.
+## The finding's own provenance, recorded because it matters
+
+**The frozen packet PREDICTED this failure mode in writing** — *"live `#DB` chance semantics … have not yet
+been proven in the game"* — and **the Session found it by asking what a fix packet would target, then noticing
+that the install store is a known write under an armed watch.** **The prediction was in the contract; it took
+a question about the NEXT packet to test it.** **Recorded as a process observation: a contract's stated
+uncertainty is a test waiting to be written.**
 
 ## The constructive consequence — this is now FIXABLE, and cheaply
 
