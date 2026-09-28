@@ -100,7 +100,20 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-arming-coverage-repeat-r1` **EXECUTED (5 ON) → `O-READ-PATH`**, **K = 3, agreement complete**; stage-1 acceptance pending
+## CURRENT PACKET — `A2h-arming-coverage-repeat-r1` **EXECUTED (5 ON) → `O-COVERAGE`** (Planner reversed `O-READ-PATH`); stage-1 **`ACCEPT-WITH-CORRECTIONS`** applied, **`BLOCKING: NONE`**
+
+- **Stage-1 review:** `docs/reviews/a2h-arming-coverage-repeat-acceptance-review.md` (`6a0eb11`) — **all eight
+  criteria pass on independent verification.** **The EXECUTION is clean; the corrections concerned the row
+  framing**, and all four are applied.
+- **`K = 3`** = **reproducibility** of the terminal triple, the install control and the census across three
+  independent realizations. **It does not buy a certified writer row.**
+- **ROW `O-COVERAGE` → `A2h-slot-write-coverage-provenance`.** The Planner **withdrew its own `O-READ-PATH`
+  ruling** on the DR0 `PREMISE_CHANGED`, and its citations are exact: the predecessor packet
+  (`a2h-slot-read-path-displacement.md:27`) **already required the install write to cause a native DR0 record**
+  and said the software `install_ok` **"cannot itself count as a trapped-install witness"**; and
+  (`a2h-slot-within-run-attribution.md:19`) ***"A missing canonical install trap is `O-COVERAGE`, never
+  no-write: live `#DB` chance semantics and all-thread arming have not yet been proven in the game."***
+  **The frozen contract predicted this outcome and prescribed the row in advance.**
 
 - **Packet:** `docs/packets/a2h-arming-coverage-repeat.md`, **15 lines**, frozen
   **`4AC455E7F427ABCD9AEB6A81FA34B2A570A826964A6FB76EC3478ADA4B1174A1`** — **not edited**.
@@ -114,15 +127,18 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
   positive, zero DR hits.
 - **`K = 3`** — the pinned r2 run 2 supplies K=1 (Advisor K-scope ruling (i)) plus two new coverage-complete
   TARGETs. **K ≥ 2 MET for the first time in this line.**
-- **ROW `O-READ-PATH` → `A2h-terminal-read-path-audit`, narrowly** — Planner ruling
-  `docs/reviews/a2h-repeat-row-interpretation.md` (`1b0a7b8`). **A COVERAGE claim, not a no-write claim:**
-  the terminal zero is **consistent with a discrepancy warranting audit** under complete certified coverage
-  **within which no zero-write was OBSERVED**. **Does NOT assert the slot was never written, does not name a
-  writer, does not prove a read-path fault or miscompile. Writer `UNKNOWN`, mechanism `UNKNOWN`.**
-- **The Session escalated rather than deciding, and the Planner's decisive point was one the Session had
+- **SUPERSEDED — the Planner's first ruling was `O-READ-PATH`, and it was WITHDRAWN** when the DR0 positive
+  control failure showed that **leg 3's DR half had never certified anything.** The Planner's own words: *"I
+  incorrectly treated software `install_ok` as a positive DR firing control. Aliases + reads remain certified
+  but cannot satisfy the required canonical/DR leg."* **The `O-READ-PATH` text is retained here only as
+  history; the operative row is `O-COVERAGE` at the top of this section.**
+- **The Session escalated rather than deciding, and the Planner's first decisive point was one the Session had
   missed:** *"Requiring a terminal-gap DR hit to select the expressly no-zero-write-observed audit row makes
-  that row unreachable in its intended case."* **Leg 3 is CONDITIONAL post-hit reconciliation — a post-hit
-  read is required only if a hit occurs.**
+  that row unreachable in its intended case."* **That reasoning was sound about the row's own gate — but it
+  turned out to rest on a false premise about the instrument, and the Planner reversed on the DR0 finding.**
+  **The lesson survives the reversal and is worth keeping: a gate that would make a row unreachable in its
+  intended case is worth re-reading, but re-reading it is not a substitute for testing the instrument the row
+  depends on.**
 - **DURABLE WORDING REQUIREMENT for future packets:** state that *"no-zero-write"* means **no zero-write
   OBSERVED WITHIN POSITIVELY CERTIFIED COVERAGE**, and that **post-hit reconciliation is conditional on a
   hit.** The Session was the **second** reader to conflate the row predicate with its gate.
