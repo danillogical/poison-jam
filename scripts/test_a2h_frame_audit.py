@@ -132,6 +132,62 @@ class TestArgumentCounting(unittest.TestCase):
         self.assertEqual(len(pushes), 3)
         self.assertNotEqual(naive, n)
 
+    def test_safe_start_uses_recompiler_labels_not_byte_scan(self):
+        """A bare C3 byte scan is NOT a reliable block terminator -- pinned by the exact case.
+
+        An earlier revision scanned backward for a `C3` byte and found one at 0x0016B8EB, which is
+        the MODRM byte of `add ebx,0x12` (83 c3 12) at 0x0016B8EA -- not a `ret`. Decoding from
+        0x0016B8EC produced a 6-byte `adc al,[ebp+0x501874c0]` that swallowed the `push eax` at
+        0x0016B8F1, so call@0x0016B912 was counted as 2 arguments instead of 3. The wrong number
+        reached the evidence record and was caught by the acceptance reviewer.
+        """
+        # The bytes that fooled it: 83 c3 12 -- the c3 is a ModRM byte, not a ret.
+        raw = audit.slice_mod().xbe_window(
+            audit.xbe_path(), audit.sections(), 0x0016B8EA, 3)
+        self.assertEqual(raw.hex(), "83c312",
+                         "the fixture bytes for this regression have moved")
+
+    def test_all_thirteen_sites_pass_three_arguments(self):
+        """The corrected result, pinned. A 2-arg site would contradict the callee's own ABI.
+
+        The callee is generated `CC: cdecl, 3 params` and ends `esp += 16; return; /* ret 12 */`,
+        cleaning 12 bytes of arguments. A genuine 2-argument call site would therefore be an ABI
+        contradiction, which is the sanity check that exposed the mis-count.
+        """
+        counts = {}
+        for cva, _ret in audit.direct_calls_to(audit.CALLEE):
+            n, _detail, status = audit.arguments_at(cva, self.deltas, self.exempt)
+            counts["0x%08X" % cva] = (n, status)
+        self.assertEqual(len(counts), 13)
+        wrong = {k: v for k, v in counts.items() if v != (3, "ok")}
+        self.assertEqual(wrong, {}, "every direct call site must pass 3 arguments")
+
+    def test_the_previously_miscounted_site_is_three(self):
+        """call@0x0016B912 specifically -- the site the byte-scan heuristic got wrong.
+
+        NOTE on what is asserted: `detail` lists every push the backward walk ENCOUNTERED, which
+        includes pushes belonging to EARLIER calls that the intervening-call deltas already
+        accounted for. So the count to assert is the RETURNED argument count (3), not
+        `len(pushes)`. Asserting `len(pushes) == 3` here was itself a wrong test -- the walk
+        legitimately sees eight pushes across three calls.
+        """
+        n, detail, status = audit.arguments_at(0x0016B912, self.deltas, self.exempt)
+        self.assertEqual(status, "ok")
+        self.assertEqual(n, 3, "call@0x0016B912 passes three arguments")
+        # The walk must have seen the intervening calls and accounted for their consumption.
+        calls = [d for d in detail if d[0] == "call"]
+        self.assertGreaterEqual(len(calls), 1, "expected intervening calls in the walk")
+        self.assertIn("consumed=0", " ".join(c[2] for c in calls),
+                      "0x14a838 consumes no arguments, so pushes below it survive")
+
+    def test_safe_start_returns_a_recompiler_label(self):
+        """The resync point must be a boundary the lifter asserts, when one exists."""
+        labels = audit._loc_labels()
+        self.assertGreater(len(labels), 1000, "label set looks wrong")
+        start = audit._safe_start(0x0016B912, 0xC0)
+        self.assertIn(start, labels,
+                      "_safe_start must return a recompiler label, not a byte-scan guess")
+
     def test_every_call_site_resolves_or_reports_unknown(self):
         for cva, _ret in audit.direct_calls_to(audit.CALLEE):
             n, _detail, status = audit.arguments_at(cva, self.deltas, self.exempt)

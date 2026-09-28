@@ -249,11 +249,11 @@ the seam is **toolkit-side**, outside this packet's write scope. **Acceptance pe
 
 | Fact | Result |
 |---|---|
-| `E`, three independent ways | ordinal-277 `esp+0x1A0`, ordinal-184 `esp+0x1B0`, and the post-prologue arithmetic — **all give `0x00F7FEA0`** |
+| `E`, one consistency check | ordinal-277 `esp+0x1A0`, ordinal-184 `esp+0x1B0`, and the post-prologue arithmetic — **all give `0x00F7FEA0`**. *(Originally described as "three independent ways": **an over-claim** — the first two are the same relation displaced one slot and the third reuses the first's `esp`. **Genuinely independent corroboration is the DUMP LAYOUT**, supplied by the reviewer: `E−16`, `E−12`, `E−8` and `E` all hold exactly the predicted constants/return address)* |
 | The frame | `ebp = 0x00F7FE9C`, **`[ebp+0x10] = 0x00F7FEAC`** |
 | **The caller, BOUND** | **`call@0x0017C921`**, `ret=0x0017C926` — a real `call 0x1497dc` ends exactly there |
 | Competing writers | **NONE** — the callee has **0 writes** to the slot across its whole 841-line body (5 reads) |
-| Call-site arity | **12 of 13** direct call sites pass **three** arguments; one passes two |
+| Call-site arity | **13 of 13** direct call sites pass **three** arguments — *(an earlier entry said "12 of 13; one passes two": **FALSE**, a misaligned-decode artifact in the Session's own tool, falsified by the acceptance reviewer and fixed with regression tests)* |
 
 ### Why the row is `O-OPEN` — a coverage gap, not a defect
 
@@ -280,7 +280,7 @@ generated code** — the owner and the packet agree.
 caller passed **one** argument (wrong — the intervening `call 0x14a838` is a zero-consumption getter, so the
 pushes below it survive); my correction then mis-read the slot by double-counting the getter's popped return
 address. **Both are now impossible**: `scripts/a2h-frame-audit.py` tracks ESP symbolically, and
-`scripts/test_a2h_frame_audit.py` (**21 tests OK**) pins the behaviour. **The tool caught two of its own
+`scripts/test_a2h_frame_audit.py` (**29 tests OK**) pins the behaviour. **The tool caught two of its own
 author's errors** — a mis-transcribed byte string (`89442410` vs the real `896c2410`), and a linear section
 sweep returning **zero** call sites for a target with **thirteen**.
 

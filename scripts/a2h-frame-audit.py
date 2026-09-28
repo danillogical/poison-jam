@@ -142,7 +142,9 @@ def direct_calls_to(target: int):
     """Every `call target` in the guest image, with its return address.
 
     A LINEAR SWEEP OF A WHOLE SECTION DOES NOT WORK HERE, and the first version of this
-    function proved it by returning ZERO call sites for a target that demonstrably has eight.
+    function proved it by returning ZERO call sites for a target that demonstrably has thirteen.
+    (An earlier revision of this docstring said "eight" -- the superseded premise from before the
+    boundary-corrected census. The count is THIRTEEN, and the test suite asserts it.)
     Sweeping 1.5 MB of .text sequentially desynchronises on the first data/padding byte and
     every instruction after it is garbage -- the same misalignment hazard this project keeps
     meeting, in the one place where a silent wrong answer is easiest to believe.
@@ -254,24 +256,57 @@ def arguments_at(call_va: int, deltas: dict, exempt: set, window: int = 0xC0):
 def _safe_start(call_va: int, window: int) -> int:
     """Find a resynchronisation point at or before `call_va - window`.
 
-    A `ret` opcode (C3, or C2 with its 2-byte operand) terminates a basic block, so the byte
-    immediately after it MUST begin an instruction. Scanning backward for the nearest one gives
-    a start from which a forward decode is aligned. If none is found the caller's window is
-    used unchanged, and the caller reports UNKNOWN rather than a fabricated count.
+    A BARE `C3`/`C2` BYTE SCAN IS NOT A RELIABLE BASIC-BLOCK TERMINATOR, and an earlier revision of
+    this function proved it by producing a WRONG ARGUMENT COUNT that reached the record. It scanned
+    backward for a `C3` byte and found one at `0x0016B8EB` -- but that byte is the MODRM byte of
+    `add ebx,0x12` (`83 c3 12`) at `0x0016B8EA`, not a `ret`. Decoding from `0x0016B8EC` then
+    produced `adc al,[ebp+0x501874c0]`, a 6-byte instruction that SWALLOWED the `push eax` at
+    `0x0016B8F1`, so the walk counted 2 arguments where there are 3. That is the misaligned-
+    disassembly-produces-plausible-garbage failure mode, in the one place where a silent wrong
+    answer is easiest to believe.
+
+    THE AUTHORITATIVE BOUNDARY SET IS THE RECOMPILER'S OWN. The lifter already decided every
+    instruction boundary and emitted a `loc_XXXXXXXX:` label for each one, in both the generated
+    chunks and the reviewed recovered code. So this function now returns the NEAREST LABEL at or
+    before the window start -- a boundary the recompiler asserts -- instead of guessing from bytes.
+    If no label is available it falls back to the window start, and the caller reports UNKNOWN
+    rather than fabricating a count.
     """
-    m = slice_mod()
-    secs = sections()
+    labels = _loc_labels()
     lo = max(0, call_va - window)
-    try:
-        raw = m.xbe_window(xbe_path(), secs, lo, call_va - lo)
-    except Exception:
-        return lo
-    for i in range(len(raw) - 1, -1, -1):
-        if raw[i] == 0xC3:
-            return lo + i + 1
-        if raw[i] == 0xC2 and i + 2 < len(raw):
-            return lo + i + 3
+    # The nearest label at or before lo is a boundary the lifter asserts.
+    candidates = [v for v in labels if v <= lo]
+    if candidates:
+        return max(candidates)
+    # No label before the window: try any label inside the window, which still resynchronises.
+    inside = [v for v in labels if lo < v <= call_va]
+    if inside:
+        return min(inside)
     return lo
+
+
+_LABELS_CACHE = None
+
+
+def _loc_labels() -> set:
+    """Every `loc_XXXXXXXX:` boundary the recompiler emitted, from generated AND recovered code.
+
+    Both are needed: six of this callee's thirteen call sites live in `src/recomp/recovered/`, and a
+    generated-only label set would leave exactly those sites unresynchronisable.
+    """
+    global _LABELS_CACHE
+    if _LABELS_CACHE is not None:
+        return _LABELS_CACHE
+    labels = set()
+    for base in (ROOT / "src" / "recomp" / "gen", ROOT / "src" / "recomp" / "recovered"):
+        if not base.exists():
+            continue
+        for f in sorted(base.glob("*.c")):
+            for m in re.finditer(r"loc_([0-9A-Fa-f]{8}):",
+                                 f.read_text(encoding="utf-8", errors="replace")):
+                labels.add(int(m.group(1), 16))
+    _LABELS_CACHE = labels
+    return labels
 
 
 def frame_for_entry(entry_esp: int):

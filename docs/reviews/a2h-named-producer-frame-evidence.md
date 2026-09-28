@@ -68,7 +68,25 @@ helper `push 0x1804A0` → `E−16`; helper `push eax` → `E−20`; **`lea ebp,
 frame **aliases the standard argument positions** — exactly what MSVC's `__SEH_prolog` is for — and the
 recompilation reproduces it faithfully.
 
-### E is fixed by three independent facts, and the third was not used to derive it
+### E is fixed by one consistency check, corroborated independently by the dump layout
+
+> **Correction (acceptance review, verified):** this section originally claimed **"three independent facts"**.
+> **That was an over-claim.** `0x00F7FD00 − 0x00F7FCF0 = 0x10` and `0x1B0 − 0x1A0 = 0x10`, so **facts 1 and 2
+> are the same relation displaced by one slot**, and **fact 3 reuses fact 1's `esp`**. **It is ONE consistency
+> check, not three.** The conclusion (`E = 0x00F7FEA0`) is correct; the corroboration claim was not.
+>
+> **The reviewer supplied a genuinely independent corroboration the Session had missed** — the **dump layout
+> itself**, which is a different method entirely:
+>
+> | Slot | Dump value | Predicted | |
+> |---|---|---|---|
+> | `E−16` = `0x00F7FE90` | `0x001804A0` | the helper's first push | **exact** |
+> | `E−12` = `0x00F7FE94` | `0x001E0BE8` | the callee's `push 0x1E0BE8` | **exact** |
+> | `E−8` = `0x00F7FE98` | `0x00000000` | zeroed by `recomp_0003.c:20147` `and [ebp-4],0` | **exact** |
+> | `E−4` = `0x00F7FE9C` | `0x00F7FE4C` | the helper's saved inherited `ebp` | plausible stack value |
+> | `E` = `0x00F7FEA0` | `0x0017C926` | `call@0x0017C921 + 5` | **exact** |
+>
+> **That is the stronger corroboration and it is what this record now rests on.**
 
 | # | Source | Result |
 |---|---|---|
@@ -105,7 +123,14 @@ So the caller is identified **by a return address in the frame**, not by inferen
 > now tracks ESP symbolically instead of counting pushes.** The tool was then validated against the
 > recompiler's own call list: **13 sites, exact set equality with the generated source.**
 
-**Result: 12 of the 13 direct call sites pass three arguments; one passes two.** The packet's premise that the
+**Result: 13 of the 13 direct call sites pass three arguments.** *(An earlier revision of this record said
+"12 of 13; one passes two". **That was FALSE**, and the acceptance reviewer falsified it: the lone 2 was a
+**misaligned-decode artifact** in my own tool. `_safe_start` scanned backward for a `C3` byte and found one at
+`0x0016B8EB` — the **ModRM byte** of `add ebx,0x12` (`83 c3 12`) at `0x0016B8EA`, not a `ret`. Decoding from
+`0x0016B8EC` yielded a 6-byte `adc al,[ebp+0x501874c0]` that **swallowed** the `push eax` at `0x0016B8F1`.
+From the verified boundary `0x0016B8D0` it is **3**. **This is the "misaligned disassembly producing plausible
+garbage" failure mode, and it survived into an accepted record** — see the tool fix and its regression tests.)*
+The packet's premise that the
 two three-push sites were the candidate set is **superseded** — but see below, because that did **not** produce
 a positive row.
 
@@ -133,22 +158,59 @@ is **outside** `sub_001497DC`'s range `0x001497DC..0x00149F48`. **So the failing
 later activation of the same function reused the same stack addresses at the same depth.** Its `arg2` was
 overwritten and **is not in the artifact**.
 
-### The decisive arithmetic — the slot matches **neither** activation
+### The decisive arithmetic — corrected by the acceptance review
 
-The producer's value survives in the dump at `[ebp−0x24]` (`0x00F7FE78` = **`0x4C000020`**), and `edi` was set
-from it (`shr edi,4`). Checking the crash registers against the verified instruction chain:
+> ### ⚠ Three corrections to this section, required by the stage-1 acceptance review and verified by the Session
+>
+> **The reviewer was right on all three. The row is unchanged; the numbers were wrong.**
+>
+> **Correction A — the pre-image interval was wrong.** I wrote that the crashing activation's `arg2` must lie
+> in **`[0x4C000011, 0x4C000020]`**. With `V(x) = (x + 0x1F) & ~0xF` (and `x == 0 → 1`):
+> **`V(0x4C000011) = 0x4C000030`**, not `0x4C000020`. **The true pre-image of `0x4C000020` is
+> `[0x4C000001, 0x4C000010]`** — verified by direct evaluation over the range.
+>
+> **Correction B — an arithmetic slip in my own text.** I wrote *"`0x4C000010 + 0x20 = 0x4C000020`"*.
+> **It is `0x4C000030`**, and the line **contradicted my own earlier correct line** which computed
+> `0x4C000040`. **This was an unswept remnant contradicting the sentence above it** — the same
+> "correction banner with an unswept body" failure this project has now recorded three times.
+>
+> **Correction C — "the slot agrees with NEITHER" was wrong.** With the corrected interval,
+> **`0x4C000010` IS fully consistent with the CRASH activation**, and `V(0x4C000010) = 0x4C000020` is the
+> crash's `eax` **exactly**. The correct statement is the one my own earlier line already made: **the dump's
+> frame IS the crash activation's, self-consistent with the crash registers.**
+>
+> **What survives, and it is cleaner:** the slot is **inconsistent with the failing allocation**, which
+> requires `V(a) + 0x20 = 0x23B20430`, i.e. **`a ∈ [0x23B203F1, 0x23B20400]`** — and `0x4C000010` is nowhere
+> near that. **So the failing allocation's `arg2` was overwritten by the crash activation's push at the same
+> address.** That is the finding, stated without the false interval.
+>
+> **Correction D — the "dead slot" scope was over-broad.** I wrote the slot is *"not a witness for ANY
+> activation's `arg2`"*. At capture the crash is **inside activation B** with `esp ≈ 0x00F7FD00`, so
+> `0x00F7FEAC` is **live caller argument space holding B's `arg2`**, matching B's registers exactly.
+> **Correct scope: it is not a witness for the FAILING activation's `arg2`.**
 
-| Quantity | Dump / register | Consistent? |
-|---|---|---|
-| `[ebp−0x28]` = `align16(arg2)>>4` | dump `0x00F7FE74` = `0x04C00002`; **crash `edi=0x04C00002`** | **exact match** |
-| `[ebp−0x24]` = `align16(arg2)` | dump `0x00F7FE78` = `0x4C000020`; **crash `eax=0x4C000020`** | **exact match** |
-| ⇒ the crashing activation's `arg2` | must lie in **`[0x4C000011, 0x4C000020]`** | — |
-| the dump's `[ebp+0x10]` slot | **`0x4C000010`** | **below that interval — matches neither** |
+**Verified instruction chain** (the producer, from genuine boundaries):
 
-**So the dump's `arg2` slot holds `0x4C000010`, while the crashing activation must have read a value in
-`[0x4C000011, 0x4C000020]`, and the failing allocation implies `0x23B20410`.** The slot agrees with **neither**.
-**The `arg2` slot is dead stack by capture time** — the callee's `ret 12` raises `esp` above it — **so it is not
-a witness for any activation's `arg2`.**
+```
+00149800  mov   eax, [ebp+0x10]
+00149803  test  eax, eax
+00149805  jne   0x149808
+00149807  inc   eax
+00149808  add   eax, 0x1f
+0014980B  and   eax, 0xfffffff0        ; V(x) = (x + 0x1F) & ~0xF, with x == 0 -> 1
+0014980E  mov   [ebp-0x24], eax
+00149811  mov   edi, eax
+00149813  shr   edi, 4
+00149816  mov   [ebp-0x28], edi
+   ...
+00149E24  add   dword ptr [ebp-0x24], 0x20
+```
+
+**The crash registers are reproduced exactly:** `V(0x4C000010) = 0x4C000020` = crash **`eax`**; and
+`0x4C000020 >> 4 = 0x04C00002` = crash **`edi`**. Both exact.
+
+**And the failing allocation's requirement:** `V(a) + 0x20 = 0x23B20430` ⇒ **`a ∈ [0x23B203F1, 0x23B20400]`**.
+**`0x4C000010` is not in that interval**, so the archived slot is **not** the failing activation's `arg2`.
 
 *(Note the producer's own two stores **do** survive and **do** match the crash registers exactly. That is what
 makes the `arg2` slot's disagreement conclusive rather than a mapping error: the frame address is right, the
@@ -275,9 +337,9 @@ allocation**, before the activation returned. **The address is known exactly; on
 
 **Establishes** (verified bytes + the toolkit's own generated code, **not** the dump): the SEH helper
 **replaces** `ebp` with a frame that **aliases the argument positions**; `[ebp+0x10]` at `0x00149800` is
-therefore **arg2 of the caller**; **E = `0x00F7FEA0`** by three independent facts; the caller is
+therefore **arg2 of the caller**; **E = `0x00F7FEA0`** by one consistency check corroborated by the dump layout; the caller is
 **`call@0x0017C921`** by a return address in the frame; the callee has **no write** to the slot, so there is
-**no competing writer**; **12 of 13 call sites pass three arguments**; and the archived frame is the **crash**
+**no competing writer**; **13 of 13 call sites pass three arguments**; and the archived frame is the **crash**
 activation's, self-consistent with the crash registers.
 
 **Does not establish:** the failing allocation's `arg2` **value**; the source of that value; that the caller's
@@ -289,7 +351,7 @@ was not bypassed, and **no guest error-handling change is proposed**. **`PIO_FRE
 
 ## Tooling produced
 
-**`scripts/a2h-frame-audit.py`** + **`scripts/test_a2h_frame_audit.py`** (**21 tests, OK**), because three
+**`scripts/a2h-frame-audit.py`** + **`scripts/test_a2h_frame_audit.py`** (**29 tests, OK**), because three
 hand-analyses of the same stack produced three different answers. It **caught two of its own author's
 errors**: a mis-transcribed byte string (`89442410` vs the real `896c2410`), and a linear section sweep that
 returned **zero** call sites for a target with thirteen. Both are now pinned by tests.
