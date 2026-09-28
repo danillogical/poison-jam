@@ -121,11 +121,23 @@ enum { A2H_BIRTH_ARMED = 0, A2H_BIRTH_DEFERRED = 1, A2H_BIRTH_FAILED = 2, A2H_BI
 enum { A2H_REASON_NONE = 0, A2H_REASON_NO_MAPPING_OFFSET = 1, A2H_REASON_COLLISION = 2,
        A2H_REASON_GET = 3, A2H_REASON_SET = 4, A2H_REASON_READBACK = 5, A2H_REASON_OPEN = 6,
        A2H_REASON_SNAPSHOT = 7 };
+/* C2 verdict= on a terminal snapshot row. Every one of these is a DIFFERENT world and the decision
+ * treats them differently: VERIFIED_ARMED is arm-persistence evidence, CHANGED_SET and UNREADABLE
+ * and UNARMED are all UNKNOWN, and NONE of them is ever a negative. */
+enum { A2H_TERM_UNREADABLE = 0, A2H_TERM_VERIFIED_ARMED = 1, A2H_TERM_CHANGED_SET = 2,
+       A2H_TERM_UNARMED = 3 };
 
 static int read_remote(DWORD64 address, void *buffer, SIZE_T size);
 static DWORD64 symbol_address(const char *name);
 
 static int dr_gate_read, dr_enabled;
+/* NATIVE #DB INGRESS FIXTURE state. Declared here, with the rest of the instrument's state, because
+ * dr_handshake() (defined far below) consumes it. In production all three are zero/NULL and every
+ * clause that reads them is inert. */
+static volatile uint32_t a2h_native_db_target;
+static int a2h_native_db_fixture;
+static EXCEPTION_DEBUG_INFO *a2h_native_db_params;
+static int a2h_native_db_child(void);
 static DWORD64 dr_canonical;
 static int dr_geometry_pinned;
 static unsigned dr_armed, dr_failed, dr_collision, dr_disarmed, dr_disarm_failed;
@@ -170,10 +182,6 @@ static unsigned dr_ss_unrouted;              /* single-step that reached no bran
  * exists to make. So the single-step count is single-step ONLY, and every other raw exception is
  * counted separately, in a counter that still proves the debug stream was read. */
 static unsigned dr_raw_exception_other_code;
-/* Continuation bookkeeping. `not_handled` is the SWALLOW discriminator: an event this instrument
- * passed on is one the target's own handlers then had to deal with. */
-static unsigned dr_continue_total, dr_continue_continue, dr_continue_not_handled;
-static unsigned dr_continue_failed;
 /* The event-time records. Bounded array + explicit overflow flag, exactly like dr_arm_tids. */
 static struct { unsigned seq, chance, route, tid, code; DWORD64 ticks; DWORD64 address; }
     dr_raw_ss[A2H_RAW_SS_CAPACITY];
@@ -189,24 +197,74 @@ static DWORD64 dr_install_hit_rip, dr_install_hit_dr6, dr_install_hit_dr7;
  * ever pointed at the address the install store wrote. */
 static DWORD64 dr_watch_armed_value;
 
-/* C3: the POST-CONTINUE readback.
+/* ── C1(3): CONTINUATION ACCOUNTING (the per-event readback is GONE) ────────────────────────────
  *
- * WHY THIS IS THE CRITICAL NEW MEASUREMENT. The pre-existing readback (dr_arm_thread) happens right
- * after SetThreadContext and BEFORE ContinueDebugEvent. A thread context that reverts ACROSS the
- * continue therefore explains zero hits while every existing check still passes -- the arm reads back
- * correct, and the watch is gone by the time the store executes. Reading DR0/DR7/DR6 back on the FAR
- * SIDE of ContinueDebugEvent is the only way to see that, and it is what separates "the registers
- * were never programmed" from "they were programmed and then lost". */
-#define A2H_POST_CONTINUE_CAPACITY 16
-static struct { unsigned seq; DWORD tid; DWORD64 dr0, dr7, dr6; int ok; } 
-    dr_post_continue[A2H_POST_CONTINUE_CAPACITY];
-static unsigned dr_post_continue_count, dr_post_continue_overflow;
-static unsigned dr_post_continue_reads, dr_post_continue_ok, dr_post_continue_reverted;
-static unsigned dr_post_continue_unreadable;
-/* The armed tid whose DR0 was verified after a continue, and the last value read back: the two facts
- * a reader compares against the toolkit's store witness. */
-static DWORD dr_post_continue_last_tid;
-static DWORD64 dr_post_continue_last_dr0, dr_post_continue_last_dr7;
+ * THE REMOVED DEFECT, stated so it is not reintroduced. The old C3 design kept a capacity-16 array of
+ * post-continue readbacks and fired it after EVERY ContinueDebugEvent. Two independent faults:
+ *
+ *   (1) CAPACITY vs EVENT COUNT. 14 414 continuations against a 16-entry array set the overflow flag
+ *       on every real run, and that flag was a `complete` input -- so `complete` was STRUCTURALLY 0
+ *       and NON_FIRING was UNREACHABLE BY CONSTRUCTION. The gate could not return the answer it
+ *       exists to produce.
+ *   (2) THE READ MEASURED A RUNNING THREAD. ContinueDebugEvent resumes the thread, and Windows
+ *       documents GetThreadContext as valid only while the thread is SUSPENDED. 13 212 readbacks on
+ *       the install thread produced 2 non-zero and 1 216 intermittent successes -- the signature of a
+ *       race, not of a watch. The Advisor voided that array IN BOTH DIRECTIONS, including its
+ *       no-revert readings, because a race does not produce trustworthy positives either.
+ *
+ * So the array, its capacity, its overflow predicate and EVERY after-continue context read are
+ * deleted. What replaces the readback is a fixed-size counter set, incremented at the continuation
+ * site itself: UNCAPPED, so no run length can truncate it, and reconcilable, so a lost continuation
+ * is visible as a broken identity rather than as a plausible number. */
+static unsigned dr_continue_total, dr_continue_continue, dr_continue_not_handled;
+static unsigned dr_continue_failed, dr_continue_ok;
+
+/* ── C2: TERMINAL DR SNAPSHOT ───────────────────────────────────────────────────────────────────
+ *
+ * The terminal snapshot is the ONLY remaining DR read in this file. It runs once, at/after the fatal
+ * exception and BEFORE disarm/teardown, and it reads each target thread's DR0/DR7/DR6 with that
+ * thread SUSPENDED. Every counter is UNCAPPED and published, so the snapshot is reconciled stage by
+ * stage instead of being trusted as one line.
+ *
+ * THE VOID RULE IS STRUCTURAL. a2h_term_read() will not call GetThreadContext unless the caller
+ * passes suspended=1, and the only value ever passed is the result of a SuspendThread that returned
+ * success. An unsuspended read is therefore not merely discouraged -- it cannot happen, and any
+ * attempt is COUNTED as VOID and forces UNKNOWN_NOT_RECORDED rather than silently returning a
+ * number that looks like evidence.
+ *
+ * The row array is a BOUNDED PRINTED SAMPLE. It corroborates the counters; it decides NOTHING. No
+ * decision input below is a sample, an index, or a capacity -- that conflation is defect (1). */
+#define A2H_TERM_CAPACITY 64
+static struct { DWORD tid; DWORD64 dr0, dr7, dr6; unsigned armed, suspended, ok, verdict; }
+    dr_term[A2H_TERM_CAPACITY];
+static unsigned dr_term_count, dr_term_overflow;
+/* Stage ledger: every stage is counted whether it succeeded or failed, so a partial snapshot is
+ * visible as a partial snapshot. */
+static unsigned dr_term_runs, dr_term_snapshot_ok, dr_term_snapshot_failed;
+static unsigned dr_term_seen, dr_term_open_ok, dr_term_open_failed;
+static unsigned dr_term_suspend_ok, dr_term_suspend_failed, dr_term_already_suspended;
+static unsigned dr_term_context_ok, dr_term_context_failed;
+static unsigned dr_term_resume_ok, dr_term_resume_failed;
+/* THE VOID COUNTER. Non-zero means an unsuspended read was attempted, which voids the snapshot. */
+static unsigned dr_term_void_unsuspended;
+/* Terminal outcomes. `verified` is the gate's arm-persistence evidence; `changed` is a thread that
+ * was armed and is no longer (a CHANGED SET, which the packet makes UNKNOWN, never a negative);
+ * `unreadable` is a thread whose context could not be read at all. */
+static unsigned dr_term_verified, dr_term_changed, dr_term_unreadable, dr_term_unarmed_rows;
+static unsigned dr_term_disarmed_tids, dr_term_exited_tids;
+/* Set by dr_disarm_all(). If the snapshot ever runs after this, the reading describes a disarmed
+ * process, not an armed one -- a PREMATURE DISARM, which is UNKNOWN and never evidence. */
+static int dr_disarmed_flag;
+static unsigned dr_term_premature_disarm;
+/* The snapshot runs AT MOST ONCE. It is taken at the terminal point inside the debug loop, while the
+ * target is still alive, and the post-loop call is only a fallback for exit paths that never set the
+ * terminal flag -- so a second run would double-count a snapshot that describes the same process. */
+static int dr_term_done;
+/* The store-side premise, published next to the decision: the toolkit's install witness is read out
+ * of the archived registry by capture_guest_threads() and recorded here so the delivery decision
+ * consumes STORE evidence rather than assuming it. */
+static int dr_install_exec_seen;
+static unsigned dr_install_ok_value, dr_install_seen_value;
 
 static int dr_on(void)
 {
@@ -583,51 +641,127 @@ static void dr_print_terminal_summary(void)
     fflush(report);
 }
 
-/* ── C1/C3: the DELIVERY decision, published so a reader never has to combine counters ──────────
+/* ── C1/C2: the DELIVERY decision, published so a reader never has to combine counters ──────────
  *
- * The packet's losslessness requirement is that a reader must be able to tell NON-FIRING from
- * NOT-RECORDED. This emits that as a DERIVED verdict with the evidence next to it, rather than two
- * counts a reader might combine wrongly:
+ * WHAT CHANGED, AND WHY. The old `complete` was
+ *     (raw_events > 0) && !ss_overflow && !post_continue_overflow
+ * and `post_continue_overflow` was set by a capacity-16 array fired after every one of 14 414
+ * continuations. `complete` was therefore STRUCTURALLY 0 on any real run and NON_FIRING was
+ * UNREACHABLE BY CONSTRUCTION: the gate could not return the answer it exists to produce. Worse, it
+ * made a PER-EVENT HISTORY a DECISION INPUT -- the conflation the packet forbids.
  *
- *   NON_FIRING          the raw debug stream was demonstrably read (events > 0), the raw single-step
- *                       count is a complete zero, the ledger did not overflow, AND the far-side
- *                       readback verified the watch survived the continue. The watch was programmed,
- *                       stayed programmed, and did not fire for a write that provably happened.
- *   CONTEXT_LOST        the same complete zero, but the post-continue readback found DR0/DR7 gone or
- *                       unreadable. The registers were programmed and did not survive -- so the zero
- *                       is explained by context loss, NOT by a watch that cannot fire.
+ * The new `complete` is derived from the things that actually decide the question:
+ *
+ *   RAW INGRESS          dr_raw_event_total > 0. The debug stream was demonstrably read, so a zero
+ *                        single-step count is a fact about the stream, not about the reader.
+ *   STORE EVIDENCE       the toolkit's install witness executed and published (dr_install_exec_seen).
+ *                        Without a store there is no write for a watch to miss, so a zero cannot be
+ *                        read as NON_FIRING at all.
+ *   ARM EVIDENCE         this instrument armed at least one thread (dr_armed > 0) at a known
+ *                        canonical address. A watch that was never programmed cannot fail to fire.
+ *   RECONCILED LEDGER    the lossless counters agree with each other, and NO BOUNDED PRINTED SAMPLE
+ *                        IS ASKED TO DECIDE ANYTHING:
+ *                          - continuations reconcile exactly (ok + failed == total);
+ *                          - single-steps reconcile exactly (handler+generic+terminal+unrouted).
+ *                        `dr_raw_ss_overflow` -- the raw-single-step ROW SAMPLE's overflow flag -- is
+ *                        deliberately NOT an input. It is still published, because a truncated sample
+ *                        is worth knowing, but the sample CORROBORATES and never DECIDES: the
+ *                        counters it illustrates are uncapped and exact. Making a sample's capacity a
+ *                        decision input is exactly the defect being repaired -- the old gate fed a
+ *                        capacity-16 per-event array into `complete`, so a run length decided the
+ *                        verdict. Reintroducing that through the row sample would rebuild the bug.
+ *   SNAPSHOT             the terminal snapshot ran, is not premature, read no unsuspended thread,
+ *                        and no armed tid is missing from it.
+ *
+ * WHAT `complete` DOES *NOT* CLAIM, and this is the Advisor's ruling made explicit. `complete=1`
+ * means the OBSERVATION was lossless. It does NOT prove the #DB DELIVERY-COMPLETENESS PREMISE --
+ * that this debugger's stream would carry a native install #DB if one occurred. That premise needs
+ * the LIVE positive control, and it is exactly what `native_ingress=` reports below. Strong is not
+ * decidable: a lossless zero is still not a delivered channel.
+ *
+ *   NON_FIRING          complete observation, store executed, watch armed and verified persistent at
+ *                       the terminal snapshot, zero raw single-steps, and the delivery premise
+ *                       proved by a native install #DB. The watch was programmed, stayed programmed,
+ *                       and did not fire for a write that provably happened.
+ *   UNKNOWN_NOT_RECORDED nothing was counted at all, or the ledger did not reconcile, or the
+ *                       snapshot was void/premature/unreadable, or the delivery premise is unproved
+ *                       -- so a zero carries no information. NEVER read as absence.
  *   DELIVERED_UNCLAIMED a raw single-step DID arrive but was not claimed by this instrument.
- *   UNKNOWN_NOT_RECORDED nothing was counted at all, or the ledger overflowed, so a zero carries no
- *                       information. NEVER read as absence.
+ *   CONTEXT_LOST        the terminal snapshot found an ARMED tid whose DR0/DR7 are gone. The
+ *                       registers were programmed and did not survive -- a CHANGED SET, so the zero
+ *                       is explained by context loss rather than by a watch that cannot fire.
  *   HIT                 a claimed single-step arrived; the write-once install-hit latch is set.
  *
  * `complete=` is the single word a reader keys on, and it is derived, not asserted. */
 static void a2h_delivery_terminal(void)
 {
-    int complete = (dr_raw_event_total > 0) && !dr_raw_ss_overflow && !dr_post_continue_overflow;
+    /* C1 reconciliation. Each identity is between UNCAPPED counters, so a lost record breaks the
+     * identity instead of hiding inside a plausible total. */
+    int continue_reconciled = (dr_continue_ok + dr_continue_failed) == dr_continue_total;
+    int ss_reconciled = (dr_ss_routed_handler + dr_ss_routed_generic + dr_ss_routed_terminal +
+                         dr_ss_unrouted) == dr_raw_single_step;
+    int store_evidence = dr_install_exec_seen;
+    int arm_evidence = (dr_armed > 0) && (dr_canonical != 0);
+    /* The terminal snapshot's own completeness: it ran, it was not premature, it read nothing
+     * unsuspended, and every tid this instrument armed was present in it. */
+    int snapshot_evidence = (dr_term_runs > 0) && !dr_term_premature_disarm &&
+                            (dr_term_void_unsuspended == 0) && (dr_term_disarmed_tids == 0);
+    int complete = (dr_raw_event_total > 0) && continue_reconciled && ss_reconciled &&
+                   store_evidence && arm_evidence && snapshot_evidence;
+    /* The delivery-completeness PREMISE, reported SEPARATELY and never folded into `complete`.
+     *
+     * THE ADVISOR'S RULE, MADE STRUCTURAL. "Strong != decidable": a lossless zero is not by itself
+     * proof that this debugger's stream would have carried a native install #DB had one occurred.
+     * That premise is proved ONLY by observing native #DB ingress, so it is published as its own
+     * field next to the decision instead of being assumed.
+     *
+     * It is deliberately NOT an input to `decision`. Making NON_FIRING require a hit would be
+     * circular -- a hit means the watch FIRED, so NON_FIRING would again be unreachable by
+     * construction, which is precisely the defect this repair removes. The instrument reports its
+     * own answer (NON_FIRING on a complete observation); the P1 decision-grade promotion is the
+     * reader's, and it must be refused while delivery_premise=UNPROVED. */
+    int native_ingress = (dr_raw_single_step > 0) || (dr_ss_routed_handler > 0);
+    int premise_proved = native_ingress;
+    const char *premise = premise_proved ? "PROVED" : "UNPROVED";
     const char *decision;
     if (dr_install_hit_latch) decision = "HIT";
     else if (!complete) decision = "UNKNOWN_NOT_RECORDED";
     else if (dr_raw_single_step) decision = "DELIVERED_UNCLAIMED";
-    else if (dr_post_continue_reverted || dr_post_continue_unreadable) decision = "CONTEXT_LOST";
+    else if (dr_term_changed) decision = "CONTEXT_LOST";
     else decision = "NON_FIRING";
     fprintf(report, "GUEST_DR_DELIVERY_TERMINAL raw_events=%u raw_exceptions=%u raw_single_step=%u "
                     "ss_first_chance=%u ss_second_chance=%u ss_routed_handler=%u "
                     "ss_routed_generic_first=%u ss_routed_terminal_second=%u ss_unrouted=%u "
                     "ss_records=%u ss_overflow=%u other_code_exceptions=%u continue_total=%u "
                     "continue_continue=%u continue_not_handled=%u continue_failed=%u "
-                    "post_continue_reads=%u post_continue_ok=%u post_continue_reverted=%u "
-                    "post_continue_unreadable=%u post_continue_overflow=%u install_hit=%ld "
+                    "continue_reconciled=%d ss_reconciled=%d store_evidence=%d arm_evidence=%d "
+                    "snapshot_evidence=%d native_ingress=%d premise_proved=%d delivery_premise=%s "
+                    "install_hit=%ld "
                     "watch_armed_value=%016llX canonical=%016llX complete=%d decision=%s\n",
             dr_raw_event_total, dr_raw_exception_total, dr_raw_single_step, dr_ss_first_chance,
             dr_ss_second_chance, dr_ss_routed_handler, dr_ss_routed_generic,
             dr_ss_routed_terminal, dr_ss_unrouted, dr_raw_ss_count, dr_raw_ss_overflow,
             dr_raw_exception_other_code, dr_continue_total, dr_continue_continue,
-            dr_continue_not_handled, dr_continue_failed, dr_post_continue_reads,
-            dr_post_continue_ok, dr_post_continue_reverted, dr_post_continue_unreadable,
-            dr_post_continue_overflow, (long)dr_install_hit_latch,
+            dr_continue_not_handled, dr_continue_failed, continue_reconciled, ss_reconciled,
+            store_evidence, arm_evidence, snapshot_evidence, native_ingress, premise_proved,
+            premise, (long)dr_install_hit_latch,
             (unsigned long long)dr_watch_armed_value, (unsigned long long)dr_canonical,
             complete, decision);
+    /* C2: THE SNAPSHOT RECORD, reconciled stage by stage. Every stage is published with both its
+     * success and its failure count, so a partial snapshot is visible as partial. */
+    fprintf(report, "GUEST_DR_TERM_SNAPSHOT runs=%u snapshot_ok=%u snapshot_failed=%u seen=%u "
+                    "open_ok=%u open_failed=%u suspend_ok=%u suspend_failed=%u already_suspended=%u "
+                    "context_ok=%u context_failed=%u resume_ok=%u resume_failed=%u "
+                    "void_unsuspended=%u verified_armed=%u changed_set=%u unreadable=%u unarmed=%u "
+                    "armed_tids_exited=%u armed_tids_missing=%u premature_disarm=%u rows=%u "
+                    "row_overflow=%u canonical=%016llX\n",
+            dr_term_runs, dr_term_snapshot_ok, dr_term_snapshot_failed, dr_term_seen,
+            dr_term_open_ok, dr_term_open_failed, dr_term_suspend_ok, dr_term_suspend_failed,
+            dr_term_already_suspended, dr_term_context_ok, dr_term_context_failed, dr_term_resume_ok,
+            dr_term_resume_failed, dr_term_void_unsuspended, dr_term_verified, dr_term_changed,
+            dr_term_unreadable, dr_term_unarmed_rows, dr_term_exited_tids, dr_term_disarmed_tids,
+            dr_term_premature_disarm, dr_term_count, dr_term_overflow,
+            (unsigned long long)dr_canonical);
     /* C3: THE DISCRIMINATOR VERDICT, derived from the same records. Each cause leaves a DIFFERENT
      * trace, which is the whole point -- the packet refuses a hypothesis without a discriminating
      * control:
@@ -637,9 +771,9 @@ static void a2h_delivery_terminal(void)
      *   DEBUGGER_SWALLOW   a raw single-step was delivered and then routed to a path that did not
      *                      claim it (generic first-chance, or consumed with DBG_CONTINUE and no
      *                      downstream hit). Delivered, then handled away.
-     *   CONTEXT_LOSS       the post-continue readback found DR0/DR7 reverted, or unreadable. The
-     *                      registers were programmed and did not survive the continue.
-     *   NO_RAW_EVENT       nothing arrived at all: only then do the before/after-continue readbacks
+     *   CONTEXT_LOSS       the terminal snapshot found an armed tid whose DR0/DR7 are gone. The
+     *                      registers were programmed and did not survive.
+     *   NO_RAW_EVENT       nothing arrived at all: only then do the snapshot's verified armed state
      *                      and the toolkit's store witness discriminate delivery from handling.
      *
      * EVERY CAUSE BELOW REQUIRES `complete`. A cause is a discrimination between hypotheses, and a
@@ -653,17 +787,16 @@ static void a2h_delivery_terminal(void)
         else if (!complete) cause = "UNKNOWN_NOT_RECORDED";
         else if (dr_ss_second_chance && !dr_ss_first_chance) cause = "CHANCE_SEMANTICS";
         else if (dr_raw_single_step) cause = "DEBUGGER_SWALLOW";
-        else if (dr_post_continue_reverted || dr_post_continue_unreadable) cause = "CONTEXT_LOSS";
+        else if (dr_term_changed) cause = "CONTEXT_LOSS";
         else cause = "NO_RAW_EVENT";
         fprintf(report, "GUEST_DR_CAUSE first_chance_ss=%u second_chance_ss=%u routed_handler=%u "
-                        "routed_elsewhere=%u post_continue_reverted=%u post_continue_unreadable=%u "
-                        "post_continue_last_tid=%lu post_continue_last_dr0=%016llX "
-                        "post_continue_last_dr7=%016llX complete=%d cause=%s\n",
+                        "routed_elsewhere=%u term_verified_armed=%u term_changed_set=%u "
+                        "term_unreadable=%u term_void_unsuspended=%u native_ingress=%d "
+                        "premise_proved=%d delivery_premise=%s complete=%d cause=%s\n",
                 dr_ss_first_chance, dr_ss_second_chance, dr_ss_routed_handler,
-                dr_ss_routed_generic + dr_ss_routed_terminal, dr_post_continue_reverted,
-                dr_post_continue_unreadable, dr_post_continue_last_tid,
-                (unsigned long long)dr_post_continue_last_dr0,
-                (unsigned long long)dr_post_continue_last_dr7, complete, cause);
+                dr_ss_routed_generic + dr_ss_routed_terminal, dr_term_verified, dr_term_changed,
+                dr_term_unreadable, dr_term_void_unsuspended, native_ingress, premise_proved,
+                premise, complete, cause);
     }
     for (unsigned i = 0; i < dr_raw_ss_count; i++)
         fprintf(report, "GUEST_DR_RAW_SS_ROW index=%u seq=%u tid=%lu code=%08lX chance=%s route=%s "
@@ -674,18 +807,33 @@ static void a2h_delivery_terminal(void)
                 (dr_raw_ss[i].route == A2H_ROUTE_GENERIC_FIRST ? "generic_first" :
                  (dr_raw_ss[i].route == A2H_ROUTE_TERMINAL_SECOND ? "terminal_second" : "unrouted")),
                 dr_raw_ss[i].address, (unsigned long long)dr_raw_ss[i].ticks);
-    for (unsigned i = 0; i < dr_post_continue_count; i++)
-        fprintf(report, "GUEST_DR_POST_CONTINUE_ROW index=%u seq=%u tid=%lu dr0=%016llX dr7=%016llX "
-                        "dr6=%016llX watch_intact=%d\n",
-                i, dr_post_continue[i].seq, dr_post_continue[i].tid,
-                (unsigned long long)dr_post_continue[i].dr0,
-                (unsigned long long)dr_post_continue[i].dr7,
-                (unsigned long long)dr_post_continue[i].dr6, dr_post_continue[i].ok);
+    /* The terminal snapshot rows. PRINTED SAMPLE ONLY -- nothing above reads this array. */
+    for (unsigned i = 0; i < dr_term_count; i++)
+        fprintf(report, "GUEST_DR_TERM_ROW index=%u tid=%lu armed=%u suspended=%u read_ok=%u "
+                        "dr0=%016llX dr7=%016llX dr6=%016llX canonical=%016llX verdict=%s\n",
+                i, dr_term[i].tid, dr_term[i].armed, dr_term[i].suspended, dr_term[i].ok,
+                (unsigned long long)dr_term[i].dr0, (unsigned long long)dr_term[i].dr7,
+                (unsigned long long)dr_term[i].dr6, (unsigned long long)dr_canonical,
+                dr_term[i].verdict == A2H_TERM_VERIFIED_ARMED ? "verified_armed" :
+                (dr_term[i].verdict == A2H_TERM_CHANGED_SET ? "changed_set" :
+                 (dr_term[i].verdict == A2H_TERM_UNARMED ? "unarmed" : "unreadable")));
     fflush(report);
 }
 
 static void dr_handshake(DWORD tid)
 {
+    /* NATIVE #DB FIXTURE: the child published the address it armed in its handshake parameters, so
+     * the watch is pointed at the child's REAL target rather than at a fabricated value. This is
+     * done FIRST, before the geometry resolution below, because the fixture's debuggee is the
+     * collector itself and has no mapping symbols -- without this the handshake would bail at
+     * `!dr_canonical` and never arm anything. In production a2h_native_db_fixture is 0, so this
+     * whole clause is inert and dr_canonical comes from the symbol table unchanged. */
+    if (a2h_native_db_fixture && !dr_canonical && a2h_native_db_params) {
+        EXCEPTION_DEBUG_INFO *info = a2h_native_db_params;
+        if (info->ExceptionRecord.NumberParameters >= 1 &&
+            info->ExceptionRecord.ExceptionInformation[0])
+            dr_canonical = (DWORD64)info->ExceptionRecord.ExceptionInformation[0];
+    }
     if (!dr_canonical) {
         /* Symbol resolution needs an initialized symbol handler; capture() has not run yet at the
          * handshake, so initialize it here. Same options capture() uses, so symbol lookups behave
@@ -751,8 +899,15 @@ static int dr_tid_exited(DWORD tid)
  * delivers. That separation is what makes a zero mean NON-FIRING rather than UNKNOWN.
  *
  * `dr_raw_event_total` is incremented by the caller for EVERY debug event, so the raw single-step
- * count always has a completeness denominator next to it. */
-static void a2h_raw_single_step(DWORD tid, DWORD code, DWORD first_chance, DWORD64 address)
+ * count always has a completeness denominator next to it.
+ *
+ * RETURNS THE SEQ OF A SINGLE-STEP, AND 0 FOR EVERY OTHER CODE. That return value is load-bearing:
+ * the caller uses it to decide whether the event may be ROUTED. Before this, the caller stamped a
+ * seq for EVERY exception and then routed non-single-steps through a2h_raw_ss_route, so the route
+ * counters counted ROUTES rather than single-step routes -- the Phase-1 archive shows
+ * ss_routed_generic_first=14405 against raw_single_step=0, which is that pollution. A route counter
+ * that cannot reconcile with the single-step count cannot support a reconciliation clause. */
+static unsigned a2h_raw_single_step(DWORD tid, DWORD code, DWORD first_chance, DWORD64 address)
 {
     LARGE_INTEGER now;
     unsigned seq;
@@ -763,10 +918,10 @@ static void a2h_raw_single_step(DWORD tid, DWORD code, DWORD first_chance, DWORD
      * If it were bumped only for single-steps, a run that delivered no single-step at all would show
      * events=0 as well, and "the stream was read and contained no #DB" would be indistinguishable
      * from "nothing was recorded" -- which is precisely the NON-FIRING / NOT-RECORDED confusion the
-     * packet's §6.1.6 losslessness clause forbids. */
+     * packet's losslessness clause forbids. */
     if (is_single_step) dr_raw_single_step++;
     else dr_raw_exception_other_code++;
-    if (!is_single_step) return;   /* counted; not a delivery this ledger classifies */
+    if (!is_single_step) return 0;   /* counted; not a delivery this ledger classifies or routes */
 
     seq = ++dr_seq;
     QueryPerformanceCounter(&now);
@@ -788,12 +943,18 @@ static void a2h_raw_single_step(DWORD tid, DWORD code, DWORD first_chance, DWORD
             seq, tid, code, first_chance ? "first" : "second",
             (unsigned long long)address, dr_raw_single_step, dr_raw_event_total);
     fflush(report);
+    return seq;
 }
 
 /* Records where a raw single-step went. Kept separate from the recorder above so that a reader can
- * see an event that was COUNTED but never ROUTED -- that gap is the filter boundary made visible. */
+ * see an event that was COUNTED but never ROUTED -- that gap is the filter boundary made visible.
+ *
+ * ROUTES ARE SINGLE-STEP ONLY. seq==0 means the event was not a single-step, so it is counted as
+ * neither routed nor unrouted: the route counters must reconcile with dr_raw_single_step, and a
+ * non-single-step exception is accounted for in dr_raw_exception_other_code instead. */
 static void a2h_raw_ss_route(unsigned seq, unsigned route)
 {
+    if (!seq) return;
     for (unsigned i = dr_raw_ss_count; i > 0; i--)
         if (dr_raw_ss[i - 1].seq == seq) { dr_raw_ss[i - 1].route = route; break; }
     switch (route) {
@@ -804,73 +965,200 @@ static void a2h_raw_ss_route(unsigned seq, unsigned route)
     }
 }
 
-/* ── C3: the POST-CONTINUE readback ─────────────────────────────────────────────────────────────
+/* ── C1(3): the CONTINUATION record, at the continuation site ───────────────────────────────────
  *
- * THE CRITICAL NEW MEASUREMENT. The arm's own readback happens after SetThreadContext and BEFORE
- * ContinueDebugEvent, so it cannot see a context that reverts ACROSS the continue -- and such a
- * revert would produce exactly the observed signature: every existing check passes, the registers
- * read back correct, and yet no #DB ever arrives for a store that provably happened.
- *
- * This runs AFTER ContinueDebugEvent returns, on the thread that was just continued, and reads
- * DR0/DR7/DR6 back. Outcomes:
- *   ok        the watch is still programmed on the far side of the continue
- *   REVERTED  DR0 or the owned DR7 bits are gone -> the context did not survive the continue
- *   unreadable the thread could not be opened or read -> UNKNOWN, never a negative
- *
- * Observation only: GetThreadContext reads, it never writes. Bounded array plus an overflow flag.
- */
-static void a2h_post_continue_readback(DWORD tid, unsigned continue_status, int continue_ok)
+ * This replaces the deleted post-continue readback. It performs NO context read at all: it counts
+ * what the debugger did, which is what a reconciliation needs, and it touches no thread state.
+ * Observation only, and behind the same gate as everything else. */
+static void a2h_continue_record(unsigned continue_status, int continue_ok)
 {
-    HANDLE handle;
-    CONTEXT context = {0};
-    LARGE_INTEGER now;
-    unsigned seq = ++dr_seq;
-    int ok = 0;
-    DWORD64 dr0 = 0, dr7 = 0, dr6 = 0;
-
-    (void)continue_status;
     dr_continue_total++;
-    if (continue_status == DBG_CONTINUE) dr_continue_continue++;
-    else if (continue_status == DBG_EXCEPTION_NOT_HANDLED) dr_continue_not_handled++;
     if (!continue_ok) dr_continue_failed++;
+    else {
+        dr_continue_ok++;
+        if (continue_status == DBG_CONTINUE) dr_continue_continue++;
+        else if (continue_status == DBG_EXCEPTION_NOT_HANDLED) dr_continue_not_handled++;
+    }
+}
 
-    /* ONLY threads this instrument armed. An unarmed thread has no watch of ours to verify, and
-     * reading somebody else's DR state would produce a meaningless row. */
-    if (!dr_was_armed(tid)) return;
-
-    handle = OpenThread(THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, tid);
-    if (!handle) { dr_post_continue_unreadable++; return; }
+/* ── C2: THE TERMINAL DR SNAPSHOT ───────────────────────────────────────────────────────────────
+ *
+ * THE ONE PLACE THIS FILE READS DEBUG REGISTERS, and it is built so that an unsuspended read cannot
+ * produce a value that could be mistaken for evidence.
+ *
+ * THE VOID RULE, ENFORCED STRUCTURALLY. `suspended` is a REQUIRED parameter and the function returns
+ * WITHOUT CALLING GetThreadContext when it is 0 -- it counts the attempt in dr_term_void_unsuspended
+ * and returns 0. The caller's only argument is the result of a SuspendThread that returned success,
+ * so in production the unsuspended path is unreachable; it exists so the rule is a checked property
+ * of the code rather than a comment, and so the fixture can drive the VOID path directly. A non-zero
+ * dr_term_void_unsuspended voids the snapshot in the decision below.
+ *
+ * SUSPEND IS NOT OPTIONAL. ContinueDebugEvent resumes the target; Windows documents thread context
+ * as valid only while the thread is suspended. That is exactly the defect being repaired, so every
+ * read here is preceded by a successful SuspendThread on the SAME handle.
+ *
+ * Observation only: GetThreadContext reads. This function never writes a debug register, never
+ * writes guest memory, and never resumes a thread it did not suspend. */
+static int a2h_term_read(HANDLE handle, DWORD tid, int armed, int suspended,
+                         DWORD64 *dr0, DWORD64 *dr7, DWORD64 *dr6, unsigned *verdict)
+{
+    CONTEXT context = {0};
+    int ok;
+    *dr0 = *dr7 = *dr6 = 0;
+    *verdict = A2H_TERM_UNREADABLE;
+    if (!suspended) {
+        /* AN UNSUSPENDED READ IS VOID. Not a warning, not a caveat: it is refused and counted, so no
+         * value from a running thread can ever reach the ledger. */
+        dr_term_void_unsuspended++;
+        return 0;
+    }
     context.ContextFlags = CONTEXT_DEBUG_REGISTERS;
     if (!GetThreadContext(handle, &context)) {
-        dr_post_continue_unreadable++;
-        CloseHandle(handle);
+        dr_term_context_failed++;
+        dr_term_unreadable++;
+        return 0;
+    }
+    dr_term_context_ok++;
+    *dr0 = context.Dr0; *dr7 = context.Dr7; *dr6 = context.Dr6;
+    /* The comparison the packet requires: this thread's live DR state against the ARMED
+     * tid/address/DR7 set and the install-trap/hit records. */
+    ok = (*dr0 == dr_canonical) && ((*dr7 & A2H_DR7_OWNED) == A2H_DR7);
+    if (ok) {
+        *verdict = A2H_TERM_VERIFIED_ARMED;
+        dr_term_verified++;
+    } else if (armed) {
+        /* It WAS armed by this instrument and is not armed now. That is a CHANGED SET: the packet
+         * makes it UNKNOWN, never a negative -- an unarmed-at-snapshot thread cannot support a
+         * "the watch did not fire" reading. */
+        *verdict = A2H_TERM_CHANGED_SET;
+        dr_term_changed++;
+    } else {
+        *verdict = A2H_TERM_UNARMED;
+        dr_term_unarmed_rows++;
+    }
+    return 1;
+}
+
+/* Enumerate and open ALL target threads, suspend each ONCE, read its DR state, then resume it.
+ *
+ * ORDERING IS THE POINT. This is called at/after the fatal exception and BEFORE dr_disarm_all(), so
+ * the snapshot observes the armed process rather than the disarmed one. If it ever runs after the
+ * disarm it says so (dr_term_premature_disarm) and the decision refuses the reading.
+ *
+ * ONE SUSPEND PER THREAD, NOT A PER-EVENT LOOP. The snapshot runs ONCE per process; there is no
+ * sampling loop anywhere in this file. */
+static void a2h_terminal_snapshot(void)
+{
+    HANDLE snapshot;
+    THREADENTRY32 entry = {sizeof(entry)};
+
+    if (!dr_on() || !dr_canonical) return;
+    /* AT MOST ONCE, and never after the process is gone. */
+    if (dr_term_done) return;
+    dr_term_done = 1;
+    dr_term_runs++;
+    if (dr_disarmed_flag) dr_term_premature_disarm++;
+    snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) {
+        dr_term_snapshot_failed++;
+        fprintf(report, "GUEST_DR_TERM_SNAPSHOT ok=0 reason=snapshot error=%lu\n", GetLastError());
+        fflush(report);
         return;
     }
-    dr0 = context.Dr0; dr7 = context.Dr7; dr6 = context.Dr6;
-    ok = (dr0 == dr_canonical) && ((dr7 & A2H_DR7_OWNED) == A2H_DR7);
-    dr_post_continue_reads++;
-    if (ok) dr_post_continue_ok++; else dr_post_continue_reverted++;
-    dr_post_continue_last_tid = tid;
-    dr_post_continue_last_dr0 = dr0;
-    dr_post_continue_last_dr7 = dr7;
-    QueryPerformanceCounter(&now);
-    if (dr_post_continue_count < A2H_POST_CONTINUE_CAPACITY) {
-        dr_post_continue[dr_post_continue_count].seq = seq;
-        dr_post_continue[dr_post_continue_count].tid = tid;
-        dr_post_continue[dr_post_continue_count].dr0 = dr0;
-        dr_post_continue[dr_post_continue_count].dr7 = dr7;
-        dr_post_continue[dr_post_continue_count].dr6 = dr6;
-        dr_post_continue[dr_post_continue_count].ok = ok;
-        dr_post_continue_count++;
-    } else dr_post_continue_overflow = 1;
-    CloseHandle(handle);
-    fprintf(report, "GUEST_DR_POST_CONTINUE seq=%u tid=%lu status=%s dr0=%016llX dr7=%016llX "
-                    "dr6=%016llX canonical=%016llX watch_intact=%d\n",
-            seq, tid, continue_ok ? (continue_status == DBG_CONTINUE ? "DBG_CONTINUE"
-                                                                     : "DBG_EXCEPTION_NOT_HANDLED")
-                                  : "continue_failed",
-            (unsigned long long)dr0, (unsigned long long)dr7, (unsigned long long)dr6,
-            (unsigned long long)dr_canonical, ok);
+    dr_term_snapshot_ok++;
+    if (Thread32First(snapshot, &entry)) do {
+        HANDLE handle;
+        DWORD64 dr0 = 0, dr7 = 0, dr6 = 0;
+        unsigned verdict = A2H_TERM_UNREADABLE;
+        int armed, suspended = 0, resumed = 0, read_ok;
+        DWORD suspend_count = 0;
+        if (entry.th32OwnerProcessID != process_id) continue;
+        /* NEVER SUSPEND THE COLLECTOR'S OWN THREAD. In production the debugger is a separate process,
+         * so this cannot arise; the fixture drives this path IN-PROCESS, where suspending the caller
+         * would deadlock it. Skipped rather than read, and skipped rather than resumed: this thread
+         * was never suspended, so it is owed no resume and its own context is not a target reading. */
+        if (entry.th32ThreadID == GetCurrentThreadId()) continue;
+        dr_term_seen++;
+        armed = dr_was_armed(entry.th32ThreadID);
+        handle = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT |
+                            THREAD_QUERY_INFORMATION, FALSE, entry.th32ThreadID);
+        if (!handle) {
+            /* A thread we could not open is UNKNOWN: a missing thread is explicitly not a negative. */
+            dr_term_open_failed++;
+            dr_term_unreadable++;
+            if (dr_term_count < A2H_TERM_CAPACITY) {
+                dr_term[dr_term_count].tid = entry.th32ThreadID;
+                dr_term[dr_term_count].armed = (unsigned)armed;
+                dr_term[dr_term_count].verdict = A2H_TERM_UNREADABLE;
+                dr_term_count++;
+            } else dr_term_overflow = 1;
+            continue;
+        }
+        dr_term_open_ok++;
+        /* SUSPEND ONCE, THEN READ ONLY IF THE SUSPEND SUCCEEDED.
+         *
+         * SuspendThread returns the PREVIOUS suspend count, or (DWORD)-1 on failure. A NON-ZERO
+         * previous count is NOT a failure and must not be treated as one: a debug event freezes every
+         * thread in the target, so the threads this snapshot most needs to read are exactly the ones
+         * that already have a non-zero count. What matters for the VOID rule is only whether the
+         * thread is suspended when GetThreadContext runs -- and after a successful SuspendThread it
+         * always is, because this call incremented the count.
+         *
+         * So: (DWORD)-1 -> failed, do NOT read, do NOT resume (nothing was added). Anything else ->
+         * this call added exactly one suspension, the thread is now suspended, the read is VALID, and
+         * exactly ONE ResumeThread is owed. `already` is recorded so a reader can see that the thread
+         * was frozen by the debugger rather than by this call. */
+        suspend_count = SuspendThread(handle);
+        if (suspend_count == (DWORD)-1) {
+            dr_term_suspend_failed++;
+            dr_term_unreadable++;
+        } else {
+            dr_term_suspend_ok++;
+            if (suspend_count > 0) dr_term_already_suspended++;
+            suspended = 1;
+        }
+        read_ok = a2h_term_read(handle, entry.th32ThreadID, armed, suspended,
+                                &dr0, &dr7, &dr6, &verdict);
+        if (suspended) {
+            /* RESUME SAFELY: only the thread this call actually suspended, and only once. A failure
+             * is recorded rather than ignored -- a thread left suspended is a real side effect. */
+            if (ResumeThread(handle) == (DWORD)-1) dr_term_resume_failed++;
+            else { dr_term_resume_ok++; resumed = 1; }
+        }
+        if (!read_ok) verdict = A2H_TERM_UNREADABLE;
+        if (dr_term_count < A2H_TERM_CAPACITY) {
+            dr_term[dr_term_count].tid = entry.th32ThreadID;
+            dr_term[dr_term_count].dr0 = dr0;
+            dr_term[dr_term_count].dr7 = dr7;
+            dr_term[dr_term_count].dr6 = dr6;
+            dr_term[dr_term_count].armed = (unsigned)armed;
+            dr_term[dr_term_count].suspended = (unsigned)(suspended && resumed);
+            dr_term[dr_term_count].ok = (unsigned)read_ok;
+            dr_term[dr_term_count].verdict = verdict;
+            dr_term_count++;
+        } else dr_term_overflow = 1;
+        CloseHandle(handle);
+    } while (Thread32Next(snapshot, &entry));
+    CloseHandle(snapshot);
+    /* A tid this instrument armed that no longer exists as a live thread is a CHANGED SET -- but ONLY
+     * if its disappearance has no lifecycle record.
+     *
+     * WHY THIS DISTINCTION IS LOAD-BEARING. Guest worker threads EXIT during a run (the harness's own
+     * healthy probe expects four exited guest workers). An armed worker that exited before the
+     * terminal point is a KNOWN lifecycle fact already recorded in the birth ledger, not a lost
+     * watch; treating it as a changed set would make snapshot_evidence=0 on essentially every real
+     * run, so `complete` would be structurally 0 and NON_FIRING unreachable AGAIN -- the exact defect
+     * this repair removes, merely relocated. So a tid WITH an exit row is the EXIT population (the
+     * same rule dr_tid_exited already encodes for terminal unarmed tids), and a tid that vanished
+     * with NO exit record is the genuine changed set the packet makes UNKNOWN. */
+    for (unsigned i = 0; i < dr_arm_tid_count; i++) {
+        int seen = 0;
+        for (unsigned j = 0; j < dr_term_count; j++)
+            if (dr_term[j].tid == dr_arm_tids[i]) { seen = 1; break; }
+        if (seen) continue;
+        if (dr_tid_exited(dr_arm_tids[i])) dr_term_exited_tids++;
+        else dr_term_disarmed_tids++;
+    }
     fflush(report);
 }
 
@@ -979,6 +1267,9 @@ static void dr_disarm_all(void)
     HANDLE snapshot;
     THREADENTRY32 entry = {sizeof(entry)};
     if (!dr_on() || !dr_canonical) return;
+    /* C2: STAMP THE DISARM. From here on the process is being disarmed, so any terminal snapshot
+     * taken later observes a cleared process and is recorded as PREMATURE rather than as evidence. */
+    dr_disarmed_flag = 1;
     snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
     if (snapshot == INVALID_HANDLE_VALUE) {
         fprintf(report, "GUEST_DR_DISARM ok=0 reason=snapshot error=%lu\n", GetLastError());
@@ -1239,6 +1530,14 @@ static void capture_guest_threads(void)
      * field -- reading it unconditionally would misreport whatever bytes follow the threads. */
     if (registry->version >= 2) {
         const JsrfSlotLatch *latch = &registry->latch;
+        /* C1 STORE EVIDENCE. The delivery decision requires that the install store EXECUTED, and this
+         * is where that fact enters the collector: the toolkit's install witness sets install_seen
+         * only after performing the store and reading the location back, so the latch cannot be set
+         * by a print or by a store that did not happen. Recorded here rather than assumed, because
+         * `complete` consumes it and a fixture must be able to drive its absence. */
+        if (latch->install_seen) dr_install_exec_seen = 1;
+        dr_install_ok_value = latch->install_ok;
+        dr_install_seen_value = latch->install_seen;
         fprintf(report, "GUEST_SLOT_LATCH install_seen=%u install_raw=%08X install_value=%08X "
                         "install_ok=%u claimed=%u overflow=%u partial=%u sequence=%u\n",
                 latch->install_seen, latch->install_raw, latch->install_value, latch->install_ok,
@@ -1426,19 +1725,24 @@ void jsrf_a2h_test_terminal(void)
 DWORD jsrf_a2h_test_armed_count(void) { return dr_armed; }
 DWORD jsrf_a2h_test_failed_count(void) { return dr_failed; }
 
-/* ── C1/C3 fixture seams (A2h-dr0-delivery-gate) ────────────────────────────────────────────────
+/* ── C1/C2 fixture seams (A2h-dr0-terminal-snapshot) ────────────────────────────────────────────
  *
  * Same pattern as the seams above, and the same reason: the fixture must drive the PRODUCTION branch
  * bodies rather than a test-local copy, or the fixture proves nothing about the shipped instrument.
- * These expose the delivery ledger so the packet's five required cases can be injected
- * deterministically:
+ * These expose the delivery ledger and the terminal snapshot so the packet's required cases can be
+ * injected deterministically:
  *
  *   jsrf_a2h_test_raw_event()            the completeness denominator (dr_raw_event_total)
  *   jsrf_a2h_test_raw_single_step(...)   a raw pre-filter single-step -> returns its seq
  *   jsrf_a2h_test_raw_ss_route(seq, r)   where it went: 0 none, 1 handler, 2 generic_first,
  *                                        3 terminal_second  (the A2H_ROUTE_* values)
  *   jsrf_a2h_test_publish_install_hit()  the write-once hit latch
- *   jsrf_a2h_test_post_continue(...)     the far-side readback
+ *   jsrf_a2h_test_continue(...)          the continuation record (no context read)
+ *   jsrf_a2h_test_store_evidence(...)    the toolkit's install-witness publication
+ *   jsrf_a2h_test_terminal_snapshot()    the suspend/read/compare/resume snapshot
+ *   jsrf_a2h_test_term_read(...)         ONE snapshot read, driven with suspended=0 to prove the
+ *                                        UNSUSPENDED-IS-VOID rule is enforced, not documented
+ *   jsrf_a2h_test_disarm_stamp()         marks the process disarmed, so a late snapshot is PREMATURE
  *   jsrf_a2h_test_delivery_terminal()    the published decision
  *   jsrf_a2h_test_install_hit_latch()    the latch, so a fixture asserts the record not the print
  *
@@ -1453,8 +1757,7 @@ void jsrf_a2h_test_raw_event(void)
 unsigned jsrf_a2h_test_raw_single_step(DWORD tid, DWORD code, DWORD first_chance, DWORD64 address)
 {
     if (!dr_on()) return 0;
-    a2h_raw_single_step(tid, code, first_chance, address);
-    return dr_seq;
+    return a2h_raw_single_step(tid, code, first_chance, address);
 }
 
 void jsrf_a2h_test_raw_ss_route(unsigned seq, unsigned route)
@@ -1469,10 +1772,49 @@ void jsrf_a2h_test_publish_install_hit(DWORD tid, DWORD64 dr6, DWORD64 dr7, DWOR
     a2h_publish_install_hit(tid, dr6, dr7, rip);
 }
 
-void jsrf_a2h_test_post_continue(DWORD tid, unsigned status, int ok)
+void jsrf_a2h_test_continue(DWORD tid, unsigned status, int ok)
+{
+    (void)tid;
+    if (!dr_on()) return;
+    a2h_continue_record(status, ok);
+}
+
+/* The toolkit's install-witness publication, as the collector observes it in the archived registry.
+ * A fixture sets it so the STORE-EVIDENCE clause of `complete` is exercised rather than assumed. */
+void jsrf_a2h_test_store_evidence(unsigned install_ok, unsigned install_seen)
 {
     if (!dr_on()) return;
-    a2h_post_continue_readback(tid, status, ok);
+    dr_install_exec_seen = 1;
+    dr_install_ok_value = install_ok;
+    dr_install_seen_value = install_seen;
+}
+
+void jsrf_a2h_test_terminal_snapshot(void)
+{
+    if (!dr_on()) return;
+    a2h_terminal_snapshot();
+}
+
+/* ONE snapshot read, with the suspend flag supplied by the caller. The fixture passes suspended=0
+ * to prove the VOID rule is ENFORCED BY THE CODE: the call must refuse, count the attempt, and
+ * return 0 without reading a context. */
+int jsrf_a2h_test_term_read(DWORD tid, int suspended, unsigned *verdict)
+{
+    HANDLE handle;
+    DWORD64 dr0 = 0, dr7 = 0, dr6 = 0;
+    int ok;
+    if (!dr_on()) return 0;
+    handle = OpenThread(THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, tid);
+    if (!handle) return 0;
+    ok = a2h_term_read(handle, tid, 1, suspended, &dr0, &dr7, &dr6, verdict);
+    CloseHandle(handle);
+    return ok;
+}
+
+void jsrf_a2h_test_disarm_stamp(void)
+{
+    if (!dr_on()) return;
+    dr_disarmed_flag = 1;
 }
 
 void jsrf_a2h_test_delivery_terminal(void)
@@ -1483,9 +1825,95 @@ void jsrf_a2h_test_delivery_terminal(void)
 
 int jsrf_a2h_test_install_hit_latch(void) { return (int)dr_install_hit_latch; }
 
-/* ── C1/C3 DELIVERY FIXTURE ─────────────────────────────────────────────────────────────────────
+/* The fixture's arm target. In PRODUCTION the debugger is a separate process from the debuggee, so
+ * the terminal snapshot never sees its own thread. The fixture runs in-process, so it arms a WORKER
+ * thread and keeps it alive for the snapshot: that reproduces the production relationship (a target
+ * thread that is not the reader) instead of suspending the caller and deadlocking. */
+static volatile LONG a2h_fixture_worker_run;
+static HANDLE a2h_fixture_worker_handle;
+static DWORD a2h_fixture_worker_tid;
+static DWORD WINAPI a2h_fixture_worker(LPVOID unused)
+{
+    (void)unused;
+    while (InterlockedCompareExchange(&a2h_fixture_worker_run, 1, 1)) Sleep(1);
+    return 0;
+}
+
+static DWORD a2h_fixture_arm_worker(void)
+{
+    a2h_fixture_worker_run = 1;
+    a2h_fixture_worker_handle = CreateThread(NULL, 0, a2h_fixture_worker, NULL, CREATE_SUSPENDED,
+                                             &a2h_fixture_worker_tid);
+    if (!a2h_fixture_worker_handle) return 0;
+    /* Armed while SUSPENDED, which is the only point at which the watch is complete for the thread's
+     * whole life -- the same rule the CREATE_THREAD_DEBUG_EVENT path follows in production. */
+    if (!dr_arm_thread(a2h_fixture_worker_handle, a2h_fixture_worker_tid, "fixture", NULL)) {
+        InterlockedExchange(&a2h_fixture_worker_run, 0);
+        ResumeThread(a2h_fixture_worker_handle);
+        CloseHandle(a2h_fixture_worker_handle);
+        a2h_fixture_worker_handle = NULL;
+        return 0;
+    }
+    ResumeThread(a2h_fixture_worker_handle);
+    return a2h_fixture_worker_tid;
+}
+
+static void a2h_fixture_release_worker(void)
+{
+    if (!a2h_fixture_worker_handle) return;
+    InterlockedExchange(&a2h_fixture_worker_run, 0);
+    WaitForSingleObject(a2h_fixture_worker_handle, 2000);
+    CloseHandle(a2h_fixture_worker_handle);
+    a2h_fixture_worker_handle = NULL;
+}
+
+/* ── NATIVE #DB INGRESS FIXTURE ─────────────────────────────────────────────────────────────────
  *
- * WHY A FIXTURE MODE LIVES IN THE COLLECTOR. The packet requires the five delivery cases to be
+ * THE PACKET'S POSITIVE CONTROL, AND WHY IT MUST BE NATIVE. The delivery-completeness premise is
+ * "would this debugger's stream carry an install #DB if one occurred?". No injected, logged or
+ * software-compared imitation can answer that: a seam that calls a2h_raw_single_step() proves the
+ * counter works, not that the OS delivers #DB to WaitForDebugEvent. So this fixture does the real
+ * thing end to end:
+ *
+ *   CHILD   programs its OWN DR0/DR7 with a real SetThreadContext, raises the real handshake
+ *           exception so the debugger arms it while it is STOPPED, then performs a real store to the
+ *           watched address. That store must deliver a genuine EXCEPTION_SINGLE_STEP.
+ *   PARENT  is the actual debugger. It arms the child at the handshake, counts the #DB at the TOP of
+ *           its exception branch (native ingress, pre-filter), routes it, claims it from DR6.B0, and
+ *           publishes the write-once install-hit latch.
+ *
+ * The watch address is discovered the way production discovers it -- through the handshake, while the
+ * child is stopped -- rather than being fabricated by the parent. Reached only by an argv token that
+ * scripts/run-jsrf.py never passes. */
+static int a2h_native_db_child(void)
+{
+    /* THE CHILD DOES NOT PROGRAM ITS OWN DEBUG REGISTERS, and that is deliberate. The first version
+     * did, and the debugger's arm then correctly REFUSED the thread as a COLLISION -- its own
+     * collision guard saw a foreign DR7 and declined to clobber it, so the thread was never armed
+     * and no hit could be claimed. That is the guard working, not a bug in it.
+     *
+     * Production arms the thread and the guest performs the store. This fixture reproduces exactly
+     * that: the child publishes the address it will write, the DEBUGGER programs the watch while the
+     * child is stopped at the handshake, and only then does the child store. */
+    __try {
+        RaiseException(JSRF_A2H_DR_HANDSHAKE, 0, 1,
+                       (const ULONG_PTR[]){(ULONG_PTR)(uintptr_t)&a2h_native_db_target});
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        /* The debugger answered DBG_EXCEPTION_NOT_HANDLED, as it does in production; the toolkit's
+         * own VEH is what consumes it there. Here it is consumed locally. */
+    }
+    /* THE STORE UNDER THE WATCH. The debugger armed this thread at the handshake above, so if the
+     * watch works this store delivers a genuine native #DB to the debugger's WaitForDebugEvent. */
+    a2h_native_db_target = 0xFE000104u;
+    /* STAY ALIVE so the terminal snapshot can observe this thread still armed. Without this the
+     * process exits first and the snapshot legitimately reports the armed tids as missing. */
+    Sleep(30000);
+    return 0;
+}
+
+/* ── C1/C2 DELIVERY + TERMINAL-SNAPSHOT FIXTURE ─────────────────────────────────────────────────
+ *
+ * WHY A FIXTURE MODE LIVES IN THE COLLECTOR. The packet requires the delivery cases to be
  * fixture-tested, and requires that no row read an untested or lossy counter. The decision semantics
  * live in a2h_delivery_terminal(), so the only honest fixture is one that drives THAT function -- a
  * Python reimplementation of the decision would test the reimplementation, not the instrument.
@@ -1496,13 +1924,18 @@ int jsrf_a2h_test_install_hit_latch(void) { return (int)dr_install_hit_latch; }
  *
  * One case per process, on purpose: the install-hit latch is write-once and the counters accumulate,
  * so a single process could only ever publish one decision. Each case therefore gets a clean ledger,
- * which is also what makes the "absent hit" case a real zero rather than a leftover. */
+ * which is also what makes the "absent hit" case a real zero rather than a leftover.
+ *
+ * WHAT THE CASES NOW PROVE. The old set could not prove the property that matters most, because the
+ * old `complete` was structurally 0: there was no case in which NON_FIRING was REACHABLE. The
+ * "absent" case below drives the full gate to a complete observation and asserts NON_FIRING, which
+ * is the regression test for the defect being repaired. */
 static int a2h_delivery_fixture(const char *case_name)
 {
-    HANDLE self;
-    DWORD tid = GetCurrentThreadId();
+    DWORD tid;
     unsigned seq;
     unsigned i;
+    unsigned verdict = 0;
     int armed;
 
     if (!dr_on()) {
@@ -1518,10 +1951,18 @@ static int a2h_delivery_fixture(const char *case_name)
     process_id = GetCurrentProcessId();
     jsrf_a2h_test_geometry((DWORD64)(uintptr_t)&report);
 
-    /* Arm the CURRENT thread for real, so the far-side readback has a thread it is entitled to
-     * verify and the fixture exercises the same arm path the collector uses. */
-    self = OpenThread(THREAD_GET_CONTEXT | THREAD_SET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, tid);
-    armed = self ? dr_arm_thread(self, tid, "fixture", NULL) : 0;
+    /* Arm a WORKER thread for real, so the terminal snapshot has a target it is entitled to verify
+     * and the fixture exercises the same arm path the collector uses. It is a worker and not this
+     * thread because the snapshot must suspend what it reads, and a process cannot suspend its own
+     * calling thread without deadlocking. */
+    tid = a2h_fixture_arm_worker();
+    armed = tid ? 1 : 0;
+
+    /* THE STORE PREMISE. Every case that expects a DECIDABLE answer sets it, because `complete`
+     * requires store evidence: without a store there is no write for a watch to miss. The
+     * `store_absent` case is the one that deliberately does not, and it is the control for this
+     * clause. */
+    if (strcmp(case_name, "store_absent")) jsrf_a2h_test_store_evidence(1, 1);
 
     if (!strcmp(case_name, "hit")) {
         /* An install event WITH a hit: a raw first-chance single-step, claimed by the handler, and
@@ -1531,9 +1972,11 @@ static int a2h_delivery_fixture(const char *case_name)
         jsrf_a2h_test_raw_ss_route(seq, A2H_ROUTE_HANDLER);
         jsrf_a2h_test_publish_install_hit(tid, 0xF, A2H_DR7, dr_canonical);
     } else if (!strcmp(case_name, "absent")) {
-        /* An install event with an INTENTIONALLY ABSENT hit: the debug stream was demonstrably read
-         * (two events of other kinds) and no single-step ever arrived. This is the NON_FIRING world,
-         * and it is the case the Phase-1 finding claims the live run is in. */
+        /* THE NON_FIRING WORLD, and the regression test for the repaired gate. The debug stream was
+         * demonstrably read (two events of other kinds), the store executed, the watch was armed, the
+         * terminal snapshot verified it armed and suspended, and NO single-step ever arrived. Under
+         * the old gate this case was UNREACHABLE: the capacity-16 post-continue array set its
+         * overflow flag on any real run, so `complete` was structurally 0. */
         jsrf_a2h_test_raw_event();
         jsrf_a2h_test_raw_event();
     } else if (!strcmp(case_name, "second_chance")) {
@@ -1549,9 +1992,9 @@ static int a2h_delivery_fixture(const char *case_name)
         jsrf_a2h_test_raw_ss_route(seq, A2H_ROUTE_GENERIC_FIRST);
     } else if (!strcmp(case_name, "filtered")) {
         /* A raw event whose code is NOT a single-step, plus a real single-step: the non-single-step
-         * must be counted in the completeness denominator and in other_code_exceptions, and must
-         * NEVER inflate raw_single_step. That separation is what keeps the live ~14k-event run from
-         * turning a zero-single-step result into a false DELIVERED_UNCLAIMED. */
+         * must be counted in the completeness denominator and in other_code_exceptions, must NEVER
+         * inflate raw_single_step, and -- since the routing fix -- must not be routed either. The
+         * routes must reconcile with the single-step count, so the non-single-step returns seq 0. */
         jsrf_a2h_test_raw_event();
         seq = jsrf_a2h_test_raw_single_step(tid, EXCEPTION_BREAKPOINT, 1, dr_canonical);
         jsrf_a2h_test_raw_ss_route(seq, A2H_ROUTE_GENERIC_FIRST);
@@ -1576,39 +2019,69 @@ static int a2h_delivery_fixture(const char *case_name)
          * requirement, and it is the failure mode that would silently manufacture a negative. */
         ;
     } else if (!strcmp(case_name, "overflow")) {
-        /* PUBLICATION FAILURE by truncation: more single-steps than the bounded ledger can hold.
-         * The overflow flag is published, so the ledger is VISIBLY truncated and cannot be read as
-         * complete -- the same reason dr_arm_tid_overflow exists. */
+        /* PUBLICATION FAILURE by truncation: more single-steps than the bounded ROW SAMPLE can hold.
+         * The overflow flag is published, so the sample is VISIBLY truncated. Note what this case
+         * does NOT do any more: the uncapped counters stay exact, and the decision reads them, so
+         * this is reported as an incomplete SAMPLE rather than as an undecidable LEDGER. Under the
+         * old gate a sample overflow was a decision input, which is how `complete` became
+         * structurally 0. */
         jsrf_a2h_test_raw_event();
         for (i = 0; i < A2H_RAW_SS_CAPACITY + 8; i++) {
             seq = jsrf_a2h_test_raw_single_step(tid, EXCEPTION_SINGLE_STEP, 1, dr_canonical);
             jsrf_a2h_test_raw_ss_route(seq, A2H_ROUTE_HANDLER);
         }
+    } else if (!strcmp(case_name, "unsuspended")) {
+        /* THE VOID CASE. A snapshot read is attempted with suspended=0 -- the exact defect being
+         * repaired, where GetThreadContext measured a RUNNING thread. The read must be REFUSED and
+         * COUNTED, and the resulting snapshot must be void, so the decision can never be
+         * NON_FIRING on evidence from a running thread. */
+        jsrf_a2h_test_raw_event();
+        jsrf_a2h_test_term_read(tid, 0, &verdict);
+    } else if (!strcmp(case_name, "premature_disarm")) {
+        /* The snapshot ran AFTER the disarm. The reading describes a cleared process, so it is
+         * UNKNOWN and never evidence -- the packet's premature-disarm clause. */
+        jsrf_a2h_test_disarm_stamp();
+        jsrf_a2h_test_raw_event();
+    } else if (!strcmp(case_name, "store_absent")) {
+        /* NO STORE EVIDENCE: the debug stream was read and no single-step arrived, but the toolkit's
+         * install witness never published. There is no write for a watch to miss, so a zero cannot
+         * be read as NON_FIRING. This clause is why `absent` and `store_absent` are different
+         * cases. */
+        jsrf_a2h_test_raw_event();
+        jsrf_a2h_test_raw_event();
+    } else if (!strcmp(case_name, "unsuspended_live")) {
+        /* The VOID rule driven through the PRODUCTION snapshot path on this live process: the
+         * snapshot runs, but the unsuspended-read counter is forced non-zero first so the decision's
+         * void clause is exercised end to end. */
+        jsrf_a2h_test_raw_event();
+        jsrf_a2h_test_term_read(tid, 0, &verdict);
     } else {
         fprintf(report, "A2H_DELIVERY_FIXTURE unknown_case=%s\n", case_name);
         fflush(report);
-        if (self) CloseHandle(self);
+        a2h_fixture_release_worker();
         return 2;
     }
 
-    /* The far-side readback, exactly as the debug loop performs it after ContinueDebugEvent. */
-    jsrf_a2h_test_post_continue(tid, DBG_CONTINUE, 1);
+    /* The continuation record, exactly as the debug loop performs it after ContinueDebugEvent --
+     * with NO context read, which is the whole point of C1(3). */
+    jsrf_a2h_test_continue(tid, DBG_CONTINUE, 1);
+    /* THE TERMINAL SNAPSHOT, before any disarm. It suspends each target thread once, reads its DR
+     * state while suspended, compares against the armed set, and resumes. */
+    if (!strcmp(case_name, "store_absent")) {
+        /* This case needs the snapshot to NOT count as evidence, so it is deliberately not run:
+         * snapshot_evidence=0 makes `complete` 0 for a second, independent reason, and the expected
+         * decision is UNKNOWN either way. */
+        ;
+    } else {
+        jsrf_a2h_test_terminal_snapshot();
+    }
     jsrf_a2h_test_delivery_terminal();
     fprintf(report, "A2H_DELIVERY_FIXTURE case=%s armed=%d canonical=%016llX\n",
             case_name, armed, (unsigned long long)dr_canonical);
     fflush(report);
 
     /* Leave no residue: the fixture programmed real debug registers on a real thread. */
-    if (self) {
-        CONTEXT clear = {0};
-        clear.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-        if (GetThreadContext(self, &clear)) {
-            clear.Dr0 = clear.Dr1 = clear.Dr2 = clear.Dr3 = 0;
-            clear.Dr7 = 0;
-            SetThreadContext(self, &clear);
-        }
-        CloseHandle(self);
-    }
+    a2h_fixture_release_worker();
     return 0;
 }
 
@@ -1628,6 +2101,16 @@ int main(int argc, char **argv)
     DWORD exit_code = 0;
     const char *outcome = "collector_failure";
     int initial_break = 1, dump_ok = 0, finished = 0;
+    /* NATIVE #DB INGRESS FIXTURE, CHILD HALF. It must run BEFORE the argc check and before any
+     * collector setup: the child is debugged by a parent that is already waiting for its handshake,
+     * and it is launched with only this one token, so it never satisfies the collector's argv
+     * contract.
+     *
+     * ONLY argv[1] IS TESTED, and that is load-bearing. The child token is passed to the debugger as
+     * the CHILD'S command-line argument, so it also appears in the debugger's own argv -- scanning
+     * every argument made the debugger take the child path and never create a report at all. The
+     * child is launched with the token first and nothing else, so argv[1] identifies it exactly. */
+    if (argc > 1 && !strcmp(argv[1], "--a2h-native-db-child")) return a2h_native_db_child();
     if (argc < 4) { fprintf(stderr, "usage: jsrf_collect seconds output-dir executable [game-arg ...]\n"); return 2; }
     out_dir = argv[2];
     snprintf(path, sizeof(path), "%s\\stacks.txt", out_dir);
@@ -1643,6 +2126,20 @@ int main(int argc, char **argv)
             return code;
         }
     }
+    /* NATIVE #DB INGRESS FIXTURE, DEBUGGER HALF. Detected from the CHILD's command line, because that
+     * is where the token actually is: the debugger's own argv carries it only as the child's
+     * argument. This needs no second token and cannot be reached by scripts/run-jsrf.py, which never
+     * passes --a2h-native-db-child. */
+    for (int arg = 4; arg < argc; ++arg)
+        if (!strcmp(argv[arg], "--a2h-native-db-child")) a2h_native_db_fixture = 1;
+    /* PIN THE GEOMETRY FOR THIS FIXTURE, and this is load-bearing rather than cosmetic. This
+     * fixture's debuggee is the collector itself, which has no `g_xbox_mem_offset` symbol, so
+     * capture()'s resolve_geometry() would recompute dr_canonical as 0 -- silently zeroing the
+     * address the handshake established and making the post-loop guards skip the terminal snapshot,
+     * the disarm AND every terminal record. That is exactly the absent-record failure class this
+     * packet exists to close, so the fixture pins the geometry the same way the ctest arming fixture
+     * does. Production never sets this flag and its resolution is unchanged. */
+    if (a2h_native_db_fixture) dr_geometry_pinned = 1;
     command[0] = '\0';
     if (!jsrf_append_windows_arg(command, sizeof(command), &command_used, argv[3])) {
         fprintf(report, "Child command line exceeds the Windows command limit.\n");
@@ -1687,6 +2184,11 @@ int main(int argc, char **argv)
          * dispatch below. Without it a raw single-step count of 0 could not be told apart from a
          * debug stream that was never read. */
         if (dr_on()) dr_raw_event_total++;
+        /* NATIVE #DB FIXTURE: expose this event's parameters to the handshake, which uses them to
+         * point the watch at the child's real target. Cleared immediately after, so no other branch
+         * can observe a stale pointer. */
+        a2h_native_db_params = (event.dwDebugEventCode == EXCEPTION_DEBUG_EVENT)
+                               ? &event.u.Exception : NULL;
         if (event.dwDebugEventCode == CREATE_PROCESS_DEBUG_EVENT) {
             if (event.u.CreateProcessInfo.hFile) CloseHandle(event.u.CreateProcessInfo.hFile);
         } else if (event.dwDebugEventCode == CREATE_THREAD_DEBUG_EVENT) {
@@ -1712,13 +2214,13 @@ int main(int argc, char **argv)
              * could not tell a dropped event from one that never arrived. */
             if (dr_on()) {
                 dr_raw_exception_total++;
-                raw_seq = dr_seq + 1;
-                a2h_raw_single_step(event.dwThreadId, code, exception->dwFirstChance,
-                                    (DWORD64)(uintptr_t)exception->ExceptionRecord.ExceptionAddress);
+                raw_seq = a2h_raw_single_step(event.dwThreadId, code, exception->dwFirstChance,
+                                              (DWORD64)(uintptr_t)exception->ExceptionRecord.ExceptionAddress);
             }
             if (code == EXCEPTION_BREAKPOINT && initial_break) initial_break = 0;
             else if (code == EXCEPTION_BREAKPOINT && break_deadline) {
                 outcome = "diagnostic_deadline";
+                if (dr_on()) a2h_terminal_snapshot();   /* C2: terminal, before the dump and disarm */
                 dump_ok = capture(0, NULL);
                 exit_code = 3;
                 finished = 1;
@@ -1755,6 +2257,14 @@ int main(int argc, char **argv)
                 exit_code = code;
                 fprintf(report, "UNHANDLED tid=%lu exception=%08lX address=%p\n", event.dwThreadId,
                         code, exception->ExceptionRecord.ExceptionAddress);
+                /* C2: THE TERMINAL SNAPSHOT, TAKEN HERE, AT THE FATAL EXCEPTION AND BEFORE THE
+                 * DUMP AND THE DISARM. This is the packet's ordering: at/after the fatal exception,
+                 * before disarm/teardown, while the target still exists. It is taken BEFORE
+                 * capture() because the debuggee is alive and stopped right now, whereas the
+                 * post-loop position ran after CloseHandle(job) had already killed it -- which is
+                 * measured: suspend_failed=5 against open_ok=5, every read UNREADABLE. A snapshot
+                 * taken too late is not a snapshot of an armed process. */
+                if (dr_on()) a2h_terminal_snapshot();
                 dump_ok = capture(event.dwThreadId, exception);
                 finished = 1;
             } else {
@@ -1772,14 +2282,22 @@ int main(int argc, char **argv)
         }
         if (finished && strcmp(outcome, "normal_exit")) TerminateProcess(process, exit_code);
         continue_ok = ContinueDebugEvent(event.dwProcessId, event.dwThreadId, continuation);
-        /* C3: THE FAR-SIDE READBACK, immediately after the continue returns. This is the measurement
-         * that did not exist before: the arm's own readback is taken before this point, so a context
-         * that reverts ACROSS the continue was invisible to every previous check while producing
-         * exactly the observed signature of a watch that never fires. Gated, so with the gate off no
-         * thread is opened and no context is read. */
-        if (dr_on()) a2h_post_continue_readback(event.dwThreadId, continuation, continue_ok != 0);
+        /* C1(3): THE CONTINUATION RECORD. This replaces the deleted far-side readback, which fired
+         * here on EVERY continuation and read a RUNNING thread's context. Nothing is read now: the
+         * counters are uncapped, so 14 414 continuations are 14 414 counted continuations rather
+         * than an overflow flag, and they reconcile against the ledger instead of poisoning it. */
+        if (dr_on()) a2h_continue_record(continuation, continue_ok != 0);
+        a2h_native_db_params = NULL;
     }
     CloseHandle(job); /* also kills the child on collector failure */
+    /* C2 FALLBACK ONLY. The snapshot is normally taken at the terminal point inside the debug loop,
+     * while the target is alive. This call covers exit paths that never reached that point (a normal
+     * exit, or a loop that broke on an error), and a2h_terminal_snapshot() runs AT MOST ONCE, so it
+     * can never double-count. It still runs BEFORE the disarm: disarm zeroes every thread's DR7, so a
+     * snapshot taken after it would observe a disarmed process and could not distinguish an armed
+     * watch from a cleared one -- the packet makes a premature disarm UNKNOWN for exactly this
+     * reason. */
+    if (dr_on()) a2h_terminal_snapshot();
     if (dr_on()) dr_disarm_all();
     CloseHandle(process);
     fclose(report);

@@ -118,6 +118,41 @@ def check_dump(folder, mode):
             events = re.findall(r'kind=1 target=([0-9A-F]+)',block)
             assert len(events) == 127 and all(int(x,16)==expected for x in events), 'mixed thread histories'
 
+def snapshot_field(snapshot, name):
+    """Read one numeric field from a GUEST_DR_TERM_SNAPSHOT line."""
+    m = re.search(rf'(?:^|\s){name}=(\d+)(?:\s|$)', snapshot)
+    assert m, (name, snapshot)
+    return int(m.group(1))
+
+def assert_snapshot_verified(snapshot, expect_verified=True):
+    """The C2 invariants, asserted RELATIONALLY rather than against fixed thread counts.
+
+    Thread counts differ between the in-process fixture and a real run, so a literal
+    `suspend_ok=5` would be an environment assertion rather than a property assertion. These are the
+    properties the packet actually requires: every thread that was opened was suspended before it was
+    read, every suspension was released, nothing was read unsuspended, and the armed state was
+    verified rather than assumed.
+    """
+    seen = snapshot_field(snapshot, 'seen')
+    assert snapshot_field(snapshot,'open_ok') == seen, snapshot
+    assert snapshot_field(snapshot,'open_failed') == 0, snapshot
+    assert snapshot_field(snapshot,'suspend_ok') == seen, snapshot
+    assert snapshot_field(snapshot,'suspend_failed') == 0, snapshot
+    # A READ ONLY HAPPENS ON A SUSPENDED THREAD: contexts read == threads suspended.
+    assert snapshot_field(snapshot,'context_ok') == snapshot_field(snapshot,'suspend_ok'), snapshot
+    assert snapshot_field(snapshot,'context_failed') == 0, snapshot
+    # EVERY SUSPENSION WAS RELEASED: resumes == suspends, and none failed.
+    assert snapshot_field(snapshot,'resume_ok') == snapshot_field(snapshot,'suspend_ok'), snapshot
+    assert snapshot_field(snapshot,'resume_failed') == 0, snapshot
+    # THE VOID RULE: no unsuspended read was ever accepted.
+    assert snapshot_field(snapshot,'void_unsuspended') == 0, snapshot
+    assert snapshot_field(snapshot,'premature_disarm') == 0, snapshot
+    assert snapshot_field(snapshot,'changed_set') == 0, snapshot
+    assert snapshot_field(snapshot,'unreadable') == 0, snapshot
+    assert snapshot_field(snapshot,'armed_tids_missing') == 0, snapshot
+    if expect_verified:
+        assert snapshot_field(snapshot,'verified_armed') >= 1, snapshot
+
 def delivery_fixture(case, expect_decision, expect_cause, **fields):
     """Drive the collector's REAL delivery decision for one injected case.
 
@@ -128,8 +163,14 @@ def delivery_fixture(case, expect_decision, expect_cause, **fields):
 
     The point of the set is the packet's losslessness clause: a reader must be able to tell NON-FIRING
     from NOT-RECORDED. `absent` and `filtered_only` are the two shapes a live run can have when no
-    #DB arrives; `publication_failure` and `overflow` are the shapes that must NEVER be read as a
+    #DB arrives; `publication_failure` and `store_absent` are the shapes that must NEVER be read as a
     negative. No assertion below reads a counter that no case exercises.
+
+    REGRESSION NOTE (A2h-dr0-terminal-snapshot). The old gate computed
+        complete = (raw_events>0) && !ss_overflow && !post_continue_overflow
+    where the capacity-16 post-continue array overflowed on any real run -- so `complete` was
+    STRUCTURALLY 0 and NON_FIRING was unreachable by construction. `absent` asserts complete=1 AND
+    NON_FIRING, which is precisely what the old gate could never produce; it fails on the old code.
     """
     folder = Path(os.environ.get('TEMP') or '.')/f'a2h-delivery-{case}'
     folder.mkdir(parents=True, exist_ok=True)
@@ -143,8 +184,10 @@ def delivery_fixture(case, expect_decision, expect_cause, **fields):
     text = (folder/'stacks.txt').read_text(errors='replace')
     terminal = next((l for l in text.splitlines() if l.startswith('GUEST_DR_DELIVERY_TERMINAL ')), None)
     cause = next((l for l in text.splitlines() if l.startswith('GUEST_DR_CAUSE ')), None)
+    snapshot = next((l for l in text.splitlines() if l.startswith('GUEST_DR_TERM_SNAPSHOT ')), None)
     assert terminal, f'{case}: no terminal delivery record was published'
     assert cause, f'{case}: no cause record was published'
+    assert snapshot, f'{case}: no terminal snapshot record was published'
     assert f'decision={expect_decision} ' in terminal+' ', (case,terminal)
     assert f'cause={expect_cause} ' in cause+' ', (case,cause)
     for name,value in fields.items():
@@ -155,16 +198,22 @@ def delivery_fixture(case, expect_decision, expect_cause, **fields):
     if 'complete=0' in terminal:
         assert expect_cause == 'UNKNOWN_NOT_RECORDED' or expect_decision == 'HIT', (case,terminal)
     print(f'PASS delivery-{case}: {expect_decision}/{expect_cause}',flush=True)
-    return terminal
+    return terminal, cause, snapshot
 
 def delivery_fixtures():
-    """The five required cases plus the two loss modes that must never read as a negative."""
+    """The required cases plus the loss/void modes that must never read as a negative."""
     # 1. an install event WITH a hit -> the write-once latch, and a claimed single-step
-    delivery_fixture('hit','HIT','HIT_OBSERVED',install_hit='1',raw_single_step='1',
-                     ss_first_chance='1',ss_routed_handler='1',post_continue_ok='1')
-    # 2. an install event with an INTENTIONALLY ABSENT hit -> the NON-FIRING world
-    delivery_fixture('absent','NON_FIRING','NO_RAW_EVENT',install_hit='0',raw_single_step='0',
-                     complete='1',post_continue_ok='1',post_continue_reverted='0')
+    t,_,_ = delivery_fixture('hit','HIT','HIT_OBSERVED',install_hit='1',raw_single_step='1',
+                     ss_first_chance='1',ss_routed_handler='1',premise_proved='1')
+    # 2. an install event with an INTENTIONALLY ABSENT hit -> the NON-FIRING world.
+    #    THIS IS THE REGRESSION TEST FOR THE REPAIRED GATE: complete=1 and NON_FIRING together are
+    #    what the old capacity-16 overflow made UNREACHABLE.
+    t,_,s = delivery_fixture('absent','NON_FIRING','NO_RAW_EVENT',install_hit='0',raw_single_step='0',
+                     complete='1',continue_reconciled='1',ss_reconciled='1',
+                     store_evidence='1',arm_evidence='1',snapshot_evidence='1')
+    # ...and the snapshot that supports it must be genuinely suspended and verified, not assumed.
+    assert_snapshot_verified(s)
+    assert snapshot_field(s,'verified_armed') == 1, s   # exactly the one armed worker
     # 2b. the live run's actual shape: the stream WAS read (non-single-step exceptions counted) while
     #     no single-step ever arrived. This must still be NON_FIRING -- if unrelated exceptions were
     #     folded into raw_single_step it would read DELIVERED_UNCLAIMED and the Phase-1 answer would
@@ -180,9 +229,69 @@ def delivery_fixtures():
     # 5. publication failure -- nothing counted at all, so a zero carries NO information
     delivery_fixture('publication_failure','UNKNOWN_NOT_RECORDED','UNKNOWN_NOT_RECORDED',
                      raw_events='0',complete='0')
-    # 5b. publication failure by truncation -- the ledger overflowed and says so
-    delivery_fixture('overflow','UNKNOWN_NOT_RECORDED','UNKNOWN_NOT_RECORDED',ss_overflow='1',
-                     complete='0',ss_records='32')
+    # 5b. the bounded ROW SAMPLE overflowed and says so. The uncapped counters stay EXACT and the
+    #     decision reads THEM, so a truncated sample neither voids the ledger nor changes the verdict
+    #     -- the sample corroborates and never decides. Under the OLD gate a sample's capacity was a
+    #     decision input, which is exactly how `complete` became structurally 0.
+    delivery_fixture('overflow','DELIVERED_UNCLAIMED','DEBUGGER_SWALLOW',ss_overflow='1',
+                     ss_records='32',raw_single_step='40',complete='1')
+    # 6. NO STORE EVIDENCE -- the stream was read and nothing arrived, but the install witness never
+    #    published. There is no write for a watch to miss, so a zero can never be NON_FIRING.
+    delivery_fixture('store_absent','UNKNOWN_NOT_RECORDED','UNKNOWN_NOT_RECORDED',
+                     store_evidence='0',complete='0')
+    # 7. AN UNSUSPENDED READ IS VOID. A context read is attempted with suspended=0 -- the exact
+    #    defect being repaired, where GetThreadContext measured a RUNNING thread. The read must be
+    #    refused and counted, and the snapshot must be void so the decision cannot be NON_FIRING on
+    #    evidence from a running thread.
+    t,_,s = delivery_fixture('unsuspended','UNKNOWN_NOT_RECORDED','UNKNOWN_NOT_RECORDED',
+                     snapshot_evidence='0',complete='0')
+    assert 'void_unsuspended=1' in s, s
+    assert 'void_unsuspended=0' not in s, s
+    # 8. PREMATURE DISARM -- the snapshot ran after the disarm, so it describes a cleared process and
+    #    is UNKNOWN, never evidence.
+    delivery_fixture('premature_disarm','UNKNOWN_NOT_RECORDED','UNKNOWN_NOT_RECORDED',
+                     snapshot_evidence='0',complete='0')
+
+def native_db_fixture():
+    """POSITIVE CONTROL: a REAL, debugger-delivered native #DB, not an injected imitation.
+
+    The delivery-completeness premise is "would this debugger's stream carry an install #DB if one
+    occurred?". A seam that calls the counter proves the counter works, not that the OS delivers
+    #DB to WaitForDebugEvent -- so this launches the collector as the actual debugger of a child that
+    raises the real handshake, is armed by the debugger while stopped, and then performs a REAL store
+    to the watched address.
+
+    It asserts the three things that make the premise decidable:
+      * native ingress was COUNTED at the top of the exception branch (raw_single_step=1);
+      * the event was ROUTED to this instrument's handler (ss_routed_handler=1);
+      * DR6.B0 -- this instrument's own watch bit -- was set and CLAIMED (GUEST_DR_INSTALL_HIT).
+    """
+    folder = Path(os.environ.get('TEMP') or '.')/'a2h-native-db'
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder/'stacks.txt').unlink(missing_ok=True)
+    env = dict(os.environ, JSRF_TRACE_A2H_DR='1')
+    command = [str(BUILD/'Release/jsrf_collect.exe'), '6', str(folder),
+               str(BUILD/'Release/jsrf_collect.exe'), '--a2h-native-db-child']
+    completed = subprocess.run(command,cwd=ROOT,capture_output=True,text=True,timeout=120,env=env)
+    text = (folder/'stacks.txt').read_text(errors='replace')
+    hit = next((l for l in text.splitlines() if l.startswith('GUEST_DR_INSTALL_HIT ')), None)
+    terminal = next((l for l in text.splitlines() if l.startswith('GUEST_DR_DELIVERY_TERMINAL ')), None)
+    snapshot = next((l for l in text.splitlines() if l.startswith('GUEST_DR_TERM_SNAPSHOT ')), None)
+    assert terminal, 'native-db: no terminal delivery record'
+    assert snapshot, 'native-db: no terminal snapshot record'
+    # THE PREMISE, PROVED BY A NATIVE DELIVERY: a real #DB arrived at the debugger and was claimed.
+    assert hit, f'native-db: NO native #DB was delivered/claimed\n{text[-2000:]}'
+    assert 'dr6=00000000FFFF0FF1' in hit, hit
+    assert 'raw_single_step=1' in terminal, terminal
+    assert 'ss_routed_handler=1' in terminal, terminal
+    assert 'native_ingress=1' in terminal, terminal
+    assert 'delivery_premise=PROVED' in terminal, terminal
+    assert 'premise_proved=1' in terminal, terminal
+    # THE TERMINAL SNAPSHOT must have SUSPENDED before reading and resumed after, and must have
+    # verified the armed state -- this is the C2 property the repair exists to establish.
+    assert_snapshot_verified(snapshot)
+    print('PASS native-db: real debugger-delivered #DB claimed; premise PROVED; '
+          'snapshot suspended/read/compared/resumed',flush=True)
 
 def run(mode, repetition=0):
     expected_checkpoint = 'probe_gpu' if mode.startswith('gpu-') else 'probe_video' if mode=='video' else 'probe_events' if mode=='healthy' else 'probe_handled' if mode=='handled' else 'probe_dispatch' if mode=='dispatch-race' else 'probe_started'
@@ -212,8 +321,14 @@ if __name__=='__main__':
     # here means the delivery decision itself is unsound -- which would make every later observation
     # uninterpretable.
     delivery_fixtures()
+    # The positive control runs with them: it proves a NATIVE #DB reaches this debugger's stream, so
+    # a zero count can be told apart from a channel that never delivers.
+    native_db_fixture()
     for i in range(3): folders.append(run('healthy',i))
     for mode in ('dispatch-race','handled','worker-crash','deadlock','spin','video','gpu-mmio-owner','gpu-mmio-lifecycle','gpu-ptimer-runtime','gpu-submit-supported','gpu-submit-bound','gpu-submit-blocked','gpu-progress','gpu-stall','gpu-corrupt','gpu-unreadable'): folders.append(run(mode))
     (ROOT/'logs/harness-test-results.json').write_text(json.dumps({'passed':True,'runs':folders},indent=2))
     print('PASS: 19 harness probes; trapped USER submission, MMIO ownership/lifecycle, PTIMER runtime, thread capture, GPU history/decoding, missing memory and stalled queues verified')
-    print('PASS: 7 A2h delivery fixtures; NON-FIRING distinguished from NOT-RECORDED, first/second chance, swallow and publication failure verified')
+    print('PASS: 9 A2h delivery fixtures; NON_FIRING REACHABLE on a complete observation, unsuspended read VOID, '
+          'premature disarm and missing store UNKNOWN, first/second chance, swallow and loss verified')
+    print('PASS: 1 native #DB positive control; real debugger-delivered #DB claimed, delivery premise PROVED, '
+          'terminal snapshot suspend/read/compare/resume verified')
