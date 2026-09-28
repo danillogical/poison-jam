@@ -143,7 +143,18 @@ or two independent secondary sources of different provenance with at least one X
 satisfied:**
 
 - **No primary specification was found.** The 2001 NVIDIA nForce MCP technical brief is linked from the wiki
-  but is a marketing-level document; **no register-level `PIO_FREE` semantics were located**.
+  but **now returns HTTP 404** — no register-level `PIO_FREE` semantics were located.
+- **A first-party source was checked and is also silent.** The wiki's own citation for the 256-voice figure
+  is Brian Schmidt's *"Designing the Boot Sound for the Original Xbox"* (Gamasutra, 2011-11-17; archived
+  2019-01-23), whose author is described as *"the architect for the Xbox and Xbox 360 audio systems and
+  created the Xbox startup sound"* — i.e. **first-party**. It describes the MCPX as *"quite full featured …
+  256 channels of sound with programmable filters on each voice as well as a 6-stage envelope"*, and
+  discusses the sequencer, patches, filters and envelopes in detail. **It says nothing about `PIO_FREE`, a
+  free-space register, or a command queue.** **A first-party account of the device that omits the register
+  is further evidence the semantics are not publicly documented** — though silence is still not a contrary
+  finding.
+- **Related wiki pages were also checked and are silent:** `MCPX` (1 684 bytes) and `DSP` (9 655 bytes)
+  each contain **zero** occurrences of `PIO_FREE` and **zero** of `queue`.
 - **Only one admissible secondary source exists, and it is silent.** Silence is **not** a contrary finding —
   it simply leaves the leaves uncovered.
 
