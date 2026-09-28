@@ -100,7 +100,38 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-arming-coverage-repeat-r1` (**delta**: one bounded r2 yield repeat) — **PROMOTED 2026-09-28, `ADEQUATE`**
+## CURRENT PACKET — `A2h-arming-coverage-repeat-r1` **EXECUTED (5 ON) → `O-READ-PATH`**, **K = 3, agreement complete**; stage-1 acceptance pending
+
+- **Packet:** `docs/packets/a2h-arming-coverage-repeat.md`, **15 lines**, frozen
+  **`4AC455E7F427ABCD9AEB6A81FA34B2A570A826964A6FB76EC3478ADA4B1174A1`** — **not edited**.
+- **Identity verified BEFORE any ON run:** `jsrf_recomp.exe`, `jsrf_collect.exe` and `default.xbe` all hash
+  **byte-identically** to the pinned values, and source deltas since `d369880`/`571982d` are **empty** for
+  `src/`, `tools/`, `CMakeLists.txt`. **So the OFF control CARRIED and no fresh OFF was taken.**
+- **Five ON runs.** **Run 1 is `diagnostic_deadline` (exit 3), NOT ANCHORED** — capture bounded before any
+  fatal terminal, so it never reached the OOM. **Excluded as not a realization, not scored a NON-TARGET.**
+  **Runs 2 and 5 are TARGETs** (`0x00000000@0014982E`); runs 3 and 4 NON-TARGET (`0x00147D36`, `0x00147DBC`).
+  **All anchored runs coverage-complete:** 17/17 arms, overflow 0, census 28/28 zero touches, install control
+  positive, zero DR hits.
+- **`K = 3`** — the pinned r2 run 2 supplies K=1 (Advisor K-scope ruling (i)) plus two new coverage-complete
+  TARGETs. **K ≥ 2 MET for the first time in this line.**
+- **ROW `O-READ-PATH` → `A2h-terminal-read-path-audit`, narrowly** — Planner ruling
+  `docs/reviews/a2h-repeat-row-interpretation.md` (`1b0a7b8`). **A COVERAGE claim, not a no-write claim:**
+  the terminal zero is **consistent with a discrepancy warranting audit** under complete certified coverage
+  **within which no zero-write was OBSERVED**. **Does NOT assert the slot was never written, does not name a
+  writer, does not prove a read-path fault or miscompile. Writer `UNKNOWN`, mechanism `UNKNOWN`.**
+- **The Session escalated rather than deciding, and the Planner's decisive point was one the Session had
+  missed:** *"Requiring a terminal-gap DR hit to select the expressly no-zero-write-observed audit row makes
+  that row unreachable in its intended case."* **Leg 3 is CONDITIONAL post-hit reconciliation — a post-hit
+  read is required only if a hit occurs.**
+- **DURABLE WORDING REQUIREMENT for future packets:** state that *"no-zero-write"* means **no zero-write
+  OBSERVED WITHIN POSITIVELY CERTIFIED COVERAGE**, and that **post-hit reconciliation is conditional on a
+  hit.** The Session was the **second** reader to conflate the row predicate with its gate.
+- **GENERAL LESSON:** *a positive demonstration that observation channels were continuously available makes
+  "nothing observed on certified channels" NARROWER than "nothing happened."*
+
+**Next:** stage-1 acceptance of this packet, then the `0x001D5078` pivot decision (queued, not concurrent).
+
+**Toolkit:** `571982d` (pushed). **Game:** `6cc67a2`.
 
 - **Packet:** `docs/packets/a2h-arming-coverage-repeat.md`, **15 lines**, **5552 bytes**, frozen
   **`4AC455E7F427ABCD9AEB6A81FA34B2A570A826964A6FB76EC3478ADA4B1174A1`** — **this is the packet to execute.**
