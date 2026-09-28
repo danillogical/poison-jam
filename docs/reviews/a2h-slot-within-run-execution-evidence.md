@@ -46,7 +46,9 @@ K ≥ 2 requirement.** Coverage-disqualified targets: **0**.
 
 ## The row: **`O-COVERAGE`** → `A2h-slot-write-coverage-provenance`
 
-**The all-thread-arming leg FAILS, and the packet makes that fail closed.** Every run reports:
+**The all-thread-arming leg FAILS, and the packet makes that fail closed.** Every run reports (these lines
+live in **`stacks.txt`, not `jsrf_run.log`** — there are **zero** `GUEST_DR` lines in any of the five logs,
+stated per acceptance finding C4):
 
 ```
 GUEST_DR_ARM why=handshake ok=0 armed=10 failed=9 collision=0 canonical=00000000001D4064 aliases=28
@@ -121,11 +123,26 @@ unchanged — **the memory genuinely changed.** *(The Session could not cross-ch
 from other threads: the run terminates immediately after, so there are none. Recorded as a limit, not
 papered over.)*
 
+**The acceptance reviewer SHARPENED the bracket, and it is tighter than this record first stated.** The two
+`value=00000000` samples are **not** the record's endpoints: call `#246`'s **`phase=before` already read
+`00000000`**, so the record's `before=FE000104` is the sampler's **previous** read — call `#245`'s
+`phase=after`. **The write is therefore bracketed strictly BETWEEN `#245`'s after-sample and `#246`'s
+before-sample — i.e. OUTSIDE any bridge body for `#246`**, not merely "within one bridge call" as this record
+originally said. **That is a materially tighter constraint on where the write happened, and the reviewer's
+reading is the correct one.**
+
+**The reviewer also independently corroborated the witness from the frozen registry**, which this record had
+not done: run 5's `classes[4]` reads `valid=1 class_id=4 tid=66468 call_index=246 ordinal=224
+before=0xFE000104 after=0x00000000 count=1 class_witness_count=1`, while **runs 1–4 record 0**. **So the
+witness survives in the archived decision record, not only in a log line** — which is the §6.1.6 standard
+this line has been held to throughout.
+
 ### 4. The deduction the three measurements support together
 
 **No alias touch** (census complete, 28/28) **+ no canonical write by the armed faulting thread** (DR0 armed,
 zero hits) **+ the slot demonstrably reached zero** ⇒ **the zero was written through the CANONICAL address by
-one of the NINE UNARMED threads.**
+one of the threads the instrument did NOT arm — the nine failed attempts AND the never-attempted guest
+threads** (corrected per acceptance finding C2; see below).
 
 **That is a bounded, evidence-backed narrowing — and it is precisely the region the coverage gap leaves
 open.** It is **not** an attribution: **no writer is named, no site is named, and the row stays
@@ -180,9 +197,9 @@ attempted at all**, yet **each dispatched guest code.**
 guest threads that ran guest code. **This is not "9 of 10 arms failed" — it is "4 of 5 guest threads were
 never even attempted."**
 
-**Run 5 shows the same shape:** the one armed thread (`66428`, guest identity 4) plus **four guest threads
-never attempted** (`59716`, `62152`, `63812`, `66468`), and **`66468` is the thread that witnessed the
-transition and then faulted.**
+**Run 5 shows the same shape:** the one armed thread (`66428`, **guest identity 1** — corrected, see below)
+plus **four guest threads never attempted** (`59716`, `62152`, `63812`, `66468`), and **`66468` — guest
+identity 4 — is the thread that witnessed the transition and then faulted.**
 
 **Why the earlier characterisation was incomplete, and why that matters:** `GUEST_DR_ARM … armed=10 failed=9`
 reads as a 90% failure rate over a ten-thread population. **It is actually a 100% miss over the guest-thread
@@ -194,6 +211,57 @@ this project keeps meeting, and worth recording as such.
 mapping offset is known to exist — the collector must **enumerate every live thread in the target and arm
 each**, rather than arming only the handshaking thread. **The fail-closed half is already correct** (`ok=0`,
 named failures, archived tid list); **only the enumeration is missing.**
+
+---
+
+# Corrections applied after stage-1 acceptance — **`ACCEPT-WITH-CORRECTIONS`, `BLOCKING: NONE`**
+
+**Reviewer:** `a25dafb3-52c9-4d2d-86e1-cfe4dd8f1d1f`, review
+`docs/reviews/a2h-slot-within-run-acceptance-review.md`. **No acceptance criterion was falsified**; all four
+findings were **defects in this record's prose**, not in the execution. **The Session verified each and
+applied all four.**
+
+**C1 — a factual mislabel, corrected.** This record said run 5's armed thread was *"`66428`, guest identity
+4."* **Verified: `66428` is guest identity 1** (start `0x00148023`, the main thread) and **`66468` is
+identity 4.** The argument is unaffected — *the armed thread is not the witnessing thread* — **but the label
+was wrong and is now corrected above.**
+
+**C2 — an imprecise writer set, corrected.** §4 said the zero came from *"one of the nine unarmed threads."*
+**The nine are the nine failed `create_thread` attempts**, whereas the witnessing thread `66468` **was never
+attempted at all** (it is absent from `GUEST_DR_ARM_TID`). **The correct phrasing is "one of the threads the
+instrument did not arm — the nine failed attempts AND the never-attempted guest threads."** **This is the
+more important correction of the two**, because it is precisely the distinction the section above establishes.
+
+**C3 — the guest-thread census was incomplete, and the gap is BIGGER than recorded.** This record counted
+*"4 of 5 guest threads never attempted"* for run 1, taking the frozen registry's five threads as the
+population. **Verified: there is a SIXTH guest-dispatching thread, `tid 57376`**, which reaches
+`[KERNEL] #286`, appears **1149 times** in `stacks.txt`, and was **never armed**. **So the true statement is
+at least 5 of at least 6 guest-dispatching threads never attempted** — **which strengthens this record's
+point rather than weakening it.**
+
+**And `57376` carries something this record had not examined: 1148 first-chance `0xC0000005` access
+violations.** **Disclosed as unexamined contrastive data.** It does not change the row — `O-COVERAGE` either
+way — but **a thread raising ~1148 access violations is a fact a successor should not have to rediscover**,
+and this record should have surfaced it.
+
+**C4 — provenance of the quoted DR lines, now stated.** The `GUEST_DR_ARM` / `GUEST_DR_ARM_FAIL` /
+`GUEST_DR_HIT` lines live in **`stacks.txt`, not `jsrf_run.log`** — there are **zero** `GUEST_DR` lines in any
+of the five logs. **Stated so a reader checking the log alone does not wrongly conclude the claim is
+unsupported.**
+
+## What the reviewer could NOT verify — recorded, not glossed
+
+- **The read-path leg:** it could not exclude that `BRIDGE_MEM32(0x001C4064)` and the guest's own read resolve
+  to different host storage. **The row is `O-COVERAGE` regardless**, so this does not move the verdict.
+- **The OFF-control identity claim:** it verified the five ON runs share one exe SHA but **did not compare it
+  against the archived Run-1 OFF exe SHA.** **The Session did make that comparison** before the runs
+  (`A7E324642A41DF3F…ACDEAD9`, byte-identical, recorded in
+  `docs/reviews/a2h-slot-within-run-r1-session-validation.md`), **so the claim holds — but the reviewer is
+  right that its own review did not independently establish it, and that is stated here rather than papered
+  over.**
+- **`PIO_FREE` / `A4b2-*` / `0xFFFFB3` status** was taken from this record's assertion rather than re-derived.
+- **No `check-dump-mapping.py` gate was run**; no claim here rests on XBE-backed dump content beyond the
+  registry extraction, which the reviewer **did** re-derive.
 
 ---
 
