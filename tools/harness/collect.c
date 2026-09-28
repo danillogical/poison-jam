@@ -69,7 +69,7 @@ static void capture_guest_threads(void);
  * and SIZE fields are checked before any field is read: a struct that changed without the version
  * moving is reported as unavailable rather than silently misread. */
 #define A2H_SLOTW_MAGIC          0x57533241u   /* 'A2SW' */
-#define A2H_SLOTW_VERSION        3u             /* must equal XBOX_A2H_SLOTW_VERSION in the toolkit */
+#define A2H_SLOTW_VERSION        4u             /* must equal XBOX_A2H_SLOTW_VERSION in the toolkit */
 #define A2H_SLOTW_PAGES_MAX      (1 + XBOX_NUM_MIRRORS_COLLECTOR)
 #define XBOX_NUM_MIRRORS_COLLECTOR 28
 /* ⚠ 1024, NOT 256, AND THE CAPACITY IS NOT THE REPAIR. The repair is that non-slot page writes are
@@ -79,14 +79,40 @@ static void capture_guest_threads(void);
 #define A2H_SLOTW_EVENTS_MAX     1024
 #define A2H_SLOTW_FIRST_TOUCH_MAX 512
 #define A2H_SLOTW_EV_KIND_WRITE  1u
+/* The ledger's archive copy of the recompiled-start set. Must equal XBOX_A2H_SLOTW_RECOMP_ARCHIVE.
+ * The CLASSIFIER's set is larger and lives in the toolkit; this is the bounded copy the archive
+ * carries so a reader can re-classify the recorded RIPs by hand. */
+#define A2H_SLOTW_RECOMP_ARCHIVE 512
+
+/* ── THE RANGE CLASSES AND THE COHERENCE VERDICTS, MIRRORED FROM THE TOOLKIT ────────────────────
+ *
+ * ⚠ THE `enc` FIELD IS GONE, AND ITS ABSENCE IS THE FIX. The toolkit used to classify the NATIVE
+ * bytes at a faulting RIP against GUEST ENCODINGS, which can never match in recompiled code; every
+ * `enc` this report ever carried was therefore UNSOUND, and the collector no longer has a field to
+ * print one into. What replaces it is the RIP's RANGE class, which is a statement about which module
+ * the address is in and is checkable against the bounds the same report prints.
+ *
+ * These MUST stay equal to XBOX_A2H_SLOTW_RANGE_* / XBOX_A2H_SLOTW_COH_* in xbox_memory_layout.h.
+ * The struct mirror is validated by `magic` + `size` + `version` at read time, so a drift here is
+ * caught at RUN time rather than being silently misread. */
+#define A2H_SLOTW_RANGE_UNKNOWN      0u
+#define A2H_SLOTW_RANGE_GAME_MODULE  1u
+#define A2H_SLOTW_RANGE_TOOLKIT_HOST 2u
+
+#define A2H_SLOTW_COH_NOT_COMPARABLE 0u
+#define A2H_SLOTW_COH_COHERENT       1u
+#define A2H_SLOTW_COH_MISMATCH       2u
+#define A2H_SLOTW_COH_NO_TERMINAL    3u
 
 typedef struct {
-    uint32_t seq, kind, alias_index, slot_hit, fault_va, pre_value, post_value, tid, enc, reserved;
+    uint32_t seq, kind, alias_index, slot_hit, fault_va, pre_value, post_value, tid;
+    uint32_t range_class, form;
     uint64_t rip, ticks;
 } XboxA2hSlotwEvent;
 
 typedef struct {
-    uint32_t valid, offset, alias_index, tid, pre_value, slot_value_at_touch, enc, reserved;
+    uint32_t valid, offset, alias_index, tid, pre_value, slot_value_at_touch;
+    uint32_t range_class, form;
     uint64_t rip, ticks;
 } XboxA2hSlotwFirstTouch;
 
@@ -98,16 +124,30 @@ typedef struct {
     uint64_t read_samples, installer_control_hits, nonslot_distinct, first_touch_overflow;
     uint64_t first_touch_dropped, cross_checks, cross_mismatch, cross_skipped;
     uint64_t overflow, base_changed;
+    /* THE RANGE CLASSIFIER'S OWN ACCOUNTING. All three are printed together so "0 unknown" is never
+     * confused with "the classifier never ran". `range_unknown` non-zero is INFRA FAILURE. */
+    uint64_t range_game, range_host, range_unknown, range_unavailable;
+    uint64_t form_store, form_not_store, form_undecoded;
+    uint64_t coherence_mismatch;
 } XboxA2hSlotwLoss;
 
 typedef struct {
     uint32_t magic, version, size, armed, arm_base, term_base, arm_slot, term_slot;
     uint32_t slot_stable, page_offset, mapped_mask, protect_mask, alias_count, protected_count;
     uint32_t event_count, event_overflow, thread_count, thread_overflow, terminal_seen;
-    uint32_t terminal_target, arm_reason, term_base_ok, reserved;
+    uint32_t terminal_target, arm_reason;
+    uint32_t recomp_bound_valid, recomp_bound_probes;
+    uint32_t recomp_start_count, recomp_start_overflow;
+    uint64_t recomp_lo, recomp_hi, image_lo, image_hi;
+    uint64_t recomp_starts[A2H_SLOTW_RECOMP_ARCHIVE];
+    uint32_t coherence_verdict, coherence_last_write_value, coherence_last_write_seq;
+    uint32_t coherence_terminal_value;
+    uint64_t window_open_ticks_last, window_close_ticks_last, window_open_count;
+    uint32_t window_open, reserved0;
+    uint32_t term_base_ok, reserved;
     uint64_t arm_ticks, terminal_ticks;
     uint32_t read_count, fourth_reached, fourth_value, fourth_seq;
-    uint32_t last_write_seq, last_write_enc, last_write_alias, last_write_value;
+    uint32_t last_write_seq, last_write_range, last_write_alias, last_write_value;
     uint64_t last_write_rip, last_write_ticks;
     uint32_t cross_checks, cross_mismatch, first_touch_count, first_touch_overflow;
     uint32_t last_slot_read_value, last_slot_read_seq, last_slot_read_hits, last_slot_read_alias;
@@ -132,12 +172,12 @@ typedef struct {
  * construction, whatever the assert does -- and the toolkit's own fixture prints the authoritative
  * number (14680) so the comparison is checkable from the archive too. Both numbers move together
  * with XBOX_A2H_SLOTW_VERSION. */
-_Static_assert(sizeof(XboxA2hSlotwLedger) == 82360u,
-               "XboxA2hSlotwLedger mirror does not match xbox_memory_layout.h -- "
-               "update this pin and XBOX_A2H_SLOTW_VERSION together");
 _Static_assert(sizeof(XboxA2hSlotwEvent) == 56u, "XboxA2hSlotwEvent mirror drifted");
 _Static_assert(sizeof(XboxA2hSlotwFirstTouch) == 48u, "XboxA2hSlotwFirstTouch mirror drifted");
-_Static_assert(sizeof(XboxA2hSlotwLoss) == 232u, "XboxA2hSlotwLoss mirror drifted");
+_Static_assert(sizeof(XboxA2hSlotwLoss) == 296u, "XboxA2hSlotwLoss mirror drifted");
+_Static_assert(sizeof(XboxA2hSlotwLedger) == 86616u,
+               "XboxA2hSlotwLedger mirror does not match xbox_memory_layout.h -- "
+               "update this pin and XBOX_A2H_SLOTW_VERSION together");
 /* DR7 = L0 (enable DR0) | RW0 = 01 (write only) | LEN0 = 11 (4 bytes). LE/GE stay CLEAR so the
  * processor reports the data breakpoint AFTER the storing instruction, which is the ordering the
  * writer attribution assumes. */
@@ -1846,6 +1886,79 @@ static void capture_guest_threads(void)
                     (unsigned long long)sw->loss.base_changed,
                     (unsigned long long)sw->loss.nonslot_distinct,
                     (unsigned long long)sw->loss.first_touch_dropped);
+            /* ── THE RANGE CLASSIFIER'S INPUTS AND ITS VERDICTS, ON THEIR OWN LINES ──────────────
+             *
+             * ⚠ THIS REPLACES THE `enc` REPORTING ENTIRELY, AND THAT IS THE POINT. Every encoding
+             * classification this line ever recorded from a fault RIP was UNSOUND -- the toolkit
+             * tested NATIVE bytes against GUEST encodings, which cannot match in recompiled code --
+             * so there is no field to print and none may be added back.
+             *
+             * The BOUNDS are printed WITH the counts so a reader can check every classification
+             * against the ranges it was made with, rather than trusting the count. `recomp_valid=0`
+             * means the embedder never published a recompiled bound: the classifier then REFUSES to
+             * classify, every RIP lands in `range_unknown`/`range_unavailable`, and that is INFRA
+             * FAILURE rather than a run to interpret. */
+            fprintf(report, "GUEST_SLOTW_RANGE recomp_lo=%016llX recomp_hi=%016llX recomp_valid=%u "
+                            "recomp_probes=%u recomp_start_count=%u recomp_start_overflow=%u "
+                            "image_lo=%016llX image_hi=%016llX "
+                            "game=%llu host=%llu unknown=%llu unavailable=%llu "
+                            "form_store=%llu form_not_store=%llu form_undecoded=%llu\n",
+                    (unsigned long long)sw->recomp_lo, (unsigned long long)sw->recomp_hi,
+                    sw->recomp_bound_valid, sw->recomp_bound_probes,
+                    sw->recomp_start_count, sw->recomp_start_overflow,
+                    (unsigned long long)sw->image_lo, (unsigned long long)sw->image_hi,
+                    (unsigned long long)sw->loss.range_game,
+                    (unsigned long long)sw->loss.range_host,
+                    (unsigned long long)sw->loss.range_unknown,
+                    (unsigned long long)sw->loss.range_unavailable,
+                    (unsigned long long)sw->loss.form_store,
+                    (unsigned long long)sw->loss.form_not_store,
+                    (unsigned long long)sw->loss.form_undecoded);
+            /* ⚠ THE CLASSIFIER'S ACTUAL INPUT, SO A READER CAN RE-CLASSIFY BY HAND. The recompiled
+             * test is membership of this SET of function starts, not one interval: the game's own
+             * probe objects are linked into the MIDDLE of the extent, so an interval would call 14
+             * host functions "recompiled code" -- including `probe_worker_fault` and
+             * `jsrf_probe_gpu`, which run and touch memory. Printing the set is what makes every
+             * `range=` value in this report checkable instead of merely asserted. It is a bounded
+             * copy: `recomp_start_count` says how many there really were, so a reader sees the
+             * truncation as a number rather than mistaking the copy for the whole set. */
+            {
+                uint32_t s, shown = sw->recomp_start_count;
+                if (shown > A2H_SLOTW_RECOMP_ARCHIVE) shown = A2H_SLOTW_RECOMP_ARCHIVE;
+                fprintf(report, "GUEST_SLOTW_RECOMP_STARTS count=%u shown=%u\n",
+                        sw->recomp_start_count, shown);
+                for (s = 0; s < shown; s++)
+                    fprintf(report, "GUEST_SLOTW_RECOMP_START index=%u native=%016llX\n",
+                            s, (unsigned long long)sw->recomp_starts[s]);
+            }
+            /* THE TERMINAL-VALUE COHERENCE GATE. BOTH OPERANDS ARE PRINTED, so a reader sees the
+             * comparison rather than being told its result. `verdict=2` is a MISMATCH and it means
+             * UNKNOWN -- and it is the GATE WORKING, not a defect. ON-3's own numbers are the worked
+             * example: last-recorded 0x0015F9D0 against terminal 0x001D5078. `verdict=1` (coherent)
+             * removes the mismatch objection from a RECORDED positive and NOTHING MORE: it is not an
+             * absence proof, because a same-value racing write inside a window would be invisible. */
+            fprintf(report, "GUEST_SLOTW_COHERENCE verdict=%u last_write=%08X last_write_seq=%u "
+                            "terminal=%08X mismatch=%llu note=%s\n",
+                    sw->coherence_verdict, sw->coherence_last_write_value,
+                    sw->coherence_last_write_seq, sw->coherence_terminal_value,
+                    (unsigned long long)sw->loss.coherence_mismatch,
+                    sw->coherence_verdict == A2H_SLOTW_COH_MISMATCH
+                        ? "MISMATCH_=>_UNKNOWN_the_gate_working_never_a_claim"
+                        : (sw->coherence_verdict == A2H_SLOTW_COH_COHERENT
+                               ? "coherent_removes_mismatch_objection_from_a_RECORDED_positive_only"
+                               : "not_comparable_no_recorded_slot_write"));
+            /* ⚠ THE OPEN WINDOWS, STATED RATHER THAN HIDDEN. `VirtualProtect` is PAGE-GRANULAR and
+             * the slot is at offset 0x62C of its page, so opening the page to step a NON-SLOT write
+             * also makes the SLOT writable for that one instruction. The leave-RW narrowing is NOT
+             * implemented (it would blind the instrument after the first traffic write), so every
+             * write is stepped and the page re-armed immediately. These counters and ticks are what
+             * let a reader see how much unprotected time the run contained. */
+            fprintf(report, "GUEST_SLOTW_WINDOW open_count=%llu unprotected_intervals=%llu "
+                            "open_now=%u last_open_tick=%llu last_close_tick=%llu\n",
+                    (unsigned long long)sw->window_open_count,
+                    (unsigned long long)sw->loss.unprotected_intervals, sw->window_open,
+                    (unsigned long long)sw->window_open_ticks_last,
+                    (unsigned long long)sw->window_close_ticks_last);
             /* ── Q3(c): THE CROSS-VALIDATION, REPORTED AS A DENOMINATOR AND A MISMATCH COUNT ────
              *
              * "0 mismatches" is only meaningful next to how many pairs were compared, so both are
@@ -1876,10 +1989,10 @@ static void capture_guest_threads(void)
                 const XboxA2hSlotwFirstTouch *ft = &sw->first_touch[f];
                 if (!ft->valid) continue;
                 fprintf(report, "GUEST_SLOTW_TOUCH index=%u off=%03X alias=%u tid=%u pre=%08X "
-                                "slot=%08X enc=%u rip=%016llX ticks=%llu\n",
+                                "slot=%08X range=%u form=%u rip=%016llX ticks=%llu\n",
                         f, ft->offset, ft->alias_index, ft->tid, ft->pre_value,
-                        ft->slot_value_at_touch, ft->enc, (unsigned long long)ft->rip,
-                        (unsigned long long)ft->ticks);
+                        ft->slot_value_at_touch, ft->range_class, ft->form,
+                        (unsigned long long)ft->rip, (unsigned long long)ft->ticks);
             }
             /* THE OVERFLOW LATCH, ON ITS OWN LINE. A reader keys on this one word to decide whether
              * absence/order rows survive; it is never folded into a counter. */
@@ -1891,14 +2004,14 @@ static void capture_guest_threads(void)
             /* THE FOURTH READ, TIED BY ORDERED EVENT IDS. `last_write_seq` is the seq of the last
              * slot-hit write at or before read #4 -- an event id, not a log timestamp, so the tie
              * survives log truncation and interleaving. A reader compares fourth_seq against
-             * last_write_seq, and compares last_write_enc against the installer's ModRM encoding,
-             * rather than reconstructing the order from the text below. */
+             * last_write_seq, and compares `last_write_range` against GAME_MODULE (1), rather than
+             * reconstructing the order from the text below. */
             fprintf(report, "GUEST_SLOTW_FOURTH reached=%u read_count=%u value=%08X seq=%u "
-                            "last_write_seq=%u last_write_enc=%u last_write_alias=%u "
+                            "last_write_seq=%u last_write_range=%u last_write_alias=%u "
                             "last_write_value=%08X last_write_rip=%016llX last_write_ticks=%llu "
                             "terminal_seen=%u terminal_target=%08X\n",
                     sw->fourth_reached, sw->read_count, sw->fourth_value, sw->fourth_seq,
-                    sw->last_write_seq, sw->last_write_enc, sw->last_write_alias,
+                    sw->last_write_seq, sw->last_write_range, sw->last_write_alias,
                     sw->last_write_value, (unsigned long long)sw->last_write_rip,
                     (unsigned long long)sw->last_write_ticks, sw->terminal_seen,
                     sw->terminal_target);
@@ -1909,10 +2022,10 @@ static void capture_guest_threads(void)
                 const XboxA2hSlotwEvent *ev = &sw->events[e];
                 if (!ev->seq) continue;
                 fprintf(report, "GUEST_SLOTW_EVENT index=%u seq=%u kind=%u alias=%u slot_hit=%u "
-                                "fault_va=%08X pre=%08X post=%08X tid=%u enc=%u rip=%016llX "
-                                "ticks=%llu\n",
+                                "fault_va=%08X pre=%08X post=%08X tid=%u range=%u form=%u "
+                                "rip=%016llX ticks=%llu\n",
                         e, ev->seq, ev->kind, ev->alias_index, ev->slot_hit, ev->fault_va,
-                        ev->pre_value, ev->post_value, ev->tid, ev->enc,
+                        ev->pre_value, ev->post_value, ev->tid, ev->range_class, ev->form,
                         (unsigned long long)ev->rip, (unsigned long long)ev->ticks);
             }
             /* THE RECONCILIATION, DERIVED RATHER THAN ASSERTED. A reader must not have to trust
