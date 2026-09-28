@@ -218,6 +218,29 @@ static void capture_guest_threads(void)
     fprintf(report, "GUEST_REGISTRY address=%016llX version=%u claimed=%u overflow=%u qpc_frequency=%llu\n",
             (unsigned long long)address, registry->version, registry->claimed, registry->overflow,
             (unsigned long long)registry->frequency);
+    /* The A2h NULL-slot latch is part of this struct and is therefore already archived by the
+     * line above. Print its own fields too, because they are DECISION INPUTS: without this line a
+     * reader sees only the THREAD registry's `claimed` and would have to extract the latch from
+     * the minidump to learn whether the install control passed. The latch's verdict belongs in
+     * the archive's own text, next to the data it describes.
+     *
+     * Guarded on the version, because the latch was appended and an older registry has no such
+     * field -- reading it unconditionally would misreport whatever bytes follow the threads. */
+    if (registry->version >= 2) {
+        const JsrfSlotLatch *latch = &registry->latch;
+        fprintf(report, "GUEST_SLOT_LATCH install_seen=%u install_raw=%08X install_value=%08X "
+                        "install_ok=%u claimed=%u overflow=%u partial=%u sequence=%u\n",
+                latch->install_seen, latch->install_raw, latch->install_value, latch->install_ok,
+                latch->claimed, latch->overflow, latch->partial, latch->sequence);
+        for (unsigned s = 0; s < JSRF_LATCH_CAPACITY; s++) {
+            const JsrfSlotTransition *t = &latch->slots[s];
+            if (!t->valid && !t->tid && !t->call_index && !t->before && !t->after) continue;
+            fprintf(report, "GUEST_SLOT_TRANSITION slot=%u tid=%u call=%u ordinal=%u "
+                            "before=%08X after=%08X intra=%u ticks=%llu\n",
+                    s, t->tid, t->call_index, t->ordinal, t->before, t->after, t->intra,
+                    (unsigned long long)t->ticks);
+        }
+    }
     for (unsigned i=0;i<registry->claimed && i<JSRF_THREAD_CAPACITY;i++) {
         JsrfThread *thread = &registry->threads[i];
         uint32_t registers[JSRF_REGISTER_COUNT] = {0};
