@@ -1,4 +1,4 @@
-# `A2h-arming-coverage-repeat-r1` — execution evidence: **K = 3, agreement complete, ROW PENDING INTERPRETATION**
+# `A2h-arming-coverage-repeat-r1` — execution evidence: **K = 3, agreement complete, ROW `O-READ-PATH`**
 
 **Session:** `session-9f8c9988-38fb-4cc9-a188-a6881a52559a`, 2026-09-28, DSH.
 **Packet:** `A2h-arming-coverage-repeat-r1`, frozen
@@ -62,39 +62,62 @@ coverage-complete TARGETs (runs 2 and 5). **K = 3 ≥ 2.**
 
 ---
 
-## ⚠ THE ROW IS NOT SELECTED — a genuine interpretation question, escalated rather than decided
+## ✅ THE ROW IS SELECTED — **`O-READ-PATH`** → `A2h-terminal-read-path-audit`, narrowly
 
-**The packet says in terms: *"never infer a no-write or named writer from no DR hit"* and *"shared silence is
-insufficient."***
+**Planner ruling (frozen-contract interpretation):** `docs/reviews/a2h-repeat-row-interpretation.md`,
+committed `1b0a7b8`. **The Session escalated the tension rather than deciding it; the Planner ruled, and its
+reasoning is the substantive part:**
 
-**Every writer-facing observable is SILENT in all three runs:** no DR hit, no alias touch, **no positive
-class witness** (`GUEST_SLOT_CLASS` absent). **The agreement is therefore agreement on silence plus the
-terminal triple and coverage controls — which the packet explicitly says cannot certify a writer.**
+> *"leg 3 is conditionally reconciled DR/mapping evidence, not a requirement for a terminal-gap DR hit; a
+> post-hit read is required only if a hit occurs. Positive trapped install/17 arms/28 protected aliases/terminal
+> mapping and record reconciliation certify the observation surface independently in all three runs; zero hits
+> alone do not."*
 
-**But the inherited row set contains `O-READ-PATH`, whose predicate is: *"Complete continuous no-zero-write
-coverage, stable mapping, generated target AND hook read zero, DR/mapping leg reconciled"* — and every one of
-those components IS present:**
+**And the decisive point, which the Session had missed when it escalated:** *"Requiring a terminal-gap DR hit to
+select the expressly no-zero-write-observed audit row makes that row unreachable in its intended case."*
+**A row defined as "we observed no zero-write, with coverage proven" cannot require a zero-write observation as
+its own precondition.** **The gate the Session read as unmet was a gate that would have made the row
+self-defeating.**
 
-- **complete continuous coverage** — 17/17 arms, no gaps, no overflow;
-- **stable mapping** — re-proved at the terminal;
-- **generated target AND hook read zero** — `target=00000000` **and** `live=00000000`, two independent reads;
-- **DR/mapping leg reconciled** — `arm_tid_list == arms_recorded`, overflow 0.
+### The intended reading — a COVERAGE claim, not a no-write claim
 
-**So there is a real tension between two rules the packet states:**
-- the row predicate for `O-READ-PATH` **appears satisfied**, and
-- the packet **forbids inferring "no write" from no DR hit**, and `O-READ-PATH`'s first clause **is** a
-  no-write claim.
+> *"'No-zero-write coverage' was intended as coverage within which no zero-write was observed, not a no-write
+> assertion; writer and mechanism `UNKNOWN`, no claim of miscompile or actual discrepancy."*
 
-**Both readings are defensible and they select different rows** (`O-READ-PATH` → `A2h-terminal-read-path-audit`
-versus staying `O-COVERAGE`). **The Session is NOT deciding this privately.** Per `docs/agent-workflow.md`, a
-frozen-contract interpretation question goes to the Planner, and to the final adjudicator if it remains open.
-**The evidence above is what that decision needs, and it is complete.**
+**So `O-READ-PATH` asserts:** the terminal zero is **consistent with a discrepancy warranting audit**, with
+**complete positively certified coverage** of the observation surfaces, **within which no zero-write was
+observed.**
 
-## What is NOT in question
+**It does NOT assert:** that the slot **was never written**; **who** wrote it; or that a **read-path fault or
+miscompile** is proven. **Writer `UNKNOWN`. Mechanism `UNKNOWN`.** **Generality is limited to the agreed row,
+not extended to a no-write conclusion.**
 
-**K = 3 ≥ 2 is MET**, so the packet's central requirement is **satisfied for the first time in this line.**
-**The instrument is coverage-complete, the identity held, the OFF carried, and three independent realizations
-agree on the terminal triple, the install control and the full census.**
+### Why K = 3 matters even though the row is silent on the writer
+
+**Three independent realizations — the pinned r2 run 2 and new runs 2 and 5 — agree on the terminal triple,
+the install positive control, and the full census.** **That establishes REPRODUCIBILITY of the observation
+surface**, which is what licenses the audit referral. **It does not upgrade silence into attribution**, and the
+ruling says so explicitly: *"K=3 establishes agreement on that limited row, not a no-write conclusion."*
+
+### A prospective wording fix the Planner requires
+
+**The Planner confirms the frozen wording is *"genuinely ambiguous"* and needs correction.** **The Session is
+the second reader to conflate the row predicate with its gate**, and the predicate and gate live in
+**different packets**. **The fix, for future packets:**
+
+> state explicitly that **"no-zero-write" means *no zero-write OBSERVED WITHIN POSITIVELY CERTIFIED COVERAGE***,
+> and that **post-hit reconciliation is CONDITIONAL on a hit.**
+
+**Recorded as a durable wording requirement rather than a silent correction** — the frozen packets are not
+edited, and the clarification belongs in the successor's contract.
+
+### The general lesson the Planner drew, recorded because this line keeps meeting it
+
+> **"A positive demonstration that observation channels were continuously available makes 'nothing observed on
+> certified channels' narrower than 'nothing happened.'"**
+
+**That is the absent-record-as-negative boundary stated precisely**, and it is the third time this line has had
+to draw it — including **twice by the Session in one afternoon.**
 
 **No sixth run** — `N = 5` was pre-specified and this set is complete. **No synthetic completion.** The
 producer line stays **PARKED**; `PIO_FREE` stays **DEFERRED**; `A4b2-r7`/`A4b2-r8`/`A4b1-r4` are **not**
