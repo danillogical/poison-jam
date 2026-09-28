@@ -128,7 +128,7 @@ and silence is not conflict (reviewer independently upheld this); `O-SPEC` no on
 
 **`A2h` deliberately NOT named** — the missing witnesses are **documentation, not guest time**.
 
-### ⚠ The constraint that shapes the successor
+### ⚠ The constraint that shapes the successor — and the reframing that unblocks it
 
 **`docs/jsrf-run-profiles.md:245-267`** requires a modelled cause to rest on **either** one credible
 **primary** source **or two independent secondary sources of meaningfully different provenance**, and it is
@@ -137,21 +137,40 @@ explicit that:
 > *"**observed guest behaviour may corroborate an interpretation but does not count as one of the two
 > independent sources.** Guest code is evidence about the title, not about the hardware."* (`:260-262`)
 
-**So the Session's 28-site census is a constraint on any model, not an admissible source for one.** The
-acceptance review has now established that **no admissible external source documents the five `UNKNOWN`
-leaves** — which means the successor the `O-UNKNOWN` row names (*"a focused `PIO_FREE`
-source/queue-interface discovery on the exact listed leaves"*) **may be infeasible as specified**, and that
-is the question the Planner must now answer rather than repeat the search.
+**So the Session's 28-site census is a constraint on any model, not an admissible source for one**, and
+acceptance has established that **no admissible external source documents the five `UNKNOWN` leaves**. The
+`O-UNKNOWN` row's named successor — *"a focused source/queue-interface discovery on the exact listed
+leaves"* — is therefore **not feasible as an admissible hardware-model route**, and the Planner has
+confirmed that independently.
 
-**A promising reframing for the Planner to consider (not decided here):** *specifying a truthful hardware
-model* needs external documentation and is blocked; but *whether the existing stub is **sufficient** for
-the guest to proceed* is a question about the **title**, and guest code **is** admissible evidence about the
-title. The census already bounds it: 13 sites pass on any value ≥ 4, and the 15 variable sites need
-`val >> 2 ≥ demand` — so the decidable question is **the maximum demand at those 15 sites**, which is finite
-and offline. **That serves the owner's stated purpose** (the next admissible boundary before a stronger
-strict boot/progress claim) without requiring a hardware datasheet.
+**But there are two different questions, and only one is blocked:**
 
-**Toolkit:** `c151d4e` (unchanged). **Game:** `c97fef9`.
+| Question | Evidence class | Status |
+|---|---|---|
+| *What does the hardware's free-space register truly do?* | **hardware** | **BLOCKED** — no admissible source exists |
+| *Is the existing stub **sufficient** for the title to proceed?* | **the title** | **DECIDABLE** — guest code **is** admissible about the title |
+
+**The second is developed and measured in `docs/reviews/pio-free-sufficiency-analysis.md`:**
+
+- Every variable site is `mov r,[0xFE820010] / shr r,2 / cmp r,demand / jb poll`, so it exits iff
+  **`(val >> 2) >= demand`**; with the stub's `0x80` that is **`32 >= demand`**.
+- **The demand is `k × <byte field>`, `k ∈ {2,3,6,7,8,9,10}`**, and the source is a **byte-sized load at all
+  15 sites** (0 wider, 0 unresolved) — so **demand ≤ 255 × 10 = 2550**, a **derived** bound.
+- **The byte field is at `[esi+0x64]` (14 sites) / `[ebx+0x64]` (1)** — **the same structure field**.
+- **The 13 constant sites do not all compare against `4`** (the Planner's correction, verified): literals
+  are `0x4`×4, `0x8`×3, `0xC`, `0x20`, `0x48`, `0x4C`, and **`0x80`×2** — all pass, but the two `0x80`
+  sites sit at **ZERO margin**, so a stub of `0x7C` or less would fail them.
+- **The variable demand register is `ecx` (11) or `eax` (4)** — a hardcoded-`ecx` assumption misses 4.
+
+**So the decidable question is: what is the maximum value of one byte field at `+0x64`?** The stub is
+sufficient iff `max_byte × k ≤ 32` at every site. **If it is, the PIO_FREE boundary is *bounded* rather than
+unknown and needs no hardware model for progress. If any site can exceed 32, a truthful free-space model
+becomes *necessary* — and that requires the currently-blocked hardware sourcing: a genuine,
+evidence-backed escalation.**
+
+**This does not model the hardware**, and the five `UNKNOWN` ledger leaves **remain `UNKNOWN`**.
+
+**Toolkit:** `c151d4e` (unchanged). **Game:** `ec57057`.
 
 ---
 
