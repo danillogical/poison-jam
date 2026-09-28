@@ -100,7 +100,85 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-dr0-terminal-snapshot-r1` (**discovery**: repair the install-delivery gate) — **PROMOTED 2026-09-28, `ADEQUATE`**
+## CURRENT PACKET — `A2h-dr0-terminal-snapshot-r1` **EXECUTED → `P1-UNKNOWN`** — **DR LEG DROPPED (terminal ceiling)**; line disposition pending Advisor
+
+- **Packet:** `docs/packets/a2h-dr0-terminal-snapshot.md`, frozen
+  **`969E8827CC3D36AA8AFBF7D4FF7D43609BB750312723AAFBCE7ADFA5CA48F7EE`** — **not edited**.
+- **Runs:** fresh OFF (`…052203-982-a2h-snapshot-inert-off`, **record-level inert**) + **one** ON
+  (`…052216-631-a2h-snapshot-on-1`), both **strict**. Evidence:
+  `docs/reviews/a2h-dr0-terminal-snapshot-phase1-evidence.md`.
+
+### ✅ The repair WORKED — and the delivery premise is now PROVED on this host
+
+- **`complete=1`** where the previous build was **structurally 0**; **`decision=CONTEXT_LOST`** is a **defined
+  verdict**, not `UNKNOWN_NOT_RECORDED`. **The gate is functional again.**
+- **A genuine native `#DB` was delivered and claimed**: the Worker's fixture makes the collector the **real
+  debugger of a child that raises the real handshake, is armed while stopped, then performs a REAL store to
+  the watched address** ⇒ `code=80000004`, `dr6=00000000FFFF0FF1`, claimed from `DR6.B0`,
+  **`delivery_premise=PROVED`.** **"This host cannot deliver `#DB`" is RULED OUT.**
+
+### ⚠ The live trial produced a CONTRADICTION on the one thread that matters
+
+**The snapshot worked correctly** (17 seen, 17 opened, 17 suspended, 17 read, 17 resumed,
+`void_unsuspended=0`). **Exactly one thread did not match — `index=0`, `tid=69420`, THE INSTALL THREAD:**
+
+```
+GUEST_DR_TERM_ROW index=0 tid=69420 armed=1 suspended=1 read_ok=1
+                 dr0=0000000000000000 dr7=0000000000000000 dr6=0000000000000000
+```
+
+**The other 16 read armed.** **And this contradicts the arm record** — `GUEST_DR_ARM_OK seq=20 tid=69420
+dr0=00000000001D4064 dr7_readback=00000000000D0001`, with the tid in the armed list. **`already_suspended=1`,
+and it is exactly this thread.**
+
+**Two candidates the evidence CANNOT separate:** **(a)** the install thread's DR state was **genuinely
+cleared** after the arm — which would **fully explain zero `#DB` for the store**; **(b)** a thread **already
+suspended at the debug event** reads differently from one the snapshot suspends itself, so the zero is a
+**read artifact** for exactly this thread.
+
+### DISPOSITION — the ceiling applies, and the Session is not proposing a third round
+
+- `P1-PASS` requires the native install hit — **not met** (`install_hit=0`).
+- **`P1-NONFIRING` requires the delivery-completeness premise** — and the packet says in terms that an
+  unproved premise must report **`P1-UNKNOWN`** rather than promote an observed zero. **`delivery_premise=UNPROVED`.**
+- **Line 11** makes **contradictory store/snapshot evidence `P1-UNKNOWN`** with the same drop.
+
+> ### **`P1-UNKNOWN` ⇒ INFRA FAILURE ⇒ DROP THE DR LEG + coverage-provenance. TERMINAL.**
+
+**Per the Advisor:** *"failure to establish the install trap, loss/contradiction, or any new instrument defect
+⇒ DROP the DR leg + coverage-provenance, with NO third round absent re-referral."* **This is
+loss/contradiction.** **No third round.**
+
+### What the drop means — stated explicitly
+
+| Survives | Unreachable on this line |
+|---|---|
+| **28-alias page-protection census** (`armed=1 mapped=28 protected=28 touched=0`) | **canonical-write attribution** (guest / host / transient-as-write) |
+| **Mapping stability** | **the DR leg of the read-path audit** |
+| **The two terminal software zero reads** | **any DR-based absence or presence claim** |
+| **The install software control** (`80000115 → FE000104`) | |
+
+**Per the Advisor: *"never carry the channel as decoration."*** **No row may cite a DR record in either
+direction — including the zero-`#DB` series, which is an observation about an instrument of unproven
+coverage, not about the slot.**
+
+### Durable gains from this trial
+
+1. **The delivery premise is PROVED on this host**, settling the long-standing *"maybe `#DB` never arrives"*
+   hypothesis — **it CAN arrive.**
+2. **The gate defect is fixed and demonstrated** by a fixture yielding `complete=1 decision=NON_FIRING`,
+   **impossible on the old code.**
+3. **The contradiction is LOCALISED to the install thread** — sharper than the previous line's
+   *"zero hits, cause unknown."*
+4. **Three further defects were found by measurement during implementation**, including **route-counter
+   pollution** that had inflated `ss_routed_generic_first` to **14405** against `raw_single_step=0`, and a
+   **toolkit gate coupling** that would have made `NON_FIRING` unreachable *again* through a second env var.
+
+**Next:** the line's disposition — **pivot to the queued `0x001D5078` packet, or defer** — is an Advisor
+decision, since the ceiling makes the DR route terminal and the sibling line was explicitly **queued, not
+concurrent.**
+
+**Toolkit:** `37226b2` (unpushed — pending acceptance). **Game:** `e14cdd2`.
 
 - **Packet:** `docs/packets/a2h-dr0-terminal-snapshot.md`, **16 lines**, frozen
   **`969E8827CC3D36AA8AFBF7D4FF7D43609BB750312723AAFBCE7ADFA5CA48F7EE`** — **this is the packet to execute.**
