@@ -257,8 +257,29 @@ narrows the successor or removes a hypothesis it would otherwise have to test.
 | Hypothesis | Basis for refutation |
 |---|---|
 | **A macro mismatch** between the toolkit's sampler and the game's terminal read | **Identical in effect.** `BRIDGE_MEM32(a) = *(u32*)((uintptr_t)(a) + g_xbox_mem_offset)`; `MEM32(a) = *(u32*)XBOX_PTR(a)` where `XBOX_PTR(a) = (uintptr_t)(uint32_t)(a) + g_xbox_mem_offset`. **Both read the same location for the same VA** |
+| **A different read ADDRESS** | **Refuted from source.** The sampler loads `BRIDGE_MEM32(0x001C4064)`; the generated code loads `MEM32(0x1C4064)` at `recomp_0003.c:20155`. **Same literal address.** |
+| **A different read WIDTH** | **Refuted from source.** `BRIDGE_MEM32` is `*(volatile uint32_t *)`; `MEM32` is `*(volatile uint32_t *)`. **Both 32-bit.** |
 | **A torn / partial read** | The slot is **4-byte aligned** (`0x001C4064 % 4 == 0`) and the access is a naturally-aligned `uint32`, which **cannot tear on x86** |
 | **A static VA displacement** | The install sample read **`0x80000115`** at that VA through the *toolkit's* macro, so the VA resolved to the image's `.rdata` correctly. **`g_xbox_mem_offset` is written only at init** (`src/main.c:225`, `xbox_memory_layout.c:1768`) and by nothing afterwards in either repository |
+
+**The terminal site, verified at a genuine instruction boundary:**
+
+```
+00149822  push  dword ptr [esi + 0x580]   ; the CRITICAL_SECTION pointer
+00149828  call  dword ptr [0x1c4064]      ; RtlEnterCriticalSection, via the thunk slot
+0014982E  mov   byte ptr [ebp - 0x1d], 1
+```
+
+**So exactly TWO candidates survive**, and they are precisely what the corrected successor packet
+instruments:
+
+1. **the memory genuinely changed to `0`** in the bridgeless gap — a guest or host write; and
+2. **`g_xbox_mem_offset` differed at the terminal moment**, making the two reads resolve to different
+   physical locations.
+
+**The Session's offline grep is evidence against (2) but is NOT sufficient for a positive read-path
+conclusion** — the Advisor ruled exactly that, and requires a **live re-read of the offset at terminal**.
+**That requirement stands and belongs to the successor.**
 
 **Also confirmed:** the terminal value was read **twice independently** — once by the generated
 `MEM32(0x1C4064)` at `recomp_0003.c:20155`, and once by the terminal hook's own `MEM32(0x001C4064)` — and
