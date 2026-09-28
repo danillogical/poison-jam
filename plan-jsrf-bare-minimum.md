@@ -100,7 +100,53 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-slot-read-path-displacement-r1` **EXECUTED (Run 1 OFF only) → `O-COVERAGE`**; **successor re-scoped by Advisor to WITHIN-RUN attribution**
+## CURRENT PACKET — `A2h-slot-within-run-attribution-r1` (**discovery**: who zeroed the slot in a TARGET realization?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-slot-within-run-attribution.md`, revision
+  **`A2h-slot-within-run-attribution-r1`**, class **discovery**, **33 lines**, frozen SHA-256
+  **`3865FACC776BC64C6B0CFE8DF6C6BD0287DBD6EFC339C4E7FFAA7406667BEC27`** — **this is the packet to execute.**
+  Validation: `docs/reviews/a2h-slot-within-run-r1-session-validation.md`.
+- **The question:** in a realization whose terminal event is a raw-zero read of thunk slot guest `0x001C4064`
+  at `0x0014982E`, did the slot become zero in the bridgeless gap, and by whom — **guest writer, host writer,
+  transient zero-then-restore, or read-path discrepancy**?
+- **The design change that matters:** **within-run rows only.** Classify each realization **first by its
+  entire observed terminal-event set**; **only uniquely-TARGET realizations with complete coverage** may
+  select attribution rows. Every **NON-TARGET** is preserved in full as **contrastive data, never forced into
+  a row.**
+- **N = 5 ON runs, same build**, pre-specified — not stop-at-first-hit and not retry-until-target. Need
+  **K ≥ 2 complete-coverage TARGET realizations** for a general claim; agreement required, disagreement ⇒
+  report both + **`UNKNOWN` generality**, no majority vote. **K = 0 ⇒ report the rate, STOP, re-refer — no
+  extension without referral.** **This supersedes the old two-run bound.**
+- **BINDING VALIDITY GATE — deterministic anchors only, terminal EXCLUDED:** OOM request `598869040`, heap
+  `used 12715008/50855936`, status `0xC0000017` (**identical on 39/39 archived OOM-line runs**); **identity-1
+  dispatch prefix through OOM = 5555** (**verified on all four `tid`-bearing runs**; the fifth historical run
+  lacks `tid=`). **Anchor mismatch ⇒ `O-COVERAGE` for that realization only.**
+- **Durable rule:** *no run serves as a cross-run control for terminal behavior; controls must be structural
+  (gates-off silence) or prefix-scoped (deterministic anchors only).*
+- **OFF control CARRIES — no fresh OFF run needed.** The current build's exe SHA-256 is **byte-identical** to
+  the archived Run-1 OFF (`A7E324642A41DF3F…ACDEAD9`). **A new build ⇒ one fresh OFF.**
+- **Rows:** `NON-TARGET` (contrastive) · `O-IDENTITY` · `O-COVERAGE` · `O-GUEST-ZERO` · `O-HOST-ZERO` ·
+  `O-TRANSIENT` · `O-READ-PATH`. Priority within a TARGET: `O-IDENTITY` → `O-COVERAGE` → uniquely supported
+  positive row.
+- **Two Session measurements the packet now rests on:** the **target is the most common terminal outcome
+  (26/39, ~67%)**, which motivates `N = 5` without estimating this build's rate; and the packet's strict
+  **fail-closed multi-terminal rule discards ZERO target data** — **0 of 26** archived target runs carry a
+  competing terminal, while **every** multi-terminal run is a non-target.
+- **A real defect found and fixed during validation:** the extractor **could not read the v3 gate-OFF
+  archive**, because it *searched* for a write-watch arming pattern that is **not distinctive**
+  (`alias_count == 1` ⇒ `(1,1,1,1)`, dozens of coincidental hits). **Fixed** (`1195b8e`) to **derive** the
+  offset from the unique registry header, with content as a **corroborating** check — so an all-zero watch
+  reads as the legitimate **gate-OFF** state while an unproducible state **still raises**. **All four archived
+  runs now extract.**
+
+**Next:** execute the five pre-specified ON runs, then §5.8 acceptance.
+
+**Toolkit:** `5528d00` — **unpushed**, because the A2h diagnostic is **pending-acceptance** (a **no-push**
+state). It becomes pushable once this packet is accepted. **Game:** `1195b8e`.
+
+---
+
+## Previous — `A2h-slot-read-path-displacement-r1` **EXECUTED (Run 1 OFF only) → `O-COVERAGE`**; successor re-scoped by Advisor to WITHIN-RUN attribution
 
 - **Packet:** `docs/packets/a2h-slot-read-path-displacement.md`, revision
   `A2h-slot-read-path-displacement-r1`, frozen
