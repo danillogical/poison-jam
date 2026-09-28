@@ -58,6 +58,22 @@ python -X utf8 scripts\a2h-oom-slice.py --log logs/runs/20260927-160330-655-a4b2
 > as **"ABSENT"** — **reading an absent record as a negative measurement**, the same error class as the
 > earlier `[GP*]`-zeros mistake and the byte-width writer census. **A census reading all plausible locations
 > now shows all 35 archived runs with this request are trapped.**
+>
+> **And a third round was needed, because the second defect's first fix was incomplete.** Stage 2 found that
+> the correction **banners** were added but the document **bodies** were never swept: the withdrawn claim
+> survived **unflagged in six places**, including a **conclusions list** re-asserting the exact sentence the
+> banner declares withdrawn, a **section heading**, and a **document title**. All six are now corrected, plus
+> one more in the plan's findings table.
+>
+> **The lesson, recorded because it is a process one: a correction banner is not a correction.** When a claim
+> is withdrawn, **every assertion of it must be swept**, not just the section that discussed it.
+>
+> **And the sweep was then checked mechanically rather than by eye** — every line in the four A2h documents
+> mentioning the withdrawn claim was printed **with its surrounding context** and flagged unless that context
+> marks it as a correction, a withdrawal, a refuted hypothesis, or a quotation of the old claim. **Result: 10
+> mentions, all 10 legitimately flagged, zero unflagged.** The marker set is deliberately broad, so a mention
+> must be genuinely inside a corrective frame to pass. **It is a heuristic, not a proof — but it does not
+> depend on my reading the right lines, which is the failure mode stage 2 caught.**
 
 ## Experiment 1 — archive-first binding
 
