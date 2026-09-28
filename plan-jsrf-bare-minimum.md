@@ -100,7 +100,69 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-live-slot-write-r1` (**discovery**: LIVE observation — does `0x00199F45` write the slot, or a competitor?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+## CURRENT PACKET — `A2h-live-slot-write-r1` **EXECUTED: ON trial 1 → INFRA FAILURE**; **THE WATCH WORKS**; bounded repair + Q3(b)/(c) in progress
+
+- **Packet:** `docs/packets/a2h-live-slot-write.md`, frozen
+  **`8F3C6291C42ED3D9C3B96D879A9BB9D46391E5FEEA3F4BDC1E8712F46FFF7D4F`** — **not edited**.
+- **Evidence:** `a2h-live-slot-write-on1-evidence.md` (`f9a8534`); **ruling**
+  `a2h-on1-advisor-ruling.md` (`6a7f599`); **Q3(a)** `a2h-q3a-pre-path-correct.md` (`6a7f599`).
+
+### ✅ THE PAGE-PROTECTION WATCH **FIRES** — a first for this line
+
+**The DR0 watch never fired once across ~14k debug events per run. This one fired 129 times in a partial
+run:**
+
+```
+armed=1 arm_base=0019B200 arm_slot=0019D62C page_offset=6  aliases=29/29 mask=1FFFFFFF
+relevant_av=129  steps=128  rearm_ok=128  rearm_failed=0  concurrent_overlap=0
+```
+
+**The deferred ARM also worked** (device was `0` at first attempt; the census poll completed it).
+**And `stable=0 term_base_ok=0` is EXACTLY what the implementation record predicted.**
+
+### ⚠ ON trial 1 = **INFRA FAILURE** by the packet's own rule
+
+**`slot_hits=0`; NO terminal; `[A2HSLOT]` = 0 (the installer never ran); `GUEST_SLOTW_FOURTH reached=0`.**
+**No outcome claim. Row `O-OPEN`.**
+
+**CAUSE: the implementation RETAINED TRAFFIC AS RECORDS IN VIOLATION OF ITS OWN DESIGN.** **256-record buffer,
+2 records per write, `129 × 2 = 258 > 256`** → overflow → **the fail-closed path fired** → **the propagated
+fault ended the run.** **The design is right; the implementation did not follow it.**
+
+### ⚠ THE LEAD: a LINEAR ZEROING FILL heading toward the slot
+
+**`fault_va` incrementing by 4 from `0x0019D000` to `0x0019D1FC`**, every one **`pre=B8077500 post=00000000`**
+(where **`pre` is the SLOT's value**). **The slot is at `0x0019D62C` — the fill was 267 dwords short when
+the run died.**
+
+> **The Advisor's framing:** **the fill is *"context + prime suspect with a FALSIFIABLE PREDICTION
+> (continued linear zeroing reaches `0x1D62C`)"*, which the fixed-instrument runs will CONFIRM or REFUTE.**
+> **RECORDED, NOT CHASED.**
+
+### Q3 GATES EVERYTHING — no ON run until value-trust is proven
+
+| # | Requirement | Status |
+|---|---|---|
+| **(a)** | **static inspection of the pre-read path** | ✅ **EXECUTED — the path is CORRECT** |
+| **(b)** | **a COMMITTED fixture proving value fidelity END-TO-END** | **in progress** |
+| **(c)** | **cross-validation where fault-record and hook reads overlap** | **in progress** |
+
+**Q3(a)'s result:** **`pre` is read at `g_a2h_slotw_pages[alias-1] + off` where `off` derives from `slot_va`,
+NOT from `fault`** — **so `pre` is the SLOT's value within whichever alias faulted, BY DESIGN.** **That
+resolved the Session's `pre=B8077500` puzzle as a MISREADING: the Session had read `pre` as the value at the
+FAULTING address, when it is the SLOT's value at the fault.**
+
+**⚠ And the Session corrected its own reading of the event pairs:** **`kind=1` = WRITE, `kind=2` = STEP, and
+the STEP record is what carries the slot's post-value.** **So the slot was `B8077500` before AND after all 128
+fills — the fill was NOT touching the slot.**
+
+**Next:** capacity repair (traffic→counters per the packet's own design) + Q3(b) + Q3(c); then **fresh OFF +
+NEW N=5** (a different experiment, per the ruling).
+
+**⚠ N-accounting:** **the aborted run COUNTS toward N** — *"excluding it would license re-rolling until
+lucky."* **New N=5 for the new instrument.**
+
+**Toolkit:** `09db685` local / `571982d` pushed (**no-push state**). **Game:** `6a7f599`.
 
 - **Packet:** `docs/packets/a2h-live-slot-write.md`, **17 lines**, **8397 bytes**, frozen
   **`8F3C6291C42ED3D9C3B96D879A9BB9D46391E5FEEA3F4BDC1E8712F46FFF7D4F`** — **this is the packet to execute.**
