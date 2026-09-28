@@ -67,19 +67,65 @@ static void capture_guest_threads(void);
 #define A2H_DR6_MEANINGFUL 0x0000E00Fu
 #define A2H_ARM_TID_CAPACITY 256
 #define A2H_DR_HIT_CAPACITY 64
+/* C2 per-birth ledger capacity. Same bounded pattern as dr_arm_tids above: a fixed array plus an
+ * explicit overflow flag, so a truncated ledger is VISIBLE as truncated and can never be read as a
+ * complete one. No run-length-sized history is kept anywhere in this file. */
+#define A2H_BIRTH_CAPACITY 256
+
+/* The three counters below answer three DIFFERENT questions and must never be substituted for one
+ * another. Recorded here because all three were confused in this archive:
+ *   dr_armed            -- successful arms this process performed. POSITIVE per-arm records back it.
+ *   dr_arm_tid_count    -- tids armed so far, as a bounded list. UNDERCOUNTS arms when it overflows,
+ *                          and before this change it was only printed at the handshake, so every
+ *                          later arm was invisible.
+ *   dr_disarmed         -- live threads whose DRs were zeroed cleanly at teardown. That walks EVERY
+ *                          live thread unconditionally (dr_disarm_all), so it counts threads that
+ *                          EXISTED at teardown whether or not they were ever armed: it OVERCOUNTS
+ *                          arms and is reported below explicitly as not an arm count. */
+
+/* why= on an arming observation. */
+enum { A2H_WHY_HANDSHAKE = 0, A2H_WHY_CREATE_THREAD = 1, A2H_WHY_EXIT = 2 };
+/* state= on a per-birth row: the outcome of this tid's arming, as observed at the event. */
+enum { A2H_BIRTH_ARMED = 0, A2H_BIRTH_DEFERRED = 1, A2H_BIRTH_FAILED = 2, A2H_BIRTH_EXITED = 3 };
+/* reason= on a per-birth row. DEFERRED and FAILED are kept apart on purpose: DEFERRED means the
+ * attempt could not be made yet (mapping not published) and the handshake sweep is expected to
+ * recover it; FAILED means an attempt was made and lost. A failed attempt that the sweep later
+ * recovered is reported separately as recovered, and is NOT a terminal unarmed tid. */
+enum { A2H_REASON_NONE = 0, A2H_REASON_NO_MAPPING_OFFSET = 1, A2H_REASON_COLLISION = 2,
+       A2H_REASON_GET = 3, A2H_REASON_SET = 4, A2H_REASON_READBACK = 5, A2H_REASON_OPEN = 6,
+       A2H_REASON_SNAPSHOT = 7 };
 
 static int read_remote(DWORD64 address, void *buffer, SIZE_T size);
 static DWORD64 symbol_address(const char *name);
 
 static int dr_gate_read, dr_enabled;
 static DWORD64 dr_canonical;
+static int dr_geometry_pinned;
 static unsigned dr_armed, dr_failed, dr_collision, dr_disarmed, dr_disarm_failed;
+/* Declared here, after the A2H_REASON_* enum above, so its initializer is valid. */
+static unsigned dr_last_fail_reason = A2H_REASON_NONE;
 static DWORD dr_arm_tids[A2H_ARM_TID_CAPACITY];
+static unsigned char dr_arm_tid_why[A2H_ARM_TID_CAPACITY];
 static unsigned dr_arm_tid_count, dr_arm_tid_overflow;
 static struct { DWORD tid; DWORD64 dr0, dr7; } dr_prev[A2H_ARM_TID_CAPACITY];
 static unsigned dr_prev_count, dr_prev_overflow;
 static struct { DWORD tid; DWORD64 dr6, rip; uint32_t value; DWORD64 ticks; } dr_hit[A2H_DR_HIT_CAPACITY];
 static unsigned dr_hits, dr_hit_overflow;
+
+/* C1/C2 event-time ledger. dr_seq is the monotonic sequence shared by every arming observation and
+ * every per-birth row, so a reader can order arms against births and against the handshake without
+ * relying on line numbers or on the collector's own print ordering. */
+static unsigned dr_seq, dr_arm_ok_records, dr_armed_before_handshake, dr_armed_at_or_after_handshake;
+static unsigned dr_create_thread_events, dr_exit_events;
+static unsigned dr_distinct_armed;
+static unsigned dr_handshake_seq, dr_terminal_seq;
+static int dr_handshake_seen;
+static unsigned dr_last_fail_reason;
+/* One row per lifecycle event, never per attempt-over-time: a reused tid yields a second row, which
+ * is how lifecycle identity is preserved rather than overwritten. */
+static struct { unsigned seq, why, mapping_available, state, reason; DWORD tid; DWORD64 ticks; }
+    dr_birth[A2H_BIRTH_CAPACITY];
+static unsigned dr_birth_count, dr_birth_overflow;
 
 static int dr_on(void)
 {
@@ -92,7 +138,13 @@ static int dr_on(void)
 static int resolve_geometry(void)
 {
     uint64_t offset = 0, size = 0;
-    DWORD64 addr = symbol_address("g_xbox_mem_offset");
+    DWORD64 addr;
+    /* Fixture-only pin. tests/test_collect_arming.c has no debuggee, so it cannot read the mapping
+     * symbols out of one; it pins the geometry instead. Nothing in the collector ever sets this flag,
+     * so production resolution is unchanged -- and pinning is the ONLY way a fixture could reach the
+     * arm path at all, since the real path needs a live target's symbol table. */
+    if (dr_geometry_pinned) return dr_canonical != 0;
+    addr = symbol_address("g_xbox_mem_offset");
     if (addr && read_remote(addr, &offset, sizeof(offset)) && offset) {
         guest_offset = offset;
         addr = symbol_address("g_xbox_total_ram");
@@ -105,12 +157,110 @@ static int resolve_geometry(void)
     return dr_canonical != 0;
 }
 
-static int dr_arm_thread(HANDLE thread, DWORD tid, const char *why)
+static int dr_arm_thread(HANDLE thread, DWORD tid, const char *why, unsigned *reason);
+static int dr_was_armed(DWORD tid);
+
+/* ── C1/C2 event-time ledger (observation only; every writer is behind the gate) ───────────────
+ *
+ * WHY: a successful arm after the handshake used to print nothing and the tid list was a
+ * handshake-time snapshot, so "was this guest thread ever armed?" was not answerable from the
+ * artifact -- which is how the absent-record error class in
+ * docs/reviews/a2h-arming-coverage-advisor-reruling.md got committed twice. Every function here
+ * writes a POSITIVE record at the moment the event happens, and nothing here changes arming
+ * behaviour: no queue, no second sweep, no new mechanism. */
+
+static const char *a2h_state_name(unsigned state)
+{
+    switch (state) {
+    case A2H_BIRTH_ARMED:    return "armed";
+    case A2H_BIRTH_DEFERRED: return "deferred";
+    case A2H_BIRTH_FAILED:   return "failed";
+    default:                 return "exited";
+    }
+}
+
+static const char *a2h_reason_name(unsigned reason)
+{
+    switch (reason) {
+    case A2H_REASON_NO_MAPPING_OFFSET: return "no_mapping_offset";
+    case A2H_REASON_COLLISION:         return "collision";
+    case A2H_REASON_GET:               return "get";
+    case A2H_REASON_SET:               return "set";
+    case A2H_REASON_READBACK:          return "readback";
+    case A2H_REASON_OPEN:              return "open";
+    case A2H_REASON_SNAPSHOT:          return "snapshot";
+    default:                           return "none";
+    }
+}
+
+/* One row per lifecycle event. Returns the seq it used, or 0 when the ledger is full -- the caller
+ * must NOT report a state transition it failed to record, which is why the return value is checked
+ * at the exit path. */
+static unsigned a2h_birth_record(DWORD tid, unsigned why, int mapping_available,
+                                 unsigned state, unsigned reason)
+{
+    LARGE_INTEGER now;
+    unsigned seq = ++dr_seq;
+    if (dr_birth_count >= A2H_BIRTH_CAPACITY) { dr_birth_overflow = 1; return 0; }
+    QueryPerformanceCounter(&now);
+    dr_birth[dr_birth_count].seq = seq;
+    dr_birth[dr_birth_count].why = why;
+    dr_birth[dr_birth_count].mapping_available = mapping_available ? 1u : 0u;
+    dr_birth[dr_birth_count].state = state;
+    dr_birth[dr_birth_count].reason = reason;
+    dr_birth[dr_birth_count].tid = tid;
+    dr_birth[dr_birth_count].ticks = (DWORD64)now.QuadPart;
+    dr_birth_count++;
+    return seq;
+}
+
+/* C1(1)/C1(2): the positive per-arm record. This is the record the Advisor ruling makes central --
+ * without it no count in the archive can settle coverage. `dr7_readback` is the value actually read
+ * back from the thread, not the value written, so a silently-refused arm cannot print as a success. */
+static void a2h_arm_ok_record(DWORD tid, const char *why, DWORD64 dr7_readback, DWORD64 dr0_readback)
+{
+    LARGE_INTEGER now;
+    unsigned seq = ++dr_seq;
+    QueryPerformanceCounter(&now);
+    dr_arm_ok_records++;
+    if (dr_handshake_seen) dr_armed_at_or_after_handshake++;
+    else dr_armed_before_handshake++;
+    fprintf(report, "GUEST_DR_ARM_OK seq=%u tid=%lu why=%s dr0=%016llX dr7_readback=%016llX "
+                    "canonical=%016llX ticks=%llu phase=%s\n",
+            seq, tid, why, (unsigned long long)dr0_readback, (unsigned long long)dr7_readback,
+            (unsigned long long)dr_canonical, (unsigned long long)now.QuadPart,
+            /* `why` already says WHICH path armed this thread; `phase` says WHEN, relative to the
+             * handshake event. The sweep runs during the handshake, so its arms are
+             * phase=at_handshake and not post_handshake -- a naming distinction worth keeping, since
+             * "post-handshake" is exactly the population that used to be invisible. */
+            strcmp(why, "handshake") == 0 ? "at_handshake" :
+            (dr_handshake_seen ? "post_handshake" : "pre_handshake"));
+    fflush(report);
+}
+
+/* Every CREATE_THREAD debug event, whether or not an arm attempt follows. Emitted BEFORE the attempt
+ * so that a crash or a refused arm inside the attempt cannot lose the birth itself. */
+static void a2h_birth_event(DWORD tid)
+{
+    LARGE_INTEGER now;
+    unsigned seq = ++dr_seq;
+    QueryPerformanceCounter(&now);
+    dr_create_thread_events++;
+    fprintf(report, "GUEST_DR_BIRTH seq=%u tid=%lu event=create_thread mapping_available=%u "
+                    "canonical=%016llX ticks=%llu handshake_seen=%u\n",
+            seq, tid, dr_canonical ? 1u : 0u, (unsigned long long)dr_canonical,
+            (unsigned long long)now.QuadPart, dr_handshake_seen ? 1u : 0u);
+    fflush(report);
+}
+
+static int dr_arm_thread(HANDLE thread, DWORD tid, const char *why, unsigned *reason)
 {
     CONTEXT context = {0}, back = {0};
     context.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+    if (reason) *reason = A2H_REASON_NONE;
     if (!GetThreadContext(thread, &context)) {
         dr_failed++;
+        if (reason) *reason = A2H_REASON_GET;
         fprintf(report, "GUEST_DR_ARM_FAIL tid=%lu why=%s stage=get error=%lu\n", tid, why, GetLastError());
         return 0;
     }
@@ -120,6 +270,7 @@ static int dr_arm_thread(HANDLE thread, DWORD tid, const char *why)
          * an unreconciled DR owner makes every hit ambiguous, which is a coverage failure -- not a
          * reason to overwrite somebody else's watch. */
         dr_collision++;
+        if (reason) *reason = A2H_REASON_COLLISION;
         fprintf(report, "GUEST_DR_ARM_FAIL tid=%lu why=%s stage=collision dr6=%016llX dr7=%016llX\n",
                 tid, why, (unsigned long long)context.Dr6, (unsigned long long)context.Dr7);
         return 0;
@@ -135,6 +286,7 @@ static int dr_arm_thread(HANDLE thread, DWORD tid, const char *why)
     context.Dr7 = A2H_DR7;
     if (!SetThreadContext(thread, &context)) {
         dr_failed++;
+        if (reason) *reason = A2H_REASON_SET;
         fprintf(report, "GUEST_DR_ARM_FAIL tid=%lu why=%s stage=set error=%lu\n", tid, why, GetLastError());
         return 0;
     }
@@ -142,13 +294,24 @@ static int dr_arm_thread(HANDLE thread, DWORD tid, const char *why)
     if (!GetThreadContext(thread, &back) || back.Dr0 != dr_canonical ||
         (back.Dr7 & A2H_DR7_OWNED) != A2H_DR7) {
         dr_failed++;
+        if (reason) *reason = A2H_REASON_READBACK;
         fprintf(report, "GUEST_DR_ARM_FAIL tid=%lu why=%s stage=readback dr0=%016llX dr7=%016llX error=%lu\n",
                 tid, why, (unsigned long long)back.Dr0, (unsigned long long)back.Dr7, GetLastError());
         return 0;
     }
     dr_armed++;
-    if (dr_arm_tid_count < A2H_ARM_TID_CAPACITY) dr_arm_tids[dr_arm_tid_count++] = tid;
-    else dr_arm_tid_overflow = 1;
+    if (dr_arm_tid_count < A2H_ARM_TID_CAPACITY) {
+        int seen = 0;
+        for (unsigned i = 0; i < dr_arm_tid_count; i++) if (dr_arm_tids[i] == tid) { seen = 1; break; }
+        if (!seen) dr_distinct_armed++;
+        dr_arm_tid_why[dr_arm_tid_count] = (unsigned char)(strcmp(why, "handshake") == 0
+                                                           ? A2H_WHY_HANDSHAKE : A2H_WHY_CREATE_THREAD);
+        dr_arm_tids[dr_arm_tid_count++] = tid;
+    } else dr_arm_tid_overflow = 1;
+    /* C1(1): THE FIX. A success used to return silently, which is precisely how a post-handshake
+     * arm became indistinguishable from no attempt at all. The record carries the readback DR7, so
+     * the claim "armed" is backed by the value the thread actually reports. */
+    a2h_arm_ok_record(tid, why, back.Dr7, back.Dr0);
     return 1;
 }
 
@@ -158,8 +321,10 @@ static void dr_arm_all(const char *why)
 {
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
     THREADENTRY32 entry = {sizeof(entry)};
+    unsigned reason = A2H_REASON_NONE;
     if (snapshot == INVALID_HANDLE_VALUE) {
         dr_failed++;
+        dr_last_fail_reason = A2H_REASON_SNAPSHOT;
         fprintf(report, "GUEST_DR_ARM_FAIL why=%s stage=snapshot error=%lu\n", why, GetLastError());
         return;
     }
@@ -170,11 +335,20 @@ static void dr_arm_all(const char *why)
                             FALSE, entry.th32ThreadID);
         if (!handle) {
             dr_failed++;
+            dr_last_fail_reason = A2H_REASON_OPEN;
+            a2h_birth_record(entry.th32ThreadID, A2H_WHY_HANDSHAKE, 1, A2H_BIRTH_FAILED,
+                             A2H_REASON_OPEN);
             fprintf(report, "GUEST_DR_ARM_FAIL tid=%lu why=%s stage=open error=%lu\n",
                     entry.th32ThreadID, why, GetLastError());
             continue;
         }
-        dr_arm_thread(handle, entry.th32ThreadID, why);
+        dr_arm_thread(handle, entry.th32ThreadID, why, &reason);
+        /* Every attempt the sweep makes gets an event-time row too, so a tid the sweep touched is
+         * never recorded only by the handshake summary -- and a tid the sweep touched but could NOT
+         * arm is recorded as a failed attempt rather than left to be inferred from `failed=`. */
+        a2h_birth_record(entry.th32ThreadID, A2H_WHY_HANDSHAKE, 1,
+                         reason == A2H_REASON_NONE ? A2H_BIRTH_ARMED : A2H_BIRTH_FAILED, reason);
+        if (reason != A2H_REASON_NONE) dr_last_fail_reason = reason;
         CloseHandle(handle);
     } while (Thread32Next(snapshot, &entry));
     CloseHandle(snapshot);
@@ -195,24 +369,164 @@ static void dr_print_arm_summary(const char *why)
     fflush(report);
 }
 
+/* ── C1(3)/C1(4) TERMINAL reconciliation ──────────────────────────────────────────────────────
+ *
+ * WHY a second, terminal line is required and why the handshake line above cannot serve as one:
+ * `GUEST_DR_ARM why=handshake` is a snapshot taken at the handshake, so it cannot describe arms that
+ * happened after it -- and `cleared=` in GUEST_DR_DISARM counts every live thread zeroed at teardown
+ * REGARDLESS of whether it was ever armed, so it OVERCOUNTS arms and is deliberately NOT used as an
+ * arm count anywhere below. The only arm count reported here is the count of positive per-arm
+ * records (GUEST_DR_ARM_OK lines), which is why every success prints one.
+ *
+ * `recovered` is C1(4): a tid whose create_thread attempt FAILED or was DEFERRED (deferred means no
+ * mapping offset was published yet, so no attempt was even possible) and which the handshake sweep
+ * then armed successfully. Those are recovered, not unarmed -- conflating them is the accounting
+ * error this record exists to prevent. `failed_never_recovered` is the set that is genuinely still
+ * unarmed, and it is derived from per-event records, not from `failed=` (which counts ATTEMPTS, and
+ * counts a tid twice when it both failed at birth and failed again in the sweep). */
+static void dr_print_terminal_summary(void)
+{
+    unsigned recovered = 0, failed_never_recovered = 0, deferred_events = 0, failed_events = 0;
+    unsigned exit_rows = 0, mapping_unavailable_births = 0, exited_unarmed = 0;
+    unsigned pre_handshake_births = 0, pre_handshake_exits = 0, orphan_exits = 0;
+    unsigned pre_mapping_exits = 0;
+    dr_terminal_seq = ++dr_seq;
+    for (unsigned i = 0; i < dr_birth_count; i++) {
+        DWORD tid = dr_birth[i].tid;
+        if (dr_birth[i].state == A2H_BIRTH_EXITED) {
+            exit_rows++;
+            if (dr_birth[i].seq < dr_handshake_seq) pre_handshake_exits++;
+            /* A tid that was born with no mapping offset published and then exited BEFORE the
+             * handshake is the one population neither the sweep nor any queue could retroactively
+             * cover -- it is not live at the handshake, so the sweep never sees it. Counted from
+             * records: mapping_available=0 on its own birth row, state=exited, seq before the
+             * handshake. */
+            if (!dr_birth[i].mapping_available && dr_birth[i].seq < dr_handshake_seq)
+                pre_mapping_exits++;
+            if (!dr_was_armed(tid)) orphan_exits++;
+            continue;
+        }
+        if (dr_birth[i].why == A2H_WHY_CREATE_THREAD) {
+            if (!dr_birth[i].mapping_available) mapping_unavailable_births++;
+            if (dr_birth[i].seq < dr_handshake_seq) pre_handshake_births++;
+            if (dr_birth[i].state == A2H_BIRTH_DEFERRED) deferred_events++;
+            if (dr_birth[i].state == A2H_BIRTH_FAILED) failed_events++;
+            if (dr_birth[i].state != A2H_BIRTH_ARMED) {
+                if (dr_was_armed(tid)) recovered++;
+                else if (dr_tid_exited(tid)) exited_unarmed++;
+                else failed_never_recovered++;
+            }
+        } else if (dr_birth[i].state == A2H_BIRTH_FAILED && !dr_was_armed(tid)) {
+            /* A sweep attempt that lost and was never subsequently recovered. */
+            if (dr_tid_exited(tid)) exited_unarmed++;
+            else failed_never_recovered++;
+        }
+    }
+    fprintf(report, "GUEST_DR_ARM_TERMINAL arms_recorded=%u armed_before_handshake=%u "
+                    "armed_at_or_after_handshake=%u arm_attempt_failures=%u collision=%u "
+                    "create_thread_events=%u exit_events=%u deferred_births=%u failed_births=%u "
+                    "recovered_by_sweep=%u failed_never_recovered=%u exited_unarmed=%u birth_rows=%u%s "
+                    "handshake_seq=%u last_seq=%u handshake_seen=%u terminal=%u\n",
+            dr_arm_ok_records, dr_armed_before_handshake, dr_armed_at_or_after_handshake, dr_failed,
+            dr_collision, dr_create_thread_events, dr_exit_events, deferred_events, failed_events,
+            recovered, failed_never_recovered, exited_unarmed, dr_birth_count,
+            dr_birth_overflow ? " birth_overflow=1" : "",
+            dr_handshake_seq, dr_seq, dr_handshake_seen ? 1u : 0u, dr_terminal_seq);
+    /* The reconciliation the packet demands: what the artifact can and cannot prove. Every clause is
+     * derived from records, never from a count that could be a snapshot or a superset. */
+    fprintf(report, "GUEST_DR_ARM_RECONCILE arm_tid_list=%u arm_tid_overflow=%u "
+                    "disarm_cleared=%u disarm_cleared_is_not_an_arm_count=1 "
+                    "distinct_armed_tids=%u pre_handshake_births=%u pre_handshake_exits=%u "
+                    "mapping_unavailable_births=%u orphan_exits=%u incomplete=%u\n",
+            dr_arm_tid_count, dr_arm_tid_overflow, dr_disarmed, dr_distinct_armed,
+            pre_handshake_births, pre_handshake_exits, mapping_unavailable_births, orphan_exits,
+            (dr_birth_overflow || dr_arm_tid_overflow || dr_prev_overflow || dr_hit_overflow)
+                ? 1u : 0u);
+    fprintf(report, "GUEST_DR_ARM_RECONCILE_EXIT_RULE exits_recorded=%u exit_records_missing=%u "
+                    "note=EXIT_THREAD_DEBUG_EVENT_is_not_delivered_to_a_DEBUG_ONLY_THIS_PROCESS_debugger\n",
+            exit_rows, dr_exit_events);
+    /* C2 PRE-MAPPING-EXIT BOUND, as a DERIVED decision rather than two counts a reader must combine
+     * (and might combine wrongly). The packet's question is: could a tid born before mapping
+     * availability have exited before the handshake having dispatched guest code -- uncovered by the
+     * sweep, and uncoverable by any queue? Three outcomes, and the default is UNKNOWN:
+     *
+     *   EMPTY_NO_PRE_MAPPING_BIRTH  no birth row was ever recorded with mapping_available=0, and the
+     *                               ledger did not overflow, and the handshake happened. Nothing could
+     *                               have been in the window.
+     *   NO_PRE_MAPPING_EXIT         pre-mapping births exist but every one of them is still live at
+     *                               the handshake (no exited row before it), so the sweep covered them.
+     *   PRE_MAPPING_EXIT_UNCOVERED  at least one tid was born without mapping availability and exited
+     *                               before the handshake. Its guest dispatch status is NOT decidable
+     *                               from these records alone, so this yields UNKNOWN and must be
+     *                               joined against the ICALL/bridge-dispatch census before any
+     *                               coverage claim -- never read as absence.
+     *   UNKNOWN                     the ledger overflowed, no handshake was seen, or the exit path
+     *                               could not be recorded (exit records are not delivered by this
+     *                               debugger, see RECONCILE_EXIT_RULE), so the window cannot be closed
+     *                               from records.
+     */
+    {
+        const char *window;
+        if (dr_birth_overflow || !dr_handshake_seen || dr_exit_events != exit_rows)
+            window = "UNKNOWN";
+        else if (pre_mapping_exits) window = "PRE_MAPPING_EXIT_UNCOVERED";
+        else if (mapping_unavailable_births) window = "NO_PRE_MAPPING_EXIT";
+        else window = "EMPTY_NO_PRE_MAPPING_BIRTH";
+        fprintf(report, "GUEST_DR_ARM_PRE_MAPPING_BOUND births_before_mapping=%u "
+                        "births_before_handshake=%u exits_before_handshake=%u pre_mapping_exits=%u "
+                        "handshake_seq=%u decision=decidable_from_records window=%s\n",
+                mapping_unavailable_births, pre_handshake_births, pre_handshake_exits,
+                pre_mapping_exits, dr_handshake_seq, window);
+    }
+    /* Every observed arm, with its source, so the terminal record is self-contained and a reader
+     * never has to reconstruct the set from the handshake snapshot plus guesswork. */
+    for (unsigned i = 0; i < dr_birth_count; i++)
+        fprintf(report, "GUEST_DR_BIRTH_ROW index=%u seq=%u tid=%lu why=%s state=%s reason=%s "
+                        "mapping_available=%u ticks=%llu\n",
+                i, dr_birth[i].seq, dr_birth[i].tid,
+                dr_birth[i].why == A2H_WHY_HANDSHAKE ? "handshake" :
+                (dr_birth[i].why == A2H_WHY_CREATE_THREAD ? "create_thread" : "exit"),
+                a2h_state_name(dr_birth[i].state), a2h_reason_name(dr_birth[i].reason),
+                dr_birth[i].mapping_available, (unsigned long long)dr_birth[i].ticks);
+    for (unsigned i = 0; i < dr_arm_tid_count; i++)
+        fprintf(report, "GUEST_DR_ARM_TID_TERMINAL index=%u tid=%lu source=%s\n", i,
+                dr_arm_tids[i], dr_arm_tid_why[i] == A2H_WHY_HANDSHAKE ? "handshake" : "create_thread");
+    fflush(report);
+}
+
 static void dr_handshake(DWORD tid)
 {
     if (!dr_canonical) {
         /* Symbol resolution needs an initialized symbol handler; capture() has not run yet at the
          * handshake, so initialize it here. Same options capture() uses, so symbol lookups behave
-         * identically whichever path initializes first. */
-        SymSetOptions(SYMOPT_UNDNAME | SYMOPT_LOAD_LINES | SYMOPT_DEFERRED_LOADS |
-                      SYMOPT_FAIL_CRITICAL_ERRORS);
-        SymInitialize(process, out_dir, TRUE);
+         * identically whichever path initializes first. The process guard is not a behaviour change
+         * for the collector (process is always live by the time a debug event arrives); it keeps the
+         * fixture, which has no debuggee, from asking the symbol handler about a null handle. */
+        if (process) {
+            SymSetOptions(SYMOPT_UNDNAME | SYMOPT_LOAD_LINES | SYMOPT_DEFERRED_LOADS |
+                          SYMOPT_FAIL_CRITICAL_ERRORS);
+            SymInitialize(process, out_dir, TRUE);
+        }
         resolve_geometry();
     }
     if (!dr_canonical) {
         dr_failed++;
+        dr_last_fail_reason = A2H_REASON_NO_MAPPING_OFFSET;
+        /* C2: the handshake still happened, and its seq is what every "before the handshake" bound is
+         * measured against -- so it is stamped even on this failure path. A handshake with no mapping
+         * offset leaves the whole run uncovered, which the terminal line reports as UNKNOWN rather
+         * than as an empty pre-mapping window. */
+        dr_handshake_seen = 1;
+        dr_handshake_seq = ++dr_seq;
         fprintf(report, "GUEST_DR_ARM why=handshake ok=0 armed=0 failed=%u reason=no_mapping_offset "
-                        "handshake_tid=%lu\n", dr_failed, tid);
+                        "handshake_tid=%lu handshake_seq=%u\n", dr_failed, tid, dr_handshake_seq);
         fflush(report);
         return;
     }
+    /* Stamped BEFORE the sweep, so every arm the sweep itself performs is correctly counted as
+     * post-handshake, and so births can be ordered against the handshake. */
+    dr_handshake_seen = 1;
+    dr_handshake_seq = ++dr_seq;
     dr_arm_all("handshake");
     dr_print_arm_summary("handshake");
 }
@@ -221,6 +535,16 @@ static int dr_was_armed(DWORD tid)
 {
     for (unsigned i = 0; i < dr_arm_tid_count; i++)
         if (dr_arm_tids[i] == tid) return 1;
+    return 0;
+}
+
+/* A tid with an exit row. Such a tid is reported in the EXIT population, never as a terminal unarmed
+ * tid: "exited before it could be armed" and "still live and never armed" are different findings, and
+ * collapsing them would be the same conflation C1(4) forbids for failed attempts. */
+static int dr_tid_exited(DWORD tid)
+{
+    for (unsigned i = 0; i < dr_birth_count; i++)
+        if (dr_birth[i].tid == tid && dr_birth[i].state == A2H_BIRTH_EXITED) return 1;
     return 0;
 }
 
@@ -335,10 +659,14 @@ static void dr_disarm_all(void)
         CloseHandle(handle);
     } while (Thread32Next(snapshot, &entry));
     CloseHandle(snapshot);
-    fprintf(report, "GUEST_DR_DISARM ok=%d cleared=%u failed=%u dr7_nonzero=%u hits=%u hit_overflow=%u\n",
+    fprintf(report, "GUEST_DR_DISARM ok=%d cleared=%u failed=%u dr7_nonzero=%u hits=%u hit_overflow=%u "
+                    "cleared_means=live_threads_zeroed_at_teardown_not_arms\n",
             dr_disarm_failed == 0 ? 1 : 0, dr_disarmed, dr_disarm_failed, dr_disarm_failed,
             dr_hits, dr_hit_overflow);
     fflush(report);
+    /* C1(3): the TERMINAL full-list summary. Printed here, after teardown, so it describes the whole
+     * process lifetime rather than the handshake instant -- and before fclose, so it cannot be lost. */
+    dr_print_terminal_summary();
 }
 
 /* A2h install handshake. The toolkit raises this FIRST-CHANCE at its thunk-install callback and
@@ -643,6 +971,114 @@ static void capture_guest_threads(void)
     free(registry);
 }
 
+/* The gated CREATE_THREAD branch, extracted verbatim from main()'s debug loop so that the fixture
+ * can drive the SAME code the production collector runs rather than a test-local copy of it.
+ * Behaviour is unchanged: the gate check is still the first thing this does. */
+static void dr_on_create_thread(HANDLE thread, DWORD tid)
+{
+    unsigned reason = A2H_REASON_NONE;
+    if (!dr_on()) return;
+    /* C2: the birth is recorded FIRST, before any attempt, so the record exists even if the attempt
+     * below cannot run or fails. */
+    a2h_birth_event(tid);
+    if (resolve_geometry()) {
+        if (dr_arm_thread(thread, tid, "create_thread", &reason)) {
+            /* C1(2): the success is now recorded as an event, not left to a summary printed at a
+             * different time. This is the arm that used to be silent. */
+            a2h_birth_record(tid, A2H_WHY_CREATE_THREAD, 1, A2H_BIRTH_ARMED, A2H_REASON_NONE);
+        } else {
+            a2h_birth_record(tid, A2H_WHY_CREATE_THREAD, 1, A2H_BIRTH_FAILED, reason);
+            dr_last_fail_reason = reason;
+            /* Kept for continuity with the existing artifact shape: a failed create_thread arm still
+             * prints its summary. */
+            dr_print_arm_summary("create_thread");
+        }
+    } else {
+        dr_failed++;
+        dr_last_fail_reason = A2H_REASON_NO_MAPPING_OFFSET;
+        /* DEFERRED, not failed: no attempt was possible yet, and the handshake sweep is expected to
+         * recover this tid. Recorded distinctly so a later recovery is reported as recovered rather
+         * than as a contradiction. */
+        a2h_birth_record(tid, A2H_WHY_CREATE_THREAD, 0, A2H_BIRTH_DEFERRED,
+                         A2H_REASON_NO_MAPPING_OFFSET);
+        fprintf(report, "GUEST_DR_ARM_FAIL tid=%lu why=create_thread reason=no_mapping_offset\n", tid);
+    }
+}
+
+/* C2 lifecycle record, extracted from main()'s debug loop for the same reason as above. MEASURED
+ * CAVEAT, recorded because the packet demands that an unprovable bound yield UNKNOWN rather than an
+ * implied guarantee: with a DEBUG_ONLY_THIS_PROCESS debugger Windows does NOT deliver
+ * EXIT_THREAD_DEBUG_EVENT for a thread that exits (only EXIT_PROCESS ends the loop), so this is
+ * expected to be unreachable in practice. It is kept because it costs nothing and would capture a
+ * delivery on a host that does send it; the terminal line reports exits_recorded and states the
+ * caveat, so a zero exit count is never read as "no thread exited". */
+static void dr_on_exit_thread(DWORD tid)
+{
+    if (!dr_on()) return;
+    dr_exit_events++;
+    if (!a2h_birth_record(tid, A2H_WHY_EXIT, dr_canonical ? 1 : 0, A2H_BIRTH_EXITED,
+                          A2H_REASON_NONE)) {
+        /* The ledger is full, so this exit could not be recorded. Losing a lifecycle row silently
+         * would be exactly the absent-record error class; say so loudly. */
+        fprintf(report, "GUEST_DR_BIRTH_DROPPED tid=%lu event=exit reason=ledger_full\n", tid);
+        fflush(report);
+    }
+}
+
+/* ── Fixture seams (tests/test_collect_arming.c) ────────────────────────────────────────────────
+ *
+ * These exist so the C1/C2 fixture drives the PRODUCTION branch bodies above rather than a
+ * test-local copy of them -- the apu_watch_fixture_test precedent. Nothing in the collector calls
+ * them, they add no behaviour, and the gate still decides everything: with JSRF_TRACE_A2H_DR unset
+ * every one of them is inert (jsrf_a2h_test_create_thread/exit_thread return immediately, the
+ * handshake refuses, and the terminal summary is not reached because dr_disarm_all's caller is
+ * gated). */
+void jsrf_a2h_test_begin(const char *report_path)
+{
+    FILE *file = fopen(report_path, "w");
+    if (file) report = file;
+    process_id = GetCurrentProcessId();
+    dr_gate_read = 0;              /* re-read the gate, so the fixture's own environment decides */
+    dr_enabled = 0;
+}
+
+void jsrf_a2h_test_geometry(DWORD64 canonical)
+{
+    if (!dr_on()) return;
+    dr_geometry_pinned = 1;
+    dr_canonical = canonical;
+}
+
+void jsrf_a2h_test_create_thread(HANDLE thread, DWORD tid)
+{
+    dr_on_create_thread(thread, tid);
+}
+
+void jsrf_a2h_test_exit_thread(DWORD tid)
+{
+    dr_on_exit_thread(tid);
+}
+
+int jsrf_a2h_test_handshake(DWORD tid)
+{
+    if (!dr_on()) return 0;
+    dr_handshake(tid);
+    return dr_handshake_seen;
+}
+
+void jsrf_a2h_test_terminal(void)
+{
+    if (!dr_on()) return;
+    dr_print_terminal_summary();
+}
+
+DWORD jsrf_a2h_test_armed_count(void) { return dr_armed; }
+DWORD jsrf_a2h_test_failed_count(void) { return dr_failed; }
+
+/* The fixture links this file to drive the production branch bodies above, so its own main() is
+ * compiled out there. Nothing in the production build defines JSRF_COLLECT_NO_MAIN, so the collector
+ * entry point is unchanged. */
+#ifndef JSRF_COLLECT_NO_MAIN
 int main(int argc, char **argv)
 {
     STARTUPINFOA startup = {sizeof(startup)};
@@ -707,17 +1143,10 @@ int main(int argc, char **argv)
              * gated watch can be complete for a thread's whole life. Arming after ContinueDebugEvent
              * would leave a window in which the new thread could perform a watched write unarmed --
              * which is exactly the UNKNOWN/coverage failure the packet refuses to accept. */
-            if (dr_on()) {
-                if (resolve_geometry()) {
-                    if (!dr_arm_thread(event.u.CreateThread.hThread, event.dwThreadId, "create_thread"))
-                        dr_print_arm_summary("create_thread");
-                } else {
-                    dr_failed++;
-                    fprintf(report, "GUEST_DR_ARM_FAIL tid=%lu why=create_thread reason=no_mapping_offset\n",
-                            event.dwThreadId);
-                }
-            }
+            dr_on_create_thread(event.u.CreateThread.hThread, event.dwThreadId);
             if (event.u.CreateThread.hThread) CloseHandle(event.u.CreateThread.hThread);
+        } else if (event.dwDebugEventCode == EXIT_THREAD_DEBUG_EVENT) {
+            dr_on_exit_thread(event.dwThreadId);
         } else if (event.dwDebugEventCode == LOAD_DLL_DEBUG_EVENT) {
             if (event.u.LoadDll.hFile) CloseHandle(event.u.LoadDll.hFile);
         } else if (event.dwDebugEventCode == EXCEPTION_DEBUG_EVENT) {
@@ -787,3 +1216,4 @@ int main(int argc, char **argv)
     return !strcmp(outcome, "normal_exit") ? (exit_code ? 1 : 0) :
            !strcmp(outcome, "collector_failure") || !dump_ok ? 2 : 3;
 }
+#endif /* JSRF_COLLECT_NO_MAIN */

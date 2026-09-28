@@ -181,6 +181,30 @@ if(BUILD_TESTING)
         ENVIRONMENT "RECOMP_APU_TRACE=1;RECOMP_APU_PWRITE_WATCH=1"
         PASS_REGULAR_EXPRESSION "AC-PWRITE events=2 in_image_i=1 above_image_i=1 ngp_skipped=0 invalid=0")
     add_test(NAME jsrf_gpu_inspection COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_gpu_inspection.py)
+    # A2h-arming-coverage-attribution C1/C2.  The fixture lives in the toolkit's tests/
+    # directory, like tests/apu_watch_fixture_test.c and tests/kernel_inplace_event_test.c,
+    # because it is a standalone collector fixture and the game repo keeps no fixture of
+    # its own under tests/.  Registered TWICE, on purpose: the DR gate
+    # (JSRF_TRACE_A2H_DR) is read once and cached, so one process can only ever exercise
+    # one arm.  The gated arm asserts every new record; the unset arm is the inertness
+    # control and asserts an EMPTY artifact plus unchanged counters -- record-level
+    # inertness, not merely log silence.
+    add_executable(jsrf_collect_arming_test
+        ${XBOXRECOMP_DIR}/tests/collect_arming_fixture_test.c)
+    # collect.c is compiled here for its gated branch bodies; its own main() is excluded so the
+    # fixture's main() is the entry point. No game source is linked, so nothing of the collector
+    # beyond the instrument under test is pulled in.
+    target_sources(jsrf_collect_arming_test PRIVATE tools/harness/collect.c)
+    target_include_directories(jsrf_collect_arming_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(jsrf_collect_arming_test PRIVATE dbghelp shell32)
+    target_compile_definitions(jsrf_collect_arming_test PRIVATE
+        _CRT_SECURE_NO_WARNINGS JSRF_COLLECT_NO_MAIN)
+    add_test(NAME jsrf_collect_arming_gate_on COMMAND jsrf_collect_arming_test)
+    set_tests_properties(jsrf_collect_arming_gate_on PROPERTIES
+        TIMEOUT 30 ENVIRONMENT "JSRF_TRACE_A2H_DR=1")
+    add_test(NAME jsrf_collect_arming_gate_off COMMAND jsrf_collect_arming_test)
+    set_tests_properties(jsrf_collect_arming_gate_off PROPERTIES TIMEOUT 30)
     add_executable(jsrf_gpu_smoke tests/native_gpu_smoke.c)
     target_link_libraries(jsrf_gpu_smoke PRIVATE d3d11 dxgi dxguid)
     find_path(RENDERDOC_INCLUDE_DIR renderdoc_app.h PATHS "$ENV{ProgramFiles}/RenderDoc")
