@@ -23,7 +23,7 @@ carries; no fresh OFF was taken**, exactly as the packet and the Advisor require
 | 1 | `…035337-386-a2h-repeat-on-1` | **none** — `diagnostic_deadline` (exit 3) | **NOT ANCHORED** (no OOM) | complete | **NOT A REALIZATION** |
 | 2 | `…035402-315-a2h-repeat-on-2` | **`0x00000000@0014982E`** | PASS | complete | **TARGET** |
 | 3 | `…035409-942-a2h-repeat-on-3` | `0x41200000@00147D36` | PASS | complete | NON-TARGET |
-| 4 | `…035417-757-a2h-repeat-on-4` | `0x00000000@00147DBC` | PASS | complete | NON-TARGET |
+| 4 | `…035417-757-a2h-repeat-on-4` | **TWO terminals: `0x00000000@00147DBC` AND `0x00000001`** (the table first showed only the first) | PASS | complete | NON-TARGET |
 | 5 | `…035425-633-a2h-repeat-on-5` | **`0x00000000@0014982E`** | PASS | complete | **TARGET** |
 
 **Run 1 is `diagnostic_deadline`, not a terminal failure** — capture was bounded at 8 s **before any fatal
@@ -41,7 +41,21 @@ wrong.** Corrected, and the corrected test is the one reported above.
 `GUEST_DR_ARM_TERMINAL arms_recorded=17 armed_at_or_after_handshake=17 arm_attempt_failures=9
 collision=0 create_thread_events=16`, and `GUEST_DR_ARM_RECONCILE arm_tid_list=17 arm_tid_overflow=0
 distinct_armed_tids=17`. **Census `armed=1 mapped=28 protected=28`, `touched=0`, `publish_failed=0`** in all.
-**Install control positive** (`80000115 → FE000104`, `ok=1`) in all. **Zero `GUEST_DR_HIT`** in all.
+**Install control positive** (`80000115 → FE000104`, `ok=1`) in all. **Zero `GUEST_DR_HIT` in all — recorded
+as INSTRUMENT STATUS, NOT as coverage.** **Per the DR0 positive control failure, the canonical-write channel
+is NOT CERTIFIED:** the watch was armed (`DR7` read back `0x000D0001`) and **never fired**, so zero hits
+certify **nothing** about writes. See the `PREMISE_CHANGED` section.
+
+**And the acceptance reviewer STRENGTHENED this beyond the Session's own finding.** It counted the raw debug
+event stream: **no `EXCEPTION_SINGLE_STEP` (`0x80000004`) was ever delivered to the debugger at all, in any run
+of this line** — on-1 15036 events/0, on-2 14358/0, on-3 14396/0, on-4 14429/0, on-5 14446/0, pinned
+14340/0. **So this is not "a hit was not recorded" — no data breakpoint reached the debugger even once across
+~14k events, including for a write that demonstrably happened.** The collector's dispatch **is** reached
+(`collect.c:1163` routes `EXCEPTION_SINGLE_STEP && dr_on()`), so **the failure is downstream of correct
+arming**, consistent with the second-chance / `DEBUG_ONLY_THIS_PROCESS` hypothesis.
+
+**Also scoped by the reviewer:** the coverage claim is **anchored runs only, 17/17 arms — run 1, which is NOT
+anchored, shows 18/18.** *(This corrects an earlier blanket "17/17" in this record.)*
 
 ## K = 3 — and the mechanical agreement is COMPLETE
 
@@ -57,7 +71,7 @@ coverage-complete TARGETs (runs 2 and 5). **K = 3 ≥ 2.**
 | DR hits | 0 | 0 | 0 | YES |
 | **Positive writer-class witness** | **none** | **none** | **none** | *(see below)* |
 
-**So the three realizations agree on every observable the instrument records**, and the agreement is
+**So the three realizations agree on every observable the instrument records** — **scoped to the channels that are CERTIFIED, which after the DR0 finding excludes the canonical-write channel** — and the agreement is
 **mechanical and pre-specified** as the packet requires — assessed from **both raw artifacts**, not from prose.
 
 ---
