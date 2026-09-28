@@ -110,7 +110,9 @@ typedef struct {
     uint32_t last_write_seq, last_write_enc, last_write_alias, last_write_value;
     uint64_t last_write_rip, last_write_ticks;
     uint32_t cross_checks, cross_mismatch, first_touch_count, first_touch_overflow;
-    uint32_t last_slot_read_value, last_slot_read_seq, last_slot_change_seen, reserved2;
+    uint32_t last_slot_read_value, last_slot_read_seq, last_slot_read_hits, last_slot_read_alias;
+    uint32_t last_slot_change_seen;
+    uint32_t terminal_alias_value, terminal_guest_value, terminal_cross_ok;
     XboxA2hSlotwLoss loss;
     XboxA2hSlotwEvent events[A2H_SLOTW_EVENTS_MAX];
     XboxA2hSlotwFirstTouch first_touch[A2H_SLOTW_FIRST_TOUCH_MAX];
@@ -130,7 +132,7 @@ typedef struct {
  * construction, whatever the assert does -- and the toolkit's own fixture prints the authoritative
  * number (14680) so the comparison is checkable from the archive too. Both numbers move together
  * with XBOX_A2H_SLOTW_VERSION. */
-_Static_assert(sizeof(XboxA2hSlotwLedger) == 82344u,
+_Static_assert(sizeof(XboxA2hSlotwLedger) == 82360u,
                "XboxA2hSlotwLedger mirror does not match xbox_memory_layout.h -- "
                "update this pin and XBOX_A2H_SLOTW_VERSION together");
 _Static_assert(sizeof(XboxA2hSlotwEvent) == 56u, "XboxA2hSlotwEvent mirror drifted");
@@ -1852,12 +1854,16 @@ static void capture_guest_threads(void)
              * facility made, including the ones the game-side hook requested. */
             fprintf(report, "GUEST_SLOTW_CROSS ledger_checks=%u ledger_mismatch=%u "
                             "loss_checks=%llu loss_mismatch=%llu loss_skipped=%llu "
-                            "last_slot_read=%08X last_slot_read_seq=%u change_seen=%u\n",
+                            "last_slot_read=%08X last_slot_read_seq=%u last_slot_read_hits=%u "
+                            "last_slot_read_alias=%u change_seen=%u "
+                            "terminal_alias=%08X terminal_guest=%08X terminal_cross_ok=%u\n",
                     sw->cross_checks, sw->cross_mismatch,
                     (unsigned long long)sw->loss.cross_checks,
                     (unsigned long long)sw->loss.cross_mismatch,
                     (unsigned long long)sw->loss.cross_skipped,
-                    sw->last_slot_read_value, sw->last_slot_read_seq, sw->last_slot_change_seen);
+                    sw->last_slot_read_value, sw->last_slot_read_seq, sw->last_slot_read_hits,
+                    sw->last_slot_read_alias, sw->last_slot_change_seen,
+                    sw->terminal_alias_value, sw->terminal_guest_value, sw->terminal_cross_ok);
             /* THE FIRST-TOUCH CENSUS: the SET of addresses the page's traffic touched, one record
              * per distinct address. This is what replaces the per-write records for non-slot
              * traffic, and it is why a linear fill of any length costs no records for its repeats. */
