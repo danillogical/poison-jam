@@ -60,8 +60,16 @@ xbox_HeapAlloc: out of memory (requested 598869040, used 12715008/50855936)
 
 | # | Defect | Evidence |
 |---|---|---|
-| **A** | A guest request for **571 MB** — implausible, so the size is computed from bad input | the constant itself |
+| **A** | A guest `MEM_COMMIT` of **571 MB** with `BaseAddress = NULL` — **not** a legitimate reservation (see §4), and ~285× the size the same site normally passes | the two-size table; the `alloc_type` decode |
 | **B** | **No NULL check on the allocation result**, so a recoverable `STATUS_NO_MEMORY` becomes a fatal crash | `0xC0000017` → NULL ICALL → `0xE0424943` |
+
+**On Defect A's characterisation — stated with the care it needs.** The size is **implausible for a
+commit** and the same site passes a small size normally. That makes **"the size is mis-derived"** the
+leading hypothesis, **but it is a hypothesis, not a measurement**: the producer of `[ebp-0x24]` has **not**
+been traced, and the Planner is right that *"whether the size comes from a bad input or a legitimate large
+virtual-region request"* is not decided by the archived sequence alone. **§4 rules out the pure-reservation
+defence for this invocation specifically; it does not identify what produced `0x23B20410`.** That trace is
+exactly what the `A2h-oom-causal-slice` packet exists to perform.
 
 **Defect B is the crash.** `0xC0000017` is a *return value*, not an exception — a guest that checked it
 would simply report failure. **The run log even shows one archived run that did:**
@@ -94,6 +102,53 @@ The caller at `0x00149E50` (XBE disassembly):
 **So `RegionSize = [ebp-0x24] + 0x20`, where `[ebp-0x24] = 598869008 = 0x23B20410`.** The size is a
 **stack local**, computed by the function's own logic before the call — so tracing `[ebp-0x24]`'s definition
 backward is a **bounded, demand-driven** question, exactly the shape that has worked on this project.
+
+### The same call site passes **two and only two** sizes
+
+`alloc_type = 0x801000` appears **70 times** in the archive, with **exactly two distinct sizes**:
+
+| | Size | Pre-add local (`size − 0x20`) |
+|---|---|---|
+| **normal** | `2097200` = `0x00200030` | **`2097168` = `0x00200010`** |
+| **failing** | `598869040` = `0x23B20430` | **`598869008` = `0x23B20410`** |
+
+**Both have the same low 16 bits (`0x0430` / `0x0410` respectively) and differ by `0x23920400`.**
+
+> **A Session error, corrected before it propagated.** My first pass claimed the normal pre-add local was
+> **exactly `0x200000` (2 MB, a clean power of two)** and that this showed the same path normally computing
+> a tidy 2 MB. **That was wrong** — I subtracted `0x20` from the *rounded* figure and then compared against a
+> value I had assumed. The normal pre-add local is **`0x00200010`**, which is **not** page-aligned and **not**
+> a power of two. **The "exactly 2 MB" reading is withdrawn.** What survives is the weaker but still useful
+> fact: **the site passes one small size normally (`0x00200030`) and the implausible `0x23B20430` when it
+> fails**, and the failing value is **~285× larger**.
+
+### And the failing size is **not** a legitimate large *reservation*
+
+The Planner raised a load-bearing nuance from `src/kernel/kernel_bridge.c:833-899`: the toolkit
+**distinguishes** a large pure `MEM_RESERVE` from RAM backing, and on real hardware a reservation costs
+address space rather than pages — so *"a large virtual request is not automatically invalid."* **That is
+correct about the toolkit, and the Session verified it by reading the source.** But it **does not apply to
+this invocation**, and the decode is decisive:
+
+| Bit | Value | Present in `0x801000`? |
+|---|---|---|
+| `MEM_COMMIT` | `0x1000` | **YES** |
+| `MEM_RESERVE` | `0x2000` | **NO** |
+
+The toolkit's reserve branches (`:857` "grant above RAM" and `:876` "clamp") both require
+**`(alloc_type & 0x2000) && !(alloc_type & 0x1000)`** — which is **FALSE** for `0x801000`.
+**So neither reserve branch can run for the failing call**, and the archived logs confirm it: **zero**
+"reserve of N granted" messages and **zero** "clamped" messages across the whole archive.
+
+**So the failing call is a `MEM_COMMIT` with `BaseAddress = NULL` for 571 MB.** Committing means backing
+pages, so on a 64 MB console a 571 MB commit **cannot succeed on hardware either.** **The
+"legitimate large reservation" defence is therefore not available for this specific invocation** — though
+it remains a correct general caution, and the archive shows `0x2000` reserves at `1048576`/`2097152` being
+handled by the normal heap path.
+
+**This narrows the `O-SEMANTICS` row rather than deleting it:** the row should not be read as *"this
+invocation may be legitimate"*, because for `0x801000` it demonstrably is not. Whether *some other* large
+virtual request in this title is legitimate is a separate question the packet may still ask.
 
 ## 5. What this means for the `A2h` packet
 

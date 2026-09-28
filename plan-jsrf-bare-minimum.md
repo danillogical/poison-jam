@@ -100,7 +100,53 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — **`PIO_FREE` DEFERRED by Advisor ruling; next authorized work is `A2h`**
+## CURRENT PACKET — `A2h-oom-causal-slice-r1` (**discovery**: what produced the 571 MB allocation size?) — **PROMOTED 2026-09-27, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-oom-causal-slice.md`, revision **`A2h-oom-causal-slice-r1`**, class
+  **discovery**, frozen SHA-256
+  **`E9CDB1B39066CE5F5626FF74246E5EAD34C1612BC31BE622341B50FCC541108C`** (**47 lines**). **This is the packet
+  to execute.** Promotion byte-identical with no revision (§5.3); hash verified **3× over ~10 s** immediately
+  before and matching the Planner's report.
+- **Adequacy:** the **writing Planner's** own §5.3 two-question review — **`ADEQUATE`**, `BLOCKING: NONE`,
+  `PREMISE_FRESHNESS: BOUNDED`. **Correct for a discovery**; **no shape preflight**. Verification:
+  `docs/reviews/a2h-oom-causal-slice-r1-session-verification.md`.
+- **The question:** *which instruction and live input defined `[ebp-0x24] = 0x23B20410` before the
+  `0x00149E24` addition produced the failing allocation size?* — answered by a **backward, invocation-bound
+  slice** from the original XBE plus pinned archived runs, with **at most one bounded 8-second diagnostic
+  strict capture** if needed.
+- **Rows:** `O-IDENTITY` (provenance repair) · **`O-APU-INPUT`** (a modelled APU input binds the pre-add
+  local → named-input discovery) · **`O-OTHER-INPUT`** (a witnessed non-APU producer → named-producer
+  discovery) · **`O-SEMANTICS`** (a deliberate large virtual-region request → virtual-memory fidelity
+  discovery **and Advisor ruling**) · **`O-OPEN`** (any unbound edge → one missing-witness/tooling
+  discovery, **never a fabricated fix**).
+- **Deliverables (not yet existing — the packet creates them):** a checked-in, tested backward-slice tool
+  under `scripts/` with a matching unit-test module, required before parsed traces may select an attribution
+  row; the evidence record; and at most one diagnostic hook, env-gated and **off at closure**.
+- **Forbids carried and verified present:** does **not** suppress the trap, fake the allocation, or **widen
+  the arena**; the guest's **NULL-guard repair is out of scope**; **`PIO_FREE` stays deferred**;
+  `A4b2-r7`/accepted-closed `A4b2-r8`/`A4b1-r4` not reopened; `0xFFFFB3` **`UNRESOLVED`**; any toolkit
+  advance requires **re-establishing P4's discovery-transfer bridge** first.
+
+### What the Session measured before planning (both records committed)
+
+| Record | Establishes |
+|---|---|
+| `docs/reviews/a2h-mechanism.md` | The request is a **byte-identical constant across 35 runs** (`598869040` = `0x23B20430` ≈ 571 MB vs a 48.5 MB arena); **the earliest OOM run has NO trap** (`20260922-224429-003-a2g-304f0-span`, a2g) so **the trap is not the cause** — it makes an already-broken path reachable sooner; the chain is `NtAllocateVirtualMemory` (ordinal 184, from `0x00149E50`) → **`0xC0000017`** → guest calls through **NULL** → `0xE0424943`. **Two stacked defects: an implausible 571 MB commit, and no NULL check on the result.** The arena behaves **correctly** |
+| same, §4 | The size is a **stack local** (`RegionSize = [ebp-0x24] + 0x20`), so its producer is a **bounded backward question**. The **same call site passes exactly two sizes**: `2097200` normally, `598869040` when it fails (**~285× larger**). The failing call is **`MEM_COMMIT` (`0x801000`)**, **not** a pure `MEM_RESERVE`, so the toolkit's reserve branches **cannot run for it** — the "legitimate large reservation" defence does **not** apply to this invocation, though it remains a correct general caution |
+| same, §5 | **`0xC0000017` is survivable**: `20260927-130036-879-a4b2-nr-baseline` returned `NO_MEMORY` **without** taking the NULL call, so the guest's own path decides whether the failure is fatal |
+
+**Two Session errors in that analysis are recorded and corrected in place:** a claim that the normal
+pre-add local was "exactly 2 MB" (it is `0x00200010`, withdrawn), and the horizon record's earlier causal
+reading that the OOM *tracks* the trap (correlation real, causation wrong).
+
+**Next authorized action:** **execute `A2h-oom-causal-slice-r1`** — the backward slice, producing
+`docs/reviews/a2h-oom-causal-slice-evidence.md` and a first-match row, then §5.8 acceptance.
+
+**Toolkit:** `c151d4e` (unchanged). **Game:** pending commit.
+
+---
+
+## Previous — **`PIO_FREE` DEFERRED by Advisor ruling** (superseded as the current packet)
 
 **The `PIO_FREE` line is closed at `O-OPEN` and DEFERRED.** `PIO_FREE-title-demand-bound-r1` executed to
 `O-OPEN`, the Session made the scope/defer referral its row required, and the **Persistent Advisor ruled:
