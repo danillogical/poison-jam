@@ -100,7 +100,71 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-callback-context-identity-r2` **EXECUTED → `ACCEPT-WITH-CORRECTIONS`**; **row `O-OPEN` SUSTAINED, edge ADVANCED**; successor next
+## CURRENT PACKET — `A2h-callback-slot-writer-trace-r1` (**discovery**: ONE edge — what writes `software_device+0x242C`?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-callback-slot-writer-trace.md`, **17 lines**, **7231 bytes**, frozen
+  **`C5FD9CAA405819255E0FF63DE35DB21E7F41E3F16E3B392842BF5CD44CD32A76`** — **this is the packet to execute.**
+  Validation: `docs/reviews/a2h-callback-slot-writer-trace-r1-session-validation.md`.
+
+### ✅ Established — do NOT re-derive
+
+| Fact | Value |
+|---|---|
+| **`software_device`** | **`MEM32(0x19DCE0) = 0x0019B200`** — the software NV2A device object |
+| **`aperture`** | **`[context] = 0xFD000000`** — the NV2A MMIO register aperture |
+| **`context`** | **`software_device + 0x2268`** |
+| **THE ONE SLOT** | **`context+0x1C4 == software_device+0x242C`** (`0x2268 + 0x1C4 = 0x242C`) |
+| **The callback read** | **`0x00193E62 mov eax,[esi+0x1C4]`** in `sub_00193D90`, **`esi = ecx` = context**, **NULL-tested** |
+| **The failing call** | **`0x00193EB5 call eax`** |
+| **The installed value** | **`MEM32(software_device+0x242C) = 0x0015F9D0`** — **the installer chain RAN** |
+
+**All five mandated XBE byte checks and all five offset-shift-controlled memory values are ACCEPTED**
+(`a2h-acceptance-condition-a-satisfied.md`, `aed7998`). **The `device+0x2268` refutation is RETRACTED on
+verified bytes** (`a2h-device-2268-refutation-retracted.md`, `d0319d0`).
+
+### ⚠ The vocabulary — the reviewer's condition (b), now mandatory
+
+**"device" named TWO OBJECTS and the packet's earlier phrase conflated them.** **`software_device` is
+`0x0019B200`; `aperture` is `0xFD000000`.** **They are simultaneously true and NOT interchangeable.**
+**Never write bare "device."**
+
+### ⚠ The Session's worst error this line, and the packet now ENFORCES the fix
+
+**The Session reported `MEM32(device+0x2268) = 0x000000FD` and called it *"a small INTEGER, not a pointer"*
+— building a "permanent" refutation on it. The true value is `0xFD000000`, THE NV2A MMIO APERTURE BASE,
+documented 29 times in this repository. The byte-reversal DESTROYED THE CLUE.**
+
+**The packet encodes all THREE of the Session's script bugs as BINDING controls:**
+
+| Instruction | Prevents |
+|---|---|
+| **`VA`/`VA+1` offset-shift control is BINDING**; *"a single-address control does NOT discriminate"* | the byte-reversal |
+| **parse with `int(text,16)`**, NOT `int.from_bytes(bytes.fromhex(text),"little")` | the double reversal |
+| **compare `(v1 & 0x00FFFFFF) == (v0 >> 8)`**, not `v1 == v0 >> 8` | the too-strict shift check |
+
+**So the practice note's control set (`session-extraction-error-pattern.md`) is now ENFORCED BY A FROZEN
+PACKET rather than by the Session's discipline.**
+
+### The three searches
+
+1. **Direct stores** — every `[reg+0x242C]` across **EVERY original-XBE executable section**, each base's
+   **complete reaching definition** traced to `software_device` or refuted.
+2. **Context aliases** — every `[context+0x1C4]` write, **including the DPC consumer path**.
+3. **Computed stores** — `[base+index*4]`, `[base+reg]`, bulk-write destinations.
+
+**Generated text locates LEADS only, never exhaustive coverage.**
+
+### The TWO edges, kept SEPARATE
+
+1. **THIS packet:** **the writer of `software_device+0x242C`.**
+2. **The C-5 ledger (NOT this question):** **the caller of `sub_00194ADD` and the `KeInsertQueueDpc` site**
+   — recorded UNTRACED/UNLOCATED. **The Session verified `sub_00194ADD` is a DISPATCH-TABLE target with
+   ZERO call sites** (`a2h-c5-dpc-activation-edge.md`, `227917a`), **and the packet forbids inferring anything
+   about the slot writer from that.**
+
+**Next:** execute the three searches; then §5.8 acceptance.
+
+**Toolkit:** `37226b2` local / `571982d` pushed (**no-push state**). **Game:** `ec108cf`.
 
 - **Packet:** `docs/packets/a2h-callback-context-identity.md`, **r2**, frozen
   **`94D4C08A56D9DF4F56524D9F56594E081BC6820CFF7877EE118EBFD7295ED17A`** — **not edited**.
