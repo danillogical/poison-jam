@@ -23,6 +23,13 @@ produced a `#DB` hit. It did not.**
 | 7 | **The store happens AFTER the arm** | log line 50 `handshake … state=ack`, log line 52 `install …` — **the arm precedes the store, which is the handshake's entire purpose** |
 | 8 | **NO HIT WAS RECORDED** | `GUEST_DR_DISARM … hits=0 hit_overflow=0`; **`GUEST_DR_HIT` count is 0 in every run of this line** |
 
+**And the Session STRESS-TESTED link 8, because the whole finding rests on it.** The zero-`0x80000004`
+inference depends on the collector **printing every exception debug event**. **Verified at `collect.c:1156`:**
+the `fprintf(report, "DEBUG_EXCEPTION tid=… code=… first=…")` sits **at the TOP of the exception branch,
+BEFORE any filtering, gating or routing** — the `EXCEPTION_SINGLE_STEP` check is at `:1163`, seven lines
+later. **So every exception that reaches the debugger is printed, and zero `0x80000004` lines means zero
+single-step events were DELIVERED — not that they were filtered out of the report.** **The inference holds.**
+
 **Every link holds. A 4-byte write to the watched address, by the armed thread, after the arm, under a
 correctly programmed write watch, produced no `#DB`.**
 
