@@ -8,8 +8,96 @@
  * a new thread. Only the owning thread writes a slot. External readers MUST
  * freeze the process at a debug event; no in-process live snapshot is allowed.
  * Odd sequence numbers mark events interrupted midway through publication. */
-JsrfRegistry g_jsrf_debug = {1};
+JsrfRegistry g_jsrf_debug = {JSRF_REGISTRY_VERSION};
 static RECOMP_TLS JsrfThread *current;
+
+/* ── A2h NULL-slot latch ───────────────────────────────────────────────────────
+ *
+ * Deciding what zeroed the kernel thunk slot at 0x001C4064 requires a decision input that
+ * cannot drop the deciding event (docs/agent-workflow.md 6.1.6). A log line CAN be dropped --
+ * by the kernel-log budget, by concurrent stderr, or by a terminal RaiseException that runs
+ * before a flush -- so the authoritative record is this write-once latch, and the log lines are
+ * corroboration only.
+ *
+ * PER-THREAD, NOT GLOBAL. The toolkit's dispatch counter is `RECOMP_TLS` (kernel_bridge.c:316),
+ * so each thread has its own call sequence and its own first transition. A single global record
+ * would be claimed by whichever thread arrived first, which under races need not be the thread
+ * whose transition matters. So one slot per thread, keyed by the live-read tid, claimed once.
+ *
+ * NEVER RECYCLED. A slot is claimed by the first thread that observes a transition and is never
+ * reused, even after that thread exits -- recycling is how an exited thread's record gets
+ * mistaken for a live one. When the fixed capacity is exhausted the overflow flag is set and the
+ * event is reported UNKNOWN rather than given a recycled or dynamically allocated slot.
+ *
+ * ONE SLOT PER THREAD: `self_slot` is TLS, so a thread finds its own slot without searching and
+ * without a lock. Publication is a release-store of `valid` after the payload is written. */
+static RECOMP_TLS JsrfSlotTransition *self_slot;
+static RECOMP_TLS uint32_t self_call_index;
+
+void jsrf_slot_latch_install(uint32_t raw_value, uint32_t installed_value)
+{
+    /* The install sample is a POSITIVE CONTROL, not an observation: the image holds the ordinal
+     * marker 0x80000115 at slot 65 and the toolkit's patch loop rewrites it to the synthetic
+     * dispatch VA (KERNEL_VA_BASE + index*4). If the pair does not match that prediction, the
+     * control FAILED and every downstream attribution is unsafe -- so `install_ok` records the
+     * comparison rather than assuming it. */
+    uint32_t predicted = 0xFE000000u + 65u * 4u;   /* slot 65 == (0x001C4064-0x001C3F60)/4 */
+    if (g_jsrf_debug.latch.install_seen) return;
+    g_jsrf_debug.latch.install_raw = raw_value;
+    g_jsrf_debug.latch.install_value = installed_value;
+    g_jsrf_debug.latch.install_ok =
+        (raw_value == 0x80000115u && installed_value == predicted) ? 1u : 0u;
+    InterlockedExchange((volatile LONG *)&g_jsrf_debug.latch.install_seen, 1);
+}
+
+void jsrf_slot_latch_sample(uint32_t tid, uint32_t call_index, uint32_t ordinal,
+                            uint32_t before, uint32_t after)
+{
+    LONG slot;
+    LARGE_INTEGER now;
+    JsrfSlotTransition *s;
+
+    self_call_index = call_index;   /* remembered so the terminal path can report it */
+
+    /* Only a genuine nonzero->zero transition is a first-zero record. Anything else is the
+     * caller's business to filter, but this guard makes the latch's meaning unambiguous. */
+    if (before == 0 || after != 0) return;
+    if (self_slot) return;          /* write-once per thread; a second transition is not the first */
+
+    slot = InterlockedIncrement((volatile LONG *)&g_jsrf_debug.latch.claimed) - 1;
+    if (slot >= JSRF_LATCH_CAPACITY) {
+        /* FAIL CLOSED: no free slot means UNKNOWN, never a recycled slot. */
+        InterlockedIncrement((volatile LONG *)&g_jsrf_debug.latch.overflow);
+        return;
+    }
+    s = &g_jsrf_debug.latch.slots[slot];
+    InterlockedExchange((volatile LONG *)&g_jsrf_debug.latch.sequence, 1);  /* odd = publishing */
+    QueryPerformanceCounter(&now);
+    s->tid = tid;
+    s->call_index = call_index;
+    s->ordinal = ordinal;
+    s->before = before;
+    s->after = after;
+    s->intra = ordinal ? 1u : 0u;
+    s->reserved = 0;
+    s->ticks = (uint64_t)now.QuadPart;
+    /* Release the payload before the reader can see it as valid. */
+    InterlockedExchange((volatile LONG *)&s->valid, 1);
+    self_slot = s;
+    InterlockedExchange((volatile LONG *)&g_jsrf_debug.latch.sequence, 2);  /* even = settled */
+}
+
+uint32_t jsrf_slot_latch_self_call_index(void)
+{
+    return self_call_index;
+}
+
+uint32_t jsrf_slot_latch_self_observed(void)
+{
+    /* Distinguishes "this thread recorded a transition" from "this thread never sampled".
+     * A bare 0 from the call index would otherwise be ambiguous. */
+    return self_slot ? 1u : 0u;
+}
 
 void recomp_diag_thread_start(uint32_t start, uint32_t low, uint32_t high)
 {
