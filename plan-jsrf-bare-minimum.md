@@ -100,7 +100,68 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-callback-slot-writer-r1` (**discovery**: is the poller's `edi+0x1C4` really `device+0x242C`?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+## CURRENT PACKET — `A2h-callback-slot-writer-r1` **EXECUTED → `O-OPEN`** (named edge: `edi` identity); **integrity audit packet authorized and next**
+
+- **Packet:** `docs/packets/a2h-callback-slot-writer.md`, **19 lines**, frozen
+  **`D2CA02E17E2BACC1DE3726B3247965EA3A3B3061B504C06C9601F7FB4B894E3A`** — **not edited**.
+- **Row selection:** `docs/reviews/a2h-callback-slot-writer-r1-row-selection.md` — **`O-OPEN`**, named edge
+  **`edi`'s identity**.
+- **Identity gate executed:** `docs/reviews/a2h-callback-slot-identity-gate-executed.md` (`25a4f09`).
+- **Advisor ruling:** `docs/reviews/a2h-callback-slot-identity-advisor-ruling.md` (`451821e`), turn `01a0e82b`.
+
+### ✅ The identity gate answered NO — and the device-slot branch is PERMANENTLY CLOSED
+
+**From the ONE run whose dump passes `check-dump-mapping.py`** *(byte order settled by a known-string control)*:
+
+| Read | Value |
+|---|---|
+| `MEM32(0x19DCE0)` | **`0x0019B200`** — **exactly the generated initializer `recomp_0004.c:40150`** |
+| **`MEM32(device + 0x2268)`** | **`0x000000FD`** — **a small INTEGER, not a pointer, not the device** |
+| `MEM32(device + 0x242C)` | **`0x0015F9D0`** — **the refcount thunk: the installer DID run** |
+
+> **`[device+0x2268] != device`, so `edi` is NOT `device+0x2268` and the alias does NOT bind the failing
+> call.** **Per the Advisor: *"defeats the device-slot branch permanently — no future packet may re-litigate
+> the alias without new evidence."***
+
+**Discriminator 1 from disassembly:** **NO call site passes a literal `lea ecx,[reg+0x2268]`** — all four
+decodable sites do `mov ecx,edi` or `mov ecx,[esp+0xC]`, and **all read `[esi+0x100]` testing the same bit
+`0x01000000`.** **So the context arrives as a PARAMETER at every site**, and the five sites form **one polling
+family**.
+
+**The installer chain is CORRECT and it RAN** — `device+0x242C` holds `0x15F9D0` — **it simply does not
+feed this call.**
+
+### ⚠ A byte-order trap that nearly produced a FALSE finding
+
+**`inspect-jsrf.py memory` prints LITTLE-ENDIAN DWORD VALUES, not memory-order bytes.** The Session first read
+it as memory order and concluded `MEM32(0x19DCE0) = 0x30766A64` = ASCII `"djv0"` — **which would have made the
+D3D device global garbage and collapsed the whole object identity.** **Settled with a known string**
+(`djv000_0.adx` at `0x001D5078`). **Third interpretation error this session; the discipline is now a standing
+mandate — known-answer controls for EVERY extraction.**
+
+### ⚠ 23 of 24 archived A2h runs FAIL the dump-integrity gate
+
+**`CONTENT_MISMATCH` for 23 of 24.** In those, `MEM32(0x19DCE0)` reads `0x00B21900`; **in the one passing run,
+`0x0019B200` — exactly the generated initializer.** **So guest-memory reads from failing runs are
+uninterpretable, and the gate is what separated them.**
+
+> **⚠ The Advisor forbids citing the 23/24 census for any SPECIFIC row. Per-row primary mapping checks are
+> required.** **It is a population statement, not evidence about any individual row.**
+
+### The order the Advisor mandated
+
+1. **NEXT — a bounded, READ-ONLY audit packet** (authorized): score **every ACCEPTED A2h row** by
+   **decision-input source** — log/trace/code-static vs **guest-memory-from-dump + that run's mapping
+   result** vs live hook reads vs inference. **`O-OPEN`/`UNKNOWN` rows get a label check only.** **Any POSITIVE
+   claim consuming failing-run memory is flagged with exact input/run/status.** **Other lines excluded.**
+   **Reason it comes first: the caller-trace's register inputs may themselves be tainted — dependency, not
+   hygiene.**
+2. **THEN the caller-trace** — discriminator-1-one-level-up, to identify `edi`, **scoped to mapping-clean
+   inputs + XBE bytes + log lines only.** **Not concurrent.**
+
+**Next:** the integrity audit; then the `edi` caller-trace.
+
+**Toolkit:** `37226b2` local / `571982d` pushed (**no-push state**). **Game:** `0f79b0f`.
 
 - **Packet:** `docs/packets/a2h-callback-slot-writer.md`, **19 lines**, **7488 bytes**, frozen
   **`D2CA02E17E2BACC1DE3726B3247965EA3A3B3061B504C06C9601F7FB4B894E3A`** — **this is the packet to execute.**
