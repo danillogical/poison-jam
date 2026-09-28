@@ -449,6 +449,39 @@ static void a2h_arm_ok_record(DWORD tid, const char *why, DWORD64 dr7_readback, 
     fflush(report);
 }
 
+/* ── THE ALL-THREAD CENSUS FOR THE SLOT-WRITE WATCH, ON ITS OWN COUNTERS ───────────────────────
+ *
+ * ⚠ THESE ARE **NEW AND INDEPENDENT** COUNTERS, NOT THE DR INSTRUMENT'S. The DR channel is EXCLUDED
+ * from this packet, and its counters are gated by dr_on(); reusing dr_create_thread_events or
+ * dr_exit_events as this instrument's census would make the live result depend on a channel the
+ * preflight removed -- and would read zero whenever the DR gate is off, which is every run this
+ * packet is allowed to make.
+ *
+ * They count DEBUG EVENTS, which is the only vantage point that sees a thread that both arrived and
+ * exited: CREATE_THREAD_DEBUG_EVENT is delivered before the new thread runs its first instruction.
+ * The toolkit's own census thread polls and cannot see such a thread, so the two counts are
+ * DIFFERENT QUANTITIES and are reported side by side rather than conflated. */
+static unsigned slotw_debugger_births, slotw_debugger_exits;
+
+/* Every CREATE_THREAD debug event, counted for the slot-write census. Unconditional: it is not this
+ * instrument's business to decide that a birth did not matter. */
+static void a2h_slotw_birth_event(DWORD tid)
+{
+    (void)tid;
+    slotw_debugger_births++;
+}
+
+/* Every EXIT_THREAD debug event. ⚠ MEASURED: on this host a DEBUG_ONLY_THIS_PROCESS debugger does
+ * NOT receive these, so this counter is expected to stay 0 and the exit side is therefore reported
+ * as UNKNOWN rather than as a closed census. It is counted anyway, because "we saw no exits" and
+ * "exits are not delivered" are different findings and the second must not be inferred from the
+ * first. */
+static void a2h_slotw_exit_event(DWORD tid)
+{
+    (void)tid;
+    slotw_debugger_exits++;
+}
+
 /* Every CREATE_THREAD debug event, whether or not an arm attempt follows. Emitted BEFORE the attempt
  * so that a crash or a refused arm inside the attempt cannot lose the birth itself. */
 static void a2h_birth_event(DWORD tid)
@@ -693,10 +726,10 @@ static void dr_print_terminal_summary(void)
                         "toolkit_new=%u toolkit_gone=%u toolkit_live=%u toolkit_overflow=%u "
                         "census_closed=%d exit_side_closed=%d "
                         "note=EXIT_THREAD_DEBUG_EVENT_not_delivered_so_the_exit_side_is_UNKNOWN\n",
-                dr_create_thread_events, dr_exit_events, tk_new, tk_gone, tk_live,
+                slotw_debugger_births, slotw_debugger_exits, tk_new, tk_gone, tk_live,
                 sw ? sw->thread_overflow : 0u,
-                (dr_create_thread_events > 0 && dr_exit_events > 0) ? 1 : 0,
-                dr_exit_events > 0 ? 1 : 0);
+                (slotw_debugger_births > 0 && slotw_debugger_exits > 0) ? 1 : 0,
+                slotw_debugger_exits > 0 ? 1 : 0);
         free(sw);
     }
     /* C2 PRE-MAPPING-EXIT BOUND, as a DERIVED decision rather than two counts a reader must combine
@@ -2468,10 +2501,16 @@ int main(int argc, char **argv)
              * thread executes its first instruction, so arming here is the only point at which the
              * gated watch can be complete for a thread's whole life. Arming after ContinueDebugEvent
              * would leave a window in which the new thread could perform a watched write unarmed --
-             * which is exactly the UNKNOWN/coverage failure the packet refuses to accept. */
+             * which is exactly the UNKNOWN/coverage failure the packet refuses to accept.
+             *
+             * THE SLOT-WRITE CENSUS COUNTS HERE TOO, on its own counter and NOT the DR instrument's:
+             * the page protection is process-wide, so a new thread's stores are covered the instant
+             * it is created, but the THREAD has to be named for the census to be complete. */
+            a2h_slotw_birth_event(event.dwThreadId);
             dr_on_create_thread(event.u.CreateThread.hThread, event.dwThreadId);
             if (event.u.CreateThread.hThread) CloseHandle(event.u.CreateThread.hThread);
         } else if (event.dwDebugEventCode == EXIT_THREAD_DEBUG_EVENT) {
+            a2h_slotw_exit_event(event.dwThreadId);
             dr_on_exit_thread(event.dwThreadId);
         } else if (event.dwDebugEventCode == LOAD_DLL_DEBUG_EVENT) {
             if (event.u.LoadDll.hFile) CloseHandle(event.u.LoadDll.hFile);
