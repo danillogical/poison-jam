@@ -162,6 +162,13 @@ absence claims; **this finding is consistent with that rule rather than an excep
 
 ## The coverage defect, precisely characterised for the successor
 
+> **⚠ SUPERSEDED — read the correction at line 182 first.** This section's *counts* are right, but its
+> conclusion that guest threads were **"never attempted"** is **withdrawn**. `GUEST_DR_DISARM cleared=17`
+> proves **17** threads were armed (not 10), all nine failed attempts were **recovered** by the handshake
+> sweep, and a **successful post-handshake arm prints nothing** — so the tid list is a **handshake-time
+> snapshot** and cannot show which threads were armed. **The defect is a REPORTING gap, not a proven coverage
+> gap.**
+
 **Root cause:** `GUEST_DR_ARM_FAIL … why=create_thread reason=no_mapping_offset`. The collector arms at
 `CREATE_THREAD` **before `ContinueDebugEvent`**, which is the correct **ordering** — but at that moment
 `g_xbox_mem_offset` is **not yet resolvable**, so **every thread created before the mapping is established
@@ -179,7 +186,73 @@ while the DR watch covered one thread.
 
 ---
 
-# The defect, precisely characterised — it is WORSE than "nine arms failed"
+# ⚠ SESSION ERROR CORRECTED — the "never attempted" claim was WRONG; the defect is a REPORTING gap
+
+**I claimed "at least five of at least six guest-dispatching threads were never attempted at all," and
+sections below were written on that basis. The claim OUTRAN THE EVIDENCE and is withdrawn.** I found the
+error by reading the collector's own source rather than defending the claim.
+
+## What the source actually does
+
+| Fact | Source |
+|---|---|
+| `dr_arm_all()` **is a full sweep** — it walks `CreateToolhelp32Snapshot`/`Thread32Next` over every thread in the target and arms each | `collect.c:157-181` |
+| The `GUEST_DR_ARM …` + `GUEST_DR_ARM_TID` summary is printed by `dr_print_arm_summary()`, called **at the handshake** | `collect.c:217` |
+| In the `CREATE_THREAD` branch, the summary prints **only on failure** | `collect.c:713` |
+| **A successful arm after the handshake prints NOTHING** | consequence of the two above |
+
+**So the tid list in `stacks.txt` is a HANDSHAKE-TIME SNAPSHOT. Threads armed later are invisible in it.**
+
+## What the artifacts prove
+
+| Evidence | Value, **identical in all five runs** |
+|---|---|
+| Summary at handshake | `armed=10 failed=9` |
+| Tids **listed** | 10 |
+| **`GUEST_DR_DISARM ok=1 cleared=17 …`** | **17** |
+| ⇒ armed **after** the summary, unreported | **7** |
+
+**`cleared=17` is the decisive number:** seventeen threads had DR7 cleared at teardown, so **seventeen were
+armed** — not ten. **And all nine `failed=9` attempts were subsequently RECOVERED:** every one of the nine
+failed tids also appears in the armed list.
+
+## The corrected conclusion
+
+**`failed=9` counts failed ATTEMPTS, not unarmed threads.** The handshake sweep recovered all nine. **The
+four guest threads absent from the tid list are NOT PROVEN UNARMED** — they were created **after** the
+snapshot, and a successful post-handshake arm **prints nothing**. **The record cannot distinguish:**
+
+- **(i) armed successfully, never reported** — from
+- **(ii) never attempted at all.**
+
+**So the defect is a REPORTING gap, not a proven coverage gap.** My "100% miss over the guest threads that
+matter" framing was **wrong**, and the sections below that assert it are **superseded by this correction**.
+
+## Why the row is nevertheless unchanged — `O-COVERAGE`
+
+**The row does not depend on the withdrawn claim.** The packet's rule is that **any unarmed observed tid
+yields `UNKNOWN`, and a coverage claim requires positive continuous coverage.** **A record that cannot show
+which threads were armed cannot establish coverage** — and that is a **sufficient** basis for `O-COVERAGE`
+on its own. **What changes is the REASON: the instrument's *record* is inadequate, not (as I claimed) its
+*coverage*.**
+
+**This makes the Advisor's correction 2 exactly right, and for a sharper reason than I gave.** I asked
+whether the never-attempted population needed a positive control. **It does — because without one I
+mistook a reporting gap for a coverage gap**, which is precisely the absent-record-as-negative error this
+line keeps meeting. **I committed it myself while documenting it.**
+
+**The corrected deduction, stated at its true strength:** the census result (28/28 mirrors, zero touches) and
+the run-5 witness (`FE000104 → 00000000`, outside any bridge body) **stand unchanged**. **What cannot be
+stated is that the DR0 watch missed the writer** — only that **the archive does not show whether it did.**
+
+---
+
+# Superseded — the following sections were written on the withdrawn claim
+
+*Retained rather than deleted, per this line's rule that corrections name what they supersede. **Read them
+with the correction above applied: the counts are right, the "never attempted" conclusion is not.***
+
+
 
 **The Session dug one level further, and the failure is not a retry problem. The collector armed the WRONG
 THREADS ENTIRELY.**
