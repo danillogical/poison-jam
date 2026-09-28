@@ -100,7 +100,71 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-slot-writer-four-edges-r1` (**discovery**: FOUR named edges, not one) — **PROMOTED 2026-09-28, `ADEQUATE`**
+## CURRENT PACKET — `A2h-slot-writer-terminal-r1` (**discovery**: **TERMINAL** — GAP A seed coverage, GAP B sole-caller argument) — **PROMOTED 2026-09-28, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-slot-writer-terminal.md`, **15 lines**, **6036 bytes**, frozen
+  **`116884E8D474A0238096ACD43111E089E5A1A89C87F861E9FCBA953B95E05E9F`** — **this is the packet to execute.**
+  Validation: `docs/reviews/a2h-slot-writer-terminal-r1-session-validation.md`.
+- **⚠ THIS IS THE LINE'S LAST AUTHORIZED PACKET.** *"ONE bounded terminal packet, **not permission to
+  execute further packets automatically**."* **Only GAP A and GAP B are authorized; no new methods, no new
+  enumeration.**
+
+### ✅ What the four-edge trace established — do NOT re-derive
+
+| Fact | Value |
+|---|---|
+| **THE ONE SLOT** | **`context+0x1C4 == software_device+0x242C`** |
+| **exactly ONE direct store** | **`0x0018CE3A`**, base `ecx = MEM32(0x19DCE0)`; **raw `2C 24 00 00` scan = 1 hit** |
+| **its value chain** | **`0x00012319 call 0x15f9e0`** (SOLE caller) → **`0x0015F9E0`** (`0` → `0x15F9D0`, `-1` → `0`) → `jmp 0x18ce30` |
+| **EDGE 1 `0x00199F45`** | **ARG1 confirmed three-deep, but `2064` NOT ESTABLISHED reachable** — only three reachable uses of immediate `0x810`, **none an argument** |
+| **EDGE 2 `0x0018DF59`** | **`1645` UNREACHABLE** — seven of twelve callers pass a literal `0/1/2/3`; **value is ARG2** |
+| **EDGE 3** | **the index-51 dispatch is LOCATED: `0x000D4DA2 jmp dword ptr [eax+0xCC]`** (`0xCC = 51×4`) — **and it IS EDGE 1's ARG1** |
+| **EDGE 4** | **the DESCRIPTOR PATH is REFUTED** — ⚠ **but the alias IDENTITY remains OPEN: DOWNSTREAM DEPENDENCY only, never a premise** |
+
+### ⚠ THE SESSION'S GAP A LEAD — the executor must have it
+
+**`docs/reviews/a2h-gapA-3c8-read-cluster.md`** (`4786c19`). **Found by a DIFFERENT method than the Worker's,
+and it reaches accesses the Worker's probe could not.**
+
+**Method (chosen to avoid the drift defect):** **raw byte scan for the disp32 encoding `C8 03 00 00`**, then
+classifying each occurrence by decoding the containing instruction. **Alignment-independent for existence,
+encoding coverage stated.**
+
+| Result | Value |
+|---|---|
+| **occurrences image-wide** | **76** |
+| **`[esi + 0x3c8]` reads in `0x0005F6E5..0x0005F92B`** | **25** |
+| **the containing function** | **`sub_0005F6B0`** (`0x0005F6B0..0x0005F96D`, **701 bytes**) — **24 of the 25** |
+
+> **A 701-byte function whose body is dominated by repeated reads of ONE object field is the DISPATCHER
+> CANDIDATE** — **with a DECLARED boundary from `recomp_0000.c`'s `Original:` header.**
+
+**And it CONFIRMS the Worker's own caveat:** its recursive-descent probe found **ZERO** sites across 39
+functions touching `+0x3C8`, **so its seeding gap is REAL.**
+
+**⚠ WHAT THE LEAD DOES NOT ESTABLISH:** **whether this `+0x3C8` is the SAME field** that `0x000D4684`
+installs `0x257DE0` into — **`+0x3C8` is an OFFSET and different object types can share one.** **The Session
+did NOT bind the object carrying vtable `0x1E1270` to the `esi` at `0x0005F6E5`.** **And it did NOT conclude
+`+0x3C8` is one field because it has one offset** — **that is the offset-arithmetic inference the Advisor
+barred for `device+0x242C`.** **Also: `0x0005F6E5` is NOT in `config/recovered-functions.json`; the boundary
+comes from the generated source's `Original:` header.**
+
+### The terminality bound
+
+- **Closes the writer ⇒ mechanism consideration is a SEPARATE LATER DECISION.**
+- **Opens another gap, or seed coverage fails ⇒ `O-OPEN` + STOP, PARK with the precise edge, RE-REFER for
+  scope (pivot/retire/other).**
+- **NEVER auto-chain.**
+
+### The §6.1 method rule now binds this packet
+
+**`docs/agent-workflow.md:775`.** **Both demonstrations are in the packet:** the linear `.text` decode that
+produced **29 548 plausible instructions and reached neither** load-bearing address, **and the aligned dword
+scan that reported ZERO where the truth is THREE** (`C7 06 70 12 1E 00` — off-boundary immediate).
+
+**Next:** execute GAP A and GAP B; then `O-DATA-AS-CALL` or `O-OPEN` + PARK.
+
+**Toolkit:** `37226b2` local / `571982d` pushed (**no-push state**). **Game:** `da63d34`.
 
 - **Packet:** `docs/packets/a2h-slot-writer-four-edges.md`, **17 lines**, **7947 bytes**, frozen
   **`6C207AC90B853744A9C89B71C03187F5E000F0820C2D5D881994B4183A13FB9E`** — **this is the packet to execute.**
