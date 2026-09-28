@@ -175,7 +175,72 @@ identified diagnostic-only game hook" — not a toolkit edit.** The packet also 
 observe the transitions without changing guest behaviour, **stop at `O-OPEN`** and that *"if this is
 impossible, `O-OPEN` is the output, not permission to improvise."*
 
-## Selected row: `O-OPEN`
+## A SEPARATE FINDING, larger than this packet's question: the OOM is HANDLED, and the crash is a NULL thunk slot
+
+**Found while checking the packet's own claims; recorded because it may move the critical path.** It is
+**not** this packet's question and **not** established as related to it.
+
+### The guest checks the allocation result and unwinds properly
+
+The accepted predecessor record said *"the guest then does not check the result and calls through NULL."*
+**The first clause is false.** Verified bytes:
+
+```
+00149E4A  call  dword ptr [0x1c3f88]   ; NtAllocateVirtualMemory
+00149E50  mov   dword ptr [ebp-0x12c], eax
+00149E56  test  eax, eax
+00149E58  jl    0x149eec               ; <-- A SIGNED CHECK
+```
+
+`0xC0000017` is **negative** as a signed 32-bit value, so **`jl` IS taken**, and the error path
+**materialises the status and returns cleanly**:
+
+```
+00149EF2  mov  dword ptr [ebp-0x188], 0xc0000017   ; STATUS_NO_MEMORY, carried
+00149F1D  lea  eax, [ebp-0x188]
+00149F23  push eax
+00149F24  call dword ptr [0x1c4080]
+00149F35  call 0x149f4b
+00149F40  call 0x17d231                            ; __SEH_epilog
+00149F45  ret  0xc
+```
+
+**So the OOM is handled, not fatal.** *(Correction recorded in `a2h-oom-causal-slice-evidence.md` too, since
+that record is accepted and cited.)*
+
+### The terminal event is the ICALL guard firing on a target of 0
+
+`0xE0424943` is the project's **unresolved/invalid-call** code (`AGENTS.md`). The failing instruction is
+`call dword ptr [0x1c4064]` at `0x00149828` — **near the TOP of the function**, whereas the ordinal-184 call
+is at `0x00149E4A` near the **END**. **They are different passes of the same function.**
+
+### The slot held a WORKING target and then did not
+
+| Evidence | Value |
+|---|---|
+| Original XBE `.rdata` at `0x001C4064` | **`0x80000115`** — a valid **ordinal-277** kernel thunk (`0x80000000 \| 277`) |
+| The toolkit **patches** this table at runtime (`kernel_bridge.c:9198-9225`, `VirtualProtect` to `PAGE_READWRITE`, then rewrites entries) | so the runtime value is a **patched** target, not the raw thunk |
+| ordinal-277 dispatches from **this exact call site** (`ret=0x0014982E`) | **1177** |
+| …and then | **`[ICALL] invalid target 0x00000000 … return=0014982E`** |
+
+**So the slot worked 1177 times and then read as `0`.** The guard rejected `0` as non-code and logged.
+
+### What is NOT established — and must not be assumed
+
+- **Whether the slot was zeroed by a guest write, by the toolkit's own install/relocation, or read from the
+  wrong place.**
+- **Whether the OOM and the NULL slot are related at all.** The OOM is handled and returns; the NULL is on a
+  different pass. **Their co-occurrence in one run is not evidence of causation**, and this packet asserts no
+  link.
+- **The dump cannot settle it:** `check-dump-mapping.py` reports this run `content-mismatch`, so
+  XBE-backed reads from it are displaced — the apparent `0` at `0x001C4060` in the dump is **not**
+  admissible evidence. **This is exactly the "don't read a displaced dump as repaired memory" rule.**
+
+**Recorded as a lead with a positive-control structure** — the same slot demonstrably worked 1177 times, so a
+"what zeroed it" packet would have a strong baseline to compare against. **It is a separate question from this
+packet's, and the Session is routing the critical-path decision rather than silently switching packets.**
+
+
 
 | Row | Applicable? | Why |
 |---|---|---|
