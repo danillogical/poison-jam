@@ -83,6 +83,10 @@ static void capture_guest_threads(void);
  * The CLASSIFIER's set is larger and lives in the toolkit; this is the bounded copy the archive
  * carries so a reader can re-classify the recorded RIPs by hand. */
 #define A2H_SLOTW_RECOMP_ARCHIVE 512
+/* Must equal XBOX_A2H_SLOTW_UNKNOWN_SAMPLE_MAX. `range_unknown` is the uncapped COUNT; this is a
+ * bounded SET of distinct unplaceable RIPs, because a count alone cannot tell an instrument bug inside
+ * the recompiled extent from a writer genuinely outside the image. */
+#define A2H_SLOTW_UNKNOWN_SAMPLE_MAX 16
 
 /* ── THE RANGE CLASSES AND THE COHERENCE VERDICTS, MIRRORED FROM THE TOOLKIT ────────────────────
  *
@@ -143,7 +147,12 @@ typedef struct {
     uint32_t coherence_verdict, coherence_last_write_value, coherence_last_write_seq;
     uint32_t coherence_terminal_value;
     uint64_t window_open_ticks_last, window_close_ticks_last, window_open_count;
-    uint32_t window_open, reserved0;
+    uint32_t window_open;
+    uint32_t unknown_rip_count, reserved0;
+    uint64_t unknown_rips[A2H_SLOTW_UNKNOWN_SAMPLE_MAX];
+    uint64_t unknown_rip_bases[A2H_SLOTW_UNKNOWN_SAMPLE_MAX];
+    uint32_t unknown_same_image[A2H_SLOTW_UNKNOWN_SAMPLE_MAX];
+    uint32_t unknown_reserved[A2H_SLOTW_UNKNOWN_SAMPLE_MAX];
     uint32_t term_base_ok, reserved;
     uint64_t arm_ticks, terminal_ticks;
     uint32_t read_count, fourth_reached, fourth_value, fourth_seq;
@@ -175,7 +184,7 @@ typedef struct {
 _Static_assert(sizeof(XboxA2hSlotwEvent) == 56u, "XboxA2hSlotwEvent mirror drifted");
 _Static_assert(sizeof(XboxA2hSlotwFirstTouch) == 48u, "XboxA2hSlotwFirstTouch mirror drifted");
 _Static_assert(sizeof(XboxA2hSlotwLoss) == 296u, "XboxA2hSlotwLoss mirror drifted");
-_Static_assert(sizeof(XboxA2hSlotwLedger) == 86616u,
+_Static_assert(sizeof(XboxA2hSlotwLedger) == 87008u,
                "XboxA2hSlotwLedger mirror does not match xbox_memory_layout.h -- "
                "update this pin and XBOX_A2H_SLOTW_VERSION together");
 /* DR7 = L0 (enable DR0) | RW0 = 01 (write only) | LEN0 = 11 (4 bytes). LE/GE stay CLEAR so the
@@ -1930,6 +1939,27 @@ static void capture_guest_threads(void)
                 for (s = 0; s < shown; s++)
                     fprintf(report, "GUEST_SLOTW_RECOMP_START index=%u native=%016llX\n",
                             s, (unsigned long long)sw->recomp_starts[s]);
+            }
+            /* ── THE UNPLACEABLE RIPs, SAMPLED ───────────────────────────────────────────────────
+             *
+             * ⚠ `unknown` IS INFRA FAILURE BY THE PACKET'S RULE, SO IT MUST BE DIAGNOSABLE FROM THE
+             * ARCHIVE. A count alone cannot do that: "264 unknown" is equally consistent with a
+             * classifier bug INSIDE the recompiled extent and with writes from outside the image
+             * entirely (a system DLL or the D3D driver), and those two demand OPPOSITE responses.
+             * The first N DISTINCT unplaceable RIPs are therefore recorded verbatim, with the range
+             * bounds in force, so the next reader can identify them instead of re-running to find
+             * out. `sampled` is printed so a bounded sample is never read as the whole population. */
+            {
+                uint32_t u;
+                fprintf(report, "GUEST_SLOTW_UNKNOWN count=%llu sampled=%u image_lo=%016llX\n",
+                        (unsigned long long)sw->loss.range_unknown, sw->unknown_rip_count,
+                        (unsigned long long)sw->image_lo);
+                for (u = 0; u < sw->unknown_rip_count && u < A2H_SLOTW_UNKNOWN_SAMPLE_MAX; u++)
+                    fprintf(report, "GUEST_SLOTW_UNKNOWN_RIP index=%u rip=%016llX"
+                                    " alloc_base=%016llX same_image=%u\n",
+                            u, (unsigned long long)sw->unknown_rips[u],
+                            (unsigned long long)sw->unknown_rip_bases[u],
+                            sw->unknown_same_image[u]);
             }
             /* THE TERMINAL-VALUE COHERENCE GATE. BOTH OPERANDS ARE PRINTED, so a reader sees the
              * comparison rather than being told its result. `verdict=2` is a MISMATCH and it means
