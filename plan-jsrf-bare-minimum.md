@@ -100,7 +100,60 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-slot-writer-terminal-r1` **EXECUTED → `REJECT`**; **row reverts to `O-OPEN`** — chain-completion successor next
+## CURRENT PACKET — `A2h-slot-writer-chain-completion-r1` (**discovery**: does `0x00199F45` ever write the slot, and with what value?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-slot-writer-chain-completion.md`, **16 lines**, frozen
+  **`3F7AD922DADD5E8E1B3944EAFF6B461468C1C05DC2350973243022C16305C7FD`** — **this is the packet to execute.**
+  Validation: `docs/reviews/a2h-slot-writer-chain-completion-r1-session-validation.md`.
+
+### ⚠ THE REJECT'S LESSON IS THE PACKET'S CORE RULE
+
+> **`2064` must be WITNESSED through caller values or a bounds argument.** **Offset arithmetic alone selects
+> `O-OPEN`.** *"never solve ARG1 backwards from the slot"*
+
+**That is the error that produced the `REJECT`:** **the previous execution derived `ARG1 = 2064` FROM the
+target address `0x242C` and presented the arithmetic as though it verified the index.** **It does not — it is
+an IDENTITY.** **The index must be observed.**
+
+### The FOUR obligations — the entire scope
+
+| # | Obligation | Core requirement |
+|---|---|---|
+| **1** | **INDEX provenance** | trace upstream of the forwarder `sub_00153790`; **witness ARG1/ARG3**, or name the untraced edge |
+| **2** | **ORDER** | **polls 1–3 vs poll 4 prove change BETWEEN polls, NOT attribution**; bind installer → candidate write → fourth read; **absence of a log line is not negative attribution** |
+| **3** | **ADDRESS VERSUS BYTES** | the pack formula is **a confirmed FORMULA, not proof**; **four bytes in `0..255` fit ANY dword**; the **SAME dword is an address to the ADX filename string** |
+| **4** | **FOLDED-IN SIB SWEEP** | the found writer does **NOT** close exclusivity — the ModRM scan **was encoding-scoped**; enumerate ModRM + SIB + computed/alias, **state coverage**, no standalone sweep |
+
+**The index consequence, stated exactly:** **`0x3EC+2064·4=0x242C` is ARITHMETIC ONLY**; indices `0..2063`
+occupy `0x3EC..0x2428`, **making 2064 ONE-PAST a 2064-element array.** **`ARG1=0` needs `ARG3≥2065`;
+`ARG1=2064` starts AT the slot.** **Neither is assumed.**
+
+### ⚠ The Session's thunk-mapping finding — the executor must have it
+
+**`docs/reviews/a2h-thunk-argument-mapping.md`** (`e09534c`).
+
+**The vcall thunk is a `JMP`, not a `CALL`** — **Session-verified: `8b 01 ff a0 cc 00 00 00`, and `FF A0` is
+the `/4` extension (`jmp`), not `FF 90` (`/2`, `call`).**
+
+> **So `esp` is UNCHANGED from the caller's frame, and worker ARG1 (the INDEX) is the caller's SECOND pushed
+> argument — while THE CALLER'S FIRST PUSHED ARGUMENT IS IGNORED ENTIRELY.**
+
+**The executor must not count from the wrong end.** **This is the same class of error as the ARG1/ARG3
+displacement confusion that produced the REJECT.**
+
+### Controls — and the REJECT's control lesson
+
+**Line 13:** *"Mismatch invalidates the read, never silently corrects guest state; **XBE-byte control does not
+substitute for a dump gate**."* **That encodes the REJECT's finding that the previous execution used an
+XBE-byte control while performing ZERO dump reads.**
+
+**And line 11 names the line's own citation failures as prohibitions:** *"old `0x0015F9E5/E8/EA/EF/F2` labels
+were off by 1–2 and `0x000D45D4` was mid-instruction (`0x000D45D2` starts it); **do not inherit them as
+anchors**."*
+
+**Next:** execute the four obligations; then `O-DATA-AS-CALL` (index WITNESSED) or `O-OPEN` + PARK.
+
+**Toolkit:** `37226b2` local / `571982d` pushed (**no-push state**). **Game:** `3f96ae2`.
 
 - **Packet:** `docs/packets/a2h-slot-writer-terminal.md`, frozen
   **`116884E8D474A0238096ACD43111E089E5A1A89C87F861E9FCBA953B95E05E9F`** — **not edited**.
