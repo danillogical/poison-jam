@@ -31,13 +31,28 @@ def check_dump(folder, mode):
         address = offset+int(marker[1],16)
         base, length, rva = next(r for r in ranges if r[0] <= address and address+4 <= r[0]+r[1])
         assert struct.unpack_from('<I',data,rva+address-base)[0] == int(marker[2],16), 'GPU memory contents not preserved'
-    match = re.search(r'GUEST_REGISTRY address=([0-9A-F]+) version=1 claimed=(\d+) overflow=0', stacks)
+    # The registry version is NOT pinned. It is bumped whenever the struct gains fields, and it has
+    # already moved 1 -> 2 (the A2h NULL-slot latch) -> 3 (the slot write watch). Hard-coding it here
+    # meant every bump silently broke this probe: the assertion failed with "missing registry" even
+    # though the registry was present and healthy, which reads as a data problem rather than a stale
+    # test. Accept any version the collector can print, and let the STRUCTURAL assertions below --
+    # the registry memory being present in the dump and its first word reading 1 -- carry the check.
+    match = re.search(r'GUEST_REGISTRY address=([0-9A-F]+) version=(\d+) claimed=(\d+) overflow=0', stacks)
     assert match, 'missing registry or registry overflow'
-    address, count = int(match[1],16), int(match[2])
+    assert int(match[2]) >= 1, 'registry version must be a positive integer'
+    # Group indices shift with the version capture added above: 1 = address, 2 = version, 3 = claimed.
+    address, count = int(match[1],16), int(match[3])
     assert count >= (1 if mode.startswith('gpu-') else 3 if mode=='deadlock' else 5 if mode=='healthy' else 2)
+    # The registry struct BEGINS with `uint32 version`, so the first word in the dump IS the version
+    # the collector printed. Asserting it equals the literal 1 was correct only while the version was
+    # 1; it has since moved to 2 and then 3, so the check is now written against the version the
+    # collector itself reported. That still proves the registry text and the registry MEMORY are the
+    # same object -- which is the property this assertion exists to establish -- without pinning a
+    # number that every struct change is entitled to move.
+    expected_version = int(match[2])
     for base,length,rva in ranges:
         if base <= address and address+16 <= base+length:
-            assert struct.unpack_from('<I',data,rva+address-base)[0] == 1
+            assert struct.unpack_from('<I',data,rva+address-base)[0] == expected_version
             break
     else: raise AssertionError('registry text exists but registry memory missing from dump')
     assert 'harness_probes.c:' in stacks or 'gpu_probes.c:' in stacks or mode == 'healthy', 'missing fixture source lines'
