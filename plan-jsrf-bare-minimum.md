@@ -100,7 +100,63 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-named-producer-frame-r1` (**discovery**: which caller frame supplied the failing word?) — **PROMOTED 2026-09-27, `ADEQUATE`**
+## CURRENT PACKET — `A2h-named-producer-frame-r1` **EXECUTED 2026-09-27 → `O-OPEN`** (frame and caller BOUND; the failing allocation's read value is not in the artifact)
+
+**Executed, not edited.** Frozen `2333B652…F88887`. Evidence:
+`docs/reviews/a2h-named-producer-frame-evidence.md`. **No guest run** — the packet allows one only if the
+offline audit fails *and* a safe non-generated seam exists; the audit **succeeded at binding the frame**, but
+the seam is **toolkit-side**, outside this packet's write scope. **Acceptance pending.**
+
+### What was established — the frame question is DECISIVELY answered
+
+**The SEH helper REPLACES `ebp`** (the packet required tracing it rather than assuming):
+`0017D213 lea ebp,[esp+0x10]` → `ebp = E−4`, where `E` is the callee's entry `esp`. The recompiled helper
+**publishes** that frame (`recomp_0004.c:1589 g_seh_ebp = ebp`) and the callee **reads it back**
+(`recomp_0003.c:20122`). **So `[ebp+0x10]` at `0x00149800` IS the caller's arg2** — the helper's frame
+**aliases the standard argument positions**, which is what `__SEH_prolog` is for.
+
+| Fact | Result |
+|---|---|
+| `E`, three independent ways | ordinal-277 `esp+0x1A0`, ordinal-184 `esp+0x1B0`, and the post-prologue arithmetic — **all give `0x00F7FEA0`** |
+| The frame | `ebp = 0x00F7FE9C`, **`[ebp+0x10] = 0x00F7FEAC`** |
+| **The caller, BOUND** | **`call@0x0017C921`**, `ret=0x0017C926` — a real `call 0x1497dc` ends exactly there |
+| Competing writers | **NONE** — the callee has **0 writes** to the slot across its whole 841-line body (5 reads) |
+| Call-site arity | **12 of 13** direct call sites pass **three** arguments; one passes two |
+
+### Why the row is `O-OPEN` — a coverage gap, not a defect
+
+**The archived frame is the CRASH activation's, not the failing allocation's:**
+`align16(0x4C000010) + 0x20 = 0x4C000020` — **exactly the `eax` in the crash registers** — while the failing
+size `0x23B20430` was requested **exactly once**. And the bridge call after the OOM returns to `0x00149F5D`,
+**outside** the callee's range, so **the failing activation returned** and a later one **reused the same stack
+addresses at the same depth**. Its `arg2` was overwritten. **`[TRACE]` does not help** — the callee is not
+traced, and `0x0017C926` appears **0** times as a `from=`.
+
+**The one smallest missing witness:** a **recorded value of `[ebp+0x10]` at guest address `0x00F7FEAC` on the
+OOM activation**, before it returned. **The address is known exactly; only the moment is missing.**
+
+### Seam status — the blocking question for the next packet
+
+**`kernel_thunk_dispatch()` (`kernel_bridge.c:8944`, TOOLKIT) is the only seam that sees every bridge call
+with `esp`.** The game-side `src/diagnostics.c` observes six fixed store sites, not this read. **This packet
+authorized at most a diagnostic-only GAME hook, so the Session stopped rather than editing the toolkit or
+generated code** — the owner and the packet agree.
+
+### Session errors caught by measurement in this execution
+
+**Three hand-analyses of the same stack produced three different answers.** My first count said the bound
+caller passed **one** argument (wrong — the intervening `call 0x14a838` is a zero-consumption getter, so the
+pushes below it survive); my correction then mis-read the slot by double-counting the getter's popped return
+address. **Both are now impossible**: `scripts/a2h-frame-audit.py` tracks ESP symbolically, and
+`scripts/test_a2h_frame_audit.py` (**21 tests OK**) pins the behaviour. **The tool caught two of its own
+author's errors** — a mis-transcribed byte string (`89442410` vs the real `896c2410`), and a linear section
+sweep returning **zero** call sites for a target with **thirteen**.
+
+**Toolkit:** `c151d4e` (unchanged). **Game:** `c914448`.
+
+---
+
+## Previous — `A2h-named-producer-frame-r1` (**discovery**: which caller frame supplied the failing word?) — **PROMOTED 2026-09-27, `ADEQUATE`**
 
 - **Packet:** `docs/packets/a2h-named-producer-frame.md`, revision **`A2h-named-producer-frame-r1`**, class
   **discovery**, frozen SHA-256
