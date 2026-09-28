@@ -100,7 +100,38 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-dr0-delivery-gate-r1` (**discovery**: repair or retire the DR0 observation leg) — **PROMOTED 2026-09-28, `ADEQUATE`**
+## CURRENT PACKET — `A2h-dr0-terminal-snapshot-r1` (**discovery**: repair the install-delivery gate) — **PROMOTED 2026-09-28, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-dr0-terminal-snapshot.md`, **16 lines**, frozen
+  **`969E8827CC3D36AA8AFBF7D4FF7D43609BB750312723AAFBCE7ADFA5CA48F7EE`** — **this is the packet to execute.**
+  Validation: `docs/reviews/a2h-dr0-terminal-snapshot-r1-session-validation.md`.
+- **The predecessor's Phase 1 returned `P1-UNKNOWN` because of a defect IN THE GATE**, not a dead channel:
+  `A2H_POST_CONTINUE_CAPACITY` was 16 while the readback fired **14 414** times, so `post_continue_overflow=1`
+  on any real run made `complete` **structurally 0** and **`NON_FIRING` unreachable by construction**. The
+  readback also measured a **RUNNING** thread. **The whole `post_continue_*` array is VOID in both
+  directions**, including any no-revert reading.
+- **THE REPAIR, per the Advisor (LAST authorized repair):** array → **counters-or-nothing**, plus a
+  **terminal DR snapshot** — *"enumerate/open ALL target threads, `SuspendThread` each ONCE before
+  `GetThreadContext`"*, compared against the armed set. *"Suspending 14k times is material timing perturbation
+  … to no benefit"*; the terminal snapshot is free of that because **the run is dead**.
+- **THE SESSION'S FINDING, now an explicit precondition:** **`capture()` does NOT suspend before reading
+  context**, so a snapshot bolted onto it would **inherit exactly the defect being repaired.** The packet
+  requires suspension and makes **any unsuspended read VOID (`UNKNOWN_NOT_RECORDED`)**.
+- **THE GATE IS REPAIRED, NOT WEAKENED.** `NON_FIRING` becomes **reachable**, but the **delivery-completeness
+  premise is still required** — the Advisor's ***"Strong ≠ decidable"*** is honored: an unproved premise
+  yields `P1-UNKNOWN` rather than promoting an observed zero to decision-grade `NON_FIRING`.
+- **What survives from the failed trial:** store executed with expected values; **`host == canonical`** (address
+  mismatch ruled out); **zero `#DB` as an OBSERVED SERIES, not as completeness.**
+- **Fresh OFF + exactly ONE bounded ON trial** (new code breaks the carry rule). **Install-trap positive
+  control gates Phase 2.**
+- **TERMINAL CEILING:** *"this is the LAST authorized repair"* — failure, loss, contradiction or a new
+  instrument defect ⇒ **DROP the DR leg + coverage-provenance, no third round absent re-referral.** Census,
+  software reads and the install software control survive; **no row reads DR records in either direction.**
+
+**Next:** implement C1 + C2 (with the suspend requirement), fixtures, guards, fresh OFF, one ON trial, then
+§5.8 acceptance.
+
+**Toolkit:** `139f18e` (unpushed — pending acceptance). **Game:** `e80a718`.
 
 - **Packet:** `docs/packets/a2h-dr0-delivery-gate.md`, **16 lines**, frozen
   **`12A0B68EB550A96DCD4D2393DBC81262AC0CEE2838CC403A9FD99ED18D3BE537`** — **this is the packet to execute.**
