@@ -100,7 +100,56 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-rdata-call-target-r1` **EXECUTED → `O-OPEN`**, **object identity CLOSED**; stage-1 acceptance pending
+## CURRENT PACKET — `A2h-rdata-call-target-r1` **ACCEPTED** (`ACCEPT-WITH-CORRECTIONS`, all three applied); **next edge named**
+
+- **Packet:** `docs/packets/a2h-rdata-call-target.md`, **22 lines**, frozen
+  **`31343C167746872A501A21C6D558F52B897A7CD571E43C9EB016D42341152593`** — **not edited**.
+- **Stage-1 review:** `docs/reviews/a2h-rdata-call-target-acceptance-review.md` (`59caab3`) —
+  **`ACCEPT-WITH-CORRECTIONS`**, **`BLOCKING: NONE`**, **`EVIDENCE OUTRUNNING CLAIMS: NONE`**. Acceptance
+  record: `docs/reviews/a2h-rdata-call-target-acceptance-record.md`.
+- **Row `O-OPEN`** — correct, and the reviewer independently reproduced the load-bearing claims, including
+  its own byte sweep for the uniqueness signature (**with the `disp32` variant included, which returned zero
+  additional sites**) and `ecx−esp = 0x20` checked against the recorded registers.
+- **Established:** the call site `0x00193EB5 call eax` is **unique and provable** (declared boundary, unique ABI
+  signature); the `.rdata` table is **`{u32 id, char* name}`** and **no entry is callable**; the object field is
+  **`[device+0x2268+0x1C4] = [device+0x242C]`** *(alias arithmetic exact; **final hop INFERRED**)*; and the
+  installer chain is **corroborated end-to-end**.
+- **Three corrections applied, two of them found independently by the Session** — `0x0018CB60` is
+  **`rep movsd` (a COPY from caller data), NOT `rep stosd`**, so the *"zeroing constructor"* argument was
+  **VOID**; the *"populator absent from the translation"* claim was **FALSE**; and the *"one `[reg+0x1C4]`
+  access in D3D"* claim **omitted two stack-local hits**. **Net effect on the row: none.**
+- **Session self-correction:** both the Worker's record and the Session's own called the object identity
+  **"CLOSED"**, and **the reviewer is right that the word is too strong** — the final hop is inferred.
+  **Softened in both records.**
+
+### The named next edge
+
+**`docs/reviews/a2h-rdata-call-target-named-edge-refinement.md`** — the Session characterised what is
+**actually** missing, and the answer differs from the Worker's phrasing:
+
+> **The gap is a MISSING WRITE, not a missing function.** `sub_0018CB60` **IS** translated, and it is a
+> **`rep movsd` copy** whose destination range **`[+0x247C, +0x277C)` EXCLUDES the callback field at
+> `+0x242C`.** **The field's only static writer is `sub_0018CE30`, reachable only by two constant-argument
+> `jmp`s, so the only static writer cannot produce `0x001D5078`.**
+
+**So a successor should NOT hunt for a missing constructor.** **The productive question is what OTHER code can
+reach `device+0x242C`** — given `[reg+0x1C4]` has no static write, any write comes **from a section not swept
+or through a computed base.** **The double-buffer selector at `0x0018CB78` shows the context is BUFFERED**, so
+a selector error is a hypothesis to test.
+
+### Toolkit push — a **NO-PUSH** state, recorded
+
+**`docs/reviews/a2h-dr0-repair-push-decision.md`.** **Two commits sit unpushed on `main` (`139f18e`,
+`37226b2`); `origin/main` is `571982d`.** **The DR-repair packet ended `P1-UNKNOWN` and triggered the terminal
+ceiling, which the owner's policy names as a no-push state** (*"equivalent fail-closed outcomes remain no-push
+states"*). **The Session will not self-authorize an exception** and has flagged it: **the work has real durable
+value (a gate fixed, the `#DB` delivery premise proved, the contradiction localised), so a stage-1 acceptance
+of it as a NEGATIVE RESULT would make it pushable.** **Nothing is lost — the commits are local, and each run
+archives `toolkit.patch`.**
+
+**Next:** a successor packet on the `device+0x242C` write path, or the Advisor's pivot/defer ruling.
+
+**Toolkit:** `37226b2` local / `571982d` pushed. **Game:** `5e3dc20`.
 
 - **Packet:** `docs/packets/a2h-rdata-call-target.md`, **22 lines**, frozen
   **`31343C167746872A501A21C6D558F52B897A7CD571E43C9EB016D42341152593`** — **not edited**.
