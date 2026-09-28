@@ -100,7 +100,49 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-integrity-audit-r1` **EXECUTED → `A-TAINTED`**, R-1 **REMEDIATED** (erratum); **caller-trace next**
+## CURRENT PACKET — `A2h-callback-context-identity-r2` (**discovery**: identify the context's PRODUCER) — **PROMOTED 2026-09-28, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-callback-context-identity.md`, **r2**, **16 lines**, **6979 bytes**, frozen
+  **`94D4C08A56D9DF4F56524D9F56594E081BC6820CFF7877EE118EBFD7295ED17A`** — **this is the packet to execute.**
+  Validation: `docs/reviews/a2h-callback-context-identity-r1-session-validation.md`.
+- **Starting evidence:** `docs/reviews/a2h-callback-context-identity-identified.md` (`c77b0c3`) — **the Session
+  identified the wrapper offline**, and **r2 folds it in.**
+
+### ✅ What is ESTABLISHED (do not re-derive)
+
+| Fact | Value |
+|---|---|
+| **Five DECLARED containing functions** | `sub_00194300`, `sub_00194480`, `sub_00194A72`, `sub_00194EEF`, `sub_00196C0B` |
+| **The invariant** | **`device = [context]`** — **the context's FIRST DWORD** — **not `ecx = device`** |
+| **The register holding the context DIFFERS** | `edi` (poller, `sub_00194A72`, `sub_00194EEF`), `[esp+8]` (`sub_00194300`), `[esp+0xC]` (`sub_00194480`) |
+| **The callback slot** | **CONTEXT `+0x1C4`**, read by the callee via **`mov esi,ecx`** (`0x00193D62`), **NULL-tested** |
+| **The polled flag** | **DEVICE `+0x100`** (via the dereferenced device pointer), bit **`0x01000000`** |
+
+### ⚠ A Session error the PLANNER caught — recorded in place
+
+**The Session's first identification table claimed `edi = ecx` for four of five and filed `+0x100` as a CONTEXT
+offset. BOTH WERE WRONG.** **The Session's detection script matched `mov [esp+8], ecx` as if it were
+`edi = ecx`.** **The Planner caught it by reading the generated source line by line.** **Corrected in place at
+`c77b0c3`, with the wrong version marked so the correction is legible.** **Fifth reading error this session;
+the pattern matches the fourth — a table derived from a script whose match condition was too loose, without
+per-row verification against the bytes.**
+
+### The remaining edge — and it is the packet's whole point
+
+> **The context's ALLOCATION SITE and its `+0x1C4` WRITER remain UNKNOWN.** **`O-ALTERNATE-PATH` requires the
+> wrapper/field-layout evidence PLUS a VERIFIED producer, so the row stays `O-OPEN` until the producer binds
+> all sites.**
+
+### Input restrictions (the Advisor's, encoded verbatim)
+
+**Mapping-clean inputs + original XBE bytes + log lines ONLY.** **Per-run `check-dump-mapping.py` before ANY
+dump read; the 23/24 census is BARRED per-row.** **Known-answer control for EVERY extraction.** **No tainted
+caller bindings.** **`device+0x2268` is PERMANENTLY REFUTED — no re-litigation.** **No game run, build, test
+or instrumentation.**
+
+**Next:** execute the caller→producer trace; then the `+0x1C4` writer.
+
+**Toolkit:** `37226b2` local / `571982d` pushed (**no-push state**). **Game:** `6fa8490`.
 
 - **Packet:** `docs/packets/a2h-integrity-audit.md`, **17 lines**, frozen
   **`03F53E0AF09283EBD2B14886DC3FA625C25402875107D0759537A7C9D1B242F9`** — **not edited**.
