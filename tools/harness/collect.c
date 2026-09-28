@@ -69,10 +69,15 @@ static void capture_guest_threads(void);
  * and SIZE fields are checked before any field is read: a struct that changed without the version
  * moving is reported as unavailable rather than silently misread. */
 #define A2H_SLOTW_MAGIC          0x57533241u   /* 'A2SW' */
-#define A2H_SLOTW_VERSION        2u             /* must equal XBOX_A2H_SLOTW_VERSION in the toolkit */
+#define A2H_SLOTW_VERSION        3u             /* must equal XBOX_A2H_SLOTW_VERSION in the toolkit */
 #define A2H_SLOTW_PAGES_MAX      (1 + XBOX_NUM_MIRRORS_COLLECTOR)
 #define XBOX_NUM_MIRRORS_COLLECTOR 28
-#define A2H_SLOTW_EVENTS_MAX     256
+/* ⚠ 1024, NOT 256, AND THE CAPACITY IS NOT THE REPAIR. The repair is that non-slot page writes are
+ * TRAFFIC and are COUNTED rather than recorded, so ordinary traffic consumes no records at all. The
+ * array is enlarged because "zero headroom" was itself part of the defect: at 1024 the buffer holds
+ * 512 slot writes plus their step records, far above the 128 steps a partial boot produced. */
+#define A2H_SLOTW_EVENTS_MAX     1024
+#define A2H_SLOTW_FIRST_TOUCH_MAX 512
 #define A2H_SLOTW_EV_KIND_WRITE  1u
 
 typedef struct {
@@ -81,11 +86,18 @@ typedef struct {
 } XboxA2hSlotwEvent;
 
 typedef struct {
+    uint32_t valid, offset, alias_index, tid, pre_value, slot_value_at_touch, enc, reserved;
+    uint64_t rip, ticks;
+} XboxA2hSlotwFirstTouch;
+
+typedef struct {
     uint64_t relevant_av, slot_hits, nonslot_writes, steps, rearm_ok, rearm_failed;
     uint64_t protected_intervals, unprotected_intervals, concurrent_overlap;
     uint64_t threads_new, threads_gone, publish_failed, protect_failed, dropped_events;
     uint64_t unexpected_exception, db_unowned, db_own_serviced, db_ac97_serviced, db_dual_serviced;
-    uint64_t read_samples, installer_control_hits, overflow, base_changed;
+    uint64_t read_samples, installer_control_hits, nonslot_distinct, first_touch_overflow;
+    uint64_t first_touch_dropped, cross_checks, cross_mismatch, cross_skipped;
+    uint64_t overflow, base_changed;
 } XboxA2hSlotwLoss;
 
 typedef struct {
@@ -97,8 +109,11 @@ typedef struct {
     uint32_t read_count, fourth_reached, fourth_value, fourth_seq;
     uint32_t last_write_seq, last_write_enc, last_write_alias, last_write_value;
     uint64_t last_write_rip, last_write_ticks;
+    uint32_t cross_checks, cross_mismatch, first_touch_count, first_touch_overflow;
+    uint32_t last_slot_read_value, last_slot_read_seq, last_slot_change_seen, reserved2;
     XboxA2hSlotwLoss loss;
     XboxA2hSlotwEvent events[A2H_SLOTW_EVENTS_MAX];
+    XboxA2hSlotwFirstTouch first_touch[A2H_SLOTW_FIRST_TOUCH_MAX];
 } XboxA2hSlotwLedger;
 
 /* THE CROSS-PROCESS LAYOUT PIN, AND AN HONEST NOTE ABOUT WHAT IT DOES AND DOES NOT CATCH.
@@ -115,11 +130,12 @@ typedef struct {
  * construction, whatever the assert does -- and the toolkit's own fixture prints the authoritative
  * number (14680) so the comparison is checkable from the archive too. Both numbers move together
  * with XBOX_A2H_SLOTW_VERSION. */
-_Static_assert(sizeof(XboxA2hSlotwLedger) == 14680u,
+_Static_assert(sizeof(XboxA2hSlotwLedger) == 82344u,
                "XboxA2hSlotwLedger mirror does not match xbox_memory_layout.h -- "
                "update this pin and XBOX_A2H_SLOTW_VERSION together");
 _Static_assert(sizeof(XboxA2hSlotwEvent) == 56u, "XboxA2hSlotwEvent mirror drifted");
-_Static_assert(sizeof(XboxA2hSlotwLoss) == 184u, "XboxA2hSlotwLoss mirror drifted");
+_Static_assert(sizeof(XboxA2hSlotwFirstTouch) == 48u, "XboxA2hSlotwFirstTouch mirror drifted");
+_Static_assert(sizeof(XboxA2hSlotwLoss) == 232u, "XboxA2hSlotwLoss mirror drifted");
 /* DR7 = L0 (enable DR0) | RW0 = 01 (write only) | LEN0 = 11 (4 bytes). LE/GE stay CLEAR so the
  * processor reports the data breakpoint AFTER the storing instruction, which is the ordering the
  * writer attribution assumes. */
@@ -1802,7 +1818,8 @@ static void capture_guest_threads(void)
                             "threads_gone=%llu publish_failed=%llu protect_failed=%llu "
                             "dropped_events=%llu unexpected_exception=%llu db_unowned=%llu "
                             "db_own_serviced=%llu db_ac97_serviced=%llu db_dual_serviced=%llu "
-                            "read_samples=%llu installer_control_hits=%llu base_changed=%llu\n",
+                            "read_samples=%llu installer_control_hits=%llu base_changed=%llu "
+                            "nonslot_distinct=%llu first_touch_dropped=%llu\n",
                     (unsigned long long)sw->loss.relevant_av,
                     (unsigned long long)sw->loss.slot_hits,
                     (unsigned long long)sw->loss.nonslot_writes,
@@ -1824,7 +1841,40 @@ static void capture_guest_threads(void)
                     (unsigned long long)sw->loss.db_dual_serviced,
                     (unsigned long long)sw->loss.read_samples,
                     (unsigned long long)sw->loss.installer_control_hits,
-                    (unsigned long long)sw->loss.base_changed);
+                    (unsigned long long)sw->loss.base_changed,
+                    (unsigned long long)sw->loss.nonslot_distinct,
+                    (unsigned long long)sw->loss.first_touch_dropped);
+            /* ── Q3(c): THE CROSS-VALIDATION, REPORTED AS A DENOMINATOR AND A MISMATCH COUNT ────
+             *
+             * "0 mismatches" is only meaningful next to how many pairs were compared, so both are
+             * printed and a reader is never asked to infer the denominator. `checks` here is the
+             * ledger's own slot-hit fault/step pairs; `loss.cross_checks` is every comparison the
+             * facility made, including the ones the game-side hook requested. */
+            fprintf(report, "GUEST_SLOTW_CROSS ledger_checks=%u ledger_mismatch=%u "
+                            "loss_checks=%llu loss_mismatch=%llu loss_skipped=%llu "
+                            "last_slot_read=%08X last_slot_read_seq=%u change_seen=%u\n",
+                    sw->cross_checks, sw->cross_mismatch,
+                    (unsigned long long)sw->loss.cross_checks,
+                    (unsigned long long)sw->loss.cross_mismatch,
+                    (unsigned long long)sw->loss.cross_skipped,
+                    sw->last_slot_read_value, sw->last_slot_read_seq, sw->last_slot_change_seen);
+            /* THE FIRST-TOUCH CENSUS: the SET of addresses the page's traffic touched, one record
+             * per distinct address. This is what replaces the per-write records for non-slot
+             * traffic, and it is why a linear fill of any length costs no records for its repeats. */
+            fprintf(report, "GUEST_SLOTW_CENSUS first_touch_count=%u first_touch_overflow=%u "
+                            "nonslot_writes=%llu nonslot_distinct=%llu\n",
+                    sw->first_touch_count, sw->first_touch_overflow,
+                    (unsigned long long)sw->loss.nonslot_writes,
+                    (unsigned long long)sw->loss.nonslot_distinct);
+            for (unsigned f = 0; f < A2H_SLOTW_FIRST_TOUCH_MAX && f < sw->first_touch_count; f++) {
+                const XboxA2hSlotwFirstTouch *ft = &sw->first_touch[f];
+                if (!ft->valid) continue;
+                fprintf(report, "GUEST_SLOTW_TOUCH index=%u off=%03X alias=%u tid=%u pre=%08X "
+                                "slot=%08X enc=%u rip=%016llX ticks=%llu\n",
+                        f, ft->offset, ft->alias_index, ft->tid, ft->pre_value,
+                        ft->slot_value_at_touch, ft->enc, (unsigned long long)ft->rip,
+                        (unsigned long long)ft->ticks);
+            }
             /* THE OVERFLOW LATCH, ON ITS OWN LINE. A reader keys on this one word to decide whether
              * absence/order rows survive; it is never folded into a counter. */
             fprintf(report, "GUEST_SLOTW_OVERFLOW latch=%llu dropped=%llu event_overflow=%u "
@@ -1861,29 +1911,48 @@ static void capture_guest_threads(void)
             }
             /* THE RECONCILIATION, DERIVED RATHER THAN ASSERTED. A reader must not have to trust
              * that the counters and the records agree; the agreement is computed here. `complete=1`
-             * means every event the counters claim is present as a record. */
+             * means every event the counters claim is present as a record.
+             *
+             * ⚠ THE EXPECTED RECORD COUNT IS NO LONGER "EVERY WRITE". Under the packet's own design
+             * only SLOT BYTE writes are recorded, so a write record is expected per SLOT HIT and a
+             * step record per SLOT-HIT STEP -- page traffic is counted and censused, never recorded.
+             * `expected_records` is therefore `slot_hits + steps` plus the read samples, and the
+             * reconciliation is against THAT rather than against `relevant_av`. Reconciling against
+             * `relevant_av` would report a correctly-implemented instrument as incomplete on any
+             * run with page traffic -- which is every run. */
             {
                 unsigned records = 0;
                 unsigned hits_in_records = 0;
+                unsigned long long expected;
                 for (unsigned e = 0; e < A2H_SLOTW_EVENTS_MAX; e++) {
                     if (!sw->events[e].seq) continue;
                     records++;
                     if (sw->events[e].kind == A2H_SLOTW_EV_KIND_WRITE && sw->events[e].slot_hit)
                         hits_in_records++;
                 }
-                fprintf(report, "GUEST_SLOTW_RECONCILE records=%u counted=%u writes=%llu steps=%llu "
-                                "reads=%llu slot_hits=%llu hits_in_records=%u complete=%d "
-                                "overflow=%llu absence_rows_valid=%d positive_records_valid=1\n",
-                        records, sw->event_count,
+                /* A SLOT-HIT WRITE PUBLISHES EXACTLY TWO RECORDS: the fault record and, when its
+                 * step is serviced, the step record. A TRAFFIC write publishes NONE. So the expected
+                 * total is `2 * slot_hits + read_samples`, and it is independent of how much page
+                 * traffic the run produced -- which is the property the repair exists to create. */
+                expected = sw->loss.slot_hits * 2u + sw->loss.read_samples;
+                fprintf(report, "GUEST_SLOTW_RECONCILE records=%u counted=%u expected=%llu "
+                                "writes=%llu steps=%llu reads=%llu slot_hits=%llu "
+                                "hits_in_records=%u traffic=%llu traffic_distinct=%llu "
+                                "complete=%d overflow=%llu absence_rows_valid=%d "
+                                "positive_records_valid=1\n",
+                        records, sw->event_count, expected,
                         (unsigned long long)(sw->loss.relevant_av),
                         (unsigned long long)sw->loss.steps,
                         (unsigned long long)sw->loss.read_samples,
                         (unsigned long long)sw->loss.slot_hits, hits_in_records,
+                        (unsigned long long)sw->loss.nonslot_writes,
+                        (unsigned long long)sw->loss.nonslot_distinct,
                         (records == sw->event_count && !sw->event_overflow) ? 1 : 0,
                         (unsigned long long)sw->loss.overflow,
                         (!sw->event_overflow && !sw->loss.overflow && sw->loss.rearm_failed == 0
                          && sw->loss.publish_failed == 0 && sw->loss.protect_failed == 0
-                         && sw->loss.concurrent_overlap == 0) ? 1 : 0);
+                         && sw->loss.concurrent_overlap == 0 && sw->loss.cross_mismatch == 0
+                         && !sw->first_touch_overflow) ? 1 : 0);
             }
             free(sw);
         }

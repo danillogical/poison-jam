@@ -37,6 +37,105 @@ static void checkpoint(const char *name)
             (unsigned long long)GetTickCount64(), GetCurrentThreadId(), name);
 }
 
+/* ── Q3(c): THE GAME-SIDE HOOK READ, FOR THE CROSS-VALIDATION ────────────────────────────────────
+ *
+ * The Advisor requires cross-validation "where fault-record and hook reads overlap (same address +
+ * time must agree -- the control that caught the byte-order trap)". This is the hook side.
+ *
+ * THE TWO READERS USE DIFFERENT ARITHMETIC FOR THE SAME PHYSICAL DWORD, AND THAT IS THE POINT:
+ *
+ *   * THE FAULT RECORD reads through `g_a2h_slotw_pages[alias-1] + (slot_va & 0xFFF)` -- a RAW HOST
+ *     PAGE BASE captured once at ARM and cached by the toolkit. Nothing re-derives it per event.
+ *   * THIS HOOK reads `MEM32(slot_va)` -- the guest's OWN translation, `g_xbox_mem_offset` plus the
+ *     guest VA, re-derived on every access, exactly as the generated code reads it.
+ *
+ * A wrong base, a wrong offset, or a stale cached pointer would make one of them read the wrong
+ * dword while the other stayed right, and nothing downstream could tell: the instrument would simply
+ * publish a wrong number. That is the byte-order-trap failure class, and it is what this catches.
+ *
+ * ⚠ THE QUIET-WINDOW GUARD, WHICH IS WHAT MAKES THE COMPARISON SOUND RATHER THAN RACY. A concurrent
+ * slot write would make the two readers legitimately disagree. So the toolkit publishes the
+ * slot-hit count at the moment it made its read; this hook reads that triple, performs its own
+ * read, then reads the count AGAIN. An unchanged count proves no slot write landed across the
+ * window, so both readers cover the same value and must agree. A count that moved means the window
+ * was not quiet and the pair is counted SKIPPED by the toolkit, never as agreement -- so "no
+ * comparison" can never be read as "agreement".
+ *
+ * OBSERVATION ONLY. The read is a plain load from an RO page, which the mechanism explicitly lets
+ * pass without faulting. Nothing is written, nothing is changed, and the whole thing is behind the
+ * same gate as the watch. */
+static HANDLE g_a2h_cross_thread = NULL;
+static volatile LONG g_a2h_cross_stop = 0;
+
+static DWORD WINAPI a2h_cross_validate_thread(LPVOID param)
+{
+    unsigned long samples = 0, compared = 0, mismatches = 0;
+    (void)param;
+
+    while (!InterlockedCompareExchange(&g_a2h_cross_stop, 0, 0)) {
+        uint32_t slot_va = xbox_A2hSlotWatchSlotVa();
+        uint32_t rec_value, rec_seq, rec_hits, hook_value, hits_after;
+
+        if (slot_va && xbox_A2hSlotWatchLastSlotRead(&rec_value, &rec_seq, &rec_hits)) {
+            /* THE HOOK'S OWN READ, through the guest's translation and not through the instrument's
+             * cached alias base. This is the expansion of the guest's own `MEM32(slot_va)`
+             * (`XBOX_PTR` = guest VA + g_xbox_mem_offset), written out because this translation unit
+             * does not pull in recomp_types.h's macros -- and writing it out makes explicit that the
+             * address is RE-DERIVED here rather than reusing the toolkit's cached page base, which
+             * is the whole point of the cross-validation. */
+            hook_value = *(volatile uint32_t *)((uintptr_t)slot_va + (uintptr_t)g_xbox_mem_offset);
+            hits_after = xbox_A2hSlotWatchSlotHits();
+            samples++;
+            if (hits_after == rec_hits) {
+                /* THE WINDOW WAS QUIET: no slot write landed between the instrument's read and this
+                 * one, so the two cover the SAME ADDRESS AT THE SAME TIME and must agree. The
+                 * toolkit applies the further alias guard (only canonical reads are comparable,
+                 * because the mirror views are not coherent here) and counts every case it does not
+                 * compare as SKIPPED rather than as agreement. */
+                compared++;
+                if (!xbox_A2hSlotWatchCrossCheck(slot_va, rec_value, hook_value)) {
+                    mismatches++;
+                    fprintf(stderr, "  [A2HSLOTW] CROSS-VALIDATION hook disagrees: slot=%08X"
+                                    " fault_record=%08X hook=%08X seq=%u samples=%lu\n",
+                            slot_va, rec_value, hook_value, rec_seq, samples);
+                    fflush(stderr);
+                }
+            } else {
+                /* The window was not quiet. Counted by the toolkit as skipped; never as agreement. */
+                xbox_A2hSlotWatchCrossCheck(0xFFFFFFFFu, 0u, 0u);
+            }
+        }
+        Sleep(1);
+    }
+    fprintf(stderr, "  [A2HSLOTW] cross-validation hook stopped samples=%lu compared=%lu"
+                    " mismatches=%lu\n", samples, compared, mismatches);
+    fflush(stderr);
+    return 0;
+}
+
+static void a2h_cross_validate_start(void)
+{
+    if (!xbox_A2hSlotWatchEnabled() || g_a2h_cross_thread)
+        return;
+    g_a2h_cross_stop = 0;
+    g_a2h_cross_thread = CreateThread(NULL, 0, a2h_cross_validate_thread, NULL, 0, NULL);
+    if (!g_a2h_cross_thread) {
+        fprintf(stderr, "  [A2HSLOTW] cross-validation hook NOT created (error %lu): Q3(c) has no"
+                        " independent reader this run\n", GetLastError());
+        fflush(stderr);
+    }
+}
+
+static void a2h_cross_validate_stop(void)
+{
+    if (!g_a2h_cross_thread)
+        return;
+    InterlockedExchange(&g_a2h_cross_stop, 1);
+    WaitForSingleObject(g_a2h_cross_thread, 2000);
+    CloseHandle(g_a2h_cross_thread);
+    g_a2h_cross_thread = NULL;
+}
+
 static BOOL load_xbe(const char *path, void **out_data, size_t *out_size)
 {
     FILE *file = fopen(path, "rb");
@@ -362,6 +461,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
      * protected, no thread is created and nothing is printed -- the run is byte-for-byte the run it
      * was before this existed. */
     xbox_A2hSlotWatchStart();
+    /* Q3(c): START THE INDEPENDENT READER. The Advisor requires cross-validation "where fault-record
+     * and hook reads overlap"; this is the hook side, and it is started only when the watch's own
+     * gate is set, so an OFF run creates no thread and reads nothing. */
+    a2h_cross_validate_start();
 
     g_esp = XBOX_STACK_TOP;
     recomp_diag_thread_start(YOUR_GAME_ENTRY_POINT, XBOX_STACK_BASE, XBOX_STACK_TOP + 16);
@@ -371,6 +474,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
         recomp_diag_thread_end();
         xbox_kernel_shutdown();
         nv2a_hook_shutdown();
+        a2h_cross_validate_stop();
+        xbox_A2hSlotWatchStop();
         xbox_MemoryLayoutShutdown();
         free(xbe_data);
         return result;
@@ -387,6 +492,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
 
     xbox_kernel_shutdown();
     nv2a_hook_shutdown();
+    a2h_cross_validate_stop();
     xbox_A2hSlotWatchStop();
     xbox_MemoryLayoutShutdown();
     free(xbe_data);
