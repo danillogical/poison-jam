@@ -152,11 +152,11 @@ ARITHMETIC."***
 
 ### The phases — ONE packet, fix + rerun together
 
-| Phase | What | Gate |
-|---|---|---|
-| **Exp0** | **range-based classifier proof** — **OFFLINE** | **proof passes** |
-| **Exp1** | **control run** — **installer trap MUST fire**, range-classified + loss accounting | **control GREEN** |
-| **Exp2** | **bounded attribution** — **N≤5 pre-specified, early-stop, K≥2-agree** | **zero qualifying ⇒ report + RE-REFER** |
+| Phase | What | Gate | Status |
+|---|---|---|---|
+| **Exp0** | **range-based classifier proof** — **OFFLINE** | **proof passes** | ✅ **PASSED — 17/17 rows verified** (`a2h-slot-writer-attribution-r2-exp0-proof.md`) |
+| **Exp1** | **control run** — **installer trap MUST fire**, range-classified + loss accounting | **control GREEN** | ⏳ **Session owns it — NOT run by the implementation Worker** |
+| **Exp2** | **bounded attribution** — **N≤5 pre-specified, early-stop, K≥2-agree** | **zero qualifying ⇒ report + RE-REFER** | ⏳ **Session owns it** |
 
 **Order: classifier fix → coherence gate → attribution read.** **No third-run extensions.**
 
@@ -166,9 +166,14 @@ ARITHMETIC."***
 residual** — **all four were the same error: promoting an observation into a conclusion the instrument did
 not support.**
 
-**Next:** implement the corrected classifier + coherence gate; Exp0 → Exp1 → Exp2.
+**⚠⚠ NEXT: Exp1 — the control run. The installer trap MUST fire and MUST be classified by native RIP RANGE.**
+**The implementation Worker ran NO ON trial and makes NO attribution claim.** **It also discovered that the
+set test and an interval test have EQUIVALENT COVERAGE on a host run between two published starts** — a
+**stated limit**, asserted by the fixture, because the dispatch answers function ENTRIES and not ENDS.
 
-**Toolkit:** `4f06907` local / `571982d` pushed (**no-push state**). **Game:** `b980f13`.
+**Toolkit:** `f1adbd8` — **fix 1 in FOUR commits**: `e6ee7ae` (native-domain classifier + `enc` deleted),
+`7f6440c` (fixture hardening), `1dd38e1` (start set + stated residual), `f1adbd8` (embedder overflow latch).
+**Game:** `5832348` — `7f2422b` (start-set publisher + measured probe coverage), `5832348` (Exp0 proof).
 
 - **Packet:** `docs/packets/a2h-live-slot-write.md`, frozen
   **`8F3C6291C42ED3D9C3B96D879A9BB9D46391E5FEEA3F4BDC1E8712F46FFF7D4F`** — **not edited**.
