@@ -323,6 +323,8 @@ record are DWORD values as the tool prints them.** No value was re-decoded, shif
 
 ---
 
+> **R-1 REMEDIATED 2026-09-28** — per the Advisor ruling (`a2h-integrity-audit-remediation-advisor-ruling.md`, turn `01a0e83a`): **demote, do not re-derive** (re-derivation is **FORECLOSED**, not merely declined). **The erratum is written and its scope is WIDER than this record's R-1 brief:** it withdraws the corroboration table **AND the caller return-address binding**, because `0x00F7FEA0` sits **inside** the tainted window. See **`a2h-named-producer-frame-dump-window-erratum.md`**. **Row unchanged: `O-OPEN`.**
+
 ## 5. Flagged remediation list (packet line 13)
 
 > **One remediation item. A separate remediation decision is required before the queued caller-trace.**

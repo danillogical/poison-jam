@@ -1,5 +1,34 @@
 # Acceptance review (stage 1) — `A2h-named-producer-frame-r1`
 
+> ## ⚠ ERRATUM 2026-09-28 — dump-window corroboration WITHDRAWN
+>
+> **The run `logs/runs/20260927-160330-655-a4b2-gp-trap-trace` FAILS `check-dump-mapping.py`**
+> (`CONTENT_MISMATCH`, `matches: 0 / content-mismatch: 1`), **so every value read from its dump is
+> UNINTERPRETABLE.**
+>
+> **Two claims in this review are therefore NON-ADMISSIBLE:**
+> 1. **the `E = 0x00F7FEA0` corroboration table in §5 (lines 112–120)** — **including the three values marked
+>    "exact"**; and
+> 2. **the caller return-address binding in the same table** — `[0x00F7FEA0] = 0017C926`, *"return address =
+>    `call@0x0017C921 + 5` — **exact**"* — **because `0x00F7FEA0` lies INSIDE the tainted window
+>    `0x00F7FE8C..0x00F7FEAC`.** **The caller attribution DROPS TO A CANDIDATE SET.**
+>
+> **What STANDS, being mapping-immune:** **the frame arithmetic** (two independent log-`esp` readings + the log
+> ordinal), **the call-site argument counts** (static), and **the no-writer proof** (static search).
+> **So this is a corroboration-integrity defect, NOT a disproof.**
+>
+> **The row is UNCHANGED: `O-OPEN` — and it is STRENGTHENED**, since its missing-value ground is intact and its
+> *"recorded value at `0x00F7FEAC`"* specificity **survives verbatim via the arithmetic.**
+>
+> **Note the asymmetry:** the packet's own evidence record **correctly refused this SAME run's dump** for the
+> slot question (`a2h-named-producer-frame-evidence.md:312-314`), **and this review listed the
+> `CONTENT_MISMATCH` in its own table while still marking the window values "exact".** **The gate result was
+> present and its consequence was not drawn.**
+>
+> **Authority:** Advisor ruling `a2h-integrity-audit-remediation-advisor-ruling.md` (turn `01a0e83a`);
+> audit R-1. **Full text:** **`a2h-named-producer-frame-dump-window-erratum.md`**.
+> **No re-review required (§3.2). Original text below is preserved unchanged.**
+
 **Reviewer:** acceptance reviewer, stage 1. **Date:** 2026-09-27.
 **Packet:** `docs/packets/a2h-named-producer-frame.md`, frozen SHA-256
 `2333B6523B39866F1AEB9C1BEFFE1CCE42176E35BA3ADB86F8965A265BF88887`, 37 lines — **re-hashed in this

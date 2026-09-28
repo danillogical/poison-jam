@@ -100,7 +100,68 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-integrity-audit-r1` (**discovery/audit, READ-ONLY**: which accepted A2h rows rest on failing-run guest memory?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+## CURRENT PACKET — `A2h-integrity-audit-r1` **EXECUTED → `A-TAINTED`**, R-1 **REMEDIATED** (erratum); **caller-trace next**
+
+- **Packet:** `docs/packets/a2h-integrity-audit.md`, **17 lines**, frozen
+  **`03F53E0AF09283EBD2B14886DC3FA625C25402875107D0759537A7C9D1B242F9`** — **not edited**.
+- **Evidence:** `docs/reviews/a2h-integrity-audit-execution-evidence.md` (`06e2f8b`); **Session verification**
+  `docs/reviews/a2h-integrity-audit-session-verification.md` (`f96490a`); **Session cross-check**
+  `docs/reviews/a2h-integrity-audit-session-crosscheck.md` (`29e6e8c`).
+
+### Audit row: **`A-TAINTED`** — one remediation item, now closed
+
+**7 accepted rows.** Verdicts: **`TAINTED` 1**, **`ASSERTS-NOTHING` 3** (all `O-OPEN`), **`NO-GUEST-MEMORY` 4**,
+**`CLEAN` 0.** **No `A-IDENTITY`/`A-OPEN`.** **All six controls passed.** **The executor's inventory agreed
+exactly with the Session's independently built cross-check.**
+
+**`CLEAN`-zero is the CORRECT OUTPUT of the packet's narrow rule** (positive inputs *include* dump memory
+*and* all runs pass) — **no accepted row stakes positives on passing-run dump memory** — **not a hygiene
+deficit.** **`NO-GUEST-MEMORY` stands on HOST-ADDRESS provenance:** `a2h-read-registry.py` reads a **64-bit
+host address** in the minidump, which the guest-VA gate does not reach.
+
+### ✅ R-1 — remediated by ERRATUM (demote, do NOT re-derive)
+
+**`A2h-named-producer-frame-r1`** consumed `inspect-jsrf.py memory` on the guest stack window
+`0x00F7FE8C–0x00F7FEAC` from run **`20260927-160330-655-a4b2-gp-trap-trace`** — **`CONTENT_MISMATCH`.**
+**Withdrawn: the `E=0x00F7FEA0` corroboration table (all six rows, including three marked "exact") AND the
+caller return-address binding** (`0x00F7FEA0` is **inside** the tainted window, so the caller drops to a
+**candidate set**).
+
+> **Erratum:** `docs/reviews/a2h-named-producer-frame-dump-window-erratum.md` — **append-only, original bytes
+> preserved, linked from the audit record and the acceptance review. No re-review (§3.2).**
+
+**What STANDS (mapping-immune):** **frame arithmetic** (2× log-`esp` + log ordinal), **call-site argument
+counts** (static), **no-writer proof** (static). **Row `O-OPEN` UNCHANGED and STRENGTHENED.** **So R-1 is a
+corroboration-integrity defect, not a disproof.**
+
+**Re-derivation is FORECLOSED, not declined** — *"returned frames leave no trace and the crash activation
+overwrote … no archive can contain it."* **A live capture is the row's named successor.**
+
+### ⚠ THE AUDIT'S MOST DURABLE LESSON
+
+> **The one real taint was in run `20260927-160330-655-a4b2-gp-trap-trace` — an `a4b2` run, NOT an `a2h` run.
+> It was NEVER IN THE 23/24 CENSUS**, which globbed `2026*-a2h-*`. **The Session verified: the census glob
+> matches 24 runs and this one is not among them.**
+>
+> **So the census could not have found the taint. Per-row primary checks — and the ban on citing the census
+> per-row — are what found it.**
+
+### ⚠ A correction the Advisor made to the SESSION's brief
+
+**The Session's remediation brief named ONE affected claim. The Advisor found a SECOND — the caller
+return-address binding.** **The Session had read the corroboration *table* without checking whether the row's
+other uses of the same window fell inside it.** **Fourth reading failure this session; the pattern is
+consistent: the Session reads the artifact it is directed to and does not check the surrounding geometry.**
+
+### Handoff that MUST be honoured
+
+> **`A2h-callback-slot-writer-r1` is PENDING acceptance, hence OUTSIDE the audit's scope.** **Its acceptance
+> MUST verify its register inputs' provenance.** **Audit silence there is SCOPE, not clearance.**
+
+**Next:** the `edi` caller-trace — discriminator-1-one-level-up, **scoped to mapping-clean inputs + XBE bytes +
+log lines only**, **not concurrent**, and now unblocked by R-1's closure.
+
+**Toolkit:** `37226b2` local / `571982d` pushed (**no-push state**). **Game:** `21a0f76`.
 
 - **Packet:** `docs/packets/a2h-integrity-audit.md`, **17 lines**, **6116 bytes**, frozen
   **`03F53E0AF09283EBD2B14886DC3FA625C25402875107D0759537A7C9D1B242F9`** — **this is the packet to execute.**
