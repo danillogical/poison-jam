@@ -100,7 +100,36 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-callback-slot-writer-r1` **EXECUTED → `O-OPEN`** (named edge: `edi` identity); **integrity audit packet authorized and next**
+## CURRENT PACKET — `A2h-integrity-audit-r1` (**discovery/audit, READ-ONLY**: which accepted A2h rows rest on failing-run guest memory?) — **PROMOTED 2026-09-28, `ADEQUATE`**
+
+- **Packet:** `docs/packets/a2h-integrity-audit.md`, **17 lines**, **6116 bytes**, frozen
+  **`03F53E0AF09283EBD2B14886DC3FA625C25402875107D0759537A7C9D1B242F9`** — **this is the packet to execute.**
+  Validation: `docs/reviews/a2h-integrity-audit-r1-session-validation.md`.
+- **READ-ONLY. No game runs, no build, no tests, no instrumentation, no source edits.** **Accepted A2h rows
+  ONLY** — other lines are **excluded** (their own gates already cover their runs).
+- **WHY IT COMES FIRST (Advisor):** *"the trace packet's register inputs may themselves be tainted, and only
+  the audit can clear them — **dependency, not hygiene**"*; and *"with three self-caught misreads on
+  artifact interpretation, a self-assessed inventory must not stand unreviewed."*
+- **Method:** score every accepted row by **decision-input source** — `log/trace/code-static` vs
+  **`guest-memory-from-dump` + that run's `check-dump-mapping.py` result** vs `live hook reads` vs `inference`;
+  **run the gate SEPARATELY for each run actually used.**
+- **Verdicts:** `TAINTED` / `CLEAN` / `NO-GUEST-MEMORY` / `ASSERTS-NOTHING`, plus audit rows `A-IDENTITY` and
+  `A-OPEN` which **take precedence over closure even if a taint is flagged.**
+- **`ASSERTS-NOTHING` is label-only:** an accepted `O-OPEN`/`UNKNOWN` asserts nothing positive, and
+  **narrative must NOT be backfilled as though the row accepted it.**
+- **KNOWN-ANSWER CONTROL FOR EVERY EXTRACTION** — with the worked `djv000_0.adx` control (memory-order bytes
+  `64 6A 76 30 30 30 5F 30 2E 61 64 78` must print as DWORD values `30766A64 305F3030 7864612E`) **and the
+  `.text` prefix `8b512c85d28b4130c70190431c00741c`.**
+- **⚠ THE CENSUS CAVEAT:** the **23/24** figure is **ONLY a population statement and MUST NOT be cited for
+  any specific accepted row.** **Per-row primary mapping checks are required, even for a run in the census.**
+- **`A-CLEAN` is NOT a claim that anything works** — it only *"permit[s] a separately scoped caller-trace
+  packet."* **And `CLEAN` requires positive inputs to INCLUDE dump guest memory; a row that simply does not use
+  guest memory is `NO-GUEST-MEMORY`, not `CLEAN`.**
+
+**Next:** execute the audit; then, **only after the audited inventory**, the `edi` caller-trace — **scoped to
+mapping-clean inputs + XBE bytes + log lines only, and NOT concurrently.**
+
+**Toolkit:** `37226b2` local / `571982d` pushed (**no-push state**). **Game:** `ee86e7a`.
 
 - **Packet:** `docs/packets/a2h-callback-slot-writer.md`, **19 lines**, frozen
   **`D2CA02E17E2BACC1DE3726B3247965EA3A3B3061B504C06C9601F7FB4B894E3A`** — **not edited**.
