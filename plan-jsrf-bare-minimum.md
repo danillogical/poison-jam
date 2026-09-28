@@ -100,7 +100,64 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-oom-causal-slice-r1` **EXECUTED 2026-09-27 → `O-OPEN`**, chain since bound to the producer
+## CURRENT PACKET — `A2h-oom-causal-slice-r1` **EXECUTED 2026-09-27 → `O-OPEN`**, chain bound to the producer; **acceptance: stage 1 `NOT ACCEPTED` → both defects fixed → stage 2 running**
+
+**Row as selected: `O-OPEN`.** Evidence: `docs/reviews/a2h-oom-causal-slice-evidence.md`. Binding:
+`docs/reviews/a2h-oom-causal-slice-binding.json`. **No new guest run was needed or performed**, **no toolkit
+change, no runtime change, no instrumentation added**.
+
+### Acceptance history — recorded honestly, because it is the process working
+
+**Stage 1 (Hy4) returned `NOT ACCEPTED`** with two mandatory criteria `DISAGREED`. The reviewer reproduced
+**every** load-bearing measurement independently — including writing **its own capstone CFG** to test the
+dominance claim — and **confirmed** the producer formula, the dominance result, the `movzx` non-reachability,
+the frameless function, the arena behaviour, the identity, and that **`O-OPEN` was correctly selected with an
+honest closure account** (it called that handling *"a model of how to do it"*). **Both defects were the
+Session's, and both are now fixed:**
+
+| # | Defect | Fix |
+|---|---|---|
+| **1** | **A required parser fixture was missing** — the packet's *"mid-instruction disassembly start that is REJECTED"* fixture existed **only in a docstring**, because the tool had **no disassembly surface at all** | `a2h-oom-slice.py` now exposes `verify_instruction` + a `--verify VA:BYTES` CLI, rejecting misaligned starts, wrong bytes, length mismatches, malformed bytes and out-of-section VAs. **Nine new tests**, synthetic **and real** XBE. **31 tests, OK** |
+| **2** | **The "no-trap" label on the A2g run was FALSE** — `metadata.json`'s `settings` dict sets `RECOMP_APU_TRAP=1` and its log line 26 says *"trapped for MMIO"*. The Session read `run_profile.effective_settings`, found it **empty**, and reported "ABSENT" | **Both records corrected** with visible banners; **the strong claim is WITHDRAWN**; re-censused from **all** plausible locations |
+
+**The corrected census: 35 archived runs carry the `598869040` request, ALL 35 are trapped, ZERO untrapped.**
+So *"the trap is not a necessary cause"* is **not established** by this archive set. **What survives:** the
+failure is **not trace-caused** (R1 has `RECOMP_APU_TRACE` with 401 `[APUMMIO]` lines; A2g has none; trace is
+observation-only) and it **predates the A4b2 trap work** (different exe, five days earlier, same size, type,
+OOM tuple and terminal ICALL).
+
+**Defect 2 is the instructive one:** reading `effective_settings`, finding it empty, and concluding "ABSENT"
+is **reading an absent record as a negative measurement** — the same error class as the earlier `[GP*]`-zeros
+mistake and the byte-width writer census.
+
+### What was established
+
+| Finding | Witness |
+|---|---|
+| **The OOM predates the A4b2 trap work** | Different exe (`2cd0472a256e9d` vs `bc8e288dd54d`), five days earlier, **same size/type/OOM tuple/terminal ICALL** — and **all 94 invocation sizes identical index-for-index** across both logs |
+| **The chain is bound to the producer** | `RegionSize = align16([ebp+0x10]) + 0x20`; producer **`0x0014980E`**; value from **`[ebp+0x10]`, the 3rd argument**. **Reproduces both observed sizes exactly**; both pre-add values exact multiples of 16 |
+| **The producer's function** | **`sub_001497DC`** (`0x001497DC`–`0x00149F48`), **frameless** (`fpo_leaf`, inherits the caller's frame), so `[ebp+0x10]` is an offset in the *caller's* frame |
+| **Dominance, doubly derived** | Two independent CFG methods agree: 46 reaching instructions, **2 writers**, single entry `0x001497DC`, call **unreachable** with writers removed; the `movzx` writer **never reaches the call** |
+| **The failing argument was pointer-shaped** | `≈0x23B20410`, far outside the 64 MB RAM window — **the caller passed a pointer-like value where a size belongs** |
+| **The arena and toolkit behaved correctly** | `alloc_type 0x801000` is `MEM_COMMIT`, no `MEM_RESERVE`, so no reserve branch applies; the bridge returns `0xC0000017`. The guest then does not check the result and calls through NULL |
+
+**Three hypotheses refuted in sequence, all recorded:** the horizon record's reading that the OOM *tracks the
+trap*; the Session's mid-execution **stale-stack-slot** hypothesis; and the Session's **"no-trap A2g"** claim.
+
+### Next authorized work
+
+**An `A2h-named-producer` discovery** naming `[ebp+0x10]` of `sub_001497DC` at `0x0014980E`, with **the
+caller's identity** as its remaining question. A **bounded lead** is already recorded: `sub_001497DC` has **8
+call sites**, only **two** push three arguments, and one of them (`sub_0014A83E`) **passes its own `arg1`
+through** as the callee's `arg2` — with the `PUSH32` macro's pre-decrement evaluation **verified in source**.
+**Whether that is the failing path is NOT established** (the other candidate is not excluded). **No change
+packet is authorized** — the packet says *"consider a change only after cause is established."*
+
+**Toolkit:** `c151d4e` (unchanged). **Game:** `e1dd3e2`.
+
+---
+
+## Previous — `A2h-oom-causal-slice-r1` **PROMOTED 2026-09-27, `ADEQUATE`** (now executed → `O-OPEN`, chain bound)
 
 **Row as selected: `O-OPEN`.** Evidence: `docs/reviews/a2h-oom-causal-slice-evidence.md`. Binding:
 `docs/reviews/a2h-oom-causal-slice-binding.json`. **No new guest run was needed or performed** (the packet's
