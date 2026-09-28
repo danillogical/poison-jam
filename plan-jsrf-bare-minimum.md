@@ -100,43 +100,43 @@ outputs, hashes) before `A4b2-r8` cites it; **forbid** citing region-counter tal
 
 ---
 
-## CURRENT PACKET — `A2h-slot-within-run-attribution-r1` **EXECUTED (5 ON runs) → `O-COVERAGE`**, stage-1 **`ACCEPT-WITH-CORRECTIONS`** (`BLOCKING: NONE`), corrections applied
+## CURRENT PACKET — `A2h-arming-coverage-attribution-r2` (**discovery**: who zeroed the slot, with certified coverage?) — **PROMOTED 2026-09-28, `ADEQUATE`**
 
-- **Packet:** `docs/packets/a2h-slot-within-run-attribution.md`, revision
-  **`A2h-slot-within-run-attribution-r1`**, **33 lines**, frozen
-  **`3865FACC776BC64C6B0CFE8DF6C6BD0287DBD6EFC339C4E7FFAA7406667BEC27`** — **not edited**.
-- **Five pre-specified ON runs executed**, same build, all **STRICT**, identical deterministic anchors
-  (OOM `598869040` / `12715008/50855936`, `0xC0000017`, identity-1 prefix `5555`). **No sixth run.**
-- **Classification: 3 TARGET (runs 1, 2, 4), 2 NON-TARGET. K = 3 — MEETS the K ≥ 2 requirement.** The install
-  positive control **passed in all five** (`install_ok=1`, index 65). **No target realization carried a
-  competing terminal**, so the strict multi-terminal rule discarded **zero** data.
-- **Row `O-COVERAGE` → `A2h-slot-write-coverage-provenance`**, because **the all-thread-arming leg fails**:
-  every run `GUEST_DR_ARM why=handshake ok=0 armed=10 failed=9`, **zero `GUEST_DR_HIT`**.
-- **THE DEFECT, measured precisely:** all nine "attempts" were threads that **never dispatched a guest call**,
-  and **at least five of at least six guest-dispatching threads were never attempted at all.** **The DR0 watch
-  covered ONE guest thread that ran guest code.** Root cause `reason=no_mapping_offset` — the collector arms at
-  `CREATE_THREAD` (correct **ordering**) but **`g_xbox_mem_offset` is not yet resolvable then**. **A TIMING
-  dependency, not an ordering error.** Only the install-handshake path succeeded.
-- **A SHARPENED WRITER BOUND, recorded as a finding and NOT a row:** (i) **no write came through any of the 28
-  mirrors** — census complete, `touched_count=0`, `publish_failed=0` in all five; (ii) **the faulting thread
-  WAS armed in runs 1, 2 and 4 and produced zero canonical DR hits**; (iii) **run 5 POSITIVELY WITNESSED the
-  slot going `FE000104 → 00000000`**, corroborated in the **frozen registry** (`classes[4]`), provenance
-  `JSRF_PROV_UNKNOWN`, and **bracketed strictly between call `#245`'s after-sample and `#246`'s before-sample
-  — OUTSIDE any bridge body.** ⇒ the zero came through the **canonical address** from a thread the instrument
-  **did not arm**.
-- **Records:** evidence `docs/reviews/a2h-slot-within-run-execution-evidence.md`; stage-1 review
-  `docs/reviews/a2h-slot-within-run-acceptance-review.md`; post-review confirmation
-  `docs/reviews/a2h-slot-within-run-post-review-confirmation.md`.
+- **Packet:** `docs/packets/a2h-arming-coverage-attribution.md`, revision **`A2h-arming-coverage-attribution-r2`**,
+  class **discovery**, **23 lines**, **10965 bytes**, frozen SHA-256
+  **`80E9425977547BC1EE44DD95645F72ACF4F7941857A39B6DB67B427E7DD81D84`** — **this is the packet to execute.**
+  Validation: `docs/reviews/a2h-arming-coverage-r2-session-validation.md`.
+- **Authority:** `docs/reviews/a2h-arming-coverage-advisor-reruling.md` — the re-ruling that **shrank the fix to
+  reporting-only** after catching an error in the **Session's own** correction.
+- **THE FIX IS REPORTING-ONLY.** The sweep, the install-ordering and the `CREATE_THREAD` path **already exist**
+  (`collect.c:157-181`, `:198-218`, `:704-720`). **No new arming mechanism, no queue/drain, no second sweep.**
+- **The defect, corrected:** `GUEST_DR_ARM armed=10 failed=9` is a **handshake-time snapshot**; `failed=9` counts
+  failed **attempts**, and **all nine were recovered** by the sweep. **`cleared=17` counts live threads cleared
+  at teardown regardless of prior arming — NOT seventeen arms.** A successful post-handshake arm **prints
+  nothing**, so **"armed but unreported" and "never attempted" are indistinguishable.** **The armed population's
+  size is UNKNOWN: the tid list is a lower bound of 10, `cleared=17` is 17 threads existing, truth in between.**
+- **⇒ `O-COVERAGE`, because the RECORD cannot establish the positive continuous coverage the packet requires —
+  NOT because coverage was proven inadequate.**
+- **C1 — reporting-only:** print **every successful arm at the event** (`tid`, `why`, DR7 readback, seq/tick);
+  record the now-silent post-handshake successes; publish a **terminal full-list summary** reconciling all
+  outcomes rather than the handshake snapshot or the aggregate `cleared`.
+- **C2 — lossless per-birth reconciliation:** log **every** `CREATE_THREAD` event, not just attempts; an
+  explicit **operational dispatch criterion**; the **six-tid regression census** (**50616, 58620, 60872, 66492,
+  67988, 57376** — **Session-verified: all six dispatch guest code**); and the **pre-mapping-exit bound** (prove
+  no pre-handshake exit dispatched, or `UNKNOWN`).
+- **Run plan:** one **fresh OFF** (the code change breaks the carry rule), then **up to `N = 5`** ON, **early stop
+  only on two coverage-complete TARGETs that AGREE**; zero targets ⇒ report `0/5`, STOP, re-refer. **No
+  extension without Advisor referral.**
+- **Anchors unchanged:** OOM `598869040` / `12715008` / `50855936`, status `0xC0000017`, identity-1 prefix
+  `5555`. **Terminal excluded.** **`never infer a no-write or named writer from no DR hit`** is in the packet.
 
-**Next:** the successor fixes the **arming coverage** (enumerate and arm every live thread at the install
-handshake, where the mapping offset exists), takes a **fresh OFF** (this is a code change), re-runs, and
-attributes. **Advisor shape preflight required** for the toolkit change.
+**Next:** implement C1 + C2, fixtures, guards → fresh OFF → up to 5 ON → §5.8 acceptance.
 
-**Toolkit:** `5528d00` — **unpushed**, pending acceptance. **Game:** `d5b01b7`.
+**Toolkit:** `5528d00` — **unpushed**, pending acceptance. **Game:** `8ccf5dc`.
 
 ---
 
-## Previous — `A2h-slot-within-run-attribution-r1` **PROMOTED**, then executed as above
+## Previous — `A2h-slot-within-run-attribution-r1` **EXECUTED (5 ON) → `O-COVERAGE`**, stage-1 **`ACCEPT-WITH-CORRECTIONS`** applied
 
 - **Packet:** `docs/packets/a2h-slot-read-path-displacement.md`, revision
   `A2h-slot-read-path-displacement-r1`, frozen
