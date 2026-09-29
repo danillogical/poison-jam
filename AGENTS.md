@@ -28,8 +28,9 @@ Toolkit: `C:\Users\logic\Repos\xboxrecomp`
 
 Toolkit remotes (**verify with `git remote -v`; do not assume names**): `origin` is the owner's fork
 (`https://github.com/danillogical/xboxrecomp`); `upstream` is
-`https://github.com/sp00nznet/xboxrecomp`, fetch-only (its push URL is `DISABLED`). The game repository
-has no remote; do not add one.
+`https://github.com/sp00nznet/xboxrecomp`, fetch-only (its push URL is `DISABLED`). The game repository's
+remote is `origin` = `https://github.com/danillogical/poison-jam`, which is **public**: `game/` is
+gitignored and original assets must never be tracked or pushed.
 
 **Push policy (owner instruction, 2026-09-25 — full text in
 `docs/reviews/owner-push-policy-xboxrecomp-fork.md`).** Treat regular pushes to the fork as part of

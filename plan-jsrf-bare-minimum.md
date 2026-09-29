@@ -4601,7 +4601,7 @@ remotes".
 `https://github.com/sp00nznet/xboxrecomp.git` (fetch; push `DISABLED`). **The fork is already
 configured, so no remote was added, renamed, or altered, and `upstream` was not touched.** The
 instruction's suggested name `fork` was deliberately **not** used — a second name for the same URL is a
-way to push to the wrong destination by accident. The game repository has no remote.
+way to push to the wrong destination by accident. (Superseded 2026-09-28: the game repository now has a public remote; see AGENTS.md.)
 
 **A measured constraint that decides how a future push works.** `origin/main` is `766ecef` (*"Release
 v0.11.0"*, i.e. upstream's release line) and is **not** an ancestor of local `main`; the two have
