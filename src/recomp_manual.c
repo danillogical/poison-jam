@@ -10,10 +10,24 @@
 extern void sub_0017CEC0(void);
 extern recomp_func_t jsrf_lookup_recovered(uint32_t va);
 
+/* 0x00162B9D: a shared COM error tail, `mov eax, 0x800401F0; ret 0xc`
+ * (CO_E_NOTINITIALIZED). Its two callers, 0x00162A20 and 0x00162AB0, are
+ * recovered bodies that end where it starts and tail-jump to it. The v0.12
+ * translator folds such an abutting tail into its parents, and those parents
+ * are not generated, so nothing emitted it any more (regeneration of
+ * 2026-09-28). stdcall: the caller's return address plus 12 bytes. */
+void sub_00162B9D(void)
+{
+    g_eax = 0x800401F0u;
+    g_esp += 4 + 12;
+}
+
 recomp_func_t recomp_lookup_manual(uint32_t xbox_va)
 {
     if (xbox_va == 0x0017CEC0u)
         return sub_0017CEC0;
+    if (xbox_va == 0x00162B9Du)
+        return sub_00162B9D;
     return jsrf_lookup_recovered(xbox_va);
 }
 
@@ -93,4 +107,31 @@ void recomp_icall_not_code_log(uint32_t va)
      * or later execution can obscure its cause. Explicit opt-out is diagnostic. */
     if (!getenv("JSRF_ALLOW_UNRESOLVED"))
         RaiseException(0xE0424943u, EXCEPTION_NONCONTINUABLE, 0, NULL);
+}
+
+/* Untranslated instructions (upstream v0.12 lifter, ee4eb97).
+ *
+ * The lifter emits RECOMP_UNIMPL(text, va) at every instruction it has no
+ * translation for, where it used to leave a bare comment. The instruction is
+ * still a no-op -- exactly what the older tree did silently -- so behaviour is
+ * unchanged; this only makes the omission visible when it is reached.
+ * RECOMP_UNIMPL_TRAP=1 stops at the first one, at the guest address of the
+ * cause rather than wherever its damage surfaces. Contract copied from the
+ * toolkit's templates/new-game/src/recomp_manual.c. */
+void recomp_unimpl(const char *text, uint32_t va)
+{
+    static int printed;
+    const char *trap = getenv("RECOMP_UNIMPL_TRAP");
+    int stop = trap && *trap && *trap != '0';
+
+    if (printed < 50 || stop) {
+        printed++;
+        fprintf(stderr,
+                "[UNIMPL] untranslated instruction REACHED: `%s` at 0x%08X"
+                " (a no-op; set RECOMP_UNIMPL_TRAP=1 to stop here)\n",
+                text, va);
+        fflush(stderr);
+    }
+    if (stop)
+        abort();
 }

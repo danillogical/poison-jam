@@ -196,8 +196,9 @@ model is its own packet, placed before the first criterion that needs it.
 v0.12: `RECOMP_IRQL_TRACE`, `RECOMP_KEY_TRACE`, `RECOMP_INPUT_DIAG`, `RECOMP_PB_WRAP_TRACE`,
 `RECOMP_FB_WINDOW_DUMP_EVERY`, `RECOMP_WATCH`, `RECOMP_WATCH_RAW`.
 
-`RECOMP_UNIMPL_TRAP` exists only in upstream's unbuilt new-game template and JSRF's runtime
-does not read it; inventoried, not classified (upstream-merge rule 5).
+`RECOMP_UNIMPL_TRAP` (since the 2026-09-28 regeneration, `src/recomp_manual.c`): an untranslated
+instruction is always a no-op and is reported as `[UNIMPL] … REACHED`; this switch only makes the first
+one abort. It can end a run earlier, never let it get further, so it is observation (fail-closed).
 
 `RECOMP_KERNEL_LOG_BUDGET` is observation but changes conclusions anyway: the
 default truncates the log, and a truncated log reads as a hang. Use 100000.

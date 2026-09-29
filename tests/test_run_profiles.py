@@ -210,7 +210,8 @@ class ProfileClassifierTests(unittest.TestCase):
     def test_upstream_capability_switches_stay_strict(self):
         """Real capability or observation, not a faked answer."""
         for name in ('RECOMP_ASYNC_IO', 'RECOMP_USB_HC', 'RECOMP_USB_NDP',
-                     'RECOMP_KEYBOARD', 'RECOMP_IRQL_TRACE', 'RECOMP_WATCH'):
+                     'RECOMP_KEYBOARD', 'RECOMP_IRQL_TRACE', 'RECOMP_WATCH',
+                     'RECOMP_UNIMPL_TRAP'):
             with self.subTest(name=name):
                 self.assertEqual(
                     classify_settings(settings(RECOMP_GPU_ACK='0', **{name: '1'}))[
