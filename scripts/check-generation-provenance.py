@@ -51,6 +51,27 @@ ANALYSIS_INPUTS = (
     'config/recovery-unresolved.json',
 )
 
+# The full pass does not read the game's analysis output. Run from the game root
+# with the toolkit on PYTHONPATH, `tools.recomp` resolves its default analysis
+# directories inside the toolkit, and those gitignored files are what the chunks
+# were generated from (measured 2026-09-28: every generated function is in the
+# toolkit's 8768-entry functions.json; 713 are absent from the game's 8437-entry
+# one, which relift-selected.py and recover-functions.py use). Recorded as
+# `toolkit:`-prefixed inputs so a changed toolkit analysis file is caught.
+TOOLKIT_ANALYSIS_INPUTS = (
+    'tools/disasm/output/functions.json',
+    'tools/disasm/output/labels.json',
+    'tools/func_id/output/identified_functions.json',
+    'tools/abi_analysis/output/abi_functions.json',
+)
+TOOLKIT_PREFIX = 'toolkit:'
+
+
+def _input_path(name: str) -> Path:
+    if name.startswith(TOOLKIT_PREFIX):
+        return TOOLKIT / name[len(TOOLKIT_PREFIX):]
+    return ROOT / name
+
 # The single correct full-translation invocation.  Recorded because nothing in
 # `scripts/` runs it, so it is easy to invoke by hand and get subtly wrong --
 # which is exactly what happened when omitting the two flags left two functions
@@ -59,7 +80,8 @@ FULL_TRANSLATION_COMMAND = (
     'python -m tools.recomp game/default.xbe --all --split 1000 '
     '--gen-dir src/recomp/gen --game-name "Jet Set Radio Future" '
     '--manual-functions config/manual-functions.json '
-    '--exclude-manual src/recomp_manual.c'
+    '--exclude-manual src/recomp_manual.c '
+    '--trace-functions config/trace-functions.json'
 )
 
 # ABI-instrumentation markers that a regeneration must not silently remove.  Each
@@ -128,8 +150,8 @@ def repository_state(repo: Path) -> dict[str, Any]:
 def input_hashes() -> dict[str, Any]:
     """Hash every analysis input; a missing one is recorded, not skipped."""
     result: dict[str, Any] = {}
-    for name in ANALYSIS_INPUTS:
-        path = ROOT / name
+    for name in ANALYSIS_INPUTS + tuple(TOOLKIT_PREFIX + n for n in TOOLKIT_ANALYSIS_INPUTS):
+        path = _input_path(name)
         digest = _digest(path)
         result[name] = {'sha256': digest,
                         'present': digest is not None,
@@ -206,7 +228,9 @@ def build_manifest() -> dict[str, Any]:
         'purpose': ('Provenance for the generated tree. Establishes what produced '
                     'the current bytes; it is NOT a claim that the old generation '
                     'is reproducible.'),
-        'generation_mode': 'pinned-baseline (no regeneration)',
+        'generation_mode': ('full regeneration 2026-09-28 with the toolkit 2925f0b lifter, '
+                            'then relift-selected.py boundaries; hand edits re-applied '
+                            '(recomp_types.h project additions, A4b2 watch hooks)'),
         'full_translation_command': FULL_TRANSLATION_COMMAND,
         'inputs': input_hashes(),
         'generators': generator_versions(),
@@ -262,7 +286,7 @@ def check_manifest(manifest: Any, *, baseline: dict[str, str | None] | None = No
             if not isinstance(digest, str) or not re.fullmatch(r'[0-9a-f]{64}', digest):
                 problems.append(f'input {name} has no valid hash')
                 continue
-            actual = _digest(ROOT / name)
+            actual = _digest(_input_path(name))
             if actual is None:
                 unknown.append(f'input {name} is missing now')
             elif actual != digest:

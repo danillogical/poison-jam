@@ -1,18 +1,18 @@
 {
   "files": {
     "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "7393f32bc953c01f293609d4a77abc1ddfc6118082bc2c3db04c7511ec3eec38",
-    "src/recomp/gen/recomp_0000.c": "4f159bdf9b51392732a11887e3cd69fca31c1559a8468415c9ca6bfc903c136f",
-    "src/recomp/gen/recomp_0001.c": "e81ea53fb6b90b123fb88e089436902063ed0b052f38c4370abdc3b6171ca1f6",
-    "src/recomp/gen/recomp_0002.c": "c753efecb13b2c1218e6668c9c96c75e0116386df8a4da253870051125e47872",
-    "src/recomp/gen/recomp_0003.c": "bec987663e12743be735c57211b2cd219d2377451f909cc23b2cf3c5dce914b3",
-    "src/recomp/gen/recomp_0004.c": "95e194bfc3632f04ce565ab2b976f90c443ffd7eb04effbd0adc837ef8aa3944",
-    "src/recomp/gen/recomp_0005.c": "505eecef50f11969d1770c3b4973faebdc05ecc5e01493c1a95615c669c9163d",
+    "src/recomp/gen/recomp_0000.c": "d6745de877d097a5cbecb9e1e7e99f4347dcd34ffe511814621208e464044b94",
+    "src/recomp/gen/recomp_0001.c": "635f3df10c48b1e10f463557611f67cb6534ebcf0121a2c5e363e3a5d3ecb7f4",
+    "src/recomp/gen/recomp_0002.c": "8b8f69c8b9693008078c4d731f025192dde3d329df46ffc92f9040708674d48f",
+    "src/recomp/gen/recomp_0003.c": "7fae47d9a7e7d63937d09c2f12ac87e33f2dffad47d9cbb5c4920cfe7ec38810",
+    "src/recomp/gen/recomp_0004.c": "cebdfa390daac3e0310db718e1d255b5b6e24c752b3e913b2b115deb4899ed08",
+    "src/recomp/gen/recomp_0005.c": "e9ee7d24762c8cc05e0ecd5d75f1c3338d6ff4c0f6ee45c9d91e1140c6a88ef5",
     "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
-    "src/recomp/gen/recomp_dispatch.c": "b61fa0c759966a8c1c91acabdd2cc7dc6d11e60dac345591d48a7fe86b17696c",
-    "src/recomp/gen/recomp_funcs.h": "e7ae9afad3ca1c823b056813aa4e9b978aefd83a858e3cb024be847c59dd8664",
+    "src/recomp/gen/recomp_dispatch.c": "94884ab6ccc74eecd556fdac6b68d6a28f73e915bc661eb4501766f3d35f9f22",
+    "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
     "src/recomp/gen/recomp_stubs_recovery.c": "77d2c5decf6a815c9c2b1400b37a189d4419bef07baeab3836437e19beb9d345",
-    "src/recomp/gen/recomp_stubs_unresolved.c": "eabd1f8872da1cf8aaca65d7aea349df9476a701f1cda7004dc00cc5d39f66fb",
-    "src/recomp/gen/recomp_types.h": "4122e4f536370b675240b401f6bcf0a353d5200c03b4c0d67b2fbac542119c67",
+    "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
+    "src/recomp/gen/recomp_types.h": "8cb8a6a542a022f99d9b731bfb444fb4da741b2ee21030e6ba2cedf3f24f26dd",
     "src/recomp/recovered/recovered.c": "3210117dccf0a909cf3f7f881919001d976e14922aea6d1025312df5b1f22fe9",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
     "src/recomp/recovered/recovered_11c1_test.c": "88f6f654cd5a615c76838332884d0131a178718a9680e77f6e57fda8f2761621",
@@ -29,6 +29,22 @@
         "src/recomp/gen/recomp_0005.c"
       ],
       "reason": "recomp_0000.c/recomp_0005.c: six A4b2 jsrf_watch_store observation hooks (3d0dc08) were never re-baselined; recomp_0004.c: the four CRT 64-bit divide helper bodies that dropped rcr were removed in favour of src/jsrf_crt.c (docs/reviews/crt-64bit-divide.md)."
+    },
+    {
+      "date": "2026-09-28",
+      "files": [
+        "src/recomp/gen/recomp_0000.c",
+        "src/recomp/gen/recomp_0001.c",
+        "src/recomp/gen/recomp_0002.c",
+        "src/recomp/gen/recomp_0003.c",
+        "src/recomp/gen/recomp_0004.c",
+        "src/recomp/gen/recomp_0005.c",
+        "src/recomp/gen/recomp_dispatch.c",
+        "src/recomp/gen/recomp_funcs.h",
+        "src/recomp/gen/recomp_stubs_unresolved.c",
+        "src/recomp/gen/recomp_types.h"
+      ],
+      "reason": "full regeneration with the toolkit 2925f0b lifter (docs/reviews/regeneration-v012.md): chunks, recomp_funcs.h, dispatch, unresolved stubs and recomp_types.h rewritten by the pass; boundaries relifted; project header additions and A4b2 hooks re-applied."
     }
   ]
 }
