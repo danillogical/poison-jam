@@ -12,7 +12,7 @@
     "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
     "src/recomp/gen/recomp_stubs_recovery.c": "77d2c5decf6a815c9c2b1400b37a189d4419bef07baeab3836437e19beb9d345",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
-    "src/recomp/gen/recomp_types.h": "8cb8a6a542a022f99d9b731bfb444fb4da741b2ee21030e6ba2cedf3f24f26dd",
+    "src/recomp/gen/recomp_types.h": "6cfe395a479de5c25e5041ae6eaaa2eb620b0f443e5bbc6bd95888066bd348e4",
     "src/recomp/recovered/recovered.c": "3210117dccf0a909cf3f7f881919001d976e14922aea6d1025312df5b1f22fe9",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
     "src/recomp/recovered/recovered_11c1_test.c": "88f6f654cd5a615c76838332884d0131a178718a9680e77f6e57fda8f2761621",
@@ -44,6 +44,7 @@
         "src/recomp/gen/recomp_stubs_unresolved.c",
         "src/recomp/gen/recomp_types.h"
       ],
+      "note": "recomp_types.h re-hashed in its checked-out (core.autocrlf) form; the first hash was of an LF copy.",
       "reason": "full regeneration with the toolkit 2925f0b lifter (docs/reviews/regeneration-v012.md): chunks, recomp_funcs.h, dispatch, unresolved stubs and recomp_types.h rewritten by the pass; boundaries relifted; project header additions and A4b2 hooks re-applied."
     }
   ]

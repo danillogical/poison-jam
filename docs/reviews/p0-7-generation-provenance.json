@@ -14,7 +14,7 @@
     "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
     "src/recomp/gen/recomp_stubs_recovery.c": "77d2c5decf6a815c9c2b1400b37a189d4419bef07baeab3836437e19beb9d345",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
-    "src/recomp/gen/recomp_types.h": "8cb8a6a542a022f99d9b731bfb444fb4da741b2ee21030e6ba2cedf3f24f26dd",
+    "src/recomp/gen/recomp_types.h": "6cfe395a479de5c25e5041ae6eaaa2eb620b0f443e5bbc6bd95888066bd348e4",
     "src/recomp/recovered/recovered.c": "3210117dccf0a909cf3f7f881919001d976e14922aea6d1025312df5b1f22fe9",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
     "src/recomp/recovered/recovered_11c1_test.c": "88f6f654cd5a615c76838332884d0131a178718a9680e77f6e57fda8f2761621",
@@ -23,10 +23,10 @@
   "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
   "generators": {
     "project": {
-      "dirty": false,
-      "revision": "3abec23fc9334be6e09776991d6ff77becbc619f",
+      "dirty": true,
+      "revision": "e73e495b53e3f33ce5a4de0a3f7a5946c1d79909",
       "state": "MEASURED",
-      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "status_sha256": "6c9c158cdea1845630b9050a2d2406de2a426808e56ed78b512ef4f0fde30fba"
     },
     "scripts/recover-functions.py": "5397c8b0ab5a857b5dc46f3522e99adb89191b39071b03a5014a244e3dd02fc1",
     "scripts/relift-selected.py": "b5dde0b04f0c25f2e7dc1d41e1f47729df65a9b353acb210c37b91985418ca6b",
