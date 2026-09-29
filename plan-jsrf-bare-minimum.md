@@ -6,6 +6,16 @@ by scanning historical documents or old status tables. `docs/agent-workflow.md` 
 roles, the packet lifecycle and escalation; `AGENTS.md` owns operating/build/runtime
 discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 
+## Toolkit synced to upstream v0.12.0+ (owner, 2026-09-28)
+
+Toolkit `main` = merge `2925f0b`, pushed to the fork; strict stop unchanged. Record and plan findings:
+`docs/reviews/toolkit-sync-v012.md`. **Findings the next Planner must weigh:** the committed generated
+code drops `rcr` in the CRT 64-bit divide helpers (`__alldiv` and three siblings), so large-divisor 64-bit
+divides are wrong; other upstream lifter fixes are latent until regeneration or relift; nine new upstream
+switches (four synthetic, including `RECOMP_DSP_ACK`) are unknown to the run-profile classifier and would be
+labelled strict; the generation-provenance guard already fails at `HEAD` (A4b2-NR watch hooks, manifest not
+re-recorded).
+
 ## Previous packet — `A4b2-NR-epoch-slice-followup-r1` **EXECUTED 2026-09-27 → frontier CLOSED on measured evidence; row `O-TWO-LEG`** (superseded; `A4b2-r8` accepted and closed)
 
 **`A4b2-NR-epoch-slice-followup-r1` (`03CE475D…`) executed** with the Advisor-mandated **backward
