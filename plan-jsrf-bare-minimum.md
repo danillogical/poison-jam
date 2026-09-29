@@ -14,9 +14,10 @@ generated bodies dropped `rcr` are hand-written in `src/jsrf_crt.c` and unit-tes
 (`docs/reviews/crt-64bit-divide.md`); a strict run on the fixed build still requests the same 598,869,040
 bytes, so **the A2h allocation is not caused by it and the A2h successor proceeds as specified** (new
 baseline: toolkit `2925f0b`, game at or after this commit). Upstream's four synthetic switches classify as
-exploratory; the generation-provenance guard passes again. **Still open:** other upstream lifter fixes
-(`LOOP`, operand-width sign, `REPE CMPS` flags, `frndint`) are latent in the generated tree until a relift or
-regeneration.
+exploratory; the generation-provenance guard passes again. **Regenerated the same day** with the v0.12
+lifter (`docs/reviews/regeneration-v012.md`): same strict stop, identical DirectSound trace counts. **Open
+discovery item:** the new build never enters the D3D resource-release routine `sub_00192830` (the old build
+freed 54 contiguous buffers through it); which build is faithful is not established.
 
 ## Previous packet — `A4b2-NR-epoch-slice-followup-r1` **EXECUTED 2026-09-27 → frontier CLOSED on measured evidence; row `O-TWO-LEG`** (superseded; `A4b2-r8` accepted and closed)
 
