@@ -32,17 +32,28 @@ Toolkit remotes (**verify with `git remote -v`; do not assume names**): `origin`
 remote is `origin` = `https://github.com/danillogical/poison-jam`, which is **public**: `game/` is
 gitignored and original assets must never be tracked or pushed.
 
-**Push policy (owner instruction, 2026-09-25 — full text in
-`docs/reviews/owner-push-policy-xboxrecomp-fork.md`).** Treat regular pushes to the fork as part of
-**normal durable closure** for toolkit work, not only at the end of the project: push after an accepted
-toolkit implementation, a completed sync/merge packet, a materially useful commit later packets depend
-on, or a clean milestone boundary. Before every push, verify all five of: the toolkit tree is **clean**;
-the commit/branch is the **intended durable state**; the **active packet's tests/acceptance passed**;
-the destination is **the fork, not `upstream`**; and record the local SHA and branch. **Never push**
-failed/rolled-back states, temporary conflict branches, incomplete experiments, pending-acceptance
-commits, or dirty trees — `R-CONFLICT`, rollback and `INADEQUATE` are **no-push** states. **Never**
-`--force`/`--force-with-lease` and **never** push to `upstream` without explicit owner authorization.
-Record each push as `PUSHED_TO: / BRANCH: / COMMIT: / REMOTE_URL: / RESULT:`.
+**Commit and push policy — both repositories (owner instruction, 2026-09-28; extends the toolkit
+policy of 2026-09-25 in `docs/reviews/owner-push-policy-xboxrecomp-fork.md`).** Regular commits and
+pushes of **both** repositories are part of normal durable closure, not an end-of-project step.
+
+- **Commit** durable work as it lands, in whichever repository it belongs to: an accepted or closed
+  packet, a promoted packet, a review record or ruling, a plan update, an owner-directed change, a
+  sync/merge. Never leave accepted work uncommitted across a session boundary.
+- **Push both repositories at the same checkpoints:** packet closure, packet promotion, a completed
+  sync/merge, a materially useful commit later work depends on, a milestone boundary, and the end of a
+  session. Push the **toolkit first**, then the game, because game records cite toolkit commits.
+- **Before every push**, in that repository: the tree is **clean**; the branch/commit is the **intended
+  durable state**; the push is a **fast-forward**; the destination is **`origin`** (toolkit: the fork,
+  never `upstream`); and, for **code**, the active packet's tests/acceptance passed. For the **game**
+  repository, which is public, also confirm the outgoing commits add **no `game/` path, no secret, and
+  no blob over 100 MB** (`scripts/secret-audit.py` covers secrets).
+- **Records** (plan, packets, review records, rulings) may be pushed whenever committed and clean.
+  **Code** may not be pushed in a failed/rolled-back state, on a temporary conflict branch, as an
+  incomplete experiment, pending acceptance, or from a dirty tree — `R-CONFLICT`, rollback and
+  `INADEQUATE` are **no-push** states for code.
+- **Never** `--force`/`--force-with-lease`; **never** push to toolkit `upstream` without explicit owner
+  authorization. Record each push as `PUSHED_TO: / BRANCH: / COMMIT: / REMOTE_URL: / RESULT:` in the
+  record for the work it closes.
 
 Inspect both working trees before editing. Toolkit instructions live in
 `docs/GETTING_STARTED.md`, `docs/technical/indirect-calls.md`, and `lessons-learned.md`.
