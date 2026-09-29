@@ -70,6 +70,10 @@ boundary until the terminal read of `0` (TR §5).
 - **Kernel memory open points** (toolkit `1d85934`): partial `MEM_RELEASE` refused, `NtQueryVirtualMemory`
   ignores the region registry, the reserve clamp kept; KeSystemTime/KeInterruptTime are set once and
   not advanced (toolkit `4b4a62d`) — a new clock model would need admission.
+- **Review capture for Muse reviewers:** `scripts/record-review.py` reads only DSH child-session logs
+  (`--child`, `session.v3.jsonl.zstd`) and defaults `--requested-model` to the retired Hy4 route; a Muse
+  Spark Acceptance reviewer (workflow §1) is not a DSH child, so its record needs a capture path from
+  the Muse response before the next acceptance review.
 - **DSP provenance record:** `xboxrecomp/src/apu/dsp/PROVENANCE.md` lists the A4b1 modifications only;
   the A4b2-NR instrumentation in `interp/dsp_cpu.c` (marked `A4b2-NR`, plus `a9188d9`'s forward
   declaration) is not in its table.

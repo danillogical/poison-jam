@@ -38,17 +38,15 @@ must be reported precisely; it is not permission to switch to a retired model.
 
 - Planner: requested route/effort; returned route identity:
 - Persistent advisor: requested route/effort; returned route identity:
-- Acceptance reviewer (first stage): requested route/effort; returned route identity:
-- Acceptance reviewer (second stage): requested route/effort; returned route identity:
+- Acceptance reviewer: requested route/effort; returned route identity:
 - Workers: requested route/effort; returned route identity:
 - Exact error or ambiguity, if any:
 
-## Acceptance reviewer probes — PASS / FAIL / UNKNOWN
+## Acceptance reviewer probe — PASS / FAIL / UNKNOWN
 
-Probe each stage listed in workflow §1 separately.
+One review stage (workflow §1); probe it on a fresh Muse handle, never the `advisor` handle.
 
-- First stage — child ID; fresh token; response reference; empty-evidence answer; result:
-- Second stage — child ID; fresh token; response reference; empty-evidence answer; result:
+- Handle; fresh token; response reference; empty-evidence answer; reported effort; result:
 - Exact error or missing evidence:
 
 ## Persistent advisor probe — PASS / FAIL / UNKNOWN
