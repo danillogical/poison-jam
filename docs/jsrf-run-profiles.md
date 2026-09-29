@@ -52,6 +52,7 @@ The classifier follows each runtime's actual semantics:
 | `JSRF_ALLOW_UNRESOLVED` | Presence continues after unresolved calls, including empty or `0`. | Must be absent. |
 | `JSRF_ABI_CONTINUE` | Presence continues after ABI failures, including empty or `0`. | Must be absent. |
 | `RECOMP_APU_DSP_ACK` | C `strtoul(..., 0)` parses addresses; each nonzero address is cleared on APU ticks, up to eight nonzero entries. | Must be absent or parse to zero addresses. Unsupported/malformed inputs are `UNKNOWN`, never clean. |
+| `RECOMP_DSP_ACK`, `RECOMP_POKE`, `RECOMP_FORCE_RETURN`, `RECOMP_PAD_PRESS` | Upstream v0.12 bring-up switches (toolkit `2925f0b`); see §"Synthetic completion". | Must be absent. Presence is exploratory whatever the value, including values the runtime would parse as nothing. |
 
 Environment names are compared case-insensitively, as on Windows. Duplicate
 spellings of one setting are `UNKNOWN`; do not convert a list of settings into a
@@ -89,6 +90,10 @@ so in the same sentence that states it.
 | `RECOMP_APU_DSP_ACK=<addr>[,<addr>...]` | Clears those guest dwords once per APU tick. | The title's DSP pending word goes to 0 without the GP DSP having run anything. This is the override the audit names explicitly: it makes the audio path *look* complete. |
 | `RECOMP_AC97_READY` | Deleted; replaced by the always-on modeled cause listed in §"Unconditional modeled hardware causes". | Historical: it set the bit with no codec modelled behind it. The replacement models codec presence as device state, which is admitted under the always-on section; this name no longer exists in the runtime. Measured effect of the old override: the run got ~200 kernel calls further and then faulted at `0x001A2BFC` on a zero `WAVEFORMATEX`. |
 | `RECOMP_GPU_ACK` | The busy-bit ack table: clears busy bits and mirrors `USER_DMA_PUT` into `USER_DMA_GET`. It is enabled by default unless its value is exactly `0`. | Register handshakes complete with no engine behind them. Strict launches must explicitly set `0`; absence is exploratory. Note this also gates the memory mirrors — see the register-owner gate below. |
+| `RECOMP_DSP_ACK=<va>[,<va>...]` | Upstream v0.12 (`3332005`): zeroes up to eight guest dwords whenever they are non-zero, every worker tick. | The same shape as `RECOMP_APU_DSP_ACK`: a DSP command or pending word completes with nothing having done the work. |
+| `RECOMP_POKE=<va>:<value>[,...]` | Upstream v0.12 (`3332005`): holds guest globals at fixed values. | The guest reads a value no guest code or model produced. |
+| `RECOMP_FORCE_RETURN` | Upstream v0.12 (`37a21c8`): functions translated with `--force-return` answer a constant. Inert unless the generated code carries it, which JSRF's does not today. | A function's answer is replaced with a chosen constant. |
+| `RECOMP_PAD_PRESS=<mask>` | Upstream v0.12 (`8da86c1`): synthesises a pulsing button press on the emulated pad. | Input no player or host device produced. A bring-up probe by its own description. |
 | ~~`RECOMP_VBLANK`~~ | **Removed 2026-09-22 (A2).** It used to assert vblank by OR-ing into `NV_PCRTC_INTR_0` and `NV_PMC_INTR_0`, both of which are write-1-to-clear — so it cleared pending bits instead of setting them and could never assert anything. The vblank source is now part of the model (`nv2a_vblank_pulse` on the display clock), the guest's own W1C is the only acknowledgment, and both of the guest's enables gate delivery. There is nothing left to override. | **Removed, so it cannot satisfy acceptance at all.** Recorded here because the audit named it; there is no override left to set, and vblank delivery is now modelled rather than asserted. |
 
 ### Retired overrides — a third category, and it is revision-relative
@@ -142,6 +147,9 @@ exploratory.
 | `RECOMP_PB_EXEC` | Runs the pushbuffer executor. |
 | `RECOMP_RASTER_TEST` | Draws one known triangle through the executor. |
 | `RECOMP_USB`, `RECOMP_FMV_HOST`, `RECOMP_FB_WINDOW` | USB, FMV host decode, window. |
+| `RECOMP_USB_HC`, `RECOMP_USB_NDP` | Upstream v0.12: opt-in OHCI host-controller features and port count. |
+| `RECOMP_ASYNC_IO` | Upstream v0.12 (`991ff12`, `517682e`): reads on handles opened asynchronous return pending and complete later, as the console does. Both settings are model behaviour; runs with and without it are not a single-variable comparison with each other. |
+| `RECOMP_KEYBOARD` | Upstream v0.12: the host keyboard stands in for a pad. Real host input, not synthesised. |
 
 **Enabling a feature does not turn stub answers into modelled ones.** A claim is only
 as strict as the source of each value it relies on, so the run's label is necessary but
@@ -184,7 +192,12 @@ model is its own packet, placed before the first criterion that needs it.
 `RECOMP_PB_UNHANDLED_ALL`, `RECOMP_KERNEL_LOG_BUDGET`, `RECOMP_KERNEL_WATCH*`,
 `RECOMP_TRACE_*`, `RECOMP_PEEK*`, `RECOMP_FB_DUMP`, `RECOMP_FB_VA`, `RECOMP_TEX_*`,
 `RECOMP_FMV_DUMP`, `RECOMP_CS_*`, `RECOMP_USB_TRACE`, `RECOMP_APU_TRACE`,
-`RECOMP_FIND_NAN`, `RECOMP_FIND_QUAD`, `RECOMP_TRAP_NULL`, `RECOMP_CMDLINE`.
+`RECOMP_FIND_NAN`, `RECOMP_FIND_QUAD`, `RECOMP_TRAP_NULL`, `RECOMP_CMDLINE`, and from upstream
+v0.12: `RECOMP_IRQL_TRACE`, `RECOMP_KEY_TRACE`, `RECOMP_INPUT_DIAG`, `RECOMP_PB_WRAP_TRACE`,
+`RECOMP_FB_WINDOW_DUMP_EVERY`, `RECOMP_WATCH`, `RECOMP_WATCH_RAW`.
+
+`RECOMP_UNIMPL_TRAP` exists only in upstream's unbuilt new-game template and JSRF's runtime
+does not read it; inventoried, not classified (upstream-merge rule 5).
 
 `RECOMP_KERNEL_LOG_BUDGET` is observation but changes conclusions anyway: the
 default truncates the log, and a truncated log reads as a hang. Use 100000.

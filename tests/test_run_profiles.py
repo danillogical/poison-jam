@@ -197,6 +197,25 @@ class ProfileClassifierTests(unittest.TestCase):
                         classify_settings(settings(RECOMP_GPU_ACK='0', **{name: value}))[
                             'classification'], EXPLORATORY)
 
+    def test_upstream_synthetic_switches_are_exploratory(self):
+        """v0.12 bring-up switches that fake an answer (policy: upstream-merge rule 2)."""
+        for name in ('RECOMP_DSP_ACK', 'RECOMP_POKE', 'RECOMP_FORCE_RETURN',
+                     'RECOMP_PAD_PRESS'):
+            for value in ('', '0', '0x804A8810', '1'):
+                with self.subTest(name=name, value=value):
+                    self.assertEqual(
+                        classify_settings(settings(RECOMP_GPU_ACK='0', **{name: value}))[
+                            'classification'], EXPLORATORY)
+
+    def test_upstream_capability_switches_stay_strict(self):
+        """Real capability or observation, not a faked answer."""
+        for name in ('RECOMP_ASYNC_IO', 'RECOMP_USB_HC', 'RECOMP_USB_NDP',
+                     'RECOMP_KEYBOARD', 'RECOMP_IRQL_TRACE', 'RECOMP_WATCH'):
+            with self.subTest(name=name):
+                self.assertEqual(
+                    classify_settings(settings(RECOMP_GPU_ACK='0', **{name: '1'}))[
+                        'classification'], STRICT)
+
     def test_apu_ack_counts_nonzero_addresses_not_tokens(self):
         self.assertEqual(parse_apu_ack_addresses('0,0,0,0,0,0,0,0,1'), [1])
         self.assertEqual(parse_apu_ack_addresses('1,2,3,4,5,6,7,8,malformed'),

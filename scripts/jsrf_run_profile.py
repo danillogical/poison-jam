@@ -30,6 +30,10 @@ AC97_READY = 'RECOMP_AC97_READY'
 APU_DSP_ACK = 'RECOMP_APU_DSP_ACK'
 ALLOW_UNRESOLVED = 'JSRF_ALLOW_UNRESOLVED'
 ABI_CONTINUE = 'JSRF_ABI_CONTINUE'
+DSP_ACK = 'RECOMP_DSP_ACK'
+POKE = 'RECOMP_POKE'
+FORCE_RETURN = 'RECOMP_FORCE_RETURN'
+PAD_PRESS = 'RECOMP_PAD_PRESS'
 
 # Retired semantic overrides: names that once changed guest-visible behavior,
 # whose implementation was deliberately deleted, and which active policy still
@@ -391,6 +395,16 @@ def classify_settings(entries: Any) -> dict[str, Any]:
         (AC97_READY, 'was: forced the AC97 codec-ready bit; the runtime no longer reads it'),
         (ALLOW_UNRESOLVED, 'continues after unresolved indirect calls when present'),
         (ABI_CONTINUE, 'continues after ABI failures when present'),
+        # Upstream v0.12 bring-up switches (toolkit merge 2925f0b). New device
+        # behaviour from an upstream merge enters dormant only, and a variable that
+        # means synthetic completion is exploratory (jsrf-run-profiles.md,
+        # "Upstream merges never silently change admitted evidence semantics",
+        # rule 2). Presence is enough, whatever the value: over-classifying a run
+        # as exploratory is the safe direction.
+        (DSP_ACK, 'zeroes the listed guest dwords whenever they are non-zero when present'),
+        (POKE, 'holds guest globals at fixed values when present'),
+        (FORCE_RETURN, 'makes force-return functions answer a constant when present'),
+        (PAD_PRESS, 'synthesises controller button presses when present'),
     ):
         if name.casefold() in values:
             active.append(f'{name} {reason}')

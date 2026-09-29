@@ -3,6 +3,8 @@
 
 ptrdiff_t g_xbox_mem_offset;
 RECOMP_TLS uint32_t g_eax, g_esp;
+/* jsrf_crt.c also defines the 64-bit divide helpers, which use these. */
+RECOMP_TLS uint32_t g_ecx, g_edx, g_ebx;
 extern void sub_0017CEC0(void);
 
 static unsigned char guest[8192];
