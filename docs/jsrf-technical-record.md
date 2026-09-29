@@ -315,3 +315,108 @@ against N. New baseline: toolkit `2925f0b`, game ≥ `e73e495`; re-derive native
 - **Read what ships:** build configuration (`NDEBUG`), line endings (`core.autocrlf` changes hashes of
   checked-out files), and which analysis database actually produced generated code.
 - **Carry-forward lists are re-justified per packet;** a brief cannot add criteria to a frozen contract.
+
+---
+
+## 7. Fork audit and owner-directed toolkit fixes (2026-09-28/29)
+
+**Status: committed on branch `jsrf/fork-fixes` in both repositories, not pushed, and not verified on
+Windows.** No MSVC build, no `ctest`, no regeneration and no JSRF run has used this toolkit revision.
+Verification here was a MinGW-w64 cross-build of every toolkit target (zig 0.16, clang 21; only the
+three `d3d8_smoke` executables fail, at link, for want of `d3dcompiler`), the toolkit's pytest suite
+(643 passed, 2 skipped, 1 macOS-only undefined-behaviour negative control), and host-native runs of
+the new pure-logic C tests.
+
+### The audit
+
+All 23 forks of `sp00nznet/xboxrecomp` and two second-level forks were compared **by content** against
+the fork's `main` `db96e30` (= upstream `ea60cfa` + local work); upstream squash-merges fork PRs, so
+ancestry overstates what is missing. Upstream's own `work/*` branches hold nothing beyond `main`.
+Licences that bound reuse: DanielJVoxSmart is GPL-3.0 since `88cde2c` (ideas only); Tiptup300's
+semaphore code is from an unnamed source (ideas only); many NoRain211 commits carry an "Antigravity"
+bot identity (noted in the commits that took them, per upstream `CONTRIBUTING.md`).
+
+DanielJVoxSmart brought JSRF up on its own HLE runtime (`docs/technical/third-title-jsrf.md` at
+`DanielJVoxSmart/main` `505ae8e`, 2026-09-20). It stalled in `sub_001497DC` — the allocator that holds
+our strict terminal call at `0x00149828` — and its two root causes (flags lost across `lock xadd`, so
+every COM `Release()` destroyed the object; the missed function `0x00154DAA`) are already fixed in this
+toolkit and game. It then died on two indirect calls to non-code with an unreconciled contradiction
+between two of its own measurements. Provenance only; not evidence about this build.
+
+### XDK D3D device fields — INFERRED, verify against JSRF bytes
+
+From `~/src/halo-ce-universal` (Halo CE Xbox, XDK ~3911, a matching decompilation; `libs/d3d8` is
+GPL-3.0 and RXDK-derived, so **facts only, no code**): `libs/d3d8/device_layout.h:180-182` and
+`d3dbase.cpp:142` (`SetVerticalBlankCallback` stores `g_pDevice->m_Miniport.m_pVerticalBlankCallback`).
+Matched to JSRF offsets by role, anchored on measurements already in `docs/jsrf-kick-get-contract.md`,
+`jsrf-callback-reentry-contract.md` and §5; the miniport context starts at device `+0x2268`:
+
+| JSRF device offset | XDK field (Halo name) | Basis |
+|---|---|---|
+| `+0x242C` | `m_pVerticalBlankCallback` | only store is `0x0018CE3A`, in a function shaped like `D3DDevice_SetVerticalBlankCallback` |
+| `+0x2430` | `m_VerticalBlankEvent` (KEVENT) | `KeWaitForSingleObject` target in `sub_0018CE50` (`BlockUntilVerticalBlank`) |
+| `+0x2434` | that event's `Header.SignalState` | cleared before the wait (`KeClearEvent` is inline) |
+| `+0x2440` | `m_BusyBlockEvent` | second event, same initialisation |
+
+Role matches, also inferred: `0x0018CE30` SetVerticalBlankCallback, `0x0018CE50` BlockUntilVerticalBlank,
+`0x00193D90` `CMiniport::VBlank`, `0x00194210` `ServiceGrInterrupt`, `0x00193F70` `SoftwareMethod`.
+**Consequence for A2h (a lead, not a finding):** the only legitimate writer of `+0x242C` is
+SetVerticalBlankCallback, so `sub_00038530` writing `0x001D5078` there means the object it initialises
+overlaps `g_Device` (`0x0019B200`–`0x0019DCE0`), or its argument is mistranslated. JSRF's CDevice is
+probably `0x2AE0` bytes (the `g_Device`→`g_pDevice` gap); Halo's is `0x2B90`, so offsets do not carry
+over by arithmetic.
+
+### Corrections to earlier records
+
+- **The "`VCRUNTIME140` memset/memmove" writer (§5) is most likely guest code.** The lifter lowers
+  guest `rep stos`/`rep movs` to host `memset`/`memcpy` (`xboxrecomp/tools/recomp/lifter.py`, the rep
+  string paths; `grep -o` over the committed tree finds 95 `memset(` and 464 `memcpy(` in
+  `src/recomp/gen/recomp_000*.c`, 114 and 652 with `recovered.c`), and `src/jsrf_crt.c` routes
+  guest memmove to host `memmove`. The successor's specified "`VCRUNTIME140` → HOST" split would
+  misattribute it; attribution must use the native return address into the recompiled module. This
+  changes an Advisor-specified input, so it goes back to the Advisor before the successor is designed.
+- **`0x1B00/0x1B04/0x1B08/0x1BC8/0x1BCC` are texture-stage methods** (`xboxrecomp/src/nv2a/nv2a_regs.h`
+  NV097 texture block), not "the programmable-vertex path" as `docs/jsrf-operating-history.md` (2026-09-22)
+  says. Vertex-program evidence is `0x1E94` and the `0x0B80+` constants.
+- **The game has implicit function declarations of its own** (found by the clang cross-build; MSVC
+  only warns, C4013): `xbox_inb`/`xbox_outb` in `src/recomp/gen/recomp_0002.c`, `_0004.c`, `_0005.c`
+  (harmless — `SET_LO8` masks the assumed `int` — and fixed in the toolkit template for the next
+  regeneration), `recomp_dispatch_init` (`src/main.c:634`), `recomp_delta_allowed`
+  (`src/diagnostics.c:324`), `dr_tid_exited` (`tools/harness/collect.c:732`, a static defined after
+  use), `sub_00193D10`/`sub_00196C83` (`tests/test_recovery_11c1.c`). The toolkit now builds with
+  `/we4013`; the game must not inherit it until these are declared.
+
+### Toolkit changes on `jsrf/fork-fixes` (base `db96e30`)
+
+| Commit | Change | Strict-path effect |
+|---|---|---|
+| `c4adb9b` | Merge BearddOddity `pr-a-small-fixes` (split of upstream PR #128, rebased on v0.12.0): 64-bit per-thread kernel call counter, pseudo-handle sign extension, `STATUS_CONFLICTING_ADDRESSES` → `ERROR_INVALID_ADDRESS`, OHCI DATA UNDERRUN | handle/USB/log fixes; A2h counters stay `RECOMP_TLS`, printed digits unchanged |
+| `a253876` | Merge BearddOddity `pr-b-pushbuffer-executor`: CPU executor (FFP, vertex programs, lighting), DMA-engine walker | none: runs only in the GPU-ack thread body (`RECOMP_GPU_ACK≠0`) under `RECOMP_PB_EXEC`; `xbox_Nv2aAckBusyBits` checks the ack gate itself |
+| `a9188d9` | Toolkit C builds with `/we4013` / `-Werror=implicit-function-declaration`; the two existing violations declared (A2h alias census, DSP P-write watch) | none (same code generated) |
+| `cde1ccb` | Revan67: a DPC queued during a drain runs on the next timer pass | a self-requeueing DPC can no longer spin the timer thread |
+| `4b4a62d` | All 34 kernel DATA exports (nxdk `xboxkrnl.exe.def`, Cxbx-Reloaded `KernelThunk.cpp`) patch to backed data; 88, 89, 102, 120, 154, 162, 240, 245, 249, 321 were function thunks. Their old storage overlapped the IDE channel object at `0x500` | **thunk values change** for those ten ordinals if imported (each printed at init); 277/`[0x1C4064]` and KeTickCount unchanged; 120/154 are set once and not advanced |
+| `1534c4a` | `NtCreateFile`: host `ERROR_FILE_EXISTS` → `STATUS_OBJECT_NAME_COLLISION` | that one failure code |
+| `305efd1` | Guest concurrency meter, `RECOMP_GUEST_METER=1` | none when unset (observation only) |
+| `093174c`, `787b7d7`, `1d85934` | Heap blocks split on reuse; `MmFreeContiguousMemory` frees in the contiguous arena (it called `xbox_HeapFree` on an arena address); reservations tracked as regions with NT semantics — a reserve hint is honoured or refused with `STATUS_CONFLICTING_ADDRESSES`, a commit must land in a region (zero-filled after decommit), `NtFreeVirtualMemory` reads the 32-bit guest values (it dereferenced them as 8-byte host values and failed every call) and really decommits/releases. `[KMEM] summary` counters | **yes** — allocation addresses and failure codes change; `RECOMP_KMEM_LEGACY=1` restores the old behaviour exactly for A/B |
+| `123ca65` | One SRW lock around every heap entry point | removes an unsynchronised shared table |
+| `b6cea28`, `e8972a1` | HeatXD: 8/16-bit `mul`/`imul`/`div`/`idiv` in their narrow forms (4 JSRF sites, e.g. `sub_000307F8`) | at next regeneration |
+| `69842cf`, `79a0070` | NoRain211: jump table read from slot 1 when slot 0 is unusable, not when pointers precede slot 0 | at next regeneration |
+| `caeee80` | `movsx` from `bp`/`sp` (1 JSRF site, `0x0005D58D`) | at next regeneration |
+| `73974ab` | Indirect calls through alias entries counted (`g_recomp_alias_icall_count`), first 8 printed as `[ALIAS-ICALL]` | at next regeneration; `recomp_lookup(alias)` then returns a counting wrapper, so `src/main.c`'s A2h start set grows by up to 135 (cap 16384) |
+| `ca4257c` | A join whose predecessors disagree computes its condition on each edge; leftover `_flags` reads are reported (`FLAGS:`) and `--strict-flags` fails on them. Of 17 annotated sites in the generated tree, 8 were live bugs (always-false branches: `loc_000153A9` in `sub_00015130`, five in `sub_00130FD0`, `sub_000A0F10`, `sub_001C0B86`); 9 remain and are reported (flags live into the function, or data decoded as code). The 144 bare `if (!_flags)` are REP-compare loops and correct | at next regeneration; previously dead branches become live |
+| `f61a0af` | Runtime template declares `xbox_in*`/`xbox_out*` | at next regeneration |
+| `822c9de` | The D3D11 translator keys on the real NV097 method numbers (`nv2a_regs.h`; eight local constants were wrong) and reads a subchannel by its bound class | none: JSRF never reaches that translator |
+| `6864f1f`, `30d7322`, `aa650ca` | **Dormant unless `RECOMP_NV2A_ACTIONS` is exactly `1`:** semaphore release (`0x1A4` handle via RAMHT, `0x1D6C` offset, `0x1D70` written only if the stream commits); a non-zero NOP with PGRAPH `DEBUG_3` bit 20 set traps (TRAPPED_ADDR/DATA, NSOURCE, INTR ERROR, FIFO access off, vector 3) and holds the walk until the guest both clears ERROR and re-enables `0x400720`, GET left past the NOP as in xemu; `0x1D8C`/`0x1D90` land in `0x401A88`/`0x40186C`; `FLIP_STALL` holds while the flip READ index equals WRITE, released only by the guest's `0x40071C` write | none when unset — a differential driver fed 6000 random streams plus ISR register writes through the old (`a9188d9`) and new cores and every state field matched; the synthetic fence mirror writing the semaphore's word is logged and counted |
+| `2a349c8` | Admission evidence: `docs/technical/nv2a-action-methods.md` | — |
+
+**Admission status of the NV2A action methods** (the toolkit doc has the sources: xemu `f9b1403`,
+envytools `f102b82`, nxdk pbkit `58427c0`, Linux v6.6 nouveau, each with lines and SHA-256; JSRF's ISR and
+the XDK reconstruction are corroboration only). Against §"Admission criteria" of
+`docs/jsrf-run-profiles.md`: criterion 1 is unmet for all three by design (they are behind a switch until
+admitted). **Semaphore release fails criterion 4 as written**: the release tells D3D that the rendering
+before it finished, and the strict model does not render, so it can stand in for work the guest then
+relies on; only its DMA-object lookup has two sources. **NOP trap** meets criteria 2–4 except two points
+where the sources disagree (whether the data check is gated by `DEBUG_3` bit 20 — a non-zero NOP with the
+bit clear stops as `software_method_unchecked` rather than guessing — and the exact NSOURCE bit).
+**FLIP_STALL** meets 3–4; its counters have two sources, its stall condition only xemu. None of it can run
+end to end in JSRF until `0x00193F70` (`SoftwareMethod`) is recovered.

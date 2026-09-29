@@ -53,6 +53,7 @@ The classifier follows each runtime's actual semantics:
 | `JSRF_ABI_CONTINUE` | Presence continues after ABI failures, including empty or `0`. | Must be absent. |
 | `RECOMP_APU_DSP_ACK` | C `strtoul(..., 0)` parses addresses; each nonzero address is cleared on APU ticks, up to eight nonzero entries. | Must be absent or parse to zero addresses. Unsupported/malformed inputs are `UNKNOWN`, never clean. |
 | `RECOMP_DSP_ACK`, `RECOMP_POKE`, `RECOMP_FORCE_RETURN`, `RECOMP_PAD_PRESS` | Upstream v0.12 bring-up switches (toolkit `2925f0b`); see §"Synthetic completion". | Must be absent. Presence is exploratory whatever the value, including values the runtime would parse as nothing. |
+| `RECOMP_KMEM_LEGACY`, `RECOMP_NV2A_ACTIONS` | Toolkit `jsrf/fork-fixes` (2026-09-28); see §"Legacy and unadmitted behaviour". | Must be absent. Presence is exploratory whatever the value. |
 
 Environment names are compared case-insensitively, as on Windows. Duplicate
 spellings of one setting are `UNKNOWN`; do not convert a list of settings into a
@@ -139,6 +140,17 @@ exploratory.
 | `JSRF_ALLOW_UNRESOLVED=1` | Continues past unresolved calls. | The plan's original text is right: do not use as acceptance evidence. Useful only to see *what lies beyond* a stop, and the `0x00700010` case showed the answer can be garbage. |
 | `JSRF_ABI_CONTINUE` | Continues past an ABI contract failure. | An ABI failure means the translated body ran with a wrong stack or register contract; continuing measures the wreckage. |
 
+### Legacy and unadmitted behaviour — exploratory by presence
+
+Added with the owner-directed toolkit fixes on branch `jsrf/fork-fixes` (2026-09-28;
+`docs/jsrf-technical-record.md` §7). Neither is synthetic completion, and neither can support
+a strict claim.
+
+| Override | What it does | Why it cannot satisfy acceptance |
+|---|---|---|
+| `RECOMP_KMEM_LEGACY` | Restores the kernel memory semantics the fixes replaced: `NtFreeVirtualMemory` always failing, reservation base hints ignored, commit-only calls succeeding anywhere, contiguous frees and oversized heap reuse as before. | It exists only to A/B the fix. The old semantics are known wrong, so a run with them measures the defect, not the title. |
+| `RECOMP_NV2A_ACTIONS` | Arms NV2A behaviour the strict model otherwise lacks: semaphore release (`0x1D70`), the software-method trap (NOP with a non-zero parameter), and the `FLIP_STALL` hold. | Modelled device behaviour that has **not been admitted** under §"Unconditional modeled hardware causes"; the evidence for admission is recorded in the toolkit's `docs/technical/nv2a-action-methods.md`. Until the owner admits it (it would then become unconditional and this switch would be retired), a run with it is exploratory. |
+
 ### Feature enablement — real capability, not a bypass
 
 | Override | Effect |
@@ -150,6 +162,7 @@ exploratory.
 | `RECOMP_USB_HC`, `RECOMP_USB_NDP` | Upstream v0.12: opt-in OHCI host-controller features and port count. |
 | `RECOMP_ASYNC_IO` | Upstream v0.12 (`991ff12`, `517682e`): reads on handles opened asynchronous return pending and complete later, as the console does. Both settings are model behaviour; runs with and without it are not a single-variable comparison with each other. |
 | `RECOMP_KEYBOARD` | Upstream v0.12: the host keyboard stands in for a pad. Real host input, not synthesised. |
+| `RECOMP_VP` | BearddOddity pushbuffer executor (toolkit merge `a253876`): vertex-program batches are interpreted unless the value is `0`. Read only by the executor, which runs only under `RECOMP_PB_EXEC` and only while the GPU-ack gate is open, i.e. never in a strict run. |
 
 **Enabling a feature does not turn stub answers into modelled ones.** A claim is only
 as strict as the source of each value it relies on, so the run's label is necessary but
@@ -194,7 +207,10 @@ model is its own packet, placed before the first criterion that needs it.
 `RECOMP_FMV_DUMP`, `RECOMP_CS_*`, `RECOMP_USB_TRACE`, `RECOMP_APU_TRACE`,
 `RECOMP_FIND_NAN`, `RECOMP_FIND_QUAD`, `RECOMP_TRAP_NULL`, `RECOMP_CMDLINE`, and from upstream
 v0.12: `RECOMP_IRQL_TRACE`, `RECOMP_KEY_TRACE`, `RECOMP_INPUT_DIAG`, `RECOMP_PB_WRAP_TRACE`,
-`RECOMP_FB_WINDOW_DUMP_EVERY`, `RECOMP_WATCH`, `RECOMP_WATCH_RAW`.
+`RECOMP_FB_WINDOW_DUMP_EVERY`, `RECOMP_WATCH`, `RECOMP_WATCH_RAW`; from the 2026-09-28 fork fixes:
+`RECOMP_FFP_TRACE` and `RECOMP_TRACE_FLIP` (executor tracing), and `RECOMP_GUEST_METER` (counts host
+threads inside lifted guest code; changes no guest state or scheduling). `RECOMP_PB_WRAP_TRACE` is no
+longer read: the executor merge replaced the wrap scan it traced.
 
 `RECOMP_UNIMPL_TRAP` (since the 2026-09-28 regeneration, `src/recomp_manual.c`): an untranslated
 instruction is always a no-op and is reported as `[UNIMPL] … REACHED`; this switch only makes the first

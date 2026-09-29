@@ -13,11 +13,35 @@ The last packet, `A2h-slot-writer-attribution-r2`, is **ACCEPTED** (stage 1, fin
 `sub_00038530` writes `0x001D5078` (a pointer to an ADX filename) into the D3D callback slot
 `software_device+0x242C`, K≥2, but no run's terminal matched, so the row is withheld (TR §5).
 
-**Next action:** the Planner designs the A2h successor the Advisor specified (TR §5, "The specified
-successor"): bounded runs, pre-specified N with early stop, for writer-observed **and** terminal-match
-with controls green; zero qualifying ⇒ report and re-refer; split `unknown` into host-identifiable and
-truly unplaceable; test the CRT-`memset` lead, never assert it. **New baseline:** toolkit `2925f0b` (or `db96e30`, which adds docs only),
-game at or after this commit; re-derive native RVAs per run (the tree was regenerated).
+**Owner-directed toolkit fixes landed on branch `jsrf/fork-fixes` in both repositories (TR §7), not
+pushed and not verified on Windows.** They change strict-path behaviour (kernel memory semantics,
+kernel data-export thunks) and, at the next regeneration, generated code (flag joins that were always
+false, narrow multiply/divide). Before the A2h successor inherits anything, in order:
+
+1. **Windows build of the branch** (MSVC), `ctest` in both repositories, including the toolkit's new
+   `xbox_kmem`, `xbox_guest_meter`, `kernel_data_exports`, `kernel_file_status` and NV2A tests.
+2. **Regenerate** with the branch's lifter (same command and inputs as TR §2) and compare as TR §2 did;
+   expect `FLAGS:` ≈ 9 leftover sites and newly live branches in `sub_00015130` and `sub_00130FD0`.
+3. **Re-baseline the strict horizon:** one strict run on the branch and one with `RECOMP_KMEM_LEGACY=1`
+   (exploratory by presence) as the A/B; read `[KMEM] summary` (the reserve at `0x1495E3`, the commit at
+   `0x14961B`), the `data export ordinal` lines, and whether the `[0x1C4064]` stop moves.
+4. **Read-only checks** (no packet needed): confirm TR §7's inferred D3D field names against JSRF's
+   bytes at `0x0018CE30`, `0x0018CE50`, `0x00193D90`, `0x00194210`; compute `sub_00038530`'s object
+   base and whether it overlaps `g_Device` or the page holding `0x001C4064`.
+5. **Owner decision:** whether to admit the NV2A action methods on the evidence in the toolkit's
+   `docs/technical/nv2a-action-methods.md` (dormant behind `RECOMP_NV2A_ACTIONS`). TR §7 records the
+   criteria: the NOP trap is closest; semaphore release fails criterion 4 as written and needs a ruling
+   on what "work" means for a state-capture model before it could replace the synthetic fence mirror.
+   Any of it needs `0x00193F70` recovered and JSRF's `DEBUG_3` value confirmed (bit 20).
+
+Then the Planner designs the A2h successor the Advisor specified (TR §5, "The specified successor"):
+bounded runs, pre-specified N with early stop, for writer-observed **and** terminal-match with controls
+green; zero qualifying ⇒ report and re-refer; test the CRT-`memset` lead, never assert it. **Re-refer one
+input first:** the specified split of `unknown` into host-identifiable and truly unplaceable would class
+`VCRUNTIME140` writes as HOST, but those are most likely guest `rep stos`/`rep movs` lowered to host
+calls (TR §7, corrections) — attribute by native return address. `RECOMP_GUEST_METER=1` is available to
+observe the unobserved final gap. **Baseline:** the branch once steps 1–3 pass (until then toolkit
+`db96e30`, game `6251ccc`); re-derive native RVAs per run.
 
 ## Current strict horizon
 
@@ -41,6 +65,14 @@ boundary until the terminal read of `0` (TR §5).
 - **GP port follow-ups:** `NDEBUG`-elided asserts in `src/apu/dsp/` that change GP state or inputs; EP
   routing (TR §4).
 - **AC'97 registers not modelled:** `0xFEC0017C`, `0xFEC00100`.
+- **Game implicit declarations** (TR §7): declare `recomp_dispatch_init`, `recomp_delta_allowed`,
+  `dr_tid_exited` and the two test stubs before the game's CMake adopts `/we4013` as the toolkit has.
+- **Kernel memory open points** (toolkit `1d85934`): partial `MEM_RELEASE` refused, `NtQueryVirtualMemory`
+  ignores the region registry, the reserve clamp kept; KeSystemTime/KeInterruptTime are set once and
+  not advanced (toolkit `4b4a62d`) — a new clock model would need admission.
+- **DSP provenance record:** `xboxrecomp/src/apu/dsp/PROVENANCE.md` lists the A4b1 modifications only;
+  the A4b2-NR instrumentation in `interp/dsp_cpu.c` (marked `A4b2-NR`, plus `a9188d9`'s forward
+  declaration) is not in its table.
 
 ## Closed packets
 
@@ -58,6 +90,7 @@ boundary until the terminal read of `0` (TR §5).
 | Toolkit sync to v0.12.0+ | done (owner) | merge `2925f0b`, stop unchanged | §1 |
 | CRT 64-bit divide helpers | done (owner) | hand-written, unit-tested | §2 |
 | Regeneration with v0.12 lifter | done (owner) | same stop; D3D release difference open | §2 |
+| Fork audit + owner-directed toolkit fixes | committed on `jsrf/fork-fixes`, unverified on Windows | TR §7 table | §7 |
 
 `A2h-r6` was retired (premise refuted; the failure was already fixed by `cb7cae2`).
 

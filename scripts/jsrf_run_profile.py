@@ -34,6 +34,8 @@ DSP_ACK = 'RECOMP_DSP_ACK'
 POKE = 'RECOMP_POKE'
 FORCE_RETURN = 'RECOMP_FORCE_RETURN'
 PAD_PRESS = 'RECOMP_PAD_PRESS'
+KMEM_LEGACY = 'RECOMP_KMEM_LEGACY'
+NV2A_ACTIONS = 'RECOMP_NV2A_ACTIONS'
 
 # Retired semantic overrides: names that once changed guest-visible behavior,
 # whose implementation was deliberately deleted, and which active policy still
@@ -405,6 +407,12 @@ def classify_settings(entries: Any) -> dict[str, Any]:
         (POKE, 'holds guest globals at fixed values when present'),
         (FORCE_RETURN, 'makes force-return functions answer a constant when present'),
         (PAD_PRESS, 'synthesises controller button presses when present'),
+        # Owner-directed toolkit fixes (jsrf/fork-fixes). The legacy switch restores
+        # kernel memory semantics now known to be wrong; the NV2A switch arms
+        # modelled device behaviour that has not been admitted yet
+        # (jsrf-run-profiles.md, "Unconditional modeled hardware causes").
+        (KMEM_LEGACY, 'restores the previous, unfaithful kernel memory semantics when present'),
+        (NV2A_ACTIONS, 'arms unadmitted NV2A semaphore/software-method/flip-stall behaviour when present'),
     ):
         if name.casefold() in values:
             active.append(f'{name} {reason}')
