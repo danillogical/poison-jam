@@ -9,12 +9,14 @@ discipline; `docs/jsrf-run-profiles.md` owns evidence-profile semantics.
 ## Toolkit synced to upstream v0.12.0+ (owner, 2026-09-28)
 
 Toolkit `main` = merge `2925f0b`, pushed to the fork; strict stop unchanged. Record and plan findings:
-`docs/reviews/toolkit-sync-v012.md`. **Findings the next Planner must weigh:** the committed generated
-code drops `rcr` in the CRT 64-bit divide helpers (`__alldiv` and three siblings), so large-divisor 64-bit
-divides are wrong; other upstream lifter fixes are latent until regeneration or relift; nine new upstream
-switches (four synthetic, including `RECOMP_DSP_ACK`) are unknown to the run-profile classifier and would be
-labelled strict; the generation-provenance guard already fails at `HEAD` (A4b2-NR watch hooks, manifest not
-re-recorded).
+`docs/reviews/toolkit-sync-v012.md`. **Resolved the same day:** the CRT 64-bit divide helpers whose
+generated bodies dropped `rcr` are hand-written in `src/jsrf_crt.c` and unit-tested
+(`docs/reviews/crt-64bit-divide.md`); a strict run on the fixed build still requests the same 598,869,040
+bytes, so **the A2h allocation is not caused by it and the A2h successor proceeds as specified** (new
+baseline: toolkit `2925f0b`, game at or after this commit). Upstream's four synthetic switches classify as
+exploratory; the generation-provenance guard passes again. **Still open:** other upstream lifter fixes
+(`LOOP`, operand-width sign, `REPE CMPS` flags, `frndint`) are latent in the generated tree until a relift or
+regeneration.
 
 ## Previous packet — `A4b2-NR-epoch-slice-followup-r1` **EXECUTED 2026-09-27 → frontier CLOSED on measured evidence; row `O-TWO-LEG`** (superseded; `A4b2-r8` accepted and closed)
 
