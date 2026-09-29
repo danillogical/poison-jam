@@ -704,7 +704,7 @@ adequacy reviewers must effectively execute the criterion to review it, and the 
 own procedure contains an unbounded enumeration ("apply this rule to every site and show
 each one terminates"). Measured cost of not doing this: two consecutive `INADEQUATE`
 verdicts and a §5.5 redesign on one criterion
-(`docs/reviews/a4b-pio-methodology-ruling.md`).
+(`docs/jsrf-technical-record.md §4`).
 
 ### 5.6 Premise freshness
 
@@ -769,7 +769,7 @@ command that produced it inside the criterion, and make the PASS predicate condi
 `UNKNOWN`, never PASS. State in the same sentence what the method cannot see:
 register-indirect, computed, and table-driven accesses. A text search is admissible as a
 lead, never as a completeness witness. This was measured: a `PIO_FREE` enumeration built by
-grepping one spelling found 10 of 28 sites (`docs/reviews/a4b-q1-advisor-ruling.md`,
+grepping one spelling found 10 of 28 sites (`docs/jsrf-technical-record.md §4`,
 PREMISE_CHANGED addendum).
 
 **Stating the enumeration method.** Completeness and uniqueness claims state their enumeration
@@ -780,10 +780,10 @@ for uniqueness ("exactly one") state the encoding coverage over all instruction 
 carry the pattern. This was measured twice in one session: a linear decode of `.text` from its
 own start produced 29 548 plausible instructions and reached **neither** of two load-bearing
 addresses, so every later "instruction boundary" in that sweep was wrong
-(`docs/reviews/a2h-slot-writer-four-edges-session-verification.md`); and an `--aligned` dword scan
+(`docs/jsrf-technical-record.md §6`); and an `--aligned` dword scan
 reported **zero** references to a vtable base where the correct count is **three**, because the
 installs are `C7 06 70 12 1E 00` and the immediate sits off a 4-byte boundary
-(`docs/reviews/a2h-slot-writer-four-edges-evidence.md`). Raw-byte scans are the sound fallback for
+(`docs/jsrf-technical-record.md §6`). Raw-byte scans are the sound fallback for
 existence and for displacement uniqueness, and they are why this line's surviving findings
 withstood the defect.
 
@@ -815,7 +815,7 @@ evidence semantics".
    packet that owns the code producing a decision input also owns and fixture-tests that
    input's semantics; a consuming packet only reads it. Measured cost of not doing this:
    two consecutive `INADEQUATE` verdicts on one mechanism
-   (`docs/reviews/a4b-watch-ledger-ruling.md`).
+   (`xboxrecomp/src/apu/GP-INTEGRATION.md`).
 6b. **Decision inputs are bounded by construction.** A record a row decides from must have a
    size fixed by a **finite universe that is stated and derived from source** (a register
    file, a FIFO count, a fixed set of classes, the enumerated instrumentation sites),
@@ -828,7 +828,7 @@ evidence semantics".
    fixture case), not by counting distinct keys at run time. A criterion whose only role is
    to qualify a PASS is **evaluated only when that PASS holds**. Measured cost of not doing
    this: a third consecutive `INADEQUATE` verdict on one mechanism, where a 256-entry table
-   faced a 1024-word key universe (`docs/reviews/a4b-gpin-accounting-ruling.md`).
+   faced a 1024-word key universe (`xboxrecomp/src/apu/GP-INTEGRATION.md`).
 7. **Exercise and controls.** Absence claims need a coverage witness; a new checker
    needs known-good and known-bad controls; the oracle is not derived solely from the
    implementation under test.

@@ -2064,7 +2064,7 @@ ordinal-277 kernel thunk** — and the toolkit patches that table at runtime.
 **Consequence.** The Advisor ruled that the **critical path has moved** to *what zeroed / what
 read as zero at `0x001C4064`*, and that the producer line is **PARKED, not retired**, with two
 named reactivation conditions. Ruling recorded verbatim in
-`docs/reviews/a2h-critical-path-advisor-ruling.md`; errata appended to
+`docs/jsrf-technical-record.md §5`; errata appended to
 `a2h-oom-causal-slice-evidence.md` and `a2h-mechanism.md`.
 
 **Also withdrawn:** two hand-counts (1177 and 1909) for the ordinal-277 dispatch multiplicity.

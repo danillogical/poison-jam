@@ -33,7 +33,7 @@ remote is `origin` = `https://github.com/danillogical/poison-jam`, which is **pu
 gitignored and original assets must never be tracked or pushed.
 
 **Commit and push policy — both repositories (owner instruction, 2026-09-28; extends the toolkit
-policy of 2026-09-25 in `docs/reviews/owner-push-policy-xboxrecomp-fork.md`).** Regular commits and
+policy of 2026-09-25).** Regular commits and
 pushes of **both** repositories are part of normal durable closure, not an end-of-project step.
 
 - **Commit** durable work as it lands, in whichever repository it belongs to: an accepted or closed
@@ -220,7 +220,7 @@ chunks.
   exposed, which covers all MMIO and the contiguous window. **Never enumerate guest
   accesses by grepping one spelling**; derive them from the original XBE and normalise to
   `uint32`. Measured cost of getting this wrong: a `PIO_FREE` site list built by spelling
-  covered 10 of 28 sites (`docs/reviews/a4b-q1-advisor-ruling.md`).
+  covered 10 of 28 sites (`docs/jsrf-technical-record.md §4`).
 - Boundary changes require both manifest editing **and**:
 
 ```powershell

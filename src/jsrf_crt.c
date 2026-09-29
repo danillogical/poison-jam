@@ -32,7 +32,7 @@ void sub_0017CEC0(void)
  * that produced src/recomp/gen did not lift rcl/rcr; upstream fixed that in
  * 4dd267a), so the normalisation loop that runs whenever the divisor needs
  * more than 32 bits shifted only the high halves and returned wrong results.
- * These replace the generated bodies; see docs/reviews/crt-64bit-divide.md.
+ * These replace the generated bodies; see docs/jsrf-technical-record.md §2.
  *
  * All four are stdcall with four dword arguments -- dividend low/high, then
  * divisor low/high -- and `ret 0x10`, so the callee pops the return address

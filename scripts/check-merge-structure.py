@@ -65,7 +65,7 @@ CHECKER_VERSION = 'jsrf-merge-structure/1'
 
 # SCOPE: the toolkit paths that are build inputs of jsrf_recomp.exe.  Recorded as a
 # path list with a guard that fails closed if the build graph starts including
-# anything else (see docs/reviews/a4s-ac97-hunk-ruling.md, "Interpretation ruling 2").
+# anything else (see docs/jsrf-technical-record.md §1, merge-check scope).
 SCOPE_PREFIXES = ('src/', 'include/')
 SOURCE_SUFFIXES = ('.c', '.h')
 

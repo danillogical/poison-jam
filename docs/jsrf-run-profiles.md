@@ -246,7 +246,7 @@ A capped, sampled, rate-limited or first-N **log** is observation only: it may c
 and no row may depend on the presence or absence of such a line. Absence of a witness is
 never a positive attribution; it selects `UNKNOWN` or an explicit unattributed row, never a
 row that blames a specific agent. See `docs/agent-workflow.md` §6.1.6 and
-`docs/reviews/a4b-watch-ledger-ruling.md`.
+`xboxrecomp/src/apu/GP-INTEGRATION.md`.
 
 **A decision input must also be bounded by construction.** Its size must be fixed by a finite
 universe stated and derived from source, independent of run length and input volume; it is keyed
@@ -254,7 +254,7 @@ by the property the decision classifies (a provenance class, a bin, a region), n
 of individual events (an address, a page, a value). A table whose key universe is not shown finite
 is observation only, and an overflow counter is a bug detector — if a record can overflow because
 the run was long or busy, the key is wrong. See `docs/agent-workflow.md` §6.1.6b and
-`docs/reviews/a4b-gpin-accounting-ruling.md`.
+`xboxrecomp/src/apu/GP-INTEGRATION.md`.
 
 A modelled cause requires **either**:
 - one credible **primary** hardware source — a datasheet or vendor specification for the
@@ -318,7 +318,7 @@ supplies a *result of work*, it is synthetic completion however it is written.
 | `KeTickCount` advance (kernel/APU clock worker) | autonomous clock | pre-existing accepted practice; reasoning in its source comment |
 | MCPX APU GP sample counter `0xFE820010` (`MCPX_COUNTERS`) | autonomous counter | pre-existing accepted practice; reasoning in its source comment |
 | NV2A vblank pulse (`nv2a_vblank_pulse`, display clock) | periodic device event | pre-existing accepted practice; the guest's own W1C is the only acknowledgment |
-| AC'97 primary-codec-ready, `GLOB_STA` bit 8 (`0xFEC00130`) | device state from modeled prior state | `docs/reviews/ac97-codec-ready-evidence.md` — secondary-source path, two independent sources |
+| AC'97 primary-codec-ready, `GLOB_STA` bit 8 (`0xFEC00130`) | device state from modeled prior state | `docs/jsrf-technical-record.md §3` — secondary-source path, two independent sources |
 
 The first three rows are recorded for **classification continuity**: they predate this
 section and were already accepted as always-on models. Their listed basis is their existing
@@ -384,7 +384,7 @@ behaviour, and a **clean** hunk can do it as silently as a conflicting one. Ther
 Measured cost of not doing this: a merge hunk would have restored `RECOMP_AC97_READY` and
 re-gated the accepted always-on codec model, and the first scoped check then produced a
 false FAIL on an unbuilt scaffold and a comment
-(`docs/reviews/a4s-ac97-hunk-ruling.md`, including its "Interpretation ruling 2: scope").
+(`docs/jsrf-technical-record.md` §1, the AC'97 hunk ruling and merge-check scope).
 
 ### Claim limits
 

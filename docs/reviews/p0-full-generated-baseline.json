@@ -28,7 +28,7 @@
         "src/recomp/gen/recomp_0004.c",
         "src/recomp/gen/recomp_0005.c"
       ],
-      "reason": "recomp_0000.c/recomp_0005.c: six A4b2 jsrf_watch_store observation hooks (3d0dc08) were never re-baselined; recomp_0004.c: the four CRT 64-bit divide helper bodies that dropped rcr were removed in favour of src/jsrf_crt.c (docs/reviews/crt-64bit-divide.md)."
+      "reason": "recomp_0000.c/recomp_0005.c: six A4b2 jsrf_watch_store observation hooks (3d0dc08) were never re-baselined; recomp_0004.c: the four CRT 64-bit divide helper bodies that dropped rcr were removed in favour of src/jsrf_crt.c (docs/jsrf-technical-record.md §2)."
     },
     {
       "date": "2026-09-28",
@@ -45,7 +45,7 @@
         "src/recomp/gen/recomp_types.h"
       ],
       "note": "recomp_types.h re-hashed in its checked-out (core.autocrlf) form; the first hash was of an LF copy.",
-      "reason": "full regeneration with the toolkit 2925f0b lifter (docs/reviews/regeneration-v012.md): chunks, recomp_funcs.h, dispatch, unresolved stubs and recomp_types.h rewritten by the pass; boundaries relifted; project header additions and A4b2 hooks re-applied."
+      "reason": "full regeneration with the toolkit 2925f0b lifter (docs/jsrf-technical-record.md §2): chunks, recomp_funcs.h, dispatch, unresolved stubs and recomp_types.h rewritten by the pass; boundaries relifted; project header additions and A4b2 hooks re-applied."
     }
   ]
 }

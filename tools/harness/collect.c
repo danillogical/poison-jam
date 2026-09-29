@@ -443,7 +443,8 @@ static void a2h_delivery_terminal(void);
  * WHY: a successful arm after the handshake used to print nothing and the tid list was a
  * handshake-time snapshot, so "was this guest thread ever armed?" was not answerable from the
  * artifact -- which is how the absent-record error class in
- * docs/reviews/a2h-arming-coverage-advisor-reruling.md got committed twice. Every function here
+ * the A2h arming-coverage analysis got committed twice (docs/jsrf-technical-record.md §5,
+ * "Instrument facts"). Every function here
  * writes a POSITIVE record at the moment the event happens, and nothing here changes arming
  * behaviour: no queue, no second sweep, no new mechanism. */
 
