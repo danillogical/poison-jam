@@ -5,8 +5,8 @@ This file is the **single authority** for JSRF agent staffing and workflow.
 
 **Design goal:** cheap models execute precisely; senior models exercise judgment;
 evidence stays trustworthy; technical questions end at the Advisor; the project
-keeps moving. When a literal reading of this file defeats that goal, the Advisor
-decides what the rule is for (§2.3).
+keeps moving. When a literal reading of this file defeats that goal, the Advisor may
+issue a process interpretation under §2.3, subject to the hard limits in §2.4 and §3.4.
 
 **Staffing rule:** the roster table in §1 is the only persisted staffing policy.
 Other files and later sections refer to roles only. If staffing changes, edit §1
@@ -15,39 +15,84 @@ first and sweep the repository for stale copied assignments.
 ## 0. Startup checks
 
 Complete these in every new top-level session before implementing a game packet.
-A previous session's child IDs or PASS results do not establish readiness.
+A previous session's child IDs, route resolutions, or PASS results do not establish
+current readiness.
 
 1. **Load current authority.** Read this file, the `CURRENT PACKET` block of
    `plan-jsrf-bare-minimum.md`, and `docs/jsrf-run-profiles.md`. Record both
-   repository identities and dirty files. Nothing else selects work.
+   repository identities and dirty files. Nothing else selects packet-governed work.
+
 2. **Verify routes.** Compare the running Session with its §1 row from harness
    metadata (record `UNKNOWN` if unverifiable). Resolve every other role live (§1).
-3. **Probe the Acceptance reviewer.** Resolve its route live (§1) and spawn a fresh
-   child at the listed effort. PASS requires a completed response containing a fresh
-   session token, one reason an empty evidence set must fail acceptance, and the output
-   hash of one named read-only command it ran itself (reproduction is its job). Dispatch
-   alone is not PASS. The probe child is discarded; each review spawns its own.
-4. **Probe the Advisor (one combined probe).** Resolve its route live (§1) and spawn
-   it as a fresh continuable child at the listed effort. In the first turn give it a
-   unique marker and ask it to read one named repository file and report a fact
-   deliberately left out of the brief. In a second turn to the **same child**, ask for
-   the marker without repeating it. PASS requires the correct fact (checked against the
-   file), the correct marker from the same child, and the listed effort in the child's
-   metadata. This proves continuity and that the Advisor can read project evidence.
-5. **Reconcile packet state.** Inspect both working trees and preserve unrelated
-   edits. Execute **only** the exact packet/revision named in the plan's
-   `CURRENT PACKET` block. Never discover work by scanning for pending items. If no
-   packet is current, implementation is `BLOCKED` until one is promoted (§5).
-6. **Persist the receipt.** Fill `docs/session-start-template.md`, save it as
-   `docs/reviews/startup-<date>-<session-id>.md`, and link it from the active packet
-   or review record.
 
-A required route, effort, spawn, or continuation that is unavailable makes startup
-`BLOCKED` for accepted game work. Do not substitute an unlisted route. The Advisor
-child is created and probed fresh in each top-level session (§4.4). The Planner needs
-no separate probe: every adequacy review it returns must cite the files and line ranges
-it read, and each Planner turn must report the listed `reasoningEffort`; both are
-checked on first use.
+3. **Probe the Acceptance reviewer.** Resolve its route live (§1) and spawn a fresh
+   child at the listed effort. PASS requires a completed response containing:
+   - a fresh session token;
+   - one reason an empty evidence set must fail acceptance; and
+   - the output hash of one named read-only command it ran itself.
+
+   Dispatch alone is not PASS. The probe child is discarded; each review spawns its own.
+
+4. **Probe the Persistent Advisor as a real continuable child.** Resolve the exact
+   Advisor model/provider live (§1), then spawn it through a delegation surface that
+   actually creates a **continuable** child and can pin the resolved model and required
+   effort. The probe must establish all of the following together:
+   - the child is the exact §1 Advisor model/provider;
+   - the child is running at the listed effort;
+   - the child appears in the model-facing continuable-agent listing;
+   - `send_message` or the harness-equivalent continuation call can reach the same child;
+   - a first turn can read one named repository file and report a fact deliberately
+     omitted from the brief;
+   - a second turn to the **same child** can return a unique marker that was supplied
+     only in the first turn.
+
+   A one-shot child does **not** satisfy this requirement. In DSH, `workflow`'s
+   `agent()` is not an Advisor-capable path while it uses the one-shot
+   `subagents.start()` lifecycle. It may be used for the Advisor only if a future
+   capability probe proves that it now creates a continuable child (for example through
+   `startContinuable()` or an equivalent lifecycle) **and** exposes the configured
+   model and effort.
+
+   In current DSH profiles, the preferred shape is a continuable `subagent` or
+   `subagent_fork` path with model selection enabled. If the continuable tool does not
+   expose `provider`/`model`, configure the harness/plugin that gates model selection
+   (for example `subagent-model-selection-settings.allowedModels`) so the resolved
+   Claude Opus 5.5 route is selectable. If no available tool can simultaneously prove
+   **continuability + exact Claude route + high effort**, startup is `BLOCKED`.
+   Never choose one property and silently give up another.
+
+5. **Reconcile packet state.** Inspect both working trees and preserve unrelated edits.
+   Game-behavior implementation executes **only** the exact packet/revision named in
+   the plan's `CURRENT PACKET` block. Never discover packet work by scanning for pending
+   items. If no packet is current, game-behavior implementation is `BLOCKED` until one
+   is promoted (§5).
+
+   This does **not** block explicit owner-directed non-packet work that the authoritative
+   plan names as such, including maintenance, tooling, rebaseline work, repository
+   hygiene, documentation maintenance, or environment repair, provided that work does
+   not silently change behavior governed by an unpromoted packet. When in doubt, route
+   the boundary to the Planner or Advisor rather than treating maintenance as an
+   implicit implementation packet.
+
+6. **Persist a bounded startup receipt.** Fill `docs/session-start-template.md` and
+   write the current receipt to:
+
+   `docs/reviews/startup-current.md`
+
+   replacing the previous session's rolling receipt rather than creating an unbounded
+   family of `startup-<date>-<session-id>.md` files. Record the receipt SHA-256 and
+   relevant child IDs/routes in the active review record. Before a packet reaches final
+   acceptance, copy the startup facts that materially establish that packet's staffing
+   and route readiness into its durable acceptance/review record. Historical authority
+   therefore lives in packet/review records; `startup-current.md` is only the current
+   session's operational receipt.
+
+A required route, effort, spawn, continuation mechanism, or model-selection capability
+that is unavailable makes startup `BLOCKED` for accepted game work. Do not substitute
+an unlisted route. The Persistent Advisor child is created and probed fresh in each
+top-level session (§4.4). The Planner needs no separate startup probe: every adequacy
+review it returns must cite the files and line ranges it read, and each Planner turn
+must report the listed `reasoningEffort`; both are checked on first use.
 
 ## 1. Supported harnesses and roster
 
@@ -55,43 +100,73 @@ Exactly two harnesses are supported. Use only the assignments in the active colu
 
 | Role | Codex | DeepSeek Harness (DSH) |
 |---|---|---|
-| **Session** | `gpt-6-luna` @ `max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
-| **Worker subagents** | `gpt-6-luna` @ `max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
-| **Planner** | `gpt-6-astra` @ `medium` | **Muse Spark 1.3** @ `high` (`skill: muse-worker`, fresh handle) |
-| **Persistent advisor** | `gpt-6-astra` @ `medium` | **Claude Opus 5.5** @ `high` (`route: LIVE_RESOLVE`, continuable child) |
-| **Acceptance reviewer** | `gpt-6-luna` @ `max` | **GPT-6 Sol** @ `high` (`provider: codex`, `route: LIVE_RESOLVE`, fresh child per review) |
+| **Session** | `gpt-6.1-luna` @ `max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
+| **Worker subagents** | `gpt-6.1-luna` @ `max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
+| **Planner** | `gpt-6.1-astra` @ `medium` | **Muse Spark 1.3** @ `high` (`skill: muse-worker`, fresh handle) |
+| **Persistent advisor** | `gpt-6.1-astra` @ `medium` | **Claude Opus 5.5** @ `high` (`route: CONTINUABLE_PINNED`, session-continuable child) |
+| **Acceptance reviewer** | `gpt-6.1-luna` @ `max` | **GPT-6.1 Sol** @ `high` (`provider: codex`, `route: LIVE_RESOLVE`, fresh child per review) |
 
 Acceptance has **one review stage**. An `ACCEPT` is final; a rejection disputed only on
 how a frozen criterion reads goes to the Advisor (§2.2).
 
 **DSH independence.** The Planner (Muse Spark), Advisor (Claude) and Acceptance reviewer
-(GPT-6 Sol) are three model families, and each runs in its own handle or child: a
-reviewer never sees the packet's planning or Advisor conversation.
+(GPT-6.1 Sol) are three model families, and each runs in its own handle or child. A
+reviewer never receives the packet's planning or Advisor conversation.
 
-**Authority attaches to the role, not the model.** A GPT-6 Sol Acceptance reviewer is a
-contract role and is bound exactly like any other Acceptance reviewer. A Muse Spark
+**Authority attaches to the role, not the model.** A GPT-6.1 Sol Acceptance reviewer is
+a contract role and is bound exactly like any other Acceptance reviewer. A Muse Spark
 Planner handle has Planner authority; the Advisor child has Advisor authority. One child
 or handle holds one role: a child that reviewed a packet's acceptance does not also rule
 on a dispute about that review.
 
 ### Live verification
 
-- DSH: resolve ordinary model roles with `list_subagent_models` and verify any listed
-  effort. A row marked `LIVE_RESOLVE` requires **exactly one** advertised route whose
-  canonical model identity is the named model, whose provider matches when specified,
-  and which supports the required effort. Record the returned provider/model string.
-  Zero or multiple matches is `BLOCKED` until §1 or the route ambiguity is repaired.
-  Never invent an identifier from a display name.
-- The DSH Advisor resolves like any `LIVE_RESOLVE` row. The `claude` route was
-  unusable from 2026-09-26; never assume it is back — a failed resolution is `BLOCKED`.
-- The DSH Muse Spark role (Planner) is **not** resolved through `list_subagent_models`;
-  it is provided by the `muse-worker` skill. Read that skill before first use. Each
-  handle is opened fresh for its packet and recorded in that packet's review record.
-  Handles are workspace-bound. Every Muse turn must report the `reasoningEffort` listed
-  in the table; a different reported tier is `BLOCKED` for that output.
-  `.muse-workers.md` holds the former persistent Advisor handle, as history.
-- Codex: verify route and effort through current harness metadata.
+- **DSH ordinary model roles.** Resolve with `list_subagent_models` and verify any
+  listed effort. A row marked `LIVE_RESOLVE` requires **exactly one** advertised route
+  whose canonical model identity is the named model, whose provider matches when
+  specified, and which supports the required effort. Record the returned
+  provider/model string. Zero or multiple matches is `BLOCKED` until §1 or the route
+  ambiguity is repaired. Never invent an identifier from a display name.
+
+- **DSH Persistent Advisor: `CONTINUABLE_PINNED`.** This route shape has three
+  independent predicates:
+  1. exact model/provider resolves to **Claude Opus 5.5**;
+  2. the spawn surface creates a **continuable** child that can be reached again; and
+  3. the spawn surface can request and verify `high` effort.
+
+  All three must hold at the same time. Model identity alone does not establish the
+  route; a continuable default-model child does not establish the route; a one-shot
+  Claude child does not establish the route.
+
+  The DSH Session must use a continuable-capable `subagent`/`subagent_fork` path or a
+  future equivalent that passes §0 step 4. If the continuable tool's schema hides model
+  selection, enable the DSH model-selection setting/plugin so the exact resolved Claude
+  provider/model is exposed as an allowed choice. Record the tool surface, provider,
+  model, effort, child ID, continuability probe, and continuation result.
+
+  `workflow` → `agent()` is **forbidden for the Persistent Advisor** while its
+  implementation delegates through one-shot `subagents.start()`. A GUI label is not
+  the test; the lifecycle probe is. It becomes eligible only if the running harness
+  proves that the path now creates a continuable child and supports the exact model and
+  effort.
+
+  This is a route-shape requirement, not a cosmetic preference. If no available tool
+  can satisfy it, the Advisor route is `BLOCKED`; do not downgrade to a one-shot Claude
+  child or an unpinned continuable child.
+
+- **DSH Muse Spark Planner.** The Planner is **not** resolved through
+  `list_subagent_models`; it is provided by the `muse-worker` skill. Read that skill
+  before first use. Each handle is opened fresh for its packet and recorded in that
+  packet's review record. Handles are workspace-bound. Every Muse turn must report the
+  `reasoningEffort` listed in the table; a different reported tier is `BLOCKED` for
+  that output. `.muse-workers.md` may retain historical handles, but no historical
+  handle establishes current readiness.
+
+- **Codex.** Verify route and effort through current harness metadata. The Codex
+  Advisor must also be continuable through that harness's continuation mechanism.
+
 - If a row omits effort, omit `reasoning_effort`.
+
 - An unavailable assignment is `BLOCKED`; never fall back silently.
 
 ## 2. Role authority
@@ -116,7 +191,10 @@ question itself.
 
 **All contract roles**
 
-1. Work only on the exact packet/revision named in `CURRENT PACKET`; verify its hash.
+1. For packet-governed game-behavior work, work only on the exact packet/revision named
+   in `CURRENT PACKET`; verify its hash. Explicit owner-directed non-packet work allowed
+   by §0.5 is outside this packet restriction but may not silently alter behavior that
+   should be governed by an unpromoted packet.
 2. Run commands exactly as written. A step that cannot be performed as written is a
    blocker to escalate, not something to improvise around.
 3. Stay inside the declared write scope. Preserve unrelated edits in both trees.
@@ -130,19 +208,23 @@ question itself.
 7. Never claim a fix without measuring it. A report that something was fixed names
    the command or artifact that shows it, or says `UNVERIFIED`.
 8. Do not write narrative about your own repairs into operative documents.
-9. An explicit stop boundary — from the owner, the Advisor, the Planner, or a
-   packet's `Stop if` — is hard: stop, record the state, report. Do not continue past
-   it on your own judgment.
+9. An explicit stop boundary — from the owner, the Advisor, the Planner, or a packet's
+   `Stop if` — is hard: stop, record the state, report. Do not continue past it on your
+   own judgment.
 10. Write each review record to disk, from the reviewer's own response, **before**
     starting the next revision or promoting.
 
 **Session** — owns integration, build, run, evidence collection, and record keeping.
 It drafts the mechanical parts of a packet (commands, paths, hashes, environment) and
 verifies that every command in a draft actually runs before submitting it for review.
-It does not author criteria or decision rows on its own authority (§5.1), and while
-the Planner works it keeps the brief frozen (§5.1). It does not
-write causal or historical claims that a decision will rely on; it supplies artifacts
-and lets the Planner or Advisor draw the conclusion.
+It does not author criteria or decision rows on its own authority (§5.1), and while the
+Planner works it keeps the brief frozen (§5.1).
+
+The Session **may** record direct measurements and contract-prescribed mechanical
+derivations, including deterministic transforms the frozen procedure explicitly asks it
+to compute. It may not invent new causal or historical conclusions that a decision will
+rely on. New causal interpretation belongs to the Planner or Advisor; the Session
+supplies the underlying artifacts and measured/mechanical results.
 
 When spawning a bounded implementation worker, the Session includes the
 implementation-worker progress gate below in the brief. A worker's no-progress stop is
@@ -199,7 +281,7 @@ only**:
 - Overall disposition: `ACCEPT` only when every mandatory criterion is `AGREED`;
   otherwise `NOT ACCEPTED`, naming the blocking criteria.
 - An ambiguous criterion is `CANNOT VERIFY`, naming the ambiguity, never a private
-  reinterpretation; the Session takes it to the Advisor (below).
+  reinterpretation; the Session takes it to the Advisor.
 - Concerns outside the contract are listed separately as advisories. They do not
   change the disposition and do not add criteria.
 
@@ -207,37 +289,52 @@ only**:
 
 1. The Acceptance reviewer reviews every mandatory criterion as above. `ACCEPT` is
    final.
+
 2. On `NOT ACCEPTED` the Session records the review, then sorts each criterion that is
    not `AGREED`:
+
    - **Evidence failure** — the reproduction failed, or the evidence is missing, stale,
      or does not show the claim. The criterion stays failed; the work or evidence is
      fixed and the affected criteria are re-reviewed (`pending — post-review edits`).
      No role can turn it into PASS (§2.4).
+
    - **Contradicting measurements** — the reviewer's reproduction and the delivered
-     evidence disagree and neither is shown wrong. That is a factual dispute: it goes to
-     the Advisor (§4.2), which orders the discriminating measurement, and the reproduced
-     result controls (§2.4).
+     evidence disagree and neither is shown wrong. That is a factual dispute: it goes
+     to the Advisor (§4.2), which orders the discriminating measurement, and the
+     reproduced result controls (§2.4).
+
    - **Interpretation dispute** — the evidence is not in question, but the Session and
-     the reviewer read an already-frozen criterion differently, or the reviewer returned
-     `CANNOT VERIFY` because its wording is ambiguous. Only this goes to the Advisor, as
-     an acceptance-dispute ruling (§2.3).
-3. The Session sends the Advisor only the disputed criterion(s), the frozen contract,
-   the review record, the delivered evidence, and each side's reading in one or two
-   sentences. With no second reviewer, the Advisor is the only other look at a rejected
-   criterion, so it reads the evidence the dispute turns on itself (§2.4.2) instead of
-   relying on either side's summary.
-4. It returns `AGREED`, `DISAGREED`, or `CANNOT VERIFY` per escalated criterion, with the
-   reading it applied and the evidence that would reverse it. If, once the readings are
-   stated, they agree and what remains is which measurement is right, it returns
-   `CANNOT VERIFY` naming the measurement that would decide — never a disposition by
-   authority.
+     reviewer read an already-frozen criterion differently, or the reviewer returned
+     `CANNOT VERIFY` because its wording is ambiguous. Only this goes to the Advisor
+     as an acceptance-dispute ruling (§2.3).
+
+3. **Independence for a disputed criterion.** If the session's Persistent Advisor
+   materially participated in that packet's shape preflight, packet-specific policy
+   ruling, criteria design, or other planning decision that could bias the disputed
+   reading, the dispute does **not** go back to that same child. Spawn a **fresh
+   independent Advisor child** using the same §1 Advisor model, provider, effort, and
+   continuable route shape. Its startup brief contains only the frozen contract, the
+   review record, the delivered evidence, and each side's reading in one or two
+   sentences. Do not seed it with the prior Advisor conversation.
+
+   A routine startup probe alone is not material participation. If the session Advisor
+   did not materially participate in the packet, it may handle the dispute.
+
+4. The Advisor handling the dispute reads the evidence the dispute turns on itself
+   rather than relying on either side's summary. It returns `AGREED`, `DISAGREED`, or
+   `CANNOT VERIFY` per escalated criterion, with the reading it applied and the evidence
+   that would reverse it. If, once the readings are stated, they agree and what remains
+   is which measurement is right, it returns `CANNOT VERIFY` naming the measurement
+   that would decide — never a disposition by authority.
+
 5. If deciding needs a policy, architecture, scope, fidelity or exception decision, the
    Advisor makes it as a separate, recorded technical-policy ruling (§3.3) rather than
    folding it into the criterion's disposition. Missing evidence remains missing
    evidence (§2.4).
+
 6. `ACCEPT` then requires every mandatory criterion `AGREED`, by the review or by the
-   dispute ruling. That disposition binds the criterion for that evidence revision and is
-   not re-ruled without new evidence or `PREMISE_CHANGED`.
+   dispute ruling. That disposition binds the criterion for that evidence revision and
+   is not re-ruled without new evidence or `PREMISE_CHANGED`.
 
 A reviewer route failure is `pending — reviewer unavailable`, not a failed review; it
 is repaired, not sent to the Advisor.
@@ -268,11 +365,15 @@ what is enough, and what to do next; they do not decide what happened (§2.4).
   unsafely;
 - not improve architecture merely because a better design is visible while planning;
   an architectural change enters the packet only when it is necessary to make the
-  bounded claim mechanically decidable or to avoid one of the concrete wrong outcomes
+  bounded claim mechanically decidable or avoid one of the concrete wrong outcomes
   above.
 
-**Persistent advisor** — the project's senior technical decision-maker. Everything
-the Planner may do, plus:
+**Persistent advisor** — the project's senior technical decision-maker. "Persistent"
+means **continuable throughout one top-level session**; it does not mean that unrecorded
+child memory is trusted across sessions. Cross-session persistence comes from recorded
+rulings, not from reusing an old child.
+
+Everything the Planner may do, plus the Advisor may:
 
 - resolve any technical question: architecture, device/emulator semantics,
   reverse-engineering method, evidence admissibility, contract interpretation;
@@ -281,25 +382,40 @@ the Planner may do, plus:
   within the limits of §2.4 and §3.4; the Planner may record dissent, but dissent does
   not block;
 - rule on acceptance disputes about how a frozen criterion reads (§2.2), reading the
-  disputed evidence itself; it interprets the wording but never lowers the evidence
+  disputed evidence itself; it interprets wording but never lowers the evidence
   requirement, and a contradiction between measurements is settled by a new
-  measurement, not by the ruling;
-- override a literal reading of a workflow rule when that reading defeats the rule's
+  measurement, not by authority;
+- override a literal reading of a **process** rule when that reading defeats the rule's
   purpose, stating the purpose and the override;
 - decide whether an uncertainty is material and whether an advisory is worth acting
   on; reclassify any finding in either direction;
 - stop an unproductive review or revision loop; tell the Planner or reviewer that a
   finding is non-blocking and deferred;
-- approve reasonable technical exceptions (process only — never evidence, §2.4);
+- approve reasonable technical exceptions to process;
 - tell the Session to proceed when further process adds no meaningful confidence;
 - change methodology when repeated failures show the current method is the wrong shape.
 
-The Advisor does not need the owner for any of this. It escalates only a reserved
-owner decision (§3.4).
+**Hard ceiling on Advisor overrides.** An Advisor process override cannot:
+- override or weaken §2.4 evidence invariants;
+- override an explicit owner instruction or a §3.4 owner-reserved decision;
+- retroactively change a frozen criterion, threshold, profile, or decision row so that
+  failed, missing, contradictory, `UNKNOWN`, or `BLOCKED` evidence becomes successful;
+- waive evidence after it has failed;
+- turn a factual contradiction into a judgment call.
+
+If a frozen criterion is genuinely ill-formed, the Advisor may rule that it must be
+revised; the affected work is then re-measured and re-reviewed. It does not pass on the
+old evidence.
+
+The Advisor does not need the owner for other technical decisions. It escalates only a
+reserved owner decision (§3.4).
 
 **Accountability instead of gates.** Every discretionary call — defer, waive,
-simplify, stop, accept uncertainty, grant an exception, override a rule — is recorded
-in one line in the relevant review record: *decision; reason; what would reverse it.*
+simplify, stop, accept uncertainty, grant an exception, override a process rule — is
+recorded in one line in the relevant review record:
+
+`decision; reason; what would reverse it.`
+
 The call is valid when made; the record makes it auditable afterwards.
 
 ### 2.4 Evidence invariants — hard for every role
@@ -308,26 +424,33 @@ The call is valid when made; the record makes it auditable afterwards.
    or report is labelled as something the author observed itself (read or ran),
    something inferred, or something uncertain. Never present an inference or a brief's
    claim as observed.
+
 2. **Briefs are leads.** Another agent's summary is not evidence. When a fact would
    decide the outcome and is disputed, surprising, or cheap to check, look at it
    directly. The senior role decides which facts are material and need not re-read
    sources that cannot change the decision.
+
 3. **Failure stays failure.** No ruling turns a failed measurement into PASS, replaces
    missing evidence, converts UNKNOWN into success, or waives a criterion after the
    fact. A judgment role may rule a criterion ill-formed; that sends the packet back
-   for revision and a re-measurement, it does not pass the criterion.
+   for revision and re-measurement, it does not pass the criterion.
+
 4. **Profiles are fixed in advance.** Exploratory or fixture evidence never satisfies a
    strict criterion. A rule that admits a class of evidence is general, prospective,
    and recorded in its owning document before any evidence relies on it.
    `docs/jsrf-run-profiles.md` owns the profile rules.
+
 5. **Absence needs coverage.** Zero hits prove absence only with a positive witness
    that the target would have been observable.
+
 6. **The view is not the artifact.** Truncated, paginated, or summarized tool output
-   is not the file. Before a load-bearing count, negative, or provenance claim, account
-   for truncation and blank-line handling, and read the underlying range when the view
-   may be lossy. When in doubt, the result is UNKNOWN.
+   is not the file. Before a load-bearing count, negative, or provenance claim,
+   account for truncation and blank-line handling, and read the underlying range when
+   the view may be lossy. When in doubt, the result is UNKNOWN.
+
 7. **Reviews bind to bytes.** A review covers only the exact revision and evidence it
    saw. A post-review edit reopens the affected criteria.
+
 8. **Exceptions relax process, never evidence.**
 
 ## 3. Definitions
@@ -348,8 +471,7 @@ A blocking finding must state a **concrete failure scenario**: these inputs or t
 state lead to that wrong outcome. Without a scenario it is an advisory. The test is the
 consequence, not where the text sits: a false sentence in a step note that would lead an
 executor to break a step is blocking; a wrong count in a history note is not.
-Plausibility is a judgment call for the Planner or Advisor (for example, an attack the
-real toolchain cannot emit is not plausible).
+Plausibility is a judgment call for the Planner or Advisor.
 
 ### 3.2 Advisory
 
@@ -357,24 +479,25 @@ Every other finding: wording, formatting, narrative or history accuracy, record
 pointers, incomplete cross-references, stronger-than-needed controls, and hypothetical
 attacks outside the packet's stated trust boundary. Advisories are listed in the review
 record's **Deferred** section. They never reopen a frozen packet. Correcting a
-non-packet record (history log, review pointer) needs no re-review.
+non-packet record needs no re-review.
 
 ### 3.3 Technical-policy ruling
 
 An Advisor decision that settles a technical question the project documents leave open
-or ambiguous — evidence admissibility, methodology, device semantics, interpretation of
-a criterion, a dispute, a loop stop, an exception. It binds every role from the moment
-it is recorded and states:
+or ambiguous — evidence admissibility, methodology, device semantics, interpretation
+of a criterion, a dispute, a loop stop, or an exception. It binds every role from the
+moment it is recorded and states:
 
-- the question and the decision;
+- the question and decision;
 - observed / inferred / uncertain basis (§2.4.1);
 - what would reverse it;
 - where it is recorded.
 
 General rules are recorded in the document that owns the topic (§8); case rulings go in
-the review record. The Session records the ruling text verbatim with the Advisor's
-child ID, model, and effort; a paraphrase cites that record.
-An attribution that cannot be traced to a recorded Advisor response is `UNKNOWN`.
+the review record. The Session records the ruling text verbatim with the Advisor child
+ID, model, provider, effort, and whether the child satisfied the continuability probe.
+A paraphrase cites that record. An attribution that cannot be traced to a recorded
+Advisor response is `UNKNOWN`.
 
 ### 3.4 Owner decision
 
@@ -456,23 +579,40 @@ RECORD IN: <owning document or review record>
 ```
 
 Follow-ups may be delta briefs. A delta does not freeze earlier premises: if a
-correction changes a load-bearing premise, mark it `PREMISE_CHANGED` and ask the Advisor
-to reconsider every ruling that depended on it. Never instruct the Advisor not to
-revisit a premise.
+correction changes a load-bearing premise, mark it `PREMISE_CHANGED` and ask the
+Advisor to reconsider every ruling that depended on it. Never instruct the Advisor not
+to revisit a premise.
 
 ### 4.4 Advisor continuity
 
-The DSH Advisor is a **continuable child** on the §1 route, reused for the whole
-top-level session unless its state becomes unreliable; a new top-level session creates
-and probes its own (§0 step 4). Do not seed it with the current conversation: brief it
-from the files (§4.3). Spawn it with `run_in_background: true`, keep the child ID, and
-continue it with `send_message`. Rulings, not the child's memory, carry decisions across
-sessions: each is recorded, with the child ID, where §3.3 and §8 say.
+The DSH Persistent Advisor is a **session-continuable child**, not a one-shot delegate.
+Create it once per top-level session after the §0 step 4 capability probe and reuse that
+same child for the session's Advisor work unless its state becomes unreliable.
+
+For DSH:
+
+1. resolve the exact Claude Opus 5.5 provider/model;
+2. use a continuable-capable spawn surface that accepts the resolved provider/model and
+   `high` effort;
+3. spawn in continuable/background mode;
+4. verify the child appears in the continuable-agent listing;
+5. verify a second message reaches the same child;
+6. retain the child ID and use continuation messaging for later rulings.
+
+Do **not** use `workflow` → `agent()` for the Persistent Advisor while that path is
+one-shot. A first response from the correct model is not enough.
+
+Do not seed a new Advisor with the current conversation. Brief it from files (§4.3).
+Recorded rulings, not the child's memory, carry decisions across top-level sessions.
+Each new top-level session creates and probes a new session-continuable Advisor.
 
 For the direct Codex harness, use the continuable Advisor route from the Codex column
 of §1 and resume it through that harness's continuation mechanism. If the required
 continuation mechanism is unavailable, work needing the Advisor is `BLOCKED`; do not
 invent an invocation.
+
+A fresh independent Advisor created for an acceptance dispute under §2.2 is a separate
+child and does not replace the session's Persistent Advisor.
 
 ## 5. Packet lifecycle
 
@@ -486,8 +626,8 @@ investigates it.
 blocker, the runs and artifacts that show it, and anything already measured. It may
 gather that evidence first, including bounded diagnostic runs. Once the brief is sent,
 the Session sends the Planner nothing new unless it **refutes the brief's premise**;
-other findings wait for the packet. Policy edits also wait, unless the Planner asks for
-one. A planner working against a brief that changes every few minutes cannot finish.
+other findings wait for the packet. Policy edits also wait unless the Planner asks for
+one. A Planner working against a brief that changes every few minutes cannot finish.
 
 **2. Planning is done when three things can be stated:**
 
@@ -502,15 +642,16 @@ facts.
 
 **3. The Planner only reads.** It reads existing source, docs, disassembly and archived
 runs. Running the guest, building, writing tools or scripts, fetching external source,
-and multi-step analysis of dumps or binaries are execution: they belong inside a packet.
-A question that needs outside knowledge goes to the Advisor as one bounded question.
-The one file the Planner writes is its own draft packet.
+and multi-step analysis of dumps or binaries are execution: they belong inside a
+packet. A question that needs outside knowledge goes to the Advisor as one bounded
+question. The one file the Planner writes is its own draft packet.
 
 **4. Sketch first, with an early Advisor shape preflight and escalating checkpoints.**
+
 The Planner's goal is a sketch of at most about 15 lines: claim, class (discovery or
-change), unknowns, the experiment, and the outcome rows. It writes the sketch at the
-top of its draft packet file, under a `Sketch` heading, where it survives compaction and
-the owner can read it.
+change), unknowns, experiment, and outcome rows. It writes the sketch at the top of its
+draft packet file under a `Sketch` heading, where it survives compaction and the owner
+can read it.
 
 For every **new change packet or material redesign**, the first viable sketch goes to
 the Persistent Advisor **as soon as it exists and no later than 20 tool calls**, before
@@ -547,38 +688,34 @@ change the sketch**. The sketch goes to the Advisor at the checkpoints below, ne
 the Session, which does not judge or answer it.
 
 Checkpoints count **tool calls, not reasoning**. The Planner should think as long as
-the decision needs; the checkpoints limit investigation. Each one is heavier than the
-last:
+the decision needs; the checkpoints limit investigation.
 
 At every checkpoint the Planner writes its **current sketch** into the draft, however
 rough, with unknowns stated as unknowns. It also writes a **forecast** if it continues:
-the specific reads it will make next, and what it expects them to change in the sketch
-(class, claim, an unknown resolved, an outcome row). From 40 calls on it writes a
-**yield** as well: what the last 20 calls actually changed, compared with the forecast.
+the specific reads it will make next, and what it expects them to change in the sketch.
+From 40 calls on it writes a **yield** as well: what the last 20 calls actually changed,
+compared with the forecast.
 
 | At | The Planner | The Advisor |
 |---|---|---|
 | **first viable sketch / ≤20 calls** | writes sketch 1 and, for a change packet/material redesign, sends it for shape preflight before expanding the packet; after `PROCEED`, either writes the packet or writes a specific forecast and continues | returns `PROCEED`, `REDIRECT`, or `DISCOVERY_FIRST`; expands into a technical ruling only if a policy/architecture question is actually present |
-| **40 calls** | writes sketch 2, the yield against the prior forecast, and a new forecast; sends all three to the Advisor, then continues unless redirected | decides whether the investigation is still paying; may answer, redirect, or stop it |
+| **40 calls** | writes sketch 2, yield against the prior forecast, and a new forecast; sends all three to the Advisor, then continues unless redirected | decides whether the investigation is still paying; may answer, redirect, or stop it |
 | **60 calls** | stops investigating; writes sketch 3 and the yield against the 40-call forecast; sends both, plus what is still missing, to the Advisor | must decide: extend planning with an explicit bounded list of allowed reads, or have the Planner write the packet with the gaps as its subject |
 
-The yield is what tells the Advisor whether investigation is still paying. If a
-20-call stretch changed nothing that matters in the sketch, that is the signal to stop,
-and the Planner should say so rather than wait to be told. The Planner messages the
-Advisor directly when the harness allows; otherwise the Session relays the message
-unchanged.
+The yield tells the Advisor whether investigation is still paying. If a 20-call
+stretch changed nothing that matters in the sketch, that is the signal to stop, and the
+Planner should say so rather than wait to be told.
 
 The Advisor does **not** perform a full second review of every completed Planner packet.
 After `PROCEED`, it becomes involved again only at the checkpoints above or when the
 Planner encounters a genuine Advisor-class question: architecture/device semantics,
 evidence admissibility, workflow methodology, deletion/waiver of a previously
 protective requirement, acceptance of material uncertainty, fidelity tradeoff,
-conflict with an existing ruling, or repeated failure requiring a methodology change.
+conflict with an existing ruling, or repeated failure requiring methodology change.
 
 Every checkpoint decision is written into the draft, so the trail shows why planning
-ran long. A Planner that reaches 40 or 60 is a signal to the owner and the Advisor, not
-a failure by itself. The budget counts tool calls because models do not see wall-clock
-time.
+ran long. A Planner that reaches 40 or 60 is a signal to the owner and Advisor, not a
+failure by itself.
 
 **5. Authorship.**
 
@@ -588,12 +725,12 @@ time.
    and verifies that every command runs before submitting the revision.
 3. **Change packets:** adequacy review is by a Planner child. If that child wrote or
    materially rewrote the criteria or rows of the revision, the review goes to a
-   **fresh** Planner child. In DSH this means a fresh Muse Spark Planner handle under the
-   §1 roster, never the handle that wrote the revision;
-   the Advisor's shape preflight is not the adequacy review and does not replace it.
-   **Discovery packets:** the writing Planner reviews its own packet against §5.3's two
-   questions; no second Planner is spawned. Either way, independence in the end comes
-   from the Acceptance reviewer reproducing the evidence.
+   **fresh** Planner child. In DSH this means a fresh Muse Spark Planner handle under
+   the §1 roster, never the handle that wrote the revision. The Advisor's shape
+   preflight is not the adequacy review and does not replace it.
+4. **Discovery packets:** the writing Planner reviews its own packet against §5.3's two
+   blocking questions; no second Planner is spawned. Either way, final independence
+   comes from the Acceptance reviewer reproducing the evidence.
 
 ### 5.2 States
 
@@ -604,13 +741,13 @@ time.
 | **ADEQUATE** | review found zero blocking defects | **frozen and promoted in the same step** |
 | **promoted** | frozen hash in `CURRENT PACKET` | Session executes |
 | **delivered** | Session says criteria pass with evidence | Acceptance review |
-| **disputed** | the Acceptance review returned `NOT ACCEPTED` and a frozen-contract interpretation dispute remains | Advisor dispute ruling (§2.2) |
+| **disputed** | Acceptance returned `NOT ACCEPTED` and a frozen-contract interpretation dispute remains | Advisor dispute ruling (§2.2) |
 | **accepted** | all mandatory criteria are `AGREED` after review or dispute ruling | record; plan names next work |
 | **pending — CANNOT VERIFY** | reviewer cannot reproduce a criterion | new evidence; if evidence exists but wording remains disputed, Advisor dispute ruling (§2.2) |
 | **pending — reviewer unavailable** | reviewer route failed | repair route; no substitution |
 | **pending — post-review edits** | reviewed tree/evidence changed | re-review affected criteria |
 | **escalated** | policy/architecture/scope/fidelity/exception question | Advisor ruling, then rerun/re-review as needed |
-| **retired** | premise failed or objective changed | recorded in the plan |
+| **retired** | premise failed or objective changed | recorded in plan |
 | **exploratory evidence** | artifact used bypass/synthetic completion | cannot satisfy strict criteria |
 
 ### 5.3 Adequacy review
@@ -621,23 +758,26 @@ The Planner reviews the packet itself, not the Session's description of it, and 
 REVISION:          <packet revision + SHA-256 it read>
 READ:              <files/commits/runs and ranges read directly>
 PREMISE_FRESHNESS: PASS | BOUNDED | FAIL   (§5.6)
-BLOCKING:          <each: location; failure scenario; required outcome>  | NONE
-DEFERRED:          <advisories>  | NONE
+BLOCKING:          <each: location; failure scenario; required outcome> | NONE
+DEFERRED:          <advisories> | NONE
 DECISIONS:         <one line each: decision; reason; what would reverse it>
 VERDICT:           ADEQUATE | INADEQUATE
 ```
 
-`VERDICT` is `ADEQUATE` exactly when `BLOCKING` is `NONE` and `PREMISE_FRESHNESS` is not
-`FAIL`. There are no other counts or conditions: the number of advisories or prose
-defects has no effect on the verdict.
+`VERDICT` is `ADEQUATE` exactly when `BLOCKING` is `NONE` and
+`PREMISE_FRESHNESS` is not `FAIL`. There are no other counts or conditions.
 
-For a **discovery packet** (§5.8) the writing Planner reviews its own packet, and the
-review asks only two questions: could an outcome be misread into the wrong row, and is
-the packet safe and reversible? A blocking defect is one that answers either question
-badly. The Planner returns the same block, with `READ` naming what it read and
-`VERDICT` its answer; the Session confirms every command runs, records the block, and
-freezes and promotes on ADEQUATE as for any packet. A misread outcome row is caught
-again at acceptance, where the reviewer checks the row selection.
+For a **discovery packet** (§5.8), the writing Planner reviews its own packet. The two
+special discovery questions determine **BLOCKING**:
+
+1. could an outcome be misread into the wrong row?
+2. is the packet safe and reversible?
+
+Those two questions do **not** waive premise freshness. `PREMISE_FRESHNESS` remains
+mandatory for discovery packets exactly as above; `FAIL` still forces `INADEQUATE`.
+The Session confirms every command runs, records the review block, and freezes and
+promotes on `ADEQUATE` as for any packet. A misread outcome row is caught again at
+acceptance, where the reviewer checks row selection.
 
 **ADEQUATE ends plan iteration.** The Session freezes that exact revision, records the
 review, and promotes it into `CURRENT PACKET` in the same step, with no discretion to
@@ -647,8 +787,8 @@ revise first. Deferred advisories stay deferred.
 
 **After INADEQUATE:** the revision repairs the blocking defects. It may also fix cheap
 operative advisories, but adds no narrative about the repairs. Re-review covers the
-blocking defects, the changed regions, and a contract-completeness check; the blocking
-test still applies anywhere, but advisory hunting in unchanged text is not requested.
+blocking defects, changed regions, and a contract-completeness check; advisory hunting
+in unchanged text is not requested.
 
 **After ADEQUATE**, a frozen packet may be revised **only** when a Planner or Advisor
 authorizes it, recording one of:
@@ -666,49 +806,46 @@ interpretation ruling that execution follows, not by a revision.
 
 ### 5.5 Churn and redesign
 
-When two consecutive INADEQUATE verdicts have blocking defects in the same criterion or
-mechanism, the method is probably the wrong shape. The Planner must then **redesign**
-that criterion (change what it measures, split it, or delete it) or take the
-methodology to the Advisor. A third patch of the same shape is not allowed. The Planner
-or Advisor may also stop a loop at any time by recording the decision (§2.3).
+When two consecutive `INADEQUATE` verdicts have blocking defects in the same criterion
+or mechanism, the method is probably the wrong shape. The Planner must then **redesign**
+that criterion or take the methodology to the Advisor. A third patch of the same shape
+is not allowed. The Planner or Advisor may also stop a loop at any time by recording
+the decision (§2.3).
 
-**A criterion whose evaluation is itself an analysis belongs in a discovery packet.** If
-deciding a criterion requires multi-step static or dynamic analysis of a binary or a run —
-work the Planner cannot complete by reading — then the criterion is asking a contract to
-*produce* evidence rather than to check it, and its verdict cannot be known at planning
-time. Put that analysis in a discovery packet (§5.8) that runs first, and have the change
-packet cite the accepted outcome as a precondition. Two symptoms identify it: consecutive
-adequacy reviewers must effectively execute the criterion to review it, and the criterion's
-own procedure contains an unbounded enumeration ("apply this rule to every site and show
-each one terminates"). Measured cost of not doing this: two consecutive `INADEQUATE`
-verdicts and a §5.5 redesign on one criterion
-(`docs/jsrf-technical-record.md §4`).
+**A criterion whose evaluation is itself an analysis belongs in a discovery packet.**
+If deciding a criterion requires multi-step static or dynamic analysis of a binary or a
+run — work the Planner cannot complete by reading — then the criterion is asking a
+contract to *produce* evidence rather than check it. Put that analysis in a discovery
+packet (§5.8) that runs first, and have the later change packet cite the accepted
+outcome as a pinned precondition or evidence source.
 
 ### 5.6 Premise freshness
 
 Before an adequacy verdict the Planner judges whether the evidence that motivates the
 packet still holds for the target revision. The Session may prepare the facts; the
-Planner decides whether they are enough. Consider: the cited artifact exists and shows
-the event; its evidence profile; the source/build it represents; later commits that may
-have fixed or superseded it; whether the failure is current or only historical; and a
-coverage witness for absence claims.
+Planner decides whether they are enough. Consider: whether the cited artifact exists
+and shows the event; its evidence profile; the source/build it represents; later
+commits that may have fixed or superseded it; whether the failure is current or only
+historical; and a coverage witness for absence claims.
 
-- `PASS` — the premise is established for the target revision.
-- `BOUNDED` — some uncertainty remains, it is stated, and the packet fails closed if
-  the premise is wrong (a stale premise yields FAIL or UNKNOWN, never a false PASS).
-- `FAIL` — the premise is refuted or unsupported in a way that could yield a false
-  result; the packet is INADEQUATE or retired.
+- `PASS` — premise established for the target revision.
+- `BOUNDED` — uncertainty remains, is stated, and the packet fails closed if the
+  premise is wrong.
+- `FAIL` — premise refuted or unsupported in a way that could yield a false result;
+  packet is `INADEQUATE` or retired.
 
-Do this once per packet, and again only on `PREMISE_CHANGED`, not on every revision.
+Do this once per packet, and again only on `PREMISE_CHANGED`, not every revision.
 
 ### 5.7 What a frozen packet contains
 
 The operative contract only: claim and limits, identity and profile, steps, criteria,
-decision rows, pins, stop conditions, and closure. No revision history, "Fixed:" notes,
-or rationale about earlier revisions. Those go in one log,
-`docs/reviews/<packet>-revision-history.md`, which is non-authoritative, is not reviewed
-for accuracy, and loses to the contract on any conflict. The packet carries a one-line
-pointer to it.
+decision rows, pins, stop conditions, and closure. No revision history, `"Fixed:"`
+notes, or rationale about earlier revisions. Those go in one log:
+
+`docs/reviews/<packet>-revision-history.md`
+
+which is non-authoritative, is not reviewed for accuracy, and loses to the contract on
+any conflict. The packet carries a one-line pointer to it.
 
 ### 5.8 Packet classes
 
@@ -718,111 +855,104 @@ pointer to it.
 | May do | read anything; add diagnostic-only instrumentation; run exploratory or fixture profiles | anything its contract authorizes |
 | Instrumentation | reversible, trace-only or behind an environment variable, off by default at closure | production code under full review |
 | Contract | about one page (§6.3) | full contract (§6.1–6.2) |
-| Adequacy review | the writing Planner, two questions (§5.3) | a Planner that did not write it, full review (§5.3) |
-| Acceptance | reviewer confirms the artifacts exist, match the commands, and select the recorded outcome row | every criterion reproduced |
-| Can claim | "observed X under profile Y" | what its criteria establish |
+| Adequacy review | writing Planner, two blocking questions + premise freshness (§5.3) | a Planner that did not write it, full review (§5.3) |
+| Acceptance | reviewer confirms artifacts exist, match commands, and select the recorded outcome row | every criterion reproduced |
+| Can claim | `"observed X under profile Y"` | what its criteria establish |
 
-A discovery packet never satisfies a strict criterion and never claims anything works.
-Its outcome table names the next packet for each result, so closing it hands the
-Planner its next brief directly. Prefer a discovery packet whenever the next
+A discovery packet never itself satisfies a strict criterion and never claims that
+something works. **An accepted discovery outcome may, however, be pinned as a
+precondition or cited as an evidence source by a later change packet.** The later
+change packet still owns its strict acceptance; the discovery result does not become
+strict evidence merely by being cited.
+
+A discovery packet's outcome table names the next packet for each result, so closing it
+hands the Planner its next brief directly. Prefer discovery whenever the next
 implementation depends on facts nobody has observed. Keep it small enough to execute
-in one session. Leaving its instrumentation enabled after closure requires a change
-packet.
+in one session. Leaving diagnostic instrumentation enabled after closure requires a
+change packet.
 
 ## 6. Packet construction
 
 ### 6.1 Drafting checklist
 
 This list is for change packets; a discovery packet uses §6.3. Whoever drafts works
-through it; the Planner may waive an item with a one-line reason (for example, "no
-controls: the oracle is an existing tested tool").
+through it; the Planner may waive an item with a one-line reason.
 
-**Enumerating guest accesses to an address.** A criterion that claims something about*every* access to an address must not build its population by searching text. One address
-can be spelled more than one way in the generated code, so a text search silently covers a
-subset and a literal executor returns PASS over it. Derive the population from the original
-XBE instruction stream with operands normalised to `uint32`, reconcile it against the
-generated code by normalised **value** rather than spelling, freeze the count and the
-command that produced it inside the criterion, and make the PASS predicate conditional on
-`count found == frozen count` with every listed site evaluated — any difference is
-`UNKNOWN`, never PASS. State in the same sentence what the method cannot see:
-register-indirect, computed, and table-driven accesses. A text search is admissible as a
-lead, never as a completeness witness. This was measured: a `PIO_FREE` enumeration built by
-grepping one spelling found 10 of 28 sites (`docs/jsrf-technical-record.md §4`,
-PREMISE_CHANGED addendum).
+**Enumerating guest accesses to an address.** A criterion that claims something about
+*every* access to an address must not build its population by searching text. One
+address can be spelled more than one way in generated code, so a text search can
+silently cover a subset. Derive the population from the original XBE instruction
+stream with operands normalized to `uint32`, reconcile it against generated code by
+normalized **value** rather than spelling, freeze the count and the command that
+produced it inside the criterion, and make PASS conditional on
+`count found == frozen count` with every listed site evaluated. Any difference is
+`UNKNOWN`, never PASS. State what the method cannot see: register-indirect, computed,
+and table-driven accesses. A text search is a lead, never a completeness witness.
 
-**Stating the enumeration method.** Completeness and uniqueness claims state their enumeration
-method. Linear-sweep decode is inadmissible for completeness without a drift control (known
-instruction addresses demonstrably reached); use recursive descent or equivalent
-control-flow-following enumeration. Byte-pattern scans are alignment-independent for existence;
-for uniqueness ("exactly one") state the encoding coverage over all instruction forms that could
-carry the pattern. This was measured twice in one session: a linear decode of `.text` from its
-own start produced 29 548 plausible instructions and reached **neither** of two load-bearing
-addresses, so every later "instruction boundary" in that sweep was wrong
-(`docs/jsrf-technical-record.md §6`); and an `--aligned` dword scan
-reported **zero** references to a vtable base where the correct count is **three**, because the
-installs are `C7 06 70 12 1E 00` and the immediate sits off a 4-byte boundary
-(`docs/jsrf-technical-record.md §6`). Raw-byte scans are the sound fallback for
-existence and for displacement uniqueness, and they are why this line's surviving findings
-withstood the defect.
+**Stating the enumeration method.** Completeness and uniqueness claims state their
+enumeration method. Linear-sweep decode is inadmissible for completeness without a
+drift control. Use recursive descent or an equivalent control-flow-following
+enumeration. Byte-pattern scans are alignment-independent for existence; for uniqueness
+(`"exactly one"`) state the encoding coverage over all instruction forms that could
+carry the pattern. Raw-byte scans are a sound fallback for existence and displacement
+uniqueness when instruction boundaries are not mechanically established.
 
 **Merge packets.** A packet that merges upstream must inventory device- and
-profile-relevant hunks **by content, not by conflict status**, because a clean hunk can
-restore a deleted override or arm new device behaviour as silently as a conflict can hide it.
-The local admitted form wins for anything touching an admitted model or a classifier-listed
-or deleted variable, and the merged tree is grepped for those names and for arming call
-sites. See `docs/jsrf-run-profiles.md` §"Upstream merges never silently change admitted
-evidence semantics".
+profile-relevant hunks **by content, not conflict status**, because a clean hunk can
+restore a deleted override or arm new device behavior as silently as a conflict can
+hide it. The local admitted form wins for anything touching an admitted model or a
+classifier-listed/deleted variable, and the merged tree is checked for those names and
+arming call sites. See `docs/jsrf-run-profiles.md` for merge/evidence-profile policy.
 
-1. **Objective first.** State the bounded claim and explicit non-goals.
+1. **Objective first.** State bounded claim and explicit non-goals.
 2. **Stable IDs.** One criterion = one independently decidable obligation.
-3. **Guards against.** Each criterion names the wrong outcome it prevents. A criterion
-   that prevents none is deleted.
-4. **Profile before measurement.** Strict/exploratory/fixture/manual scope, identities,
-   instrumentation, and permitted overrides are fixed first.
+3. **Guards against.** Each criterion names the wrong outcome it prevents. Delete a
+   criterion that prevents none.
+4. **Profile before measurement.** Fix strict/exploratory/fixture/manual scope,
+   identities, instrumentation, and permitted overrides first.
 5. **Reproducible procedure.** Working directory, tools, inputs, command, environment,
    bounds, artifact destination. Missing tooling is a prerequisite, not an invented
    command. Every command has been run before freezing.
 6. **Decision rule.** PASS, FAIL, and UNKNOWN/BLOCKED are each defined; missing,
    malformed, stale, unexercised, or empty evidence never defaults to PASS.
-   **Decision inputs are lossless by construction.** A criterion may select a row only from
-   a record that cannot drop the deciding event: a write-once latch or an uncapped counter,
-   updated at the event by the code that performs it. Capped, sampled, rate-limited or
-   first-N logs are **observation only**, and no row may depend on the presence or absence
-   of such a line. Absence of a witness is never a positive attribution: it selects
-   `UNKNOWN` or an explicit unattributed row, never a row that blames a specific agent. The
-   packet that owns the code producing a decision input also owns and fixture-tests that
-   input's semantics; a consuming packet only reads it. Measured cost of not doing this:
-   two consecutive `INADEQUATE` verdicts on one mechanism
-   (`xboxrecomp/src/apu/GP-INTEGRATION.md`).
-6b. **Decision inputs are bounded by construction.** A record a row decides from must have a
-   size fixed by a **finite universe that is stated and derived from source** (a register
-   file, a FIFO count, a fixed set of classes, the enumerated instrumentation sites),
-   **independent of run length and input volume**. Key it by the **property the decision
-   classifies** (provenance class, bin, region), not by the identity of individual events
-   (address, page, value). A table whose key universe is not shown finite is **observation
-   only**. An overflow or out-of-universe counter is a **bug detector**; if a record can
-   overflow because the run was long or busy, **the key is wrong**. Completeness of
-   instrumentation is established **structurally** (enumerated hook sites, each with a
-   fixture case), not by counting distinct keys at run time. A criterion whose only role is
-   to qualify a PASS is **evaluated only when that PASS holds**. Measured cost of not doing
-   this: a third consecutive `INADEQUATE` verdict on one mechanism, where a 256-entry table
-   faced a 1024-word key universe (`xboxrecomp/src/apu/GP-INTEGRATION.md`).
+
+   **Decision inputs are lossless by construction.** A criterion may select a row only
+   from a record that cannot drop the deciding event: a write-once latch or an uncapped
+   counter updated at the event by the code that performs it. Capped, sampled,
+   rate-limited, or first-N logs are **observation only**. Absence of a witness is never
+   positive attribution: it selects `UNKNOWN` or an explicit unattributed row, never a
+   row that blames a specific agent. The packet that owns the code producing a decision
+   input also owns and fixture-tests that input's semantics; a consuming packet only
+   reads it.
+
+6b. **Decision inputs are bounded by construction.** A record a row decides from must
+   have a size fixed by a **finite universe that is stated and derived from source**,
+   independent of run length and input volume. Key it by the **property the decision
+   classifies**, not by individual event identity. A table whose key universe is not
+   shown finite is **observation only**. Overflow or out-of-universe counters are bug
+   detectors; if a record can overflow simply because the run was long or busy, the
+   key is wrong. Completeness of instrumentation is established structurally by
+   enumerated hook sites and fixture coverage, not by counting distinct keys at run
+   time. A criterion whose only role is to qualify a PASS is evaluated only when that
+   PASS holds.
+
 7. **Exercise and controls.** Absence claims need a coverage witness; a new checker
    needs known-good and known-bad controls; the oracle is not derived solely from the
    implementation under test.
 8. **Separate claim classes.** Structural correctness, exercised ABI behavior, strict
    reachability, device semantics, and liveness are separate obligations.
 9. **Scope and stops.** Population, window, coverage, write scope, and `Stop if`.
-10. **Mechanical closure.** Criterion -> artifact/hash -> result -> reviewer disposition
-    on one declared evidence revision.
+10. **Mechanical closure.** Criterion -> artifact/hash -> result -> reviewer
+    disposition on one declared evidence revision.
 11. **Observability first.** If success and failure cannot be distinguished, build and
-    validate the tooling in an earlier packet.
+    validate tooling in an earlier packet.
 
 Before release ask both questions:
 
-> Could broken behavior, an unexercised path, an exploratory run, stale evidence, or an
-> empty input satisfy these checks? — if yes, tighten.
-> Does every requirement protect the objective against a named wrong outcome? — if not,
+> Could broken behavior, an unexercised path, an exploratory run, stale evidence, or
+> an empty input satisfy these checks? If yes, tighten.
+
+> Does every requirement protect the objective against a named wrong outcome? If not,
 > delete it.
 
 ### 6.2 Packet template
@@ -907,10 +1037,13 @@ Before release ask both questions:
 | Term | Meaning |
 |---|---|
 | **model diversity** | a different model family from the Session |
-| **procedural independence** | the reviewer did not author the work and is asked to falsify, not confirm |
-| **evidence reproduction** | the reviewer re-ran the load-bearing measurement |
+| **procedural independence** | reviewer/adjudicating role did not author the work it is judging and is asked to falsify, not confirm |
+| **evidence reproduction** | reviewer re-ran the load-bearing measurement |
+| **continuability** | the same child can receive a later message through the harness's continuation API; a one-shot response does not qualify |
+| **route identity** | the canonical provider/model actually used, resolved live rather than inferred from a display label |
 
-Model diversity helps; it never replaces reproduced evidence.
+Model diversity helps; it never replaces reproduced evidence. Continuability and route
+identity are separate properties and must be verified separately when §1 requires both.
 
 ## 8. Document ownership
 
@@ -923,10 +1056,16 @@ Model diversity helps; it never replaces reproduced evidence.
 | a packet's operative contract | `docs/packets/<packet>.md` |
 | verdicts, deferred advisories, discretionary decisions, case rulings | `docs/reviews/<packet>-r<N>-*.md` |
 | a packet's revision narrative | `docs/reviews/<packet>-revision-history.md` (non-authoritative) |
-| the former persistent Muse Advisor handle (history) | `.muse-workers.md` |
-| transient session notes | outside the repository (no report files) |
+| current top-level-session readiness receipt | `docs/reviews/startup-current.md` (rolling, non-historical) |
+| durable staffing/readiness facts for accepted work | the packet's durable acceptance/review record |
+| historical Muse/Advisor handles, if retained | `.muse-workers.md` (history only; never readiness authority) |
+| transient session notes | outside the repository |
 | dated narrative | `docs/jsrf-operating-history.md` |
 
 Do not copy the roster outside §1. The Advisor decides a general technical rule (§3.3);
 this table says where it is recorded; the Session records it; the Planner and reviewer
 apply it to later work.
+
+`startup-current.md` is intentionally bounded operational state. Before it is replaced,
+any staffing or route facts that materially support accepted packet work must already
+exist in the packet's durable review/acceptance record.
