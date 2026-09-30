@@ -161,21 +161,48 @@ TTD traces are the only evidence for `0x00196A29`.
 (`ret 0`), dispatch -> `jmp rax`. **GS/range-check and CastGuard**: every query
 empty; `__security_check_cookie` ran three times and returned normally.
 
-## The next bounded step
+## The next bounded step, and its RESULT
 
-A **non-TTD strict run** long enough to reach the `0x00196A29` region, with the
-collector's own minidump as the artifact -- the collector already produces one, and
-the `abort()` mechanism above was proven from exactly that artifact. If the run stops
-at `0x00196A29`, the minidump names the emitter directly. If it does **not** stop
-there, the TTD recording is changing the guest's behaviour, and *that* becomes the
-finding.
+The step was: a **non-TTD strict run** long enough to reach the `0x00196A29` region,
+with the collector's own minidump as the artifact. If the run stops at `0x00196A29`,
+the minidump names the emitter directly. If it does **not** stop there, the TTD
+recording is changing the guest's behaviour, and *that* becomes the finding.
 
-## What this does not establish
+### The non-TTD run passes straight through the region where TTD died
 
-- It does **not** show the recompiled guest is correct: the control run reached its
-  deadline with **0 invalid ICALLs**, so it did not reach the horizon either. Neither
-  run exhibits the terminal event.
-- It does **not** name the emitter for *this* trace. It refutes both earlier
-  candidates and narrows the question to one instruction and one window check.
-- A TTD trace is not an archived strict run (W11's S8), and nothing here changes
-  that.
+**MEASURED** on `logs/runs/20260930-053228-652-nonttd-196a29` -- same binary, same
+environment (`RECOMP_GPU_ACK=0`), no TTD, 20 s bound:
+
+| | TTD | non-TTD |
+|---|---|---|
+| log lines | 577 | 3226 |
+| reached `0x00196967` | **no** (died before it) | **yes** -- `[RECOVERED] 0x00196967 returned; ABI verified` |
+| reached `0x00194520` | **no** | **yes** -- `[RECOVERED] 0x00194520 returned; ABI verified` |
+| reached `0x00196A65` | **no** | **yes** -- `[RECOVERED] 0x00196A65 returned; ABI verified` |
+| `ABI FAILURE` lines | 0 | 0 |
+| invalid ICALLs | 0 | 0 |
+| outcome | `0xC0000409` at 5.8 s | `diagnostic_deadline`, exit 3, 25.0 s |
+
+**This selects the finding's own second branch.** The traced run never reaches
+`0x00196A29`; the untraced run passes `0x00196967`, `0x00194520` and `0x00196A65` and
+runs to its deadline. The `0x00196A29` fault the first reading hypothesised **does not
+occur without the recorder**, so **the TTD recording is changing the guest's
+behaviour.**
+
+That is exactly the condition the W11 ruling's reversal list names: *"Evidence that
+`0xC0000409` is recording-induced and prevents any traced run from reaching the
+horizon -> the class stays admitted, but **C1 via TTD is BLOCKED** and must be
+re-planned."*
+
+### Consequence for C1
+
+**C1 cannot use TTD until a traced run reaches the horizon**, because witness W-a
+(terminal-in-trace) cannot hold. The question is now *why recording changes the run*,
+not *which code writes the slot*. That is a different and more tractable packet.
+
+### What this does not establish
+
+It does **not** name the mechanism by which recording changes behaviour. It does not
+show the non-TTD run would have reached the horizon either: that run hit its own
+deadline at 25 s with 0 invalid ICALLs, so it stopped for the collector's reason
+rather than at a fault. A longer non-TTD run is the next bounded step.

@@ -250,12 +250,24 @@ for is done, as T13). The remaining W rows are document edits whose checks now e
 **BLOCKED 2026-09-30 (W11).** A TTD trace is admitted as a lossless class, but every traced
 run so far exits `0xC0000409` after ~5.8 s / 577 log lines and never reaches the horizon, so
 witness W-a cannot hold and no attribution may be selected
-(`docs/reviews/rulings/ttd-query-decision-input.md`). The discriminating control is done: the
-same environment **without** TTD runs to its deadline (`20260930-034938-427-ttd-exit-control`,
-`outcome=diagnostic_deadline`, exit 3), so the failure is recording-induced or
-recording-correlated. **The next action is a discovery packet on that exit**, not C1.
-- Question: which code writes the value the terminal read sees at `[0x1C4064]`, and which writes
-  device `+0x242C`? If V3 moved the stop, C1 targets the new stop's first bad value instead.
+(`docs/reviews/rulings/ttd-query-decision-input.md`).
+- **The discriminating experiment is DONE, and it names the blocker.**
+  `docs/reviews/ttd-recording-exit-finding.md` records it: the non-TTD control
+  (`logs/runs/20260930-053228-652-nonttd-196a29`, same binary, same environment, 20 s)
+  **passes straight through the region where TTD died** — `[RECOVERED] 0x00196967`,
+  `0x00194520` and `0x00196A65` all returned with ABI verified, 0 ABI failures, 0 invalid
+  ICALLs, 3226 log lines against TTD's 577. **The TTD recording changes the guest's
+  behaviour**, which is precisely the W11 reversal condition that keeps the class admitted
+  while blocking C1 through TTD.
+- **C1 therefore cannot use TTD until a traced run reaches the horizon.** The next packet is
+  a **discovery packet on why recording changes the run**, not C1. It is bounded: the two
+  TTD traces and this non-TTD control are the evidence, and the question is one instruction
+  (`0x00196A29`) wide.
+- Question (for the successor packet): why does a TTD-recorded run stop at `0x00196A29`
+  when the same binary in the same environment passes that region untraced?
+- Question (for C1, unchanged once unblocked): which code writes the value the terminal read
+  sees at `[0x1C4064]`, and which writes device `+0x242C`? If V3 moved the stop, C1 targets
+  the new stop's first bad value instead.
 - Experiment: T1 recording of one strict run; the T1 query over all 29 aliases of each address;
   map native IPs to guest functions with the linker map and T2 names.
 - Acceptance: the query artifact, its positive control (the install write) present, and the row
