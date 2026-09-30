@@ -32,7 +32,7 @@ WORKFLOW_BODY = """# Workflow
 
 | Role | DSH |
 |---|---|
-| **Persistent advisor** | `workbuddy-ai/kimi-k3` |
+| **Persistent advisor** | `workbuddy-ai/deepseek-v4.1-flash` |
 
 Retired: `gpt-5.6-sol`, `hy3`, `glm-5.3` are historical names.
 
@@ -163,7 +163,13 @@ class RosterDuplicationTests(CorpusMixin, unittest.TestCase):
         self.assertIn('duplicated_roster', self.reasons(findings))
 
     def test_stray_route_name_without_history_marker_is_rejected(self):
-        self.write('AGENTS.md', AGENTS_BODY + '\nThe advisor is `workbuddy-ai/kimi-k3`.\n')
+        # Uses a route that is NOT retired, so this test is about the stray-name
+        # rule and not about the retired-name rule.  Measured: it previously used
+        # `kimi-k3`, and when W15 added that name to RETIRED_NAMES this test
+        # started passing for the wrong reason -- it would have kept passing even
+        # if the stray-name check were deleted.
+        self.write('AGENTS.md',
+                   AGENTS_BODY + '\nThe advisor is `workbuddy-ai/grok-4.7`.\n')
         findings = self.audit()
         self.assertIn('stray_route_name', self.reasons(findings))
 
@@ -201,6 +207,19 @@ class RetiredNameTests(CorpusMixin, unittest.TestCase):
             '  `hy4-preview-f`, `deepseek-v4.1-flash`, `gpt-5.5` and `kimi-k3`).\n'))
         findings = self.audit()
         self.assertNotIn('unlabelled_retired_name', self.reasons(findings))
+
+    def test_retired_name_without_a_catalog_marker_is_still_flagged(self):
+        """The catalog exemption must not become a blanket exemption.
+
+        A control for the check above: the SAME retired names in a sentence that
+        is not a statement about what a provider serves must still be flagged.
+        Without this, deleting the retired-name check entirely would leave the
+        catalog test passing.
+        """
+        self.write('docs/agent-workflow.md', WORKFLOW_BODY + (
+            '\n- The advisor is `workbuddy-ai/kimi-k3`.\n'))
+        findings = self.audit()
+        self.assertIn('unlabelled_retired_name', self.reasons(findings))
 
 
 class JustRecipeTests(CorpusMixin, unittest.TestCase):

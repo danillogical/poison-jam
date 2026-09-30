@@ -1,0 +1,33 @@
+00193D50 add      byte ptr [eax], al
+00193D52 add      byte ptr [eax], al
+00193D54 mov      eax, dword ptr [ebx + 0x40071c]
+00193D5A mov      ecx, dword ptr [esp + 0x14]
+00193D5E or       eax, 2
+00193D61 mov      dword ptr [ebx + 0x40071c], eax
+00193D67 inc      dword ptr [esi + 0x1f0]
+00193D6D mov      eax, dword ptr [esi + 0x1f4]
+00193D73 pop      edi
+00193D74 mov      dword ptr [esi + 0x1f8], eax
+00193D7A mov      dword ptr [esi + 0x210], ecx
+00193D80 pop      esi
+00193D81 pop      ebx
+00193D82 ret      8
+00193D85 nop      
+00193D86 nop      
+00193D87 nop      
+00193D88 nop      
+00193D89 nop      
+00193D8A nop      
+00193D8B nop      
+00193D8C nop      
+00193D8D nop      
+00193D8E nop      
+00193D8F nop      
+00193D90 sub      esp, 0x14
+00193D93 push     ebx
+00193D94 push     ebp
+00193D95 push     esi
+00193D96 mov      esi, ecx
+00193D98 mov      ebx, dword ptr [esi]
+00193D9A push     edi
+00193D9B call     0x193c40

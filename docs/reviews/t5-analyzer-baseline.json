@@ -1,0 +1,2912 @@
+{
+  "configurations": [
+    {
+      "by_code": {
+        "error": 37,
+        "warning": 6321
+      },
+      "compilation_units": 72,
+      "configuration": "clang-cl /Zs /W4 (CMake command lines)",
+      "environment_limited": false,
+      "environment_note": null,
+      "exit_code": 1,
+      "findings": [
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src\\platform/xbox_winnt.h",
+          "level": "warning",
+          "line": 73,
+          "text": "non-portable path to file '<Windows.h>'; specified path differs in case from file name on disk [-Wnonportable-system-include-path]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 151,
+          "text": "identifier '_XBOX_ANSI_STRING' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 158,
+          "text": "identifier '_XBOX_UNICODE_STRING' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 165,
+          "text": "identifier '_XBOX_OBJECT_ATTRIBUTES' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 172,
+          "text": "identifier '_XBOX_IO_STATUS_BLOCK' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 181,
+          "text": "identifier '_XBOX_FILE_INFORMATION_CLASS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 196,
+          "text": "identifier '_XBOX_FS_INFORMATION_CLASS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 205,
+          "text": "identifier '_XBOX_FILE_BASIC_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 214,
+          "text": "identifier '_XBOX_FILE_STANDARD_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 223,
+          "text": "identifier '_XBOX_FILE_POSITION_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 228,
+          "text": "identifier '_XBOX_FILE_END_OF_FILE_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 233,
+          "text": "identifier '_XBOX_FILE_DISPOSITION_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 238,
+          "text": "identifier '_XBOX_FILE_NETWORK_OPEN_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 249,
+          "text": "identifier '_XBOX_FILE_DIRECTORY_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 264,
+          "text": "identifier '_XBOX_FILE_FS_SIZE_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 272,
+          "text": "identifier '_XBOX_MM_STATISTICS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 285,
+          "text": "identifier '_XBOX_TIME_FIELDS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 297,
+          "text": "identifier '_XBOX_HARDWARE_INFO' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 305,
+          "text": "identifier '_XBOX_KRNL_VERSION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 313,
+          "text": "identifier '_XBE_SECTION_HEADER' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 327,
+          "text": "identifier '_XBOX_LAUNCH_DATA_PAGE' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 337,
+          "text": "identifier '_XBOX_TIMER_TYPE' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 343,
+          "text": "identifier '_XBOX_EVENT_TYPE' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 349,
+          "text": "identifier '_XBOX_KTIMER' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 350,
+          "text": "identifier '_XBOX_KDPC' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 351,
+          "text": "identifier '_XBOX_KINTERRUPT' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 443,
+          "text": "identifier '_XBOX_SHA_CONTEXT' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 450,
+          "text": "identifier '_XBOX_RC4_CONTEXT' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 498,
+          "text": "'/*' within block comment [-Wcomment]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 566,
+          "text": "identifier 'wchar_t' conflicts with a C++ keyword [-Wc++-keyword]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 28,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 29,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 29,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 40,
+          "text": "padding struct 'path_rule' with 4 bytes to align 'sub_win' [-Wpadded]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 116,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 116,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 117,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 118,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 120,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 135,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 143,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 143,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 144,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 145,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 146,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 149,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 160,
+          "text": "identifier 'wchar_t' conflicts with a C++ keyword [-Wc++-keyword]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 162,
+          "text": "identifier 'wchar_t' conflicts with a C++ keyword [-Wc++-keyword]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 170,
+          "text": "non-portable path to file '<ShlObj.h>'; specified path differs in case from file name on disk [-Wnonportable-system-include-path]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 221,
+          "text": "cast from 'unsigned char *' to 'ULONG *' (aka 'unsigned long *') increases required alignment from 1 to 4 [-Wcast-align]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 222,
+          "text": "cast from 'unsigned char *' to 'ULONG *' (aka 'unsigned long *') increases required alignment from 1 to 4 [-Wcast-align]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 223,
+          "text": "cast from 'unsigned char *' to 'ULONG *' (aka 'unsigned long *') increases required alignment from 1 to 4 [-Wcast-align]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 224,
+          "text": "cast from 'unsigned char *' to 'ULONG *' (aka 'unsigned long *') increases required alignment from 1 to 4 [-Wcast-align]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 217,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 217,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 218,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 220,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 221,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 222,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 222,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 223,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 223,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 224,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 254,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 258,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 258,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 261,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 296,
+          "text": "mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 297,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 298,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 301,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 302,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 321,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 353,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 374,
+          "text": "identifier 'wchar_t' conflicts with a C++ keyword [-Wc++-keyword]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 417,
+          "text": "implicit conversion changes signedness: 'DWORD' (aka 'unsigned long') to 'int' [-Wsign-conversion]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 436,
+          "text": "mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 1109,
+          "text": "token pasting of ',' and '__VA_ARGS__' is a GNU extension [-Wgnu-zero-variadic-macro-arguments]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 407,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 409,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 410,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 411,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 427,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 450,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 451,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_path.c",
+          "level": "warning",
+          "line": 452,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src\\platform/xbox_winnt.h",
+          "level": "warning",
+          "line": 73,
+          "text": "non-portable path to file '<Windows.h>'; specified path differs in case from file name on disk [-Wnonportable-system-include-path]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 151,
+          "text": "identifier '_XBOX_ANSI_STRING' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 158,
+          "text": "identifier '_XBOX_UNICODE_STRING' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 165,
+          "text": "identifier '_XBOX_OBJECT_ATTRIBUTES' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 172,
+          "text": "identifier '_XBOX_IO_STATUS_BLOCK' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 181,
+          "text": "identifier '_XBOX_FILE_INFORMATION_CLASS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 196,
+          "text": "identifier '_XBOX_FS_INFORMATION_CLASS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 205,
+          "text": "identifier '_XBOX_FILE_BASIC_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 214,
+          "text": "identifier '_XBOX_FILE_STANDARD_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 223,
+          "text": "identifier '_XBOX_FILE_POSITION_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 228,
+          "text": "identifier '_XBOX_FILE_END_OF_FILE_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 233,
+          "text": "identifier '_XBOX_FILE_DISPOSITION_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 238,
+          "text": "identifier '_XBOX_FILE_NETWORK_OPEN_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 249,
+          "text": "identifier '_XBOX_FILE_DIRECTORY_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 264,
+          "text": "identifier '_XBOX_FILE_FS_SIZE_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 272,
+          "text": "identifier '_XBOX_MM_STATISTICS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 285,
+          "text": "identifier '_XBOX_TIME_FIELDS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 297,
+          "text": "identifier '_XBOX_HARDWARE_INFO' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 305,
+          "text": "identifier '_XBOX_KRNL_VERSION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 313,
+          "text": "identifier '_XBE_SECTION_HEADER' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 327,
+          "text": "identifier '_XBOX_LAUNCH_DATA_PAGE' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 337,
+          "text": "identifier '_XBOX_TIMER_TYPE' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 343,
+          "text": "identifier '_XBOX_EVENT_TYPE' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 349,
+          "text": "identifier '_XBOX_KTIMER' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 350,
+          "text": "identifier '_XBOX_KDPC' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 351,
+          "text": "identifier '_XBOX_KINTERRUPT' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 443,
+          "text": "identifier '_XBOX_SHA_CONTEXT' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 450,
+          "text": "identifier '_XBOX_RC4_CONTEXT' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 498,
+          "text": "'/*' within block comment [-Wcomment]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 566,
+          "text": "identifier 'wchar_t' conflicts with a C++ keyword [-Wc++-keyword]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 1109,
+          "text": "token pasting of ',' and '__VA_ARGS__' is a GNU extension [-Wgnu-zero-variadic-macro-arguments]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 1109,
+          "text": "token pasting of ',' and '__VA_ARGS__' is a GNU extension [-Wgnu-zero-variadic-macro-arguments]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 1109,
+          "text": "token pasting of ',' and '__VA_ARGS__' is a GNU extension [-Wgnu-zero-variadic-macro-arguments]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 1109,
+          "text": "token pasting of ',' and '__VA_ARGS__' is a GNU extension [-Wgnu-zero-variadic-macro-arguments]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src\\platform/xbox_winnt.h",
+          "level": "warning",
+          "line": 73,
+          "text": "non-portable path to file '<Windows.h>'; specified path differs in case from file name on disk [-Wnonportable-system-include-path]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 151,
+          "text": "identifier '_XBOX_ANSI_STRING' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 158,
+          "text": "identifier '_XBOX_UNICODE_STRING' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 165,
+          "text": "identifier '_XBOX_OBJECT_ATTRIBUTES' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 172,
+          "text": "identifier '_XBOX_IO_STATUS_BLOCK' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 181,
+          "text": "identifier '_XBOX_FILE_INFORMATION_CLASS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 196,
+          "text": "identifier '_XBOX_FS_INFORMATION_CLASS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 205,
+          "text": "identifier '_XBOX_FILE_BASIC_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 214,
+          "text": "identifier '_XBOX_FILE_STANDARD_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 223,
+          "text": "identifier '_XBOX_FILE_POSITION_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 228,
+          "text": "identifier '_XBOX_FILE_END_OF_FILE_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 233,
+          "text": "identifier '_XBOX_FILE_DISPOSITION_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 238,
+          "text": "identifier '_XBOX_FILE_NETWORK_OPEN_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 249,
+          "text": "identifier '_XBOX_FILE_DIRECTORY_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 264,
+          "text": "identifier '_XBOX_FILE_FS_SIZE_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 272,
+          "text": "identifier '_XBOX_MM_STATISTICS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 285,
+          "text": "identifier '_XBOX_TIME_FIELDS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 297,
+          "text": "identifier '_XBOX_HARDWARE_INFO' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 305,
+          "text": "identifier '_XBOX_KRNL_VERSION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 313,
+          "text": "identifier '_XBE_SECTION_HEADER' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 327,
+          "text": "identifier '_XBOX_LAUNCH_DATA_PAGE' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 337,
+          "text": "identifier '_XBOX_TIMER_TYPE' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 343,
+          "text": "identifier '_XBOX_EVENT_TYPE' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 349,
+          "text": "identifier '_XBOX_KTIMER' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 350,
+          "text": "identifier '_XBOX_KDPC' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 351,
+          "text": "identifier '_XBOX_KINTERRUPT' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 443,
+          "text": "identifier '_XBOX_SHA_CONTEXT' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 450,
+          "text": "identifier '_XBOX_RC4_CONTEXT' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 498,
+          "text": "'/*' within block comment [-Wcomment]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 566,
+          "text": "identifier 'wchar_t' conflicts with a C++ keyword [-Wc++-keyword]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 31,
+          "text": "cast from 'const char *' to 'char *' drops const qualifier [-Wcast-qual]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 45,
+          "text": "cast from 'const unsigned short *' to 'unsigned short *' drops const qualifier [-Wcast-qual]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 65,
+          "text": "implicit conversion changes signedness: 'DWORD' (aka 'unsigned long') to 'NTSTATUS' (aka 'long') [-Wsign-conversion]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 72,
+          "text": "implicit conversion changes signedness: 'DWORD' (aka 'unsigned long') to 'NTSTATUS' (aka 'long') [-Wsign-conversion]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 83,
+          "text": "implicit conversion changes signedness: 'int' to '__size_t' (aka 'unsigned long long') [-Wsign-conversion]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 78,
+          "text": "mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 84,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 99,
+          "text": "implicit conversion changes signedness: 'DWORD' (aka 'unsigned long') to 'NTSTATUS' (aka 'long') [-Wsign-conversion]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 106,
+          "text": "implicit conversion changes signedness: 'DWORD' (aka 'unsigned long') to 'NTSTATUS' (aka 'long') [-Wsign-conversion]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 112,
+          "text": "mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 120,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 155,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 219,
+          "text": "cast from 'char *' to 'XBOX_CS_SLOT *' increases required alignment from 1 to 8 [-Wcast-align]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 217,
+          "text": "unsafe buffer access [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 219,
+          "text": "unsafe pointer arithmetic [-Wunsafe-buffer-usage]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 253,
+          "text": "'getenv' is deprecated: This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [-Wdeprecated-decla"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 265,
+          "text": "mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 344,
+          "text": "implicit conversion changes signedness: 'ptrdiff_t' (aka 'long long') to 'uintptr_t' (aka 'unsigned long long') [-Wsign-conversion]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 343,
+          "text": "implicit conversion changes signedness: 'int' to 'uint32_t' (aka 'unsigned int') [-Wsign-conversion]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 379,
+          "text": "implicit conversion changes signedness: 'ptrdiff_t' (aka 'long long') to 'uintptr_t' (aka 'unsigned long long') [-Wsign-conversion]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 405,
+          "text": "'getenv' is deprecated: This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [-Wdeprecated-decla"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 426,
+          "text": "'getenv' is deprecated: This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [-Wdeprecated-decla"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 608,
+          "text": "implicit conversion changes signedness: 'DWORD' (aka 'unsigned long') to 'LONG' (aka 'long') [-Wsign-conversion]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 618,
+          "text": "implicit conversion changes signedness: 'LONG' (aka 'long') to 'DWORD' (aka 'unsigned long') [-Wsign-conversion]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 673,
+          "text": "diagnostic behavior may be improved by adding the 'format(printf, 3, 4)' attribute to the declaration of 'xbox_RtlSnprintf' [-Wmissing-format-attribute]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 673,
+          "text": "mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 682,
+          "text": "diagnostic behavior may be improved by adding the 'format(printf, 2, 3)' attribute to the declaration of 'xbox_RtlSprintf' [-Wmissing-format-attribute]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 682,
+          "text": "'vsprintf' is deprecated: This function or variable may be unsafe. Consider using vsprintf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [-Wdeprecated-de"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 682,
+          "text": "mixing declarations and code is incompatible with standards before C99 [-Wdeclaration-after-statement]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 689,
+          "text": "diagnostic behavior may be improved by adding the 'format(printf, 3, 0)' attribute to the declaration of 'xbox_RtlVsnprintf' [-Wmissing-format-attribute]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 694,
+          "text": "'vsprintf' is deprecated: This function or variable may be unsafe. Consider using vsprintf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [-Wdeprecated-de"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel/kernel_rtl.c",
+          "level": "warning",
+          "line": 694,
+          "text": "diagnostic behavior may be improved by adding the 'format(printf, 2, 0)' attribute to the declaration of 'xbox_RtlVsprintf' [-Wmissing-format-attribute]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src\\platform/xbox_winnt.h",
+          "level": "warning",
+          "line": 73,
+          "text": "non-portable path to file '<Windows.h>'; specified path differs in case from file name on disk [-Wnonportable-system-include-path]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 151,
+          "text": "identifier '_XBOX_ANSI_STRING' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 158,
+          "text": "identifier '_XBOX_UNICODE_STRING' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 165,
+          "text": "identifier '_XBOX_OBJECT_ATTRIBUTES' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 172,
+          "text": "identifier '_XBOX_IO_STATUS_BLOCK' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 181,
+          "text": "identifier '_XBOX_FILE_INFORMATION_CLASS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 196,
+          "text": "identifier '_XBOX_FS_INFORMATION_CLASS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 205,
+          "text": "identifier '_XBOX_FILE_BASIC_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 214,
+          "text": "identifier '_XBOX_FILE_STANDARD_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 223,
+          "text": "identifier '_XBOX_FILE_POSITION_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 228,
+          "text": "identifier '_XBOX_FILE_END_OF_FILE_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 233,
+          "text": "identifier '_XBOX_FILE_DISPOSITION_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 238,
+          "text": "identifier '_XBOX_FILE_NETWORK_OPEN_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 249,
+          "text": "identifier '_XBOX_FILE_DIRECTORY_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 264,
+          "text": "identifier '_XBOX_FILE_FS_SIZE_INFORMATION' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 272,
+          "text": "identifier '_XBOX_MM_STATISTICS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 285,
+          "text": "identifier '_XBOX_TIME_FIELDS' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        },
+        {
+          "code": null,
+          "file": "C:/Users/logic/Repos/xboxrecomp/src/kernel\\kernel.h",
+          "level": "warning",
+          "line": 297,
+          "text": "identifier '_XBOX_HARDWARE_INFO' is reserved because it starts with '_' followed by a capital letter [-Wreserved-identifier]"
+        }
+      ],
+      "log": "C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\clang-cl.log",
+      "named_classes": {
+        "implicit_declaration": 0,
+        "printf_int64": 2056
+      },
+      "total_diagnostics": 6358,
+      "truncated": true
+    },
+    {
+      "by_code": {
+        "C28112": 11,
+        "C28113": 1,
+        "C28159": 15,
+        "C28160": 123,
+        "C28199": 1,
+        "C4018": 5,
+        "C4090": 3,
+        "C4100": 22,
+        "C4101": 1,
+        "C4132": 1,
+        "C4189": 8,
+        "C4210": 11,
+        "C4244": 3,
+        "C4245": 2,
+        "C4324": 1,
+        "C4456": 3,
+        "C4477": 5,
+        "C4702": 2,
+        "C4996": 4,
+        "C6001": 6,
+        "C6011": 12,
+        "C6031": 2,
+        "C6239": 1,
+        "C6244": 3,
+        "C6246": 3,
+        "C6255": 1,
+        "C6262": 5,
+        "C6285": 9,
+        "C6326": 13,
+        "C6328": 5,
+        "C6333": 4,
+        "C6340": 46,
+        "C6386": 5,
+        "C6387": 18
+      },
+      "configuration": "MSVC /analyze",
+      "exit_code": 0,
+      "findings": [
+        {
+          "code": "C4132",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_device.c",
+          "level": "warning",
+          "line": 120,
+          "text": "'g_device_vtbl': const object should be initialized [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\xbox_d3d8.vcxproj]"
+        },
+        {
+          "code": "C6262",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\nv2a\\nv2a_core.c",
+          "level": "warning",
+          "line": 1437,
+          "text": "Function uses '17244' bytes of stack.  Consider moving some data to heap. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\nv2a\\nv2a_actions_test.vcxproj]"
+        },
+        {
+          "code": "C4101",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_combiners.c",
+          "level": "warning",
+          "line": 185,
+          "text": "'i': unreferenced local variable [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\xbox_d3d8.vcxproj]"
+        },
+        {
+          "code": "C4090",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\dsp_c.c",
+          "level": "warning",
+          "line": 138,
+          "text": "'function': different 'const' qualifiers [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C4090",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\dsp_c.c",
+          "level": "warning",
+          "line": 209,
+          "text": "'function': different 'const' qualifiers [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C4090",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\dsp_c.c",
+          "level": "warning",
+          "line": 293,
+          "text": "'function': different 'const' qualifiers [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C4018",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\dsp_dma.c",
+          "level": "warning",
+          "line": 258,
+          "text": "'<': signed/unsigned mismatch [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C4018",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\dsp_dma.c",
+          "level": "warning",
+          "line": 259,
+          "text": "'<': signed/unsigned mismatch [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C4018",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\dsp_dma.c",
+          "level": "warning",
+          "line": 276,
+          "text": "'<': signed/unsigned mismatch [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C4018",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\dsp_dma.c",
+          "level": "warning",
+          "line": 366,
+          "text": "'<': signed/unsigned mismatch [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6011",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\tests\\d3d8_smoke\\test_main.c",
+          "level": "warning",
+          "line": 164,
+          "text": "Dereferencing NULL pointer 'lin'. : Lines: 150, 154, 158, 159, 160, 161, 162, 163, 164 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d8_smoke.vcxproj]"
+        },
+        {
+          "code": "C6387",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\tests\\d3d8_smoke\\test_main.c",
+          "level": "warning",
+          "line": 166,
+          "text": "'re' could be '0':  this does not adhere to the specification for the function 'memset'. : Lines: 150, 154, 158, 159, 160, 161, 162, 163, 164, 165, 166 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\"
+        },
+        {
+          "code": "C6387",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\tests\\d3d8_smoke\\test_main.c",
+          "level": "warning",
+          "line": 171,
+          "text": "'re' could be '0':  this does not adhere to the specification for the function 'memcmp'. See line 166 for an earlier location where this can occur: Lines: 150, 154, 158, 159, 160, 161, 162, 163, 164, "
+        },
+        {
+          "code": "C6387",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\tests\\d3d8_smoke\\test_main.c",
+          "level": "warning",
+          "line": 171,
+          "text": "'lin' could be '0':  this does not adhere to the specification for the function 'memcmp'. See line 164 for an earlier location where this can occur: Lines: 150, 154, 158, 159, 160, 161, 162, 163, 164,"
+        },
+        {
+          "code": "C6011",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\tests\\d3d8_smoke\\test_main.c",
+          "level": "warning",
+          "line": 209,
+          "text": "Dereferencing NULL pointer 'lin'. : Lines: 194, 198, 200, 201, 202, 203, 204, 207, 208, 209 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d8_smoke.vcxproj]"
+        },
+        {
+          "code": "C6011",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\tests\\d3d8_smoke\\test_main.c",
+          "level": "warning",
+          "line": 214,
+          "text": "Dereferencing NULL pointer 'swz'. : Lines: 194, 198, 200, 201, 202, 203, 204, 207, 208, 209, 208, 209, 208, 207, 208, 207, 210, 212, 213, 214 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d"
+        },
+        {
+          "code": "C4477",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\gp_ep.c",
+          "level": "warning",
+          "line": 191,
+          "text": "'fprintf' : format string '%lx' requires an argument of type 'unsigned long', but variadic argument 6 has type 'size_t' [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C4477",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\gp_ep.c",
+          "level": "warning",
+          "line": 472,
+          "text": "'fprintf' : format string '%lx' requires an argument of type 'unsigned long', but variadic argument 2 has type 'uint64_t' [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C4477",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\gp_ep.c",
+          "level": "warning",
+          "line": 486,
+          "text": "'fprintf' : format string '%lx' requires an argument of type 'unsigned long', but variadic argument 2 has type 'uint64_t' [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C4477",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\gp_ep.c",
+          "level": "warning",
+          "line": 546,
+          "text": "'fprintf' : format string '%lx' requires an argument of type 'unsigned long', but variadic argument 2 has type 'uint64_t' [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C4477",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\gp_ep.c",
+          "level": "warning",
+          "line": 560,
+          "text": "'fprintf' : format string '%lx' requires an argument of type 'unsigned long', but variadic argument 2 has type 'uint64_t' [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C28159",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_device.c",
+          "level": "warning",
+          "line": 434,
+          "text": "Consider using 'GetTickCount64' instead of 'GetTickCount'. Reason: GetTickCount overflows roughly every 49 days.  Code that does not take that into account can loop indefinitely.  GetTickCount64 opera"
+        },
+        {
+          "code": "C6285",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1628,
+          "text": "(<non-zero constant> || <non-zero constant>) is always a non-zero constant.  Did you intend to use the bitwise-and operator? [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d"
+        },
+        {
+          "code": "C6285",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1627,
+          "text": "(<non-zero constant> || <non-zero constant>) is always a non-zero constant.  Did you intend to use the bitwise-and operator? [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d"
+        },
+        {
+          "code": "C6285",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1626,
+          "text": "(<non-zero constant> || <non-zero constant>) is always a non-zero constant.  Did you intend to use the bitwise-and operator? [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d"
+        },
+        {
+          "code": "C6326",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1626,
+          "text": "Potential comparison of a constant with another constant. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d8_smoke.vcxproj]"
+        },
+        {
+          "code": "C6326",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1627,
+          "text": "Potential comparison of a constant with another constant. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d8_smoke.vcxproj]"
+        },
+        {
+          "code": "C6326",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1628,
+          "text": "Potential comparison of a constant with another constant. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d8_smoke.vcxproj]"
+        },
+        {
+          "code": "C6326",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1629,
+          "text": "Potential comparison of a constant with another constant. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d8_smoke.vcxproj]"
+        },
+        {
+          "code": "C6285",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1628,
+          "text": "(<non-zero constant> || <non-zero constant>) is always a non-zero constant.  Did you intend to use the bitwise-and operator? [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d"
+        },
+        {
+          "code": "C6285",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1627,
+          "text": "(<non-zero constant> || <non-zero constant>) is always a non-zero constant.  Did you intend to use the bitwise-and operator? [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d"
+        },
+        {
+          "code": "C6285",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1626,
+          "text": "(<non-zero constant> || <non-zero constant>) is always a non-zero constant.  Did you intend to use the bitwise-and operator? [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d"
+        },
+        {
+          "code": "C6326",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1626,
+          "text": "Potential comparison of a constant with another constant. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d8_a8.vcxproj]"
+        },
+        {
+          "code": "C6326",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1627,
+          "text": "Potential comparison of a constant with another constant. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d8_a8.vcxproj]"
+        },
+        {
+          "code": "C6326",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1628,
+          "text": "Potential comparison of a constant with another constant. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d8_a8.vcxproj]"
+        },
+        {
+          "code": "C6326",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1629,
+          "text": "Potential comparison of a constant with another constant. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d8_a8.vcxproj]"
+        },
+        {
+          "code": "C28112",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\guest_meter.c",
+          "level": "warning",
+          "line": 73,
+          "text": "A variable (g_gm_max) which is accessed via an Interlocked function must always be accessed via an Interlocked function. See line 74:  It is not always safe to access a variable which is accessed via "
+        },
+        {
+          "code": "C6001",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\tests\\guest_meter_test.c",
+          "level": "warning",
+          "line": 166,
+          "text": "Using uninitialized memory 'th[BYTE:0]'.: Lines: 156, 157, 158, 160, 161, 162, 163, 162, 163, 162, 164, 165, 166, 167, 165, 166, 167, 166 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kerne"
+        },
+        {
+          "code": "C6386",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\apu_vp.c",
+          "level": "warning",
+          "line": 232,
+          "text": "Buffer overrun while writing to 'd->vp.ssl':  the writable size is '5120' bytes, but '1310720' bytes might be written.: Lines: 201, 183, 185, 186, 187, 189, 198, 199, 201, 202, 204, 205, 213, 217, 220"
+        },
+        {
+          "code": "C4996",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\usb\\ohci.c",
+          "level": "warning",
+          "line": 1094,
+          "text": "'getenv': This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [C:\\Users\\logic\\Repos\\my_xbox_gam"
+        },
+        {
+          "code": "C4996",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\usb\\ohci.c",
+          "level": "warning",
+          "line": 1098,
+          "text": "'getenv': This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [C:\\Users\\logic\\Repos\\my_xbox_gam"
+        },
+        {
+          "code": "C4210",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\usb\\usb_gamepad.c",
+          "level": "warning",
+          "line": 311,
+          "text": "nonstandard extension used: function given file scope [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\usb\\xbox_usb.vcxproj]"
+        },
+        {
+          "code": "C4996",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\usb\\usb_gamepad.c",
+          "level": "warning",
+          "line": 309,
+          "text": "'getenv': This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [C:\\Users\\logic\\Repos\\my_xbox_gam"
+        },
+        {
+          "code": "C4996",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\usb\\usb_gamepad.c",
+          "level": "warning",
+          "line": 320,
+          "text": "'getenv': This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [C:\\Users\\logic\\Repos\\my_xbox_gam"
+        },
+        {
+          "code": "C6262",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\nv2a\\nv2a_core.c",
+          "level": "warning",
+          "line": 1437,
+          "text": "Function uses '17244' bytes of stack.  Consider moving some data to heap. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\nv2a\\xbox_nv2a.vcxproj]"
+        },
+        {
+          "code": "C6255",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\nv2a\\nv2a_pgraph_d3d11.c",
+          "level": "warning",
+          "line": 245,
+          "text": "`_alloca` indicates failure by raising a stack overflow exception.  Consider using _malloca instead. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\nv2a\\xbox_nv2a.vcxproj]"
+        },
+        {
+          "code": "C28113",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\tests\\kernel_timestamp_test.c",
+          "level": "warning",
+          "line": 67,
+          "text": "Accessing a local variable completed via an Interlocked function:  This is an unusual usage which could be reconsidered. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_timestamp_"
+        },
+        {
+          "code": "C28112",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\tests\\kernel_timestamp_test.c",
+          "level": "warning",
+          "line": 49,
+          "text": "A variable (completed) which is accessed via an Interlocked function must always be accessed via an Interlocked function. See line 67:  It is not always safe to access a variable which is accessed via"
+        },
+        {
+          "code": "C6285",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1628,
+          "text": "(<non-zero constant> || <non-zero constant>) is always a non-zero constant.  Did you intend to use the bitwise-and operator? [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\xbox_d3d8.vcxp"
+        },
+        {
+          "code": "C6285",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1627,
+          "text": "(<non-zero constant> || <non-zero constant>) is always a non-zero constant.  Did you intend to use the bitwise-and operator? [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\xbox_d3d8.vcxp"
+        },
+        {
+          "code": "C6285",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1626,
+          "text": "(<non-zero constant> || <non-zero constant>) is always a non-zero constant.  Did you intend to use the bitwise-and operator? [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\xbox_d3d8.vcxp"
+        },
+        {
+          "code": "C6326",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1626,
+          "text": "Potential comparison of a constant with another constant. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\xbox_d3d8.vcxproj]"
+        },
+        {
+          "code": "C6326",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1627,
+          "text": "Potential comparison of a constant with another constant. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\xbox_d3d8.vcxproj]"
+        },
+        {
+          "code": "C6326",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1628,
+          "text": "Potential comparison of a constant with another constant. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\xbox_d3d8.vcxproj]"
+        },
+        {
+          "code": "C6326",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_resources.c",
+          "level": "warning",
+          "line": 1629,
+          "text": "Potential comparison of a constant with another constant. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\xbox_d3d8.vcxproj]"
+        },
+        {
+          "code": "C28159",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\usb\\usb_gamepad.c",
+          "level": "warning",
+          "line": 266,
+          "text": "Consider using 'GetTickCount64' instead of 'GetTickCount'. Reason: GetTickCount overflows roughly every 49 days.  Code that does not take that into account can loop indefinitely.  GetTickCount64 opera"
+        },
+        {
+          "code": "C28159",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\usb\\usb_gamepad.c",
+          "level": "warning",
+          "line": 275,
+          "text": "Consider using 'GetTickCount64' instead of 'GetTickCount'. Reason: GetTickCount overflows roughly every 49 days.  Code that does not take that into account can loop indefinitely.  GetTickCount64 opera"
+        },
+        {
+          "code": "C28159",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\usb\\usb_gamepad.c",
+          "level": "warning",
+          "line": 313,
+          "text": "Consider using 'GetTickCount64' instead of 'GetTickCount'. Reason: GetTickCount overflows roughly every 49 days.  Code that does not take that into account can loop indefinitely.  GetTickCount64 opera"
+        },
+        {
+          "code": "C6262",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_combiners.c",
+          "level": "warning",
+          "line": 800,
+          "text": "Function uses '16424' bytes of stack.  Consider moving some data to heap. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\d3d8_smoke\\d3d8_a8.vcxproj]"
+        },
+        {
+          "code": "C6244",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\apu_watch.c",
+          "level": "warning",
+          "line": 1028,
+          "text": "Local declaration of 's' hides previous declaration at line '93' of 'c:\\users\\logic\\repos\\xboxrecomp\\src\\apu\\apu_watch.c'.: Lines: 93 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_"
+        },
+        {
+          "code": "C6244",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\apu_watch.c",
+          "level": "warning",
+          "line": 1043,
+          "text": "Local declaration of 's' hides previous declaration at line '93' of 'c:\\users\\logic\\repos\\xboxrecomp\\src\\apu\\apu_watch.c'.: Lines: 93 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_"
+        },
+        {
+          "code": "C6244",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\apu_watch.c",
+          "level": "warning",
+          "line": 1052,
+          "text": "Local declaration of 'p' hides previous declaration at line '140' of 'c:\\users\\logic\\repos\\xboxrecomp\\src\\apu\\apu_watch.c'.: Lines: 140 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbo"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_pool.c",
+          "level": "warning",
+          "line": 20,
+          "text": "'Tag': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 51,
+          "text": "'HighestAcceptableAddress': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 50,
+          "text": "'LowestAcceptableAddress': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 116,
+          "text": "'NumberOfBytes': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 151,
+          "text": "'Protect': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 151,
+          "text": "'PhysicalAddress': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 159,
+          "text": "'NumberOfBytes': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 187,
+          "text": "'Persist': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 187,
+          "text": "'NumberOfBytes': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 187,
+          "text": "'BaseAddress': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 229,
+          "text": "'UnlockPages': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 229,
+          "text": "'NumberOfBytes': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 229,
+          "text": "'BaseAddress': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 235,
+          "text": "'UnlockPage': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 235,
+          "text": "'PhysicalAddress': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 244,
+          "text": "'DebuggerThread': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 257,
+          "text": "'StackBase': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 271,
+          "text": "'ZeroBits': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_file.c",
+          "level": "warning",
+          "line": 1294,
+          "text": "'ObjectAttributes': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C6011",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\dsp.c",
+          "level": "warning",
+          "line": 143,
+          "text": "Dereferencing NULL pointer 'dsp'. : Lines: 142, 143 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_hal.c",
+          "level": "warning",
+          "line": 779,
+          "text": "'SystemTime': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C6262",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_combiners.c",
+          "level": "warning",
+          "line": 800,
+          "text": "Function uses '16424' bytes of stack.  Consider moving some data to heap. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\xbox_d3d8.vcxproj]"
+        },
+        {
+          "code": "C4210",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 1366,
+          "text": "nonstandard extension used: function given file scope [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4244",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 1499,
+          "text": "'function': conversion from 'uint32_t' to 'BOOLEAN', possible loss of data [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4244",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 1601,
+          "text": "'function': conversion from 'uint32_t' to 'KPROCESSOR_MODE', possible loss of data [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4244",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 1605,
+          "text": "'function': conversion from 'uint32_t' to 'KPROCESSOR_MODE', possible loss of data [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4189",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 1586,
+          "text": "'diag_object': local variable is initialized but not referenced [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4189",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 1709,
+          "text": "'diag_object': local variable is initialized but not referenced [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4189",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 1768,
+          "text": "'diag_object': local variable is initialized but not referenced [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4210",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 1962,
+          "text": "nonstandard extension used: function given file scope [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4210",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 1963,
+          "text": "nonstandard extension used: function given file scope [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4210",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 3147,
+          "text": "nonstandard extension used: function given file scope [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4210",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 3170,
+          "text": "nonstandard extension used: function given file scope [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4245",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 3650,
+          "text": "'=': conversion from 'NTSTATUS' to 'uint32_t', signed/unsigned mismatch [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4245",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 3674,
+          "text": "'=': conversion from 'NTSTATUS' to 'uint32_t', signed/unsigned mismatch [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4189",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 4011,
+          "text": "'handle': local variable is initialized but not referenced [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4189",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 4012,
+          "text": "'obj_type': local variable is initialized but not referenced [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4189",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 4065,
+          "text": "'protect': local variable is initialized but not referenced [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4189",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 4505,
+          "text": "'diag_object': local variable is initialized but not referenced [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4189",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 4534,
+          "text": "'diag_object': local variable is initialized but not referenced [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 9334,
+          "text": "'ordinal': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4018",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_bridge.c",
+          "level": "warning",
+          "line": 9712,
+          "text": "'<': signed/unsigned mismatch [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C6011",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\dsp_c.c",
+          "level": "warning",
+          "line": 299,
+          "text": "Dereferencing NULL pointer 'core'. : Lines: 298, 299 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C4210",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\xbox_memory_layout.c",
+          "level": "warning",
+          "line": 950,
+          "text": "nonstandard extension used: function given file scope [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4210",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\xbox_memory_layout.c",
+          "level": "warning",
+          "line": 1099,
+          "text": "nonstandard extension used: function given file scope [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4210",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\xbox_memory_layout.c",
+          "level": "warning",
+          "line": 1100,
+          "text": "nonstandard extension used: function given file scope [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4210",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\xbox_memory_layout.c",
+          "level": "warning",
+          "line": 1117,
+          "text": "nonstandard extension used: function given file scope [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4324",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\xbox_memory_layout.c",
+          "level": "warning",
+          "line": 1411,
+          "text": "'<unnamed-tag>': structure was padded due to alignment specifier [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4456",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\xbox_memory_layout.c",
+          "level": "warning",
+          "line": 2059,
+          "text": "declaration of 'old_protect' hides previous local declaration [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4456",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\xbox_memory_layout.c",
+          "level": "warning",
+          "line": 2652,
+          "text": "declaration of 'old_protect' hides previous local declaration [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4100",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\xbox_memory_layout.c",
+          "level": "warning",
+          "line": 3249,
+          "text": "'fault_va': unreferenced parameter [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C4456",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\xbox_memory_layout.c",
+          "level": "warning",
+          "line": 4076,
+          "text": "declaration of 'i' hides previous local declaration [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\kernel\\xbox_kernel.vcxproj]"
+        },
+        {
+          "code": "C6262",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_vsh.c",
+          "level": "warning",
+          "line": 1190,
+          "text": "Function uses '33304' bytes of stack.  Consider moving some data to heap. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\d3d\\xbox_d3d8.vcxproj]"
+        },
+        {
+          "code": "C28199",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_path.c",
+          "level": "warning",
+          "line": 427,
+          "text": "Using possibly uninitialized memory '*p':  The variable has had its address taken but no assignment to it has been discovered.: Lines: 383, 384, 385, 386, 388, 391, 395, 396, 400, 406, 407, 408, 409, "
+        },
+        {
+          "code": "C6328",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\gp_ep.c",
+          "level": "warning",
+          "line": 191,
+          "text": "Size mismatch: 'unsigned __int64' passed as _Param_(8) when 'int' is required in call to 'fprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6328",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\gp_ep.c",
+          "level": "warning",
+          "line": 472,
+          "text": "Size mismatch: 'unsigned __int64' passed as _Param_(4) when 'int' is required in call to 'fprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6328",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\gp_ep.c",
+          "level": "warning",
+          "line": 486,
+          "text": "Size mismatch: 'unsigned __int64' passed as _Param_(4) when 'int' is required in call to 'fprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6328",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\gp_ep.c",
+          "level": "warning",
+          "line": 546,
+          "text": "Size mismatch: 'unsigned __int64' passed as _Param_(4) when 'int' is required in call to 'fprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6328",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\gp_ep.c",
+          "level": "warning",
+          "line": 560,
+          "text": "Size mismatch: 'unsigned __int64' passed as _Param_(4) when 'int' is required in call to 'fprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C28159",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\d3d\\d3d8_device.c",
+          "level": "warning",
+          "line": 434,
+          "text": "Consider using 'GetTickCount64' instead of 'GetTickCount'. Reason: GetTickCount overflows roughly every 49 days.  Code that does not take that into account can loop indefinitely.  GetTickCount64 opera"
+        },
+        {
+          "code": "C6386",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_rtl.c",
+          "level": "warning",
+          "line": 84,
+          "text": "Buffer overrun while writing to 'DestinationString->Buffer':  the writable size is 'unicode_len' bytes, but 'result' bytes might be written.: Lines: 78, 62, 64, 67, 69, 70, 71, 73, 78, 82, 83, 84 [C:\\"
+        },
+        {
+          "code": "C6386",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_rtl.c",
+          "level": "warning",
+          "line": 120,
+          "text": "Buffer overrun while writing to 'DestinationString->Buffer':  the writable size is 'ansi_len' bytes, but 'result' bytes might be written.: Lines: 112, 96, 98, 101, 103, 104, 105, 107, 112, 117, 118, 1"
+        },
+        {
+          "code": "C28112",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_rtl.c",
+          "level": "warning",
+          "line": 513,
+          "text": "A variable (g_cs_enters) which is accessed via an Interlocked function must always be accessed via an Interlocked function. See line 479:  It is not always safe to access a variable which is accessed "
+        },
+        {
+          "code": "C28112",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_rtl.c",
+          "level": "warning",
+          "line": 513,
+          "text": "A variable (g_cs_enters) which is accessed via an Interlocked function must always be accessed via an Interlocked function. See line 479:  It is not always safe to access a variable which is accessed "
+        },
+        {
+          "code": "C28112",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_rtl.c",
+          "level": "warning",
+          "line": 522,
+          "text": "A variable (g_cs_contention_reports) which is accessed via an Interlocked function must always be accessed via an Interlocked function. See line 488:  It is not always safe to access a variable which "
+        },
+        {
+          "code": "C6001",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_emu.c.inc",
+          "level": "warning",
+          "line": 5601,
+          "text": "Using uninitialized memory 'save_lx'.: Lines: 5470, 5477, 5478, 5481, 5484, 5485, 5487, 5494, 5549, 5552, 5601, 5602, 5601 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj"
+        },
+        {
+          "code": "C6001",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_emu.c.inc",
+          "level": "warning",
+          "line": 5602,
+          "text": "Using uninitialized memory 'save_ly'.: Lines: 5470, 5477, 5478, 5481, 5484, 5485, 5487, 5494, 5549, 5552, 5601, 5602 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6011",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\video\\video_player.c",
+          "level": "warning",
+          "line": 659,
+          "text": "Dereferencing NULL pointer 'line'. : Lines: 632, 633, 634, 635, 636, 637, 639, 641, 642, 644, 645, 646, 647, 648, 649, 650, 651, 652, 653, 655, 656, 657, 658, 659 [C:\\Users\\logic\\Repos\\my_xbox_game\\lo"
+        },
+        {
+          "code": "C6387",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\video\\video_player.c",
+          "level": "warning",
+          "line": 663,
+          "text": "'line' could be '0':  this does not adhere to the specification for the function 'fwrite'. See line 659 for an earlier location where this can occur: Lines: 632, 633, 634, 635, 636, 637, 639, 641, 642"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 367,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 388,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 408,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 419,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 439,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 460,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 480,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 491,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 526,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 538,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 558,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 570,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 591,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 612,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 632,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 643,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 679,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 700,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 720,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 731,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 908,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 935,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 962,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 979,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1043,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1070,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1097,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1114,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1140,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1167,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1194,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1211,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1251,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1278,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1305,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1322,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1349,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1349,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(5) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1352,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(3) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 1352,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(5) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6340",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_dis.c.inc",
+          "level": "warning",
+          "line": 2041,
+          "text": "Mismatch on sign: 'unsigned int' passed as _Param_(4) when some signed type is required in call to 'sprintf'. [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C6386",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_cpu.c",
+          "level": "warning",
+          "line": 1662,
+          "text": "Buffer overrun while writing to 'dsp->xram':  the writable size is '16384' bytes, but 'address' bytes might be written.: Lines: 1651, 1652, 1656, 1658, 1662 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\ana"
+        },
+        {
+          "code": "C6001",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\apu\\dsp\\interp\\dsp_cpu.c",
+          "level": "warning",
+          "line": 1707,
+          "text": "Using uninitialized memory 'space_c'.: Lines: 1684, 1685, 1687, 1689, 1691, 1701, 1705, 1706, 1707, 1708, 1707 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc\\src\\apu\\xbox_apu.vcxproj]"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing both MEM_RELEASE and MEM_DECOMMIT to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analy"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing both MEM_RELEASE and MEM_DECOMMIT to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analy"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing both MEM_RELEASE and MEM_DECOMMIT to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analy"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing both MEM_RELEASE and MEM_DECOMMIT to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analy"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing both MEM_RELEASE and MEM_DECOMMIT to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analy"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing zero as the dwFreeType parameter to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyz"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing zero as the dwFreeType parameter to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyz"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing both MEM_RELEASE and MEM_DECOMMIT to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analy"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing both MEM_RELEASE and MEM_DECOMMIT to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analy"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing both MEM_RELEASE and MEM_DECOMMIT to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analy"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing both MEM_RELEASE and MEM_DECOMMIT to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analy"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing both MEM_RELEASE and MEM_DECOMMIT to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analy"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing zero as the dwFreeType parameter to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyz"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing zero as the dwFreeType parameter to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyz"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing both MEM_RELEASE and MEM_DECOMMIT to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analy"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing both MEM_RELEASE and MEM_DECOMMIT to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analy"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing both MEM_RELEASE and MEM_DECOMMIT to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analy"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing both MEM_RELEASE and MEM_DECOMMIT to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analy"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing both MEM_RELEASE and MEM_DECOMMIT to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analy"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing zero as the dwFreeType parameter to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyz"
+        },
+        {
+          "code": "C28160",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_memory.c",
+          "level": "warning",
+          "line": 304,
+          "text": "Error annotation: Passing zero as the dwFreeType parameter to VirtualFree is not allowed. This results in the failure of this call.: Lines: 299, 302, 304 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyz"
+        },
+        {
+          "code": "C28159",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\video\\video_pump.c",
+          "level": "warning",
+          "line": 107,
+          "text": "Consider using 'GetTickCount64' instead of 'GetTickCount'. Reason: GetTickCount overflows roughly every 49 days.  Code that does not take that into account can loop indefinitely.  GetTickCount64 opera"
+        },
+        {
+          "code": "C28159",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\video\\video_pump.c",
+          "level": "warning",
+          "line": 111,
+          "text": "Consider using 'GetTickCount64' instead of 'GetTickCount'. Reason: GetTickCount overflows roughly every 49 days.  Code that does not take that into account can loop indefinitely.  GetTickCount64 opera"
+        },
+        {
+          "code": "C6386",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\kernel\\kernel_file.c",
+          "level": "warning",
+          "line": 662,
+          "text": "Buffer overrun while writing to 'pattern_wide':  the writable size is '520' bytes, but 'FileName->Length' bytes might be written.: Lines: 626, 627, 628, 630, 632, 633, 638, 639, 642, 643, 647, 648, 64"
+        },
+        {
+          "code": "C28112",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\video\\fb_present.c",
+          "level": "warning",
+          "line": 69,
+          "text": "A variable (s_present_idx) which is accessed via an Interlocked function must always be accessed via an Interlocked function. See line 104:  It is not always safe to access a variable which is accesse"
+        },
+        {
+          "code": "C6011",
+          "file": "C:\\Users\\logic\\Repos\\xboxrecomp\\src\\video\\fb_present.c",
+          "level": "warning",
+          "line": 238,
+          "text": "Dereferencing NULL pointer 'line'. : Lines: 214, 215, 216, 217, 219, 221, 222, 224, 225, 226, 227, 228, 229, 230, 231, 232, 234, 235, 236, 237, 238 [C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc"
+        }
+      ],
+      "forced_rebuild": true,
+      "log": "C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\msvc-analyze.log",
+      "named_classes": {
+        "implicit_declaration": 0,
+        "printf_int64": 5
+      },
+      "total_diagnostics": 355,
+      "truncated": true
+    }
+  ],
+  "generated_utc": "2026-09-30T11:16:07.932245+00:00",
+  "named_class_reasons": {
+    "implicit_declaration": "a call to a function with no prototype in scope",
+    "printf_int64": "a 64-bit format specifier used with a 32-bit argument (`%lld`-with-`int`)"
+  },
+  "named_class_totals": {
+    "implicit_declaration": {
+      "per_configuration": {
+        "MSVC /analyze": 0,
+        "clang-cl /Zs /W4 (CMake command lines)": 0
+      },
+      "reported_by_any": false
+    },
+    "printf_int64": {
+      "per_configuration": {
+        "MSVC /analyze": 5,
+        "clang-cl /Zs /W4 (CMake command lines)": 2056
+      },
+      "reported_by_any": true
+    }
+  },
+  "note": "Read-only: both configurations build into logs/analyze/, outside the repository. The baseline is recorded as a SET of diagnostics so a later change is visible as a difference; the toolkit has a large pre-existing warning population and a zero-warning check would be ignored.",
+  "seeded_control": {
+    "exit_code": 1,
+    "fired": {
+      "implicit_declaration": true,
+      "printf_int64": true
+    },
+    "log": "C:\\Users\\logic\\Repos\\my_xbox_game\\logs\\analyze\\seeded-control.log",
+    "named_classes": {
+      "implicit_declaration": 1,
+      "printf_int64": 1
+    },
+    "note": "A seeded translation unit carrying both named classes, compiled without /we4013. A class the detector reports here but not over the toolkit is an absence WITH a reason; a class it reports nowhere is a broken detector.",
+    "total_diagnostics": 2
+  },
+  "tool": "jsrf-analyze-toolkit/1",
+  "toolkit": "C:\\Users\\logic\\Repos\\xboxrecomp"
+}
