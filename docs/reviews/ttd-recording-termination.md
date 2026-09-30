@@ -302,3 +302,58 @@ separates `named` from `test` rather than reporting one total.
   traces this session kept.
 - **No claim that the gate is wrong.** It is doing exactly what T14 asks, and it caught
   the shortfall before a recording could fail mid-write.
+
+
+## Two owner decisions this session surfaced but did not take
+
+Both are recorded because a Session that silently works around a rule it disagrees with
+is worse than one that reports the rule failing. **Neither is a defect introduced by this
+session**, and both are stated with the numbers the decision needs.
+
+### 1. The disk floor is red, and clearing it is T14's owner decision
+
+`just check` fails at `check-disk-gate.py`: **33.8 GB free against a 50 GB floor**.
+T14's text is explicit that this is not the Session's call — *"archive or delete the rest
+**after owner approval of the policy** (deletion is an owner decision)"*.
+
+The tool the gate points to reports the choice:
+
+| Kind | Runs | Real | Note |
+|---|---|---|---|
+| `test` | 808 | **111.29 GB** | removes more than twice the shortfall on its own |
+| `named` | 323 | 52.13 GB | — |
+| protected | 58 | 9.37 GB | cited by durable records, or the newest 20 |
+
+**None of the 1,131 candidates was created by this session.** Every run this session
+created is cited by a durable record and is kept; every trace it created that is **not**
+cited has been removed.
+
+### 2. W14's ledger coverage is red for 36 pre-2026-09-29 runs
+
+`scripts/check-horizon-ledger.py` invoked **without** `--since` reports 36 archived STRICT
+runs with no ledger row:
+
+```
+[ledger_coverage/strict_run_without_a_line] 20260928-110859-848-a2h-slotw2-on-3 ...
+[ledger_coverage/strict_run_without_a_line] 20260928-120818-632-a2h-attrib-inert-off ...
+[ledger_coverage/strict_run_without_a_line] 20260928-190035-939-regen-trace-192830 ...
+```
+
+**`just check` passes because it passes `--since 2026-09-29`.** So W14's own check has a
+scope narrower than the rule it states — "a strict run with no ledger line fails" — and
+the 36 uncovered runs are all from 2026-09-28, before the ledger's first row.
+
+**Why this is an owner decision rather than a chore.** The runs predate the ledger. Two
+readings, and they lead to different work:
+
+- **the ledger's scope is genuinely "from its inception onward"**, in which case the
+  `--since` argument is the honest encoding and the bare invocation should say so in its
+  own output rather than reporting 36 failures; or
+- **the rule is retroactive**, in which case 36 rows must be backfilled from artifacts
+  this session has not examined, and that is a packet-sized job rather than a fix.
+
+**The Session's own new runs are all covered** — the four it archived this session each
+have a row, and the gate demanded them.
+
+**Recorded rather than resolved**, because choosing between those readings is a scope
+decision about a rule the plan owns.
