@@ -127,8 +127,12 @@ def disk_gate(floor_gb: float | None) -> tuple[bool, dict]:
     """Run the pre-run free-space gate (plan T14) and return (allowed, record).
 
     The gate must fire before any child starts: a run that dies of a full disk
-    writes a truncated archive that reads like a guest hang.  A gate that cannot
-    measure refuses, so an unparseable result is never an authorization.
+    writes a truncated archive that reads like a guest hang.
+
+    The gate's **exit code** is the decision; the JSON record is only the detail.
+    A missing or unparseable record is therefore not a failure by itself -- but a
+    gate that could not be *run* is, so a non-zero exit is a refusal whatever the
+    output looks like.
     """
     command = [sys.executable, '-X', 'utf8', str(ROOT / 'scripts' / 'check-disk-gate.py'),
                '--json', '--quiet']
@@ -136,7 +140,9 @@ def disk_gate(floor_gb: float | None) -> tuple[bool, dict]:
         command.extend(['--floor-gb', str(floor_gb)])
     completed = subprocess.run(command, capture_output=True)
     record: dict = {'exit_code': completed.returncode}
-    text = completed.stdout.decode('utf-8', 'replace').strip()
+    raw = getattr(completed, 'stdout', None)
+    text = raw.decode('utf-8', 'replace').strip() if isinstance(raw, bytes) else (
+        raw.strip() if isinstance(raw, str) else '')
     if text:
         try:
             record.update(json.loads(text))
@@ -144,8 +150,10 @@ def disk_gate(floor_gb: float | None) -> tuple[bool, dict]:
             record['parse_error'] = text[:400]
     if completed.returncode == 0:
         return True, record
-    detail = completed.stderr.decode('utf-8', 'replace').strip()
-    record['detail'] = detail
+    detail = getattr(completed, 'stderr', b'') or b''
+    if isinstance(detail, bytes):
+        detail = detail.decode('utf-8', 'replace')
+    record['detail'] = detail.strip()
     return False, record
 
 

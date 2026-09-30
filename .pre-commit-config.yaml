@@ -1,0 +1,44 @@
+# Pre-commit hooks for the JSRF game repository (plan T7).
+#
+# Install once per clone:
+#
+#     pre-commit install
+#
+# Run against everything without committing:
+#
+#     pre-commit run --all-files
+#
+# The controls that prove these hooks actually refuse are in
+# `tests/test_precommit_hooks.py`; a hook that is installed but never exercised is
+# indistinguishable from one that is not installed.
+repos:
+  - repo: local
+    hooks:
+      # Refuses a staged `game/` path (nondistributable retail assets, and this
+      # repository is public), a secret-shaped blob, and an oversized blob.
+      - id: staged-paths
+        name: no game/ path, no secret, no oversized staged blob
+        entry: python -X utf8 scripts/precommit-staged-paths.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      # The repository's own checkers: agent-facing document authority, the
+      # plan-T6 recipe names, and structural merge damage.
+      - id: repo-checks
+        name: agent docs, just recipes, merge structure
+        entry: python -X utf8 scripts/precommit-repo-checks.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      # Refuses a commit with unresolved merge paths in the index.
+      - id: merge-gate
+        name: no unresolved merge paths
+        entry: python -X utf8 scripts/precommit-merge-gate.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]

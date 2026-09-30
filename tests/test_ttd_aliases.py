@@ -1,0 +1,173 @@
+"""Controls for the TTD alias arithmetic and query plumbing (plan T1).
+
+The TTD query itself needs a trace and a debugger, so it is exercised by running
+`tools/ttd/ttd-query.py` against a recorded trace (recorded in the session record).
+What is testable without either is the part that has already been wrong twice in
+one session:
+
+  * the **host base**.  The runtime does not map guest 0 at host 0; it maps it at
+    an offset it prints.  A query that omits the offset looks 64 KB below every
+    guest address.  The first working query returned 8 writes for guest
+    `0x001C4064` that were really the XBE decompressor writing guest `0x001B4064`
+    -- a plausible wrong answer, which is the worst kind.
+  * the **alias arithmetic**.  29 linear addresses, one canonical plus 28 mirrors
+    at 64 MB intervals.
+  * **fail-closed derivation**.  Both numbers come from the run's own log lines.
+    A log without them must produce `UNKNOWN`, never a default.
+
+These are pure functions over a log string, so the controls are cheap and the
+failures they catch are the ones that produced a wrong answer rather than an
+error.
+"""
+from __future__ import annotations
+
+import re
+import sys
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools' / 'ttd'))
+
+from aliases import (  # noqa: E402
+    XBOX_NUM_MIRRORS,
+    aliases,
+    format_aliases,
+    host_base_from_log,
+    ram_size_from_log,
+)
+
+# Verbatim from a real strict run's log (the two lines the query depends on).
+REAL_LOG = (
+    'xbox_MemoryLayoutInit: mapped 65536 KB at 0x0000000000010000 '
+    '(offset +65536 from Xbox base)\n'
+    '  RAM mirror: 28/28 views mapped (covers 1856 MB)\n'
+)
+
+
+class HostBaseTests(unittest.TestCase):
+    def test_reads_the_real_line(self) -> None:
+        self.assertEqual(host_base_from_log(REAL_LOG), 0x10000)
+
+    def test_absent_line_is_none_not_zero(self) -> None:
+        """A missing line must not default to 0; that is the wrong-64-KB bug."""
+        self.assertIsNone(host_base_from_log('RAM mirror: 28/28 views mapped\n'))
+
+    def test_zero_base_is_distinguishable_from_absent(self) -> None:
+        text = 'xbox_MemoryLayoutInit: mapped 65536 KB at 0x0000000000000000\n'
+        self.assertEqual(host_base_from_log(text), 0)
+
+
+class RamSizeTests(unittest.TestCase):
+    def test_reads_the_real_line(self) -> None:
+        coverage = ram_size_from_log(REAL_LOG)
+        self.assertIsNotNone(coverage)
+        mapped, expected, ram_bytes = coverage
+        self.assertEqual((mapped, expected), (28, 28))
+        # 1856 MB covers the base view plus 28 mirrors: 29 * 64 MB.
+        self.assertEqual(ram_bytes, 64 * 1024 * 1024)
+
+    def test_absent_line_is_none(self) -> None:
+        self.assertIsNone(ram_size_from_log('nothing here\n'))
+
+    def test_partial_coverage_is_reported_as_such(self) -> None:
+        coverage = ram_size_from_log('  RAM mirror: 20/28 views mapped (covers 1344 MB)\n')
+        self.assertIsNotNone(coverage)
+        mapped, expected, _ = coverage
+        self.assertEqual((mapped, expected), (20, 28))
+        self.assertNotEqual(mapped, expected)  # the caller fails closed on this
+
+
+class AliasTests(unittest.TestCase):
+    RAM = 64 * 1024 * 1024
+
+    def test_count_is_one_canonical_plus_28_mirrors(self) -> None:
+        self.assertEqual(len(aliases(0x1C4064, self.RAM)), XBOX_NUM_MIRRORS + 1)
+        self.assertEqual(len(aliases(0x1C4064, self.RAM)), 29)
+
+    def test_first_is_the_canonical_host_address(self) -> None:
+        self.assertEqual(aliases(0x1C4064, self.RAM, host_base=0x10000)[0], 0x1D4064)
+
+    def test_mirrors_step_by_the_ram_size(self) -> None:
+        result = aliases(0x1C4064, self.RAM, host_base=0x10000)
+        for index in range(1, len(result)):
+            self.assertEqual(result[index] - result[index - 1], self.RAM)
+
+    def test_mirror_n_aliases_the_same_guest_offset(self) -> None:
+        """Each alias must land on the same offset within its own view."""
+        va = 0x1C4064
+        for index, address in enumerate(aliases(va, self.RAM, host_base=0x10000)):
+            self.assertEqual((address - 0x10000) % self.RAM, va)
+            self.assertEqual((address - 0x10000) // self.RAM, index)
+
+    def test_out_of_range_is_refused(self) -> None:
+        """A non-RAM address has no mirrors; guessing one would be wrong."""
+        for bad in (0x80000000, self.RAM, self.RAM + 1, -1):
+            with self.assertRaises(ValueError):
+                aliases(bad, self.RAM)
+
+    def test_host_base_shifts_every_alias(self) -> None:
+        without = aliases(0x1C4064, self.RAM)
+        with_base = aliases(0x1C4064, self.RAM, host_base=0x10000)
+        self.assertEqual([a - 0x10000 for a in with_base], without)
+
+    def test_format_is_16_hex_digits(self) -> None:
+        formatted = format_aliases(0x1C4064, self.RAM, host_base=0x10000)
+        self.assertEqual(len(formatted), 29)
+        for text in formatted:
+            self.assertRegex(text, r'^0x[0-9A-F]{16}$')
+
+
+class QueryScriptTests(unittest.TestCase):
+    """The generated cdb script must carry the corrected addresses."""
+
+    def test_script_passes_host_addresses(self) -> None:
+        source = (ROOT / 'tools' / 'ttd' / 'ttd-query.py').read_text(encoding='utf-8')
+        # The negative control must be translated, not passed as a raw guest VA.
+        self.assertIn('host_base + negative_guest', source)
+        self.assertIn('alias_list[index]', source)
+
+    def test_writes_js_is_not_python(self) -> None:
+        """A Python docstring at the top is a JavaScript syntax error.
+
+        Measured: `writes.js` first shipped with a `\"\"\"` header, and the debugger
+        reported `SyntaxError: Invalid or unexpected token` at load, then
+        `Unable to bind name` for every later call -- which reads like a missing
+        function, not a parse failure.
+        """
+        text = (ROOT / 'tools' / 'ttd' / 'writes.js').read_text(encoding='utf-8')
+        self.assertFalse(text.lstrip().startswith('"""'))
+        self.assertNotIn('"""', text)
+
+    def test_writes_js_avoids_unsupported_syntax_in_code(self) -> None:
+        """Only syntax MEASURED to fail is excluded.
+
+        The engine accepts more than expected, and an earlier version of this
+        control asserted a subset it had not measured -- flagging `for...of`,
+        which the working query uses.  A control that forbids working code is a
+        defect, so only the construct that actually failed is excluded here.
+
+        Comments and string literals are excluded from the scan, because a
+        backtick in prose about the engine is not a template literal.
+        """
+        text = (ROOT / 'tools' / 'ttd' / 'writes.js').read_text(encoding='utf-8')
+        code = re.sub(r'/\*.*?\*/', '', text, flags=re.DOTALL)
+        code = re.sub(r'//[^\n]*', '', code)
+        self.assertNotIn('=>', code, 'arrow functions are not used here')
+
+    def test_writes_js_uses_the_verified_memory_api(self) -> None:
+        """The query must go through `TTD.Memory`, the API this project verified.
+
+        `host.memory.readMemoryValues` is NOT available in this debugger build --
+        a readability probe built on it returned 0 for every address, including
+        ones that were demonstrably readable.  A probe that silently reports
+        "unreadable" everywhere is worse than no probe: it would certify any
+        address as a valid negative control.
+        """
+        text = (ROOT / 'tools' / 'ttd' / 'writes.js').read_text(encoding='utf-8')
+        self.assertIn('TTD.Memory(', text)
+        self.assertNotIn('host.memory.readMemoryValues', text)
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)

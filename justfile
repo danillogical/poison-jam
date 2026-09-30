@@ -81,9 +81,11 @@ check:
     {{python}} -X utf8 scripts/check-dump-controls.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Output "check: all checkers passed"
 
-# Record one strict run under WinDbg TTD (T1).
+# Record one strict run under WinDbg TTD (T1). Sets RECOMP_GPU_ACK=0 for you,
+# exactly as `just strict-run` does: the profile contract puts the strict setting
+# on the caller, and the tool refuses rather than inserting it.
 ttd-record label="ttd":
-    {{python}} -X utf8 tools/ttd/ttd-record.py --label {{label}}
+    $env:RECOMP_GPU_ACK = "0"; {{python}} -X utf8 tools/ttd/ttd-record.py --label {{label}}
 
 # Query a TTD trace for writes to a guest VA across all 29 aliases (T1).
 ttd-writes trace va:

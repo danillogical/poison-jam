@@ -45,6 +45,8 @@ Read `docs/agent-workflow.md` for the roster.
 
 Read `plan-jsrf-bare-minimum.md` for acceptance and the current blocker.
 
+Build with `just build`; run the checkers with `just check`.
+
 Run `C:\\Python313\\python.exe -X utf8 scripts\\check-agent-docs.py --check`.
 """
 
@@ -61,6 +63,11 @@ Read `docs/agent-workflow.md` at session start.
 """
 
 
+def python_call(recipe: str) -> str:
+    """A plausible body line for a fixture recipe; never executed."""
+    return f'python -X utf8 scripts/{recipe}.py'
+
+
 class CorpusMixin:
     """Build a synthetic document corpus that the checker can audit."""
 
@@ -74,6 +81,19 @@ class CorpusMixin:
         self.write('plan-jsrf-bare-minimum.md', PLAN_BODY)
         self.write('docs/session-start-template.md', TEMPLATE_BODY)
         self.write('scripts/check-agent-docs.py', '# placeholder\n')
+        # The justfile the T6 recipe check audits.  Built from the checker's own
+        # required list so the fixture cannot drift from the contract it stands in
+        # for -- a hand-written fixture would silently stop covering a recipe the
+        # checker starts requiring.
+        self.write('justfile', self.justfile_body())
+
+    @staticmethod
+    def justfile_body() -> str:
+        lines = ['# fixture justfile', 'python := "python"', 'default:', '    @just --list']
+        for recipe in checker.REQUIRED_RECIPES:
+            lines.append(f'{recipe}:')
+            lines.append(f'    {python_call(recipe)}')
+        return '\n'.join(lines) + '\n'
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -181,6 +201,47 @@ class RetiredNameTests(CorpusMixin, unittest.TestCase):
             '  `hy4-preview-f`, `deepseek-v4.1-flash`, `gpt-5.5` and `kimi-k3`).\n'))
         findings = self.audit()
         self.assertNotIn('unlabelled_retired_name', self.reasons(findings))
+
+
+class JustRecipeTests(CorpusMixin, unittest.TestCase):
+    """Plan T6 fixes the recipe names; the checker must fail when one goes."""
+
+    def test_clean_corpus_defines_every_recipe(self):
+        self.assertNotIn('missing_recipe', self.reasons(self.audit()))
+
+    def test_missing_recipe_is_rejected(self):
+        self.write('justfile', '# fixture justfile\ndefault:\n    @just --list\n')
+        findings = self.audit()
+        self.assertIn('missing_recipe', self.reasons(findings))
+        # Every required recipe should be reported, not just the first.
+        reported = [f for f in findings if f['reason'] == 'missing_recipe']
+        self.assertEqual(len(reported), len(checker.REQUIRED_RECIPES))
+
+    def test_parameterised_recipe_counts_as_defined(self):
+        """`strict-run label="x":` is a definition, not a missing recipe.
+
+        Measured: the first version of the checker's name pattern required the
+        colon immediately after the name and reported eight recipes missing from
+        a justfile that defined all of them.
+        """
+        body = self.justfile_body().replace(
+            'strict-run:\n    python -X utf8 scripts/strict-run.py',
+            'strict-run label="strict":\n    python -X utf8 scripts/strict-run.py')
+        self.write('justfile', body)
+        self.assertNotIn('missing_recipe', self.reasons(self.audit()))
+
+    def test_assignment_is_not_mistaken_for_a_recipe(self):
+        self.write('justfile', self.justfile_body() + '\nnot_a_recipe := "value"\n')
+        self.assertNotIn('missing_recipe', self.reasons(self.audit()))
+
+    def test_agents_must_point_at_the_recipes(self):
+        self.write('AGENTS.md', AGENTS_BODY.replace('`just build`', '`the build`'))
+        self.assertIn('docs_do_not_point_at_recipes', self.reasons(self.audit()))
+
+    def test_absent_justfile_is_reported_not_crashed(self):
+        (self.root / 'justfile').unlink()
+        findings = self.audit()
+        self.assertIn('missing_input', self.reasons(findings))
 
 
 class CommandPathTests(CorpusMixin, unittest.TestCase):
