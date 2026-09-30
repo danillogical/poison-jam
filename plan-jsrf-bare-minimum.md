@@ -233,13 +233,26 @@ Senior calls: W11 is one Advisor ruling; the rest are owner-approved document ed
 §1, and no fallback model/provider may be invented (the generic receipt machinery that W8 also asks
 for is done, as T13). The remaining W rows are document edits whose checks now exist.
 
-| Row | Check that now exists |
-|---|---|
-| W1 | `scripts/check-review-recurrence.py` + 13 controls |
-| W2 | `scripts/qualify-premise.py` + 18 controls, `just qualify` |
-| W11 | `docs/jsrf-run-profiles.md` §"TTD trace query (W11)"; ruling ledger; T1 evaluates S1–S8 mechanically and exits nonzero |
-| W14 | `scripts/check-horizon-ledger.py` + 9 controls, `just horizon-check`, wired into `just check` |
-| W15 | `scripts/check-override-drift.py` + 9 controls, `just override-check`; the stale `AGENTS.md` text it found is fixed |
+| Row | Check that now exists | What it found on the real tree |
+|---|---|---|
+| W1 | `scripts/check-review-recurrence.py` + 13 controls | 0 packets to examine (no revision records on disk); controls are fixtures and say so |
+| W2 | `scripts/qualify-premise.py` + 18 controls, `just qualify` | on the real C1 premise: 5 PASS, 1 UNKNOWN, verdict `INCOMPLETE` |
+| W3/W10 | `scripts/check-packet-transcript.py` + 12 controls, `just packet-check` | 6 closed packets exempt by name; no blocking findings |
+| W4/W12 | `scripts/check-record-hygiene.py` + 21 controls, `just record-check` | 3 real instances, then clean after the exemptions were scoped |
+| W5 | `scripts/check-transcribed-values.py` + 10 controls, `just transcribed-check` | 4 `rechecked`, 2 `undecidable`, 0 blocking |
+| W6 | `scripts/check-ruling-ledger.py` + 11 controls, `just ruling-check` | the W11 ruling passes its own lint |
+| W7 | `scripts/chore-gate.py` + 12 controls, `just chore`; §5.8's three-class table | `STOP_REMOVED` on the two real runs |
+| W8 | `scripts/check-route-allowlist.py` + 8 controls, `just route-check` | both roster routes are in the allow-list; fallbacks owner-reserved |
+| W9 | `scripts/check-instrument-controls.py` + 14 controls, `just instrument-check` | no instrumented runs recorded |
+| W11 | `docs/jsrf-run-profiles.md` §"TTD trace query (W11)"; ruling ledger; T1 evaluates S1–S8 mechanically and exits nonzero | the delivered artifact is `NOT ADMITTED`, with the two reasons the Advisor named |
+| W13 | packet template's `**Senior-call budget:**` field, checked by W3/W10's lint | template carries the field |
+| W14 | `scripts/check-horizon-ledger.py` + 9 controls, `just horizon-check`, wired into `just check` | found 4 runs cited only by suffix; the ledger now names them fully |
+| W15 | `scripts/check-override-drift.py` + 9 controls, `just override-check` | found the exact `AGENTS.md:92` stale text the plan names; fixed |
+| W16 | `scripts/precommit-repo-checks.py` draft-packet warning + 6 controls | no draft staged |
+
+`just check` runs ten checkers; each has its own recipe and each recipe is named in
+`check-agent-docs.py`'s `REQUIRED_RECIPES`, so a rename fails the check rather than
+silently breaking a record that cites it.
 | W16 | `scripts/precommit-repo-checks.py` draft-packet warning + 6 controls |
 
 ---
