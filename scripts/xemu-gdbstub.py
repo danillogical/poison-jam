@@ -37,24 +37,37 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# x86-64 RSP register order, as returned by `g`.
+# **The guest is 32-bit, so the `g` packet is the i386 layout: 16 registers in
+# 4-byte slots.** Measured against a live xemu running JSRF, and the earlier
+# assumption was wrong in a way that produced confident nonsense:
+#
+#   read as i386 (4-byte):   eip = 0x00193D67   cs = 0x08  ss = 0x10  ds = 0x10
+#   read as x86-64 (8-byte): rip = 0x0000000000000000  cs = 0x0000BFFE88000000
+#
+# `cs = 8`, `ss = 0x10`, `ds = 0x10` are the segment selectors of a 32-bit
+# protected-mode guest, and `eip = 0x00193D67` holds `ff 86 f0 01 00 00` -- which is
+# **byte-for-byte what the original XBE holds at that address**
+# (`inc dword ptr [esi+0x1f0]`, confirmed with `inspect-jsrf.py data 0x00193D67 20`).
+# Under the 8-byte reading `rip` is always zero, which is why all four archived dumps
+# reported `eip = 0x00000000`: they were reading the wrong bytes, not a stopped guest.
+#
+# The packet is 344 bytes = 16 x 4 + 280 bytes of x87/SSE state this tool does not
+# decode. 344 is not a multiple of 8, so the 8-byte reading was also misaligned from
+# the first register onward.
 REGISTER_ORDER = (
-    'rax', 'rbx', 'rcx', 'rdx', 'rsi', 'rdi', 'rbp', 'rsp',
-    'r8', 'r9', 'r10', 'r11', 'r12', 'r13', 'r14', 'r15',
-    'rip', 'eflags', 'cs', 'ss', 'ds', 'es', 'fs', 'gs',
+    'eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi',
+    'eip', 'eflags', 'cs', 'ss', 'ds', 'es', 'fs', 'gs',
 )
 
-# The guest is 32-bit; these are the names the guest's own disassembly uses.
-# Every 64-bit register gets a 32-bit alias, because the guest's state lives in
-# the low half and a dump that offered only `rax` would make every consumer
-# remember the mapping -- and a consumer that forgot would compare a guest value
-# against a host-width one.
+REGISTER_WIDTH = 4
+
+# The guest's own disassembly names these, and they are now the packet's own names --
+# so there is no alias layer to forget. Kept as a mapping for callers that ask for
+# the 64-bit spelling of a 32-bit register.
 GUEST_ALIASES = {
-    'rax': 'eax', 'rbx': 'ebx', 'rcx': 'ecx', 'rdx': 'edx',
-    'rsi': 'esi', 'rdi': 'edi', 'rbp': 'ebp', 'rsp': 'esp',
-    'r8': 'r8d', 'r9': 'r9d', 'r10': 'r10d', 'r11': 'r11d',
-    'r12': 'r12d', 'r13': 'r13d', 'r14': 'r14d', 'r15': 'r15d',
-    'rip': 'eip',
+    'eax': 'rax', 'ebx': 'rbx', 'ecx': 'rcx', 'edx': 'rdx',
+    'esi': 'rsi', 'edi': 'rdi', 'ebp': 'rbp', 'esp': 'rsp',
+    'eip': 'rip',
 }
 
 
@@ -132,21 +145,31 @@ class GdbStub:
         return self.request('?')
 
     def registers(self) -> dict[str, int]:
-        """`g` -- every register, little-endian, in REGISTER_ORDER."""
+        """`g` -- the i386 register block, little-endian, in REGISTER_ORDER.
+
+        **The packet is longer than the registers this decodes.** Measured: 344
+        bytes = 16 registers x 4 bytes + 280 bytes of x87/SSE state. The extra
+        bytes are left undecoded rather than padded or guessed at; a tool that
+        invented values for them would be reporting state it never read.
+        """
         payload = self.request('g')
         if payload.startswith('E'):
             raise GdbStubError(f'the stub refused the register read: {payload}')
         raw = bytes.fromhex(payload)
-        width = 8
-        expected = len(REGISTER_ORDER) * width
+        expected = len(REGISTER_ORDER) * REGISTER_WIDTH
         if len(raw) < expected:
-            # Some stubs return fewer; decode what is there rather than padding
-            # with zeros, which would fabricate register values.
+            # Decode what is there rather than padding with zeros, which would
+            # fabricate register values.
             raise GdbStubError(
-                f'register block is {len(raw)} bytes, expected {expected}')
+                f'register block is {len(raw)} bytes, expected at least {expected}')
         values = {}
         for index, name in enumerate(REGISTER_ORDER):
-            values[name] = struct.unpack_from('<Q', raw, index * width)[0]
+            offset = index * REGISTER_WIDTH
+            values[name] = struct.unpack_from('<I', raw, offset)[0]
+        # The undecoded remainder is REPORTED, so a reader can tell a packet this
+        # tool understood from one it silently truncated.
+        self.last_register_block_bytes = len(raw)
+        self.last_register_undecoded_bytes = len(raw) - expected
         return values
 
     def read_memory(self, address: int, length: int) -> bytes:
@@ -166,21 +189,18 @@ class GdbStub:
 
 
 def guest_view(registers: dict[str, int]) -> dict[str, int]:
-    """The 32-bit view of the registers, which is what the guest actually sees.
+    """The guest's register values, which are the packet's own values.
 
-    Every register keeps a **guest-width alias** as well as its RSP name, because
-    the guest is 32-bit and its own disassembly names `eax`, `eip`, `esp`. A dump
-    that offered only `rax`/`rip` would force every consumer to remember the
-    mapping, and a consumer that forgot would compare a guest address against a
-    host-width value. Both spellings are present and equal in the low 32 bits.
+    The registers are already 32-bit, so there is no truncation to perform and no
+    alias layer for a consumer to forget. `GUEST_ALIASES` is kept so a caller can
+    ask for the 64-bit spelling of a 32-bit register and get the same number, which
+    is what the previous version's aliasing was for -- but the direction is now the
+    safe one: the packet's names are the guest's names.
     """
-    view: dict[str, int] = {}
-    for name, value in registers.items():
-        truncated = value & 0xFFFFFFFF
-        view[name] = truncated
-        guest_name = GUEST_ALIASES.get(name)
-        if guest_name:
-            view[guest_name] = truncated
+    view: dict[str, int] = dict(registers)
+    for guest_name, wide_name in GUEST_ALIASES.items():
+        if guest_name in registers:
+            view[wide_name] = registers[guest_name]
     return view
 
 
@@ -219,7 +239,16 @@ def main() -> int:
         with GdbStub(args.host, args.port) as stub:
             record['stop_reason'] = stub.stop_reason()
             registers = stub.registers()
-            record['registers_64'] = {k: f'0x{v:016X}' for k, v in registers.items()}
+            record['register_block_bytes'] = getattr(
+                stub, 'last_register_block_bytes', None)
+            record['register_undecoded_bytes'] = getattr(
+                stub, 'last_register_undecoded_bytes', None)
+            record['register_layout'] = (
+                f'i386, {REGISTER_WIDTH}-byte slots, '
+                f'{len(REGISTER_ORDER)} registers')
+            # The packet's own names ARE the guest's names, so one mapping is
+            # recorded and the redundant `registers_64` spelling is gone -- it was
+            # the label that made a wrong decode look authoritative.
             record['guest_registers'] = {k: f'0x{v:08X}'
                                          for k, v in guest_view(registers).items()}
             record['reads'] = []
