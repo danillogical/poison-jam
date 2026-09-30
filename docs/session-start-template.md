@@ -44,7 +44,7 @@ must be reported precisely; it is not permission to switch to a retired model.
 
 ## Acceptance reviewer probe — PASS / FAIL / UNKNOWN
 
-One review stage (workflow §1); probe it on a fresh Muse handle, never the `advisor` handle.
+One review stage (workflow §1); probe it on a fresh Muse handle.
 
 - Handle; fresh token; response reference; empty-evidence answer; reported effort; result:
 - Exact error or missing evidence:

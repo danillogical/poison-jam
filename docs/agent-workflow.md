@@ -22,24 +22,17 @@ A previous session's child IDs or PASS results do not establish readiness.
    repository identities and dirty files. Nothing else selects work.
 2. **Verify routes.** Compare the running Session with its §1 row from harness
    metadata (record `UNKNOWN` if unverifiable). Resolve every other role live (§1).
-3. **Probe the Acceptance reviewer.** Open a fresh Muse handle (never the `advisor`
-   handle) at the listed effort. PASS requires a completed response containing a
-   fresh session token, one reason an empty evidence set must fail acceptance, and the
-   listed `reasoningEffort`. Dispatch alone is not PASS. The probe handle is discarded;
-   each review opens its own.
-4. **Recover or create the Persistent Advisor, then probe it once.** The DSH
-   Advisor is the persistent Muse worker defined by the `muse-worker` skill. Read
-   `.muse-workers.md` at the project root. If it contains an `advisor` handle, recover
-   that exact handle with `muse_session_open`; do not create a replacement merely
-   because the top-level DSH session is new. If no advisor handle exists, open one
-   Muse session, prime it with the Advisor role in §2.3, and immediately persist its
-   handle in `.muse-workers.md`. Then send a unique marker and ask the Advisor to read
-   one named repository file and report a fact deliberately left out of the brief. In
-   a second turn to the **same handle**, ask for the marker without repeating it. PASS
-   requires the correct fact, the correct marker, and `reasoningEffort: max` reported
-   for the Advisor turns. Never `close` the persistent Advisor. Never send two prompts
-   concurrently on the Advisor handle; if a send times out, collect it with
-   `muse_session_read` before sending anything else on that handle.
+3. **Probe the Acceptance reviewer.** Open a fresh Muse handle at the listed effort.
+   PASS requires a completed response containing a fresh session token, one reason an
+   empty evidence set must fail acceptance, and the listed `reasoningEffort`. Dispatch
+   alone is not PASS. The probe handle is discarded; each review opens its own.
+4. **Probe the Advisor (one combined probe).** Resolve its route live (§1) and spawn
+   it as a fresh continuable child at the listed effort. In the first turn give it a
+   unique marker and ask it to read one named repository file and report a fact
+   deliberately left out of the brief. In a second turn to the **same child**, ask for
+   the marker without repeating it. PASS requires the correct fact (checked against the
+   file), the correct marker from the same child, and the listed effort in the child's
+   metadata. This proves continuity and that the Advisor can read project evidence.
 5. **Reconcile packet state.** Inspect both working trees and preserve unrelated
    edits. Execute **only** the exact packet/revision named in the plan's
    `CURRENT PACKET` block. Never discover work by scanning for pending items. If no
@@ -49,11 +42,11 @@ A previous session's child IDs or PASS results do not establish readiness.
    or review record.
 
 A required route, effort, spawn, or continuation that is unavailable makes startup
-`BLOCKED` for accepted game work. Do not substitute an unlisted route. A persisted
-Muse handle establishes identity, not readiness: recover and probe it each top-level
-session as step 4 requires. The Planner needs no separate probe: every adequacy review
-it returns must cite the files and line ranges it read, and each Planner turn must
-report the listed `reasoningEffort`; both are checked on first use.
+`BLOCKED` for accepted game work. Do not substitute an unlisted route. The Advisor
+child is created and probed fresh in each top-level session (§4.4). The Planner needs
+no separate probe: every adequacy review it returns must cite the files and line ranges
+it read, and each Planner turn must report the listed `reasoningEffort`; both are
+checked on first use.
 
 ## 1. Supported harnesses and roster
 
@@ -64,25 +57,21 @@ Exactly two harnesses are supported. Use only the assignments in the active colu
 | **Session** | `gpt-6-luna` @ `max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
 | **Worker subagents** | `gpt-6-luna` @ `max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
 | **Planner** | `gpt-6-astra` @ `medium` | **Muse Spark 1.3** @ `high` (`skill: muse-worker`, fresh handle) |
-| **Persistent advisor** | `gpt-6-astra` @ `medium` | **Muse Spark 1.3** @ `max` (`skill: muse-worker`, persistent handle) |
+| **Persistent advisor** | `gpt-6-astra` @ `medium` | **Claude Opus 5.5** @ `high` (`route: LIVE_RESOLVE`, continuable child) |
 | **Acceptance reviewer** | `gpt-6-luna` @ `max` | **Muse Spark 1.3** @ `high` (`skill: muse-worker`, fresh handle per review) |
-| **Final unresolved acceptance adjudicator** | `gpt-6-sol` @ `xhigh` | **GPT-6 Sol** @ `xhigh` (`provider: codex`, `route: LIVE_RESOLVE`, fresh child) |
 
-Acceptance has **one review stage**. An `ACCEPT` is final; a disputed rejection goes
-to the adjudicator only when it is an interpretation dispute (§2.2).
+Acceptance has **one review stage**. An `ACCEPT` is final; a rejection disputed only on
+how a frozen criterion reads goes to the Advisor (§2.2).
 
-**DSH independence is procedural, not model diversity.** The Planner, Advisor and
-Acceptance reviewer are all Muse Spark, so what keeps them independent is that each
-runs on its own handle: a reviewer handle never sees the packet's planning or Advisor
-conversation. The adjudicator is a different family (GPT-6 Sol) and a fresh child.
+**DSH independence.** The Planner and the Acceptance reviewer are both Muse Spark, so
+what keeps them independent is that each runs on its own handle: a reviewer handle never
+sees the packet's planning conversation. The Advisor is a different family (Claude).
 
 **Authority attaches to the role, not the model.** A Muse Spark Acceptance reviewer is
 a contract role and is bound exactly like any other Acceptance reviewer. A Muse Spark
-Planner handle has Planner authority; the persistent `advisor` handle has Advisor
-authority. The final acceptance adjudicator has only the bounded authority defined in
-§2.3. One child or Muse handle holds one role: a Planner or reviewer handle is never the
-`advisor` handle, and a handle that reviewed a packet's acceptance does not also rule as
-Advisor on a dispute about that review.
+Planner handle has Planner authority; the Advisor child has Advisor authority. One child
+or Muse handle holds one role: Planner and reviewer handles are separate, and a handle
+that reviewed a packet's acceptance does not also rule on a dispute about that review.
 
 ### Live verification
 
@@ -92,15 +81,14 @@ Advisor on a dispute about that review.
   and which supports the required effort. Record the returned provider/model string.
   Zero or multiple matches is `BLOCKED` until §1 or the route ambiguity is repaired.
   Never invent an identifier from a display name.
-- The DSH Muse Spark roles (Planner, Persistent advisor, Acceptance reviewer) are
-  **not** resolved through `list_subagent_models`; they are provided by the
-  `muse-worker` skill. Read that skill before first use. The Advisor is the persisted
-  `advisor` handle: recover it from `.muse-workers.md`, or create and persist it exactly
-  once when absent. Planner and Acceptance-reviewer handles are opened fresh for their
-  packet or review, recorded in that packet's review record (not in `.muse-workers.md`),
-  and are never the `advisor` handle. Handles are workspace-bound. Every Muse turn must
-  report the `reasoningEffort` listed in the table; a different reported tier is
-  `BLOCKED` for that output.
+- The DSH Advisor resolves like any `LIVE_RESOLVE` row. The `claude` route was
+  unusable from 2026-09-26; never assume it is back — a failed resolution is `BLOCKED`.
+- The DSH Muse Spark roles (Planner, Acceptance reviewer) are **not** resolved through
+  `list_subagent_models`; they are provided by the `muse-worker` skill. Read that skill
+  before first use. Each handle is opened fresh for its packet or review and recorded in
+  that packet's review record. Handles are workspace-bound. Every Muse turn must report
+  the `reasoningEffort` listed in the table; a different reported tier is `BLOCKED` for
+  that output. `.muse-workers.md` holds the former persistent Advisor handle, as history.
 - Codex: verify route and effort through current harness metadata.
 - If a row omits effort, omit `reasoning_effort`.
 - An unavailable assignment is `BLOCKED`; never fall back silently.
@@ -111,7 +99,7 @@ Advisor on a dispute about that review.
 
 | Layer | Roles | Produces | Bound by |
 |---|---|---|---|
-| **Judgment** | Persistent advisor (senior), Planner, final acceptance adjudicator (bounded) | rulings, packet design, adequacy verdicts, bounded acceptance interpretation, deferrals, stops, exceptions | facts (§2.4), the owner's objective and reserved decisions (§3.4) |
+| **Judgment** | Persistent advisor (senior), Planner | rulings, packet design, adequacy verdicts, acceptance-dispute rulings, deferrals, stops, exceptions | facts (§2.4), the owner's objective and reserved decisions (§3.4) |
 | **Contract** | Session, Worker subagents, Acceptance reviewer | executed steps, evidence, dispositions | the frozen packet, this file, and recorded rulings |
 
 **Rank settles judgment; evidence settles facts.** The Advisor may overrule the Planner
@@ -210,11 +198,11 @@ only**:
 - Overall disposition: `ACCEPT` only when every mandatory criterion is `AGREED`;
   otherwise `NOT ACCEPTED`, naming the blocking criteria.
 - An ambiguous criterion is `CANNOT VERIFY`, naming the ambiguity, never a private
-  reinterpretation; the Session takes it to the adjudicator (below).
+  reinterpretation; the Session takes it to the Advisor (below).
 - Concerns outside the contract are listed separately as advisories. They do not
   change the disposition and do not add criteria.
 
-**Acceptance and adjudication** — one review stage:
+**Acceptance and disputes** — one review stage:
 
 1. The Acceptance reviewer reviews every mandatory criterion as above. `ACCEPT` is
    final.
@@ -223,34 +211,35 @@ only**:
    - **Evidence failure** — the reproduction failed, or the evidence is missing, stale,
      or does not show the claim. The criterion stays failed; the work or evidence is
      fixed and the affected criteria are re-reviewed (`pending — post-review edits`).
-     Neither the adjudicator nor the Advisor can turn it into PASS (§2.4).
+     No role can turn it into PASS (§2.4).
    - **Contradicting measurements** — the reviewer's reproduction and the delivered
      evidence disagree and neither is shown wrong. That is a factual dispute: it goes to
      the Advisor (§4.2), which orders the discriminating measurement, and the reproduced
      result controls (§2.4).
    - **Interpretation dispute** — the evidence is not in question, but the Session and
      the reviewer read an already-frozen criterion differently, or the reviewer returned
-     `CANNOT VERIFY` because its wording is ambiguous. Only this goes to a **fresh Final
-     unresolved acceptance adjudicator** (§1, §2.3).
-3. The Session sends the adjudicator only the disputed criterion(s), the frozen
-   contract, the review record, the delivered evidence, and each side's reading in one
-   or two sentences. With no second reviewer, the adjudicator is the only other look at
-   a rejected criterion, so it reads the evidence the dispute turns on itself (§2.4.2)
-   instead of relying on either side's summary.
+     `CANNOT VERIFY` because its wording is ambiguous. Only this goes to the Advisor, as
+     an acceptance-dispute ruling (§2.3).
+3. The Session sends the Advisor only the disputed criterion(s), the frozen contract,
+   the review record, the delivered evidence, and each side's reading in one or two
+   sentences. With no second reviewer, the Advisor is the only other look at a rejected
+   criterion, so it reads the evidence the dispute turns on itself (§2.4.2) instead of
+   relying on either side's summary.
 4. It returns `AGREED`, `DISAGREED`, or `CANNOT VERIFY` per escalated criterion, with the
    reading it applied and the evidence that would reverse it. If, once the readings are
    stated, they agree and what remains is which measurement is right, it returns
    `CANNOT VERIFY` naming the measurement that would decide — never a disposition by
    authority.
-5. If deciding would need a policy, architecture, scope, fidelity or exception
-   decision, it returns `NEEDS_ADVISOR_RULING` and the question goes to the Persistent
-   Advisor. Missing evidence remains missing evidence (§2.4).
+5. If deciding needs a policy, architecture, scope, fidelity or exception decision, the
+   Advisor makes it as a separate, recorded technical-policy ruling (§3.3) rather than
+   folding it into the criterion's disposition. Missing evidence remains missing
+   evidence (§2.4).
 6. `ACCEPT` then requires every mandatory criterion `AGREED`, by the review or by the
-   adjudication. An adjudicated disposition binds that criterion for that evidence
-   revision and is not re-adjudicated without new evidence or `PREMISE_CHANGED`.
+   dispute ruling. That disposition binds the criterion for that evidence revision and is
+   not re-ruled without new evidence or `PREMISE_CHANGED`.
 
 A reviewer route failure is `pending — reviewer unavailable`, not a failed review; it
-is repaired, not sent to the adjudicator.
+is repaired, not sent to the Advisor.
 
 ### 2.3 Judgment roles — decide
 
@@ -281,26 +270,6 @@ what is enough, and what to do next; they do not decide what happened (§2.4).
   bounded claim mechanically decidable or to avoid one of the concrete wrong outcomes
   above.
 
-**Final unresolved acceptance adjudicator** — a narrow judgment role used only when the
-Acceptance review returned `NOT ACCEPTED` and a genuine interpretation dispute about a
-frozen criterion remains (§2.2). There is no second review stage, so it is the only
-look at a rejected criterion besides the reviewer's. It is a **fresh GPT-6 Sol xHigh
-child** for each escalation, never the Planner that authored the packet. It may:
-
-- interpret the wording of an already-frozen acceptance criterion against the frozen
-  packet and the evidence, which it reads itself rather than through either side's
-  summary;
-- decide among `AGREED`, `DISAGREED`, and `CANNOT VERIFY` for only the criterion(s)
-  explicitly escalated to it;
-- state what evidence would reverse its disposition.
-
-It may **not** rewrite the packet, add or delete criteria, define policy, change scope,
-make a fidelity tradeoff, choose architecture, waive evidence, or grant an exception.
-It does not settle a contradiction between measurements; that is a fact, and it returns
-`CANNOT VERIFY` naming the measurement that would decide it. Any other need returns
-`NEEDS_ADVISOR_RULING` and goes to the Persistent Advisor. It never outranks reproduced
-facts (§2.4).
-
 **Persistent advisor** — the project's senior technical decision-maker. Everything
 the Planner may do, plus:
 
@@ -310,6 +279,10 @@ the Planner may do, plus:
 - resolve disagreements among Session, Planner, and reviewer — its ruling is final
   within the limits of §2.4 and §3.4; the Planner may record dissent, but dissent does
   not block;
+- rule on acceptance disputes about how a frozen criterion reads (§2.2), reading the
+  disputed evidence itself; it interprets the wording but never lowers the evidence
+  requirement, and a contradiction between measurements is settled by a new
+  measurement, not by the ruling;
 - override a literal reading of a workflow rule when that reading defeats the rule's
   purpose, stating the purpose and the override;
 - decide whether an uncertainty is material and whether an advisory is worth acting
@@ -399,7 +372,7 @@ it is recorded and states:
 
 General rules are recorded in the document that owns the topic (§8); case rulings go in
 the review record. The Session records the ruling text verbatim with the Advisor's
-persistent handle, model, and reported reasoning effort; a paraphrase cites that record.
+child ID, model, and effort; a paraphrase cites that record.
 An attribution that cannot be traced to a recorded Advisor response is `UNKNOWN`.
 
 ### 3.4 Owner decision
@@ -426,8 +399,7 @@ rule for the situation. That is what the Advisor is for.
 Worker      -> Session
 Session     -> Planner       (packet design, adequacy, whether to revise)
 Session     -> Advisor       (technical/policy question, including how to read a frozen step)
-Reviewer    -> Adjudicator   (via the Session; only a frozen-contract interpretation dispute)
-Adjudicator -> Advisor       (`NEEDS_ADVISOR_RULING`: policy/architecture/scope/fidelity/exception)
+Reviewer    -> Advisor       (via the Session; a frozen-contract interpretation dispute, §2.2)
 Planner     -> Advisor       (policy gap, methodology change, anything beyond Planner authority)
 Advisor     -> Owner         (§3.4 only; everything else ends at the Advisor)
 ```
@@ -489,27 +461,12 @@ revisit a premise.
 
 ### 4.4 Advisor continuity
 
-The DSH Advisor is a **project-persistent Muse conversation**, not a per-DSH-session
-child. Its durable identity is the `advisor` handle in `.muse-workers.md`.
-
-- On a new top-level DSH session, read `.muse-workers.md` and call
-  `muse_session_open` with the recorded handle. `created: false` is the normal recovery
-  case and means the existing Muse conversation was reattached with its context intact.
-- If no `advisor` handle exists, call `muse_session_open` without a handle, prime that
-  new conversation with the §2.3 Advisor role, and immediately write the returned
-  handle to `.muse-workers.md` before relying on it.
-- Reuse that same handle for the project. Do **not** `muse_session_close` a persistent
-  Advisor during ordinary operation; closing only makes DSH forget the handle and does
-  not delete Muse history.
-- Never send two prompts concurrently on the Advisor handle. Muse sends on one handle
-  are serialized and concurrent turns can wedge the conversation. If a send times out,
-  the turn may still be running; use `muse_session_read` to collect it before the next
-  send.
-- The handle is bound to the workspace in which it was created. A
-  `WORKSPACE_MISMATCH` is a real blocker; open a different handle only for a genuinely
-  different project/workspace and record it separately.
-- Advisor turns use Muse Spark 1.3 at `max`. Verify the `reasoningEffort` reported by
-  each completed turn before recording a ruling.
+The DSH Advisor is a **continuable child** on the §1 route, reused for the whole
+top-level session unless its state becomes unreliable; a new top-level session creates
+and probes its own (§0 step 4). Do not seed it with the current conversation: brief it
+from the files (§4.3). Spawn it with `run_in_background: true`, keep the child ID, and
+continue it with `send_message`. Rulings, not the child's memory, carry decisions across
+sessions: each is recorded, with the child ID, where §3.3 and §8 say.
 
 For the direct Codex harness, use the continuable Advisor route from the Codex column
 of §1 and resume it through that harness's continuation mechanism. If the required
@@ -631,7 +588,7 @@ time.
 3. **Change packets:** adequacy review is by a Planner child. If that child wrote or
    materially rewrote the criteria or rows of the revision, the review goes to a
    **fresh** Planner child. In DSH this means a fresh Muse Spark Planner handle under the
-   §1 roster, never the `advisor` handle and never the handle that wrote the revision;
+   §1 roster, never the handle that wrote the revision;
    the Advisor's shape preflight is not the adequacy review and does not replace it.
    **Discovery packets:** the writing Planner reviews its own packet against §5.3's two
    questions; no second Planner is spawned. Either way, independence in the end comes
@@ -646,9 +603,9 @@ time.
 | **ADEQUATE** | review found zero blocking defects | **frozen and promoted in the same step** |
 | **promoted** | frozen hash in `CURRENT PACKET` | Session executes |
 | **delivered** | Session says criteria pass with evidence | Acceptance review |
-| **final adjudication** | the Acceptance review returned `NOT ACCEPTED` and a frozen-contract interpretation dispute remains | fresh Sol xHigh adjudicator disposition (§2.2) |
-| **accepted** | all mandatory criteria are `AGREED` after review/adjudication | record; plan names next work |
-| **pending — CANNOT VERIFY** | reviewer cannot reproduce a criterion | new evidence; if evidence exists but wording remains disputed, final adjudication (§2.2) |
+| **disputed** | the Acceptance review returned `NOT ACCEPTED` and a frozen-contract interpretation dispute remains | Advisor dispute ruling (§2.2) |
+| **accepted** | all mandatory criteria are `AGREED` after review or dispute ruling | record; plan names next work |
+| **pending — CANNOT VERIFY** | reviewer cannot reproduce a criterion | new evidence; if evidence exists but wording remains disputed, Advisor dispute ruling (§2.2) |
 | **pending — reviewer unavailable** | reviewer route failed | repair route; no substitution |
 | **pending — post-review edits** | reviewed tree/evidence changed | re-review affected criteria |
 | **escalated** | policy/architecture/scope/fidelity/exception question | Advisor ruling, then rerun/re-review as needed |
@@ -965,7 +922,7 @@ Model diversity helps; it never replaces reproduced evidence.
 | a packet's operative contract | `docs/packets/<packet>.md` |
 | verdicts, deferred advisories, discretionary decisions, case rulings | `docs/reviews/<packet>-r<N>-*.md` |
 | a packet's revision narrative | `docs/reviews/<packet>-revision-history.md` (non-authoritative) |
-| persistent Muse worker handles | `.muse-workers.md` |
+| the former persistent Muse Advisor handle (history) | `.muse-workers.md` |
 | transient session notes | outside the repository (no report files) |
 | dated narrative | `docs/jsrf-operating-history.md` |
 

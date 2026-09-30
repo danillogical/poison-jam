@@ -68,9 +68,9 @@ A window opening is not the slice; one playable scene is not the game.
 ## 3. How work runs under this plan
 
 - **DeepSeek Session and workers execute everything by default** (unlimited). A senior call
-  (Muse Spark Planner/Advisor/reviewer, GPT-6 Sol adjudicator) is made only at a gate a task names,
-  and each task states a **senior-call budget**; exceeding it stops the task for an Advisor
-  continue/stop decision.
+  (the Planner, Advisor and Acceptance reviewer of `docs/agent-workflow.md` §1) is made only at
+  a gate a task names, and each task states a **senior-call budget**; exceeding it stops the
+  task for an Advisor continue/stop decision.
 - **Three task classes.** *Chore* — owner-directed mechanical work (builds, syncs, regeneration,
   tooling, record fixes): no packet; recorded in the TR with commands and results; may not change
   admitted evidence semantics except behind a switch classified in `docs/jsrf-run-profiles.md`

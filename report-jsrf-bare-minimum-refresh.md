@@ -62,8 +62,8 @@ were approved at senior gates.
 ### 1.3 Execution and acceptance
 
 - 21 acceptance reviews covered 25 packets; 6 first-stage non-ACCEPTs, **none overturned on the
-  merits**; the second stage ran twice; the Sol adjudicator was never used. So removing the second
-  stage (workflow `e6397ed`) loses little measured value.
+  merits**; the second stage ran twice; the Sol adjudicator was never used (the role has since
+  been removed). So removing the second stage (workflow `e6397ed`) loses little measured value.
 - The costly failures were **false ACCEPTs and unqualified instruments**: the OOM slice was accepted
   on a false premise found 78 minutes later; named-producer-frame cited dump reads as exact against
   its own `CONTENT_MISMATCH` table; 7 of 10 A2h acceptances were edited after review, 2 of them
@@ -101,8 +101,11 @@ were approved at senior gates.
 - There is no class for owner-directed mechanical work, so every sync, regeneration and import ran
   outside the lifecycle or through a full packet.
 - Any unavailable route blocks accepted work, including work DeepSeek could do alone.
-- With the Planner, Advisor and reviewer all on Muse Spark since `e6397ed`, independence is procedural
-  only (separate handles); the Sol adjudicator is the only different family.
+- With the Planner, Advisor and reviewer all on Muse Spark since `e6397ed`, independence was procedural
+  only (separate handles). **Superseded the same day by owner staffing decisions:** the Advisor is now
+  Claude Opus 5.5 (a continuable child) and the final adjudicator role is removed, with
+  frozen-criterion interpretation disputes going to the Advisor; the Planner and reviewer stay Muse
+  Spark on separate handles.
 
 ### 1.6 What worked (kept)
 
