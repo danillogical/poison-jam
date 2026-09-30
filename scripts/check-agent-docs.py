@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CHECKER_VERSION = 'jsrf-agent-docs/2'
+CHECKER_VERSION = 'jsrf-agent-docs/3'
 
 AGENTS = 'AGENTS.md'
 WORKFLOW = 'docs/agent-workflow.md'
@@ -69,6 +69,17 @@ COMMAND_PATTERNS = (
 # Paths the documents name as *absent* on purpose; they are findings about the
 # repository, not instructions.
 KNOWN_ABSENT_OK = {'build-jsrf.ps1'}
+
+# A document may also *plan* a tool it has not written yet.  "`scripts/logq.py`
+# (planned)" is a deliverable, not an instruction to run something, and flagging
+# it would make adopting a plan that names its own future tools impossible
+# without writing them first.  The marker must be on the **same line**, so an
+# unmarked mention of the same path elsewhere still fails.
+PLANNED_MARKERS = (
+    'to be written', 'not yet written', 'to be built', 'not yet built',
+    'to be implemented', 'not yet implemented', 'to be added', 'planned',
+    'deliverable',
+)
 
 AUTHORITY_LINKS = (
     (AGENTS, WORKFLOW),
@@ -197,13 +208,18 @@ def check_retired_names_labelled() -> list[dict]:
 
 
 def check_command_paths() -> list[dict]:
-    """Every script/test path a document names must exist."""
+    """Every script/test path a document names must exist, unless it is planned."""
     findings: list[dict] = []
     for name in (AGENTS, WORKFLOW, PLAN, STARTUP_TEMPLATE):
         path = ROOT / name
         if not path.is_file():
             continue
-        for line_number, line in enumerate(read(path).split('\n'), start=1):
+        lines = read(path).split('\n')
+        for line_number, line in enumerate(lines, start=1):
+            # A tool the document is *planning* is a deliverable, not an
+            # instruction; see PLANNED_MARKERS.
+            if any(marker in line.casefold() for marker in PLANNED_MARKERS):
+                continue
             for pattern in COMMAND_PATTERNS:
                 for match in pattern.finditer(line):
                     filename = match.group(1)

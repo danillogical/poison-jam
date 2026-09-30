@@ -206,6 +206,28 @@ class CommandPathTests(CorpusMixin, unittest.TestCase):
         findings = self.audit()
         self.assertIn('broken_command_path', self.reasons(findings))
 
+    def test_planned_script_path_is_not_flagged(self):
+        """A plan may name a tool it has not written yet.
+
+        Measured need: adopting `plan-jsrf-bare-minimum.md` (2026-09-29) named
+        four Phase-1 deliverables (`scripts/logq.py`, `scripts/cite.py`, …) that
+        are planned work, not commands.  Treating a deliverable as a broken
+        instruction would make adopting a plan that names its own future tools
+        impossible without writing them first.
+        """
+        self.write('plan-jsrf-bare-minimum.md',
+                   PLAN_BODY + '\n| **T8** | `scripts/logq.py` (planned) loads lines | ok |\n')
+        findings = self.audit()
+        self.assertNotIn('broken_command_path', self.reasons(findings))
+
+    def test_planned_marker_does_not_excuse_an_unmarked_mention(self):
+        """The marker is per-line: the same path elsewhere still fails."""
+        self.write('plan-jsrf-bare-minimum.md',
+                   PLAN_BODY + '\n| **T8** | `scripts/logq.py` (planned) loads lines | ok |\n'
+                   '\nRun `scripts/logq.py` to check the counts.\n')
+        findings = self.audit()
+        self.assertIn('broken_command_path', self.reasons(findings))
+
 
 class AuthorityLinkTests(CorpusMixin, unittest.TestCase):
     def test_missing_authority_link_is_rejected(self):
