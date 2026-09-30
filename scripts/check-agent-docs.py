@@ -43,6 +43,7 @@ REQUIRED_RECIPES = (
     'qualify',
     'record-check',
     'route-check',
+    'ruling-check',
 )
 
 # The recipes a document must point at, and the document that must point at them.

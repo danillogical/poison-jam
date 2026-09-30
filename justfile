@@ -89,6 +89,10 @@ check:
     {{python}} -X utf8 scripts/check-override-drift.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Output "check: all checkers passed"
 
+# W6s ruling-ledger lint: a ruling must carry its four required facts.
+ruling-check:
+    {{python}} -X utf8 scripts/check-ruling-ledger.py
+
 # W8s allow-list coverage: every roster route must be selectable.
 route-check:
     {{python}} -X utf8 scripts/check-route-allowlist.py
