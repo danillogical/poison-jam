@@ -10,6 +10,21 @@ established facts. Where this plan proposes a change to one of them, it is a tas
 
 ---
 
+## Direction (owner decision, 2026-09-30): the bare minimum is pragmatic
+
+- **Take the path of least resistance to the title screen** (DoD-BOOT, M15), then to the rest of
+  the slice. The route is §13's **title-screen fast path**; it supersedes the ordering of Phase 3
+  until the title screen is reached.
+- **Every departure from running the original code on real hardware is recorded** in
+  `docs/jsrf-compatibility-ledger.md`, classed as reimplemented, translated, emulated, wrapped,
+  stubbed, patched, approximated or intentionally ignored. A shortcut is allowed; an unrecorded
+  shortcut is not.
+- **Exploratory runs may satisfy bare-minimum milestones** when the run's record lists the ledger IDs
+  it relied on (`docs/jsrf-run-profiles.md` §"Pragmatic bare minimum"). Strict runs remain available
+  as a diagnostic for fidelity questions.
+- **Fast-path steps run as chores** (W7), not packets: no Planner, adequacy review or acceptance
+  review per step. The Acceptance reviewer checks the milestone (M15) with its ledger IDs.
+
 ## 0. What changed from the current plan
 
 - **Built on the whole history**, not only the last packet: the original milestone ladder
@@ -43,16 +58,17 @@ after its adequacy review returns `ADEQUATE` (`docs/agent-workflow.md` §5).
 ## 1. Objective and definition of done
 
 Port JSRF to Windows by static recompilation. **Minimum playable slice** — all of the following,
-each under the **strict** profile unless the row says otherwise and the run-profile document admits
-it:
+under **any** run profile, provided every path the result relies on that is not *emulated* or
+*translated* is recorded in `docs/jsrf-compatibility-ledger.md` and the run's record lists those
+ledger IDs:
 
 | DoD | Criterion | Measured by |
 |---|---|---|
-| DoD-BOOT | Launch to the title screen with no synthetic-completion switch; the title frame is presented. | M15 |
+| DoD-BOOT | Launch to the title screen; the title frame is presented; every shortcut used is in the ledger. | M15 |
 | DoD-INPUT | A host controller drives menu navigation through the guest's own XAPI input path. | M16–M17 |
 | DoD-PLAY | New game loads the opening area; the player skates, turns, jumps and the camera follows. | M18–M21 |
 | DoD-GRAFFITI | One graffiti interaction completes and the game's own progression state records it. | M22 |
-| DoD-AUDIO | Sound effects and music are audible at the correct pitch through the modelled APU path. | M23–M24 |
+| DoD-AUDIO | Sound effects and music are audible at the correct pitch. | M23–M24 |
 | DoD-SAVE | Save, exit, restart and resume to the saved location/progression; a missing save is handled. | M25 |
 | DoD-STABLE | A 15-minute soak with no invalid indirect call, no ABI violation and bounded memory. | M26 |
 
@@ -81,8 +97,12 @@ A window opening is not the slice; one playable scene is not the game.
   admitted evidence semantics except behind a switch classified in `docs/jsrf-run-profiles.md`
   (pending W7, chores run as owner-directed changes, as the syncs and regeneration already did).
   *Discovery* and *change* — packets under `docs/agent-workflow.md` §5.
+- **Least resistance, recorded.** For each blocker, take the cheapest honest class: if emulating it
+  would take more than about a day, approximate, stub or patch it, add the ledger entry in the same
+  commit, and move on. Upgrade a path only when it blocks something.
 - **Acceptance criteria** name: profile · artifact path · oracle (independent of the
-  implementation) · PASS predicate · FAIL/UNKNOWN predicate. The rows in this plan give the profile,
+  implementation) · PASS predicate · FAIL/UNKNOWN predicate; for bare-minimum milestones the profile
+  may be exploratory, and the record lists its ledger IDs. The rows in this plan give the profile,
   artifact, oracle and PASS predicate; the packet that executes a row adds its FAIL/UNKNOWN rules and
   controls. A packet criterion without all five is not ready to freeze.
 - **Values in records come from tools**, never hand transcription, once T10 lands; until then a
@@ -266,6 +286,8 @@ silently breaking a record that cites it.
 ## 7. Phase 3 — critical path to boot (after V3)
 
 **C1 — Attribute the record-array write (discovery).** Replaces the specified A2h successor.
+**Pragmatic order (2026-09-30):** fast-path step F1 (a `[READ] dst=` check on an ordinary run) goes
+first; the TTD recording below runs only if F1 finds no file read landing on the table.
 **INSTRUMENT: TTD, RULED 2026-09-30.** The Advisor's §2.3 ruling is in
 `docs/reviews/rulings/ttd-query-decision-input.md` ("C1 instrument (2026-09-30)"):
 **W11 stands unchanged and TTD remains C1's instrument.** The Session's contrary
@@ -355,7 +377,8 @@ Accepted when: each implicated item has a `kmem_test` case that fails before and
 strict run shows the implicating symptom gone (`[KMEM] summary` counter or stop site named in the
 packet).
 
-**C3 — NV2A action methods (owner decision).** Evidence: toolkit
+**C3 — NV2A action methods — PARKED (2026-09-30).** The fast path renders through the executor
+(F4), which does not need them; revisit after the slice. Evidence: toolkit
 `docs/technical/nv2a-action-methods.md`. Before any run: recover `0x00193F70` (`SoftwareMethod`)
 and confirm JSRF's `DEBUG_3` value (bit 20). Then an exploratory run with `RECOMP_NV2A_ACTIONS=1`.
 An Advisor ruling is needed on criterion 4 for semaphore release (what "work" means for a
@@ -368,7 +391,9 @@ control on another traced function) records entered/not entered, and the decidin
 named from its disassembly; the faithful build is decided against the xemu oracle (T3) or recorded
 UNKNOWN.
 
-**C5 — Rendering architecture (Advisor shape preflight, then discovery).** Strict runs capture
+**C5 — Rendering architecture — DECIDED for the bare minimum (2026-09-30): the executor path.**
+`RECOMP_GPU_ACK` stays on (ledger L16) and `RECOMP_PB_EXEC` renders (L18); the strict-model back
+end below is post-slice work. Original design note: strict runs capture
 NV2A state but render nothing; the pr-b executor renders but only on the synthetic-ack path.
 Proposed target: the strict model's **committed** methods drive the pr-b render back end
 (`nv2a_backend.h`), so completion stays real and frames are produced. Discovery: which committed
@@ -394,7 +419,9 @@ dated list in the TR with a disposition per candidate.
 ## 8. Milestone ladder — bare-minimum slice (07–26)
 
 Rows 00–05 are done; 06a done; 06b ("implement reached imported kernel semantics") is closed into
-the fork fixes and re-opens only on a measured unbridged call. Profiles are strict unless stated.
+the fork fixes and re-opens only on a measured unbridged call. **Any profile is acceptable**; each
+acceptance record lists the ledger IDs its run relied on. SSIM and correlation thresholds are
+guidance for judging the frame or sound, not a strict gate.
 "xemu ref" means a T3 capture of the same checkpoint; without T3, the fallback oracle is named.
 
 | M | Milestone | Acceptance (artifact → PASS predicate) | Notes / upstream |
@@ -464,14 +491,55 @@ package. Each gets criteria in the same five-part form when it becomes next.
 - `MEASURED` = inspected source/artifact evidence with an identity/procedure; `INFERRED` = a
   hypothesis or expected consequence.
 - Missing, malformed, stale, unexercised or `CANNOT VERIFY` evidence is never PASS.
-- Only a verified strict run supports strict integration/boot/liveness/device claims; exploratory
-  and fixture evidence stays bounded to what it measured.
+- Bare-minimum milestones accept exploratory runs whose records list their ledger IDs; a claim about
+  *fidelity* (the port behaves as the hardware does) still needs a strict run, and exploratory or
+  fixture evidence stays bounded to what it measured.
 - A failed measurement cannot be converted to PASS by any role; a post-review change reopens the
   affected criterion.
 - Original assets and existing saves remain unchanged.
 - Pending W11: TTD query output as a lossless decision input. Pending W5/T10: tool-cited values only.
 
 ## 13. Next action
+
+### Title-screen fast path (owner direction, 2026-09-30) — supersedes the entries below
+
+Chores, run by the DeepSeek Session in order; each step adds or updates ledger entries in the same
+commit and one strict-horizon-ledger line per session. Stop and report only when a step's fallback
+list is exhausted.
+
+- **F0 — Unblock (decided, see below).** Ordinary runs gate at **15 GB** free (TTD recordings still
+  need about 50 GB; check with `just disk` first). No reclaim is needed for F1–F6.
+- **F1 — Find the table writer the cheap way.** One run (exploratory is fine),
+  `RECOMP_KERNEL_LOG_BUDGET=100000`, then list every `[READ] … dst=0x… got=N` line whose range
+  `[dst, dst+got)` intersects the thunk table `0x001C3F60..0x001C4140`; if none does, widen to
+  `0x001C2B20`, where index 0 would sit if the 40-byte-stride record array (index `0x79` at
+  `0x1C3E08`, TR §5) starts at index 0. A hit names the file, offset and caller: fix why that
+  buffer address is wrong. No hit → next cheapest in order: (a) the voice-processor DMA path
+  (ledger D2) with a log of VP writes below the image end; (b) a serialised-guest experiment (D4);
+  (c) the C1 TTD recording with `ttd -stop`.
+- **F2 — Fix the DMA_PUT bit-16 mask** (ledger D1) in the toolkit before rendering; correct
+  `docs/jsrf-kick-get-contract.md:60` (`0x100410` is `NV_PFB_WBC`).
+- **F3 — Iterate the stop.** For each new stop: disassemble past it, check upstream/forks
+  (Mercenaries-Recompiled included), then fix with the cheapest honest class and a ledger entry.
+  Fallbacks if the guest heap keeps failing: replace the XAPI heap routines (Mercenaries did this for
+  the same routine, `sub_001497DC`) — ledger class *reimplemented*.
+- **F4 — Frames.** Run with `RECOMP_GPU_ACK` on (default), `RECOMP_PB_EXEC=1`, `RECOMP_FB_WINDOW=1`
+  (ledger L16, L18). Missing draw forms or formats in the executor are fixed there.
+- **F5 — Intro movies.** If the Sofdec intros block, skip them (ledger: *patched* or *intentionally
+  ignored*); decoding them is post-slice (M29).
+- **F6 — Title screen (M15).** Acceptance: a frame dump of the title screen plus the run record with
+  its ledger IDs; compare by eye with an xemu screenshot of the same screen (T3). One Acceptance
+  review for the milestone.
+
+**Decisions taken with this direction (2026-09-30), each reversible by the owner:**
+- The disk floor for ordinary runs is 15 GB (`scripts/check-disk-gate.py`); a run measured a few GB.
+  TTD recordings keep the 50 GB expectation. Deleting old runs stays an owner decision and is not
+  needed now.
+- The strict-horizon ledger's scope is **from 2026-09-29 onward** (`just check` already passes
+  `--since 2026-09-29`); the 36 earlier runs are not backfilled.
+- C3 is parked and C5 is decided (executor) for the bare minimum, as recorded in §7.
+
+### Earlier entries
 
 1. **T14's free-space gate**, then **V1 → V2 → V3 → V4** on the Windows host (DeepSeek chores;
    0 senior calls); start the strict-horizon ledger (W14) with V3's result.

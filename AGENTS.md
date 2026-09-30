@@ -106,7 +106,11 @@ What a session actually needs:
 - **`scripts/check-override-drift.py`** fails when a document names an override the
   toolkit no longer reads, so this section cannot go stale again.
 
-Exploratory/fixture evidence cannot satisfy strict boot/audio/GPU/liveness criteria.
+**The bare minimum is pragmatic (owner, 2026-09-30).** Take the path of least resistance to the
+title screen; exploratory runs may satisfy bare-minimum milestones when every shortcut they rely on
+is in `docs/jsrf-compatibility-ledger.md` and the run record lists those ledger IDs
+(`docs/jsrf-run-profiles.md` §"Pragmatic bare minimum"). Exploratory/fixture evidence still cannot
+support a fidelity claim, and a shortcut without a ledger entry is not allowed.
 
 `diagnostic_deadline` means capture was bounded, not that the guest was live.
 `normal_exit` means the entry point returned, not that the title objective succeeded.

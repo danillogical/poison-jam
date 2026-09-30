@@ -119,7 +119,7 @@ def disk_state() -> dict:
         usage = shutil.disk_usage(str(ROOT))
     except OSError:
         return {'measured': False}
-    floor_gb = 50.0
+    floor_gb = 15.0   # the pre-run gate's default (scripts/check-disk-gate.py)
     return {
         'measured': True,
         'free_gb': round(usage.free / 1024 ** 3, 2),

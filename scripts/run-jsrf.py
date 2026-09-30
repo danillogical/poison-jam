@@ -211,7 +211,7 @@ def parse_args() -> argparse.Namespace:
                         help='evidence profile; defaults to strict for a guest run and fixture for --probe')
     parser.add_argument('--expect-checkpoint', action='append', dest='expect_checkpoint')
     parser.add_argument('--disk-floor-gb', type=float, default=None,
-                        help='free-space floor in GB; defaults to the gate default (50)')
+                        help='free-space floor in GB; defaults to the gate default (15)')
     parser.add_argument('--skip-disk-gate', action='store_true',
                         help='bypass the pre-run free-space gate; records the bypass in metadata')
     args = parser.parse_args()

@@ -296,6 +296,9 @@ only**:
 - For each mandatory criterion return `AGREED`, `DISAGREED`, or `CANNOT VERIFY`, with
   the reproducing command or `file:line` evidence. Reproduce load-bearing measurements;
   absence checks need a positive control. Try to falsify.
+- For a bare-minimum milestone, confirm every shortcut the run relied on (switches set,
+  stubs, patches, approximations) has an entry in `docs/jsrf-compatibility-ledger.md`
+  and is listed in the run record; a missing entry is `DISAGREED` for that criterion.
 - Overall disposition: `ACCEPT` only when every mandatory criterion is `AGREED`;
   otherwise `NOT ACCEPTED`, naming the blocking criteria.
 - An ambiguous criterion is `CANNOT VERIFY`, naming the ambiguity, never a private

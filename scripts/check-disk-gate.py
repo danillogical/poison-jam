@@ -37,7 +37,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # The floor is a *pre-run* budget: enough headroom for one archived run plus the
 # build tree it is launched from.  A run's own archive is dominated by the save
 # root and the collector dump, which have measured at a few GB on this host.
-DEFAULT_FLOOR_GB = 50.0
+# TTD recordings are far larger; check `just disk` for about 50 GB before one.
+DEFAULT_FLOOR_GB = 15.0
 
 _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 _GetCompressedFileSizeW = _kernel32.GetCompressedFileSizeW

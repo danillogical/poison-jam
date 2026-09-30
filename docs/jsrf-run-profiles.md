@@ -78,9 +78,28 @@ two are not comparable.
 ## Exploratory
 
 Any of the overrides below. Useful for reaching code that is otherwise
-unreachable, and for measuring what a subsystem asks for. **Never sufficient for
-boot, audio, GPU or liveness acceptance**, and a result obtained this way must say
-so in the same sentence that states it.
+unreachable, and for measuring what a subsystem asks for. **Never sufficient for a
+fidelity claim** (that the port behaves as the hardware does), and a result obtained
+this way must say so in the same sentence that states it. Bare-minimum milestones are
+the exception defined next.
+
+## Pragmatic bare minimum (owner decision, 2026-09-30)
+
+The bare minimum is pragmatic: the project takes the path of least resistance to the
+title screen and then the rest of the slice. For **bare-minimum milestones**
+(`plan-jsrf-bare-minimum.md` §1 and §8):
+
+- An **exploratory** run may satisfy the milestone, provided every path the result relies
+  on that is not *emulated* or *translated* — every synthetic-completion switch, stub,
+  patch or approximation — has an entry in `docs/jsrf-compatibility-ledger.md`, and the
+  run's record lists those ledger IDs. A path missing from the ledger blocks acceptance
+  until it is added.
+- The switch classification below is unchanged and still labels every run; it now says
+  what a run *used*, not whether the milestone may count it.
+- **Strict** runs remain the only evidence for fidelity claims and stay useful as a
+  diagnostic (a strict run isolates what the model does without shortcuts).
+- The admitted-models section still governs what may run unconditionally in the default
+  (switch-free) configuration.
 
 ## Override classification
 
