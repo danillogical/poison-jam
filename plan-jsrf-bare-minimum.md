@@ -494,11 +494,40 @@ W16; **W8's fallback half is owner-reserved**). `just check` runs ten checkers.
 Session's contrary conclusion was withdrawn because it rested on a trace truncated at
 its size cap.
 
-**The next action is a TTD recording that satisfies C-a** — a process-exit end, below
-`-maxFile` — then C-b…C-e in order, then promoting
-`docs/packets/c1-slot-write-attribution.md`. `just ttd-record` already sets the
-horizon-reachable environment and a 20 GB cap; the missing piece is a bound short
-enough that the recorder reaches the process's exit rather than its cap.
+**C1's conditions are now all measured, and they reduce to one recording problem.**
+
+| Condition | State | Evidence |
+|---|---|---|
+| C-a (process-exit end, below cap) | **achievable, but it excludes the horizon** | `--seconds 12` gave `Process exited … after 6797ms` at 240 MB — exiting `0xC0000409` **before** the horizon at ~7.3 s |
+| C-b (terminal in the trace) | **FAILS on every existing trace** | 58 recorded reads of slot 65, **0** of them zero (`docs/reviews/c1-slot-reads-in-trace.md`) |
+| C-c (mirror positive) | **MISSING** | a real store through a mirror VA is still required |
+| C-d (kernel-write control) | **MISSING**, now possible | the toolkit logs `dst=` (`xboxrecomp` `1572256`) |
+| C-e (census on an admitted trace) | blocked on C-a **and** the horizon | — |
+
+**The trade is measured, not assumed:** a bound short enough to end by process exit ends
+at 6.8 s with `0xC0000409`, before the horizon; a bound long enough to reach the horizon
+is capped before the process exits. **`ttd -stop` is the only path that satisfies both**,
+which S1 already anticipates — *"A trace ended by `ttd -stop` is out of scope unless the
+terminal position precedes the stop."* The trigger must be a signal from outside, not a
+timeout or a cap.
+
+**The Session is BLOCKED on the disk floor before it can take that step.**
+`scripts/check-disk-gate.py` reports **33.9 GB free against a 50 GB floor**, and T14 makes
+clearing it an **owner decision** (*"archive or delete the rest after owner approval of
+the policy"*). The reclaim plan reports 1,131 candidate runs holding 163 GB, of which the
+808 `test` runs alone are **111 GB** — more than twice the shortfall. **None was created
+by this session**; every run this session created is cited by a durable record and kept.
+
+**So the next action is an owner decision, not a Session step:** approve a reclaim of the
+archived `test` runs (or another subset), after which the Session can record the
+`ttd -stop` trace, evaluate C-b on it, and promote
+`docs/packets/c1-slot-write-attribution.md`.
+
+**A second owner decision is recorded** in `docs/reviews/ttd-recording-termination.md`:
+`check-horizon-ledger.py` without `--since` reports **36 pre-2026-09-29 runs** with no
+ledger row, while `just check` passes because it passes `--since 2026-09-29`. Either the
+ledger's scope is "from inception onward" and the bare invocation should say so, or the
+rule is retroactive and 36 rows need backfilling — a packet-sized job.
 
 Until a packet is promoted, packet implementation remains BLOCKED and the chores run
 as owner-directed work.
