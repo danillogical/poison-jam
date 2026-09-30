@@ -38,7 +38,7 @@ REQUIRED_RECIPES = (
     'build', 'test', 'ctest', 'regen', 'strict-run', 'explore-run', 'probe',
     'check', 'ttd-record', 'ttd-writes', 'doctor', 'analyze', 'disk',
     'secret-audit', 'symbols', 'logq', 'enumerate', 'cite-check', 'receipt',
-    'horizon-check',
+    'horizon-check', 'override-check', 'dump-controls',
 )
 
 # The recipes a document must point at, and the document that must point at them.

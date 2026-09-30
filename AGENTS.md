@@ -89,12 +89,24 @@ Inspect both working trees before editing. Toolkit instructions live in
 
 ### Run profiles
 
-`RECOMP_APU_DSP_ACK` and `RECOMP_AC97_READY` are synthetic completion.
-`RECOMP_GPU_ACK` is synthetic completion **when enabled**: it is enabled by default
-when absent and by every value except exact string `0`. A strict run therefore requires
-the caller to set `RECOMP_GPU_ACK=0` explicitly. Do not infer profile semantics from
-this summary; `docs/jsrf-run-profiles.md` is authoritative. Exploratory/fixture evidence
-cannot satisfy strict boot/audio/GPU/liveness criteria.
+**Do not enumerate the overrides here.** `docs/jsrf-run-profiles.md` is the single
+authority on override classification, and this file previously carried a summary
+that named two removed overrides (`RECOMP_APU_DSP_ACK`, `RECOMP_AC97_READY`) as
+live — the stale-duplication failure the plan records as W15. `AGENTS.md` is loaded
+automatically on a byte budget, so a second copy drifts silently.
+
+What a session actually needs:
+
+- **A strict run must set `RECOMP_GPU_ACK=0` explicitly.** That switch is synthetic
+  completion when enabled, and it is enabled by default when absent and by every
+  value except the exact string `0`. `just strict-run` and `just ttd-record` set it
+  for you; the runner refuses a strict request without it and never inserts it.
+- **Any synthetic-completion or bypass setting makes a run exploratory.** Which
+  names those are, and what each does, is the table in `docs/jsrf-run-profiles.md`.
+- **`scripts/check-override-drift.py`** fails when a document names an override the
+  toolkit no longer reads, so this section cannot go stale again.
+
+Exploratory/fixture evidence cannot satisfy strict boot/audio/GPU/liveness criteria.
 
 `diagnostic_deadline` means capture was bounded, not that the guest was live.
 `normal_exit` means the entry point returned, not that the title objective succeeded.
