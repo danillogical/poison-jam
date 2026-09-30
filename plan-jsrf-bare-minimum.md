@@ -177,6 +177,29 @@ Order: T14's pre-run gate, T6, T7, T4 first (they make every later step mechanic
 failure mode recurring), then T1, T2, T8, T9, T10, T11, T12, T13, T5; T3 whenever the owner
 provides the images. Senior calls: T1's admission ruling (W11) only.
 
+### Phase 1 status — 2026-09-30 session
+
+**T14, T6, T7, T4, T1, T2, T8, T9, T10, T11, T12, T13, T5 are DONE; T3 is DONE.** Each landed with
+its controls exercised, and the defects those controls found are recorded in the commits and in the
+tools themselves. Measured highlights, all reproducible from the named command:
+
+| Task | Evidence |
+|---|---|
+| T1 | `20260930-030513-184-c1-probe`: 29 aliases queried, install positive FOUND (`0xFE000104` to slot 65), mirror negative PASS, trace-live PASS. **Reopened and re-closed** against W11's S1–S8 — see §7 C1. |
+| T2 | 363 symbols (D3D8 163, DSOUND 137, XAPILIB 59, XGRAPHC 4); `XInputOpen` and `D3DDevice_SetRenderState_Simple` agree with the independent record. **`__aulldiv` is OUT_OF_SCOPE**, not failing: XbSymbolDatabase ships no CRT library. |
+| T3 | xemu's own config resolves all five assets; gdbstub reachable; guest `0x00011000` reads the recorded `.text` control byte-for-byte; `xemu-diff` MATCH against an archived recomp run; self-vs-self empty and a seeded byte found. |
+| T4 | `main` green; a deliberately failing test turned the **CTest** step red on a throwaway branch, which was then deleted. |
+| T5 | clang-cl 6358 diagnostics, MSVC `/analyze` 355; the `%lld`-with-`int` class reported by **both**; `implicit_declaration` reported by neither, with a seeded control proving the detector works and `/we4013` explaining the absence. |
+| T6 | 22 recipes; `check-agent-docs.py` fails on a missing recipe. |
+| T7 | A staged `game/` path, a planted token and a conflicted merge are all refused, each with a known-good case. |
+| T8 | 6488 kernel calls and 344 recovered returns match independent grep counts exactly. |
+| T9 | `PIO_FREE` = 28 sites (10 A1-moffs + 18 ModRM), vtable base = 3; both controls PASS. |
+| T10 | Seeded transposition `0x00193D62` flagged, known-good control clean. |
+| T11 | Default is `codex/gpt-6.1-sol` @ `high`, read back from the §1 roster by a control. |
+| T12 | `doctor.json` written per run; MSBuild's duplicate-case hazard and disk headroom reported. |
+| T13 | Generated receipt; regeneration preserves probe results. |
+| T14 | A launch below the floor is refused before any child starts; the retention plan is citation-aware and deletes nothing. |
+
 ## 6. Phase 2 — workflow changes (tasks; each edits the owning document and adds a check)
 
 Each row names the measured failure it answers (report §2) and is accepted when the document is
@@ -202,6 +225,22 @@ edited, `check-agent-docs.py` passes, and the named check exists with a failing 
 | **W16** | **Stage explicit paths only**; the Session never runs `git add -A` while another role may be writing; hashes are pinned only after the writer reports done | `git add -A` swept a Planner's in-progress draft twice (`141cb7e`); a hash pinned mid-write (`d82f388`); a lost ACCEPT record (`a90b8ab`) | pre-commit warns on staged draft packets not named in the commit message |
 
 Senior calls: W11 is one Advisor ruling; the rest are owner-approved document edits (0).
+
+### Phase 2 status — 2026-09-30 session
+
+**W1, W2, W11, W14, W15, W16 are DONE, each with its named check and controls.**
+**W8 remains OWNER-RESERVED**: it requires the owner to name one fallback route per senior role in
+§1, and no fallback model/provider may be invented (the generic receipt machinery that W8 also asks
+for is done, as T13). The remaining W rows are document edits whose checks now exist.
+
+| Row | Check that now exists |
+|---|---|
+| W1 | `scripts/check-review-recurrence.py` + 13 controls |
+| W2 | `scripts/qualify-premise.py` + 18 controls, `just qualify` |
+| W11 | `docs/jsrf-run-profiles.md` §"TTD trace query (W11)"; ruling ledger; T1 evaluates S1–S8 mechanically and exits nonzero |
+| W14 | `scripts/check-horizon-ledger.py` + 9 controls, `just horizon-check`, wired into `just check` |
+| W15 | `scripts/check-override-drift.py` + 9 controls, `just override-check`; the stale `AGENTS.md` text it found is fixed |
+| W16 | `scripts/precommit-repo-checks.py` draft-packet warning + 6 controls |
 
 ---
 
