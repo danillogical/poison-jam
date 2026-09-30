@@ -22,10 +22,11 @@ A previous session's child IDs or PASS results do not establish readiness.
    repository identities and dirty files. Nothing else selects work.
 2. **Verify routes.** Compare the running Session with its §1 row from harness
    metadata (record `UNKNOWN` if unverifiable). Resolve every other role live (§1).
-3. **Probe the Acceptance reviewer.** Open a fresh Muse handle at the listed effort.
-   PASS requires a completed response containing a fresh session token, one reason an
-   empty evidence set must fail acceptance, and the listed `reasoningEffort`. Dispatch
-   alone is not PASS. The probe handle is discarded; each review opens its own.
+3. **Probe the Acceptance reviewer.** Resolve its route live (§1) and spawn a fresh
+   child at the listed effort. PASS requires a completed response containing a fresh
+   session token, one reason an empty evidence set must fail acceptance, and the output
+   hash of one named read-only command it ran itself (reproduction is its job). Dispatch
+   alone is not PASS. The probe child is discarded; each review spawns its own.
 4. **Probe the Advisor (one combined probe).** Resolve its route live (§1) and spawn
    it as a fresh continuable child at the listed effort. In the first turn give it a
    unique marker and ask it to read one named repository file and report a fact
@@ -58,20 +59,20 @@ Exactly two harnesses are supported. Use only the assignments in the active colu
 | **Worker subagents** | `gpt-6-luna` @ `max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
 | **Planner** | `gpt-6-astra` @ `medium` | **Muse Spark 1.3** @ `high` (`skill: muse-worker`, fresh handle) |
 | **Persistent advisor** | `gpt-6-astra` @ `medium` | **Claude Opus 5.5** @ `high` (`route: LIVE_RESOLVE`, continuable child) |
-| **Acceptance reviewer** | `gpt-6-luna` @ `max` | **Muse Spark 1.3** @ `high` (`skill: muse-worker`, fresh handle per review) |
+| **Acceptance reviewer** | `gpt-6-luna` @ `max` | **GPT-6 Sol** @ `high` (`provider: codex`, `route: LIVE_RESOLVE`, fresh child per review) |
 
 Acceptance has **one review stage**. An `ACCEPT` is final; a rejection disputed only on
 how a frozen criterion reads goes to the Advisor (§2.2).
 
-**DSH independence.** The Planner and the Acceptance reviewer are both Muse Spark, so
-what keeps them independent is that each runs on its own handle: a reviewer handle never
-sees the packet's planning conversation. The Advisor is a different family (Claude).
+**DSH independence.** The Planner (Muse Spark), Advisor (Claude) and Acceptance reviewer
+(GPT-6 Sol) are three model families, and each runs in its own handle or child: a
+reviewer never sees the packet's planning or Advisor conversation.
 
-**Authority attaches to the role, not the model.** A Muse Spark Acceptance reviewer is
-a contract role and is bound exactly like any other Acceptance reviewer. A Muse Spark
+**Authority attaches to the role, not the model.** A GPT-6 Sol Acceptance reviewer is a
+contract role and is bound exactly like any other Acceptance reviewer. A Muse Spark
 Planner handle has Planner authority; the Advisor child has Advisor authority. One child
-or Muse handle holds one role: Planner and reviewer handles are separate, and a handle
-that reviewed a packet's acceptance does not also rule on a dispute about that review.
+or handle holds one role: a child that reviewed a packet's acceptance does not also rule
+on a dispute about that review.
 
 ### Live verification
 
@@ -83,12 +84,12 @@ that reviewed a packet's acceptance does not also rule on a dispute about that r
   Never invent an identifier from a display name.
 - The DSH Advisor resolves like any `LIVE_RESOLVE` row. The `claude` route was
   unusable from 2026-09-26; never assume it is back — a failed resolution is `BLOCKED`.
-- The DSH Muse Spark roles (Planner, Acceptance reviewer) are **not** resolved through
-  `list_subagent_models`; they are provided by the `muse-worker` skill. Read that skill
-  before first use. Each handle is opened fresh for its packet or review and recorded in
-  that packet's review record. Handles are workspace-bound. Every Muse turn must report
-  the `reasoningEffort` listed in the table; a different reported tier is `BLOCKED` for
-  that output. `.muse-workers.md` holds the former persistent Advisor handle, as history.
+- The DSH Muse Spark role (Planner) is **not** resolved through `list_subagent_models`;
+  it is provided by the `muse-worker` skill. Read that skill before first use. Each
+  handle is opened fresh for its packet and recorded in that packet's review record.
+  Handles are workspace-bound. Every Muse turn must report the `reasoningEffort` listed
+  in the table; a different reported tier is `BLOCKED` for that output.
+  `.muse-workers.md` holds the former persistent Advisor handle, as history.
 - Codex: verify route and effort through current harness metadata.
 - If a row omits effort, omit `reasoning_effort`.
 - An unavailable assignment is `BLOCKED`; never fall back silently.

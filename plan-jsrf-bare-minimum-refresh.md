@@ -149,7 +149,7 @@ A window opening is not the slice; one playable scene is not the game.
 | **T8** | **DuckDB log queries**: `scripts/logq.py` loads kernel/`[KMEM]`/`[ALIAS-ICALL]`/`[GMETER]`/`[ICALL]` lines into tables; saved queries under `tools/queries/` | reproduces a known count from an archived run (e.g. the 15,498 sampled bridge boundaries of A2h-null-slot-triage) |
 | **T9** | **Enumerator**: `scripts/enumerate-accesses.py` — operands normalised to `uint32`, recursive-descent from the entry and dispatch seeds, raw-byte fallback, each run printing its own known-answer controls | reproduces `PIO_FREE` = 28 sites (10 hex + 18 decimal spellings) and the vtable base = 3 references (TR §6) |
 | **T10** | **Citation tool + lint**: `scripts/cite.py` records value, artifact, command, hash; the memory reader prints both byte orders and an offset-shift control; a lint rejects hex literals in records that no cited output contains | the lint flags a seeded transposition (`0x00193D62` for `0x00193D96`, the recorded historical error) |
-| **T11** | **Muse review capture**: `record-review.py` accepts a saved Muse response (handle, turn, text, reported effort) and no longer defaults to the retired Hy4 route | records a sample Muse response with its hash; the existing DSH tests still pass |
+| **T11** | **Review capture**: `record-review.py` defaults to the current reviewer route (GPT-6 Sol child) instead of the retired Hy4 route | records a Sol child's review from its session log with its hash; the existing DSH tests still pass |
 | **T12** | **Doctor per run**: `tools/doctor.py --runtime-log` writes `doctor.json` into every archived run | present in the V3 runs |
 | **T13** | **Startup receipt generator**: fills `docs/session-start-template.md` from harness metadata and live route checks | a generated receipt passes `check-agent-docs.py` |
 | **T14** | **Run-log retention**: `scripts/logs-reclaim-plan.py` + `scripts/disk-usage.py` as a pre-run gate (refuse to launch below a free-space floor) and a retention policy: keep every run cited by the TR, the plan, a packet or a ruling, plus the last 20; archive or delete the rest **after owner approval of the policy** (deletion is an owner decision) | a launch below the floor is refused with a clear message; the policy lists how many runs/GB it would reclaim on the current host before anything is removed |
@@ -299,7 +299,7 @@ package. Each gets criteria in the same five-part form when it becomes next.
 | Game implicit declarations | → C6 |
 | Kernel memory open points | → C2 |
 | DSP provenance record (A4b2-NR instrumentation not listed) | kept; chore |
-| Review capture for Muse reviewers | → T11 |
+| Review capture (`record-review.py` default) | → T11 |
 | (new) Stale override text in `AGENTS.md`/run profiles; stale `RETIRED_NAMES` | → W15 |
 | (new) Run logs filling the disk (167 GB across 1,172 run directories on 09-28, `6a97c86`) | → T14 |
 

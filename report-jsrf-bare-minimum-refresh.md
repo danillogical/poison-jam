@@ -103,9 +103,10 @@ were approved at senior gates.
 - Any unavailable route blocks accepted work, including work DeepSeek could do alone.
 - With the Planner, Advisor and reviewer all on Muse Spark since `e6397ed`, independence was procedural
   only (separate handles). **Superseded the same day by owner staffing decisions:** the Advisor is now
-  Claude Opus 5.5 (a continuable child) and the final adjudicator role is removed, with
-  frozen-criterion interpretation disputes going to the Advisor; the Planner and reviewer stay Muse
-  Spark on separate handles.
+  Claude Opus 5.5 (a continuable child), the Acceptance reviewer is GPT-6 Sol @ high (a fresh DSH
+  child per review, which runs commands itself, so no separate reproducer), and the final adjudicator
+  role is removed, with frozen-criterion interpretation disputes going to the Advisor; the Planner
+  stays Muse Spark on fresh handles. The three senior roles are now three model families.
 
 ### 1.6 What worked (kept)
 

@@ -44,9 +44,9 @@ must be reported precisely; it is not permission to switch to a retired model.
 
 ## Acceptance reviewer probe — PASS / FAIL / UNKNOWN
 
-One review stage (workflow §1); probe it on a fresh Muse handle.
+One review stage (workflow §1); probe it on a fresh child that runs one read-only command.
 
-- Handle; fresh token; response reference; empty-evidence answer; reported effort; result:
+- Child ID; fresh token; response reference; empty-evidence answer; command and output hash; effort; result:
 - Exact error or missing evidence:
 
 ## Persistent advisor probe — PASS / FAIL / UNKNOWN
