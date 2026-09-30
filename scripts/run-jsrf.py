@@ -123,6 +123,32 @@ def archive_project_state(run_dir: Path) -> bool:
         return False
 
 
+def disk_gate(floor_gb: float | None) -> tuple[bool, dict]:
+    """Run the pre-run free-space gate (plan T14) and return (allowed, record).
+
+    The gate must fire before any child starts: a run that dies of a full disk
+    writes a truncated archive that reads like a guest hang.  A gate that cannot
+    measure refuses, so an unparseable result is never an authorization.
+    """
+    command = [sys.executable, '-X', 'utf8', str(ROOT / 'scripts' / 'check-disk-gate.py'),
+               '--json', '--quiet']
+    if floor_gb is not None:
+        command.extend(['--floor-gb', str(floor_gb)])
+    completed = subprocess.run(command, capture_output=True)
+    record: dict = {'exit_code': completed.returncode}
+    text = completed.stdout.decode('utf-8', 'replace').strip()
+    if text:
+        try:
+            record.update(json.loads(text))
+        except ValueError:
+            record['parse_error'] = text[:400]
+    if completed.returncode == 0:
+        return True, record
+    detail = completed.stderr.decode('utf-8', 'replace').strip()
+    record['detail'] = detail
+    return False, record
+
+
 def project_game_running(root: Path) -> bool:
     kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
     kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
@@ -176,6 +202,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--profile', choices=('strict', 'exploratory', 'fixture'),
                         help='evidence profile; defaults to strict for a guest run and fixture for --probe')
     parser.add_argument('--expect-checkpoint', action='append', dest='expect_checkpoint')
+    parser.add_argument('--disk-floor-gb', type=float, default=None,
+                        help='free-space floor in GB; defaults to the gate default (50)')
+    parser.add_argument('--skip-disk-gate', action='store_true',
+                        help='bypass the pre-run free-space gate; records the bypass in metadata')
     args = parser.parse_args()
     if not 1 <= args.seconds <= 300:
         parser.error('--seconds must be between 1 and 300')
@@ -243,6 +273,15 @@ def main() -> int:
     started = datetime.now()
     stamp = started.strftime('%Y%m%d-%H%M%S-') + f'{started.microsecond // 1000:03d}'
     run_dir = ROOT / 'logs' / 'runs' / f'{stamp}-{args.label}'
+    gate_record: dict = {'skipped': True, 'reason': '--skip-disk-gate'}
+    if not args.skip_disk_gate:
+        allowed, gate_record = disk_gate(args.disk_floor_gb)
+        if not allowed:
+            print('Refusing to launch: pre-run disk gate did not pass.', file=sys.stderr)
+            if gate_record.get('detail'):
+                print(gate_record['detail'], file=sys.stderr)
+            return 2
+        gate_record['skipped'] = False
     try:
         verify = subprocess.run([sys.executable, str(ROOT / 'scripts' / 'build-identity.py'), 'verify'])
         if verify.returncode != 0:
@@ -306,6 +345,7 @@ def main() -> int:
             'artifact_sha256': {name: digest(run_dir / name) for name in ARTIFACTS},
             'settings': effective_settings,
             'run_profile': profile_record,
+            'disk_gate': gate_record,
             'command': command,
             'repository_identities': {
                 'project': project_identity,

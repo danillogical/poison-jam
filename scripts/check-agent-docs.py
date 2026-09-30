@@ -28,6 +28,20 @@ AGENTS = 'AGENTS.md'
 WORKFLOW = 'docs/agent-workflow.md'
 PLAN = 'plan-jsrf-bare-minimum.md'
 STARTUP_TEMPLATE = 'docs/session-start-template.md'
+JUSTFILE = 'justfile'
+
+# Plan T6 fixes these recipe names: they are the mechanical spelling of the host
+# workflow, and a record cites `just <recipe>` instead of a drifting command line.
+# Renaming or deleting one silently breaks every record that cites it, so the
+# check is by name.  `check` and `doctor` are additionally the gate recipes.
+REQUIRED_RECIPES = (
+    'build', 'test', 'ctest', 'regen', 'strict-run', 'explore-run', 'probe',
+    'check', 'ttd-record', 'ttd-writes', 'doctor', 'analyze', 'disk',
+    'secret-audit', 'symbols', 'logq',
+)
+
+# The recipes a document must point at, and the document that must point at them.
+RECIPE_POINTER = (AGENTS, 'just build')
 
 AGENTS_BUDGET = 65536
 # The guide says "keep a conservative budget and retain headroom".  A file within
@@ -236,6 +250,58 @@ def check_command_paths() -> list[dict]:
     return findings
 
 
+def recipe_names(text: str) -> set[str]:
+    """Recipe names defined in a justfile, without running `just`.
+
+    A recipe line starts at column 0 with `name:` -- optionally followed by
+    parameters, some of which carry `=` defaults (`strict-run label="x":`).
+    Assignments and settings (`name := value`, `set shell := [...]`) are not
+    recipes, and neither are aliases, so each is excluded explicitly rather than
+    by hoping the pattern misses it.
+    """
+    names: set[str] = set()
+    for line in text.split('\n'):
+        if not line or line[0] in ' \t#':
+            continue
+        if ':=' in line:
+            continue
+        first = line.split(None, 1)[0]
+        if first in ('set', 'alias', 'export', 'import', 'mod', 'unexport'):
+            continue
+        match = re.match(r'^([A-Za-z_][\w-]*)(?:\s+[^:]*)?:', line)
+        if match:
+            names.add(match.group(1))
+    return names
+
+
+def check_just_recipes() -> list[dict]:
+    """Plan T6: every named recipe must exist, and AGENTS.md must point at them."""
+    findings: list[dict] = []
+    path = ROOT / JUSTFILE
+    if not path.is_file():
+        return [{'check': 'just_recipes', 'reason': 'missing_input',
+                 'detail': f'{JUSTFILE} is missing; plan T6 names it as the host workflow'}]
+
+    defined = recipe_names(read(path))
+    for recipe in REQUIRED_RECIPES:
+        if recipe not in defined:
+            findings.append({
+                'check': 'just_recipes', 'reason': 'missing_recipe',
+                'detail': f'{JUSTFILE} does not define the recipe {recipe!r}, which '
+                          f'plan T6 names as part of the host workflow',
+            })
+
+    source, pointer = RECIPE_POINTER
+    source_path = ROOT / source
+    if source_path.is_file() and pointer not in read(source_path):
+        findings.append({
+            'check': 'just_recipes', 'reason': 'docs_do_not_point_at_recipes',
+            'detail': f'{source} does not mention {pointer!r}; T6 requires the build '
+                      f'and run instructions to point at the just recipes',
+        })
+    return findings
+
+
 def check_authority_links() -> list[dict]:
     """The files that defer authority must name files that exist and own it."""
     findings: list[dict] = []
@@ -326,6 +392,7 @@ CHECKS = (
     ('roster_single_authority', check_roster_single_authority),
     ('retired_names', check_retired_names_labelled),
     ('command_paths', check_command_paths),
+    ('just_recipes', check_just_recipes),
     ('authority_links', check_authority_links),
     ('next_packet', check_next_packet_agreement),
 )

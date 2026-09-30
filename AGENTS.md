@@ -133,7 +133,23 @@ path.
 
 ## Build and run
 
-From the game root:
+**Prefer the `just` recipes** (plan T6); they are the supported spelling of each step, so
+a record can cite `just <recipe>` instead of a command line that drifts. `just --list`
+shows all of them.
+
+```powershell
+just build          # guarded Release build, identity-checked
+just test           # build, then the full CTest suite
+just ctest          # CTest only, against the current build
+just strict-run <label>   # strict-profile run; sets RECOMP_GPU_ACK=0 for you
+just explore-run <label>  # exploratory-profile run
+just probe <name> <label> # bounded fixture probe
+just check          # every repository checker
+just doctor         # host/run environment report
+just disk           # free-space gate and retention plan
+```
+
+The underlying commands, if a recipe is not usable:
 
 ```powershell
 python -X utf8 scripts\build-jsrf.py
@@ -142,6 +158,9 @@ python -X utf8 scripts\run-jsrf.py --seconds 5 --label smoke
 Get-Content .\jsrf_run.log -Tail 50
 python -X utf8 scripts\test-harness.py
 ```
+
+A strict launch needs `RECOMP_GPU_ACK=0` in the environment; the runner refuses a
+strict request without it and never inserts it. `just strict-run` sets it for you.
 
 Useful inspection:
 
