@@ -106,6 +106,24 @@ Exactly two harnesses are supported. Use only the assignments in the active colu
 | **Persistent advisor** | `gpt-6.1-astra` @ `medium` | **Claude Opus 5.5** @ `high` (`route: CONTINUABLE_PINNED`, session-continuable child) |
 | **Acceptance reviewer** | `gpt-6.1-luna` @ `max` | **GPT-6.1 Sol** @ `high` (`provider: codex`, `route: LIVE_RESOLVE`, fresh child per review) |
 
+**Fallback routes: NONE AUTHORISED.** Plan W8 asks the owner to name one fallback
+route per senior role. **No fallback is named**, and this is an owner-reserved
+decision (§3.4): a fallback is a staffing change, and no agent may choose one. Until
+the owner names them, an unavailable senior route is `BLOCKED` for work that needs
+it, and the session continues its pre-authorised chores and discovery execution --
+which is what W8 also asks for and what `docs/reviews/startup-current.md` records.
+
+When the owner does name them, they belong **here**, as a column or a row per role,
+because this table is the only persisted staffing policy. A fallback named anywhere
+else is not a policy; it is a suggestion, and the measured failure W8 answers is
+exactly that: "on 09-25 the owner-authorised fallback was missing from the allow-list
+and needed a new session".
+
+The session allow-list is `subagent-model-selection-settings.allowedModels` in the
+active DSH profile patch. It must contain every route named above **and** every
+fallback the owner authorises, or a fallback that exists in policy cannot be
+selected at the moment it is needed.
+
 Acceptance has **one review stage**. An `ACCEPT` is final; a rejection disputed only on
 how a frozen criterion reads goes to the Advisor (§2.2).
 

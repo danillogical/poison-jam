@@ -89,6 +89,10 @@ check:
     {{python}} -X utf8 scripts/check-override-drift.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Output "check: all checkers passed"
 
+# W8s allow-list coverage: every roster route must be selectable.
+route-check:
+    {{python}} -X utf8 scripts/check-route-allowlist.py
+
 # W4/W12s record-hygiene lint: run before a review.
 record-check:
     {{python}} -X utf8 scripts/check-record-hygiene.py
