@@ -192,3 +192,55 @@ the horizon was re-reproduced this session at game `5fc6348` / toolkit `4ec3eca`
 the earlier "the horizon may have moved" reading was refuted as a missing
 `RECOMP_APU_TRAP=1` in the launch environment
 (`docs/reviews/strict-horizon-ledger.md`).
+
+
+## MEASURED OUTCOME (2026-09-30 session)
+
+The experiments above were run. Full evidence:
+`docs/reviews/c1-terminal-slot-finding.md`. Summary against this packet's own outcome
+table:
+
+| Outcome | Measured? | Evidence |
+|---|---|---|
+| `O-GUEST-FILL` | **YES, in part** | 480 byte-at-a-time fills from `VCRUNTIME140!memset_repstos` write the whole table at position 4005; the install loop then writes all 120 slots. But **nothing writes the table after the install**, so the fill does not explain the guest's `0`. |
+| `O-ALIAS` | **NO — excluded** | all 28 mirror aliases of the table's range queried: zero writes. This also supplies W11's missing W-c control. |
+| `O-HOST` | no | the install loop is the toolkit, and it is the last writer; it is not the source of the `0`. |
+| `O-DATA-CALL` | **consistent with the data** | the table holds the 40-byte-stride record array TR §5 describes, confirmed from a non-TTD source. |
+| `O-UNATTRIBUTED` | **YES — this is the measured state** | the guest read `0`; the trace's last write was the install; no alias was written; no kernel write is visible. |
+| `O-READ-PATH` | not selected | the value at P is not zero in the trace's record, so this row does not apply as written. |
+
+### The row this packet did not anticipate, and it is the finding
+
+**TTD cannot see the class of write that most plausibly produced the `0`.** Measured:
+400,000 writes scanned across the low 4 GB, **zero** originate outside
+`jsrf_recomp.exe` and `VCRUNTIME140` — so kernel-mode writes are invisible to the
+query. W11's exclusion (d) is therefore **confirmed rather than suspected**, and the
+trace's own log shows 14 `[READ]` lines where `NtReadFile` delivered 512–28,672 bytes
+into guest buffers with none of those bytes appearing as a write.
+
+**So C1's question splits**, and the packet's remaining work is:
+
+1. **Is the `0` a memory value at all?** The guest's `[ICALL] invalid target
+   0x00000000` may be the dispatch reading an uninitialised register rather than a
+   slot. A **non-TTD capture at the stop** answers this directly, and one already
+   exists: `logs/runs/20260930-053722-314-v3-repro-check/process.dmp` reached the
+   horizon in 7.3 s. Its slot 65 reads `0x00000000`, agreeing with the guest — so
+   **the `0` is real**, and this sub-question is answered.
+2. **Which code writes the record array?** TTD is the wrong instrument if the writer
+   is not an instruction store. **This is now the packet's whole remaining question**,
+   and its instrument choice is with the Advisor under §2.3.
+
+### Status of this packet
+
+**Draft, and NOT ready to promote as written.** Its instrument premise — that a TTD
+trace can answer "which code writes this slot" — is **measured to fail for one
+plausible writer class**. The packet needs either:
+
+- an instrument that can see a non-instruction-store write, named as a requirement; or
+- a demonstration that the writer **is** an instruction store, which the write census
+  has not produced.
+
+**Promoting it unchanged would violate §5.3's premise-freshness rule**, because the
+premise it rests on has been measured false for part of its scope. That is recorded
+here rather than repaired by the Session, because the instrument choice is a §2.3
+Advisor question.
