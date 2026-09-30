@@ -69,9 +69,20 @@ CATALOG_MARKERS = (
     'advertis', 'does not serve', 'catalog', 'list_subagent_models', 'serves up to',
     'does not advertise',
 )
+# Routes this project no longer assigns. A document may name one only where the
+# surrounding text marks it as history.
+#
+# Plan W15 asks for `kimi-k3`, `claude-opus-5-5` and `hy4-preview-f` to be added.
+# **That list is partly stale and was corrected against the current §1 roster
+# rather than copied**: `claude-opus-5-5` is the *current* Persistent Advisor
+# (`docs/agent-workflow.md` §1), so listing it as retired would make this checker
+# flag the workflow's own roster row. The two that are genuinely retired as
+# assignments -- `hy4-preview-f` (T11's subject: `record-review.py` defaulted to
+# it) and `kimi-k3` -- are added. Both are still *served* by the provider, which
+# is exactly why a stale document can name one without looking wrong.
 RETIRED_NAMES = (
     'gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.5', 'grok-cli',
-    'hy3', 'glm-5.3',
+    'hy3', 'hy4-preview-f', 'kimi-k3', 'glm-5.3',
 )
 
 # Commands the documents tell a session to run.  A path that does not exist is a
