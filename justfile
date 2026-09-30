@@ -155,8 +155,8 @@ horizon-check:
 #
 # The trace cap is raised because the default 8 GB was reached EXACTLY, which fails
 # W11's S1 (the tail may be dropped).
-ttd-record label="ttd":
-    $env:RECOMP_GPU_ACK = "0"; $env:RECOMP_APU_TRAP = "1"; $env:RECOMP_KERNEL_LOG_BUDGET = "100000"; {{python}} -X utf8 tools/ttd/ttd-record.py --label {{label}} --max-file-mb 20480
+ttd-record label="ttd" seconds="20":
+    $env:RECOMP_GPU_ACK = "0"; $env:RECOMP_APU_TRAP = "1"; $env:RECOMP_KERNEL_LOG_BUDGET = "100000"; {{python}} -X utf8 tools/ttd/ttd-record.py --label {{label}} --seconds {{seconds}} --max-file-mb 20480
 
 # Find the terminal position P and the value at P (W11 witnesses W-a/W-b).
 ttd-terminal trace *args:

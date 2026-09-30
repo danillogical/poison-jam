@@ -212,7 +212,17 @@ def main() -> int:
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         creationflags=CREATE_NO_WINDOW if os.name == 'nt' else 0)
     try:
-        output, _ = process.communicate(timeout=args.seconds + 90)
+        # **The timeout must outlast the PROCESS, not the requested bound.** Measured:
+        # `--seconds 20` gave `20 + 90 = 110s`, and the recorder was killed at 109.578s
+        # with "Recording stopped" while its trace was only 20252 MB against a 20480 MB
+        # cap -- so the wrapper, not the cap, ended it, and C-a could never be satisfied
+        # through this path. The guest's own horizon is what decides when the run ends,
+        # and it is not a function of `--seconds`.
+        #
+        # The allowance is therefore proportional to the bound with a floor, so a
+        # caller asking for a long run gets a proportionally long grace.
+        grace = max(300, args.seconds * 10)
+        output, _ = process.communicate(timeout=args.seconds + grace)
         timed_out = False
     except subprocess.TimeoutExpired:
         # `-stop` is TTD's own control path: it ends the recording and lets the
@@ -230,6 +240,7 @@ def main() -> int:
     runs = sorted(trace_dir.glob('*.run'))
     total_mb = sum(p.stat().st_size for p in runs) / 1024 / 1024
     contract['timed_out'] = timed_out
+    contract['wrapper_grace_seconds'] = grace if 'grace' in dir() else None
     contract['ttd_exit_code'] = process.returncode
 
     # **How the recording ended decides whether the trace has a tail at all.**
