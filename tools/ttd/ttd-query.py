@@ -48,6 +48,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'tools' / 'ttd'))
 
 from aliases import aliases, host_base_from_log, ram_size_from_log  # noqa: E402
+from ttd_query_helpers import resolve_cdb  # noqa: E402
 
 JS = ROOT / 'tools' / 'ttd' / 'writes.js'
 THUNK_TABLE_BASE = 0x001C3F60
@@ -113,20 +114,6 @@ def cdb_version(cdb: str) -> str | None:
         if 'Windows Debugger Version' in line:
             return line.strip()
     return text.strip().splitlines()[0] if text.strip() else None
-
-
-def resolve_cdb() -> str | None:
-    found = shutil.which('cdb') or shutil.which('cdb.exe')
-    if found:
-        return found
-    roots = [Path(r'C:\Program Files\WindowsApps'),
-             Path(r'C:\Program Files (x86)\Windows Kits\10\Debuggers')]
-    for root in roots:
-        if not root.is_dir():
-            continue
-        for candidate in root.glob('**/cdb.exe'):
-            return str(candidate)
-    return None
 
 
 def run_query(cdb: str, trace: Path, alias_list: list[int],

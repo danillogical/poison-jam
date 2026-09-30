@@ -158,6 +158,10 @@ horizon-check:
 ttd-record label="ttd":
     $env:RECOMP_GPU_ACK = "0"; $env:RECOMP_APU_TRAP = "1"; $env:RECOMP_KERNEL_LOG_BUDGET = "100000"; {{python}} -X utf8 tools/ttd/ttd-record.py --label {{label}} --max-file-mb 20480
 
+# Find the terminal position P and the value at P (W11 witnesses W-a/W-b).
+ttd-terminal trace *args:
+    {{python}} -X utf8 tools/ttd/ttd-terminal.py "{{trace}}" {{args}}
+
 # Query a TTD trace for writes to a guest VA across all 29 aliases (T1).
 # Add --terminal-sequence / --value-at-p to supply W11's position P and enable the
 # full admission verdict. The command exits nonzero when a W11 condition fails.
