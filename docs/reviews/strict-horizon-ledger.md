@@ -18,6 +18,14 @@ Rules this ledger follows:
 | 2026-09-29 | `44becd4` | `2a349c8` | `20260929-231110-868-rebaseline-strict` | Kernel thunk table `0x001C3F60..0x001C413F` overwritten by a 40-byte-stride record array; first thunk call after it faults | `0x00147D36` (tid 63012) | 06:11:16.686 |
 | 2026-09-29 | `44becd4` | `2a349c8` | `20260929-231211-023-rebaseline-gmeter` | same | `0x0014982E` (tid 46508) | 06:12:16.688 |
 | 2026-09-30 | `5776aab` | `2a349c8` | `20260930-001405-390-v1-verified-strict` | same (kernel thunk table overwritten); re-verified on the binary built this session from the same revision pair | `0x0014982E` (tid 64532) | 07:14:15.588 |
+| 2026-09-30 | `5fc6348` | `4ec3eca` | `20260930-034938-427-ttd-exit-control` | **NOT REACHED** — `diagnostic_deadline` at 11.98 s with **0 invalid ICALLs**; the guest was still live (1002 kernel calls, 6 threads, 0 `[UNIMPL]`, 0 exceptions, the same 10 data exports) | none | 10:49:50.4 |
+
+**The 2026-09-30 row is a strict run that did not reach the horizon, and it is recorded as
+such.** It is the discriminating control for the TTD question: the same environment
+(`RECOMP_GPU_ACK=0` only) that exits `0xC0000409` under TTD recording runs to its deadline
+without it. Reading it as a horizon *move* would be exactly the error this ledger exists to
+prevent — the horizon is an event, and no thunk call faulted here. What it establishes is the
+comparison, not progress.
 
 ## Prior horizon (superseded 2026-09-29)
 
@@ -35,10 +43,15 @@ The old address `0x00149828` still fires in 3 of the 6 strict runs taken that se
 
 | First stop site | Count | Runs |
 |---|---|---|
-| `0x0014982E` (slot 65) | 3 | V3(c), r2, r4 |
+| `0x0014982E` (slot 65) | 3 | V3(c), `20260929-231451-253-rebaseline-strict-r2`, `20260929-231501-792-rebaseline-strict-r4` |
 | `0x00147D36` (slot 68) | 1 | V3(a) |
-| `0x00147DE2` (slot 71) | 1 | repeat |
-| `0x00147DBC` (slot 70) | 1 | r3 |
+| `0x00147DE2` (slot 71) | 1 | `20260929-231423-047-rebaseline-strict-repeat` |
+| `0x00147DBC` (slot 70) | 1 | `20260929-231456-503-rebaseline-strict-r3` |
 
 This spread is the race, not four horizons: every site is a call through a slot of the one overwritten
 table.
+
+**Every run in the table above is named by its full directory name**, so a reader can re-derive its
+row from `logs/runs/<name>/` without guessing which file "r3" meant. `scripts/check-horizon-ledger.py`
+(W14) enforces that: it fails when an archived STRICT run has no ledger line naming it, which is how
+these four were found cited only by suffix.

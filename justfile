@@ -79,7 +79,12 @@ check:
     {{python}} -X utf8 scripts/check-generation-provenance.py --check; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-disk-gate.py --quiet; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-dump-controls.py; if ($LASTEXITCODE -ne 0) { exit 1 }
+    {{python}} -X utf8 scripts/check-horizon-ledger.py --since 2026-09-29; if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Output "check: all checkers passed"
+
+# W14's ledger lint: a strict run with no ledger line fails.
+horizon-check:
+    {{python}} -X utf8 scripts/check-horizon-ledger.py --since 2026-09-29
 
 # Record one strict run under WinDbg TTD (T1). Sets RECOMP_GPU_ACK=0 for you,
 # exactly as `just strict-run` does: the profile contract puts the strict setting
