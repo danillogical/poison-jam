@@ -206,3 +206,58 @@ It does **not** name the mechanism by which recording changes behaviour. It does
 show the non-TTD run would have reached the horizon either: that run hit its own
 deadline at 25 s with 0 invalid ICALLs, so it stopped for the collector's reason
 rather than at a fault. A longer non-TTD run is the next bounded step.
+
+## Two further results, and one correction to the analysis above
+
+### The VEH-window hypothesis is REFUTED
+
+The analysis above proposed that the guest faults on `mov eax,[ecx]` with
+`ecx = 0xFD100214` because that address is **outside** the NV2A window the game's VEH
+handles (`src/main.c:307`). **That is wrong**, and the arithmetic is trivial:
+
+```
+VEH window : 0xFD000000 .. 0xFE000000
+address    : 0xFD100214
+=> INSIDE
+```
+
+`0xFD100214` is comfortably inside the window, so the VEH would have handled the
+fault rather than letting it propagate. The `[EXCEPTION first-chance]` line the
+analysis predicted is therefore not expected either -- and indeed neither the TTD log
+nor the non-TTD run contains **any** `[EXCEPTION` line (0 in both).
+
+Recorded because the hypothesis was written down and would otherwise be inherited:
+it was a plausible-looking address-range argument that one subtraction refutes. That
+is the class of error this project's W2 premise gate exists to catch, and it is
+exactly why a claim of the form "X is outside window Y" should carry the comparison
+rather than the conclusion.
+
+### A 90-second non-TTD run still does not reach the horizon
+
+**MEASURED** on `logs/runs/20260930-053502-372-nonttd-90s` (same binary, same
+environment, `RECOMP_GPU_ACK=0`, no TTD):
+
+| | value |
+|---|---|
+| bound | 90 s (actual 93.9 s) |
+| outcome | `diagnostic_deadline`, exit 3 |
+| log lines | 4031 |
+| invalid ICALLs | **0** |
+| `ABI FAILURE` | 0 |
+| `[EXCEPTION` | 0 |
+| `[UNIMPL]` | 0 |
+| kernel calls | 1002 total across 6 threads |
+
+**This matters for C1's framing.** The strict horizon -- the thunk table being
+overwritten, after which the next thunk call faults -- is **not reached in 90 seconds
+of untraced execution**, whereas the earlier ledger runs reached it in roughly 5 to
+8 seconds. The guest is now much further along, which is consistent with the fork
+fixes (`db96e30..2a349c8`) and the V1 rebuild having moved real behaviour, and it
+means the horizon framing itself deserves a fresh qualification rather than being
+inherited from the 2026-09-29 runs.
+
+**What this does not establish**: whether the horizon is *gone* or merely *later*.
+Both 90 s and the 20 s control end at the collector's deadline, so they show the
+guest was still running, not that it would never fault. A longer bound, or a run that
+ends for a guest reason, would decide it. That is the successor packet's question and
+it is bounded.
