@@ -89,6 +89,14 @@ check:
     {{python}} -X utf8 scripts/check-override-drift.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Output "check: all checkers passed"
 
+# W9s control-first gate: would a new instrumented run be allowed?
+instrument-check instrument="":
+    {{python}} -X utf8 scripts/check-instrument-controls.py check {{instrument}}
+
+# W9: record an instrumented run and check its positive control fired.
+instrument-record instrument control address log:
+    {{python}} -X utf8 scripts/check-instrument-controls.py record --instrument {{instrument}} --control {{control}} --address {{address}} --log {{log}}
+
 # W5s transcribed-value re-check: a table row nobody re-checked.
 transcribed-check:
     {{python}} -X utf8 scripts/check-transcribed-values.py

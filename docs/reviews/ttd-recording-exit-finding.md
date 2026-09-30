@@ -86,40 +86,96 @@ only spins. cdb showed it because **TTD reports the last-scheduled thread at the
 trace tail, not the faulting one.** Recorded because the wrong reading was written
 down first and would otherwise be inherited.
 
-## Ranked candidates
+## The experiment, and its result: BOTH candidates refuted
 
-1. **INFERRED** (locus **MEASURED**): TTD's `TTDRecordCPU` emulation perturbs the
-   guest thread inside the recovered GPU/PLL setup path
-   (`body_00196967`, guest `0x00196967–0x00196A65`), driving it into a `__fastfail`.
-   Both traces stop at the same instruction, so it is deterministic.
-2. **INFERRED**: TTD raises the fastfail on the guest's behalf (an unsupported
-   instruction or a recorder-internal inconsistency) and attributes the exit code to
-   the guest. Not yet separated from 1.
-3. **MEASURED-EXCLUDED**: the recovered-code ABI `abort()` assertions in
-   `src/recomp/recovered/recovered.c`.
+The discriminating experiment was run against the existing trace. It refuted both
+candidates this record originally ranked, and it moved the question.
 
-## The one cheapest discriminating experiment
+### The mechanism is the static CRT's `abort()`, proven WITHOUT TTD
 
-No new recording is needed — walk thread 0 inside the existing trace:
+`logs/runs/20260922-190336-778-a2f-7e255-span/process.dmp` is a **non-TTD collector
+minidump** carrying the identical exit code. `cdb -z <dmp>` -> `.exr -1`, `k`:
 
 ```
-cdb -z logs\ttd\20260930-035010-033-c1-repeat\jsrf_recomp01.run -cf <script>
-  !tt 100
-  dx -g @$cursession.TTD.Calls("jsrf_recomp!body_00196967")   # note TimeStart
-  !tt <TimeStart>
-  ~0s
-  p                                                          # step to the fault
+ExceptionAddress: 00007ffa6e78527e (ucrtbase!abort+0x4e)
+   ExceptionCode: c0000409   Parameter[0]: 0000000000000007
+                              Subcode: 0x7 FAST_FAIL_FATAL_APP_EXIT
+ucrtbase!abort+0x4e:  cd29   int 29h
+   ...  jsrf_recomp!sub_000304F0+0x19b     <- recovered.c ABI-check wrapper
+   ...  jsrf_recomp!body_00025310+0x169
 ```
 
-It separates candidate 1 (the guest executes into a failfast) from candidate 2 (TTD
-raises it). Script files must live outside the repository.
+That run's log ends `[RECOVERED] ABI FAILURE 0x000304F0 ...`, which **this record
+verified independently**. Two further non-TTD runs corroborate (`0x00048190`,
+`0x00168480`). **The guest-emitted failfast is real and is proven without TTD**, so
+the "TTD raises it on the guest's behalf" candidate is refuted as the mechanism.
+
+### But it is NOT emitted at this trace's death PC
+
+- `s -b jsrf_recomp!body_00196967 L600 cd 29` -> **no match**; the same for
+  `sub_00196967 L200`. Only 16 `int 29h` sites exist in the image, all in static-CRT
+  failfast stubs or unrelated recovered bodies; the nearest is `0x3DDDA` bytes away.
+- The TTD run's `jsrf_run.log` contains **zero `ABI FAILURE` lines** and never
+  mentions `0x00196967` -- **verified in this record**. Its last line is
+  `[RECOVERED] 0x00196800 returned; ABI verified`.
+- `dx -g @$cursession.TTD.Calls("ucrtbase!abort*")` -> **empty**: no `abort` call
+  anywhere in this trace.
+
+So the "the guest executes into a failfast in `body_00196967`" candidate is **also
+refuted**. The `abort()` mechanism is real and repeatedly observed, but at *other*
+PCs in older runs, not at `0x00196A29`.
+
+### The guest instruction at `0x00196A29` never executed
+
+Stepping the trace (`~0s`, `p`) reaches `TTD: End of trace reached` at position
+`99CF6:0`. The last recorded event on thread 0 is the **not-yet-executed**
+`mov eax,[r15+r10]` at `99CF5:0`. The guest PC `0x00196A29` is the lifter's *next*
+guest instruction: **TTD stopped the guest before it ran.**
+
+Stepping back from there lands in `ntdll!NtContinue` <- `ntdll!RtlCaptureContext2`
+-- a **context-restore trampoline**, not a guest call chain. The "guest stack" this
+record first reported is therefore not a call chain at all. That is the second
+correction to the first reading.
+
+### What remains unexplained, and it points at the recorder
+
+Two facts are unexplained together:
+
+1. Thread 0 is parked in a context-restore trampoline, never a normal guest path.
+2. **Every** `int 29h` site is absent from the trace and no `abort` was recorded --
+   yet `ucrtbase!abort+0x4e` was already fully resident in the trace process (same
+   DLL base, same address as the non-TTD dump).
+
+The natural explanation is a **memory fault on the instruction after `0x00196A29`**:
+`mov eax,[ecx]` with `ecx = 0xFD100214` (`edi + 0x100214`), which is **outside the
+NV2A window the game's own VEH handles** (`src/main.c:307`). The VEH would have
+logged an `[EXCEPTION first-chance]` line, and **that line is absent too**.
+
+Confirming it needs a **non-TTD capture at this stop**, which does not exist: the two
+TTD traces are the only evidence for `0x00196A29`.
+
+### Ruled out along the way
+
+**CFG is inert**: `GuardFlags = 0x100` (CF_INSTRUMENTED only, no
+`CF_FUNCTION_TABLE_PRESENT`), `GuardCFCheckFunctionPointer` -> `_guard_check_icall_nop`
+(`ret 0`), dispatch -> `jmp rax`. **GS/range-check and CastGuard**: every query
+empty; `__security_check_cookie` ran three times and returned normally.
+
+## The next bounded step
+
+A **non-TTD strict run** long enough to reach the `0x00196A29` region, with the
+collector's own minidump as the artifact -- the collector already produces one, and
+the `abort()` mechanism above was proven from exactly that artifact. If the run stops
+at `0x00196A29`, the minidump names the emitter directly. If it does **not** stop
+there, the TTD recording is changing the guest's behaviour, and *that* becomes the
+finding.
 
 ## What this does not establish
 
 - It does **not** show the recompiled guest is correct: the control run reached its
   deadline with **0 invalid ICALLs**, so it did not reach the horizon either. Neither
   run exhibits the terminal event.
-- It does **not** name the cause of the failfast. It locates it to one instruction
-  and excludes every symbolicated abort path.
+- It does **not** name the emitter for *this* trace. It refutes both earlier
+  candidates and narrows the question to one instruction and one window check.
 - A TTD trace is not an archived strict run (W11's S8), and nothing here changes
   that.
