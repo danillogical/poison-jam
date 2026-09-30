@@ -113,9 +113,18 @@ A window opening is not the slice; one playable scene is not the game.
 - Do: the TR §2 command, unchanged inputs; if MSVC runs out of memory, `--split 250` (upstream's
   recommendation for 15 GB hosts). Re-apply `relift-selected.py boundaries`, the ABI deltas, the
   A4b2 hooks; re-record provenance (`check-generation-provenance.py --write`).
-- PASS: build + ctest pass; the generator's `FLAGS:` report lists ≤ 9 leftover `_flags` reads, each
-  named; function count and dispatch count recorded against 5740 / 8928; provenance `--check` ok.
-  FAIL: more `FLAGS:` sites than 9, or any new `[UNIMPL]` reached in V3.
+- PASS: build + ctest pass; the generator's `FLAGS:` report names exactly the 10 known leftover
+  `_flags` reads — 5 `state: none` (4 that read flags live into the function, plus the `loope` at
+  `sub_0010634E`) and 5 `adc cannot answer` — and **no site outside the pre-regeneration set**, checked
+  by diffing the listed sites against `HEAD`'s `gen/`; the 8 sites `ca4257c` called live bugs read no
+  fallback; function count and dispatch count recorded against 5740 / 8928; provenance `--check` ok.
+  FAIL: any listed `FLAGS:` site that is not in that set, or any new `[UNIMPL]` reached in V3.
+- *Corrected 2026-09-29 (Advisor ruling, Phase 0 V2).* The criterion previously read "≤ 9", taken from
+  toolkit `ca4257c`'s census. That census counted **jcc-form sites only** (17 sites, 8 fixed, 9 left),
+  while the generator's `flag_gaps()` also counts LOOPE/LOOPNE, SETcc and CMOVcc preloads. The two
+  numbers were never comparable, so "≤ 9" was unsatisfiable-by-construction rather than a defect: the
+  tenth site is a `loope` byte-identical to the pre-regeneration tree. The criterion is now tied to
+  **named sites**, not to a count taken under a different scope.
 
 **V3 — Re-baseline the strict horizon.**
 - Do: (a) strict run `RECOMP_GPU_ACK=0 RECOMP_APU_TRAP=1`, log budget 100000, label

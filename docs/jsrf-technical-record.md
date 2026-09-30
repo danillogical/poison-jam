@@ -97,6 +97,41 @@ Set Radio Future" --manual-functions config/manual-functions.json --exclude-manu
   ten callers decides differently; main-thread critical-section pairs drop by ~160. Which build is
   faithful is not established. Rollback point: game `0f7ef9c`.
 
+### Phase 0 re-baseline on Windows (owner-directed chores, 2026-09-29)
+
+Plan §4 V1–V4, run on the Windows host at game `a62b5ce`→`44becd4`, toolkit `2a349c8`. This is the first
+time the fork fixes `db96e30..2a349c8` were built and run on Windows.
+
+**V1 — build and test.** `scripts/build-jsrf.py` exit 0. Game `ctest`: **26/26 passed**, including the
+toolkit's `xbox_kmem`, `xbox_guest_meter` and `nv2a_actions`. Standalone toolkit projects, both built
+with the host's generator (**Visual Studio 18 2026** — the host has no VS 2022, so a `Visual Studio 17
+2022` configure fails; this is an environment fact, not a code defect): `tests/kernel_data_exports`
+**5/5** and `tests/kernel_file_status` **5/5**, each including the same three toolkit tests.
+
+**V2 — regeneration.** 5740/8928 functions (0 failed), 653342 lines of C; 7 unresolved targets stubbed;
+23 unimplemented instructions (17 mnemonics); `recomp_funcs.h` and `recomp_stubs_unresolved.c`
+byte-identical to the previous pass. Build and ctest pass again (26/26); provenance `--check` ok.
+The pass reverted two hand-applied project deltas, which were restored: the ABI additions in
+`recomp_types.h` (`recomp_delta_ok`, `recomp_delta_allowed`, `recomp_abi_regs_exempt`,
+`jsrf_trace_delta_mismatch`, `jsrf_trace_seq`, and the delta-checking `RECOMP_ABI_CALL`), and the six
+A4b2 `jsrf_watch_store` hooks. `scripts/apply-a4b2-hooks.py` now does the hooks by anchoring on the
+**guest label or store** the translator emits rather than a line number, refuses an anchor that does not
+resolve exactly once, and is idempotent — hand-editing them is how a hook silently disappears, and
+because they are observation-only a missing one does not fail a build; it empties the watch artifact,
+which reads as "the guest never wrote there". The pass also picked up the toolkit's new port-I/O
+declarations (C6's prerequisite) automatically.
+
+`FLAGS: 10 conditional(s) in 7 function(s)`. Nine are the jcc-form reads toolkit `ca4257c` predicted
+(4 live into the function, 5 where an `adc` must answer `jl`/`jg`/`jo` in `adc [eax],al` byte runs); the
+tenth is a `loope` in `sub_0010634E` that `ca4257c`'s census did not count because it counted jcc sites
+only, and which is **byte-identical** to the pre-regeneration tree — not a regression. The 8 sites the
+census called live bugs are fixed: `sub_00015130` (`loc_000153A9`), `sub_00130FD0`, `sub_000A0F10`,
+`sub_001C0B86` carry no fallback read and use materialised `_fc_*` conditions. The plan's V2 criterion
+read "≤ 9", which compared a jcc-only census against a wider report; it is now tied to the named sites
+(Advisor ruling, recorded in the plan).
+
+**V3/V4 — see §5** (the strict horizon) and §7 (the device-field verdicts).
+
 ### CRT 64-bit divide helpers (owner, 2026-09-28)
 
 The previous generated tree dropped every `rcr` in the MSVC CRT divide helpers' normalisation loop, so
@@ -232,13 +267,84 @@ Non-reliance discovery row: `O-TWO-LEG` (`L1 = PROVEN`, `L2 = INVARIANT`).
 
 ### Where strict runs end
 
-`call dword ptr [0x1C4064]` at `0x00149828` reads `0` and raises `0xE0424943`. The XBE holds
-`0x80000115` there (the ordinal-277 kernel thunk); the runtime patches that table. The ~571 MB
-allocation failure just before it (`NtAllocateVirtualMemory`, returned `0xC0000017`) **is handled** by
-the guest (`0x00149E56 test eax,eax` / `jl 0x149eec`, clean return through `__SEH_epilog`), so it is not
-the cause (Advisor critical-path ruling, 2026-09-27). The producer line that chased the allocation size
-is parked; reopen only if the slot death proves downstream of that error handling, or a later gate
-needs the size explained.
+**The kernel thunk table is overwritten, and the first thunk call after that faults.** This replaces the
+single-stop-site framing that stood until 2026-09-29 (Phase 0 V3). The measured terminal event is not one
+slot dying: it is the whole table being clobbered, after which *whichever thread next calls through any
+thunk* raises `0xE0424943`.
+
+- **The table.** `0x001C3F60..0x001C413F`, 120 slots of 4 bytes, the head of `.rdata`
+  (`VA=0x001C3F60 vsize=161792 raw=0x001B4000`). In the original XBE every slot holds an
+  `0x80000NNN` kernel thunk — `0x001C4064` = `0x80000115` = ordinal 277, and slot *N* is at
+  `0x1C3F60 + N*4` with ordinal `value & 0x1FF`.
+- **What replaces it (MEASURED, V3 dumps).** A record array of 40-byte stride whose index field counts
+  upward: `0x79` at `0x1C3E08`, `0x80` at `0x1C3F18`, `0x88` at `0x1C4058`. The other fields are
+  constant-looking — `0x3E800000` (0.25f), `0x41200000` (10.0f), `0xFFFFFFFF`, `1`, `0x001FA1D8`.
+  In the V3(a) dump **0 of the 120 slots hold a patched `0xFE……` thunk**: 31 hold `0`, 89 hold
+  record fields.
+- **Every observed invalid target is a record field at the slot its call read**, which is what makes
+  this one event rather than several:
+
+  | Slot | Slot VA | XBE value (ordinal) | Read as | Failing call returns to |
+  |---|---|---|---|---|
+  | 46 | `0x001C4018` | `0x8000009F` (159) | `0x00000001` | `0x0018CE73` (the `ret` after `0x0018CE6D call [0x1C4018]`) |
+  | 65 | `0x001C4064` | `0x80000115` (277) | `0x00000000` | `0x0014982E` |
+  | 68 | `0x001C4070` | `0x8000007C` (124) | `0x41200000` | `0x00147D36` |
+  | 70 | `0x001C4078` | `0x800000E7` (231) | `0x00000000` | `0x00147DBC` |
+  | 71 | `0x001C407C` | `0x800000E0` (224) | `0x3E800000` | `0x00147DE2` |
+
+- **Which site is first varies, and that is the race, not the horizon.** Six strict V3 runs on one
+  build produced four different first sites: `0x00149828` 3/6, `0x00147D30` 1/6, `0x00147DDC` 1/6,
+  `0x00147DB6` 1/6. A worker thread can die before the main thread (`0x00147D30` in V3(a), tid 63012,
+  main thread at 5175 kernel calls). **The old site did not move**: `0x00149828` still fires in half
+  the runs. The set is evidence of the race; the horizon is the clobber.
+- **The old baseline had it too.** The 2026-09-28 dump (`20260928-185612-449-regen-v012-strict`) holds
+  the identical record array at the same addresses, so the lifter and kernel-memory changes did **not**
+  move this horizon. Its terminal event was `0x0014982E`, the same slot 65.
+- **Bearing on the A2h line.** The terminal read is a slot in a table that is overwritten wholesale, so
+  the A2h attribution watched a different address from the terminal event: its slot `0x0019D62C`
+  (`base 0x0019B200 + 0x242C`) is in `g_Device`, not in `.rdata`. Its `last_write=001D5078` record
+  (`20260928-121142-929-a2h-attrib-exp2-3b`) is real but is not this event. C1 is retargeted to the
+  writer of the record array; the obvious instrument is a write watch on `0x1C3F60`.
+
+The ~571 MB allocation failure that precedes the fault (`NtAllocateVirtualMemory`, `0xC0000017`)
+**is handled** by the guest (`0x00149E56 test eax,eax` / `jl 0x149eec`, clean return through
+`__SEH_epilog`), so it is not the cause (Advisor critical-path ruling, 2026-09-27); V3(a) and V3(c)
+reproduce that return and still fault afterwards. The producer line that chased the allocation size is
+parked; reopen only if the clobber proves downstream of that error handling, or a later gate needs the
+size explained.
+
+**Phase 0 V3 measurements** (game `44becd4`, toolkit `2a349c8`, 8 s, `RECOMP_GPU_ACK=0
+RECOMP_APU_TRAP=1 RECOMP_KERNEL_LOG_BUDGET=100000`). All three classified as the plan requires;
+`[UNIMPL]` lines: **0** in all seven V3 logs; `RtlRaiseException` and `0xE06D7363`: **0**.
+
+| Run | Label | Profile | First terminal site | Kernel calls | Stop (UTC) |
+|---|---|---|---|---|---|
+| (a) | `20260929-231110-868-rebaseline-strict` | STRICT | `0x00147D36` (tid 63012) | 6456 | 06:11:16.686 |
+| (b) | `20260929-231200-429-rebaseline-kmem-legacy` | EXPLORATORY | `0x00147DBC` (tid 28756) | 6431 | 06:12:06.024 |
+| (c) | `20260929-231211-023-rebaseline-gmeter` | STRICT | `0x0014982E` (tid 46508) | 6321 | 06:12:16.688 |
+
+`[KMEM] summary` (a): `legacy=0 regions=13 hint_ok=0 hint_conflict=0 reserve_ok=15 reserve_fail=0
+alloc_invalid=0 commit_region=52 commit_heap_block=0 commit_rejected=0 pages_zeroed=734 decommit_ok=0
+decommit_failed=0 release_ok=2 release_failed=0 free_bad_type=0 region_table_full=0 contig_free_ok=0
+contig_free_unknown=0 contig_untracked=0 contig_split_skipped=0 heap_split=3 heap_split_full=0
+heap_carve_ok=0 heap_carve_busy=0 heap_carve_full=0`; (c) is identical except `commit_region=54
+pages_zeroed=738`. (b) prints `legacy=1` alone, which is the override's own switch. (a) and (c) print the
+same two rejects — `kind=release_failed … type=0x8000 status=0xC00000A0` and `kind=reserve_failed
+base=0x00000000 size=0x23B20430 type=0x801000 status=0xC0000017` — and **(b) prints no `[KMEM] reject`
+line at all**, which is the legacy path's behaviour (the reserve hint is not evaluated, so the
+`reserve_failed` reject is not emitted). All three print the same ten data exports: ordinals 16, 40, 156,
+164, 259, 322, 323, 325, 354, 356 (slots 15, 30, 62, 58, 67, 87, 38, 39, 40, 55 →
+`0x00740000..0x007404A0`). `[GMETER]` (c) only: `max=4 inside=1 contended=2954 host_kcalls=2
+anomalies=0`, entries/contended/nested/exits `kernel=4426/2856/0/4432`, `isr=60/51/0/59`,
+`dpc=59/43/0/59`.
+
+**(b) is the same event, not a different one.** The legacy kernel-memory semantics change *when* the
+clobber lands, not whether it does: (b)'s dump holds the identical record array (0 of 120 slots patched,
+the same five slot values). What differs is which thunk call happens first *after* the clobber — in (b)
+`0x00147D36` is still a working call (`#809: ordinal 124 (slot 68) ret=0x00147D36`) and the first fault
+is one call later at `0x00147DBC`; in (a) `0x00147D36` is the first fault. The two runs are not
+comparable beyond that (`docs/jsrf-run-profiles.md`: a strict run may stop earlier than an exploratory
+one), and no claim about the clobber's *cause* is drawn from the A/B.
 
 **Null-slot triage (A2h-null-slot-triage-r1, accepted, `O-NO-BOUNDARY-TRANSITION`).** `[0x1C4064]`
 read its installed value `0xFE000104` (raw `0x80000115`, index 65) at every one of 15,498 sampled
@@ -343,28 +449,52 @@ every COM `Release()` destroyed the object; the missed function `0x00154DAA`) ar
 toolkit and game. It then died on two indirect calls to non-code with an unreconciled contradiction
 between two of its own measurements. Provenance only; not evidence about this build.
 
-### XDK D3D device fields — INFERRED, verify against JSRF bytes
+### XDK D3D device fields — verified against JSRF bytes (Phase 0 V4, 2026-09-29)
 
 From `~/src/halo-ce-universal` (Halo CE Xbox, XDK ~3911, a matching decompilation; `libs/d3d8` is
 GPL-3.0 and RXDK-derived, so **facts only, no code**): `libs/d3d8/device_layout.h:180-182` and
 `d3dbase.cpp:142` (`SetVerticalBlankCallback` stores `g_pDevice->m_Miniport.m_pVerticalBlankCallback`).
 Matched to JSRF offsets by role, anchored on measurements already in `docs/jsrf-kick-get-contract.md`,
-`jsrf-callback-reentry-contract.md` and §5; the miniport context starts at device `+0x2268`:
+`jsrf-callback-reentry-contract.md` and §5; the miniport context starts at device `+0x2268`.
 
-| JSRF device offset | XDK field (Halo name) | Basis |
-|---|---|---|
-| `+0x242C` | `m_pVerticalBlankCallback` | only store is `0x0018CE3A`, in a function shaped like `D3DDevice_SetVerticalBlankCallback` |
-| `+0x2430` | `m_VerticalBlankEvent` (KEVENT) | `KeWaitForSingleObject` target in `sub_0018CE50` (`BlockUntilVerticalBlank`) |
-| `+0x2434` | that event's `Header.SignalState` | cleared before the wait (`KeClearEvent` is inline) |
-| `+0x2440` | `m_BusyBlockEvent` | second event, same initialisation |
+V4 disassembled each site in the original XBE. The offsets and the five names are now **CONFIRMED**;
+the inference that `sub_00038530` writes this slot is **REFUTED** (see below the table).
 
-Role matches, also inferred: `0x0018CE30` SetVerticalBlankCallback, `0x0018CE50` BlockUntilVerticalBlank,
-`0x00193D90` `CMiniport::VBlank`, `0x00194210` `ServiceGrInterrupt`, `0x00193F70` `SoftwareMethod`.
-**Consequence for A2h (a lead, not a finding):** the only legitimate writer of `+0x242C` is
-SetVerticalBlankCallback, so `sub_00038530` writing `0x001D5078` there means the object it initialises
-overlaps `g_Device` (`0x0019B200`–`0x0019DCE0`), or its argument is mistranslated. JSRF's CDevice is
-probably `0x2AE0` bytes (the `g_Device`→`g_pDevice` gap); Halo's is `0x2B90`, so offsets do not carry
-over by arithmetic.
+| JSRF device offset | XDK field (Halo name) | Verdict | Bytes |
+|---|---|---|---|
+| `+0x242C` | `m_pVerticalBlankCallback` | **CONFIRMED** | `0x0018CE30: mov eax,[esp+4]; mov ecx,[0x19DCE0]; mov [ecx+0x242C],eax; ret 4` — the only store to `+0x242C` in the whole generated tree |
+| `+0x2430` | `m_VerticalBlankEvent` (KEVENT) | **CONFIRMED** | `0x0018CE67: add eax,0x2430; push eax; call [0x1C4018]` — `[0x1C4018]` is the ordinal-159 `KeWaitForSingleObject` thunk (`0x8000009F`), and the run log shows `ordinal 159 (slot 46) … ret=0x0018CE73` |
+| `+0x2434` | that event's `Header.SignalState` | **CONFIRMED** | `0x0018CE5B: mov dword ptr [eax+0x2434],0` — cleared before the wait, as `KeClearEvent` inline does |
+| `+0x2440` | `m_BusyBlockEvent` | **REFUTED (as an offset)** | no store to `+0x2440` exists anywhere in the generated tree. `sub_0018CE80` (`mov eax,[esp+4]; mov ecx,[0x19DCE0]; …lea esi,[ecx+eax*8+0x211C]; rep movsd`) is a table copy, not a second event. Keep the field as INFERRED-UNLOCATED |
+
+Role names, each **CONFIRMED** by its own bytes: `0x0018CE30` `SetVerticalBlankCallback` (19 bytes,
+stores its first argument at `+0x242C` and returns `ret 4`); `0x0018CE50` `BlockUntilVerticalBlank`
+(clears `+0x2434`, then waits on `+0x2430` through the ordinal-159 thunk); `0x00193D90`
+`CMiniport::VBlank` (`sub esp,0x14`; `call 0x193C40` = `rdtsc`; reads/writes `[esi+0x208]`,
+`[esi+0x20C]`, `[esi+0x1F4]` — a frame counter and time base); `0x00194210` `ServiceGrInterrupt`
+(`mov [esi+0x400720],0` clears PGRAPH `0x400720`; reads `0x400100`, `0x400704` and `0x400108`, i.e.
+PGRAPH INTR/TRAPPED_ADDR/TRAPPED_DATA); `0x00193F70` `SoftwareMethod` (`sub esp,0x14`; `lea
+edx,[ecx-1]; jmp dword ptr [edx*4+0x1941B4]` — a method-index switch, and the table at `0x001941B4`
+holds eight in-module VAs `0x00193F87`, `0x0019401C`, `0x0019412A`, `0x0019412A`, `0x00194144`,
+`0x0019415D`, `0x0019415D`, `0x00194173`).
+
+**`sub_00038530` does NOT write `+0x242C` — REFUTED.** V4 asked whether the object that function
+initialises overlaps `g_Device`. It does not reach the slot: the A2h ARM record
+(`20260928-121142-929-a2h-attrib-exp2-3b`: `armed base=0019B200 slot=0019D62C page=0019D000 off=62C
+aliases=29/29`) gives the watched object base as `0x0019B200`, and `0x0019B200 + 0x242C = 0x0019D62C`
+exactly. That base **is** `g_Device` (`0x0019B200`–`0x0019DCE0`, `+0x2AE0`), and the object's extent
+ends at `0x0019DCE0` — so it does **not** overlap the page holding `0x001C4064` (`0x001C4000`–`0x001C4FFF`).
+The `+0x242C` store the A2h packet attributed to `sub_00038530` is `MEM32(ecx + 0x242C) = eax` at
+`recomp_0004.c:54015`, which is inside **`sub_0018CE30`** — the legitimate installer — not `sub_00038530`.
+The current `sub_00038530` body stores only up to `+0xA4` directly plus indexed stores through pointers
+read from `[edi+0x50/0x14/0x28/0x3C/0x64/0x78/0xA4]`, so the A2h write reached the slot through one of
+those pointers, not by a literal offset. **The `0x001D5078` write is therefore a data-driven store into
+`g_Device`, not evidence that a JSRF object overlaps `g_Device`.** The A2h packet's own coherence verdict
+for that run was already `MISMATCH => UNKNOWN`.
+
+**The A2h slot is not the terminal event** (see §5): the terminal read is a slot of the kernel thunk
+table in `.rdata`, which is overwritten wholesale, while the A2h watch sat on `g_Device` at
+`0x0019D62C`. The two addresses are unrelated.
 
 ### Corrections to earlier records
 
