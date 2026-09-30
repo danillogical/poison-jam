@@ -867,15 +867,37 @@ any conflict. The packet carries a one-line pointer to it.
 
 ### 5.8 Packet classes
 
-| | **Discovery packet** | **Change packet** |
-|---|---|---|
-| Output | knowledge: what was observed | a behaviour change, or an acceptance claim |
-| May do | read anything; add diagnostic-only instrumentation; run exploratory or fixture profiles | anything its contract authorizes |
-| Instrumentation | reversible, trace-only or behind an environment variable, off by default at closure | production code under full review |
-| Contract | about one page (§6.3) | full contract (§6.1–6.2) |
-| Adequacy review | writing Planner, two blocking questions + premise freshness (§5.3) | a Planner that did not write it, full review (§5.3) |
-| Acceptance | reviewer confirms artifacts exist, match commands, and select the recorded outcome row | every criterion reproduced |
-| Can claim | `"observed X under profile Y"` | what its criteria establish |
+Three classes. A **chore** is owner-directed mechanical work; a **discovery packet**
+obtains knowledge; a **change packet** changes behaviour or makes an acceptance
+claim.
+
+| | **Chore** | **Discovery packet** | **Change packet** |
+|---|---|---|---|
+| Output | a mechanical result with its own gate output | knowledge: what was observed | a behaviour change, or an acceptance claim |
+| Authorized by | the owner, in the authoritative plan, **by name** | the Planner | the Planner |
+| May do | build, test, sync, regenerate, tooling, record fixes, environment repair | read anything; add diagnostic-only instrumentation; run exploratory or fixture profiles | anything its contract authorizes |
+| Instrumentation | none it introduces silently | reversible, trace-only or behind an environment variable, off by default at closure | production code under full review |
+| Contract | none; the gate script is the contract | about one page (§6.3) | full contract (§6.1–6.2) |
+| Adequacy review | **none** — the gate script replaces it | writing Planner, two blocking questions + premise freshness (§5.3) | a Planner that did not write it, full review (§5.3) |
+| Acceptance | **none** — the gate's own output is the record | reviewer confirms artifacts exist, match commands, and select the recorded outcome row | every criterion reproduced |
+| Can claim | that the mechanical steps ran and what they produced | `"observed X under profile Y"` | what its criteria establish |
+
+**A chore needs no packet.** It is named as a chore in the authoritative plan (the
+plan's task tables and its §3 task classes), and its closure is
+`scripts/chore-gate.py`'s output rather than a review. That is the whole point: the
+measured failure is the v0.11 sync taking **19.6 h and six revisions as packet A4s**,
+while the owner's direct v0.12 sync (121 upstream commits) landed as one merge commit
+and one record commit seven minutes apart (`2925f0b`, `32680d7`). The packet
+machinery added nothing to a mechanical sync and cost a day.
+
+**A chore may not change admitted evidence semantics.** Anything that alters what
+counts as strict evidence is a change packet, or is classified in
+`docs/jsrf-run-profiles.md` behind a switch — which is that document's decision, not
+the chore's.
+
+**A chore that fails its gate is a finding, not a failure to hide.** The gate's
+output is recorded as-is, including a changed stop site. "The stop changed" is a
+result; a chore that reports only success is not reporting.
 
 A discovery packet never itself satisfies a strict criterion and never claims that
 something works. **An accepted discovery outcome may, however, be pinned as a

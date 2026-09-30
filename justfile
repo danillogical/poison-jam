@@ -89,6 +89,10 @@ check:
     {{python}} -X utf8 scripts/check-override-drift.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Output "check: all checkers passed"
 
+# W7s chore gate: build, ctest and a strict A/B for owner-directed chores.
+chore label *args:
+    {{python}} -X utf8 scripts/chore-gate.py --label {{label}} {{args}}
+
 # W6s ruling-ledger lint: a ruling must carry its four required facts.
 ruling-check:
     {{python}} -X utf8 scripts/check-ruling-ledger.py
