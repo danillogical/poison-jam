@@ -4,8 +4,8 @@ Companion to `plan-jsrf-bare-minimum-refresh.md`. The owner asked for a refreshe
 review of all work since the project began, with every decision recorded here for review afterwards.
 This file is an owner-requested decision record, not a session report and not an authority.
 
-**Produced:** `plan-jsrf-bare-minimum-refresh.md` (PROPOSED) and this report, committed on branch
-`jsrf/fork-fixes` of the game repository, not pushed.
+**Produced:** `plan-jsrf-bare-minimum-refresh.md` (PROPOSED) and this report, committed to the game
+repository (first on branch `jsrf/fork-fixes`, which the owner then folded into `master`).
 
 **How the review was done.** Three read-only analyses of the full pre-cleanup archive (`e73e495`:
 381 files, 557,030 words; 530 game commits), run one at a time: packet lifecycle, execution and
@@ -122,7 +122,7 @@ failing every call and always-false branches that the packet process had not.
 
 | Change | Plan effect |
 |---|---|
-| Toolkit `jsrf/fork-fixes` kernel memory semantics (`1d85934` etc.) and data-export thunks (`4b4a62d`) | strict horizon must be re-measured before anything inherits it (V3); M09 largely delivered; C2 for leftovers |
+| Toolkit fork fixes: kernel memory semantics (`1d85934` etc.) and data-export thunks (`4b4a62d`) | strict horizon must be re-measured before anything inherits it (V3); M09 largely delivered; C2 for leftovers |
 | Lifter fixes (`_flags` joins, narrow mul/div, `movsx`, jump tables) | regeneration required (V2); 8 always-false JSRF branches become live |
 | Runtime template port-I/O prototypes (`f61a0af`) | picked up at V2; game implicit declarations cleaned in C6 |
 | NV2A action methods behind `RECOMP_NV2A_ACTIONS` (`6864f1f`…) | C3 owner admission decision; fence mirror retirement depends on it |
@@ -203,7 +203,7 @@ Each: **decision** — reason — what would reverse it.
 - **D-21 Carried open items keep their dispositions** as listed in the plan's §10 (none dropped
   without a destination).
 - **D-22 Committed on `jsrf/fork-fixes`, not pushed.** — The standing instruction for this line of
-  work is commit without push. — The owner pushes.
+  work is commit without push. — The owner pushes. (Superseded 2026-09-29: the owner folded the branches into `main`/`master`.)
 - **D-23 The analyses ran one subagent at a time; their figures are used as reported, with the
   load-bearing ones spot-checked (list above).** — Owner instruction; re-deriving every count would
   repeat their work. — A figure the plan relies on is found wrong; the plan row is corrected.

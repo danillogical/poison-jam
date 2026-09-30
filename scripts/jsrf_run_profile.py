@@ -407,7 +407,7 @@ def classify_settings(entries: Any) -> dict[str, Any]:
         (POKE, 'holds guest globals at fixed values when present'),
         (FORCE_RETURN, 'makes force-return functions answer a constant when present'),
         (PAD_PRESS, 'synthesises controller button presses when present'),
-        # Owner-directed toolkit fixes (jsrf/fork-fixes). The legacy switch restores
+        # Owner-directed toolkit fixes (toolkit db96e30..2a349c8). The legacy switch restores
         # kernel memory semantics now known to be wrong; the NV2A switch arms
         # modelled device behaviour that has not been admitted yet
         # (jsrf-run-profiles.md, "Unconditional modeled hardware causes").

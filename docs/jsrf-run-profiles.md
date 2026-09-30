@@ -53,7 +53,7 @@ The classifier follows each runtime's actual semantics:
 | `JSRF_ABI_CONTINUE` | Presence continues after ABI failures, including empty or `0`. | Must be absent. |
 | `RECOMP_APU_DSP_ACK` | C `strtoul(..., 0)` parses addresses; each nonzero address is cleared on APU ticks, up to eight nonzero entries. | Must be absent or parse to zero addresses. Unsupported/malformed inputs are `UNKNOWN`, never clean. |
 | `RECOMP_DSP_ACK`, `RECOMP_POKE`, `RECOMP_FORCE_RETURN`, `RECOMP_PAD_PRESS` | Upstream v0.12 bring-up switches (toolkit `2925f0b`); see §"Synthetic completion". | Must be absent. Presence is exploratory whatever the value, including values the runtime would parse as nothing. |
-| `RECOMP_KMEM_LEGACY`, `RECOMP_NV2A_ACTIONS` | Toolkit `jsrf/fork-fixes` (2026-09-28); see §"Legacy and unadmitted behaviour". | Must be absent. Presence is exploratory whatever the value. |
+| `RECOMP_KMEM_LEGACY`, `RECOMP_NV2A_ACTIONS` | Toolkit fork fixes `db96e30..2a349c8` (2026-09-28); see §"Legacy and unadmitted behaviour". | Must be absent. Presence is exploratory whatever the value. |
 
 Environment names are compared case-insensitively, as on Windows. Duplicate
 spellings of one setting are `UNKNOWN`; do not convert a list of settings into a
@@ -142,7 +142,7 @@ exploratory.
 
 ### Legacy and unadmitted behaviour — exploratory by presence
 
-Added with the owner-directed toolkit fixes on branch `jsrf/fork-fixes` (2026-09-28;
+Added with the owner-directed toolkit fixes `db96e30..2a349c8` (2026-09-28;
 `docs/jsrf-technical-record.md` §7). Neither is synthetic completion, and neither can support
 a strict claim.
 

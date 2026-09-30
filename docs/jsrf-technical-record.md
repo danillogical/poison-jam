@@ -320,7 +320,7 @@ against N. New baseline: toolkit `2925f0b`, game ≥ `e73e495`; re-derive native
 
 ## 7. Fork audit and owner-directed toolkit fixes (2026-09-28/29)
 
-**Status: committed on branch `jsrf/fork-fixes` in both repositories, not pushed, and not verified on
+**Status: committed to toolkit `main` (`db96e30..2a349c8`) and game `master`, and not verified on
 Windows.** No MSVC build, no `ctest`, no regeneration and no JSRF run has used this toolkit revision.
 Verification here was a MinGW-w64 cross-build of every toolkit target (zig 0.16, clang 21; only the
 three `d3d8_smoke` executables fail, at link, for want of `d3dcompiler`), the toolkit's pytest suite
@@ -386,7 +386,7 @@ over by arithmetic.
   use), `sub_00193D10`/`sub_00196C83` (`tests/test_recovery_11c1.c`). The toolkit now builds with
   `/we4013`; the game must not inherit it until these are declared.
 
-### Toolkit changes on `jsrf/fork-fixes` (base `db96e30`)
+### Toolkit changes `db96e30..2a349c8`
 
 | Commit | Change | Strict-path effect |
 |---|---|---|

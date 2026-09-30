@@ -16,7 +16,7 @@ established facts. Where this plan proposes a change to one of them, it is a tas
 - **Built on the whole history**, not only the last packet: the original milestone ladder
   (`docs/jsrf-operating-history.md:1806-1880`), every closed packet, the fork audit and fixes
   (TR §7), and three reviews of the archive at `e73e495` (summarised in the report).
-- **Phase 0 re-baselines on Windows first.** The toolkit on `jsrf/fork-fixes` changes strict-path
+- **Phase 0 re-baselines on Windows first.** The toolkit fixes (`db96e30..2a349c8`) change strict-path
   behaviour (kernel memory, data-export thunks) and, after regeneration, generated code. Nothing
   inherits the old horizon until it is re-measured.
 - **The A2h successor is replaced by one Time Travel Debugging recording** (C1). The archive shows
@@ -57,8 +57,8 @@ A window opening is not the slice; one playable scene is not the game.
 
 | Item | State |
 |---|---|
-| Toolkit | branch `jsrf/fork-fixes` at `2a349c8` (base `db96e30` = upstream `ea60cfa` + local), pushed; **not built or run on Windows** |
-| Game | branch `jsrf/fork-fixes`; generated tree is still the 2026-09-28 v0.12 regeneration |
+| Toolkit | `main` at `2a349c8`: the fork fixes on top of `db96e30` (= upstream `ea60cfa` + local); **not built or run on Windows** |
+| Game | `master`; generated tree is still the 2026-09-28 v0.12 regeneration |
 | Last measured strict horizon (old toolkit `db96e30`) | ~5 s: `call dword ptr [0x1C4064]` at `0x00149828` (in the title allocator `sub_001497DC`) reads 0 → `[ICALL] invalid target` `0xE0424943`; the slot is ordinal 277 `RtlEnterCriticalSection`; the last bridge call before it was ordinal 294 `RtlLeaveCriticalSection` (TR §5, run `20260928-185612-449-regen-v012-strict`) |
 | Established | AC'97 codec-ready model (TR §3); GP DSP56300 port and the GP clearing the DSP pending word (TR §4); CRT 64-bit divide helpers (TR §2); the slot writer `sub_00038530` (TR §5, row `O-OPEN`) |
 | Inferred, to verify | XDK D3D device fields `+0x242C` vblank callback, `+0x2430` vblank event, `+0x2440` busy-block event, and five function names (TR §7) |
@@ -96,15 +96,15 @@ A window opening is not the slice; one playable scene is not the game.
 
 ## 4. Phase 0 — verify and re-baseline on Windows (chores; DeepSeek; 0 senior calls)
 
-**V1 — Build and test the branch.**
-- Do: check out `jsrf/fork-fixes` in both repositories (toolkit first); `python -X utf8
+**V1 — Build and test `main`/`master`.**
+- Do: pull toolkit `main` and game `master` (toolkit first); `python -X utf8
   scripts\build-jsrf.py`; `ctest` in the game build and in a standalone toolkit build.
 - PASS: build exit 0; every ctest passes, including the toolkit's `xbox_kmem`, `xbox_guest_meter`,
   `nv2a_actions`, and the standalone `tests/kernel_data_exports` and `tests/kernel_file_status`
   projects; test counts recorded. FAIL: any build or test failure → fix before V2 (a toolkit
-  failure is fixed on the branch; its commit cited).
+  failure is fixed on `main`; its commit cited).
 
-**V2 — Regenerate with the branch's lifter.**
+**V2 — Regenerate with the new lifter.**
 - Do: the TR §2 command, unchanged inputs; if MSVC runs out of memory, `--split 250` (upstream's
   recommendation for 15 GB hosts). Re-apply `relift-selected.py boundaries`, the ABI deltas, the
   A4b2 hooks; re-record provenance (`check-generation-provenance.py --write`).
@@ -142,7 +142,7 @@ A window opening is not the slice; one playable scene is not the game.
 | **T1** | **WinDbg TTD**: `just ttd-record <label>` records a strict run; `tools/ttd/writes.js` (dx query) lists every write to a guest VA **across all 29 aliases** (base + 28 mirrors) with thread, native IP, symbol, position | on one trace, the query finds the runtime's own thunk-install write to `0x001C4064` (known positive), and zero writes to an address never written (known negative) |
 | **T2** | **XbSymbolDatabase** (MIT, external CLI) → `config/xdk-symbols.json`; names merged into `inspect-jsrf.py` output and linker-map symbolization | ≥ 300 names (DanielJVoxSmart measured 363 on this XBE); five spot checks against known functions (`__aulldiv` `0x0017D4D0`, etc.) agree |
 | **T3** | **xemu oracle** (requires the owner's BIOS, MCPX ROM, HDD image): gdbstub recipe that dumps guest memory/registers at a named guest PC; `scripts/xemu-diff.py` compares with the same checkpoint in a recomp run | the diff of a checkpoint against itself is empty; a seeded one-byte change is found. If the images are unavailable: BLOCKED (owner assets) and milestones fall back to non-xemu oracles |
-| **T4** | **Windows CI** for the toolkit fork (GitHub Actions `windows-latest`, MSVC, ctest) | green on `jsrf/fork-fixes`; a deliberately failing test turns it red |
+| **T4** | **Windows CI** for the toolkit fork (GitHub Actions `windows-latest`, MSVC, ctest) | green on `main`; a deliberately failing test turns it red |
 | **T5** | **clang-cl + MSVC `/analyze`** configurations of the toolkit | baseline warning counts recorded; the known `%lld`-with-`int` class and implicit declarations are reported by at least one of them |
 | **T6** | **`just`** recipes: `build`, `test`, `regen`, `strict-run`, `explore-run`, `check`, `ttd-record`, `doctor`, `analyze` | every recipe runs on the Windows host; AGENTS.md "Build and run" points at them; `check-agent-docs.py` verifies the named recipes exist |
 | **T7** | **pre-commit** hooks: `check-agent-docs.py --check`, `secret-audit.py` on staged blobs, no `game/` path, run-profile tests, `check-merge-structure.py` when a merge is in progress | a staged `game/` path and a planted fake token are both refused |

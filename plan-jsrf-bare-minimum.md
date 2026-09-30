@@ -13,16 +13,16 @@ The last packet, `A2h-slot-writer-attribution-r2`, is **ACCEPTED** (stage 1, fin
 `sub_00038530` writes `0x001D5078` (a pointer to an ADX filename) into the D3D callback slot
 `software_device+0x242C`, K≥2, but no run's terminal matched, so the row is withheld (TR §5).
 
-**Owner-directed toolkit fixes landed on branch `jsrf/fork-fixes` in both repositories (TR §7), not
-pushed and not verified on Windows.** They change strict-path behaviour (kernel memory semantics,
+**Owner-directed toolkit fixes landed on toolkit `main` (`db96e30..2a349c8`) and game `master` (TR §7),
+not yet verified on Windows.** They change strict-path behaviour (kernel memory semantics,
 kernel data-export thunks) and, at the next regeneration, generated code (flag joins that were always
 false, narrow multiply/divide). Before the A2h successor inherits anything, in order:
 
-1. **Windows build of the branch** (MSVC), `ctest` in both repositories, including the toolkit's new
+1. **Windows build of `main`/`master`** (MSVC), `ctest` in both repositories, including the toolkit's new
    `xbox_kmem`, `xbox_guest_meter`, `kernel_data_exports`, `kernel_file_status` and NV2A tests.
-2. **Regenerate** with the branch's lifter (same command and inputs as TR §2) and compare as TR §2 did;
+2. **Regenerate** with the new lifter (same command and inputs as TR §2) and compare as TR §2 did;
    expect `FLAGS:` ≈ 9 leftover sites and newly live branches in `sub_00015130` and `sub_00130FD0`.
-3. **Re-baseline the strict horizon:** one strict run on the branch and one with `RECOMP_KMEM_LEGACY=1`
+3. **Re-baseline the strict horizon:** one strict run on the new toolkit and one with `RECOMP_KMEM_LEGACY=1`
    (exploratory by presence) as the A/B; read `[KMEM] summary` (the reserve at `0x1495E3`, the commit at
    `0x14961B`), the `data export ordinal` lines, and whether the `[0x1C4064]` stop moves.
 4. **Read-only checks** (no packet needed): confirm TR §7's inferred D3D field names against JSRF's
@@ -40,7 +40,7 @@ green; zero qualifying ⇒ report and re-refer; test the CRT-`memset` lead, neve
 input first:** the specified split of `unknown` into host-identifiable and truly unplaceable would class
 `VCRUNTIME140` writes as HOST, but those are most likely guest `rep stos`/`rep movs` lowered to host
 calls (TR §7, corrections) — attribute by native return address. `RECOMP_GUEST_METER=1` is available to
-observe the unobserved final gap. **Baseline:** the branch once steps 1–3 pass (until then toolkit
+observe the unobserved final gap. **Baseline:** toolkit `2a349c8` and this `master` once steps 1–3 pass (until then toolkit
 `db96e30`, game `6251ccc`); re-derive native RVAs per run.
 
 ## Current strict horizon
@@ -94,7 +94,7 @@ boundary until the terminal read of `0` (TR §5).
 | Toolkit sync to v0.12.0+ | done (owner) | merge `2925f0b`, stop unchanged | §1 |
 | CRT 64-bit divide helpers | done (owner) | hand-written, unit-tested | §2 |
 | Regeneration with v0.12 lifter | done (owner) | same stop; D3D release difference open | §2 |
-| Fork audit + owner-directed toolkit fixes | committed on `jsrf/fork-fixes`, unverified on Windows | TR §7 table | §7 |
+| Fork audit + owner-directed toolkit fixes | committed to `main`/`master`, unverified on Windows | TR §7 table | §7 |
 
 `A2h-r6` was retired (premise refuted; the failure was already fixed by `cb7cae2`).
 
