@@ -89,6 +89,10 @@ check:
     {{python}} -X utf8 scripts/check-override-drift.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Output "check: all checkers passed"
 
+# W1s recurrence check: the same criterion blocking two consecutive reviews.
+recurrence-check:
+    {{python}} -X utf8 scripts/check-review-recurrence.py
+
 # Data-quality report over every archived dump (not a tree check; see `check`).
 dump-controls:
     {{python}} -X utf8 scripts/check-dump-controls.py --all
