@@ -346,6 +346,37 @@ is one call later at `0x00147DBC`; in (a) `0x00147D36` is the first fault. The t
 comparable beyond that (`docs/jsrf-run-profiles.md`: a strict run may stop earlier than an exploratory
 one), and no claim about the clobber's *cause* is drawn from the A/B.
 
+**Independent re-verification (2026-09-30, owner-directed startup session).** Phase 0 V1–V4 were already
+executed and committed by the preceding session at this same revision pair (`44becd4`/`56372dc`). Rather
+than re-run them, this session re-measured their recorded values against the archived artifacts and the
+current tree, and executed the outstanding V5. Every value below was re-derived, not copied:
+
+| V | Recorded value | Re-measured this session | Result |
+|---|---|---|---|
+| V1 | build exit 0; game ctest 26/26; `kernel_data_exports` 5/5; `kernel_file_status` 5/5 | `build-jsrf.py` exit 0; ctest **26/26**; both standalone projects rebuilt and **5/5** each | agrees |
+| V2 | `FLAGS: 10 conditional(s) in 7 function(s)`; 5740/8928 | full pass re-run into `logs/v2repro/gen`: **`FLAGS: 10 conditional(s) in 7 function(s)`, 5 `state: none` + 5 `adc cannot answer`**, the same ten named sites; chunks sum **5740** (banners) with **5739** bodies (`sub_00162B9D` is folded and hand-written in `recomp_manual.c`); dispatch **8928 unique**; provenance `--check` ok | agrees |
+| V2 | "no site outside the pre-regeneration set" | the leftover-`_flags` function sets at `e73e495` and at `44becd4` are **identical (3868 functions; NEW = NONE, dropped = NONE)** | agrees |
+| V2 | the 8 sites `ca4257c` called live bugs read no fallback | `sub_00015130`, `sub_00130FD0`, `sub_000A0F10`, `sub_001C0B86`: bare `if (!_flags)` reads **0** each, materialised `_fc_` conditions present (10/16/4/4) | agrees |
+| V3 | (a) strict, (b) exploratory, (c) strict | re-classified: **STRICT / EXPLORATORY / STRICT** | agrees |
+| V3 | horizon = the thunk table clobber; first site varies | fresh strict run `20260930-001405-390-v1-verified-strict` on the binary built this session: **STRICT**, `0x0014982E` (tid 64532), 6488 kernel calls, 0 `[UNIMPL]`, the same ten data exports, `legacy=0`, same two `[KMEM] reject` lines | agrees |
+| V4 | the five disassembly sites and their bytes | all five re-disassembled and byte-matched; the only `+0x242C` store is `sub_0018CE30` at `recomp_0004.c:54015` | agrees |
+| V4 | `sub_00038530` object base / overlap | `arm_base=0x0019B200` (= `g_Device`), `+0x242C` → `0x0019D62C`; extent ends `0x0019DCE0`; overlaps `g_Device` **yes**, overlaps the page of `0x001C4064` **no** | agrees |
+| V4 | `+0x2440` REFUTED | **does not hold** — see the `+0x2440` REOPENED note in §7 | **corrected** |
+
+Two limits on the re-verification, stated rather than left implicit:
+
+- **All five archived dumps are `CONTENT_MISMATCH`** under `scripts/check-dump-mapping.py` (the 2026-09-28
+  baseline too). They remain structurally readable at their actual guest VAs, and the values above were
+  read that way; no value here is an image-content claim, and no shifted read was used as a repair.
+- The `[KMEM]` reserve-hint counter at `0x1495E3` and commit counter at `0x14961B` are **not** printed by
+  the runtime as counters. Both are call sites of the **same** thunk slot: `0x001495F3 call [0x1C3F88]`
+  (reserve) and `0x0014962C call [0x1C3F88]` (commit), and `0x001C3F88` is slot 10 → ordinal 184. The run
+  log shows them as `#9: ordinal 184 (slot 10) … ret=0x001495F9` and `#10: ordinal 184 (slot 10) …
+  ret=0x00149632`, **exactly one each** in every run examined (the three V3 runs and the 2026-09-30
+  verification run). So the per-run value is 1 reserve-hint call and 1 commit call; there is no aggregate
+  counter to quote, and `NtAllocateVirtualMemory`/`NtFreeVirtualMemory` are not individually named by the
+  runtime's kernel log. Recorded because an owner instruction asked for the counter.
+
 **Null-slot triage (A2h-null-slot-triage-r1, accepted, `O-NO-BOUNDARY-TRANSITION`).** `[0x1C4064]`
 read its installed value `0xFE000104` (raw `0x80000115`, index 65) at every one of 15,498 sampled
 kernel-bridge boundaries on all six threads — per-thread series complete, no gap or duplicate. The
@@ -465,7 +496,7 @@ the inference that `sub_00038530` writes this slot is **REFUTED** (see below the
 | `+0x242C` | `m_pVerticalBlankCallback` | **CONFIRMED** | `0x0018CE30: mov eax,[esp+4]; mov ecx,[0x19DCE0]; mov [ecx+0x242C],eax; ret 4` — the only store to `+0x242C` in the whole generated tree |
 | `+0x2430` | `m_VerticalBlankEvent` (KEVENT) | **CONFIRMED** | `0x0018CE67: add eax,0x2430; push eax; call [0x1C4018]` — `[0x1C4018]` is the ordinal-159 `KeWaitForSingleObject` thunk (`0x8000009F`), and the run log shows `ordinal 159 (slot 46) … ret=0x0018CE73` |
 | `+0x2434` | that event's `Header.SignalState` | **CONFIRMED** | `0x0018CE5B: mov dword ptr [eax+0x2434],0` — cleared before the wait, as `KeClearEvent` inline does |
-| `+0x2440` | `m_BusyBlockEvent` | **REFUTED (as an offset)** | no store to `+0x2440` exists anywhere in the generated tree. `sub_0018CE80` (`mov eax,[esp+4]; mov ecx,[0x19DCE0]; …lea esi,[ecx+eax*8+0x211C]; rep movsd`) is a table copy, not a second event. Keep the field as INFERRED-UNLOCATED |
+| `+0x2440` | `m_BusyBlockEvent` | **REOPENED — INFERRED-LOCATED** (was REFUTED; see below) | `0x00191497: mov [edi+0x2444],ebp` (SignalState) and `0x00191501: lea esi,[edi+0x2440]` → `0x00191519: call [0x1c4018]` (the same ordinal-159 `KeWaitForSingleObject` thunk as `+0x2430`). `sub_0018CE80` is a table copy, not a second event — that part stands |
 
 Role names, each **CONFIRMED** by its own bytes: `0x0018CE30` `SetVerticalBlankCallback` (19 bytes,
 stores its first argument at `+0x242C` and returns `ret 4`); `0x0018CE50` `BlockUntilVerticalBlank`
@@ -477,6 +508,49 @@ PGRAPH INTR/TRAPPED_ADDR/TRAPPED_DATA); `0x00193F70` `SoftwareMethod` (`sub esp,
 edx,[ecx-1]; jmp dword ptr [edx*4+0x1941B4]` — a method-index switch, and the table at `0x001941B4`
 holds eight in-module VAs `0x00193F87`, `0x0019401C`, `0x0019412A`, `0x0019412A`, `0x00194144`,
 `0x0019415D`, `0x0019415D`, `0x00194173`).
+
+**`+0x2440` REOPENED (2026-09-30, V4 re-verification).** The row above previously read **REFUTED**, on the
+criterion "no store to `+0x2440` exists anywhere in the generated tree". That criterion does not
+discriminate: the field it sits beside, `+0x2430`, **also** has no store anywhere in the tree, and V4
+CONFIRMED it on its *wait* site. Re-run mechanically over both spellings the lifter emits (hex and signed
+decimal, per `AGENTS.md`):
+
+| offset | stores (hex form) | stores (dec form) |
+|---|---|---|
+| `+0x242C` | 1 | 0 |
+| `+0x2430` | **0** | 0 |
+| `+0x2434` | 1 | 0 |
+| `+0x2440` | **0** | 0 |
+| `+0x2444` | 1 | 0 |
+
+Absence of a store therefore cannot separate a real event field from a non-field, and `+0x2440` has the
+same evidence *shape* as the confirmed `+0x2430`:
+
+- **It is waited on through the same thunk.** `0x00191501 lea esi,[edi+0x2440]` … `0x00191519 call edi`
+  where `0x00191507 mov edi,[0x1C4018]` — `[0x1C4018]` is the ordinal-159 `KeWaitForSingleObject` thunk
+  (`0x8000009F`) that `+0x2430` also uses.
+- **Its base is `g_Device`.** At `0x00191446 mov edi,[0x19DCE0]`, `edi` is the device pointer; no
+  instruction writes `edi` between there and the only branch to the wait (`0x001914CB jae 0x191501` —
+  `0x001914E5` and `0x001914FC` are on the `0x001914E2`/`0x001914FC` paths that `ret` at `0x001914FE`
+  without reaching `0x00191501`). So the wait target is `g_Device+0x2440`.
+- **It has a SignalState field at `+4`.** `0x00191497 mov [edi+0x2444],ebp`, exactly as the confirmed
+  event has `mov [eax+0x2434],0`. The two offsets are `0x10` apart, one `KEVENT`
+  (`DISPATCHER_HEADER`) apart.
+
+**Verdict: INFERRED-LOCATED, not CONFIRMED.** The *offset and its wait* are measured; the *name*
+`m_BusyBlockEvent` still comes from the Halo XDK layout by role-matching, which is the same kind of
+inference V4 accepted for the three CONFIRMED rows. It is not raised to CONFIRMED here because the
+role-match itself has not been re-derived from the reference this session, and the `+0x2440` wait site
+has **not been observed executing**: `ordinal 159 … ret=0x0019151B` appears **0** times in all four V3
+runs and in the 2026-09-30 verification run, while the `+0x2430` wait (`ret=0x0018CE73`) appears 124–140
+times. An unexecuted path is not a refuted one, but it is also not a measurement of the field.
+
+*Method note for W2/W10.* This is the second recorded case of a refutation that came from the **absence**
+of a witness rather than from a positive measurement — `docs/jsrf-run-profiles.md` §"Evidence rule" already
+forbids that ("Absence of a witness is never a positive attribution"), and the criterion here failed for a
+sharper reason: the witness it demanded is not expected to exist for this class of field at all, because a
+KEVENT is armed by *whoever signals it* through a pointer, not by a literal-offset store. The same
+V4 pass that refuted `+0x2440` for having no store had CONFIRMED `+0x2430` — which has no store either.
 
 **`sub_00038530` does NOT write `+0x242C` — REFUTED.** V4 asked whether the object that function
 initialises overlaps `g_Device`. It does not reach the slot: the A2h ARM record
