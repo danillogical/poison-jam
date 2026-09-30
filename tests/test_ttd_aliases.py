@@ -448,5 +448,34 @@ class TerminalToolTests(unittest.TestCase):
         self.assertIn('from ttd_query_helpers import resolve_cdb', query)
 
 
+    def test_the_default_read_is_the_failing_calls_slot(self) -> None:
+        """Not the last kernel call's slot.
+
+        Measured: the tool defaulted to the last kernel call's slot (64) while the
+        failing call used slot 65 (`call dword ptr [0x1c4064]` at `0x00149828`,
+        return `0x0014982E`). That made W-b compare slot 64's value against slot 65's
+        write and select the wrong row.
+        """
+        run = ROOT / 'logs' / 'runs' / '20260930-053722-314-v3-repro-check'
+        if not run.is_dir():
+            self.skipTest('the horizon-reproducing run is not present')
+        evidence = self.terminal.log_evidence(run / 'jsrf_run.log')
+        slot_va = self.terminal.failing_call_slot(evidence, run / 'jsrf_run.log')
+        self.assertEqual(slot_va, 0x001C4064,
+                         'the failing call is `call [0x1c4064]`, slot 65')
+        # And it must NOT be the last kernel call's slot, which is 64 here.
+        self.assertNotEqual(slot_va, int(evidence['last_kernel_call']['slot_va'], 16))
+
+    def test_the_failing_call_slot_is_none_without_an_icall(self) -> None:
+        """No ICALL means no failing call; the caller falls back rather than guessing."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as temporary:
+            run = Path(temporary)
+            (run / 'jsrf_run.log').write_text('nothing here\n', encoding='utf-8')
+            evidence = self.terminal.log_evidence(run / 'jsrf_run.log')
+        self.assertIsNone(
+            self.terminal.failing_call_slot(evidence, run / 'jsrf_run.log'))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

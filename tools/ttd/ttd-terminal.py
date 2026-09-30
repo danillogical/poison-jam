@@ -98,8 +98,23 @@ def trace_end(cdb: str, trace: Path, thread: str | None,
     if thread:
         commands.append(f'~{thread}s')
     if read_va is not None:
+        # **`dd` CANNOT SEE THE VALUE; `TTD.Memory` CAN.** Measured on the
+        # horizon-reachable trace: `dd 0x1D4060` prints `????????` while
+        # `TTD.Memory(0x1D4060, 0x1D4064, "r").Last()` returns
+        # `Value: 0xfe000100`. A plain read wants the memory as it stands at the
+        # current position, and TTD answers that only for pages it has paged in;
+        # the data-model query walks the RECORDED accesses, which is exactly the
+        # evidence W-b compares against.
+        #
+        # Reading through the data model is also the more honest instrument here:
+        # it reports the last recorded access at the address, with its position, so
+        # the value carries its own provenance.
+        commands.append(f'dx -r1 @$cursession.TTD.Memory(0x{read_va:X}, '
+                        f'0x{read_va + width:X}, "r").Last()')
+        # The plain read is kept as a CROSS-CHECK, so a disagreement between the two
+        # instruments is visible rather than resolved silently.
         reader = 'dq' if width == 8 else 'dd'
-        commands.append(f'{reader} 0x{read_va:016X} L4')
+        commands.append(f'{reader} 0x{read_va:016X} L1')
     commands.append('q')
     script = Path(trace).parent / f'{trace.stem}-terminal.txt'
     script.write_text('\n'.join(commands) + '\n', encoding='ascii')
@@ -122,26 +137,62 @@ def trace_end(cdb: str, trace: Path, thread: str | None,
                 result['sequence'] = int(match.group(1), 16)
                 result['steps'] = int(match.group(2), 16)
     if read_va is not None:
-        # cdb prints `00000000`001d4060  ???????? ????????` when the page was never
-        # recorded, and `00000000`001d4060  fe000104 fe000108` when it was. Only the
-        # second is a value; the first is UNREADABLE and must not read as zero.
+        # The data-model query first: it walks recorded accesses and reports the
+        # value with the position it was read at.
+        value_match = re.search(r'Value\s*:\s*(0x[0-9a-f]+)', output, re.IGNORECASE)
+        position_match = re.search(r'TimeStart\s*:\s*([0-9A-Fa-f]+:[0-9A-Fa-f]+)',
+                                   output)
+        if value_match:
+            result['value_at_end'] = value_match.group(1).upper().replace('0X', '0x')
+            result['value_at_end_source'] = 'TTD.Memory (the recorded accesses)'
+            if position_match:
+                result['value_at_end_position'] = position_match.group(1)
+        # The plain read, as a cross-check.
         pattern = re.compile(
             rf'^[0-9a-f]{{8}}`{read_va:08x}\s+([0-9a-f?]{{8}})', re.MULTILINE)
-        match = pattern.search(output)
-        if match:
-            token = match.group(1)
-            if '?' in token:
+        cross = pattern.search(output)
+        if cross:
+            token = cross.group(1)
+            result['plain_read'] = None if '?' in token else '0x' + token.upper()
+        if not value_match:
+            if result.get('plain_read'):
+                result['value_at_end'] = result['plain_read']
+                result['value_at_end_source'] = 'a plain read'
+            else:
                 result['value_at_end'] = None
                 result['value_at_end_reason'] = (
-                    'the slot reads as ????????, so TTD recorded no memory there; '
-                    'this is UNREADABLE, not zero')
-            else:
-                result['value_at_end'] = '0x' + token.upper()
-        else:
-            result['value_at_end'] = None
-            result['value_at_end_reason'] = 'the read did not appear in cdb output'
+                    'neither TTD.Memory nor a plain read returned a value at this '
+                    'address; this is UNREADABLE, not zero')
     result['output_tail'] = output.strip().splitlines()[-6:]
     return result
+
+
+CALL_SLOT = re.compile(
+    r'call\s+dword\s+ptr\s+\[0x([0-9A-Fa-f]+)\]')
+
+
+def failing_call_slot(evidence: dict, run_log: Path) -> int | None:
+    """The slot VA the failing call read, from its own return address.
+
+    The ICALL line reports the return address; the call is the instruction ending
+    there. Disassembling a window that ends at that address finds it, and its memory
+    operand is the slot. Returns None when the call cannot be found, so the caller
+    falls back rather than guessing.
+    """
+    if not evidence['invalid_icalls']:
+        return None
+    return_va = int(evidence['invalid_icalls'][-1]['return_address'], 16)
+    completed = subprocess.run(
+        [sys.executable, '-X', 'utf8', str(ROOT / 'scripts' / 'inspect-jsrf.py'),
+         'disasm', hex(max(0, return_va - 0x20)), hex(return_va)],
+        capture_output=True, text=True)
+    if completed.returncode != 0:
+        return None
+    # The LAST `call dword ptr [...]` at or before the return address.
+    matches = CALL_SLOT.findall(completed.stdout)
+    if not matches:
+        return None
+    return int(matches[-1], 16)
 
 
 def main() -> int:
@@ -187,6 +238,18 @@ def main() -> int:
     if evidence['exceptions']:
         thread = str(evidence['exceptions'][-1]['tid'])
     guest_va = args.read_va
+    if guest_va is None:
+        # **The slot the FAILING CALL read, not the slot of the last kernel call.**
+        # Measured: defaulting to the last kernel call read slot 64 while the failing
+        # call used slot 65 (`call dword ptr [0x1c4064]` at `0x00149828`, return
+        # `0x0014982E`), so W-b compared one slot's value against another slot's
+        # write and selected the wrong row.
+        #
+        # The failing call's slot is derived from the return address: the ICALL
+        # reports where the call RETURNS to, and the call is the instruction just
+        # before it. `scripts/inspect-jsrf.py disasm` gives the instruction, and its
+        # memory operand names the slot.
+        guest_va = failing_call_slot(evidence, run_log)
     if guest_va is None and evidence['last_kernel_call']:
         guest_va = int(evidence['last_kernel_call']['slot_va'], 16)
     read_va = (host_base + guest_va) if guest_va is not None else None
