@@ -8,6 +8,11 @@ evidence stays trustworthy; technical questions end at the Advisor; the project
 keeps moving. When a literal reading of this file defeats that goal, the Advisor may
 issue a process interpretation under §2.3, subject to the hard limits in §2.4 and §3.4.
 
+**The bare minimum is pragmatic (owner decision, 2026-09-30).** The project takes the path of least
+resistance to the title screen and then the rest of the slice. Shortcuts are allowed when recorded
+in `docs/jsrf-compatibility-ledger.md` (§2.4.9); strict evidence is kept for fidelity claims
+(`docs/jsrf-run-profiles.md` §"Pragmatic bare minimum").
+
 **Staffing rule:** the roster table in §1 is the only persisted staffing policy.
 Other files and later sections refer to roles only. If staffing changes, edit §1
 first and sweep the repository for stale copied assignments.
@@ -244,6 +249,19 @@ to compute. It may not invent new causal or historical conclusions that a decisi
 rely on. New causal interpretation belongs to the Planner or Advisor; the Session
 supplies the underlying artifacts and measured/mechanical results.
 
+**Pragmatic duties (bare-minimum work).** The Session:
+
+- **searches prior art first** — upstream, the toolkit forks, Mercenaries-Recompiled (`https://github.com/KraftMacAndChee/Mercenaries-Recompiled`) and
+  halo-ce-universal (`https://github.com/cybersecurity/halo-ce-universal`) — before investigating a blocker (the answer has repeatedly already
+  existed elsewhere);
+- **picks the cheapest honest class itself**, without a senior call: if emulating a blocker would
+  take more than about a day, it approximates, stubs, patches or reimplements, and adds the ledger
+  entry in the same commit;
+- **lists the ledger IDs** each milestone run relied on in that run's record;
+- **escalates to the Advisor only** when a shortcut would re-gate or remove an admitted model
+  (`docs/jsrf-run-profiles.md` "Listed models"), when two shortcuts in a row have failed on the same
+  blocker, or when it cannot tell whether a shortcut would hide a real defect in a later milestone.
+
 When spawning a bounded implementation worker, the Session includes the
 implementation-worker progress gate below in the brief. A worker's no-progress stop is
 not permission to spawn an identical replacement automatically; the Session first
@@ -459,7 +477,9 @@ The call is valid when made; the record makes it auditable afterwards.
 4. **Profiles are fixed in advance.** Exploratory or fixture evidence never satisfies a
    strict criterion. A rule that admits a class of evidence is general, prospective,
    and recorded in its owning document before any evidence relies on it.
-   `docs/jsrf-run-profiles.md` owns the profile rules.
+   `docs/jsrf-run-profiles.md` owns the profile rules. Bare-minimum milestone criteria
+   are not strict criteria: that document admits exploratory runs for them, with ledger
+   IDs (§2.4.9).
 
 5. **Absence needs coverage.** Zero hits prove absence only with a positive witness
    that the target would have been observable.
@@ -473,6 +493,12 @@ The call is valid when made; the record makes it auditable afterwards.
    saw. A post-review edit reopens the affected criteria.
 
 8. **Exceptions relax process, never evidence.**
+
+9. **Shortcuts are recorded, never hidden.** Every path a result relies on that is not
+   emulated or translated — a synthetic-completion switch, stub, patch, approximation or
+   reimplementation — has an entry in `docs/jsrf-compatibility-ledger.md`, and the run's
+   record lists its ledger IDs. A result that relies on an unrecorded shortcut is not
+   evidence for anything until the entry exists.
 
 ## 3. Definitions
 
@@ -893,10 +919,13 @@ while the owner's direct v0.12 sync (121 upstream commits) landed as one merge c
 and one record commit seven minutes apart (`2925f0b`, `32680d7`). The packet
 machinery added nothing to a mechanical sync and cost a day.
 
-**A chore may not change admitted evidence semantics.** Anything that alters what
-counts as strict evidence is a change packet, or is classified in
-`docs/jsrf-run-profiles.md` behind a switch — which is that document's decision, not
-the chore's.
+**A chore may add a bare-minimum shortcut** — a patch, stub, approximation,
+reimplementation or switch — when it adds the ledger entry in the same commit
+(§2.4.9); that is how the plan's title-screen fast path runs.
+**It still may not change admitted evidence semantics:** it may not re-gate or remove an
+admitted model (`docs/jsrf-run-profiles.md` "Listed models") or change what counts as
+strict evidence. That is a change packet, or a classification in the run-profile
+document — that document's decision, not the chore's.
 
 **A chore that fails its gate is a finding, not a failure to hide.** The gate's
 output is recorded as-is, including a changed stop site. "The stop changed" is a

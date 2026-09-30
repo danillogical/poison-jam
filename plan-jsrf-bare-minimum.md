@@ -48,6 +48,9 @@ established facts. Where this plan proposes a change to one of them, it is a tas
 - **The strict horizon becomes the progress metric** (§3). It moved twice in nine days (09-24
   AC'97, 09-27 GP DSP); 21 of 530 game commits moved any stop, and 287 commits followed the last
   move without moving it again.
+- **Mercenaries-Recompiled is prior art** (2026-09-30): a playable Windows port of another Xbox title
+  on an early fork of the same toolkit. Its lifts are planned in §7a; its comparison also exposed
+  four defects in our toolkit (ledger D1–D4).
 
 ## CURRENT PACKET — none
 
@@ -78,11 +81,12 @@ A window opening is not the slice; one playable scene is not the game.
 
 | Item | State |
 |---|---|
-| Toolkit | `main` at `2a349c8`: the fork fixes on top of `db96e30` (= upstream `ea60cfa` + local); **not built or run on Windows** |
-| Game | `master`; generated tree is still the 2026-09-28 v0.12 regeneration |
-| Last measured strict horizon (old toolkit `db96e30`) | ~5 s: `call dword ptr [0x1C4064]` at `0x00149828` (in the title allocator `sub_001497DC`) reads 0 → `[ICALL] invalid target` `0xE0424943`; the slot is ordinal 277 `RtlEnterCriticalSection`; the last bridge call before it was ordinal 294 `RtlLeaveCriticalSection` (TR §5, run `20260928-185612-449-regen-v012-strict`) |
-| Established | AC'97 codec-ready model (TR §3); GP DSP56300 port and the GP clearing the DSP pending word (TR §4); CRT 64-bit divide helpers (TR §2); the slot writer `sub_00038530` (TR §5, row `O-OPEN`) |
-| Inferred, to verify | XDK D3D device fields `+0x242C` vblank callback, `+0x2430` vblank event, `+0x2440` busy-block event, and five function names (TR §7) |
+| Toolkit | `main` (fork fixes on top of upstream `ea60cfa`), built and tested on Windows in Phase 0 (V1) |
+| Game | `master`; Phase 0 V1–V4 done (TR §5 "Phase 0 V3 measurements") |
+| Current horizon | ~5–7 s: the kernel thunk table `0x1C3F60..0x1C413F` is overwritten by a 40-byte-stride record array, and whichever thread next calls through a thunk faults; the first site varies run to run (TR §5) |
+| Established | AC'97 codec-ready model (TR §3); GP DSP56300 port and the GP clearing the DSP pending word (TR §4); CRT 64-bit divide helpers (TR §2); the XDK D3D vblank fields `+0x242C`/`+0x2430`/`+0x2434` and five function names (V4, TR §7) |
+| Refuted | that `sub_00038530` writes the vblank-callback slot (V4, TR §7) |
+| Prior art | Mercenaries-Recompiled (`https://github.com/KraftMacAndChee/Mercenaries-Recompiled`; playable; toolkit base upstream `25cf8a6`, a sibling fork — lift ideas and patches, never merge); halo-ce-universal (`https://github.com/cybersecurity/halo-ce-universal`) (XDK facts); the toolkit forks (TR §7) |
 
 ---
 
@@ -192,6 +196,12 @@ A window opening is not the slice; one playable scene is not the game.
 | **T12** | **Doctor per run**: `tools/doctor.py --runtime-log` writes `doctor.json` into every archived run | present in the V3 runs |
 | **T13** | **Startup receipt generator**: fills `docs/session-start-template.md` from harness metadata and live route checks | a generated receipt passes `check-agent-docs.py` |
 | **T14** | **Run-log retention**: `scripts/logs-reclaim-plan.py` + `scripts/disk-usage.py` as a pre-run gate (refuse to launch below a free-space floor) and a retention policy: keep every run cited by the TR, the plan, a packet or a ruling, plus the last 20; archive or delete the rest **after owner approval of the policy** (deletion is an owner decision) | a launch below the floor is refused with a clear message; the policy lists how many runs/GB it would reclaim on the current host before anything is removed |
+
+| **T15** | **Function-level parity audit and overlay bisection** (from Mercenaries `audit_generated_function_parity.py` + `make_generated_overlay.py`, MIT): hash each generated body by guest address across two trees; restore baseline bodies in an address range to bisect "which function moved the stop" | finds a seeded one-function change between two trees; an overlay that restores it moves the stop back |
+| **T16** | **`just regen` matches the recorded regeneration**: pass `--trace-functions config/trace-functions.json` (TR §2 has it, the recipe drops it) and reviewed spans through the toolkit's `--coalesce-functions` | a regeneration reproduces TR §2's inputs; the 7 boundary fixes appear without the post-hoc relift |
+| **T17** | **Content-sniffing asset guard** in pre-commit: refuse `XBEH` headers, Xbox volume magic, nested archives, and JSRF's `.text` control bytes `8b512c85…` (copied guest RAM) | a staged file carrying each signature is refused |
+| **T18** | **Post-generation patch script** (Mercenaries `Patch-Generated.py` design, rewritten): exact-once text patches applied after every regeneration, each with a ledger ID, failing loudly when a site is missing (no `--allow-missing`) | a regeneration + patch run is idempotent; a missing site fails the run |
+| **T19** | **Retail-byte function oracles**: run original x86 (capstone) against the lifted body with poisoned registers and stack-balance checks, extending `generate-lifter-tests.py` | catches a seeded callee-saved-register clobber |
 
 Order: T14's pre-run gate, T6, T7, T4 first (they make every later step mechanical and stop the disk
 failure mode recurring), then T1, T2, T8, T9, T10, T11, T12, T13, T5; T3 whenever the owner
@@ -416,6 +426,29 @@ dated list in the TR with a disposition per candidate.
 
 ---
 
+## 7a. Lifts from Mercenaries-Recompiled (2026-09-30)
+
+Ideas and code from Mercenaries-Recompiled (`https://github.com/KraftMacAndChee/Mercenaries-Recompiled`; MIT root with no copyright line: add an
+attribution header; its `src/apu` and `src/nv2a` are xemu-derived LGPL: keep per-file notices; never
+take `tools/recomp/xemu_dsp_oracle/`, which builds xemu's GPL interpreter). Each lift adds its ledger
+entry in the same commit. "When" ties it to the fast path (§13).
+
+| ID | Lift | Why for JSRF | Ledger class | Effort | When |
+|---|---|---|---|---|---|
+| ML1 | **Serialised guest execution** behind a switch: one guest thread in lifted code at a time (a lock at the guest-meter brackets, released across kernel calls), ISRs and DPCs delivered under the lock only when IRQL allows, a yield at loop back-edges | our timer thread runs the GPU ISR and every DPC beside up to 4 guest threads (D4, `[GMETER] max=4`); the prime suspect for the table overwrite | approximated | moderate (runtime + one translator hook, regenerate) | F1 fallback (b) |
+| ML2 | **Replacement XAPI heap**: `RtlAllocateHeap`/`RtlFreeHeap`/`RtlReAllocateHeap`/`_msize` on a host-tracked guest arena (their `recomp_manual.c:15333-16060`) | JSRF's `sub_001497DC` is the same routine they replaced after the lifted heap rejected valid allocations | reimplemented | moderate; needs JSRF's heap addresses (T2 names) | F3 |
+| ML3 | **File I/O**: Xbox no-buffering as a caching hint (we pass `FILE_FLAG_NO_BUFFERING`, which demands sector-aligned I/O), their streaming read cache, `GENERIC_ALL` → data access | asset reads (M08) and saves (M25) | wrapped | small | F2b, before asset loading |
+| ML4 | **APU interrupts and timing**: IRQ delivery with vector `0x30+n` / IRQL `27−n`, `timeBeginPeriod(1)`, the 5.1 fold, voice-processor DMA through the physical model (D2) | we raise no APU interrupt; coarse timers slow audio clocks; D2 can write the XBE image | emulated / approximated | small–moderate | F3 as needed; before M23 |
+| ML5 | **Vblank fallback**: on each host vblank, signal the device's vblank event (`+0x2430`) and advance its counter | only if `BlockUntilVerticalBlank` hangs; fields confirmed by V4 | approximated | small | F3 fallback |
+| ML6 | **Executor-path shortcuts**: GET=PUT when the walk errors or runs out of budget, acknowledge software-method NOPs, a non-holding `FLIP_STALL` | only if a GPU stall appears on the executor path | approximated | small each | F4 fallback |
+| ML7 | **D3D11 renderer transplant** (~24k lines: combiners and vertex programs → HLSL, formats/swizzle, surface cache, AA/stencil, flip-ordered presentation, shader cache) | our executor renders on the CPU and passes no combiner state, so JSRF's cel shading cannot appear | translated | large; feasibility study first | after F4, when the title screen or M19–M20 needs it |
+| ML8 | **ISO extraction and build-from-ISO** (xdvdfs, hash-checked) and later the first-launch launcher | new-machine setup; M36 packaging | wrapped | small / moderate | any time; M36 |
+| ML9 | **Input and options**: keyboard/mouse bindings with prompts, SDL/XInput, stick outer-rim calibration, resolution/aspect/FPS-cap options, F8 log marker | M16 onward and quality of life | wrapped / approximated | moderate | after M15 |
+| ML10 | **Unified physical memory** (`0x80000000+` aliases the same RAM, as on hardware) | removes the D2 class of device-DMA bugs; an architecture change | emulated | large | only if more D2-type bugs appear |
+
+Not lifted: their DirectSound mailbox patch (our GP DSP already clears that wait), XMV playback (JSRF
+uses Sofdec), Lua/mission/UI/bird/PS2 title fixes (W21–W42).
+
 ## 8. Milestone ladder — bare-minimum slice (07–26)
 
 Rows 00–05 are done; 06a done; 06b ("implement reached imported kernel semantics") is closed into
@@ -473,7 +506,9 @@ package. Each gets criteria in the same five-part form when it becomes next.
 | DSP provenance record (A4b2-NR instrumentation not listed) | kept; chore |
 | Review capture (`record-review.py` default) | → T11 |
 | (new) Stale override text in `AGENTS.md`/run profiles; stale `RETIRED_NAMES` | → W15 |
-| (new) Run logs filling the disk (167 GB across 1,172 run directories on 09-28, `6a97c86`) | → T14 |
+| (new) Run logs filling the disk (167 GB across 1,172 run directories on 09-28, `6a97c86`) | → T14; the owner cleared the old runs on 2026-09-30 |
+| (new) W2 gate under pragmatism: `scripts/qualify-premise.py` item 2 requires strict premise runs, and item 5 should name the prior-art set (Mercenaries-Recompiled, halo-ce-universal, toolkit forks) | chore: accept exploratory premise runs for bare-minimum lines, keep strict for fidelity questions, and list the prior-art sources item 5 must search |
+| (new) **Owner decision:** the public game repository tracks 38 MB of lifted game code (`src/recomp/gen/`, `recovered.c`) and has no LICENSE file; Mercenaries keeps generated code out of its public source | owner decides whether it stays public and which licence applies |
 
 ## 11. Removed or retired
 
@@ -515,16 +550,19 @@ list is exhausted.
   `0x001C2B20`, where index 0 would sit if the 40-byte-stride record array (index `0x79` at
   `0x1C3E08`, TR §5) starts at index 0. A hit names the file, offset and caller: fix why that
   buffer address is wrong. No hit → next cheapest in order: (a) the voice-processor DMA path
-  (ledger D2) with a log of VP writes below the image end; (b) a serialised-guest experiment (D4);
-  (c) the C1 TTD recording with `ttd -stop`.
+  (ledger D2) with a log of VP writes below the image end; (b) the serialised-guest lift ML1 (D4);
+  (c) the C1 TTD recording with `ttd -stop` (disk space was cleared on 2026-09-30).
 - **F2 — Fix the DMA_PUT bit-16 mask** (ledger D1) in the toolkit before rendering; correct
   `docs/jsrf-kick-get-contract.md:60` (`0x100410` is `NV_PFB_WBC`).
+- **F2b — File I/O before asset loading:** lift ML3 (no-buffering as a caching hint, `GENERIC_ALL`).
 - **F3 — Iterate the stop.** For each new stop: disassemble past it, check upstream/forks
   (Mercenaries-Recompiled included), then fix with the cheapest honest class and a ledger entry.
-  Fallbacks if the guest heap keeps failing: replace the XAPI heap routines (Mercenaries did this for
-  the same routine, `sub_001497DC`) — ledger class *reimplemented*.
+  Fallbacks: the guest heap keeps failing → ML2 (replacement XAPI heap, *reimplemented*); a vblank
+  wait hangs → ML5; missing APU interrupts or slow audio clocks → ML4.
 - **F4 — Frames.** Run with `RECOMP_GPU_ACK` on (default), `RECOMP_PB_EXEC=1`, `RECOMP_FB_WINDOW=1`
-  (ledger L16, L18). Missing draw forms or formats in the executor are fixed there.
+  (ledger L16, L18). Missing draw forms or formats in the executor are fixed there; a GPU stall on
+  this path → ML6; if the title screen needs register combiners the CPU executor cannot show, start
+  ML7's feasibility study.
 - **F5 — Intro movies.** If the Sofdec intros block, skip them (ledger: *patched* or *intentionally
   ignored*); decoding them is post-slice (M29).
 - **F6 — Title screen (M15).** Acceptance: a frame dump of the title screen plus the run record with
