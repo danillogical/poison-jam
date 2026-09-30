@@ -158,7 +158,7 @@ A window opening is not the slice; one playable scene is not the game.
 
 | ID | Tool | PASS (each with a control) |
 |---|---|---|
-| **T1** | **WinDbg TTD**: `just ttd-record <label>` records a strict run; `tools/ttd/writes.js` (dx query) lists every write to a guest VA **across all 29 aliases** (base + 28 mirrors) with thread, native IP, symbol, position | on one trace, the query finds the runtime's own thunk-install write to `0x001C4064` (known positive), and zero writes to an address never written (known negative) |
+| **T1** | **WinDbg TTD**: `just ttd-record <label>` records a strict run; `tools/ttd/writes.js` (dx query) lists every write to a guest VA **across all 29 aliases** (base + 28 mirrors) with thread, native IP, symbol, position | on one trace, the query finds the runtime's own thunk-install write to `0x001C4064` (known positive), and zero writes to an address never written (known negative) — **controls PASS 2026-09-30** (`20260930-030513-184-c1-probe`); **but see the W11 finding: the traced run does not reach the horizon, so the artifact is not admitted and T1 is REOPENED for the conditions in `docs/reviews/rulings/ttd-query-decision-input.md` S1–S8** |
 | **T2** | **XbSymbolDatabase** (MIT, external CLI) → `config/xdk-symbols.json`; names merged into `inspect-jsrf.py` output and linker-map symbolization | ≥ 300 names (DanielJVoxSmart measured 363 on this XBE); five spot checks against known functions (`__aulldiv` `0x0017D4D0`, etc.) agree |
 | **T3** | **xemu oracle** (requires the owner's BIOS, MCPX ROM, HDD image): gdbstub recipe that dumps guest memory/registers at a named guest PC; `scripts/xemu-diff.py` (planned) compares with the same checkpoint in a recomp run | the diff of a checkpoint against itself is empty; a seeded one-byte change is found. If the images are unavailable: BLOCKED (owner assets) and milestones fall back to non-xemu oracles |
 | **T4** | **Windows CI** for the toolkit fork (GitHub Actions `windows-latest`, MSVC, ctest) | green on `main`; a deliberately failing test turns it red |
@@ -194,7 +194,7 @@ edited, `check-agent-docs.py` passes, and the named check exists with a failing 
 | **W8** | **Lazy route checks and pre-authorised fallbacks**: verify a route at first real use; no Advisor probe turns at startup; the owner names one fallback route per senior role in §1 (owner decision), and the session allow-list includes it; during a senior-route outage DeepSeek continues pre-authorised chores and discovery execution | probes passed 13/13 while all 5 outages happened mid-session; ~45 h of outage-adjacent gaps; on 09-25 the owner-authorised fallback was missing from the allow-list and needed a new session | T13 receipt |
 | **W9** | **Control-first instruments**: `run-jsrf.py` refuses a second ON run, and checkers refuse to emit a row, until the raw log shows the named positive-control event at an independently derived address | 13 A2h instrument defects; a positive control silently weakened to a value comparison | fixture test |
 | **W10** | Each packet lists its load-bearing **premises with byte-level commands**; the reviewer re-runs them first; a lint rejects values cited from a `CONTENT_MISMATCH` dump or a run with tracing off | false ACCEPTs on false premises (OOM slice, named-producer-frame) | lint |
-| **W11** | Advisor ruling: **TTD query output as a decision input** (lossless, reproducible) recorded in `docs/jsrf-run-profiles.md` | enables C1 without new watch instruments | the ruling text in the owning document |
+| **W11** | Advisor ruling: **TTD query output as a decision input** (lossless, reproducible) recorded in `docs/jsrf-run-profiles.md` | enables C1 without new watch instruments | the ruling text in the owning document — **DONE 2026-09-30**: TTD traces admitted as a lossless *class* under conditions S1–S8; the current artifact **NOT admitted** (the traced run exits `0xC0000409` at 577 log lines and never reaches the horizon, so W-a cannot hold). Recorded in `docs/jsrf-run-profiles.md` §"TTD trace query (W11)" and `docs/reviews/rulings/ttd-query-decision-input.md` |
 | **W12** | Session "verification" prose is replaced by script JSON; review records keep rulings and packets, which are the only records later work reused | 31 of 36 session verification records never cited (38,972 words) | record lint |
 | **W13** | Per-task **senior-call budget** (§3), recorded in the packet; exceeding it is an Advisor continue/stop decision | change packets consumed 15–27 senior calls; discovery 2–4 | packet template field |
 | **W14** | **Strict-horizon ledger and ceiling rule** (§3): one line per session; 3 packets or 4 h without moving the horizon or an accepted critical-path finding → one Advisor ceiling call | the NULL-line ceiling came only after 5 packets; 287 commits after the last horizon move | ledger lint: a session with a run and no ledger line fails |
@@ -208,18 +208,21 @@ Senior calls: W11 is one Advisor ruling; the rest are owner-approved document ed
 ## 7. Phase 3 — critical path to boot (after V3)
 
 **C1 — Attribute the slot write with TTD (discovery).** Replaces the specified A2h successor.
+**BLOCKED 2026-09-30 (W11).** A TTD trace is admitted as a lossless class, but every traced
+run so far exits `0xC0000409` after ~5.8 s / 577 log lines and never reaches the horizon, so
+witness W-a cannot hold and no attribution may be selected
+(`docs/reviews/rulings/ttd-query-decision-input.md`). The discriminating control is done: the
+same environment **without** TTD runs to its deadline (`20260930-034938-427-ttd-exit-control`,
+`outcome=diagnostic_deadline`, exit 3), so the failure is recording-induced or
+recording-correlated. **The next action is a discovery packet on that exit**, not C1.
 - Question: which code writes the value the terminal read sees at `[0x1C4064]`, and which writes
   device `+0x242C`? If V3 moved the stop, C1 targets the new stop's first bad value instead.
 - Experiment: T1 recording of one strict run; the T1 query over all 29 aliases of each address;
   map native IPs to guest functions with the linker map and T2 names.
-- Outcomes: **O-GUEST-FILL** (a lowered `rep stos`/`memset` in guest function F; next: why F's
-  destination overlaps — heap/allocator packet); **O-ALIAS** (a write through a mirror VA above
-  64 MB; next: the allocation that handed out that range); **O-HOST** (a toolkit function; next:
-  a toolkit fix); **O-DATA-CALL** (the slot holds `0x001D5078`-style data; next: the object
-  overlap with `g_Device` from V4); **O-UNKNOWN** (no write found with the positive control
-  present → the read path, not a writer; re-plan).
 - Acceptance: the query artifact, its positive control (the install write) present, and the row
-  selected by rule. Senior budget: 1 Planner (self-review), 1 acceptance review.
+  selected by rule — **and, per W11, witnesses W-a (terminal-in-trace) and W-b (value
+  consistency), with `O-UNKNOWN` selectable only under W-b equality**. Senior budget: 1 Planner
+  (self-review), 1 acceptance review.
 
 **C2 — Kernel memory follow-ups (change, only if V3 or C1 implicates them):**
 `NtQueryVirtualMemory` consulting the region registry; partial `MEM_RELEASE`; whether to keep the
@@ -352,6 +355,13 @@ package. Each gets criteria in the same five-part form when it becomes next.
 2. Alongside, on any host: **T6, T7, T4**, then **T1, T2, T8–T13, T5**; T3 when the owner supplies
    the images. Owner approves the W-row document edits as they land (W7, W8, W15 first).
 3. Then **C1** as the first packet (after W11), with C5's Advisor preflight in parallel.
+
+**Updated 2026-09-30 (this session).** Phase 1 is largely done: T14, T6, T7, T4, T1, T2, T8 and
+T12 have landed, and **W11 is ruled**. The ruling changed the critical path: **C1 is BLOCKED**
+because no TTD trace reaches the horizon, so the next packet is a **discovery packet on the
+`0xC0000409` exit under TTD** — what fails in the traced process at ~5.8 s, and whether TTD
+recording is the cause. Until a traced run reaches the terminal event, no C1 attribution can be
+selected by rule.
 
 If no packet is promoted in the authoritative plan file, packet implementation is BLOCKED; chores
 listed here run as owner-directed changes once the owner adopts this plan.

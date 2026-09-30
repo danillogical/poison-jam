@@ -272,6 +272,50 @@ is observation only, and an overflow counter is a bug detector — if a record c
 the run was long or busy, the key is wrong. See `docs/agent-workflow.md` §6.1.6b and
 `xboxrecomp/src/apu/GP-INTEGRATION.md`.
 
+### TTD trace query (W11)
+
+**Advisor ruling, 2026-09-30.** The full text, its attribution, its basis, its reversal
+conditions and the findings it rests on are in
+`docs/reviews/rulings/ttd-query-decision-input.md`. This section states the rule; the
+ledger states the case.
+
+A **full-mode** TTD trace is admitted as a **lossless record class**, because it emulates
+every user-mode instruction of every thread in the process from launch and therefore
+cannot drop an instruction-performed store. That is a class admission, not a licence to
+use any query over a trace: a query's *projection* is a separate decision input and must
+satisfy the two rules above on its own. The per-alias query in `tools/ttd/ttd-query.py`
+qualifies only when all of the following hold, and **any failure selects `UNKNOWN`** — it
+never names a writer, and it never selects an unattributed or read-path row:
+
+- **S1.** Full mode only: no `-ring`, trace size below `-maxFile`, and the `.out` shows a
+  process-exit end with its exit code recorded. A trace ended by `ttd -stop` is out of
+  scope unless the terminal position precedes the stop.
+- **S2.** The trace **contains** the event under investigation (the terminal position P),
+  the traced run's executable hash and profile settings match a strict ledger run or every
+  difference is recorded, and the event of interest happens before P.
+- **S3.** Every alias summary is present, none truncated, counts uncapped,
+  `mapped == expected == XBOX_NUM_MIRRORS`, and the debugger exits 0.
+- **S4.** The deciding write is **the last write before P**, never whichever the
+  enumeration returns first.
+- **S5.** Every pass evaluates the install-write positive, a **mirror** positive, a known
+  negative and a trace-live control, mechanically.
+- **S6.** A value-consistency witness decides between the attributed, unattributed and
+  read-path rows: the value at P must equal the last write found before P. If it does not,
+  an unrecorded writer (kernel, external, or an overlapping wide store) is the finding.
+- **S7.** The artifact binds the trace hash, the hash of the query code, and the debugger
+  version, and is **rerun** from those rather than transcribed.
+- **S8.** A TTD trace is **not** an archived strict run. It may decide an attribution
+  criterion; it cannot satisfy a strict boot, liveness or horizon criterion, and it cannot
+  add a line to `docs/reviews/strict-horizon-ledger.md` by itself.
+
+Two losslessness limits are stated rather than left implicit, because a query over a trace
+cannot see past them: **kernel-mode writes are not instruction stores** and are not
+reported by the memory query (uncertain; a control would retire it), and **`--max-hits`
+makes an enumeration a first-N log**, which is observation only. An admissible projection
+reports, per alias, an uncapped count and the single last write before P with its full
+value — 29 fixed-shape rows, keyed by alias index.
+
+
 A modelled cause requires **either**:
 - one credible **primary** hardware source — a datasheet or vendor specification for the
   relevant device; **or**
