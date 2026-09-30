@@ -45,10 +45,19 @@ the v0.12 sync commit times, and ordinals 277/294 (`RtlEnterCriticalSection`/`Rt
 | Enumeration by spelling recurring despite written rules | (13 defects) | PIO_FREE 10 of 28 sites; "exactly three writers" were 185 |
 | Frozen commands never run | 15 | A4s-r4 duplicate anchors; A4s-r5 PowerShell 5.1 grep; 7 of 12 A4s Advisor rulings interpreted frozen text |
 
-Discovery packets after the reform used 2–4 senior calls; change packets 15–27. DeepSeek was strong at
-running commands and controls (16/16, 36/36 command validations; caught the CRLF hash hazard) and weak
-at derived tables and bookkeeping (12 recorded extraction errors; a digit transposition that survived
-a promotion; a descriptor misidentified across four packets).
+Discovery packets after the reform used 2–4 senior calls; change packets 15–27.
+
+**The Session orchestrated well; its errors were one narrow kind, fixed by tools.** The Session ran
+every build, run and review round, validated frozen commands (16/16 and 36/36), and caught defects in
+commands that senior Planners had frozen (the PowerShell 5.1 grep, the CRLF hash hazard). Its recorded
+errors are values written into records by hand — 12 extraction errors, e.g. "a transposed address I
+wrote from memory" (`251d770`) — and git bookkeeping (`141cb7e`, `d82f388`). The records do not name
+the model behind each error, and a Codex Session route existed alongside DSH, so they are not
+attributable to DeepSeek specifically. The remedy is tooling (T10 citation lint, W16 explicit staging,
+T13 receipts), not moving orchestration: the plan keeps DeepSeek as orchestrator and widens its lane
+(chores without senior sign-off, work through senior outages, the pre-Planner gate). Most of the
+expensive failures — unqualified premises, instrument designs, a reversed ruling, false ACCEPTs —
+were approved at senior gates.
 
 ### 1.3 Execution and acceptance
 
