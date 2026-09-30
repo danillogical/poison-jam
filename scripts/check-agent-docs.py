@@ -41,6 +41,7 @@ REQUIRED_RECIPES = (
     'horizon-check', 'override-check', 'dump-controls',
     'recurrence-check',
     'qualify',
+    'record-check',
 )
 
 # The recipes a document must point at, and the document that must point at them.
