@@ -260,10 +260,49 @@ silently breaking a record that cites it.
 ## 7. Phase 3 — critical path to boot (after V3)
 
 **C1 — Attribute the record-array write (discovery).** Replaces the specified A2h successor.
-**INSTRUMENT CHOICE RE-OPENED 2026-09-30.** The packet is drafted
-(`docs/packets/c1-slot-write-attribution.md`) and its experiments were run
-(`docs/reviews/c1-terminal-slot-finding.md`). Four measurements, one exclusion, and a
-premise that no longer holds:
+**INSTRUMENT: TTD, RULED 2026-09-30.** The Advisor's §2.3 ruling is in
+`docs/reviews/rulings/ttd-query-decision-input.md` ("C1 instrument (2026-09-30)"):
+**W11 stands unchanged and TTD remains C1's instrument.** The Session's contrary
+conclusion — that TTD cannot see the write — rested on a trace that **fails S1 because
+it was truncated at its size cap** (verified: the `.run` is exactly 8192 MB, and
+`ttd-output.txt` says "Recording stopped after 43375ms" where a completed recording says
+"Process exited with exit code …"). The process outlived the recorder, so its log carries
+the terminal that the trace does not. **That conclusion is withdrawn**, and the record
+says so.
+
+**C1 must meet C-a…C-e before any row may be selected:**
+
+- **C-a (S1).** The recorder output shows *"Process exited with exit code 0xE0424943"*
+  and the trace is **below** `-maxFile`. *"Recording stopped"*, or a size at or above the
+  cap, is a FAIL, and nothing after the install may then be read from the trace. Size the
+  cap from the T14 disk gate.
+- **C-b (S2).** W-a is established **from the trace itself**: the trace contains TTD's
+  exception event with code `0xE0424943` on the faulting thread, and **P is that event's
+  position**, not `!tt 100`. A log-only terminal is a FAIL. `ttd-query.py` now requires
+  `--terminal-in-trace` explicitly.
+- **C-c.** **W-c is still MISSING and is not waived.** A mirror positive needs a store
+  actually made **through a mirror VA**, found at its alias index. "All 28 mirrors of a
+  canonically written range return 0" is a negative, and a broken query returns 0 too.
+- **C-d.** **W-d is still MISSING.** It needs the destination VA of one `[READ]` and a
+  query at that buffer. The toolkit now logs `dst=` (`xboxrecomp` `1572256`), which is
+  what made the control possible.
+- **C-e.** The census and "last write before P" are **recomputed on an admitted trace**,
+  and W-b decides: equal means `ATTRIBUTED`; mismatch means `UNATTRIBUTED`, which then
+  triggers an **in-process last-write latch keyed by destination region** — not the A2h
+  alias census, which is a *first-touch* census and so selects the earliest writer where
+  C1 needs the last.
+
+The experiments already run are recorded in
+`docs/reviews/c1-terminal-slot-finding.md`; its later sections are **NOT ADMITTED** and
+carry a withdrawal block. The non-TTD minidump A/B survives as corroboration: the
+original XBE holds `0x80000NNN` ordinals at `0x001C3F60` while the runtime holds the
+40-byte-stride record array whose constants match TR §5 exactly, and slot 65 reads `0`
+there — agreeing with the guest's own `[ICALL]`.
+
+**The next action is a TTD recording that satisfies C-a**, then C-b…C-e in order.
+
+Measured this session, and still valid because it does not depend on the truncated
+trace:
 
 - **The horizon IS reachable under recording.** The earlier "TTD changes the guest's
   behaviour" reading was wrong: `RECOMP_APU_TRAP=1` is the difference, and with it a
@@ -283,20 +322,20 @@ premise that no longer holds:
   **confirmed rather than suspected**, and the trace's log shows 14 `[READ]` lines
   where `NtReadFile` delivered into guest buffers with none of those bytes appearing
   as a write.
-- **W-c is satisfied for this trace**, by a construction the ruling did not specify:
-  all 28 mirror aliases of the table's full range queried, zero writes, over a range
-  known to have been written through the canonical view.
+- **Withdrawn by the ruling.** The claims that "W-c is satisfied", "W-d is answered",
+  "H-ALIAS is excluded" and "TTD cannot see the write" all rested on the cap-truncated
+  trace and are **NOT ADMITTED**. The mirror sweep over a canonically written range is a
+  **negative**, and a broken mirror query returns zero too, so it does not supply W-c.
 
-**Why C1 is not ready to promote.** Its instrument premise — that a TTD trace can
-answer "which code writes this slot" — is measured to fail for one plausible writer
-class, so promoting it unchanged would violate §5.3's premise-freshness rule. **The
-instrument choice is with the Advisor under §2.3**, and this section is updated when
-that ruling lands.
+**Why C1 is not ready to promote.** Its experiments ran against a trace that fails S1,
+so their results are not admissible. **Promoting it unchanged would violate §5.3's
+premise-freshness rule.** The instrument is ruled (TTD), and the packet is ready to
+promote once its `### Experiments` are re-run against a trace meeting C-a and C-b.
 
 - Question: **which code writes the record array** (not "which writes slot 65" — the
   census shows the table is written wholesale, so the unit is the array).
-- Experiment, once the instrument is decided: see the packet's `### Experiments`,
-  which already carries the write census, the alias query and the W-d control.
+- Experiment: see the packet's `### Experiments`, and re-run steps 2-4 against a trace
+  satisfying **C-a** (process-exit end, below the cap).
 - Acceptance: the query artifact, its positive control (the install write) present,
   and the row selected by rule — **and, per W11, witnesses W-a (terminal-in-trace) and
   W-b (value consistency), with `O-UNKNOWN` selectable only under W-b equality**.
@@ -450,10 +489,16 @@ W16; **W8's fallback half is owner-reserved**). `just check` runs ten checkers.
    and the clobber is confirmed from a **non-TTD** minidump. So C1's instrument choice
    is re-opened with the Advisor under §2.3.
 
-**The next action is that §2.3 ruling**, then: promote
-`docs/packets/c1-slot-write-attribution.md` with its instrument premise corrected, or
-replace it. Its experiments are already run and recorded in
-`docs/reviews/c1-terminal-slot-finding.md`; its outcome table is filled in.
+**The §2.3 ruling has landed** (`docs/reviews/rulings/ttd-query-decision-input.md`,
+"C1 instrument (2026-09-30)"): **W11 stands, TTD remains C1's instrument**, and the
+Session's contrary conclusion was withdrawn because it rested on a trace truncated at
+its size cap.
+
+**The next action is a TTD recording that satisfies C-a** — a process-exit end, below
+`-maxFile` — then C-b…C-e in order, then promoting
+`docs/packets/c1-slot-write-attribution.md`. `just ttd-record` already sets the
+horizon-reachable environment and a 20 GB cap; the missing piece is a bound short
+enough that the recorder reaches the process's exit rather than its cap.
 
 Until a packet is promoted, packet implementation remains BLOCKED and the chores run
 as owner-directed work.
