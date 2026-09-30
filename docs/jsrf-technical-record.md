@@ -420,6 +420,28 @@ names), and the address the reviewed `end` reached is a *separate* recovered ent
 body — the reviewed `end` was widened over the next routine. A retirement packet must therefore re-check
 each of the 122 spans rather than assume the reviewed `end` was right.
 
+**One OBSOLETE row's emitted body genuinely overlaps another's** — the one case a retirement packet must
+handle rather than merely re-check. Of the 122: 57 are enclosed by exactly one emitted body, **64 are the
+`--coalesce-functions` rows whose address is not inside the *default* pass's bodies at all** (they are
+emitted only under that option), and **1 overlaps**:
+
+| row | emitted body | conflict |
+|---|---|---|
+| `0x00162AB0` | `sub_00162AB0` `[0x00162AB0, 0x00162BA5)` | starts strictly inside `sub_00162A20` `[0x00162A20, 0x00162B9D)` and runs **8 bytes past its end** |
+
+Those 8 bytes are the `sub_00162B9D` tail (`0x00162B9D: mov eax,0x800401F0; ret 0xc`) — the same COM error
+tail §2 records as folded by the new translator and hand-written in `src/recomp_manual.c`. Both
+`0x00162A20` and `0x00162AB0` are OBSOLETE rows in `config/recovered-functions.json`, so one region carries
+two entries and an overlapping emitted span: retiring either alone must first establish which body the
+runtime actually needs there.
+
+*Method note.* This overlap came from the V5 worker's own final consistency check, which passed its three
+defect gates (0 sweep/fold disagreements, 0 verdict-rule mismatches, 0 `OWN_BODY` rows lacking their own
+banner) and reported the nested bodies as a residual observation. Re-checked here with half-open interval
+semantics, which separates a genuine overlap from ordinary **adjacency** (one body ending exactly where the
+next begins — normal in a chunked translation, not a hazard). Two of the three addresses that check flagged
+(`0x00190FB0`, `0x001910C0`) are adjacent, not overlapping; only `0x00162AB0` genuinely overlaps.
+
 **Null-slot triage (A2h-null-slot-triage-r1, accepted, `O-NO-BOUNDARY-TRANSITION`).** `[0x1C4064]`
 read its installed value `0xFE000104` (raw `0x80000115`, index 65) at every one of 15,498 sampled
 kernel-bridge boundaries on all six threads — per-thread series complete, no gap or duplicate. The
