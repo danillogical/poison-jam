@@ -82,3 +82,48 @@ own output, so no single field can be wrong and unnoticed.
   durable record cites one: the dumps in `logs/xemu-probe/` are scratch, and the
   launch record records asset paths and sizes only.
 - **`xemu-diff.py` is unaffected** — it compares bytes and never decodes registers.
+
+
+## T3's acceptance, re-run against a live guest
+
+The owner had JSRF running in xemu, so the acceptance was re-run against a **live
+guest** rather than an archived probe. All four criteria the plan names:
+
+| Criterion | Result | Evidence |
+|---|---|---|
+| xemu's own config resolves all five assets | **PASS** | `xemu-oracle.py`: `result: CONFIGURED`, five `OK` rows, no missing assets |
+| gdbstub reachable | **PASS** | `?` returned `T05thread:01;` |
+| guest `0x00011000` reads the recorded `.text` control byte-for-byte | **PASS** | `8b512c85d28b4130c70190431c00741c`, identical to the control |
+| `xemu-diff` MATCH against an archived recomp run | **PASS** | `MATCH (empty diff)`, both sides `98c60dd680442843` |
+| self-vs-self empty, seeded byte found | **PASS** | `selftest: PASS` — 0 differences self-vs-self, 1 at `0x001C3F65` for the seed, 12 for truncation |
+
+**Asset paths are used in place from the owner's configuration.** Nothing was copied
+into either repository, and only paths, sizes and existence were recorded — never asset
+bytes.
+
+## A hazard the re-run exposed: comparing against a `CONTENT_MISMATCH` dump
+
+The first attempt at the `xemu-diff` criterion **reported `DIFFER, 16 byte(s)`**, which
+looks like a real disagreement between the emulator and the recompilation. It was not.
+
+**The run I passed was `20260930-053722-314-v3-repro-check`, whose dump is
+`CONTENT_MISMATCH`.** Its XBE-backed content is displaced, so its bytes at `0x00011000`
+are not the image at all — `check-dump-mapping.py` reports exactly the bytes `xemu-diff`
+was comparing (`83c41456ff5010eb5d8b44240c85c06a`). Re-run against the `MATCH` dump
+(`20260930-034938-427-ttd-exit-control`), the criterion passes with an empty diff.
+
+**So `xemu-diff` can silently compare against displaced content**, and the failure looks
+like a finding about the recompilation rather than about the dump. That is the same class
+of error `AGENTS.md` already warns about for memory reads — *"a dump can be structurally
+valid while XBE-backed content is displaced"* — but here it reaches a **comparison tool**
+rather than a reader.
+
+**The rule this session applies from now on:** run `check-dump-mapping.py` on the recomp
+run **before** citing an `xemu-diff` result, and treat a `DIFFER` against a
+`CONTENT_MISMATCH` run as a statement about the dump rather than about the code. The
+acceptance above was re-run under that rule.
+
+**Not fixed here, and deliberately:** `xemu-diff.py` could refuse a `CONTENT_MISMATCH`
+run outright, or warn. That is a change to a tool with an accepted selftest, and the
+choice between refusing and warning is a judgement about how the tool will be used — so
+it is recorded as a follow-up rather than taken unilaterally.
