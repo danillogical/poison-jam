@@ -95,8 +95,26 @@ The S1 and S6 failures are what step 2 and step 3 of `### Experiments` address; 
 
 ### Question
 
-Which code writes the value the terminal read sees at slot 65 of the kernel thunk
-table, and through which of the 29 linear aliases of that address?
+**Which code writes the 40-byte record at `0x001C4058`?**
+
+The original question was "which code writes the value the terminal read sees at slot 65
+of the kernel thunk table". Measurement has made that exact rather than narrower:
+
+`docs/reviews/c1-record-array-in-table.md` establishes that the table's slots **are** the
+record array's fields at these addresses — three observed invalid calls match the
+record's own bytes at their offsets **3 of 3**, from a dump unrelated to the trace the
+calls were seen in:
+
+| slot | slot VA | offset in the record at `0x001C4058` | record byte | guest read |
+|---|---|---|---|---|
+| 65 | `0x001C4064` | 12 | `0x00000000` | `0x00000000` |
+| 70 | `0x001C4078` | 32 | `0x00000000` | `0x00000000` |
+| 71 | `0x001C407C` | 36 | `0x3E800000` | `0x3E800000` |
+
+**All three failing slots fall inside ONE record, at `0x001C4058`.** So a single write
+explains every observation, and the question is not "what wrote slot 65" but **"what
+wrote the record at `0x001C4058`"**. That is a smaller question than the one this packet
+opened with.
 
 The unknowns behind it:
 
@@ -202,21 +220,33 @@ table:
 
 | Outcome | Measured? | Evidence |
 |---|---|---|
-| `O-GUEST-FILL` | **YES, in part** | 480 byte-at-a-time fills from `VCRUNTIME140!memset_repstos` write the whole table at position 4005; the install loop then writes all 120 slots. But **nothing writes the table after the install**, so the fill does not explain the guest's `0`. |
-| `O-ALIAS` | **NO — excluded** | all 28 mirror aliases of the table's range queried: zero writes. This also supplies W11's missing W-c control. |
+| `O-GUEST-FILL` | **not established** | the census that reported it is **not admitted** (the trace fails S1), so the row stands unmeasured. The record-array identity above is independent of that trace. |
+| `O-ALIAS` | **not established** | the mirror sweep is **not admitted** — the trace fails S1, and the Advisor ruled that "all 28 mirrors of a canonically written range return 0" is a **negative** that a broken mirror query would also produce, so it does **not** supply W-c. **W-c remains MISSING.** |
 | `O-HOST` | no | the install loop is the toolkit, and it is the last writer; it is not the source of the `0`. |
 | `O-DATA-CALL` | **consistent with the data** | the table holds the 40-byte-stride record array TR §5 describes, confirmed from a non-TTD source. |
-| `O-UNATTRIBUTED` | **YES — this is the measured state** | the guest read `0`; the trace's last write was the install; no alias was written; no kernel write is visible. |
+| `O-UNATTRIBUTED` | **not established** | the census and last-write readings are **not admitted** (the trace fails S1). What survives independently is the **record-array identity** above, which is a positive observation from a non-TTD dump. |
 | `O-READ-PATH` | not selected | the value at P is not zero in the trace's record, so this row does not apply as written. |
 
-### The row this packet did not anticipate, and it is the finding
+### The row this packet did not anticipate — WITHDRAWN by the Advisor's ruling
 
-**TTD cannot see the class of write that most plausibly produced the `0`.** Measured:
-400,000 writes scanned across the low 4 GB, **zero** originate outside
-`jsrf_recomp.exe` and `VCRUNTIME140` — so kernel-mode writes are invisible to the
-query. W11's exclusion (d) is therefore **confirmed rather than suspected**, and the
-trace's own log shows 14 `[READ]` lines where `NtReadFile` delivered 512–28,672 bytes
-into guest buffers with none of those bytes appearing as a write.
+The packet previously recorded, as its finding, that **"TTD cannot see the class of
+write that most plausibly produced the `0`"**, on the strength of a 400,000-write
+IP-module sample. **That conclusion is withdrawn.** The Advisor's ruling
+(`docs/reviews/rulings/ttd-query-decision-input.md`, "C1 instrument (2026-09-30)")
+establishes that:
+
+- the sample is a **first-N** observation, taken from the head of a run whose earlier
+  sample was 99.97% `memset`, so it is observation only and cannot support an absence;
+- a kernel-mode write would not carry an `ntdll`/`KERNELBASE` IP in the first place, so
+  the sample cannot show kernel writes are unreported;
+- the claim that none of the 14 `[READ]` bytes appears as a write **was never measured**,
+  because those log lines did not print the destination VA. They do now (toolkit
+  `1572256`), which is what makes the W-d control possible.
+
+**W11's exclusion (d) therefore remains uncertain, exactly as ruled**, and **W-d remains
+MISSING**. The trace all of it rested on fails S1: it was truncated at its size cap
+(`8,589,934,592` bytes exactly, with `ttd-output.txt` saying *"Recording stopped"* where a
+completed recording says *"Process exited"*).
 
 **So C1's question splits**, and the packet's remaining work is:
 
