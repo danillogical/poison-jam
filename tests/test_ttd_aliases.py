@@ -377,5 +377,76 @@ class AdmissionVerdictTests(unittest.TestCase):
         self.assertEqual(result['verdict'], 'UNKNOWN')
 
 
+class TerminalToolTests(unittest.TestCase):
+    """The terminal-evidence tool, on the code path a real trace uses.
+
+    Measured: `ttd-terminal.py` first read the guest VA `0x001C4060` as a HOST
+    address and reported `????????`, which reads as "TTD recorded no memory there"
+    when in fact it read the wrong 64 KB. That is the same defect `ttd-query.py`
+    had, and the control below is the one that would have caught it.
+    """
+
+    def setUp(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'ttd_terminal', ROOT / 'tools' / 'ttd' / 'ttd-terminal.py')
+        self.terminal = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.terminal)
+
+    def test_the_terminal_evidence_comes_from_the_run_log(self) -> None:
+        """The log carries the exception and the last kernel call."""
+        run = ROOT / 'logs' / 'runs' / '20260930-053722-314-v3-repro-check'
+        if not run.is_dir():
+            self.skipTest('the horizon-reproducing run is not present')
+        evidence = self.terminal.log_evidence(run / 'jsrf_run.log')
+        self.assertEqual(len(evidence['invalid_icalls']), 1)
+        self.assertEqual(evidence['invalid_icalls'][0]['return_address'], '0014982E')
+        self.assertEqual(evidence['exceptions'][-1]['code'], '0xE0424943')
+        last = evidence['last_kernel_call']
+        self.assertIsNotNone(last)
+        self.assertEqual(last['slot_va'],
+                         f"0x{0x001C3F60 + last['slot'] * 4:08X}")
+
+    def test_the_slot_va_is_derived_from_the_slot_index(self) -> None:
+        """`slot N` is at `0x1C3F60 + N*4` (TR §5), not a second constant."""
+        run = ROOT / 'logs' / 'runs' / '20260930-053722-314-v3-repro-check'
+        if not run.is_dir():
+            self.skipTest('the horizon-reproducing run is not present')
+        last = self.terminal.log_evidence(run / 'jsrf_run.log')['last_kernel_call']
+        self.assertEqual(int(last['slot_va'], 16),
+                         0x001C3F60 + last['slot'] * 4)
+
+    def test_the_guest_to_host_translation_is_required(self) -> None:
+        """A log without the mapping line must be refused, not misread.
+
+        The tool cannot translate without the runtime's own line, and reading a
+        guest VA as a host address silently returns the wrong memory.
+        """
+        import tempfile
+        with tempfile.TemporaryDirectory() as temporary:
+            run = Path(temporary)
+            (run / 'jsrf_run.log').write_text(
+                '[ICALL] invalid target 0x0 tid=1 esp=0 return=0014982E\n',
+                encoding='utf-8')
+            trace = run / 'x.run'
+            trace.write_bytes(b'')
+            import subprocess
+            import sys
+            result = subprocess.run(
+                [sys.executable, '-X', 'utf8',
+                 str(ROOT / 'tools' / 'ttd' / 'ttd-terminal.py'), str(trace)],
+                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+        self.assertIn('cannot be translated', result.stderr)
+
+    def test_the_tool_uses_the_shared_cdb_resolver(self) -> None:
+        """One resolver, so a WinDbg version bump is fixed in one place."""
+        source = (ROOT / 'tools' / 'ttd' / 'ttd-terminal.py').read_text(
+            encoding='utf-8')
+        self.assertIn('from ttd_query_helpers import resolve_cdb', source)
+        query = (ROOT / 'tools' / 'ttd' / 'ttd-query.py').read_text(encoding='utf-8')
+        self.assertIn('from ttd_query_helpers import resolve_cdb', query)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

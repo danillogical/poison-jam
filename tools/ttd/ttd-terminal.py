@@ -39,7 +39,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'tools' / 'ttd'))
 
-from ttd_query_helpers import resolve_cdb  # noqa: E402  (shared, see below)
+from aliases import host_base_from_log  # noqa: E402
+from ttd_query_helpers import resolve_cdb  # noqa: E402
 
 # The runtime's fatal code for an invalid indirect call.
 INVALID_ICALL_CODE = '0xE0424943'
@@ -166,13 +167,29 @@ def main() -> int:
         return 2
 
     evidence = log_evidence(run_log)
+
+    # **The read is over HOST addresses.** The runtime maps guest 0 at an offset it
+    # prints, and a cdb read is a host linear address. Measured: without this
+    # translation the tool read `0x001C4060` -- a GUEST address -- and reported
+    # `????????`, which reads as "TTD recorded no memory there" when in fact it read
+    # the wrong 64 KB. That is the same defect `ttd-query.py` had, and it is why the
+    # translation lives in one place now.
+    log_text = run_log.read_text(encoding='utf-8', errors='replace')
+    host_base = host_base_from_log(log_text)
+    if host_base is None:
+        print('the run log does not carry the "xbox_MemoryLayoutInit: mapped ... at '
+              '0x..." line, so a guest VA cannot be translated to a host address; '
+              'the value at P would be read from the wrong place', file=sys.stderr)
+        return 3
+
     # The faulting thread, from the exception when there is one.
     thread = None
     if evidence['exceptions']:
         thread = str(evidence['exceptions'][-1]['tid'])
-    read_va = args.read_va
-    if read_va is None and evidence['last_kernel_call']:
-        read_va = int(evidence['last_kernel_call']['slot_va'], 16)
+    guest_va = args.read_va
+    if guest_va is None and evidence['last_kernel_call']:
+        guest_va = int(evidence['last_kernel_call']['slot_va'], 16)
+    read_va = (host_base + guest_va) if guest_va is not None else None
 
     end = trace_end(cdb, args.trace, thread, read_va, args.width)
 
@@ -183,7 +200,9 @@ def main() -> int:
         'run_log': str(run_log),
         'log_evidence': evidence,
         'trace_end': end,
-        'read_va': f'0x{read_va:08X}' if read_va is not None else None,
+        'guest_va_read': f'0x{guest_va:08X}' if guest_va is not None else None,
+        'host_base': f'0x{host_base:016X}',
+        'read_va': f'0x{read_va:016X}' if read_va is not None else None,
         'note': ('Read-only: `!tt` seeks, `~Ns` selects a thread, `dq`/`dd` read. '
                  'No step, no execute, no write.'),
     }
@@ -224,8 +243,10 @@ def main() -> int:
                   f"(slot {last['slot']} = {last['slot_va']}) ret={last['return_address']}")
         print(f"  trace end      : {end.get('position', 'UNKNOWN')}")
         if record['read_va']:
-            print(f"  read at end    : {record['read_va']} -> "
-                  f"{end.get('value_at_end', 'UNREADABLE')}")
+            print(f"  host base      : {record['host_base']}")
+            print(f"  read at end    : guest {record['guest_va_read']} -> host "
+                  f"{record['read_va']} -> "
+                  f"{end.get('value_at_end') or 'UNREADABLE'}")
         print()
         print()
         if record.get('value_at_p_unavailable'):
