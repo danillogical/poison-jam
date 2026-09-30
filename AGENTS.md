@@ -171,6 +171,33 @@ After runtime changes, run targeted behavior/ABI regressions plus a game smoke r
 After collector/thread-tracing changes, rerun harness probes. Documentation-only edits
 do not require a rebuild.
 
+## Windows host tooling
+
+The primary Windows development host has these external tools available.
+
+| Tool | Version / location |
+|---|---|
+| LLVM / clang-cl | LLVM 23.1.2; `C:\Program Files\LLVM\bin\clang-cl.exe`; on `PATH` |
+| WinDbg TTD recorder | `ttd.exe`; on `PATH`; recording requires an elevated process |
+| just | `just.exe`; on `PATH` |
+| pre-commit | `pre-commit.exe`; on `PATH` |
+| DuckDB | Python package 1.5.6 under `C:\Python313\python.exe` |
+| XbSymbolDatabase CLI | `C:\Users\logic\Repos\XbSymbolDatabase\build\win_x64\bin\XbSymbolDatabaseCLI.exe` |
+| xemu | `C:\Users\logic\Downloads\xemu\xemu.exe` |
+
+xemu owner-provided asset directories:
+
+- BIOS: `C:\Users\logic\Downloads\xemu\bios`
+- MCPX: `C:\Users\logic\Downloads\xemu\mcpx`
+- HDD: `C:\Users\logic\Downloads\xemu\hdd`
+
+These Xbox assets are local, proprietary owner-provided inputs. Never copy,
+archive, commit, or upload them into either repository or any generated artifact.
+
+Prefer tools resolved from `PATH` where available. Use the explicit paths above
+for tools not placed on `PATH`. Do not reinstall an available tool merely to
+change its installation method.
+
 ## Host and sandbox constraints
 
 - This shell may export both lower- and upper-case proxy variables; MSBuild can fail on
