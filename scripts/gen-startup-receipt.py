@@ -128,11 +128,44 @@ def disk_state() -> dict:
     }
 
 
+def existing_field_values(path: Path) -> dict[str, str]:
+    """Values already filled into an existing receipt, keyed by field label.
+
+    **Why this exists.** Measured: re-running the generator over a receipt whose
+    probe fields had been filled replaced all 14 of them with `UNVERIFIED`. The
+    generator is *supposed* to be re-runnable -- it is the tool that fills the
+    mechanical fields -- but regenerating must not silently discard the one part of
+    the receipt a human or a probe supplied, because that part is the evidence.
+
+    Only lines whose value is NOT the placeholder are carried over, so a receipt
+    that was never filled is regenerated cleanly.
+    """
+    if not path.is_file():
+        return {}
+    carried: dict[str, str] = {}
+    for line in path.read_text(encoding='utf-8', errors='replace').splitlines():
+        stripped = line.lstrip('- ').strip()
+        if not stripped or ':' not in stripped:
+            continue
+        label, _, value = stripped.partition(':')
+        value = value.strip()
+        if not value or value.startswith('UNVERIFIED'):
+            continue
+        if value.startswith(('`', '**')) or len(value) > 4:
+            carried[label.strip()] = value
+    return carried
+
+
 def render(record: dict) -> str:
     game = record['repositories']['game']
     toolkit = record['repositories']['toolkit']
     packet = record['current_packet']
     disk = record['disk']
+    carried: dict[str, str] = record.get('carried', {})
+
+    def field(label: str, generated: str) -> str:
+        """The carried value when one exists, else the generated text."""
+        return carried.get(label, generated)
     lines = [
         '# Fresh-session startup receipt',
         '',
@@ -145,10 +178,10 @@ def render(record: dict) -> str:
         '',
         '## Identity and handoff',
         '',
-        f'- Session ID/date/harness: {UNVERIFIED}',
+        f'- Session ID/date/harness: {field("Session ID/date/harness", UNVERIFIED)}',
         f'  (harness: `DSH_PROFILE={os.environ.get("DSH_PROFILE", "UNKNOWN")}`, '
         f'`DSH_WEB_URL={os.environ.get("DSH_WEB_URL", "UNKNOWN")}`)',
-        f'- Actual main model/effort: {UNVERIFIED}',
+        f'- Actual main model/effort: {field("Actual main model/effort", UNVERIFIED)}',
         '- Workflow/plan/run-profile revisions and dirty diff identity: '
         f'workflow `{record["authority_hashes"].get("docs/agent-workflow.md", "?")[:16]}`, '
         f'plan `{record["authority_hashes"].get("plan-jsrf-bare-minimum.md", "?")[:16]}`, '
@@ -168,31 +201,35 @@ def render(record: dict) -> str:
     else:
         lines.append(f'  - {packet.get("reason", "not found")}')
     lines.extend([
-        f'- Dependencies and their recorded acceptance reviews: {UNVERIFIED}',
-        f'- Next exact authorized action: {UNVERIFIED}',
-        f'- Build/run owner and worker write ownership: {UNVERIFIED}',
+        f'- Dependencies and their recorded acceptance reviews: '
+        f'{field("Dependencies and their recorded acceptance reviews", UNVERIFIED)}',
+        f'- Next exact authorized action: '
+        f'{field("Next exact authorized action", UNVERIFIED)}',
+        f'- Build/run owner and worker write ownership: '
+        f'{field("Build/run owner and worker write ownership", UNVERIFIED)}',
         '',
         '## Route resolution — PASS / BLOCKED',
         '',
         'Resolved live in this session by the Session, not by this generator:',
         '',
-        f'- Planner: {UNVERIFIED} (Muse Spark 1.3 @ high, `skill: muse-worker`, fresh handle)',
-        f'- Persistent advisor: {UNVERIFIED} (Claude Opus 5.5 @ high, '
+        f'- Planner: {field("Planner", UNVERIFIED)} (Muse Spark 1.3 @ high, `skill: muse-worker`, fresh handle)',
+        f'- Persistent advisor: {field("Persistent advisor", UNVERIFIED)} (Claude Opus 5.5 @ high, '
         f'`route: CONTINUABLE_PINNED`)',
-        f'- Acceptance reviewer: {UNVERIFIED} (GPT-6.1 Sol @ high, `provider: codex`, '
+        f'- Acceptance reviewer: {field("Acceptance reviewer", UNVERIFIED)} (GPT-6.1 Sol @ high, `provider: codex`, '
         f'`route: LIVE_RESOLVE`)',
-        f'- Workers: {UNVERIFIED} (`workbuddy-ai/deepseek-v4.1-flash` @ max)',
+        f'- Workers: {field("Workers", UNVERIFIED)}',
         '- Exact error or ambiguity, if any:',
         '',
         '## Acceptance reviewer probe — PASS / FAIL / UNKNOWN',
         '',
         f'- Child ID; fresh token; response reference; empty-evidence answer; '
-        f'command and output hash; effort; result: {UNVERIFIED}',
+        f'command and output hash; effort; result: '
+        f'{field("Child ID; fresh token; response reference; empty-evidence answer; command and output hash; effort; result", UNVERIFIED)}',
         '- Exact error or missing evidence:',
         '',
         '## Persistent advisor probe — PASS / FAIL / UNKNOWN',
         '',
-        f'- Child ID: {UNVERIFIED}',
+        f'- Child ID: {field("Child ID", UNVERIFIED)}',
         '- Turn 1 reference; unique marker given:',
         '- Named file and the fact deliberately omitted from the brief:',
         "- Advisor's answer; checked against the file:",
@@ -204,7 +241,8 @@ def render(record: dict) -> str:
         '',
         f'- Frozen revision/hash matches `CURRENT PACKET`: '
         f'{"N/A — no packet" if not packet.get("names_a_packet") else UNVERIFIED}',
-        f'- Adequacy review record and verdict: {UNVERIFIED}',
+        f'- Adequacy review record and verdict: '
+        f'{field("Adequacy review record and verdict", UNVERIFIED)}',
         '- Deferred advisories (recorded, not acted on):',
         '- Prerequisites / tooling checks:',
     ])
@@ -219,7 +257,8 @@ def render(record: dict) -> str:
         lines.append('  - free space: UNKNOWN (could not measure)')
     lines.extend([
         '- State/plan disagreements and how they were escalated:',
-        f'- Overall disposition and next action: {UNVERIFIED}',
+        f'- Overall disposition and next action: '
+        f'{field("Overall disposition and next action", UNVERIFIED)}',
         '',
         'Do not mark readiness PASS with a failed or unknown required item. A provider',
         'catalog entry is not a completed invocation. A new advisor answering the',
@@ -257,6 +296,9 @@ def main() -> int:
         'tools': tool_versions(),
         'disk': disk_state(),
     }
+    # Carry over any field an earlier run or a probe already filled, so a
+    # re-run refreshes the mechanical fields without discarding the evidence.
+    record['carried'] = existing_field_values(args.out)
     record['receipt'] = render(record)
 
     if args.json:

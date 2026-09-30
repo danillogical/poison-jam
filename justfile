@@ -88,8 +88,22 @@ ttd-record label="ttd":
     $env:RECOMP_GPU_ACK = "0"; {{python}} -X utf8 tools/ttd/ttd-record.py --label {{label}}
 
 # Query a TTD trace for writes to a guest VA across all 29 aliases (T1).
+# Add --terminal-sequence / --value-at-p to supply W11's position P and enable the
+# full admission verdict. The command exits nonzero when a W11 condition fails.
 ttd-writes trace va:
     {{python}} -X utf8 tools/ttd/ttd-query.py "{{trace}}" {{va}}
+
+# Enumerate every guest access to a VA from the original XBE (T9), with controls.
+enumerate va:
+    {{python}} -X utf8 scripts/enumerate-accesses.py --value {{va}}
+
+# Record or lint a cited value (T10).
+cite-check records:
+    {{python}} -X utf8 scripts/cite.py check {{records}}
+
+# Regenerate this session's startup receipt (T13).
+receipt:
+    {{python}} -X utf8 scripts/gen-startup-receipt.py
 
 # Host/run environment report; --runtime-log writes doctor.json into a run (T12).
 doctor run="":

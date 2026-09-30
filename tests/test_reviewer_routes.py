@@ -168,5 +168,66 @@ class NoStaleRouteInScriptsTests(unittest.TestCase):
                          '\n  '.join(offenders))
 
 
+class StartupReceiptCarryOverTests(unittest.TestCase):
+    """T13: regenerating a receipt must not discard the probe results.
+
+    Measured: re-running the generator over a filled receipt replaced all 14 probe
+    fields with `UNVERIFIED`. The generator is *supposed* to be re-runnable -- it
+    fills the mechanical fields -- but the probe fields are the evidence, and a
+    tool that silently discards evidence on a routine re-run is worse than one that
+    never filled it.
+    """
+
+    def setUp(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'receipt', ROOT / 'scripts' / 'gen-startup-receipt.py')
+        self.receipt = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.receipt)
+
+    def test_filled_fields_are_carried_over(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'receipt.md'
+            path.write_text(
+                '# Receipt\n'
+                '- Session ID/date/harness: 2026-09-30, DSH\n'
+                '- Actual main model/effort: `workbuddy-ai/deepseek-v4.1-flash` @ `max`\n'
+                '- Child ID: UNVERIFIED (not measurable)\n',
+                encoding='utf-8')
+            carried = self.receipt.existing_field_values(path)
+        self.assertEqual(carried.get('Session ID/date/harness'), '2026-09-30, DSH')
+        self.assertIn('deepseek-v4.1-flash', carried.get('Actual main model/effort', ''))
+
+    def test_placeholders_are_not_carried_over(self) -> None:
+        """A never-filled receipt must regenerate cleanly, not inherit placeholders."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'receipt.md'
+            path.write_text(
+                '- Child ID: UNVERIFIED (not measurable by this generator)\n',
+                encoding='utf-8')
+            carried = self.receipt.existing_field_values(path)
+        self.assertNotIn('Child ID', carried)
+
+    def test_a_missing_receipt_yields_no_carry_over(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as temporary:
+            carried = self.receipt.existing_field_values(
+                Path(temporary) / 'absent.md')
+        self.assertEqual(carried, {})
+
+    def test_the_real_receipt_keeps_its_route_facts(self) -> None:
+        """The end-to-end property, on the receipt this session produced."""
+        receipt = ROOT / 'docs' / 'reviews' / 'startup-current.md'
+        if not receipt.is_file():
+            self.skipTest('no receipt present')
+        text = receipt.read_text(encoding='utf-8')
+        # The route-resolution section must still name the probed routes.
+        self.assertIn('claude-opus-5-5', text)
+        self.assertIn('gpt-6.1-sol', text)
+        self.assertIn('deepseek-v4.1-flash', text)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
