@@ -89,6 +89,10 @@ check:
     {{python}} -X utf8 scripts/check-override-drift.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Output "check: all checkers passed"
 
+# W3/W10s packet prerequisites: a dry-run transcript and stated premises.
+packet-check:
+    {{python}} -X utf8 scripts/check-packet-transcript.py
+
 # W7s chore gate: build, ctest and a strict A/B for owner-directed chores.
 chore label *args:
     {{python}} -X utf8 scripts/chore-gate.py --label {{label}} {{args}}

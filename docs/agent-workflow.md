@@ -1004,10 +1004,22 @@ Before release ask both questions:
 **Governing requirement:** <requirement or link>
 **Depends on:** <accepted packet IDs/revisions>
 **Baseline:** <game/toolkit revisions + dirty-state identity>
+**Senior-call budget:** <N Planner, N Advisor, N acceptance> (W13)
 **Revision log:** docs/reviews/<packet>-revision-history.md (non-authoritative)
 
 ### Motivating evidence
 - <artifact/run/commit> — profile <...> — source/build <...> — supports <claim>
+
+### Load-bearing premises (W10)
+Each premise this packet depends on, with the **byte-level command** that
+establishes it, so the reviewer re-runs them first:
+- <premise> — `<command>` — <expected output or hash>
+
+### Dry-run transcript (W3)
+Every command in `### Execution`, executed on the target host and tree before
+freezing, with its output hashed. A frozen command that has never run is a command
+that may not run at all.
+- `<command>` — exit <N> — output sha256 `<hash>`
 
 ### Claim and boundaries
 - Establishes: <precise claim>
@@ -1043,6 +1055,22 @@ Before release ask both questions:
 - Post-review edits reopen affected criteria.
 - Unrelated next stop: record as follow-up; do not expand scope.
 ```
+
+**W13's budget is a field, not a hope.** "Per-task senior-call budget (§3), recorded
+in the packet; exceeding it is an Advisor continue/stop decision", answering "change
+packets consumed 15–27 senior calls; discovery 2–4". A packet whose budget is
+exceeded stops for an Advisor continue/stop rather than continuing to spend.
+
+**W3's transcript is a prerequisite to freezing, not paperwork.** The measured
+failures are "frozen commands that never ran (A4s-r4 anchors, A4s-r5 PowerShell 5.1
+grep; 7 of 12 A4s Advisor rulings)". `scripts/check-packet-transcript.py` verifies
+the section exists and that every command in `### Execution` appears in it.
+
+**W10's premises are re-run first.** The measured failure is "false ACCEPTs on false
+premises (OOM slice, named-producer-frame)". A premise with a byte-level command is
+one the reviewer can falsify; a premise stated in prose is one they must trust.
+`scripts/check-record-hygiene.py` rejects a value cited from a `CONTENT_MISMATCH`
+dump or a run with tracing off.
 
 ### 6.3 Discovery packet template
 
