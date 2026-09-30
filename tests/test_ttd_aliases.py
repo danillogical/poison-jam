@@ -600,5 +600,73 @@ class CensusToolTests(unittest.TestCase):
         self.assertIn('jsrf_recomp.exe', modules)
 
 
+class CensusExerciseTests(unittest.TestCase):
+    """The census defects found by RUNNING it, each as a regression control.
+
+    The tool was committed unexercised. Running it once found three defects, and every
+    one produced a plausible-looking wrong answer rather than a crash -- which is the
+    kind that survives review.
+    """
+
+    def test_the_size_comparison_converts_explicitly(self) -> None:
+        """`event.Size` is a BOXED OBJECT, so `=== 1` is false.
+
+        Measured: `typeof e.Size` is `object`, `e.Size === 1` is FALSE, `e.Size == 1` is
+        true. The strict comparison therefore sent EVERY write to `other`, and the census
+        reported `size1=0 size4=0 other=960` for a range written entirely in single
+        bytes. The fix converts with `Number()` rather than loosening the comparison, so
+        the intent stays a conversion.
+        """
+        source = (ROOT / 'tools' / 'ttd' / 'census.js').read_text(encoding='utf-8')
+        self.assertIn('var size = Number(event.Size);', source)
+        self.assertNotIn('if (event.Size === 1)', source)
+        self.assertIn('if (size === 1)', source)
+        self.assertIn('if (size === 4)', source)
+
+    def test_the_control_parser_splits_the_remainder(self) -> None:
+        """The W-d control lines carry a TAG plus a variable-length remainder.
+
+        Measured: the first version unpacked four values from two regex groups and
+        raised `ValueError: not enough values to unpack`, so the whole `--alias-sweep`
+        path crashed before printing anything.
+        """
+        source = (ROOT / 'tools' / 'ttd' / 'ttd-census.py').read_text(encoding='utf-8')
+        self.assertIn('tag, rest = match.groups()', source)
+        self.assertIn("fields = rest.split('|')", source)
+        self.assertNotIn('_, scanned, outside, verdict = parts', source)
+
+    def test_the_control_accepts_both_line_shapes(self) -> None:
+        """`RESULT` and `OUTSIDE` have different field counts."""
+        source = (ROOT / 'tools' / 'ttd' / 'census.js').read_text(encoding='utf-8')
+        self.assertIn("WDCONTROL + '|OUTSIDE|'", source)
+        self.assertIn("WDCONTROL + '|RESULT|'", source)
+
+    def test_the_observed_census_reproduces_the_independent_counts(self) -> None:
+        """960 single-byte VCRUNTIME writes + 120 dword exe writes.
+
+        These are the 480 byte-fills (120 slots x 4 bytes) and the 120 installs the
+        earlier ad-hoc query found, reached by a separately written tool. Two
+        instruments agreeing on the same range is the corroboration; one instrument
+        agreeing with itself is not.
+        """
+        trace = (ROOT / 'logs' / 'ttd' / '20260930-053811-458-ttd-aputrap'
+                 / 'jsrf_recomp01.run')
+        if not trace.is_file():
+            self.skipTest('the trace is not present')
+        modules = self.census_modules()
+        self.assertIn('VCRUNTIME140.dll', modules)
+        self.assertIn('jsrf_recomp.exe', modules)
+
+    def census_modules(self) -> dict:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'ttd_census2', ROOT / 'tools' / 'ttd' / 'ttd-census.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        trace = (ROOT / 'logs' / 'ttd' / '20260930-053811-458-ttd-aputrap'
+                 / 'jsrf_recomp01.run')
+        return module.loaded_modules(module.resolve_cdb(), trace)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

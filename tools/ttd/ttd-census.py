@@ -192,21 +192,29 @@ def main() -> int:
             continue
         match = CONTROL.match(line)
         if match:
-            parts = match.groups()
-            if parts[0] == 'RESULT':
-                _, scanned, outside, verdict = parts
+            # The regex captures the TAG and the remainder, so the remainder is split
+            # here. Measured: the first version unpacked four values from two groups
+            # (`ValueError: not enough values to unpack`), so the whole `--alias-sweep`
+            # path crashed before it printed anything -- and it was committed without
+            # ever being run, which is exactly why the sweep is exercised now.
+            tag, rest = match.groups()
+            fields = rest.split('|')
+            if tag == 'RESULT':
+                if len(fields) < 3:
+                    continue
+                scanned, outside, verdict = fields[0], fields[1], fields[2]
                 record['kernel_write_control'] = {
                     'scanned': int(scanned),
                     'outside_process_modules': int(outside),
                     'verdict': ('TTD DOES NOT REPORT KERNEL-MODE WRITES'
                                 if verdict == 'NOT_REPORTED'
                                 else 'kernel-mode writes ARE reported'),
-                    'process_modules': process_modules if 'process_modules' in dir()
-                    else None,
+                    'process_modules': process_modules,
                 }
-            else:
+            elif tag == 'OUTSIDE' and len(fields) >= 3:
                 record.setdefault('kernel_write_outside_samples', []).append({
-                    'ip': parts[1], 'module': parts[2], 'sequence': int(parts[3]),
+                    'ip': fields[0], 'module': fields[1],
+                    'sequence': int(fields[2]),
                 })
 
     if args.out:

@@ -100,13 +100,20 @@ function census(moduleList, lo, hi, maxEvents, maxSamples) {
         }
         var s = stats[name];
         s.total = s.total + 1;
-        if (event.Size === 1) { s.size1 = s.size1 + 1; }
-        else if (event.Size === 4) { s.size4 = s.size4 + 1; }
+        // **`event.Size` is a BOXED OBJECT, not a number.** Measured:
+        // `typeof e.Size` is `object`, `e.Size === 1` is FALSE and `e.Size == 1` is
+        // true -- so the strict comparison sent every write to `other` and the census
+        // reported `size1=0 size4=0 other=960` for a range written entirely in single
+        // bytes. `Number()` is the explicit conversion, and it is used rather than `==`
+        // so the intent is a conversion rather than a loose comparison.
+        var size = Number(event.Size);
+        if (size === 1) { s.size1 = s.size1 + 1; }
+        else if (size === 4) { s.size4 = s.size4 + 1; }
         else { s.other = s.other + 1; }
         s.last = event.TimeStart.Sequence;
         if (samples < maxSamples) {
             _log(SAMPLE + '|' + event.TimeStart.Sequence + '|'
-                 + _addr(event.Address) + '|' + event.Size + '|'
+                 + _addr(event.Address) + '|' + size + '|'
                  + _hex(event.Value >>> 0, 8) + '|'
                  + _hex(event.OverwrittenValue >>> 0, 8) + '|'
                  + _addr(event.IP));
