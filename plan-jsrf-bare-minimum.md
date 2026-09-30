@@ -179,7 +179,13 @@ provides the images. Senior calls: T1's admission ruling (W11) only.
 
 ### Phase 1 status — 2026-09-30 session
 
-**T14, T6, T7, T4, T1, T2, T8, T9, T10, T11, T12, T13, T5 are DONE; T3 is DONE.** Each landed with
+**T14, T6, T7, T4, T1, T2, T8, T9, T10, T11, T12, T13, T5 are DONE; T3 is DONE** (re-verified
+against a live xemu running the title, with the four criteria at line 190 all passing —
+see `docs/reviews/t3-gdbstub-register-layout.md`). **T3's gdbstub had a defect found during
+that re-run and fixed:** it decoded the register block as x86-64 where the guest is 32-bit,
+so every register value it had produced was wrong while every memory read was right. The
+verification that has teeth is a cross-check against the original XBE: the live `eip` holds
+bytes identical to `inspect-jsrf.py data` at that address. Each landed with
 its controls exercised, and the defects those controls found are recorded in the commits and in the
 tools themselves. Measured highlights, all reproducible from the named command:
 
