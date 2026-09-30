@@ -231,6 +231,25 @@ def main() -> int:
     total_mb = sum(p.stat().st_size for p in runs) / 1024 / 1024
     contract['timed_out'] = timed_out
     contract['ttd_exit_code'] = process.returncode
+
+    # **How the recording ended decides whether the trace has a tail at all.**
+    # Measured: a trace can be cut off by its own `-maxFile` cap, and then the
+    # recorder writes "Recording stopped after Nms" where a completed one writes
+    # "Process exited with exit code ...". The process keeps running afterwards, so
+    # its log can contain events the TRACE does not -- which is exactly how a
+    # log-only terminal came to be read as an in-trace one (Advisor ruling
+    # 2026-09-30, condition C-a).
+    ttd_text = (trace_dir / 'ttd-output.txt').read_text(encoding='utf-8',
+                                                        errors='replace')
+    contract['ended_by_process_exit'] = 'Process exited with exit code' in ttd_text
+    contract['ended_by_recording_stop'] = 'Recording stopped' in ttd_text
+    contract['at_size_cap'] = bool(
+        contract.get('max_file_mb')
+        and total_mb >= contract['max_file_mb'])
+    # A trace with no tail cannot support an absence claim, so the record says so
+    # rather than leaving a reader to infer it from a size.
+    contract['has_tail'] = bool(
+        contract['ended_by_process_exit'] and not contract['at_size_cap'])
     contract['trace_files'] = [
         {'name': p.name, 'bytes': p.stat().st_size,
          'sha256': _sha256(p)} for p in runs

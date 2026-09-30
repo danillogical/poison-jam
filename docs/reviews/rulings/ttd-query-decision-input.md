@@ -198,3 +198,115 @@ C1 via TTD is BLOCKED"** branch: a traced run does not reach the horizon, so W-a
 cannot hold and no C1 attribution can be made from a TTD trace until the cause is
 found and removed. The Session does **not** treat this as a new ruling; it is
 recorded as the measurement the ruling asked for, and the branch it selects.
+
+
+---
+
+# C1 instrument (2026-09-30, second entry)
+
+**Question put to the Advisor.** Given that the write C1 is looking for is not visible
+in a TTD trace if it is not an instruction store, and that two non-TTD sources agree
+the `0` is real while TTD's record disagrees, should C1 continue with TTD or does the
+measurement require a different instrument?
+
+## RULING
+
+**W11 STANDS UNCHANGED, AND TTD REMAINS C1's INSTRUMENT.** The measurement offered as
+the new W-d control is **not** a valid W-d control, so it triggers neither reversal
+branch. The C1 finding's conclusion "TTD cannot see the write" is **not established**,
+and the artifact it rests on is **NOT ADMITTED**.
+
+## The observation the brief and the finding missed
+
+`logs/ttd/20260930-053811-458-ttd-aputrap/` **fails S1: it was truncated at its size
+cap.** Verified independently in this session:
+
+| Claim | Measured |
+|---|---|
+| the `.run` is at the cap | **YES** — `8,589,934,592` bytes = exactly `8192 MB` |
+| the recorder ended by cap, not process exit | **YES** — `ttd-output.txt` says *"Recording stopped after 43375ms"*; the two earlier traces say *"Process exited with exit code …"*; `timed_out=false` |
+| the terminal is in the LOG, not the TRACE | **YES** — `[ICALL]` at log line 23,481 of 23,484, written by the process after recording stopped |
+
+**The consequence.** `ttd-terminal.py` set P from `!tt 100` — the trace's END — and
+`ttd-query.py` passed S2 whenever the **log** contained the terminal. S2 therefore
+checked "the log has the event", not "the trace has the event", which is **not what W-a
+requires**. So the census, the `TTD.Memory` value, and the apparent disagreement with
+the minidump are all what a tail-truncated trace produces when the clobber happens
+after recording stopped. **The simplest reading needs no new write class.**
+
+## The four points, addressed
+
+1. **(4) is not under "Reversed by", in either direction.** W-d means querying a known
+   `NtReadFile` destination buffer. (4) classified the first 400,000 writes by module —
+   a **first-N sample**, observation only — and it cannot show kernel writes are
+   unreported, because a kernel-mode write would not carry an `ntdll`/`KERNELBASE` IP
+   in the first place. The claim that none of the 14 `[READ]` bytes appears as a write
+   **was never measured**: those log lines do not print the destination VA.
+   **Exclusion (d) stays exactly as ruled: uncertain, stated, caught by W-b.**
+   H-KERNEL is neither excluded nor confirmed.
+2. **TTD is not admissible as evidence of absence for a class it cannot see**, and W11
+   already says so. An absence excludes writers of the admitted class (user-mode
+   instruction stores, inside `[trace start, P]`) in that window only. A value mismatch
+   with no write found selects `UNATTRIBUTED`, which never names a writer or a class. A
+   trace that fails S1 has no coverage for its tail and yields **no absence at all**.
+3. **The required instrument class** is still TTD, on a trace passing S1 and a corrected
+   S2. The record array looks like a constructor loop in guest code (inferred), i.e. a
+   lifted user-mode store inside the admitted class. **Only if W-b selects
+   `UNATTRIBUTED`** does C1 need something else: an **in-process last-write latch keyed
+   by destination region** (a finite, source-derived key), set at the event by every
+   enumerated host path that writes guest RAM outside lifted guest code — `NtReadFile`
+   and IO-completion destinations, APU/GPU DMA into RAM, host `memcpy`/`memset` on guest
+   buffers — each fixture-tested.
+4. **The A2h alias census is NOT the successor.** It is a **first-touch** census, so its
+   key selects the EARLIEST writer (the loader or the install) where C1 needs the LAST
+   before P. It inherits the page-guard/VEH instrument class whose defect history is why
+   the plan left A2h. It may corroborate; it may not decide.
+
+## Conditions C1 must meet before any row (additions to W11's scope)
+
+- **C-a (S1, strict reading).** The recorder output shows *"Process exited with exit code
+  0xE0424943"* and the trace is **below** `-maxFile`. *"Recording stopped"*, or a size at
+  or above the cap, is **S1 FAIL**, and then **nothing after the install may be read from
+  the trace**. Size the cap from the T14 disk gate.
+- **C-b (S2 corrected).** W-a is established **from the trace itself**: the trace
+  contains the terminal event — TTD's exception event with code `0xE0424943` on the
+  faulting thread, or the faulting thread's read of the failing slot. **P is that
+  event's position, not `!tt 100`.** A log-only terminal means **S2 FAIL**.
+- **C-c.** **W-c is still MISSING and is not waived.** "All 28 mirrors of a canonically
+  written range return 0" is a **negative**: a working mirror query returns zero there,
+  and so would a broken one. A mirror positive needs a store actually made **through a
+  mirror VA**, found at its alias index.
+- **C-d.** **W-d is still MISSING.** It needs the destination VA of one `[READ]`
+  (logged by the runtime) and a query at that buffer for the transfer window.
+- **C-e.** The census and "last write before P" are **recomputed on the admitted trace**,
+  and W-b decides: equal means `ATTRIBUTED`; mismatch means `UNATTRIBUTED`, which
+  triggers the in-process latch in point 3.
+
+## Basis
+
+- **Observed:** the trace file equals the cap; "Recording stopped" with no process-exit
+  line; `timed_out=false`; the terminal exists only in the process's log; P comes from
+  `!tt 100`; S2 passes on the log alone; `[READ]` lines lack destination VAs; (4) is a
+  first-N IP sample.
+- **Inferred:** the clobber and the terminal read postdate the recording's end, which
+  fully explains the "contradiction"; the record array is a guest instruction store.
+- **Uncertain:** whether `TTD.Memory "w"` reports syscall-output memory (W-d); the
+  writer's identity.
+
+## Reversed by
+
+- A trace meeting **C-a and C-b** whose recomputed census still shows no write of the
+  record array before P while the value at P reads `0` → W-b selects `UNATTRIBUTED`, and
+  C1 moves to the in-process last-write latch. **TTD is then retired for this question
+  only; the W11 class admission stands.**
+- A **proper** W-d control showing syscall-output writes are reported → drop exclusion
+  (d).
+- Evidence that the recording stop was not cap-induced and the trace does contain the
+  terminal at P → this ruling's main finding falls and the question reopens on the
+  existing trace.
+
+## Withdrawn from `docs/reviews/c1-terminal-slot-finding.md`
+
+The sections *"W-d is ANSWERED"*, *"H-ALIAS is EXCLUDED"*, *"H-KERNEL excluded"* and
+*"TTD is the wrong instrument"* are **NOT ADMITTED**, and the record carries a
+withdrawal block saying so. The **non-TTD minidump A/B survives** as corroboration.

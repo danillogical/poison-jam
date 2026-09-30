@@ -1,5 +1,39 @@
 # C1 finding: the terminal slot holds `0`, and TTD's own record says it held `0xFE000104`
 
+> ## WITHDRAWAL (2026-09-30, Advisor §2.3 ruling)
+>
+> **The trace this record's later sections rest on FAILS W11's S1: it was truncated at
+> its size cap.** The Advisor's observation, verified independently in this session:
+>
+> | Claim | Measured |
+> |---|---|
+> | the `.run` is at the cap | **YES** — `8,589,934,592` bytes = exactly `8192 MB` |
+> | the recorder ended by cap, not by process exit | **YES** — `ttd-output.txt` says *"Recording stopped after 43375ms"*, where the two earlier traces say *"Process exited with exit code …"*; `timed_out=false`, so the tool did not stop it |
+> | the terminal event is in the LOG, not necessarily the TRACE | **YES** — `[ICALL]` is at log line 23,481 of 23,484; the log is written by the process, which kept running after recording stopped |
+>
+> **Therefore these sections are NOT ADMITTED and their conclusions are WITHDRAWN:**
+>
+> - *"W-d is ANSWERED: TTD records no kernel-mode writes"* — the measurement was a
+>   first-N IP sample, which is observation only, and it cannot show kernel writes are
+>   unreported (a kernel-mode write would not carry an `ntdll`/`KERNELBASE` IP in the
+>   first place). W11's exclusion (d) **remains uncertain**, exactly as ruled.
+> - *"H-ALIAS is EXCLUDED"* — a negative at a mirror is what a WORKING mirror query
+>   returns for a canonically-written range, so it does not supply W-c. **W-c remains
+>   MISSING and is not waived.**
+> - *"H-KERNEL is excluded"* / *"TTD is the wrong instrument"* — unsupported.
+> - *"the complete write census"* and *"nothing writes the table after the install"* —
+>   not admitted: a trace that fails S1 has no coverage for its tail, so it supports
+>   **no absence at all**, not even for user-mode stores.
+>
+> **What survives:** the non-TTD minidump A/B (the clobber is real, the record array is
+> present, slot 65 reads `0`), which does not depend on the trace. It stays as
+> corroboration.
+>
+> **The ruling's simplest reading, which needs no new write class:** the clobber and the
+> terminal read happened **after recording stopped**, and the trace shows exactly what
+> that produces. C1 proceeds with TTD, gated on the ruling's C-a…C-e
+> (`docs/reviews/rulings/ttd-query-decision-input.md`, "C1 instrument (2026-09-30)").
+
 **Status:** discovery result, produced by `docs/packets/c1-slot-write-attribution.md`'s
 experiment. Recorded here so the next session starts from it rather than re-deriving.
 

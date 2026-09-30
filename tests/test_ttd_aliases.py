@@ -199,8 +199,11 @@ class AdmissionVerdictTests(unittest.TestCase):
             'mirrors_mapped': 28,
             'mirrors_expected': 28,
             'toolkit_mirrors': 28,
+            # C-b: a terminal is only in-trace when the caller asserts it AND the
+            # recording ended by process exit. The fixture asserts both, so the
+            # positive cases exercise the VERDICT rather than the gate.
             'terminal': {'present': True, 'sequence': 100, 'kind': 'test',
-                         'value_at_p': '0xFE000104'},
+                         'value_at_p': '0xFE000104', 'in_trace': True},
         }
         record.update(overrides)
         return record
@@ -244,7 +247,7 @@ class AdmissionVerdictTests(unittest.TestCase):
         The record-contract is pointed at the real trace from this session so S1
         can be satisfied; without it S1 is UNKNOWN by design (see the next test).
         """
-        contract = (ROOT / 'logs' / 'ttd' / '20260930-030513-184-c1-probe'
+        contract = (ROOT / 'logs' / 'ttd' / '20260930-035010-033-c1-repeat'
                     / 'record-contract.json')
         if not contract.is_file():
             self.skipTest('the recorded trace contract is not present')
@@ -261,7 +264,7 @@ class AdmissionVerdictTests(unittest.TestCase):
         naturally writes the guest-width form, so a string comparison selected
         UNATTRIBUTED WRITER for a slot that was in fact attributed.
         """
-        contract = (ROOT / 'logs' / 'ttd' / '20260930-030513-184-c1-probe'
+        contract = (ROOT / 'logs' / 'ttd' / '20260930-035010-033-c1-repeat'
                     / 'record-contract.json')
         if not contract.is_file():
             self.skipTest('the recorded trace contract is not present')
@@ -475,6 +478,66 @@ class TerminalToolTests(unittest.TestCase):
             evidence = self.terminal.log_evidence(run / 'jsrf_run.log')
         self.assertIsNone(
             self.terminal.failing_call_slot(evidence, run / 'jsrf_run.log'))
+
+
+class CapTruncationTests(unittest.TestCase):
+    """The Advisor's C-a and C-b: a cap-truncated trace supports no absence.
+
+    Measured defect this replaces: `ttd-terminal.py` took P from `!tt 100` -- the END
+    of the trace -- and `ttd-query.py` passed S2 whenever the run's LOG contained the
+    terminal event. Both are satisfied by a trace whose recording stopped at its
+    `-maxFile` cap, where the process outlived the recorder and its log carries events
+    the trace does not. That produced a wrong conclusion, and the ruling names it.
+    """
+
+    def setUp(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'ttd_terminal', ROOT / 'tools' / 'ttd' / 'ttd-terminal.py')
+        self.terminal = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.terminal)
+
+    def test_a_cap_truncated_trace_is_not_in_trace(self) -> None:
+        """The real trace: at the cap, ended by 'Recording stopped'."""
+        trace = (ROOT / 'logs' / 'ttd' / '20260930-053811-458-ttd-aputrap'
+                 / 'jsrf_recomp01.run')
+        if not trace.is_file():
+            self.skipTest('the cap-truncated trace is not present')
+        contract = self.terminal.trace_contract(trace)
+        self.assertFalse(contract.get('ended_by_process_exit'),
+                         'this trace ended by "Recording stopped", not process exit')
+
+    def test_a_completed_trace_ends_by_process_exit(self) -> None:
+        """The contrast: the earlier traces DO say 'Process exited'."""
+        trace = (ROOT / 'logs' / 'ttd' / '20260930-035010-033-c1-repeat'
+                 / 'jsrf_recomp01.run')
+        if not trace.is_file():
+            self.skipTest('the earlier trace is not present')
+        contract = self.terminal.trace_contract(trace)
+        self.assertTrue(contract.get('ended_by_process_exit'))
+
+    def test_the_query_refuses_a_log_only_terminal(self) -> None:
+        """C-b: without `--terminal-in-trace`, S2 must fail."""
+        source = (ROOT / 'tools' / 'ttd' / 'ttd-query.py').read_text(encoding='utf-8')
+        self.assertIn('terminal_in_trace', source)
+        self.assertIn('the terminal event was found in the run LOG but not in the '
+                      'TRACE', source)
+
+    def test_s2_requires_the_in_trace_assertion(self) -> None:
+        """The assertion must be explicit, not defaulted to True.
+
+        Defaulting it True would restore exactly the defect the ruling names.
+        """
+        source = (ROOT / 'tools' / 'ttd' / 'ttd-query.py').read_text(encoding='utf-8')
+        self.assertIn("'in_trace': bool(args.terminal_in_trace)", source)
+        self.assertIn("'--terminal-in-trace', action='store_true'", source)
+
+    def test_the_recorder_records_how_it_ended(self) -> None:
+        """C-a needs the end condition in the contract, not inferred from a size."""
+        source = (ROOT / 'tools' / 'ttd' / 'ttd-record.py').read_text(encoding='utf-8')
+        self.assertIn('ended_by_process_exit', source)
+        self.assertIn('ended_by_recording_stop', source)
+        self.assertIn('at_size_cap', source)
 
 
 if __name__ == '__main__':

@@ -182,6 +182,19 @@ def evaluate_conditions(record: dict, parsed: dict, args) -> dict:
                     f"{contract['max_file_mb']} MB cap, so the tail may be dropped")
         if contract.get('ring'):
             problems.append('the recording used ring mode, which drops the head')
+        # C-a (Advisor ruling 2026-09-30): the trace must END BY PROCESS EXIT.
+        # A recorder that stopped at its cap leaves the process running, so the log
+        # can carry events the trace does not -- and a log-only terminal is not W-a.
+        if contract.get('ended_by_recording_stop') and not contract.get(
+                'ended_by_process_exit'):
+            problems.append(
+                'the recorder stopped without the process exiting '
+                '("Recording stopped" with no "Process exited"), so the trace has '
+                'no tail and supports no absence after its last event')
+        if contract.get('ended_by_process_exit') is False and not contract.get(
+                'ended_by_recording_stop'):
+            problems.append('the recorder output states neither a process exit nor a '
+                            'recording stop, so the ending is unknown')
         add('S1_full_mode', 'FAIL' if problems else 'PASS',
             '; '.join(problems) if problems else
             f"full mode, {contract.get('trace_total_mb')} MB, "
@@ -190,11 +203,22 @@ def evaluate_conditions(record: dict, parsed: dict, args) -> dict:
     # S2 -- the trace CONTAINS the event under investigation (W-a).
     live = parsed['controls'].get('trace_live_writes', [])
     record['trace_is_live'] = bool(live and live[0].split('|')[0] != '0')
+    # C-b (Advisor ruling 2026-09-30): W-a is "the trace CONTAINS the terminal
+    # event", and P is that event's position -- NOT the end of the trace. Measured
+    # defect this replaces: S2 passed whenever the run's LOG contained the event,
+    # and `ttd-terminal.py` took P from `!tt 100`. Both are satisfied by a trace
+    # whose recording stopped before the terminal, which is precisely the case that
+    # produced a wrong conclusion.
     terminal = record.get('terminal') or {}
-    if terminal.get('present'):
+    if terminal.get('present') and terminal.get('in_trace'):
         add('S2_terminal_in_trace', 'PASS',
             f"terminal event at sequence {terminal.get('sequence')}: "
             f"{terminal.get('kind')}")
+    elif terminal.get('present') and not terminal.get('in_trace'):
+        add('S2_terminal_in_trace', 'FAIL',
+            'the terminal event was found in the run LOG but not in the TRACE; the '
+            'process outlived the recording, so no absence or attribution may be '
+            'selected from this trace (W-a as ruled: the trace must contain it)')
     else:
         add('S2_terminal_in_trace', 'FAIL',
             'the trace does not contain the event under investigation, so no '
@@ -515,6 +539,9 @@ def main() -> int:
     parser.add_argument('--terminal-kind', default='',
                         help='what the terminal event is, e.g. "ICALL invalid '
                              'target" or "read of the slot"')
+    parser.add_argument('--terminal-in-trace', action='store_true',
+                        help='assert the terminal event was found IN THE TRACE, not '
+                             'only in the run log; W-a requires this (C-b)')
     parser.add_argument('--value-at-p', default=None,
                         help='the value read at P, which W-b compares with the '
                              'last write before P')
@@ -643,6 +670,9 @@ def main() -> int:
         'sequence': args.terminal_sequence if args.terminal_sequence >= 0 else None,
         'kind': args.terminal_kind or None,
         'value_at_p': args.value_at_p,
+        # C-b: the caller must assert the event is in the TRACE. Defaulting this to
+        # True would restore the defect the ruling names.
+        'in_trace': bool(args.terminal_in_trace),
     }
 
     output, exit_code = run_query(cdb, trace, alias_list, args.max_hits,

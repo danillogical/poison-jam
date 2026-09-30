@@ -287,12 +287,26 @@ satisfy the two rules above on its own. The per-alias query in `tools/ttd/ttd-qu
 qualifies only when all of the following hold, and **any failure selects `UNKNOWN`** — it
 never names a writer, and it never selects an unattributed or read-path row:
 
-- **S1.** Full mode only: no `-ring`, trace size below `-maxFile`, and the `.out` shows a
-  process-exit end with its exit code recorded. A trace ended by `ttd -stop` is out of
-  scope unless the terminal position precedes the stop.
-- **S2.** The trace **contains** the event under investigation (the terminal position P),
-  the traced run's executable hash and profile settings match a strict ledger run or every
-  difference is recorded, and the event of interest happens before P.
+- **S1.** Full mode only: no `-ring`, trace size **below** `-maxFile`, and the `.out`
+  shows a **process-exit end** with its exit code recorded. A trace ended by `ttd -stop`
+  is out of scope unless the terminal position precedes the stop.
+
+  **`Recording stopped` is a FAIL, and a size at or above the cap is a FAIL.** Measured
+  (Advisor ruling 2026-09-30): a recorder cut off by its own `-maxFile` cap leaves the
+  process **running**, so the process's log can carry events the trace does not. A trace
+  that fails S1 has **no coverage for its tail** and therefore supports **no absence at
+  all** — not even for the write class it can see. Size the cap from the T14 disk gate.
+- **S2.** The trace **contains** the event under investigation, and **P is that event's
+  position** — not the end of the trace. The traced run's executable hash and profile
+  settings match a strict ledger run or every difference is recorded, and the event of
+  interest happens before P.
+
+  **A terminal found only in the run LOG is a FAIL.** The log is written by the process,
+  not by the recorder, so a log line does not put an event inside the trace. W-a reads
+  "the trace contains the strict horizon event at position P", and
+  `--terminal-in-trace` asserts it explicitly rather than defaulting it true — defaulting
+  it true is exactly the defect this wording replaces, where S2 passed on
+  `terminal.present` read from the log while P came from `!tt 100`.
 - **S3.** Every alias summary is present, none truncated, counts uncapped,
   `mapped == expected == XBOX_NUM_MIRRORS`, and the debugger exits 0.
 - **S4.** The deciding write is **the last write before P**, never whichever the

@@ -195,6 +195,47 @@ def failing_call_slot(evidence: dict, run_log: Path) -> int | None:
     return int(matches[-1], 16)
 
 
+def trace_contract(trace: Path) -> dict:
+    """The recording's end condition, from the contract and the recorder's output.
+
+    **The recorder's own output is the authority, and it is read every time.** A
+    contract written before this session does not carry the end-condition fields, and
+    reading them as absent would make a COMPLETED trace look unknown -- the opposite
+    error from the one C-a exists to catch. `ttd-output.txt` sits beside the trace and
+    states the ending in the recorder's own words:
+
+        "Process exited with exit code ..."   a completed recording
+        "Recording stopped after Nms"         cut off, e.g. by `-maxFile`
+
+    So the fields are DERIVED from that text whenever the contract lacks them, and the
+    contract's values win when present because it was written by the recorder at the
+    time.
+    """
+    directory = Path(trace).parent
+    data: dict = {'found': False}
+    path = directory / 'record-contract.json'
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text(encoding='utf-8'))
+            data['found'] = True
+        except (OSError, ValueError) as error:
+            data = {'found': False, 'reason': str(error)}
+
+    output = directory / 'ttd-output.txt'
+    if output.is_file():
+        text = output.read_text(encoding='utf-8', errors='replace')
+        data.setdefault('ended_by_process_exit',
+                        'Process exited with exit code' in text)
+        data.setdefault('ended_by_recording_stop', 'Recording stopped' in text)
+    if 'at_size_cap' not in data:
+        runs = sorted(directory.glob('*.run'))
+        total_mb = sum(p.stat().st_size for p in runs) / 1024 / 1024
+        cap = data.get('max_file_mb')
+        data['at_size_cap'] = bool(cap and total_mb >= cap)
+        data.setdefault('trace_total_mb', round(total_mb, 2))
+    return data
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('trace', type=Path)
@@ -279,6 +320,41 @@ def main() -> int:
         record['terminal_kind'] = 'an invalid indirect call'
     else:
         record['terminal_kind'] = None
+    # **C-b: is the terminal event IN THE TRACE?**
+    #
+    # Two facts decide it, and neither is the run log:
+    #   * whether the recorder ended by PROCESS EXIT (from `record-contract.json`,
+    #     which `ttd-record.py` now fills from the recorder's own output). A recorder
+    #     that stopped at its `-maxFile` cap left the process running, so the log can
+    #     contain events the trace does not.
+    #   * whether the trace itself carries an exception record for the terminal code.
+    #
+    # Measured defect this replaces: `ttd-terminal.py` took P from `!tt 100` -- the
+    # END of the trace -- and the query passed S2 whenever the run's LOG contained
+    # the event. Both are satisfied by a trace whose recording stopped before the
+    # terminal, which produced a wrong conclusion (Advisor ruling 2026-09-30).
+    contract = trace_contract(args.trace)
+    record['trace_contract'] = contract
+    exception_code = (evidence['exceptions'][-1]['code']
+                      if evidence['exceptions'] else None)
+    in_trace = bool(
+        contract.get('ended_by_process_exit')
+        and not contract.get('at_size_cap')
+        and exception_code is not None)
+    record['terminal_in_trace'] = in_trace
+    record['terminal_in_trace_basis'] = (
+        f"recorder ended by process exit: {contract.get('ended_by_process_exit')}; "
+        f"at size cap: {contract.get('at_size_cap')}; "
+        f"exception code in the run log: {exception_code}")
+    if not in_trace:
+        record['terminal_in_trace_reason'] = (
+            'the terminal event cannot be shown to be IN THE TRACE: '
+            + ('the recorder stopped at its size cap, so the process outlived it'
+               if contract.get('at_size_cap')
+               else 'the recorder did not end by process exit'
+               if not contract.get('ended_by_process_exit')
+               else 'no exception code appears in the run log'))
+
     record['terminal_sequence_argument'] = end.get('sequence')
     record['value_at_p_argument'] = end.get('value_at_end')
     if end.get('value_at_end') is None and end.get('value_at_end_reason'):
@@ -312,6 +388,12 @@ def main() -> int:
                   f"{end.get('value_at_end') or 'UNREADABLE'}")
         print()
         print()
+        if record.get('terminal_in_trace'):
+            print('  in the trace  : YES -- '
+                  + str(record.get('terminal_in_trace_basis')))
+        else:
+            print('  in the trace  : NO -- W-a cannot be satisfied')
+            print('                  ' + str(record.get('terminal_in_trace_reason')))
         if record.get('value_at_p_unavailable'):
             print(f"  value at P    : UNAVAILABLE -- "
                   f"{record['value_at_p_unavailable']}")
