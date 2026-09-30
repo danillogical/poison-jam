@@ -411,6 +411,15 @@ Artifacts (all under gitignored `logs/`): `v5-recovered-audit.md` (full per-entr
 `v5/verdicts.json` (the 3074 verdicts), `v5/controls.log`, `v5/coalesce-sweep.json`,
 `v5-gen/`, `v5-gen-fresh/`, `v5-gen-coalesce/`. **No entry was retired** — retirement is later work.
 
+**Qualification for the retirement packet.** OBSOLETE means "a body for this address is emitted", not "the
+reviewed span is identical". Comparing emitted spans with the reviewed `end`: **53 exact**, **66 wider**
+(the body carries the reviewed span plus a neighbour's tail or padding), **3 shorter** (`0x00190FB0`,
+`0x001910C0`, `0x001912A0`). The three shorter ones are benign and byte-checked: each emitted span ends on
+the routine's own `ret` (e.g. `0x0019101D-0x0019101F` = `c2 0c 00`, the `ret 0xC` the entry's evidence
+names), and the address the reviewed `end` reached is a *separate* recovered entry with its own emitted
+body — the reviewed `end` was widened over the next routine. A retirement packet must therefore re-check
+each of the 122 spans rather than assume the reviewed `end` was right.
+
 **Null-slot triage (A2h-null-slot-triage-r1, accepted, `O-NO-BOUNDARY-TRANSITION`).** `[0x1C4064]`
 read its installed value `0xFE000104` (raw `0x80000115`, index 65) at every one of 15,498 sampled
 kernel-bridge boundaries on all six threads — per-thread series complete, no gap or duplicate. The
