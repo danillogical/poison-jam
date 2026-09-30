@@ -35,6 +35,12 @@ established facts. Where this plan proposes a change to one of them, it is a tas
   AC'97, 09-27 GP DSP); 21 of 530 game commits moved any stop, and 287 commits followed the last
   move without moving it again.
 
+## CURRENT PACKET — none
+
+No packet is promoted. Phase 0 (§4) and the chores of §5–§6 run as owner-directed chores, which
+need no packet. The first packet is C1 (§7); it is promoted here, by exact revision and hash, only
+after its adequacy review returns `ADEQUATE` (`docs/agent-workflow.md` §5).
+
 ## 1. Objective and definition of done
 
 Port JSRF to Windows by static recompilation. **Minimum playable slice** — all of the following,
@@ -336,3 +342,23 @@ package. Each gets criteria in the same five-part form when it becomes next.
 
 If no packet is promoted in the authoritative plan file, packet implementation is BLOCKED; chores
 listed here run as owner-directed changes once the owner adopts this plan.
+
+## 14. Closed packets
+
+| Packet | Result | Claim (limits in TR) | TR |
+|---|---|---|---|
+| P0.S, P0.1–P0.7 | ACCEPTED | evidence loop: runner, profiles, dumps, review records, provenance | `docs/reviews/p0-3-to-p0-7-acceptance.md` |
+| `A3a-r25` | ACCEPTED | AC'97 codec-ready modelled as `GS.bit8 := GC.bit1` | §3 |
+| `A4a-r2` | ACCEPTED (discovery) | GP start handshake observed; row `O-6` | §4 |
+| `A4p-r1` | ACCEPTED (discovery) | `PIO_FREE` gate-only at 28 direct reads (`O-GATE`) | §4 |
+| `A4s-r6` | ACCEPTED | toolkit synced to v0.11.0 | §1 |
+| `A4b1-r4` | ACCEPTED (stage 2) | GP DSP56300 core ported, GPL-2.0-or-later | §4 |
+| `A4b2-r8` | ACCEPTED | the GP engine's DMA write clears the DSP pending word in a strict run | §4 |
+| `A4b2-NR` (discovery) | `O-TWO-LEG` | the stub inputs do not reach the clearing descriptor | §4 |
+| `A2h-slot-writer-attribution-r2` | ACCEPTED, `O-OPEN` | writer found, row withheld | §5 |
+| Toolkit sync to v0.12.0+ | done (owner) | merge `2925f0b`, stop unchanged | §1 |
+| CRT 64-bit divide helpers | done (owner) | hand-written, unit-tested | §2 |
+| Regeneration with v0.12 lifter | done (owner) | same stop; D3D release difference open | §2 |
+| Fork audit + owner-directed toolkit fixes | committed to `main`/`master`, unverified on Windows | TR §7 table | §7 |
+
+`A2h-r6` was retired (premise refuted; the failure was already fixed by `cb7cae2`).
