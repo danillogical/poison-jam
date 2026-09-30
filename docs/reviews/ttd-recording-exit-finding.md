@@ -261,3 +261,92 @@ Both 90 s and the 20 s control end at the collector's deadline, so they show the
 guest was still running, not that it would never fault. A longer bound, or a run that
 ends for a guest reason, would decide it. That is the successor packet's question and
 it is bounded.
+
+
+## SUPERSEDING RESULT: TTD reaches the horizon once the environment matches
+
+**The two conclusions above about "TTD changes the guest's behaviour" are
+SUPERSEDED.** They rested on a comparison against a control that was itself not on a
+horizon-reachable path.
+
+### What was wrong with the comparison
+
+The ledger now records it (`docs/reviews/strict-horizon-ledger.md`, 2026-09-30): the
+horizon reproduces **exactly** under V3's environment
+(`RECOMP_GPU_ACK=0 RECOMP_APU_TRAP=1 RECOMP_KERNEL_LOG_BUDGET=100000`, 8 s) — same
+return address `0x0014982E`, same slot 65, `exit_code=0xE0424943`, in 7.3 s. It does
+**not** reproduce without `RECOMP_APU_TRAP=1`: 20 s and 90 s runs both reached the
+collector's deadline with 0 invalid ICALLs.
+
+`RECOMP_APU_TRAP` is **feature enablement, not a bypass** (`docs/jsrf-run-profiles.md`),
+so a run with it is still STRICT, and `check-run-profile.py` agrees.
+
+**Both TTD recordings were made with `RECOMP_GPU_ACK=0` only** — a configuration that
+does not reach the horizon untraced either. So the earlier comparison was between two
+runs that were both off the horizon path, and the difference between them (577 lines
+versus 3226) was not evidence that recording changes guest behaviour.
+
+### The corrected experiment
+
+A TTD recording **with the horizon-reachable environment**
+(`logs/ttd/20260930-053811-458-ttd-aputrap/`):
+
+| | value |
+|---|---|
+| log lines | **23,484** (against 577 for the earlier TTD runs) |
+| reached the horizon | **YES** — `[ICALL] invalid target 0x00000000 return=0014982E` |
+| same site as the untraced run | **YES** — `return=0014982E`, slot 65 |
+| kernel calls at the stop | 5175, ending `ordinal 294 (slot 64) ret=0x00149F5D` |
+| `[EXCEPTION]` | `code=0xE0424943`, the project's own invalid-indirect-call code |
+| trace size | 8192.0 MB against an 8192 MB cap — **AT the cap** |
+
+**TTD recording does not prevent the horizon.** The traced run reaches the same
+terminal site as the untraced one, with the same exit code. The two earlier TTD runs
+died early because the launch lacked `RECOMP_APU_TRAP=1`, which is a launch
+configuration, not a property of recording.
+
+### What the W11 verdict says about this trace
+
+Run through `tools/ttd/ttd-query.py` (S1–S8 evaluated mechanically):
+
+```
+W11 ADMISSION: NOT ADMITTED
+  FAIL     S1_full_mode        trace is 8192.0 MB against a 8192 MB cap
+  FAIL     S2_terminal_in_trace  no terminal position P supplied
+  PASS     S3_coverage         29/29 aliases, none truncated, 28/28 views
+  PASS     S4_last_before_P    29 alias(es) reported a last-write-before-P row
+  FAIL     S5_controls         no mirror positive (W-c)
+  UNKNOWN  S6_value_consistency  no P, so W-b cannot be evaluated
+  PASS     S7_hash_binding
+  PASS     S8_not_a_strict_run
+```
+
+The install positive is **FOUND** (`0xFE000104` written to slot 65) and the
+trace-live and known-negative controls pass. **The two failures are now both
+mechanical and both fixable**, which is the change this result makes:
+
+  * **S1** — the trace hit its size cap, so the tail may be dropped. A larger
+    `--max-file-mb` (or a shorter bound) removes it. The horizon is *inside* this
+    trace, so the cap did not truncate the event here, but S1 cannot be *shown* to
+    hold from the artifact alone.
+  * **S2 / S6** — the query needs the terminal position P and the value at P, which
+    `ttd-query.py` accepts as `--terminal-sequence` and `--value-at-p`. Supplying
+    them turns W-a and W-b into mechanical evaluations.
+
+**W-c (the mirror positive) remains a genuine missing control** and is the Advisor's
+finding F5, unchanged: no write in this trace reached any mirror view, so a zero at a
+mirror alias is still not evidence.
+
+### Consequence for C1
+
+**C1 is no longer blocked by "TTD cannot reach the horizon".** It is blocked by two
+mechanical conditions that the next recording can satisfy:
+
+1. record with `RECOMP_APU_TRAP=1` (so the horizon is reachable) **and** a larger
+   `--max-file-mb` (so S1 holds);
+2. supply the terminal position P and the value at P to the query, which requires
+   reading them from the trace — the one piece of analysis the tool does not yet do
+   for itself.
+
+The C1 question itself is unchanged: which code writes the value the terminal read
+sees at `[0x1C4064]`.

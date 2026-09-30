@@ -21,6 +21,7 @@ Rules this ledger follows:
 | 2026-09-30 | `5fc6348` | `4ec3eca` | `20260930-034938-427-ttd-exit-control` | **NOT REACHED** — `diagnostic_deadline` at 11.98 s with **0 invalid ICALLs**; the guest was still live (1002 kernel calls, 6 threads, 0 `[UNIMPL]`, 0 exceptions, the same 10 data exports) | none | 10:49:50.4 |
 | 2026-09-30 | `5fc6348` | `4ec3eca` | `20260930-053228-652-nonttd-196a29` | **NOT REACHED** — `diagnostic_deadline` at 25.04 s, 0 invalid ICALLs, 0 `[UNIMPL]`, 3226 log lines. Reaches and passes `0x00196967`/`0x00194520`/`0x00196A65`, the region where the TTD-recorded run dies at 577 lines | none | 12:32:53.7 || 2026-09-30 | `5fc6348` | `4ec3eca` | `20260930-053228-652-nonttd-196a29` | **NOT REACHED** — `diagnostic_deadline` at 25.04 s, 0 invalid ICALLs, 0 `[UNIMPL]`, 3226 log lines. Reaches and passes `0x00196967`/`0x00194520`/`0x00196A65`, the region where the TTD-recorded run dies at 577 lines | none | 12:32:53.7 |
 | 2026-09-30 | `5fc6348` | `4ec3eca` | `20260930-053502-372-nonttd-90s` | **NOT REACHED** — `diagnostic_deadline` at 93.94 s, 0 invalid ICALLs, 0 `[UNIMPL]`, 4031 log lines. Reaches and passes `0x00196967`/`0x00194520`/`0x00196A65`, the region where the TTD-recorded run dies at 577 lines | none | 12:35:03.3 |
+| 2026-09-30 | `5fc6348` | `4ec3eca` | `20260930-053722-314-v3-repro-check` | **REPRODUCED** — the kernel thunk table overwritten and the next thunk call faults: `[ICALL] invalid target 0x00000000` `return=0014982E` (slot 65), `exit_code=0xE0424943`, 16442 log lines, 0 ABI failures, 1 `[EXCEPTION]` at that code | `0x0014982E` (tid 21432) | 12:37:32.1 |
 
 **The 2026-09-30 row is a strict run that did not reach the horizon, and it is recorded as
 such.** It is the discriminating control for the TTD question: the same environment
@@ -57,3 +58,41 @@ table.
 row from `logs/runs/<name>/` without guessing which file "r3" meant. `scripts/check-horizon-ledger.py`
 (W14) enforces that: it fails when an archived STRICT run has no ledger line naming it, which is how
 these four were found cited only by suffix.
+
+
+## 2026-09-30: the horizon reproduces exactly, and it depends on `RECOMP_APU_TRAP`
+
+The 90 s and 20 s runs above reached **no** horizon (0 invalid ICALLs, both at the
+collector's deadline). Reproducing **V3's exact environment** instead —
+`RECOMP_GPU_ACK=0 RECOMP_APU_TRAP=1 RECOMP_KERNEL_LOG_BUDGET=100000`, 8 s — reaches it
+in **7.3 s**:
+
+```
+[ICALL] invalid target 0x00000000 tid=21432 esp=00F7FD00 return=0014982E
+[KERNEL] #5173: ordinal 277 (slot 65) esp=0x00F7FD00 ret=0x0014982E
+exit_code = 0xE0424943
+```
+
+`0x0014982E` is the **same return address** the 2026-09-29 ledger rows record, and
+slot 65 is the same slot. **The horizon did not move; it was not being reached because
+the run was missing `RECOMP_APU_TRAP=1`.**
+
+`RECOMP_APU_TRAP` is classified in `docs/jsrf-run-profiles.md` as **feature
+enablement — real capability, not a bypass**, so a run with it is still STRICT
+(`check-run-profile.py` agrees: `STRICT`). It routes `0xFE800000..0xFE880000` to the
+emulated APU. Without it the guest takes a different path and never reaches the thunk
+table clobber within 90 s.
+
+**Consequence.** The horizon framing is **unchanged and freshly reproduced on the
+current binary** (`5fc6348` / `4ec3eca`, built this session). C1's target is still the
+terminal slot write, and the "the horizon may have moved" reading in
+`docs/reviews/ttd-recording-exit-finding.md` is **superseded by this row**: the
+earlier runs simply lacked the APU trap.
+
+**This is also the control the TTD question needs.** A traced run must be launched
+with the same `RECOMP_APU_TRAP=1` if it is to reach the horizon at all — the two TTD
+recordings were made with `RECOMP_GPU_ACK=0` only, which is now known to be a
+non-horizon-reachable configuration. **The TTD exit may therefore have been
+mis-attributed**: the traced run was not on the path that reaches the horizon in the
+first place, so "TTD changes the guest's behaviour" and "the traced configuration
+never reaches the horizon anyway" are not yet separated.

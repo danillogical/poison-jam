@@ -141,11 +141,22 @@ override-check:
 horizon-check:
     {{python}} -X utf8 scripts/check-horizon-ledger.py --since 2026-09-29
 
-# Record one strict run under WinDbg TTD (T1). Sets RECOMP_GPU_ACK=0 for you,
-# exactly as `just strict-run` does: the profile contract puts the strict setting
-# on the caller, and the tool refuses rather than inserting it.
+# Record one strict run under WinDbg TTD (T1).
+#
+# Sets the HORIZON-REACHABLE strict environment, which is what makes the trace usable
+# at all: measured, `RECOMP_APU_TRAP=1` is the difference between reaching the terminal
+# thunk-table event in ~7 s and not reaching it in 90 s
+# (`docs/reviews/strict-horizon-ledger.md`, 2026-09-30). Without it a trace stops early
+# for a launch-configuration reason, which reads like a recording problem.
+#
+# `RECOMP_GPU_ACK=0` is set here for the same reason `just strict-run` sets it: the
+# profile contract puts the strict setting on the CALLER, and the tool refuses rather
+# than inserting it.
+#
+# The trace cap is raised because the default 8 GB was reached EXACTLY, which fails
+# W11's S1 (the tail may be dropped).
 ttd-record label="ttd":
-    $env:RECOMP_GPU_ACK = "0"; {{python}} -X utf8 tools/ttd/ttd-record.py --label {{label}}
+    $env:RECOMP_GPU_ACK = "0"; $env:RECOMP_APU_TRAP = "1"; $env:RECOMP_KERNEL_LOG_BUDGET = "100000"; {{python}} -X utf8 tools/ttd/ttd-record.py --label {{label}} --max-file-mb 20480
 
 # Query a TTD trace for writes to a guest VA across all 29 aliases (T1).
 # Add --terminal-sequence / --value-at-p to supply W11's position P and enable the
