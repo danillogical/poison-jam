@@ -40,6 +40,7 @@ REQUIRED_RECIPES = (
     'secret-audit', 'symbols', 'logq', 'enumerate', 'cite-check', 'receipt',
     'horizon-check', 'override-check', 'dump-controls',
     'recurrence-check',
+    'qualify',
 )
 
 # The recipes a document must point at, and the document that must point at them.

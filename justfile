@@ -89,6 +89,10 @@ check:
     {{python}} -X utf8 scripts/check-override-drift.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Output "check: all checkers passed"
 
+# W2s premise-qualification gate: run this BEFORE any Planner call.
+qualify run *args:
+    {{python}} -X utf8 scripts/qualify-premise.py --run {{run}} {{args}}
+
 # W1s recurrence check: the same criterion blocking two consecutive reviews.
 recurrence-check:
     {{python}} -X utf8 scripts/check-review-recurrence.py
