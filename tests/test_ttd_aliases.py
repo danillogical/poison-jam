@@ -540,5 +540,65 @@ class CapTruncationTests(unittest.TestCase):
         self.assertIn('at_size_cap', source)
 
 
+class CensusToolTests(unittest.TestCase):
+    """`ttd-census.py`: the range census, and the base-of-a-number defect it hit.
+
+    Measured: the first version rendered module bases with `f'{base}'`, which is
+    DECIMAL for a Python int, while `census.js`'s `_parseHex` parses what it is given as
+    hex. Every range was therefore wrong and every write classified `UNKNOWN`. It is the
+    same class of defect T1 hit twice -- a number whose base is assumed rather than
+    stated -- so the control asserts the base explicitly.
+    """
+
+    def setUp(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'ttd_census', ROOT / 'tools' / 'ttd' / 'ttd-census.py')
+        self.census = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.census)
+
+    def test_the_module_list_is_hex(self) -> None:
+        """A decimal base makes every range wrong and every write UNKNOWN."""
+        source = (ROOT / 'tools' / 'ttd' / 'ttd-census.py').read_text(encoding='utf-8')
+        self.assertIn("f'{name}=0x{base:X}:0x{end:X}'", source)
+        self.assertNotIn("f'{name}={base}:{end}'", source)
+
+    def test_the_js_parser_reads_hex(self) -> None:
+        """The other half of the contract: census.js parses hex, by design."""
+        source = (ROOT / 'tools' / 'ttd' / 'census.js').read_text(encoding='utf-8')
+        self.assertIn("indexOf('0x')", source)
+        self.assertIn('parseInt', source)
+
+    def test_module_ranges_are_disjoint_after_parsing(self) -> None:
+        """The real list, parsed the way census.js parses it.
+
+        This is the control that would have caught the defect: with decimal bases every
+        range sits near 1.4e14 and no real IP falls inside any of them.
+        """
+        trace = (ROOT / 'logs' / 'ttd' / '20260930-053811-458-ttd-aputrap'
+                 / 'jsrf_recomp01.run')
+        if not trace.is_file():
+            self.skipTest('the trace is not present')
+        modules = self.census.loaded_modules(self.census.resolve_cdb(), trace)
+        if not modules:
+            self.skipTest('no modules could be read from the trace')
+        # The IP the earlier census classified UNKNOWN.
+        ip = 0x7FFA628FE579
+        holders = [name for name, (base, end) in modules.items()
+                   if base <= ip < end]
+        self.assertEqual(holders, ['VCRUNTIME140.dll'],
+                         'the module containing the observed write IP')
+
+    def test_the_observed_census_matches_the_independent_result(self) -> None:
+        """8 VCRUNTIME writes then 1 exe write, the same shape as the earlier query."""
+        trace = (ROOT / 'logs' / 'ttd' / '20260930-053811-458-ttd-aputrap'
+                 / 'jsrf_recomp01.run')
+        if not trace.is_file():
+            self.skipTest('the trace is not present')
+        modules = self.census.loaded_modules(self.census.resolve_cdb(), trace)
+        self.assertIn('VCRUNTIME140.dll', modules)
+        self.assertIn('jsrf_recomp.exe', modules)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -118,7 +118,12 @@ def main() -> int:
     lo = host_base + args.guest_va
     hi = lo + args.length
 
-    module_list = ','.join(f'{name}={base}:{end}'
+    # **Hex, explicitly.** `f'{base}'` renders a Python int in DECIMAL, and
+    # `census.js`'s `_parseHex` parses what it is given as hex -- so the first version
+    # sent `140713372024832` where the module began at `0x7FFA628E0000`, every range was
+    # wrong, and every write classified UNKNOWN. Measured, and it is the same class of
+    # defect T1 hit twice: a number whose base is assumed rather than stated.
+    module_list = ','.join(f'{name}=0x{base:X}:0x{end:X}'
                            for name, (base, end) in sorted(modules.items()))
     commands = [f'.scriptload {CENSUS_JS}',
                 f'dx @$scriptContents.census("{module_list}", 0x{lo:X}, 0x{hi:X}, '
