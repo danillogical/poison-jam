@@ -46,6 +46,7 @@ REQUIRED_RECIPES = (
     'ruling-check',
     'chore',
     'packet-check',
+    'transcribed-check',
 )
 
 # The recipes a document must point at, and the document that must point at them.

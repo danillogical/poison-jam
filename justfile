@@ -89,6 +89,10 @@ check:
     {{python}} -X utf8 scripts/check-override-drift.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Output "check: all checkers passed"
 
+# W5s transcribed-value re-check: a table row nobody re-checked.
+transcribed-check:
+    {{python}} -X utf8 scripts/check-transcribed-values.py
+
 # W3/W10s packet prerequisites: a dry-run transcript and stated premises.
 packet-check:
     {{python}} -X utf8 scripts/check-packet-transcript.py
