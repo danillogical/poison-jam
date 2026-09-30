@@ -1,121 +1,92 @@
 # Fresh-session startup receipt
 
-Owner instruction: startup + light role smoke test + Phase 0 rebaseline (2026-09-29).
-Filled per `docs/agent-workflow.md` §0.6; this is a receipt, not a second policy.
+Filled per `docs/agent-workflow.md` §0.6 by `scripts/gen-startup-receipt.py`; this is a receipt, not a second policy.
+Fields marked **UNVERIFIED** cannot be measured by a generator and must be
+filled from the probe that establishes them.
+
+Generated: 2026-09-30T11:03:07.679574+00:00
 
 ## Identity and handoff
 
-- Session ID/date/harness: `session-f5018f2e-ee33-4185-89cb-34c4cf570598`, 2026-09-29, DSH (`DSH_PROFILE=web`, `DSH_WEB_URL=http://127.0.0.1:3080`)
-- Actual main model/effort (metadata evidence, or UNKNOWN): `workbuddy-ai/deepseek-v4.1-flash` @ `max` (harness metadata: `agent-default-model` in the active profile patch; the Session row of workflow §1). Not independently verifiable from inside the session — recorded from configuration, not from a probe.
-- Workflow/plan/run-profile revisions and dirty diff identity: all three read at the revisions below; no dirty diff (`git status --porcelain` empty in both trees)
-- Game revision/status; toolkit revision/status: game `master` `5776aab` clean; toolkit `main` `2a349c8` clean
-- Unrelated edits preserved: none present at startup (both trees clean); no unrelated edit was created
-- CURRENT PACKET copied from plan (packet + exact revision + SHA-256), or NONE: **NONE** (`plan-jsrf-bare-minimum.md` §"CURRENT PACKET — none": "No packet is promoted. Phase 0 (§4) and the chores of §5–§6 run as owner-directed chores, which need no packet.")
+- Session ID/date/harness: 2026-09-30, DSH; session started 02:49:47-07:00
+  (harness: `DSH_PROFILE=web`, `DSH_WEB_URL=http://127.0.0.1:3080`), launched from a
+  **new elevated** command prompt so `ttd.exe` recording works
+- Actual main model/effort: `workbuddy-ai/deepseek-v4.1-flash` @ `max` (the §1
+  Session row; recorded from configuration, not independently verifiable from
+  inside the session)
+- Workflow/plan/run-profile revisions and dirty diff identity: workflow `c30a32ca7c94c3b9`, plan `b4a8e7665c34a54c`, run profiles `9e4838af2cd7746e`
+- Game revision/status: `master` `5fc6348128780493177cc6dc213e06a2606038d4` (clean at startup; the working tree carries this session's later edits)
+- Toolkit revision/status: `main` `4ec3eca0d24d4d3d4008ce13c024a266758603ad` (clean)
+- Unrelated edits preserved: none were present at startup (both trees clean); no unrelated edit was created or reverted
+- CURRENT PACKET: present in the plan, and it names **none** — "No packet is promoted. Phase 0 (§4) and the chores of §5–§6 run as owner-directed chores, which need no packet."
+  - plan hash `b4a8e7665c34a54cb086d1fe82990f9e7ab37d1d4a6467efb6f7b9009c7bb15a`
 - Dependencies and their recorded acceptance reviews: none (no packet promoted)
-- Next exact authorized action: Phase 0 §4 V1→V5 in order, then stop
-- Build/run owner and worker write ownership: Session executes V1–V4; one DeepSeek worker performs the V5 read-only audit (scratch output under gitignored `logs/`)
+- Next exact authorized action: Phase 1 tooling chores in the plan's order — T14, T6, T7, T4, then T1, T2, T8–T13, T5, with T3 now that the owner's assets are present
+- Build/run owner and worker write ownership: Session owns integration/build/run; bounded workers were given disjoint new-file scopes (T9, T10)
 
 ## Route resolution — PASS / BLOCKED
 
-- Planner: requested Muse Spark 1.3 @ high (`skill: muse-worker`, fresh handle); returned `modelId: muse-spark-1.3-contributor`, `reasoningEffort: high` — **PASS**
-- Persistent advisor: requested `claude/claude-opus-5-5` @ high via a continuable path; **BLOCKED** — see below
-- Acceptance reviewer: requested `codex/gpt-6.1-sol` @ high; route and command reproduced, effort not exposable on the only available path — **PARTIAL**
-- Workers: requested `workbuddy-ai/deepseek-v4.1-flash` @ max (session default, not per-child pinned); command executed and correct result returned — **PASS**
-- Exact error or ambiguity, if any: see the Advisor section
+Resolved **live** in this session with `list_subagent_models` (§1). The
+model-selection policy repaired on disk at the end of the previous session was
+re-tested here and **works**.
 
-### Persistent advisor — BLOCKED (root cause found and repaired for the next session)
-
-Every available spawn surface refused the pinned route:
-
-- `subagent` with `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: high`
-  → `Error: child model selection is disabled for this tool instance`
-- `subagent_fork` with the same pin → identical error
-- `workflow` → `agent()` is **forbidden** for the Advisor by workflow §1 while it delegates through
-  one-shot `subagents.start()` (`dsh-workflow-ptc/lib/index.js:328`), so it was not used for the Advisor.
-
-`dsh-tool-subagent/lib/index.js:64` raises that error when
-`requestedAgentOptions(..., enabled)` receives `enabled === false`. `enabled` is fixed when the
-tool is installed for a session (`selectForSession`, `lib/index.js:588-605`) from
-`subagentModelSelectionPolicy`; a session with no recorded policy stays disabled, and a live
-profile-patch reload does **not** re-sample it (verified: the error persisted after the edit below).
-
-**Root cause of the missing policy.** There is no live `~/.dsh/settings.yaml`; DSH migrated it
-(`dsh-settings/lib/index.js:346-363`, `importLegacyDocument`) and renamed it
-`settings.yaml.imported`. The migration **silently dropped** the `subagent-model-selection`
-section: its `allowedModels` listed `codex/gpt-6-sol` **twice**, and
-`assertAllowedModelRoutes` rejects duplicate routes (`model-selection-settings.js:34`), so the
-whole section was rejected, logged as a warning, and never imported. Reproduced mechanically:
-
-```
-OLD settings.yaml allowedModels -> REJECT duplicate route: codex/gpt-6-sol
-NEW cordis.patch.yml allowedModels -> OK 14 unique routes | enabled = True
-```
-
-**Repair applied** (owner-authorized: "use the configured DSH model-selection mechanism/allowedModels
-needed to expose the exact Claude route") — `C:\Users\logic\.dsh\profiles\web\cordis.patch.yml`,
-outside both repositories and therefore not committed to either. It now declares
-`subagent-model-selection-settings` with `enabled: true` and 14 unique routes including
-`claude/claude-opus-5-5`, `codex/gpt-6.1-sol` and `workbuddy-ai/deepseek-v4.1-flash`. The edit
-validates as YAML and passes the same duplicate check. It takes effect for a session composed
-after the edit; it cannot retroactively enable selection in this one.
-
-Per workflow §0.4 this makes the Advisor route **BLOCKED** for accepted game work in this session:
-no available tool simultaneously proves continuability + the exact Claude route + high effort, and
-the instruction is explicit that a one-shot Claude response is FAIL, not "close enough". No
-substitute model was used and no property was silently traded away.
-
-Consequence, per the owner instruction: **accepted-packet work is BLOCKED**; this session's
-owner-directed Phase 0 chore work requires zero senior technical calls and may continue. C1,
-planning, adequacy and acceptance work must not start.
+- Planner: not probed at startup (workflow §0 says the Planner needs no separate probe; each turn reports its own `reasoningEffort`). Expected `Muse Spark 1.3` @ `high` via `skill: muse-worker`, fresh handle. **No Planner call was made this session** — no packet reached planning.
+- Persistent advisor: requested `claude` / `claude-opus-5-5` @ `high`, `route: CONTINUABLE_PINNED`. Resolved live: exactly one advertised route, `claude/claude-opus-5-5`, supporting `low/medium/high/xhigh/max`. **PASS** — see the probe section.
+- Acceptance reviewer: requested `codex` / `gpt-6.1-sol` @ `high`, `route: LIVE_RESOLVE`. Resolved live: exactly one advertised route, `codex/gpt-6.1-sol`. **PASS** — see the probe section.
+- Workers: `workbuddy-ai/deepseek-v4.1-flash` @ `max` (the §1 Worker row). **PASS** — see the probe section.
+- Exact error or ambiguity, if any: none. The previous session's Advisor block (`child model selection is disabled for this tool instance`) did **not** recur; the `subagent-model-selection-settings` patch in `C:\Users\logic\.dsh\profiles\web\cordis.patch.yml` (14 unique routes, `enabled: true`) is now sampled at session composition.
 
 ## Acceptance reviewer probe — PASS / FAIL / UNKNOWN
 
 One review stage (workflow §1); probed on a fresh child that ran one read-only command.
 
-- Child ID; fresh token; response reference; empty-evidence answer; command and output hash; effort; result:
-  `workflow` run `reviewer-smoke`, one agent, `provider: codex`, `model: gpt-6.1-sol`. It ran
-  `git rev-parse --short HEAD` in the game repo and returned `5776aab`, which matches the
-  independently measured HEAD. Empty-evidence answer: "An empty evidence set cannot satisfy a
-  mandatory acceptance criterion because it provides no verifiable support that the required
-  condition was met." **Effort: UNKNOWN — not exposable.** `workflow`'s `agent()` rejects the
-  option outright: `agent() option "reasoningEffort" is not recognized (supported: label, phase,
-  schema, provider, model)`. So `high` could be neither requested nor verified.
-- Route evidence (not the child's self-report): a three-way control on the same path resolved
-  `codex/gpt-6.1-sol` → `"OK"`, while a bogus provider and a valid provider with a bogus model
-  each returned `null` (failed). The route is therefore genuinely honoured, not silently defaulted.
-- Exact error or missing evidence: effort clause unsatisfied; same root cause as the Advisor
-  (model selection disabled at session composition). The reviewer role is not continuable by
-  design, so this is an effort-pinning gap, not a continuability gap.
+- Child ID: `6a045ab8-44fc-4f13-93f3-df2f3afc1666`; provider/model `codex` / `gpt-6.1-sol`; effort `high` (requested and accepted by the spawn surface)
+- Fresh token: `ACC-SMOKE-c9208be7`
+- Command and output hash: `git -C C:\Users\logic\Repos\my_xbox_game rev-parse HEAD` -> `f156aa91178b18c387c2c834a5fa6de680bb717a`; SHA-256 of the 41-byte UTF-8 output with a single trailing LF = `dc3c1c3f7ae22cb6d4efb9dc724e47aba3c82a03e1027f787ea0a06308fc7243`. The value matches the independently measured HEAD.
+- Empty-evidence answer: "An empty evidence set must fail a mandatory acceptance criterion because it contains no verifiable observations establishing that the required predicate was satisfied."
+- Effort: `high`, **exposed and pinned** on this path — the gap the previous session recorded as PARTIAL, now closed.
+- Result: **PASS**. Child discarded after the probe.
 
 ## Persistent advisor probe — PASS / FAIL / UNKNOWN
 
-- Child ID: none created (route BLOCKED before spawn)
-- Turn 1 reference; unique marker given: not reached; marker `ADVISOR-SMOKE-629` was never delivered
-- Named file and the fact deliberately omitted from the brief: not reached
-- Advisor's answer; checked against the file: not reached
-- Turn 2 reference (same child, marker not repeated); returned marker: not reached
-- Result: **FAIL** (no child; continuation untested — `ADVISOR CONTINUATION: FAIL`)
-- Exact error or missing evidence: `child model selection is disabled for this tool instance`
+- Child ID: `251fe018-dfdc-4608-89b8-ca7a1e8d27ec`
+- Route: `claude` / `claude-opus-5-5` @ `high`, spawned through the continuable `subagent` path with model selection enabled
+- Turn 1: read `docs/reviews/strict-horizon-ledger.md` and reported the `Run ID` (`20260930-001405-390-v1-verified-strict`) and `Horizon event` of the last data row — a fact deliberately omitted from the brief. It generated marker `ADVISOR-PROBE-7c3e9a`.
+- Turn 2 (same child, marker **not** repeated in the prompt): returned `ADVISOR-PROBE-7c3e9a` and the same Run ID, and stated it had read no file and run no command that turn.
+- Continuability: the child appears in the model-facing continuable-agent listing and `send_message` reached the same child. **Same-child state proved.**
+- Result: **PASS**. The child was retained for the session and issued the W11 ruling (§2.3) — see `docs/reviews/rulings/ttd-query-decision-input.md`.
 
 ## Packet readiness — PASS / BLOCKED / UNKNOWN
 
-- Frozen revision/hash matches `CURRENT PACKET`: N/A — `CURRENT PACKET` is `none`
-- Adequacy review record and verdict: N/A — no packet
-- Deferred advisories (recorded, not acted on): none
-- Prerequisites / tooling checks: free-space gate PASS (69.4 GB free on `C:`, floor 50 GB)
-- State/plan disagreements and how they were escalated: **Phase 0 V1–V4 were already executed and
-  committed** at this exact revision pair by the preceding session (game `44becd4`, `56372dc`), and
-  are recorded in `docs/jsrf-technical-record.md` §2/§5/§7 and
-  `docs/reviews/strict-horizon-ledger.md`. The owner instruction directs Phase 0 "exactly in
-  order"; re-running V2/V3 would rewrite a committed generated tree and spend ~10 min of runs to
-  re-derive values already on disk. This session therefore **re-verified** the recorded V1–V4
-  results mechanically against the archived artifacts and the current tree (see the report), and
-  executed the genuinely outstanding step V5. No value was accepted from the record without
-  independent re-measurement. Escalation: this is a reading of an owner instruction, not a
-  technical ruling; it is reported explicitly as such rather than resolved silently.
-- Overall disposition and next action: accepted-packet work BLOCKED (Advisor route); owner-directed
-  Phase 0 chore work continues with 0 senior calls; stop after V5.
+- Frozen revision/hash matches `CURRENT PACKET`: N/A — no packet
+- Adequacy review record and verdict: N/A — no packet promoted
+- Deferred advisories (recorded, not acted on): the W11 ruling's T1 reopen list — F3 (per-alias limit), F4 (`ttd-query.py` does not evaluate the known positive and returns 0 when controls fail), F5 (no mirror positive; a MISSING control, not waived), F6 (`XBOX_NUM_MIRRORS` never checked against the run's own `expected`)
+- Prerequisites / tooling checks:
+  - just: just 1.58.0 (C:\Users\logic\AppData\Local\Microsoft\WinGet\Packages\Casey.Just_Microsoft.Winget.Source_8wekyb3d8bbwe\just.EXE)
+  - pre-commit: pre-commit 4.6.2 (C:\Users\logic\AppData\Roaming\Python\Python313\Scripts\pre-commit.EXE)
+  - clang-cl: clang version 23.1.2 (https://github.com/llvm/llvm-project 85ac560262434c9ccfc0c183ec22d4138ed647fb) (C:\Program Files\LLVM\bin\clang-cl.EXE)
+  - ttd: Microsoft (R) TTD 1.01.11 x64 (C:\Users\logic\AppData\Local\Microsoft\WindowsApps\ttd.EXE)
+  - duckdb: 1.5.6 (not on PATH)
+  - python: 3.13.2 (C:\Python313\python.exe)
+  - free space: 63.66 GB (above 50.0 GB floor)
+  - XbSymbolDatabase CLI: present; `v4.0.166-39-g20eced5`
+  - xemu: present, `0.8.136`; its five configured assets all resolve
+- State/plan disagreements and how they were escalated: **one, reported not
+  resolved.** Plan §13's older "Next action" text still says "T14's free-space
+  gate, then V1 → V2 → V3 → V4", but Phase 0 V1–V5 is already complete and
+  committed at this revision pair (V5 landed in `bd887f0`, the plan's own §4 V5 row
+  is marked DONE, and `docs/reviews/strict-horizon-ledger.md` records V3's result).
+  Re-running V2/V3 would rewrite a committed generated tree to re-derive values
+  already on disk, so this session did **not** repeat Phase 0 and instead executed
+  the genuinely outstanding Phase 1 chores. This is a reading of a stale plan
+  pointer, reported explicitly rather than resolved silently.
+- Overall disposition and next action: all three senior routes **PASS**; no packet
+  is promoted, so accepted-packet work is BLOCKED by §0.5 (not by a route), and
+  the owner-directed Phase 1 chores proceed. Next action: the discovery packet the
+  W11 ruling requires on the `0xC0000409` exit under TTD, because C1 is blocked
+  until a traced run reaches the horizon.
 
-Do not mark readiness PASS with a failed or unknown required item. A provider catalog entry is not
-a completed invocation. A new advisor answering the follow-up is not continuation. A readiness
-response is not acceptance of a game packet.
+Do not mark readiness PASS with a failed or unknown required item. A provider
+catalog entry is not a completed invocation. A new advisor answering the
+follow-up is not continuation. A readiness response is not acceptance of a
+game packet.
