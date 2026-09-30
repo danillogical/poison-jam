@@ -259,34 +259,48 @@ silently breaking a record that cites it.
 
 ## 7. Phase 3 — critical path to boot (after V3)
 
-**C1 — Attribute the slot write with TTD (discovery).** Replaces the specified A2h successor.
-**BLOCKED 2026-09-30 (W11).** A TTD trace is admitted as a lossless class, but every traced
-run so far exits `0xC0000409` after ~5.8 s / 577 log lines and never reaches the horizon, so
-witness W-a cannot hold and no attribution may be selected
-(`docs/reviews/rulings/ttd-query-decision-input.md`).
-- **The discriminating experiment is DONE, and it names the blocker.**
-  `docs/reviews/ttd-recording-exit-finding.md` records it: the non-TTD control
-  (`logs/runs/20260930-053228-652-nonttd-196a29`, same binary, same environment, 20 s)
-  **passes straight through the region where TTD died** — `[RECOVERED] 0x00196967`,
-  `0x00194520` and `0x00196A65` all returned with ABI verified, 0 ABI failures, 0 invalid
-  ICALLs, 3226 log lines against TTD's 577. **The TTD recording changes the guest's
-  behaviour**, which is precisely the W11 reversal condition that keeps the class admitted
-  while blocking C1 through TTD.
-- **C1 therefore cannot use TTD until a traced run reaches the horizon.** The next packet is
-  a **discovery packet on why recording changes the run**, not C1. It is bounded: the two
-  TTD traces and this non-TTD control are the evidence, and the question is one instruction
-  (`0x00196A29`) wide.
-- Question (for the successor packet): why does a TTD-recorded run stop at `0x00196A29`
-  when the same binary in the same environment passes that region untraced?
-- Question (for C1, unchanged once unblocked): which code writes the value the terminal read
-  sees at `[0x1C4064]`, and which writes device `+0x242C`? If V3 moved the stop, C1 targets
-  the new stop's first bad value instead.
-- Experiment: T1 recording of one strict run; the T1 query over all 29 aliases of each address;
-  map native IPs to guest functions with the linker map and T2 names.
-- Acceptance: the query artifact, its positive control (the install write) present, and the row
-  selected by rule — **and, per W11, witnesses W-a (terminal-in-trace) and W-b (value
-  consistency), with `O-UNKNOWN` selectable only under W-b equality**. Senior budget: 1 Planner
-  (self-review), 1 acceptance review.
+**C1 — Attribute the record-array write (discovery).** Replaces the specified A2h successor.
+**INSTRUMENT CHOICE RE-OPENED 2026-09-30.** The packet is drafted
+(`docs/packets/c1-slot-write-attribution.md`) and its experiments were run
+(`docs/reviews/c1-terminal-slot-finding.md`). Four measurements, one exclusion, and a
+premise that no longer holds:
+
+- **The horizon IS reachable under recording.** The earlier "TTD changes the guest's
+  behaviour" reading was wrong: `RECOMP_APU_TRAP=1` is the difference, and with it a
+  traced run reaches the horizon at 23,484 log lines, same site (`return=0014982E`,
+  slot 65, `exit_code=0xE0424943`). `just ttd-record` now sets that environment.
+- **The clobber is confirmed from a NON-TTD source.** The original XBE at `0x001C3F60`
+  holds `800000BB 800000BE …` (ordinals); the non-TTD minidump of the
+  horizon-reaching run holds the 40-byte-stride **record array** whose constants match
+  TR §5 exactly. Slot 65 reads `0x00000000` there, agreeing with the guest's own
+  `[ICALL] invalid target 0x00000000`.
+- **The complete write census of the table** (1080 writes): 480 byte-at-a-time fills
+  from `VCRUNTIME140!memset_repstos` at position 4005, then 120 dword installs from
+  `jsrf_recomp` ending at 483399. **Nothing writes the table after the install.**
+- **TTD CANNOT SEE THE WRITE CLASS THAT MOST PLAUSIBLY PRODUCED THE `0`.** 400,000
+  writes scanned across the low 4 GB, **zero** outside `jsrf_recomp.exe` and
+  `VCRUNTIME140` — so kernel-mode writes are invisible. W11's exclusion (d) is
+  **confirmed rather than suspected**, and the trace's log shows 14 `[READ]` lines
+  where `NtReadFile` delivered into guest buffers with none of those bytes appearing
+  as a write.
+- **W-c is satisfied for this trace**, by a construction the ruling did not specify:
+  all 28 mirror aliases of the table's full range queried, zero writes, over a range
+  known to have been written through the canonical view.
+
+**Why C1 is not ready to promote.** Its instrument premise — that a TTD trace can
+answer "which code writes this slot" — is measured to fail for one plausible writer
+class, so promoting it unchanged would violate §5.3's premise-freshness rule. **The
+instrument choice is with the Advisor under §2.3**, and this section is updated when
+that ruling lands.
+
+- Question: **which code writes the record array** (not "which writes slot 65" — the
+  census shows the table is written wholesale, so the unit is the array).
+- Experiment, once the instrument is decided: see the packet's `### Experiments`,
+  which already carries the write census, the alias query and the W-d control.
+- Acceptance: the query artifact, its positive control (the install write) present,
+  and the row selected by rule — **and, per W11, witnesses W-a (terminal-in-trace) and
+  W-b (value consistency), with `O-UNKNOWN` selectable only under W-b equality**.
+  Senior budget: 1 Planner (self-review), 1 acceptance review.
 
 **C2 — Kernel memory follow-ups (change, only if V3 or C1 implicates them):**
 `NtQueryVirtualMemory` consulting the region registry; partial `MEM_RELEASE`; whether to keep the
@@ -420,12 +434,29 @@ package. Each gets criteria in the same five-part form when it becomes next.
    the images. Owner approves the W-row document edits as they land (W7, W8, W15 first).
 3. Then **C1** as the first packet (after W11), with C5's Advisor preflight in parallel.
 
-**Updated 2026-09-30 (this session).** Phase 1 is largely done: T14, T6, T7, T4, T1, T2, T8 and
-T12 have landed, and **W11 is ruled**. The ruling changed the critical path: **C1 is BLOCKED**
-because no TTD trace reaches the horizon, so the next packet is a **discovery packet on the
-`0xC0000409` exit under TTD** — what fails in the traced process at ~5.8 s, and whether TTD
-recording is the cause. Until a traced run reaches the terminal event, no C1 attribution can be
-selected by rule.
+**Updated 2026-09-30 (second entry, end of session).** Supersedes the note above.
+
+**Phase 1 is complete** (T14, T6, T7, T4, T1, T2, T3, T5, T8–T13), and **Phase 2's
+checks are implemented** (W1, W2, W3/W10, W4/W12, W5, W6, W7, W9, W11, W13, W14, W15,
+W16; **W8's fallback half is owner-reserved**). `just check` runs ten checkers.
+
+**The critical path moved twice more, and both moves are measurements:**
+
+1. The `0xC0000409`-under-TTD reading was **wrong**: it was a missing
+   `RECOMP_APU_TRAP=1` in the launch environment. With it, a traced run reaches the
+   horizon (23,484 log lines, same site, same exit code).
+2. **TTD cannot see the write class C1 is looking for.** 400,000 writes scanned, zero
+   outside `jsrf_recomp.exe` and `VCRUNTIME140` — kernel-mode writes are invisible —
+   and the clobber is confirmed from a **non-TTD** minidump. So C1's instrument choice
+   is re-opened with the Advisor under §2.3.
+
+**The next action is that §2.3 ruling**, then: promote
+`docs/packets/c1-slot-write-attribution.md` with its instrument premise corrected, or
+replace it. Its experiments are already run and recorded in
+`docs/reviews/c1-terminal-slot-finding.md`; its outcome table is filled in.
+
+Until a packet is promoted, packet implementation remains BLOCKED and the chores run
+as owner-directed work.
 
 If no packet is promoted in the authoritative plan file, packet implementation is BLOCKED; chores
 listed here run as owner-directed changes once the owner adopts this plan.
