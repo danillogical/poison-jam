@@ -377,6 +377,40 @@ Two limits on the re-verification, stated rather than left implicit:
   counter to quote, and `NtAllocateVirtualMemory`/`NtFreeVirtualMemory` are not individually named by the
   runtime's kernel log. Recorded because an owner instruction asked for the counter.
 
+**V5 — recovered-functions audit (2026-09-30, one DeepSeek worker, read-only).** For all 3074 entries of
+`config/recovered-functions.json`, does the current translator now emit that address's body natively?
+**Answer: 122 OBSOLETE, 2952 STILL_NEEDED, 0 UNKNOWN.** The verdict set is exactly the config entry set
+(3074 addresses, no duplicates).
+
+| class | mechanism | count |
+|---|---|---|
+| OBSOLETE | default full pass (no option) | 58 |
+| OBSOLETE | `--coalesce-functions` | 64 |
+| STILL_NEEDED | no current option emits a body for it | 2952 |
+| UNKNOWN | — | 0 |
+
+- **Evidence is generated-code pointers, not reasoning.** OBSOLETE requires `{ 0x<ADDR>u,
+  (recomp_func_t)sub_<ADDR> }` in a scratch pass's `recomp_dispatch.c` **and** an `Original: 0x<ADDR> -`
+  banner over `void sub_<ADDR>(void)`. STILL_NEEDED is either a fold (the dispatch tuple names a
+  `recomp_alias_<ADDR>` wrapper whose body is `<OWNER>();`) or no dispatch at all.
+- **The committed `src/recomp/gen/` tree cannot answer this**, in either direction: it defines **0** of the
+  3074 addresses because `config/manual-functions.json` lists all 3074. All evidence came from three
+  scratch full passes under `logs/` (recorded-database, fresh-database, and `--coalesce-functions`).
+- **Controls, 0 failures:** 25 ordinary generated functions classify `OWN_BODY` (positive — what a native
+  body looks like); 15 sampled folds stay folded; 7 data addresses are `NO_DISPATCH` in both trees
+  (negative — what "no body" looks like).
+- **Two of the three mechanisms the plan named do not retire anything.** `jump_table_entry_starts` is 60
+  (recorded db) / 54 (fresh db), and **0** of the 3074 addresses are in that set, so switch-arm recovery is
+  not the mechanism. The returning-body probe is not either: it reports true for 2487 of the 3074, but it
+  was already true when the entries were written — being true is *why* the detector classifies them
+  `tail_jump_alias` instead of standalone functions. Only `--coalesce-functions` retires entries (64).
+- **Recorded database vs current sources:** the two passes agree on 3073 of 3074; the single difference
+  (`0x00040001`) is STILL_NEEDED either way, so the table is unaffected.
+
+Artifacts (all under gitignored `logs/`): `v5-recovered-audit.md` (full per-entry table, 1.4 MB),
+`v5/verdicts.json` (the 3074 verdicts), `v5/controls.log`, `v5/coalesce-sweep.json`,
+`v5-gen/`, `v5-gen-fresh/`, `v5-gen-coalesce/`. **No entry was retired** — retirement is later work.
+
 **Null-slot triage (A2h-null-slot-triage-r1, accepted, `O-NO-BOUNDARY-TRANSITION`).** `[0x1C4064]`
 read its installed value `0xFE000104` (raw `0x80000115`, index 65) at every one of 15,498 sampled
 kernel-bridge boundaries on all six threads — per-thread series complete, no gap or duplicate. The

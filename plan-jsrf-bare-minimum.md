@@ -148,6 +148,11 @@ A window opening is not the slice; one playable scene is not the game.
   (switch-arm entries, returning-body probe, opt-in `--coalesce-functions`) now produces it natively.
 - PASS: a table entry → {still needed, obsolete, unknown} with the generated-code evidence;
   retirement of obsolete entries is a later change packet.
+- **DONE 2026-09-30.** 3074 entries: **122 OBSOLETE** (58 by the default pass, 64 by
+  `--coalesce-functions`), **2952 STILL_NEEDED**, **0 UNKNOWN**; the verdict set is exactly the config
+  entry set. Controls 0 failures. Switch-arm entries and the returning-body probe retire nothing.
+  Full table in `logs/v5-recovered-audit.md`; recorded in `docs/jsrf-technical-record.md` §5. No entry
+  was retired.
 
 ## 5. Phase 1 — tooling (chores; DeepSeek; senior calls only where named)
 
