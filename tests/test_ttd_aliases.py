@@ -169,5 +169,213 @@ class QueryScriptTests(unittest.TestCase):
         self.assertNotIn('host.memory.readMemoryValues', text)
 
 
+class AdmissionVerdictTests(unittest.TestCase):
+    """W11's S1-S8 verdict, on the code path a real query uses.
+
+    The ruling requires the conditions to be "evaluated mechanically" and to
+    select UNKNOWN when any fails. A verdict that could not fail would satisfy
+    every positive case, so each control here pairs a case that must be ADMITTED
+    with one that must not.
+    """
+
+    def setUp(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'ttd_query', ROOT / 'tools' / 'ttd' / 'ttd-query.py')
+        self.query = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.query)
+
+    def _record(self, **overrides) -> dict:
+        record = {
+            'trace': str(ROOT / 'logs' / 'ttd' / 'nonexistent' / 'x.run'),
+            'cdb': self.query.resolve_cdb() or 'cdb',
+            'guest_va': '0x001C4064',
+            'host_base': '0x0000000000010000',
+            'ram_bytes': 64 * 1024 * 1024,
+            'aliases_missing': [],
+            'aliases_answered': 29,
+            'alias_count': 29,
+            'alias_coverage': 'COMPLETE',
+            'mirrors_mapped': 28,
+            'mirrors_expected': 28,
+            'toolkit_mirrors': 28,
+            'terminal': {'present': True, 'sequence': 100, 'kind': 'test',
+                         'value_at_p': '0xFE000104'},
+        }
+        record.update(overrides)
+        return record
+
+    def _parsed(self, **overrides) -> dict:
+        parsed = {
+            'cdb_exit_code': 0,
+            'summaries': [{'alias_index': i, 'truncated': False, 'writes': 1}
+                          for i in range(29)],
+            'lasts': {0: {'alias_index': 0, 'address': '0x0', 'ip': '0x7ff',
+                          'size': 4, 'thread_id': 1, 'time_sequence': 50,
+                          'time_steps': 1, 'value': '0x00000000FE000104'}},
+            'events': [],
+            'controls': {
+                'trace_live_writes': ['16|truncated|1'],
+                'mirror_writes': ['3|scanned|28'],
+                'negative_writes': ['0'],
+            },
+        }
+        parsed.update(overrides)
+        return parsed
+
+    def _args(self):
+        """A stub args carrying a healthy install-positive runner.
+
+        The verdict logic must be testable without a trace and a debugger; a
+        verdict exercised only when a real trace exists is tested exactly when its
+        bugs are most expensive.
+        """
+        class _Args:
+            terminal_sequence = 100
+            max_hits = 16
+            install_positive_runner = staticmethod(
+                lambda: {'found': True, 'evaluated': True,
+                         'detail': 'stub install positive'})
+        return _Args()
+
+    def test_a_fully_satisfied_pass_is_admitted(self) -> None:
+        """Known-good: every condition satisfied must yield ADMITTED.
+
+        The record-contract is pointed at the real trace from this session so S1
+        can be satisfied; without it S1 is UNKNOWN by design (see the next test).
+        """
+        contract = (ROOT / 'logs' / 'ttd' / '20260930-030513-184-c1-probe'
+                    / 'record-contract.json')
+        if not contract.is_file():
+            self.skipTest('the recorded trace contract is not present')
+        record = self._record(trace=str(contract.parent / 'jsrf_recomp01.run'))
+        parsed = self._parsed()
+        result = self.query.evaluate_conditions(record, parsed, self._args())
+        self.assertEqual(result['verdict'], 'ADMITTED', result['conditions'])
+        self.assertEqual(result['row'], 'ATTRIBUTED')
+
+    def test_guest_width_and_full_width_values_compare_equal(self) -> None:
+        """Formatting must not change the selected row.
+
+        Measured: the last-write row prints a full 64-bit value while a caller
+        naturally writes the guest-width form, so a string comparison selected
+        UNATTRIBUTED WRITER for a slot that was in fact attributed.
+        """
+        contract = (ROOT / 'logs' / 'ttd' / '20260930-030513-184-c1-probe'
+                    / 'record-contract.json')
+        if not contract.is_file():
+            self.skipTest('the recorded trace contract is not present')
+        record = self._record(trace=str(contract.parent / 'jsrf_recomp01.run'))
+        record['terminal']['value_at_p'] = '0xFE000104'   # guest width
+        result = self.query.evaluate_conditions(record, self._parsed(), self._args())
+        self.assertEqual(result['row'], 'ATTRIBUTED')
+        self.assertEqual(result['verdict'], 'ADMITTED')
+
+    def test_a_trace_without_the_terminal_event_is_not_admitted(self) -> None:
+        """W-a: the delivered artifact's actual failure (the Advisor's F1)."""
+        record = self._record(terminal={'present': False, 'sequence': None,
+                                        'kind': None, 'value_at_p': None})
+        result = self.query.evaluate_conditions(record, self._parsed(), self._args())
+        self.assertEqual(result['verdict'], 'NOT ADMITTED')
+        self.assertIn('S2_terminal_in_trace', result['failed'])
+
+    def test_a_missing_mirror_positive_is_not_admitted(self) -> None:
+        """W-c: a zero at a mirror is not evidence without it (the Advisor's F5)."""
+        parsed = self._parsed()
+        parsed['controls']['mirror_writes'] = ['0|scanned|28']
+        result = self.query.evaluate_conditions(self._record(), parsed, self._args())
+        self.assertEqual(result['verdict'], 'NOT ADMITTED')
+        self.assertIn('S5_controls', result['failed'])
+
+    def test_a_missing_negative_control_is_not_admitted(self) -> None:
+        parsed = self._parsed()
+        parsed['controls'].pop('negative_writes')
+        result = self.query.evaluate_conditions(self._record(), parsed, self._args())
+        self.assertEqual(result['verdict'], 'NOT ADMITTED')
+        self.assertIn('S5_controls', result['failed'])
+
+    def test_a_toolkit_mirror_change_is_not_admitted(self) -> None:
+        """S3: the mirror count must be checked against the toolkit, not assumed."""
+        record = self._record(toolkit_mirrors=32)
+        result = self.query.evaluate_conditions(record, self._parsed(), self._args())
+        self.assertEqual(result['verdict'], 'NOT ADMITTED')
+        self.assertIn('S3_coverage', result['failed'])
+
+    def test_a_missing_alias_summary_is_not_admitted(self) -> None:
+        record = self._record(aliases_missing=[7], aliases_answered=28)
+        result = self.query.evaluate_conditions(record, self._parsed(), self._args())
+        self.assertEqual(result['verdict'], 'NOT ADMITTED')
+        self.assertIn('S3_coverage', result['failed'])
+
+    def test_an_omitted_display_line_is_not_a_coverage_failure(self) -> None:
+        """The distinction the S3 fix turns on.
+
+        `events_omitted` bounds the per-event DISPLAY list; the count is uncapped
+        and the last-write row is the real final write, so the projection is
+        complete. Treating the flag as a coverage failure failed a complete pass.
+        """
+        parsed = self._parsed()
+        parsed['summaries'][0]['truncated'] = True
+        result = self.query.evaluate_conditions(self._record(), parsed, self._args())
+        self.assertIn('S3_coverage', result['conditions'])
+        self.assertEqual(result['conditions']['S3_coverage']['verdict'], 'PASS')
+        # S1 is UNKNOWN here because the fixture trace has no record-contract;
+        # what this control asserts is that the flag did NOT fail S3.
+        self.assertNotIn('S3_coverage', result['failed'])
+
+    def test_value_mismatch_selects_unattributed_not_read_path(self) -> None:
+        """W-b: a changed value with a recorded write is an UNRECORDED WRITER."""
+        record = self._record()
+        record['terminal']['value_at_p'] = '0xDEADBEEF'
+        result = self.query.evaluate_conditions(record, self._parsed(), self._args())
+        self.assertEqual(result['row'], 'UNATTRIBUTED WRITER')
+        self.assertIn('S6_value_consistency', result['failed'])
+
+    def test_read_path_needs_both_no_write_and_a_zero_value(self) -> None:
+        """O-UNKNOWN is selectable ONLY under W-b equality with nothing written."""
+        record = self._record()
+        record['terminal']['value_at_p'] = '0x0000000000000000'
+        parsed = self._parsed(lasts={0: None})
+        result = self.query.evaluate_conditions(record, parsed, self._args())
+        self.assertEqual(result['row'], 'READ PATH')
+        self.assertEqual(result['conditions']['S6_value_consistency']['verdict'],
+                         'PASS')
+
+    def test_a_nonzero_value_with_no_write_is_not_the_read_path(self) -> None:
+        """The trap the ruling names: a value nobody recorded a write for."""
+        record = self._record()
+        record['terminal']['value_at_p'] = '0x0000000000000001'
+        parsed = self._parsed(lasts={0: None})
+        result = self.query.evaluate_conditions(record, parsed, self._args())
+        self.assertEqual(result['row'], 'UNATTRIBUTED WRITER')
+        self.assertNotEqual(result['verdict'], 'ADMITTED')
+
+    def test_missing_contract_is_unknown_not_a_pass(self) -> None:
+        """S1 must not default to PASS when the recording metadata is absent."""
+        result = self.query.evaluate_conditions(self._record(), self._parsed(), self._args())
+        self.assertEqual(result['conditions']['S1_full_mode']['verdict'], 'UNKNOWN')
+        self.assertEqual(result['verdict'], 'UNKNOWN')
+        self.assertIn('S1_full_mode', result['unknown'])
+
+    def test_read_path_does_not_require_a_contract(self) -> None:
+        """The row and the verdict are separate: an UNKNOWN condition is not a row.
+
+        A pass with a complete projection but missing recording metadata still
+        SELECTS its row by W-b -- it simply may not be used as a decision input.
+        Conflating the two would make the selected row depend on unrelated
+        bookkeeping.
+        """
+        record = self._record()
+        record['terminal']['value_at_p'] = '0x0000000000000000'
+        parsed = self._parsed(lasts={0: None})
+        # The install positive is carried by a SEPARATE pass at the install slot,
+        # so this fixture supplies it explicitly; without it S5 fails for a reason
+        # unrelated to the row this test is about.
+        record['install_positive'] = {'found': True, 'detail': 'fixture'}
+        result = self.query.evaluate_conditions(record, parsed, self._args())
+        self.assertEqual(result['row'], 'READ PATH')
+        self.assertEqual(result['verdict'], 'UNKNOWN')
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

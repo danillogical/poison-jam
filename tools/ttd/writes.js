@@ -36,6 +36,7 @@
 var PREFIX_EVENT = 'TTDWRITE';
 var PREFIX_SUMMARY = 'TTDALIAS';
 var PREFIX_CONTROL = 'TTDCONTROL';
+var PREFIX_LAST = 'TTDLAST';
 
 
 function _hex(value, width) {
@@ -184,4 +185,131 @@ function queryTraceIsLive(maxHits) {
     _log(PREFIX_CONTROL + '|trace_live_writes|' + result.hits.length
          + '|truncated|' + (result.truncated ? 1 : 0));
     return result.hits.length;
+}
+
+/* Full 64-bit value, because a wide store's upper half is the difference between
+ * an address and a truncated address. */
+function _hex64(value) {
+    if (value < 0) { value = value + 18446744073709551616; }
+    var hi = Math.floor(value / 4294967296);
+    var lo = value - hi * 4294967296;
+    return _hex(hi, 8) + _hex(lo, 8);
+}
+
+/*
+ * One alias, in the shape the W11 ruling admits: an UNCAPPED count and the LAST
+ * write at or before the terminal position P.
+ *
+ * Why this shape rather than a bounded list of hits. `run-profiles.md`'s evidence
+ * rule admits a record "keyed by the property the decision classifies", and a
+ * first-N bound makes an enumeration observation only. Worse, the write that
+ * DECIDES the question is the last one before the terminal read, and a first-N
+ * bound drops exactly that one first. So this reports, per alias:
+ *
+ *   - `count`: every write at this alias at or before P, uncapped -- the key is
+ *     the alias index, so the table is 29 fixed-shape rows however long the run;
+ *   - `last`:  the final such write, with its FULL 64-bit value and its size.
+ *
+ * `upperBound` is P in TTD sequence numbers; a negative value means "no bound".
+ */
+function queryAliasTo(aliasIndex, lo, hi, upperBound, maxReported) {
+    var query = host.currentSession.TTD.Memory(lo, hi, 'w');
+    var count = 0;
+    var last = null;
+    var reported = 0;
+    var truncated = false;
+    for (var event of query) {
+        var seq = event.TimeStart.Sequence;
+        if (upperBound >= 0 && seq > upperBound) { break; }
+        count = count + 1;
+        last = event;
+        if (reported < maxReported) {
+            _log(PREFIX_EVENT + '|' + aliasIndex + '|' + _addr64(event.Address)
+                 + '|' + _addr64(event.IP) + '|' + event.Size + '|'
+                 + event.ThreadId + '|' + seq + '|' + event.TimeStart.Steps + '|'
+                 + _hex(event.Value >>> 0, 8));
+            reported = reported + 1;
+        } else {
+            truncated = true;
+        }
+    }
+    if (last !== null) {
+        _log(PREFIX_LAST + '|' + aliasIndex + '|' + _addr64(last.Address) + '|'
+             + _addr64(last.IP) + '|' + last.Size + '|' + last.ThreadId + '|'
+             + last.TimeStart.Sequence + '|' + last.TimeStart.Steps + '|'
+             + _hex64(last.Value));
+    } else {
+        _log(PREFIX_LAST + '|' + aliasIndex + '|NONE');
+    }
+    /* The sixth field is `events_omitted`, NOT `truncated`.
+     *
+     * The distinction is load-bearing for W11's S3. The enumeration always runs to
+     * the end of the query -- `count` is uncapped and `last` is the real final
+     * write -- so the record is complete whatever this flag says. The flag only
+     * reports that some EVENT LINES were not printed, which is a display bound on
+     * a per-event list the ruling classes as observation only. Calling it
+     * "truncated" made S3 fail a pass whose coverage was in fact complete, which is
+     * the opposite error from the one the flag exists to catch. */
+    _log(PREFIX_SUMMARY + '|' + aliasIndex + '|' + _addr64(lo) + '|' + _addr64(hi)
+         + '|' + count + '|' + (truncated ? 1 : 0));
+    return count;
+}
+
+/*
+ * The whole query: one alias at a time, in the order the caller supplied, each
+ * bounded by P and each reporting an uncapped count plus the last write before P.
+ */
+function queryAliasesTo(aliasList, upperBound, maxReportedPerAlias) {
+    var parts = ('' + aliasList).split(',');
+    var total = 0;
+    var asked = 0;
+    for (var i = 0; i < parts.length; i++) {
+        var token = parts[i].replace(/^\s+|\s+$/g, '');
+        if (token.length === 0) { continue; }
+        var lo = _parseAddress(token);
+        total += queryAliasTo(i, lo, lo + 4, upperBound, maxReportedPerAlias);
+        asked = asked + 1;
+    }
+    _log(PREFIX_CONTROL + '|aliases_queried|' + asked);
+    _log(PREFIX_CONTROL + '|writes_total|' + total);
+    return total;
+}
+
+/*
+ * MIRROR POSITIVE CONTROL (W11's W-c).
+ *
+ * The known negative at mirror 1 proves nothing on its own: zero writes there is
+ * equally consistent with "the mirror queries are broken". This asks whether ANY
+ * write reached ANY mirror view of the RAM region -- the property O-ALIAS turns on
+ * -- and reports which alias index it landed on.
+ *
+ * A trace with no mirror write at all is reported as zero, not as a pass; the
+ * caller decides whether that is acceptable for its question.
+ */
+function queryMirrorPositive(ramBytes, hostBase, numMirrors, maxReported) {
+    var found = 0;
+    var scanned = 0;
+    for (var m = 1; m <= numMirrors; m++) {
+        var lo = hostBase + m * ramBytes;
+        var hi = lo + ramBytes;
+        scanned = scanned + 1;
+        try {
+            var query = host.currentSession.TTD.Memory(lo, hi, 'w');
+            var n = 0;
+            for (var event of query) {
+                n = n + 1;
+                if (n <= maxReported) {
+                    _log(PREFIX_CONTROL + '|mirror_hit|' + m + '|'
+                         + _addr64(event.Address) + '|' + _addr64(event.IP) + '|'
+                         + event.Size + '|' + event.ThreadId);
+                }
+                if (n > maxReported) { break; }
+            }
+            found = found + n;
+        } catch (err) {
+            /* An unmapped mirror is not a write; skip it. */
+        }
+    }
+    _log(PREFIX_CONTROL + '|mirror_writes|' + found + '|scanned|' + scanned);
+    return found;
 }
