@@ -34551,8 +34551,7 @@ loc_001A562B: ;
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
     SET_LO8(ebx, MEM8(ebp + eax + -8));
     SET_LO8(eax, MEM8(ebp + eax + -16));
-    { int64_t _r = (int64_t)(int32_t)eax * (int64_t)(int32_t)LO8(ebx);
-      eax = (uint32_t)_r; edx = (uint32_t)(_r >> 32); }
+    SET_LO16(eax, (uint16_t)((int16_t)(int8_t)LO8(eax) * (int16_t)(int8_t)LO8(ebx)));
     esi = edi + ecx;
     ecx = MEM32(ebp + 0x18);
     SET_LO8(ecx, MEM8(ecx + esi));
@@ -58067,6 +58066,7 @@ loc_001C0B83: ;
 void sub_001C0B86(void)
 {
     int _flags = 0; /* fallback flag var */
+    int _fc_e = 0; /* join conditions */
     uint32_t _fa = 0, _fb = 0;
     int32_t _fas = 0, _fbs = 0;
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
@@ -58148,6 +58148,7 @@ loc_001C0C07: ;
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
     _fa = (uint32_t)(HI8(eax)) & 0xFFu; _fb = (uint32_t)(4) & 0xFFu;
     _fas = (int32_t)(int8_t)(_fa); _fbs = (int32_t)(int8_t)(_fb); /* test HI8(eax), 4 (8-bit) */
+    _fc_e = (TEST_Z(_fa, _fb)) ? 1 : 0; /* je, for a join */
     goto loc_001C0C18;
 
 loc_001C0C11: ;
@@ -58155,10 +58156,11 @@ loc_001C0C11: ;
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* and result */
     _fa = (uint32_t)(edx) & 0xFFFFFFFFu; _fb = (uint32_t)(eax) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test edx, eax (32-bit) */
+    _fc_e = (TEST_Z(_fa, _fb)) ? 1 : 0; /* je, for a join */
 
 loc_001C0C18: ;
     MEM32(esi + 0xC) = eax;
-    if (_flags /* jne: not equal / not zero */) goto loc_001C0C7E;
+    if (!_fc_e) goto loc_001C0C7E; /* jne: not equal / not zero */
 
 loc_001C0C1D: ;
     MEM32(esi + 0xC) = MEM32(esi + 0xC) | edx;

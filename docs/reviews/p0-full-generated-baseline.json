@@ -1,18 +1,18 @@
 {
   "files": {
     "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "7393f32bc953c01f293609d4a77abc1ddfc6118082bc2c3db04c7511ec3eec38",
-    "src/recomp/gen/recomp_0000.c": "d6745de877d097a5cbecb9e1e7e99f4347dcd34ffe511814621208e464044b94",
-    "src/recomp/gen/recomp_0001.c": "635f3df10c48b1e10f463557611f67cb6534ebcf0121a2c5e363e3a5d3ecb7f4",
-    "src/recomp/gen/recomp_0002.c": "8b8f69c8b9693008078c4d731f025192dde3d329df46ffc92f9040708674d48f",
-    "src/recomp/gen/recomp_0003.c": "7fae47d9a7e7d63937d09c2f12ac87e33f2dffad47d9cbb5c4920cfe7ec38810",
+    "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
+    "src/recomp/gen/recomp_0001.c": "065a43c255bc9c3469906b915c9ad51fe9f1e3e16c4a9ff465421317fbe77024",
+    "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
+    "src/recomp/gen/recomp_0003.c": "c43fd622443017710a32508cc10f33f2833c124d5fb01671367f96357bc11543",
     "src/recomp/gen/recomp_0004.c": "cebdfa390daac3e0310db718e1d255b5b6e24c752b3e913b2b115deb4899ed08",
-    "src/recomp/gen/recomp_0005.c": "e9ee7d24762c8cc05e0ecd5d75f1c3338d6ff4c0f6ee45c9d91e1140c6a88ef5",
+    "src/recomp/gen/recomp_0005.c": "62fc70e44afd27ea802728d72d249f3a55418ff5604d21065ea055def2a40707",
     "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
-    "src/recomp/gen/recomp_dispatch.c": "94884ab6ccc74eecd556fdac6b68d6a28f73e915bc661eb4501766f3d35f9f22",
+    "src/recomp/gen/recomp_dispatch.c": "1cc469ddcc6d12ac98f8675846b5940f3f438624a3a51a95faca40a9b59a4238",
     "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
     "src/recomp/gen/recomp_stubs_recovery.c": "77d2c5decf6a815c9c2b1400b37a189d4419bef07baeab3836437e19beb9d345",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
-    "src/recomp/gen/recomp_types.h": "6cfe395a479de5c25e5041ae6eaaa2eb620b0f443e5bbc6bd95888066bd348e4",
+    "src/recomp/gen/recomp_types.h": "528770f45a6dee0c1feee45db9921fad561cb0a268eee313a444d24c9e143c83",
     "src/recomp/recovered/recovered.c": "3210117dccf0a909cf3f7f881919001d976e14922aea6d1025312df5b1f22fe9",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
     "src/recomp/recovered/recovered_11c1_test.c": "88f6f654cd5a615c76838332884d0131a178718a9680e77f6e57fda8f2761621",
@@ -28,7 +28,7 @@
         "src/recomp/gen/recomp_0004.c",
         "src/recomp/gen/recomp_0005.c"
       ],
-      "reason": "recomp_0000.c/recomp_0005.c: six A4b2 jsrf_watch_store observation hooks (3d0dc08) were never re-baselined; recomp_0004.c: the four CRT 64-bit divide helper bodies that dropped rcr were removed in favour of src/jsrf_crt.c (docs/jsrf-technical-record.md §2)."
+      "reason": "recomp_0000.c/recomp_0005.c: six A4b2 jsrf_watch_store observation hooks (3d0dc08) were never re-baselined; recomp_0004.c: the four CRT 64-bit divide helper bodies that dropped rcr were removed in favour of src/jsrf_crt.c (docs/jsrf-technical-record.md \u00a72)."
     },
     {
       "date": "2026-09-28",
@@ -45,7 +45,21 @@
         "src/recomp/gen/recomp_types.h"
       ],
       "note": "recomp_types.h re-hashed in its checked-out (core.autocrlf) form; the first hash was of an LF copy.",
-      "reason": "full regeneration with the toolkit 2925f0b lifter (docs/jsrf-technical-record.md §2): chunks, recomp_funcs.h, dispatch, unresolved stubs and recomp_types.h rewritten by the pass; boundaries relifted; project header additions and A4b2 hooks re-applied."
+      "reason": "full regeneration with the toolkit 2925f0b lifter (docs/jsrf-technical-record.md \u00a72): chunks, recomp_funcs.h, dispatch, unresolved stubs and recomp_types.h rewritten by the pass; boundaries relifted; project header additions and A4b2 hooks re-applied."
+    },
+    {
+      "date": "2026-09-29",
+      "files": [
+        "src/recomp/gen/recomp_0000.c",
+        "src/recomp/gen/recomp_0001.c",
+        "src/recomp/gen/recomp_0002.c",
+        "src/recomp/gen/recomp_0003.c",
+        "src/recomp/gen/recomp_0005.c",
+        "src/recomp/gen/recomp_dispatch.c",
+        "src/recomp/gen/recomp_types.h"
+      ],
+      "note": "recomp_types.h hashed in its checked-out (core.autocrlf) form, as the checker does. Chunks are CRLF on disk for the same reason.",
+      "reason": "full regeneration with the toolkit 2a349c8 lifter (docs/jsrf-technical-record.md \u00a72): chunks, dispatch and recomp_types.h rewritten by the pass; relift-selected.py boundaries re-applied; the project header ABI additions and the six A4b2 jsrf_watch_store hooks re-applied by scripts/apply-a4b2-hooks.py. recomp_funcs.h and recomp_stubs_unresolved.c came out byte-identical."
     }
   ]
 }

@@ -17,11 +17,320 @@ typedef struct {
     recomp_func_t func;
 } recomp_entry_t;
 
+/* ----------------------------------------------------------------
+ * Alias-entry observer.
+ *
+ * An alias VA (a secondary entry inside another function's body) is
+ * dispatched to its owner's symbol, so a call to it runs the owner
+ * from its START. These wrappers count such calls and print the first
+ * eight distinct ones; the behaviour is otherwise unchanged.
+ * ---------------------------------------------------------------- */
+#include <stdio.h>
+volatile uint64_t g_recomp_alias_icall_count = 0;
+const uint32_t g_recomp_alias_icall_entries = 134u;
+#if defined(__GNUC__) || defined(__clang__)
+#define RECOMP_ALIAS_INC64(p) __atomic_add_fetch((p), 1, __ATOMIC_RELAXED)
+#define RECOMP_ALIAS_FIRST(p) (__atomic_exchange_n((p), 1, __ATOMIC_RELAXED) == 0)
+#elif defined(_MSC_VER)
+#include <intrin.h>
+#define RECOMP_ALIAS_INC64(p) ((uint64_t)_InterlockedIncrement64((volatile __int64 *)(p)))
+#define RECOMP_ALIAS_FIRST(p) (_InterlockedExchange8((volatile char *)(p), 1) == 0)
+#else
+#define RECOMP_ALIAS_INC64(p) (++*(p))
+#define RECOMP_ALIAS_FIRST(p) (*(p) ? 0 : (*(p) = 1))
+#endif
+/* {alias VA, owner VA}, in the order of g_recomp_alias_icall_hits. */
+const uint32_t g_recomp_alias_icall_map[][2] = {
+    { 0x000110D0u, 0x000110A0u },
+    { 0x00015682u, 0x00015520u },
+    { 0x000156B0u, 0x00015520u },
+    { 0x0001BF40u, 0x0001BE50u },
+    { 0x0001DF48u, 0x0001DF30u },
+    { 0x0002040Du, 0x00020408u },
+    { 0x0002055Bu, 0x00020504u },
+    { 0x000207F0u, 0x00020803u },
+    { 0x000208DDu, 0x000208DBu },
+    { 0x00022043u, 0x00022010u },
+    { 0x00022F30u, 0x00022E50u },
+    { 0x000252B2u, 0x000252E0u },
+    { 0x000252B5u, 0x000252E0u },
+    { 0x000252B7u, 0x000252E0u },
+    { 0x00027B00u, 0x00027CD0u },
+    { 0x00029FE0u, 0x00029F50u },
+    { 0x0002C360u, 0x0002D1E0u },
+    { 0x0002DC69u, 0x0002DC04u },
+    { 0x0002E00Cu, 0x0002DF76u },
+    { 0x0002E026u, 0x0002DF76u },
+    { 0x0002F688u, 0x0002F6B0u },
+    { 0x0002F830u, 0x0002F7F0u },
+    { 0x0002FF70u, 0x0002F7F0u },
+    { 0x0003060Eu, 0x00030592u },
+    { 0x000307F0u, 0x000307F8u },
+    { 0x00030849u, 0x00030D70u },
+    { 0x00032610u, 0x00033800u },
+    { 0x00032C70u, 0x00033800u },
+    { 0x00033C50u, 0x000355B0u },
+    { 0x00034200u, 0x000355B0u },
+    { 0x000348A0u, 0x000355B0u },
+    { 0x00035640u, 0x000360D0u },
+    { 0x00037550u, 0x00038530u },
+    { 0x00038D98u, 0x00038D8Du },
+    { 0x0003D8E2u, 0x0003D830u },
+    { 0x0003FFB0u, 0x0003FFC0u },
+    { 0x00040002u, 0x00040000u },
+    { 0x000402A9u, 0x000402A4u },
+    { 0x000402E8u, 0x000402E0u },
+    { 0x000402F1u, 0x000402E0u },
+    { 0x00040921u, 0x000406D0u },
+    { 0x00041D10u, 0x00041BF0u },
+    { 0x00043FE0u, 0x00044250u },
+    { 0x0006FFA0u, 0x00070000u },
+    { 0x00070017u, 0x00070000u },
+    { 0x0007400Au, 0x00074004u },
+    { 0x0007402Bu, 0x00074018u },
+    { 0x0007402Du, 0x00074018u },
+    { 0x00078887u, 0x00078520u },
+    { 0x0007ADE1u, 0x0007ADCEu },
+    { 0x0007ADE2u, 0x0007ADCEu },
+    { 0x0007B956u, 0x0007BC10u },
+    { 0x0007B978u, 0x0007BC10u },
+    { 0x0007BBF3u, 0x0007BC10u },
+    { 0x0007E255u, 0x0007E242u },
+    { 0x000817C3u, 0x000817BCu },
+    { 0x000817EEu, 0x000817BCu },
+    { 0x00081834u, 0x000817BCu },
+    { 0x000865B2u, 0x0008659Fu },
+    { 0x0008FF70u, 0x0008FE10u },
+    { 0x000ADE86u, 0x000ADDF7u },
+    { 0x000AE655u, 0x000AE5F1u },
+    { 0x000AECA0u, 0x000AEC8Du },
+    { 0x000AECA1u, 0x000AEC8Du },
+    { 0x000AF067u, 0x000AEFF8u },
+    { 0x000AFEA7u, 0x000AFE3Cu },
+    { 0x000AFEA8u, 0x000AFE3Cu },
+    { 0x000AFFF4u, 0x000AFEE0u },
+    { 0x000B0060u, 0x000AFEE0u },
+    { 0x000B090Bu, 0x000B0A20u },
+    { 0x000B3DCFu, 0x000B3D67u },
+    { 0x000B3DD0u, 0x000B3D67u },
+    { 0x000B5ECEu, 0x000B7170u },
+    { 0x000BBA17u, 0x000BBA04u },
+    { 0x000BFFE0u, 0x000BFF80u },
+    { 0x000CB35Cu, 0x000CB32Fu },
+    { 0x000D59FCu, 0x000D59BDu },
+    { 0x000E9A40u, 0x000E9D80u },
+    { 0x000F7705u, 0x000F76F2u },
+    { 0x000FCB16u, 0x000FCB03u },
+    { 0x000FCDF9u, 0x000FCDE6u },
+    { 0x000FD166u, 0x000FD153u },
+    { 0x001009EFu, 0x001009D0u },
+    { 0x00100A89u, 0x00100A50u },
+    { 0x00100AB0u, 0x00100AF0u },
+    { 0x00100B8Cu, 0x00100B6Fu },
+    { 0x001015B6u, 0x001015A3u },
+    { 0x00101EF9u, 0x00101EE6u },
+    { 0x00102700u, 0x00102920u },
+    { 0x001045ACu, 0x00104599u },
+    { 0x00104A8Au, 0x00104A77u },
+    { 0x00106320u, 0x00106300u },
+    { 0x00106349u, 0x00106342u },
+    { 0x0010FA43u, 0x0010FA30u },
+    { 0x00110280u, 0x00110282u },
+    { 0x00110298u, 0x00110282u },
+    { 0x001102AAu, 0x00110301u },
+    { 0x00110314u, 0x00110301u },
+    { 0x00110317u, 0x00110301u },
+    { 0x001199C0u, 0x00119BD0u },
+    { 0x0011BAAAu, 0x0011BA97u },
+    { 0x0011BD0Du, 0x0011BCDFu },
+    { 0x0011E315u, 0x0011E2E7u },
+    { 0x0011E41Au, 0x0011E2E7u },
+    { 0x00120125u, 0x00120117u },
+    { 0x00120161u, 0x00120117u },
+    { 0x00120168u, 0x00120117u },
+    { 0x001274A1u, 0x001270F9u },
+    { 0x001296C7u, 0x00129FAAu },
+    { 0x0012A57Bu, 0x0012A234u },
+    { 0x0013A340u, 0x0013A570u },
+    { 0x0014FEF0u, 0x00150231u },
+    { 0x0015A0AEu, 0x0015A0A8u },
+    { 0x0015A0B4u, 0x0015A0A8u },
+    { 0x0015A0BAu, 0x0015A0A8u },
+    { 0x0015A0C0u, 0x0015A0A8u },
+    { 0x0015A0C6u, 0x0015A0A8u },
+    { 0x0015A0CCu, 0x0015A0A8u },
+    { 0x0015A0D2u, 0x0015A0A8u },
+    { 0x0015A0F9u, 0x0015A110u },
+    { 0x001600F1u, 0x00160110u },
+    { 0x00171EB7u, 0x00171EC0u },
+    { 0x00178882u, 0x00178830u },
+    { 0x0017888Au, 0x00178830u },
+    { 0x0017FD31u, 0x0017FD0Cu },
+    { 0x0017FF7Fu, 0x0017FD0Cu },
+    { 0x00180020u, 0x0017FD0Cu },
+    { 0x00183F71u, 0x00183E10u },
+    { 0x00183F86u, 0x00183E10u },
+    { 0x00183FC4u, 0x00183E10u },
+    { 0x001A2078u, 0x001A2034u },
+    { 0x001BD800u, 0x001BD767u },
+    { 0x001C379Du, 0x001C3685u },
+    { 0x001C3800u, 0x001C3685u },
+};
+volatile uint64_t g_recomp_alias_icall_hits[134];
+static volatile char g_recomp_alias_seen[134];
+static volatile uint64_t g_recomp_alias_printed;
+
+static void recomp_alias_observe(uint32_t i)
+{
+    RECOMP_ALIAS_INC64(&g_recomp_alias_icall_count);
+    RECOMP_ALIAS_INC64(&g_recomp_alias_icall_hits[i]);
+    if (RECOMP_ALIAS_FIRST(&g_recomp_alias_seen[i])
+            && RECOMP_ALIAS_INC64(&g_recomp_alias_printed) <= 8)
+        fprintf(stderr, "[ALIAS-ICALL] target=0x%08X owner=0x%08X\n",
+                (unsigned)g_recomp_alias_icall_map[i][0],
+                (unsigned)g_recomp_alias_icall_map[i][1]);
+}
+
+static void recomp_alias_000110D0(void) { recomp_alias_observe(0u); sub_000110A0(); }
+static void recomp_alias_00015682(void) { recomp_alias_observe(1u); sub_00015520(); }
+static void recomp_alias_000156B0(void) { recomp_alias_observe(2u); sub_00015520(); }
+static void recomp_alias_0001BF40(void) { recomp_alias_observe(3u); sub_0001BE50(); }
+static void recomp_alias_0001DF48(void) { recomp_alias_observe(4u); sub_0001DF30(); }
+static void recomp_alias_0002040D(void) { recomp_alias_observe(5u); sub_00020408(); }
+static void recomp_alias_0002055B(void) { recomp_alias_observe(6u); sub_00020504(); }
+static void recomp_alias_000207F0(void) { recomp_alias_observe(7u); sub_00020803(); }
+static void recomp_alias_000208DD(void) { recomp_alias_observe(8u); sub_000208DB(); }
+static void recomp_alias_00022043(void) { recomp_alias_observe(9u); sub_00022010(); }
+static void recomp_alias_00022F30(void) { recomp_alias_observe(10u); sub_00022E50(); }
+static void recomp_alias_000252B2(void) { recomp_alias_observe(11u); sub_000252E0(); }
+static void recomp_alias_000252B5(void) { recomp_alias_observe(12u); sub_000252E0(); }
+static void recomp_alias_000252B7(void) { recomp_alias_observe(13u); sub_000252E0(); }
+static void recomp_alias_00027B00(void) { recomp_alias_observe(14u); sub_00027CD0(); }
+static void recomp_alias_00029FE0(void) { recomp_alias_observe(15u); sub_00029F50(); }
+static void recomp_alias_0002C360(void) { recomp_alias_observe(16u); sub_0002D1E0(); }
+static void recomp_alias_0002DC69(void) { recomp_alias_observe(17u); sub_0002DC04(); }
+static void recomp_alias_0002E00C(void) { recomp_alias_observe(18u); sub_0002DF76(); }
+static void recomp_alias_0002E026(void) { recomp_alias_observe(19u); sub_0002DF76(); }
+static void recomp_alias_0002F688(void) { recomp_alias_observe(20u); sub_0002F6B0(); }
+static void recomp_alias_0002F830(void) { recomp_alias_observe(21u); sub_0002F7F0(); }
+static void recomp_alias_0002FF70(void) { recomp_alias_observe(22u); sub_0002F7F0(); }
+static void recomp_alias_0003060E(void) { recomp_alias_observe(23u); sub_00030592(); }
+static void recomp_alias_000307F0(void) { recomp_alias_observe(24u); sub_000307F8(); }
+static void recomp_alias_00030849(void) { recomp_alias_observe(25u); sub_00030D70(); }
+static void recomp_alias_00032610(void) { recomp_alias_observe(26u); sub_00033800(); }
+static void recomp_alias_00032C70(void) { recomp_alias_observe(27u); sub_00033800(); }
+static void recomp_alias_00033C50(void) { recomp_alias_observe(28u); sub_000355B0(); }
+static void recomp_alias_00034200(void) { recomp_alias_observe(29u); sub_000355B0(); }
+static void recomp_alias_000348A0(void) { recomp_alias_observe(30u); sub_000355B0(); }
+static void recomp_alias_00035640(void) { recomp_alias_observe(31u); sub_000360D0(); }
+static void recomp_alias_00037550(void) { recomp_alias_observe(32u); sub_00038530(); }
+static void recomp_alias_00038D98(void) { recomp_alias_observe(33u); sub_00038D8D(); }
+static void recomp_alias_0003D8E2(void) { recomp_alias_observe(34u); sub_0003D830(); }
+static void recomp_alias_0003FFB0(void) { recomp_alias_observe(35u); sub_0003FFC0(); }
+static void recomp_alias_00040002(void) { recomp_alias_observe(36u); sub_00040000(); }
+static void recomp_alias_000402A9(void) { recomp_alias_observe(37u); sub_000402A4(); }
+static void recomp_alias_000402E8(void) { recomp_alias_observe(38u); sub_000402E0(); }
+static void recomp_alias_000402F1(void) { recomp_alias_observe(39u); sub_000402E0(); }
+static void recomp_alias_00040921(void) { recomp_alias_observe(40u); sub_000406D0(); }
+static void recomp_alias_00041D10(void) { recomp_alias_observe(41u); sub_00041BF0(); }
+static void recomp_alias_00043FE0(void) { recomp_alias_observe(42u); sub_00044250(); }
+static void recomp_alias_0006FFA0(void) { recomp_alias_observe(43u); sub_00070000(); }
+static void recomp_alias_00070017(void) { recomp_alias_observe(44u); sub_00070000(); }
+static void recomp_alias_0007400A(void) { recomp_alias_observe(45u); sub_00074004(); }
+static void recomp_alias_0007402B(void) { recomp_alias_observe(46u); sub_00074018(); }
+static void recomp_alias_0007402D(void) { recomp_alias_observe(47u); sub_00074018(); }
+static void recomp_alias_00078887(void) { recomp_alias_observe(48u); sub_00078520(); }
+static void recomp_alias_0007ADE1(void) { recomp_alias_observe(49u); sub_0007ADCE(); }
+static void recomp_alias_0007ADE2(void) { recomp_alias_observe(50u); sub_0007ADCE(); }
+static void recomp_alias_0007B956(void) { recomp_alias_observe(51u); sub_0007BC10(); }
+static void recomp_alias_0007B978(void) { recomp_alias_observe(52u); sub_0007BC10(); }
+static void recomp_alias_0007BBF3(void) { recomp_alias_observe(53u); sub_0007BC10(); }
+static void recomp_alias_0007E255(void) { recomp_alias_observe(54u); sub_0007E242(); }
+static void recomp_alias_000817C3(void) { recomp_alias_observe(55u); sub_000817BC(); }
+static void recomp_alias_000817EE(void) { recomp_alias_observe(56u); sub_000817BC(); }
+static void recomp_alias_00081834(void) { recomp_alias_observe(57u); sub_000817BC(); }
+static void recomp_alias_000865B2(void) { recomp_alias_observe(58u); sub_0008659F(); }
+static void recomp_alias_0008FF70(void) { recomp_alias_observe(59u); sub_0008FE10(); }
+static void recomp_alias_000ADE86(void) { recomp_alias_observe(60u); sub_000ADDF7(); }
+static void recomp_alias_000AE655(void) { recomp_alias_observe(61u); sub_000AE5F1(); }
+static void recomp_alias_000AECA0(void) { recomp_alias_observe(62u); sub_000AEC8D(); }
+static void recomp_alias_000AECA1(void) { recomp_alias_observe(63u); sub_000AEC8D(); }
+static void recomp_alias_000AF067(void) { recomp_alias_observe(64u); sub_000AEFF8(); }
+static void recomp_alias_000AFEA7(void) { recomp_alias_observe(65u); sub_000AFE3C(); }
+static void recomp_alias_000AFEA8(void) { recomp_alias_observe(66u); sub_000AFE3C(); }
+static void recomp_alias_000AFFF4(void) { recomp_alias_observe(67u); sub_000AFEE0(); }
+static void recomp_alias_000B0060(void) { recomp_alias_observe(68u); sub_000AFEE0(); }
+static void recomp_alias_000B090B(void) { recomp_alias_observe(69u); sub_000B0A20(); }
+static void recomp_alias_000B3DCF(void) { recomp_alias_observe(70u); sub_000B3D67(); }
+static void recomp_alias_000B3DD0(void) { recomp_alias_observe(71u); sub_000B3D67(); }
+static void recomp_alias_000B5ECE(void) { recomp_alias_observe(72u); sub_000B7170(); }
+static void recomp_alias_000BBA17(void) { recomp_alias_observe(73u); sub_000BBA04(); }
+static void recomp_alias_000BFFE0(void) { recomp_alias_observe(74u); sub_000BFF80(); }
+static void recomp_alias_000CB35C(void) { recomp_alias_observe(75u); sub_000CB32F(); }
+static void recomp_alias_000D59FC(void) { recomp_alias_observe(76u); sub_000D59BD(); }
+static void recomp_alias_000E9A40(void) { recomp_alias_observe(77u); sub_000E9D80(); }
+static void recomp_alias_000F7705(void) { recomp_alias_observe(78u); sub_000F76F2(); }
+static void recomp_alias_000FCB16(void) { recomp_alias_observe(79u); sub_000FCB03(); }
+static void recomp_alias_000FCDF9(void) { recomp_alias_observe(80u); sub_000FCDE6(); }
+static void recomp_alias_000FD166(void) { recomp_alias_observe(81u); sub_000FD153(); }
+static void recomp_alias_001009EF(void) { recomp_alias_observe(82u); sub_001009D0(); }
+static void recomp_alias_00100A89(void) { recomp_alias_observe(83u); sub_00100A50(); }
+static void recomp_alias_00100AB0(void) { recomp_alias_observe(84u); sub_00100AF0(); }
+static void recomp_alias_00100B8C(void) { recomp_alias_observe(85u); sub_00100B6F(); }
+static void recomp_alias_001015B6(void) { recomp_alias_observe(86u); sub_001015A3(); }
+static void recomp_alias_00101EF9(void) { recomp_alias_observe(87u); sub_00101EE6(); }
+static void recomp_alias_00102700(void) { recomp_alias_observe(88u); sub_00102920(); }
+static void recomp_alias_001045AC(void) { recomp_alias_observe(89u); sub_00104599(); }
+static void recomp_alias_00104A8A(void) { recomp_alias_observe(90u); sub_00104A77(); }
+static void recomp_alias_00106320(void) { recomp_alias_observe(91u); sub_00106300(); }
+static void recomp_alias_00106349(void) { recomp_alias_observe(92u); sub_00106342(); }
+static void recomp_alias_0010FA43(void) { recomp_alias_observe(93u); sub_0010FA30(); }
+static void recomp_alias_00110280(void) { recomp_alias_observe(94u); sub_00110282(); }
+static void recomp_alias_00110298(void) { recomp_alias_observe(95u); sub_00110282(); }
+static void recomp_alias_001102AA(void) { recomp_alias_observe(96u); sub_00110301(); }
+static void recomp_alias_00110314(void) { recomp_alias_observe(97u); sub_00110301(); }
+static void recomp_alias_00110317(void) { recomp_alias_observe(98u); sub_00110301(); }
+static void recomp_alias_001199C0(void) { recomp_alias_observe(99u); sub_00119BD0(); }
+static void recomp_alias_0011BAAA(void) { recomp_alias_observe(100u); sub_0011BA97(); }
+static void recomp_alias_0011BD0D(void) { recomp_alias_observe(101u); sub_0011BCDF(); }
+static void recomp_alias_0011E315(void) { recomp_alias_observe(102u); sub_0011E2E7(); }
+static void recomp_alias_0011E41A(void) { recomp_alias_observe(103u); sub_0011E2E7(); }
+static void recomp_alias_00120125(void) { recomp_alias_observe(104u); sub_00120117(); }
+static void recomp_alias_00120161(void) { recomp_alias_observe(105u); sub_00120117(); }
+static void recomp_alias_00120168(void) { recomp_alias_observe(106u); sub_00120117(); }
+static void recomp_alias_001274A1(void) { recomp_alias_observe(107u); sub_001270F9(); }
+static void recomp_alias_001296C7(void) { recomp_alias_observe(108u); sub_00129FAA(); }
+static void recomp_alias_0012A57B(void) { recomp_alias_observe(109u); sub_0012A234(); }
+static void recomp_alias_0013A340(void) { recomp_alias_observe(110u); sub_0013A570(); }
+static void recomp_alias_0014FEF0(void) { recomp_alias_observe(111u); sub_00150231(); }
+static void recomp_alias_0015A0AE(void) { recomp_alias_observe(112u); sub_0015A0A8(); }
+static void recomp_alias_0015A0B4(void) { recomp_alias_observe(113u); sub_0015A0A8(); }
+static void recomp_alias_0015A0BA(void) { recomp_alias_observe(114u); sub_0015A0A8(); }
+static void recomp_alias_0015A0C0(void) { recomp_alias_observe(115u); sub_0015A0A8(); }
+static void recomp_alias_0015A0C6(void) { recomp_alias_observe(116u); sub_0015A0A8(); }
+static void recomp_alias_0015A0CC(void) { recomp_alias_observe(117u); sub_0015A0A8(); }
+static void recomp_alias_0015A0D2(void) { recomp_alias_observe(118u); sub_0015A0A8(); }
+static void recomp_alias_0015A0F9(void) { recomp_alias_observe(119u); sub_0015A110(); }
+static void recomp_alias_001600F1(void) { recomp_alias_observe(120u); sub_00160110(); }
+static void recomp_alias_00171EB7(void) { recomp_alias_observe(121u); sub_00171EC0(); }
+static void recomp_alias_00178882(void) { recomp_alias_observe(122u); sub_00178830(); }
+static void recomp_alias_0017888A(void) { recomp_alias_observe(123u); sub_00178830(); }
+static void recomp_alias_0017FD31(void) { recomp_alias_observe(124u); sub_0017FD0C(); }
+static void recomp_alias_0017FF7F(void) { recomp_alias_observe(125u); sub_0017FD0C(); }
+static void recomp_alias_00180020(void) { recomp_alias_observe(126u); sub_0017FD0C(); }
+static void recomp_alias_00183F71(void) { recomp_alias_observe(127u); sub_00183E10(); }
+static void recomp_alias_00183F86(void) { recomp_alias_observe(128u); sub_00183E10(); }
+static void recomp_alias_00183FC4(void) { recomp_alias_observe(129u); sub_00183E10(); }
+static void recomp_alias_001A2078(void) { recomp_alias_observe(130u); sub_001A2034(); }
+static void recomp_alias_001BD800(void) { recomp_alias_observe(131u); sub_001BD767(); }
+static void recomp_alias_001C379D(void) { recomp_alias_observe(132u); sub_001C3685(); }
+static void recomp_alias_001C3800(void) { recomp_alias_observe(133u); sub_001C3685(); }
+
 static const recomp_entry_t g_recomp_table[] = {
     { 0x00011000u, (recomp_func_t)sub_00011000 },
     { 0x00011070u, (recomp_func_t)sub_00011070 },
     { 0x000110A0u, (recomp_func_t)sub_000110A0 },
-    { 0x000110D0u, (recomp_func_t)sub_000110A0 },
+    { 0x000110D0u, (recomp_func_t)recomp_alias_000110D0 },
     { 0x00011105u, (recomp_func_t)sub_00011105 },
     { 0x00011220u, (recomp_func_t)sub_00011220 },
     { 0x00011260u, (recomp_func_t)sub_00011260 },
@@ -150,8 +459,8 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00015420u, (recomp_func_t)sub_00015420 },
     { 0x00015480u, (recomp_func_t)sub_00015480 },
     { 0x00015520u, (recomp_func_t)sub_00015520 },
-    { 0x00015682u, (recomp_func_t)sub_00015520 },
-    { 0x000156B0u, (recomp_func_t)sub_00015520 },
+    { 0x00015682u, (recomp_func_t)recomp_alias_00015682 },
+    { 0x000156B0u, (recomp_func_t)recomp_alias_000156B0 },
     { 0x00015888u, (recomp_func_t)sub_00015888 },
     { 0x00015BA0u, (recomp_func_t)sub_00015BA0 },
     { 0x00015D10u, (recomp_func_t)sub_00015D10 },
@@ -221,7 +530,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0001B500u, (recomp_func_t)sub_0001B500 },
     { 0x0001B5C0u, (recomp_func_t)sub_0001B5C0 },
     { 0x0001BE50u, (recomp_func_t)sub_0001BE50 },
-    { 0x0001BF40u, (recomp_func_t)sub_0001BE50 },
+    { 0x0001BF40u, (recomp_func_t)recomp_alias_0001BF40 },
     { 0x0001C000u, (recomp_func_t)sub_0001C000 },
     { 0x0001D570u, (recomp_func_t)sub_0001D570 },
     { 0x0001D6D0u, (recomp_func_t)sub_0001D6D0 },
@@ -244,7 +553,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0001DEA0u, (recomp_func_t)sub_0001DEA0 },
     { 0x0001DEF0u, (recomp_func_t)sub_0001DEF0 },
     { 0x0001DF30u, (recomp_func_t)sub_0001DF30 },
-    { 0x0001DF48u, (recomp_func_t)sub_0001DF30 },
+    { 0x0001DF48u, (recomp_func_t)recomp_alias_0001DF48 },
     { 0x0001E000u, (recomp_func_t)sub_0001E000 },
     { 0x0001E0B0u, (recomp_func_t)sub_0001E0B0 },
     { 0x0001E0D0u, (recomp_func_t)sub_0001E0D0 },
@@ -289,23 +598,23 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00020330u, (recomp_func_t)sub_00020330 },
     { 0x000203A0u, (recomp_func_t)sub_000203A0 },
     { 0x00020408u, (recomp_func_t)sub_00020408 },
-    { 0x0002040Du, (recomp_func_t)sub_00020408 },
+    { 0x0002040Du, (recomp_func_t)recomp_alias_0002040D },
     { 0x00020420u, (recomp_func_t)sub_00020420 },
     { 0x000204D0u, (recomp_func_t)sub_000204D0 },
     { 0x00020504u, (recomp_func_t)sub_00020504 },
-    { 0x0002055Bu, (recomp_func_t)sub_00020504 },
+    { 0x0002055Bu, (recomp_func_t)recomp_alias_0002055B },
     { 0x00020570u, (recomp_func_t)sub_00020570 },
     { 0x00020670u, (recomp_func_t)sub_00020670 },
     { 0x00020700u, (recomp_func_t)sub_00020700 },
     { 0x00020760u, (recomp_func_t)sub_00020760 },
     { 0x000207C2u, (recomp_func_t)sub_000207C2 },
-    { 0x000207F0u, (recomp_func_t)sub_00020803 },
+    { 0x000207F0u, (recomp_func_t)recomp_alias_000207F0 },
     { 0x00020803u, (recomp_func_t)sub_00020803 },
     { 0x00020806u, (recomp_func_t)sub_00020806 },
     { 0x00020814u, (recomp_func_t)sub_00020814 },
     { 0x000208BAu, (recomp_func_t)sub_000208BA },
     { 0x000208DBu, (recomp_func_t)sub_000208DB },
-    { 0x000208DDu, (recomp_func_t)sub_000208DB },
+    { 0x000208DDu, (recomp_func_t)recomp_alias_000208DD },
     { 0x00020900u, (recomp_func_t)sub_00020900 },
     { 0x000209B0u, (recomp_func_t)sub_000209B0 },
     { 0x00020A10u, (recomp_func_t)sub_00020A10 },
@@ -325,7 +634,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00021D90u, (recomp_func_t)sub_00021D90 },
     { 0x00021F30u, (recomp_func_t)sub_00021F30 },
     { 0x00022010u, (recomp_func_t)sub_00022010 },
-    { 0x00022043u, (recomp_func_t)sub_00022010 },
+    { 0x00022043u, (recomp_func_t)recomp_alias_00022043 },
     { 0x00022070u, (recomp_func_t)sub_00022070 },
     { 0x00022200u, (recomp_func_t)sub_00022200 },
     { 0x00022530u, (recomp_func_t)sub_00022530 },
@@ -334,7 +643,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00022990u, (recomp_func_t)sub_00022990 },
     { 0x00022AF0u, (recomp_func_t)sub_00022AF0 },
     { 0x00022E50u, (recomp_func_t)sub_00022E50 },
-    { 0x00022F30u, (recomp_func_t)sub_00022E50 },
+    { 0x00022F30u, (recomp_func_t)recomp_alias_00022F30 },
     { 0x00022F7Fu, (recomp_func_t)sub_00022F7F },
     { 0x000231E0u, (recomp_func_t)sub_000231E0 },
     { 0x00023280u, (recomp_func_t)sub_00023280 },
@@ -397,9 +706,9 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00025233u, (recomp_func_t)sub_00025233 },
     { 0x0002524Au, (recomp_func_t)sub_0002524A },
     { 0x00025263u, (recomp_func_t)sub_00025263 },
-    { 0x000252B2u, (recomp_func_t)sub_000252E0 },
-    { 0x000252B5u, (recomp_func_t)sub_000252E0 },
-    { 0x000252B7u, (recomp_func_t)sub_000252E0 },
+    { 0x000252B2u, (recomp_func_t)recomp_alias_000252B2 },
+    { 0x000252B5u, (recomp_func_t)recomp_alias_000252B5 },
+    { 0x000252B7u, (recomp_func_t)recomp_alias_000252B7 },
     { 0x000252E0u, (recomp_func_t)sub_000252E0 },
     { 0x00025310u, (recomp_func_t)sub_00025310 },
     { 0x00025390u, (recomp_func_t)sub_00025390 },
@@ -444,7 +753,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000278B0u, (recomp_func_t)sub_000278B0 },
     { 0x000278F0u, (recomp_func_t)sub_000278F0 },
     { 0x00027950u, (recomp_func_t)sub_00027950 },
-    { 0x00027B00u, (recomp_func_t)sub_00027CD0 },
+    { 0x00027B00u, (recomp_func_t)recomp_alias_00027B00 },
     { 0x00027C70u, (recomp_func_t)sub_00027C70 },
     { 0x00027CD0u, (recomp_func_t)sub_00027CD0 },
     { 0x00027D40u, (recomp_func_t)sub_00027D40 },
@@ -483,7 +792,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00028C20u, (recomp_func_t)sub_00028C20 },
     { 0x00028C60u, (recomp_func_t)sub_00028C60 },
     { 0x00029F50u, (recomp_func_t)sub_00029F50 },
-    { 0x00029FE0u, (recomp_func_t)sub_00029F50 },
+    { 0x00029FE0u, (recomp_func_t)recomp_alias_00029FE0 },
     { 0x0002A000u, (recomp_func_t)sub_0002A000 },
     { 0x0002A2B0u, (recomp_func_t)sub_0002A2B0 },
     { 0x0002A300u, (recomp_func_t)sub_0002A300 },
@@ -510,7 +819,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0002C2A0u, (recomp_func_t)sub_0002C2A0 },
     { 0x0002C2C8u, (recomp_func_t)sub_0002C2C8 },
     { 0x0002C2D0u, (recomp_func_t)sub_0002C2D0 },
-    { 0x0002C360u, (recomp_func_t)sub_0002D1E0 },
+    { 0x0002C360u, (recomp_func_t)recomp_alias_0002C360 },
     { 0x0002CFC0u, (recomp_func_t)sub_0002CFC0 },
     { 0x0002D010u, (recomp_func_t)sub_0002D010 },
     { 0x0002D020u, (recomp_func_t)sub_0002D020 },
@@ -532,7 +841,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0002DBE0u, (recomp_func_t)sub_0002DBE0 },
     { 0x0002DC04u, (recomp_func_t)sub_0002DC04 },
     { 0x0002DC44u, (recomp_func_t)sub_0002DC44 },
-    { 0x0002DC69u, (recomp_func_t)sub_0002DC04 },
+    { 0x0002DC69u, (recomp_func_t)recomp_alias_0002DC69 },
     { 0x0002DC76u, (recomp_func_t)sub_0002DC76 },
     { 0x0002DCB6u, (recomp_func_t)sub_0002DCB6 },
     { 0x0002DCE6u, (recomp_func_t)sub_0002DCE6 },
@@ -540,8 +849,8 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0002DEBFu, (recomp_func_t)sub_0002DEBF },
     { 0x0002DEDDu, (recomp_func_t)sub_0002DEDD },
     { 0x0002DF76u, (recomp_func_t)sub_0002DF76 },
-    { 0x0002E00Cu, (recomp_func_t)sub_0002DF76 },
-    { 0x0002E026u, (recomp_func_t)sub_0002DF76 },
+    { 0x0002E00Cu, (recomp_func_t)recomp_alias_0002E00C },
+    { 0x0002E026u, (recomp_func_t)recomp_alias_0002E026 },
     { 0x0002E030u, (recomp_func_t)sub_0002E030 },
     { 0x0002E0C0u, (recomp_func_t)sub_0002E0C0 },
     { 0x0002E0CDu, (recomp_func_t)sub_0002E0CD },
@@ -575,11 +884,11 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0002F65Eu, (recomp_func_t)sub_0002F65E },
     { 0x0002F66Cu, (recomp_func_t)sub_0002F66C },
     { 0x0002F67Au, (recomp_func_t)sub_0002F67A },
-    { 0x0002F688u, (recomp_func_t)sub_0002F6B0 },
+    { 0x0002F688u, (recomp_func_t)recomp_alias_0002F688 },
     { 0x0002F6B0u, (recomp_func_t)sub_0002F6B0 },
     { 0x0002F7F0u, (recomp_func_t)sub_0002F7F0 },
-    { 0x0002F830u, (recomp_func_t)sub_0002F7F0 },
-    { 0x0002FF70u, (recomp_func_t)sub_0002F7F0 },
+    { 0x0002F830u, (recomp_func_t)recomp_alias_0002F830 },
+    { 0x0002FF70u, (recomp_func_t)recomp_alias_0002FF70 },
     { 0x00030004u, (recomp_func_t)sub_00030004 },
     { 0x00030120u, (recomp_func_t)sub_00030120 },
     { 0x00030230u, (recomp_func_t)sub_00030230 },
@@ -590,7 +899,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00030592u, (recomp_func_t)sub_00030592 },
     { 0x000305B9u, (recomp_func_t)sub_000305B9 },
     { 0x00030601u, (recomp_func_t)sub_00030601 },
-    { 0x0003060Eu, (recomp_func_t)sub_00030592 },
+    { 0x0003060Eu, (recomp_func_t)recomp_alias_0003060E },
     { 0x00030630u, (recomp_func_t)sub_00030630 },
     { 0x00030650u, (recomp_func_t)sub_00030650 },
     { 0x00030660u, (recomp_func_t)sub_00030660 },
@@ -599,10 +908,10 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00030740u, (recomp_func_t)sub_00030740 },
     { 0x00030750u, (recomp_func_t)sub_00030750 },
     { 0x000307A0u, (recomp_func_t)sub_000307A0 },
-    { 0x000307F0u, (recomp_func_t)sub_000307F8 },
+    { 0x000307F0u, (recomp_func_t)recomp_alias_000307F0 },
     { 0x000307F8u, (recomp_func_t)sub_000307F8 },
     { 0x00030800u, (recomp_func_t)sub_00030800 },
-    { 0x00030849u, (recomp_func_t)sub_00030D70 },
+    { 0x00030849u, (recomp_func_t)recomp_alias_00030849 },
     { 0x00030850u, (recomp_func_t)sub_00030850 },
     { 0x00030D00u, (recomp_func_t)sub_00030D00 },
     { 0x00030D20u, (recomp_func_t)sub_00030D20 },
@@ -621,9 +930,9 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00031750u, (recomp_func_t)sub_00031750 },
     { 0x00031950u, (recomp_func_t)sub_00031950 },
     { 0x000320A0u, (recomp_func_t)sub_000320A0 },
-    { 0x00032610u, (recomp_func_t)sub_00033800 },
+    { 0x00032610u, (recomp_func_t)recomp_alias_00032610 },
     { 0x00032790u, (recomp_func_t)sub_00032790 },
-    { 0x00032C70u, (recomp_func_t)sub_00033800 },
+    { 0x00032C70u, (recomp_func_t)recomp_alias_00032C70 },
     { 0x00033180u, (recomp_func_t)sub_00033180 },
     { 0x000332F0u, (recomp_func_t)sub_000332F0 },
     { 0x00033800u, (recomp_func_t)sub_00033800 },
@@ -643,18 +952,18 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00033BD0u, (recomp_func_t)sub_00033BD0 },
     { 0x00033C00u, (recomp_func_t)sub_00033C00 },
     { 0x00033C10u, (recomp_func_t)sub_00033C10 },
-    { 0x00033C50u, (recomp_func_t)sub_000355B0 },
+    { 0x00033C50u, (recomp_func_t)recomp_alias_00033C50 },
     { 0x00034070u, (recomp_func_t)sub_00034070 },
-    { 0x00034200u, (recomp_func_t)sub_000355B0 },
+    { 0x00034200u, (recomp_func_t)recomp_alias_00034200 },
     { 0x00034810u, (recomp_func_t)sub_00034810 },
     { 0x00034830u, (recomp_func_t)sub_00034830 },
     { 0x00034850u, (recomp_func_t)sub_00034850 },
-    { 0x000348A0u, (recomp_func_t)sub_000355B0 },
+    { 0x000348A0u, (recomp_func_t)recomp_alias_000348A0 },
     { 0x00035560u, (recomp_func_t)sub_00035560 },
     { 0x00035590u, (recomp_func_t)sub_00035590 },
     { 0x000355B0u, (recomp_func_t)sub_000355B0 },
     { 0x000355C0u, (recomp_func_t)sub_000355C0 },
-    { 0x00035640u, (recomp_func_t)sub_000360D0 },
+    { 0x00035640u, (recomp_func_t)recomp_alias_00035640 },
     { 0x00036050u, (recomp_func_t)sub_00036050 },
     { 0x000360B0u, (recomp_func_t)sub_000360B0 },
     { 0x000360D0u, (recomp_func_t)sub_000360D0 },
@@ -686,7 +995,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00037450u, (recomp_func_t)sub_00037450 },
     { 0x00037471u, (recomp_func_t)sub_00037471 },
     { 0x00037480u, (recomp_func_t)sub_00037480 },
-    { 0x00037550u, (recomp_func_t)sub_00038530 },
+    { 0x00037550u, (recomp_func_t)recomp_alias_00037550 },
     { 0x00038460u, (recomp_func_t)sub_00038460 },
     { 0x00038530u, (recomp_func_t)sub_00038530 },
     { 0x00038860u, (recomp_func_t)sub_00038860 },
@@ -695,7 +1004,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00038B50u, (recomp_func_t)sub_00038B50 },
     { 0x00038B90u, (recomp_func_t)sub_00038B90 },
     { 0x00038D8Du, (recomp_func_t)sub_00038D8D },
-    { 0x00038D98u, (recomp_func_t)sub_00038D8D },
+    { 0x00038D98u, (recomp_func_t)recomp_alias_00038D98 },
     { 0x00038DA0u, (recomp_func_t)sub_00038DA0 },
     { 0x00038DC0u, (recomp_func_t)sub_00038DC0 },
     { 0x00038DD0u, (recomp_func_t)sub_00038DD0 },
@@ -828,7 +1137,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0003D750u, (recomp_func_t)sub_0003D750 },
     { 0x0003D790u, (recomp_func_t)sub_0003D790 },
     { 0x0003D830u, (recomp_func_t)sub_0003D830 },
-    { 0x0003D8E2u, (recomp_func_t)sub_0003D830 },
+    { 0x0003D8E2u, (recomp_func_t)recomp_alias_0003D8E2 },
     { 0x0003E000u, (recomp_func_t)sub_0003E000 },
     { 0x0003E210u, (recomp_func_t)sub_0003E210 },
     { 0x0003E3C0u, (recomp_func_t)sub_0003E3C0 },
@@ -871,12 +1180,12 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0003FE00u, (recomp_func_t)sub_0003FE00 },
     { 0x0003FE20u, (recomp_func_t)sub_0003FE20 },
     { 0x0003FEA0u, (recomp_func_t)sub_0003FEA0 },
-    { 0x0003FFB0u, (recomp_func_t)sub_0003FFC0 },
+    { 0x0003FFB0u, (recomp_func_t)recomp_alias_0003FFB0 },
     { 0x0003FFC0u, (recomp_func_t)sub_0003FFC0 },
     { 0x0003FFFFu, (recomp_func_t)sub_0003FFFF },
     { 0x00040000u, (recomp_func_t)sub_00040000 },
     { 0x00040001u, (recomp_func_t)sub_00040001 },
-    { 0x00040002u, (recomp_func_t)sub_00040000 },
+    { 0x00040002u, (recomp_func_t)recomp_alias_00040002 },
     { 0x00040003u, (recomp_func_t)sub_00040003 },
     { 0x00040032u, (recomp_func_t)sub_00040032 },
     { 0x00040038u, (recomp_func_t)sub_00040038 },
@@ -895,12 +1204,12 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00040298u, (recomp_func_t)sub_00040298 },
     { 0x0004029Cu, (recomp_func_t)sub_0004029C },
     { 0x000402A4u, (recomp_func_t)sub_000402A4 },
-    { 0x000402A9u, (recomp_func_t)sub_000402A4 },
+    { 0x000402A9u, (recomp_func_t)recomp_alias_000402A9 },
     { 0x000402B4u, (recomp_func_t)sub_000402B4 },
     { 0x000402C0u, (recomp_func_t)sub_000402C0 },
     { 0x000402E0u, (recomp_func_t)sub_000402E0 },
-    { 0x000402E8u, (recomp_func_t)sub_000402E0 },
-    { 0x000402F1u, (recomp_func_t)sub_000402E0 },
+    { 0x000402E8u, (recomp_func_t)recomp_alias_000402E8 },
+    { 0x000402F1u, (recomp_func_t)recomp_alias_000402F1 },
     { 0x00040300u, (recomp_func_t)sub_00040300 },
     { 0x00040304u, (recomp_func_t)sub_00040304 },
     { 0x00040308u, (recomp_func_t)sub_00040308 },
@@ -917,7 +1226,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00040540u, (recomp_func_t)sub_00040540 },
     { 0x00040590u, (recomp_func_t)sub_00040590 },
     { 0x000406D0u, (recomp_func_t)sub_000406D0 },
-    { 0x00040921u, (recomp_func_t)sub_000406D0 },
+    { 0x00040921u, (recomp_func_t)recomp_alias_00040921 },
     { 0x000409F8u, (recomp_func_t)sub_000409F8 },
     { 0x00040A64u, (recomp_func_t)sub_00040A64 },
     { 0x00040A84u, (recomp_func_t)sub_00040A84 },
@@ -934,7 +1243,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000416C0u, (recomp_func_t)sub_000416C0 },
     { 0x00041700u, (recomp_func_t)sub_00041700 },
     { 0x00041BF0u, (recomp_func_t)sub_00041BF0 },
-    { 0x00041D10u, (recomp_func_t)sub_00041BF0 },
+    { 0x00041D10u, (recomp_func_t)recomp_alias_00041D10 },
     { 0x00041E24u, (recomp_func_t)sub_00041E24 },
     { 0x00041E40u, (recomp_func_t)sub_00041E40 },
     { 0x00041E48u, (recomp_func_t)sub_00041E48 },
@@ -981,7 +1290,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00043C00u, (recomp_func_t)sub_00043C00 },
     { 0x00043EA0u, (recomp_func_t)sub_00043EA0 },
     { 0x00043EC0u, (recomp_func_t)sub_00043EC0 },
-    { 0x00043FE0u, (recomp_func_t)sub_00044250 },
+    { 0x00043FE0u, (recomp_func_t)recomp_alias_00043FE0 },
     { 0x00044000u, (recomp_func_t)sub_00044000 },
     { 0x00044250u, (recomp_func_t)sub_00044250 },
     { 0x00044400u, (recomp_func_t)sub_00044400 },
@@ -1637,9 +1946,9 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0006FD50u, (recomp_func_t)sub_0006FD50 },
     { 0x0006FDB0u, (recomp_func_t)sub_0006FDB0 },
     { 0x0006FE00u, (recomp_func_t)sub_0006FE00 },
-    { 0x0006FFA0u, (recomp_func_t)sub_00070000 },
+    { 0x0006FFA0u, (recomp_func_t)recomp_alias_0006FFA0 },
     { 0x00070000u, (recomp_func_t)sub_00070000 },
-    { 0x00070017u, (recomp_func_t)sub_00070000 },
+    { 0x00070017u, (recomp_func_t)recomp_alias_00070017 },
     { 0x00070027u, (recomp_func_t)sub_00070027 },
     { 0x00070320u, (recomp_func_t)sub_00070320 },
     { 0x00070420u, (recomp_func_t)sub_00070420 },
@@ -1716,10 +2025,10 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00073F88u, (recomp_func_t)sub_00073F88 },
     { 0x00073FD2u, (recomp_func_t)sub_00073FD2 },
     { 0x00074004u, (recomp_func_t)sub_00074004 },
-    { 0x0007400Au, (recomp_func_t)sub_00074004 },
+    { 0x0007400Au, (recomp_func_t)recomp_alias_0007400A },
     { 0x00074018u, (recomp_func_t)sub_00074018 },
-    { 0x0007402Bu, (recomp_func_t)sub_00074018 },
-    { 0x0007402Du, (recomp_func_t)sub_00074018 },
+    { 0x0007402Bu, (recomp_func_t)recomp_alias_0007402B },
+    { 0x0007402Du, (recomp_func_t)recomp_alias_0007402D },
     { 0x00074080u, (recomp_func_t)sub_00074080 },
     { 0x000740A0u, (recomp_func_t)sub_000740A0 },
     { 0x00074200u, (recomp_func_t)sub_00074200 },
@@ -1775,7 +2084,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000780F0u, (recomp_func_t)sub_000780F0 },
     { 0x00078210u, (recomp_func_t)sub_00078210 },
     { 0x00078520u, (recomp_func_t)sub_00078520 },
-    { 0x00078887u, (recomp_func_t)sub_00078520 },
+    { 0x00078887u, (recomp_func_t)recomp_alias_00078887 },
     { 0x000788C8u, (recomp_func_t)sub_000788C8 },
     { 0x000789D0u, (recomp_func_t)sub_000789D0 },
     { 0x000789F0u, (recomp_func_t)sub_000789F0 },
@@ -1808,8 +2117,8 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0007AD80u, (recomp_func_t)sub_0007AD80 },
     { 0x0007ADB7u, (recomp_func_t)sub_0007ADB7 },
     { 0x0007ADCEu, (recomp_func_t)sub_0007ADCE },
-    { 0x0007ADE1u, (recomp_func_t)sub_0007ADCE },
-    { 0x0007ADE2u, (recomp_func_t)sub_0007ADCE },
+    { 0x0007ADE1u, (recomp_func_t)recomp_alias_0007ADE1 },
+    { 0x0007ADE2u, (recomp_func_t)recomp_alias_0007ADE2 },
     { 0x0007AE10u, (recomp_func_t)sub_0007AE10 },
     { 0x0007AF70u, (recomp_func_t)sub_0007AF70 },
     { 0x0007AF80u, (recomp_func_t)sub_0007AF80 },
@@ -1819,9 +2128,9 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0007B8B0u, (recomp_func_t)sub_0007B8B0 },
     { 0x0007B8D0u, (recomp_func_t)sub_0007B8D0 },
     { 0x0007B93Cu, (recomp_func_t)sub_0007B93C },
-    { 0x0007B956u, (recomp_func_t)sub_0007BC10 },
-    { 0x0007B978u, (recomp_func_t)sub_0007BC10 },
-    { 0x0007BBF3u, (recomp_func_t)sub_0007BC10 },
+    { 0x0007B956u, (recomp_func_t)recomp_alias_0007B956 },
+    { 0x0007B978u, (recomp_func_t)recomp_alias_0007B978 },
+    { 0x0007BBF3u, (recomp_func_t)recomp_alias_0007BBF3 },
     { 0x0007BC10u, (recomp_func_t)sub_0007BC10 },
     { 0x0007BC90u, (recomp_func_t)sub_0007BC90 },
     { 0x0007BDD0u, (recomp_func_t)sub_0007BDD0 },
@@ -1914,7 +2223,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0007E120u, (recomp_func_t)sub_0007E120 },
     { 0x0007E180u, (recomp_func_t)sub_0007E180 },
     { 0x0007E242u, (recomp_func_t)sub_0007E242 },
-    { 0x0007E255u, (recomp_func_t)sub_0007E242 },
+    { 0x0007E255u, (recomp_func_t)recomp_alias_0007E255 },
     { 0x0007E260u, (recomp_func_t)sub_0007E260 },
     { 0x0007E2D0u, (recomp_func_t)sub_0007E2D0 },
     { 0x0007E2F0u, (recomp_func_t)sub_0007E2F0 },
@@ -2000,9 +2309,9 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00080340u, (recomp_func_t)sub_00080340 },
     { 0x00080BD0u, (recomp_func_t)sub_00080BD0 },
     { 0x000817BCu, (recomp_func_t)sub_000817BC },
-    { 0x000817C3u, (recomp_func_t)sub_000817BC },
-    { 0x000817EEu, (recomp_func_t)sub_000817BC },
-    { 0x00081834u, (recomp_func_t)sub_000817BC },
+    { 0x000817C3u, (recomp_func_t)recomp_alias_000817C3 },
+    { 0x000817EEu, (recomp_func_t)recomp_alias_000817EE },
+    { 0x00081834u, (recomp_func_t)recomp_alias_00081834 },
     { 0x00082770u, (recomp_func_t)sub_00082770 },
     { 0x00082790u, (recomp_func_t)sub_00082790 },
     { 0x000827B0u, (recomp_func_t)sub_000827B0 },
@@ -2049,7 +2358,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00086501u, (recomp_func_t)sub_00086501 },
     { 0x0008656Eu, (recomp_func_t)sub_0008656E },
     { 0x0008659Fu, (recomp_func_t)sub_0008659F },
-    { 0x000865B2u, (recomp_func_t)sub_0008659F },
+    { 0x000865B2u, (recomp_func_t)recomp_alias_000865B2 },
     { 0x000865D0u, (recomp_func_t)sub_000865D0 },
     { 0x000865E0u, (recomp_func_t)sub_000865E0 },
     { 0x000866F0u, (recomp_func_t)sub_000866F0 },
@@ -2125,7 +2434,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0008EAA0u, (recomp_func_t)sub_0008EAA0 },
     { 0x0008F070u, (recomp_func_t)sub_0008F070 },
     { 0x0008FE10u, (recomp_func_t)sub_0008FE10 },
-    { 0x0008FF70u, (recomp_func_t)sub_0008FE10 },
+    { 0x0008FF70u, (recomp_func_t)recomp_alias_0008FF70 },
     { 0x00090029u, (recomp_func_t)sub_00090029 },
     { 0x00090640u, (recomp_func_t)sub_00090640 },
     { 0x00090CA0u, (recomp_func_t)sub_00090CA0 },
@@ -2570,14 +2879,14 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000ADBE0u, (recomp_func_t)sub_000ADBE0 },
     { 0x000ADD20u, (recomp_func_t)sub_000ADD20 },
     { 0x000ADDF7u, (recomp_func_t)sub_000ADDF7 },
-    { 0x000ADE86u, (recomp_func_t)sub_000ADDF7 },
+    { 0x000ADE86u, (recomp_func_t)recomp_alias_000ADE86 },
     { 0x000ADE90u, (recomp_func_t)sub_000ADE90 },
     { 0x000AE220u, (recomp_func_t)sub_000AE220 },
     { 0x000AE290u, (recomp_func_t)sub_000AE290 },
     { 0x000AE430u, (recomp_func_t)sub_000AE430 },
     { 0x000AE560u, (recomp_func_t)sub_000AE560 },
     { 0x000AE5F1u, (recomp_func_t)sub_000AE5F1 },
-    { 0x000AE655u, (recomp_func_t)sub_000AE5F1 },
+    { 0x000AE655u, (recomp_func_t)recomp_alias_000AE655 },
     { 0x000AE660u, (recomp_func_t)sub_000AE660 },
     { 0x000AE6A0u, (recomp_func_t)sub_000AE6A0 },
     { 0x000AE6C0u, (recomp_func_t)sub_000AE6C0 },
@@ -2587,13 +2896,13 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000AEAEFu, (recomp_func_t)sub_000AEAEF },
     { 0x000AEC02u, (recomp_func_t)sub_000AEC02 },
     { 0x000AEC8Du, (recomp_func_t)sub_000AEC8D },
-    { 0x000AECA0u, (recomp_func_t)sub_000AEC8D },
-    { 0x000AECA1u, (recomp_func_t)sub_000AEC8D },
+    { 0x000AECA0u, (recomp_func_t)recomp_alias_000AECA0 },
+    { 0x000AECA1u, (recomp_func_t)recomp_alias_000AECA1 },
     { 0x000AECC0u, (recomp_func_t)sub_000AECC0 },
     { 0x000AECD0u, (recomp_func_t)sub_000AECD0 },
     { 0x000AEE80u, (recomp_func_t)sub_000AEE80 },
     { 0x000AEFF8u, (recomp_func_t)sub_000AEFF8 },
-    { 0x000AF067u, (recomp_func_t)sub_000AEFF8 },
+    { 0x000AF067u, (recomp_func_t)recomp_alias_000AF067 },
     { 0x000AF070u, (recomp_func_t)sub_000AF070 },
     { 0x000AF090u, (recomp_func_t)sub_000AF090 },
     { 0x000AF790u, (recomp_func_t)sub_000AF790 },
@@ -2602,19 +2911,19 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000AFD40u, (recomp_func_t)sub_000AFD40 },
     { 0x000AFD99u, (recomp_func_t)sub_000AFD99 },
     { 0x000AFE3Cu, (recomp_func_t)sub_000AFE3C },
-    { 0x000AFEA7u, (recomp_func_t)sub_000AFE3C },
-    { 0x000AFEA8u, (recomp_func_t)sub_000AFE3C },
+    { 0x000AFEA7u, (recomp_func_t)recomp_alias_000AFEA7 },
+    { 0x000AFEA8u, (recomp_func_t)recomp_alias_000AFEA8 },
     { 0x000AFEC0u, (recomp_func_t)sub_000AFEC0 },
     { 0x000AFEE0u, (recomp_func_t)sub_000AFEE0 },
-    { 0x000AFFF4u, (recomp_func_t)sub_000AFEE0 },
+    { 0x000AFFF4u, (recomp_func_t)recomp_alias_000AFFF4 },
     { 0x000B0000u, (recomp_func_t)sub_000B0000 },
-    { 0x000B0060u, (recomp_func_t)sub_000AFEE0 },
+    { 0x000B0060u, (recomp_func_t)recomp_alias_000B0060 },
     { 0x000B0081u, (recomp_func_t)sub_000B0081 },
     { 0x000B0190u, (recomp_func_t)sub_000B0190 },
     { 0x000B0210u, (recomp_func_t)sub_000B0210 },
     { 0x000B0600u, (recomp_func_t)sub_000B0600 },
     { 0x000B06E0u, (recomp_func_t)sub_000B06E0 },
-    { 0x000B090Bu, (recomp_func_t)sub_000B0A20 },
+    { 0x000B090Bu, (recomp_func_t)recomp_alias_000B090B },
     { 0x000B0A00u, (recomp_func_t)sub_000B0A00 },
     { 0x000B0A20u, (recomp_func_t)sub_000B0A20 },
     { 0x000B1130u, (recomp_func_t)sub_000B1130 },
@@ -2635,8 +2944,8 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000B3270u, (recomp_func_t)sub_000B3270 },
     { 0x000B3970u, (recomp_func_t)sub_000B3970 },
     { 0x000B3D67u, (recomp_func_t)sub_000B3D67 },
-    { 0x000B3DCFu, (recomp_func_t)sub_000B3D67 },
-    { 0x000B3DD0u, (recomp_func_t)sub_000B3D67 },
+    { 0x000B3DCFu, (recomp_func_t)recomp_alias_000B3DCF },
+    { 0x000B3DD0u, (recomp_func_t)recomp_alias_000B3DD0 },
     { 0x000B3DE0u, (recomp_func_t)sub_000B3DE0 },
     { 0x000B3DF0u, (recomp_func_t)sub_000B3DF0 },
     { 0x000B3E10u, (recomp_func_t)sub_000B3E10 },
@@ -2657,7 +2966,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000B5CC0u, (recomp_func_t)sub_000B5CC0 },
     { 0x000B5E70u, (recomp_func_t)sub_000B5E70 },
     { 0x000B5EB0u, (recomp_func_t)sub_000B5EB0 },
-    { 0x000B5ECEu, (recomp_func_t)sub_000B7170 },
+    { 0x000B5ECEu, (recomp_func_t)recomp_alias_000B5ECE },
     { 0x000B5F3Au, (recomp_func_t)sub_000B5F3A },
     { 0x000B6760u, (recomp_func_t)sub_000B6760 },
     { 0x000B6ED0u, (recomp_func_t)sub_000B6ED0 },
@@ -2713,7 +3022,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000BB9D8u, (recomp_func_t)sub_000BB9D8 },
     { 0x000BB9EBu, (recomp_func_t)sub_000BB9EB },
     { 0x000BBA04u, (recomp_func_t)sub_000BBA04 },
-    { 0x000BBA17u, (recomp_func_t)sub_000BBA04 },
+    { 0x000BBA17u, (recomp_func_t)recomp_alias_000BBA17 },
     { 0x000BBA40u, (recomp_func_t)sub_000BBA40 },
     { 0x000BBCF0u, (recomp_func_t)sub_000BBCF0 },
     { 0x000BBD10u, (recomp_func_t)sub_000BBD10 },
@@ -2743,7 +3052,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000BFF40u, (recomp_func_t)sub_000BFF40 },
     { 0x000BFF60u, (recomp_func_t)sub_000BFF60 },
     { 0x000BFF80u, (recomp_func_t)sub_000BFF80 },
-    { 0x000BFFE0u, (recomp_func_t)sub_000BFF80 },
+    { 0x000BFFE0u, (recomp_func_t)recomp_alias_000BFFE0 },
     { 0x000C002Cu, (recomp_func_t)sub_000C002C },
     { 0x000C0050u, (recomp_func_t)sub_000C0050 },
     { 0x000C02D0u, (recomp_func_t)sub_000C02D0 },
@@ -3006,7 +3315,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000CB250u, (recomp_func_t)sub_000CB250 },
     { 0x000CB2A0u, (recomp_func_t)sub_000CB2A0 },
     { 0x000CB32Fu, (recomp_func_t)sub_000CB32F },
-    { 0x000CB35Cu, (recomp_func_t)sub_000CB32F },
+    { 0x000CB35Cu, (recomp_func_t)recomp_alias_000CB35C },
     { 0x000CB360u, (recomp_func_t)sub_000CB360 },
     { 0x000CB3B0u, (recomp_func_t)sub_000CB3B0 },
     { 0x000CB410u, (recomp_func_t)sub_000CB410 },
@@ -3284,7 +3593,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000D5800u, (recomp_func_t)sub_000D5800 },
     { 0x000D58E0u, (recomp_func_t)sub_000D58E0 },
     { 0x000D59BDu, (recomp_func_t)sub_000D59BD },
-    { 0x000D59FCu, (recomp_func_t)sub_000D59BD },
+    { 0x000D59FCu, (recomp_func_t)recomp_alias_000D59FC },
     { 0x000D5A00u, (recomp_func_t)sub_000D5A00 },
     { 0x000D5A60u, (recomp_func_t)sub_000D5A60 },
     { 0x000D5AC0u, (recomp_func_t)sub_000D5AC0 },
@@ -3654,7 +3963,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000E9380u, (recomp_func_t)sub_000E9380 },
     { 0x000E93C0u, (recomp_func_t)sub_000E93C0 },
     { 0x000E97F0u, (recomp_func_t)sub_000E97F0 },
-    { 0x000E9A40u, (recomp_func_t)sub_000E9D80 },
+    { 0x000E9A40u, (recomp_func_t)recomp_alias_000E9A40 },
     { 0x000E9D80u, (recomp_func_t)sub_000E9D80 },
     { 0x000E9E20u, (recomp_func_t)sub_000E9E20 },
     { 0x000E9F70u, (recomp_func_t)sub_000E9F70 },
@@ -3902,7 +4211,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000F7565u, (recomp_func_t)sub_000F7565 },
     { 0x000F7606u, (recomp_func_t)sub_000F7606 },
     { 0x000F76F2u, (recomp_func_t)sub_000F76F2 },
-    { 0x000F7705u, (recomp_func_t)sub_000F76F2 },
+    { 0x000F7705u, (recomp_func_t)recomp_alias_000F7705 },
     { 0x000F77F0u, (recomp_func_t)sub_000F77F0 },
     { 0x000F78C0u, (recomp_func_t)sub_000F78C0 },
     { 0x000F78E0u, (recomp_func_t)sub_000F78E0 },
@@ -3987,7 +4296,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000FC9C1u, (recomp_func_t)sub_000FC9C1 },
     { 0x000FCA90u, (recomp_func_t)sub_000FCA90 },
     { 0x000FCB03u, (recomp_func_t)sub_000FCB03 },
-    { 0x000FCB16u, (recomp_func_t)sub_000FCB03 },
+    { 0x000FCB16u, (recomp_func_t)recomp_alias_000FCB16 },
     { 0x000FCB40u, (recomp_func_t)sub_000FCB40 },
     { 0x000FCB5Au, (recomp_func_t)sub_000FCB5A },
     { 0x000FCB86u, (recomp_func_t)sub_000FCB86 },
@@ -3997,7 +4306,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000FCD08u, (recomp_func_t)sub_000FCD08 },
     { 0x000FCD73u, (recomp_func_t)sub_000FCD73 },
     { 0x000FCDE6u, (recomp_func_t)sub_000FCDE6 },
-    { 0x000FCDF9u, (recomp_func_t)sub_000FCDE6 },
+    { 0x000FCDF9u, (recomp_func_t)recomp_alias_000FCDF9 },
     { 0x000FCE20u, (recomp_func_t)sub_000FCE20 },
     { 0x000FCE3Au, (recomp_func_t)sub_000FCE3A },
     { 0x000FCE88u, (recomp_func_t)sub_000FCE88 },
@@ -4007,7 +4316,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x000FD075u, (recomp_func_t)sub_000FD075 },
     { 0x000FD0E0u, (recomp_func_t)sub_000FD0E0 },
     { 0x000FD153u, (recomp_func_t)sub_000FD153 },
-    { 0x000FD166u, (recomp_func_t)sub_000FD153 },
+    { 0x000FD166u, (recomp_func_t)recomp_alias_000FD166 },
     { 0x000FD850u, (recomp_func_t)sub_000FD850 },
     { 0x000FD870u, (recomp_func_t)sub_000FD870 },
     { 0x000FD9B0u, (recomp_func_t)sub_000FD9B0 },
@@ -4088,20 +4397,20 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00100922u, (recomp_func_t)sub_00100922 },
     { 0x001009B4u, (recomp_func_t)sub_001009B4 },
     { 0x001009D0u, (recomp_func_t)sub_001009D0 },
-    { 0x001009EFu, (recomp_func_t)sub_001009D0 },
+    { 0x001009EFu, (recomp_func_t)recomp_alias_001009EF },
     { 0x00100A08u, (recomp_func_t)sub_00100A08 },
     { 0x00100A20u, (recomp_func_t)sub_00100A20 },
     { 0x00100A33u, (recomp_func_t)sub_00100A33 },
     { 0x00100A50u, (recomp_func_t)sub_00100A50 },
-    { 0x00100A89u, (recomp_func_t)sub_00100A50 },
-    { 0x00100AB0u, (recomp_func_t)sub_00100AF0 },
+    { 0x00100A89u, (recomp_func_t)recomp_alias_00100A89 },
+    { 0x00100AB0u, (recomp_func_t)recomp_alias_00100AB0 },
     { 0x00100AE0u, (recomp_func_t)sub_00100AE0 },
     { 0x00100AF0u, (recomp_func_t)sub_00100AF0 },
     { 0x00100AF3u, (recomp_func_t)sub_00100AF3 },
     { 0x00100B31u, (recomp_func_t)sub_00100B31 },
     { 0x00100B44u, (recomp_func_t)sub_00100B44 },
     { 0x00100B6Fu, (recomp_func_t)sub_00100B6F },
-    { 0x00100B8Cu, (recomp_func_t)sub_00100B6F },
+    { 0x00100B8Cu, (recomp_func_t)recomp_alias_00100B8C },
     { 0x00100BB0u, (recomp_func_t)sub_00100BB0 },
     { 0x00100D60u, (recomp_func_t)sub_00100D60 },
     { 0x00100D80u, (recomp_func_t)sub_00100D80 },
@@ -4119,7 +4428,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00101481u, (recomp_func_t)sub_00101481 },
     { 0x00101570u, (recomp_func_t)sub_00101570 },
     { 0x001015A3u, (recomp_func_t)sub_001015A3 },
-    { 0x001015B6u, (recomp_func_t)sub_001015A3 },
+    { 0x001015B6u, (recomp_func_t)recomp_alias_001015B6 },
     { 0x001015E0u, (recomp_func_t)sub_001015E0 },
     { 0x00101600u, (recomp_func_t)sub_00101600 },
     { 0x00101A70u, (recomp_func_t)sub_00101A70 },
@@ -4133,7 +4442,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00101E93u, (recomp_func_t)sub_00101E93 },
     { 0x00101EB4u, (recomp_func_t)sub_00101EB4 },
     { 0x00101EE6u, (recomp_func_t)sub_00101EE6 },
-    { 0x00101EF9u, (recomp_func_t)sub_00101EE6 },
+    { 0x00101EF9u, (recomp_func_t)recomp_alias_00101EF9 },
     { 0x00101F20u, (recomp_func_t)sub_00101F20 },
     { 0x00102282u, (recomp_func_t)sub_00102282 },
     { 0x001022A0u, (recomp_func_t)sub_001022A0 },
@@ -4142,7 +4451,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00102490u, (recomp_func_t)sub_00102490 },
     { 0x001026B0u, (recomp_func_t)sub_001026B0 },
     { 0x001026E0u, (recomp_func_t)sub_001026E0 },
-    { 0x00102700u, (recomp_func_t)sub_00102920 },
+    { 0x00102700u, (recomp_func_t)recomp_alias_00102700 },
     { 0x00102920u, (recomp_func_t)sub_00102920 },
     { 0x00102B90u, (recomp_func_t)sub_00102B90 },
     { 0x00102BF0u, (recomp_func_t)sub_00102BF0 },
@@ -4167,7 +4476,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0010455Du, (recomp_func_t)sub_0010455D },
     { 0x00104574u, (recomp_func_t)sub_00104574 },
     { 0x00104599u, (recomp_func_t)sub_00104599 },
-    { 0x001045ACu, (recomp_func_t)sub_00104599 },
+    { 0x001045ACu, (recomp_func_t)recomp_alias_001045AC },
     { 0x001045D0u, (recomp_func_t)sub_001045D0 },
     { 0x00104790u, (recomp_func_t)sub_00104790 },
     { 0x001047B0u, (recomp_func_t)sub_001047B0 },
@@ -4178,7 +4487,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00104A38u, (recomp_func_t)sub_00104A38 },
     { 0x00104A58u, (recomp_func_t)sub_00104A58 },
     { 0x00104A77u, (recomp_func_t)sub_00104A77 },
-    { 0x00104A8Au, (recomp_func_t)sub_00104A77 },
+    { 0x00104A8Au, (recomp_func_t)recomp_alias_00104A8A },
     { 0x00104AB0u, (recomp_func_t)sub_00104AB0 },
     { 0x00104DE0u, (recomp_func_t)sub_00104DE0 },
     { 0x00104E00u, (recomp_func_t)sub_00104E00 },
@@ -4192,9 +4501,9 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x001060B0u, (recomp_func_t)sub_001060B0 },
     { 0x001060E1u, (recomp_func_t)sub_001060E1 },
     { 0x00106300u, (recomp_func_t)sub_00106300 },
-    { 0x00106320u, (recomp_func_t)sub_00106300 },
+    { 0x00106320u, (recomp_func_t)recomp_alias_00106320 },
     { 0x00106342u, (recomp_func_t)sub_00106342 },
-    { 0x00106349u, (recomp_func_t)sub_00106342 },
+    { 0x00106349u, (recomp_func_t)recomp_alias_00106349 },
     { 0x0010634Eu, (recomp_func_t)sub_0010634E },
     { 0x00106370u, (recomp_func_t)sub_00106370 },
     { 0x00106390u, (recomp_func_t)sub_00106390 },
@@ -4329,7 +4638,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0010F9D0u, (recomp_func_t)sub_0010F9D0 },
     { 0x0010F9FEu, (recomp_func_t)sub_0010F9FE },
     { 0x0010FA30u, (recomp_func_t)sub_0010FA30 },
-    { 0x0010FA43u, (recomp_func_t)sub_0010FA30 },
+    { 0x0010FA43u, (recomp_func_t)recomp_alias_0010FA43 },
     { 0x0010FCE0u, (recomp_func_t)sub_0010FCE0 },
     { 0x0010FD00u, (recomp_func_t)sub_0010FD00 },
     { 0x0010FD10u, (recomp_func_t)sub_0010FD10 },
@@ -4344,14 +4653,14 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x001101E0u, (recomp_func_t)sub_001101E0 },
     { 0x001101FEu, (recomp_func_t)sub_001101FE },
     { 0x0011021Au, (recomp_func_t)sub_0011021A },
-    { 0x00110280u, (recomp_func_t)sub_00110282 },
+    { 0x00110280u, (recomp_func_t)recomp_alias_00110280 },
     { 0x00110282u, (recomp_func_t)sub_00110282 },
-    { 0x00110298u, (recomp_func_t)sub_00110282 },
-    { 0x001102AAu, (recomp_func_t)sub_00110301 },
+    { 0x00110298u, (recomp_func_t)recomp_alias_00110298 },
+    { 0x001102AAu, (recomp_func_t)recomp_alias_001102AA },
     { 0x001102C3u, (recomp_func_t)sub_001102C3 },
     { 0x00110301u, (recomp_func_t)sub_00110301 },
-    { 0x00110314u, (recomp_func_t)sub_00110301 },
-    { 0x00110317u, (recomp_func_t)sub_00110301 },
+    { 0x00110314u, (recomp_func_t)recomp_alias_00110314 },
+    { 0x00110317u, (recomp_func_t)recomp_alias_00110317 },
     { 0x00110710u, (recomp_func_t)sub_00110710 },
     { 0x00110830u, (recomp_func_t)sub_00110830 },
     { 0x00110890u, (recomp_func_t)sub_00110890 },
@@ -4503,7 +4812,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x001197F0u, (recomp_func_t)sub_001197F0 },
     { 0x00119800u, (recomp_func_t)sub_00119800 },
     { 0x00119950u, (recomp_func_t)sub_00119950 },
-    { 0x001199C0u, (recomp_func_t)sub_00119BD0 },
+    { 0x001199C0u, (recomp_func_t)recomp_alias_001199C0 },
     { 0x00119BD0u, (recomp_func_t)sub_00119BD0 },
     { 0x00119C00u, (recomp_func_t)sub_00119C00 },
     { 0x00119C10u, (recomp_func_t)sub_00119C10 },
@@ -4534,12 +4843,12 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0011BA6Au, (recomp_func_t)sub_0011BA6A },
     { 0x0011BA73u, (recomp_func_t)sub_0011BA73 },
     { 0x0011BA97u, (recomp_func_t)sub_0011BA97 },
-    { 0x0011BAAAu, (recomp_func_t)sub_0011BA97 },
+    { 0x0011BAAAu, (recomp_func_t)recomp_alias_0011BAAA },
     { 0x0011BAD0u, (recomp_func_t)sub_0011BAD0 },
     { 0x0011BCA0u, (recomp_func_t)sub_0011BCA0 },
     { 0x0011BCB0u, (recomp_func_t)sub_0011BCB0 },
     { 0x0011BCDFu, (recomp_func_t)sub_0011BCDF },
-    { 0x0011BD0Du, (recomp_func_t)sub_0011BCDF },
+    { 0x0011BD0Du, (recomp_func_t)recomp_alias_0011BD0D },
     { 0x0011BE20u, (recomp_func_t)sub_0011BE20 },
     { 0x0011BF50u, (recomp_func_t)sub_0011BF50 },
     { 0x0011C050u, (recomp_func_t)sub_0011C050 },
@@ -4567,8 +4876,8 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0011E2A0u, (recomp_func_t)sub_0011E2A0 },
     { 0x0011E2B0u, (recomp_func_t)sub_0011E2B0 },
     { 0x0011E2E7u, (recomp_func_t)sub_0011E2E7 },
-    { 0x0011E315u, (recomp_func_t)sub_0011E2E7 },
-    { 0x0011E41Au, (recomp_func_t)sub_0011E2E7 },
+    { 0x0011E315u, (recomp_func_t)recomp_alias_0011E315 },
+    { 0x0011E41Au, (recomp_func_t)recomp_alias_0011E41A },
     { 0x0011E8C0u, (recomp_func_t)sub_0011E8C0 },
     { 0x0011E8E0u, (recomp_func_t)sub_0011E8E0 },
     { 0x0011E9D0u, (recomp_func_t)sub_0011E9D0 },
@@ -4593,9 +4902,9 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0011FD60u, (recomp_func_t)sub_0011FD60 },
     { 0x0011FE90u, (recomp_func_t)sub_0011FE90 },
     { 0x00120117u, (recomp_func_t)sub_00120117 },
-    { 0x00120125u, (recomp_func_t)sub_00120117 },
-    { 0x00120161u, (recomp_func_t)sub_00120117 },
-    { 0x00120168u, (recomp_func_t)sub_00120117 },
+    { 0x00120125u, (recomp_func_t)recomp_alias_00120125 },
+    { 0x00120161u, (recomp_func_t)recomp_alias_00120161 },
+    { 0x00120168u, (recomp_func_t)recomp_alias_00120168 },
     { 0x00120170u, (recomp_func_t)sub_00120170 },
     { 0x00120180u, (recomp_func_t)sub_00120180 },
     { 0x001202E0u, (recomp_func_t)sub_001202E0 },
@@ -4666,7 +4975,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00127080u, (recomp_func_t)sub_00127080 },
     { 0x001270CEu, (recomp_func_t)sub_001270CE },
     { 0x001270F9u, (recomp_func_t)sub_001270F9 },
-    { 0x001274A1u, (recomp_func_t)sub_001270F9 },
+    { 0x001274A1u, (recomp_func_t)recomp_alias_001274A1 },
     { 0x001274D0u, (recomp_func_t)sub_001274D0 },
     { 0x00127590u, (recomp_func_t)sub_00127590 },
     { 0x001277F0u, (recomp_func_t)sub_001277F0 },
@@ -4691,7 +5000,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x001294D8u, (recomp_func_t)sub_001294D8 },
     { 0x00129620u, (recomp_func_t)sub_00129620 },
     { 0x001296BAu, (recomp_func_t)sub_001296BA },
-    { 0x001296C7u, (recomp_func_t)sub_00129FAA },
+    { 0x001296C7u, (recomp_func_t)recomp_alias_001296C7 },
     { 0x001296E5u, (recomp_func_t)sub_001296E5 },
     { 0x00129712u, (recomp_func_t)sub_00129712 },
     { 0x001297ECu, (recomp_func_t)sub_001297EC },
@@ -4711,7 +5020,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0012A1DAu, (recomp_func_t)sub_0012A1DA },
     { 0x0012A20Cu, (recomp_func_t)sub_0012A20C },
     { 0x0012A234u, (recomp_func_t)sub_0012A234 },
-    { 0x0012A57Bu, (recomp_func_t)sub_0012A234 },
+    { 0x0012A57Bu, (recomp_func_t)recomp_alias_0012A57B },
     { 0x0012A640u, (recomp_func_t)sub_0012A640 },
     { 0x0012B0A0u, (recomp_func_t)sub_0012B0A0 },
     { 0x0012B180u, (recomp_func_t)sub_0012B180 },
@@ -4856,7 +5165,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00139970u, (recomp_func_t)sub_00139970 },
     { 0x00139B30u, (recomp_func_t)sub_00139B30 },
     { 0x0013A140u, (recomp_func_t)sub_0013A140 },
-    { 0x0013A340u, (recomp_func_t)sub_0013A570 },
+    { 0x0013A340u, (recomp_func_t)recomp_alias_0013A340 },
     { 0x0013A570u, (recomp_func_t)sub_0013A570 },
     { 0x0013A600u, (recomp_func_t)sub_0013A600 },
     { 0x0013A650u, (recomp_func_t)sub_0013A650 },
@@ -5590,7 +5899,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0014FE30u, (recomp_func_t)sub_0014FE30 },
     { 0x0014FE50u, (recomp_func_t)sub_0014FE50 },
     { 0x0014FE60u, (recomp_func_t)sub_0014FE60 },
-    { 0x0014FEF0u, (recomp_func_t)sub_00150231 },
+    { 0x0014FEF0u, (recomp_func_t)recomp_alias_0014FEF0 },
     { 0x00150130u, (recomp_func_t)sub_00150130 },
     { 0x00150170u, (recomp_func_t)sub_00150170 },
     { 0x001501F0u, (recomp_func_t)sub_001501F0 },
@@ -5911,14 +6220,14 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00159F80u, (recomp_func_t)sub_00159F80 },
     { 0x0015A020u, (recomp_func_t)sub_0015A020 },
     { 0x0015A0A8u, (recomp_func_t)sub_0015A0A8 },
-    { 0x0015A0AEu, (recomp_func_t)sub_0015A0A8 },
-    { 0x0015A0B4u, (recomp_func_t)sub_0015A0A8 },
-    { 0x0015A0BAu, (recomp_func_t)sub_0015A0A8 },
-    { 0x0015A0C0u, (recomp_func_t)sub_0015A0A8 },
-    { 0x0015A0C6u, (recomp_func_t)sub_0015A0A8 },
-    { 0x0015A0CCu, (recomp_func_t)sub_0015A0A8 },
-    { 0x0015A0D2u, (recomp_func_t)sub_0015A0A8 },
-    { 0x0015A0F9u, (recomp_func_t)sub_0015A110 },
+    { 0x0015A0AEu, (recomp_func_t)recomp_alias_0015A0AE },
+    { 0x0015A0B4u, (recomp_func_t)recomp_alias_0015A0B4 },
+    { 0x0015A0BAu, (recomp_func_t)recomp_alias_0015A0BA },
+    { 0x0015A0C0u, (recomp_func_t)recomp_alias_0015A0C0 },
+    { 0x0015A0C6u, (recomp_func_t)recomp_alias_0015A0C6 },
+    { 0x0015A0CCu, (recomp_func_t)recomp_alias_0015A0CC },
+    { 0x0015A0D2u, (recomp_func_t)recomp_alias_0015A0D2 },
+    { 0x0015A0F9u, (recomp_func_t)recomp_alias_0015A0F9 },
     { 0x0015A110u, (recomp_func_t)sub_0015A110 },
     { 0x0015A170u, (recomp_func_t)sub_0015A170 },
     { 0x0015A1C0u, (recomp_func_t)sub_0015A1C0 },
@@ -6072,7 +6381,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00160050u, (recomp_func_t)sub_00160050 },
     { 0x00160080u, (recomp_func_t)sub_00160080 },
     { 0x001600CAu, (recomp_func_t)sub_001600CA },
-    { 0x001600F1u, (recomp_func_t)sub_00160110 },
+    { 0x001600F1u, (recomp_func_t)recomp_alias_001600F1 },
     { 0x00160110u, (recomp_func_t)sub_00160110 },
     { 0x00160140u, (recomp_func_t)sub_00160140 },
     { 0x00160190u, (recomp_func_t)sub_00160190 },
@@ -6580,7 +6889,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00171B50u, (recomp_func_t)sub_00171B50 },
     { 0x00171E00u, (recomp_func_t)sub_00171E00 },
     { 0x00171E24u, (recomp_func_t)sub_00171E24 },
-    { 0x00171EB7u, (recomp_func_t)sub_00171EC0 },
+    { 0x00171EB7u, (recomp_func_t)recomp_alias_00171EB7 },
     { 0x00171EC0u, (recomp_func_t)sub_00171EC0 },
     { 0x00172070u, (recomp_func_t)sub_00172070 },
     { 0x001721D0u, (recomp_func_t)sub_001721D0 },
@@ -6776,8 +7085,8 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x00178722u, (recomp_func_t)sub_00178722 },
     { 0x001787A0u, (recomp_func_t)sub_001787A0 },
     { 0x00178830u, (recomp_func_t)sub_00178830 },
-    { 0x00178882u, (recomp_func_t)sub_00178830 },
-    { 0x0017888Au, (recomp_func_t)sub_00178830 },
+    { 0x00178882u, (recomp_func_t)recomp_alias_00178882 },
+    { 0x0017888Au, (recomp_func_t)recomp_alias_0017888A },
     { 0x001788F5u, (recomp_func_t)sub_001788F5 },
     { 0x00178A00u, (recomp_func_t)sub_00178A00 },
     { 0x00178B30u, (recomp_func_t)sub_00178B30 },
@@ -7073,9 +7382,9 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0017FCAAu, (recomp_func_t)sub_0017FCAA },
     { 0x0017FCCFu, (recomp_func_t)sub_0017FCCF },
     { 0x0017FD0Cu, (recomp_func_t)sub_0017FD0C },
-    { 0x0017FD31u, (recomp_func_t)sub_0017FD0C },
-    { 0x0017FF7Fu, (recomp_func_t)sub_0017FD0C },
-    { 0x00180020u, (recomp_func_t)sub_0017FD0C },
+    { 0x0017FD31u, (recomp_func_t)recomp_alias_0017FD31 },
+    { 0x0017FF7Fu, (recomp_func_t)recomp_alias_0017FF7F },
+    { 0x00180020u, (recomp_func_t)recomp_alias_00180020 },
     { 0x00180038u, (recomp_func_t)sub_00180038 },
     { 0x001804A0u, (recomp_func_t)sub_001804A0 },
     { 0x00180578u, (recomp_func_t)sub_00180578 },
@@ -7207,9 +7516,9 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x0018321Eu, (recomp_func_t)sub_0018321E },
     { 0x001836C6u, (recomp_func_t)sub_001836C6 },
     { 0x00183E10u, (recomp_func_t)sub_00183E10 },
-    { 0x00183F71u, (recomp_func_t)sub_00183E10 },
-    { 0x00183F86u, (recomp_func_t)sub_00183E10 },
-    { 0x00183FC4u, (recomp_func_t)sub_00183E10 },
+    { 0x00183F71u, (recomp_func_t)recomp_alias_00183F71 },
+    { 0x00183F86u, (recomp_func_t)recomp_alias_00183F86 },
+    { 0x00183FC4u, (recomp_func_t)recomp_alias_00183FC4 },
     { 0x00184000u, (recomp_func_t)sub_00184000 },
     { 0x0018509Au, (recomp_func_t)sub_0018509A },
     { 0x001854C4u, (recomp_func_t)sub_001854C4 },
@@ -8465,7 +8774,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x001A1F5Du, (recomp_func_t)sub_001A1F5D },
     { 0x001A200Du, (recomp_func_t)sub_001A200D },
     { 0x001A2034u, (recomp_func_t)sub_001A2034 },
-    { 0x001A2078u, (recomp_func_t)sub_001A2034 },
+    { 0x001A2078u, (recomp_func_t)recomp_alias_001A2078 },
     { 0x001A20E4u, (recomp_func_t)sub_001A20E4 },
     { 0x001A2109u, (recomp_func_t)sub_001A2109 },
     { 0x001A216Bu, (recomp_func_t)sub_001A216B },
@@ -8745,7 +9054,7 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x001BD6A9u, (recomp_func_t)sub_001BD6A9 },
     { 0x001BD6D1u, (recomp_func_t)sub_001BD6D1 },
     { 0x001BD767u, (recomp_func_t)sub_001BD767 },
-    { 0x001BD800u, (recomp_func_t)sub_001BD767 },
+    { 0x001BD800u, (recomp_func_t)recomp_alias_001BD800 },
     { 0x001BD839u, (recomp_func_t)sub_001BD839 },
     { 0x001BD888u, (recomp_func_t)sub_001BD888 },
     { 0x001BD8F5u, (recomp_func_t)sub_001BD8F5 },
@@ -8929,8 +9238,8 @@ static const recomp_entry_t g_recomp_table[] = {
     { 0x001C3618u, (recomp_func_t)sub_001C3618 },
     { 0x001C364Bu, (recomp_func_t)sub_001C364B },
     { 0x001C3685u, (recomp_func_t)sub_001C3685 },
-    { 0x001C379Du, (recomp_func_t)sub_001C3685 },
-    { 0x001C3800u, (recomp_func_t)sub_001C3685 },
+    { 0x001C379Du, (recomp_func_t)recomp_alias_001C379D },
+    { 0x001C3800u, (recomp_func_t)recomp_alias_001C3800 },
     { 0x001C3983u, (recomp_func_t)sub_001C3983 },
     { 0x001C39D6u, (recomp_func_t)sub_001C39D6 },
     { 0x001C3A23u, (recomp_func_t)sub_001C3A23 },

@@ -75979,6 +75979,7 @@ void sub_000A0F10(void)
     uint32_t ebp = 0;
     ebp = g_ebp;  /* frameless: caller's frame */
     int _flags = 0; /* fallback flag var */
+    int _fc_e = 0; /* join conditions */
     uint32_t _fa = 0, _fb = 0;
     int32_t _fas = 0, _fbs = 0;
     (void)_fa; (void)_fb; (void)_fas; (void)_fbs;
@@ -76564,6 +76565,7 @@ loc_000A1385: ;
     _fa = (uint32_t)(MEM32(esi + 0xE6C)) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* cmp MEM32(esi + 0xE6C), edi (32-bit) */
     _cf = (int)(_fa < _fb);
+    _fc_e = (CMP_EQ(_fa, _fb)) ? 1 : 0; /* je, for a join */
     goto loc_000A13A1;
 
 loc_000A138D: ;
@@ -76580,9 +76582,10 @@ loc_000A139C: ;
     _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fb = (uint32_t)(0x80000) & 0xFFFFFFFFu;
     _fas = (int32_t)(int32_t)(_fa); _fbs = (int32_t)(int32_t)(_fb); /* test eax, 0x80000 (32-bit) */
     _cf = 0; /* nothing borrows from zero */
+    _fc_e = (TEST_Z(_fa, _fb)) ? 1 : 0; /* je, for a join */
 
 loc_000A13A1: ;
-    if (_flags /* je: equal / zero */) goto loc_000A13CF;
+    if (_fc_e) goto loc_000A13CF; /* je: equal / zero */
 
 loc_000A13A3: ;
     _fa = (uint32_t)(MEM32(esi + 0xE6C)) & 0xFFFFFFFFu; _fb = (uint32_t)(edi) & 0xFFFFFFFFu;

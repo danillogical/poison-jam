@@ -14452,8 +14452,7 @@ loc_00142667: ;
 loc_0014266E: ;
     SET_LO8(eax, MEM8(ebx));
     SET_LO8(ecx, 0xC0);
-    { int64_t _r = (int64_t)(int32_t)eax * (int64_t)(int32_t)LO8(ecx);
-      eax = (uint32_t)_r; edx = (uint32_t)(_r >> 32); }
+    SET_LO16(eax, (uint16_t)((int16_t)(int8_t)LO8(eax) * (int16_t)(int8_t)LO8(ecx)));
     MEM8(esi + 0xD) = 8;
     MEM8(ebp) = LO8(eax);
     MEM32(edi) = 0x60;
