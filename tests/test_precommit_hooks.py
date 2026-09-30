@@ -178,6 +178,121 @@ class RepoCheckGateTests(unittest.TestCase):
         self.assertIn('repository checks:', result.stdout)
 
 
+class DraftPacketWarningTests(unittest.TestCase):
+    """W16: a staged draft packet not named in the commit message is warned about.
+
+    The measured failure: `git add -A` swept a Planner's in-progress draft into a
+    commit (`141cb7e`). It is a warning rather than a refusal because the content is
+    what the writer wrote -- the accident is hygiene, and making it visible at the
+    moment it happens is when it is cheap to undo.
+    """
+
+    def setUp(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'precommit_repo_checks', ROOT / 'scripts' / 'precommit-repo-checks.py')
+        self.checks = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.checks)
+
+    def test_a_draft_packet_is_detected(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'docs' / 'packets').mkdir(parents=True)
+            packet = root / 'docs' / 'packets' / 'c1-slot-write.md'
+            packet.write_text('## C1\n\n**Status:** draft\n\nbody\n', encoding='utf-8')
+            saved = self.checks.ROOT
+            self.checks.ROOT = root
+            try:
+                found = self.checks.staged_draft_packets(['docs/packets/c1-slot-write.md'])
+            finally:
+                self.checks.ROOT = saved
+        self.assertEqual(found, ['docs/packets/c1-slot-write.md'])
+
+    def test_an_adequate_packet_is_not_a_draft(self) -> None:
+        import tempfile
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'docs' / 'packets').mkdir(parents=True)
+            (root / 'docs' / 'packets' / 'frozen.md').write_text(
+                '**Status:** ADEQUATE\n', encoding='utf-8')
+            saved = self.checks.ROOT
+            self.checks.ROOT = root
+            try:
+                found = self.checks.staged_draft_packets(['docs/packets/frozen.md'])
+            finally:
+                self.checks.ROOT = saved
+        self.assertEqual(found, [])
+
+    def test_an_inadequate_packet_is_a_draft(self) -> None:
+        """`INADEQUATE` is also a not-yet-frozen state (§5.2)."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'docs' / 'packets').mkdir(parents=True)
+            (root / 'docs' / 'packets' / 'wip.md').write_text(
+                '**Status:** INADEQUATE\n', encoding='utf-8')
+            saved = self.checks.ROOT
+            self.checks.ROOT = root
+            try:
+                found = self.checks.staged_draft_packets(['docs/packets/wip.md'])
+            finally:
+                self.checks.ROOT = saved
+        self.assertEqual(found, ['docs/packets/wip.md'])
+
+    def test_a_non_packet_path_is_not_checked(self) -> None:
+        self.assertEqual(self.checks.staged_draft_packets(['docs/reviews/x.md']), [])
+        self.assertEqual(self.checks.staged_draft_packets(['src/main.c']), [])
+
+    def test_the_real_tree_has_no_staged_drafts(self) -> None:
+        """The delivered tree must not be committing a draft right now.
+
+        This is the property the hook actually enforces: not "no draft exists in the
+        repository" -- `docs/packets/p0-acceptance-contract.md` legitimately says
+        "Draft for plan review", and a draft may sit in the tree indefinitely -- but
+        "no draft is being staged in THIS commit without being named". Staging is
+        what the hook sees, so staging is what this control exercises.
+        """
+        staged = subprocess.run(
+            ['git', 'diff', '--cached', '--name-only'], cwd=str(ROOT),
+            capture_output=True, text=True)
+        if staged.returncode != 0:
+            self.skipTest('not a git working tree')
+        paths = [line.replace('\\', '/') for line in staged.stdout.splitlines()
+                 if line.strip()]
+        drafts = self.checks.staged_draft_packets(paths)
+        message = self.checks.commit_message()
+        unnamed = [d for d in drafts if Path(d).stem not in message]
+        self.assertEqual(unnamed, [],
+                         f'draft packet(s) staged and not named in the commit '
+                         f'message: {unnamed}')
+
+    def test_a_draft_named_in_the_message_is_not_warned_about(self) -> None:
+        """An intentional draft commit must not be nagged.
+
+        Without this, a check that warned about every draft would pass the
+        unnamed-draft control while making the warning useless.
+        """
+        import tempfile
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'docs' / 'packets').mkdir(parents=True)
+            (root / '.git').mkdir()
+            (root / 'docs' / 'packets' / 'c1.md').write_text(
+                '**Status:** draft\n', encoding='utf-8')
+            (root / '.git' / 'COMMIT_EDITMSG').write_text(
+                'c1: promote the slot-write discovery packet\n', encoding='utf-8')
+            saved = self.checks.ROOT
+            self.checks.ROOT = root
+            try:
+                drafts = self.checks.staged_draft_packets(['docs/packets/c1.md'])
+                message = self.checks.commit_message()
+            finally:
+                self.checks.ROOT = saved
+        self.assertEqual(drafts, ['docs/packets/c1.md'])
+        self.assertIn(Path(drafts[0]).stem, message)
+
+
 class ConfigTests(unittest.TestCase):
     def test_config_wires_every_hook(self) -> None:
         """A hook the config does not name is a hook that never runs."""
