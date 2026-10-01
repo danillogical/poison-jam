@@ -64,8 +64,8 @@ Inspect both working trees before editing. Toolkit instructions live in
 | `src/main.c` | XBE load, runtime init, probes, guest entry |
 | `src/recomp_manual.c` | manual dispatch and fatal unresolved-call diagnostics |
 | `src/jsrf_crt.c` | verified CRT replacements such as memmove |
-| `src/recomp/gen/` | generated translation units, dispatch, declarations, stubs |
-| `src/recomp/recovered/recovered.c` | reviewed recovered bodies |
+| `src/recomp/gen/` | generated translation units, dispatch, declarations, stubs (**untracked**) |
+| `src/recomp/recovered/recovered.c` | reviewed recovered bodies (**untracked**) |
 | `config/manual-functions.json` | generated/manual symbol exclusion set |
 | `config/recovered-functions.json` | reviewed recovery entries and evidence |
 | `config/boundary-fixes.json` | reviewed parent-span corrections |
@@ -271,6 +271,26 @@ it out, because they write into chunks whose `recomp_types.h` may predate the ma
 
 `recomp_funcs.h`, `recomp_NNNN.c`, `recomp_dispatch.c`, and
 `recomp_stubs_unresolved.c` must come from the same pass.
+
+### Rebuilding the lifted code
+
+`src/recomp/gen/` and `src/recomp/recovered/` are **not tracked** (owner decision,
+2026-09-30): they are code lifted from the retail XBE, and this repository is public. A checkout
+has none until they are rebuilt from `game/default.xbe`, and CMake refuses to configure without
+them. **Before pulling a commit that untracks files on a machine that already has them, copy
+`src/recomp/` aside** -- the pull deletes them -- and copy it back afterwards; ignored files then
+stay put. To rebuild from nothing:
+
+1. `just regen` -- the full pass above, then `scripts/patch-generated.py`, which re-applies the
+   hand edits in `config/generated-patches.json`.
+2. `python -X utf8 scripts\relift-selected.py boundaries` -- the reviewed boundary fixes.
+3. `python -X utf8 scripts\recover-functions.py` -- `recovered.c` and its stubs, from
+   `config/recovered-functions.json`. It also reads the game's analysis database
+   `tools/disasm/output/functions.json`, which is gitignored and has to exist locally.
+4. `python -X utf8 scripts\gen-abi-deltas.py` -- `recomp_abi_deltas.c`.
+
+Then `just check` and `just test`. A rebuild from nothing has not yet been done end to end; record
+what it needed when it is.
 
 Before measuring a clean full regeneration, clear stale analysis JSON inputs as
 required by the translation workflow; do not measure a new lifter against old generated

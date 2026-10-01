@@ -1,5 +1,9 @@
 /build/
 /game/
+# Code lifted from the retail XBE: rebuilt locally from game/default.xbe, never
+# published (owner decision, 2026-09-30). AGENTS.md says how to rebuild it.
+/src/recomp/gen/
+/src/recomp/recovered/
 /logs/
 /saves/
 *.log

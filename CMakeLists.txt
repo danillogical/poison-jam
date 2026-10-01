@@ -23,6 +23,15 @@ target_compile_definitions(xbox_kernel PRIVATE RECOMP_DIAGNOSTICS)
 
 file(GLOB RECOMP_GEN_SOURCES CONFIGURE_DEPENDS "src/recomp/gen/*.c")
 
+# The code lifted from the XBE is not tracked (owner decision, 2026-09-30), so a
+# fresh checkout has none until it is rebuilt from game/default.xbe.
+if(NOT RECOMP_GEN_SOURCES OR NOT EXISTS
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/recovered/recovered.c")
+    message(FATAL_ERROR
+        "src/recomp/gen and src/recomp/recovered are not tracked: rebuild them "
+        "from game/default.xbe first (AGENTS.md, \"Rebuilding the lifted code\").")
+endif()
+
 # Fixture sources belong to test targets only.  A *_test.c left in the globbed
 # directory is compiled into the game as well, and because a fixture defines a
 # deliberate subset of the same trap addresses the production stubs define, the

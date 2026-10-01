@@ -94,8 +94,11 @@ class ParityTests(unittest.TestCase):
         self.assertIn('changed=1', result.stderr)
 
     def test_the_real_tree_loads(self) -> None:
-        """Every generated chunk in the repository parses, with one body per address."""
-        functions = parity.load_functions(ROOT / 'src' / 'recomp' / 'gen')
+        """Every generated chunk in the local tree parses, with one body per address."""
+        gen = ROOT / 'src' / 'recomp' / 'gen'
+        if not any(gen.glob('recomp_[0-9][0-9][0-9][0-9].c')):
+            self.skipTest('the generated tree is not tracked and has not been rebuilt here')
+        functions = parity.load_functions(gen)
         self.assertGreater(len(functions), 1000)
 
 
