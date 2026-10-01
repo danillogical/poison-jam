@@ -639,8 +639,33 @@ list is exhausted.
     `0x00037550..0x00038528`, then `scripts/recover-functions.py`, the alias pair re-pointed, and a
     re-run. That is a packet's worth of work, so it is **not** done inside this chore; it is the first
     item of the next session's F3.
-    **The test of this diagnosis:** fixing the alias should move the strict horizon. If it does not,
-    the diagnosis is wrong and the copy has another source.
+    **ATTEMPTED 2026-09-30 and BLOCKED on a toolkit limitation — this is the precise state.** The
+    config edit was written and tested, then **reverted**; the tree is clean and `recovered.c` is
+    unchanged. Three measured results:
+    1. **`recover-functions.py` aborts on exactly 2 of 3075 entries**, enumerated by translating every
+       entry: `0x001063A0` (`/* TODO: arpl word ptr [eax], dx */` at `0x00106565`, past its `ret` at
+       `0x00106560`) and the new `0x00037550`. Both are spans that run past a terminator into
+       non-code bytes. Tightening `0x000BCF40`'s end to its real `ret` at `0x000BD8B0` **worked** —
+       the abort moved on to `0x001063A0` — so that part of the fix is sound and reusable.
+    2. **`0x00037550`'s four TODO markers all sit inside its own 36-entry jump table at
+       `0x00037FB4`** (`outsb`, `sti`, `popfd`, `aad`), which the translator is decoding as
+       instructions. The table's 36 targets are *all* inside the span, so the in-function-goto path
+       should apply.
+    3. **The toolkit detects the table but the recovery path never uses it.** `_recover_cfg` for this
+       address returns **3 jump tables** (41/41/5 targets) and decodes **0** instructions inside the
+       table region — the CFG recovery is correct. But `translate_function` reaches its instructions
+       through `decode_function`, which consults `self._recovered_cfg`, and that dict is populated
+       **only by the coalescence path** (`translator.py:740`). `recover-functions.py` translates a
+       reviewed entry directly, so `recovered is None`, the CFG knowledge is discarded, and
+       `decode_function` falls back to a linear `disassemble_function` over the whole span — which
+       walks into the table.
+    **So the blocker is toolkit-side, not game-side:** a reviewed recovery entry cannot express "this
+    span contains a jump table", even though the translator can compute it. Fixing it means teaching
+    `decode_function` (or `recover-functions.py`'s call path) to use `_recover_cfg`'s jump tables for
+    a reviewed entry — a toolkit change with its own tests, and the reason this is a packet and not a
+    chore edit. `0x001063A0` is the second instance of the same "span past the terminator" shape.
+    **The test of the diagnosis is unchanged:** fixing the alias should move the strict horizon. If it
+    does not, the diagnosis is wrong and the copy has another source.
     **Follow-up worth a census:** whether any *other* `tail_jump_alias` fold deletes a
     table-referenced function entry. `0x000BCF40` and `0x00037550` are two instances of one rule, and
     the rule's population has never been enumerated.
