@@ -83,6 +83,7 @@ host API); list the one that decides fidelity first.
 | L17 | Fence mirror: device `+0x30` copied to `*(device+0x34)` | Approximated | game `src/main.c:577` | always | D3D's fence without a semaphore release; replace with L19 only if it matters |
 | L18 | Pushbuffer executor → host renderer (`RECOMP_PB_EXEC`) | Translated | `src/kernel/nv2a_pb_exec.c`, `nv2a_pb_scan.c` | opt-in, needs L16 | fastest route to visible frames (plan fast path F4) |
 | L19 | NV2A action methods: semaphore release, software-method trap, `FLIP_STALL` (`RECOMP_NV2A_ACTIONS=1`) | Emulated | `src/nv2a/nv2a_core.c` | dormant | not needed on the executor path |
+| L39 | NV2A method admission: the walk accepts a method only if it appears in the generated table, and rejects the whole stream otherwise | Stubbed | `src/nv2a/nv2a_method_table.c` (generated), `nv2a_core.c` `nv2a_method_implemented` | always | the accepted set is the union of methods measured in real submission rings, so a method the title submits but no decoded ring contained stops the walk at GET. Adding one means regenerating from a ring that contains it — never a blanket range (see the `0x1720` case, toolkit `1f9309a`) |
 
 ### Audio
 

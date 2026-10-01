@@ -43,6 +43,21 @@
       "new_sha256": "2148aa7a7579b0390b95260617b74a9e658f06b3868dc22b06539c6befabef46",
       "old_sha256": "84738ea28e4efa493dccf697d87aba9ddd8b20b337b4656425e1f48f7332b3c8",
       "path": "config/recovered-functions.json"
+    },
+    {
+      "cause": "review pass 2: the 0x00026780 evidence said the old end 0x00027070 \"ran past the table\" whose start is 0x0002730C, which is backwards -- 0x00027070 is before it. The measured direction is the opposite: the old span stopped too early and truncated real code (166 decoded instructions lie at or after it, up to 0x00027306). The note also said the table has 44 entries; the dispatch is mov ebx,0x2c / cmp eax,ebx / ja / jmp [eax*4+0x2730C], which admits indices 0..0x2C, so it has 45, and 45 contiguous in-function dwords sit in [0x00026780,0x0002730C). The stale 2026-09-21 sentence \"end tightened to the next function entry inside the alias range\" is replaced with wording that names the jump-table boundary and records that the old value was another tail_jump_alias, not a code boundary. The recovery boundary itself is unchanged at 0x0002730C.",
+      "date": "2026-09-30",
+      "evidence": [
+        "the dispatch bound is read from the function prologue: mov ebx,0x2c at 0x000267A6, cmp eax,ebx at 0x000267AB, ja at 0x000267AE, jmp [eax*4+0x2730C] at 0x000267B0",
+        "45 contiguous dwords in [0x00026780,0x0002730C) are all in [0x00026780,0x0002730C), read from the XBE at .text file offset 0x1000+(0x2730C-0x11000)",
+        "the translator CFG decoder reaches 758 instructions 0x00026780..0x00027306, 166 of them at or after the old end 0x00027070",
+        "`evidence` is not read by any generator (0 reads in recover-functions.py, relift-selected.py, gen-abi-deltas.py; never a dict key in the lifter/translator), and a 41-entry with/without-`evidence` translation produced byte-identical C earlier this session",
+        "amended, not regenerated: no generated_outputs hash moved, and `recovered.c` is byte-identical to the recovery pass of 2026-09-30"
+      ],
+      "kind": "input",
+      "new_sha256": "76834b2b2b9843a9bf030cf7f0e2338e4e5d5d8c21b391f1d20d6069aa8e79bd",
+      "old_sha256": "2148aa7a7579b0390b95260617b74a9e658f06b3868dc22b06539c6befabef46",
+      "path": "config/recovered-functions.json"
     }
   ],
   "checker_version": "jsrf-generation-provenance/1",
@@ -97,9 +112,9 @@
       "sha256": "96110ed592a25d984dbd7f7715a1ec78ec66ac0514efad09fcc73df8fc1414fb"
     },
     "config/recovered-functions.json": {
-      "bytes": 2800050,
+      "bytes": 2800530,
       "present": true,
-      "sha256": "2148aa7a7579b0390b95260617b74a9e658f06b3868dc22b06539c6befabef46"
+      "sha256": "76834b2b2b9843a9bf030cf7f0e2338e4e5d5d8c21b391f1d20d6069aa8e79bd"
     },
     "config/recovery-unresolved.json": {
       "bytes": 8288,

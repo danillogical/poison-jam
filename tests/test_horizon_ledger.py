@@ -238,6 +238,28 @@ class HorizonMoveTests(unittest.TestCase):
         rows = ledger_lint.ledger_rows()
         self.assertEqual([r for r in rows if r['moved']], [])
 
+    def test_a_not_reached_row_is_never_a_move(self) -> None:
+        """A row saying NOT REACHED is not a move even if its prose says MOVED.
+
+        Measured 2026-09-30: a contrast row whose text read "the walk's diagnostic
+        changed and its address did not" was counted as a horizon move because it
+        contained the word MOVED, so the ceiling rule's date jumped to a run that
+        had moved nothing.
+        """
+        self.write(
+            '| Date | Game | Toolkit | Run ID | Event | Sites | Stop |\n'
+            '|---|---|---|---|---|---|---|\n'
+            '| 2026-09-30 | `abc1234` | `def5678` | '
+            '`20260930-100000-000-contrast` | **NOT REACHED** — the diagnostic MOVED '
+            'and the address did not | none | 10:00 |\n')
+        rows = ledger_lint.ledger_rows()
+        self.assertTrue(rows[0]['moved'], 'the word MOVED is present')
+        self.assertTrue(rows[0]['not_reached'], 'the row says NOT REACHED')
+        selected = [r for r in rows
+                    if r['moved'] and not r['superseded'] and not r['not_reached']]
+        self.assertEqual(selected, [],
+                         'a NOT REACHED row must never be selected as a move')
+
 
 class RealLedgerTests(unittest.TestCase):
     """The delivered ledger must pass its own lint."""

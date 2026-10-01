@@ -39,12 +39,22 @@ from jsrf_dump import DumpMemory
 # 0x1BCC, which the 0x1B24 decode could not see.
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
 opts = dict(a[2:].split("=", 1) for a in sys.argv[1:] if a.startswith("--") and "=" in a)
-run_name = args[0] if args else "20260922-110235-244-spanfix-1185b0"
-run = root / "logs/runs" / run_name
+# Every run named on the command line contributes its methods, and the table is the
+# UNION of them. One ring is not enough: the table used to come from a single run
+# whose ring stopped at 1497 words, so once the title began submitting more of its
+# ring the walk met methods the table had never seen. Measured 2026-09-30: the F4 run
+# submits 0x1720 at word 8124 of a 72353-word ring, and regenerating from that run
+# ALONE would drop 148 methods the older ring contributes. The union keeps both, and
+# every entry in it is still something a real submission contained.
+run_names = args or ["20260922-110235-244-spanfix-1185b0"]
 get = int(opts.get("get", "0x80001000"), 16)
+# The walk budget has to exceed the longest ring decoded. It used to be 4096, which
+# is BELOW the word where 0x1720 first appears (8124), so a decode that reported
+# "reached PUT" for the old ring could never see the method the walk was stuck on.
+budget = int(opts.get("budget", "200000"))
 
 
-def ring_top_from_log():
+def ring_top_from_log(run):
     """Highest PUT the run's own log reports, as a guest address."""
     log = run / "jsrf_run.log"
     if not log.exists():
@@ -61,90 +71,117 @@ def ring_top_from_log():
     return None if top is None else 0x80000000 + top
 
 
-put = int(opts["put"], 16) if "put" in opts else ring_top_from_log()
-if put is None:
-    raise SystemExit("no [PFIFO] submit line in %s/jsrf_run.log; pass --put=" % run)
-print("ring 0x%08X..0x%08X from %s" % (get, put, run_name))
+def decode_ring(run_name, get, put_override, budget):
+    """One run's ring, decoded with the walk `nv2a_submit_pending` performs.
 
-d = DumpMemory(run)
-buf = d.read(get, put - get)
-d.close()
+    Returns (order, per, words, stop, put). `stop` is None when the walk reached PUT.
+    """
+    run = root / "logs/runs" / run_name
+    put = put_override if put_override is not None else ring_top_from_log(run)
+    if put is None:
+        raise SystemExit("no [PFIFO] submit line in %s/jsrf_run.log; pass --put=" % run)
+    d = DumpMemory(run)
+    buf = d.read(get, put - get)
+    d.close()
+
+    per = defaultdict(lambda: defaultdict(list))
+    order = []
+    words = 0
+    pc = get
+    ret = 0
+    stop = None
+    seen = set()
+
+    # The walk mirrors `nv2a_submit_pending` in src/nv2a/nv2a_core.c word for word.
+    # It used to classify packets by `h >> 30`, which is NOT the model's test -- the
+    # model calls a word a jump when `(h & 3) == 1` (call) or `(h & 3) == 2`
+    # (return), or the high form `(h & 0xe0000003) == 0x20000000`. The two agree
+    # over the first 0x1B24 words of the ring and diverge past it, which is how a
+    # decode that looked correct produced `offset -2144335848 out of range` on the
+    # ring the title actually submits now. Keeping the two in step is the point:
+    # this generator's whole claim is that its list is what the model will walk.
+    while pc != put:
+        if words >= budget or (pc, ret) in seen:
+            stop = "budget" if words >= budget else "loop"
+            break
+        seen.add((pc, ret))
+        if pc < get or pc >= put or (pc - get) + 4 > len(buf):
+            stop = "out_of_ring pc=0x%08X" % pc
+            break
+        off = pc - get
+        h = struct.unpack_from("<I", buf, off)[0]
+        pc += 4
+        words += 1
+        if (h & 0xE0000003) == 0x20000000 or (h & 3) == 1 or (h & 3) == 2 or h == 0x00020000:
+            if (h & 3) == 2:
+                if ret:
+                    stop = "loop (double return)"
+                    break
+                ret = pc
+            if h == 0x00020000:
+                if not ret:
+                    stop = "bad_target (return with no call)"
+                    break
+                pc = ret
+                ret = 0
+                continue
+            target = (h & 0xFFFFFFFC) if (h & 3) in (1, 2) else (h & 0x1FFFFFFF)
+            if target < get or target >= put or (target & 3):
+                stop = "bad_target 0x%08X" % target
+                break
+            pc = target
+            continue
+        if (h & 0xE0030003) == 0 or (h & 0xE0030003) == 0x40000000:
+            count = (h >> 18) & 0x7FF
+            sub = (h >> 13) & 7
+            method = h & 0x1FFC
+            for i in range(count):
+                if words >= budget:
+                    stop = "budget"
+                    break
+                if pc == put:
+                    stop = "truncated"
+                    break
+                p = struct.unpack_from("<I", buf, pc - get)[0]
+                pc += 4
+                words += 1
+                m = method + 4 * i
+                per[sub][m].append(p)
+                if (sub, m) not in order:
+                    order.append((sub, m))
+            if stop:
+                break
+            continue
+        stop = "reserved 0x%08X" % h
+        break
+
+    return order, per, words, stop, put
+
+
+put_override = int(opts["put"], 16) if "put" in opts else None
 
 per = defaultdict(lambda: defaultdict(list))
 order = []
-words = 0
-pc = get
-ret = 0
-stop = None
-seen = set()
+run_report = []
+for run_name in run_names:
+    r_order, r_per, r_words, r_stop, r_put = decode_ring(
+        run_name, get, put_override, budget)
+    run_report.append((run_name, get, r_put, r_words, r_stop, len(r_order)))
+    print("ring 0x%08X..0x%08X from %s: %d words, %s"
+          % (get, r_put, run_name, r_words,
+             "reached PUT" if not r_stop else "stopped: " + r_stop))
+    for (sub, m) in r_order:
+        if (sub, m) not in order:
+            order.append((sub, m))
+    for sub in r_per:
+        for m, params in r_per[sub].items():
+            per[sub][m].extend(params)
 
-# The walk mirrors `nv2a_submit_pending` in src/nv2a/nv2a_core.c word for word.
-# It used to classify packets by `h >> 30`, which is NOT the model's test -- the
-# model calls a word a jump when `(h & 3) == 1` (call) or `(h & 3) == 2`
-# (return), or the high form `(h & 0xe0000003) == 0x20000000`. The two agree
-# over the first 0x1B24 words of the ring and diverge past it, which is how a
-# decode that looked correct produced `offset -2144335848 out of range` on the
-# ring the title actually submits now. Keeping the two in step is the point:
-# this generator's whole claim is that its list is what the model will walk.
-while pc != put:
-    if words >= 4096 or (pc, ret) in seen:
-        stop = "budget" if words >= 4096 else "loop"
-        break
-    seen.add((pc, ret))
-    if pc < get or pc >= put or (pc - get) + 4 > len(buf):
-        stop = "out_of_ring pc=0x%08X" % pc
-        break
-    off = pc - get
-    h = struct.unpack_from("<I", buf, off)[0]
-    pc += 4
-    words += 1
-    if (h & 0xE0000003) == 0x20000000 or (h & 3) == 1 or (h & 3) == 2 or h == 0x00020000:
-        if (h & 3) == 2:
-            if ret:
-                stop = "loop (double return)"
-                break
-            ret = pc
-        if h == 0x00020000:
-            if not ret:
-                stop = "bad_target (return with no call)"
-                break
-            pc = ret
-            ret = 0
-            continue
-        target = (h & 0xFFFFFFFC) if (h & 3) in (1, 2) else (h & 0x1FFFFFFF)
-        if target < get or target >= put or (target & 3):
-            stop = "bad_target 0x%08X" % target
-            break
-        pc = target
-        continue
-    if (h & 0xE0030003) == 0 or (h & 0xE0030003) == 0x40000000:
-        count = (h >> 18) & 0x7FF
-        sub = (h >> 13) & 7
-        method = h & 0x1FFC
-        for i in range(count):
-            if words >= 4096:
-                stop = "budget"
-                break
-            if pc == put:
-                stop = "truncated"
-                break
-            p = struct.unpack_from("<I", buf, pc - get)[0]
-            pc += 4
-            words += 1
-            m = method + 4 * i
-            per[sub][m].append(p)
-            if (sub, m) not in order:
-                order.append((sub, m))
-        if stop:
-            break
-        continue
-    stop = "reserved 0x%08X" % h
-    break
+words = sum(r[3] for r in run_report)
+put = max(r[2] for r in run_report)
+print("union of %d ring(s): %d distinct (subchannel, method) pairs, %d words"
+      % (len(run_names), len(order), words))
 
-if stop:
-    print("walk stopped: %s (pc=0x%08X, words=%d)" % (stop, pc, words))
-else:
-    print("walk reached PUT")
 
 CLASS = {0: "NV097_KELVIN_PRIMITIVE", 1: "NV_MEMORY_TO_MEMORY_FORMAT",
          2: "NV_IMAGE_BLIT", 3: "NV_CONTEXT_SURFACES_2D"}
@@ -153,16 +190,28 @@ CLASS_MACRO = {0: "NV097_CLASS", 1: "NV_MEMCPY_CLASS",
 
 # ---- the inventory document -------------------------------------------------
 out = ["# JSRF NV2A method inventory (milestone 11)\n",
-       "Every (subchannel, method) pair the title submits in one real pushbuffer,",
-       "in the order the walk meets them. The model accepts a method",
+       "Every (subchannel, method) pair the title submits in its real pushbuffer",
+       "rings, in the order the walk meets them. The model accepts a method",
        "only if it is implemented, so this list is the specification: the walk stops",
        "at the first entry here that is not in the generated method table.",
        "",
-       "Generated by `scripts/gen-nv2a-method-inventory.py` from `%s`,",
-       "ring `0x%08X..0x%08X` (%d words)." % (run_name, get, put, words),
-       "",
-       "| # | subchannel | class | method | params seen |",
-       "|---|---|---|---|---|"]
+       "Generated by `scripts/gen-nv2a-method-inventory.py` as the UNION of %d run(s):"
+       % len(run_report),
+       ""]
+for r_name, r_get, r_put, r_words, r_stop, r_pairs in run_report:
+    out.append("- `%s`: ring `0x%08X..0x%08X`, %d words, %d pairs, %s"
+               % (r_name, r_get, r_put, r_words, r_pairs,
+                  "reached PUT" if not r_stop else "stopped: " + r_stop))
+out += ["",
+        "**Why a union.** One ring is not enough. The table used to come from a single",
+        "run whose ring stopped at 1497 words; once the title began submitting more of",
+        "its ring the walk met methods that table had never seen. Measured 2026-09-30:",
+        "the F4 run submits `0x1720` at word 8124 of a 72353-word ring, so a decode",
+        "budgeted at 4096 words could never reach it, and regenerating from that run",
+        "alone would drop 148 methods the older ring contributes.",
+        "",
+        "| # | subchannel | class | method | params seen |",
+        "|---|---|---|---|---|"]
 for i, (sub, m) in enumerate(order):
     ps = per[sub][m]
     shown = " ".join("%08X" % x for x in ps[:4]) + (" ..." if len(ps) > 4 else "")

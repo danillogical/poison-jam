@@ -627,8 +627,8 @@ list is exhausted.
     its callers is responsible. Cheapest honest class first (ledger Rules); do not patch the table.
   - **SUPERSEDED — the three paragraphs below record F3's intermediate states (cause found, then
     blocked, then fixed). They are kept as history; the authoritative outcome is the F3 DONE block
-    after F4.** The reasoning that follows is what the fix rested on, and the "BLOCKED" wording in it
-    describes a state that no longer holds.
+    below, which follows these historical notes and precedes F4.** The reasoning that follows is what
+    the fix rested on, and the "BLOCKED" wording in it describes a state that no longer holds.
   - *(historical)* **F3 CAUSE FOUND 2026-09-30 — it is a wrong tail-jump alias.** The guest called
     `0x00037550`, but the translator classified that address `detection_method: tail_jump_alias` and
     folded it into `sub_00038530`, deleting its body. `0x00037550` is a real function (its own SEH
@@ -701,7 +701,8 @@ list is exhausted.
 - **F3's continuing subject.** The 93-second run ended at its own deadline with no fault, so the next
   stop is unknown. Fallbacks unchanged: the guest heap keeps failing → ML2 (replacement XAPI heap,
   *reimplemented*); a vblank wait hangs → ML5; missing APU interrupts or slow audio clocks → ML4.
-- **F4 — Frames. THE ACTIVE NEXT STEP, and it is not in the renderer.**
+- **F4 — Frames. THE ACTIVE NEXT STEP. The `0x1720` walk blocker is IMPLEMENTED (toolkit `1f9309a`);
+  the next measurement is whether the walk now advances past GET `0x8EF0`.**
   **Diagnosed 2026-09-30: the submission walk stops on the first method the model does not know.**
   On the fixed build (`20260930-230206-594-f4-frames-after-horizon-fix`, exploratory, 123.3 s, 629,781
   lines, 0 invalid ICALLs/exceptions/ABI failures/`[UNIMPL]`), the run logs **64** `[PFIFO] submit`
@@ -709,18 +710,46 @@ list is exhausted.
   `get=00008EF0`** while `put` keeps advancing. Submits #12 onward carry
   `diag=unsupported_method … method=1720 … at=00008EF0`. `0x1720` is
   **`NV097_SET_VERTEX_DATA_ARRAY_OFFSET`**. `FLIP`, `present` and `FB_DUMP` are all 0 because nothing
-  past that command is ever interpreted — enabling the executor cannot help until the walk advances.
-  **The implementation:** admit `NV097_SET_VERTEX_DATA_ARRAY_OFFSET` through the measured/generated
-  method inventory (`src/nv2a/nv2a_method_table.c`, produced by
-  `scripts/gen-nv2a-method-inventory.py`) and use the existing method-state path —
-  `pgraph_method()` already stores accepted NV097 parameters in `PGRAPHState.methods` (ledger D3,
-  toolkit `9fd83c6`). That is the cheapest honest class and it is the project's own pattern; **do not**
-  add a one-off "ignore unknown methods" special case, which would blind the walk to real gaps.
-  Toolkit change with its own test. Then re-run and see whether the walk reaches a draw method or stops
-  on the next unknown; the population of unhandled methods is unknown until it advances past this one.
-  Fallbacks once frames exist: missing draw forms/formats are fixed in the executor; a GPU stall on
-  this path → ML6; if the title needs register combiners the CPU executor cannot show, start ML7's
-  feasibility study.
+  past that command is ever interpreted.
+  **IMPLEMENTED 2026-09-30 in toolkit `1f9309a`, by the measured-inventory route, not a bypass.** The
+  walk still rejects anything absent from the generated table; `0x1720` is now *in* it, because a real
+  submission contained it. Seven NV097 methods were admitted, every one measured:
+  `0x1720 0x172C 0x1730 0x1744` (the vertex-data-array-offset slots the title uses) and
+  `0x1800 0x1804 0x1808` (PGRAPH antialiasing / blend / blend-colour). It is deliberately **not** the
+  whole `0x1720..0x175C` array: the array is indexed, so a blanket range would admit slots the title
+  never submits. Only the four measured slots are admitted and the first unmeasured slot (`0x1724`)
+  still rejects — a test pins that asymmetry. Admitted methods flow through the existing state path
+  (`pgraph_method` stores them in `PGRAPHState.methods`); no execution semantics were invented.
+  **Two generator defects had to be fixed first**, both in `scripts/gen-nv2a-method-inventory.py`, and
+  both are why the method was invisible: its decode budget was **4096 words** while `0x1720` first
+  appears at word **8124** of the F4 ring's 72,353, and it derived the table from **one** ring, so the
+  F4 ring alone would have **dropped 148 methods** the older ring contributes. The table is now the
+  union of the rings named on the command line.
+  **Tests:** five new functions in the toolkit's `tests/nv2a_actions_test.c` — accepted and staged,
+  GET advances past it, the indexed-range control, unrelated methods still rejected, wrong-class and
+  unbound still rejected, and a stream through the block commits. Verified both ways: all pass with
+  the fix, and **15 failures without it** (GET pinned at `0x1000` with `unsupported_method`).
+  **What this does NOT establish: that frames exist.** The next runtime question is the one below.
+  **SMOKE-MEASURED 2026-09-30 (`20261001-004608-186-f4-smoke-1720-admitted`, 47.3 s): the blocker
+  MOVED, and GET did NOT advance.** `unsupported_method` is gone (0 occurrences, was 54), so the
+  admission works. The walk now stops at the **same** `get=00008EF0` with
+  `diag=sink_capacity`, on all 52 submissions after #12, while `put` advances to `0x47A84`.
+  **Cause, decoded from the ring:** the failing submission (`0x8EF0..0xA440`, 1364 words, 259 packets,
+  0 jump words) stages **1109 methods**, and the sink is a per-submission array of **1024**
+  (`nv2a_core.c`, reset per submission at `:1468`), so it overflows **within one submission** at packet
+  #239 — not by accumulating across submissions. Integrity stays clean (0 invalid ICALLs, 0 exceptions,
+  0 ABI failures, 0 `[UNIMPL]`); `FLIP`/`present`/`FB_DUMP` are still 0.
+  **STOPPED HERE DELIBERATELY — the next packet decides the fix.** Whether the answer is a larger sink,
+  a sink that drains as it fills, or incremental commit during the walk is a design question about what
+  the sink is *for*, not a constant to raise. Do not start the next long run until that is decided.
+  *(Also noted: the comment at `nv2a_core.c:1461-1467` says "its 256 cap" while the array and its test
+  are 1024 — a stale comment, not behaviour.)*
+  **The next runtime question:** *does the submission walk advance beyond GET `0x8EF0`, and if so,
+  what is the next measured stop or the first draw/flip event?* **ANSWERED 2026-09-30: no, it does not
+  advance; the next stop is `sink_capacity` at the same GET (see the smoke measurement above).** The
+  question for the next packet is therefore the sink's design, not another method. Fallbacks once
+  frames exist: missing draw forms/formats are fixed in the executor; a GPU stall on this path → ML6;
+  if the title needs register combiners the CPU executor cannot show, start ML7's feasibility study.
 - **F5 — Intro movies.** If the Sofdec intros block, skip them (ledger: *patched* or *intentionally
   ignored*); decoding them is post-slice (M29).
 - **F6 — Title screen (M15).** Acceptance: a frame dump of the title screen plus the run record with

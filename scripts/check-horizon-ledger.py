@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LEDGER = ROOT / 'docs' / 'reviews' / 'strict-horizon-ledger.md'
 RUNS = ROOT / 'logs' / 'runs'
 
-CHECKER_VERSION = 'jsrf-horizon-ledger/2'
+CHECKER_VERSION = 'jsrf-horizon-ledger/3'
 
 # The ledger's scope (owner decision recorded in plan-jsrf-bare-minimum.md, 2026-09-30):
 # strict runs from 2026-09-29 onward; the earlier runs are not backfilled. The bare
@@ -243,7 +243,12 @@ def main() -> int:
     # Information, not a finding: the ceiling rule is a §2.3 judgement.
     # Only a row that says MOVED is a progress event, and the superseded table is
     # excluded: its rows describe an older horizon and sit below the session rows.
-    moved = [row for row in rows if row['moved'] and not row['superseded']]
+    # A row that also says NOT REACHED is never a move, whatever else it says --
+    # measured 2026-09-30: a contrast row whose prose said "the diagnostic changed
+    # and its address did not" was counted as a move because it contained the word
+    # MOVED, which is the same class of error this check exists to prevent.
+    moved = [row for row in rows
+             if row['moved'] and not row['superseded'] and not row['not_reached']]
     last_move = moved[-1] if moved else None
     elapsed_hours = None
     if last_move:

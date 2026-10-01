@@ -369,6 +369,64 @@ case for `NV097_SET_VERTEX_DATA_ARRAY_OFFSET` — store the offset as method sta
 does for other NV097 parameters (`PGRAPHState.methods`, ledger D3) — and re-run to see whether the walk
 then reaches a draw method or stops on the next unknown. That is a toolkit change with its own test.
 
+**IMPLEMENTED 2026-09-30 in toolkit `1f9309a`.** The method is admitted through the measured, generated
+inventory rather than by loosening the unknown-method policy: the walk still rejects anything absent
+from `src/nv2a/nv2a_method_table.c`, and `0x1720` is now in it because a real submission contained it.
+Seven NV097 methods were admitted, every one measured — `0x1720`, `0x172C`, `0x1730`, `0x1744` (the
+vertex-data-array-offset slots the title uses) and `0x1800`, `0x1804`, `0x1808` (PGRAPH antialiasing,
+blend, blend-colour). It is deliberately **not** the whole `0x1720..0x175C` array: the array is
+indexed, so a blanket range would admit slots the title never submits; only the four measured slots are
+admitted, and the first unmeasured slot (`0x1724`) still rejects. Admitted methods flow through the
+existing state path (`pgraph_method` stores them in `PGRAPHState.methods`); **no execution semantics
+were invented** for the method.
+
+**Two generator defects had to be fixed first**, both in `scripts/gen-nv2a-method-inventory.py`, and
+each is why the method was invisible to the tool that builds the table:
+
+- its decode **budget was 4096 words**, but `0x1720` first appears at word **8124** of the F4 ring's
+  72,353 — so a decode that reported "reached PUT" for the older ring could never reach the method the
+  walk was stuck on;
+- it derived the table from **one** ring. The F4 ring alone would have **dropped 148 methods** the
+  older ring contributes, because the two rings overlap only partly. The table is now the **union** of
+  the rings named on the command line, and every entry is still something a real submission contained.
+
+**Focused tests** (five new functions in the toolkit's `tests/nv2a_actions_test.c`): the measured
+command is accepted and staged with GET advancing past it; the indexed-range control (four measured
+slots accepted, `0x1724` still rejected); unrelated unknown methods still rejected with GET unmoved;
+the same method on an `NV_MEMCPY`-bound subchannel and on an unbound subchannel still rejected; and a
+stream through the `0x1720` block commits. Verified both ways — all pass with the fix, and **15
+failures without it**, with GET pinned at `0x1000` and `unsupported_method` — so the tests exercise the
+change rather than merely coexisting with it. No existing test was weakened: the `0x0104` rejection
+case in `test_semaphore_written_only_on_commit` still uses a method absent from the table.
+
+**What this does NOT establish: that frames exist.** Whether the walk now advances beyond GET `0x8EF0`,
+and what the next stop or first draw/flip event is, is the next measurement — and it is a separate
+step, not a conclusion of this one.
+
+**MEASURED 2026-09-30 (smoke run `20261001-004608-186-f4-smoke-1720-admitted`): the blocker MOVED, and
+GET did NOT advance.** The `unsupported_method` diagnostic is **gone entirely** (0 occurrences, where
+the previous run had 54), so the `0x1720` admission works as intended. But the walk now stops with a
+*different* diagnostic at the *same* address:
+
+- `[PFIFO] submit #12 diag=sink_capacity get=00008EF0 put=0000A440`, and all 52 submissions after it
+  report the same `get=00008EF0` while `put` advances to `0x47A84`. Max GET is still `0x00008EF0`.
+- **Cause, decoded from the ring:** the failing submission's window is `0x8EF0..0xA440` (1364 words,
+  259 packets, 0 jump words), and it stages **1109 methods**. The sink is a per-submission staging
+  array of **1024** entries (`nv2a_core.c`, `sink[1024]`), reset at the start of each submission
+  (`nv2a_core.c:1468`), so the cap is hit **within one submission** — the walk overflows at packet
+  #239, having staged 1025. This is not accumulation across submissions.
+- Integrity is unchanged and clean: 0 invalid ICALLs, 0 exceptions, 0 ABI failures, 0 `[UNIMPL]`.
+  `FLIP`, `present` and `FB_DUMP` are still all 0 — no frames, as expected while the walk is stopped.
+- **A stale comment at `nv2a_core.c:1461-1467` says "its 256 cap"** while the array and the test are
+  1024. Worth correcting when that code is next touched; it is a comment, not behaviour.
+
+**So the next blocker is a capacity limit, not a missing method.** It is deliberately **not** fixed in
+this pass: the instruction was to record the new measured state and stop so the next packet can be
+reviewed. What a fix would have to decide — and what this measurement does not decide — is whether the
+right answer is a larger sink, a sink that drains as it fills, or whether staging 1109 methods in one
+submission means the walk should be committing incrementally. That is a design question about what the
+sink is *for*, not a constant to raise.
+
 **Not established.** Whether `0x1720` is the *only* blocker or the first of a series: the walk stops at
 the first unknown method, so the population of unhandled methods JSRF's first frames need is unknown
 until the walk advances past this one. The `[PFIFO]` line is a bounded log, so it bounds this run, not
