@@ -262,8 +262,12 @@ python -m tools.recomp game/default.xbe --all --split 1000 \
     --gen-dir src/recomp/gen --game-name "Jet Set Radio Future" \
     --manual-functions config/manual-functions.json \
     --exclude-manual src/recomp_manual.c \
-    --trace-functions config/trace-functions.json
+    --trace-functions config/trace-functions.json --backedge-yield
 ```
+
+`--backedge-yield` puts `RECOMP_BACKEDGE()` on loop back-edges, serial guest mode's preemption
+point (compatibility ledger L34); it reads one flag when that mode is off. Targeted relifts leave
+it out, because they write into chunks whose `recomp_types.h` may predate the macro.
 
 `recomp_funcs.h`, `recomp_NNNN.c`, `recomp_dispatch.c`, and
 `recomp_stubs_unresolved.c` must come from the same pass.

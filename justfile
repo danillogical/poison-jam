@@ -59,7 +59,7 @@ ctest:
 # Full translation pass: regenerate src/recomp/gen from the original XBE, then
 # re-apply config/generated-patches.json (T18).
 regen:
-    $env:PYTHONPATH = "{{toolkit}}"; {{python}} -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name "Jet Set Radio Future" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json; if ($LASTEXITCODE -ne 0) { exit 1 }
+    $env:PYTHONPATH = "{{toolkit}}"; {{python}} -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name "Jet Set Radio Future" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json --backedge-yield; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/patch-generated.py; if ($LASTEXITCODE -ne 0) { exit 1 }
 
 # Strict-profile guest run; sets RECOMP_GPU_ACK=0 for you.

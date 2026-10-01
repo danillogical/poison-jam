@@ -476,8 +476,9 @@ uses Sofdec), Lua/mission/UI/bird/PS2 title fixes (W21–W42).
 
 **Status 2026-09-30 (Mac session; cross-built and unit-tested, not run on the title):**
 - **ML1 DONE, opt-in:** toolkit `179439b`, `RECOMP_GUEST_SERIAL=1` (ledger L34, exploratory by
-  presence). The meter test's serial cases pass natively. Missing: the translator back-edge yield (no
-  runtime choke point exists), so a guest spin loop costs one bounded wait.
+  presence). The meter test's serial cases pass natively. The loop back-edge yield is in the
+  translator (`86113c7`, `--backedge-yield`, which `just regen` now passes); it takes effect at the
+  next full regeneration, on Windows. Until then a guest spin loop costs one bounded wait.
 - **ML3 DONE:** toolkit `e43e9bf` (ledger L30, L31).
 - **ML4 mostly done:** `timeBeginPeriod(1)` (`55acf60`, L33), the 5.1 fold (`29f13d0`, L25) and
   voice-processor DMA through the GP's translation (`1c6641a`, D2 fixed, L22). APU interrupt

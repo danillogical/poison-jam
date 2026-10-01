@@ -81,7 +81,7 @@ FULL_TRANSLATION_COMMAND = (
     '--gen-dir src/recomp/gen --game-name "Jet Set Radio Future" '
     '--manual-functions config/manual-functions.json '
     '--exclude-manual src/recomp_manual.c '
-    '--trace-functions config/trace-functions.json'
+    '--trace-functions config/trace-functions.json --backedge-yield'
 )
 
 # ABI-instrumentation markers that a regeneration must not silently remove.  Each
