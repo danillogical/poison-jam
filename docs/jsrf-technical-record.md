@@ -348,6 +348,59 @@ Measured in `20260930-221404-630-f1b-rdata-guard` (strict; `RECOMP_RDATA_GUARD=1
 and whether the copy is legitimate guest work aimed at a *different* destination that the port
 mis-computes. The shift `0x37608` is a measured constant for this XBE, not an explanation.
 
+### F3: the cause is a wrong tail-jump alias, `0x00037550` → `0x00038530` (2026-09-30)
+
+**The guest called `0x00037550`; the port ran `sub_00038530` instead.** That substitution is the whole
+defect, and it is measured end to end.
+
+- **The substitution is observed, not inferred.** `[ALIAS-ICALL] target=0x00037550
+  owner=0x00038530` is printed by the generated dispatch's own `recomp_alias_observe`
+  (`src/recomp/gen/recomp_dispatch.c`). It appears in **both** F1 runs, and in the guard run it is at
+  log line 17896 — **19 lines before** the first `[RDATA-GUARD] write` at 17915, on the same thread
+  (tid 24300). The copy is what the guest got *instead of* calling `0x00037550`.
+- **`0x00037550` is a real function with its own body.** It ends `ret 4` at `0x00038525`, followed by
+  seven `nop` bytes of padding to `0x00038530`. It has its own SEH prologue at its start
+  (`push -1` / `mov eax, fs:[0]` / `push 0x1870EE`) and a jump table at `0x00037FB4` on
+  `[esi+0x15DC]`.
+- **It is a function entry by definition.** It occurs **exactly once** as a 32-bit pointer in the XBE,
+  in a run of distinct `.text` addresses at `.data VA 0x001EC108` — neighbours `0x00036640`,
+  `0x00028500`, `0x00037550`, `0x00026780`, `0x00038890`, `0x0002AD60`. It has **0** direct
+  `call`/`jmp` sites landing on it, so that table is the only way it is reached — which is exactly
+  why a fold is fatal here and invisible in the call graph.
+- **The translator folded it.** `tools/disasm/output/functions.json` classifies `0x00037550` as
+  `detection_method: tail_jump_alias`, `confidence: 0.88`, spanning `0x00037550..0x00038530` — i.e. it
+  gives the function the *fold target's* start as its end and deletes its body. `sub_00038530` is
+  separately `call_target`, `0.9`, `0x00038530..0x0003885D`.
+- **No generated body exists for it.** `sub_00037550` appears **0** times as a definition or call in
+  `src/recomp/gen/*.c`; it exists only as the alias pair in `recomp_dispatch.c` and as the dispatch
+  table's entry.
+- **This is the same defect class the config already records.** `config/recovered-functions.json`'s
+  entry for `0x000BCF40` describes it in the same words: *"The translation pass read that table as a
+  switch table, classified this address `detection_method=tail_jump_alias` and folded it into
+  `sub_000BD8D0` under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch
+  tuple `0x000BCF40` at `sub_000BD8D0`. A virtual call then enters the wrong function."* `0x000BCF40`
+  was fixed by a recovery entry plus a boundary fix, and the alias table then named the recovered
+  body.
+- **The fix path is therefore known and precedented.** `recomp_lookup_manual` consults
+  `jsrf_lookup_recovered` before the alias table, so a recovery entry for `0x00037550` — with its own
+  span, `0x00037550..0x00038528` (stopping before the padding) — takes precedence and restores the
+  real body. `jsrf_lookup_recovered` currently has **3074** cases and **none** for `0x00037550`.
+
+**Why this is not fixed in this session.** A recovery entry is a reviewed recovery change: it needs
+the span reviewed, `scripts/recover-functions.py` regenerated, the alias pair re-pointed, and the
+whole thing re-tested and re-run. That is a packet's worth of work, not the cheapest honest step
+inside a chore, and it is the first item of F3's iteration.
+
+**Bearing on the horizon.** This is upstream of the clobber: the fold is why the wrong function runs,
+and the wrong function's `rep movsd` is what overwrites the image. Fixing the alias should move the
+strict horizon, and that is the test of this diagnosis — if the horizon does not move, the diagnosis
+is wrong and the copy has another source.
+
+**Not established.** Whether `0x00037550`'s real body is otherwise correctly translatable, and
+whether any *other* `tail_jump_alias` fold in this image deletes a table-referenced function entry.
+The latter is worth a census: `0x000BCF40` and `0x00037550` are two instances of one rule, and the
+rule's population has not been enumerated.
+
 The ~571 MB allocation failure that precedes the fault (`NtAllocateVirtualMemory`, `0xC0000017`)
 **is handled** by the guest (`0x00149E56 test eax,eax` / `jl 0x149eec`, clean return through
 `__SEH_epilog`), so it is not the cause (Advisor critical-path ruling, 2026-09-27); V3(a) and V3(c)

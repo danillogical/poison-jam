@@ -625,6 +625,25 @@ list is exhausted.
   - **The fix, and it is F3's first job:** the copy's **destination and length** are wrong, not the
     table. `sub_00038530` computes both. Not yet established: why the copy runs at all, and which of
     its callers is responsible. Cheapest honest class first (ledger Rules); do not patch the table.
+  - **F3 CAUSE FOUND 2026-09-30 — it is a wrong tail-jump alias.** The guest called `0x00037550`, but
+    the translator classified that address `detection_method: tail_jump_alias` and folded it into
+    `sub_00038530`, deleting its body. `0x00037550` is a real function (its own SEH prologue, `ret 4`
+    at `0x00038525`, then nop padding) and occurs exactly once as a pointer in a function-pointer table
+    at `.data VA 0x001EC108` with **0** direct call sites — so the table is its only route, and the fold
+    silently enters the wrong function. The generated dispatch's own
+    `[ALIAS-ICALL] target=0x00037550 owner=0x00038530` appears in **both** runs, and in the guard run it
+    is 19 log lines before the first `[RDATA-GUARD] write`, on the same thread. This is the same defect
+    class `config/recovered-functions.json` already documents for `0x000BCF40`, which was fixed by a
+    recovery entry plus a boundary fix.
+    **The fix is a reviewed recovery change** — a recovery entry for `0x00037550` spanning
+    `0x00037550..0x00038528`, then `scripts/recover-functions.py`, the alias pair re-pointed, and a
+    re-run. That is a packet's worth of work, so it is **not** done inside this chore; it is the first
+    item of the next session's F3.
+    **The test of this diagnosis:** fixing the alias should move the strict horizon. If it does not,
+    the diagnosis is wrong and the copy has another source.
+    **Follow-up worth a census:** whether any *other* `tail_jump_alias` fold deletes a
+    table-referenced function entry. `0x000BCF40` and `0x00037550` are two instances of one rule, and
+    the rule's population has never been enumerated.
 - **F2 — DONE 2026-09-30:** the DMA_PUT bit-16 mask (D1) is removed in toolkit `b857665`, and
   `docs/jsrf-kick-get-contract.md:60` records that `0x100410` is `NV_PFB_WBC`.
 - **F2b — DONE 2026-09-30:** ML3 (toolkit `e43e9bf`).
