@@ -845,60 +845,34 @@ int main(void)
         REJECT_CASE("USER unreadable span", 0xff8, 0x1004, "unreadable_pushbuffer");
         VirtualProtect((uint8_t *)pb + 0x1000, 0x1000, old_protect, &old_protect);
 
-        /* 11b4b4: the kick latch.  JSRF sets bit 16 of DMA PUT and spins
-         * until the engine clears it (0x00191270, inlined at 0x001912C6).
-         * The latch is model-owned, so the acknowledgement must come from
-         * the model and never from the guest. */
+        /* PUT is a plain ring offset with no latch bits.  JSRF's
+         * set-bit-16-and-spin at 0x00191270 targets 0x100410, NV_PFB_WBC,
+         * whose flush reads idle (checked with the PCI identity above). */
         memset(pb, 0, 0x2000);
         pb[0] = (1u << 18) | 0x100u; pb[1] = 0xdeadbeefu;
         submit_reset(gpu, 0, 0);
-        gpu->pfifo.kick_requests = 0;
-        gpu->pfifo.kick_acks = 0;
-        gpu->pfifo.kick_last_put = 0;
-        /* The kick carries the PUT offset in the low bits. */
-        nv2a_mmio_write(gpu, 0x800040, 8u | 0x10000u, 4);
-        ok &= check(gpu->pfifo.kick_requests, 1, "USER kick latch requested once");
-        ok &= check(gpu->pfifo.kick_acks, 1, "USER kick latch acknowledged");
-        ok &= check(gpu->pfifo.kick_last_put, 8, "USER kick records the PUT offset");
-        ok &= check(nv2a_mmio_read(gpu, 0x800040, 4) & 0x10000u, 0,
-                    "USER kick bit cleared so the 0x00191290 poll terminates");
+        nv2a_mmio_write(gpu, 0x800040, 8, 4);
         ok &= check(nv2a_mmio_read(gpu, 0x800040, 4), 8,
-                    "USER kick left the actual PUT readable");
+                    "USER PUT stores its offset verbatim");
         ok &= check(nv2a_mmio_read(gpu, 0x800044, 4), 8,
-                    "USER kick executed the pending submission (GET advanced)");
-        ok &= check(gpu->pfifo.sink_count, 1, "USER kicked stream reached the sink");
+                    "USER PUT write runs the pending submission (GET advanced)");
+        ok &= check(gpu->pfifo.sink_count, 1, "USER PUT stream reached the sink");
 
-        /* A plain PUT write is not a kick: it must neither latch nor clear. */
-        memset(pb, 0, 0x2000);
-        pb[0] = (1u << 18) | 0x100u; pb[1] = 0x12345678u;
-        submit_reset(gpu, 0, 0);
-        gpu->pfifo.kick_requests = 0;
-        gpu->pfifo.kick_acks = 0;
-        nv2a_mmio_write(gpu, 0x800040, 4, 4);
-        ok &= check(gpu->pfifo.kick_requests, 0, "USER plain PUT is not a kick");
-        ok &= check(gpu->pfifo.kick_acks, 0, "USER plain PUT does not acknowledge");
-        ok &= check(nv2a_mmio_read(gpu, 0x800040, 4), 4,
-                    "USER plain PUT stores its offset verbatim");
+        /* Bit 16 is an ordinary offset bit once the ring passes 64 KB; masking
+         * it walks the ring 64 KB short.  GET already equals PUT here, so
+         * nothing is walked outside the fixture buffer. */
+        submit_reset(gpu, 0x10008u, 0x10008u);
+        nv2a_mmio_write(gpu, 0x800040, 0x10008u, 4);
+        ok &= check(nv2a_mmio_read(gpu, 0x800040, 4), 0x10008u,
+                    "USER PUT keeps bit 16");
+        ok &= check(nv2a_mmio_read(gpu, 0x800044, 4), 0x10008u,
+                    "USER PUT with bit 16 is not walked as a lower offset");
 
-        /* Bit 16 must never survive into the stored PUT value, whichever
-         * path wrote it, or the next GET comparison is off by 0x10000. */
-        nv2a_mmio_write(gpu, 0x800040, 12u | 0x10000u, 4);
-        ok &= check(nv2a_mmio_read(gpu, 0x800040, 4) & 0x10000u, 0,
-                    "USER stored PUT never retains the kick bit");
-
-        /* A blocked stream must still acknowledge.  The guest would
-         * otherwise spin in 0x00191290 on a stream the model rejected,
-         * hiding the real unsupported_method diagnostic behind a hang. */
+        /* A blocked stream leaves GET where it stopped and says why. */
         memset(pb, 0, 0x2000);
         pb[0] = (1u << 18) | (6u << 13) | 0x180u; pb[1] = 0x99;
         submit_reset(gpu, 0, 0);
-        gpu->pfifo.kick_requests = 0;
-        gpu->pfifo.kick_acks = 0;
-        nv2a_mmio_write(gpu, 0x800040, 8u | 0x10000u, 4);
-        ok &= check(gpu->pfifo.kick_acks, 1,
-                    "USER blocked stream still acknowledges the kick");
-        ok &= check(nv2a_mmio_read(gpu, 0x800040, 4) & 0x10000u, 0,
-                    "USER blocked stream clears the kick bit");
+        nv2a_mmio_write(gpu, 0x800040, 8, 4);
         ok &= check(submit_diag_is(gpu, "unsupported_method"), 1,
                     "USER blocked stream reports why it blocked");
         ok &= check(gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET], 0,

@@ -40,9 +40,9 @@ Fields referenced below, all off that pointer:
 `MEM32[0x0019E328]` is the full ring size in bytes; `MEM32[0x0019E32C]` is
 the same value used halved (`shr ebx,1` at `0x00191610`).
 
-### CRITICAL — the kick is a real register write, already partially modeled
+### The "kick" at `0x00191270` is the PFB write-buffer flush
 
-`0x00191270..0x0019129D` is the kick primitive, and it is **not** an unknown
+`0x00191270..0x0019129D` was first read as the kick primitive; it is **not** an unknown
 MMIO address:
 
 ```
@@ -57,23 +57,23 @@ MMIO address:
 0019129C  ret
 ```
 
-`+0x100410` is `NV_PFIFO_CACHE1_DMA_PUT` (0x100410 is exactly the offset
-already named in the toolkit). So the guest kicks by **setting bit 16 of the
-DMA PUT register and then polling until the hardware clears it**.
+**Correction (2026-09-30):** `+0x100410` is **`NV_PFB_WBC`**, the PFB write-buffer
+control, and bit 16 is `NV_PFB_WBC_FLUSH` (`xboxrecomp/src/nv2a/nv2a_regs.h`). It is
+**not** `NV_PFIFO_CACHE1_DMA_PUT`: the mapped register base is BAR0, where PFB starts at
+`0x100000`, and the PUT pointer the guest publishes is `NV_USER_DMA_PUT` (`0x800040`). The
+sequence above flushes the CPU write buffer (after `sfence`) and waits for the flush to
+finish; `pfb_read` already answers `NV_PFB_WBC` as idle. The original reading of this
+section led the toolkit to mask bit 16 out of every PUT write, which walks the ring 64 KB
+short once it passes 64 KB (compatibility ledger D1, fixed by removing the latch).
 
-Two consequences that change the shape of the work:
+What stays true:
 
 1. `0x00191270` is an **uncalled helper**: `0x001912A0` inlines the same
    sequence at `0x001912C6..0x001912EA`. The `call 0x00191270` sites have not
    been located; treat `0x00191270` as an internal body unless a caller is
    found. Do not seed it as an independent function on speculation.
-2. The poll at `0x00191290` is only satisfiable if the *model* clears bit 16.
-   `nv2a_core.c` currently stores the raw value in
-   `pfifo_write` `NV_PFIFO_CACHE1_DMA_PUT` and never clears bit 16, so this
-   loop would spin forever once it is reached. **Clearing bit 16 to
-   acknowledge a kick is the first required model change.** That is a real
-   hardware behaviour, not a convenience stub: bit 16 is the kick request
-   latch, and the engine clearing it is what the guest is waiting for.
+2. The poll at `0x00191290` is satisfied by the PFB flush reading idle, not by
+   any PFIFO behaviour.
 
 ### The GET wait helper `0x00191530` (`RET 8`)
 
@@ -196,10 +196,11 @@ masking are meaningful.
 
 ## Required model behaviour before the chain may be recovered
 
-1. **Kick acknowledgement.** A write to `NV_PFIFO_CACHE1_DMA_PUT` with bit
-   16 set must latch the kick, run the pending submission, clear bit 16, and
-   leave the stored PUT readable. The `0x00191290` poll must terminate
-   without any guest-side help.
+1. **Flush acknowledgement.** `NV_PFB_WBC` reads with `NV_PFB_WBC_FLUSH`
+   clear, so the `0x00191290` poll terminates without guest-side help. A PUT
+   write is stored as written (bit 16 is an offset bit) and runs the pending
+   submission. (This item originally required a PUT kick latch; see the
+   correction above.)
 2. **GET advances as a consequence of work, never on write.** GET may only
    move because a packet was executed to completion. A write by the guest to
    GET may be rejected or recorded, but it must not synthesize completion.

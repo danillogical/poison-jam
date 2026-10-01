@@ -23824,7 +23824,7 @@
     "kind": "routine",
     "stack_args": 0,
     "test_unit": "11c1",
-    "evidence": "The kick primitive itself. No arguments at all (no prologue, plain RET at 0x0019129C). Loads the ring context from MEM32[0x0019DCE0], follows context+0x2268 to the mapped NV2A register base, issues SFENCE, then reads-modifies-writes NV_PFIFO_CACHE1_DMA_PUT (register base + 0x100410) with bit 16 set, and spins at 0x00191290 until the same bit reads back clear. This is exactly the latch contract documented in docs/jsrf-kick-get-contract.md and implemented in the toolkit by 0x00191270's counterpart NV_PFIFO_CACHE1_DMA_PUT_KICK. Called from 0x001914B8 and 0x001914DB inside the back-pressure wait. It is never called from the 0x001918E0/0x001917F0 method blocks; those publish through 0x00190240."
+    "evidence": "The kick primitive itself. No arguments at all (no prologue, plain RET at 0x0019129C). Loads the ring context from MEM32[0x0019DCE0], follows context+0x2268 to the mapped NV2A register base, issues SFENCE, then reads-modifies-writes NV_PFB_WBC (register base + 0x100410) with NV_PFB_WBC_FLUSH (bit 16) set, and spins at 0x00191290 until the flush reads back idle. An earlier reading called this register NV_PFIFO_CACHE1_DMA_PUT; see the correction in docs/jsrf-kick-get-contract.md. Called from 0x001914B8 and 0x001914DB inside the back-pressure wait. It is never called from the 0x001918E0/0x001917F0 method blocks; those publish through 0x00190240."
   },
   {
     "start": "0x001912A0",
