@@ -65,14 +65,29 @@ RESULT: SUCCESS — fast-forward a71f937 -> a826201; parent job pwsh-3305 collec
         5 blobs scanned, 0 hits; 0 secrets; largest object 407267 B
 ```
 
-- **Future gateway (next work, source-only):** the new stop is the **F6 candidate, UNCLASSIFIED** —
-  the **sampled callee region** `0x1A03xx–0x1A04xx` calling **`19E438`** → **ordinals 277 and 294**
-  (~6300 each, returning 0). **Resolved by source:** **277 = `RtlEnterCriticalSection`**,
-  **294 = `RtlLeaveCriticalSection`** (host-blocking critical sections; a VOID-0 return **does not**
-  prove a kernel wait), and **`19E438` is a shared conditional-enter helper with ~50 callers** — so the
-  **scope is a shared lock, not a loop head**, and the **actual next stop stays unclassified**.
-  Disassemble **`19E438`** and its callers at `0x1A0360–0x1A0500` to find the actual loop head, and run
-  the **mapping gate** before any guest-VA read. **No fix, no run extension, no longer run, no seeding.**
+- **Game push receipt (actual) — closes this work:**
+
+```text
+PUSHED_TO: origin
+BRANCH: master
+COMMIT: e7e9a4a19f50171048708ab0a2a6a0601c91da42
+REMOTE_URL: https://github.com/danillogical/poison-jam.git
+RESULT: SUCCESS — fast-forward d1f30e1 -> e7e9a4a; parent job pwsh-3372 collected; tree clean
+        before the push; outgoing 8 DOC blobs (commits 15d8af1 and e7e9a4a);
+        zero assets, zero secrets, none over 100 MB; largest object 125040 B
+```
+
+- **Future gateway (next work, READ-ONLY):** the new stop is the **F6 candidate, UNCLASSIFIED**. The
+  earlier "`1A03` loop / poll" reading is **superseded** (sampled callee region; initial hypothesis,
+  not the poll head). **Current classification:** the **277/294 traffic is PER-FRAME RENDER WORK**
+  (277@19E452 = 12 × 515; 294 sites = 3 × 515 and 1 × 515; IRQL pairs ≈515; **E_FAIL 0 times**) —
+  **≈515 frames over ≈90 s ≈ 5.7 fps**, a **rate estimate only**. At capture the stack runs
+  `… → 13A80 → 14D090 → 198F10 → 198ED0 → 191390 → 1912A0` with **PFB_WBC = 0** and
+  **GET == PUT == 0x5B50C** — a **snapshot fact, not proof of no stall at any other time**.
+  **(A)** slow frame/time-counted sequence vs **(B)** step gated on an event (audio/movie/thread with
+  `RECOMP_APU_TRAP=1`) is **undecided; not called a stall or hang**. **Next, read-only:** disassemble
+  **`13A80`**'s vtable dispatch from **`13CB2–13EE4`** plus **`14D090`**, then read the object's
+  step/timer fields from the new dump (**mapping gate already passed**). **No run, no fix, no seeding.**
 - **Historical baseline captions:** the `a71f937` baseline statements, the RED-phase gating, and the
   launch-pending wording above are **historical** and are retained only as history.
 - **W14 — HISTORICAL (pre-reset).** *At the time of writing:* the ceiling was the original 4 h

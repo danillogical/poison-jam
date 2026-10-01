@@ -835,6 +835,18 @@ RESULT: SUCCESS — fast-forward a71f937 -> a826201; parent job pwsh-3305 collec
         5 blobs scanned, 0 hits; 0 secrets; largest object 407267 B
 ```
 
+**D2 game push (actual, 2026-10-01).** The records closure, game second — this closes the D2 work:
+
+```text
+PUSHED_TO: origin
+BRANCH: master
+COMMIT: e7e9a4a19f50171048708ab0a2a6a0601c91da42
+REMOTE_URL: https://github.com/danillogical/poison-jam.git
+RESULT: SUCCESS — fast-forward d1f30e1 -> e7e9a4a; parent job pwsh-3372 collected; tree clean
+        before the push; outgoing 8 DOC blobs (commits 15d8af1 and e7e9a4a);
+        zero assets, zero secrets, none over 100 MB; largest object 125040 B
+```
+
 **Deferred optional test advisory.** Do not add a diagnostic-is-OK assertion after the measured
 red/green runs merely for churn; reopen if a future failure of the 1109-method case fails without
 naming its diagnostic. Advisor accepted this deferral after independently inspecting both diffs.
