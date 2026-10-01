@@ -555,7 +555,7 @@ package. Each gets criteria in the same five-part form when it becomes next.
 | (new) Run logs filling the disk (167 GB across 1,172 run directories on 09-28, `6a97c86`) | → T14; the owner cleared the old runs on 2026-09-30 |
 | (new) W2 gate under pragmatism: `scripts/qualify-premise.py` item 2 requires strict premise runs, and item 5 should name the prior-art set (Mercenaries-Recompiled, halo-ce-universal, toolkit forks) | **DONE 2026-09-30:** `--purpose bare-minimum` accepts an exploratory run with `--ledger-id`s the ledger has (`fidelity`, the default, stays strict); item 5 searches `PRIOR_ART` checked out beside the repository, and a missing checkout is UNKNOWN; 7 new controls |
 | (new) Horizon-ledger scope in the bare invocation | **DONE 2026-09-30:** `check-horizon-ledger.py` defaults to `--since 2026-09-29` (`--since all` for the archive) and prints the scope |
-| (new) **Owner decision:** the public game repository tracks 38 MB of lifted game code (`src/recomp/gen/`, `recovered.c`) and has no LICENSE file; Mercenaries keeps generated code out of its public source | owner decides whether it stays public and which licence applies |
+| (new) **Owner decision:** the public game repository tracks 38 MB of lifted game code (`src/recomp/gen/`, `recovered.c`) and has no LICENSE file; Mercenaries keeps generated code out of its public source | **DECIDED 2026-09-30:** the lifted code is untracked (`52dc97b`) after its hand edits became patches (`8331a6d`); removing it from history is planned in `docs/reviews/lifted-code-history-scrub.md` and waits for the owner's go-ahead to force-push. The licence question is still open |
 
 ## 11. Removed or retired
 
@@ -591,6 +591,9 @@ list is exhausted.
 
 - **F0 — Unblock (decided, see below).** Ordinary runs gate at **15 GB** free (TTD recordings still
   need about 50 GB; check with `just disk` first). No reclaim is needed for F1–F6.
+- **F0a — Before pulling on Windows, copy `src/recomp/` aside.** Game `52dc97b` untracks the lifted
+  code, so the pull deletes it; copy it back afterwards (it is ignored from then on). If it is lost,
+  rebuild it as `AGENTS.md` "Rebuilding the lifted code" says, and record what that took.
 - **F0b — Rebuild on the new toolkit first.** `just build` then `just test` (new or changed:
   `jsrf_dpc_queue_bridge`, the NV2A contract's PUT cases, the guest-meter serial cases). Toolkit
   `b857665..179439b` changed D1, D2, file I/O, DPCs, the timer period and the mixdown, so the
