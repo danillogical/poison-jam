@@ -162,8 +162,8 @@ int jsrf_probe_gpu(const char *mode)
             if (bound) {
                 NV2AState *state = nv2a_get_state();
                 if (after.sink_count != before.sink_count + 3u ||
-                    state->pgraph.regs[0x0200 / 4] != 0x00100020u ||
-                    state->pgraph.regs[0x0204 / 4] != 0x00200040u) return 1;
+                    state->pgraph.methods[0x0200 / 4] != 0x00100020u ||
+                    state->pgraph.methods[0x0204 / 4] != 0x00200040u) return 1;
             }
         }
         fprintf(stderr,

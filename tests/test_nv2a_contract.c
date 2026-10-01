@@ -439,9 +439,9 @@ int main(void)
         submit_reset(gpu, 0, 20);
         ok &= check(nv2a_submit_pending(gpu), 1,
                     "USER bound NV097 clip methods accepted");
-        ok &= check(gpu->pgraph.regs[0x0200 / 4], 0x00100020,
+        ok &= check(gpu->pgraph.methods[0x0200 / 4], 0x00100020,
                     "NV097 surface clip horizontal stored");
-        ok &= check(gpu->pgraph.regs[0x0204 / 4], 0x00200040,
+        ok &= check(gpu->pgraph.methods[0x0204 / 4], 0x00200040,
                     "NV097 surface clip vertical stored");
         /* The pinned NV097 definitions assign all 32 bits of each clip word
          * to two 16-bit fields, so zero and all-ones are both defined. */
@@ -451,9 +451,9 @@ int main(void)
         submit_reset(gpu, 0, 12);
         ok &= check(nv2a_submit_pending(gpu), 1,
                     "USER clip full parameter domain accepted");
-        ok &= check(gpu->pgraph.regs[0x0200 / 4], 0,
+        ok &= check(gpu->pgraph.methods[0x0200 / 4], 0,
                     "NV097 zero clip fields stored");
-        ok &= check(gpu->pgraph.regs[0x0204 / 4], 0xffffffffu,
+        ok &= check(gpu->pgraph.methods[0x0204 / 4], 0xffffffffu,
                     "NV097 maximum clip fields stored");
 
         /* The vertex-program methods the title submits are implemented, so the
@@ -479,9 +479,9 @@ int main(void)
                     "USER NV097 transform execution mode accepted");
         ok &= check(submit_diag_is(gpu, "ok"), 1,
                     "USER NV097 transform execution mode diagnostic");
-        ok &= check(gpu->pgraph.regs[0x1BC8 / 4], 0x00000002u,
+        ok &= check(gpu->pgraph.methods[0x1BC8 / 4], 0x00000002u,
                     "NV097 transform execution mode stored");
-        ok &= check(gpu->pgraph.regs[0x1BCC / 4], 0x00000003u,
+        ok &= check(gpu->pgraph.methods[0x1BCC / 4], 0x00000003u,
                     "NV097 transform program start stored");
 
         /* Implementing a method must not weaken the rejection next door: the
@@ -496,7 +496,7 @@ int main(void)
                     "USER unimplemented transform neighbour diagnostic");
         ok &= check(gpu->pfifo.submit_diag_method, 0x1BD0u,
                     "USER unimplemented transform neighbour exact method");
-        ok &= check(gpu->pgraph.regs[0x1BC8 / 4], 0x00000002u,
+        ok &= check(gpu->pgraph.methods[0x1BC8 / 4], 0x00000002u,
                     "NV097 transform execution mode survives neighbour reject");
 
         /* Handle rebinding is per subchannel and commits with the stream. */
@@ -509,7 +509,7 @@ int main(void)
         ok &= check(nv2a_submit_pending(gpu), 1, "USER NV097 rebind accepted");
         ok &= check(gpu->pfifo.binding_object[0], 0x5678,
                     "USER active rebind object");
-        ok &= check(gpu->pgraph.regs[0x0200 / 4], 0x05000005u,
+        ok &= check(gpu->pgraph.methods[0x0200 / 4], 0x05000005u,
                     "USER rebound state stored");
         ok &= check(nv2a_set_fixture_binding(gpu, 1, 0x2222, 0x97), 1,
                     "USER second subchannel registration");
@@ -532,8 +532,8 @@ int main(void)
         ok &= check(gpu->pfifo.binding_object[2], 0,
                     "USER invalid class active binding unchanged");
         uint32_t old_object = gpu->pfifo.binding_object[0];
-        uint32_t old_clip_h = gpu->pgraph.regs[0x0200 / 4];
-        uint32_t old_clip_v = gpu->pgraph.regs[0x0204 / 4];
+        uint32_t old_clip_h = gpu->pgraph.methods[0x0200 / 4];
+        uint32_t old_clip_v = gpu->pgraph.methods[0x0204 / 4];
         ok &= check(nv2a_set_fixture_binding(gpu, 0, 0x9abc, 0x97), 1,
                     "USER rollback object registration");
         memset(pb, 0, 0x2000);
@@ -546,9 +546,9 @@ int main(void)
                     "USER removed surface format rollback");
         ok &= check(gpu->pfifo.binding_object[0], old_object,
                     "USER late unsupported binding rollback");
-        ok &= check(gpu->pgraph.regs[0x0200 / 4], old_clip_h,
+        ok &= check(gpu->pgraph.methods[0x0200 / 4], old_clip_h,
                     "USER late unsupported state rollback");
-        ok &= check(gpu->pgraph.regs[0x0204 / 4], old_clip_v,
+        ok &= check(gpu->pgraph.methods[0x0204 / 4], old_clip_v,
                     "USER late unsupported vertical state rollback");
         ok &= check(gpu->pfifo.submit_diag_method, 0x03fc,
                     "USER removed format exact method diagnostic");
@@ -564,7 +564,7 @@ int main(void)
                     "USER unbound subchannel state method rejected");
         ok &= check(gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET], 0,
                     "USER unbound method GET rollback");
-        ok &= check(gpu->pgraph.regs[0x0200 / 4], old_clip_h,
+        ok &= check(gpu->pgraph.methods[0x0200 / 4], old_clip_h,
                     "USER unbound method state rollback");
         ok &= check(submit_diag_is(gpu, "unsupported_method"), 1,
                     "USER unbound method diagnostic");
@@ -590,15 +590,15 @@ int main(void)
                     "USER RAMHT active object is handle 0xD");
         ok &= check(gpu->pfifo.binding_class[0], 0x97u,
                     "USER RAMHT class is RAMIN word0");
-        ok &= check(gpu->pgraph.regs[0x0200 / 4], 0x00100020u,
+        ok &= check(gpu->pgraph.methods[0x0200 / 4], 0x00100020u,
                     "USER RAMHT NV097 clip H stored");
-        ok &= check(gpu->pgraph.regs[0x0204 / 4], 0x00200040u,
+        ok &= check(gpu->pgraph.methods[0x0204 / 4], 0x00200040u,
                     "USER RAMHT NV097 clip V stored");
         ok &= check(gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET], 20,
                     "USER RAMHT GET advances on accepted bind");
 
-        uint32_t ramht_clip_h = gpu->pgraph.regs[0x0200 / 4];
-        uint32_t ramht_clip_v = gpu->pgraph.regs[0x0204 / 4];
+        uint32_t ramht_clip_h = gpu->pgraph.methods[0x0200 / 4];
+        uint32_t ramht_clip_v = gpu->pgraph.methods[0x0204 / 4];
         memset(pb, 0, 0x2000);
         pb[0] = (1u << 18); pb[1] = 0x3u;
         submit_reset(gpu, 0, 8);
@@ -613,7 +613,7 @@ int main(void)
                     "USER RAMHT non-NV097 clip rejected");
         ok &= check(gpu->pfifo.binding_object[0], 0x3u,
                     "USER RAMHT failed clip leaves 0x3D bind");
-        ok &= check(gpu->pgraph.regs[0x0200 / 4], ramht_clip_h,
+        ok &= check(gpu->pgraph.methods[0x0200 / 4], ramht_clip_h,
                     "USER RAMHT failed clip rolls back H");
 
         memset(pb, 0, 0x2000);
@@ -626,9 +626,9 @@ int main(void)
                     "USER RAMHT late unsupported rolls back");
         ok &= check(gpu->pfifo.binding_object[0], 0x3u,
                     "USER RAMHT late unsupported object rollback");
-        ok &= check(gpu->pgraph.regs[0x0200 / 4], ramht_clip_h,
+        ok &= check(gpu->pgraph.methods[0x0200 / 4], ramht_clip_h,
                     "USER RAMHT late unsupported H rollback");
-        ok &= check(gpu->pgraph.regs[0x0204 / 4], ramht_clip_v,
+        ok &= check(gpu->pgraph.methods[0x0204 / 4], ramht_clip_v,
                     "USER RAMHT late unsupported V rollback");
         ok &= check(gpu->pfifo.submit_diag_method, 0x03fc,
                     "USER RAMHT late format method diagnostic");
@@ -772,8 +772,8 @@ int main(void)
                 { 0x0ffcu, 0x00100000u },
                 { 0x17fcu, 0x00200000u },
             };
-            uint32_t clip_h = gpu->pgraph.regs[0x0200 / 4];
-            uint32_t clip_v = gpu->pgraph.regs[0x0204 / 4];
+            uint32_t clip_h = gpu->pgraph.methods[0x0200 / 4];
+            uint32_t clip_v = gpu->pgraph.methods[0x0204 / 4];
             for (unsigned i = 0; i < sizeof(removed_surface) / sizeof(removed_surface[0]); ++i) {
                 memset(pb, 0, 0x2000);
                 pb[0] = (1u << 18) | removed_surface[i][0];
@@ -787,9 +787,9 @@ int main(void)
                 ok &= check(gpu->pfifo.submit_diag_param,
                             removed_surface[i][1],
                             "USER unmodeled surface exact parameter diagnostic");
-                ok &= check(gpu->pgraph.regs[0x0200 / 4], clip_h,
+                ok &= check(gpu->pgraph.methods[0x0200 / 4], clip_h,
                             "USER unmodeled surface horizontal clip unchanged");
-                ok &= check(gpu->pgraph.regs[0x0204 / 4], clip_v,
+                ok &= check(gpu->pgraph.methods[0x0204 / 4], clip_v,
                             "USER unmodeled surface vertical clip unchanged");
             }
         }
