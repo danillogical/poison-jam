@@ -742,7 +742,12 @@ list is exhausted.
   (`nv2a_core.c`, reset per submission at `:1468`), so it overflows **within one submission** at packet
   #239 — not by accumulating across submissions. Integrity stays clean (0 invalid ICALLs, 0 exceptions,
   0 ABI failures, 0 `[UNIMPL]`); `FLIP`/`present`/`FB_DUMP` are still 0.
-  **STOPPED HERE DELIBERATELY — the next packet decides the fix.** Whether the answer is a larger sink,
+  **SUPERSEDED 2026-10-01 — owner-directed F4 sink ruling recorded.** Advisor chose A′: size both
+  staging and sink to the existing 4096-word walk budget, move staging into PFIFO state, retain
+  whole-submission atomicity and all other rejection rules. The local atomicity approximation is
+  recorded as L40; hardware/prior art dispatch per method. Verbatim decision, basis, tests and reversal
+  conditions: `docs/reviews/rulings/f4-submission-capacity.md` (TR §5). Implementation/validation pending.
+  **Historical stop:** Whether the answer is a larger sink,
   a sink that drains as it fills, or incremental commit during the walk is a design question about what
   the sink is *for*, not a constant to raise. Do not start the next long run until that is decided.
   *(Also noted: the comment at `nv2a_core.c:1461-1467` says "its 256 cap" while the array and its test

@@ -427,6 +427,15 @@ right answer is a larger sink, a sink that drains as it fills, or whether stagin
 submission means the walk should be committing incrementally. That is a design question about what the
 sink is *for*, not a constant to raise.
 
+**F4 capacity ruling, 2026-10-01 (owner-directed chore; implementation pending).** The Persistent
+Advisor chose A′: size both `staged[]` and `sink[]` to the existing 4096-word budget, place staging in
+PFIFO state rather than the stack, and preserve all-or-nothing submission admission and the other
+rejection rules. This is cheapest within the existing architecture, not hardware-faithful incremental
+PFIFO→PGRAPH dispatch. L40 records the deliberate atomicity approximation; it creates no new modeled
+hardware cause. The exact response, observed/inferred basis, focused regressions, next-stop procedure
+and reversal conditions are in `docs/reviews/rulings/f4-submission-capacity.md`. Advisor child
+`4e6d87e1-f748-48b3-a0a4-a6e5728bfeee`, `claude/claude-opus-5-5` @ `high`, continuity PASS.
+
 **Not established.** Whether `0x1720` is the *only* blocker or the first of a series: the walk stops at
 the first unknown method, so the population of unhandled methods JSRF's first frames need is unknown
 until the walk advances past this one. The `[PFIFO]` line is a bounded log, so it bounds this run, not
