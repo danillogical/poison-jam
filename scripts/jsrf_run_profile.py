@@ -36,6 +36,7 @@ FORCE_RETURN = 'RECOMP_FORCE_RETURN'
 PAD_PRESS = 'RECOMP_PAD_PRESS'
 KMEM_LEGACY = 'RECOMP_KMEM_LEGACY'
 NV2A_ACTIONS = 'RECOMP_NV2A_ACTIONS'
+GUEST_SERIAL = 'RECOMP_GUEST_SERIAL'
 
 # Retired semantic overrides: names that once changed guest-visible behavior,
 # whose implementation was deliberately deleted, and which active policy still
@@ -413,6 +414,9 @@ def classify_settings(entries: Any) -> dict[str, Any]:
         # (jsrf-run-profiles.md, "Unconditional modeled hardware causes").
         (KMEM_LEGACY, 'restores the previous, unfaithful kernel memory semantics when present'),
         (NV2A_ACTIONS, 'arms unadmitted NV2A semaphore/software-method/flip-stall behaviour when present'),
+        # Serialised guest mode (toolkit 179439b, 2026-09-30) replaces the scheduling
+        # model itself and lets a waiter overrun the lock; presence alone is enough.
+        (GUEST_SERIAL, 'runs one guest thread at a time with bounded-wait overruns when present'),
     ):
         if name.casefold() in values:
             active.append(f'{name} {reason}')

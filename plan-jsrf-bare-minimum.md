@@ -236,6 +236,27 @@ tools themselves. Measured highlights, all reproducible from the named command:
 | T13 | Generated receipt; regeneration preserves probe results. |
 | T14 | A launch below the floor is refused before any child starts; the retention plan is citation-aware and deletes nothing. |
 
+**Mac session, 2026-09-30 (no game assets; nothing here has run on Windows).**
+- **T15 DONE** as `scripts/generated-parity.py` (`audit`, `overlay`; MIT notice carried): 6 controls,
+  including a seeded one-function change, a merged start reported as subsumed, an overlay limited to
+  its range, and the real tree (5,739 functions) parsing. Still open: building an overlaid tree and
+  watching the stop move back, which needs the Windows host.
+- **T16 half done:** `just regen` and AGENTS.md now pass `--trace-functions config/trace-functions.json`,
+  matching TR §2 and the provenance checker. The `--coalesce-functions` half needs a Windows
+  regeneration to show the 7 boundary fixes appear without the post-hoc relift.
+- **T17 DONE** in `scripts/precommit-staged-paths.py`: XBE, FATX, minidump, XDVDFS, archive and
+  compressed-stream signatures and the raw `.text` control bytes; 14 refusal cases, a prose
+  known-good case, and a check that the gate's own sources pass it.
+- **T18 DONE** as `scripts/patch-generated.py` and `config/generated-patches.json` (empty). `just regen`
+  applies it and `just check` runs `--check`; 8 controls cover exact-once application, a second run
+  changing nothing, function scope, a missing or ambiguous site, and an unknown ledger ID. **Candidate
+  patches** (need a fresh regeneration to capture their exact text): the
+  `jsrf_watch_store` declaration every chunk header says to re-apply, and the exact-delta ABI
+  additions to `recomp_types.h` (TR §2).
+- **T19** not started (Windows; needs the XBE).
+- The pre-commit and AC2 tests now turn commit signing off in their scratch repositories: a global
+  `commit.gpgsign` hung them on a signing prompt.
+
 ## 6. Phase 2 — workflow changes (tasks; each edits the owning document and adds a check)
 
 Each row names the measured failure it answers (report §2) and is accepted when the document is
@@ -415,6 +436,10 @@ committed stream, each method the back end handles or lacks, with counts.
 `recomp_delta_allowed`, `dr_tid_exited` and the two test stubs; pick up the runtime template's
 port-I/O prototypes at V2; then adopt `/we4013` in the game CMake.
 Accepted when: the game builds under MSVC with `/we4013` and the full ctest passes.
+*Status 2026-09-30:* the declarations are in (`src/main.c`, `src/diagnostics.c`,
+`tools/harness/collect.c`, `tests/test_recovery_11c1.c`); a MinGW cross-compile with
+`-Wimplicit-function-declaration` finds none left in the 22 hand-written C files (three stop early on
+MSVC-only constructs). Remaining, on Windows: `/we4013` and the MSVC build and ctest.
 
 **C7 — A4b2 P4 transfer bridge (carried):** re-establish only when a packet inherits P4.
 
@@ -448,6 +473,19 @@ entry in the same commit. "When" ties it to the fast path (§13).
 
 Not lifted: their DirectSound mailbox patch (our GP DSP already clears that wait), XMV playback (JSRF
 uses Sofdec), Lua/mission/UI/bird/PS2 title fixes (W21–W42).
+
+**Status 2026-09-30 (Mac session; cross-built and unit-tested, not run on the title):**
+- **ML1 DONE, opt-in:** toolkit `179439b`, `RECOMP_GUEST_SERIAL=1` (ledger L34, exploratory by
+  presence). The meter test's serial cases pass natively. Missing: the translator back-edge yield (no
+  runtime choke point exists), so a guest spin loop costs one bounded wait.
+- **ML3 DONE:** toolkit `e43e9bf` (ledger L30, L31).
+- **ML4 mostly done:** `timeBeginPeriod(1)` (`55acf60`, L33), the 5.1 fold (`29f13d0`, L25) and
+  voice-processor DMA through the GP's translation (`1c6641a`, D2 fixed, L22). APU interrupt
+  delivery (vector `0x30+n`) is still open.
+- **Also landed:** DPC queue semantics (`e2872a1`, L35: at-most-once insert, `KeRemoveQueueDpc`
+  cancels, locked queue), `rep movsb`'s element-wise path through volatile `MEM8` (`5364747`), and
+  the blind-spot tools (`7b6839a`): the `NtReadFile` bounce buffer (L29) and the read-only tripwire
+  `RECOMP_RDATA_GUARD=1` (L32).
 
 ## 8. Milestone ladder — bare-minimum slice (07–26)
 
@@ -501,13 +539,14 @@ package. Each gets criteria in the same five-part form when it becomes next.
 | Classifier: move `RECOMP_AC97_READY` to `RETIRED_OVERRIDES` | kept; chore with T7 |
 | GP port follow-ups (NDEBUG asserts, EP routing) | kept; before M23 |
 | AC'97 registers `0xFEC0017C`, `0xFEC00100` | kept; before M23 |
-| Game implicit declarations | → C6 |
+| Game implicit declarations | → C6 (declarations in; `/we4013` on Windows) |
 | Kernel memory open points | → C2 |
 | DSP provenance record (A4b2-NR instrumentation not listed) | kept; chore |
 | Review capture (`record-review.py` default) | → T11 |
 | (new) Stale override text in `AGENTS.md`/run profiles; stale `RETIRED_NAMES` | → W15 |
 | (new) Run logs filling the disk (167 GB across 1,172 run directories on 09-28, `6a97c86`) | → T14; the owner cleared the old runs on 2026-09-30 |
-| (new) W2 gate under pragmatism: `scripts/qualify-premise.py` item 2 requires strict premise runs, and item 5 should name the prior-art set (Mercenaries-Recompiled, halo-ce-universal, toolkit forks) | chore: accept exploratory premise runs for bare-minimum lines, keep strict for fidelity questions, and list the prior-art sources item 5 must search |
+| (new) W2 gate under pragmatism: `scripts/qualify-premise.py` item 2 requires strict premise runs, and item 5 should name the prior-art set (Mercenaries-Recompiled, halo-ce-universal, toolkit forks) | **DONE 2026-09-30:** `--purpose bare-minimum` accepts an exploratory run with `--ledger-id`s the ledger has (`fidelity`, the default, stays strict); item 5 searches `PRIOR_ART` checked out beside the repository, and a missing checkout is UNKNOWN; 7 new controls |
+| (new) Horizon-ledger scope in the bare invocation | **DONE 2026-09-30:** `check-horizon-ledger.py` defaults to `--since 2026-09-29` (`--since all` for the archive) and prints the scope |
 | (new) **Owner decision:** the public game repository tracks 38 MB of lifted game code (`src/recomp/gen/`, `recovered.c`) and has no LICENSE file; Mercenaries keeps generated code out of its public source | owner decides whether it stays public and which licence applies |
 
 ## 11. Removed or retired
@@ -544,17 +583,28 @@ list is exhausted.
 
 - **F0 — Unblock (decided, see below).** Ordinary runs gate at **15 GB** free (TTD recordings still
   need about 50 GB; check with `just disk` first). No reclaim is needed for F1–F6.
-- **F1 — Find the table writer the cheap way.** One run (exploratory is fine),
-  `RECOMP_KERNEL_LOG_BUDGET=100000`, then list every `[READ] … dst=0x… got=N` line whose range
-  `[dst, dst+got)` intersects the thunk table `0x001C3F60..0x001C4140`; if none does, widen to
-  `0x001C2B20`, where index 0 would sit if the 40-byte-stride record array (index `0x79` at
-  `0x1C3E08`, TR §5) starts at index 0. A hit names the file, offset and caller: fix why that
-  buffer address is wrong. No hit → next cheapest in order: (a) the voice-processor DMA path
-  (ledger D2) with a log of VP writes below the image end; (b) the serialised-guest lift ML1 (D4);
-  (c) the C1 TTD recording with `ttd -stop` (disk space was cleared on 2026-09-30).
-- **F2 — Fix the DMA_PUT bit-16 mask** (ledger D1) in the toolkit before rendering; correct
-  `docs/jsrf-kick-get-contract.md:60` (`0x100410` is `NV_PFB_WBC`).
-- **F2b — File I/O before asset loading:** lift ML3 (no-buffering as a caching hint, `GENERIC_ALL`).
+- **F0b — Rebuild on the new toolkit first.** `just build` then `just test` (new or changed:
+  `jsrf_dpc_queue_bridge`, the NV2A contract's PUT cases, the guest-meter serial cases). Toolkit
+  `b857665..179439b` changed D1, D2, file I/O, DPCs, the timer period and the mixdown, so the
+  first run after this may stop somewhere new; record it in the horizon ledger before chasing it.
+- **F1 — Find the table writer the cheap way.** Three single runs, cheapest first; stop at the first
+  that names the writer. All may be exploratory (`RECOMP_KERNEL_LOG_BUDGET=100000`).
+  - **(a) Reads.** List every `[READ] … dst=0x… got=N` line whose `[dst, dst+got)` intersects the thunk
+    table `0x001C3F60..0x001C4140`; if none does, widen to `0x001C2B20`, where index 0 would sit if the
+    40-byte-stride record array (index `0x79` at `0x1C3E08`, TR §5) starts at index 0. Reads now go
+    through a host bounce buffer (L29), and the line warns when a read lands in a read-only section.
+    A hit names the file, offset and caller: fix why that buffer address is wrong.
+  - **(b) Tripwire.** `RECOMP_RDATA_GUARD=1` (L32, observation). The first `[RDATA-GUARD] write`
+    inside `0x001C3F60..0x001C4140` gives the value, the module-relative RIP (symbolise it against
+    the PDB) and the guest return chain. Do not combine with `JSRF_TRACE_A2H_DR`/`_SLOTW`.
+  - **(c) Where the array belongs.** In xemu (T3), stop at the same horizon and search guest RAM for
+    the record pattern (`0x3E800000`, `0x41200000`, `0xFFFFFFFF`, `1`, `0x001FA1D8` at a 40-byte
+    stride). Its address on real hardware says which base pointer the port computes wrongly.
+  No answer → `RECOMP_GUEST_SERIAL=1` (L34, D4) and re-run (b); then the C1 TTD recording with
+  `ttd -stop`. (The old fallback "(a) VP DMA" is gone: D2 is fixed.)
+- **F2 — DONE 2026-09-30:** the DMA_PUT bit-16 mask (D1) is removed in toolkit `b857665`, and
+  `docs/jsrf-kick-get-contract.md:60` records that `0x100410` is `NV_PFB_WBC`.
+- **F2b — DONE 2026-09-30:** ML3 (toolkit `e43e9bf`).
 - **F3 — Iterate the stop.** For each new stop: disassemble past it, check upstream/forks
   (Mercenaries-Recompiled included), then fix with the cheapest honest class and a ledger entry.
   Fallbacks: the guest heap keeps failing → ML2 (replacement XAPI heap, *reimplemented*); a vblank
@@ -573,8 +623,8 @@ list is exhausted.
 - The disk floor for ordinary runs is 15 GB (`scripts/check-disk-gate.py`); a run measured a few GB.
   TTD recordings keep the 50 GB expectation. Deleting old runs stays an owner decision and is not
   needed now.
-- The strict-horizon ledger's scope is **from 2026-09-29 onward** (`just check` already passes
-  `--since 2026-09-29`); the 36 earlier runs are not backfilled.
+- The strict-horizon ledger's scope is **from 2026-09-29 onward**, now the lint's default
+  (`--since all` covers the archive); the 36 earlier runs are not backfilled.
 - C3 is parked and C5 is decided (executor) for the bare minimum, as recorded in §7.
 
 ### Earlier entries

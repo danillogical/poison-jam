@@ -33,6 +33,8 @@ host API); list the one that decides fidelity first.
   something.
 - Evidence profiles (`docs/jsrf-run-profiles.md`) still label every run; a *strict* run is now a
   diagnostic, not the gate for bare-minimum milestones.
+- A patch to generated code is an entry in `config/generated-patches.json` and names the ledger ID
+  it implements; `scripts/patch-generated.py` refuses an ID this file does not have (plan T18).
 
 ## Entries
 
@@ -55,11 +57,18 @@ host API); list the one that decides fidelity first.
 |---|---|---|---|---|---|
 | L07 | Kernel imports through the ordinal bridge | Reimplemented | `src/kernel/kernel_bridge.c` | always | upgrade per ordinal when a run depends on it |
 | L08 | File I/O (`NtCreateFile`, `NtReadFile`, …) on host files | Wrapped | `src/kernel/kernel_file.c` | always | `RECOMP_ASYNC_IO` adds pending/async completion |
+| L29 | `NtReadFile` reads into a host buffer and copies it into guest memory, so the store is user-mode and visible to TTD and page protection | Wrapped | `src/kernel/kernel_bridge.c:3638` | always; `RECOMP_READ_DIRECT=1` reads straight into guest memory | the `[READ]` line warns when a read lands in a read-only section |
+| L30 | `FILE_NO_INTERMEDIATE_BUFFERING` treated as a caching hint, not `FILE_FLAG_NO_BUFFERING` (whose sector alignment guest buffers do not meet) | Intentionally ignored | `src/kernel/kernel_file.c:191` | always | Mercenaries-Recompiled does the same |
+| L31 | `GENERIC_ALL` mapped to read, write and delete rather than Win32 `GENERIC_ALL` | Wrapped | `src/kernel/kernel_file.c:97` | always | avoids demanding owner/security rights a title file never needs |
 | L09 | Guest virtual memory (region registry), heap and contiguous arena | Reimplemented | `src/kernel/kmem.c`, `kernel_vm.c`, `xbox_memory_layout.c` | always | `RECOMP_KMEM_LEGACY=1` restores the old semantics |
 | L10 | Kernel data exports JSRF imports (ordinals 16, 40, 156, 164, 259, 322, 323, 325, 354, 356) | Reimplemented | `kernel_data_init` in `src/kernel/kernel_bridge.c` | always | values synthesised; object types use a self-address convention (TR §5, V3) |
-| L11 | Six guest threads run on host threads; the GPU interrupt handler and all DPCs run on the timer thread every 10 ms with no IRQL gate | Approximated | `src/kernel/kernel_bridge.c:2628-2630` | always | the Xbox has one CPU; if races block progress, add a serialised-guest mode (defect D4) |
-| L12 | `.rdata` page protection | Intentionally ignored | `src/kernel/xbox_memory_layout.c` | always | `.rdata` shares host pages with neighbouring sections |
+| L11 | Six guest threads run on host threads; the GPU interrupt handler and all DPCs run on the timer thread every 10 ms with no IRQL gate | Approximated | `src/kernel/kernel_bridge.c:2780-2781` | unless `RECOMP_GUEST_SERIAL=1` | the Xbox has one CPU; L34 is the serialised alternative (defect D4) |
+| L12 | `.rdata` page protection | Intentionally ignored | `src/kernel/xbox_memory_layout.c` | unless `RECOMP_RDATA_GUARD=1` | `.rdata` shares host pages with neighbouring sections; L32 is the diagnostic that enforces it |
 | L13 | `KeTickCount` advance | Emulated | kernel clock worker | always | admitted autonomous clock (run profiles) |
+| L32 | Read-only tripwire: pages wholly covered by read-only XBE sections are write-protected in the canonical view and all 28 mirrors after the thunk table is installed; each store is single-stepped, reported (VA, section, view, old/new dword, RIP, guest return chain) and allowed | Emulated | `src/kernel/xbox_memory_layout.c:1950` | `RECOMP_RDATA_GUARD=1` (diagnostic) | four reports per page, 256 in all; refuses to arm with the A2h traces |
+| L33 | Host timer period of 1 ms (`timeBeginPeriod(1)`), as xemu requests | Wrapped | `src/kernel/kernel_bridge.c:9886` | always | the default 15.6 ms period made the 10 ms tick and guest waits wake late |
+| L34 | Serialised guest mode: one host thread runs guest code at a time; the GPU ISR, DPCs and timer DPCs run in one atomic section per tick, deferred while the guest's IRQL blocks them; a waiter runs anyway after a bounded wait and is counted as an overrun | Approximated | `src/kernel/guest_meter.c:88`, `src/kernel/kernel_bridge.c:2716` | `RECOMP_GUEST_SERIAL=1` (timeout `RECOMP_GUEST_SERIAL_TIMEOUT_MS`, default 100) | `[GSERIAL]` counts overruns; no back-edge yield yet, so a guest spin loop costs one timeout |
+| L35 | DPC queue: one queue drained by the timer thread every 10 ms; a DPC is queued at most once, `KeRemoveQueueDpc` cancels, and a DPC queued from a DPC runs on the next drain | Approximated | `src/kernel/kernel_bridge.c:2256`, `:2410` | always | no per-processor list or importance ordering |
 
 ### Graphics
 
@@ -78,10 +87,10 @@ host API); list the one that decides fidelity first.
 |---|---|---|---|---|---|
 | L20 | AC'97 codec-ready bit, `GS.bit8 := GC.bit1` | Emulated | `src/kernel/xbox_memory_layout.c` | always | admitted (TR §3) |
 | L21 | GP DSP56300 (xemu port) | Emulated | `src/apu/dsp/` | with `RECOMP_APU_TRAP` | clears DirectSound's pending word (TR §4) |
-| L22 | APU voice processor | Emulated | `src/apu/apu_vp.c` | with `RECOMP_APU_TRAP` | see defect D2 |
+| L22 | APU voice processor | Emulated | `src/apu/apu_vp.c` | with `RECOMP_APU_TRAP` | VP memory accesses use the GP's translation (`src/apu/apu_watch.c:540`); an unmapped access reads zero, writes nothing and logs `[VPDMA]` |
 | L23 | `PIO_FREE` answers `0x80` | Stubbed | `src/apu/apu_vp.c:556-557` | with `RECOMP_APU_TRAP` | "pretend queue is empty"; model it only if a wait depends on its value (TR §4) |
 | L24 | GP/EP register reads answer zero | Stubbed | APU register map | with `RECOMP_APU_TRAP` | run profiles, feature enablement |
-| L25 | Speaker mixdown: even bins left, odd bins right | Approximated | `src/apu/apu_mixdown.c:52` | always | port a 5.1 fold if audio sounds wrong |
+| L25 | Speaker mixdown: 5.1 fold of the DirectSound speaker buses (centre and rear −3 dB, LFE −6 dB, 3D front pair as is, 3D rear pair −3 dB); effect sends from bin 10 up are dropped | Approximated | `src/apu/apu_mixdown.c:101` | always; `RECOMP_APU_MIXDOWN_ALL=2` even/odd, `0` two bins | Mercenaries-Recompiled's fold for when the EP does not run |
 | L26 | Host audio output | Wrapped | XAudio2 path | always | — |
 
 ### Input
@@ -93,12 +102,12 @@ host API); list the one that decides fidelity first.
 
 ## Known defects (not classes — fix or record a class when they bite)
 
-| ID | Defect | Where | Effect |
-|---|---|---|---|
-| D1 | Every DMA_PUT write loses bit 16: the mask `0x1FFEFFFF` came from reading `0x100410` (`NV_PFB_WBC`, the write-buffer flush) as DMA_PUT | `src/nv2a/nv2a_regs.h:171`, `nv2a_core.c:1699-1735`; game `docs/jsrf-kick-get-contract.md:60` has the same mislabel | once the ring passes 64 KB, PUT `0x12764` is walked as `0x2764`; fix before any rendering milestone |
-| D2 | Voice-processor DMA uses low RAM, not the contiguous window | `src/apu/apu_shim.h:167-191` (flagged at `apu_watch.c:455-462`) | a voice-processor write can land in the XBE image |
-| D3 | NV097 method parameters are stored into the PGRAPH register array | `src/nv2a/nv2a_core.c:1630` | some methods would overwrite interrupt/status registers the GPU handler reads; latent |
-| D4 | ISR and DPC work runs concurrently with guest threads, no IRQL gate (L11) | `src/kernel/kernel_bridge.c:2628-2630` | `[GMETER] max=4`; the first fault site varies run to run (TR §5) |
+| ID | Defect | Where | Effect | Status |
+|---|---|---|---|---|
+| D1 | Every DMA_PUT write lost bit 16: the mask `0x1FFEFFFF` came from reading `0x100410` (`NV_PFB_WBC`, the write-buffer flush) as DMA_PUT | `src/nv2a/nv2a_core.c` `NV_USER_DMA_PUT` write; game `docs/jsrf-kick-get-contract.md:60` | once the ring passes 64 KB the walk stops 64 KB short | **Fixed** 2026-09-30, toolkit `b857665`: PUT stored as written, latch removed; contract doc corrected |
+| D2 | Voice-processor DMA used low RAM, not the contiguous window | `src/apu/apu_shim.h`, `src/apu/apu_vp.c` | a voice-processor write could land in the XBE image | **Fixed** 2026-09-30, toolkit `1c6641a`: shared translation (L22) |
+| D3 | NV097 method parameters are stored into the PGRAPH register array, which is indexed by byte offset, so method `0x400` lands on `NV_PGRAPH_INTR` | `src/nv2a/nv2a_core.c:1630` | some methods would overwrite interrupt/status registers the GPU handler reads; latent | **Open**, deferred: the game's NV2A contract tests and GPU probes read method state from `pgraph.regs[method/4]`, so the fix (a separate method-state array) migrates those tests too |
+| D4 | ISR and DPC work runs concurrently with guest threads, no IRQL gate (L11) | `src/kernel/kernel_bridge.c:2780-2781` | `[GMETER] max=4`; the first fault site varies run to run (TR §5) | **Mitigation, opt-in**: L34 (`RECOMP_GUEST_SERIAL=1`), not yet run on the title |
 
 ## Retired
 

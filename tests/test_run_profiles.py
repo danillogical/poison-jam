@@ -209,7 +209,7 @@ class ProfileClassifierTests(unittest.TestCase):
 
     def test_fork_fix_switches_are_exploratory(self):
         """Legacy kernel memory semantics and unadmitted NV2A behaviour."""
-        for name in ('RECOMP_KMEM_LEGACY', 'RECOMP_NV2A_ACTIONS'):
+        for name in ('RECOMP_KMEM_LEGACY', 'RECOMP_NV2A_ACTIONS', 'RECOMP_GUEST_SERIAL'):
             for value in ('', '0', '1'):
                 with self.subTest(name=name, value=value):
                     self.assertEqual(
@@ -221,7 +221,8 @@ class ProfileClassifierTests(unittest.TestCase):
         for name in ('RECOMP_ASYNC_IO', 'RECOMP_USB_HC', 'RECOMP_USB_NDP',
                      'RECOMP_KEYBOARD', 'RECOMP_IRQL_TRACE', 'RECOMP_WATCH',
                      'RECOMP_UNIMPL_TRAP', 'RECOMP_GUEST_METER', 'RECOMP_FFP_TRACE',
-                     'RECOMP_TRACE_FLIP', 'RECOMP_VP'):
+                     'RECOMP_TRACE_FLIP', 'RECOMP_VP', 'RECOMP_RDATA_GUARD',
+                     'RECOMP_READ_DIRECT'):
             with self.subTest(name=name):
                 self.assertEqual(
                     classify_settings(settings(RECOMP_GPU_ACK='0', **{name: '1'}))[

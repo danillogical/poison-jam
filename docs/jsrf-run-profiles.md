@@ -54,6 +54,7 @@ The classifier follows each runtime's actual semantics:
 | `RECOMP_APU_DSP_ACK` | C `strtoul(..., 0)` parses addresses; each nonzero address is cleared on APU ticks, up to eight nonzero entries. | Must be absent or parse to zero addresses. Unsupported/malformed inputs are `UNKNOWN`, never clean. |
 | `RECOMP_DSP_ACK`, `RECOMP_POKE`, `RECOMP_FORCE_RETURN`, `RECOMP_PAD_PRESS` | Upstream v0.12 bring-up switches (toolkit `2925f0b`); see §"Synthetic completion". | Must be absent. Presence is exploratory whatever the value, including values the runtime would parse as nothing. |
 | `RECOMP_KMEM_LEGACY`, `RECOMP_NV2A_ACTIONS` | Toolkit fork fixes `db96e30..2a349c8` (2026-09-28); see §"Legacy and unadmitted behaviour". | Must be absent. Presence is exploratory whatever the value. |
+| `RECOMP_GUEST_SERIAL` | Serialised guest mode (toolkit `179439b`, 2026-09-30); see §"Legacy and unadmitted behaviour". | Must be absent. Presence is exploratory whatever the value. |
 
 Environment names are compared case-insensitively, as on Windows. Duplicate
 spellings of one setting are `UNKNOWN`; do not convert a list of settings into a
@@ -168,6 +169,7 @@ a strict claim.
 | Override | What it does | Why it cannot satisfy acceptance |
 |---|---|---|
 | `RECOMP_KMEM_LEGACY` | Restores the kernel memory semantics the fixes replaced: `NtFreeVirtualMemory` always failing, reservation base hints ignored, commit-only calls succeeding anywhere, contiguous frees and oversized heap reuse as before. | It exists only to A/B the fix. The old semantics are known wrong, so a run with them measures the defect, not the title. |
+| `RECOMP_GUEST_SERIAL` | Lets one host thread run guest code at a time and runs the GPU ISR, DPCs and timer DPCs at tick checkpoints, deferred while the guest's IRQL blocks them (compatibility ledger L34). `RECOMP_GUEST_SERIAL_TIMEOUT_MS` sets the bounded wait. | It replaces the scheduling model, and a waiter that times out runs anyway, so a run mixes serialised and concurrent execution; `[GSERIAL]` counts the overruns. A bare-minimum milestone may rely on it with L34 listed. |
 | `RECOMP_NV2A_ACTIONS` | Arms NV2A behaviour the strict model otherwise lacks: semaphore release (`0x1D70`), the software-method trap (NOP with a non-zero parameter), and the `FLIP_STALL` hold. | Modelled device behaviour that has **not been admitted** under §"Unconditional modeled hardware causes"; the evidence for admission is recorded in the toolkit's `docs/technical/nv2a-action-methods.md`. Until the owner admits it (it would then become unconditional and this switch would be retired), a run with it is exploratory. |
 
 ### Feature enablement — real capability, not a bypass
@@ -228,7 +230,9 @@ model is its own packet, placed before the first criterion that needs it.
 v0.12: `RECOMP_IRQL_TRACE`, `RECOMP_KEY_TRACE`, `RECOMP_INPUT_DIAG`, `RECOMP_PB_WRAP_TRACE`,
 `RECOMP_FB_WINDOW_DUMP_EVERY`, `RECOMP_WATCH`, `RECOMP_WATCH_RAW`; from the 2026-09-28 fork fixes:
 `RECOMP_FFP_TRACE` and `RECOMP_TRACE_FLIP` (executor tracing), and `RECOMP_GUEST_METER` (counts host
-threads inside lifted guest code; changes no guest state or scheduling). `RECOMP_PB_WRAP_TRACE` is no
+threads inside lifted guest code; changes no guest state or scheduling); from 2026-09-30:
+`RECOMP_RDATA_GUARD` (reports stores into read-only XBE sections and lets each complete, ledger L32)
+and `RECOMP_READ_DIRECT` (reads files straight into guest memory, as before the bounce buffer, L29). `RECOMP_PB_WRAP_TRACE` is no
 longer read: the executor merge replaced the wrap scan it traced.
 
 `RECOMP_UNIMPL_TRAP` (since the 2026-09-28 regeneration, `src/recomp_manual.c`): an untranslated
