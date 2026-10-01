@@ -465,6 +465,24 @@ smokes, whichever comes first, then another ceiling call unless a finding is acc
 horizon moves. Next read-only worker answers deadline main/render wait sites first; GPU-specific
 flip/interrupt survey only if those waits point at GPU. No second smoke or fix yet authorized.
 
+**Push checkpoint (2026-10-01, capacity fix and smoke record).** Both clean and fast-forward;
+public game outgoing audit 0 secret hits, no asset/lifted-code additions or blob >100 MB.
+Toolkit first, then game; remote branch SHAs independently matched local HEADs after push.
+
+```text
+PUSHED_TO: origin (toolkit)
+BRANCH: main
+COMMIT: e8a6e03793d417106993b863fa3240a3abae0caa
+REMOTE_URL: https://github.com/danillogical/xboxrecomp.git
+RESULT: exit 0; 1f9309a..e8a6e03 main -> main; ls-remote equals HEAD
+
+PUSHED_TO: origin (game)
+BRANCH: master
+COMMIT: d86c8418adf27c6a03521218c9069716d567596b
+REMOTE_URL: https://github.com/danillogical/poison-jam.git
+RESULT: exit 0; 2a7324b..d86c841 master -> master; ls-remote equals HEAD
+```
+
 **Deferred optional test advisory.** Do not add a diagnostic-is-OK assertion after the measured
 red/green runs merely for churn; reopen if a future failure of the 1109-method case fails without
 naming its diagnostic. Advisor accepted this deferral after independently inspecting both diffs.
