@@ -12,7 +12,7 @@ Generated: 2026-10-01T05:26:56.446531+00:00
   (harness: `DSH_PROFILE=web`, `DSH_WEB_URL=http://127.0.0.1:3080`)
 - Actual main model/effort: `workbuddy-ai/deepseek-v4.1-flash` @ `max` (the §1
 - Workflow/plan/run-profile revisions and dirty diff identity: workflow `4ec760339ea33f4d`, plan `7bd50133a0d13e3b`, run profiles `775757cdea36bb2f`
-- Game revision/status: `master` `0ea5b8e250767312d140ca2d05db733e94f71421` (DIRTY)
+- Game revision/status: `master` `0597d94a72dfeb5c39a4ef11173f255af1a858d7` (DIRTY)
 - Toolkit revision/status: `main` `86113c730fe452508ce3f02f9fa1982260846599` (clean)
 - Unrelated edits preserved: 1 game, 0 toolkit
 - CURRENT PACKET: present

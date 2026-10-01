@@ -1,6 +1,6 @@
 # F0b: the provenance gate, and the writer of the record array
 
-**Session:** DSH, 2026-09-30. Game `ef2c855` → `0ea5b8e`; toolkit `1572256` → `86113c7`.
+**Session:** DSH, 2026-09-30. Game `ef2c855` → `0597d94`; toolkit `1572256` → `86113c7`.
 **Chores:** F0a, F0b, F1 (plan `plan-jsrf-bare-minimum.md` §13, owner-directed).
 
 This record carries the two durable results of the session: the Advisor ruling that
@@ -131,7 +131,7 @@ never having been done end to end. This is the first concrete blocker found for 
 ```text
 PUSHED_TO:   danillogical/poison-jam (origin)
 BRANCH:      master
-COMMIT:      0ea5b8e
+COMMIT:      0597d94
 REMOTE_URL:  https://github.com/danillogical/poison-jam.git
 RESULT:      fast-forward; no game/ path, no secret, no blob over 100 MB
 ```
