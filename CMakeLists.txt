@@ -126,6 +126,14 @@ if(BUILD_TESTING)
     target_link_libraries(jsrf_inplace_event_test PRIVATE xboxrecomp)
     add_test(NAME jsrf_inplace_event_bridge COMMAND jsrf_inplace_event_test)
     set_tests_properties(jsrf_inplace_event_bridge PROPERTIES TIMEOUT 20)
+    add_executable(jsrf_dpc_queue_test
+        ${XBOXRECOMP_DIR}/tests/kernel_dpc_queue_test.c)
+    target_include_directories(jsrf_dpc_queue_test PRIVATE
+        ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/kernel
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/gen)
+    target_link_libraries(jsrf_dpc_queue_test PRIVATE xboxrecomp)
+    add_test(NAME jsrf_dpc_queue_bridge COMMAND jsrf_dpc_queue_test)
+    set_tests_properties(jsrf_dpc_queue_bridge PROPERTIES TIMEOUT 20)
     # A4b1 step 8 (AC-FIX).  Registered TWICE, on purpose: the trace is read
     # once and cached (apu_watch_trace_enabled), so one process can only ever
     # exercise one arm.  The trace-on arm checks the line-vs-snapshot rule; the
