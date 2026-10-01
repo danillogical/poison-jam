@@ -655,6 +655,15 @@ list is exhausted.
   (ledger L16, L18). Missing draw forms or formats in the executor are fixed there; a GPU stall on
   this path → ML6; if the title screen needs register combiners the CPU executor cannot show, start
   ML7's feasibility study.
+  - **TRIED 2026-09-30, no frames yet.** `20260930-223608-115-f4-frames-pb-exec-fb-window`
+    (exploratory, 62 s): `diagnostic_deadline`, **0 invalid ICALLs, 0 exceptions, 0 ABI failures,
+    0 `[UNIMPL]`**, 138,597 log lines, 45,506 kernel calls — the longest the title has run on this
+    toolkit. **But `FLIP`, `present` and `FB_DUMP` are all 0**: the executor produced no frames, so
+    F4 is not satisfied and the run is a reachability result, not a rendering one. It also **does not**
+    isolate a cause: it differs from the strict pair in three settings at once, so the absence of the
+    `0x00037550` alias here does not show which one prevents it. The next F4 attempt should start from
+    a **strict** run (which clobbers at ~6 s) once F3's alias fix lands, and only then enable the
+    executor settings one at a time.
 - **F5 — Intro movies.** If the Sofdec intros block, skip them (ledger: *patched* or *intentionally
   ignored*); decoding them is post-slice (M29).
 - **F6 — Title screen (M15).** Acceptance: a frame dump of the title screen plus the run record with
