@@ -482,6 +482,13 @@ uses Sofdec), Lua/mission/UI/bird/PS2 title fixes (W21–W42).
 - **ML4 mostly done:** `timeBeginPeriod(1)` (`55acf60`, L33), the 5.1 fold (`29f13d0`, L25) and
   voice-processor DMA through the GP's translation (`1c6641a`, D2 fixed, L22). APU interrupt
   delivery (vector `0x30+n`) is still open.
+- **Later the same day:** `KeRaiseIrqlToSynchLevel` is tracked and `KeGetCurrentIrql` reports the
+  tracked level (`92715dc`, L36), so the IRQL gates see every raise; D3 is fixed (`9fd83c6`,
+  NV097 method state moved out of the PGRAPH register array); and `tools/posix_check.py`
+  (`c58ed2f`) runs the portable tests natively, cross-builds for Windows and runs the toolkit's
+  pytest in one command. Its first run found two stale tests, both fixed: the guest-meter audit
+  did not know serial mode's bracket (`104e9d8`), and `tests/apu_mixdown` crashed on every host
+  since the GP DSP port (`5d3466b`).
 - **Also landed:** DPC queue semantics (`e2872a1`, L35: at-most-once insert, `KeRemoveQueueDpc`
   cancels, locked queue), `rep movsb`'s element-wise path through volatile `MEM8` (`5364747`), and
   the blind-spot tools (`7b6839a`): the `NtReadFile` bounce buffer (L29) and the read-only tripwire
