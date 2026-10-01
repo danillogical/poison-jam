@@ -12,7 +12,7 @@
     "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
     "src/recomp/gen/recomp_stubs_recovery.c": "77d2c5decf6a815c9c2b1400b37a189d4419bef07baeab3836437e19beb9d345",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
-    "src/recomp/gen/recomp_types.h": "528770f45a6dee0c1feee45db9921fad561cb0a268eee313a444d24c9e143c83",
+    "src/recomp/gen/recomp_types.h": "e1007de83bf802bac0ec192025c6c274bed7d86f845f8e653619f31f2a7a69a4",
     "src/recomp/recovered/recovered.c": "3210117dccf0a909cf3f7f881919001d976e14922aea6d1025312df5b1f22fe9",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
     "src/recomp/recovered/recovered_11c1_test.c": "88f6f654cd5a615c76838332884d0131a178718a9680e77f6e57fda8f2761621",
@@ -60,6 +60,14 @@
       ],
       "note": "recomp_types.h hashed in its checked-out (core.autocrlf) form, as the checker does. Chunks are CRLF on disk for the same reason.",
       "reason": "full regeneration with the toolkit 2a349c8 lifter (docs/jsrf-technical-record.md \u00a72): chunks, dispatch and recomp_types.h rewritten by the pass; relift-selected.py boundaries re-applied; the project header ABI additions and the six A4b2 jsrf_watch_store hooks re-applied by scripts/apply-a4b2-hooks.py. recomp_funcs.h and recomp_stubs_unresolved.c came out byte-identical."
+    },
+    {
+      "date": "2026-09-30",
+      "files": [
+        "src/recomp/gen/recomp_types.h"
+      ],
+      "note": "recomp_types.h re-hashed in its checked-out (core.autocrlf) form, as the checker does.",
+      "reason": "scripts/patch-generated.py applied the T18 patch a4b-watch-declaration (config/generated-patches.json, ledger L38) to recomp_types.h: four lines declaring jsrf_watch_store for the a4b-watch-* call sites. The other eight patches were already applied and left their files unchanged. Amended, not regenerated: the lifter, command and generator identity are those of the 2026-09-29 2a349c8 pass."
     }
   ]
 }

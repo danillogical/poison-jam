@@ -1,4 +1,36 @@
 {
+  "amendments": [
+    {
+      "cause": "ec650f9 corrected one `evidence` string (the register at 0x00191270 is NV_PFB_WBC, not NV_PFIFO_CACHE1_DMA_PUT). The manifest was not re-recorded and 73 commits landed after it, so this gate had been red since.",
+      "date": "2026-09-30",
+      "evidence": [
+        "the recorded hash equals the 44becd4 blob with LF->CRLF applied, so the manifest was correct when written (core.autocrlf checkout)",
+        "parsing both revisions and dropping every `evidence` key gives equal JSON; with the keys they differ, so the change is prose only",
+        "scripts/recover-functions.py, relift-selected.py and gen-abi-deltas.py contain 0 reads of `evidence`; tools/recomp/lifter.py contains 0 and translator.py never reads it as a dict key",
+        "measured: translating 41 config entries (including the changed entry 0x00191270) twice, with and without the `evidence` key, produced byte-identical C every time -- 41/41 identical, 0 different",
+        "amended, not regenerated: generators, command and lifter identity are those of the 2026-09-29 pass"
+      ],
+      "kind": "input",
+      "new_sha256": "bb2f26e4550812588d3e8a0b69f92dd1f67c1fc2dde7a308673aa98df651ea12",
+      "old_sha256": "277f96bd41853efb3e5cc76b4737a34b99f5271a1cab2a6a8080b4a009a178de",
+      "path": "config/recovered-functions.json"
+    },
+    {
+      "cause": "scripts/patch-generated.py applied the T18 patch `a4b-watch-declaration` (config/generated-patches.json, ledger L38), a four-line declaration of jsrf_watch_store for the a4b-watch-* call sites.",
+      "date": "2026-09-30",
+      "evidence": [
+        "the patch run reported 9 patches, 1 applied, 8 already applied; a second `--check` run reports 9 already applied, so it is idempotent",
+        "exactly 4 lines were inserted; the other 15 baselined files are byte-identical to the pre-patch copies",
+        "jsrf_watch_store is defined at src/diagnostics.c:362",
+        "the patch registry was added at 8331a6d, after this manifest was written",
+        "amended, not regenerated: generators, command and lifter identity are those of the 2026-09-29 pass"
+      ],
+      "kind": "generated output",
+      "new_sha256": "e1007de83bf802bac0ec192025c6c274bed7d86f845f8e653619f31f2a7a69a4",
+      "old_sha256": "528770f45a6dee0c1feee45db9921fad561cb0a268eee313a444d24c9e143c83",
+      "path": "src/recomp/gen/recomp_types.h"
+    }
+  ],
   "checker_version": "jsrf-generation-provenance/1",
   "full_translation_command": "python -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name \"Jet Set Radio Future\" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json",
   "generated_outputs": {
@@ -14,13 +46,13 @@
     "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
     "src/recomp/gen/recomp_stubs_recovery.c": "77d2c5decf6a815c9c2b1400b37a189d4419bef07baeab3836437e19beb9d345",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
-    "src/recomp/gen/recomp_types.h": "528770f45a6dee0c1feee45db9921fad561cb0a268eee313a444d24c9e143c83",
+    "src/recomp/gen/recomp_types.h": "e1007de83bf802bac0ec192025c6c274bed7d86f845f8e653619f31f2a7a69a4",
     "src/recomp/recovered/recovered.c": "3210117dccf0a909cf3f7f881919001d976e14922aea6d1025312df5b1f22fe9",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
     "src/recomp/recovered/recovered_11c1_test.c": "88f6f654cd5a615c76838332884d0131a178718a9680e77f6e57fda8f2761621",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
-  "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
+  "generation_mode": "full regeneration 2026-09-29 with the toolkit 2a349c8 lifter, then relift-selected.py boundaries; hand edits re-applied by scripts/patch-generated.py from config/generated-patches.json (the recomp_types.h project ABI additions, the six A4b2 jsrf_watch_store hooks, and the a4b-watch declaration). This tree predates toolkit 86113c7 --backedge-yield: RECOMP_BACKEDGE is absent, so under RECOMP_GUEST_SERIAL=1 a guest spin loop costs one bounded timeout (docs/jsrf-compatibility-ledger.md L34).",
   "generators": {
     "project": {
       "dirty": true,
@@ -51,9 +83,9 @@
       "sha256": "a0c53d1550ec36cae9a32960ba82d777940c61b122bb169108430741587d4188"
     },
     "config/recovered-functions.json": {
-      "bytes": 2821750,
+      "bytes": 2821702,
       "present": true,
-      "sha256": "277f96bd41853efb3e5cc76b4737a34b99f5271a1cab2a6a8080b4a009a178de"
+      "sha256": "bb2f26e4550812588d3e8a0b69f92dd1f67c1fc2dde7a308673aa98df651ea12"
     },
     "config/recovery-unresolved.json": {
       "bytes": 8387,

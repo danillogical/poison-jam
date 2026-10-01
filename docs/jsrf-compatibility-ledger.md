@@ -111,6 +111,7 @@ host API); list the one that decides fidelity first.
 | D2 | Voice-processor DMA used low RAM, not the contiguous window | `src/apu/apu_shim.h`, `src/apu/apu_vp.c` | a voice-processor write could land in the XBE image | **Fixed** 2026-09-30, toolkit `1c6641a`: shared translation (L22) |
 | D3 | NV097 method parameters were stored into the PGRAPH register array, which is indexed by byte offset, so method `0x500` landed on `NV_PGRAPH_INTR_EN` and `0x520` on `NV_PGRAPH_CTX_USER` | `src/nv2a/nv2a_core.c` (the walk and `pgraph_method`) | some methods would overwrite interrupt/trap registers the model reads; latent (no accepted method collided) | **Fixed** 2026-09-30, toolkit `9fd83c6`: parameters go to `PGRAPHState.methods`; the game's NV2A contract tests and GPU probes read it |
 | D4 | ISR and DPC work runs concurrently with guest threads, no IRQL gate (L11) | `src/kernel/kernel_bridge.c:2780-2781` | `[GMETER] max=4`; the first fault site varies run to run (TR §5) | **Mitigation, opt-in**: L34 (`RECOMP_GUEST_SERIAL=1`), not yet run on the title |
+| D5 | A `rep movsd` in the slot writer `sub_00038530+0x398` copies the XBE image from `+0x37608` over `.text` and `.rdata`, 1.70 MB from `0x00011000` to the thunk table, and so overwrites the kernel thunk table | game `src/recomp/gen/recomp_0000.c` (generated `sub_00038530`) | the strict horizon: the table is clobbered and the next thunk call raises `0xE0424943` | **Found** 2026-09-30 (F1); writer named, mechanism measured, fix not yet chosen (TR §5) |
 
 ## Retired
 

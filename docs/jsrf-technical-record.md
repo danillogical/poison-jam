@@ -306,6 +306,48 @@ thunk* raises `0xE0424943`.
   (`20260928-121142-929-a2h-attrib-exp2-3b`) is real but is not this event. C1 is retargeted to the
   writer of the record array; the obvious instrument is a write watch on `0x1C3F60`.
 
+### The writer of the record array (F1, 2026-09-30) — `O-OPEN` closed
+
+**The array is not constructed at the table: it is copied there, from the XBE's own `.data`.** The
+writer is `sub_00038530+0x398`, reached as `rip=exe+0x5361B8`, and it is a `rep movsd` image copy.
+Measured in `20260930-221404-630-f1b-rdata-guard` (strict; `RECOMP_RDATA_GUARD=1`, ledger L32).
+
+- **The writer, from the guard.** All **256** `[RDATA-GUARD] write` reports — the guard's total cap,
+  `RO_GUARD_TOTAL_REPORTS` — carry `rip=exe+0x5361B8` on tid 24300. Symbolised against
+  `build/Release/jsrf_recomp.map`: `sub_00038530` at `0x140535E20`, so `+0x398`. That function's
+  generated body contains `rep movsd`/`rep movsb` idioms (`src/recomp/gen/recomp_0000.c`), and it is
+  the slot writer already named by A2h (TR §5, row `O-OPEN`) — the same function, a different site.
+- **The copy is image-wide, not a table poke.** The guard's reports run from `0x00011000` upward, four
+  dwords per 4 KB page, all from the same writer. They **stop at `0x0005000C`** because the guard hit
+  its 256-report total cap after 64 pages — so the guard proves the copy's *start, direction and
+  writer*, and it does **not** by itself prove the copy reaches the table. The reach to the table is
+  established by the shifted-provenance map below, which covers the whole range.
+- **Shifted byte provenance (AGENTS.md: this establishes provenance, and is never a correction).**
+  The dump at guest VA `V` equals the original XBE at `V + 0x37608`. Sampled at 4 KB granularity over
+  `0x00011000..0x001C5000`: **431 of 436 pages are `SHIFTED`, 0 are original**, 5 unreadable. Spot
+  checks over `.text` match exactly (`0x00011000`, `0x00018000`, `0x00020000`, `0x00030000`,
+  `0x00080000`, `0x00100000`, `0x00140000`, `0x00180000`). The page holding the table, `0x001C4000`,
+  is in the `SHIFTED` set.
+- **The record array is the XBE's `.data` at `0x001FB568`.** The dump's 128 bytes at the table VA
+  `0x001C3F60` are **byte-identical** to the original XBE's bytes at `0x001FB568`. Applying the same
+  `+0x37608` shift to the table destination gives exactly that address. So the array is not produced by
+  the guest at run time; it is *read from the image* and written over the table.
+- **What the table should hold.** The original XBE at `0x001C3F60` holds `800000BB 800000BE 80000121
+  800000EC …` — all `0x80000NNN` kernel ordinals. **0** dwords of that shape survive anywhere in
+  `0x001C0000..0x001C8000` in the dump.
+- **Consequence for the terminal event.** The horizon is unchanged: the table is overwritten and the
+  next thunk call faults. The two F1 runs differ in *which* call faults first (`0x0014982E` tid 47532
+  without the guard; `0x00147CF8` tid 26240 with it) because the fault races the copy's progress —
+  the same race TR §5 already records. The guard reports stop at log line 20892 and the fault is at
+  20919, so the copy was still running when the first thunk call read a half-written slot.
+- **The mechanism to fix.** A `rep movsd` whose destination should not be `0x00011000` and whose
+  length should not be 1.70 MB. `sub_00038530` computes both; the cheapest honest fix is at the
+  translation or the argument, not at the table.
+
+**Not established by F1.** Why the copy runs at all, which of `sub_00038530`'s callers is responsible,
+and whether the copy is legitimate guest work aimed at a *different* destination that the port
+mis-computes. The shift `0x37608` is a measured constant for this XBE, not an explanation.
+
 The ~571 MB allocation failure that precedes the fault (`NtAllocateVirtualMemory`, `0xC0000017`)
 **is handled** by the guest (`0x00149E56 test eax,eax` / `jl 0x149eec`, clean return through
 `__SEH_epilog`), so it is not the cause (Advisor critical-path ruling, 2026-09-27); V3(a) and V3(c)
