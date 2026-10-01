@@ -21,6 +21,13 @@ FIXTURE = 'fixture'
 UNKNOWN = 'UNKNOWN'
 MISSING = 'MISSING'
 
+# The longest run the harness will launch or classify, in seconds. It lives here,
+# next to the classifier that enforces it, and the runner imports it, because the
+# two used to carry separate literals: raising one alone let a long run launch and
+# then be classified UNKNOWN by the other. 600 s is the F5 observation bound; the
+# collector converts argv[1] seconds to milliseconds and has no duration cap.
+MAX_RUN_SECONDS = 600
+
 PROFILE_SCHEMA_VERSION = 1
 CLASSIFIER_VERSION = 'jsrf-run-profile/1'
 UINT32_MAX = (1 << 32) - 1
@@ -665,7 +672,8 @@ def _valid_new_archive(metadata: dict[str, Any], profile: dict[str, Any],
     if metadata.get('project_archived') is not True:
         return {'classification': UNKNOWN, 'reasons': ['project repository state was not archived']}
 
-    if type(metadata.get('seconds')) is not int or not 1 <= metadata['seconds'] <= 300:
+    if (type(metadata.get('seconds')) is not int
+            or not 1 <= metadata['seconds'] <= MAX_RUN_SECONDS):
         return {'classification': UNKNOWN, 'reasons': ['missing or invalid run duration']}
 
     save_root = metadata.get('save_root')

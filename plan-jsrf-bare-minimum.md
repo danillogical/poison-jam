@@ -847,6 +847,21 @@ list is exhausted.
   and `RECOMP_FB_WINDOW_DUMP_EVERY=600` (both observation-only), with the **≥15 GB disk gate** checked
   first (~5.3 GB save-root per run). **Seeded cache PREPARED, NOT AUTHORISED** — no owner decision now
   and no implementation. **W14 clock unchanged at 10:32:32.** Reversals in the appendix.
+  **Duration cap raised to 600 — IMPLEMENTED (Advisor duration-cap ruling, replacement child; verbatim
+  in the same ruling file):** one **shared constant** `MAX_RUN_SECONDS = 600` in
+  `scripts/jsrf_run_profile.py` (bound **:676**), imported by `scripts/run-jsrf.py` (bound/message
+  **:219-220**) — the ruling's own `:218-219`/`:668` citations are its verbatim text and stand as
+  written. Measured boundaries: `1 -> 1`, `300 -> 300`, `600 -> 600`, `601`/`0`/`-5` -> `SystemExit 2`.
+  **RED** (unmodified 300 caps): **4 failed, 2 passed, 6 subtests passed**, exit 1. **GREEN:** focused
+  **4 passed, 10 subtests passed**; full `test_run_profiles.py` **38 passed, 100 subtests passed** in
+  **1.29 s**; `just check` **exit 0**; `build-identity.py verify` **rc 0** (exe unchanged). Guards
+  preserved (identity verify, empty save-root, disk gate, archive, classification). Commit title
+  `harness: permit bounded 600-second cache observations`. **300 s
+  is not a substitute** — two 300 s fresh roots each restart the first-boot fill and cannot show the
+  >300 s decision rows. **The first 600 s attempt FAILED to launch**: `2026-10-01T11:01:26Z`, **rc 2**
+  on the **dual 300 cap** — a **harness launch fact, not a runtime or guest fact**: no game run
+  occurred, no run artifact exists, only launch logs; recorded as a launch failure and **not** a
+  horizon entry.
   Corrected evidence in TR and `logs/workers/f4-drained-no-frames-brief.md`.
   **Historical 2026-09-30 question (answer recorded then; superseded by the accepted capacity work
   and now by Architecture A):** Whether the answer is a larger sink,

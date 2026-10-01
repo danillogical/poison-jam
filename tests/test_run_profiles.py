@@ -34,6 +34,7 @@ from jsrf_run_profile import (  # noqa: E402
     resolve_retired_overrides,
     validate_launch_profile,
 )
+import jsrf_run_profile  # noqa: E402  (module handle: the shared duration bound)
 from jsrf_run_profile import ARCHIVED_ARTIFACTS, REPOSITORY_FILES  # noqa: E402
 
 # The toolkit tree is a sibling of this repository; the revision-aware retired
@@ -810,6 +811,89 @@ class RetiredOverrideTests(unittest.TestCase):
                              'setting must not classify strict')
             self.assertTrue(any(VBLANK in reason for reason in result['reasons']),
                             f'expected a retired-override reason, got {result["reasons"]}')
+
+
+class DurationCapTests(unittest.TestCase):
+    """The run-duration bound is shared by the launcher and the classifier.
+
+    Both sites carried their own literal 300, so raising one alone would let a
+    long run launch and then be classified UNKNOWN by the other.  These pin the
+    bound at both sites, at the boundary, so the two cannot drift apart again.
+    """
+
+    def test_boundary_durations_parse_at_the_launcher(self):
+        """600 is accepted; 601 and 0 are refused with argparse's exit code 2."""
+        with patch.object(sys, 'argv', ['run-jsrf.py', '--seconds', '600']), \
+                contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(run_jsrf.parse_args().seconds, 600)
+        for seconds in ('601', '0'):
+            with self.subTest(seconds=seconds), \
+                    patch.object(sys, 'argv', ['run-jsrf.py', '--seconds', seconds]), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as exit_info:
+                    run_jsrf.parse_args()
+                self.assertEqual(exit_info.exception.code, 2)
+
+    def test_existing_durations_are_unaffected(self):
+        """The pre-existing accepted values keep working."""
+        for seconds in ('1', '300'):
+            with self.subTest(seconds=seconds), \
+                    patch.object(sys, 'argv', ['run-jsrf.py', '--seconds', seconds]), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(run_jsrf.parse_args().seconds, int(seconds))
+
+    def _archive_at(self, run_dir: Path, source_xbe: Path, seconds: int) -> dict:
+        metadata = write_valid_archive(run_dir, source_xbe)
+        metadata['seconds'] = seconds
+        metadata['command'][1] = str(seconds)
+        (run_dir / 'metadata.json').write_text(
+            json.dumps(metadata, indent=2), encoding='utf-8')
+        return metadata
+
+    def test_archive_validity_follows_the_same_bound(self):
+        """600 stays a valid archive for both base profiles; 601/0 go UNKNOWN.
+
+        The base classification comes from the environment, so a strict archive
+        is built from RECOMP_GPU_ACK=0 and an exploratory one from the default
+        (GPU ack absent).  A duration the classifier refuses must not be able to
+        keep either classification.
+        """
+        for label, environment, expected in (
+                ('strict', settings(RECOMP_GPU_ACK='0'), STRICT),
+                ('exploratory', settings(), EXPLORATORY)):
+            for seconds, want in ((600, expected), (601, UNKNOWN), (0, UNKNOWN)):
+                with self.subTest(profile=label, seconds=seconds), \
+                        tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    run_dir = root / 'logs' / 'runs' / f'{label}-{seconds}'
+                    source_xbe = root / 'game' / 'default.xbe'
+                    metadata = self._archive_at(run_dir, source_xbe, seconds)
+                    base = classify_settings(environment)
+                    metadata['settings'] = environment
+                    metadata['run_profile'].update({
+                        'requested_profile': expected,
+                        'classification': expected,
+                        'environment_classification': base['classification'],
+                        'reasons': base['reasons'],
+                        'inherited_settings': environment,
+                        'effective_settings': environment,
+                        'resolved_defaults': base['resolved_defaults'],
+                    })
+                    (run_dir / 'metadata.json').write_text(
+                        json.dumps(metadata, indent=2), encoding='utf-8')
+                    result = classify_run_directory(run_dir, source_xbe)
+                    self.assertEqual(
+                        result['classification'], want,
+                        f'{label} archive with seconds={seconds} classified '
+                        f'{result["classification"]}: {result["reasons"]}')
+
+    def test_one_shared_constant_governs_both_sites(self):
+        """The bound is a single shared value, not two literals that can drift."""
+        self.assertTrue(hasattr(jsrf_run_profile, 'MAX_RUN_SECONDS'),
+                        'the bound must live in one shared constant')
+        self.assertEqual(jsrf_run_profile.MAX_RUN_SECONDS, 600)
+        self.assertEqual(run_jsrf.MAX_RUN_SECONDS, jsrf_run_profile.MAX_RUN_SECONDS,
+                         'the launcher must use the classifier\'s constant')
 
 
 if __name__ == '__main__':

@@ -557,6 +557,73 @@ REVERSED BY:
 - the cache rate collapsing to 0 with the image static (a stall);
 - the owner's xemu (empty HDD cache) showing the SEGA logo for only a few seconds on first boot. In that case the fill is not what gates the logo, and the slow per-frame rate is the lead.
 
+## Appendix — Advisor duration-cap ruling, VERBATIM (replacement child)
+
+Replacement Persistent Advisor child `c0ecc88b-756e-4256-9852-1bd8b7398735`; `claude/claude-opus-5-5`
+@ `high`; created in the same session under **§4.4 unreliable-state replacement**, **not a fallback**,
+same exact route as the original (`4e6d87e1…`, which had become unreliable — successive turns failed
+without a closing message despite a watcher ACK; cause transport UNKNOWN). The replacement was
+**briefed from files, not seeded with conversation**. **Continuity: first fact read received, and the
+second-turn marker subsequently PASS** — the marker `ADVISOR-RECOVERY-1112-CAP` was returned without
+being repeated in the second prompt. **Route and `high` effort are established by the pinned parent
+spawn record, not by the child's self-report** — the child correctly declined to self-verify its own
+effort. Text below is the **exact agent message**, preserved verbatim; no images or binaries are
+embedded.
+
+ADVISOR-RECOVERY-1112-CAP (replacement Persistent Advisor, claude/claude-opus-5-5). Probe fact from cap brief: exact LAUNCH_UTC=2026-10-01T11:01:26Z (the 10:56:32Z figure was a pre-launch estimate, withdrawn).
+RULING: Raise BOTH bounds to 600 — run-jsrf.py:218-219 and jsrf_run_profile.py:668 — preferably as one shared constant (e.g. MAX_RUN_SECONDS in jsrf_run_profile, used by the runner) so they cannot drift again. Add boundary regressions at both sites: 600 accept, 601 reject, 0 reject (runner parse + profile classifier → UNKNOWN on 601/0); existing profile tests unchanged and green. Commit (clean tree) before the run, then do the ONE 600 s exploratory run exactly as the F5 ruling §3 specifies (no seed). Do not use 300 s as a substitute: two 300 s fresh roots each restart the first-boot fill, so they cannot show the >300 s decision rows.
+BASIS (observed): I read both sites; they are the only 300 caps in scripts/. Collector takes argv[1]*1000 ms with no cap (collect.c:2696); collector.wait = seconds+45 (run-jsrf.py:381) scales. build-identity.py fingerprints only .c/.h/.json/.txt/.cmake, so the exe SHA stays verified; the runner change is captured by the archived project revision/patch identity. Raising only the launcher would make the profile UNKNOWN (inferred from :668), so both must move.
+BASIS (inferred): this is harness bound-widening, not guest/runtime code; every guard (identity verify, empty save-root, disk gate, archive, classification) is unchanged, so F5's "no code" intent (no guest-behaviour change) holds.
+RECORD IN: f4-submission-capacity.md (one line after the F5 appendix) + plan F5 entry; cite the commit.
+REVERSED BY: any other 300 s/duration bound found downstream (e.g. a checker or the archive path rejecting >300), the regressions failing, or the 600 s run failing for a duration-related reason — then stop and bring it back; or owner direction to use 300 s.
+
+**One-line cap record (cite the commit):** the duration caps are **implemented** as **one shared
+constant** so they cannot drift — `MAX_RUN_SECONDS = 600` in `scripts/jsrf_run_profile.py` (bound at
+**`:676`**), imported and used by `scripts/run-jsrf.py` (bound and message at **`:219-220`**); the
+earlier `:218-219` / `:668` citations above are the **Advisor's verbatim text and are unchanged**.
+Boundary behaviour measured directly: `1 -> 1`, `300 -> 300`, `600 -> 600`, and `601`/`0`/`-5` ->
+`SystemExit 2`.
+**RED** (against the unmodified 300 caps, focused `DurationCapTests`): **4 failed, 2 passed,
+6 subtests passed**, exit 1 — 600 rejected at parse, `MAX_RUN_SECONDS` absent, and archives for
+`strict`/`exploratory` at `seconds=600` classified UNKNOWN (capture `logs/workers/f5-cap-RED.txt`).
+**GREEN** (after the shared constant): focused **4 passed, 10 subtests passed**; full
+`tests/test_run_profiles.py` **38 passed, 100 subtests passed** in **1.29 s**; `just check` **exit 0**
+("check: all checkers passed"); `build-identity.py verify` **rc = 0** — scripts are outside the
+fingerprint, so the **exe is unchanged**. Guards preserved: identity verify, empty save-root, disk
+gate, archive, classification, and the negative/`bool` type guard. The code commit is the harness
+commit whose message is `harness: permit bounded 600-second cache observations` (its own SHA is
+recorded by the commit itself and by the run that follows, not restated here, to avoid a
+self-referential cycle).
+
+**Failed 600 s launch — a HARNESS LAUNCH FACT, not a runtime or guest fact.** The attempt **launched
+at `2026-10-01T11:01:26Z` and failed with rc 2 on the dual 300 s cap**. Precisely: this was a
+**harness/launcher failure** — **no game run occurred** and **no run artifact exists**; only
+**launch logs** exist. It is therefore recorded as a **launch failure**, explicitly **not** a
+strict-horizon entry and **not** a guest/runtime observation. (The `10:56:32Z` figure seen earlier was
+a **pre-launch estimate, withdrawn**.)
+
+## Appendix — Advisor window-watcher ruling, VERBATIM (original child)
+
+Advisor child `4e6d87e1-f748-48b3-a0a4-a6e5728bfeee`; `claude` / `claude-opus-5-5` / `high`;
+continuability probe satisfied and continuity re-ACKed. **Received after the F4 runtime records push
+`e991fd22311b7fe64edb47e5971b0aaa55954a7c`.** Verbatim text follows.
+
+ACK continuity: same child, 4e6d87e1. I never saw a provider error and the earlier turns produced no error text, so record the cause as transport UNKNOWN. This message is sent without other tool calls.
+WATCHER RULING: APPROVED, conditioned on the fixed version (immutable validated bytes written with 'xb', captured stat, thread-failure exit 3) and its 7 passing self-tests, as you describe. I have not re-read the helper. Your direct read caught the second-read race, and the fix closes it by construction, which is enough for an observation tool.
+Conditions:
+1. Read-only on the game. It writes only under ignored logs/workers. It never opens the window file for write, never takes a lock and never signals the game. Runtime is bounded at ≤650 s.
+2. Missed overwrites are expected, because the window rewrites the same path. The manifest is therefore a SAMPLE of window frames, not a complete series. Label it that way: a gap or skip means "not captured", never "no frame".
+3. Every captured window BMP is cross-checked against the draw-surface BMP sequence (f000…) by time. If the two disagree (window ≠ draw surface at similar times), that is a finding to bring to me, not something to resolve.
+4. Launch the 600 s run only after the game push of e991fd2 completes, with the same clean pair. No seed (seeding is not authorised).
+5. The readout follows my F5 ruling §3: per-interval draws/flips, BMP and window hashes, CACHE_COMPLETE/Cache0N.tbl mtimes, and the cached-file count. Apply the decision rows exactly.
+REVERSED BY: the watcher's manifest disagreeing with the files on disk after the run (hash mismatch), in which case its series is void and only the draw-surface BMPs count.
+
+**Conditions carried as binding (all three the Session must apply):** **missed overwrites are
+expected** — the manifest is a **SAMPLE**, so a gap means "not captured", **never** "no frame";
+**near-time cross-check** every captured window BMP against the draw-surface sequence by time, and
+bring any disagreement to the Advisor rather than resolving it; and a **hash mismatch voids** the
+watcher series, leaving only the draw-surface BMPs.
+
 ## Session evidence qualification
 
 The submission dimensions above are inherited measurements from the prior run's plan/TR, not a fresh Advisor decode. The initial worker negative claim that Mercenaries had no NV2A was withdrawn after discovering truncated tree coverage; corrected direct-source findings were supplied before this ruling. Primary reference URLs: https://github.com/xemu-project/xemu/blob/f9b14039e5bb56ae2d8f028e31e7cc19f13f7e12/hw/xbox/nv2a/pfifo.c and https://github.com/KraftMacAndChee/Mercenaries-Recompiled/blob/c978ee754e319c8593ee2260ac37b8262628f7c7/src/nv2a/nv2a_core.c . No hardware-fidelity claim is made by preserving local atomicity.

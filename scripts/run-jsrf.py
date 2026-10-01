@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from jsrf_run_profile import (
+    MAX_RUN_SECONDS,
     ProfileError,
     environment_settings,
     make_profile_record,
@@ -215,8 +216,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--skip-disk-gate', action='store_true',
                         help='bypass the pre-run free-space gate; records the bypass in metadata')
     args = parser.parse_args()
-    if not 1 <= args.seconds <= 300:
-        parser.error('--seconds must be between 1 and 300')
+    if not 1 <= args.seconds <= MAX_RUN_SECONDS:
+        parser.error(f'--seconds must be between 1 and {MAX_RUN_SECONDS}')
     if not re.fullmatch(r'[a-zA-Z0-9_-]+', args.label):
         parser.error('--label must match [a-zA-Z0-9_-]+')
     if args.probe not in PROBES:
