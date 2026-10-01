@@ -289,6 +289,10 @@ void jsrf_trace_seq(uint32_t site, uint32_t value)
     _unlock_file(stderr);
 }
 
+/* Declared in recomp_types.h only under RECOMP_ABI_CHECK, which this file is
+ * not always built with; defined in recomp_abi_deltas.c. */
+int recomp_delta_allowed(uint32_t va, uint32_t out[4]);
+
 /* Reports a callee whose ESP delta the table does not allow. Only reachable with
  * -DRECOMP_ABI_CHECK; see scripts/gen-abi-deltas.py for why the check exists. */
 void jsrf_trace_delta_mismatch(uint32_t site, uint32_t va, uint32_t actual)

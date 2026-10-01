@@ -700,6 +700,8 @@ static void dr_print_arm_summary(const char *why)
  * error this record exists to prevent. `failed_never_recovered` is the set that is genuinely still
  * unarmed, and it is derived from per-event records, not from `failed=` (which counts ATTEMPTS, and
  * counts a tid twice when it both failed at birth and failed again in the sweep). */
+static int dr_tid_exited(DWORD tid);   /* defined with the terminal census below */
+
 static void dr_print_terminal_summary(void)
 {
     unsigned recovered = 0, failed_never_recovered = 0, deferred_events = 0, failed_events = 0;

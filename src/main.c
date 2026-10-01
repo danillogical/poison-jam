@@ -85,6 +85,7 @@ static void checkpoint(const char *name)
  * would be a link error, not a silent misread. */
 typedef void (*jsrf_recomp_func_t)(void);
 extern jsrf_recomp_func_t recomp_lookup(uint32_t xbox_va);
+extern int recomp_dispatch_init(void);
 
 /* ⚠ THE PUBLICATION IS THE SET OF REAL FUNCTION STARTS, AND WHAT IT DOES *NOT* BUY IS RECORDED HERE.
  *

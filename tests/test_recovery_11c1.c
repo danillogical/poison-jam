@@ -35,6 +35,8 @@ extern void sub_00197058(void);
 extern void sub_001970CD(void);
 extern void sub_001949E2(void);
 extern void sub_001912A0(void);
+extern void sub_00193D10(void);
+extern void sub_00196C83(void);
 
 RECOMP_TLS uint32_t g_eax, g_ecx, g_edx, g_esp;
 RECOMP_TLS uint32_t g_ebx, g_esi, g_edi, g_ebp;
