@@ -98,7 +98,7 @@ class Bench:
             subprocess.run(['git', 'init', '-q'], cwd=r, capture_output=True)
             subprocess.run(['git', 'add', '-A'], cwd=r, capture_output=True)
             subprocess.run(['git', '-c', 'user.email=b@b', '-c', 'user.name=b',
-                            'commit', '-qm', 'bench'],
+                            '-c', 'commit.gpgsign=false', 'commit', '-qm', 'bench'],
                            cwd=r, capture_output=True)
 
     def env(self, **extra):

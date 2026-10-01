@@ -50,6 +50,10 @@ class ScratchRepo:
         git(self.path, 'init', '-q')
         git(self.path, 'config', 'user.email', 'test@example.invalid')
         git(self.path, 'config', 'user.name', 'Pre-commit Control')
+        # A global commit.gpgsign would otherwise sign every scratch commit,
+        # and a signing program that waits for its owner hangs the test.
+        git(self.path, 'config', 'commit.gpgsign', 'false')
+        git(self.path, 'config', 'tag.gpgsign', 'false')
         (self.path / 'README.md').write_text('scratch\n', encoding='utf-8')
         git(self.path, 'add', 'README.md')
         git(self.path, 'commit', '-q', '-m', 'initial')
