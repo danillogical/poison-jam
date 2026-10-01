@@ -41,6 +41,12 @@ RUNS = ROOT / 'logs' / 'runs'
 
 CHECKER_VERSION = 'jsrf-horizon-ledger/1'
 
+# The ledger's scope (owner decision recorded in plan-jsrf-bare-minimum.md, 2026-09-30):
+# strict runs from 2026-09-29 onward; the earlier runs are not backfilled. The bare
+# invocation applies it, so it no longer reports pre-scope runs as failures;
+# `--since all` covers the whole archive.
+SCOPE_START = '2026-09-29'
+
 # A ledger row: `| date | game | toolkit | run-id | event | sites | stop |`
 ROW = re.compile(r'^\|\s*(\d{4}-\d{2}-\d{2})\s*\|(.+)\|\s*$')
 RUN_ID = re.compile(r'`(\d{8}-\d{6}-\d{3}-[A-Za-z0-9_.-]+)`')
@@ -164,14 +170,17 @@ def strict_runs(since: str | None = None) -> tuple[list[Path], list[str]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--json', action='store_true')
-    parser.add_argument('--since', help='only consider runs from this date (YYYY-MM-DD)')
+    parser.add_argument('--since', default=SCOPE_START,
+                        help=f'only consider runs from this date (YYYY-MM-DD); default '
+                             f'{SCOPE_START}, the ledger scope; "all" for the whole archive')
     args = parser.parse_args()
+    since = None if args.since == 'all' else args.since
 
     findings: list[dict] = []
     rows = ledger_rows()
     named = all_named_runs()
 
-    strict, problems = strict_runs(args.since)
+    strict, problems = strict_runs(since)
     for problem in problems:
         findings.append({'check': 'profile', 'reason': 'checker_failed',
                          'detail': problem})
@@ -225,6 +234,7 @@ def main() -> int:
     record = {
         'checker': CHECKER_VERSION,
         'ledger': str(LEDGER),
+        'since': since or 'all',
         'rows': len(rows),
         'named_runs': len(named),
         'strict_runs_archived': len(strict),
@@ -241,6 +251,7 @@ def main() -> int:
         print(json.dumps(record, indent=2, sort_keys=True))
     else:
         print(f'checker {CHECKER_VERSION}')
+        print(f'  runs considered since  : {since or "all"}')
         print(f'  ledger rows            : {len(rows)}')
         print(f'  strict runs archived   : {len(strict)}')
         print(f'  runs named in the ledger: {len(named)}')

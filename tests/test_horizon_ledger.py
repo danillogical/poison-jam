@@ -175,6 +175,21 @@ class RealLedgerTests(unittest.TestCase):
             capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_bare_invocation_applies_the_ledger_scope(self) -> None:
+        """Without --since the lint uses the recorded scope, and says so."""
+        import json
+        import subprocess
+        import sys
+        script = str(ROOT / 'scripts' / 'check-horizon-ledger.py')
+        bare = subprocess.run([sys.executable, '-X', 'utf8', script, '--json'],
+                              capture_output=True, text=True)
+        self.assertEqual(json.loads(bare.stdout)['since'], '2026-09-29',
+                         bare.stdout + bare.stderr)
+        whole = subprocess.run([sys.executable, '-X', 'utf8', script, '--json',
+                                '--since', 'all'], capture_output=True, text=True)
+        self.assertEqual(json.loads(whole.stdout)['since'], 'all',
+                         whole.stdout + whole.stderr)
+
     def test_real_ledger_rows_name_real_runs(self) -> None:
         """Every row must name a run directory that exists, so it can be re-derived."""
         text = (ROOT / 'docs' / 'reviews' / 'strict-horizon-ledger.md').read_text(

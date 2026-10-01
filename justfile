@@ -85,7 +85,7 @@ check:
     {{python}} -X utf8 scripts/check-merge-structure.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-generation-provenance.py --check; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-disk-gate.py --quiet; if ($LASTEXITCODE -ne 0) { exit 1 }
-    {{python}} -X utf8 scripts/check-horizon-ledger.py --since 2026-09-29; if ($LASTEXITCODE -ne 0) { exit 1 }
+    {{python}} -X utf8 scripts/check-horizon-ledger.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-override-drift.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Output "check: all checkers passed"
 
