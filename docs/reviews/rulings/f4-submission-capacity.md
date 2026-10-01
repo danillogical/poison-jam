@@ -1319,6 +1319,28 @@ Bound ends at the earliest of **U1 plus conditional U2 completed/reported**, **2
 
 Basis: source fixed per-call step and frozen CURRENT0/TARGET1 sharpen the observation question but do not establish call cadence or reset history. Reversed by the bounded original-source/canonical-capture evidence above. Session assigned U1 to the existing source worker; no new run/patch/build was started by this ruling record.
 
+### Resume ruling clarification and push receipt
+
+Advisor accepted the Session's observation-control correction: **independent 240 s/300 s runs are CANDIDATE only**, because object age and reset history differ; neither nonzero CURRENT nor zero CURRENT with more global frames classifies A/B or resets W14. Only two captures within one run, with object VA rederived in each dump, matching vtable/scene identity and advancing frame control, can support an Advisor classification ruling; even those are not Session self-classification. Earlier U2 predicates are superseded to this extent.
+
+U1 also covers original-source per-frame reachable float/x87/32-bit stores at `+98..+A4`, `+A8..+B8`, `+C0` from dispatcher/walker and fade/scene vtables (`1C4D10`, `1CCFB8`), inlined setter bodies matched by store pattern, and indirect fade-vtable calls. Full global scan not required. Unclosed reachability/indirect targets within the **unchanged 45-minute budget** produce UNKNOWN with explicit uncovered set, not U2 authorization. Only a clean covered set with uncovered paths judged immaterial by the parent's own original-source read authorizes U2. Bound unchanged.
+
+**PUSHED_TO:** origin · **BRANCH:** toolkit main / game master · **COMMIT:** toolkit `a8262014eec9cd8d720184f7f2fb7dce4652105d` (unchanged), game `1bdf5d55bdaf285b3d9e95e1fbd341672481301a` · **REMOTE_URL:** toolkit `https://github.com/danillogical/xboxrecomp.git`, game `https://github.com/danillogical/poison-jam.git` · **RESULT:** toolkit up-to-date first; game fast-forward `e189f1b..1bdf5d5`; both HEADs equal their origin branches. Both trees clean before push; two outgoing documentation blobs audited, zero secret hits, no game asset path or oversized blob. Documentation pre-commit gates passed; no rebuild needed. This receipt records that completed checkpoint, not acceptance of unfinished U1.
+
+### U1 UNKNOWN and final W14 STOP — 2026-10-01 ~18:31 UTC
+
+**Advisor delivered STOP for an owner decision.** U1 returned UNKNOWN: per-frame receiver/reachability and aliased/inline writers could not be closed, and the uncovered set was not demonstrated immaterial. Therefore **U2 is not authorized**. This reaches bound (a), before 20:15Z, with no accepted critical-path finding or eligible event: **no second ceiling call, no clock reset, no further run/patch/investigation until owner decision**. Advisor did not independently re-read the original instructions below; STOP rests on U1 UNKNOWN and the prior bound, not on accepting those source leads.
+
+Qualified parent checks, not A/B classification:
+- Original `12418–124C8`: each nonzero mode branch executes its selected walker then **JMP `124C3`**, skipping `11070`; **all four mode words zero** reaches `124B8/124BE→11070`. The frozen capture's words were zero, establishing only frozen eligibility, not historical invocation/cadence.
+- Original `7C110–7C13C`: **ID1DDA present → JNE `7C13B`**, skipping `666F0`. Thus worker reset site `6677C` is excluded for this captured state-8 path, not globally.
+- Original `1BA8A0–1BA8E7`: no branch, pointer loads then fixed 16-dword scratch/matrix stores and RET. This helper is not a conditional skip of the subsequent virtual call.
+- Worker raw E8/store-byte scans are leads, not instruction-aligned exhaustive enumerations. Positive recovery of six known stores cannot prove completeness; displacement matching misses CURRENT0 stores through `fstp [ecx]` after address formation. Zero literal address references cannot exclude computed/copied indirect targets. Later claimed DSOUND route was rejected: proposed function range did not contain its VA and the quoted little-endian immediate was `0x246`, not `0x24600`. No writer-completeness or new reset-cause claim is accepted.
+
+A/B remains **UNCLASSIFIED**, D2 remains accepted, pytest side item closed with its prior caveats, no F6/title claim. The last eligible W14 event remains the **exploratory** unnumbered CMP marker at **13:27:49.9575858Z**, not a strict-horizon move.
+
+Advisor's owner options (**none authorized by this STOP**): **recommended** small observation-only packet with same-object reads within one run, focused RED/GREEN and Reviewer gating; alternatively one ~240 s exploratory cross-run candidate compared with existing 062415 (cannot classify), an explicitly ledgered pragmatic shortcut (not recommended before classification), or pause/end. Current packet remains none. Records-only closure and fresh §4.5 Reviewer follow.
+
 ## Session evidence qualification
 
 The submission dimensions above are inherited measurements from the prior run's plan/TR, not a fresh Advisor decode. The initial worker negative claim that Mercenaries had no NV2A was withdrawn after discovering truncated tree coverage; corrected direct-source findings were supplied before this ruling. Primary reference URLs: https://github.com/xemu-project/xemu/blob/f9b14039e5bb56ae2d8f028e31e7cc19f13f7e12/hw/xbox/nv2a/pfifo.c and https://github.com/KraftMacAndChee/Mercenaries-Recompiled/blob/c978ee754e319c8593ee2260ac37b8262628f7c7/src/nv2a/nv2a_core.c . No hardware-fidelity claim is made by preserving local atomicity.
