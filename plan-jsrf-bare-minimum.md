@@ -613,6 +613,18 @@ list is exhausted.
     stride). Its address on real hardware says which base pointer the port computes wrongly.
   No answer → `RECOMP_GUEST_SERIAL=1` (L34, D4) and re-run (b); then the C1 TTD recording with
   `ttd -stop`. (The old fallback "(a) VP DMA" is gone: D2 is fixed.)
+  - **DONE 2026-09-30, at step (b), and the writer is named.** (a) was answered from the already
+    archived strict run `20260930-081601-393-read-dst-verify`: 14 `[READ] dst=` lines, **0** intersecting
+    the table or the widened range; no `[READ] WARNING` in either run. (b) then named the writer:
+    `rip=exe+0x5361B8` = **`sub_00038530+0x398`**, the slot writer A2h already named, at a different
+    site — a `rep movsd` image copy running upward from `0x00011000`. The array is not built at the
+    table: it is **copied there from the XBE's own `.data`** (the dump at `V` equals the XBE at
+    `V + 0x37608` for 431 of 436 sampled 4 KB pages, 0 original; the dump's bytes at the table VA are
+    byte-identical to the XBE's at `0x001FB568`). Recorded as **D5** in the compatibility ledger and in
+    `docs/jsrf-technical-record.md` §5. (c) was therefore not needed and was not run.
+  - **The fix, and it is F3's first job:** the copy's **destination and length** are wrong, not the
+    table. `sub_00038530` computes both. Not yet established: why the copy runs at all, and which of
+    its callers is responsible. Cheapest honest class first (ledger Rules); do not patch the table.
 - **F2 — DONE 2026-09-30:** the DMA_PUT bit-16 mask (D1) is removed in toolkit `b857665`, and
   `docs/jsrf-kick-get-contract.md:60` records that `0x100410` is `NV_PFB_WBC`.
 - **F2b — DONE 2026-09-30:** ML3 (toolkit `e43e9bf`).
@@ -704,6 +716,20 @@ rule is retroactive and 36 rows need backfilling — a packet-sized job.
 
 Until a packet is promoted, packet implementation remains BLOCKED and the chores run
 as owner-directed work.
+
+### Follow-up leads from the 2026-09-30 F0/F1 session (recorded, not acted on)
+
+- **`tests/test_generation_provenance.py` is not registered in CTest.** `CMakeLists.txt`
+  names no such target and `ctest -N` lists 28 tests without it, so `just test` cannot
+  catch a provenance failure — only a bare `just check` can. That is why the gate was red
+  for 73 commits without a session noticing. Registering it is a small chore; it is a
+  lead here because it changes what `just test` means.
+- **`scripts/recover-functions.py` cannot complete a from-nothing rebuild.** It aborts at
+  `0x000BCF40` (`RuntimeError: Incomplete translation`): the configured span
+  `0x000BCF40..0x000BD8D0` runs 0x20 bytes past that function's real `ret` at
+  `0x000BD8B0` into padding that decodes as `aaa`, which the lifter reports as
+  `/* TODO: aaa */`. The live `recovered.c` predates the check and is unaffected. This is
+  the first concrete blocker for the rebuild AGENTS.md records as never done end to end.
 
 If no packet is promoted in the authoritative plan file, packet implementation is BLOCKED; chores
 listed here run as owner-directed changes once the owner adopts this plan.

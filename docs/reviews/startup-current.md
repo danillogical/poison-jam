@@ -4,19 +4,19 @@ Filled per `docs/agent-workflow.md` §0.6 by `scripts/gen-startup-receipt.py`; t
 Fields marked **UNVERIFIED** cannot be measured by a generator and must be
 filled from the probe that establishes them.
 
-Generated: 2026-09-30T11:33:50.230657+00:00
+Generated: 2026-10-01T05:26:56.446531+00:00
 
 ## Identity and handoff
 
 - Session ID/date/harness: 2026-09-30, DSH; session started 02:49:47-07:00
   (harness: `DSH_PROFILE=web`, `DSH_WEB_URL=http://127.0.0.1:3080`)
 - Actual main model/effort: `workbuddy-ai/deepseek-v4.1-flash` @ `max` (the §1
-- Workflow/plan/run-profile revisions and dirty diff identity: workflow `c30a32ca7c94c3b9`, plan `b4a8e7665c34a54c`, run profiles `9e4838af2cd7746e`
-- Game revision/status: `master` `d95ff82b16cff0f7e5692ffea10479b3f982174b` (DIRTY)
-- Toolkit revision/status: `main` `4ec3eca0d24d4d3d4008ce13c024a266758603ad` (clean)
-- Unrelated edits preserved: 3 game, 0 toolkit
+- Workflow/plan/run-profile revisions and dirty diff identity: workflow `4ec760339ea33f4d`, plan `7bd50133a0d13e3b`, run profiles `775757cdea36bb2f`
+- Game revision/status: `master` `0ea5b8e250767312d140ca2d05db733e94f71421` (DIRTY)
+- Toolkit revision/status: `main` `86113c730fe452508ce3f02f9fa1982260846599` (clean)
+- Unrelated edits preserved: 1 game, 0 toolkit
 - CURRENT PACKET: present
-  - plan hash `b4a8e7665c34a54cb086d1fe82990f9e7ab37d1d4a6467efb6f7b9009c7bb15a`
+  - plan hash `7bd50133a0d13e3b78ce964f5fe7d1ecb4ce9581024d73487707ca8eadcec0a5`
   - block: No packet is promoted. Phase 0 (§4) and the chores of §5–§6 run as owner-directed chores, which
 need no packet. The first packet is C1 (§7); it is promoted here, by exact revision and hash, only
 after its adequacy review returns `ADEQUATE` (`docs/agent-workflow.md` §5).
@@ -28,26 +28,26 @@ after its adequacy review returns `ADEQUATE` (`docs/agent-workflow.md` §5).
 
 Resolved live in this session by the Session, not by this generator:
 
-- Planner: not probed at startup (workflow §0 says the Planner needs no separate probe; each turn reports its own `reasoningEffort`). Expected `Muse Spark 1.3` @ `high` via `skill: muse-worker`, fresh handle. **No Planner call was made this session** — no packet reached planning. (Muse Spark 1.3 @ high, `skill: muse-worker`, fresh handle)
-- Persistent advisor: requested `claude` / `claude-opus-5-5` @ `high`, `route: CONTINUABLE_PINNED`. Resolved live: exactly one advertised route, `claude/claude-opus-5-5`, supporting `low/medium/high/xhigh/max`. **PASS** — see the probe section. (Claude Opus 5.5 @ high, `route: CONTINUABLE_PINNED`)
-- Acceptance reviewer: requested `codex` / `gpt-6.1-sol` @ `high`, `route: LIVE_RESOLVE`. Resolved live: exactly one advertised route, `codex/gpt-6.1-sol`. **PASS** — see the probe section. (GPT-6.1 Sol @ high, `provider: codex`, `route: LIVE_RESOLVE`)
-- Workers: `workbuddy-ai/deepseek-v4.1-flash` @ `max` (the §1 Worker row). **PASS** — see the probe section.
-- Exact error or ambiguity, if any:
+- Planner: not probed at startup (workflow §0 says the Planner needs no separate probe; each turn reports its own `reasoningEffort`). Expected `Muse Spark 1.3` @ `high` via `skill: muse-worker`, fresh handle. **No Planner call was made this session** — no packet reached planning.
+- Persistent advisor: requested `claude` / `claude-opus-5-5` @ `high`, `route: CONTINUABLE_PINNED`. Resolved live: exactly one advertised route, `claude/claude-opus-5-5`. **PASS** — see the probe section.
+- Acceptance reviewer: requested `codex` / `gpt-6.1-sol` @ `high`, `route: LIVE_RESOLVE`. **NOT PROBED this session.** The route resolves (`codex/gpt-6.1-sol` is advertised, and a pinned `codex`/`gpt-6.1-sol` @ `high` control child answered a probe), but §0 step 3's acceptance probe — fresh token, empty-evidence reason, and the hash of a named read-only command — was **not** run, because this session made no acceptance claim that needs a reviewer. This is **UNVERIFIED**, not PASS.
+- Workers: `workbuddy-ai/deepseek-v4.1-flash` @ `max` (the §1 Worker row). No worker child was spawned this session.
+- Exact error or ambiguity, if any: the Claude route was initially **BLOCKED** — `list_subagent_models --provider claude` advertised nothing and a spawn returned `No eligible account for claude/claude-opus-5-5` (the CLI reported `OAuth session expired and could not be refreshed`). The owner logged in, after which the route resolved to exactly one entry and the probe passed. Recorded because a route that resolves is not a route that can serve.
 
 ## Acceptance reviewer probe — PASS / FAIL / UNKNOWN
 
-- Child ID; fresh token; response reference; empty-evidence answer; command and output hash; effort; result: UNVERIFIED (not measurable by this generator; see the note)
-- Exact error or missing evidence:
+- Child ID; fresh token; response reference; empty-evidence answer; command and output hash; effort; result: **NOT RUN** (UNVERIFIED). No acceptance claim was made this session; the work was owner-directed chores (F0a, F0b, F1) whose closure is the gate script's own output (`docs/agent-workflow.md` §5.8).
+- Exact error or missing evidence: the probe itself was not performed.
 
 ## Persistent advisor probe — PASS / FAIL / UNKNOWN
 
-- Child ID: `251fe018-dfdc-4608-89b8-ca7a1e8d27ec`
-- Turn 1 reference; unique marker given:
-- Named file and the fact deliberately omitted from the brief:
-- Advisor's answer; checked against the file:
-- Turn 2 reference (same child, marker not repeated); returned marker:
-- Result:
-- Exact error or missing evidence:
+- Child ID: `c8c75ebb-9a4e-45e1-b052-f6777a5b2f94` — route `claude/claude-opus-5-5`, provider `claude`, effort `high`, spawned continuable.
+- Turn 1 reference; unique marker given: marker `JSRF-ADV-MARKER-4X7Q2N`, supplied **only** in turn 1.
+- Named file and the fact deliberately omitted from the brief: `docs/jsrf-compatibility-ledger.md`; L25's Class and Where, and D4's Status.
+- Advisor's answer; checked against the file: `L25 CLASS: Approximated`; `L25 WHERE: src/apu/apu_mixdown.c:101`; `D4 STATUS: Mitigation, opt-in: L34 (RECOMP_GUEST_SERIAL=1), not yet run on the title`. All three checked against the file and correct.
+- Turn 2 reference (same child, marker not repeated); returned marker: `CONTINUATION-OK marker=JSRF-ADV-MARKER-4X7Q2N`.
+- Result: **PASS** — all six §0 step 4 predicates hold together: exact §1 model/provider, listed effort, present in the continuable-agent listing, reachable by `send_message`, turn 1 read the named file and reported the omitted facts, turn 2 returned the turn-1 marker to the same child.
+- Exact error or missing evidence: none after the owner's login. Before it, the route was BLOCKED as recorded above.
 
 ## Packet readiness — PASS / BLOCKED / UNKNOWN
 
@@ -61,9 +61,9 @@ Resolved live in this session by the Session, not by this generator:
   - ttd: Microsoft (R) TTD 1.01.11 x64 (C:\Users\logic\AppData\Local\Microsoft\WindowsApps\ttd.EXE)
   - duckdb: 1.5.6 (not on PATH)
   - python: 3.13.2 (C:\Python313\python.exe)
-  - free space: 63.65 GB (above 50.0 GB floor)
-- State/plan disagreements and how they were escalated:
-- Overall disposition and next action: all three senior routes **PASS**; no packet
+  - free space: 232.29 GB (above 15.0 GB floor)
+- State/plan disagreements and how they were escalated: none. `just check` was red on generation provenance; the repair was taken to the Persistent Advisor under §2.3 and its ruling is recorded in `docs/reviews/f0b-provenance-and-record-array-writer.md`.
+- Overall disposition and next action: the Persistent Advisor route **PASS**; the Acceptance reviewer probe **NOT RUN (UNVERIFIED)** and not required, no acceptance claim being made. No packet is promoted, so packet implementation is **BLOCKED** and the plan's §13 owner-directed chores continue. Next: F3 (iterate the stop now that F1 has named the writer).
 
 Do not mark readiness PASS with a failed or unknown required item. A provider
 catalog entry is not a completed invocation. A new advisor answering the
