@@ -131,9 +131,23 @@ never having been done end to end. This is the first concrete blocker found for 
 ```text
 PUSHED_TO:   danillogical/poison-jam (origin)
 BRANCH:      master
-COMMIT:      0597d94
+COMMIT:      0ea5b8e
 REMOTE_URL:  https://github.com/danillogical/poison-jam.git
 RESULT:      fast-forward; no game/ path, no secret, no blob over 100 MB
+```
+
+**Rewritten identity (recorded, not substituted).** A later identity rewrite
+(`f2d03fe`) re-authored this session's commits, so the commit above now exists as
+**`0597d94`**. The push record deliberately keeps the SHA that was actually pushed —
+`0ea5b8e` — because "fast-forward" is a statement about *that* push, and `0597d94`
+did **not** arrive by fast-forward: it reached `origin` later, by force-with-lease,
+as part of the rewrite. Substituting the rewritten SHA would make a forced update
+read as an ordinary fast-forward, which is precisely the provenance the push policy
+exists to keep straight. Rewritten SHAs for the whole range are in
+`docs/reviews/lifted-code-history-scrub.md`.
+
+```text
+REWRITE_MAP: 0ea5b8e -> 0597d94   (this record's commit)
 ```
 
 Toolkit: no commit was required this session — the pull was a pure fast-forward to

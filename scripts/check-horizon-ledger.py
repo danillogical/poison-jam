@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LEDGER = ROOT / 'docs' / 'reviews' / 'strict-horizon-ledger.md'
 RUNS = ROOT / 'logs' / 'runs'
 
-CHECKER_VERSION = 'jsrf-horizon-ledger/1'
+CHECKER_VERSION = 'jsrf-horizon-ledger/2'
 
 # The ledger's scope (owner decision recorded in plan-jsrf-bare-minimum.md, 2026-09-30):
 # strict runs from 2026-09-29 onward; the earlier runs are not backfilled. The bare
@@ -53,6 +53,13 @@ RUN_ID = re.compile(r'`(\d{8}-\d{6}-\d{3}-[A-Za-z0-9_.-]+)`')
 REVISION = re.compile(r'`([0-9a-f]{7,40})`')
 # A row that says the horizon was not reached is still a valid row; it must say so.
 NOT_REACHED = re.compile(r'NOT REACHED|did not reach|no stop', re.IGNORECASE)
+# A row that records the horizon actually moving. This is the only progress event:
+# `REPRODUCED` re-observes the same event and `NOT REACHED` observes none, so
+# neither is a move.
+MOVED = re.compile(r'\bMOVED\b')
+# The superseded-horizon section, whose rows describe an older horizon and must not
+# take part in the "last move" calculation.
+SUPERSEDED_HEADING = re.compile(r'^##\s+Prior horizon', re.IGNORECASE)
 
 
 def all_named_runs() -> set[str]:
@@ -75,11 +82,24 @@ def ledger_rows() -> list[dict]:
 
     Used for the *reproducibility* checks (a row must name a real run and a real
     revision), not for coverage -- see `all_named_runs`.
+
+    Each row also carries `moved` (it records the horizon actually moving) and
+    `superseded` (it sits in the "Prior horizon" section, so it describes an older
+    horizon). **Why both.** Measured 2026-09-30: the previous version computed the
+    last horizon move as "the last row that is not `NOT REACHED`", which counts
+    `REPRODUCED` rows as moves and, because the superseded table sits below the
+    session rows, made the 2026-09-28 row win by file order -- so W14's ceiling
+    rule was judged from a date 78 h stale while 2026-09-30 rows existed, and it
+    kept reporting 2026-09-28 even after two real moves. A row is a progress event
+    only when it says `MOVED`.
     """
     if not LEDGER.is_file():
         raise SystemExit(f'{LEDGER} is missing')
     rows = []
+    superseded = False
     for number, line in enumerate(LEDGER.read_text(encoding='utf-8').splitlines(), 1):
+        if SUPERSEDED_HEADING.match(line):
+            superseded = True
         if not line.startswith('|'):
             continue
         match = ROW.match(line)
@@ -95,6 +115,8 @@ def ledger_rows() -> list[dict]:
             'run_ids': run_ids,
             'revisions': REVISION.findall(body),
             'not_reached': bool(NOT_REACHED.search(body)),
+            'moved': bool(MOVED.search(body)),
+            'superseded': superseded,
             'text': line.strip(),
         })
     return rows
@@ -219,7 +241,9 @@ def main() -> int:
             })
 
     # Information, not a finding: the ceiling rule is a §2.3 judgement.
-    moved = [row for row in rows if not row['not_reached']]
+    # Only a row that says MOVED is a progress event, and the superseded table is
+    # excluded: its rows describe an older horizon and sit below the session rows.
+    moved = [row for row in rows if row['moved'] and not row['superseded']]
     last_move = moved[-1] if moved else None
     elapsed_hours = None
     if last_move:
@@ -239,7 +263,10 @@ def main() -> int:
         'named_runs': len(named),
         'strict_runs_archived': len(strict),
         'strict_runs_without_a_line': [r.name for r in strict if r.name not in named],
+        'horizon_moves': len(moved),
         'last_horizon_move': last_move['date'] if last_move else None,
+        'last_horizon_move_run': (last_move['run_ids'][0] if last_move
+                                  and last_move['run_ids'] else None),
         'hours_since_last_move': elapsed_hours,
         'ceiling_note': ('The ceiling rule (3 packets or 4 h) needs a session '
                          'boundary and a packet count, which this lint does not '
@@ -255,9 +282,13 @@ def main() -> int:
         print(f'  ledger rows            : {len(rows)}')
         print(f'  strict runs archived   : {len(strict)}')
         print(f'  runs named in the ledger: {len(named)}')
+        print(f'  horizon moves recorded : {record["horizon_moves"]}')
         if elapsed_hours is not None:
             print(f'  last horizon move      : {record["last_horizon_move"]} '
                   f'({elapsed_hours} h ago)')
+            print(f'  that move was the run  : {record["last_horizon_move_run"]}')
+        else:
+            print('  last horizon move      : none recorded (no row says MOVED)')
         if findings:
             print(f'  {len(findings)} finding(s):')
             for finding in findings:

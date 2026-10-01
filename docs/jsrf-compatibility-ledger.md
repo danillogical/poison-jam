@@ -45,7 +45,7 @@ host API); list the one that decides fidelity first.
 | ID | Path | Class | Where | Active | Note / upgrade when |
 |---|---|---|---|---|---|
 | L01 | Lifted guest code, x86 → C | Translated | game `src/recomp/gen/` | always | regenerate with the toolkit lifter (TR §2) |
-| L02 | Reviewed recovered bodies (3,074 entries) and 7 boundary fixes | Patched | game `config/recovered-functions.json`, `config/boundary-fixes.json`, `src/recomp/recovered/recovered.c` | always | spans the translator got wrong; retire entries the translator now produces (plan V5) |
+| L02 | Reviewed recovered bodies (3,075 entries) and 7 boundary fixes | Patched | game `config/recovered-functions.json`, `config/boundary-fixes.json`, `src/recomp/recovered/recovered.c` | always | spans the translator got wrong; retire entries the translator now produces (plan V5). Was 3,074 until the F3 fix added `0x00037550` (2026-09-30); the V5 audit's 3,074 figures are historical and were true when it ran |
 | L03 | CRT `memmove` | Reimplemented | game `src/jsrf_crt.c` | always | verified replacement |
 | L04 | CRT 64-bit divides `__alldiv`/`__aulldiv`/`__aullrem`/`__aulldvrm` | Reimplemented | game `src/jsrf_crt.c`, `tests/test_crt_divide.c` | always | the old lifter dropped `rcr` (TR §2); remove with their manual entries if generated code owns them again |
 | L05 | COM error tail `sub_00162B9D` | Reimplemented | game `src/recomp_manual.c:19` | always | the v0.12 translator folds it (TR §2) |

@@ -162,6 +162,83 @@ class LedgerLintTests(unittest.TestCase):
         self.assertEqual(findings, [])
 
 
+class HorizonMoveTests(unittest.TestCase):
+    """`moved` / `superseded`: only a MOVED row is a progress event.
+
+    Measured 2026-09-30: the previous rule ("the last row that is not
+    `NOT REACHED`") counted `REPRODUCED` rows as moves and let the superseded
+    table, which sits below the session rows, win by file order. It reported
+    2026-09-28 for 78 h while 2026-09-30 rows existed, including two real moves.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        (self.root / 'docs' / 'reviews').mkdir(parents=True)
+        self._saved = (ledger_lint.ROOT, ledger_lint.LEDGER)
+        ledger_lint.ROOT = self.root
+        ledger_lint.LEDGER = self.root / 'docs' / 'reviews' / 'strict-horizon-ledger.md'
+
+    def tearDown(self) -> None:
+        ledger_lint.ROOT, ledger_lint.LEDGER = self._saved
+        self._tmp.cleanup()
+
+    def write(self, body: str) -> None:
+        ledger_lint.LEDGER.write_text(body, encoding='utf-8')
+
+    @staticmethod
+    def row(date: str, stamp: str, event: str) -> str:
+        return (f'| {date} | `abc1234` | `def5678` | `{stamp}-strict` | '
+                f'{event} | site | 10:00 |\n')
+
+    def test_only_moved_rows_are_progress_events(self) -> None:
+        """Known-good: MOVED counts; REPRODUCED and NOT REACHED do not."""
+        self.write(
+            '| Date | Game | Toolkit | Run ID | Event | Sites | Stop |\n'
+            '|---|---|---|---|---|---|---|\n'
+            + self.row('2026-09-29', '20260929-100000-000-a', 'REPRODUCED')
+            + self.row('2026-09-30', '20260930-100000-000-b', 'NOT REACHED')
+            + self.row('2026-09-30', '20260930-110000-000-c', '**MOVED**'))
+        rows = ledger_lint.ledger_rows()
+        self.assertEqual([r['moved'] for r in rows], [False, False, True])
+        moved = [r for r in rows if r['moved'] and not r['superseded']]
+        self.assertEqual(len(moved), 1)
+        self.assertEqual(moved[-1]['date'], '2026-09-30')
+
+    def test_the_superseded_table_never_wins_by_file_order(self) -> None:
+        """Known-bad control: a later superseded row must not become the last move.
+
+        This is the measured defect: the superseded 2026-09-28 row sits below the
+        session rows, so "the last row that is not NOT REACHED" selected it.
+        """
+        self.write(
+            '| Date | Game | Toolkit | Run ID | Event | Sites | Stop |\n'
+            '|---|---|---|---|---|---|---|\n'
+            + self.row('2026-09-30', '20260930-110000-000-c', '**MOVED**')
+            + '\n## Prior horizon (superseded 2026-09-29)\n\n'
+            '| Date | Game | Toolkit | Run ID | Horizon | Stop |\n'
+            '|---|---|---|---|---|---|\n'
+            + self.row('2026-09-28', '20260928-100000-000-old', 'event'))
+        rows = ledger_lint.ledger_rows()
+        self.assertEqual([r['superseded'] for r in rows], [False, True])
+        moved = [r for r in rows if r['moved'] and not r['superseded']]
+        self.assertEqual([r['date'] for r in moved], ['2026-09-30'],
+                         'the superseded row must not be selected as the last move')
+        # And the naive rule would have got it wrong, which is the control.
+        naive = [r for r in rows if not r['not_reached']]
+        self.assertEqual(naive[-1]['date'], '2026-09-28',
+                         'the old rule selects the superseded row; the new one must not')
+
+    def test_a_ledger_with_no_move_reports_none(self) -> None:
+        """Known-good: absence of a move is reported as absence, not as a date."""
+        self.write(
+            '| Date | Game | Toolkit | Run ID | Event | Sites | Stop |\n'
+            '|---|---|---|---|---|---|---|\n'
+            + self.row('2026-09-30', '20260930-100000-000-b', 'REPRODUCED'))
+        rows = ledger_lint.ledger_rows()
+        self.assertEqual([r for r in rows if r['moved']], [])
+
+
 class RealLedgerTests(unittest.TestCase):
     """The delivered ledger must pass its own lint."""
 

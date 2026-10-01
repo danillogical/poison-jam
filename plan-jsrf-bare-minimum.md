@@ -625,32 +625,32 @@ list is exhausted.
   - **The fix, and it is F3's first job:** the copy's **destination and length** are wrong, not the
     table. `sub_00038530` computes both. Not yet established: why the copy runs at all, and which of
     its callers is responsible. Cheapest honest class first (ledger Rules); do not patch the table.
-  - **F3 CAUSE FOUND 2026-09-30 — it is a wrong tail-jump alias.** The guest called `0x00037550`, but
-    the translator classified that address `detection_method: tail_jump_alias` and folded it into
-    `sub_00038530`, deleting its body. `0x00037550` is a real function (its own SEH prologue, `ret 4`
-    at `0x00038525`, then nop padding) and occurs exactly once as a pointer in a function-pointer table
-    at `.data VA 0x001EC108` with **0** direct call sites — so the table is its only route, and the fold
-    silently enters the wrong function. The generated dispatch's own
-    `[ALIAS-ICALL] target=0x00037550 owner=0x00038530` appears in **both** runs, and in the guard run it
-    is 19 log lines before the first `[RDATA-GUARD] write`, on the same thread. This is the same defect
-    class `config/recovered-functions.json` already documents for `0x000BCF40`, which was fixed by a
-    recovery entry plus a boundary fix.
-    **The fix is a reviewed recovery change** — a recovery entry for `0x00037550` spanning
-    `0x00037550..0x00038528`, then `scripts/recover-functions.py`, the alias pair re-pointed, and a
-    re-run. That is a packet's worth of work, so it is **not** done inside this chore; it is the first
-    item of the next session's F3.
-    **ATTEMPTED 2026-09-30 and BLOCKED on a toolkit limitation — this is the precise state.** The
-    config edit was written and tested, then **reverted**; the tree is clean and `recovered.c` is
-    unchanged. Three measured results:
-    1. **`recover-functions.py` aborts on exactly 2 of 3075 entries**, enumerated by translating every
+  - **SUPERSEDED — the three paragraphs below record F3's intermediate states (cause found, then
+    blocked, then fixed). They are kept as history; the authoritative outcome is the F3 DONE block
+    after F4.** The reasoning that follows is what the fix rested on, and the "BLOCKED" wording in it
+    describes a state that no longer holds.
+  - *(historical)* **F3 CAUSE FOUND 2026-09-30 — it is a wrong tail-jump alias.** The guest called
+    `0x00037550`, but the translator classified that address `detection_method: tail_jump_alias` and
+    folded it into `sub_00038530`, deleting its body. `0x00037550` is a real function (its own SEH
+    prologue, its own bare `ret` at `0x00037603`, its own jump table at `0x00037FB4`) and occurs
+    exactly once as a pointer in a function-pointer table at `.data VA 0x001EC108` with **0** direct
+    call sites — so the table is its only route, and the fold silently enters the wrong function. The
+    generated dispatch's own `[ALIAS-ICALL] target=0x00037550 owner=0x00038530` appears in **both**
+    runs, and in the guard run it is 19 log lines before the first `[RDATA-GUARD] write`, on the same
+    thread. This is the same defect class `config/recovered-functions.json` already documents for
+    `0x000BCF40`, which was fixed by a recovery entry plus a boundary fix.
+    **ATTEMPTED 2026-09-30 and BLOCKED on a toolkit limitation — this state is SUPERSEDED; the fix
+    landed later the same session (see the F3 DONE block).** The config edit was written and tested,
+    then reverted at that point; the tree was left clean and `recovered.c` unchanged. Three measured
+    results, all still valid:
+    1. **`recover-functions.py` aborted on exactly 2 of 3075 entries**, enumerated by translating every
        entry: `0x001063A0` (`/* TODO: arpl word ptr [eax], dx */` at `0x00106565`, past its `ret` at
-       `0x00106560`) and the new `0x00037550`. Both are spans that run past a terminator into
+       `0x00106560`) and the then-new `0x00037550`. Both were spans that ran past a terminator into
        non-code bytes. Tightening `0x000BCF40`'s end to its real `ret` at `0x000BD8B0` **worked** —
-       the abort moved on to `0x001063A0` — so that part of the fix is sound and reusable.
+       the abort moved on to `0x001063A0` — so that part of the fix was sound and reusable.
     2. **`0x00037550`'s four TODO markers all sit inside its own 36-entry jump table at
-       `0x00037FB4`** (`outsb`, `sti`, `popfd`, `aad`), which the translator is decoding as
-       instructions. The table's 36 targets are *all* inside the span, so the in-function-goto path
-       should apply.
+       `0x00037FB4`** (`outsb`, `sti`, `popfd`, `aad`), which the translator decoded as instructions.
+       The table's 36 targets are *all* inside the span, so the in-function-goto path applies.
     3. **The toolkit detects the table but the recovery path never uses it.** `_recover_cfg` for this
        address returns **3 jump tables** (41/41/5 targets) and decodes **0** instructions inside the
        table region — the CFG recovery is correct. But `translate_function` reaches its instructions
@@ -659,16 +659,11 @@ list is exhausted.
        reviewed entry directly, so `recovered is None`, the CFG knowledge is discarded, and
        `decode_function` falls back to a linear `disassemble_function` over the whole span — which
        walks into the table.
-    **So the blocker is toolkit-side, not game-side:** a reviewed recovery entry cannot express "this
-    span contains a jump table", even though the translator can compute it. Fixing it means teaching
-    `decode_function` (or `recover-functions.py`'s call path) to use `_recover_cfg`'s jump tables for
-    a reviewed entry — a toolkit change with its own tests, and the reason this is a packet and not a
-    chore edit. `0x001063A0` is the second instance of the same "span past the terminator" shape.
-    **The test of the diagnosis is unchanged:** fixing the alias should move the strict horizon. If it
-    does not, the diagnosis is wrong and the copy has another source.
-    **Follow-up worth a census:** whether any *other* `tail_jump_alias` fold deletes a
-    table-referenced function entry. `0x000BCF40` and `0x00037550` are two instances of one rule, and
-    the rule's population has never been enumerated.
+    **The way through was to end the span at the jump table**, so the linear decode never reaches the
+    table's bytes. That needs no toolkit change and is what landed.
+  - **Follow-up worth a census:** whether any *other* `tail_jump_alias` fold deletes a
+    table-referenced function entry. `0x000BCF40`, `0x00037550` and `0x00026780` are three instances of
+    one rule, and the rule's population has never been enumerated.
     **The census was attempted on 2026-09-30 and the instrument was NOT valid.** Scanning the XBE for
     each folded address as a raw 4-byte pattern reported 3501 of 3508 folded addresses as
     "referenced", which cannot be true — a 4-byte pattern matches by chance constantly. Recorded as a
@@ -678,23 +673,54 @@ list is exhausted.
 - **F2 — DONE 2026-09-30:** the DMA_PUT bit-16 mask (D1) is removed in toolkit `b857665`, and
   `docs/jsrf-kick-get-contract.md:60` records that `0x100410` is `NV_PFB_WBC`.
 - **F2b — DONE 2026-09-30:** ML3 (toolkit `e43e9bf`).
-- **F3 — Iterate the stop.** For each new stop: disassemble past it, check upstream/forks
-  (Mercenaries-Recompiled included), then fix with the cheapest honest class and a ledger entry.
-  Fallbacks: the guest heap keeps failing → ML2 (replacement XAPI heap, *reimplemented*); a vblank
-  wait hangs → ML5; missing APU interrupts or slow audio clocks → ML4.
-- **F4 — Frames.** Run with `RECOMP_GPU_ACK` on (default), `RECOMP_PB_EXEC=1`, `RECOMP_FB_WINDOW=1`
-  (ledger L16, L18). Missing draw forms or formats in the executor are fixed there; a GPU stall on
-  this path → ML6; if the title screen needs register combiners the CPU executor cannot show, start
-  ML7's feasibility study.
-  - **TRIED 2026-09-30, no frames yet.** `20260930-223608-115-f4-frames-pb-exec-fb-window`
-    (exploratory, 62 s): `diagnostic_deadline`, **0 invalid ICALLs, 0 exceptions, 0 ABI failures,
-    0 `[UNIMPL]`**, 138,597 log lines, 45,506 kernel calls — the longest the title has run on this
-    toolkit. **But `FLIP`, `present` and `FB_DUMP` are all 0**: the executor produced no frames, so
-    F4 is not satisfied and the run is a reachability result, not a rendering one. It also **does not**
-    isolate a cause: it differs from the strict pair in three settings at once, so the absence of the
-    `0x00037550` alias here does not show which one prevents it. The next F4 attempt should start from
-    a **strict** run (which clobbers at ~6 s) once F3's alias fix lands, and only then enable the
-    executor settings one at a time.
+- **F3 — DONE 2026-09-30. THE STRICT HORIZON IS CLOSED.** The kernel thunk table is no longer
+  overwritten and `.text` is no longer displaced. Two wrong `tail_jump_alias` folds were fixed by
+  recovery entries whose spans end at each function's own jump table:
+  `0x00037550` (slot `.data 0x001EC108`, folded into `sub_00038530`, span now `..0x00037FB4`) and
+  `0x00026780` (slot `.data 0x001EC10C`, folded into `sub_000278F0`, span now `..0x0002730C`). Two
+  further config spans that ran past their terminators were tightened so the recovery pass could run
+  at all: `0x000BCF40` (`..0x000BD8B0`) and `0x001063A0` (`..0x00106560`).
+  **Measured, strict profile, `RECOMP_APU_TRAP=1`, budget 100000:**
+
+  | Run | Outcome |
+  |---|---|
+  | `20260930-221054-913-f0b-first-run-new-toolkit` (before) | `0xE0424943` at 5.8 s, 17,906 lines |
+  | `20260930-225440-580-f3-alias-fix-strict` (alias 1) | `0xC0000409` at 14.6 s, ABI failure at `0x00026780` |
+  | `20260930-225739-446-f3-alias-fix-2-strict` (both) | **`diagnostic_deadline` at 93.0 s**, 487,394 lines, 0 invalid ICALLs, 0 `0xE0424943`, 0 exceptions, 0 ABI failures, 0 `[UNIMPL]` |
+
+  `check-dump-mapping.py` went from `CONTENT_MISMATCH` in every prior run to **`matches: 1,
+  content-mismatch: 0`**: `.text` at `0x00011000` is byte-identical to the XBE and `0x001C3F60` holds
+  the runtime's installed `FE000000+` thunks. Full finding in `docs/jsrf-technical-record.md` §5.
+  **Two caveats recorded with it.** (a) The recovery regeneration rewrote **3042 of 3075** bodies — a
+  generator-version effect (`uint32_t ebp = 0`, `RECOMP_FCMP_CC`), not only the two alias repairs; the
+  provenance record states this and the two intermediate runs isolate the aliases as what moved the
+  horizon. (b) `0x00037550`'s span and `stack_args: 0` were re-verified after review and are correct:
+  its own code ends at a bare `ret` at `0x00037603`, the `ret 4` at `0x00038525` belongs to
+  `0x00038460`/`0x0003848E`, and the runtime logged
+  `[RECOVERED] 0x00037550 returned; ABI verified (ESP/EBX/ESI/EDI)`.
+- **F3's continuing subject.** The 93-second run ended at its own deadline with no fault, so the next
+  stop is unknown. Fallbacks unchanged: the guest heap keeps failing → ML2 (replacement XAPI heap,
+  *reimplemented*); a vblank wait hangs → ML5; missing APU interrupts or slow audio clocks → ML4.
+- **F4 — Frames. THE ACTIVE NEXT STEP, and it is not in the renderer.**
+  **Diagnosed 2026-09-30: the submission walk stops on the first method the model does not know.**
+  On the fixed build (`20260930-230206-594-f4-frames-after-horizon-fix`, exploratory, 123.3 s, 629,781
+  lines, 0 invalid ICALLs/exceptions/ABI failures/`[UNIMPL]`), the run logs **64** `[PFIFO] submit`
+  lines: the first ten advance `get` (`0x1000` … `0x8B5C`), and **all 54 remaining report the same
+  `get=00008EF0`** while `put` keeps advancing. Submits #12 onward carry
+  `diag=unsupported_method … method=1720 … at=00008EF0`. `0x1720` is
+  **`NV097_SET_VERTEX_DATA_ARRAY_OFFSET`**. `FLIP`, `present` and `FB_DUMP` are all 0 because nothing
+  past that command is ever interpreted — enabling the executor cannot help until the walk advances.
+  **The implementation:** admit `NV097_SET_VERTEX_DATA_ARRAY_OFFSET` through the measured/generated
+  method inventory (`src/nv2a/nv2a_method_table.c`, produced by
+  `scripts/gen-nv2a-method-inventory.py`) and use the existing method-state path —
+  `pgraph_method()` already stores accepted NV097 parameters in `PGRAPHState.methods` (ledger D3,
+  toolkit `9fd83c6`). That is the cheapest honest class and it is the project's own pattern; **do not**
+  add a one-off "ignore unknown methods" special case, which would blind the walk to real gaps.
+  Toolkit change with its own test. Then re-run and see whether the walk reaches a draw method or stops
+  on the next unknown; the population of unhandled methods is unknown until it advances past this one.
+  Fallbacks once frames exist: missing draw forms/formats are fixed in the executor; a GPU stall on
+  this path → ML6; if the title needs register combiners the CPU executor cannot show, start ML7's
+  feasibility study.
 - **F5 — Intro movies.** If the Sofdec intros block, skip them (ledger: *patched* or *intentionally
   ignored*); decoding them is post-slice (M29).
 - **F6 — Title screen (M15).** Acceptance: a frame dump of the title screen plus the run record with

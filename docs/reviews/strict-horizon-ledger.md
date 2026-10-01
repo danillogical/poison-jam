@@ -19,7 +19,7 @@ Rules this ledger follows:
 | 2026-09-29 | `44becd4` | `2a349c8` | `20260929-231211-023-rebaseline-gmeter` | same | `0x0014982E` (tid 46508) | 06:12:16.688 |
 | 2026-09-30 | `5776aab` | `2a349c8` | `20260930-001405-390-v1-verified-strict` | same (kernel thunk table overwritten); re-verified on the binary built this session from the same revision pair | `0x0014982E` (tid 64532) | 07:14:15.588 |
 | 2026-09-30 | `5fc6348` | `4ec3eca` | `20260930-034938-427-ttd-exit-control` | **NOT REACHED** — `diagnostic_deadline` at 11.98 s with **0 invalid ICALLs**; the guest was still live (1002 kernel calls, 6 threads, 0 `[UNIMPL]`, 0 exceptions, the same 10 data exports) | none | 10:49:50.4 |
-| 2026-09-30 | `5fc6348` | `4ec3eca` | `20260930-053228-652-nonttd-196a29` | **NOT REACHED** — `diagnostic_deadline` at 25.04 s, 0 invalid ICALLs, 0 `[UNIMPL]`, 3226 log lines. Reaches and passes `0x00196967`/`0x00194520`/`0x00196A65`, the region where the TTD-recorded run dies at 577 lines | none | 12:32:53.7 || 2026-09-30 | `5fc6348` | `4ec3eca` | `20260930-053228-652-nonttd-196a29` | **NOT REACHED** — `diagnostic_deadline` at 25.04 s, 0 invalid ICALLs, 0 `[UNIMPL]`, 3226 log lines. Reaches and passes `0x00196967`/`0x00194520`/`0x00196A65`, the region where the TTD-recorded run dies at 577 lines | none | 12:32:53.7 |
+| 2026-09-30 | `5fc6348` | `4ec3eca` | `20260930-053228-652-nonttd-196a29` | **NOT REACHED** — `diagnostic_deadline` at 25.04 s, 0 invalid ICALLs, 0 `[UNIMPL]`, 3226 log lines. Reaches and passes `0x00196967`/`0x00194520`/`0x00196A65`, the region where the TTD-recorded run dies at 577 lines | none | 12:32:53.7 |
 | 2026-09-30 | `5fc6348` | `4ec3eca` | `20260930-053502-372-nonttd-90s` | **NOT REACHED** — `diagnostic_deadline` at 93.94 s, 0 invalid ICALLs, 0 `[UNIMPL]`, 4031 log lines. Reaches and passes `0x00196967`/`0x00194520`/`0x00196A65`, the region where the TTD-recorded run dies at 577 lines | none | 12:35:03.3 |
 | 2026-09-30 | `5fc6348` | `4ec3eca` | `20260930-053722-314-v3-repro-check` | **REPRODUCED** — the kernel thunk table overwritten and the next thunk call faults: `[ICALL] invalid target 0x00000000` `return=0014982E` (slot 65), `exit_code=0xE0424943`, 16442 log lines, 0 ABI failures, 1 `[EXCEPTION]` at that code | `0x0014982E` (tid 21432) | 12:37:32.1 |
 | 2026-09-30 | `5fc6348` | `1572256` | `20260930-081601-393-read-dst-verify` | **REPRODUCED** — the same terminal site on a build carrying the toolkits new `[READ] dst=` field: `[ICALL] invalid target 0x00000000 return=0014982E`, `exit_code=0xE0424943`, 0 ABI failures. Recorded because W14 requires every archived STRICT run to have a row, and because it shows the observation-only toolkit change did not move the horizon | `0x0014982E` (tid 4612) | 08:16:10.6 |
@@ -29,19 +29,32 @@ Rules this ledger follows:
 | 2026-09-30 | `ef2c855` | `86113c7` | `20260930-225440-580-f3-alias-fix-strict` | **MOVED** — first run after the `0x00037550` recovery entry. The kernel thunk table is **no longer overwritten**: `invalid target` 0, `0xE0424943` 0. The run ends at 14.6 s on `exit_code=0xC0000409` with `[RECOVERED] ABI FAILURE 0x00026780` — the **next entry in the same function-pointer table** (`.data 0x001EC10C`, where `0x00037550` sits at `0x001EC108`), same defect shape. Strict, `RECOMP_APU_TRAP=1`, budget 100000, 77,608 log lines | `0x00026780` (ABI) | 2026-10-01 05:54:41.1 |
 | 2026-09-30 | `ef2c855` | `86113c7` | `20260930-225739-446-f3-alias-fix-2-strict` | **MOVED, and the clobber is gone** — after also retargeting `0x00026780` to its own code (ending at its jump table `0x0002730C`). `diagnostic_deadline` at **93.0 s** (against ~6 s before), **0** invalid ICALLs, **0** `0xE0424943`, **0** `[EXCEPTION]`, **0** ABI failures, **0** `[UNIMPL]`, 487,394 log lines. `check-dump-mapping.py` reports **`matches: 1, content-mismatch: 0`** (it was `CONTENT_MISMATCH` in every prior run): `.text` at `0x00011000` is byte-identical to the XBE, and the thunk table at `0x001C3F60` holds the runtime's installed `0xFE000000+` thunks instead of the record array. **The A2h/C1 terminal event is closed.** Strict, `RECOMP_APU_TRAP=1`, budget 100000 | none (deadline) | 2026-10-01 05:57:40.3 |
 
-**The 2026-09-30 F1 row is the horizon's cause, not a new horizon.** The two rows above
-are the same event: the kernel thunk table `0x001C3F60..0x001C4140` is overwritten by a
-copy that carries the XBE's own `.data` content over it. What the second row adds is the
-writer's identity and the mechanism, both measured — see `docs/jsrf-technical-record.md`
-§5 and the compatibility ledger. The **horizon event is unchanged**; the *first site* that
-faults differs between the two runs because the fault races the copy's progress.
+**`20260930-221054-913-f0b-first-run-new-toolkit` and `20260930-221404-630-f1b-rdata-guard` are
+the same event, not two horizons.** In both, the kernel thunk table `0x001C3F60..0x001C4140` is
+overwritten by a copy that carries the XBE's own `.data` content over it. What the second run adds
+is the writer's identity and the mechanism, both measured — see `docs/jsrf-technical-record.md` §5
+and the compatibility ledger. The **horizon event is unchanged** between them; the *first site* that
+faults differs (`0x0014982E` vs `0x00147CF8`) because the fault races the copy's progress.
 
-**The 2026-09-30 row is a strict run that did not reach the horizon, and it is recorded as
-such.** It is the discriminating control for the TTD question: the same environment
-(`RECOMP_GPU_ACK=0` only) that exits `0xC0000409` under TTD recording runs to its deadline
-without it. Reading it as a horizon *move* would be exactly the error this ledger exists to
-prevent — the horizon is an event, and no thunk call faulted here. What it establishes is the
-comparison, not progress.
+**`20260930-034938-427-ttd-exit-control` and `20260930-053228-652-nonttd-196a29` are strict runs that
+did not reach the horizon, and they are recorded as such.** The first is the discriminating control
+for the TTD question: the same environment (`RECOMP_GPU_ACK=0` only) that exits `0xC0000409` under
+TTD recording runs to its deadline without it. Reading either as a horizon *move* would be exactly
+the error this ledger exists to prevent — the horizon is an event, and no thunk call faulted in
+them. What they establish is the comparison, not progress.
+
+**`20260930-225440-580-f3-alias-fix-strict` and `20260930-225739-446-f3-alias-fix-2-strict` are the
+two rows that actually moved the horizon, and they moved it by removing the event.** The first fixed
+the `0x00037550` fold and the table stopped being clobbered, so its terminal fault is a *different*
+event (an ABI failure at the next slot, `0x00026780`). The second fixed that fold too, and the run
+reached its 93-second deadline with the table intact and `.text` undamaged. The horizon is therefore
+**closed**, not relocated: there is no longer a terminal event to record, and the next stop is
+whatever the deadline-bounded run reaches next.
+
+**Which rows count as progress.** A row is a horizon **move** only if it says `MOVED`; `REPRODUCED`
+means the same event was observed again, and `NOT REACHED` means no event occurred. The checker reads
+this distinction (`scripts/check-horizon-ledger.py`), and the superseded table below is excluded from
+its calculation.
 
 ## Prior horizon (superseded 2026-09-29)
 

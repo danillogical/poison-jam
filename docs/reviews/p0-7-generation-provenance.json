@@ -29,6 +29,20 @@
       "new_sha256": "e1007de83bf802bac0ec192025c6c274bed7d86f845f8e653619f31f2a7a69a4",
       "old_sha256": "528770f45a6dee0c1feee45db9921fad561cb0a268eee313a444d24c9e143c83",
       "path": "src/recomp/gen/recomp_types.h"
+    },
+    {
+      "cause": "review pass: the `evidence` prose of three recovery entries still named their pre-fix spans after their `end` values moved in the F3 fix (0x00026780 said ..0x00027070, now ..0x0002730C; 0x000BCF40 said ..0x000BD8D0, now ..0x000BD8B0; 0x001063A0 said ..0x00106580, now ..0x00106560). Each now names its actual span and records why the boundary moved.",
+      "date": "2026-09-30",
+      "evidence": [
+        "`evidence` is not read by any generator: recover-functions.py, relift-selected.py and gen-abi-deltas.py contain 0 reads of it, and the lifter/translator never read it as a dict key",
+        "measured earlier this session: translating 41 config entries twice, with and without the `evidence` key, produced byte-identical C 41/41",
+        "the three edits are prose-only, so no generated output changed: the manifest lists this path as an input, and no `generated_outputs` hash moved with it",
+        "amended, not regenerated: generators, command and lifter identity are those of the 2026-09-29 pass, and the recovery pass of 2026-09-30"
+      ],
+      "kind": "input",
+      "new_sha256": "2148aa7a7579b0390b95260617b74a9e658f06b3868dc22b06539c6befabef46",
+      "old_sha256": "84738ea28e4efa493dccf697d87aba9ddd8b20b337b4656425e1f48f7332b3c8",
+      "path": "config/recovered-functions.json"
     }
   ],
   "checker_version": "jsrf-generation-provenance/1",
@@ -83,9 +97,9 @@
       "sha256": "96110ed592a25d984dbd7f7715a1ec78ec66ac0514efad09fcc73df8fc1414fb"
     },
     "config/recovered-functions.json": {
-      "bytes": 2799077,
+      "bytes": 2800050,
       "present": true,
-      "sha256": "84738ea28e4efa493dccf697d87aba9ddd8b20b337b4656425e1f48f7332b3c8"
+      "sha256": "2148aa7a7579b0390b95260617b74a9e658f06b3868dc22b06539c6befabef46"
     },
     "config/recovery-unresolved.json": {
       "bytes": 8288,

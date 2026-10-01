@@ -201,6 +201,15 @@ if(BUILD_TESTING)
         ENVIRONMENT "RECOMP_APU_TRACE=1;RECOMP_APU_PWRITE_WATCH=1"
         PASS_REGULAR_EXPRESSION "AC-PWRITE events=2 in_image_i=1 above_image_i=1 ngp_skipped=0 invalid=0")
     add_test(NAME jsrf_gpu_inspection COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_gpu_inspection.py)
+    # P0.7 generation provenance.  Registered here because it was NOT: the checker was
+    # wired into `just check` only, so `just test` could not catch a provenance failure,
+    # and the gate stayed red for 73 commits without a session noticing (measured
+    # 2026-09-30).  It is a pure-Python unittest over the recorded manifest, the
+    # preservation baseline and the live generated tree, so it needs no build target.
+    # TIMEOUT is generous because it hashes the generated tree and runs `--check-only`.
+    add_test(NAME jsrf_generation_provenance
+        COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_generation_provenance.py)
+    set_tests_properties(jsrf_generation_provenance PROPERTIES TIMEOUT 300)
     # A2h-arming-coverage-attribution C1/C2.  The fixture lives in the toolkit's tests/
     # directory, like tests/apu_watch_fixture_test.c and tests/kernel_inplace_event_test.c,
     # because it is a standalone collector fixture and the game repo keeps no fixture of

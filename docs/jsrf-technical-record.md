@@ -385,8 +385,33 @@ through the table entered an unrelated function:
 
 | Address | Table slot | Folded into | Its own code ends | Its jump table |
 |---|---|---|---|---|
-| `0x00037550` | `0x001EC108` | `sub_00038530` | `0x00038525` (`ret 4`) | `0x00037FB4` |
+| `0x00037550` | `0x001EC108` | `sub_00038530` | `0x00037603` (bare `ret`) | `0x00037FB4` |
 | `0x00026780` | `0x001EC10C` | `sub_000278F0` | `0x00026816`+epilogue | `0x0002730C` |
+
+**The `0x00037550` span and ABI were re-verified after review, and `stack_args: 0` is correct.** The
+review question was whether the `ret 4` at `0x00038525` belongs to this function, since the recovery
+entry declares no stack arguments and `recover-functions.py` derives its expectation as
+`stack_delta = 4 + stack_args` (`scripts/recover-functions.py:77-86`). It does **not** belong to it.
+Three independent measurements agree:
+
+1. **The translator's control-flow-following decoder reaches exactly one `ret` from `0x00037550`: a
+   bare `ret` at `0x00037603`** (`c3`), the end of the function's own SEH epilogue
+   (`xor eax,eax` / `mov ecx,[esp+0x218]` / `pop edi/esi/ebp/ebx` / `mov fs:[0],ecx` /
+   `add esp,0x214` / `ret`). Every switch arm jumps to `0x000375E9`/`0x000375EB` and leaves there.
+2. **`0x00038525` is not reachable from `0x00037550` at all.** The decoder's set ends at `0x00037FAD`;
+   `0x00038525` is 0x5B8 bytes beyond it and is only reached from a different function. Decoding
+   `0x00038460..0x00038530` and `0x0003848E..0x00038530` both reach it — and both are `ret 4`
+   functions of their own, so the `ret 4` belongs to them.
+3. **The runtime ABI check passed on the fixed build.** Run
+   `20260930-225739-446-f3-alias-fix-2-strict` logs
+   `[RECOVERED] 0x00037550 returned; ABI verified (ESP/EBX/ESI/EDI)`, and there is no
+   `ABI FAILURE 0x00037550` line anywhere in it. The generated wrapper asserts
+   `g_esp == before_stack + 4`, so the guest's own call convention confirms the bare `ret`.
+
+An earlier version of this table and of the bullet below said the function "ends `ret 4` at
+`0x00038525`". That was wrong — it described the fold's span end, not the function's own code — and it
+is corrected here rather than deleted, because it is the kind of error that would otherwise justify a
+wrong `stack_args` in the next recovery entry.
 
 `sub_00038530`'s `rep movsd` copied the XBE image from `+0x37608` over `.text` and `.rdata`, 1.70 MB
 from `0x00011000` to the thunk table. The generated dispatch named the first substitution itself:
@@ -437,10 +462,11 @@ defect, and it is measured end to end.
   (`src/recomp/gen/recomp_dispatch.c`). It appears in **both** F1 runs, and in the guard run it is at
   log line 17896 — **19 lines before** the first `[RDATA-GUARD] write` at 17915, on the same thread
   (tid 24300). The copy is what the guest got *instead of* calling `0x00037550`.
-- **`0x00037550` is a real function with its own body.** It ends `ret 4` at `0x00038525`, followed by
-  seven `nop` bytes of padding to `0x00038530`. It has its own SEH prologue at its start
-  (`push -1` / `mov eax, fs:[0]` / `push 0x1870EE`) and a jump table at `0x00037FB4` on
-  `[esi+0x15DC]`.
+- **`0x00037550` is a real function with its own body.** Its own code ends at a bare `ret` at
+  `0x00037603`, the end of its SEH epilogue; `0x00038525` holds a `ret 4` that belongs to
+  `0x00038460`/`0x0003848E`, not to this function (see the re-verification above). It has its own SEH
+  prologue at its start (`push -1` / `mov eax, fs:[0]` / `push 0x1870EE`) and a jump table at
+  `0x00037FB4` on `[esi+0x15DC]`.
 - **It is a function entry by definition.** It occurs **exactly once** as a 32-bit pointer in the XBE,
   in a run of distinct `.text` addresses at `.data VA 0x001EC108` — neighbours `0x00036640`,
   `0x00028500`, `0x00037550`, `0x00026780`, `0x00038890`, `0x0002AD60`. It has **0** direct
