@@ -644,6 +644,12 @@ list is exhausted.
     **Follow-up worth a census:** whether any *other* `tail_jump_alias` fold deletes a
     table-referenced function entry. `0x000BCF40` and `0x00037550` are two instances of one rule, and
     the rule's population has never been enumerated.
+    **The census was attempted on 2026-09-30 and the instrument was NOT valid.** Scanning the XBE for
+    each folded address as a raw 4-byte pattern reported 3501 of 3508 folded addresses as
+    "referenced", which cannot be true — a 4-byte pattern matches by chance constantly. Recorded as a
+    **failed instrument**, not as a population count. A usable census needs the function-pointer tables
+    identified first (the way `0x000BCF40`'s and `0x00037550`'s entries were), then membership tested
+    against those tables, not a raw dword search.
 - **F2 — DONE 2026-09-30:** the DMA_PUT bit-16 mask (D1) is removed in toolkit `b857665`, and
   `docs/jsrf-kick-get-contract.md:60` records that `0x100410` is `NV_PFB_WBC`.
 - **F2b — DONE 2026-09-30:** ML3 (toolkit `e43e9bf`).
@@ -758,6 +764,25 @@ as owner-directed work.
   `0x000BD8B0` into padding that decodes as `aaa`, which the lifter reports as
   `/* TODO: aaa */`. The live `recovered.c` predates the check and is unaffected. This is
   the first concrete blocker for the rebuild AGENTS.md records as never done end to end.
+  **Diagnosed and fixed-in-principle 2026-09-30.** The abort is **not** a regression from the
+  `86113c7` pull: a worktree at the pre-pull `1572256` emits the same `/* TODO: aaa */`
+  for the same entry, measured directly. The committed `body_000BCF40` stops at
+  `loc_000BD8AB` (its last label; no label at or after `0x000BD8B0`), so the generation
+  that produced it never walked the padding — the config's `end` and the check have been
+  inconsistent since `ddb0697` tightened bounds.
+  **The fix is one field and it is verified in memory:** ending the entry at
+  `0x000BD8B0` (the `ret`) yields a body with **0** TODO markers and all real labels
+  preserved (`000BD889`, `000BD8A9`, `000BD8AB`); `0x000BD8B1` and the other candidates
+  also clear it, but `0x000BD8B0` is the instruction boundary. Applying it is part of the
+  F3 recovery work below, because it must be followed by a regeneration and a re-run.
+  The boundary is confirmed against the XBE's own bytes: `.text` at file offset `0xAD8AB`
+  holds `5e 5d 83 c4 10 c3 8d 49 00 90` — `pop esi` / `pop ebp` / `add esp,0x10` / `ret`
+  at `0x000BD8B0` / `lea ecx,[ecx]` / `nop`, then padding.
+  *(A note here first claimed `inspect-jsrf.py data` and `disasm` disagreed about the byte
+  at `0x000BD8B0`. They do not: `data` prints little-endian dword **values**, so its
+  `C4835D5E` is the bytes `5e 5d 83 c4`. The claim was a misreading of the output format
+  and is withdrawn; it is recorded because this is exactly the transcription-error class
+  plan W5/T10 exists for.)*
 
 If no packet is promoted in the authoritative plan file, packet implementation is BLOCKED; chores
 listed here run as owner-directed changes once the owner adopts this plan.
