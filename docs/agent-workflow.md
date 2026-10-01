@@ -243,8 +243,8 @@ question itself.
 10. Write each review record to disk, from the reviewer's own response, **before**
     starting the next revision or promoting.
 
-**Session** — owns integration, build, run, evidence collection, and record keeping.
-It drafts the mechanical parts of a packet (commands, paths, hashes, environment) and
+**Session** — owns integration, evidence, and record keeping, and directs the workers
+that do most of the execution (worker-first, below). It drafts the mechanical parts of a packet (commands, paths, hashes, environment) and
 verifies that every command in a draft actually runs before submitting it for review.
 It does not author criteria or decision rows on its own authority (§5.1), and while the
 Planner works it keeps the brief frozen (§5.1).
@@ -273,16 +273,78 @@ implementation-worker progress gate below in the brief. A worker's no-progress s
 not permission to spawn an identical replacement automatically; the Session first
 routes the returned blocker through the normal escalation ladder.
 
-**Worker subagents** — used for context isolation (summarize a large log or dump) or
-bounded implementation (explicit files, contract, and check). Workers keep disjoint
-write scopes, never touch policy documents, stop at ambiguity or at the edge of their
-scope, and return `file:line` or artifact evidence marked **MEASURED** or
-**INFERRED**. A worker never owns final integration, build, or run.
+**Worker subagents — worker-first.** Worker tokens are unlimited and Session tokens are
+not (owner, 2026-10-01). The Session therefore delegates by default and spends its own
+tokens on what only it can do. The test for each piece of work: **delegate when doing it
+would cost the Session more than writing the brief and reading the summary.** Worker
+churn — retries, dead ends, long reads, parallel attempts — costs nothing and is never
+a reason to keep work in the Session.
+
+Delegate by default:
+
+- **bulk reading** — logs, dumps, traces, run artifacts (`stacks.txt`, GPU reports),
+  disassembly ranges, generated chunks, large source files, test and build failures;
+- **search** — prior art (the sources under *Pragmatic duties*), "where is X
+  written/called/defined", symbol and address hunts (derived per `AGENTS.md`, never by
+  one spelling);
+- **mechanical execution** — `just build`/`test`/`check`, bounded runs and probes,
+  relifts and regeneration, packet dry-run transcripts and hashes (W3), the W2 premise
+  checklist, the W5 value re-check, the strict-horizon ledger line;
+- **specified edits** — ledger entries, manifest and boundary edits, fixtures and tests
+  for a stated behaviour, repetitive refactors, name and document sweeps;
+- **brief assembly** — gathering the `READ YOURSELF` set and measurements for a Planner,
+  Advisor or Reviewer brief; the Session edits the brief, it does not research it;
+- **competing hypotheses** — one read-only worker per hypothesis, in parallel, each
+  returning its cheapest discriminating observation.
+
+Keep in the Session:
+
+- decisions; reconciling worker results that disagree; criteria and record text;
+  commits and pushes; every exchange with a senior role or the Reviewer;
+- work of a few tool calls with small output, where the brief costs as much as the work;
+- the direct check of a load-bearing fact (§2.4.2), kept to one small read because
+  workers cite exactly;
+- integration already in flight, whose context would cost more to hand over than to finish.
+
+Do not overdo it:
+
+- never read a worker's transcript; if its summary does not settle the question, send a
+  follow-up to the same worker or spawn a narrower one;
+- do not spawn a worker to confirm another worker's result unless the result is
+  load-bearing and the confirmation costs the Session less than checking it directly
+  (W5 is the standing case);
+- run no more parallel workers than the Session will read summaries from — about four.
+
+**Concurrency.** Read-only workers run in parallel freely. Writing workers keep disjoint
+write scopes. Builds and game runs share `build/`, the game root and the emulated disk
+images, so **one** worker at a time holds the build/run slot, named in its brief.
+
+**Briefs and returns.** A brief cites files and commands instead of pasting their
+content, and states the goal, read-only or write scope, done-when, and this return
+format:
+
+```text
+STATUS: DONE | PARTIAL | BLOCKED
+ANSWER: <at most 15 lines>
+EVIDENCE: <file:line, artifact path, or command + output sha256; each MEASURED or INFERRED>
+OPEN: <what remains unknown> | NONE
+DETAIL: <path of the full report> | NONE
+```
+
+Long output, tables and reasoning go in a full report under `logs/workers/` (gitignored;
+scratch, never a record or durable source). The Session opens it only when the summary
+does not settle a decision. A worker summary is a lead (§2.4.2), not evidence.
+
+Workers never touch policy documents and stop at ambiguity or at the edge of their
+scope. A worker executes builds and runs exactly as briefed but does not own them: the
+Session reads the run's `result.json` and profile itself before any claim, and owns
+integration and the record.
 
 **Implementation-worker progress gate.** This gate applies to bounded implementation
-workers, not read-only/log-analysis workers.
+workers, not read-only/log-analysis workers. It exists to bound wall time and drift, not
+cost.
 
-- By **15 tool calls**, the worker must have produced at least one concrete execution
+- By **25 tool calls**, the worker must have produced at least one concrete execution
   artifact: an edit, compile/build attempt, test run, generated fixture, or a bounded
   blocker report.
 - If it has not, it stops broad investigation and either performs the smallest safe
@@ -293,7 +355,7 @@ workers, not read-only/log-analysis workers.
 - A worker may not restart architecture/source exploration from first principles after
   an implementation failure unless new contradictory evidence invalidates the prior
   design premise.
-- If **two consecutive 10-call stretches** produce no new artifact, measurement, or
+- If **two consecutive 15-call stretches** produce no new artifact, measurement, or
   narrowed blocker, the worker stops and returns control to the Session.
 - Re-reading the same files or reconsidering already-settled design alternatives
   without new contradictory evidence counts as **no progress**.
@@ -726,6 +788,9 @@ The Reviewer checks:
    pushed at a push checkpoint, with each push's preconditions met.
 3. **Honest reply.** Every claim in the draft reply is supported by an artifact or
    command, and nothing that failed, was skipped, or is `UNVERIFIED` is reported as done.
+4. **Delegation (advisory only).** Bulk reading or long mechanical work the Session did
+   itself that worker-first (§2.2) assigns to workers. This never causes `CONTINUE` —
+   redoing finished work wastes more — it is recorded so the pattern is visible.
 
 It returns:
 
@@ -733,6 +798,7 @@ It returns:
 TURN_END: END | CONTINUE
 REMAINING: <each item: what is undone; evidence; why no legitimate stop covers it> | NONE
 REPLY_CORRECTIONS: <each unsupported or overstated claim> | NONE
+DELEGATION: <each piece of work that should have gone to a worker> | NONE
 ```
 
 On `CONTINUE` the Session does the remaining work, corrects the reply, and requests a
