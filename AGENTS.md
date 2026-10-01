@@ -261,7 +261,8 @@ is required, use exactly:
 python -m tools.recomp game/default.xbe --all --split 1000 \
     --gen-dir src/recomp/gen --game-name "Jet Set Radio Future" \
     --manual-functions config/manual-functions.json \
-    --exclude-manual src/recomp_manual.c
+    --exclude-manual src/recomp_manual.c \
+    --trace-functions config/trace-functions.json
 ```
 
 `recomp_funcs.h`, `recomp_NNNN.c`, `recomp_dispatch.c`, and

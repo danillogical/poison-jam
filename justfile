@@ -58,7 +58,7 @@ ctest:
 
 # Full translation pass: regenerate src/recomp/gen from the original XBE.
 regen:
-    $env:PYTHONPATH = "{{toolkit}}"; {{python}} -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name "Jet Set Radio Future" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c
+    $env:PYTHONPATH = "{{toolkit}}"; {{python}} -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name "Jet Set Radio Future" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json
 
 # Strict-profile guest run; sets RECOMP_GPU_ACK=0 for you.
 strict-run label="strict":
