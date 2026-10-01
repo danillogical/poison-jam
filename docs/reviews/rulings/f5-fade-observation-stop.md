@@ -24,7 +24,7 @@ External full evidence: [fixture stop report](<C:/Users/logic/jsrf-handoffs/f5-f
 
 **No actual-reader RED, GREEN, gate-off, null-root, null-slot or out-of-range control was executed.** No semantic control passed or failed. No fixture CTest result exists.
 
-The worker did run a throwaway public-reader reconnaissance probe with an unauthorized dispatch seam pair. This exceeded the seam boundary and is explicitly rejected as control or guest evidence. It was disclosed, construction stopped, and the draft was removed from the toolkit tree. The probe is not the authorized game guest run.
+The worker did run a throwaway public-reader reconnaissance probe with an unauthorized dispatch seam pair. The exact number of probe runs and additional construction shapes is not established; provenance gaps remain recorded. This exceeded the seam boundary and is explicitly rejected as control or guest evidence. It was disclosed, construction stopped, and the draft was removed from the toolkit tree. The probe is not the authorized game guest run.
 
 The classifier draft had 91 passing synthetic pytest cases, synthetic CLI samples and read-only parsing of the earlier archived run. None substitutes for actual-reader controls. Its three reported wrong-answer fixes exceeded the two-revision cap; no manual W5 decision input was completed. The drafts were moved outside the repository, not accepted or pushed as code:
 
