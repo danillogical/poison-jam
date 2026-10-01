@@ -746,7 +746,16 @@ list is exhausted.
   staging and sink to the existing 4096-word walk budget, move staging into PFIFO state, retain
   whole-submission atomicity and all other rejection rules. The local atomicity approximation is
   recorded as L40; hardware/prior art dispatch per method. Verbatim decision, basis, tests and reversal
-  conditions: `docs/reviews/rulings/f4-submission-capacity.md` (TR §5). Implementation/validation pending.
+  conditions: `docs/reviews/rulings/f4-submission-capacity.md` (TR §5). **Implemented; focused tests
+  measured:** both sink and PFIFO-owned staging hold 4096 entries, both statically asserted against the
+  word budget; 1024-packet budget and action/rejection atomicity unchanged. New tests accept 1109
+  methods over 555 packets (1664 words, same method count but different shape from the real stream)
+  and one count-1025 packet (1026 words). Reversing only the toolkit fix produces **9 assertion
+  failures**; restoring it produces **344 passing register/clock contracts**. Toolkit action checks
+  pass. The fixture holds only 2048 words, so no >4096-word budget rejection fixture was added;
+  the static assertions pin method-capacity ≥ word-budget. Toolkit commit `e8a6e03`.
+  **Full validation passed:** toolkit Release build, 5/5 CTest, 30 lifter unittests; game `just check`
+  and `just test` (29/29 CTest). `xbox_guest_meter` passed both runs. Guest smoke pending.
   **Historical stop:** Whether the answer is a larger sink,
   a sink that drains as it fills, or incremental commit during the walk is a design question about what
   the sink is *for*, not a constant to raise. Do not start the next long run until that is decided.

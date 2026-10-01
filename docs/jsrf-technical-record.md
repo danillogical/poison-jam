@@ -427,7 +427,7 @@ right answer is a larger sink, a sink that drains as it fills, or whether stagin
 submission means the walk should be committing incrementally. That is a design question about what the
 sink is *for*, not a constant to raise.
 
-**F4 capacity ruling, 2026-10-01 (owner-directed chore; implementation pending).** The Persistent
+**F4 capacity ruling, 2026-10-01 (owner-directed chore; implemented, full validation pending).** The Persistent
 Advisor chose A′: size both `staged[]` and `sink[]` to the existing 4096-word budget, place staging in
 PFIFO state rather than the stack, and preserve all-or-nothing submission admission and the other
 rejection rules. This is cheapest within the existing architecture, not hardware-faithful incremental
@@ -435,6 +435,24 @@ PFIFO→PGRAPH dispatch. L40 records the deliberate atomicity approximation; it 
 hardware cause. The exact response, observed/inferred basis, focused regressions, next-stop procedure
 and reversal conditions are in `docs/reviews/rulings/f4-submission-capacity.md`. Advisor child
 `4e6d87e1-f748-48b3-a0a4-a6e5728bfeee`, `claude/claude-opus-5-5` @ `high`, continuity PASS.
+
+**Focused regression measured.** Game `tests/test_nv2a_contract.c` replaces only the old
+`USER sink capacity` rejection with acceptance of 1109 methods over 555 packets (1664 words;
+same method count, not the real packet shape) and a single count-1025 packet (1026 words).
+Assertions cover acceptance, method count, GET=PUT and one successful commit; the multi-packet case
+also checks packet count. With only the worker's toolkit patch reversed, those new cases produce
+9 assertion failures (exit 1); after restoring it, all 344 register/clock contracts pass (exit 0).
+Toolkit `nv2a_actions_test` reports all checks passed. Exact commands are the Release CMake targets
+`jsrf_nv2a_test` and `nv2a_actions_test`, followed by their binaries; no guest run is implied by these
+fixtures. The 2048-word fixture cannot represent a >4096-word budget stop, so the existing packet-
+budget rejection remains and static assertions pin both method capacities to the word budget.
+Toolkit commit `e8a6e03`. Full validation measured: toolkit Release build exit 0, CTest 5/5,
+30 lifter unittests; game `just check` exit 0 and `just test` build plus 29/29 CTest.
+`xbox_guest_meter` passed both suites. The one bounded F4 guest smoke remains pending.
+
+**Deferred optional test advisory.** Do not add a diagnostic-is-OK assertion after the measured
+red/green runs merely for churn; reopen if a future failure of the 1109-method case fails without
+naming its diagnostic. Advisor accepted this deferral after independently inspecting both diffs.
 
 **Not established.** Whether `0x1720` is the *only* blocker or the first of a series: the walk stops at
 the first unknown method, so the population of unhandled methods JSRF's first frames need is unknown

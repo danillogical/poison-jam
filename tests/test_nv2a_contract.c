@@ -833,9 +833,62 @@ int main(void)
         submit_reset(gpu, 0, 12);
         REJECT_CASE("USER method range", 0, 12, "method_range_overflow");
 
-        memset(pb, 0, 0x2000); pb[0] = (1025u << 18) | 0x100u;
-        submit_reset(gpu, 0, 0x1008);
-        REJECT_CASE("USER sink capacity", 0, 0x408, "sink_capacity");
+        /* The old "USER sink capacity" rejection is gone: the walk's bound is
+         * the submission's word budget, not the number of methods, and the
+         * sink and the walk's staging both hold a whole budget
+         * (NV2A_SUBMIT_MAX_WORDS, asserted in nv2a_core.c). The fixture window
+         * is 0x2000 bytes = 2048 words, so it cannot carry the 4097 words a
+         * word-budget REJECT_CASE would need: the fixture cannot test
+         * word-budget rejection, and the runtime word limit is not what the
+         * static assertions cover. Method-capacity overflow is structurally
+         * unreachable at the walk bound -- a staged method consumes a word, so
+         * staged <= words <= budget -- and the static assertions pin exactly
+         * that relationship between the budget and the two capacities. The
+         * packet-budget case above still rejects with the same atomicity
+         * checks. What is testable is that the method cap no longer rejects: */
+        {
+            /* (a) More than 1024 staged methods spread over several packets --
+             * the real method count, in a different packet shape. Under the old
+             * 1024-method cap this rejected as "sink_capacity" although it is
+             * well inside the word budget. */
+            const unsigned nop_packets = 554;      /* 2 non-incrementing NOPs each */
+            const unsigned want_methods = nop_packets * 2u + 1u;   /* 1109 */
+            unsigned w = 0;
+            memset(pb, 0, 0x2000);
+            for (unsigned i = 0; i < nop_packets; ++i) {
+                pb[w++] = 0x40000000u | (2u << 18) | 0x100u;
+                pb[w++] = 0;
+                pb[w++] = 0;
+            }
+            pb[w++] = 0x40000000u | (1u << 18) | 0x100u;
+            pb[w++] = 0;
+            submit_reset(gpu, 0, w * 4);
+            ok &= check(nv2a_submit_pending(gpu), 1,
+                        "USER 1109-method multi-packet stream accepted");
+            ok &= check(gpu->pfifo.sink_count, want_methods,
+                        "USER 1109-method stream stages every method");
+            ok &= check(gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET], w * 4,
+                        "USER 1109-method stream GET reaches PUT");
+            ok &= check(gpu->pfifo.submit_packets, nop_packets + 1u,
+                        "USER 1109-method stream walks every packet");
+            ok &= check(gpu->pfifo.submit_successes, 1,
+                        "USER 1109-method stream commits exactly once");
+        }
+
+        /* (b) One packet whose count is 1025, with PUT covering all 1026
+         * words. Non-incrementing, so every parameter is the NOP method
+         * 0x100 and the count itself is what is under test. */
+        memset(pb, 0, 0x2000);
+        pb[0] = 0x40000000u | (1025u << 18) | 0x100u;
+        submit_reset(gpu, 0, 1026 * 4);
+        ok &= check(nv2a_submit_pending(gpu), 1,
+                    "USER 1025-method packet accepted");
+        ok &= check(gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET], 1026 * 4,
+                    "USER 1025-method packet GET reaches PUT");
+        ok &= check(gpu->pfifo.sink_count, 1025,
+                    "USER 1025-method packet stages every method");
+        ok &= check(gpu->pfifo.submit_successes, 1,
+                    "USER 1025-method packet commits exactly once");
 
         memset(pb, 0, 0x2000); pb[0x3fe] = (2u << 18) | 0x100u; pb[0x3ff] = 1;
         ok &= check(VirtualProtect((uint8_t *)pb + 0x1000, 0x1000,
