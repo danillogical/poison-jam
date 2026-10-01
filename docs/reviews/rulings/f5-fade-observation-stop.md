@@ -66,4 +66,9 @@ The unauthorized seeded test-XBE probe is not a control, reader proof or real gu
 
 Ignored rejected probe residue was inventoried externally by full path, size and SHA-256, then removed. [Inventory](<C:/Users/logic/jsrf-handoffs/f5-probe-residue-inventory.json>) SHA-256 `FCDFF6F47A579695B69CD1802AC6EA4E1887BED9AD38CD8027DE0B66AD4C64C4`. `Test-Path` confirmed the toolkit probe directory absent; the classifier's ignored bytecode was also removed. Quarantined sources and original failure outputs remain outside the repositories.
 
-Record-only `just check` passed (exit 0), output SHA-256 `11CD06A1C6E4187714196BD0534C2DC8840B587256CB539668A97D855F5755C9`. No accepted code change or production build. Toolkit-first/game-second origin push receipts follow.
+Record-only `just check` passed (exit 0), output SHA-256 `11CD06A1C6E4187714196BD0534C2DC8840B587256CB539668A97D855F5755C9`. No accepted code change or production build. Toolkit-first/game-second origin push receipts:
+
+- PUSHED_TO: origin / BRANCH: main / COMMIT: `a8262014eec9cd8d720184f7f2fb7dce4652105d` / REMOTE_URL: `https://github.com/danillogical/xboxrecomp.git` / RESULT: everything up-to-date; clean, HEAD=origin/main, 0/0.
+- PUSHED_TO: origin / BRANCH: master / COMMIT: `bc8797845be666978d5282e8796a24c023882712` / REMOTE_URL: `https://github.com/danillogical/poison-jam.git` / RESULT: fast-forward from `a8e1246` to `bc87978`; clean before push, HEAD=origin/master afterward. Only the stop record and plan changed; staged secret/asset/oversized-blob audit and documentation checks passed. No code was pushed.
+
+This receipt is added in a separate records-only follow-up commit; its final commit and origin equality are reported in the owner reply.
