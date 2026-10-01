@@ -1327,7 +1327,7 @@ U1 also covers original-source per-frame reachable float/x87/32-bit stores at `+
 
 **PUSHED_TO:** origin · **BRANCH:** toolkit main / game master · **COMMIT:** toolkit `a8262014eec9cd8d720184f7f2fb7dce4652105d` (unchanged), game `1bdf5d55bdaf285b3d9e95e1fbd341672481301a` · **REMOTE_URL:** toolkit `https://github.com/danillogical/xboxrecomp.git`, game `https://github.com/danillogical/poison-jam.git` · **RESULT:** toolkit up-to-date first; game fast-forward `e189f1b..1bdf5d5`; both HEADs equal their origin branches. Both trees clean before push; two outgoing documentation blobs audited, zero secret hits, no game asset path or oversized blob. Documentation pre-commit gates passed; no rebuild needed. This receipt records that completed checkpoint, not acceptance of unfinished U1.
 
-### U1 UNKNOWN and final W14 STOP — 2026-10-01 ~18:31 UTC
+### U1 UNKNOWN and final W14 STOP — 2026-10-01 ~18:29–18:31 UTC
 
 **Advisor delivered STOP for an owner decision.** U1 returned UNKNOWN: per-frame receiver/reachability and aliased/inline writers could not be closed, and the uncovered set was not demonstrated immaterial. Therefore **U2 is not authorized**. This reaches bound (a), before 20:15Z, with no accepted critical-path finding or eligible event: **no second ceiling call, no clock reset, no further run/patch/investigation until owner decision**. Advisor did not independently re-read the original instructions below; STOP rests on U1 UNKNOWN and the prior bound, not on accepting those source leads.
 
@@ -1340,6 +1340,8 @@ Qualified parent checks, not A/B classification:
 A/B remains **UNCLASSIFIED**, D2 remains accepted, pytest side item closed with its prior caveats, no F6/title claim. The last eligible W14 event remains the **exploratory** unnumbered CMP marker at **13:27:49.9575858Z**, not a strict-horizon move.
 
 Advisor's owner options (**none authorized by this STOP**): **recommended** small observation-only packet with same-object reads within one run, focused RED/GREEN and Reviewer gating; alternatively one ~240 s exploratory cross-run candidate compared with existing 062415 (cannot classify), an explicitly ledgered pragmatic shortcut (not recommended before classification), or pause/end. Current packet remains none. Records-only closure and fresh §4.5 Reviewer follow.
+
+**STOP checkpoint push receipt:** **PUSHED_TO:** origin · **BRANCH:** toolkit main / game master · **COMMIT:** toolkit `a8262014eec9cd8d720184f7f2fb7dce4652105d` unchanged, game `28f0e5202bbcf52afd03e2540a4c034c6f573d85` · **REMOTE_URL:** toolkit `https://github.com/danillogical/xboxrecomp.git`, game `https://github.com/danillogical/poison-jam.git` · **RESULT:** toolkit up-to-date first; game fast-forward `1bdf5d5..28f0e52`; game HEAD equals origin/master, toolkit HEAD equals origin/main at the completed checkpoint. Clean trees, two outgoing documentation blobs audited with zero secret hits, no assets/oversized blobs; pre-commit gates passed. No code/runtime acceptance claim. This receipt documents that completed push; its own subsequent records-only commit is operationally checked separately.
 
 ## Session evidence qualification
 
