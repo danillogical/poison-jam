@@ -55,7 +55,11 @@ established facts. Where this plan proposes a change to one of them, it is a tas
 
 ## CURRENT PACKET — none
 
-No packet is promoted. Phase 0 (§4) and the chores of §5–§6 run as owner-directed chores, which
+No packet is promoted. **F5 fade-observation draft stopped before freeze: Planner INADEQUATE;
+actual-reader fixture link blocked under the authorized seams; no controls and no new guest run.
+Operational UNKNOWN, causal A/B still UNCLASSIFIED; owner decision required, no automatic retry.**
+See [F5 pre-freeze stop](docs/reviews/rulings/f5-fade-observation-stop.md). The broader goal stays paused.
+Phase 0 (§4) and the chores of §5–§6 run as owner-directed chores, which
 need no packet. The first packet is C1 (§7); it is promoted here, by exact revision and hash, only
 after its adequacy review returns `ADEQUATE` (`docs/agent-workflow.md` §5).
 
