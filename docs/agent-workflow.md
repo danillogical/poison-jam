@@ -264,7 +264,7 @@ supplies the underlying artifacts and measured/mechanical results.
   take more than about a day, it approximates, stubs, patches or reimplements, and adds the ledger
   entry in the same commit;
 - **lists the ledger IDs** each milestone run relied on in that run's record;
-- **escalates to the Advisor only** when a shortcut would re-gate or remove an admitted model
+- **takes a shortcut to the Advisor** when it would re-gate or remove an admitted model
   (`docs/jsrf-run-profiles.md` "Listed models"), when two shortcuts in a row have failed on the same
   blocker, or when it cannot tell whether a shortcut would hide a real defect in a later milestone.
 
@@ -694,7 +694,12 @@ within its own authority.
 owner instruction, not an injection: follow it, record it, and tell the Session if it
 changes scope. It outranks every role's ruling.
 
-### 4.2 When a contract role escalates
+### 4.2 When to consult the Advisor
+
+The Session runs at `medium` effort and the Advisor at `high`: judgment is what the
+Advisor is for, and a Session that reasons its way through an Advisor-class question
+alone usually spends more of its own tokens and gets a worse answer. **Each trigger below
+is a consult, not an option.** A contract role consults when:
 
 - the same root-cause failure survives **two attempts**, or each next step is a guess;
 - two credible measurements contradict each other;
@@ -703,6 +708,26 @@ changes scope. It outranks every role's ruling.
 - a criterion or step is ambiguous, contradicted, or cannot be executed as written;
 - the work would need a policy, criterion, scope, or threshold change;
 - Session and reviewer disagree.
+
+The Session also consults when:
+
+- **a new blocker appears** — before investigating it: a fault-diagnosis consult (§4.3)
+  ranks mechanisms and names the cheapest discriminating experiment, so investigation
+  starts on the right branch;
+- it is **choosing between technical approaches** that differ in architecture, fidelity,
+  or which code they touch, or picking a shortcut whose effect on later milestones it
+  cannot see;
+- a worker returns a **surprising result** — one that contradicts a recorded finding,
+  ruling, or the Session's expectation — before anything is built on it;
+- it is about to tell the owner a **causal conclusion** ("X causes the stop", "Y is
+  fixed") that it inferred rather than measured.
+
+**Not an Advisor question:** a fact a worker can read or measure (send a worker); a
+question this file, `AGENTS.md`, or a recorded ruling already answers; the same question
+again without new evidence; mechanical choices with no effect on the claim.
+
+A consult that a trigger required is never skipped to stay inside a packet's senior-call
+budget: quick consults (§4.3) do not count against it.
 
 ### 4.3 Briefing the Advisor
 
@@ -736,6 +761,14 @@ BASIS: observed / inferred / uncertain, for load-bearing claims only
 REVERSED BY: <evidence that would change it>
 RECORD IN: <owning document or review record>
 ```
+
+**Quick consult.** For a bounded judgment check — which of two approaches, whether a
+result is surprising, which mechanism to test first — the Session sends at most ten lines
+to the session's continuable Advisor child: the question, the files to read, and what it
+has measured. The Advisor answers in at most ten lines, ending with `REVERSED BY:`. A
+quick consult that turns out to need a ruling becomes one under the full template. Quick
+consults keep consulting cheap enough that cost is never the reason to skip one; the
+Session records each answer it acts on in one line in the relevant record.
 
 Follow-ups may be delta briefs. A delta does not freeze earlier premises: if a
 correction changes a load-bearing premise, mark it `PREMISE_CHANGED` and ask the
@@ -793,7 +826,12 @@ The Reviewer checks:
    pushed at a push checkpoint, with each push's preconditions met.
 3. **Honest reply.** Every claim in the draft reply is supported by an artifact or
    command, and nothing that failed, was skipped, or is `UNVERIFIED` is reported as done.
-4. **Delegation (advisory only).** Bulk reading or long mechanical work the Session did
+4. **Advisor use.** A §4.2 trigger that fired during the turn without a consult. Where
+   the harness log of the Session's turn is readable, the Reviewer reads it itself rather
+   than asking the Session to summarise. If the draft reply relies on the conclusion the
+   consult should have checked, that is `CONTINUE`: consult before the reply goes out.
+   Otherwise it is recorded under `ADVISOR`.
+5. **Delegation (advisory only).** Bulk reading or long mechanical work the Session did
    itself that worker-first (§2.2) assigns to workers. This never causes `CONTINUE` —
    redoing finished work wastes more — it is recorded so the pattern is visible.
 
@@ -803,6 +841,7 @@ It returns:
 TURN_END: END | CONTINUE
 REMAINING: <each item: what is undone; evidence; why no legitimate stop covers it> | NONE
 REPLY_CORRECTIONS: <each unsupported or overstated claim> | NONE
+ADVISOR: <each §4.2 trigger that fired without a consult> | NONE
 DELEGATION: <each piece of work that should have gone to a worker> | NONE
 ```
 

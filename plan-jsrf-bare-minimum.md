@@ -94,10 +94,11 @@ A window opening is not the slice; one playable scene is not the game.
 ## 3. How work runs under this plan
 
 - **DeepSeek workers execute by default** (unlimited); the Session directs, integrates and
-  records (`docs/agent-workflow.md` §2.2 "worker-first"). A senior call
-  (the Planner, Advisor and Reviewer of `docs/agent-workflow.md` §1) is made only at
-  a gate a task names, and each task states a **senior-call budget**; exceeding it stops the
-  task for an Advisor continue/stop decision.
+  records (`docs/agent-workflow.md` §2.2 "worker-first"). Planner and Reviewer calls are
+  made at the gates a task names; the Advisor is consulted at those gates **and** on every
+  `docs/agent-workflow.md` §4.2 trigger. Each task states a **senior-call budget**; exceeding
+  it stops the task for an Advisor continue/stop decision. Quick consults (§4.3) do not count
+  against it.
 - **Three task classes.** *Chore* — owner-directed mechanical work (builds, syncs, regeneration,
   tooling, record fixes): no packet; recorded in the TR with commands and results; may not change
   admitted evidence semantics except behind a switch classified in `docs/jsrf-run-profiles.md`
