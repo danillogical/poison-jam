@@ -344,9 +344,58 @@ Measured in `20260930-221404-630-f1b-rdata-guard` (strict; `RECOMP_RDATA_GUARD=1
   length should not be 1.70 MB. `sub_00038530` computes both; the cheapest honest fix is at the
   translation or the argument, not at the table.
 
-**Not established by F1.** Why the copy runs at all, which of `sub_00038530`'s callers is responsible,
-and whether the copy is legitimate guest work aimed at a *different* destination that the port
-mis-computes. The shift `0x37608` is a measured constant for this XBE, not an explanation.
+### F3: the horizon is closed — two wrong tail-jump aliases, fixed (2026-09-30)
+
+**The A2h/C1 terminal event is closed.** The kernel thunk table is no longer overwritten, `.text` is
+no longer displaced, and a strict run now reaches its 93-second deadline instead of faulting at ~6 s.
+
+**Cause.** Two entries of the function-pointer table at `.data 0x001EC0F8..` were folded into their
+abutting neighbours by the translator's `tail_jump_alias` rule and had their bodies deleted, so a call
+through the table entered an unrelated function:
+
+| Address | Table slot | Folded into | Its own code ends | Its jump table |
+|---|---|---|---|---|
+| `0x00037550` | `0x001EC108` | `sub_00038530` | `0x00038525` (`ret 4`) | `0x00037FB4` |
+| `0x00026780` | `0x001EC10C` | `sub_000278F0` | `0x00026816`+epilogue | `0x0002730C` |
+
+`sub_00038530`'s `rep movsd` copied the XBE image from `+0x37608` over `.text` and `.rdata`, 1.70 MB
+from `0x00011000` to the thunk table. The generated dispatch named the first substitution itself:
+`[ALIAS-ICALL] target=0x00037550 owner=0x00038530`.
+
+**Fix.** A recovery entry for each address in `config/recovered-functions.json`, with the span ending
+at the function's own jump table — the table is data, not code. `recomp_lookup_manual` consults
+`jsrf_lookup_recovered` before the alias table, so the recovered body wins. The spans were chosen from
+the bytes and verified before use: all table targets lie inside the span, every one carries a label in
+the emitted body, and there are 0 dangling gotos and 0 `RECOMP_UNIMPL` markers.
+
+**Two further config spans were tightened**, because each ran past its function's terminator into bytes
+that decode as instructions, which aborts `scripts/recover-functions.py` and blocked the regeneration:
+`0x000BCF40` (`end` `0x000BD8D0`→`0x000BD8B0`, its `ret`; the old value decoded padding as `aaa`) and
+`0x001063A0` (`0x00106580`→`0x00106560`, its `ret`). With all four edits the regeneration completes —
+**3075 functions**, the first successful run of `scripts/recover-functions.py` in this session.
+
+**Measured effect, strict profile, `RECOMP_APU_TRAP=1`, budget 100000:**
+
+| Run | Outcome | Evidence |
+|---|---|---|
+| `20260930-221054-913-f0b-first-run-new-toolkit` (before) | `0xE0424943` at 5.8 s | 17,906 log lines; table held the record array |
+| `20260930-225440-580-f3-alias-fix-strict` (`0x00037550` fixed) | `0xC0000409` at 14.6 s, `[RECOVERED] ABI FAILURE 0x00026780` | the **next slot in the same table**; 77,608 lines |
+| `20260930-225739-446-f3-alias-fix-2-strict` (both fixed) | `diagnostic_deadline` at **93.0 s** | 487,394 lines; **0** invalid ICALLs, **0** `0xE0424943`, **0** exceptions, **0** ABI failures, **0** `[UNIMPL]` |
+
+The decisive check is the dump's own integrity gate, which reads guest VA `0x00011000`:
+
+- **Before:** `CONTENT_MISMATCH` in every run — the dump held the XBE's bytes from `+0x37608`.
+- **After:** `matches: 1, content-mismatch: 0`. `.text` at `0x00011000` is `852C518B 30418BD2 …`,
+  byte-identical to the original XBE, and the thunk table at `0x001C3F60` holds the runtime's installed
+  `FE000000 FE000004 FE000008 …` thunks rather than the record array.
+
+**This confirms the F3 diagnosis by its own stated test** — "fixing the alias should move the strict
+horizon" — and the prediction held twice, once per alias.
+
+**Not established.** Why the guest's call reaches these table entries in the first place, and whether
+any *other* `tail_jump_alias` fold still deletes a table-referenced entry. The census that would answer
+the latter is not yet a valid instrument (see plan §13). The 93-second run ended at its own deadline
+with no fault, so the next stop is unknown and is F3's continuing subject.
 
 ### F3: the cause is a wrong tail-jump alias, `0x00037550` → `0x00038530` (2026-09-30)
 

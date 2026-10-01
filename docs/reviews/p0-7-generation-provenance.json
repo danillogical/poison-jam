@@ -34,7 +34,7 @@
   "checker_version": "jsrf-generation-provenance/1",
   "full_translation_command": "python -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name \"Jet Set Radio Future\" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json",
   "generated_outputs": {
-    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "7393f32bc953c01f293609d4a77abc1ddfc6118082bc2c3db04c7511ec3eec38",
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "327c53fff6da9d755ec01d501ad1dd39735af73a0816fc0ba6fba6ce70f4f9ad",
     "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
     "src/recomp/gen/recomp_0001.c": "065a43c255bc9c3469906b915c9ad51fe9f1e3e16c4a9ff465421317fbe77024",
     "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
@@ -44,12 +44,12 @@
     "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
     "src/recomp/gen/recomp_dispatch.c": "1cc469ddcc6d12ac98f8675846b5940f3f438624a3a51a95faca40a9b59a4238",
     "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-    "src/recomp/gen/recomp_stubs_recovery.c": "77d2c5decf6a815c9c2b1400b37a189d4419bef07baeab3836437e19beb9d345",
+    "src/recomp/gen/recomp_stubs_recovery.c": "28aab23490cbfd82a7713986a1860e91c75879f4f79209b81f2425df72a3efb4",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
     "src/recomp/gen/recomp_types.h": "e1007de83bf802bac0ec192025c6c274bed7d86f845f8e653619f31f2a7a69a4",
-    "src/recomp/recovered/recovered.c": "3210117dccf0a909cf3f7f881919001d976e14922aea6d1025312df5b1f22fe9",
+    "src/recomp/recovered/recovered.c": "65cb5b696ee3b363a774589a4b64bbcaaae65ba01072cc34a2407592ebd715cf",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "88f6f654cd5a615c76838332884d0131a178718a9680e77f6e57fda8f2761621",
+    "src/recomp/recovered/recovered_11c1_test.c": "5db2f0bc861dc48a3f1aa03724697e80a0056d12ad7c6cbd0ff4b8dfd25b9afa",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "generation_mode": "full regeneration 2026-09-29 with the toolkit 2a349c8 lifter, then relift-selected.py boundaries; hand edits re-applied by scripts/patch-generated.py from config/generated-patches.json (the recomp_types.h project ABI additions, the six A4b2 jsrf_watch_store hooks, and the a4b-watch declaration). This tree predates toolkit 86113c7 --backedge-yield: RECOMP_BACKEDGE is absent, so under RECOMP_GUEST_SERIAL=1 a guest spin loop costs one bounded timeout (docs/jsrf-compatibility-ledger.md L34).",
@@ -78,19 +78,19 @@
       "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
     },
     "config/manual-functions.json": {
-      "bytes": 101645,
+      "bytes": 101678,
       "present": true,
-      "sha256": "a0c53d1550ec36cae9a32960ba82d777940c61b122bb169108430741587d4188"
+      "sha256": "96110ed592a25d984dbd7f7715a1ec78ec66ac0514efad09fcc73df8fc1414fb"
     },
     "config/recovered-functions.json": {
-      "bytes": 2821702,
+      "bytes": 2799077,
       "present": true,
-      "sha256": "bb2f26e4550812588d3e8a0b69f92dd1f67c1fc2dde7a308673aa98df651ea12"
+      "sha256": "84738ea28e4efa493dccf697d87aba9ddd8b20b337b4656425e1f48f7332b3c8"
     },
     "config/recovery-unresolved.json": {
-      "bytes": 8387,
+      "bytes": 8288,
       "present": true,
-      "sha256": "3a5af64103f17d708b7931b052ce5786dde6bfd727c39c139c0b3bd88888f5db"
+      "sha256": "8270dab2d35535327f630b32a1c0aba4acbfd95560b58a33e4dd541b91bd038d"
     },
     "game/default.xbe": {
       "bytes": 2281472,
@@ -123,9 +123,9 @@
       "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
     },
     "tools/disasm/output/functions.recovered.json": {
-      "bytes": 6012250,
+      "bytes": 6013470,
       "present": true,
-      "sha256": "1f7abb1bba4db039456efd844568b5f57ac90b5f5cbc8ff78dd1922c37e37a4b"
+      "sha256": "25d3fc1059017835d482bbd27ced16b6961b01c4c23a70d7e25f558c779f3075"
     }
   },
   "known_unknowns": [],
@@ -213,5 +213,28 @@
     }
   },
   "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",
+  "regenerations": [
+    {
+      "command": "python -X utf8 scripts/recover-functions.py",
+      "date": "2026-09-30",
+      "inputs_changed": [
+        "config/manual-functions.json",
+        "config/recovered-functions.json",
+        "config/recovery-unresolved.json",
+        "tools/disasm/output/functions.recovered.json"
+      ],
+      "kind": "recovery pass (scripts/recover-functions.py), not a full translation pass",
+      "not_claimed": "This is not a claim that the old tree was wrong. It records that the recovery pass regenerated 3042 bodies, that the differences are attributable to the generator rather than to the two edits, and that the tree was rebuilt, retested (28/28) and re-run afterwards.",
+      "outputs_changed": [
+        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+        "src/recomp/gen/recomp_stubs_recovery.c",
+        "src/recomp/recovered/recovered.c",
+        "src/recomp/recovered/recovered_11c1_test.c"
+      ],
+      "reason": "Two wrong tail_jump_alias folds were corrected by adding recovery entries for 0x00037550 and retargeting 0x00026780, and two config spans that ran past their function's terminator were tightened (0x000BCF40, 0x001063A0). The pass rewrote recovered.c and its stubs; it is the first successful run of this script in the session. The strict horizon moved as a result: run 20260930-225739-446-f3-alias-fix-2-strict reaches 93.0 s with the kernel thunk table intact (docs/jsrf-technical-record.md section 5).",
+      "scope_measured": "recovered.c: 3074 -> 3075 functions; 1 added (sub_00037550), 0 removed, 3042 bodies differ, 32 identical. The differences are generator-version effects, not only the two edits: 2836 bodies now declare `uint32_t ebp = 0` where the old tree had an uninitialised `uint32_t ebp`, and 846 fcom sites now set the FPU condition codes through RECOMP_FCMP_CC, which the old tree never did. Both are emitted by the current translator and the macro is defined in the tree (src/recomp/gen/recomp_types.h:260), so the result compiles and is the intended output of this generator, not a regression.",
+      "toolkit": "86113c7 (unchanged by this pass)"
+    }
+  ],
   "schema_version": 1
 }
