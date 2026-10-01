@@ -294,8 +294,8 @@ Delegate by default:
   for a stated behaviour, repetitive refactors, name and document sweeps;
 - **brief assembly** — gathering the `READ YOURSELF` set and measurements for a Planner,
   Advisor or Reviewer brief; the Session edits the brief, it does not research it;
-- **competing hypotheses** — one read-only worker per hypothesis, in parallel, each
-  returning its cheapest discriminating observation.
+- **competing hypotheses** — one read-only worker per hypothesis, each returning its
+  cheapest discriminating observation (serial or parallel: see below).
 
 Keep in the Session:
 
@@ -313,9 +313,14 @@ Do not overdo it:
 - do not spawn a worker to confirm another worker's result unless the result is
   load-bearing and the confirmation costs the Session less than checking it directly
   (W5 is the standing case);
-- run no more parallel workers than the Session will read summaries from — about four.
+- **tokens before speed** (owner, 2026-10-01): parallel workers are never justified by
+  speed alone. Run workers **one after another** when an early result is likely to settle
+  the question or narrow the next brief, so the Session never reads summaries it did not
+  need. Run them **in parallel** only when the Session will need every result anyway
+  (independent facts for one decision); then parallel adds no summaries and saves
+  Session round trips. At most about four at once.
 
-**Concurrency.** Read-only workers run in parallel freely. Writing workers keep disjoint
+**Concurrency.** Read-only workers may run in parallel when the rule above allows. Writing workers keep disjoint
 write scopes. Builds and game runs share `build/`, the game root and the emulated disk
 images, so **one** worker at a time holds the build/run slot, named in its brief.
 
