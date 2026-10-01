@@ -56,9 +56,11 @@ test: build
 ctest:
     ctest --test-dir build -C Release --output-on-failure
 
-# Full translation pass: regenerate src/recomp/gen from the original XBE.
+# Full translation pass: regenerate src/recomp/gen from the original XBE, then
+# re-apply config/generated-patches.json (T18).
 regen:
-    $env:PYTHONPATH = "{{toolkit}}"; {{python}} -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name "Jet Set Radio Future" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json
+    $env:PYTHONPATH = "{{toolkit}}"; {{python}} -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name "Jet Set Radio Future" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json; if ($LASTEXITCODE -ne 0) { exit 1 }
+    {{python}} -X utf8 scripts/patch-generated.py; if ($LASTEXITCODE -ne 0) { exit 1 }
 
 # Strict-profile guest run; sets RECOMP_GPU_ACK=0 for you.
 strict-run label="strict":
@@ -86,6 +88,7 @@ check:
     {{python}} -X utf8 scripts/check-generation-provenance.py --check; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-disk-gate.py --quiet; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-horizon-ledger.py; if ($LASTEXITCODE -ne 0) { exit 1 }
+    {{python}} -X utf8 scripts/patch-generated.py --check; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-override-drift.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Output "check: all checkers passed"
 
