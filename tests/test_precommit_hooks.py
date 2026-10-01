@@ -131,6 +131,61 @@ class StagedPathGateTests(unittest.TestCase):
                     f'{relative} matches its own {name} pattern; assemble the '
                     f'literal from fragments instead')
 
+    # One staged blob per retail-content signature (plan T17). Built from bytes
+    # here, never stored, so this file carries none of them.
+    RETAIL_SAMPLES = {
+        'default.bin': (b'XBEH' + b'\0' * 60, 'XBE header'),
+        'partition.img': (b'FATX' + b'\0' * 60, 'FATX'),
+        'process.bin': (b'MDMP' + b'\0' * 60, 'minidump'),
+        'bundle.dat': (b'PK\x03\x04' + b'\0' * 60, 'zip archive'),
+        'bundle.7': (b'7z\xbc\xaf\x27\x1c' + b'\0' * 60, '7-Zip archive'),
+        'bundle.r': (b'Rar!\x1a\x07\x00' + b'\0' * 60, 'RAR archive'),
+        'stream.g': (b'\x1f\x8b\x08' + b'\0' * 60, 'gzip stream'),
+        'stream.x': (b'\xfd7zXZ\x00' + b'\0' * 60, 'xz stream'),
+        'stream.z': (b'\x28\xb5\x2f\xfd' + b'\0' * 60, 'zstd stream'),
+        'stream.b': (b'BZh9' + b'1AY&SY' + b'\0' * 60, 'bzip2 stream'),
+        'bundle.t': (b'\0' * 257 + b'ustar' + b'\0' * 60, 'tar archive'),
+        'disc.iso': (b'\0' * 64 + b'MICROSOFT*' + b'XBOX*MEDIA' + b'\0' * 64,
+                     'Xbox disc image'),
+        'ram.bin': (b'\0' * 64 + bytes.fromhex('8b512c85d28b4130c70190431c00741c'),
+                    ".text bytes"),
+        'blob.bin': (b'\0' * 64 + b'XBEH' + b'\0' * 64, 'embedded XBE header'),
+    }
+
+    def test_retail_content_is_refused_by_signature(self) -> None:
+        """T17: each signature is refused whatever the file is called."""
+        for name, (data, what) in self.RETAIL_SAMPLES.items():
+            with self.subTest(name=name), ScratchRepo() as repo:
+                (repo / name).write_bytes(data)
+                git(repo, 'add', name)
+                result = run_hook(STAGED_PATHS, repo)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn(what, result.stdout)
+                self.assertIn(name, result.stdout)
+
+    def test_prose_about_retail_formats_is_allowed(self) -> None:
+        """Known good: documents name these formats and quote the control hex."""
+        with ScratchRepo() as repo:
+            (repo / 'notes.md').write_text(
+                'The XBEH magic opens an XBE. Control read: '
+                '8b512c85d28b4130c70190431c00741c\n', encoding='utf-8')
+            git(repo, 'add', 'notes.md')
+            result = run_hook(STAGED_PATHS, repo)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('no retail content', result.stdout)
+
+    def test_the_gate_carries_no_signature_it_refuses(self) -> None:
+        """The gate's own sources must pass it, or the first commit is refused."""
+        sys.path.insert(0, str(ROOT / 'scripts'))
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('staged_paths', STAGED_PATHS)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for relative in ('scripts/precommit-staged-paths.py',
+                         'tests/test_precommit_hooks.py'):
+            data = (ROOT / relative).read_bytes()
+            self.assertEqual(module.content_findings(relative, data), [], relative)
+
     def test_unstaged_secret_is_not_refused(self) -> None:
         """A secret in the working tree but not in the index is not a commit."""
         token = 'ghp_' + 'Z9y8X7w6V5u4T3s2R1q0P9o8N7m6L5k4J3i2'

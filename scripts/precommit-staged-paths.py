@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Pre-commit gate 1: refuse a staged path under `game/`, and refuse secrets.
+"""Pre-commit gate 1: refuse a staged path under `game/`, retail content, and secrets.
 
 Plan T7 names both refusals.  This is a **staged-blob** check, not a working-tree
 check: the thing being prevented is a nondistributable retail asset entering a
@@ -9,6 +9,12 @@ The game repository is public.  `game/` is gitignored, so a normal `git add`
 cannot reach it -- but `git add -f`, a `.gitignore` edit, or a rename can, and
 the failure is unrecoverable without a history rewrite the owner has to authorize.
 Refusing it before the commit exists is the cheap end of that trade.
+
+A path rule cannot see an asset that arrives under another name or inside
+another file, so staged blobs are also sniffed for retail content (plan T17): an
+XBE header, an Xbox disc or hard-disk volume, a minidump (it carries guest
+memory), an archive or compressed stream (it can carry anything), and JSRF's own
+`.text` control bytes, which mark copied guest RAM or a copied XBE.
 
 Secrets are scanned with the same pattern set `scripts/secret-audit.py` uses, so
 the pre-commit gate and the pre-push audit cannot disagree about what a secret is.
@@ -35,6 +41,53 @@ FORBIDDEN_PREFIXES = ('game/', 'game\\')
 # enough to be disabled.  Anything over this is refused outright, which is also
 # the repository's own blob limit.
 MAX_BLOB_BYTES = 100 * 1024 * 1024
+
+# Guest VA 0x00011000, the first bytes of JSRF's .text (AGENTS.md, dump integrity).
+# As raw bytes they mean guest memory or the XBE; the hex text in documents is not
+# matched.
+TEXT_CONTROL = bytes.fromhex('8b512c85d28b4130c70190431c00741c')
+
+# Signatures checked at the start of a blob.
+SIGNATURES_AT_START = (
+    (b'XBEH', 'an Xbox executable (XBE header)'),
+    (b'FATX', 'an Xbox hard-disk partition (FATX)'),
+    (b'MDMP', 'a minidump, which carries guest memory'),
+    (b'PK\x03\x04', 'a zip archive'),
+    (b'7z\xbc\xaf\x27\x1c', 'a 7-Zip archive'),
+    (b'Rar!\x1a\x07', 'a RAR archive'),
+    (b'\x1f\x8b\x08', 'a gzip stream'),
+    (b'\xfd7zXZ\x00', 'an xz stream'),
+    (b'\x28\xb5\x2f\xfd', 'a zstd stream'),
+)
+
+# Signatures checked anywhere in a blob.
+SIGNATURES_ANYWHERE = (
+    # Split so this file does not carry the contiguous marker it refuses.
+    (b'MICROSOFT*' b'XBOX*MEDIA', 'an Xbox disc image (XDVDFS volume descriptor)'),
+    (TEXT_CONTROL, "JSRF's .text bytes (copied guest memory or the XBE)"),
+)
+
+# Paths allowed to carry a signature, each with its reason. Empty: nothing in the
+# repository needs one, and an entry here is a decision the owner should see.
+CONTENT_ALLOWED: dict[str, str] = {}
+
+
+def content_findings(path: str, data: bytes) -> list[str]:
+    """What retail-looking content a staged blob carries, one line per signature."""
+    if path.replace('\\', '/') in CONTENT_ALLOWED:
+        return []
+    found = [what for magic, what in SIGNATURES_AT_START if data.startswith(magic)]
+    if data[:3] == b'BZh' and data[4:10] == b'1AY&SY':
+        found.append('a bzip2 stream')
+    if data[257:262] == b'ustar':
+        found.append('a tar archive')
+    found += [what for magic, what in SIGNATURES_ANYWHERE if magic in data]
+    # Prose mentions "XBEH"; only a binary blob carrying it is an embedded image.
+    if b'\0' in data[:8192] and b'XBEH' in data[4:]:
+        found.append('an embedded XBE header')
+    return [f'REFUSED: {path!r} looks like {what}. Retail content must not enter '
+            f'this public repository; unstage it with: git restore --staged "{path}"'
+            for what in found]
 
 
 def staged_entries() -> list[tuple[str, str]]:
@@ -100,6 +153,7 @@ def main() -> int:
         data = subprocess.run(['git', 'cat-file', 'blob', _sha],
                               capture_output=True, cwd=str(ROOT)).stdout
         scanned += 1
+        failures += content_findings(path, data)
         text = data.decode('utf-8', errors='replace')
         for name, pattern in COMPILED:
             match = pattern.search(text)
@@ -118,7 +172,7 @@ def main() -> int:
         return 1
 
     print(f'  staged-path gate: {len(entries)} path(s), {scanned} blob(s) scanned; '
-          f'no game/ path, no secret, no oversized blob')
+          f'no game/ path, no retail content, no secret, no oversized blob')
     return 0
 
 
