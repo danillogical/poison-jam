@@ -796,7 +796,7 @@ list is exhausted.
   **no second walk and no second GET**; rejection stays **atomic** (reject without executing);
   fixtures must pin **clear/flip counts**; the run must show a **post-guest periodic `[GPU]` report**
   as positive proof. Order: **capture per entry class → bindings → `action_commit` → consumer
-  (ordered NV097 only) → last method → GET**. **Interface refinement (Advisor APPROVED):** the seam
+  (ordered all committed classes; the kernel executes the NV097 subset) → last method → GET**. **Interface refinement (Advisor APPROVED):** the seam
   takes **four args `(subch, class_id, method, param)`** and **all committed entries reach the core
   callback**; the **kernel wrapper** filters to NV097 and keeps the skip count — replacing the earlier
   3-arg NV097-only-core-consumer shape (a policy-free core is the better factoring). Order and
@@ -820,8 +820,33 @@ list is exhausted.
   then L18 keeps its old entry. **Architecture A is IMPLEMENTED AND ACCEPTED** — toolkit
   `a71f9374ddb2a6685b790493855c835842228212` (9 files, +329/−10); the Advisor read the diff itself and
   ruled ACCEPT/GO with final validation green (core 5/5 in 2.34 s, 30 lifter unittests, game 29/29
-  CTest in 28.81 s, all checks pass, conformant to the approved design). **Runtime is still pending and
-  no frames claim is made**; commit and push the clean pair **before** the smoke.
+  CTest in 28.81 s, all checks pass, conformant to the approved design). **F4 IS MET, exploratory:**
+  the 60 s run `20261001-033129-276-f4-a-smoke-60s` produced a coherent guest image (the
+  "Presented by SEGA" card), so F4's frame criterion is satisfied under the exploratory profile —
+  **not** a milestone acceptance, which is carried with the **F6 milestone Review**. **W14 reset at
+  10:32:32 UTC** on that first critical-path frame finding; the earlier extension is closed. The
+  180 s observation run `20261001-033805-242-f5-sequence-180s` (same pair + `RECOMP_FB_DUMP`) is
+  recorded as **observed** in the strict-horizon ledger and the ruling: 25 BMPs, 2 distinct hashes in
+  ordered blocks (8 black, then 17 SEGA), pixels from the **guest draw surface** (not the window), one
+  separate window-dump artifact at 10:38:19, counts as **lower bounds**. That run produced **no horizon
+  move and no W14 change**; the F5 consult ruling that followed is recorded next. Commit and push the
+  clean pair **before** the next run.
+  **F5 consult ruling (2026-10-01, Advisor; verbatim in the F5 appendix of
+  `docs/reviews/rulings/f4-submission-capacity.md`): the logo phase is NOT a stall** — the guest is
+  doing its **first-boot HDD cache fill**, slowly. OBSERVED **360 `[PATH]` opens of
+  `\Device\Harddisk0\Partition5\Media\…~`, 184 distinct**, 20–33 per 10 s report to the end of the log
+  (last line 209119); the cache holds `Cache00-02.tbl`/`DmCache00-02.tbl` with
+  **`JSRF_CACHE_COMPLETE00.CMP` written 10:39:41** and **Cache02 started 10:39:42**; payload **182
+  files, 67.9 MB**; rate **~1.0–1.3 files/s in every recent run, with or without the executor** (48 s:
+  64; 60 s: 82 and 80; 180 s: 184), so **the executor does not limit it**. **INFERRED** the SEGA screen
+  covers the fill in stages (00 then 01–03); **UNCERTAIN** whether the logo is really **fill-gated**.
+  The word **"stop" is REJECTED** — the frozen `VirtualQuery` sample in `submit_read_word` is a
+  **capture-time location, not a stop** (guest live; the per-word `VirtualQuery` is a perf lead, not a
+  defect). Window accepted only as one-shot at 10:38:19.247 (`frames==600`, `fb_present.c:341`), SEGA.
+  **NEXT (authorized): ONE 600 s observation run**, same clean pair and profile plus `RECOMP_FB_DUMP`
+  and `RECOMP_FB_WINDOW_DUMP_EVERY=600` (both observation-only), with the **≥15 GB disk gate** checked
+  first (~5.3 GB save-root per run). **Seeded cache PREPARED, NOT AUTHORISED** — no owner decision now
+  and no implementation. **W14 clock unchanged at 10:32:32.** Reversals in the appendix.
   Corrected evidence in TR and `logs/workers/f4-drained-no-frames-brief.md`.
   **Historical 2026-09-30 question (answer recorded then; superseded by the accepted capacity work
   and now by Architecture A):** Whether the answer is a larger sink,

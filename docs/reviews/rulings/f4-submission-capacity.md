@@ -333,7 +333,7 @@ PFIFO lock**. This is **not a new shortcut and adds no ledger class entry**.
 *Superseded earlier shape (kept for history):* one stage per entry class, 16 bytes per entry,
 explicitly not a final binding, feeding sink/capture/hook with a midstream-rebind fixture; only
 NV097 entries ordered with skipped non-NV097 counted and reported (the skip now lives in the
-**kernel wrapper**, which passes all committed entries to a four-argument core callback — see the
+**kernel wrapper**; the **core passes all committed entries to a four-argument callback** — see the
 interface refinement above); a single caller on the PFIFO lock
 with the REPORT on the same OWNER submit path at 10 s — `PB_EXEC` never the ack worker; the legacy
 SCAN guard skips when the owner is active and logs once; the owner lock being BMPIO is acceptable
@@ -379,6 +379,183 @@ recorded as a **conditional**: it reproduces **only if** the exact **two rerun c
 `/−1` then `0` in the artifact; **otherwise it is UNKNOWN / non-reproduced**. Final validation is
 **green and no GO block** — the worker is producing the artifact. **No extra durable cause
 attribution is supported** and none is recorded.
+
+**F4 — MET, exploratory (Advisor-attributed summary, 2026-10-01; not verbatim).** Frames exist. The
+60 s run `20261001-033129-276-f4-a-smoke-60s` (game `f676b1c` / toolkit `a71f937`) produced a
+**coherent guest image** — the "Presented by SEGA" title card — so **F4 is met under the exploratory
+profile**, evidenced by that guest frame. This is **not** a milestone acceptance: acceptance is
+carried with the **F6 milestone Review**. **W14 was reset at 10:32:32 UTC** on the first critical-path
+frame finding; the old extension is consumed and closed.
+
+**180 s observation run `20261001-033805-242-f5-sequence-180s` — OBSERVED, no F5 causal ruling yet.**
+Same pair and profile as the 60 s run, plus the observation `RECOMP_FB_DUMP` (prefix
+`logs/workers/f4a-sequence/f`). Exact identity: `started_utc 2026-10-01T10:38:05.948693+00:00`,
+`duration_seconds 182.688193`, Stop **10:41:08.636886**; `diagnostic_deadline`, exit 3, dump and GPU
+report OK, 21 threads, 179 named frames, **exploratory** (requested exploratory, `GPU_ACK` default).
+Mapping gate: **1 match, 0 mismatch**.
+
+- **25 BMP dumps, 2 distinct hashes, in ordered blocks:** `f000–f007` are one byte-identical hash
+  (the black frame), `f008–f024` are another (the SEGA frame). Within these **files** there is no
+  alternation. *(This is a statement about the dumped files only — it is **not** a global claim that
+  the guest never animates; the window one-shot below shows the window at a different instant.)*
+- The **8-then-17 split is attributed to the two dump writers** — the executor's draw path
+  (`nv2a_pb_exec.c:2206-2209`, capped by `FB_DUMP_AFTER_DRAW` = 8 at `:2000`) and the periodic report
+  (`:3124`, one picture per report) — with the once-only notice at `if (seq == 1)` (`:962-964`).
+  **INFERRED, not directly logged:** there is no per-dump log line, so the split is matched by
+  **code plus file mtimes**, not by a per-file log witness. The **mtimes themselves are OBSERVED**
+  (10:38:09–10:38:10 for the first block, 10:38:20 → 10:41:01 at a 10 s cadence for the second), and
+  the run logged 19 reports for 25 files.
+- **Provenance of the BMP pixels (verified in source):** the executor dump reads a **guest DRAW
+  surface** via `mem + dma_resolve(s_gpu.drawn_offset ? drawn_offset : color_offset)` with clip and
+  pitch (`:937-940`); it **does not touch the window or `AVSetPCRTC`**. The once-only notice prints
+  **`color_offset`**, which may differ from the `drawn_offset` actually read, so **the notice's
+  address is not a reliable source for a given file's contents** (reported for later files).
+- **A third, different artifact — the window dump:** the extensionless file `…\f` (921,654 B, sha256
+  `9E7541A8ABC68B31FAA3F4553867DCD70A7364EB5FC35B60B7055344E5EE7401`, mtime **10:38:19**, "BM")
+  comes from `xbox_FramebufferDumpBmp` in **`src/video/fb_present.c`** (`:212`, guard `!s_rgb ||
+  !s_fb_va` at `:219-220`), called one-shot at `frames == 600` (`:342`) with the prefix passed
+  **raw** — hence no `.bmp` suffix, unlike the executor's `"%s%03d.bmp"` at `nv2a_pb_exec.c:919`.
+  **Accepted by the F5 ruling as exactly "one-shot window frame at 10:38:19.247 (`frames==600`,
+  `fb_present.c:341`), SEGA", with nothing claimed about the window after that** — so it does **not**
+  establish a static window over the run.
+- **The window dump is the stronger present/scanout witness** — the code's own note (`fb_present.c:322-332`)
+  is that the window "follows the address AvSetDisplayMode gave, which is what the CRTC scans and
+  therefore what a person sees", while the executor dump "follows its draw surface", and with double
+  buffering those differ. The **F5 ruling accepts the one-shot frame** as stated above; the **present
+  call path remains INFERRED** (no log witness, and not needed for F4).
+- **Counts are LOWER BOUNDS, and the two runs must not be mixed.** For **this 180 s run**: the last
+  report is `L205921–205927` (**clears 2943, draws 2943, flips 987, stalls 987**, 14 non-NV097 skips,
+  4899 triangles, 394,019,568 pixels), and the `[GPU] clear #N` stream continues past it to
+  **`clear #3000` at L207880** of 209257 — so activity continued after the last report and **no
+  end-of-run totals exist**. Separately, in the **60 s run** (`20261001-033129-276-f4-a-smoke-60s`,
+  119913 lines) the last report is `L115261–115267` (**clears 840, draws 840, flips 286, stalls 286**)
+  with **`clear #900` at L117696**. The `#900`/L117696 figures belong to the **60 s** run and must
+  **not** be cited as the 180 s run's post-report activity.
+- **No overclaim:** no deadline-success, no liveness from the deadline, no strict horizon claim, and
+  no F5 causal ruling. `RAW BIN` figures (the Advisor's own MATCH-gate export, VA `0x8011C000`,
+  RGB565, 614400 bytes, sha `95CE9EC0…`) are **Advisor-attributed**, not re-measured here; the `.bin`
+  is not present under `logs/workers/f4a-frames/`.
+
+## Appendix — Advisor F4 runtime ruling, VERBATIM
+
+Advisor child `4e6d87e1-f748-48b3-a0a4-a6e5728bfeee`; provider `claude`; model `claude-opus-5-5`;
+effort `high`; continuability probe satisfied (same child confirmed continuity after these messages).
+The three sections below are the **exact received Advisor text**, copied from the Session's context and
+preserved verbatim. Nothing here is reconstructed or paraphrased; the summary above is the attributed
+reading, this appendix is the authority. **No images or raw binaries are embedded** — only references
+and provenance. The final section is explicitly **not** Advisor text.
+
+### F4 RESULT RULING
+
+F4 RESULT RULING: FRAMES EXIST. The guest renders the "Presented by SEGA" logo. W14 is reset. Next: F5/F6.
+OBSERVED (I extracted it myself):
+- check-dump-mapping: matches 1 / mismatch 0.
+- I exported the final [GPU] block's draw surface 0x8011C000 (640x480, pitch 1280, so RGB565) from process.dmp (inspect-jsrf memory, 614400 B, sha256 95CE9EC0…) and converted it to PNG. It shows a clean, correctly coloured "Presented by SEGA®" logo on black. Saved as scratch: logs/workers/f4a-frames/final-surface-0x8011C000.png, sha256 396DC92B….
+- The clear surface 0x80084000 is byte-identical. INFERRED: the final pass copies the back buffer, which the [TEXUSE] 0x80084000 640x480 lin, 286 batches, suggests.
+- Log 115261-115267 (lower bound at that line): draws 840, textured 840, tris 1394, flips 286, flip stalls 286, 14 non-NV097 skipped, 95,949 unhandled methods (242 distinct).
+- 0 invalid ICALL/exception/ABI/[UNIMPL]/budget/sink/unsupported.
+CLASSIFICATION:
+- F4 "frames" is MET as an exploratory bare-minimum result. Ledger IDs: L14, L15, L17, L18 (via the commit consumer, toolkit a71f937), L20-L25, L39, L40; L16 set but inert under the owner; L19 dormant.
+- No strict or fidelity claim. The unhandled-method count is advisory: a picture is correct, but effects may be missing.
+- Draws rising across successive reports (147 to 840) plus a coherent image is the semantic liveness witness the profiles doc asks for. diagnostic_deadline alone was not; your rejection of the worker's "guest live" claim was right.
+- Record F4 in the plan/TR with this run, the PNG (re-derivable by the command above), and the ledger list. It reaches acceptance with the F6 milestone review per plan:842, not separately.
+W14: the line produced a critical-path finding (first rendered frame), so the ceiling clock resets to 10:32:32 UTC under the standard 3-packet/4 h rule. The extension I granted is consumed and closed.
+NEXT (cheapest, one run, observation-only addition):
+- Same profile and pair, plus RECOMP_FB_DUMP=<run-dir>\fb\f. It is observation-only per run-profiles:227, and dump_surface_bmp runs on each 10 s report.
+- Duration: 180 s.
+- Question: does the dumped sequence progress past the SEGA logo (more logos, the Sofdec intro, the title screen), or freeze on one image?
+- Readout: list each BMP with its log line and draws/flips at that report, then view them. If the image stays constant while draws rise, the guest is likely in a movie/logo wait. That is F5: inspect the Sofdec/XMV path, with the skip-or-patch option per plan:840. If it reaches the title screen, capture the frame for F6 and take the xemu screenshot of the same screen (T3 oracle) for the eye comparison.
+- If FB_DUMP produces nothing (clip/format guard at nv2a_pb_exec.c:912), the fallback is the dump-extraction method above at the deadline only. No code change.
+- ALSO advisory: 286 flips in ~62 s is roughly 4.6 fps. INFERRED: the executor is slow. That is not blocking for the bare minimum, but if the run times out before the title screen, use a longer deadline before any optimisation.
+REVERSED BY: the 180 s sequence showing a corrupted or wrong image on later frames (format assumption wrong), or the logo being produced by a fixture or static path rather than guest draws (draws=0 at a report).
+
+### IMAGE EVIDENCE clarification
+
+IMAGE EVIDENCE: the actual image already exists, so no inference is needed. Please read my previous message ("F4 RESULT RULING: FRAMES EXIST").
+1. OBSERVED, not inferred: I extracted guest VA 0x8011C000 (the final report's draw surface, 640x480, pitch 1280, RGB565) from this run's process.dmp after a MATCH dump gate. I converted it and viewed it: "Presented by SEGA®", clean, correctly coloured. Artifact: logs/workers/f4a-frames/final-surface-0x8011C000.png (sha256 396DC92B…); raw bin sha256 95CE9EC0…. Reproduce with `python -X utf8 scripts\inspect-jsrf.py memory <run> 0x8011C000 614400 --out x.bin`, then an RGB565→PNG conversion (a trivial script; let the worker write it under logs/workers).
+2. Correct labels:
+   - "present / FB window was called": INFERRED, no log witness, and it is not needed for F4.
+   - "the guest rendered a frame into its surface": OBSERVED from the image. The image is the F4 evidence.
+   - The draw coordinates x −0.5..160, y −0.5..165 are a lower-bound range from the report. They are consistent with screen-space quads in a 2D logo pass, not a "quarter video", given the image. Whether it is a movie frame is answered by the image: it is a static logo.
+3. Clear #900 at line 117696 (OBSERVED; #700 at 108751, #800 at 113318): accepted. The clear counter is DEMONSTRATED at ≥900 by that line, the log ends at 119913, and full end counts are absent. Record "≥900 clears by log line 117696" as a demonstrated lower bound.
+4. Method inventory: UNKNOWN under the owner. Correct, as ruled.
+5. Next step unchanged: the 180 s run with RECOMP_FB_DUMP for an image sequence. If the dump guard yields nothing, apply the dump-extraction method once at the deadline. That is the cheapest diagnostic and needs no code.
+
+### External prefix permission
+
+ACK. Prefix outside the run directory: fine, because the run ID is generated at launch. Conditions:
+- Put it under logs/ (gitignored), e.g. logs/workers/f4a-fbdump-<UTC>/f.
+- Have the record name that path, the env value used, and each BMP's sha256 and mtime.
+- Map each BMP to the [GPU] report log line that produced it; dump_surface_bmp runs inside the report, so the order matches.
+- Keep the BMPs out of the game repo's tracked paths. They are rendered from proprietary assets.
+Waiting for the 180 s result as the F5 consult input.
+
+### Session qualification after the 180 s run (NOT Advisor text)
+
+The worker and Session found two executor dump sites (eight early draw-path dumps and seventeen report-cadence dumps). Only the first executor dump is logged. Exact per-BMP report-line correspondence is therefore not observed. These findings were supplied to the Advisor for the pending F5 consult; no per-file exact-line claim is accepted. The BMP sequence is guest draw-surface evidence, not window-buffer evidence. A separate extensionless file is a one-shot window-buffer capture at window-thread frame 600; it shows SEGA at that instant only.
+
+**Prefix mapping, CORRECTED (Session, 2026-10-01 — not Advisor text, and superseding the Advisor's
+"the order matches" expectation above).** The Advisor's prefix condition asked that each BMP map to the
+report line that produced it. That mapping does **not** hold one-to-one here: the executor has **two**
+dump sites — the draw path (`nv2a_pb_exec.c:2206-2209`, capped at 8) and the periodic report
+(`:3124`) — and only the first dump is logged (`if (seq == 1)`, `:962-964`). Measured outcome: 25 BMPs
+(8 black, then 17 SEGA) against 19 logged reports, with the 8-then-17 split matching the two writers
+by timestamp (10:38:09–10:38:10 vs 10:38:20→10:41:01 at 10 s). **Per-file report-line correspondence is
+INFERRED, not observed.** A pending F5 ruling will supersede this appendix section.
+**[RESOLVED 2026-10-01: the F5 ruling has since arrived and is recorded verbatim in the F5 appendix
+below. The sentence above is left as written, as the state at the time of the 180 s qualification.
+The F5 ruling confirms the per-file mapping point and rejects the word "stop" for the frozen sample —
+see the F5 appendix §1 and §2.]**
+
+## Appendix — Advisor F5 cache-fill ruling, VERBATIM
+
+Advisor child `4e6d87e1-f748-48b3-a0a4-a6e5728bfeee`; provider `claude`; model `claude-opus-5-5`;
+effort `high`; continuability probe satisfied. The text below is the **exact received Advisor response**,
+copied directly from the Session's context and preserved verbatim. Nothing is reconstructed or
+paraphrased. **No images or raw binaries are embedded** — references and provenance only.
+
+F5 CONSULT RULING: the logo phase is not a stall. The guest is doing its first-boot HDD cache fill, slowly. The next step is ONE long observation run (no code). Record F4 first.
+
+1. WORDING CORRECTIONS
+- Window: accepted as "one-shot window frame at 10:38:19.247 (frames==600, fb_present.c:341), SEGA". Nothing is claimed about the window after that.
+- Brief §4 "stop is inside the submission walk": REJECT the word "stop". A single frozen sample in submit_read_word's VirtualQuery is a capture-time location, and the guest is live (below). Advisory: submit_read_word calls VirtualQuery once per pushbuffer word (nv2a_core.c), which is a plausible per-frame cost. It is a perf lead only, not a defect.
+
+2. NEW EVIDENCE (OBSERVED, I read it myself from the 180 s run)
+- The guest is filling its HDD cache from the DVD. 360 [PATH] opens of `\Device\Harddisk0\Partition5\Media\…~` (temp names), 184 distinct, steadily: 20-33 per 10 s report interval, through the end of the log (last: line 209119, e010.bin).
+- save-root\Cache\Media\Cache holds Cache00-02.tbl, DmCache00-02.tbl, and JSRF_CACHE_COMPLETE00.CMP written at 10:39:41 (~96 s in), with Cache02 started at 10:39:42. Cache02.tbl names Cache03.tbl/DmCache03.tbl next. DmCache00.tbl lists the Mission/Event files being copied. Cache payload: 182 small files, 67.9 MB.
+- Copy rate is ~1.0-1.3 distinct files/s in EVERY recent run, with or without the executor (48 s: 64 files; 60 s: 82 and 80; 180 s: 184). So the executor does not limit it.
+- INFERRED: the "Presented by SEGA" screen covers the first-boot cache fill, which goes in stages (00 complete, then 01-03), and the logo stays until the fill finishes. UNCERTAIN: whether JSRF really gates the logo on fill completion. A long run settles it.
+- Every run starts with an EMPTY disposable save-root (run-jsrf.py:306-313 refuses a non-empty one), so every run repeats the first-boot fill. A real console fills once.
+
+3. NEXT (cheapest discriminator, one run, no code)
+- 600 s, same clean pair and profile.
+- Add RECOMP_FB_DUMP=<logs/workers/...>/f and RECOMP_FB_WINDOW_DUMP_EVERY=600 (window frame about every 10 s). Both are observation-only per run-profiles:227/230.
+- Check disk ≥ 15 GB first: each run's save-root is about 5.3 GB of partition images.
+- Readout, from the run's own artifacts:
+  (a) per-10 s: draws/flips, BMP hash, window-dump hash;
+  (b) mtimes of the JSRF_CACHE_COMPLETE*.CMP and Cache0N.tbl files;
+  (c) the cached-file count per interval.
+- Decision rows:
+  - The image changes after a CACHE_COMPLETE (Smilebit logo, movie or title) → the logo is fill-gated; progress resumes. Then F5 is a movie check, and see 4.
+  - The cache keeps growing and the image is unchanged at 600 s → fill-bound but longer than 600 s. Estimate the remaining fill from the DmCache tables, then decide between a longer run and 4.
+  - The cache stops growing and the image is unchanged → a real stall. Bring the waits (stacks) to me.
+
+4. PREPARED, NOT AUTHORISED YET: a seeded cache.
+If the fill gates the logo, the path of least resistance is to start runs from a save-root whose cache was filled by a completed earlier run. That is the steady state of a real console, not a bypass. It needs:
+- an explicit runner option (owner-visible) instead of the empty-root refusal;
+- the seed's source run recorded in metadata;
+- a ledger entry ("Initial disk state: HDD cache pre-filled from run X");
+- the save/resume tests kept on empty roots.
+I will rule on it after the 600 s readout.
+
+5. RECORDS: commit F4 (records only) before the run, so the run identity is clean.
+
+W14: the clock reset at 10:32:32 still governs. One 600 s run is well inside it.
+
+REVERSED BY:
+- the 600 s run showing the image change while no cache completion occurred (gate is not the fill);
+- the cache rate collapsing to 0 with the image static (a stall);
+- the owner's xemu (empty HDD cache) showing the SEGA logo for only a few seconds on first boot. In that case the fill is not what gates the logo, and the slow per-frame rate is the lead.
 
 ## Session evidence qualification
 

@@ -183,7 +183,7 @@ a strict claim.
 | `RECOMP_USB_HC`, `RECOMP_USB_NDP` | Upstream v0.12: opt-in OHCI host-controller features and port count. |
 | `RECOMP_ASYNC_IO` | Upstream v0.12 (`991ff12`, `517682e`): reads on handles opened asynchronous return pending and complete later, as the console does. Both settings are model behaviour; runs with and without it are not a single-variable comparison with each other. |
 | `RECOMP_KEYBOARD` | Upstream v0.12: the host keyboard stands in for a pad. Real host input, not synthesised. |
-| `RECOMP_VP` | BearddOddity pushbuffer executor (toolkit merge `a253876`): vertex-program batches are interpreted unless the value is `0`. Read only by the executor, which runs only under `RECOMP_PB_EXEC` and only while the GPU-ack gate is open, i.e. never in a strict run. |
+| `RECOMP_VP` | BearddOddity pushbuffer executor (toolkit merge `a253876`): vertex-program batches are interpreted unless the value is `0`. Read only by the executor under `RECOMP_PB_EXEC`. The legacy feed required the GPU-ack gate; Architecture A (toolkit `a71f937`) uses the owner commit consumer independently of that gate. Profile classification rules are unchanged. |
 
 **Enabling a feature does not turn stub answers into modelled ones.** A claim is only
 as strict as the source of each value it relies on, so the run's label is necessary but

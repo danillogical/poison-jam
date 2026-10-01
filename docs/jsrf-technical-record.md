@@ -427,7 +427,7 @@ right answer is a larger sink, a sink that drains as it fills, or whether stagin
 submission means the walk should be committing incrementally. That is a design question about what the
 sink is *for*, not a constant to raise.
 
-**F4 capacity ruling, 2026-10-01 (owner-directed chore; implemented and accepted — runtime pending).** The Persistent
+**F4 capacity ruling, 2026-10-01 (owner-directed chore; implemented and accepted; F4 MET exploratory).** The Persistent
 Advisor chose A′: size both `staged[]` and `sink[]` to the existing 4096-word budget, place staging in
 PFIFO state rather than the stack, and preserve all-or-nothing submission admission and the other
 rejection rules. This is cheapest within the existing architecture, not hardware-faithful incremental
@@ -537,7 +537,8 @@ NV097→`PB_EXEC` path with **no second walk and no second GET**; a rejection mu
 (reject without executing); fixtures must pin **clear/flip counts**; and the next run must show a
 **post-guest periodic `[GPU]` report** as positive proof the path is live. W14 is extended **until
 A's first smoke plus one diagnostic**. **No more inert reruns.** The final order is **capture per
-entry class → bindings → `action_commit` → consumer (ordered NV097 only) → last method → GET**.
+entry class → bindings → `action_commit` → consumer (ordered all committed classes; the kernel
+executes the NV097 subset) → last method → GET**.
 **Interface refinement (Advisor APPROVED):** the seam takes **four arguments
 `(subch, class_id, method, param)`** and **all committed entries reach the core callback**; the
 **kernel wrapper** filters to NV097 and keeps the skip count — this **replaces the earlier
@@ -582,6 +583,70 @@ COMMIT: d86c8418adf27c6a03521218c9069716d567596b
 REMOTE_URL: https://github.com/danillogical/poison-jam.git
 RESULT: exit 0; 2a7324b..d86c841 master -> master; ls-remote equals HEAD
 ```
+
+**Architecture A push checkpoint (2026-10-01).** Toolkit first, then game; no force, no `upstream`;
+both trees clean at the pushed commits. Gate results: toolkit max outgoing blob 281,957 B, 0 behind /
+1 ahead, intended 9 source paths only; game 7 intended paths (five records, two tests), no `game/` or
+asset path, max outgoing blob 91,095 B, **7-blob outgoing secret audit 0 hits, exit 0**. Both pushes
+were re-verified by `git ls-remote` against local HEAD.
+
+```text
+PUSHED_TO: origin (toolkit)
+BRANCH: main
+COMMIT: a71f9374ddb2a6685b790493855c835842228212
+REMOTE_URL: https://github.com/danillogical/xboxrecomp.git
+RESULT: exit 0; e8a6e03..a71f937 main -> main; ls-remote equals HEAD
+
+PUSHED_TO: origin (game)
+BRANCH: master
+COMMIT: f676b1c3f2543a46e31240c793f707699923cc45
+REMOTE_URL: https://github.com/danillogical/poison-jam.git
+RESULT: exit 0; c01e292..f676b1c master -> master; ls-remote equals HEAD
+```
+
+**F4 — MET, exploratory (2026-10-01; Advisor-attributed summary — the Advisor's verbatim ruling is in
+the appendix of `docs/reviews/rulings/f4-submission-capacity.md`).** Frames exist: the 60 s run
+`20261001-033129-276-f4-a-smoke-60s` (game `f676b1c` / toolkit `a71f937`) rendered a clean,
+correctly coloured "Presented by SEGA®" logo into its draw surface — **OBSERVED from the image**, not
+inferred. Draws rising across successive reports (147 → 840) plus that coherent image is the
+**semantic liveness witness** the profiles doc requires; `diagnostic_deadline` alone was not. Ledger
+IDs: L14, L15, L17, L18 (via the commit consumer), L20–L25, L39, L40; **L16 set but inert under the
+owner**; L19 dormant. **No strict or fidelity claim**; the unhandled-method count is advisory (a
+picture is correct, effects may be missing). Acceptance is carried with the **F6 milestone Review**,
+not separately. **W14 reset at 10:32:32 UTC** on this first critical-path frame finding; the earlier
+extension is consumed and closed. The 180 s observation run `20261001-033805-242-f5-sequence-180s`
+(same pair plus `RECOMP_FB_DUMP`) is recorded as **observed** in the strict-horizon ledger and the
+ruling: 25 BMPs with 2 distinct hashes in ordered blocks (8 black, then 17 SEGA); pixels are the
+**guest draw surface** (`dma_resolve(drawn_offset ? drawn_offset : color_offset)`), not the window;
+one separate extensionless window-buffer capture at 10:38:19 (one-shot, `frames==600`, `fb_present.c:341`,
+accepted by the F5 ruling as SEGA at that instant only); counts are **lower bounds**. The 180 s run's
+last report is `L205921–205927` (**clears 2943, draws 2943, flips 987, stalls 987**) with its own
+`[GPU] clear #3000` at **L207880** of 209257; the **60 s** run's last report is `L115261–115267`
+(**clears 840, draws 840, flips 286, stalls 286**) with `clear #900` at **L117696** of 119913 — the
+two runs are **not** to be mixed. That run produced **no horizon move and no W14 change**; the F5
+consult ruling that followed is below.
+
+**F5 consult ruling (2026-10-01; Advisor-attributed summary — verbatim in the F5 appendix of
+`docs/reviews/rulings/f4-submission-capacity.md`).** **The logo phase is not a stall.** The guest is
+doing its **first-boot HDD cache fill**, slowly. **OBSERVED** (Advisor read the 180 s run): **360
+`[PATH]` opens of `\Device\Harddisk0\Partition5\Media\…~`, 184 distinct**, steady at 20–33 per 10 s
+report through the end of the log (last line 209119, `e010.bin`); the save-root cache holds
+`Cache00-02.tbl`, `DmCache00-02.tbl` and **`JSRF_CACHE_COMPLETE00.CMP` written 10:39:41** (~96 s in)
+with **Cache02 started 10:39:42**; payload **182 small files, 67.9 MB**; copy rate **~1.0–1.3 distinct
+files/s in every recent run, with or without the executor** (48 s: 64; 60 s: 82 and 80; 180 s: 184),
+so **the executor does not limit it**. **INFERRED:** the SEGA screen covers the fill, which goes in
+stages (00 complete, then 01–03). **UNCERTAIN:** whether JSRF really **gates** the logo on fill
+completion. The word **"stop" is REJECTED** for the frozen sample: a single frozen `VirtualQuery`
+sample in `submit_read_word` is a **capture-time location, not a stop** — the guest is live; the
+per-word `VirtualQuery` is a **perf lead only, not a defect**. The window claim is accepted only as
+**one-shot at 10:38:19.247 (`frames==600`, `fb_present.c:341`), SEGA**, with nothing claimed after it.
+**NEXT (authorized):** ONE **600 s** observation run, same clean pair and profile (the records commit
+changes only the game SHA), plus `RECOMP_FB_DUMP` and **`RECOMP_FB_WINDOW_DUMP_EVERY=600`** (both
+observation-only), with the **≥15 GB disk gate** checked first (each save-root is ~5.3 GB of partition
+images); readout per-10 s draws/flips + BMP hash + window hash, the `JSRF_CACHE_COMPLETE*.CMP` and
+`Cache0N.tbl` mtimes, and the cached-file count per interval; three decision rows as recorded in the
+appendix. **A seeded cache is PREPARED, NOT AUTHORISED** — no owner decision now and no
+implementation. **W14 clock unchanged at 10:32:32.** Reversals as listed in the appendix.
 
 **Deferred optional test advisory.** Do not add a diagnostic-is-OK assertion after the measured
 red/green runs merely for churn; reopen if a future failure of the 1109-method case fails without
