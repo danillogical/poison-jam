@@ -745,18 +745,59 @@ dot-directory filtering, the `FindNextFile`-failure cleanup and line `:234` are 
 **deterministic RED** is a 64-open/65th-query test plus a 200-round churn assertion — **VERIFIED RED on
 `a71f937` in both modes: 2/2 CTest tests failed, rc 8, 0.29 s**, with **64 opened / 64 queried**, the
 **65th query failing with status `0x80000006`** and **churn failing at round 1 of 200** with the same
-status. The parent read `red-direct.log` (initial ~70 lines) and the load-bearing counts in both modes
-from `red-ctest.log`; the newer `red-direct-raw.txt`/`red-bridge-raw.txt` are **UTF-16, read failed,
-pending UTF-8 conversion** and are not cited as parent-read. A worker **5/5-per-mode** claim is
-**worker-reported**; the **2/2 result is parent-verified**. The earlier **8-run 4-fail/4-pass result is
-superseded and NOT an accepted RED** (`RestartScan 1` masked the stale-context path), and **cause is
-NOT proven** by this RED. Plus a **required bridge-path
-test** using **`NtOpenFile` (ordinal 202), not `NtCreateFile`**, with a **fourth wrapper
-`xbox_test_bridge_NtOpenFile`** required and the `NtCreateFile` wrapper optional (Advisor harness-plan
-ACK, verbatim in the ruling appendix; no direct-only GREEN). **Packet:
-`docs/packets/f5-directory-context-close.md` — APPROVED / implementation IN PROGRESS (RED verified,
-GREEN pending), NOT ACCEPTED** until GREEN, tests and an allowed run. **No guest run until GREEN; no
-seeding; no `:234` change.** Risks
+status. **Parent-read RED evidence (current):** the parent read `red-direct.log` (initial ~70 lines),
+the load-bearing counts in both modes from `red-ctest.log`, and — after the worker's conversion — the
+**converted raws `red-direct-raw-utf8.txt` (lines 73–82)** and **`red-bridge-raw-utf8.txt` (lines
+138–149)**, which **confirm the same counts and the same `0x80000006` status** in both modes; the
+**UTF-16 originals are preserved** with their raw/BOM and hash. *(Historical qualification: at the time
+of the failure the raws were UTF-16 and unreadable; they are **now converted and verified**.)* A worker
+**5/5-per-mode** claim is **worker-reported**; the **2/2 result is parent-verified**. The earlier
+**8-run 4-fail/4-pass result is superseded and NOT an accepted RED** (`RestartScan 1` masked the
+stale-context path), and **cause is NOT proven** by this RED. The bridge test uses **`NtOpenFile`
+(ordinal 202), not `NtCreateFile`**; **three actual test-seam wrappers** were built — **open, query,
+close** — so the **"fourth wrapper" wording is historical** (it came from the design-stage harness
+discussion, where `NtCreateFile` was a possible extra) and the **`NtCreateFile` wrapper is not
+required** (Advisor harness-plan ACK, verbatim in the ruling appendix; no direct-only GREEN). **Packet:
+`docs/packets/f5-directory-context-close.md` — **ACCEPTED** (RED verified, GREEN verified, 300 s smoke
+PASS-F5 criterion (a)): the **unnumbered `JSRF_CACHE_COMPLETE.CMP` was created** (0 B,
+`CreationTimeUtc == LastWriteTimeUtc == 2026-10-01T13:27:49.9575858Z`), the **CMP loop stopped**, and
+state 0's nine-probe check completed. **W14 RESET from that actual marker event: horizon
+`13:27:49.9575858Z`, ceiling `17:27:49.9575858Z`, reset count 0** — the eligible event is the **marker,
+not a frame**; **no title claim** (the frame is still SEGA, so criterion (c) is not met). **New stop:
+F6 candidate, UNCLASSIFIED** — the earlier "`1A03` loop/poll" reading is **superseded**: the **277/294
+traffic is PER-FRAME RENDER WORK** (277@19E452 = 12 × 515; 294 sites = 3 × 515 and 1 × 515; IRQL pairs
+≈515; **E_FAIL paths 0 times**), i.e. **≈515 frames over ≈90 s ≈ 5.7 fps** (rate estimate only). At
+capture the root stack runs `… → 13A80 → 14D090 → 198F10 → 198ED0 → 191390 → 1912A0` with **PFB_WBC = 0**
+and **GET == PUT == 0x5B50C** — a **snapshot fact, not proof of no stall at any other time**. **(A)** slow
+frame/time-counted sequence vs **(B)** step gated on an event (audio/movie/thread with
+`RECOMP_APU_TRAP=1`) is **not yet decided; not called a stall or hang**. **Next: read-only** —
+disassemble `13A80`'s vtable dispatch from **`13CB2–13EE4`** plus **`14D090`**, then read the object's
+step/timer fields from the new dump (**mapping gate already passed**); **no run, no fix, no seeding**.
+**GREEN gates
+(measured):** focused 2/2 in 0.19 s; toolkit CTest
+**7/7 in 2.71 s**; lifter **Ran 134, OK (skipped=1)** in 14.460 s; game CTest **31/31 in 31.32 s**;
+game `just check` all passed. **Advisor GREEN: APPROVED**, scope matching D2; **the untracked
+`tests/dir_context_release_test.c` must be committed with the fix before any toolkit push.**
+**SMOKE RULING (verbatim in the appendix): `--seconds 300`, EXPLORATORY**, identical retry1
+environment (`RECOMP_APU_TRAP=1`, `RECOMP_FB_WINDOW=1`, `RECOMP_FB_WINDOW_DUMP_EVERY=600`,
+`RECOMP_KERNEL_LOG_BUDGET=100000`, `RECOMP_NV2A_TRACE=1`, `RECOMP_PB_EXEC=1`, `RECOMP_PB_SCAN=1`,
+**`RECOMP_GPU_ACK` absent/default**), `RECOMP_FB_DUMP` pointed at a **new** directory, fresh isolated
+disposable `--save-root`, **no seed**, **no `:234` change**, Release build via `just build` with the
+identity check passing, and the run on a committed tree (or the toolkit dirty state recorded — the
+runner archives `toolkit.patch`). **30 s and 60 s are rejected**: retry1's first marker appeared at
+**~205 s**, so they never reach F5. **Ledger IDs L14–L18, L20–L25, L39, L40; L19 dormant** (parent
+verifies against the ledger). **Interpretation:** PASS-F5 (unnumbered marker created, OR ordinal-207
+results no longer alternating `0x80000006` with marker creates bounded, OR new progress past the SEGA
+screen); **FAIL-SAME** (nine numbered markers recreated repeatedly and ordinal 207 still returning
+`0x80000006`) — stop, do not extend, bring the counts; **FAIL-DIFFERENT** (207 all `0` but markers still
+loop) — bring the `25040` state evidence. Mapping gate before any guest-VA dump read. **The ordinal-207
+counts are qualified per the Advisor's audit ACK: 1244 strict calls (the 1245 included the summary
+line, a false positive), and 1022/539/482/1 with the window starting at `COMPLETE00` (the earlier
+1021/538/482/1 was off by one at the boundary). Adjacency matching is approximate because threads
+interleave, so "alternating 0/0x80000006" is supporting evidence only, not per-call proof. The 205 s
+figure comes from retry1 save-root file CreationTime (host timestamps, not guest log time).** **No
+W14 reset at that time**; the reset came later from the actual marker event. **No guest run until GREEN;
+no seeding; no `:234` change.** Risks
 recorded, not fixed here: the lazy `InitializeCriticalSection` race, and the query using `ctx` outside
 the lock after lookup. **The "other `CloseHandle`-of-taken-token paths" item is a write-audit
 requirement, not a standing risk:** the **worker's grep found no other such close site**. The parent independently searched
@@ -780,6 +821,18 @@ BRANCH: master
 COMMIT: d1f30e1ec43e11d55cc47a4d5de0debe20a0d114
 REMOTE_URL: https://github.com/danillogical/poison-jam.git
 RESULT: exit 0; c4bcd2b..d1f30e1 master -> master; local HEAD == ls-remote
+```
+
+**D2 toolkit push (actual, 2026-10-01).** The accepted D2 code, toolkit first:
+
+```text
+PUSHED_TO: origin
+BRANCH: main
+COMMIT: a8262014eec9cd8d720184f7f2fb7dce4652105d
+REMOTE_URL: https://github.com/danillogical/xboxrecomp.git
+RESULT: SUCCESS — fast-forward a71f937 -> a826201; parent job pwsh-3305 collected, rc 0;
+        outgoing 5 files, 571 insertions / 1 deletion, test file included;
+        5 blobs scanned, 0 hits; 0 secrets; largest object 407267 B
 ```
 
 **Deferred optional test advisory.** Do not add a diagnostic-is-OK assertion after the measured

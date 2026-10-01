@@ -879,22 +879,51 @@ list is exhausted.
   unchanged). Ledger IDs L14, L15, L16 (legacy ack
   retired; feed replaced), L17, L18 (owner consumer), L20–L25, L39, L40; L19 dormant. **W14 reset
   unchanged at 10:32:32; no strict-horizon move** — as of **12:10 UTC the clock has elapsed 1 h 38 m**.
-  **F5 D1 probe INCONCLUSIVE (2026-10-01):** the read-only directory-context probe did not reach the
-  candidate table — `s_dir_contexts` live VA has **0 containing ranges**, **0/4928** readable slots,
-  dump coverage **0.96%** (113 ranges). **Cause NOT proven** (occupancy UNKNOWN — the capture does not
-  include the array). **D2 is now approved** (see the bounded unit below); **no new run until its
-  RED/GREEN and test gate passes**. The **current Advisor is
-  `63c4869f…`** (ACK 1 + ACK 2), which delivered the **F5 directory-probe ruling (A–E), reply 3, the
-  D2 design ruling and the harness-plan ACK** — all verbatim in the ruling appendix. **No ledger entry**
-  for the candidate fix: it is **not yet introduced**, so there is no shortcut to admit and no promotion
-  to record.
-  **Bounded code/test unit for this chore step:** `docs/packets/f5-directory-context-close.md` —
-  **owner-directed F5 chore, bounded code/test unit** (the Advisor calls it a separate code packet);
-  **not a workflow change or discovery packet, and CURRENT PACKET remains none**. It carries the D2 fix
-  shape (release the directory-search context on close at both `xbox_NtClose` sites *and*
-  `bridge_NtClose`), the deterministic **RED-first** test plan, and the **`NtOpenFile` (ordinal 202)
-  bridge requirement** with the exact guest arguments. **RED only, parent-authorised — no production
-  change until the parent reviews both RED statuses.**
+  **W14 RESET (2026-10-01, superseding the above):** the D2 300 s smoke produced the **actual eligible
+  event — the unnumbered `JSRF_CACHE_COMPLETE.CMP`** (0 B, `CreationTimeUtc == LastWriteTimeUtc ==`
+  **`2026-10-01T13:27:49.9575858Z`**) — so the **horizon moves to `13:27:49.9575858Z`** and the
+  **ceiling to `17:27:49.9575858Z`**, **reset count 0**. The old `14:32:32` is **historical and
+  superseded**. The eligible event is the **actual marker, not a frame**. **F5 CMP loop resolved; the
+  new stop is after the marker phase.** **No title claim** (the frame is still SEGA).
+  **New stop — F6 candidate, UNCLASSIFIED after the cache.** ***Superseded reading:*** the earlier
+  "`1A03` loop / poll" interpretation was the **sampled callee region** and the Advisor's **initial
+  hypothesis**, **not the actual poll head** — **kept as history**. **Current classification
+  (Advisor, own reads; read-only):** the **277/294 traffic is PER-FRAME RENDER WORK, not a poll** —
+  **277@19E452 = 12 × 515**, **294 sites = 3 × 515 and 1 × 515**, IRQL pairs ≈ 515 each, **E_FAIL paths
+  0 times**, all lock-stepping at **≈515 = one set per frame**; so **≈515 frames after the marker over
+  ≈90 s ≈ 5.7 fps** (a **rate estimate only** — nothing timestamps individual frames). **Capture
+  state:** root stack `… → 13A80 (game main loop) → 14D090 → 198F10 → 198ED0 → 191390 → 1912A0`
+  (push-buffer kickoff), with **PFB_WBC = 0** and **GET == PUT == 0x5B50C**, so the flush and queue were
+  **not stuck at capture** — a **snapshot fact, not proof of no stall at any other time**. **F6 candidate
+  remains UNCLASSIFIED:** **(A)** a slow frame/time-counted sequence vs **(B)** a step gated on an event
+  that has not happened (audio/movie/thread, given `RECOMP_APU_TRAP=1`). **Not called a stall or a
+  hang.** **Next action — READ-ONLY, one stop (parent-assigned to the worker, in progress):**
+  disassemble **`13A80`**'s per-frame dispatch, the vtable calls (`call [edi+0x14]`, `[edi+0x1c8]`,
+  `[ecx+0x20]`) from **`13CB2–13EE4`**, with **`14D090`**; identify the active logo/scene object and its
+  **step/timer field**, then read those fields from the new dump (the **mapping gate has already
+  passed** for `062415`). **No run, no fix, no seeding** until (A)/(B) is classified. **The D2 closure
+  is independent and stays accepted.**
+  **Log evidence (parent-read, own):** lines **234619–622** show the **unnumbered marker `CREATE`** with
+  return **`1456CB`**, the **`PATH`**, and **status 0** (the accompanying token in that record is not
+  interpreted here).
+  **Strict-path audit (qualified):** the strict-path counts came out **12 vs 474 matches**, and that
+  set **includes the demo**; the **marker creates fall in an adjacent 6-line window**, which is
+  **qualified — not a tid proof**.
+  ***Historical — F5 D1 and the D2 design before GREEN.*** *As recorded then:* the F5 D1 probe was
+  **INCONCLUSIVE** (`s_dir_contexts` live VA with **0 containing ranges**, **0/4928** readable slots,
+  coverage **0.96%** over 113 ranges; **cause NOT proven**, occupancy UNKNOWN); the D2 design was
+  **approved** with **no new run until its RED/GREEN and test gate passed**; the Advisor
+  **`63c4869f…`** (ACK 1 + ACK 2) had delivered the **A–E ruling, reply 3, the D2 design ruling and the
+  harness-plan ACK** (all verbatim in the ruling appendix); and the **bounded unit**
+  (`docs/packets/f5-directory-context-close.md`) was **RED-only, parent-authorised**, with no ledger
+  entry because the fix was **not yet introduced**.
+  ***Current — ACCEPTED, tested, toolkit pushed.*** The bounded unit is **ACCEPTED**: RED verified →
+  GREEN verified (focused 2/2 0.19 s; toolkit CTest 7/7 2.71 s; lifter 134 OK skipped=1 14.460 s; game
+  31/31 31.32 s; `just check` passed) → **300 s smoke PASS-F5 (a)** with the **unnumbered
+  `JSRF_CACHE_COMPLETE.CMP`** created; **W14 reset to horizon `13:27:49.9575858Z` / ceiling
+  `17:27:49.9575858Z`**; **toolkit pushed** as **`a8262014eec9cd8d720184f7f2fb7dce4652105d`**
+  (fast-forward `a71f937 → a826201`, 5 files, 571+/1−, test included, 0 blobs/secrets). **CURRENT
+  PACKET remains none** — this is a bounded F5 unit, **not** a workflow promotion.
   Corrected evidence in TR and `logs/workers/f4-drained-no-frames-brief.md`.
   **Historical 2026-09-30 question (answer recorded then; superseded by the accepted capacity work
   and now by Architecture A):** Whether the answer is a larger sink,

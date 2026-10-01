@@ -2,7 +2,7 @@
 
 **Class:** owner-directed F5 chore — bounded code/test unit (the Advisor calls it a separate code
 packet); **not a workflow change or discovery packet; CURRENT PACKET remains none, unchanged.**
-**Contract revision:** r1   **Status:** APPROVED — implementation **IN PROGRESS** (RED **VERIFIED**, GREEN pending)
+**Contract revision:** r1   **Status:** **ACCEPTED** — RED verified, GREEN verified, 300 s smoke **PASS-F5 criterion (a)** (unnumbered `JSRF_CACHE_COMPLETE.CMP` created); bounded F5 unit, **not** a workflow packet promotion
 **Authority:** this unit is named by the **original owner prompt step 4** and sits inside the **F5
 chore** in `plan-jsrf-bare-minimum.md` §13 — **the same title/link as that chore entry**, not a new
 promoted packet. Workflow §5.8's class list and plan §3/§13 take precedence here; **no promotion is
@@ -25,32 +25,62 @@ exemption. **W14's clock and packet-count conditions both apply** (see Status an
 `logs/workers/f5-directory-context-d2-design-verbatim.md`; ruling + reply 3 + harness ACK verbatim in
 `docs/reviews/rulings/f4-submission-capacity.md` (F5 directory-probe appendix).
 
-### Status and gating
+### Status and gating — ACCEPTED (closure)
 
-- **APPROVED / implementation IN PROGRESS.** **RED VERIFIED on `a71f937`** (both modes, below);
-  **GREEN pending**; **NOT ACCEPTED** until GREEN, tests and an allowed run.
-- **Verified RED (parent-read):** **2/2 CTest tests failed** — `xbox_dir_context_release_direct` and
-  `xbox_dir_context_release_bridge` — **rc 8, 0.29 s**; in each mode **64 opened / 64 queried**, the
-  **65th query FAILED with status `0x80000006`** (`STATUS_NO_MORE_FILES`), and **churn failed at round
-  1 of 200** with the same status. **Artifacts, cited as actually read:** `red-direct.log` (parent read
-  its initial ~70 lines) and `red-ctest.log` (load-bearing counts in both modes); the newer
-  `red-direct-raw.txt` / `red-bridge-raw.txt` are **UTF-16**, their read **failed**, and they are
-  **pending UTF-8 conversion** — not cited as parent-read. The earlier **8-run 4-fail/4-pass result is superseded and NOT an accepted
-  RED** (`RestartScan 1` masked the stale-context path); a worker claim of 5/5 per mode is
-  **worker-reported, not parent-verified**.
-- **Cause is NOT proven** by the RED: it shows the observable failure and its status, **not** that the
-  context leak is the actual cause of the guest loop.
-- **Test first.** The test is written before the fix and **fails on `a71f937`**.
-- **No guest run until GREEN.** No seeding. No change to `kernel_file.c:234`.
-- **W14 (plan §3 rule — "3 packets or 4 h without moving the horizon or an accepted critical-path
-  finding → one Advisor ceiling call"):** the **ceiling stays at the original 4 h, `14:32:32` UTC**,
-  with **no reset** from D1 or from the source candidate alone; a **RED-then-GREEN D2 that later moves
-  the guest past F5** would be the candidate for a reset, and a source candidate alone is not.
-  **D2 is ONE pending candidate unit, not three** (Advisor budget ACK, verbatim in the ruling
-  appendix), so the packet-count threshold is **not** reached. The ACK's own caveat: it **did not read
-  the W14 text itself** — it confirms consistency with its history, **not** an independent rules audit;
-  the **authority is plan §3**, which the parent read. Elapsed time alone still cannot establish that
-  the count condition is clear. **As of `13:14:39` the ceiling `14:32:32` is still unreset.**
+- **ACCEPTED.** RED verified → GREEN verified → the authorised 300 s smoke **PASS-F5 criterion (a)**:
+  the **unnumbered `JSRF_CACHE_COMPLETE.CMP` was created** (0 B, `CreationTimeUtc ==
+  LastWriteTimeUtc == 2026-10-01T13:27:49.9575858Z`), the **CMP loop stopped**, and state 0's nine-probe
+  check completed. **Bounded F5 unit — not a workflow packet promotion; CURRENT PACKET remains none.**
+- **Run and result (actual artifact):** run **`20261001-062415-815-f5-d2-context-release-300s`**,
+  `exe_sha256 74377ac6…` (the fix build), `--seconds 300`, label `f5-d2-context-release-300s`, profile
+  **exploratory** with `RECOMP_GPU_ACK` absent, the exact 7 fixed overrides **plus the new
+  `RECOMP_FB_DUMP` path** (a filename **base** — the writer appends `NNN.bmp`). `result.json`:
+  **`diagnostic_deadline`** (expected, not a crash), `exit_code` **3**, **302.951383 s**, `dump_ok` and
+  `gpu_report_ok` **true**, **21** native threads, **166** named frames, **1** snapshot / **0** dropped,
+  `save_root_verified` and `checkpoints_passed` **true**, **mapping gate matches 1** with zero
+  mismatch/unreadable/missing. Frames: **38 files, 3 byte-hashes** — SEGA window, **8 black**
+  (`000–007`), **29 SEGA** (`008–036`); **no new frame past SEGA; not the title.**
+- **Tests (measured):** focused **2/2** in **0.19 s**; toolkit CTest **7/7** in **2.71 s**; lifter
+  **Ran 134, OK (skipped=1)** in 14.460 s; game CTest **31/31** in **31.32 s**; game `just check` all
+  passed. **POSIX helper reviewed, NOT compiled** (Windows `:615-633`, POSIX `:1174-1192`).
+- **Verified RED (historical, as measured):** **2/2 failed, rc 8, 0.29 s**; 64 opened / 64 queried; the
+  **65th query failed with `0x80000006`**; **churn failed at round 1 of 200**. Read from
+  `red-direct.log` (initial ~70 lines), `red-ctest.log`, and the converted raws
+  `red-direct-raw-utf8.txt` (73–82) / `red-bridge-raw-utf8.txt` (138–149). The earlier 8-run
+  4-fail/4-pass result is **superseded and not an accepted RED**; a worker 5/5-per-mode claim is
+  **worker-reported**. **The RED alone does not prove guest causality.**
+- **Ledger IDs (independently verified):** L14–L18, L20–L25, L39, L40; **L19 dormant**.
+- **W14:** the smoke produced the **actual eligible event** — the unnumbered marker — so the **horizon
+  is `13:27:49.9575858Z`** and the **ceiling `17:27:49.9575858Z`**, **reset count 0**; the earlier
+  `14:32:32` is **historical**. The event is the **marker, not a frame**.
+- **Toolkit push receipt (actual):**
+
+```text
+PUSHED_TO: origin
+BRANCH: main
+COMMIT: a8262014eec9cd8d720184f7f2fb7dce4652105d
+REMOTE_URL: https://github.com/danillogical/xboxrecomp.git
+RESULT: SUCCESS — fast-forward a71f937 -> a826201; parent job pwsh-3305 collected, rc 0;
+        outgoing 5 files, 571 insertions / 1 deletion, test file included;
+        5 blobs scanned, 0 hits; 0 secrets; largest object 407267 B
+```
+
+- **Future gateway (next work, source-only):** the new stop is the **F6 candidate, UNCLASSIFIED** —
+  the **sampled callee region** `0x1A03xx–0x1A04xx` calling **`19E438`** → **ordinals 277 and 294**
+  (~6300 each, returning 0). **Resolved by source:** **277 = `RtlEnterCriticalSection`**,
+  **294 = `RtlLeaveCriticalSection`** (host-blocking critical sections; a VOID-0 return **does not**
+  prove a kernel wait), and **`19E438` is a shared conditional-enter helper with ~50 callers** — so the
+  **scope is a shared lock, not a loop head**, and the **actual next stop stays unclassified**.
+  Disassemble **`19E438`** and its callers at `0x1A0360–0x1A0500` to find the actual loop head, and run
+  the **mapping gate** before any guest-VA read. **No fix, no run extension, no longer run, no seeding.**
+- **Historical baseline captions:** the `a71f937` baseline statements, the RED-phase gating, and the
+  launch-pending wording above are **historical** and are retained only as history.
+- **W14 — HISTORICAL (pre-reset).** *At the time of writing:* the ceiling was the original 4 h
+  `14:32:32` UTC, with no reset from D1 or from the source candidate alone, and D2 counted as **one
+  pending candidate unit, not three**. **SUPERSEDED:** the smoke produced the **actual eligible event**
+  (the unnumbered marker), so the **current horizon is `13:27:49.9575858Z`** and the **current ceiling
+  `17:27:49.9575858Z`**, **reset count 0**. The Advisor's budget ACK also **did not read the W14 text
+  itself** — it confirmed consistency with its history, not an independent rules audit.
 
 ### Guard clarification (Advisor, verbatim in the ruling appendix)
 
@@ -154,9 +184,10 @@ queried 64 times).
   The guest path is **`NtOpenFile`** — thunk **ordinal 202**, from the original raw at `145F08-145F20`;
   `bridge_NtOpenFile` (`kernel_bridge.c:3340-3353`) forwards to the same `bridge_create_file_impl` with
   **disposition 1 (`FILE_OPEN`)** and **allocation 0**. The two are functionally equivalent, but an
-  `NtOpenFile` wrapper costs one more same-shape seam wrapper **and matches the guest exactly**, so a
-  **fourth wrapper `xbox_test_bridge_NtOpenFile` is REQUIRED** for the RED/GREEN bridge test; **the
-  `NtCreateFile` wrapper is optional — drop it if not needed for fixture setup**.
+  `NtOpenFile` wrapper matches the guest exactly, so **`xbox_test_bridge_NtOpenFile` is required** for
+  the RED/GREEN bridge test. **As built, there are THREE actual test-seam wrappers — open, query,
+  close**; the design-stage wording about a **"fourth wrapper" is historical** (it counted a possible
+  extra `NtCreateFile` wrapper), and the **`NtCreateFile` wrapper is not required**.
 - **Exact guest arguments (from the ACK):** **DesiredAccess `0x100001`**, **ShareAccess `3`**,
   **OpenOptions `0x4021`** (`DIRECTORY_FILE | SYNCHRONOUS_IO_NONALERT | OPEN_FOR_BACKUP_INTENT`);
   query with **FileInformationClass `1`**, **Length `0x148`**, **RestartScan `0`**, and an

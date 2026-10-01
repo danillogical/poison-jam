@@ -785,8 +785,8 @@ F5 D2 DESIGN RULING (same route; sources read: kernel_file.c 316-324, 590-729, 9
    - No guest run until GREEN. No seeding and no :234 change.
    - The smoke run and profile policy come later, as you said.
 
-**Packet:** the approved implementation packet is `docs/packets/f5-directory-context-close.md` —
-**APPROVED / implementation pending**, and **NOT ACCEPTED** until RED/GREEN, tests and an allowed run.
+**Packet:** the implementation packet is `docs/packets/f5-directory-context-close.md` —
+**ACCEPTED** (RED verified, GREEN verified, 300 s smoke PASS-F5 criterion (a)).
 
 ### F5 D2 guard clarification (full, as received)
 
@@ -977,6 +977,282 @@ accepted yet**, and there has been **no guest run since the fix**. **No W14 rese
 same child** — `send_message`, **no fallback route** — and **no answer is currently received**.
 Therefore **no current-Advisor GREEN approval is claimed**; the consult's outcome is **pending** and is
 recorded only when the actual ruling text arrives.
+
+### F5 D2 GREEN review + SMOKE RULING (full, as received)
+
+Received from the **same child `63c4869f…`** by `send_message` (`tool/call` line 443, turn 15 step 1,
+13:22:45, **4176 chars**) — verbatim, not a summary:
+
+F5 ADVISOR GREEN REVIEW + SMOKE RULING (same route; own reads done)
+
+GREEN: APPROVED, scope matches D2. What I read myself:
+- Toolkit diff on a71f937, working tree (kernel.h, kernel_bridge.c, kernel_file.c, CMakeLists.txt, plus the untracked test).
+  - Helper: Windows at :615, POSIX at :1176. Each takes the lock, clears every matching slot, and no-ops on NULL/INVALID.
+  - Both xbox_NtClose copies call it inside the valid-handle check, before CloseHandle.
+  - bridge_NtClose calls it after take, only when h is valid, before CloseHandle. Synthetic-handle exclusion and g_eax=0 unchanged.
+  - Query code is untouched.
+  - Test seam wrappers: NtOpenFile, NtQueryDirectoryFile, NtClose. Two separate CTest processes.
+- Log tails: green-toolkit-ctest 7/7, green-game-test 31/31 (including #28/#29), green-game-check "all checkers passed". Bridge log shows the synthetic 0xDEAD0001 close.
+- POSIX reviewed, not compiled: accepted as recorded.
+- Before any toolkit push, the untracked tests/dir_context_release_test.c MUST be committed with the fix.
+
+NEW SUPPORTING EVIDENCE from the existing retry1 jsrf_run.log (read-only):
+- 1245 calls to ordinal 207 (NtQueryDirectoryFile) in total. 1021 of them are from 0x145F50 after the first marker line, returning 538 × 0, 482 × 0x80000006, and 1 × 1. The tail alternates 0 / 80000006, which is the pattern predicted by mechanism (ii), handle reuse.
+- On a correct backend, an exact-name query for a marker that exists cannot return NO_MORE_FILES.
+- Caveat: the longest run of consecutive successes is 9. Those may include other 145E7E callers (the 24E10 Z: copy-check, or other directories), so this does not refute the mechanism. Treat it as runtime corroboration, not as proof of causality.
+
+TIMING CONSTRAINT, which decides the bound:
+- In retry1 the run started at 04:36:30.
+- The first marker, JSRF_CACHE_COMPLETE01, was created at 04:39:55, about 205 s in, after the payload copy.
+- So 30 s or 60 s would NEVER reach F5 and cannot test the fix. Both are rejected.
+
+SMOKE RULING:
+- Duration: --seconds 300. That covers about 205 s to the marker phase plus about 95 s for the loop to resolve or recur. It is half of the old 600 s and fits inside the W14 ceiling with margin.
+- Profile: EXPLORATORY. Use the identical environment of retry1: RECOMP_APU_TRAP=1, RECOMP_FB_WINDOW=1, RECOMP_FB_WINDOW_DUMP_EVERY=600, RECOMP_KERNEL_LOG_BUDGET=100000, RECOMP_NV2A_TRACE=1, RECOMP_PB_EXEC=1, RECOMP_PB_SCAN=1, with RECOMP_GPU_ACK absent (default). Point RECOMP_FB_DUMP at a NEW directory. Ledger IDs as the parent listed: L14–L18, L20–L25, L39, L40, with L19 dormant. The parent verifies these against the ledger.
+- Use a fresh isolated disposable --save-root under the new run dir: no seed, no copied cache, no markers. No change to line :234. A Release build of the GREEN toolkit tree via just build, with the identity check passing.
+- The run must be on a committed tree, or record the toolkit dirty state explicitly in the run record. The runner archives toolkit.patch.
+
+INTERPRETATION (decide from result.json plus the log, no title claim):
+- PASS-F5, meaning the fix moves the loop: at least one of these happens:
+  (a) JSRF_CACHE_COMPLETE.CMP (unnumbered) is created;
+  (b) after the first marker, the log shows the 0x145F50 ordinal-207 results without the alternating 80000006 pattern, AND marker creates stop repeating (bounded, roughly at most 9 per cache, not about 50 each);
+  (c) new guest progress past the SEGA screen in the framebuffer dumps.
+  (a) or (c) counts as horizon movement, which makes the parent's W14 reset evaluation eligible.
+- FAIL-SAME: the 9 numbered markers are recreated repeatedly and ordinal 207 still returns 80000006 for existing markers. That means the mechanism is incomplete. Stop, do not extend the run, and bring me the log counts.
+- FAIL-DIFFERENT: the 207 calls are all 0 but markers still loop. Then the cleanup is correct but not causal. Bring me the 25040 state evidence. No seeding.
+- Any crash or new first failure: record the earliest actual failure and its caller per AGENTS.md.
+- Run the mapping gate before any guest-VA dump read.
+
+There are no further prerequisites from me. Proceed.
+
+**Session notes (scope/attribution, not part of the ruling):**
+- **GREEN: APPROVED**, scope matches D2. The Advisor read the toolkit diff, the helpers (Windows
+  `:615`, POSIX `:1176`), both `xbox_NtClose` copies, `bridge_NtClose`, the untouched query code, the
+  test-seam wrappers and the log tails itself. **Before any toolkit push, the untracked
+  `tests/dir_context_release_test.c` MUST be committed with the fix.**
+- **The ordinal-207 counts are ADVISOR-REPORTED and must be verified by the parent** — they are
+  **runtime corroboration, not proof of causality** (the Advisor says so itself, noting the longest run
+  of consecutive successes is 9 and that other `145E7E` callers may be included).
+- **`--seconds 300` is authorised, EXPLORATORY**, because retry1's first marker appeared at **~205 s**
+  (run start 04:36:30, marker 04:39:55), so **30 s and 60 s are rejected as never reaching F5**.
+- **No W14 reset** until an eligible event (unnumbered marker creation or a new frame) actually occurs.
+
+### F5 D2 authorised smoke — LAUNCH RECORD (historical; outcome now recorded above)
+
+**Launch-time record. The outcome is recorded in the RESULT and PASS-F5 sections; this block is
+retained as history.**
+
+| Item | Value |
+|---|---|
+| Job | **`pwsh-3220`** (parent-owned) |
+| `--seconds` | **300** |
+| Label | **`f5-d2-context-release-300s`** |
+| Profile | **exploratory** |
+| Environment | the **exact 7-variable retry1 set**, with **`RECOMP_GPU_ACK` absent** and **no other inherited overrides** (`GetChildEnv` shows none) |
+| `RECOMP_FB_DUMP` | **`logs/workers/f5-d2-smoke-300-framebuffers`** (new directory) |
+| Build | `just build` job **`pwsh-3212`** collected success; identity recorded |
+| Save-root | runner-created fresh run dir and save-root automatically (no CLI root setting needed) |
+| Toolkit state | **dirty: 4 tracked files + the untracked fixture**; the runner archives the **patch carrying the fix** — the **untracked fixture is NOT in that archive** (a test snapshot is copied after the run, independently hashed: artifact provenance, not profile-verified) |
+| Ledger IDs | **L14–L18, L20–L25, L39, L40; L19 dormant** — **independently verified by the parent** against the ledger |
+
+**W14: no reset** from this launch. A reset becomes eligible only if the run produces an eligible
+event — the unnumbered marker, or a new frame — per the smoke ruling's interpretation rows.
+
+### F5 D2 authorised smoke — RUN IDENTITY (read from the run's own metadata)
+
+| Field | Value |
+|---|---|
+| **Run ID** | **`20261001-062415-815-f5-d2-context-release-300s`** |
+| `metadata.started_utc` | **`2026-10-01T13:24:16.649794+00:00`** |
+| `metadata.seconds` | **300** |
+| `result` | **`diagnostic_deadline`**, exit **3**, **302.951383 s** (see the RESULT section) |
+| `exe_sha256` | **`74377ac6130e812b7a830492d4995bdc58efb8899ff5c1d6c23b7ee6c0c0424e`** — **differs from retry1's `7027fafa…`**: the fix build |
+| Profile | requested **exploratory** / classification **exploratory**; `RECOMP_GPU_ACK` **absent** (`present: false`, effective default enabled) |
+| Effective env | the **7 fixed overrides** — `RECOMP_APU_TRAP=1`, `RECOMP_FB_WINDOW=1`, `RECOMP_FB_WINDOW_DUMP_EVERY=600`, `RECOMP_KERNEL_LOG_BUDGET=100000`, `RECOMP_NV2A_TRACE=1`, `RECOMP_PB_EXEC=1`, `RECOMP_PB_SCAN=1` — **plus the new `RECOMP_FB_DUMP=logs/workers/f5-d2-smoke-300-framebuffers`** (8 settings in total; the **7 count excludes `FB_DUMP`**) |
+| Game revision | **`15d8af1f694681a7341fa5e8b03b8900b6cef4ec`** |
+| Toolkit revision | **`a71f9374ddb2a6685b790493855c835842228212`**, **`patch_sha256 4611158b…`**, **`status_sha256 e4905daf…`** — the runner **archived the patch carrying the fix**; the **untracked fixture is NOT in that archive** (the parent copies a test snapshot after the run, with an independent hash — artifact provenance, not profile-verified) |
+| Save-root | runner-created, `disposable: true` |
+| XBE | `xbe_sha256 fd190557…` (unchanged) |
+
+**No W14 reset at launch time**; the reset came later from the actual marker event (see the PASS-F5
+section: horizon `13:27:49.9575858Z`, ceiling `17:27:49.9575858Z`).
+
+### F5 D2 smoke 300 s — RESULT and FRAME FINDING (2026-10-01)
+
+**Run `20261001-062415-815-f5-d2-context-release-300s`** (fix build, `exe_sha256 74377ac6…`).
+
+| Field | Value |
+|---|---|
+| `outcome` | **`diagnostic_deadline`** (expected — **not** a crash) |
+| `exit_code` | **3** |
+| `duration_seconds` | **302.951383** |
+| `dump_ok` / `gpu_report_ok` | **true / true** |
+| `native_threads` / `named_frames` | **21 / 166** |
+| `gpu_snapshots` / dropped | **1 / 0** |
+| `save_root_verified` / `checkpoints_passed` | **true / true** |
+| Mapping gate | **matches 1**, zero mismatch / unreadable / missing |
+| Profile | classifier **EXPLORATORY** as expected; `RECOMP_GPU_ACK` absent |
+
+**Frame finding (parent-read; PNGs converted, viewed by eye).** **38 framebuffer files, 3 byte-hashes:**
+the **base file** (no extension, 921654 B, sha `9E7541A8…`) is the **window capture showing SEGA**;
+the **8 numbered draws `000–007`** are one hash (`9DC5CDCF…`) = **black**; the **29 numbered draws
+`008–036`** are another hash (`905E9204…`) = **SEGA**. Evidence PNGs:
+`logs/workers/f5-d2-frame-0.png` (SEGA window), `-1.png` (black), `-2.png` (the SEGA group).
+
+**PASS-F5 criterion (a) IS MET — D2 ACCEPTED; W14 RESET at the actual event.** The **unnumbered
+`JSRF_CACHE_COMPLETE.CMP` was created** (verified independently: 0 B,
+`CreationTimeUtc == LastWriteTimeUtc == 2026-10-01T13:27:49.9575858Z`), the **CMP loop stopped**, and
+state 0's nine-probe check completed. **Horizon movement at the F5 loop**, recorded as **"F5 CMP loop
+resolved; new stop is after the marker phase"**. **W14 RESET from the actual event: horizon
+`13:27:49.9575858Z`, ceiling `17:27:49.9575858Z`, reset count 0; the old `14:32:32` is historical and
+superseded.** The **eligible event is the actual marker, NOT a frame**. **Not a title claim**: the
+visible frame is still SEGA, so **criterion (c) "progress past SEGA" is NOT met**. **D2 is ACCEPTED**
+as a **bounded F5 unit** — **not a workflow packet promotion; CURRENT PACKET remains none**. Allowed:
+the **D2 commit/push per policy** (toolkit first, the test file included, the record listing the ledger
+IDs). **Not allowed: a run extension, a longer run, or seeding.** **No further run is in progress.**
+**The `FB_DUMP` value is a filename BASE, not a directory**: the writer appends `NNN.bmp`, and the
+extension-less file is the window capture — the durable wording says **"new path"**.
+
+**Marker-once qualification.** All **10 marker files have equal Creation and LastWrite times**, and the
+**log shows each marker PATH exactly once** — but **"created exactly once" cannot be inferred from equal
+Creation/LastWrite times alone**; it rests on the log's per-path counts (Advisor- and worker-observed,
+still a **qualified** method, not a timestamp proof).
+
+**New stop — F6 candidate, UNCLASSIFIED.** The **sampled callee region** is the
+**`0x1A03xx–0x1A04xx` loop calling `19E438`**, which calls **ordinals 277 and 294** (~6300 times each,
+both returning 0). **This is the Advisor's initial hypothesis, not the proven loop head.**
+**Next finding (annotated, resolved by source):** the **ordinal names are resolved** — **277 =
+`RtlEnterCriticalSection`**, **294 = `RtlLeaveCriticalSection`** — and **`19E438` is a shared
+conditional-enter helper with ~50 callers**, its family being **3 float-wrapper framework methods**.
+**277/294 are host-blocking critical sections, and a VOID-0 return does not prove a kernel wait.** So
+the **poll condition is NOT established**; the **scope is a shared lock**, **not a loop head**, the
+**actual next stop remains UNCLASSIFIED**, and **no fix and no run** are proposed. The **branch-polarity
+error in the earlier worker report was caught by the parent and corrected by the worker.** Next cheap
+action, **source-only, no
+run**: disassemble **`19E438`** and its
+callers at `0x1A0360–0x1A0500` to find the actual loop head, and **run the mapping gate before
+reading guest VAs** from the new dump.
+
+**Old ordinal-207 counts — Advisor ACCEPTED the corrections (annotated, not rewritten).** The GREEN
+ruling's figures (1245 total; 1021 from `0x145F50`; 538×0 / 482×`0x80000006` / 1×1) **stand as
+originally quoted**, annotated as **qualified**: **1245 → 1244** strict calls (the 1245 included the
+**summary line, a false positive**); **1021/538/482/1 → 1022/539/482/1** because the window starts at
+**COMPLETE00, not COMPLETE01** (off-by-one at the boundary); and **matching each return status to its
+call by adjacency is approximate** because threads interleave, so "alternating 0/80000006" is
+**supporting evidence only, not per-call proof**. **Where the 205 s came from:** retry1 save-root file
+**CreationTime** — `COMPLETE01` at 04:39:55 local versus `started_utc` 11:36:30Z = 04:36:30 local,
+≈**205 s**; **`COMPLETE00` at 04:38:07, ≈97 s in**; these are **host file timestamps, not guest log
+time**, and last-write times reflect rewrites.
+
+### F5 D2 audit ACK + 300 s smoke interpretation (full, as received)
+
+Received from the **same child `63c4869f…`** by `send_message` (`tool/call` line 503, turn 17 step 1,
+13:34:21, **3562 chars**) — verbatim, not a summary. **This is the actual received ACK; the
+earlier "consult pending" wording is superseded by it.**
+
+F5 ADVISOR: AUDIT ACK + 300 s SMOKE INTERPRETATION (own reads)
+
+1. AUDIT CORRECTIONS ACCEPTED. Annotate my earlier ruling as qualified; do not rewrite it.
+- 1245 → 1244 strict calls. The 1245 included the summary line, which was a false positive.
+- 1021/538/482/1 → 1022/539/482/1, because the window starts at COMPLETE00, not COMPLETE01. Off by one at the boundary.
+- Matching each return status to its call by adjacency is approximate, because threads interleave. So "alternating 0/80000006" is supporting evidence only; it does not prove per-call results.
+- Where the 205 s came from: retry1 save-root file CreationTime. JSRF_CACHE_COMPLETE01.CMP was created at 04:39:55 local (Get-ChildItem CreationTime). metadata.started_utc is 11:36:30Z, which is 04:36:30 local, so the gap is about 205 s. COMPLETE00 was created at 04:38:07, about 97 s in. These are host file timestamps, not guest log time. Last-write times (04:46:2x) reflect rewrites.
+
+2. NEW RUN 20261001-062415-815-f5-d2-context-release-300s, read by me:
+- result.json: diagnostic_deadline, 302.95 s, dump_ok, save_root_verified, checkpoints passed. Settings are identical to retry1 apart from RECOMP_FB_DUMP. RECOMP_GPU_ACK is absent, so EXPLORATORY. toolkit.patch is 10531 bytes; the dirty GREEN tree was archived.
+- Save root (CreationTime == LastWriteTime for all of them, so each marker was created exactly once):
+  - COMPLETE00 at 06:25:50
+  - COMPLETE01 to COMPLETE08 from 06:27:36 to 06:27:49
+  - **JSRF_CACHE_COMPLETE.CMP (unnumbered) at 06:27:49**
+- Log: each marker path appears exactly once (10 total). In retry1 there were 46–59 per marker and the unnumbered marker never appeared.
+- After the unnumbered marker (log line about 234620): there are **0** ordinal-207 calls from 0x145F50. The log is dominated by 277/294 calls (about 6300 each) and sub_0019E438 pairs. That is the polling region at 0x1A0360–0x1A0500. Stack: 001A0413/0489/0383 → 19E438 → 277/294.
+- Ordinal 207 from COMPLETE01 onward: 49 calls (28 × 0, 21 × 80000006), approximately matched. Some NO_MORE_FILES results are expected for markers that were genuinely absent on a fresh save root.
+- Framebuffer: I read the dump myself. It is 640×480 and shows "Presented by SEGA". The parent's 38-BMP grouping (SEGA, black, SEGA) stands; I did not recount it.
+
+3. RULING.
+- **PASS-F5, criterion (a), is met.** The unnumbered JSRF_CACHE_COMPLETE.CMP was created, the CMP loop stopped (each marker created once), and state 0's nine-probe check completed.
+- That is horizon movement at the F5 loop, which makes D2 eligible for packet acceptance. It is also the parent's W14 reset evaluation, so record it as "F5 CMP loop resolved; new stop is after the marker phase".
+- Not a title claim. The visible frame is still SEGA, so "progress past SEGA", criterion (c), is NOT met.
+- New stop, F6 candidate, unclassified: after completing the cache, the guest sits in the 0x1A03xx–0x1A04xx loop calling 19E438, which in turn calls ordinals 277 and 294, about 6300 times each.
+- Both 277 and 294 return 0, so this looks like a wait/poll on a kernel object or state. Next cheap action, source-only, no run:
+  - Resolve ordinals 277 and 294 by name from the toolkit thunk table.
+  - Disassemble 19E438 and its callers at 0x1A0360–0x1A0500, and identify the condition being polled.
+  - Run the mapping gate before reading guest VAs from the new dump.
+- Allowed: the D2 commit/push per policy (toolkit first, the test file included, the RED/GREEN/smoke record listing the ledger IDs).
+- Not allowed: a run extension, a longer run, or seeding.
+
+**Annotation to the ruling above (added after the fact; the quoted ruling is unchanged).** The
+**ordinal names are now resolved by source**: **277 = `RtlEnterCriticalSection`** and
+**294 = `RtlLeaveCriticalSection`** — **host-blocking critical sections**, and a **VOID-0 return does
+not prove a kernel wait**. **`19E438` is a shared conditional-enter helper with ~50 callers** (family:
+**3 float-wrapper framework methods**), so the **scope is a shared lock, not a loop head**; the
+**"guest sits in the 1A03 loop" reading is the sampled callee region and the Advisor's initial
+hypothesis, NOT the proven loop head**, and the **actual next stop remains UNCLASSIFIED**. The earlier
+worker report's **branch-polarity error was caught by the parent and corrected by the worker**. **No fix
+is proposed and no danger is claimed.**
+
+### F5 → F6 Advisor classification (full, as received)
+
+Received from the **same child `63c4869f…`** by `send_message` (`tool/call` line 575, turn 19,
+**3463 chars**) — verbatim, not a summary:
+
+F5→F6 ADVISOR CLASSIFICATION (own reads: original disasm, new-run stacks.txt, log, gpu-report; read-only, no run)
+
+1. WORKER CORRECTIONS ACCEPTED. The parent's branch polarity is right. "No defect anywhere" is withdrawn. 19E438 is a shared lock helper, not the head of a poll loop.
+
+2. THE 277/294 TRAFFIC IS PER-FRAME RENDER WORK, NOT A POLL. Per-site counts after the unnumbered marker (log line 234620 onward, tid 66348):
+- 277@19E452: 6180 = 12 × 515.
+- 294 at 1A0403, 1A0479 and 1A04EF: 1545 each = 3 × 515.
+- 294 at 19F288, 19E829 and 19F31A: 515 each.
+- KfRaiseIrql/KfLowerIrql (160/161) at 1A1BA8/1A1BC0: 515 each.
+- KeRaiseIrqlToDpcLevel/KfLowerIrql (129/161) at 1BD606/1BD61B: 514 each.
+All of these lock-step at about 515, which is one set per frame. The E_FAIL paths (1A039E/042E/04A4) were reached 0 times. The fact that 1A0403/0479/04EF were reached says nothing more than that the callers ran. So about 515 frames ran after the cache phase, in about 90 s: the marker was at about 213 s, since started_utc is 13:24:16Z = 06:24:16 local and the unnumbered marker was created at 06:27:49. That is roughly 5.7 frames per second. This is a rate estimate only; nothing timestamps individual frames.
+
+3. ROOT STACK AT CAPTURE (stacks.txt, THREAD 66348). xbe_entry → 147F53 → PsCreateSystemThreadEx → 147EBB → 147FB4 → 6F9E0 → 13F80 → 13A80 (game main loop) → 14D090 → 198F10 → 198ED0 → 191390 → 1912A0.
+- 1912A0 is the push-buffer kickoff.
+  - It sets bit 0x10000 at [[0x19DCE0]+0x2268]+0x100410, which is the NV2A PFB_WBC write-back flush, then spins until that bit clears. The capture PC is the write at recovered.c:363951.
+  - It then writes PUT ([+0x2264]+0x40).
+  - It then loops on 18E120 while GET != PUT or [PGRAPH+0x400700] != 0.
+- gpu-report: PFB_WBC=0 and DMA GET == PUT == 0x5B50C. The flush and the queue were not stuck at capture.
+- In retry1, the main thread was also in 1912A0, reached through 198F10 → 198BE0 → 1989B0 → 18DAA0 → 1916B0 → 191530. The CMP state machine was ticking inside the same frame loop.
+So the guest is NOT blocked. It is presenting frames in its main loop, and the screen stays on SEGA. Other threads are doing periodic Suspend/Resume/Ob*/KeWait work (62120, 54036, 58916, 15880); no blocked wait was identified.
+
+4. F6 CANDIDATE (unclassified): the logo sequence does not advance within about 90 s at about 5.7 fps. There are two hypotheses:
+- (A) A frame- or time-counted sequence that is merely slow. For example, a 60 fps design running at 5.7 fps would take about 10 times as long.
+- (B) A sequence step that is gated on something not happening, such as audio or a movie/stream event, given RECOMP_APU_TRAP=1, or a thread event.
+Do NOT call it a stall or a hang yet.
+
+5. NEXT CHEAPEST READ-ONLY ACTION (one stop):
+- Disassemble 13A80's per-frame dispatch, the vtable calls through `call [edi+0x14]`, [edi+0x1c8] and [ecx+0x20] from 13CB2 to 13EE4, together with 14D090. Identify the active logo or scene object and its step/timer field.
+- Then read that object's state and timer fields from the new dump. The mapping gate has already passed for 062415.
+- Decide between (A) and (B) from whether the timer is counting, which source it counts from (frames, KeTickCount or QPC), and what step condition it is waiting on.
+- No run, no fix, no seeding. Once (A) or (B) is classified, I'll rule on whether a longer bounded run or a targeted diagnostic is justified.
+- The D2 closure is independent and stays accepted.
+
+**Session notes (annotation only; the quoted ruling is unchanged):**
+- **The earlier `1A03` "loop / poll" reading is SUPERSEDED** — it was the **sampled callee region** and
+  the Advisor's **initial hypothesis**, **not the actual poll head**; `19E438` is a **shared lock
+  helper** and the **scope is a shared lock**, not a loop head. The old verbatim text is **kept
+  unchanged** above and is annotated here.
+- **The 277/294 traffic is PER-FRAME RENDER WORK, not a poll** (277@19E452 = 12 × 515;
+  294 sites = 3 × 515 and 1 × 515; IRQL pairs ≈ 515 each; **E_FAIL paths reached 0 times**). All
+  lock-step at **≈515**, i.e. **one set per frame**.
+- **≈515 frames after the marker over ≈90 s ≈ 5.7 fps** — a **rate estimate only**; nothing timestamps
+  individual frames.
+- **Capture state:** root stack `xbe_entry → 147F53 → PsCreateSystemThreadEx → 147EBB → 147FB4 → 6F9E0
+  → 13F80 → 13A80 → 14D090 → 198F10 → 198ED0 → 191390 → 1912A0` (push-buffer kickoff);
+  **PFB_WBC = 0** and **GET == PUT == 0x5B50C**, so the flush and queue were **not stuck at capture**.
+- **Wording discipline:** this is a **snapshot at capture** and is **not proof of no stall at any other
+  time**; the classification is **not** an absolute "not blocked" claim.
+- **F6 candidate remains UNCLASSIFIED:** (A) a slow frame/time-counted sequence vs (B) a step gated on
+  an event that has not happened (audio/movie/thread), given `RECOMP_APU_TRAP=1`. **Not called a stall
+  or a hang.**
+- **Next action — READ-ONLY, one stop, parent-assigned to the worker (already in progress):**
+  disassemble **`13A80`**'s per-frame dispatch, the vtable calls (`call [edi+0x14]`, `[edi+0x1c8]`,
+  `[ecx+0x20]`) from **`13CB2–13EE4`**, together with **`14D090`**; identify the active logo/scene
+  object and its **step/timer field**, then read that object's state and timer fields **from the new
+  dump** (the **mapping gate has already passed** for `062415`). **No run, no fix, no seeding** until
+  (A)/(B) is classified. **The D2 closure is independent and stays accepted.**
 
 ### Lineage of the Advisor children (all four, §4.4 same-route, no fallback)
 
