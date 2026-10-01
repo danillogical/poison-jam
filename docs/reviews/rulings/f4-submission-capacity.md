@@ -624,6 +624,50 @@ expected** — the manifest is a **SAMPLE**, so a gap means "not captured", **ne
 bring any disagreement to the Advisor rather than resolving it; and a **hash mismatch voids** the
 watcher series, leaving only the draw-surface BMPs.
 
+## Appendix — Advisor save-root census ruling, VERBATIM
+
+Persistent Advisor child `c0ecc88b-756e-4256-9852-1bd8b7398735`; `claude`/`claude-opus-5-5` @ `high`
+(**parent-pinned spawn**; the §4.4 continuity marker `ADVISOR-RECOVERY-1112-CAP` belongs to the
+**recovery + duration-cap consults only** — it is not a per-consult property and implies no fresh
+continuity check). Received after cap commit `c4bcd2b…`, before the game push/launch. Exact received
+agent message below, preserved verbatim.
+
+ADVISOR QUICK RULING (save-root census):
+RULING: AUTHORIZED under the existing F5 observation approval. Section 3(b)/(c) of the F5 ruling already asks for these readouts, and this is only a way to collect them. It is not a run-profile override and not a ledger shortcut.
+Conditions: run it on the host, outside the guest, read-only. List the directory and stat files only: no opening or hashing of file contents, and never touch the Partition*.img files. Identify the save-root by the exact new run label; if there is no match or more than one, stop and fail. Write the JSONL outside the save-root, under logs/workers. Sample every 10 s and stop at the runner's exit or at 650 s. Make no change to the game's environment or arguments. Record the observer's source SHA in the run record; if you keep it, it belongs in scripts/, not logs/. If the observer fails, report it, but the run's own result.json still governs.
+Not a new commit gate: as a scratch helper outside the game's code it doesn't change the build identity. Keep the post-run final mtimes/file counts from the save-root as the authoritative cross-check, and the [PATH]-open counts as a secondary, inferred measure.
+BASIS (observed): run-jsrf.py:307-331 creates <run_dir>/save-root as an empty directory and passes it with --save-root, so it can be found on the host and holds the cache files listed in the F5 ruling. (inferred) Listing and stat on Windows uses attribute-only access and does not block the guest's writes.
+REVERSED BY: any sign the observer affects the run (sharing/lock errors in jsrf_run.log, changes in copy rate compared with the earlier runs' ~1.0-1.3 files/s), or a census that disagrees with the post-run save-root state. If that happens, fall back to the final mtimes plus [PATH]-open counts.
+
+**Scope note (Session):** this ruling authorizes **list + stat only**. The later **tiny-table
+prefix/tail byte read** was a **separate read-only authorization whose exact text has NOT yet been
+recovered** — it is **not** covered by this census ruling and must not be presented as such. A
+separate explicit authorization is awaited and will be appended here when its actual text is available.
+
+## Appendix — Advisor interrupted-run replacement ruling, VERBATIM
+
+Same replacement child/route as above. Exact received agent message below, preserved verbatim.
+
+ADVISOR QUICK RULING (truncated 600 s run):
+RULING: Run 20261001-042821-012-f5-observe-600s-c4bcd2b is INVALID as F5 evidence: no F5 decision, no stall claim, no capacity claim. Keep the directory unchanged and record it as "interrupted at ~14 s; cause unknown; leading hypothesis: external process-tree termination (inferred)". ONE replacement 600 s run is AUTHORIZED: same pushed pair c4bcd2b/a71, same env/profile, fresh empty root, new label ending -retry1, no seed, census as approved. Conditions: the parent owns the job as a managed background job and stays to collect it with job_output (wait). Don't hand it to a child that ends its turn; use workers for analysis only. Re-run preflight first: identity verify, disk gate (≥15 GB after this run's save-root), no jsrf process alive.
+BASIS (observed, I read the run dir myself): all artifacts were last written at 04:28:35 local, ~14 s after the directory was created. jsrf_run.log stops mid-line ("[KERNEL] #18721 … →") with no FATAL/E0424943/unresolved marker. stacks.txt has 17,720 lines, all first-chance DEBUG_EXCEPTION, and no THREAD capture section; the 180 s run had one, ending in diagnostic_deadline. result.json is 0 bytes. collect.c:2836-2843 opens result.json and then writes it, so the collector or runner died between the open and the write. A guest fault or deadline would have produced a capture plus an outcome.
+BASIS (inferred): the run was killed abruptly from outside the game, consistent with the owning shell or job ending. Not proven.
+REVERSED BY: if the -retry1 run also ends early with no capture while the parent still owns the job, the harness-ownership hypothesis is false. Then STOP: no third run; bring me stacks.txt, the log tail and the event logs. If a second-chance exception or fatal marker turns up in this run, it becomes a defect investigation instead.
+
+**Session clarification (outside the quotation above — the Advisor's wording is preserved as written,
+including "the collector or runner died between the open and the write").** A **0-byte `result.json`
+is consistent with an unwritten or unflushed file** and is **not proof** of an exact failure window or
+of any particular causality. No title or hardware-fidelity claim is made by this appendix.
+
+## Appendix — Advisor no-rerun ruling, VERBATIM
+
+Same replacement child/route. Received message, not a closing paraphrase. Exact text below.
+
+ADVISOR QUICK ANSWER (seed / longer run, no F5 ruling yet):
+RULING: Correct: no seed, no longer run, and no new run until the CMP/table check loop is explained from retry1's artifacts. The follow-up list you sent the worker matches what I asked for. Agreed on the table mtimes: the census is right; the tables are static after 04:40:08, and only the CMP mtimes move. The worker withdraws the "all tables change" claim unless it measures more than one distinct table mtime.
+BASIS (observed): copying stopped at about 230 s, and every DVD table had been read by then. From about 230 s to 600 s the log shows no further payload or DVD opens, only the check loop. A longer run would most likely only repeat the loop (inferred). The F5 seed in §4 assumed "the fill gates the logo". Retry1 doesn't show that: the fill stopped and the SEGA screen continued. That is closest to F5 decision row 3 ("cache stops growing, image unchanged → bring the waits"). The game is still running and looping, though, not blocked in a wait. So the next step is the loop's caller and the condition it checks. That includes the stacks and the missing Cache09/CMP09 lead. It is not a cheaper way to fill the cache.
+REVERSED BY: the corrected interval data showing payload opens or table growth after about 230 s (the fill isn't finished); or the image changing during the loop (progress is happening, so a longer run becomes the cheaper discriminator).
+
 ## Session evidence qualification
 
 The submission dimensions above are inherited measurements from the prior run's plan/TR, not a fresh Advisor decode. The initial worker negative claim that Mercenaries had no NV2A was withdrawn after discovering truncated tree coverage; corrected direct-source findings were supplied before this ruling. Primary reference URLs: https://github.com/xemu-project/xemu/blob/f9b14039e5bb56ae2d8f028e31e7cc19f13f7e12/hw/xbox/nv2a/pfifo.c and https://github.com/KraftMacAndChee/Mercenaries-Recompiled/blob/c978ee754e319c8593ee2260ac37b8262628f7c7/src/nv2a/nv2a_core.c . No hardware-fidelity claim is made by preserving local atomicity.

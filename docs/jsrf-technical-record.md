@@ -634,7 +634,14 @@ report through the end of the log (last line 209119, `e010.bin`); the save-root 
 `Cache00-02.tbl`, `DmCache00-02.tbl` and **`JSRF_CACHE_COMPLETE00.CMP` written 10:39:41** (~96 s in)
 with **Cache02 started 10:39:42**; payload **182 small files, 67.9 MB**; copy rate **~1.0–1.3 distinct
 files/s in every recent run, with or without the executor** (48 s: 64; 60 s: 82 and 80; 180 s: 184),
-so **the executor does not limit it**. **INFERRED:** the SEGA screen covers the fill, which goes in
+so **the executor does not limit it**.
+*(Population clarification, dated 2026-10-01 — the figures above are the Advisor's and are retained as
+written; the 182 is its broader observation and is **not** re-designated.)* Re-measured at the **same
+population**, this 180 s run's roots are **`Cache` 181/23**, **`Cache/Media` 181/22**, **tables root
+7/0**; the later retry1 run shows **227/23**, **227/22**, **28/0**. The byte figure **70,021,120 across
+227 files includes the 28 tables/markers**, so it is a **TOTAL Cache byte count, not a payload-only
+byte count** (payload file count 199); subtract table sizes before calling anything a payload size.
+**INFERRED:** the SEGA screen covers the fill, which goes in
 stages (00 complete, then 01–03). **UNCERTAIN:** whether JSRF really **gates** the logo on fill
 completion. The word **"stop" is REJECTED** for the frozen sample: a single frozen `VirtualQuery`
 sample in `submit_read_word` is a **capture-time location, not a stop** — the guest is live; the
@@ -647,6 +654,68 @@ images); readout per-10 s draws/flips + BMP hash + window hash, the `JSRF_CACHE_
 `Cache0N.tbl` mtimes, and the cached-file count per interval; three decision rows as recorded in the
 appendix. **A seeded cache is PREPARED, NOT AUTHORISED** — no owner decision now and no
 implementation. **W14 clock unchanged at 10:32:32.** Reversals as listed in the appendix.
+
+**600 s observation run TAKEN — `20261001-043629-961-f5-observe-600s-c4bcd2b-retry1` (2026-10-01;
+exploratory; NOT a title and NOT a horizon move).** Second attempt after the invalid truncated one;
+parent-owned managed job `pwsh-2573`, collected with `job_output(wait)`. Same pushed pair as authorized for
+the replacement — game **`c4bcd2b9b323ff94a711cc3f89fafea72af36b4d`**, toolkit
+**`a71f9374ddb2a6685b790493855c835842228212`** — fresh empty root, no seed,
+`exe_sha256 7027fafad9cd706981ea2f4c0fd898935db133b09f2da99fb5c7e8559a43b303`
+(unchanged: no build change). Profile **exploratory** (requested exploratory;
+`RECOMP_GPU_ACK` absent, effective default enabled). `diagnostic_deadline`,
+exit **3**, `dump_ok` true, 21 threads, **166 named frames**, 1 snapshot, 0 dropped,
+`save_root_verified` true, `missing_checkpoints []`, `checkpoints_passed` true, `gpu_report_ok` true.
+**Stop (UTC) = `metadata.started_utc` `11:36:30.743170` + `result.duration_seconds` `603.170746` =
+`11:46:33.913916`** — computed from metadata, **not** the script's launch line (`11:36:29Z`).
+Helper hashes (full, as the owner requested observer source SHAs): **census helper**
+`55E10B51F58B59569567BA4EC540E646208576A7EEBB8940635720912F7195A9`; **window watcher**
+`0801459DDF6CB35CECD2DC007C6BEA539364F1CDF363470E84FCBD35B4332EC9`; **launch script**
+`73B186402E04D06A1C64B60F7C42C8BB514A08CACF54722C569A2B916D92AFB8`.
+**Ledger IDs for this run:** L14, L15, **L16** (legacy ack body retired; executor feed replaced by the
+consumer), L17, **L18** (owner consumer, active), L20–L25, L39, L40; **L19 dormant**. **No
+strict-horizon move; W14 reset unchanged at 10:32:32** — as of **12:10 UTC the clock has elapsed
+1 h 38 m**. Outer shell job reported `1` while
+WRAP/result is `3` — **statuses only, no cause claimed**.
+
+**Exact typed counters (final row, primary source `logs/workers/f5-retry1/gpu-reports-v2.csv`; v2 used
+for all fields):** `clears` 10500,
+`draws` 10500, `with_coordinates` 10500, `indices` 52482, `flips` 3506, `flip_stalls` 3506,
+`unhandled_methods` 1178547, `distinct_unhandled` 242, `non_NV097_skipped` 14. **Counts rise across
+the 61 blocks; the images are static SEGA by eye — the rising counts are not new images. Still not the
+title.**
+
+**Window vs draw-surface comparison — NOT pixel-equivalent.** The **60 near-time pairs** have
+**0 equal pixel pairs**. The separate full pixel comparison of `w0000.bmp` with `f066.bmp` found
+**55157 differing channel bytes out of 921600 (5.98%)**, **max channel delta 7**. This is not an
+aggregate count across 60 pairs. The difference is small but real; the paired data goes to the
+**Advisor**, and **no admissibility, fidelity, or transform claim is made here**.
+
+**Tables and markers (measured):** all **19 tables have `distinct_mtimes = 1`** over 10 s samples
+("not observed to change", not "written once"); only the **nine zero-byte `.CMP` markers** change
+after first appearing. **Exact padding fact** — from the UTF-8 raw
+`logs/workers/f5-retry1/table-prefix-test-utf8.txt`: **19/19 save-root tables are the DVD bytes
+followed by zero padding rounded up to a 512-byte sector** (3786→4096, 5869→6144, 72→512, 938→1024,
+688→1024; deltas [86, 275, 310, 336, 440]). Whether that padding is benign is the Advisor's call, not
+asserted here. `Cache09`/`CMP09` are **absent on both sides** — an observed consistency of this
+title's cache layout, **not** an expected shape and not a guest-count claim.
+
+**Not done and not claimed:** **no new run and no seed** until the CMP/table check loop is explained
+from retry1's artifacts (Advisor no-rerun ruling, verbatim in the ruling appendix). **No wrapper
+argument mapping, no `IoStatus` reading, and no loop-cause interpretation is recorded** — those remain
+pending the Advisor's judgment. The tiny-table byte read was a **separate read-only authorization
+whose exact text is not yet recovered**; it is not presented as covered by the census ruling.
+
+**Advisor lineage (§4.4 recovery provenance, 2026-10-01).** The **three rulings above were produced by
+replacement child `c0ecc88b-756e-4256-9852-1bd8b7398735`**, and **their metadata stands unchanged**.
+That child then **failed twice with no error text and no closing message**, so a **further same-route
+§4.4 replacement** was spawned — child **`c623447b-19f2-4abf-83bb-bdd85719556e`**, `claude`/
+`claude-opus-5-5` @ `high`, **parent-pinned**, briefed from files, **not a fallback**; its continuity
+marker **`ADVISOR-RECOVERY-1210-F5`** was **ACKed in a received message**: it acknowledged the
+pushed pair, the prior no-rerun rule, and reading the workflow and recovery brief. The ACK does not
+self-verify route/effort; those are recorded by the spawn. No new design ruling from it is yet acted on. **Total Advisor children: 3** — original `4e6d87e1…`, recovery
+`c0ecc88b…`, and new `c623447b…` — alongside **3 workers + 1 startup Reviewer**. The **CMP caller
+cross-reference** work is ongoing at the original worker. **Observations integration remains
+authorized; no new run.**
 
 **Deferred optional test advisory.** Do not add a diagnostic-is-OK assertion after the measured
 red/green runs merely for churn; reopen if a future failure of the 1109-method case fails without

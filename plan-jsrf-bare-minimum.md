@@ -862,6 +862,21 @@ list is exhausted.
   on the **dual 300 cap** — a **harness launch fact, not a runtime or guest fact**: no game run
   occurred, no run artifact exists, only launch logs; recorded as a launch failure and **not** a
   horizon entry.
+  **600 s run TAKEN — `20261001-043629-961-f5-observe-600s-c4bcd2b-retry1` (exploratory; NOT a title,
+  NOT a horizon move).** Parent-owned job `pwsh-2573`; same pair game `c4bcd2b` / toolkit `a71f937`,
+  fresh empty root, no seed, `exe_sha256 7027fafa…b303` unchanged. `diagnostic_deadline`, exit 3,
+  166 named frames, 1 snapshot 0 dropped, `gpu_report_ok` true. **Stop 11:46:33.913916** =
+  `metadata.started_utc` 11:36:30.743170 + `result.duration_seconds` 603.170746. Exact typed counters
+  (`gpu-reports-v2.csv`): clears 10500, draws 10500, with_coordinates 10500, indices 52482, flips 3506,
+  flip_stalls 3506, unhandled_methods 1178547, distinct_unhandled 242, non_NV097_skipped 14.
+  **Counts rise while the images stay static SEGA by eye — not new images, still not the title.**
+  19 tables `distinct_mtimes = 1` ("not observed to change"); only the nine zero-byte `.CMP` markers
+  change; **19/19 tables = DVD bytes + zero padding to a 512-byte sector** (exact padding fact).
+  **Observer/helper full hashes: see the TR's 600 s paragraph (single authority — not duplicated here).**
+  **No new run and no seed** until the CMP/table check loop is explained. **No wrapper-argument or
+  loop-cause interpretation recorded** — pending the Advisor. Ledger IDs L14, L15, L16 (legacy ack
+  retired; feed replaced), L17, L18 (owner consumer), L20–L25, L39, L40; L19 dormant. **W14 reset
+  unchanged at 10:32:32; no strict-horizon move** — as of **12:10 UTC the clock has elapsed 1 h 38 m**.
   Corrected evidence in TR and `logs/workers/f4-drained-no-frames-brief.md`.
   **Historical 2026-09-30 question (answer recorded then; superseded by the accepted capacity work
   and now by Architecture A):** Whether the answer is a larger sink,
@@ -872,9 +887,11 @@ list is exhausted.
   **The next runtime question (historical, ANSWERED 2026-09-30):** *does the submission walk advance
   beyond GET `0x8EF0`, and if so, what is the next measured stop or the first draw/flip event?*
   **ANSWERED: no, it did not advance; the next stop was `sink_capacity` at the same GET (see the smoke
-  measurement above).** That capacity blocker is **closed** (A′ accepted, toolkit `e8a6e03`), and the
-  current next question is Architecture A's: whether the owner path yields a post-guest `[GPU]` report
-  and whether GET passes `0x8EF0`. Fallbacks once
+  measurement above).** That capacity blocker is **closed** (A′ accepted, toolkit `e8a6e03`).
+  *(Superseded history: the Architecture A question — whether the owner path yields a post-guest
+  `[GPU]` report and whether GET passes `0x8EF0` — was **ANSWERED** by the 600 s run above, which did
+  produce post-guest reports. The **active** question is now F5's: the CMP/table check loop, pending
+  the Advisor.)* Fallbacks once
   frames exist: missing draw forms/formats are fixed in the executor; a GPU stall on this path → ML6;
   if the title needs register combiners the CPU executor cannot show, start ML7's feasibility study.
 - **F5 — Intro movies.** If the Sofdec intros block, skip them (ledger: *patched* or *intentionally
