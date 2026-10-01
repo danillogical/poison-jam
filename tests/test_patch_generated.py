@@ -88,6 +88,19 @@ class PatchGeneratedTests(unittest.TestCase):
             self.assertIn('0 applied, 1 already applied', second.stdout)
             self.assertEqual(s.chunk(), after_first)
 
+    def test_an_insertion_is_idempotent(self) -> None:
+        """An "after" that keeps "before" as its anchor is applied once, then left alone."""
+        with Scratch() as s:
+            s.patches(patch(before='edx = 1;', after='ebx = 9;\n    edx = 1;'))
+            first = s.run()
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            once = s.chunk()
+            self.assertEqual(once.count('ebx = 9;'), 1)
+            second = s.run()
+            self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+            self.assertIn('1 already applied', second.stdout)
+            self.assertEqual(s.chunk(), once)
+
     def test_function_scope_keeps_a_patch_out_of_other_functions(self) -> None:
         """The same text in sub_00011000 is outside the patch's scope."""
         with Scratch() as s:

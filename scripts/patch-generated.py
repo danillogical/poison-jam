@@ -10,9 +10,10 @@ as data rather than code:
 
   * **Exact once.** A patch's `before` text must occur exactly once in its scope
     and its `after` text not at all; then it is applied. If `after` occurs once
-    and `before` not at all, it is already applied and left alone, so a second run
-    changes nothing. Anything else -- the site missing, ambiguous, or both texts
-    present -- fails the whole run. There is no `--allow-missing`: a patch whose
+    and `before` only inside it, it is already applied and left alone, so a second
+    run changes nothing; an insertion, whose `after` keeps `before` as its anchor,
+    counts as applied the same way. Anything else -- the site missing, ambiguous,
+    or both texts present apart -- fails the whole run. There is no `--allow-missing`: a patch whose
     site moved is a patch that silently stopped applying.
   * **Scoped.** `function` names a generated function (`0x00238C00` scopes the
     patch to the body of `sub_00238C00` in whichever chunk defines it); `file`
@@ -133,7 +134,9 @@ def run(manifest: Path, gen_dir: Path, ledger: Path, check: bool) -> int:
         text = files[path]
         scope = text[start:end]
         n_before, n_after = scope.count(patch['before']), scope.count(patch['after'])
-        if n_before == 0 and n_after == 1:
+        # An insertion's "after" contains its "before"; those occurrences are the
+        # patch itself, not a second site.
+        if n_after == 1 and n_before == patch['after'].count(patch['before']):
             already += 1
             continue
         if n_before == 1 and n_after == 0 and not check:
