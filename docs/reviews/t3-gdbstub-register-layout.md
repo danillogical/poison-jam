@@ -95,7 +95,7 @@ guest** rather than an archived probe. All four criteria the plan names:
 | gdbstub reachable | **PASS** | `?` returned `T05thread:01;` |
 | guest `0x00011000` reads the recorded `.text` control byte-for-byte | **PASS** | `8b512c85d28b4130c70190431c00741c`, identical to the control |
 | `xemu-diff` MATCH against an archived recomp run | **PASS** | `MATCH (empty diff)`, both sides `98c60dd680442843` |
-| self-vs-self empty, seeded byte found | **PASS** | `selftest: PASS` — 0 differences self-vs-self, 1 at `0x001C3F65` for the seed, 12 for truncation |
+| self-vs-self empty, seeded byte found | **PASS** | `selftest: PASS` — 0 differences self-vs-self, 1 at `0x001C3F65` for the seed, 12 for truncation; current re-check, reproduced 2026-10-01 at `3be0adb` (script unchanged since `abd419c`): `logs/workers/t3-xemu-diff-selftest-2026-10-01.txt` |
 
 **Asset paths are used in place from the owner's configuration.** Nothing was copied
 into either repository, and only paths, sizes and existence were recorded — never asset
