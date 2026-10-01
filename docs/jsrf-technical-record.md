@@ -448,7 +448,22 @@ fixtures. The 2048-word fixture cannot represent a >4096-word budget stop, so th
 budget rejection remains and static assertions pin both method capacities to the word budget.
 Toolkit commit `e8a6e03`. Full validation measured: toolkit Release build exit 0, CTest 5/5,
 30 lifter unittests; game `just check` exit 0 and `just test` build plus 29/29 CTest.
-`xbox_guest_meter` passed both suites. The one bounded F4 guest smoke remains pending.
+`xbox_guest_meter` passed both suites.
+
+**Bounded smoke measured:** `20261001-020407-358-f4-capacity-fix-smoke` on game `3be0adb`
+(archived record-only row-98 citation diff) / toolkit `e8a6e03`; Session directly read result and
+metadata. Requested 45 s, actual 48.336403 s, `diagnostic_deadline`, exit 3, dump/profile/checkpoints
+valid. Exploratory default-on GPU_ACK plus APU_TRAP, PB_EXEC, FB_WINDOW and log budget 100000.
+Active ledger L14–L18, L20–L25, L39, L40; L19 dormant. All 64 printed submissions (#0–63) report
+OK and GET=PUT through `0x47A84`; frozen GET=PUT `0x16648`. Ring wrap/continued progress beyond
+logged submission 63 is INFERRED, not a complete trace. No sink/budget diagnostic or 32-address
+budget trace; no observed rejected submission. Draw/indices/triangles/pixels/clear all zero,
+clip/surface zero, no flip/present. The capacity stop is gone in exploratory scope; **F4 frames are
+not satisfied and the strict horizon did not move**. Mapping gate: 1 match, 0 content mismatch.
+Advisor independently inspected artifacts and ruled **W14 CONTINUE** until 11:00 UTC or two more
+smokes, whichever comes first, then another ceiling call unless a finding is accepted or a strict
+horizon moves. Next read-only worker answers deadline main/render wait sites first; GPU-specific
+flip/interrupt survey only if those waits point at GPU. No second smoke or fix yet authorized.
 
 **Deferred optional test advisory.** Do not add a diagnostic-is-OK assertion after the measured
 red/green runs merely for churn; reopen if a future failure of the 1109-method case fails without

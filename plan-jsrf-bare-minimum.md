@@ -755,7 +755,17 @@ list is exhausted.
   pass. The fixture holds only 2048 words, so no >4096-word budget rejection fixture was added;
   the static assertions pin method-capacity ≥ word-budget. Toolkit commit `e8a6e03`.
   **Full validation passed:** toolkit Release build, 5/5 CTest, 30 lifter unittests; game `just check`
-  and `just test` (29/29 CTest). `xbox_guest_meter` passed both runs. Guest smoke pending.
+  and `just test` (29/29 CTest). `xbox_guest_meter` passed both runs.
+  **Bounded smoke measured:** `20261001-020407-358-f4-capacity-fix-smoke`, game `3be0adb`
+  (archived record-only citation diff), toolkit `e8a6e03`; exploratory default-on GPU_ACK plus
+  APU_TRAP/PB_EXEC/FB_WINDOW/log budget 100000. Requested 45 s, actual 48.336403 s,
+  diagnostic deadline. Logged submissions #0–63 all OK, GET=PUT through `0x47A84`, beyond
+  old `0x8EF0`; final GET=PUT `0x16648`. No sink/budget rejection. **Still zero draw/clear/
+  flip/present**, so F4 frames remain unsatisfied; no strict horizon claim.
+  Active ledger L14–L18, L20–L25, L39, L40; L19 dormant. Advisor **W14 CONTINUE until
+  11:00 UTC or two more smoke iterations, whichever first**. Next: read-only deadline
+  main/render wait-site diagnosis on this archive first; GPU-specific survey only if waits
+  point to GPU. No further smoke/fix authorized before the diagnosis ruling.
   **Historical stop:** Whether the answer is a larger sink,
   a sink that drains as it fills, or incremental commit during the walk is a design question about what
   the sink is *for*, not a constant to raise. Do not start the next long run until that is decided.

@@ -72,6 +72,46 @@ CMake/game build/run slot. It received permission to begin the focused CMake red
 without waiting for an unrelated Python process to finish. No full `just check`/`just test` is run
 while that Python reproduction remains in progress. Source and build scopes remain disjoint.
 
+## Post-implementation and W14 ruling (Advisor, 2026-10-01)
+
+Advisor independently inspected both diffs: A′ conforms; both arrays statically cover the word
+budget, staging is PFIFO-owned under its lock, heap allocation makes the state growth safe.
+1024-packet budget, action staging and other rejection cases are unchanged. The 2048-word fixture
+fallback is accepted; 1109 methods over 555 packets tests method count, not the real packet shape.
+The red run's 513 packets match the old guard (INFERRED, not a printed diagnostic).
+Optional diagnostic-is-OK assertion deferred to avoid churn after measured red/green; reversed by
+a future failure of that case without a named diagnostic.
+
+Run `20261001-020407-358-f4-capacity-fix-smoke`: Advisor directly inspected artifacts and profile.
+Exploratory, 48.3 s diagnostic deadline; logged submissions #0–63 all OK, GET=PUT through
+`0x47A84`; final GET=PUT `0x16648`. No sink or word-budget diagnostic; no frames/flip/present.
+No strict horizon claim or F4 frame acceptance. **W14 CONTINUE**, ceiling not triggered: 3h08m
+since the strict move at 05:57:40.3 UTC. Bound: **11:00 UTC or two more smoke iterations,
+whichever comes first**, then return for the ceiling call unless a finding is accepted or a
+strict run moves the horizon. Next is one read-only worker on this archive, no rerun: deadline
+thread waits/ICALLs **first**; only if those point at GPU, flip/Present path and PCRTC/VBlank
+pending versus interrupt-enable writers. Advisor re-ranking (INFERRED from zero draws/clears/clip):
+non-GPU loading/audio/timer wait first, vblank gap second, D3D init before frame setup third;
+ignored flip last. GPU-poll loop evidence reverses that ranking. Reversed by a different strict stop, an unlogged capacity/budget rejection,
+or frames appearing. No second run or fix is authorized by this diagnosis assignment alone.
+
+## Side-item citation ruling and measured result
+
+The four reported alias failures are UNKNOWN/not reproduced: 49 passed with current intact
+artifacts. Reopen with failing test names and the reporting artifact state; no code defect/fix claim.
+The one transcribed-values failure is a baseline record citation gap, not code or fixture drift:
+`docs/reviews/t3-gdbstub-register-layout.md` row 98. Advisor inspected deterministic selftest and
+unchanged script since `abd419c`, and reproduced matching output. Approved current re-check
+citation only for row 98, not historical proof or live-guest rows 94–97; no Verified-by blanket
+marker and no checker semantics change. Reversed by different output or a script diff.
+Worker output `logs/workers/t3-xemu-diff-selftest-2026-10-01.txt`, SHA256
+`3410CFD67B092ED0B9EA68760AE0329E75FE72032681BD4DB00D877405F95C32`, is five UTF-8 lines:
+0 self-differences, 1 seeded difference, 12 truncation differences, all PASS. Current re-check
+at `3be0adb`, citation commit `d9db283`; checker exit 0 and 10/10 transcribed tests pass.
+Three uncited prose register literals remain undecidable/non-blocking, not reverified.
+**Advisory:** logs are ignored; fresh checkouts without those artifacts still fail the historical
+record checker. This is a host-local citation repair, not a clean-clone reproducibility fix.
+
 ## Session evidence qualification
 
 The submission dimensions above are inherited measurements from the prior run's plan/TR, not a fresh Advisor decode. The initial worker negative claim that Mercenaries had no NV2A was withdrawn after discovering truncated tree coverage; corrected direct-source findings were supplied before this ruling. Primary reference URLs: https://github.com/xemu-project/xemu/blob/f9b14039e5bb56ae2d8f028e31e7cc19f13f7e12/hw/xbox/nv2a/pfifo.c and https://github.com/KraftMacAndChee/Mercenaries-Recompiled/blob/c978ee754e319c8593ee2260ac37b8262628f7c7/src/nv2a/nv2a_core.c . No hardware-fidelity claim is made by preserving local atomicity.
