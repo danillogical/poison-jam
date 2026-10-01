@@ -344,6 +344,36 @@ Measured in `20260930-221404-630-f1b-rdata-guard` (strict; `RECOMP_RDATA_GUARD=1
   length should not be 1.70 MB. `sub_00038530` computes both; the cheapest honest fix is at the
   translation or the argument, not at the table.
 
+### F4: the GPU walk stops on the first method it does not know (2026-09-30)
+
+**No frames are produced, and the reason is not the executor's rendering — it is that the submission
+walk never consumes a command.** Measured on the fixed build in
+`20260930-230206-594-f4-frames-after-horizon-fix` (exploratory; `RECOMP_PB_EXEC=1`, `RECOMP_FB_WINDOW=1`,
+`RECOMP_GPU_ACK` default-on, 123.3 s, 629,781 log lines, 0 invalid ICALLs, 0 exceptions, 0 ABI failures,
+0 `[UNIMPL]`).
+
+- **The walk is stuck.** The run logs **64** `[PFIFO] submit` lines. The first ten advance `get` normally
+  (`0x1000`, `0x2764`, `0x344C`, … `0x8B5C`). Every one of the remaining **54** reports the *same*
+  `get=00008EF0` while `put` keeps advancing — the walk is not moving.
+- **The first failure is a method the model does not handle.** Submits #12 onward carry
+  `diag=unsupported_method … method=1720 … at=00008EF0`. `0x1720` is
+  `NV097_SET_VERTEX_DATA_ARRAY_OFFSET` (`nv2a_regs.h:1141`). The submit record names the method and the
+  parameter (`param=003CA000`, a guest VA), so the command is decoded; the walk simply has no case for
+  it and stops at that address.
+- **Consequence.** `get` never passes `0x8EF0`, so nothing after that command in the pushbuffer is ever
+  interpreted. `FLIP`, `present` and `FB_DUMP` are all **0**: there is nothing for the executor or the
+  window to draw, and enabling them cannot help until the walk advances.
+
+**So F4's next step is not in the renderer.** The cheapest honest class is to give the strict walk a
+case for `NV097_SET_VERTEX_DATA_ARRAY_OFFSET` — store the offset as method state, as `9fd83c6` already
+does for other NV097 parameters (`PGRAPHState.methods`, ledger D3) — and re-run to see whether the walk
+then reaches a draw method or stops on the next unknown. That is a toolkit change with its own test.
+
+**Not established.** Whether `0x1720` is the *only* blocker or the first of a series: the walk stops at
+the first unknown method, so the population of unhandled methods JSRF's first frames need is unknown
+until the walk advances past this one. The `[PFIFO]` line is a bounded log, so it bounds this run, not
+the title's method set.
+
 ### F3: the horizon is closed — two wrong tail-jump aliases, fixed (2026-09-30)
 
 **The A2h/C1 terminal event is closed.** The kernel thunk table is no longer overwritten, `.text` is
@@ -397,7 +427,7 @@ any *other* `tail_jump_alias` fold still deletes a table-referenced entry. The c
 the latter is not yet a valid instrument (see plan §13). The 93-second run ended at its own deadline
 with no fault, so the next stop is unknown and is F3's continuing subject.
 
-### F3: the cause is a wrong tail-jump alias, `0x00037550` → `0x00038530` (2026-09-30)
+### F3 evidence: why the `0x00037550` fold is fatal (2026-09-30)
 
 **The guest called `0x00037550`; the port ran `sub_00038530` instead.** That substitution is the whole
 defect, and it is measured end to end.
@@ -431,24 +461,17 @@ defect, and it is measured end to end.
   was fixed by a recovery entry plus a boundary fix, and the alias table then named the recovered
   body.
 - **The fix path is therefore known and precedented.** `recomp_lookup_manual` consults
-  `jsrf_lookup_recovered` before the alias table, so a recovery entry for `0x00037550` — with its own
-  span, `0x00037550..0x00038528` (stopping before the padding) — takes precedence and restores the
-  real body. `jsrf_lookup_recovered` currently has **3074** cases and **none** for `0x00037550`.
-
-**Why this is not fixed in this session.** A recovery entry is a reviewed recovery change: it needs
-the span reviewed, `scripts/recover-functions.py` regenerated, the alias pair re-pointed, and the
-whole thing re-tested and re-run. That is a packet's worth of work, not the cheapest honest step
-inside a chore, and it is the first item of F3's iteration.
+  `jsrf_lookup_recovered` before the alias table, so a recovery entry for `0x00037550` takes precedence
+  and restores the real body. It was applied as recorded above; at the time of this measurement
+  `jsrf_lookup_recovered` had **3074** cases and **none** for `0x00037550`.
 
 **Bearing on the horizon.** This is upstream of the clobber: the fold is why the wrong function runs,
 and the wrong function's `rep movsd` is what overwrites the image. Fixing the alias should move the
-strict horizon, and that is the test of this diagnosis — if the horizon does not move, the diagnosis
-is wrong and the copy has another source.
+strict horizon, and that is the test of this diagnosis — it was applied, and the horizon moved.
 
-**Not established.** Whether `0x00037550`'s real body is otherwise correctly translatable, and
-whether any *other* `tail_jump_alias` fold in this image deletes a table-referenced function entry.
-The latter is worth a census: `0x000BCF40` and `0x00037550` are two instances of one rule, and the
-rule's population has not been enumerated.
+**Not established.** Why the guest's call reaches this table entry in the first place, and whether any
+*other* `tail_jump_alias` fold in this image still deletes a table-referenced function entry. The
+latter needs a census, and the one attempted in this session was not a valid instrument (plan §13).
 
 The ~571 MB allocation failure that precedes the fault (`NtAllocateVirtualMemory`, `0xC0000017`)
 **is handled** by the guest (`0x00149E56 test eax,eax` / `jl 0x149eec`, clean return through

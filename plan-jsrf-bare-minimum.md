@@ -778,6 +778,18 @@ as owner-directed work.
 
 ### Follow-up leads from the 2026-09-30 F0/F1 session (recorded, not acted on)
 
+- **`check-horizon-ledger.py`'s "last horizon move" reads a stale row, and always has.**
+  It computes `moved = [row for row in rows if not row['not_reached']]` and takes the
+  last one (`check-horizon-ledger.py:222-223`), but the ledger's **"Prior horizon
+  (superseded 2026-09-29)"** table sits *below* the session rows, so its 2026-09-28
+  entry is the last non-`NOT REACHED` row. Measured: at `HEAD~5` (before this session)
+  and in the current tree alike, the reported value is **2026-09-28
+  `20260928-185612-449-regen-v012-strict`**, even though rows for 2026-09-30 exist and
+  this session moved the horizon twice. **This is pre-existing, not introduced here**,
+  and it is a checker defect, not a ledger defect: the ledger itself is right. It
+  matters because W14's ceiling rule ("3 packets or 4 h without moving the horizon")
+  is judged from that number, so the rule has been measuring the wrong date. A fix
+  would scan only the session rows, or exclude the superseded table explicitly.
 - **`tests/test_generation_provenance.py` is not registered in CTest.** `CMakeLists.txt`
   names no such target and `ctest -N` lists 28 tests without it, so `just test` cannot
   catch a provenance failure — only a bare `just check` can. That is why the gate was red
