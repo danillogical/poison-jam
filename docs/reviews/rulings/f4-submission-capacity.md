@@ -668,6 +668,367 @@ RULING: Correct: no seed, no longer run, and no new run until the CMP/table chec
 BASIS (observed): copying stopped at about 230 s, and every DVD table had been read by then. From about 230 s to 600 s the log shows no further payload or DVD opens, only the check loop. A longer run would most likely only repeat the loop (inferred). The F5 seed in §4 assumed "the fill gates the logo". Retry1 doesn't show that: the fill stopped and the SEGA screen continued. That is closest to F5 decision row 3 ("cache stops growing, image unchanged → bring the waits"). The game is still running and looping, though, not blocked in a wait. So the next step is the loop's caller and the condition it checks. That includes the stacks and the missing Cache09/CMP09 lead. It is not a cheaper way to fill the cache.
 REVERSED BY: the corrected interval data showing payload opens or table growth after about 230 s (the fill isn't finished); or the image changing during the loop (progress is happening, so a longer run becomes the cheaper discriminator).
 
+## Appendix — F5 directory-probe ruling (D1) and reply 3, VERBATIM
+
+Received from **child `63c4869f-3689-41b2-89b8-f5429f8b5927`** — route **`claude` / `claude-opus-5-5`
+@ `high`**, **parent-pinned spawn parameters** (not child self-verification). Continuity: **ACK 1 and
+ACK 2 both received**. The ruling was delivered by `send_message` (the child's own `tool/call` record,
+line 135, `arguments.message`, 6353 chars) — **not** by its closing `assistant` text, which is shorter
+and is not the ruling. Copied verbatim; **no hidden reasoning is quoted, summarised or used**.
+
+### F5 ADVISOR RULING (full A–E, as received)
+
+F5 ADVISOR RULING (same-route recovery, claude-opus-5-5 high). Read-only throughout: original XBE disassembly, a 4-dword read of the import table and toolkit source. No run, no code change, no mutation.
+
+A. HOW THE EXISTENCE PROBE WORKS (original raw, read by me)
+- 24EF0(idx) builds the marker name (idx 9 = the literal with no number; otherwise %02d) and calls 25770(name).
+- 25770 calls 145E7E(name, &finddata). If the result is -1 it returns 0. Otherwise it calls 145585(handle) and returns 1.
+- 145585 is NtClose (thunk [0x1C3F60] = ordinal 187). 145E7E is an XAPI FindFirstFile:
+  1. It splits off the directory part and keeps the leaf as the ANSI mask.
+  2. It calls NtOpenFile (thunk [0x1C3F80] = ordinal 202) on the directory, with access 0x100001, share 3, options 0x4021 (DIRECTORY_FILE | SYNCHRONOUS_IO_NONALERT | OPEN_FOR_BACKUP_INTENT).
+  3. It calls NtQueryDirectoryFile (thunk [0x1C3FB8] = ordinal 207) with args (h, 0, 0, 0, &iosb, buf, 0x148, class 1, &mask, RestartScan=0).
+  4. If the status is below 0, it calls NtClose, sets LastError and returns -1. Otherwise it returns the handle.
+  So "the marker exists" means "the first NtQueryDirectoryFile on a freshly opened directory handle succeeded". 24E10 (the Z: copy-exists check in state 2) uses the same 25770 path.
+- Thunk ordinals came from the original XBE section read at VAs 0x1C3F60/68/80/B8, giving 187, 289, 202 and 207.
+
+B. CANDIDATE DEFECT (toolkit source, Windows branch is live: kernel_file.c #if _WIN32 runs from line 70 to 732)
+- kernel_file.c:590-623 keeps a static DIR_CONTEXT s_dir_contexts[64], keyed by the native HANDLE value (file_handle) and live while find_handle != NULL.
+- In xbox_NtQueryDirectoryFile (:625-729), a FindFirstFileW that succeeds sets first_done=TRUE and leaves find_handle open. The context is released only when a later FindNextFileW fails (:680-686, :692-697).
+- bridge_NtClose (kernel_bridge.c:734-752) and xbox_NtClose (kernel_file.c:316-324) never release that context. Nothing else references s_dir_contexts (grep).
+- What follows from that:
+  (i) Every successful probe leaks one context, with a stale HANDLE value and first_done=TRUE.
+  (ii) Windows readily reuses a handle value right after CloseHandle. If the next probe's NtOpenFile receives the same value, find_or_create_dir_context matches the stale context. RestartScan=0 and first_done=TRUE then send it into FindNextFileW on the PREVIOUS search pattern. That fails, so the call returns STATUS_NO_MORE_FILES and clears the context. The guest sees "marker absent" for a file that exists. The probe after that starts fresh and succeeds.
+  (iii) If the values are not reused, the 64-slot table fills after 64 successful probes. Every later query then returns STATUS_INSUFFICIENT_RESOURCES, and all probes fail.
+- On real NT the scan state belongs to the file object, so a new open always starts a new scan.
+
+C. WHY THIS FITS THE OBSERVED LOOP (25040 raw lines 43-69 and 153-170; I did not rely on worker wording)
+- State 0, when [+48] != [+4C], needs 9 CONSECUTIVE successful 24EF0 probes (edi 0..8). Only then does it write [+48]=9 and state=5, create the unnumbered marker, and reach 11BE0/11C20 (the finish).
+- Under (ii) the probe results alternate. Under (iii) they all fail. Either way 9 in a row never happens.
+- Each failure goes to 2510D: [+48]=[+4C], [+50]=0, state 6. State 6 calls 256A0(0x1f, [+48]) and moves to state 7. State 7 reloads the count/pointer pair and moves to state 1.
+- State 1 scans the bitmap from [+50]. Once this cache's bits are already set, it reaches state 5, which creates marker [+48], computes next = [+48]+1 mod 9 into [+4C], and sets state 0. That repeats indefinitely.
+- That is exactly "payload copy finished, then roughly 994 marker creates with STATUS 0, then no F6".
+- The creates succeed because NtCreateFile opens a regular file and never touches the directory-context table.
+- The Information 2:1 expression at kernel_file.c:234 is still NOT causal here. 24E70 tests only the handle.
+- Status: a strong source-level candidate whose mechanism is consistent with the evidence. Causality is NOT yet proven at runtime.
+
+D. NEXT BOUNDED ACTION
+1. Cheapest, no run, read-only: inspect the frozen host state in the existing retry1 run's process.dmp, using the archived binaries/symbols.
+   - Read jsrf_recomp!s_dir_contexts, which is static in kernel_file.c and may be inlined or COMDAT-folded, so use the archived PDB. Read 64 × {file_handle, find_handle, first_done}.
+   - Expected under (ii): at most a few entries have a non-NULL find_handle.
+   - Expected under (iii): all 64 have a non-NULL find_handle and stale handle values.
+   - Also record the "Ke"/handle-table state only if it is trivially available.
+   - Run the mapping gate first if any guest-VA read is involved. This read is host-native, so the gate is still good practice but not strictly needed.
+   - Precondition: check that process.dmp is a full-memory minidump that includes the .data/.bss of jsrf_recomp.exe. If it is not, or the symbol is not resolvable, record that as the result and stop. Do not substitute a guess.
+2. If step 1 is unavailable or inconclusive, write a host-only unit test as the first code step. It needs a separate code packet and owner/parent authorisation; I am not authorising it here. The test opens a directory, makes one query with a mask that matches, closes, reopens the same directory with a different matching mask, and expects success. It should fail on the current toolkit a71f937. Write the test BEFORE any fix.
+3. Fix shape, for the later packet and not now: release the directory context in the NtClose path, keyed by the native handle before CloseHandle. Optionally treat a context whose file_handle was closed as fresh. Keep FATX dot-directory filtering. The POSIX branch (:1136-1202) has its own table and needs the same check.
+4. Not allowed: seeding markers, longer or blind runs, or a 600 s rerun before step 1 or step 2 resolves causality. Do not change line :234 as part of this.
+
+E. CORRECTIONS ACCEPTED: everything in the parent's messages about [+48] vs [+4C], state 6 → 7, the count/pointer pair being consumed in state 7, and 24DB0's loop direction and mask. My ruling does not depend on the 24DB0 bitmap semantics, beyond "bits already set lead from state 1 to state 5", which is the ebx==edx path at 25144/2514E.
+
+### F5 ADVISOR REPLY 3 (as received)
+
+F5 ADVISOR REPLY 3
+
+YES. In D2, "separate code packet and owner/parent authorisation" means its own packet with its own acceptance and record. It does NOT mean a new owner boundary. Within the original owner pre-authorisation (step 4 / continue until a §3.4 or W14 stop), the parent may approve the bounded RED-test-then-fix packet itself. Conditions:
+(a) The test is written first and fails on a71f937.
+(b) The fix is limited to releasing the directory-search context on close (Windows path; check the POSIX branch).
+(c) The packet's tests and acceptance pass before any push. Toolkit is pushed first.
+(d) No seeding, and no change to line :234 rolled into it.
+(e) Escalate to the owner only if D1 or the RED test contradicts the mechanism in a way that needs a scope change, or if a genuine §3.4 condition comes up.
+I have not re-read the owner prompt file. This rests on your citation of lines 27–57 and of §3.4/W14.
+
+WILDCARD WITHDRAWAL: AGREED, from the original raw. At 145EED–145F04, the wrapper zeroes the mask length (match all) only when the leaf is exactly 3 characters "*.*". The marker leaf "JSRF_CACHE_COMPLETExx.CMP" (or the literal with no number) is not "*.*", so the exact-name mask applies. The mask handling is not a candidate defect.
+
+I'll wait for the D1 result.
+
+### F5 D2 DESIGN RULING (full, as received)
+
+Received from the **same child `63c4869f-3689-41b2-89b8-f5429f8b5927`** by `send_message` (its
+`tool/call` line 226, `arguments.message`, 4019 chars) — **not** its short closing text. Verbatim:
+
+F5 D2 DESIGN RULING (same route; sources read: kernel_file.c 316-324, 590-729, 907-915, 1128-1237; kernel_bridge.c 734-752)
+
+1. HOOK. Add one release function to kernel_file.c with a body in each branch (Windows and POSIX), e.g. `void xbox_dir_context_release(HANDLE h)`, declared in kernel.h. Call it at BOTH sites:
+   a. `xbox_NtClose`, at both :316 and :907: inside the existing valid-handle check, BEFORE `CloseHandle`.
+   b. `bridge_NtClose` (kernel_bridge.c:747-749): after `bridge_take_handle` and before `CloseHandle(h)`, only when `h` is valid. This is required because `bridge_NtClose` does NOT go through `xbox_NtClose`. Hooking only `xbox_NtClose` would give a false GREEN on the guest path.
+   Release BEFORE the host close. If the order were reversed, another thread could receive the reused handle value and have its new context wiped.
+
+2. RELEASE SEMANTICS. Take `s_dir_cs`, using the same lazy-init helper the code already has.
+   - Windows: for every slot whose `file_handle == h`, regardless of `find_handle`, `FindClose` the find handle if it is non-NULL and not `INVALID_HANDLE_VALUE`, then zero the slot (`file_handle`, `find_handle`, `first_done`).
+   - POSIX: for every slot whose `handle == h`, `closedir` it if it is non-NULL, then set `handle` and `dir` to NULL.
+   - Invalid, NULL or synthetic handles (`0xDEAD0001`, `0xBEEF0010`): no-op, and keep the existing return values.
+   - Do not change the lookup or query semantics, the dot-directory filtering, the `FindNextFile`-failure cleanup, or line :234.
+
+3. RISKS, NOT IN SCOPE (record them, do not fix):
+   - The lazy `InitializeCriticalSection` (the `s_dir_cs_init` flag) is a pre-existing race.
+   - On Windows the query uses `ctx` outside the lock after lookup. A guest closing a handle while another thread is querying it is guest misuse.
+   - Before acceptance, grep for any other path that `CloseHandle`s a taken token; any such path needs the same call.
+
+4. DETERMINISTIC RED (actual Windows build, a separate test process per ctest). Use a fixture temp directory containing exactly one file `M.CMP`.
+   Direct-API test:
+   - Open the directory 64 times with `xbox_NtOpenFile`/`NtCreateFile`, using `DIRECTORY_FILE` and keeping all handles open. Query each once with the exact mask "M.CMP"; every query must succeed.
+   - Close all 64 with `xbox_NtClose`.
+   - Open a 65th handle and query it with "M.CMP".
+   - On `a71f937` the 65th query fails either way. If the handle value is reused, the stale `first_done` context sends it to `FindNextFile`, which returns `NO_MORE_FILES`. If it is not reused, there is no free slot and it returns `INSUFFICIENT_RESOURCES`. So the RED does not depend on whether Windows reuses the value. Assert `STATUS_SUCCESS` and record the actual failing status in the RED record.
+   - Add a churn assertion: 200 rounds of open, query, close, each must succeed. This covers the guest's real probe pattern.
+   Bridge-path test (REQUIRED, no direct-only GREEN):
+   - Run the same 64/65 sequence through `bridge_NtOpenFile`, `bridge_NtQueryDirectoryFile` and `bridge_NtClose`, with guest-memory handle, IOSB and ANSI_STRING mask.
+   - If the toolkit has no bridge or kernel-thunk test harness, the packet must add the minimal one or record bridge coverage as NOT verified, which means NOT ACCEPTED. Check what exists first; I have not verified it.
+   - `bridge_take_handle` must have resolved the token to the native `HANDLE` that the context is keyed by. The test proves this end to end.
+
+5. ACCEPTANCE:
+   - RED recorded on `a71f937`: both tests fail and the statuses are recorded.
+   - GREEN after the fix.
+   - The full toolkit ctest suite and the game `just test` / `just check` pass.
+   - POSIX branch: compile it if a POSIX build exists; otherwise record "POSIX reviewed, not compiled". That does not block the Windows packet.
+   - Push the toolkit first, then the game record.
+   - No guest run until GREEN. No seeding and no :234 change.
+   - The smoke run and profile policy come later, as you said.
+
+**Packet:** the approved implementation packet is `docs/packets/f5-directory-context-close.md` —
+**APPROVED / implementation pending**, and **NOT ACCEPTED** until RED/GREEN, tests and an allowed run.
+
+### F5 D2 guard clarification (full, as received)
+
+Received from the **same child `63c4869f…`** by `send_message` (its `tool/call` line 241, turn 7 step 1,
+`arguments.message`, 1272 chars) — verbatim, not a summary:
+
+F5 ADVISOR: D2 approval received. On the guard question:
+
+- Invalid/synthetic handles: `xbox_dir_context_release` returns void and changes no return value.
+  - In `xbox_NtClose`, call it only inside the existing `if (Handle && Handle != INVALID_HANDLE_VALUE)` block. The STATUS_INVALID_HANDLE path stays untouched.
+  - In `bridge_NtClose`, call it only inside the existing `if (raw_handle && raw_handle != 0xDEAD0001u && raw_handle != 0xBEEF0010u)` block, after `bridge_take_handle`, and only when `h` is neither NULL nor INVALID_HANDLE_VALUE. `g_eax = 0` stays as it is.
+  - The helper itself must also no-op on NULL/INVALID. Defence in depth: it is a cheap check, and it means no empty-slot match on NULL.
+- IMPORTANT: Windows `find_or_create_dir_context` treats `find_handle == NULL` as a free slot. So release must also clear `file_handle`. Otherwise a stale `file_handle` can linger in a slot that looks free. That is harmless for lookup, which requires `find_handle != NULL`, but clear it anyway so the table state is unambiguous.
+- Test for the guard: closing a synthetic `0xDEAD0001` through the bridge returns 0 and leaves the table unchanged. This is optional, and cheap if the harness exists.
+
+Standing by for the worker's harness plan or the RED/GREEN results.
+
+### F5 D2 harness-plan ACK (full, as received)
+
+Received from the **same child `63c4869f…`** by `send_message` (`tool/call` line 256, turn 8 step 1,
+12:56:18, 1236 chars) — verbatim, not a summary:
+
+F5 ADVISOR: ACK on the harness plan. One required change: use NtOpenFile, not NtCreateFile.
+
+- The guest path is NtOpenFile (thunk ordinal 202, from the original raw at 145F08-145F20). bridge_NtOpenFile (kernel_bridge.c:3340-3353) forwards to the same bridge_create_file_impl with disposition 1 (FILE_OPEN) and allocation 0. The two are functionally equivalent, but an NtOpenFile wrapper costs one more same-shape seam wrapper and matches the guest exactly. So: REQUIRE a fourth wrapper, xbox_test_bridge_NtOpenFile, for the RED/GREEN bridge test. The NtCreateFile wrapper is optional; drop it if it is not needed for fixture setup.
+- Use the guest's exact arguments: DesiredAccess 0x100001, ShareAccess 3, OpenOptions 0x4021 (DIRECTORY_FILE | SYNCHRONOUS_IO_NONALERT | OPEN_FOR_BACKUP_INTENT). Query with FileInformationClass 1, Length 0x148, RestartScan 0, and an ANSI_STRING mask "M.CMP" in guest memory.
+- Approved as stated: the toolkit fixture, the existing jsrf_test_write_stack seam, wrappers in scope, and POSIX cleanup compiled if a POSIX build is available, otherwise recorded as "reviewed".
+- Noted: the grep confirms no other close site for owned file tokens.
+
+No further design changes. Proceed when the parent authorises.
+
+### F5 D2 budget ACK (full, as received)
+
+Received from the **same child `63c4869f…`** by `send_message` (`tool/call` line 271, turn 9 step
+1, 13:01:17, 1007 chars) — verbatim, not a summary:
+
+F5 ADVISOR: ACK the budget count. No correction from my history.
+
+- This advisor session saw only the following. I issued no other packet ruling and counted nothing else:
+  - F5 source analysis: the CMP loop and the dir-context candidate.
+  - D1: inconclusive because the dump has no coverage. Not a contradiction, and not a W14 reset.
+  - D2: one bounded candidate fix unit, approved, not accepted, RED pending.
+- Counting D2 as one candidate unit and not yet at the 3-packet threshold is consistent with what I hold. Removing the "no additional senior budget" exemption claim is correct.
+- The ceiling stays at the original 4 h, 14:32:32 UTC, unless an accepted critical finding or horizon move resets it. A RED-then-GREEN D2 that later moves the guest past F5 would be the candidate for that. A source candidate alone is not.
+- Caveat: I have not read the W14 text in docs/agent-workflow.md or plan §3.4 in this session. This ACK confirms consistency with my history only, not an independent rules audit.
+
+**Session note on the budget:** the ACK confirms the count and states **no correction from its
+history**; it also **caveats that it did not itself read W14** — the **authority is plan §3**, which the
+parent read. Per that count, **D2 is one pending candidate, not three**; the **original ceiling time is
+`14:32:32`** and there is **no reset** from D1 or from the source reading alone.
+
+### F5 D2 protocol-correction ACK (full, as received)
+
+Received from the **same child `63c4869f…`** by `send_message` (`tool/call` line 306, turn 10 step 5,
+13:08:47, 1825 chars) — verbatim, not a summary:
+
+F5 ADVISOR: ACK the protocol correction. It is not a new design, and there is no new count seam.
+
+I read the current tests/dir_context_release_test.c (402 lines): RESTART_VAL=0 at every query site, argv direct|bridge, an explicit `failed` flag plus queried==200, and dir_close on query failure. It matches the D2 design.
+
+WHY THE PRIOR 4/4 SPLIT IS EXPLAINED BY RESTART=1, NOT BY INHERENT FLAKINESS. On a71f937 the 65th open has two possible outcomes, and Restart decides how they come out:
+- (a) Windows reuses one of the 64 closed values. The stale context has first_done=TRUE and its search pattern was dNNN\M.CMP with exactly one match.
+  - Restart=0 → FindNextFileW → NO_MORE_FILES → FAIL.
+  - Restart=1 → fresh FindFirstFileW → PASS. This is the masking.
+- (b) No reuse. All 64 slots are occupied, so find_or_create returns NULL → INSUFFICIENT_RESOURCES → FAIL, whatever Restart is.
+So Restart=1 gives a reuse-dependent result, and Restart=0 gives a deterministic RED. Churn is RED either way with Restart=0. With 65 distinct directories, a single-match pattern, and contexts held across the 64 opens, it is deterministic.
+
+MINOR, not blocking:
+1. Direct mode stores the native HANDLE as a uint32_t. That is fine for Windows kernel handles, which are below 2^32 in practice. Note it in a comment.
+2. Churn runs in the same process after open64, so table state carries over. That is intended. On RED, record which subtest failed first and its status; you should expect 0xC000009A (INSUFFICIENT_RESOURCES) or 0x80000006 (NO_MORE_FILES).
+3. The synthetic guard checks only the return value, not that the table is unchanged. That was the accepted optional scope.
+
+Acceptance is unchanged: a recorded RED in both separate CTest processes on a71f937, then GREEN after the fix, then the full suites. No guest run before GREEN.
+
+**Session note (HISTORICAL — at the protocol ACK, 13:08:47; superseded by the verified RED below).** The **initial 8-run, 4-fail / 4-pass result is
+NOT an accepted RED**: the fixture used **`RestartScan 1` at the query sites**, which **masked the
+stale-context path**, and it had **no direct mode** and reported **churn `failed_at 0`**, a **false
+GREEN at round 0**. The corrected test uses **`RestartScan 0` at every site**, **separate direct and
+bridge processes**, and an explicit **`queried == 200`** success condition — matching the D2 design,
+**as the Advisor read it at 402 lines**. *At that time the RED was not yet verified; it is now* — a recorded RED in **both**
+separate CTest processes on `a71f937` is pending, then GREEN after the fix, then the full suites, with
+**no guest run before GREEN**. **No new count seam and no production fix** are involved, and the fix is
+to a **prior report's mislabel — not inherent flakiness**.
+
+### F5 D2 corrected RED — VERIFIED (2026-10-01)
+
+Measured and **recorded before the production fix was authorized**; the implementation is **in
+progress** at the time of writing. At RED time the toolkit carried **no `kernel_file.c` change** — the
+parent's own check recorded **no production fix**, and **no timestamp is asserted here** (none is
+inferred from file mtimes or from a worker's reading).
+
+| Item | Direct mode | Bridge mode |
+|---|---|---|
+| opened / queried (subtest 1) | **64 / 64** | **64 / 64** |
+| 65th distinct directory query | **FAIL — status `0x80000006`** | **FAIL — status `0x80000006`** |
+| churn (subtest 2) | **FAIL at round 1 of 200**, after 1 successful query, status `0x80000006` | same |
+| mode tag | `mode=direct` | `mode=bridge` |
+
+**CTest: 2 tests failed out of 2 — `xbox_dir_context_release_direct` and
+`xbox_dir_context_release_bridge` — rc 8, total 0.29 s.** Status `0x80000006` is
+`STATUS_NO_MORE_FILES`, one of the two outcomes the design predicted (the other being
+`0xC000009A`/`INSUFFICIENT_RESOURCES`); the **stale-context path** is therefore the one taken here.
+
+**Raw artifacts (cite exactly what was read):** the **parent read `red-direct.log` (its initial ~70
+lines)**, the **load-bearing counts in both modes from `red-ctest.log`**, and — after the worker's
+conversion — the **converted raws `red-direct-raw-utf8.txt` (lines 73–82)** and
+**`red-bridge-raw-utf8.txt` (lines 138–149)**, which **confirm the same counts and the same
+`0x80000006` status** in both modes. The **UTF-16 originals are preserved** (`red-direct-raw.txt`,
+`red-bridge-raw.txt`) with their source/output hash in the worker log. A worker claim of **5/5 repeats
+per mode** is **worker-reported, not parent-verified**; the **2/2 RED in the main CTest log is the
+parent-verified result** and stands independently of the repetition count.
+
+**The earlier 8-run, 4-fail / 4-pass result is superseded and is NOT an accepted RED** — it used
+`RestartScan 1`, which masked the stale-context path (see the protocol-correction ACK above).
+
+**Cause is NOT proven** by this RED: it demonstrates the observable failure and its status, not that
+the directory-context leak is the only or the actual cause of the guest's loop.
+
+### F5 D2 corrected-RED ACK (full, as received)
+
+Received from the **same child `63c4869f…`** by `send_message` (`tool/call` line 321, turn 11 step 1,
+13:12:31, 1387 chars) — verbatim, not a summary:
+
+F5 ADVISOR: ACK the corrected RED. It matches the mechanism.
+
+- The 65th open succeeds and its query returns 0x80000006 (NO_MORE_FILES) in both the direct and bridge processes. That is path (a): a reused handle value matched a stale first_done context, so the query went down the FindNextFile path. The failure status is the same one I predicted for the guest probe.
+- Churn: round 0 passes and round 1 fails. That is consistent. The 65th query's FindNextFile failure freed one slot, round 0 used that slot fresh and leaked it again, and round 1 then hit a stale or reused value.
+- Proving no fix was in place with HEAD a71f937 plus an empty kernel_file diff is adequate.
+
+The production-fix authorisation stays within the D2 scope:
+- The helper in both branches.
+- Both xbox_NtClose copies, and bridge_NtClose before the host close.
+- Guards in place and return values unchanged.
+
+The fixture's uintptr_t token change and comment correction are test-only and acceptable.
+
+For GREEN review, send me:
+(1) the diff of kernel_file.c, kernel_bridge.c and kernel.h;
+(2) both ctest logs showing the 64/65, churn 200 and guard checks passing, with 5/5 repeats per mode;
+(3) the full toolkit ctest result and the game `just test` / `just check` results;
+(4) the POSIX compile result, or "reviewed, not compiled".
+
+I will rule on the smoke profile and the short bound then. Not a 600 s blind run.
+
+**GREEN review list (4 items, as the ACK requires):** (1) the diff of `kernel_file.c`,
+`kernel_bridge.c` and `kernel.h`; (2) both ctest logs showing the **64/65, churn 200 and guard checks
+passing, with 5/5 repeats per mode**; (3) the full toolkit ctest result and the game `just test` /
+`just check` results; (4) the **POSIX compile result, or "reviewed, not compiled"**. The Advisor
+**will rule on the smoke profile and the short bound then — not a 600 s blind run.**
+
+**POSIX helper (parent-read, independent):** the parent read `kernel_file.c:1162-1192` — **all matching
+handles closed with `closedir`, `handle`/`dir` cleared, guards and lock correct** — recorded as
+**reviewed, not yet compiled**.
+
+### F5 D2 GREEN — VERIFIED (2026-10-01); smoke PENDING
+
+Fix applied; **all gates green**. Counts read from the archived logs (plain UTF-8, readable):
+
+| Gate | Result | Source |
+|---|---|---|
+| **Focused** (D2 unit) | **2/2 passed**, **0.19 s** — `xbox_dir_context_release_direct`, `xbox_dir_context_release_bridge` | `green-ctest.log` |
+| **Toolkit CTest** | **7/7 passed**, **2.71 s** | `green-toolkit-ctest.log` |
+| **Lifter unittests** | **Ran 134, OK (skipped=1)** — 133 passed, 1 skip, **14.460 s** | `green-lifter.log` |
+| **Game CTest** | **31/31 passed**, **31.32 s** | `green-game-test.log` |
+| **Game `just check`** | **"check: all checkers passed"** | `green-game-check.log` |
+| **Toolkit build** | clean | `green-toolkit-build.log` |
+
+**D2 unit behaviour, measured (verbose logs):** direct mode — **opened 64 / queried 64**,
+**65th open ok with `65th_query_status=0x00000000`**, **churn 200 rounds / 200 successful queries,
+failed=no**, **guard skipped** (direct mode has no synthetic tokens); bridge mode — same 64/64 and
+65th status `0`, churn 200/200, **guard: synthetic token close returned `0x00000000` (expected 0)**.
+Counted checks: **6 passed in direct, 7 in bridge**.
+
+**Attribution, stated precisely:** the **parent read the focused 2/2, the full toolkit CTest, the
+lifter and the game logs**; a **five-repeats-per-mode** claim is **worker-reported — the parent did not
+read repeat logs** — so it is **not** cited as verified. The toolkit log's own total is **2.71 s**
+(the parent's earlier "2.67 s" is superseded by the log).
+
+**POSIX:** the parent read the **Windows helper at `kernel_file.c:615-633`** and the **POSIX helper at
+`:1174-1192`** — **reviewed, NOT compiled**.
+
+**Status:** **GREEN verified**, **smoke PENDING** — the Advisor consult is in flight, and the Advisor
+**will rule on the smoke profile and short bound**, explicitly **not a 600 s blind run**. **D2 is NOT
+accepted yet**, and there has been **no guest run since the fix**. **No W14 reset** — the ceiling stays
+`14:32:32` UTC.
+
+**Advisor GREEN-consult status (2026-10-01).** The **GREEN consult failed one turn and recovered on the
+same child** — `send_message`, **no fallback route** — and **no answer is currently received**.
+Therefore **no current-Advisor GREEN approval is claimed**; the consult's outcome is **pending** and is
+recorded only when the actual ruling text arrives.
+
+### Lineage of the Advisor children (all four, §4.4 same-route, no fallback)
+
+| # | Child | Route / effort | Why replaced | What it produced |
+|---|---|---|---|---|
+| 1 | `4e6d87e1-f748-48b3-a0a4-a6e5728bfeee` | `claude`/`claude-opus-5-5` @ `high`, continuable | became unreliable — turns ended with no answer (**15 × `EMPTY_RESPONSE`, 1 × `RATE_LIMIT`**; never recovered, turns 41–46) | the F4 runtime, F5 cache-fill, duration-cap and window-watcher rulings |
+| 2 | `c0ecc88b-756e-4256-9852-1bd8b7398735` | same route / `high`, parent-pinned | failed after producing rulings (**2 × `EMPTY_RESPONSE`**, turns 11–12) | the save-root census, interrupted-run replacement and no-rerun rulings |
+| 3 | `c623447b-19f2-4abf-83bb-bdd85719556e` | same route / `high`, parent-pinned | **earlier ACK received** (continuity proven); **zero turn errors — 3 turns completed — but no substantive answer delivered** | no technical ruling |
+| 4 | **`63c4869f-3689-41b2-89b8-f5429f8b5927`** | same route / `high`, parent-pinned | **current**; **two D2 turns failed after its ACK, then the third on the same handle recovered** | **the A–E ruling, reply 3, the D2 design ruling, the guard clarification and the harness-plan ACK** |
+
+The **§4.4 continuity marker is a one-time recovery artefact**, not a per-consult property. The
+empty-content failure mode (`EMPTY_RESPONSE` after the adapter exhausted five retries) is
+**established for children 1 and 2**; **child 3 had zero turn errors**, so it must **not** be grouped
+with them. For **child 4's two failed D2 turns the error type is not asserted** — the failures are
+recorded as failures, **without claiming `EMPTY_RESPONSE`**, and **no fallback route was used**.
+
+### D1 status (INCONCLUSIVE — checked by the parent; exact counts from the UTF-8 raw)
+
+Read from the primary raw files (UTF-8), not from a summary:
+
+- **`symbol-locate-utf8.txt`:** `s_dir_contexts` preferred VA `0x0000000141087780`, RVA `0x1087780`;
+  runtime module base `0x00007FF707E30000`; live VA `0x00007FF708EB7780`; **ranges containing that VA:
+  0**; `DIR_CONTEXT` sizeof **616 bytes**, **64 entries = 39424 bytes**; **8-byte slots readable:
+  0/4928** → **`s_dir_contexts` is NOT in the dump: INCONCLUSIVE, no result.**
+- **`dump-coverage-utf8.txt`:** **113 memory ranges**; **4 ranges overlap the exe image**; covered
+  **546112 of 56725504 bytes = 0.96%**; by section — **`.text` 768 bytes (0.01%)**, **`.data` 545344
+  bytes (1.31%)**, with **`.rdata`, `.pdata`, `.rsrc`, `.reloc` NOT IN DUMP**. The **first pre-check
+  line said "0 overlap"** and is **superseded** by the dump-coverage measurement.
+- **Partial-dump flags:** the dump reports **`0x201120`** (hex) with **MemoryList 113 ranges**, **no
+  full memory**.
+- **The 64-entry table is the thing needed — coverage percentage is not the focus.** **Do not claim
+  "no full data" from the stream type alone**: a full capture *could* be a MemoryList, so
+  **coverage proof is what is absent**, and that is sufficient to call D1 inconclusive.
+
+**D1 is INCONCLUSIVE** (checked by the parent). Precisely: **the array is absent from the capture;
+its occupancy and any runtime causality are UNKNOWN**, so **no cause is proven**, and no coverage
+amount or gap is invented here.
+
+**D2 status (historical, then current).** *Historically:* at the time of the D1 inspection, **D2 had
+not yet been approved**; the current Advisor's **D2 turn then failed twice after its ACK recovery on
+the same handle**, and a **third attempt on that same handle recovered the full design** — the actual
+error types of those two failures are **not asserted** and **no fallback route was used**. *Current:*
+the **D2 design is approved and quoted above** (design ruling, guard clarification and harness-plan
+ACK), and the **parent now approves the RED phase**; **no new run** is taken until RED/GREEN and the
+test gate pass.
+
+### No stop, no owner boundary
+
+This needs **no session stop and no new owner boundary**: under the original owner pre-authorisation
+(step 4 / continue until a §3.4 or W14 stop), the **parent may approve the bounded RED-test-then-fix
+packet** — that is what reply 3 (a)–(e) authorises.
+
 ## Session evidence qualification
 
 The submission dimensions above are inherited measurements from the prior run's plan/TR, not a fresh Advisor decode. The initial worker negative claim that Mercenaries had no NV2A was withdrawn after discovering truncated tree coverage; corrected direct-source findings were supplied before this ruling. Primary reference URLs: https://github.com/xemu-project/xemu/blob/f9b14039e5bb56ae2d8f028e31e7cc19f13f7e12/hw/xbox/nv2a/pfifo.c and https://github.com/KraftMacAndChee/Mercenaries-Recompiled/blob/c978ee754e319c8593ee2260ac37b8262628f7c7/src/nv2a/nv2a_core.c . No hardware-fidelity claim is made by preserving local atomicity.

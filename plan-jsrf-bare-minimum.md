@@ -874,9 +874,27 @@ list is exhausted.
   change; **19/19 tables = DVD bytes + zero padding to a 512-byte sector** (exact padding fact).
   **Observer/helper full hashes: see the TR's 600 s paragraph (single authority — not duplicated here).**
   **No new run and no seed** until the CMP/table check loop is explained. **No wrapper-argument or
-  loop-cause interpretation recorded** — pending the Advisor. Ledger IDs L14, L15, L16 (legacy ack
+  loop-cause interpretation recorded** — *as recorded at the 600 s checkpoint; **superseded by D1/D2
+  below*** (the source candidate is now explained and its test is pending; the no-seed decision is
+  unchanged). Ledger IDs L14, L15, L16 (legacy ack
   retired; feed replaced), L17, L18 (owner consumer), L20–L25, L39, L40; L19 dormant. **W14 reset
   unchanged at 10:32:32; no strict-horizon move** — as of **12:10 UTC the clock has elapsed 1 h 38 m**.
+  **F5 D1 probe INCONCLUSIVE (2026-10-01):** the read-only directory-context probe did not reach the
+  candidate table — `s_dir_contexts` live VA has **0 containing ranges**, **0/4928** readable slots,
+  dump coverage **0.96%** (113 ranges). **Cause NOT proven** (occupancy UNKNOWN — the capture does not
+  include the array). **D2 is now approved** (see the bounded unit below); **no new run until its
+  RED/GREEN and test gate passes**. The **current Advisor is
+  `63c4869f…`** (ACK 1 + ACK 2), which delivered the **F5 directory-probe ruling (A–E), reply 3, the
+  D2 design ruling and the harness-plan ACK** — all verbatim in the ruling appendix. **No ledger entry**
+  for the candidate fix: it is **not yet introduced**, so there is no shortcut to admit and no promotion
+  to record.
+  **Bounded code/test unit for this chore step:** `docs/packets/f5-directory-context-close.md` —
+  **owner-directed F5 chore, bounded code/test unit** (the Advisor calls it a separate code packet);
+  **not a workflow change or discovery packet, and CURRENT PACKET remains none**. It carries the D2 fix
+  shape (release the directory-search context on close at both `xbox_NtClose` sites *and*
+  `bridge_NtClose`), the deterministic **RED-first** test plan, and the **`NtOpenFile` (ordinal 202)
+  bridge requirement** with the exact guest arguments. **RED only, parent-authorised — no production
+  change until the parent reviews both RED statuses.**
   Corrected evidence in TR and `logs/workers/f4-drained-no-frames-brief.md`.
   **Historical 2026-09-30 question (answer recorded then; superseded by the accepted capacity work
   and now by Architecture A):** Whether the answer is a larger sink,

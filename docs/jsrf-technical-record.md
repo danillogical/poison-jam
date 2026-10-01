@@ -712,10 +712,75 @@ That child then **failed twice with no error text and no closing message**, so a
 `claude-opus-5-5` @ `high`, **parent-pinned**, briefed from files, **not a fallback**; its continuity
 marker **`ADVISOR-RECOVERY-1210-F5`** was **ACKed in a received message**: it acknowledged the
 pushed pair, the prior no-rerun rule, and reading the workflow and recovery brief. The ACK does not
-self-verify route/effort; those are recorded by the spawn. No new design ruling from it is yet acted on. **Total Advisor children: 3** — original `4e6d87e1…`, recovery
-`c0ecc88b…`, and new `c623447b…` — alongside **3 workers + 1 startup Reviewer**. The **CMP caller
-cross-reference** work is ongoing at the original worker. **Observations integration remains
-authorized; no new run.**
+self-verify route/effort; those are recorded by the spawn. No new design ruling from it is yet acted on.
+That child then **completed three turns with zero turn errors but delivered no substantive answer**, so
+a **further same-route §4.4 replacement**
+was spawned — **current child `63c4869f-3689-41b2-89b8-f5429f8b5927`**, same route / `high`,
+parent-pinned, **ACK 1 and ACK 2 both received**, and it **delivered the F5 directory-probe ruling
+(A–E) and reply 3** — recorded verbatim in the ruling appendix. **Total Advisor children: 4** —
+original `4e6d87e1…`, `c0ecc88b…`, `c623447b…`, current `63c4869f…` — alongside **3 workers + 1 startup
+Reviewer** (no fresh Reviewer yet). The **CMP caller cross-reference** work is ongoing at the original
+worker. **Observations integration remains authorized; no new run.**
+
+**F5 D1 probe — INCONCLUSIVE (2026-10-01).** The read-only directory-context probe did **not** reach
+the candidate table: `s_dir_contexts` live VA `0x00007FF708EB7780` has **0 ranges containing it** in
+the dump, **0/4928** readable 8-byte slots, and the dump's **113 memory ranges** cover **0.96%** of the
+exe image (`.data` 1.31%, `.text` 0.01%; `.rdata`/`.pdata`/`.rsrc`/`.reloc` absent). **Cause is NOT
+proven.** Precisely: the **table's occupancy in the live process is UNKNOWN** — the capture simply
+**does not include the array** — so D1 shows *absence from the dump*, **not** absence from the process.
+The pre-check's "0 overlap" line is **superseded** by the coverage measurement. Raw:
+`logs/workers/f5-retry1/symbol-locate-utf8.txt`, `dump-coverage-utf8.txt`.
+*(Had not yet approved D2 at the time of the D1 inspection; D2 was subsequently approved — see below.)*
+**Current D2 authorization is recorded below; no new run until its RED/GREEN and test gate passes.**
+
+**F5 D2 — design ruling received and packet APPROVED (2026-10-01).** The same child
+(`63c4869f…`) delivered the **F5 D2 design ruling** by `send_message` (full text verbatim in the
+ruling appendix; design source `logs/workers/f5-directory-context-d2-design-verbatim.md`). It rules the
+fix shape: **one release function** (`xbox_dir_context_release`) called at **both `xbox_NtClose` sites
+(`kernel_file.c:316`, `:907`) before `CloseHandle`** *and* at **`bridge_NtClose`
+(`kernel_bridge.c:747-749`)**, because **`bridge_NtClose` does not go through `xbox_NtClose`** — hooking
+only the latter would give a **false GREEN on the guest path**. Release semantics free the slot for
+every entry matching the handle; invalid/NULL/synthetic handles are a no-op; **query semantics, the
+dot-directory filtering, the `FindNextFile`-failure cleanup and line `:234` are unchanged**. The
+**deterministic RED** is a 64-open/65th-query test plus a 200-round churn assertion — **VERIFIED RED on
+`a71f937` in both modes: 2/2 CTest tests failed, rc 8, 0.29 s**, with **64 opened / 64 queried**, the
+**65th query failing with status `0x80000006`** and **churn failing at round 1 of 200** with the same
+status. The parent read `red-direct.log` (initial ~70 lines) and the load-bearing counts in both modes
+from `red-ctest.log`; the newer `red-direct-raw.txt`/`red-bridge-raw.txt` are **UTF-16, read failed,
+pending UTF-8 conversion** and are not cited as parent-read. A worker **5/5-per-mode** claim is
+**worker-reported**; the **2/2 result is parent-verified**. The earlier **8-run 4-fail/4-pass result is
+superseded and NOT an accepted RED** (`RestartScan 1` masked the stale-context path), and **cause is
+NOT proven** by this RED. Plus a **required bridge-path
+test** using **`NtOpenFile` (ordinal 202), not `NtCreateFile`**, with a **fourth wrapper
+`xbox_test_bridge_NtOpenFile`** required and the `NtCreateFile` wrapper optional (Advisor harness-plan
+ACK, verbatim in the ruling appendix; no direct-only GREEN). **Packet:
+`docs/packets/f5-directory-context-close.md` — APPROVED / implementation IN PROGRESS (RED verified,
+GREEN pending), NOT ACCEPTED** until GREEN, tests and an allowed run. **No guest run until GREEN; no
+seeding; no `:234` change.** Risks
+recorded, not fixed here: the lazy `InitializeCriticalSection` race, and the query using `ctx` outside
+the lock after lookup. **The "other `CloseHandle`-of-taken-token paths" item is a write-audit
+requirement, not a standing risk:** the **worker's grep found no other such close site**. The parent independently searched
+`kernel_bridge.c` for `CloseHandle` and `bridge_take_handle` and read the token-removal helper:
+`bridge_NtClose` is the sole caller of `bridge_take_handle`; the other native closes belong to
+thread/event paths, not owned file tokens. **D1 was inconclusive
+(occupancy UNKNOWN), so no causality claim is made** — the mechanism rests on the source reading.
+
+**Records push (actual, 2026-10-01).** Toolkit first, then game; both exit 0, trees clean, remote
+equality verified by `git ls-remote`:
+
+```text
+PUSHED_TO: origin (toolkit, first)
+BRANCH: main
+COMMIT: a71f9374ddb2a6685b790493855c835842228212
+REMOTE_URL: https://github.com/danillogical/xboxrecomp.git
+RESULT: exit 0; "Everything up-to-date"; local HEAD == ls-remote
+
+PUSHED_TO: origin (game, second)
+BRANCH: master
+COMMIT: d1f30e1ec43e11d55cc47a4d5de0debe20a0d114
+REMOTE_URL: https://github.com/danillogical/poison-jam.git
+RESULT: exit 0; c4bcd2b..d1f30e1 master -> master; local HEAD == ls-remote
+```
 
 **Deferred optional test advisory.** Do not add a diagnostic-is-OK assertion after the measured
 red/green runs merely for churn; reopen if a future failure of the 1109-method case fails without
