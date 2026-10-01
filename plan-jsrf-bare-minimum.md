@@ -23,7 +23,7 @@ established facts. Where this plan proposes a change to one of them, it is a tas
   it relied on (`docs/jsrf-run-profiles.md` §"Pragmatic bare minimum"). Strict runs remain available
   as a diagnostic for fidelity questions.
 - **Fast-path steps run as chores** (W7), not packets: no Planner, adequacy review or acceptance
-  review per step. The Acceptance reviewer checks the milestone (M15) with its ledger IDs.
+  review per step. The Reviewer checks the milestone (M15) with its ledger IDs.
 
 ## 0. What changed from the current plan
 
@@ -93,7 +93,7 @@ A window opening is not the slice; one playable scene is not the game.
 ## 3. How work runs under this plan
 
 - **DeepSeek Session and workers execute everything by default** (unlimited). A senior call
-  (the Planner, Advisor and Acceptance reviewer of `docs/agent-workflow.md` §1) is made only at
+  (the Planner, Advisor and Reviewer of `docs/agent-workflow.md` §1) is made only at
   a gate a task names, and each task states a **senior-call budget**; exceeding it stops the
   task for an Advisor continue/stop decision.
 - **Three task classes.** *Chore* — owner-directed mechanical work (builds, syncs, regeneration,

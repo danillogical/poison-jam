@@ -212,15 +212,15 @@ def render(record: dict) -> str:
         '',
         'Resolved live in this session by the Session, not by this generator:',
         '',
-        f'- Planner: {field("Planner", UNVERIFIED)} (Muse Spark 1.3 @ high, `skill: muse-worker`, fresh handle)',
+        f'- Planner: {field("Planner", UNVERIFIED)} (Claude Opus 5.5 @ high, `route: LIVE_RESOLVE`, fresh child)',
         f'- Persistent advisor: {field("Persistent advisor", UNVERIFIED)} (Claude Opus 5.5 @ high, '
         f'`route: CONTINUABLE_PINNED`)',
-        f'- Acceptance reviewer: {field("Acceptance reviewer", UNVERIFIED)} (GPT-6.1 Sol @ high, `provider: codex`, '
-        f'`route: LIVE_RESOLVE`)',
+        f'- Reviewer: {field("Reviewer", UNVERIFIED)} (Claude Opus 5.5 @ medium, '
+        f'`route: LIVE_RESOLVE`, fresh child per review)',
         f'- Workers: {field("Workers", UNVERIFIED)}',
         '- Exact error or ambiguity, if any:',
         '',
-        '## Acceptance reviewer probe — PASS / FAIL / UNKNOWN',
+        '## Reviewer probe — PASS / FAIL / UNKNOWN',
         '',
         f'- Child ID; fresh token; response reference; empty-evidence answer; '
         f'command and output hash; effort; result: '

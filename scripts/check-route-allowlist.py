@@ -44,8 +44,8 @@ PROFILE_PATCHES = (
     Path.home() / '.dsh' / 'profiles' / 'web' / 'cordis.patch.yml',
 )
 
-# `provider/model` in the roster table, e.g. `workbuddy-ai/deepseek-v4.1-flash` or
-# `codex` + `gpt-6.1-sol` written separately.
+# `provider/model` in the roster table, e.g. `workbuddy-ai/deepseek-v4.1-flash`, or
+# a provider and model written separately.
 ROUTE = re.compile(r'`([a-z0-9-]+)/([A-Za-z0-9._-]+)`')
 # `provider: codex` beside a bare model name in backticks.
 PROVIDER_HINT = re.compile(r'provider:\s*([a-z0-9-]+)', re.IGNORECASE)
@@ -60,14 +60,14 @@ def roster_routes() -> tuple[set[tuple[str, str]], list[str]]:
     """(provider, model) pairs named by §1's roster, plus any it could not pair.
 
     The table writes routes two ways: a full `provider/model` in one span, or a
-    bare model with a `provider:` qualifier beside it.  Both are read, because the
-    DSH column uses the second form for the Acceptance reviewer.
+    bare model with a `provider:` qualifier beside it.  Both are read; an earlier
+    roster used the second form for its reviewer row.
     """
     if not WORKFLOW.is_file():
         raise SystemExit(f'{WORKFLOW} is missing')
     text = WORKFLOW.read_text(encoding='utf-8')
     # Only the roster table: from the §1 heading to the next `###`.
-    start = text.find('## 1. Supported harnesses and roster')
+    start = text.find('## 1. Supported harness')
     end = text.find('\n### ', start) if start >= 0 else -1
     section = text[start:end if end > 0 else len(text)]
 
@@ -83,7 +83,7 @@ def roster_routes() -> tuple[set[tuple[str, str]], list[str]]:
             routes.add((provider, model))
         hint = PROVIDER_HINT.search(line)
         if hint and not found:
-            # `| **Acceptance reviewer** | ... | **GPT-6.1 Sol** @ `high`
+            # `| **Reviewer** | **GPT-6.1 Sol** @ `high`
             #  (`provider: codex`, `route: LIVE_RESOLVE`) |`
             #
             # The FIRST bold span is the ROLE, the second is the MODEL. Measured:

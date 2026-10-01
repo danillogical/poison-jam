@@ -59,9 +59,9 @@ def main() -> int:
     parser.add_argument('--review-id', required=True)
     parser.add_argument('--reviewed', nargs='+', required=True,
                         help='repo-relative paths the review covers')
-    # The Acceptance reviewer route, from `docs/agent-workflow.md` §1 (the DSH
-    # column): **GPT-6.1 Sol** @ `high`, `provider: codex`, `route: LIVE_RESOLVE`,
-    # a fresh child per review.
+    # The Reviewer route, from `docs/agent-workflow.md` §1:
+    # `claude/claude-opus-5-5` @ `medium`, `route: LIVE_RESOLVE`, a fresh child per
+    # review.
     #
     # This defaulted to `workbuddy-ai/hy4-preview-f`, which is a **retired** route
     # -- plan T11's whole subject.  A stale default is worse than no default: it
@@ -70,8 +70,8 @@ def main() -> int:
     # route the *reviewer* ran on, which the caller knows; this default only
     # covers the case where the caller omits it, and the workflow's current
     # assignment is the only defensible value for that.
-    parser.add_argument('--requested-model', default='codex/gpt-6.1-sol')
-    parser.add_argument('--requested-effort', default='high')
+    parser.add_argument('--requested-model', default='claude/claude-opus-5-5')
+    parser.add_argument('--requested-effort', default='medium')
     parser.add_argument('--session-root', default=str(SESSION_ROOT))
     parser.add_argument('--note', default='')
     args = parser.parse_args()

@@ -38,11 +38,11 @@ must be reported precisely; it is not permission to switch to a retired model.
 
 - Planner: requested route/effort; returned route identity:
 - Persistent advisor: requested route/effort; returned route identity:
-- Acceptance reviewer: requested route/effort; returned route identity:
+- Reviewer: requested route/effort; returned route identity:
 - Workers: requested route/effort; returned route identity:
 - Exact error or ambiguity, if any:
 
-## Acceptance reviewer probe — PASS / FAIL / UNKNOWN
+## Reviewer probe — PASS / FAIL / UNKNOWN
 
 One review stage (workflow §1); probe it on a fresh child that runs one read-only command.
 

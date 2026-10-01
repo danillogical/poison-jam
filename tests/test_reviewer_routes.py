@@ -2,8 +2,7 @@
 
 **T11's failure.** `scripts/record-review.py` defaulted `--requested-model` to
 `workbuddy-ai/hy4-preview-f`, a **retired** route, while `docs/agent-workflow.md`
-§1 assigns Acceptance review to **GPT-6.1 Sol** (`provider: codex`,
-`route: LIVE_RESOLVE`). A stale default is worse than no default: it silently
+§1 assigned review to a different route. A stale default is worse than no default: it silently
 attributes a review to a model that did not produce it, and the resulting record
 reads as evidence about the wrong reviewer. The tool's own guard binds a record to
 the route that *answered*, so a wrong default makes the record internally
@@ -40,30 +39,27 @@ _spec.loader.exec_module(check_agent_docs)
 WORKFLOW = ROOT / 'docs' / 'agent-workflow.md'
 
 
-def workflow_acceptance_route() -> tuple[str, str]:
-    """The Acceptance reviewer's provider and effort, read from §1's roster.
+def workflow_reviewer_route() -> tuple[str, str]:
+    """The Reviewer's provider and effort, read from §1's roster.
 
     Read from the roster table rather than hard-coded here, so this control
     follows a legitimate staffing change instead of freezing today's answer. The
-    row's DSH cell has the shape
-    ``**GPT-6.1 Sol** @ `high` (`provider: codex`, `route: LIVE_RESOLVE`, ...)``.
+    row's route cell has the shape
+    ``claude/claude-opus-5-5`` @ ``medium`` (Claude Opus 5.5; ...), each in
+    single backticks.
     """
     text = WORKFLOW.read_text(encoding='utf-8')
     for line in text.splitlines():
-        if not line.startswith('|') or 'Acceptance reviewer' not in line:
+        if not line.startswith('| **Reviewer**'):
             continue
-        dsh = line.strip().strip('|').split('|')[-1]
-        # The cell writes ``@ `high` (`provider: codex`, `route: LIVE_RESOLVE`)``:
-        # the effort is a bare code span after `@`, and the provider value is
-        # inside a parenthesised span, NOT itself backticked.
-        effort = re.search(r'@\s*`([a-z]+)`', dsh)
-        provider = re.search(r'provider:\s*([\w.\-]+)', dsh)
-        if effort and provider:
-            return provider.group(1), effort.group(1)
+        cell = line.strip().strip('|').split('|')[-1]
+        route = re.search(r'`([\w.\-]+)/[\w.\-]+`\s*@\s*`([a-z]+)`', cell)
+        if route:
+            return route.group(1), route.group(2)
         raise AssertionError(
-            f'the Acceptance reviewer row is present but its DSH cell does not '
-            f'carry both an effort and a provider: {dsh.strip()!r}')
-    raise AssertionError('the workflow §1 roster has no Acceptance reviewer row')
+            f'the Reviewer row is present but its route cell does not carry '
+            f'a `provider/model` @ `effort`: {cell.strip()!r}')
+    raise AssertionError('the workflow §1 roster has no Reviewer row')
 
 
 class RecordReviewDefaultTests(unittest.TestCase):
@@ -81,7 +77,7 @@ class RecordReviewDefaultTests(unittest.TestCase):
 
     def test_default_matches_the_workflow_roster(self) -> None:
         """The default must be the route the workflow actually assigns."""
-        provider, effort = workflow_acceptance_route()
+        provider, effort = workflow_reviewer_route()
         source = (ROOT / 'scripts' / 'record-review.py').read_text(encoding='utf-8')
         default_model = re.search(
             r"--requested-model',\s*default='([^']+)'", source).group(1)
@@ -89,7 +85,7 @@ class RecordReviewDefaultTests(unittest.TestCase):
             r"--requested-effort',\s*default='([^']+)'", source).group(1)
         self.assertTrue(default_model.startswith(provider + '/'),
                         f'record-review.py defaults to {default_model!r}, but the '
-                        f'workflow assigns the Acceptance reviewer to provider '
+                        f'workflow assigns the Reviewer to provider '
                         f'{provider!r}')
         self.assertEqual(default_effort, effort,
                          f'record-review.py defaults to effort {default_effort!r}, '
