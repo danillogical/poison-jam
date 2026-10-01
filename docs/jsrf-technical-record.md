@@ -427,7 +427,7 @@ right answer is a larger sink, a sink that drains as it fills, or whether stagin
 submission means the walk should be committing incrementally. That is a design question about what the
 sink is *for*, not a constant to raise.
 
-**F4 capacity ruling, 2026-10-01 (owner-directed chore; implemented, full validation pending).** The Persistent
+**F4 capacity ruling, 2026-10-01 (owner-directed chore; implemented and accepted — runtime pending).** The Persistent
 Advisor chose A′: size both `staged[]` and `sink[]` to the existing 4096-word budget, place staging in
 PFIFO state rather than the stack, and preserve all-or-nothing submission admission and the other
 rejection rules. This is cheapest within the existing architecture, not hardware-faithful incremental
@@ -457,13 +457,113 @@ valid. Exploratory default-on GPU_ACK plus APU_TRAP, PB_EXEC, FB_WINDOW and log 
 Active ledger L14–L18, L20–L25, L39, L40; L19 dormant. All 64 printed submissions (#0–63) report
 OK and GET=PUT through `0x47A84`; frozen GET=PUT `0x16648`. Ring wrap/continued progress beyond
 logged submission 63 is INFERRED, not a complete trace. No sink/budget diagnostic or 32-address
-budget trace; no observed rejected submission. Draw/indices/triangles/pixels/clear all zero,
-clip/surface zero, no flip/present. The capacity stop is gone in exploratory scope; **F4 frames are
+budget trace; no observed rejected submission. **Draw/indices/triangles/pixels/clear, clip/surface
+and flip/present are UNKNOWN for this capture, not zero** — corrected by the Advisor fault-diagnosis
+ruling (2026-10-01): the only `[GPU]` executor report lines in the log are 34–43, printed during
+`xbox_MemoryLayoutInit` before the guest ran (line 39 is the `memory_ready` checkpoint), and the
+runtime report fires only with `RECOMP_NV2A_TRACE` or VERBOSE, neither of which was set; `submit`
+printing also stops at #63. The capacity stop is gone in exploratory scope; **F4 frames are
 not satisfied and the strict horizon did not move**. Mapping gate: 1 match, 0 content mismatch.
 Advisor independently inspected artifacts and ruled **W14 CONTINUE** until 11:00 UTC or two more
 smokes, whichever comes first, then another ceiling call unless a finding is accepted or a strict
-horizon moves. Next read-only worker answers deadline main/render wait sites first; GPU-specific
-flip/interrupt survey only if those waits point at GPU. No second smoke or fix yet authorized.
+horizon moves. **Initial next assignment (superseded below):** a read-only worker answers deadline
+main/render wait sites first; GPU-specific flip/interrupt survey only if those waits point at GPU;
+no second smoke or fix authorized at that point.
+
+**Post-smoke premise correction (read-only archive, no rerun).** Main tid 6984 was live
+at the deadline: it made kernel calls through #30073, at log line 111298 (Session direct
+read of `jsrf_run.log:111290–111300`), and that call returned. Advisor independently grouped
+last-4000-line kernel calls by ordinal/return/tid and noted recurring helpers. Worker confirmed
+277/294 as `RtlEnterCriticalSection`/`RtlLeaveCriticalSection` from the toolkit table. Original
+XBE mapping places the hot helpers `0x0019E438`, `0x0019F266`, `0x001A0480`, the lock
+`0x001BA050`, and candidate global `0x001BA04C` in **DSOUND**, not renderer setup.
+The mapped direct absolute write `mov [0x001BA04C],1` is at **`0x001A2317`** (file `0x18FFD7`),
+not the worker's withdrawn approximate address. Global `0x001BA04C` reads 0 at capture; this
+neither proves the writer never ran nor excludes alias/reset writes. Its semantics and causal
+relation to no frames are **not established**. Global `0x001BA6F0` has no XBE file backing but is
+valid guest RAM, holding live heap pointer `0x01120004`; absence of file backing does not invalidate
+its runtime state. Named helper ranges have no local backedge, but their enclosing loop is unread;
+no inference about frame/time-bounded outer progress follows. Two other threads wait on DSOUND
+event `0x0019D630`; signaler unknown. No GPU wait observed for main, not a general exclusion.
+Final queue history is insufficient: the 64-word preview supports neither "no flip was ever
+submitted" nor "an unacted flip is excluded". Neither claim is made. Artifact:
+`logs/workers/f4-drained-no-frames-brief.md` (corrected).
+
+**Fault-diagnosis ruling returned (Advisor, 2026-10-01) — this supersedes the initial read-only
+assignment above; the ruling text is recorded verbatim in `docs/reviews/rulings/f4-submission-capacity.md`.**
+The guest looks like a **running game loop**, not a stalled one. Observed: main tid 6984 sits in game
+code `sub_00161C20 → 161A90 → 161920 → 1669A0 →` XAPILIB `XGetDevices` (`0x001BD5FF`, +0xFF) polling
+input — ordinary per-frame activity — with `DirectSoundDoWork` (`0x0019F260`) and the DSOUND critical
+section (`0x0019E438` = `DirectSoundEnterCriticalSection`, CS `0x001BA050`) repeating. `0x001BA04C` is
+DSOUND library state, **not** a render-arming flag (48 references, 43 `cmp …,0`, one write
+`mov [0x001BA04C],1` at `0x001A2317` inside a DSOUND method calling `0x1A1C8A`): **dropped as the F4
+lead**. Thread 59696 is in D3D `BlockUntilVerticalBlank` (ret `0x0018CE73`), and that return site
+appears **1,622** times, so vblank delivery is INFERRED to work and the interrupt-delivery hypothesis
+drops to **low**. INFERRED from raw stack words (not unwound): D3D state-call addresses (`SetStateUP`,
+`UpdateProjectionViewportTransform`, `SetScissors`) lie in main's live stack region, suggesting a
+render path. **The open question is only whether it renders and presents, and this capture cannot
+answer it.**
+
+**Observation run `20261001-023335-656-f4-observation-60s` (2026-10-01): the instrumentation was
+inert — architecture A.** Run with `RECOMP_NV2A_TRACE=1` and `RECOMP_PB_SCAN=1` on the smoke's
+exploratory set, game `c01e292` / toolkit `e8a6e03`, `exe_sha256 1ecf8363…` (byte-identical to the
+capacity smoke's binary): 62.580312 s `diagnostic_deadline`, exit 3, dump/checkpoints/
+`gpu_report_ok` good, 21 threads, 165 named frames. The run produced **no post-guest render output**:
+zero `[PB]` lines, and no line after `guest_entry` (log line 75) matching draw/flip/pixel/surface.
+**Root cause, MEASURED in source (Advisor):** `src/main.c:529` installs the MMIO state owner →
+`src/nv2a/nv2a_mmio_hook.c:681` `xbox_Nv2aClaimRegisterOwner()` →
+`src/kernel/xbox_memory_layout.c:173-179` clears `g_nv2a_ack_enabled`; the legacy GPU body
+`:1048-1177` (busy-bit acks, DMA_GET mirroring, pushbuffer scan, executor call, periodic report) is
+inside that enabled check and therefore never runs. `RECOMP_PB_EXEC`/`RECOMP_PB_SCAN`/
+`RECOMP_NV2A_TRACE` are **set but inert** on this build — a **new instrument defect**, not a guest
+finding. **MEASURED:** 64 `[PFIFO] submit` lines all `diag=ok`, GET=PUT through `0x47A84`, so
+committed methods are real; the six `[GPU]` lines are all at log 32-38, before `guest_entry`.
+**INFERRED, not measured:** that the executor is never called under the owner, and hence that no
+render work executes — a code-path reachability inference. **The run's runtime counters are UNKNOWN**,
+and must not be recorded as measured zero. Stop = `metadata.json` `started_utc`
+`2026-10-01T09:33:36.447445+00:00` + `result.json` `duration_seconds` 62.580312 =
+**2026-10-01 09:34:39.027757**.
+
+**Ruling A (Advisor) and the approved design preflight — FINAL GO; Architecture A IMPLEMENTED AND
+ACCEPTED.** Toolkit `a71f9374ddb2a6685b790493855c835842228212` (9 files, +329/−10): the Advisor read
+the diff itself and ruled **ACCEPT/GO** with **final validation green** — core 5/5 in 2.34 s, 30
+lifter unittests, game 29/29 CTest in 28.81 s, all checks pass, conformant to the approved design.
+The **actual `FrameCounter` audit found 0 host registrants** (evidence cite "Advisor grep 2026-10-01":
+0 game host registrations, definition/header only in the toolkit), which differs from the worker's
+backend-only audit; that worker item stays pending and **does not block**. **Runtime is still pending
+and no frames claim is made**; the clean pair is committed and pushed **before** the smoke. The fix
+must reach the owner's
+NV097→`PB_EXEC` path with **no second walk and no second GET**; a rejection must stay **atomic**
+(reject without executing); fixtures must pin **clear/flip counts**; and the next run must show a
+**post-guest periodic `[GPU]` report** as positive proof the path is live. W14 is extended **until
+A's first smoke plus one diagnostic**. **No more inert reruns.** The final order is **capture per
+entry class → bindings → `action_commit` → consumer (ordered NV097 only) → last method → GET**.
+**Interface refinement (Advisor APPROVED):** the seam takes **four arguments
+`(subch, class_id, method, param)`** and **all committed entries reach the core callback**; the
+**kernel wrapper** filters to NV097 and keeps the skip count — this **replaces the earlier
+3-argument NV097-only-core-consumer** shape, since a policy-free core is the better factoring (the
+core sees what the executor sees, not a pre-filtered subset). Order and atomicity are unchanged
+(callback still after `action_commit`, inside the ok path); tests must show a **non-NV097 entry
+leaving the `EXEC` counters unchanged** while the **wrapper's skip count increments**, the core's
+local-callback tests must check the **correct class including across a rebind**, and the **skip count
+is read for the report under the same PFIFO lock**. Not a new shortcut, and **no new ledger class
+entry**. The runtime seam is a **core static function plus a setter** — no env var, no weak symbol,
+and the point of "no `extern`" is that the **core holds no `extern` reference to the executor** while
+the **kernel does register the seam**; registered **before the guest starts**, with `PB_EXEC`
+presence as the only trigger. Integration uses the **existing HAL target links across the whole
+toolkit** (the fallback is a dedicated real-exec minimal stub target only if the HAL cannot be a
+fixture); the earlier "A2 new targets" proposal is **superseded**. Standalone core tests cover order,
+atomicity and rebind with a local callback. The owner lock uses a **free getter on the existing
+active flag** (not a submission snapshot, not lock coupling), and the legacy guard **logs once and
+skips `EXEC`**. The **report runs only under the consumer lock at a 10 s cadence**. Flip accounting
+adds a **NEW `flip_stalls` counter**: `0x0130` is a completed swap that calls `FrameCounterFlip` but
+**does not increment the existing `s_gpu.flips`**, while **`0x012C` is the `s_gpu.flips++`**. A
+**game-side registrant audit is mandatory**, with **no blocking callbacks under the lock**. **L18's
+edit lands at the coordinated cross-repository checkpoint** — the toolkit code commit plus the game
+ledger record citing that toolkit SHA, pushed **toolkit first** (Advisor-ACKed binding: "same commit"
+means that same checkpoint, since the two repositories are separate and cannot share one commit
+object). **Until the code is accepted, L18 keeps its old entry** — no speculative acceptance.
+Recorded durably in `docs/reviews/rulings/f4-submission-capacity.md`.
 
 **Push checkpoint (2026-10-01, capacity fix and smoke record).** Both clean and fast-forward;
 public game outgoing audit 0 secret hits, no asset/lifted-code additions or blob >100 MB.

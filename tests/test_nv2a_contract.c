@@ -70,6 +70,24 @@ static int submit_diag_is(NV2AState *gpu, const char *expected)
     return strcmp(nv2a_submit_diagnostic(gpu->pfifo.submit_diag), expected) == 0;
 }
 
+/* Committed-method consumer recorder. This fixture links no kernel and no
+ * executor: it pins the SEAM contract (order, per-entry class, atomicity),
+ * not what any consumer does with the methods. */
+static uint32_t consumer_calls;
+static uint32_t consumer_method[8], consumer_param[8], consumer_class[8];
+static void consumer_reset(void) { consumer_calls = 0; }
+static void consumer_record(uint32_t subchannel, uint32_t class_id,
+                            uint32_t method, uint32_t param)
+{
+    (void)subchannel;
+    if (consumer_calls < 8) {
+        consumer_method[consumer_calls] = method;
+        consumer_param[consumer_calls] = param;
+        consumer_class[consumer_calls] = class_id;
+    }
+    ++consumer_calls;
+}
+
 /* Install one original-XBE RAMHT pair plus the 16-byte RAMIN object it names.
  * Hash is the 0x001945D6 11-bit fold; for 4K tables that is the handle itself
  * when handle < 0x800. */
@@ -931,6 +949,101 @@ int main(void)
         ok &= check(gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET], 0,
                     "USER blocked stream leaves GET untouched");
 #undef REJECT_CASE
+        VirtualFree(pb, 0, MEM_RELEASE);
+    }
+
+    /* ── Committed-method consumer seam (core-local, no kernel) ────────
+     *
+     * The core must hand committed methods to whatever registered, and the
+     * contract it must keep is local to the core: order, per-entry class,
+     * atomicity against rejection, and that GET still advances exactly as
+     * before. This fixture links no kernel and no executor -- the consumer here
+     * is a plain recorder -- so it pins the SEAM, not the executor. */
+    {
+        uint32_t *pb = (uint32_t *)VirtualAlloc(NULL, 0x2000,
+                                               MEM_RESERVE | MEM_COMMIT,
+                                               PAGE_READWRITE);
+        ok &= check(pb != NULL, 1, "consumer seam: mapping allocated");
+        ok &= check(nv2a_set_pushbuffer_window(gpu, (uint8_t *)pb, 0, 0x2000), 1,
+                    "consumer seam: window registered");
+        consumer_reset();
+        nv2a_set_commit_consumer(consumer_record);
+
+        /* Bind NV097 on subchannel 0 through the production RAMHT path, so the
+         * class under test does not depend on what earlier cases left bound. */
+        ramht_install(instance, 0x9u, 0x130u, 0, 0x97u, 0);
+
+        /* Order and per-entry class: SET_OBJECT then two NOPs. */
+        memset(pb, 0, 0x2000);
+        pb[0] = (1u << 18); pb[1] = 0x9u;                      /* SET_OBJECT NV097 */
+        pb[2] = (1u << 18) | 0x100u; pb[3] = 0xAAAA0001u;
+        pb[4] = (1u << 18) | 0x100u; pb[5] = 0xAAAA0002u;
+        submit_reset(gpu, 0, 24);
+        ok &= check(nv2a_submit_pending(gpu), 1, "consumer seam: stream accepted");
+        ok &= check(consumer_calls, 3, "consumer seam: one call per committed method");
+        ok &= check(consumer_method[0], 0x000, "consumer seam: SET_OBJECT delivered first");
+        ok &= check(consumer_method[1], 0x100, "consumer seam: second method in order");
+        ok &= check(consumer_param[1], 0xAAAA0001u, "consumer seam: second param in order");
+        ok &= check(consumer_method[2], 0x100, "consumer seam: third method in order");
+        ok &= check(consumer_param[2], 0xAAAA0002u, "consumer seam: third param in order");
+        ok &= check(consumer_class[1], 0x97u, "consumer seam: class delivered per entry");
+        ok &= check(consumer_class[2], 0x97u, "consumer seam: class stable across entries");
+
+        /* GET advances exactly as before the seam existed. */
+        ok &= check(gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET], 24,
+                    "consumer seam: GET advances to PUT");
+        ok &= check(gpu->pfifo.submit_successes, 1,
+                    "consumer seam: one commit for one accepted stream");
+
+        /* Atomicity: a rejected walk consumes nothing, even though a
+         * well-formed method precedes the faulting one. */
+        consumer_reset();
+        memset(pb, 0, 0x2000);
+        pb[0] = (1u << 18) | 0x100u; pb[1] = 0xBBBB0001u;      /* would commit */
+        pb[2] = 0x60000000u;                                   /* reserved -> reject */
+        submit_reset(gpu, 0, 12);
+        ok &= check(nv2a_submit_pending(gpu), 0, "consumer seam: reserved opcode rejected");
+        ok &= check(consumer_calls, 0, "consumer seam: rejected walk consumes nothing");
+        ok &= check(gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET], 0,
+                    "consumer seam: rejected walk leaves GET untouched");
+
+        /* Deregistration stops delivery. */
+        nv2a_set_commit_consumer(NULL);
+        consumer_reset();
+        memset(pb, 0, 0x2000);
+        pb[0] = (1u << 18) | 0x100u; pb[1] = 0xCCCC0001u;
+        submit_reset(gpu, 0, 8);
+        ok &= check(nv2a_submit_pending(gpu), 1, "consumer seam: stream accepted after dereg");
+        ok &= check(consumer_calls, 0, "consumer seam: deregistered delivers nothing");
+        ok &= check(gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET], 8,
+                    "consumer seam: GET still advances when unregistered");
+
+        /* Mid-stream rebind, core-local: NV097 -> rebind to NV_MEMCPY (0x39) on
+         * the SAME subchannel. The method walked before the rebind must still be
+         * delivered as NV097. Taking the class from the final binding would
+         * retro-label it, and a consumer that filters on class would then skip
+         * work that really was NV097. */
+        nv2a_set_commit_consumer(consumer_record);
+        ramht_install(instance, 0xAu, 0x140u, 0, 0x39u, 0);
+        ramht_install(instance, 0xBu, 0x150u, 0, 0x97u, 0);
+        consumer_reset();
+        memset(pb, 0, 0x2000);
+        pb[0] = (1u << 18); pb[1] = 0xBu;                     /* bind NV097 */
+        pb[2] = (1u << 18) | 0x100u; pb[3] = 0xDDDD0001u;     /* NV097 NOP, pre-rebind */
+        pb[4] = (1u << 18); pb[5] = 0xAu;                     /* rebind -> NV_MEMCPY */
+        pb[6] = (1u << 18) | 0x0180u; pb[7] = 0xDDDD0002u;    /* NV_MEMCPY method */
+        submit_reset(gpu, 0, 32);
+        ok &= check(nv2a_submit_pending(gpu), 1, "consumer seam: rebind stream accepted");
+        ok &= check(consumer_calls, 4, "consumer seam: rebind delivers all four methods");
+        ok &= check(consumer_class[1], 0x97u,
+                    "consumer seam: pre-rebind method keeps NV097");
+        ok &= check(consumer_class[3], 0x39u,
+                    "consumer seam: post-rebind method carries the new class");
+        ok &= check(consumer_method[1], 0x100, "consumer seam: pre-rebind method number");
+        ok &= check(consumer_method[3], 0x180, "consumer seam: post-rebind method number");
+        ok &= check(gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET], 32,
+                    "consumer seam: rebind stream still advances GET to PUT");
+        nv2a_set_commit_consumer(NULL);
         VirtualFree(pb, 0, MEM_RELEASE);
     }
     /* ── Interrupt controller: source, masks, acknowledgment ──────────

@@ -760,21 +760,81 @@ list is exhausted.
   (archived record-only citation diff), toolkit `e8a6e03`; exploratory default-on GPU_ACK plus
   APU_TRAP/PB_EXEC/FB_WINDOW/log budget 100000. Requested 45 s, actual 48.336403 s,
   diagnostic deadline. Logged submissions #0–63 all OK, GET=PUT through `0x47A84`, beyond
-  old `0x8EF0`; final GET=PUT `0x16648`. No sink/budget rejection. **Still zero draw/clear/
-  flip/present**, so F4 frames remain unsatisfied; no strict horizon claim.
+  old `0x8EF0`; final GET=PUT `0x16648`. No sink/budget rejection. **Draw/clear/flip/present are
+  UNKNOWN for this capture, not zero** — corrected 2026-10-01 by the Advisor fault-diagnosis
+  ruling: the only `[GPU]` executor lines are printed during `xbox_MemoryLayoutInit`, before the
+  guest ran, and `RECOMP_NV2A_TRACE` was unset, so no end-of-run counters exist. F4 frames remain
+  unsatisfied; no strict horizon claim.
   Active ledger L14–L18, L20–L25, L39, L40; L19 dormant. Advisor **W14 CONTINUE until
   11:00 UTC or two more smoke iterations, whichever first**. Next: read-only deadline
   main/render wait-site diagnosis on this archive first; GPU-specific survey only if waits
-  point to GPU. No further smoke/fix authorized before the diagnosis ruling.
-  **Historical stop:** Whether the answer is a larger sink,
+  point to GPU. **Archive diagnosis corrected (Advisor fault-diagnosis ruling, 2026-10-01):** the
+  guest looks like a running game loop — main tid 6984 polls input via `XGetDevices` in game code
+  (`sub_00161C20`), with `DirectSoundDoWork` (`0x0019F260`) and the DSOUND critical section
+  (`0x0019E438`, CS `0x001BA050`) repeating. Candidate flag `0x001BA04C` is DSOUND library state
+  (**not** a render-arming flag; drop it as the F4 lead): 48 references, 43 `cmp …,0`, and one
+  write `mov [0x001BA04C],1` at `0x001A2317` inside a DSOUND method calling `0x1A1C8A`. Thread
+  59696 is in D3D `BlockUntilVerticalBlank` (ret `0x0018CE73`) and that return site appears 1,622
+  times, so vblank delivery is INFERRED to work and the interrupt-delivery hypothesis drops to
+  low. INFERRED from raw stack words (not unwound): D3D state-call addresses (`SetStateUP`,
+  `UpdateProjectionViewportTransform`, `SetScissors`) sit in main's live stack region, suggesting a
+  render path. **Open question: whether it renders and presents — this capture cannot answer it.**
+  **ANSWERED 2026-10-01 — the instrumentation was inert, and the answer needs a fix first.**
+  Observation run `20261001-023335-656-f4-observation-60s` (game `c01e292`, toolkit `e8a6e03`,
+  `exe_sha256 1ecf8363…` identical to the capacity smoke) ran with `RECOMP_NV2A_TRACE=1` and
+  `RECOMP_PB_SCAN=1`: 62.580312 s `diagnostic_deadline`, dump/checkpoints/GPU report good, but
+  **zero `[PB]` lines and no post-`guest_entry` render output**. Root cause (Advisor, MEASURED in
+  source): `src/main.c:529` installs the MMIO state owner → `nv2a_mmio_hook.c:681`
+  `xbox_Nv2aClaimRegisterOwner()` → `xbox_memory_layout.c:173-179` clears `g_nv2a_ack_enabled`, and
+  the legacy GPU body `:1048-1177` (acks, DMA_GET mirroring, pushbuffer scan, executor call,
+  periodic report) sits inside that check. So **L16/L18 are set but inert on this build** and the
+  switch is itself a **new instrument defect**. MEASURED: 64 `[PFIFO] submit` lines all `diag=ok`,
+  GET=PUT through `0x47A84` (committed methods are real); six `[GPU]` lines all at log 32-38, before
+  `guest_entry` (line 75). **Runtime counters are UNKNOWN for this capture, not measured zero**;
+  that the executor never runs under the owner is **INFERRED from the code path**.
+  **Ruling A (Advisor), FINAL GO design:** the owner's NV097→`PB_EXEC` path must be reached with
+  **no second walk and no second GET**; rejection stays **atomic** (reject without executing);
+  fixtures must pin **clear/flip counts**; the run must show a **post-guest periodic `[GPU]` report**
+  as positive proof. Order: **capture per entry class → bindings → `action_commit` → consumer
+  (ordered NV097 only) → last method → GET**. **Interface refinement (Advisor APPROVED):** the seam
+  takes **four args `(subch, class_id, method, param)`** and **all committed entries reach the core
+  callback**; the **kernel wrapper** filters to NV097 and keeps the skip count — replacing the earlier
+  3-arg NV097-only-core-consumer shape (a policy-free core is the better factoring). Order and
+  atomicity unchanged (callback after `action_commit`, inside the ok path); tests must show a
+  **non-NV097 entry leaving `EXEC` counters unchanged** while the **wrapper skip count increments**;
+  core local-callback tests check the **correct class including across a rebind**; the **skip count is
+  read for the report under the same PFIFO lock**. Not a new shortcut, **no new ledger class entry**.
+  Runtime seam: **core static fn + setter**, no env var, **no weak symbol**; "no `extern`" means the
+  **core holds no `extern` executor reference** while the **kernel does register the seam**;
+  registered before guest start, `PB_EXEC` presence the only trigger. Integration: **existing HAL
+  target links across the whole toolkit** (dedicated real-exec minimal stub target only as fallback);
+  earlier "A2 new targets" **superseded**. Standalone core tests: order, atomicity, rebind with a
+  local callback. Owner lock: **free getter on the existing active flag**; legacy guard **logs once
+  and skips `EXEC`**. Report only under the **consumer lock, 10 s cadence**. Flip accounting adds a
+  **NEW `flip_stalls`** counter: `0x0130` is a completed swap that calls `FrameCounterFlip` but
+  **does not increment the existing `s_gpu.flips`**; **`0x012C` is the `s_gpu.flips++`**.
+  **Game-side registrant audit mandatory — no blocking callbacks under the lock.** W14 is extended
+  **until A's first smoke plus one diagnostic**; **no more inert reruns**; **L18's edit lands at the
+  coordinated cross-repository checkpoint** with the accepted toolkit code (the toolkit SHA recorded
+  in the game's ledger record — separate repositories, so not literally one git commit), and until
+  then L18 keeps its old entry. **Architecture A is IMPLEMENTED AND ACCEPTED** — toolkit
+  `a71f9374ddb2a6685b790493855c835842228212` (9 files, +329/−10); the Advisor read the diff itself and
+  ruled ACCEPT/GO with final validation green (core 5/5 in 2.34 s, 30 lifter unittests, game 29/29
+  CTest in 28.81 s, all checks pass, conformant to the approved design). **Runtime is still pending and
+  no frames claim is made**; commit and push the clean pair **before** the smoke.
+  Corrected evidence in TR and `logs/workers/f4-drained-no-frames-brief.md`.
+  **Historical 2026-09-30 question (answer recorded then; superseded by the accepted capacity work
+  and now by Architecture A):** Whether the answer is a larger sink,
   a sink that drains as it fills, or incremental commit during the walk is a design question about what
   the sink is *for*, not a constant to raise. Do not start the next long run until that is decided.
   *(Also noted: the comment at `nv2a_core.c:1461-1467` says "its 256 cap" while the array and its test
   are 1024 — a stale comment, not behaviour.)*
-  **The next runtime question:** *does the submission walk advance beyond GET `0x8EF0`, and if so,
-  what is the next measured stop or the first draw/flip event?* **ANSWERED 2026-09-30: no, it does not
-  advance; the next stop is `sink_capacity` at the same GET (see the smoke measurement above).** The
-  question for the next packet is therefore the sink's design, not another method. Fallbacks once
+  **The next runtime question (historical, ANSWERED 2026-09-30):** *does the submission walk advance
+  beyond GET `0x8EF0`, and if so, what is the next measured stop or the first draw/flip event?*
+  **ANSWERED: no, it did not advance; the next stop was `sink_capacity` at the same GET (see the smoke
+  measurement above).** That capacity blocker is **closed** (A′ accepted, toolkit `e8a6e03`), and the
+  current next question is Architecture A's: whether the owner path yields a post-guest `[GPU]` report
+  and whether GET passes `0x8EF0`. Fallbacks once
   frames exist: missing draw forms/formats are fixed in the executor; a GPU stall on this path → ML6;
   if the title needs register combiners the CPU executor cannot show, start ML7's feasibility study.
 - **F5 — Intro movies.** If the Sofdec intros block, skip them (ledger: *patched* or *intentionally
