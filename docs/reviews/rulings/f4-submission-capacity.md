@@ -46,6 +46,13 @@ CONFIRMED on both points.
 2. Ledger: the entry is a deliberate Approximated model choice, all-or-nothing commit per submission. It is not a claim about hardware and it changes no causal policy. Its removal gate is the incremental-commit packet.
 REVERSED BY: none at this level. These are readings of my own ruling's text.
 
+## Comment and concurrency clarification (Advisor response)
+
+ACK, no objection.
+1. Comment at :1571-1574: correcting it as a pure comment is within A′. Suggested sense: "A jump-free walk consumes at most PUT-GET words, so reaching the budget means either a jump/call moved pc (a cyclic trace) or the pending span exceeds the budget (a jump-free trace). The 32-address dump tells them apart." The comment edit must not change the code: the fprintf and the break stay exactly as they are.
+2. Parallel exception: acceptable. The two pytest files are Python only and do not touch build/ or the game root. INFERRED from their imports of scripts/*.py, not run by me. Condition: the side worker must not run ctest/just test/just check while ca4b9205 holds unbuilt toolkit edits. Those commands would build or run against a mixed tree and give a misleading red. The implementation worker builds only after the side worker releases the slot.
+REVERSED BY: the side worker's reproduction needing just check/ctest. In that case serialise it before the implementation build.
+
 ## Pytest side-item fault consult (Advisor response)
 
 PYTEST SIDE CONSULT (quick; I read both test files and did not run them, since my run job was killed to leave the build/run slot to your worker).
@@ -57,6 +64,13 @@ REVERSED BY: the checker output flagging a non-record file, or the ttd failures 
 ## Deferred (Advisor advisory)
 
 ADVISORY (record under Deferred; it does not change the behaviour premise): the worker's first "Mercenaries has no NV2A" was a negative claim drawn from a truncated view, which violates §2.4.5/§2.4.6. A negative result from a fetched tree listing needs a positive witness: a root listing showing the expected top-level dirs, or a direct fetch of the path where the code should be. Future prior-art briefs should require "path fetched directly, HTTP status" for every negative.
+
+## Session scheduling clarification
+
+The independent side-item reproduction is Python-only; the implementation worker owns the sole
+CMake/game build/run slot. It received permission to begin the focused CMake red/green experiment
+without waiting for an unrelated Python process to finish. No full `just check`/`just test` is run
+while that Python reproduction remains in progress. Source and build scopes remain disjoint.
 
 ## Session evidence qualification
 
