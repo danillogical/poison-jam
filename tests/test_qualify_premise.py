@@ -93,6 +93,38 @@ class ProfileParsingTests(unittest.TestCase):
         self.assertEqual(result['profile_verdict'], 'PASS')
 
 
+class ProfilePurposeTests(unittest.TestCase):
+    """Item 2 under pragmatism: bare-minimum lines may rest on exploratory runs."""
+
+    def test_fidelity_refuses_an_exploratory_run(self) -> None:
+        verdict, _ = gate.profile_verdict('r', 'EXPLORATORY', 'fidelity', ['L16'])
+        self.assertEqual(verdict, 'FAIL')
+
+    def test_bare_minimum_accepts_an_exploratory_run_with_ledger_ids(self) -> None:
+        verdict, detail = gate.profile_verdict('r', 'EXPLORATORY', 'bare-minimum',
+                                               ['L16', 'L18'])
+        self.assertEqual(verdict, 'PASS', detail)
+
+    def test_bare_minimum_without_ledger_ids_is_unknown(self) -> None:
+        verdict, detail = gate.profile_verdict('r', 'EXPLORATORY', 'bare-minimum', [])
+        self.assertEqual(verdict, 'UNKNOWN')
+        self.assertIn('--ledger-id', detail)
+
+    def test_an_id_the_ledger_lacks_fails(self) -> None:
+        verdict, detail = gate.profile_verdict('r', 'EXPLORATORY', 'bare-minimum',
+                                               ['L16', 'L999'])
+        self.assertEqual(verdict, 'FAIL')
+        self.assertIn('L999', detail)
+
+    def test_bare_minimum_still_refuses_a_fixture_run(self) -> None:
+        verdict, _ = gate.profile_verdict('r', 'FIXTURE', 'bare-minimum', ['L16'])
+        self.assertEqual(verdict, 'FAIL')
+
+    def test_strict_passes_either_purpose(self) -> None:
+        for purpose in ('fidelity', 'bare-minimum'):
+            self.assertEqual(gate.profile_verdict('r', 'STRICT', purpose, [])[0], 'PASS')
+
+
 class FreshnessItemTests(unittest.TestCase):
     """Item 2: the premise must postdate the fixes the brief names."""
 
@@ -165,14 +197,33 @@ class SymptomSearchItemTests(unittest.TestCase):
     def test_no_symptom_is_unknown(self) -> None:
         self.assertEqual(gate.check_symptom_search(None)['verdict'], 'UNKNOWN')
 
+    def _prior_art(self, root: Path, names) -> Path:
+        for name in names:
+            (root / name).mkdir(parents=True)
+            (root / name / 'notes.md').write_text('the thunk table was overwritten\n',
+                                                 encoding='utf-8')
+        return root
+
     def test_a_search_reports_its_hits(self) -> None:
-        result = gate.check_symptom_search('thunk table')
+        with tempfile.TemporaryDirectory() as tmp:
+            prior = self._prior_art(Path(tmp), [n for n, _ in gate.PRIOR_ART])
+            result = gate.check_symptom_search('thunk table', prior)
         self.assertEqual(result['verdict'], 'PASS')
+        for name, _url in gate.PRIOR_ART:
+            self.assertEqual(result['hits'][name], ['notes.md'])
         self.assertIn('hits', result)
         # The toolkit history names the thunk table, so a search must find something
         # -- a zero here would mean the search is not reaching the repositories.
         total = sum(len(v) for v in result['hits'].values())
         self.assertGreater(total, 0, 'the search found nothing anywhere')
+
+    def test_a_missing_prior_art_checkout_is_unknown(self) -> None:
+        """A search that skipped a prior-art title is not a search of the set."""
+        with tempfile.TemporaryDirectory() as tmp:
+            prior = self._prior_art(Path(tmp), [gate.PRIOR_ART[0][0]])
+            result = gate.check_symptom_search('thunk table', prior)
+        self.assertEqual(result['verdict'], 'UNKNOWN')
+        self.assertIn(gate.PRIOR_ART[1][1], result['detail'])
 
 
 class VerdictTests(unittest.TestCase):

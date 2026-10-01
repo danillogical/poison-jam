@@ -6,15 +6,20 @@ answers five questions and attaches the output to the brief:
 1. **Disassemble past the failing instruction.**  The failure cited as the blocker
    must actually be a failure at that instruction, not an assumption about it.
 2. **Premise artifact vs later fix commits** (`git merge-base --is-ancestor`) **and
-   strict profile.**  A premise drawn from a run that predates a fix, or from a run
-   that is not strict, does not describe the target revision.
+   profile.**  A premise drawn from a run that predates a fix does not describe the
+   target revision. For a fidelity question (`--purpose fidelity`, the default) the
+   run must be strict. For a bare-minimum line (`--purpose bare-minimum`, owner
+   decision 2026-09-30) an exploratory run is accepted when the brief lists the
+   compatibility-ledger IDs of the paths it exercised (`--ledger-id`).
 3. **The positive control firing on the target build.**  An instrument that never
    fired on this binary has produced no observation, however many runs it made.
 4. **A dry run of every measurement.**  A frozen command that has never executed is
    a command that may not run at all.
 5. **A search of upstream, forks and reference decompilations for the symptom.**  The
    answer may already exist, and the plan's own history records symptoms chased for
-   days that a fork had already fixed.
+   days that a fork had already fixed. The set searched is the toolkit (with every
+   fetched fork branch), this repository's docs, and the prior-art titles in
+   `PRIOR_ART`, checked out beside this repository; a missing checkout is UNKNOWN.
 
 **What the plan says these prevent**, in its own row: "A2h-r6 six revisions on a
 fixed failure; the 571 MB premise ~5 days, refuted by the `test eax`/`jl` four
@@ -49,6 +54,17 @@ GATE_VERSION = 'jsrf-premise-gate/1'
 
 # A guest VA as it appears in a premise, e.g. `0x00149828` or `00149828`.
 VA = re.compile(r'\b(?:0x)?([0-9A-Fa-f]{8})\b')
+
+LEDGER = ROOT / 'docs' / 'jsrf-compatibility-ledger.md'
+LEDGER_ROW = re.compile(r'^\|\s*(L\d+)\s*\|', re.MULTILINE)
+
+# Item 5's prior-art set (plan §2): recompiled titles whose fixes may already answer
+# a symptom. Each is expected as a checkout named like this beside the repository.
+PRIOR_ART = (
+    ('Mercenaries-Recompiled', 'https://github.com/KraftMacAndChee/Mercenaries-Recompiled'),
+    ('halo-ce-universal', 'https://github.com/cybersecurity/halo-ce-universal'),
+)
+PRIOR_ART_SUFFIXES = ('.md', '.c', '.h', '.py')
 
 
 def git(repo: Path, *args: str) -> tuple[int, str]:
@@ -169,8 +185,39 @@ def check_disassembly(premise: dict) -> dict:
                        'UNKNOWN, not a misalignment finding' % address)}
 
 
+def ledger_ids() -> set[str]:
+    try:
+        return set(LEDGER_ROW.findall(LEDGER.read_text(encoding='utf-8')))
+    except OSError:
+        return set()
+
+
+def profile_verdict(name: str, classification: str, purpose: str,
+                    named: list[str]) -> tuple[str, str]:
+    """Item 2's profile half: (verdict, detail) for a run's classification.
+
+    A fidelity premise must come from a strict run; exploratory evidence cannot carry
+    a strict claim (`docs/jsrf-run-profiles.md`). A bare-minimum premise may rest on
+    an exploratory run whose shortcuts are named by ledger ID.
+    """
+    if classification == 'STRICT':
+        return 'PASS', f'{name} is STRICT'
+    if purpose == 'bare-minimum' and classification == 'EXPLORATORY':
+        unknown_ids = sorted(set(named) - ledger_ids())
+        if not named:
+            return 'UNKNOWN', (f'{name} is EXPLORATORY; a bare-minimum premise may rest '
+                               f'on it only with the ledger IDs of the paths it '
+                               f'exercised (--ledger-id)')
+        if unknown_ids:
+            return 'FAIL', f'{unknown_ids} are not entries in {LEDGER.name}; add them first'
+        return 'PASS', (f'{name} is EXPLORATORY, accepted for a bare-minimum line with '
+                        f'ledger IDs {sorted(set(named))}')
+    return 'FAIL', (f'{name} classifies as {classification}; a {purpose} premise needs '
+                    f'STRICT' + (' or EXPLORATORY' if purpose == 'bare-minimum' else ''))
+
+
 def check_run(run_dir: Path, premise: dict) -> dict:
-    """Item 2 and 3: strict profile, and the premise postdating known fixes."""
+    """Item 2: the run's profile for the premise's purpose, and freshness."""
     result: dict = {'run': run_dir.name}
     profile = subprocess.run(
         [sys.executable, '-X', 'utf8', str(ROOT / 'scripts' / 'check-run-profile.py'),
@@ -192,16 +239,9 @@ def check_run(run_dir: Path, premise: dict) -> dict:
             break
     result['profile'] = classification
 
-    # A premise must come from a strict run; exploratory evidence cannot carry a
-    # strict claim (`docs/jsrf-run-profiles.md`).
-    if classification != 'STRICT':
-        result['profile_verdict'] = 'FAIL'
-        result['profile_detail'] = (
-            f'{run_dir.name} classifies as {classification}, not STRICT; a strict '
-            f'claim cannot rest on it')
-    else:
-        result['profile_verdict'] = 'PASS'
-        result['profile_detail'] = f'{run_dir.name} is STRICT'
+    result['purpose'] = premise.get('purpose') or 'fidelity'
+    result['profile_verdict'], result['profile_detail'] = profile_verdict(
+        run_dir.name, classification, result['purpose'], premise.get('ledger_ids') or [])
 
     # The premise must postdate every fix commit the brief names.
     fixes = premise.get('fixed_by') or []
@@ -326,12 +366,13 @@ def check_dry_run(commands: list[str]) -> dict:
             'commands': checked}
 
 
-def check_symptom_search(symptom: str | None) -> dict:
-    """Item 5: the symptom was searched for in the forks and upstream.
+def check_symptom_search(symptom: str | None, prior_art_root: Path | None = None) -> dict:
+    """Item 5: the symptom was searched for in the forks, upstream and prior art.
 
     The search itself is a judgement about relevance, so this reports what the
     repositories contain and leaves the reading to the session.  What it will not do
-    is report `PASS` for a search nobody ran.
+    is report `PASS` for a search nobody ran, or for a prior-art title that is not
+    checked out.
     """
     if not symptom:
         return {'verdict': 'UNKNOWN',
@@ -358,6 +399,32 @@ def check_symptom_search(symptom: str | None) -> dict:
     code, log = git(TOOLKIT, 'log', '--oneline', '--all', '--grep', symptom,
                     '-i', '-20')
     hits['commits'] = log.splitlines()[:20] if code == 0 and log else []
+    missing = []
+    base = prior_art_root or ROOT.parent
+    for name, url in PRIOR_ART:
+        root = base / name
+        if not root.is_dir():
+            missing.append(f'{name} ({url})')
+            continue
+        found = []
+        for path in root.rglob('*'):
+            if path.suffix not in PRIOR_ART_SUFFIXES or '.git' in path.parts:
+                continue
+            try:
+                text = path.read_text(encoding='utf-8', errors='replace')
+            except OSError:
+                continue
+            if pattern.search(text):
+                found.append(str(path.relative_to(root)).replace('\\', '/'))
+                if len(found) >= 20:
+                    break
+        hits[name] = found
+    if missing:
+        return {'verdict': 'UNKNOWN',
+                'detail': (f'prior art not checked out beside {ROOT.name}: '
+                           f'{", ".join(missing)}; clone it there or pass '
+                           f'--prior-art-root'),
+                'hits': hits}
     return {'verdict': 'PASS',
             'detail': (f'searched {sum(len(v) for v in hits.values())} hit(s) for '
                        f'{symptom!r}; the session reads them and records what it '
@@ -378,6 +445,15 @@ def main() -> int:
     parser.add_argument('--command', action='append', default=[],
                         help='a measurement command; repeatable')
     parser.add_argument('--symptom', help='the symptom to search the forks for')
+    parser.add_argument('--purpose', choices=('fidelity', 'bare-minimum'),
+                        default='fidelity',
+                        help='fidelity needs a strict run; bare-minimum also accepts '
+                             'an exploratory one with --ledger-id')
+    parser.add_argument('--ledger-id', action='append', default=[],
+                        help='a compatibility-ledger ID the run exercised; repeatable')
+    parser.add_argument('--prior-art-root', type=Path,
+                        help='directory holding the prior-art checkouts '
+                             '(default: beside this repository)')
     parser.add_argument('--out', type=Path, help='write the gate record here')
     parser.add_argument('--json', action='store_true')
     args = parser.parse_args()
@@ -387,6 +463,7 @@ def main() -> int:
         'gate': GATE_VERSION,
         'generated_utc': datetime.now(timezone.utc).isoformat(),
         'run_argument': args.run,
+        'purpose': args.purpose,
         'run_resolved': str(run_dir) if run_dir else None,
         'note': ('W2 requires this gate to run before any Planner call and its '
                  'output to be attached to the brief. UNKNOWN blocks: a gate that '
@@ -400,7 +477,8 @@ def main() -> int:
                         'detail': f'the run {args.run!r} could not be resolved'}
     else:
         premise = {'failing_instruction': args.failing_instruction,
-                   'fixed_by': args.fixed_by}
+                   'fixed_by': args.fixed_by, 'purpose': args.purpose,
+                   'ledger_ids': args.ledger_id}
         items['disassembly'] = check_disassembly(premise)
         items['run'] = check_run(run_dir, premise)
         run_verdicts = (items['run'].get('profile_verdict'),
@@ -415,7 +493,7 @@ def main() -> int:
         items['positive_control'] = check_positive_control(
             run_dir, args.positive_control)
     items['dry_run'] = check_dry_run(args.command)
-    items['symptom_search'] = check_symptom_search(args.symptom)
+    items['symptom_search'] = check_symptom_search(args.symptom, args.prior_art_root)
 
     record['items'] = items
     flat = {
@@ -447,6 +525,7 @@ def main() -> int:
     else:
         print(f'premise gate {GATE_VERSION}')
         print(f'  run : {record["run_resolved"]}')
+        print(f'  purpose: {args.purpose}')
         for name, verdict in flat.items():
             print(f'  {verdict:<9} {name}')
         for name, entry in items.items():
