@@ -107,7 +107,7 @@ D2 [archive log](../../logs/runs/20261002-014152-190-owner-d2-600/jsrf_run.log) 
 
 Ordinals: 277/294 enter/leave critical section; 160/161 raise/lower IRQL (fastcall); 129 raise IRQL to DPC; 289 initialize ANSI string (unchanged main total, not evidence of post-CMP calls); 187 close; 199 free virtual memory; 119 insert DPC; 145 set event; 159 wait for single object; 224/231 resume/suspend thread; 246/250 reference/dereference object; 143/124 set/query base priority. These establish repeated service/synchronization/clock activity, not the SEGA exit predicate.
 
-Build receipt: guarded `just build` succeeded without regeneration. First full CTest 31/32: `xbox_guest_meter` failed a kernel-return concurrency assertion and reported a 31 ms DPC overrun. Isolated rerun passed; second **full CTest 32/32 passed**. No code altered to hide the failure. Initial unittest invocation ran zero tests (wrong runner); direct `python -X utf8 ../xboxrecomp/tools/kernel_audit/test_noop_bridges_are_named.py` passed, naming all 67 bridges.
+Build receipt: guarded `just build` succeeded without regeneration. First full CTest 31/32: `xbox_guest_meter` failed a kernel-return concurrency assertion. Correction from T3 audit: the recovered 31 ms DPC overrun belongs to an older Oct 1 **passing** log, not proven to the failed run; do not attribute it to that failure. Isolated rerun passed; second **full CTest 32/32 passed**. No code altered to hide the failure. Initial unittest invocation ran zero tests (wrong runner); direct `python -X utf8 ../xboxrecomp/tools/kernel_audit/test_noop_bridges_are_named.py` passed, naming all 67 bridges.
 
 New run uses the same D2 environment/ledger IDs as Step 2, a fresh disposable save root and fresh framebuffer directory; only toolkit observation build differs. Because the kernel lines have no intrinsic timestamps, an external host tail reader records line-numbered UTC receipt times at 50 ms polling in `logs/workers/owner-kernel-noop-receipts.jsonl`. Times are **host observations**, subject to scheduling/buffering latency, not exact guest invocation times. No runtime trace switch or collector changed.
 
@@ -133,3 +133,54 @@ One quick Advisor consult only, `claude/claude-opus-5-5`, high, child `759e9303-
 Most likely remaining gate is still **logo scene completion, possibly logo-audio completion/progress**, low confidence, exact predicate/address **UNKNOWN**. New naming evidence neither measures audio nor elevates that hypothesis. Cheapest honest future change remains: identify the one scene-exit condition first, then either implement its actual missing completion bridge if proven, or bypass only that predicate with a new compatibility-ledger entry, explicit exploratory switch, hazards and removal gate. No ledger ID allocated for an unlocated shortcut; no implementation, blanket DSOUND success, forced DSP word, cache seeding, GPU_ACK change, movie skip, or observer work. Broader goal remains paused; stop after records/checks/commit/push.
 
 Push receipts for this records-only closure: `PUSHED_TO: origin / BRANCH: main / COMMIT: 929856fcfc145036252510509abaa0782d910a22 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: up-to-date (toolkit first)`; game `PUSHED_TO: origin / BRANCH: master / COMMIT: this records-only commit (identity in final response) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward`. No runtime/helper source or local artifacts included.
+
+## T3 — read-only xemu SEGA exit oracle (2026-10-02)
+
+**Supersedes the audio-leading / gate-UNKNOWN judgement above. No port fixes or new port runs.** xemu 0.8.136 (`fc24584ce88f0915ad7f04775bb7712c2e3f49ee`) ran with a disposable `-snapshot` HDD overlay and read-only i386 gdbstub observations. Verified desktop images show **Presented by SEGA** before and **Created by Smilebit** after. Earlier heuristic captures were still SEGA fades, not successors. QMP quit succeeded; subsequent process inspection verified xemu absent. The original EEPROM was used; its protection/unchanged status is not established.
+
+Evidence stays outside git in `%TEMP%/owner-sega-oracle`: `sega-ram.bin`, `departed-ram.bin`, register packets, control reads, screenshots, and per-image holes manifests. These are **guest-VA images**, not physical RAM dumps. Unreadable pages are placeholder zeros, excluded from comparison (about 80–83% holes). Control at `0x11000` matches XBE/port bytes `8b512c85d28b4130c70190431c00741c`. The 344-byte i386 register packet includes 16 decoded dwords and 280 undecoded x87/SSE bytes. Changed readable state, not hole zeros, supplies the comparison.
+
+### Actual presentation predicate — high confidence
+
+Logo object vtable `0x1CCFB8`, update slot +4 = **`0x7E360`**. Actual pointers: oracle `0x515030`, port `0x143EE60`; no guessed delta correction. `0x7E360` switches on **logo+0x98** (16 phases). Normal SEGA segment:
+
+1. Phase 0 waits on `0x24650()` (fade complete), then advances to phase 1 and clears logo+0x9C.
+2. Phase 1 increments **logo+0x9C each update**. At **counter > 0x78 (120)** (`0x7E412–0x7E424`) it advances to phase 2 and calls `0x24620(0xFF000000, 1/120)` (`0x7E4AF`). Optional controller input sets logo+0xA0 and can shorten the hold; sampled input latch is zero.
+3. **Phase 2 waits for `0x24650() != 0` at `0x7E444–0x7E44B`.** This is the exact blocked SEGA exit predicate in the archived port. Nonzero advances the phase and calls `0x24620(0, 1/120)` to fade the successor in. Thus the ordinary producer is **per-frame fade integration**, not audio completion, a kernel event, wall-clock duration, or the render scene-ready gate.
+
+`0x24650` fetches app subsystem 6 via `0x128C0` and returns **fade+0xC0** (returns 1 only if no object). `0x24620` forwards to `0x24540`, which writes target ARGB channels fade+0xA8..0xB4, step+0xB8 and clears done+0xC0. Fade update vtable+4 **`0x24700`** moves current channels +0x98..0xA4 toward targets, clamps on convergence, and sets **+0xC0=1 once all four channels match** (`0x24943` region). Draw `0x24400` consumes packed colour+0xBC; completion is not produced by draw.
+
+| Actual field | Oracle SEGA | Oracle Smilebit | Archived port |
+|---|---:|---:|---:|
+| Logo phase +0x98 | 0 | 5 | **2** |
+| Logo hold counter +0x9C | 0 | 121 | **121** |
+| Logo input latch +0xA0 | 0 | 0 | 0 |
+| Logo auxiliary latch +0xA4 | 0 | 1 | 1 |
+| Fade current alpha +0x98 | ~0.25833 | ~0.66667 | **0** |
+| Fade target alpha +0xA8 | 0 | 1 | **1** |
+| Fade step +0xB8 | 1/120 | 1/120 | 1/120 |
+| Fade done +0xC0 | 0 | 0 | **0** |
+
+Fade pointers oracle `0x600E60`, port `0x15F0E60`, vtable `0x1C4D10`. The two oracle snapshots catch different fades **in progress**; done need not be 1 in the successor snapshot. The phase change plus verified screenshot proves that an intervening fade completed; snapshots are not a full per-call trace.
+
+### Frame/render path and rejected cache-machine inference
+
+Port app `0x1063A70`, oracle `0x363A70`. app+0x18/+0x24/+0x94 are zero in both snapshots and port. Oracle tick `0x265174` 100→700; app frame counters 101→697. Port tick 2567, counters 3766. `0x13A80 → scene vtable+0xB8 → 0x14D090` performs presentation/timer work; `0x14D080` scene slots +0xB0/+0xB4 return zero, not a negative ready condition. Neither this gate nor increasing frames explains fade convergence by itself.
+
+`0x123E0 → 0x11070` walks app+0x87DC, calling node vtable+4 then child+0x28/sibling+0x30 unless node flags+4 are negative. In the archived port tree the fade is reachable: root `0x108FF40 → 0x1340060 → 0x108FFA0`, child `0x15F0E60`; fade flags `0x10003` are nonnegative. Logo sibling `0x143EE60` has flags 9. Reachability in a frozen tree does **not** prove the armed fade instance was updated on every prior frame.
+
+Worker initially promoted cache object `0x430060` state25→26, substate3→10, latch1→0 as the logo gate. **Rejected by Session comparison:** port counterpart `0x1340060` already has state **30**, latch0, substate10, pending fields +0x50/+0x54/+0x64 all0. Its `0x25310/0x25390`, `0x2DBE0` and `PRESS/DEFAULT` asset walk are separate cache/state machinery, not the actual presentation exit. The `.data` comparison found 16 changed dwords (282 across readable compared memory), including the cache tables/overlay, but heap logo/fade state is decisive. State changes, successful asset opens and `D:`/`Z:` rewrites alone cannot name the presentation predicate.
+
+### One quick Advisor consult; future action only
+
+Advisor `c11bbc0a-6897-4d25-8315-801b3e8ab313`, `claude/claude-opus-5-5`, high: original `0x24700` and inspected recovered alpha arithmetic agree; FCMP status bits and parity masks are correct. Advisor also checked the archived source bundle: the fade body comparison chain and FPU/parity helpers match the working tree; the map links `sub_00024700` from recovered.obj, and both archived patch files are empty. **Do not diagnose a parity defect from this capture.** Alpha0/target1/done0 after arming strongly suggests missing updates of the armed object, but invocation/instance mismatch, resets or runtime execution faults remain unproven. First-call `[RECOVERED]` logs do not prove post-arm execution.
+
+Cheapest honest future repair: diagnose the armed subsystem-6 instance's `0x24700` invocations and actual stores, then correct only the demonstrated traversal/instance/runtime defect. No completion bridge or bypass is presently justified. For a pragmatic shortcut, only this located phase-2 predicate could be considered, with a new explicit exploratory switch, ledger entry, hazards and removal gate; **none allocated or implemented**. Audio is not implicated by this exit path; no `RECOMP_APU_TRACE=1` run was made or recommended as the next diagnostic. No GPU_ACK changes, cache seed, new observer, movie skip or title acceptance. Broader goal stays paused.
+
+### CTest evidence correction and remaining limit
+
+Raw failed full-suite output has not yet been recovered from the available surviving artifacts. The earlier reported assertion text was `FAIL: the kernel return re-entered while the worker was inside`; this is retained context, **not newly recovered full raw output**. The surviving toolkit `build/Testing/Temporary/LastTest.log` is an older Oct 1 passing run: its raw line `[GSERIAL] overrun: dpc on tid 43312 waited 31 ms; holder tid 3976 -- running without the lock` precedes `Test Passed.` It cannot substantiate the failed run's overrun. Isolated and second full-suite passes are unchanged historical observations, not evidence that the original timing-sensitive failure was fixed.
+
+Records validation: `just check` all checkers passed; `git diff --check` clean; two staged record blobs scanned by `scripts/secret-audit.py`, zero secret hits, sizes 30,242/109,688 bytes before this validation sentence (far below 100 MB), no `game/` path. Documentation-only work required no rebuild. Fresh turn-end Reviewer `04d83ae2-8589-4f11-a12a-008b68d70027`, `claude/claude-opus-5-5` medium, **ACCEPT**; independently confirmed records-only diff, clean toolkit and no xemu process. Unrelated local session marker preserved/excluded, not staged.
+
+T3 push: `PUSHED_TO: origin / BRANCH: main / COMMIT: 929856fcfc145036252510509abaa0782d910a22 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: up-to-date (toolkit first)`; game receipt uses the resulting records-only commit identity in final response. Proprietary RAM, generated source, screenshots and scratch scripts excluded.
