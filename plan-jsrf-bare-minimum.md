@@ -603,7 +603,7 @@ package. Each gets criteria in the same five-part form when it becomes next.
 4. **Checkpoint 2 observed:** `20261002-014152-190-owner-d2-600`, 603.03 s deadline; 59 timed window captures identical SEGA, about 401 s after CMP marker; fresh root, no strict-horizon move. [Run record](docs/reviews/owner-sega-600-observations.md).
 5. **No-APU classified from archive:** `20261002-015434-370-owner-d2-noapu-600` spins at `001A18D0` DSP pending-word initialization, before logo; APU_TRAP/L21 required on this build/path. L21–L24 removed, L25 remains; no framebuffer/CMP, visual UNKNOWN.
 6. **Cheapest honest shortcut (not implemented):** only after locating the exact logo audio-completion predicate, bypass that single condition with a new compatibility-ledger entry/exploratory switch/removal gate; no blanket DSOUND success or guessed scene skip. F5 movie skip remains conditional.
-7. **Owner read-only classification chore:** two archives only, one quick Advisor consult, no new runs/implementation/observer retry; earlier W14 waiver/history preserved in run record. Checked records commit/push, toolkit first, then STOP; broader goal stays paused.
+7. **Owner kernel-name chore complete:** toolkit `929856f`; sole 600 s D2 run `20261002-132843-938-owner-d2-kernel-noop-600` ended at 604.83 s deadline, final SEGA. Two startup no-ops only (shutdown registration, boost control), none first appearing after CMP; no new gate identified. Archived per-thread rankings, times/limits and one Advisor consult in [review](docs/reviews/owner-sega-600-observations.md); no implementation/observer retry. Records commit/push toolkit first, then STOP; broader goal paused.
 
 ### Owner checkpoint 1 — records and gates (2026-10-02)
 

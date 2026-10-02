@@ -88,3 +88,48 @@ The last path is `Media\\Sounds\\dsstdfx.bin` (log line 4887). The [log tail](..
 Cheapest honest shortcut, **if the audio predicate is subsequently identified**, is to bypass only that one logo sound-completion condition, not decode movies or repair the entire audio model. Before any implementation, identify its exact site and contract and create a *Patched* or *Intentionally ignored* compatibility-ledger entry with an explicit exploratory switch, hazards, and removal gate (real playback/notification completion); future run records must cite that ID. No new ledger ID is allocated for an unimplemented proposal. No blanket DirectSound success, guessed pending-word clear, GPU acknowledgement change, cache seed, or unlocated whole-scene skip. F5's movie skip remains conditional on an actual intro blocker. Nothing implemented, no observer retry, no new runs; classification chore stops after checked commit/push.
 
 Closure push receipts for this records-only commit are reported with the final commit identity (avoids a self-referential hash).
+
+## Owner-authorized named no-op kernel observation (2026-10-02)
+
+Toolkit pulled first, fast-forward `348a0e3 → 929856fcfc145036252510509abaa0782d910a22`. The change only names each do-nothing bridge on its process-wide first call; it does not implement completion. Owner authorizes one rebuilt 600-second D2 exploratory run and records, no fix. Broader goal stays paused; observer stays parked.
+
+### Read-only first: last three archived summary blocks per thread
+
+D2 [archive log](../../logs/runs/20261002-014152-190-owner-d2-600/jsrf_run.log) after marker line 232735. Headers lack a native tid: attribution uses guest stack region matched to explicit kernel-call `tid=` records. Rankings are **cumulative since thread start**, not post-marker interval counts. Summary output interleaves: adjacency alone is not attribution. Listed active ordinals are independently observed in post-marker call records; main-thread detailed calls stop at its 100000-call budget, while summaries continue. No claim that threads without a final summary perform no kernel work.
+
+| Native tid / guest stack region | Last three summary header lines / total calls | Final ranked ordinals and cumulative counts | Ordinals explicitly called after CMP |
+|---|---|---|---|
+| 42264 / `00F7` (main) | 392722 / 138806; 393224 / 139198; 393691 / 139618 | 277 ×55294; 294 ×55294; 161 ×8372; 160 ×4468; 129 ×3905; 289 ×2303 | 129, 160, 161, 187, 199, 277, 294 |
+| 65924 / `007B` | 392785 / 3899; 393421 / 3905; 393869 / 3909 | 119 ×1955; 145 ×1954 (only two occupied ranks) | 119, 145 |
+| 5160 / `0123` | 392812 / 24189; 393436 / 24228; 393896 / 24254 | Last unambiguously contiguous six at 393437–393442: 246 ×5585; 250 ×5584; 224 ×3729; 143 ×3722; 159 ×1868; 124 ×1862. Final interleaved block: 246 ×5591, 250 ×5590, 143 ×3726, 124 ×1864; remaining ranks not safely attributable | 124, 143, 159, 224, 231, 246, 250 |
+| 59404 / `012B` | 392816 / 3844; 393433 / 3850; 393900 / 3854 | 159 ×1926; 224 ×1926; 277 ×1; 294 ×1, interleaved with 5160. Shared static `shown_ord` scratch can omit/duplicate ranks under concurrent summaries; do not reconstruct six invented entries | 159, 224 |
+| 51468 / `0133` | 392829 / 3625; 393457 / 3631; 393928 / 3635 | 231 ×3633; 277 ×1; 294 ×1 (only three occupied ranks) | 231 |
+
+Ordinals: 277/294 enter/leave critical section; 160/161 raise/lower IRQL (fastcall); 129 raise IRQL to DPC; 289 initialize ANSI string (unchanged main total, not evidence of post-CMP calls); 187 close; 199 free virtual memory; 119 insert DPC; 145 set event; 159 wait for single object; 224/231 resume/suspend thread; 246/250 reference/dereference object; 143/124 set/query base priority. These establish repeated service/synchronization/clock activity, not the SEGA exit predicate.
+
+Build receipt: guarded `just build` succeeded without regeneration. First full CTest 31/32: `xbox_guest_meter` failed a kernel-return concurrency assertion and reported a 31 ms DPC overrun. Isolated rerun passed; second **full CTest 32/32 passed**. No code altered to hide the failure. Initial unittest invocation ran zero tests (wrong runner); direct `python -X utf8 ../xboxrecomp/tools/kernel_audit/test_noop_bridges_are_named.py` passed, naming all 67 bridges.
+
+New run uses the same D2 environment/ledger IDs as Step 2, a fresh disposable save root and fresh framebuffer directory; only toolkit observation build differs. Because the kernel lines have no intrinsic timestamps, an external host tail reader records line-numbered UTC receipt times at 50 ms polling in `logs/workers/owner-kernel-noop-receipts.jsonl`. Times are **host observations**, subject to scheduling/buffering latency, not exact guest invocation times. No runtime trace switch or collector changed.
+
+### Sole new run: complete first-call inventory and outcome
+
+Archive `20261002-132843-938-owner-d2-kernel-noop-600`; game source `a5e06d9`, toolkit `929856f`; EXE SHA-256 `f1a7a7a445f4f658adfab756b8c05fb7e7634453550bbb97c84872933c69dbe7`. Start `2026-10-02T20:28:44.712643Z`, derived stop `20:38:49.541471Z`, duration 604.828828 s. `diagnostic_deadline`, result code 3, fresh root verified; 21 native threads, checkpoints passed, dump and offline GPU report successful. Wrapper shell exit 1 reflects the runner's nonzero deadline return, not a guest crash; result governs. Exactly one guest launch, no rerun.
+
+All first-call lines in the **complete final log** (two total):
+
+| Log line | UTC host receipt | Receipt seconds from metadata start | Bridge / caller | CMP relationship / suspicion |
+|---|---|---|---|---|
+| [824](../../logs/runs/20261002-132843-938-owner-d2-kernel-noop-600/jsrf_run.log#L824) | 20:28:48.795267Z | 4.082624 | `HalRegisterShutdownNotification` / `0x00194BAF` | Before CMP; shutdown registration side effect, not an identified logo gate |
+| [4247](../../logs/runs/20261002-132843-938-owner-d2-kernel-noop-600/jsrf_run.log#L4247) | 20:28:49.608284Z | 4.895641 | `KeSetDisableBoostThread` / `0x00147D92` | Before CMP; thread scheduler boost policy, not an identified logo gate |
+
+CMP PATH line [247970](../../logs/runs/20261002-132843-938-owner-d2-kernel-noop-600/jsrf_run.log#L247970) received at `20:32:19.342266Z` (+214.629623 s). **No first-call no-op appeared after CMP**, so this experiment yields **no new prime suspect** under the owner's late-first-call criterion. First-call suppression is process-wide: later reuse of an already named bridge is invisible; this does not rule out partial/non-noop bridges, guest audio code, or missing asynchronous completion. The trace is not voice/notification telemetry.
+
+Final framebuffer remains **Presented by SEGA**. Capture-path qualification: the supplied fresh `RECOMP_FB_DUMP` basename had no trailing directory separator; runtime overwrote that one file at each of 60 logged FBWIN writes, plus an initial suffixed `000.bmp`. Therefore this run proves the **final image**, not 60 retained identical images or a continuous still-SEGA interval. No rerun to repair that limitation. Initial fresh path and settings are in metadata; original assets/saves untouched. This observation is exploratory and moves no strict horizon.
+
+### Bounded judgement / stop
+
+One quick Advisor consult only, `claude/claude-opus-5-5`, high, child `759e9303-9388-4b2a-ae3f-335e2008667b`. Caller inspection: `sub_00194ADD` registers shutdown callback `001941E0` in DSOUND initialization and continues without consuming a result; the `00147D92` thread-creation wrapper similarly discards the boost-control return before releasing the reference. Neither provides a plausible scene-completion dependency. No repair/shortcut for these two is justified.
+
+Most likely remaining gate is still **logo scene completion, possibly logo-audio completion/progress**, low confidence, exact predicate/address **UNKNOWN**. New naming evidence neither measures audio nor elevates that hypothesis. Cheapest honest future change remains: identify the one scene-exit condition first, then either implement its actual missing completion bridge if proven, or bypass only that predicate with a new compatibility-ledger entry, explicit exploratory switch, hazards and removal gate. No ledger ID allocated for an unlocated shortcut; no implementation, blanket DSOUND success, forced DSP word, cache seeding, GPU_ACK change, movie skip, or observer work. Broader goal remains paused; stop after records/checks/commit/push.
+
+Push receipts for this records-only closure: `PUSHED_TO: origin / BRANCH: main / COMMIT: 929856fcfc145036252510509abaa0782d910a22 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: up-to-date (toolkit first)`; game `PUSHED_TO: origin / BRANCH: master / COMMIT: this records-only commit (identity in final response) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward`. No runtime/helper source or local artifacts included.
