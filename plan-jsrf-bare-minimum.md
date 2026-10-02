@@ -601,7 +601,7 @@ package. Each gets criteria in the same five-part form when it becomes next.
 2. **D2 accepted** — the directory-context cleanup closed as a bounded unit and stays accepted.
 3. **SEGA after the marker is UNCLASSIFIED** — the eligible W14 event was the unnumbered `JSRF_CACHE_COMPLETE.CMP`; the visible frame is still the SEGA logo; no title claim.
 4. **Checkpoint 2 observed:** `20261002-014152-190-owner-d2-600`, 603.03 s deadline; 59 timed window captures identical SEGA, about 401 s after CMP marker; fresh root, no strict-horizon move. [Run record](docs/reviews/owner-sega-600-observations.md).
-5. **Checkpoint 3 only if still SEGA:** same 600 s run without `RECOMP_APU_TRAP`; record changed ledger dependencies, then stop and report.
+5. **Checkpoint 3 observed:** `20261002-015434-370-owner-d2-noapu-600`, APU_TRAP absent, 602.44 s deadline; no framebuffer/CMP evidence, visual UNKNOWN; L21–L24 removed, L25 remains. Chores STOP: no rerun/investigation.
 6. **Owner waiver:** W14 bounds do not block these runs; no new fixtures, observer harnesses, bounded units or history scrub; at most one quick Advisor consult per step, ambiguity recorded without further investigation.
 7. **Checkpoint 1 first:** ruling metadata/check gates and plan cleanup, `just check` green, commit/push; subsequent run records include ledger IDs and horizon-ledger rows; toolkit pushed first each checkpoint.
 
