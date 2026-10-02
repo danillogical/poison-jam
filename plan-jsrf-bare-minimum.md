@@ -55,10 +55,12 @@ established facts. Where this plan proposes a change to one of them, it is a tas
 
 ## CURRENT PACKET — none
 
-No packet is promoted. **F5 fade-observation draft stopped before freeze: Planner INADEQUATE;
-actual-reader fixture link blocked under the authorized seams; no controls and no new guest run.
-Operational UNKNOWN, causal A/B still UNCLASSIFIED; owner decision required, no automatic retry.**
-See [F5 pre-freeze stop](docs/reviews/rulings/f5-fade-observation-stop.md). The broader goal stays paused.
+No packet is promoted. **F5 fail-fast observer attempt STOP UNKNOWN before final corrective build:
+initial real-library link succeeded but 0/12 controls passed; final source audit found elapsed-threshold
+mismatch and an unmapped assertion against the closed correction list. No passing controls or new guest
+run; no observer/causal classification; owner decision required, no automatic retry or correction.**
+See [F5 fail-fast observer stop](docs/reviews/rulings/f5-failfast-observer-stop.md) and historical
+[F5 pre-freeze stop](docs/reviews/rulings/f5-fade-observation-stop.md). The broader goal stays paused.
 Phase 0 (§4) and the chores of §5–§6 run as owner-directed chores, which
 need no packet. The first packet is C1 (§7); it is promoted here, by exact revision and hash, only
 after its adequacy review returns `ADEQUATE` (`docs/agent-workflow.md` §5).
