@@ -184,3 +184,59 @@ Raw failed full-suite output has not yet been recovered from the available survi
 Records validation: `just check` all checkers passed; `git diff --check` clean; two staged record blobs scanned by `scripts/secret-audit.py`, zero secret hits, sizes 30,242/109,688 bytes before this validation sentence (far below 100 MB), no `game/` path. Documentation-only work required no rebuild. Fresh turn-end Reviewer `04d83ae2-8589-4f11-a12a-008b68d70027`, `claude/claude-opus-5-5` medium, **ACCEPT**; independently confirmed records-only diff, clean toolkit and no xemu process. Unrelated local session marker preserved/excluded, not staged.
 
 T3 push: `PUSHED_TO: origin / BRANCH: main / COMMIT: 929856fcfc145036252510509abaa0782d910a22 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: up-to-date (toolkit first)`; game receipt uses the resulting records-only commit identity in final response. Proprietary RAM, generated source, screenshots and scratch scripts excluded.
+
+## Folded-alias follow-up — archived evidence only (2026-10-02)
+
+Owner boundary: **read-only, no new runs or fixes**. Reused `20261002-132843-938-owner-d2-kernel-noop-600`; no xemu restart, guest launch, build, recovery generation or manifest edit. This follow-up proposes an L02 recovery, not a scene-exit bypass.
+
+### Log census and capture limitation
+
+The complete archived 30,973,165-byte log contains **1 `[ALIAS-ICALL]` line**, at [line 2652](../../logs/runs/20261002-132843-938-owner-d2-kernel-noop-600/jsrf_run.log#L2652):
+
+```text
+[ALIAS-ICALL] target=0x0014FEF0 owner=0x00150231
+```
+
+The run's own archived dispatch source has 134 map pairs. `recomp_alias_observe` atomically increments the total and per-entry hits before testing first sighting and the <=8 distinct-print cap. One line is **not cap saturation**; there is no evidence of eight logged aliases hiding later ones. It proves this alias was invoked at least once, **not its exact count or an exhaustive nonzero-counter census**. Log completeness/loss is not interchangeable with a frozen counter array. The wrapper uses zero-based map/hits index **111** and calls `sub_00150231` from its start.
+
+The requested dump counter census is **BLOCKED by uncaptured host memory**, not zero hits. `check-dump-mapping.py` passes: matches1, mismatch/unreadable/missing0 at guest control `0x11000`. This establishes guest-image mapping only; it cannot make host globals readable. Worker parsed matching PDB MSF info and dump CodeView records: GUID **135BA5C2-6096-4517-8E6D-3D541722BD3F**, age **84**, exact match. No `cdb.exe` was available; symbol locations below come from the matching archived linker map plus dump module ASLR base, and missing-page proof from all110 memory descriptors, **not a successful debugger counter read**. ModuleListStream gives actual EXE base `0x7FF789340000` (size `0x361E000`); archived map preferred base is `0x140000000`.
+
+| Symbol | Image RVA | Actual host VA | Frozen value |
+|---|---:|---:|---|
+| `g_recomp_alias_icall_entries` | `0xD6BC00` | `0x7FF78A0ABC00` | not captured; archived source constant **134** |
+| `g_recomp_alias_icall_map[][2]` | `0xD6BC10` | `0x7FF78A0ABC10` | not captured; all134 static pairs available in archived source |
+| `g_recomp_alias_icall_count` | `0xEC90D0` | `0x7FF78A2090D0` | **UNKNOWN** |
+| `g_recomp_alias_icall_hits[]` | `0x25C3120` | `0x7FF78B903120` | **UNKNOWN for all134 entries** |
+
+Parsing the minidump's captured memory descriptors finds only two EXE-image slices: `0x7FF78971B11D+0x100` and `0x7FF78A163000+0x85240` (image RVA `0xE23000..0xEA8240`). None covers these globals. Host arrays cannot be replaced by guest RAM or initialized EXE/BSS zeros. A debugger may reconstruct read-only constants from the matching EXE, but cannot recover dynamic hits from pages that were never captured. Scratch parser/source extracts remain external in `%TEMP%/aliasjob`.
+
+Consequently the only **observed hit** that can be listed is:
+
+| Alias VA | Owner VA | Count evidence | Table method? | Fade/presentation path? |
+|---|---|---|---|---|
+| `0x0014FEF0` | `0x00150231` | **>=1** from first-sight log; exact frozen count unavailable | **Yes**, render-scene vtable `0x1E0F00`, slot `+0x148`, dword at `0x1E1048` | **Yes**, per-frame scene-state calls in `0x13A80`; not the fade producer or done reader |
+
+No other alias is claimed to have zero hits; the requested complete nonzero list is unavailable within the no-new-run boundary.
+
+### Own-byte / table evidence and proposed L02 repair
+
+The original pointer table contains distinct `.text` entries: `0x14FDE0` at +0x144, **`0x14FEF0` at +0x148**, `0x14FE30` at +0x14C, followed by `0x150130`, `0x150170`, `0x1501F0`, `0x150240`, `0x150280`. This is a function-pointer table, not a switch-label table. The current recovery manifest has entries for the six siblings `0x14FE30`, `0x14FE50`, `0x14FE60`, `0x150130`, `0x150170`, `0x1501F0`, but **no start entry at `0x14FEF0`**. The analysis database labels it `tail_jump_alias`, end `0x150231`; that inferred span crosses other real functions and is not an acceptable recovery boundary.
+
+Own original bytes instead establish:
+
+- Body **`[0x14FEF0, 0x150104)`**. `cmp edx,9; ja 0x150075` handles the pointer-argument path; otherwise `jmp [edx*4+0x150104]` selects ten cases. Every path returns with **`ret 0xC`** (this plus two arguments), makes no calls and contains no loops.
+- Own jump table **`[0x150104, 0x15012C)`**, ten dwords: `14FF10 14FF3C 14FF68 14FF72 14FF81 14FF8B 14FFC3 14FFD5 15001A 15002C`. All targets lie inside the body. Four NOPs precede the next function at `0x150130`. Stop recovery at **`0x150104`**, excluding the table data, as with prior L02 switch recoveries; do not use the alias owner as the end.
+- Original writes per-stage texture/combiner state in `0x19DF10..0x19DF2C + (stage<<7)` and dirty flags at `0x19DED8`, returning S_OK. The alias owner **`0x150231` is only the shared E_INVALIDARG tail** of neighbouring `0x1501F0`: `eax=0x80070057; ret 0xC`. It omits these stores while keeping the stack balanced.
+- Per-frame scene calls at `0x13DDC` and `0x13F03` use `[scene-vtable+0x148]`; subsequent instructions do not branch on the returned HRESULT. This locates the observed alias on the presentation path, but does not show it bypasses `0x123E0/0x11070` or the armed subsystem-6 update.
+
+**Proposed fix — not applied:** add one reviewed routine recovery to `config/recovered-functions.json`: start `0x0014FEF0`, end `0x00150104`, section `.text`, kind `routine`, stack_args **12**, with the above table/own-byte evidence under existing **L02**. Generate its own body/dispatch using the existing recovery process, not a stub or synthetic completion. This is the same repair class as `0x37550`, `0x26780`, `0x7E360`, `0x24700`.
+
+Future acceptance must verify ten in-span switch targets plus the `ja` path, no unresolved indirect jump, return cleanup (`ESP+16` including return address), recovered lookup priority over the alias, and expected per-stage stores for known inputs. The alias line disappearing alone is insufficient to establish repair or SEGA departure. No manifest, source, L02 count or runtime changed here.
+
+### Causal judgement and stop
+
+One quick Advisor consult for this follow-up: `c11bbc0a-6897-4d25-8315-801b3e8ab313`, `claude/claude-opus-5-5` high, original bytes/source read offline. **Observed defect: real render-state method replaced by an error tail. Inference: likely rendering-fidelity damage, not direct fade-update starvation.** The original leaf has no task/scene-list writes, loops or calls; its alias has balanced cleanup. Sampled callers ignore HRESULT. Worker also found 50 raw byte-pattern candidate +0x148 call sites (broader than Advisor's 45 lifted sites); immediate next-instruction classification found no test/cmp of EAX, but included three branches and one ambiguous case. **This does not prove whole-path HRESULT non-use**: immediate-instruction scans are not dataflow or decoded-CFG analysis. Other callers and indirect effects remain unverified, so no global impossibility claim is made. Parent independently disassembled the original switch: register **EDX**, default **0x150075**; rejected worker's raw-scan misdecodes EAX/0x150071. Independent address addition also corrected the initial host-VA arithmetic for count/hits to the values in the table above.
+
+The earlier missing-update hypothesis is still unproven: no post-arm `0x24700` call trace was recovered. This alias is a concrete byte/table-backed repair candidate on the presentation path, **not a demonstrated fix for fade done0 / SEGA hold**. No APU trace, new dump, bypass, title claim or strict-horizon movement. Complete counter census is blocked by the existing dump's missing pages; stop rather than violate no-new-runs. Broader goal remains paused.
+
+Push receipts for this records-only follow-up: `PUSHED_TO: origin / BRANCH: main / COMMIT: 929856fcfc145036252510509abaa0782d910a22 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: up-to-date (toolkit first)`; game `PUSHED_TO: origin / BRANCH: master / COMMIT: resulting records commit (final response) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: records validated; fast-forward push receipt in final response`. Validation: `just check` all checkers passed; `git diff --check` clean; two records-only staged blobs, secret audit0 hits; no `game/` paths or large blobs. Toolkit clean/up-to-date first; no xemu process. Fresh turn-end review requested after game push; its result is reported in final response.
