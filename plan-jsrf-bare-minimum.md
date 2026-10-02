@@ -599,11 +599,11 @@ package. Each gets criteria in the same five-part form when it becomes next.
 
 1. **Observer parked, no retry** — the fail-fast observer is STOP UNKNOWN by owner decision; no retry, correction, consultation, list extension or further fixture work.
 2. **D2 accepted** — the directory-context cleanup closed as a bounded unit and stays accepted.
-3. **SEGA after the marker is UNCLASSIFIED** — the eligible W14 event was the unnumbered `JSRF_CACHE_COMPLETE.CMP`; the visible frame is still the SEGA logo; no title claim.
+3. **SEGA gate: audio-completion/progress is the leading hypothesis, low confidence; exact predicate UNKNOWN.** Archived post-CMP opens/reads: none; no opened intro blocker (F5). Presentation/DSOUND servicing continue; voice positions/notifications unmeasured. No title claim.
 4. **Checkpoint 2 observed:** `20261002-014152-190-owner-d2-600`, 603.03 s deadline; 59 timed window captures identical SEGA, about 401 s after CMP marker; fresh root, no strict-horizon move. [Run record](docs/reviews/owner-sega-600-observations.md).
-5. **Checkpoint 3 observed:** `20261002-015434-370-owner-d2-noapu-600`, APU_TRAP absent, 602.44 s deadline; no framebuffer/CMP evidence, visual UNKNOWN; L21–L24 removed, L25 remains. Chores STOP: no rerun/investigation.
-6. **Owner waiver:** W14 bounds do not block these runs; no new fixtures, observer harnesses, bounded units or history scrub; at most one quick Advisor consult per step, ambiguity recorded without further investigation.
-7. **Checkpoint 1 first:** ruling metadata/check gates and plan cleanup, `just check` green, commit/push; subsequent run records include ledger IDs and horizon-ledger rows; toolkit pushed first each checkpoint.
+5. **No-APU classified from archive:** `20261002-015434-370-owner-d2-noapu-600` spins at `001A18D0` DSP pending-word initialization, before logo; APU_TRAP/L21 required on this build/path. L21–L24 removed, L25 remains; no framebuffer/CMP, visual UNKNOWN.
+6. **Cheapest honest shortcut (not implemented):** only after locating the exact logo audio-completion predicate, bypass that single condition with a new compatibility-ledger entry/exploratory switch/removal gate; no blanket DSOUND success or guessed scene skip. F5 movie skip remains conditional.
+7. **Owner read-only classification chore:** two archives only, one quick Advisor consult, no new runs/implementation/observer retry; earlier W14 waiver/history preserved in run record. Checked records commit/push, toolkit first, then STOP; broader goal stays paused.
 
 ### Owner checkpoint 1 — records and gates (2026-10-02)
 
