@@ -1,5 +1,15 @@
 # F5 fade observation — pre-freeze STOP (UNKNOWN)
 
+## Historical status and ruling metadata
+
+Owner decision: park the observer line; do not retry. Older next-step recommendations are historical; the park prevails and this metadata authorizes nothing.
+
+**BASIS:** OBSERVED: three hash-backed strict-link attempts exited 1; no actual-reader controls executed. INFERRED: the required memory-layout object pulls kernel bridge dependencies needing generated dispatch symbols. UNCERTAIN: the attempts do not prove all linking strategies impossible; probe count/additional shapes and individual linker command lines are not established. Details remain below.
+
+**REVERSED BY:** No Advisor reversal condition was recorded. Only an explicit owner decision can reopen this historical stop; the owner now parks it. The recommended fail-fast-seam option was consumed by the later attempt, not left authorized for retry. Step-1 metadata consult confirmed this absence rather than inventing a technical condition.
+
+**RECORD IN:** This ruling and [plan CURRENT PACKET](../../../plan-jsrf-bare-minimum.md#current-packet--none) own this stop disposition; [agent workflow](../../agent-workflow.md) §3.3–3.4 owns ruling recording and owner authority.
+
 ## Decision boundary
 
 The owner authorized a small observation-only packet: focused actual-reader RED/GREEN controls, then exactly one guest run of at most 300 seconds. No fix, bypass, progression change or automatic follow-up. **No guest run was launched. No packet was promoted.** The broader goal remains paused; no W14 reset, F6/title acceptance or causal A/B finding is claimed.

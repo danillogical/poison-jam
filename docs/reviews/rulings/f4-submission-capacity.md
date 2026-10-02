@@ -2,6 +2,14 @@
 
 2026-10-01. Persistent Advisor child `4e6d87e1-f748-48b3-a0a4-a6e5728bfeee`, provider `claude`, model `claude-opus-5-5`, effort `high`; startup continuity probe PASS. Owner-directed F4 chore, no packet promoted. The following is the Advisor response verbatim (apart from this record heading).
 
+## Historical status
+
+This record preserves historical decisions and their reversal conditions; they are not open tasks. The owner has parked the later F5 observer line without retry; that park prevails over older observer next-step wording. No new fixture, unit or history scrub is authorized by metadata cleanup.
+
+## Hazards carried from the superseded capacity reading
+
+The stale 256-cap comment concealed the actual 1024-entry limit, and enlarging only the sink would leave the second, local staged-array cap. This ruling carries those hazards explicitly: both capacities follow the existing word budget. Incremental commit would alter rejection atomicity, carry/hold, action commit and semaphore rollback; keeping whole-submission atomicity is a deliberate model approximation, not a hardware-fidelity claim. These hazards and tradeoffs are stated in the response below; no new conclusion is added.
+
 ## Response
 
 F4 SINK RULING (Persistent Advisor 4e6d87e1; record verbatim in plan/TR)

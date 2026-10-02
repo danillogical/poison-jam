@@ -1,5 +1,19 @@
 # F5 fail-fast observer — STOP UNKNOWN before final build
 
+## Historical status and ruling metadata
+
+Owner decision: park the observer line; do not retry. Earlier next-step text is historical; this metadata grants no new authorization.
+
+**BASIS:** OBSERVED: MSVC configure/build succeeded but CTest passed 0/12; Session, Worker and independent Reviewer confirmed the two closed-list source violations below. INFERRED/conservative: Advisor attempt accounting and accepted equivalent header input do not waive those findings. UNCERTAIN: overwritten VS2022/Ninja transcripts survive as recollection only; hash recovery proves content, not chronology. Closed-list Advisor attribution is per record; child ID/model/effort not stated here, not supplied from memory.
+
+**REVERSED BY:** No Advisor reversal condition was recorded. Only a new explicit owner decision can reopen this historical stop; the owner parks it. The unspent build is not an automatic retry allowance. Step-1 metadata consult confirmed the absence of a technical reversal condition.
+
+**RECORD IN:** This ruling and [plan CURRENT PACKET](../../../plan-jsrf-bare-minimum.md#current-packet--none) own the stop disposition; [agent workflow](../../agent-workflow.md) §3.3–3.4 owns ruling recording and owner authority.
+
+### Hazards of the superseded link-blocker ruling
+
+Successful real-library linking supersedes only the earlier construction blocker, not its adequacy boundary. Hazard: linking does not establish traversal or observer adequacy (0/12 controls). Unauthorized dispatch-seam probes and synthetic classifier tests from the earlier ruling are not actual-reader control or guest evidence; ignored drafts must not be reused as controls. Unauthorized edits, header disclosure deviation and lost transcripts remain unwaived process debt, not reasons to reset the budget. The source findings below terminate this later attempt without establishing success.
+
 ## Disposition
 
 Owner-authorized narrow claim: the production observation reader, through the real NV2A submission-walk callback path, can observe relevant fade-object state and distinguish stable from changed values. **Not established.** No packet frozen/promoted; no successful fixture controls; no conditional guest run. Operational UNKNOWN; no OBS-A/OBS-B, writer causality, fidelity, progression, or U2 claim. Owner decision required; no automatic retry, further technical consultation, correction, or list extension.

@@ -210,6 +210,10 @@ if(BUILD_TESTING)
     add_test(NAME jsrf_generation_provenance
         COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_generation_provenance.py)
     set_tests_properties(jsrf_generation_provenance PROPERTIES TIMEOUT 300)
+    # W6 ruling metadata must stay green in both check and CTest; no build target.
+    add_test(NAME jsrf_ruling_ledger
+        COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check-ruling-ledger.py)
+    set_tests_properties(jsrf_ruling_ledger PROPERTIES TIMEOUT 300)
     # A2h-arming-coverage-attribution C1/C2.  The fixture lives in the toolkit's tests/
     # directory, like tests/apu_watch_fixture_test.c and tests/kernel_inplace_event_test.c,
     # because it is a standalone collector fixture and the game repo keeps no fixture of

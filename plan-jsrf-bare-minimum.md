@@ -55,12 +55,15 @@ established facts. Where this plan proposes a change to one of them, it is a tas
 
 ## CURRENT PACKET — none
 
-No packet is promoted. **F5 fail-fast observer attempt STOP UNKNOWN before final corrective build:
-initial real-library link succeeded but 0/12 controls passed; final source audit found elapsed-threshold
-mismatch and an unmapped assertion against the closed correction list. No passing controls or new guest
-run; no observer/causal classification; owner decision required, no automatic retry or correction.**
-See [F5 fail-fast observer stop](docs/reviews/rulings/f5-failfast-observer-stop.md) and historical
-[F5 pre-freeze stop](docs/reviews/rulings/f5-fade-observation-stop.md). The broader goal stays paused.
+No packet is promoted. **The fail-fast observer attempt is PARKED by the owner — STOP UNKNOWN, no
+retry, no further correction, consultation or list extension.** It stopped before the final corrective
+build: the initial real-library link succeeded but 0/12 controls passed, and the final source audit
+found an elapsed-threshold mismatch and an unmapped assertion against the closed correction list. No
+passing controls, no new guest run, no observer/causal classification. See
+[F5 fail-fast observer stop](docs/reviews/rulings/f5-failfast-observer-stop.md) and historical
+[F5 pre-freeze stop](docs/reviews/rulings/f5-fade-observation-stop.md). The chores now running are the
+owner-directed records cleanup and exploratory runs in §13's current-state block, **not** a resume of
+the broader goal, which stays paused.
 Phase 0 (§4) and the chores of §5–§6 run as owner-directed chores, which
 need no packet. The first packet is C1 (§7); it is promoted here, by exact revision and hash, only
 after its adequacy review returns `ADEQUATE` (`docs/agent-workflow.md` §5).
@@ -592,9 +595,40 @@ package. Each gets criteria in the same five-part form when it becomes next.
 
 ## 13. Next action
 
+### Current state (owner, 2026-10-01; read this block first)
+
+1. **Observer parked, no retry** — the fail-fast observer is STOP UNKNOWN by owner decision; no retry, correction, consultation, list extension or further fixture work.
+2. **D2 accepted** — the directory-context cleanup closed as a bounded unit and stays accepted.
+3. **SEGA after the marker is UNCLASSIFIED** — the eligible W14 event was the unnumbered `JSRF_CACHE_COMPLETE.CMP`; the visible frame is still the SEGA logo; no title claim.
+4. **Checkpoint 2:** one 600 s current-build exploratory run, same D2 smoke profile plus a new `RECOMP_FB_DUMP` directory; EXE `74377ac6…c0424e`, toolkit `348a0e3`; fresh root because the unchanged collector refuses populated roots.
+5. **Checkpoint 3 only if still SEGA:** same 600 s run without `RECOMP_APU_TRAP`; record changed ledger dependencies, then stop and report.
+6. **Owner waiver:** W14 bounds do not block these runs; no new fixtures, observer harnesses, bounded units or history scrub; at most one quick Advisor consult per step, ambiguity recorded without further investigation.
+7. **Checkpoint 1 first:** ruling metadata/check gates and plan cleanup, `just check` green, commit/push; subsequent run records include ledger IDs and horizon-ledger rows; toolkit pushed first each checkpoint.
+
+### Owner checkpoint 1 — records and gates (2026-10-02)
+
+Toolkit fast-forwarded to `348a0e38fdf3fd940d6e5f79ad24cf25fbcf2c41`: only Mac runner tooling, no runtime change. Eight ruling-lint findings closed using the rulings' own content and one quick metadata Advisor consult (`4ec43a66-99c2-4d6b-b981-5a558f8e6d54`, Claude Opus 5.5 high). Missing technical reversal conditions and the historical fail-fast Advisor attribution remain explicitly absent rather than reconstructed. Observer stays parked; historical process debt is not waived.
+
+The existing ruling checker now runs in `just check` and CTest, without a new fixture/build target. `just ruling-check`, `just check`, dedicated ruling CTest and full CTest **32/32** passed. CMake registration changed the source fingerprint: initial identity verification refused it, so `just build` refreshed identity through the guarded path (no regeneration); production EXE remains SHA-256 `74377ac6130e812b7a830492d4995bdc58efb8899ff5c1d6c23b7ee6c0c0424e`. Plan worker's stale run identity/conditional-step errors were found and corrected by Session before closure.
+
+Run preparation decision: use the existing runner's **fresh empty disposable root**; it has no seed option and refuses nonempty roots. No runner modification or copy-race. The allowed copy was optional; prior D2 root and original assets remain untouched. The 600 seconds therefore includes cache filling; report the measured post-marker interval, not a claimed 600 seconds after marker. This adds no seed shortcut/ledger entry. Run profile and its ledger IDs remain the D2 profile until conditional APU removal.
+
+Staffing correction: Session mistakenly dispatched content review on `codex/gpt-6.1-sol` medium (`49b63b11-7402-48ab-a628-b6852da7fadb`); it is not roster-compliant Reviewer acceptance. Fresh authoritative `claude/claude-opus-5-5` medium Reviewer (`3084f0a2-73d3-4dbf-b449-761555bacc4a`) accepted checkpoint 1 with no blocking defects; independently verified ruling lint, dedicated CTest registration/pass and unchanged executable identity. Parent-held spawn receipt pins route/effort; roster unchanged.
+
+Push receipt is reported at this checkpoint and in the next durable run record; final receipt names the resulting commit rather than a self-referential hash.
+
 ### Title-screen fast path (owner direction, 2026-09-30) — supersedes the entries below
 
-Chores, run by the DeepSeek Session in order; each step adds or updates ledger entries in the same
+**Superseded as current status by the block above; kept as history.** The naming note below applies to
+every F-number in this section and in the historical material that follows.
+
+*Naming note: the F-numbers are the names these steps were recorded under. **F5 names two different
+things in the history** — the intro movies (its current meaning, below) and, in the superseded
+2026-10-01 material, the fade/logo/cache observation work that later took the names **F4b** (the
+logo/cache observation) and **F5 fail-fast observer** (the parked attempt). Old text keeps its old F5
+wording; read it through this note rather than rewriting it. **F5 is reserved for the intro movies.***
+
+Chores, run by the Session in order; each step adds or updates ledger entries in the same
 commit and one strict-horizon-ledger line per session. Stop and report only when a step's fallback
 list is exhausted.
 
@@ -710,7 +744,9 @@ list is exhausted.
 - **F3's continuing subject.** The 93-second run ended at its own deadline with no fault, so the next
   stop is unknown. Fallbacks unchanged: the guest heap keeps failing → ML2 (replacement XAPI heap,
   *reimplemented*); a vblank wait hangs → ML5; missing APU interrupts or slow audio clocks → ML4.
-- **F4 — Frames. THE ACTIVE NEXT STEP. The `0x1720` walk blocker is IMPLEMENTED (toolkit `1f9309a`);
+- **F4 — Frames.** *(Historical — this was the active next step when recorded; §13's current-state
+  block above supersedes it. The logo/cache observation work carried in this entry is **F4b** under the
+  naming note above.)* **The `0x1720` walk blocker is IMPLEMENTED (toolkit `1f9309a`);
   the next measurement is whether the walk now advances past GET `0x8EF0`.**
   **Diagnosed 2026-09-30: the submission walk stops on the first method the model does not know.**
   On the fixed build (`20260930-230206-594-f4-frames-after-horizon-fix`, exploratory, 123.3 s, 629,781
@@ -889,7 +925,7 @@ list is exhausted.
   event — the unnumbered `JSRF_CACHE_COMPLETE.CMP`** (0 B, `CreationTimeUtc == LastWriteTimeUtc ==`
   **`2026-10-01T13:27:49.9575858Z`**) — so the **horizon moves to `13:27:49.9575858Z`** and the
   **ceiling to `17:27:49.9575858Z`**, **reset count 0**. The old `14:32:32` is **historical and
-  superseded**. The eligible event is the **actual marker, not a frame**. **F5 CMP loop resolved; the
+  superseded**. The eligible event is the **actual marker, not a frame**. **F4b CMP loop resolved; the
   new stop is after the marker phase.** **No title claim** (the frame is still SEGA).
   **Owner-resume W14 ceiling call (2026-10-01 18:19 UTC): CONTINUE with a fixed bound.** Same-route replacement Persistent Advisor `356aed7e-07f5-4327-aa32-88bdfe21ac8b` passed independent-read/second-message continuity under workflow §4.4 after prior child repeatedly failed delivery. Conservatively count wall time; owner pause does not reset the clock. No accepted source-only finding/reset, and no strict-horizon claim from the exploratory CMP event. Bound: **U1 plus conditional U2 reported, 20:15:00Z, or one packet, whichever first**. At that bound without an accepted critical-path finding/new eligible event: **STOP for owner decision, no second ceiling call**. U1: one source-only worker ≤45 min checking reset writers/update gates against original XBE. U2 only on a complete negative U1: existing binary/profile, canonical object captures ≥60 s apart and advancing frame-count control, no code/instrumentation/seeding; unchanged harness or explicitly authorized weaker 240 s/300 s cross-run captures. Full oracle, predicates and constraints: `docs/reviews/rulings/f4-submission-capacity.md` §W14 ceiling ruling on owner resume. **A/B still UNCLASSIFIED; no new run/patch/build yet.**
   **FINAL W14 STOP — owner decision required (2026-10-01 ~18:29–18:31 UTC).** U1 returned **UNKNOWN**: unresolved per-frame receiver/alias/inline writers, not proven immaterial. Bound (a) reached, **U2 not authorized, no second ceiling call or clock reset**. Replacement Advisor delivered STOP and accepted corrected branch/reachability wording. No new build/run/patch; D2 accepted, A/B UNCLASSIFIED, no F6/title. Parent original checks preserve only frozen eligibility: all four mode words zero permits `11070`; any nonzero branch skips it via JMP `124C3`; stage8 with ID1DDA present skips `666F0`. Worker raw-byte scan/address-reference overclaims rejected; no new cause or exhaustive writer proof. Owner options: recommended small observation-only packet for same-object within-run reads with RED/GREEN/Reviewer gates; weaker one-run cross-capture candidate; explicitly ledgered pragmatic shortcut; or pause/end. **None is authorized until owner chooses.** Full ruling/qualifications in the ruling record's §U1 UNKNOWN and final W14 STOP.
@@ -917,7 +953,7 @@ list is exhausted.
   **Strict-path audit (qualified):** the strict-path counts came out **12 vs 474 matches**, and that
   set **includes the demo**; the **marker creates fall in an adjacent 6-line window**, which is
   **qualified — not a tid proof**.
-  ***Historical — F5 D1 and the D2 design before GREEN.*** *As recorded then:* the F5 D1 probe was
+  ***Historical — F4b D1 and the D2 design before GREEN.*** *As recorded then:* the F4b D1 probe was
   **INCONCLUSIVE** (`s_dir_contexts` live VA with **0 containing ranges**, **0/4928** readable slots,
   coverage **0.96%** over 113 ranges; **cause NOT proven**, occupancy UNKNOWN); the D2 design was
   **approved** with **no new run until its RED/GREEN and test gate passed**; the Advisor
