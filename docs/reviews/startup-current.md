@@ -1,146 +1,146 @@
 # Fresh-session startup receipt
 
-Filled per `docs/agent-workflow.md` §0 by `scripts/gen-startup-receipt.py`, then
-completed from this session's own probe results. This is a receipt, not a second
-policy: `docs/agent-workflow.md` owns the roster, startup procedure and failure
-handling.
+Filled per `docs/agent-workflow.md` §0.6 by `scripts/gen-startup-receipt.py` and then
+completed from this session's own probes; this is a receipt, not a second policy.
+Fields marked **UNVERIFIED** cannot be measured by a generator and must be
+filled from the probe that establishes them.
 
-Generated: 2026-10-03T05:52:59.569286+00:00 (mechanical fields)
-Probe fields filled: 2026-10-03 (this session)
+Generated: 2026-10-03T16:11:20.000343+00:00
 
 ## Identity and handoff
 
 - Session ID/date/harness: 2026-10-03, DSH; session
-  `session-162a2425-a048-4d82-995f-2934c653ec6b` (harness: `DSH_PROFILE=web`,
-  `DSH_WEB_URL=http://127.0.0.1:3080`, `DSH_HOME=C:\Users\logic\.dsh`)
+  `session-d4f66947-86a8-42c5-9d69-a04353db2f64`
+  (harness: `DSH_PROFILE=web`, `DSH_WEB_URL=http://127.0.0.1:3080`)
 - Actual main model/effort: `workbuddy-ai/deepseek-v4.1-flash` @ `max` — the §1
-  Session row. Read from harness metadata, not self-reported:
-  `record.rows.modelSelection.val.lastUsed` =
-  `{provider: workbuddy-ai, model: deepseek-v4.1-flash, reasoningEffort: max}` at
-  `seq` 699 in
-  `C:\Users\logic\.dsh\storages\session_projcache\sessions\session-162a2425-a048-4d82-995f-2934c653ec6b.json`.
-  Caveat carried from prior receipts: `lastUsed` is the last selection, not a
-  per-turn proof of the route that served any particular turn, and its `seq`
-  drifts as the session runs; cite it with the `seq`.
-- Workflow/plan/run-profile revisions and dirty diff identity: workflow
-  `57bb7c13d5eb4525`, plan `697b3552bb12858d`, run profiles `4bb50f539ba4b7e8`;
-  no dirty diff in either tree
-- Game revision/status: `master` `371b06285c8d56d20f191af9a78c129bc1580948` (clean)
+  Session row. Verified from this session's own `request/header` record in
+  `C:\Users\logic\.dsh\sessions\--C-Users-logic-Repos-my_xbox_game--\session-d4f66947-86a8-42c5-9d69-a04353db2f64\`,
+  not from a display name.
+- Workflow/plan/run-profile revisions and dirty diff identity: workflow `2de284987ce0fa6f`, plan `cd3c8706e0113fec`, run profiles `4bb50f539ba4b7e8`
+- Game revision/status: `master` `ab85bb9ea84b9488c6949b6a4def75a118f2dbda` (clean)
 - Toolkit revision/status: `main` `929856fcfc145036252510509abaa0782d910a22` (clean)
-- Unrelated edits preserved: 0 game, 0 toolkit
-- CURRENT PACKET: **none**. Plan hash
-  `697b3552bb12858d339e9b958d98e96bceab6567c6ef0d994f436d0920b58a30`; the block
-  reads `## CURRENT PACKET — none`. No packet is promoted; the fail-fast observer
-  stays PARKED by the owner (no retry). Packet-governed game-behavior
-  implementation is therefore `BLOCKED` (§0.6).
+- Unrelated edits preserved: 0 game, 0 toolkit. Toolkit pulled first
+  (`Already up to date.`), then game (`c0294db..ab85bb9`, fast-forward,
+  `docs/agent-workflow.md` + `scripts/gen-startup-receipt.py`).
+- CURRENT PACKET: **NONE** — `## CURRENT PACKET — none` (`plan-jsrf-bare-minimum.md:56`)
+  - plan hash `cd3c8706e0113fececdf9d4108d0d826735908781b5c44da4c29f8bbf28011c6`
+  - block: "No packet is promoted. **The fail-fast observer attempt is PARKED by the owner — STOP UNKNOWN, no
+retry, no further correction, consultation or list extension.**" The plan also states
+    "The first packet is C1 (§7); it is promoted here, by exact revision and hash, only
+    after its adequacy review returns `ADEQUATE`" (`plan-jsrf-bare-minimum.md:68`).
 - Dependencies and their recorded acceptance reviews: none (no packet promoted)
-- Next exact authorized action: **owner-directed discovery work under §0.6**
-  (records only, no fixes), as instructed in this session's prompt — find what
-  should update the SEGA logo's armed fade and why it does not in the port; then
-  record, commit and push (toolkit first) and stop. This is explicit
-  owner-directed non-packet work and does not resume the paused broader goal.
+- Next exact authorized action: **owner-directed environment diagnosis under §0.6**
+  (Muse guardrail shell-denial question). No game-behavior implementation: with no
+  packet promoted, that remains `BLOCKED` until one is promoted (§5).
 - Build/run owner and worker write ownership: Session owns integration, the
-  build/run slot and the record. This session ran one owner-directed read-only
-  xemu oracle session (T3) and read-only archive analysis; no implementation
-  worker, no rebuild, no port run.
+  build/run, evidence collection and record keeping (§2.2). No worker was spawned
+  this session.
 
 ## Route resolution — PASS / BLOCKED
 
-Resolved live in this session by the Session with `list_subagent_models`, not
-inferred from a display name.
+Resolved live in this session by the Session, not by this generator. Every child
+route below was read from that child's own `request/header` record under
+`C:\Users\logic\.dsh\sessions\--C-Users-logic-Repos-my_xbox_game--\<child-id>\`, which
+is harness metadata rather than a self-report.
 
-- Session: `workbuddy-ai/deepseek-v4.1-flash` @ `max` — matches §1 (harness metadata above)
 - Planner: `claude/claude-opus-5-5` @ `high` — exactly one advertised route
-  (`claude/claude-opus-5-5`), effort `high` advertised. `LIVE_RESOLVE`. **Not
-  spawned this session** (no packet, no planning call required).
-- Persistent advisor: requested `claude` / `claude-opus-5-5` @ `xhigh`,
-  `route: CONTINUABLE_PINNED`. Exactly one advertised route; `xhigh` advertised.
-  Probed and **PASS** (below).
-- Muse guardrail: `subagent_muse` @ `max` (`muse-code` / Muse Spark 1.3, one
-  session-continuable child). Probed and **PASS** (below).
+  (`list_subagent_models claude` → `claude/claude-opus-5-5`); `route: LIVE_RESOLVE`,
+  fresh child per packet. Not spawned this session (no packet to plan).
+- Persistent advisor: requested `claude` / `claude-opus-5-5` @ `xhigh`; returned
+  route identity `claude` / `claude-opus-5-5` @ `xhigh` (`maxTokens: 128000`) —
+  **PASS**, `route: CONTINUABLE_PINNED`.
+- Muse guardrail: `subagent_muse` @ `max`; returned route identity
+  `muse-code` / `muse-spark-1.3-contributor` @ `max` — **PASS**
+  (`subagent_muse` @ max, one session-continuable child).
 - Packet reviewer: `claude/claude-opus-5-5` @ `medium`. Exactly one advertised
-  route; `medium` advertised. Probed and **PASS** (below). No packet review was
-  required this session.
+  route; returned route identity `claude` / `claude-opus-5-5` @ `medium` —
+  **PASS** (`route: LIVE_RESOLVE`, fresh child per packet review).
 - Turn reviewer: `codex/gpt-6.1-sol` @ `high`. Exactly one advertised route
-  matching the named provider/model; `high` advertised. No startup probe is
-  required (§0.3); verified on first use at this turn's end.
+  (`list_subagent_models codex` → `codex/gpt-6.1-sol`) — resolved, but **not yet
+  spawned**; verified on first use per §1.
 - Workers: `workbuddy-ai/deepseek-v4.1-flash` @ `max` (the §1 Worker row). No
-  worker child spawned this session.
-- Exact error or ambiguity, if any: none. All five required routes resolved to
-  exactly one advertised route each; no row was zero-match or multi-match.
+  worker spawned this session.
+- Exact error or ambiguity, if any: none. All four §1 routes resolved to exactly
+  one advertised entry.
 
 ## Packet reviewer probe — PASS
 
-- Child ID: `e5082010-2749-4751-87fc-dcd67be92c85`; route
-  `claude/claude-opus-5-5` @ `medium`
-- Fresh token: `82807b2fb8b3420d`
-- Empty-evidence answer: "Acceptance needs positive, checkable proof that a
-  criterion holds. If there is no evidence, nothing has been measured, so the
-  criterion is unverified (CANNOT VERIFY / UNKNOWN), not passed. Passing it by
-  default would invent a result." Grounded by the child itself in
-  `docs/agent-workflow.md:278-280` and
-  `docs/reviews/review-record.schema.json:124`.
-- Command run by the child itself:
-  `git -C C:\Users\logic\Repos\my_xbox_game rev-parse HEAD`
-- Output: `371b06285c8d56d20f191af9a78c129bc1580948`
-- Output sha256 (child's own computation):
-  `2624fd0be03b5e3c509bf47ef5fdfc75e7176a1a0e50afccaea46e0191cb2e05`
-- **Independently reproduced by the Session** on the same command and tree: the
-  same hash `2624fd0b…2e05`. This is a reproduced measurement, not a brief.
-- Effort: the child reported `EFFORT_CONFIRMED: UNKNOWN` (it cannot read its own
-  effort). Effort is instead established by the Session's spawn at `medium`,
-  which is the §1 row, and by the advertised effort list for the single resolved
-  route.
-- Result: **PASS** (fresh token + reason + self-run read-only command with a
-  hash the Session reproduced).
-- Exact error or missing evidence: none. The probe child is discarded and was not
-  reused.
+- Child ID: `961cefb8-65e4-4e17-b491-a400a01b26a7`
+- Fresh token: `PKTREV-7c3e91a4`
+- Empty-evidence answer: cited §2.4 invariant 3 ("Failure stays failure") and
+  invariant 5 ("Absence needs coverage"), reading `docs/agent-workflow.md`
+  lines 619–673 directly.
+- Command and output hash: `git rev-parse HEAD` →
+  `c7bc15869160e27f7548a92094bd3f5f0bc8a31c7cda619b95a4ed46a966661c`
+- Effort/route: `claude/claude-opus-5-5` @ `medium` (from its `request/header`).
+- Result: **PASS**. Its independently computed hash matches the Session's own
+  positive control for the same command exactly (see "Positive control" below).
+- Exact error or missing evidence: none. The probe child is discarded.
 
-## Muse guardrail probe — PASS
+## Muse guardrail probe — PASS (with a recorded shell limitation)
 
-- Muse child ID: `bce6d52d-1dbc-42ab-a8e1-72a69cfd620e`; route `subagent_muse`
-  @ `max` (`muse-code` / Muse Spark 1.3)
-- Workspace: `C:\Users\logic\Repos\my_xbox_game` — the requesting session's cwd,
-  reported by the child from its own environment
-- Named fact read with Muse-native tools: `plan-jsrf-bare-minimum.md:56-57` —
-  `## CURRENT PACKET — none` (and the following line is blank)
-- Turn-1 marker: `MUSE-PKT7Q2X9K`
-- Turn 2 (same child, marker not repeated in the request): returned
-  `MARKER: MUSE-PKT7Q2X9K` and `CONTINUATION: OK`
-- Result: **PASS** (real DSH child, listed, correct workspace, named fact read,
-  second message reached the same child and used the turn-1-only marker)
-- Exact error or missing evidence: none. This child is retained for routine
-  packet preflight/post-execution guardrail checks during this top-level session.
+- Muse child ID: `284f6218-1859-4de2-b440-2fdd16472fa7`
+- Route/effort: `muse-code` / `muse-spark-1.3-contributor` @ `max` (from its
+  `request/header`)
+- Workspace: `C:\Users\logic\Repos\my_xbox_game` (session-scoped resolution;
+  `workspaceMode: session`)
+- Named fact read: `docs/jsrf-run-profiles.md:50` — the `RECOMP_GPU_ACK` row. Its
+  quote is byte-exact against the file.
+- Turn-2 marker: `MUSE-GUARDRAIL-PROBE-7F3A91C4`, returned verbatim by the same
+  child on continuation.
+- Result: **PASS** for the §0.5 requirements.
+- **Recorded limitation (owner-directed diagnosis, §0.6).** The Muse child can read
+  files with `muse.read_file` / `muse.search`, but every `muse.powershell` call is
+  refused with `tool denied: deny_unmatched: no policy rule allows this action`.
+  This is **not** a DSH restriction: the child's DSH record carries
+  `sandbox/mode danger-full-access` and `approval/policy never`, both
+  `source: delegation`, and the plugin hardcodes Muse's own
+  `approvalMode: 'denyUnmatched'` at session creation. Until that changes, Muse
+  cannot run `git diff` / `git show` for a guardrail check and must read the
+  working tree and any written artifact instead.
+- Exact error or missing evidence: none for §0.5.
 
 ## Persistent advisor probe — PASS
 
-- Child ID: `c548070d-9cc1-4340-b3b0-d56d88e2f0cc`; route
-  `claude/claude-opus-5-5`, provider `claude`, effort `xhigh`
-- Tool surface: `subagent` with `provider`/`model`/`reasoning_effort` selection
-  (a continuable DSH child path)
-- Continuability probe: the child appears in the continuable-agent listing, and a
-  later `send_message` reached **the same child**
-- Turn 1 reference; unique marker given: `MARKER: QV7-ottermandrel-4K19`
-- Named file and the fact deliberately omitted from the brief: the child read
-  `plan-jsrf-bare-minimum.md` §13 "Current state", lines 595-622, and reported
-  (a) the SEGA logo update VA `0x7E360` and (b) the fade done-flag reader
-  `0x24650` (which reads `+0xC0` of the subsystem-6 fade object). Neither value
-  was given in the brief.
-- Advisor's answer checked against the file by the Session: both values match the
-  plan text the child cited. **Confirmed.**
-- Turn 2 reference (same child, marker not repeated): returned
-  `MARKER: QV7-ottermandrel-4K19` and `CONTINUATION: OK`
-- Result: **PASS** (exact provider/model, listed effort, listing visibility,
-  continuation, first-turn file read with an omitted fact, second-turn marker)
-- Exact error or missing evidence: none. Retained for later rulings; it answered
-  one quick consult this session (recorded in
-  `docs/reviews/owner-sega-600-observations.md`).
+- Child ID: `f60b72c9-f3b7-4aa0-a36b-5787ea9ea12c`
+- Turn 1 reference; unique marker given: `ADVISOR-PROBE-4B2E77D0`
+- Named file and the fact deliberately omitted from the brief: read
+  `docs/jsrf-run-profiles.md` and reported the strict-run variable
+  (`RECOMP_GPU_ACK`, must be present as exact string `0`) from `:18`, corroborated
+  at `:50`. It additionally reported `plan-jsrf-bare-minimum.md:58` ("No packet is
+  promoted.") and `:68` (first packet `C1`), neither of which was in the brief.
+- Advisor's answer; checked against the file: both quoted lines verified
+  byte-exact against the files by the Session.
+- Turn 2 reference (same child, marker not repeated); returned marker:
+  `ADVISOR-PROBE-4B2E77D0`, plus `C1` recalled from turn 1.
+- Route/effort: `claude` / `claude-opus-5-5` @ `xhigh` (from its `request/header`).
+- Result: **PASS** — continuable, exact §1 route, listed effort, listing
+  visibility, and a continuation that reaches the same child.
+- Exact error or missing evidence: none. The Advisor self-reported that it could
+  not verify its own effort from inside the child; the Session confirmed `xhigh`
+  from harness metadata, as §1 requires.
 
-## Packet readiness — BLOCKED (no packet promoted)
+## Positive control — Session's own measurements
 
-- Frozen revision/hash matches `CURRENT PACKET`: N/A — `CURRENT PACKET — none`
+Run by the Session with `pwsh` from `C:\Users\logic\Repos\my_xbox_game`. SHA-256 is
+over stdout with CRLF normalized to LF and trailing newline(s) stripped, UTF-8
+encoded; an added exit-code line is **not** part of any hash.
+
+| # | Command | Bytes | SHA-256 |
+|---|---|---|---|
+| a | `git rev-parse HEAD` | 40 | `c7bc15869160e27f7548a92094bd3f5f0bc8a31c7cda619b95a4ed46a966661c` |
+| b | `git show --stat HEAD` | 2240 | `7c4a5b87e714ad274a7df41152518a3bb5ff70d62f8ee24d77713756ccbad216` |
+| c | `python -X utf8 scripts\check-agent-docs.py --check` | 98 | `5de425e5d160bcfbf36da1fbb966d7a070f8d52b483243151e6ba0e2cff50d37` |
+| d | `Get-Location` | 102 | `bf43c6335762965b7bffebef51f061b5fe230e768dd3e62da301287d08a9a1dc` |
+
+`check-agent-docs.py --check` exited 0 (`checker jsrf-agent-docs/3`; `AGENTS.md`
+20312 bytes, budget 65536; `no findings`).
+
+## Packet readiness — PASS / BLOCKED / UNKNOWN
+
+- Frozen revision/hash matches `CURRENT PACKET`: N/A — no packet promoted
 - Adequacy review record and verdict: N/A — no packet promoted
-- Deferred advisories (recorded, not acted on): none new this session
+- Deferred advisories (recorded, not acted on): none raised this session
 - Prerequisites / tooling checks:
   - just: just 1.58.0 (C:\Users\logic\AppData\Local\Microsoft\WinGet\Packages\Casey.Just_Microsoft.Winget.Source_8wekyb3d8bbwe\just.EXE)
   - pre-commit: pre-commit 4.6.2 (C:\Users\logic\AppData\Roaming\Python\Python313\Scripts\pre-commit.EXE)
@@ -148,16 +148,14 @@ inferred from a display name.
   - ttd: Microsoft (R) TTD 1.01.11 x64 (C:\Users\logic\AppData\Local\Microsoft\WindowsApps\ttd.EXE)
   - duckdb: 1.5.6 (not on PATH)
   - python: 3.13.2 (C:\Python313\python.exe)
-  - free space: 217.29 GB (above 15.0 GB floor)
-  - xemu: `C:\Users\logic\Downloads\xemu\xemu.exe`, configured assets resolved in
-    place and present (bootrom, flashrom, eeprom, hdd, dvd)
-- State/plan disagreements and how they were escalated: none. The plan's
-  `CURRENT PACKET — none` matches the observed tree.
-- Overall disposition and next action: **all required startup items PASS**, but
-  packet-governed game-behavior implementation is **BLOCKED** because no packet is
-  promoted. The work executed this session is explicit **owner-directed
-  non-packet discovery under §0.6** (records only, no fixes), and does not resume
-  the paused broader goal.
+  - free space: 214.07 GB (above 15.0 GB floor)
+- State/plan disagreements and how they were escalated: none. Both trees clean and
+  fast-forward after the pull.
+- Overall disposition and next action: **all required startup items PASS**. §0.5
+  Muse guardrail and §0.4 Advisor both PASS with recorded evidence; §0.3 Packet
+  reviewer PASS. No packet is promoted, so game-behavior implementation is
+  `BLOCKED` until one is promoted (§5). The session's work this turn is the
+  owner-directed §0.6 environment diagnosis recorded above and in the turn reply.
 
 Do not mark readiness PASS with a failed or unknown required item. A provider
 catalog entry is not a completed invocation. A new advisor answering the
