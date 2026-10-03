@@ -662,7 +662,8 @@ package. Each gets criteria in the same five-part form when it becomes next.
     `0x123E0` routes to `0x11070`, `0x112A0`, `0x114D0`, `0x11700` or `0x11930` depending on
     `app+0x40/+0x44/+0x48/+0x4C`, and on this object all five reach `0x24700` because its `+0x10`,
     `+0x1C`, `+0x28` and `+0x34` slots all point at the `0xAECC0` thunk (`mov eax,[ecx]; jmp
-    [eax+4]`); requiring the recorded `0x1108A` chain specifically would turn a real hit on another
+    [eax+4]`; the oracle's fade slots match byte for byte, and the logo's point at a bare `ret`);
+    requiring the recorded `0x1108A` chain specifically would turn a real hit on another
     path into a false "uncontrolled". `watch_report` suppresses unchanged values
     (`xbox_memory_layout.c:1567–1568`), so this is a **changed-value** watch, not a write log or an
     entry trace: a hit is decisive for the positive case (with `done = 0` and `alpha 0 ≠ target 1`,
