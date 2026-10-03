@@ -639,8 +639,9 @@ package. Each gets criteria in the same five-part form when it becomes next.
    the traversal's gate open (`app+0x40/+0x44/+0x48/+0x4C` all 0). What it does not establish is that
    *that* frame updated *this* object, and the reason is ordering: the walk is preorder and reaches
    the fade (child of `0x108FFA0`) **before** the logo (later sibling), and on the arming tick
-   `done` is still 1 — set either by the completion store at `0x2494A` or by the immediate-set path
-   at `0x24493`, which this record does not try to distinguish — so `0x24700` returns at
+   `done` is still 1 — set by the constructor (`0x246C1`), the completion store at `0x2494A` or the
+   immediate-set path at `0x24493`, which this record does not try to distinguish — so `0x24700`
+   returns at
    `0x24703` without writing `+0x98`; the logo then arms it further along the same walk at `0x7E4AF`
    → `0x24540`, which sets `done = 0` and the target and never writes `+0x98`. The frozen state is
    therefore **exactly what the arming frame leaves behind**, so that account is *compatible* with
@@ -667,8 +668,10 @@ package. Each gets criteria in the same five-part form when it becomes next.
    `0x3C088889` (1/120) in `20260930-225440-580-f3-alias-fix-strict`, not the constructor's 1/60
    (`0x3C888889`, `0x246CB`), so an arm ran after construction. That supports an arm-compatible
    overwrite, **not its caller**: exactly three direct sites push 1/120 before `0x24620` (`0x7E460`,
-   `0x7E4B9`, `0x7E762`), only the last two pair it with target 0, and `0x24540` has one direct
-   caller (`0x2463D`) with computed-pointer calls not excluded. `done = 1` in that dump is consistent
+   `0x7E4B9`, `0x7E762`), the **first and last** pair it with target 0 (`edi = 0` at both, from the
+   function's own `xor` and the constructor's `xor edi, edi`), the middle one pushes `0xFF000000`
+   (target 1.0), and `0x24540` has one direct caller (`0x2463D`) with computed-pointer calls not
+   excluded. `done = 1` in that dump is consistent
    with the completion store at `0x2494A` but not decisive — `0x24480` (via `0x24600`) also sets it,
    at `0x24493`, without touching `step` — and consult 4 withdrew the discriminator it had implied
    there: the endpoint fits a completed `0x24700` fade-in exactly as well as an immediate set.
