@@ -1704,8 +1704,13 @@ static int capture(DWORD fault_tid, const EXCEPTION_DEBUG_INFO *fault)
     snprintf(path, sizeof(path), "%s\\process.dmp", out_dir);
     file = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     memory_added = 0; extra_next = 0;
+    /* MiniDumpWithDataSegs adds every module's writable data, so the runtime's own
+     * globals -- the alias-entry hit counters, the executor and guest-meter counters
+     * -- can be read from the dump by symbol. Without it only the guest regions
+     * added through the callback exist, and a frozen host counter is unreadable. */
     ok = file != INVALID_HANDLE_VALUE && MiniDumpWriteDump(process, process_id, file,
-        MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules | MiniDumpWithProcessThreadData,
+        MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules | MiniDumpWithProcessThreadData
+            | MiniDumpWithDataSegs,
         fault ? &exception_info : NULL, NULL, &callback);
     fprintf(report, "DUMP ok=%d error=%lu guest_ram=%016llX+%lu threads=%u named_frames=%u\n",
         ok, ok ? 0 : GetLastError(), (unsigned long long)ram_base, ram_size, thread_count, named_frames);
