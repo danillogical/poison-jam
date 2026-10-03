@@ -470,7 +470,19 @@ Keep the D2 profile and ledger IDs of the latest run otherwise unchanged, with a
 | `0x244B8` — sets alpha from the argument (constructor/`0x24600` path) | inside `0x24480`, **before any push** | `0x2461D` ([recomp_0000.c:41101](src/recomp/gen/recomp_0000.c#L41101)) | — |
 | `0x24748` — the `1/120` add | inside `0x24700`, **after `push esi`** | saved `esi` = the node `0x15F0E60` | `0x1108A` ([recomp_0000.c:121](src/recomp/gen/recomp_0000.c#L121)) |
 
-So a step of `+1/120` carrying `raw[esp+4] = 0x1108A` is the traversal's update; a jump to 0 carrying `raw[esp+0] = 0x2461D` is the immediate setter. **Read those raw slot positions, not the filtered chain** — the filtered list prints code-looking words and can include stale values. A write through an alias view is still not trapped, which stays an open case.
+So a step of `+1/120` carrying a traversal return in `raw[esp+4]` is the traversal's update; a jump to 0 carrying `raw[esp+0] = 0x2461D` is the immediate setter. **Read those raw slots, not the filtered chain** — the filtered list prints code-looking words and can include stale values. A write through an alias view is still not trapped, which stays an open case.
+
+**The traversal return is not always `0x1108A` — all five routes have their own, and the table lists them.** The node's update is reached through a *different* vtable slot and a different return address depending on which mode flag routed the traversal (`0x123E0`'s priority chain), so requiring `0x1108A` alone would misread a genuine hit on another route. Each route's innermost return, verified in the lifted source:
+
+| Route (dispatch at `0x123E0`) | vtable slot | Innermost return |
+|---|---|---|
+| `app+0x40` → `0x114D0` | `+0x1C` | `0x114EA` ([recomp_0000.c:1037](src/recomp/gen/recomp_0000.c#L1037)) |
+| `app+0x44` → `0x112A0` | `+0x10` | `0x112BA` ([recomp_0000.c:579](src/recomp/gen/recomp_0000.c#L579)) |
+| `app+0x48` → `0x11700` | `+0x28` | `0x1171A` ([recomp_0000.c:1495](src/recomp/gen/recomp_0000.c#L1495)) |
+| `app+0x4C` → `0x11930` | `+0x34` | `0x1194A` ([recomp_0000.c:1953](src/recomp/gen/recomp_0000.c#L1953)) |
+| default → `0x11070` | `+0x04` | `0x1108A` ([recomp_0000.c:121](src/recomp/gen/recomp_0000.c#L121)) |
+
+The five route *calls* themselves return to `0x12431`, `0x12448`, `0x1245C`, `0x12470` and `0x124C3` respectively (all `jmp 0x124C3`), which appear further out in the raw frame. All five end at the same `0x24700` update, so **any** of the five innermost returns with a `1/120` step counts as the traversal updating this object.
 
 **Why this instrument and not the alternatives.** `RECOMP_WATCH` traps the page, single-steps the writer and prints the guest frame, so a hit is decisive about *whether and by whom* alpha was written. `RECOMP_WATCHDOG_SECS` is out: `run-jsrf.py:326` strips it and it ends the process with `_exit(3)`. `RECOMP_PEEK` only snapshots. `RECOMP_ICALL_FEEDBACK` would need a rebuild (`#ifdef`-gated), so it is not the smallest instrument for a no-rebuild run.
 
@@ -487,7 +499,7 @@ This control replaces two earlier proposals, and **both earlier forms were wrong
 
 | Outcome | Means | Does **not** mean |
 |---|---|---|
-| Alpha steps by `1/120` repeatedly with `raw[esp+4] = 0x1108A` after the arm | The traversal's update ran on this object and the value advanced — the fade is being driven. | Not that the fade is visible on screen, and not that the value survived. If alpha later returns to 0, a later write moved it down: either an **immediate set** (`0x24480` via `0x24600`; `raw[esp+0] = 0x2461D`) or a **re-arm** (`0x24540`) to a lower target, after which the *same* updater `0x24700` decrements. Which one it is has to be read from the raw slots, not assumed. |
+| Alpha steps by `1/120` repeatedly with a traversal return in `raw[esp+4]` after the arm (`0x1108A`, or `0x112BA`/`0x114EA`/`0x1171A`/`0x1194A` on a mode route) | The traversal's update ran on this object and the value advanced — the fade is being driven. | Not that the fade is visible on screen, and not that the value survived. If alpha later returns to 0, a later write moved it down: either an **immediate set** (`0x24480` via `0x24600`; `raw[esp+0] = 0x2461D`) or a **re-arm** (`0x24540`) to a lower target, after which the *same* updater `0x24700` decrements. Which one it is has to be read from the raw slots, not assumed. |
 | Alpha jumps to 0 with `raw[esp+0] = 0x2461D` | The **immediate-set** path ran, not the update — a different defect from "the update never runs". | Not that the update is fine elsewhere. |
 | No alpha change after the arm | The alpha dword was never reported changing after the arm. | Not that `0x24700` never ran: a run in which the FPU branch skipped the add, or in which the watch failed (protection lost, alias write), or in which the change fell outside the 150 s window, looks identical. Guaranteed guest value changes are not guaranteed observations. |
 | No alpha change at all, including the constructor | **UNCONTROLLED** — the control did not fire. | Not a proven wrong address: check the runtime's `WATCH: … not armed` line first. `UNCONTROLLED` is a verdict on the run, not a diagnosis. |

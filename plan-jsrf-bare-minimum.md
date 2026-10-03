@@ -695,7 +695,11 @@ package. Each gets criteria in the same five-part form when it becomes next.
     ([recomp_0000.c:41101](src/recomp/gen/recomp_0000.c#L41101)); `0x24748` (the `1/120` add) runs
     inside `0x24700` after `push esi`, so `raw[esp+0]` is the saved node `0x15F0E60` and
     `raw[esp+4] = 0x1108A` ([recomp_0000.c:121](src/recomp/gen/recomp_0000.c#L121)). Read those raw
-    slots, not the filtered chain, which prints code-looking words and can carry stale values.
+    slots, not the filtered chain, which prints code-looking words and can carry stale values. The
+    traversal return is **route-dependent** — `0x1108A` (default `0x11070`) or `0x112BA`/`0x114EA`/
+    `0x1171A`/`0x1194A` on the `+0x44`/`+0x40`/`+0x48`/`+0x4C` routes — so any of the five with a
+    `1/120` step counts as the traversal updating this object; requiring `0x1108A` alone would
+    misread a genuine hit on another route.
     **Positive control: the constructor's alpha `0 → 1.0` store at `0x244B8`**, reached from the logo
     constructor's `0x24600(0xFF000000)` at `0x7E752`–`0x7E757` (`raw[esp+0] = 0x2461D`, caller return
     `0x7E75C`). It is an **expected** control, not a guaranteed one: it is silent if alpha is already
