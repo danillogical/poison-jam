@@ -663,30 +663,36 @@ package. Each gets criteria in the same five-part form when it becomes next.
    at the arming frame" account is unsupported. An endpoint snapshot is **not** an interval history,
    so this does not show what the loop did between arming and capture. **No cause claimed.**
 10. **Awaiting owner approval of one bounded run (not executed).** One exploratory run, **no code
-    change and no rebuild**: `RECOMP_WATCH=0x15F0EF8` (the fade's alpha field, literal VA — the
-    `[[…]+…+…]` pointer form misparses under the real grammar and would arm on a readable address
-    nothing writes) plus `RECOMP_WATCH_RAW=1`, bound `--seconds 150` (a concrete cap, **not**
-    established as the smallest sufficient one), otherwise the D2 profile and ledger IDs unchanged,
-    fresh disposable save root.
-    Positive control required: `[WATCH]` lines must appear **before** the hold, or the run is
-    `UNCONTROLLED` and decides nothing. `UNCONTROLLED` is a verdict on the run, not a diagnosis: a
-    non-firing control is equally consistent with the arm failing (the runtime prints `WATCH: … not
-    armed` in that case), with the page losing protection, or with the phase-0 fade-in not writing
-    this field in that run. The control rests on the **phase-0 fade-in** alone — the phase-2 arm does
-    **not** write alpha. It accepts the update arriving through **any** of the five routes above,
-    because on this object all five reach `0x24700`; requiring the recorded `0x1108A` chain
-    specifically would turn a real hit on another route into a false "uncontrolled". `watch_report`
-    suppresses unchanged values (`xbox_memory_layout.c:1567–1568`), so this is a **changed-value**
-    watch, not a write log or an entry trace: a hit is decisive for the positive case once the
-    printed chain is validated against `recomp_0000.c` and the logo's phase/hold is read at that
-    moment (the raw stack words are leads, not an unwind), but **silence is not decisive** — "no
-    lines after the hold" means only that no change was *reported* at that address, which does not
-    separate "no route reached the node", "`done` stayed 1", "stores of the same value" or "the page
-    lost protection". Separating those needs a per-invocation observation of `0x24700` or of the
-    traversal, which this build cannot produce: `config/trace-functions.json` hooks only 18 unrelated
-    VAs and the walk is not among them, so it would require a rebuild and is outside this proposal.
-    `RECOMP_WATCHDOG_SECS` is stripped by the runner and `RECOMP_PEEK` cannot separate the cases.
-    Details, artifacts and hashes: `docs/reviews/owner-sega-600-observations.md`,
+    change and no rebuild**: `RECOMP_WATCH=0x15F0F20` — the fade's **`done` flag** (`0x15F0E60 +
+    0xC0`), literal VA, because the `[[…]+…+…]` pointer form misparses under the real grammar and
+    would arm on a readable address nothing writes — plus `RECOMP_WATCH_RAW=1`, bound
+    `--seconds 150` (a concrete cap, **not** established as the smallest sufficient one), otherwise
+    the D2 profile and ledger IDs unchanged, fresh disposable save root.
+    **The target is `done`, not alpha, because the first control proposal was defective**: the
+    phase-0 fade-in never runs in the port — phase 0's handler `0x7E3BC` advances the phase as soon
+    as `0x24650` reports `done != 0`, the constructor sets `done = 1`, and measured phase 0 lasted
+    only 11 activations (frames 72 − hold 61) where a 1/120 fade-in needs ~120 — so an alpha watch
+    would have gone silent for a reason unrelated to the question (quick Advisor consult 3, which
+    also retracted its own consult-2 "walk stopped" ruling on the counter evidence).
+    Control and positive case on that one address, both guaranteed value changes: the arm's `1 → 0`
+    at `0x24553` (reached via `0x24620`/`0x24540`) proves the fade **was armed**; the completion's
+    `0 → 1` at `0x2494A`, **inside `0x24700`**, proves the update **ran to completion on this
+    object**. `done` stuck at `0` after arming is the discriminating outcome. `done 1 → 0` alone does
+    **not** prove the *logo* armed it — 57 call sites reach `0x24620` and 7 reach `0x24600`, all
+    sharing subsystem slot 6 — and the printed chain is a **lead** to be validated against
+    `recomp_0000.c`, with the logo's phase/hold read at that moment, not assumed.
+    `RECOMP_WATCH` takes a single target and `watch_report` suppresses unchanged values
+    (`xbox_memory_layout.c:1567–1568`), so this is a **changed-value** watch, not a write log or an
+    entry trace: hits are decisive for the transitions above, but **silence is not** — the remaining
+    unseparated cases are "never invoked on this object", "invoked but the translated FPU branch
+    skipped the add", and "the watch failed". A missing arm is `UNCONTROLLED`, which is a verdict on
+    the run, not a diagnosis: check for the runtime's `WATCH: … not armed` line first.
+    **Stronger no-rebuild alternative, recorded not adopted:** `just ttd-record` runs on the current
+    build and shows every `sub_00024700` entry with its `ECX`, `[esi+0xC0]` and the branch taken,
+    separating all three cases directly; it needs an **elevated** process, a large trace (recipe caps
+    at `--max-file-mb 20480`) and a strict-profile run, so it is the escalation if the watch is
+    ambiguous. `RECOMP_WATCHDOG_SECS` is stripped by the runner and `RECOMP_PEEK` cannot separate the
+    cases. Details, artifacts and hashes: `docs/reviews/owner-sega-600-observations.md`,
     "Owner-directed discovery: what should update the armed fade (2026-10-03)".
 
 ### Fast path status
