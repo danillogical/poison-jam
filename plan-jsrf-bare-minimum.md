@@ -663,6 +663,15 @@ package. Each gets criteria in the same five-part form when it becomes next.
    **different totals** of activations while ending in the same terminal state, and a "loop stopped
    at the arming frame" account is unsupported. An endpoint snapshot is **not** an interval history,
    so this does not show what the loop did between arming and capture. **No cause claimed.**
+   **Lead, recorded with its alternative:** the fade's `step` field (`+0xB8`) reads the **arm value**
+   `0x3C088889` (1/120) in `20260930-225440-580-f3-alias-fix-strict`, not the constructor's 1/60
+   (`0x3C888889`, `0x246CB`), so an arm ran after construction. That supports an arm-compatible
+   overwrite, **not its caller**: exactly three direct sites push 1/120 before `0x24620` (`0x7E460`,
+   `0x7E4B9`, `0x7E762`), only the last two pair it with target 0, and `0x24540` has one direct
+   caller (`0x2463D`) with computed-pointer calls not excluded. `done = 1` in that dump is consistent
+   with the completion store at `0x2494A` but not decisive — `0x24480` (via `0x24600`) also sets it,
+   at `0x24493`, without touching `step` — and consult 4 withdrew the discriminator it had implied
+   there: the endpoint fits a completed `0x24700` fade-in exactly as well as an immediate set.
 10. **Awaiting owner approval of one bounded run (not executed).** One exploratory run, **no code
     change and no rebuild**: `RECOMP_WATCH=0x15F0EF8` — the fade's **alpha** field, literal VA,
     because the `[[…]+…+…]` pointer form misparses under the real grammar and would arm on a readable
@@ -670,10 +679,10 @@ package. Each gets criteria in the same five-part form when it becomes next.
     **not** established as the smallest sufficient one), otherwise the D2 profile and ledger IDs
     unchanged, fresh disposable save root.
     **Alpha, not the `done` flag** (quick Advisor consult 4 reversed the previous draft's choice):
-    `done` carries **no per-step history** — the constructor sets it to 1 (`0x246C1`), the arm clears
-    it (`0x24553`), and **both** the completion store (`0x2494A`) and the immediate setter
-    (`0x24493`) set it back to 1 — so its value cannot separate alpha **stepping** by `1/120` from
-    `0x24700` against alpha **jumping** to 0 through the immediate-set path at `0x24480`.
+    **alpha is preferred because `done` carries no per-step history** — `done` is a flag set by
+    `0x246C1` (constructor), `0x24493` (immediate set) and `0x2494A` (completion) and cleared by
+    `0x24553` (arm), so it cannot separate alpha **stepping** by `1/120` from `0x24700` against alpha
+    **jumping** to 0 through the immediate-set path at `0x24480`; alpha records each `0x24700` step.
     Attribution comes from the raw frame (`raw[esp+N]`, `xbox_memory_layout.c:1593–1601`), whose two
     candidate writers have **disjoint** innermost slots: `0x244B8` (alpha set from the argument)
     runs inside `0x24480` before any push, so `raw[esp+0] = 0x2461D`
@@ -683,14 +692,18 @@ package. Each gets criteria in the same five-part form when it becomes next.
     slots, not the filtered chain, which prints code-looking words and can carry stale values.
     **Positive control: the constructor's alpha `0 → 1.0` store at `0x244B8`**, reached from the logo
     constructor's `0x24600(0xFF000000)` at `0x7E752`–`0x7E757` (`raw[esp+0] = 0x2461D`, caller return
-    `0x7E75C`). Two earlier control proposals are withdrawn as unreliable or insufficient: the
-    phase-0 fade-in (`72 − 61 = 11` activations lie outside the captured phase-1 hold, and the fade is
-    unarmed at capture), and the `done` flag (cannot separate stepping from a jump).
+    `0x7E75C`). It is an **expected** control, not a guaranteed one: it is silent if alpha is already
+    `1.0` when the store runs. Two earlier control proposals are withdrawn as unreliable or
+    insufficient: the phase-0 fade-in (the fade is unarmed at capture, and `72 − 61 = 11` counts only
+    activations outside the captured phase-1 hold — it does not measure phase 0 or exclude a completed
+    or partial fade), and the `done` flag (cannot separate stepping from a jump).
     `watch_report` suppresses unchanged values (`xbox_memory_layout.c:1567–1568`), so this is a
     **changed-value** watch, not a write log: a `1/120` step with `raw[esp+4] = 0x1108A` proves the
     update ran, and a jump to 0 with `raw[esp+0] = 0x2461D` proves the setter ran — but **silence is
     not decisive**, because a skipped FPU branch, a failed watch (protection lost, alias write) and a
-    change falling outside the 150 s window all look identical.
+    change falling outside the 150 s window all look identical. If alpha rises and later returns to 0,
+    read the raw slots: an immediate set (`0x2461D`) and a **re-arm** to a lower target — after which
+    the *same* updater decrements — are both consistent with the value alone.
     **Stronger no-rebuild alternative, recorded not adopted:** `just ttd-record` runs on the current
     build and shows every `sub_00024700` entry with its `ECX`, `[esi+0xC0]` and the branch taken; it
     needs an **elevated** process, a large trace (recipe caps at `--max-file-mb 20480`) and a
