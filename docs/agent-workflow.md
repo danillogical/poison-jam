@@ -111,15 +111,20 @@ checked on first use.
 
 One harness is supported: the DeepSeek Harness (DSH). Use only these assignments.
 
-| Role | Route @ effort (DSH) |
-|---|---|
-| **Session / orchestrator** | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
-| **Worker subagents** | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
-| **Planner** | `claude/claude-opus-5-5` @ `high` (Claude Opus 5.5; `route: LIVE_RESOLVE`, fresh child per packet) |
-| **Persistent Advisor** | `claude/claude-opus-5-5` @ `xhigh` (Claude Opus 5.5; `route: CONTINUABLE_PINNED`, session-continuable child) |
-| **Muse decision guardrail** | `subagent_muse` @ `max` (`muse-code` / Muse Spark 1.3; one session-continuable child) |
-| **Packet reviewer** | `claude/claude-opus-5-5` @ `medium` (Claude Opus 5.5; `route: LIVE_RESOLVE`, fresh child per packet review) |
-| **Turn reviewer** | `codex/gpt-6.1-sol` @ `high` (GPT-6.1 Sol; `route: LIVE_RESOLVE`, fresh child per turn-end review) |
+| Role | Spawn parameters | Route @ effort (DSH) |
+|---|---|---|
+| **Session / orchestrator** | not spawned; verify from harness metadata | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
+| **Worker subagents** | `provider: workbuddy-ai`, `model: deepseek-v4.1-flash`, `reasoning_effort: max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
+| **Planner** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: high` | `claude/claude-opus-5-5` @ `high` (Claude Opus 5.5; `route: LIVE_RESOLVE`, fresh child per packet) |
+| **Persistent Advisor** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: xhigh` | `claude/claude-opus-5-5` @ `xhigh` (Claude Opus 5.5; `route: CONTINUABLE_PINNED`, session-continuable child) |
+| **Muse decision guardrail** | the `subagent_muse` tool, not `subagent` | `subagent_muse` @ `max` (`muse-code` / Muse Spark 1.3; one session-continuable child) |
+| **Packet reviewer** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: medium` | `claude/claude-opus-5-5` @ `medium` (Claude Opus 5.5; `route: LIVE_RESOLVE`, fresh child per packet review) |
+| **Turn reviewer** | `provider: codex`, `model: gpt-6.1-sol`, `reasoning_effort: high` | `codex/gpt-6.1-sol` @ `high` (GPT-6.1 Sol; `route: LIVE_RESOLVE`, fresh child per turn-end review) |
+
+**Spawn with all three parameters.** Pass `provider`, `model` and `reasoning_effort`
+exactly as the row gives them. DSH rejects a `model` without its `provider` ("child LLM
+`provider` and `model` must be supplied together"), and a model name alone does not
+select a route.
 
 `codex` here is the DSH **provider** name that serves GPT-6.1 Sol, not a harness.
 `subagent_muse` is the current DSH-native continuable Muse child route backed by
