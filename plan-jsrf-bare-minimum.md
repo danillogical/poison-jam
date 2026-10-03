@@ -598,11 +598,13 @@ package. Each gets criteria in the same five-part form when it becomes next.
 
 1. **The SEGA card is held by an unfinished fade.** Located with the xemu oracle (T3): the logo
    update `0x7E360` reaches phase 2 and waits for `0x24650() != 0`, the done flag at `+0xC0` of the
-   subsystem-6 fade object. On hardware the card holds for more than 120 update frames, then fades at
-   1/120 per update and moves on to the Smilebit logo. In the port the logo sits in phase 2 with its
-   hold counter at 121 and the fade at alpha 0, target 1, done 0. The fade update `0x24700` is
-   translated correctly; the leading explanation is that the armed fade instance is never updated,
-   cause not yet established. Evidence: `docs/reviews/owner-sega-600-observations.md`.
+   subsystem-6 fade object. In the xemu oracle the card holds for more than 120 update frames, then
+   fades at 1/120 per update and moves on to the Smilebit logo. (xemu is an emulator, not real
+   hardware: these are oracle observations, and they are not a fidelity claim about retail Xbox.) In
+   the port the logo sits in phase 2 with its hold counter at 121 and the fade at alpha 0, target 1,
+   done 0. The fade update `0x24700` is translated correctly; the leading explanation is that the
+   armed fade instance is never updated, cause not yet established. Evidence:
+   `docs/reviews/owner-sega-600-observations.md`.
 2. **Ruled out** by 600 s runs and archive reads: a slow logo (static image for 400+ s after the cache
    marker), file I/O or a stalled movie (no file opened or read after the marker), the do-nothing
    kernel bridges (none first called after the marker), and folded aliases (all 134 alias counters
