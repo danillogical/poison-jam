@@ -630,7 +630,9 @@ package. Each gets criteria in the same five-part form when it becomes next.
 9. **The archived port capture cannot decide the port half, structurally.** The armed fade
    `0x15F0E60` **is** in the walked list (`0x108FF40 → 0x1340060 → 0x108FFA0 → 0x15F0E60 → … →
    0x143EE60`), its `+4` flags `0x00010003` are non-negative, `app+0xB0` (the subsystem-6 slot
-   `0x24650` reads) is that same object, and the tree matches the oracle node for node. But the
+   `0x24650` reads) is that same object, and the tree corresponds to the oracle's node for node
+   over that span (one oracle-only sibling after the logo, `0x52EE60`, is a later-scene object with
+   negative flags in the successor snapshots and is not on the fade's path). But the
    `[RECOVERED] 0x00024700` line is **first-call-only** (`recovered.c:15365`, printed ~136,000 log
    lines before the cache marker), and the walker's sole indirect call `0x11087` is lifted to
    `RECOMP_ICALL_SAFE_AT`, which publishes **no** guest event by construction. The earlier "no
