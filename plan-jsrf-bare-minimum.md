@@ -670,8 +670,10 @@ package. Each gets criteria in the same five-part form when it becomes next.
     **not** established as the smallest sufficient one), otherwise the D2 profile and ledger IDs
     unchanged, fresh disposable save root.
     **Alpha, not the `done` flag** (quick Advisor consult 4 reversed the previous draft's choice):
-    `done` changes only at arm and completion, so it cannot separate alpha **stepping** by `1/120`
-    from `0x24700` against alpha **jumping** to 0 through the immediate-set path at `0x24480`.
+    `done` carries **no per-step history** — the constructor sets it to 1 (`0x246C1`), the arm clears
+    it (`0x24553`), and **both** the completion store (`0x2494A`) and the immediate setter
+    (`0x24493`) set it back to 1 — so its value cannot separate alpha **stepping** by `1/120` from
+    `0x24700` against alpha **jumping** to 0 through the immediate-set path at `0x24480`.
     Attribution comes from the raw frame (`raw[esp+N]`, `xbox_memory_layout.c:1593–1601`), whose two
     candidate writers have **disjoint** innermost slots: `0x244B8` (alpha set from the argument)
     runs inside `0x24480` before any push, so `raw[esp+0] = 0x2461D`
