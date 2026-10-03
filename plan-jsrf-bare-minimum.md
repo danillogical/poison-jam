@@ -624,8 +624,11 @@ package. Each gets criteria in the same five-part form when it becomes next.
    phase-0 chain**: all 10 phase-2 xemu hits at `0x24700` carry the identical return chain
    `1108A → 11096 → 11096 → 124C3 → 13B24 → 13F9E → 6FA41` and the identical fade object
    (`ECX 0x00600E60`, vtable `0x1C4D10`, flags `0x00010003`). The first phase-2 hit *is* the port's
-   stuck state (alpha 0, target 1, done 0, logo phase 2, hold 121) and the next is alpha `1/120`, so
-   hardware updates the fade on the frame phase 2 is entered. Within the sampled interval (the
+   stuck state (alpha 0, target 1, done 0, logo phase 2, hold 121) and the next sampled entry is
+   alpha `1/120` — so the updater is **entered in phase 2** and alpha advances between those sampled
+   entries. The sample does **not** show the update running on the phase-transition activation itself
+   (the first entry is already phase 2 / done 0) and does **not** show every later frame updating:
+   ten breakpoint entries are not a contiguous frame history. Within the sampled interval (the
    phase-0 fade-in plus 10 phase-2 hits, budget-reached) **no second producer and no second fade
    object were observed**; the sample does not exclude one that was never hit.
 9. **The archived port capture answers reachability but cannot decide the object-specific half.** The
