@@ -56,8 +56,10 @@ is harness metadata rather than a self-report.
   route; returned route identity `claude` / `claude-opus-5-5` @ `medium` —
   **PASS** (`route: LIVE_RESOLVE`, fresh child per packet review).
 - Turn reviewer: `codex/gpt-6.1-sol` @ `high`. Exactly one advertised route
-  (`list_subagent_models codex` → `codex/gpt-6.1-sol`) — resolved, but **not yet
-  spawned**; verified on first use per §1.
+  (`list_subagent_models codex` → `codex/gpt-6.1-sol`); child
+  `4bfc8a87-a3c0-496c-b8f7-af2471eae6e4` spawned for this turn's review, route and
+  effort verified from its delegation descriptor; continued through its re-reviews
+  per §4.5.
 - Workers: `workbuddy-ai/deepseek-v4.1-flash` @ `max` (the §1 Worker row). No
   worker spawned this session.
 - Exact error or ambiguity, if any: none. All four §1 routes resolved to exactly
@@ -102,10 +104,10 @@ is harness metadata rather than a self-report.
   plugin code explicitly sets `approvalMode: 'denyUnmatched'`
   (`src/muse/sdk-adapter.ts:305`); the denial token `deny_unmatched` is that same mode
   name in snake_case; the child's DSH record carries `sandbox/mode danger-full-access`
-  and `approval/policy never`, both `source: delegation`; and `muse.read_file`
-  succeeded in the same child. Its README says Muse's native tools "are NOT mediated
-  by DSH's tool registry" and that DSH-side policies "do not constrain what Muse
-  itself can do". Uncertain: whether `muse.powershell` was invoked at all.
+  and `approval/policy never`, both `source: delegation`; and the child returned a
+  file quote matching the repository. Its README says Muse's native tools "are NOT
+  mediated by DSH's tool registry" and that DSH-side policies "do not constrain what
+  Muse itself can do". Uncertain: whether `muse.powershell` was invoked at all.
   The child's DSH transcript records no `tool/call` or `tool/result` events, but
   that absence is **not** cited as evidence either way: the plugin README states
   Muse tools "never appear as DSH tool calls, tool-role messages, or tool events",
@@ -162,35 +164,37 @@ changed measurement. The four hashes above reproduce at `ab85bb9`.
 Advisor child `f60b72c9-f3b7-4aa0-a36b-5787ea9ea12c`, route
 `claude/claude-opus-5-5` @ `xhigh` (from its `request/header`), continuability
 verified this session. Consulted under §4.2 after the Turn reviewer's `CONTINUE`.
-Verbatim ruling text is in the session's turn record; the operative content:
+Per §3.3 the ruling text is recorded **verbatim** below; the Session's paraphrase
+follows it and cites this block.
 
-- **Q1 — rejecting layer.** May be reported only as **inferred**: "most likely Muse
-  Code's own approval enforcement", never observed or established. The zero DSH
-  `tool/call` events must **not** be cited either way, because the plugin README
-  states Muse tools never appear as DSH tool events, so that absence is expected by
-  design. Reversed by: a Muse-side record of that session showing a `powershell` tool
-  call with a typed denial (upgrades to observed), or showing no call at all (the
-  denial was confabulated and the attribution must be withdrawn).
-- **Q2 — configuration change.** Strongest admissible claim: "the plugin hardcodes
-  `approvalMode` (`src/muse/sdk-adapter.ts:305`) and its `Config` schema
-  (`src/config.ts:206–261`) has no approval key, so no plugin *configuration* setting
-  can change the mode a session starts in" — **observed, for this checkout only**.
-  "The smallest sufficient change is a plugin code change" is **not admissible** and
-  stays unestablished: necessity is not shown (the denial names a missing *policy
-  rule*, and the mode is select-never-create, so a host-side allow rule is not ruled
-  out; one rejected key in one plane rules out only that key), and sufficiency and
-  minimality are not shown (the other three modes are untested; `allowAll` would also
-  permit writes, not only reads). The "no profile-selection field/method" finding
-  holds only for the schema version read this session. Reversed by: host docs/schema
-  showing how rules are configured plus a live test where a read-only allow rule
-  returns shell output; or a full list of host config planes with no rule surface plus
-  a patched-plugin live test returning shell output.
+### Verbatim ruling text (Advisor response, 2026-10-03)
+
+> Q1 RULING: You may report it only as INFERRED: "most likely Muse Code's own approval enforcement". Do not call it observed or established. The zero DSH tool/call events must not be cited either way: README.md:206-209 says Muse tools never appear as DSH tool events, so that absence is expected by design and is not evidence. Your existing wording at startup-current.md:103-111 is correctly labelled; keep it.
+> Q1 BASIS: observed: sdk-adapter.ts:305 passes `denyUnmatched`, the denial token `deny_unmatched` is that same mode name in snake_case, the DSH record shows approval never / danger-full-access, and muse.read_file succeeded in the same child. inferred: that the Muse runtime, not the model, produced the denial text, because only the child's own reply carries it. uncertain: whether powershell was invoked at all.
+> Q1 REVERSED BY: a Muse-side record of that session (host session log or turn items) showing a powershell tool call with a typed denial upgrades this to observed. A Muse-side record showing no call at all means the denial was confabulated, and the attribution must be withdrawn.
+> Q2 RULING: The strongest claim you may make is: "the plugin hardcodes approvalMode (sdk-adapter.ts:305) and its Config schema (config.ts:206-261) has no approval key, so no plugin *configuration* setting can change the mode a session starts in". That is observed, for this checkout only. "The smallest sufficient change is a plugin code change" is NOT admissible and must stay unestablished. (a) Necessity is not shown. The denial names a missing *policy rule*, and muse-sdk.md:480 says the approval mode is "Select, never create — the value names a mode the host's configuration already defines". So a host-side allow rule under denyUnmatched has not been ruled out, and one rejected key (`settings.default_profile`) in one plane rules out nothing beyond that key. (b) Sufficiency and minimality are not shown. The closed union offers only allowAll (all shell and writes, not read-only), onRequest (prompts that nobody answers in a non-interactive run) and promptUnmatched, and none of them has been tested. M1-03:313-314 also records shell as never probed.
+> Q2 BASIS: observed: the hardcoded value, the schema without an approval key, and the closed four-member union. The "no profile-selection field" negative counts as observed only for the schema version or fingerprint you read; state that scope when you report it. inferred: that a host-side rule layer exists, from the denial wording and from select-never-create. uncertain: whether any host config surface admits a per-tool or per-command allow rule.
+> Q2 REVERSED BY: (1) Muse host docs or schema that list how rules are configured, plus a live test where adding a read-only powershell allow rule returns shell output, would make the answer a host config change, not code. (2) A full list of host config planes showing no rule surface, plus a live test with a patched plugin that returns shell output, would establish that a code change is both necessary and sufficient. Minimality would still need the narrowest mode that passes.
+
+The Advisor also read `docs/recon/muse-sdk.md:480–500` and
+`packets/M1-03-dsh-preset-smoke.md:307–314` in the plugin repository, and named its
+rejecting-layer wording "most likely Muse Code's own approval enforcement".
+
+### Session paraphrase (cites the block above)
+
+- **Q1 — rejecting layer.** Only **inferred**: most likely Muse Code's own approval
+  enforcement. The zero DSH `tool/call` events must **not** be cited either way.
+- **Q2 — configuration change.** Strongest admissible claim: the plugin hardcodes
+  `approvalMode` and its `Config` schema has no approval key, so no plugin
+  *configuration* setting can change the mode a session starts in — observed, for this
+  checkout only. "The smallest sufficient change is a plugin code change" is **not
+  admissible** and stays unestablished.
 - **BASIS:** observed — the hardcoded value, the schema without an approval key, the
-  closed four-member mode union, and `muse.read_file` succeeding in the same child.
-  inferred — that the Muse runtime rather than the model produced the denial text, and
-  that a host-side rule layer exists. uncertain — whether `muse.powershell` was
-  invoked at all, and whether any host config surface admits a per-tool or per-command
-  allow rule.
+  closed four-member mode union, and the child returning a file quote matching the
+  repository. inferred — that the Muse runtime rather than the model produced the
+  denial text, and that a host-side rule layer exists. uncertain — whether
+  `muse.powershell` was invoked at all, and whether any host config surface admits a
+  per-tool or per-command allow rule.
 
 ## Push record
 
@@ -216,18 +220,36 @@ own push tuple in the commit that carries them.
 - RESULT: success (`abb854a..dc27639`, fast-forward; outgoing path list is
   `docs/reviews/startup-current.md` only; pre-commit passed).
 
+- PUSHED_TO: `origin` (review-outcome record commit)
+- BRANCH: `master`
+- COMMIT: `4fe3ab1b01754c4ccf4d139045f5db1bb24024ff`
+- REMOTE_URL: `https://github.com/danillogical/poison-jam.git`
+- RESULT: success (`dc27639..4fe3ab1`, fast-forward; outgoing path list is
+  `docs/reviews/startup-current.md` only; pre-commit passed).
+
 Turn-end review record for this turn (not a packet acceptance):
 
 - First review: `TURN_END: CONTINUE` — four items: missing substantive Advisor
   consult, missing Muse post-check, missing push tuple, and a **freeze-first
   violation** (the Session kept investigating after spawning the reviewer, which
   §4.5 makes void). The first review is recorded as void on that ground.
-- Repairs applied: Advisor consult obtained and recorded above; Muse chore
+- Repairs applied: Advisor consult obtained and recorded verbatim above; Muse chore
   post-check obtained (`MUSE_POST: CLEAR`, `BLOCKING: NONE`, `ANTI_VACUITY: NONE`,
   `INTEGRATION: NONE`); push tuple added; overstated claims narrowed.
-- Re-review: the same Turn reviewer child (`4bfc8a87-a3c0-496c-b8f7-af2471eae6e4`,
-  `codex/gpt-6.1-sol` @ `high`) is continued with this revision's diff and its open
-  items, per §4.5 re-review rules.
+- Re-review 1: `TURN_END: CONTINUE` on three items — no corrected frozen owner reply
+  was supplied (the originally frozen draft was unchanged and still carried the
+  defects); the third push tuple was missing; and the Advisor ruling was paraphrased
+  rather than recorded verbatim (§3.3). It also corrected two receipt phrases that
+  still asserted successful `muse.read_file` invocation, and one stale startup-status
+  line as a non-blocking follow-up.
+- Repairs applied for re-review 2: the corrected owner reply is
+  `C:\Users\logic\AppData\Local\Temp\jsrf-turn-reply-corrected-2026-10-03.md`, which
+  supersedes `jsrf-turn-draft-2026-10-03.md` (now void); the Advisor's complete ruling
+  is recorded verbatim above; the third push tuple is recorded; the two invocation
+  phrases and the stale Turn-reviewer line are corrected.
+- Re-review 2: the same Turn reviewer child (`4bfc8a87-a3c0-496c-b8f7-af2471eae6e4`,
+  `codex/gpt-6.1-sol` @ `high`) is continued with the corrected reply and this
+  revision's diff, per §4.5 re-review rules.
 
 ## Packet readiness — PASS / BLOCKED / UNKNOWN
 
