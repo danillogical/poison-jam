@@ -45,13 +45,40 @@ MAP_TEXT = f''' jsrf_recomp
 '''
 
 
-def build_dump(path: Path, with_hits: bool = True) -> None:
+def build_image(path: Path) -> None:
+    """A minimal PE32+ image: .rdata (read-only) holds the entry count and the map,
+    .data (writable) holds a stale copy of the counters."""
+    tables = struct.pack('<I', len(PAIRS)).ljust(0x10, b'\0') + b''.join(
+        struct.pack('<II', *pair) for pair in PAIRS)
+    stale = b''.join(struct.pack('<Q', 99) for _ in HITS)
+    pe, optional = 0x40, 240
+    table_at = pe + 24 + optional
+    rdata_raw, data_raw = 0x400, 0x600
+    image = bytearray(0x800)
+    image[0:2] = b'MZ'
+    struct.pack_into('<I', image, 0x3C, pe)
+    image[pe:pe + 4] = b'PE\0\0'
+    struct.pack_into('<HHIIIHH', image, pe + 4, 0x8664, 2, 0, 0, 0, optional, 0x22)
+    struct.pack_into('<H', image, pe + 24, 0x20B)
+    struct.pack_into('<Q', image, pe + 24 + 24, PREFERRED)
+    for i, (name, rva, raw, data, flags) in enumerate((
+            (b'.rdata', ENTRIES_AT - PREFERRED, rdata_raw, tables, 0x40000040),
+            (b'.data', HITS_AT - PREFERRED, data_raw, stale, 0xC0000040))):
+        header = table_at + 40 * i
+        image[header:header + 8] = name.ljust(8, b'\0')
+        struct.pack_into('<IIII', image, header + 8, 0x100, rva, 0x100, raw)
+        struct.pack_into('<I', image, header + 36, flags)
+        image[raw:raw + len(data)] = data
+    path.write_bytes(bytes(image))
+
+
+def build_dump(path: Path, with_hits: bool = True, with_tables: bool = True) -> None:
     """MDMP with a ModuleListStream (4) and a Memory64ListStream (9)."""
     name = 'C:\\build\\Release\\jsrf_recomp.exe'.encode('utf-16-le')
     first = struct.pack('<I', len(PAIRS)).ljust(0x10, b'\0') + b''.join(
         struct.pack('<II', *pair) for pair in PAIRS)
     second = b''.join(struct.pack('<Q', h) for h in HITS)
-    ranges = [(BASE + (ENTRIES_AT - PREFERRED), first)]
+    ranges = [(BASE + (ENTRIES_AT - PREFERRED), first)] if with_tables else []
     if with_hits:
         ranges.append((BASE + (HITS_AT - PREFERRED), second))
 
@@ -75,13 +102,15 @@ def build_dump(path: Path, with_hits: bool = True) -> None:
 
 
 class Scratch:
-    def __init__(self, with_hits: bool = True):
-        self.with_hits = with_hits
+    def __init__(self, with_hits: bool = True, with_tables: bool = True, image: bool = False):
+        self.with_hits, self.with_tables, self.image = with_hits, with_tables, image
 
     def __enter__(self) -> Path:
         self.tmp = tempfile.TemporaryDirectory()
         run = Path(self.tmp.name)
-        build_dump(run / 'process.dmp', self.with_hits)
+        build_dump(run / 'process.dmp', self.with_hits, self.with_tables)
+        if self.image:
+            build_image(run / 'jsrf_recomp.exe')
         (run / 'stacks.txt').write_text('DUMP ok=1 guest_ram=0000000200000000+4096\n')
         (run / 'jsrf_recomp.map').write_text(MAP_TEXT)
         return run
@@ -114,6 +143,31 @@ class HostSymbolTests(unittest.TestCase):
             self.assertIn('alias 0x0014FEF0 -> owner 0x00150231  calls 5', result.stdout)
             self.assertIn('alias 0x00024700 -> owner 0x000246E0  calls 2', result.stdout)
             self.assertNotIn('0x00037550', result.stdout)
+
+    def test_read_only_tables_come_from_the_archived_image(self) -> None:
+        """The real layout: const tables are not in the dump, counters are."""
+        with Scratch(with_tables=False, image=True) as run:
+            result = subprocess.run([sys.executable, '-X', 'utf8', str(SCRIPT), str(run),
+                                     '--alias-hits'], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('2 alias entries called', result.stdout)
+            self.assertIn('alias 0x0014FEF0 -> owner 0x00150231  calls 5', result.stdout)
+
+    def test_a_writable_counter_is_never_read_from_the_image(self) -> None:
+        """The image's .data holds initial values (99 here), not the frozen state."""
+        with Scratch(with_hits=False, image=True) as run:
+            result = subprocess.run([sys.executable, '-X', 'utf8', str(SCRIPT), str(run),
+                                     '--alias-hits'], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertNotIn('calls 99', result.stdout)
+            self.assertIn('absent from this dump', result.stderr)
+            # Read directly, with the image offered: the writable section is refused.
+            direct = subprocess.run([sys.executable, '-X', 'utf8', str(SCRIPT), str(run),
+                                     'g_recomp_alias_icall_hits', '--length', '8', '--as', 'u64'],
+                                    capture_output=True, text=True)
+            self.assertEqual(direct.returncode, 1, direct.stdout + direct.stderr)
+            self.assertIn('writable section', direct.stderr)
+            self.assertNotIn('99', direct.stdout)
 
     def test_an_uncaptured_counter_is_absent_not_zero(self) -> None:
         with Scratch(with_hits=False) as run:

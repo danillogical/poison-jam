@@ -3,8 +3,11 @@
 Host globals of the recompiled executable (counters such as
 g_recomp_alias_icall_hits) are read by symbol: the archived linker map gives the
 symbol's address at the preferred load base, and the dump's module list gives the
-base the image actually loaded at. They are present only in dumps written with
-MiniDumpWithDataSegs (tools/harness/collect.c).
+base the image actually loaded at. Writable globals are present only in dumps
+written with MiniDumpWithDataSegs (tools/harness/collect.c); read-only data (const
+tables in .rdata) is not in the dump at all and is read from the archived
+executable instead, which holds exactly those bytes. Writable data is never read
+from the file: there it holds initial values, not the frozen state.
 """
 import mmap
 from pathlib import Path
@@ -72,6 +75,32 @@ def map_symbol(map_path, name):
     return hits.pop(), int(preferred[1], 16)
 
 
+def image_bytes(exe_path, rva, length):
+    """Bytes at an RVA of a PE image file, from a read-only, file-backed section only."""
+    data = Path(exe_path).read_bytes()
+    if data[:2] != b'MZ':
+        raise CaptureError(f'{exe_path} is not a PE image')
+    pe, = struct.unpack_from('<I', data, 0x3C)
+    if data[pe:pe + 4] != b'PE\0\0':
+        raise CaptureError(f'{exe_path} has no PE header')
+    sections, optional_size = struct.unpack_from('<H', data, pe + 6)[0], \
+        struct.unpack_from('<H', data, pe + 20)[0]
+    table = pe + 24 + optional_size
+    for i in range(sections):
+        header = table + 40 * i
+        vsize, va, raw_size, raw_ptr = struct.unpack_from('<IIII', data, header + 8)
+        flags, = struct.unpack_from('<I', data, header + 36)
+        if va <= rva and rva + length <= va + max(vsize, raw_size):
+            if flags & 0x80000000:        # IMAGE_SCN_MEM_WRITE
+                raise CaptureError(f'RVA 0x{rva:X} is in a writable section; its frozen value '
+                                   f'is only in a dump, never in the image file')
+            if rva + length > va + raw_size:
+                raise CaptureError(f'RVA 0x{rva:X} is not file-backed in {exe_path}')
+            start = raw_ptr + rva - va
+            return data[start:start + length]
+    raise CaptureError(f'RVA 0x{rva:X} is in no section of {exe_path}')
+
+
 def module_bases(data, streams):
     """{lower-case module file name: (base, size)} from the ModuleListStream."""
     if 4 not in streams:
@@ -124,13 +153,21 @@ class DumpMemory:
             raise CaptureError('host read must be non-negative and within 16 MiB')
         return self._read(address, length, lambda a: f'host memory 0x{a:016X}')
 
-    def host_symbol(self, map_path, name, length, module='jsrf_recomp.exe'):
-        """Bytes of a global of `module`, located through its linker map."""
+    def host_symbol(self, map_path, name, length, module='jsrf_recomp.exe', image=None):
+        """Bytes of a global of `module`, located through its linker map.
+
+        A symbol absent from the dump is read from `image` (the archived
+        executable) when it lies in a read-only section, and only then."""
         bases = module_bases(self.data, self.streams)
         if module.lower() not in bases:
             raise CaptureError(f'{module} is not in the dump module list')
         address, preferred = map_symbol(map_path, name)
-        return self.read_host(bases[module.lower()][0] + address - preferred, length)
+        try:
+            return self.read_host(bases[module.lower()][0] + address - preferred, length)
+        except CaptureError:
+            if image is None:
+                raise
+            return image_bytes(image, address - preferred, length)
 
     def _read(self, cursor, length, describe):
         result = bytearray()
