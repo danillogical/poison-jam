@@ -9,7 +9,7 @@ mechanically obtainable or must be reported as `UNKNOWN`.
 **What this fills and what it will not.** It fills every field it can *measure* --
 repository revisions, dirty paths, the `CURRENT PACKET` block, the tool versions,
 the free-space state, the route table as resolved from the live catalog. It does
-**not** invent the fields only a probe can establish: the acceptance-reviewer
+**not** invent the fields only a probe can establish: the packet-reviewer
 probe's token, the advisor's continuation marker, the session's own model. Those
 are emitted as explicit `UNVERIFIED` placeholders with the command that would fill
 them, because a receipt that guesses is worse than one that is visibly incomplete.
@@ -213,18 +213,28 @@ def render(record: dict) -> str:
         'Resolved live in this session by the Session, not by this generator:',
         '',
         f'- Planner: {field("Planner", UNVERIFIED)} (Claude Opus 5.5 @ high, `route: LIVE_RESOLVE`, fresh child)',
-        f'- Persistent advisor: {field("Persistent advisor", UNVERIFIED)} (Claude Opus 5.5 @ high, '
+        f'- Persistent advisor: {field("Persistent advisor", UNVERIFIED)} (Claude Opus 5.5 @ xhigh, '
         f'`route: CONTINUABLE_PINNED`)',
-        f'- Reviewer: {field("Reviewer", UNVERIFIED)} (Claude Opus 5.5 @ medium, '
-        f'`route: LIVE_RESOLVE`, fresh child per review)',
+        f'- Muse guardrail: {field("Muse guardrail", UNVERIFIED)} (`subagent_muse` @ max, '
+        f'one session-continuable child)',
+        f'- Packet reviewer: {field("Packet reviewer", UNVERIFIED)} (Claude Opus 5.5 @ high, '
+        f'`route: LIVE_RESOLVE`, fresh child per packet review)',
+        f'- Turn reviewer: {field("Turn reviewer", UNVERIFIED)} (GPT-6.1 Sol @ high, '
+        f'`route: LIVE_RESOLVE`, fresh child per turn-end review; verified on first use)',
         f'- Workers: {field("Workers", UNVERIFIED)}',
         '- Exact error or ambiguity, if any:',
         '',
-        '## Reviewer probe — PASS / FAIL / UNKNOWN',
+        '## Packet reviewer probe — PASS / FAIL / UNKNOWN',
         '',
         f'- Child ID; fresh token; response reference; empty-evidence answer; '
         f'command and output hash; effort; result: '
         f'{field("Child ID; fresh token; response reference; empty-evidence answer; command and output hash; effort; result", UNVERIFIED)}',
+        '- Exact error or missing evidence:',
+        '',
+        '## Muse guardrail probe — PASS / FAIL / UNKNOWN',
+        '',
+        f'- Muse child ID; route; effort; workspace; named fact read; turn-2 marker; result: '
+        f'{field("Muse child ID; route; effort; workspace; named fact read; turn-2 marker; result", UNVERIFIED)}',
         '- Exact error or missing evidence:',
         '',
         '## Persistent advisor probe — PASS / FAIL / UNKNOWN',

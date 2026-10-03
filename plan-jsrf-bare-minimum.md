@@ -23,7 +23,7 @@ established facts. Where this plan proposes a change to one of them, it is a tas
   it relied on (`docs/jsrf-run-profiles.md` §"Pragmatic bare minimum"). Strict runs remain available
   as a diagnostic for fidelity questions.
 - **Fast-path steps run as chores** (W7), not packets: no Planner, adequacy review or acceptance
-  review per step. The Reviewer checks the milestone (M15) with its ledger IDs.
+  review per step. The Packet reviewer checks the milestone (M15) with its ledger IDs.
 
 ## 0. What changed from the current plan
 
@@ -38,9 +38,8 @@ established facts. Where this plan proposes a change to one of them, it is a tas
   trace is lossless by construction and a reviewer can re-run the same query.
 - **Tooling is planned work** (§5): TTD, XbSymbolDatabase, an xemu oracle, Windows CI, clang-cl,
   `just`, pre-commit, DuckDB log queries, a checked-in enumerator and a citation lint.
-- **Workflow fixes are tasks** (§6), each tied to a measured failure pattern, with DeepSeek
-  workers doing most execution and the limited models (Session, senior roles) spent where only
-  they can act.
+- **Workflow fixes are tasks** (§6), each tied to a measured failure pattern, with DeepSeek kept as
+  Session and workers and the limited models spent only at named gates and Advisor triggers.
 - **Acceptance criteria are measurable:** every milestone names its profile, artifact, oracle and
   PASS/FAIL predicate (§8). Rendering milestones use xemu reference frames where available.
 - **Upstream changes re-scope milestones:** input is now largely toolkit-provided (verify, not
@@ -102,9 +101,8 @@ A window opening is not the slice; one playable scene is not the game.
 
 ## 3. How work runs under this plan
 
-- **DeepSeek workers execute by default** (unlimited); the Session directs, integrates and
-  records (`docs/agent-workflow.md` §2.2 "worker-first"). Planner and Reviewer calls are
-  made at the gates a task names; the Advisor is consulted at those gates **and** on every
+- **DeepSeek Session and workers execute everything by default** (unlimited). Planner, Muse
+  guardrail and reviewer calls are made at the gates `docs/agent-workflow.md` names; the Advisor is consulted at those gates **and** on every
   `docs/agent-workflow.md` §4.2 trigger. Each task states a **senior-call budget**; exceeding
   it stops the task for an Advisor continue/stop decision. Quick consults (§4.3) do not count
   against it.

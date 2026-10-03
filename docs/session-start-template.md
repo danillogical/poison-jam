@@ -9,7 +9,8 @@ For a fresh DSH session, open the repository root and use this handoff prompt:
 > Read `AGENTS.md`, `docs/agent-workflow.md`, `plan-jsrf-bare-minimum.md`, and
 > `docs/jsrf-run-profiles.md`. Complete the workflow startup checklist (§0) using
 > the roles designated in workflow §1, including live route resolution, the
-> acceptance-reviewer probe, and the combined persistent-advisor probe.
+> packet-reviewer probe, the Muse guardrail probe, and the combined persistent-advisor
+> probe.
 >
 > You are a contract role (§2.2): execute the frozen contract exactly, stop at
 > ambiguity or any stop boundary, and escalate technical questions to the Advisor.
@@ -38,15 +39,22 @@ must be reported precisely; it is not permission to switch to a retired model.
 
 - Planner: requested route/effort; returned route identity:
 - Persistent advisor: requested route/effort; returned route identity:
-- Reviewer: requested route/effort; returned route identity:
+- Muse guardrail: requested route/effort; returned route identity:
+- Packet reviewer: requested route/effort; returned route identity:
+- Turn reviewer: requested route/effort; returned route identity (verified on first use):
 - Workers: requested route/effort; returned route identity:
 - Exact error or ambiguity, if any:
 
-## Reviewer probe — PASS / FAIL / UNKNOWN
+## Packet reviewer probe — PASS / FAIL / UNKNOWN
 
-One review stage (workflow §1); probe it on a fresh child that runs one read-only command.
+Probe it on a fresh child that runs one read-only command (workflow §0 step 3).
 
 - Child ID; fresh token; response reference; empty-evidence answer; command and output hash; effort; result:
+- Exact error or missing evidence:
+
+## Muse guardrail probe — PASS / FAIL / UNKNOWN
+
+- Muse child ID; route; effort; workspace; named fact read; turn-2 marker; result:
 - Exact error or missing evidence:
 
 ## Persistent advisor probe — PASS / FAIL / UNKNOWN
