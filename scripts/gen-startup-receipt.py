@@ -217,7 +217,7 @@ def render(record: dict) -> str:
         f'`route: CONTINUABLE_PINNED`)',
         f'- Muse guardrail: {field("Muse guardrail", UNVERIFIED)} (`subagent_muse` @ max, '
         f'one session-continuable child)',
-        f'- Packet reviewer: {field("Packet reviewer", UNVERIFIED)} (Claude Opus 5.5 @ high, '
+        f'- Packet reviewer: {field("Packet reviewer", UNVERIFIED)} (Claude Opus 5.5 @ medium, '
         f'`route: LIVE_RESOLVE`, fresh child per packet review)',
         f'- Turn reviewer: {field("Turn reviewer", UNVERIFIED)} (GPT-6.1 Sol @ high, '
         f'`route: LIVE_RESOLVE`, fresh child per turn-end review; verified on first use)',

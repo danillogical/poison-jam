@@ -118,7 +118,7 @@ One harness is supported: the DeepSeek Harness (DSH). Use only these assignments
 | **Planner** | `claude/claude-opus-5-5` @ `high` (Claude Opus 5.5; `route: LIVE_RESOLVE`, fresh child per packet) |
 | **Persistent Advisor** | `claude/claude-opus-5-5` @ `xhigh` (Claude Opus 5.5; `route: CONTINUABLE_PINNED`, session-continuable child) |
 | **Muse decision guardrail** | `subagent_muse` @ `max` (`muse-code` / Muse Spark 1.3; one session-continuable child) |
-| **Packet reviewer** | `claude/claude-opus-5-5` @ `high` (Claude Opus 5.5; `route: LIVE_RESOLVE`, fresh child per packet review) |
+| **Packet reviewer** | `claude/claude-opus-5-5` @ `medium` (Claude Opus 5.5; `route: LIVE_RESOLVE`, fresh child per packet review) |
 | **Turn reviewer** | `codex/gpt-6.1-sol` @ `high` (GPT-6.1 Sol; `route: LIVE_RESOLVE`, fresh child per turn-end review) |
 
 `codex` here is the DSH **provider** name that serves GPT-6.1 Sol, not a harness.
@@ -443,9 +443,15 @@ packet's claim.
   Advisor to change the acceptance criteria**. The request names the criterion (or the
   missing one), the failure scenario or reason, and proposed replacement text. It goes
   to the Advisor through the Session (§4.1); the Packet reviewer never applies it itself.
+- **Escalation.** When deciding a criterion or a finding needs judgment the review
+  cannot settle — device or emulator semantics, architecture, evidence admissibility,
+  or whether a suspected defect is real — the Packet reviewer escalates it to the
+  Advisor through the Session instead of guessing either way. It names the item, what
+  it checked, and the one question that would decide it. An escalation is never a way
+  to pass an item it could not verify: until the Advisor rules, the item is open.
 - **Disposition.** `ACCEPT` only when every mandatory criterion is `AGREED`, no blocking
-  finding is open, and no criteria-change request is pending; otherwise `NOT ACCEPTED`,
-  naming the blocking criteria, findings, and requests.
+  finding is open, and no criteria-change request or escalation is pending; otherwise
+  `NOT ACCEPTED`, naming the blocking criteria, findings, requests, and escalations.
 
 The Packet reviewer and the Turn reviewer (§4.5) are bound by §2.4 and by contract
 rules 1, 4, 5, 7 and 9 above. They never edit the work, the packet, or the evidence,
@@ -476,6 +482,11 @@ change is re-measured and re-reviewed (§2.3 hard ceiling).
      text (§2.3). `REVISE` is a frozen-packet revision authorised under §5.4; the
      affected criteria are re-measured and re-reviewed against the new text. `KEEP`
      returns the criterion to review unchanged.
+
+   - **Escalation** — the Advisor reads what the item turns on and rules on the
+     escalated question (§2.3). Its ruling settles the item as `AGREED`, `DISAGREED`,
+     a blocking finding or an advisory; a ruling that needs new evidence sends the item
+     back for measurement and re-review.
 
    - **Contradicting measurements** — the reviewer's reproduction and the delivered
      evidence disagree and neither is shown wrong. That is a factual dispute: it goes
@@ -727,7 +738,7 @@ Session          -> Planner        (packet design, adequacy, whether to revise)
 Planner          -> Advisor        (policy gap, methodology, architecture)
 Session          -> Muse guardrail (routine preflight and post-execution checks)
 Muse guardrail   -> Advisor        (policy/criteria/architecture/evidence decision)
-Packet reviewer  -> Advisor        (via Session; dispute, finding classification, criteria-change request)
+Packet reviewer  -> Advisor        (via Session; escalation, dispute, finding classification, criteria-change request)
 Turn reviewer    -> Advisor        (via Session; a disputed turn-end item, §4.5)
 Advisor          -> Owner         (§3.4 only; all technical questions end at Advisor)
 ```
@@ -1061,6 +1072,7 @@ reopen a frozen packet.
 | **MUSE CLEAR** | post-review found no blocking guardrail issue | fresh Packet reviewer |
 | **disputed** | Packet reviewer returned `NOT ACCEPTED` and a dispute/classification remains | Advisor ruling (§2.2) |
 | **pending — criteria change** | Packet reviewer asked Advisor to change criteria | Advisor `KEEP` or `REVISE` (§5.4) |
+| **pending — reviewer escalation** | Packet reviewer escalated an item it could not settle | Advisor ruling, then measurement or re-review as the ruling requires |
 | **accepted** | Muse `CLEAR`, all mandatory criteria `AGREED`, and no blocking review finding open | record; plan names next work |
 | **pending — CANNOT VERIFY** | reviewer cannot reproduce a criterion | new evidence; rerun affected sandwich stages |
 | **pending — reviewer unavailable** | reviewer route failed | repair route; no substitution |

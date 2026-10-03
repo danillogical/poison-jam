@@ -45,7 +45,7 @@ def workflow_reviewer_route() -> tuple[str, str]:
     Read from the roster table rather than hard-coded here, so this control
     follows a legitimate staffing change instead of freezing today's answer. The
     row's route cell has the shape
-    ``claude/claude-opus-5-5`` @ ``high`` (Claude Opus 5.5; ...), each in
+    ``claude/claude-opus-5-5`` @ ``medium`` (Claude Opus 5.5; ...), each in
     single backticks.
     """
     text = WORKFLOW.read_text(encoding='utf-8')
