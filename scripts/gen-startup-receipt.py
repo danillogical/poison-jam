@@ -217,14 +217,12 @@ def render(record: dict) -> str:
         f'`route: CONTINUABLE_PINNED`)',
         f'- Decision guardrail: {field("Decision guardrail", UNVERIFIED)} (Grok 4.7 @ xhigh, `route: CONTINUABLE_PINNED`, '
         f'one session-continuable child)',
-        f'- Packet reviewer: {field("Packet reviewer", UNVERIFIED)} (Claude Opus 5.5 @ medium, '
-        f'`route: LIVE_RESOLVE`, fresh child per packet review)',
-        f'- Turn reviewer: {field("Turn reviewer", UNVERIFIED)} (GPT-6.1 Sol @ high, '
-        f'`route: LIVE_RESOLVE`, fresh child per turn, continued through its re-reviews; verified on first use)',
+        f'- Reviewer: {field("Reviewer", UNVERIFIED)} (Claude Opus 5.5 @ high, `route: LIVE_RESOLVE`, '
+        f'fresh child per packet review, and one per turn for the turn-end review)',
         f'- Workers: {field("Workers", UNVERIFIED)}',
         '- Exact error or ambiguity, if any:',
         '',
-        '## Packet reviewer probe — PASS / FAIL / UNKNOWN',
+        '## Reviewer probe — PASS / FAIL / UNKNOWN',
         '',
         f'- Child ID; fresh token; response reference; empty-evidence answer; '
         f'command and output hash; effort; result: '

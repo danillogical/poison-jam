@@ -24,7 +24,7 @@ established facts. Where this plan proposes a change to one of them, it is a tas
   it relied on (`docs/jsrf-run-profiles.md` §"Pragmatic bare minimum"). Strict runs remain available
   as a diagnostic for fidelity questions.
 - **Fast-path steps run as chores** (W7), not packets: no Planner, adequacy review or acceptance
-  review per step. The Packet reviewer checks the milestone (M15) with its ledger IDs.
+  review per step. The Reviewer checks the milestone (M15) with its ledger IDs.
 
 ## 0. What changed from the current plan
 

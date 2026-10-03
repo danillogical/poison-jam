@@ -40,12 +40,11 @@ must be reported precisely; it is not permission to switch to a retired model.
 - Planner: requested route/effort; returned route identity:
 - Persistent advisor: requested route/effort; returned route identity:
 - Decision guardrail: requested route/effort; returned route identity:
-- Packet reviewer: requested route/effort; returned route identity:
-- Turn reviewer: requested route/effort; returned route identity (verified on first use):
+- Reviewer: requested route/effort; returned route identity:
 - Workers: requested route/effort; returned route identity:
 - Exact error or ambiguity, if any:
 
-## Packet reviewer probe — PASS / FAIL / UNKNOWN
+## Reviewer probe — PASS / FAIL / UNKNOWN
 
 Probe it on a fresh child that runs one read-only command (workflow §0 step 3).
 

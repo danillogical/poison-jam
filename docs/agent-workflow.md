@@ -7,7 +7,7 @@ This file is the **single authority** for JSRF agent staffing and workflow.
 evidence stays trustworthy; technical questions end at the Advisor; the project
 keeps moving. The workflow uses a **decision sandwich**: senior roles freeze the
 question and policy, the Session and workers execute the bounded work, the Decision guardrail performs a routine
-pre/post execution guardrail, and a fresh Packet reviewer decides acceptance. When a
+pre/post execution guardrail, and a fresh Reviewer decides acceptance. When a
 literal reading of this file defeats that goal, the Advisor may issue a process
 interpretation under §2.3, subject to the hard limits in §2.4 and §3.4.
 
@@ -31,19 +31,17 @@ current readiness.
    repository identities and dirty files. Nothing else selects packet-governed work.
 
 2. **Verify routes.** Confirm the running Session matches its §1 row from harness
-   metadata. Resolve the Planner, Decision guardrail, Packet reviewer and Turn reviewer routes live (§1).
+   metadata. Resolve the Planner, Decision guardrail and Reviewer routes live (§1).
    Record `UNKNOWN` if unverifiable; never infer a canonical route from a display name.
 
-3. **Probe the Packet reviewer.** Resolve its §1 route and spawn a fresh child at the
+3. **Probe the Reviewer.** Resolve its §1 route and spawn a fresh child at the
    listed effort. PASS requires a completed response containing:
    - a fresh session token;
    - one reason an empty evidence set must fail acceptance; and
    - the output hash of one named read-only command it ran itself.
 
-   Dispatch alone is not PASS. The probe child is discarded; each packet review spawns
-   its own fresh Packet reviewer. The Turn reviewer needs no startup probe: its first
-   turn-end review reports its route, its effort and the output hash of a read-only
-   command it ran, and those are checked on that first use.
+   Dispatch alone is not PASS. The probe child is discarded; each packet review, and
+   each turn's turn-end review, spawns its own Reviewer child.
 
 4. **Probe the Persistent Advisor as a real continuable child.** Resolve the exact
    §1 Advisor provider/model and spawn it through a delegation surface that creates a
@@ -70,7 +68,7 @@ current readiness.
      first turn.
 
    Reuse this child for routine packet preflight and post-execution guardrail checks
-   during the top-level session. It is not the Packet reviewer and does not replace the
+   during the top-level session. It is not the Reviewer and does not replace the
    Advisor.
 
 6. **Reconcile packet state.** Inspect both working trees and preserve unrelated edits.
@@ -93,7 +91,7 @@ current readiness.
 
    replacing the previous session's rolling receipt rather than creating an unbounded
    family of `startup-<date>-<session-id>.md` files. Record the receipt SHA-256 plus
-   the Session route, Advisor child ID, Decision guardrail child ID, and Packet reviewer
+   the Session route, Advisor child ID, Decision guardrail child ID, and Reviewer
    probe route. Before a packet reaches final acceptance, copy the startup facts that
    materially establish that packet's staffing and route readiness into its durable
    acceptance/review record. Historical authority therefore lives in packet/review
@@ -118,15 +116,13 @@ One harness is supported: the DeepSeek Harness (DSH). Use only these assignments
 | **Planner** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: high` | `claude/claude-opus-5-5` @ `high` (Claude Opus 5.5; `route: LIVE_RESOLVE`, fresh child per packet) |
 | **Persistent Advisor** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: xhigh` | `claude/claude-opus-5-5` @ `xhigh` (Claude Opus 5.5; `route: CONTINUABLE_PINNED`, session-continuable child) |
 | **Decision guardrail** | `provider: grok`, `model: Grok 4.7`, `reasoning_effort: xhigh` | `grok/Grok 4.7` @ `xhigh` (Grok 4.7; `route: CONTINUABLE_PINNED`, one session-continuable child) |
-| **Packet reviewer** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: medium` | `claude/claude-opus-5-5` @ `medium` (Claude Opus 5.5; `route: LIVE_RESOLVE`, fresh child per packet review) |
-| **Turn reviewer** | `provider: codex`, `model: gpt-6.1-sol`, `reasoning_effort: high` | `codex/gpt-6.1-sol` @ `high` (GPT-6.1 Sol; `route: LIVE_RESOLVE`, fresh child per turn, continued through its re-reviews) |
+| **Reviewer** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: high` | `claude/claude-opus-5-5` @ `high` (Claude Opus 5.5; `route: LIVE_RESOLVE`, a fresh child per packet review, and one per turn for the turn-end review, continued through its re-reviews) |
 
 **Spawn with all three parameters.** Pass `provider`, `model` and `reasoning_effort`
 exactly as the row gives them. DSH rejects a `model` without its `provider` ("child LLM
 `provider` and `model` must be supplied together"), and a model name alone does not
 select a route.
 
-`codex` here is the DSH **provider** name that serves GPT-6.1 Sol, not a harness.
 The Decision guardrail's name and verdict tokens do not depend on the model that fills
 it. Grok 4.7 fills it from 2026-10-03 (owner decision), spawned with `subagent` like the
 other routes. Records before that date call it the Muse guardrail and its verdicts
@@ -142,7 +138,7 @@ above.
 Completion after execution has two gates:
 
 1. the **Decision guardrail** must return `CLEAR`; then
-2. a fresh **Packet reviewer** performs the authoritative acceptance review.
+2. a fresh **Reviewer** performs the authoritative acceptance review.
 
 A chore gets the guardrail post-check only (§2.2, §5.8).
 
@@ -163,7 +159,7 @@ DeepSeek Session + workers execute
         ↓
 Decision guardrail post-review
         ↓
-Packet reviewer reproduces and ACCEPTs / NOT ACCEPTED
+Reviewer reproduces and ACCEPTs / NOT ACCEPTED
         ↓
 Persistent Advisor resolves any remaining technical decision or dispute
         ↓
@@ -174,25 +170,23 @@ Owner only for §3.4 owner-reserved decisions
 
 - Session and workers share DeepSeek 4.1 Flash intentionally; they are execution
   capacity, not independent review.
-- Planner, Persistent Advisor and Packet reviewer share Claude Opus 5.5, so their
-  independence is procedural: separate children, separate authority, and a Packet
-  reviewer never receives the Planner, Advisor or guardrail conversation. Its evidence
-  reproduction is what makes a packet review independent.
-- The Decision guardrail (Grok 4.7) is a different model family from the DeepSeek, Opus
-  and GPT roles, and supplies the routine pre/post execution guardrail, not acceptance.
-- The Turn reviewer (GPT-6.1 Sol) is a different model family from both the DeepSeek
-  execution it checks and the Opus roles.
+- Planner, Persistent Advisor and Reviewer share Claude Opus 5.5, so their
+  independence is procedural: separate children, separate authority, and a Reviewer
+  never receives the Planner, Advisor or guardrail conversation. Its evidence
+  reproduction is what makes a review independent.
+- The Decision guardrail (Grok 4.7) is a different model family from the DeepSeek and
+  Opus roles, and supplies the routine pre/post execution guardrail, not acceptance.
 
 **Authority attaches to the role, not the model.** A child has exactly the authority of
-the role it was spawned for: Planner, Advisor, Decision guardrail, Packet reviewer or Turn
-reviewer authority. One role does not inherit another role's powers merely because
+the role it was spawned for: Planner, Advisor, Decision guardrail or Reviewer
+authority. One role does not inherit another role's powers merely because
 it uses a capable model.
 
 ### Live verification
 
 - **Session.** Verify the running Session's route and effort from harness metadata.
 
-- **Ordinary routes.** Resolve the Planner, Packet reviewer and Turn reviewer with
+- **Ordinary routes.** Resolve the Planner and Reviewer with
   `list_subagent_models` (or the running harness equivalent) and verify effort. A
   `LIVE_RESOLVE` row requires exactly one advertised route whose canonical identity
   matches the named model/provider and supports the required effort. Zero or multiple
@@ -216,9 +210,10 @@ it uses a capable model.
 
 - **Planner.** A fresh child per packet or adequacy review as §5 requires.
 
-- **Reviewers.** A fresh Packet reviewer child for each packet review, and a fresh Turn
-  reviewer child for each turn, continued through that turn's re-reviews (§4.5). Never
-  reuse the Decision guardrail, the Advisor or a Planner child as either.
+- **Reviewer.** A fresh child for each packet review, and a fresh child for each turn's
+  turn-end review, continued through that turn's re-reviews (§4.5). Never reuse the
+  Decision guardrail, the Advisor or a Planner child as a Reviewer, or one review's
+  child for the other.
 
 - If a row omits effort, omit `reasoning_effort`.
 
@@ -251,7 +246,7 @@ control.
 |---|---|---|---|
 | **Judgment** | Persistent Advisor, Planner | rulings, packet design, adequacy verdicts, review-dispute and criteria-change rulings, deferrals, stops, exceptions | facts (§2.4), the owner's objective and reserved decisions (§3.4) |
 | **Guardrail** | Decision guardrail | pre-execution packet-shape verdict; post-execution causal/test/integration verdict | frozen/current packet, recorded rulings, facts (§2.4); may not change policy/criteria itself |
-| **Review** | Packet reviewer, Turn reviewer | criterion dispositions, review findings, criteria-change requests and the completion disposition (Packet reviewer); turn-end verdicts (Turn reviewer, §4.5) | facts (§2.4), packet claim, this file, recorded rulings |
+| **Review** | Reviewer | criterion dispositions, review findings, criteria-change requests and the completion disposition (packet review, §2.2); turn-end verdicts (turn-end review, §4.5) | facts (§2.4), packet claim, this file, recorded rulings |
 | **Contract** | Session, Worker subagents | executed steps, edits, measurements, evidence | frozen packet, this file, recorded rulings |
 
 **Rank settles judgment; evidence settles facts.** The Advisor may overrule the Planner
@@ -259,11 +254,11 @@ on method, materiality, or scope, and may resolve a disputed guardrail or review
 interpretation. No role, including the Advisor, can overrule a reproduced measurement
 by authority; it can only order a new or better measurement.
 
-The Decision guardrail is deliberately **not** the Packet reviewer. It catches wrong packet
+The Decision guardrail is deliberately **not** the Reviewer. It catches wrong packet
 shape before execution and causal/test/integration drift immediately after execution;
-the fresh Packet reviewer supplies independent acceptance.
+the fresh Reviewer supplies independent acceptance.
 
-### 2.2 Contract roles execute; the guardrail guards the sandwich; the reviewers review
+### 2.2 Contract roles execute; the guardrail guards the sandwich; the Reviewer reviews
 
 These rules are hard. When the contract is silent, ambiguous, or appears wrong, a
 contract role **stops that line of work and escalates** (§4); it never resolves the
@@ -369,7 +364,7 @@ worker brief.
 
 **Decision guardrail — routine pre/post execution check.** The same continuable
 guardrail child is reused through the top-level session while its context remains
-reliable. It is not a Planner, Advisor, or Packet reviewer.
+reliable. It is not a Planner, Advisor, or Reviewer.
 
 **Pre-execution**, after the packet has been drafted and mechanically verified but
 before final adequacy/freeze, the guardrail reads the packet plus the smallest source/evidence
@@ -393,7 +388,7 @@ it may not rewrite policy or acceptance criteria on its own authority.
 
 A routine discovery packet skips the preflight; its post-review still runs.
 
-**Post-execution**, before the Packet reviewer is spawned, the guardrail reads the frozen
+**Post-execution**, before the Reviewer is spawned, the guardrail reads the frozen
 packet, actual diff, validation, and load-bearing evidence:
 
 ```text
@@ -404,7 +399,7 @@ INTEGRATION:
 REVERSED_BY:
 ```
 
-- `CLEAR` sends the exact candidate tree/evidence to the Packet reviewer.
+- `CLEAR` sends the exact candidate tree/evidence to the Reviewer.
 - `REVISE` names a concrete repairable defect or evidence/test failure; fix it,
   revalidate, and rerun guardrail post-review.
 - `ESCALATE` means the next step requires an Advisor ruling before changing the frozen
@@ -419,7 +414,8 @@ the Advisor.
 
 Every guardrail re-check is bounded by the churn limits in §5.5.
 
-**Packet reviewer** — a fresh child performs a **real review of a packet's delivered
+**Reviewer — packet review.** The Reviewer does two reviews, each in its own child: this
+one and the turn-end review (§4.5). For a packet review, a fresh child performs a **real review of a packet's delivered
 work after the guardrail returns `CLEAR`, before the packet can complete**. It is not a checklist: its job is to find out whether the work is
 actually right and whether the evidence actually shows it. It reads the frozen packet,
 the diff in both repositories since the packet's baseline, the delivered evidence and
@@ -446,13 +442,13 @@ packet's claim.
   packet's claim is a follow-up lead, not a blocking finding.
 - **Criteria-change requests.** When the review shows that a criterion is wrong — it can
   pass on broken work, cannot fail, guards against nothing, cannot be decided as
-  written, or the claim needs a criterion the packet lacks — the Packet reviewer may **ask the
+  written, or the claim needs a criterion the packet lacks — the Reviewer may **ask the
   Advisor to change the acceptance criteria**. The request names the criterion (or the
   missing one), the failure scenario or reason, and proposed replacement text. It goes
-  to the Advisor through the Session (§4.1); the Packet reviewer never applies it itself.
+  to the Advisor through the Session (§4.1); the Reviewer never applies it itself.
 - **Escalation.** When deciding a criterion or a finding needs judgment the review
   cannot settle — device or emulator semantics, architecture, evidence admissibility,
-  or whether a suspected defect is real — the Packet reviewer escalates it to the
+  or whether a suspected defect is real — the Reviewer escalates it to the
   Advisor through the Session instead of guessing either way. It names the item, what
   it checked, and the one question that would decide it. An escalation is never a way
   to pass an item it could not verify: until the Advisor rules, the item is open.
@@ -460,9 +456,9 @@ packet's claim.
   finding is open, and no criteria-change request or escalation is pending; otherwise
   `NOT ACCEPTED`, naming the blocking criteria, findings, requests, and escalations.
 
-The Packet reviewer and the Turn reviewer (§4.5) are bound by §2.4 and by contract
-rules 1, 4, 5, 7 and 9 above. They never edit the work, the packet, or the evidence,
-and never lower a criterion on their own reading. A criteria-change request cannot turn failed evidence into success: a granted
+In both reviews the Reviewer is bound by §2.4 and by contract rules 1, 4, 5, 7 and 9
+above. It never edits the work, the packet, or the evidence, and never lowers a
+criterion on its own reading. A criteria-change request cannot turn failed evidence into success: a granted
 change is re-measured and re-reviewed (§2.3 hard ceiling).
 
 **Review and disputes** — Decision guardrail plus one independent acceptance stage:
@@ -470,7 +466,7 @@ change is re-measured and re-reviewed (§2.3 hard ceiling).
 0. The delivered packet first passes guardrail post-review. `REVISE` is repaired and sent
    back to the guardrail; `ESCALATE` goes to the Advisor. Only `CLEAR` proceeds.
 
-1. After guardrail `CLEAR`, the fresh Packet reviewer reviews the packet as above. `ACCEPT` is final
+1. After guardrail `CLEAR`, a fresh Reviewer reviews the packet as above. `ACCEPT` is final
    for the exact reviewed tree and evidence.
 
 2. On `NOT ACCEPTED` the Session records the review, then sorts each blocking item:
@@ -509,10 +505,10 @@ change is re-measured and re-reviewed (§2.3 hard ceiling).
    requests, and unresolved technical questions go to the session's Persistent Advisor.
    Do not spawn a second technical-authority model solely to create another opinion.
 
-   The fresh Packet reviewer already supplies procedural independence from the
+   The fresh Reviewer already supplies procedural independence from the
    planning/execution path. If the Persistent Advisor previously participated in the
    disputed policy or packet decision, it must explicitly re-evaluate that prior ruling
-   against the Packet reviewer's challenge and the underlying evidence rather than relying on
+   against the Reviewer's challenge and the underlying evidence rather than relying on
    its earlier conclusion.
 
 4. The Advisor handling the item reads the evidence it turns on itself rather than
@@ -580,7 +576,7 @@ Everything the Planner may do, plus the Advisor may:
   disputed evidence itself; it interprets wording but never lowers the evidence
   requirement, and a contradiction between measurements is settled by a new
   measurement, not by authority;
-- rule on a Packet reviewer's request to change acceptance criteria (§2.2): `KEEP`, or
+- rule on a Reviewer's request to change acceptance criteria (§2.2): `KEEP`, or
   `REVISE` with the new text, which reopens the packet under §5.4 and is re-measured
   and re-reviewed; and classify a disputed review finding as blocking or advisory;
 - override a literal reading of a **process** rule when that reading defeats the rule's
@@ -670,7 +666,7 @@ The call is valid when made; the record makes it auditable afterwards.
 
 12. **Final-tree revalidation.** An earlier green run does not bind later edits. Before
     final packet acceptance, rerun load-bearing validation on the exact candidate tree
-    that the guardrail clears and the Packet reviewer reviews.
+    that the guardrail clears and the Reviewer reviews.
 
 ## 3. Definitions
 
@@ -745,8 +741,7 @@ Session          -> Planner        (packet design, adequacy, whether to revise)
 Planner          -> Advisor        (policy gap, methodology, architecture)
 Session          -> Guardrail      (routine preflight and post-execution checks)
 Guardrail        -> Advisor        (policy/criteria/architecture/evidence decision)
-Packet reviewer  -> Advisor        (via Session; escalation, dispute, finding classification, criteria-change request)
-Turn reviewer    -> Advisor        (via Session; a disputed turn-end item, §4.5)
+Reviewer         -> Advisor        (via Session; escalation, dispute, finding classification, criteria-change request, disputed turn-end item)
 Advisor          -> Owner         (§3.4 only; all technical questions end at Advisor)
 ```
 
@@ -886,16 +881,16 @@ Do not seed a new Advisor or Decision guardrail from the current chat transcript
 files and durable records. Recorded rulings and accepted review records, not child
 memory, carry authority across top-level sessions.
 
-Every Packet reviewer is a fresh child. A Turn reviewer is a fresh child for each turn
-and is continued through that turn's re-reviews (§4.5). Both are separate from the
-Advisor and guardrail children.
+Each packet review is a fresh Reviewer child. Each turn's turn-end review is a fresh
+Reviewer child, continued through that turn's re-reviews (§4.5). Both are separate from
+the Advisor and guardrail children.
 
 If a required continuation mechanism is unavailable, work needing that role is
 `BLOCKED`; do not invent an invocation.
 
 ### 4.5 Turn-end review
 
-**Before the Session replies to a prompt and ends its turn, the Turn reviewer performs a
+**Before the Session replies to a prompt and ends its turn, the Reviewer performs a
 final review.** Its purpose is to stop the Session ending a turn prematurely: stopping with
 work the prompt asked for still undone, with a required step skipped, or with a reply
 that claims more than was done.
@@ -906,13 +901,13 @@ stopped investigating. If a consult answers, or a new measurement or finding arr
 after the reviewer has started, that review is void; the Session finishes the work and
 starts a new cycle.
 
-The Session spawns a Turn reviewer child on its §1 route and briefs it with:
+The Session spawns a Reviewer child on its §1 route and briefs it with:
 the prompt verbatim; the Session's draft reply; both repositories' identities, status
 and the commits/diff made during the turn; and the packet or chore state it touched. The
-brief is a lead; the Turn reviewer checks the repositories and artifacts itself
+brief is a lead; the Reviewer checks the repositories and artifacts itself
 (§2.4.2). This first review is the turn's one full review.
 
-The Turn reviewer checks:
+The Reviewer checks:
 
 1. **Done.** Everything the prompt asked for was done, or each undone item names a
    legitimate stop: an explicit stop boundary (§2.2 rule 9), a `BLOCKED` result with
@@ -923,14 +918,14 @@ The Turn reviewer checks:
 3. **Honest reply.** Every claim in the draft reply is supported by an artifact or
    command, and nothing that failed, was skipped, or is `UNVERIFIED` is reported as done.
 4. **Advisor use.** A §4.2 trigger that fired during the turn without a consult. Where
-   the harness log of the Session's turn is readable, the Turn reviewer reads it itself rather
+   the harness log of the Session's turn is readable, the Reviewer reads it itself rather
    than asking the Session to summarise. If the draft reply relies on the conclusion the
    consult should have checked, that is `CONTINUE`: consult before the reply goes out.
    Otherwise it is recorded under `ADVISOR`.
 
 **A proposed run is not reviewed here.** When the turn ends by proposing a run for owner
 approval, the proposal is a draft discovery packet (§5.8) and its design is the
-Planner's to review. The Turn reviewer checks only that the draft exists, that nothing
+Planner's to review. The Reviewer checks only that the draft exists, that nothing
 in it was executed, and that the reply does not overstate it.
 
 It returns:
@@ -952,7 +947,7 @@ that adds a technical claim, and for every technical correction, it reproduces t
 evidence before changing the record. Proposing text is not editing the work (§2.2).
 
 **Re-reviews.** On `CONTINUE` the Session does what the review named, the remaining work
-and the corrections, and corrects the reply. It then sends the same Turn reviewer the
+and the corrections, and corrects the reply. It then sends the same Reviewer child the
 diff and the list of its open items. The re-review checks that each item is closed and
 that the diff adds no new defect. It reopens unchanged text only for a defect that would
 change a conclusion or the reply, and says that it is doing so; smaller issues in
@@ -982,7 +977,7 @@ follow-up in the plan, not applied to the reviewed records. Changing those recor
 `END` reopens the review.
 
 A turn-end review is not acceptance: it never `ACCEPT`s a packet, adds criteria, or
-substitutes for §2.2's review. If the Turn reviewer route is unavailable, the Session may end
+substitutes for §2.2's review. If the Reviewer route is unavailable, the Session may end
 the turn but must say in its reply that the turn-end review did not run.
 
 ## 5. Packet lifecycle
@@ -1120,7 +1115,7 @@ reopen a frozen packet.
    preflight is not the adequacy review and does not replace it.
 4. **Discovery packets:** the writing Planner reviews its own packet against §5.3's two
    blocking questions; no second Planner is spawned. Either way, final independence
-   comes from the Packet reviewer reviewing the work and reproducing the evidence.
+   comes from the Reviewer reviewing the work and reproducing the evidence.
 
 ### 5.2 States
 
@@ -1135,14 +1130,14 @@ reopen a frozen packet.
 | **promoted** | frozen hash in `CURRENT PACKET` | Session and workers execute |
 | **delivered** | Session says criteria pass with evidence | guardrail post-execution review |
 | **GUARDRAIL REVISE** | post-review found repairable defect without policy change | repair + revalidate + guardrail post-review |
-| **GUARDRAIL CLEAR** | post-review found no blocking guardrail issue | fresh Packet reviewer |
-| **disputed** | Packet reviewer returned `NOT ACCEPTED` and a dispute/classification remains | Advisor ruling (§2.2) |
-| **pending — criteria change** | Packet reviewer asked Advisor to change criteria | Advisor `KEEP` or `REVISE` (§5.4) |
-| **pending — reviewer escalation** | Packet reviewer escalated an item it could not settle | Advisor ruling, then measurement or re-review as the ruling requires |
+| **GUARDRAIL CLEAR** | post-review found no blocking guardrail issue | fresh Reviewer |
+| **disputed** | Reviewer returned `NOT ACCEPTED` and a dispute/classification remains | Advisor ruling (§2.2) |
+| **pending — criteria change** | Reviewer asked Advisor to change criteria | Advisor `KEEP` or `REVISE` (§5.4) |
+| **pending — reviewer escalation** | Reviewer escalated an item it could not settle | Advisor ruling, then measurement or re-review as the ruling requires |
 | **accepted** | Guardrail `CLEAR`, all mandatory criteria `AGREED`, and no blocking review finding open | record; plan names next work |
 | **pending — CANNOT VERIFY** | reviewer cannot reproduce a criterion | new evidence; rerun affected sandwich stages |
 | **pending — reviewer unavailable** | reviewer route failed | repair route; no substitution |
-| **pending — post-review edits** | reviewed tree/evidence changed | guardrail post-review + fresh Packet reviewer for affected criteria |
+| **pending — post-review edits** | reviewed tree/evidence changed | guardrail post-review + fresh Reviewer for affected criteria |
 | **escalated** | policy/architecture/scope/fidelity/exception question | Advisor ruling, then rerun/re-review as needed |
 | **retired** | premise failed or objective changed | recorded in plan |
 | **exploratory evidence** | artifact used bypass/synthetic completion | cannot satisfy strict criteria |
@@ -1195,7 +1190,7 @@ authorizes it, recording one of:
    a concrete scenario;
 2. a load-bearing premise is invalidated by new evidence (`PREMISE_CHANGED`);
 3. an Advisor policy ruling changes a policy the packet depends on;
-4. the Advisor grants a Packet reviewer's criteria-change request (`REVISE`, §2.2);
+4. the Advisor grants a Reviewer's criteria-change request (`REVISE`, §2.2);
 5. the owner changes the objective or scope.
 
 Nothing else reopens a frozen packet: not advisories, wording, history, record pointers,
@@ -1275,7 +1270,7 @@ claim.
 | Instrumentation | none it introduces silently | reversible, trace-only or behind an environment variable, off by default at closure | production code under full review |
 | Contract | none; the gate script is the contract | about one page (§6.3) | full contract (§6.1–6.2) |
 | Adequacy review | **none** — the gate script replaces it | writing Planner, two blocking questions + premise freshness (§5.3) | a Planner that did not write it, full review (§5.3) |
-| Review | guardrail post-check (§2.2); otherwise the gate's own output is the record | guardrail post-review, then the Packet reviewer confirms artifacts exist, match commands, and select the recorded outcome row, and reviews any instrumentation | guardrail post-review `CLEAR`, then full independent review (§2.2): work reviewed, every criterion reproduced |
+| Review | guardrail post-check (§2.2); otherwise the gate's own output is the record | guardrail post-review, then the Reviewer confirms artifacts exist, match commands, and select the recorded outcome row, and reviews any instrumentation | guardrail post-review `CLEAR`, then full independent review (§2.2): work reviewed, every criterion reproduced |
 | Can claim | that the mechanical steps ran and what they produced | `"observed X under profile Y"` | what its criteria establish |
 
 **A chore needs no packet.** It is named as a chore in the authoritative plan (the
@@ -1401,7 +1396,7 @@ arming call sites. See `docs/jsrf-run-profiles.md` for merge/evidence-profile po
     fixture probe (`AGENTS.md` "Probe runs").
 
 14. **Final-tree binding.** State which load-bearing commands are rerun after the final
-    accepted edit set so the guardrail and the Packet reviewer see evidence from the exact candidate
+    accepted edit set so the guardrail and the Reviewer see evidence from the exact candidate
     tree.
 
 Before release ask both questions:
@@ -1521,7 +1516,7 @@ dump or a run with tracing off.
 
 | Term | Meaning |
 |---|---|
-| **decision sandwich** | senior roles freeze the bounded question/policy; the guardrail checks immediately before and after execution; a fresh Packet reviewer decides acceptance |
+| **decision sandwich** | senior roles freeze the bounded question/policy; the guardrail checks immediately before and after execution; a fresh Reviewer decides acceptance |
 | **model diversity** | a different model family from the work or decision layer being checked |
 | **procedural independence** | reviewer/adjudicating role did not author the work or decision it is judging and is asked to falsify, not confirm |
 | **evidence reproduction** | reviewer re-ran the load-bearing measurement |
@@ -1529,9 +1524,9 @@ dump or a run with tracing off.
 | **route identity** | the canonical provider/model actually used, resolved live rather than inferred from a display label |
 | **guardrail clear** | the guardrail found no blocking pre/post execution issue; it is not final packet acceptance |
 
-Model diversity helps; it never replaces reproduced evidence. The guardrail and the Packet
-reviewer provide different checks: the guardrail has current-session context and catches
-decision/execution drift; the fresh Packet reviewer supplies independent acceptance.
+Model diversity helps; it never replaces reproduced evidence. The guardrail and the
+Reviewer provide different checks: the guardrail has current-session context and catches
+decision/execution drift; the fresh Reviewer supplies independent acceptance.
 Continuability and route identity are separate properties and must be verified
 separately when §1 requires both.
 
@@ -1544,7 +1539,7 @@ separately when §1 requires both.
 | evidence-profile semantics, strictness, admitted model classes | `docs/jsrf-run-profiles.md` |
 | current packet, blocker, next action, milestone acceptance | `plan-jsrf-bare-minimum.md` |
 | a packet's operative contract | `docs/packets/<packet>.md` |
-| Guardrail preflight/post-review results, Packet reviewer verdicts, deferred advisories, discretionary decisions, case rulings | `docs/reviews/<packet>-r<N>-*.md` |
+| Guardrail preflight/post-review results, Reviewer verdicts, deferred advisories, discretionary decisions, case rulings | `docs/reviews/<packet>-r<N>-*.md` |
 | a packet's revision narrative | `docs/reviews/<packet>-revision-history.md` (non-authoritative) |
 | current top-level-session readiness receipt | `docs/reviews/startup-current.md` (rolling, non-historical) |
 | durable staffing/readiness facts for accepted work | the packet's durable acceptance/review record |
@@ -1555,7 +1550,7 @@ separately when §1 requires both.
 
 Do not copy the roster outside §1. The Advisor decides general technical rules; the
 Planner applies them to packet design; the guardrail checks decision/execution alignment; the
-Packet reviewer decides acceptance; the Session records the durable result.
+Reviewer decides acceptance; the Session records the durable result.
 
 `startup-current.md` is intentionally bounded operational state. Before it is replaced,
 any staffing or route facts that materially support accepted packet work must already

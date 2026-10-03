@@ -40,26 +40,26 @@ WORKFLOW = ROOT / 'docs' / 'agent-workflow.md'
 
 
 def workflow_reviewer_route() -> tuple[str, str]:
-    """The Packet reviewer's provider and effort, read from §1's roster.
+    """The Reviewer's provider and effort, read from §1's roster.
 
     Read from the roster table rather than hard-coded here, so this control
     follows a legitimate staffing change instead of freezing today's answer. The
     row's route cell has the shape
-    ``claude/claude-opus-5-5`` @ ``medium`` (Claude Opus 5.5; ...), each in
+    ``claude/claude-opus-5-5`` @ ``high`` (Claude Opus 5.5; ...), each in
     single backticks.
     """
     text = WORKFLOW.read_text(encoding='utf-8')
     for line in text.splitlines():
-        if not line.startswith('| **Packet reviewer**'):
+        if not line.startswith('| **Reviewer**'):
             continue
         cell = line.strip().strip('|').split('|')[-1]
         route = re.search(r'`([\w.\-]+)/[\w.\-]+`\s*@\s*`([a-z]+)`', cell)
         if route:
             return route.group(1), route.group(2)
         raise AssertionError(
-            f'the Packet reviewer row is present but its route cell does not carry '
+            f'the Reviewer row is present but its route cell does not carry '
             f'a `provider/model` @ `effort`: {cell.strip()!r}')
-    raise AssertionError('the workflow §1 roster has no Packet reviewer row')
+    raise AssertionError('the workflow §1 roster has no Reviewer row')
 
 
 class RecordReviewDefaultTests(unittest.TestCase):
@@ -85,7 +85,7 @@ class RecordReviewDefaultTests(unittest.TestCase):
             r"--requested-effort',\s*default='([^']+)'", source).group(1)
         self.assertTrue(default_model.startswith(provider + '/'),
                         f'record-review.py defaults to {default_model!r}, but the '
-                        f'workflow assigns the Packet reviewer to provider '
+                        f'workflow assigns the Reviewer to provider '
                         f'{provider!r}')
         self.assertEqual(default_effort, effort,
                          f'record-review.py defaults to effort {default_effort!r}, '
