@@ -220,7 +220,7 @@ def render(record: dict) -> str:
         f'- Packet reviewer: {field("Packet reviewer", UNVERIFIED)} (Claude Opus 5.5 @ medium, '
         f'`route: LIVE_RESOLVE`, fresh child per packet review)',
         f'- Turn reviewer: {field("Turn reviewer", UNVERIFIED)} (GPT-6.1 Sol @ high, '
-        f'`route: LIVE_RESOLVE`, fresh child per turn-end review; verified on first use)',
+        f'`route: LIVE_RESOLVE`, fresh child per turn, continued through its re-reviews; verified on first use)',
         f'- Workers: {field("Workers", UNVERIFIED)}',
         '- Exact error or ambiguity, if any:',
         '',

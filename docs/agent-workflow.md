@@ -119,7 +119,7 @@ One harness is supported: the DeepSeek Harness (DSH). Use only these assignments
 | **Persistent Advisor** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: xhigh` | `claude/claude-opus-5-5` @ `xhigh` (Claude Opus 5.5; `route: CONTINUABLE_PINNED`, session-continuable child) |
 | **Muse decision guardrail** | the `subagent_muse` tool, not `subagent` | `subagent_muse` @ `max` (`muse-code` / Muse Spark 1.3; one session-continuable child) |
 | **Packet reviewer** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: medium` | `claude/claude-opus-5-5` @ `medium` (Claude Opus 5.5; `route: LIVE_RESOLVE`, fresh child per packet review) |
-| **Turn reviewer** | `provider: codex`, `model: gpt-6.1-sol`, `reasoning_effort: high` | `codex/gpt-6.1-sol` @ `high` (GPT-6.1 Sol; `route: LIVE_RESOLVE`, fresh child per turn-end review) |
+| **Turn reviewer** | `provider: codex`, `model: gpt-6.1-sol`, `reasoning_effort: high` | `codex/gpt-6.1-sol` @ `high` (GPT-6.1 Sol; `route: LIVE_RESOLVE`, fresh child per turn, continued through its re-reviews) |
 
 **Spawn with all three parameters.** Pass `provider`, `model` and `reasoning_effort`
 exactly as the row gives them. DSH rejects a `model` without its `provider` ("child LLM
@@ -216,9 +216,9 @@ it uses a capable model.
 
 - **Planner.** A fresh child per packet or adequacy review as §5 requires.
 
-- **Reviewers.** A fresh Packet reviewer child for each packet review and a fresh Turn
-  reviewer child for each turn-end review. Never reuse the Muse guardrail, the Advisor
-  or a Planner child as either.
+- **Reviewers.** A fresh Packet reviewer child for each packet review, and a fresh Turn
+  reviewer child for each turn, continued through that turn's re-reviews (§4.5). Never
+  reuse the Muse guardrail, the Advisor or a Planner child as either.
 
 - If a row omits effort, omit `reasoning_effort`.
 
@@ -287,7 +287,9 @@ question itself.
    finding as blocking or advisory. Those are judgment-layer decisions.
 7. Never claim a fix without measuring it. A report that something was fixed names
    the command or artifact that shows it, or says `UNVERIFIED`.
-8. Do not write narrative about your own repairs into operative documents.
+8. Do not write narrative about your own repairs into operative documents or records.
+   A correction replaces the claim with what the evidence supports; what was withdrawn,
+   and by whom, goes in the commit message.
 9. An explicit stop boundary — from the owner, the Advisor, the Planner, or a packet's
    `Stop if` — is hard: stop, record the state, report. Do not continue past it on your
    own judgment.
@@ -835,10 +837,24 @@ RECORD IN: <owning document or review record>
 **Quick consult.** For a bounded judgment check — which of two approaches, whether a
 result is surprising, which mechanism to test first — the Session sends at most ten lines
 to the session's continuable Advisor child: the question, the files to read, and what it
-has measured. The Advisor answers in at most ten lines, ending with `REVERSED BY:`. A
-quick consult that turns out to need a ruling becomes one under the full template. Quick
-consults keep consulting cheap enough that cost is never the reason to skip one; the
-Session records each answer it acts on in one line in the relevant record.
+has measured. The Advisor answers in at most ten lines, marks each load-bearing claim
+observed or inferred (§2.4.1), and ends with `REVERSED BY:`. A quick consult that turns
+out to need a ruling becomes one under the full template. Quick consults keep consulting
+cheap enough that cost is never the reason to skip one; the Session records each answer
+it acts on in one line in the relevant record.
+
+**Ask about a fault in the fault-diagnosis form.** When the question is why something
+happens, including whether the Session's own inference holds, ask for ranked mechanisms
+and the cheapest discriminating measurement for each, not a yes or no on one reading. A
+yes/no question draws one confident mechanism; the ranked form keeps the alternatives
+open until a measurement removes them.
+
+**An Advisor's factual claim is a lead until reproduced.** Judgment roles do not decide
+what happened (§2.3). The Session records a claim the Advisor marks observed only after
+reproducing it with its own read or command, and records an inferred claim as a
+hypothesis with its `REVERSED BY`, never as a finding. When a ruling needs a long read,
+such as a dump scan or a census of call sites, the Advisor names the read and the
+Session runs it.
 
 Follow-ups may be delta briefs. A delta does not freeze earlier premises: if a
 correction changes a load-bearing premise, mark it `PREMISE_CHANGED` and ask the
@@ -870,8 +886,9 @@ Do not seed a new Advisor or Muse guardrail from the current chat transcript. Br
 files and durable records. Recorded rulings and accepted review records, not child
 memory, carry authority across top-level sessions.
 
-Every Packet reviewer and Turn reviewer is a fresh child, separate from both persistent
-children.
+Every Packet reviewer is a fresh child. A Turn reviewer is a fresh child for each turn
+and is continued through that turn's re-reviews (§4.5). Both are separate from the
+Advisor and Muse children.
 
 If a required continuation mechanism is unavailable, work needing that role is
 `BLOCKED`; do not invent an invocation.
@@ -883,11 +900,17 @@ final review.** Its purpose is to stop the Session ending a turn prematurely: st
 work the prompt asked for still undone, with a required step skipped, or with a reply
 that claims more than was done.
 
-The Session spawns a fresh Turn reviewer child on its §1 route and briefs it with:
+**Freeze first.** The Session asks for the review only when the turn's work is
+finished: no Advisor consult, Muse check or worker is outstanding, and the Session has
+stopped investigating. If a consult answers, or a new measurement or finding arrives,
+after the reviewer has started, that review is void; the Session finishes the work and
+starts a new cycle.
+
+The Session spawns a Turn reviewer child on its §1 route and briefs it with:
 the prompt verbatim; the Session's draft reply; both repositories' identities, status
 and the commits/diff made during the turn; and the packet or chore state it touched. The
 brief is a lead; the Turn reviewer checks the repositories and artifacts itself
-(§2.4.2).
+(§2.4.2). This first review is the turn's one full review.
 
 The Turn reviewer checks:
 
@@ -905,20 +928,58 @@ The Turn reviewer checks:
    consult should have checked, that is `CONTINUE`: consult before the reply goes out.
    Otherwise it is recorded under `ADVISOR`.
 
+**A proposed run is not reviewed here.** When the turn ends by proposing a run for owner
+approval, the proposal is a draft discovery packet (§5.8) and its design is the
+Planner's to review. The Turn reviewer checks only that the draft exists, that nothing
+in it was executed, and that the reply does not overstate it.
+
 It returns:
 
 ```text
 TURN_END: END | CONTINUE
 REMAINING: <each item: what is undone; evidence; why no legitimate stop covers it> | NONE
-REPLY_CORRECTIONS: <each unsupported or overstated claim> | NONE
+REPLY_CORRECTIONS: <each unsupported or overstated claim, with its fix as below> | NONE
 ADVISOR: <each §4.2 trigger that fired without a consult> | NONE
+FOLLOW_UPS: <re-reviews only: smaller issues in unchanged text; they do not block END> | NONE
 ```
 
-On `CONTINUE` the Session does the remaining work, corrects the reply, and requests a
-new turn-end review on a fresh child. If the Session disputes a `REMAINING` item (out of
-the prompt's scope, needs the owner, or covered by a stop), the Advisor rules on it. If
-two consecutive turn-end reviews return `CONTINUE` on the same item, the Session takes
-that item to the Advisor rather than looping.
+**Each correction carries its fix.** A correction about wording or claim strength gives
+`file:line`, the current text, replacement text the evidence supports, and that
+evidence. A correction saying a technical claim is wrong gives the refuting evidence
+(the address, bytes, or command and its output) rather than a new conclusion. The
+Session applies verbatim a replacement that only narrows a claim. For a replacement
+that adds a technical claim, and for every technical correction, it reproduces the
+evidence before changing the record. Proposing text is not editing the work (§2.2).
+
+**Re-reviews.** On `CONTINUE` the Session does what the review named, the remaining work
+and the corrections, and corrects the reply. It then sends the same Turn reviewer the
+diff and the list of its open items. The re-review checks that each item is closed and
+that the diff adds no new defect. It reopens unchanged text only for a defect that would
+change a conclusion or the reply, and says that it is doing so; smaller issues in
+unchanged text go under `FOLLOW_UPS`. These are §5.5 rules 2 and 3 applied to turn-end
+review. If the child cannot be continued, a fresh child does the re-review as a full
+review.
+
+Anything the review did not ask for, such as a new measurement, finding or claim, means
+the turn's work was not finished: the Session completes it and starts a fresh full
+review under **Freeze first**.
+
+The measured failure these rules answer: one records-only discovery turn (2026-10-03)
+spent three-quarters of its time, after its findings were committed, in eight turn-end
+reviews and 16 correction commits. Reviews started while consults were pending,
+correction rounds kept adding new claims, and fresh reviewers kept finding issues in
+text that earlier reviewers had passed.
+
+**Disputes and limits.** If the Session disputes a `REMAINING` item (out of the
+prompt's scope, needs the owner, or covered by a stop), the Advisor rules on it. If two
+consecutive reviews return `CONTINUE` on the same item, the Session takes that item to
+the Advisor rather than looping. After three `CONTINUE`s in one turn, the Advisor
+decides whether to end the turn, stop it, or order a fresh full review.
+
+**`END` closes the turn's records.** A `FOLLOW_UPS` entry, and any suggestion that
+arrives after `END` (a non-blocking Muse note or reviewer advisory), is recorded as a
+follow-up in the plan, not applied to the reviewed records. Changing those records after
+`END` reopens the review.
 
 A turn-end review is not acceptance: it never `ACCEPT`s a packet, adds criteria, or
 substitutes for §2.2's review. If the Turn reviewer route is unavailable, the Session may end
@@ -1248,6 +1309,13 @@ hands the Planner its next brief directly. Prefer discovery whenever the next
 implementation depends on facts nobody has observed. Keep it small enough to execute
 in one session. Leaving diagnostic instrumentation enabled after closure requires a
 change packet.
+
+**A proposed run is a discovery packet.** When owner-directed work (§0.6) ends by
+proposing a run for the owner to approve, the Planner drafts the proposal in
+`docs/packets/` on the §6.3 template and reviews it as the writing Planner (§5.3). The
+Session supplies the measured facts. The turn's records point to the draft rather than
+carrying their own copy of the experiment, and the draft is not promoted until the
+owner approves the run.
 
 ## 6. Packet construction
 
