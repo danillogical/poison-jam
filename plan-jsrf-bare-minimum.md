@@ -102,7 +102,7 @@ A window opening is not the slice; one playable scene is not the game.
 
 ## 3. How work runs under this plan
 
-- **DeepSeek Session and workers execute everything by default** (unlimited). Planner, Muse
+- **DeepSeek Session and workers execute everything by default** (unlimited). Planner, Decision
   guardrail and reviewer calls are made at the gates `docs/agent-workflow.md` names; the Advisor is consulted at those gates **and** on every
   `docs/agent-workflow.md` §4.2 trigger. Each task states a **senior-call budget**; exceeding
   it stops the task for an Advisor continue/stop decision. Quick consults (§4.3) do not count

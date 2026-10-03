@@ -215,7 +215,7 @@ def render(record: dict) -> str:
         f'- Planner: {field("Planner", UNVERIFIED)} (Claude Opus 5.5 @ high, `route: LIVE_RESOLVE`, fresh child)',
         f'- Persistent advisor: {field("Persistent advisor", UNVERIFIED)} (Claude Opus 5.5 @ xhigh, '
         f'`route: CONTINUABLE_PINNED`)',
-        f'- Muse guardrail: {field("Muse guardrail", UNVERIFIED)} (Grok 4.7 @ xhigh, `route: CONTINUABLE_PINNED`, '
+        f'- Decision guardrail: {field("Decision guardrail", UNVERIFIED)} (Grok 4.7 @ xhigh, `route: CONTINUABLE_PINNED`, '
         f'one session-continuable child)',
         f'- Packet reviewer: {field("Packet reviewer", UNVERIFIED)} (Claude Opus 5.5 @ medium, '
         f'`route: LIVE_RESOLVE`, fresh child per packet review)',
@@ -231,10 +231,10 @@ def render(record: dict) -> str:
         f'{field("Child ID; fresh token; response reference; empty-evidence answer; command and output hash; effort; result", UNVERIFIED)}',
         '- Exact error or missing evidence:',
         '',
-        '## Muse guardrail probe — PASS / FAIL / UNKNOWN',
+        '## Decision guardrail probe — PASS / FAIL / UNKNOWN',
         '',
-        f'- Muse child ID; route; effort; workspace; named fact read; turn-2 marker; result: '
-        f'{field("Muse child ID; route; effort; workspace; named fact read; turn-2 marker; result", UNVERIFIED)}',
+        f'- Guardrail child ID; route; effort; workspace; named fact read; turn-2 marker; result: '
+        f'{field("Guardrail child ID; route; effort; workspace; named fact read; turn-2 marker; result", UNVERIFIED)}',
         '- Exact error or missing evidence:',
         '',
         '## Persistent advisor probe — PASS / FAIL / UNKNOWN',

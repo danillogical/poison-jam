@@ -6,7 +6,7 @@ This file is the **single authority** for JSRF agent staffing and workflow.
 **Design goal:** cheap models execute precisely; senior models exercise judgment;
 evidence stays trustworthy; technical questions end at the Advisor; the project
 keeps moving. The workflow uses a **decision sandwich**: senior roles freeze the
-question and policy, the Session and workers execute the bounded work, Muse performs a routine
+question and policy, the Session and workers execute the bounded work, the Decision guardrail performs a routine
 pre/post execution guardrail, and a fresh Packet reviewer decides acceptance. When a
 literal reading of this file defeats that goal, the Advisor may issue a process
 interpretation under §2.3, subject to the hard limits in §2.4 and §3.4.
@@ -31,7 +31,7 @@ current readiness.
    repository identities and dirty files. Nothing else selects packet-governed work.
 
 2. **Verify routes.** Confirm the running Session matches its §1 row from harness
-   metadata. Resolve the Planner, Muse guardrail, Packet reviewer and Turn reviewer routes live (§1).
+   metadata. Resolve the Planner, Decision guardrail, Packet reviewer and Turn reviewer routes live (§1).
    Record `UNKNOWN` if unverifiable; never infer a canonical route from a display name.
 
 3. **Probe the Packet reviewer.** Resolve its §1 route and spawn a fresh child at the
@@ -60,7 +60,7 @@ current readiness.
    **continuability + exact §1 route + listed effort**, Advisor-dependent work is
    `BLOCKED`.
 
-5. **Probe the Muse decision guardrail.** Spawn one continuable child on its §1 route
+5. **Probe the Decision guardrail.** Spawn one continuable child on its §1 route
    at the listed effort. PASS requires:
    - the child appears in the normal DSH child list;
    - the effective model route is the one §1 names;
@@ -93,15 +93,15 @@ current readiness.
 
    replacing the previous session's rolling receipt rather than creating an unbounded
    family of `startup-<date>-<session-id>.md` files. Record the receipt SHA-256 plus
-   the Session route, Advisor child ID, Muse guardrail child ID, and Packet reviewer
+   the Session route, Advisor child ID, Decision guardrail child ID, and Packet reviewer
    probe route. Before a packet reaches final acceptance, copy the startup facts that
    materially establish that packet's staffing and route readiness into its durable
    acceptance/review record. Historical authority therefore lives in packet/review
    records; `startup-current.md` is only the current session's operational receipt.
 
-A required Session, Planner, Advisor, Muse guardrail, reviewer, effort, spawn, or
+A required Session, Planner, Advisor, Decision guardrail, reviewer, effort, spawn, or
 continuation capability that is unavailable makes the affected workflow stage
-`BLOCKED`. Do not substitute an unlisted route. The Persistent Advisor and Muse
+`BLOCKED`. Do not substitute an unlisted route. The Persistent Advisor and Decision
 guardrail are created and probed fresh in each top-level session. The Planner needs no
 separate startup probe: its route is resolved live when its first child is spawned, and
 every adequacy review it returns must cite the files and line ranges it read; both are
@@ -117,7 +117,7 @@ One harness is supported: the DeepSeek Harness (DSH). Use only these assignments
 | **Worker subagents** | `provider: workbuddy-ai`, `model: deepseek-v4.1-flash`, `reasoning_effort: max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
 | **Planner** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: high` | `claude/claude-opus-5-5` @ `high` (Claude Opus 5.5; `route: LIVE_RESOLVE`, fresh child per packet) |
 | **Persistent Advisor** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: xhigh` | `claude/claude-opus-5-5` @ `xhigh` (Claude Opus 5.5; `route: CONTINUABLE_PINNED`, session-continuable child) |
-| **Muse decision guardrail** | `provider: grok`, `model: Grok 4.7`, `reasoning_effort: xhigh` | `grok/Grok 4.7` @ `xhigh` (Grok 4.7; `route: CONTINUABLE_PINNED`, one session-continuable child) |
+| **Decision guardrail** | `provider: grok`, `model: Grok 4.7`, `reasoning_effort: xhigh` | `grok/Grok 4.7` @ `xhigh` (Grok 4.7; `route: CONTINUABLE_PINNED`, one session-continuable child) |
 | **Packet reviewer** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: medium` | `claude/claude-opus-5-5` @ `medium` (Claude Opus 5.5; `route: LIVE_RESOLVE`, fresh child per packet review) |
 | **Turn reviewer** | `provider: codex`, `model: gpt-6.1-sol`, `reasoning_effort: high` | `codex/gpt-6.1-sol` @ `high` (GPT-6.1 Sol; `route: LIVE_RESOLVE`, fresh child per turn, continued through its re-reviews) |
 
@@ -127,10 +127,10 @@ exactly as the row gives them. DSH rejects a `model` without its `provider` ("ch
 select a route.
 
 `codex` here is the DSH **provider** name that serves GPT-6.1 Sol, not a harness.
-The Muse decision guardrail keeps its role name and its verdict tokens
-(`MUSE_PREFLIGHT`, `MUSE_POST`) whatever model fills it. Grok 4.7 fills it from
-2026-10-03 (owner decision), spawned with `subagent` like the other routes rather than
-`subagent_muse`.
+The Decision guardrail's name and verdict tokens do not depend on the model that fills
+it. Grok 4.7 fills it from 2026-10-03 (owner decision), spawned with `subagent` like the
+other routes. Records before that date call it the Muse guardrail and its verdicts
+`MUSE_PREFLIGHT` and `MUSE_POST`.
 
 **Fallback routes: NONE AUTHORISED.** A fallback is a staffing change and no agent may
 choose one. There is no second technical-escalation model above the Persistent Advisor.
@@ -141,10 +141,10 @@ above.
 
 Completion after execution has two gates:
 
-1. the **Muse decision guardrail** must return `CLEAR`; then
+1. the **Decision guardrail** must return `CLEAR`; then
 2. a fresh **Packet reviewer** performs the authoritative acceptance review.
 
-A chore gets the Muse post-check only (§2.2, §5.8).
+A chore gets the guardrail post-check only (§2.2, §5.8).
 
 A disputed review, requested criteria change, or technical/policy question goes to the
 Persistent Advisor. If the remaining decision is owner-reserved under §3.4, the Advisor
@@ -155,13 +155,13 @@ asks the owner.
 ```text
 Planner drafts; Advisor shape preflight
         ↓
-Muse guardrail preflight
+Decision guardrail preflight
         ↓
 Planner adequacy review; freeze and promote
         ↓
 DeepSeek Session + workers execute
         ↓
-Muse guardrail post-review
+Decision guardrail post-review
         ↓
 Packet reviewer reproduces and ACCEPTs / NOT ACCEPTED
         ↓
@@ -176,15 +176,15 @@ Owner only for §3.4 owner-reserved decisions
   capacity, not independent review.
 - Planner, Persistent Advisor and Packet reviewer share Claude Opus 5.5, so their
   independence is procedural: separate children, separate authority, and a Packet
-  reviewer never receives the Planner, Advisor or Muse conversation. Its evidence
+  reviewer never receives the Planner, Advisor or guardrail conversation. Its evidence
   reproduction is what makes a packet review independent.
-- The Muse guardrail (Grok 4.7) is a different model family from the DeepSeek, Opus
+- The Decision guardrail (Grok 4.7) is a different model family from the DeepSeek, Opus
   and GPT roles, and supplies the routine pre/post execution guardrail, not acceptance.
 - The Turn reviewer (GPT-6.1 Sol) is a different model family from both the DeepSeek
   execution it checks and the Opus roles.
 
 **Authority attaches to the role, not the model.** A child has exactly the authority of
-the role it was spawned for: Planner, Advisor, Muse guardrail, Packet reviewer or Turn
+the role it was spawned for: Planner, Advisor, Decision guardrail, Packet reviewer or Turn
 reviewer authority. One role does not inherit another role's powers merely because
 it uses a capable model.
 
@@ -208,7 +208,7 @@ it uses a capable model.
   continuation result. A one-shot Opus child or a continuable child on an unverified
   model does not satisfy the role.
 
-- **Muse decision guardrail: `CONTINUABLE_PINNED`.** Resolve its §1 route with
+- **Decision guardrail: `CONTINUABLE_PINNED`.** Resolve its §1 route with
   `list_subagent_models` as for an ordinary route, then verify it creates a real
   continuable DSH child on that route, runs at the listed effort, appears in the normal
   child list, and operates in the requesting DSH session's cwd. Record the child ID and
@@ -218,7 +218,7 @@ it uses a capable model.
 
 - **Reviewers.** A fresh Packet reviewer child for each packet review, and a fresh Turn
   reviewer child for each turn, continued through that turn's re-reviews (§4.5). Never
-  reuse the Muse guardrail, the Advisor or a Planner child as either.
+  reuse the Decision guardrail, the Advisor or a Planner child as either.
 
 - If a row omits effort, omit `reasoning_effort`.
 
@@ -250,20 +250,20 @@ control.
 | Layer | Roles | Produces | Bound by |
 |---|---|---|---|
 | **Judgment** | Persistent Advisor, Planner | rulings, packet design, adequacy verdicts, review-dispute and criteria-change rulings, deferrals, stops, exceptions | facts (§2.4), the owner's objective and reserved decisions (§3.4) |
-| **Guardrail** | Muse decision guardrail | pre-execution packet-shape verdict; post-execution causal/test/integration verdict | frozen/current packet, recorded rulings, facts (§2.4); may not change policy/criteria itself |
+| **Guardrail** | Decision guardrail | pre-execution packet-shape verdict; post-execution causal/test/integration verdict | frozen/current packet, recorded rulings, facts (§2.4); may not change policy/criteria itself |
 | **Review** | Packet reviewer, Turn reviewer | criterion dispositions, review findings, criteria-change requests and the completion disposition (Packet reviewer); turn-end verdicts (Turn reviewer, §4.5) | facts (§2.4), packet claim, this file, recorded rulings |
 | **Contract** | Session, Worker subagents | executed steps, edits, measurements, evidence | frozen packet, this file, recorded rulings |
 
 **Rank settles judgment; evidence settles facts.** The Advisor may overrule the Planner
-on method, materiality, or scope, and may resolve a disputed Muse or reviewer
+on method, materiality, or scope, and may resolve a disputed guardrail or reviewer
 interpretation. No role, including the Advisor, can overrule a reproduced measurement
 by authority; it can only order a new or better measurement.
 
-The Muse guardrail is deliberately **not** the Packet reviewer. It catches wrong packet
+The Decision guardrail is deliberately **not** the Packet reviewer. It catches wrong packet
 shape before execution and causal/test/integration drift immediately after execution;
 the fresh Packet reviewer supplies independent acceptance.
 
-### 2.2 Contract roles execute; Muse guards the sandwich; the reviewers review
+### 2.2 Contract roles execute; the guardrail guards the sandwich; the reviewers review
 
 These rules are hard. When the contract is silent, ambiguous, or appears wrong, a
 contract role **stops that line of work and escalates** (§4); it never resolves the
@@ -367,16 +367,16 @@ automatically spawn an identical replacement worker on the same brief; it first
 decides whether the blocker belongs to the Planner, Advisor, or a revised bounded
 worker brief.
 
-**Muse decision guardrail — routine pre/post execution check.** The same continuable
-Muse child is reused through the top-level session while its context remains
+**Decision guardrail — routine pre/post execution check.** The same continuable
+guardrail child is reused through the top-level session while its context remains
 reliable. It is not a Planner, Advisor, or Packet reviewer.
 
 **Pre-execution**, after the packet has been drafted and mechanically verified but
-before final adequacy/freeze, Muse reads the packet plus the smallest source/evidence
+before final adequacy/freeze, the guardrail reads the packet plus the smallest source/evidence
 set needed to judge whether execution would be coherent and testable:
 
 ```text
-MUSE_PREFLIGHT: PROCEED | REDIRECT | DISCOVERY_FIRST | ESCALATE
+GUARDRAIL_PREFLIGHT: PROCEED | REDIRECT | DISCOVERY_FIRST | ESCALATE
 REASON:
 ANTI_VACUITY_RISK: NONE | <risk>
 REVERSED_BY:
@@ -388,16 +388,16 @@ REVERSED_BY:
 - `ESCALATE` sends architecture, policy, evidence-admissibility, fidelity, or other
   Advisor-class questions to the Persistent Advisor.
 
-Muse may identify anti-vacuity, integration, or missing-control defects;
+The guardrail may identify anti-vacuity, integration, or missing-control defects;
 it may not rewrite policy or acceptance criteria on its own authority.
 
 A routine discovery packet skips the preflight; its post-review still runs.
 
-**Post-execution**, before the Packet reviewer is spawned, Muse reads the frozen
+**Post-execution**, before the Packet reviewer is spawned, the guardrail reads the frozen
 packet, actual diff, validation, and load-bearing evidence:
 
 ```text
-MUSE_POST: CLEAR | REVISE | ESCALATE
+GUARDRAIL_POST: CLEAR | REVISE | ESCALATE
 BLOCKING:
 ANTI_VACUITY:
 INTEGRATION:
@@ -406,21 +406,21 @@ REVERSED_BY:
 
 - `CLEAR` sends the exact candidate tree/evidence to the Packet reviewer.
 - `REVISE` names a concrete repairable defect or evidence/test failure; fix it,
-  revalidate, and rerun Muse post-review.
+  revalidate, and rerun guardrail post-review.
 - `ESCALATE` means the next step requires an Advisor ruling before changing the frozen
   contract or opening a new causal branch.
 
-Muse `CLEAR` is **not acceptance**. It is the second side of the decision sandwich
+Guardrail `CLEAR` is **not acceptance**. It is the second side of the decision sandwich
 around execution.
 
 **Chores.** A chore gets the same post-execution check on its diff and gate output
 before it is recorded as done. `REVISE` is repaired and re-checked; `ESCALATE` goes to
 the Advisor.
 
-Every Muse re-check is bounded by the churn limits in §5.5.
+Every guardrail re-check is bounded by the churn limits in §5.5.
 
 **Packet reviewer** — a fresh child performs a **real review of a packet's delivered
-work after Muse returns `CLEAR`, before the packet can complete**. It is not a checklist: its job is to find out whether the work is
+work after the guardrail returns `CLEAR`, before the packet can complete**. It is not a checklist: its job is to find out whether the work is
 actually right and whether the evidence actually shows it. It reads the frozen packet,
 the diff in both repositories since the packet's baseline, the delivered evidence and
 run records, and the ledger entries the work relies on, and tries to falsify the
@@ -465,12 +465,12 @@ rules 1, 4, 5, 7 and 9 above. They never edit the work, the packet, or the evide
 and never lower a criterion on their own reading. A criteria-change request cannot turn failed evidence into success: a granted
 change is re-measured and re-reviewed (§2.3 hard ceiling).
 
-**Review and disputes** — Muse guardrail plus one independent acceptance stage:
+**Review and disputes** — Decision guardrail plus one independent acceptance stage:
 
-0. The delivered packet first passes Muse post-review. `REVISE` is repaired and sent
-   back to Muse; `ESCALATE` goes to the Advisor. Only `CLEAR` proceeds.
+0. The delivered packet first passes guardrail post-review. `REVISE` is repaired and sent
+   back to the guardrail; `ESCALATE` goes to the Advisor. Only `CLEAR` proceeds.
 
-1. After Muse `CLEAR`, the fresh Packet reviewer reviews the packet as above. `ACCEPT` is final
+1. After guardrail `CLEAR`, the fresh Packet reviewer reviews the packet as above. `ACCEPT` is final
    for the exact reviewed tree and evidence.
 
 2. On `NOT ACCEPTED` the Session records the review, then sorts each blocking item:
@@ -527,7 +527,7 @@ change is re-measured and re-reviewed (§2.3 hard ceiling).
    folding it into the disposition. Missing evidence remains missing evidence (§2.4).
    If the required decision is owner-reserved under §3.4, the Advisor asks the owner.
 
-6. `ACCEPT` then requires Muse `CLEAR`, every mandatory criterion `AGREED`, and no blocking finding
+6. `ACCEPT` then requires guardrail `CLEAR`, every mandatory criterion `AGREED`, and no blocking finding
    open, by the review or by the Advisor's ruling. That disposition binds for that
    evidence revision and is not re-ruled without new evidence or `PREMISE_CHANGED`.
 
@@ -670,7 +670,7 @@ The call is valid when made; the record makes it auditable afterwards.
 
 12. **Final-tree revalidation.** An earlier green run does not bind later edits. Before
     final packet acceptance, rerun load-bearing validation on the exact candidate tree
-    that Muse clears and the Packet reviewer reviews.
+    that the guardrail clears and the Packet reviewer reviews.
 
 ## 3. Definitions
 
@@ -743,15 +743,15 @@ rule for the situation. That is what the Advisor is for.
 Worker           -> Session
 Session          -> Planner        (packet design, adequacy, whether to revise)
 Planner          -> Advisor        (policy gap, methodology, architecture)
-Session          -> Muse guardrail (routine preflight and post-execution checks)
-Muse guardrail   -> Advisor        (policy/criteria/architecture/evidence decision)
+Session          -> Guardrail      (routine preflight and post-execution checks)
+Guardrail        -> Advisor        (policy/criteria/architecture/evidence decision)
 Packet reviewer  -> Advisor        (via Session; escalation, dispute, finding classification, criteria-change request)
 Turn reviewer    -> Advisor        (via Session; a disputed turn-end item, §4.5)
 Advisor          -> Owner         (§3.4 only; all technical questions end at Advisor)
 ```
 
 If the Advisor is unavailable, that is a staffing blocker; the Planner still decides
-within its own authority. If Muse is unavailable, work waits at the applicable side of
+within its own authority. If the guardrail is unavailable, work waits at the applicable side of
 the sandwich rather than silently skipping the guardrail.
 
 **The owner may message any agent directly**, including a child. Such a message is an
@@ -771,7 +771,7 @@ A contract role consults the Persistent Advisor when:
 - a criterion or step is ambiguous, contradicted, or cannot be executed as written;
 - work would need a policy, criterion, scope, or threshold change;
 - the Session and a reviewer disagree;
-- Muse returns `ESCALATE`;
+- the guardrail returns `ESCALATE`;
 - a new blocker appears before investigation and its mechanism is not already established;
 - choosing between technical approaches that differ in architecture, fidelity, or which
   code they touch;
@@ -796,7 +796,7 @@ No third blind attempt follows two failures of the same root-cause mechanism.
 
 **Not an Advisor question:** a fact a worker can read or measure; a question already
 answered by project authority or a recorded ruling; the same question again without new
-evidence; mechanical choices with no effect on the claim; the routine Muse
+evidence; mechanical choices with no effect on the claim; the routine
 pre/post-execution guardrail itself.
 
 A required consult is never skipped to stay inside a packet's senior-call budget.
@@ -861,9 +861,9 @@ correction changes a load-bearing premise, mark it `PREMISE_CHANGED` and ask the
 Advisor to reconsider every ruling that depended on it. Never instruct the Advisor not
 to revisit a premise.
 
-### 4.4 Advisor and Muse continuity
+### 4.4 Advisor and guardrail continuity
 
-The Persistent Advisor and Muse guardrail are both session-continuable children, but
+The Persistent Advisor and Decision guardrail are both session-continuable children, but
 they are separate roles and separate conversations.
 
 **Persistent Advisor**
@@ -874,21 +874,21 @@ they are separate roles and separate conversations.
 4. verify a second message reaches the same child;
 5. retain the child ID for later rulings.
 
-**Muse decision guardrail**
+**Decision guardrail**
 
-1. spawn on the §1 Muse route;
+1. spawn on the §1 guardrail route;
 2. verify the child is a real DSH child on that route;
 3. verify the listed effort and session-scoped workspace;
 4. verify listing visibility and second-turn continuation;
 5. retain the child ID for routine preflight/post-review.
 
-Do not seed a new Advisor or Muse guardrail from the current chat transcript. Brief from
+Do not seed a new Advisor or Decision guardrail from the current chat transcript. Brief from
 files and durable records. Recorded rulings and accepted review records, not child
 memory, carry authority across top-level sessions.
 
 Every Packet reviewer is a fresh child. A Turn reviewer is a fresh child for each turn
 and is continued through that turn's re-reviews (§4.5). Both are separate from the
-Advisor and Muse children.
+Advisor and guardrail children.
 
 If a required continuation mechanism is unavailable, work needing that role is
 `BLOCKED`; do not invent an invocation.
@@ -901,7 +901,7 @@ work the prompt asked for still undone, with a required step skipped, or with a 
 that claims more than was done.
 
 **Freeze first.** The Session asks for the review only when the turn's work is
-finished: no Advisor consult, Muse check or worker is outstanding, and the Session has
+finished: no Advisor consult, guardrail check or worker is outstanding, and the Session has
 stopped investigating. If a consult answers, or a new measurement or finding arrives,
 after the reviewer has started, that review is void; the Session finishes the work and
 starts a new cycle.
@@ -977,7 +977,7 @@ the Advisor rather than looping. After three `CONTINUE`s in one turn, the Adviso
 decides whether to end the turn, stop it, or order a fresh full review.
 
 **`END` closes the turn's records.** A `FOLLOW_UPS` entry, and any suggestion that
-arrives after `END` (a non-blocking Muse note or reviewer advisory), is recorded as a
+arrives after `END` (a non-blocking guardrail note or reviewer advisory), is recorded as a
 follow-up in the plan, not applied to the reviewed records. Changing those records after
 `END` reopens the review.
 
@@ -1088,23 +1088,23 @@ Every checkpoint decision is written into the draft, so the trail shows why plan
 ran long. A Planner that reaches 40 or 60 is a signal to the owner and Advisor, not a
 failure by itself.
 
-**4b. Muse execution preflight before adequacy/freeze.**
+**4b. Guardrail execution preflight before adequacy/freeze.**
 
 After the Planner expands the packet and the Session fills/verifies its mechanical
-commands, but **before** the fresh-Planner adequacy review, the session's Muse guardrail
+commands, but **before** the fresh-Planner adequacy review, the session's Decision guardrail
 reads the candidate packet and the smallest current source/evidence set needed to judge
 execution shape. It runs **once per packet**, on the first full draft; a routine
 discovery packet skips it (§2.2).
 
-It returns the `MUSE_PREFLIGHT` contract from §2.2.
+It returns the `GUARDRAIL_PREFLIGHT` contract from §2.2.
 
 - `PROCEED` sends the same draft to adequacy review.
-- `REDIRECT` sends it back to the Planner for bounded revision, and Muse re-checks only
+- `REDIRECT` sends it back to the Planner for bounded revision, and the guardrail re-checks only
   the redirected points.
 - `DISCOVERY_FIRST` requires a discovery packet for the missing fact.
 - `ESCALATE` goes to the Persistent Advisor.
 
-Because this happens before adequacy/freeze, resolving a Muse preflight finding does not
+Because this happens before adequacy/freeze, resolving a guardrail preflight finding does not
 reopen a frozen packet.
 
 **5. Authorship.**
@@ -1126,23 +1126,23 @@ reopen a frozen packet.
 
 | State | Meaning | Exit |
 |---|---|---|
-| **draft** | being written | Muse preflight, then adequacy review |
-| **MUSE REDIRECT** | preflight found a concrete packet-shape/test issue | Planner revision |
-| **MUSE DISCOVERY_FIRST** | preflight found implementation would be guessing | discovery packet |
-| **MUSE ESCALATE** | guardrail found Advisor-class decision | Advisor ruling |
+| **draft** | being written | guardrail preflight, then adequacy review |
+| **GUARDRAIL REDIRECT** | preflight found a concrete packet-shape/test issue | Planner revision |
+| **GUARDRAIL DISCOVERY_FIRST** | preflight found implementation would be guessing | discovery packet |
+| **GUARDRAIL ESCALATE** | guardrail found Advisor-class decision | Advisor ruling |
 | **INADEQUATE** | adequacy review found ≥1 blocking defect | revision (§5.4) or retirement |
-| **ADEQUATE** | review found zero blocking defects (a change packet also has `MUSE_PREFLIGHT: PROCEED`) | **frozen and promoted in the same step** |
+| **ADEQUATE** | review found zero blocking defects (a change packet also has `GUARDRAIL_PREFLIGHT: PROCEED`) | **frozen and promoted in the same step** |
 | **promoted** | frozen hash in `CURRENT PACKET` | Session and workers execute |
-| **delivered** | Session says criteria pass with evidence | Muse post-execution review |
-| **MUSE REVISE** | post-review found repairable defect without policy change | repair + revalidate + Muse post-review |
-| **MUSE CLEAR** | post-review found no blocking guardrail issue | fresh Packet reviewer |
+| **delivered** | Session says criteria pass with evidence | guardrail post-execution review |
+| **GUARDRAIL REVISE** | post-review found repairable defect without policy change | repair + revalidate + guardrail post-review |
+| **GUARDRAIL CLEAR** | post-review found no blocking guardrail issue | fresh Packet reviewer |
 | **disputed** | Packet reviewer returned `NOT ACCEPTED` and a dispute/classification remains | Advisor ruling (§2.2) |
 | **pending — criteria change** | Packet reviewer asked Advisor to change criteria | Advisor `KEEP` or `REVISE` (§5.4) |
 | **pending — reviewer escalation** | Packet reviewer escalated an item it could not settle | Advisor ruling, then measurement or re-review as the ruling requires |
-| **accepted** | Muse `CLEAR`, all mandatory criteria `AGREED`, and no blocking review finding open | record; plan names next work |
+| **accepted** | Guardrail `CLEAR`, all mandatory criteria `AGREED`, and no blocking review finding open | record; plan names next work |
 | **pending — CANNOT VERIFY** | reviewer cannot reproduce a criterion | new evidence; rerun affected sandwich stages |
 | **pending — reviewer unavailable** | reviewer route failed | repair route; no substitution |
-| **pending — post-review edits** | reviewed tree/evidence changed | Muse post-review + fresh Packet reviewer for affected criteria |
+| **pending — post-review edits** | reviewed tree/evidence changed | guardrail post-review + fresh Packet reviewer for affected criteria |
 | **escalated** | policy/architecture/scope/fidelity/exception question | Advisor ruling, then rerun/re-review as needed |
 | **retired** | premise failed or objective changed | recorded in plan |
 | **exploratory evidence** | artifact used bypass/synthetic completion | cannot satisfy strict criteria |
@@ -1162,7 +1162,7 @@ VERDICT:           ADEQUATE | INADEQUATE
 ```
 
 `VERDICT` is `ADEQUATE` exactly when `BLOCKING` is `NONE`,
-`PREMISE_FRESHNESS` is not `FAIL`, and, for a change packet, Muse preflight has
+`PREMISE_FRESHNESS` is not `FAIL`, and, for a change packet, guardrail preflight has
 returned `PROCEED` (§5.1.4b; once per packet, not per revision). There are no other counts or hidden conditions.
 
 For a **discovery packet** (§5.8), the writing Planner reviews its own packet. The two
@@ -1205,12 +1205,12 @@ interpretation ruling that execution follows, not by a revision.
 
 ### 5.5 Churn and redesign
 
-A change packet passes three checks before execution — Advisor shape preflight, Muse
-preflight, adequacy review — and two after it — Muse post-review and the Packet
+A change packet passes three checks before execution — Advisor shape preflight, guardrail
+preflight, adequacy review — and two after it — guardrail post-review and the Packet
 reviewer. These limits keep them from looping:
 
-1. **Muse preflight runs once.** After `PROCEED`, revisions go back to adequacy review
-   only. Muse preflights again only after `PREMISE_CHANGED` or a redesign under rule 5.
+1. **Guardrail preflight runs once.** After `PROCEED`, revisions go back to adequacy review
+   only. The guardrail preflights again only after `PREMISE_CHANGED` or a redesign under rule 5.
 2. **Re-checks cover what changed.** Any check after a revision or repair reads the
    changed regions and the points it raised, not the whole packet again.
 3. **No re-litigating.** A check does not reopen what an earlier check, an adequacy
@@ -1275,12 +1275,12 @@ claim.
 | Instrumentation | none it introduces silently | reversible, trace-only or behind an environment variable, off by default at closure | production code under full review |
 | Contract | none; the gate script is the contract | about one page (§6.3) | full contract (§6.1–6.2) |
 | Adequacy review | **none** — the gate script replaces it | writing Planner, two blocking questions + premise freshness (§5.3) | a Planner that did not write it, full review (§5.3) |
-| Review | Muse post-check (§2.2); otherwise the gate's own output is the record | Muse post-review, then the Packet reviewer confirms artifacts exist, match commands, and select the recorded outcome row, and reviews any instrumentation | Muse post-review `CLEAR`, then full independent review (§2.2): work reviewed, every criterion reproduced |
+| Review | guardrail post-check (§2.2); otherwise the gate's own output is the record | guardrail post-review, then the Packet reviewer confirms artifacts exist, match commands, and select the recorded outcome row, and reviews any instrumentation | guardrail post-review `CLEAR`, then full independent review (§2.2): work reviewed, every criterion reproduced |
 | Can claim | that the mechanical steps ran and what they produced | `"observed X under profile Y"` | what its criteria establish |
 
 **A chore needs no packet.** It is named as a chore in the authoritative plan (the
 plan's task tables and its §3 task classes), and its closure is
-`scripts/chore-gate.py`'s output plus the Muse post-check rather than a review. That is the whole point: the
+`scripts/chore-gate.py`'s output plus the guardrail post-check rather than a review. That is the whole point: the
 measured failure is the v0.11 sync taking **19.6 h and six revisions as packet A4s**,
 while the owner's direct v0.12 sync (121 upstream commits) landed as one merge commit
 and one record commit seven minutes apart (`2925f0b`, `32680d7`). The packet
@@ -1401,7 +1401,7 @@ arming call sites. See `docs/jsrf-run-profiles.md` for merge/evidence-profile po
     fixture probe (`AGENTS.md` "Probe runs").
 
 14. **Final-tree binding.** State which load-bearing commands are rerun after the final
-    accepted edit set so Muse and the Packet reviewer see evidence from the exact candidate
+    accepted edit set so the guardrail and the Packet reviewer see evidence from the exact candidate
     tree.
 
 Before release ask both questions:
@@ -1421,7 +1421,7 @@ Before release ask both questions:
 **Governing requirement:** <requirement or link>
 **Depends on:** <accepted packet IDs/revisions>
 **Baseline:** <game/toolkit revisions + dirty-state identity>
-**Senior-call budget:** <N Planner, N Advisor, N Muse guardrail, N review> (W13)
+**Senior-call budget:** <N Planner, N Advisor, N Decision guardrail, N review> (W13)
 **Revision log:** docs/reviews/<packet>-revision-history.md (non-authoritative)
 
 ### Motivating evidence
@@ -1521,16 +1521,16 @@ dump or a run with tracing off.
 
 | Term | Meaning |
 |---|---|
-| **decision sandwich** | senior roles freeze the bounded question/policy; Muse guards immediately before and after execution; a fresh Packet reviewer decides acceptance |
+| **decision sandwich** | senior roles freeze the bounded question/policy; the guardrail checks immediately before and after execution; a fresh Packet reviewer decides acceptance |
 | **model diversity** | a different model family from the work or decision layer being checked |
 | **procedural independence** | reviewer/adjudicating role did not author the work or decision it is judging and is asked to falsify, not confirm |
 | **evidence reproduction** | reviewer re-ran the load-bearing measurement |
 | **continuability** | the same child can receive a later message through the harness continuation API; a one-shot response does not qualify |
 | **route identity** | the canonical provider/model actually used, resolved live rather than inferred from a display label |
-| **guardrail clear** | Muse found no blocking pre/post execution issue; it is not final packet acceptance |
+| **guardrail clear** | the guardrail found no blocking pre/post execution issue; it is not final packet acceptance |
 
-Model diversity helps; it never replaces reproduced evidence. Muse and the Packet
-reviewer provide different checks: Muse has current-session context and catches
+Model diversity helps; it never replaces reproduced evidence. The guardrail and the Packet
+reviewer provide different checks: the guardrail has current-session context and catches
 decision/execution drift; the fresh Packet reviewer supplies independent acceptance.
 Continuability and route identity are separate properties and must be verified
 separately when §1 requires both.
@@ -1544,17 +1544,17 @@ separately when §1 requires both.
 | evidence-profile semantics, strictness, admitted model classes | `docs/jsrf-run-profiles.md` |
 | current packet, blocker, next action, milestone acceptance | `plan-jsrf-bare-minimum.md` |
 | a packet's operative contract | `docs/packets/<packet>.md` |
-| Muse preflight/post-review results, Packet reviewer verdicts, deferred advisories, discretionary decisions, case rulings | `docs/reviews/<packet>-r<N>-*.md` |
+| Guardrail preflight/post-review results, Packet reviewer verdicts, deferred advisories, discretionary decisions, case rulings | `docs/reviews/<packet>-r<N>-*.md` |
 | a packet's revision narrative | `docs/reviews/<packet>-revision-history.md` (non-authoritative) |
 | current top-level-session readiness receipt | `docs/reviews/startup-current.md` (rolling, non-historical) |
 | durable staffing/readiness facts for accepted work | the packet's durable acceptance/review record |
-| current-session Advisor/Muse child IDs | `docs/reviews/startup-current.md` only; never cross-session authority |
+| current-session Advisor/guardrail child IDs | `docs/reviews/startup-current.md` only; never cross-session authority |
 | historical handles from retired Muse routes | `.muse-workers.md` (history only; never readiness authority) |
 | transient session notes | outside the repository |
 | dated narrative | `docs/jsrf-operating-history.md` |
 
 Do not copy the roster outside §1. The Advisor decides general technical rules; the
-Planner applies them to packet design; Muse checks decision/execution alignment; the
+Planner applies them to packet design; the guardrail checks decision/execution alignment; the
 Packet reviewer decides acceptance; the Session records the durable result.
 
 `startup-current.md` is intentionally bounded operational state. Before it is replaced,
