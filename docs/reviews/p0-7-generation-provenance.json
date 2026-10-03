@@ -58,6 +58,57 @@
       "new_sha256": "76834b2b2b9843a9bf030cf7f0e2338e4e5d5d8c21b391f1d20d6069aa8e79bd",
       "old_sha256": "2148aa7a7579b0390b95260617b74a9e658f06b3868dc22b06539c6befabef46",
       "path": "config/recovered-functions.json"
+    },
+    {
+      "cause": "L02 recovery of the render-scene method 0x0014FEF0 (config/recovered-functions.json: start 0x0014FEF0, end 0x00150104, section .text, kind routine, stack_args 12). The address is the render-scene vtable 0x001E0F00 slot +0x148 (dword 0x001E1048, between 0x0014FDE0 and 0x0014FE30); the analysis database classified it detection_method=tail_jump_alias and folded it onto the shared E_INVALIDARG tail 0x00150231, so the generated dispatch answered the address with a wrapper for the wrong function. The recovery pass was re-run with the one reviewed entry added, which rewrote recovered.c and its fixture unit. Recovery entries are hashed as inputs, so the gate necessarily goes red for any recovery pass; this amendment records the measured hashes instead of re-recording a full translation pass. The change is one added function and one pre-existing body that the translator now emits differently (see the evidence below): it is not text-local to the new entry.",
+      "date": "2026-10-02",
+      "evidence": [
+        "measured: regenerating the reviewed set with the 0x0014FEF0 entry REMOVED reproduces the recorded baseline src/recomp/recovered/recovered.c 65cb5b696ee3b363a774589a4b64bbcaaae65ba01072cc34a2407592ebd715cf byte-for-byte (sha256 equal), so the tree changed by this one reviewed entry and not by a generator-version effect",
+        "the same replication run WITH the entry reproduces the current production recovered.c a469141f607252bf3da4f8b1b3c9c4790a550524e902f23ae4c4efdab6f30c6c byte-for-byte, which is the fidelity control for that comparison",
+        "measured body-by-body (3075 bodies before, 3076 after): 1 body added (0014FEF0), 0 removed, and exactly 1 PRE-EXISTING body changed -- body_0014FE60 (src/recomp/recovered/recovered.c:263193..263284). It gained five lines: `uint32_t ebp = 0;`, `ebp = g_ebp;`, `ebp = g_seh_ebp;` at the top and, at the end, `g_seh_ebp = ebp; sub_0014FEF0(); return; /* fallthrough 0x0014FEF0 */`. Cause: making 0x0014FEF0 a resolvable function entry lets the translator emit a fallthrough it previously suppressed. That fallthrough is unreachable dead code -- it follows an unconditional `esp += 16; return;` and no label follows it, so nothing can branch to it",
+        "src/recomp/recovered/recovered_11c1_test.c differs by exactly one added line, the declaration `extern void sub_0014FEF0(void);` at line 3733; the unit compiles 51 bodies and shares the 5579-entry declaration block with recovered.c",
+        "unchanged: every other generated output and every other input is byte-identical to the recorded hash",
+        "protected markers were recounted, not assumed. This change's true delta in recovered.c is RECOMP_ABI_CALL +0, JSRF_ABI_CONTINUE +3 (all three from the new checked wrapper) and g_seh_ebp +4 (2 in the new body, 2 in body_0014FE60's added lines); RECOMP_GENERATED_CODE is unchanged. The previously recorded per-file RECOMP_ABI_CALL count for recovered.c (9541) was ALREADY STALE before this change: the regenerated pre-L02 tree contains 9584, so the +43 is a stale-record correction, not an effect of this entry. All markers remain non-zero, so no ABI instrumentation was erased",
+        "amended, not regenerated: the recorded generation_mode, full_translation_command and toolkit/lifter identity are still those of the 2026-09-29 toolkit 2a349c8 full pass and the 2026-09-30 recovery pass; no new full translation ran"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "bytes": 101711,
+          "new_sha256": "9b9a6f51d753aa0a4ea164445992f7b5b11dd8a772a709c14347f5f411e12d63",
+          "old_sha256": "96110ed592a25d984dbd7f7715a1ec78ec66ac0514efad09fcc73df8fc1414fb",
+          "path": "config/manual-functions.json"
+        },
+        {
+          "bytes": 2803546,
+          "new_sha256": "a527838a440587f8bc260324a3e25b43ad57dc86b253ced9837621cb0c640128",
+          "old_sha256": "76834b2b2b9843a9bf030cf7f0e2338e4e5d5d8c21b391f1d20d6069aa8e79bd",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "bytes": 6017809,
+          "new_sha256": "c4c8f56402d6f6bd901b53752ee6f24bd317096dec8bed4c87497a0f845f1396",
+          "old_sha256": "25d3fc1059017835d482bbd27ced16b6961b01c4c23a70d7e25f558c779f3075",
+          "path": "tools/disasm/output/functions.recovered.json"
+        },
+        {
+          "new_sha256": "a469141f607252bf3da4f8b1b3c9c4790a550524e902f23ae4c4efdab6f30c6c",
+          "old_sha256": "65cb5b696ee3b363a774589a4b64bbcaaae65ba01072cc34a2407592ebd715cf",
+          "path": "src/recomp/recovered/recovered.c"
+        },
+        {
+          "new_sha256": "95671703a08b722516a5d31669e455f0130786da73d4c23f7f3e4722d5a69f6a",
+          "old_sha256": "5db2f0bc861dc48a3f1aa03724697e80a0056d12ad7c6cbd0ff4b8dfd25b9afa",
+          "path": "src/recomp/recovered/recovered_11c1_test.c"
+        }
+      ],
+      "recovery_entry": {
+        "end": "0x00150104",
+        "kind": "routine",
+        "section": ".text",
+        "stack_args": 12,
+        "start": "0x0014FEF0"
+      }
     }
   ],
   "checker_version": "jsrf-generation-provenance/1",
@@ -76,9 +127,9 @@
     "src/recomp/gen/recomp_stubs_recovery.c": "28aab23490cbfd82a7713986a1860e91c75879f4f79209b81f2425df72a3efb4",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
     "src/recomp/gen/recomp_types.h": "e1007de83bf802bac0ec192025c6c274bed7d86f845f8e653619f31f2a7a69a4",
-    "src/recomp/recovered/recovered.c": "65cb5b696ee3b363a774589a4b64bbcaaae65ba01072cc34a2407592ebd715cf",
+    "src/recomp/recovered/recovered.c": "a469141f607252bf3da4f8b1b3c9c4790a550524e902f23ae4c4efdab6f30c6c",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "5db2f0bc861dc48a3f1aa03724697e80a0056d12ad7c6cbd0ff4b8dfd25b9afa",
+    "src/recomp/recovered/recovered_11c1_test.c": "95671703a08b722516a5d31669e455f0130786da73d4c23f7f3e4722d5a69f6a",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "generation_mode": "full regeneration 2026-09-29 with the toolkit 2a349c8 lifter, then relift-selected.py boundaries; hand edits re-applied by scripts/patch-generated.py from config/generated-patches.json (the recomp_types.h project ABI additions, the six A4b2 jsrf_watch_store hooks, and the a4b-watch declaration). This tree predates toolkit 86113c7 --backedge-yield: RECOMP_BACKEDGE is absent, so under RECOMP_GUEST_SERIAL=1 a guest spin loop costs one bounded timeout (docs/jsrf-compatibility-ledger.md L34).",
@@ -107,14 +158,14 @@
       "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
     },
     "config/manual-functions.json": {
-      "bytes": 101678,
+      "bytes": 101711,
       "present": true,
-      "sha256": "96110ed592a25d984dbd7f7715a1ec78ec66ac0514efad09fcc73df8fc1414fb"
+      "sha256": "9b9a6f51d753aa0a4ea164445992f7b5b11dd8a772a709c14347f5f411e12d63"
     },
     "config/recovered-functions.json": {
-      "bytes": 2800530,
+      "bytes": 2803546,
       "present": true,
-      "sha256": "76834b2b2b9843a9bf030cf7f0e2338e4e5d5d8c21b391f1d20d6069aa8e79bd"
+      "sha256": "a527838a440587f8bc260324a3e25b43ad57dc86b253ced9837621cb0c640128"
     },
     "config/recovery-unresolved.json": {
       "bytes": 8288,
@@ -152,9 +203,9 @@
       "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
     },
     "tools/disasm/output/functions.recovered.json": {
-      "bytes": 6013470,
+      "bytes": 6017809,
       "present": true,
-      "sha256": "25d3fc1059017835d482bbd27ced16b6961b01c4c23a70d7e25f558c779f3075"
+      "sha256": "c4c8f56402d6f6bd901b53752ee6f24bd317096dec8bed4c87497a0f845f1396"
     }
   },
   "known_unknowns": [],
@@ -226,19 +277,19 @@
       },
       "src/recomp/recovered/recovered.c": {
         "markers": {
-          "JSRF_ABI_CONTINUE": 9222,
-          "RECOMP_ABI_CALL": 9541,
+          "JSRF_ABI_CONTINUE": 9228,
+          "RECOMP_ABI_CALL": 9584,
           "RECOMP_GENERATED_CODE": 1,
-          "g_seh_ebp": 6311
+          "g_seh_ebp": 6315
         },
         "present": true
       }
     },
     "totals": {
-      "JSRF_ABI_CONTINUE": 9222,
-      "RECOMP_ABI_CALL": 9549,
+      "JSRF_ABI_CONTINUE": 9228,
+      "RECOMP_ABI_CALL": 9592,
       "RECOMP_GENERATED_CODE": 5,
-      "g_seh_ebp": 6317
+      "g_seh_ebp": 6321
     }
   },
   "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",
