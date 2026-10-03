@@ -89,15 +89,30 @@ is harness metadata rather than a self-report.
 - Turn-2 marker: `MUSE-GUARDRAIL-PROBE-7F3A91C4`, returned verbatim by the same
   child on continuation.
 - Result: **PASS** for the §0.5 requirements.
-- **Recorded limitation (owner-directed diagnosis, §0.6).** The Muse child can read
-  files with `muse.read_file` / `muse.search`, but every `muse.powershell` call is
-  refused with `tool denied: deny_unmatched: no policy rule allows this action`.
-  This is **not** a DSH restriction: the child's DSH record carries
-  `sandbox/mode danger-full-access` and `approval/policy never`, both
-  `source: delegation`, and the plugin hardcodes Muse's own
-  `approvalMode: 'denyUnmatched'` at session creation. Until that changes, Muse
-  cannot run `git diff` / `git show` for a guardrail check and must read the
-  working tree and any written artifact instead.
+- **Recorded limitation (owner-directed diagnosis, §0.6).** Muse reports native-shell
+  denials. On four control commands (`git rev-parse HEAD`, `git show --stat HEAD`,
+  `python -X utf8 scripts\check-agent-docs.py --check`, `Get-Location`) it reported
+  `muse.powershell` as the tool and the identical text
+  `tool denied: deny_unmatched: no policy rule allows this action`. It supplied no
+  shell output for any of them, so no Muse output hash exists to compare and no
+  output mismatch was demonstrated. Its `docs/jsrf-run-profiles.md:50` quote matches
+  the repository byte-for-byte.
+  Rejecting layer (**inferred**, per the Advisor ruling below — not observed or
+  established): most likely Muse Code's own approval enforcement. Observed basis:
+  plugin code explicitly sets `approvalMode: 'denyUnmatched'`
+  (`src/muse/sdk-adapter.ts:305`); the denial token `deny_unmatched` is that same mode
+  name in snake_case; the child's DSH record carries `sandbox/mode danger-full-access`
+  and `approval/policy never`, both `source: delegation`; and `muse.read_file`
+  succeeded in the same child. Its README says Muse's native tools "are NOT mediated
+  by DSH's tool registry" and that DSH-side policies "do not constrain what Muse
+  itself can do". Uncertain: whether `muse.powershell` was invoked at all.
+  The child's DSH transcript records no `tool/call` or `tool/result` events, but
+  that absence is **not** cited as evidence either way: the plugin README states
+  Muse tools "never appear as DSH tool calls, tool-role messages, or tool events",
+  so the absence is expected by design.
+  Consequence for the guardrail, bounded to what was tested: the four commands above
+  did not return output, so a guardrail check that needs a command result must read
+  the working tree or a written artifact instead.
 - Exact error or missing evidence: none for §0.5.
 
 ## Persistent advisor probe — PASS
@@ -135,6 +150,64 @@ encoded; an added exit-code line is **not** part of any hash.
 
 `check-agent-docs.py --check` exited 0 (`checker jsrf-agent-docs/3`; `AGENTS.md`
 20312 bytes, budget 65536; `no findings`).
+
+Positive-control revision binding: all four commands were run at game revision
+`ab85bb9ea84b9488c6949b6a4def75a118f2dbda` (the pre-turn `HEAD`). The receipt commit
+below moved `HEAD`, so re-running `git rev-parse HEAD` / `git show --stat HEAD` now
+yields different hashes for the same commands; that is the revision change, not a
+changed measurement. The four hashes above reproduce at `ab85bb9`.
+
+## Advisor rulings recorded this session
+
+Advisor child `f60b72c9-f3b7-4aa0-a36b-5787ea9ea12c`, route
+`claude/claude-opus-5-5` @ `xhigh` (from its `request/header`), continuability
+verified this session. Consulted under §4.2 after the Turn reviewer's `CONTINUE`.
+Verbatim ruling text is in the session's turn record; the operative content:
+
+- **Q1 — rejecting layer.** May be reported only as **inferred**: "most likely Muse
+  Code's own approval enforcement", never observed or established. The zero DSH
+  `tool/call` events must **not** be cited either way, because the plugin README
+  states Muse tools never appear as DSH tool events, so that absence is expected by
+  design. Reversed by: a Muse-side record of that session showing a `powershell` tool
+  call with a typed denial (upgrades to observed), or showing no call at all (the
+  denial was confabulated and the attribution must be withdrawn).
+- **Q2 — configuration change.** Strongest admissible claim: "the plugin hardcodes
+  `approvalMode` (`src/muse/sdk-adapter.ts:305`) and its `Config` schema
+  (`src/config.ts:206–261`) has no approval key, so no plugin *configuration* setting
+  can change the mode a session starts in" — **observed, for this checkout only**.
+  "The smallest sufficient change is a plugin code change" is **not admissible** and
+  stays unestablished: necessity is not shown (the denial names a missing *policy
+  rule*, and the mode is select-never-create, so a host-side allow rule is not ruled
+  out; one rejected key in one plane rules out only that key), and sufficiency and
+  minimality are not shown (the other three modes are untested; `allowAll` would also
+  permit writes, not only reads). The "no profile-selection field/method" finding
+  holds only for the schema version read this session. Reversed by: host docs/schema
+  showing how rules are configured plus a live test where a read-only allow rule
+  returns shell output; or a full list of host config planes with no rule surface plus
+  a patched-plugin live test returning shell output.
+- **BASIS:** observed — the hardcoded value, the schema without an approval key, the
+  closed four-member mode union, and `muse.read_file` succeeding in the same child.
+  inferred — that the Muse runtime rather than the model produced the denial text, and
+  that a host-side rule layer exists. uncertain — whether `muse.powershell` was
+  invoked at all, and whether any host config surface admits a per-tool or per-command
+  allow rule.
+
+## Push record
+
+- PUSHED_TO: `origin`
+- BRANCH: `master`
+- COMMIT: `abb854a3d648a7e8a6d9e20d1a4f83f80bf729a9`
+- REMOTE_URL: `https://github.com/danillogical/poison-jam.git`
+- RESULT: success (`ab85bb9..abb854a`, fast-forward; outgoing path list is
+  `docs/reviews/startup-current.md` only; pre-commit passed including the
+  no-`game/`-path and secret audit).
+- Toolkit: **no push and no commit** — `main` at
+  `929856fcfc145036252510509abaa0782d910a22`, clean, 0 ahead / 0 behind `origin/main`;
+  `git pull --ff-only` reported `Already up to date.` The toolkit was pulled first,
+  as required, and had nothing to send.
+
+Corrections committed after the Turn reviewer's `CONTINUE` are recorded with their
+own push tuple in the commit that carries them.
 
 ## Packet readiness — PASS / BLOCKED / UNKNOWN
 
