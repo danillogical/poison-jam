@@ -215,7 +215,7 @@ def render(record: dict) -> str:
         f'- Planner: {field("Planner", UNVERIFIED)} (Claude Opus 5.5 @ high, `route: LIVE_RESOLVE`, fresh child)',
         f'- Persistent advisor: {field("Persistent advisor", UNVERIFIED)} (Claude Opus 5.5 @ xhigh, '
         f'`route: CONTINUABLE_PINNED`)',
-        f'- Muse guardrail: {field("Muse guardrail", UNVERIFIED)} (`subagent_muse` @ max, '
+        f'- Muse guardrail: {field("Muse guardrail", UNVERIFIED)} (Grok 4.7 @ xhigh, `route: CONTINUABLE_PINNED`, '
         f'one session-continuable child)',
         f'- Packet reviewer: {field("Packet reviewer", UNVERIFIED)} (Claude Opus 5.5 @ medium, '
         f'`route: LIVE_RESOLVE`, fresh child per packet review)',

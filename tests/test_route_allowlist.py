@@ -88,6 +88,16 @@ class RosterParsingTests(unittest.TestCase):
         self.assertIn(('codex', 'gpt-6.1-sol'), found)
         self.assertNotIn(('codex', 'acceptance-reviewer'), found)
 
+    def test_a_model_id_with_a_space_is_read_whole(self) -> None:
+        """A model id such as `Grok 4.7` must not be cut at the space."""
+        self.write_roster(ROSTER.replace(
+            '### Live verification',
+            '| **Guardrail** | — | `grok/Grok 4.7` @ `xhigh` |\n\n### Live verification'))
+        found, unpaired = routes.roster_routes()
+        self.assertIn(('grok', 'Grok 4.7'), found)
+        self.assertNotIn(('grok', 'Grok'), found)
+        self.assertEqual(unpaired, [])
+
     def test_only_the_roster_section_is_read(self) -> None:
         """A route named outside §1 is not a staffing policy."""
         self.write_roster(ROSTER + '\n`codex/not-a-role` appears in prose.\n')
@@ -110,6 +120,24 @@ class AllowlistParsingTests(unittest.TestCase):
         self.assertIn(('codex', 'gpt-6.1-sol'), found)
         self.assertIn(('workbuddy-ai', 'deepseek-v4.1-flash'), found)
         self.assertEqual(len(searched), 1)
+
+    def test_a_model_id_with_a_space_is_read_plain_or_quoted(self) -> None:
+        """YAML allows `model: Grok 4.7` plain or quoted; both are the same id."""
+        import tempfile
+        patch = PATCH + ('      - provider: grok\n        model: Grok 4.7\n'
+                         '      - provider: grok\n        model: "Grok 5"  # quoted\n')
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'cordis.patch.yml'
+            path.write_text(patch, encoding='utf-8')
+            saved = routes.PROFILE_PATCHES
+            routes.PROFILE_PATCHES = (path,)
+            try:
+                found, _ = routes.allowlist_routes()
+            finally:
+                routes.PROFILE_PATCHES = saved
+        self.assertIn(('grok', 'Grok 4.7'), found)
+        self.assertIn(('grok', 'Grok 5'), found)
+        self.assertNotIn(('grok', 'Grok'), found)
 
 
 class CoverageTests(unittest.TestCase):

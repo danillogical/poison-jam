@@ -31,7 +31,7 @@ current readiness.
    repository identities and dirty files. Nothing else selects packet-governed work.
 
 2. **Verify routes.** Confirm the running Session matches its §1 row from harness
-   metadata. Resolve the Planner, Packet reviewer and Turn reviewer routes live (§1).
+   metadata. Resolve the Planner, Muse guardrail, Packet reviewer and Turn reviewer routes live (§1).
    Record `UNKNOWN` if unverifiable; never infer a canonical route from a display name.
 
 3. **Probe the Packet reviewer.** Resolve its §1 route and spawn a fresh child at the
@@ -65,7 +65,7 @@ current readiness.
    - the child appears in the normal DSH child list;
    - the effective model route is the one §1 names;
    - its cwd is the current repository through session-scoped workspace resolution;
-   - Muse reads one named repository fact using Muse-native tools; and
+   - the child reads one named repository fact with its own tool call; and
    - a second message reaches the same DSH child and uses a marker supplied only in the
      first turn.
 
@@ -117,7 +117,7 @@ One harness is supported: the DeepSeek Harness (DSH). Use only these assignments
 | **Worker subagents** | `provider: workbuddy-ai`, `model: deepseek-v4.1-flash`, `reasoning_effort: max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
 | **Planner** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: high` | `claude/claude-opus-5-5` @ `high` (Claude Opus 5.5; `route: LIVE_RESOLVE`, fresh child per packet) |
 | **Persistent Advisor** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: xhigh` | `claude/claude-opus-5-5` @ `xhigh` (Claude Opus 5.5; `route: CONTINUABLE_PINNED`, session-continuable child) |
-| **Muse decision guardrail** | the `subagent_muse` tool, not `subagent` | `subagent_muse` @ `max` (`muse-code` / Muse Spark 1.3; one session-continuable child) |
+| **Muse decision guardrail** | `provider: grok`, `model: Grok 4.7`, `reasoning_effort: xhigh` | `grok/Grok 4.7` @ `xhigh` (Grok 4.7; `route: CONTINUABLE_PINNED`, one session-continuable child) |
 | **Packet reviewer** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: medium` | `claude/claude-opus-5-5` @ `medium` (Claude Opus 5.5; `route: LIVE_RESOLVE`, fresh child per packet review) |
 | **Turn reviewer** | `provider: codex`, `model: gpt-6.1-sol`, `reasoning_effort: high` | `codex/gpt-6.1-sol` @ `high` (GPT-6.1 Sol; `route: LIVE_RESOLVE`, fresh child per turn, continued through its re-reviews) |
 
@@ -127,17 +127,17 @@ exactly as the row gives them. DSH rejects a `model` without its `provider` ("ch
 select a route.
 
 `codex` here is the DSH **provider** name that serves GPT-6.1 Sol, not a harness.
-`subagent_muse` is the current DSH-native continuable Muse child route backed by
-`muse-code`; it is not the retired external Muse subagent provider that historically
-used the same name.
+The Muse decision guardrail keeps its role name and its verdict tokens
+(`MUSE_PREFLIGHT`, `MUSE_POST`) whatever model fills it. Grok 4.7 fills it from
+2026-10-03 (owner decision), spawned with `subagent` like the other routes rather than
+`subagent_muse`.
 
 **Fallback routes: NONE AUTHORISED.** A fallback is a staffing change and no agent may
 choose one. There is no second technical-escalation model above the Persistent Advisor.
 If a decision is outside the Advisor's authority, it is an owner decision under §3.4.
 
-The session allow-list in the active DSH profile must contain the ordinary model routes
-named above. `subagent_muse` is verified through its own child/model route rather than
-treated as an ordinary DSH tool-calling model.
+The session allow-list in the active DSH profile must contain the model routes named
+above.
 
 Completion after execution has two gates:
 
@@ -178,8 +178,8 @@ Owner only for §3.4 owner-reserved decisions
   independence is procedural: separate children, separate authority, and a Packet
   reviewer never receives the Planner, Advisor or Muse conversation. Its evidence
   reproduction is what makes a packet review independent.
-- Muse Spark is a different model family and supplies the routine pre/post execution
-  guardrail, not acceptance.
+- The Muse guardrail (Grok 4.7) is a different model family from the DeepSeek, Opus
+  and GPT roles, and supplies the routine pre/post execution guardrail, not acceptance.
 - The Turn reviewer (GPT-6.1 Sol) is a different model family from both the DeepSeek
   execution it checks and the Opus roles.
 
@@ -208,11 +208,11 @@ it uses a capable model.
   continuation result. A one-shot Opus child or a continuable child on an unverified
   model does not satisfy the role.
 
-- **Muse decision guardrail.** Use the §1 route. Verify it creates a real continuable
-  DSH child on that route, runs at the listed effort, appears in the
-  normal child list, and operates in the requesting DSH session's cwd. DSH-native tool
-  calling is unsupported on the Muse model route; Muse-native tools operate inside the
-  assigned workspace. Record the child ID and continuity probe.
+- **Muse decision guardrail: `CONTINUABLE_PINNED`.** Resolve its §1 route with
+  `list_subagent_models` as for an ordinary route, then verify it creates a real
+  continuable DSH child on that route, runs at the listed effort, appears in the normal
+  child list, and operates in the requesting DSH session's cwd. Record the child ID and
+  continuity probe.
 
 - **Planner.** A fresh child per packet or adequacy review as §5 requires.
 

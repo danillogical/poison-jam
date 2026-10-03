@@ -45,15 +45,17 @@ PROFILE_PATCHES = (
 )
 
 # `provider/model` in the roster table, e.g. `workbuddy-ai/deepseek-v4.1-flash`, or
-# a provider and model written separately.
-ROUTE = re.compile(r'`([a-z0-9-]+)/([A-Za-z0-9._-]+)`')
+# a provider and model written separately.  A model id may contain single spaces
+# (`grok/Grok 4.7`); cutting it at the space would name a route that does not exist.
+MODEL_ID = r'[A-Za-z0-9._-]+(?: [A-Za-z0-9._-]+)*'
+ROUTE = re.compile(r'`([a-z0-9-]+)/(' + MODEL_ID + r')`')
 # `provider: codex` beside a bare model name in backticks.
 PROVIDER_HINT = re.compile(r'provider:\s*([a-z0-9-]+)', re.IGNORECASE)
 MODEL_IN_BACKTICKS = re.compile(r'`([A-Za-z0-9][A-Za-z0-9._-]*)`')
 
-# The allow-list entries, from the YAML patch.
+# The allow-list entries, from the YAML patch; a value may be plain or quoted.
 ALLOWED_ENTRY = re.compile(
-    r'-\s*provider:\s*([a-z0-9-]+)\s*\n\s*model:\s*([A-Za-z0-9._-]+)')
+    r'-\s*provider:\s*["\']?([a-z0-9-]+)["\']?\s*\n\s*model:\s*["\']?(' + MODEL_ID + r')')
 
 
 def roster_routes() -> tuple[set[tuple[str, str]], list[str]]:
