@@ -620,6 +620,36 @@ package. Each gets criteria in the same five-part form when it becomes next.
    of `0x24700` during the **phase-2** fade (the recorded chain `1108A → 11096 → 11096 → 124C3 →
    13B24 → 13F9E → 6FA41` is from the phase-0 fade); in the port, whether those callers run during
    the hold.
+8. **Answered 2026-10-03 (owner-directed discovery, records only).** The **phase-2 chain is the
+   phase-0 chain**: all 10 phase-2 xemu hits at `0x24700` carry the identical return chain
+   `1108A → 11096 → 11096 → 124C3 → 13B24 → 13F9E → 6FA41` and the identical fade object
+   (`ECX 0x00600E60`, vtable `0x1C4D10`, flags `0x00010003`). The first phase-2 hit *is* the port's
+   stuck state (alpha 0, target 1, done 0, logo phase 2, hold 121) and the next is alpha `1/120`, so
+   hardware updates the fade on the frame phase 2 is entered. There is no separate phase-2 producer
+   and no second fade object.
+9. **The archived port capture cannot decide the port half, structurally.** The armed fade
+   `0x15F0E60` **is** in the walked list (`0x108FF40 → 0x1340060 → 0x108FFA0 → 0x15F0E60 → … →
+   0x143EE60`), its `+4` flags `0x00010003` are non-negative, `app+0xB0` (the subsystem-6 slot
+   `0x24650` reads) is that same object, and the tree matches the oracle node for node. But the
+   `[RECOVERED] 0x00024700` line is **first-call-only** (`recovered.c:15365`, printed ~136,000 log
+   lines before the cache marker), and the walker's sole indirect call `0x11087` is lifted to
+   `RECOMP_ICALL_SAFE_AT`, which publishes **no** guest event by construction. The earlier "no
+   retained match" was an instrument artifact, not evidence. The frozen main-thread frame
+   (`sub_00013A80+0x38D2` = `recomp_0000.c:8175`, the `0x13F2A` indirect call) shows the walk's
+   gate open — `app+0x40/+0x44/+0x48/+0x4C` all 0, which is the condition `0x123E0` needs to call
+   `0x11070` — yet alpha is 0. Either the walk does not run each frame during the hold or the node's
+   update is not invoked; the archive cannot separate those. **No cause claimed.**
+10. **Awaiting owner approval of one bounded run (not executed).** One exploratory run, **no code
+    change and no rebuild**: `RECOMP_WATCH=0x15F0EF8` (the fade's alpha field, literal VA — the
+    `[[…]+…+…]` pointer form misparses under the real grammar and would arm on a readable address
+    nothing writes) plus `RECOMP_WATCH_RAW=1`, otherwise the D2 profile and ledger IDs unchanged.
+    Positive control required: `[WATCH]` lines carrying the chain above must appear **before** the
+    hold, or the run is `UNCONTROLLED`. Outcomes: lines through the hold → the walk runs and the
+    defect is in the update's effect; lines before the hold only → the walk stops reaching the node;
+    no lines → uncontrolled, decides nothing. `RECOMP_WATCHDOG_SECS` is stripped by the runner and
+    `RECOMP_PEEK` cannot separate the cases. Details, artifacts and hashes:
+    `docs/reviews/owner-sega-600-observations.md`, "Owner-directed discovery: what should update the
+    armed fade (2026-10-03)".
 
 ### Fast path status
 
