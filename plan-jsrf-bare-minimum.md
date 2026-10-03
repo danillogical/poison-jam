@@ -625,33 +625,53 @@ package. Each gets criteria in the same five-part form when it becomes next.
    `1108A → 11096 → 11096 → 124C3 → 13B24 → 13F9E → 6FA41` and the identical fade object
    (`ECX 0x00600E60`, vtable `0x1C4D10`, flags `0x00010003`). The first phase-2 hit *is* the port's
    stuck state (alpha 0, target 1, done 0, logo phase 2, hold 121) and the next is alpha `1/120`, so
-   hardware updates the fade on the frame phase 2 is entered. There is no separate phase-2 producer
-   and no second fade object.
-9. **The archived port capture cannot decide the port half, structurally.** The armed fade
-   `0x15F0E60` **is** in the walked list (`0x108FF40 → 0x1340060 → 0x108FFA0 → 0x15F0E60 → … →
-   0x143EE60`), its `+4` flags `0x00010003` are non-negative, `app+0xB0` (the subsystem-6 slot
-   `0x24650` reads) is that same object, and the tree corresponds to the oracle's node for node
-   over that span (one oracle-only sibling after the logo, `0x52EE60`, is a later-scene object with
-   negative flags in the successor snapshots and is not on the fade's path). But the
-   `[RECOVERED] 0x00024700` line is **first-call-only** (`recovered.c:15365`, printed ~136,000 log
-   lines before the cache marker), and the walker's sole indirect call `0x11087` is lifted to
-   `RECOMP_ICALL_SAFE_AT`, which publishes **no** guest event by construction. The earlier "no
-   retained match" was an instrument artifact, not evidence. The frozen main-thread frame
-   (`sub_00013A80+0x38D2` = `recomp_0000.c:8175`, the `0x13F2A` indirect call) shows the walk's
-   gate open — `app+0x40/+0x44/+0x48/+0x4C` all 0, which is the condition `0x123E0` needs to call
-   `0x11070` — yet alpha is 0. Either the walk does not run each frame during the hold or the node's
-   update is not invoked; the archive cannot separate those. **No cause claimed.**
+   hardware updates the fade on the frame phase 2 is entered. Within the sampled interval (the
+   phase-0 fade-in plus 10 phase-2 hits, budget-reached) **no second producer and no second fade
+   object were observed**; the sample does not exclude one that was never hit.
+9. **The archived port capture answers reachability but cannot decide the object-specific half.** The
+   armed fade `0x15F0E60` **is** in the walked list (`0x108FF40 → 0x1340060 → 0x108FFA0 →
+   0x15F0E60 → … → 0x143EE60`), its `+4` flags `0x00010003` are non-negative, `app+0xB0` (the
+   subsystem-6 slot `0x24650` reads) is that same object, and the tree corresponds to the oracle's
+   node for node over that span (one oracle-only sibling after the logo, `0x52EE60`, is a
+   later-scene object with negative flags in the successor snapshots and is not on the fade's path).
+   The frozen main-thread frame (`sub_00013A80+0x38D2` = `recomp_0000.c:8175`, the `0x13F2A`
+   indirect call) **positively establishes** `0x13A80`, `0x13F80` and `0x6F9E0` on the chain, with
+   the walk's gate open (`app+0x40/+0x44/+0x48/+0x4C` all 0). What it does not establish is that
+   *that* frame updated *this* object, and the reason is ordering: the walk is preorder and reaches
+   the fade (child of `0x108FFA0`) **before** the logo (later sibling), and on the arming tick
+   `done` is still 1 from the previous cycle's completion store at `0x2494A`, so `0x24700` returns at
+   `0x24703` without writing `+0x98`; the logo then arms it further along the same walk at `0x7E4AF`
+   → `0x24540`, which sets `done = 0` and the target and never writes `+0x98`. The frozen state is
+   therefore the **post-arming state of the arming frame** (quick Advisor consult 2; an earlier
+   "live contradiction" reading of this record is retracted). What remains undecidable from the
+   archive: whether later activations selected this walk, descended into this subtree, or invoked
+   this node. The `[RECOVERED] 0x00024700` line is **first-call-only** (`recovered.c:15365`, printed
+   ~136,000 log lines before the cache marker) and the walker's sole indirect call `0x11087` is
+   lifted to `RECOMP_ICALL_SAFE_AT`, which publishes **no** guest event by construction, so the
+   earlier "no retained match" was an instrument artifact, not evidence. The activation counter
+   `app+0x87E0` (stored at `0x13F5C` after both the walk and the Present call, no `ret` between)
+   scales with duration for a fixed build and identical captured logo state (321 / 1016 / 3532 at
+   62.6 / 182.7 / 603.2 s), so the loop does **not** stop at the arming frame. **No cause claimed.**
 10. **Awaiting owner approval of one bounded run (not executed).** One exploratory run, **no code
     change and no rebuild**: `RECOMP_WATCH=0x15F0EF8` (the fade's alpha field, literal VA — the
     `[[…]+…+…]` pointer form misparses under the real grammar and would arm on a readable address
-    nothing writes) plus `RECOMP_WATCH_RAW=1`, otherwise the D2 profile and ledger IDs unchanged.
-    Positive control required: `[WATCH]` lines carrying the chain above must appear **before** the
-    hold, or the run is `UNCONTROLLED`. Outcomes: lines through the hold → the walk runs and the
-    defect is in the update's effect; lines before the hold only → the walk stops reaching the node;
-    no lines → uncontrolled, decides nothing. `RECOMP_WATCHDOG_SECS` is stripped by the runner and
-    `RECOMP_PEEK` cannot separate the cases. Details, artifacts and hashes:
-    `docs/reviews/owner-sega-600-observations.md`, "Owner-directed discovery: what should update the
-    armed fade (2026-10-03)".
+    nothing writes) plus `RECOMP_WATCH_RAW=1`, bound `--seconds 150` (arming lands by ~47 s in every
+    archived run), otherwise the D2 profile and ledger IDs unchanged, fresh disposable save root.
+    Positive control required: `[WATCH]` lines must appear **before** the hold, or the run is
+    `UNCONTROLLED`. The control accepts the update arriving through **any** of five traversals —
+    `0x123E0` routes to `0x11070`, `0x112A0`, `0x114D0`, `0x11700` or `0x11930` depending on
+    `app+0x40/+0x44/+0x48/+0x4C`, and on this object all five reach `0x24700` because its `+0x10`,
+    `+0x1C`, `+0x28` and `+0x34` slots all point at the `0xAECC0` thunk (`mov eax,[ecx]; jmp
+    [eax+4]`); requiring the recorded `0x1108A` chain specifically would turn a real hit on another
+    path into a false "uncontrolled". `watch_report` suppresses unchanged values
+    (`xbox_memory_layout.c:1567–1568`), so this is a **changed-value** watch, not a write log or an
+    entry trace: a hit is decisive for the positive case (with `done = 0` and `alpha 0 ≠ target 1`,
+    the store at `0x24748` is unavoidable), but **silence is not decisive** — "no lines after the
+    hold" means only that the alpha dword stopped changing, and does not separate "no traversal
+    reached the node", "`done` stayed 1", "the store was unchanged" or "the page lost protection".
+    `RECOMP_WATCHDOG_SECS` is stripped by the runner and `RECOMP_PEEK` cannot separate the cases.
+    Details, artifacts and hashes: `docs/reviews/owner-sega-600-observations.md`,
+    "Owner-directed discovery: what should update the armed fade (2026-10-03)".
 
 ### Fast path status
 

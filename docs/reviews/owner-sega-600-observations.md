@@ -326,11 +326,11 @@ Breakpoint `0x24700`, filtered on the SEGA logo object `0x515030` (vtable `0x1CC
 +30 0x00013B24  +40 0x00013F9E  +48 0x0006FA41
 ```
 
-ECX is `0x00600E60` in **both** phases, and the fade's links are identical (`child+0x28 = 0`, `sibling+0x30 = 0x00600F40`). So there is **no separate phase-2 producer and no second fade object**: the phase-2 fade-out is driven by the same tree walk, the same node, and the same call chain as the phase-0 fade-in. The plan's open question — "the caller chain of `0x24700` during the phase-2 fade" — is answered: it is the chain already recorded.
+ECX is `0x00600E60` in **both** phases, and the fade's links are identical (`child+0x28 = 0`, `sibling+0x30 = 0x00600F40`). Within the sampled interval — the logo's phase-0 fade-in and the 10 phase-2 hits at the budget — **every observed hit uses the same node and the same call chain**, so no *second* producer or fade object was **observed**; the sample cannot exclude one that was never hit before the budget ran out, and it is not claimed to. The plan's open question — "the caller chain of `0x24700` during the phase-2 fade" — is answered for what was sampled: it is the chain already recorded.
 
 Artifacts (local, outside git): `%TEMP%/owner-sega-phase2/{phase2-hits.json, phase0-hits.json, all-hits-summary.json, launch.json, oracle-phase2.py}`. `phase2-hits.json` sha256 `fb8e760d1ebd0b16d9997b78bcb9162eab0bb94d5f5b9a2406c22c97739517b2`; `phase0-hits.json` sha256 `5ae852534ca66079470e98c4dc3594c194a63419f4feb432066dc3c35df2c11a`.
 
-### 2. Port, read-only on `20261002-174731-263-owner-l02-d2-600` — the capture cannot answer it
+### 2. Port, read-only on `20261002-174731-263-owner-l02-d2-600` — the capture cannot answer the object-specific half
 
 Mapping gate first: `check-dump-mapping.py` → `matches 1, content-mismatch 0, unreadable 0, missing 0`, control `0x11000` exact. Every port value below is read at its actual guest VA from that dump.
 
@@ -350,6 +350,37 @@ The port tree corresponds to the oracle's node for node over the same span — `
 
 One difference, recorded rather than smoothed over: the oracle's `sega-ram.bin` snapshot has **one extra sibling** after the logo (`0x515030`'s `+0x30` = `0x52EE60`, vtable `0x001CCF78`), which the port's logo node does not have (`+0x30` = `0`). That node is a later-scene object: in the oracle's two successor snapshots its vtable has become `0x001C4390` with flags `0x80000000` (negative, so the walker skips it), and the logo's own `+0x30` is then `0`. It is appended after the SEGA segment, not before it, and it is **not** on the path that updates the fade — the fade is reached through `0x38FFA0`'s child, not through the logo's sibling. It does not affect the reachability finding above, and it is not claimed as a defect.
 
+**Where the fade sits in the walk's order** — replaying `0x11070`'s preorder (update node → recurse child `+0x28` → sibling `+0x30`) over the frozen port tree gives:
+
+| # | Node | flags | update `[[+0]]+4` | |
+|---|---|---|---|---|
+| 1 | `0x0108FF40` | `0x00000000` | `0x00011C90` | |
+| 2 | `0x01340060` | `0x00000000` | `0x00025310` | |
+| 3 | `0x0108FFA0` | `0x00000000` | `0x0007BDD0` | |
+| 4 | `0x015F0E60` | `0x00010003` | `0x00024700` | **← the armed fade** |
+| 5 | `0x015F0F40` | `0x00010003` | `0x00042880` | |
+| 6 | `0x0161B5E0` | `0x40000100` | `0x00011C90` | |
+| 7 | `0x015F2D40` | `0x00010003` | `0x00066440` | |
+| 8 | `0x0143EE60` | `0x00000009` | `0x0007E360` | **← the SEGA logo** |
+| 9 | `0x01341990` | `0x00000000` | `0x00118610` | |
+| 10 | `0x01345CC0` | `0x00000000` | `0x00116E30` | |
+
+The fade is visited **4th** and the logo **8th**, in the same traversal — which is what makes the arming order below load-bearing.
+
+**A second structural finding: the tree is traversed five times per activation, through five different vtable slots.** `0x123E0` does not simply call the walk or skip it — when a mode flag is set it calls a **different** traversal, and each traversal invokes a different slot on every node it visits:
+
+| Traversal | Slot invoked | Selected when |
+|---|---|---|
+| `0x11070` | `[[node]+0x04]` | all four of `app+0x40/+0x44/+0x48/+0x4C` are zero |
+| `0x112A0` | `[[node]+0x10]` | `app+0x44 != 0` |
+| `0x114D0` | `[[node]+0x1C]` | `app+0x40 != 0` |
+| `0x11700` | `[[node]+0x28]` | `app+0x48 != 0` |
+| `0x11930` | `[[node]+0x34]` | `app+0x4C != 0` |
+
+All five share the same shape — null check, `test [node+4]` / `js` skip, an optional `0x1BA8A0` call, the indirect call, then child `+0x28` and sibling `+0x30` recursion — and all four alternatives reach the fade too, because the fade's `+0x10`, `+0x1C`, `+0x28` and `+0x34` slots all point at `0x000AECC0`, which is `mov eax, [ecx]; jmp [eax+4]` — a **thunk back to the very same `+4` update** (`0x24700`). The logo's four alternative slots instead point at `0x00011C90`, which is a bare `ret` (its real body is the separate `0x11CA0` entry).
+
+So `0x24700` is reachable through **five** traversals, not one, and on the fade all five land on the same body. This is recorded because it widens the reachability question: a run that fails to show the `0x11070` chain has not shown the fade was unreached — a mode flag would route the update through one of the other four paths and still call `0x24700`. It is **not** claimed to be the defect; nothing here shows which traversal ran, and the `0x1108A` chain xemu recorded is the `0x11070` one.
+
 **But nothing in this capture records whether `0x24700` ran during the hold, and the reason is structural, not statistical:**
 
 - `src/recomp/recovered/recovered.c:15365` logs on **first call only** (`if (!logged++)`). The single `[RECOVERED] 0x00024700 returned` line is at [log 6660](../../logs/runs/20261002-174731-263-owner-l02-d2-600/jsrf_run.log#L6660) — early in the run, ~136,000 lines **before** the cache marker at [log 141999](../../logs/runs/20261002-174731-263-owner-l02-d2-600/jsrf_run.log#L141999). A later call cannot print.
@@ -357,7 +388,7 @@ One difference, recorded rather than smoothed over: the oracle's `sega-ram.bin` 
 - The frozen 128-event tails contain only kernel-bridge events (targets `001BA050`, `001916C0`, …). The absence the earlier session reported was therefore **guaranteed by the instrument**, not evidence about the guest.
 - The TLS ICALL ring is 16 targets and is not in the dump.
 
-So **step 2's answer is: no — the archived capture cannot decide it, and no amount of re-reading it will.**
+So **step 2's answer is: the capture answers the reachability half and cannot answer the object-specific half.** Positively captured: `0x13A80`, `0x13F80` and `0x6F9E0` are on the main thread's chain, and the armed fade is present in the list the walk traverses. Not answerable from this archive: whether `0x24700` was invoked **on this object** during the hold — the two records that would show it are structurally incapable of it (below), and no amount of re-reading changes that.
 
 **What the capture does say, and it sharpens the question.** The frozen main thread's native stack ([stacks.txt:50977–50979](../../logs/runs/20261002-174731-263-owner-l02-d2-600/stacks.txt#L50977-L50979)) is
 
@@ -368,11 +399,21 @@ sub_0014D090+0x117  ->  sub_00013A80+0x38D2 (recomp_0000.c:8175)  ->  sub_00013F
 and `recomp_0000.c:8175` is the `0x13F2A` indirect call to `0x14D090`. Two static facts make that frame load-bearing:
 
 - `0x13A80` reaches `0x13B1F` (`call 0x123E0`) **unconditionally**: between `0x13A80` and `0x13B1F` there is no `ret`, and the only `jmp` is `0x13A9B jmp 0x13AA2`; every other branch target in that range is inside it.
-- `0x123E0` calls the walk (`0x124B8 → 0x11070`) **only when all four of `app+0x40`, `+0x44`, `+0x48`, `+0x4C` are zero**; otherwise it takes one of four `jmp 0x124C3` shortcuts and the walk is skipped. All four read **0** in the frozen dump, and `0x13A80` sets them from `+0x50..+0x6C` at the top of the same frame — so the frozen frame's own flags select the walk path.
+- `0x123E0` calls the walk (`0x124B8 → 0x11070`) **only when all four of `app+0x40`, `+0x44`, `+0x48`, `+0x4C` are zero**; otherwise it takes one of four `jmp 0x124C3` shortcuts and the walk is skipped. All four read **0** in the frozen dump.
 
-The frame counter at `app+0x87E0`/`+0x87E4` reads 3974, so the frame loop is well past its opening iterations.
+**One caveat on that second point, and how far it goes.** Those four fields are **recomputed at the top of every activation** of `0x13A80` — `0x13A85`–`0x13AFA` derives each from `app+0x50..+0x6C`, and `0x13AFD` then clears `+0x50`. So a frozen reading describes the capture frame's own decision and is not a standing property of the run. For **this** frame, however, the reading does decide: in the lifted body, the `0x123E0` call is at `recomp_0000.c:7652` and the frozen `0x13F2A` Present call is at `:8175`, and there is **no** write to `app+0x40`, `+0x44`, `+0x48` or `+0x4C` anywhere between them. So the frame that is on the stack at capture is one whose `0x123E0` saw all four flags zero and therefore took the `0x124B8 → 0x11070` walk path. What the frozen zeros do **not** license is any claim about *other* activations in the run — an earlier draft used them that way, and that step is withdrawn.
 
-So the port reads point the **opposite** way from the frozen fade state: the walk's gate is open, the armed fade is in the walked list with non-negative flags and update slot `0x24700`, and `0x24700`'s translated body would add `1/120` to an alpha of 0 against a target of 1 — yet alpha is 0 and `done` is 0. Either the walk does not actually run during the hold (something upstream of `0x13B1F` is not reached every frame), or it runs and this node's update is not invoked. **The archive cannot separate those two, and the distinction is exactly the repair target.** No cause is claimed here.
+So that frame **does** establish that the walk ran in that activation, and it establishes the chain `0x13A80 → 0x13F80 → 0x6F9E0` positively. What it does **not** establish is that this frame's walk updated the armed fade — and the reason is ordering, not luck:
+
+- The walk is **preorder**: `0x11087` calls the node's update, `0x1108A` takes the child `+0x28`, `0x11096` the sibling `+0x30`. The fade `0x15F0E60` is a **child of `0x108FFA0`**, while the logo `0x143EE60` is a **later sibling of `0x15F0F40`** — so the walk reaches the fade *before* the logo, every time.
+- On the arming tick the fade's `done` is still `1`, left by the previous cycle's completion store at `0x2494A`. `0x24700` then returns at `0x24703` (`jne 0x24962`, and `0x24962` is `pop esi; ret`) **without touching `+0x98`**.
+- The logo arms it further along the same walk: `0x7E409`–`0x7E424` (hold → 121, phase++) then `0x7E4AF` → `0x24620` → `0x24540`, which writes `done = 0` at `0x24553` and the target at `0x24578`, and **never writes `+0x98`**.
+
+The frozen state — alpha 0, target 1.0, done 0, logo phase 2, hold 121 — is therefore exactly the **post-arming state of the arming frame**, and it is what that state looks like whether or not every later frame updates the fade. Quick Advisor consult 2 (`c548070d-9cc1-4340-b3b0-d56d88e2f0cc`) ruled this way; the Session reproduced each step above from the original bytes.
+
+**An earlier reading of this record is retracted.** It argued the frozen frame proved a live contradiction — that reaching `0x13F2A` implies the walk ran and must therefore have written alpha. That inference silently assumed the fade was *already armed* when the walk reached it in that frame; on the arming frame it is not. No contradiction is claimed.
+
+**What the archive does narrow.** The activation counter at `app+0x87E0` is stored at `0x13F5C`, inside `0x13A80`, after both the `0x13B1F` walk call and the `0x13F2A` Present call, with no `ret` between entry and that store — so it counts completed activations of the frame function. It is **not** frozen at a build-specific constant: for build `7027fafad9cd` it reads 321, 1016 and 3532 at 62.6 s, 182.7 s and 603.2 s, while the captured logo state is identical in all three (phase 2, hold 121). Those longer runs therefore performed thousands more activations with the logo sitting in that state, so the main loop does **not** stop at the arming frame. Yet alpha is still exactly 0 at capture. So the frozen state is not simply "everything halted at arming" — but whether those later activations selected this walk (the `+0x40/+0x44/+0x48/+0x4C` gate at `0x123E0`), descended into this subtree, or invoked this node's update, **this archive cannot separate.** No cause is claimed here.
 
 ### 3. Proposed bounded run — for owner approval, not executed
 
@@ -382,28 +423,34 @@ One exploratory run, **no code change and no rebuild**, using an instrument alre
 RECOMP_WATCH=0x15F0EF8
 ```
 
-plus `RECOMP_WATCH_RAW=1` for the unfiltered frame. Keep the D2 profile and ledger IDs of the latest run otherwise unchanged, with a fresh disposable save root.
+plus `RECOMP_WATCH_RAW=1` for the unfiltered frame. Keep the D2 profile and ledger IDs of the latest run otherwise unchanged, with a fresh disposable save root. **Bound: `--seconds 150`.** That is the smallest bound that still contains the whole arming sequence — the logo reaches phase 1 / hold 61 by 14.6 s and phase 2 by ~47 s in every archived run, so 150 s gives the arming tick plus roughly 100 s of post-arming frames to watch, at the ~6 fps those runs sustain. The run is a diagnostic, not a horizon: `RECOMP_WATCHDOG_SECS` is out (`run-jsrf.py:326` strips it and it ends the process with `_exit(3)`), so the bound is the runner's own `--seconds`.
 
 **Why the literal VA and not a pointer chain.** `xbox_WatchInit` ([xbox_memory_layout.c:1699–1705](../../../xboxrecomp/src/kernel/xbox_memory_layout.c#L1699-L1705)) treats **every** leading `[` as a dereference of the root and then reads **one** trailing `+offset`; `[[0x22FCE0]+0xB0+0x98]` would therefore resolve to `mem[mem[0x22FCE0]]+0xB0` — the app's vtable in `.rdata`, a readable page nothing writes — and the watch would arm and stay silent. That is a false negative, not a measurement. `RECOMP_PEEK` has the same grammar. The literal VA is safe here because `app+0xB0 == 0x15F0E60` (so alpha is `0x15F0EF8`) in **all three** archived port dumps checked: `20261002-014152-190`, `20261002-132843-938`, `20261002-174731-263`. A future run must re-check that before reading the output.
 
 **Why this instrument and not the alternatives.** `RECOMP_WATCH` traps the page, single-steps the writer and prints the guest call chain, so a hit is decisive about *whether and by whom* alpha was written — the exact question. `RECOMP_WATCHDOG_SECS` is out: `run-jsrf.py:326` strips it and it ends the process with `_exit(3)`. `RECOMP_PEEK` only snapshots, and alpha's frozen value is already known. `RECOMP_ICALL_FEEDBACK` would need a rebuild (`#ifdef`-gated), so it is not the smallest instrument for a no-rebuild run.
 
-**Named positive control (required — `check-instrument-controls.py` classes `RECOMP_WATCH` as an instrument).** In xemu the phase-0 fade-in writes alpha on **this same object** (`ECX 0x00600E60`), and the phase-2 arm writes it again on the same object. The run must therefore show `[WATCH]` lines for `0x15F0EF8` carrying the `1108A → 11096 → 11096 → 124C3 → 13B24 → 13F9E → 6FA41` chain **before** the hold. No such line means the run is **UNCONTROLLED** and the address or the profile is wrong — not that the walk stopped.
+**Named positive control (required — `check-instrument-controls.py` classes `RECOMP_WATCH` as an instrument).** In xemu the phase-0 fade-in writes alpha on **this same object** (`ECX 0x00600E60`), and the phase-2 arm writes it again on the same object. The run must therefore show `[WATCH]` lines for `0x15F0EF8` **before** the hold. No such line means the run is **UNCONTROLLED** and the address or the profile is wrong — not that the walk stopped.
 
-**What the outcomes decide.**
+The control must accept the update arriving through **any** of the five traversals above, because on this object all five end at `0x24700`. The chain printed will name whichever one ran: the update-call return is `0x1108A` for `0x11070`, `0x112BA` for `0x112A0`, `0x114EA` for `0x114D0`, `0x1171A` for `0x11700`, and `0x1194A` for `0x11930`. The recorded xemu chain carries `0x1108A` — the `0x11070` path. Requiring `0x1108A` specifically would turn a genuine hit through one of the other four into a false "uncontrolled", so the control is **any of the five**, with the traversal named in the record.
 
-| Outcome | Means |
-|---|---|
-| Watch lines present through the phase-2 hold | The walk runs and updates the armed fade; the defect is inside the update's effect (a reset or a second writer), and the printed chain names it. |
-| Watch lines before the hold only, none after | The walk stops reaching this node when phase 2 begins — the defect is upstream of `0x24700`. |
-| No watch lines at all | `UNCONTROLLED`: address/profile wrong; the run decides nothing. |
+**What the outcomes decide — and what they do not.** `watch_report` suppresses unchanged values (`xbox_memory_layout.c:1567–1568`: `if (now == g_watch_last) return;`), so this is a **changed-value** watch, not an entry trace or a write log. Every "no line" outcome below means *the 32-bit value at that address did not change*, and nothing more.
+
+| Outcome | Means | Does **not** mean |
+|---|---|---|
+| `[WATCH]` hits after the hold | The walk reached this node and `0x24700`'s store ran on this object after arming — the write happens. The chain is a **lead** until the offsets are validated against `recomp_0000.c`, and it names **which** of the five traversals ran. | Not that the value survived, and not that the fade is visible. |
+| Hits before the hold only, none after | The alpha dword stopped changing when phase 2 began. Consistent with no traversal reaching this node, with `done` staying 1, with an unchanged store, or with the page losing protection. **These are not separated.** | Not proof the traversals stopped, not proof the node is unreached, not proof the defect is upstream of `0x24700`. |
+| No hits at all | **UNCONTROLLED.** The phase-0 control did not fire, so the address or the profile is wrong and the run decides nothing. | Not "the walk stopped". |
+
+The asymmetry is the point: a hit is decisive for the positive case (with `done = 0` and `alpha 0 ≠ target 1`, `0x24700`'s store at `0x24748` is unavoidable — no branch avoids it), while **silence is not decisive for the negative case**. `RECOMP_WATCH` also traps the whole 4 KiB page and re-protects it after each single step, so the watch must be shown to still be armed late in the run before silence is even read as "no change".
 
 **Limits.** This is exploratory and moves no strict horizon; it establishes only whether and by whom the alpha field was written. It does not establish a cause, and it is not a fidelity claim. No ledger ID is allocated for it: `RECOMP_WATCH`/`RECOMP_WATCH_RAW` are already listed observation-only with no semantic effect, so the run adds no shortcut.
 
 **Stopped here for owner approval** of that one run. Nothing was built, launched or changed in the port; no bypass, stub or ledger entry was created.
 
-### Quick Advisor consult (instrument choice)
+### Quick Advisor consults
 
-Advisor child `c548070d-9cc1-4340-b3b0-d56d88e2f0cc`, `claude/claude-opus-5-5` @ `xhigh`, continuable (startup probe PASS, `docs/reviews/startup-current.md`). Question: is `RECOMP_WATCH` on the fade's alpha the right smallest no-rebuild instrument, and is there a cheaper decisive switch? Answer, reproduced and independently confirmed by the Session: the proposed pointer spec **misparses** under the real grammar (confirmed at `xbox_memory_layout.c:1699–1705`) and would arm on a silently-wrong readable address; use the literal VA after confirming `app+0xB0` in another archived dump (confirmed across three dumps); `RECOMP_WATCHDOG_SECS` is stripped and `RECOMP_PEEK` cannot separate the two cases; a watch hit is decisive but silence is not, so the run needs the phase-0 positive control; and the zero-cost checks (walker gate, node fields, kernel-bridge tail) should run first. Those zero-cost checks were run and are recorded above. `REVERSED BY:` walker disassembly showing no per-node gate before `0x11087` — the walker **does** gate at `0x11077` (`js` on `node+4`) and again at the `0x123E0` flag branches, so silence will not be read as "walk stopped"; or archived port dumps disagreeing on `app+0xB0` — they agree.
+**Consult 1 — instrument choice.** Advisor child `c548070d-9cc1-4340-b3b0-d56d88e2f0cc`, `claude/claude-opus-5-5` @ `xhigh`, continuable (startup probe PASS, `docs/reviews/startup-current.md`). Question: is `RECOMP_WATCH` on the fade's alpha the right smallest no-rebuild instrument, and is there a cheaper decisive switch? Answer, reproduced and independently confirmed by the Session: the proposed pointer spec **misparses** under the real grammar (confirmed at `xbox_memory_layout.c:1699–1705`) and would arm on a silently-wrong readable address; use the literal VA after confirming `app+0xB0` in another archived dump (confirmed across three dumps); `RECOMP_WATCHDOG_SECS` is stripped and `RECOMP_PEEK` cannot separate the two cases; a watch hit is decisive but silence is not, so the run needs the phase-0 positive control; and the zero-cost checks (walker gate, node fields, kernel-bridge tail) should run first. Those zero-cost checks were run and are recorded above. `REVERSED BY:` walker disassembly showing no per-node gate before `0x11087` — the walker **does** gate at `0x11077` (`js` on `node+4`) and again at the `0x123E0` flag branches, so silence will not be read as "walk stopped"; or archived port dumps disagreeing on `app+0xB0` — they agree.
+
+**Consult 2 — is the frozen frame a contradiction?** Same child. The Session was about to record that the frozen `0x13A80` frame proved a live contradiction (walk ran ⇒ alpha must have been written ⇒ yet alpha is 0). The Advisor ruled the inference **unsound**, and named the failing premise: the fade was not yet **armed** when that frame's walk reached it. The Session then reproduced each step from the original bytes and retracted the reading (§2 above): `0x24703` skips when `done != 0`, `0x24962` is `pop esi; ret`, `done` is left at 1 by the completion store at `0x2494A`, the walk is preorder with the fade ahead of the logo, and the arm at `0x24540` sets `done = 0` and the target but never `+0x98`. The Advisor further concluded "the walk stopped — the main loop has not finished a frame since the arming tick". **The Session checked that and found it contradicted by the archive**: the activation counter at `app+0x87E0` scales with duration for a fixed build and captured logo state (321 / 1016 / 3532 at 62.6 / 182.7 / 603.2 s, build `7027fafad9cd`), so the loop does not stop at the arming frame. The record states the narrower finding — the frozen state is the post-arming state, and the archive cannot separate "later frames did not select this walk" from "the walk ran but did not reach or invoke this node". `REVERSED BY:` evidence that the counter is not one-per-activation, or that the fade's alpha is written on later frames while the captured value stays 0.
 
 **Records-only closure.** No port fix, no runtime edit, no new run, no ledger ID, no observer retry, no APU trace. The single xemu session was read-only and is spent.
