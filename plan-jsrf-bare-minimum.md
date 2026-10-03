@@ -639,7 +639,8 @@ package. Each gets criteria in the same five-part form when it becomes next.
    the traversal's gate open (`app+0x40/+0x44/+0x48/+0x4C` all 0). What it does not establish is that
    *that* frame updated *this* object, and the reason is ordering: the walk is preorder and reaches
    the fade (child of `0x108FFA0`) **before** the logo (later sibling), and on the arming tick
-   `done` is still 1 from the previous cycle's completion store at `0x2494A`, so `0x24700` returns at
+   `done` is still 1 — set either by the completion store at `0x2494A` or by the immediate-set path
+   at `0x24493`, which this record does not try to distinguish — so `0x24700` returns at
    `0x24703` without writing `+0x98`; the logo then arms it further along the same walk at `0x7E4AF`
    → `0x24540`, which sets `done = 0` and the target and never writes `+0x98`. The frozen state is
    therefore **exactly what the arming frame leaves behind**, so that account is *compatible* with
@@ -668,24 +669,29 @@ package. Each gets criteria in the same five-part form when it becomes next.
     would arm on a readable address nothing writes — plus `RECOMP_WATCH_RAW=1`, bound
     `--seconds 150` (a concrete cap, **not** established as the smallest sufficient one), otherwise
     the D2 profile and ledger IDs unchanged, fresh disposable save root.
-    **The target is `done`, not alpha, because the first control proposal was unreliable**: the
-    phase-0 fade-in has too little room in the port — phase 0's handler `0x7E3BC` advances the phase
-    as soon as `0x24650` reports `done != 0`, the constructor sets `done = 1`, and the phase-1 dump
-    `20260930-225440-580-f3-alias-fix-strict` sits at phase 1 / hold 61 after 72 activations, so
-    phase 0 can have lasted at most 11 activations where a 1/120 fade-in needs ~120, with the fade
-    unarmed (`done = 1`, `target = 0.0`) at capture — so an alpha watch could go silent for a reason
-    unrelated to the question (quick Advisor consult 3; the Session's later evidence that the `step`
-    field holds the 1/120 arm value was returned to the Advisor under §4.3 PREMISE_CHANGED, because
-    it meets consult 3's own `REVERSED BY` and is not yet ruled on).
+    **The target is `done`, not alpha, because the first control proposal was unreliable**: phase 0's
+    handler `0x7E3BC` advances the phase as soon as `0x24650` reports `done != 0`, the constructor
+    sets `done = 1`, and the phase-1 dump `20260930-225440-580-f3-alias-fix-strict` sits at phase 1 /
+    hold 61 after 72 activations — so **72 − 61 = 11 activations lie outside the captured phase-1
+    hold**, and the fade is unarmed (`done = 1`, `target = 0.0`) with alpha 0 at capture. That
+    subtraction bounds only that quantity: it does **not** establish the phase-0 interval, exclude an
+    earlier arm, exclude partial updates or exclude a direct reset, so "the phase-0 fade-in never
+    runs" is **not** claimed. The supported point is that an alpha watch could plausibly go silent for
+    reasons unrelated to the question. (Quick Advisor consult 3; the Session's evidence that `step`
+    holds the 1/120 arm value was returned to the Advisor under §4.3 `PREMISE_CHANGED` because it
+    meets consult 3's own `REVERSED BY` — that ruling is **pending**, and the `done` target is
+    proposed on its own merits rather than on the contested claim.)
     Control and positive case on that one address, both guaranteed value changes: the arm's `1 → 0`
     at `0x24553` (reached via `0x24620`/`0x24540`) proves the fade **was armed**; the completion's
     `0 → 1` at `0x2494A`, **inside `0x24700`**, indicates the update ran to completion on this
     object **only once the printed chain is validated** — a bare `0 → 1` is ambiguous, because
-    `0x24480` (via `0x24600`) also writes `done = 1` at `0x24493`. `done` armed and never returning
-    to `1` is the discriminating outcome, with watch failure still an open case. `done 1 → 0` alone
-    does **not** prove the *logo* armed it — 57 call sites reach `0x24620` and 7 reach `0x24600`,
-    all sharing subsystem slot 6 — and the printed chain is a **lead** to be validated against
-    `recomp_0000.c`, with the logo's phase/hold read at that moment, not assumed.
+    `0x24480` (via `0x24600`) also writes `done = 1` at `0x24493`. `done` armed with no **logged**
+    return to `1` is the discriminating outcome; watch failure and a completion falling outside the
+    150 s window both remain open cases, since a guaranteed guest value change is not a guaranteed
+    observation. `done 1 → 0` alone does **not** prove the *logo* armed it — 57 call sites reach
+    `0x24620` and 7 reach `0x24600`, all sharing subsystem slot 6 — and the printed chain is a
+    **lead** to be validated against `recomp_0000.c`, with the logo's phase/hold read at that moment,
+    not assumed.
     `RECOMP_WATCH` takes a single target and `watch_report` suppresses unchanged values
     (`xbox_memory_layout.c:1567–1568`), so this is a **changed-value** watch, not a write log or an
     entry trace: hits are decisive for the transitions above, but **silence is not** — the remaining
