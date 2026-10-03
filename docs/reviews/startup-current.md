@@ -247,9 +247,37 @@ Turn-end review record for this turn (not a packet acceptance):
   supersedes `jsrf-turn-draft-2026-10-03.md` (now void); the Advisor's complete ruling
   is recorded verbatim above; the third push tuple is recorded; the two invocation
   phrases and the stale Turn-reviewer line are corrected.
-- Re-review 2: the same Turn reviewer child (`4bfc8a87-a3c0-496c-b8f7-af2471eae6e4`,
-  `codex/gpt-6.1-sol` @ `high`) is continued with the corrected reply and this
-  revision's diff, per §4.5 re-review rules.
+- Re-review 2: `TURN_END: CONTINUE` on four narrow items — the corrected reply still
+  named stale freeze identities and lacked the final closure push tuple; one sentence
+  still reasoned from the absence of DSH tool events, which the Advisor expressly
+  prohibited; the reviewer's own post-commit hashes were mislabelled as current; and
+  the reply said `git diff` / `git show` were untested, contradicting command (b).
+  It confirmed the durable parts: the Advisor's ruling recorded verbatim and
+  completely, receipt hash/blob and remote tip matching, allowed-path scope correct,
+  and zero secret-pattern hits.
+- Repairs applied for re-review 3: items (a)–(d) applied. The reply's freeze
+  identities were retaken from fresh `git rev-parse` / `git status` output; the
+  sentence reasoning from absent DSH events was **deleted**, not rewritten; the
+  reviewer's hashes are labelled with the commit they were measured at; and the reply
+  is narrowed to what was actually tested.
+- **Third `CONTINUE` → Advisor disposition ruling (§4.5).** Advisor child
+  `f60b72c9-f3b7-4aa0-a36b-5787ea9ea12c` ruled **END**, taking effect once (a)–(d) are
+  applied and every change either only narrows a claim or is taken from command
+  output. Reason: §4.5:976–977 lets the Advisor end the turn; re-review 2 confirmed the
+  durable records; rounds 2–3 added no new claim and were converging on reply hygiene;
+  a fresh full review would risk repeating the failure recorded at §4.5:967–971, where
+  fresh reviewers reopened text earlier reviewers had passed. `STOP` did not apply —
+  nothing is blocked and the work is done. `BASIS`: observed — the §4.5 text and the
+  reviewer's acceptance of recording the closure push in the reply. inferred — that
+  (a)–(d) are mechanical. uncertain — whether the applied edits are correct, since
+  nobody re-reviews them. `REVERSED BY`: if applying (a)–(d) needs any new technical
+  claim, measurement or finding, or if a push precondition fails or the push is not a
+  clean fast-forward, the ruling becomes no-END (finish the work and run a fresh full
+  review under Freeze first); if re-review 2's text shows (b) or (d) carried a
+  conclusion the reply relies on rather than only wording, the ruling becomes a fresh
+  full review.
+- Disposition: the turn ends by Advisor ruling under §4.5 after three `CONTINUE`s. The
+  re-review-2 corrections were applied but **not re-reviewed**.
 
 ## Packet readiness — PASS / BLOCKED / UNKNOWN
 
@@ -271,6 +299,13 @@ Turn-end review record for this turn (not a packet acceptance):
   reviewer PASS. No packet is promoted, so game-behavior implementation is
   `BLOCKED` until one is promoted (§5). The session's work this turn is the
   owner-directed §0.6 environment diagnosis recorded above and in the turn reply.
+  The turn ended by Advisor ruling under §4.5 after three Turn-reviewer `CONTINUE`s;
+  the last corrections were applied but not re-reviewed.
+- Owner decision pending: whether to change the `subagent_muse` child's Muse approval
+  posture so the guardrail can run read-only shell commands. **Not applied, and the
+  smallest sufficient change is unestablished** — see the Advisor's Q2 ruling above.
+  This is a security-relevant posture change in another repository, so it needs the
+  owner's decision before any work starts.
 
 Do not mark readiness PASS with a failed or unknown required item. A provider
 catalog entry is not a completed invocation. A new advisor answering the
