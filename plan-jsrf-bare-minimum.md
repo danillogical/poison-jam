@@ -664,46 +664,37 @@ package. Each gets criteria in the same five-part form when it becomes next.
    at the arming frame" account is unsupported. An endpoint snapshot is **not** an interval history,
    so this does not show what the loop did between arming and capture. **No cause claimed.**
 10. **Awaiting owner approval of one bounded run (not executed).** One exploratory run, **no code
-    change and no rebuild**: `RECOMP_WATCH=0x15F0F20` — the fade's **`done` flag** (`0x15F0E60 +
-    0xC0`), literal VA, because the `[[…]+…+…]` pointer form misparses under the real grammar and
-    would arm on a readable address nothing writes — plus `RECOMP_WATCH_RAW=1`, bound
-    `--seconds 150` (a concrete cap, **not** established as the smallest sufficient one), otherwise
-    the D2 profile and ledger IDs unchanged, fresh disposable save root.
-    **The target is `done`, not alpha, because the first control proposal was unreliable**: phase 0's
-    handler `0x7E3BC` advances the phase as soon as `0x24650` reports `done != 0`, the constructor
-    sets `done = 1`, and the phase-1 dump `20260930-225440-580-f3-alias-fix-strict` sits at phase 1 /
-    hold 61 after 72 activations — so **72 − 61 = 11 activations lie outside the captured phase-1
-    hold**, and the fade is unarmed (`done = 1`, `target = 0.0`) with alpha 0 at capture. That
-    subtraction bounds only that quantity: it does **not** establish the phase-0 interval, exclude an
-    earlier arm, exclude partial updates or exclude a direct reset, so "the phase-0 fade-in never
-    runs" is **not** claimed. The supported point is that an alpha watch could plausibly go silent for
-    reasons unrelated to the question. (Quick Advisor consult 3; the Session's evidence that `step`
-    holds the 1/120 arm value was returned to the Advisor under §4.3 `PREMISE_CHANGED` because it
-    meets consult 3's own `REVERSED BY` — that ruling is **pending**, and the `done` target is
-    proposed on its own merits rather than on the contested claim.)
-    Control and positive case on that one address, both guaranteed value changes: the arm's `1 → 0`
-    at `0x24553` (reached via `0x24620`/`0x24540`) proves the fade **was armed**; the completion's
-    `0 → 1` at `0x2494A`, **inside `0x24700`**, indicates the update ran to completion on this
-    object **only once the printed chain is validated** — a bare `0 → 1` is ambiguous, because
-    `0x24480` (via `0x24600`) also writes `done = 1` at `0x24493`. `done` armed with no **logged**
-    return to `1` is the discriminating outcome; watch failure and a completion falling outside the
-    150 s window both remain open cases, since a guaranteed guest value change is not a guaranteed
-    observation. `done 1 → 0` alone does **not** prove the *logo* armed it — 57 call sites reach
-    `0x24620` and 7 reach `0x24600`, all sharing subsystem slot 6 — and the printed chain is a
-    **lead** to be validated against `recomp_0000.c`, with the logo's phase/hold read at that moment,
-    not assumed.
-    `RECOMP_WATCH` takes a single target and `watch_report` suppresses unchanged values
-    (`xbox_memory_layout.c:1567–1568`), so this is a **changed-value** watch, not a write log or an
-    entry trace: hits are decisive for the transitions above, but **silence is not** — the remaining
-    unseparated cases are "never invoked on this object", "invoked but the translated FPU branch
-    skipped the add", and "the watch failed". A missing arm is `UNCONTROLLED`, which is a verdict on
-    the run, not a diagnosis: check for the runtime's `WATCH: … not armed` line first.
+    change and no rebuild**: `RECOMP_WATCH=0x15F0EF8` — the fade's **alpha** field, literal VA,
+    because the `[[…]+…+…]` pointer form misparses under the real grammar and would arm on a readable
+    address nothing writes — plus `RECOMP_WATCH_RAW=1`, bound `--seconds 150` (a concrete cap,
+    **not** established as the smallest sufficient one), otherwise the D2 profile and ledger IDs
+    unchanged, fresh disposable save root.
+    **Alpha, not the `done` flag** (quick Advisor consult 4 reversed the previous draft's choice):
+    `done` changes only at arm and completion, so it cannot separate alpha **stepping** by `1/120`
+    from `0x24700` against alpha **jumping** to 0 through the immediate-set path at `0x24480`.
+    Attribution comes from the raw frame (`raw[esp+N]`, `xbox_memory_layout.c:1593–1601`), whose two
+    candidate writers have **disjoint** innermost slots: `0x244B8` (alpha set from the argument)
+    runs inside `0x24480` before any push, so `raw[esp+0] = 0x2461D`
+    ([recomp_0000.c:41101](src/recomp/gen/recomp_0000.c#L41101)); `0x24748` (the `1/120` add) runs
+    inside `0x24700` after `push esi`, so `raw[esp+0]` is the saved node `0x15F0E60` and
+    `raw[esp+4] = 0x1108A` ([recomp_0000.c:121](src/recomp/gen/recomp_0000.c#L121)). Read those raw
+    slots, not the filtered chain, which prints code-looking words and can carry stale values.
+    **Positive control: the constructor's alpha `0 → 1.0` store at `0x244B8`**, reached from the logo
+    constructor's `0x24600(0xFF000000)` at `0x7E752`–`0x7E757` (`raw[esp+0] = 0x2461D`, caller return
+    `0x7E75C`). Two earlier control proposals are withdrawn as unreliable or insufficient: the
+    phase-0 fade-in (`72 − 61 = 11` activations lie outside the captured phase-1 hold, and the fade is
+    unarmed at capture), and the `done` flag (cannot separate stepping from a jump).
+    `watch_report` suppresses unchanged values (`xbox_memory_layout.c:1567–1568`), so this is a
+    **changed-value** watch, not a write log: a `1/120` step with `raw[esp+4] = 0x1108A` proves the
+    update ran, and a jump to 0 with `raw[esp+0] = 0x2461D` proves the setter ran — but **silence is
+    not decisive**, because a skipped FPU branch, a failed watch (protection lost, alias write) and a
+    change falling outside the 150 s window all look identical.
     **Stronger no-rebuild alternative, recorded not adopted:** `just ttd-record` runs on the current
-    build and shows every `sub_00024700` entry with its `ECX`, `[esi+0xC0]` and the branch taken,
-    separating all three cases directly; it needs an **elevated** process, a large trace (recipe caps
-    at `--max-file-mb 20480`) and a strict-profile run, so it is the escalation if the watch is
-    ambiguous. `RECOMP_WATCHDOG_SECS` is stripped by the runner and `RECOMP_PEEK` cannot separate the
-    cases. Details, artifacts and hashes: `docs/reviews/owner-sega-600-observations.md`,
+    build and shows every `sub_00024700` entry with its `ECX`, `[esi+0xC0]` and the branch taken; it
+    needs an **elevated** process, a large trace (recipe caps at `--max-file-mb 20480`) and a
+    strict-profile run, so it is the escalation if the watch is ambiguous.
+    `RECOMP_WATCHDOG_SECS` is stripped by the runner and `RECOMP_PEEK` cannot separate the cases.
+    Details, artifacts and hashes: `docs/reviews/owner-sega-600-observations.md`,
     "Owner-directed discovery: what should update the armed fade (2026-10-03)".
 
 ### Fast path status
