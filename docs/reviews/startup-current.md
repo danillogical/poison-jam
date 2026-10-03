@@ -209,6 +209,26 @@ Verbatim ruling text is in the session's turn record; the operative content:
 Corrections committed after the Turn reviewer's `CONTINUE` are recorded with their
 own push tuple in the commit that carries them.
 
+- PUSHED_TO: `origin` (correction commit)
+- BRANCH: `master`
+- COMMIT: `dc276392c14d6f564bceeea70e292951a816cbfd`
+- REMOTE_URL: `https://github.com/danillogical/poison-jam.git`
+- RESULT: success (`abb854a..dc27639`, fast-forward; outgoing path list is
+  `docs/reviews/startup-current.md` only; pre-commit passed).
+
+Turn-end review record for this turn (not a packet acceptance):
+
+- First review: `TURN_END: CONTINUE` — four items: missing substantive Advisor
+  consult, missing Muse post-check, missing push tuple, and a **freeze-first
+  violation** (the Session kept investigating after spawning the reviewer, which
+  §4.5 makes void). The first review is recorded as void on that ground.
+- Repairs applied: Advisor consult obtained and recorded above; Muse chore
+  post-check obtained (`MUSE_POST: CLEAR`, `BLOCKING: NONE`, `ANTI_VACUITY: NONE`,
+  `INTEGRATION: NONE`); push tuple added; overstated claims narrowed.
+- Re-review: the same Turn reviewer child (`4bfc8a87-a3c0-496c-b8f7-af2471eae6e4`,
+  `codex/gpt-6.1-sol` @ `high`) is continued with this revision's diff and its open
+  items, per §4.5 re-review rules.
+
 ## Packet readiness — PASS / BLOCKED / UNKNOWN
 
 - Frozen revision/hash matches `CURRENT PACKET`: N/A — no packet promoted
