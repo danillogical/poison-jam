@@ -1,8 +1,9 @@
 # Jet Set Radio Future: Windows port plan — refresh
 
 **Status: ADOPTED by the owner 2026-09-29; this file is the execution authority.** Every decision
-taken while writing it is recorded, with its reason and what would reverse it, in
-`report-jsrf-bare-minimum-refresh.md`.
+taken while writing it was recorded, with its reason and what would reverse it, in the session
+report `report-jsrf-bare-minimum-refresh.md`, removed 2026-10-02 (reports are not kept in the
+repository); read it with `git show 84e7a93:report-jsrf-bare-minimum-refresh.md`.
 
 Authorities are unchanged: `docs/agent-workflow.md` owns roles and the packet lifecycle,
 `docs/jsrf-run-profiles.md` owns evidence profiles, `docs/jsrf-technical-record.md` ("TR §n") owns

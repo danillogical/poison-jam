@@ -21,3 +21,5 @@ __pycache__/
 # instrumentation gate is set. Durable copies belong in logs/runs/<run>/, which
 # is itself gitignored; these root-level ones are scratch.
 /gpb9_trace.txt
+# Written into the working directory by the toolkit collect_arming fixture test.
+/collect_arming_artifact.txt
