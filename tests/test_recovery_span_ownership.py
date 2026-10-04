@@ -27,6 +27,37 @@ def self_span_stub_calls(text, entries, unresolved):
     return bad
 
 
+import bisect
+
+# Bodies that still call an unresolved stub inside or just past their span
+# (up to the next function start, or 0x400 past the recorded end). Frozen on
+# 2026-10-05: open recovery-boundary defects, NOT audited. The test fails if a
+# body NOT in this set starts doing so; the set should only shrink. Fix one by
+# correcting its span in config/recovered-functions.json.
+KNOWN_OPEN = {int(x, 16) for x in """11105 14720 1F000 202A0 203A0 20420 204D0 20760 21200 2A000 2DBE0 2F600 332F0 38460 38B90 39410 4037C 433C0 44000 45DB0 488B0 4B6A0 504E0 52050 67E90 705E0 73C20 7AB40 80080 864E0 91830 982B0 A76E0 AC0B0 ACD90 ADD20 AE560 AE9D0 AEE80 AFD40 B0210 B06E0 B3970 BB7B0 C7D40 CB2A0 D02D0 E01C0 E0710 E0CF0 E3BB0 EC0B0 F02F0 F7540 FC7B0 FCB40 FCE20 101DC0 104500 1045D0 104990 10A0E0 10BF90 10F960 1101E0 110B20 11BCB0 11E2B0 11FE90 127080 127810 1403B0 140E60 142400 1424D0 15A020 15A1C0 171B50 171E00 1783D0 180038""".split()}
+
+
+def boundary_stub_calls(text, entries, unresolved):
+    """Bodies with a stub call to an unresolved address between the body start
+    and min(next function start, recorded end + 0x400): the label is inside the
+    span, or just beyond a span that ended too early."""
+    starts = sorted(entries)
+    bodies = [(m.start(), int(m[1], 16))
+              for m in re.finditer(r'\n(?:static )?void body_([0-9A-F]{8})\(void\)', text)]
+    bodies.append((len(text), 0))
+    bad = set()
+    for (s, a), (n, _) in zip(bodies, bodies[1:]):
+        if a not in entries:
+            continue
+        i = bisect.bisect_right(starts, a)
+        nxt = starts[i] if i < len(starts) else 1 << 32
+        for m in re.finditer(r'g_seh_ebp = ebp; sub_([0-9A-F]{8})\(\); return;', text[s:n]):
+            x = int(m[1], 16)
+            if x in unresolved and a < x < min(nxt, entries[a] + 0x400):
+                bad.add(a)
+    return bad
+
+
 class SpanOwnershipTest(unittest.TestCase):
     def setUp(self):
         rec = ROOT / 'src/recomp/recovered/recovered.c'
@@ -40,6 +71,11 @@ class SpanOwnershipTest(unittest.TestCase):
 
     def test_no_body_calls_a_stub_inside_its_own_span(self):
         self.assertEqual(self_span_stub_calls(self.text, self.entries, self.unresolved), [])
+
+    def test_no_new_boundary_defects(self):
+        bad = boundary_stub_calls(self.text, self.entries, self.unresolved)
+        self.assertEqual(sorted(hex(a) for a in bad - KNOWN_OPEN), [])
+        self.assertNotIn(0x7B8D0, bad)
 
     def test_the_7b8d0_labels_are_owned(self):
         self.assertEqual(self.entries[0x7B8D0], 0x7BC04)
@@ -75,13 +111,13 @@ class SpanOwnershipTest(unittest.TestCase):
             self.assertEqual(self.entries[a], b, hex(a))
 
     def test_negative_control_old_short_span_is_caught(self):
-        # Re-create the old state: span ends at 0x7B93C and the labels are stubs.
+        # The real old state: the span ended at 0x7B93C (labels beyond it) and
+        # the jumps were calls to fatal stubs. The old entry must be flagged.
         entries = dict(self.entries); entries[0x7B8D0] = 0x7B93C
         un = set(self.unresolved) | {0x7B956, 0x7B978, 0x7BBF3}
         old = self.text.replace('goto loc_0007BBF3;', 'g_seh_ebp = ebp; sub_0007BBF3(); return;')
-        # With the corrected span the injected stub call lies inside it.
-        bad = self_span_stub_calls(old, self.entries, un)
-        self.assertIn((0x7B8D0, 0x7BBF3), bad)
+        self.assertIn(0x7B8D0, boundary_stub_calls(old, entries, un))
+        self.assertNotIn(0x7B8D0, boundary_stub_calls(self.text, self.entries, self.unresolved))
 
 
 if __name__ == '__main__':

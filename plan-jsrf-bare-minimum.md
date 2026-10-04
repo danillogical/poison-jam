@@ -69,23 +69,33 @@ fatal (observed: it is a `loc_0007BBF3` label in the recovered body and gone fro
 
 Exploratory runs (D2 environment, GPU_ACK default, ledger L14-L18, L20-L25, L39, L40; built from `fca9af3`
 plus the uncommitted patch of this work, archived as `project.patch`):
-`20261003-223732-864-f4c-6ec80-600` ran the full 600 s to `diagnostic_deadline` with no fatal;
-`20261003-224759-960-f4c-title-capture` (420 s, `RECOMP_FB_DUMP` every 30 presents) captured 30 frames.
-**Observed frames:** "Presented by SEGA" (fb010) then the graffiti/vandalism disclaimer (fb029), and the
-game opened `Title\LogoE.dat`, `TitleE.dat`, `TitleE.bin` and `playdemo00.dat`. This is the first
-observed frame past the SEGA card.
+`20261003-223732-864-f4c-6ec80-600` reached the 600 s `diagnostic_deadline` (harness outcome, not a
+liveness claim); `20261003-224759-960-f4c-title-capture` (420 s, `RECOMP_FB_DUMP` every 30 presents) wrote
+30 numbered frames. **Observed frame sequence (hashed and viewed):** fb000-008 early surface; fb009-010
+"Presented by SEGA"; fb011-012 "Created by Smilebit"; fb013-015 ADX; fb016-018 Dolby Digital; fb019-029
+the graffiti/vandalism disclaimer (22:51:03 to 22:52:58, >=115 s by file mtimes). The unsuffixed `fb` file
+that kept being overwritten (last write 22:55:01) is still the disclaimer but not byte-identical to fb029
+(slightly brighter), so the screen was still being redrawn. The game also opens `Title\LogoE.dat`,
+`TitleE.dat`, `TitleE.bin`, `playdemo00.dat`; older runs open those too, so they are not evidence of
+progress. The first observed frame past SEGA is Smilebit. Older frame dumps in this tree are SEGA or
+early surfaces only. The title screen has not been reached.
 
-**Next blocker (not yet diagnosed).** The disclaimer frame is byte-identical for 11 consecutive dumps,
-22:51:03 to the end of the run, at least 115 s. The guest is live, not crashed: flips reached 1000 and
-kernel calls continue (ordinals 231/159/224/145/119 repeating). The title screen has **not** been reached.
-Candidates, none measured: a timer or frame-time-driven hold like the fade (which ran ~6.5 updates/s), an
-input wait, or a missing fade/phase completion for the next screen. Next: read the disclaimer's state
-machine (the object that owns it, as 0x7E360 did for the logo) and find the predicate it waits on.
+**Next blocker (measured fact, cause not yet diagnosed): the guest writes its own fatal-error marker.**
+In both runs the guest creates `\Device\Harddisk0\Partition5\Media\Cache\JSRF_FATAL.ERR`
+(`20261003-224759-960`: log line 439249, file present in its save root, 0 bytes, 22:53:03, ~302 s after
+launch and ~2 minutes after the disclaimer appeared; `20261003-223732-864`: log line 438013, ~300 s).
+From the original bytes: the string `Z:\Media\Cache\JSRF_FATAL.ERR` is at `0x1C445C`, referenced only at
+`0x12798` inside `0x12770` (sets `[app+0x24]=1`, calls `0x1165D0(0)` and `0x118800`, then
+CreateFile/close); its only caller is `0x6EE6E`, reached when `[esi+0x98] & 0x400000`, in the body of
+`0x6EC80`, which this change's span fix newly lets run. So the game is taking an internal fatal path at
+about 300 s, not merely waiting. Next: find what sets bit `0x400000` at `+0x98` of the `0x6EC80` object
+and why (a ~300 s timeout is a lead, not a finding); the disclaimer hold may be the same cause or a
+separate one.
 
 **Not established:** any strict-profile result; that the 120 `sub_0014C850/70` call sites are unchanged in
 behaviour; and that no other table-referenced method is missing: a census of vtable/handler runs finds
-about 151 further code-pointer targets with no owned function (72 inside a recovered span). They are not
-known to be reached; each that is will fail as an unresolved call.
+about 151 further code-pointer targets with no owned function (72 inside a recovered span; an ad-hoc
+scan of `.rdata`/`.data` runs of 3+ code pointers, no artifact kept, unaudited). They are not known to be reached; each that is will fail as an unresolved call.
 
 ## 1. Objective and definition of done
 
@@ -763,15 +773,17 @@ package. Each gets criteria in the same five-part form when it becomes next.
     method (`0x4BF40`, `0x52150`, `0x52FC0`, `0x3E210`), and methods referenced only from vtables or a
     handler table that had no function (`0x4C400`, `0x425D0`, the `0x1F9888` handler targets,
     `0x3E230`, `0x41400`, `0x69F90`). `tests/test_recovery_span_ownership.py` (CTest
-    `jsrf_recovery_span_ownership`) asserts that no recovered body calls an unresolved stub inside its
-    own span and pins these entries; its negative control reinjects the old stub call. **Advisor ruling
+    `jsrf_recovery_span_ownership`) pins these entries and checks the boundary invariant below. **Advisor ruling
     (2026-10-05):** `0x47470`/`0x47540` are pure tail-jump thunks (`jmp [eax+4]` / `jmp [eax+0xc]`), so
     their `ret N` is the receiver's. Basis (observed): they occur only as raw dwords in five vtables
     (0x1CA490, 0x1CA5A8, 0x1CA5CC, 0x1CAA8C, 0x1CC12C) and every slot-1/slot-3 receiver ends in
     `ret 0xC`; hence `stack_args 12`, exact check kept. Inferred: a callee-cleans tail jmp implies equal
     pop size. Reversed by a thunk reference the scan missed paired with a receiver whose RET is not
-    `0xC`. Mechanical sweep still open: 289 recovered entries end on a non-terminator, most of them
-    deliberate mid-function fragments that the translator already treats as such; not audited.
+    `0xC`. The test's invariant is: no recovered body may call an unresolved stub between its start and
+    min(next function start, recorded end + 0x400); its negative control reinstates the old
+    `0x7B8D0` span (end `0x7B93C`) and the stub calls and must be flagged. 81 bodies still violate it
+    and are frozen in `KNOWN_OPEN` in the test (open, unaudited defects, e.g. `0x52050`, `0x4B6A0`,
+    `0x504E0`, `0x67E90`); the test fails only if a new one appears, and the set should only shrink.
 
 ### Fast path status
 

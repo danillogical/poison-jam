@@ -2977,7 +2977,7 @@
     "end": "0x0004BF67",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0004C070 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x0004BF40..0x0004C070, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. Boundary corrected 2026-10-05: the old span 0x4BF40..0x4C070 ran over the next method 0x4BF70; the ret at 0x4BF66 ends this one (nop padding follows).",
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0004C070 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x0004BF40..0x0004C070, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. SUPERSEDED span text above (the old Body runs sentence): Boundary corrected 2026-10-05: the old span 0x4BF40..0x4C070 ran over the next method 0x4BF70; the ret at 0x4BF66 ends this one (nop padding follows).",
     "stack_args": 0
   },
   {
@@ -3323,7 +3323,7 @@
     "end": "0x000521A5",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00052640 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00052150..0x00052402, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. Boundary corrected 2026-10-05: the old span 0x52150..0x52402 ran over the methods 0x521B0 and 0x52350; the ret at 0x521A4 ends this one.",
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00052640 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00052150..0x00052402, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. SUPERSEDED span text above (the old Body runs sentence): Boundary corrected 2026-10-05: the old span 0x52150..0x52402 ran over the methods 0x521B0 and 0x52350; the ret at 0x521A4 ends this one.",
     "stack_args": 0
   },
   {
@@ -3426,7 +3426,7 @@
     "end": "0x0005309D",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00053B40 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00052FC0..0x00053270, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. Boundary corrected 2026-10-05: the old span 0x52FC0..0x53270 ran over the method 0x530A0; the ret at 0x5309C ends this one (nop padding follows).",
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00053B40 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00052FC0..0x00053270, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. SUPERSEDED span text above (the old Body runs sentence): Boundary corrected 2026-10-05: the old span 0x52FC0..0x53270 ran over the method 0x530A0; the ret at 0x5309C ends this one (nop padding follows).",
     "stack_args": 0
   },
   {
@@ -4050,7 +4050,7 @@
     "section": ".text",
     "kind": "routine",
     "stack_args": 12,
-    "evidence": "A vtable slot-1 method (receiver of the tail-jump thunk 0x47470 via jmp [eax+4]); Vtable 0x1CC12C slot 1; no analysis-database entry; two RETs (0x6A042, 0x6A0FA), both ret 0xC. Its only RET is ret 0xC (original bytes), so stack_args 12. Body runs 0x00069F90..0x0006A0FD (nop padding follows). Found by the 2026-10-05 Advisor scan after run 20261003-222232-329-f4c-thunks-600 died on the unresolved 0x3E230."
+    "evidence": "A vtable slot-1 method (receiver of the tail-jump thunk 0x47470 via jmp [eax+4]); Vtable 0x1CC12C slot 1; no analysis-database entry; two RETs (0x6A042, 0x6A0FA), both ret 0xC. Both RETs (0x6A042, 0x6A0FA) are ret 0xC (original bytes), so stack_args 12. Body runs 0x00069F90..0x0006A0FD (nop padding follows). Found by the 2026-10-05 Advisor scan after run 20261003-222232-329-f4c-thunks-600 died on the unresolved 0x3E230."
   },
   {
     "start": "0x0006A100",

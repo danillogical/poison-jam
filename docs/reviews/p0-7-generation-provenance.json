@@ -397,6 +397,28 @@
           "path": "tools/disasm/output/functions.recovered.json"
         }
       ]
+    },
+    {
+      "cause": "Turn-review cleanup: prose-only edits to `evidence` strings in config/recovered-functions.json (0x69F90 RET wording; marker that the old Body-runs sentence of 0x4BF40, 0x52150 and 0x52FC0 is superseded).",
+      "date": "2026-10-05",
+      "evidence": [
+        "`evidence` is not read by any generator (see the 2026-09-30 amendments)",
+        "recover-functions.py re-run: generated recovered.c hash unchanged unless listed above",
+        "bare --write not used (would drop the amendment history)"
+      ],
+      "kind": "input",
+      "paths": [
+        {
+          "new_sha256": "b26ff3b2896aa1f0f8464fbc4fea62b3e1d7ca68bb4c1ae2f5016abf59a52cf0",
+          "old_sha256": "91785e8f7ffadf75365f5aa240c92c125af963bdedcacb20fa11b1345fd5a4d6",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "77ed4817794a1a60a385ecefae71146f2fa3413948805e42f707d0e51478c1c2",
+          "old_sha256": "d20e02498c508bab9f8ff22326e676744ac84713265311abe1a562dcaadb5bb7",
+          "path": "tools/disasm/output/functions.recovered.json"
+        }
+      ]
     }
   ],
   "checker_version": "jsrf-generation-provenance/1",
@@ -451,9 +473,9 @@
       "sha256": "cd683f100c6445f1d987dbce83466c124eaa168fe584f49304197aa89e130bd8"
     },
     "config/recovered-functions.json": {
-      "bytes": 2811806,
+      "bytes": 2811994,
       "present": true,
-      "sha256": "91785e8f7ffadf75365f5aa240c92c125af963bdedcacb20fa11b1345fd5a4d6"
+      "sha256": "b26ff3b2896aa1f0f8464fbc4fea62b3e1d7ca68bb4c1ae2f5016abf59a52cf0"
     },
     "config/recovery-unresolved.json": {
       "bytes": 8090,
@@ -491,9 +513,9 @@
       "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
     },
     "tools/disasm/output/functions.recovered.json": {
-      "bytes": 6028090,
+      "bytes": 6028278,
       "present": true,
-      "sha256": "d20e02498c508bab9f8ff22326e676744ac84713265311abe1a562dcaadb5bb7"
+      "sha256": "77ed4817794a1a60a385ecefae71146f2fa3413948805e42f707d0e51478c1c2"
     }
   },
   "known_unknowns": [],
