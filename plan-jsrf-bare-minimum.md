@@ -602,9 +602,8 @@ package. Each gets criteria in the same five-part form when it becomes next.
    fades at 1/120 per update and moves on to the Smilebit logo. (xemu is an emulator, not real
    hardware: these are oracle observations, and they are not a fidelity claim about retail Xbox.) In
    the port the logo sits in phase 2 with its hold counter at 121 and the fade at alpha 0, target 1,
-   done 0. The fade update `0x24700` is translated correctly; the leading explanation was that the
-   armed fade instance is never updated — **refuted 2026-10-03, see item 10: the update runs on this
-   object and the stepped value is re-clamped to 0 on each update**. Evidence:
+   done 0. The fade update `0x24700` is translated correctly; the update runs on the armed fade
+   instance, and the `[0,1]` clamp at `0xA4CF0` returns alpha to 0 on each update (item 10). Evidence:
    `docs/reviews/owner-sega-600-observations.md`.
 2. **Ruled out** by 600 s runs and archive reads: a slow logo (static image for 400+ s after the cache
    marker), file I/O or a stalled movie (no file opened or read after the marker), the do-nothing
@@ -683,29 +682,30 @@ package. Each gets criteria in the same five-part form when it becomes next.
    with the completion store at `0x2494A` but not decisive — `0x24480` (via `0x24600`) also sets it,
    at `0x24493`, without touching `step` — and consult 4 withdrew the discriminator it had implied
    there: the endpoint fits a completed `0x24700` fade-in exactly as well as an immediate set.
-10. **Done 2026-10-03 (owner-approved discovery run). The fade *is* updated; the value does not
-    survive the update.** The bounded alpha watch run held for approval here was executed as
-    `20261003-174222-912-owner-fade-watch-150` — exploratory, `--seconds 150`, `RECOMP_WATCH=0x15F0EF8`
-    plus `RECOMP_WATCH_RAW=1`, otherwise the D2 environment of `20261002-174731-263-owner-l02-d2-600`
+10. **Observed 2026-10-03, owner-approved run `20261003-174222-912-owner-fade-watch-150`: the fade is
+    updated; the value does not survive the update.** Exploratory, `--seconds 150`,
+    `RECOMP_WATCH=0x15F0EF8` plus `RECOMP_WATCH_RAW=1`, otherwise the D2 environment of
+    `20261002-174731-263-owner-l02-d2-600`
     (same executable and XBE hashes), no code change and no rebuild. Mapping gate **1 match / 0
     mismatch**, and the log shows `WATCH: writes to the page of 0x015F0EF8 are trapped`. `app+0xB0`
     re-checked in this dump = `0x15F0E60`, so the watched dword is the fade's alpha. **The positive
     control fired** (one report `0 -> 1.0` with `raw[esp+0] = 0x2461D`, `raw[esp+8] = 0x7E75C`,
     `raw[esp+12] = 0xFF000000`), so the run is **CONTROLLED**.
-    **Observed from the raw slots:** 2004 changed-value reports; 667 carry the `0x24748` step store
-    (`raw[esp+4] = 0x1108A`, `raw[esp+0] = 0x15F0E60`), a lower bound because the watch suppresses
+    **Observed from the raw slots:** 2004 changed-value reports; 667 carry a `0x24700` step store
+    (666 the add at `0x24748`, one the subtract at `0x24777`; `raw[esp+4] = 0x1108A`,
+    `raw[esp+0] = 0x15F0E60`), a lower bound because the watch suppresses
     unchanged values; and a second writer in the same function — the `[0,1]` clamp at `0xA4CF0`
     reached from `0x24957` — writes alpha to `1.0` and then to `0` (`raw[esp+16]`/`raw[esp+24] =
     0x2495C`). All 666 cycles starting at a `0 -> 1/120` step have the identical shape
     `0 -> 1/120 -> 1.0 -> 0`, spread evenly across the run to capture end. Endpoint unchanged from the
     source run: alpha 0, target 1.0, step 1/120, done 0, logo phase 2, hold 121. Logo phase/hold are
     **not** readable per hit (the logo VA appears in 1 of 2004 raw frames, the control's).
-    **So the leading explanation in item 1 is refuted as written:** the armed fade *is* updated; the
-    stepped value is re-clamped back to 0 on each update. **Lead, recorded as a lead and not a cause:**
+    The armed fade is updated, and the stepped value is clamped back to 0 on each update.
+    **Lead, recorded as a lead and not a cause:**
     the lifted `sub_0014C870`/`sub_0014C850` emit `fcmove`/`fcmovne` as comments only
     (`recomp_0003.c:43940`, `:43900`; the only 2 such sites in `gen/`), which would force
     `min(x,1.0) = 1.0` and `max(x,0) = 0` every update, so alpha never reaches target and `done`
-    stays 0. The Session verified `app+0xB0`, the triplet shape, the absence of any override for
+    stays 0. Checked: `app+0xB0`, the triplet shape, the absence of any override for
     either address in the four config manifests, and the 2-site census; the decisive test
     (`sub_0014C870(1/120, 1.0)` returning `1/120`) was **not** run, so the lead is **unverified**.
     **No fix, no TTD recording, no ledger ID**; exploratory, single run, one dword, no strict-horizon,

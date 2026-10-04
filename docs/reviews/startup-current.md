@@ -75,9 +75,7 @@ which is harness metadata rather than a self-report.
   instruction for this turn, the roster is not corrected here and no other id is
   substituted.
 
-### Allow-list check
-
-`just route-check` (`scripts/check-route-allowlist.py`, checker
+**Allow-list.** `just route-check` (`scripts/check-route-allowlist.py`, checker
 `jsrf-route-allowlist/1`) — **exit 1**, 1 finding:
 
 ```text
