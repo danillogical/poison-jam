@@ -180,3 +180,7 @@ Toolkit 671ab0a translates fcmovcc; sub_0014C850 and sub_0014C870 relifted (conf
 ## 2026-10-05 - F4c recovery boundaries / frames past the SEGA card
 
 Recovery entries corrected (plan Current work and section 13 item 12). No strict run, so the strict horizon does not move. Exploratory runs 20261003-223732-864-f4c-6ec80-600 (600 s deadline) and 20261003-224759-960-f4c-title-capture (420 s, 30 frames): SEGA, Smilebit, ADX, Dolby, then the graffiti disclaimer (held >=115 s by dump mtimes). The guest wrote JSRF_FATAL.ERR at ~300 s in both runs (route 0x6EE6E -> 0x12770), so it was taking an internal fatal path, not just waiting. Ledger L14-L18, L20-L25, L39, L40. Not the title screen; not a fidelity or liveness claim.
+
+## 2026-10-05 - F5 heap fix / clean 600 s to the disclaimer
+
+Toolkit dbeb284 records alignment gaps and carves aligned pieces from free blocks; eight further recovery entries. No strict run, so the strict horizon does not move. Exploratory run 20261004-014344-804-f5-hook-600 (600 s deadline): no OOM, no JSRF_FATAL, no unresolved call; SEGA, Smilebit, ADX, Dolby, then the graffiti disclaimer held for the last ~5 minutes. Ledger L14-L18, L20-L25, L39, L40. Not the title screen; not a fidelity or liveness claim.

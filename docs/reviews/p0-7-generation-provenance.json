@@ -419,6 +419,79 @@
           "path": "tools/disasm/output/functions.recovered.json"
         }
       ]
+    },
+    {
+      "cause": "F5: recovery pass 8. Added seven job-handler table entries (0x1EC0F0 slots 2,10,13,15,16,18,21: 0x32C70, 0x348A0, 0x33C50, 0x35640, 0x34200, 0x2C360, 0x27B00; stack_args 0). recovered.c 3086 -> 3093. Amended, not regenerated: no full pass ran.",
+      "date": "2026-10-05",
+      "evidence": [
+        "failing run 20261004-011042-668-f5-heapfix-480: ABI FAILURE 0x00025310 (alias dispatch of 0x348A0)",
+        "boundaries classified from the original bytes by a worker and spot-checked",
+        "bare --write not used (would drop the amendment history)"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "53feaca2df9837e82004dbba9905820dfd11af96771716095b93329a9c951de6",
+          "old_sha256": "a7e2d008f7c7f24e048a3125d4d8157d364c39ed4596d0e142b3dabd1407ec50",
+          "path": "src/recomp/recovered/recovered.c"
+        },
+        {
+          "new_sha256": "09b9e416fc03038cd92b4a4e084b0da460d66053e907f9427a8aac7338f330c8",
+          "old_sha256": "06148f2f513c7d8fd98b70f67e4b0a0d81dafe0b8d93af938af12d01904eb1b5",
+          "path": "src/recomp/recovered/recovered_11c1_test.c"
+        },
+        {
+          "new_sha256": "2fb9c79d5b506865815f57b609f0827c9ef2aebf6cceb910573dce477749f149",
+          "old_sha256": "b26ff3b2896aa1f0f8464fbc4fea62b3e1d7ca68bb4c1ae2f5016abf59a52cf0",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "4d42899c840f2a6606dbe9461230ab9919e96307fb10e982b7751b6be883efa0",
+          "old_sha256": "cd683f100c6445f1d987dbce83466c124eaa168fe584f49304197aa89e130bd8",
+          "path": "config/manual-functions.json"
+        },
+        {
+          "new_sha256": "e54dfcdb6322f8743068455b4c31267d4edb52360b8075cc732766389b646ad1",
+          "old_sha256": "77ed4817794a1a60a385ecefae71146f2fa3413948805e42f707d0e51478c1c2",
+          "path": "tools/disasm/output/functions.recovered.json"
+        }
+      ]
+    },
+    {
+      "cause": "F5: recovery pass 9. Added 0x0013D840..0x0013D856 (a data-installed hook wrapper, stack_args 0). recovered.c 3093 -> 3094. Amended, not regenerated: no full pass ran.",
+      "date": "2026-10-05",
+      "evidence": [
+        "failing run 20261004-013505-513-f5-handlers-600: unresolved indirect call 0x13D840 from sub_001408C0",
+        "bare --write not used (would drop the amendment history)"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "a3db1da6f15507b9dafafcc3db0cb942352b4f559c596061e42cfdb998bbe651",
+          "old_sha256": "53feaca2df9837e82004dbba9905820dfd11af96771716095b93329a9c951de6",
+          "path": "src/recomp/recovered/recovered.c"
+        },
+        {
+          "new_sha256": "8ba25fa5796164d924583f4195c28c395d755fd15043616f17083992e89c6bf2",
+          "old_sha256": "09b9e416fc03038cd92b4a4e084b0da460d66053e907f9427a8aac7338f330c8",
+          "path": "src/recomp/recovered/recovered_11c1_test.c"
+        },
+        {
+          "new_sha256": "aa0ca331a2b67c4b62b82c439bbd98f1deb7f0fdaf5db35c4dfc800fa59b7065",
+          "old_sha256": "2fb9c79d5b506865815f57b609f0827c9ef2aebf6cceb910573dce477749f149",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "31b72ef85c7f3cc4c8e8e5d4e972ffef009cabac6d0eae49d6d297d8320cfbaa",
+          "old_sha256": "4d42899c840f2a6606dbe9461230ab9919e96307fb10e982b7751b6be883efa0",
+          "path": "config/manual-functions.json"
+        },
+        {
+          "new_sha256": "d34b29dc0ad9800f1f6b98b53e9f107f2c88d2c159fd196467d964a1b0968b8f",
+          "old_sha256": "e54dfcdb6322f8743068455b4c31267d4edb52360b8075cc732766389b646ad1",
+          "path": "tools/disasm/output/functions.recovered.json"
+        }
+      ]
     }
   ],
   "checker_version": "jsrf-generation-provenance/1",
@@ -437,9 +510,9 @@
     "src/recomp/gen/recomp_stubs_recovery.c": "5b361433bf3ffc5e766cc2aa03ea98863d9e9fcbd08e4d82ee379ce7521e8572",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
     "src/recomp/gen/recomp_types.h": "e1007de83bf802bac0ec192025c6c274bed7d86f845f8e653619f31f2a7a69a4",
-    "src/recomp/recovered/recovered.c": "a7e2d008f7c7f24e048a3125d4d8157d364c39ed4596d0e142b3dabd1407ec50",
+    "src/recomp/recovered/recovered.c": "a3db1da6f15507b9dafafcc3db0cb942352b4f559c596061e42cfdb998bbe651",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "06148f2f513c7d8fd98b70f67e4b0a0d81dafe0b8d93af938af12d01904eb1b5",
+    "src/recomp/recovered/recovered_11c1_test.c": "8ba25fa5796164d924583f4195c28c395d755fd15043616f17083992e89c6bf2",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "generation_mode": "full regeneration 2026-09-29 with the toolkit 2a349c8 lifter, then relift-selected.py boundaries; hand edits re-applied by scripts/patch-generated.py from config/generated-patches.json (the recomp_types.h project ABI additions, the six A4b2 jsrf_watch_store hooks, and the a4b-watch declaration). This tree predates toolkit 86113c7 --backedge-yield: RECOMP_BACKEDGE is absent, so under RECOMP_GUEST_SERIAL=1 a guest spin loop costs one bounded timeout (docs/jsrf-compatibility-ledger.md L34).",
@@ -468,14 +541,14 @@
       "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
     },
     "config/manual-functions.json": {
-      "bytes": 102041,
+      "bytes": 102305,
       "present": true,
-      "sha256": "cd683f100c6445f1d987dbce83466c124eaa168fe584f49304197aa89e130bd8"
+      "sha256": "31b72ef85c7f3cc4c8e8e5d4e972ffef009cabac6d0eae49d6d297d8320cfbaa"
     },
     "config/recovered-functions.json": {
-      "bytes": 2811994,
+      "bytes": 2820151,
       "present": true,
-      "sha256": "b26ff3b2896aa1f0f8464fbc4fea62b3e1d7ca68bb4c1ae2f5016abf59a52cf0"
+      "sha256": "aa0ca331a2b67c4b62b82c439bbd98f1deb7f0fdaf5db35c4dfc800fa59b7065"
     },
     "config/recovery-unresolved.json": {
       "bytes": 8090,
@@ -513,9 +586,9 @@
       "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
     },
     "tools/disasm/output/functions.recovered.json": {
-      "bytes": 6028278,
+      "bytes": 6033684,
       "present": true,
-      "sha256": "77ed4817794a1a60a385ecefae71146f2fa3413948805e42f707d0e51478c1c2"
+      "sha256": "d34b29dc0ad9800f1f6b98b53e9f107f2c88d2c159fd196467d964a1b0968b8f"
     }
   },
   "known_unknowns": [],

@@ -55,47 +55,43 @@ established facts. Where this plan proposes a change to one of them, it is a tas
 
 ## Current work
 
-**F4c: past the SEGA card; the graffiti disclaimer now holds.**
+**F5: the graffiti disclaimer hold (the guest's fatal path is fixed).**
 
-**Current finding (2026-10-05).** The run that followed the fcmov repair died on a series of recovery
-defects: spans that ended at an internal label, methods folded into a neighbour, and vtable/handler-table
-methods with no function of their own. All are fixed in `config/recovered-functions.json`
-(3076 -> 3086 entries; every change is a read-from-bytes boundary, none is a bypass):
-`0x7B8D0` end `0x7B93C` -> `0x7BC04` (the original `0x7BBF3` stop); `0x6EC80` end `0x6ECBE` -> `0x6EE8A`;
-`0x4BF40`, `0x52150`, `0x52FC0`, `0x3E210` tightened to their own `ret`; new entries `0x4C400`, `0x4BF70`,
-`0x521B0`, `0x52350`, `0x52780`, `0x530A0`, `0x425D0`, `0x3E230`, `0x41400`, `0x69F90`; the tail-jump
-thunks `0x47470`/`0x47540` set to `stack_args 12` (Advisor ruling, §13 item 12). `0x7BBF3` is no longer
-fatal (observed: it is a `loc_0007BBF3` label in the recovered body and gone from `recovery-unresolved.json`).
+**Fixed this turn (2026-10-05).**
+1. **The ~300 s `JSRF_FATAL.ERR` and the Beat.bin loop were a port allocator defect.** Chain (each link
+   read from the original bytes or a run dump): the guest's `0x6F730` builds the "There's a problem with
+   the disc..." dialog (flags `0x400000`, class vtable `0x1CC660`), whose creation makes the `0x6EC80`
+   body call `0x12770`, which writes the fatal marker. In run `20261003-224759-960` the heap logged 712
+   out-of-memory failures (687 of them `352256` = the `Beat.bin` buffer); the 48 MB kernel heap held only
+   17.15 MB live, 18.9 MB free and 14.5 MB lost to unrecorded 64 KB-alignment gaps. Two bugs
+   (toolkit `dbeb284`): `heap_alloc_locked` skipped to each 64 KB boundary without recording the gap, and
+   `kmem_heap_reuse` reused only free blocks that already started aligned, so none of 12 free blocks
+   that could each hold the request was usable. Fixed by recording gaps as free blocks and carving an
+   aligned piece from a larger free block (the OOM line now also reports free bytes and the largest free
+   block). `kmem_test` gains a case that fails on the old `kmem.c`. Advisor ruling relied on (see §13
+   item 13). Not a shortcut, no ledger entry. Whether the 15 s I/O timeout in the `0x25400` job class
+   is what raised the dialog is inferred, not measured; after the fix the dialog and marker no longer
+   occur.
+2. **Eight further recovery entries** reached by successive runs (see §13 item 12 for the earlier ones):
+   the seven job-handler table entries `0x32C70, 0x348A0, 0x33C50, 0x35640, 0x34200, 0x2C360, 0x27B00`
+   (slots of the table at `0x1EC0F0`, `stack_args 0`, boundaries from recursive descent through every
+   jump table) and the hook wrapper `0x13D840`. recovered.c is 3094 functions.
 
-Exploratory runs (D2 environment, GPU_ACK default, ledger L14-L18, L20-L25, L39, L40; built from `fca9af3`
-plus the uncommitted patch of this work, archived as `project.patch`):
-`20261003-223732-864-f4c-6ec80-600` reached the 600 s `diagnostic_deadline` (harness outcome, not a
-liveness claim); `20261003-224759-960-f4c-title-capture` (420 s, `RECOMP_FB_DUMP` every 30 presents) wrote
-30 numbered frames. **Observed frame sequence (hashed and viewed):** fb000-008 early surface; fb009-010
-"Presented by SEGA"; fb011-012 "Created by Smilebit"; fb013-015 ADX; fb016-018 Dolby Digital; fb019-029
-the graffiti/vandalism disclaimer (22:51:03 to 22:52:58, >=115 s by file mtimes). The unsuffixed `fb` file
-that kept being overwritten (last write 22:55:01) is still the disclaimer but not byte-identical to fb029
-(slightly brighter), so the screen was still being redrawn. The game also opens `Title\LogoE.dat`,
-`TitleE.dat`, `TitleE.bin`, `playdemo00.dat`; older runs open those too, so they are not evidence of
-progress. The first observed frame past SEGA is Smilebit. Older frame dumps in this tree are SEGA or
-early surfaces only. The title screen has not been reached.
+**Measured now.** Exploratory run `20261004-014344-804-f5-hook-600` (600 s, D2 environment, GPU_ACK default,
+ledger L14-L18, L20-L25, L39, L40): `diagnostic_deadline`, **zero** out-of-memory lines, **zero**
+`JSRF_FATAL`, no unresolved call, no ABI failure, no `[UNIMPL]`. Frames (viewed): SEGA, Smilebit, ADX,
+Dolby, then the graffiti disclaimer from 01:48:36 to the end of the run (~5 minutes), identical across 31
+numbered dumps (the unsuffixed file is the disclaimer, slightly different: it is still being redrawn).
+**The title screen has not been reached.**
 
-**Next blocker (measured fact, cause not yet diagnosed): the guest writes its own fatal-error marker.**
-In both runs the guest creates `\Device\Harddisk0\Partition5\Media\Cache\JSRF_FATAL.ERR`
-(`20261003-224759-960`: log line 439249, file present in its save root, 0 bytes, 22:53:03, ~302 s after
-launch and ~2 minutes after the disclaimer appeared; `20261003-223732-864`: log line 438013, ~300 s).
-From the original bytes: the string `Z:\Media\Cache\JSRF_FATAL.ERR` is at `0x1C445C`, referenced only at
-`0x12798` inside `0x12770` (sets `[app+0x24]=1`, calls `0x1165D0(0)` and `0x118800`, then
-CreateFile/close); its only caller is `0x6EE6E`, reached when `[esi+0x98] & 0x400000`, in the body of
-`0x6EC80`, which this change's span fix newly lets run. So the game is taking an internal fatal path at
-about 300 s, not merely waiting. Next: find what sets bit `0x400000` at `+0x98` of the `0x6EC80` object
-and why (a ~300 s timeout is a lead, not a finding); the disclaimer hold may be the same cause or a
-separate one.
+**Next blocker.** The disclaimer screen has no exit. It is the same behaviour class as the SEGA hold (a
+state machine waiting on a completion). Next: find the object and phase that owns the disclaimer (the
+logo-class method at `0x7E360` handled SEGA; the disclaimer is one of its later phases or a sibling),
+read its phase/hold fields from the dump, and identify the predicate it waits on.
 
-**Not established:** any strict-profile result; that the 120 `sub_0014C850/70` call sites are unchanged in
-behaviour; and that no other table-referenced method is missing: a census of vtable/handler runs finds
-about 151 further code-pointer targets with no owned function (72 inside a recovered span; an ad-hoc
-scan of `.rdata`/`.data` runs of 3+ code pointers, no artifact kept, unaudited). They are not known to be reached; each that is will fail as an unresolved call.
+**Not established:** any strict-profile result; whether the disclaimer waits on a fade (as SEGA did), an
+input, or a timer; and that no other table-referenced method is missing (about 151 code-pointer targets
+had no owned function in an ad-hoc scan; `KNOWN_OPEN` freezes 81 bodies with the same boundary defect).
 
 ## 1. Objective and definition of done
 
@@ -784,6 +780,17 @@ package. Each gets criteria in the same five-part form when it becomes next.
     `0x7B8D0` span (end `0x7B93C`) and the stub calls and must be flagged. 81 bodies still violate it
     and are frozen in `KNOWN_OPEN` in the test (open, unaudited defects, e.g. `0x52050`, `0x4B6A0`,
     `0x504E0`, `0x67E90`); the test fails only if a new one appears, and the set should only shrink.
+
+13. **Advisor ruling, 2026-10-05: the Beat.bin loop and fatal are a port heap-bookkeeping defect, not
+    a leak and not a heap-size shortfall.** Basis (observed): heap block table read from `process.dmp`
+    (860 blocks, address-ordered to exactly `g_heap_next`): live 17.15 MB, free 18.90 MB, unrecorded
+    gaps 14.48 MB; 224 gaps of exactly 61,440 B each followed by a live 4 KB block at a 64 KB boundary
+    (one region per small file); frees work (`release_ok=232`); the cache copy had succeeded (the loop
+    opens `Beat.bin` with status 0 then fails the 352,256 B allocation). Inferred: the real console
+    charges RAM per committed 4 KB page so the 64 KB granule costs only address space; the disc dialog
+    is the 15 s pending-I/O timeout. Do not enlarge the heap or drop the 64 KB reserve alignment (that
+    would hide the defect or need a ledger entry). Reversed by: OOM continuing after the fix with live
+    bytes near 48 MB, or the dialog appearing with no OOM. Neither occurred in the 600 s run.
 
 ### Fast path status
 

@@ -13,9 +13,9 @@
     "src/recomp/gen/recomp_stubs_recovery.c": "5b361433bf3ffc5e766cc2aa03ea98863d9e9fcbd08e4d82ee379ce7521e8572",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
     "src/recomp/gen/recomp_types.h": "e1007de83bf802bac0ec192025c6c274bed7d86f845f8e653619f31f2a7a69a4",
-    "src/recomp/recovered/recovered.c": "a7e2d008f7c7f24e048a3125d4d8157d364c39ed4596d0e142b3dabd1407ec50",
+    "src/recomp/recovered/recovered.c": "a3db1da6f15507b9dafafcc3db0cb942352b4f559c596061e42cfdb998bbe651",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "06148f2f513c7d8fd98b70f67e4b0a0d81dafe0b8d93af938af12d01904eb1b5",
+    "src/recomp/recovered/recovered_11c1_test.c": "8ba25fa5796164d924583f4195c28c395d755fd15043616f17083992e89c6bf2",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -153,6 +153,22 @@
         "src/recomp/recovered/recovered_11c1_test.c"
       ],
       "reason": "F4c: seventh recovery pass of the session. 0x0006EC80 end 0x6ECBE -> 0x6EE8A (the old span ended at an internal label; real last ret 4 at 0x6EE87). recovered.c function count unchanged (3086). Amended, not regenerated: no full pass ran."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/recovered/recovered.c",
+        "src/recomp/recovered/recovered_11c1_test.c"
+      ],
+      "reason": "F5: recovery pass 8. Added seven job-handler table entries (0x1EC0F0 slots 2,10,13,15,16,18,21: 0x32C70, 0x348A0, 0x33C50, 0x35640, 0x34200, 0x2C360, 0x27B00; stack_args 0). recovered.c 3086 -> 3093. Amended, not regenerated: no full pass ran."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/recovered/recovered.c",
+        "src/recomp/recovered/recovered_11c1_test.c"
+      ],
+      "reason": "F5: recovery pass 9. Added 0x0013D840..0x0013D856 (a data-installed hook wrapper, stack_args 0). recovered.c 3093 -> 3094. Amended, not regenerated: no full pass ran."
     }
   ]
 }

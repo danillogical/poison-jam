@@ -757,6 +757,14 @@
     "stack_args": 12
   },
   {
+    "start": "0x00027B00",
+    "end": "0x00027C48",
+    "section": ".text",
+    "kind": "routine",
+    "stack_args": 0,
+    "evidence": "Slot 21 of the job-handler table at 0x001EC0F0 (called as `call eax` with ecx=this and no stack arguments from the job class at 0x25310). The analysis database folds it as a tail_jump_alias with a span far past its true end, so the generated dispatch pointed it at the wrong body and it had no function of its own; run 20261004-011042-668-f5-heapfix-480 died with an ABI failure at 0x25310 when this table dispatched an alias. Body runs 0x00027B00..0x00027C48, ending at the last instruction reachable by recursive descent from the entry through all its jump tables (every switch target read from the bytes lies inside the body; the function's own tables and padding follow). Every RET it owns is a plain `ret`, so stack_args 0. Classified by a worker from the original bytes and spot-checked (0x348A0: single ret at 0x34901, 21-entry switch at 0x35018 with all targets in 0x348D7..0x35006)."
+  },
+  {
     "start": "0x00027C70",
     "end": "0x00027CD0",
     "section": ".text",
@@ -1092,6 +1100,14 @@
     "stack_args": 12
   },
   {
+    "start": "0x0002C360",
+    "end": "0x0002CBB4",
+    "section": ".text",
+    "kind": "routine",
+    "stack_args": 0,
+    "evidence": "Slot 18 of the job-handler table at 0x001EC0F0 (called as `call eax` with ecx=this and no stack arguments from the job class at 0x25310). The analysis database folds it as a tail_jump_alias with a span far past its true end, so the generated dispatch pointed it at the wrong body and it had no function of its own; run 20261004-011042-668-f5-heapfix-480 died with an ABI failure at 0x25310 when this table dispatched an alias. Body runs 0x0002C360..0x0002CBB4, ending at the last instruction reachable by recursive descent from the entry through all its jump tables (every switch target read from the bytes lies inside the body; the function's own tables and padding follow). Every RET it owns is a plain `ret`, so stack_args 0. Classified by a worker from the original bytes and spot-checked (0x348A0: single ret at 0x34901, 21-entry switch at 0x35018 with all targets in 0x348D7..0x35006)."
+  },
+  {
     "start": "0x0002CFC0",
     "end": "0x0002D010",
     "section": ".text",
@@ -1401,6 +1417,14 @@
     "stack_args": 4
   },
   {
+    "start": "0x00032C70",
+    "end": "0x00033140",
+    "section": ".text",
+    "kind": "routine",
+    "stack_args": 0,
+    "evidence": "Slot 2 of the job-handler table at 0x001EC0F0 (called as `call eax` with ecx=this and no stack arguments from the job class at 0x25310). The analysis database folds it as a tail_jump_alias with a span far past its true end, so the generated dispatch pointed it at the wrong body and it had no function of its own; run 20261004-011042-668-f5-heapfix-480 died with an ABI failure at 0x25310 when this table dispatched an alias. Body runs 0x00032C70..0x00033140, ending at the last instruction reachable by recursive descent from the entry through all its jump tables (every switch target read from the bytes lies inside the body; the function's own tables and padding follow). Every RET it owns is a plain `ret`, so stack_args 0. Classified by a worker from the original bytes and spot-checked (0x348A0: single ret at 0x34901, 21-entry switch at 0x35018 with all targets in 0x348D7..0x35006)."
+  },
+  {
     "start": "0x00033180",
     "end": "0x000332F0",
     "section": ".text",
@@ -1521,11 +1545,27 @@
     "stack_args": 12
   },
   {
+    "start": "0x00033C50",
+    "end": "0x00034034",
+    "section": ".text",
+    "kind": "routine",
+    "stack_args": 0,
+    "evidence": "Slot 13 of the job-handler table at 0x001EC0F0 (called as `call eax` with ecx=this and no stack arguments from the job class at 0x25310). The analysis database folds it as a tail_jump_alias with a span far past its true end, so the generated dispatch pointed it at the wrong body and it had no function of its own; run 20261004-011042-668-f5-heapfix-480 died with an ABI failure at 0x25310 when this table dispatched an alias. Body runs 0x00033C50..0x00034034, ending at the last instruction reachable by recursive descent from the entry through all its jump tables (every switch target read from the bytes lies inside the body; the function's own tables and padding follow). Every RET it owns is a plain `ret`, so stack_args 0. Classified by a worker from the original bytes and spot-checked (0x348A0: single ret at 0x34901, 21-entry switch at 0x35018 with all targets in 0x348D7..0x35006)."
+  },
+  {
     "start": "0x00034070",
     "end": "0x00034088",
     "section": ".text",
     "kind": "routine",
     "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000355B0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00034070..0x00034088, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+  },
+  {
+    "start": "0x00034200",
+    "end": "0x0003463C",
+    "section": ".text",
+    "kind": "routine",
+    "stack_args": 0,
+    "evidence": "Slot 16 of the job-handler table at 0x001EC0F0 (called as `call eax` with ecx=this and no stack arguments from the job class at 0x25310). The analysis database folds it as a tail_jump_alias with a span far past its true end, so the generated dispatch pointed it at the wrong body and it had no function of its own; run 20261004-011042-668-f5-heapfix-480 died with an ABI failure at 0x25310 when this table dispatched an alias. Body runs 0x00034200..0x0003463C, ending at the last instruction reachable by recursive descent from the entry through all its jump tables (every switch target read from the bytes lies inside the body; the function's own tables and padding follow). Every RET it owns is a plain `ret`, so stack_args 0. Classified by a worker from the original bytes and spot-checked (0x348A0: single ret at 0x34901, 21-entry switch at 0x35018 with all targets in 0x348D7..0x35006)."
   },
   {
     "start": "0x00034810",
@@ -1552,6 +1592,14 @@
     "stack_args": 12
   },
   {
+    "start": "0x000348A0",
+    "end": "0x00035018",
+    "section": ".text",
+    "kind": "routine",
+    "stack_args": 0,
+    "evidence": "Slot 10 of the job-handler table at 0x001EC0F0 (called as `call eax` with ecx=this and no stack arguments from the job class at 0x25310). The analysis database folds it as a tail_jump_alias with a span far past its true end, so the generated dispatch pointed it at the wrong body and it had no function of its own; run 20261004-011042-668-f5-heapfix-480 died with an ABI failure at 0x25310 when this table dispatched an alias. Body runs 0x000348A0..0x00035018, ending at the last instruction reachable by recursive descent from the entry through all its jump tables (every switch target read from the bytes lies inside the body; the function's own tables and padding follow). Every RET it owns is a plain `ret`, so stack_args 0. Classified by a worker from the original bytes and spot-checked (0x348A0: single ret at 0x34901, 21-entry switch at 0x35018 with all targets in 0x348D7..0x35006)."
+  },
+  {
     "start": "0x00035560",
     "end": "0x00035590",
     "section": ".text",
@@ -1574,6 +1622,14 @@
     "kind": "routine",
     "evidence": "A method of the function-pointer table at 0x001EC200. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_000360D0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000355C0 at sub_000360D0. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x000355C0..0x00035622, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
     "stack_args": 12
+  },
+  {
+    "start": "0x00035640",
+    "end": "0x00035D34",
+    "section": ".text",
+    "kind": "routine",
+    "stack_args": 0,
+    "evidence": "Slot 15 of the job-handler table at 0x001EC0F0 (called as `call eax` with ecx=this and no stack arguments from the job class at 0x25310). The analysis database folds it as a tail_jump_alias with a span far past its true end, so the generated dispatch pointed it at the wrong body and it had no function of its own; run 20261004-011042-668-f5-heapfix-480 died with an ABI failure at 0x25310 when this table dispatched an alias. Body runs 0x00035640..0x00035D34, ending at the last instruction reachable by recursive descent from the entry through all its jump tables (every switch target read from the bytes lies inside the body; the function's own tables and padding follow). Every RET it owns is a plain `ret`, so stack_args 0. Classified by a worker from the original bytes and spot-checked (0x348A0: single ret at 0x34901, 21-entry switch at 0x35018 with all targets in 0x348D7..0x35006)."
   },
   {
     "start": "0x00036050",
@@ -14406,6 +14462,14 @@
     "section": ".text",
     "kind": "routine",
     "evidence": "A thread-startup trampoline the disassembler never claimed: it sits in a 439-byte hole between sub_0013B110 (ends 0x0013B179) and sub_0013B330, and no entry covered it. The title passes these addresses as ctx1 to PsCreateSystemThreadEx, and the thread wrapper 0x00147EBB calls ctx1, so the call failed with [ICALL] Failed to resolve VA 0x0013B180 in run logs/runs/20260922-085953-527-tailthunk-fix-ac97. Shape: spin on a per-thread flag word in 0x25EFA8-0x25EFDC counting iterations, run the worker loop, then push 0xF0000001, set the completion word and call 0x147E4E, which is the noreturn thread exit (push 0; call 0x147C6B; push [esp+4]; call dword ptr [0x1C4084]; int3), so the body has no ret of its own. Extent is the straight-line body up to and including the int3 that follows the exit call."
+  },
+  {
+    "start": "0x0013D840",
+    "end": "0x0013D856",
+    "section": ".text",
+    "kind": "routine",
+    "stack_args": 0,
+    "evidence": "A callback pointer stored in a global table at 0x2615C4..0x2615D8 (value 0x0013D840 is installed from the dword at 0x12E42B and sits in the table in the run dump). The analysis database has no entry (the previous function ends at 0x13D834, nop padding follows), so the indirect call `call eax` at 0x1408CF/0x140902 area was unresolved and fatal: run 20261004-013505-513-f5-handlers-600 died at it, ~347 s. Body: `mov eax,[0x261588]; test eax,eax; je ret; mov ecx,[0x26158c]; mov [esp+4],ecx; jmp eax` (a tail jump through a global hook that rewrites its first argument) with a plain `ret` at 0x13D855, so stack_args 0 for the ret path; the jmp eax tail forwards to the hook, which pops its own argument. Body runs 0x0013D840..0x0013D856."
   },
   {
     "start": "0x0013F950",
