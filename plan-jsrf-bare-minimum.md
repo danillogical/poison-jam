@@ -621,9 +621,9 @@ package. Each gets criteria in the same five-part form when it becomes next.
 6. **Parked by the owner:** the F5 fail-fast observer; no retry.
 7. **Answered 2026-10-03 by item 10:** the armed fade *is* updated — the traversal's `1/120` step
    store ran on it at least 667 times — and a second writer in the same function, the `[0,1]` clamp
-   at `0xA4CF0`, re-clamps alpha to `0` on each update, so it never reaches the target. What remains
-   open is **why** the clamp returns `0`; the unverified lead is the no-op `fcmove`/`fcmovne` lift in
-   `sub_0014C870`/`sub_0014C850` (item 10).
+   at `0xA4CF0`, re-clamps alpha to `0` on each update, so it never reaches the target. The cause is
+   the no-op `fcmove`/`fcmovne` lift in `sub_0014C870`/`sub_0014C850`, confirmed as a mechanism on
+   2026-10-04 (item 10).
 8. **Answered 2026-10-03 (owner-directed discovery, records only).** The **phase-2 chain is the
    phase-0 chain**: all 10 phase-2 xemu hits at `0x24700` carry the identical return chain
    `1108A → 11096 → 11096 → 124C3 → 13B24 → 13F9E → 6FA41` and the identical fade object
@@ -726,8 +726,9 @@ package. Each gets criteria in the same five-part form when it becomes next.
     (`fldenv` `sub_00040214`, `fisttp` `sub_000FDDA2`, `fnclex` `sub_0017F02C`, none on the
     fade path), and guest-advances-but-screen-holds. **Second defect, independent:** the drop
     is **silent** — no `RECOMP_UNIMPL`, no `TODO`, nothing in `lifter.unimplemented`, so the
-    contract `test_lifter_unimpl.py` enforces is violated and nothing reported it. Note the
-    clamp has **120 call sites**, so a repair changes other behaviour too.
+    contract `test_lifter_unimpl.py` enforces is violated and nothing reported it. Note the two
+    helpers `sub_0014C870`/`sub_0014C850` have **120 direct call sites** (35 + 85) across `gen/`
+    and `recovered.c`, so a repair changes other behaviour too.
     **No fix was made**: no translator change, no generated-code patch, no workaround, no
     packet promoted. **No fix, no TTD recording, no ledger ID**; exploratory, single run, one
     dword, no strict-horizon,

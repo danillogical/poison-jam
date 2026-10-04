@@ -16,7 +16,7 @@ Generated: 2026-10-04T00:39:23.739759+00:00
   Session row. Verified from this session's own `request/header` record in
   `C:\Users\logic\.dsh\sessions\--C-Users-logic-Repos-my_xbox_game--\session-c6018192-e90e-4718-9616-ff2165ca495b\`,
   not from a display name.
-- Workflow/plan/run-profile revisions and dirty diff identity: workflow `1c9489e0c5573f8b`, plan `4bcc474277c42d3f`, run profiles `4bb50f539ba4b7e8`, recomputed from the current file bytes because this session's own staffing edit changed the workflow and the plan. The paths the staffing commit changes are `docs/agent-workflow.md`, `docs/reviews/startup-current.md` and `tests/test_reviewer_routes.py`.
+- Workflow/plan/run-profile revisions and dirty diff identity: workflow `1c9489e0c5573f8b`, plan `4bcc474277c42d3f`, run profiles `4bb50f539ba4b7e8`, recomputed from the current file bytes because this session's staffing edit changed the workflow and its discovery edit changed the plan. The paths the staffing commit changes are `docs/agent-workflow.md`, `docs/reviews/startup-current.md` and `tests/test_reviewer_routes.py`.
 - Game revision/status: `master` `dfc22ff56610e6627bf28d0da322e3c1a328983f` at the startup pull of the previous turn; `1b7bd3d000e5c499f9096babf9974a2cba3052e2` (clean) at the start of this staffing/discovery turn.
 - Toolkit revision/status: `main` `929856fcfc145036252510509abaa0782d910a22` (clean, unchanged this session)
 - Unrelated edits preserved: 0 game, 0 toolkit. Toolkit pulled first
@@ -167,8 +167,8 @@ already contains.
   Decision guardrail (§0.5), Advisor (§0.4) and Reviewer (§0.3) all PASS, and
   `just route-check` is green with all three roster routes covered. No packet is
   promoted, so game-behavior implementation is `BLOCKED` until one is promoted
-  (§5). Owner-directed §0.6 work — the staffing correction, the alpha watch run and
-  the fcmov discovery test — is recorded in
+  (§5). Owner-directed §0.6 work: the staffing correction is recorded in §1 and this
+  receipt; the alpha watch run and the fcmov discovery test are recorded in
   `docs/reviews/owner-sega-600-observations.md` and plan §13 item 10.
 
 Do not mark readiness PASS with a failed or unknown required item. A provider
