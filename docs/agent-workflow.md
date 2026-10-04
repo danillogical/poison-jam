@@ -115,7 +115,7 @@ One harness is supported: the DeepSeek Harness (DSH). Use only these assignments
 | **Worker subagents** | `provider: workbuddy-ai`, `model: deepseek-v4.1-flash`, `reasoning_effort: max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` |
 | **Planner** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: high` | `claude/claude-opus-5-5` @ `high` (Claude Opus 5.5; `route: LIVE_RESOLVE`, fresh child per packet) |
 | **Persistent Advisor** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: xhigh` | `claude/claude-opus-5-5` @ `xhigh` (Claude Opus 5.5; `route: CONTINUABLE_PINNED`, session-continuable child) |
-| **Decision guardrail** | `provider: grok`, `model: Grok 4.7`, `reasoning_effort: xhigh` | `grok/Grok 4.7` @ `xhigh` (Grok 4.7; `route: CONTINUABLE_PINNED`, one session-continuable child) |
+| **Decision guardrail** | `provider: workbuddy-ai`, `model: grok-4.7`, `reasoning_effort: xhigh` | `workbuddy-ai/grok-4.7` @ `xhigh` (Grok 4.7; `route: CONTINUABLE_PINNED`, one session-continuable child) |
 | **Reviewer** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: high` | `claude/claude-opus-5-5` @ `high` (Claude Opus 5.5; `route: LIVE_RESOLVE`, a fresh child per packet review, and one per turn for the turn-end review, continued through its re-reviews) |
 
 **Spawn with all three parameters.** Pass `provider`, `model` and `reasoning_effort`

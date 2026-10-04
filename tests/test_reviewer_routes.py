@@ -219,10 +219,15 @@ class StartupReceiptCarryOverTests(unittest.TestCase):
         if not receipt.is_file():
             self.skipTest('no receipt present')
         text = receipt.read_text(encoding='utf-8')
-        # The route-resolution section must still name the probed routes.
+        # The route-resolution section must name the routes §1 currently assigns.
+        # This asserted `gpt-6.1-sol` until 2026-10-03, when the workflow replaced
+        # the separate Packet and Turn reviewers with one Reviewer on Opus 5.5 @
+        # high; that route is no longer a §1 assignment, so the assertion demanded
+        # the receipt carry a retired route. The set below is the roster's current
+        # probed routes, so a stale one is still caught.
         self.assertIn('claude-opus-5-5', text)
-        self.assertIn('gpt-6.1-sol', text)
         self.assertIn('deepseek-v4.1-flash', text)
+        self.assertIn('grok-4.7', text)
 
 
 if __name__ == '__main__':

@@ -16,9 +16,9 @@ Generated: 2026-10-04T00:39:23.739759+00:00
   Session row. Verified from this session's own `request/header` record in
   `C:\Users\logic\.dsh\sessions\--C-Users-logic-Repos-my_xbox_game--\session-c6018192-e90e-4718-9616-ff2165ca495b\`,
   not from a display name.
-- Workflow/plan/run-profile revisions and dirty diff identity: workflow `b0174ae9d4af7af7`, plan `f20c5d97cff65531`, run profiles `4bb50f539ba4b7e8`
-- Game revision/status: `master` `dfc22ff56610e6627bf28d0da322e3c1a328983f` (clean)
-- Toolkit revision/status: `main` `929856fcfc145036252510509abaa0782d910a22` (clean)
+- Workflow/plan/run-profile revisions and dirty diff identity: workflow `1c9489e0c5573f8b`, plan `4bcc474277c42d3f`, run profiles `4bb50f539ba4b7e8`, recomputed from the current file bytes because this session's own staffing edit changed the workflow and the plan. The paths the staffing commit changes are `docs/agent-workflow.md`, `docs/reviews/startup-current.md` and `tests/test_reviewer_routes.py`.
+- Game revision/status: `master` `dfc22ff56610e6627bf28d0da322e3c1a328983f` at the startup pull of the previous turn; `1b7bd3d000e5c499f9096babf9974a2cba3052e2` (clean) at the start of this staffing/discovery turn.
+- Toolkit revision/status: `main` `929856fcfc145036252510509abaa0782d910a22` (clean, unchanged this session)
 - Unrelated edits preserved: 0 game, 0 toolkit. Toolkit pulled first
   (`Already up to date.`), then game (`c333048..dfc22ff`, fast-forward,
   `docs/agent-workflow.md`, `docs/session-start-template.md`,
@@ -27,17 +27,17 @@ Generated: 2026-10-04T00:39:23.739759+00:00
   `tests/test_reviewer_routes.py`, `tests/test_route_allowlist.py`).
 - CURRENT PACKET copied from plan (packet + exact revision + SHA-256), or NONE:
   **NONE** — `## CURRENT PACKET — none` (`plan-jsrf-bare-minimum.md:56`)
-  - plan hash `f20c5d97cff6553108a49047c3e09ee0624806f55d4c0b843886101705f70545`
+  - plan hash `4bcc474277c42d3f` (current bytes; the packet block itself is unchanged)
   - block: "No packet is promoted. **The fail-fast observer attempt is PARKED by the
     owner — STOP UNKNOWN, no retry, no further correction, consultation or list
     extension.**" The plan also states "The first packet is C1 (§7); it is promoted
     here, by exact revision and hash, only after its adequacy review returns
     `ADEQUATE`" (`plan-jsrf-bare-minimum.md:68`).
 - Dependencies and their recorded acceptance reviews: none (no packet promoted)
-- Next exact authorized action: **owner-directed discovery under §0.6** — the
-  bounded watch run recorded in plan §13 item 10, approved by the owner this turn.
-  No game-behavior implementation: with no packet promoted that stays `BLOCKED`
-  until one is promoted (§5).
+- Next exact authorized action: **owner-directed §0.6 maintenance and discovery** — the
+  owner-authorized Decision guardrail staffing correction, and the fcmov discovery
+  test recorded in plan §13 item 10. No game-behavior implementation: with no packet
+  promoted that stays `BLOCKED` until one is promoted (§5).
 - Build/run owner and worker write ownership: Session owns integration, the
   build/run, evidence collection and record keeping (§2.2). No worker was spawned
   this session.
@@ -56,45 +56,40 @@ which is harness metadata rather than a self-report.
 - Persistent advisor: requested `claude` / `claude-opus-5-5` @ `xhigh`; returned
   route identity `claude` / `claude-opus-5-5` @ `xhigh` (`maxTokens: 128000`) —
   **PASS**, `route: CONTINUABLE_PINNED`.
-- Decision guardrail: requested `grok` / `Grok 4.7` @ `xhigh`; **BLOCKED**. The
-  active catalog registers **no `grok` provider**. Grok 4.7 is advertised only as
-  `workbuddy-ai/grok-4.7` — "Grok-4.7 · x1.90", efforts low, medium, high, xhigh —
-  which is a different provider id from the one §1 names, so the §1 route does not
-  resolve. A spawn attempt on the §1 route exactly as written was rejected:
-  `Error: child LLM route "grok/Grok 4.7" is not allowed for this Session`. No
-  substitute id or route was used (owner instruction; §1 "Fallback routes: NONE
-  AUTHORISED").
+- Decision guardrail: requested `workbuddy-ai` / `grok-4.7` @ `xhigh`; returned
+  route identity `workbuddy-ai` / `grok-4.7` @ `xhigh` — **PASS**,
+  `route: CONTINUABLE_PINNED`. §1 named `grok/Grok 4.7` until this session, which
+  the active catalog does not advertise; the owner made the §3.4 staffing decision
+  to move the row to the advertised route, and §1 now reads
+  `provider: workbuddy-ai`, `model: grok-4.7`, `reasoning_effort: xhigh`. The
+  advertised catalog entry is `workbuddy-ai/grok-4.7` — "Grok-4.7 · x1.90",
+  efforts low, medium, high, xhigh.
 - Reviewer: requested `claude` / `claude-opus-5-5` @ `high`; returned route
   identity `claude` / `claude-opus-5-5` @ `high` (`maxTokens: 128000`) — **PASS**
   (`route: LIVE_RESOLVE`, a fresh child per packet review and one per turn for the
   turn-end review). Exactly one advertised route matches, and it offers `high`.
 - Workers: `workbuddy-ai/deepseek-v4.1-flash` @ `max` (the §1 Worker row). No
   worker spawned this session.
-- Exact error or ambiguity, if any: the Decision guardrail route above. §1 names
-  `grok/Grok 4.7`; the catalog advertises `workbuddy-ai/grok-4.7`. Per the owner's
-  instruction for this turn, the roster is not corrected here and no other id is
-  substituted.
+- Exact error or ambiguity, if any: none. All four §1 routes resolve to exactly one
+  advertised entry.
 
 **Allow-list.** `just route-check` (`scripts/check-route-allowlist.py`, checker
-`jsrf-route-allowlist/1`) — **exit 1**, 1 finding:
+`jsrf-route-allowlist/1`) — **exit 0**, no findings, all three roster routes covered:
 
 ```text
 checker jsrf-route-allowlist/1
   roster routes    : 3
     OK   claude/claude-opus-5-5
-    MISS grok/Grok 4.7
     OK   workbuddy-ai/deepseek-v4.1-flash
+    OK   workbuddy-ai/grok-4.7
   allow-list routes: 15
   fallbacks named  : none (owner-reserved; see the note)
-  1 finding(s):
-    [roster_route_not_allowed] the roster names grok/Grok 4.7, which the active allow-list does not contain; a route that is policy but not allowed cannot be selected when it is needed
+  no findings
 ```
 
-Two of the three roster routes are covered. The active profile patch
-(`C:\Users\logic\.dsh\profiles\web\cordis.patch.yml`) contains
-`workbuddy-ai/grok-4.7`, not `grok/Grok 4.7`. This is consistent with the live
-resolution above and is the same missing route, reported independently by a static
-text check.
+The checker and its matching were not changed: the roster row was corrected to the
+route the active profile patch (`C:\Users\logic\.dsh\profiles\web\cordis.patch.yml`)
+already contains.
 
 ## Reviewer probe — PASS
 
@@ -116,19 +111,23 @@ text check.
   yields a different hash; that is the revision change, not a changed measurement.
 - Exact error or missing evidence: none. The probe child is discarded.
 
-## Decision guardrail probe — BLOCKED
+## Decision guardrail probe — PASS
 
-- Guardrail child ID: **none created**
-- Route: `grok` / `Grok 4.7` @ `xhigh` (the §1 row) — not advertised by the catalog.
-- Exact error or missing evidence: no `grok` provider is registered, so the §1
-  route cannot be resolved and the child cannot be spawned. The spawn attempt
-  returned `Error: child LLM route "grok/Grok 4.7" is not allowed for this Session`.
-  Every §0.5 PASS requirement (child in the DSH child list, effective route equal to
-  the §1 row, session-scoped workspace, a repository fact read with its own tool
-  call, a second-turn marker) is therefore unmet, and the child-side
-  `git rev-parse HEAD` comparison requested this turn could not be performed.
-- Result: **BLOCKED**. Guardrail-dependent work is `BLOCKED` (§0). The advertised
-  id was recorded and no substitute was used.
+- Guardrail child ID: `e01fab41-5669-47b1-b96a-ebf99be20f69` (`mode: continuable`,
+  from its `subagent/catalog` record)
+- Route: `workbuddy-ai` / `grok-4.7` @ `xhigh` (the corrected §1 row), spawned with
+  all three explicit parameters and read back from its own `request/header`.
+- Workspace: `C:\Users\logic\Repos\my_xbox_game` (session-scoped resolution).
+- Named fact read with its own tool call: `docs/agent-workflow.md`, the §1 Decision
+  guardrail row, which it quoted verbatim; it also ran
+  `git -C C:\Users\logic\Repos\my_xbox_game rev-parse HEAD` itself and returned
+  `1b7bd3d000e5c499f9096babf9974a2cba3052e2`, matching the Session's own reading.
+- Turn-2 marker: `GUARDRAIL-PROBE-4T8N-20261004`, returned verbatim by the same
+  child on continuation.
+- Result: **PASS** for the §0.5 requirements.
+- Exact error or missing evidence: none. The earlier §1 route (`grok` / `Grok 4.7`)
+  was BLOCKED because the catalog registers no `grok` provider; that route is
+  superseded by the owner's staffing decision and is no longer the §1 row.
 
 ## Persistent advisor probe — PASS
 
@@ -161,16 +160,16 @@ text check.
   - duckdb: 1.5.6 (not on PATH)
   - python: 3.13.2 (C:\Python313\python.exe)
   - free space: 217.81 GB (above 15.0 GB floor; `just disk` gate PASS)
-- State/plan disagreements and how they were escalated: none. Both trees clean and
-  fast-forward after the pull.
-- Overall disposition and next action: **BLOCKED**. The §0.5 Decision guardrail
-  probe cannot run because the §1 route `grok/Grok 4.7` is not advertised, so
-  guardrail-dependent work is `BLOCKED` and the guardrail side of the decision
-  sandwich is unavailable this session. Advisor (§0.4) and Reviewer (§0.3) both
-  PASS. No packet is promoted, so game-behavior implementation is `BLOCKED` until
-  one is promoted (§5). The session's work this turn is the owner-approved §0.6
-  discovery run recorded in `docs/reviews/owner-sega-600-observations.md` and plan
-  §13 item 10.
+- State/plan disagreements and how they were escalated: none. The §1 Decision
+  guardrail route was BLOCKED under the roster as written; the owner made the §3.4
+  staffing decision and §1 was corrected to the advertised route.
+- Overall disposition and next action: **PASS** for the required startup items.
+  Decision guardrail (§0.5), Advisor (§0.4) and Reviewer (§0.3) all PASS, and
+  `just route-check` is green with all three roster routes covered. No packet is
+  promoted, so game-behavior implementation is `BLOCKED` until one is promoted
+  (§5). Owner-directed §0.6 work — the staffing correction, the alpha watch run and
+  the fcmov discovery test — is recorded in
+  `docs/reviews/owner-sega-600-observations.md` and plan §13 item 10.
 
 Do not mark readiness PASS with a failed or unknown required item. A provider
 catalog entry is not a completed invocation. A new advisor answering the
