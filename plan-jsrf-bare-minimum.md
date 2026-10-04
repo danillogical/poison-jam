@@ -78,16 +78,35 @@ established facts. Where this plan proposes a change to one of them, it is a tas
    jump table) and the hook wrapper `0x13D840`. recovered.c is 3094 functions.
 
 **Measured now.** Exploratory run `20261004-014344-804-f5-hook-600` (600 s, D2 environment, GPU_ACK default,
-ledger L14-L18, L20-L25, L39, L40): `diagnostic_deadline`, **zero** out-of-memory lines, **zero**
-`JSRF_FATAL`, no unresolved call, no ABI failure, no `[UNIMPL]`. Frames (viewed): SEGA, Smilebit, ADX,
-Dolby, then the graffiti disclaimer from 01:48:36 to the end of the run (~5 minutes), identical across 31
-numbered dumps (the unsuffixed file is the disclaimer, slightly different: it is still being redrawn).
-**The title screen has not been reached.**
+ledger L14-L18, L20-L25, L39, L40): `diagnostic_deadline`, zero out-of-memory lines, zero `JSRF_FATAL`, no
+unresolved call, no ABI failure, no `[UNIMPL]`. Frames (viewed): SEGA, Smilebit, ADX, Dolby, then the graffiti
+disclaimer from ~290 s to the end. In that run's dump the logo object `0x142EE60` is in **phase 13 with
+hold 618** (`0x7E48F`: it counts updates and moves on at hold > `0x2D0` = 720), at ~2 updates/s, so the
+hold ends ~50 s after the run does. The runner's 600 s cap is what stopped that observation; it is raised to
+1800 s (`scripts/jsrf_run_profile.py` `MAX_RUN_SECONDS`, its test updated).
 
-**Next blocker.** The disclaimer screen has no exit. It is the same behaviour class as the SEGA hold (a
-state machine waiting on a completion). Next: find the object and phase that owns the disclaimer (the
-logo-class method at `0x7E360` handled SEGA; the disclaimer is one of its later phases or a sibling),
-read its phase/hold fields from the dump, and identify the predicate it waits on.
+Long run `20261004-020802-181-f5-long-1500` (1500 s, same environment, quieter logging): `diagnostic_deadline`,
+no OOM, no unresolved call. The disclaimer frame is the last numbered frame (`fb068`, from ~540 s) and the
+unsuffixed final frame is still the disclaimer. **By the end of the dump the logo object is gone** (its
+vtable word no longer `0x1CCFB8`) **and the subsystem-6 fade at `0x15E0E60` is mid-step (alpha `0x3D888889`,
+done 0)**: the state machine moved past phase 13, but no new frame was captured (the dumps were every 60
+presents and the last was the disclaimer). Inferred, not seen. **The title screen has not been reached.**
+
+**A second `JSRF_FATAL.ERR` at 02:23:57 (~950 s) with no OOM.** The dialog object in the dump
+(`0x226F7B0`, vtable `0x1CC660`, `+0x98 = 0x400000`, text "There's a problem with the disc...") is the same
+dialog class. So the disc-error dialog has at least two causes: the heap exhaustion (fixed) and something
+else. **Which of the four `0x6F730` callers fired is not measured.** The callers are `0x25537E`/`0x255AD`
+(15 s I/O timeout in the job class at `0x25400`, objects of vtable `0x1C4F68`; a live one is at
+`0x1330060`, `+0x44 = 1`, `+0x48 = 10`, state field `+0x1604 = 0`), `0x664C3` (`0x257B0` result >= 2) and
+`0x116EA8` (`0x13AA50` nonzero). The cheapest next measurement is a guest-stack record at the
+`JSRF_FATAL.ERR` open (return addresses `0x6EE73` / `0x664C8` / `0x255B2` / `0x116EAD` name the caller); I
+drafted that as a trace-only print in the kernel bridge's NtCreateFile and reverted it uncommitted. It
+needs one more ~16 min run to fire.
+
+**Next.** (1) Add that stack record (observation only) and rerun long enough to cross ~950 s, naming the
+caller of `0x6F730`; (2) capture a frame after the disclaimer (dump every 10 presents once past ~500 s) to
+see what follows it; (3) if the second fatal is the 15 s I/O timeout, find which pending I/O never
+completes (the job's `+0x50/+0x54/+0x64` fields: pending `0x103` status block).
 
 **Not established:** any strict-profile result; whether the disclaimer waits on a fade (as SEGA did), an
 input, or a timer; and that no other table-referenced method is missing (about 151 code-pointer targets

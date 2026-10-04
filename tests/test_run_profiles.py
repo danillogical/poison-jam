@@ -822,11 +822,11 @@ class DurationCapTests(unittest.TestCase):
     """
 
     def test_boundary_durations_parse_at_the_launcher(self):
-        """600 is accepted; 601 and 0 are refused with argparse's exit code 2."""
-        with patch.object(sys, 'argv', ['run-jsrf.py', '--seconds', '600']), \
+        """1800 is accepted; 1801 and 0 are refused with argparse's exit code 2."""
+        with patch.object(sys, 'argv', ['run-jsrf.py', '--seconds', '1800']), \
                 contextlib.redirect_stderr(io.StringIO()):
-            self.assertEqual(run_jsrf.parse_args().seconds, 600)
-        for seconds in ('601', '0'):
+            self.assertEqual(run_jsrf.parse_args().seconds, 1800)
+        for seconds in ('1801', '0'):
             with self.subTest(seconds=seconds), \
                     patch.object(sys, 'argv', ['run-jsrf.py', '--seconds', seconds]), \
                     contextlib.redirect_stderr(io.StringIO()):
@@ -851,7 +851,7 @@ class DurationCapTests(unittest.TestCase):
         return metadata
 
     def test_archive_validity_follows_the_same_bound(self):
-        """600 stays a valid archive for both base profiles; 601/0 go UNKNOWN.
+        """1800 stays a valid archive for both base profiles; 1801/0 go UNKNOWN.
 
         The base classification comes from the environment, so a strict archive
         is built from RECOMP_GPU_ACK=0 and an exploratory one from the default
@@ -861,7 +861,7 @@ class DurationCapTests(unittest.TestCase):
         for label, environment, expected in (
                 ('strict', settings(RECOMP_GPU_ACK='0'), STRICT),
                 ('exploratory', settings(), EXPLORATORY)):
-            for seconds, want in ((600, expected), (601, UNKNOWN), (0, UNKNOWN)):
+            for seconds, want in ((1800, expected), (1801, UNKNOWN), (0, UNKNOWN)):
                 with self.subTest(profile=label, seconds=seconds), \
                         tempfile.TemporaryDirectory() as temporary:
                     root = Path(temporary)
@@ -891,7 +891,7 @@ class DurationCapTests(unittest.TestCase):
         """The bound is a single shared value, not two literals that can drift."""
         self.assertTrue(hasattr(jsrf_run_profile, 'MAX_RUN_SECONDS'),
                         'the bound must live in one shared constant')
-        self.assertEqual(jsrf_run_profile.MAX_RUN_SECONDS, 600)
+        self.assertEqual(jsrf_run_profile.MAX_RUN_SECONDS, 1800)
         self.assertEqual(run_jsrf.MAX_RUN_SECONDS, jsrf_run_profile.MAX_RUN_SECONDS,
                          'the launcher must use the classifier\'s constant')
 

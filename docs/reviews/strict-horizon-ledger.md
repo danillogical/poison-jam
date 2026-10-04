@@ -184,3 +184,7 @@ Recovery entries corrected (plan Current work and section 13 item 12). No strict
 ## 2026-10-05 - F5 heap fix / clean 600 s to the disclaimer
 
 Toolkit dbeb284 records alignment gaps and carves aligned pieces from free blocks; eight further recovery entries. No strict run, so the strict horizon does not move. Exploratory run 20261004-014344-804-f5-hook-600 (600 s deadline): no OOM, no JSRF_FATAL, no unresolved call; SEGA, Smilebit, ADX, Dolby, then the graffiti disclaimer held for the last ~5 minutes. Ledger L14-L18, L20-L25, L39, L40. Not the title screen; not a fidelity or liveness claim.
+
+## 2026-10-05 - F5 long runs
+
+Runs 20261004-014344-804-f5-hook-600 (600 s: disclaimer, logo phase 13 hold 618/720) and 20261004-020802-181-f5-long-1500 (1500 s: disclaimer held to the last frame; logo object gone and fade mid-step at the end of the dump; the guest wrote JSRF_FATAL.ERR at ~950 s with no OOM, caller of 0x6F730 not yet named). No strict run; no strict-horizon move. Ledger L14-L18, L20-L25, L39, L40. Not the title screen; not a fidelity or liveness claim.

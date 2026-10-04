@@ -26,7 +26,7 @@ MISSING = 'MISSING'
 # two used to carry separate literals: raising one alone let a long run launch and
 # then be classified UNKNOWN by the other. 600 s is the F5 observation bound; the
 # collector converts argv[1] seconds to milliseconds and has no duration cap.
-MAX_RUN_SECONDS = 600
+MAX_RUN_SECONDS = 1800
 
 PROFILE_SCHEMA_VERSION = 1
 CLASSIFIER_VERSION = 'jsrf-run-profile/1'
