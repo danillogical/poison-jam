@@ -57,25 +57,32 @@ established facts. Where this plan proposes a change to one of them, it is a tas
 
 **F4b — SEGA/logo progression.**
 
-**Current finding (2026-10-04).** The `fcmove`/`fcmovne` repair released the SEGA card. Toolkit `671ab0a`
-translates `fcmovcc` in `_lift_fpu` and in `lift_basic_block`; the two clamp bodies
-`sub_0014C850`/`sub_0014C870` were relifted (`relift-selected.py fcmov`, nothing else in the tree
-changed). Exploratory run `20261003-205636-600-f4b-fcmov-fix-150` (150 s, ledger L14-L18, L20-L25,
-L39, L40): the logo object `0x143EE60` is at phase 8 (was 2, held, in every earlier run) and the game
-then opens Mission/Event/Sounds files it never reached before. Observed in the dump and the log; the
-fade finishing is inferred from the phase moving. A 360 s run `20261003-210011-097-f4b-fcmov-fix-360`
-then stopped, fatally, at an unresolved call: `[ICALL] Failed to resolve VA 0x0007BBF3`, called from
-`body_0007B8D0` (`recovered.c:76104`, `recomp_stubs_recovery.c:93`).
+**Current finding (2026-10-04).** Repairing `fcmove`/`fcmovne` moved the logo state machine past the SEGA
+hold in an exploratory run. Toolkit `671ab0a` translates `fcmovcc` (in `_lift_fpu` and `lift_basic_block`);
+the two clamp bodies `sub_0014C850`/`sub_0014C870` were relifted (`relift-selected.py fcmov`). Run
+`20261003-205636-600-f4b-fcmov-fix-150` (exploratory, 150 s, ledger L14-L18, L20-L25, L39, L40; built
+from c3e8c48 plus the patch committed with this change, archived as `project.patch`): logo object
+`0x143EE60` is at phase 8, hold `0x79`. It was phase 2 and held in every earlier run. Phase 8 is a later
+logo's fade-out wait (jump table at `0x7E524`), so the fade-complete check passed several times after the
+SEGA hold. **Observed:** the dump read (dump-mapping check passes). **Inferred, not seen:** no frame was
+dumped or inspected, so "the card released" rests on the logo state machine advancing, in a run with
+synthetic GPU acknowledgement on by default. No strict run was made.
 
-**Next stop.** `0x0007BBF3` is the shared epilogue of `sub_0007B8D0` (`mov ecx,[esp+0xc]; pop esi; pop
-ebx; mov fs:[0],ecx; add esp,0x10; ret`), reached by `je 0x7bbf3` at `0x7B903` and `jne` at `0x7B95E`.
-The recovered span ends at `0x7B93C`, so the jump became a call to a non-function. Classify it (boundary
-or recovery span: an internal label, not a function) and fix it through `config/recovered-functions.json`
-/ `config/boundary-fixes.json`; not a bypass.
+The 360 s run `20261003-210011-097-f4b-fcmov-fix-360` then stopped fatally at `[ICALL] Failed to resolve
+VA 0x0007BBF3`, called from `body_0007B8D0` (`recovered.c:76104`, `recomp_stubs_recovery.c:93`).
 
-**Ruled out for this item:** a short run bound (the release happens inside the first 150 s run).
-Not established: that the strict profile releases the card (no strict run was made), and that the
-fcmov fix is the only change in behaviour: the helpers have 120 call sites (see �13 item 11).
+**Next stop (a recovered-span defect that predates the fix; the run only got far enough to hit it).**
+`0x0007BBF3` is the shared epilogue of `sub_0007B8D0` (`mov ecx,[esp+0xc]; pop esi; pop ebx; mov
+fs:[0],ecx; add esp,0x10; ret`), reached by `je` at `0x7B903` and `jne` at `0x7B95E`. The recovered entry
+ends at `0x7B93C` but the function runs to `0x7BC03`, so jump targets `0x7B93C`, `0x7B956`, `0x7B978`
+and `0x7BBF3` fall outside it and became fatal stubs (`0x7BBF3` has been in
+`config/recovery-unresolved.json` since before this change). Classify the whole span and fix it through
+`config/recovered-functions.json` / `config/boundary-fixes.json`; not a bypass.
+
+**Ruled out for this item:** a short run bound (the advance happens inside the first 150 s run).
+**Not established:** that the strict profile releases the card, or that no other behaviour changed: the
+two helpers have 120 call sites (§13 item 11).
+
 ## 1. Objective and definition of done
 
 Port JSRF to Windows by static recompilation. **Minimum playable slice** — all of the following,
@@ -738,17 +745,15 @@ package. Each gets criteria in the same five-part form when it becomes next.
     and `_flags` otherwise; any FPU mnemonic with no case now goes through `Lifter._unimplemented`
     (`RECOMP_UNIMPL` + tally) instead of a bare comment. Other catch-all sites: `fisttp` translated
     (truncating store, pop); `fnclex` is an explicit decision (x87 exception state is not modelled; all
-    exceptions are masked), as are `fnop`/`fwait`; `fldenv` now reports `[UNIMPL]` (one site,
-    `sub_00040214`, none known to be reached). Game side: `scripts/relift-selected.py fcmov` relifted
+    exceptions are masked), as are `fnop`/`fwait`; `fldenv` now reports `[UNIMPL]` in a fresh lift (the JSRF tree has not been relifted for it). Game side: `scripts/relift-selected.py fcmov` relifted
     exactly `sub_0014C850` and `sub_0014C870` in `recomp_0003.c`; the diff is 6 insertions and 4
-    deletions inside those two bodies, and no other file changed. Blast radius: 120 call sites
-    (35+85) now get a real clamp, so any behaviour that depended on the broken clamp changes; this is
-    not separately audited. Tests: toolkit `test_lifter_fcmov_exec.py` and `test_lifter_fpu.py`
+    deletions inside those two bodies. That is the selection rule, not an audit: a read-only relift of every generated body with the new lifter (scratch, nothing written; 4,866 bodies, 2,630 differ, almost all generator-version noise such as CC/Frame header lines) finds exactly two other bodies whose diff is FPU-related, `sub_000FDDA2` (`fisttp` becomes a store) and `sub_0017F02C` (`fnclex` becomes a decided no-op; its copy in `recovered.c` is also still a comment). Neither is on the fade path and neither was relifted. The one `fldenv` site (`recomp_0000.c:79871`) sits in a body the audit could not map to an analysis entry, so it still carries the old silent comment and is unaudited. Blast radius: the 120 call sites (35+85) are textually unchanged (no caller body differs in the audit for FPU reasons), but they now receive a real clamp result, so behaviour that depended on the broken clamp changes at runtime; that was not audited per caller. Known gap in the lifter: with no tracked flag setter the `fcmovcc` fallback reads `_flags`, which is never assigned (and not declared for `fcmov` functions); neither JSRF site uses it. Tests: toolkit `test_lifter_fcmov_exec.py` and `test_lifter_fpu.py`
     (fail on the old lifter); game `tests/test_fcmov_clamp.py`, registered as CTest
     `jsrf_fcmov_clamp`, executes the generated bodies (`1/120` and `1/120` now, `1.0` and `0` before)
     with a negative control. Provenance: the one-file `recomp_0003.c` baseline and manifest were
     amended narrowly (a bare `--write` would have deleted the amendment history). Run result: see
     "Current work".
+
 ### Fast path status
 
 - **F0, F0a, F0b — done.** Runs gate at 15 GB free; copy `src/recomp/` aside before pulling a commit
