@@ -56,50 +56,6 @@ def run_check(label: str, argv: list[str]) -> bool:
     return True
 
 
-def staged_draft_packets(paths: list[str]) -> list[str]:
-    """Staged packet files that are still drafts. W16's warning.
-
-    Plan W16: "**Stage explicit paths only**; the Session never runs `git add -A`
-    while another role may be writing; hashes are pinned only after the writer
-    reports done", with the check "pre-commit warns on staged draft packets not
-    named in the commit message".
-
-    **Why it is a WARNING and not a refusal.** The measured failure is a Planner's
-    in-progress draft swept into a commit by `git add -A` (`141cb7e`), which is a
-    commit-hygiene accident rather than a correctness defect in the tree: the
-    content is what the writer had written. Refusing would block a legitimate commit
-    of a draft the author intends to land; warning makes the accident visible at the
-    moment it happens, which is when it is cheap to undo.
-
-    A draft is named in the commit message when the message mentions its packet id,
-    so an intentional draft commit is not warned about.
-    """
-    drafts = []
-    for path in paths:
-        if not path.endswith('.md'):
-            continue
-        if '/packets/' not in f'/{path}' and not path.startswith('docs/packets/'):
-            continue
-        try:
-            text = (ROOT / path).read_text(encoding='utf-8', errors='replace')
-        except OSError:
-            continue
-        # `**Status:** draft` and `**Status:** INADEQUATE` are the two not-yet-frozen
-        # states (`docs/agent-workflow.md` §5.2).
-        if re.search(r'\*\*Status:\*\*\s*(draft|INADEQUATE)\b', text, re.IGNORECASE):
-            drafts.append(path)
-    return drafts
-
-
-def commit_message() -> str:
-    """The message git will use, from COMMIT_EDITMSG or the -m form."""
-    edit = ROOT / '.git' / 'COMMIT_EDITMSG'
-    try:
-        return edit.read_text(encoding='utf-8', errors='replace')
-    except OSError:
-        return ''
-
-
 def main() -> int:
     paths = staged_paths()
     checks: list[tuple[str, list[str]]] = [
@@ -117,20 +73,6 @@ def main() -> int:
     for label, argv in checks:
         if not run_check(label, argv):
             ok = False
-
-    # W16: a draft packet staged without being named in the commit message.
-    message = commit_message()
-    for path in staged_draft_packets(paths):
-        packet = Path(path).stem
-        if packet and packet in message:
-            continue
-        print()
-        print(f'  W16 WARNING: {path} is staged and its Status is draft/INADEQUATE,')
-        print(f'  and the commit message does not name {packet!r}.')
-        print(f'  If this draft was swept in by `git add -A` while its author was')
-        print(f'  still writing (the measured failure, 141cb7e), unstage it with:')
-        print(f'      git restore --staged {path}')
-        print(f'  Otherwise name the packet in the commit message and re-commit.')
 
     if not ok:
         print()

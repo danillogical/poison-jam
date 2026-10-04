@@ -68,10 +68,14 @@ def roster_routes() -> tuple[set[tuple[str, str]], list[str]]:
     if not WORKFLOW.is_file():
         raise SystemExit(f'{WORKFLOW} is missing')
     text = WORKFLOW.read_text(encoding='utf-8')
-    # Only the roster table: from the §1 heading to the next `###`.
-    start = text.find('## 1. Supported harness')
-    end = text.find('\n### ', start) if start >= 0 else -1
-    section = text[start:end if end > 0 else len(text)]
+    # Only the roster table: from the §1 heading to the next heading.
+    heading = re.search(r'^## 1\. ', text, re.MULTILINE)
+    if heading is None:
+        raise SystemExit(f'{WORKFLOW} has no §1 roster heading')
+    start = heading.start()
+    ends = [i for i in (text.find('\n## ', start + 1), text.find('\n### ', start + 1))
+            if i > 0]
+    section = text[start:min(ends) if ends else len(text)]
 
     routes: set[tuple[str, str]] = set()
     unpaired: list[str] = []
@@ -79,6 +83,10 @@ def roster_routes() -> tuple[set[tuple[str, str]], list[str]]:
         if not line.startswith('|'):
             continue
         if 'Role' in line or line.startswith('|---'):
+            continue
+        # The top-level session is chosen at launch, not spawned, so the
+        # subagent allow-list does not have to contain it.
+        if 'not spawned' in line:
             continue
         found = ROUTE.findall(line)
         for provider, model in found:

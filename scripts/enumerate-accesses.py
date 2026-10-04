@@ -29,7 +29,7 @@ Two independent enumerations are run and cross-checked:
 
 1. **Recursive descent** from the XBE entry point plus every dispatch seed, following
    direct `call`/`jmp`/`jcc` targets and fall-through, over a visited set.  This is the
-   control-flow-following method `docs/agent-workflow.md` section 6.1 requires; a linear
+   control-flow-following method a completeness claim requires; a linear
    sweep is inadmissible for completeness because it drifts at the first data island.
 2. **Raw-byte fallback**: an alignment-independent scan for the little-endian dword.
    This is an **existence** check.  It is deliberately not filtered by reachability,

@@ -8,7 +8,7 @@ a log. Two disciplines apply:
 
   * counts must be tool-computed from a named artifact with a recorded hash (the Advisor made this
     binding after two hand counts of one quantity disagreed and both were withdrawn);
-  * a decision input must be lossless by construction (docs/agent-workflow.md 6.1.6), so the
+  * a decision input must be lossless by construction (docs/jsrf-run-profiles.md), so the
     AUTHORITATIVE record here is the game's write-once per-thread latch -- the [A2HSLOT] and
     [KWATCH] log lines are CORROBORATION and may not carry a row on their own.
 

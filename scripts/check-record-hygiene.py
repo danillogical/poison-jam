@@ -46,8 +46,7 @@ RECORD_GLOBS = ('docs/reviews/*.md', 'docs/reviews/**/*.md',
                 'docs/reviews/*.json', 'docs/reviews/**/*.json')
 
 # Directories whose contents are data, not records.
-SKIP_NAMES = {'startup-current.md', 'strict-horizon-ledger.md',
-              'review-record.schema.json', 't5-analyzer-baseline.json'}
+SKIP_NAMES = {'strict-horizon-ledger.md', 't5-analyzer-baseline.json'}
 
 # Records written before W12 was adopted.  W12 landed on 2026-09-30 and governs
 # records written from then on; two older records legitimately carry a

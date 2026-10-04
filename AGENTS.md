@@ -8,12 +8,12 @@ the whole game. Work in small, verifiable milestones and explain defects with ev
 
 At session start read, in this order:
 
-1. `docs/agent-workflow.md` — **staffing, session loop, review, escalation**
-2. `plan-jsrf-bare-minimum.md` — **current packet, blocker, next action, acceptance criteria/status**
+1. `docs/agent-workflow.md` — **staffing, roles, review, escalation**
+2. `plan-jsrf-bare-minimum.md` — **current work, blocker, next action, milestone criteria/status**
 3. `docs/jsrf-run-profiles.md` — **strict vs exploratory evidence rules**
 
-Do not keep session reports in the repository. Durable findings go in the plan, a
-packet, or a review record; scratch notes stay outside the repository.
+Do not keep session reports in the repository. Durable findings go in the plan or the
+technical record; scratch notes stay outside the repository.
 
 `AGENTS.md` contains operating knowledge only. **Do not copy provider, model, or effort
 assignments here.** If `docs/agent-workflow.md` is unavailable, staffing is BLOCKED;
@@ -36,21 +36,20 @@ gitignored and original assets must never be tracked or pushed.
 policy of 2026-09-25).** Regular commits and
 pushes of **both** repositories are part of normal durable closure, not an end-of-project step.
 
-- **Commit** durable work as it lands, in whichever repository it belongs to: an accepted or closed
-  packet, a promoted packet, a review record or ruling, a plan update, an owner-directed change, a
-  sync/merge. Never leave accepted work uncommitted across a session boundary.
-- **Push both repositories at the same checkpoints:** packet closure, packet promotion, a completed
+- **Commit** durable work as it lands, in whichever repository it belongs to: a reviewed piece of
+  work, an Advisor ruling, a plan update, an owner-directed change, a sync/merge. Never leave
+  finished work uncommitted across a session boundary.
+- **Push both repositories at the same checkpoints:** finished, reviewed work, a completed
   sync/merge, a materially useful commit later work depends on, a milestone boundary, and the end of a
   session. Push the **toolkit first**, then the game, because game records cite toolkit commits.
 - **Before every push**, in that repository: the tree is **clean**; the branch/commit is the **intended
   durable state**; the push is a **fast-forward**; the destination is **`origin`** (toolkit: the fork,
-  never `upstream`); and, for **code**, the active packet's tests/acceptance passed. For the **game**
+  never `upstream`); and, for **code**, the relevant tests passed. For the **game**
   repository, which is public, also confirm the outgoing commits add **no `game/` path, no secret, and
   no blob over 100 MB** (`scripts/secret-audit.py` covers secrets).
-- **Records** (plan, packets, review records, rulings) may be pushed whenever committed and clean.
+- **Records** (plan, technical record, ledger) may be pushed whenever committed and clean.
   **Code** may not be pushed in a failed/rolled-back state, on a temporary conflict branch, as an
-  incomplete experiment, pending acceptance, or from a dirty tree — `R-CONFLICT`, rollback and
-  `INADEQUATE` are **no-push** states for code.
+  incomplete experiment, or from a dirty tree.
 - **Never** `--force`/`--force-with-lease`; **never** push to toolkit `upstream` without explicit owner
   authorization. Record each push as `PUSHED_TO: / BRANCH: / COMMIT: / REMOTE_URL: / RESULT:` in the
   record for the work it closes.
@@ -366,7 +365,7 @@ Interpretation limits:
 
 ## GPU inspection
 
-For the current guest stop and next executable packet, use
+For the current guest stop and next step, use the **Current work** section of
 `plan-jsrf-bare-minimum.md`; do not store a current stop in this file.
 
 ```powershell

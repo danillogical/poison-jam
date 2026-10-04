@@ -25,8 +25,8 @@ Subcommands
 ``check``   the lint: scan records for hex literals and report every literal that no
             cited output contains.
 
-KEY UNIVERSE (docs/agent-workflow.md section 6.1.6b)
----------------------------------------------------
+KEY UNIVERSE (docs/jsrf-run-profiles.md "Evidence rule")
+------------------------------------------------------
 A citation is keyed by **the property the decision classifies**, not by the read that
 observed it.  ``--key-kind guest-va`` keys a citation by the guest virtual address
 whose value is being cited; ``file-offset`` by a byte offset in a named file;

@@ -5,7 +5,7 @@ taken while writing it was recorded, with its reason and what would reverse it, 
 report `report-jsrf-bare-minimum-refresh.md`, removed 2026-10-02 (reports are not kept in the
 repository); read it with `git show 84e7a93:report-jsrf-bare-minimum-refresh.md`.
 
-Authorities are unchanged: `docs/agent-workflow.md` owns roles and the packet lifecycle,
+Authorities: `docs/agent-workflow.md` owns roles and how agents work,
 `docs/jsrf-run-profiles.md` owns evidence profiles, `docs/jsrf-technical-record.md` ("TR §n") owns
 established facts. Where this plan proposes a change to one of them, it is a task (§6), not an edit.
 
@@ -23,8 +23,8 @@ established facts. Where this plan proposes a change to one of them, it is a tas
 - **Exploratory runs may satisfy bare-minimum milestones** when the run's record lists the ledger IDs
   it relied on (`docs/jsrf-run-profiles.md` §"Pragmatic bare minimum"). Strict runs remain available
   as a diagnostic for fidelity questions.
-- **Fast-path steps run as chores** (W7), not packets: no Planner, adequacy review or acceptance
-  review per step. The Reviewer checks the milestone (M15) with its ledger IDs.
+- **The Orchestrator runs the fast path** (`docs/agent-workflow.md`); the Turn reviewer reproduces
+  the milestone (M15) with its ledger IDs.
 
 ## 0. What changed from the current plan
 
@@ -53,20 +53,21 @@ established facts. Where this plan proposes a change to one of them, it is a tas
   on an early fork of the same toolkit. Its lifts are planned in §7a; its comparison also exposed
   four defects in our toolkit (ledger D1–D4).
 
-## CURRENT PACKET — none
+## Current work
 
-No packet is promoted. **The fail-fast observer attempt is PARKED by the owner — STOP UNKNOWN, no
-retry, no further correction, consultation or list extension.** It stopped before the final corrective
-build: the initial real-library link succeeded but 0/12 controls passed, and the final source audit
-found an elapsed-threshold mismatch and an unmapped assertion against the closed correction list. No
-passing controls, no new guest run, no observer/causal classification. See
-[F5 fail-fast observer stop](docs/reviews/rulings/f5-failfast-observer-stop.md) and historical
-[F5 pre-freeze stop](docs/reviews/rulings/f5-fade-observation-stop.md). The chores now running are the
-owner-directed records cleanup and exploratory runs in §13's current-state block, **not** a resume of
-the broader goal, which stays paused.
-Phase 0 (§4) and the chores of §5–§6 run as owner-directed chores, which
-need no packet. The first packet is C1 (§7); it is promoted here, by exact revision and hash, only
-after its adequacy review returns `ADEQUATE` (`docs/agent-workflow.md` §5).
+**F4b — SEGA/logo progression.**
+
+**Current finding.** The no-op `fcmove`/`fcmovne` lift in `sub_0014C870`/`sub_0014C850` is a
+sufficient cause of the phase-2 fade hold, confirmed as a mechanism for this build (§13 "Current
+state", items 7 and 10; Advisor claim ceiling: not the only cause, and not that repairing it releases
+the SEGA card). The drop is also silent: nothing reports it, which violates the contract
+`test_lifter_unimpl.py` enforces. The two helpers have 120 direct call sites, so a repair changes
+other behaviour too.
+
+**Next.** Implement faithful `fcmove`/`fcmovne` translation in xboxrecomp's `_lift_fpu`, make an
+unhandled FPU instruction report instead of dropping silently, rebuild JSRF, verify the corrected
+behaviour in the linked executable, then measure the next blocker. If the hold persists, the
+Advisor's ranked alternatives are in §13 item 10.
 
 ## 1. Objective and definition of done
 
@@ -102,35 +103,19 @@ A window opening is not the slice; one playable scene is not the game.
 
 ## 3. How work runs under this plan
 
-- **DeepSeek Session and workers execute everything by default** (unlimited). Planner, Decision
-  guardrail and reviewer calls are made at the gates `docs/agent-workflow.md` names; the Advisor is consulted at those gates **and** on every
-  `docs/agent-workflow.md` §4.2 trigger. Each task states a **senior-call budget**; exceeding
-  it stops the task for an Advisor continue/stop decision. Quick consults (§4.3) do not count
-  against it.
-- **Three task classes.** *Chore* — owner-directed mechanical work (builds, syncs, regeneration,
-  tooling, record fixes): no packet; recorded in the TR with commands and results; may not change
-  admitted evidence semantics except behind a switch classified in `docs/jsrf-run-profiles.md`
-  (pending W7, chores run as owner-directed changes, as the syncs and regeneration already did).
-  *Discovery* and *change* — packets under `docs/agent-workflow.md` §5.
+- **`docs/agent-workflow.md` governs the work**: the Orchestrator plans and decides ordinary work,
+  workers execute, the Persistent Advisor takes hard technical questions, and the Turn reviewer
+  reviews finished work.
 - **Least resistance, recorded.** For each blocker, take the cheapest honest class: if emulating it
   would take more than about a day, approximate, stub or patch it, add the ledger entry in the same
   commit, and move on. Upgrade a path only when it blocks something.
-- **Acceptance criteria** name: profile · artifact path · oracle (independent of the
+- **Milestone criteria** name: profile · artifact path · oracle (independent of the
   implementation) · PASS predicate · FAIL/UNKNOWN predicate; for bare-minimum milestones the profile
-  may be exploratory, and the record lists its ledger IDs. The rows in this plan give the profile,
-  artifact, oracle and PASS predicate; the packet that executes a row adds its FAIL/UNKNOWN rules and
-  controls. A packet criterion without all five is not ready to freeze.
-- **Values in records come from tools**, never hand transcription, once T10 lands; until then a
-  second DeepSeek worker re-reads every value against the artifact before it is used (W5).
-- **The strict horizon is the progress metric.** Each session a DeepSeek worker appends one line
-  to `docs/reviews/strict-horizon-ledger.md`: date, toolkit/game revisions, run ID, stop site,
-  stop time. A line of work that goes **3 packets or 4 hours** without moving the horizon or
-  producing an accepted finding on the critical path gets one Advisor ceiling call (continue with
-  a stated bound, or stop) (W14).
-- **Before any Planner call** the DeepSeek premise checklist runs (W2): disassemble past the
-  failing instruction; the evidence runs are strict and postdate known fixes; the instrument's
-  positive control fires on a known event; upstream, forks and reference decompilations are
-  searched for the same symptom.
+  may be exploratory, and the record lists its ledger IDs.
+- **The strict horizon is the progress metric.** Record each strict-run stop in
+  `docs/reviews/strict-horizon-ledger.md`: date, toolkit/game revisions, run ID, stop site, stop
+  time. A line of work that goes about 4 hours without moving the horizon or producing a finding on
+  the critical path goes to the Advisor: continue with a stated bound, or stop.
 
 ---
 
@@ -303,13 +288,13 @@ for is done, as T13). The remaining W rows are document edits whose checks now e
 
 | Row | Check that now exists | What it found on the real tree |
 |---|---|---|
-| W1 | `scripts/check-review-recurrence.py` + 13 controls | 0 packets to examine (no revision records on disk); controls are fixtures and say so |
+| W1 | `scripts/check-review-recurrence.py` (retired 2026-10-03) + 13 controls | 0 packets to examine (no revision records on disk); controls are fixtures and say so |
 | W2 | `scripts/qualify-premise.py` + 18 controls, `just qualify` | on the real C1 premise: 5 PASS, 1 UNKNOWN, verdict `INCOMPLETE` |
-| W3/W10 | `scripts/check-packet-transcript.py` + 12 controls, `just packet-check` | 6 closed packets exempt by name; no blocking findings |
+| W3/W10 | `scripts/check-packet-transcript.py` (retired 2026-10-03) + 12 controls, `just packet-check` | 6 closed packets exempt by name; no blocking findings |
 | W4/W12 | `scripts/check-record-hygiene.py` + 21 controls, `just record-check` | 3 real instances, then clean after the exemptions were scoped |
 | W5 | `scripts/check-transcribed-values.py` + 10 controls, `just transcribed-check` | 4 `rechecked`, 2 `undecidable`, 0 blocking |
-| W6 | `scripts/check-ruling-ledger.py` + 11 controls, `just ruling-check` | the W11 ruling passes its own lint |
-| W7 | `scripts/chore-gate.py` + 12 controls, `just chore`; §5.8's three-class table | `STOP_REMOVED` on the two real runs |
+| W6 | `scripts/check-ruling-ledger.py` (retired 2026-10-03) + 11 controls, `just ruling-check` | the W11 ruling passes its own lint |
+| W7 | `scripts/chore-gate.py` (retired 2026-10-03) + 12 controls, `just chore`; §5.8's three-class table | `STOP_REMOVED` on the two real runs |
 | W8 | `scripts/check-route-allowlist.py` + 8 controls, `just route-check` | both roster routes are in the allow-list; fallbacks owner-reserved |
 | W9 | `scripts/check-instrument-controls.py` + 14 controls, `just instrument-check` | no instrumented runs recorded |
 | W11 | `docs/jsrf-run-profiles.md` §"TTD trace query (W11)"; ruling ledger; T1 evaluates S1–S8 mechanically and exits nonzero | the delivered artifact is `NOT ADMITTED`, with the two reasons the Advisor named |
@@ -578,6 +563,12 @@ package. Each gets criteria in the same five-part form when it becomes next.
 - **The old A1–A5 roadmap and the pre-reform milestone diaries** → provenance only (history).
 - **Startup Advisor probe turns** → W8.
 - **The second acceptance stage** → already removed (workflow `e6397ed`).
+- **The packet lifecycle and its tooling** (2026-10-03, owner) → replaced by the simplified
+  `docs/agent-workflow.md`. Removed: the Planner, Decision guardrail, preflights, adequacy
+  review, freeze/promote, startup receipts, and the scripts that enforced them
+  (`check-packet-transcript`, `check-review-recurrence`, `check-recorded-reviews`,
+  `record-review`, `export-codex-review`, `jsrf_review_records`, `gen-startup-receipt`,
+  `check-ruling-ledger`, `chore-gate`). Existing packets, reviews and rulings stay as history.
 
 ## 12. Evidence and decision rules (kept)
 

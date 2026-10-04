@@ -88,6 +88,26 @@ class RosterParsingTests(unittest.TestCase):
         self.assertIn(('codex', 'gpt-6.1-sol'), found)
         self.assertNotIn(('codex', 'acceptance-reviewer'), found)
 
+    def test_a_role_that_is_not_spawned_needs_no_allowlist_entry(self) -> None:
+        """The top-level session is chosen at launch; only spawned routes count."""
+        self.write_roster(ROSTER.replace(
+            '### Live verification',
+            '| **Orchestrator** | not spawned; chosen at launch | `claude/claude-sonnet-5-5` @ `medium` |\n'
+            '| **Advisor** | `provider: claude` | `claude/claude-opus-5-5` @ `xhigh` |\n'
+            '\n### Live verification'))
+        found, unpaired = routes.roster_routes()
+        self.assertNotIn(('claude', 'claude-sonnet-5-5'), found)
+        self.assertIn(('claude', 'claude-opus-5-5'), found)
+        self.assertEqual(unpaired, [])
+
+    def test_the_roster_section_ends_at_the_next_section(self) -> None:
+        """A route in a table under §2 is not part of the §1 roster."""
+        self.write_roster(ROSTER.replace(
+            '### Live verification',
+            '## 2. Other\n\n| x | y | `codex/not-a-roster-route` @ `high` |\n\n### Live verification'))
+        found, _ = routes.roster_routes()
+        self.assertNotIn(('codex', 'not-a-roster-route'), found)
+
     def test_a_model_id_with_a_space_is_read_whole(self) -> None:
         """A model id such as `Grok 4.7` must not be cut at the space."""
         self.write_roster(ROSTER.replace(

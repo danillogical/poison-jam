@@ -86,7 +86,6 @@ check:
     {{python}} -X utf8 scripts/check-agent-docs.py --check; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-merge-structure.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-generation-provenance.py --check; if ($LASTEXITCODE -ne 0) { exit 1 }
-    {{python}} -X utf8 scripts/check-ruling-ledger.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-disk-gate.py --quiet; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-horizon-ledger.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/patch-generated.py --check; if ($LASTEXITCODE -ne 0) { exit 1 }
@@ -105,18 +104,6 @@ instrument-record instrument control address log:
 transcribed-check:
     {{python}} -X utf8 scripts/check-transcribed-values.py
 
-# W3/W10s packet prerequisites: a dry-run transcript and stated premises.
-packet-check:
-    {{python}} -X utf8 scripts/check-packet-transcript.py
-
-# W7s chore gate: build, ctest and a strict A/B for owner-directed chores.
-chore label *args:
-    {{python}} -X utf8 scripts/chore-gate.py --label {{label}} {{args}}
-
-# W6s ruling-ledger lint: a ruling must carry its four required facts.
-ruling-check:
-    {{python}} -X utf8 scripts/check-ruling-ledger.py
-
 # W8s allow-list coverage: every roster route must be selectable.
 route-check:
     {{python}} -X utf8 scripts/check-route-allowlist.py
@@ -128,10 +115,6 @@ record-check:
 # W2s premise-qualification gate: run this BEFORE any Planner call.
 qualify run *args:
     {{python}} -X utf8 scripts/qualify-premise.py --run {{run}} {{args}}
-
-# W1s recurrence check: the same criterion blocking two consecutive reviews.
-recurrence-check:
-    {{python}} -X utf8 scripts/check-review-recurrence.py
 
 # Data-quality report over every archived dump (not a tree check; see `check`).
 dump-controls:
@@ -179,10 +162,6 @@ enumerate va:
 # Record or lint a cited value (T10).
 cite-check records:
     {{python}} -X utf8 scripts/cite.py check {{records}}
-
-# Regenerate this session's startup receipt (T13).
-receipt:
-    {{python}} -X utf8 scripts/gen-startup-receipt.py
 
 # Host/run environment report; --runtime-log writes doctor.json into a run (T12).
 doctor run="":

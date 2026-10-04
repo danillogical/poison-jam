@@ -284,16 +284,14 @@ write-once latch or an uncapped counter, written at the event by the code that p
 A capped, sampled, rate-limited or first-N **log** is observation only: it may corroborate,
 and no row may depend on the presence or absence of such a line. Absence of a witness is
 never a positive attribution; it selects `UNKNOWN` or an explicit unattributed row, never a
-row that blames a specific agent. See `docs/agent-workflow.md` §6.1.6 and
-`xboxrecomp/src/apu/GP-INTEGRATION.md`.
+row that blames a specific agent. See `xboxrecomp/src/apu/GP-INTEGRATION.md`.
 
 **A decision input must also be bounded by construction.** Its size must be fixed by a finite
 universe stated and derived from source, independent of run length and input volume; it is keyed
 by the property the decision classifies (a provenance class, a bin, a region), not by the identity
 of individual events (an address, a page, a value). A table whose key universe is not shown finite
 is observation only, and an overflow counter is a bug detector — if a record can overflow because
-the run was long or busy, the key is wrong. See `docs/agent-workflow.md` §6.1.6b and
-`xboxrecomp/src/apu/GP-INTEGRATION.md`.
+the run was long or busy, the key is wrong. See `xboxrecomp/src/apu/GP-INTEGRATION.md`.
 
 ### TTD trace query (W11)
 

@@ -27,7 +27,6 @@ CHECKER_VERSION = 'jsrf-agent-docs/3'
 AGENTS = 'AGENTS.md'
 WORKFLOW = 'docs/agent-workflow.md'
 PLAN = 'plan-jsrf-bare-minimum.md'
-STARTUP_TEMPLATE = 'docs/session-start-template.md'
 JUSTFILE = 'justfile'
 
 # Plan T6 fixes these recipe names: they are the mechanical spelling of the host
@@ -37,15 +36,11 @@ JUSTFILE = 'justfile'
 REQUIRED_RECIPES = (
     'build', 'test', 'ctest', 'regen', 'strict-run', 'explore-run', 'probe',
     'check', 'ttd-record', 'ttd-writes', 'doctor', 'analyze', 'disk',
-    'secret-audit', 'symbols', 'logq', 'enumerate', 'cite-check', 'receipt',
+    'secret-audit', 'symbols', 'logq', 'enumerate', 'cite-check',
     'horizon-check', 'override-check', 'dump-controls',
-    'recurrence-check',
     'qualify',
     'record-check',
     'route-check',
-    'ruling-check',
-    'chore',
-    'packet-check',
     'transcribed-check',
     'instrument-check', 'instrument-record',
 )
@@ -114,12 +109,13 @@ PLANNED_MARKERS = (
     'to be written', 'not yet written', 'to be built', 'not yet built',
     'to be implemented', 'not yet implemented', 'to be added', 'planned',
     'deliverable',
+    # A tool marked retired is history in a status table, not an instruction.
+    'retired',
 )
 
 AUTHORITY_LINKS = (
     (AGENTS, WORKFLOW),
     (AGENTS, PLAN),
-    (STARTUP_TEMPLATE, WORKFLOW),
 )
 
 
@@ -245,7 +241,7 @@ def check_retired_names_labelled() -> list[dict]:
 def check_command_paths() -> list[dict]:
     """Every script/test path a document names must exist, unless it is planned."""
     findings: list[dict] = []
-    for name in (AGENTS, WORKFLOW, PLAN, STARTUP_TEMPLATE):
+    for name in (AGENTS, WORKFLOW, PLAN):
         path = ROOT / name
         if not path.is_file():
             continue
