@@ -57,18 +57,25 @@ established facts. Where this plan proposes a change to one of them, it is a tas
 
 **F4b — SEGA/logo progression.**
 
-**Current finding.** The no-op `fcmove`/`fcmovne` lift in `sub_0014C870`/`sub_0014C850` is a
-sufficient cause of the phase-2 fade hold, confirmed as a mechanism for this build (§13 "Current
-state", items 7 and 10; Advisor claim ceiling: not the only cause, and not that repairing it releases
-the SEGA card). The drop is also silent: nothing reports it, which violates the contract
-`test_lifter_unimpl.py` enforces. The two helpers have 120 direct call sites, so a repair changes
-other behaviour too.
+**Current finding (2026-10-04).** The `fcmove`/`fcmovne` repair released the SEGA card. Toolkit `671ab0a`
+translates `fcmovcc` in `_lift_fpu` and in `lift_basic_block`; the two clamp bodies
+`sub_0014C850`/`sub_0014C870` were relifted (`relift-selected.py fcmov`, nothing else in the tree
+changed). Exploratory run `20261003-205636-600-f4b-fcmov-fix-150` (150 s, ledger L14-L18, L20-L25,
+L39, L40): the logo object `0x143EE60` is at phase 8 (was 2, held, in every earlier run) and the game
+then opens Mission/Event/Sounds files it never reached before. Observed in the dump and the log; the
+fade finishing is inferred from the phase moving. A 360 s run `20261003-210011-097-f4b-fcmov-fix-360`
+then stopped, fatally, at an unresolved call: `[ICALL] Failed to resolve VA 0x0007BBF3`, called from
+`body_0007B8D0` (`recovered.c:76104`, `recomp_stubs_recovery.c:93`).
 
-**Next.** Implement faithful `fcmove`/`fcmovne` translation in xboxrecomp's `_lift_fpu`, make an
-unhandled FPU instruction report instead of dropping silently, rebuild JSRF, verify the corrected
-behaviour in the linked executable, then measure the next blocker. If the hold persists, the
-Advisor's ranked alternatives are in §13 item 10.
+**Next stop.** `0x0007BBF3` is the shared epilogue of `sub_0007B8D0` (`mov ecx,[esp+0xc]; pop esi; pop
+ebx; mov fs:[0],ecx; add esp,0x10; ret`), reached by `je 0x7bbf3` at `0x7B903` and `jne` at `0x7B95E`.
+The recovered span ends at `0x7B93C`, so the jump became a call to a non-function. Classify it (boundary
+or recovery span: an internal label, not a function) and fix it through `config/recovered-functions.json`
+/ `config/boundary-fixes.json`; not a bypass.
 
+**Ruled out for this item:** a short run bound (the release happens inside the first 150 s run).
+Not established: that the strict profile releases the card (no strict run was made), and that the
+fcmov fix is the only change in behaviour: the helpers have 120 call sites (see �13 item 11).
 ## 1. Objective and definition of done
 
 Port JSRF to Windows by static recompilation. **Minimum playable slice** — all of the following,
@@ -726,6 +733,22 @@ package. Each gets criteria in the same five-part form when it becomes next.
     fidelity or liveness claim. Evidence: `docs/reviews/owner-sega-600-observations.md`,
     "Owner-directed discovery: the fcmov clamp test (2026-10-04)".
 
+11. **F4b repair applied and measured (2026-10-04).** Toolkit `671ab0a`: `fcmove`/`fcmovne` (and the
+    other `fcmovcc` forms) are translated, via the tracked EFLAGS condition when a setter is tracked
+    and `_flags` otherwise; any FPU mnemonic with no case now goes through `Lifter._unimplemented`
+    (`RECOMP_UNIMPL` + tally) instead of a bare comment. Other catch-all sites: `fisttp` translated
+    (truncating store, pop); `fnclex` is an explicit decision (x87 exception state is not modelled; all
+    exceptions are masked), as are `fnop`/`fwait`; `fldenv` now reports `[UNIMPL]` (one site,
+    `sub_00040214`, none known to be reached). Game side: `scripts/relift-selected.py fcmov` relifted
+    exactly `sub_0014C850` and `sub_0014C870` in `recomp_0003.c`; the diff is 6 insertions and 4
+    deletions inside those two bodies, and no other file changed. Blast radius: 120 call sites
+    (35+85) now get a real clamp, so any behaviour that depended on the broken clamp changes; this is
+    not separately audited. Tests: toolkit `test_lifter_fcmov_exec.py` and `test_lifter_fpu.py`
+    (fail on the old lifter); game `tests/test_fcmov_clamp.py`, registered as CTest
+    `jsrf_fcmov_clamp`, executes the generated bodies (`1/120` and `1/120` now, `1.0` and `0` before)
+    with a negative control. Provenance: the one-file `recomp_0003.c` baseline and manifest were
+    amended narrowly (a bare `--write` would have deleted the amendment history). Run result: see
+    "Current work".
 ### Fast path status
 
 - **F0, F0a, F0b — done.** Runs gate at 15 GB free; copy `src/recomp/` aside before pulling a commit

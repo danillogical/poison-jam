@@ -49,7 +49,7 @@ host API); list the one that decides fidelity first.
 | L03 | CRT `memmove` | Reimplemented | game `src/jsrf_crt.c` | always | verified replacement |
 | L04 | CRT 64-bit divides `__alldiv`/`__aulldiv`/`__aullrem`/`__aulldvrm` | Reimplemented | game `src/jsrf_crt.c`, `tests/test_crt_divide.c` | always | the old lifter dropped `rcr` (TR §2); remove with their manual entries if generated code owns them again |
 | L05 | COM error tail `sub_00162B9D` | Reimplemented | game `src/recomp_manual.c:19` | always | the v0.12 translator folds it (TR §2) |
-| L06 | Untranslated instructions execute as no-ops, reported `[UNIMPL]` | Stubbed | game `src/recomp_manual.c:121` | always | none reached in V3; translate any that becomes reached |
+| L06 | Untranslated instructions execute as no-ops, reported `[UNIMPL]` | Stubbed | game `src/recomp_manual.c:121` | always | none reached in V3; translate any that becomes reached. 2026-10-04: x87 mnemonics without a case now report too; `fcmovcc`/`fisttp` are translated, `fnclex`/`fnop`/`fwait` are explicit no-ops, `fldenv` reports |
 
 ### Kernel, memory, threads
 

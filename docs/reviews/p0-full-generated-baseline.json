@@ -4,7 +4,7 @@
     "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
     "src/recomp/gen/recomp_0001.c": "065a43c255bc9c3469906b915c9ad51fe9f1e3e16c4a9ff465421317fbe77024",
     "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
-    "src/recomp/gen/recomp_0003.c": "c43fd622443017710a32508cc10f33f2833c124d5fb01671367f96357bc11543",
+    "src/recomp/gen/recomp_0003.c": "5e36ccfcb9e419c1ce695cb2e185c5832897f563ed6eb0eaca0b00d2176ef489",
     "src/recomp/gen/recomp_0004.c": "cebdfa390daac3e0310db718e1d255b5b6e24c752b3e913b2b115deb4899ed08",
     "src/recomp/gen/recomp_0005.c": "62fc70e44afd27ea802728d72d249f3a55418ff5604d21065ea055def2a40707",
     "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
@@ -86,6 +86,13 @@
         "src/recomp/recovered/recovered_11c1_test.c"
       ],
       "reason": "L02 recovery of the render-scene method 0x0014FEF0 (one reviewed entry in config/recovered-functions.json: 0x0014FEF0..0x00150104, .text, routine, stack_args 12). recovered.c: 3075 -> 3076 functions. The entry adds one body, its checked ABI wrapper, one declaration and one lookup case, and it also changes exactly ONE pre-existing body: body_0014FE60 now ends with an emitted `g_seh_ebp = ebp; sub_0014FEF0(); return; /* fallthrough 0x0014FEF0 */` after its unconditional return, i.e. unreachable dead code, because making 0x0014FEF0 a resolvable entry lets the translator emit a fallthrough it previously suppressed. Measured: regenerating the reviewed set with that entry removed reproduces the previous baseline recovered.c 65cb5b69... byte-for-byte, so this is a one-entry change and not a generator-version effect. recovered_11c1_test.c differs by exactly one added declaration line (extern void sub_0014FEF0(void); at line 3733). All other baselined files are byte-identical."
+    },
+    {
+      "date": "2026-10-04",
+      "files": [
+        "src/recomp/gen/recomp_0003.c"
+      ],
+      "reason": "F4b: scripts/relift-selected.py fcmov relifted exactly two bodies, sub_0014C850 and sub_0014C870, with the toolkit 671ab0a lifter. Their fcmovne/fcmove were bare comments; they are now conditional moves (TEST_NZ/TEST_Z on the test ah,1 result). Measured by diff against the pre-relift tree: 6 insertions, 4 deletions, all inside those two bodies (the conditional move, one blank line, and the CC header line now reading int_or_void). The relift mode, its 2-entry config/relift-fcmov.json and tests/test_fcmov_clamp.py are the record. No other baselined file changed."
     }
   ]
 }
