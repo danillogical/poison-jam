@@ -1,6 +1,6 @@
 {
   "files": {
-    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "327c53fff6da9d755ec01d501ad1dd39735af73a0816fc0ba6fba6ce70f4f9ad",
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "0d73fcc568b996214737fd27c2c9767d6226013bedde9e79bec15b5a49eaa399",
     "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
     "src/recomp/gen/recomp_0001.c": "065a43c255bc9c3469906b915c9ad51fe9f1e3e16c4a9ff465421317fbe77024",
     "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
@@ -10,12 +10,12 @@
     "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
     "src/recomp/gen/recomp_dispatch.c": "1cc469ddcc6d12ac98f8675846b5940f3f438624a3a51a95faca40a9b59a4238",
     "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-    "src/recomp/gen/recomp_stubs_recovery.c": "28aab23490cbfd82a7713986a1860e91c75879f4f79209b81f2425df72a3efb4",
+    "src/recomp/gen/recomp_stubs_recovery.c": "5b361433bf3ffc5e766cc2aa03ea98863d9e9fcbd08e4d82ee379ce7521e8572",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
     "src/recomp/gen/recomp_types.h": "e1007de83bf802bac0ec192025c6c274bed7d86f845f8e653619f31f2a7a69a4",
-    "src/recomp/recovered/recovered.c": "a469141f607252bf3da4f8b1b3c9c4790a550524e902f23ae4c4efdab6f30c6c",
+    "src/recomp/recovered/recovered.c": "a7e2d008f7c7f24e048a3125d4d8157d364c39ed4596d0e142b3dabd1407ec50",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "95671703a08b722516a5d31669e455f0130786da73d4c23f7f3e4722d5a69f6a",
+    "src/recomp/recovered/recovered_11c1_test.c": "06148f2f513c7d8fd98b70f67e4b0a0d81dafe0b8d93af938af12d01904eb1b5",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -93,6 +93,66 @@
         "src/recomp/gen/recomp_0003.c"
       ],
       "reason": "F4b: scripts/relift-selected.py fcmov relifted exactly two bodies, sub_0014C850 and sub_0014C870, with the toolkit 671ab0a lifter. Their fcmovne/fcmove were bare comments; they are now conditional moves (TEST_NZ/TEST_Z on the test ah,1 result). Measured by diff against the pre-relift tree: 6 insertions, 4 deletions, all inside those two bodies (the conditional move, one blank line, and the CC header line now reading int_or_void). The relift mode, its 2-entry config/relift-fcmov.json and tests/test_fcmov_clamp.py are the record. No other baselined file changed."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+        "src/recomp/gen/recomp_stubs_recovery.c",
+        "src/recomp/recovered/recovered.c",
+        "src/recomp/recovered/recovered_11c1_test.c"
+      ],
+      "reason": "F4b/0x7BBF3: recovery entry 0x0007B8D0 end 0x0007B93C -> 0x0007BC04 (the method ends at the ret at 0x7BC03; 0x7B93C, 0x7B956, 0x7B978 and 0x7BBF3 were internal labels). recover-functions.py regenerated recovered.c and its stubs; recovery-unresolved.json lost 0x7B956, 0x7B978 and 0x7BBF3 (0x7B93C was already a generated function and stays). Measured against the pre-run tree: recovered.c gains the whole body and drops 4 extern lines, the old 108-byte header and the 4 stub-call lines; the regeneration also lifts sub_0017F02C's fnclex (recovered.c) as the decided no-op of toolkit 671ab0a instead of a comment; recovered_11c1_test.c differs by +2/-4 extern declarations (sub_00055530, sub_0007B850 added; the four labels removed); both stub files lose exactly the three stubs. All other baselined files are byte-identical. Amended, not regenerated: no full pass ran."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+        "src/recomp/gen/recomp_stubs_recovery.c",
+        "src/recomp/recovered/recovered.c"
+      ],
+      "reason": "F4c: second recovery pass of the same session. Added one reviewed entry 0x0004C400..0x0004C8A1 (thiscall method entered only by tail jmp from 0x51FFC; no analysis-database entry existed, so the jmp was a fatal stub). recovered.c 3076 -> 3077 functions: one body added (690 lines, 3 switch tables, every goto labelled), its wrapper, declarations and lookup case; the stub for 0x4C400 removed from recovery-unresolved.json and from both stub files. Measured diff against the state recorded after the 0x7B8D0 amendment is limited to that body and its declarations. Amended, not regenerated: no full pass ran."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+        "src/recomp/gen/recomp_stubs_recovery.c",
+        "src/recomp/recovered/recovered.c",
+        "src/recomp/recovered/recovered_11c1_test.c"
+      ],
+      "reason": "F4c: third recovery pass of the session. The 0x77-entry handler table at 0x001F9888 has 111 distinct targets; a census found five with no function of their own (0x4BF70, 0x521B0, 0x52350, 0x52780, 0x530A0) and four of them inside another recovered span (folded neighbours). Entries 0x4BF40, 0x52150 and 0x52FC0 were shortened to their own ret; five entries were added. recovered.c 3077 -> 3082 functions. The stubs for 0x52416 and 0x52456 (labels inside the old 0x52150 span) left recovery-unresolved.json. Amended, not regenerated: no full pass ran."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/recovered/recovered.c",
+        "src/recomp/recovered/recovered_11c1_test.c"
+      ],
+      "reason": "F4c: fourth recovery pass of the session. Added one entry 0x000425D0..0x00042745 (stack_args 12; vtable method at 0x1CA5CC slot 1, no analysis-database entry). recovered.c 3082 -> 3083 functions. Amended, not regenerated: no full pass ran."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/recovered/recovered.c"
+      ],
+      "reason": "F4c: fifth recovery pass of the session. stack_args corrected 0 -> 12 for the tail-jump thunks 0x00047470 (jmp [eax+4]) and 0x00047540 (jmp [eax+0xc]); the wrapper ABI check now expects esp+16. Amended, not regenerated: no full pass ran."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/recovered/recovered.c",
+        "src/recomp/recovered/recovered_11c1_test.c"
+      ],
+      "reason": "F4c: sixth recovery pass of the session. Advisor-directed: 0x3E210 tightened to 0x3E22E (its ret 4 at 0x3E22B); new entries 0x3E230, 0x41400, 0x69F90 (slot-1 receivers of thunk 0x47470, stack_args 12, ret 0xC). recovered.c 3083 -> 3086. Amended, not regenerated: no full pass ran."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/recovered/recovered.c",
+        "src/recomp/recovered/recovered_11c1_test.c"
+      ],
+      "reason": "F4c: seventh recovery pass of the session. 0x0006EC80 end 0x6ECBE -> 0x6EE8A (the old span ended at an internal label; real last ret 4 at 0x6EE87). recovered.c function count unchanged (3086). Amended, not regenerated: no full pass ran."
     }
   ]
 }

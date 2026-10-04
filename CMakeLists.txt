@@ -202,6 +202,7 @@ if(BUILD_TESTING)
         PASS_REGULAR_EXPRESSION "AC-PWRITE events=2 in_image_i=1 above_image_i=1 ngp_skipped=0 invalid=0")
     add_test(NAME jsrf_gpu_inspection COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_gpu_inspection.py)
     add_test(NAME jsrf_fcmov_clamp COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_fcmov_clamp.py)
+    add_test(NAME jsrf_recovery_span_ownership COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_recovery_span_ownership.py)
     # P0.7 generation provenance.  Registered here because it was NOT: the checker was
     # wired into `just check` only, so `just test` could not catch a provenance failure,
     # and the gate stayed red for 73 commits without a session noticing (measured

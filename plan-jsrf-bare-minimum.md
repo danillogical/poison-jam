@@ -55,33 +55,37 @@ established facts. Where this plan proposes a change to one of them, it is a tas
 
 ## Current work
 
-**F4b — SEGA/logo progression.**
+**F4c: past the SEGA card; the graffiti disclaimer now holds.**
 
-**Current finding (2026-10-04).** Repairing `fcmove`/`fcmovne` moved the logo state machine past the SEGA
-hold in an exploratory run. Toolkit `671ab0a` translates `fcmovcc` (in `_lift_fpu` and `lift_basic_block`);
-the two clamp bodies `sub_0014C850`/`sub_0014C870` were relifted (`relift-selected.py fcmov`). Run
-`20261003-205636-600-f4b-fcmov-fix-150` (exploratory, 150 s, ledger L14-L18, L20-L25, L39, L40; built
-from c3e8c48 plus the patch committed with this change, archived as `project.patch`): logo object
-`0x143EE60` is at phase 8, hold `0x79`. It was phase 2 and held in every earlier run. Phase 8 is a later
-logo's fade-out wait (jump table at `0x7E524`), so the fade-complete check passed several times after the
-SEGA hold. **Observed:** the dump read (dump-mapping check passes). **Inferred, not seen:** no frame was
-dumped or inspected, so "the card released" rests on the logo state machine advancing, in a run with
-synthetic GPU acknowledgement on by default. No strict run was made.
+**Current finding (2026-10-05).** The run that followed the fcmov repair died on a series of recovery
+defects: spans that ended at an internal label, methods folded into a neighbour, and vtable/handler-table
+methods with no function of their own. All are fixed in `config/recovered-functions.json`
+(3076 -> 3086 entries; every change is a read-from-bytes boundary, none is a bypass):
+`0x7B8D0` end `0x7B93C` -> `0x7BC04` (the original `0x7BBF3` stop); `0x6EC80` end `0x6ECBE` -> `0x6EE8A`;
+`0x4BF40`, `0x52150`, `0x52FC0`, `0x3E210` tightened to their own `ret`; new entries `0x4C400`, `0x4BF70`,
+`0x521B0`, `0x52350`, `0x52780`, `0x530A0`, `0x425D0`, `0x3E230`, `0x41400`, `0x69F90`; the tail-jump
+thunks `0x47470`/`0x47540` set to `stack_args 12` (Advisor ruling, §13 item 12). `0x7BBF3` is no longer
+fatal (observed: it is a `loc_0007BBF3` label in the recovered body and gone from `recovery-unresolved.json`).
 
-The 360 s run `20261003-210011-097-f4b-fcmov-fix-360` then stopped fatally at `[ICALL] Failed to resolve
-VA 0x0007BBF3`, called from `body_0007B8D0` (`recovered.c:76104`, `recomp_stubs_recovery.c:93`).
+Exploratory runs (D2 environment, GPU_ACK default, ledger L14-L18, L20-L25, L39, L40; built from `fca9af3`
+plus the uncommitted patch of this work, archived as `project.patch`):
+`20261003-223732-864-f4c-6ec80-600` ran the full 600 s to `diagnostic_deadline` with no fatal;
+`20261003-224759-960-f4c-title-capture` (420 s, `RECOMP_FB_DUMP` every 30 presents) captured 30 frames.
+**Observed frames:** "Presented by SEGA" (fb010) then the graffiti/vandalism disclaimer (fb029), and the
+game opened `Title\LogoE.dat`, `TitleE.dat`, `TitleE.bin` and `playdemo00.dat`. This is the first
+observed frame past the SEGA card.
 
-**Next stop (a recovered-span defect that predates the fix; the run only got far enough to hit it).**
-`0x0007BBF3` is the shared epilogue of `sub_0007B8D0` (`mov ecx,[esp+0xc]; pop esi; pop ebx; mov
-fs:[0],ecx; add esp,0x10; ret`), reached by `je` at `0x7B903` and `jne` at `0x7B95E`. The recovered entry
-ends at `0x7B93C` but the function runs to `0x7BC03`, so jump targets `0x7B93C`, `0x7B956`, `0x7B978`
-and `0x7BBF3` fall outside it and became fatal stubs (`0x7BBF3` has been in
-`config/recovery-unresolved.json` since before this change). Classify the whole span and fix it through
-`config/recovered-functions.json` / `config/boundary-fixes.json`; not a bypass.
+**Next blocker (not yet diagnosed).** The disclaimer frame is byte-identical for 11 consecutive dumps,
+22:51:03 to the end of the run, at least 115 s. The guest is live, not crashed: flips reached 1000 and
+kernel calls continue (ordinals 231/159/224/145/119 repeating). The title screen has **not** been reached.
+Candidates, none measured: a timer or frame-time-driven hold like the fade (which ran ~6.5 updates/s), an
+input wait, or a missing fade/phase completion for the next screen. Next: read the disclaimer's state
+machine (the object that owns it, as 0x7E360 did for the logo) and find the predicate it waits on.
 
-**Ruled out for this item:** a short run bound (the advance happens inside the first 150 s run).
-**Not established:** that the strict profile releases the card, or that no other behaviour changed: the
-two helpers have 120 call sites (§13 item 11).
+**Not established:** any strict-profile result; that the 120 `sub_0014C850/70` call sites are unchanged in
+behaviour; and that no other table-referenced method is missing: a census of vtable/handler runs finds
+about 151 further code-pointer targets with no owned function (72 inside a recovered span). They are not
+known to be reached; each that is will fail as an unresolved call.
 
 ## 1. Objective and definition of done
 
@@ -753,6 +757,21 @@ package. Each gets criteria in the same five-part form when it becomes next.
     with a negative control. Provenance: the one-file `recomp_0003.c` baseline and manifest were
     amended narrowly (a bare `--write` would have deleted the amendment history). Run result: see
     "Current work".
+
+12. **Recovery boundary pass (2026-10-05).** Same defect class five times, each found by a run:
+    a span that ended at an internal label (`0x7B8D0`, `0x6EC80`), a span that ran over the next
+    method (`0x4BF40`, `0x52150`, `0x52FC0`, `0x3E210`), and methods referenced only from vtables or a
+    handler table that had no function (`0x4C400`, `0x425D0`, the `0x1F9888` handler targets,
+    `0x3E230`, `0x41400`, `0x69F90`). `tests/test_recovery_span_ownership.py` (CTest
+    `jsrf_recovery_span_ownership`) asserts that no recovered body calls an unresolved stub inside its
+    own span and pins these entries; its negative control reinjects the old stub call. **Advisor ruling
+    (2026-10-05):** `0x47470`/`0x47540` are pure tail-jump thunks (`jmp [eax+4]` / `jmp [eax+0xc]`), so
+    their `ret N` is the receiver's. Basis (observed): they occur only as raw dwords in five vtables
+    (0x1CA490, 0x1CA5A8, 0x1CA5CC, 0x1CAA8C, 0x1CC12C) and every slot-1/slot-3 receiver ends in
+    `ret 0xC`; hence `stack_args 12`, exact check kept. Inferred: a callee-cleans tail jmp implies equal
+    pop size. Reversed by a thunk reference the scan missed paired with a receiver whose RET is not
+    `0xC`. Mechanical sweep still open: 289 recovered entries end on a non-terminator, most of them
+    deliberate mid-function fragments that the translator already treats as such; not audited.
 
 ### Fast path status
 

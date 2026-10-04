@@ -123,12 +123,286 @@
       "new_sha256": "5e36ccfcb9e419c1ce695cb2e185c5832897f563ed6eb0eaca0b00d2176ef489",
       "old_sha256": "c43fd622443017710a32508cc10f33f2833c124d5fb01671367f96357bc11543",
       "path": "src/recomp/gen/recomp_0003.c"
+    },
+    {
+      "cause": "F4b/0x7BBF3: recovery entry 0x0007B8D0 end 0x0007B93C -> 0x0007BC04 (the method ends at the ret at 0x7BC03; 0x7B93C, 0x7B956, 0x7B978 and 0x7BBF3 were internal labels). recover-functions.py regenerated recovered.c and its stubs; recovery-unresolved.json lost 0x7B956, 0x7B978 and 0x7BBF3 (0x7B93C was already a generated function and stays). Measured against the pre-run tree: recovered.c gains the whole body and drops 4 extern lines, the old 108-byte header and the 4 stub-call lines; the regeneration also lifts sub_0017F02C's fnclex (recovered.c) as the decided no-op of toolkit 671ab0a instead of a comment; recovered_11c1_test.c differs by +2/-4 extern declarations (sub_00055530, sub_0007B850 added; the four labels removed); both stub files lose exactly the three stubs. All other baselined files are byte-identical. Amended, not regenerated: no full pass ran.",
+      "date": "2026-10-05",
+      "evidence": [
+        "tests/test_recovery_span_ownership.py asserts no body calls an unresolved stub inside its own span, and has a negative control",
+        "a bare --write was NOT used: it would drop the amendment history"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "8a81a4c2df78a6831c050be6c502a9dfa53eae9469b5778aeca3407f49fd2051",
+          "old_sha256": "327c53fff6da9d755ec01d501ad1dd39735af73a0816fc0ba6fba6ce70f4f9ad",
+          "path": "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c"
+        },
+        {
+          "new_sha256": "66ff9793cd6a98e16eacebdd1fc42022171998460f365ca0004998b97ecfbcd5",
+          "old_sha256": "28aab23490cbfd82a7713986a1860e91c75879f4f79209b81f2425df72a3efb4",
+          "path": "src/recomp/gen/recomp_stubs_recovery.c"
+        },
+        {
+          "new_sha256": "f0d0a56cb24780a2402a4663bf4b777025f0a017759b731b86381d00c02e1369",
+          "old_sha256": "a469141f607252bf3da4f8b1b3c9c4790a550524e902f23ae4c4efdab6f30c6c",
+          "path": "src/recomp/recovered/recovered.c"
+        },
+        {
+          "new_sha256": "c26c3aca3ebe8d69b9fdc57dbc4c320b9254a8bf6b0002986cf02091c45be15c",
+          "old_sha256": "95671703a08b722516a5d31669e455f0130786da73d4c23f7f3e4722d5a69f6a",
+          "path": "src/recomp/recovered/recovered_11c1_test.c"
+        },
+        {
+          "new_sha256": "a6da2fa27bb59bf9856a64429eacd919f9eefa4b6bd319dc7a793688720f1db6",
+          "old_sha256": "a527838a440587f8bc260324a3e25b43ad57dc86b253ced9837621cb0c640128",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "7f898c872fad64c276a05c79d88f638b45c4d8e51ee27b3ff9838e4315042f95",
+          "old_sha256": "8270dab2d35535327f630b32a1c0aba4acbfd95560b58a33e4dd541b91bd038d",
+          "path": "config/recovery-unresolved.json"
+        },
+        {
+          "new_sha256": "1ca2cec115b73de46cc7c6cdf7fb871711c0cd044f814a909e5009575de3b42f",
+          "old_sha256": "c4c8f56402d6f6bd901b53752ee6f24bd317096dec8bed4c87497a0f845f1396",
+          "path": "tools/disasm/output/functions.recovered.json"
+        }
+      ]
+    },
+    {
+      "cause": "F4c: second recovery pass of the same session. Added one reviewed entry 0x0004C400..0x0004C8A1 (thiscall method entered only by tail jmp from 0x51FFC; no analysis-database entry existed, so the jmp was a fatal stub). recovered.c 3076 -> 3077 functions: one body added (690 lines, 3 switch tables, every goto labelled), its wrapper, declarations and lookup case; the stub for 0x4C400 removed from recovery-unresolved.json and from both stub files. Measured diff against the state recorded after the 0x7B8D0 amendment is limited to that body and its declarations. Amended, not regenerated: no full pass ran. recover-functions.py also rewrites config/manual-functions.json (adds sub_0004C400 and the earlier sub_0007B8D0 state); its hash is recorded here.",
+      "date": "2026-10-05",
+      "evidence": [
+        "bare --write not used (would drop the amendment history)",
+        "the stack in run 20261003-214906-533-f4c-7bbf3-span-360 named sub_0004C400 reached from body_00051FC0 via tail jmp 0x51FFC"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "b974fc3220335fd34175232857847363b6b1cb2f182f6572dac46523bb856b21",
+          "old_sha256": "8a81a4c2df78a6831c050be6c502a9dfa53eae9469b5778aeca3407f49fd2051",
+          "path": "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c"
+        },
+        {
+          "new_sha256": "cd15aa9bd839d51d89a4e7d7d6660ddc1e3b547c82c8b112f1b79886f0c0a8ba",
+          "old_sha256": "66ff9793cd6a98e16eacebdd1fc42022171998460f365ca0004998b97ecfbcd5",
+          "path": "src/recomp/gen/recomp_stubs_recovery.c"
+        },
+        {
+          "new_sha256": "e48633ca26cd980eed593a1cc9f19eccc91a6a04193d511c21628060e038ce2e",
+          "old_sha256": "f0d0a56cb24780a2402a4663bf4b777025f0a017759b731b86381d00c02e1369",
+          "path": "src/recomp/recovered/recovered.c"
+        },
+        {
+          "new_sha256": "dc84b48304e237f2a3995584cd207b5558001891abdbb74f6660d42fa7610b38",
+          "old_sha256": "a6da2fa27bb59bf9856a64429eacd919f9eefa4b6bd319dc7a793688720f1db6",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "e80c2ffcb6d1765e437e5206ac6724cde66a3b0ec7c5881562eb501a5829ffb0",
+          "old_sha256": "7f898c872fad64c276a05c79d88f638b45c4d8e51ee27b3ff9838e4315042f95",
+          "path": "config/recovery-unresolved.json"
+        },
+        {
+          "new_sha256": "65999170ad5de54863ddca87b4bb17e2caf6f32dd96e145a3756543ac99534b4",
+          "old_sha256": "1ca2cec115b73de46cc7c6cdf7fb871711c0cd044f814a909e5009575de3b42f",
+          "path": "tools/disasm/output/functions.recovered.json"
+        },
+        {
+          "new_sha256": "918d782b0776f3f35d08ecaf065e68be9cbc97f4bdcd4afa1c683e0ece5739ff",
+          "old_sha256": "9b9a6f51d753aa0a4ea164445992f7b5b11dd8a772a709c14347f5f411e12d63",
+          "path": "config/manual-functions.json"
+        }
+      ]
+    },
+    {
+      "cause": "F4c: third recovery pass of the session. The 0x77-entry handler table at 0x001F9888 has 111 distinct targets; a census found five with no function of their own (0x4BF70, 0x521B0, 0x52350, 0x52780, 0x530A0) and four of them inside another recovered span (folded neighbours). Entries 0x4BF40, 0x52150 and 0x52FC0 were shortened to their own ret; five entries were added. recovered.c 3077 -> 3082 functions. The stubs for 0x52416 and 0x52456 (labels inside the old 0x52150 span) left recovery-unresolved.json. Amended, not regenerated: no full pass ran.",
+      "date": "2026-10-05",
+      "evidence": [
+        "the failing call was run 20261003-215828-145-f4c-4c400-span-420: indirect call eax=0x000521B0 from body_00051FC0",
+        "bare --write not used (would drop the amendment history)"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "0d73fcc568b996214737fd27c2c9767d6226013bedde9e79bec15b5a49eaa399",
+          "old_sha256": "b974fc3220335fd34175232857847363b6b1cb2f182f6572dac46523bb856b21",
+          "path": "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c"
+        },
+        {
+          "new_sha256": "5b361433bf3ffc5e766cc2aa03ea98863d9e9fcbd08e4d82ee379ce7521e8572",
+          "old_sha256": "cd15aa9bd839d51d89a4e7d7d6660ddc1e3b547c82c8b112f1b79886f0c0a8ba",
+          "path": "src/recomp/gen/recomp_stubs_recovery.c"
+        },
+        {
+          "new_sha256": "88c6e1da60550bf965f3ec5506f6842dee43614c5d334e733b739ac6a841c17f",
+          "old_sha256": "e48633ca26cd980eed593a1cc9f19eccc91a6a04193d511c21628060e038ce2e",
+          "path": "src/recomp/recovered/recovered.c"
+        },
+        {
+          "new_sha256": "659ab785ed4ac3204135c4258fd0d38dbc17ab0e7cf9b6805c78ff32a8b4f2bf",
+          "old_sha256": "c26c3aca3ebe8d69b9fdc57dbc4c320b9254a8bf6b0002986cf02091c45be15c",
+          "path": "src/recomp/recovered/recovered_11c1_test.c"
+        },
+        {
+          "new_sha256": "10d6531ff22c357fb36138f836d8ee0bd13850ff656c12ae63cc0b1323ab1d08",
+          "old_sha256": "dc84b48304e237f2a3995584cd207b5558001891abdbb74f6660d42fa7610b38",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "e468eff00f5992be7cf90388526e5a1781863840914b7d57af60fd333441f409",
+          "old_sha256": "e80c2ffcb6d1765e437e5206ac6724cde66a3b0ec7c5881562eb501a5829ffb0",
+          "path": "config/recovery-unresolved.json"
+        },
+        {
+          "new_sha256": "a7e5680fe7bacc722120034d87bc9a2b5613b932620154fd52c4bc33e3d782be",
+          "old_sha256": "918d782b0776f3f35d08ecaf065e68be9cbc97f4bdcd4afa1c683e0ece5739ff",
+          "path": "config/manual-functions.json"
+        },
+        {
+          "new_sha256": "c297ce5c872b73ae8cd7bf568c252a96540d10d74db3a133450e7c1e1fa25545",
+          "old_sha256": "65999170ad5de54863ddca87b4bb17e2caf6f32dd96e145a3756543ac99534b4",
+          "path": "tools/disasm/output/functions.recovered.json"
+        }
+      ]
+    },
+    {
+      "cause": "F4c: fourth recovery pass of the session. Added one entry 0x000425D0..0x00042745 (stack_args 12; vtable method at 0x1CA5CC slot 1, no analysis-database entry). recovered.c 3082 -> 3083 functions. Amended, not regenerated: no full pass ran.",
+      "date": "2026-10-05",
+      "evidence": [
+        "failing call: run 20261003-220638-566-f4c-handlers-480, unresolved 0x000425D0 from sub_00047470",
+        "bare --write not used (would drop the amendment history)"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "ee6ff1b1629de85382f104cc4b21de6cfb8c0834b7bd050ed48ba9addc7533ce",
+          "old_sha256": "88c6e1da60550bf965f3ec5506f6842dee43614c5d334e733b739ac6a841c17f",
+          "path": "src/recomp/recovered/recovered.c"
+        },
+        {
+          "new_sha256": "c8e84b25e9be9ab127dca1a211d19f1e96948e7d7d4ce4bd8251cca4fb148b43",
+          "old_sha256": "659ab785ed4ac3204135c4258fd0d38dbc17ab0e7cf9b6805c78ff32a8b4f2bf",
+          "path": "src/recomp/recovered/recovered_11c1_test.c"
+        },
+        {
+          "new_sha256": "999c0ee7b3b3f0225f3bdf77ccccc9c668b00a3488a92be5173f5ea002685ad4",
+          "old_sha256": "10d6531ff22c357fb36138f836d8ee0bd13850ff656c12ae63cc0b1323ab1d08",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "6c79c6fdafe33d27f7aeee1afeed3eebae1db36e66837f08e6ea3f0d9fd6e7d7",
+          "old_sha256": "a7e5680fe7bacc722120034d87bc9a2b5613b932620154fd52c4bc33e3d782be",
+          "path": "config/manual-functions.json"
+        },
+        {
+          "new_sha256": "89b023d0b53d23d044ce9bf720e487044df83176b0236e720a0e21adabc38266",
+          "old_sha256": "c297ce5c872b73ae8cd7bf568c252a96540d10d74db3a133450e7c1e1fa25545",
+          "path": "tools/disasm/output/functions.recovered.json"
+        }
+      ]
+    },
+    {
+      "cause": "F4c: fifth recovery pass of the session. stack_args corrected 0 -> 12 for the tail-jump thunks 0x00047470 (jmp [eax+4]) and 0x00047540 (jmp [eax+0xc]); the wrapper ABI check now expects esp+16. Amended, not regenerated: no full pass ran.",
+      "date": "2026-10-05",
+      "evidence": [
+        "failing run 20261003-221441-950-f4c-425d0-480: ABI FAILURE 0x00047470 esp +0x10 vs expected +4",
+        "receivers 0x3E230/0x425D0 (slot 1) and 0x48390 (slot 3) all end in ret 0xC, read from the original bytes",
+        "bare --write not used (would drop the amendment history)"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "da77a79b842bdf792a148ce5d11f341de800b3b042a65a5102741eaa115914b8",
+          "old_sha256": "ee6ff1b1629de85382f104cc4b21de6cfb8c0834b7bd050ed48ba9addc7533ce",
+          "path": "src/recomp/recovered/recovered.c"
+        },
+        {
+          "new_sha256": "016aa38b4990be906a72330edd590ede3492c4296e474b750189534211f6653f",
+          "old_sha256": "999c0ee7b3b3f0225f3bdf77ccccc9c668b00a3488a92be5173f5ea002685ad4",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "28115853d5797496d2ecb3d2da8350f4dd2679bb5ee8362dca2b496abfad3b60",
+          "old_sha256": "89b023d0b53d23d044ce9bf720e487044df83176b0236e720a0e21adabc38266",
+          "path": "tools/disasm/output/functions.recovered.json"
+        }
+      ]
+    },
+    {
+      "cause": "F4c: sixth recovery pass of the session. Advisor-directed: 0x3E210 tightened to 0x3E22E (its ret 4 at 0x3E22B); new entries 0x3E230, 0x41400, 0x69F90 (slot-1 receivers of thunk 0x47470, stack_args 12, ret 0xC). recovered.c 3083 -> 3086. Amended, not regenerated: no full pass ran.",
+      "date": "2026-10-05",
+      "evidence": [
+        "failing run 20261003-222232-329-f4c-thunks-600: unresolved 0x3E230 via the 0x47470 thunk",
+        "Advisor whole-XBE scan: five vtables, five slot-1 receivers, all ret 0xC",
+        "bare --write not used (would drop the amendment history)"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "4dcc85dd76b1ff1168d672efa6b4634227f4ba02b32cbaf4b82bf2518f2bfb9f",
+          "old_sha256": "da77a79b842bdf792a148ce5d11f341de800b3b042a65a5102741eaa115914b8",
+          "path": "src/recomp/recovered/recovered.c"
+        },
+        {
+          "new_sha256": "4d5f761c2525bb418e328eeb140ee39e60f2ccb1510c84a8fe06792082ca60e1",
+          "old_sha256": "c8e84b25e9be9ab127dca1a211d19f1e96948e7d7d4ce4bd8251cca4fb148b43",
+          "path": "src/recomp/recovered/recovered_11c1_test.c"
+        },
+        {
+          "new_sha256": "13e09c64bac7bfedd782c49849e3d75254c6c286b892c85352ba173c1b421890",
+          "old_sha256": "016aa38b4990be906a72330edd590ede3492c4296e474b750189534211f6653f",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "cd683f100c6445f1d987dbce83466c124eaa168fe584f49304197aa89e130bd8",
+          "old_sha256": "6c79c6fdafe33d27f7aeee1afeed3eebae1db36e66837f08e6ea3f0d9fd6e7d7",
+          "path": "config/manual-functions.json"
+        },
+        {
+          "new_sha256": "bf55307599d120ea34af2ddb2fe65cd6bdf284ace39aabe93556f9291247ecea",
+          "old_sha256": "28115853d5797496d2ecb3d2da8350f4dd2679bb5ee8362dca2b496abfad3b60",
+          "path": "tools/disasm/output/functions.recovered.json"
+        }
+      ]
+    },
+    {
+      "cause": "F4c: seventh recovery pass of the session. 0x0006EC80 end 0x6ECBE -> 0x6EE8A (the old span ended at an internal label; real last ret 4 at 0x6EE87). recovered.c function count unchanged (3086). Amended, not regenerated: no full pass ran.",
+      "date": "2026-10-05",
+      "evidence": [
+        "failing run 20261003-222956-758-f4c-receivers-600: ABI FAILURE 0x0006EC80 esp -0x20, esi changed",
+        "bare --write not used (would drop the amendment history)"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "a7e2d008f7c7f24e048a3125d4d8157d364c39ed4596d0e142b3dabd1407ec50",
+          "old_sha256": "4dcc85dd76b1ff1168d672efa6b4634227f4ba02b32cbaf4b82bf2518f2bfb9f",
+          "path": "src/recomp/recovered/recovered.c"
+        },
+        {
+          "new_sha256": "06148f2f513c7d8fd98b70f67e4b0a0d81dafe0b8d93af938af12d01904eb1b5",
+          "old_sha256": "4d5f761c2525bb418e328eeb140ee39e60f2ccb1510c84a8fe06792082ca60e1",
+          "path": "src/recomp/recovered/recovered_11c1_test.c"
+        },
+        {
+          "new_sha256": "91785e8f7ffadf75365f5aa240c92c125af963bdedcacb20fa11b1345fd5a4d6",
+          "old_sha256": "13e09c64bac7bfedd782c49849e3d75254c6c286b892c85352ba173c1b421890",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "d20e02498c508bab9f8ff22326e676744ac84713265311abe1a562dcaadb5bb7",
+          "old_sha256": "bf55307599d120ea34af2ddb2fe65cd6bdf284ace39aabe93556f9291247ecea",
+          "path": "tools/disasm/output/functions.recovered.json"
+        }
+      ]
     }
   ],
   "checker_version": "jsrf-generation-provenance/1",
   "full_translation_command": "python -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name \"Jet Set Radio Future\" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json",
   "generated_outputs": {
-    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "327c53fff6da9d755ec01d501ad1dd39735af73a0816fc0ba6fba6ce70f4f9ad",
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "0d73fcc568b996214737fd27c2c9767d6226013bedde9e79bec15b5a49eaa399",
     "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
     "src/recomp/gen/recomp_0001.c": "065a43c255bc9c3469906b915c9ad51fe9f1e3e16c4a9ff465421317fbe77024",
     "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
@@ -138,12 +412,12 @@
     "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
     "src/recomp/gen/recomp_dispatch.c": "1cc469ddcc6d12ac98f8675846b5940f3f438624a3a51a95faca40a9b59a4238",
     "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-    "src/recomp/gen/recomp_stubs_recovery.c": "28aab23490cbfd82a7713986a1860e91c75879f4f79209b81f2425df72a3efb4",
+    "src/recomp/gen/recomp_stubs_recovery.c": "5b361433bf3ffc5e766cc2aa03ea98863d9e9fcbd08e4d82ee379ce7521e8572",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
     "src/recomp/gen/recomp_types.h": "e1007de83bf802bac0ec192025c6c274bed7d86f845f8e653619f31f2a7a69a4",
-    "src/recomp/recovered/recovered.c": "a469141f607252bf3da4f8b1b3c9c4790a550524e902f23ae4c4efdab6f30c6c",
+    "src/recomp/recovered/recovered.c": "a7e2d008f7c7f24e048a3125d4d8157d364c39ed4596d0e142b3dabd1407ec50",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "95671703a08b722516a5d31669e455f0130786da73d4c23f7f3e4722d5a69f6a",
+    "src/recomp/recovered/recovered_11c1_test.c": "06148f2f513c7d8fd98b70f67e4b0a0d81dafe0b8d93af938af12d01904eb1b5",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "generation_mode": "full regeneration 2026-09-29 with the toolkit 2a349c8 lifter, then relift-selected.py boundaries; hand edits re-applied by scripts/patch-generated.py from config/generated-patches.json (the recomp_types.h project ABI additions, the six A4b2 jsrf_watch_store hooks, and the a4b-watch declaration). This tree predates toolkit 86113c7 --backedge-yield: RECOMP_BACKEDGE is absent, so under RECOMP_GUEST_SERIAL=1 a guest spin loop costs one bounded timeout (docs/jsrf-compatibility-ledger.md L34).",
@@ -172,19 +446,19 @@
       "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
     },
     "config/manual-functions.json": {
-      "bytes": 101711,
+      "bytes": 102041,
       "present": true,
-      "sha256": "9b9a6f51d753aa0a4ea164445992f7b5b11dd8a772a709c14347f5f411e12d63"
+      "sha256": "cd683f100c6445f1d987dbce83466c124eaa168fe584f49304197aa89e130bd8"
     },
     "config/recovered-functions.json": {
-      "bytes": 2803546,
+      "bytes": 2811806,
       "present": true,
-      "sha256": "a527838a440587f8bc260324a3e25b43ad57dc86b253ced9837621cb0c640128"
+      "sha256": "91785e8f7ffadf75365f5aa240c92c125af963bdedcacb20fa11b1345fd5a4d6"
     },
     "config/recovery-unresolved.json": {
-      "bytes": 8288,
+      "bytes": 8090,
       "present": true,
-      "sha256": "8270dab2d35535327f630b32a1c0aba4acbfd95560b58a33e4dd541b91bd038d"
+      "sha256": "e468eff00f5992be7cf90388526e5a1781863840914b7d57af60fd333441f409"
     },
     "game/default.xbe": {
       "bytes": 2281472,
@@ -217,9 +491,9 @@
       "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
     },
     "tools/disasm/output/functions.recovered.json": {
-      "bytes": 6017809,
+      "bytes": 6028090,
       "present": true,
-      "sha256": "c4c8f56402d6f6bd901b53752ee6f24bd317096dec8bed4c87497a0f845f1396"
+      "sha256": "d20e02498c508bab9f8ff22326e676744ac84713265311abe1a562dcaadb5bb7"
     }
   },
   "known_unknowns": [],

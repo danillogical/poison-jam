@@ -176,3 +176,7 @@ Fresh ordered `just build→just test→just check` passes (all exit0, test32/32
 ## 2026-10-04 - F4b fcmov repair / exploratory release observation
 
 Toolkit 671ab0a translates fcmovcc; sub_0014C850 and sub_0014C870 relifted (config/relift-fcmov.json). No strict run was made, so this does not move the strict horizon. Exploratory runs 20261003-205636-600-f4b-fcmov-fix-150 (150 s) and 20261003-210011-097-f4b-fcmov-fix-360 (360 s), D2 environment, GPU_ACK default, ledger L14-L18, L20-L25, L39, L40. First: logo object at phase 8 (inferred release; no frame inspected), built from c3e8c48 plus the uncommitted patch. Second: fatal unresolved call 0x0007BBF3 from body_0007B8D0 (epilogue label outside the recovered span). Not a fidelity or liveness claim.
+
+## 2026-10-05 - F4c recovery boundaries / first frame past the SEGA card
+
+Recovery entries corrected (see plan Current work and section 13 item 12). No strict run was made, so the strict horizon does not move. Exploratory runs 20261003-223732-864-f4c-6ec80-600 (600 s, no fatal) and 20261003-224759-960-f4c-title-capture (420 s, 30 frames): SEGA card, then the graffiti disclaimer, held at least 115 s with the guest live (flips 1000). Ledger L14-L18, L20-L25, L39, L40. Not the title screen; not a fidelity or liveness claim.
