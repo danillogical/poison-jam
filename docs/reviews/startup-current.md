@@ -16,7 +16,7 @@ Generated: 2026-10-04T00:39:23.739759+00:00
   Session row. Verified from this session's own `request/header` record in
   `C:\Users\logic\.dsh\sessions\--C-Users-logic-Repos-my_xbox_game--\session-c6018192-e90e-4718-9616-ff2165ca495b\`,
   not from a display name.
-- Workflow/plan/run-profile revisions and dirty diff identity: workflow `1c9489e0c5573f8b`, plan `4bcc474277c42d3f`, run profiles `4bb50f539ba4b7e8`, recomputed from the current file bytes because this session's staffing edit changed the workflow and its discovery edit changed the plan. The paths the staffing commit changes are `docs/agent-workflow.md`, `docs/reviews/startup-current.md` and `tests/test_reviewer_routes.py`.
+- Workflow/plan/run-profile revisions and dirty diff identity: workflow `1c9489e0c5573f8b`, plan `4bcc474277c42d3f`, run profiles `4bb50f539ba4b7e8`, computed from the file bytes at `d2c584f` because this session's staffing edit changed the workflow and its discovery edit changed the plan. The paths the staffing commit changes are `docs/agent-workflow.md`, `docs/reviews/startup-current.md` and `tests/test_reviewer_routes.py`.
 - Game revision/status: `master` `dfc22ff56610e6627bf28d0da322e3c1a328983f` at the startup pull of the previous turn; `1b7bd3d000e5c499f9096babf9974a2cba3052e2` (clean) at the start of this staffing/discovery turn.
 - Toolkit revision/status: `main` `929856fcfc145036252510509abaa0782d910a22` (clean, unchanged this session)
 - Unrelated edits preserved: 0 game, 0 toolkit. Toolkit pulled first
@@ -27,7 +27,7 @@ Generated: 2026-10-04T00:39:23.739759+00:00
   `tests/test_reviewer_routes.py`, `tests/test_route_allowlist.py`).
 - CURRENT PACKET copied from plan (packet + exact revision + SHA-256), or NONE:
   **NONE** — `## CURRENT PACKET — none` (`plan-jsrf-bare-minimum.md:56`)
-  - plan hash `4bcc474277c42d3f` (current bytes; the packet block itself is unchanged)
+  - plan hash `4bcc474277c42d3f` (file bytes at `d2c584f`; the packet block itself is unchanged)
   - block: "No packet is promoted. **The fail-fast observer attempt is PARKED by the
     owner — STOP UNKNOWN, no retry, no further correction, consultation or list
     extension.**" The plan also states "The first packet is C1 (§7); it is promoted
