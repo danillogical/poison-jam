@@ -603,3 +603,64 @@ Its fourth reversal condition — a test showing `sub_0014C870(1/120, 1.0)` retu
 **Limits.** This is exploratory, 150 s, single run, one watched dword; it moves no strict horizon. `watch_report` suppresses unchanged values, so 667 is a lower bound, and a write through an alias view is not trapped. The run is one bounded capture, not an interval history of the whole boot. The per-hit logo phase and hold are not recoverable from these reports.
 
 **Stop.** No fix, no rebuild, no ledger ID, no TTD recording started, no observer retry, no APU trace. The next step is the owner's.
+
+## Owner-directed discovery: the fcmov clamp test (2026-10-04)
+
+Owner-directed §0.6 discovery. **No production behavior was changed.** This runs the decisive test that §13 item 10 named and left unrun: does the current lift of `sub_0014C870` return `1/120` for `min(1/120, 1.0)`?
+
+### What the translator emits
+
+`fcmove` and `fcmovne` are **absent** from `_lift_fpu` (`tools/recomp/lifter.py:3663–3979`): a search of that range finds zero `fcmov` handling, so both fall through to the catch-all at `lifter.py:3979`, which emits a bare comment. The real bytes are genuine conditional moves:
+
+| Function | Instruction | Bytes | Address | Lift |
+|---|---|---|---|---|
+| `sub_0014C870` | `fcmove st(0), st(1)` | `da c9` | `0x14C881` | `/* FPU: fcmove st(0), st(1) */` |
+| `sub_0014C850` | `fcmovne st(0), st(1)` | `db c9` | `0x14C861` | `/* FPU: fcmovne st(0), st(1) */` |
+
+The surrounding instructions *are* lifted, including the `fcom`/`fnstsw ax`/`test ah,1` that set the condition the move depends on. So the compare runs, its result reaches `g_fp_cmp`/`g_fp_cc`, and then the move that consumes it **vanishes**. `src/recomp/gen/` contains exactly 2 such sites (`recomp_0003.c:43940`, `:43900`).
+
+This is the same failure class `test_lifter_fpu_reverse.py` already documents for other x87 forms: they "fell through to the bare-comment catch-all and executed as nothing at all". `fcmov` is that bug, still present.
+
+### The decisive test
+
+Executed the **current** lifted semantics rather than a handwritten copy: real XBE bytes at `0x14C870`/`0x14C850` → Capstone → the real `Lifter` → the emitted C lines compiled by clang against the real runtime header macros (`RECOMP_FCMP`, `RECOMP_FCMP_CC`, `HI8`, `MEMF`) → run. Anti-vacuity control: the identical pipeline with only the two `fcmov` lines replaced by faithful conditional moves.
+
+| Variant | `sub_0014C870(1/120, 1.0)` | expected |
+|---|---|---|
+| **current lift** | **`1.0`** (`0x3F800000`) | `1/120` (`0x3C088889`) |
+| control (faithful `fcmove`) | `1/120` (`0x3C088889`) | `1/120` |
+
+The current lift returns `1.0`; the control returns `1/120`. **The lead is CONFIRMED as a mechanism**: the clamp does not clamp.
+
+Supporting cases, current lift: `min(1.0, 0.5) → 0.5` (right by accident — the fall-through returns `st(1)`, the limit), `min(1.0, 1.0) → 1.0`, `min(0.0, 1.0) → 1.0` (wrong), `max(1/120, 0) → 0` (wrong), `max(1.0, 0) → 0` (wrong). The control returns the correct value in all six.
+
+### Reconciliation with the observed run
+
+The measured clamp explains the owner fade-watch cycle exactly. Each update adds `1/120` at `0x24748`, then the end-of-update clamp at `0x24957` computes `min(x, 1.0)`, which returns `1.0`, and then `max(1.0, 0)`, which returns `0`, writing alpha back to `0` — the observed `0 -> 1/120 -> 1.0 -> 0`. Alpha therefore never leaves `0`, never reaches the target `1.0`, so `ecx` never reaches 4 at `0x24945`, `done` is never set at `0x2494A`, `0x24650()` returns `[fade+0xC0] = 0`, and `0x7E360`'s phase 2 waits.
+
+### Advisor ruling on what this may claim
+
+Quick fault-diagnosis consult to Advisor child `79766644-778c-469c-ada5-8716057a0f39`, `claude/claude-opus-5-5` @ `xhigh`. It read the run's dump itself and ruled that most of the reconciliation is **observed, not inferred**: the running binary's clamp outputs, the dump fields, the bytes and the census are all measured; only "`ecx` never reaches 4" is deduced.
+
+**What a claim may say:** the broken `fcmov` lift is a **sufficient cause of the phase-2 hold, observed for this build**. It may **not** say the defect is the only cause, or that fixing it releases the SEGA card.
+
+It ranked what would remain if the hold persisted after a repair: (1) the repair is wrong or not in the binary — `fcmove`/`fcmovne` test ZF, which `test ah,1` set from FPU C0, **not** C3, so a C3-keyed repair returns `x` only when `x` equals the limit; (2) the run bound is too short — the hold ran at ~6.5 activations/s, so a 120-step fade-in takes ~20 s and the phase-3 fade-out another ~20 s, and later phases may wait longer (`0x7E498` compares against 720); (3) a later SEGA gate (phase 3 re-arms to target 0 at `0x7E460` and `0x7E481` waits on `done` again); (4) a writer the alpha watch cannot see, such as a re-arm through `0x24540`; (5) other dropped FPU ops — the catch-all fired at 6 sites total, the 2 clamps plus `fldenv` (`sub_00040214`), `fisttp` (`sub_000FDDA2`) and `fnclex` (`sub_0017F02C`, once in `recovered.c`), none on the fade path; (6) the guest advancing while the screen still shows SEGA. It also noted there are **120 clamp call sites**, so a repair changes other behaviour too.
+
+### A second, independent defect: the drop is silent
+
+The catch-all violates the contract `test_lifter_unimpl.py` exists to enforce. For `fcmove`/`fcmovne` the lift emits **no** `RECOMP_UNIMPL`, **no** `TODO` comment, and records **nothing** in `lifter.unimplemented` — while a known-unimplemented instruction (`daa`) emits both and is recorded. The documented contract is that an instruction the lifter cannot translate must be reported, and the runtime `RECOMP_UNIMPL_TRAP` exists to stop at the cause. So this omission is not merely wrong, it is **unreported**, which is why it survived: no tally, no trap, no log line.
+
+### Status
+
+| Statement | Status |
+|---|---|
+| The current lift of `sub_0014C870(1/120, 1.0)` returns `1.0`, not `1/120`. | **Observed** (executed the current lift; control returns `1/120`). |
+| The generated clamp therefore cannot clamp, and resets alpha to `0` every update. | **Observed** for this build. |
+| That is a **sufficient cause** of the phase-2 hold. | **Observed** (Advisor ruling, reading the run's own binary output). |
+| That it is the **only** cause, or that repairing it releases the SEGA card. | **Not claimed.** The Advisor named six ranked alternatives and the 120 call sites. |
+| The drop is silent — no `RECOMP_UNIMPL`, no `TODO`, not in `lifter.unimplemented`. | **Observed.** |
+| Any fix. | **None made.** No translator change, no generated-code patch, no workaround. |
+
+**Limits.** The fixture compiles the lifted lines with the project's runtime macros but is not the linked `sub_0014C870` from `jsrf_recomp.exe`; the Advisor's item (1) names exactly that gap. The clamp has 120 call sites, so this establishes the mechanism, not its full blast radius. No run was performed this turn.
+
+**Stop.** Discovery only. No production fix, no translator change, no packet promoted, no TTD recording, no strict-horizon or fidelity claim. The next action is the owner's.

@@ -705,12 +705,34 @@ package. Each gets criteria in the same five-part form when it becomes next.
     the lifted `sub_0014C870`/`sub_0014C850` emit `fcmove`/`fcmovne` as comments only
     (`recomp_0003.c:43940`, `:43900`; the only 2 such sites in `gen/`), which would force
     `min(x,1.0) = 1.0` and `max(x,0) = 0` every update, so alpha never reaches target and `done`
-    stays 0. Checked: `app+0xB0`, the triplet shape, the absence of any override for
-    either address in the four config manifests, and the 2-site census; the decisive test
-    (`sub_0014C870(1/120, 1.0)` returning `1/120`) was **not** run, so the lead is **unverified**.
-    **No fix, no TTD recording, no ledger ID**; exploratory, single run, one dword, no strict-horizon,
+    stays 0. **Checked:** `app+0xB0`, the triplet shape, the absence of any override for
+    either address in the four config manifests, and the 2-site census.
+    **Answered 2026-10-04: the lead is CONFIRMED as a mechanism.** The decisive test named
+    here was run, executing the current lift (real XBE bytes → Capstone → the real `Lifter`
+    → the emitted C → clang against the runtime macros) with an anti-vacuity control that
+    replaces only the two `fcmov` lines with faithful conditional moves:
+    `sub_0014C870(1/120, 1.0)` returns **`1.0`** under the current lift and **`1/120`**
+    under the control, so the clamp does not clamp. `fcmove`/`fcmovne` are absent from
+    `_lift_fpu` (`lifter.py:3663–3979`) and fall to the catch-all at `:3979`; the real
+    bytes are `da c9` at `0x14C881` and `db c9` at `0x14C861`. This reproduces the observed
+    cycle exactly: the `1/120` add at `0x24748`, then `min(x,1.0) → 1.0` and `max(1.0,0) → 0`
+    at the `0x24957` clamp, writing alpha back to `0`. **Claim ceiling (Advisor ruling):** a
+    **sufficient cause of the phase-2 hold, observed for this build**; **not** the only
+    cause, and **not** that repairing it releases the SEGA card. The Advisor ranked what
+    would remain if the hold persisted: a ZF-vs-C3-keyed repair (the `test ah,1` condition
+    is C0, not C3), too-short a run bound (~6.5 activations/s ⇒ a 120-step fade-in is ~20 s),
+    a later SEGA gate at phase 3 (`0x7E460`/`0x7E481`, `0x7E498` compares against 720), a
+    re-arm through `0x24540` that the alpha watch cannot see, the 4 other catch-all sites
+    (`fldenv` `sub_00040214`, `fisttp` `sub_000FDDA2`, `fnclex` `sub_0017F02C`, none on the
+    fade path), and guest-advances-but-screen-holds. **Second defect, independent:** the drop
+    is **silent** — no `RECOMP_UNIMPL`, no `TODO`, nothing in `lifter.unimplemented`, so the
+    contract `test_lifter_unimpl.py` enforces is violated and nothing reported it. Note the
+    clamp has **120 call sites**, so a repair changes other behaviour too.
+    **No fix was made**: no translator change, no generated-code patch, no workaround, no
+    packet promoted. **No fix, no TTD recording, no ledger ID**; exploratory, single run, one
+    dword, no strict-horizon,
     fidelity or liveness claim. Evidence: `docs/reviews/owner-sega-600-observations.md`,
-    "Owner-directed discovery: the alpha watch run (2026-10-03)".
+    "Owner-directed discovery: the fcmov clamp test (2026-10-04)".
 
 ### Fast path status
 
