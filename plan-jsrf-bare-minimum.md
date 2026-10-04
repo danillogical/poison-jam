@@ -55,7 +55,7 @@ established facts. Where this plan proposes a change to one of them, it is a tas
 
 ## Current work
 
-**F5: the graffiti disclaimer hold (the guest's fatal path is fixed).**
+**F5: the graffiti disclaimer hold; the OOM-driven fatal is fixed, the guest's disc-error path is not.**
 
 **Fixed this turn (2026-10-05).**
 1. **The ~300 s `JSRF_FATAL.ERR` and the Beat.bin loop were a port allocator defect.** Chain (each link
@@ -69,10 +69,14 @@ established facts. Where this plan proposes a change to one of them, it is a tas
    that could each hold the request was usable. Fixed by recording gaps as free blocks and carving an
    aligned piece from a larger free block (the OOM line now also reports free bytes and the largest free
    block). `kmem_test` gains a case that fails on the old `kmem.c`. Advisor ruling relied on (see §13
-   item 13). Not a shortcut, no ledger entry. Whether the 15 s I/O timeout in the `0x25400` job class
-   is what raised the dialog is inferred, not measured; after the fix the dialog and marker no longer
-   occur.
-2. **Eight further recovery entries** reached by successive runs (see §13 item 12 for the earlier ones):
+   item 13). Not a shortcut, no ledger entry. After the fix the ~300 s fatal and the Beat.bin loop no longer
+   occur in the 600 s run, **but the dialog and marker came back at ~950 s in the 1500 s run with no OOM
+   (see Measured now), so the disc-error path itself is still open.** Whether the 15 s I/O timeout in
+   the `0x25400` job class raised either dialog is inferred, not measured.
+2. **Eight further recovery entries** reached by successive runs (see §13 item 12 for the earlier ones; the
+   boundaries are byte-verified by recursive descent through every jump table, **not** runtime-exercised:
+   only `0x348A0` returned once (run `20261004-013505-513`), the other six handlers and the `0x13D840` hook
+   have not run since they were added):
    the seven job-handler table entries `0x32C70, 0x348A0, 0x33C50, 0x35640, 0x34200, 0x2C360, 0x27B00`
    (slots of the table at `0x1EC0F0`, `stack_args 0`, boundaries from recursive descent through every
    jump table) and the hook wrapper `0x13D840`. recovered.c is 3094 functions.
@@ -95,7 +99,7 @@ presents and the last was the disclaimer). Inferred, not seen. **The title scree
 **A second `JSRF_FATAL.ERR` at 02:23:57 (~950 s) with no OOM.** The dialog object in the dump
 (`0x226F7B0`, vtable `0x1CC660`, `+0x98 = 0x400000`, text "There's a problem with the disc...") is the same
 dialog class. So the disc-error dialog has at least two causes: the heap exhaustion (fixed) and something
-else. **Which of the four `0x6F730` callers fired is not measured.** The callers are `0x25537E`/`0x255AD`
+else. **Which of the four `0x6F730` callers fired is not measured.** The callers are `0x2537E` (a tail `jmp`, so it leaves no return address of its own) / `0x255AD`
 (15 s I/O timeout in the job class at `0x25400`, objects of vtable `0x1C4F68`; a live one is at
 `0x1330060`, `+0x44 = 1`, `+0x48 = 10`, state field `+0x1604 = 0`), `0x664C3` (`0x257B0` result >= 2) and
 `0x116EA8` (`0x13AA50` nonzero). The cheapest next measurement is a guest-stack record at the
@@ -108,8 +112,13 @@ caller of `0x6F730`; (2) capture a frame after the disclaimer (dump every 10 pre
 see what follows it; (3) if the second fatal is the 15 s I/O timeout, find which pending I/O never
 completes (the job's `+0x50/+0x54/+0x64` fields: pending `0x103` status block).
 
-**Not established:** any strict-profile result; whether the disclaimer waits on a fade (as SEGA did), an
-input, or a timer; and that no other table-referenced method is missing (about 151 code-pointer targets
+**Rival explanation for the logo object being gone:** the ~950 s fatal path (`0x12770` calls `0x1165D0` and
+`0x118800`) may be what removed it, rather than the logo state machine finishing. **Likely cause of the
+long disclaimer hold:** phase 13 needs 720 updates; at ~2 updates/s that is ~6 minutes, against ~12 s at
+60 Hz, so the guest's update/present rate is the leading explanation (inferred from the 618/720 count and
+the measured ~2/s, not yet tested by raising the rate).
+
+**Not established:** any strict-profile result; and that no other table-referenced method is missing (about 151 code-pointer targets
 had no owned function in an ad-hoc scan; `KNOWN_OPEN` freezes 81 bodies with the same boundary defect).
 
 ## 1. Objective and definition of done
@@ -809,7 +818,12 @@ package. Each gets criteria in the same five-part form when it becomes next.
     charges RAM per committed 4 KB page so the 64 KB granule costs only address space; the disc dialog
     is the 15 s pending-I/O timeout. Do not enlarge the heap or drop the 64 KB reserve alignment (that
     would hide the defect or need a ledger entry). Reversed by: OOM continuing after the fix with live
-    bytes near 48 MB, or the dialog appearing with no OOM. Neither occurred in the 600 s run.
+    bytes near 48 MB, or the dialog appearing with no OOM. **Annotation: the second condition occurred in
+    run `20261004-020802-181-f5-long-1500` (fatal marker at ~950 s, zero OOM lines, dialog object in the
+    dump). The heap-bookkeeping finding stands (measured: the block table, the 687 failures, the aligned fit
+    for 12 free blocks); the inferred part, that the dialog is the 15 s pending-I/O timeout, is no longer
+    supported and the cause of the second dialog is open. Send the caller question (which of the four
+    `0x6F730` callers fired) to the Advisor once the stack record names it.**
 
 ### Fast path status
 

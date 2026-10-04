@@ -492,6 +492,27 @@
           "path": "tools/disasm/output/functions.recovered.json"
         }
       ]
+    },
+    {
+      "cause": "Turn-review cleanup: prose-only edits to evidence strings in config/recovered-functions.json (0x13D840 installer address). recovered.c unchanged.",
+      "date": "2026-10-05",
+      "evidence": [
+        "evidence is not read by any generator",
+        "bare --write not used (would drop the amendment history)"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "7b50fa26f8c22450aa366820f7df4e341209597dc090f596f42199f38ff4f923",
+          "old_sha256": "aa0ca331a2b67c4b62b82c439bbd98f1deb7f0fdaf5db35c4dfc800fa59b7065",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "202b2a6df688d1728d299bf2bbb1be194967db8ef03b7bc2c19ac8decf2cd4da",
+          "old_sha256": "d34b29dc0ad9800f1f6b98b53e9f107f2c88d2c159fd196467d964a1b0968b8f",
+          "path": "tools/disasm/output/functions.recovered.json"
+        }
+      ]
     }
   ],
   "checker_version": "jsrf-generation-provenance/1",
@@ -546,9 +567,9 @@
       "sha256": "31b72ef85c7f3cc4c8e8e5d4e972ffef009cabac6d0eae49d6d297d8320cfbaa"
     },
     "config/recovered-functions.json": {
-      "bytes": 2820151,
+      "bytes": 2820155,
       "present": true,
-      "sha256": "aa0ca331a2b67c4b62b82c439bbd98f1deb7f0fdaf5db35c4dfc800fa59b7065"
+      "sha256": "7b50fa26f8c22450aa366820f7df4e341209597dc090f596f42199f38ff4f923"
     },
     "config/recovery-unresolved.json": {
       "bytes": 8090,
@@ -586,9 +607,9 @@
       "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
     },
     "tools/disasm/output/functions.recovered.json": {
-      "bytes": 6033684,
+      "bytes": 6033688,
       "present": true,
-      "sha256": "d34b29dc0ad9800f1f6b98b53e9f107f2c88d2c159fd196467d964a1b0968b8f"
+      "sha256": "202b2a6df688d1728d299bf2bbb1be194967db8ef03b7bc2c19ac8decf2cd4da"
     }
   },
   "known_unknowns": [],

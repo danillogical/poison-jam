@@ -169,6 +169,11 @@
         "src/recomp/recovered/recovered_11c1_test.c"
       ],
       "reason": "F5: recovery pass 9. Added 0x0013D840..0x0013D856 (a data-installed hook wrapper, stack_args 0). recovered.c 3093 -> 3094. Amended, not regenerated: no full pass ran."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [],
+      "reason": "Turn-review cleanup: prose-only edits to evidence strings in config/recovered-functions.json (0x13D840 installer address). recovered.c unchanged."
     }
   ]
 }

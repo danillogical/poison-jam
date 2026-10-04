@@ -14469,7 +14469,7 @@
     "section": ".text",
     "kind": "routine",
     "stack_args": 0,
-    "evidence": "A callback pointer stored in a global table at 0x2615C4..0x2615D8 (value 0x0013D840 is installed from the dword at 0x12E42B and sits in the table in the run dump). The analysis database has no entry (the previous function ends at 0x13D834, nop padding follows), so the indirect call `call eax` at 0x1408CF/0x140902 area was unresolved and fatal: run 20261004-013505-513-f5-handlers-600 died at it, ~347 s. Body: `mov eax,[0x261588]; test eax,eax; je ret; mov ecx,[0x26158c]; mov [esp+4],ecx; jmp eax` (a tail jump through a global hook that rewrites its first argument) with a plain `ret` at 0x13D855, so stack_args 0 for the ret path; the jmp eax tail forwards to the hook, which pops its own argument. Body runs 0x0013D840..0x0013D856."
+    "evidence": "A callback pointer stored in a global table at 0x2615C4..0x2615D8 (value 0x0013D840 is installed by `push 0x13D840` at 0x13E42A and sits in the table in the run dump). The analysis database has no entry (the previous function ends at 0x13D834, nop padding follows), so the indirect call `call eax` at 0x1408CF/0x140902 area was unresolved and fatal: run 20261004-013505-513-f5-handlers-600 died at it, ~347 s. Body: `mov eax,[0x261588]; test eax,eax; je ret; mov ecx,[0x26158c]; mov [esp+4],ecx; jmp eax` (a tail jump through a global hook that rewrites its first argument) with a plain `ret` at 0x13D855, so stack_args 0 for the ret path; the jmp eax tail forwards to the hook, which pops its own argument. Body runs 0x0013D840..0x0013D856."
   },
   {
     "start": "0x0013F950",

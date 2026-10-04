@@ -24,7 +24,7 @@ MISSING = 'MISSING'
 # The longest run the harness will launch or classify, in seconds. It lives here,
 # next to the classifier that enforces it, and the runner imports it, because the
 # two used to carry separate literals: raising one alone let a long run launch and
-# then be classified UNKNOWN by the other. 600 s is the F5 observation bound; the
+# then be classified UNKNOWN by the other. 600 s was the F5 observation bound (raised to 1800 s on 2026-10-05: the graffiti disclaimer's phase 13 needs ~720 updates at ~2 updates/s, which a 600 s run cannot reach after the ~290 s boot to that screen); the
 # collector converts argv[1] seconds to milliseconds and has no duration cap.
 MAX_RUN_SECONDS = 1800
 
