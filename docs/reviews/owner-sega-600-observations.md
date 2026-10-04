@@ -538,3 +538,68 @@ It also named a stronger no-rebuild instrument (`just ttd-record`), recorded abo
 **Status of the "walk stopped" question.** Both the Session's earlier reading and the Advisor's consult-2 ruling on it are now withdrawn. What the record claims is the narrower, supported statement: the walk runs and reaches the fade **before** the logo in the same traversal; the fade's `done` is 0 and its alpha is exactly 0 at capture in every phase-2 run; and the archive cannot say whether `0x24700` was invoked on this object during the hold. That is a live, well-posed question — not a proven contradiction, and not a proven halt.
 
 **Records-only closure.** No port fix, no runtime edit, no new run, no ledger ID, no observer retry, no APU trace. The single xemu session was read-only and is spent.
+
+## Owner-directed discovery: the alpha watch run (2026-10-03)
+
+Owner-directed discovery under `docs/agent-workflow.md` §0.6, approved by the owner. This executes the bounded run that §13 item 10 previously held for approval. **No code change, no rebuild, no fix.** Both repositories pulled first (toolkit then game); both clean at `main` `929856f` / `master` `dfc22ff`.
+
+### Run identity and gates
+
+Run **`20261003-174222-912-owner-fade-watch-150`**, exploratory profile, requested 150 s, started `2026-10-04T00:42:24.191014+00:00`, duration **153.290216 s**. [Result](../../logs/runs/20261003-174222-912-owner-fade-watch-150/result.json): `diagnostic_deadline` / exit 3, `dump_ok` true, 21 native threads, 177 named frames, 1 GPU snapshot, 0 dropped, save root verified, checkpoints passed, no missing checkpoints, `gpu_report_ok` true. Deadline and GPU-analysis success are bounded-capture facts, not liveness or a strict-horizon move.
+
+Executable identity `e29986c406fa6129f411d5f16ac783867b117db1b5409f1689da9c85175c0fb3` and XBE `fd19055756719893c466302809b433b785ecf5732df0441286f3f605f0f3ef9c` are the **same** as the source run `20261002-174731-263-owner-l02-d2-600`. The run adds no shortcut: `RECOMP_WATCH`/`RECOMP_WATCH_RAW` are already listed observation-only in `docs/jsrf-run-profiles.md`, and the profile is exploratory because `RECOMP_GPU_ACK` is absent/default.
+
+Environment copied from run `20261002-174731-263-owner-l02-d2-600`'s record: `RECOMP_APU_TRAP=1`, `RECOMP_FB_WINDOW=1`, `RECOMP_FB_WINDOW_DUMP_EVERY=600`, `RECOMP_KERNEL_LOG_BUDGET=100000`, `RECOMP_NV2A_TRACE=1`, `RECOMP_PB_EXEC=1`, `RECOMP_PB_SCAN=1`, `RECOMP_GPU_ACK` absent/default. Added: `RECOMP_WATCH=0x15F0EF8` and `RECOMP_WATCH_RAW=1`. Fresh disposable save root, no seed. **One disclosed deviation:** `RECOMP_FB_DUMP` points at a fresh per-run destination, `logs/workers/owner-fade-watch-150-framebuffers.bmp`, not the source run's path — the runtime overwrites `<prefix>.bmp` on every FBWIN write, so reusing the source run's path would have destroyed its archived framebuffers. The record counts `RECOMP_FB_DUMP` separately from the D2 profile overrides for exactly this reason. No other setting differs.
+
+**Both required pre-interpretation gates PASS.**
+
+- `python -X utf8 scripts\check-dump-mapping.py <run>`: **matches 1, content-mismatch 0, unreadable 0, missing 0**; control read at guest VA `0x00011000` exact (`8b512c85d28b4130c70190431c00741c`).
+- The log shows the arm: `WATCH: writes to the page of 0x015F0EF8 are trapped (current 00000000)`.
+
+The plan's identity precondition was re-checked in **this** run's dump, as it requires: `app+0xB0` at `0x1063B20` reads `0x15F0E60`, so the watched dword `0x15F0EF8` is the subsystem-6 fade's alpha field.
+
+### What the watch observed
+
+**2004 changed-value reports** on `0x15F0EF8`. Every load-bearing attribution below is read from the raw frame (`raw[esp+N]`), not the filtered chain.
+
+**The positive control fired.** One report is alpha `0 -> 1.0` carrying `raw[esp+0] = 0x2461D`, `raw[esp+8] = 0x7E75C`, `raw[esp+12] = 0xFF000000` — the constructor's store at `0x244B8` through the logo constructor's `0x24600(0xFF000000)` at `0x7E752`-`0x7E757`, exactly the signature §13 item 10 predicted. The run is therefore **CONTROLLED**.
+
+**The traversal's step store ran on this object.** 668 reports are a `±1/120` step; 667 of them carry `raw[esp+4] = 0x1108A` with `raw[esp+0] = 0x15F0E60` — the add at `0x24748` inside `0x24700`, reached on the default traversal route. 666 are `0 -> 1/120` and one is `1.0 -> 0.991666675`, the subtract at `0x24777`. This is a **changed-value** watch, so 667 is a lower bound on how often that store ran, not a count of invocations.
+
+**A second writer ran in the same function.** 669 reports write alpha to `1.0` and 668 write it to `0`. The `1.0` writes carry `raw[esp+16] = 0x2495C` (668 of them) and the `0` writes carry `raw[esp+24] = 0x2495C` (all 668). `0x2495C` is the instruction after `call 0xa4cf0` at `0x24957`, inside `0x24700`. `0xA4CF0` is the `[0,1]` clamp of alpha/r/g/b: its frame places return `0x2495C` at `esp+16` at the `fstp` at `0xA4D16` and, two pushes later, at `esp+24` at the `fstp` at `0xA4D21`. So alpha is re-clamped to `1.0` and then to `0` on the same update.
+
+**The reports come in exact triplets.** All 666 cycles beginning at a `0 -> 1/120` step have length 3 and the identical shape `0 -> 1/120 -> 1.0 -> 0`; 666 x 3 = 1998 reports, plus 6 reports before the first cycle start, account for all 2004. The activity spans log lines 15010-275577 of 275727 and continues to the capture's end; cycle starts are spread evenly across the window (64/64/64/63/64/64/69/74/71/69 per decile), so this is a repeating per-update cycle, not a one-off.
+
+**Endpoint state is unchanged from the source run.** Fade `0x15F0E60` (vtable `0x1C4D10`): alpha `0`, target `1.0`, step `1/120` (`0x3C088889`), done `0`. Logo `0x143EE60` (vtable `0x1CCFB8`): phase `2`, hold `121` (`0x143EEF8`/`0x143EEFC`). Both match `20261002-174731-263-owner-l02-d2-600` exactly.
+
+**Logo phase and hold are not readable per hit.** The logo VA `0x143EE60` appears in the raw frame of exactly **1** of the 2004 reports — the control's, at `esp+28` and `esp+60`. Phase and hold are therefore available only at the endpoint, not at each hit.
+
+### Advisor consult and the lead it produced
+
+One quick consult to the session's continuable Advisor child `79766644-778c-469c-ada5-8716057a0f39`, `claude/claude-opus-5-5` @ `xhigh` (continuability verified this session, `docs/reviews/startup-current.md`). Question: is it sound to record that the step store ran on this object while a second writer reset the value each cycle, and to call that second writer observed-but-unattributed?
+
+Its ruling: the step-store record is **sound**, and 667 is a lower bound; but "observed-but-unattributed" **understates** the second writer, because the raw slots already attribute it — it is the `[0,1]` clamp at `0xA4CF0`, whose two `fstp`s match the `esp+16` and `esp+24` return slots. The Session reproduced that attribution against the original bytes at `0xA4CF0`-`0xA4D21` and `0x24954`-`0x2495C`, and adopted the correction.
+
+It also named a **lead, which is recorded as a lead and not as a cause**: the lifted `sub_0014C870` and `sub_0014C850` emit `fcmove`/`fcmovne` as **comments only** (`recomp_0003.c:43940` and `:43900`), so `min(x, 1.0)` always yields `1.0` and `max(x, 0)` always yields `0`; alpha would be forced back to `0` on every update, could never reach the target, and `done` would stay `0`. The Session checked the reversal conditions it could:
+
+- `app+0xB0 = 0x15F0E60` in this dump — **holds**, so the watched dword is the fade's alpha.
+- The reports do come in `step -> 1.0 -> 0` triplets — **holds** for all 666 cycles.
+- No override replaces `sub_0014C870`/`sub_0014C850`: `config/manual-functions.json`, `config/recovered-functions.json`, `config/generated-patches.json` and `config/recovery-unresolved.json` contain **no** entry for either address; the built executable is the same hash as the source run's.
+- A search of `src/recomp/gen/` finds **exactly 2** `fcmov` sites, both comments only — so the pattern is not more widespread than the lead claims.
+
+Its fourth reversal condition — a test showing `sub_0014C870(1/120, 1.0)` returning `1/120` — was **not** run; the lead is therefore **not verified**, and it is recorded with its own `REVERSED BY` rather than adopted. Its `BASIS`: the raw slots and generated source are **observed**; the missing `fcmov` as the cause, and the count reconciliation, are **inferred**.
+
+### What this does and does not establish
+
+| Statement | Status |
+|---|---|
+| The fade's alpha dword changed 2004 times in 150 s and the traversal's `1/120` step store ran on this object at least 667 times. | **Observed.** |
+| A second writer in the same function, the `[0,1]` clamp at `0xA4CF0` reached from `0x24957`, reset alpha to `1.0` then `0` on each update. | **Observed** (raw slots against the original bytes). |
+| The endpoint is alpha `0` / target `1.0` / step `1/120` / done `0`, logo phase `2` / hold `121`. | **Observed.** |
+| The `fcmove`/`fcmovne` no-op lift is *why* alpha cannot hold a stepped value. | **Lead, unverified.** The no-op sites are observed; the causal link is inferred and its decisive test was not run. |
+| The fade is "never updated". | **Refuted as written.** The update runs on this object; the value does not survive it. |
+| Any fix, or any fidelity/liveness/strict-horizon claim. | **Not claimed.** No port code was changed. |
+
+**Limits.** This is exploratory, 150 s, single run, one watched dword; it moves no strict horizon. `watch_report` suppresses unchanged values, so 667 is a lower bound, and a write through an alias view is not trapped. The run is one bounded capture, not an interval history of the whole boot. The per-hit logo phase and hold are not recoverable from these reports.
+
+**Stop.** No fix, no rebuild, no ledger ID, no TTD recording started, no observer retry, no APU trace. The next step is the owner's.

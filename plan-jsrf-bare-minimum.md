@@ -602,8 +602,9 @@ package. Each gets criteria in the same five-part form when it becomes next.
    fades at 1/120 per update and moves on to the Smilebit logo. (xemu is an emulator, not real
    hardware: these are oracle observations, and they are not a fidelity claim about retail Xbox.) In
    the port the logo sits in phase 2 with its hold counter at 121 and the fade at alpha 0, target 1,
-   done 0. The fade update `0x24700` is translated correctly; the leading explanation is that the
-   armed fade instance is never updated, cause not yet established. Evidence:
+   done 0. The fade update `0x24700` is translated correctly; the leading explanation was that the
+   armed fade instance is never updated — **refuted 2026-10-03, see item 10: the update runs on this
+   object and the stepped value is re-clamped to 0 on each update**. Evidence:
    `docs/reviews/owner-sega-600-observations.md`.
 2. **Ruled out** by 600 s runs and archive reads: a slow logo (static image for 400+ s after the cache
    marker), file I/O or a stalled movie (no file opened or read after the marker), the do-nothing
@@ -614,14 +615,16 @@ package. Each gets criteria in the same five-part form when it becomes next.
 4. **Latest changes:** L02 recovery of the render-state method `0x14FEF0` (game `5c1d7d6`); run dumps
    capture the executable's globals, read with `scripts/read-host-symbol.py` (game `d385e37`,
    `651595f`); the 67 do-nothing kernel bridges name their first call (toolkit `929856f`).
-5. **Latest run:** `20261002-174731-263-owner-l02-d2-600`, exploratory D2 profile with
-   `RECOMP_APU_TRAP=1`, 602.8 s deadline, still on the SEGA card. Ledger IDs L14–L18, L20–L25, L39,
-   L40 (L16 inert under the MMIO owner, L19 dormant).
+5. **Latest run:** `20261003-174222-912-owner-fade-watch-150`, the item-10 alpha watch — exploratory,
+   150 s, same executable as `20261002-174731-263-owner-l02-d2-600`, which remains the latest 600 s
+   capture. Both end on the SEGA card. Ledger IDs L14–L18, L20–L25, L39, L40 (L16 inert under the
+   MMIO owner, L19 dormant); the watch run adds no shortcut and no ledger ID.
 6. **Parked by the owner:** the F5 fail-fast observer; no retry.
-7. **Next:** find what should update the armed fade and why it does not. In xemu, the caller chain
-   of `0x24700` during the **phase-2** fade (the recorded chain `1108A → 11096 → 11096 → 124C3 →
-   13B24 → 13F9E → 6FA41` is from the phase-0 fade); in the port, whether those callers run during
-   the hold.
+7. **Answered 2026-10-03 by item 10:** the armed fade *is* updated — the traversal's `1/120` step
+   store ran on it at least 667 times — and a second writer in the same function, the `[0,1]` clamp
+   at `0xA4CF0`, re-clamps alpha to `0` on each update, so it never reaches the target. What remains
+   open is **why** the clamp returns `0`; the unverified lead is the no-op `fcmove`/`fcmovne` lift in
+   `sub_0014C870`/`sub_0014C850` (item 10).
 8. **Answered 2026-10-03 (owner-directed discovery, records only).** The **phase-2 chain is the
    phase-0 chain**: all 10 phase-2 xemu hits at `0x24700` carry the identical return chain
    `1108A → 11096 → 11096 → 124C3 → 13B24 → 13F9E → 6FA41` and the identical fade object
@@ -680,49 +683,34 @@ package. Each gets criteria in the same five-part form when it becomes next.
    with the completion store at `0x2494A` but not decisive — `0x24480` (via `0x24600`) also sets it,
    at `0x24493`, without touching `step` — and consult 4 withdrew the discriminator it had implied
    there: the endpoint fits a completed `0x24700` fade-in exactly as well as an immediate set.
-10. **Awaiting owner approval of one bounded run (not executed).** One exploratory run, **no code
-    change and no rebuild**: `RECOMP_WATCH=0x15F0EF8` — the fade's **alpha** field, literal VA,
-    because the `[[…]+…+…]` pointer form misparses under the real grammar and would arm on a readable
-    address nothing writes — plus `RECOMP_WATCH_RAW=1`, bound `--seconds 150` (a concrete cap,
-    **not** established as the smallest sufficient one), otherwise the D2 profile and ledger IDs
-    unchanged, fresh disposable save root.
-    **Alpha, not the `done` flag** (quick Advisor consult 4 reversed the previous draft's choice):
-    **alpha is preferred because `done` carries no per-step history** — `done` is a flag set by
-    `0x246C1` (constructor), `0x24493` (immediate set) and `0x2494A` (completion) and cleared by
-    `0x24553` (arm), so it cannot separate alpha **stepping** by `1/120` from `0x24700` against alpha
-    **jumping** to 0 through the immediate-set path at `0x24480`; alpha records each `0x24700` step.
-    Attribution comes from the raw frame (`raw[esp+N]`, `xbox_memory_layout.c:1593–1601`), whose two
-    candidate writers have **disjoint** innermost slots: `0x244B8` (alpha set from the argument)
-    runs inside `0x24480` before any push, so `raw[esp+0] = 0x2461D`
-    ([recomp_0000.c:41101](src/recomp/gen/recomp_0000.c#L41101)); `0x24748` (the `1/120` add) runs
-    inside `0x24700` after `push esi`, so `raw[esp+0]` is the saved node `0x15F0E60` and
-    `raw[esp+4] = 0x1108A` ([recomp_0000.c:121](src/recomp/gen/recomp_0000.c#L121)). Read those raw
-    slots, not the filtered chain, which prints code-looking words and can carry stale values. The
-    traversal return is **route-dependent** — `0x1108A` (default `0x11070`) or `0x112BA`/`0x114EA`/
-    `0x1171A`/`0x1194A` on the `+0x44`/`+0x40`/`+0x48`/`+0x4C` routes — so any of the five with a
-    `1/120` step counts as the traversal updating this object; requiring `0x1108A` alone would
-    misread a genuine hit on another route.
-    **Positive control: the constructor's alpha `0 → 1.0` store at `0x244B8`**, reached from the logo
-    constructor's `0x24600(0xFF000000)` at `0x7E752`–`0x7E757` (`raw[esp+0] = 0x2461D`, caller return
-    `0x7E75C`). It is an **expected** control, not a guaranteed one: it is silent if alpha is already
-    `1.0` when the store runs. Two earlier control proposals are withdrawn as unreliable or
-    insufficient: the phase-0 fade-in (the fade is unarmed at capture, and `72 − 61 = 11` counts only
-    activations outside the captured phase-1 hold — it does not measure phase 0 or exclude a completed
-    or partial fade), and the `done` flag (cannot separate stepping from a jump).
-    `watch_report` suppresses unchanged values (`xbox_memory_layout.c:1567–1568`), so this is a
-    **changed-value** watch, not a write log: a `1/120` step with `raw[esp+4] = 0x1108A` proves the
-    update ran, and a jump to 0 with `raw[esp+0] = 0x2461D` proves the setter ran — but **silence is
-    not decisive**, because a skipped FPU branch, a failed watch (protection lost, alias write) and a
-    change falling outside the 150 s window all look identical. If alpha rises and later returns to 0,
-    read the raw slots: an immediate set (`0x2461D`) and a **re-arm** to a lower target — after which
-    the *same* updater decrements — are both consistent with the value alone.
-    **Stronger no-rebuild alternative, recorded not adopted:** `just ttd-record` runs on the current
-    build and shows every `sub_00024700` entry with its `ECX`, `[esi+0xC0]` and the branch taken; it
-    needs an **elevated** process, a large trace (recipe caps at `--max-file-mb 20480`) and a
-    strict-profile run, so it is the escalation if the watch is ambiguous.
-    `RECOMP_WATCHDOG_SECS` is stripped by the runner and `RECOMP_PEEK` cannot separate the cases.
-    Details, artifacts and hashes: `docs/reviews/owner-sega-600-observations.md`,
-    "Owner-directed discovery: what should update the armed fade (2026-10-03)".
+10. **Done 2026-10-03 (owner-approved discovery run). The fade *is* updated; the value does not
+    survive the update.** The bounded alpha watch run held for approval here was executed as
+    `20261003-174222-912-owner-fade-watch-150` — exploratory, `--seconds 150`, `RECOMP_WATCH=0x15F0EF8`
+    plus `RECOMP_WATCH_RAW=1`, otherwise the D2 environment of `20261002-174731-263-owner-l02-d2-600`
+    (same executable and XBE hashes), no code change and no rebuild. Mapping gate **1 match / 0
+    mismatch**, and the log shows `WATCH: writes to the page of 0x015F0EF8 are trapped`. `app+0xB0`
+    re-checked in this dump = `0x15F0E60`, so the watched dword is the fade's alpha. **The positive
+    control fired** (one report `0 -> 1.0` with `raw[esp+0] = 0x2461D`, `raw[esp+8] = 0x7E75C`,
+    `raw[esp+12] = 0xFF000000`), so the run is **CONTROLLED**.
+    **Observed from the raw slots:** 2004 changed-value reports; 667 carry the `0x24748` step store
+    (`raw[esp+4] = 0x1108A`, `raw[esp+0] = 0x15F0E60`), a lower bound because the watch suppresses
+    unchanged values; and a second writer in the same function — the `[0,1]` clamp at `0xA4CF0`
+    reached from `0x24957` — writes alpha to `1.0` and then to `0` (`raw[esp+16]`/`raw[esp+24] =
+    0x2495C`). All 666 cycles starting at a `0 -> 1/120` step have the identical shape
+    `0 -> 1/120 -> 1.0 -> 0`, spread evenly across the run to capture end. Endpoint unchanged from the
+    source run: alpha 0, target 1.0, step 1/120, done 0, logo phase 2, hold 121. Logo phase/hold are
+    **not** readable per hit (the logo VA appears in 1 of 2004 raw frames, the control's).
+    **So the leading explanation in item 1 is refuted as written:** the armed fade *is* updated; the
+    stepped value is re-clamped back to 0 on each update. **Lead, recorded as a lead and not a cause:**
+    the lifted `sub_0014C870`/`sub_0014C850` emit `fcmove`/`fcmovne` as comments only
+    (`recomp_0003.c:43940`, `:43900`; the only 2 such sites in `gen/`), which would force
+    `min(x,1.0) = 1.0` and `max(x,0) = 0` every update, so alpha never reaches target and `done`
+    stays 0. The Session verified `app+0xB0`, the triplet shape, the absence of any override for
+    either address in the four config manifests, and the 2-site census; the decisive test
+    (`sub_0014C870(1/120, 1.0)` returning `1/120`) was **not** run, so the lead is **unverified**.
+    **No fix, no TTD recording, no ledger ID**; exploratory, single run, one dword, no strict-horizon,
+    fidelity or liveness claim. Evidence: `docs/reviews/owner-sega-600-observations.md`,
+    "Owner-directed discovery: the alpha watch run (2026-10-03)".
 
 ### Fast path status
 
