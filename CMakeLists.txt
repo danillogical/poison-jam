@@ -216,6 +216,14 @@ if(BUILD_TESTING)
     add_test(NAME jsrf_generation_provenance
         COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_generation_provenance.py)
     set_tests_properties(jsrf_generation_provenance PROPERTIES TIMEOUT 300)
+    # Run-coverage check.  Registered because this session recorded an entry as
+    # "run-confirmed" by a run that never dispatched it (Turn Reviewer finding B3):
+    # f25 was credited for 0x00032610 and has zero ABI-verified return lines for it,
+    # while f27 genuinely does.  The controls assert that the two real runs disagree,
+    # so the check reads a return event rather than matching text.  Pure Python over
+    # archived logs; no build target needed.
+    add_test(NAME jsrf_run_exercised
+        COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_run_exercised.py)
     # A2h-arming-coverage-attribution C1/C2.  The fixture lives in the toolkit's tests/
     # directory, like tests/apu_watch_fixture_test.c and tests/kernel_inplace_event_test.c,
     # because it is a standalone collector fixture and the game repo keeps no fixture of

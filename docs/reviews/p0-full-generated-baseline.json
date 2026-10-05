@@ -1,6 +1,6 @@
 {
   "files": {
-    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "a707e71a5411f272e8d5d45283292fe09bd118d0138e72e86d3a7c2687517dc8",
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "64d3f2f70787b3ce4d185d3796e9702b6e4e9e0e8b2756421fd288f1d53c510a",
     "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
     "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
     "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
@@ -10,12 +10,12 @@
     "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
     "src/recomp/gen/recomp_dispatch.c": "1cc469ddcc6d12ac98f8675846b5940f3f438624a3a51a95faca40a9b59a4238",
     "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-    "src/recomp/gen/recomp_stubs_recovery.c": "ac5188369b606abe88bfe02898bb23c2ef8fe0e012cad77b6ae573d98fbd348e",
+    "src/recomp/gen/recomp_stubs_recovery.c": "5897e497ad2f789241a9b2f95653023b306f3d4849a80406ca586ed7706d9bbb",
     "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
     "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "592f8aab767c1997c65905af907780fe3296126b8921cbb1ec6fdb7f1dcf7d91",
+    "src/recomp/recovered/recovered.c": "b6cbf6243b9df9d695d6c2b5ddd83fde0812eba44b999dce036386fd427ad92e",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "2a604fd62ee20952a7092f390c1b6e40f42d587aaa18cc0f4e3f8f2952c592d7",
+    "src/recomp/recovered/recovered_11c1_test.c": "13ebacc52b5d2f70d82bc07f0f62156357d99024e473bc114869e5dd74513cb1",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -268,6 +268,16 @@
       "date": "2026-10-05",
       "files": [],
       "reason": "0x00089A60 recovered (0x00089A60..0x00089AC9, stack_args 0), a function swallowed by a gap_prologue false entry at 0x00089A42 (whose bytes are jump-table data, not code). Run f28 died on it after the 0x00054750 fix. The body has no ret of its own: it ends `pop esi; jmp 0x1baa50`, and 0x1baa50 ends in a plain C3, so stack_args 0. recovered.c 3102 -> 3103. Amended, not regenerated: no full translation pass ran."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+        "src/recomp/gen/recomp_stubs_recovery.c",
+        "src/recomp/recovered/recovered.c",
+        "src/recomp/recovered/recovered_11c1_test.c"
+      ],
+      "reason": "0x0008AEB0 recovered (0x0008AEB0..0x0008B1FD, stack_args 0), an unowned gap reached by two direct jumps, found by f29 after the 0x00032610 and 0x00054750 fixes. It also owns the gap_prologue false entry 0x0008B056, which has no rel32 reference anywhere. Five plain C3 rets, so stack_args 0. recovered.c 3103 -> 3104. Amended, not regenerated: no full translation pass ran."
     }
   ]
 }
