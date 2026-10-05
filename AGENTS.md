@@ -6,20 +6,52 @@ Port Jet Set Radio Future to Windows through Xbox static recompilation. First re
 playable opening area with movement, graffiti, audio, and save/resume; then expand to
 the whole game. Work in small, verifiable milestones and explain defects with evidence.
 
+## Temporary Grok Build single-agent mode
+
+**Owner decision, 2026-10-04:** this repository is temporarily being worked on through
+Grok Build as a single autonomous agent.
+
+For this mode:
+
+- Grok Build is the orchestrator, implementer, debugger, integrator, and reviewer.
+- Do **not** load or follow `docs/agent-workflow.md` unless the owner explicitly asks.
+- No Planner, Persistent Advisor, worker, guardrail, packet, or Turn-reviewer process is
+  required.
+- Do not recreate the retired workflow gates in another form.
+- Own ordinary technical decisions yourself: investigate, choose the next experiment,
+  implement, test, run, evaluate the evidence, and continue.
+- When a blocker is fixed, look for the next highest-value critical-path task rather than
+  treating the fix as the end of the session.
+- Use prior art before doing deep reverse engineering:
+  upstream xboxrecomp, relevant forks, Mercenaries-Recompiled, and halo-ce-universal.
+- Prefer the cheapest honest path toward the current milestone. Record any stub, patch,
+  approximation, reimplementation, or synthetic completion in
+  `docs/jsrf-compatibility-ledger.md`.
+- Escalate to the owner only for an actual owner decision: project objective/scope,
+  material fidelity trade-off, destructive or hard-to-reverse repository action,
+  credentials, spending, legal/licensing, or something explicitly marked
+  `OWNER REQUIRED`.
+- Technical uncertainty is yours to resolve through source inspection, tests,
+  instrumentation, comparison, and reproduced evidence.
+
+The evidence, repository-safety, build, regeneration, guest-code, and asset rules in this
+file remain fully in force.
+
 At session start read, in this order:
 
-1. `docs/agent-workflow.md` — **staffing, roles, review, escalation**
-2. `plan-jsrf-bare-minimum.md` — **current work, blocker, next action, milestone criteria/status**
-3. `docs/jsrf-run-profiles.md` — **strict vs exploratory evidence rules**
+1. `plan-jsrf-bare-minimum.md` — **Current work, blocker, next action, milestone status**
+2. `docs/jsrf-run-profiles.md` — **strict vs exploratory evidence rules**
+3. additional technical records only as needed for the work actually being done
 
-Do not keep session reports in the repository. Durable findings go in the plan or the
-technical record; scratch notes stay outside the repository.
+Fetch both repositories and inspect their status before editing. Preserve unrelated edits.
 
-`AGENTS.md` contains operating knowledge only. **Do not copy provider, model, or effort
-assignments here.** If `docs/agent-workflow.md` is unavailable, staffing is BLOCKED;
-do not reconstruct it from memory, reports, handoffs, or history.
+Keep the plan's **Current work** section accurate as evidence moves.
 
-Keep original assets and existing saves unchanged. Preserve unrelated edits.
+Do not keep session reports in the repository. Durable findings go in the plan,
+technical record, strict-horizon ledger, or compatibility ledger as appropriate;
+scratch notes stay outside the repository.
+
+Keep original assets and existing saves unchanged.
 
 ## Workspace and key files
 
@@ -36,10 +68,11 @@ gitignored and original assets must never be tracked or pushed.
 policy of 2026-09-25).** Regular commits and
 pushes of **both** repositories are part of normal durable closure, not an end-of-project step.
 
-- **Commit** durable work as it lands, in whichever repository it belongs to: a reviewed piece of
-  work, an Advisor ruling, a plan update, an owner-directed change, a sync/merge. Never leave
+- **Commit** durable work as it lands, in whichever repository it belongs to: a tested or
+  evidence-verified fix, a durable technical finding, a plan/record update, an
+  owner-directed change, or a sync/merge. Never leave
   finished work uncommitted across a session boundary.
-- **Push both repositories at the same checkpoints:** finished, reviewed work, a completed
+- **Push both repositories at the same checkpoints:** finished, tested/verified work, a completed
   sync/merge, a materially useful commit later work depends on, a milestone boundary, and the end of a
   session. Push the **toolkit first**, then the game, because game records cite toolkit commits.
 - **Before every push**, in that repository: the tree is **clean**; the branch/commit is the **intended
@@ -79,7 +112,7 @@ Inspect both working trees before editing. Toolkit instructions live in
 | `scripts/inspect-jsrf.py` | original-XBE disassembly and guest-memory reads |
 | `scripts/jsrf_dump.py`, `scripts/jsrf_gpu.py` | dump/GPU offline inspection |
 | `tools/harness/collect.c` | external debugger, all-thread capture, minidumps |
-| `docs/agent-workflow.md` | sole authority for agent roster/workflow |
+| `docs/agent-workflow.md` | inactive during the temporary Grok Build single-agent experiment; do not load unless the owner asks |
 | `docs/jsrf-operating-history.md` | dated narrative; read only when needed |
 | `game/default.xbe`, `game/Media/` | original assets; never modify |
 | `logs/runs/` | archived run evidence |
