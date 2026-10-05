@@ -13,7 +13,7 @@
     "src/recomp/gen/recomp_stubs_recovery.c": "9e94c6ecdeb699c690f46d39ebddbeada57ce24a9acee1486f0df2ff54020548",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
     "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "231d25962f71539b6fa64b72d52d9eda980ec7cc5af3be485cae94ae1b310d10",
+    "src/recomp/recovered/recovered.c": "e3c902b3105cdb59d745056230d649171e09a3d9f7109213254325bcf355f844",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
     "src/recomp/recovered/recovered_11c1_test.c": "99bbc9734ba9897617908db58cb256fa10b731f9174eb28d0628b912db5ce8de",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
@@ -255,6 +255,13 @@
         "src/recomp/recovered/recovered_11c1_test.c"
       ],
       "reason": "0x00032610 recovered (0x00032610..0x0003275D, stack_args 12). Same tail_jump_alias defect as the already-recovered sibling 0x00032C70: the DB span 0x32610..0x33800 overran because the jump table at 0x32760 contains bytes that decode as a spurious ret 0x326, so the dispatch ran 0x33800 (`mov eax,1; ret 4`) instead of this function. All 11 RETs are `ret 0xc`, hence stack_args 12; the sibling 0x32C70 has a plain ret and keeps 0. Run f23 logged `[ALIAS-ICALL] target=0x00032610 owner=0x00033800` just before it died. recovered.c 3100 -> 3101. Amended, not regenerated: no full translation pass ran."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/recovered/recovered.c"
+      ],
+      "reason": "Two defects found by the Orchestrator's own consolidated re-verification, not by a run. 0x00032610 end 0x0003275D -> 0x0003275F: the old end cut the final three-byte `ret 0xc` in half so the body fell off the end with no return for its last exit path (now 12 exits, not 11). 0x00047820 stack_args 0 -> 4: the body ends `pop esi; ret 4` (C2 04 00), so the wrapper must expect +8. recovered.c stays 3101. Amended, not regenerated: no full translation pass ran."
     }
   ]
 }
