@@ -417,6 +417,40 @@ static void fatal_dump_object(const char *tag, uint32_t p)
             MEM32(p + 0x1604));
 }
 
+/* The 0x116EAD caller has just stored movsx(word [child+0x60]) at parent+0x60.
+ * The four children are the ADX slots at parent+0x68. Log them before the
+ * watchdog's own clear runs. Reads only. */
+static void fatal_dump_adx_slots(uint32_t parent)
+{
+    uint32_t slot;
+    if (!fatal_ptr(parent))
+        return;
+    fprintf(stderr, "  [FATAL-ADX] parent+60=%08X\n", MEM32(parent + 0x60));
+    for (slot = 0; slot < 4; slot++) {
+        uint32_t obj = MEM32(parent + 0x68u + slot * 4u);
+        uint32_t link;
+        if (!fatal_ptr(obj)) {
+            fprintf(stderr, "  [FATAL-ADX] slot=%u obj=%08X not an object\n",
+                    slot, obj);
+            continue;
+        }
+        link = MEM32(obj + 4u);
+        fprintf(stderr,
+                "  [FATAL-ADX] slot=%u obj=%08X st=%u b6d=%u b72=%u"
+                " w40=%04X w60=%04X ctr68=%04X ctr6a=%04X d38=%08X link=%08X",
+                slot, obj, MEM8(obj + 1u), MEM8(obj + 0x6du), MEM8(obj + 0x72u),
+                (unsigned)MEM16(obj + 0x40u), (unsigned)MEM16(obj + 0x60u),
+                (unsigned)MEM16(obj + 0x68u), (unsigned)MEM16(obj + 0x6au),
+                MEM32(obj + 0x38u), link);
+        if (fatal_ptr(link))
+            fprintf(stderr, " lst=%u d2c=%08X d30=%08X d38=%08X\n",
+                    MEM8(link + 1u), MEM32(link + 0x2cu), MEM32(link + 0x30u),
+                    MEM32(link + 0x38u));
+        else
+            fprintf(stderr, " link-unreadable\n");
+    }
+}
+
 static void fatal_dump_stack(uint32_t esp)
 {
     uint32_t i, shown = 0;
@@ -450,6 +484,8 @@ void jsrf_fatal_ctor_enter(void)
     fatal_dump_stack(esp);
     fatal_dump_object("ecx", g_ecx);
     fatal_dump_object("esi", g_esi);
+    if (ret == 0x00116EADu)
+        fatal_dump_adx_slots(g_esi);
     fflush(stderr);
     _unlock_file(stderr);
 }

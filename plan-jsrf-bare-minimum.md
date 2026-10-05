@@ -100,7 +100,7 @@ presents and the last was the disclaimer). Inferred, not seen. **The title scree
 **A second `JSRF_FATAL.ERR` at 02:23:57 (~950 s) with no OOM.** The dialog object in the dump
 (`0x226F7B0`, vtable `0x1CC660`, `+0x98 = 0x400000`, text "There's a problem with the disc...") is the same
 dialog class. So the disc-error dialog has at least two causes: the heap exhaustion (fixed) and something
-else. **Which of the four `0x6F730` callers fired is not measured.** The callers are `0x2537E` (a tail `jmp`, so it leaves no return address of its own) / `0x255AD`
+else. Which caller fired was not measured in that run; f9 measured `0x116EAD` (below). The callers are `0x2537E` (a tail `jmp`, so it leaves no return address of its own) / `0x255AD`
 (pending-I/O path in the job class at `0x25400`, threshold 240 s; objects of vtable `0x1C4F68`; a live one is at
 `0x1330060`, `+0x44 = 1`, `+0x48 = 10`, state field `+0x1604 = 0`), `0x664C3` (`0x257B0` result >= 2) and
 `0x116EA8` (`0x13AA50` nonzero). Observation for the next long run is in (ledger L41, toolkit `d40e88a`): a host log at
@@ -114,8 +114,7 @@ zero flips, kernel regions stayed at 8. The main guest thread was in `sub_001A17
 `loc_001A18D0`, spinning on the DSP pending word `0x803BC810` (still 3; anchor
 `MEM32(0x1BA858)=0x803BC000`). SGE entry 0 at `0x803C8000` is physical `0x003BC000`, and the
 contiguous high-water `0x56C000` accepts that translation. The second busy thread was
-`nv2a_ack_thread`. Last content path was `dsstdfx.bin`. L41 did not fire. The ~950 s caller is
-still unmeasured. GPRST was not in the minidump (the APU object is heap).
+`nv2a_ack_thread`. Last content path was `dsstdfx.bin`. L41 did not fire on f6. f9 measured the caller (below). GPRST was not in the minidump (the APU object is heap).
 
 **f7 passed that spin and was still booting at 183 s.** Run `20261004-182724-545-f7-apuwait`
 (exploratory, same shortcuts, capped `[APUWAIT]` log from toolkit `712f70d`, no present BMPs): `diagnostic_deadline`.
@@ -145,22 +144,41 @@ analysis database already ends the alias at `0x00140540` (`push esi`). The `je` 
 targets `0x0014048E` (`call 0x1437a0`), which the short span had turned into a fatal stub call.
 Widened to `0x00140540`; `recover-functions.py` changed only `body_001403B0` (control regeneration
 of the old end matches `recovered.c` `a1b767e6`). Every exit through `0x0014053F` pops edi, ebp
-and esi. **Not yet shown at runtime.** This abort is not the ~950 s disc-error dialog; that caller
-is still unmeasured. The 1500 s run did not take this path.
+and esi. f9 (below) passed this function with zero ABI failures. This abort is not the disc-error
+dialog. The 1500 s run did not take this path.
 
 **Pushed 2026-10-04 (0x1403B0 boundary).** Toolkit unchanged at `712f70d` (no push). Game
 `PUSHED_TO: origin / BRANCH: master / COMMIT: 8c4a656e706731051dfd39fa1915ba4409e81dfa / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: 56ff335..8c4a656 master -> master`.
 
-**Next.** The widened body is built and `ctest` is 34/34 (`just check` passed). The abort is not
-yet shown gone at runtime. One
-exploratory run with the same frame-dump settings (`RECOMP_FB_PRESENT_DUMP_EVERY=10`,
-`RECOMP_FB_DUMP` set from the first presents, a new dump prefix), 1200 s, long enough to pass the
-disclaimer and to cross ~950 s if the dialog still happens. Read the BMPs and `[FATAL-CTOR]` /
-`[FATAL-TAIL]` / `[FATAL-FILE]`. If `0x001403B0` aborts again, the boundary fix did not cover the
-path. If the caller is `0x255B2` (or the `0x25310` tail), name the pending file from the job at
-`esi` (`+0x50` set, `+0x64 == 0x103`, path at `+0x78`) and why that overlapped I/O does not
-complete. Do not stretch the 240 s threshold. Do not skip the 720-update hold. The ~2 updates/s
-figure is still only the 600 s run's phase-13 count.
+**f9 named the disc-error caller. It is not the 240 s I/O job.** Run
+`20261004-185558-235-f9-frames` (1200 s requested, exploratory because `RECOMP_GPU_ACK` defaulted
+on, `RECOMP_FB_PRESENT_DUMP_EVERY=10`, no `RECOMP_DSP_ACK`): `diagnostic_deadline` at 1203 s, dump
+mapping matched, zero ABI failures, zero OOM, one `[FATAL-CTOR]`, no `[FATAL-TAIL]`. The ctor ran
+between the t=313 s and t=323 s present samples. `ret=00116EAD`, the direct call at `0x116EA8`,
+because `0x13AA50` (`movsx eax, word [ptr+0x60]`) returned nonzero. Parent `0x01335CC0` (vtable
+`0x1D76C8`) still holds `+0x60 = 0xFFFFFFFF` at the deadline, so the word was `0xFFFF` (`-1`).
+The only nonzero word stores to `+0x60` in `.text` are `0x13D34F` (`0xFFFE`) and `0x13D3F5`
+(`0xFFFF`) in the ADX watchdog `0x13D300`. `-1` is the "linked status stays off 3" counter, not
+the position-stall `-2`, and not the `-999` sentinel `0x1162E0` writes through `0x13A980` into
+`word [slot+0x40]` and the inner dword `+0x60`. The four slots are the `0x13AC80` pool at
+`0x27D120`. At the deadline their `+0x60` words are 0 and `+0x6d` is 2, 1, 1, 2, which is the
+watchdog's clear-after-notify path; which slot held `-1` at the call is not in the final dump.
+`title.adx` (`\Device\CdRom0\Media\Z_ADX\BGM\title.adx`, 10946862 bytes on the host) opened with
+NTSTATUS 0. The `E0109261 ... not in cache (wxCiGetFileSize)` strings are the fallback at
+`0x1408C0`, which calls `0x140760` on a miss. No `[FILE] FAILED` after that open. Presents locked
+the graffiti disclaimer at t=130 s (hash `5bdaea576b8509f5`, `p0007.bmp`) and stayed on it through
+`p0024.bmp` at the deadline. The present counter froze at 1000 from t=313 s to t=1193 s. The main
+thread was then in `NtDelayExecution` under `sub_00013F80`, called from `0x6FA3C` in `0x6F9E0`.
+**Title screen not reached. Disclaimer-cleared not established.** The dialog text was not in any
+saved frame. `[APUWAIT]` matched f7. Phase 13's update rate was not re-measured; do not treat the
+~3.3 presents/s before the freeze as that counter.
+
+**Next.** The ctor hook now prints the four ADX slots when `ret == 0x116EAD` (still observation,
+L41). One exploratory run of about 400 s, same frame-dump settings, new prefix. Read `[FATAL-ADX]`.
+The firing slot is the one whose `w60` is `FFFF`. Its `st`, `lst`, `ctr6a`, and `d2c`/`d30` say
+whether the linked decoder never left status 0 and whether any byte count moved. Do not stretch
+the 240 s threshold. Do not skip the 720-update hold. Do not treat the `-999` words as the fatal
+value.
 
 **Rival explanation for the logo object being gone:** the ~950 s fatal path (`0x12770` calls `0x1165D0` and
 `0x118800`) may be what removed it, rather than the logo state machine finishing. **Likely cause of the
