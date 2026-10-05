@@ -193,16 +193,21 @@ latent for the same reason: those addresses had no body of their own before this
 run could have exercised them. **This is the argument for the re-verification pass as a standing
 practice, not a one-off.**
 
-**Test-evidence caveat for `4cac35c` (recorded, not papered over).** The load-independent checks
-pass on the committed tree: `check-generation-provenance.py --check` is `ok`,
-`check-merge-structure.py` reports 0 findings, `check-route-allowlist.py` and
-`check-agent-docs.py --check` report no findings, and `tests/test_recovery_span_ownership.py` is
-9/9. **A clean full CTest run could not be obtained** because the host was at 100% CPU from
-unrelated processes (Chrome, Windows Defender) for an extended period. The resulting failures are
-load artifacts, not regressions, and the evidence for that is that **a different set of tests
-failed on each attempt** (first `22/28/29`, then `9/11/22/28/29`) and that `xbox_guest_meter` — a
-**toolkit** kernel test under `xboxrecomp/src/kernel/`, independent of `recovered.c` — failed 3 of
-6 isolated runs on the same binary. A clean full-suite run is owed once the host is idle.
+**Test-evidence caveat for `4cac35c` — RESOLVED.** The clean full-suite run that was owed has now
+been taken once the host went idle (CPU load 100% -> 2%): **CTest 35/35 passed in 29.15 s** and
+**`just check` reports "all checkers passed"** on the committed tree at `1c77b37`. This confirms
+the earlier failures were load artifacts, as classified. The record of the earlier attempts is
+kept below because the reasoning is the reusable part.
+
+**Original caveat, kept for the record.** The load-independent checks passed throughout:
+`check-generation-provenance.py --check` `ok`, `check-merge-structure.py` 0 findings,
+`check-route-allowlist.py` and `check-agent-docs.py --check` no findings, and
+`tests/test_recovery_span_ownership.py` 9/9. But a clean full CTest run could not be obtained
+while the host sat at 100% CPU from unrelated processes (Chrome, Windows Defender). The resulting
+failures were load artifacts, not regressions, and the evidence was that **a different set of
+tests failed on each attempt** (first `22/28/29`, then `9/11/22/28/29`) and that
+`xbox_guest_meter` — a **toolkit** kernel test under `xboxrecomp/src/kernel/`, independent of
+`recovered.c` — failed 3 of 6 isolated runs on the same binary.
 
 **Also this session.** `docs/agent-workflow.md` §1 named the Turn Planner route `codex/sol-6.1`,
 which does not exist; the codex provider advertises `gpt-6.1-sol` and plan T11 already recorded
