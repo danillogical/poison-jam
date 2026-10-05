@@ -1,6 +1,6 @@
 {
   "files": {
-    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "0d73fcc568b996214737fd27c2c9767d6226013bedde9e79bec15b5a49eaa399",
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "9663554e2aac3098cd69c56fa7b921f4d3e8ee1d4e2c73f089efed12fb8fef21",
     "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
     "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
     "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
@@ -10,12 +10,12 @@
     "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
     "src/recomp/gen/recomp_dispatch.c": "1cc469ddcc6d12ac98f8675846b5940f3f438624a3a51a95faca40a9b59a4238",
     "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-    "src/recomp/gen/recomp_stubs_recovery.c": "5b361433bf3ffc5e766cc2aa03ea98863d9e9fcbd08e4d82ee379ce7521e8572",
+    "src/recomp/gen/recomp_stubs_recovery.c": "7289d2781fa0f9f106cd143e1f9c4badef95f9a6b95e63f722f9f1492d3a1d43",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
     "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "a1b767e6c0d1dd03836e7c50fc6b493c1fcfd4f37cb371f686de3d3c85c90039",
+    "src/recomp/recovered/recovered.c": "a47e78bfc6c2092e8f7ad6c863412b2e6bf26c75d330e71eb0c313a82cfe3e8b",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "8ba25fa5796164d924583f4195c28c395d755fd15043616f17083992e89c6bf2",
+    "src/recomp/recovered/recovered_11c1_test.c": "b33e203bed9a4c50124cc29f9f71febb0b3e4f2452754e191bcc7e3b94940332",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -183,6 +183,16 @@
         "src/recomp/recovered/recovered.c"
       ],
       "reason": "L41 disc-error observation. Host log at the entry of 0x6F730 (recomp_0001.c, declaration in recomp_types.h) and on the 0x2537E tail in recovered.c before esi is popped. Observation only: no guest write. Amended, not regenerated: no full pass ran."
+    },
+    {
+      "date": "2026-10-04",
+      "files": [
+        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+        "src/recomp/gen/recomp_stubs_recovery.c",
+        "src/recomp/recovered/recovered.c",
+        "src/recomp/recovered/recovered_11c1_test.c"
+      ],
+      "reason": "0x001403B0 end widened 0x00140485 -> 0x00140540 after f8 aborted on the truncated body. recover-functions.py re-run. Only body_001403B0 changed; the stub for 0x0014048E was removed. Function count stays 3094. Amended, not regenerated: no full pass ran."
     }
   ]
 }

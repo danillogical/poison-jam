@@ -14606,10 +14606,10 @@
   },
   {
     "start": "0x001403B0",
-    "end": "0x00140485",
+    "end": "0x00140540",
     "section": ".text",
     "kind": "routine",
-    "evidence": "A method of the function-pointer table at 0x0022DBA8. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_00140540 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x001403B0 at sub_00140540. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x001403B0..0x00140485, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
+    "evidence": "A method of the function-pointer table at 0x0022DBA8. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_00140540 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x001403B0 at sub_00140540. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. The 2026-09-21 end 0x00140485 was not a function entry: it is the instruction `mov [esi+0x20], ecx` immediately after `test ebp, ebp`, and the analysis database already ends this alias at 0x00140540. END WIDENED 0x00140485 -> 0x00140540 (2026-10-04). The next prologue is `push esi` at 0x00140540. Run 20261004-183625-666-f8-frames aborted in the checked wrapper (0xC0000409) on the path that reaches that instruction: the truncated body left the pushes of esi, ebp and edi unpopped (ABI FAILURE esp 01220F38->01220F2C, expected +4). The je at 0x00140447 targets 0x0014048E, which is `call 0x1437a0` inside this function, not a separate entry. Every exit from 0x0014048E through 0x0014053F pops edi, ebp and esi and returns. stack_args stays 0.",
     "stack_args": 0
   },
   {

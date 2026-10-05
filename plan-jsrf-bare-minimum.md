@@ -129,14 +129,35 @@ Technical record §4.
 
 **Pushed 2026-10-04 (this checkpoint).** Toolkit `PUSHED_TO: origin / BRANCH: main / COMMIT: 712f70d7e1f84631c95984c9d80e4b2744caa71b / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: dbeb284..712f70d main -> main`. Game `PUSHED_TO: origin / BRANCH: master / COMMIT: bf42a800ce12a0790a55dd997f9d0650012eb150 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: 9c37140..bf42a80 master -> master`.
 
-**Next.** One longer exploratory run with `RECOMP_FB_PRESENT_DUMP_EVERY=10` and
-`RECOMP_FB_DUMP` set from the first presents, long enough to record the frames and to cross
-~950 s if the disc-error dialog still happens. Read the BMPs and `[FATAL-CTOR]` /
-`[FATAL-TAIL]` / `[FATAL-FILE]`. If the caller is `0x255B2` (or the `0x25310` tail), name the
-pending file from the job at `esi` (`+0x50` set, `+0x64 == 0x103`, path at `+0x78`) and why
-that overlapped I/O does not complete. Do not stretch the 240 s threshold. Do not skip the
-720-update hold. The ~2 updates/s figure is still only the 600 s run's phase-13 count; f7 did
-not re-measure it.
+**f8 showed the disclaimer, then aborted inside a truncated recovery.** Run
+`20261004-183625-666-f8-frames` (1200 s requested, exploratory, `RECOMP_FB_PRESENT_DUMP_EVERY=10`,
+no `RECOMP_DSP_ACK`, no `RECOMP_GPU_ACK`): `unhandled_exception`, exit `3221226505` (`0xC0000409`),
+duration 242.6 s, dump mapping matched. Saved frames: black, SEGA, Smilebit, ADX, Dolby, then the
+graffiti disclaimer (`p0007.bmp`, hash `5bdaea576b8509f5`, locked from t=131 s). The next BMP is the
+60 s unchanged heartbeat of that same picture. The disclaimer was still the visible frame at the
+abort. **Title screen not reached. Disclaimer-cleared not established.** Presents during that hold
+were about 6.5/s from t=131 s (396) to t=195 s (810). That is the present counter, not a
+re-measurement of the phase-13 update count. Zero OOM, no `JSRF_FATAL.ERR`, L41 did not fire.
+`[APUWAIT]` matched f7 (pending word 3, then 0 on the next sample). The abort is
+`[RECOVERED] ABI FAILURE 0x001403B0 esp 01220F38->01220F2C expected +4` on guest thread start
+`0x13B1C0`. The reviewed end `0x00140485` is `mov [esi+0x20], ecx` after `test ebp, ebp`. The
+analysis database already ends the alias at `0x00140540` (`push esi`). The `je` at `0x00140447`
+targets `0x0014048E` (`call 0x1437a0`), which the short span had turned into a fatal stub call.
+Widened to `0x00140540`; `recover-functions.py` changed only `body_001403B0` (control regeneration
+of the old end matches `recovered.c` `a1b767e6`). Every exit through `0x0014053F` pops edi, ebp
+and esi. **Not yet shown at runtime.** This abort is not the ~950 s disc-error dialog; that caller
+is still unmeasured. The 1500 s run did not take this path.
+
+**Next.** The widened body is built and `ctest` is 34/34 (`just check` passed). The abort is not
+yet shown gone at runtime. One
+exploratory run with the same frame-dump settings (`RECOMP_FB_PRESENT_DUMP_EVERY=10`,
+`RECOMP_FB_DUMP` set from the first presents, a new dump prefix), 1200 s, long enough to pass the
+disclaimer and to cross ~950 s if the dialog still happens. Read the BMPs and `[FATAL-CTOR]` /
+`[FATAL-TAIL]` / `[FATAL-FILE]`. If `0x001403B0` aborts again, the boundary fix did not cover the
+path. If the caller is `0x255B2` (or the `0x25310` tail), name the pending file from the job at
+`esi` (`+0x50` set, `+0x64 == 0x103`, path at `+0x78`) and why that overlapped I/O does not
+complete. Do not stretch the 240 s threshold. Do not skip the 720-update hold. The ~2 updates/s
+figure is still only the 600 s run's phase-13 count.
 
 **Rival explanation for the logo object being gone:** the ~950 s fatal path (`0x12770` calls `0x1165D0` and
 `0x118800`) may be what removed it, rather than the logo state machine finishing. **Likely cause of the
@@ -145,7 +166,7 @@ long disclaimer hold:** phase 13 needs 720 updates; at ~2 updates/s that is ~6 m
 the measured ~2/s, not yet tested by raising the rate).
 
 **Not established:** any strict-profile result; and that no other table-referenced method is missing (about 151 code-pointer targets
-had no owned function in an ad-hoc scan; `KNOWN_OPEN` freezes 81 bodies with the same boundary defect).
+had no owned function in an ad-hoc scan; `KNOWN_OPEN` freezes 80 bodies with the same boundary defect after `0x1403B0` was widened).
 
 ## 1. Objective and definition of done
 
