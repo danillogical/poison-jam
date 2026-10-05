@@ -148,6 +148,9 @@ of the old end matches `recovered.c` `a1b767e6`). Every exit through `0x0014053F
 and esi. **Not yet shown at runtime.** This abort is not the ~950 s disc-error dialog; that caller
 is still unmeasured. The 1500 s run did not take this path.
 
+**Pushed 2026-10-04 (0x1403B0 boundary).** Toolkit unchanged at `712f70d` (no push). Game
+`PUSHED_TO: origin / BRANCH: master / COMMIT: 8c4a656e706731051dfd39fa1915ba4409e81dfa / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: 56ff335..8c4a656 master -> master`.
+
 **Next.** The widened body is built and `ctest` is 34/34 (`just check` passed). The abort is not
 yet shown gone at runtime. One
 exploratory run with the same frame-dump settings (`RECOMP_FB_PRESENT_DUMP_EVERY=10`,
