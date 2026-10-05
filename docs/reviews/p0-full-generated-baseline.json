@@ -1,6 +1,6 @@
 {
   "files": {
-    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "9663554e2aac3098cd69c56fa7b921f4d3e8ee1d4e2c73f089efed12fb8fef21",
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "6d44bc4ed914b47ed52c0708102341084729389fa4057d8264ef1623c171ef5e",
     "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
     "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
     "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
@@ -10,12 +10,12 @@
     "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
     "src/recomp/gen/recomp_dispatch.c": "1cc469ddcc6d12ac98f8675846b5940f3f438624a3a51a95faca40a9b59a4238",
     "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-    "src/recomp/gen/recomp_stubs_recovery.c": "7289d2781fa0f9f106cd143e1f9c4badef95f9a6b95e63f722f9f1492d3a1d43",
+    "src/recomp/gen/recomp_stubs_recovery.c": "4dff9e19c4df2b82c2e1123438bfe347d9ddac41e43a18128426f3bbf2cc32bd",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
     "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "a47e78bfc6c2092e8f7ad6c863412b2e6bf26c75d330e71eb0c313a82cfe3e8b",
+    "src/recomp/recovered/recovered.c": "04db306c0eab57a426c814514d4ee8a3de211a4bce7804a87571c89be4bb4810",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "b33e203bed9a4c50124cc29f9f71febb0b3e4f2452754e191bcc7e3b94940332",
+    "src/recomp/recovered/recovered_11c1_test.c": "1b9724f9c3e9784d3436bc2c1288c6e61385070001538b52ac68d1824b0d1931",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -193,6 +193,24 @@
         "src/recomp/recovered/recovered_11c1_test.c"
       ],
       "reason": "0x001403B0 end widened 0x00140485 -> 0x00140540 after f8 aborted on the truncated body. recover-functions.py re-run. Only body_001403B0 changed; the stub for 0x0014048E was removed. Function count stays 3094. Amended, not regenerated: no full pass ran."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/recovered/recovered.c",
+        "src/recomp/recovered/recovered_11c1_test.c"
+      ],
+      "reason": "Two changes, and the second is a repair of a checkpoint that was already red. (1) 0x0013B750 recovered as its own entry 0x0013B750..0x0013B810, stack_args 0: the guest installs it itself at 0x0013BBDF via 0x142810 (obj->0x88 = fn, obj->0x8c = ctx) and dispatches it at 0x00142C9E call [esi+0x88] (return 0x00142CA4); f15 died on it with [ICALL] Failed to resolve VA 0x0013B750. recovered.c 3095 -> 3096; the 11c1 fixture gains only extern sub_0013B750. (2) This file still carried recovered.c a47e78bf, the PRE-0x13FAD0 hash, because d77474d updated docs/reviews/p0-7-generation-provenance.json but did not re-baseline this file. At HEAD the manifest recorded 6f5f7dcd and this baseline recorded a47e78bf, so jsrf_generation_provenance was already failing at the pushed checkpoint d77474d (test_generated_tree_matches_the_preservation_baseline and test_cli_check_passes). Both entries are now the measured values. Control: regenerating with the 0x0013B750 entry removed reproduces recovered.c 6f5f7dcd byte-for-byte, so the tree moved by that one reviewed entry and not by a generator-version effect. All four TRANSLATION-owned files and the 11 other baselined gen/ files are byte-identical; the changed set is exactly the two RECOVERY-owned files (recovered.c, recomp_stubs_recovery.c) and their two fixtures. recomp_stubs_recovery.c sits in gen/ but is recovery-owned. Amended, not regenerated: no full translation pass ran."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+        "src/recomp/gen/recomp_stubs_recovery.c",
+        "src/recomp/recovered/recovered.c",
+        "src/recomp/recovered/recovered_11c1_test.c"
+      ],
+      "reason": "Run-driven chain: 0x0007AF90 recovered (0x0007AF90..0x0007B750, stack_args 0, a vtable method of 0x001CCE70 slot +0x04 and the only unresolved pointer in that table); 0x000BB7B0 span widened 0x000BBA04 -> 0x000BBA19 to own its shared tail-merged epilogue at 0x000BBA17; 0x000B0210 end corrected 0x000B0305 -> 0x000B05CC so its 11-entry jump table at 0xB05CC keeps all 7 distinct arms inside the span. Each was found by a run and each is confirmed by that run reaching the next site. recovered.c 3096 -> 3097; the 11c1 fixture gains only externs. All four TRANSLATION-owned files and the 11 other baselined gen/ files are byte-identical; the changed set is exactly the two RECOVERY-owned files (recovered.c, recomp_stubs_recovery.c) and their two fixtures. recomp_stubs_recovery.c sits in gen/ but is recovery-owned. Amended, not regenerated: no full translation pass ran."
     }
   ]
 }

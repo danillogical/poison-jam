@@ -6,42 +6,11 @@ Port Jet Set Radio Future to Windows through Xbox static recompilation. First re
 playable opening area with movement, graffiti, audio, and save/resume; then expand to
 the whole game. Work in small, verifiable milestones and explain defects with evidence.
 
-## Temporary Grok Build single-agent mode
-
-**Owner decision, 2026-10-04:** this repository is temporarily being worked on through
-Grok Build as a single autonomous agent.
-
-For this mode:
-
-- Grok Build is the orchestrator, implementer, debugger, integrator, and reviewer.
-- Do **not** load or follow `docs/agent-workflow.md` unless the owner explicitly asks.
-- No Planner, Persistent Advisor, worker, guardrail, packet, or Turn-reviewer process is
-  required.
-- Do not recreate the retired workflow gates in another form.
-- Own ordinary technical decisions yourself: investigate, choose the next experiment,
-  implement, test, run, evaluate the evidence, and continue.
-- When a blocker is fixed, look for the next highest-value critical-path task rather than
-  treating the fix as the end of the session.
-- Use prior art before doing deep reverse engineering:
-  upstream xboxrecomp, relevant forks, Mercenaries-Recompiled, and halo-ce-universal.
-- Prefer the cheapest honest path toward the current milestone. Record any stub, patch,
-  approximation, reimplementation, or synthetic completion in
-  `docs/jsrf-compatibility-ledger.md`.
-- Escalate to the owner only for an actual owner decision: project objective/scope,
-  material fidelity trade-off, destructive or hard-to-reverse repository action,
-  credentials, spending, legal/licensing, or something explicitly marked
-  `OWNER REQUIRED`.
-- Technical uncertainty is yours to resolve through source inspection, tests,
-  instrumentation, comparison, and reproduced evidence.
-
-The evidence, repository-safety, build, regeneration, guest-code, and asset rules in this
-file remain fully in force.
-
 At session start read, in this order:
 
-1. `plan-jsrf-bare-minimum.md` — **Current work, blocker, next action, milestone status**
-2. `docs/jsrf-run-profiles.md` — **strict vs exploratory evidence rules**
-3. additional technical records only as needed for the work actually being done
+1. `docs/agent-workflow.md` — **staffing, roles, review, escalation**
+2. `plan-jsrf-bare-minimum.md` — **Current work, blocker, next action, milestone criteria/status**
+3. `docs/jsrf-run-profiles.md` — **strict vs exploratory evidence rules**
 
 Fetch both repositories and inspect their status before editing. Preserve unrelated edits.
 
@@ -50,6 +19,11 @@ Keep the plan's **Current work** section accurate as evidence moves.
 Do not keep session reports in the repository. Durable findings go in the plan,
 technical record, strict-horizon ledger, or compatibility ledger as appropriate;
 scratch notes stay outside the repository.
+
+`AGENTS.md` contains operating knowledge only. **Do not copy provider, model, or effort
+assignments here.** `docs/agent-workflow.md` is the sole authority for staffing and
+workflow. If it is unavailable, staffing is BLOCKED; do not reconstruct it from memory,
+reports, handoffs, or history.
 
 Keep original assets and existing saves unchanged.
 
@@ -112,7 +86,7 @@ Inspect both working trees before editing. Toolkit instructions live in
 | `scripts/inspect-jsrf.py` | original-XBE disassembly and guest-memory reads |
 | `scripts/jsrf_dump.py`, `scripts/jsrf_gpu.py` | dump/GPU offline inspection |
 | `tools/harness/collect.c` | external debugger, all-thread capture, minidumps |
-| `docs/agent-workflow.md` | inactive during the temporary Grok Build single-agent experiment; do not load unless the owner asks |
+| `docs/agent-workflow.md` | sole authority for agent roster/workflow |
 | `docs/jsrf-operating-history.md` | dated narrative; read only when needed |
 | `game/default.xbe`, `game/Media/` | original assets; never modify |
 | `logs/runs/` | archived run evidence |
