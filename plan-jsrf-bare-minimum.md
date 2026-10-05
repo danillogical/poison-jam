@@ -167,7 +167,9 @@ watchdog's clear-after-notify path; which slot held `-1` at the call is not in t
 NTSTATUS 0. The `E0109261 ... not in cache (wxCiGetFileSize)` strings are the fallback at
 `0x1408C0`, which calls `0x140760` on a miss. No `[FILE] FAILED` after that open. Presents locked
 the graffiti disclaimer at t=130 s (hash `5bdaea576b8509f5`, `p0007.bmp`) and stayed on it through
-`p0024.bmp` at the deadline. The present counter froze at 1000 from t=313 s to t=1193 s. The main
+`p0024.bmp` at the deadline. The present counter reached exactly 1000 at t=223 s and every heartbeat
+from there through t=1193 s is still 1000. There is no host cap at 1000. `[FATAL-CTOR]` is logged
+after the t=313 s heartbeat, about 90 s after flips had already stopped. The main
 thread was then in `NtDelayExecution` under `sub_00013F80`, called from `0x6FA3C` in `0x6F9E0`.
 **Title screen not reached. Disclaimer-cleared not established.** The dialog text was not in any
 saved frame. `[APUWAIT]` matched f7. Phase 13's update rate was not re-measured; do not treat the
@@ -176,18 +178,66 @@ saved frame. `[APUWAIT]` matched f7. Phase 13's update rate was not re-measured;
 **Pushed 2026-10-04 (f9 caller).** Toolkit unchanged at `712f70d` (no push). Game
 `PUSHED_TO: origin / BRANCH: master / COMMIT: 108df5c8a22dec88a2d2d18cd552e23324435208 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: 94031e7..108df5c master -> master`.
 
-**Next.** The ctor hook now prints the four ADX slots when `ret == 0x116EAD` (still observation,
-L41). One exploratory run of about 400 s, same frame-dump settings, new prefix. Read `[FATAL-ADX]`.
-The firing slot is the one whose `w60` is `FFFF`. Its `st`, `lst`, `ctr6a`, and `d2c`/`d30` say
-whether the linked decoder never left status 0 and whether any byte count moved. Do not stretch
-the 240 s threshold. Do not skip the 720-update hold. Do not treat the `-999` words as the fatal
-value.
+**f10 did not reach the ctor. The read that should feed `title.adx` is stuck in state 2.** Run
+`20261004-193140-174-f10-frames` (420 s, exploratory, same frame settings as f9, `RECOMP_GPU_ACK`
+left at its default): `diagnostic_deadline` at 423.6 s, dump mapping matched, zero ABI failures,
+zero OOM, zero `JSRF_FATAL`, zero `[FATAL-CTOR]`. The disclaimer hash `5bdaea576b8509f5` locked at
+t=129 s, present 396, and was still the picture at the deadline. Presents reached exactly 1000 at
+t=222 s and stayed there. **Title screen not reached. Disclaimer-cleared not established.** At the
+deadline the phase object `[0x22FCE0] = 0x01063A70` has `+0x10 = 1` and `+0x24 = 0x002A336E` (64
+bytes of zeros at that address, not a live object). `0x13F80` calls `0x13A80` only while `+0x24`
+is 0; otherwise it calls `0x659C0` and delays. That is why presents stopped. Who stores `+0x24` is
+not measured. Do not clear it.
+
+The ADX parent `0x01335CC0` was still live (`+0x60 = 0`). Slot 0 (`0x27D120`) was `DECINFO`
+(byte+1 = 1), not playing. Its link `0x27C720` was still header-wait (byte+1 = 1). The SJ
+`0x277180` had readable and free counts both 0, so a 16-byte header read cannot return. The file
+slot `0x273780` (path `D:\Media\Z_ADX\BGM\title.adx`) was state 2 with `+0x148 = 0`, `+0x14C = 0`,
+and a consumed request at offset 0 length `0xC800`. State 2 means the read was requested.
+`0x1401B0` clears `+0x14C` and does not set state back to 1. `0x140BA0` promotes state to 1 only
+inside the `+0x14C == 1` check, after the alertable delay `0x145C28`. The bridge was running that
+APC inside `NtReadFile`, which is inside `0x1407E0`, which is inside that check, so the flag was
+already clear when the poller tested it. `RECOMP_ASYNC_IO` does not change that order. The one
+`[KMEM] release_failed` of base 0 is not the Beat.bin allocator bug.
+
+**f11: the deferred APC runs. `title.adx` is still re-read from offset 0, and flips still stop at 1000.**
+Run `20261004-200005-213-f11-apc` (600 s, exploratory because `RECOMP_GPU_ACK` defaulted on, same
+frame settings as f10, `RECOMP_ASYNC_IO` unset): `diagnostic_deadline` at 603.8 s, dump mapping
+matched, zero ABI failures, zero OOM. File completion APCs are queued on the issuing thread and
+drained at the next alertable wait, including a zero interval (ledger L42, `xbox_file_apc_test`).
+Seven drains, five of them `context=0x001401B0` `ios=0x002738AC` (file slot `0x273780`). No
+`file APC queue full`. One other file read from `0x1463A8` advanced (`@0` length 28672, then
+`@28672`). `title.adx` did not. It opened after the flip freeze, between the t=241 s and t=251 s
+heartbeats, and the same slot was read five times, always `@0` length 51200, first bytes
+`80 00 00 20`. Each queue line is followed immediately by that APC's drain. The poller `0x140BA0`
+promotes (`+0x18 += +0x20`, `byte+1 = 1`) only when `+0x14C` is already 0 after its own 0 ms
+alertable delay, and that delay is where this drain sits, so the add should have run before
+`0x140BA0` returned. The next request staying at offset 0 means `+0x18` was 0 again at each
+`0x1403B0`. Not yet split into "the add never ran" versus "a later seek stored 0".
+
+Presents reached exactly 1000 at t=231 s, hash `5bdaea576b8509f5`, and every heartbeat through
+t=591 s is still 1000. The last `[GPU] flips` line is 975 increment-writes and 975 stalls; the
+report does not resume. There is no host cap at 1000. `[FATAL-CTOR] #1` falls between the t=341 s
+and t=351 s heartbeats, about 110 s after flips stopped. `ret=00116EAD` again. Parent
+`+0x60 = 0xFFFFFFFF`. Slot 0 is still `DECINFO`, its link still header-wait (`lst=1`, `d2c=0`,
+`d30=0`), and that slot's `w60` is already 0, so L41 still does not name the slot that held `-1`.
+At the deadline the file slot is zero, SJ `0x277180` has been reset (`+0x0C = 0`,
+`+0x10 = 0x000D0000`), and the header bytes are still at `0x0133DF80`. Phase `[0x22FCE0] +0x24`
+is still `0x002A336E`. **Title screen not reached. Disclaimer-cleared not established.** The 720
+hold was not remeasured; these runs stop presenting while the disclaimer is up, earlier than a
+720-update hold at the old ~2/s rate would end. Do not stretch the 240 s threshold. Do not skip
+the 720-update hold. Do not clear `+0x24`. Do not treat the `-999` words as the fatal value.
+
+**Next:** one exploratory run that logs, for the `title.adx` APC only, file-slot `byte+1`,
+`+0x18`, `+0x20`, `+0x148` and `+0x14C` immediately after the APC and on the following kernel
+entries, and logs phase `+0x24` as the present serial reaches 1000. That splits the two
+`+0x18` explanations and ties the flip stop to the phase field. Do not repeat f11's binary.
 
 **Rival explanation for the logo object being gone:** the ~950 s fatal path (`0x12770` calls `0x1165D0` and
-`0x118800`) may be what removed it, rather than the logo state machine finishing. **Likely cause of the
-long disclaimer hold:** phase 13 needs 720 updates; at ~2 updates/s that is ~6 minutes, against ~12 s at
-60 Hz, so the guest's update/present rate is the leading explanation (inferred from the 618/720 count and
-the measured ~2/s, not yet tested by raising the rate).
+`0x118800`) may be what removed it, rather than the logo state machine finishing. The 600 s run's phase-13
+hold (618 of 720 at about 2 updates/s) was not remeasured on f9–f11. Those runs stop issuing flips at
+exactly 1000 presents while the disclaimer is still up, which is earlier than that hold would end.
+Raising the old update rate is not the next experiment.
 
 **Not established:** any strict-profile result; and that no other table-referenced method is missing (about 151 code-pointer targets
 had no owned function in an ad-hoc scan; `KNOWN_OPEN` freezes 80 bodies with the same boundary defect after `0x1403B0` was widened).
