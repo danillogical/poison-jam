@@ -55,9 +55,102 @@ established facts. Where this plan proposes a change to one of them, it is a tas
 
 ## Current work
 
-**F5: the graffiti disclaimer hold; the OOM-driven fatal is fixed, the guest's disc-error path is not.**
+**F5: the graffiti disclaimer hold. Nine dispatch defects cleared this session; the ICALL chain
+now reaches a non-address target. The title screen has NOT been reached.**
 
-**Fixed this turn (2026-10-05).**
+**Current state (2026-10-05, second session; read this block first).**
+
+The blocker chain moved nine times, each step confirmed by the next run advancing to a new site.
+Runs `f16`..`f23` (`20261005-000031-102` … `20261005-011634-413`), all **exploratory**
+(`RECOMP_GPU_ACK` defaulted on, `RECOMP_APU_TRAP=1`, `RECOMP_PB_EXEC=1`, `RECOMP_FB_WINDOW=1`,
+`RECOMP_FB_PRESENT_DUMP_EVERY=10`). Commits `7e683a3`, `e96c586`. `recovered.c` 3095 -> 3100.
+
+| # | Stop | Fix | Confirmed by |
+|---|---|---|---|
+| 1 | `0x0013B750` | recovered `0x13B750..0x13B810`, `stack_args 0` | f16 ABI-verified return |
+| 2 | `0x0007AF90` | recovered `0x7AF90..0x7B750`, `stack_args 0` | f17 ABI-verified return |
+| 3 | `0x000BBA17` | `0xBB7B0` widened `0xBBA04 -> 0xBBA19` | f18 ABI-verified return |
+| 4 | `0x000B022E` | `0xB0210` end `0xB0305 -> 0xB05CC` | f19 ABI-verified return |
+| 5 | `0x0006A770` | recovered `0x6A770..0x6A7C0`, `stack_args 0` | f20 ABI-verified return |
+| 6 | `ABI FAILURE 0x00074C70 +8` | `0x74C70` `stack_args 4 -> 0` (latent, unmasked by #5) | f21 ABI-verified return |
+| 7 | `0x000C2630` | split `0xC25D0` (`-> 0xC2621`) + entry `0xC2630..0xC2700` | f22 ABI-verified return |
+| 8 | `jmp 0x47850` cut target | split `0x47820` (`-> 0x47849`) + entry `0x47850..0x47970` | detector-found, not run-isolated |
+| 9 | `ABI FAILURE 0x0007DA30 +4` | `0x7DA30` end `0x7DA84 -> 0x7DAD6`, `stack_args 0 -> 4` | f23 ABI-verified return |
+
+**Four distinct defect classes, all measured from the original bytes:**
+
+1. **Unowned gap** — a complete function between two owned spans with no entry at all
+   (`0x13B750`, `0x7AF90`, `0x6A770`). Each boundary is a clean capstone decode with exactly one
+   `ret`. `0x13B750` is installed by the guest itself at `0x13BBDF` via `0x142810`
+   (`obj->0x88 = fn`) and dispatched at `0x142C9E call [esi+0x88]`; its only XBE reference is the
+   **misaligned** `push 0x13B750` immediate. `0x7AF90` is the **only** unresolved code pointer in
+   the `.rdata` vtable `0x001CCE70`; the other 15 slots resolve. `0x6A770` is reached by
+   `E9 C2 5A FF FF` (`jmp 0x6a770`) from `0x74CA9`, so it is a **relative displacement** and the
+   address occurs **zero** times in the XBE.
+2. **Span swallowed a later function** (`0xC2630` inside `0xC25D0`, `0x47850` inside `0x47820`) —
+   the `0x13FAD0` class. Fixed by tightening the earlier span to its real end and giving the later
+   one its own entry.
+3. **Span ended at a folded-alias start, cutting its own switch arms** (`0xB0210`, `0x7DA30`) —
+   the "tighten to the next function entry inside the alias range" rule that
+   `scripts/check-span-exits.py` documents as wrong, because those starts are folded aliases and
+   not entries.
+4. **Shared tail-merged epilogue just outside the span** (`0xBBA17`) — the function's own
+   epilogue, targeted by three in-span branches and jump-table slot 5, became an external
+   tail-call answered only by a fatal trap stub.
+
+**Two latent defects were unmasked by fixing the ones in front of them** (`0x74C70` `stack_args`,
+`0x7DA30` truncated end plus hidden `ret 4`). Both were already wrong at `d77474d` and could not
+be exercised, because the body in front of them had no reachable `ret`. **H9: any entry whose
+span ends at a folded-alias start should be re-checked for a hidden `ret` immediate.**
+
+**New stop, uncharacterised.** f23 next hit `[ICALL] Failed to resolve VA 0xFFC00000` on two
+threads. `0xFFC00000` is **not** a code address — it is the bit pattern of a negative quiet NaN,
+already named `NAN_NEG` in the toolkit (`nv2a_pb_exec.c:3000`). The ICALL history before it is
+`… 0x00141A00, 0xFE000104, 0xFE000100, 0xFE00011C, 0xFFC00000`, a kernel-thunk path. This is a
+different class from the nine above and must not be treated as a missing dispatch entry.
+**UNVERIFIED.**
+
+**Advisor ruling, consultation 1 (2026-10-05): the shared-epilogue repair and the freeze reading.**
+It ratified widening `0xBB7B0` (and independently rejected the 2-byte fragment entry as failing
+its own ABI check deterministically), proved from the bytes that `sub_000BBA04` is a **false**
+function start — its only reference anywhere is slot 4 of `0xBB7B0`'s own table, and it reads
+`esi` before writing it, which no x86 entry can do — and resolved the "double push" question by
+showing both callees are `ret 4` so the second `push esi` is an argument. **It also downgraded
+the presents freeze from an independent blocker to a likely symptom of the boot transition**:
+f9, f14, f15, f16 and f17 all freeze at exactly 1000 with the same frame; in f17 the thread that
+died was `GUEST_THREAD identity=1`, the main boot presenter, still inside its per-frame update;
+and f9, which had no ICALL at all, ends on the same transition via the game's own fatal-error
+path (`[FATAL-CTOR]` at `0x116EA8`, then `Media\Cache\JSRF_FATAL.ERR`). So "zero ICALLs and still
+frozen" does **not** establish independence. **Do not build a present-path fix on the
+independence assumption.** Deciding check: a run where identity=1 returns to the presenter loop
+with `+0x24` still 0 and presents still frozen.
+
+**Deferred to backlog (Advisor recommendation).** The root cause of classes 3 and 4 is the
+analysis database's `gap_prologue` pass accepting a `push` after a `ret` as a function entry.
+Fixing it needs a full regeneration. The Advisor recommends **batching the 12 known sibling
+spans** rather than paying one run per fatal; each proposed end must be verified by decode (all
+switch arms resolved, no `ITAIL`, zero checker findings) before landing. `0x00043910` needs no
+change.
+
+**Also this session.** `docs/agent-workflow.md` §1 named the Turn Planner route `codex/sol-6.1`,
+which does not exist; the codex provider advertises `gpt-6.1-sol` and plan T11 already recorded
+it as the default, so `scripts/check-route-allowlist.py` was failing and `just check` was red at
+`d77474d`. Owner-approved correction. Separately,
+`docs/reviews/p0-full-generated-baseline.json` still carried `recovered.c a47e78bf`, the
+PRE-`0x13FAD0` hash, because `d77474d` updated the manifest but never re-baselined that file, so
+`jsrf_generation_provenance` was **already failing** at `d77474d`; both now hold measured values
+and the suite is 35/35.
+
+**Next.** Characterise `0xFFC00000` (is a float reaching an indirect call, a corrupted vtable
+slot, or a consequence of the freeze?). Then batch the 12 sibling spans. Then re-measure the
+freeze with transition-triggered logging, since the current `[FBPHASE]` sampler cannot see
+`+0x24` change after present 1000.
+
+---
+
+**Earlier block (first 2026-10-05 session; retained for the record).**
+
+**Fixed that turn (2026-10-05).**
 1. **The ~300 s `JSRF_FATAL.ERR` and the Beat.bin loop were a port allocator defect.** Chain (each link
    read from the original bytes or a run dump): the guest's `0x6F730` builds the "There's a problem with
    the disc..." dialog (flags `0x400000`, class vtable `0x1CC660`), whose creation makes the `0x6EC80`
