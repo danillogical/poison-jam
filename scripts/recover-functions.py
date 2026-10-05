@@ -55,6 +55,19 @@ for entry in entries:
     # preserve the guest operation with widened unsigned arithmetic before
     # the existing unsigned DIV sequence.  Keep this correction in the
     # generator so production and focused fixtures cannot diverge.
+    if address == 0x00025310:
+        # Observation only. The tail jmp at 0x2537E is the one 0x6F730 entry
+        # that does not push its own return address, and it pops esi (the job)
+        # first. Log while esi is still the job. A missing anchor means the
+        # lift moved; do not guess a new site.
+        anchor = 'loc_0002537A: ;\n    POP32(esp, esi);'
+        hooked = ('loc_0002537A: ;\n'
+                  '    jsrf_fatal_tail(esi, MEM32(esp + 12)); '
+                  '/* observation: job still in esi; caller of 0x25310 is [esp+12]; no guest write */\n'
+                  '    POP32(esp, esi);')
+        if anchor not in code:
+            raise RuntimeError('0x25310 fatal-tail observation anchor missing')
+        code = code.replace(anchor, hooked, 1)
     if address == 0x00196800:
         code=code.replace(
             'eax = (uint32_t)((int32_t)eax * (int32_t)ecx);',

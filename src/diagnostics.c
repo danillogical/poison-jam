@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "recomp/gen/recomp_types.h"
 #include "diagnostics.h"
+#include "jsrf_fatal_observe.h"
 
 /* Slots are never recycled. Thus an exited TLS address cannot be mistaken for
  * a new thread. Only the owning thread writes a slot. External readers MUST
@@ -388,4 +389,82 @@ void jsrf_trace_heap(uint32_t site, uint32_t frame)
     _unlock_file(stderr);
     if (site==0x149F6Au && MEM32(frame+16)>=0x10010 && !(MEM8(MEM32(frame+16)-11)&1))
         RaiseException(0xE0424845u,EXCEPTION_NONCONTINUABLE,0,NULL);
+}
+
+/* Disc-error observation. Reads guest memory and prints. Writes nothing,
+ * and does not change guest registers. Capped so a retry loop cannot fill
+ * the log. The words are the job/dialog fields named in the current plan:
+ * state +0x44/+0x48, the pending-I/O triple +0x50/+0x54/+0x64, dialog flags
+ * +0x98, and the time snapshot +0x190/+0x194. +0x1604 is the field a live
+ * 0x1C4F68 object was read at. */
+static int fatal_ptr(uint32_t p)
+{
+    return p >= 0x00010000u && p < 0x04000000u - 0x1608u && (p & 3u) == 0;
+}
+
+static void fatal_dump_object(const char *tag, uint32_t p)
+{
+    if (!fatal_ptr(p)) {
+        fprintf(stderr, "  [%s] %08X not an object\n", tag, p);
+        return;
+    }
+    fprintf(stderr,
+            "  [%s] %08X vt=%08X +44=%08X +48=%08X +50=%08X +54=%08X"
+            " +64=%08X +98=%08X +190=%08X +194=%08X +1604=%08X\n",
+            tag, p, MEM32(p), MEM32(p + 0x44), MEM32(p + 0x48),
+            MEM32(p + 0x50), MEM32(p + 0x54), MEM32(p + 0x64),
+            MEM32(p + 0x98), MEM32(p + 0x190), MEM32(p + 0x194),
+            MEM32(p + 0x1604));
+}
+
+static void fatal_dump_stack(uint32_t esp)
+{
+    uint32_t i, shown = 0;
+    fprintf(stderr, "  [FATAL-CTOR] stack");
+    for (i = 0; i < 128 && shown < 48; i++) {
+        uint32_t a = esp + i * 4u;
+        uint32_t w;
+        if (a < 0x00010000u || a >= 0x04000000u - 4u)
+            break;
+        w = MEM32(a);
+        if (i < 8 || (w >= 0x00011000u && w < 0x001C3F60u)) {
+            fprintf(stderr, " +%03X=%08X", i * 4u, w);
+            shown++;
+        }
+    }
+    fprintf(stderr, "\n");
+}
+
+void jsrf_fatal_ctor_enter(void)
+{
+    static volatile LONG n;
+    LONG k = InterlockedIncrement(&n);
+    uint32_t esp, ret;
+    if (k > 16)
+        return;
+    esp = g_esp;
+    ret = (esp >= 0x00010000u && esp < 0x04000000u - 4u) ? MEM32(esp) : 0;
+    _lock_file(stderr);
+    fprintf(stderr, "[FATAL-CTOR] #%ld ret=%08X %s ecx=%08X esi=%08X esp=%08X\n",
+            k, ret, jsrf_fatal_ctor_ret_name(ret), g_ecx, g_esi, esp);
+    fatal_dump_stack(esp);
+    fatal_dump_object("ecx", g_ecx);
+    fatal_dump_object("esi", g_esi);
+    fflush(stderr);
+    _unlock_file(stderr);
+}
+
+void jsrf_fatal_tail(uint32_t job, uint32_t caller_ret)
+{
+    static volatile LONG n;
+    LONG k = InterlockedIncrement(&n);
+    if (k > 16)
+        return;
+    _lock_file(stderr);
+    fprintf(stderr, "[FATAL-TAIL] #%ld job=%08X caller_of_25310=%08X"
+            " (tail jmp 0x2537E taken; esi still the job)\n",
+            k, job, caller_ret);
+    fatal_dump_object("job", job);
+    fflush(stderr);
+    _unlock_file(stderr);
 }

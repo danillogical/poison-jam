@@ -71,8 +71,9 @@ established facts. Where this plan proposes a change to one of them, it is a tas
    block). `kmem_test` gains a case that fails on the old `kmem.c`. Advisor ruling relied on (see §13
    item 13). Not a shortcut, no ledger entry. After the fix the ~300 s fatal and the Beat.bin loop no longer
    occur in the 600 s run, **but the dialog and marker came back at ~950 s in the 1500 s run with no OOM
-   (see Measured now), so the disc-error path itself is still open.** Whether the 15 s I/O timeout in
-   the `0x25400` job class raised either dialog is inferred, not measured.
+   (see Measured now), so the disc-error path itself is still open.** Whether the pending-I/O path in
+   the `0x25400` job class raised either dialog is not measured. That path's threshold is 240 s, not
+   15 s (technical record §8).
 2. **Eight further recovery entries** reached by successive runs (see §13 item 12 for the earlier ones; the
    boundaries are byte-verified by recursive descent through every jump table, **not** runtime-exercised:
    only `0x348A0` returned once (run `20261004-013505-513`), the other six handlers and the `0x13D840` hook
@@ -100,17 +101,22 @@ presents and the last was the disclaimer). Inferred, not seen. **The title scree
 (`0x226F7B0`, vtable `0x1CC660`, `+0x98 = 0x400000`, text "There's a problem with the disc...") is the same
 dialog class. So the disc-error dialog has at least two causes: the heap exhaustion (fixed) and something
 else. **Which of the four `0x6F730` callers fired is not measured.** The callers are `0x2537E` (a tail `jmp`, so it leaves no return address of its own) / `0x255AD`
-(15 s I/O timeout in the job class at `0x25400`, objects of vtable `0x1C4F68`; a live one is at
+(pending-I/O path in the job class at `0x25400`, threshold 240 s; objects of vtable `0x1C4F68`; a live one is at
 `0x1330060`, `+0x44 = 1`, `+0x48 = 10`, state field `+0x1604 = 0`), `0x664C3` (`0x257B0` result >= 2) and
-`0x116EA8` (`0x13AA50` nonzero). The cheapest next measurement is a guest-stack record at the
-`JSRF_FATAL.ERR` open (return addresses `0x6EE73` / `0x664C8` / `0x255B2` / `0x116EAD` name the caller); I
-drafted that as a trace-only print in the kernel bridge's NtCreateFile and reverted it uncommitted. It
-needs one more ~16 min run to fire.
+`0x116EA8` (`0x13AA50` nonzero). Observation for the next long run is in (ledger L41, toolkit `d40e88a`): a host log at
+`0x6F730` entry, a host log on the `0x2537E` tail before `esi` is popped, and a guest-stack dump when a
+created path contains `JSRF_FATAL`. `0x6EE73` is the draw path's return into `0x6EC80`, not a constructor
+caller. The return-address names are pinned by `jsrf_fatal_ret_name`. Run
+`20261004-174418-621-f6-fatal-caller` (1200 s, exploratory, same shortcuts as the 1500 s run, plus
+`RECOMP_FB_PRESENT_DUMP_EVERY=10` and `RECOMP_FB_PRESENT_DUMP_AFTER_S=500`) is the measurement.
 
-**Next.** (1) Add that stack record (observation only) and rerun long enough to cross ~950 s, naming the
-caller of `0x6F730`; (2) capture a frame after the disclaimer (dump every 10 presents once past ~500 s) to
-see what follows it; (3) if the second fatal is the 15 s I/O timeout, find which pending I/O never
-completes (the job's `+0x50/+0x54/+0x64` fields: pending `0x103` status block).
+**Next.** Read run `20261004-174418-621-f6-fatal-caller` for `[FATAL-CTOR]` / `[FATAL-TAIL]` /
+`[FATAL-FILE]` and the `visp` frames after 500 s. If the caller is `0x255B2` (or the `0x25310` tail, the
+same 240 s class), name the pending file from the job at `esi` (`+0x50` set, `+0x64 == 0x103`, path at
+`+0x78`) and why that overlapped I/O does not complete. Do not stretch the 240 s threshold. The ~2
+updates/s hold is not the TSC scaler (`xbox_ReadTimeStampCounter` already runs at 733,333,333 Hz); the
+process is busy on about one core in the first minutes, so the rate lead is host time spent per guest
+update, still to be located.
 
 **Rival explanation for the logo object being gone:** the ~950 s fatal path (`0x12770` calls `0x1165D0` and
 `0x118800`) may be what removed it, rather than the logo state machine finishing. **Likely cause of the
@@ -816,14 +822,14 @@ package. Each gets criteria in the same five-part form when it becomes next.
     (one region per small file); frees work (`release_ok=232`); the cache copy had succeeded (the loop
     opens `Beat.bin` with status 0 then fails the 352,256 B allocation). Inferred: the real console
     charges RAM per committed 4 KB page so the 64 KB granule costs only address space; the disc dialog
-    is the 15 s pending-I/O timeout. Do not enlarge the heap or drop the 64 KB reserve alignment (that
+    is the pending-I/O timeout (the threshold is 240 s, not 15 s; technical record §8). Do not enlarge the heap or drop the 64 KB reserve alignment (that
     would hide the defect or need a ledger entry). Reversed by: OOM continuing after the fix with live
     bytes near 48 MB, or the dialog appearing with no OOM. **Annotation: the second condition occurred in
     run `20261004-020802-181-f5-long-1500` (fatal marker at ~950 s, zero OOM lines, dialog object in the
     dump). The heap-bookkeeping finding stands (measured: the block table, the 687 failures, the aligned fit
-    for 12 free blocks); the inferred part, that the dialog is the 15 s pending-I/O timeout, is no longer
-    supported and the cause of the second dialog is open. Send the caller question (which of the four
-    `0x6F730` callers fired) to the Advisor once the stack record names it.**
+    for 12 free blocks); the inferred part, that the dialog is the pending-I/O timeout, is no longer
+    supported and the cause of the second dialog is open. The caller is measured by the L41 logs in
+    run `20261004-174418-621-f6-fatal-caller`, not by a separate review.**
 
 ### Fast path status
 

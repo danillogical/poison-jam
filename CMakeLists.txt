@@ -46,6 +46,7 @@ add_executable(${PROJECT_NAME} WIN32
     src/recomp_manual.c
     src/jsrf_crt.c
     src/diagnostics.c
+    src/jsrf_fatal_observe.c
     src/recomp/recovered/recovered.c
     tests/harness_probes.c
     tests/video_probes.c
@@ -101,6 +102,9 @@ if(BUILD_TESTING)
     add_executable(jsrf_crt_divide_test tests/test_crt_divide.c src/jsrf_crt.c)
     target_include_directories(jsrf_crt_divide_test PRIVATE src)
     add_test(NAME jsrf_crt_divide COMMAND jsrf_crt_divide_test)
+    add_executable(jsrf_fatal_ret_name_test tests/test_fatal_ret_name.c src/jsrf_fatal_observe.c)
+    target_include_directories(jsrf_fatal_ret_name_test PRIVATE src)
+    add_test(NAME jsrf_fatal_ret_name COMMAND jsrf_fatal_ret_name_test)
     add_executable(jsrf_lifter_test tests/lifter-regressions.c)
     add_test(NAME jsrf_lifter_flags COMMAND jsrf_lifter_test)
     add_executable(jsrf_nv2a_test tests/test_nv2a_contract.c

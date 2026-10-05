@@ -228,7 +228,11 @@ model is its own packet, placed before the first criterion that needs it.
 `RECOMP_FMV_DUMP`, `RECOMP_CS_*`, `RECOMP_USB_TRACE`, `RECOMP_APU_TRACE`,
 `RECOMP_FIND_NAN`, `RECOMP_FIND_QUAD`, `RECOMP_TRAP_NULL`, `RECOMP_CMDLINE`, and from upstream
 v0.12: `RECOMP_IRQL_TRACE`, `RECOMP_KEY_TRACE`, `RECOMP_INPUT_DIAG`, `RECOMP_PB_WRAP_TRACE`,
-`RECOMP_FB_WINDOW_DUMP_EVERY`, `RECOMP_WATCH`, `RECOMP_WATCH_RAW`; from the 2026-09-28 fork fixes:
+`RECOMP_FB_WINDOW_DUMP_EVERY`, `RECOMP_FB_PRESENT_DUMP_EVERY`,
+`RECOMP_FB_PRESENT_DUMP_AFTER_S` (window-thread sample of published flips: a log
+every N flips and at least every 10 s, a BMP when the visible image changes and
+once a minute while it does not, starting AFTER_S seconds after the window thread's
+first sample; no guest write), `RECOMP_WATCH`, `RECOMP_WATCH_RAW`; from the 2026-09-28 fork fixes:
 `RECOMP_FFP_TRACE` and `RECOMP_TRACE_FLIP` (executor tracing), and `RECOMP_GUEST_METER` (counts host
 threads inside lifted guest code; changes no guest state or scheduling); from 2026-09-30:
 `RECOMP_RDATA_GUARD` (reports stores into read-only XBE sections and lets each complete, ledger L32)

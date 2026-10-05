@@ -26,6 +26,22 @@
       "after": "/* A4b watch-ledger seam (compatibility ledger L38): a thin forwarder defined\n * in src/diagnostics.c, called from the a4b-watch-* patched stores. */\nextern void jsrf_watch_store(uint32_t site_va, uint32_t target_va, uint32_t value);\n\nvoid recomp_trace_enter(const char *name, uint32_t va);\n#define RECOMP_TRACE_ENTER"
     },
     {
+      "id": "fatal-ctor-declare",
+      "ledger": "L41",
+      "file": "recomp_types.h",
+      "reason": "declare the disc-error observation calls used by fatal-ctor-enter and the recovered tail site",
+      "before": "void recomp_trace_esp(const char *name, const char *tag);\n#define RECOMP_TRACE_ESP(name, tag) recomp_trace_esp((name), (tag))",
+      "after": "void recomp_trace_esp(const char *name, const char *tag);\n#define RECOMP_TRACE_ESP(name, tag) recomp_trace_esp((name), (tag))\n\n/* Disc-error observation (compatibility ledger L41). Host logs only.\n * jsrf_fatal_ctor_enter reads [esp] at the entry of 0x6F730.\n * jsrf_fatal_tail runs on the 0x2537E tail path before esi is popped. */\nvoid jsrf_fatal_ctor_enter(void);\nvoid jsrf_fatal_tail(uint32_t job, uint32_t caller_ret);"
+    },
+    {
+      "id": "fatal-ctor-enter",
+      "ledger": "L41",
+      "function": "0x0006F730",
+      "reason": "record the guest return address when the disc-error dialog is constructed",
+      "before": "loc_0006F730: ;\n    PUSH32(esp, 0);",
+      "after": "loc_0006F730: ;\n    jsrf_fatal_ctor_enter(); /* observation: name the caller of 0x6F730; no guest write */\n    PUSH32(esp, 0);"
+    },
+    {
       "id": "a4b-watch-0006DACE",
       "ledger": "L38",
       "function": "0x0006DA80",

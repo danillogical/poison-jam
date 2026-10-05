@@ -1364,3 +1364,30 @@ where the sources disagree (whether the data check is gated by `DEBUG_3` bit 20 
 bit clear stops as `software_method_unchecked` rather than guessing — and the exact NSOURCE bit).
 **FLIP_STALL** meets 3–4; its counters have two sources, its stall condition only xemu. None of it can run
 end to end in JSRF until `0x00193F70` (`SoftwareMethod`) is recovered.
+
+## 8. Disc-error timeout and the boot clock (2026-10-05)
+
+The pending-I/O path in `0x25400` is not a 15-second timeout. Measured from the original bytes and the
+runtime that serves them:
+
+- `0x145560` is `rdtsc` into an 8-byte guest buffer (`ret 4`). The lifter emits
+  `xbox_ReadTimeStampCounter()`, which scales `QueryPerformanceCounter` to `XBOX_TSC_HZ`
+  (733,333,333). The constant the title compiles in is the same value: `0x145571` stores
+  `0x2BB5C755` and returns 1, and the 1500 s dump holds that pair at `[0x20CC50]`
+  (`check-dump-mapping.py` matched `.text` at `0x11000`).
+- `0x6E910` (`ret 0x14`) subtracts two TSC samples, multiplies by `0xF4240` (1,000,000) via
+  `0x17CA70` (`_allmul`), and divides by the 64-bit frequency at `[ecx+8]` via `0x17C9C0`
+  (`_alldiv`). Callers pass `ecx = 0x20CC48`. The quotient is microseconds of wall time when the
+  scaler matches that frequency.
+- `0x25400` takes the fatal call at `0x255AD` only when `[esi+0x64] == 0x103` (`STATUS_PENDING`,
+  written by `0x146078` into the overlapped block) and that quotient's high half is positive or its
+  low half is at least `0xE4E1C0` (240,000,000). The start sample is `[esi+0x188]` / `[esi+0x18C]`,
+  not the `+0x190` / `+0x194` pair `0x25310` uses. The same 240,000,000 threshold is what `0x25310`
+  compares before its tail jump to `0x6F730`. The path string lives at `[esi+0x78]` (the copy starts
+  with `'Z'`) and a `~` from `[0x1C4DF0]` is appended for the side file.
+
+Which of the four `0x6F730` entries fires at the ~950 s marker is not established by this section.
+The ~2 updates/s logo hold is not this scaler running slow: the scaler is what makes the 240 s
+threshold 240 s of wall time. `RECOMP_PB_EXEC`'s `FLIP_STALL` returns as soon as it is asked
+(`nv2a_pb_exec.c`), and the vblank thread targets 60 Hz unless the mode timing is 40–240 Hz, so
+neither clock is a 2 Hz source.

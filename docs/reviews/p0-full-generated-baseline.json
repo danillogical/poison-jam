@@ -2,7 +2,7 @@
   "files": {
     "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "0d73fcc568b996214737fd27c2c9767d6226013bedde9e79bec15b5a49eaa399",
     "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
-    "src/recomp/gen/recomp_0001.c": "065a43c255bc9c3469906b915c9ad51fe9f1e3e16c4a9ff465421317fbe77024",
+    "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
     "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
     "src/recomp/gen/recomp_0003.c": "5e36ccfcb9e419c1ce695cb2e185c5832897f563ed6eb0eaca0b00d2176ef489",
     "src/recomp/gen/recomp_0004.c": "cebdfa390daac3e0310db718e1d255b5b6e24c752b3e913b2b115deb4899ed08",
@@ -12,8 +12,8 @@
     "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
     "src/recomp/gen/recomp_stubs_recovery.c": "5b361433bf3ffc5e766cc2aa03ea98863d9e9fcbd08e4d82ee379ce7521e8572",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
-    "src/recomp/gen/recomp_types.h": "e1007de83bf802bac0ec192025c6c274bed7d86f845f8e653619f31f2a7a69a4",
-    "src/recomp/recovered/recovered.c": "a3db1da6f15507b9dafafcc3db0cb942352b4f559c596061e42cfdb998bbe651",
+    "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
+    "src/recomp/recovered/recovered.c": "a1b767e6c0d1dd03836e7c50fc6b493c1fcfd4f37cb371f686de3d3c85c90039",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
     "src/recomp/recovered/recovered_11c1_test.c": "8ba25fa5796164d924583f4195c28c395d755fd15043616f17083992e89c6bf2",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
@@ -174,6 +174,15 @@
       "date": "2026-10-05",
       "files": [],
       "reason": "Turn-review cleanup: prose-only edits to evidence strings in config/recovered-functions.json (0x13D840 installer address). recovered.c unchanged."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/gen/recomp_0001.c",
+        "src/recomp/gen/recomp_types.h",
+        "src/recomp/recovered/recovered.c"
+      ],
+      "reason": "L41 disc-error observation. Host log at the entry of 0x6F730 (recomp_0001.c, declaration in recomp_types.h) and on the 0x2537E tail in recovered.c before esi is popped. Observation only: no guest write. Amended, not regenerated: no full pass ran."
     }
   ]
 }
