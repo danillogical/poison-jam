@@ -1409,6 +1409,14 @@
     "stack_args": 0
   },
   {
+    "start": "0x00032610",
+    "end": "0x0003275D",
+    "section": ".text",
+    "kind": "routine",
+    "stack_args": 12,
+    "evidence": "The same tail_jump_alias defect the already-recovered 0x00032C70 documents: a complete function folded into an abutting alias, so the generated dispatch pointed it at the WRONG body. The analysis database has sub_00032610 as 0x00032610..0x00033800 detection_method=tail_jump_alias, and the generated alias tuple is {0x00032610, 0x00033800} (recomp_dispatch.c:70) resolving to recomp_alias_00032610 -> sub_00033800. But 0x00033800 is `mov eax,1; ret 4` -- two instructions -- while 0x00032610 is a real function whose own body ends at 0x0003275C. Run 20261005-011634-413-f23-7da30 is the only run that ever reached this dispatch and logged `[ALIAS-ICALL] target=0x00032610 owner=0x00033800` immediately before it died on `[ICALL] Failed to resolve VA 0xFFC00000`. Whether the wrong body caused the subsequent corruption is NOT established; what IS established is that dispatching 0x00032610 ran `mov eax,1; ret 4` instead of this function. Boundary measured, not guessed: a linear capstone decode of 0x00032610..0x0003275D is clean and every one of its 11 RETs is `ret 0xc` (C2 0C 00) -- at 0x3265A, 0x3269C, 0x326A6, 0x326B0, 0x326BF, 0x326DA, 0x326E6, 0x32706, 0x32726, 0x3274C and 0x32755 -- so stack_args 12. The end 0x0003275D is the last `ret 0xc` (at 0x3275C) plus one, followed by a 3-byte nop pad at 0x3275D..0x3275F and then this function's own jump table at 0x32760. That table is why a naive decode overruns: `C2 26 03 00` at 0x32770 decodes as a spurious `ret 0x326` and `E9 26 03 00` as a spurious `jmp`, which is exactly the overrun that made the database span the whole 0x32610..0x33800 range. Compare the already-recovered sibling 0x00032C70 (0x32C70..0x33140, stack_args 0), which was fixed for the same reason after run 20261004-011042-668-f5-heapfix-480 took an ABI failure at 0x25310 when this same job-handler table dispatched an alias."
+  },
+  {
     "start": "0x00032790",
     "end": "0x00032C70",
     "section": ".text",

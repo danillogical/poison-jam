@@ -877,6 +877,44 @@
           "path": "config/recovered-functions.json"
         }
       ]
+    },
+    {
+      "cause": "0x00032610 recovered (0x00032610..0x0003275D, stack_args 12): the same tail_jump_alias defect the already-recovered sibling 0x00032C70 documents. The analysis database has sub_00032610 as 0x00032610..0x00033800 detection_method=tail_jump_alias, and the generated alias tuple {0x00032610, 0x00033800} resolves to recomp_alias_00032610 -> sub_00033800. But 0x00033800 is `mov eax,1; ret 4` -- two instructions -- while 0x00032610 is a real function whose body ends at 0x0003275C. Run 20261005-011634-413-f23-7da30 is the only run that ever reached this dispatch and logged `[ALIAS-ICALL] target=0x00032610 owner=0x00033800` immediately before dying on `[ICALL] Failed to resolve VA 0xFFC00000`; whether the wrong body caused that is NOT established. Boundary measured, not guessed: a clean capstone decode of 0x00032610..0x0003275D has 11 RETs and every one is `ret 0xc` (C2 0C 00) -- at 0x3265A, 0x3269C, 0x326A6, 0x326B0, 0x326BF, 0x326DA, 0x326E6, 0x32706, 0x32726, 0x3274C and 0x32755 -- so stack_args 12. End 0x0003275D is the last ret plus one, then a 3-byte nop pad and this function's own jump table at 0x32760; `C2 26 03 00` there decodes as a spurious `ret 0x326`, which is the overrun that produced the database span. The sibling 0x00032C70 genuinely differs: its single ret at 0x32CCE is a plain C3, so its stack_args 0 is correct and this entry's 12 is not a copy error. recovered.c 3100 -> 3101. scripts/check-span-exits.py findings stay 428 and 0x00032610 is not a finding. Amended, not regenerated: no full translation pass ran.",
+      "date": "2026-10-05",
+      "evidence": [
+        "run 20261005-011634-413-f23-7da30: `[ALIAS-ICALL] target=0x00032610 owner=0x00033800`, then `[ICALL] Failed to resolve VA 0xFFC00000`; 0 ALIAS-ICALL lines in f22 and f24",
+        "bytes at 0x33800 are `b8 01 00 00 00 c2 04 00` (mov eax,1; ret 4) -- not a body for 0x32610",
+        "all 11 RETs in 0x32610..0x3275D are `c2 0c 00`; the sibling 0x32C70 ret at 0x32CCE is `c3`",
+        "scripts/check-span-exits.py reports no finding for the new entry"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "0f99e9f52c6f4269c8aff30cf54214c1b231d9495faaeaaf2dbd629ec87a8e9d",
+          "old_sha256": "b21b21cb9460e6e0d1117690d9b95850b343090fe00d7916a3c489f86680e6a2",
+          "path": "tools/disasm/output/functions.recovered.json"
+        },
+        {
+          "new_sha256": "de9d5324a839fc5c3e085750f32faa441068606b08847c99c643fdc0fd33dfe5",
+          "old_sha256": "e6e8db16de9f357f870b5fd81f017775d210c6885466891b2f70093d694d25c0",
+          "path": "config/manual-functions.json"
+        },
+        {
+          "new_sha256": "5f8f02755abaf016f24a08bea66aa58920be5ac2ed2348ba0a436c73dfa933f4",
+          "old_sha256": "242345fceac98ee618c9056e10aa1b366987d529f6b6bdd0ef27dc2ce7d21f85",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "231d25962f71539b6fa64b72d52d9eda980ec7cc5af3be485cae94ae1b310d10",
+          "old_sha256": "5beefba2bc3eb507da5c1578d246e00cdfeb6f7a4f0bb0a924d43783622cfbd9",
+          "path": "src/recomp/recovered/recovered.c"
+        },
+        {
+          "new_sha256": "99bbc9734ba9897617908db58cb256fa10b731f9174eb28d0628b912db5ce8de",
+          "old_sha256": "8b4fe9c30a7eb516771ec139a4e8b2bd916192a49288f942e2d5a9313bdd0dbf",
+          "path": "src/recomp/recovered/recovered_11c1_test.c"
+        }
+      ]
     }
   ],
   "checker_version": "jsrf-generation-provenance/1",
@@ -895,18 +933,18 @@
     "src/recomp/gen/recomp_stubs_recovery.c": "9e94c6ecdeb699c690f46d39ebddbeada57ce24a9acee1486f0df2ff54020548",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
     "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "5beefba2bc3eb507da5c1578d246e00cdfeb6f7a4f0bb0a924d43783622cfbd9",
+    "src/recomp/recovered/recovered.c": "231d25962f71539b6fa64b72d52d9eda980ec7cc5af3be485cae94ae1b310d10",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "8b4fe9c30a7eb516771ec139a4e8b2bd916192a49288f942e2d5a9313bdd0dbf",
+    "src/recomp/recovered/recovered_11c1_test.c": "99bbc9734ba9897617908db58cb256fa10b731f9174eb28d0628b912db5ce8de",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "generation_mode": "full regeneration 2026-09-29 with the toolkit 2a349c8 lifter, then relift-selected.py boundaries; hand edits re-applied by scripts/patch-generated.py from config/generated-patches.json (the recomp_types.h project ABI additions, the six A4b2 jsrf_watch_store hooks, and the a4b-watch declaration). This tree predates toolkit 86113c7 --backedge-yield: RECOMP_BACKEDGE is absent, so under RECOMP_GUEST_SERIAL=1 a guest spin loop costs one bounded timeout (docs/jsrf-compatibility-ledger.md L34).",
   "generators": {
     "project": {
       "dirty": true,
-      "revision": "7e683a3a034edb39bddb0dcbd66a212d899f3f8a",
+      "revision": "c61a9dd4811cf9f72795dbaa018bba9f1fd4710f",
       "state": "MEASURED",
-      "status_sha256": "13c75a08814415ed6bcaa6ee565e6797602a8cd6fdb887168061421998cf457d"
+      "status_sha256": "c90e91736dc852b8f8d2f466b6abb84fda2488faaa9f7ea80d1fa15b1d5f0adc"
     },
     "scripts/recover-functions.py": "c951fe5ed787253bd523d16502a231772197043b84a3b20e4c7b680b55c03847",
     "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
@@ -926,14 +964,14 @@
       "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
     },
     "config/manual-functions.json": {
-      "bytes": 102503,
+      "bytes": 102536,
       "present": true,
-      "sha256": "e6e8db16de9f357f870b5fd81f017775d210c6885466891b2f70093d694d25c0"
+      "sha256": "de9d5324a839fc5c3e085750f32faa441068606b08847c99c643fdc0fd33dfe5"
     },
     "config/recovered-functions.json": {
-      "bytes": 2862311,
+      "bytes": 2864325,
       "present": true,
-      "sha256": "242345fceac98ee618c9056e10aa1b366987d529f6b6bdd0ef27dc2ce7d21f85"
+      "sha256": "5f8f02755abaf016f24a08bea66aa58920be5ac2ed2348ba0a436c73dfa933f4"
     },
     "config/recovery-unresolved.json": {
       "bytes": 7925,
@@ -971,9 +1009,9 @@
       "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
     },
     "tools/disasm/output/functions.recovered.json": {
-      "bytes": 6052485,
+      "bytes": 6054065,
       "present": true,
-      "sha256": "b21b21cb9460e6e0d1117690d9b95850b343090fe00d7916a3c489f86680e6a2"
+      "sha256": "0f99e9f52c6f4269c8aff30cf54214c1b231d9495faaeaaf2dbd629ec87a8e9d"
     }
   },
   "known_unknowns": [],
@@ -1045,19 +1083,19 @@
       },
       "src/recomp/recovered/recovered.c": {
         "markers": {
-          "JSRF_ABI_CONTINUE": 9300,
+          "JSRF_ABI_CONTINUE": 9303,
           "RECOMP_ABI_CALL": 9903,
           "RECOMP_GENERATED_CODE": 1,
-          "g_seh_ebp": 6349
+          "g_seh_ebp": 6352
         },
         "present": true
       }
     },
     "totals": {
-      "JSRF_ABI_CONTINUE": 9300,
+      "JSRF_ABI_CONTINUE": 9303,
       "RECOMP_ABI_CALL": 9911,
       "RECOMP_GENERATED_CODE": 5,
-      "g_seh_ebp": 6355
+      "g_seh_ebp": 6358
     }
   },
   "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",
