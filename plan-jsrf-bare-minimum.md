@@ -127,6 +127,8 @@ not in the spin. No fatal file. What the 655 flips showed was not saved. **Title
 reached. Disclaimer-cleared not established.** The f6 spin is not fixed; it did not reproduce.
 Technical record §4.
 
+**Pushed 2026-10-04 (this checkpoint).** Toolkit `PUSHED_TO: origin / BRANCH: main / COMMIT: 712f70d7e1f84631c95984c9d80e4b2744caa71b / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: dbeb284..712f70d main -> main`. Game `PUSHED_TO: origin / BRANCH: master / COMMIT: bf42a800ce12a0790a55dd997f9d0650012eb150 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: 9c37140..bf42a80 master -> master`.
+
 **Next.** One longer exploratory run with `RECOMP_FB_PRESENT_DUMP_EVERY=10` and
 `RECOMP_FB_DUMP` set from the first presents, long enough to record the frames and to cross
 ~950 s if the disc-error dialog still happens. Read the BMPs and `[FATAL-CTOR]` /
