@@ -14496,10 +14496,18 @@
   },
   {
     "start": "0x0013F9E0",
+    "end": "0x0013FAD0",
+    "section": ".text",
+    "kind": "routine",
+    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0013FCA0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x0013F9E0..0x0013FAD0. The 2026-09-21 end 0x0013FBC0 swallowed the next method, 0x0013FAD0, which is its own prologue (push ebx) after the nop pad at 0x0013FAC6. Every path of this body tail-jumps to 0x001434F0 at or before 0x0013FAC1. Evidence: report-deepseek.md, 2026-09-21; split measured 2026-10-04.",
+    "stack_args": 0
+  },
+  {
+    "start": "0x0013FAD0",
     "end": "0x0013FBC0",
     "section": ".text",
     "kind": "routine",
-    "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0013FCA0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x0013F9E0..0x0013FBC0, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
+    "evidence": "A method of the function-pointer table at file-backed .data 0x0022DB38. Slot +0x20 is the dword 0x0013FAD0 in default.xbe (the f14 dump reads the same table). The neighbours +0x0C..+0x1C and +0x24..+0x2C are already their own entries; this one was left inside sub_0013F9E0's span 0x0013F9E0..0x0013FBC0, so jsrf_lookup_recovered had no case and the indirect call raised 0xE0424943. Run 20261004-205925-857-f14-adxpromote: after title.adx promotion, call [vtable+0x20] at 0x0013C0C1 (return 0x0013C0C4) with edi=0x00277180, mode 1, and the chunk descriptor {0x0133DF80, 0xC800}. The body is push ebx; it copies that chunk when the mode is 1, tail-jumps to 0x001434F0, and the empty-chunk path is pop ebx; ret at 0x0013FBBC. End is the next prologue, 0x0013FBC0. stack_args 0.",
     "stack_args": 0
   },
   {

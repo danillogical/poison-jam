@@ -589,6 +589,43 @@
           "path": "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c"
         }
       ]
+    },
+    {
+      "cause": "0x0013FAD0 split out of sub_0013F9E0. The 2026-09-21 end 0x0013FBC0 swallowed the .data 0x0022DB38 slot +0x20 method. f14 (20261004-205925-857) died on call [vtable+0x20] at 0x0013C0C1 with [ICALL] Failed to resolve VA 0x0013FAD0. End of 0x0013F9E0 is now 0x0013FAD0; new entry 0x0013FAD0..0x0013FBC0, stack_args 0. A control regeneration before the edit reproduced recovered.c a47e78bf byte for byte. The moved instructions match that lift; the live prefix of body_0013F9E0 is unchanged. recovered.c 3094 -> 3095. The 11c1 fixture gains only extern sub_0013FAD0. Stubs and recovery-unresolved.json are unchanged. Amended, not regenerated: no full translation pass ran. Bare --write was not used.",
+      "date": "2026-10-04",
+      "evidence": [
+        "control regeneration of the previous manifest reproduced recovered.c a47e78bfc6c2092e8f7ad6c863412b2e6bf26c75d330e71eb0c313a82cfe3e8b",
+        "instruction block from PUSH32 ebx through the ret is identical to the swallowed lift (191 lines); loc_0013F9E0 through its nop pad is identical (166 lines)",
+        "XBE .data 0x0022DB38+0x20 is 0x0013FAD0; f14 dump reads the same dword; return address at guest esp 0x01220F3C is 0x0013C0C4"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "3900173a189db2e7878d7ee5b6969bc63dc1cb5f11807d30103baa8da1963672",
+          "old_sha256": "328f24f6f1416c6cb6aaa9c881f654d7a54751f2b25e98cc3feb5f0085d01d24",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "a7b0f7c553d984d5b0aa7bc7ad8bb30c7fc440acd42c7da155dd77faade5bf78",
+          "old_sha256": "31b72ef85c7f3cc4c8e8e5d4e972ffef009cabac6d0eae49d6d297d8320cfbaa",
+          "path": "config/manual-functions.json"
+        },
+        {
+          "new_sha256": "f7d9d988ae82d9cc5abc7511f501fa0fca3beab983c4c9aef2d64973261cfb90",
+          "old_sha256": "e6cb87bc859e6f9bcaeb0beb8c78f89bd43592d9a77fa39b8e5294dccc406c9f",
+          "path": "tools/disasm/output/functions.recovered.json"
+        },
+        {
+          "new_sha256": "6f5f7dcdaa3aef453a4fe8fca35e5d6b978d98c927f7d30ea32d753f0382e15d",
+          "old_sha256": "a47e78bfc6c2092e8f7ad6c863412b2e6bf26c75d330e71eb0c313a82cfe3e8b",
+          "path": "src/recomp/recovered/recovered.c"
+        },
+        {
+          "new_sha256": "a7e6ba7ee74447b79d495e969d0a86dfc1ca2017b541d60f157399337090d508",
+          "old_sha256": "b33e203bed9a4c50124cc29f9f71febb0b3e4f2452754e191bcc7e3b94940332",
+          "path": "src/recomp/recovered/recovered_11c1_test.c"
+        }
+      ]
     }
   ],
   "checker_version": "jsrf-generation-provenance/1",
@@ -607,9 +644,9 @@
     "src/recomp/gen/recomp_stubs_recovery.c": "7289d2781fa0f9f106cd143e1f9c4badef95f9a6b95e63f722f9f1492d3a1d43",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
     "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "a47e78bfc6c2092e8f7ad6c863412b2e6bf26c75d330e71eb0c313a82cfe3e8b",
+    "src/recomp/recovered/recovered.c": "6f5f7dcdaa3aef453a4fe8fca35e5d6b978d98c927f7d30ea32d753f0382e15d",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "b33e203bed9a4c50124cc29f9f71febb0b3e4f2452754e191bcc7e3b94940332",
+    "src/recomp/recovered/recovered_11c1_test.c": "a7e6ba7ee74447b79d495e969d0a86dfc1ca2017b541d60f157399337090d508",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "generation_mode": "full regeneration 2026-09-29 with the toolkit 2a349c8 lifter, then relift-selected.py boundaries; hand edits re-applied by scripts/patch-generated.py from config/generated-patches.json (the recomp_types.h project ABI additions, the six A4b2 jsrf_watch_store hooks, and the a4b-watch declaration). This tree predates toolkit 86113c7 --backedge-yield: RECOMP_BACKEDGE is absent, so under RECOMP_GUEST_SERIAL=1 a guest spin loop costs one bounded timeout (docs/jsrf-compatibility-ledger.md L34).",
@@ -638,14 +675,14 @@
       "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
     },
     "config/manual-functions.json": {
-      "bytes": 102305,
+      "bytes": 102338,
       "present": true,
-      "sha256": "31b72ef85c7f3cc4c8e8e5d4e972ffef009cabac6d0eae49d6d297d8320cfbaa"
+      "sha256": "a7b0f7c553d984d5b0aa7bc7ad8bb30c7fc440acd42c7da155dd77faade5bf78"
     },
     "config/recovered-functions.json": {
-      "bytes": 2820764,
+      "bytes": 2821861,
       "present": true,
-      "sha256": "328f24f6f1416c6cb6aaa9c881f654d7a54751f2b25e98cc3feb5f0085d01d24"
+      "sha256": "3900173a189db2e7878d7ee5b6969bc63dc1cb5f11807d30103baa8da1963672"
     },
     "config/recovery-unresolved.json": {
       "bytes": 8057,
@@ -683,9 +720,9 @@
       "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
     },
     "tools/disasm/output/functions.recovered.json": {
-      "bytes": 6034297,
+      "bytes": 6035596,
       "present": true,
-      "sha256": "e6cb87bc859e6f9bcaeb0beb8c78f89bd43592d9a77fa39b8e5294dccc406c9f"
+      "sha256": "f7d9d988ae82d9cc5abc7511f501fa0fca3beab983c4c9aef2d64973261cfb90"
     }
   },
   "known_unknowns": [],

@@ -230,10 +230,103 @@ the 720-update hold. Do not clear `+0x24`. Do not treat the `-999` words as the 
 
 **Pushed 2026-10-04 (deferred file APC).** Toolkit `PUSHED_TO: origin / BRANCH: main / COMMIT: 8f6c59758c5c2daa24bab90912b3055ebd88c20d / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: 712f70d..8f6c597 main -> main`. Game `PUSHED_TO: origin / BRANCH: master / COMMIT: 5eb06266dbd3e7366f5f03dbcb59a9e2b7f6589f / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: 1f5adf9..5eb0626 master -> master`.
 
-**Next:** one exploratory run that logs, for the `title.adx` APC only, file-slot `byte+1`,
-`+0x18`, `+0x20`, `+0x148` and `+0x14C` immediately after the APC and on the following kernel
-entries, and logs phase `+0x24` as the present serial reaches 1000. That splits the two
-`+0x18` explanations and ties the flip stop to the phase field. Do not repeat f11's binary.
+**f12: the add never runs, and `+0x24` is still 0 at the 1000th flip.** Run
+`20261004-203241-650-f12-adxio` (300 s, exploratory because `RECOMP_GPU_ACK` defaulted on,
+same frame settings as f11): `diagnostic_deadline` at 303.5 s, `dump_ok`, zero ABI failures,
+zero OOM, zero `JSRF_FATAL`. The cap ends before f11's constructor. **Title screen not
+reached. Disclaimer-cleared not established.** The logged hash is still `5bdaea576b8509f5`
+at t=296 s.
+
+`[FBPHASE]` at presents 400, 900, 990, and 1000 reads object `0x01063A70`, `+0x10 = 0`,
+`+0x24 = 0`, update counters 1703, 2202, 2292, and 2303. The sample is inside the flip
+stall. There is no presents=1001 line, and every heartbeat from t=216 s through t=296 s
+is still 1000. The idle branch is not the state at that stall. A store of `+0x24` after
+the stall returns, later in the same update, is not excluded; the f10/f11 deadline value
+`0x002A336E` is that later state. Do not clear it. This supersedes, for the moment of the
+stop, the f10 sentence that `+0x24` is why presents stopped.
+
+`title.adx` opened between the t=226 s and t=236 s heartbeats. Four reads, all
+`from=0x001463A8` `dst=0x0133DF80` `@0` length 51200, first bytes `80 00 00 20`. After
+each APC, slot `0x273780` is `byte+1 = 2`, `+0x18 = 0`, `+0x20 = 0x19`, `+0x148 = 0`,
+`+0x14C = 0`. The next kernel returns on that thread start at `0x147D28` (the call sites
+in `0x147Cxx` are `ObReferenceObjectByHandle`, `ObfDereferenceObject`, thread priority,
+suspend, and resume) and include `0x18CE73`. None is `0x145C59`. No `file APC queue full`.
+A different file from the same issuer still advanced (`@0` length 28672, then `@28672`).
+The add at `0x140C1B` did not run: position stayed 0 and state stayed 2, so this is not a
+later seek storing 0. The f11 inference that this drain is the poller's delay, and that
+the add should therefore have run, is not established. That binary sampled
+`g_xbox_kernel_caller` after delivery, and the completion overwrites it with the dummy
+return 0.
+
+**f13: that drain is the poller's delay, and the add still does not store.** Run
+`20261004-204852-370-f13-adxcaller` (280 s, exploratory because `RECOMP_GPU_ACK`
+defaulted on): `diagnostic_deadline` at 283.4 s, `dump_ok`. Three `title.adx` reads,
+all `from=0x001463A8` `dst=0x0133DF80` `@0` length 51200, first bytes `80 00 00 20`.
+The drain line now records `g_xbox_kernel_caller` before delivery. Each of those
+three is `caller=0x00145C59`, the instruction after `call [KeDelayExecutionThread]`
+in `0x145C28`. After each APC the slot is still `byte+1 = 2`, `+0x18 = 0`,
+`+0x14C = 0`. The two earlier drains, context `0x00178E40`, are `caller=0x00145B87`
+and that other file still advanced. **Title screen not reached. Disclaimer-cleared
+not established.**
+
+The delay is the wait the poller asked for, so an earlier wait is not what skips
+the add. `deliver_one_apc` popped 12 bytes that `kernel_thunk_dispatch` had already
+popped for ordinal 232 (`NtUserIoApcDispatcher`). `0x145C28` executes `pop esi`
+before `leave`, so `esi` came back wrong and `0x140C1B` did not update slot
+`0x273780`. `leave` repairs `esp` from the local frame, which is why the poller
+returns at all. `xbox_file_apc_test` now delivers routine `0xFE000068` and fails
+if `g_esp` is not restored (29 checks; the same check fails when the second pop
+is put back). The game binary with that fix is the next measurement.
+
+**f14: promotion stores, then the copy method has no entry.** Run
+`20261004-205925-857-f14-adxpromote` (exploratory because `RECOMP_GPU_ACK`
+defaulted on). `unhandled_exception`, exit `0xE0424943`, `dump_ok`, 234.0 s.
+One `title.adx` read, drain `caller=0x00145C59`. The sample inside the delay
+is still `byte+1 = 2`, `+0x18 = 0`. The next kernel sample,
+`caller=0x00147D28`, is `byte+1 = 1`, `+0x18 = 0x19`, `+0x20 = 0x19`. The add
+at `0x140C1B` wrote slot `0x273780`. **Title screen not reached.
+Disclaimer-cleared not established.** The process died on that first
+promotion, before a later present.
+
+`[ICALL] Failed to resolve VA 0x0013FAD0`. `check-dump-mapping.py` matched.
+Guest `esp = 0x01220F3C` is return `0x0013C0C4`, the instruction after
+`call dword ptr [ecx+0x20]` at `0x0013C0C1`. `edi = 0x00277180`, the mode
+argument is 1, and the chunk at `0x01220F6C` is `{0x0133DF80, 0xC800}` (the
+header buffer and the 51200-byte read). `ecx = 0x0022DB38`. That table is
+file-backed `.data`: `default.xbe` slot `+0x20` is `0x0013FAD0`, and the dump
+reads the same dword. The neighbours are already entries. `0x0013FAD0` is its
+own function (`push ebx`, `ret` at `0x0013FBBC`) that the 2026-09-21 recovery
+left inside `sub_0013F9E0`'s span `0x0013F9E0..0x0013FBC0`, so lookup had no
+case. A control regeneration before the edit reproduced `recovered.c`
+`a47e78bf` byte for byte. The span now ends at `0x0013FAD0`, and
+`0x0013FAD0..0x0013FBC0` is its own entry, `stack_args` 0. The moved
+instructions match the previous lift. 3094 -> 3095. Not a bypass. Do not set
+`JSRF_ALLOW_UNRESOLVED`.
+
+**f15: the copy returns, then `0x0013B750` is unresolved.** Run
+`20261004-211848-572-f15-sjcopy` (243.6 s, exploratory because `RECOMP_GPU_ACK`
+defaulted on). `unhandled_exception`, exit `0xE0424943`, `dump_ok`, and
+`check-dump-mapping.py` matched. The `title.adx` read is again
+`caller=0x00145C59`, and the following kernel sample is `byte+1 = 1`,
+`+0x18 = 0x19`. `[RECOVERED] 0x0013FAD0 returned; ABI verified`. The same
+thread's next indirect targets are `0x0013F9E0`, `0x0013F9A0`, then
+`[ICALL] Failed to resolve VA 0x0013B750`. Guest `esp = 0x01220F60` holds
+return `0x00142CA4`. `0x0013B750` is `push ebp` / `push esi` after the nop
+pad; `functions.json` ends the previous body at `0x0013B74A` and has no entry
+here, and neither the recovered switch nor the generated dispatch has it.
+Disclaimer hash `5bdaea576b8509f5` from t=130 (present 396) through the last
+present log, t=234, presents=1000. `[FBPHASE]` at 400/900/990/1000 still has
+`+0x10 = 0`, `+0x24 = 0`, with the update counters moving. No present past
+1000. **Title screen not reached. Disclaimer-cleared not established.** The
+copy's return is not a frame change. Do not set `JSRF_ALLOW_UNRESOLVED`.
+
+**Pushed 2026-10-04 (APC stack frame).** Toolkit `PUSHED_TO: origin / BRANCH: main / COMMIT: 6e6e05664f438ad8b95b0c5186a770da8e54e883 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: 8f6c597..6e6e056 main -> main`.
+
+**Next:** give `0x0013B750` its own entry only after the call at the site
+that returns to `0x00142CA4` is read from the XBE. It is the same class of
+missing entry as `0x0013FAD0`, and it is not inside a recovered span. Do not
+force `byte+1 = 1`. Do not return `0x101`. Do not set `RECOMP_ASYNC_IO`. Do
+not patch `kernel_file.c` or `0x1401B0`.
 
 **Rival explanation for the logo object being gone:** the ~950 s fatal path (`0x12770` calls `0x1165D0` and
 `0x118800`) may be what removed it, rather than the logo state machine finishing. The 600 s run's phase-13
