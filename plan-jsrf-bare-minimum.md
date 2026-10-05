@@ -106,17 +106,35 @@ else. **Which of the four `0x6F730` callers fired is not measured.** The callers
 `0x116EA8` (`0x13AA50` nonzero). Observation for the next long run is in (ledger L41, toolkit `d40e88a`): a host log at
 `0x6F730` entry, a host log on the `0x2537E` tail before `esi` is popped, and a guest-stack dump when a
 created path contains `JSRF_FATAL`. `0x6EE73` is the draw path's return into `0x6EC80`, not a constructor
-caller. The return-address names are pinned by `jsrf_fatal_ret_name`. Run
-`20261004-174418-621-f6-fatal-caller` (1200 s, exploratory, same shortcuts as the 1500 s run, plus
-`RECOMP_FB_PRESENT_DUMP_EVERY=10` and `RECOMP_FB_PRESENT_DUMP_AFTER_S=500`) is the measurement.
+caller. The return-address names are pinned by `jsrf_fatal_ret_name`.
 
-**Next.** Read run `20261004-174418-621-f6-fatal-caller` for `[FATAL-CTOR]` / `[FATAL-TAIL]` /
-`[FATAL-FILE]` and the `visp` frames after 500 s. If the caller is `0x255B2` (or the `0x25310` tail, the
-same 240 s class), name the pending file from the job at `esi` (`+0x50` set, `+0x64 == 0x103`, path at
-`+0x78`) and why that overlapped I/O does not complete. Do not stretch the 240 s threshold. The ~2
-updates/s hold is not the TSC scaler (`xbox_ReadTimeStampCounter` already runs at 733,333,333 Hz); the
-process is busy on about one core in the first minutes, so the rate lead is host time spent per guest
-update, still to be located.
+**f6 did not reach the fatal or a frame.** Run `20261004-174418-621-f6-fatal-caller` (1200 s,
+exploratory, `diagnostic_deadline` at 1203 s, dump mapping matched): zero OOM, zero `JSRF_FATAL`,
+zero flips, kernel regions stayed at 8. The main guest thread was in `sub_001A1769` at
+`loc_001A18D0`, spinning on the DSP pending word `0x803BC810` (still 3; anchor
+`MEM32(0x1BA858)=0x803BC000`). SGE entry 0 at `0x803C8000` is physical `0x003BC000`, and the
+contiguous high-water `0x56C000` accepts that translation. The second busy thread was
+`nv2a_ack_thread`. Last content path was `dsstdfx.bin`. L41 did not fire. The ~950 s caller is
+still unmeasured. GPRST was not in the minidump (the APU object is heap).
+
+**f7 passed that spin and was still booting at 183 s.** Run `20261004-182724-545-f7-apuwait`
+(exploratory, same shortcuts, capped `[APUWAIT]` log from toolkit `712f70d`, no present BMPs): `diagnostic_deadline`.
+The first sample had `GPRST=3`, `realtime=1`, and the pending word 0. The word was 3 at
+frame-thread call 225 and 0 at call 226 after 84326 GP cycles. The window opened, `Beat.bin`
+opened, cache files through `JSRF_CACHE_COMPLETE.CMP` were touched, and the GPU log reached
+655 flips. At the deadline the main thread was in `nv2a_submit_pending` under `sub_00013F80`,
+not in the spin. No fatal file. What the 655 flips showed was not saved. **Title screen not
+reached. Disclaimer-cleared not established.** The f6 spin is not fixed; it did not reproduce.
+Technical record §4.
+
+**Next.** One longer exploratory run with `RECOMP_FB_PRESENT_DUMP_EVERY=10` and
+`RECOMP_FB_DUMP` set from the first presents, long enough to record the frames and to cross
+~950 s if the disc-error dialog still happens. Read the BMPs and `[FATAL-CTOR]` /
+`[FATAL-TAIL]` / `[FATAL-FILE]`. If the caller is `0x255B2` (or the `0x25310` tail), name the
+pending file from the job at `esi` (`+0x50` set, `+0x64 == 0x103`, path at `+0x78`) and why
+that overlapped I/O does not complete. Do not stretch the 240 s threshold. Do not skip the
+720-update hold. The ~2 updates/s figure is still only the 600 s run's phase-13 count; f7 did
+not re-measure it.
 
 **Rival explanation for the logo object being gone:** the ~950 s fatal path (`0x12770` calls `0x1165D0` and
 `0x118800`) may be what removed it, rather than the logo state machine finishing. **Likely cause of the

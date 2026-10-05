@@ -242,6 +242,33 @@ Non-reliance discovery row: `O-TWO-LEG` (`L1 = PROVEN`, `L2 = INVARIANT`).
 **Carried constraint:** A4b2's P4 condition is toolkit-identity-sensitive. The toolkit has advanced
 (`2925f0b`), so the discovery-transfer bridge must be re-established before anything inherits P4.
 
+### Boot mailbox on 2026-10-04 (measured, not a new acceptance)
+
+The pending word is still `MEM32(0x001BA858)+0x810`. On the runs below that anchor was
+`0x803BC000`, so the word was `0x803BC810`, not the earlier run's `0x803C0810`. The SGE table
+was at `0x803C8000` and entry 0 was physical `0x003BC000`. Contiguous high-water on the stuck
+run was `0x56C000`, above both offsets, so `apu_translate` case 2 accepts them. No
+`[GPDMA] unmapped` line was logged.
+
+`20261004-174418-621-f6-fatal-caller` (1200 s, exploratory, `diagnostic_deadline`) stopped with
+that word still 3. The main guest thread was in `sub_001A1769` at `loc_001A18D0`, holding
+critical section `0x1BA050` (acquired by `0x19E438`, which is `RtlEnterCriticalSection` ordinal
+277, and released only after the spin returns). The APU object is heap and was not in the
+minidump, so GPRST was not readable. This run never opened a framebuffer window.
+
+`20261004-182724-545-f7-apuwait` (183 s, same exploratory environment, plus a capped host log
+on the APU frame thread, toolkit `712f70d`) did not stick. The first sample already had `GPRST=3`,
+`gp.realtime=1`, `GPSADDR=0x003C8000`, SGE entry 0 `0x003BC000` → `0x803BC000`, and the word
+0. The word was 3 at frame-thread call 225 and 0 at call 226, after the GP had run 84326
+cycles on that frame. Boot then opened the framebuffer window, opened `Beat.bin`, touched
+`JSRF_CACHE_COMPLETE.CMP`, and the GPU log reached 655 flips. At the deadline the main thread
+was in `nv2a_submit_pending`, not in the spin.
+
+What that does and does not say: when GPRST is already 3 and the frame thread is running the
+GP, this mailbox clears within one audio frame and the guest leaves the spin. It does not say
+why f6 stayed at 3 for 1200 s. It does not re-establish the A4b2 strict `GP_CLEAR` latch, and
+`RECOMP_DSP_ACK` was not set. The log does not write guest memory.
+
 ### `PIO_FREE` (`0xFE820010`)
 
 - **Gate-only at the 28 direct reads (A4p-r1, discovery, accepted 2026-09-24, `O-GATE`).** Every
