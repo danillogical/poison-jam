@@ -1,93 +1,101 @@
 {
-  "schema": 1,
   "patches": [
     {
+      "after": "#ifdef RECOMP_ABI_CHECK\n/* Project-local additions. The toolkit template tracks the runtime model and is\n * refreshed from templates/runtime/recomp_types.h by the translation pass, so\n * these lines have to be re-applied after a regeneration -- AGENTS.md says so\n * and this is what it means. They are the exact-delta ABI instrumentation this\n * project's evidence rests on: the `ABI verified` line is produced by the\n * macro below, and the delta hooks let a site be exempted or traced by name. */\nint recomp_delta_ok(uint32_t va, uint32_t actual);\nint recomp_delta_allowed(uint32_t va, uint32_t out[4]);\nint recomp_abi_regs_exempt(uint32_t va);\nvoid jsrf_trace_delta_mismatch(uint32_t site, uint32_t va, uint32_t actual);\nvoid jsrf_trace_seq(uint32_t site, uint32_t value);\nvoid recomp_abi_violation_log(",
+      "before": "#ifdef RECOMP_ABI_CHECK\nvoid recomp_abi_violation_log(",
+      "file": "recomp_types.h",
       "id": "abi-delta-declarations",
       "ledger": "L37",
-      "file": "recomp_types.h",
-      "reason": "declare the exact-delta ABI hooks the RECOMP_ABI_CALL check uses",
-      "before": "#ifdef RECOMP_ABI_CHECK\nvoid recomp_abi_violation_log(",
-      "after": "#ifdef RECOMP_ABI_CHECK\n/* Project-local additions. The toolkit template tracks the runtime model and is\n * refreshed from templates/runtime/recomp_types.h by the translation pass, so\n * these lines have to be re-applied after a regeneration -- AGENTS.md says so\n * and this is what it means. They are the exact-delta ABI instrumentation this\n * project's evidence rests on: the `ABI verified` line is produced by the\n * macro below, and the delta hooks let a site be exempted or traced by name. */\nint recomp_delta_ok(uint32_t va, uint32_t actual);\nint recomp_delta_allowed(uint32_t va, uint32_t out[4]);\nint recomp_abi_regs_exempt(uint32_t va);\nvoid jsrf_trace_delta_mismatch(uint32_t site, uint32_t va, uint32_t actual);\nvoid jsrf_trace_seq(uint32_t site, uint32_t value);\nvoid recomp_abi_violation_log("
+      "reason": "declare the exact-delta ABI hooks the RECOMP_ABI_CALL check uses"
     },
     {
+      "after": "    if (!recomp_delta_ok((va), g_esp - _ap)) \\\n        jsrf_trace_delta_mismatch(MEM32(_ap), (va), g_esp - _ap); /* exact-delta check; site = return address */ \\\n    if (!recomp_abi_regs_exempt((va)) && \\\n        (g_ebx != _ab || g_esi != _as || g_edi != _ad || g_esp < _ap + 4)) \\\n",
+      "before": "    if (g_ebx != _ab || g_esi != _as || g_edi != _ad || g_esp < _ap + 4) \\\n",
+      "file": "recomp_types.h",
       "id": "abi-delta-check",
       "ledger": "L37",
-      "file": "recomp_types.h",
-      "reason": "check the exact ESP delta, and let a site be exempted from the register check",
-      "before": "    if (g_ebx != _ab || g_esi != _as || g_edi != _ad || g_esp < _ap + 4) \\\n",
-      "after": "    if (!recomp_delta_ok((va), g_esp - _ap)) \\\n        jsrf_trace_delta_mismatch(MEM32(_ap), (va), g_esp - _ap); /* exact-delta check; site = return address */ \\\n    if (!recomp_abi_regs_exempt((va)) && \\\n        (g_ebx != _ab || g_esi != _as || g_edi != _ad || g_esp < _ap + 4)) \\\n"
+      "reason": "check the exact ESP delta, and let a site be exempted from the register check"
     },
     {
+      "after": "/* A4b watch-ledger seam (compatibility ledger L38): a thin forwarder defined\n * in src/diagnostics.c, called from the a4b-watch-* patched stores. */\nextern void jsrf_watch_store(uint32_t site_va, uint32_t target_va, uint32_t value);\n\nvoid recomp_trace_enter(const char *name, uint32_t va);\n#define RECOMP_TRACE_ENTER",
+      "before": "void recomp_trace_enter(const char *name, uint32_t va);\n#define RECOMP_TRACE_ENTER",
+      "file": "recomp_types.h",
       "id": "a4b-watch-declaration",
       "ledger": "L38",
-      "file": "recomp_types.h",
-      "reason": "declare jsrf_watch_store for the a4b-watch-* call sites",
-      "before": "void recomp_trace_enter(const char *name, uint32_t va);\n#define RECOMP_TRACE_ENTER",
-      "after": "/* A4b watch-ledger seam (compatibility ledger L38): a thin forwarder defined\n * in src/diagnostics.c, called from the a4b-watch-* patched stores. */\nextern void jsrf_watch_store(uint32_t site_va, uint32_t target_va, uint32_t value);\n\nvoid recomp_trace_enter(const char *name, uint32_t va);\n#define RECOMP_TRACE_ENTER"
+      "reason": "declare jsrf_watch_store for the a4b-watch-* call sites"
     },
     {
+      "after": "void recomp_trace_esp(const char *name, const char *tag);\n#define RECOMP_TRACE_ESP(name, tag) recomp_trace_esp((name), (tag))\n\n/* Disc-error observation (compatibility ledger L41). Host logs only.\n * jsrf_fatal_ctor_enter reads [esp] at the entry of 0x6F730.\n * jsrf_fatal_tail runs on the 0x2537E tail path before esi is popped. */\nvoid jsrf_fatal_ctor_enter(void);\nvoid jsrf_fatal_tail(uint32_t job, uint32_t caller_ret);",
+      "before": "void recomp_trace_esp(const char *name, const char *tag);\n#define RECOMP_TRACE_ESP(name, tag) recomp_trace_esp((name), (tag))",
+      "file": "recomp_types.h",
       "id": "fatal-ctor-declare",
       "ledger": "L41",
-      "file": "recomp_types.h",
-      "reason": "declare the disc-error observation calls used by fatal-ctor-enter and the recovered tail site",
-      "before": "void recomp_trace_esp(const char *name, const char *tag);\n#define RECOMP_TRACE_ESP(name, tag) recomp_trace_esp((name), (tag))",
-      "after": "void recomp_trace_esp(const char *name, const char *tag);\n#define RECOMP_TRACE_ESP(name, tag) recomp_trace_esp((name), (tag))\n\n/* Disc-error observation (compatibility ledger L41). Host logs only.\n * jsrf_fatal_ctor_enter reads [esp] at the entry of 0x6F730.\n * jsrf_fatal_tail runs on the 0x2537E tail path before esi is popped. */\nvoid jsrf_fatal_ctor_enter(void);\nvoid jsrf_fatal_tail(uint32_t job, uint32_t caller_ret);"
+      "reason": "declare the disc-error observation calls used by fatal-ctor-enter and the recovered tail site"
     },
     {
+      "after": "loc_0006F730: ;\n    jsrf_fatal_ctor_enter(); /* observation: name the caller of 0x6F730; no guest write */\n    PUSH32(esp, 0);",
+      "before": "loc_0006F730: ;\n    PUSH32(esp, 0);",
+      "function": "0x0006F730",
       "id": "fatal-ctor-enter",
       "ledger": "L41",
-      "function": "0x0006F730",
-      "reason": "record the guest return address when the disc-error dialog is constructed",
-      "before": "loc_0006F730: ;\n    PUSH32(esp, 0);",
-      "after": "loc_0006F730: ;\n    jsrf_fatal_ctor_enter(); /* observation: name the caller of 0x6F730; no guest write */\n    PUSH32(esp, 0);"
+      "reason": "record the guest return address when the disc-error dialog is constructed"
     },
     {
+      "after": "    MEM32(ecx) = 0;\n    jsrf_watch_store(0x0006DACEu, eax + 0x810, ecx); /* A4b observation \u2014 re-apply after regeneration */\n    MEM32(eax + 0x810) = ecx;",
+      "before": "    MEM32(ecx) = 0;\n    MEM32(eax + 0x810) = ecx;",
+      "function": "0x0006DA80",
       "id": "a4b-watch-0006DACE",
       "ledger": "L38",
-      "function": "0x0006DA80",
-      "reason": "record the guest store at 0x0006DACE before it happens",
-      "before": "    MEM32(ecx) = 0;\n    MEM32(eax + 0x810) = ecx;",
-      "after": "    MEM32(ecx) = 0;\n    jsrf_watch_store(0x0006DACEu, eax + 0x810, ecx); /* A4b observation — re-apply after regeneration */\n    MEM32(eax + 0x810) = ecx;"
+      "reason": "record the guest store at 0x0006DACE before it happens"
     },
     {
+      "after": "    MEM32(eax) = edx;\n    jsrf_watch_store(0x0006DBBAu, ecx + 0x810, eax); /* A4b observation \u2014 re-apply after regeneration */\n    MEM32(ecx + 0x810) = eax;",
+      "before": "    MEM32(eax) = edx;\n    MEM32(ecx + 0x810) = eax;",
+      "function": "0x0006DBB0",
       "id": "a4b-watch-0006DBBA",
       "ledger": "L38",
-      "function": "0x0006DBB0",
-      "reason": "record the guest store at 0x0006DBBA before it happens",
-      "before": "    MEM32(eax) = edx;\n    MEM32(ecx + 0x810) = eax;",
-      "after": "    MEM32(eax) = edx;\n    jsrf_watch_store(0x0006DBBAu, ecx + 0x810, eax); /* A4b observation — re-apply after regeneration */\n    MEM32(ecx + 0x810) = eax;"
+      "reason": "record the guest store at 0x0006DBBA before it happens"
     },
     {
+      "after": "    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */\n    jsrf_watch_store(0x0006DEF3u, ecx + 0x810, eax); /* A4b observation \u2014 re-apply after regeneration */\n    MEM32(ecx + 0x810) = eax;",
+      "before": "    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */\n    MEM32(ecx + 0x810) = eax;",
+      "function": "0x0006DEE0",
       "id": "a4b-watch-0006DEF3",
       "ledger": "L38",
-      "function": "0x0006DEE0",
-      "reason": "record the guest store at 0x0006DEF3 before it happens",
-      "before": "    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */\n    MEM32(ecx + 0x810) = eax;",
-      "after": "    _fa = (uint32_t)(eax) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */\n    jsrf_watch_store(0x0006DEF3u, ecx + 0x810, eax); /* A4b observation — re-apply after regeneration */\n    MEM32(ecx + 0x810) = eax;"
+      "reason": "record the guest store at 0x0006DEF3 before it happens"
     },
     {
+      "after": "    edi = MEM32(eax);\n    jsrf_watch_store(0x001A1751u, edi + 0x810, 0); /* A4b observation \u2014 re-apply after regeneration */\n    MEM32(edi + 0x810) = MEM32(edi + 0x810) & 0;",
+      "before": "    edi = MEM32(eax);\n    MEM32(edi + 0x810) = MEM32(edi + 0x810) & 0;",
+      "function": "0x001A1747",
       "id": "a4b-watch-001A1751",
       "ledger": "L38",
-      "function": "0x001A1747",
-      "reason": "record the guest store at 0x001A1751 before it happens",
-      "before": "    edi = MEM32(eax);\n    MEM32(edi + 0x810) = MEM32(edi + 0x810) & 0;",
-      "after": "    edi = MEM32(eax);\n    jsrf_watch_store(0x001A1751u, edi + 0x810, 0); /* A4b observation — re-apply after regeneration */\n    MEM32(edi + 0x810) = MEM32(edi + 0x810) & 0;"
+      "reason": "record the guest store at 0x001A1751 before it happens"
     },
     {
+      "after": "    ecx = 0; /* rep movsb */\n    jsrf_watch_store(0x001A18CEu, ebx, eax); /* A4b observation \u2014 re-apply after regeneration */\n    MEM32(ebx) = eax;",
+      "before": "    ecx = 0; /* rep movsb */\n    MEM32(ebx) = eax;",
+      "function": "0x001A1769",
       "id": "a4b-watch-001A18CE",
       "ledger": "L38",
-      "function": "0x001A1769",
-      "reason": "record the guest store at 0x001A18CE before it happens",
-      "before": "    ecx = 0; /* rep movsb */\n    MEM32(ebx) = eax;",
-      "after": "    ecx = 0; /* rep movsb */\n    jsrf_watch_store(0x001A18CEu, ebx, eax); /* A4b observation — re-apply after regeneration */\n    MEM32(ebx) = eax;"
+      "reason": "record the guest store at 0x001A18CE before it happens"
     },
     {
+      "after": "    _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */\n    jsrf_watch_store(0x001A1FA7u, edi + 0x10, ebp); /* A4b observation \u2014 re-apply after regeneration */\n    MEM32(edi + 0x10) = ebp;",
+      "before": "    _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */\n    MEM32(edi + 0x10) = ebp;",
+      "function": "0x001A1F5D",
       "id": "a4b-watch-001A1FA7",
       "ledger": "L38",
-      "function": "0x001A1F5D",
-      "reason": "record the guest store at 0x001A1FA7 before it happens",
-      "before": "    _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */\n    MEM32(edi + 0x10) = ebp;",
-      "after": "    _fa = (uint32_t)(edi) & 0xFFFFFFFFu; _fas = (int32_t)(int32_t)(_fa); /* add result */\n    jsrf_watch_store(0x001A1FA7u, edi + 0x10, ebp); /* A4b observation — re-apply after regeneration */\n    MEM32(edi + 0x10) = ebp;"
+      "reason": "record the guest store at 0x001A1FA7 before it happens"
+    },
+    {
+      "after": "/* 0x00054750 has its own recovered body (L02); the translation pass's \"not detected\" trap for the same address is replaced by this comment so the two definitions cannot collide at link time (LNK2005). */\n",
+      "before": "void sub_00054750(void) { recomp_icall_fail_log(0x00054750u); g_esp += 4; /* 0x00054750: not detected */ }\n",
+      "file": "recomp_stubs_unresolved.c",
+      "id": "remove-54750-stub",
+      "ledger": "L02",
+      "reason": "0x00054750 was recovered as its own body (config/recovered-functions.json), so the translation pass's \"not detected\" trap for the same address became a duplicate symbol: LNK2005 sub_00054750 already defined in recovered.obj. recomp_stubs_unresolved.c is translation-owned, so recover-functions.py cannot remove it (its line 179 says so); this patch is the sanctioned mechanism and scripts/patch-generated.py re-applies it after every regeneration. It implements L02: the recovered body must replace the generated translation for this address. Deletion is written as a replacement to an empty string."
     }
-  ]
+  ],
+  "schema": 1
 }

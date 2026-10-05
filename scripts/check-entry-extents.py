@@ -135,18 +135,61 @@ def main():
                         help='also list entries with only alignment padding left over')
     parser.add_argument('--quiet-terminators', action='store_true',
                         help='suppress the informational NO-TERMINATOR reports')
+    parser.add_argument('--baseline', default=None, metavar='PATH',
+                        help='JSON list of TRUNCATED entry starts already known and '
+                             'reviewed; only a TRUNCATED entry NOT in it fails. Without '
+                             'this the check fails on every known one, which is why it '
+                             'was not a gate (review finding B7).')
+    parser.add_argument('--write-baseline', default=None, metavar='PATH',
+                        help='record the current TRUNCATED entry starts as the baseline')
     args = parser.parse_args()
+
+    known: set[str] = set()
+    if args.baseline:
+        try:
+            known = set(json.loads(Path(args.baseline).read_text(encoding='utf-8')))
+        except FileNotFoundError:
+            print(f'{args.baseline}: no baseline file; treating every TRUNCATED entry as new',
+                  file=sys.stderr)
+        except Exception as exc:
+            print(f'{args.baseline}: unreadable baseline ({exc}); refusing to pass',
+                  file=sys.stderr)
+            return 2
+
     counts = {}
+    truncated = []
     for entry in sorted(entries, key=lambda e: int(e['start'], 16)):
         for kind, address, detail in check(entry):
             if kind == 'PADDING' and not args.show_padding:
                 continue
             if kind == 'NO-TERMINATOR' and args.quiet_terminators:
                 continue
+            if kind == 'TRUNCATED':
+                truncated.append(entry['start'])
             counts[kind] = counts.get(kind, 0) + 1
             print(f'{kind:14} entry {entry["start"]}-{entry["end"]}: {detail}')
     summary = ', '.join(f'{v} {k}' for k, v in sorted(counts.items())) or 'nothing'
     print(f'\n{len(entries)} entries checked: {summary}')
+
+    if args.write_baseline:
+        Path(args.write_baseline).write_text(
+            json.dumps(sorted(set(truncated)), indent=2) + '\n', encoding='utf-8')
+        print(f'baseline written: {len(set(truncated))} TRUNCATED entry start(s) '
+              f'-> {args.write_baseline}')
+        return 0
+
+    if args.baseline:
+        new = sorted(set(truncated) - known)
+        stale = sorted(known - set(truncated))
+        if stale:
+            print(f'note: {len(stale)} baseline entr(y/ies) are no longer TRUNCATED and '
+                  f'can be removed: {", ".join(stale[:8])}')
+        if new:
+            print(f'FAIL: {len(new)} NEW TRUNCATED entry start(s): {", ".join(new)}')
+            return 1
+        print(f'PASS: no new TRUNCATED entries ({len(known)} known and reviewed)')
+        return 0
+
     return 1 if counts.get('TRUNCATED') else 0
 
 

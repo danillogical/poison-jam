@@ -1418,3 +1418,69 @@ The ~2 updates/s logo hold is not this scaler running slow: the scaler is what m
 threshold 240 s of wall time. `RECOMP_PB_EXEC`'s `FLIP_STALL` returns as soon as it is asked
 (`nv2a_pb_exec.c`), and the vblank thread targets 60 Hz unless the mode timing is 40–240 Hz, so
 neither clock is a 2 Hz source.
+
+## 9. The alias-fold misdispatch class: wrong return value → corrupt loop bound → wild write (2026-10-05)
+
+**A single misdispatched function can corrupt 363 KiB of guest memory, and the mechanism is now
+fully accounted for.** This is a defect class, not a one-off, and it is why an unresolved-looking
+symptom (`[ICALL] Failed to resolve VA 0xFFC00000`, a NaN bit pattern rather than an address) was
+actually a *return-value* defect.
+
+**The chain, every link observed from run `20261005-011634-413-f23-7da30`'s dump and the original
+bytes:**
+
+1. **The misdispatch.** `0x9CC40` at `0x9CCC0` does `push i; push 3; push ebp; push 1; call
+   0x25700`. `0x25700` is a table dispatcher: `cmp edx,0x21` bounds the index, then
+   `mov edx,[edx*4+0x1EC200]` and `call edx` with 3 stack arguments. Index 1 selects
+   `[0x1EC204] = 0x00032610`. That address had **no body of its own** — the 2026-09-21 translation
+   pass folded it as a `tail_jump_alias` into `sub_00033800` — so the call ran `sub_00033800`,
+   which is `mov eax,1; ret 4`. That is the `[ALIAS-ICALL] target=0x00032610 owner=0x00033800`
+   line, seen in f23 only.
+2. **Two effects, one silent.** `ret 4` against a real `ret 0xc` leaves guest `esp` 8 bytes low
+   inside `0x9CC40`; and the wrong **return value `eax = 1`** flows onward.
+3. **The wrong value becomes a pointer.** At `0x9CCCF` the `1` goes into `ebp`, passes a nonzero
+   test, `new(0x118)` runs, and constructor `0x15420` stores its argument — the `1` — at
+   `[obj+0x38]`, where an object pointer belongs. The object is `0x034D5110`.
+4. **The loop runs away.** `0x15D90` derives its loop counts from `[esi+0x38]`. With `[esi+0x38] =
+   1`, `[esi+0x110]` reads `(count-1)/1` with `count = 0`, i.e. **`0xFFFFFFFF`**; the saved outer
+   counter is **31,739**. The inner loop walks a 12-byte float3 array based at `0x231D40`
+   (`mov edi,0x231d40` at `0x15E17`) and a paired heap buffer based at `0x034C3E40`.
+5. **Why the fill is NaN.** The loop normalises each vector through `0x14C3B0` / `0x14C460`.
+   Normalising a **zero** vector gives `0 · rsqrt(0) = 0 · inf`, and the SSE default quiet NaN is
+   **`0xFFC00000`** — the title's own "no value" sentinel, which is why this first looked like a
+   deliberate sentinel fill rather than computed garbage.
+6. **The arithmetic closes exactly.** `0x231D40 + 12 × 31,739 = 0x28ED04`, which is both the
+   guest's `edi` at capture and the exact end of the observed fill; and
+   `0x034C3E40 + 0x5C × 31,740 = 0x0378CCD0`, the paired `ebx`. The fill is therefore **computed**,
+   not a `memset`, and it is the writer's own loop rather than a wild store.
+
+**The observed damage:** a uniform `0xFFC00000` run at `0x233ED0..0x28ED04` (93,057 of 93,069
+words) that overwrote the `DOLBY` section image (`0x27E080`), live globals including `0x251D6C`,
+and the thread-trampoline control block — so the trampoline's `mov eax,[0x25efb8]; test eax,eax;
+je` saw non-zero and called `0xFFC00000`, producing the misleading `[ICALL] Failed to resolve`
+fatal. Writing past the end of `.data` into `DOLBY` is a consequence, not a separate defect:
+enforcing XBE section write-protection would only fault earlier. (Whether the retail loader
+enforces section write flags at all is **inferred, not verified**; treat it as a backlog diagnostic
+idea, not a fidelity defect.)
+
+**Why it is not a regression and not a race.** The fill follows **deterministically** from the
+misdispatch once the path is taken. The *path* is what varies run to run: `f24` never reached
+`0x9CC40`, going idle in the `0x13F80` presenter loop and taking the game's own fatal path after 9
+presents. So a clean run proves nothing unless it reaches the path.
+
+**Acceptance criterion this implies (path-aware).** For this class, a run counts only if it logs
+`[RECOVERED] 0x00032610 returned`, has **no** `ALIAS-ICALL target=0x00032610`, shows **no** NaN at
+`0x27E080` or `0x25EFB8`, and stops **beyond** `0x9CC40`. A run that takes the f24 branch has
+exercised nothing and must be recorded as not exercised and rerun.
+
+**What would change this account:** a run that logs the ABI-verified return for `0x00032610` and
+*still* shows the fill — that would mean `[obj+0x38]` has a second source.
+
+**Generalisation.** The generated dispatch carries **134 alias tuples**. Any of them reached
+through a data table runs its *owner's body from the start*, which is wrong whenever the alias
+target is a genuine function. Ten unrecovered ones are referenced from data sections and were
+audited: `0xE9A40` (ref `0x1CEE84`, its rets are 4 and its owner's are 0), `0x102700`
+(`0x1D1DD4`), `0x1199C0` (`0x1D7B6C`), `0x13A340` (`0x1DEA64`) — all `.rdata` and therefore
+highest priority — plus `.data` references to `0x40002`, `0x100AB0`, `0x1A2078`, `0x1BD800`,
+`0x1C3800`; `0xB090B` is referenced only from `$$XTIMAGE` and is probably coincidental. Each must
+be verified from the bytes before recovery, because some data references will be coincidental.

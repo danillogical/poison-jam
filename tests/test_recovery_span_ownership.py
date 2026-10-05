@@ -34,7 +34,16 @@ import bisect
 # 2026-10-05: open recovery-boundary defects, NOT audited. The test fails if a
 # body NOT in this set starts doing so; the set should only shrink. Fix one by
 # correcting its span in config/recovered-functions.json.
-KNOWN_OPEN = {int(x, 16) for x in """11105 14720 1F000 202A0 203A0 20420 204D0 20760 21200 2A000 2DBE0 2F600 332F0 38460 38B90 39410 4037C 433C0 44000 45DB0 488B0 4B6A0 504E0 52050 67E90 705E0 73C20 7AB40 80080 864E0 91830 982B0 A76E0 AC0B0 ACD90 ADD20 AE560 AE9D0 AEE80 AFD40 B0210 B06E0 B3970 BB7B0 C7D40 CB2A0 D02D0 E01C0 E0710 E0CF0 E3BB0 EC0B0 F02F0 F7540 FC7B0 FCB40 FCE20 101DC0 104500 1045D0 104990 10A0E0 10BF90 10F960 1101E0 110B20 11BCB0 11E2B0 11FE90 127080 127810 140E60 142400 1424D0 15A020 15A1C0 171B50 171E00 1783D0 180038""".split()}
+#
+# SHRUNK 2026-10-05 by 14 entries, all fixed by widening the parent span to own
+# its own release arm / shared epilogue (a gap_prologue false entry that reads
+# esi before writing it and has no rel32 reference from anywhere in the XBE):
+# 7AB40, 864E0, AE9D0, F7540, FC7B0, FCB40, FCE20, 101DC0, 104500, 104990,
+# 10F960, 1101E0, plus B0210 and BB7B0 fixed earlier the same session. The batch
+# of 12 resolved 65 trap call sites and dropped scripts/check-span-exits.py
+# findings 428 -> 363. The fixed addresses are removed here so they cannot
+# silently regress: 80 -> 66, which now equals the measured set exactly.
+KNOWN_OPEN = {int(x, 16) for x in """11105 14720 1F000 202A0 203A0 20420 204D0 20760 21200 2A000 2DBE0 2F600 332F0 38460 38B90 39410 4037C 433C0 44000 45DB0 488B0 4B6A0 504E0 52050 67E90 705E0 73C20 80080 91830 982B0 A76E0 AC0B0 ACD90 ADD20 AE560 AEE80 AFD40 B06E0 B3970 C7D40 CB2A0 D02D0 E01C0 E0710 E0CF0 E3BB0 EC0B0 F02F0 1045D0 10A0E0 10BF90 110B20 11BCB0 11E2B0 11FE90 127080 127810 140E60 142400 1424D0 15A020 15A1C0 171B50 171E00 1783D0 180038""".split()}
 
 
 def boundary_stub_calls(text, entries, unresolved):

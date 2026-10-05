@@ -107,15 +107,19 @@ span ends at a folded-alias start should be re-checked for a hidden `ret` immedi
 `[ICALL] Failed to resolve VA 0xFFC00000` on two threads — not a code address, but the bit pattern
 of a negative quiet NaN (the toolkit names it `NAN_NEG`, `nv2a_pb_exec.c:3000`). The last named
 event before it was `[ALIAS-ICALL] target=0x00032610 owner=0x00033800`, present in f23 only.
-`0x32610` is slot 1 of the job-handler table at `0x1EC0F0` and is the **same `tail_jump_alias`
-defect the already-recovered sibling `0x32C70` documents**: the database span `0x32610..0x33800`
-overran because the function's own jump table at `0x32760` contains `C2 26 03 00`, which decodes
-as a spurious `ret 0x326`. The dispatch therefore ran `0x33800` — `mov eax,1; ret 4`, two
-instructions — instead of the real function ending at `0x3275C`. All 11 RETs are `ret 0xc`
-(`C2 0C 00`), so `stack_args 12`; the sibling `0x32C70` has a plain `C3` and correctly keeps 0, so
-the two genuinely differ. Recovered as `0x32610..0x3275D`, commit `9ea4e44`. **f25
-(`20261005-034216-016`, 404 s) then ran to `diagnostic_deadline` with zero unresolved calls, zero
-ABI failures and zero `ALIAS-ICALL` lines.** `recovered.c` 3100 -> 3101.
+`0x32610` is slot 1 of the job-handler table at `0x1EC200` — a **separate** table from the one at
+`0x1EC0F0`, which ends with a zero terminator at `0x1EC1FC` (slot 67) — and it is the **same
+`tail_jump_alias` defect the already-recovered sibling `0x32C70` documents**: the database span
+`0x32610..0x33800` overran because the function's own jump table at `0x32760` contains
+`C2 26 03 00`, which decodes as a spurious `ret 0x326`. The dispatch therefore ran `0x33800` —
+`mov eax,1; ret 4`, two instructions — instead of the real function ending at `0x3275C`. All **12**
+RETs are `ret 0xc` (`C2 0C 00`), so `stack_args 12`; the sibling `0x32C70` (slot 2 of `0x1EC0F0`)
+has a plain `C3` and correctly keeps 0, so the two genuinely differ. Recovered as
+`0x32610..0x3275F`, commit `9ea4e44` plus the end correction in `4cac35c`. **The run-confirmation is
+`f27` (`20261005-110711-776`), which logs `[RECOVERED] 0x00032610 returned; ABI verified`** — *not*
+f25: f25 has **zero** occurrences of that line, because it never dispatched the address. (An earlier
+revision of this record named f25; the Reviewer caught that and it is corrected here.) `recovered.c`
+3100 -> 3101.
 
 **Open and NOT diagnosed: a nondeterministic 363 KiB NaN fill.** f23 also showed a uniform
 `0xFFC00000` fill at `0x233ED0..0x28ED04` (93,057 of 93,069 words; 4-byte aligned, not
@@ -123,14 +127,20 @@ page-aligned at either end, running 68,752 bytes past `.data`'s virtual end). It
 `DOLBY` section image (`0x27E080`, marked `writable: false, executable: true`), live globals
 including `0x251D6C` that `0x7DA30` reads, and the thread-trampoline control block — so the
 trampoline's `mov eax,[0x25efb8]; test eax,eax; je` saw non-zero and called `0xFFC00000`.
-**It is not deterministic:** f24 (`20261005-020708-928`, same binary) ran 520 s, stalled at 9
-presents and stayed clean; f25 stayed clean; older and much longer runs (f9 1203 s, f5-long
-1500 s) were clean. Recorded as a newly observed nondeterministic corruption with its evidence —
-**not** a diagnosis, and **not** established as a regression from this turn's span changes. The
-`[ALIAS-ICALL]` timing makes `0x32610` a plausible cause, but that is an inference and is not
-claimed. Two follow-ups worth a backlog entry: whether the wrong body caused the fill, and whether
-the `writable: false` `DOLBY` overwrite is a separate port defect (the port not enforcing XBE
-section write-protection).
+**It is not deterministic.** The genuine **same-binary** pair is f25 (`20261005-034216-016`) and
+f26 (`20261005-034914-266`), which share `exe_sha256 = ca867957…`: f25 reached the disclaimer at
+960 presents, f26 stalled on the **Smilebit** card at 193 presents for its whole 810 s and never
+showed the disclaimer hash at all. Older, much longer runs (f9 1203 s, f5-long 1500 s) were also
+clean. **Correction:** an earlier revision of this record called f24 "the same binary" as f23; that
+is false — f23 is `exe_sha256 = 44c39546…` and f24 is `ac62b0b1…`. Their source trees differ in
+exactly one file (`config/recovered-functions.json`) and are identical once the `evidence` prose is
+stripped, so the *conclusion* (run-to-run variance, not the code change, dominates) survives — but
+the stated evidence did not, and the Reviewer caught it. Recorded as a newly observed
+nondeterministic corruption with its evidence — **not** a diagnosis, and **not** established as a
+regression from this turn's span changes. The `[ALIAS-ICALL]` timing makes `0x32610` a plausible
+cause, but that is an inference and is not claimed. Two follow-ups worth a backlog entry: whether
+the wrong body caused the fill, and whether the `writable: false` `DOLBY` overwrite is a separate
+port defect (the port not enforcing XBE section write-protection).
 
 **Advisor status.** The Persistent Advisor returned one ruling (consultation 1, below) and then
 **failed twice with no reply** on consultations 2 and 3 (the fill's mechanism, and the `0x32610`
@@ -209,14 +219,39 @@ tests failed on each attempt** (first `22/28/29`, then `9/11/22/28/29`) and that
 `xbox_guest_meter` — a **toolkit** kernel test under `xboxrecomp/src/kernel/`, independent of
 `recovered.c` — failed 3 of 6 isolated runs on the same binary.
 
-**Also this session.** `docs/agent-workflow.md` §1 named the Turn Planner route `codex/sol-6.1`,
-which does not exist; the codex provider advertises `gpt-6.1-sol` and plan T11 already recorded
-it as the default, so `scripts/check-route-allowlist.py` was failing and `just check` was red at
-`d77474d`. Owner-approved correction. Separately,
+**Also this session — the §1 route correction, stated precisely (Reviewer finding B1 corrected).**
+`docs/agent-workflow.md` §1 named the Turn Planner route `codex/sol-6.1`, which does not exist; the
+codex provider advertises `gpt-6.1-sol` and plan T11 already recorded it as the default, so the
+route was corrected to `codex/gpt-6.1-sol`.
+
+**Two corrections to how an earlier revision of this record described that**, both raised by the
+Reviewer and both reproduced:
+
+- **The failing command was `scripts/check-route-allowlist.py` (the `just route-check` recipe), NOT
+  `just check`.** That script is *not* in the `check:` recipe, so it cannot make `just check` red.
+  The earlier wording "so `just check` was red" was wrong.
+- **The `sol-6.1` string lived in the uncommitted working tree, not in any committed revision.**
+  At session start `git status` showed ` M docs/agent-workflow.md` against `d77474d` — an
+  owner-prepared §1–§7 rewrite. `git rev-list --all -- docs/agent-workflow.md` shows `sol-6.1` in
+  **0 of 44 revisions**, so a reader testing only `git show d77474d:` will conclude the route never
+  existed and repeat the Reviewer's reasoning. **The failure is nonetheless real and reproducible**:
+  restoring the `sol-6.1` spelling into the committed document and running the real checker gives
+  `MISS codex/sol-6.1` / `roster_route_not_allowed`, **exit 1**.
+
+`just check` **was** red at `d77474d`, for a different and independently verified reason:
 `docs/reviews/p0-full-generated-baseline.json` still carried `recovered.c a47e78bf`, the
 PRE-`0x13FAD0` hash, because `d77474d` updated the manifest but never re-baselined that file, so
-`jsrf_generation_provenance` was **already failing** at `d77474d`; both now hold measured values
-and the suite is 35/35.
+`jsrf_generation_provenance` was already failing. Both now hold measured values and the suite is
+35/35.
+
+**Owner disclosure (Reviewer finding B1, the part that stands).** Commit `7e683a3` also carried the
+pre-existing uncommitted **Orchestrator** row (`claude/claude-sonnet-5-5` @ `medium` →
+`workbuddy-ai/deepseek-v4.1-flash` @ `high`) and the **Workers** effort change (`max` → `high`) into
+the repository. Those rows were in the dirty tree rather than authored here, but the commit
+published them, and its message described the change as only a "typo fix". **`docs/agent-workflow.md`
+§7 makes staffing owner-reserved**, so the full scope is disclosed here for owner confirmation
+rather than left implicit. The substantive content is consistent with the session brief, which
+describes the Orchestrator as `workbuddy-ai/deepseek-v4.1-flash` @ `high`.
 
 **Pushed 2026-10-05 (the nine-defect dispatch chain).** Toolkit unchanged this session at
 `6e6e05664f438ad8b95b0c5186a770da8e54e883` (no push). Game

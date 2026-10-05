@@ -90,6 +90,7 @@ check:
     {{python}} -X utf8 scripts/check-horizon-ledger.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/patch-generated.py --check; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-override-drift.py; if ($LASTEXITCODE -ne 0) { exit 1 }
+    {{python}} -X utf8 scripts/check-entry-extents.py --baseline config/entry-extent-baseline.json --quiet-terminators; if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Output "check: all checkers passed"
 
 # W9s control-first gate: would a new instrumented run be allowed?
