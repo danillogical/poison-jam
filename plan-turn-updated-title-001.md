@@ -29,16 +29,40 @@ Every run is **exploratory** (`RECOMP_GPU_ACK` defaulted on, `RECOMP_APU_TRAP=1`
 **The title screen has NOT been reached.** The last visible frame is still the graffiti
 disclaimer, hash `5bdaea576b8509f5`, and presents still stop at exactly 1000.
 
-## Blocker 10 — `0xFFC00000`, a new class, NOT yet characterised
+## Blocker 10 — `0xFFC00000`: an alias-folded job handler, and a nondeterministic NaN fill
 
-f23 cleared `0x7DA30` and then reached two `[ICALL] Failed to resolve VA 0xFFC00000` failures
-(tid 35064 and 33952). `0xFFC00000` is not a plausible code address: it is the bit pattern of
-a negative quiet NaN, and the toolkit already names it (`nv2a_pb_exec.c:3000`, `NAN_NEG`).
-The ICALL history immediately before it is `... 0x00141A00, 0xFE000104, 0xFE000100,
-0xFE00011C, 0xFFC00000`, i.e. a kernel-thunk path. **This is a different defect class from
-the nine above** — not a missing dispatch entry, and it must not be treated as one. Whether
-it is a float consumed as a pointer, a corrupted vtable slot, or a symptom of the presents
-freeze is **UNVERIFIED**. It needs its own investigation and is the immediate next task.
+**Resolved part (fixed, run-confirmed).** The last named event before the NaN fatal was
+`[ALIAS-ICALL] target=0x00032610 owner=0x00033800`, present in f23 only. `0x32610` is slot 1 of
+the job-handler table at `0x1EC0F0` and is the **same `tail_jump_alias` defect the
+already-recovered sibling `0x32C70` documents**: the database span `0x32610..0x33800` overran
+because the function's own jump table at `0x32760` contains `C2 26 03 00`, which decodes as a
+spurious `ret 0x326`. The dispatch therefore ran `0x33800`, which is `mov eax,1; ret 4` — two
+instructions — instead of the real function ending at `0x3275C`. All 11 RETs are `ret 0xc`
+(`C2 0C 00`), so `stack_args 12`; the sibling `0x32C70` has a plain `C3` and correctly keeps 0.
+Recovered as `0x32610..0x3275D`, `stack_args 12`. **f25 (404 s) then ran to
+`diagnostic_deadline` with zero unresolved calls, zero ABI failures and zero `ALIAS-ICALL`
+lines.** `recovered.c` 3100 -> 3101. Commit `9ea4e44`.
+
+**Open part (recorded, NOT diagnosed).** f23 also showed a 363 KiB uniform `0xFFC00000` fill at
+`0x233ED0..0x28ED04` (93,057 of 93,069 words), which overwrote the `DOLBY` section image
+(`0x27E080`, marked `writable: false, executable: true`), live globals including `0x251D6C` that
+`0x7DA30` reads, and the thread-trampoline control block — making the trampoline's
+`test eax,eax; je` see non-zero and call `0xFFC00000`. **It is not deterministic:** f24 on the
+same binary ran 520 s, stalled at 9 presents and stayed clean; f25 also stayed clean; older and
+much longer runs (f9 1203 s, f5-long 1500 s) were clean. It is therefore recorded as a newly
+observed nondeterministic corruption with its evidence, **not** as a diagnosis and **not** as a
+regression from this turn's span changes. The `[ALIAS-ICALL]` timing makes `0x32610` a
+plausible cause, but that is an **inference** and is not claimed.
+
+**Advisor status.** The Persistent Advisor (`claude/claude-opus-5-5` @ `xhigh`) returned one
+ruling (consultation 1, recorded below) and then **failed twice with no reply** on
+consultations 2 and 3 (the fill's mechanism and the `0x32610` questions). Per
+`docs/agent-workflow.md` §1 an unavailable route is **reported, never silently replaced**, and
+the Advisor is not a gate, so the `0x32610` fix was made on the Orchestrator's own judgment from
+the bytes. The open questions it would have ruled on are: whether the wrong body caused the fill
+(causal arrow), whether `stack_args 12` is right (I derived it from all 11 RETs being
+`C2 0C 00`), and whether the `writable: false` `DOLBY` overwrite is a separate port defect (the
+port not enforcing XBE section write-protection).
 
 ## PLAN_CHANGE 5 — the freeze is probably NOT an independent blocker (Advisor correction)
 
@@ -247,14 +271,60 @@ and was reworded: `jsrf_lookup_recovered` has no case for `0xBBA17`, so the old 
 `sub_000BBA04` is still reachable — it is **latent**, not inert, because nothing currently
 dispatches to `0xBBA17` indirectly.
 
+## Blocker 11 — the boot path is strongly nondeterministic (new, measured)
+
+Three runs on the **same binary**, same environment, different outcomes:
+
+| run | seconds | outcome | furthest frame | presents | notes |
+|---|---|---|---|---|---|
+| f23 | 253 | `unhandled_exception` | disclaimer `5bdaea576b8509f5` | **1000** | 363 KiB NaN fill; `[ALIAS-ICALL] 0x32610` |
+| f25 | 404 | `diagnostic_deadline` | disclaimer `5bdaea576b8509f5` | 960 | clean; no fatal, no fill |
+| f26 | 810 | `diagnostic_deadline` | **Smilebit card `22fe3b5810848f88`** | **193** | **never showed the disclaimer hash at all** |
+
+f26 ran **twice as long** as f25 and got **less far**: it held the Smilebit card from t≈159 s to
+t=796 s, spinning in kernel ordinal 119 (9,353 calls), with the main thread
+`GUEST_THREAD identity=1 tid=2340 start=00148023` still live. It never reached the disclaimer.
+Its BMPs were inspected directly: `p0003` is the SEGA card, `p0005`/`p0006` are the Smilebit
+card, and the final held frame is Smilebit.
+
+**This matters for how the turn's results should be read.** The plan already records
+non-reproducing stalls for this title (f6's DSP spin "did not reproduce"; f7 passed it), so this
+is consistent with a known property — but it means **a single run cannot establish progress**, and
+the "presents stop at exactly 1000" observation is only reachable on the branch that gets that
+far. It also means the NaN fill's absence in f24/f25/f26 is **weak** evidence about its cause:
+those runs never reached the state f23 did.
+
+**Not a regression claim:** f26 used the `0x32610` binary and stalled *earlier* than f25 on the
+same binary, which is direct evidence that run-to-run variance, not the code change, dominates
+this comparison.
+
+## Completion assessment for this turn
+
+The turn's substantive objective — walk the critical path toward the title screen — is
+**substantially advanced**: ten dispatch defects were found, fixed, and each confirmed by the next
+run reaching a new site. On the runs that get that far, the `[ICALL]` chain now runs to a clean
+`diagnostic_deadline` with zero unresolved calls and zero ABI failures.
+
+**The title screen has NOT been reached.** No frame other than the already-known SEGA, Smilebit and
+disclaimer cards has been observed in any run this turn. **No title-frame BMP exists, so M15 is
+not claimed**, and no disclaimer-cleared claim is made from a present count or a hash change.
+
+The next critical-path question is no longer "which dispatch entry is missing" but **"why does the
+boot path stall at a different card on different runs"** — a concurrency/timing question rather
+than a lifting question. That is a reasonable place to hand the turn to review.
+
 ## Critical path — remaining
 
-1. **Blocker 10** (`0xFFC00000`): characterise it before treating it as a dispatch defect. It is
-   a NaN bit pattern, not a code address.
-2. **Batch the 12 sibling spans** the Advisor identified, verifying each proposed end by decode
+1. **Blocker 11** (nondeterministic boot stalls): characterise why the same binary stalls at the
+   Smilebit card in one run and reaches the disclaimer in another. This is now the primary
+   critical-path question.
+2. **Blocker 10's open half**: whether the `0x32610` wrong-body dispatch caused the NaN fill (an
+   inference, not a claim), and whether the `writable: false` `DOLBY` overwrite is a separate port
+   defect.
+3. **Batch the 12 sibling spans** the Advisor identified, verifying each proposed end by decode
    before landing it, so the remaining instances of the shared-epilogue class do not each cost a
    run.
-3. **The presents/flips freeze at exactly 1000** — see PLAN_CHANGE 5: probably a symptom of the
+4. **The presents/flips freeze at exactly 1000** — see PLAN_CHANGE 5: probably a symptom of the
    boot-path transition, not an independent blocker.
 
 ## Competing hypotheses (updated)

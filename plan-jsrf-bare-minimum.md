@@ -103,12 +103,42 @@ Runs `f16`..`f23` (`20261005-000031-102` … `20261005-011634-413`), all **explo
 be exercised, because the body in front of them had no reachable `ret`. **H9: any entry whose
 span ends at a folded-alias start should be re-checked for a hidden `ret` immediate.**
 
-**New stop, uncharacterised.** f23 next hit `[ICALL] Failed to resolve VA 0xFFC00000` on two
-threads. `0xFFC00000` is **not** a code address — it is the bit pattern of a negative quiet NaN,
-already named `NAN_NEG` in the toolkit (`nv2a_pb_exec.c:3000`). The ICALL history before it is
-`… 0x00141A00, 0xFE000104, 0xFE000100, 0xFE00011C, 0xFFC00000`, a kernel-thunk path. This is a
-different class from the nine above and must not be treated as a missing dispatch entry.
-**UNVERIFIED.**
+**Blocker 10 resolved in part: an alias-folded job handler ran the wrong body.** f23 next hit
+`[ICALL] Failed to resolve VA 0xFFC00000` on two threads — not a code address, but the bit pattern
+of a negative quiet NaN (the toolkit names it `NAN_NEG`, `nv2a_pb_exec.c:3000`). The last named
+event before it was `[ALIAS-ICALL] target=0x00032610 owner=0x00033800`, present in f23 only.
+`0x32610` is slot 1 of the job-handler table at `0x1EC0F0` and is the **same `tail_jump_alias`
+defect the already-recovered sibling `0x32C70` documents**: the database span `0x32610..0x33800`
+overran because the function's own jump table at `0x32760` contains `C2 26 03 00`, which decodes
+as a spurious `ret 0x326`. The dispatch therefore ran `0x33800` — `mov eax,1; ret 4`, two
+instructions — instead of the real function ending at `0x3275C`. All 11 RETs are `ret 0xc`
+(`C2 0C 00`), so `stack_args 12`; the sibling `0x32C70` has a plain `C3` and correctly keeps 0, so
+the two genuinely differ. Recovered as `0x32610..0x3275D`, commit `9ea4e44`. **f25
+(`20261005-034216-016`, 404 s) then ran to `diagnostic_deadline` with zero unresolved calls, zero
+ABI failures and zero `ALIAS-ICALL` lines.** `recovered.c` 3100 -> 3101.
+
+**Open and NOT diagnosed: a nondeterministic 363 KiB NaN fill.** f23 also showed a uniform
+`0xFFC00000` fill at `0x233ED0..0x28ED04` (93,057 of 93,069 words; 4-byte aligned, not
+page-aligned at either end, running 68,752 bytes past `.data`'s virtual end). It overwrote the
+`DOLBY` section image (`0x27E080`, marked `writable: false, executable: true`), live globals
+including `0x251D6C` that `0x7DA30` reads, and the thread-trampoline control block — so the
+trampoline's `mov eax,[0x25efb8]; test eax,eax; je` saw non-zero and called `0xFFC00000`.
+**It is not deterministic:** f24 (`20261005-020708-928`, same binary) ran 520 s, stalled at 9
+presents and stayed clean; f25 stayed clean; older and much longer runs (f9 1203 s, f5-long
+1500 s) were clean. Recorded as a newly observed nondeterministic corruption with its evidence —
+**not** a diagnosis, and **not** established as a regression from this turn's span changes. The
+`[ALIAS-ICALL]` timing makes `0x32610` a plausible cause, but that is an inference and is not
+claimed. Two follow-ups worth a backlog entry: whether the wrong body caused the fill, and whether
+the `writable: false` `DOLBY` overwrite is a separate port defect (the port not enforcing XBE
+section write-protection).
+
+**Advisor status.** The Persistent Advisor returned one ruling (consultation 1, below) and then
+**failed twice with no reply** on consultations 2 and 3 (the fill's mechanism, and the `0x32610`
+questions). Per `docs/agent-workflow.md` §1 an unavailable route is **reported, never silently
+replaced**, and the Advisor is not a gate, so `0x32610` was fixed on the Orchestrator's own
+judgment from the bytes. The questions it would have ruled on: whether the wrong body caused the
+fill, whether `stack_args 12` is right, and whether the `writable: false` `DOLBY` overwrite is a
+separate port defect.
 
 **Advisor ruling, consultation 1 (2026-10-05): the shared-epilogue repair and the freeze reading.**
 It ratified widening `0xBB7B0` (and independently rejected the 2-byte fragment entry as failing
@@ -132,6 +162,25 @@ spans** rather than paying one run per fatal; each proposed end must be verified
 switch arms resolved, no `ITAIL`, zero checker findings) before landing. `0x00043910` needs no
 change.
 
+**Blocker 11: the boot path is strongly nondeterministic, and that now bounds what a run proves.**
+Three runs on the **same binary**, same environment, different outcomes:
+
+| run | seconds | outcome | furthest frame | presents | notes |
+|---|---|---|---|---|---|
+| f23 | 253 | `unhandled_exception` | disclaimer `5bdaea576b8509f5` | **1000** | 363 KiB NaN fill; `[ALIAS-ICALL] 0x32610` |
+| f25 | 404 | `diagnostic_deadline` | disclaimer `5bdaea576b8509f5` | 960 | clean; no fatal, no fill |
+| f26 | 810 | `diagnostic_deadline` | **Smilebit card `22fe3b5810848f88`** | **193** | **never showed the disclaimer hash at all** |
+
+f26 ran **twice as long** as f25 and got **less far**: it held the Smilebit card from t≈159 s to
+t=796 s, spinning in kernel ordinal 119 (9,353 calls), main thread
+`GUEST_THREAD identity=1 tid=2340 start=00148023` still live. Its BMPs were inspected directly —
+`p0003` is the SEGA card, `p0005`/`p0006` the Smilebit card, and the final held frame is Smilebit.
+This is consistent with the non-reproducing stalls the plan already records for this title (f6's
+DSP spin "did not reproduce"; f7 passed it), but it has two consequences that must be respected:
+**a single run cannot establish progress**, and the NaN fill's absence in f24/f25/f26 is **weak**
+evidence about its cause, because those runs never reached the state f23 did. It is **not** a
+regression claim: f26 used the `0x32610` binary and stalled *earlier* than f25 on the same binary.
+
 **Also this session.** `docs/agent-workflow.md` §1 named the Turn Planner route `codex/sol-6.1`,
 which does not exist; the codex provider advertises `gpt-6.1-sol` and plan T11 already recorded
 it as the default, so `scripts/check-route-allowlist.py` was failing and `just check` was red at
@@ -140,6 +189,15 @@ it as the default, so `scripts/check-route-allowlist.py` was failing and `just c
 PRE-`0x13FAD0` hash, because `d77474d` updated the manifest but never re-baselined that file, so
 `jsrf_generation_provenance` was **already failing** at `d77474d`; both now hold measured values
 and the suite is 35/35.
+
+**Pushed 2026-10-05 (the nine-defect dispatch chain).** Toolkit unchanged this session at
+`6e6e05664f438ad8b95b0c5186a770da8e54e883` (no push). Game
+`PUSHED_TO: origin / BRANCH: master / COMMIT: c61a9dd4811cf9f72795dbaa018bba9f1fd4710f / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: d77474d..c61a9dd master -> master`.
+The three game commits are `7e683a3` (four entries and one truncated span), `e96c586` (five more
+entries and three defective spans) and `c61a9dd` (this record). Outgoing commits add no `game/`
+path; `just secret-audit` reports two hits, both self-matches of the audit script's own pattern
+text (`scripts/secret-audit.py`) and the record that documents it
+(`docs/reviews/push-checkpoint-2026-09-28.md`), not real secrets.
 
 **Next.** Characterise `0xFFC00000` (is a float reaching an indirect call, a corrupted vtable
 slot, or a consequence of the freeze?). Then batch the 12 sibling spans. Then re-measure the
