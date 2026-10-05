@@ -6,42 +6,83 @@ actually evolved and why.
 
 ## Status at last update
 
-**Nine dispatch defects fixed, each confirmed by the next run advancing to a new site.**
+**Fourteen dispatch defects fixed, each confirmed by the next run advancing to a new site**, plus a
+twelve-span batch that resolved 65 fatal trap call sites. This section is regenerated from the
+committed manifest at HEAD; the Reviewer found (B6) that an earlier revision shipped a superseded
+span and an incorrect RET count, and that is why it is regenerated rather than appended.
 
 | # | Blocker | Fix | Run evidence |
 |---|---|---|---|
 | 1 | `[ICALL] Failed to resolve VA 0x0013B750` | recovered `0x13B750..0x13B810`, `stack_args 0` | f16: `[RECOVERED] 0x0013B750 returned; ABI verified` |
 | 2 | `[ICALL] Failed to resolve VA 0x0007AF90` | recovered `0x7AF90..0x7B750`, `stack_args 0` | f17: `[RECOVERED] 0x0007AF90 returned; ABI verified` |
-| 3 | `[ICALL] Failed to resolve VA 0x000BBA17` | widened `0xBB7B0` `0xBBA04 -> 0xBBA19` | f18: `[RECOVERED] 0x000BB7B0 returned; ABI verified` |
+| 3 | `[ICALL] Failed to resolve VA 0x000BBA17` | `0xBB7B0` widened `0xBBA04 -> 0xBBA19` | f18: `[RECOVERED] 0x000BB7B0 returned; ABI verified` |
 | 4 | `[ICALL] Failed to resolve VA 0x000B022E` | `0xB0210` end `0xB0305 -> 0xB05CC` | f19: `[RECOVERED] 0x000B0210 returned; ABI verified` |
 | 5 | `[ICALL] Failed to resolve VA 0x0006A770` | recovered `0x6A770..0x6A7C0`, `stack_args 0` | f20: `[RECOVERED] 0x0006A770 returned; ABI verified` |
-| 6 | latent: `ABI FAILURE 0x00074C70 expected +8` | `0x74C70` `stack_args 4 -> 0` | f21: `[RECOVERED] 0x00074C70 returned; ABI verified` |
-| 7 | `[ICALL] Failed to resolve VA 0x000C2630` | split `0xC25D0` (end `-> 0xC2621`) + new entry `0xC2630..0xC2700` | f22: `[RECOVERED] 0x000C2630 returned; ABI verified` |
-| 8 | detector-found: `jmp 0x47850` cut target | split `0x47820` (end `-> 0x47849`) + new entry `0x47850..0x47970` | not yet run in isolation; f23 loaded it |
-| 9 | latent: `ABI FAILURE 0x0007DA30 expected +4` | `0x7DA30` end `0x7DA84 -> 0x7DAD6`, `stack_args 0 -> 4` | f23: `[RECOVERED] 0x0007DA30 returned; ABI verified` |
+| 6 | latent `ABI FAILURE 0x00074C70 expected +8` | `0x74C70` `stack_args 4 -> 0` | f21: `[RECOVERED] 0x00074C70 returned; ABI verified` |
+| 7 | `[ICALL] Failed to resolve VA 0x000C2630` | split `0xC25D0` (`-> 0xC2621`) + entry `0xC2630..0xC2700` | f22: `[RECOVERED] 0x000C2630 returned; ABI verified` |
+| 8 | detector-found: `jmp 0x47850` cut target | split `0x47820` (`-> 0x47849`) + entry `0x47850..0x47970` | byte-derived only; **no** run dispatched it |
+| 9 | latent `ABI FAILURE 0x0007DA30 expected +4` | `0x7DA30` end `0x7DA84 -> 0x7DAD6`, `stack_args 0 -> 4` | f23: `[RECOVERED] 0x0007DA30 returned; ABI verified` |
+| 10 | `[ALIAS-ICALL] 0x00032610` + `0xFFC00000` | recovered `0x32610..0x3275F`, `stack_args 12` | **f27**: `[RECOVERED] 0x00032610 returned; ABI verified` |
+| 11 | `[ICALL] Failed to resolve VA 0x00054750` | recovered `0x54750..0x55530`, `stack_args 0` + generated patch `remove-54750-stub` (L02) | **f28**: `[RECOVERED] 0x00054750 returned; ABI verified` |
+| 12 | `[ICALL] Failed to resolve VA 0x00089A60` | recovered `0x89A60..0x89AC9`, `stack_args 0` | f28 died here |
+| — | twelve sibling spans (65 fatal trap sites) | widened as one batch, `KNOWN_OPEN` 80 -> 66 | byte-derived; no run dispatched them |
+| — | two self-found defects | `0x32610` end `0x3275D -> 0x3275F`; `0x47820` `stack_args 0 -> 4` | found by consolidated re-verification, not a run |
 
-`recovered.c` 3095 -> 3100. `recovery-unresolved.json` lost `0x000BBA17`, `0x000B022E`,
-`0x0006A770`. `scripts/check-span-exits.py` findings 431 -> 428, and **none** of the eleven
-entries touched this turn is a finding. CTest 35/35. All checkers pass.
+**Run-to-run nondeterminism is now a first-class constraint (blocker 11).** f25 and f26 share
+`exe_sha256 = ca867957…`: f25 reached the disclaimer at 960 presents, f26 stalled on the **Smilebit**
+card at 193 presents for its whole 810 s and never showed the disclaimer hash. So **a clean run
+proves nothing unless it reaches the path** — which is why the acceptance criterion for blocker 10 is
+path-aware.
+
+`recovered.c` 3095 -> 3103. `recovery-unresolved.json` losses `d77474d` -> HEAD, measured:
+`0x00047850`, `0x0006A770`, `0x0007ADE1`, `0x0007ADE2`, `0x000865B2`, `0x000AECA0`, `0x000AECA1`,
+`0x000B05B8`, `0x000BBA17`, `0x000F7705`, `0x000FCB16`, `0x000FCDF9`, `0x000FD166`, `0x00101EF9`,
+`0x001045AC`, `0x00104A8A`, `0x0010FA43`, `0x00110314`, `0x00110317`. (An earlier revision named
+`0x000B022E`, which appears in **no** revision of that file — 14 checked; corrected per Reviewer
+finding B4.) `scripts/check-span-exits.py` findings 431 -> 363. CTest 35/35; `just check` passes,
+now including a baseline-gated `check-entry-extents.py`.
 
 Every run is **exploratory** (`RECOMP_GPU_ACK` defaulted on, `RECOMP_APU_TRAP=1`,
 `RECOMP_PB_EXEC=1`, `RECOMP_FB_WINDOW=1`, `RECOMP_FB_PRESENT_DUMP_EVERY=10`).
 **The title screen has NOT been reached.** The last visible frame is still the graffiti
 disclaimer, hash `5bdaea576b8509f5`, and presents still stop at exactly 1000.
 
-## Blocker 10 — `0xFFC00000`: an alias-folded job handler, and a nondeterministic NaN fill
+## Blocker 10 — `0xFFC00000`: an alias-folded job handler that caused the NaN fill
 
-**Resolved part (fixed, run-confirmed).** The last named event before the NaN fatal was
-`[ALIAS-ICALL] target=0x00032610 owner=0x00033800`, present in f23 only. `0x32610` is slot 1 of
-the job-handler table at `0x1EC0F0` and is the **same `tail_jump_alias` defect the
-already-recovered sibling `0x32C70` documents**: the database span `0x32610..0x33800` overran
+**Resolved part — and the fill is now fully explained, not merely observed.** The last named event
+before the NaN fatal was `[ALIAS-ICALL] target=0x00032610 owner=0x00033800`, present in f23 only.
+`0x32610` is slot 1 of the job-handler table at **`0x1EC200`** — a *separate* table from
+`0x1EC0F0`, which ends with a zero terminator at `0x1EC1FC` (slot 67); counting straight on from
+`0x1EC0F0` it would be slot 69. Dispatcher `0x00025700` bounds the index with `cmp edx,0x21` and
+then does `mov edx,[edx*4+0x1EC200]`. (An earlier revision of this plan said "slot 1 of `0x1EC0F0`";
+that was wrong and is corrected per Reviewer finding B2.) It is the **same `tail_jump_alias` defect
+the already-recovered sibling `0x32C70` documents**: the database span `0x32610..0x33800` overran
 because the function's own jump table at `0x32760` contains `C2 26 03 00`, which decodes as a
 spurious `ret 0x326`. The dispatch therefore ran `0x33800`, which is `mov eax,1; ret 4` — two
-instructions — instead of the real function ending at `0x3275C`. All 11 RETs are `ret 0xc`
-(`C2 0C 00`), so `stack_args 12`; the sibling `0x32C70` has a plain `C3` and correctly keeps 0.
-Recovered as `0x32610..0x3275D`, `stack_args 12`. **f25 (404 s) then ran to
-`diagnostic_deadline` with zero unresolved calls, zero ABI failures and zero `ALIAS-ICALL`
-lines.** `recovered.c` 3100 -> 3101. Commit `9ea4e44`.
+instructions — instead of the real function ending at `0x3275C`. All **12** RETs are `ret 0xc`
+(`C2 0C 00`), so `stack_args 12`. Recovered as `0x32610..0x3275F`, `stack_args 12`.
+
+**Run confirmation is `f27` (`20261005-110711-776`), which logs `[RECOVERED] 0x00032610 returned;
+ABI verified`** — *not* f25. f25 has **zero** occurrences of that line and never dispatched the
+address; an earlier revision of this plan credited f25 and that was corrected per Reviewer finding
+B3. `recovered.c` 3100 -> 3101. Commit `9ea4e44`.
+
+**The fill's mechanism (Advisor ruling, consultations 2/3): the misdispatch caused it.** The wrong
+`eax = 1` from `mov eax,1; ret 4` flowed into constructor `0x15420`, which stored it at
+`[obj+0x38]` where an object pointer belongs (object `0x034D5110`). The boot thread's loop at
+`0x15D90` then derived `count = (0-1)/1 = 0xFFFFFFFF` and ran **31,739** iterations, normalising
+zero vectors to the SSE default QNaN `0xFFC00000` and writing 12-byte entries from the float3 array
+base `0x231D40` to `edi = 0x28ED04`. The arithmetic closes exactly: `0x231D40 + 12 × 31,739 =
+0x28ED04` and the paired heap buffer `0x034C3E40 + 0x5C × 31,740 = 0x0378CCD0`. So the fill is
+**computed NaN, not a memset** and not the title's sentinel, and it is a **latent defect of the
+2026-09-21 alias fold that f23 was the first run to reach — not a regression from this turn's span
+changes.** The `0x7DA30` change did not cause it; bisecting would have been wasted effort. Recorded
+as a new defect class in `docs/jsrf-technical-record.md` §9.
+
+**Path-aware acceptance criterion this implies.** A run counts only if it logs
+`[RECOVERED] 0x00032610 returned`, has **no** `ALIAS-ICALL target=0x00032610`, shows **no** NaN at
+`0x27E080` or `0x25EFB8`, and stops **beyond** `0x9CC40`. A run taking the f24 branch (idle in the
+`0x13F80` presenter loop, 9 presents) exercised nothing and must be recorded as not exercised.
 
 **Open part (recorded, NOT diagnosed).** f23 also showed a 363 KiB uniform `0xFFC00000` fill at
 `0x233ED0..0x28ED04` (93,057 of 93,069 words), which overwrote the `DOLBY` section image
@@ -54,15 +95,29 @@ observed nondeterministic corruption with its evidence, **not** as a diagnosis a
 regression from this turn's span changes. The `[ALIAS-ICALL]` timing makes `0x32610` a
 plausible cause, but that is an **inference** and is not claimed.
 
-**Advisor status.** The Persistent Advisor (`claude/claude-opus-5-5` @ `xhigh`) returned one
-ruling (consultation 1, recorded below) and then **failed twice with no reply** on
-consultations 2 and 3 (the fill's mechanism and the `0x32610` questions). Per
-`docs/agent-workflow.md` §1 an unavailable route is **reported, never silently replaced**, and
-the Advisor is not a gate, so the `0x32610` fix was made on the Orchestrator's own judgment from
-the bytes. The open questions it would have ruled on are: whether the wrong body caused the fill
-(causal arrow), whether `stack_args 12` is right (I derived it from all 11 RETs being
-`C2 0C 00`), and whether the `writable: false` `DOLBY` overwrite is a separate port defect (the
-port not enforcing XBE section write-protection).
+**Advisor status — resolved.** The Persistent Advisor returned four rulings across the turn. It
+failed twice with no reply (consultations 2 and 3) and then **answered both on the retry**; per
+`docs/agent-workflow.md` §1 an unavailable route is reported rather than silently replaced, and the
+Advisor is not a gate, so the intervening `0x32610` fix was made on the Orchestrator's own judgment
+from the bytes and was subsequently **ratified**. All three open questions it was asked are now
+answered:
+
+- **Did the wrong body cause the fill?** **Yes** — see the mechanism above. The causal arrow runs
+  from the alias to the fill, and it is a latent defect of the 2026-09-21 alias fold, not a
+  regression. It would be reversed by a run that logs the ABI-verified return for `0x00032610` and
+  still shows the fill, which would mean `[obj+0x38]` has a second source.
+- **Is `stack_args 12` right?** **Yes** — and the Advisor checked all 33 slots of the `0x1EC200`
+  table: every one is `ret 0xc` with manifest `stack_args 12`, so 12 is consistent. (My earlier
+  derivation said "11 RETs"; the corrected end `0x3275F` has **12**, and the 11th/12th distinction
+  was the very defect Reviewer finding B6 caught in this file.)
+- **Is the `writable: false` `DOLBY` overwrite a separate port defect?** **No** — the runaway loop
+  simply crossed the end of `.data`. Enforcing write protection would only fault earlier, and
+  whether the retail loader enforces section write flags at all is **inferred, not verified**. It is
+  a backlog diagnostic idea, not a fidelity defect.
+
+The Advisor also recommended batching the sibling spans (done: 12 widened, 65 trap sites resolved)
+and auditing the ten unrecovered alias addresses that data tables point at — recorded in
+`docs/jsrf-technical-record.md` §9 with the four `.rdata` ones marked highest priority.
 
 ## PLAN_CHANGE 5 — the freeze is probably NOT an independent blocker (Advisor correction)
 
