@@ -13,9 +13,9 @@
     "src/recomp/gen/recomp_stubs_recovery.c": "5897e497ad2f789241a9b2f95653023b306f3d4849a80406ca586ed7706d9bbb",
     "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
     "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "b6cbf6243b9df9d695d6c2b5ddd83fde0812eba44b999dce036386fd427ad92e",
+    "src/recomp/recovered/recovered.c": "a007c1b0dc39621e7bd2eac92352f1a63120a6616d382a5730177d529a3d7327",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "13ebacc52b5d2f70d82bc07f0f62156357d99024e473bc114869e5dd74513cb1",
+    "src/recomp/recovered/recovered_11c1_test.c": "62b39ea1af197d1631627b81ca358eac0826916a8ed16577ba6ef184ccbf7fa6",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -278,6 +278,22 @@
         "src/recomp/recovered/recovered_11c1_test.c"
       ],
       "reason": "0x0008AEB0 recovered (0x0008AEB0..0x0008B1FD, stack_args 0), an unowned gap reached by two direct jumps, found by f29 after the 0x00032610 and 0x00054750 fixes. It also owns the gap_prologue false entry 0x0008B056, which has no rel32 reference anywhere. Five plain C3 rets, so stack_args 0. recovered.c 3103 -> 3104. Amended, not regenerated: no full translation pass ran."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/recovered/recovered.c",
+        "src/recomp/recovered/recovered_11c1_test.c"
+      ],
+      "reason": "0x00080340 end corrected 0x00080BD0 -> 0x00081853 and stack_args 4 -> 0. The declared end contained no ret at all, so the body could not reach its epilogue and f30 measured an ABI failure at +8; the real epilogue is a single plain C3 at 0x00081852. The span also owns three tail_jump_alias interior starts with no rel32 reference anywhere. check-span-exits findings 363 -> 360. recovered.c stays 3104. Amended, not regenerated."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/recovered/recovered.c",
+        "src/recomp/recovered/recovered_11c1_test.c"
+      ],
+      "reason": "0x000307A0 end corrected 0x000307F8 -> 0x00030800 and stack_args set to 4. The old end cut `test esi,esi` in half and the body fell through to a symbol decoded from mid-instruction on a reachable path -- a LIVE defect the entry-extent baseline had frozen as reviewed. Same class as 0x00178F40 and 0x00032610. The baseline drops 19 -> 18. recovered.c stays 3104. Amended, not regenerated: no full translation pass ran."
     }
   ]
 }

@@ -34,13 +34,34 @@ card at 193 presents for its whole 810 s and never showed the disclaimer hash. S
 proves nothing unless it reaches the path** — which is why the acceptance criterion for blocker 10 is
 path-aware.
 
-`recovered.c` 3095 -> 3103. `recovery-unresolved.json` losses `d77474d` -> HEAD, measured:
-`0x00047850`, `0x0006A770`, `0x0007ADE1`, `0x0007ADE2`, `0x000865B2`, `0x000AECA0`, `0x000AECA1`,
-`0x000B05B8`, `0x000BBA17`, `0x000F7705`, `0x000FCB16`, `0x000FCDF9`, `0x000FD166`, `0x00101EF9`,
-`0x001045AC`, `0x00104A8A`, `0x0010FA43`, `0x00110314`, `0x00110317`. (An earlier revision named
-`0x000B022E`, which appears in **no** revision of that file — 14 checked; corrected per Reviewer
-finding B4.) `scripts/check-span-exits.py` findings 431 -> 363. CTest 35/35; `just check` passes,
-now including a baseline-gated `check-entry-extents.py`.
+`recovered.c` 3095 -> 3104. `recovery-unresolved.json` losses `d77474d` -> HEAD, **measured by
+set difference rather than transcribed** (the first attempt at this list named
+`0x000B022E`, which appears in no revision of that file, and then omitted real losses — the
+Remediation Planner caught both, which is why it is now generated):
+`0x00047850`,
+`0x0006A770`,
+`0x0007ADE1`,
+`0x0007ADE2`,
+`0x000865B2`,
+`0x00089A60`,
+`0x0008AEB0`,
+`0x000AECA0`,
+`0x000AECA1`,
+`0x000B05B8`,
+`0x000BBA17`,
+`0x000F7705`,
+`0x000FCB16`,
+`0x000FCDF9`,
+`0x000FD166`,
+`0x00101EF9`,
+`0x001045AC`,
+`0x00104A8A`,
+`0x0010FA43`,
+`0x00110314`,
+`0x00110317`.
+`scripts/check-span-exits.py` findings 431 -> 360. CTest 36/36; `just check` passes,
+now including a baseline-gated `check-entry-extents.py` (18 entries, after `0x000307A0` was
+found to be a LIVE defect and fixed rather than left frozen).
 
 Every run is **exploratory** (`RECOMP_GPU_ACK` defaulted on, `RECOMP_APU_TRAP=1`,
 `RECOMP_PB_EXEC=1`, `RECOMP_FB_WINDOW=1`, `RECOMP_FB_PRESENT_DUMP_EVERY=10`).
@@ -88,9 +109,10 @@ as a new defect class in `docs/jsrf-technical-record.md` §9.
 `0x233ED0..0x28ED04` (93,057 of 93,069 words), which overwrote the `DOLBY` section image
 (`0x27E080`, marked `writable: false, executable: true`), live globals including `0x251D6C` that
 `0x7DA30` reads, and the thread-trampoline control block — making the trampoline's
-`test eax,eax; je` see non-zero and call `0xFFC00000`. **It is not deterministic:** f24 on the
-same binary ran 520 s, stalled at 9 presents and stayed clean; f25 also stayed clean; older and
-much longer runs (f9 1203 s, f5-long 1500 s) were clean. It is therefore recorded as a newly
+`test eax,eax; je` see non-zero and call `0xFFC00000`. **It is not deterministic.** f24 (a
+**different** binary: `ac62b0b1…` vs f23's `44c39546…`) ran 520 s, stalled at 9 presents and stayed
+clean; the genuine same-binary pair f25/f26 also disagree; older and much longer runs (f9 1203 s,
+f5-long 1500 s) were clean. It is therefore recorded as a newly
 observed nondeterministic corruption with its evidence, **not** as a diagnosis and **not** as a
 regression from this turn's span changes. The `[ALIAS-ICALL]` timing makes `0x32610` a
 plausible cause, but that is an **inference** and is not claimed.
@@ -328,7 +350,7 @@ dispatches to `0xBBA17` indirectly.
 
 ## Blocker 11 — the boot path is strongly nondeterministic (new, measured)
 
-Three runs on the **same binary**, same environment, different outcomes:
+Three runs in the same environment with different outcomes. **They are NOT all the same binary**: f23 is `exe_sha256 = 44c39546…`, while f25 and f26 share `ca867957…`. The genuine same-binary pair is f25/f26, and that pair alone carries the nondeterminism finding; an earlier revision of this file said otherwise and the Remediation Planner caught it.
 
 | run | seconds | outcome | furthest frame | presents | notes |
 |---|---|---|---|---|---|
@@ -370,8 +392,8 @@ than a lifting question. That is a reasonable place to hand the turn to review.
 
 ## Critical path — remaining
 
-1. **Blocker 11** (nondeterministic boot stalls): characterise why the same binary stalls at the
-   Smilebit card in one run and reaches the disclaimer in another. This is now the primary
+1. **Blocker 11** (nondeterministic boot stalls): characterise why two runs of the *same* binary
+   stall at different cards. This is now the primary
    critical-path question.
 2. **Blocker 10's open half**: whether the `0x32610` wrong-body dispatch caused the NaN fill (an
    inference, not a claim), and whether the `writable: false` `DOLBY` overwrite is a separate port

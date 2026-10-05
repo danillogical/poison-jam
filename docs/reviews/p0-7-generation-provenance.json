@@ -1022,6 +1022,74 @@
           "path": "src/recomp/recovered/recovered_11c1_test.c"
         }
       ]
+    },
+    {
+      "cause": "0x00080340 end corrected 0x00080BD0 -> 0x00081853 AND stack_args corrected 4 -> 0. Both were wrong, and the truncated end is why the ABI value could not be right: at end 0x00080BD0 the span contains NO ret at all, so the body could not reach its own epilogue. Run 20261005-114334-406-f30-8aeb0 measured `[RECOVERED] ABI FAILURE 0x00080340 esp 00F7FED0->00F7FED4 expected +8` -- the observed delta is 4, i.e. stack_args 0, not 4. A clean capstone decode of 0x00080340..0x00081853 has exactly ONE ret, at 0x00081852, a plain C3. The widened span also owns three interior addresses the database lists as separate entries (0x00080BD0, 0x00080C83, 0x000814BE), all detection_method=tail_jump_alias with NO rel32 reference from anywhere in the XBE, i.e. internal labels. This is an instance of BOTH the truncated-span class and the hidden-ret-immediate class (H9) at once. scripts/check-span-exits.py findings 363 -> 360. recovered.c stays 3104.",
+      "date": "2026-10-05",
+      "evidence": [
+        "run 20261005-114334-406-f30-8aeb0: `[RECOVERED] 0x0008AEB0 returned; ABI verified`, then `[RECOVERED] ABI FAILURE 0x00080340 ... expected +8`",
+        "the declared span 0x00080340..0x00080BD0 contains no ret at all under a clean capstone decode",
+        "clean capstone decode 0x00080340..0x00081853 has exactly one ret at 0x00081852, plain C3",
+        "the three interior starts have no rel32 reference in any section",
+        "the body now emits exactly one `esp += 4; return;` and the wrapper expects +4"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "36e7a066d8afe15fd718599782326cde60f349c5474f8d43b177444c947218e1",
+          "old_sha256": "320c615788ab0a57b46064f6857bb14176d1fdaa6a7c34dc86ee15dd81bb3ae8",
+          "path": "tools/disasm/output/functions.recovered.json"
+        },
+        {
+          "new_sha256": "481f1b8f7233892c91d4e6a7a83a135ddb2e71796ae71aa14d38e21bce4eaf9a",
+          "old_sha256": "70c6f5f0cd83c5c363cf8cdd1225b59dc31127192696b0dc79254d65b365c7ea",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "c920f496b69d9f64f8e585213dba04246e7ec946c3de4907b1e2dcb8bc097d83",
+          "old_sha256": "b6cbf6243b9df9d695d6c2b5ddd83fde0812eba44b999dce036386fd427ad92e",
+          "path": "src/recomp/recovered/recovered.c"
+        },
+        {
+          "new_sha256": "eea63145aba364680ea41c0cbed8f5df3b065993f99893a767bf2d1efb594b9a",
+          "old_sha256": "13ebacc52b5d2f70d82bc07f0f62156357d99024e473bc114869e5dd74513cb1",
+          "path": "src/recomp/recovered/recovered_11c1_test.c"
+        }
+      ]
+    },
+    {
+      "cause": "0x000307A0 end corrected 0x000307F8 -> 0x00030800 and stack_args set to 4: a LIVE defect of the entry-extent class, found by the Remediation Planner, which correctly refused to accept the baseline I had frozen as \"reviewed\". The old end cut `test esi, esi` (`85 F6` at 0x000307F7..0x000307F8) in half, so the generated body ended at loc_000307F4 with `g_seh_ebp = ebp; sub_000307F8(); return;` -- a call to a symbol whose address is MID-INSTRUCTION (0x000307F8 decodes as `div byte ptr [ebp-0xb]`, the tail of the cut `test`) -- on a reachable path, because the loop at 0x000307F0 falls through when `test esi,esi` sets ZF. Same failure mode as 0x00178F40 and 0x00032610. A clean capstone decode of 0x000307A0..0x00030800 has exactly one ret, at 0x000307FD (`C2 04 00` = ret 4), so stack_args 4; 0x00030800 is the byte after it and is a separate function entry that the `je 0x30800` at 0x000307F2 tail-jumps to. config/entry-extent-baseline.json drops from 19 to 18 entries. recovered.c stays 3104.",
+      "date": "2026-10-05",
+      "evidence": [
+        "the declared span 0x000307A0..0x000307F8 cuts `85 F6` at 0x000307F7, leaving one byte",
+        "the generated body emitted `sub_000307F8(); return;` at loc_000307F4 on a reachable path",
+        "0x000307F8 decodes as `div byte ptr [ebp-0xb]`, i.e. mid-instruction, not a function start",
+        "clean capstone decode 0x000307A0..0x00030800 has exactly one ret at 0x000307FD, `C2 04 00`",
+        "the fixed body calls no mid-instruction symbol and the wrapper expects +8 for ret 4"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "a0aa2882ffd32fae8cd8c7b3bf3f80b7c044a32f16b7097d70df79e38b633c8c",
+          "old_sha256": "36e7a066d8afe15fd718599782326cde60f349c5474f8d43b177444c947218e1",
+          "path": "tools/disasm/output/functions.recovered.json"
+        },
+        {
+          "new_sha256": "a9f35183d890d46333757c254df28ffe2c5789a56e3ec8d3aac819a2635d6da7",
+          "old_sha256": "481f1b8f7233892c91d4e6a7a83a135ddb2e71796ae71aa14d38e21bce4eaf9a",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "a007c1b0dc39621e7bd2eac92352f1a63120a6616d382a5730177d529a3d7327",
+          "old_sha256": "c920f496b69d9f64f8e585213dba04246e7ec946c3de4907b1e2dcb8bc097d83",
+          "path": "src/recomp/recovered/recovered.c"
+        },
+        {
+          "new_sha256": "62b39ea1af197d1631627b81ca358eac0826916a8ed16577ba6ef184ccbf7fa6",
+          "old_sha256": "eea63145aba364680ea41c0cbed8f5df3b065993f99893a767bf2d1efb594b9a",
+          "path": "src/recomp/recovered/recovered_11c1_test.c"
+        }
+      ]
     }
   ],
   "checker_version": "jsrf-generation-provenance/1",
@@ -1040,18 +1108,18 @@
     "src/recomp/gen/recomp_stubs_recovery.c": "5897e497ad2f789241a9b2f95653023b306f3d4849a80406ca586ed7706d9bbb",
     "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
     "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "b6cbf6243b9df9d695d6c2b5ddd83fde0812eba44b999dce036386fd427ad92e",
+    "src/recomp/recovered/recovered.c": "a007c1b0dc39621e7bd2eac92352f1a63120a6616d382a5730177d529a3d7327",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "13ebacc52b5d2f70d82bc07f0f62156357d99024e473bc114869e5dd74513cb1",
+    "src/recomp/recovered/recovered_11c1_test.c": "62b39ea1af197d1631627b81ca358eac0826916a8ed16577ba6ef184ccbf7fa6",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "generation_mode": "full regeneration 2026-09-29 with the toolkit 2a349c8 lifter, then relift-selected.py boundaries; hand edits re-applied by scripts/patch-generated.py from config/generated-patches.json (the recomp_types.h project ABI additions, the six A4b2 jsrf_watch_store hooks, and the a4b-watch declaration). This tree predates toolkit 86113c7 --backedge-yield: RECOMP_BACKEDGE is absent, so under RECOMP_GUEST_SERIAL=1 a guest spin loop costs one bounded timeout (docs/jsrf-compatibility-ledger.md L34).",
   "generators": {
     "project": {
       "dirty": true,
-      "revision": "24d6970c9bec83af1378aca30da45587b1e22ae8",
+      "revision": "5401375f2f8a1949910174938cd1821070a750e6",
       "state": "MEASURED",
-      "status_sha256": "5cbcc8f6003a225632a90099553232659020de565027f2a779f249f62fd1af6d"
+      "status_sha256": "3ed1ed2bbd4c635d889b4e91fb4ff9c9850adec14be73201719fd0638b0dcbde"
     },
     "scripts/recover-functions.py": "c951fe5ed787253bd523d16502a231772197043b84a3b20e4c7b680b55c03847",
     "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
@@ -1076,9 +1144,9 @@
       "sha256": "994f2212b8df469b66e81cc7c15ba74a894bbf0099c3d2bc31c74e38cef16bac"
     },
     "config/recovered-functions.json": {
-      "bytes": 2885652,
+      "bytes": 2888186,
       "present": true,
-      "sha256": "70c6f5f0cd83c5c363cf8cdd1225b59dc31127192696b0dc79254d65b365c7ea"
+      "sha256": "a9f35183d890d46333757c254df28ffe2c5789a56e3ec8d3aac819a2635d6da7"
     },
     "config/recovery-unresolved.json": {
       "bytes": 7364,
@@ -1116,9 +1184,9 @@
       "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
     },
     "tools/disasm/output/functions.recovered.json": {
-      "bytes": 6075975,
+      "bytes": 6078509,
       "present": true,
-      "sha256": "320c615788ab0a57b46064f6857bb14176d1fdaa6a7c34dc86ee15dd81bb3ae8"
+      "sha256": "a0aa2882ffd32fae8cd8c7b3bf3f80b7c044a32f16b7097d70df79e38b633c8c"
     }
   },
   "known_unknowns": [],
@@ -1191,18 +1259,18 @@
       "src/recomp/recovered/recovered.c": {
         "markers": {
           "JSRF_ABI_CONTINUE": 9312,
-          "RECOMP_ABI_CALL": 10048,
+          "RECOMP_ABI_CALL": 10127,
           "RECOMP_GENERATED_CODE": 1,
-          "g_seh_ebp": 6298
+          "g_seh_ebp": 6296
         },
         "present": true
       }
     },
     "totals": {
       "JSRF_ABI_CONTINUE": 9312,
-      "RECOMP_ABI_CALL": 10056,
+      "RECOMP_ABI_CALL": 10135,
       "RECOMP_GENERATED_CODE": 5,
-      "g_seh_ebp": 6304
+      "g_seh_ebp": 6302
     }
   },
   "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",
