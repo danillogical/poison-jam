@@ -173,7 +173,10 @@ switch arms resolved, no `ITAIL`, zero checker findings) before landing. `0x0004
 change.
 
 **Blocker 11: the boot path is strongly nondeterministic, and that now bounds what a run proves.**
-Three runs on the **same binary**, same environment, different outcomes:
+Three runs in the same environment with different outcomes. **They are not all the same binary** —
+f23 is `exe_sha256 = 44c39546…` while f25/f26 share `ca867957…`; the genuine same-binary pair is
+f25/f26, and that pair alone carries the finding. (An earlier revision of this record said
+otherwise; the Reviewer caught it.)
 
 | run | seconds | outcome | furthest frame | presents | notes |
 |---|---|---|---|---|---|
@@ -218,6 +221,93 @@ failures were load artifacts, not regressions, and the evidence was that **a dif
 tests failed on each attempt** (first `22/28/29`, then `9/11/22/28/29`) and that
 `xbox_guest_meter` — a **toolkit** kernel test under `xboxrecomp/src/kernel/`, independent of
 `recovered.c` — failed 3 of 6 isolated runs on the same binary.
+
+**The chain continued past the reviewed range (stops 11–14), each run-confirmed.** After the Turn
+Reviewer's brief, the same run-driven walk cleared four more stops and closed two tooling gaps:
+
+| # | Stop | Fix | Confirmed by |
+|---|---|---|---|
+| 10 | `[ALIAS-ICALL] 0x00032610` + `0xFFC00000` | recovered `0x32610..0x3275F`, `stack_args 12` | **f27** (`20261005-110711-776`) |
+| 11 | `[ICALL] 0x00054750` | recovered `0x54750..0x55530`, `stack_args 0` + generated patch `remove-54750-stub` (L02) | **f28** (`20261005-111824-944`) |
+| 12 | `[ICALL] 0x00089A60` | recovered `0x89A60..0x89AC9`, `stack_args 0` | f29 (exercised; f29 died at `0x8AEB0`) |
+| 13 | `[ICALL] 0x0008AEB0` | recovered `0x8AEB0..0x8B1FD`, `stack_args 0` | **f30** (`20261005-114334-406`) |
+| 14 | `ABI FAILURE 0x00080340 expected +8` | `0x80340` end `0x80BD0 -> 0x81853`, `stack_args 4 -> 0` | f30 (the failure is the evidence) |
+
+`0x00054750` needed a generated patch because the translation pass had also emitted a "not detected"
+trap for the same address, and the two definitions collided (`LNK2005 sub_00054750 already defined`).
+`recomp_stubs_unresolved.c` is **translation-owned**, so `config/generated-patches.json` is the
+sanctioned mechanism and the patch names ledger **L02**. `0x00080340` was an instance of **both**
+classes at once — a truncated span **and** a `stack_args` hidden behind it — the same pattern as
+`0x0007DA30`.
+
+**A mistake I made and corrected, recorded because the lesson is durable.** I first widened
+`0x00080340` to `0x00081853` on the claim that three interior addresses (`0x80BD0`, `0x80C83`,
+`0x814BE`) were internal labels, justified by "no rel32 branch references them". **That test is
+not merely weak, it is the wrong test.** The Advisor's ruling is explicit: `0x80BD0` has **no**
+rel32 callers and is reached only through the `.rdata` dword at `0x1CD000` (`0x80340` is in the
+same table at `0x1CCFFC`), yet it is a real standalone **SEH** function. The correct criterion for
+an interior label is whether the owner's **own stack-depth CFG** reaches the address without
+falling through padding or crossing an epilogue/prologue pair.
+
+**The resolution is exact, and the two ranges are adjacent, not overlapping.**
+`0x80340` owns `[0x80340, 0x80BD0)` and `stack_args 0`: it has no `ret` of its own and ends at
+`0x80BCE` with two tail jumps to `0x0008AEB0`, both at stack depth 0. `0x80BD0` owns
+`[0x80BD0, 0x81853)` and `stack_args 0`: it is SEH-guarded, install at `0x80BD0`/`0x80BDE`
+(`mov fs:[0],esp`), restore at `0x81848` (`mov fs:[0],ecx`) → `add esp,0x34` → `ret` at `0x81852`,
+and the arithmetic closes exactly — prologue `push -1; push 0x187dcb; push eax; sub esp,0x28;
+push ebx; push ebp; push esi` = **-0x40**, epilogue `pop esi; pop ebp; pop ebx; add esp,0x34; ret`
+= **+0x44**, net **+4**. The Advisor's independent stack-depth CFG agrees: 840 reachable
+instructions over that span — every instruction in it — no depth conflicts, one exit at depth 0.
+
+**Why my first widening looked right:** a clean linear decode from `0x80340` runs past its *own*
+tail jump at `0x80BCE`, through two nop bytes, and into `0x80BD0`'s code, where it finds
+`0x80BD0`'s `ret` at `0x81852` and reports it as `0x80340`'s. The decode was clean; the inference
+from it was not. My "net -0x140" stack walk was also meaningless — it summed pushes and pops from
+branches that never execute together.
+
+**The remaining defect was in `0x80BD0`'s own pre-existing entry** (end `0x80C83`, `stack_args 4`,
+both wrong): `0x80C83` is the **join point of four branches inside the function**, not an end, so
+the body exited at depth `-0x40` with `fs:[0]` still linked and `ebx`/`esi` clobbered — exactly the
+measured `esp 00F7FE70->00F7FE30` against `+8` expected that f31 and f32 both logged. Both defects
+predate this session; clearing the entries in front made it reachable, the **H9 pattern** again.
+**f33 then passed the Advisor's stated acceptance criteria**: `[RECOVERED] 0x00080BD0 returned; ABI
+verified`, no ABI failure, and a stop later than f32 — a new site at `[ICALL] Failed to resolve VA
+0x00094AB0`.
+
+**Backlog, recommended by the Advisor.** A **stack-depth-CFG validator** over every manifest entry
+(exits at depth 0 with `ret` ⇒ `stack_args`; tails at depth 0) would have caught `0x80BD0`
+statically, and would also have caught this session's `0xBB7B0`, `0x7DA30` and `0x74C70` defects
+**without a run**. It is ~80 lines. Add it alongside the sibling-span and alias batches — this is
+the highest-value outstanding checker, because four of this session's defects were found only by
+running.
+
+**Two tooling gaps closed, each with a failing control.**
+
+- **`scripts/check-entry-extents.py` is now a real gate.** It took `--baseline`/`--write-baseline`
+  and is wired into the `check:` recipe with `config/entry-extent-baseline.json`. This is the
+  deterministic detector for the truncated-`end` class, and it was in **no** gate, which is why
+  `0x32610`'s one-byte-short end survived three commits while `just check` and CTest both passed.
+  **Negative control:** reinstating `0x3275D` makes the gate FAIL and name `0x00032610`; correcting
+  it passes again. **The baseline was initially 19 entries marked "reviewed" — and that was an
+  overclaim.** The Remediation Planner found `0x000307A0` frozen in it as a **live** defect: its
+  declared end cut `test esi,esi` (`85 F6`) in half and the body fell through to a symbol decoded
+  from mid-instruction (`sub_000307F8`) on a reachable path. It is now **fixed** (end
+  `0x000307F8 -> 0x00030800`, `stack_args 4`) and removed from the baseline, which is **18**
+  entries. The Planner's two oracles disagreed on how many of the rest are live (7 vs 1) and that
+  count is **not settled** — recorded as outstanding rather than taken from either.
+- **`scripts/check-run-exercised.py`** with `tests/test_run_exercised.py` (CTest
+  `jsrf_run_exercised`). It exists because this record called `0x00032610` "run-confirmed" by f25,
+  which **never dispatched it** (zero ABI-verified lines; all 14 textual `32610` matches were f25's
+  own directory name). A clean run that never reaches the changed code proves nothing, and the
+  error survived three commits. The check is path-aware and its **deciding control** asserts the two
+  real archived runs *disagree* — f25 must FAIL for `0x00032610` and f27 must PASS — so it reads a
+  return event rather than matching text.
+
+**The f29 run is the load-bearing validation for the reviewed fixes**, applied with the path-aware
+criterion: it exercised `0x32610`, `0x54750` **and** `0x89A60`, showed **no** NaN at `0x27E080` or
+`0x25EFB8`, had no `ALIAS-ICALL` for `0x32610`, and advanced to a new stop. That independently
+corroborates the Advisor's causal account of the fill, and is exactly what its stated reversal
+condition would have falsified.
 
 **Also this session — the §1 route correction, stated precisely (Reviewer finding B1 corrected).**
 `docs/agent-workflow.md` §1 named the Turn Planner route `codex/sol-6.1`, which does not exist; the
