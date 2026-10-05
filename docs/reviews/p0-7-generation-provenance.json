@@ -694,12 +694,195 @@
           "path": "src/recomp/gen/recomp_stubs_recovery.c"
         }
       ]
+    },
+    {
+      "cause": "0x0006A770 recovered (0x0006A770..0x0006A7C0, stack_args 0): a direct tail-jump target that no stored-pointer census can find. sub_00074C70 ends at 0x00074CA9 with `jmp 0x6a770`, encoded E9 C2 5A FF FF (opcode 0xE9 plus rel32 -42302 from 0x74CAE), so the target is a relative displacement and the address 0x0006A770 occurs ZERO times in default.xbe -- confirmed by an exact dword search over the whole file, with the positive control that the same search finds 0x0013B750 and 0x0013FAD0. Run 20261005-004233-759-f19-b0210 died on `[ICALL] Failed to resolve VA 0x0006A770` with the ICALL history naming 0x00074C70, after the 0x000B0210 fix landed. The analysis database has no entry in the gap: sub_0006A730 ends at 0x0006A769, six nop bytes follow, and the next entry is sub_0006A7C0. The body is a complete function with the balanced exit `pop edi; pop esi; ret` at 0x0006A7B9, so stack_args 0; a clean capstone decode of 0x0006A770..0x0006A7C0 has exactly that one ret followed by a 6-byte nop pad. This is the same unowned-gap class as 0x0013B750 and 0x0007AF90, but with a new detection blind spot: a relative-branch tail jump leaves no stored pointer at all. recovered.c 3097 -> 3098; recovery-unresolved.json loses 0x0006A770. Amended, not regenerated: no full translation pass ran. ALSO: 0x00074C70 stack_args corrected 4 -> 0. The recorded 4 was never exercised before, because this thunk tail-jumps to 0x0006A770 and that address had no entry, so the jump aborted in a trap stub before any epilogue ran. Once 0x0006A770 was recovered, run 20261005-005240-902-f20-6a770 measured the mismatch: `[RECOVERED] ABI FAILURE 0x00074C70 esp 00F7FED8->00F7FEDC expected +8`. The byte-derived value is 0: 0x00074C70 has NO ret of its own -- it ends `pop edi; pop esi; jmp 0x6a770` at 0x00074CA9 -- and 0x0006A770 ends with a plain `ret` (C3 at 0x0006A7B9), not a `ret N`. Accounting from entry esp E: push esi/push edi/pop edi/pop esi leaves E, then the target does push esi/push edi/pop edi/pop esi/ret, giving E+4, which is 4 + stack_args 0. No `ret N` executes on this path. The 4 appears to have been copied from the abutting folded neighbour 0x00074CB0, whose own body genuinely ends `ret 4` and keeps stack_args 4. This is a LATENT PRE-EXISTING defect that the 0x0006A770 fix unmasked, not a regression from it: the wrong value was already at d77474d, but nothing could reach the epilogue to check it.",
+      "date": "2026-10-05",
+      "evidence": [
+        "run 20261005-004233-759-f19-b0210: `[RECOVERED] 0x000B0210 returned; ABI verified`, then `[ICALL] Failed to resolve VA 0x0006A770` with ICALL history 0x00074C70",
+        "bytes at 0x00074CA9 are `e9 c2 5a ff ff`; 0x74CAE + (-42302) == 0x0006A770",
+        "exact dword search over default.xbe finds 0 occurrences of 0x0006A770, while the same search finds 0x0013B750 (1, misaligned push immediate) and 0x0013FAD0 (1, .data slot)",
+        "clean capstone decode of 0x0006A770..0x0006A7C0 with exactly one ret at 0x0006A7B9",
+        "scripts/check-span-exits.py reports no finding for the new entry",
+        "run 20261005-005240-902-f20-6a770: `[RECOVERED] 0x0006A770 returned; ABI verified`, then `[RECOVERED] ABI FAILURE 0x00074C70 ... expected +8`, which is the latent stack_args defect"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "1733d65e25ecd05b0775b6fe864eeb5eb731af61bf8f35ee3f1b5cad58385156",
+          "old_sha256": "d5349fa87db0744ed511e8f3d742e9b862a4ee5df972b2efd7c6a9825221cedd",
+          "path": "tools/disasm/output/functions.recovered.json"
+        },
+        {
+          "new_sha256": "cd38b103cf371be12c2cc36cedfaa654086ce7691f8c48714af4651020836ac6",
+          "old_sha256": "67e15369044a4a1e395436fe9c443e5fe30bd120f1de6744d9d373a3edad5cb3",
+          "path": "config/manual-functions.json"
+        },
+        {
+          "new_sha256": "f379d886bb761cf438ce851a6f2f50f17b1bcf0f7f319f781f9296bfd22058f6",
+          "old_sha256": "3659ae830cfa699e88477daff1ace007227f3d88a51916ca81d304bfbc904802",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "94d31ed6d692b984467aa59901fe464f307e9ccba81cce868e36b3e731e6f9ff",
+          "old_sha256": "91d84be12a3a1ca26d0e990643eb97db96162a1b4b5c77aa0b6836cfcfcd207d",
+          "path": "config/recovery-unresolved.json"
+        },
+        {
+          "new_sha256": "a6412be134a74bb58292066c122851fe2e432d626212a3dd4762d9e3d42c720c",
+          "old_sha256": "6d44bc4ed914b47ed52c0708102341084729389fa4057d8264ef1623c171ef5e",
+          "path": "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c"
+        },
+        {
+          "new_sha256": "093d67a0d510e224b77329e9acbb7f5da2e4da24f6251f791077f6a180abc606",
+          "old_sha256": "4dff9e19c4df2b82c2e1123438bfe347d9ddac41e43a18128426f3bbf2cc32bd",
+          "path": "src/recomp/gen/recomp_stubs_recovery.c"
+        },
+        {
+          "new_sha256": "b68e404d59ed04ed65e91c0679a2696620f02813218078e9e045ff39028069c5",
+          "old_sha256": "04db306c0eab57a426c814514d4ee8a3de211a4bce7804a87571c89be4bb4810",
+          "path": "src/recomp/recovered/recovered.c"
+        }
+      ]
+    },
+    {
+      "cause": "Two more splits of the 0x0013FAD0 class, found by the span-exit detector rather than by a run. (1) 0x000C25D0 end tightened 0x000C2700 -> 0x000C2621 and 0x000C2630 given its own entry 0x000C2630..0x000C2700, stack_args 0. Run 20261005-010052-514-f21-74c70 died on `[ICALL] Failed to resolve VA 0x000C2630` after the 0x00074C70 fix landed, because jsrf_lookup_recovered had no case for it and the dispatch had none either. sub_000C25D0 really ends at the tail jump `pop esi; jmp 0x47850` at 0x000C261C followed by a 14-byte nop pad; the swallowed function 0x000C2630 has exactly one ret, at 0x000C26FF. (2) 0x00047820 end tightened 0x00047970 -> 0x00047849 and 0x00047850 given its own entry 0x00047850..0x00047970, stack_args 0. This one was NOT run-driven: tightening 0x000C25D0 made scripts/check-span-exits.py report its own tail jump `jmp 0x47850` as a cut target, and 0x00047850 turned out to be inside sub_00047820's span rather than an entry. sub_00047820 really ends at `pop esi; ret 4` at 0x00047846 plus seven nop bytes; 0x00047850 is `sub esp,0x14 ... add esp,0x14; ret` with exactly one ret at 0x00047964 and a 12-byte nop pad to the next prologue 0x00047970. Both boundaries are measured by clean linear capstone decodes, not guessed. recovered.c 3098 -> 3100. scripts/check-span-exits.py findings 430 -> 428, and none of the nine entries touched this turn is a finding. Amended, not regenerated: no full translation pass ran.",
+      "date": "2026-10-05",
+      "evidence": [
+        "run 20261005-010052-514-f21-74c70: `[RECOVERED] 0x00074C70 returned; ABI verified`, then `[ICALL] Failed to resolve VA 0x000C2630`",
+        "clean capstone decode 0x000C2630..0x000C2700: exactly one ret at 0x000C26FF",
+        "clean capstone decode 0x00047850..0x00047970: exactly one ret at 0x00047964",
+        "0x00047820 ends `pop esi; ret 4` at 0x00047846 with seven nop bytes to 0x00047850",
+        "scripts/check-span-exits.py reports no finding for any of the nine entries"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "6024aadc2b7b218a96c3b453360e6c1ec24ad84c57db4423307bc98f5604d245",
+          "old_sha256": "10c74377685ab5b348298a6ff84300fb31726deceb19c044c4217810ffbd8e96",
+          "path": "tools/disasm/output/functions.recovered.json"
+        },
+        {
+          "new_sha256": "518842bd3defb715812b796891052ad96eb919f029d118e89fd676c7dac0af88",
+          "old_sha256": "cd38b103cf371be12c2cc36cedfaa654086ce7691f8c48714af4651020836ac6",
+          "path": "config/manual-functions.json"
+        },
+        {
+          "new_sha256": "ecfc0af677ad6085f089d53480fdd5def64e915296f54c90b8d50c7a7e8233ba",
+          "old_sha256": "3168b1a31a2f6dae7a62012ae2f61e332b8e81b486810a6c51099632c545649c",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "9bac8d5e663594d3fb1375d8d7db718c061c4e95b01c7dea2c04135c5fc9aa7d",
+          "old_sha256": "94d31ed6d692b984467aa59901fe464f307e9ccba81cce868e36b3e731e6f9ff",
+          "path": "config/recovery-unresolved.json"
+        },
+        {
+          "new_sha256": "b501dbf4cc4b8ecc889822b32cc5f0b3ddc986982c931e1ac99e255607fe8019",
+          "old_sha256": "a6412be134a74bb58292066c122851fe2e432d626212a3dd4762d9e3d42c720c",
+          "path": "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c"
+        },
+        {
+          "new_sha256": "9e94c6ecdeb699c690f46d39ebddbeada57ce24a9acee1486f0df2ff54020548",
+          "old_sha256": "093d67a0d510e224b77329e9acbb7f5da2e4da24f6251f791077f6a180abc606",
+          "path": "src/recomp/gen/recomp_stubs_recovery.c"
+        },
+        {
+          "new_sha256": "d09e93c78c08df88701119b4f11efcc3495ddc09549884508e5abacf0d4d1f0a",
+          "old_sha256": "d09c927d935d5399f30e29ae62e5d0e6f7230eace8614131ec45a1c27c14ba78",
+          "path": "src/recomp/recovered/recovered.c"
+        },
+        {
+          "new_sha256": "8b4fe9c30a7eb516771ec139a4e8b2bd916192a49288f942e2d5a9313bdd0dbf",
+          "old_sha256": "1b9724f9c3e9784d3436bc2c1288c6e61385070001538b52ac68d1824b0d1931",
+          "path": "src/recomp/recovered/recovered_11c1_test.c"
+        }
+      ]
+    },
+    {
+      "cause": "0x0007DA30 end corrected 0x0007DA84 -> 0x0007DAD6 AND stack_args corrected 0 -> 4. Two defects in one entry, and the second was hidden by the first. At end 0x0007DA84 the generated body fell off the end with no epilogue at all (it stops after PUSH32(esp, 0x3F800000); PUSH32(esp, 0xB6); PUSH32(esp, eax);), so run 20261005-010853-469-f22-c2630 measured `[RECOVERED] ABI FAILURE 0x0007DA30 esp 00F7FED0->00F7FEB8 expected +4`. 0x0007DA84 is not an entry: it is `call dword ptr [edx+0x7c]` mid-function, labelled detection_method=tail_jump_alias by the analysis database. The real epilogue is `pop edi; pop esi; ret 4` at 0x0007DAD3, encoding C2 04 00, so stack_args is 4. Boundary measured by a clean capstone decode of 0x0007DA30..0x0007DAD6 with exactly one ret, then nop padding to the next prologue 0x0007DAE0. Same class as 0x000B0210, plus the finding that a truncated body can hide a ret-immediate, so the wrapper delta was wrong too and could never be exercised because there was no ret to run. recovered.c stays 3100. scripts/check-span-exits.py findings stay 428 and none of the eleven entries touched this turn is a finding. Amended, not regenerated: no full translation pass ran.",
+      "date": "2026-10-05",
+      "evidence": [
+        "run 20261005-010853-469-f22-c2630: `[RECOVERED] 0x000C2630 returned; ABI verified`, then `[RECOVERED] ABI FAILURE 0x0007DA30 ... expected +4`",
+        "capstone decode 0x0007DA30..0x0007DAD6 has exactly one ret, at 0x0007DAD3",
+        "bytes at 0x0007DAD3 are `c2 04 00` (ret 4), and the entry pushes esi then edi to match the two pops",
+        "the previous body had no ret at all: its last emitted line was PUSH32(esp, eax)"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "3af87a4ea735f92a4e9885d4d353fdea297539f644ab143068b31af92f27f0aa",
+          "old_sha256": "6024aadc2b7b218a96c3b453360e6c1ec24ad84c57db4423307bc98f5604d245",
+          "path": "tools/disasm/output/functions.recovered.json"
+        },
+        {
+          "new_sha256": "e6e8db16de9f357f870b5fd81f017775d210c6885466891b2f70093d694d25c0",
+          "old_sha256": "518842bd3defb715812b796891052ad96eb919f029d118e89fd676c7dac0af88",
+          "path": "config/manual-functions.json"
+        },
+        {
+          "new_sha256": "557ddc6052aca9ecc9bec89a80fb6f34140b2e5d6f74b513e82fe8974ee0c805",
+          "old_sha256": "ecfc0af677ad6085f089d53480fdd5def64e915296f54c90b8d50c7a7e8233ba",
+          "path": "config/recovered-functions.json"
+        },
+        {
+          "new_sha256": "5beefba2bc3eb507da5c1578d246e00cdfeb6f7a4f0bb0a924d43783622cfbd9",
+          "old_sha256": "d09e93c78c08df88701119b4f11efcc3495ddc09549884508e5abacf0d4d1f0a",
+          "path": "src/recomp/recovered/recovered.c"
+        }
+      ]
+    },
+    {
+      "cause": "0x0007DA30 end corrected 0x0007DA84 -> 0x0007DAD6 AND stack_args corrected 0 -> 4. Two defects in one entry, and the second was hidden by the first. At end 0x0007DA84 the generated body fell off the end with no epilogue at all (it stops after PUSH32(esp, 0x3F800000); PUSH32(esp, 0xB6); PUSH32(esp, eax);), so run 20261005-010853-469-f22-c2630 measured `[RECOVERED] ABI FAILURE 0x0007DA30 esp 00F7FED0->00F7FEB8 expected +4`. 0x0007DA84 is not an entry: it is `call dword ptr [edx+0x7c]` mid-function, labelled detection_method=tail_jump_alias by the analysis database. The real epilogue is `pop edi; pop esi; ret 4` at 0x0007DAD3, encoding C2 04 00, so stack_args is 4. Boundary measured by a clean capstone decode of 0x0007DA30..0x0007DAD6 with exactly one ret, then nop padding to the next prologue 0x0007DAE0. Same class as 0x000B0210, plus the finding that a truncated body can hide a ret-immediate, so the wrapper delta was wrong too and could never be exercised because there was no ret to run. recovered.c stays 3100. scripts/check-span-exits.py findings stay 428 and none of the eleven entries touched this turn is a finding. Amended, not regenerated: no full translation pass ran.",
+      "date": "2026-10-05",
+      "evidence": [
+        "run 20261005-010853-469-f22-c2630: `[RECOVERED] 0x000C2630 returned; ABI verified`, then `[RECOVERED] ABI FAILURE 0x0007DA30 ... expected +4`",
+        "capstone decode 0x0007DA30..0x0007DAD6 has exactly one ret, at 0x0007DAD3",
+        "bytes at 0x0007DAD3 are `c2 04 00` (ret 4), and the entry pushes esi then edi to match the two pops",
+        "the previous body had no ret at all: its last emitted line was PUSH32(esp, eax)"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "44292c76fcebb1118fef68d531240d038505abfe5541eecf9d23b31f2489fa1c",
+          "old_sha256": "3af87a4ea735f92a4e9885d4d353fdea297539f644ab143068b31af92f27f0aa",
+          "path": "tools/disasm/output/functions.recovered.json"
+        },
+        {
+          "new_sha256": "313c82d57b4d50aa0b252274ed775a53f00897ed8d2a1f0f04cbcdae309ca5d1",
+          "old_sha256": "557ddc6052aca9ecc9bec89a80fb6f34140b2e5d6f74b513e82fe8974ee0c805",
+          "path": "config/recovered-functions.json"
+        }
+      ]
+    },
+    {
+      "cause": "0x0007DA30 end corrected 0x0007DA84 -> 0x0007DAD6 AND stack_args corrected 0 -> 4. Two defects in one entry, and the second was hidden by the first. At end 0x0007DA84 the generated body fell off the end with no epilogue at all (it stops after PUSH32(esp, 0x3F800000); PUSH32(esp, 0xB6); PUSH32(esp, eax);), so run 20261005-010853-469-f22-c2630 measured `[RECOVERED] ABI FAILURE 0x0007DA30 esp 00F7FED0->00F7FEB8 expected +4`. 0x0007DA84 is not an entry: it is `call dword ptr [edx+0x7c]` mid-function, labelled detection_method=tail_jump_alias by the analysis database. The real epilogue is `pop edi; pop esi; ret 4` at 0x0007DAD3, encoding C2 04 00, so stack_args is 4. Boundary measured by a clean capstone decode of 0x0007DA30..0x0007DAD6 with exactly one ret, then nop padding to the next prologue 0x0007DAE0. Same class as 0x000B0210, plus the finding that a truncated body can hide a ret-immediate, so the wrapper delta was wrong too and could never be exercised because there was no ret to run. recovered.c stays 3100. scripts/check-span-exits.py findings stay 428 and none of the eleven entries touched this turn is a finding. Amended, not regenerated: no full translation pass ran.",
+      "date": "2026-10-05",
+      "evidence": [
+        "run 20261005-010853-469-f22-c2630: `[RECOVERED] 0x000C2630 returned; ABI verified`, then `[RECOVERED] ABI FAILURE 0x0007DA30 ... expected +4`",
+        "capstone decode 0x0007DA30..0x0007DAD6 has exactly one ret, at 0x0007DAD3",
+        "bytes at 0x0007DAD3 are `c2 04 00` (ret 4), and the entry pushes esi then edi to match the two pops",
+        "the previous body had no ret at all: its last emitted line was PUSH32(esp, eax)"
+      ],
+      "kind": "input and generated output",
+      "paths": [
+        {
+          "new_sha256": "b21b21cb9460e6e0d1117690d9b95850b343090fe00d7916a3c489f86680e6a2",
+          "old_sha256": "44292c76fcebb1118fef68d531240d038505abfe5541eecf9d23b31f2489fa1c",
+          "path": "tools/disasm/output/functions.recovered.json"
+        },
+        {
+          "new_sha256": "242345fceac98ee618c9056e10aa1b366987d529f6b6bdd0ef27dc2ce7d21f85",
+          "old_sha256": "313c82d57b4d50aa0b252274ed775a53f00897ed8d2a1f0f04cbcdae309ca5d1",
+          "path": "config/recovered-functions.json"
+        }
+      ]
     }
   ],
   "checker_version": "jsrf-generation-provenance/1",
   "full_translation_command": "python -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name \"Jet Set Radio Future\" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json",
   "generated_outputs": {
-    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "6d44bc4ed914b47ed52c0708102341084729389fa4057d8264ef1623c171ef5e",
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "b501dbf4cc4b8ecc889822b32cc5f0b3ddc986982c931e1ac99e255607fe8019",
     "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
     "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
     "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
@@ -709,21 +892,21 @@
     "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
     "src/recomp/gen/recomp_dispatch.c": "1cc469ddcc6d12ac98f8675846b5940f3f438624a3a51a95faca40a9b59a4238",
     "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-    "src/recomp/gen/recomp_stubs_recovery.c": "4dff9e19c4df2b82c2e1123438bfe347d9ddac41e43a18128426f3bbf2cc32bd",
+    "src/recomp/gen/recomp_stubs_recovery.c": "9e94c6ecdeb699c690f46d39ebddbeada57ce24a9acee1486f0df2ff54020548",
     "src/recomp/gen/recomp_stubs_unresolved.c": "6e81e0da996461f01a988f0ba2c9f2d871caf1bcfa940f1d29fd8ba57e82ecbe",
     "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "04db306c0eab57a426c814514d4ee8a3de211a4bce7804a87571c89be4bb4810",
+    "src/recomp/recovered/recovered.c": "5beefba2bc3eb507da5c1578d246e00cdfeb6f7a4f0bb0a924d43783622cfbd9",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "1b9724f9c3e9784d3436bc2c1288c6e61385070001538b52ac68d1824b0d1931",
+    "src/recomp/recovered/recovered_11c1_test.c": "8b4fe9c30a7eb516771ec139a4e8b2bd916192a49288f942e2d5a9313bdd0dbf",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "generation_mode": "full regeneration 2026-09-29 with the toolkit 2a349c8 lifter, then relift-selected.py boundaries; hand edits re-applied by scripts/patch-generated.py from config/generated-patches.json (the recomp_types.h project ABI additions, the six A4b2 jsrf_watch_store hooks, and the a4b-watch declaration). This tree predates toolkit 86113c7 --backedge-yield: RECOMP_BACKEDGE is absent, so under RECOMP_GUEST_SERIAL=1 a guest spin loop costs one bounded timeout (docs/jsrf-compatibility-ledger.md L34).",
   "generators": {
     "project": {
       "dirty": true,
-      "revision": "d77474deea07bf191d91bef730b85480ee0ebae8",
+      "revision": "7e683a3a034edb39bddb0dcbd66a212d899f3f8a",
       "state": "MEASURED",
-      "status_sha256": "77ec1af4e52fb1d02848f1b66a97e00da0733d111af3c7a07bdb28b382f07cf8"
+      "status_sha256": "13c75a08814415ed6bcaa6ee565e6797602a8cd6fdb887168061421998cf457d"
     },
     "scripts/recover-functions.py": "c951fe5ed787253bd523d16502a231772197043b84a3b20e4c7b680b55c03847",
     "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
@@ -743,19 +926,19 @@
       "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
     },
     "config/manual-functions.json": {
-      "bytes": 102437,
+      "bytes": 102503,
       "present": true,
-      "sha256": "67e15369044a4a1e395436fe9c443e5fe30bd120f1de6744d9d373a3edad5cb3"
+      "sha256": "e6e8db16de9f357f870b5fd81f017775d210c6885466891b2f70093d694d25c0"
     },
     "config/recovered-functions.json": {
-      "bytes": 2853590,
+      "bytes": 2862311,
       "present": true,
-      "sha256": "3659ae830cfa699e88477daff1ace007227f3d88a51916ca81d304bfbc904802"
+      "sha256": "242345fceac98ee618c9056e10aa1b366987d529f6b6bdd0ef27dc2ce7d21f85"
     },
     "config/recovery-unresolved.json": {
-      "bytes": 7991,
+      "bytes": 7925,
       "present": true,
-      "sha256": "91d84be12a3a1ca26d0e990643eb97db96162a1b4b5c77aa0b6836cfcfcd207d"
+      "sha256": "9bac8d5e663594d3fb1375d8d7db718c061c4e95b01c7dea2c04135c5fc9aa7d"
     },
     "game/default.xbe": {
       "bytes": 2281472,
@@ -788,9 +971,9 @@
       "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
     },
     "tools/disasm/output/functions.recovered.json": {
-      "bytes": 6043184,
+      "bytes": 6052485,
       "present": true,
-      "sha256": "d5349fa87db0744ed511e8f3d742e9b862a4ee5df972b2efd7c6a9825221cedd"
+      "sha256": "b21b21cb9460e6e0d1117690d9b95850b343090fe00d7916a3c489f86680e6a2"
     }
   },
   "known_unknowns": [],
@@ -862,19 +1045,19 @@
       },
       "src/recomp/recovered/recovered.c": {
         "markers": {
-          "JSRF_ABI_CONTINUE": 9291,
-          "RECOMP_ABI_CALL": 9901,
+          "JSRF_ABI_CONTINUE": 9300,
+          "RECOMP_ABI_CALL": 9903,
           "RECOMP_GENERATED_CODE": 1,
-          "g_seh_ebp": 6347
+          "g_seh_ebp": 6349
         },
         "present": true
       }
     },
     "totals": {
-      "JSRF_ABI_CONTINUE": 9291,
-      "RECOMP_ABI_CALL": 9909,
+      "JSRF_ABI_CONTINUE": 9300,
+      "RECOMP_ABI_CALL": 9911,
       "RECOMP_GENERATED_CODE": 5,
-      "g_seh_ebp": 6353
+      "g_seh_ebp": 6355
     }
   },
   "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",

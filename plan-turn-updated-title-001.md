@@ -6,18 +6,63 @@ actually evolved and why.
 
 ## Status at last update
 
-**Two blockers fixed, each confirmed by a run. The turn has advanced twice.**
+**Nine dispatch defects fixed, each confirmed by the next run advancing to a new site.**
 
 | # | Blocker | Fix | Run evidence |
 |---|---|---|---|
-| 1 | `[ICALL] Failed to resolve VA 0x0013B750` | recovered `0x0013B750..0x0013B810`, `stack_args 0` | f16 `20261005-000031-102-f16-b750`: `[RECOVERED] 0x0013B750 returned; ABI verified` |
-| 2 | `[ICALL] Failed to resolve VA 0x0007AF90` | recovered `0x0007AF90..0x0007B750`, `stack_args 0` | f17 `20261005-000908-412-f17-vtable`: `[RECOVERED] 0x0007AF90 returned; ABI verified` |
-| 3 | `[ICALL] Failed to resolve VA 0x000BBA17` | **in progress** — shared-epilogue span defect, see below | f17 died here |
+| 1 | `[ICALL] Failed to resolve VA 0x0013B750` | recovered `0x13B750..0x13B810`, `stack_args 0` | f16: `[RECOVERED] 0x0013B750 returned; ABI verified` |
+| 2 | `[ICALL] Failed to resolve VA 0x0007AF90` | recovered `0x7AF90..0x7B750`, `stack_args 0` | f17: `[RECOVERED] 0x0007AF90 returned; ABI verified` |
+| 3 | `[ICALL] Failed to resolve VA 0x000BBA17` | widened `0xBB7B0` `0xBBA04 -> 0xBBA19` | f18: `[RECOVERED] 0x000BB7B0 returned; ABI verified` |
+| 4 | `[ICALL] Failed to resolve VA 0x000B022E` | `0xB0210` end `0xB0305 -> 0xB05CC` | f19: `[RECOVERED] 0x000B0210 returned; ABI verified` |
+| 5 | `[ICALL] Failed to resolve VA 0x0006A770` | recovered `0x6A770..0x6A7C0`, `stack_args 0` | f20: `[RECOVERED] 0x0006A770 returned; ABI verified` |
+| 6 | latent: `ABI FAILURE 0x00074C70 expected +8` | `0x74C70` `stack_args 4 -> 0` | f21: `[RECOVERED] 0x00074C70 returned; ABI verified` |
+| 7 | `[ICALL] Failed to resolve VA 0x000C2630` | split `0xC25D0` (end `-> 0xC2621`) + new entry `0xC2630..0xC2700` | f22: `[RECOVERED] 0x000C2630 returned; ABI verified` |
+| 8 | detector-found: `jmp 0x47850` cut target | split `0x47820` (end `-> 0x47849`) + new entry `0x47850..0x47970` | not yet run in isolation; f23 loaded it |
+| 9 | latent: `ABI FAILURE 0x0007DA30 expected +4` | `0x7DA30` end `0x7DA84 -> 0x7DAD6`, `stack_args 0 -> 4` | f23: `[RECOVERED] 0x0007DA30 returned; ABI verified` |
 
-Every run so far is **exploratory** (`RECOMP_GPU_ACK` defaulted on, `RECOMP_APU_TRAP=1`,
+`recovered.c` 3095 -> 3100. `recovery-unresolved.json` lost `0x000BBA17`, `0x000B022E`,
+`0x0006A770`. `scripts/check-span-exits.py` findings 431 -> 428, and **none** of the eleven
+entries touched this turn is a finding. CTest 35/35. All checkers pass.
+
+Every run is **exploratory** (`RECOMP_GPU_ACK` defaulted on, `RECOMP_APU_TRAP=1`,
 `RECOMP_PB_EXEC=1`, `RECOMP_FB_WINDOW=1`, `RECOMP_FB_PRESENT_DUMP_EVERY=10`).
 **The title screen has NOT been reached.** The last visible frame is still the graffiti
-disclaimer, hash `5bdaea576b8509f5`.
+disclaimer, hash `5bdaea576b8509f5`, and presents still stop at exactly 1000.
+
+## Blocker 10 — `0xFFC00000`, a new class, NOT yet characterised
+
+f23 cleared `0x7DA30` and then reached two `[ICALL] Failed to resolve VA 0xFFC00000` failures
+(tid 35064 and 33952). `0xFFC00000` is not a plausible code address: it is the bit pattern of
+a negative quiet NaN, and the toolkit already names it (`nv2a_pb_exec.c:3000`, `NAN_NEG`).
+The ICALL history immediately before it is `... 0x00141A00, 0xFE000104, 0xFE000100,
+0xFE00011C, 0xFFC00000`, i.e. a kernel-thunk path. **This is a different defect class from
+the nine above** — not a missing dispatch entry, and it must not be treated as one. Whether
+it is a float consumed as a pointer, a corrupted vtable slot, or a symptom of the presents
+freeze is **UNVERIFIED**. It needs its own investigation and is the immediate next task.
+
+## PLAN_CHANGE 5 — the freeze is probably NOT an independent blocker (Advisor correction)
+
+```text
+PLAN_CHANGE:
+- Changed: H4 ("the 1000-present freeze is an independent second blocker") is DOWNGRADED from
+  "strongly supported" to "likely a symptom of the boot-path transition, not independent".
+- Evidence (Advisor ruling, consultation 1): f9, f14, f15, f16 and f17 ALL freeze at exactly
+  presents=1000 with the same frame hash and upd-presents a constant 1303 from present 400 on.
+  In f17 the thread that died on 0xBBA17 was GUEST_THREAD identity=1 -- the main/boot presenter
+  thread (start 0x148023) -- still inside its per-frame update, and its guest stack holds 0x13F9E
+  (from `call 0x13A80` in presenter loop 0x13F80), 0x13B24 and 0x124C3. In f9 (no ICALL at all,
+  1203 s) the same thread is idling in the [esi+0x24] != 0 branch, sleeping until [esi+0x10] goes
+  negative, and about 100 s later the game took its OWN fatal-error path ([FATAL-CTOR] at
+  0x116EA8, then it opens Media\Cache\JSRF_FATAL.ERR).
+- Why: presents stop because the title transition runs synchronously inside the presenter thread
+  and the presenter is then told to stop. A run that never reaches these ICALLs (f9) still ends on
+  the same transition, just via the game's own error path. So "f9 had zero ICALLs and still froze"
+  does NOT establish independence -- it is a different terminal failure of the same transition.
+- Consequence: the freeze is likely to clear, or to change shape, once this ICALL chain is walked.
+  Do NOT spend the turn building a present-path fix on the assumption that it is independent.
+  The deciding check remains: a run where identity=1 returns to the presenter loop with +0x24
+  still 0 and presents still frozen would point back at the present/GPU path.
+```
 
 ## PLAN_CHANGE 1 — roster route correction (before execution began)
 
@@ -86,7 +131,41 @@ PLAN_CHANGE:
   the measured values and the whole CTest suite is 35/35.
 ```
 
-## Blocker 3 — `0x000BBA17`: a shared-epilogue span defect (root cause established)
+## Blocker 3 — `0x000BBA17`: RESOLVED (shared-epilogue span defect)
+
+**Advisor ruling, consultation 1: repair (a) — widen `0x000BB7B0` to `0x000BBA19`. The tree
+already had it and the regenerated body is correct: "switch: 6 entries, 6 targets" with all
+six as `goto` labels, so the `RECOMP_ITAIL` fallback is unreachable and all three `jcc` sites
+become `goto loc_000BBA17`.** f18 confirmed it: `[RECOVERED] 0x000BB7B0 returned; ABI verified`.
+
+The Advisor also resolved the open question I had recorded, and I have updated the manifest
+evidence accordingly:
+
+- `sub_000BBA04` is a **false function start**, not a real function. Its only reference
+  anywhere in the XBE is slot 4 of `0xBB7B0`'s own jump table at `0xBBA2C`.
+- It **cannot** be an entry under any x86 ABI: it begins `push esi; mov ecx, esi`, reading
+  `esi` before writing it, and `esi` is callee-saved and undefined at a function entry.
+- **There is no double push.** The second `push esi` at `0xBBA04` is an *argument*, not a
+  register save: both callees (`0x11BE0`, `0x11C20`) are `ret 4` and remove it. Stack trace
+  for slot 4 from entry esp `E`: `push esi` (save) `E-4`; `push esi` (arg) + `call 0x11BE0`
+  (`ret 4`) `E-4`; `push [esi+0x28]` + `call 0x11C20` (`ret 4`) `E-4`; `0xBBA17 pop esi`
+  restores `E`; `ret` -> `E+4`. The wrapper's `+4` delta and `esi`-preserved checks both pass.
+- The table really has six entries: the byte index table at `0xBBA34` is
+  `[0,1,5,2,3,5,5,5,5,5,4]`, maximum index 5.
+- It is a **compiler idiom**, not a one-off: the same release arm plus the owner's own
+  epilogue appears at the end of 12 other recovered spans and in `0xB0210`. In every case the
+  arm's only reference is the last slot of its owner's jump table, and the epilogue pops what
+  the owner's prologue pushed — which a standalone function could not do.
+
+**Advisor-deferred (backlog, not this turn):** the root cause is the analysis database's
+`gap_prologue` pass accepting a `push` after a `ret` as an entry. Relaxing
+`_analyze_switch_table`'s truncation alone would emit `goto`s to labels outside the span, so
+the durable fix is a change at full-regeneration scale. **Advisor recommendation:** batch the
+12 sibling spans rather than paying one run per fatal; each proposed end must be verified by
+decode (all switch arms resolved, no `ITAIL`, zero checker findings) before landing.
+`0x00043910` needs no change (its arm `0x4393A` is a real DB entry reached by `je`).
+
+## Blocker 3 root cause (kept for the record)
 
 The recovered entry `0x000BB7B0..0x000BBA04` (`stack_args 0`) contains an intra-function switch:
 
@@ -148,67 +227,80 @@ truncates the arm list at the first target outside `[func_start, func_end)`. Wit
 `func_end = 0xBBA04` it keeps 4 arms and drops `0xBBA04` and `0xBBA17`; the emitted code says
 `/* switch: 4 entries, 4 targets */` and falls through to `RECOMP_ITAIL(_jt)`.
 
-**Chosen repair (minimal, keeps ownership honest):** add a recovered entry
-`0x000BBA17..0x000BBA19`, `stack_args 0`. The three branch sites then tail-call a real body that
-does exactly `pop esi; ret`.
+**Chosen repair (adopted, Advisor-ratified):** widen the recovered span of `0x000BB7B0` to
+`0x000BBA19`, so the function owns its own shared tail-merged epilogue. This is the fourth
+instance of the class `scripts/check-span-exits.py` documents and the third with the same fix;
+all three reviewed precedents widened the parent.
 
-Why this rather than widening `0x000BB7B0` to `0xBBA19`: `sub_000BBA04` is a genuine separate
-function (its own `push esi` prologue, referenced by the switch, and classified `game_vtable` by
-the generator). Widening `0x000BB7B0` over it would recreate the exact `0x13FAD0` defect class in
-reverse — one function's span swallowing another's. The chosen repair leaves `sub_000BBA04`
-untouched and adds only the shared epilogue as a resolvable target.
+**Rejected repair, kept for the record:** a 2-byte fragment entry `0xBBA17..0xBBA19`. Entered
+as a tail jump with `esi` already pushed, its body nets `+8` against a wrapper expecting
+`4 + stack_args`, and `stack_args` means `ret N` cleanup, so no honest value expresses a
+register pop. The Advisor reached the same conclusion independently and flagged it as an early
+warning before I had replaced it. **A checked wrapper on a bare epilogue fragment fails its own
+ABI check every time it runs** — that is a deterministic reading, not a run result.
 
-**Recorded caveat (must be measured, not assumed).** Switch slot 4 (`0xBBA04`) is reached as a
-tail jump from `0xBB7B0` *after* `0xBB7B0` has already pushed `esi`, so if guest state
-`[esi+0x164] == 10` is reachable, that path pushes `esi` twice and pops it once. The run is the
-falsifier: if slot 4 is taken and unbalanced, the ABI check reports it. State 10 may be
-unreachable in this title, which would explain why the shipped game worked. This is recorded as an
-open question, not a claim.
+**Advisor housekeeping, both done:** the stray `"0x000BBA17"` entry that the abandoned
+fragment attempt left in `config/manual-functions.json` (the recovery script only ever adds to
+that file) was removed — it would have made the lifter emit `RECOMP_ITAIL` to a symbol nothing
+defines. The manifest sentence claiming the recovered body makes the alias "inert" was wrong
+and was reworded: `jsrf_lookup_recovered` has no case for `0xBBA17`, so the old alias to
+`sub_000BBA04` is still reachable — it is **latent**, not inert, because nothing currently
+dispatches to `0xBBA17` indirectly.
 
 ## Critical path — remaining
 
-1. **Blocker 3** (`0xBBA17`): apply the entry, regenerate, rebuild, run. Falsifier: a new fatal or
-   an ABI failure.
-2. **Blocker 4+**: keep walking the chain while each step is cheap. Each cleared entry is one
-   manifest line, one regeneration, one run.
-3. **The presents/flips freeze at exactly 1000** — independent, and the more likely owner of the
-   title screen. See H4 below. Worker `fe438413` is measuring it.
+1. **Blocker 10** (`0xFFC00000`): characterise it before treating it as a dispatch defect. It is
+   a NaN bit pattern, not a code address.
+2. **Batch the 12 sibling spans** the Advisor identified, verifying each proposed end by decode
+   before landing it, so the remaining instances of the shared-epilogue class do not each cost a
+   run.
+3. **The presents/flips freeze at exactly 1000** — see PLAN_CHANGE 5: probably a symptom of the
+   boot-path transition, not an independent blocker.
 
 ## Competing hypotheses (updated)
 
 - **H1 (0x13B750 missing entry)** — **RESOLVED and measured.** f16 shows the ABI-verified return.
 - **H2 (nop pad makes 0x13B750 a label)** — **refuted**, as the start plan found.
-- **H3 (whole class missing)** — **bounded, see PLAN_CHANGE 3.** One of ~5 of its shape.
-- **H4 (the 1000-present freeze is an independent second blocker)** — **strongly supported and
-  still live.** f9 ran 1203 s to deadline with zero `[ICALL]`, zero ABI failures and never passed
-  1000 presents; f10-f13 same. Flips stop with presents, so the guest stopped committing NV097
-  methods. No host cap exists. f16 and f17 reproduce the freeze at 1000 while *also* clearing
-  blockers, which further separates the two.
-- **H5 (freeze is the disc-error/pending-I/O path)** — live. f9's fatal file line comes ~90 s
-  after flips stop, so the fatal is at most a consequence.
-- **H6 (720-update hold / `+0x24` idle branch)** — weakened by f12/f15 (`+0x24 = 0` at the 1000th
-  present with update counters moving), not excluded.
-- **H7 (rendering/submit defect unrelated to state-machine timing)** — live and under-weighted.
-- **H8 (NEW, from this turn): a switch arm whose target is a shared epilogue just outside the
-  span).** Confirmed as the mechanism of blocker 3. This is a distinct sub-class from both
-  `0x13FAD0` (table slot inside another span) and `0x13B750` (`.text` immediate, unowned gap).
+- **H3 (whole class missing)** — **bounded.** One of ~5 of its shape. The census found 6569
+  distinct genuine code-pointer targets: owned 3831, inside-another-span 2214, unowned-gap 512,
+  at-span-start-unowned 12.
+- **H4 (the 1000-present freeze is an independent second blocker)** — **DOWNGRADED, see
+  PLAN_CHANGE 5.** The Advisor's ruling shows f9's terminal failure is the same boot transition
+  reached via the game's own error path, so "zero ICALLs and still frozen" does not establish
+  independence.
+- **H5 (freeze is the disc-error/pending-I/O path)** — still live but weaker; f9's fatal file
+  line comes ~100 s after flips stop, so the fatal is at most a consequence.
+- **H6 (720-update hold / `+0x24` idle branch)** — **strengthened by the Advisor**: in f9 the
+  presenter thread is genuinely idling in the `[esi+0x24] != 0` branch at `0x13F90`, sleeping
+  until `[esi+0x10]` goes negative. This is a real observed state, not just a field value.
+- **H7 (rendering/submit defect unrelated to state-machine timing)** — weakened by H6.
+- **H8 (a switch arm whose target is a shared epilogue just outside the span)** — **confirmed**,
+  and the fix is now Advisor-ratified with a resolved ownership argument.
+- **H9 (NEW): a truncated span can hide a `ret N`.** `0x0007DA30` had both a truncated end and a
+  wrong `stack_args`, and the wrong `stack_args` could never be exercised because the body had no
+  `ret` to run. Any entry whose span ends at a folded-alias start should be re-checked for a
+  hidden `ret` immediate.
+- **H10 (NEW): a float bit pattern reaching an indirect call.** `0xFFC00000` is `NAN_NEG`.
+  Live, uncharacterised.
 
 ## Measurements that remain decisive
 
 - **M3 (guest vs host freeze)** — read `[GPU] flips` and `[FBPRESENT]` in the same run. Both stop
-  together in f9/f15/f16/f17, so the guest stopped submitting. Keep this as the standing check.
+  together in every run so far.
 - **M5 (is the freeze a timeout?)** — compare the wall-clock gap between the last present and the
   last committed method against the 240 s pending-I/O threshold and the 720-update hold.
-- **M7 (NEW — blocker 3 falsifier)** — after the `0xBBA17` entry, does the run clear it and either
-  reach a new site or report an ABI failure at `0x000BB7B0` (which would indicate switch slot 4 is
-  reachable and unbalanced)?
+- **M8 (Advisor's independence falsifier)** — a run where identity=1 returns to the presenter
+  loop with `+0x24` still 0 and presents still frozen would point back at the present/GPU path.
+- **M9 (Advisor's freeze instrumentation)** — the `[FBPHASE]` sampler cannot see `+0x24` change
+  after present 1000, because it logs once per `n` and `n` stays at 1000. Log on transitions of
+  `+0x24`/`+0x10` instead.
 
 ## Advisor
 
-Consulted once (blocker 3's repair choice, since several plausible repairs fit and the choice is
-ABI-sensitive). The ruling is recorded here when it returns. The start plan's other Advisor points
-remain open: whether the freeze mechanism is H5 or H7, and whether the `.text`-immediate class
-becomes a systematic pass.
+Consulted once (blocker 3's repair choice). The ruling ratified the widening, resolved the
+`0xBBA04` ownership question from the bytes, flagged two housekeeping defects (both fixed), and
+corrected my reading of the presents freeze (PLAN_CHANGE 5). Further consultation is available
+and the Advisor is continuable.
 
 ## Completion criteria (unchanged from the start plan)
 
