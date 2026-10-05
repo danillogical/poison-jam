@@ -173,6 +173,9 @@ thread was then in `NtDelayExecution` under `sub_00013F80`, called from `0x6FA3C
 saved frame. `[APUWAIT]` matched f7. Phase 13's update rate was not re-measured; do not treat the
 ~3.3 presents/s before the freeze as that counter.
 
+**Pushed 2026-10-04 (f9 caller).** Toolkit unchanged at `712f70d` (no push). Game
+`PUSHED_TO: origin / BRANCH: master / COMMIT: 108df5c8a22dec88a2d2d18cd552e23324435208 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: 94031e7..108df5c master -> master`.
+
 **Next.** The ctor hook now prints the four ADX slots when `ret == 0x116EAD` (still observation,
 L41). One exploratory run of about 400 s, same frame-dump settings, new prefix. Read `[FATAL-ADX]`.
 The firing slot is the one whose `w60` is `FFFF`. Its `st`, `lst`, `ctr6a`, and `d2c`/`d30` say
