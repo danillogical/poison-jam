@@ -199,6 +199,12 @@ path; `just secret-audit` reports two hits, both self-matches of the audit scrip
 text (`scripts/secret-audit.py`) and the record that documents it
 (`docs/reviews/push-checkpoint-2026-09-28.md`), not real secrets.
 
+**Pushed 2026-10-05 (0x32610 and the nondeterminism record).** Toolkit unchanged at `6e6e056`
+(no push). Game
+`PUSHED_TO: origin / BRANCH: master / COMMIT: 6b2a3e62e60126eab9ad8910766c33a1bf4bde61 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: c61a9dd..6b2a3e6 master -> master`.
+Two commits: `9ea4e44` (recover `0x32610`) and `6b2a3e6` (blocker 11, the nondeterminism record).
+Outgoing commits add no `game/` path and are records plus one manifest entry.
+
 **Next.** Characterise `0xFFC00000` (is a float reaching an indirect call, a corrupted vtable
 slot, or a consequence of the freeze?). Then batch the 12 sibling spans. Then re-measure the
 freeze with transition-triggered logging, since the current `[FBPHASE]` sampler cannot see
