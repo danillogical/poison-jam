@@ -228,6 +228,8 @@ hold was not remeasured; these runs stop presenting while the disclaimer is up, 
 720-update hold at the old ~2/s rate would end. Do not stretch the 240 s threshold. Do not skip
 the 720-update hold. Do not clear `+0x24`. Do not treat the `-999` words as the fatal value.
 
+**Pushed 2026-10-04 (deferred file APC).** Toolkit `PUSHED_TO: origin / BRANCH: main / COMMIT: 8f6c59758c5c2daa24bab90912b3055ebd88c20d / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: 712f70d..8f6c597 main -> main`. Game `PUSHED_TO: origin / BRANCH: master / COMMIT: 5eb06266dbd3e7366f5f03dbcb59a9e2b7f6589f / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: 1f5adf9..5eb0626 master -> master`.
+
 **Next:** one exploratory run that logs, for the `title.adx` APC only, file-slot `byte+1`,
 `+0x18`, `+0x20`, `+0x148` and `+0x14C` immediately after the APC and on the following kernel
 entries, and logs phase `+0x24` as the present serial reaches 1000. That splits the two
