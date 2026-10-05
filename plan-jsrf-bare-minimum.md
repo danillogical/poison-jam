@@ -181,6 +181,29 @@ DSP spin "did not reproduce"; f7 passed it), but it has two consequences that mu
 evidence about its cause, because those runs never reached the state f23 did. It is **not** a
 regression claim: f26 used the `0x32610` binary and stalled *earlier* than f25 on the same binary.
 
+**Two more defects were found by the Orchestrator's own consolidated re-verification, not by a
+run** (commit `4cac35c`). A capstone decode of every entry touched this session, checking the ret
+count and the ret encoding against the recorded `stack_args`, caught: (a) `0x00032610`'s end was
+recorded one byte short at `0x3275D`, cutting the final three-byte `ret 0xc` (`C2 0C 00` at
+`0x3275C..0x3275E`) in half, so the generated body's last exit path fell off the end with no
+return — now `0x3275F`, twelve `ret 0xc` exits instead of eleven; and (b) `0x00047820`'s
+`stack_args` was 0 but its body ends `pop esi; ret 4` (`C2 04 00` at `0x47846`), so the wrapper
+must expect +8 — now 4, the same class as the `0x74C70` and `0x7DA30` corrections. Both were
+latent for the same reason: those addresses had no body of their own before this session, so no
+run could have exercised them. **This is the argument for the re-verification pass as a standing
+practice, not a one-off.**
+
+**Test-evidence caveat for `4cac35c` (recorded, not papered over).** The load-independent checks
+pass on the committed tree: `check-generation-provenance.py --check` is `ok`,
+`check-merge-structure.py` reports 0 findings, `check-route-allowlist.py` and
+`check-agent-docs.py --check` report no findings, and `tests/test_recovery_span_ownership.py` is
+9/9. **A clean full CTest run could not be obtained** because the host was at 100% CPU from
+unrelated processes (Chrome, Windows Defender) for an extended period. The resulting failures are
+load artifacts, not regressions, and the evidence for that is that **a different set of tests
+failed on each attempt** (first `22/28/29`, then `9/11/22/28/29`) and that `xbox_guest_meter` — a
+**toolkit** kernel test under `xboxrecomp/src/kernel/`, independent of `recovered.c` — failed 3 of
+6 isolated runs on the same binary. A clean full-suite run is owed once the host is idle.
+
 **Also this session.** `docs/agent-workflow.md` §1 named the Turn Planner route `codex/sol-6.1`,
 which does not exist; the codex provider advertises `gpt-6.1-sol` and plan T11 already recorded
 it as the default, so `scripts/check-route-allowlist.py` was failing and `just check` was red at
