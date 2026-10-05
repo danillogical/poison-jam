@@ -6,7 +6,7 @@ actually evolved and why.
 
 ## Status at last update
 
-**Fourteen dispatch defects fixed, each confirmed by the next run advancing to a new site**, plus a
+**Sixteen dispatch defects fixed, each confirmed by the next run advancing to a new site**, plus a
 twelve-span batch that resolved 65 fatal trap call sites. This section is regenerated from the
 committed manifest at HEAD; the Reviewer found (B6) that an earlier revision shipped a superseded
 span and an incorrect RET count, and that is why it is regenerated rather than appended.
@@ -24,7 +24,11 @@ span and an incorrect RET count, and that is why it is regenerated rather than a
 | 9 | latent `ABI FAILURE 0x0007DA30 expected +4` | `0x7DA30` end `0x7DA84 -> 0x7DAD6`, `stack_args 0 -> 4` | f23: `[RECOVERED] 0x0007DA30 returned; ABI verified` |
 | 10 | `[ALIAS-ICALL] 0x00032610` + `0xFFC00000` | recovered `0x32610..0x3275F`, `stack_args 12` | **f27**: `[RECOVERED] 0x00032610 returned; ABI verified` |
 | 11 | `[ICALL] Failed to resolve VA 0x00054750` | recovered `0x54750..0x55530`, `stack_args 0` + generated patch `remove-54750-stub` (L02) | **f28**: `[RECOVERED] 0x00054750 returned; ABI verified` |
-| 12 | `[ICALL] Failed to resolve VA 0x00089A60` | recovered `0x89A60..0x89AC9`, `stack_args 0` | f28 died here |
+| 12 | `[ICALL] Failed to resolve VA 0x00089A60` | recovered `0x89A60..0x89AC9`, `stack_args 0` | f29 exercised it |
+| 13 | `[ICALL] Failed to resolve VA 0x0008AEB0` | recovered `0x8AEB0..0x8B1FD`, `stack_args 0` | **f30**: ABI-verified return |
+| 14 | `ABI FAILURE 0x00080340 expected +8` | `0x80340` end `0x80BD0`, `stack_args 0` | f30 measured it; f31/f32 caught my bad `0x81853` widening |
+| 15 | `ABI FAILURE 0x00080BD0 expected +8` (delta `-0x40`) | `0x80BD0` end `0x80C83 -> 0x81853`, `stack_args 4 -> 0` | **f33**: ABI-verified return |
+| 16 | `[ICALL] Failed to resolve VA 0x00094AB0` | **next stop, not yet fixed** | f33 died here |
 | — | twelve sibling spans (65 fatal trap sites) | widened as one batch, `KNOWN_OPEN` 80 -> 66 | byte-derived; no run dispatched them |
 | — | two self-found defects | `0x32610` end `0x3275D -> 0x3275F`; `0x47820` `stack_args 0 -> 4` | found by consolidated re-verification, not a run |
 

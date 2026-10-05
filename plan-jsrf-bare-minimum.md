@@ -231,7 +231,14 @@ Reviewer's brief, the same run-driven walk cleared four more stops and closed tw
 | 11 | `[ICALL] 0x00054750` | recovered `0x54750..0x55530`, `stack_args 0` + generated patch `remove-54750-stub` (L02) | **f28** (`20261005-111824-944`) |
 | 12 | `[ICALL] 0x00089A60` | recovered `0x89A60..0x89AC9`, `stack_args 0` | f29 (exercised; f29 died at `0x8AEB0`) |
 | 13 | `[ICALL] 0x0008AEB0` | recovered `0x8AEB0..0x8B1FD`, `stack_args 0` | **f30** (`20261005-114334-406`) |
-| 14 | `ABI FAILURE 0x00080340 expected +8` | `0x80340` end `0x80BD0 -> 0x81853`, `stack_args 4 -> 0` | f30 (the failure is the evidence) |
+| 14 | `ABI FAILURE 0x00080340 expected +8` | `0x80340` end `0x80BD0` (the `0x81853` attempt was wrong), `stack_args 0` | f30 measured the failure; f31/f32 caught my bad widening |
+| 15 | `ABI FAILURE 0x00080BD0 expected +8` (delta `-0x40`) | `0x80BD0` end `0x80C83 -> 0x81853`, `stack_args 4 -> 0` | **f33** (`20261005-121111-883`): `[RECOVERED] 0x00080BD0 returned; ABI verified` |
+| 16 | `[ICALL] 0x00094AB0` | **next stop, not yet fixed** | f33 died here |
+
+Note stop 15's entry was **pre-existing and wrong twice over** (end `0x80C83` is a four-way join
+point inside the function, and `stack_args 4` should be 0). It only became reachable after stops
+13–14 cleared the entries in front — the **H9 pattern**. Stop 14's first fix was my error and is
+described below.
 
 `0x00054750` needed a generated patch because the translation pass had also emitted a "not detected"
 trap for the same address, and the two definitions collided (`LNK2005 sub_00054750 already defined`).
