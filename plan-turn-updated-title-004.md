@@ -289,9 +289,9 @@ ten tuples are a **latent hazard**: dead code today, a wrong-body misdispatch on
 
 ## Remaining work, in order
 
-1. **One more bounded run** to exercise F7d and stop 26 (`0x96560`), and to reach the next stop. f11
-   has already tested F7c/F7d at the extent level with no new stop; this run is for *exercised*
-   evidence, which neither f10 nor f11 provides for `0x96560`.
+1. **One more bounded run** to exercise stop 28 (`0x81860`), which is the only repaired address no run
+   has executed. f11 tested F7c/F7d at the extent level, f12 exercised stop 26, and f13 exercised
+   stop 27; each also reached a new stop, so this run is expected to be productive in both senses.
 2. **The remaining 25 `KNOWN_OPEN`** entries: the residue after three repair batches, each needing
    its own certificate rather than a heuristic.
 3. **`0x96F80`** stays `UNQUALIFIED` by design; its proof gap is named in TR §18 and the detector's

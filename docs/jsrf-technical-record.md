@@ -2464,14 +2464,16 @@ collector directly rather than through `scripts/run-jsrf.py`, so it carries no `
 not a conforming archive. Leaving it there made `check-run-profile.py --all` report `missing 1`, which
 would have been an unearned defect in the archive tally.
 
-**Stated precisely: the replay's log was removed, and the experiment remains repeatable.**
+**Stated precisely: the replay's log was removed, and the experiment can be repeated.** The Turn
+Planner is right that "repeatable" must not be read as reproducing the *result*.
 `logs/runs/20261006-015500-000-f9replay-pre-f7c/` was deleted, so the two counts above are no longer
 re-readable from disk; they are recorded here and were read directly from that log before deletion.
-What makes the claim checkable anyway is that the input is preserved: f9's own archive still holds
-`jsrf_recomp.exe` with sha256 `43e639d7be16be97…`, so the replay can be reproduced byte-for-byte at any
-time. That is the weaker but honest position — an experiment whose *artifact* was discarded but whose
-*input* is retained — and it is stated rather than glossed, because "the evidence is recorded" and "the
-evidence is available" are not the same claim.
+What is preserved is the **input**: f9's own archive still holds `jsrf_recomp.exe` with sha256
+`43e639d7be16be97…`, so the same executable can be run again. That is the weaker but honest position —
+an experiment whose *artifact* was discarded but whose *input* is retained — and **it is not
+byte-for-byte reproducibility of the environment or the output**, because a re-run is a new sample.
+"The evidence is recorded" and "the evidence is available" are not the same claim, and neither is
+"the experiment can be repeated".
 
 
 ## 20. The under-wide residue: 5 measured, 1 certifiable, 4 explicitly not (2026-10-06)
