@@ -10,7 +10,7 @@
   "src/recomp/gen/recomp_0004.c": "cebdfa390daac3e0310db718e1d255b5b6e24c752b3e913b2b115deb4899ed08",
   "src/recomp/gen/recomp_0005.c": "62fc70e44afd27ea802728d72d249f3a55418ff5604d21065ea055def2a40707",
   "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
-  "src/recomp/gen/recomp_dispatch.c": "e55a3e6ddf35b199921053cf68e500959a1710f3355b003ac4099cfe5ff1d755",
+  "src/recomp/gen/recomp_dispatch.c": "5b5e8ed7b9083487b62a212d3367112f03b9aa06688046d96e94e5a6fcb35af7",
   "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
   "src/recomp/gen/recomp_stubs_recovery.c": "1e0a27a1f93c5c846236092a32143353e687b7666b0de360362328416c3dd4df",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
@@ -24,9 +24,9 @@
  "generators": {
   "project": {
    "dirty": true,
-   "revision": "b2179d2ef81db8aa779911fa212e79cc13f8c173",
+   "revision": "82a2c406ba84b383324d4fd0f78aea7ebe5aebe1",
    "state": "MEASURED",
-   "status_sha256": "5e68f715ab4f851e88c9f2f854d53836c0d6497e4673b0dcb35e173d8a451bf2"
+   "status_sha256": "8017adf74e82901f3c5de990e045c281b26159c4f7ad009462544edb015f625a"
   },
   "scripts/recover-functions.py": "c951fe5ed787253bd523d16502a231772197043b84a3b20e4c7b680b55c03847",
   "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
@@ -51,9 +51,9 @@
    "sha256": "33b605f9fda7b69ea4d6bae7b99780f852d5169ddfa8a7f599be50b87c8f8e85"
   },
   "config/recovered-functions.json": {
-   "bytes": 2915325,
+   "bytes": 2932524,
    "present": true,
-   "sha256": "8bb404ca31a75e0048cac6a48506e90b7ddf746194651e920be02efadc9b4f01"
+   "sha256": "e0574a2bbb54f2a4c39dcca91e0377a32387bd9b0ccbc8a189413a4a286785e7"
   },
   "config/recovery-unresolved.json": {
    "bytes": 6902,
@@ -1564,7 +1564,17 @@
   {
    "kind": "input and generated output",
    "date": "2026-10-05",
-   "cause": "F6b: run g07 (`20261005-211627-927-g07-thunk`, exploratory) cleared stop 20 with `[RECOVERED] 0x00154540 returned; ABI verified` and then produced a NEW stop, `[ICALL] Failed to resolve VA 0x000B5F82`. The cause is an under-wide span, not an over-wide one: `0x000B5EB0` was tightened to `[0x000B5EB0, 0x000B5F3A)` by an earlier pass, which cut the function's OWN jump table at `0x000B5F0F` -- 8 of its 9 arms lie beyond `0x000B5F3A` -- so the lifter emitted `RECOMP_ITAIL` instead of a resolved switch and the guest trapped on the first arm it took. The span is restored to the body's real end `0x000B6732`, the false split entry `0x000B5F3A` is removed, and `config/generated-patches.json` gains `remove-b5f3a-dispatch` (L42) because `recomp_dispatch.c` is translation-owned and still named the removed symbol (LNK2001). `recovered.c` 3157 functions; entries 3158 -> 3157."
+   "cause": "F6b: run g07 (`20261005-211627-927-g07-thunk`, exploratory) cleared stop 20 with `[RECOVERED] 0x00154540 returned; ABI verified` and then produced a NEW stop, `[ICALL] Failed to resolve VA 0x000B5F82`. The cause is an under-wide span, not an over-wide one: `0x000B5EB0` was tightened to `[0x000B5EB0, 0x000B5F3A)` by an earlier pass, which cut the function's OWN jump table at `0x000B5F0F` -- 8 of its 9 arms lie beyond `0x000B5F3A` -- so the lifter emitted `RECOMP_ITAIL` instead of a resolved switch and the guest trapped on the first arm it took. The span is restored to the body's real end `0x000B6732`, the false split entry `0x000B5F3A` is removed, and `config/generated-patches.json` gains `remove-b5f3a-dispatch` (L02) because `recomp_dispatch.c` is translation-owned and still named the removed symbol (LNK2001). `recovered.c` 3157 functions; entries 3158 -> 3157."
+  },
+  {
+   "kind": "input only",
+   "date": "2026-10-05",
+   "cause": "F6 remediation: the `evidence` prose of the 50 tightened containers and of `0x000B5EB0` was updated to name each span's new end and the detector that derived it. Turn Review 1 found 46 of the 50 still stated their OLD body end, which is how a later pass re-widens a span -- `0x000B5EB0`'s own history is exactly that churn. **No generated output changed**: `generated_tree_hashes()` is byte-identical to the preservation baseline, because `evidence` is not compiled. Only the input hash moved. This entry also corrects the ledger citation for `remove-b5f3a-dispatch` from the unrelated L42 to L02, the reviewed-manifest entry its precedent `remove-54750-stub` cites."
+  },
+  {
+   "kind": "input and generated output",
+   "date": "2026-10-05",
+   "cause": "F6c, a crash the turn shipped and then found. The patch `remove-b5f3a-dispatch` removed the dispatch tuple for `0x000B5F3A` but left `static const size_t g_recomp_table_size = 8928;` while the array held 8927 tuples, so `recomp_dispatch_init` read one entry past the end and wrote `g_flat_table[...]` from the garbage: a host access violation (0xC0000005, write) at `recomp_dispatch.c:9299`, BEFORE `guest_entry`, in runs g08 and g08b (4 s, `missing_checkpoints=[guest_entry]`, RIP resolved from the minidump to `recomp_dispatch_init+0xC3`). The control that localized it: g07's archived binary reached `guest_entry` in the same environment while the new build died at the same log line. No static gate caught it -- `just check`, the CTest suite and `check-merge-structure.py` all pass on a dispatch table whose declared size exceeds its contents. Fixed by the companion patch `fix-dispatch-table-size` (L02), which decrements the count to 8927; g08c then reached `guest_entry` with `checkpoints_passed: true`."
   }
  ],
  "regenerations": [

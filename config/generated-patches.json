@@ -101,8 +101,16 @@
    "file": "recomp_dispatch.c",
    "before": "    { 0x000B5F3Au, (recomp_func_t)sub_000B5F3A },\n",
    "after": "    /* 0x000B5F3A is an internal label of sub_000B5EB0, not an entry; its dispatch tuple is removed so it cannot name an undefined symbol (LNK2001). */\n",
-   "reason": "0x000B5F3A is an internal label of the function at 0x000B5EB0, not an entry. The reviewed manifest no longer carries it, so the generated dispatch tuple for it names a symbol nothing defines and the link fails with LNK2001. Removing the tuple is the whole fix: the widened 0x000B5EB0 body owns the address as a loc_ label reached by fallthrough from its own jump table at 0x000B5F0F.",
-   "ledger": "L42"
+   "reason": "0x000B5F3A is an internal label of the function at 0x000B5EB0, not an entry: it is reached by fallthrough from 0x000B5EB0's own jump-table arm 0xB5F16, its only raw dword sits in packed .data, and nothing branches to it. The reviewed manifest no longer carries it (config/recovered-functions.json, ledger L02), so the generated dispatch tuple named a symbol nothing defines and the link failed with LNK2001. Removing the tuple also requires the companion patch `fix-dispatch-table-size`; see that entry for why. recomp_dispatch.c is translation-owned, so these patches are the sanctioned mechanism and patch-generated.py re-applies them after every regeneration.",
+   "ledger": "L02"
+  },
+  {
+   "id": "fix-dispatch-table-size",
+   "file": "recomp_dispatch.c",
+   "ledger": "L02",
+   "before": "static const size_t g_recomp_table_size = 8928;",
+   "after": "static const size_t g_recomp_table_size = 8927;",
+   "reason": "Companion to `remove-b5f3a-dispatch`, and a real crash the turn shipped and then found. That patch removes one tuple from `g_recomp_table` but leaves `g_recomp_table_size` at 8928, while the array holds 8927. `recomp_dispatch_init` loops `for (i = 0; i < g_recomp_table_size; i++)`, so it reads one entry past the end of the array and writes `g_flat_table[...]` from the garbage it read -- a host access violation (0xC0000005, write) at recomp_dispatch.c:9299 inside `recomp_dispatch_init`, BEFORE guest_entry, reproduced in runs g08 and g08b (4 s, missing_checkpoints=[guest_entry], RIP resolved from the minidump to `recomp_dispatch_init+0xC3`). No static gate caught it: `just check`, the CTest suite and `check-merge-structure.py` all pass on a table whose declared size exceeds its contents. A patch that removes a table entry must decrement the count in the same change."
   }
  ],
  "schema": 1

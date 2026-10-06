@@ -8,7 +8,7 @@
   "src/recomp/gen/recomp_0004.c": "cebdfa390daac3e0310db718e1d255b5b6e24c752b3e913b2b115deb4899ed08",
   "src/recomp/gen/recomp_0005.c": "62fc70e44afd27ea802728d72d249f3a55418ff5604d21065ea055def2a40707",
   "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
-  "src/recomp/gen/recomp_dispatch.c": "e55a3e6ddf35b199921053cf68e500959a1710f3355b003ac4099cfe5ff1d755",
+  "src/recomp/gen/recomp_dispatch.c": "5b5e8ed7b9083487b62a212d3367112f03b9aa06688046d96e94e5a6fcb35af7",
   "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
   "src/recomp/gen/recomp_stubs_recovery.c": "1e0a27a1f93c5c846236092a32143353e687b7666b0de360362328416c3dd4df",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
@@ -405,6 +405,13 @@
     "src/recomp/recovered/recovered_11c1_test.c"
    ],
    "reason": "F6b: `0x000B5EB0` was restored to its real end `0x000B6732` and the false split entry `0x000B5F3A` removed, because run g07 proved the tightened end cut the function's own jump table at `0x000B5F0F` (8 of 9 arms beyond it) and the guest trapped at `0x000B5F82`. `recovered.c` and its stub/test companions were regenerated; the recomp_000N chunks are unchanged, which is the expected shape for a reviewed-manifest repair."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/gen/recomp_dispatch.c"
+   ],
+   "reason": "F6c: `recomp_dispatch.c` changed because the companion patch `fix-dispatch-table-size` (L02) decrements `g_recomp_table_size` from 8928 to 8927 to match the array after `remove-b5f3a-dispatch` removed one tuple. Without it `recomp_dispatch_init` read one entry past the array end and the process died with a host access violation at `recomp_dispatch.c:9299` before `guest_entry` (runs g08, g08b). No other generated file moved: this is a two-line generated-source correction, not a regeneration."
   }
  ]
 }
