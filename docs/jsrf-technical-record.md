@@ -1864,3 +1864,130 @@ never pushed, so `d = +8` and `N + d = 4 + 8 = 12`, exactly its declared value. 
 of those 29 entries behind an unrelated unresolved path — the same false-negative shape as the
 gating rule, one class down. Findings went 24 → 39 and it remains `SUSPICIOUS`, so widening it cannot
 block the gate; it only makes the population visible.
+
+
+## 14. The hidden-entry detector: a span can be over-wide while its `end` is "correct" (2026-10-05)
+
+**The failure class, and why the existing detectors cannot see it.** `scripts/check-entry-extents.py`
+fails when a declared `end` lands mid-instruction, and the documented convention for that end is "the
+next function entry". Both can be satisfied while the entry is still **too wide**. The motivating
+case:
+
+```
+0x0007DAE0   declared [0x7DAE0, 0x7DE20)
+             its own reachable body ends at 0x7DBCB `ret`, then 4 NOPs
+             a complete 190-instruction function begins at 0x7DBD0
+0x7DE20      is BOTH this entry's declared end AND the end of the function at 0x7DBD0
+```
+
+So an end-versus-next-start check calls `0x7DAE0` correct. It is not: `0x7DBD0`'s only reference in
+the whole image is the aligned `.rdata` dword at `0x0020D3C8`, no span owns it, and dispatch is an
+**exact-match** binary search (`recomp_lookup`), so an indirect call through that dword traps with
+`[ICALL] Failed to resolve VA 0x0007DBD0`. §12 recorded the same shape for `0x1FF90` (consumes
+`0x1FFF0`) and `0x91C00` (consumes `0x91C30` and `0x91D70`) but had no detector for it.
+
+**The invariant, and why each half is load-bearing.**
+
+> A manifest entry's declared span must not extend past the end of its own reachable body into an
+> address that has independent evidence of being a separate executable entry.
+
+*Half 1 — the body provably ends early.* `Analyzer.walk` is reused from
+`scripts/check-stack-depth.py`, not reimplemented. The finding requires the walk to be **fully
+enumerated**: no truncated decode, **no fall-off at all**, no `indirect`/`terminal` exit, and the last
+reachable instruction a terminator. That combination is what turns "the walk never visited this
+address" into a proof — every path was followed to a known successor, so the reachable set is
+complete and the address is not in it.
+
+This is the `0x80BD0` lesson used in the safe direction, and the distinction is the whole point.
+`0x80BD0` has **zero** rel32 callers and is a real standalone SEH function reached only through the
+`.rdata` dword at `0x1CD000`; a previous session widened `0x80340` to `0x81853` on the reasoning
+"no rel32 branch references these interior addresses" and was wrong. So the test here is **not**
+caller absence. It is that *this entry's own control flow was completely enumerated and did not
+arrive at the address*.
+
+*Half 2 — the address has independent entry evidence.* Two sources, both measured: an aligned
+`.data`/`.rdata` dword whose value lands in `.text` (how these functions are dispatched at all), and
+an address another manifest entry already starts at (then the two spans overlap and one is wrong by
+construction). A raw pointer sweep is noisy, so the candidate must also be plausible as an
+instruction start: 4-byte aligned, not itself a padding byte, decodable, and preceded by an
+alignment-padding boundary. The last two are the tests §12 measured as taking the sibling census from
+117 to 93.
+
+**Verdicts, and the three gating classes.**
+
+| verdict | meaning | gate |
+|---|---|---|
+| `HIDDEN_ENTRY` | the consumed address resolves nowhere | **FAILS** |
+| `OVERLAP` | it is another manifest entry | **FAILS** |
+| `SHADOWED` | it already has its own generated body | **FAILS** |
+| `MISDISPATCH` | it resolves to a *different* symbol | reported |
+| `OVER_RUN` | the over-run holds no evidenced entry | reported |
+| `UNQUALIFIED` | the walk has an opaque exit, so separation is not provable | reported |
+
+The gate needs **no baseline**, for the same reason §10's gate gates only its `STACK_ARGS` class:
+each gating class is a property of this entry's own bytes plus one other address's independent
+reference, with no whole-program reasoning. `UNQUALIFIED` is never silently clean — `0x96F60` ends in
+`jmp dword ptr [eax+8]`, so its over-run into `0x96F80` is real but *not provable*, and a control
+asserts it stays undecided rather than being reported as a separation.
+
+`MISDISPATCH` is the population §12 said needed a *separate* detector from `check-table-targets.py`:
+an alias shim **does** resolve, so the trap checker cannot see it, but the symbol answering it is its
+parent's, so entering it runs the wrong body. It is reported rather than gated because §12 leaves the
+actionable subset open ("the rest are genuine mid-body labels for which running the parent's body
+from the start is correct").
+
+**Census on the pre-repair manifest: 50 containers, 63 consumed addresses.** 45 `HIDDEN_ENTRY`, 5
+`OVERLAP`, 2 `SHADOWED`, 2 `UNQUALIFIED` (the `0x96F60`/`0xAEE80` pair), 265 `OVER_RUN`. Every
+container is a `tail_jump_alias` record, which is the same dominant stop class §11 names. The
+consumed bodies are substantial, not stubs: sizes 50 to 1213 bytes, **median 360**.
+
+**The repairs, and what each value rests on.** 50 spans tightened to their own reachable end; 48 new
+reviewed entries; 5 consumed addresses already owned an entry and 2 (`0x556D0`, `0xC42E0`) already had
+a generated body, so those got no entry. Of the 48 additions, **38 are `PROVED`** — a fully enumerated
+walk reaches a `ret N` at depth 0, so `stack_args = N` by §10's identity — and **10 are `INFERRED`**,
+where the walk is enumerated and every reachable `ret` agrees on `N` but no path reaches one at depth
+0. The record keeps that distinction rather than flattening it.
+
+**Three real defects were caught by tests rather than by reasoning, and each is now a guard.** They
+are recorded because the first two were *silent*:
+
+1. **`apply()` keyed additions to the container's start**, so all 50 new entries were dropped while
+   the run printed `wrote 3110 entries` and the checker still passed — because removing the additions
+   removes the finding. It was caught by counting `set(after) - set(before)` instead of trusting the
+   exit code. Additions are now keyed by their own start and a duplicate-start check runs before the
+   write.
+2. **Two additions collided with generated bodies** (`0x556D0`, `0xC42E0`): the generated chunk
+   already defines `sub_<va>`, so the link failed with
+   `LNK2005: sub_000556D0 already defined in recovered.obj`. The first version of the checker decided
+   "resolves at runtime" from a set that defaults to empty, which misclassified both. `SHADOWED` is
+   that class, read from `recomp_dispatch.c`'s own-symbol tuples.
+3. **`0xB3C30` was given an extent one tail-jump short.** Bounded at its first candidate end
+   (`0xB3D67`) its walk looks complete, but two of its exits are tail jumps to `0xB3DCF`/`0xB3DD0`,
+   which are internal to the real body ending at `0xB3DD4`. The generated body then called a fatal
+   stub for its own continuation, and `tests/test_recovery_span_ownership.py` caught it.
+   `repair-hidden-entries.py:resolve()` now rejects any bound whose exits include a tail to an address
+   that is not a boundary.
+
+**Independent reproduction of the population.** A prototype written before the checker agreed with
+`check-table-targets.py`'s existing in-span rule on **50 of 52** candidates, the two differences being
+exactly the two opaque-exit containers. The detector also re-finds `0x96F80`, which §12 had already
+recorded as a known open instance of the class, without being told about it.
+
+**A jump-table under-read cannot produce a false finding.** Of the 50 gate containers, 6 have a
+reachable jump-table `jmp`; none has a table that stopped at `MAX_JUMP_TABLE` or whose next dword was
+still executable code, and no dropped arm lands on a consumed address. Any `jmp` the walk cannot fully
+resolve is recorded opaque, which degrades the entry to `UNQUALIFIED` rather than to a finding.
+
+**A known tool defect was hit twice and worked around, not fixed.** `check-generation-provenance.py
+--write` records only the measured axes and erases the hand-maintained `amendments` and
+`regenerations` history — it dropped 39 and 1 respectively this session (the plan already records this
+from a prior turn). They were re-attached from the pre-write copy both times, so the file now holds 40
+amendments and 2 regenerations. **The tool is still wrong**; the workaround is not a fix.
+
+**Verification.** `just check` green; CTest **38/38** (was 37; `jsrf_hidden_entries` added); stack-depth
+`--selfcheck` **10/10**; hidden-entry `--selfcheck` 5/5 controls plus 17 unit tests including a
+deciding negative control that re-injects the motivating defect into a temporary manifest and requires
+the real gate to exit nonzero; `recovered.c` regenerated (3158 functions); preservation baseline
+re-recorded with its `updates` history preserved. **The title screen is still not reached and M15 is
+not claimed.**
+

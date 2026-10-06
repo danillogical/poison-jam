@@ -55,12 +55,112 @@ established facts. Where this plan proposes a change to one of them, it is a tas
 
 ## Current work
 
-**F5: the graffiti disclaimer hold. A stack-depth CFG validator is now a repository gate, it proved
-20 live manifest defects that are now repaired, and the first unresolved stop is
-`0x00094AB0` — recovered this session as a complete function the analysis database never had. The
-title screen has NOT been reached.**
+**F6: the hidden-entry detector. A span can be over-wide while its declared `end` is "correct", and
+the new `scripts/check-hidden-entries.py` proves it from the original bytes. It found 50 over-wide
+spans consuming 63 separately evidenced entries, all now repaired and gated with no baseline. The
+first unresolved runtime stop remains `0x00154540` — found by g05, still NOT runtime-confirmed. The
+title screen has NOT been reached and M15 is NOT claimed.**
 
-**Current state (2026-10-05, third session; read this block first).**
+**Current state (2026-10-05, fourth session; read this block first).**
+
+The prior session built `scripts/check-stack-depth.py` and repaired the 24 defects it proved; this
+session built the detector for the class §12 had identified but left unbuilt. The motivating case is
+`0x7DAE0`:
+
+```text
+0x7DAE0   declared [0x7DAE0, 0x7DE20)
+          its own reachable body ends at 0x7DBCB `ret`, then 4 NOPs
+          a complete 190-instruction function begins at 0x7DBD0
+0x7DE20   is BOTH this entry's declared end AND the end of the function at 0x7DBD0
+```
+
+so `check-entry-extents.py` calls the entry correct while a whole function sits inside it. `0x7DBD0`'s
+only reference in the image is the aligned `.rdata` dword at `0x0020D3C8`, no span owns it, and
+dispatch is an **exact-match** binary search, so an indirect call through that dword traps.
+
+**The invariant, and why neither half alone is enough.**
+
+> A manifest entry's declared span must not extend past the end of its own reachable body into an
+> address that has independent evidence of being a separate executable entry.
+
+| half | what it requires | why it is load-bearing |
+|---|---|---|
+| the body provably ends early | `Analyzer.walk` (reused from `check-stack-depth.py`) is **fully enumerated**: no truncated decode, **no fall-off**, no `indirect`/`terminal` exit, last reachable instruction a terminator | that is what makes "the walk never visited this address" a *proof*: every path was followed to a known successor, so the reachable set is complete |
+| the address has independent evidence | an aligned `.data`/`.rdata` dword into `.text`, or another manifest start | a bare "unreached address inside the span" would be noise; 265 `OVER_RUN` containers are exactly that and are reported, not gated |
+
+**This is the `0x80BD0` lesson used in the safe direction.** `0x80BD0` has **zero** rel32 callers and is
+a real standalone SEH function reached only through a `.rdata` dword; a prior session widened `0x80340`
+to `0x81853` on "no rel32 branch references these interior addresses" and was wrong. So the test here
+is **not** caller absence — it is that *this entry's own control flow was completely enumerated and did
+not arrive at the address*. A test asserts the rejected test appears nowhere in the code.
+
+**Verdicts.** `HIDDEN_ENTRY` (gates; the consumed address resolves nowhere), `OVERLAP` (gates; it is
+another manifest entry), `SHADOWED` (gates; it already has its own generated body, so adding one is
+`LNK2005`), plus reported-only `MISDISPATCH`, `OVER_RUN` and `UNQUALIFIED`. **The gate needs no
+baseline.** `UNQUALIFIED` is never silently clean: `0x96F60` ends in `jmp dword ptr [eax+8]`, so its
+over-run into `0x96F80` is real but not provable, and a control asserts it stays undecided.
+
+| # | Class | Repair | Evidence |
+|---|---|---|---|
+| — | 45 `HIDDEN_ENTRY` containers | span tightened to its own reachable end; the consumed address gets its own reviewed entry | byte-derived + the gate; no run needed |
+| — | 5 `OVERLAP` containers | span tightened; the consumed address already owned an entry, so nothing is added | `0x5BF00`→`0x5C840`, `0x18AFA0`→8 entries, `0x18C150`→2, `0x190FB0`, `0x1910C0` |
+| — | 2 `SHADOWED` containers | span tightened only | `0x556D0`, `0xC42E0` already have generated bodies — a real `LNK2005` proved it |
+| 20 | `ABI FAILURE 0x00154540 expected +24` (delta 16) | two this-adjusting thunks corrected 20→12; swallowed `0x154560` recovered (`stack_args 20`) | **g05** found it; **g06 did NOT exercise it**; g07 attempted this session |
+
+**Census: 50 containers, 63 consumed addresses, every container a `tail_jump_alias` record** — the same
+dominant stop class §11 names. The consumed bodies are substantial, not stubs: 50 to 1213 bytes,
+**median 360**. Of the 48 additions, **38 are `PROVED`** (a fully enumerated walk reaches a `ret N` at
+depth 0, so `stack_args = N` by the §10 identity) and **10 are `INFERRED`** (every reachable `ret`
+agrees on `N`, but no path reaches one at depth 0). The distinction is kept rather than flattened.
+
+**A prototype written before the checker agreed with `check-table-targets.py`'s existing in-span rule
+on 50 of 52 candidates**, the two differences being exactly the two opaque-exit containers, and it
+re-found `0x96F80` — which §12 had already recorded as a known open instance — without being told
+about it. That is the reproduction control for "not overfitted to `0x7DBD0`".
+
+**Three real defects were caught by tests rather than by reasoning, and two were silent.** They are
+recorded because each is now a guard:
+
+1. **`apply()` keyed additions to the container's start**, so all 50 new entries were dropped while the
+   script printed `wrote 3110 entries` and the checker still passed — removing the additions removes
+   the finding. Caught by counting `set(after) − set(before)`, not by trusting the exit code.
+2. **Two additions collided with generated bodies** (`0x556D0`, `0xC42E0`): the chunk already defines
+   `sub_<va>`, so the link failed with `LNK2005 … already defined in recovered.obj`. The checker's
+   first version decided "resolves at runtime" from a set that defaults to empty. `SHADOWED` is that
+   class, read from `recomp_dispatch.c`'s own-symbol tuples.
+3. **`0xB3C30` was given an extent one tail-jump short.** Bounded at `0xB3D67` its walk looks complete,
+   but two exits are tail jumps to `0xB3DCF`/`0xB3DD0`, internal to the real body ending at `0xB3DD4`,
+   so the generated body called a fatal stub for its own continuation —
+   `tests/test_recovery_span_ownership.py` caught it. `resolve()` now rejects any bound whose exits
+   include a tail to a non-boundary.
+
+**A jump-table under-read cannot produce a false finding.** Of the 50 gate containers, 6 have a
+reachable jump-table `jmp`; none has a table that stopped at `MAX_JUMP_TABLE` or whose next dword was
+still executable, and no dropped arm lands on a consumed address. Any `jmp` the walk cannot fully
+resolve is recorded opaque, which degrades the entry to `UNQUALIFIED` rather than to a finding.
+
+**Verification at this point.** `just check` green; CTest **38/38** (was 37; `jsrf_hidden_entries`
+added); stack-depth `--selfcheck` **10/10**; hidden-entry `--selfcheck` 5/5 plus **17** unit tests,
+including a deciding negative control that re-injects the motivating defect into a temporary manifest
+and requires the real gate to exit nonzero; `recovered.c` regenerated (**3158** functions, was 3110
+entries); preservation baseline and provenance manifest re-recorded with their hand-maintained history
+preserved. Commit `6f2e4e2`.
+
+**A known tool defect was hit twice and worked around, not fixed.** `check-generation-provenance.py
+--write` records only the measured axes and erases the hand-maintained `amendments` and `regenerations`
+history — it dropped **39** and **1** respectively this session, twice. Both times they were re-attached
+from the pre-write copy, so the file holds 40 amendments and 2 regenerations. **The tool is still
+wrong**; the workaround is not a fix, and this is a backlog item.
+
+**Advisor status: the Persistent Advisor did not run.** It was spawned three times on the
+detector-design consultation (invariant soundness, gate-versus-census, the trap/misdispatch split) and
+each child **failed before finishing with no closing message**. Per `docs/agent-workflow.md` §1 an
+unavailable route is **reported, never silently replaced**, so **no Advisor ruling is claimed for any
+decision in this section**. The design rests instead on the measurements above, on the two independent
+reproductions (the prototype's 50/52 agreement with the existing rule, and the re-finding of
+`0x96F80`), and on the three real defects the tests caught.
+
+**Current state (2026-10-05, third session).**
 
 The previous session's sixteen dispatch defects were found by spending a game run each. Four of
 them were **stack-contract contradictions that are decidable statically from the original bytes**,
