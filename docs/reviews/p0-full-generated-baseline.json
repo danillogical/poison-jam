@@ -1,389 +1,399 @@
 {
-  "files": {
-    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "5b1105e2a6df9f8f79f7f942553cb44bc6c86c9e2ec4b10d19cff5f52bc4a1ac",
-    "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
-    "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
-    "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
-    "src/recomp/gen/recomp_0003.c": "5e36ccfcb9e419c1ce695cb2e185c5832897f563ed6eb0eaca0b00d2176ef489",
-    "src/recomp/gen/recomp_0004.c": "cebdfa390daac3e0310db718e1d255b5b6e24c752b3e913b2b115deb4899ed08",
-    "src/recomp/gen/recomp_0005.c": "62fc70e44afd27ea802728d72d249f3a55418ff5604d21065ea055def2a40707",
-    "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
-    "src/recomp/gen/recomp_dispatch.c": "1cc469ddcc6d12ac98f8675846b5940f3f438624a3a51a95faca40a9b59a4238",
-    "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-    "src/recomp/gen/recomp_stubs_recovery.c": "144d1ba3965dd4ae8bba44355df25f2dc6da95397acb20caf9b68024ce98801b",
-    "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
-    "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "52e4eb7b6bfd4a49807f0644c658d0adaed73006bda16bb88be833711e2bc0d3",
-    "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "1d58a453a7e71671257484d5c0776e62e564e7ea1f2316dc16d3569a165d2f55",
-    "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
+ "files": {
+  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "762800d1bb99ada5de9c6da90fb14634f2d1bb004d228879b609eed32449e0e8",
+  "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
+  "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
+  "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
+  "src/recomp/gen/recomp_0003.c": "5e36ccfcb9e419c1ce695cb2e185c5832897f563ed6eb0eaca0b00d2176ef489",
+  "src/recomp/gen/recomp_0004.c": "cebdfa390daac3e0310db718e1d255b5b6e24c752b3e913b2b115deb4899ed08",
+  "src/recomp/gen/recomp_0005.c": "62fc70e44afd27ea802728d72d249f3a55418ff5604d21065ea055def2a40707",
+  "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
+  "src/recomp/gen/recomp_dispatch.c": "1cc469ddcc6d12ac98f8675846b5940f3f438624a3a51a95faca40a9b59a4238",
+  "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
+  "src/recomp/gen/recomp_stubs_recovery.c": "09c78d8ae1c25f2bf8bfa942532fb2bf463adb3d458261aaaf143d1b2ac0bd3d",
+  "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
+  "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
+  "src/recomp/recovered/recovered.c": "766a964c5a95a82a51071bb38b086308ec2d277aa4d0e9a0456a966268480e6c",
+  "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
+  "src/recomp/recovered/recovered_11c1_test.c": "b95dba506b203a1e2350c07490a05fb4b4919feadead7069f704ae21783e8576",
+  "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
+ },
+ "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
+ "schema_version": 1,
+ "updates": [
+  {
+   "date": "2026-09-28",
+   "files": [
+    "src/recomp/gen/recomp_0000.c",
+    "src/recomp/gen/recomp_0004.c",
+    "src/recomp/gen/recomp_0005.c"
+   ],
+   "reason": "recomp_0000.c/recomp_0005.c: six A4b2 jsrf_watch_store observation hooks (3d0dc08) were never re-baselined; recomp_0004.c: the four CRT 64-bit divide helper bodies that dropped rcr were removed in favour of src/jsrf_crt.c (docs/jsrf-technical-record.md \u00a72)."
   },
-  "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
-  "schema_version": 1,
-  "updates": [
-    {
-      "date": "2026-09-28",
-      "files": [
-        "src/recomp/gen/recomp_0000.c",
-        "src/recomp/gen/recomp_0004.c",
-        "src/recomp/gen/recomp_0005.c"
-      ],
-      "reason": "recomp_0000.c/recomp_0005.c: six A4b2 jsrf_watch_store observation hooks (3d0dc08) were never re-baselined; recomp_0004.c: the four CRT 64-bit divide helper bodies that dropped rcr were removed in favour of src/jsrf_crt.c (docs/jsrf-technical-record.md \u00a72)."
-    },
-    {
-      "date": "2026-09-28",
-      "files": [
-        "src/recomp/gen/recomp_0000.c",
-        "src/recomp/gen/recomp_0001.c",
-        "src/recomp/gen/recomp_0002.c",
-        "src/recomp/gen/recomp_0003.c",
-        "src/recomp/gen/recomp_0004.c",
-        "src/recomp/gen/recomp_0005.c",
-        "src/recomp/gen/recomp_dispatch.c",
-        "src/recomp/gen/recomp_funcs.h",
-        "src/recomp/gen/recomp_stubs_unresolved.c",
-        "src/recomp/gen/recomp_types.h"
-      ],
-      "note": "recomp_types.h re-hashed in its checked-out (core.autocrlf) form; the first hash was of an LF copy.",
-      "reason": "full regeneration with the toolkit 2925f0b lifter (docs/jsrf-technical-record.md \u00a72): chunks, recomp_funcs.h, dispatch, unresolved stubs and recomp_types.h rewritten by the pass; boundaries relifted; project header additions and A4b2 hooks re-applied."
-    },
-    {
-      "date": "2026-09-29",
-      "files": [
-        "src/recomp/gen/recomp_0000.c",
-        "src/recomp/gen/recomp_0001.c",
-        "src/recomp/gen/recomp_0002.c",
-        "src/recomp/gen/recomp_0003.c",
-        "src/recomp/gen/recomp_0005.c",
-        "src/recomp/gen/recomp_dispatch.c",
-        "src/recomp/gen/recomp_types.h"
-      ],
-      "note": "recomp_types.h hashed in its checked-out (core.autocrlf) form, as the checker does. Chunks are CRLF on disk for the same reason.",
-      "reason": "full regeneration with the toolkit 2a349c8 lifter (docs/jsrf-technical-record.md \u00a72): chunks, dispatch and recomp_types.h rewritten by the pass; relift-selected.py boundaries re-applied; the project header ABI additions and the six A4b2 jsrf_watch_store hooks re-applied by scripts/apply-a4b2-hooks.py. recomp_funcs.h and recomp_stubs_unresolved.c came out byte-identical."
-    },
-    {
-      "date": "2026-09-30",
-      "files": [
-        "src/recomp/gen/recomp_types.h"
-      ],
-      "note": "recomp_types.h re-hashed in its checked-out (core.autocrlf) form, as the checker does.",
-      "reason": "scripts/patch-generated.py applied the T18 patch a4b-watch-declaration (config/generated-patches.json, ledger L38) to recomp_types.h: four lines declaring jsrf_watch_store for the a4b-watch-* call sites. The other eight patches were already applied and left their files unchanged. Amended, not regenerated: the lifter, command and generator identity are those of the 2026-09-29 2a349c8 pass."
-    },
-    {
-      "date": "2026-09-30",
-      "files": [
-        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
-        "src/recomp/gen/recomp_stubs_recovery.c",
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "Two wrong tail_jump_alias folds were corrected by adding recovery entries for 0x00037550 and retargeting 0x00026780, and two config spans that ran past their function's terminator were tightened (0x000BCF40, 0x001063A0). The pass rewrote recovered.c and its stubs; it is the first successful run of this script in the session. The strict horizon moved as a result: run 20260930-225739-446-f3-alias-fix-2-strict reaches 93.0 s with the kernel thunk table intact (docs/jsrf-technical-record.md section 5). recovered.c: 3074 -> 3075 functions; 1 added (sub_00037550), 0 removed, 3042 bodies differ, 32 identical. The differences are generator-version effects, not only the two edits: 2836 bodies now declare `uint32_t ebp = 0` where the old tree had an uninitialised `uint32_t ebp`, and 846 fcom sites now set the FPU condition codes through RECOMP_FCMP_CC, which the old tree never did. Both are emitted by the current translator and the macro is defined in the tree (src/recomp/gen/recomp_types.h:260), so the result compiles and is the intended output of this generator, not a regression."
-    },
-    {
-      "date": "2026-10-02",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "L02 recovery of the render-scene method 0x0014FEF0 (one reviewed entry in config/recovered-functions.json: 0x0014FEF0..0x00150104, .text, routine, stack_args 12). recovered.c: 3075 -> 3076 functions. The entry adds one body, its checked ABI wrapper, one declaration and one lookup case, and it also changes exactly ONE pre-existing body: body_0014FE60 now ends with an emitted `g_seh_ebp = ebp; sub_0014FEF0(); return; /* fallthrough 0x0014FEF0 */` after its unconditional return, i.e. unreachable dead code, because making 0x0014FEF0 a resolvable entry lets the translator emit a fallthrough it previously suppressed. Measured: regenerating the reviewed set with that entry removed reproduces the previous baseline recovered.c 65cb5b69... byte-for-byte, so this is a one-entry change and not a generator-version effect. recovered_11c1_test.c differs by exactly one added declaration line (extern void sub_0014FEF0(void); at line 3733). All other baselined files are byte-identical."
-    },
-    {
-      "date": "2026-10-04",
-      "files": [
-        "src/recomp/gen/recomp_0003.c"
-      ],
-      "reason": "F4b: scripts/relift-selected.py fcmov relifted exactly two bodies, sub_0014C850 and sub_0014C870, with the toolkit 671ab0a lifter. Their fcmovne/fcmove were bare comments; they are now conditional moves (TEST_NZ/TEST_Z on the test ah,1 result). Measured by diff against the pre-relift tree: 6 insertions, 4 deletions, all inside those two bodies (the conditional move, one blank line, and the CC header line now reading int_or_void). The relift mode, its 2-entry config/relift-fcmov.json and tests/test_fcmov_clamp.py are the record. No other baselined file changed."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
-        "src/recomp/gen/recomp_stubs_recovery.c",
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "F4b/0x7BBF3: recovery entry 0x0007B8D0 end 0x0007B93C -> 0x0007BC04 (the method ends at the ret at 0x7BC03; 0x7B93C, 0x7B956, 0x7B978 and 0x7BBF3 were internal labels). recover-functions.py regenerated recovered.c and its stubs; recovery-unresolved.json lost 0x7B956, 0x7B978 and 0x7BBF3 (0x7B93C was already a generated function and stays). Measured against the pre-run tree: recovered.c gains the whole body and drops 4 extern lines, the old 108-byte header and the 4 stub-call lines; the regeneration also lifts sub_0017F02C's fnclex (recovered.c) as the decided no-op of toolkit 671ab0a instead of a comment; recovered_11c1_test.c differs by +2/-4 extern declarations (sub_00055530, sub_0007B850 added; the four labels removed); both stub files lose exactly the three stubs. All other baselined files are byte-identical. Amended, not regenerated: no full pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
-        "src/recomp/gen/recomp_stubs_recovery.c",
-        "src/recomp/recovered/recovered.c"
-      ],
-      "reason": "F4c: second recovery pass of the same session. Added one reviewed entry 0x0004C400..0x0004C8A1 (thiscall method entered only by tail jmp from 0x51FFC; no analysis-database entry existed, so the jmp was a fatal stub). recovered.c 3076 -> 3077 functions: one body added (690 lines, 3 switch tables, every goto labelled), its wrapper, declarations and lookup case; the stub for 0x4C400 removed from recovery-unresolved.json and from both stub files. Measured diff against the state recorded after the 0x7B8D0 amendment is limited to that body and its declarations. Amended, not regenerated: no full pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
-        "src/recomp/gen/recomp_stubs_recovery.c",
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "F4c: third recovery pass of the session. The 0x77-entry handler table at 0x001F9888 has 111 distinct targets; a census found five with no function of their own (0x4BF70, 0x521B0, 0x52350, 0x52780, 0x530A0) and four of them inside another recovered span (folded neighbours). Entries 0x4BF40, 0x52150 and 0x52FC0 were shortened to their own ret; five entries were added. recovered.c 3077 -> 3082 functions. The stubs for 0x52416 and 0x52456 (labels inside the old 0x52150 span) left recovery-unresolved.json. Amended, not regenerated: no full pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "F4c: fourth recovery pass of the session. Added one entry 0x000425D0..0x00042745 (stack_args 12; vtable method at 0x1CA5CC slot 1, no analysis-database entry). recovered.c 3082 -> 3083 functions. Amended, not regenerated: no full pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c"
-      ],
-      "reason": "F4c: fifth recovery pass of the session. stack_args corrected 0 -> 12 for the tail-jump thunks 0x00047470 (jmp [eax+4]) and 0x00047540 (jmp [eax+0xc]); the wrapper ABI check now expects esp+16. Amended, not regenerated: no full pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "F4c: sixth recovery pass of the session. Advisor-directed: 0x3E210 tightened to 0x3E22E (its ret 4 at 0x3E22B); new entries 0x3E230, 0x41400, 0x69F90 (slot-1 receivers of thunk 0x47470, stack_args 12, ret 0xC). recovered.c 3083 -> 3086. Amended, not regenerated: no full pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "F4c: seventh recovery pass of the session. 0x0006EC80 end 0x6ECBE -> 0x6EE8A (the old span ended at an internal label; real last ret 4 at 0x6EE87). recovered.c function count unchanged (3086). Amended, not regenerated: no full pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "F5: recovery pass 8. Added seven job-handler table entries (0x1EC0F0 slots 2,10,13,15,16,18,21: 0x32C70, 0x348A0, 0x33C50, 0x35640, 0x34200, 0x2C360, 0x27B00; stack_args 0). recovered.c 3086 -> 3093. Amended, not regenerated: no full pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "F5: recovery pass 9. Added 0x0013D840..0x0013D856 (a data-installed hook wrapper, stack_args 0). recovered.c 3093 -> 3094. Amended, not regenerated: no full pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [],
-      "reason": "Turn-review cleanup: prose-only edits to evidence strings in config/recovered-functions.json (0x13D840 installer address). recovered.c unchanged."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/gen/recomp_0001.c",
-        "src/recomp/gen/recomp_types.h",
-        "src/recomp/recovered/recovered.c"
-      ],
-      "reason": "L41 disc-error observation. Host log at the entry of 0x6F730 (recomp_0001.c, declaration in recomp_types.h) and on the 0x2537E tail in recovered.c before esi is popped. Observation only: no guest write. Amended, not regenerated: no full pass ran."
-    },
-    {
-      "date": "2026-10-04",
-      "files": [
-        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
-        "src/recomp/gen/recomp_stubs_recovery.c",
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "0x001403B0 end widened 0x00140485 -> 0x00140540 after f8 aborted on the truncated body. recover-functions.py re-run. Only body_001403B0 changed; the stub for 0x0014048E was removed. Function count stays 3094. Amended, not regenerated: no full pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "Two changes, and the second is a repair of a checkpoint that was already red. (1) 0x0013B750 recovered as its own entry 0x0013B750..0x0013B810, stack_args 0: the guest installs it itself at 0x0013BBDF via 0x142810 (obj->0x88 = fn, obj->0x8c = ctx) and dispatches it at 0x00142C9E call [esi+0x88] (return 0x00142CA4); f15 died on it with [ICALL] Failed to resolve VA 0x0013B750. recovered.c 3095 -> 3096; the 11c1 fixture gains only extern sub_0013B750. (2) This file still carried recovered.c a47e78bf, the PRE-0x13FAD0 hash, because d77474d updated docs/reviews/p0-7-generation-provenance.json but did not re-baseline this file. At HEAD the manifest recorded 6f5f7dcd and this baseline recorded a47e78bf, so jsrf_generation_provenance was already failing at the pushed checkpoint d77474d (test_generated_tree_matches_the_preservation_baseline and test_cli_check_passes). Both entries are now the measured values. Control: regenerating with the 0x0013B750 entry removed reproduces recovered.c 6f5f7dcd byte-for-byte, so the tree moved by that one reviewed entry and not by a generator-version effect. All four TRANSLATION-owned files and the 11 other baselined gen/ files are byte-identical; the changed set is exactly the two RECOVERY-owned files (recovered.c, recomp_stubs_recovery.c) and their two fixtures. recomp_stubs_recovery.c sits in gen/ but is recovery-owned. Amended, not regenerated: no full translation pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
-        "src/recomp/gen/recomp_stubs_recovery.c",
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "Run-driven chain: 0x0007AF90 recovered (0x0007AF90..0x0007B750, stack_args 0, a vtable method of 0x001CCE70 slot +0x04 and the only unresolved pointer in that table); 0x000BB7B0 span widened 0x000BBA04 -> 0x000BBA19 to own its shared tail-merged epilogue at 0x000BBA17; 0x000B0210 end corrected 0x000B0305 -> 0x000B05CC so its 11-entry jump table at 0xB05CC keeps all 7 distinct arms inside the span. Each was found by a run and each is confirmed by that run reaching the next site. recovered.c 3096 -> 3097; the 11c1 fixture gains only externs. All four TRANSLATION-owned files and the 11 other baselined gen/ files are byte-identical; the changed set is exactly the two RECOVERY-owned files (recovered.c, recomp_stubs_recovery.c) and their two fixtures. recomp_stubs_recovery.c sits in gen/ but is recovery-owned. Amended, not regenerated: no full translation pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
-        "src/recomp/gen/recomp_stubs_recovery.c",
-        "src/recomp/recovered/recovered.c"
-      ],
-      "reason": "0x0006A770 recovered (0x0006A770..0x0006A7C0, stack_args 0). It is a direct tail-jump target from sub_00074C70 at 0x00074CA9 (`jmp 0x6a770`, E9 rel32), so the address is never stored as a dword anywhere in default.xbe and no pointer census can find it. Run 20261005-004233-759-f19-b0210 died on it. recovered.c 3097 -> 3098; the 11c1 fixture gains only the corresponding extern; recovery-unresolved.json loses 0x0006A770. Amended, not regenerated: no full translation pass ran. Also corrected 0x00074C70 stack_args 4 -> 0: the thunk has no ret of its own (it ends `jmp 0x6a770`) and 0x0006A770 ends with a plain `ret`, so the guest delta is 4, not 8. The recorded 4 was a latent pre-existing defect at d77474d that only became measurable once 0x0006A770 had a body to return through; f20 measured `ABI FAILURE 0x00074C70 ... expected +8`."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
-        "src/recomp/gen/recomp_stubs_recovery.c",
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "Two 0x0013FAD0-class splits. 0x000C25D0 end tightened 0x000C2700 -> 0x000C2621 and 0x000C2630 given its own entry (run-driven: f21 died on [ICALL] Failed to resolve VA 0x000C2630). 0x00047820 end tightened 0x00047970 -> 0x00047849 and 0x00047850 given its own entry (detector-driven: tightening 0x000C25D0 made check-span-exits.py report its tail jump jmp 0x47850, and 0x47850 was inside 0x00047820's span). Both boundaries measured by clean capstone decodes. recovered.c 3098 -> 3100. Amended, not regenerated: no full translation pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c"
-      ],
-      "reason": "0x0007DA30 end corrected 0x0007DA84 -> 0x0007DAD6 and stack_args corrected 0 -> 4. The old end was a folded-alias start mid-function, so the body had no epilogue and f22 measured an ABI failure; the real epilogue is `pop edi; pop esi; ret 4` at 0x0007DAD3 (C2 04 00). recovered.c stays 3100. Amended, not regenerated: no full translation pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "0x00032610 recovered (0x00032610..0x0003275D, stack_args 12). Same tail_jump_alias defect as the already-recovered sibling 0x00032C70: the DB span 0x32610..0x33800 overran because the jump table at 0x32760 contains bytes that decode as a spurious ret 0x326, so the dispatch ran 0x33800 (`mov eax,1; ret 4`) instead of this function. All 11 RETs are `ret 0xc`, hence stack_args 12; the sibling 0x32C70 has a plain ret and keeps 0. Run f23 logged `[ALIAS-ICALL] target=0x00032610 owner=0x00033800` just before it died. recovered.c 3100 -> 3101. Amended, not regenerated: no full translation pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c"
-      ],
-      "reason": "Two defects found by the Orchestrator's own consolidated re-verification, not by a run. 0x00032610 end 0x0003275D -> 0x0003275F: the old end cut the final three-byte `ret 0xc` in half so the body fell off the end with no return for its last exit path (now 12 exits, not 11). 0x00047820 stack_args 0 -> 4: the body ends `pop esi; ret 4` (C2 04 00), so the wrapper must expect +8. recovered.c stays 3101. Amended, not regenerated: no full translation pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
-        "src/recomp/gen/recomp_stubs_recovery.c",
-        "src/recomp/gen/recomp_stubs_unresolved.c",
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "Twelve sibling spans widened as one batch to own their own release arms (65 fatal trap call sites resolved; check-span-exits 428 -> 363; KNOWN_OPEN 80 -> 66), plus 0x00054750 recovered as an unowned gap and the remove-54750-stub generated patch (ledger L02) that resolves the resulting LNK2005 against the translation-owned trap file. recovered.c 3101 -> 3102. Amended, not regenerated: no full translation pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [],
-      "reason": "0x00089A60 recovered (0x00089A60..0x00089AC9, stack_args 0), a function swallowed by a gap_prologue false entry at 0x00089A42 (whose bytes are jump-table data, not code). Run f28 died on it after the 0x00054750 fix. The body has no ret of its own: it ends `pop esi; jmp 0x1baa50`, and 0x1baa50 ends in a plain C3, so stack_args 0. recovered.c 3102 -> 3103. Amended, not regenerated: no full translation pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
-        "src/recomp/gen/recomp_stubs_recovery.c",
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "0x0008AEB0 recovered (0x0008AEB0..0x0008B1FD, stack_args 0), an unowned gap reached by two direct jumps, found by f29 after the 0x00032610 and 0x00054750 fixes. It also owns the gap_prologue false entry 0x0008B056, which has no rel32 reference anywhere. Five plain C3 rets, so stack_args 0. recovered.c 3103 -> 3104. Amended, not regenerated: no full translation pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "0x00080340 end corrected 0x00080BD0 -> 0x00081853 and stack_args 4 -> 0. The declared end contained no ret at all, so the body could not reach its epilogue and f30 measured an ABI failure at +8; the real epilogue is a single plain C3 at 0x00081852. The span also owns three tail_jump_alias interior starts with no rel32 reference anywhere. check-span-exits findings 363 -> 360. recovered.c stays 3104. Amended, not regenerated."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "0x000307A0 end corrected 0x000307F8 -> 0x00030800 and stack_args set to 4. The old end cut `test esi,esi` in half and the body fell through to a symbol decoded from mid-instruction on a reachable path -- a LIVE defect the entry-extent baseline had frozen as reviewed. Same class as 0x00178F40 and 0x00032610. The baseline drops 19 -> 18. recovered.c stays 3104. Amended, not regenerated: no full translation pass ran."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "0x00080340 end corrected again 0x00081853 -> 0x00080BD0 with stack_args 0. The earlier widening swallowed 0x00080BD0, a real SEH function with its own recovered body; f31 measured the collision as an ABI failure at 0x00080BD0. The body really ends at 0x00080BCE with two tail jumps to 0x0008AEB0. The false-label test was weak: it did not require the address to lack its own recovered entry. recovered.c stays 3104. Amended, not regenerated."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "reason": "0x00080BD0 end corrected 0x00080C83 -> 0x00081853 and stack_args 4 -> 0, resolving the 0x80340/0x80BD0 overlap: the two functions are ADJACENT, proven by 0x80BD0's matching SEH pair and by prologue -0x40 / epilogue +0x44 netting exactly +4. f31 and f32 both measured the -0x40 ABI failure. Both defects predate this session. recovered.c stays 3104. Amended, not regenerated."
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "cause": "config/recovered-functions.json gained the recovered entry 0x00094AB0..0x00095FB2 and twenty corrected `stack_args` values (20 entries changed from 0 to their body's own `ret N` immediate: 4 for nineteen of them and 20 for 0x00080028). scripts/recover-functions.py was re-run, so recovered.c and its focused fixture were rewritten. The baseline moves with them deliberately: the previous session updated the manifest but not this file, which left jsrf_generation_provenance red at the pushed checkpoint d77474d.",
-      "evidence": [
-        "scripts/check-stack-depth.py reports 0 DEFECTs on the committed manifest with no baseline file",
-        "a control regeneration before the manifest edit reproduced recovered.c byte for byte, so these hashes reflect the manifest change and nothing else",
-        "scripts/check-generation-provenance.py --check passes on the same tree"
-      ]
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "cause": "config/recovered-functions.json gained the recovered entry 0x000496E0..0x000497D6 with stack_args 8. Run 20261005-174422-643-g03-94ab0 cleared 0x00094AB0 (ABI-verified return) and then stopped on `[ICALL] Failed to resolve VA 0x000496E0`, an address in no earlier archived run. It is a complete function with no analysis-database entry of its own, swallowed by the over-wide tail_jump_alias record sub_00049520 [0x49520, 0x4A6F0), which overruns four functions the manifest already owns separately (0x497E0, 0x49A80, 0x49E80, 0x4A6C0). stack_args 8 is INFERRED rather than derived: the body's single reachable exit is `ret 8` at 0x000497D1, but it makes seven indirect calls, so the pre-ret depth is not statically resolvable and the validator reports the entry UNKNOWN/PARTIAL, not PROVED. The value follows from the byte pattern -- no call has an `add esp,N` fix-up, so each callee removes its own arguments. recovered.c 3105 -> 3106 functions (manifest entries: 3104 at abb86d4, 3106 at 1d8599f). This entry's cause text originally repeated entry 33's by mistake and is rewritten here.",
-      "evidence": [
-        "g03's log holds exactly one `[RECOVERED] 0x00094AB0 returned; ABI verified` line, so the earlier stop was cleared on an exercised path",
-        "g03's only `Failed to resolve` line names 0x000496E0, and that address appears in no other archived jsrf_run.log",
-        "the extent is byte-derived: `ret 8` (C2 08 00) at 0x000497D1, then NOPs, then the next manifest entry at 0x000497E0",
-        "the regenerated wrapper checks +12 and the body emits `esp += 12; return; /* ret 8 */`, which agree",
-        "the validator's verdict for this entry is UNKNOWN/PARTIAL, not PROVED; the record states that rather than claiming a proof the gate never gave"
-      ]
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "cause": "config/recovered-functions.json gained the recovered entry 0x0005C840..0x0005C983 with stack_args 0. Run 20261005-175848-754-g04-496e0 exercised 0x00094AB0 again and then took a DIFFERENT path from g03, stopping on `[ICALL] Failed to resolve VA 0x0005C840` -- also absent from every earlier run. Same swallowed-entry class: a complete function with no analysis-database entry of its own, before the over-wide tail_jump_alias records sub_0005C990 and sub_0005CB90 (both [0x5C990, 0x5D3B0), both overrunning real functions). It has ZERO rel32 callers and exactly one reference in the image, the .data dword at 0x001FA1C0. stack_args 0 is derived from the bytes rather than the model, because two calls on its walk are not statically resolvable; both resolvable exits sit at depth 0 and total 4. The validator reports it UNKNOWN, not PROVED, and the record says so. recovered.c 3106 -> 3107 functions (manifest entries: 3106 at 1d8599f, 3107 at 74760e4). This entry's cause text originally repeated entry 33's by mistake and is rewritten here.",
-      "evidence": [
-        "g04's log holds exactly one `[RECOVERED] 0x00094AB0 returned; ABI verified` line, so stop 17 was exercised again",
-        "g04's only `Failed to resolve` line names 0x0005C840, an address in no other archived jsrf_run.log",
-        "g04 took a different path from g03, which is the documented run-to-run nondeterminism rather than a regression; g04 therefore neither confirms nor refutes the 0x496E0 repair",
-        "the two call cleanups are read from the byte pattern: no `add esp,N` after either call, zero pushes before the direct one, exactly two before the vtable one",
-        "zero rel32 callers; the single reference is the .data dword at 0x001FA1C0",
-        "the regenerated wrapper constant +4 equals 4 + stack_args 0, and the body emits `esp += 4; return; /* ret */`"
-      ]
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
-        "src/recomp/gen/recomp_stubs_recovery.c",
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "cause": "config/recovered-functions.json gained 0x001025B0..0x001026AA and 0x00152DE0..0x00152E2C and had four stack_args corrected (0x00021010 0->16, 0x000F4FF0 0->4, 0x00102490 0->4, 0x00152BC0 8->24), so scripts/recover-functions.py was re-run and recovered.c plus its focused fixture were rewritten. The four came from fixing a false-negative in scripts/check-stack-depth.py that required every reachable exit to be at depth 0.",
-      "evidence": [
-        "scripts/check-stack-depth.py reports 0 DEFECTs on the committed manifest with no baseline file",
-        "the regenerated wrappers check +20, +8, +8, +28, +4 and +12, each equal to 4 + stack_args",
-        "the validator --selfcheck passes 10 controls including three that pin the per-path rule"
-      ]
-    },
-    {
-      "date": "2026-10-05",
-      "files": [
-        "src/recomp/recovered/recovered.c",
-        "src/recomp/recovered/recovered_11c1_test.c"
-      ],
-      "cause": "config/recovered-functions.json gained the recovered function 0x00154560..0x001548DC (stack_args 20) and two this-adjusting thunks had their stack_args corrected 20 -> 12 (0x00154520 and 0x00154540), with 0x00154540's span tightened from 0x001548E0 to 0x00154558 because it had swallowed 0x00154560. Run 20261005-185514-638-g05-confirm logged `ABI FAILURE 0x00154540 esp 00F7FD30->00F7FD40 expected +24`; the thunks end in an indirect tail jump `jmp dword ptr [ecx+0x6c]`, so the caller's cleanup is the tail target's `ret N`. The run's frozen dump gives the object 0x0106C870, its vtable 0x001E0F00, and that vtable's +0x6c slot 0x00154420, whose exits are all `ret 0xc` = 12; 4 + 12 = 16 equals the measured delta exactly. scripts/recover-functions.py was re-run, so recovered.c and its focused fixture were rewritten.",
-      "evidence": [
-        "run g05 confirms both earlier repairs on an exercised path: one `[RECOVERED] 0x000496E0 returned; ABI verified` and one for 0x0005C840",
-        "the dump mapping was verified with scripts/check-dump-mapping.py before any guest memory was read (matches 1, content-mismatch 0)",
-        "0x00154420's four reachable exits are all `ret 0xc` (C2 0C 00), so its cleanup is 12, and 4 + 12 = 16 equals the observed delta",
-        "after regeneration the wrappers check +16, +16 and +24, each equal to 4 + stack_args",
-        "scripts/check-stack-depth.py reports 0 DEFECTs on the committed manifest with no baseline file"
-      ]
-    }
-  ]
+  {
+   "date": "2026-09-28",
+   "files": [
+    "src/recomp/gen/recomp_0000.c",
+    "src/recomp/gen/recomp_0001.c",
+    "src/recomp/gen/recomp_0002.c",
+    "src/recomp/gen/recomp_0003.c",
+    "src/recomp/gen/recomp_0004.c",
+    "src/recomp/gen/recomp_0005.c",
+    "src/recomp/gen/recomp_dispatch.c",
+    "src/recomp/gen/recomp_funcs.h",
+    "src/recomp/gen/recomp_stubs_unresolved.c",
+    "src/recomp/gen/recomp_types.h"
+   ],
+   "note": "recomp_types.h re-hashed in its checked-out (core.autocrlf) form; the first hash was of an LF copy.",
+   "reason": "full regeneration with the toolkit 2925f0b lifter (docs/jsrf-technical-record.md \u00a72): chunks, recomp_funcs.h, dispatch, unresolved stubs and recomp_types.h rewritten by the pass; boundaries relifted; project header additions and A4b2 hooks re-applied."
+  },
+  {
+   "date": "2026-09-29",
+   "files": [
+    "src/recomp/gen/recomp_0000.c",
+    "src/recomp/gen/recomp_0001.c",
+    "src/recomp/gen/recomp_0002.c",
+    "src/recomp/gen/recomp_0003.c",
+    "src/recomp/gen/recomp_0005.c",
+    "src/recomp/gen/recomp_dispatch.c",
+    "src/recomp/gen/recomp_types.h"
+   ],
+   "note": "recomp_types.h hashed in its checked-out (core.autocrlf) form, as the checker does. Chunks are CRLF on disk for the same reason.",
+   "reason": "full regeneration with the toolkit 2a349c8 lifter (docs/jsrf-technical-record.md \u00a72): chunks, dispatch and recomp_types.h rewritten by the pass; relift-selected.py boundaries re-applied; the project header ABI additions and the six A4b2 jsrf_watch_store hooks re-applied by scripts/apply-a4b2-hooks.py. recomp_funcs.h and recomp_stubs_unresolved.c came out byte-identical."
+  },
+  {
+   "date": "2026-09-30",
+   "files": [
+    "src/recomp/gen/recomp_types.h"
+   ],
+   "note": "recomp_types.h re-hashed in its checked-out (core.autocrlf) form, as the checker does.",
+   "reason": "scripts/patch-generated.py applied the T18 patch a4b-watch-declaration (config/generated-patches.json, ledger L38) to recomp_types.h: four lines declaring jsrf_watch_store for the a4b-watch-* call sites. The other eight patches were already applied and left their files unchanged. Amended, not regenerated: the lifter, command and generator identity are those of the 2026-09-29 2a349c8 pass."
+  },
+  {
+   "date": "2026-09-30",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "Two wrong tail_jump_alias folds were corrected by adding recovery entries for 0x00037550 and retargeting 0x00026780, and two config spans that ran past their function's terminator were tightened (0x000BCF40, 0x001063A0). The pass rewrote recovered.c and its stubs; it is the first successful run of this script in the session. The strict horizon moved as a result: run 20260930-225739-446-f3-alias-fix-2-strict reaches 93.0 s with the kernel thunk table intact (docs/jsrf-technical-record.md section 5). recovered.c: 3074 -> 3075 functions; 1 added (sub_00037550), 0 removed, 3042 bodies differ, 32 identical. The differences are generator-version effects, not only the two edits: 2836 bodies now declare `uint32_t ebp = 0` where the old tree had an uninitialised `uint32_t ebp`, and 846 fcom sites now set the FPU condition codes through RECOMP_FCMP_CC, which the old tree never did. Both are emitted by the current translator and the macro is defined in the tree (src/recomp/gen/recomp_types.h:260), so the result compiles and is the intended output of this generator, not a regression."
+  },
+  {
+   "date": "2026-10-02",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "L02 recovery of the render-scene method 0x0014FEF0 (one reviewed entry in config/recovered-functions.json: 0x0014FEF0..0x00150104, .text, routine, stack_args 12). recovered.c: 3075 -> 3076 functions. The entry adds one body, its checked ABI wrapper, one declaration and one lookup case, and it also changes exactly ONE pre-existing body: body_0014FE60 now ends with an emitted `g_seh_ebp = ebp; sub_0014FEF0(); return; /* fallthrough 0x0014FEF0 */` after its unconditional return, i.e. unreachable dead code, because making 0x0014FEF0 a resolvable entry lets the translator emit a fallthrough it previously suppressed. Measured: regenerating the reviewed set with that entry removed reproduces the previous baseline recovered.c 65cb5b69... byte-for-byte, so this is a one-entry change and not a generator-version effect. recovered_11c1_test.c differs by exactly one added declaration line (extern void sub_0014FEF0(void); at line 3733). All other baselined files are byte-identical."
+  },
+  {
+   "date": "2026-10-04",
+   "files": [
+    "src/recomp/gen/recomp_0003.c"
+   ],
+   "reason": "F4b: scripts/relift-selected.py fcmov relifted exactly two bodies, sub_0014C850 and sub_0014C870, with the toolkit 671ab0a lifter. Their fcmovne/fcmove were bare comments; they are now conditional moves (TEST_NZ/TEST_Z on the test ah,1 result). Measured by diff against the pre-relift tree: 6 insertions, 4 deletions, all inside those two bodies (the conditional move, one blank line, and the CC header line now reading int_or_void). The relift mode, its 2-entry config/relift-fcmov.json and tests/test_fcmov_clamp.py are the record. No other baselined file changed."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "F4b/0x7BBF3: recovery entry 0x0007B8D0 end 0x0007B93C -> 0x0007BC04 (the method ends at the ret at 0x7BC03; 0x7B93C, 0x7B956, 0x7B978 and 0x7BBF3 were internal labels). recover-functions.py regenerated recovered.c and its stubs; recovery-unresolved.json lost 0x7B956, 0x7B978 and 0x7BBF3 (0x7B93C was already a generated function and stays). Measured against the pre-run tree: recovered.c gains the whole body and drops 4 extern lines, the old 108-byte header and the 4 stub-call lines; the regeneration also lifts sub_0017F02C's fnclex (recovered.c) as the decided no-op of toolkit 671ab0a instead of a comment; recovered_11c1_test.c differs by +2/-4 extern declarations (sub_00055530, sub_0007B850 added; the four labels removed); both stub files lose exactly the three stubs. All other baselined files are byte-identical. Amended, not regenerated: no full pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c"
+   ],
+   "reason": "F4c: second recovery pass of the same session. Added one reviewed entry 0x0004C400..0x0004C8A1 (thiscall method entered only by tail jmp from 0x51FFC; no analysis-database entry existed, so the jmp was a fatal stub). recovered.c 3076 -> 3077 functions: one body added (690 lines, 3 switch tables, every goto labelled), its wrapper, declarations and lookup case; the stub for 0x4C400 removed from recovery-unresolved.json and from both stub files. Measured diff against the state recorded after the 0x7B8D0 amendment is limited to that body and its declarations. Amended, not regenerated: no full pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "F4c: third recovery pass of the session. The 0x77-entry handler table at 0x001F9888 has 111 distinct targets; a census found five with no function of their own (0x4BF70, 0x521B0, 0x52350, 0x52780, 0x530A0) and four of them inside another recovered span (folded neighbours). Entries 0x4BF40, 0x52150 and 0x52FC0 were shortened to their own ret; five entries were added. recovered.c 3077 -> 3082 functions. The stubs for 0x52416 and 0x52456 (labels inside the old 0x52150 span) left recovery-unresolved.json. Amended, not regenerated: no full pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "F4c: fourth recovery pass of the session. Added one entry 0x000425D0..0x00042745 (stack_args 12; vtable method at 0x1CA5CC slot 1, no analysis-database entry). recovered.c 3082 -> 3083 functions. Amended, not regenerated: no full pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c"
+   ],
+   "reason": "F4c: fifth recovery pass of the session. stack_args corrected 0 -> 12 for the tail-jump thunks 0x00047470 (jmp [eax+4]) and 0x00047540 (jmp [eax+0xc]); the wrapper ABI check now expects esp+16. Amended, not regenerated: no full pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "F4c: sixth recovery pass of the session. Advisor-directed: 0x3E210 tightened to 0x3E22E (its ret 4 at 0x3E22B); new entries 0x3E230, 0x41400, 0x69F90 (slot-1 receivers of thunk 0x47470, stack_args 12, ret 0xC). recovered.c 3083 -> 3086. Amended, not regenerated: no full pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "F4c: seventh recovery pass of the session. 0x0006EC80 end 0x6ECBE -> 0x6EE8A (the old span ended at an internal label; real last ret 4 at 0x6EE87). recovered.c function count unchanged (3086). Amended, not regenerated: no full pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "F5: recovery pass 8. Added seven job-handler table entries (0x1EC0F0 slots 2,10,13,15,16,18,21: 0x32C70, 0x348A0, 0x33C50, 0x35640, 0x34200, 0x2C360, 0x27B00; stack_args 0). recovered.c 3086 -> 3093. Amended, not regenerated: no full pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "F5: recovery pass 9. Added 0x0013D840..0x0013D856 (a data-installed hook wrapper, stack_args 0). recovered.c 3093 -> 3094. Amended, not regenerated: no full pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [],
+   "reason": "Turn-review cleanup: prose-only edits to evidence strings in config/recovered-functions.json (0x13D840 installer address). recovered.c unchanged."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/gen/recomp_0001.c",
+    "src/recomp/gen/recomp_types.h",
+    "src/recomp/recovered/recovered.c"
+   ],
+   "reason": "L41 disc-error observation. Host log at the entry of 0x6F730 (recomp_0001.c, declaration in recomp_types.h) and on the 0x2537E tail in recovered.c before esi is popped. Observation only: no guest write. Amended, not regenerated: no full pass ran."
+  },
+  {
+   "date": "2026-10-04",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "0x001403B0 end widened 0x00140485 -> 0x00140540 after f8 aborted on the truncated body. recover-functions.py re-run. Only body_001403B0 changed; the stub for 0x0014048E was removed. Function count stays 3094. Amended, not regenerated: no full pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "Two changes, and the second is a repair of a checkpoint that was already red. (1) 0x0013B750 recovered as its own entry 0x0013B750..0x0013B810, stack_args 0: the guest installs it itself at 0x0013BBDF via 0x142810 (obj->0x88 = fn, obj->0x8c = ctx) and dispatches it at 0x00142C9E call [esi+0x88] (return 0x00142CA4); f15 died on it with [ICALL] Failed to resolve VA 0x0013B750. recovered.c 3095 -> 3096; the 11c1 fixture gains only extern sub_0013B750. (2) This file still carried recovered.c a47e78bf, the PRE-0x13FAD0 hash, because d77474d updated docs/reviews/p0-7-generation-provenance.json but did not re-baseline this file. At HEAD the manifest recorded 6f5f7dcd and this baseline recorded a47e78bf, so jsrf_generation_provenance was already failing at the pushed checkpoint d77474d (test_generated_tree_matches_the_preservation_baseline and test_cli_check_passes). Both entries are now the measured values. Control: regenerating with the 0x0013B750 entry removed reproduces recovered.c 6f5f7dcd byte-for-byte, so the tree moved by that one reviewed entry and not by a generator-version effect. All four TRANSLATION-owned files and the 11 other baselined gen/ files are byte-identical; the changed set is exactly the two RECOVERY-owned files (recovered.c, recomp_stubs_recovery.c) and their two fixtures. recomp_stubs_recovery.c sits in gen/ but is recovery-owned. Amended, not regenerated: no full translation pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "Run-driven chain: 0x0007AF90 recovered (0x0007AF90..0x0007B750, stack_args 0, a vtable method of 0x001CCE70 slot +0x04 and the only unresolved pointer in that table); 0x000BB7B0 span widened 0x000BBA04 -> 0x000BBA19 to own its shared tail-merged epilogue at 0x000BBA17; 0x000B0210 end corrected 0x000B0305 -> 0x000B05CC so its 11-entry jump table at 0xB05CC keeps all 7 distinct arms inside the span. Each was found by a run and each is confirmed by that run reaching the next site. recovered.c 3096 -> 3097; the 11c1 fixture gains only externs. All four TRANSLATION-owned files and the 11 other baselined gen/ files are byte-identical; the changed set is exactly the two RECOVERY-owned files (recovered.c, recomp_stubs_recovery.c) and their two fixtures. recomp_stubs_recovery.c sits in gen/ but is recovery-owned. Amended, not regenerated: no full translation pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c"
+   ],
+   "reason": "0x0006A770 recovered (0x0006A770..0x0006A7C0, stack_args 0). It is a direct tail-jump target from sub_00074C70 at 0x00074CA9 (`jmp 0x6a770`, E9 rel32), so the address is never stored as a dword anywhere in default.xbe and no pointer census can find it. Run 20261005-004233-759-f19-b0210 died on it. recovered.c 3097 -> 3098; the 11c1 fixture gains only the corresponding extern; recovery-unresolved.json loses 0x0006A770. Amended, not regenerated: no full translation pass ran. Also corrected 0x00074C70 stack_args 4 -> 0: the thunk has no ret of its own (it ends `jmp 0x6a770`) and 0x0006A770 ends with a plain `ret`, so the guest delta is 4, not 8. The recorded 4 was a latent pre-existing defect at d77474d that only became measurable once 0x0006A770 had a body to return through; f20 measured `ABI FAILURE 0x00074C70 ... expected +8`."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "Two 0x0013FAD0-class splits. 0x000C25D0 end tightened 0x000C2700 -> 0x000C2621 and 0x000C2630 given its own entry (run-driven: f21 died on [ICALL] Failed to resolve VA 0x000C2630). 0x00047820 end tightened 0x00047970 -> 0x00047849 and 0x00047850 given its own entry (detector-driven: tightening 0x000C25D0 made check-span-exits.py report its tail jump jmp 0x47850, and 0x47850 was inside 0x00047820's span). Both boundaries measured by clean capstone decodes. recovered.c 3098 -> 3100. Amended, not regenerated: no full translation pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c"
+   ],
+   "reason": "0x0007DA30 end corrected 0x0007DA84 -> 0x0007DAD6 and stack_args corrected 0 -> 4. The old end was a folded-alias start mid-function, so the body had no epilogue and f22 measured an ABI failure; the real epilogue is `pop edi; pop esi; ret 4` at 0x0007DAD3 (C2 04 00). recovered.c stays 3100. Amended, not regenerated: no full translation pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "0x00032610 recovered (0x00032610..0x0003275D, stack_args 12). Same tail_jump_alias defect as the already-recovered sibling 0x00032C70: the DB span 0x32610..0x33800 overran because the jump table at 0x32760 contains bytes that decode as a spurious ret 0x326, so the dispatch ran 0x33800 (`mov eax,1; ret 4`) instead of this function. All 11 RETs are `ret 0xc`, hence stack_args 12; the sibling 0x32C70 has a plain ret and keeps 0. Run f23 logged `[ALIAS-ICALL] target=0x00032610 owner=0x00033800` just before it died. recovered.c 3100 -> 3101. Amended, not regenerated: no full translation pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c"
+   ],
+   "reason": "Two defects found by the Orchestrator's own consolidated re-verification, not by a run. 0x00032610 end 0x0003275D -> 0x0003275F: the old end cut the final three-byte `ret 0xc` in half so the body fell off the end with no return for its last exit path (now 12 exits, not 11). 0x00047820 stack_args 0 -> 4: the body ends `pop esi; ret 4` (C2 04 00), so the wrapper must expect +8. recovered.c stays 3101. Amended, not regenerated: no full translation pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/gen/recomp_stubs_unresolved.c",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "Twelve sibling spans widened as one batch to own their own release arms (65 fatal trap call sites resolved; check-span-exits 428 -> 363; KNOWN_OPEN 80 -> 66), plus 0x00054750 recovered as an unowned gap and the remove-54750-stub generated patch (ledger L02) that resolves the resulting LNK2005 against the translation-owned trap file. recovered.c 3101 -> 3102. Amended, not regenerated: no full translation pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [],
+   "reason": "0x00089A60 recovered (0x00089A60..0x00089AC9, stack_args 0), a function swallowed by a gap_prologue false entry at 0x00089A42 (whose bytes are jump-table data, not code). Run f28 died on it after the 0x00054750 fix. The body has no ret of its own: it ends `pop esi; jmp 0x1baa50`, and 0x1baa50 ends in a plain C3, so stack_args 0. recovered.c 3102 -> 3103. Amended, not regenerated: no full translation pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "0x0008AEB0 recovered (0x0008AEB0..0x0008B1FD, stack_args 0), an unowned gap reached by two direct jumps, found by f29 after the 0x00032610 and 0x00054750 fixes. It also owns the gap_prologue false entry 0x0008B056, which has no rel32 reference anywhere. Five plain C3 rets, so stack_args 0. recovered.c 3103 -> 3104. Amended, not regenerated: no full translation pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "0x00080340 end corrected 0x00080BD0 -> 0x00081853 and stack_args 4 -> 0. The declared end contained no ret at all, so the body could not reach its epilogue and f30 measured an ABI failure at +8; the real epilogue is a single plain C3 at 0x00081852. The span also owns three tail_jump_alias interior starts with no rel32 reference anywhere. check-span-exits findings 363 -> 360. recovered.c stays 3104. Amended, not regenerated."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "0x000307A0 end corrected 0x000307F8 -> 0x00030800 and stack_args set to 4. The old end cut `test esi,esi` in half and the body fell through to a symbol decoded from mid-instruction on a reachable path -- a LIVE defect the entry-extent baseline had frozen as reviewed. Same class as 0x00178F40 and 0x00032610. The baseline drops 19 -> 18. recovered.c stays 3104. Amended, not regenerated: no full translation pass ran."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "0x00080340 end corrected again 0x00081853 -> 0x00080BD0 with stack_args 0. The earlier widening swallowed 0x00080BD0, a real SEH function with its own recovered body; f31 measured the collision as an ABI failure at 0x00080BD0. The body really ends at 0x00080BCE with two tail jumps to 0x0008AEB0. The false-label test was weak: it did not require the address to lack its own recovered entry. recovered.c stays 3104. Amended, not regenerated."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "0x00080BD0 end corrected 0x00080C83 -> 0x00081853 and stack_args 4 -> 0, resolving the 0x80340/0x80BD0 overlap: the two functions are ADJACENT, proven by 0x80BD0's matching SEH pair and by prologue -0x40 / epilogue +0x44 netting exactly +4. f31 and f32 both measured the -0x40 ABI failure. Both defects predate this session. recovered.c stays 3104. Amended, not regenerated."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "cause": "config/recovered-functions.json gained the recovered entry 0x00094AB0..0x00095FB2 and twenty corrected `stack_args` values (20 entries changed from 0 to their body's own `ret N` immediate: 4 for nineteen of them and 20 for 0x00080028). scripts/recover-functions.py was re-run, so recovered.c and its focused fixture were rewritten. The baseline moves with them deliberately: the previous session updated the manifest but not this file, which left jsrf_generation_provenance red at the pushed checkpoint d77474d.",
+   "evidence": [
+    "scripts/check-stack-depth.py reports 0 DEFECTs on the committed manifest with no baseline file",
+    "a control regeneration before the manifest edit reproduced recovered.c byte for byte, so these hashes reflect the manifest change and nothing else",
+    "scripts/check-generation-provenance.py --check passes on the same tree"
+   ]
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "cause": "config/recovered-functions.json gained the recovered entry 0x000496E0..0x000497D6 with stack_args 8. Run 20261005-174422-643-g03-94ab0 cleared 0x00094AB0 (ABI-verified return) and then stopped on `[ICALL] Failed to resolve VA 0x000496E0`, an address in no earlier archived run. It is a complete function with no analysis-database entry of its own, swallowed by the over-wide tail_jump_alias record sub_00049520 [0x49520, 0x4A6F0), which overruns four functions the manifest already owns separately (0x497E0, 0x49A80, 0x49E80, 0x4A6C0). stack_args 8 is INFERRED rather than derived: the body's single reachable exit is `ret 8` at 0x000497D1, but it makes seven indirect calls, so the pre-ret depth is not statically resolvable and the validator reports the entry UNKNOWN/PARTIAL, not PROVED. The value follows from the byte pattern -- no call has an `add esp,N` fix-up, so each callee removes its own arguments. recovered.c 3105 -> 3106 functions (manifest entries: 3104 at abb86d4, 3106 at 1d8599f). This entry's cause text originally repeated entry 33's by mistake and is rewritten here.",
+   "evidence": [
+    "g03's log holds exactly one `[RECOVERED] 0x00094AB0 returned; ABI verified` line, so the earlier stop was cleared on an exercised path",
+    "g03's only `Failed to resolve` line names 0x000496E0, and that address appears in no other archived jsrf_run.log",
+    "the extent is byte-derived: `ret 8` (C2 08 00) at 0x000497D1, then NOPs, then the next manifest entry at 0x000497E0",
+    "the regenerated wrapper checks +12 and the body emits `esp += 12; return; /* ret 8 */`, which agree",
+    "the validator's verdict for this entry is UNKNOWN/PARTIAL, not PROVED; the record states that rather than claiming a proof the gate never gave"
+   ]
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "cause": "config/recovered-functions.json gained the recovered entry 0x0005C840..0x0005C983 with stack_args 0. Run 20261005-175848-754-g04-496e0 exercised 0x00094AB0 again and then took a DIFFERENT path from g03, stopping on `[ICALL] Failed to resolve VA 0x0005C840` -- also absent from every earlier run. Same swallowed-entry class: a complete function with no analysis-database entry of its own, before the over-wide tail_jump_alias records sub_0005C990 and sub_0005CB90 (both [0x5C990, 0x5D3B0), both overrunning real functions). It has ZERO rel32 callers and exactly one reference in the image, the .data dword at 0x001FA1C0. stack_args 0 is derived from the bytes rather than the model, because two calls on its walk are not statically resolvable; both resolvable exits sit at depth 0 and total 4. The validator reports it UNKNOWN, not PROVED, and the record says so. recovered.c 3106 -> 3107 functions (manifest entries: 3106 at 1d8599f, 3107 at 74760e4). This entry's cause text originally repeated entry 33's by mistake and is rewritten here.",
+   "evidence": [
+    "g04's log holds exactly one `[RECOVERED] 0x00094AB0 returned; ABI verified` line, so stop 17 was exercised again",
+    "g04's only `Failed to resolve` line names 0x0005C840, an address in no other archived jsrf_run.log",
+    "g04 took a different path from g03, which is the documented run-to-run nondeterminism rather than a regression; g04 therefore neither confirms nor refutes the 0x496E0 repair",
+    "the two call cleanups are read from the byte pattern: no `add esp,N` after either call, zero pushes before the direct one, exactly two before the vtable one",
+    "zero rel32 callers; the single reference is the .data dword at 0x001FA1C0",
+    "the regenerated wrapper constant +4 equals 4 + stack_args 0, and the body emits `esp += 4; return; /* ret */`"
+   ]
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "cause": "config/recovered-functions.json gained 0x001025B0..0x001026AA and 0x00152DE0..0x00152E2C and had four stack_args corrected (0x00021010 0->16, 0x000F4FF0 0->4, 0x00102490 0->4, 0x00152BC0 8->24), so scripts/recover-functions.py was re-run and recovered.c plus its focused fixture were rewritten. The four came from fixing a false-negative in scripts/check-stack-depth.py that required every reachable exit to be at depth 0.",
+   "evidence": [
+    "scripts/check-stack-depth.py reports 0 DEFECTs on the committed manifest with no baseline file",
+    "the regenerated wrappers check +20, +8, +8, +28, +4 and +12, each equal to 4 + stack_args",
+    "the validator --selfcheck passes 10 controls including three that pin the per-path rule"
+   ]
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "cause": "config/recovered-functions.json gained the recovered function 0x00154560..0x001548DC (stack_args 20) and two this-adjusting thunks had their stack_args corrected 20 -> 12 (0x00154520 and 0x00154540), with 0x00154540's span tightened from 0x001548E0 to 0x00154558 because it had swallowed 0x00154560. Run 20261005-185514-638-g05-confirm logged `ABI FAILURE 0x00154540 esp 00F7FD30->00F7FD40 expected +24`; the thunks end in an indirect tail jump `jmp dword ptr [ecx+0x6c]`, so the caller's cleanup is the tail target's `ret N`. The run's frozen dump gives the object 0x0106C870, its vtable 0x001E0F00, and that vtable's +0x6c slot 0x00154420, whose exits are all `ret 0xc` = 12; 4 + 12 = 16 equals the measured delta exactly. scripts/recover-functions.py was re-run, so recovered.c and its focused fixture were rewritten.",
+   "evidence": [
+    "run g05 confirms both earlier repairs on an exercised path: one `[RECOVERED] 0x000496E0 returned; ABI verified` and one for 0x0005C840",
+    "the dump mapping was verified with scripts/check-dump-mapping.py before any guest memory was read (matches 1, content-mismatch 0)",
+    "0x00154420's four reachable exits are all `ret 0xc` (C2 0C 00), so its cleanup is 12, and 4 + 12 = 16 equals the observed delta",
+    "after regeneration the wrappers check +16, +16 and +24, each equal to 4 + stack_args",
+    "scripts/check-stack-depth.py reports 0 DEFECTs on the committed manifest with no baseline file"
+   ]
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "F6 hidden-entry repairs. `config/recovered-functions.json` tightened 50 over-wide spans and added 48 reviewed entries for functions the spans had swallowed, so `recovered.c` and its stub/test companions were regenerated by `python -X utf8 scripts/recover-functions.py`. `recomp_stubs_recovery.c` and `recomp_stubs_recovery_test.c` changed because the recovered symbol set changed; `recovered_11c1_test.c` is derived from `recovered.c`. The four recomp_000N chunks are unchanged, which is the expected shape: this repair adds and tightens *reviewed* entries and does not regenerate the chunk tree."
+  }
+ ]
 }

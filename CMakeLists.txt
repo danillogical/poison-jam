@@ -219,6 +219,18 @@ if(BUILD_TESTING)
     add_test(NAME jsrf_stack_depth
         COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_stack_depth.py)
     set_tests_properties(jsrf_stack_depth PROPERTIES TIMEOUT 600)
+    # Hidden-entry detection over the recovered manifest.  Registered because the
+    # motivating defect (0x7DAE0 declared [0x7DAE0, 0x7DE20) consuming the 190-
+    # instruction function at 0x7DBD0) has an `end` that is simultaneously its own
+    # declared end AND the next database function start, so check-entry-extents.py
+    # cannot see it -- and 48 more of the same shape were live.  The test re-runs
+    # the checker's real-defect controls, requires the 0x96F60 indirect-exit case to
+    # stay UNQUALIFIED, asserts the gate passes with NO baseline, and proves the gate
+    # can fail by feeding it a manifest with the motivating defect re-injected.
+    # Pure Python over the XBE and the manifest; no build target needed.
+    add_test(NAME jsrf_hidden_entries
+        COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_hidden_entries.py)
+    set_tests_properties(jsrf_hidden_entries PROPERTIES TIMEOUT 900)
     # P0.7 generation provenance.  Registered here because it was NOT: the checker was
     # wired into `just check` only, so `just test` could not catch a provenance failure,
     # and the gate stayed red for 73 commits without a session noticing (measured

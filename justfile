@@ -92,6 +92,7 @@ check:
     {{python}} -X utf8 scripts/check-override-drift.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-entry-extents.py --baseline config/entry-extent-baseline.json --quiet-terminators; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-stack-depth.py; if ($LASTEXITCODE -ne 0) { exit 1 }
+    {{python}} -X utf8 scripts/check-hidden-entries.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Output "check: all checkers passed"
 
 # W9s control-first gate: would a new instrumented run be allowed?
@@ -139,6 +140,15 @@ horizon-check:
 stack-depth:
     {{python}} -X utf8 scripts/check-stack-depth.py --selfcheck
     {{python}} -X utf8 scripts/check-stack-depth.py
+
+# Hidden-entry detection: a declared span that over-runs its own body into a
+# separate evidenced function.  `--selfcheck` replays the real defects at their
+# pre-fix spans (0x7DAE0/0x7DBD0, 0x1FF90/0x1FFF0, 0x91C00/0x91C30, 0x55670/0x556D0)
+# and requires the `0x96F60` indirect-exit case to stay UNQUALIFIED; the bare run
+# is the gate and passes with NO baseline.
+hidden-entries:
+    {{python}} -X utf8 scripts/check-hidden-entries.py --selfcheck
+    {{python}} -X utf8 scripts/check-hidden-entries.py
 
 # Record one strict run under WinDbg TTD (T1).
 #
