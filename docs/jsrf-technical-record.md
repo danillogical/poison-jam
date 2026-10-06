@@ -2117,6 +2117,15 @@ This section is therefore the first *real* Advisor ruling of the turn, and it is
 route. The Turn Planner and the Turn Reviewer both ran normally, so the earlier failure was specific to
 that spawn rather than to the route being unavailable.
 
+**Forward erratum for commit `64945a3`.** That commit's message says the patch
+`remove-b5f3a-dispatch` carries ledger **`(L42)`**. That is **wrong**. Its ledger is **L02**
+("Reviewed recovered bodies … and boundary fixes"), the entry its own precedent `remove-54750-stub`
+cites; L42 is "File completion APCs run at the next alertable wait", which is kernel APC timing and has
+nothing to do with this patch. Turn Review 1 caught it, and because `scripts/patch-generated.py` only
+checks that a ledger ID *exists*, `just check` had passed regardless. The published commit is **not**
+amended or force-pushed; this paragraph is the erratum. The correction landed in
+`config/generated-patches.json` (ledger `L02`), the L02 row, and every active citation.
+
 **Correction 1: the 192/234 "fatal stub" count was a spelling count, not a fatal count.** Scanning
 bodies that contain a `RECOMP_ITAIL` for `g_seh_ebp = ebp; sub_<va>(); return;` finds **192 bodies and
 234 distinct targets** — and the Advisor reproduced those numbers exactly. But that spelling is also how
