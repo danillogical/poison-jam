@@ -2371,5 +2371,49 @@ table above: a measured count change, correlated with a known change, unexplaine
 the plan's remaining work rather than being quietly dropped, and no acceptance claim rests on the
 present count in either direction.
 
+**Settled: it is run-to-run variance, not the batch.** The experiment was run, and it used the
+**archived binary** rather than a rebuild — the differential method this record already mandates when
+a run regresses:
+
+```text
+f9 archived binary   sha256 43e639d7be16be97...
+replay binary        sha256 43e639d7be16be97...   IDENTICAL (byte-for-byte)
+```
+
+f9's own executable, replayed in the same environment with the same four overrides:
+
+| run | binary | max `presents=` | ABI-verified returns |
+|---|---|---|---|
+| f9 (recorded) | `43e639d7…` | **1000** | 550 |
+| f9 **replayed** | `43e639d7…` (identical) | **394** | 385 |
+
+**The same bytes produced 394 presents where they had produced 1000.** So the present count is not a
+function of the code change at all: the run-to-run variation this project documents as first-class
+(g03–g08 reached different addresses on identical binaries) dominates the effect completely, and the
+f10/f11 reading of 888 is inside that spread rather than caused by F7c. The correlation with the batch
+was real but not causal, which is exactly the distinction the plan's evidence rules exist to force.
+
+Two further observations from the replay, recorded because they are measured:
+
+- the replay's disclaimer hash is `87683a748e27d071`, **not** `5bdaea576b8509f5`. The same binary can
+  therefore reach a different *visual* state, not merely a different count — which independently
+  confirms that the disclaimer hash is a path witness and not a stable per-binary constant.
+- the replay produced **fewer** returns (385) than any of f9–f11 (550/553/440), again on identical
+  bytes to f9.
+
+The replay directory is deliberately **not** kept under `logs/runs/`: it was produced by invoking the
+collector directly rather than through `scripts/run-jsrf.py`, so it carries no `metadata.json` and is
+not a conforming archive. Leaving it there made `check-run-profile.py --all` report `missing 1`, which
+would have been an unearned defect in the archive tally.
+
+**Stated precisely: the replay's log was removed, and the experiment remains repeatable.**
+`logs/runs/20261006-015500-000-f9replay-pre-f7c/` was deleted, so the two counts above are no longer
+re-readable from disk; they are recorded here and were read directly from that log before deletion.
+What makes the claim checkable anyway is that the input is preserved: f9's own archive still holds
+`jsrf_recomp.exe` with sha256 `43e639d7be16be97…`, so the replay can be reproduced byte-for-byte at any
+time. That is the weaker but honest position — an experiment whose *artifact* was discarded but whose
+*input* is retained — and it is stated rather than glossed, because "the evidence is recorded" and "the
+evidence is available" are not the same claim.
+
 
 
