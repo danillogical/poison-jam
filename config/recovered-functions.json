@@ -2636,6 +2636,14 @@
   "stack_args": 8
  },
  {
+  "start": "0x00048690",
+  "end": "0x000488AA",
+  "section": ".text",
+  "kind": "routine",
+  "stack_args": 8,
+  "evidence": "F7 under-wide batch: an uncovered function pointer in the same `.data` table 0x1F97B4 that owns the repaired 0x00048DB0 (slot 0x1F97B8), found by the Turn Planner as the likely next stop. It had NO manifest span and NO dispatch tuple, so an indirect call through the table reached `[ICALL] Failed to resolve`. Extent and ABI derived from the bytes: `sub esp,0x10` at 0x48695 plus pushes of esi (0x4869A), ebx (0x4875F), edi (0x486E0) and ebp, against the epilogue at 0x488A3 `pop esi; add esp,0x10; ret 8` (C2 08 00 at 0x488A7) with the ebx/edi/ebp pops on the 0x487xx path, so the frame balances to `ret 8` = stack_args 8. The end is the last ret byte plus 3 NOPs (0x488AA..0x488AF), then the next entry 0x488B0. Reachability is by the table only: this address is never a branch target inside any recovered body."
+ },
+ {
   "start": "0x000488B0",
   "end": "0x000489D2",
   "section": ".text",
@@ -2653,10 +2661,11 @@
  },
  {
   "start": "0x00048DB0",
-  "end": "0x00048FBB",
+  "end": "0x000496B7",
   "section": ".text",
   "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0004A6F0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00048DB0..0x00048FBB, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0004A6F0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00048DB0..0x00048FBB, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.\n\nREPAIRED 2026-10-05 (F7 under-wide batch), and the old end was WRONG in both fields. Run 20261005-223404-818-g08-b5eb0-fixed measured `[RECOVERED] ABI FAILURE 0x00048DB0 esp 00F7FE50->00F7FDA8 expected +4`, an observed delta of -0xA8. That is exactly the prologue: `sub esp,0x98` at 0x48DB0 plus four pushes (ebp 0x48DBB, edi 0x48DC9, ebx 0x48E37, esi 0x48E4D) = 0xA8, so the body fell off the declared end with no epilogue at all and the wrapper's `+4` was the default because no `stack_args` key was present. The real body ends at a single `ret 8` at 0x496B4 (bytes C2 08 00), reached by BOTH epilogue paths: the path through 0x49669 pops ebx (0x49673), edi (0x496AC) and ebp (0x496AD) against the ebp/edi/ebx pushes, and the path through 0x49668 adds `pop esi`, so each path balances its own pushes, does `add esp,0x98`, then `ret 8`. Net on either path is 0 + 4 + 8, so stack_args is 8, not 0. End is now 0x496B7: the last ret byte, one 0x90 pad byte, then the function's OWN jump table at 0x496B8 (`jmp dword ptr [ebx*4 + 0x496B8]` at 0x490A6; 8 dwords 0x49421/0x491BC x3/0x49197/0x49245/0x492DE/0x490AD, then 0x90909090). 0x48FBB is not an entry: it is `jge` MID-INSTRUCTION, and the analysis database labels it tail_jump_alias. Same under-wide class as 0x000B5EB0 (F6b) and 0x000B06E0, and the mirror of F6's over-wide class.",
+  "stack_args": 8
  },
  {
   "start": "0x000496E0",
@@ -7553,10 +7562,10 @@
  },
  {
   "start": "0x000B06E0",
-  "end": "0x000B0811",
+  "end": "0x000B09E0",
   "section": ".text",
   "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000B0A20 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000B06E0..0x000B0811, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
+  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000B0A20 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000B06E0..0x000B0811, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.\n\nREPAIRED 2026-10-05 (F7 under-wide batch). The declared end 0x000B0811 is not an entry: it is a `tail_jump_alias` database start that falls INSIDE this function's own body, and the walk from 0xB06E0 visits it. Its own epilogue at 0xB09DC (`pop esi; ret 4`) lay OUTSIDE the span, so the emitted body called the fatal trap stub `sub_000B09DC` four times and `sub_000B09D9` twice -- a proved static production defect, recorded in TR section 17, and reachable on a valid object whose `[ecx+0x128] == 0xFFFFFFFF` (the very first `je 0xB09DC` at 0xB06EC). The end is now 0xB09E0: the `ret 4` at 0xB09DD (C2 04 00), then one byte of the 0xB09E0 data run. `stack_args 4` was ALREADY correct and is unchanged: the extended walk has a `ret 4` at 0xB07F7 and a `ret 4` at 0xB09DD reached at depth 0, so this was an extent error only, unlike 0x00048DB0. The `0xB090B` alias question is decided by the bytes: 0xB090B is reached by FALLTHROUGH from 0xB0904 inside this body, is never a branch target, and its one image reference is a dword in the `$$XTIMAGE` section (0x00286FE4) in a run of texture data -- so it is an INTERNAL LABEL of 0xB06E0 and not a separate function. Its dispatch tuple and its alias-shim entry are therefore left exactly as they are: `recomp_alias_000B090B` forwards to `sub_000B0A20`, and removing the tuple would be a separate, unproven change. It has been dispatched in ZERO archived runs.",
   "stack_args": 4
  },
  {

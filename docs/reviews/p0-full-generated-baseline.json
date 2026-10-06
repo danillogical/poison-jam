@@ -1,6 +1,6 @@
 {
  "files": {
-  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "1760343eda117915b86930811e31a62ef4d1fb528a6d41998c0250184f5eab2b",
+  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "fa89c3f28720063e9a16ff687642d8d0acf52f1e049a047bd102b5da154469a3",
   "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
   "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
   "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
@@ -10,12 +10,12 @@
   "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
   "src/recomp/gen/recomp_dispatch.c": "e171d107613c3dc920f44ea1af81183416ddfa8c08c0fd59b0a7ef36092c234f",
   "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-  "src/recomp/gen/recomp_stubs_recovery.c": "1e0a27a1f93c5c846236092a32143353e687b7666b0de360362328416c3dd4df",
+  "src/recomp/gen/recomp_stubs_recovery.c": "6dbce67f09a902df66b6544ce0d452e38584f7b0596e75c5ac4cd24107abddcb",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-  "src/recomp/recovered/recovered.c": "d0fe4d0421ca133702023ba9792f3dae0e7526e31ca2098cbf21831fcbbc9b2e",
+  "src/recomp/recovered/recovered.c": "ae7518ab2dfb88ae5c9fab6434d81d9314bfc4e9b7fe939b7ed9929cfb5c2261",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "c229854090de39432b11ef361db5eba657b38a57d46e4b93eff4e9993074f4e7",
+  "src/recomp/recovered/recovered_11c1_test.c": "a4f44185e3ebaff65850bd7809e27827e8ffaaa066235da3aa4a8b85b5940d23",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -419,6 +419,16 @@
     "src/recomp/gen/recomp_dispatch.c"
    ],
    "reason": "F7: the dispatch table's declared count is now DERIVED from the array instead of restated as a literal. `fix-dispatch-table-size` (L02) previously corrected `g_recomp_table_size` from 8928 to 8927 after `remove-b5f3a-dispatch` removed one tuple, but that left a second, independent statement of the same fact which can drift again -- and drifting is what shipped the crash: a host access violation at `recomp_dispatch.c:9299`, before `guest_entry`, in runs g08/g08b, with every static gate green. The patch now rewrites those two lines to `sizeof(g_recomp_table) / sizeof(g_recomp_table[0])`, and `tools/recomp/translator.py` `_write_dispatch_table` emits the identical derived form so a regeneration is a no-op for this text. The table itself is untouched: 8927 tuples before and after, and no chunk, header or recovered file moves -- verified by requiring exactly this one file's hash to change. This is a two-line generated-source correction, not a regeneration."
+  },
+  {
+   "date": "2026-10-05",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "F7 under-wide repair batch: three spans whose declared `end` cut their own continuation or epilogue, the mirror of F6's over-wide class. (1) `0x00048DB0` end `0x00048FBB` -> `0x000496B7` AND `stack_args` added as 8. Run 20261005-223404-818-g08-b5eb0-fixed measured `[RECOVERED] ABI FAILURE 0x00048DB0 esp 00F7FE50->00F7FDA8 expected +4`, delta -0xA8, which is exactly the prologue (`sub esp,0x98` plus four pushes = 0xA8): the body fell off the declared end with no epilogue and the wrapper's +4 was the absent-key default. The real end is a single `ret 8` at 0x496B4 (C2 08 00) reached by BOTH epilogue paths, each balancing its own pushes and doing `add esp,0x98`, so net is 0 + 4 + 8 and stack_args is 8. `0x48FBB` is `jge` MID-INSTRUCTION. (2) `0x00048690` added as `[0x00048690, 0x000488AA)` with `stack_args 8`: an uncovered pointer in the same `.data` table 0x1F97B4 that owns 0x48DB0 (slot 0x1F97B8), with no span and no dispatch tuple, so an indirect call through the table trapped. Its frame is `sub esp,0x10` plus four pushes against `pop esi; add esp,0x10; ret 8` (C2 08 00 at 0x488A7). (3) `0x000B06E0` end `0x000B0811` -> `0x000B09E0` with `stack_args 4` UNCHANGED. 0xB0811 is a `tail_jump_alias` start inside the function's own body, so its epilogue at 0xB09DC (`pop esi; ret 4`) lay outside the span and the emitted body called the fatal trap stub `sub_000B09DC` four times -- the proved defect TR section 17 recorded. The extended walk has a `ret 4` at 0xB09DD reached at DEPTH 0, so unlike 0x48DB0 this was an extent error only. The `0xB090B` alias question is settled by the bytes and left unchanged: 0xB090B is reached by FALLTHROUGH from 0xB0904 inside 0xB06E0's body, is never a branch target, and its only image reference is a dword in the `$$XTIMAGE` texture run at 0x00286FE4, so it is an internal label; its dispatch tuple and alias shim stay as they are. Measured effect on the gates: stack-depth SUSPICIOUS 138 -> 136 (CUT_EPILOGUE 70 -> 69, FALL_OFF_END 25 -> 24), check-span-exits CUT-TARGET 323 -> 314, hidden-entry unchanged and still zero-baseline; all three repaired bodies now emit ZERO fatal trap stubs and their jump tables resolve (8 entries/6 targets and 4/4). `recovered.c` 3157 -> 3158 functions."
   }
  ]
 }
