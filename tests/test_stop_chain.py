@@ -274,15 +274,35 @@ class StopChainControls(unittest.TestCase):
                            capture_output=True, text=True, cwd=str(ROOT))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
-    def test_the_live_record_does_not_claim_stop_21(self):
-        """`0xB5EB0` must not be RUNTIME_CONFIRMED: two runs never reached it."""
+    def test_the_live_record_does_not_overstate_stop_21(self):
+        """`0xB5EB0` may only be confirmed by a run that actually executed it.
+
+        This test originally asserted the *state* was NOT_EXERCISED, because two
+        consecutive runs had failed to reach it. Run f9 then genuinely did, so the
+        frozen value became wrong -- and the test failed, which is the correct
+        behaviour for a pin that has been overtaken. It now asserts the durable
+        invariant instead of a snapshot: if the row says RUNTIME_CONFIRMED, at
+        least one cited run must actually contain the ABI-verified return line,
+        checked against the archives rather than against the record's own claim.
+        """
         record = json.loads((ROOT / 'config' / 'stop-chain.json').read_text(encoding='utf-8'))
         stops = record['stops'] if isinstance(record, dict) else record
         row21 = next(s for s in stops if s['address'].lower() == '0x000b5eb0')
-        self.assertEqual(row21['state'], 'NOT_EXERCISED')
-        roles = {e['role'] for e in row21['evidence']}
-        self.assertFalse(roles & {'confirmed', 'exercised', 'returned'},
-                         'stop 21 cites a confirming role but no run executed it')
+
+        confirming = [e for e in row21['evidence']
+                      if e['role'] in {'confirmed', 'exercised', 'returned'}]
+        if row21['state'] != 'RUNTIME_CONFIRMED':
+            self.assertFalse(confirming,
+                             'stop 21 is not RUNTIME_CONFIRMED but cites a confirming role')
+            return
+        self.assertTrue(confirming, 'RUNTIME_CONFIRMED with no confirming evidence')
+        for item in confirming:
+            log = ROOT / 'logs' / 'runs' / item['run'] / 'jsrf_run.log'
+            self.assertTrue(log.is_file(), f"{item['run']} has no archived log")
+            text = log.read_text(encoding='utf-8', errors='replace')
+            self.assertIn('0x000B5EB0 returned; ABI verified', text,
+                          f"{item['run']} is cited as confirming 0xB5EB0 but its log has no "
+                          f"ABI-verified return for it")
 
 
 if __name__ == '__main__':

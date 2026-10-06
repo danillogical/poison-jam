@@ -2,7 +2,7 @@
  "checker_version": "jsrf-generation-provenance/1",
  "full_translation_command": "python -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name \"Jet Set Radio Future\" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json --backedge-yield",
  "generated_outputs": {
-  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "fa89c3f28720063e9a16ff687642d8d0acf52f1e049a047bd102b5da154469a3",
+  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "c67f7ce01116b3148200f47fff23401fc7ecdfbb56000d7a3ca99edbdb1f0150",
   "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
   "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
   "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
@@ -12,21 +12,21 @@
   "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
   "src/recomp/gen/recomp_dispatch.c": "e171d107613c3dc920f44ea1af81183416ddfa8c08c0fd59b0a7ef36092c234f",
   "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-  "src/recomp/gen/recomp_stubs_recovery.c": "6dbce67f09a902df66b6544ce0d452e38584f7b0596e75c5ac4cd24107abddcb",
+  "src/recomp/gen/recomp_stubs_recovery.c": "bebad0f959cf1ddb78a6d0dc91c3db4a54d12e841d4c6a8705438f71a64b559a",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-  "src/recomp/recovered/recovered.c": "ae7518ab2dfb88ae5c9fab6434d81d9314bfc4e9b7fe939b7ed9929cfb5c2261",
+  "src/recomp/recovered/recovered.c": "447fd022af93230950598888d2d478510897c1bb2906369ccbc44894ec31d31a",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "a4f44185e3ebaff65850bd7809e27827e8ffaaa066235da3aa4a8b85b5940d23",
+  "src/recomp/recovered/recovered_11c1_test.c": "2ffb8f91d5cbbcd46676c4848e602941d2ce43411979d3c5e628a9e4a265312e",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
  "generators": {
   "project": {
    "dirty": true,
-   "revision": "2a1dbc9b92cdf79736b4108666cfc1d939b7cc7c",
+   "revision": "b1aca896f354b7aae8df2c6e717d26ac2f6969bc",
    "state": "MEASURED",
-   "status_sha256": "7317f37b8f7f442d2986f460645d190711f7770d6c3d13c160f19a2c78ac07f1"
+   "status_sha256": "b3b2274d8c16e386ab6594ef55e7a624cfbb4c0af118568059d81da8f4acf7b8"
   },
   "scripts/recover-functions.py": "c951fe5ed787253bd523d16502a231772197043b84a3b20e4c7b680b55c03847",
   "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
@@ -51,14 +51,14 @@
    "sha256": "2df298287b765385e1435684e568800a90f0eb1506e04802097e140e2dc1fe92"
   },
   "config/recovered-functions.json": {
-   "bytes": 2936242,
+   "bytes": 2937553,
    "present": true,
-   "sha256": "260c4751f11e20589002c6d06eabb76ad38a8afa6ffe0ae339ca1e5069a8a431"
+   "sha256": "0a4a1ee37884b73df946036275023c30b247fd0dabfdb1800cad619f8a0c54c5"
   },
   "config/recovery-unresolved.json": {
-   "bytes": 6770,
+   "bytes": 6737,
    "present": true,
-   "sha256": "21837b24a4626d6bedf8e29fa4d1a2b0831750e2e48d49cfd9e6cd0a5162abf1"
+   "sha256": "7d50d167bae5c25e5d1dd7930a3065ce201b967705e4ff852707290d0cad1748"
   },
   "game/default.xbe": {
    "bytes": 2281472,
@@ -91,9 +91,9 @@
    "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
   },
   "tools/disasm/output/functions.recovered.json": {
-   "bytes": 6181361,
+   "bytes": 6182672,
    "present": true,
-   "sha256": "e9f2177e7e5a8c35e0c760d1bfdc8028cd34766af4c26c11cf5e11219a534cd4"
+   "sha256": "6ff6987316c9cc41141f6d4cd16788476789eceef72528e85fadbaa849326767"
   }
  },
  "known_unknowns": [],
@@ -166,18 +166,18 @@
    "src/recomp/recovered/recovered.c": {
     "markers": {
      "JSRF_ABI_CONTINUE": 9474,
-     "RECOMP_ABI_CALL": 10387,
+     "RECOMP_ABI_CALL": 10393,
      "RECOMP_GENERATED_CODE": 1,
-     "g_seh_ebp": 6203
+     "g_seh_ebp": 6195
     },
     "present": true
    }
   },
   "totals": {
    "JSRF_ABI_CONTINUE": 9474,
-   "RECOMP_ABI_CALL": 10395,
+   "RECOMP_ABI_CALL": 10401,
    "RECOMP_GENERATED_CODE": 5,
-   "g_seh_ebp": 6209
+   "g_seh_ebp": 6201
   }
  },
  "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",
@@ -1585,6 +1585,11 @@
    "kind": "input and generated output",
    "date": "2026-10-05",
    "cause": "F7 under-wide repair batch: three spans whose declared `end` cut their own continuation or epilogue, the mirror of F6's over-wide class. (1) `0x00048DB0` end `0x00048FBB` -> `0x000496B7` AND `stack_args` added as 8. Run 20261005-223404-818-g08-b5eb0-fixed measured `[RECOVERED] ABI FAILURE 0x00048DB0 esp 00F7FE50->00F7FDA8 expected +4`, delta -0xA8, which is exactly the prologue (`sub esp,0x98` plus four pushes = 0xA8): the body fell off the declared end with no epilogue and the wrapper's +4 was the absent-key default. The real end is a single `ret 8` at 0x496B4 (C2 08 00) reached by BOTH epilogue paths, each balancing its own pushes and doing `add esp,0x98`, so net is 0 + 4 + 8 and stack_args is 8. `0x48FBB` is `jge` MID-INSTRUCTION. (2) `0x00048690` added as `[0x00048690, 0x000488AA)` with `stack_args 8`: an uncovered pointer in the same `.data` table 0x1F97B4 that owns 0x48DB0 (slot 0x1F97B8), with no span and no dispatch tuple, so an indirect call through the table trapped. Its frame is `sub esp,0x10` plus four pushes against `pop esi; add esp,0x10; ret 8` (C2 08 00 at 0x488A7). (3) `0x000B06E0` end `0x000B0811` -> `0x000B09E0` with `stack_args 4` UNCHANGED. 0xB0811 is a `tail_jump_alias` start inside the function's own body, so its epilogue at 0xB09DC (`pop esi; ret 4`) lay outside the span and the emitted body called the fatal trap stub `sub_000B09DC` four times -- the proved defect TR section 17 recorded. The extended walk has a `ret 4` at 0xB09DD reached at DEPTH 0, so unlike 0x48DB0 this was an extent error only. The `0xB090B` alias question is settled by the bytes and left unchanged: 0xB090B is reached by FALLTHROUGH from 0xB0904 inside 0xB06E0's body, is never a branch target, and its only image reference is a dword in the `$$XTIMAGE` texture run at 0x00286FE4, so it is an internal label; its dispatch tuple and alias shim stay as they are. Measured effect on the gates: stack-depth SUSPICIOUS 138 -> 136 (CUT_EPILOGUE 70 -> 69, FALL_OFF_END 25 -> 24), check-span-exits CUT-TARGET 323 -> 314, hidden-entry unchanged and still zero-baseline; all three repaired bodies now emit ZERO fatal trap stubs and their jump tables resolve (8 entries/6 targets and 4/4). `recovered.c` 3157 -> 3158 functions."
+  },
+  {
+   "kind": "input and generated output",
+   "date": "2026-10-06",
+   "cause": "F7b: the under-wide class repaired again, this time on a stop the structural census had PREDICTED before any run reached it. Run 20261006-003520-133-f9-underwide-batch-pb (exploratory, 257 s, unhandled_exception) CONFIRMED stops 21 and 22 -- it logged `[RECOVERED] 0x000B5EB0 returned; ABI verified` and `[RECOVERED] 0x00048DB0 returned; ABI verified`, the first run ever to execute either address -- and then stopped on `[ICALL] Failed to resolve VA 0x000AE655`. That address is not an entry: it is the shared epilogue of `0x000AE560` (`pop esi` at 0xAE5ED, `ret 4` at 0xAE5EE), reached by SEVEN conditional branches from inside that body, and the declared end `0x000AE5F1` cut it off. The census had reported exactly `0x000AE560-0x000AE5F1 -> end 0x000AE659 N=4` with those seven branches. End is now 0x000AE659 (last ret byte plus three NOPs before the next entry 0x000AE660) and `stack_args 4` is UNCHANGED: the extended walk has `ret 4` at 0xAE5EE and at 0xAE656, both at depth 0, so this was an extent error only. The regenerated body emits ZERO fatal trap stubs and both exits as `ret 4`. Measured effect: stack-depth SUSPICIOUS 136 -> 135 (CUT_EPILOGUE 69 -> 68), check-span-exits CUT-TARGET 314 -> 308. `recovered.c` stays 3158 functions. Separately recorded: run 20261006-002553-667-f8-underwide-batch is NOT comparable to g07/g08 -- it lacks the four canonical exploratory overrides (RECOMP_APU_TRAP, RECOMP_PB_EXEC, RECOMP_FB_WINDOW, RECOMP_FB_PRESENT_DUMP_EVERY) that those runs carry, produced 195 ABI-verified returns against 546, and reached no `[FBPRESENT]` line at all. No claim is made from it in either direction."
   }
  ],
  "regenerations": [

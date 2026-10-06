@@ -131,3 +131,54 @@ conditional and unconditional populations separate rather than forcing one label
 3. The structural misdispatch census (B5), keeping the alias-shim class separate from the
    under-wide class.
 4. One bounded run to test stops 21 and 22 together.
+
+## A4 — the certified-continuation record gate, and the batch's runtime state
+
+`config/stop-chain.json` (8 rows) plus `scripts/check-stop-chain.py` and
+`tests/test_stop_chain.py` (21 controls, CTest `jsrf_stop_chain`, `just check`, ledger L43). Each
+row cites the archived runs that establish it, and the gate refuses a row that claims more than they
+show: a confirming role needs the address's ABI-verified return line **and** a run revision
+descending from the row's `repair_commit`; a `not_exercised` role needs that line to be absent; a
+`discovered` role needs a defect line or an ICALL-history frame; and a `RUNTIME_CONFIRMED` state
+needs at least one confirming role. Every citation also re-checks its run's log hash against that
+run's own `metadata.json`, so a citation cannot be satisfied by editing a log afterwards.
+
+**The ancestry half immediately caught a real distinction rather than a hypothetical one.** g05
+*discovered* `0x00154540` and does **not** descend from its own repair commit (`f603e1e`), so that
+row cites g05 as `discovered` and not as a confirmation — the return line alone would have been read
+as one. The same check shows g07 does not descend from `0xB5EB0`'s repair either, so stop 21 could
+only ever have been `NOT_EXERCISED` from that run. An unprovable revision is reported UNKNOWN, never
+as refuted.
+
+### The batch's runtime state: NOT EXERCISED, and one of my own runs was methodologically wrong
+
+Run **f8** (`20261006-002553-667-f8-underwide-batch`, exploratory, 423 s, `diagnostic_deadline`)
+reached `guest_entry` with **zero** `Failed to resolve`, **zero** ABI failures and **zero**
+alias-misdispatch lines. It exercised **none** of the repaired addresses (`0xB5EB0`, `0x48DB0`,
+`0xB06E0`, `0x48690`, `0x154540`). So the batch is **NOT runtime-confirmed**, and the honest record
+is NOT EXERCISED — the same discipline g06 required.
+
+**But f8 is not a comparable run, and that is my error, not the code's.** It produced only **195**
+ABI-verified returns against g07's and g08's **546**, never reached a single `[FBPRESENT]` line, and
+its last returns are an entirely different set. The cause is measured, not inferred: g07 and g08
+carry `RECOMP_APU_TRAP=1`, `RECOMP_PB_EXEC=1`, `RECOMP_FB_WINDOW=1` and
+`RECOMP_FB_PRESENT_DUMP_EVERY=10` in their recorded settings, and **f8 carries none of them** —
+`just explore-run` adds no override, and these are inherited from the environment. So f8 is not a
+regression, and it is not evidence against the repair; it is a different, much earlier path. A
+comparable run is required before any statement about the batch can be made, and the next run sets
+the same four variables.
+
+This is the differential-debugging rule applied to a *run* rather than a binary: compare against
+what the earlier run actually had, not against what it is remembered to have had.
+
+## PLAN_CHANGE
+
+- **Changed:** the runtime verification for the repair batch is re-run with the canonical
+  exploratory override set, and f8 is recorded as methodologically non-comparable rather than as a
+  clean result.
+- **Evidence:** the four overrides are present in g07's and g08's recorded `settings` and absent from
+  f8's, measured from `metadata.json`; f8 produced 195 returns and no presents against 546 and 1000.
+- **Why:** recording f8 as evidence for or against the batch would compare two different
+  configurations, which is exactly the single-variable error `docs/jsrf-run-profiles.md` warns
+  about. No claim is made from it in either direction.
+
