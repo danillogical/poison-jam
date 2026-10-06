@@ -55,15 +55,20 @@ no false-positive burden.**  The census on the committed manifest is the evidenc
 for that choice: of the four classes this model can report, only one is a
 property of the original bytes that needs no global depth reasoning at all.
 
-* `STACK_ARGS` -- **the gating class.** Every reachable exit is the *same*
-  `ret N` reached at depth 0, there is no tail call and no fall-through, and the
-  walk is fully resolved (no unknown depth, no unresolved callee cleanup, no
-  unresolved indirect transfer).  Then `N` must equal `stack_args`, whatever any
-  callee did: the body pushes and pops in balance and leaves through one
-  immediate.  It is a byte fact about this entry alone.  This is the form that
-  catches `0x7DA30`'s hidden `ret 4`, `0x74C70`'s copied `4`, and the twenty
-  entries whose bodies are a balanced `push esi; ...; pop esi; ret 4` declared
-  as `stack_args 0`.
+* `STACK_ARGS` -- **the gating class.** Some reachable exit is a `ret N` reached
+  at depth **0**, and `N` is not the declared `stack_args`.  Then `N` must equal
+  `stack_args`, because at depth 0 the body's own pushes and pops balance and it
+  leaves through that one immediate.  The claim is about a single concrete path
+  through this entry's bytes, so no callee, no indirect transfer and no nonzero
+  depth is needed -- which is what makes it gateable without a baseline.  The
+  `d == 0` restriction is load-bearing and measured: of the 29 entries with a
+  resolved nonzero-depth `ret N`, **every** one has `d > 0`, i.e. its walk popped
+  registers the body never pushed, which is the signature of a mid-function entry
+  or an over-wide span and is an *extent* question rather than a value question.
+  This is the form that catches `0x7DA30`'s hidden `ret 4`, `0x74C70`'s copied
+  `4`, the twenty entries whose bodies are a balanced `push esi; ...; pop esi;
+  ret 4` declared as `stack_args 0`, and the four found after the rule was fixed
+  (`0x21010`, `0xF4FF0`, `0x102490`, `0x152BC0`).
 
 Everything else is `SUSPICIOUS`, carries its precise code, and does **not** fail
 the gate:
@@ -75,8 +80,8 @@ the gate:
   that is neither an entry nor inside any function.
 
 **Why they are not gated, measured rather than asserted.** On the committed
-3,109-entry manifest the census is 0 `STACK_ARGS`, 24 `RET_DEPTH`, 26
-`FALL_OFF_END`, 71 `CUT_EPILOGUE` and 2 `TRUNCATED`.  The span classes overlap
+3,110-entry manifest the census is 0 `STACK_ARGS`, 39 `RET_DEPTH`, 26
+`FALL_OFF_END`, 70 `CUT_EPILOGUE` and 2 `TRUNCATED`.  The span classes overlap
 `scripts/check-span-exits.py`'s existing 360-finding CUT-TARGET population (156
 entries) -- a class the project already knows about and deliberately does not
 gate -- and the rest need per-entry boundary adjudication that a validator must
@@ -625,12 +630,21 @@ class Analyzer:
                         resolved = False
                         break
 
-        if resolved:
-            for site, kind, depth, immediate in exits:
-                if kind == 'ret' and depth != 0:
-                    return SUSPICIOUS, 'RET_DEPTH', (
-                        f'`ret` at 0x{site:08X} reached at depth {depth:+d}; '
-                        f'a return needs depth 0')
+        # `RET_DEPTH` is reported from per-path evidence, deliberately NOT gated
+        # on `resolved`.  Requiring the whole walk to resolve would hide a
+        # resolved contradiction behind an unrelated unresolved path -- the same
+        # false-negative shape as the gating rule had, one class down.  Measured:
+        # 14 of the 29 entries with a resolved nonzero-depth `ret` were reported
+        # only as `UNKNOWN/PARTIAL` under the `resolved` requirement.  It stays
+        # `SUSPICIOUS`, so widening it cannot block the gate; it only makes the
+        # population visible, which is the point.
+        for site, kind, depth, immediate in exits:
+            if kind == 'ret' and depth is not UNK and depth != 0:
+                return SUSPICIOUS, 'RET_DEPTH', (
+                    f'`ret` at 0x{site:08X} reached at depth {depth:+d}; '
+                    f'a return needs depth 0.  A positive depth means the walk '
+                    f'popped registers this body never pushed, which is the '
+                    f'signature of a mid-function entry or an over-wide span')
 
         # A branch out of the span, at a nonzero depth, to an address that is
         # neither an entry nor inside any function: the span may have cut its own
@@ -670,26 +684,36 @@ class Analyzer:
         # --- the gating class -------------------------------------------------
         # **At a reachable `ret N` reached at depth 0, `stack_args` must be N.**
         #
+        # The sign convention here is `push` -> `d -= 4`, so `d` is
+        # `ESP_at_ret - ESP_at_entry`: negative while bytes are still pushed.
         # `scripts/recover-functions.py` asserts
         # `g_esp == before_stack + 4 + stack_args` after the body, and a `ret N`
-        # leaves `esp = entry_esp + 4 + N - d`, so in general
-        # `stack_args = N - d`.  The gate uses only the **`d == 0`** case, and that
-        # restriction is load-bearing rather than conservative-for-its-own-sake:
+        # leaves `esp = entry_esp + d + 4 + N`, so in general
+        #
+        #     stack_args = N + d
+        #
+        # (**not** `N - d`; an earlier revision of this comment had that sign
+        # wrong, and the error was caught by adversarial review).  At `d == 0` the
+        # two forms agree, so the shipped rule is unaffected -- only the prose was
+        # wrong.  The gate uses only the `d == 0` case:
         #
         #   * `d == 0` is a claim about one concrete path through *this* entry's
         #     own bytes.  It says the body's own pushes and pops balance, which is
         #     exactly the situation in which `stack_args = N` with no reference to
         #     any callee.  It is checkable and it is what the twenty repaired
-        #     defects and the four below all look like.
-        #   * the general `N - d` form is **not** safe to gate on, and gating it
-        #     was measured wrong: it fired on 18 entries, including
-        #     `0x0001C000` ("must be -292") and `0x00022070` ("must be -44").
-        #     Those are over-wide spans whose walk wanders into a neighbouring
-        #     function and accumulates a large bogus depth, so a nonzero `d` is
-        #     only as trustworthy as the span extent -- which is the very thing
-        #     this validator is not allowed to assume.  A negative `stack_args` is
-        #     also not representable, which is the tell that the depth is wrong
-        #     rather than the manifest.
+        #     defects and the four found later all look like.
+        #   * the general `N + d` form is **not** safe to gate on.  Measured on
+        #     the committed manifest, with the walk required to be fully resolved:
+        #     **29** entries have a resolved nonzero-depth `ret N`, and in **every
+        #     one** `d > 0` (min 4, max 100) -- i.e. the `ret` is reached with MORE
+        #     stack than at entry, which means the walk popped registers this body
+        #     never pushed.  That is the signature of a mid-function entry or of an
+        #     over-wide span whose walk ran into a neighbouring function, and it is
+        #     an **extent** question, not a `stack_args` question.  Gating it would
+        #     mean asserting the declared extent is right in order to conclude the
+        #     declared value is wrong, which is circular.  All 29 also disagree with
+        #     their declared value, and none has a verified return in any archived
+        #     run, so nothing is being hidden by leaving them to `RET_DEPTH`.
         #
         # **An earlier revision required *every* exit to be at depth 0, and that
         # was a real false-negative.**  One `ret` site is often reached by several
@@ -704,8 +728,10 @@ class Analyzer:
         # rule, and both times the same four addresses.
         #
         # `0x001BCB14` is the control that this rule must not touch: a single
-        # `ret 4` declared as 12, correct because its depth is `-8`.  Its depth is
-        # UNKNOWN, so it is never gated, and it is run-verified in 106 archived
+        # `ret 4` declared as 12.  It **starts mid-function** and pops `esi`/`ebx`
+        # it never pushed, so its depth is `+8` and `N + d = 4 + 8 = 12` -- exactly
+        # the declared value, which is why it is right and must stay ungated.  Its
+        # depth is UNKNOWN to the model, and it is run-verified in 106 archived
         # runs.  Requiring `d == 0` is what keeps it safe.
         if not truncated:
             at_zero = [(s, i) for s, k, d, i in exits

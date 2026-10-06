@@ -101,14 +101,15 @@ class SelfCheckTests(unittest.TestCase):
                          '0x0007DA30 has no depth-0 path and must not be gated')
 
     def test_the_rule_is_not_the_unsound_general_form(self) -> None:
-        """`N - d` at a *nonzero* depth must not be gated.
+        """`N + d` at a *nonzero* depth must not be gated.
 
-        The general form over-fires on over-wide spans whose walk wanders into a
-        neighbouring function: measured, it produced 18 DEFECTs including
-        `0x0001C000` ("must be -292").  A negative `stack_args` is not
-        representable, which is the tell that the *depth* is wrong rather than the
-        manifest.  This asserts the shipped rule reports no negative value and no
-        entry outside the known set.
+        The general form would fire on entries whose walk pops registers the body
+        never pushed -- the signature of a mid-function entry or an over-wide span,
+        which is an *extent* question.  Measured: all 29 such entries have `d > 0`.
+        This asserts the specific behaviour rather than only "0 DEFECTs" (which
+        `test_gate_passes_with_no_baseline` already covers): no gated finding may
+        cite a nonzero depth, and `0x1BCB14` -- correct at `d = +8` -- must stay
+        ungated.
         """
         result = subprocess.run(
             [sys.executable, '-X', 'utf8', str(CHECKER), '--json'],
@@ -118,6 +119,40 @@ class SelfCheckTests(unittest.TestCase):
         self.assertEqual(defects, [],
                          f'the committed manifest should have 0 DEFECTs, got: '
                          f'{[(r["start"], r["detail"]) for r in defects]}')
+        # No gated finding anywhere may rest on a nonzero depth.
+        for record in payload['results']:
+            if record['verdict'] != 'DEFECT':
+                continue
+            self.assertNotIn('depth +', record['detail'],
+                             f'{record["start"]} is gated on a nonzero depth')
+        # 0x1BCB14 is correct at d = +8 and must never be gated.  `--json`
+        # reports `start` as an integer, not the manifest's hex string.
+        by_start = {r['start']: r for r in payload['results']}
+        entry = by_start.get(0x001BCB14)
+        self.assertIsNotNone(entry, '0x001BCB14 is not in the report')
+        self.assertNotEqual(entry['verdict'], 'DEFECT',
+                            '0x001BCB14 is correct at d = +8 and must stay ungated')
+
+    def test_ret_depth_is_reported_per_path(self) -> None:
+        """A resolved nonzero-depth `ret` must be reported even if other paths are UNKNOWN.
+
+        The `resolved`-gated version hid 14 of the 29 such entries behind an
+        unrelated unresolved path -- the same false-negative shape as the gating
+        rule, one class down.
+        """
+        result = subprocess.run(
+            [sys.executable, '-X', 'utf8', str(CHECKER), '--json'],
+            cwd=ROOT, capture_output=True, text=True)
+        payload = json.loads(result.stdout)
+        ret_depth = [r for r in payload['results'] if r['code'] == 'RET_DEPTH']
+        self.assertGreaterEqual(
+            len(ret_depth), 29,
+            f'RET_DEPTH should report at least the 29 entries with a resolved '
+            f'nonzero-depth ret, got {len(ret_depth)}')
+        for record in ret_depth:
+            self.assertIn('depth +', record['detail'],
+                          f'{record["start"]} is RET_DEPTH but cites no positive '
+                          f'depth: {record["detail"]}')
 
 
 class GateTests(unittest.TestCase):

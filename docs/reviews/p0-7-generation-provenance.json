@@ -15,18 +15,18 @@
     "src/recomp/gen/recomp_stubs_recovery.c": "144d1ba3965dd4ae8bba44355df25f2dc6da95397acb20caf9b68024ce98801b",
     "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
     "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "da709ae2e0df0a3a7ea7bed7f2e20afcc4d66f6c9945b7a92dbac5ddf3397162",
+    "src/recomp/recovered/recovered.c": "52e4eb7b6bfd4a49807f0644c658d0adaed73006bda16bb88be833711e2bc0d3",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "3d885e73a3d070a339b84ecae55440b69bf437dc9193bef138ee8b8c15d48386",
+    "src/recomp/recovered/recovered_11c1_test.c": "1d58a453a7e71671257484d5c0776e62e564e7ea1f2316dc16d3569a165d2f55",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
   "generators": {
     "project": {
       "dirty": true,
-      "revision": "74760e46aac6db7712d6dae1d2aa6d59db0d0a96",
+      "revision": "c9173cbbbe9a2eea17a250db83657e344d8bdbee",
       "state": "MEASURED",
-      "status_sha256": "a8ba3efcd8322c49db94ef885c402cc6be6cbf93765223a7f0eb2b05dcbfcb09"
+      "status_sha256": "5cfbe24cc1c9940485eb760bea1dcb4f1654f91193aa92e84c904c6ce38092c1"
     },
     "scripts/recover-functions.py": "c951fe5ed787253bd523d16502a231772197043b84a3b20e4c7b680b55c03847",
     "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
@@ -46,14 +46,14 @@
       "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
     },
     "config/manual-functions.json": {
-      "bytes": 102800,
+      "bytes": 102833,
       "present": true,
-      "sha256": "beda26a16a6ff54b968209c6a9b21ee9a0a93dc3b11d14bb75c67f53558a2615"
+      "sha256": "a7e94330523e357a0eb8809b77b11dd7cd2d26c57d096e2b9628c15556ca6761"
     },
     "config/recovered-functions.json": {
-      "bytes": 2926146,
+      "bytes": 2930678,
       "present": true,
-      "sha256": "6a4ca999083fa81cfad8e824745dda4197511766caa66883c02569114792d052"
+      "sha256": "1ce76640229ed5ed92a7b55bba1fdc7d53d06823b85c4be4b79eb1673f47a635"
     },
     "config/recovery-unresolved.json": {
       "bytes": 7331,
@@ -91,9 +91,9 @@
       "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
     },
     "tools/disasm/output/functions.recovered.json": {
-      "bytes": 6117440,
+      "bytes": 6122165,
       "present": true,
-      "sha256": "6a799647b1291822b34128cc2c5e3db6dda8074e1a11dacdada718fe9a470b60"
+      "sha256": "e5ff44b23902d2f3fc7b144512ddff7fce78e03fc8b0ef89ee74d9e768b1b991"
     }
   },
   "known_unknowns": [],
@@ -165,7 +165,7 @@
       },
       "src/recomp/recovered/recovered.c": {
         "markers": {
-          "JSRF_ABI_CONTINUE": 9327,
+          "JSRF_ABI_CONTINUE": 9330,
           "RECOMP_ABI_CALL": 10320,
           "RECOMP_GENERATED_CODE": 1,
           "g_seh_ebp": 6301
@@ -174,7 +174,7 @@
       }
     },
     "totals": {
-      "JSRF_ABI_CONTINUE": 9327,
+      "JSRF_ABI_CONTINUE": 9330,
       "RECOMP_ABI_CALL": 10328,
       "RECOMP_GENERATED_CODE": 5,
       "g_seh_ebp": 6307
@@ -1508,6 +1508,51 @@
           "path": "src/recomp/recovered/recovered_11c1_test.c",
           "old_sha256": "ef133f1fc8bda698e9e2c0ebef151e782d8d574084a13891e9e5991e736f6687",
           "new_sha256": "3d885e73a3d070a339b84ecae55440b69bf437dc9193bef138ee8b8c15d48386"
+        }
+      ]
+    },
+    {
+      "kind": "input and generated output",
+      "date": "2026-10-05",
+      "cause": "Two things. (1) **Run 20261005-185514-638-g05-confirm cleared the `0x496E0` and `0x5C840` stops** -- its log holds exactly one `[RECOVERED] 0x000496E0 returned; ABI verified` and one for `0x0005C840` -- and then logged `ABI FAILURE 0x00154540 esp 00F7FD30->00F7FD40 expected +24`, a new defect class: a **this-adjusting thunk**. `0x00154540` and `0x00154520` load the object from `[esp+4]`, take its vtable, adjust the second argument and end in an indirect TAIL jump `jmp dword ptr [ecx+0x6c]`. A tail jump reuses the frame, so the caller's cleanup is the **tail target's** `ret N`, and the thunk's `stack_args` must equal that target's cleanup. Observed from the run's frozen dump (mapping verified with `check-dump-mapping.py`): the failing wrapper's entry esp `0x00F7FD30` holds `[esp+4] = 0x0106C870`, `[0x0106C870] = 0x001E0F00` is the object's vtable, and that vtable's `+0x6c` slot is `0x00154420`, whose reachable exits are all `ret 0xc` = 12; the measured delta is 16 and 4 + 12 = 16 closes exactly. Both thunks are corrected 20 -> 12, and `0x00154540`'s span is tightened from `0x001548E0` to `0x00154558` because it had swallowed a complete function at `0x00154560` whose exits are `ret 0x14` = 20 -- the `0x152BC0`/`0x74C70` pattern of a value inherited from a neighbouring body. That function is recovered as `0x00154560..0x001548DC` with `stack_args 20`. `recovered.c` 3109 -> 3110. (2) **A sign error in the recorded identity is corrected**: with the convention `push` -> `d -= 4`, a `ret N` gives `stack_args = N + d`, not `N - d`. The gate is unaffected because the two forms agree at `d == 0`, but the prose and the stated reason for not gating the general form were wrong and are fixed in `check-stack-depth.py`, the plan and the technical record. The real reason is measured: of the 29 entries with a resolved nonzero-depth `ret N`, every one has `d > 0` (min 4, max 100) -- the walk popped registers the body never pushed, the signature of a mid-function entry or an over-wide span, which is an *extent* question; asserting the extent is right in order to conclude the value is wrong is circular. `RET_DEPTH` is now also reported per path rather than only on a fully resolved walk, which surfaced 14 entries that were previously reported merely `UNKNOWN` (24 -> 39 findings); it stays `SUSPICIOUS`. `0x001BCB14` is documented correctly: it starts mid-function and pops `esi`/`ebx` it never pushed, so `d = +8` and `N + d = 12`, exactly its declared value.",
+      "evidence": [
+        "run g05 confirms both earlier repairs on an exercised path: one `[RECOVERED] 0x000496E0 returned; ABI verified` and one for `0x0005C840`",
+        "g05's only `ABI FAILURE` line names `0x00154540` with esp 00F7FD30->00F7FD40, a delta of 16",
+        "the dump mapping was verified by `scripts/check-dump-mapping.py` before any guest memory was read (matches 1, content-mismatch 0)",
+        "the object and vtable chain is read from that dump: [esp+4] = 0x0106C870, [0x0106C870] = 0x001E0F00, and 0x001E0F00 + 0x6c = 0x00154420",
+        "0x00154420's own reachable exits are four `ret 0xc` (C2 0C 00) at 0x00154440, 0x0015445D, 0x001544FA and 0x0015450E, so its cleanup is 12, and 4 + 12 = 16 equals the measured delta",
+        "the swallowed function is byte-confirmed: prologue `sub esp,0x60; push ebp` at 0x00154560, two exits `ret 0x14` at 0x001548CD and 0x001548D9 each after `pop ebp; add esp,0x60`, with 0x001548CD reached at depth 0",
+        "after regeneration the wrappers check +16, +16 and +24, each equal to `4 + stack_args`",
+        "a scan of all 126 vtable-like runs with a resolvable `+0x6c` slot shows cleanups of 0, 4, 8, 12 and 20, so a single constant is NOT universally right for an arbitrary `jmp [ecx+0x6c]`; it is right here because each of these two thunks occurs in exactly one vtable, which is stated rather than assumed",
+        "the identity was corrected after adversarial review showed `push` -> `d -= 4` implies `stack_args = N + d`; re-measuring gives 29 entries with a resolved nonzero-depth ret, all with `d > 0`, and 0 with `N + d < 0` (whereas the wrong sign gave 25 apparent negatives)",
+        "the `0x496E0` evidence had pasted in `0x94AB0`'s epilogue (`pop edi; pop esi; pop ebp; pop ebx; add esp,0x50; ret 8`). Its real frame is `push esi` (0x496E7), `push edi` (0x49744), `pop edi` (0x4977B), `pop esi` (0x497B7), with no `sub esp,N` anywhere in the body and no ebx/ebp save; that is corrected in the manifest and the technical record",
+        "the `--selfcheck` controls still pass 10/10 and `tests/test_stack_depth.py` is 12/12, including two new tests pinning that no gated finding rests on a nonzero depth and that `RET_DEPTH` is reported per path"
+      ],
+      "paths": [
+        {
+          "path": "config/recovered-functions.json",
+          "old_sha256": "6a4ca999083fa81cfad8e824745dda4197511766caa66883c02569114792d052",
+          "new_sha256": "1ce76640229ed5ed92a7b55bba1fdc7d53d06823b85c4be4b79eb1673f47a635"
+        },
+        {
+          "path": "config/manual-functions.json",
+          "old_sha256": "beda26a16a6ff54b968209c6a9b21ee9a0a93dc3b11d14bb75c67f53558a2615",
+          "new_sha256": "a7e94330523e357a0eb8809b77b11dd7cd2d26c57d096e2b9628c15556ca6761"
+        },
+        {
+          "path": "tools/disasm/output/functions.recovered.json",
+          "old_sha256": "6a799647b1291822b34128cc2c5e3db6dda8074e1a11dacdada718fe9a470b60",
+          "new_sha256": "e5ff44b23902d2f3fc7b144512ddff7fce78e03fc8b0ef89ee74d9e768b1b991"
+        },
+        {
+          "path": "src/recomp/recovered/recovered.c",
+          "old_sha256": "da709ae2e0df0a3a7ea7bed7f2e20afcc4d66f6c9945b7a92dbac5ddf3397162",
+          "new_sha256": "52e4eb7b6bfd4a49807f0644c658d0adaed73006bda16bb88be833711e2bc0d3"
+        },
+        {
+          "path": "src/recomp/recovered/recovered_11c1_test.c",
+          "old_sha256": "3d885e73a3d070a339b84ecae55440b69bf437dc9193bef138ee8b8c15d48386",
+          "new_sha256": "1d58a453a7e71671257484d5c0776e62e564e7ea1f2316dc16d3569a165d2f55"
         }
       ]
     }

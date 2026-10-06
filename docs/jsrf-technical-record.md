@@ -1494,18 +1494,23 @@ reachable exits actually do.
 
 **The identity the whole thing rests on.** `scripts/recover-functions.py` asserts
 `g_esp == before_stack + 4 + stack_args` after a recovered body, and a `ret N` leaves
-`esp = entry_esp + 4 + N − d`. Equating them gives
+`esp = entry_esp + d + 4 + N` (the convention is `push` -> `d -= 4`, so `d`
+is `ESP_at_ret − ESP_entry`). Equating them gives
 
 ```
-stack_args = N − d          at a reachable `ret N`
+stack_args = N + d          at a reachable `ret N`
 ```
 
 So at a reachable `ret N` reached at `d = 0`, `stack_args` must be `N`. That is the class the gate
-fails on, and the restriction to `d = 0` is load-bearing rather than cautious: the general `N − d`
-form was implemented and **rejected on measurement**, because it fired on 18 entries including
-`0x1C000` ("must be −292") and `0x22070` ("must be −44") — over-wide spans whose walk wanders into a
-neighbouring function and accumulates a bogus depth. A negative `stack_args` is not representable,
-which is the tell that the *depth* is wrong rather than the manifest.
+fails on, and the restriction to `d = 0` is load-bearing: the general `N + d`
+form was implemented and **rejected on measurement**. With the walk required to be fully resolved,
+**29** entries have a resolved nonzero-depth `ret N`, and in **every one** `d > 0` (min 4, max 100):
+the `ret` is reached with *more* stack than at entry, i.e. the walk popped registers the body never
+pushed. That is the signature of a mid-function entry or of an over-wide span whose walk ran into a
+neighbouring function, so a nonzero `d` is only as trustworthy as the span extent — and asserting the
+extent is right in order to conclude the value is wrong is circular. All 29 also disagree with their
+declared value, and none has a verified return in any archived run, so nothing is hidden by leaving
+them to `RET_DEPTH`, which is the code that exists for exactly that adjudication.
 
 **The conclusion is about this entry; the depth may rest on callee summaries.** An earlier draft of
 this section said the rule "mentions no callee", which is false. A `call` contributes its callee's
@@ -1518,7 +1523,7 @@ computed from other functions.
 
 **A false-negative in the first shipped rule hid four more defects, and it was found twice
 independently.** The first rule required *every* reachable exit to be a `ret N` at depth 0. Because
-`stack_args = N − d` holds on each path separately, one `ret` site reached at depth 0 by one path and
+`stack_args = N + d` holds on each path separately, one `ret` site reached at depth 0 by one path and
 at UNKNOWN by another (through an indirect call) failed the all-depths test, so the whole entry
 reported only `UNKNOWN/PARTIAL` — a live defect hidden behind an unrelated unresolved path. The rule
 now gates on **any** reachable `ret N` at depth 0. Measured: 20 defects before, **24** on the
@@ -1537,8 +1542,9 @@ swallowed functions recovered: `0x102490` covered `0x1025B0` (`sub esp,0x1c; pus
 (`mov edx,[esp+8]; cmp edx,[0x264e74]; push edi` … `pop edi; ret 8`, `stack_args 8`).
 **`0x152BC0`'s wrong 8 was inherited from `0x152DE0`'s own correct `ret 8`** — the `0x74C70`
 pattern of a value belonging to a different body. `0x1BCB14` remains the control the rule must not
-touch: a single `ret 4` declared as 12, correct if its depth is −8, with **no** depth-0 path, and
-run-verified in 106 archived runs.
+touch: a single `ret 4` declared as 12. It **starts mid-function** and pops `esi`/`ebx` it never
+pushed, so `d = +8` and `N + d = 4 + 8 = 12` — exactly the declared value, which is why it is right.
+It has **no** depth-0 path, so the gate never touches it, and it is run-verified in 106 archived runs.
 
 **The 20 live defects.** Twenty entries declared `stack_args 0` (four by an ABSENT key, so the
 generated wrapper used the `0` default) while their bodies end in `ret 4` — `ret 0x14` for
@@ -1610,10 +1616,21 @@ reports that entry `UNKNOWN/PARTIAL`, not `PROVED`, because its body makes **sev
 `call dword ptr [...]` calls (`[ecx+0x11c]`, `[edx+0x148]`, `[edi+0x144]`, `[edx+0x154]` twice,
 `[ecx+0x154]`, `[edx+0x144]`), so the depth at the `ret 8` is not statically resolvable and there is
 no depth-0 path to gate on. The value 8 comes from the byte *pattern* instead: no call is followed by
-an `add esp,N` fix-up, so each callee removes its own arguments (stdcall/thiscall), and the epilogue
-is `pop edi; pop esi; pop ebp; pop ebx; add esp,0x50; ret 8`. A single `ret N` after a fully popped
-frame makes 8 the only value consistent with that pattern, but the depth-0 claim is a convention
-here, not an observation. `0x5C840` is recorded the same way for the same reason. The distinction
+an `add esp,N` fix-up, so each callee removes its own arguments (stdcall/thiscall). The frame is
+`push esi` (`0x496E7`), `push edi` (`0x49744`), `pop edi` (`0x4977B`) and `pop esi` (`0x497B7`) --
+**there is no `sub esp,N` anywhere in the body and no `ebx`/`ebp` save** -- then a final argument
+block (`push ecx`, `push 1`, `push eax` at `0x497BF`..`0x497CA`), `call dword ptr [edx+0x144]` at
+`0x497CB`, and `ret 8` at `0x497D1`. The callee removes the three argument words, so the depth is
+back to 0 at that `ret 8`. A single `ret N` after a balanced frame makes 8 the only value consistent
+with that pattern, but the depth-0 claim is a convention here, not an observation.
+
+*(An earlier revision of this paragraph gave the epilogue as `pop edi; pop esi; pop ebp; pop ebx;
+add esp,0x50; ret 8`. That is `0x94AB0`'s epilogue, pasted in by mistake, and it is corrected here.
+The mistake was caught by adversarial review and is recorded rather than quietly removed, because
+"the value was right but the cited bytes were another function's" is exactly the kind of error that
+makes an inference look like an observation.)*
+
+`0x5C840` is recorded the same way for the same reason. The distinction
 matters because the two cases have different failure modes: a `PROVED` value is forced by the bytes,
 whereas an `INFERRED` one is a strong hypothesis that a run can still falsify.
 
@@ -1691,10 +1708,14 @@ from a single 16-bit word array at `.rdata:0x0022E1B4` whose bytes read `...6000
 Tightening the filter to require "not a padding byte at the VA" and "4-byte aligned" takes 117 to
 **93**. That test should be added.
 
-**The detector is structurally blind to four live defects of exactly the class that has been
-stopping runs.** `check-table-targets.py` filters on `runtime_starts()`, which asks "can the runtime
-resolve this address". A `tail_jump_alias` folded into its parent **does** resolve — the dispatch
-tuple names an `recomp_alias_XXXX` shim — but the shim runs a *different function*:
+**Four live defects of the section-9 class are invisible to that census, and this is a scoping
+limit rather than a bug in the checker.** `check-table-targets.py` filters on `runtime_starts()`,
+which asks "can the runtime resolve this address", and that is the *correct* predicate for its
+stated purpose: finding addresses that reach an indirect call and **do not resolve at all**, i.e. a
+trap. A `tail_jump_alias` folded into its parent **does** resolve — the dispatch tuple names an
+`recomp_alias_XXXX` shim — so it is outside that purpose by construction. But the shim runs a
+*different function*, so the address is still wrong, just wrong in the section-9 way (a wrong body
+rather than no body):
 
 ```
 static void recomp_alias_000E9A40(void) { recomp_alias_observe(77u); sub_000E9D80(); }
@@ -1702,12 +1723,22 @@ static void recomp_alias_000E9A40(void) { recomp_alias_observe(77u); sub_000E9D8
 ```
 
 `0xE9A40`'s own body is a complete function with a 0x12-case switch and `ret 4`; the shim runs
-`sub_000E9D80` instead. Re-running the same sweep with `genuine_starts()` gives **121** instead of
-117, and the four it surfaces are `0xE9A40`, `0x100AB0`, `0x1199C0` and `0x13A340` — each a complete
-body with its own switch table and `ret`, reachable through a `.rdata`/`.data` pointer. This is the
-A2e/A2f/A2g alias-misdispatch defect class of §9, and it is the same fix `check-span-exits.py`
-received in `fb5d7e2`. **It should be the next detector change**, because it makes the population
-visible automatically instead of requiring a hand sweep.
+`sub_000E9D80` instead. Verified against `src/recomp/gen/recomp_dispatch.c`: there are **134** alias
+shims and **every one** calls a `sub_` that is not its own address, so this is a property of the
+whole alias-fold mechanism rather than of these four. Re-running the sweep with `genuine_starts()`
+instead of `runtime_starts()` gives **121** rather than 117, and the four it surfaces are
+`0xE9A40`, `0x100AB0`, `0x1199C0` and `0x13A340` — each a complete body with its own switch table
+and `ret`, reachable through a `.rdata`/`.data` pointer.
+
+**So the correct statement is not "the checker is blind" but "traps and misdispatches are two
+populations and only one is censused."** What is needed is a *separate* detector for the
+misdispatch class — one that asks whether an address's dispatch entry runs its own body — rather
+than changing this checker's predicate, because changing it would mix the two populations and make
+the trap list noisy. Of the 134 shims, the actionable subset is the aliases whose own address is a
+genuine function (a real prologue and its own `ret`); the rest are genuine mid-body labels for which
+running the parent's body from the start is correct. `0xE9A40`, `0x100AB0`, `0x1199C0` and
+`0x13A340` are four such, and §9's list of ten data-referenced aliases is the same population. This
+is the next detector change, and it is a new checker rather than an edit to this one.
 
 **Some defects are in existing entries rather than missing ones, and the documented span convention
 is what hides them.** `0x7DBD0` is a complete 190-instruction function swallowed by the manifest

@@ -71,7 +71,8 @@ computes `d = ESP − ESP_at_entry`.
 
 **The identity it rests on.** `scripts/recover-functions.py` asserts
 `g_esp == before_stack + 4 + stack_args` after a body, and a `ret N` leaves
-`esp = entry_esp + 4 + N − d`, so **`stack_args = N − d`**. When every reachable exit is the same
+`esp = entry_esp + d + 4 + N` (the convention is `push` -> `d -= 4`), so
+**`stack_args = N + d`**. When every reachable exit is the same
 `ret N` reached at `d = 0`, `stack_args` must be `N` — a fact about that entry's own bytes that
 mentions no callee and needs no global depth reasoning. That is the **only** class the gate fails
 on. `TRUNCATED`, `FALL_OFF_END`, `RET_DEPTH` and `CUT_EPILOGUE` are counted, named and reported as
@@ -160,11 +161,11 @@ harmless PADDING** — its `je 0x20801` at `0x207F7` makes the two bytes at `0x2
 the old gate's linear "unreachable after the terminator" reasoning is wrong there. `0x1BCB14` is the
 one entry the gate deliberately reports rather than fails: a single `ret 4` declared as 12, which is
 correct if its depth is −8, and it has **no** path reaching that `ret` at depth 0 — so `stack_args =
-N − d` genuinely cannot be evaluated for it, and it is run-verified in 106 archived runs, which is
+N + d` genuinely cannot be evaluated for it, and it is run-verified in 106 archived runs, which is
 the control proving the rule must not touch it.
 
 **A false-negative was found in the gate and it had hidden four more defects.** The first shipped
-rule required *every* reachable exit to be a `ret N` at depth 0. But `stack_args = N − d` holds on
+rule required *every* reachable exit to be a `ret N` at depth 0. But `stack_args = N + d` holds on
 each path separately, so a single `ret` site reached at depth 0 by one path and at UNKNOWN by
 another (through an indirect call) made the whole entry report only `UNKNOWN/PARTIAL` — hiding a
 live defect behind an unrelated unresolved path. The rule now gates on **any** reachable `ret N` at
@@ -177,12 +178,15 @@ times the same four addresses. Two of the four were also swallowing a whole func
 swallowed functions are recovered; `0x152BC0`'s wrong 8 was itself inherited from `0x152DE0`'s own
 correct `ret 8`, the `0x74C70` pattern.
 
-**The general `N − d` form is NOT gated, and that is measured rather than cautious.** Gating it fired
-on 18 entries, including `0x1C000` ("must be −292") and `0x22070` ("must be −44") — over-wide spans
-whose walk wanders into a neighbouring function and accumulates a bogus depth. A negative
-`stack_args` is not representable, which is the tell that the *depth* is wrong rather than the
-manifest. So the gate uses only the `d == 0` case, which is a claim about one concrete path through
-this entry's own bytes.
+**The general `N + d` form is NOT gated, and that is measured.** Of the **29** entries with a
+resolved nonzero-depth `ret N`, **every one** has `d > 0` (min 4, max 100): the `ret` is reached with
+*more* stack than at entry, i.e. the walk popped registers the body never pushed. That is the
+signature of a mid-function entry or an over-wide span whose walk ran into a neighbouring function,
+so a nonzero `d` is only as trustworthy as the span extent — and asserting the extent is right in
+order to conclude the value is wrong is circular. All 29 also disagree with their declared value and
+none has a verified return in any archived run, so nothing is hidden by leaving them to `RET_DEPTH`,
+the code that exists for exactly that adjudication. The gate uses only the `d == 0` case, a claim
+about one concrete path through this entry's own bytes.
 
 **What the gating class does and does not depend on.** It is a statement about *this entry*: at a
 reachable `ret N` reached at depth 0, the declared value must be `N`. But the **depth** is not always
