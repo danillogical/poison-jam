@@ -18,7 +18,7 @@ the disclaimer hash `5bdaea576b8509f5` unchanged.
 | # | Blocker | Fix | Run evidence |
 |---|---|---|---|
 | 20 | `ABI FAILURE 0x00154540 expected +24` (observed delta 16) | two this-adjusting thunks corrected 20→12; swallowed `0x154560` recovered (`stack_args 20`) | **g05 found it; g06 did NOT exercise it; g07 CONFIRMED it** — `[RECOVERED] 0x00154540 returned; ABI verified` |
-| 21 | `[ICALL] Failed to resolve VA 0x000B5F82` | `0xB5EB0` restored to its real end `0xB6732`; false split `0xB5F3A` removed; generated patch `remove-b5f3a-dispatch` (L42) | **g07 found it**; byte-derived repair, **NOT yet runtime-confirmed** |
+| 21 | `[ICALL] Failed to resolve VA 0x000B5F82` | `0xB5EB0` restored to its real end `0xB6732`; false split `0xB5F3A` removed; generated patch `remove-b5f3a-dispatch` (L02) | **g07 found it**; byte-derived repair, **NOT yet runtime-confirmed** |
 | — | 50 over-wide spans consuming 63 separately evidenced entries | spans tightened; 48 new reviewed entries; 5 already owned an entry; 2 already had generated bodies | byte-derived + the new gate; no run needed |
 
 ## PLAN_CHANGE
@@ -42,7 +42,7 @@ the disclaimer hash `5bdaea576b8509f5` unchanged.
 - **Evidence:** restoring `0xB5EB0`'s span alone did not link. `recomp_dispatch.c` is
   translation-owned and still carried `{ 0x000B5F3Au, (recomp_func_t)sub_000B5F3A }`, so the build
   failed with `LNK2001: unresolved external symbol sub_000B5F3A`. The patch
-  `remove-b5f3a-dispatch` (L42) follows the existing `remove-54750-stub` precedent.
+  `remove-b5f3a-dispatch` (L02) follows the existing `remove-54750-stub` precedent.
 - **Why:** a manifest-only repair was incomplete; the generated dispatch had to be corrected too, and
   the sanctioned mechanism for a translation-owned file is a recorded patch.
 

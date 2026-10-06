@@ -20,9 +20,11 @@ is the aligned `.rdata` dword at `0x0020D3C8` -- and no span owns it, so an
 indirect call through that dword traps with `[ICALL] Failed to resolve VA`.
 
 The same shape is recorded for `0x1FF90` (consumes `0x1FFF0`) and `0x91C00`
-(consumes `0x91C30` and `0x91D70`), and this detector finds **48** containers and
-**59** consumed entries on the current manifest.
-
+(consumes `0x91C30` and `0x91D70`). On the pre-repair manifest this detector found
+**50** containers and **63** consumed addresses (43 `HIDDEN_ENTRY`, 5 `OVERLAP`,
+2 `SHADOWED`); all are repaired, so the committed manifest now reports none.
+48 of the 50 containers are `tail_jump_alias` database records; the two `OVERLAP`
+containers `0x190FB0` and `0x1910C0` have no database record at all.
 ## The invariant
 
 > A manifest entry's declared span must not extend past the end of its own
@@ -116,10 +118,16 @@ decided", and the class is counted and named instead of guessed either way.
   makes the entry `UNQUALIFIED` rather than clean.
 * Only `[start, end)` of the declared entry is examined.  An entry that is too
   *narrow* is `check-entry-extents.py`'s class, not this one.
-* A jump table whose read stopped early could in principle hide an arm.  The read
-  stops at the first value that is not executable code, and any `jmp` the walk
-  could not fully resolve is recorded opaque, so an under-read table degrades the
-  entry to `UNQUALIFIED` rather than to a false finding.
+* A jump table whose read stopped early could in principle hide an arm.  **The
+  shared walker does not report this**: `Analyzer.walk` records an `indirect` exit
+  only when *no* arm it read is in span, so a table that stops early but has at
+  least one in-span arm is still treated as enumerated.  An earlier version of
+  this docstring claimed an under-read table "degrades the entry to
+  `UNQUALIFIED`", which is stronger than the code.  Measured on the 50 gate
+  containers: none has a dropped arm, so the gate is sound for this population,
+  but the guarantee does not generalise and is stated here as the limit it is.
+  Turn Review 1 (2026-10-05) found this and it is recorded rather than papered
+  over.
 
 ## Controls
 

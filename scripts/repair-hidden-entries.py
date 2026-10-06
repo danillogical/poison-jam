@@ -24,10 +24,22 @@ Every derived value carries how it was obtained:
               cleanup belongs to the tail target.  The existing declared value
               is preserved rather than replaced by a guess.
 
-The script refuses to write anything unless the result is self-consistent: the
-repaired manifest must make `check-hidden-entries.py` pass, every added entry
-must still be liftable by `recover-functions.py`'s translator, and no new span
-may be introduced.  `--dry-run` (the default) reports what it would do.
+The script refuses to write anything unless the result is self-consistent.  On
+`--write`/`--out` it re-loads the repaired manifest and asserts, before touching
+the file, that
+
+  * `check-hidden-entries.py` reports no gating verdict on it,
+  * no two entries share a start address,
+  * every added entry is inside `.text` with `end > start`, and
+  * every added entry lifts standalone through `recover-functions.py`'s
+    translator (the check that would have caught the `LNK2005` collision without
+    a full build).
+
+`--dry-run` (the default) reports what it would do and writes nothing.  Turn
+Review 1 (2026-10-05) found that an earlier version of this docstring *claimed*
+those checks while `main()` performed none of them -- the same silent-success
+shape as the `apply()` bug it describes -- so they are implemented rather than
+merely described.
 """
 from __future__ import annotations
 
@@ -265,6 +277,94 @@ class Repairer:
         return out
 
 
+def verify(repairer, repaired, additions):
+    """Refuse to write a manifest that is not self-consistent.
+
+    These are the checks the docstring promises, and every one of them is here
+    because an earlier version of this script wrote a repaired manifest that had
+    passed *none* of them and reported success anyway.  Turn Review 1
+    (2026-10-05) found the docstring claiming checks `main()` did not perform --
+    the same silent-success shape as the `apply()` bug.  They run before the
+    file is touched, so a failure leaves the committed manifest intact.
+    """
+    problems = []
+
+    starts = [int(record['start'], 16) for record in repaired]
+    duplicates = sorted({s for s in starts if starts.count(s) > 1})
+    if duplicates:
+        problems.append('duplicate start(s): %s'
+                        % ', '.join('0x%08X' % s for s in duplicates[:8]))
+
+    for item in additions:
+        if item['end'] <= item['start']:
+            problems.append('addition 0x%08X has end 0x%08X <= start'
+                            % (item['start'], item['end']))
+        if not repairer.image.is_code(item['start']):
+            problems.append('addition 0x%08X is not inside .text' % item['start'])
+
+    # The repaired manifest must satisfy the detector that motivated the repair.
+    entries = [hidden.Entry(record) for record in repaired]
+    finder = hidden.HiddenEntryFinder(
+        repairer.image, repairer.database, entries, repairer.pointer_sites,
+        repairer.finder.generated, repairer.finder.dispatched)
+    gating = []
+    for entry in entries:
+        verdict, consumed, _ = finder.evaluate(entry)
+        if verdict in hidden.GATING:
+            gating.append((entry.start, verdict, consumed))
+    if gating:
+        problems.append('%d span(s) still gate, e.g. 0x%08X %s'
+                        % (len(gating), gating[0][0], gating[0][1]))
+
+    # Every added entry must lift standalone.  This is the check that would have
+    # caught the LNK2005 collision without spending a full build on it.
+    if additions:
+        try:
+            import json as _json
+            sys.path.insert(0, str(ROOT.parent / 'xboxrecomp'))
+            from tools.recomp import config as _config
+            from tools.recomp.translator import FunctionTranslator
+
+            _config.configure_from_xbe(str(ROOT / 'game' / 'default.xbe'))
+            data = (ROOT / 'game' / 'default.xbe').read_bytes()
+            database = {}
+            for item in _json.loads(
+                    (ROOT / 'tools' / 'disasm' / 'output' / 'functions.json').read_text()):
+                a = int(item['start'], 16)
+                item['_addr'] = a
+                item['end'] = int(item['end'], 16)
+                database[a] = item
+            for fix in _json.loads(
+                    (ROOT / 'config' / 'boundary-fixes.json').read_text(encoding='utf-8')):
+                a = int(fix['start'], 16)
+                database[a]['end'] = int(fix['end'], 16)
+            labels = {int(v['address'], 16): v['name'] for v in _json.loads(
+                (ROOT / 'tools' / 'disasm' / 'output' / 'labels.json').read_text())}
+            for item in additions:
+                probe = dict(database)
+                probe[item['start']] = {
+                    'start': '0x%08X' % item['start'], 'end': item['end'],
+                    '_addr': item['start'], 'size': item['end'] - item['start'],
+                    'name': 'sub_%08X' % item['start'], 'confidence': 1.0,
+                    'detection_method': 'reviewed_runtime_target',
+                    'has_prologue': False, 'calls_to': [], 'called_by': []}
+                translator = FunctionTranslator(data, probe, labels)
+                code = translator.translate_function(item['start'], probe[item['start']])
+                if not code or '/* TODO:' in code:
+                    problems.append('addition 0x%08X does not lift standalone'
+                                    % item['start'])
+        except ImportError as exc:
+            problems.append('cannot verify liftability (translator unavailable): %s' % exc)
+
+    if problems:
+        print('\nREFUSING TO WRITE: %d consistency problem(s):' % len(problems))
+        for problem in problems:
+            print('   %s' % problem)
+        raise SystemExit(1)
+    print('verified: %d entries, no gating span, no duplicate start, '
+          '%d addition(s) lift standalone' % (len(repaired), len(additions)))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -311,6 +411,8 @@ def main() -> int:
         return 0
 
     repaired = repairer.apply(updates, additions)
+    verify(repairer, repaired, additions)
+
     target = Path(args.out) if args.out else MANIFEST
     target.write_text(json.dumps(repaired, indent=1) + '\n', encoding='utf-8')
     print('\nwrote %d entries -> %s' % (len(repaired), target))
