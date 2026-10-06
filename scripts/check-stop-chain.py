@@ -90,13 +90,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RECORD = ROOT / 'config' / 'stop-chain.json'
 RUNS = ROOT / 'logs' / 'runs'
+CURRENT_MANIFEST = ROOT / 'config' / 'recovered-functions.json'
+CURRENT_MANIFEST_ENTRIES: dict[str, tuple] | None = None
 
 # `[RECOVERED] 0x0013B750 returned; ABI verified (ESP/EBX/ESI/EDI)`
 RETURNED = re.compile(r'\[RECOVERED\]\s+0x([0-9A-Fa-f]{8})\s+returned;\s*ABI verified')
+# `[RECOVERED] ABI FAILURE 0x00026780 esp ... expected +4`
+ABI_FAILURE = re.compile(r'\[RECOVERED\]\s+ABI FAILURE\s+0x([0-9A-Fa-f]{8})')
 # Lines that name a defect the run hit.
 DEFECT = (
     re.compile(r'\[ICALL\]\s+Failed to resolve VA\s+0x([0-9A-Fa-f]{8})'),
-    re.compile(r'\[RECOVERED\]\s+ABI FAILURE\s+0x([0-9A-Fa-f]{8})'),
+    ABI_FAILURE,
     re.compile(r'\[ALIAS-ICALL\]\s+target=0x([0-9A-Fa-f]{8})'),
 )
 # The toolkit's ICALL history: `  [15] 0x000B5EB0` immediately after a failed
@@ -136,7 +140,112 @@ def read_log(run: str) -> str | None:
 
 
 def exercised_addresses(log: str) -> set[str]:
-    return {normalise('0x' + m) for m in RETURNED.findall(log)}
+    """Addresses with an ABI-verified return, EXCLUDING any that also failed.
+
+    **Measured defect (Advisor finding, verified).** The return line is written
+    once, on the first successful return, and it is **not exclusive with a later
+    failure for the same address**. In the strict run
+    `20260930-225440-580-f3-alias-fix-strict`, `0x00026780` logs
+
+        line 75094  [RECOVERED] 0x00026780 returned; ABI verified (ESP/EBX/ESI/EDI)
+        line 77608  [RECOVERED] ABI FAILURE 0x00026780 esp 00F7FEE0->00F7FCBC expected +4
+
+    so the address demonstrably has a broken stack contract in that run, and
+    `check-run-exercised.py` still reported PASS. A return line alone is therefore
+    **not** sufficient for a confirming role: an address that also failed must
+    never be counted as exercised.
+
+    `JSRF_ABI_CONTINUE` is the other half. It turns the ABI check into a report, so
+    a run under it can log many failures and keep going -- its returns are not
+    evidence that the contracts held. That is read from the run's own recorded
+    settings by `run_under_abi_continue`, not guessed.
+    """
+    returned = {normalise('0x' + m) for m in RETURNED.findall(log)}
+    failed = {normalise('0x' + m) for m in ABI_FAILURE.findall(log)}
+    return returned - failed
+
+
+def run_under_abi_continue(metadata: dict | None) -> bool:
+    """Did this run set `JSRF_ABI_CONTINUE`?
+
+    Presence is what matters, including empty or `0` (the classifier's rule), so
+    this is a membership test and never a truthiness test.
+    """
+    if not isinstance(metadata, dict):
+        return False
+    settings = metadata.get('settings')
+    entries = settings if isinstance(settings, list) else []
+    for entry in entries:
+        if isinstance(entry, dict) and str(entry.get('name', '')).upper() == 'JSRF_ABI_CONTINUE':
+            return True
+    return False
+
+
+def archived_manifest(archive: Path) -> dict | None:
+    """The reviewed manifest as it was when the run was archived.
+
+    The runner copies the source tree into `source.zip`, so the archive carries
+    the exact `config/recovered-functions.json` the run was built from. That is
+    the only way to answer "which body did this run actually execute", and it is
+    why descent from the repair commit is **necessary but not sufficient**: a
+    later commit can change the span again, and then the run exercised a
+    different body than the record now describes.
+
+    Returns `{start_va: (end, stack_args)}`, or None when unavailable.
+    """
+    import zipfile
+    path = archive / 'source.zip'
+    if not path.is_file():
+        return None
+    try:
+        with zipfile.ZipFile(path) as zf:
+            names = [n for n in zf.namelist() if n.endswith('config/recovered-functions.json')]
+            if len(names) != 1:
+                return None
+            entries = json.loads(zf.read(names[0]))
+    except (OSError, ValueError, KeyError):
+        return None
+    if not isinstance(entries, list):
+        return None
+    out: dict[str, tuple] = {}
+    for entry in entries:
+        if isinstance(entry, dict) and isinstance(entry.get('start'), str):
+            out[normalise(entry['start'])] = (entry.get('end'), entry.get('stack_args'))
+    return out
+
+
+def manifest_agreement(label: str, run: str, address: str, row: dict) -> list[str]:
+    """Does the run's archived manifest describe the same body as today's?
+
+    Compares the `(end, stack_args)` tuple the run was built with against the
+    current manifest. A run whose tuple differs exercised a *different* body, so
+    its return does not confirm the body the record now describes.
+    """
+    archive = RUNS / run
+    recorded = archived_manifest(archive)
+    if recorded is None:
+        return [f'{label}: cited run {run} carries no readable archived manifest '
+                f'(source.zip), so which body it executed cannot be established; '
+                f'refusing to assume it matches']
+    if address not in recorded:
+        return [f'{label}: cited run {run} was built from a manifest with no entry for '
+                f'{address}, so it cannot have exercised that body as repaired']
+    if not CURRENT_MANIFEST.is_file():
+        return [f'{label}: the current manifest is unavailable, so agreement for '
+                f'{run} cannot be checked']
+    current = CURRENT_MANIFEST_ENTRIES
+    if current is None:
+        return [f'{label}: the current manifest is unreadable, so agreement for '
+                f'{run} cannot be checked']
+    if address not in current:
+        return [f'{label}: {address} is not in the current manifest']
+    if recorded[address] != current[address]:
+        return [f'{label}: cited run {run} executed {address} as '
+                f'(end, stack_args)={recorded[address]}, but the current manifest says '
+                f'{current[address]}. Descent from the repair commit is necessary but '
+                f'not sufficient: a later commit changed the span again, so this run '
+                f'exercised a different body.']
+    return []
 
 
 def defect_addresses(log: str) -> set[str]:
@@ -295,9 +404,16 @@ def check_row(row: dict, cache: dict) -> list[str]:
         if role in CONFIRMING_ROLES:
             if address not in exercised_addresses(log):
                 problems.append(
-                    f'{label}: cited as {role!r} by {run}, but that log has no '
+                    f'{label}: cited as {role!r} by {run}, but that log has no clean '
                     f'ABI-verified return for {address}. A run that does not reach an '
-                    f'address establishes NOT EXERCISED, not a pass.')
+                    f'address establishes NOT EXERCISED, not a pass; and an address that '
+                    f'returned AND later logged an ABI FAILURE is not clean either.')
+                continue
+            if run_under_abi_continue(metadata):
+                problems.append(
+                    f'{label}: cited as {role!r} by {run}, but that run set '
+                    f'JSRF_ABI_CONTINUE, which turns the ABI check into a report. Its '
+                    f'returns do not establish that the contracts held.')
                 continue
             if not isinstance(repair_commit, str) or not repair_commit:
                 problems.append(
@@ -320,6 +436,10 @@ def check_row(row: dict, cache: dict) -> list[str]:
                     f'{label}: cited as {role!r} by {run}, but that run\'s revision '
                     f'{revision[:9]} does not descend from the repair {repair_commit}. '
                     f'The return proves the path ran, not that it ran with the repair.')
+            # Descent is necessary but NOT sufficient: a later commit can change the
+            # span again, and then the run exercised a different body than the one
+            # the record describes.
+            problems.extend(manifest_agreement(label, run, address, row))
         elif role in NEGATIVE_ROLES:
             if address in exercised_addresses(log):
                 problems.append(
@@ -360,16 +480,27 @@ def load_record(path: Path) -> list[dict]:
 
 
 def main() -> int:
-    global RUNS
+    global RUNS, CURRENT_MANIFEST, CURRENT_MANIFEST_ENTRIES
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--record', type=Path, default=RECORD)
     parser.add_argument('--runs', type=Path, default=None)
+    parser.add_argument('--manifest', type=Path, default=None)
     parser.add_argument('--quiet', action='store_true')
     args = parser.parse_args()
 
     if args.runs is not None:
         RUNS = args.runs
+    if args.manifest is not None:
+        CURRENT_MANIFEST = args.manifest
+    if CURRENT_MANIFEST.is_file():
+        try:
+            entries = json.loads(CURRENT_MANIFEST.read_text(encoding='utf-8'))
+            CURRENT_MANIFEST_ENTRIES = {
+                normalise(e['start']): (e.get('end'), e.get('stack_args'))
+                for e in entries if isinstance(e, dict) and isinstance(e.get('start'), str)}
+        except (OSError, ValueError, KeyError):
+            CURRENT_MANIFEST_ENTRIES = None
 
     if not args.record.is_file():
         print(f'check-stop-chain: {args.record} is missing; the stop chain has no record',

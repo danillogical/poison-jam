@@ -15,6 +15,20 @@ reached the disclaimer at 960 presents while f26 stalled on the Smilebit card at
 acceptance is **path-aware**: a run counts for an address only when its log
 contains that address's ABI-verified return line.
 
+**Why a return line is not enough (measured).** The `returned; ABI verified` line is
+written once, on the first successful return, and it is **not exclusive with a
+later failure for the same address**. In the strict run
+`20260930-225440-580-f3-alias-fix-strict`, `0x00026780` logs the return at line
+75094 and then
+
+    [RECOVERED] ABI FAILURE 0x00026780 esp 00F7FEE0->00F7FCBC expected +4
+
+at line 77608 -- so that address has a broken stack contract in that run, yet this
+script reported PASS for it. An address that both returned and failed is **not**
+clean. `JSRF_ABI_CONTINUE` is the other half: it turns the ABI check into a report,
+so a run under it can log many failures and keep going, and its returns do not
+establish that the contracts held.
+
 Usage:
     python -X utf8 scripts/check-run-exercised.py <run-dir> <va> [<va> ...]
     python -X utf8 scripts/check-run-exercised.py <run-dir> --list
@@ -24,6 +38,7 @@ every address the run exercised and exits 0.
 """
 from pathlib import Path
 import argparse
+import json
 import re
 import sys
 
@@ -31,6 +46,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # `[RECOVERED] 0x0013B750 returned; ABI verified (ESP/EBX/ESI/EDI)`
 RETURNED = re.compile(r'\[RECOVERED\]\s+0x([0-9A-Fa-f]{8})\s+returned;\s*ABI verified')
+# `[RECOVERED] ABI FAILURE 0x00026780 esp ... expected +4`
+ABI_FAILURE = re.compile(r'\[RECOVERED\]\s+ABI FAILURE\s+0x([0-9A-Fa-f]{8})')
 # `[ALIAS-ICALL] target=0x00032610 owner=0x00033800` -- an alias fold ran the
 # wrong body, which is itself a defect worth surfacing next to the acceptance.
 ALIAS_ICALL = re.compile(r'\[ALIAS-ICALL\]\s+target=0x([0-9A-Fa-f]{8})\s+owner=0x([0-9A-Fa-f]{8})')
@@ -66,26 +83,39 @@ def main() -> int:
 
     text = log.read_text(encoding='utf-8', errors='replace')
     returned = {normalise('0x' + m) for m in RETURNED.findall(text)}
+    failed = {normalise('0x' + m) for m in ABI_FAILURE.findall(text)}
+    # An address that returned AND later failed is not clean: the return line is
+    # written once and is not exclusive with a later failure for the same address.
+    clean = returned - failed
     aliased = {(normalise('0x' + t), normalise('0x' + o))
                for t, o in ALIAS_ICALL.findall(text)}
 
     print(f'run      : {run.name}')
-    print(f'exercised: {len(returned)} recovered entr(y/ies) with an ABI-verified return')
+    print(f'exercised: {len(clean)} recovered entr(y/ies) with a CLEAN ABI-verified return')
+    if failed:
+        both = sorted(returned & failed)
+        print(f'abi-failure lines: {len(failed)}; returned AND failed: {len(both)}')
+        for va in both:
+            print(f'   {va}  <-- returned first, then failed ABI: NOT clean')
     if aliased:
         print(f'alias-icall lines: {len(aliased)}')
         for t, o in sorted(aliased):
             print(f'   target={t} owner={o}  <-- a folded alias ran the WRONG body')
 
     if args.list or not args.addresses:
-        for va in sorted(returned):
+        for va in sorted(clean):
             print(f'   {va}')
         return 0
 
     failures = 0
     for raw in args.addresses:
         va = normalise(raw)
-        if va in returned:
+        if va in clean:
             print(f'PASS  {va} was exercised')
+        elif va in returned:
+            print(f'FAIL  {va} returned but ALSO logged an ABI FAILURE in this run, so '
+                  f'its stack contract is broken here; it is not clean evidence')
+            failures += 1
         else:
             print(f'FAIL  {va} was NOT exercised by this run -- it proves nothing '
                   f'about that address; rerun on the branch that reaches it')

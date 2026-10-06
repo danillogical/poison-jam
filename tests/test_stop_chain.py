@@ -60,7 +60,7 @@ class Scratch:
 
     def run(self, name: str, log: str, revision: str = REVISION,
             with_metadata: bool = True, with_result: bool = True,
-            break_log_hash: bool = False) -> None:
+            break_log_hash: bool = False, manifest: dict | None = None) -> None:
         archive = self.runs / name
         archive.mkdir(parents=True, exist_ok=True)
         log_path = archive / 'jsrf_run.log'
@@ -78,16 +78,33 @@ class Scratch:
                 'repository_identities': {'project': {'revision': revision}},
                 'run_log_sha256': digest,
             }), encoding='utf-8')
+        # By default the archive carries a manifest agreeing with the scratch
+        # current-manifest, so a control that is not about manifest agreement is
+        # not accidentally testing it.
+        if manifest is None:
+            manifest = {ADDRESS: ('0x000B6732', 4)}
+        if manifest:
+            self.write_manifest(name, manifest)
 
     def write(self, rows: list[dict]) -> None:
         self.record.write_text(json.dumps({'schema': 1, 'stops': rows}),
                                encoding='utf-8')
 
-    def check(self) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            [sys.executable, '-X', 'utf8', str(SCRIPT),
-             '--record', str(self.record), '--runs', str(self.runs)],
-            capture_output=True, text=True)
+    def write_manifest(self, run: str, entries: dict) -> None:
+        """Give a scratch archive a `source.zip` carrying a reviewed manifest."""
+        import zipfile
+        payload = json.dumps([{'start': k, 'end': v[0], 'stack_args': v[1]}
+                              for k, v in entries.items()])
+        path = self.runs / run / 'source.zip'
+        with zipfile.ZipFile(path, 'w') as zf:
+            zf.writestr('project/config/recovered-functions.json', payload)
+
+    def check(self, manifest: Path | None = None) -> subprocess.CompletedProcess:
+        argv = [sys.executable, '-X', 'utf8', str(SCRIPT),
+                '--record', str(self.record), '--runs', str(self.runs)]
+        if manifest is not None:
+            argv += ['--manifest', str(manifest)]
+        return subprocess.run(argv, capture_output=True, text=True)
 
 
 def row(state: str, evidence: list[dict], address: str = ADDRESS,
@@ -102,6 +119,15 @@ class StopChainControls(unittest.TestCase):
     def setUp(self) -> None:
         self.scratch = Scratch()
         self.addCleanup(self.scratch.close)
+        # A scratch current-manifest, so the controls do not depend on the live
+        # tree's spans. It agrees with `ADDRESS` unless a control says otherwise.
+        self.manifest = self.scratch.root / 'current-manifest.json'
+        self.manifest.write_text(json.dumps([
+            {'start': ADDRESS, 'end': '0x000B6732', 'stack_args': 4},
+        ]), encoding='utf-8')
+
+    def check(self) -> subprocess.CompletedProcess:
+        return self.scratch.check(self.manifest)
 
     # -- the gate must be able to fail ------------------------------------
 
@@ -115,7 +141,7 @@ class StopChainControls(unittest.TestCase):
         self.scratch.write([row('RUNTIME_CONFIRMED', [{'run': 'r1', 'role': 'confirmed'}])])
         r = self.scratch.check()
         self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
-        self.assertIn('no ABI-verified return', r.stderr)
+        self.assertIn('no clean', r.stderr)
         self.assertIn('NOT EXERCISED, not a pass', r.stderr)
 
     def test_state_unsupported_by_roles_fails(self):
@@ -266,6 +292,58 @@ class StopChainControls(unittest.TestCase):
         self.scratch.write([row('STATIC_ONLY', [])])
         r = self.scratch.check()
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    # -- the two producer-side holes the Advisor found ---------------------
+
+    def test_a_return_followed_by_an_abi_failure_is_not_clean(self):
+        """The real f3 defect: the return line is not exclusive with failure.
+
+        In `20260930-225440-580-f3-alias-fix-strict`, `0x00026780` logs
+        `returned; ABI verified` at line 75094 and `ABI FAILURE 0x00026780 ...`
+        at line 77608. Both `check-run-exercised.py` and this gate reported PASS
+        before this control existed.
+        """
+        log = (RETURN_LINE
+               + '[RECOVERED] ABI FAILURE 0x000B5EB0 esp 00F7FEE0->00F7FCBC expected +4\n')
+        self.scratch.run('r1', log)
+        self.scratch.write([row('RUNTIME_CONFIRMED', [{'run': 'r1', 'role': 'confirmed'}])])
+        r = self.scratch.check()
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn('no clean', r.stderr)
+
+    def test_a_run_under_abi_continue_cannot_confirm(self):
+        """`JSRF_ABI_CONTINUE` turns the check into a report, so returns prove less."""
+        self.scratch.run('r1', RETURN_LINE)
+        archive = self.scratch.runs / 'r1'
+        metadata = json.loads((archive / 'metadata.json').read_text(encoding='utf-8'))
+        metadata['settings'] = [{'name': 'JSRF_ABI_CONTINUE', 'value': '0'}]
+        (archive / 'metadata.json').write_text(json.dumps(metadata), encoding='utf-8')
+        self.scratch.write([row('RUNTIME_CONFIRMED', [{'run': 'r1', 'role': 'confirmed'}])])
+        r = self.scratch.check()
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn('JSRF_ABI_CONTINUE', r.stderr)
+
+    def test_a_run_whose_archived_manifest_disagrees_cannot_confirm(self):
+        """Descent is necessary but not sufficient: a later commit can move the span.
+
+        `0xAE560` is the real example: the f9 run executed it as
+        `(end 0x000AE5F1, stack_args 4)` and the tree now says
+        `(end 0x000AE659, stack_args 4)`, so f9's return is evidence about the OLD
+        body, not the repaired one.
+        """
+        self.scratch.run('r1', RETURN_LINE,
+                         manifest={ADDRESS: ('0x000AE5F1', 4)})
+        self.scratch.write([row('RUNTIME_CONFIRMED', [{'run': 'r1', 'role': 'confirmed'}])])
+        r = self.check()
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn('exercised a different body', r.stderr)
+
+    def test_a_run_with_no_archived_manifest_is_unknown_not_clean(self):
+        self.scratch.run('r1', RETURN_LINE, manifest={})
+        self.scratch.write([row('RUNTIME_CONFIRMED', [{'run': 'r1', 'role': 'confirmed'}])])
+        r = self.check()
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn('no readable archived manifest', r.stderr)
 
     # -- the live record -------------------------------------------------
 

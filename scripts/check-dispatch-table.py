@@ -69,12 +69,40 @@ DERIVED = re.compile(
     r'^\s*sizeof\s*\(\s*g_recomp_table\s*\)\s*/\s*sizeof\s*\(\s*g_recomp_table\s*\[\s*0\s*\]\s*\)\s*$')
 LITERAL = re.compile(r'^\s*(\d+)\s*$')
 
+# A row that has been COMMENTED OUT is not a row.
+#
+# **Measured defect (Advisor finding, reproduced).** `remove-b5f3a-dispatch`
+# replaces its tuple with prose, so counting the raw text happens to work today.
+# But a patch that instead comments the tuple out --
+#
+#     /* { 0x000B5F3Au, (recomp_func_t)sub_000B5F3A }, removed */
+#
+# -- leaves the array holding 8927 rows against a declared 8928, and the checker
+# PASSED (exit 0), because it was counting the *spelling* of a row rather than a
+# row. That is exactly the class this gate exists to catch, so the table body is
+# comment-stripped before counting.
+_BLOCK_COMMENT = re.compile(r'/\*.*?\*/', re.S)
+_LINE_COMMENT = re.compile(r'//[^\n]*')
+
+
+def strip_comments(text: str) -> str:
+    """Remove C comments, preserving newlines so line numbers still line up.
+
+    String literals are not a concern here: this is a table of `{ 0x...u, ... }`
+    rows with no string members, and the checker never needs to distinguish a
+    comment marker inside a string.
+    """
+    text = _BLOCK_COMMENT.sub(lambda m: '\n' * m.group(0).count('\n'), text)
+    return _LINE_COMMENT.sub('', text)
+
 
 def check_file(path: Path) -> list[str]:
     """Every consistency failure in one generated dispatch unit."""
     if not path.is_file():
         return [f'{path}: missing']
-    text = path.read_text(encoding='utf-8', errors='replace')
+    raw_text = path.read_text(encoding='utf-8', errors='replace')
+    # Count rows in the COMMENT-STRIPPED text: a commented-out tuple is not a row.
+    text = strip_comments(raw_text)
 
     table = TABLE.search(text)
     if not table:

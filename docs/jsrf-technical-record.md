@@ -2176,7 +2176,8 @@ a table-extent argument and the turn reproduced it:
 ```
 
 The manifest span is `[0xB06E0, 0xB0811)`, so the function's **own epilogue** at `0xB09DC` lies outside
-it, and the emitted body calls the fatal stub `sub_000B09DC` four times and `sub_000B09D9` twice. A
+it, and the emitted body calls the fatal stub `sub_000B09DC` **twice** and `sub_000B09D9` **four**
+times. A
 valid object with `[ecx+0x128] == 0xFFFFFFFF` selects a plain return requiring no table heuristic at
 all. It is a **proved static production defect**. It is **not** repaired in this turn — the remediation
 scope is records-only plus the crash fix — and it is recorded as the next static work with its proof
@@ -2189,6 +2190,80 @@ continuations". The Advisor's point stands: those nine micro-entries are contain
 have no `stack_args`, their only "pointers" are consecutive dwords in a packed `.data` run, and calling
 them real continuations is **inference the bytes argue against**. They are **identity-unproven**, not
 legitimate, and are recorded that way.
+
+
+## 18. Errata and the under-wide class's own census (2026-10-06)
+
+**Erratum: the `0xB06E0` trap-stub counts were reversed.** §17, the plan and commit `892dd1e`'s
+message all said the pre-repair body called `sub_000B09DC` four times and `sub_000B09D9` twice. The
+measured counts are the **opposite**: `sub_000B09DC` **twice** (`0xB06EC`, `0xB06FF`) and
+`sub_000B09D9` **four** times (`0xB0720`, `0xB0743`, `0xB07CC`, `0xB07D8`). Re-measured from the
+archived pre-repair body in `logs/runs/20261005-223404-818-g08-b5eb0-fixed/source.zip`, which is the
+authority for what that run was built from, and independently by the Persistent Advisor. The counts
+are corrected in §17, the plan and `config/stop-chain.json` row 23; the published commit is **not**
+amended, so this paragraph is the erratum. The defect and its repair are unaffected.
+
+**Why the hidden-entry detector missed `0xB06E0`.** `HiddenEntryFinder.body()` returns `None` (hence
+`CLEAN`) whenever the walk falls off its declared end, and the old span fell off at `0xB0811` at depth
+`-16`. The detector is for **over-wide** spans by construction; `0xB06E0` was **under-wide**, the
+mirror class. `check-stack-depth.py` did see it, but only as `SUSPICIOUS/CUT_EPILOGUE`, which does not
+gate. That is the honest statement of the coverage gap, and it is why the under-wide class needs its
+own evidence rather than an extension of the over-wide gate.
+
+**The under-wide class, measured structurally.** The Orchestrator's census walks every manifest entry
+over its own declared span and asks two questions. It finds:
+
+| measure | count |
+|---|---|
+| entries whose own fully-enumerated walk reaches a **fatal** trap stub | **128** |
+| entries where a **conditional** branch leaves the span to an address that is neither a manifest start nor inside any genuine span, and extending to the next manifest start certifies one single `ret N` | **150 PROVED, 4 INFERRED** |
+| of the certified set, entries whose certified `N` disagrees with the declared `stack_args` | **10** |
+
+The conditional and unconditional populations are kept **separate**: for an unconditional `jmp` out
+of span, "this function's own continuation" and "a legitimate tail call to a separate function" are
+not distinguishable from the bytes alone, so that subset is a measurement and not a gate. The
+conditional subset is the defensible one, and its first prediction was correct in advance — see below.
+
+**The census's first call, and it was right.** Before any run reached it, the census reported
+`0x000AE560-0x000AE5F1 -> end 0x000AE659 N=4`, listing seven conditional branches to `0xAE655`. Run
+`20261006-003520-133-f9-underwide-batch-pb` then logged `[ICALL] Failed to resolve VA 0x000AE655`
+with `0x000AE560` as ICALL-history frame 15, immediately after that body's ABI-verified return.
+`0xAE655` is the shared epilogue (`pop esi` at `0xAE5ED`, `ret 4` at `0xAE5EE`) that the declared end
+cut off. Repaired to end `0x000AE659`; `stack_args 4` was already right, since both exits are `ret 4`
+at depth 0.
+
+**Stops 21 and 22 are runtime-confirmed.** The same run is the first ever to execute either repaired
+address, and it logs both `[RECOVERED] 0x000B5EB0 returned; ABI verified` and
+`[RECOVERED] 0x00048DB0 returned; ABI verified`. So `0xB5EB0` — repaired from the bytes and then
+missed by two consecutive runs — is finally confirmed, and the found-versus-confirmed distinction is
+discharged for both.
+
+**The certified-continuation gate, and two holes in it that were found by review.** `L43` and
+`config/stop-chain.json` bind each stop row to the archived runs that establish it. Review found two
+producer-side holes, both real and both now closed with a control taken from a real archive:
+
+1. **The return line is not exclusive with failure.** `20260930-225440-580-f3-alias-fix-strict` logs
+   `0x00026780 returned; ABI verified` at line 75094 and `ABI FAILURE 0x00026780 ... expected +4` at
+   line 77608, and `check-run-exercised.py` reported **PASS** for it. A confirming role now also
+   requires that the address has no ABI-failure line in that log, and that the run did not set
+   `JSRF_ABI_CONTINUE` (which turns the check into a report, so its returns prove less).
+2. **Descent from the repair commit is necessary but not sufficient.** A later commit can move the
+   span again. The archive carries `source.zip`, so the run's own
+   `config/recovered-functions.json` is available in 134 of 135 archives; a confirming role now also
+   requires the archived `(end, stack_args)` tuple to equal the current one. `0xAE560` is the live
+   example: f9 executed `(end 0x000AE5F1, stack_args 4)` and the tree now says
+   `(end 0x000AE659, stack_args 4)`.
+
+Both rules are enforced, both have a real-archive control, and all seven current confirming citations
+were re-verified against them.
+
+**The dispatch gate counted spelling, not rows.** `check-dispatch-table.py` matched row text without
+stripping comments, so a tuple commented out rather than replaced by prose left the array one row
+short of its declared count and the checker **passed**. The table body is now comment-stripped before
+counting, with the commented-tuple case as a control and the two real archived crash trees
+(`20261005-222801-316-g08-b5eb0` and `20261005-222917-439-g08b-repro`, both declared 8928 against
+8927 rows) as end-to-end controls. The structural fix — deriving the count with `sizeof` — is
+unaffected and remains the primary defence.
 
 
 

@@ -123,7 +123,7 @@
    "state": "STATIC_ONLY",
    "repair_commit": "892dd1e",
    "evidence": [],
-   "note": "A PROVED static production defect (TR section 17): its declared end 0xB0811 is a tail_jump_alias start inside its own body, so its epilogue at 0xB09DC lay outside the span and the emitted body called the fatal trap stub sub_000B09DC four times. Repaired as end 0xB09E0. NO archived run has been observed to reach it, so it has no evidence rows and cannot claim any runtime state. The evidence list is empty on purpose: an empty list is checked, and it is not a pass."
+   "note": "A PROVED static production defect (TR section 17): its declared end 0xB0811 is a tail_jump_alias start inside its own body, so its epilogue at 0xB09DC lay outside the span and the emitted body called the fatal trap stub sub_000B09DC TWICE and sub_000B09D9 FOUR times. (An earlier revision of this row, of TR section 17 and of the plan had those two counts reversed; the erratum is TR section 18. The counts here are re-measured from the archived pre-repair body in the g08 source.zip.) Repaired as end 0xB09E0. NO archived run has been observed to reach it, so it has no evidence rows and cannot claim any runtime state. The evidence list is empty on purpose: an empty list is checked, and it is not a pass."
   },
   {
    "id": 24,

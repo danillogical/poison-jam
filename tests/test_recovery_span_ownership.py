@@ -42,8 +42,17 @@ import bisect
 # 10F960, 1101E0, plus B0210 and BB7B0 fixed earlier the same session. The batch
 # of 12 resolved 65 trap call sites and dropped scripts/check-span-exits.py
 # findings 428 -> 363. The fixed addresses are removed here so they cannot
-# silently regress: 80 -> 66, which now equals the measured set exactly.
-KNOWN_OPEN = {int(x, 16) for x in """11105 14720 1F000 202A0 203A0 20420 204D0 20760 21200 2A000 2DBE0 2F600 332F0 38460 38B90 39410 4037C 433C0 44000 45DB0 488B0 4B6A0 504E0 52050 67E90 705E0 73C20 80080 91830 982B0 A76E0 AC0B0 ACD90 ADD20 AE560 AEE80 AFD40 B06E0 B3970 C7D40 CB2A0 D02D0 E01C0 E0710 E0CF0 E3BB0 EC0B0 F02F0 1045D0 10A0E0 10BF90 110B20 11BCB0 11E2B0 11FE90 127080 127810 140E60 142400 1424D0 15A020 15A1C0 171B50 171E00 1783D0 180038""".split()}
+# silently regress: 80 -> 66, which then equalled the measured set exactly.
+#
+# SHRUNK AGAIN 2026-10-06 by 6 entries, all repaired as under-wide spans:
+# 0xAE560 (end -> 0xAE659, its shared epilogue), 0xB06E0 (end -> 0xB09E0),
+# 0x48DB0 (end -> 0x496B7), 0x39410, 0xAC0B0 and 0xB3970. 66 -> 60, which again
+# equals the measured set exactly -- and `test_no_stale_known_open_members`
+# below now FAILS if that stops being true. The subtraction alone could not see
+# a stale member: `bad - KNOWN_OPEN` is empty whether the list is exact or
+# bloated, so six repaired addresses were sitting in it, and a regression on any
+# of them would have been silently accepted.
+KNOWN_OPEN = {int(x, 16) for x in """11105 14720 1F000 202A0 203A0 20420 204D0 20760 21200 2A000 2DBE0 2F600 332F0 38460 38B90 4037C 433C0 44000 45DB0 4B6A0 504E0 52050 67E90 705E0 73C20 80080 91830 982B0 A76E0 ACD90 ADD20 AEE80 AFD40 C7D40 CB2A0 D02D0 E01C0 E0710 E0CF0 E3BB0 EC0B0 F02F0 1045D0 10A0E0 10BF90 110B20 11BCB0 11E2B0 11FE90 127080 127810 140E60 142400 1424D0 15A020 15A1C0 171B50 171E00 1783D0 180038""".split()}
 
 
 def boundary_stub_calls(text, entries, unresolved):
@@ -85,6 +94,23 @@ class SpanOwnershipTest(unittest.TestCase):
         bad = boundary_stub_calls(self.text, self.entries, self.unresolved)
         self.assertEqual(sorted(hex(a) for a in bad - KNOWN_OPEN), [])
         self.assertNotIn(0x7B8D0, bad)
+
+    def test_no_stale_known_open_members(self):
+        """`KNOWN_OPEN` must equal the measured set, not merely contain it.
+
+        The subtraction `bad - KNOWN_OPEN` is empty whether the list is exact or
+        bloated, so a repaired address left in it is invisible -- and a
+        *regression* on that address would then be silently accepted. Six were
+        sitting in it on 2026-10-06 (`0x39410`, `0x488B0`, `0xAC0B0`, `0xAE560`,
+        `0xB06E0`, `0xB3970`). This assertion is what makes the set exact rather
+        than a growing allowance.
+        """
+        bad = boundary_stub_calls(self.text, self.entries, self.unresolved)
+        stale = sorted(hex(a) for a in KNOWN_OPEN - bad)
+        self.assertEqual(
+            stale, [],
+            f'{len(stale)} KNOWN_OPEN member(s) are no longer flagged and must be '
+            f'removed, or a regression on them cannot be seen: {stale}')
 
     def test_the_7b8d0_labels_are_owned(self):
         self.assertEqual(self.entries[0x7B8D0], 0x7BC04)

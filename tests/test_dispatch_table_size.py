@@ -105,6 +105,81 @@ class DispatchTableControls(unittest.TestCase):
         self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
         self.assertIn('no `g_recomp_table[]', r.stderr)
 
+    def test_a_commented_out_row_is_not_a_row(self):
+        """The Advisor's gap: a commented-out tuple must not be counted.
+
+        `remove-b5f3a-dispatch` replaces its tuple with prose, so counting the raw
+        text happens to work today. A patch that instead comments the tuple out
+        leaves the array holding one fewer row than declared, and the checker
+        passed -- because it was counting the *spelling* of a row rather than a
+        row. That is the exact class this gate exists to catch.
+        """
+        text = (
+            'static const recomp_entry_t g_recomp_table[] = {\n'
+            '    { 0x00011000u, (recomp_func_t)sub_00011000 },\n'
+            '    /* { 0x00011040u, (recomp_func_t)sub_00011040 }, removed */\n'
+            '    { 0x00011080u, (recomp_func_t)sub_00011080 },\n'
+            '};\n'
+            'static const size_t g_recomp_table_size = 3;\n'
+            'static const uint32_t g_flat_base = 0x00011000u;\n'
+            'static const uint32_t g_flat_span = 0x00000081u;\n'
+        )
+        r = self.run_on(text)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn('holds 2 row(s)', r.stderr)
+
+    def test_a_commented_out_row_with_a_matching_count_passes(self):
+        """The other direction: comment the row out AND fix the count."""
+        text = (
+            'static const recomp_entry_t g_recomp_table[] = {\n'
+            '    { 0x00011000u, (recomp_func_t)sub_00011000 },\n'
+            '    // { 0x00011040u, (recomp_func_t)sub_00011040 }, removed\n'
+            '    { 0x00011080u, (recomp_func_t)sub_00011080 },\n'
+            '};\n'
+            'static const size_t g_recomp_table_size = 2;\n'
+            'static const uint32_t g_flat_base = 0x00011000u;\n'
+            'static const uint32_t g_flat_span = 0x00000081u;\n'
+        )
+        r = self.run_on(text)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_the_real_archived_crash_tree_is_caught(self):
+        """The strongest control: the actual tree that crashed the host.
+
+        `20261005-222917-439-g08b-repro` is an archived run whose copied source
+        contains the exact defective dispatch unit -- `g_recomp_table_size = 8928`
+        against 8927 rows -- and `20261005-223404-818-g08-b5eb0-fixed` is the
+        repaired one. Testing against those bytes rather than against a synthetic
+        fixture is the difference between "the checker can fail" and "the checker
+        fails on the defect that actually shipped".
+        """
+        import zipfile
+        runs = ROOT / 'logs' / 'runs'
+        cases = (
+            ('20261005-222801-316-g08-b5eb0', 1),
+            ('20261005-222917-439-g08b-repro', 1),
+            ('20261005-223404-818-g08-b5eb0-fixed', 0),
+        )
+        checked = 0
+        for run, expected in cases:
+            archive = runs / run / 'source.zip'
+            if not archive.is_file():
+                continue
+            with zipfile.ZipFile(archive) as zf:
+                names = [n for n in zf.namelist() if n.endswith('recomp_dispatch.c')]
+                if not names:
+                    continue
+                payload = zf.read(names[0])
+            checked += 1
+            path = self.tmp / 'archived.c'
+            path.write_bytes(payload)
+            r = subprocess.run([sys.executable, '-X', 'utf8', str(SCRIPT), str(path)],
+                               capture_output=True, text=True)
+            with self.subTest(run=run):
+                self.assertEqual(r.returncode, expected, r.stdout + r.stderr)
+        if not checked:
+            self.skipTest('no archived dispatch units are present')
+
     # -- ...and must pass on the real, correct shapes ---------------------
 
     def test_derived_size_passes(self):

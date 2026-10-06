@@ -156,7 +156,7 @@ repair `0xB06E0` as a small unit rather than leaving it indefinite (**accepted, 
 
 **`0xB06E0` is a proved static defect, re-verified from the original bytes.** Its span
 `[0xB06E0, 0xB0811)` stops before its **own epilogue** at `0xB09DC` (`pop esi; ret 4`), and the emitted
-body calls the fatal stub `sub_000B09DC` four times and `sub_000B09D9` twice. A valid object with
+body calls the fatal stub `sub_000B09DC` **twice** and `sub_000B09D9` **four** times. A valid object with
 `[ecx+0x128] == 0xFFFFFFFF` selects a plain return needing no table heuristic. **No g07/g08 path has
 been observed to reach it**, which affects priority, not whether it is broken.
 
