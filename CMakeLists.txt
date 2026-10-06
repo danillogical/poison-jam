@@ -248,6 +248,17 @@ if(BUILD_TESTING)
     # archived logs; no build target needed.
     add_test(NAME jsrf_run_exercised
         COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_run_exercised.py)
+    # Dispatch-table count/array consistency.  Registered because a real host crash
+    # shipped through a fully green suite: `remove-b5f3a-dispatch` removed one tuple
+    # from `g_recomp_table[]` but left `g_recomp_table_size = 8928` while the array
+    # held 8927, so `recomp_dispatch_init()` read one entry past the end and the
+    # process died with an access violation BEFORE `guest_entry` (runs g08/g08b).
+    # The count is now DERIVED from the array (`sizeof`), so the class is structurally
+    # impossible; this test is the independent gate for trees produced by any other
+    # route, and its first control re-injects the exact 8928-vs-8927 mismatch and
+    # requires the real script to exit nonzero.  Pure Python over the generated unit.
+    add_test(NAME jsrf_dispatch_table
+        COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_dispatch_table_size.py)
     # A2h-arming-coverage-attribution C1/C2.  The fixture lives in the toolkit's tests/
     # directory, like tests/apu_watch_fixture_test.c and tests/kernel_inplace_event_test.c,
     # because it is a standalone collector fixture and the game repo keeps no fixture of

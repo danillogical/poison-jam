@@ -214,6 +214,104 @@ class CheckOnlyTests(unittest.TestCase):
         self.assertEqual(before, after)
 
 
+class WritePreservationTests(unittest.TestCase):
+    """`--write` must not erase the hand-maintained history.
+
+    Measured defect: `write_manifest()` rebuilt the manifest from
+    `build_manifest()` alone and overwrote the file, so every `--write` dropped
+    the `amendments` and `regenerations` lists. It did so **four times in one
+    session** (39/1, then 40/2, then 41/3 across two more rewrites), each time
+    re-attached by hand from a pre-write copy. The loss is silent, which is what
+    made it survive so long.
+    """
+
+    def setUp(self):
+        self.recorded = json.loads(MANIFEST.read_text(encoding='utf-8'))
+        # The provenance manifest carries these two; the preservation baseline
+        # carries `updates` instead.  Both names are in PRESERVED_KEYS, so the
+        # controls below check the keys each file actually has.
+        self.here = [k for k in provenance.PRESERVED_KEYS if k in self.recorded]
+        self.assertTrue(self.here, 'the provenance manifest carries no history at all')
+        for key in self.here:
+            self.assertIsInstance(self.recorded[key], list)
+        self.assertIn('amendments', self.here)
+        self.assertIn('regenerations', self.here)
+
+    def test_write_preserves_amendments_and_regenerations(self):
+        """The deciding control: write to a copy, compare the history lists."""
+        with tempfile.TemporaryDirectory() as tmp:
+            scratch = Path(tmp) / 'manifest.json'
+            scratch.write_text(json.dumps(self.recorded), encoding='utf-8')
+            provenance.write_manifest(scratch)
+            after = json.loads(scratch.read_text(encoding='utf-8'))
+        for key in self.here:
+            self.assertEqual(after[key], self.recorded[key],
+                             f'--write dropped or altered {key!r}')
+        self.assertTrue(self.recorded['amendments'], 'the control needs a non-empty history')
+
+    def test_write_is_idempotent_over_the_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scratch = Path(tmp) / 'manifest.json'
+            scratch.write_text(json.dumps(self.recorded), encoding='utf-8')
+            provenance.write_manifest(scratch)
+            once = json.loads(scratch.read_text(encoding='utf-8'))
+            provenance.write_manifest(scratch)
+            twice = json.loads(scratch.read_text(encoding='utf-8'))
+        self.assertEqual(once, twice)
+
+    def test_write_refuses_a_malformed_history_instead_of_emptying_it(self):
+        """Present-but-not-a-list must fail loudly, not become an empty list."""
+        with tempfile.TemporaryDirectory() as tmp:
+            scratch = Path(tmp) / 'manifest.json'
+            broken = dict(self.recorded)
+            broken['amendments'] = 'not a list'
+            scratch.write_text(json.dumps(broken), encoding='utf-8')
+            with self.assertRaises(provenance.ProvenanceError):
+                provenance.write_manifest(scratch)
+
+    def test_a_fresh_tree_gets_empty_lists_rather_than_failing(self):
+        """The first write of a new tree has nothing to preserve."""
+        with tempfile.TemporaryDirectory() as tmp:
+            scratch = Path(tmp) / 'absent.json'
+            manifest = provenance.write_manifest(scratch)
+        # A fresh tree has no history at all: the writer must not invent one.
+        for key in provenance.PRESERVED_KEYS:
+            self.assertNotIn(key, manifest)
+
+    def test_render_is_byte_identical_on_the_unchanged_record(self):
+        """A no-op write must be a no-op, not a reformat.
+
+        The measured failure this prevents: `write_manifest` used a hard-coded
+        ``indent=2`` and ``sort_keys=True`` over the whole manifest, so recording
+        a two-line generated change rewrote 3,200 lines of
+        `p0-7-generation-provenance.json` and reordered 256 lines of the
+        baseline's `updates` history. A record nobody can diff is a record nobody
+        reviews.
+        """
+        for path in (MANIFEST, BASELINE):
+            with self.subTest(path=path.name):
+                original = path.read_text(encoding='utf-8')
+                rendered = provenance.render_manifest(
+                    json.loads(original), provenance.detect_indent(original) or 1,
+                    original)
+                self.assertEqual(rendered, original,
+                                 f're-rendering {path.name} is not byte-identical')
+
+    def test_render_preserves_entry_key_order(self):
+        """History entries keep their own key order, not a sorted one."""
+        raw = ('{\n "updates": [\n  {\n   "date": "2026-01-01",\n'
+               '   "files": [],\n   "reason": "why"\n  }\n ]\n}\n')
+        rendered = provenance.render_manifest(json.loads(raw), 1, raw)
+        self.assertEqual(rendered, raw)
+
+    def test_render_does_not_invent_a_history_section(self):
+        """A record with only `updates` must not gain `amendments`."""
+        raw = '{\n "files": {},\n "updates": []\n}\n'
+        rendered = provenance.render_manifest(json.loads(raw), 1, raw)
+        self.assertNotIn('amendments', rendered)
+        self.assertIn('"updates": []', rendered)
+
+
 class LiveTreeTests(unittest.TestCase):
     def test_generated_tree_matches_the_preservation_baseline(self):
         baseline = json.loads(BASELINE.read_text(encoding='utf-8'))['files']
