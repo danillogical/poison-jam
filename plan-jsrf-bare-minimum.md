@@ -85,8 +85,37 @@ stayed green. **The gate passes with no baseline file at all.**
 | — | 20 entries declaring `stack_args 0` whose bodies end in `ret 4` (`ret 0x14` for `0x80028`) | each set to its body's own ret immediate | validator + independent 20/20 reproduction; no run needed — see below |
 | — | **4 more the same class** (`0x21010`→16, `0xF4FF0`→4, `0x102490`→4, `0x152BC0`→24) | per-path rule; 2 also had a swallowed function each, now recovered | validator; found twice independently — no run needed |
 | 17 | `[ICALL] Failed to resolve VA 0x00094AB0` | recovered `0x94AB0..0x95FB2`, `stack_args 0` | **g03 and g04**: `[RECOVERED] 0x00094AB0 returned; ABI verified` in both |
-| 18 | `[ICALL] Failed to resolve VA 0x000496E0` | recovered `0x496E0..0x497D6`, `stack_args 8` (inferred, not proved) | **g03** reached it; **not yet re-observed**, because g04 took a different path |
-| 19 | `[ICALL] Failed to resolve VA 0x0005C840` | recovered `0x5C840..0x5C983`, `stack_args 0` (inferred) | **g04** reached it; **not yet re-observed** — needs a run to confirm the advance |
+| 18 | `[ICALL] Failed to resolve VA 0x000496E0` | recovered `0x496E0..0x497D6`, `stack_args 8` (inferred, not proved) | **g03** reached it; **g05 confirms** the ABI-verified return |
+| 19 | `[ICALL] Failed to resolve VA 0x0005C840` | recovered `0x5C840..0x5C983`, `stack_args 0` (inferred) | **g04** reached it; **g05 confirms** the ABI-verified return |
+| 20 | `ABI FAILURE 0x00154540 expected +24` (observed delta 16) | two this-adjusting thunks corrected 20→12; the swallowed `0x154560` recovered (`stack_args 20`) | **g05** found it; **not yet re-observed** — needs a run to confirm the advance |
+
+**Run g05 (`20261005-185514-638-g05-confirm`, exploratory, 253 s) is the strongest run so far.**
+It exercised **both** earlier repairs — exactly one `[RECOVERED] 0x000496E0 returned; ABI verified`
+and one for `0x0005C840` — so stops 18 and 19 are now confirmed by a run rather than merely found.
+It then advanced to a **new defect class**: `ABI FAILURE 0x00154540 esp 00F7FD30->00F7FD40 expected
++24`.
+
+**The thunk class, settled by observation.** `0x154540` and `0x154520` are *this-adjusting thunks*:
+they load the object from `[esp+4]`, take its vtable, adjust the second argument, and end in an
+indirect **tail** jump `jmp dword ptr [ecx+0x6c]`. Because a tail jump reuses the frame, the cleanup
+the caller performs is the **tail target's** `ret N`, so the thunk's `stack_args` must equal that
+target's cleanup. g05's frozen dump (mapping verified first) gives the chain: entry esp `0x00F7FD30`
+→ `[esp+4] = 0x0106C870` (the object) → `[0x0106C870] = 0x001E0F00` (its vtable) → `+0x6c` slot =
+`0x00154420`, whose reachable exits are all `ret 0xc` = 12. The measured delta is 16 and
+**4 + 12 = 16 closes exactly**. Both thunks are corrected 20 → 12, and `0x154540`'s declared 20 was
+not its own: its span had swallowed a complete function at `0x154560` whose exits are `ret 0x14` =
+20 — the `0x152BC0`/`0x74C70` pattern again. That function is recovered as
+`[0x154560, 0x1548DC)` `stack_args 20`.
+
+**A sign error in the recorded identity was found by adversarial review and is corrected.** With the
+checker's convention (`push` → `d -= 4`), a `ret N` gives **`stack_args = N + d`**, not `N − d`. The
+gate was never wrong — the forms agree at `d == 0` — but the prose and the stated reason for not
+gating the general form were. The corrected measurement: of the **29** entries with a resolved
+nonzero-depth `ret N`, **every one** has `d > 0` (min 4, max 100), i.e. the walk popped registers the
+body never pushed, which is the signature of a mid-function entry or an over-wide span. That is an
+*extent* question, and asserting the extent is right in order to conclude the value is wrong is
+circular. `0x1BCB14` is now documented correctly: it starts mid-function and pops `esi`/`ebx` it never
+pushed, so `d = +8` and `N + d = 12` — exactly its declared value, which is why it must stay ungated.
 
 **Run g03 (`20261005-174422-643-g03-94ab0`, exploratory, 246 s).** The first run to exercise
 `0x94AB0`: exactly one `[RECOVERED] 0x00094AB0 returned; ABI verified (ESP/EBX/ESI/EDI)` line, so
@@ -151,7 +180,7 @@ byte-contiguous instructions, three reachable exits (`0x95F42`, `0x95F8B`, `0x95
 consuming a call's argument pushes. The second cannot tell a prologue save from an argument push and
 produced depth `−52` on `0x7DA30` where the truth is `0`. A `call` now contributes its callee's own
 `ret N` immediate, derived by walking the callee; an unresolvable callee makes the depth `UNKNOWN`,
-never a silent zero. **1049 of 3109 entries are `UNKNOWN`** — a stated coverage limit, not a pass.
+never a silent zero. **1041 of 3110 entries are `UNKNOWN`** — a stated coverage limit, not a pass.
 
 **Known open, reported but not gated (the next work, in priority order).** `0x96560` (UNCOVERED,
 real prologue) and `0x96F80` (SWALLOWED by `sub_00096F60`, whose span overruns its own `ret` at
