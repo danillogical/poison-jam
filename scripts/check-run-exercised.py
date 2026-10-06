@@ -52,6 +52,13 @@ def main() -> int:
     run = Path(args.run_dir)
     if not run.is_dir():
         run = ROOT / args.run_dir
+    if not run.is_dir():
+        # A bare run name is how the run archive is normally cited, so resolve it
+        # the way every other script does.  Without this the checker looked in
+        # the repository root, found nothing, and reported "cannot establish
+        # coverage" -- a FAIL for a run that exists, which is the same
+        # silent-misdirection shape as crediting a run that never ran.
+        run = ROOT / 'logs' / 'runs' / args.run_dir
     log = run / 'jsrf_run.log'
     if not log.is_file():
         print(f'{log} is missing; cannot establish coverage', file=sys.stderr)

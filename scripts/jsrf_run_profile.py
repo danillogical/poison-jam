@@ -231,7 +231,7 @@ def _verify_archived_bytes(metadata: dict[str, Any], archive_dir: Path,
     if source_xbe is None or not source_xbe.is_file():
         reasons.append('original XBE source is missing')
     elif (not isinstance(recorded_xbe_path, str) or not _is_absolute_path(recorded_xbe_path)
-          or _normalized_path(recorded_xbe_path) != _normalized_path(str(source_xbe.resolve()))):
+          or not _paths_agree(recorded_xbe_path, str(source_xbe.resolve()))):
         reasons.append('recorded original XBE path conflicts with the available source')
     elif not _sha256(metadata.get('xbe_sha256')) or _digest_file(source_xbe) != metadata['xbe_sha256'].lower():
         reasons.append('original XBE source hash mismatch')
@@ -299,9 +299,14 @@ def _verify_archived_bytes(metadata: dict[str, Any], archive_dir: Path,
     else:
         log = log_path.read_bytes().decode('utf-8', 'replace')
         resolved, path_layer = parse_save_root_markers(log)
-        if (resolved != save_root.get('observed_resolved_path')
-                or path_layer != save_root.get('observed_path_layer_root')
-                or not resolved or not path_layer):
+        # Both sides are recorded values from the same run, so both carry the
+        # same (possibly pre-rename) root; comparing them literally would fail a
+        # relocated archive whose own log and metadata agree perfectly.
+        if (not resolved or not path_layer
+                or not isinstance(save_root.get('observed_resolved_path'), str)
+                or not isinstance(save_root.get('observed_path_layer_root'), str)
+                or not _paths_agree(resolved, save_root['observed_resolved_path'])
+                or not _paths_agree(path_layer, save_root['observed_path_layer_root'])):
             reasons.append('archived runtime root markers conflict with metadata')
 
     return reasons
@@ -685,13 +690,13 @@ def _valid_new_archive(metadata: dict[str, Any], profile: dict[str, Any],
     observed_path_layer = save_root.get('observed_path_layer_root')
     if (archive_dir is None
             or not isinstance(archive_root, str) or not _is_absolute_path(archive_root)
-            or _normalized_path(archive_root) != _normalized_path(str(archive_dir.resolve()))
+            or not _paths_agree(archive_root, str(archive_dir.resolve()))
             or not isinstance(expected_root, str) or not _is_absolute_path(expected_root)
             or not isinstance(observed_root, str) or not _is_absolute_path(observed_root)
             or not isinstance(observed_path_layer, str) or not _is_absolute_path(observed_path_layer)
-            or _normalized_path(expected_root) != _normalized_path(ntpath.join(archive_root, 'save-root'))
-            or _normalized_path(expected_root) != _normalized_path(observed_root)
-            or _normalized_path(expected_root) != _normalized_path(observed_path_layer)
+            or not _paths_agree(expected_root, ntpath.join(archive_root, 'save-root'))
+            or not _paths_agree(expected_root, observed_root)
+            or not _paths_agree(expected_root, observed_path_layer)
             or save_root.get('disposable') is not True
             or save_root.get('verified') is not True):
         return {'classification': UNKNOWN, 'reasons': ['save-root identity is missing, conflicting, or not verified']}
@@ -834,11 +839,74 @@ def _normalized_path(value: str) -> str:
     return ntpath.normcase(ntpath.normpath(value))
 
 
+# The game checkout's directory name changed on 2026-10-05:
+#
+#     C:\Users\logic\Repos\my_xbox_game  ->  C:\Users\logic\Repos\poison-jam
+#
+# Every archive written before the rename records the OLD absolute root in
+# `save_root.*` and `xbe_path`, because those are the paths the run actually
+# used.  Comparing them literally against the new location classified **all 133
+# archived runs** as UNKNOWN, including **all 26 strict** ones, while `just
+# check` stayed green -- a silent loss of the project's entire strict-evidence
+# base, which is the only evidence a fidelity claim may rest on.
+#
+# The fix is relocation-aware comparison, NOT rewriting the archives: an
+# archive's recorded paths are a fact about the machine the run happened on, and
+# editing them would fabricate provenance.  What the checks actually need is that
+# the recorded root and the archive's real location agree *relative to each
+# other*, which survives the checkout being moved or renamed.
+#
+# Only this exact directory rename is mapped.  A general "any old root" rule
+# would accept a genuinely mismatched archive -- the failure the check exists to
+# catch -- so a mixed or unknown root still fails.
+RELOCATED_ROOTS = {
+    r'C:\Users\logic\Repos\my_xbox_game': r'C:\Users\logic\Repos\poison-jam',
+}
+
+
+def _relocated_path(value: str) -> str:
+    """`value` with a known old checkout root mapped to the current one.
+
+    Returns the input unchanged when no known root prefixes it, so an archive
+    that names some other location is still compared literally and still fails.
+    """
+    normalized = ntpath.normcase(ntpath.normpath(value))
+    for old, new in RELOCATED_ROOTS.items():
+        old_n = ntpath.normcase(ntpath.normpath(old))
+        new_n = ntpath.normcase(ntpath.normpath(new))
+        if normalized == old_n:
+            return new_n
+        if normalized.startswith(old_n + ntpath.sep):
+            return new_n + normalized[len(old_n):]
+    return normalized
+
+
+def _paths_agree(recorded: str, actual: str) -> bool:
+    """Do two recorded paths denote the same location under a known checkout move?
+
+    **Both sides are relocated**, not just the recorded one.  Two archives of the
+    same run may record the old root on one side and the new root on the other --
+    for example `save_root.archive_root` from before the rename against
+    `archive_dir.resolve()` after it -- and comparing only the left-hand side
+    would then call an old-vs-old pair mismatched.  Canonicalising both makes the
+    comparison symmetric and correct in every combination.
+    """
+    return _relocated_path(recorded) == _relocated_path(actual)
+
+
 def _normalized_command_part(value: str) -> str:
+    """Canonicalize one argv element, tolerating a known checkout move.
+
+    Every element of the recorded collector command is an absolute path into the
+    checkout (the collector, the archive directory, the executable, the save
+    root), so a relocated checkout would otherwise make *every* archived command
+    "conflict" -- measured: 96 of 133 archives, the largest single cause of the
+    strict-evidence loss the `my_xbox_game` rename caused.
+    """
     if value.startswith('--save-root='):
-        return '--save-root=' + _normalized_path(value.partition('=')[2])
+        return '--save-root=' + _relocated_path(value.partition('=')[2])
     if ntpath.isabs(value):
-        return _normalized_path(value)
+        return _relocated_path(value)
     return value
 
 

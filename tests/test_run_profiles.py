@@ -258,6 +258,129 @@ class ProfileClassifierTests(unittest.TestCase):
         self.assertEqual(classify_settings([{'name': 'RECOMP_GPU_ACK'}])['classification'], UNKNOWN)
 
 
+class RelocatedCheckoutTests(unittest.TestCase):
+    """A renamed checkout must not invalidate the archives it produced.
+
+    Measured defect (2026-10-05): the game directory moved from
+    `C:\\Users\\logic\\Repos\\my_xbox_game` to `...\\poison-jam`.  Every archive
+    written before the move records the OLD absolute root in `save_root.*`,
+    `xbe_path` and every element of `command`, because those are the paths the run
+    really used.  Comparing them literally against the new location classified
+    **all 133 archived runs** UNKNOWN -- including **all 26 strict** ones -- while
+    `just check` stayed green.  That is the whole strict-evidence base, silently.
+
+    The fix is relocation-aware comparison, never rewriting the archives: an
+    archive's recorded paths are a fact about the machine the run happened on, and
+    editing them would fabricate provenance.
+    """
+
+    OLD = r'C:\Users\logic\Repos\my_xbox_game'
+    NEW = r'C:\Users\logic\Repos\poison-jam'
+
+    def test_known_roots_are_exactly_the_recorded_move(self):
+        self.assertEqual(jsrf_run_profile.RELOCATED_ROOTS, {self.OLD: self.NEW})
+
+    def test_a_moved_root_denotes_the_same_place(self):
+        self.assertTrue(jsrf_run_profile._paths_agree(
+            self.OLD + r'\logs\runs\r1', self.NEW + r'\logs\runs\r1'))
+        self.assertTrue(jsrf_run_profile._paths_agree(
+            self.OLD, self.NEW))
+
+    def test_relocation_is_symmetric_and_case_insensitive(self):
+        """Either side may be the relocated one; Windows paths ignore case."""
+        self.assertTrue(jsrf_run_profile._paths_agree(
+            self.NEW + r'\logs\runs\r1', self.OLD + r'\logs\runs\r1'))
+        self.assertTrue(jsrf_run_profile._paths_agree(
+            self.OLD.upper() + r'\LOGS\RUNS\R1', self.NEW + r'\logs\runs\r1'))
+
+    def test_a_different_root_still_fails(self):
+        """The control that matters: the check must not become a blanket pass."""
+        self.assertFalse(jsrf_run_profile._paths_agree(
+            r'C:\Users\logic\Repos\some_other_game\logs\runs\r1',
+            self.NEW + r'\logs\runs\r1'))
+        # A sibling whose name merely shares a prefix must not be relocated:
+        # `my_xbox_game_backup` is a different directory.
+        self.assertFalse(jsrf_run_profile._paths_agree(
+            self.OLD + r'_backup\logs\runs\r1', self.NEW + r'\logs\runs\r1'))
+        self.assertFalse(jsrf_run_profile._paths_agree(
+            r'D:\elsewhere', self.NEW))
+
+    def test_relocation_does_not_reach_into_the_middle_of_a_path(self):
+        self.assertFalse(jsrf_run_profile._paths_agree(
+            r'C:\copy\of' + self.OLD + r'\logs', self.NEW + r'\logs'))
+
+    def test_a_moved_archive_reclassifies_strict(self):
+        """The end-to-end control: the archive's own paths are left untouched.
+
+        The scratch archive cannot live at the real repository root, so the
+        relocation map is pointed at the scratch root instead: the archive is
+        recorded under `OLD` and physically lives under `<scratch>`, which is
+        structurally identical to the real case (an archive recorded under the
+        pre-rename root, physically inside the renamed checkout).  The production
+        map is asserted separately, unchanged, above.
+        """
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_dir = root / 'logs' / 'runs' / 'moved'
+            source_xbe = root / 'game' / 'default.xbe'
+            metadata = write_valid_archive(run_dir, source_xbe)
+            self.assertEqual(
+                classify_run_directory(run_dir, source_xbe)['classification'], STRICT)
+
+            # Rewrite every recorded path to the pre-rename root, exactly as the
+            # 133 real archives have it, and leave the archive where it is.  The
+            # substitution is on the CHECKOUT root, so each path keeps its own
+            # `logs/runs/<name>` suffix, as the real archives do.
+            moved = json.loads(json.dumps(metadata))
+            new_root, old_root = str(root.resolve()), self.OLD
+            moved['xbe_path'] = moved['xbe_path'].replace(new_root, old_root)
+            for key in ('archive_root', 'expected_resolved_path',
+                        'observed_resolved_path', 'observed_path_layer_root'):
+                moved['save_root'][key] = moved['save_root'][key].replace(new_root, old_root)
+            moved['command'] = [part.replace(new_root, old_root)
+                                for part in moved['command']]
+            (run_dir / 'metadata.json').write_text(json.dumps(moved), encoding='utf-8')
+
+            # Without the relocation the archive is UNKNOWN -- this is the real
+            # measured defect, reproduced.
+            self.assertEqual(
+                classify_run_directory(run_dir, source_xbe)['classification'], UNKNOWN,
+                'the pre-fix behaviour must be reproducible or this control proves nothing')
+
+            with patch.dict(jsrf_run_profile.RELOCATED_ROOTS,
+                            {self.OLD: str(root.resolve())}):
+                self.assertEqual(
+                    classify_run_directory(run_dir, source_xbe)['classification'], STRICT,
+                    'a relocated checkout must not invalidate an archive')
+
+    def test_a_mixed_root_archive_is_still_unknown(self):
+        """Half old, half new: the save-root witnesses must still agree."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_dir = root / 'logs' / 'runs' / 'mixed'
+            source_xbe = root / 'game' / 'default.xbe'
+            metadata = write_valid_archive(run_dir, source_xbe)
+
+            mixed = json.loads(json.dumps(metadata))
+            # `expected` moves with the checkout; `observed` names a third place
+            # entirely, so the two witnesses genuinely disagree.
+            mixed['save_root']['observed_resolved_path'] = r'C:\somewhere\else\save-root'
+            result = reclassify_metadata(mixed, run_dir, source_xbe)
+            self.assertEqual(result['classification'], UNKNOWN)
+
+    def test_a_foreign_xbe_path_is_still_unknown(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_dir = root / 'logs' / 'runs' / 'foreign-xbe'
+            source_xbe = root / 'game' / 'default.xbe'
+            metadata = write_valid_archive(run_dir, source_xbe)
+            foreign = json.loads(json.dumps(metadata))
+            foreign['xbe_path'] = r'C:\another\title\default.xbe'
+            self.assertEqual(
+                reclassify_metadata(foreign, run_dir, source_xbe)['classification'],
+                UNKNOWN)
+
+
 class ArchiveClassifierTests(unittest.TestCase):
     def test_versioned_archive_reclassifies_and_rejects_conflicts(self):
         with tempfile.TemporaryDirectory() as temporary:
