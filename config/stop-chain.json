@@ -153,15 +153,28 @@
   {
    "id": 26,
    "address": "0x00096560",
-   "state": "REPAIRED",
+   "state": "RUNTIME_CONFIRMED",
    "repair_commit": "fc6f2d4",
    "evidence": [
     {
-     "run": "20261006-011638-029-f10-underwide-batch152",
+     "run": "20261006-022404-045-f12-exercise-stop26",
+     "role": "confirmed"
+    }
+   ],
+   "note": "An unowned gap: no manifest span, no owner and no dispatch tuple, so an indirect call to it trapped. Recovered as [0x00096560, 0x000967AA) with stack_args 4 from a fully enumerated walk (two exits, both `ret 4` at 0x967A7, one at depth 0); its only image reference is the aligned .rdata dword at 0x001CD32C. The recovery landed in fc6f2d4. CONFIRMED by f12, which descends from that commit and logs the ABI-verified return. Note the discovered-run citation is the same run here: f12 both discovered the sibling 0x00096B60 and confirmed this one, which is why the single evidence row is `confirmed` rather than a pair."
+  },
+  {
+   "id": 27,
+   "address": "0x00096B60",
+   "state": "REPAIRED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261006-022404-045-f12-exercise-stop26",
      "role": "discovered"
     }
    ],
-   "note": "An unowned gap: no manifest span, no owner and no dispatch tuple, so an indirect call to it trapped. f10 logged `[ICALL] Failed to resolve VA 0x00096560` with 0x00047710 as ICALL history frame 2. Recovered as [0x00096560, 0x000967AA) with stack_args 4 from a fully enumerated walk (two exits, both `ret 4` at 0x967A7, one at depth 0). Its only image reference is the aligned .rdata dword at 0x001CD32C. The recovery landed in fc6f2d4. NO run has executed it since, so the state stays REPAIRED and the evidence stays `discovered`: the repair_commit being known does not make this runtime-confirmed, and the gate requires a confirming role before that could be claimed."
+   "note": "The sibling of 0x00096560: no manifest span, no owner and no dispatch tuple, with a byte-identical prologue. f12 logged `[ICALL] Failed to resolve VA 0x00096B60` right after confirming 0x00096560. Recovered as [0x00096B60, 0x00096DBA) with stack_args 4 from a fully enumerated 180-instruction walk (two exits, both `ret 4` at 0x96DB7, one at depth 0); its only image reference is the aligned .rdata dword at 0x001CD3AC. The repair is in the working tree; no run has executed it, so the state stays REPAIRED, the evidence stays `discovered`, and the row carries no repair_commit until one exists."
   }
  ]
 }

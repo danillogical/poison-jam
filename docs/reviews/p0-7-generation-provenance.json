@@ -15,18 +15,18 @@
   "src/recomp/gen/recomp_stubs_recovery.c": "c00d3bee04bae9c2ddf716c278e9cb572f3300fcbf2ea95e1e9b8ba2177b42f7",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-  "src/recomp/recovered/recovered.c": "e4c73ba869da92b46f3430dc1d146448ec0c4f5e6c7d0af946a463b744a64baf",
+  "src/recomp/recovered/recovered.c": "5f95d7be5fee64f76f5f358096ef265fad3c6ebf99febd24653c4ffe6ecaf043",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "5743c3c197c8b29a7cba11e010128bc08949de1f8221eaa7032f7e33658ddf62",
+  "src/recomp/recovered/recovered_11c1_test.c": "10c13281bf06d1bfdd771b498c19ebe08c2e7cb603838cb9c2881911ad11cc47",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
  "generators": {
   "project": {
    "dirty": true,
-   "revision": "f986b319d05236f302d5224fa626a4252c7e85d9",
+   "revision": "cee0c279421d41745b402b7f259304e7b3c66eb8",
    "state": "MEASURED",
-   "status_sha256": "1a8c4f1fdc869c9216191a4dff5430701b5d0fcf5d4501229904dd2ad9e503c1"
+   "status_sha256": "ef6d10294a243808babde5c5e321e1b8e4475740199f638d061b1925537b5209"
   },
   "scripts/recover-functions.py": "c951fe5ed787253bd523d16502a231772197043b84a3b20e4c7b680b55c03847",
   "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
@@ -46,14 +46,14 @@
    "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
   },
   "config/manual-functions.json": {
-   "bytes": 104549,
+   "bytes": 104582,
    "present": true,
-   "sha256": "2cc1be764256803f42ef3b5c1f23d210ee4defbe761ba39a36c5496d241d0717"
+   "sha256": "c862adf3398d53899f5b2fa38227df1914ddbe187369911fa0ebf9f6dc021708"
   },
   "config/recovered-functions.json": {
-   "bytes": 3074047,
+   "bytes": 3075275,
    "present": true,
-   "sha256": "8ee9d4e7a96ce81b568dbe88f66062d7d6ad17500927bef4ab52ecce92e47ba5"
+   "sha256": "93d2d91832408c982ff5afcc6dfe06634723b54d7cb2f3e719a57182d7096d06"
   },
   "config/recovery-unresolved.json": {
    "bytes": 4658,
@@ -91,9 +91,9 @@
    "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
   },
   "tools/disasm/output/functions.recovered.json": {
-   "bytes": 6319425,
+   "bytes": 6320861,
    "present": true,
-   "sha256": "a54b1090d1a3120071b3a0b69993199b748092ba81a6c4304203bec4f91ed6fd"
+   "sha256": "de2aba37c02b244f29bc19a0f82180c254e46b85f8d15c2e4d52a99a98da4f76"
   }
  },
  "known_unknowns": [],
@@ -165,19 +165,19 @@
    },
    "src/recomp/recovered/recovered.c": {
     "markers": {
-     "JSRF_ABI_CONTINUE": 9477,
+     "JSRF_ABI_CONTINUE": 9480,
      "RECOMP_ABI_CALL": 10785,
      "RECOMP_GENERATED_CODE": 1,
-     "g_seh_ebp": 5732
+     "g_seh_ebp": 5733
     },
     "present": true
    }
   },
   "totals": {
-   "JSRF_ABI_CONTINUE": 9477,
+   "JSRF_ABI_CONTINUE": 9480,
    "RECOMP_ABI_CALL": 10793,
    "RECOMP_GENERATED_CODE": 5,
-   "g_seh_ebp": 5738
+   "g_seh_ebp": 5739
   }
  },
  "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",
@@ -1605,6 +1605,11 @@
    "kind": "input and generated output",
    "date": "2026-10-06",
    "cause": "F7d: the extent-hidden-ABI class, the seven entries the F7c batch skipped on purpose. In each, the declared span ended before the body's own `ret`, so the walk over it fell off and check-stack-depth reported only SUSPICIOUS/FALL_OFF_END -- the reachable `ret` was not visible, so the wrapper's expected delta could never be exercised. Widening to the body's real end yields a FULLY ENUMERATED walk with exactly one distinct immediate and AT LEAST ONE exit reached at DEPTH 0, which by the project identity `stack_args = N` at depth 0 fixes BOTH fields. Six entries had NO stack_args key at all and therefore defaulted to 0: 0x202A0/0x20420/0x204D0 -> 16 (end -> 0x20329/0x204C6/0x20563), 0x34070 -> 4 (end -> 0x341F1), 0x38460 -> 4 (end -> 0x38528), 0x705E0 -> 12 (end -> 0x70642). The seventh, 0x171B50, declared 8 and is 4 (end -> 0x171DF8). This is the same class as 0x0007DA30 and 0x00152BC0. Every regenerated wrapper now matches its own body exactly: +20, +20, +20, +8, +8, +16 and +8, each equal to 4 + stack_args, and each body emits the matching `esp += N`. Measured effect: stack-depth SUSPICIOUS 74 -> 67 (CUT_EPILOGUE 19 -> 13, FALL_OFF_END 12 -> 11), check-span-exits CUT-TARGET 225 -> 210, PROVED 1977 -> 1979. KNOWN_OPEN 31 -> 25, again exactly the measured set. recovered.c stays 3159 functions."
+  },
+  {
+   "kind": "input and generated output",
+   "date": "2026-10-06",
+   "cause": "Stop 26 confirmed and stop 27 recovered. Run 20261006-022404-045-f12-exercise-stop26 (exploratory, 381 s, unhandled_exception, 556 ABI-verified returns, presents frozen at 888 with the disclaimer hash 5bdaea576b8509f5 unchanged) logged `[RECOVERED] 0x00096560 returned; ABI verified` -- the first run ever to execute the address recovered as stop 26 -- and then stopped on a NEW sibling: `[ICALL] Failed to resolve VA 0x00096B60`. That address had no manifest span, no owner and no dispatch tuple, and its prologue is byte-identical to 0x00096560's (`mov eax,[esp+4]; sub esp,0x14; cmp eax,4`), so the two are parallel methods of one family. Recovered as [0x00096B60, 0x00096DBA) with stack_args 4: a fully enumerated 180-instruction walk with no truncated decode, no fall-off, and exactly two exits, both `ret 4` at 0x96DB7, one at DEPTH 0; the frame `sub esp,0x14` plus four pushes balances against `pop edi; pop ebx; add esp,0x14; ret 4`. Its only image reference is the aligned .rdata dword at 0x001CD3AC, the same vtable-installed zero-direct-caller pattern as 0x00096560 (0x001CD32C), 0x00094AB0 and 0x00080BD0. The regenerated body emits ZERO fatal trap stubs and one `esp += 8; return; /* ret 4 */`. recovered.c 3159 -> 3160 functions. stack-depth 1979 PROVED / 1114 UNKNOWN / 67 SUSPICIOUS, findings unchanged."
   }
  ],
  "regenerations": [
