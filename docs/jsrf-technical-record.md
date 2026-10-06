@@ -1991,3 +1991,82 @@ the real gate to exit nonzero; `recovered.c` regenerated (3158 functions); prese
 re-recorded with its `updates` history preserved. **The title screen is still not reached and M15 is
 not claimed.**
 
+
+## 15. Stop 20 is runtime-confirmed, and g07 exposed the mirror-image span defect (2026-10-05)
+
+**Stop 20 is confirmed by an exercised path, not merely found.** Run g07
+(`20261005-211627-927-g07-thunk`, exploratory, 900 s budget, ended `unhandled_exception` at 241 s) logs
+exactly one
+
+```
+[RECOVERED] 0x00154540 returned; ABI verified (ESP/EBX/ESI/EDI)
+```
+
+which is the confirmation g05 found but g06 missed. The distinction the previous turn insisted on was
+correct and is now discharged: the thunk repair — two this-adjusting thunks corrected 20 → 12, with the
+swallowed `0x154560` recovered — is **runtime-confirmed**. The same run also exercised `0x5BF00`/
+`0x5C840`, `0x496E0` and `0x488B0`.
+
+**Honest reading of the same run.** Presents still froze at exactly **1000** with the disclaimer hash
+`5bdaea576b8509f5` unchanged, and the thunk executed *after* that freeze: the `[FBPRESENT] presents=1000`
+line is 75471 and the ABI-verified return is 105311, in a 105,337-line log. So g07 confirms the repair
+and advances the stop chain; **it is not title progress**, and the 1000-present ceiling is untouched by
+it.
+
+**g07 then produced a stop of a class the new detector does not cover — the mirror image of §14.**
+`[ICALL] Failed to resolve VA 0x000B5F82`. §14's class is an **over-wide** span that consumes a
+neighbour; this is an **under-wide** span that cuts its own function:
+
+```
+0x000B5EB0  declared [0x000B5EB0, 0x000B5F3A)   <- tightened by an earlier pass
+            its OWN jump table at 0x000B5F0F has 9 arms
+            8 of those arms lie beyond 0xB5F3A: 0xB5F82, 0xB632D, 0xB6574, 0xB670E
+            so the lifter emitted RECOMP_ITAIL instead of a resolved switch
+            the guest took the 0xB5F82 arm and trapped
+```
+
+The emitted C states the mechanism exactly. With the tightened end the body is one line —
+`g_seh_ebp = ebp; RECOMP_ITAIL(MEM32(eax * 4 + 0xB6734)); return;` — naming no arm at all. With the
+real end it is a `switch` whose five distinct arms all resolve to `loc_` labels, and the body contains
+no unresolved `sub_` call.
+
+**`0x000B5F3A` is not an entry, and four independent observations say so:**
+
+| observation | detail |
+|---|---|
+| its owner's own table | `0xB5EB0`'s jump table has an arm at `0xB5F16` that **falls through** into `0xB5F3A`; the `call` at `0xB5F35` is immediately followed by it |
+| its "pointer" | the only aligned dword naming it is `0x228214`, inside a packed `.data` run whose neighbours read `0x61510442`, `0x00985100`, `0x38009753` — data, not a table |
+| its exit | its walk ends at the same `0xB672F ret 4` as `0xB5EB0`, i.e. the same function |
+| its arm set | every arm of `0xB5EB0`'s table lies inside `[0xB5EB0, 0xB6732)`, so the widened body owns the address |
+
+**A discriminator was tried and discarded, and the reason is worth keeping.** The
+"reads a register before writing it" test that proved `sub_000BBA04` a false entry **does not
+generalise**: 684 genuine manifest entries trip it (330 read `ecx` first, 321 read `ebp` — a thiscall
+entry legitimately reads `ecx`, and a `mov [esp+N], ebp` prologue legitimately reads `ebp`). Reporting
+those as false entries would have been confident nonsense. The owner-reachability and jump-table-arm
+evidence above is what the repair rests on instead.
+
+**The repair, and the second link failure it caused.** `0x000B5EB0` is restored to its real end
+`0x000B6732` and the false split `0x000B5F3A` removed. That alone does not link: `recomp_dispatch.c` is
+translation-owned and still carried `{ 0x000B5F3Au, (recomp_func_t)sub_000B5F3A }`, so the build failed
+with `LNK2001: unresolved external symbol sub_000B5F3A`. `config/generated-patches.json` gains
+`remove-b5f3a-dispatch` (**L42**), following the `remove-54750-stub` precedent: the patch system
+requires a non-empty replacement, so the tuple is replaced by a comment rather than deleted, and
+`patch-generated.py` re-applies it after every regeneration. `recovered.c` 3157 functions; manifest
+entries 3158 → 3157.
+
+**The class is now named, and it is not yet detected.** §14's detector looks for a span that over-runs
+its own body; this defect is a span that stops *before* its own jump table's arms. The two share a
+witness — the owner's own reachable CFG — but run in opposite directions, and a span can be wrong in
+both at once. The candidate population for the under-wide half was measured as **71** adjacent-entry
+pairs where the owner's walk reaches the next entry's start, but that population is dominated by
+legitimate splits (the `0x200A5`/`0x200A8`/`0x200AD` micro-fragment run is a chain of real
+continuations), so it is **recorded as an open measurement, not as a gate**. A detector for it needs a
+discriminator that separates "the owner's table arm reaches this address" from "this address is simply
+the next function", and that discriminator is not established here.
+
+**Verification.** CTest **38/38**; `just check` green; both static gates pass; provenance manifest and
+preservation baseline re-recorded with their hand-maintained history preserved (41 amendments,
+3 regenerations). Commit `64945a3`. **The title screen is still not reached and M15 is not claimed.**
+
+
