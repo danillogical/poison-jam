@@ -59,7 +59,14 @@ import bisect
 # again exactly the measured set. The 8 candidates that batch SKIPPED are still
 # here on purpose: seven have a `stack_args` that disagrees with their certified
 # N (a separate finding) and one would have swallowed 0x44000.
-KNOWN_OPEN = {int(x, 16) for x in """11105 1F000 202A0 20420 204D0 20760 2A000 38460 4037C 44000 45DB0 52050 705E0 73C20 91830 A76E0 AEE80 C7D40 D02D0 E0710 E0CF0 EC0B0 F02F0 10A0E0 110B20 11FE90 127810 142400 171B50 1783D0 180038""".split()}
+#
+# SHRUNK AGAIN 2026-10-06 by 6 entries, all repaired by F7d: the seven the F7c
+# batch skipped for a `stack_args`/N disagreement, of which 0x202A0, 0x20420,
+# 0x204D0, 0x34070, 0x38460, 0x705E0 and 0x171B50 each had BOTH an extent error
+# and a hidden ABI error (the 0x7DA30/0x152BC0 shape: a truncated body hiding a
+# `ret` immediate), plus 0x96560 recovered as stop 26. 31 -> 25, again exactly
+# the measured set.
+KNOWN_OPEN = {int(x, 16) for x in """11105 1F000 20760 2A000 4037C 44000 45DB0 52050 73C20 91830 A76E0 AEE80 C7D40 D02D0 E0710 E0CF0 EC0B0 F02F0 10A0E0 110B20 11FE90 127810 142400 1783D0 180038""".split()}
 
 
 def boundary_stub_calls(text, entries, unresolved):

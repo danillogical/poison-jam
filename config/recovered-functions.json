@@ -316,10 +316,11 @@
  },
  {
   "start": "0x000202A0",
-  "end": "0x00020311",
+  "end": "0x00020329",
   "section": ".text",
   "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00020408 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000202A0..0x00020311, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00020408 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000202A0..0x00020311, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.\n\nREPAIRED 2026-10-06 (F7d, the extent-hidden-ABI class). BOTH fields were wrong and the extent error HID the ABI error. The declared span ended at 0x00020311, before this body's own `ret`, so the walk over it fell off and `scripts/check-stack-depth.py` reported only `SUSPICIOUS/FALL_OFF_END` -- the reachable `ret` was not visible, so the wrapper's expected delta could never be exercised. Extending the end to 0x00020329 yields a FULLY ENUMERATED walk with exactly one distinct immediate, `ret 16`, reached at DEPTH 0, so by the project identity `stack_args = N` at depth 0 the value must be 16; declared was None. This is the same class as 0x0007DA30 and 0x00152BC0: a truncated body hiding a `ret` immediate. The new end is an instruction boundary and crosses no other manifest entry's start. Found by the F7c batch, which skipped it deliberately rather than folding an ABI change into an extent repair.",
+  "stack_args": 16
  },
  {
   "start": "0x00020330",
@@ -339,17 +340,19 @@
  },
  {
   "start": "0x00020420",
-  "end": "0x00020468",
+  "end": "0x000204C6",
   "section": ".text",
   "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00020504 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00020420..0x00020468, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00020504 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00020420..0x00020468, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.\n\nREPAIRED 2026-10-06 (F7d, the extent-hidden-ABI class). BOTH fields were wrong and the extent error HID the ABI error. The declared span ended at 0x00020468, before this body's own `ret`, so the walk over it fell off and `scripts/check-stack-depth.py` reported only `SUSPICIOUS/FALL_OFF_END` -- the reachable `ret` was not visible, so the wrapper's expected delta could never be exercised. Extending the end to 0x000204C6 yields a FULLY ENUMERATED walk with exactly one distinct immediate, `ret 16`, reached at DEPTH 0, so by the project identity `stack_args = N` at depth 0 the value must be 16; declared was None. This is the same class as 0x0007DA30 and 0x00152BC0: a truncated body hiding a `ret` immediate. The new end is an instruction boundary and crosses no other manifest entry's start. Found by the F7c batch, which skipped it deliberately rather than folding an ABI change into an extent repair.",
+  "stack_args": 16
  },
  {
   "start": "0x000204D0",
-  "end": "0x00020506",
+  "end": "0x00020563",
   "section": ".text",
   "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00020504 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000204D0..0x00020506, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00020504 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000204D0..0x00020506, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.\n\nREPAIRED 2026-10-06 (F7d, the extent-hidden-ABI class). BOTH fields were wrong and the extent error HID the ABI error. The declared span ended at 0x00020506, before this body's own `ret`, so the walk over it fell off and `scripts/check-stack-depth.py` reported only `SUSPICIOUS/FALL_OFF_END` -- the reachable `ret` was not visible, so the wrapper's expected delta could never be exercised. Extending the end to 0x00020563 yields a FULLY ENUMERATED walk with exactly one distinct immediate, `ret 16`, reached at DEPTH 0, so by the project identity `stack_args = N` at depth 0 the value must be 16; declared was None. This is the same class as 0x0007DA30 and 0x00152BC0: a truncated body hiding a `ret` immediate. The new end is an instruction boundary and crosses no other manifest entry's start. Found by the F7c batch, which skipped it deliberately rather than folding an ABI change into an extent repair.",
+  "stack_args": 16
  },
  {
   "start": "0x00020570",
@@ -1588,10 +1591,11 @@
  },
  {
   "start": "0x00034070",
-  "end": "0x00034088",
+  "end": "0x000341F1",
   "section": ".text",
   "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000355B0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00034070..0x00034088, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000355B0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00034070..0x00034088, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.\n\nREPAIRED 2026-10-06 (F7d, the extent-hidden-ABI class). BOTH fields were wrong and the extent error HID the ABI error. The declared span ended at 0x00034088, before this body's own `ret`, so the walk over it fell off and `scripts/check-stack-depth.py` reported only `SUSPICIOUS/FALL_OFF_END` -- the reachable `ret` was not visible, so the wrapper's expected delta could never be exercised. Extending the end to 0x000341F1 yields a FULLY ENUMERATED walk with exactly one distinct immediate, `ret 4`, reached at DEPTH 0, so by the project identity `stack_args = N` at depth 0 the value must be 4; declared was None. This is the same class as 0x0007DA30 and 0x00152BC0: a truncated body hiding a `ret` immediate. The new end is an instruction boundary and crosses no other manifest entry's start. Found by the F7c batch, which skipped it deliberately rather than folding an ABI change into an extent repair.",
+  "stack_args": 4
  },
  {
   "start": "0x00034200",
@@ -1819,10 +1823,11 @@
  },
  {
   "start": "0x00038460",
-  "end": "0x0003848E",
+  "end": "0x00038528",
   "section": ".text",
   "kind": "routine",
-  "evidence": "A method of the function-pointer table at 0x001EC068. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_00038530 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00038460 at sub_00038530. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x00038460..0x0003848E, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+  "evidence": "A method of the function-pointer table at 0x001EC068. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_00038530 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00038460 at sub_00038530. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x00038460..0x0003848E, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.\n\nREPAIRED 2026-10-06 (F7d, the extent-hidden-ABI class). BOTH fields were wrong and the extent error HID the ABI error. The declared span ended at 0x0003848E, before this body's own `ret`, so the walk over it fell off and `scripts/check-stack-depth.py` reported only `SUSPICIOUS/FALL_OFF_END` -- the reachable `ret` was not visible, so the wrapper's expected delta could never be exercised. Extending the end to 0x00038528 yields a FULLY ENUMERATED walk with exactly one distinct immediate, `ret 4`, reached at DEPTH 0, so by the project identity `stack_args = N` at depth 0 the value must be 4; declared was None. This is the same class as 0x0007DA30 and 0x00152BC0: a truncated body hiding a `ret` immediate. The new end is an instruction boundary and crosses no other manifest entry's start. Found by the F7c batch, which skipped it deliberately rather than folding an ABI change into an extent repair.",
+  "stack_args": 4
  },
  {
   "start": "0x00038890",
@@ -4370,10 +4375,11 @@
  },
  {
   "start": "0x000705E0",
-  "end": "0x00070608",
+  "end": "0x00070642",
   "section": ".text",
   "kind": "routine",
-  "evidence": "A method of the function-pointer table at 0x0020CC6C. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_00070730 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000705E0 at sub_00070730. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x000705E0..0x00070608, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+  "evidence": "A method of the function-pointer table at 0x0020CC6C. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_00070730 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000705E0 at sub_00070730. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x000705E0..0x00070608, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.\n\nREPAIRED 2026-10-06 (F7d, the extent-hidden-ABI class). BOTH fields were wrong and the extent error HID the ABI error. The declared span ended at 0x00070608, before this body's own `ret`, so the walk over it fell off and `scripts/check-stack-depth.py` reported only `SUSPICIOUS/FALL_OFF_END` -- the reachable `ret` was not visible, so the wrapper's expected delta could never be exercised. Extending the end to 0x00070642 yields a FULLY ENUMERATED walk with exactly one distinct immediate, `ret 12`, reached at DEPTH 0, so by the project identity `stack_args = N` at depth 0 the value must be 12; declared was None. This is the same class as 0x0007DA30 and 0x00152BC0: a truncated body hiding a `ret` immediate. The new end is an instruction boundary and crosses no other manifest entry's start. Found by the F7c batch, which skipped it deliberately rather than folding an ABI change into an extent repair.",
+  "stack_args": 12
  },
  {
   "start": "0x00070650",
@@ -20173,11 +20179,11 @@
  },
  {
   "start": "0x00171B50",
-  "end": "0x00171D03",
+  "end": "0x00171DF8",
   "section": ".text",
   "kind": "routine",
-  "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E3C08, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_00171E24 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00171B50 at sub_00171E24. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00171B50..0x00171E24. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
-  "stack_args": 8
+  "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001E3C08, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_00171E24 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00171B50 at sub_00171E24. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x00171B50..0x00171E24. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21).\n\nREPAIRED 2026-10-06 (F7d, the extent-hidden-ABI class). BOTH fields were wrong and the extent error HID the ABI error. The declared span ended at 0x00171D03, before this body's own `ret`, so the walk over it fell off and `scripts/check-stack-depth.py` reported only `SUSPICIOUS/FALL_OFF_END` -- the reachable `ret` was not visible, so the wrapper's expected delta could never be exercised. Extending the end to 0x00171DF8 yields a FULLY ENUMERATED walk with exactly one distinct immediate, `ret 4`, reached at DEPTH 0, so by the project identity `stack_args = N` at depth 0 the value must be 4; declared was 8. This is the same class as 0x0007DA30 and 0x00152BC0: a truncated body hiding a `ret` immediate. The new end is an instruction boundary and crosses no other manifest entry's start. Found by the F7c batch, which skipped it deliberately rather than folding an ABI change into an extent repair.",
+  "stack_args": 4
  },
  {
   "start": "0x00171E00",

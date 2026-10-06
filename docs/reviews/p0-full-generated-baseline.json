@@ -1,6 +1,6 @@
 {
  "files": {
-  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "6dd9baadbb0d6ff9315cc2cd949fc1b985b9a09822d05b011989df328821bf54",
+  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "016e38b90b5feecad75094d0d7f9d9c6a1df97c96d9cbca022f2238ea865b445",
   "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
   "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
   "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
@@ -10,12 +10,12 @@
   "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
   "src/recomp/gen/recomp_dispatch.c": "e171d107613c3dc920f44ea1af81183416ddfa8c08c0fd59b0a7ef36092c234f",
   "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-  "src/recomp/gen/recomp_stubs_recovery.c": "0489b4a998e15cfb4132b5d045a4dbe0998d819a30adc291150542c2b84d02d8",
+  "src/recomp/gen/recomp_stubs_recovery.c": "c00d3bee04bae9c2ddf716c278e9cb572f3300fcbf2ea95e1e9b8ba2177b42f7",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-  "src/recomp/recovered/recovered.c": "ce992c5616fa4566b1590649b888667a5880e6e51b34a9c918f1510e33b3bf9d",
+  "src/recomp/recovered/recovered.c": "e4c73ba869da92b46f3430dc1d146448ec0c4f5e6c7d0af946a463b744a64baf",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "84f25e0db05cb388271f4e416f42e6639e7975a13139bb2d60cf721907746c89",
+  "src/recomp/recovered/recovered_11c1_test.c": "5743c3c197c8b29a7cba11e010128bc08949de1f8221eaa7032f7e33658ddf62",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -457,6 +457,16 @@
     "src/recomp/recovered/recovered_11c1_test.c"
    ],
    "reason": "F7c runtime verification and stop 26: 0x00096560 recovered as [0x00096560, 0x000967AA) with stack_args 4, from run 20261006-011638-029-f10-underwide-batch152 (`[ICALL] Failed to resolve VA 0x00096560`). 0x96560 was already a trap-stub target, so only recovered.c and its derived fixture move; the stub files are unchanged. recovered.c 3158 -> 3159 functions."
+  },
+  {
+   "date": "2026-10-06",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "F7d: the extent-hidden-ABI class, the seven entries the F7c batch skipped on purpose. In each, the declared span ended before the body's own `ret`, so the walk over it fell off and check-stack-depth reported only SUSPICIOUS/FALL_OFF_END -- the reachable `ret` was not visible, so the wrapper's expected delta could never be exercised. Widening to the body's real end yields a FULLY ENUMERATED walk with exactly one distinct immediate, reached at DEPTH 0, which by the project identity `stack_args = N` at depth 0 fixes BOTH fields. Six entries had NO stack_args key at all and therefore defaulted to 0: 0x202A0/0x20420/0x204D0 -> 16 (end -> 0x20329/0x204C6/0x20563), 0x34070 -> 4 (end -> 0x341F1), 0x38460 -> 4 (end -> 0x38528), 0x705E0 -> 12 (end -> 0x70642). The seventh, 0x171B50, declared 8 and is 4 (end -> 0x171DF8). This is the same class as 0x0007DA30 and 0x00152BC0. Every regenerated wrapper now matches its own body exactly: +20, +20, +20, +8, +8, +16 and +8, each equal to 4 + stack_args, and each body emits the matching `esp += N`. Measured effect: stack-depth SUSPICIOUS 74 -> 67 (CUT_EPILOGUE 19 -> 13, FALL_OFF_END 12 -> 11), check-span-exits CUT-TARGET 225 -> 210, PROVED 1977 -> 1979. KNOWN_OPEN 31 -> 25, again exactly the measured set. recovered.c stays 3159 functions."
   }
  ]
 }
