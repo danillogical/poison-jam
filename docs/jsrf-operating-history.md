@@ -2722,3 +2722,12 @@ retired scripts that no recipe, test, hook or active document used — the A2h i
 `jsrf_dsh_source.py` (the P0.2 DSH review adapter), `v3-evidence.py` (Phase 0 V3), and
 `decode-pushbuffer.py` (hard-coded to one run; superseded by `jsrf_gpu.py`). Historical records that
 cite them were left as written.
+
+**Pushed 2026-10-06 (Mac session), toolkit first; written from the push output.** Toolkit
+`PUSHED_TO: origin / BRANCH: main / COMMIT: d5b0b830630c6a89adeca4e00dd5c86c9036464f / REMOTE_URL: https://github.com/danillogical/xboxrecomp / RESULT: fast-forward 2cee914..d5b0b83 main -> main`
+(`28c289a` submit diagnostics and `RECOMP_NV2A_ADMIT_UNKNOWN`, `d5b0b83` four review fixes).
+Game `PUSHED_TO: origin / BRANCH: master / COMMIT: d80f49e7841256ae7de67f9369788bb90cb762c9 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward dcc93ab..d80f49e master -> master`
+(`f1c8ff7` cleanup, `14fbeba` tooling, `d80f49e` this plan and record). Outgoing game commits add no
+`game/` path; largest new blob 213 KB; `scripts/secret-audit.py` over the 31 outgoing blobs: 0 hits.
+Nothing here has run on Windows yet: the next Windows turn builds both, runs CTest (including
+`nv2a_submit_diag`, `jsrf_logq` and `jsrf_nv2a_registers`) and takes the plan's next actions.
