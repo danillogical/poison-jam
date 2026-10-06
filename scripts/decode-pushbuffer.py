@@ -17,7 +17,7 @@ import struct
 import sys
 from pathlib import Path
 
-root = Path(r"C:\Users\logic\Repos\my_xbox_game")
+root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root / "scripts"))
 from jsrf_dump import DumpMemory
 

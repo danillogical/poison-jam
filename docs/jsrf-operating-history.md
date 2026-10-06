@@ -2681,3 +2681,10 @@ as owner-directed work.
   `C4835D5E` is the bytes `5e 5d 83 c4`. The claim was a misreading of the output format
   and is withdrawn; it is recorded because this is exactly the transcription-error class
   plan W5/T10 exists for.)*
+
+## 2026-10-05 — Game checkout renamed to `poison-jam`
+
+The game checkout moved from `C:\Users\logic\Repos\my_xbox_game` to
+`C:\Users\logic\Repos\poison-jam`, matching its remote. Records, review transcripts,
+archived runs and DSH session paths written before this date name the old folder; they
+were left as written.

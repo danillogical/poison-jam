@@ -29,7 +29,7 @@ Keep original assets and existing saves unchanged.
 
 ## Workspace and key files
 
-Game repo: `C:\Users\logic\Repos\my_xbox_game`  
+Game repo: `C:\Users\logic\Repos\poison-jam`  
 Toolkit: `C:\Users\logic\Repos\xboxrecomp`
 
 Toolkit remotes (**verify with `git remote -v`; do not assume names**): `origin` is the owner's fork

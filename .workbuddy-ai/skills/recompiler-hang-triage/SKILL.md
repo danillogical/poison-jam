@@ -8,7 +8,7 @@ agent_created: true
 
 # Recompiler hang triage
 
-For the `my_xbox_game` / `xboxrecomp` pair. Order matters: each step below is
+For the `poison-jam` / `xboxrecomp` pair. Order matters: each step below is
 cheaper than the next, and the later ones are only worth running once the earlier
 ones are clean.
 

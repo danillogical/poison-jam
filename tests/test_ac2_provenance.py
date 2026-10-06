@@ -21,7 +21,7 @@ import subprocess
 import sys
 import tempfile
 
-ROOT = r'C:\Users\logic\Repos\my_xbox_game'
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HELPER = os.environ.get('A3A_HELPER', os.path.join(ROOT, 'scripts',
                                                    'ac2-provenance.py'))
 SELF = os.environ.get('A3A_SELF', os.path.join(ROOT, 'tests',

@@ -16,7 +16,7 @@ import glob
 import re
 from pathlib import Path
 
-root = Path(r"C:\Users\logic\Repos\my_xbox_game")
+root = Path(__file__).resolve().parents[1]
 chunks = sorted(glob.glob(str(root / "src/recomp/gen/recomp_0*.c")))
 
 # Addresses whose ESP delta is legitimately whatever they like, and which the

@@ -19,7 +19,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-root = Path(r"C:\Users\logic\Repos\my_xbox_game")
+root = Path(__file__).resolve().parents[1]
 run = root / "logs/runs/20260921-235816-855-clean-final2"
 log = (run / "jsrf_run.log").read_text(encoding="utf-8", errors="replace")
 
