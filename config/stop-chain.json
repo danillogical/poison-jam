@@ -1,0 +1,90 @@
+{
+ "schema": 1,
+ "purpose": "The runtime stop chain: one row per stop, each bound to the archived runs that establish it. Validated by scripts/check-stop-chain.py, which refuses a row that claims more than its cited archives show. This is a record-consistency gate, NOT a fidelity claim and NOT proof that a run reached the title screen.",
+ "runs_root": "logs/runs",
+ "stops": [
+  {
+   "id": 17,
+   "address": "0x00094AB0",
+   "state": "RUNTIME_CONFIRMED",
+   "repair_commit": "80d3f1e",
+   "evidence": [
+    {"run": "20261005-174422-643-g03-94ab0", "role": "confirmed"},
+    {"run": "20261005-185514-638-g05-confirm", "role": "confirmed"}
+   ],
+   "note": "A complete 4482-byte C++ virtual method with no analysis-database entry, reached only as slot 2 of the .rdata vtable at 0x001CD290. Zero rel32 callers. Both cited runs log an ABI-verified return."
+  },
+  {
+   "id": 18,
+   "address": "0x000496E0",
+   "state": "RUNTIME_CONFIRMED",
+   "repair_commit": "1d8599f",
+   "evidence": [
+    {"run": "20261005-174422-643-g03-94ab0", "role": "discovered"},
+    {"run": "20261005-185514-638-g05-confirm", "role": "confirmed"}
+   ],
+   "note": "g03 found it as an unresolved call and did NOT execute it; g05 executed it. stack_args 8 is INFERRED, not derived: seven indirect calls on the walk leave the depth unresolved."
+  },
+  {
+   "id": 19,
+   "address": "0x0005C840",
+   "state": "RUNTIME_CONFIRMED",
+   "repair_commit": "74760e4",
+   "evidence": [
+    {"run": "20261005-175848-754-g04-496e0", "role": "discovered"},
+    {"run": "20261005-185514-638-g05-confirm", "role": "confirmed"}
+   ],
+   "note": "g04 found it; g05 confirmed it. Zero rel32 callers, one .data reference at 0x001FA1C0."
+  },
+  {
+   "id": 20,
+   "address": "0x00154540",
+   "state": "RUNTIME_CONFIRMED",
+   "repair_commit": "f603e1e",
+   "evidence": [
+    {"run": "20261005-185514-638-g05-confirm", "role": "discovered"},
+    {"run": "20261005-192455-691-g06-thunk", "role": "not_exercised"},
+    {"run": "20261005-211627-927-g07-thunk", "role": "confirmed"},
+    {"run": "20261005-223404-818-g08-b5eb0-fixed", "role": "confirmed"}
+   ],
+   "note": "A this-adjusting thunk ending in `jmp [ecx+0x6c]`, so its cleanup is the tail target's `ret 0xc`. g05 FOUND it and does not descend from its own repair commit, which is why it is cited as `discovered` there and not as a confirmation. g06 ran 905 s and never reached it -- recorded as not_exercised, which is not a pass. g07 and g08 both confirmed it."
+  },
+  {
+   "id": 21,
+   "address": "0x000B5EB0",
+   "state": "NOT_EXERCISED",
+   "repair_commit": "64945a3",
+   "evidence": [
+    {"run": "20261005-211627-927-g07-thunk", "role": "discovered"},
+    {"run": "20261005-223404-818-g08-b5eb0-fixed", "role": "not_exercised"}
+   ],
+   "note": "An under-wide span that cut its own jump table at 0x000B5F0F, so the lifter emitted RECOMP_ITAIL and the guest trapped on the 0xB5F82 arm. Repaired from the bytes and NOT runtime-confirmed: g07 found it, and g08 did not execute it. Two consecutive runs have now failed to reach it. Do not record this as a pass."
+  },
+  {
+   "id": 22,
+   "address": "0x00048DB0",
+   "state": "REPAIRED",
+   "repair_commit": "892dd1e",
+   "evidence": [
+    {"run": "20261005-223404-818-g08-b5eb0-fixed", "role": "discovered"}
+   ],
+   "note": "g08 measured `ABI FAILURE 0x00048DB0 esp 00F7FE50->00F7FDA8 expected +4`, an observed delta of -0xA8 that is exactly its prologue. Repaired to end 0x000496B7 with stack_args 8. g08 does NOT descend from the repair commit, so it can only ever be cited as `discovered` here -- the ancestry half of the gate is what stops this row being written as confirmed."
+  },
+  {
+   "id": 23,
+   "address": "0x000B06E0",
+   "state": "STATIC_ONLY",
+   "repair_commit": "892dd1e",
+   "evidence": [],
+   "note": "A PROVED static production defect (TR section 17): its declared end 0xB0811 is a tail_jump_alias start inside its own body, so its epilogue at 0xB09DC lay outside the span and the emitted body called the fatal trap stub sub_000B09DC four times. Repaired as end 0xB09E0. NO archived run has been observed to reach it, so it has no evidence rows and cannot claim any runtime state. The evidence list is empty on purpose: an empty list is checked, and it is not a pass."
+  },
+  {
+   "id": 24,
+   "address": "0x00048690",
+   "state": "STATIC_ONLY",
+   "repair_commit": "892dd1e",
+   "evidence": [],
+   "note": "An uncovered pointer in the same .data table 0x1F97B4 that owns 0x00048DB0. Added as [0x00048690, 0x000488AA) with stack_args 8, derived from the bytes. Never dispatched in any archived run, so it has no runtime evidence and claims none."
+  }
+ ]
+}

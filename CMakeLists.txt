@@ -259,6 +259,18 @@ if(BUILD_TESTING)
     # requires the real script to exit nonzero.  Pure Python over the generated unit.
     add_test(NAME jsrf_dispatch_table
         COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_dispatch_table_size.py)
+    # Stop-chain record consistency.  Registered because the stop chain has twice
+    # claimed progression its archived runs did not establish: 0x00032610 was
+    # credited to a run that never dispatched it (f25, Turn Reviewer finding B3),
+    # and 0xB5EB0 was repaired and then credited by two runs that never executed
+    # it.  The gate binds every row to its cited archives -- the ABI-verified
+    # return line, the log's own hash, and the run revision's descent from the
+    # repair commit -- and refuses a row that claims more than they show.  Its
+    # first control takes a genuine confirming row and cites a run with no return
+    # line, which must fail.  Pure Python over archived logs and git ancestry.
+    add_test(NAME jsrf_stop_chain
+        COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_stop_chain.py)
+    set_tests_properties(jsrf_stop_chain PROPERTIES TIMEOUT 300)
     # A2h-arming-coverage-attribution C1/C2.  The fixture lives in the toolkit's tests/
     # directory, like tests/apu_watch_fixture_test.c and tests/kernel_inplace_event_test.c,
     # because it is a standalone collector fixture and the game repo keeps no fixture of
