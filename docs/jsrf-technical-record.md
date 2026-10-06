@@ -2353,9 +2353,24 @@ the same shape — f9 reaches 1000 at t=235 s, f10 stalls at 888 from t=329 s, f
 manifest spans widened to their body's real end), and it is recorded as an observation. It is **not**
 established as a regression, and no mechanism is claimed:
 
-- f10 and f11 differ from f9 by F7c *and* F7d together, and f10/f11 also differ from f9 by **F7b
-  (`0445a80`, the `0xAE560` repair)**, so this is not a single-variable comparison in either
-  direction. The plan already records that rule, and it applies here.
+**The confounder set, stated exactly per run rather than as one delta.** The Turn Planner checked this
+and my earlier wording ("f10 and f11 differ from f9 by F7c *and* F7d together") was wrong for f10.
+Measured by ancestry:
+
+| run | revision | contains |
+|---|---|---|
+| f9 | `b1aca89` | — (baseline for this comparison) |
+| f10 | `59f3ebf` | **F7b `0445a80`**, `0763de8`, **F7c `59f3ebf`** — but **not** F7d |
+| f11 | `8cd1e08` | all of the above **plus F7d `8cd1e08`** |
+| f12 | `cee0c27` | all of the above plus `fc6f2d4` (stop 26) |
+| f13 | `79f9f8f` | all of the above plus stop 27 |
+
+So f9→f10 is **three** changes (F7b, the review fixes, F7c), and f9→f11 is four. Notably **F7b
+(`0445a80`) re-ended `0xAE560` — the very function f9 trapped in** — which makes it a plausible
+confounder rather than a background one. And the F7c *single-variable* pair is `0763de8` vs `59f3ebf`,
+not anything involving f9: "a run at `b1aca89`" would be a same-binary replay of f9, not an F7c
+isolation.
+
 - The runs differ in duration and outcome (`unhandled_exception` vs `diagnostic_deadline`).
 - More returns (553 in f10 vs 550 in f9) with *fewer* presents is not the shape of a lost code path;
   it is the shape of a different path.
@@ -2379,11 +2394,13 @@ citations for same-binary variation; the g03–g08 claim is withdrawn.
 card is still what is on screen in every run, at the same hash. M15 was not reached before this change
 and is not reached after it.
 
-**What would settle it.** A run at `b1aca89` (pre-F7c) in the same environment, or a run at `59f3ebf`
-with F7d reverted, giving a genuine single-variable comparison. Until then the honest statement is the
-table above: a measured count change, correlated with a known change, unexplained. It is carried in
-the plan's remaining work rather than being quietly dropped, and no acceptance claim rests on the
-present count in either direction.
+**What would settle it.** The F7c **single-variable** comparison is `0763de8` (pre-F7c) versus
+`59f3ebf` (F7c) — those two differ by exactly that batch. A run at `b1aca89` would instead be a
+same-binary replay of f9, which tests run-to-run variance and **not** the F7c question; the Planner is
+right that my earlier wording conflated the two. Until one of those is run, the honest statement is the
+table above: a measured count change, correlated with several changes, unexplained. It is
+carried in the plan's remaining work rather than being quietly dropped, and no acceptance claim
+rests on the present count in either direction.
 
 **What the replay establishes, and what it does not.** The experiment was run, and it used the
 **archived binary** rather than a rebuild — the differential method this record already mandates when
