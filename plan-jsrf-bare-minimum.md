@@ -117,6 +117,22 @@ body never pushed, which is the signature of a mid-function entry or an over-wid
 circular. `0x1BCB14` is now documented correctly: it starts mid-function and pops `esi`/`ebx` it never
 pushed, so `d = +8` and `N + d = 12` — exactly its declared value, which is why it must stay ungated.
 
+**Run g06 (`20261005-192455-691-g06-thunk`, exploratory, 905 s) confirms NOTHING about stop 20, and
+that is the honest reading.** It ended `diagnostic_deadline` — the bounded capture expired, not a
+crash — after 457 ABI-verified returns, with **zero** `ABI FAILURE` and **zero**
+`Failed to resolve` lines, and it sat at exactly 1000 presents with the disclaimer hash
+`5bdaea576b8509f5` unchanged. It never reached `0x154540`, `0x154520` **or even `0x94AB0`**: it took
+a path that avoids the whole thunk region. So stop 20 remains **found-but-unconfirmed**, and g06
+neither confirms nor refutes the `0x154540`/`0x154520` repair. A run that reaches that address is
+still owed.
+
+**This is the fourth independent instance of the run-to-run variation this project treats as
+first-class**, and the variation is getting wider, not narrower: g03 reached `0x496E0`, g04 reached
+`0x5C840` (not `0x496E0`), g05 reached both **and** `0x154540`, and g06 reached none of them while
+running three times as long as g05. A single run therefore cannot establish progress in either
+direction, which is why the table above separates "reached it" from "confirmed by an ABI-verified
+return" and why a clean g06 is recorded as **not exercised** rather than as a pass.
+
 **Run g03 (`20261005-174422-643-g03-94ab0`, exploratory, 246 s).** The first run to exercise
 `0x94AB0`: exactly one `[RECOVERED] 0x00094AB0 returned; ABI verified (ESP/EBX/ESI/EDI)` line, so
 the return is path-exercised rather than merely present. It then advanced to
