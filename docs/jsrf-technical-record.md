@@ -2520,4 +2520,41 @@ to withdraw, and the pattern — a true result stated more strongly than its evi
 in the record as a pattern.
 
 
+## 21. The `0x96xxx` vtable family: a sibling found by runtime, then closed by census (2026-10-06)
+
+**The family exists and is now fully covered.** The `.rdata` vtables at `0x001CD2xx`–`0x001CD4xx`
+hold **25 distinct pointers** into `0x96000`–`0x98000`. Two of them were unowned gaps that only a run
+revealed:
+
+| stop | address | how found | repair |
+|---|---|---|---|
+| 26 | `0x00096560` | f10 `[ICALL] Failed to resolve VA 0x00096560` | `[0x96560, 0x967AA)`, `stack_args` 4 — **RUNTIME-CONFIRMED by f12** |
+| 27 | `0x00096B60` | f12, immediately after confirming stop 26 | `[0x96B60, 0x96DBA)`, `stack_args` 4 |
+
+`0x96B60`'s prologue is **byte-identical** to `0x96560`'s (`mov eax,[esp+4]; sub esp,0x14; cmp
+eax,4`), so they are parallel methods of one family rather than two unrelated gaps. Both have exactly
+one image reference — an aligned `.rdata` dword (`0x001CD32C` and `0x001CD3AC`) — and **zero direct
+callers**, the `0x80BD0`/`0x94AB0` vtable-installed pattern. That is why neither was found by any
+static sweep for callers, and why each cost a run.
+
+**Closed by census rather than by waiting for the next run.** After stop 27 the same sweep was run over
+the whole family: every one of the 25 pointers either owns its own manifest span, or is a recorded
+deliberate exception. Exactly one exception remains:
+
+| pointer | status |
+|---|---|
+| `0x00096F80` | **no span, deliberately**: its container `0x96F60` has an indirect tail jump `jmp dword ptr [eax+8]`, so the hidden-entry proof cannot be completed and the detector's verdict stays `UNQUALIFIED` (§18) |
+| the other 24 | each owns a span, including `0x96070`, `0x967B0`, `0x96980`, `0x972C0`–`0x973D0`, `0x97830`–`0x97870`, `0x97C70`, `0x97C90` |
+
+So the family is **finished as a class**: the two members that a run could reach have been repaired,
+and the one that remains is excluded by a proof rule rather than by an oversight. This is the census
+doing what the runtime chain cannot — closing a family instead of discovering its members one 380-second
+run at a time.
+
+**`0x967B0` and `0x96980` are worth noting as a contrast.** Both are family members with their own
+spans, and both are short (`0x30` and `0x60` bytes). They were *not* found by a run because their
+spans already existed, which is the point: the census can distinguish "unowned gap" from "owned but
+possibly wrong extent", and only the first class was live here.
+
+
 
