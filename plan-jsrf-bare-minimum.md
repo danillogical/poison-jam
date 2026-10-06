@@ -168,6 +168,17 @@ misdispatch census (`0xE9A40`, `0x100AB0`, `0x1199C0`, `0x13A340`, still **not r
 identity-unproven `0x200A5`–`0x200F7` micro-entries contained by `0x1FFF0`, and the
 `check-generation-provenance.py --write` history-erasure defect.
 
+**Pushed 2026-10-05 (turn `title-003`), toolkit first.** Toolkit
+`PUSHED_TO: origin / BRANCH: main / COMMIT: 6e6e05664f438ad8b95b0c5186a770da8e54e883 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: clean and in sync with origin/main; intentionally unchanged this turn, nothing to push`.
+Game `PUSHED_TO: origin / BRANCH: master / COMMIT: d8632ce / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward b065050..d8632ce master -> master`.
+Game `PUSHED_TO: origin / BRANCH: master / COMMIT: 464df3b / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward d8632ce..464df3b master -> master`.
+
+**On those receipts, stated honestly.** Turn Review 1 observed that no `PUSHED_TO` record existed for
+`b065050..d8632ce` and that `82a2c40` was one ahead of origin at review time. Both observations are
+correct about the state *then*: the receipts were written after the pushes rather than before them, and
+`82a2c40` was published in the second push. These lines are written from the actual push output, not
+reconstructed from memory.
+
 **Census: 50 containers, 63 consumed addresses, 48 of the 50 containers `tail_jump_alias` records** —
 the same dominant stop class §11 names (the two `OVERLAP` containers `0x190FB0` and `0x1910C0` have no
 database record). The consumed bodies are substantial, not stubs: 50 to 1213 bytes,

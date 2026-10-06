@@ -37,6 +37,19 @@ the disclaimer hash `5bdaea576b8509f5` unchanged.
 
 ## PLAN_CHANGE
 
+- **Changed:** the start plan's **alias-shim misdispatch census** (`0xE9A40`, `0x100AB0`, `0x1199C0`,
+  `0x13A340`) was **not run** this turn.
+- **Evidence:** the `MISDISPATCH` verdict exists and measures **0** on the current tree, but that is
+  only because the over-run must also be unreached; it does **not** clear those four addresses or the
+  134-shim population. `docs/jsrf-technical-record.md` §12 had identified the class and this turn's
+  detector was built for the over-wide half instead.
+- **Why:** the over-wide detector and then the g07 runtime chain were prioritized as higher-value, and
+  the turn's remaining budget went to the crash fix. **This is a scope drop, recorded as one** — the
+  review correctly flagged that it had not been written down. It **remains open** and is carried in
+  Current work's next actions. No evidence is invented to justify it.
+
+## PLAN_CHANGE
+
 - **Changed:** the repair of the new stop was extended beyond the manifest into
   `config/generated-patches.json`.
 - **Evidence:** restoring `0xB5EB0`'s span alone did not link. `recomp_dispatch.c` is
