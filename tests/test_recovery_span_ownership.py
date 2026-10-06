@@ -52,7 +52,14 @@ import bisect
 # a stale member: `bad - KNOWN_OPEN` is empty whether the list is exact or
 # bloated, so six repaired addresses were sitting in it, and a regression on any
 # of them would have been silently accepted.
-KNOWN_OPEN = {int(x, 16) for x in """11105 14720 1F000 202A0 203A0 20420 204D0 20760 21200 2A000 2DBE0 2F600 332F0 38460 38B90 4037C 433C0 44000 45DB0 4B6A0 504E0 52050 67E90 705E0 73C20 80080 91830 982B0 A76E0 ACD90 ADD20 AEE80 AFD40 C7D40 CB2A0 D02D0 E01C0 E0710 E0CF0 E3BB0 EC0B0 F02F0 1045D0 10A0E0 10BF90 110B20 11BCB0 11E2B0 11FE90 127080 127810 140E60 142400 1424D0 15A020 15A1C0 171B50 171E00 1783D0 180038""".split()}
+#
+# SHRUNK AGAIN 2026-10-06 by 29 entries, all repaired by the F7c certified
+# under-wide batch (152 spans widened to the body's real end, each certified by a
+# fully enumerated walk whose every exit is one `ret N` at depth 0). 60 -> 31,
+# again exactly the measured set. The 8 candidates that batch SKIPPED are still
+# here on purpose: seven have a `stack_args` that disagrees with their certified
+# N (a separate finding) and one would have swallowed 0x44000.
+KNOWN_OPEN = {int(x, 16) for x in """11105 1F000 202A0 20420 204D0 20760 2A000 38460 4037C 44000 45DB0 52050 705E0 73C20 91830 A76E0 AEE80 C7D40 D02D0 E0710 E0CF0 EC0B0 F02F0 10A0E0 110B20 11FE90 127810 142400 171B50 1783D0 180038""".split()}
 
 
 def boundary_stub_calls(text, entries, unresolved):
