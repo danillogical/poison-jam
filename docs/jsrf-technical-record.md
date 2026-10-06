@@ -1772,3 +1772,95 @@ It was discarded in favour of single-exit-immediate plus prologue/epilogue frame
 everything else labelled **INFERRED** rather than overclaimed. This is the same lesson as §10's
 discarded call models: a depth model that cannot keep joins consistent reports confident nonsense,
 and nonsense is worse than an explicit unknown.
+
+
+## 13. The this-adjusting thunk: a fourth missing-entry shape, and an observed stack_args (2026-10-05)
+
+**Run g05 cleared two stops and immediately produced a class the previous three had not shown.**
+`20261005-185514-638-g05-confirm` (exploratory, 253 s) logged exactly one
+`[RECOVERED] 0x000496E0 returned; ABI verified` and one for `0x0005C840`, so stops 18 and 19 are
+confirmed by an exercised path rather than merely found. It then logged
+
+```
+[RECOVERED] ABI FAILURE 0x00154540 esp 00F7FD30->00F7FD40 expected +24
+```
+
+**The shape.** `0x154540` and `0x154520` are *this-adjusting thunks*:
+
+```
+0x154540  mov eax, [esp+4]        ; eax = the object
+          mov ecx, [eax]          ; ecx = the object's vtable
+          mov edx, [esp+8]
+          add edx, 2              ; adjust the second argument
+          mov [esp+8], edx
+          mov [esp+4], eax        ; this-adjust
+          jmp dword ptr [ecx+0x6c]   ; indirect TAIL jump to the real method
+```
+
+Both bodies are seven instructions, end at `0x154558` / `0x154538`, and are followed by 8 NOPs. The
+`add edx,N` differs (2 versus 6), which is the whole point of the pair: they are the two adjustor
+entries for the same virtual method at different base offsets.
+
+**Why this needs a different rule.** A tail jump reuses the frame, so the cleanup the *caller*
+performs is the **tail target's** `ret N`, not anything in the thunk. So the thunk's `stack_args`
+must equal its target's cleanup — and that is only a well-defined constant if the thunk lives in
+exactly one vtable.
+
+**Settled by observation rather than inference.** The run's frozen dump, with its mapping verified
+by `scripts/check-dump-mapping.py` before any guest memory was read, gives the whole chain:
+
+| step | value |
+|---|---|
+| wrapper entry esp (from the ABI failure line) | `0x00F7FD30` |
+| `[esp+4]` — the object | `0x0106C870` |
+| `[0x0106C870]` — its vtable | `0x001E0F00` |
+| `[0x001E0F00 + 0x6c]` — the real method | `0x00154420` |
+| `0x00154420`'s reachable exits | four `ret 0xc` (`C2 0C 00`) at `0x154440`, `0x15445D`, `0x1544FA`, `0x15450E` |
+| therefore the expected delta | `4 + 12 = 16` |
+| the measured delta | `0x00F7FD40 − 0x00F7FD30 = 16` |
+
+**The arithmetic closes exactly**, which is what makes this an observation rather than a plausible
+story. Both thunks are corrected 20 → 12.
+
+**Where the wrong 20 came from, again.** `0x154540`'s declared span `[0x154540, 0x1548E0)` had
+swallowed a complete function at `0x154560` — prologue `sub esp,0x60; push ebp`, two exits
+`ret 0x14` = 20 — so the declared 20 was *that* function's value. This is the third instance of the
+`0x74C70` pattern (a `stack_args` inherited from a neighbouring body, after `0x152BC0`), and it is
+now the single most common way a wrong value enters this manifest. The span is tightened to
+`0x154558` and the swallowed function recovered as `[0x154560, 0x1548DC)` with `stack_args 20`.
+
+**Why a single constant is not universally safe for this shape.** A `jmp [reg+0x6c]` is generic: a
+scan of all 126 vtable-like runs whose `+0x6c` slot resolves into `.text` finds cleanups of **0
+(64 cases), 4 (15), 8 (3), 12 (2) and 20 (2)**, plus 40 unresolvable. So "the target cleans up 12"
+is a fact about *these two thunks' single vtable*, not a rule about the instruction. Both thunks
+occur in exactly one aligned dword each (`0x1E0F74` and `0x1E0F70` in the table based at
+`0x1E0F00`), which is what makes the value well-defined, and that is stated in the evidence rather
+than assumed.
+
+**A sign error in the identity, found by adversarial review.** The convention in
+`scripts/check-stack-depth.py` is `push` → `d -= 4`, so `d = ESP_at_ret − ESP_entry` and a `ret N`
+leaves `esp = entry + d + 4 + N`. Equating with the wrapper's `entry + 4 + stack_args` gives
+
+```
+stack_args = N + d
+```
+
+**not** `N − d`, which earlier revisions of §10, the plan and the checker's own comments said. The
+gate was never wrong — the two forms agree at `d == 0`, and the gate only uses `d == 0` — but the
+prose was, and so was the *stated reason* for not gating the general form. The corrected reason is
+measured: of the **29** entries with a resolved nonzero-depth `ret N`, **every one** has `d > 0`
+(min 4, max 100). A positive `d` means the `ret` is reached with more stack than at entry, i.e. the
+walk popped registers the body never pushed — the signature of a mid-function entry or of an
+over-wide span whose walk ran into a neighbouring function. That is an **extent** question, and
+asserting the extent is right in order to conclude the declared value is wrong would be circular.
+The earlier text's "negative values are the tell" was an artifact of the wrong sign: under `N − d`,
+25 of those 29 appeared negative; under `N + d`, none do.
+
+`0x1BCB14` is the entry this correction explains: it **starts mid-function** and pops `esi`/`ebx` it
+never pushed, so `d = +8` and `N + d = 4 + 8 = 12`, exactly its declared value. It is run-verified in
+106 archived runs and must never be gated.
+
+**`RET_DEPTH` is now reported per path.** It previously required a fully resolved walk, which hid 14
+of those 29 entries behind an unrelated unresolved path — the same false-negative shape as the
+gating rule, one class down. Findings went 24 → 39 and it remains `SUSPICIOUS`, so widening it cannot
+block the gate; it only makes the population visible.
