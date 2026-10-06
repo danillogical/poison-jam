@@ -2333,4 +2333,43 @@ to widen a gate would be the `N + d` mistake again. It is recorded here as a **m
 with a named proof gap**, not as a defect and not as closed.
 
 
+## 19. A present-count change correlated with F7c, recorded and not yet explained (2026-10-06)
+
+**Observed.** Three consecutive exploratory runs on this turn's own binaries, all with the same four
+canonical overrides and all reaching `guest_entry`:
+
+| run | project revision | max `presents=` | ABI-verified returns | outcome |
+|---|---|---|---|---|
+| f9 | `b1aca89` (before F7c) | **1000** | 550 | `unhandled_exception` |
+| f10 | `59f3ebf` (F7c) | **888** | 553 | `unhandled_exception` |
+| f11 | `8cd1e08` (F7d) | **888** | 440 | `diagnostic_deadline` |
+
+The disclaimer hash is `5bdaea576b8509f5` and unchanged in all three, so the *content* on screen is
+the same. What changed is the flip **count** at which the presenter stops being called: f9 logs
+`[FBPHASE]` at 400, 900, 990 and 1000; f10 and f11 log it only at 400. The `[FBPRESENT]` series shows
+the same shape — f9 reaches 1000 at t=235 s, f10 stalls at 888 from t=329 s, f11 at 888 from t=401 s.
+
+**What this is and is not.** It is a **behaviour difference correlated with the F7c batch** (152
+manifest spans widened to their body's real end), and it is recorded as an observation. It is **not**
+established as a regression, and no mechanism is claimed:
+
+- f10 and f11 differ from f9 by F7c *and* F7d together, so this is not a single-variable comparison.
+  The plan already records that rule, and it applies here.
+- The runs differ in duration and outcome (`unhandled_exception` vs `diagnostic_deadline`), and
+  run-to-run path variance in this title is documented and wide — g03 through g08 reached
+  demonstrably different addresses on identical binaries.
+- More returns (553 in f10 vs 550 in f9) with *fewer* presents is not the shape of a lost code path;
+  it is the shape of a different path.
+
+**It is also not a title-screen regression, because 1000 was never the title screen.** The disclaimer
+card is still what is on screen in every run, at the same hash. M15 was not reached before this change
+and is not reached after it.
+
+**What would settle it.** A run at `b1aca89` (pre-F7c) in the same environment, or a run at `59f3ebf`
+with F7d reverted, giving a genuine single-variable comparison. Until then the honest statement is the
+table above: a measured count change, correlated with a known change, unexplained. It is carried in
+the plan's remaining work rather than being quietly dropped, and no acceptance claim rests on the
+present count in either direction.
+
+
 
