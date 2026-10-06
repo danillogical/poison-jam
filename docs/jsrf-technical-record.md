@@ -1484,3 +1484,72 @@ audited: `0xE9A40` (ref `0x1CEE84`, its rets are 4 and its owner's are 0), `0x10
 highest priority — plus `.data` references to `0x40002`, `0x100AB0`, `0x1A2078`, `0x1BD800`,
 `0x1C3800`; `0xB090B` is referenced only from `$$XTIMAGE` and is probably coincidental. Each must
 be verified from the bytes before recovery, because some data references will be coincidental.
+
+## 10. Stack-contract contradictions are statically decidable, and 20 were live (2026-10-05)
+
+**Four defects in one session each cost a game run and every one was decidable from the original
+bytes.** `scripts/check-stack-depth.py` is the detector: a reachable CFG walk over every manifest
+entry that computes `d = ESP − ESP_at_entry` and compares the declared `stack_args` with what the
+reachable exits actually do.
+
+**The identity the whole thing rests on.** `scripts/recover-functions.py` asserts
+`g_esp == before_stack + 4 + stack_args` after a recovered body, and a `ret N` leaves
+`esp = entry_esp + 4 + N − d`. Equating them gives
+
+```
+stack_args = N − d          at a reachable `ret N`
+```
+
+So when every reachable exit is the *same* `ret N` **and every one is reached at `d = 0`**,
+`stack_args` must be `N` — a statement about that entry's own bytes that mentions no callee, no
+indirect transfer and no global depth reasoning. That is the single class the gate fails on.
+
+**The 20 live defects.** Twenty entries declared `stack_args 0` (four by an ABSENT key, so the
+generated wrapper used the `0` default) while their bodies end in `ret 4` — `ret 0x14` for
+`0x00080028`, the one exception. The wrappers checked `+4` where the bodies really net `+8`
+(`+24` for `0x00080028`), so **every one of them would have aborted with `[RECOVERED] ABI FAILURE
+… expected +4` the moment it ran**, and none ever ran: the twenty addresses appear in 0 of 122
+archived `jsrf_run.log` files, in no `returned; ABI verified` line, in no `ABI FAILURE` line and
+in no textual mention. They are `0x246E0`, `0x42CA0`, `0x80028`, `0x86180`, `0xA5050`, `0xCD890`,
+`0xD03F0`, `0xD62A0`, `0xDB820`, `0xE2050`, `0xE2A00`, `0xE3700`, `0xEDA10`, `0xF4C60`, `0xF8AF0`,
+`0x11B660`, `0x120400`, `0x124B00`, `0x134D50`, `0x139B30`. All twenty are `detection_method:
+tail_jump_alias` in the analysis database, i.e. they are exactly the addresses their manifest
+entries exist to un-fold (§9's class); a scan of every `.text` byte for `E8`/`E9`/`EB`/`7x`/`0F 8x`
+finds **zero** transfers to any of them, so the wrapper's contract is a call contract and no
+tail-jump argument rescues the old value.
+
+**Why the other four classes do not gate, measured rather than asserted.** On the committed
+manifest the census is 20 `STACK_ARGS`, 24 `RET_DEPTH`, 26 `FALL_OFF_END`, 71 `CUT_EPILOGUE` and
+2 `TRUNCATED`. The span classes overlap `scripts/check-span-exits.py`'s existing 360-finding
+CUT-TARGET population (156 entries) — a class the project already knows about and deliberately does
+not gate — and the rest need per-entry boundary adjudication. Gating them would have required
+freezing 71+ live defects in a baseline, which is exactly how `0x000307A0` stayed hidden inside
+`config/entry-extent-baseline.json` while `just check` stayed green. They are counted, named and
+reported as `SUSPICIOUS` instead.
+
+**Two models were implemented and discarded on evidence.** Treating calls as depth-neutral, and
+consuming a call's argument pushes, both fail: the second cannot tell a prologue save from an
+argument push and produced depth `−52` on `0x0007DA30` where the truth is `0`. A heuristic that
+reports confident nonsense is worse than no model, so a `call` now contributes its callee's own
+`ret N` immediate, derived by walking the callee, and an unresolvable callee makes the depth
+`UNKNOWN` — never a silent zero.
+
+**What the validator cannot decide, stated rather than hidden.** 1051 of 3105 entries are
+`UNKNOWN`: an unresolved indirect call or jump, or an `esp` written from a register. `0x7DA30`'s
+own corrected span is one of them — its three `call dword ptr [...]` sites leave the pre-`ret`
+depth unresolved, so the hidden `ret 4` is caught by the *truncated-span* form (the form the run
+actually hit) and not by the depth arithmetic.
+
+**Controls.** `--selfcheck` replays all seven historical defects (`0x80BD0`, `0x7DA30` twice,
+`0x74C70`, `0xBB7B0`, `0x307A0`, `0x246E0`) at their **pre-fix** spans and asserts the verdict
+*and* code each was diagnosed under, plus the negative half that every corrected entry is clean —
+a control that fired on both the bad and the good span would prove nothing.
+`tests/test_stack_depth.py` (CTest `jsrf_stack_depth`) adds that the gate passes with **no**
+baseline, that it can actually fail (a reverted entry is rejected and named), that two runs agree
+byte for byte, and that the JSON report covers every entry.
+
+**Tool defect found on the way.** `scripts/check-generation-provenance.py --write` records only
+the measured axes and silently erases the hand-maintained `amendments` and `regenerations`
+history; it dropped 34 amendments. They were re-attached from `HEAD`. A session that runs
+`--write` without noticing loses the provenance narrative, so this is recorded as a backlog item.
+

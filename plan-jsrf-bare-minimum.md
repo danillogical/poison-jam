@@ -55,10 +55,91 @@ established facts. Where this plan proposes a change to one of them, it is a tas
 
 ## Current work
 
-**F5: the graffiti disclaimer hold. Nine dispatch defects cleared this session; the ICALL chain
-now reaches a non-address target. The title screen has NOT been reached.**
+**F5: the graffiti disclaimer hold. A stack-depth CFG validator is now a repository gate, it proved
+20 live manifest defects that are now repaired, and the first unresolved stop is
+`0x00094AB0` — recovered this session as a complete function the analysis database never had. The
+title screen has NOT been reached.**
 
-**Current state (2026-10-05, second session; read this block first).**
+**Current state (2026-10-05, third session; read this block first).**
+
+The previous session's sixteen dispatch defects were found by spending a game run each. Four of
+them were **stack-contract contradictions that are decidable statically from the original bytes**,
+so this session built the detector first rather than spending more runs:
+`scripts/check-stack-depth.py`, wired into `just check` and registered as CTest `jsrf_stack_depth`
+(`tests/test_stack_depth.py`). It walks each manifest entry's own reachable control flow and
+computes `d = ESP − ESP_at_entry`.
+
+**The identity it rests on.** `scripts/recover-functions.py` asserts
+`g_esp == before_stack + 4 + stack_args` after a body, and a `ret N` leaves
+`esp = entry_esp + 4 + N − d`, so **`stack_args = N − d`**. When every reachable exit is the same
+`ret N` reached at `d = 0`, `stack_args` must be `N` — a fact about that entry's own bytes that
+mentions no callee and needs no global depth reasoning. That is the **only** class the gate fails
+on. `TRUNCATED`, `FALL_OFF_END`, `RET_DEPTH` and `CUT_EPILOGUE` are counted, named and reported as
+`SUSPICIOUS`, because gating them would have required freezing 71+ live defects in a baseline —
+exactly how `0x000307A0` stayed hidden inside `config/entry-extent-baseline.json` while `just check`
+stayed green. **The gate passes with no baseline file at all.**
+
+| # | Stop / defect | Fix | Confirmed by |
+|---|---|---|---|
+| — | 20 entries declaring `stack_args 0` whose bodies end in `ret 4` (`ret 0x14` for `0x80028`) | each set to its body's own ret immediate | validator + independent 20/20 reproduction; no run needed — see below |
+| 17 | `[ICALL] Failed to resolve VA 0x00094AB0` | recovered `0x94AB0..0x95FB2`, `stack_args 0` | g01 run (see the run record) |
+
+**The twenty.** `0x246E0`, `0x42CA0`, `0x80028`, `0x86180`, `0xA5050`, `0xCD890`, `0xD03F0`,
+`0xD62A0`, `0xDB820`, `0xE2050`, `0xE2A00`, `0xE3700`, `0xEDA10`, `0xF4C60`, `0xF8AF0`, `0x11B660`,
+`0x120400`, `0x124B00`, `0x134D50`, `0x139B30`. Each wrapper checked `+4` where the body really nets
+`+8` (`+24` for `0x80028`), so **every one would have aborted with `[RECOVERED] ABI FAILURE …
+expected +4` the moment it ran** — and none ever ran: the twenty addresses appear in 0 of 122
+archived `jsrf_run.log` files, in no `returned; ABI verified` line, in no `ABI FAILURE` line and in
+no textual mention. **No run is claimed for them**; the evidence is the bytes plus an independent
+reproduction by a second worker with its own capstone CFG walker (20/20).
+
+**`0x94AB0` is the `0x80BD0` pattern again.** A complete 4482-byte C++ virtual method with **no
+analysis-database entry at all** — `0x94AA3..0x95FC0` is an unanalyzed gap between `sub_000948F0`
+(which correctly ends at `0x94AA3`) and `sub_00095FC0`. It is reached **only** as slot 2 of the
+`.rdata` vtable at `0x001CD290`, installed by the constructor at `0x000948F0`, so a virtual call
+through it trapped. **Zero rel32 callers**, exactly like `0x80BD0`; the caller is pinned from the
+frozen dump as return `0x00011D6A`, after `call dword ptr [eax+8]` at `0x00011D67` in
+`sub_00011D00`. Body end `0x95FB2` by two independent decode methods agreeing on 1496
+byte-contiguous instructions, three reachable exits (`0x95F42`, `0x95F8B`, `0x95FB1`) all plain
+`ret`, then 14 NOPs. `scripts/check-table-targets.py` already flagged it as UNCOVERED.
+
+**Two models were implemented and discarded on evidence.** Treating calls as depth-neutral, and
+consuming a call's argument pushes. The second cannot tell a prologue save from an argument push and
+produced depth `−52` on `0x7DA30` where the truth is `0`. A `call` now contributes its callee's own
+`ret N` immediate, derived by walking the callee; an unresolvable callee makes the depth `UNKNOWN`,
+never a silent zero. **1051 of 3105 entries are `UNKNOWN`** — a stated coverage limit, not a pass.
+
+**Known open, reported but not gated (the next work, in priority order).** `0x96560` (UNCOVERED,
+real prologue) and `0x96F80` (SWALLOWED by `sub_00096F60`, whose span overruns its own `ret` at
+`0x96F7A`) are the same missing-entry class as `0x94AB0` and were found by the same scan.
+`0x20760` is a **live TRUNCATED defect the existing `check-entry-extents.py` calls harmless
+PADDING** — its `je 0x20801` at `0x207F7` makes the two bytes at `0x20801` reachable, so the old
+gate's linear "unreachable after the terminator" reasoning is wrong there.
+
+**Evidence discipline for this session.** The manifest's twenty values and the `0x94AB0` extent are
+byte-derived; a control regeneration before any edit reproduced `recovered.c` byte for byte
+(`b4d206571457a06f`), so the diff is the manifest's and not generator noise. `just check` and CTest
+**37/37** pass. No baseline file exists. The title screen is still **not reached** and **M15 is not
+claimed**.
+
+**Tool defect found and recorded:** `scripts/check-generation-provenance.py --write` records only
+the measured axes and silently erases the hand-maintained `amendments` and `regenerations` history
+(it dropped 34). They were re-attached from `HEAD`; the tool defect is a backlog item.
+
+**Advisor consultation: requested, not completed.** The Persistent Advisor was spawned and sent the
+validator-design consultation (join semantics, call summaries, SEH, the gating-class split and the
+verdict vocabulary) and ran for over two hours without returning a ruling, so it was stopped. **No
+Advisor ruling is claimed for any decision in this section.** The design rests instead on
+measurements in this file and on an independent worker reproduction: the gating class was narrowed
+after measuring that the broader rules produced 25–185 findings, the two heuristic call models were
+discarded because they produced a demonstrably wrong depth on `0x7DA30`, and the 20 repaired values
+were reproduced 20/20 by a second worker using its own capstone CFG walker. The Advisor's
+earlier design guidance — that `call` is not universally depth-neutral, that `ret N` cleanup must be
+compared independently of the metadata under test, and that folded aliases are not genuine entries
+— is followed; that guidance came from the previous session's review cycle and is cited as such, not
+as a ruling on this turn's work.
+
+**Current state (2026-10-05, second session).**
 
 The blocker chain moved nine times, each step confirmed by the next run advancing to a new site.
 Runs `f16`..`f23` (`20261005-000031-102` … `20261005-011634-413`), all **exploratory**
