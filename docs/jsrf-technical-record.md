@@ -2416,4 +2416,51 @@ time. That is the weaker but honest position — an experiment whose *artifact* 
 evidence is available" are not the same claim.
 
 
+## 20. The under-wide residue: 5 measured, 1 certifiable, 4 explicitly not (2026-10-06)
+
+After F7c and F7d, `check-stack-depth.py` still reports **13 `CUT_EPILOGUE`** and **11 `FALL_OFF_END`**
+findings. The question worth answering is how many of those are the *same class* the two batches
+repaired, and the answer is **not all of them** — which is why they are measured rather than repaired.
+
+Each residual `CUT_EPILOGUE` was tested with the same certificate the batches used: widen to the next
+evidenced start and require a fully enumerated walk whose every exit is one `ret N` at **depth 0**.
+
+| entry | epilogue | widen to next start | enumerated? | distinct `ret` immediate | certifiable? |
+|---|---|---|---|---|---|
+| `0x43EC0` | `pop edi; pop esi; pop ebx; ret 4` | `0x44400` | **yes** | `0x4`, at depth 0 | **yes** — but it crosses `0x44000` |
+| `0x52050` | `pop esi; ret` | `0x52090` | no | — | no |
+| `0x5BAD0` | *not an epilogue*: the bytes at `0x5BB31` decode as `push edi; lea edi,…`, i.e. code | `0x5BB90` | no | — | no |
+| `0x91830` | *not an epilogue*: `0x9188C` decodes as `mov eax,[esp+0xc]; inc esp; …` | `0x918B0` | yes | `0x0` | no — no depth-0 `ret` |
+| `0xD4860` | *not an epilogue*: `0xD487A` decodes as `push ebx; push edi; …` | `0xD5150` | no | — | no |
+
+**So exactly one of the five is the same class, and it is the one F7c already refused.** `0x43EC0`'s
+control flow reaches `0x44227` (`pop edi; pop esi; pop ebx; ret 4`) — which pops exactly the three
+registers `0x43EC0` pushes — and widening to the next start certifies a single `ret 4` at depth 0. But
+that widening **crosses the manifest start `0x44000`**, so F7c's assertion 4 stopped it. Two readings
+remain live and the bytes do not choose between them:
+
+- `0x43EC0` is under-wide and `0x44000` is a false entry, or
+- `0x44000` is a real entry and `0x44227` is a *separate* shared epilogue reached by tail call.
+
+The evidence is genuinely split. `0x44000` has a `.data` dword at `0x0022A394`, but that dword sits in
+a packed run (`0x05038000`, `0x010000`, `0x010000`, `0x00000000`, …) rather than a clean vtable, so it
+is weak entry evidence — and the analysis database labels `0x44000` itself `tail_jump_alias`, which is
+the false-entry signature. Against that, `0x44000` has its own manifest entry and its own dispatch
+tuple, and its own walk is clean. **Not repaired**, and recorded as the one measured case where the
+certificate and the entry evidence disagree.
+
+**The other four are not epilogue cuts at all, and saying so is the useful result.** Three of them
+(`0x5BAD0`, `0x91830`, `0xD4860`) have a "jump target" that decodes as **ordinary code** rather than an
+epilogue, so the finding is a misread continuation and not a truncated span. One (`0x52050`) widens
+into a walk that is not fully enumerated, so the certificate cannot conclude anything. Reporting these
+as "13 remaining defects of the same class" would have been wrong in four of five cases, and it is the
+same error shape as the 192/234 spelling count: a headline number that does not survive being
+measured per instance.
+
+**The remaining 11 `FALL_OFF_END` are a different question** and are not claimed to be this class.
+They include entries whose walk reaches the declared end with no return *and* no function there, which
+is consistent with a genuinely incomplete body or with a shared tail outside the span; each needs its
+own evidence. They are left reported and ungated, as they have been.
+
+
 
