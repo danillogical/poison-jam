@@ -7689,18 +7689,10 @@
  },
  {
   "start": "0x000B5EB0",
-  "end": "0x000B5F3A",
-  "section": ".text",
-  "kind": "routine",
-  "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CD910, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_000B7170 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000B5EB0 at sub_000B7170. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x000B5EB0..0x000B6732. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
-  "stack_args": 4
- },
- {
-  "start": "0x000B5F3A",
   "end": "0x000B6732",
   "section": ".text",
   "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000B7170 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000B5F3A..0x000B6732, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
+  "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CD910, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_000B7170 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000B5EB0 at sub_000B7170. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x000B5EB0..0x000B6732; the end was tightened to 0x000B5F3A by an earlier pass, which cut the function's OWN jump table at 0x000B5F0F: 8 of its 9 arms lie beyond 0x000B5F3A, so the lifter emitted RECOMP_ITAIL instead of a resolved switch and the guest trapped at [ICALL] Failed to resolve VA 0x000B5F82 (run 20261005-211627-927-g07-thunk). The false split 0x000B5F3A is removed: it is an internal label reached by fallthrough from the table arm 0xB5F16 (the call at 0xB5F35 is immediately followed by 0xB5F3A), its only pointer 0x228214 sits inside a packed .data run (neighbours 0x61510442, 0x00985100, 0x38009753) rather than a table, and its walk exits at the same 0xB672F ret 4 as 0xB5EB0. Evidence: logs/runs/20261005-211627-927-g07-thunk and the alias-fold findings in report-deepseek.md (2026-09-21).",
   "stack_args": 4
  },
  {
