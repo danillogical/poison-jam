@@ -44,7 +44,9 @@ plan-turn-review-1-<turn>.md
 plan-turn-review-1-updated-<turn>.md
 ```
 
-These are working artifacts for the active turn, not project-history documents.
+These are working artifacts for the active turn, not project-history documents. **When the turn
+closes, its closing commit deletes all four files**, after anything durable has moved to the plan, the
+technical record or the ledger; a closed turn's files are read with `git show <commit>:<file>`.
 
 ### `plan-turn-start-<turn>.md`
 

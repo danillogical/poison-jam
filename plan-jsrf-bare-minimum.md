@@ -1,1142 +1,167 @@
-# Jet Set Radio Future: Windows port plan — refresh
+# Jet Set Radio Future: Windows port plan
 
-**Status: ADOPTED by the owner 2026-09-29; this file is the execution authority.** Every decision
-taken while writing it was recorded, with its reason and what would reverse it, in the session
-report `report-jsrf-bare-minimum-refresh.md`, removed 2026-10-02 (reports are not kept in the
-repository); read it with `git show 84e7a93:report-jsrf-bare-minimum-refresh.md`.
+**Status: execution authority** (adopted by the owner 2026-09-29; condensed 2026-10-06). The text
+before condensation — every per-run narrative, the Phase 0/1/2 tables and the TTD line — is
+`git show dcc93ab:plan-jsrf-bare-minimum.md`; the condensation and the turns it summarises are
+recorded in `docs/jsrf-operating-history.md` ("2026-10-06 — plan condensed").
 
-Authorities: `docs/agent-workflow.md` owns roles and how agents work,
-`docs/jsrf-run-profiles.md` owns evidence profiles, `docs/jsrf-technical-record.md` ("TR §n") owns
-established facts. Where this plan proposes a change to one of them, it is a task (§6), not an edit.
+**Authorities, so this file does not repeat them.** `docs/agent-workflow.md` owns roles and turns;
+`docs/jsrf-run-profiles.md` owns evidence profiles; `docs/jsrf-technical-record.md` ("TR §n") owns
+established facts; `docs/jsrf-compatibility-ledger.md` owns every shortcut (ledger IDs `Lnn`/`Dn`);
+`config/stop-chain.json` owns the runtime stop chain; `AGENTS.md` owns build and repository
+discipline. This plan owns the objective, the milestones and what to do next.
 
 ---
 
 ## Direction (owner decision, 2026-09-30): the bare minimum is pragmatic
 
-- **Take the path of least resistance to the title screen** (DoD-BOOT, M15), then to the rest of
-  the slice. The route is §13's **title-screen fast path**; it supersedes the ordering of Phase 3
-  until the title screen is reached.
-- **Every departure from running the original code on real hardware is recorded** in
-  `docs/jsrf-compatibility-ledger.md`, classed as reimplemented, translated, emulated, wrapped,
-  stubbed, patched, approximated or intentionally ignored. A shortcut is allowed; an unrecorded
-  shortcut is not.
-- **Exploratory runs may satisfy bare-minimum milestones** when the run's record lists the ledger IDs
-  it relied on (`docs/jsrf-run-profiles.md` §"Pragmatic bare minimum"). Strict runs remain available
-  as a diagnostic for fidelity questions.
-- **The Orchestrator runs the fast path** (`docs/agent-workflow.md`); the Turn reviewer reproduces
-  the milestone (M15) with its ledger IDs.
+- **Take the path of least resistance to the title screen** (DoD-BOOT, M15), then to the rest of the
+  slice. The fast path below supersedes any older ordering until the title screen is reached.
+- **Every departure from running the original code on real hardware is recorded** in the ledger,
+  classed as reimplemented, translated, emulated, wrapped, stubbed, patched, approximated or
+  intentionally ignored. A shortcut is allowed; an unrecorded shortcut is not.
+- **Exploratory runs may satisfy bare-minimum milestones** when the run record lists the ledger IDs
+  it relied on (`docs/jsrf-run-profiles.md` §"Pragmatic bare minimum"). Strict runs remain the
+  diagnostic for fidelity questions.
+- **The Orchestrator runs the fast path**; the Turn Reviewer reproduces a milestone claim, with its
+  ledger IDs, rather than accepting the description.
 
-## 0. What changed from the current plan
+## Current work (state 2026-10-06)
 
-- **Built on the whole history**, not only the last packet: the original milestone ladder
-  (`docs/jsrf-operating-history.md:1806-1880`), every closed packet, the fork audit and fixes
-  (TR §7), and three reviews of the archive at `e73e495` (summarised in the report).
-- **Phase 0 re-baselines on Windows first.** The toolkit fixes (`db96e30..2a349c8`) change strict-path
-  behaviour (kernel memory, data-export thunks) and, after regeneration, generated code. Nothing
-  inherits the old horizon until it is re-measured.
-- **The A2h successor is replaced by one Time Travel Debugging recording** (C1). The archive shows
-  ~70,000 words spent making watch instruments trustworthy against ~13,000 for the answer; a TTD
-  trace is lossless by construction and a reviewer can re-run the same query.
-- **Tooling is planned work** (§5): TTD, XbSymbolDatabase, an xemu oracle, Windows CI, clang-cl,
-  `just`, pre-commit, DuckDB log queries, a checked-in enumerator and a citation lint.
-- **Workflow fixes are tasks** (§6), each tied to a measured failure pattern, with DeepSeek kept as
-  Session and workers and the limited models spent only at named gates and Advisor triggers.
-- **Acceptance criteria are measurable:** every milestone names its profile, artifact, oracle and
-  PASS/FAIL predicate (§8). Rendering milestones use xemu reference frames where available.
-- **Upstream changes re-scope milestones:** input is now largely toolkit-provided (verify, not
-  build); audio carries upstream ADPCM/mixdown fixes; the pushbuffer executor is an exploratory
-  preview only; a rendering-architecture decision (C5) gates every strict graphics milestone.
-- **The strict horizon becomes the progress metric** (§3). It moved twice in nine days (09-24
-  AC'97, 09-27 GP DSP); 21 of 530 game commits moved any stop, and 287 commits followed the last
-  move without moving it again.
-- **Mercenaries-Recompiled is prior art** (2026-09-30): a playable Windows port of another Xbox title
-  on an early fork of the same toolkit. Its lifts are planned in §7a; its comparison also exposed
-  four defects in our toolkit (ledger D1–D4).
+**What boots.** With the title-path switches (`just title-run`, ledger L14–L18, L20–L25, L39, L40):
+SEGA → Smilebit → ADX → Dolby → the graffiti disclaimer (frame hashes `5bdaea576b8509f5` and
+`87683a748e27d071`, both states seen in one run). Then presents stop at a fixed count: **1000** in
+30 of 35 runs before game `0445a80`, **888** in all four after it (TR §19). Runs with **zero**
+dispatch failures stop there too (g06 `20261005-192455-691-g06-thunk`, 905 s; f9
+`20261004-185558-235-f9-frames`, 1203 s). **The title screen is not reached and M15 is not claimed.**
 
-## Current work
+**The present ceiling is the critical path, and its most likely cause is in the GPU model, not the
+guest** (code review 2026-10-06; a hypothesis until step 1 below decides it):
 
-**F6: the hidden-entry detector, and stop 20 confirmed by an exercised run.**
-`scripts/check-hidden-entries.py` proves that a span can be over-wide while its declared `end` is
-"correct"; it found 50 such spans consuming 63 separately evidenced entries, all repaired and gated
-with no baseline. Run **g07 then cleared stop 20** — `[RECOVERED] 0x00154540 returned; ABI verified` —
-so the thunk repair is now **runtime-confirmed**, not merely found. g07 immediately exposed a
-**mirror-image defect**: an *under-wide* span that cut its own jump table. It is repaired and the
-false split removed. **The title screen has NOT been reached and M15 is NOT claimed.**
+- The submission walk commits all-or-nothing (L40): a rejected walk moves no GET, publishes no flip
+  and calls no commit consumer (`xboxrecomp/src/nv2a/nv2a_core.c` `nv2a_submit_pending`). The 10 s
+  `[GPU]` report runs only from that consumer (`xboxrecomp/src/kernel/nv2a_pb_exec.c`
+  `pb_exec_commit_consumer`), so "flips
+  and presents stop together and the report never resumes" is what a rejected walk produces. The
+  earlier reading "both stopped, so the guest stopped submitting" does not follow.
+- The admitted-method table (L39) was measured from the logo and disclaimer pushbuffers only, so the
+  first new scene is likely to send a method it lacks — the F4 stall on `0x1720` was this class. A
+  rejected walk is sticky: every later kick re-walks from the same GET.
+- Until 2026-10-06 the rejection was invisible: the per-submit line stopped at submission 63. The
+  toolkit now logs `[PFIFO] reject …` on the first rejection and on every diagnostic change, and
+  publishes `g_nv2a_submit_state` for dumps.
+- **The fence mirror (L17) removes back-pressure**: it reports every fence complete whether or not
+  the walk consumed the commands, so after a rejection D3D keeps writing the ring. The guest keeps
+  running (its update counters move), and the bytes at GET in a late dump may already be a later
+  frame's. Read a decode at GET as the *current* blocker; the first `[PFIFO] reject` line names the
+  original one.
+- `GET ≠ PUT` alone does not mean "unknown method": budget, loop, sink, invalid handle, bad target
+  and reserved-opcode rejections also pin GET. Branch on the diagnostic.
+- The ceiling moved from 1000 to 888 with the F7b/F7c batches (TR §19). It is recorded as a
+  correlation; once the diagnostic is known, check whether the batch simply changed when the next scene
+  starts.
 
-**Current state (2026-10-05, fourth session; read this block first).**
+**The dispatch stop chain (F7) is cleared through stop 28.** Each stop was a missing, swallowed or
+mis-sized recovered function found by one run; the class is now mostly found statically.
 
-### F6 — the over-wide span class
-
-The motivating case is `0x7DAE0`:
-
-```text
-0x7DAE0   declared [0x7DAE0, 0x7DE20)
-          its own reachable body ends at 0x7DBCB `ret`, then 4 NOPs
-          a complete 190-instruction function begins at 0x7DBD0
-0x7DE20   is BOTH this entry's declared end AND the end of the function at 0x7DBD0
-```
-
-so `check-entry-extents.py` calls the entry correct while a whole function sits inside it. `0x7DBD0`'s
-only reference in the image is the aligned `.rdata` dword at `0x0020D3C8`, no span owns it, and
-dispatch is an **exact-match** binary search, so an indirect call through that dword traps.
-
-**The invariant, and why neither half alone is enough.**
-
-> A manifest entry's declared span must not extend past the end of its own reachable body into an
-> address that has independent evidence of being a separate executable entry.
-
-| half | what it requires | why it is load-bearing |
+| Stops | What they were | Record |
 |---|---|---|
-| the body provably ends early | `Analyzer.walk` (reused from `check-stack-depth.py`) is **fully enumerated**: no truncated decode, **no fall-off**, no `indirect`/`terminal` exit, last reachable instruction a terminator | that is what makes "the walk never visited this address" a *proof*: every path was followed to a known successor, so the reachable set is complete |
-| the address has independent evidence | an aligned `.data`/`.rdata` dword into `.text`, or another manifest start | a bare "unreached address inside the span" is noise; the 265 `OVER_RUN` containers are exactly that and are reported, not gated |
+| 1–16 | unowned gaps, spans that swallowed a later function, spans cut at a folded-alias start, a shared tail epilogue, the alias-folded job handler `0x32610`, `0x80340`/`0x80BD0` | TR §9–§10; `git show dcc93ab:plan-jsrf-bare-minimum.md` "Current work" |
+| 17–28 | missing entries (`0x94AB0` class), this-adjusting thunks, under-wide spans (`0xB5EB0`, `0x48DB0`), the `0x96xxx` vtable family | `config/stop-chain.json` (gate `check-stop-chain.py`, L43): 9 runtime-confirmed (17–22, 25–27), 23 and 24 static-only, **28 (`0x81860`) repaired, not yet exercised**; TR §11–§21 |
 
-**This is the `0x80BD0` lesson used in the safe direction.** `0x80BD0` has **zero** rel32 callers and is
-a real standalone SEH function reached only through a `.rdata` dword; a prior session widened `0x80340`
-to `0x81853` on "no rel32 branch references these interior addresses" and was wrong. So the test here
-is **not** caller absence — it is that *this entry's own control flow was completely enumerated and did
-not arrive at the address*. A test asserts the rejected test appears nowhere in the code.
+**Static gates in `just check`:** entry extents, stack depth (TR §10; gates `stack_args = N` at a
+depth-0 `ret N`), hidden entries (TR §14), dispatch-table count = array (TR §16), the stop-chain
+record (L43). Measured residue (TR §18–§20): stack-depth SUSPICIOUS **67**, span-exit CUT-TARGET
+**210**, span-ownership `KNOWN_OPEN` **25**, zero fatal trap-call sites in `recovered.c`.
 
-**Verdicts.** `HIDDEN_ENTRY` (gates; the consumed address resolves nowhere), `OVERLAP` (gates; it is
-another manifest entry), `SHADOWED` (gates; it already has its own generated body, so adding one is
-`LNK2005`), plus reported-only `MISDISPATCH`, `OVER_RUN` and `UNQUALIFIED`. **The gate needs no
-baseline.** `UNQUALIFIED` is never silently clean: `0x96F60` ends in `jmp dword ptr [eax+8]`, so its
-over-run into `0x96F80` is real but not provable, and a control asserts it stays undecided.
+**Run-to-run variation is first-class.** Same-binary runs take different paths (g03–g06, f25/f26);
+a run that does not reach a changed address proves nothing about it (`scripts/check-run-exercised.py`),
+and a run without the four title-path switches is not comparable (f8 of 2026-10-06).
 
-| # | Class | Repair | Evidence |
-|---|---|---|---|
-| — | 45 `HIDDEN_ENTRY` containers | span tightened to its own reachable end; the consumed address gets its own reviewed entry | byte-derived + the gate; no run needed |
-| — | 5 `OVERLAP` containers | span tightened; the consumed address already owned an entry | `0x5BF00`→`0x5C840`, `0x18AFA0`→8 entries, `0x18C150`→2, `0x190FB0`, `0x1910C0` |
-| — | 2 `SHADOWED` containers | span tightened only | `0x556D0`, `0xC42E0` already have generated bodies — a real `LNK2005` proved it |
-| 20 | `ABI FAILURE 0x00154540 expected +24` (delta 16) | two this-adjusting thunks corrected 20→12; swallowed `0x154560` recovered (`stack_args 20`) | **g05 found it; g06 did NOT exercise it; g07 AND g08 both CONFIRMED it** — `[RECOVERED] 0x00154540 returned; ABI verified` |
-| 21 | `[ICALL] Failed to resolve VA 0x000B5F82` | `0xB5EB0` restored to its real end `0xB6732`; false split `0xB5F3A` removed; generated patches `remove-b5f3a-dispatch` + `fix-dispatch-table-size` (L02) | **g07 found it; g08 did NOT exercise `0xB5EB0`** — byte-derived repair, still **NOT runtime-confirmed** |
-| 22 | `ABI FAILURE 0x00048DB0 expected +4` (observed delta `-0xA8`) | **not yet repaired** — `0x48DB0`'s walk has two `UNKNOWN`-depth tails and a fall-off at its declared end | **g08 found it** |
-| — | host crash at `recomp_dispatch.c:9299` **before `guest_entry`** | my own `remove-b5f3a-dispatch` removed a tuple but left `g_recomp_table_size = 8928`; companion patch decrements it to 8927 | g08/g08b died in 4 s; **g08c reached `guest_entry`** |
+## Fast path to the title screen
 
-**A host crash this turn shipped, and the control that found it.** `remove-b5f3a-dispatch` removed the
-`0x000B5F3A` dispatch tuple but left `g_recomp_table_size = 8928` while the array held 8927, so
-`recomp_dispatch_init` read one entry past the end and wrote from the garbage: a host access violation
-at `recomp_dispatch.c:9299`, **before `guest_entry`**, in g08 and g08b. **Every static gate passed on
-that tree** — `just check`, CTest and `check-merge-structure.py` all accept a dispatch table whose
-declared size exceeds its contents, the sharpest instance yet of a green suite saying nothing about a
-class no checker covers. It was localized by re-running **g07's archived binary** in the same environment
-(it reached `guest_entry`; the new build died at the same log line), not by guessing. Fixed by the
-companion patch `fix-dispatch-table-size`; g08c then reached `guest_entry` with
-`checkpoints_passed: true`. **Durable rule: a patch that removes a table entry must correct that table's
-declared count in the same change.**
-
-**g08 (`20261005-223404-818-g08-b5eb0-fixed`, exploratory, 247.7 s) — stop 20 re-confirmed, stop 21 NOT
-exercised, stop 22 found.** It re-confirmed `0x00154540` with an ABI-verified return, but **never
-executed `0xB5EB0`**, so stop 21 stays **NOT runtime-confirmed** and is recorded as NOT EXERCISED
-rather than as a pass — the same discipline g06 required. It then produced
-`ABI FAILURE 0x00048DB0 esp 00F7FE50->00F7FDA8 expected +4`. `0x48DB0`'s declared span is
-`[0x48DB0, 0x48FBB)` and its own walk has **no resolved exit**: two tails at `UNKNOWN` depth
-(`0x496AC`, `0x49669`) plus a fall-off at its end, so its extent or its `stack_args` is wrong. It is
-**not yet repaired**.
-
-**Advisor ruling (first real one this turn).** The owner directed the route change to
-`codex/gpt-6.1-sol` @ xhigh after the previous route failed three times. It corrected two of this turn's
-measurements, both recorded in TR §17:
-
-- the **192 bodies / 234 targets** "fatal stub" population is a **generic external-tail spelling** count,
-  not a fatal one — only **27 bodies / 50 targets** resolve to actual production trap definitions. The
-  earlier position breakdown (115/74/30/15) was measured on the inflated set and must not be relied on;
-- **`0xFC370` is not an unrelated-guard example.** Its real shape is a two-level selector map
-  (`cmp eax,8; ja; movzx eax, byte [eax+0xFC490]; jmp [eax*4+0xFC484]`), nine selector bytes selecting
-  three dword slots, so `0x20200` is selector-map data misread as a fourth pointer. A guard must be tied
-  to the **actual index value at the jump**, through any remap — not to a register name or the nearest
-  `cmp`, and not to "`N+1` equals the consecutive-in-`.text` run", which is neither necessary nor
-  sufficient.
-
-**Its recommendation, dispositioned:** do **not** gate "out-of-span arm" alone (accepted — no under-wide
-gate is added); gate a narrower *certified lost continuation* class zero-baseline with a stated proof
-rule (accepted as backlog, rule recorded in TR §17); keep the broad census mandatory and visible and do
-not add it to a frozen baseline (accepted — `KNOWN_OPEN` subtraction is explicitly **not** closure); and
-repair `0xB06E0` as a small unit rather than leaving it indefinite (**accepted, and not done this turn**
-— recorded as the next static work).
-
-**`0xB06E0` is a proved static defect, re-verified from the original bytes.** Its span
-`[0xB06E0, 0xB0811)` stops before its **own epilogue** at `0xB09DC` (`pop esi; ret 4`), and the emitted
-body calls the fatal stub `sub_000B09DC` **twice** and `sub_000B09D9` **four** times. A valid object with
-`[ecx+0x128] == 0xFFFFFFFF` selects a plain return needing no table heuristic. **No g07/g08 path has
-been observed to reach it**, which affects priority, not whether it is broken.
-
-**The next actions, in order.** (1) Repair `0x48DB0` (stop 22) from the bytes. (2) Repair `0xB06E0`
-with a negative old-span control, then re-run the hidden-entry and stack-depth gates. (3) A further
-bounded exploratory run to exercise `0xB5EB0` — two consecutive runs have now failed to reach it, so the
-honest state is **NOT EXERCISED**, not fixed. (4) Backlog: the certified-continuation gate, the
-misdispatch census (`0xE9A40`, `0x100AB0`, `0x1199C0`, `0x13A340`, still **not run**), the nine
-identity-unproven `0x200A5`–`0x200F7` micro-entries contained by `0x1FFF0`, and the
-`check-generation-provenance.py --write` history-erasure defect.
-
-**Pushed 2026-10-05 (turn `title-003`), toolkit first.** Toolkit
-`PUSHED_TO: origin / BRANCH: main / COMMIT: 6e6e05664f438ad8b95b0c5186a770da8e54e883 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: clean and in sync with origin/main; intentionally unchanged this turn, nothing to push`.
-Game `PUSHED_TO: origin / BRANCH: master / COMMIT: d8632ce / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward b065050..d8632ce master -> master`.
-Game `PUSHED_TO: origin / BRANCH: master / COMMIT: 464df3b / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward d8632ce..464df3b master -> master`.
-
-**On those receipts, stated honestly.** Turn Review 1 observed that no `PUSHED_TO` record existed for
-`b065050..d8632ce` and that `82a2c40` was one ahead of origin at review time. Both observations are
-correct about the state *then*: the receipts were written after the pushes rather than before them, and
-`82a2c40` was published in the second push. These lines are written from the actual push output, not
-reconstructed from memory.
-
-**Census: 50 containers, 63 consumed addresses, 48 of the 50 containers `tail_jump_alias` records** —
-the same dominant stop class §11 names (the two `OVERLAP` containers `0x190FB0` and `0x1910C0` have no
-database record). The consumed bodies are substantial, not stubs: 50 to 1213 bytes,
-**median 366**. Of the 48 additions, **38 are `PROVED`** (a fully enumerated walk reaches a `ret N` at
-depth 0, so `stack_args = N` by the §10 identity) and **10 are `INFERRED`** (every reachable `ret`
-agrees on `N`, but no path reaches one at depth 0).
-
-**Consistency check, not independent reproduction (corrected by Turn Review 1).** A prototype written
-before the checker agreed with `check-table-targets.py`'s existing in-span rule on 50 of 52 candidates,
-the two differences being exactly the two opaque-exit containers, and it re-found `0x96F80`. **The
-reviewer is right that this is weaker than it was first written.** The prototype is **not in the
-repository**, so its 50/52 agreement cannot be re-run; both methods read the **same aligned-dword
-sweep**, so they share an evidence source rather than being independent; and `0x96F80` was **already
-listed as known-open** in this plan (and is hard-coded in the selfcheck and tests), so "re-found
-unprompted" cannot be re-checked. It is recorded as a **shared-source consistency check**. What does
-carry weight is the committed bad→good controls and the reviewer's own replay on `b065050`'s manifest.
-
-**Four real defects were caught, and only one by a test.** The earlier wording said "three caught by
-tests, each now a guard", which overstates the mechanism (corrected by Turn Review 1):
-
-1. **`apply()` keyed additions to the container's start**, dropping all 50 while reporting success —
-   caught by an **ad-hoc set-difference count**, not a test.
-2. **Two additions collided with generated bodies** (`0x556D0`, `0xC42E0`) — caught by the **linker**.
-3. **`0xB3C30` was given an extent one tail-jump short** — this one **was** caught by
-   `tests/test_recovery_span_ownership.py`, and it is the only one with a standing regression.
-4. **The dispatch-table size crash** (`recomp_dispatch.c:9299`, before `guest_entry`) — caught by
-   **running g07's archived binary as a control**, not by any test.
-
-`repair-hidden-entries.py` now **implements** the pre-write checks its docstring had only claimed
-(gate cleanliness, no duplicate start, in-`.text` additions, standalone liftability); before this
-remediation the docstring described checks `main()` did not perform, which is the same silent-success
-shape as defect 1.
-
-1. **`apply()` keyed additions to the container's start**, so all 50 new entries were dropped while the
-   script printed `wrote 3110 entries` and the checker still passed — removing the additions removes
-   the finding. Caught by counting `set(after) − set(before)`, not by trusting the exit code.
-2. **Two additions collided with generated bodies** (`0x556D0`, `0xC42E0`): the chunk already defines
-   `sub_<va>`, so the link failed with `LNK2005 … already defined in recovered.obj`. `SHADOWED` is that
-   class, read from `recomp_dispatch.c`'s own-symbol tuples.
-3. **`0xB3C30` was given an extent one tail-jump short.** Bounded at `0xB3D67` its walk looks complete,
-   but two exits are tail jumps to `0xB3DCF`/`0xB3DD0`, internal to the real body ending at `0xB3DD4`,
-   so the generated body called a fatal stub for its own continuation —
-   `tests/test_recovery_span_ownership.py` caught it.
-
-**A jump-table under-read guarantee, corrected.** The detector's docstring claimed an under-read table
-"degrades the entry to `UNQUALIFIED`". Turn Review 1 showed that is **stronger than the code**:
-`Analyzer.walk` records an `indirect` exit only when *no* arm it read is in span, so a table that stops
-early but has at least one in-span arm is still treated as enumerated. Measured on the 50 gate
-containers: **none has a dropped arm**, so the gate is sound for this population — but the guarantee
-does not generalise, and TR §17 records the Advisor's bounded rule for a future one. The `OVERLAP`
-docstring also read broader than the code: it covers evidenced starts in the **over-run past the
-own-body end**, not all overlapping spans.
-
-### Stop 20 — runtime-confirmed by g07
-
-Run **g07** (`20261005-211627-927-g07-thunk`, exploratory, 900 s budget, ended `unhandled_exception` at
-241 s) logs exactly one `[RECOVERED] 0x00154540 returned; ABI verified (ESP/EBX/ESI/EDI)`. That is the
-confirmation g05 found and g06 missed, so the thunk repair is **runtime-confirmed** and the
-found-versus-confirmed distinction is discharged. The same run exercised `0x5BF00`/`0x5C840`,
-`0x496E0` and `0x488B0`.
-
-**It is not title progress, and the run says so.** Presents still froze at exactly **1000** with the
-disclaimer hash `5bdaea576b8509f5` unchanged, and the thunk executed **after** that freeze — the
-`[FBPRESENT] presents=1000` line is 75471 and the ABI-verified return is 105311, in a 105,337-line log.
-The 1000-present ceiling is untouched.
-
-### The mirror-image class g07 exposed: an under-wide span that cuts its own jump table
-
-```text
-0x000B5EB0  declared [0x000B5EB0, 0x000B5F3A)   <- tightened by an earlier pass
-            its OWN jump table at 0x000B5F0F has 9 arms
-            8 of those arms lie beyond 0xB5F3A: 0xB5F82, 0xB632D, 0xB6574, 0xB670E
-            so the lifter emitted RECOMP_ITAIL instead of a resolved switch
-            the guest took the 0xB5F82 arm and trapped
-```
-
-With the tightened end the emitted body is one line — `RECOMP_ITAIL(MEM32(eax * 4 + 0xB6734))` — naming
-no arm. With the real end it is a `switch` whose five distinct arms all resolve to `loc_` labels and
-the body has no unresolved `sub_` call. `0x000B5F3A` is **not** an entry: it is reached by
-**fallthrough** from the table arm `0xB5F16` (the `call` at `0xB5F35` is immediately followed by it),
-its only "pointer" `0x228214` sits in a packed `.data` run (`0x61510442`, `0x00985100`, `0x38009753`),
-and its walk exits at the same `0xB672F ret 4` as `0xB5EB0`.
-
-**A discriminator was tried and discarded, and the reason is worth keeping.** The "reads a register
-before writing it" test that proved `sub_000BBA04` false **does not generalise**: **684** genuine
-manifest entries trip it (330 read `ecx` first — a thiscall entry legitimately reads `ecx` — and 321
-read `ebp`). Reporting those would have been confident nonsense; the owner-reachability and
-jump-table-arm evidence is what the repair rests on instead.
-
-**The repair needed a second, non-obvious step.** Restoring the span alone does not link:
-`recomp_dispatch.c` is translation-owned and still carried
-`{ 0x000B5F3Au, (recomp_func_t)sub_000B5F3A }`, so the build failed with `LNK2001: unresolved external
-symbol sub_000B5F3A`. `config/generated-patches.json` gains `remove-b5f3a-dispatch` (**L02**), following
-the `remove-54750-stub` precedent — the patch system requires a non-empty replacement, so the tuple
-becomes a comment. `recovered.c` **3157** functions; manifest entries 3158 → 3157.
-
-**The under-wide class is measured but NOT gated, and that is deliberate.** A candidate population of
-**71** adjacent-entry pairs exists where the owner's walk reaches the next entry's start, but it is
-dominated by legitimate splits — the `0x200A5`/`0x200A8`/`0x200AD` run is a chain of real
-continuations. The needed discriminator ("the owner's own table arm reaches this address" versus "this
-is simply the next function") is **not established**, so the population is recorded as an open
-measurement rather than frozen into a gate.
-
-### Verification and repository state
-
-`just check` green; CTest **38/38** (was 37; `jsrf_hidden_entries` added); stack-depth `--selfcheck`
-**10/10**; hidden-entry `--selfcheck` 5/5 controls plus **17** unit tests, including a deciding negative
-control that re-injects the motivating defect into a temporary manifest and requires the real gate to
-exit nonzero. Commits `6f2e4e2` (detector + repairs), `b2179d2` (records), `64945a3` (stop 20 +
-`0xB5EB0`).
-
-**A known tool defect was hit twice more and worked around, not fixed.**
-`check-generation-provenance.py --write` records only the measured axes and erases the hand-maintained
-`amendments` and `regenerations` history. It has now dropped them **four times** this session (39/1,
-then 40/2, then 41/3 across two more rewrites). Every time they were re-attached from the pre-write
-copy, so the file holds **41 amendments and 3 regenerations**. **The tool is still wrong**; the
-workaround is not a fix, and this is a backlog item.
-
-**Advisor status: the Persistent Advisor did not run.** It was spawned three times on the
-detector-design consultation (invariant soundness, gate-versus-census, the trap/misdispatch split) and
-each child **failed before finishing with no closing message**. Per `docs/agent-workflow.md` §1 an
-unavailable route is **reported, never silently replaced**, so **no Advisor ruling is claimed for any
-decision in this section**. The design rests instead on the measurements above, on the two independent
-reproductions (the prototype's 50/52 agreement with the existing rule, and the re-finding of
-`0x96F80`), and on the four real defects the tests and the run caught.
-
-**Current state (2026-10-05, third session).**
-
-The previous session's sixteen dispatch defects were found by spending a game run each. Four of
-them were **stack-contract contradictions that are decidable statically from the original bytes**,
-so this session built the detector first rather than spending more runs:
-`scripts/check-stack-depth.py`, wired into `just check` and registered as CTest `jsrf_stack_depth`
-(`tests/test_stack_depth.py`). It walks each manifest entry's own reachable control flow and
-computes `d = ESP − ESP_at_entry`.
-
-**The identity it rests on.** `scripts/recover-functions.py` asserts
-`g_esp == before_stack + 4 + stack_args` after a body, and a `ret N` leaves
-`esp = entry_esp + d + 4 + N` (the convention is `push` -> `d -= 4`), so
-**`stack_args = N + d`**. When every reachable exit is the same
-`ret N` reached at `d = 0`, `stack_args` must be `N` — a fact about that entry's own bytes that
-mentions no callee and needs no global depth reasoning. That is the **only** class the gate fails
-on. `TRUNCATED`, `FALL_OFF_END`, `RET_DEPTH` and `CUT_EPILOGUE` are counted, named and reported as
-`SUSPICIOUS`, because gating them would have required freezing 71+ live defects in a baseline —
-exactly how `0x000307A0` stayed hidden inside `config/entry-extent-baseline.json` while `just check`
-stayed green. **The gate passes with no baseline file at all.**
-
-| # | Stop / defect | Fix | Confirmed by |
-|---|---|---|---|
-| — | 20 entries declaring `stack_args 0` whose bodies end in `ret 4` (`ret 0x14` for `0x80028`) | each set to its body's own ret immediate | validator + independent 20/20 reproduction; no run needed — see below |
-| — | **4 more the same class** (`0x21010`→16, `0xF4FF0`→4, `0x102490`→4, `0x152BC0`→24) | per-path rule; 2 also had a swallowed function each, now recovered | validator; found twice independently — no run needed |
-| 17 | `[ICALL] Failed to resolve VA 0x00094AB0` | recovered `0x94AB0..0x95FB2`, `stack_args 0` | **g03 and g04**: `[RECOVERED] 0x00094AB0 returned; ABI verified` in both |
-| 18 | `[ICALL] Failed to resolve VA 0x000496E0` | recovered `0x496E0..0x497D6`, `stack_args 8` (inferred, not proved) | **g03** reached it; **g05 confirms** the ABI-verified return |
-| 19 | `[ICALL] Failed to resolve VA 0x0005C840` | recovered `0x5C840..0x5C983`, `stack_args 0` (inferred) | **g04** reached it; **g05 confirms** the ABI-verified return |
-| 20 | `ABI FAILURE 0x00154540 expected +24` (observed delta 16) | two this-adjusting thunks corrected 20→12; the swallowed `0x154560` recovered (`stack_args 20`) | **g05** found it; **not yet re-observed** — needs a run to confirm the advance |
-
-**Run g05 (`20261005-185514-638-g05-confirm`, exploratory, 253 s) is the strongest run so far.**
-It exercised **both** earlier repairs — exactly one `[RECOVERED] 0x000496E0 returned; ABI verified`
-and one for `0x0005C840` — so stops 18 and 19 are now confirmed by a run rather than merely found.
-It then advanced to a **new defect class**: `ABI FAILURE 0x00154540 esp 00F7FD30->00F7FD40 expected
-+24`.
-
-**The thunk class, settled by observation.** `0x154540` and `0x154520` are *this-adjusting thunks*:
-they load the object from `[esp+4]`, take its vtable, adjust the second argument, and end in an
-indirect **tail** jump `jmp dword ptr [ecx+0x6c]`. Because a tail jump reuses the frame, the cleanup
-the caller performs is the **tail target's** `ret N`, so the thunk's `stack_args` must equal that
-target's cleanup. g05's frozen dump (mapping verified first) gives the chain: entry esp `0x00F7FD30`
-→ `[esp+4] = 0x0106C870` (the object) → `[0x0106C870] = 0x001E0F00` (its vtable) → `+0x6c` slot =
-`0x00154420`, whose reachable exits are all `ret 0xc` = 12. The measured delta is 16 and
-**4 + 12 = 16 closes exactly**. Both thunks are corrected 20 → 12, and `0x154540`'s declared 20 was
-not its own: its span had swallowed a complete function at `0x154560` whose exits are `ret 0x14` =
-20 — the `0x152BC0`/`0x74C70` pattern again. That function is recovered as
-`[0x154560, 0x1548DC)` `stack_args 20`.
-
-**A sign error in the recorded identity was found by adversarial review and is corrected.** With the
-checker's convention (`push` → `d -= 4`), a `ret N` gives **`stack_args = N + d`**, not `N − d`. The
-gate was never wrong — the forms agree at `d == 0` — but the prose and the stated reason for not
-gating the general form were. The corrected measurement: of the **29** entries with a resolved
-nonzero-depth `ret N`, **every one** has `d > 0` (min 4, max 100), i.e. the walk popped registers the
-body never pushed, which is the signature of a mid-function entry or an over-wide span. That is an
-*extent* question, and asserting the extent is right in order to conclude the value is wrong is
-circular. `0x1BCB14` is now documented correctly: it starts mid-function and pops `esi`/`ebx` it never
-pushed, so `d = +8` and `N + d = 12` — exactly its declared value, which is why it must stay ungated.
-
-**Independent verification of the thunk repair and the sign correction.** Two verifier subagents
-failed to launch, so these checks were run directly against the committed tree rather than delegated.
-Each is reproducible:
-
-| claim | how it was checked | result |
+| Step | State | Acceptance / pointer |
 |---|---|---|
-| `stack_args = N + d` | `Analyzer._transfer(<push esi>, 0)` returns `-4`, so `d = ESP_now − ESP_entry`; a `ret N` leaves `entry + d + 4 + N` while the wrapper asserts `entry + 4 + stack_args` | **confirmed** — `N + d` |
-| the sign cannot affect the gate | the gated branch reads only `d == 0`, where the two forms coincide | **confirmed** — no gated verdict can change |
-| "29 entries, all `d > 0`, min 4 max 100" | re-measured with the checker's own `Analyzer` | **confirmed exactly**: 29 entries, `d < 0` count 0, min 4, max 100. Under the wrong sign 25 appeared negative; under `N + d`, none do |
-| `0x1BCB14` is right at `d = +8` | disassembled `[0x1BCB14, 0x1BCBCC)`: it pushes at `0x1BCB48`, `0x1BCBA8`, `0x1BCBBA`, `0x1BCBBC` and pops `esi`/`ebx` at `0x1BCBC7`/`0x1BCBC8` — registers it never pushed — then `ret 4` | **confirmed** — `N + d = 4 + 8 = 12` = its declared value |
-| the g05 thunk chain | read from the frozen dump after `check-dump-mapping.py` passed | **confirmed byte for byte**: entry esp `0x00F7FD30` → object `0x0106C870` → vtable `0x001E0F00` → `+0x6c` = `0x00154420`; observed delta 16 = `4 + 12` |
-| `0x154420`'s exits | reachable walk from `0x154420` | **confirmed** — `ret 0xc` (`C2 0C 00`) at `0x154440` and `0x15445D`; cleanup 12 |
-| each thunk is in exactly one table | scanned all `.data`/`.rdata` for aligned dwords | **confirmed** — `0x154520` only at `0x1E0F70`, `0x154540` only at `0x1E0F74` |
-| the false epilogue is gone | searched the manifest and the technical record for `add esp,0x50` | **2 hits, both correct**: `0x94AB0`'s own real epilogue, and the explicit retraction paragraph |
-| the baseline has no duplicates | compared all `updates` causes | **confirmed** — 38 records, 38 distinct |
-
-**Run g06 (`20261005-192455-691-g06-thunk`, exploratory, 905 s) confirms NOTHING about stop 20, and
-that is the honest reading.** It ended `diagnostic_deadline` — the bounded capture expired, not a
-crash — after 457 ABI-verified returns, with **zero** `ABI FAILURE` and **zero**
-`Failed to resolve` lines, and it sat at exactly 1000 presents with the disclaimer hash
-`5bdaea576b8509f5` unchanged. It never reached `0x154540`, `0x154520` **or even `0x94AB0`**: it took
-a path that avoids the whole thunk region. So stop 20 remains **found-but-unconfirmed**, and g06
-neither confirms nor refutes the `0x154540`/`0x154520` repair. A run that reaches that address is
-still owed.
-
-**This is the fourth independent instance of the run-to-run variation this project treats as
-first-class**, and the variation is getting wider, not narrower: g03 reached `0x496E0`, g04 reached
-`0x5C840` (not `0x496E0`), g05 reached both **and** `0x154540`, and g06 reached none of them while
-running three times as long as g05. A single run therefore cannot establish progress in either
-direction, which is why the table above separates "reached it" from "confirmed by an ABI-verified
-return" and why a clean g06 is recorded as **not exercised** rather than as a pass.
-
-**Run g03 (`20261005-174422-643-g03-94ab0`, exploratory, 246 s).** The first run to exercise
-`0x94AB0`: exactly one `[RECOVERED] 0x00094AB0 returned; ABI verified (ESP/EBX/ESI/EDI)` line, so
-the return is path-exercised rather than merely present. It then advanced to
-`[ICALL] Failed to resolve VA 0x000496E0`, an address in **no** earlier archived run.
-
-**Run g04 (`20261005-175848-754-g04-496e0`, exploratory, 250 s).** It exercised `0x94AB0` again
-(one ABI-verified return) but then took a **different path** and stopped at
-`[ICALL] Failed to resolve VA 0x0005C840` — also absent from every earlier run. This is the
-documented run-to-run nondeterminism, **not** a regression, and it is why g04 neither confirms nor
-refutes the `0x496E0` repair: g04 never reached that address. Both runs stop issuing flips at
-exactly 1000 presents with the disclaimer hash `5bdaea576b8509f5` unchanged, and **the title screen
-was not reached** in either. Both are exploratory and carry no acceptance evidence.
-
-**`0x496E0` and `0x5C840` are both the `0x94AB0` class.** A complete function with no
-analysis-database entry of its own, swallowed by (or adjacent to) an over-wide `tail_jump_alias`
-record that overruns several real functions:
-
-| address | the over-wide record | own body | exits | `stack_args` |
-|---|---|---|---|---|
-| `0x94AB0` | *none* — an unanalyzed gap `0x94AA3..0x95FC0` | `0x94AB0..0x95FB2` | 3 × plain `ret` at depth 0 | 0 |
-| `0x496E0` | `sub_00049520 [0x49520, 0x4A6F0)` | `0x496E0..0x497D6` | 1 × `ret 8` at depth 0 | 8 |
-| `0x5C840` | before `sub_0005C990` / `sub_0005CB90`, both `[0x5C990, 0x5D3B0)` | `0x5C840..0x5C983` | `jmp 0x1BAA50` and plain `ret`, both at depth 0 | 0 |
-
-`0x496E0`'s swallowing record overruns four functions the manifest already owns separately
-(`0x497E0`, `0x49A80`, `0x49E80`, `0x4A6C0`). `0x5C840` has **zero rel32 callers** and exactly one
-reference in the image, the `.data` dword at `0x001FA1C0` — the `0x80BD0`/`0x94AB0` pattern again.
-Its `stack_args 0` is derived from the bytes rather than the model, because two calls on its walk
-are not statically resolvable; both resolvable exits sit at depth 0 and total 4. The model reports
-it `UNKNOWN`, not `PROVED`, and the record says so.
-
-**Two runs were lost to environment faults; the failures are observed, the causes are inferred.**
-`g01` was killed mid-run and left no `result.json` (observed); that a tool interruption killed it is
-**inferred** from this session's own history, not verifiable from its artifacts, which show only
-that it reached `guest_entry` and has a 23 MB log. `g02` then failed in 2.7 s at
-`[SAVE] root rejected: requested directory is not writable (winerror=5)` without reaching
-`guest_entry` (observed). That this was stale state from the interrupted run is **inferred**; what
-was actually done is that the save-root was tested for writability by hand and found writable, after
-which `g03` ran normally. Neither loss is evidence about any code change, and neither is counted as
-a stop.
-
-**The twenty.** `0x246E0`, `0x42CA0`, `0x80028`, `0x86180`, `0xA5050`, `0xCD890`, `0xD03F0`,
-`0xD62A0`, `0xDB820`, `0xE2050`, `0xE2A00`, `0xE3700`, `0xEDA10`, `0xF4C60`, `0xF8AF0`, `0x11B660`,
-`0x120400`, `0x124B00`, `0x134D50`, `0x139B30`. Each wrapper checked `+4` where the body really nets
-`+8` (`+24` for `0x80028`), so **every one would have aborted with `[RECOVERED] ABI FAILURE …
-expected +4` the moment it ran** — and none ever ran: the twenty addresses appear in 0 of 122
-archived `jsrf_run.log` files, in no `returned; ABI verified` line, in no `ABI FAILURE` line and in
-no textual mention. **No run is claimed for them**; the evidence is the bytes plus an independent
-reproduction by a second worker with its own capstone CFG walker (20/20).
-
-**`0x94AB0` is the `0x80BD0` pattern again.** A complete 4482-byte C++ virtual method with **no
-analysis-database entry at all** — `0x94AA3..0x95FC0` is an unanalyzed gap between `sub_000948F0`
-(which correctly ends at `0x94AA3`) and `sub_00095FC0`. It is reached **only** as slot 2 of the
-`.rdata` vtable at `0x001CD290`, installed by the constructor at `0x000948F0`, so a virtual call
-through it trapped. **Zero rel32 callers**, exactly like `0x80BD0`; the caller is pinned from the
-frozen dump as return `0x00011D6A`, after `call dword ptr [eax+8]` at `0x00011D67` in
-`sub_00011D00`. Body end `0x95FB2` by two independent decode methods agreeing on 1496
-byte-contiguous instructions, three reachable exits (`0x95F42`, `0x95F8B`, `0x95FB1`) all plain
-`ret`, then 14 NOPs. `scripts/check-table-targets.py` already flagged it as UNCOVERED.
-
-**Two models were implemented and discarded on evidence.** Treating calls as depth-neutral, and
-consuming a call's argument pushes. The second cannot tell a prologue save from an argument push and
-produced depth `−52` on `0x7DA30` where the truth is `0`. A `call` now contributes its callee's own
-`ret N` immediate, derived by walking the callee; an unresolvable callee makes the depth `UNKNOWN`,
-never a silent zero. **1041 of 3110 entries are `UNKNOWN`** — a stated coverage limit, not a pass.
-
-**Known open, reported but not gated (the next work, in priority order).** `0x96560` (UNCOVERED,
-real prologue) and `0x96F80` (SWALLOWED by `sub_00096F60`, whose span overruns its own `ret` at
-`0x96F7A`) are the same missing-entry class as `0x94AB0`, `0x496E0` and `0x5C840`, and were found by
-the same scan. `0x20760` is a **live TRUNCATED defect the existing `check-entry-extents.py` calls
-harmless PADDING** — its `je 0x20801` at `0x207F7` makes the two bytes at `0x20801` reachable, so
-the old gate's linear "unreachable after the terminator" reasoning is wrong there. `0x1BCB14` is the
-one entry the gate deliberately reports rather than fails: a single `ret 4` declared as 12, which is
-correct if its depth is −8, and it has **no** path reaching that `ret` at depth 0 — so `stack_args =
-N + d` genuinely cannot be evaluated for it, and it is run-verified in 106 archived runs, which is
-the control proving the rule must not touch it.
-
-**A false-negative was found in the gate and it had hidden four more defects.** The first shipped
-rule required *every* reachable exit to be a `ret N` at depth 0. But `stack_args = N + d` holds on
-each path separately, so a single `ret` site reached at depth 0 by one path and at UNKNOWN by
-another (through an indirect call) made the whole entry report only `UNKNOWN/PARTIAL` — hiding a
-live defect behind an unrelated unresolved path. The rule now gates on **any** reachable `ret N` at
-depth 0. Measured: 20 defects before, **24** on the pre-turn manifest, 4 on the current one, all four
-now repaired: `0x21010` (0 → 16, the key was ABSENT so the wrapper used the 0 default and checked
-`+4` while the body emits `esp += 20`), `0xF4FF0` (0 → 4), `0x102490` (0 → 4) and `0x152BC0` (8 → 24).
-**This was found twice independently** — by adversarial review and by re-deriving the rule — and both
-times the same four addresses. Two of the four were also swallowing a whole function each
-(`0x102490` covered `0x1025B0`; `0x152BC0` covered `0x152DE0`), so both spans are tightened and the
-swallowed functions are recovered; `0x152BC0`'s wrong 8 was itself inherited from `0x152DE0`'s own
-correct `ret 8`, the `0x74C70` pattern.
-
-**The general `N + d` form is NOT gated, and that is measured.** Of the **29** entries with a
-resolved nonzero-depth `ret N`, **every one** has `d > 0` (min 4, max 100): the `ret` is reached with
-*more* stack than at entry, i.e. the walk popped registers the body never pushed. That is the
-signature of a mid-function entry or an over-wide span whose walk ran into a neighbouring function,
-so a nonzero `d` is only as trustworthy as the span extent — and asserting the extent is right in
-order to conclude the value is wrong is circular. All 29 also disagree with their declared value and
-none has a verified return in any archived run, so nothing is hidden by leaving them to `RET_DEPTH`,
-the code that exists for exactly that adjudication. The gate uses only the `d == 0` case, a claim
-about one concrete path through this entry's own bytes.
-
-**What the gating class does and does not depend on.** It is a statement about *this entry*: at a
-reachable `ret N` reached at depth 0, the declared value must be `N`. But the **depth** is not always
-computable from this entry alone — a `call` contributes its callee's own `ret N` immediate, derived
-by walking the callee with manifest/database spans to find its extent. So the honest statement is
-that the conclusion is about this entry while the depth may rest on callee summaries. Treating every
-`call` as depth-neutral was measured and discarded: it finds **zero** defects on the pre-turn
-manifest, because all twenty need their callee's cleanup resolved to reach the `ret` at depth 0.
-
-**Repair rate to expect.** Run g03 shows the stop chain still advancing one site per run at this
-point in boot, and the newest two stops (`0x94AB0`, `0x496E0`) were both the *same* class — a
-complete function swallowed by an over-wide `tail_jump_alias` record. `scripts/check-table-targets.py`
-reports 120 such candidates, so the next several stops are likely to come from that population and
-can be cleared from the bytes before spending a run, as `0x496E0` was.
-
-**Evidence discipline for this session.** The manifest's twenty values and the `0x94AB0` extent are
-byte-derived; a control regeneration before any edit reproduced `recovered.c` byte for byte
-(`b4d206571457a06f`), so the diff is the manifest's and not generator noise. `just check` and CTest
-**37/37** pass. No baseline file exists. The title screen is still **not reached** and **M15 is not
-claimed**.
-
-**Tool defect found and recorded:** `scripts/check-generation-provenance.py --write` records only
-the measured axes and silently erases the hand-maintained `amendments` and `regenerations` history
-(it dropped 34). They were re-attached from `HEAD`; the tool defect is a backlog item.
-
-**Advisor consultation: requested, not completed.** The Persistent Advisor was spawned and sent the
-validator-design consultation (join semantics, call summaries, SEH, the gating-class split and the
-verdict vocabulary) and ran for over two hours without returning a ruling, so it was stopped. **No
-Advisor ruling is claimed for any decision in this section.** The design rests instead on
-measurements in this file and on an independent worker reproduction: the gating class was narrowed
-after measuring that the broader rules produced 25–185 findings, the two heuristic call models were
-discarded because they produced a demonstrably wrong depth on `0x7DA30`, and the 20 repaired values
-were reproduced 20/20 by a second worker using its own capstone CFG walker. The Advisor's
-earlier design guidance — that `call` is not universally depth-neutral, that `ret N` cleanup must be
-compared independently of the metadata under test, and that folded aliases are not genuine entries
-— is followed; that guidance came from the previous session's review cycle and is cited as such, not
-as a ruling on this turn's work.
-
-**Current state (2026-10-05, second session).**
-
-The blocker chain moved nine times, each step confirmed by the next run advancing to a new site.
-Runs `f16`..`f23` (`20261005-000031-102` … `20261005-011634-413`), all **exploratory**
-(`RECOMP_GPU_ACK` defaulted on, `RECOMP_APU_TRAP=1`, `RECOMP_PB_EXEC=1`, `RECOMP_FB_WINDOW=1`,
-`RECOMP_FB_PRESENT_DUMP_EVERY=10`). Commits `7e683a3`, `e96c586`. `recovered.c` 3095 -> 3100.
-
-| # | Stop | Fix | Confirmed by |
-|---|---|---|---|
-| 1 | `0x0013B750` | recovered `0x13B750..0x13B810`, `stack_args 0` | f16 ABI-verified return |
-| 2 | `0x0007AF90` | recovered `0x7AF90..0x7B750`, `stack_args 0` | f17 ABI-verified return |
-| 3 | `0x000BBA17` | `0xBB7B0` widened `0xBBA04 -> 0xBBA19` | f18 ABI-verified return |
-| 4 | `0x000B022E` | `0xB0210` end `0xB0305 -> 0xB05CC` | f19 ABI-verified return |
-| 5 | `0x0006A770` | recovered `0x6A770..0x6A7C0`, `stack_args 0` | f20 ABI-verified return |
-| 6 | `ABI FAILURE 0x00074C70 +8` | `0x74C70` `stack_args 4 -> 0` (latent, unmasked by #5) | f21 ABI-verified return |
-| 7 | `0x000C2630` | split `0xC25D0` (`-> 0xC2621`) + entry `0xC2630..0xC2700` | f22 ABI-verified return |
-| 8 | `jmp 0x47850` cut target | split `0x47820` (`-> 0x47849`) + entry `0x47850..0x47970` | detector-found, not run-isolated |
-| 9 | `ABI FAILURE 0x0007DA30 +4` | `0x7DA30` end `0x7DA84 -> 0x7DAD6`, `stack_args 0 -> 4` | f23 ABI-verified return |
-
-**Four distinct defect classes, all measured from the original bytes:**
-
-1. **Unowned gap** — a complete function between two owned spans with no entry at all
-   (`0x13B750`, `0x7AF90`, `0x6A770`). Each boundary is a clean capstone decode with exactly one
-   `ret`. `0x13B750` is installed by the guest itself at `0x13BBDF` via `0x142810`
-   (`obj->0x88 = fn`) and dispatched at `0x142C9E call [esi+0x88]`; its only XBE reference is the
-   **misaligned** `push 0x13B750` immediate. `0x7AF90` is the **only** unresolved code pointer in
-   the `.rdata` vtable `0x001CCE70`; the other 15 slots resolve. `0x6A770` is reached by
-   `E9 C2 5A FF FF` (`jmp 0x6a770`) from `0x74CA9`, so it is a **relative displacement** and the
-   address occurs **zero** times in the XBE.
-2. **Span swallowed a later function** (`0xC2630` inside `0xC25D0`, `0x47850` inside `0x47820`) —
-   the `0x13FAD0` class. Fixed by tightening the earlier span to its real end and giving the later
-   one its own entry.
-3. **Span ended at a folded-alias start, cutting its own switch arms** (`0xB0210`, `0x7DA30`) —
-   the "tighten to the next function entry inside the alias range" rule that
-   `scripts/check-span-exits.py` documents as wrong, because those starts are folded aliases and
-   not entries.
-4. **Shared tail-merged epilogue just outside the span** (`0xBBA17`) — the function's own
-   epilogue, targeted by three in-span branches and jump-table slot 5, became an external
-   tail-call answered only by a fatal trap stub.
-
-**Two latent defects were unmasked by fixing the ones in front of them** (`0x74C70` `stack_args`,
-`0x7DA30` truncated end plus hidden `ret 4`). Both were already wrong at `d77474d` and could not
-be exercised, because the body in front of them had no reachable `ret`. **H9: any entry whose
-span ends at a folded-alias start should be re-checked for a hidden `ret` immediate.**
-
-**Blocker 10 resolved in part: an alias-folded job handler ran the wrong body.** f23 next hit
-`[ICALL] Failed to resolve VA 0xFFC00000` on two threads — not a code address, but the bit pattern
-of a negative quiet NaN (the toolkit names it `NAN_NEG`, `nv2a_pb_exec.c:3000`). The last named
-event before it was `[ALIAS-ICALL] target=0x00032610 owner=0x00033800`, present in f23 only.
-`0x32610` is slot 1 of the job-handler table at `0x1EC200` — a **separate** table from the one at
-`0x1EC0F0`, which ends with a zero terminator at `0x1EC1FC` (slot 67) — and it is the **same
-`tail_jump_alias` defect the already-recovered sibling `0x32C70` documents**: the database span
-`0x32610..0x33800` overran because the function's own jump table at `0x32760` contains
-`C2 26 03 00`, which decodes as a spurious `ret 0x326`. The dispatch therefore ran `0x33800` —
-`mov eax,1; ret 4`, two instructions — instead of the real function ending at `0x3275C`. All **12**
-RETs are `ret 0xc` (`C2 0C 00`), so `stack_args 12`; the sibling `0x32C70` (slot 2 of `0x1EC0F0`)
-has a plain `C3` and correctly keeps 0, so the two genuinely differ. Recovered as
-`0x32610..0x3275F`, commit `9ea4e44` plus the end correction in `4cac35c`. **The run-confirmation is
-`f27` (`20261005-110711-776`), which logs `[RECOVERED] 0x00032610 returned; ABI verified`** — *not*
-f25: f25 has **zero** occurrences of that line, because it never dispatched the address. (An earlier
-revision of this record named f25; the Reviewer caught that and it is corrected here.) `recovered.c`
-3100 -> 3101.
-
-**Open and NOT diagnosed: a nondeterministic 363 KiB NaN fill.** f23 also showed a uniform
-`0xFFC00000` fill at `0x233ED0..0x28ED04` (93,057 of 93,069 words; 4-byte aligned, not
-page-aligned at either end, running 68,752 bytes past `.data`'s virtual end). It overwrote the
-`DOLBY` section image (`0x27E080`, marked `writable: false, executable: true`), live globals
-including `0x251D6C` that `0x7DA30` reads, and the thread-trampoline control block — so the
-trampoline's `mov eax,[0x25efb8]; test eax,eax; je` saw non-zero and called `0xFFC00000`.
-**It is not deterministic.** The genuine **same-binary** pair is f25 (`20261005-034216-016`) and
-f26 (`20261005-034914-266`), which share `exe_sha256 = ca867957…`: f25 reached the disclaimer at
-960 presents, f26 stalled on the **Smilebit** card at 193 presents for its whole 810 s and never
-showed the disclaimer hash at all. Older, much longer runs (f9 1203 s, f5-long 1500 s) were also
-clean. **Correction:** an earlier revision of this record called f24 "the same binary" as f23; that
-is false — f23 is `exe_sha256 = 44c39546…` and f24 is `ac62b0b1…`. Their source trees differ in
-exactly one file (`config/recovered-functions.json`) and are identical once the `evidence` prose is
-stripped, so the *conclusion* (run-to-run variance, not the code change, dominates) survives — but
-the stated evidence did not, and the Reviewer caught it. Recorded as a newly observed
-nondeterministic corruption with its evidence — **not** a diagnosis, and **not** established as a
-regression from this turn's span changes. The `[ALIAS-ICALL]` timing makes `0x32610` a plausible
-cause, but that is an inference and is not claimed. Two follow-ups worth a backlog entry: whether
-the wrong body caused the fill, and whether the `writable: false` `DOLBY` overwrite is a separate
-port defect (the port not enforcing XBE section write-protection).
-
-**Advisor status.** The Persistent Advisor returned one ruling (consultation 1, below) and then
-**failed twice with no reply** on consultations 2 and 3 (the fill's mechanism, and the `0x32610`
-questions). Per `docs/agent-workflow.md` §1 an unavailable route is **reported, never silently
-replaced**, and the Advisor is not a gate, so `0x32610` was fixed on the Orchestrator's own
-judgment from the bytes. The questions it would have ruled on: whether the wrong body caused the
-fill, whether `stack_args 12` is right, and whether the `writable: false` `DOLBY` overwrite is a
-separate port defect.
-
-**Advisor ruling, consultation 1 (2026-10-05): the shared-epilogue repair and the freeze reading.**
-It ratified widening `0xBB7B0` (and independently rejected the 2-byte fragment entry as failing
-its own ABI check deterministically), proved from the bytes that `sub_000BBA04` is a **false**
-function start — its only reference anywhere is slot 4 of `0xBB7B0`'s own table, and it reads
-`esi` before writing it, which no x86 entry can do — and resolved the "double push" question by
-showing both callees are `ret 4` so the second `push esi` is an argument. **It also downgraded
-the presents freeze from an independent blocker to a likely symptom of the boot transition**:
-f9, f14, f15, f16 and f17 all freeze at exactly 1000 with the same frame; in f17 the thread that
-died was `GUEST_THREAD identity=1`, the main boot presenter, still inside its per-frame update;
-and f9, which had no ICALL at all, ends on the same transition via the game's own fatal-error
-path (`[FATAL-CTOR]` at `0x116EA8`, then `Media\Cache\JSRF_FATAL.ERR`). So "zero ICALLs and still
-frozen" does **not** establish independence. **Do not build a present-path fix on the
-independence assumption.** Deciding check: a run where identity=1 returns to the presenter loop
-with `+0x24` still 0 and presents still frozen.
-
-**Deferred to backlog (Advisor recommendation).** The root cause of classes 3 and 4 is the
-analysis database's `gap_prologue` pass accepting a `push` after a `ret` as a function entry.
-Fixing it needs a full regeneration. The Advisor recommends **batching the 12 known sibling
-spans** rather than paying one run per fatal; each proposed end must be verified by decode (all
-switch arms resolved, no `ITAIL`, zero checker findings) before landing. `0x00043910` needs no
-change.
-
-**Blocker 11: the boot path is strongly nondeterministic, and that now bounds what a run proves.**
-Three runs in the same environment with different outcomes. **They are not all the same binary** —
-f23 is `exe_sha256 = 44c39546…` while f25/f26 share `ca867957…`; the genuine same-binary pair is
-f25/f26, and that pair alone carries the finding. (An earlier revision of this record said
-otherwise; the Reviewer caught it.)
-
-| run | seconds | outcome | furthest frame | presents | notes |
-|---|---|---|---|---|---|
-| f23 | 253 | `unhandled_exception` | disclaimer `5bdaea576b8509f5` | **1000** | 363 KiB NaN fill; `[ALIAS-ICALL] 0x32610` |
-| f25 | 404 | `diagnostic_deadline` | disclaimer `5bdaea576b8509f5` | 960 | clean; no fatal, no fill |
-| f26 | 810 | `diagnostic_deadline` | **Smilebit card `22fe3b5810848f88`** | **193** | **never showed the disclaimer hash at all** |
-
-f26 ran **twice as long** as f25 and got **less far**: it held the Smilebit card from t≈159 s to
-t=796 s, spinning in kernel ordinal 119 (9,353 calls), main thread
-`GUEST_THREAD identity=1 tid=2340 start=00148023` still live. Its BMPs were inspected directly —
-`p0003` is the SEGA card, `p0005`/`p0006` the Smilebit card, and the final held frame is Smilebit.
-This is consistent with the non-reproducing stalls the plan already records for this title (f6's
-DSP spin "did not reproduce"; f7 passed it), but it has two consequences that must be respected:
-**a single run cannot establish progress**, and the NaN fill's absence in f24/f25/f26 is **weak**
-evidence about its cause, because those runs never reached the state f23 did. It is **not** a
-regression claim: f26 used the `0x32610` binary and stalled *earlier* than f25 on the same binary.
-
-**Two more defects were found by the Orchestrator's own consolidated re-verification, not by a
-run** (commit `4cac35c`). A capstone decode of every entry touched this session, checking the ret
-count and the ret encoding against the recorded `stack_args`, caught: (a) `0x00032610`'s end was
-recorded one byte short at `0x3275D`, cutting the final three-byte `ret 0xc` (`C2 0C 00` at
-`0x3275C..0x3275E`) in half, so the generated body's last exit path fell off the end with no
-return — now `0x3275F`, twelve `ret 0xc` exits instead of eleven; and (b) `0x00047820`'s
-`stack_args` was 0 but its body ends `pop esi; ret 4` (`C2 04 00` at `0x47846`), so the wrapper
-must expect +8 — now 4, the same class as the `0x74C70` and `0x7DA30` corrections. Both were
-latent for the same reason: those addresses had no body of their own before this session, so no
-run could have exercised them. **This is the argument for the re-verification pass as a standing
-practice, not a one-off.**
-
-**Test-evidence caveat for `4cac35c` — RESOLVED.** The clean full-suite run that was owed has now
-been taken once the host went idle (CPU load 100% -> 2%): **CTest 35/35 passed in 29.15 s** and
-**`just check` reports "all checkers passed"** on the committed tree at `1c77b37`. This confirms
-the earlier failures were load artifacts, as classified. The record of the earlier attempts is
-kept below because the reasoning is the reusable part.
-
-**Original caveat, kept for the record.** The load-independent checks passed throughout:
-`check-generation-provenance.py --check` `ok`, `check-merge-structure.py` 0 findings,
-`check-route-allowlist.py` and `check-agent-docs.py --check` no findings, and
-`tests/test_recovery_span_ownership.py` 9/9. But a clean full CTest run could not be obtained
-while the host sat at 100% CPU from unrelated processes (Chrome, Windows Defender). The resulting
-failures were load artifacts, not regressions, and the evidence was that **a different set of
-tests failed on each attempt** (first `22/28/29`, then `9/11/22/28/29`) and that
-`xbox_guest_meter` — a **toolkit** kernel test under `xboxrecomp/src/kernel/`, independent of
-`recovered.c` — failed 3 of 6 isolated runs on the same binary.
-
-**The chain continued past the reviewed range (stops 11–14), each run-confirmed.** After the Turn
-Reviewer's brief, the same run-driven walk cleared four more stops and closed two tooling gaps:
-
-| # | Stop | Fix | Confirmed by |
-|---|---|---|---|
-| 10 | `[ALIAS-ICALL] 0x00032610` + `0xFFC00000` | recovered `0x32610..0x3275F`, `stack_args 12` | **f27** (`20261005-110711-776`) |
-| 11 | `[ICALL] 0x00054750` | recovered `0x54750..0x55530`, `stack_args 0` + generated patch `remove-54750-stub` (L02) | **f28** (`20261005-111824-944`) |
-| 12 | `[ICALL] 0x00089A60` | recovered `0x89A60..0x89AC9`, `stack_args 0` | f29 (exercised; f29 died at `0x8AEB0`) |
-| 13 | `[ICALL] 0x0008AEB0` | recovered `0x8AEB0..0x8B1FD`, `stack_args 0` | **f30** (`20261005-114334-406`) |
-| 14 | `ABI FAILURE 0x00080340 expected +8` | `0x80340` end `0x80BD0` (the `0x81853` attempt was wrong), `stack_args 0` | f30 measured the failure; f31/f32 caught my bad widening |
-| 15 | `ABI FAILURE 0x00080BD0 expected +8` (delta `-0x40`) | `0x80BD0` end `0x80C83 -> 0x81853`, `stack_args 4 -> 0` | **f33** (`20261005-121111-883`): `[RECOVERED] 0x00080BD0 returned; ABI verified` |
-| 16 | `[ICALL] 0x00094AB0` | **next stop, not yet fixed** | f33 died here |
-
-Note stop 15's entry was **pre-existing and wrong twice over** (end `0x80C83` is a four-way join
-point inside the function, and `stack_args 4` should be 0). It only became reachable after stops
-13–14 cleared the entries in front — the **H9 pattern**. Stop 14's first fix was my error and is
-described below.
-
-`0x00054750` needed a generated patch because the translation pass had also emitted a "not detected"
-trap for the same address, and the two definitions collided (`LNK2005 sub_00054750 already defined`).
-`recomp_stubs_unresolved.c` is **translation-owned**, so `config/generated-patches.json` is the
-sanctioned mechanism and the patch names ledger **L02**. `0x00080340` was an instance of **both**
-classes at once — a truncated span **and** a `stack_args` hidden behind it — the same pattern as
-`0x0007DA30`.
-
-**A mistake I made and corrected, recorded because the lesson is durable.** I first widened
-`0x00080340` to `0x00081853` on the claim that three interior addresses (`0x80BD0`, `0x80C83`,
-`0x814BE`) were internal labels, justified by "no rel32 branch references them". **That test is
-not merely weak, it is the wrong test.** The Advisor's ruling is explicit: `0x80BD0` has **no**
-rel32 callers and is reached only through the `.rdata` dword at `0x1CD000` (`0x80340` is in the
-same table at `0x1CCFFC`), yet it is a real standalone **SEH** function. The correct criterion for
-an interior label is whether the owner's **own stack-depth CFG** reaches the address without
-falling through padding or crossing an epilogue/prologue pair.
-
-**The resolution is exact, and the two ranges are adjacent, not overlapping.**
-`0x80340` owns `[0x80340, 0x80BD0)` and `stack_args 0`: it has no `ret` of its own and ends at
-`0x80BCE` with two tail jumps to `0x0008AEB0`, both at stack depth 0. `0x80BD0` owns
-`[0x80BD0, 0x81853)` and `stack_args 0`: it is SEH-guarded, install at `0x80BD0`/`0x80BDE`
-(`mov fs:[0],esp`), restore at `0x81848` (`mov fs:[0],ecx`) → `add esp,0x34` → `ret` at `0x81852`,
-and the arithmetic closes exactly — prologue `push -1; push 0x187dcb; push eax; sub esp,0x28;
-push ebx; push ebp; push esi` = **-0x40**, epilogue `pop esi; pop ebp; pop ebx; add esp,0x34; ret`
-= **+0x44**, net **+4**. The Advisor's independent stack-depth CFG agrees: 840 reachable
-instructions over that span — every instruction in it — no depth conflicts, one exit at depth 0.
-
-**Why my first widening looked right:** a clean linear decode from `0x80340` runs past its *own*
-tail jump at `0x80BCE`, through two nop bytes, and into `0x80BD0`'s code, where it finds
-`0x80BD0`'s `ret` at `0x81852` and reports it as `0x80340`'s. The decode was clean; the inference
-from it was not. My "net -0x140" stack walk was also meaningless — it summed pushes and pops from
-branches that never execute together.
-
-**The remaining defect was in `0x80BD0`'s own pre-existing entry** (end `0x80C83`, `stack_args 4`,
-both wrong): `0x80C83` is the **join point of four branches inside the function**, not an end, so
-the body exited at depth `-0x40` with `fs:[0]` still linked and `ebx`/`esi` clobbered — exactly the
-measured `esp 00F7FE70->00F7FE30` against `+8` expected that f31 and f32 both logged. Both defects
-predate this session; clearing the entries in front made it reachable, the **H9 pattern** again.
-**f33 then passed the Advisor's stated acceptance criteria**: `[RECOVERED] 0x00080BD0 returned; ABI
-verified`, no ABI failure, and a stop later than f32 — a new site at `[ICALL] Failed to resolve VA
-0x00094AB0`.
-
-**Backlog, recommended by the Advisor.** A **stack-depth-CFG validator** over every manifest entry
-(exits at depth 0 with `ret` ⇒ `stack_args`; tails at depth 0) would have caught `0x80BD0`
-statically, and would also have caught this session's `0xBB7B0`, `0x7DA30` and `0x74C70` defects
-**without a run**. It is ~80 lines. Add it alongside the sibling-span and alias batches — this is
-the highest-value outstanding checker, because four of this session's defects were found only by
-running.
-
-**Two tooling gaps closed, each with a failing control.**
-
-- **`scripts/check-entry-extents.py` is now a real gate.** It took `--baseline`/`--write-baseline`
-  and is wired into the `check:` recipe with `config/entry-extent-baseline.json`. This is the
-  deterministic detector for the truncated-`end` class, and it was in **no** gate, which is why
-  `0x32610`'s one-byte-short end survived three commits while `just check` and CTest both passed.
-  **Negative control:** reinstating `0x3275D` makes the gate FAIL and name `0x00032610`; correcting
-  it passes again. **The baseline was initially 19 entries marked "reviewed" — and that was an
-  overclaim.** The Remediation Planner found `0x000307A0` frozen in it as a **live** defect: its
-  declared end cut `test esi,esi` (`85 F6`) in half and the body fell through to a symbol decoded
-  from mid-instruction (`sub_000307F8`) on a reachable path. It is now **fixed** (end
-  `0x000307F8 -> 0x00030800`, `stack_args 4`) and removed from the baseline, which is **18**
-  entries. The Planner's two oracles disagreed on how many of the rest are live (7 vs 1) and that
-  count is **not settled** — recorded as outstanding rather than taken from either.
-- **`scripts/check-run-exercised.py`** with `tests/test_run_exercised.py` (CTest
-  `jsrf_run_exercised`). It exists because this record called `0x00032610` "run-confirmed" by f25,
-  which **never dispatched it** (zero ABI-verified lines; all 14 textual `32610` matches were f25's
-  own directory name). A clean run that never reaches the changed code proves nothing, and the
-  error survived three commits. The check is path-aware and its **deciding control** asserts the two
-  real archived runs *disagree* — f25 must FAIL for `0x00032610` and f27 must PASS — so it reads a
-  return event rather than matching text.
-
-**The f29 run is the load-bearing validation for the reviewed fixes**, applied with the path-aware
-criterion: it exercised `0x32610`, `0x54750` **and** `0x89A60`, showed **no** NaN at `0x27E080` or
-`0x25EFB8`, had no `ALIAS-ICALL` for `0x32610`, and advanced to a new stop. That independently
-corroborates the Advisor's causal account of the fill, and is exactly what its stated reversal
-condition would have falsified.
-
-**Also this session — the §1 route correction, stated precisely (Reviewer finding B1 corrected).**
-`docs/agent-workflow.md` §1 named the Turn Planner route `codex/sol-6.1`, which does not exist; the
-codex provider advertises `gpt-6.1-sol` and plan T11 already recorded it as the default, so the
-route was corrected to `codex/gpt-6.1-sol`.
-
-**Two corrections to how an earlier revision of this record described that**, both raised by the
-Reviewer and both reproduced:
-
-- **The failing command was `scripts/check-route-allowlist.py` (the `just route-check` recipe), NOT
-  `just check`.** That script is *not* in the `check:` recipe, so it cannot make `just check` red.
-  The earlier wording "so `just check` was red" was wrong.
-- **The `sol-6.1` string lived in the uncommitted working tree, not in any committed revision.**
-  At session start `git status` showed ` M docs/agent-workflow.md` against `d77474d` — an
-  owner-prepared §1–§7 rewrite. `git rev-list --all -- docs/agent-workflow.md` shows `sol-6.1` in
-  **0 of 44 revisions**, so a reader testing only `git show d77474d:` will conclude the route never
-  existed and repeat the Reviewer's reasoning. **The failure is nonetheless real and reproducible**:
-  restoring the `sol-6.1` spelling into the committed document and running the real checker gives
-  `MISS codex/sol-6.1` / `roster_route_not_allowed`, **exit 1**.
-
-`just check` **was** red at `d77474d`, for a different and independently verified reason:
-`docs/reviews/p0-full-generated-baseline.json` still carried `recovered.c a47e78bf`, the
-PRE-`0x13FAD0` hash, because `d77474d` updated the manifest but never re-baselined that file, so
-`jsrf_generation_provenance` was already failing. Both now hold measured values and the suite is
-35/35.
-
-**Owner disclosure (Reviewer finding B1, the part that stands).** Commit `7e683a3` also carried the
-pre-existing uncommitted **Orchestrator** row (`claude/claude-sonnet-5-5` @ `medium` →
-`workbuddy-ai/deepseek-v4.1-flash` @ `high`) and the **Workers** effort change (`max` → `high`) into
-the repository. Those rows were in the dirty tree rather than authored here, but the commit
-published them, and its message described the change as only a "typo fix". **`docs/agent-workflow.md`
-§7 makes staffing owner-reserved**, so the full scope is disclosed here for owner confirmation
-rather than left implicit. The substantive content is consistent with the session brief, which
-describes the Orchestrator as `workbuddy-ai/deepseek-v4.1-flash` @ `high`.
-
-**Pushed 2026-10-05 (the nine-defect dispatch chain).** Toolkit unchanged this session at
-`6e6e05664f438ad8b95b0c5186a770da8e54e883` (no push). Game
-`PUSHED_TO: origin / BRANCH: master / COMMIT: c61a9dd4811cf9f72795dbaa018bba9f1fd4710f / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: d77474d..c61a9dd master -> master`.
-The three game commits are `7e683a3` (four entries and one truncated span), `e96c586` (five more
-entries and three defective spans) and `c61a9dd` (this record). Outgoing commits add no `game/`
-path; `just secret-audit` reports two hits, both self-matches of the audit script's own pattern
-text (`scripts/secret-audit.py`) and the record that documents it
-(`docs/reviews/push-checkpoint-2026-09-28.md`), not real secrets.
-
-**Pushed 2026-10-05 (0x32610 and the nondeterminism record).** Toolkit unchanged at `6e6e056`
-(no push). Game
-`PUSHED_TO: origin / BRANCH: master / COMMIT: 6b2a3e62e60126eab9ad8910766c33a1bf4bde61 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: c61a9dd..6b2a3e6 master -> master`.
-Two commits: `9ea4e44` (recover `0x32610`) and `6b2a3e6` (blocker 11, the nondeterminism record).
-Outgoing commits add no `game/` path and are records plus one manifest entry.
-
-**Next.** Characterise `0xFFC00000` (is a float reaching an indirect call, a corrupted vtable
-slot, or a consequence of the freeze?). Then batch the 12 sibling spans. Then re-measure the
-freeze with transition-triggered logging, since the current `[FBPHASE]` sampler cannot see
-`+0x24` change after present 1000.
-
----
-
-**Earlier block (first 2026-10-05 session; retained for the record).**
-
-**Fixed that turn (2026-10-05).**
-1. **The ~300 s `JSRF_FATAL.ERR` and the Beat.bin loop were a port allocator defect.** Chain (each link
-   read from the original bytes or a run dump): the guest's `0x6F730` builds the "There's a problem with
-   the disc..." dialog (flags `0x400000`, class vtable `0x1CC660`), whose creation makes the `0x6EC80`
-   body call `0x12770`, which writes the fatal marker. In run `20261003-224759-960` the heap logged 712
-   out-of-memory failures (687 of them `352256` = the `Beat.bin` buffer); the 48 MB kernel heap held only
-   17.15 MB live, 18.9 MB free and 14.5 MB lost to unrecorded 64 KB-alignment gaps. Two bugs
-   (toolkit `dbeb284`): `heap_alloc_locked` skipped to each 64 KB boundary without recording the gap, and
-   `kmem_heap_reuse` reused only free blocks that already started aligned, so none of 12 free blocks
-   that could each hold the request was usable. Fixed by recording gaps as free blocks and carving an
-   aligned piece from a larger free block (the OOM line now also reports free bytes and the largest free
-   block). `kmem_test` gains a case that fails on the old `kmem.c`. Advisor ruling relied on (see §13
-   item 13). Not a shortcut, no ledger entry. After the fix the ~300 s fatal and the Beat.bin loop no longer
-   occur in the 600 s run, **but the dialog and marker came back at ~950 s in the 1500 s run with no OOM
-   (see Measured now), so the disc-error path itself is still open.** Whether the pending-I/O path in
-   the `0x25400` job class raised either dialog is not measured. That path's threshold is 240 s, not
-   15 s (technical record §8).
-2. **Eight further recovery entries** reached by successive runs (see §13 item 12 for the earlier ones; the
-   boundaries are byte-verified by recursive descent through every jump table, **not** runtime-exercised:
-   only `0x348A0` returned once (run `20261004-013505-513`), the other six handlers and the `0x13D840` hook
-   have not run since they were added):
-   the seven job-handler table entries `0x32C70, 0x348A0, 0x33C50, 0x35640, 0x34200, 0x2C360, 0x27B00`
-   (slots of the table at `0x1EC0F0`, `stack_args 0`, boundaries from recursive descent through every
-   jump table) and the hook wrapper `0x13D840`. recovered.c is 3094 functions.
-
-**Measured now.** Exploratory run `20261004-014344-804-f5-hook-600` (600 s, D2 environment, GPU_ACK default,
-ledger L14-L18, L20-L25, L39, L40): `diagnostic_deadline`, zero out-of-memory lines, zero `JSRF_FATAL`, no
-unresolved call, no ABI failure, no `[UNIMPL]`. Frames (viewed): SEGA, Smilebit, ADX, Dolby, then the graffiti
-disclaimer from ~290 s to the end. In that run's dump the logo object `0x142EE60` is in **phase 13 with
-hold 618** (`0x7E48F`: it counts updates and moves on at hold > `0x2D0` = 720), at ~2 updates/s, so the
-hold ends ~50 s after the run does. The runner's 600 s cap is what stopped that observation; it is raised to
-1800 s (`scripts/jsrf_run_profile.py` `MAX_RUN_SECONDS`, its test updated).
-
-Long run `20261004-020802-181-f5-long-1500` (1500 s, same environment, quieter logging): `diagnostic_deadline`,
-no OOM, no unresolved call. The disclaimer frame is the last numbered frame (`fb068`, from ~540 s) and the
-unsuffixed final frame is still the disclaimer. **By the end of the dump the logo object is gone** (its
-vtable word no longer `0x1CCFB8`) **and the subsystem-6 fade at `0x15E0E60` is mid-step (alpha `0x3D888889`,
-done 0)**: the state machine moved past phase 13, but no new frame was captured (the dumps were every 60
-presents and the last was the disclaimer). Inferred, not seen. **The title screen has not been reached.**
-
-**A second `JSRF_FATAL.ERR` at 02:23:57 (~950 s) with no OOM.** The dialog object in the dump
-(`0x226F7B0`, vtable `0x1CC660`, `+0x98 = 0x400000`, text "There's a problem with the disc...") is the same
-dialog class. So the disc-error dialog has at least two causes: the heap exhaustion (fixed) and something
-else. Which caller fired was not measured in that run; f9 measured `0x116EAD` (below). The callers are `0x2537E` (a tail `jmp`, so it leaves no return address of its own) / `0x255AD`
-(pending-I/O path in the job class at `0x25400`, threshold 240 s; objects of vtable `0x1C4F68`; a live one is at
-`0x1330060`, `+0x44 = 1`, `+0x48 = 10`, state field `+0x1604 = 0`), `0x664C3` (`0x257B0` result >= 2) and
-`0x116EA8` (`0x13AA50` nonzero). Observation for the next long run is in (ledger L41, toolkit `d40e88a`): a host log at
-`0x6F730` entry, a host log on the `0x2537E` tail before `esi` is popped, and a guest-stack dump when a
-created path contains `JSRF_FATAL`. `0x6EE73` is the draw path's return into `0x6EC80`, not a constructor
-caller. The return-address names are pinned by `jsrf_fatal_ret_name`.
-
-**f6 did not reach the fatal or a frame.** Run `20261004-174418-621-f6-fatal-caller` (1200 s,
-exploratory, `diagnostic_deadline` at 1203 s, dump mapping matched): zero OOM, zero `JSRF_FATAL`,
-zero flips, kernel regions stayed at 8. The main guest thread was in `sub_001A1769` at
-`loc_001A18D0`, spinning on the DSP pending word `0x803BC810` (still 3; anchor
-`MEM32(0x1BA858)=0x803BC000`). SGE entry 0 at `0x803C8000` is physical `0x003BC000`, and the
-contiguous high-water `0x56C000` accepts that translation. The second busy thread was
-`nv2a_ack_thread`. Last content path was `dsstdfx.bin`. L41 did not fire on f6. f9 measured the caller (below). GPRST was not in the minidump (the APU object is heap).
-
-**f7 passed that spin and was still booting at 183 s.** Run `20261004-182724-545-f7-apuwait`
-(exploratory, same shortcuts, capped `[APUWAIT]` log from toolkit `712f70d`, no present BMPs): `diagnostic_deadline`.
-The first sample had `GPRST=3`, `realtime=1`, and the pending word 0. The word was 3 at
-frame-thread call 225 and 0 at call 226 after 84326 GP cycles. The window opened, `Beat.bin`
-opened, cache files through `JSRF_CACHE_COMPLETE.CMP` were touched, and the GPU log reached
-655 flips. At the deadline the main thread was in `nv2a_submit_pending` under `sub_00013F80`,
-not in the spin. No fatal file. What the 655 flips showed was not saved. **Title screen not
-reached. Disclaimer-cleared not established.** The f6 spin is not fixed; it did not reproduce.
-Technical record §4.
-
-**Pushed 2026-10-04 (this checkpoint).** Toolkit `PUSHED_TO: origin / BRANCH: main / COMMIT: 712f70d7e1f84631c95984c9d80e4b2744caa71b / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: dbeb284..712f70d main -> main`. Game `PUSHED_TO: origin / BRANCH: master / COMMIT: bf42a800ce12a0790a55dd997f9d0650012eb150 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: 9c37140..bf42a80 master -> master`.
-
-**f8 showed the disclaimer, then aborted inside a truncated recovery.** Run
-`20261004-183625-666-f8-frames` (1200 s requested, exploratory, `RECOMP_FB_PRESENT_DUMP_EVERY=10`,
-no `RECOMP_DSP_ACK`, no `RECOMP_GPU_ACK`): `unhandled_exception`, exit `3221226505` (`0xC0000409`),
-duration 242.6 s, dump mapping matched. Saved frames: black, SEGA, Smilebit, ADX, Dolby, then the
-graffiti disclaimer (`p0007.bmp`, hash `5bdaea576b8509f5`, locked from t=131 s). The next BMP is the
-60 s unchanged heartbeat of that same picture. The disclaimer was still the visible frame at the
-abort. **Title screen not reached. Disclaimer-cleared not established.** Presents during that hold
-were about 6.5/s from t=131 s (396) to t=195 s (810). That is the present counter, not a
-re-measurement of the phase-13 update count. Zero OOM, no `JSRF_FATAL.ERR`, L41 did not fire.
-`[APUWAIT]` matched f7 (pending word 3, then 0 on the next sample). The abort is
-`[RECOVERED] ABI FAILURE 0x001403B0 esp 01220F38->01220F2C expected +4` on guest thread start
-`0x13B1C0`. The reviewed end `0x00140485` is `mov [esi+0x20], ecx` after `test ebp, ebp`. The
-analysis database already ends the alias at `0x00140540` (`push esi`). The `je` at `0x00140447`
-targets `0x0014048E` (`call 0x1437a0`), which the short span had turned into a fatal stub call.
-Widened to `0x00140540`; `recover-functions.py` changed only `body_001403B0` (control regeneration
-of the old end matches `recovered.c` `a1b767e6`). Every exit through `0x0014053F` pops edi, ebp
-and esi. f9 (below) passed this function with zero ABI failures. This abort is not the disc-error
-dialog. The 1500 s run did not take this path.
-
-**Pushed 2026-10-04 (0x1403B0 boundary).** Toolkit unchanged at `712f70d` (no push). Game
-`PUSHED_TO: origin / BRANCH: master / COMMIT: 8c4a656e706731051dfd39fa1915ba4409e81dfa / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: 56ff335..8c4a656 master -> master`.
-
-**f9 named the disc-error caller. It is not the 240 s I/O job.** Run
-`20261004-185558-235-f9-frames` (1200 s requested, exploratory because `RECOMP_GPU_ACK` defaulted
-on, `RECOMP_FB_PRESENT_DUMP_EVERY=10`, no `RECOMP_DSP_ACK`): `diagnostic_deadline` at 1203 s, dump
-mapping matched, zero ABI failures, zero OOM, one `[FATAL-CTOR]`, no `[FATAL-TAIL]`. The ctor ran
-between the t=313 s and t=323 s present samples. `ret=00116EAD`, the direct call at `0x116EA8`,
-because `0x13AA50` (`movsx eax, word [ptr+0x60]`) returned nonzero. Parent `0x01335CC0` (vtable
-`0x1D76C8`) still holds `+0x60 = 0xFFFFFFFF` at the deadline, so the word was `0xFFFF` (`-1`).
-The only nonzero word stores to `+0x60` in `.text` are `0x13D34F` (`0xFFFE`) and `0x13D3F5`
-(`0xFFFF`) in the ADX watchdog `0x13D300`. `-1` is the "linked status stays off 3" counter, not
-the position-stall `-2`, and not the `-999` sentinel `0x1162E0` writes through `0x13A980` into
-`word [slot+0x40]` and the inner dword `+0x60`. The four slots are the `0x13AC80` pool at
-`0x27D120`. At the deadline their `+0x60` words are 0 and `+0x6d` is 2, 1, 1, 2, which is the
-watchdog's clear-after-notify path; which slot held `-1` at the call is not in the final dump.
-`title.adx` (`\Device\CdRom0\Media\Z_ADX\BGM\title.adx`, 10946862 bytes on the host) opened with
-NTSTATUS 0. The `E0109261 ... not in cache (wxCiGetFileSize)` strings are the fallback at
-`0x1408C0`, which calls `0x140760` on a miss. No `[FILE] FAILED` after that open. Presents locked
-the graffiti disclaimer at t=130 s (hash `5bdaea576b8509f5`, `p0007.bmp`) and stayed on it through
-`p0024.bmp` at the deadline. The present counter reached exactly 1000 at t=223 s and every heartbeat
-from there through t=1193 s is still 1000. There is no host cap at 1000. `[FATAL-CTOR]` is logged
-after the t=313 s heartbeat, about 90 s after flips had already stopped. The main
-thread was then in `NtDelayExecution` under `sub_00013F80`, called from `0x6FA3C` in `0x6F9E0`.
-**Title screen not reached. Disclaimer-cleared not established.** The dialog text was not in any
-saved frame. `[APUWAIT]` matched f7. Phase 13's update rate was not re-measured; do not treat the
-~3.3 presents/s before the freeze as that counter.
-
-**Pushed 2026-10-04 (f9 caller).** Toolkit unchanged at `712f70d` (no push). Game
-`PUSHED_TO: origin / BRANCH: master / COMMIT: 108df5c8a22dec88a2d2d18cd552e23324435208 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: 94031e7..108df5c master -> master`.
-
-**f10 did not reach the ctor. The read that should feed `title.adx` is stuck in state 2.** Run
-`20261004-193140-174-f10-frames` (420 s, exploratory, same frame settings as f9, `RECOMP_GPU_ACK`
-left at its default): `diagnostic_deadline` at 423.6 s, dump mapping matched, zero ABI failures,
-zero OOM, zero `JSRF_FATAL`, zero `[FATAL-CTOR]`. The disclaimer hash `5bdaea576b8509f5` locked at
-t=129 s, present 396, and was still the picture at the deadline. Presents reached exactly 1000 at
-t=222 s and stayed there. **Title screen not reached. Disclaimer-cleared not established.** At the
-deadline the phase object `[0x22FCE0] = 0x01063A70` has `+0x10 = 1` and `+0x24 = 0x002A336E` (64
-bytes of zeros at that address, not a live object). `0x13F80` calls `0x13A80` only while `+0x24`
-is 0; otherwise it calls `0x659C0` and delays. That is why presents stopped. Who stores `+0x24` is
-not measured. Do not clear it.
-
-The ADX parent `0x01335CC0` was still live (`+0x60 = 0`). Slot 0 (`0x27D120`) was `DECINFO`
-(byte+1 = 1), not playing. Its link `0x27C720` was still header-wait (byte+1 = 1). The SJ
-`0x277180` had readable and free counts both 0, so a 16-byte header read cannot return. The file
-slot `0x273780` (path `D:\Media\Z_ADX\BGM\title.adx`) was state 2 with `+0x148 = 0`, `+0x14C = 0`,
-and a consumed request at offset 0 length `0xC800`. State 2 means the read was requested.
-`0x1401B0` clears `+0x14C` and does not set state back to 1. `0x140BA0` promotes state to 1 only
-inside the `+0x14C == 1` check, after the alertable delay `0x145C28`. The bridge was running that
-APC inside `NtReadFile`, which is inside `0x1407E0`, which is inside that check, so the flag was
-already clear when the poller tested it. `RECOMP_ASYNC_IO` does not change that order. The one
-`[KMEM] release_failed` of base 0 is not the Beat.bin allocator bug.
-
-**f11: the deferred APC runs. `title.adx` is still re-read from offset 0, and flips still stop at 1000.**
-Run `20261004-200005-213-f11-apc` (600 s, exploratory because `RECOMP_GPU_ACK` defaulted on, same
-frame settings as f10, `RECOMP_ASYNC_IO` unset): `diagnostic_deadline` at 603.8 s, dump mapping
-matched, zero ABI failures, zero OOM. File completion APCs are queued on the issuing thread and
-drained at the next alertable wait, including a zero interval (ledger L42, `xbox_file_apc_test`).
-Seven drains, five of them `context=0x001401B0` `ios=0x002738AC` (file slot `0x273780`). No
-`file APC queue full`. One other file read from `0x1463A8` advanced (`@0` length 28672, then
-`@28672`). `title.adx` did not. It opened after the flip freeze, between the t=241 s and t=251 s
-heartbeats, and the same slot was read five times, always `@0` length 51200, first bytes
-`80 00 00 20`. Each queue line is followed immediately by that APC's drain. The poller `0x140BA0`
-promotes (`+0x18 += +0x20`, `byte+1 = 1`) only when `+0x14C` is already 0 after its own 0 ms
-alertable delay, and that delay is where this drain sits, so the add should have run before
-`0x140BA0` returned. The next request staying at offset 0 means `+0x18` was 0 again at each
-`0x1403B0`. Not yet split into "the add never ran" versus "a later seek stored 0".
-
-Presents reached exactly 1000 at t=231 s, hash `5bdaea576b8509f5`, and every heartbeat through
-t=591 s is still 1000. The last `[GPU] flips` line is 975 increment-writes and 975 stalls; the
-report does not resume. There is no host cap at 1000. `[FATAL-CTOR] #1` falls between the t=341 s
-and t=351 s heartbeats, about 110 s after flips stopped. `ret=00116EAD` again. Parent
-`+0x60 = 0xFFFFFFFF`. Slot 0 is still `DECINFO`, its link still header-wait (`lst=1`, `d2c=0`,
-`d30=0`), and that slot's `w60` is already 0, so L41 still does not name the slot that held `-1`.
-At the deadline the file slot is zero, SJ `0x277180` has been reset (`+0x0C = 0`,
-`+0x10 = 0x000D0000`), and the header bytes are still at `0x0133DF80`. Phase `[0x22FCE0] +0x24`
-is still `0x002A336E`. **Title screen not reached. Disclaimer-cleared not established.** The 720
-hold was not remeasured; these runs stop presenting while the disclaimer is up, earlier than a
-720-update hold at the old ~2/s rate would end. Do not stretch the 240 s threshold. Do not skip
-the 720-update hold. Do not clear `+0x24`. Do not treat the `-999` words as the fatal value.
-
-**Pushed 2026-10-04 (deferred file APC).** Toolkit `PUSHED_TO: origin / BRANCH: main / COMMIT: 8f6c59758c5c2daa24bab90912b3055ebd88c20d / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: 712f70d..8f6c597 main -> main`. Game `PUSHED_TO: origin / BRANCH: master / COMMIT: 5eb06266dbd3e7366f5f03dbcb59a9e2b7f6589f / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: 1f5adf9..5eb0626 master -> master`.
-
-**f12: the add never runs, and `+0x24` is still 0 at the 1000th flip.** Run
-`20261004-203241-650-f12-adxio` (300 s, exploratory because `RECOMP_GPU_ACK` defaulted on,
-same frame settings as f11): `diagnostic_deadline` at 303.5 s, `dump_ok`, zero ABI failures,
-zero OOM, zero `JSRF_FATAL`. The cap ends before f11's constructor. **Title screen not
-reached. Disclaimer-cleared not established.** The logged hash is still `5bdaea576b8509f5`
-at t=296 s.
-
-`[FBPHASE]` at presents 400, 900, 990, and 1000 reads object `0x01063A70`, `+0x10 = 0`,
-`+0x24 = 0`, update counters 1703, 2202, 2292, and 2303. The sample is inside the flip
-stall. There is no presents=1001 line, and every heartbeat from t=216 s through t=296 s
-is still 1000. The idle branch is not the state at that stall. A store of `+0x24` after
-the stall returns, later in the same update, is not excluded; the f10/f11 deadline value
-`0x002A336E` is that later state. Do not clear it. This supersedes, for the moment of the
-stop, the f10 sentence that `+0x24` is why presents stopped.
-
-`title.adx` opened between the t=226 s and t=236 s heartbeats. Four reads, all
-`from=0x001463A8` `dst=0x0133DF80` `@0` length 51200, first bytes `80 00 00 20`. After
-each APC, slot `0x273780` is `byte+1 = 2`, `+0x18 = 0`, `+0x20 = 0x19`, `+0x148 = 0`,
-`+0x14C = 0`. The next kernel returns on that thread start at `0x147D28` (the call sites
-in `0x147Cxx` are `ObReferenceObjectByHandle`, `ObfDereferenceObject`, thread priority,
-suspend, and resume) and include `0x18CE73`. None is `0x145C59`. No `file APC queue full`.
-A different file from the same issuer still advanced (`@0` length 28672, then `@28672`).
-The add at `0x140C1B` did not run: position stayed 0 and state stayed 2, so this is not a
-later seek storing 0. The f11 inference that this drain is the poller's delay, and that
-the add should therefore have run, is not established. That binary sampled
-`g_xbox_kernel_caller` after delivery, and the completion overwrites it with the dummy
-return 0.
-
-**f13: that drain is the poller's delay, and the add still does not store.** Run
-`20261004-204852-370-f13-adxcaller` (280 s, exploratory because `RECOMP_GPU_ACK`
-defaulted on): `diagnostic_deadline` at 283.4 s, `dump_ok`. Three `title.adx` reads,
-all `from=0x001463A8` `dst=0x0133DF80` `@0` length 51200, first bytes `80 00 00 20`.
-The drain line now records `g_xbox_kernel_caller` before delivery. Each of those
-three is `caller=0x00145C59`, the instruction after `call [KeDelayExecutionThread]`
-in `0x145C28`. After each APC the slot is still `byte+1 = 2`, `+0x18 = 0`,
-`+0x14C = 0`. The two earlier drains, context `0x00178E40`, are `caller=0x00145B87`
-and that other file still advanced. **Title screen not reached. Disclaimer-cleared
-not established.**
-
-The delay is the wait the poller asked for, so an earlier wait is not what skips
-the add. `deliver_one_apc` popped 12 bytes that `kernel_thunk_dispatch` had already
-popped for ordinal 232 (`NtUserIoApcDispatcher`). `0x145C28` executes `pop esi`
-before `leave`, so `esi` came back wrong and `0x140C1B` did not update slot
-`0x273780`. `leave` repairs `esp` from the local frame, which is why the poller
-returns at all. `xbox_file_apc_test` now delivers routine `0xFE000068` and fails
-if `g_esp` is not restored (29 checks; the same check fails when the second pop
-is put back). The game binary with that fix is the next measurement.
-
-**f14: promotion stores, then the copy method has no entry.** Run
-`20261004-205925-857-f14-adxpromote` (exploratory because `RECOMP_GPU_ACK`
-defaulted on). `unhandled_exception`, exit `0xE0424943`, `dump_ok`, 234.0 s.
-One `title.adx` read, drain `caller=0x00145C59`. The sample inside the delay
-is still `byte+1 = 2`, `+0x18 = 0`. The next kernel sample,
-`caller=0x00147D28`, is `byte+1 = 1`, `+0x18 = 0x19`, `+0x20 = 0x19`. The add
-at `0x140C1B` wrote slot `0x273780`. **Title screen not reached.
-Disclaimer-cleared not established.** The process died on that first
-promotion, before a later present.
-
-`[ICALL] Failed to resolve VA 0x0013FAD0`. `check-dump-mapping.py` matched.
-Guest `esp = 0x01220F3C` is return `0x0013C0C4`, the instruction after
-`call dword ptr [ecx+0x20]` at `0x0013C0C1`. `edi = 0x00277180`, the mode
-argument is 1, and the chunk at `0x01220F6C` is `{0x0133DF80, 0xC800}` (the
-header buffer and the 51200-byte read). `ecx = 0x0022DB38`. That table is
-file-backed `.data`: `default.xbe` slot `+0x20` is `0x0013FAD0`, and the dump
-reads the same dword. The neighbours are already entries. `0x0013FAD0` is its
-own function (`push ebx`, `ret` at `0x0013FBBC`) that the 2026-09-21 recovery
-left inside `sub_0013F9E0`'s span `0x0013F9E0..0x0013FBC0`, so lookup had no
-case. A control regeneration before the edit reproduced `recovered.c`
-`a47e78bf` byte for byte. The span now ends at `0x0013FAD0`, and
-`0x0013FAD0..0x0013FBC0` is its own entry, `stack_args` 0. The moved
-instructions match the previous lift. 3094 -> 3095. Not a bypass. Do not set
-`JSRF_ALLOW_UNRESOLVED`.
-
-**f15: the copy returns, then `0x0013B750` is unresolved.** Run
-`20261004-211848-572-f15-sjcopy` (243.6 s, exploratory because `RECOMP_GPU_ACK`
-defaulted on). `unhandled_exception`, exit `0xE0424943`, `dump_ok`, and
-`check-dump-mapping.py` matched. The `title.adx` read is again
-`caller=0x00145C59`, and the following kernel sample is `byte+1 = 1`,
-`+0x18 = 0x19`. `[RECOVERED] 0x0013FAD0 returned; ABI verified`. The same
-thread's next indirect targets are `0x0013F9E0`, `0x0013F9A0`, then
-`[ICALL] Failed to resolve VA 0x0013B750`. Guest `esp = 0x01220F60` holds
-return `0x00142CA4`. `0x0013B750` is `push ebp` / `push esi` after the nop
-pad; `functions.json` ends the previous body at `0x0013B74A` and has no entry
-here, and neither the recovered switch nor the generated dispatch has it.
-Disclaimer hash `5bdaea576b8509f5` from t=130 (present 396) through the last
-present log, t=234, presents=1000. `[FBPHASE]` at 400/900/990/1000 still has
-`+0x10 = 0`, `+0x24 = 0`, with the update counters moving. No present past
-1000. **Title screen not reached. Disclaimer-cleared not established.** The
-copy's return is not a frame change. Do not set `JSRF_ALLOW_UNRESOLVED`.
-
-**Pushed 2026-10-04 (APC stack frame).** Toolkit `PUSHED_TO: origin / BRANCH: main / COMMIT: 6e6e05664f438ad8b95b0c5186a770da8e54e883 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: 8f6c597..6e6e056 main -> main`.
-
-**Next:** give `0x0013B750` its own entry only after the call at the site
-that returns to `0x00142CA4` is read from the XBE. It is the same class of
-missing entry as `0x0013FAD0`, and it is not inside a recovered span. Do not
-force `byte+1 = 1`. Do not return `0x101`. Do not set `RECOMP_ASYNC_IO`. Do
-not patch `kernel_file.c` or `0x1401B0`.
-
-**Rival explanation for the logo object being gone:** the ~950 s fatal path (`0x12770` calls `0x1165D0` and
-`0x118800`) may be what removed it, rather than the logo state machine finishing. The 600 s run's phase-13
-hold (618 of 720 at about 2 updates/s) was not remeasured on f9–f11. Those runs stop issuing flips at
-exactly 1000 presents while the disclaimer is still up, which is earlier than that hold would end.
-Raising the old update rate is not the next experiment.
-
-**Not established:** any strict-profile result; and that no other table-referenced method is missing (about 151 code-pointer targets
-had no owned function in an ad-hoc scan; `KNOWN_OPEN` freezes 80 bodies with the same boundary defect after `0x1403B0` was widened).
-
-## 1. Objective and definition of done
-
-Port JSRF to Windows by static recompilation. **Minimum playable slice** — all of the following,
-under **any** run profile, provided every path the result relies on that is not *emulated* or
-*translated* is recorded in `docs/jsrf-compatibility-ledger.md` and the run's record lists those
-ledger IDs:
+| F0–F0b | done | 15 GB disk gate; copy `src/recomp/` aside before pulling an untracking commit; rebuild and test on a new toolkit before a run |
+| F1 | done 2026-09-30 | `RECOMP_RDATA_GUARD=1` named the kernel-thunk-table writer (D5) |
+| F2, F2b | done 2026-09-30 | D1 (DMA_PUT bit 16), ML3 (file flags) |
+| F3 | done 2026-09-30 | strict horizon closed: two wrong `tail_jump_alias` folds recovered |
+| F4 | met (exploratory) 2026-10-01 | SEGA card renders through the owner's NV097 consumer (toolkit `a71f937`) |
+| F4b | done 2026-10-04 | the no-op `fcmove`/`fcmovne` lift held the SEGA fade; toolkit `671ab0a` translates them |
+| F5 | parked | intro movies: if Sofdec blocks, skip and ledger it (*patched*/*intentionally ignored*); decoding is M29 |
+| F7 | done through stop 28 | the dispatch stop chain above; residue in the backlog |
+| **F8** | **next** | **the present ceiling**: name the walk diagnostic at the freeze and clear it — next actions 1–4 |
+| F6 = M15 | open | a frame dump of the title screen plus the run record with its ledger IDs; its hash is neither disclaimer hash; compared by eye with an xemu screenshot of the same screen (T3); reproduced by the Turn Reviewer |
+
+## Next actions, in order
+
+1. **Decide the ceiling without a run.** On the archived freeze runs — f9 `20261004-185558-235-f9-frames`,
+   g06 `20261005-192455-691-g06-thunk`, and title-004's `20261006-011638-029-f10-underwide-batch152`,
+   `20261006-022404-045-f12-exercise-stop26`, `20261006-024003-212-f13-exercise-stop27` — grep the log
+   for `[PFIFO] budget_exhausted` (printed unconditionally) and run `just gpu-report <run>`: final
+   GET vs PUT, the walk diagnostic the pending stream would hit, and the (class, method) pairs it carries
+   that the table lacks. Read the main thread's wait site in `stacks.txt` beside it.
+2. **One bounded `just title-run`** on the 2026-10-06 toolkit. The first `[PFIFO] reject` line names
+   the original rejection and `just gpu-report` prints `g_nv2a_submit_state`; `[FBPHASE] … (stalled 1s)`
+   reads the boot-phase object once presents stop, so it shows whether the guest's update counters still
+   move. The same run exercises stop 28 (`0x81860`); do not spend separate runs on the stop chain until
+   the ceiling is explained.
+3. **Branch on the diagnostic**, not on `GET ≠ PUT` alone:
+   - `unsupported_method` → one bounded run with `RECOMP_NV2A_ADMIT_UNKNOWN=1` (L44, exploratory) lists
+     every missing method of the next scene in one pass (`[PFIFO] admit-unknown`). Classify each as a
+     *state* method or an *action* method (xemu `pgraph`/nv2a docs) before it enters the table through
+     `scripts/gen-nv2a-method-inventory.py` (pass `--put=` explicitly: the ring top it reads from the log
+     stops at submission 63); action methods need an implementation, not just admission. Rerun
+     **without** the switch. If an admitted run then shows GET == PUT with the guest waiting, suspect an
+     admitted action method before anything else.
+   - `invalid_handle`, a class outside the table, `budget_exhausted`, `control_flow_loop`,
+     `sink_capacity`, `invalid_target`, `reserved_opcode` → each needs its own fix (RAMHT/class support,
+     walk bounds); the switch does not apply.
+   - `GET == PUT` → the guest itself stopped submitting: find the main-thread wait (f9 of 10-04 sat in
+     `NtDelayExecution` under `sub_00013F80`, called from `0x6FA3C` in `0x6F9E0`).
+4. **When a new scene appears, check the present path before trusting the window.** The window is
+   handed `drawn_offset`, which only drawn batches update — the software rasteriser's triangles (the
+   `nv2a_backend` draw path also sets it, but no backend is registered). A clear, an untransformed
+   (vertex-program) batch or a new render target leaves it on the old buffer
+   (`xboxrecomp/src/kernel/nv2a_pb_exec.c`, FLIP_STALL). An unchanged hash after the ceiling clears is
+   not proof the guest did not advance: compare `drawn_offset` with `color_offset` and read
+   `batches_untransformed` in the `[GPU]` report.
+5. **M15** as F6 states, then M16 onward.
+
+## Backlog (not on the critical path until it blocks)
+
+- **Stop-chain residue:** 25 `KNOWN_OPEN` (`tests/test_recovery_span_ownership.py`), 67 SUSPICIOUS,
+  `0x96F80` (`UNQUALIFIED`, named proof gap, TR §18), the 10 dead alias shims (a latent hazard, not a
+  live defect, TR §18), the alias-shim census's actionable classes (12 `SWALLOWED_FUNCTION`, 59
+  outside-owner shims; census commit `0cc6d5d`, counts in `git show dcc93ab:plan-turn-updated-title-004.md`
+  "B5"), and the `gap_prologue` root cause (needs a full regeneration; batch the 12 sibling spans, each
+  verified by decode before landing).
+- **Toolkit review findings (2026-10-06), open:** the fence mirror's missing back-pressure (L17; publish
+  the walk's consumed fence instead while the MMIO owner is active); the stale present (`drawn_offset`,
+  next action 4); alertable waits that wait again after delivering an APC (NT returns `STATUS_USER_APC`
+  at once) — matters for streaming, before M24; free heap blocks that stop coalescing across a
+  placeholder slot — only if out-of-memory returns; the `[APUWAIT]` line cap.
+- **Undiagnosed:** the XBE `DOLBY` section being written although marked read-only (section protection
+  is not enforced; seen with the `0xFFC00000` fill, which TR §9 explains as the `0x32610` misdispatch,
+  closed by its recovery), and the second cause of the disc-error dialog at ~950 s with no OOM
+  (f5-long; TR §8) — the L41 caller logs are in place for the next long run.
+- **Carried chores:** re-cite `P0.1-AC1` by symbol (its line numbers moved); the DSP provenance record
+  (the A4b2-NR instrumentation is not listed).
+- **Carried technical items:** C2 kernel-memory follow-ups, C4 D3D resource release, C6 `/we4013` on
+  Windows, T16's `--coalesce-functions` half, T19 retail-byte oracles, ML4 APU interrupt delivery,
+  ML7 D3D11 renderer (cel shading for M19–M20), GP port follow-ups and the AC'97 registers
+  `0xFEC0017C`/`0xFEC00100` before M23, `PIO_FREE` (deferred at `O-OPEN`, TR §4).
+- **Owner items:** removing the lifted code from history needs a force-push
+  (`docs/reviews/lifted-code-history-scrub.md`); the repository licence; W8 fallback routes.
+
+## Definition of done — the minimum playable slice
+
+All of the following under **any** run profile, provided every path the result relies on that is not
+*emulated* or *translated* is in the ledger and the run record lists those ledger IDs.
 
 | DoD | Criterion | Measured by |
 |---|---|---|
-| DoD-BOOT | Launch to the title screen; the title frame is presented; every shortcut used is in the ledger. | M15 |
+| DoD-BOOT | Launch to the title screen; the title frame is presented. | M15 |
 | DoD-INPUT | A host controller drives menu navigation through the guest's own XAPI input path. | M16–M17 |
 | DoD-PLAY | New game loads the opening area; the player skates, turns, jumps and the camera follows. | M18–M21 |
 | DoD-GRAFFITI | One graffiti interaction completes and the game's own progression state records it. | M22 |
@@ -1146,792 +171,101 @@ ledger IDs:
 
 A window opening is not the slice; one playable scene is not the game.
 
-## 2. Baseline
+## Milestones (M00–M06 done; 06b closed into the fork fixes)
 
-| Item | State |
-|---|---|
-| Toolkit | `main` (fork fixes on top of upstream `ea60cfa`), built and tested on Windows in Phase 0 (V1) |
-| Game | `master`; Phase 0 V1–V4 done (TR §5 "Phase 0 V3 measurements") |
-| Current horizon | ~5–7 s: the kernel thunk table `0x1C3F60..0x1C413F` is overwritten by a 40-byte-stride record array, and whichever thread next calls through a thunk faults; the first site varies run to run (TR §5) |
-| Established | AC'97 codec-ready model (TR §3); GP DSP56300 port and the GP clearing the DSP pending word (TR §4); CRT 64-bit divide helpers (TR §2); the XDK D3D vblank fields `+0x242C`/`+0x2430`/`+0x2434` and five function names (V4, TR §7) |
-| Refuted | that `sub_00038530` writes the vblank-callback slot (V4, TR §7) |
-| Prior art | Mercenaries-Recompiled (`https://github.com/KraftMacAndChee/Mercenaries-Recompiled`; playable; toolkit base upstream `25cf8a6`, a sibling fork — lift ideas and patches, never merge); halo-ce-universal (`https://github.com/cybersecurity/halo-ce-universal`) (XDK facts); the toolkit forks (TR §7) |
+Any profile is acceptable for these; each acceptance record lists its ledger IDs. "xemu ref" is a T3
+capture of the same checkpoint. SSIM/correlation thresholds guide the judgement; they are not a strict
+gate.
 
----
-
-## 3. How work runs under this plan
-
-- **`docs/agent-workflow.md` governs the work**: the Orchestrator plans and decides ordinary work,
-  workers execute, the Persistent Advisor takes hard technical questions, and the Turn reviewer
-  reviews finished work.
-- **Least resistance, recorded.** For each blocker, take the cheapest honest class: if emulating it
-  would take more than about a day, approximate, stub or patch it, add the ledger entry in the same
-  commit, and move on. Upgrade a path only when it blocks something.
-- **Milestone criteria** name: profile · artifact path · oracle (independent of the
-  implementation) · PASS predicate · FAIL/UNKNOWN predicate; for bare-minimum milestones the profile
-  may be exploratory, and the record lists its ledger IDs.
-- **The strict horizon is the progress metric.** Record each strict-run stop in
-  `docs/reviews/strict-horizon-ledger.md`: date, toolkit/game revisions, run ID, stop site, stop
-  time. A line of work that goes about 4 hours without moving the horizon or producing a finding on
-  the critical path goes to the Advisor: continue with a stated bound, or stop.
-
----
-
-## 4. Phase 0 — verify and re-baseline on Windows (chores; DeepSeek; 0 senior calls)
-
-**V1 — Build and test `main`/`master`.**
-- Do: pull toolkit `main` and game `master` (toolkit first); `python -X utf8
-  scripts\build-jsrf.py`; `ctest` in the game build and in a standalone toolkit build.
-- PASS: build exit 0; every ctest passes, including the toolkit's `xbox_kmem`, `xbox_guest_meter`,
-  `nv2a_actions`, and the standalone `tests/kernel_data_exports` and `tests/kernel_file_status`
-  projects; test counts recorded. FAIL: any build or test failure → fix before V2 (a toolkit
-  failure is fixed on `main`; its commit cited).
-
-**V2 — Regenerate with the new lifter.**
-- Do: the TR §2 command, unchanged inputs; if MSVC runs out of memory, `--split 250` (upstream's
-  recommendation for 15 GB hosts). Re-apply `relift-selected.py boundaries`, the ABI deltas, the
-  A4b2 hooks; re-record provenance (`check-generation-provenance.py --write`).
-- PASS: build + ctest pass; the generator's `FLAGS:` report names exactly the 10 known leftover
-  `_flags` reads — 5 `state: none` (4 that read flags live into the function, plus the `loope` at
-  `sub_0010634E`) and 5 `adc cannot answer` — and **no site outside the pre-regeneration set**, checked
-  by diffing the listed sites against `HEAD`'s `gen/`; the 8 sites `ca4257c` called live bugs read no
-  fallback; function count and dispatch count recorded against 5740 / 8928; provenance `--check` ok.
-  FAIL: any listed `FLAGS:` site that is not in that set, or any new `[UNIMPL]` reached in V3.
-- *Corrected 2026-09-29 (Advisor ruling, Phase 0 V2).* The criterion previously read "≤ 9", taken from
-  toolkit `ca4257c`'s census. That census counted **jcc-form sites only** (17 sites, 8 fixed, 9 left),
-  while the generator's `flag_gaps()` also counts LOOPE/LOOPNE, SETcc and CMOVcc preloads. The two
-  numbers were never comparable, so "≤ 9" was unsatisfiable-by-construction rather than a defect: the
-  tenth site is a `loope` byte-identical to the pre-regeneration tree. The criterion is now tied to
-  **named sites**, not to a count taken under a different scope.
-
-**V3 — Re-baseline the strict horizon.**
-- Do: (a) strict run `RECOMP_GPU_ACK=0 RECOMP_APU_TRAP=1`, log budget 100000, label
-  `rebaseline-strict`; (b) the same with `RECOMP_KMEM_LEGACY=1` (exploratory A/B); (c) the same as
-  (a) with `RECOMP_GUEST_METER=1` (observation).
-- PASS: `check-run-profile.py` classifies (a) and (c) strict, (b) exploratory; the stop site,
-  time and last 20 kernel calls are recorded for each; the `[KMEM] summary` counters (reserve hint
-  at `0x1495E3`, commit at `0x14961B`), every `data export ordinal` line, and the `[GMETER]` line are
-  archived; TR §5 "Where strict runs end" is updated with the new horizon. UNKNOWN: a run that
-  cannot be classified.
-
-**V4 — Read-only checks.**
-- Do: `inspect-jsrf.py disasm` at `0x0018CE30`, `0x0018CE50`, `0x00193D90`, `0x00194210`,
-  `0x00193F70`; compute `sub_00038530`'s object base from the A2h artifacts; count
-  `RtlRaiseException`/`0xE06D7363`/`[UNIMPL]` in the V3 logs.
-- PASS: each TR §7 inferred name marked CONFIRMED or REFUTED with the bytes quoted; the base and
-  whether it overlaps `g_Device` (`0x0019B200`–`0x0019DCE0`) or the page of `0x001C4064` recorded.
-
-**V5 — Recovered-functions audit (discovery-sized chore).**
-- Do: for each entry in `config/recovered-functions.json`, check whether the v0.12+ translator
-  (switch-arm entries, returning-body probe, opt-in `--coalesce-functions`) now produces it natively.
-- PASS: a table entry → {still needed, obsolete, unknown} with the generated-code evidence;
-  retirement of obsolete entries is a later change packet.
-- **DONE 2026-09-30.** 3074 entries: **122 OBSOLETE** (58 by the default pass, 64 by
-  `--coalesce-functions`), **2952 STILL_NEEDED**, **0 UNKNOWN**; the verdict set is exactly the config
-  entry set. Controls 0 failures. Switch-arm entries and the returning-body probe retire nothing.
-  Full table in `logs/v5-recovered-audit.md`; recorded in `docs/jsrf-technical-record.md` §5. No entry
-  was retired.
-
-## 5. Phase 1 — tooling (chores; DeepSeek; senior calls only where named)
-
-| ID | Tool | PASS (each with a control) |
-|---|---|---|
-| **T1** | **WinDbg TTD**: `just ttd-record <label>` records a strict run; `tools/ttd/writes.js` (dx query) lists every write to a guest VA **across all 29 aliases** (base + 28 mirrors) with thread, native IP, symbol, position | on one trace, the query finds the runtime's own thunk-install write to `0x001C4064` (known positive), and zero writes to an address never written (known negative) — **controls PASS 2026-09-30** (`20260930-030513-184-c1-probe`); **but see the W11 finding: the traced run does not reach the horizon, so the artifact is not admitted and T1 is REOPENED for the conditions in `docs/reviews/rulings/ttd-query-decision-input.md` S1–S8** |
-| **T2** | **XbSymbolDatabase** (MIT, external CLI) → `config/xdk-symbols.json`; names merged into `inspect-jsrf.py` output and linker-map symbolization | ≥ 300 names (DanielJVoxSmart measured 363 on this XBE); five spot checks against known functions (`__aulldiv` `0x0017D4D0`, etc.) agree |
-| **T3** | **xemu oracle** (requires the owner's BIOS, MCPX ROM, HDD image): gdbstub recipe that dumps guest memory/registers at a named guest PC; `scripts/xemu-diff.py` (planned) compares with the same checkpoint in a recomp run | the diff of a checkpoint against itself is empty; a seeded one-byte change is found. If the images are unavailable: BLOCKED (owner assets) and milestones fall back to non-xemu oracles |
-| **T4** | **Windows CI** for the toolkit fork (GitHub Actions `windows-latest`, MSVC, ctest) | green on `main`; a deliberately failing test turns it red |
-| **T5** | **clang-cl + MSVC `/analyze`** configurations of the toolkit | baseline warning counts recorded; the known `%lld`-with-`int` class and implicit declarations are reported by at least one of them |
-| **T6** | **`just`** recipes: `build`, `test`, `regen`, `strict-run`, `explore-run`, `check`, `ttd-record`, `doctor`, `analyze` | every recipe runs on the Windows host; AGENTS.md "Build and run" points at them; `check-agent-docs.py` verifies the named recipes exist |
-| **T7** | **pre-commit** hooks: `check-agent-docs.py --check`, `secret-audit.py` on staged blobs, no `game/` path, run-profile tests, `check-merge-structure.py` when a merge is in progress | a staged `game/` path and a planted fake token are both refused |
-| **T8** | **DuckDB log queries**: `scripts/logq.py` (planned) loads kernel/`[KMEM]`/`[ALIAS-ICALL]`/`[GMETER]`/`[ICALL]` lines into tables; saved queries under `tools/queries/` | reproduces a known count from an archived run (e.g. the 15,498 sampled bridge boundaries of A2h-null-slot-triage) |
-| **T9** | **Enumerator**: `scripts/enumerate-accesses.py` (planned) — operands normalised to `uint32`, recursive-descent from the entry and dispatch seeds, raw-byte fallback, each run printing its own known-answer controls | reproduces `PIO_FREE` = 28 sites (10 hex + 18 decimal spellings) and the vtable base = 3 references (TR §6) |
-| **T10** | **Citation tool + lint**: `scripts/cite.py` (planned) records value, artifact, command, hash; the memory reader prints both byte orders and an offset-shift control; a lint rejects hex literals in records that no cited output contains | the lint flags a seeded transposition (`0x00193D62` for `0x00193D96`, the recorded historical error) |
-| **T11** | **Review capture**: `record-review.py` defaults to the current reviewer route (GPT-6 Sol child) instead of the retired Hy4 route | records a Sol child's review from its session log with its hash; the existing DSH tests still pass |
-| **T12** | **Doctor per run**: `tools/doctor.py --runtime-log` writes `doctor.json` into every archived run | present in the V3 runs |
-| **T13** | **Startup receipt generator**: fills `docs/session-start-template.md` from harness metadata and live route checks | a generated receipt passes `check-agent-docs.py` |
-| **T14** | **Run-log retention**: `scripts/logs-reclaim-plan.py` + `scripts/disk-usage.py` as a pre-run gate (refuse to launch below a free-space floor) and a retention policy: keep every run cited by the TR, the plan, a packet or a ruling, plus the last 20; archive or delete the rest **after owner approval of the policy** (deletion is an owner decision) | a launch below the floor is refused with a clear message; the policy lists how many runs/GB it would reclaim on the current host before anything is removed |
-
-| **T15** | **Function-level parity audit and overlay bisection** (from Mercenaries `audit_generated_function_parity.py` + `make_generated_overlay.py`, MIT): hash each generated body by guest address across two trees; restore baseline bodies in an address range to bisect "which function moved the stop" | finds a seeded one-function change between two trees; an overlay that restores it moves the stop back |
-| **T16** | **`just regen` matches the recorded regeneration**: pass `--trace-functions config/trace-functions.json` (TR §2 has it, the recipe drops it) and reviewed spans through the toolkit's `--coalesce-functions` | a regeneration reproduces TR §2's inputs; the 7 boundary fixes appear without the post-hoc relift |
-| **T17** | **Content-sniffing asset guard** in pre-commit: refuse `XBEH` headers, Xbox volume magic, nested archives, and JSRF's `.text` control bytes `8b512c85…` (copied guest RAM) | a staged file carrying each signature is refused |
-| **T18** | **Post-generation patch script** (Mercenaries `Patch-Generated.py` design, rewritten): exact-once text patches applied after every regeneration, each with a ledger ID, failing loudly when a site is missing (no `--allow-missing`) | a regeneration + patch run is idempotent; a missing site fails the run |
-| **T19** | **Retail-byte function oracles**: run original x86 (capstone) against the lifted body with poisoned registers and stack-balance checks, extending `generate-lifter-tests.py` | catches a seeded callee-saved-register clobber |
-
-Order: T14's pre-run gate, T6, T7, T4 first (they make every later step mechanical and stop the disk
-failure mode recurring), then T1, T2, T8, T9, T10, T11, T12, T13, T5; T3 whenever the owner
-provides the images. Senior calls: T1's admission ruling (W11) only.
-
-### Phase 1 status — 2026-09-30 session
-
-**T14, T6, T7, T4, T1, T2, T8, T9, T10, T11, T12, T13, T5 are DONE; T3 is DONE** (re-verified
-against a live xemu running the title, with the four criteria at line 190 all passing —
-see `docs/reviews/t3-gdbstub-register-layout.md`). **T3's gdbstub had a defect found during
-that re-run and fixed:** it decoded the register block as x86-64 where the guest is 32-bit,
-so every register value it had produced was wrong while every memory read was right. The
-verification that has teeth is a cross-check against the original XBE: the live `eip` holds
-bytes identical to `inspect-jsrf.py data` at that address. Each landed with
-its controls exercised, and the defects those controls found are recorded in the commits and in the
-tools themselves. Measured highlights, all reproducible from the named command:
-
-| Task | Evidence |
-|---|---|
-| T1 | `20260930-030513-184-c1-probe`: 29 aliases queried, install positive FOUND (`0xFE000104` to slot 65), mirror negative PASS, trace-live PASS. **Reopened and re-closed** against W11's S1–S8 — see §7 C1. |
-| T2 | 363 symbols (D3D8 163, DSOUND 137, XAPILIB 59, XGRAPHC 4); `XInputOpen` and `D3DDevice_SetRenderState_Simple` agree with the independent record. **`__aulldiv` is OUT_OF_SCOPE**, not failing: XbSymbolDatabase ships no CRT library. |
-| T3 | xemu's own config resolves all five assets; gdbstub reachable; guest `0x00011000` reads the recorded `.text` control byte-for-byte; `xemu-diff` MATCH against an archived recomp run; self-vs-self empty and a seeded byte found. |
-| T4 | `main` green; a deliberately failing test turned the **CTest** step red on a throwaway branch, which was then deleted. |
-| T5 | clang-cl 6358 diagnostics, MSVC `/analyze` 355; the `%lld`-with-`int` class reported by **both**; `implicit_declaration` reported by neither, with a seeded control proving the detector works and `/we4013` explaining the absence. |
-| T6 | 22 recipes; `check-agent-docs.py` fails on a missing recipe. |
-| T7 | A staged `game/` path, a planted token and a conflicted merge are all refused, each with a known-good case. |
-| T8 | 6488 kernel calls and 344 recovered returns match independent grep counts exactly. |
-| T9 | `PIO_FREE` = 28 sites (10 A1-moffs + 18 ModRM), vtable base = 3; both controls PASS. |
-| T10 | Seeded transposition `0x00193D62` flagged, known-good control clean. |
-| T11 | Default is `codex/gpt-6.1-sol` @ `high`, read back from the §1 roster by a control. |
-| T12 | `doctor.json` written per run; MSBuild's duplicate-case hazard and disk headroom reported. |
-| T13 | Generated receipt; regeneration preserves probe results. |
-| T14 | A launch below the floor is refused before any child starts; the retention plan is citation-aware and deletes nothing. |
-
-**Mac session, 2026-09-30 (no game assets; nothing here has run on Windows).**
-- **T15 DONE** as `scripts/generated-parity.py` (`audit`, `overlay`; MIT notice carried): 6 controls,
-  including a seeded one-function change, a merged start reported as subsumed, an overlay limited to
-  its range, and the real tree (5,739 functions) parsing. Still open: building an overlaid tree and
-  watching the stop move back, which needs the Windows host.
-- **T16 half done:** `just regen` and AGENTS.md now pass `--trace-functions config/trace-functions.json`,
-  matching TR §2 and the provenance checker. The `--coalesce-functions` half needs a Windows
-  regeneration to show the 7 boundary fixes appear without the post-hoc relift.
-- **T17 DONE** in `scripts/precommit-staged-paths.py`: XBE, FATX, minidump, XDVDFS, archive and
-  compressed-stream signatures and the raw `.text` control bytes; 14 refusal cases, a prose
-  known-good case, and a check that the gate's own sources pass it.
-- **T18 DONE** as `scripts/patch-generated.py` and `config/generated-patches.json` (empty). `just regen`
-  applies it and `just check` runs `--check`; 8 controls cover exact-once application, a second run
-  changing nothing, function scope, a missing or ambiguous site, and an unknown ledger ID. **Candidate
-  patches** (need a fresh regeneration to capture their exact text): the
-  `jsrf_watch_store` declaration every chunk header says to re-apply, and the exact-delta ABI
-  additions to `recomp_types.h` (TR §2).
-- **T19** not started (Windows; needs the XBE).
-- The pre-commit and AC2 tests now turn commit signing off in their scratch repositories: a global
-  `commit.gpgsign` hung them on a signing prompt.
-
-## 6. Phase 2 — workflow changes (tasks; each edits the owning document and adds a check)
-
-Each row names the measured failure it answers (report §2) and is accepted when the document is
-edited, `check-agent-docs.py` passes, and the named check exists with a failing control.
-
-| ID | Change | Answers | Check |
+| M | Milestone | Acceptance (artifact → PASS) | Status 2026-10-06 |
 |---|---|---|---|
-| **W1** | Blockers carry `criterion-ID` and a category; the same criterion ID blocking two consecutive INADEQUATE verdicts forces redesign or a discovery packet; only the Advisor exempts | patch-the-patch loops (A3a AC2 r6–r10, P0.2 AC2, A4b watch→ledger→`[GPIN]`, A4b2 AC-BOOT) | `check-recorded-reviews.py` flags a repeated ID |
-| **W2** | **Qualification gate** before any Planner call, run by DeepSeek: disassemble past the failing instruction; premise artifact vs later fix commits (`git merge-base --is-ancestor`) and strict profile; the positive control firing on the target build; a dry run of every measurement; a search of upstream, forks and reference decompilations for the symptom | unqualified premises/instruments (A2h-r6 six revisions on a fixed failure; the 571 MB premise ~5 days, refuted by the `test eax`/`jl` four instructions after the call; 15 DR0 ON runs before zero hits were noticed; the slot field named by the Halo XDK layout only after the owner's audit) | gate script output attached to the brief |
-| **W3** | Freezing requires a DeepSeek **dry-run transcript**: every command executed on the target host and tree, output hashed in the packet | frozen commands that never ran (A4s-r4 anchors, A4s-r5 PowerShell 5.1 grep; 7 of 12 A4s Advisor rulings) | promotion refuses a packet without a transcript |
-| **W4** | Reviews return **BLOCKING findings only**, dispositions `ACCEPT`/`NOT ACCEPTED` only; the review stores the evidence hash and a hash change flips it to pending; record hygiene is a lint that must pass before review | churn on prose (A3a r12–r24; OOM slice 5 rounds on sweeps); 7 of 10 A2h acceptances edited after review | record schema + hash check |
-| **W5** | Values transcribed by hand into a table or record, by any role, are re-checked row by row by a second DeepSeek worker against the artifact before a criterion or ruling uses them (until T10 makes tool citation the only path) | 12 recorded extraction errors; a byte reversal that became a "permanent" refutation for 35 minutes | `verified-by` field required |
-| **W6** | **Ruling ledger per question** (`docs/reviews/rulings/<question>.md`): a new ruling lists the hazards of earlier rulings it supersedes | A2h page-guard rejected at 00:38, adopted at 09:32, then failed on the hazard cited at 00:38 | ledger lint |
-| **W7** | **Chore class** in §5.8 for owner-directed mechanical work (§3 above), with a scripted gate instead of Planner and acceptance review: build, ctest, and a strict A/B run showing the same stop (or the change in stop recorded as the finding) | the v0.11 sync as packet A4s took 19.6 h and six revisions; the owner's direct v0.12 sync (121 upstream commits) landed as one merge commit and one record commit seven minutes apart (`2925f0b`, `32680d7`); regeneration was deferred a week and then took ~30 min between commits (`0f7ef9c` → `e73e495`) and exposed the dropped `rcr` | table row + gate script |
-| **W8** | **Lazy route checks and pre-authorised fallbacks**: verify a route at first real use; no Advisor probe turns at startup; the owner names one fallback route per senior role in §1 (owner decision), and the session allow-list includes it; during a senior-route outage DeepSeek continues pre-authorised chores and discovery execution | probes passed 13/13 while all 5 outages happened mid-session; ~45 h of outage-adjacent gaps; on 09-25 the owner-authorised fallback was missing from the allow-list and needed a new session | T13 receipt |
-| **W9** | **Control-first instruments**: `run-jsrf.py` refuses a second ON run, and checkers refuse to emit a row, until the raw log shows the named positive-control event at an independently derived address | 13 A2h instrument defects; a positive control silently weakened to a value comparison | fixture test |
-| **W10** | Each packet lists its load-bearing **premises with byte-level commands**; the reviewer re-runs them first; a lint rejects values cited from a `CONTENT_MISMATCH` dump or a run with tracing off | false ACCEPTs on false premises (OOM slice, named-producer-frame) | lint |
-| **W11** | Advisor ruling: **TTD query output as a decision input** (lossless, reproducible) recorded in `docs/jsrf-run-profiles.md` | enables C1 without new watch instruments | the ruling text in the owning document — **DONE 2026-09-30**: TTD traces admitted as a lossless *class* under conditions S1–S8; the current artifact **NOT admitted** (the traced run exits `0xC0000409` at 577 log lines and never reaches the horizon, so W-a cannot hold). Recorded in `docs/jsrf-run-profiles.md` §"TTD trace query (W11)" and `docs/reviews/rulings/ttd-query-decision-input.md` |
-| **W12** | Session "verification" prose is replaced by script JSON; review records keep rulings and packets, which are the only records later work reused | 31 of 36 session verification records never cited (38,972 words) | record lint |
-| **W13** | Per-task **senior-call budget** (§3), recorded in the packet; exceeding it is an Advisor continue/stop decision | change packets consumed 15–27 senior calls; discovery 2–4 | packet template field |
-| **W14** | **Strict-horizon ledger and ceiling rule** (§3): one line per session; 3 packets or 4 h without moving the horizon or an accepted critical-path finding → one Advisor ceiling call | the NULL-line ceiling came only after 5 packets; 287 commits after the last horizon move | ledger lint: a session with a run and no ledger line fails |
-| **W15** | **Single-source, drift-checked text**: override descriptions in `AGENTS.md`/run profiles derived from `scripts/jsrf_run_profile.py`; `check-agent-docs.py` fails on override names the runtime no longer reads and on retired routes (add kimi-k3, claude-opus-5-5, hy4-preview-f to `RETIRED_NAMES`, updating the test fixtures) | `AGENTS.md:92` and `docs/jsrf-run-profiles.md:51,54` still describe `RECOMP_AC97_READY`/`RECOMP_APU_DSP_ACK` as live (removed in toolkit `c97ce2c`/`8f8f6e4`); stale `RETIRED_NAMES` | checker control: a planted stale name fails |
-| **W16** | **Stage explicit paths only**; the Session never runs `git add -A` while another role may be writing; hashes are pinned only after the writer reports done | `git add -A` swept a Planner's in-progress draft twice (`141cb7e`); a hash pinned mid-write (`d82f388`); a lost ACCEPT record (`a90b8ab`) | pre-commit warns on staged draft packets not named in the commit message |
+| 07 | CRT and game initialization | `verify-initializers.py` passes; the main-loop entry is reached; zero invalid indirect calls / ABI violations | boot reaches the logo loop (exploratory); not accepted |
+| 08 | Paths and first real asset read | a `Media` read whose byte count and hash equal the retail file; a missing file returns `STATUS_OBJECT_NAME_NOT_FOUND` | reads succeed (`title.adx`, cache files); criterion not measured |
+| 09 | Allocation and ownership | `[KMEM] summary` over a boot: `commit_rejected=0`, `release_failed=0`, `region_table_full=0` | heap bookkeeping fixed (toolkit `dbeb284`), zero OOM since; not measured |
+| 10 | Timers, threads, synchronization | `[GMETER] anomalies=0`; every boot-path wait satisfied by a modelled cause | open |
+| 11 | Graphics interception decided | the decision recorded; a fixture feeds committed methods to the back end | **decided**: executor path (C5, L16/L18) |
+| 12 | Window and clear | ≥ 60 presented frames whose clear follows the guest's own clear methods | logos presented (exploratory); not accepted |
+| 13 | One game-owned UI primitive | first UI frame vs xemu ref, SSIM ≥ 0.95 on its bounding box | open |
+| 14 | One menu texture | decoded texture bytes equal the xemu ref dump or an independent decode | open |
+| **15** | **Title screen** | 60 consecutive frames vs xemu ref (SSIM ≥ 0.90); intro FMV handling stated | **open — F8, then F6** |
+| 16 | Controller input | with `RECOMP_USB`, a host pad press produces the guest's own XID report and the title's input state changes; `RECOMP_PAD_PRESS` is not admissible | open (toolkit-provided: verify, not build) |
+| 17 | Main menu navigation | host pad drives start/options/back; the menu-state global changes | open |
+| 18 | New game loads the opening area | loader completes; files read archived with sizes and hashes; object count > 0 | open |
+| 19 | Opening scene and character | spawn frame vs xemu ref SSIM ≥ 0.90; depth/transforms at three camera positions | open (needs ML7 or executor shading) |
+| 20 | Distinctive rendering | cel shading and outlines at three views, SSIM ≥ 0.90 | open |
+| 21 | Skating and camera | position follows a held stick; jump and landing; frame-time p99 ≤ 2× median | open |
+| 22 | One graffiti interaction | tag-completion flag set and paint count decrements (named globals) | open |
+| 23 | Sound effects | APU output non-silent at rate; one effect's PCM correlates ≥ 0.9 with an xemu capture | open |
+| 24 | Music and streaming | 5 minutes of music, underrun counter unchanged, memory bounded | open (JSRF streams ADX) |
+| 25 | Save and resume | isolated save root; restart resumes; missing save handled; a regression test covers save enumeration | open |
+| 26 | Stability | 15-minute soak: zero invalid indirect calls / ABI violations, bounded `[KMEM]`, `[GMETER] anomalies=0` | open (DoD-STABLE) |
 
-Senior calls: W11 is one Advisor ruling; the rest are owner-approved document edits (0).
+Graphics, input and audio may be reordered when the boot path demands it. **After the slice
+(27–36, scope unchanged):** area transition, second character and challenge, cutscenes and FMV
+(Sofdec), all areas, missions, full playthrough, optional content, Windows hardening, performance,
+reproducible package — each gets criteria in the same form when it becomes next.
 
-### Phase 2 status — 2026-09-30 session
+## IDs other files cite
 
-**W1, W2, W11, W14, W15, W16 are DONE, each with its named check and controls.**
-**W8 remains OWNER-RESERVED**: it requires the owner to name one fallback route per senior role in
-§1, and no fallback model/provider may be invented (the generic receipt machinery that W8 also asks
-for is done, as T13). The remaining W rows are document edits whose checks now exist.
+Records, scripts and the TR cite these IDs; their full text is in
+`git show dcc93ab:plan-jsrf-bare-minimum.md` (old section numbers §0–§14 likewise).
 
-| Row | Check that now exists | What it found on the real tree |
+| IDs | What | State |
 |---|---|---|
-| W1 | `scripts/check-review-recurrence.py` (retired 2026-10-03) + 13 controls | 0 packets to examine (no revision records on disk); controls are fixtures and say so |
-| W2 | `scripts/qualify-premise.py` + 18 controls, `just qualify` | on the real C1 premise: 5 PASS, 1 UNKNOWN, verdict `INCOMPLETE` |
-| W3/W10 | `scripts/check-packet-transcript.py` (retired 2026-10-03) + 12 controls, `just packet-check` | 6 closed packets exempt by name; no blocking findings |
-| W4/W12 | `scripts/check-record-hygiene.py` + 21 controls, `just record-check` | 3 real instances, then clean after the exemptions were scoped |
-| W5 | `scripts/check-transcribed-values.py` + 10 controls, `just transcribed-check` | 4 `rechecked`, 2 `undecidable`, 0 blocking |
-| W6 | `scripts/check-ruling-ledger.py` (retired 2026-10-03) + 11 controls, `just ruling-check` | the W11 ruling passes its own lint |
-| W7 | `scripts/chore-gate.py` (retired 2026-10-03) + 12 controls, `just chore`; §5.8's three-class table | `STOP_REMOVED` on the two real runs |
-| W8 | `scripts/check-route-allowlist.py` + 8 controls, `just route-check` | both roster routes are in the allow-list; fallbacks owner-reserved |
-| W9 | `scripts/check-instrument-controls.py` + 14 controls, `just instrument-check` | no instrumented runs recorded |
-| W11 | `docs/jsrf-run-profiles.md` §"TTD trace query (W11)"; ruling ledger; T1 evaluates S1–S8 mechanically and exits nonzero | the delivered artifact is `NOT ADMITTED`, with the two reasons the Advisor named |
-| W13 | packet template's `**Senior-call budget:**` field, checked by W3/W10's lint | template carries the field |
-| W14 | `scripts/check-horizon-ledger.py` + 9 controls, `just horizon-check`, wired into `just check` | found 4 runs cited only by suffix; the ledger now names them fully |
-| W15 | `scripts/check-override-drift.py` + 9 controls, `just override-check` | found the exact `AGENTS.md:92` stale text the plan names; fixed |
-| W16 | `scripts/precommit-repo-checks.py` draft-packet warning + 6 controls | no draft staged |
+| V1–V5 | Phase 0 re-baseline on Windows (build, regenerate, strict re-baseline, read-only checks, recovered-functions audit) | done 2026-09-29/30 |
+| T1–T14 | Tooling: TTD (T1), XbSymbolDatabase (T2), xemu oracle (T3), Windows CI (T4), clang-cl//analyze (T5), `just` (T6), pre-commit (T7), DuckDB `logq` (T8), access enumerator (T9), citation lint (T10), review capture (T11), per-run doctor (T12), startup receipts (T13), disk gate and retention (T14) | done; T11/T13's scripts retired with the packet lifecycle (2026-10-03); T8 gained the present/PFIFO tables 2026-10-06 |
+| T15–T19 | Mercenaries-derived tools: generated-body parity/overlay (T15), `just regen` inputs (T16), content-sniffing asset guard (T17), post-generation patches (T18), retail-byte function oracles (T19) | T15, T17, T18 done; T16 half done (`--coalesce-functions` needs a Windows regeneration); T19 not started |
+| W1–W16 | Workflow checks tied to measured failure patterns | done, each with its check; W8 (fallback routes) owner-reserved; the packet-only checks (W1, W3/W10, W6, W7, W13) retired 2026-10-03; W15 gained the reverse direction 2026-10-06 |
+| C1 | Attribute the kernel-thunk-table write | superseded: F1 found the writer (D5) |
+| C2, C4 | Kernel-memory follow-ups; D3D resource-release re-check | open, backlog |
+| C3 | NV2A action methods (L19) | parked until after the slice |
+| C5 | Rendering architecture | decided for the bare minimum: the executor path (L16, L18) |
+| C6 | Implicit declarations | declarations in; `/we4013` and its MSVC build on Windows remain |
+| C7, C8 | A4b2 P4 transfer bridge; upstream/fork cadence | carried; chore on each upstream release |
+| ML1–ML10 | Lifts from Mercenaries-Recompiled (MIT root; its `src/apu`, `src/nv2a` are xemu-derived LGPL; never its xemu DSP oracle) | ML1 serial guest mode done, opt-in (L34); ML3 file I/O done (L30, L31); ML4 mostly done (APU interrupt delivery open); ML2 heap replacement, ML5/ML6 fallbacks, ML7 D3D11 renderer (for M19–M20), ML8 ISO tooling, ML9 input/options (after M15), ML10 unified physical memory — not started |
 
-`just check` runs ten checkers; each has its own recipe and each recipe is named in
-`check-agent-docs.py`'s `REQUIRED_RECIPES`, so a rename fails the check rather than
-silently breaking a record that cites it.
-| W16 | `scripts/precommit-repo-checks.py` draft-packet warning + 6 controls |
+## Tooling for the fast path
 
----
+`just --list` is the authority on recipes; these are the ones the next actions use.
 
-## 7. Phase 3 — critical path to boot (after V3)
-
-**C1 — Attribute the record-array write (discovery).** Replaces the specified A2h successor.
-**Pragmatic order (2026-09-30):** fast-path step F1 (a `[READ] dst=` check on an ordinary run) goes
-first; the TTD recording below runs only if F1 finds no file read landing on the table.
-**INSTRUMENT: TTD, RULED 2026-09-30.** The Advisor's §2.3 ruling is in
-`docs/reviews/rulings/ttd-query-decision-input.md` ("C1 instrument (2026-09-30)"):
-**W11 stands unchanged and TTD remains C1's instrument.** The Session's contrary
-conclusion — that TTD cannot see the write — rested on a trace that **fails S1 because
-it was truncated at its size cap** (verified: the `.run` is exactly 8192 MB, and
-`ttd-output.txt` says "Recording stopped after 43375ms" where a completed recording says
-"Process exited with exit code …"). The process outlived the recorder, so its log carries
-the terminal that the trace does not. **That conclusion is withdrawn**, and the record
-says so.
-
-**C1 must meet C-a…C-e before any row may be selected:**
-
-- **C-a (S1).** The recorder output shows *"Process exited with exit code 0xE0424943"*
-  and the trace is **below** `-maxFile`. *"Recording stopped"*, or a size at or above the
-  cap, is a FAIL, and nothing after the install may then be read from the trace. Size the
-  cap from the T14 disk gate.
-- **C-b (S2).** W-a is established **from the trace itself**: the trace contains TTD's
-  exception event with code `0xE0424943` on the faulting thread, and **P is that event's
-  position**, not `!tt 100`. A log-only terminal is a FAIL. `ttd-query.py` now requires
-  `--terminal-in-trace` explicitly.
-- **C-c.** **W-c is still MISSING and is not waived.** A mirror positive needs a store
-  actually made **through a mirror VA**, found at its alias index. "All 28 mirrors of a
-  canonically written range return 0" is a negative, and a broken query returns 0 too.
-- **C-d.** **W-d is still MISSING.** It needs the destination VA of one `[READ]` and a
-  query at that buffer. The toolkit now logs `dst=` (`xboxrecomp` `1572256`), which is
-  what made the control possible.
-- **C-e.** The census and "last write before P" are **recomputed on an admitted trace**,
-  and W-b decides: equal means `ATTRIBUTED`; mismatch means `UNATTRIBUTED`, which then
-  triggers an **in-process last-write latch keyed by destination region** — not the A2h
-  alias census, which is a *first-touch* census and so selects the earliest writer where
-  C1 needs the last.
-
-The experiments already run are recorded in
-`docs/reviews/c1-terminal-slot-finding.md`; its later sections are **NOT ADMITTED** and
-carry a withdrawal block. The non-TTD minidump A/B survives as corroboration: the
-original XBE holds `0x80000NNN` ordinals at `0x001C3F60` while the runtime holds the
-40-byte-stride record array whose constants match TR §5 exactly, and slot 65 reads `0`
-there — agreeing with the guest's own `[ICALL]`.
-
-**The next action is a TTD recording that satisfies C-a**, then C-b…C-e in order.
-
-Measured this session, and still valid because it does not depend on the truncated
-trace:
-
-- **The horizon IS reachable under recording.** The earlier "TTD changes the guest's
-  behaviour" reading was wrong: `RECOMP_APU_TRAP=1` is the difference, and with it a
-  traced run reaches the horizon at 23,484 log lines, same site (`return=0014982E`,
-  slot 65, `exit_code=0xE0424943`). `just ttd-record` now sets that environment.
-- **The clobber is confirmed from a NON-TTD source.** The original XBE at `0x001C3F60`
-  holds `800000BB 800000BE …` (ordinals); the non-TTD minidump of the
-  horizon-reaching run holds the 40-byte-stride **record array** whose constants match
-  TR §5 exactly. Slot 65 reads `0x00000000` there, agreeing with the guest's own
-  `[ICALL] invalid target 0x00000000`.
-- **The complete write census of the table** (1080 writes): 480 byte-at-a-time fills
-  from `VCRUNTIME140!memset_repstos` at position 4005, then 120 dword installs from
-  `jsrf_recomp` ending at 483399. **Nothing writes the table after the install.**
-- **TTD CANNOT SEE THE WRITE CLASS THAT MOST PLAUSIBLY PRODUCED THE `0`.** 400,000
-  writes scanned across the low 4 GB, **zero** outside `jsrf_recomp.exe` and
-  `VCRUNTIME140` — so kernel-mode writes are invisible. W11's exclusion (d) is
-  **confirmed rather than suspected**, and the trace's log shows 14 `[READ]` lines
-  where `NtReadFile` delivered into guest buffers with none of those bytes appearing
-  as a write.
-- **Withdrawn by the ruling.** The claims that "W-c is satisfied", "W-d is answered",
-  "H-ALIAS is excluded" and "TTD cannot see the write" all rested on the cap-truncated
-  trace and are **NOT ADMITTED**. The mirror sweep over a canonically written range is a
-  **negative**, and a broken mirror query returns zero too, so it does not supply W-c.
-
-**Why C1 is not ready to promote.** Its experiments ran against a trace that fails S1,
-so their results are not admissible. **Promoting it unchanged would violate §5.3's
-premise-freshness rule.** The instrument is ruled (TTD), and the packet is ready to
-promote once its `### Experiments` are re-run against a trace meeting C-a and C-b.
-
-- Question: **which code writes the record array** (not "which writes slot 65" — the
-  census shows the table is written wholesale, so the unit is the array).
-- Experiment: see the packet's `### Experiments`, and re-run steps 2-4 against a trace
-  satisfying **C-a** (process-exit end, below the cap).
-- Acceptance: the query artifact, its positive control (the install write) present,
-  and the row selected by rule — **and, per W11, witnesses W-a (terminal-in-trace) and
-  W-b (value consistency), with `O-UNKNOWN` selectable only under W-b equality**.
-  Senior budget: 1 Planner (self-review), 1 acceptance review.
-
-**C2 — Kernel memory follow-ups (change, only if V3 or C1 implicates them):**
-`NtQueryVirtualMemory` consulting the region registry; partial `MEM_RELEASE`; whether to keep the
-reserve clamp; heap blocks untracked after 65,536 entries; KeSystemTime/KeInterruptTime advancing
-(a new autonomous-clock model → admission under the run-profile rules).
-Accepted when: each implicated item has a `kmem_test` case that fails before and passes after, and a
-strict run shows the implicating symptom gone (`[KMEM] summary` counter or stop site named in the
-packet).
-
-**C3 — NV2A action methods — PARKED (2026-09-30).** The fast path renders through the executor
-(F4), which does not need them; revisit after the slice. Evidence: toolkit
-`docs/technical/nv2a-action-methods.md`. Before any run: recover `0x00193F70` (`SoftwareMethod`)
-and confirm JSRF's `DEBUG_3` value (bit 20). Then an exploratory run with `RECOMP_NV2A_ACTIONS=1`.
-An Advisor ruling is needed on criterion 4 for semaphore release (what "work" means for a
-state-capture model) before it can replace the synthetic fence mirror. Senior budget: ≤ 2 Advisor.
-
-**C4 — D3D resource release re-check (discovery).** With contiguous frees now real, does the
-regenerated build enter `sub_00192830`; which of its ten callers decides; which build is faithful.
-Accepted when: a strict run's trace (`config/trace-functions.json` entry for `sub_00192830`, positive
-control on another traced function) records entered/not entered, and the deciding caller's branch is
-named from its disassembly; the faithful build is decided against the xemu oracle (T3) or recorded
-UNKNOWN.
-
-**C5 — Rendering architecture — DECIDED for the bare minimum (2026-09-30): the executor path.**
-`RECOMP_GPU_ACK` stays on (ledger L16) and `RECOMP_PB_EXEC` renders (L18); the strict-model back
-end below is post-slice work. Original design note: strict runs capture
-NV2A state but render nothing; the pr-b executor renders but only on the synthetic-ack path.
-Proposed target: the strict model's **committed** methods drive the pr-b render back end
-(`nv2a_backend.h`), so completion stays real and frames are produced. Discovery: which committed
-methods of JSRF's first frames the back end lacks. Senior budget: 1 Advisor preflight, 1 Planner.
-Accepted when: the Advisor's `SHAPE` ruling is recorded, and the discovery lists, from a strict run's
-committed stream, each method the back end handles or lacks, with counts.
-
-**C6 — Game implicit declarations (chore):** declare `recomp_dispatch_init`,
-`recomp_delta_allowed`, `dr_tid_exited` and the two test stubs; pick up the runtime template's
-port-I/O prototypes at V2; then adopt `/we4013` in the game CMake.
-Accepted when: the game builds under MSVC with `/we4013` and the full ctest passes.
-*Status 2026-09-30:* the declarations are in (`src/main.c`, `src/diagnostics.c`,
-`tools/harness/collect.c`, `tests/test_recovery_11c1.c`); a MinGW cross-compile with
-`-Wimplicit-function-declaration` finds none left in the 22 hand-written C files (three stop early on
-MSVC-only constructs). Remaining, on Windows: `/we4013` and the MSVC build and ctest.
-
-**C7 — A4b2 P4 transfer bridge (carried):** re-establish only when a packet inherits P4.
-
-**C8 — Upstream and fork cadence (chore):** on each upstream release, a merge chore with
-`check-merge-structure.py` and the run-profile merge rules; every two weeks a DeepSeek fork scan by
-content (the TR §7 method) that lists candidate fixes with licence and strict-path effect.
-Accepted when: each merge records its hunk inventory and a strict A/B (W7 gate); each scan leaves a
-dated list in the TR with a disposition per candidate.
-
----
-
-## 7a. Lifts from Mercenaries-Recompiled (2026-09-30)
-
-Ideas and code from Mercenaries-Recompiled (`https://github.com/KraftMacAndChee/Mercenaries-Recompiled`; MIT root with no copyright line: add an
-attribution header; its `src/apu` and `src/nv2a` are xemu-derived LGPL: keep per-file notices; never
-take `tools/recomp/xemu_dsp_oracle/`, which builds xemu's GPL interpreter). Each lift adds its ledger
-entry in the same commit. "When" ties it to the fast path (§13).
-
-| ID | Lift | Why for JSRF | Ledger class | Effort | When |
-|---|---|---|---|---|---|
-| ML1 | **Serialised guest execution** behind a switch: one guest thread in lifted code at a time (a lock at the guest-meter brackets, released across kernel calls), ISRs and DPCs delivered under the lock only when IRQL allows, a yield at loop back-edges | our timer thread runs the GPU ISR and every DPC beside up to 4 guest threads (D4, `[GMETER] max=4`); the prime suspect for the table overwrite | approximated | moderate (runtime + one translator hook, regenerate) | F1 fallback (b) |
-| ML2 | **Replacement XAPI heap**: `RtlAllocateHeap`/`RtlFreeHeap`/`RtlReAllocateHeap`/`_msize` on a host-tracked guest arena (their `recomp_manual.c:15333-16060`) | JSRF's `sub_001497DC` is the same routine they replaced after the lifted heap rejected valid allocations | reimplemented | moderate; needs JSRF's heap addresses (T2 names) | F3 |
-| ML3 | **File I/O**: Xbox no-buffering as a caching hint (we pass `FILE_FLAG_NO_BUFFERING`, which demands sector-aligned I/O), their streaming read cache, `GENERIC_ALL` → data access | asset reads (M08) and saves (M25) | wrapped | small | F2b, before asset loading |
-| ML4 | **APU interrupts and timing**: IRQ delivery with vector `0x30+n` / IRQL `27−n`, `timeBeginPeriod(1)`, the 5.1 fold, voice-processor DMA through the physical model (D2) | we raise no APU interrupt; coarse timers slow audio clocks; D2 can write the XBE image | emulated / approximated | small–moderate | F3 as needed; before M23 |
-| ML5 | **Vblank fallback**: on each host vblank, signal the device's vblank event (`+0x2430`) and advance its counter | only if `BlockUntilVerticalBlank` hangs; fields confirmed by V4 | approximated | small | F3 fallback |
-| ML6 | **Executor-path shortcuts**: GET=PUT when the walk errors or runs out of budget, acknowledge software-method NOPs, a non-holding `FLIP_STALL` | only if a GPU stall appears on the executor path | approximated | small each | F4 fallback |
-| ML7 | **D3D11 renderer transplant** (~24k lines: combiners and vertex programs → HLSL, formats/swizzle, surface cache, AA/stencil, flip-ordered presentation, shader cache) | our executor renders on the CPU and passes no combiner state, so JSRF's cel shading cannot appear | translated | large; feasibility study first | after F4, when the title screen or M19–M20 needs it |
-| ML8 | **ISO extraction and build-from-ISO** (xdvdfs, hash-checked) and later the first-launch launcher | new-machine setup; M36 packaging | wrapped | small / moderate | any time; M36 |
-| ML9 | **Input and options**: keyboard/mouse bindings with prompts, SDL/XInput, stick outer-rim calibration, resolution/aspect/FPS-cap options, F8 log marker | M16 onward and quality of life | wrapped / approximated | moderate | after M15 |
-| ML10 | **Unified physical memory** (`0x80000000+` aliases the same RAM, as on hardware) | removes the D2 class of device-DMA bugs; an architecture change | emulated | large | only if more D2-type bugs appear |
-
-Not lifted: their DirectSound mailbox patch (our GP DSP already clears that wait), XMV playback (JSRF
-uses Sofdec), Lua/mission/UI/bird/PS2 title fixes (W21–W42).
-
-**Status 2026-09-30 (Mac session; cross-built and unit-tested, not run on the title):**
-- **ML1 DONE, opt-in:** toolkit `179439b`, `RECOMP_GUEST_SERIAL=1` (ledger L34, exploratory by
-  presence). The meter test's serial cases pass natively. The loop back-edge yield is in the
-  translator (`86113c7`, `--backedge-yield`, which `just regen` now passes); it takes effect at the
-  next full regeneration, on Windows. Until then a guest spin loop costs one bounded wait.
-- **ML3 DONE:** toolkit `e43e9bf` (ledger L30, L31).
-- **ML4 mostly done:** `timeBeginPeriod(1)` (`55acf60`, L33), the 5.1 fold (`29f13d0`, L25) and
-  voice-processor DMA through the GP's translation (`1c6641a`, D2 fixed, L22). APU interrupt
-  delivery (vector `0x30+n`) is still open.
-- **Later the same day:** `KeRaiseIrqlToSynchLevel` is tracked and `KeGetCurrentIrql` reports the
-  tracked level (`92715dc`, L36), so the IRQL gates see every raise; D3 is fixed (`9fd83c6`,
-  NV097 method state moved out of the PGRAPH register array); and `tools/posix_check.py`
-  (`c58ed2f`) runs the portable tests natively, cross-builds for Windows and runs the toolkit's
-  pytest in one command. Its first run found two stale tests, both fixed: the guest-meter audit
-  did not know serial mode's bracket (`104e9d8`), and `tests/apu_mixdown` crashed on every host
-  since the GP DSP port (`5d3466b`).
-- **Also landed:** DPC queue semantics (`e2872a1`, L35: at-most-once insert, `KeRemoveQueueDpc`
-  cancels, locked queue), `rep movsb`'s element-wise path through volatile `MEM8` (`5364747`), and
-  the blind-spot tools (`7b6839a`): the `NtReadFile` bounce buffer (L29) and the read-only tripwire
-  `RECOMP_RDATA_GUARD=1` (L32).
-
-## 8. Milestone ladder — bare-minimum slice (07–26)
-
-Rows 00–05 are done; 06a done; 06b ("implement reached imported kernel semantics") is closed into
-the fork fixes and re-opens only on a measured unbridged call. **Any profile is acceptable**; each
-acceptance record lists the ledger IDs its run relied on. SSIM and correlation thresholds are
-guidance for judging the frame or sound, not a strict gate.
-"xemu ref" means a T3 capture of the same checkpoint; without T3, the fallback oracle is named.
-
-| M | Milestone | Acceptance (artifact → PASS predicate) | Notes / upstream |
-|---|---|---|---|
-| **07** | CRT and game initialization complete | strict run log → `verify-initializers.py` passes, the title's main-loop entry VA (named via T2/doctor) is reached, zero `[ICALL] invalid target`, zero ABI violations | the current stop is inside this milestone (C1) |
-| **08** | Paths and first real asset read | strict run → an `NtCreateFile`+`NtReadFile` on a `Media` file whose byte count equals the file size and whose read bytes hash (T10) equals the retail file; a missing file returns `STATUS_OBJECT_NAME_NOT_FOUND` | decide `RECOMP_ASYNC_IO` from JSRF's open flags (upstream async reads); DVD media check is answered upstream |
-| **09** | Allocation and ownership | `[KMEM] summary` over a boot to the title: `commit_rejected=0`, `release_failed=0`, `region_table_full=0`; `xbox_kmem` ctest passes | largely delivered by the fork fixes; C2 if not |
-| **10** | Timers, threads, synchronization | `[GMETER] anomalies=0`; every wait on the boot path satisfied by a modelled cause (vblank count, event signal) in the log; no timer-thread spin | DPC drain fix (`cde1ccb`); KeSystemTime is static until C2 |
-| **11** | Graphics interception decided | C5 decision recorded; a fixture feeds committed methods to the back end | gates 12–15, 19–20 as strict |
-| **12** | Window and clear | strict run → ≥ 60 presented frames whose clear colour follows the guest's own `SET_COLOR_CLEAR_VALUE`/`CLEAR_SURFACE`; frame hashes archived; oracle: xemu ref of the first clear, else the method parameters themselves | the executor may preview this exploratorily |
-| **13** | One game-owned UI primitive | first UI frame vs xemu ref: SSIM ≥ 0.95 on the primitive's bounding box; vertex format/viewport/blend recorded | fallback oracle: the pushbuffer's own vertex data rendered by an independent reference rasteriser |
-| **14** | One menu texture | the decoded texture bytes (swizzle/format) equal the xemu ref dump, or the title's own source data decoded by an independent decoder | |
-| **15** | Title screen | 60 consecutive frames SSIM ≥ 0.90 vs xemu ref; intro FMV handling stated (decoded, or skipped and recorded as exploratory) | Sofdec; prior art: phobos665 Outrun 2 Sofdec work |
-| **16** | Controller input | with `RECOMP_USB`, a host pad press produces the guest's own XID report and the title's input state changes (observation hook); `RECOMP_PAD_PRESS` (synthetic) is not admissible | now toolkit-provided: upstream OHCI 4 ports, gamepad enumeration, GET_REPORT, keyboard stand-in; BearddOddity DATA UNDERRUN fix — **verify, not build** |
-| **17** | Main menu navigation | host pad drives start/options/back; the title's menu-state global changes as expected; zero invalid indirect calls/ABI violations | |
-| **18** | New game loads the opening area | the loader completes; the list of files read with sizes and hashes is archived; the object count global > 0; the transition completes | |
-| **19** | Opening scene and character rendered | spawn frame SSIM ≥ 0.90 vs xemu ref; depth and transforms correct at three camera positions | |
-| **20** | JSRF's distinctive rendering | cel shading and outlines at three reference views, SSIM ≥ 0.90 vs xemu ref | executor pixel-shader/combiner work (phobos665) is prior art |
-| **21** | Skating and camera | position changes monotonically with a held stick; jump and landing observed; frame-time p99 recorded and ≤ 2× the median | |
-| **22** | One graffiti interaction | the title's tag-completion progression flag is set and paint count decrements (named globals) | |
-| **23** | Sound effects | APU output non-silent at the expected rate; one known effect's PCM cross-correlates ≥ 0.9 with an xemu capture (fallback: the decoded ADPCM source) | GP port follow-ups (NDEBUG asserts, EP routing) and unmodelled AC'97 registers precede this; upstream ADPCM and mixdown fixes are in |
-| **24** | Music and streaming | 5 minutes of music with the underrun counter unchanged and memory bounded | determine JSRF's music format first (ADX/other) |
-| **25** | Save and resume | save file in the isolated save root; restart resumes location and progression; missing save handled; a regression test covers JSRF's save enumeration calls | watch upstream's `NtQueryDirectoryFile` change reported to break another title (fearkov `341cb66`) |
-| **26** | Stability | 15-minute strict soak: zero invalid indirect calls, zero ABI violations, `[KMEM]` live bytes bounded, `[GMETER] anomalies=0`, frame-time p99 bounded | DoD-STABLE |
-
-Graphics, input and audio may be reordered when the boot path demands it (audio already did: the
-title restarts itself without a working audio device).
-
-## 9. After the slice (27–36, unchanged scope)
-
-27 area transition · 28 second character and challenge · 29 cutscenes and FMV (Sofdec) · 30 all
-areas · 31 missions and encounters · 32 full playthrough · 33 optional content · 34 Windows
-hardening · 35 performance (prior art: DanielJVoxSmart's performance analyses) · 36 reproducible
-package. Each gets criteria in the same five-part form when it becomes next.
-
-## 10. Carried open items
-
-| Item (current plan) | Disposition |
+| Question | Tool |
 |---|---|
-| D3D resource release changed with the regeneration | → C4 |
-| `P0.1-AC1` reopened (moved line numbers) | kept; chore: re-cite by symbol after V2 |
-| `PIO_FREE` deferred at `O-OPEN` | kept, with its reopen conditions (TR §4) |
-| A4b2 P4 transfer bridge | → C7 |
-| Classifier: move `RECOMP_AC97_READY` to `RETIRED_OVERRIDES` | kept; chore with T7 |
-| GP port follow-ups (NDEBUG asserts, EP routing) | kept; before M23 |
-| AC'97 registers `0xFEC0017C`, `0xFEC00100` | kept; before M23 |
-| Game implicit declarations | → C6 (declarations in; `/we4013` on Windows) |
-| Kernel memory open points | → C2 |
-| DSP provenance record (A4b2-NR instrumentation not listed) | kept; chore |
-| Review capture (`record-review.py` default) | → T11 |
-| (new) Stale override text in `AGENTS.md`/run profiles; stale `RETIRED_NAMES` | → W15 |
-| (new) Run logs filling the disk (167 GB across 1,172 run directories on 09-28, `6a97c86`) | → T14; the owner cleared the old runs on 2026-09-30 |
-| (new) W2 gate under pragmatism: `scripts/qualify-premise.py` item 2 requires strict premise runs, and item 5 should name the prior-art set (Mercenaries-Recompiled, halo-ce-universal, toolkit forks) | **DONE 2026-09-30:** `--purpose bare-minimum` accepts an exploratory run with `--ledger-id`s the ledger has (`fidelity`, the default, stays strict); item 5 searches `PRIOR_ART` checked out beside the repository, and a missing checkout is UNKNOWN; 7 new controls |
-| (new) Horizon-ledger scope in the bare invocation | **DONE 2026-09-30:** `check-horizon-ledger.py` defaults to `--since 2026-09-29` (`--since all` for the archive) and prints the scope |
-| (new) **Owner decision:** the public game repository tracks 38 MB of lifted game code (`src/recomp/gen/`, `recovered.c`) and has no LICENSE file; Mercenaries keeps generated code out of its public source | **DECIDED 2026-09-30:** the lifted code is untracked (`52dc97b`) after its hand edits became patches (`8331a6d`); removing it from history is planned in `docs/reviews/lifted-code-history-scrub.md` and waits for the owner's go-ahead to force-push. The licence question is still open |
+| Build, test, check | `just build`, `just test`, `just check` |
+| A comparable title-path run | `just title-run <label> [seconds]` (sets `RECOMP_APU_TRAP`, `RECOMP_PB_EXEC`, `RECOMP_FB_WINDOW`, `RECOMP_FB_PRESENT_DUMP_EVERY`) |
+| Why the GPU stopped consuming | `just gpu-report <run>` (pending stream, missing methods, predicted diagnostic, `g_nv2a_submit_state`); `[PFIFO] reject`/`still rejecting`/`recovered`/`admit-unknown` log lines |
+| Present counts and PFIFO history without hand-grepping | `just logq <run> <query>` (`presents`, `pfifo`, `gpu_flips` tables; saved query `present-ceiling`) |
+| Did a run exercise an address | `scripts/check-run-exercised.py` |
+| Span and ABI defects from the bytes | `just stack-depth`, `just hidden-entries`, `scripts/check-entry-extents.py`, `scripts/check-table-targets.py`, `scripts/check-span-exits.py` |
+| Reading a dump | `scripts/check-dump-mapping.py` first, then `scripts/inspect-jsrf.py`, `scripts/read-host-symbol.py` |
+| The xemu oracle | `scripts/xemu-oracle.py`, `scripts/xemu-gdbstub.py`, `scripts/xemu-diff.py` (T3) |
+| Admitting new NV2A methods | `scripts/gen-nv2a-method-inventory.py` (pass `--put=`) |
 
-## 11. Removed or retired
+## Owner decisions in force
 
-- **The specified A2h successor** (bounded page-watch runs; splitting `unknown` into
-  host-identifiable vs unplaceable) → replaced by C1. The split's premise is wrong: the
-  `VCRUNTIME140` writes are most likely guest `rep stos`/`rep movs` lowered to host calls (TR §7).
-  The page-watch machinery stays in the toolkit as observation only.
-- **Milestone 06b** → closed into the fork fixes (data exports, memory, file status).
-- **The old A1–A5 roadmap and the pre-reform milestone diaries** → provenance only (history).
-- **Startup Advisor probe turns** → W8.
-- **The second acceptance stage** → already removed (workflow `e6397ed`).
-- **The packet lifecycle and its tooling** (2026-10-03, owner) → replaced by the simplified
-  `docs/agent-workflow.md`. Removed: the Planner, Decision guardrail, preflights, adequacy
-  review, freeze/promote, startup receipts, and the scripts that enforced them
-  (`check-packet-transcript`, `check-review-recurrence`, `check-recorded-reviews`,
-  `record-review`, `export-codex-review`, `jsrf_review_records`, `gen-startup-receipt`,
-  `check-ruling-ledger`, `chore-gate`). Existing packets, reviews and rulings stay as history.
+- The bare minimum is pragmatic, every shortcut ledgered (2026-09-30).
+- Lifted code (`src/recomp/gen/`, `recovered.c`) is untracked and rebuilt locally (2026-09-30).
+- Ordinary runs need 15 GB free (`scripts/check-disk-gate.py`); TTD recordings keep the 50 GB
+  expectation; deleting old runs is an owner decision.
+- The strict-horizon ledger's scope is from 2026-09-29 onward (`--since all` for the archive).
+- C3 is parked and C5 decided (the executor) for the bare minimum.
+- The packet lifecycle and its tooling were retired (2026-10-03); existing packets, reviews and rulings
+  stay as history.
+- Commit and push policy, and the public-repository rules, are in `AGENTS.md`.
 
-## 12. Evidence and decision rules (kept)
+## Evidence rules (kept)
 
-- `MEASURED` = inspected source/artifact evidence with an identity/procedure; `INFERRED` = a
-  hypothesis or expected consequence.
-- Missing, malformed, stale, unexercised or `CANNOT VERIFY` evidence is never PASS.
-- Bare-minimum milestones accept exploratory runs whose records list their ledger IDs; a claim about
-  *fidelity* (the port behaves as the hardware does) still needs a strict run, and exploratory or
-  fixture evidence stays bounded to what it measured.
-- A failed measurement cannot be converted to PASS by any role; a post-review change reopens the
-  affected criterion.
+- `MEASURED` = inspected source or artifact with an identity and procedure; `INFERRED` = a hypothesis.
+- Missing, malformed, stale, unexercised or `CANNOT VERIFY` evidence is never PASS; a failed
+  measurement cannot be converted to PASS by any role; a post-review change reopens the criterion.
+- Bare-minimum milestones accept exploratory runs whose records list their ledger IDs; a *fidelity*
+  claim still needs a strict run, and exploratory or fixture evidence stays bounded to what it measured.
+- A run that does not reach the changed address is NOT EXERCISED, not a pass.
+- Values transcribed by hand into a record are re-checked by a second worker against the artifact
+  (W5) until tool citation (T10) is the only path; TTD query output is a lossless decision input only
+  under the W11 conditions in `docs/jsrf-run-profiles.md`.
 - Original assets and existing saves remain unchanged.
-- Pending W11: TTD query output as a lossless decision input. Pending W5/T10: tool-cited values only.
 
-## 13. Next action
-
-### Current state (2026-10-02; read this block first)
-
-1. **The SEGA card is held by an unfinished fade.** Located with the xemu oracle (T3): the logo
-   update `0x7E360` reaches phase 2 and waits for `0x24650() != 0`, the done flag at `+0xC0` of the
-   subsystem-6 fade object. In the xemu oracle the card holds for more than 120 update frames, then
-   fades at 1/120 per update and moves on to the Smilebit logo. (xemu is an emulator, not real
-   hardware: these are oracle observations, and they are not a fidelity claim about retail Xbox.) In
-   the port the logo sits in phase 2 with its hold counter at 121 and the fade at alpha 0, target 1,
-   done 0. The fade update `0x24700` is translated correctly; the update runs on the armed fade
-   instance, and the `[0,1]` clamp at `0xA4CF0` returns alpha to 0 on each update (item 10). Evidence:
-   `docs/reviews/owner-sega-600-observations.md`.
-2. **Ruled out** by 600 s runs and archive reads: a slow logo (static image for 400+ s after the cache
-   marker), file I/O or a stalled movie (no file opened or read after the marker), the do-nothing
-   kernel bridges (none first called after the marker), and folded aliases (all 134 alias counters
-   zero after the `0x14FEF0` recovery).
-3. **`RECOMP_APU_TRAP` (L21) is required to reach the logo:** without it the guest spins in
-   DirectSound initialisation at `0x001A18D0`.
-4. **Latest changes:** L02 recovery of the render-state method `0x14FEF0` (game `5c1d7d6`); run dumps
-   capture the executable's globals, read with `scripts/read-host-symbol.py` (game `d385e37`,
-   `651595f`); the 67 do-nothing kernel bridges name their first call (toolkit `929856f`).
-5. **Latest run:** `20261003-174222-912-owner-fade-watch-150`, the item-10 alpha watch — exploratory,
-   150 s, same executable as `20261002-174731-263-owner-l02-d2-600`, which remains the latest 600 s
-   capture. Both end on the SEGA card. Ledger IDs L14–L18, L20–L25, L39, L40 (L16 inert under the
-   MMIO owner, L19 dormant); the watch run adds no shortcut and no ledger ID.
-6. **Parked by the owner:** the F5 fail-fast observer; no retry.
-7. **Answered 2026-10-03 by item 10:** the armed fade *is* updated — the traversal's `1/120` step
-   store ran on it at least 667 times — and a second writer in the same function, the `[0,1]` clamp
-   at `0xA4CF0`, re-clamps alpha to `0` on each update, so it never reaches the target. The cause is
-   the no-op `fcmove`/`fcmovne` lift in `sub_0014C870`/`sub_0014C850`, confirmed as a mechanism on
-   2026-10-04 (item 10).
-8. **Answered 2026-10-03 (owner-directed discovery, records only).** The **phase-2 chain is the
-   phase-0 chain**: all 10 phase-2 xemu hits at `0x24700` carry the identical return chain
-   `1108A → 11096 → 11096 → 124C3 → 13B24 → 13F9E → 6FA41` and the identical fade object
-   (`ECX 0x00600E60`, vtable `0x1C4D10`, flags `0x00010003`). The first phase-2 hit *is* the port's
-   stuck state (alpha 0, target 1, done 0, logo phase 2, hold 121) and the next sampled entry is
-   alpha `1/120` — so the updater is **entered in phase 2** and alpha advances between those sampled
-   entries. The sample does **not** show the update running on the phase-transition activation itself
-   (the first entry is already phase 2 / done 0) and does **not** show every later frame updating:
-   ten breakpoint entries are not a contiguous frame history. Within the sampled interval (the
-   phase-0 fade-in plus 10 phase-2 hits, budget-reached) **no second producer and no second fade
-   object were observed**; the sample does not exclude one that was never hit.
-9. **The archived port capture answers reachability but cannot decide the object-specific half.** The
-   armed fade `0x15F0E60` **is** in the walked list (`0x108FF40 → 0x1340060 → 0x108FFA0 →
-   0x15F0E60 → … → 0x143EE60`), its `+4` flags `0x00010003` are non-negative, `app+0xB0` (the
-   subsystem-6 slot `0x24650` reads) is that same object, and the tree corresponds to the oracle's
-   node for node over that span (one oracle-only sibling after the logo, `0x52EE60`, is a
-   later-scene object with negative flags in the successor snapshots and is not on the fade's path).
-   The frozen main-thread frame (`sub_00013A80+0x38D2` = `recomp_0000.c:8175`, the `0x13F2A`
-   indirect call) **positively establishes** `0x13A80`, `0x13F80` and `0x6F9E0` on the chain, with
-   the traversal's gate open (`app+0x40/+0x44/+0x48/+0x4C` all 0). What it does not establish is that
-   *that* frame updated *this* object, and the reason is ordering: the walk is preorder and reaches
-   the fade (child of `0x108FFA0`) **before** the logo (later sibling), and on the arming tick
-   `done` is still 1 — set by the constructor (`0x246C1`), the completion store at `0x2494A` or the
-   immediate-set path at `0x24493`, which this record does not try to distinguish — so `0x24700`
-   returns at
-   `0x24703` without writing `+0x98`; the logo then arms it further along the same walk at `0x7E4AF`
-   → `0x24540`, which sets `done = 0` and the target and never writes `+0x98`. The frozen state is
-   therefore **exactly what the arming frame leaves behind**, so that account is *compatible* with
-   everything observed (quick Advisor consult 2; an earlier "live contradiction" reading is
-   retracted) — but it is **not** established that the captured activation *is* the arming tick,
-   because phase 2 does not increment the hold, so `phase 2 / hold 121 / alpha 0 / done 0` is equally
-   the state of every later frame that also failed to update the fade. **Also corrected:** `0x123E0`
-   selects exactly **one** of five traversals per activation by priority (`app+0x40` → `0x114D0`,
-   else `+0x44` → `0x112A0`, else `+0x48` → `0x11700`, else `+0x4C` → `0x11930`, else the default
-   `0x11070`) — not "five times", and the non-default routes do **not** skip the walk: the fade's
-   `+0x10`/`+0x1C`/`+0x28`/`+0x34` slots all point at the `0xAECC0` thunk (`mov eax,[ecx]; jmp
-   [eax+4]`) back to the same `0x24700`, so all five can reach the update. The `[RECOVERED]
-   0x00024700` line is **first-call-only** (`recovered.c:15365`, printed ~136,000 log lines before
-   the cache marker) and the walker's sole indirect call `0x11087` is lifted to
-   `RECOMP_ICALL_SAFE_AT`, which publishes **no** guest event by construction, so the earlier "no
-   retained match" was an instrument artifact, not evidence. The activation counter `app+0x87E0`
-   (loaded `0x13F5C`, stored `0x13F6A`, after both the traversal and the Present call, no `ret`
-   between) reads 321 / 1016 / 3532 at 62.6 / 182.7 / 603.2 s for the same executable
-   `7027fafad9cd7069`, each ending at phase 2 / hold 121 / alpha 0 — so those runs completed
-   **different totals** of activations while ending in the same terminal state, and a "loop stopped
-   at the arming frame" account is unsupported. An endpoint snapshot is **not** an interval history,
-   so this does not show what the loop did between arming and capture. **No cause claimed.**
-   **Lead, recorded with its alternative:** the fade's `step` field (`+0xB8`) reads the **arm value**
-   `0x3C088889` (1/120) in `20260930-225440-580-f3-alias-fix-strict`, not the constructor's 1/60
-   (`0x3C888889`, `0x246CB`), so an arm ran after construction. That supports an arm-compatible
-   overwrite, **not its caller**: exactly three direct sites push 1/120 before `0x24620` (`0x7E460`,
-   `0x7E4B9`, `0x7E762`), the **first and last** pair it with target 0 (`edi = 0` at both, from the
-   function's own `xor` and the constructor's `xor edi, edi`), the middle one pushes `0xFF000000`
-   (target 1.0), and `0x24540` has one direct caller (`0x2463D`) with computed-pointer calls not
-   excluded. `done = 1` in that dump is consistent
-   with the completion store at `0x2494A` but not decisive — `0x24480` (via `0x24600`) also sets it,
-   at `0x24493`, without touching `step` — and consult 4 withdrew the discriminator it had implied
-   there: the endpoint fits a completed `0x24700` fade-in exactly as well as an immediate set.
-10. **Observed 2026-10-03, owner-approved run `20261003-174222-912-owner-fade-watch-150`: the fade is
-    updated; the value does not survive the update.** Exploratory, `--seconds 150`,
-    `RECOMP_WATCH=0x15F0EF8` plus `RECOMP_WATCH_RAW=1`, otherwise the D2 environment of
-    `20261002-174731-263-owner-l02-d2-600`
-    (same executable and XBE hashes), no code change and no rebuild. Mapping gate **1 match / 0
-    mismatch**, and the log shows `WATCH: writes to the page of 0x015F0EF8 are trapped`. `app+0xB0`
-    re-checked in this dump = `0x15F0E60`, so the watched dword is the fade's alpha. **The positive
-    control fired** (one report `0 -> 1.0` with `raw[esp+0] = 0x2461D`, `raw[esp+8] = 0x7E75C`,
-    `raw[esp+12] = 0xFF000000`), so the run is **CONTROLLED**.
-    **Observed from the raw slots:** 2004 changed-value reports; 667 carry a `0x24700` step store
-    (666 the add at `0x24748`, one the subtract at `0x24777`; `raw[esp+4] = 0x1108A`,
-    `raw[esp+0] = 0x15F0E60`), a lower bound because the watch suppresses
-    unchanged values; and a second writer in the same function — the `[0,1]` clamp at `0xA4CF0`
-    reached from `0x24957` — writes alpha to `1.0` and then to `0` (`raw[esp+16]`/`raw[esp+24] =
-    0x2495C`). All 666 cycles starting at a `0 -> 1/120` step have the identical shape
-    `0 -> 1/120 -> 1.0 -> 0`, spread evenly across the run to capture end. Endpoint unchanged from the
-    source run: alpha 0, target 1.0, step 1/120, done 0, logo phase 2, hold 121. Logo phase/hold are
-    **not** readable per hit (the logo VA appears in 1 of 2004 raw frames, the control's).
-    The armed fade is updated, and the stepped value is clamped back to 0 on each update.
-    **Lead, recorded as a lead and not a cause:**
-    the lifted `sub_0014C870`/`sub_0014C850` emit `fcmove`/`fcmovne` as comments only
-    (`recomp_0003.c:43940`, `:43900`; the only 2 such sites in `gen/`), which would force
-    `min(x,1.0) = 1.0` and `max(x,0) = 0` every update, so alpha never reaches target and `done`
-    stays 0. **Checked:** `app+0xB0`, the triplet shape, the absence of any override for
-    either address in the four config manifests, and the 2-site census.
-    **Answered 2026-10-04: the lead is CONFIRMED as a mechanism.** The decisive test named
-    here was run, executing the current lift (real XBE bytes → Capstone → the real `Lifter`
-    → the emitted C → clang against the runtime macros) with an anti-vacuity control that
-    replaces only the two `fcmov` lines with faithful conditional moves:
-    `sub_0014C870(1/120, 1.0)` returns **`1.0`** under the current lift and **`1/120`**
-    under the control, so the clamp does not clamp. `fcmove`/`fcmovne` are absent from
-    `_lift_fpu` (`lifter.py:3663–3979`) and fall to the catch-all at `:3979`; the real
-    bytes are `da c9` at `0x14C881` and `db c9` at `0x14C861`. This reproduces the observed
-    cycle exactly: the `1/120` add at `0x24748`, then `min(x,1.0) → 1.0` and `max(1.0,0) → 0`
-    at the `0x24957` clamp, writing alpha back to `0`. **Claim ceiling (Advisor ruling):** a
-    **sufficient cause of the phase-2 hold, observed for this build**; **not** the only
-    cause, and **not** that repairing it releases the SEGA card. The Advisor ranked what
-    would remain if the hold persisted: a ZF-vs-C3-keyed repair (the `test ah,1` condition
-    is C0, not C3), too-short a run bound (~6.5 activations/s ⇒ a 120-step fade-in is ~20 s),
-    a later SEGA gate at phase 3 (`0x7E460`/`0x7E481`, `0x7E498` compares against 720), a
-    re-arm through `0x24540` that the alpha watch cannot see, the 4 other catch-all sites
-    (`fldenv` `sub_00040214`, `fisttp` `sub_000FDDA2`, `fnclex` `sub_0017F02C`, none on the
-    fade path), and guest-advances-but-screen-holds. **Second defect, independent:** the drop
-    is **silent** — no `RECOMP_UNIMPL`, no `TODO`, nothing in `lifter.unimplemented`, so the
-    contract `test_lifter_unimpl.py` enforces is violated and nothing reported it. Note the two
-    helpers `sub_0014C870`/`sub_0014C850` have **120 direct call sites** (35 + 85) across `gen/`
-    and `recovered.c`, so a repair changes other behaviour too.
-    **No fix was made**: no translator change, no generated-code patch, no workaround, no
-    packet promoted. **No fix, no TTD recording, no ledger ID**; exploratory, single run, one
-    dword, no strict-horizon,
-    fidelity or liveness claim. Evidence: `docs/reviews/owner-sega-600-observations.md`,
-    "Owner-directed discovery: the fcmov clamp test (2026-10-04)".
-
-11. **F4b repair applied and measured (2026-10-04).** Toolkit `671ab0a`: `fcmove`/`fcmovne` (and the
-    other `fcmovcc` forms) are translated, via the tracked EFLAGS condition when a setter is tracked
-    and `_flags` otherwise; any FPU mnemonic with no case now goes through `Lifter._unimplemented`
-    (`RECOMP_UNIMPL` + tally) instead of a bare comment. Other catch-all sites: `fisttp` translated
-    (truncating store, pop); `fnclex` is an explicit decision (x87 exception state is not modelled; all
-    exceptions are masked), as are `fnop`/`fwait`; `fldenv` now reports `[UNIMPL]` in a fresh lift (the JSRF tree has not been relifted for it). Game side: `scripts/relift-selected.py fcmov` relifted
-    exactly `sub_0014C850` and `sub_0014C870` in `recomp_0003.c`; the diff is 6 insertions and 4
-    deletions inside those two bodies. That is the selection rule, not an audit: a read-only relift of every generated body with the new lifter (scratch, nothing written; 4,866 bodies, 2,630 differ, almost all generator-version noise such as CC/Frame header lines) finds exactly two other bodies whose diff is FPU-related, `sub_000FDDA2` (`fisttp` becomes a store) and `sub_0017F02C` (`fnclex` becomes a decided no-op; its copy in `recovered.c` is also still a comment). Neither is on the fade path and neither was relifted. The one `fldenv` site (`recomp_0000.c:79871`) sits in a body the audit could not map to an analysis entry, so it still carries the old silent comment and is unaudited. Blast radius: the 120 call sites (35+85) are textually unchanged (no caller body differs in the audit for FPU reasons), but they now receive a real clamp result, so behaviour that depended on the broken clamp changes at runtime; that was not audited per caller. Known gap in the lifter: with no tracked flag setter the `fcmovcc` fallback reads `_flags`, which is never assigned (and not declared for `fcmov` functions); neither JSRF site uses it. Tests: toolkit `test_lifter_fcmov_exec.py` and `test_lifter_fpu.py`
-    (fail on the old lifter); game `tests/test_fcmov_clamp.py`, registered as CTest
-    `jsrf_fcmov_clamp`, executes the generated bodies (`1/120` and `1/120` now, `1.0` and `0` before)
-    with a negative control. Provenance: the one-file `recomp_0003.c` baseline and manifest were
-    amended narrowly (a bare `--write` would have deleted the amendment history). Run result: see
-    "Current work".
-
-12. **Recovery boundary pass (2026-10-05).** Same defect class five times, each found by a run:
-    a span that ended at an internal label (`0x7B8D0`, `0x6EC80`), a span that ran over the next
-    method (`0x4BF40`, `0x52150`, `0x52FC0`, `0x3E210`), and methods referenced only from vtables or a
-    handler table that had no function (`0x4C400`, `0x425D0`, the `0x1F9888` handler targets,
-    `0x3E230`, `0x41400`, `0x69F90`). `tests/test_recovery_span_ownership.py` (CTest
-    `jsrf_recovery_span_ownership`) pins these entries and checks the boundary invariant below. **Advisor ruling
-    (2026-10-05):** `0x47470`/`0x47540` are pure tail-jump thunks (`jmp [eax+4]` / `jmp [eax+0xc]`), so
-    their `ret N` is the receiver's. Basis (observed): they occur only as raw dwords in five vtables
-    (0x1CA490, 0x1CA5A8, 0x1CA5CC, 0x1CAA8C, 0x1CC12C) and every slot-1/slot-3 receiver ends in
-    `ret 0xC`; hence `stack_args 12`, exact check kept. Inferred: a callee-cleans tail jmp implies equal
-    pop size. Reversed by a thunk reference the scan missed paired with a receiver whose RET is not
-    `0xC`. The test's invariant is: no recovered body may call an unresolved stub between its start and
-    min(next function start, recorded end + 0x400); its negative control reinstates the old
-    `0x7B8D0` span (end `0x7B93C`) and the stub calls and must be flagged. 81 bodies still violate it
-    and are frozen in `KNOWN_OPEN` in the test (open, unaudited defects, e.g. `0x52050`, `0x4B6A0`,
-    `0x504E0`, `0x67E90`); the test fails only if a new one appears, and the set should only shrink.
-
-13. **Advisor ruling, 2026-10-05: the Beat.bin loop and fatal are a port heap-bookkeeping defect, not
-    a leak and not a heap-size shortfall.** Basis (observed): heap block table read from `process.dmp`
-    (860 blocks, address-ordered to exactly `g_heap_next`): live 17.15 MB, free 18.90 MB, unrecorded
-    gaps 14.48 MB; 224 gaps of exactly 61,440 B each followed by a live 4 KB block at a 64 KB boundary
-    (one region per small file); frees work (`release_ok=232`); the cache copy had succeeded (the loop
-    opens `Beat.bin` with status 0 then fails the 352,256 B allocation). Inferred: the real console
-    charges RAM per committed 4 KB page so the 64 KB granule costs only address space; the disc dialog
-    is the pending-I/O timeout (the threshold is 240 s, not 15 s; technical record §8). Do not enlarge the heap or drop the 64 KB reserve alignment (that
-    would hide the defect or need a ledger entry). Reversed by: OOM continuing after the fix with live
-    bytes near 48 MB, or the dialog appearing with no OOM. **Annotation: the second condition occurred in
-    run `20261004-020802-181-f5-long-1500` (fatal marker at ~950 s, zero OOM lines, dialog object in the
-    dump). The heap-bookkeeping finding stands (measured: the block table, the 687 failures, the aligned fit
-    for 12 free blocks); the inferred part, that the dialog is the pending-I/O timeout, is no longer
-    supported and the cause of the second dialog is open. The caller is measured by the L41 logs in
-    run `20261004-174418-621-f6-fatal-caller`, not by a separate review.**
-
-### Fast path status
-
-- **F0, F0a, F0b — done.** Runs gate at 15 GB free; copy `src/recomp/` aside before pulling a commit
-  that untracks it; rebuild and test on a new toolkit before the first run.
-- **F1 — done 2026-09-30.** `RECOMP_RDATA_GUARD=1` named the kernel thunk table's writer (D5).
-- **F2, F2b — done 2026-09-30.** D1 (DMA_PUT bit 16) and ML3 (file flags).
-- **F3 — done 2026-09-30.** The strict horizon is closed: two wrong `tail_jump_alias` folds were
-  recovered, and strict runs reach their deadline with an intact `.text` and thunk table.
-- **F4 — met, exploratory, 2026-10-01.** The SEGA card renders through the owner's NV097 consumer
-  (Architecture A, toolkit `a71f937`).
-- **F4b — logo and cache phase, in progress.** The first-boot cache fill completes after the
-  directory-context fix (toolkit `a826201`); the hold after it is current state item 1.
-- **F5 — intro movies.** If the Sofdec intros block, skip them (ledger: *patched* or *intentionally
-  ignored*); decoding them is post-slice (M29).
-- **F6 — title screen (M15).** Acceptance: a frame dump of the title screen plus the run record with
-  its ledger IDs, compared by eye with an xemu screenshot of the same screen (T3); one Packet review
-  for the milestone.
-
-**Decisions taken with this direction (2026-09-30), each reversible by the owner:**
-- The disk floor for ordinary runs is 15 GB (`scripts/check-disk-gate.py`); a run measured a few GB.
-  TTD recordings keep the 50 GB expectation. Deleting old runs stays an owner decision and is not
-  needed now.
-- The strict-horizon ledger's scope is **from 2026-09-29 onward**, now the lint's default
-  (`--since all` covers the archive); the 36 earlier runs are not backfilled.
-- C3 is parked and C5 is decided (executor) for the bare minimum, as recorded in §7.
-
-### Earlier entries
-
-1. **T14's free-space gate**, then **V1 → V2 → V3 → V4** on the Windows host (DeepSeek chores;
-   0 senior calls); start the strict-horizon ledger (W14) with V3's result.
-2. Alongside, on any host: **T6, T7, T4**, then **T1, T2, T8–T13, T5**; T3 when the owner supplies
-   the images. Owner approves the W-row document edits as they land (W7, W8, W15 first).
-3. Then **C1** as the first packet (after W11), with C5's Advisor preflight in parallel.
-
-**Updated 2026-09-30 (second entry, end of session).** Supersedes the note above.
-
-**Phase 1 is complete** (T14, T6, T7, T4, T1, T2, T3, T5, T8–T13), and **Phase 2's
-checks are implemented** (W1, W2, W3/W10, W4/W12, W5, W6, W7, W9, W11, W13, W14, W15,
-W16; **W8's fallback half is owner-reserved**). `just check` runs ten checkers.
-
-**The critical path moved twice more, and both moves are measurements:**
-
-1. The `0xC0000409`-under-TTD reading was **wrong**: it was a missing
-   `RECOMP_APU_TRAP=1` in the launch environment. With it, a traced run reaches the
-   horizon (23,484 log lines, same site, same exit code).
-2. **TTD cannot see the write class C1 is looking for.** 400,000 writes scanned, zero
-   outside `jsrf_recomp.exe` and `VCRUNTIME140` — kernel-mode writes are invisible —
-   and the clobber is confirmed from a **non-TTD** minidump. So C1's instrument choice
-   is re-opened with the Advisor under §2.3.
-
-**The §2.3 ruling has landed** (`docs/reviews/rulings/ttd-query-decision-input.md`,
-"C1 instrument (2026-09-30)"): **W11 stands, TTD remains C1's instrument**, and the
-Session's contrary conclusion was withdrawn because it rested on a trace truncated at
-its size cap.
-
-**C1's conditions are now all measured, and they reduce to one recording problem.**
-
-| Condition | State | Evidence |
-|---|---|---|
-| C-a (process-exit end, below cap) | **achievable, but it excludes the horizon** | `--seconds 12` gave `Process exited … after 6797ms` at 240 MB — exiting `0xC0000409` **before** the horizon at ~7.3 s |
-| C-b (terminal in the trace) | **FAILS on every existing trace** | 58 recorded reads of slot 65, **0** of them zero (`docs/reviews/c1-slot-reads-in-trace.md`) |
-| C-c (mirror positive) | **MISSING** | a real store through a mirror VA is still required |
-| C-d (kernel-write control) | **MISSING**, now possible | the toolkit logs `dst=` (`xboxrecomp` `1572256`) |
-| C-e (census on an admitted trace) | blocked on C-a **and** the horizon | — |
-
-**The trade is measured, not assumed:** a bound short enough to end by process exit ends
-at 6.8 s with `0xC0000409`, before the horizon; a bound long enough to reach the horizon
-is capped before the process exits. **`ttd -stop` is the only path that satisfies both**,
-which S1 already anticipates — *"A trace ended by `ttd -stop` is out of scope unless the
-terminal position precedes the stop."* The trigger must be a signal from outside, not a
-timeout or a cap.
-
-**The Session is BLOCKED on the disk floor before it can take that step.**
-`scripts/check-disk-gate.py` reports **33.9 GB free against a 50 GB floor**, and T14 makes
-clearing it an **owner decision** (*"archive or delete the rest after owner approval of
-the policy"*). The reclaim plan reports 1,131 candidate runs holding 163 GB, of which the
-808 `test` runs alone are **111 GB** — more than twice the shortfall. **None was created
-by this session**; every run this session created is cited by a durable record and kept.
-
-**So the next action is an owner decision, not a Session step:** approve a reclaim of the
-archived `test` runs (or another subset), after which the Session can record the
-`ttd -stop` trace, evaluate C-b on it, and promote
-`docs/packets/c1-slot-write-attribution.md`.
-
-**A second owner decision is recorded** in `docs/reviews/ttd-recording-termination.md`:
-`check-horizon-ledger.py` without `--since` reports **36 pre-2026-09-29 runs** with no
-ledger row, while `just check` passes because it passes `--since 2026-09-29`. Either the
-ledger's scope is "from inception onward" and the bare invocation should say so, or the
-rule is retroactive and 36 rows need backfilling — a packet-sized job.
-
-Until a packet is promoted, packet implementation remains BLOCKED and the chores run
-as owner-directed work.
-
-The full record of F0–F4b, the owner checkpoints and the follow-up leads, as this section held it
-until 2026-10-02, is in `docs/jsrf-operating-history.md`, "2026-10-02 — Plan §13 history moved out
-of the active plan".
-
-If no packet is promoted in the authoritative plan file, packet implementation is BLOCKED; chores
-listed here run as owner-directed changes once the owner adopts this plan.
-
-## 14. Closed packets
+## Closed packets
 
 | Packet | Result | Claim (limits in TR) | TR |
 |---|---|---|---|
@@ -1944,9 +278,7 @@ listed here run as owner-directed changes once the owner adopts this plan.
 | `A4b2-r8` | ACCEPTED | the GP engine's DMA write clears the DSP pending word in a strict run | §4 |
 | `A4b2-NR` (discovery) | `O-TWO-LEG` | the stub inputs do not reach the clearing descriptor | §4 |
 | `A2h-slot-writer-attribution-r2` | ACCEPTED, `O-OPEN` | writer found, row withheld | §5 |
-| Toolkit sync to v0.12.0+ | done (owner) | merge `2925f0b`, stop unchanged | §1 |
-| CRT 64-bit divide helpers | done (owner) | hand-written, unit-tested | §2 |
-| Regeneration with v0.12 lifter | done (owner) | same stop; D3D release difference open | §2 |
-| Fork audit + owner-directed toolkit fixes | committed to `main`/`master`, unverified on Windows | TR §7 table | §7 |
 
-`A2h-r6` was retired (premise refuted; the failure was already fixed by `cb7cae2`).
+Owner-direct work outside packets (toolkit syncs to v0.12+, CRT divide helpers, the v0.12
+regeneration, the fork audit and fixes) is in TR §1, §2 and §7. `A2h-r6` was retired (its premise was
+refuted; the failure was already fixed by `cb7cae2`).

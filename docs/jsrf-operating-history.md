@@ -2688,3 +2688,37 @@ The game checkout moved from `C:\Users\logic\Repos\my_xbox_game` to
 `C:\Users\logic\Repos\poison-jam`, matching its remote. Records, review transcripts,
 archived runs and DSH session paths written before this date name the old folder; they
 were left as written.
+
+## 2026-10-06 — plan condensed; turns title-001…004 summarised
+
+`plan-jsrf-bare-minimum.md` had grown to 1,952 lines (170 KB), about 1,000 of them per-run narrative
+that duplicated TR §9–§21, plus finished Phase 0/1/2 tables and the superseded TTD line (C1). It was
+cut to its current state, fast path, next actions, backlog and milestones. **The full text before the
+cut is `git show dcc93ab:plan-jsrf-bare-minimum.md`**; nothing was copied here, because the facts it
+held are in the TR, `config/stop-chain.json` and the ledger.
+
+The four DSH turns of 2026-10-05/06, each named after its `plan-turn-*` files (deleted in the same
+change; read them with `git show dcc93ab:<file>`):
+
+| Turn | First commit | What moved | Landmarks |
+|---|---|---|---|
+| title-001 | `7e683a3` | Stops 1–16, each confirmed by the next run (f16–f33): unowned gaps, swallowed later functions, alias-cut switch arms, the alias-folded job handler `0x32610`, `0x80340`/`0x80BD0`. `check-entry-extents.py` became a gate; `check-run-exercised.py` added after a run was credited with an address it never dispatched. Nondeterministic boot recorded (f25/f26). | `7e683a3`, `e96c586`, `9ea4e44`, `4cac35c`, `4c61042` |
+| title-002 | `80d3f1e` | The stack-depth CFG validator (TR §10) and the 24 `stack_args` defects it proved without a run; stops 17–19 confirmed (g03–g05); the this-adjusting thunk `0x154540` found (stop 20). | `80d3f1e`, `c9173cb`, `f603e1e` |
+| title-003 | `6f2e4e2` | The hidden-entry detector (TR §14) and its 50 repairs; stop 20 confirmed by g07; the under-wide `0xB5EB0` (stop 21); a host crash from a dispatch-table count left stale by a patch, found by re-running an archived binary. | `6f2e4e2`, `64945a3`, `0f07195`, `464df3b` |
+| title-004 | `8e5b93a` | Dispatch count derived and gated (toolkit `2cee914`); the rename's loss of the strict archives fixed; the under-wide batch (stop 22, `0x48690`, `0xB06E0`); the stop-chain record gate (L43); F7b–F7d (152 + 7 spans); stops 25–28; the alias-shim census. Presents moved from 1000 to 888 after `0445a80`, recorded as a correlation (TR §19). | `2a1dbc9`, `892dd1e`, `b1aca89`, `0445a80`, `59f3ebf`, `8cd1e08`, `0cc6d5d`, `49bfd4e` |
+
+**What the four turns did not do:** reach the title screen, or explain the present ceiling. A code
+review of the toolkit the same day (recorded in the plan's current state and backlog) found that a
+rejected NV2A submission walk would produce exactly the observed ceiling and that its diagnostic was
+printed only for the first 64 submissions; the toolkit now logs and exports it.
+
+**Removed in the same change (recover with `git show dcc93ab:<path>`):** the 13 closed-turn
+`plan-turn-*` files; `.muse-workers.md` (it held only an Advisor handle retired 2026-09-29); and 16
+retired scripts that no recipe, test, hook or active document used — the A2h instruments
+(`scripts/a2h-map-rip.py`, `a2h-read-registry.py`, `a2h-slot-triage-classify.py`,
+`a2h-frame-audit.py`, `a2h-null-slot-triage.py`, `a2h-oom-slice.py` and their three
+`scripts/test_a2h_*.py`), the 2026-09-22 thunk-table probes (`check-thunk-relocation.py`,
+`check-thunk-survival.py`, `check-displaced-ram.py`), `check-subagent-routes.py`,
+`jsrf_dsh_source.py` (the P0.2 DSH review adapter), `v3-evidence.py` (Phase 0 V3), and
+`decode-pushbuffer.py` (hard-coded to one run; superseded by `jsrf_gpu.py`). Historical records that
+cite them were left as written.

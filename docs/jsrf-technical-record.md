@@ -958,7 +958,7 @@ horizon" — and the prediction held twice, once per alias.
 
 **Not established.** Why the guest's call reaches these table entries in the first place, and whether
 any *other* `tail_jump_alias` fold still deletes a table-referenced entry. The census that would answer
-the latter is not yet a valid instrument (see plan §13). The 93-second run ended at its own deadline
+the latter is not yet a valid instrument (see plan §13 as of `dcc93ab`). The 93-second run ended at its own deadline
 with no fault, so the next stop is unknown and is F3's continuing subject.
 
 ### F3 evidence: why the `0x00037550` fold is fatal (2026-09-30)
@@ -1006,7 +1006,7 @@ strict horizon, and that is the test of this diagnosis — it was applied, and t
 
 **Not established.** Why the guest's call reaches this table entry in the first place, and whether any
 *other* `tail_jump_alias` fold in this image still deletes a table-referenced function entry. The
-latter needs a census, and the one attempted in this session was not a valid instrument (plan §13).
+latter needs a census, and the one attempted in this session was not a valid instrument (plan §13 as of `dcc93ab`).
 
 The ~571 MB allocation failure that precedes the fault (`NtAllocateVirtualMemory`, `0xC0000017`)
 **is handled** by the guest (`0x00149E56 test eax,eax` / `jl 0x149eec`, clean return through
