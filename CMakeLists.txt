@@ -207,6 +207,18 @@ if(BUILD_TESTING)
     add_test(NAME jsrf_gpu_inspection COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_gpu_inspection.py)
     add_test(NAME jsrf_fcmov_clamp COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_fcmov_clamp.py)
     add_test(NAME jsrf_recovery_span_ownership COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_recovery_span_ownership.py)
+    # Stack-depth CFG validation over the recovered manifest.  Registered because
+    # the four defects it detects (0x80BD0, 0xBB7B0, 0x7DA30, 0x74C70) each cost a
+    # game run to find, and every one was a stack-contract contradiction visible
+    # statically from the original bytes.  The test re-runs the checker's own
+    # historical controls, asserts the corrected entries are clean, asserts the
+    # gate passes with NO baseline, and proves the gate can fail by feeding it a
+    # manifest with one proven entry reverted.  Pure Python over the XBE and the
+    # manifest; no build target needed.
+    # TIMEOUT is generous because it walks every manifest entry several times.
+    add_test(NAME jsrf_stack_depth
+        COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_stack_depth.py)
+    set_tests_properties(jsrf_stack_depth PROPERTIES TIMEOUT 600)
     # P0.7 generation provenance.  Registered here because it was NOT: the checker was
     # wired into `just check` only, so `just test` could not catch a provenance failure,
     # and the gate stayed red for 73 commits without a session noticing (measured

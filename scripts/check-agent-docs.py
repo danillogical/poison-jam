@@ -38,6 +38,7 @@ REQUIRED_RECIPES = (
     'check', 'ttd-record', 'ttd-writes', 'doctor', 'analyze', 'disk',
     'secret-audit', 'symbols', 'logq', 'enumerate', 'cite-check',
     'horizon-check', 'override-check', 'dump-controls',
+    'stack-depth',
     'qualify',
     'record-check',
     'route-check',

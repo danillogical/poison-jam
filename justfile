@@ -91,6 +91,7 @@ check:
     {{python}} -X utf8 scripts/patch-generated.py --check; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-override-drift.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-entry-extents.py --baseline config/entry-extent-baseline.json --quiet-terminators; if ($LASTEXITCODE -ne 0) { exit 1 }
+    {{python}} -X utf8 scripts/check-stack-depth.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Output "check: all checkers passed"
 
 # W9s control-first gate: would a new instrumented run be allowed?
@@ -128,6 +129,16 @@ override-check:
 # W14's ledger lint: a strict run with no ledger line fails.
 horizon-check:
     {{python}} -X utf8 scripts/check-horizon-ledger.py --since 2026-09-29
+
+# Stack-depth CFG validation over the recovered manifest, with its own controls.
+#
+# `--selfcheck` replays each historical defect (0x80BD0, 0x7DA30, 0x74C70, 0xBB7B0,
+# 0x307A0, 0x246E0) at its pre-fix span and requires the verdict AND code it was
+# diagnosed under; the bare run is the gate and passes with NO baseline, because
+# DEFECT is narrowed to the one class decidable from an entry's own bytes.
+stack-depth:
+    {{python}} -X utf8 scripts/check-stack-depth.py --selfcheck
+    {{python}} -X utf8 scripts/check-stack-depth.py
 
 # Record one strict run under WinDbg TTD (T1).
 #

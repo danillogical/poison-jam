@@ -1,4 +1,187 @@
 {
+  "checker_version": "jsrf-generation-provenance/1",
+  "full_translation_command": "python -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name \"Jet Set Radio Future\" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json --backedge-yield",
+  "generated_outputs": {
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "64d3f2f70787b3ce4d185d3796e9702b6e4e9e0e8b2756421fd288f1d53c510a",
+    "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
+    "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
+    "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
+    "src/recomp/gen/recomp_0003.c": "5e36ccfcb9e419c1ce695cb2e185c5832897f563ed6eb0eaca0b00d2176ef489",
+    "src/recomp/gen/recomp_0004.c": "cebdfa390daac3e0310db718e1d255b5b6e24c752b3e913b2b115deb4899ed08",
+    "src/recomp/gen/recomp_0005.c": "62fc70e44afd27ea802728d72d249f3a55418ff5604d21065ea055def2a40707",
+    "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
+    "src/recomp/gen/recomp_dispatch.c": "1cc469ddcc6d12ac98f8675846b5940f3f438624a3a51a95faca40a9b59a4238",
+    "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
+    "src/recomp/gen/recomp_stubs_recovery.c": "5897e497ad2f789241a9b2f95653023b306f3d4849a80406ca586ed7706d9bbb",
+    "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
+    "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
+    "src/recomp/recovered/recovered.c": "822e82befa3fc7fe5efe290c3f0cfd66fc45937b4677433bac5cbf9983d261a1",
+    "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
+    "src/recomp/recovered/recovered_11c1_test.c": "ff12bef2b21ebe285b5d7c7aa5891c6120cf8e1c3ed76b5ee587eefb91dcce8b",
+    "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
+  },
+  "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
+  "generators": {
+    "project": {
+      "dirty": true,
+      "revision": "abb86d4a4392f07df791c6351616ac4d900992d2",
+      "state": "MEASURED",
+      "status_sha256": "fa81ee46337ed4ce1dd4854d32dab4e3625696cb7a0df78ac89c26cd5549f679"
+    },
+    "scripts/recover-functions.py": "c951fe5ed787253bd523d16502a231772197043b84a3b20e4c7b680b55c03847",
+    "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
+    "toolkit": {
+      "dirty": false,
+      "revision": "6e6e05664f438ad8b95b0c5186a770da8e54e883",
+      "state": "MEASURED",
+      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "tools/recomp/lifter.py": "fc202d8bec0842e8c02a092664e4b185e2c96744ecc9994984814df8fe499ab7",
+    "tools/recomp/translator.py": "ecf2bb93c91dc9ede51d129a8cca29a11da7b64c913c4150cff9ff0134ba1630"
+  },
+  "inputs": {
+    "config/boundary-fixes.json": {
+      "bytes": 2142,
+      "present": true,
+      "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
+    },
+    "config/manual-functions.json": {
+      "bytes": 102668,
+      "present": true,
+      "sha256": "8359e4faec3973a562462ed7f74d829a2e3200114db63e123c72df30ebb3209a"
+    },
+    "config/recovered-functions.json": {
+      "bytes": 2915188,
+      "present": true,
+      "sha256": "709d6d08b345200eea4b70537dc4afd94409ebabf52293fe142178100dfe5f3a"
+    },
+    "config/recovery-unresolved.json": {
+      "bytes": 7364,
+      "present": true,
+      "sha256": "d77d1bfdc6b7427598f8bc5c19712ab39948f82fd719e840f712d99479649555"
+    },
+    "game/default.xbe": {
+      "bytes": 2281472,
+      "present": true,
+      "sha256": "fd19055756719893c466302809b433b785ecf5732df0441286f3f605f0f3ef9c"
+    },
+    "toolkit:tools/abi_analysis/output/abi_functions.json": {
+      "bytes": 2441234,
+      "present": true,
+      "sha256": "45330cec4c29daae611293da4e88981043559334197f0c2b2d7c84b456721832"
+    },
+    "toolkit:tools/disasm/output/functions.json": {
+      "bytes": 3875802,
+      "present": true,
+      "sha256": "c077d1d43c1ee82e3a73377565ad9f35846cdab1fe3ff5b71c3b4c612fde6857"
+    },
+    "toolkit:tools/disasm/output/labels.json": {
+      "bytes": 1782771,
+      "present": true,
+      "sha256": "1f42e08a03c84551698b105f375793c07ee50d170a8fcf0c4f7a5c98da70ccda"
+    },
+    "toolkit:tools/func_id/output/identified_functions.json": {
+      "bytes": 3086023,
+      "present": true,
+      "sha256": "bfb87eba20dea7758d20fe1cf9b447ec67ea4f6b6a98ba90cd42f091ab4faed9"
+    },
+    "tools/disasm/output/functions.json": {
+      "bytes": 3840761,
+      "present": true,
+      "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
+    },
+    "tools/disasm/output/functions.recovered.json": {
+      "bytes": 6105707,
+      "present": true,
+      "sha256": "1032f7941759dbce7898a66997646d50cb61319c85c5384b3a358deca579502a"
+    }
+  },
+  "known_unknowns": [],
+  "ownership": {
+    "recovery_owns": [
+      "src/recomp/recovered/recovered.c",
+      "src/recomp/gen/recomp_stubs_recovery.c"
+    ],
+    "rule": "recover-functions.py owns only recomp_stubs_recovery.c and recovered.c; the full pass owns recomp_funcs.h, the chunks, the dispatch table and recomp_stubs_unresolved.c. Never let one write the other's files.",
+    "translation_owns": [
+      "src/recomp/gen/recomp_funcs.h",
+      "src/recomp/gen/recomp_dispatch.c",
+      "src/recomp/gen/recomp_stubs_unresolved.c",
+      "src/recomp/gen/recomp_types.h"
+    ]
+  },
+  "protected_markers": {
+    "names": [
+      "RECOMP_ABI_CALL",
+      "JSRF_ABI_CONTINUE",
+      "g_seh_ebp",
+      "RECOMP_GENERATED_CODE"
+    ],
+    "per_file": {
+      "src/recomp/gen/recomp_dispatch.c": {
+        "markers": {
+          "JSRF_ABI_CONTINUE": 0,
+          "RECOMP_ABI_CALL": 0,
+          "RECOMP_GENERATED_CODE": 0,
+          "g_seh_ebp": 0
+        },
+        "present": true
+      },
+      "src/recomp/gen/recomp_funcs.h": {
+        "markers": {
+          "JSRF_ABI_CONTINUE": 0,
+          "RECOMP_ABI_CALL": 0,
+          "RECOMP_GENERATED_CODE": 0,
+          "g_seh_ebp": 0
+        },
+        "present": true
+      },
+      "src/recomp/gen/recomp_stubs_recovery.c": {
+        "markers": {
+          "JSRF_ABI_CONTINUE": 0,
+          "RECOMP_ABI_CALL": 0,
+          "RECOMP_GENERATED_CODE": 1,
+          "g_seh_ebp": 0
+        },
+        "present": true
+      },
+      "src/recomp/gen/recomp_stubs_unresolved.c": {
+        "markers": {
+          "JSRF_ABI_CONTINUE": 0,
+          "RECOMP_ABI_CALL": 0,
+          "RECOMP_GENERATED_CODE": 1,
+          "g_seh_ebp": 0
+        },
+        "present": true
+      },
+      "src/recomp/gen/recomp_types.h": {
+        "markers": {
+          "JSRF_ABI_CONTINUE": 0,
+          "RECOMP_ABI_CALL": 8,
+          "RECOMP_GENERATED_CODE": 2,
+          "g_seh_ebp": 6
+        },
+        "present": true
+      },
+      "src/recomp/recovered/recovered.c": {
+        "markers": {
+          "JSRF_ABI_CONTINUE": 9315,
+          "RECOMP_ABI_CALL": 10308,
+          "RECOMP_GENERATED_CODE": 1,
+          "g_seh_ebp": 6298
+        },
+        "present": true
+      }
+    },
+    "totals": {
+      "JSRF_ABI_CONTINUE": 9315,
+      "RECOMP_ABI_CALL": 10316,
+      "RECOMP_GENERATED_CODE": 5,
+      "g_seh_ebp": 6304
+    }
+  },
+  "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",
+  "schema_version": 1,
   "amendments": [
     {
       "cause": "ec650f9 corrected one `evidence` string (the register at 0x00191270 is NV_PFB_WBC, not NV_PFIFO_CACHE1_DMA_PUT). The manifest was not re-recorded and 73 commits landed after it, so this gate had been red since.",
@@ -1158,190 +1341,52 @@
           "path": "src/recomp/recovered/recovered_11c1_test.c"
         }
       ]
+    },
+    {
+      "kind": "input and generated output",
+      "date": "2026-10-05",
+      "cause": "Twenty manifest entries had a wrong `stack_args`, and one complete function had no entry at all. Both were found by a new reachable-stack-depth CFG validator, `scripts/check-stack-depth.py`, now a repository gate with no baseline. The twenty: `0x000246E0`, `0x00042CA0`, `0x00080028`, `0x00086180`, `0x000A5050`, `0x000CD890`, `0x000D03F0`, `0x000D62A0`, `0x000DB820`, `0x000E2050`, `0x000E2A00`, `0x000E3700`, `0x000EDA10`, `0x000F4C60`, `0x000F8AF0`, `0x0011B660`, `0x00120400`, `0x00124B00`, `0x00134D50` and `0x00139B30`. Each declared `stack_args 0` (four by ABSENT key, so the generated wrapper used the 0 default) while its body's own control flow has exactly one reachable exit, `ret 4` -- `ret 0x14` for `0x00080028` -- reached at stack depth 0. `scripts/recover-functions.py` asserts `g_esp == before_stack + 4 + stack_args` after the body, and a `ret N` removes 4+N bytes, so `stack_args` must equal the ret immediate. The generated wrappers checked `+4` where the bodies really net `+8` (`+24` for `0x00080028`), so every one of them would have aborted with `[RECOVERED] ABI FAILURE ... expected +4` the moment it ran. None ever ran: the twenty addresses appear in 0 of 122 archived `jsrf_run.log` files, in no `returned; ABI verified` line, in no `ABI FAILURE` line, and in no textual mention. The twenty-first: `0x00094AB0` is a complete 4482-byte C++ virtual method with NO analysis-database entry at all -- `0x94AA3..0x95FC0` is an unanalyzed gap -- reached only as slot 2 of the .rdata vtable at `0x001CD290`, so a virtual call through it trapped as `[ICALL] Failed to resolve VA 0x00094AB0`. It is recovered as `[0x00094AB0, 0x00095FB2)` with `stack_args 0`. `recovered.c` 3104 -> 3105 functions. The full CTest suite and `just check` pass with the validator in the gate and no frozen baseline.",
+      "evidence": [
+        "the validator's own 14-assertion self-check: all 7 historical defects (0x80BD0, 0x7DA30 twice, 0x74C70, 0xBB7B0, 0x307A0, 0x246E0) are reported with the expected verdict AND code at their pre-fix spans, and every corrected entry comes back clean",
+        "the 20 values were derived from the original bytes and independently reproduced 20/20 by a second worker using its own capstone CFG walker, which also read back each wrapper constant and each `esp += 4 + N; return;` body line",
+        "0x00080028's ret is `ret 0x14` (`C2 14 00` at 0x0008005F) so its value is 20, not 4 -- the one entry that is not a `ret 4`",
+        "re-read from the regenerated src/recomp/recovered/recovered.c: 0x000246E0 now checks +8 and emits `esp += 8; return; /* ret 4 */`; 0x00080028 checks +24 and emits `esp += 24; return; /* ret 20 */`",
+        "0x00094AB0's extent is confirmed by two independent decode methods (recursive descent and a linear sweep) agreeing on 1496 byte-contiguous instructions ending at 0x95FB2, three reachable exits 0x95F42/0x95F8B/0x95FB1 all plain `ret` (C3), and 14 NOPs before the next entry at 0x95FC0",
+        "0x00094AB0's caller is pinned from the frozen dump of run 20261005-121111-883-f33-80bd0 (check-dump-mapping.py matched): return 0x00011D6A, after `call dword ptr [eax+8]` at 0x00011D67 in sub_00011D00, with eax = 0x001CD290",
+        "a control regeneration of scripts/recover-functions.py before any manifest edit reproduced recovered.c byte for byte (sha256 b4d206571457a06f...), so the generator is deterministic and the diff is the manifest's, not noise",
+        "config/stack-depth-baseline.json does not exist and is not needed: the gate passes on the committed manifest with zero DEFECTs and no frozen entries",
+        "the prior hashes are derived by walking this record's own amendment list backwards for each path, not transcribed; a first attempt read inputs[...] as a bare string when it is a dict, fell back to `git show`, and recorded the empty-blob hash for the gitignored tools/disasm/output/functions.recovered.json",
+        "`scripts/check-generation-provenance.py --write` records only the measured axes and silently drops the hand-maintained `amendments` and `regenerations` lists; they were re-attached from HEAD after the write, and that tool defect is recorded as a backlog item rather than hidden"
+      ],
+      "paths": [
+        {
+          "path": "config/recovered-functions.json",
+          "old_sha256": "e73c2ea470157394fabc2d77550300162f19ea2eda85b1e1b8ac8d8125982998",
+          "new_sha256": "709d6d08b345200eea4b70537dc4afd94409ebabf52293fe142178100dfe5f3a"
+        },
+        {
+          "path": "config/manual-functions.json",
+          "old_sha256": "994f2212b8df469b66e81cc7c15ba74a894bbf0099c3d2bc31c74e38cef16bac",
+          "new_sha256": "8359e4faec3973a562462ed7f74d829a2e3200114db63e123c72df30ebb3209a"
+        },
+        {
+          "path": "tools/disasm/output/functions.recovered.json",
+          "old_sha256": "24aa0b8407623e8c42e499c6aeb5b7d8069378ce56ef5cf267348aab4a95e78c",
+          "new_sha256": "1032f7941759dbce7898a66997646d50cb61319c85c5384b3a358deca579502a"
+        },
+        {
+          "path": "src/recomp/recovered/recovered.c",
+          "old_sha256": "b4d206571457a06f4879bc16bf2c35ddcb2fcc1aaae278a0b4ebac505f96e29b",
+          "new_sha256": "822e82befa3fc7fe5efe290c3f0cfd66fc45937b4677433bac5cbf9983d261a1"
+        },
+        {
+          "path": "src/recomp/recovered/recovered_11c1_test.c",
+          "old_sha256": "62b39ea1af197d1631627b81ca358eac0826916a8ed16577ba6ef184ccbf7fa6",
+          "new_sha256": "ff12bef2b21ebe285b5d7c7aa5891c6120cf8e1c3ed76b5ee587eefb91dcce8b"
+        }
+      ]
     }
   ],
-  "checker_version": "jsrf-generation-provenance/1",
-  "full_translation_command": "python -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name \"Jet Set Radio Future\" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json",
-  "generated_outputs": {
-    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "64d3f2f70787b3ce4d185d3796e9702b6e4e9e0e8b2756421fd288f1d53c510a",
-    "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
-    "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
-    "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
-    "src/recomp/gen/recomp_0003.c": "5e36ccfcb9e419c1ce695cb2e185c5832897f563ed6eb0eaca0b00d2176ef489",
-    "src/recomp/gen/recomp_0004.c": "cebdfa390daac3e0310db718e1d255b5b6e24c752b3e913b2b115deb4899ed08",
-    "src/recomp/gen/recomp_0005.c": "62fc70e44afd27ea802728d72d249f3a55418ff5604d21065ea055def2a40707",
-    "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
-    "src/recomp/gen/recomp_dispatch.c": "1cc469ddcc6d12ac98f8675846b5940f3f438624a3a51a95faca40a9b59a4238",
-    "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-    "src/recomp/gen/recomp_stubs_recovery.c": "5897e497ad2f789241a9b2f95653023b306f3d4849a80406ca586ed7706d9bbb",
-    "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
-    "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "b4d206571457a06f4879bc16bf2c35ddcb2fcc1aaae278a0b4ebac505f96e29b",
-    "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "62b39ea1af197d1631627b81ca358eac0826916a8ed16577ba6ef184ccbf7fa6",
-    "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
-  },
-  "generation_mode": "full regeneration 2026-09-29 with the toolkit 2a349c8 lifter, then relift-selected.py boundaries; hand edits re-applied by scripts/patch-generated.py from config/generated-patches.json (the recomp_types.h project ABI additions, the six A4b2 jsrf_watch_store hooks, and the a4b-watch declaration). This tree predates toolkit 86113c7 --backedge-yield: RECOMP_BACKEDGE is absent, so under RECOMP_GUEST_SERIAL=1 a guest spin loop costs one bounded timeout (docs/jsrf-compatibility-ledger.md L34).",
-  "generators": {
-    "project": {
-      "dirty": true,
-      "revision": "05e51a7e6ddcdb51d271f888c54159f79bcadc79",
-      "state": "MEASURED",
-      "status_sha256": "39bdb5ce4cdf024d0c095b39700b8fd7bd3933de5189f4490a04db2c4fdf3b71"
-    },
-    "scripts/recover-functions.py": "c951fe5ed787253bd523d16502a231772197043b84a3b20e4c7b680b55c03847",
-    "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
-    "toolkit": {
-      "dirty": false,
-      "revision": "6e6e05664f438ad8b95b0c5186a770da8e54e883",
-      "state": "MEASURED",
-      "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    "tools/recomp/lifter.py": "fc202d8bec0842e8c02a092664e4b185e2c96744ecc9994984814df8fe499ab7",
-    "tools/recomp/translator.py": "ecf2bb93c91dc9ede51d129a8cca29a11da7b64c913c4150cff9ff0134ba1630"
-  },
-  "inputs": {
-    "config/boundary-fixes.json": {
-      "bytes": 2142,
-      "present": true,
-      "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
-    },
-    "config/manual-functions.json": {
-      "bytes": 102635,
-      "present": true,
-      "sha256": "994f2212b8df469b66e81cc7c15ba74a894bbf0099c3d2bc31c74e38cef16bac"
-    },
-    "config/recovered-functions.json": {
-      "bytes": 2890880,
-      "present": true,
-      "sha256": "e73c2ea470157394fabc2d77550300162f19ea2eda85b1e1b8ac8d8125982998"
-    },
-    "config/recovery-unresolved.json": {
-      "bytes": 7364,
-      "present": true,
-      "sha256": "d77d1bfdc6b7427598f8bc5c19712ab39948f82fd719e840f712d99479649555"
-    },
-    "game/default.xbe": {
-      "bytes": 2281472,
-      "present": true,
-      "sha256": "fd19055756719893c466302809b433b785ecf5732df0441286f3f605f0f3ef9c"
-    },
-    "toolkit:tools/abi_analysis/output/abi_functions.json": {
-      "bytes": 2441234,
-      "present": true,
-      "sha256": "45330cec4c29daae611293da4e88981043559334197f0c2b2d7c84b456721832"
-    },
-    "toolkit:tools/disasm/output/functions.json": {
-      "bytes": 3875802,
-      "present": true,
-      "sha256": "c077d1d43c1ee82e3a73377565ad9f35846cdab1fe3ff5b71c3b4c612fde6857"
-    },
-    "toolkit:tools/disasm/output/labels.json": {
-      "bytes": 1782771,
-      "present": true,
-      "sha256": "1f42e08a03c84551698b105f375793c07ee50d170a8fcf0c4f7a5c98da70ccda"
-    },
-    "toolkit:tools/func_id/output/identified_functions.json": {
-      "bytes": 3086023,
-      "present": true,
-      "sha256": "bfb87eba20dea7758d20fe1cf9b447ec67ea4f6b6a98ba90cd42f091ab4faed9"
-    },
-    "tools/disasm/output/functions.json": {
-      "bytes": 3840761,
-      "present": true,
-      "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
-    },
-    "tools/disasm/output/functions.recovered.json": {
-      "bytes": 6081204,
-      "present": true,
-      "sha256": "24aa0b8407623e8c42e499c6aeb5b7d8069378ce56ef5cf267348aab4a95e78c"
-    }
-  },
-  "known_unknowns": [],
-  "ownership": {
-    "recovery_owns": [
-      "src/recomp/recovered/recovered.c",
-      "src/recomp/gen/recomp_stubs_recovery.c"
-    ],
-    "rule": "recover-functions.py owns only recomp_stubs_recovery.c and recovered.c; the full pass owns recomp_funcs.h, the chunks, the dispatch table and recomp_stubs_unresolved.c. Never let one write the other's files.",
-    "translation_owns": [
-      "src/recomp/gen/recomp_funcs.h",
-      "src/recomp/gen/recomp_dispatch.c",
-      "src/recomp/gen/recomp_stubs_unresolved.c",
-      "src/recomp/gen/recomp_types.h"
-    ]
-  },
-  "protected_markers": {
-    "names": [
-      "RECOMP_ABI_CALL",
-      "JSRF_ABI_CONTINUE",
-      "g_seh_ebp",
-      "RECOMP_GENERATED_CODE"
-    ],
-    "per_file": {
-      "src/recomp/gen/recomp_dispatch.c": {
-        "markers": {
-          "JSRF_ABI_CONTINUE": 0,
-          "RECOMP_ABI_CALL": 0,
-          "RECOMP_GENERATED_CODE": 0,
-          "g_seh_ebp": 0
-        },
-        "present": true
-      },
-      "src/recomp/gen/recomp_funcs.h": {
-        "markers": {
-          "JSRF_ABI_CONTINUE": 0,
-          "RECOMP_ABI_CALL": 0,
-          "RECOMP_GENERATED_CODE": 0,
-          "g_seh_ebp": 0
-        },
-        "present": true
-      },
-      "src/recomp/gen/recomp_stubs_recovery.c": {
-        "markers": {
-          "JSRF_ABI_CONTINUE": 0,
-          "RECOMP_ABI_CALL": 0,
-          "RECOMP_GENERATED_CODE": 1,
-          "g_seh_ebp": 0
-        },
-        "present": true
-      },
-      "src/recomp/gen/recomp_stubs_unresolved.c": {
-        "markers": {
-          "JSRF_ABI_CONTINUE": 0,
-          "RECOMP_ABI_CALL": 0,
-          "RECOMP_GENERATED_CODE": 1,
-          "g_seh_ebp": 0
-        },
-        "present": true
-      },
-      "src/recomp/gen/recomp_types.h": {
-        "markers": {
-          "JSRF_ABI_CONTINUE": 0,
-          "RECOMP_ABI_CALL": 8,
-          "RECOMP_GENERATED_CODE": 2,
-          "g_seh_ebp": 6
-        },
-        "present": true
-      },
-      "src/recomp/recovered/recovered.c": {
-        "markers": {
-          "JSRF_ABI_CONTINUE": 9312,
-          "RECOMP_ABI_CALL": 10120,
-          "RECOMP_GENERATED_CODE": 1,
-          "g_seh_ebp": 6297
-        },
-        "present": true
-      }
-    },
-    "totals": {
-      "JSRF_ABI_CONTINUE": 9312,
-      "RECOMP_ABI_CALL": 10128,
-      "RECOMP_GENERATED_CODE": 5,
-      "g_seh_ebp": 6303
-    }
-  },
-  "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",
   "regenerations": [
     {
       "command": "python -X utf8 scripts/recover-functions.py",
@@ -1364,6 +1409,5 @@
       "scope_measured": "recovered.c: 3074 -> 3075 functions; 1 added (sub_00037550), 0 removed, 3042 bodies differ, 32 identical. The differences are generator-version effects, not only the two edits: 2836 bodies now declare `uint32_t ebp = 0` where the old tree had an uninitialised `uint32_t ebp`, and 846 fcom sites now set the FPU condition codes through RECOMP_FCMP_CC, which the old tree never did. Both are emitted by the current translator and the macro is defined in the tree (src/recomp/gen/recomp_types.h:260), so the result compiles and is the intended output of this generator, not a regression.",
       "toolkit": "86113c7 (unchanged by this pass)"
     }
-  ],
-  "schema_version": 1
+  ]
 }
