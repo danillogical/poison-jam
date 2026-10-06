@@ -68,13 +68,56 @@ class SelfCheckTests(unittest.TestCase):
     def test_every_historical_case_is_a_control(self) -> None:
         """Each defect the docstring names has a case, and each asserts a code."""
         named = {'0x00080BD0', '0x0007DA30', '0x00074C70', '0x000BB7B0',
-                 '0x000307A0', '0x000246E0'}
+                 '0x000307A0', '0x000246E0', '0x00152BC0', '0x00021010',
+                 '0x000F4FF0'}
         covered = {case['bad']['start'] for case in checker.CONTROLS}
         self.assertEqual(named - covered, set(),
                          'a named historical defect has no control')
         for case in checker.CONTROLS:
             self.assertIn('code', case, f"{case['name']} asserts no code")
             self.assertIn('good', case, f"{case['name']} has no negative half")
+
+    def test_the_per_path_rule_is_pinned(self) -> None:
+        """The false-negative that cost this class four defects must stay fixed.
+
+        An earlier revision gated only when **every** reachable exit sat at depth
+        0.  `0x000F4FF0`'s `ret 4` is reached at depth 0 by one path and at
+        UNKNOWN by another, so that rule reported the entry merely `UNKNOWN` and
+        hid a live defect.  `0x00021010` is the same shape via an ABSENT key.  Both
+        must be `DEFECT` now, and `0x0007DA30` -- which has *no* depth-0 path --
+        must still not be.
+        """
+        cases = {case['bad']['start']: case for case in checker.CONTROLS}
+        for start in ('0x000F4FF0', '0x00021010', '0x00152BC0'):
+            case = cases[start]
+            self.assertEqual(case['verdict'], checker.DEFECT,
+                             f'{start} is not gated; the all-depths false-negative '
+                             f'has regressed')
+            self.assertEqual(case['code'], 'STACK_ARGS')
+        # The other half: an entry with no depth-0 path must NOT be gated, or the
+        # rule would be gating on an unresolved depth.
+        da30 = cases['0x0007DA30']
+        self.assertEqual(da30['verdict'], checker.UNKNOWN,
+                         '0x0007DA30 has no depth-0 path and must not be gated')
+
+    def test_the_rule_is_not_the_unsound_general_form(self) -> None:
+        """`N - d` at a *nonzero* depth must not be gated.
+
+        The general form over-fires on over-wide spans whose walk wanders into a
+        neighbouring function: measured, it produced 18 DEFECTs including
+        `0x0001C000` ("must be -292").  A negative `stack_args` is not
+        representable, which is the tell that the *depth* is wrong rather than the
+        manifest.  This asserts the shipped rule reports no negative value and no
+        entry outside the known set.
+        """
+        result = subprocess.run(
+            [sys.executable, '-X', 'utf8', str(CHECKER), '--json'],
+            cwd=ROOT, capture_output=True, text=True)
+        payload = json.loads(result.stdout)
+        defects = [r for r in payload['results'] if r['verdict'] == 'DEFECT']
+        self.assertEqual(defects, [],
+                         f'the committed manifest should have 0 DEFECTs, got: '
+                         f'{[(r["start"], r["detail"]) for r in defects]}')
 
 
 class GateTests(unittest.TestCase):

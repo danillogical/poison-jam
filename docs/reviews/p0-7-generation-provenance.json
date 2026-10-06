@@ -2,7 +2,7 @@
   "checker_version": "jsrf-generation-provenance/1",
   "full_translation_command": "python -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name \"Jet Set Radio Future\" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json --backedge-yield",
   "generated_outputs": {
-    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "64d3f2f70787b3ce4d185d3796e9702b6e4e9e0e8b2756421fd288f1d53c510a",
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "5b1105e2a6df9f8f79f7f942553cb44bc6c86c9e2ec4b10d19cff5f52bc4a1ac",
     "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
     "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
     "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
@@ -12,21 +12,21 @@
     "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
     "src/recomp/gen/recomp_dispatch.c": "1cc469ddcc6d12ac98f8675846b5940f3f438624a3a51a95faca40a9b59a4238",
     "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-    "src/recomp/gen/recomp_stubs_recovery.c": "5897e497ad2f789241a9b2f95653023b306f3d4849a80406ca586ed7706d9bbb",
+    "src/recomp/gen/recomp_stubs_recovery.c": "144d1ba3965dd4ae8bba44355df25f2dc6da95397acb20caf9b68024ce98801b",
     "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
     "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "d54de26a46c34b4b9e222360aaee0eb26eac5b645baedd9b7840454fa34e920c",
+    "src/recomp/recovered/recovered.c": "da709ae2e0df0a3a7ea7bed7f2e20afcc4d66f6c9945b7a92dbac5ddf3397162",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "ef133f1fc8bda698e9e2c0ebef151e782d8d574084a13891e9e5991e736f6687",
+    "src/recomp/recovered/recovered_11c1_test.c": "3d885e73a3d070a339b84ecae55440b69bf437dc9193bef138ee8b8c15d48386",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
   "generators": {
     "project": {
       "dirty": true,
-      "revision": "1d8599fc0d8a2499697254cea38692edc19aca97",
+      "revision": "74760e46aac6db7712d6dae1d2aa6d59db0d0a96",
       "state": "MEASURED",
-      "status_sha256": "6d2358f2391816ccc22c84040c7645ef546fd76af0c559c373bf003577ec798d"
+      "status_sha256": "a8ba3efcd8322c49db94ef885c402cc6be6cbf93765223a7f0eb2b05dcbfcb09"
     },
     "scripts/recover-functions.py": "c951fe5ed787253bd523d16502a231772197043b84a3b20e4c7b680b55c03847",
     "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
@@ -46,19 +46,19 @@
       "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
     },
     "config/manual-functions.json": {
-      "bytes": 102734,
+      "bytes": 102800,
       "present": true,
-      "sha256": "0cbc9bd11fe2928af550ca154c8a15086e78a139f17144393b315162f1f3056c"
+      "sha256": "beda26a16a6ff54b968209c6a9b21ee9a0a93dc3b11d14bb75c67f53558a2615"
     },
     "config/recovered-functions.json": {
-      "bytes": 2918659,
+      "bytes": 2926146,
       "present": true,
-      "sha256": "e7786d7b639efa34a56dbf7f09774086184b157c566798a528588d0e7bec2c81"
+      "sha256": "6a4ca999083fa81cfad8e824745dda4197511766caa66883c02569114792d052"
     },
     "config/recovery-unresolved.json": {
-      "bytes": 7364,
+      "bytes": 7331,
       "present": true,
-      "sha256": "d77d1bfdc6b7427598f8bc5c19712ab39948f82fd719e840f712d99479649555"
+      "sha256": "210b0b95ac84e0ea60d644a200d918ef79b3133caf9f576a5f12ed4965c8ccb2"
     },
     "game/default.xbe": {
       "bytes": 2281472,
@@ -91,9 +91,9 @@
       "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
     },
     "tools/disasm/output/functions.recovered.json": {
-      "bytes": 6109566,
+      "bytes": 6117440,
       "present": true,
-      "sha256": "bd27b17014d30617d54a21461ea6979ced6ac0a35f35350c35ff629d88f85e46"
+      "sha256": "6a799647b1291822b34128cc2c5e3db6dda8074e1a11dacdada718fe9a470b60"
     }
   },
   "known_unknowns": [],
@@ -165,19 +165,19 @@
       },
       "src/recomp/recovered/recovered.c": {
         "markers": {
-          "JSRF_ABI_CONTINUE": 9321,
-          "RECOMP_ABI_CALL": 10319,
+          "JSRF_ABI_CONTINUE": 9327,
+          "RECOMP_ABI_CALL": 10320,
           "RECOMP_GENERATED_CODE": 1,
-          "g_seh_ebp": 6300
+          "g_seh_ebp": 6301
         },
         "present": true
       }
     },
     "totals": {
-      "JSRF_ABI_CONTINUE": 9321,
-      "RECOMP_ABI_CALL": 10327,
+      "JSRF_ABI_CONTINUE": 9327,
+      "RECOMP_ABI_CALL": 10328,
       "RECOMP_GENERATED_CODE": 5,
-      "g_seh_ebp": 6306
+      "g_seh_ebp": 6307
     }
   },
   "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",
@@ -1465,6 +1465,49 @@
           "path": "src/recomp/recovered/recovered_11c1_test.c",
           "old_sha256": "b443f854a9dc39c76032797aa015df39f57f32d29fef25548da720df2adbfad5",
           "new_sha256": "ef133f1fc8bda698e9e2c0ebef151e782d8d574084a13891e9e5991e736f6687"
+        }
+      ]
+    },
+    {
+      "kind": "input and generated output",
+      "date": "2026-10-05",
+      "cause": "A **false-negative in `scripts/check-stack-depth.py`** was found by adversarial review and independently by re-deriving the rule, and it hid four live `stack_args` defects. The shipped rule required EVERY reachable exit to be a `ret N` at depth 0. But `stack_args = N - d` holds on each path separately, so one `ret` site reached at depth 0 by one path and at UNKNOWN by another (through an indirect call) failed the all-depths test and made the whole entry report only `UNKNOWN/PARTIAL`. The rule now gates on any reachable `ret N` reached at depth 0. Measured: 20 defects before, 24 on the pre-turn manifest, 4 on the current one. The four corrected entries are `0x00021010` (0 -> 16; the key was ABSENT, so the wrapper used the 0 default and checked `+4` while the body emits `esp += 20`), `0x000F4FF0` (0 -> 4; `ret 4` at 0x000F505A and 0x000F5196 at depth 0), `0x00102490` (0 -> 4; `ret 4` at 0x00102588 at depth 0) and `0x00152BC0` (8 -> 24; all six exits are `ret 0x18` and 0x00152DCF is at depth 0). Two of them were also swallowing a whole function each, so both spans are tightened and the swallowed functions are recovered: `0x001025B0..0x001026AA` (`stack_args 0`) and `0x00152DE0..0x00152E2C` (`stack_args 8`). `0x00152BC0`'s wrong 8 was itself inherited from `0x00152DE0`'s own correct `ret 8` -- the `0x00074C70` pattern. `recovered.c` 3107 -> 3109 functions. Separately, the general `N - d` form was implemented and **rejected on measurement**: it fired on 18 entries including `0x0001C000` (\"must be -292\") and `0x00022070` (\"must be -44\"), all over-wide spans whose walk wanders into a neighbouring function; a negative `stack_args` is not representable, which is the tell that the depth is wrong rather than the manifest. `0x001BCB14` (a single `ret 4` declared as 12, correct because its depth is -8) stays ungated and is run-verified in 106 archived runs.",
+      "evidence": [
+        "the validator's `--selfcheck` now carries 10 controls and passes; three are new and pin the per-path form: 0x00021010 with an ABSENT key, 0x000F4FF0 with one depth-0 path and one UNKNOWN path, and 0x00152BC0 with the value inherited from its swallowed neighbour",
+        "`tests/test_stack_depth.py` gained `test_the_per_path_rule_is_pinned` (the three must be DEFECT, 0x0007DA30 must not) and `test_the_rule_is_not_the_unsound_general_form` (0 DEFECTs on the committed manifest)",
+        "the generated bodies contradict their own wrappers for all four: 0x00021010 checks +4 and emits `esp += 20`; 0x000F4FF0 checks +4 and emits `esp += 8`; 0x00102490 checks +4 and emits `esp += 8`; 0x00152BC0 checks +12 and emits `esp += 28`",
+        "after regeneration the wrappers check +20, +8, +8, +28, +4 and +12 respectively, each equal to `4 + stack_args`",
+        "none of the four appears in any of the 126 archived `jsrf_run.log` files, so they were latent exactly like the twenty",
+        "the two swallowed functions are byte-confirmed: 0x001025B0 begins `sub esp,0x1c; push esi; push edi` after 12 NOPs and ends `pop edi; pop esi; add esp,0x1c; ret`; 0x00152DE0 begins `mov edx,[esp+8]; cmp edx,[0x264e74]; push edi` after 14 NOPs and ends `pop edi; ret 8`",
+        "the 0x496E0 evidence was corrected: it claimed \"no unresolved transfer anywhere on the walk\" and that the validator \"reports it PROVED\". Both are false -- the body has seven indirect calls and the gate reports UNKNOWN/PARTIAL -- so the text now says the value is inferred from the callee convention rather than derived",
+        "`docs/reviews/p0-full-generated-baseline.json`'s `updates` list had been appending the same cause text on each edit; entries 33-35 now each carry their own text and this entry is distinct. `--check` does not detect that duplication, which is why it survived three commits",
+        "the previous amendment's `new_sha256` values are the prior state used here, so the pair cannot drift"
+      ],
+      "paths": [
+        {
+          "path": "config/recovered-functions.json",
+          "old_sha256": "e7786d7b639efa34a56dbf7f09774086184b157c566798a528588d0e7bec2c81",
+          "new_sha256": "6a4ca999083fa81cfad8e824745dda4197511766caa66883c02569114792d052"
+        },
+        {
+          "path": "config/manual-functions.json",
+          "old_sha256": "0cbc9bd11fe2928af550ca154c8a15086e78a139f17144393b315162f1f3056c",
+          "new_sha256": "beda26a16a6ff54b968209c6a9b21ee9a0a93dc3b11d14bb75c67f53558a2615"
+        },
+        {
+          "path": "tools/disasm/output/functions.recovered.json",
+          "old_sha256": "bd27b17014d30617d54a21461ea6979ced6ac0a35f35350c35ff629d88f85e46",
+          "new_sha256": "6a799647b1291822b34128cc2c5e3db6dda8074e1a11dacdada718fe9a470b60"
+        },
+        {
+          "path": "src/recomp/recovered/recovered.c",
+          "old_sha256": "d54de26a46c34b4b9e222360aaee0eb26eac5b645baedd9b7840454fa34e920c",
+          "new_sha256": "da709ae2e0df0a3a7ea7bed7f2e20afcc4d66f6c9945b7a92dbac5ddf3397162"
+        },
+        {
+          "path": "src/recomp/recovered/recovered_11c1_test.c",
+          "old_sha256": "ef133f1fc8bda698e9e2c0ebef151e782d8d574084a13891e9e5991e736f6687",
+          "new_sha256": "3d885e73a3d070a339b84ecae55440b69bf437dc9193bef138ee8b8c15d48386"
         }
       ]
     }

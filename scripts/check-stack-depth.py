@@ -75,8 +75,8 @@ the gate:
   that is neither an entry nor inside any function.
 
 **Why they are not gated, measured rather than asserted.** On the committed
-3,104-entry manifest the census is 20 `STACK_ARGS`, 24 `RET_DEPTH`, 21
-`FALL_OFF_END`, 26 `CUT_EPILOGUE` and 2 `TRUNCATED`.  The span classes overlap
+3,109-entry manifest the census is 0 `STACK_ARGS`, 24 `RET_DEPTH`, 26
+`FALL_OFF_END`, 71 `CUT_EPILOGUE` and 2 `TRUNCATED`.  The span classes overlap
 `scripts/check-span-exits.py`'s existing 360-finding CUT-TARGET population (156
 entries) -- a class the project already knows about and deliberately does not
 gate -- and the rest need per-entry boundary adjudication that a validator must
@@ -91,6 +91,19 @@ reports each historical defect under the code it was diagnosed with, so the
 non-gating classes keep their regression coverage even though they do not fail
 the build.
 
+**What the gate does and does not depend on, stated precisely.**  The gating
+class is a statement about *this entry's own bytes*: at a reachable `ret N`
+reached at depth 0, the declared `stack_args` must be `N`.  Nothing about the
+declared value comes from another function's metadata.  But the *depth* is not
+always computable from this entry alone -- a `call` contributes its callee's own
+`ret N` immediate, and those summaries are derived by walking the callee, using
+manifest and analysis-database spans to find the callee's extent.  So the honest
+statement is: **the conclusion is about this entry, but the depth it rests on may
+depend on callee summaries.**  Treating every `call` as depth-neutral instead was
+measured and discarded, because it finds **zero** defects on the pre-turn
+manifest -- the twenty repaired entries all need their callee's cleanup to be
+resolved to reach the `ret` at depth 0.
+
 ## Controls
 
 `--selfcheck` replays each historical defect **at its pre-fix span and metadata**
@@ -100,9 +113,14 @@ miss is reproducible, because the manifest now carries the corrections.  A
 control that passes on both the bad and the good span would prove nothing, so
 each case asserts the *specific* verdict that changed.
 
-`scripts/check-stack-depth.py --baseline` is the gate.  The baseline is a list of
-entry starts that were already `DEFECT` when the gate was introduced, and it must
-only ever shrink; `--write-baseline` exists but is not how a defect is cleared.
+**The gate is the bare run and it needs no baseline.**  It passes on the
+committed manifest with zero `DEFECT`s, because the gating class is decidable and
+the defects it finds are repaired rather than frozen.  `--baseline` and
+`--write-baseline` exist only so a future session can measure a *regression*
+against a named set; a baseline that is not empty is a defect population that was
+suppressed, which is the failure `0x000307A0` documents, so
+`tests/test_stack_depth.py` fails if `config/stack-depth-baseline.json` appears
+without one.
 """
 from __future__ import annotations
 
@@ -240,22 +258,16 @@ class Database:
             return False
         return record[1] not in FOLDED_DETECTION
 
-    def is_inside_a_genuine_body(self, va: int) -> bool:
-        """Is va inside some real function's span, at any offset?
-
-        This is the difference between a *shared tail-merged epilogue* and a
-        span that cut its own epilogue:
-
-        * `0x000307A0`'s `je 0x30849` leaves its own span, but `0x30849` is
-          inside the reviewed entry `[0x30800, 0x30850)` -- the compiler merged
-          both functions' tails, both pushed `esi`/`edi`, and the shared
-          epilogue pops both.  Legitimate, and the cleanup composes.
-        * `0x000BB7B0`'s `ja 0xBBA17` leaves its span, and `0xBBA17` is inside
-          only the database's `gap_prologue` record `[0xBBA04, 0xBBA19)` -- a
-          *false* entry invented by accepting a `push` after a `ret`.  The
-          branch is to a bare fragment and the run died on a trap stub.
-        """
-        return self.enclosing_span(va) is not None
+    # NOTE: a `Database.is_inside_a_genuine_body(va)` used to live here, meaning
+    # "is va inside some real function's span at any offset".  It was dead code
+    # (never called) AND broken (it called `self.enclosing_span`, which only
+    # exists on `Analyzer`), so it would have raised AttributeError the first
+    # time anything used it.  It is deleted rather than repaired because the
+    # question it asks is the one `Analyzer.enclosing_span(va, exclude_start=...)`
+    # already answers, and that is what `evaluate` calls -- including the
+    # `exclude_start` that stops an entry from justifying a branch into its own
+    # truncated span.  Keeping a second, subtly different copy of that test is
+    # how the two would drift apart.
 
 
 class Analyzer:
@@ -656,48 +668,62 @@ class Analyzer:
                 f'control leaves the span at 0x{va:08X} (end 0x{end:08X})')
 
         # --- the gating class -------------------------------------------------
-        # **`stack_args` is `N - d`, where `N` is the body's `ret N` immediate and
-        # `d` is the depth at that `ret`.**  `scripts/recover-functions.py`
-        # asserts `g_esp == before_stack + 4 + stack_args` after the body, and a
-        # `ret N` leaves `esp = entry_esp + 4 + N - d`.  Equating the two gives
-        # `stack_args = N - d` exactly.
+        # **At a reachable `ret N` reached at depth 0, `stack_args` must be N.**
         #
-        # So when *every* reachable exit is `ret N` for one single N **and every
-        # one of them is reached at depth 0**, then `stack_args` must be N.  That
-        # argument never mentions any callee, any indirect transfer or any global
-        # depth reasoning: it is a statement about this entry's own bytes.  It is
-        # therefore the only class this gate fails on.
+        # `scripts/recover-functions.py` asserts
+        # `g_esp == before_stack + 4 + stack_args` after the body, and a `ret N`
+        # leaves `esp = entry_esp + 4 + N - d`, so in general
+        # `stack_args = N - d`.  The gate uses only the **`d == 0`** case, and that
+        # restriction is load-bearing rather than conservative-for-its-own-sake:
         #
-        # Each condition is load-bearing, and the census is the evidence:
-        #   * `len(rets) == len(exits)` -- every exit is a `ret`.  A tail call, an
-        #     indirect jump, a terminal or a fall-through means the walk may have
-        #     missed an exit with a different immediate.  This excludes
-        #     `0x00074C70` (a tail to `0x6A770`) and the entries with an
-        #     unresolved indirect call.
-        #   * one shared immediate -- `ret 4` on one path and `ret 8` on another
-        #     has no single correct `stack_args`.
-        #   * **every ret at a known depth 0** -- and this is the one that is easy
-        #     to get wrong.  `0x001BCB14` is a single `ret 4` declared as 12; that
-        #     is only a defect if the `ret` is reached at depth 0.  If the body
-        #     leaves 8 bytes pushed, `d = -8` and `stack_args = 4 - (-8) = 12` is
-        #     exactly right.  Its depth is UNKNOWN, so it is reported, not failed.
-        #     Gating it would have been a false positive.
-        # On the committed manifest this selects exactly 20 entries, and an
-        # independent byte-level review of their generated bodies confirmed every
-        # one: each is a balanced `push esi; ...; pop esi; ret 4` (or `ret 0x14`)
-        # whose wrapper checks `+4` where the body really nets `+8`.
-        rets = [(s, d, i) for s, k, d, i in exits if k == 'ret']
-        if rets and len(rets) == len(exits) and not falloffs:
-            immediates = {i for _, _, i in rets}
-            if len(immediates) == 1 and None not in immediates \
-                    and all(d == 0 for _, d, _ in rets):
-                immediate = next(iter(immediates))
+        #   * `d == 0` is a claim about one concrete path through *this* entry's
+        #     own bytes.  It says the body's own pushes and pops balance, which is
+        #     exactly the situation in which `stack_args = N` with no reference to
+        #     any callee.  It is checkable and it is what the twenty repaired
+        #     defects and the four below all look like.
+        #   * the general `N - d` form is **not** safe to gate on, and gating it
+        #     was measured wrong: it fired on 18 entries, including
+        #     `0x0001C000` ("must be -292") and `0x00022070` ("must be -44").
+        #     Those are over-wide spans whose walk wanders into a neighbouring
+        #     function and accumulates a large bogus depth, so a nonzero `d` is
+        #     only as trustworthy as the span extent -- which is the very thing
+        #     this validator is not allowed to assume.  A negative `stack_args` is
+        #     also not representable, which is the tell that the depth is wrong
+        #     rather than the manifest.
+        #
+        # **An earlier revision required *every* exit to be at depth 0, and that
+        # was a real false-negative.**  One `ret` site is often reached by several
+        # paths; a body whose `ret 16` is reached once at depth 0 and once at
+        # UNKNOWN (through an indirect call) failed the all-depths test and was
+        # reported merely `UNKNOWN/PARTIAL`, hiding a live defect behind an
+        # unrelated unresolved path.  Measured: the all-depths rule found 20
+        # defects, this rule finds those 20 plus `0x00021010`, `0x000F4FF0`,
+        # `0x00102490` and `0x00152BC0`, whose generated bodies contradict their
+        # own wrappers (`0x00021010` checks `+4` and emits `esp += 20`).  This was
+        # found twice independently, by adversarial review and by re-deriving the
+        # rule, and both times the same four addresses.
+        #
+        # `0x001BCB14` is the control that this rule must not touch: a single
+        # `ret 4` declared as 12, correct because its depth is `-8`.  Its depth is
+        # UNKNOWN, so it is never gated, and it is run-verified in 106 archived
+        # runs.  Requiring `d == 0` is what keeps it safe.
+        if not truncated:
+            at_zero = [(s, i) for s, k, d, i in exits
+                       if k == 'ret' and d == 0 and i is not None]
+            implied = {i for _, i in at_zero}
+            if len(implied) == 1:
+                immediate = next(iter(implied))
                 if immediate != entry.stack_args:
+                    site = next(s for s, i in at_zero if i == immediate)
                     return DEFECT, 'STACK_ARGS', (
-                        f'every reachable exit is `ret {immediate:#x}` (0x'
-                        f'{rets[0][0]:08X}) reached at depth 0, so '
-                        f'stack_args must be {immediate}, not '
+                        f'`ret {immediate:#x}` at 0x{site:08X} is reached at '
+                        f'depth 0, so stack_args must be {immediate}, not '
                         f'{entry.stack_args}')
+            elif len(implied) > 1:
+                return SUSPICIOUS, 'EXIT_DISAGREE', (
+                    f'depth-0 exits return different immediates '
+                    f'{sorted(implied)}; the declared {entry.stack_args} is not '
+                    f'contradicted by a single path')
 
         # --- reported, not gated: a tail target whose cleanup disagrees --------
         # A `jmp` out of the span is a tail call: control leaves through the
@@ -790,19 +816,53 @@ CONTROLS = (
         'why': 'the truncated body falls off the end with no epilogue',
     },
     {
+        'name': '0x00152BC0 args 8 (the value copied from the swallowed neighbour)',
+        'bad': {'start': '0x00152BC0', 'end': '0x00152E30', 'stack_args': 8},
+        'good': {'start': '0x00152BC0', 'end': '0x00152DE0', 'stack_args': 24},
+        'verdict': DEFECT, 'code': 'STACK_ARGS',
+        'why': 'all six reachable exits are `ret 0x18` and 0x00152DCF is at '
+               'depth 0, so the declared 8 is wrong; the 8 belongs to the '
+               'swallowed function at 0x00152DE0, whose own `ret 8` is correct '
+               'for it.  This is the 0x00074C70 pattern of a value inherited '
+               'from a different body',
+    },
+    {
+        'name': '0x00021010 args 0 (the key was ABSENT, so the wrapper used 0)',
+        'bad': {'start': '0x00021010', 'end': '0x00021104'},
+        'good': {'start': '0x00021010', 'end': '0x00021104', 'stack_args': 16},
+        'verdict': DEFECT, 'code': 'STACK_ARGS',
+        'why': 'the only reachable exit is `ret 0x10` at 0x00021101 at depth 0, '
+               'so 16 is forced; the ABSENT key is exactly as wrong as an '
+               'explicit 0 and the control omits it to prove that',
+    },
+    {
+        'name': '0x000F4FF0 args 0 (two depth-0 paths and two unresolved ones)',
+        'bad': {'start': '0x000F4FF0', 'end': '0x000F5310', 'stack_args': 0},
+        'good': {'start': '0x000F4FF0', 'end': '0x000F5310', 'stack_args': 4},
+        'verdict': DEFECT, 'code': 'STACK_ARGS',
+        'why': 'the same `ret 4` site is reached at depth 0 by one path and at '
+               'UNKNOWN by another; the earlier all-depths rule let the '
+               'UNKNOWN path hide the defect, and this control is what pins '
+               'the per-path form',
+    },
+    {
         'name': '0x0007DA30 full span 0x7DAD6 but args 0 (the hidden `ret 4`)',
         'bad': {'start': '0x0007DA30', 'end': '0x0007DAD6', 'stack_args': 0},
         'good': {'start': '0x0007DA30', 'end': '0x0007DAD6', 'stack_args': 4},
         # Not a `DEFECT`, and the reason is a stated limit rather than a
         # misreading: this body's only exit is `ret 4` reached at UNKNOWN depth,
         # because it makes three `call dword ptr [...]` indirect calls whose
-        # callees cannot be resolved.  `stack_args = N - d` cannot then be
-        # evaluated.  The wrong value is still *not* `PROVED`, which is what the
-        # assertion below requires -- and the defect itself is caught by the
-        # truncated-span control above, which is the form the run actually hit.
+        # callees cannot be resolved, and it has NO path reaching that `ret` at
+        # depth 0.  So `stack_args = N - d` cannot be evaluated for it, which is
+        # exactly the line between this entry and `0x000F4FF0` above: that one
+        # has a depth-0 path and is gated; this one does not and is not.  The
+        # wrong value is still *not* `PROVED`, which is what the assertion below
+        # requires -- and the defect itself is caught by the truncated-span
+        # control above, which is the form the run actually hit.
         'verdict': UNKNOWN, 'code': 'PARTIAL',
         'why': 'the corrected span rejects the old cleanup value, but only as '
-               'UNKNOWN: its indirect calls leave the pre-ret depth unresolved',
+               'UNKNOWN: its indirect calls leave the pre-ret depth unresolved '
+               'on every path',
     },
     {
         'name': '0x00074C70 args 4 (the body has no `ret` of its own)',

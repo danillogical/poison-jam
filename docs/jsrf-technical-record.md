@@ -1500,9 +1500,45 @@ reachable exits actually do.
 stack_args = N − d          at a reachable `ret N`
 ```
 
-So when every reachable exit is the *same* `ret N` **and every one is reached at `d = 0`**,
-`stack_args` must be `N` — a statement about that entry's own bytes that mentions no callee, no
-indirect transfer and no global depth reasoning. That is the single class the gate fails on.
+So at a reachable `ret N` reached at `d = 0`, `stack_args` must be `N`. That is the class the gate
+fails on, and the restriction to `d = 0` is load-bearing rather than cautious: the general `N − d`
+form was implemented and **rejected on measurement**, because it fired on 18 entries including
+`0x1C000` ("must be −292") and `0x22070` ("must be −44") — over-wide spans whose walk wanders into a
+neighbouring function and accumulates a bogus depth. A negative `stack_args` is not representable,
+which is the tell that the *depth* is wrong rather than the manifest.
+
+**The conclusion is about this entry; the depth may rest on callee summaries.** An earlier draft of
+this section said the rule "mentions no callee", which is false. A `call` contributes its callee's
+own `ret N` immediate, derived by walking the callee, and finding that callee's extent uses the
+manifest and the analysis database. Measured proof that this matters: treating every `call` as
+depth-neutral finds **zero** defects on the pre-turn manifest, because all twenty need their callee's
+cleanup resolved before the walk reaches the `ret` at depth 0. The precise claim is that the
+*conclusion* is a statement about this entry's declared value, while the *depth* it depends on is
+computed from other functions.
+
+**A false-negative in the first shipped rule hid four more defects, and it was found twice
+independently.** The first rule required *every* reachable exit to be a `ret N` at depth 0. Because
+`stack_args = N − d` holds on each path separately, one `ret` site reached at depth 0 by one path and
+at UNKNOWN by another (through an indirect call) failed the all-depths test, so the whole entry
+reported only `UNKNOWN/PARTIAL` — a live defect hidden behind an unrelated unresolved path. The rule
+now gates on **any** reachable `ret N` at depth 0. Measured: 20 defects before, **24** on the
+pre-turn manifest, 4 on the current one, all repaired:
+
+| entry | declared | correct | why |
+|---|---|---|---|
+| `0x00021010` | 0 (key ABSENT) | **16** | only exit is `ret 0x10` at `0x21101` at depth 0; wrapper checked `+4`, body emits `esp += 20` |
+| `0x000F4FF0` | 0 | **4** | every exit is `ret 4`; two are at depth 0 |
+| `0x00102490` | 0 | **4** | `ret 4` at `0x102588` at depth 0 |
+| `0x00152BC0` | 8 | **24** | all six exits are `ret 0x18`; `0x152DCF` is at depth 0 |
+
+Two of the four were also swallowing a whole function each, so both spans were tightened and the
+swallowed functions recovered: `0x102490` covered `0x1025B0` (`sub esp,0x1c; push esi; push edi` …
+`pop edi; pop esi; add esp,0x1c; ret`, `stack_args 0`), and `0x152BC0` covered `0x152DE0`
+(`mov edx,[esp+8]; cmp edx,[0x264e74]; push edi` … `pop edi; ret 8`, `stack_args 8`).
+**`0x152BC0`'s wrong 8 was inherited from `0x152DE0`'s own correct `ret 8`** — the `0x74C70`
+pattern of a value belonging to a different body. `0x1BCB14` remains the control the rule must not
+touch: a single `ret 4` declared as 12, correct if its depth is −8, with **no** depth-0 path, and
+run-verified in 106 archived runs.
 
 **The 20 live defects.** Twenty entries declared `stack_args 0` (four by an ABSENT key, so the
 generated wrapper used the `0` default) while their bodies end in `ret 4` — `ret 0x14` for
@@ -1564,10 +1600,22 @@ it is a new stop rather than a re-observation.
 **The shape, measured twice now.** Both `0x94AB0` and `0x496E0` are complete functions with **no
 analysis-database entry of their own**, living inside an over-wide `tail_jump_alias` record:
 
-| address | swallowed by | its own body | exits | `stack_args` |
-|---|---|---|---|---|
-| `0x94AB0` | *nothing* — an unanalyzed gap `0x94AA3..0x95FC0` | `0x94AB0..0x95FB2` | 3 × plain `ret` at depth 0 | 0 |
-| `0x496E0` | `sub_00049520 [0x49520, 0x4A6F0)` | `0x496E0..0x497D6` | 1 × `ret 8` at depth 0 | 8 |
+| address | swallowed by | its own body | exits | `stack_args` | how the value was obtained |
+|---|---|---|---|---|---|
+| `0x94AB0` | *nothing* — an unanalyzed gap `0x94AA3..0x95FC0` | `0x94AB0..0x95FB2` | 3 × plain `ret` at depth 0 | 0 | **PROVED** by the gate |
+| `0x496E0` | `sub_00049520 [0x49520, 0x4A6F0)` | `0x496E0..0x497D6` | 1 × `ret 8` | 8 | **INFERRED** — the gate says `UNKNOWN` |
+
+**`0x496E0`'s value is inferred, and an earlier draft of this section overstated it.** The gate
+reports that entry `UNKNOWN/PARTIAL`, not `PROVED`, because its body makes **seven** indirect
+`call dword ptr [...]` calls (`[ecx+0x11c]`, `[edx+0x148]`, `[edi+0x144]`, `[edx+0x154]` twice,
+`[ecx+0x154]`, `[edx+0x144]`), so the depth at the `ret 8` is not statically resolvable and there is
+no depth-0 path to gate on. The value 8 comes from the byte *pattern* instead: no call is followed by
+an `add esp,N` fix-up, so each callee removes its own arguments (stdcall/thiscall), and the epilogue
+is `pop edi; pop esi; pop ebp; pop ebx; add esp,0x50; ret 8`. A single `ret N` after a fully popped
+frame makes 8 the only value consistent with that pattern, but the depth-0 claim is a convention
+here, not an observation. `0x5C840` is recorded the same way for the same reason. The distinction
+matters because the two cases have different failure modes: a `PROVED` value is forced by the bytes,
+whereas an `INFERRED` one is a strong hypothesis that a run can still falsify.
 
 `0x496E0`'s swallowing record overruns four other real functions: the manifest already owns
 `0x497E0`, `0x49A80`, `0x49E80` and `0x4A6C0` as separate entries, so the `0x49520` span is wrong
@@ -1624,3 +1672,72 @@ confirming that the *dispatched* address was the one repaired — and g04 shows 
 guaranteed on the first attempt.
 
 
+
+
+## 12. The missing-entry population is a table-level defect, and the detector is blind to part of it (2026-10-05)
+
+**Three consecutive runtime stops were the same defect, so the population was censused rather than
+worked one stop at a time.** `scripts/check-table-targets.py` reports **117** candidates (not 120:
+the three already-recovered addresses `0x94AB0`, `0x496E0`, `0x5C840` each had an aligned
+`.data`/`.rdata` dword and have left the list). The sweep behind that number, measured from the XBE:
+4117 aligned `.data`/`.rdata` dwords whose value lands in `.text`, of which 3632 already resolve at
+runtime (**no work**), 485 do not, and 117 pass the boundary filter. Classification: **53 swallowed
+by a manifest span, 10 swallowed by a database span only, 54 UNCOVERED true gaps.**
+
+**24 of the 117 are pure noise**, and that matters because they inflate the apparent backlog: 13
+have a padding byte (`0x90`) *at* the candidate VA, and 11 are not 4-byte aligned. Ten of the 13 come
+from a single 16-bit word array at `.rdata:0x0022E1B4` whose bytes read `...6000 0200 6100 0800
+6200 0800...`, so the filter passes only because the preceding word's high byte happens to be `0x90`.
+Tightening the filter to require "not a padding byte at the VA" and "4-byte aligned" takes 117 to
+**93**. That test should be added.
+
+**The detector is structurally blind to four live defects of exactly the class that has been
+stopping runs.** `check-table-targets.py` filters on `runtime_starts()`, which asks "can the runtime
+resolve this address". A `tail_jump_alias` folded into its parent **does** resolve — the dispatch
+tuple names an `recomp_alias_XXXX` shim — but the shim runs a *different function*:
+
+```
+static void recomp_alias_000E9A40(void) { recomp_alias_observe(77u); sub_000E9D80(); }
+{ 0x000E9A40u, (recomp_func_t)recomp_alias_000E9A40 },
+```
+
+`0xE9A40`'s own body is a complete function with a 0x12-case switch and `ret 4`; the shim runs
+`sub_000E9D80` instead. Re-running the same sweep with `genuine_starts()` gives **121** instead of
+117, and the four it surfaces are `0xE9A40`, `0x100AB0`, `0x1199C0` and `0x13A340` — each a complete
+body with its own switch table and `ret`, reachable through a `.rdata`/`.data` pointer. This is the
+A2e/A2f/A2g alias-misdispatch defect class of §9, and it is the same fix `check-span-exits.py`
+received in `fb5d7e2`. **It should be the next detector change**, because it makes the population
+visible automatically instead of requiring a hand sweep.
+
+**Some defects are in existing entries rather than missing ones, and the documented span convention
+is what hides them.** `0x7DBD0` is a complete 190-instruction function swallowed by the manifest
+entry `0x7DAE0–0x7DE20`, whose declared end is **both** that entry's own end *and* the next database
+function start — so by the documented convention the entry is "correct" and still hides a function.
+The same shape appears in `0x1FF90` (its own `ret 4` at `0x1FFE7`, declared end `0x200A5`, 189 bytes
+of over-run swallowing `0x1FFF0`) and `0x91C00` (its own `ret` at `0x91C23`, declared end `0x91EB0`,
+swallowing `0x91C30` and `0x91D70`). So "end at the next function start" is necessary but not
+sufficient: an entry whose own reachable body ends well before that start is over-wide, and the
+bytes between are someone else's function.
+
+**Whole tables are missing members, so this is not a run of accidents.** Sampled function-pointer
+tables and their missing-entry counts: `0x001F97B4` (the `0x496E0` family) has only 6 of 13 entries
+as database starts; `0x00215530` 40 of 46; `0x0020D8A8` 24 of 27; `0x001EC288` 26 of 33;
+`0x001CD2E0` 92 of 96; `0x001CA6C8` 61 of 64; `0x001CAC60` 78 of 80; `0x001EBCF4` 24 of 26;
+`0x002165F0` 25 of 29; `0x001CD7F8` 47 of 48. Every sampled table has missing members.
+
+**A cheap, strong discriminator was found and should be folded into the detectors.** For a candidate
+inside a container span, walk the *container's* own reachable control flow and ask whether the
+candidate is an instruction boundary reachable from the container's entry. If it is, the address is
+an internal label of the container, not a separate function — the `0x30508`/`0x3060E` situation. Of
+the 117, only **2** are reachable-from-container, and both are legitimate recoveries because their
+containers are bogus `gap_prologue` database entries with garbage bodies (`sub_00028826` decodes to
+`mov edi,edi; sub eax,[ebp-0x7a9cfffe]; …`). The other 115 are not reachable from their container's
+entry, i.e. genuinely separate entry points the container merely covers.
+
+**A method that looked authoritative was rejected.** A callee-aware stack-depth tracker produced
+depth conflicts at 47–830 distinct addresses per candidate and nonsensical exit depths (`−7120`,
+`−10260`), because a LIFO worklist visits a join point by whichever path happens to arrive first.
+It was discarded in favour of single-exit-immediate plus prologue/epilogue frame balance, with
+everything else labelled **INFERRED** rather than overclaimed. This is the same lesson as §10's
+discarded call models: a depth model that cannot keep joins consistent reports confident nonsense,
+and nonsense is worse than an explicit unknown.
