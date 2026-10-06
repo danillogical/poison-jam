@@ -2371,7 +2371,7 @@ table above: a measured count change, correlated with a known change, unexplaine
 the plan's remaining work rather than being quietly dropped, and no acceptance claim rests on the
 present count in either direction.
 
-**Settled: it is run-to-run variance, not the batch.** The experiment was run, and it used the
+**What the replay establishes, and what it does not.** The experiment was run, and it used the
 **archived binary** rather than a rebuild — the differential method this record already mandates when
 a run regresses:
 
@@ -2387,11 +2387,24 @@ f9's own executable, replayed in the same environment with the same four overrid
 | f9 (recorded) | `43e639d7…` | **1000** | 550 |
 | f9 **replayed** | `43e639d7…` (identical) | **394** | 385 |
 
-**The same bytes produced 394 presents where they had produced 1000.** So the present count is not a
-function of the code change at all: the run-to-run variation this project documents as first-class
-(g03–g08 reached different addresses on identical binaries) dominates the effect completely, and the
-f10/f11 reading of 888 is inside that spread rather than caused by F7c. The correlation with the batch
-was real but not causal, which is exactly the distinction the plan's evidence rules exist to force.
+**The same bytes produced 394 presents where they had produced 1000.** That is a genuine and
+load-bearing result, and it is also *all* it is. Stated precisely:
+
+- **Established:** the present count is **non-deterministic for a fixed binary** — 394 vs 1000 on
+  byte-identical executables in the same environment. Run-to-run variation therefore dominates any
+  effect of a code change of the size F7c represents, and the f10/f11 reading of 888 **cannot be
+  attributed to F7c on the present evidence**.
+- **NOT established: that F7c has no effect at all.** One replay of one pre-F7c binary at a
+  *different* count does not exclude a batch effect; it shows the noise is larger than the signal, not
+  that the signal is zero. The correct statement is "the count varies by more than the observed
+  difference, so the difference is not evidence of a regression", **not** "the difference is not a
+  regression".
+- **NOT established: the mechanism**, in either direction.
+
+An earlier revision of this section was headed "Settled: it is run-to-run variance, not the batch",
+which claimed more than one sample can support. The Turn Reviewer raised exactly this, and the
+correction is recorded here rather than made silently — it is the same overclaim shape as the rest of
+this record's erratum list.
 
 Two further observations from the replay, recorded because they are measured:
 
