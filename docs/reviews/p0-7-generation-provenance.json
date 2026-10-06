@@ -15,16 +15,16 @@
     "src/recomp/gen/recomp_stubs_recovery.c": "5897e497ad2f789241a9b2f95653023b306f3d4849a80406ca586ed7706d9bbb",
     "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
     "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "9e077203ca3c1f2034c3010f0729cf744b26af70628d0790cf3a357ea35483f8",
+    "src/recomp/recovered/recovered.c": "d54de26a46c34b4b9e222360aaee0eb26eac5b645baedd9b7840454fa34e920c",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "b443f854a9dc39c76032797aa015df39f57f32d29fef25548da720df2adbfad5",
+    "src/recomp/recovered/recovered_11c1_test.c": "ef133f1fc8bda698e9e2c0ebef151e782d8d574084a13891e9e5991e736f6687",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
   "generators": {
     "project": {
       "dirty": true,
-      "revision": "c1546c64a4f63de934e8d58ca3d4ec54a3511563",
+      "revision": "1d8599fc0d8a2499697254cea38692edc19aca97",
       "state": "MEASURED",
       "status_sha256": "6d2358f2391816ccc22c84040c7645ef546fd76af0c559c373bf003577ec798d"
     },
@@ -46,14 +46,14 @@
       "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
     },
     "config/manual-functions.json": {
-      "bytes": 102701,
+      "bytes": 102734,
       "present": true,
-      "sha256": "fa0527c773adfd5c00b6225e7ebf6b245609b6630e1c9e004b036200de83a4b2"
+      "sha256": "0cbc9bd11fe2928af550ca154c8a15086e78a139f17144393b315162f1f3056c"
     },
     "config/recovered-functions.json": {
-      "bytes": 2916536,
+      "bytes": 2918659,
       "present": true,
-      "sha256": "b5cb67e848379812f28195b985d4dffa7dca4549e6bb15f1e47115669a8610d9"
+      "sha256": "e7786d7b639efa34a56dbf7f09774086184b157c566798a528588d0e7bec2c81"
     },
     "config/recovery-unresolved.json": {
       "bytes": 7364,
@@ -91,9 +91,9 @@
       "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
     },
     "tools/disasm/output/functions.recovered.json": {
-      "bytes": 6107249,
+      "bytes": 6109566,
       "present": true,
-      "sha256": "0861bb072ffab07ca8fe7aa61ed72c359930e32ceed7ca3ba4eca053052ae559"
+      "sha256": "bd27b17014d30617d54a21461ea6979ced6ac0a35f35350c35ff629d88f85e46"
     }
   },
   "known_unknowns": [],
@@ -165,19 +165,19 @@
       },
       "src/recomp/recovered/recovered.c": {
         "markers": {
-          "JSRF_ABI_CONTINUE": 9318,
-          "RECOMP_ABI_CALL": 10312,
+          "JSRF_ABI_CONTINUE": 9321,
+          "RECOMP_ABI_CALL": 10319,
           "RECOMP_GENERATED_CODE": 1,
-          "g_seh_ebp": 6298
+          "g_seh_ebp": 6300
         },
         "present": true
       }
     },
     "totals": {
-      "JSRF_ABI_CONTINUE": 9318,
-      "RECOMP_ABI_CALL": 10320,
+      "JSRF_ABI_CONTINUE": 9321,
+      "RECOMP_ABI_CALL": 10327,
       "RECOMP_GENERATED_CODE": 5,
-      "g_seh_ebp": 6304
+      "g_seh_ebp": 6306
     }
   },
   "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",
@@ -1423,6 +1423,48 @@
           "path": "src/recomp/recovered/recovered_11c1_test.c",
           "old_sha256": "ff12bef2b21ebe285b5d7c7aa5891c6120cf8e1c3ed76b5ee587eefb91dcce8b",
           "new_sha256": "b443f854a9dc39c76032797aa015df39f57f32d29fef25548da720df2adbfad5"
+        }
+      ]
+    },
+    {
+      "kind": "input and generated output",
+      "date": "2026-10-05",
+      "cause": "`0x0005C840` recovered as `[0x0005C840, 0x0005C983)` with `stack_args 0`. Run 20261005-175848-754-g04-496e0 exercised `0x00094AB0` again (one ABI-verified return) and then took a DIFFERENT path from g03, stopping on `[ICALL] Failed to resolve VA 0x0005C840` -- another address absent from every earlier archived run. Same swallowed-entry class: a complete function with no analysis-database entry of its own, sitting before the over-wide `tail_jump_alias` records `sub_0005C990` and `sub_0005CB90`, whose spans `[0x5C990, 0x5D3B0)` both overrun real functions. `stack_args 0` is derived from the bytes rather than from the model, because two calls on the walk are not statically resolvable: the direct call at `0x0005C86C` to `0x1BAB20` takes its arguments in ecx/edx with no pushes before it and no `add esp,N` after it, so its cleanup is 0; the vtable call at `0x0005C87E` is preceded by exactly two pushes and followed by no `add esp,N`, so its callee removes 8. With those two edges read from the byte pattern, both resolvable exits -- `0x0005C979 jmp 0x1BAA50` (target cleanup 0) and `0x0005C982` plain `ret` -- sit at depth 0 and total 4, so `stack_args = 0`. The prologue `sub esp,0x20; push edi` is cancelled by both epilogues `pop edi; add esp,0x20`. Three further exits reach indirect calls whose targets are not statically known, so `scripts/check-stack-depth.py` reports the entry UNKNOWN rather than PROVED and the value rests on the two exits that do resolve. The address has ZERO rel32 callers and exactly one reference in the image, the `.data` dword at `0x001FA1C0`. `recovered.c` 3106 -> 3107 functions; the regenerated wrapper checks `+4` and the body emits `esp += 4; return; /* ret */`, which agree. `just check` and the full CTest suite pass.",
+      "evidence": [
+        "run g04's log holds exactly one `[RECOVERED] 0x00094AB0 returned; ABI verified` line, so stop 17 was exercised again",
+        "g04's only `Failed to resolve` line names `0x0005C840`, and that address appears in no other archived `jsrf_run.log`",
+        "g04 took a different path from g03 (which stopped at `0x000496E0`), which is the documented run-to-run nondeterminism rather than a regression",
+        "the two call cleanups are read from the byte pattern: no `add esp,N` after either call, zero pushes before the direct one, exactly two before the vtable one",
+        "both resolvable exits total 4 at depth 0, giving `stack_args 0`",
+        "zero rel32 callers; the single reference is the `.data` dword at 0x001FA1C0",
+        "the regenerated wrapper constant `+4` equals `4 + stack_args 0`, and the body emits `esp += 4; return; /* ret */`",
+        "the previous amendment's `new_sha256` values are the prior state used here, so the pair cannot drift"
+      ],
+      "paths": [
+        {
+          "path": "config/recovered-functions.json",
+          "old_sha256": "b5cb67e848379812f28195b985d4dffa7dca4549e6bb15f1e47115669a8610d9",
+          "new_sha256": "e7786d7b639efa34a56dbf7f09774086184b157c566798a528588d0e7bec2c81"
+        },
+        {
+          "path": "config/manual-functions.json",
+          "old_sha256": "fa0527c773adfd5c00b6225e7ebf6b245609b6630e1c9e004b036200de83a4b2",
+          "new_sha256": "0cbc9bd11fe2928af550ca154c8a15086e78a139f17144393b315162f1f3056c"
+        },
+        {
+          "path": "tools/disasm/output/functions.recovered.json",
+          "old_sha256": "0861bb072ffab07ca8fe7aa61ed72c359930e32ceed7ca3ba4eca053052ae559",
+          "new_sha256": "bd27b17014d30617d54a21461ea6979ced6ac0a35f35350c35ff629d88f85e46"
+        },
+        {
+          "path": "src/recomp/recovered/recovered.c",
+          "old_sha256": "9e077203ca3c1f2034c3010f0729cf744b26af70628d0790cf3a357ea35483f8",
+          "new_sha256": "d54de26a46c34b4b9e222360aaee0eb26eac5b645baedd9b7840454fa34e920c"
+        },
+        {
+          "path": "src/recomp/recovered/recovered_11c1_test.c",
+          "old_sha256": "b443f854a9dc39c76032797aa015df39f57f32d29fef25548da720df2adbfad5",
+          "new_sha256": "ef133f1fc8bda698e9e2c0ebef151e782d8d574084a13891e9e5991e736f6687"
         }
       ]
     }

@@ -1592,3 +1592,35 @@ tool interruption mid-run and left no `result.json`. `g02` then failed in 2.7 s 
 save-root was verified writable by hand and `g03` ran normally. Neither loss is evidence about any
 code change, and neither is counted as a stop.
 
+**Run g04 took a different path, and that is the nondeterminism, not a regression.**
+`20261005-175848-754-g04-496e0` (exploratory, 250 s) exercised `0x94AB0` again — one
+`[RECOVERED] 0x00094AB0 returned; ABI verified` line — and then stopped at
+`[ICALL] Failed to resolve VA 0x0005C840`, an address in no earlier run. So g04 **neither confirms
+nor refutes** the `0x496E0` repair: it never reached that address. Two runs of the same executable
+have now taken different paths through the same boot region (g03 → `0x496E0`, g04 → `0x5C840`),
+which is the third independent instance of the run-to-run variation this project records as a
+first-class constraint, and the reason a single run cannot establish progress.
+
+**`0x5C840` is the third instance of the class, and it needed a byte derivation the model could not
+do.** A complete function with no analysis-database entry of its own, sitting before the over-wide
+`tail_jump_alias` records `sub_0005C990` and `sub_0005CB90` (both `[0x5C990, 0x5D3B0)`, both
+overrunning real functions). It has **zero rel32 callers** and exactly one reference in the image,
+the `.data` dword at `0x001FA1C0` — the `0x80BD0`/`0x94AB0` pattern. `scripts/check-stack-depth.py`
+reports it `UNKNOWN`, not `PROVED`, because two calls on its walk are not statically resolvable.
+Its `stack_args 0` is therefore derived from the byte *pattern* rather than the model: neither call
+is followed by an `add esp,N` fix-up, the direct call at `0x5C86C` to `0x1BAB20` has no pushes
+before it (its arguments arrive in ecx/edx), and the vtable call at `0x5C87E` has exactly two. With
+those two edges read off, both resolvable exits — `0x5C979 jmp 0x1BAA50` (target cleanup 0) and
+`0x5C982` plain `ret` — sit at depth 0 and total 4. **The record keeps the distinction: this value
+is inferred from a byte pattern on a partially-resolved walk, not proved by the gate.**
+
+**The class is now large enough to be worth naming.** Three consecutive stops
+(`0x94AB0`, `0x496E0`, `0x5C840`) are all "complete function missing its own entry, swallowed by or
+adjacent to an over-wide `tail_jump_alias` record", and `scripts/check-table-targets.py` reports
+**120 candidates** of exactly this shape. `0x496E0` and `0x5C840` were each recovered, gated,
+regenerated, built and tested with **no run at all**, so the remaining population can be worked
+from the bytes in batches rather than one run per stop. What a run is still needed for is
+confirming that the *dispatched* address was the one repaired — and g04 shows even that is not
+guaranteed on the first attempt.
+
+

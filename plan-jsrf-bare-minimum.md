@@ -82,20 +82,39 @@ stayed green. **The gate passes with no baseline file at all.**
 | # | Stop / defect | Fix | Confirmed by |
 |---|---|---|---|
 | — | 20 entries declaring `stack_args 0` whose bodies end in `ret 4` (`ret 0x14` for `0x80028`) | each set to its body's own ret immediate | validator + independent 20/20 reproduction; no run needed — see below |
-| 17 | `[ICALL] Failed to resolve VA 0x00094AB0` | recovered `0x94AB0..0x95FB2`, `stack_args 0` | **g03**: `[RECOVERED] 0x00094AB0 returned; ABI verified` |
-| 18 | `[ICALL] Failed to resolve VA 0x000496E0` | recovered `0x496E0..0x497D6`, `stack_args 8` | **next stop, not yet fixed** — found by g03 |
+| 17 | `[ICALL] Failed to resolve VA 0x00094AB0` | recovered `0x94AB0..0x95FB2`, `stack_args 0` | **g03 and g04**: `[RECOVERED] 0x00094AB0 returned; ABI verified` in both |
+| 18 | `[ICALL] Failed to resolve VA 0x000496E0` | recovered `0x496E0..0x497D6`, `stack_args 8` | **g03** reached it; **not yet re-observed**, because g04 took a different path |
+| 19 | `[ICALL] Failed to resolve VA 0x0005C840` | recovered `0x5C840..0x5C983`, `stack_args 0` | **g04**; next stop, not yet fixed |
 
-**Run g03 (`20261005-174422-643-g03-94ab0`, exploratory, 246 s).** It is the first run to
-exercise `0x94AB0`: the log holds exactly one `[RECOVERED] 0x00094AB0 returned; ABI verified
-(ESP/EBX/ESI/EDI)` line, so the return is path-exercised rather than merely present. It then
-advanced to `[ICALL] Failed to resolve VA 0x000496E0`, an address that appears in **no** earlier
-archived run — a genuinely new stop, not a re-observation. `0x496E0` is the `0x94AB0` class again:
-a complete function with no analysis-database entry of its own, sitting inside the large
-`tail_jump_alias` record `sub_00049520 [0x49520, 0x4A6F0)` that overruns several real functions.
-Its body has exactly one reachable exit, `ret 8` at `0x000497D1` reached at depth 0, so
-`stack_args 8`; it is recovered as `[0x496E0, 0x497D6)`. **Presents still stop at exactly 1000**,
-the disclaimer hash `5bdaea576b8509f5` is unchanged throughout, and **the title screen was not
-reached**. g03 is **exploratory** and carries no acceptance evidence.
+**Run g03 (`20261005-174422-643-g03-94ab0`, exploratory, 246 s).** The first run to exercise
+`0x94AB0`: exactly one `[RECOVERED] 0x00094AB0 returned; ABI verified (ESP/EBX/ESI/EDI)` line, so
+the return is path-exercised rather than merely present. It then advanced to
+`[ICALL] Failed to resolve VA 0x000496E0`, an address in **no** earlier archived run.
+
+**Run g04 (`20261005-175848-754-g04-496e0`, exploratory, 250 s).** It exercised `0x94AB0` again
+(one ABI-verified return) but then took a **different path** and stopped at
+`[ICALL] Failed to resolve VA 0x0005C840` — also absent from every earlier run. This is the
+documented run-to-run nondeterminism, **not** a regression, and it is why g04 neither confirms nor
+refutes the `0x496E0` repair: g04 never reached that address. Both runs stop issuing flips at
+exactly 1000 presents with the disclaimer hash `5bdaea576b8509f5` unchanged, and **the title screen
+was not reached** in either. Both are exploratory and carry no acceptance evidence.
+
+**`0x496E0` and `0x5C840` are both the `0x94AB0` class.** A complete function with no
+analysis-database entry of its own, swallowed by (or adjacent to) an over-wide `tail_jump_alias`
+record that overruns several real functions:
+
+| address | the over-wide record | own body | exits | `stack_args` |
+|---|---|---|---|---|
+| `0x94AB0` | *none* — an unanalyzed gap `0x94AA3..0x95FC0` | `0x94AB0..0x95FB2` | 3 × plain `ret` at depth 0 | 0 |
+| `0x496E0` | `sub_00049520 [0x49520, 0x4A6F0)` | `0x496E0..0x497D6` | 1 × `ret 8` at depth 0 | 8 |
+| `0x5C840` | before `sub_0005C990` / `sub_0005CB90`, both `[0x5C990, 0x5D3B0)` | `0x5C840..0x5C983` | `jmp 0x1BAA50` and plain `ret`, both at depth 0 | 0 |
+
+`0x496E0`'s swallowing record overruns four functions the manifest already owns separately
+(`0x497E0`, `0x49A80`, `0x49E80`, `0x4A6C0`). `0x5C840` has **zero rel32 callers** and exactly one
+reference in the image, the `.data` dword at `0x001FA1C0` — the `0x80BD0`/`0x94AB0` pattern again.
+Its `stack_args 0` is derived from the bytes rather than the model, because two calls on its walk
+are not statically resolvable; both resolvable exits sit at depth 0 and total 4. The model reports
+it `UNKNOWN`, not `PROVED`, and the record says so.
 
 **Two runs were lost to environment faults, recorded rather than hidden.** `g01` was killed by a
 tool interruption mid-run and left no `result.json`; `g02` then failed in 2.7 s at

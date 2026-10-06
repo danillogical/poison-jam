@@ -3952,6 +3952,14 @@
     "stack_args": 0
   },
   {
+    "start": "0x0005C840",
+    "end": "0x0005C983",
+    "section": ".text",
+    "kind": "routine",
+    "stack_args": 0,
+    "evidence": "A complete function with no analysis-database entry of its own, found by run 20261005-175848-754-g04-496e0: `[ICALL] Failed to resolve VA 0x0005C840`. It sits before the large `tail_jump_alias` records sub_0005C990 and sub_0005CB90, whose spans [0x5C990, 0x5D3B0) both overrun real functions -- the same swallowed-entry class as 0x00094AB0 and 0x000496E0. Body 0x0005C840..0x0005C983 by reachable CFG walk from the entry. stack_args 0, derived from the bytes rather than from the model, because two calls on the walk are not statically resolvable: the direct call at 0x0005C86C to 0x1BAB20 takes its arguments in ecx/edx (no pushes precede it) and is followed by no `add esp,N`, so its cleanup is 0; the vtable call at 0x0005C87E `call dword ptr [ecx+0x9c]` is preceded by exactly two pushes (0x0005C87C `push edx`, 0x0005C87D `push eax`) and followed by no `add esp,N`, so the callee removes 8. With those two edges read from the byte pattern the walk is determinate: the two resolvable exits are 0x0005C979 `jmp 0x1BAA50` at depth 0, whose target's own cleanup is 0, and 0x0005C982 plain `ret` (C3) at depth 0. Every total is 4, so stack_args = 4 - 4 = 0. Three further exits (0x0005C8E0, 0x0005C942, 0x0005C958) each reach an indirect call whose target is not statically known, so the model reports the entry UNKNOWN rather than PROVED; the value is nevertheless a byte fact because both resolvable exits agree and the prologue `sub esp,0x20; push edi` is cancelled by both epilogues (`pop edi; add esp,0x20`). The end 0x0005C983 is the byte after that `ret`, followed by 12 NOPs and then the next entry at 0x0005C990. The address has ZERO rel32 callers and exactly one reference in the image: the .data dword at 0x001FA1C0, so it is the 0x00080BD0 / 0x00094AB0 pattern again. It renders a bounding box from the object at edi: it copies four floats from [edi+0x54] into a local, calls 0x1BAB20, then queries through vtable slot 0x9c and walks a list at [edi+0x10]."
+  },
+  {
     "start": "0x0005C990",
     "end": "0x0005CB90",
     "section": ".text",

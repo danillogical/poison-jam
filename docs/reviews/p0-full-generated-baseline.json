@@ -13,9 +13,9 @@
     "src/recomp/gen/recomp_stubs_recovery.c": "5897e497ad2f789241a9b2f95653023b306f3d4849a80406ca586ed7706d9bbb",
     "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
     "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "9e077203ca3c1f2034c3010f0729cf744b26af70628d0790cf3a357ea35483f8",
+    "src/recomp/recovered/recovered.c": "d54de26a46c34b4b9e222360aaee0eb26eac5b645baedd9b7840454fa34e920c",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "b443f854a9dc39c76032797aa015df39f57f32d29fef25548da720df2adbfad5",
+    "src/recomp/recovered/recovered_11c1_test.c": "ef133f1fc8bda698e9e2c0ebef151e782d8d574084a13891e9e5991e736f6687",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -310,6 +310,19 @@
         "src/recomp/recovered/recovered_11c1_test.c"
       ],
       "reason": "0x00080BD0 end corrected 0x00080C83 -> 0x00081853 and stack_args 4 -> 0, resolving the 0x80340/0x80BD0 overlap: the two functions are ADJACENT, proven by 0x80BD0's matching SEH pair and by prologue -0x40 / epilogue +0x44 netting exactly +4. f31 and f32 both measured the -0x40 ABI failure. Both defects predate this session. recovered.c stays 3104. Amended, not regenerated."
+    },
+    {
+      "date": "2026-10-05",
+      "files": [
+        "src/recomp/recovered/recovered.c",
+        "src/recomp/recovered/recovered_11c1_test.c"
+      ],
+      "cause": "config/recovered-functions.json gained the recovered entry 0x00094AB0..0x00095FB2 and twenty corrected `stack_args` values (20 entries changed from 0 to their body's own `ret N` immediate: 4 for nineteen of them and 20 for 0x00080028). scripts/recover-functions.py was re-run, so recovered.c and its focused fixture were rewritten. The baseline moves with them deliberately: the previous session updated the manifest but not this file, which left jsrf_generation_provenance red at the pushed checkpoint d77474d.",
+      "evidence": [
+        "scripts/check-stack-depth.py reports 0 DEFECTs on the committed manifest with no baseline file",
+        "a control regeneration before the manifest edit reproduced recovered.c byte for byte, so these hashes reflect the manifest change and nothing else",
+        "scripts/check-generation-provenance.py --check passes on the same tree"
+      ]
     },
     {
       "date": "2026-10-05",
