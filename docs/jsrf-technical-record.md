@@ -2307,5 +2307,30 @@ is the same mistake in the opposite direction: a true-looking positive instead o
 **ancestry bounds a commit, not an artifact**: `recovered.c` is untracked, so the only authority for
 what a run executed is the copy inside its own `source.zip`.
 
+**`0x96F80`: measured, and still not gated, with the gap named.** The sibling of the recovered
+`0x00096560`, and the other half of the plan's known-open UNCOVERED pair. The measurement is now
+sharper than the plan's original note:
+
+| fact | measurement |
+|---|---|
+| `0x96F60`'s declared span | `[0x96F60, 0x97190)` — it over-runs its own body by 0x1415 bytes |
+| `0x96F60`'s own reachable end | a plain `ret` at `0x96F7A` at **depth 0**, then NOPs to `0x96F7B` |
+| `0x96F60`'s other exit | an **indirect** tail jump `jmp dword ptr [eax+8]` at `0x96F76`, depth 0 |
+| `0x96F80`'s independent entry evidence | **two** aligned `.rdata` dwords, `0x001CD36C` and `0x001CD3EC` |
+| `0x96F80`'s own walk | fully enumerated: 153 instructions, two exits, both `ret 4` at `0x97187`, one at **depth 0** |
+
+So `0x96F80` looks like a separate function by every measure *except* the one the hidden-entry
+detector requires. Its proof needs the containing body to be **provably** finished, and that proof
+requires the walk to be fully enumerated with no `indirect`/`terminal` exit; `0x96F60` has one. The
+detector therefore reports `0x96F80` as consumed but leaves the verdict `UNQUALIFIED`, and
+`tests/test_hidden_entries.py::test_indirect_exit_is_not_gated` pins that deliberately.
+
+**It stays unqualified, and that is the right call rather than an oversight.** An indirect tail jump
+does leave the function, so an argument that it "cannot fall through to `0x96F80`" is available — but
+it is an argument about where a *resolved-at-run-time* target goes, which is precisely the class of
+claim the `0x80BD0` lesson forbids making from the bytes alone. Reversing a deliberate `UNQUALIFIED`
+to widen a gate would be the `N + d` mistake again. It is recorded here as a **measured candidate
+with a named proof gap**, not as a defect and not as closed.
+
 
 
