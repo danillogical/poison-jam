@@ -2353,13 +2353,27 @@ the same shape — f9 reaches 1000 at t=235 s, f10 stalls at 888 from t=329 s, f
 manifest spans widened to their body's real end), and it is recorded as an observation. It is **not**
 established as a regression, and no mechanism is claimed:
 
-- f10 and f11 differ from f9 by F7c *and* F7d together, so this is not a single-variable comparison.
-  The plan already records that rule, and it applies here.
-- The runs differ in duration and outcome (`unhandled_exception` vs `diagnostic_deadline`), and
-  run-to-run path variance in this title is documented and wide — g03 through g08 reached
-  demonstrably different addresses on identical binaries.
+- f10 and f11 differ from f9 by F7c *and* F7d together, and f10/f11 also differ from f9 by **F7b
+  (`0445a80`, the `0xAE560` repair)**, so this is not a single-variable comparison in either
+  direction. The plan already records that rule, and it applies here.
+- The runs differ in duration and outcome (`unhandled_exception` vs `diagnostic_deadline`).
 - More returns (553 in f10 vs 550 in f9) with *fewer* presents is not the shape of a lost code path;
   it is the shape of a different path.
+
+**Same-binary variation is documented, but not by g03–g08.** An earlier revision of this section
+cited "g03 through g08 reached demonstrably different addresses on identical binaries". **That is
+false**, and the Turn Planner caught it: g03–g08 have six *different* executable hashes
+(`b670e0f8`, `d1078ee2`, `deaeac13`, `9b6eb76f`, `80861c65`, `0188f9a1`), because each run followed a
+repair. The genuine same-binary pairs in the archive are:
+
+| pair | binary | presents | returns |
+|---|---|---|---|
+| f25 / f26 | `ca867957d99a` | 960 / 193 | — |
+| f11 / f12 | `f2c67aec053c` | 888 / 888 | 440 / 556 |
+
+f25/f26 are the pair the plan already cites for the Smilebit-card stall, and they are a **24× spread
+in presents on one binary**. f11/f12 show the same count with a 116-return difference. Those are the
+citations for same-binary variation; the g03–g08 claim is withdrawn.
 
 **It is also not a title-screen regression, because 1000 was never the title screen.** The disclaimer
 card is still what is on screen in every run, at the same hash. M15 was not reached before this change
@@ -2393,17 +2407,18 @@ written (see the caveats below), so they are recorded observations only:
 1000.** Stated precisely, in three parts:
 
 - **Recorded, NOT VERIFIED:** the present count differed between two runs of the **same binary** —
-  394 vs 1000, on byte-identical executables in the same environment. The 394/385 pair is a deleted-log
-  observation and carries no on-disk artifact, so it is reported as recorded rather than established.
-  What *is* independently verifiable is the retained f9/f10/f11 series (1000/888/888 presents,
-  550/553/440 returns), which is enough to show same-binary variation exists.
+  394 vs 1000. The 394/385 pair is a deleted-log observation and carries no on-disk artifact, so it is
+  reported as recorded rather than established. **The retained f9/f10/f11 series cannot substitute for
+  it**: those are three *different* binaries (`43e639d7`, `6c2eed73`, `f2c67aec`), so they are not
+  same-binary evidence at all. What *is* independently verifiable is the **f25/f26 pair**
+  (`ca867957d99a`, 960 vs 193 presents) and the **f11/f12 pair** (`f2c67aec053c`, 888/888 presents,
+  440/556 returns) — both same-binary, both retained.
 - **Causal attribution: UNRESOLVED.** The difference between f9's 1000 and f10/f11's 888 **cannot be
-  attributed to F7c**, because an uncontrolled variable of at least the same magnitude is present. But
-  one replay of one pre-F7c binary **does not bound** the batch effect either: it shows that variation
-  *of some size* exists, not that it is larger than whatever F7c may contribute. Saying "the variation
-  dominates the effect" would be a second overclaim in the opposite direction, and an earlier revision
-  of this section made it. The honest statement is exactly: *recorded same-binary variation; causal
-  attribution unresolved.*
+  attributed to F7c**, because the runs differ by F7b, F7c and F7d together. One replay of one pre-F7c
+  binary **does not bound** the batch effect either: it shows that variation *of some size* exists, not
+  that it is larger than whatever the batch may contribute. Saying "the variation dominates the effect"
+  would be a second overclaim in the opposite direction, and an earlier revision of this section made
+  it. The honest statement is exactly: *recorded same-binary variation; causal attribution unresolved.*
 - **NOT established: the mechanism**, in either direction, and not established that F7c has no effect.
 
 **The Reviewer's fix is applied, and its strongest point is retained:** the earlier revisions both
@@ -2412,28 +2427,37 @@ marks it NOT VERIFIED, and leaves causal status explicitly unresolved. **No new 
 the Reviewer judged an honest downgrade sufficient and a new sample would not resolve the causality
 either — it would only add another sample to a distribution whose spread is already demonstrated.
 
-**Corrections to this section, both raised by the Turn Reviewer, are recorded rather than made
-silently.** The first heading claimed the change was "settled … not the batch"; the second revision
-claimed the variation "dominates any effect". Both were withdrawn. This is the same overclaim shape as
-the rest of this record's erratum list, and it is worth noting that the *second* overclaim was
-introduced while fixing the first — a reminder that the failure mode is a habit, not a single slip.
+**Corrections to this section are recorded rather than made silently.** The first heading claimed the
+change was "settled … not the batch"; the second revision claimed the variation "dominates any effect";
+a third cited g03–g08 as same-binary evidence. **All three were withdrawn**, the last by the Turn
+Planner. The pattern — a true result stated more strongly than its evidence — is worth having in the
+record, and it is notable that each overclaim was introduced while fixing the previous one.
+
+**A neutral observation, recorded without explanation.** Across the whole retained archive, the
+pre-`0445a80` runs that reach a present count at all stop at **exactly 1000** (30 of 35 runs; the
+exceptions are f24 at 9, f26 at 193, g08c at 113, g01 at 730 and f25 at 960, all of which ended early),
+and **all four** post-`0445a80` runs (f10–f13) stop at **exactly 888**. That is a clean correlation
+with the F7b boundary (`0445a80`, the `0xAE560` repair), and it is recorded as a correlation only:
+f10–f13 also carry F7c and F7d, the sample is four, and no mechanism is proposed. It is the kind of
+observation that should be *stated* rather than left for someone to rediscover as a surprise.
 
 **Two caveats on the replay's evidence value, stated because the Reviewer is right about them.**
 The replay's log was deleted, so `394`, `385` and the hash below are **NOT VERIFIED** by any artifact
 now on disk; they were read before deletion and are reported as such. And "input-only repeatability"
 is weaker than it sounds: f9's archive preserves the *executable*, so the experiment can be re-run,
-but a re-run is not a byte-for-byte reproduction of the original environment or output — it is a new
-sample from the same distribution. That distinction is the difference between a reproducible
+but a re-run is not a **byte-for-byte** reproduction of the original environment or output — it is a
+new sample from the same distribution. That distinction is the difference between a reproducible
 *experiment* and a reproducible *result*, and only the former is available here.
 
 Two further observations from the replay, recorded as measured-at-the-time and subject to the same
-caveat:
+caveat. **Neither is independent confirmation of anything**, because both rest on the deleted log:
 
-- the replay's disclaimer hash is `87683a748e27d071`, **not** `5bdaea576b8509f5`. The same binary can
-  therefore reach a different *visual* state, not merely a different count — which independently
-  confirms that the disclaimer hash is a path witness and not a stable per-binary constant.
+- the replay's disclaimer hash was recorded as `87683a748e27d071`, **not** `5bdaea576b8509f5`. If
+  accurate this would mean the same binary can reach a different *visual* state, not merely a different
+  count — but the artifact is gone, so the claim is **NOT VERIFIED** and is not used to support the
+  "path witness, not a per-binary constant" reading. That reading rests instead on the retained runs.
 - the replay produced **fewer** returns (385) than any of f9–f11 (550/553/440), again on identical
-  bytes to f9.
+  bytes to f9. Same caveat: recorded, not verified.
 
 The replay directory is deliberately **not** kept under `logs/runs/`: it was produced by invoking the
 collector directly rather than through `scripts/run-jsrf.py`, so it carries no `metadata.json` and is
@@ -2457,7 +2481,8 @@ findings. The question worth answering is how many of those are the *same class*
 repaired, and the answer is **not all of them** — which is why they are measured rather than repaired.
 
 Each residual `CUT_EPILOGUE` was tested with the same certificate the batches used: widen to the next
-evidenced start and require a fully enumerated walk whose every exit is one `ret N` at **depth 0**.
+evidenced start and require a fully enumerated walk whose every exit is one `ret N`, with **at least
+one** exit reached at **depth 0**.
 
 | entry | epilogue | widen to next start | enumerated? | distinct `ret` immediate | certifiable? |
 |---|---|---|---|---|---|
@@ -2503,21 +2528,32 @@ fall-off, no truncation, every exit a `ret` with the same immediate, and **at le
 witness. Zero failed, zero walk limits hit. So the repairs are sound.
 
 It also found that **81 of the 159 have at least one exit whose depth the model reports `UNKNOWN`**
-(the Reviewer counted 76 of the F7c set and 5 of the F7d set; this record's own re-measure over the
-same set gives 81, the small difference being how the two counts classify an entry with several
-unknown exits). `0x21200`, `0x202A0` and `0x171B50` are examples: each has a depth-0 witness *and*
+(the Reviewer measured 76 of the F7c set and 5 of the F7d set; this record's own re-measure over the
+same set gives 81. **76 + 5 = 81, so there is no discrepancy** — an earlier revision of this paragraph
+invented a "classification difference" to explain a difference that does not exist, which is its own
+small overclaim). `0x21200`, `0x202A0` and `0x171B50` are examples: each has a depth-0 witness *and*
 UNKNOWN-depth exits.
 
-That makes the living plan's phrase "every exit is one `ret N` at depth 0" **false as written**, and
-it is corrected in both the plan and here. The proof is *"the walk is fully enumerated, every exit is a
-`ret`, exactly one distinct immediate appears, and at least one exit is reached at depth 0"* — the
-depth-0 witness is what licenses `stack_args = N`; the other exits' depths are not claimed. This is a
-**proof-statement** error, not a repair error: nothing was widened on the strength of a depth claim
-that does not hold, because the certificate never required all depths to resolve.
+**The certificate, stated once and in full, so no shorthand is needed anywhere else.** For a repaired
+under-wide span:
 
-It is recorded rather than quietly reworded because it is the third wording overclaim this turn has had
-to withdraw, and the pattern — a true result stated more strongly than its evidence — is worth having
-in the record as a pattern.
+> The walk is **fully enumerated** (no truncated decode, no fall-off, no opaque exit); **every exit is a
+> `ret`**; **exactly one distinct immediate `N`** appears across those exits; and **at least one** exit
+> is reached at **depth 0**. That depth-0 witness is what licenses `stack_args = N`. The depths of the
+> other exits are **not claimed** and may be `UNKNOWN`.
+
+Where the manifest's `evidence` strings, the preservation baseline or the plan say an entry was
+certified "at depth 0", they mean **the existence of that witness**, not that every path's depth was
+resolved. That shorthand is defined here rather than reworded in 159 places, and the one place it was
+stated as "every exit … at depth 0" — the living plan — was **false as written** and is corrected
+there.
+
+This is a **proof-statement** error, not a repair error: nothing was widened on the strength of a depth
+claim that does not hold, because the certificate never required all depths to resolve.
+
+It is recorded rather than quietly reworded because it is the fourth wording overclaim this turn has
+had to withdraw, and the pattern — a true result stated more strongly than its evidence — is worth
+having in the record as a pattern.
 
 
 ## 21. The `0x96xxx` vtable family: a sibling found by runtime, then closed by census (2026-10-06)

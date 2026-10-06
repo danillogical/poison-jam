@@ -55,7 +55,8 @@ import bisect
 #
 # SHRUNK AGAIN 2026-10-06 by 29 entries, all repaired by the F7c certified
 # under-wide batch (152 spans widened to the body's real end, each certified by a
-# fully enumerated walk whose every exit is one `ret N` at depth 0). 60 -> 31,
+# fully enumerated walk whose every exit is one `ret N` with AT LEAST ONE exit at
+# depth 0 -- see the note below on that wording). 60 -> 31,
 # again exactly the measured set. The 8 candidates that batch SKIPPED are still
 # here on purpose: seven have a `stack_args` that disagrees with their certified
 # N (a separate finding) and one would have swallowed 0x44000.
@@ -66,6 +67,12 @@ import bisect
 # and a hidden ABI error (the 0x7DA30/0x152BC0 shape: a truncated body hiding a
 # `ret` immediate), plus 0x96560 recovered as stop 26. 31 -> 25, again exactly
 # the measured set.
+#
+# NOTE ON THE CERTIFICATE WORDING used in the entries' `evidence` strings: when one
+# says an entry was certified "at depth 0", it means a DEPTH-0 WITNESS EXISTS, not
+# that every path's depth was resolved. 81 of the 159 repaired entries have at
+# least one exit the model reports UNKNOWN depth. The full certificate is stated
+# once in docs/jsrf-technical-record.md section 20.
 KNOWN_OPEN = {int(x, 16) for x in """11105 1F000 20760 2A000 4037C 44000 45DB0 52050 73C20 91830 A76E0 AEE80 C7D40 D02D0 E0710 E0CF0 EC0B0 F02F0 10A0E0 110B20 11FE90 127810 142400 1783D0 180038""".split()}
 
 

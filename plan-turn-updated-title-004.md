@@ -6,10 +6,10 @@ evolved and why.
 
 ## Status at last update
 
-Turn `title-004`. Toolkit `2cee914`; game endpoint `8454b81` (F7d repair `8cd1e08`, stop 26 `fc6f2d4`,
-residue measurement `ae9c090`, present-count qualification `02d190e` and `8454b81`). `just check`
-green; CTest **40/40**; `test_run_profiles.py` 46 OK; `test_generation_provenance.py` 36 OK;
-`test_dispatch_table_size.py` 15 OK; `test_stop_chain.py` 25 OK;
+Turn `title-004`. Toolkit `2cee914`; game endpoint `49bfd4e` (F7d `8cd1e08`, stop 26 `fc6f2d4`,
+stop 27 `46f5c48`, stop 28 `49bfd4e`, residue measurement `ae9c090`, present-count qualification
+`02d190e`/`8454b81`/`cee0c27`). `just check` green; CTest **40/40**; `test_run_profiles.py` 46 OK;
+`test_generation_provenance.py` 36 OK; `test_dispatch_table_size.py` 15 OK; `test_stop_chain.py` 25 OK;
 `test_recovery_span_ownership.py` 10 OK. Both repositories pushed and clean.
 
 **The title screen is NOT reached and M15 is NOT claimed.** Presents freeze with the disclaimer hash

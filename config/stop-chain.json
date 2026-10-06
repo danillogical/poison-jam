@@ -157,11 +157,15 @@
    "repair_commit": "fc6f2d4",
    "evidence": [
     {
+     "run": "20261006-011638-029-f10-underwide-batch152",
+     "role": "discovered"
+    },
+    {
      "run": "20261006-022404-045-f12-exercise-stop26",
      "role": "confirmed"
     }
    ],
-   "note": "An unowned gap: no manifest span, no owner and no dispatch tuple, so an indirect call to it trapped. Recovered as [0x00096560, 0x000967AA) with stack_args 4 from a fully enumerated walk (two exits, both `ret 4` at 0x967A7, one at depth 0); its only image reference is the aligned .rdata dword at 0x001CD32C. The recovery landed in fc6f2d4. CONFIRMED by f12, which descends from that commit and logs the ABI-verified return. Note the discovered-run citation is the same run here: f12 both discovered the sibling 0x00096B60 and confirmed this one, which is why the single evidence row is `confirmed` rather than a pair."
+   "note": "An unowned gap: no manifest span, no owner and no dispatch tuple, so an indirect call to it trapped. f10 logged `[ICALL] Failed to resolve VA 0x00096560` (with 0x00096560 as ICALL-history frame 15), which is the DISCOVERY. Recovered as [0x00096560, 0x000967AA) with stack_args 4 from a fully enumerated walk (two exits, both `ret 4` at 0x967A7, at least one at depth 0); its only image reference is the aligned .rdata dword at 0x001CD32C. The recovery landed in fc6f2d4. CONFIRMED by f12, which descends from that commit and logs `[RECOVERED] 0x00096560 returned; ABI verified`. Discovery and confirmation are two different runs and are cited as such."
   },
   {
    "id": 27,
