@@ -203,7 +203,13 @@ the bytes and then missed by two consecutive runs — is finally discharged. f9 
 ## F7c — the certified under-wide class
 
 152 spans widened to their real end in one validated batch (`59f3ebf`), each certified by a fully
-enumerated walk whose every exit is one `ret N` at depth 0. Five assertions guarded every write:
+enumerated walk whose every exit is one `ret N` — with **at least one** exit reached at **depth 0**.
+(Precisely: the walk is complete, every exit is a `ret`, and exactly one distinct immediate appears;
+the depth-0 exit is the witness that fixes `stack_args`, but some entries have other exits whose depth
+the model reports `UNKNOWN`. So the proof is "a depth-0 exit exists", not "every exit is at depth 0" —
+the Turn Reviewer caught that overstatement, and the enumerations were re-checked: `0x21200`,
+`0x202A0` and `0x171B50` each have UNKNOWN-depth exits alongside their depth-0 witness.) Five
+assertions guarded every write:
 widening only; instruction-boundary end; declared `stack_args` equals certified `N`; no other
 manifest start crossed; extended walk fully enumerated.
 
@@ -231,8 +237,8 @@ The 7 entries F7c skipped on purpose, now repaired as both an extent **and** an 
 (`8cd1e08`). In each, the declared span ended before the body's own `ret`, so the walk over it fell
 off and `check-stack-depth.py` reported only `SUSPICIOUS/FALL_OFF_END`: the reachable `ret` was not
 visible, so the wrapper's expected delta could never be exercised. That is the `0x7DA30`/`0x152BC0`
-shape. Widening yields a fully enumerated walk with exactly one distinct immediate at **depth 0**,
-which by the project identity `stack_args = N` fixes both fields.
+shape. Widening yields a fully enumerated walk with exactly one distinct immediate, and **at least one**
+of its exits is reached at **depth 0**, which by the project identity `stack_args = N` fixes both fields.
 
 | entry | end | `stack_args` |
 |---|---|---|

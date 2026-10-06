@@ -2388,25 +2388,37 @@ f9's own executable, replayed in the same environment with the same four overrid
 | f9 **replayed** | `43e639d7…` (identical) | **394** | 385 |
 
 **The same bytes produced 394 presents where they had produced 1000.** That is a genuine and
-load-bearing result, and it is also *all* it is. Stated precisely:
+load-bearing result, and it is also *all* it is. Stated precisely, in three parts:
 
-- **Established:** the present count is **non-deterministic for a fixed binary** — 394 vs 1000 on
-  byte-identical executables in the same environment. Run-to-run variation therefore dominates any
-  effect of a code change of the size F7c represents, and the f10/f11 reading of 888 **cannot be
-  attributed to F7c on the present evidence**.
-- **NOT established: that F7c has no effect at all.** One replay of one pre-F7c binary at a
-  *different* count does not exclude a batch effect; it shows the noise is larger than the signal, not
-  that the signal is zero. The correct statement is "the count varies by more than the observed
-  difference, so the difference is not evidence of a regression", **not** "the difference is not a
-  regression".
-- **NOT established: the mechanism**, in either direction.
+- **Recorded:** the present count differs between two runs of the **same binary** — 394 vs 1000 on
+  byte-identical executables in the same environment. Same-binary variation in this title is already
+  documented as first-class (g03–g08 reached different addresses on identical binaries), so this
+  reproduces a known property rather than discovering one.
+- **Causal attribution: UNRESOLVED.** The difference between f9's 1000 and f10/f11's 888 **cannot be
+  attributed to F7c**, because an uncontrolled variable of at least the same magnitude is present. But
+  one replay of one pre-F7c binary **does not bound** the batch effect either: it shows that variation
+  *of some size* exists, not that it is larger than whatever F7c may contribute. Saying "the variation
+  dominates the effect" would be a second overclaim in the opposite direction, and an earlier revision
+  of this section made it. The honest statement is exactly: *recorded same-binary variation; causal
+  attribution unresolved.*
+- **NOT established: the mechanism**, in either direction, and not established that F7c has no effect.
 
-An earlier revision of this section was headed "Settled: it is run-to-run variance, not the batch",
-which claimed more than one sample can support. The Turn Reviewer raised exactly this, and the
-correction is recorded here rather than made silently — it is the same overclaim shape as the rest of
-this record's erratum list.
+**Corrections to this section, both raised by the Turn Reviewer, are recorded rather than made
+silently.** The first heading claimed the change was "settled … not the batch"; the second revision
+claimed the variation "dominates any effect". Both were withdrawn. This is the same overclaim shape as
+the rest of this record's erratum list, and it is worth noting that the *second* overclaim was
+introduced while fixing the first — a reminder that the failure mode is a habit, not a single slip.
 
-Two further observations from the replay, recorded because they are measured:
+**Two caveats on the replay's evidence value, stated because the Reviewer is right about them.**
+The replay's log was deleted, so `394`, `385` and the hash below are **NOT VERIFIED** by any artifact
+now on disk; they were read before deletion and are reported as such. And "input-only repeatability"
+is weaker than it sounds: f9's archive preserves the *executable*, so the experiment can be re-run,
+but a re-run is not a byte-for-byte reproduction of the original environment or output — it is a new
+sample from the same distribution. That distinction is the difference between a reproducible
+*experiment* and a reproducible *result*, and only the former is available here.
+
+Two further observations from the replay, recorded as measured-at-the-time and subject to the same
+caveat:
 
 - the replay's disclaimer hash is `87683a748e27d071`, **not** `5bdaea576b8509f5`. The same binary can
   therefore reach a different *visual* state, not merely a different count — which independently
@@ -2474,6 +2486,29 @@ measured per instance.
 They include entries whose walk reaches the declared end with no return *and* no function there, which
 is consistent with a genuinely incomplete body or with a shared tail outside the span; each needs its
 own evidence. They are left reported and ungated, as they have been.
+
+**Independent reproduction of the whole batch, and a wording erratum.** The Turn Reviewer re-derived
+all **159** certificates (152 from F7c, 7 from F7d) from the original XBE with its own CFG walk and
+reproduced every one: widening only, instruction-boundary end, no manifest-start crossing, no
+fall-off, no truncation, every exit a `ret` with the same immediate, and **at least one** depth-0
+witness. Zero failed, zero walk limits hit. So the repairs are sound.
+
+It also found that **81 of the 159 have at least one exit whose depth the model reports `UNKNOWN`**
+(the Reviewer counted 76 of the F7c set and 5 of the F7d set; this record's own re-measure over the
+same set gives 81, the small difference being how the two counts classify an entry with several
+unknown exits). `0x21200`, `0x202A0` and `0x171B50` are examples: each has a depth-0 witness *and*
+UNKNOWN-depth exits.
+
+That makes the living plan's phrase "every exit is one `ret N` at depth 0" **false as written**, and
+it is corrected in both the plan and here. The proof is *"the walk is fully enumerated, every exit is a
+`ret`, exactly one distinct immediate appears, and at least one exit is reached at depth 0"* — the
+depth-0 witness is what licenses `stack_args = N`; the other exits' depths are not claimed. This is a
+**proof-statement** error, not a repair error: nothing was widened on the strength of a depth claim
+that does not hold, because the certificate never required all depths to resolve.
+
+It is recorded rather than quietly reworded because it is the third wording overclaim this turn has had
+to withdraw, and the pattern — a true result stated more strongly than its evidence — is worth having
+in the record as a pattern.
 
 
 
