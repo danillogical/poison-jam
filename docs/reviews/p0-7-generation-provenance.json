@@ -15,18 +15,18 @@
   "src/recomp/gen/recomp_stubs_recovery.c": "0489b4a998e15cfb4132b5d045a4dbe0998d819a30adc291150542c2b84d02d8",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-  "src/recomp/recovered/recovered.c": "8c44e7ed518ec22a7b3f5495d3a5baf4f6fad8bbb1d5fdc704771a9486375f28",
+  "src/recomp/recovered/recovered.c": "ce992c5616fa4566b1590649b888667a5880e6e51b34a9c918f1510e33b3bf9d",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "26263449ecec88d339913b120b6caef3e2de59fcfab7a479f4ca5719603ae43c",
+  "src/recomp/recovered/recovered_11c1_test.c": "84f25e0db05cb388271f4e416f42e6639e7975a13139bb2d60cf721907746c89",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
  "generators": {
   "project": {
    "dirty": true,
-   "revision": "0763de807f4dd13e4c913c5053b4ef48956f4867",
+   "revision": "0cc6d5db74f5447e125ed8ae7a4eb151adfc4dca",
    "state": "MEASURED",
-   "status_sha256": "860744317c024fa3f78fc3b94e70fbace17b919167a9d820fa4d6ede029ed3ee"
+   "status_sha256": "ef6d10294a243808babde5c5e321e1b8e4475740199f638d061b1925537b5209"
   },
   "scripts/recover-functions.py": "c951fe5ed787253bd523d16502a231772197043b84a3b20e4c7b680b55c03847",
   "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
@@ -46,14 +46,14 @@
    "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
   },
   "config/manual-functions.json": {
-   "bytes": 104516,
+   "bytes": 104549,
    "present": true,
-   "sha256": "2df298287b765385e1435684e568800a90f0eb1506e04802097e140e2dc1fe92"
+   "sha256": "2cc1be764256803f42ef3b5c1f23d210ee4defbe761ba39a36c5496d241d0717"
   },
   "config/recovered-functions.json": {
-   "bytes": 3066411,
+   "bytes": 3067562,
    "present": true,
-   "sha256": "708b151e96d2cf22f2c2019ec34b153622dc738be409583417b22a6c0dc51742"
+   "sha256": "e7f397d15f26ff5d4fcf2c98a2681427072848e817eeedf95aeedb3d35faaa9e"
   },
   "config/recovery-unresolved.json": {
    "bytes": 4922,
@@ -91,9 +91,9 @@
    "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
   },
   "tools/disasm/output/functions.recovered.json": {
-   "bytes": 6311565,
+   "bytes": 6312924,
    "present": true,
-   "sha256": "6cdf3f8f3e6ed75df6503bef65ff35977b2fa2d4ee40ae7756824e5a3806a4ad"
+   "sha256": "fb971ee71a0dfbeb61bffc67f933a4281fca96ebca3756c6200dde2695ffa158"
   }
  },
  "known_unknowns": [],
@@ -165,19 +165,19 @@
    },
    "src/recomp/recovered/recovered.c": {
     "markers": {
-     "JSRF_ABI_CONTINUE": 9474,
+     "JSRF_ABI_CONTINUE": 9477,
      "RECOMP_ABI_CALL": 10772,
      "RECOMP_GENERATED_CODE": 1,
-     "g_seh_ebp": 5748
+     "g_seh_ebp": 5749
     },
     "present": true
    }
   },
   "totals": {
-   "JSRF_ABI_CONTINUE": 9474,
+   "JSRF_ABI_CONTINUE": 9477,
    "RECOMP_ABI_CALL": 10780,
    "RECOMP_GENERATED_CODE": 5,
-   "g_seh_ebp": 5754
+   "g_seh_ebp": 5755
   }
  },
  "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",
@@ -1595,6 +1595,11 @@
    "kind": "input and generated output",
    "date": "2026-10-06",
    "cause": "F7c: the certified under-wide class repaired as one validated batch. 152 manifest spans whose declared `end` cut their own continuation were widened to the body's real end, derived from the original bytes by the same certificate the 0xAE560 repair used: the extension yields a FULLY ENUMERATED walk (no truncated decode, no fall-off, every exit a `ret`, exactly one distinct immediate) reached at DEPTH 0, so the declared `stack_args` is already correct and these are extent errors only. Every entry passed five assertions before being written: the change only widens; the new end is an instruction boundary; the declared `stack_args` equals the certified N; the extension crosses no other manifest entry's start; and the extended walk is fully enumerated. Eight candidates were SKIPPED and reported rather than guessed at -- seven because their declared `stack_args` disagrees with the certified N (a separate finding, tracked in TR section 18) and one because widening would have swallowed the manifest start 0x00044000, which is exactly the 0xB5EB0 lesson. Measured effect on the gates, all green with no baseline: stack-depth SUSPICIOUS 135 -> 74 (CUT_EPILOGUE 68 -> 19, FALL_OFF_END 24 -> 12), check-span-exits CUT-TARGET 308 -> 225, hidden-entry unchanged at 2891 CLEAN / 265 OVER_RUN / 2 UNQUALIFIED. recovered.c now contains ZERO fatal trap-call sites. `recovered.c` stays 3158 functions: no entry was added or removed, only 152 `end` values and their evidence prose changed."
+  },
+  {
+   "kind": "input and generated output",
+   "date": "2026-10-06",
+   "cause": "F7c runtime verification and stop 26. Run 20261006-011638-029-f10-underwide-batch152 (exploratory, 356 s, unhandled_exception, 553 ABI-verified returns -- up from 550 -- with presents frozen at 888 and the disclaimer hash 5bdaea576b8509f5 unchanged) re-confirmed stops 21, 22 and the F7b repair 0x000AE560, then stopped on a NEW site: `[ICALL] Failed to resolve VA 0x00096560`, with 0x00047710 as ICALL history frame 2. 0x00096560 had NO manifest span, NO owner and NO dispatch tuple, and was already recorded in the plan as a known-open UNCOVERED entry. Recovered as [0x00096560, 0x000967AA) with stack_args 4, derived from the bytes: a fully enumerated walk has 175 instructions, no truncated decode, no fall-off, and exactly two exits, both the same `ret 4` at 0x967A7, one reached at DEPTH 0; the frame `sub esp,0x14` plus four pushes balances against `pop edi; pop ebx; add esp,0x14; ret 4`. Its only image reference is the aligned .rdata dword at 0x001CD32C, the 0x80BD0/0x94AB0 vtable-installed pattern. The regenerated body emits ZERO fatal trap stubs and one `esp += 8; return; /* ret 4 */`. recovered.c 3158 -> 3159 functions. stack-depth verdicts 1977 PROVED / 1108 UNKNOWN / 74 SUSPICIOUS, unchanged findings."
   }
  ],
  "regenerations": [

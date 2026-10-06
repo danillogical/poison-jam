@@ -135,16 +135,33 @@
   },
   {
    "id": 25,
-   "address": "0x000AE655",
-   "state": "REPAIRED",
-   "repair_commit": null,
+   "address": "0x000AE560",
+   "state": "RUNTIME_CONFIRMED",
+   "repair_commit": "0445a80",
    "evidence": [
     {
      "run": "20261006-003520-133-f9-underwide-batch-pb",
      "role": "discovered"
+    },
+    {
+     "run": "20261006-011638-029-f10-underwide-batch152",
+     "role": "confirmed"
     }
    ],
-   "note": "Not an entry: it is the shared epilogue of 0x000AE560 (`pop esi` at 0xAE5ED, `ret 4` at 0xAE5EE), reached by seven conditional branches from inside that body, which the declared end 0x000AE5F1 cut off. f9 logged `[ICALL] Failed to resolve VA 0x000AE655` with 0x000AE560 as ICALL-history frame 15. Repaired in the working tree; the repair commit is not yet known, so this row deliberately carries no repair_commit and is therefore not citable as a confirmation until one exists. This is the first stop the structural census predicted before a run reached it."
+   "note": "The row is keyed on the repaired ENTRY 0x000AE560, not on 0x000AE655: the latter is this function's shared epilogue (`pop esi` at 0xAE5ED, `ret 4` at 0xAE5EE), reached by seven conditional branches from inside the body, and it is never entered as a function, so it can never have an ABI-verified return line of its own. The declared end 0x000AE5F1 cut that epilogue off, so the lifter emitted a trap for 0x000AE655 and f9 logged `[ICALL] Failed to resolve VA 0x000AE655` with 0x000AE560 as ICALL-history frame 15. The end is now 0x000AE659 and stack_args 4 was already correct (both exits are `ret 4` at depth 0). f10, which descends from the repair 0445a80, logs 0x000AE560's ABI-verified return and confirms it. This is the first stop the structural census predicted before any run reached it."
+  },
+  {
+   "id": 26,
+   "address": "0x00096560",
+   "state": "REPAIRED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261006-011638-029-f10-underwide-batch152",
+     "role": "discovered"
+    }
+   ],
+   "note": "An unowned gap: no manifest span, no owner and no dispatch tuple, so an indirect call to it trapped. f10 logged `[ICALL] Failed to resolve VA 0x00096560` with 0x00047710 as ICALL history frame 2. Recovered as [0x00096560, 0x000967AA) with stack_args 4 from a fully enumerated walk (two exits, both `ret 4` at 0x967A7, one at depth 0). Its only image reference is the aligned .rdata dword at 0x001CD32C. The repair is in the working tree; the repair commit is not yet known, so this row carries no repair_commit and is therefore not citable as a confirmation until one exists."
   }
  ]
 }

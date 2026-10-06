@@ -6509,6 +6509,14 @@
   "stack_args": 0
  },
  {
+  "start": "0x00096560",
+  "end": "0x000967AA",
+  "section": ".text",
+  "kind": "routine",
+  "stack_args": 4,
+  "evidence": "F7c runtime stop 26. Run 20261006-011638-029-f10-underwide-batch152 logged `[ICALL] Failed to resolve VA 0x00096560` with `0x00047710` as ICALL-history frame 2. The address had NO manifest span, NO owner and NO dispatch tuple, so an indirect call to it trapped; it was already recorded in the plan as a known-open UNCOVERED entry. Extent and ABI are derived from the bytes, not guessed: a fully enumerated walk of [0x96560, 0x967B0) has 175 instructions, NO truncated decode, NO fall-off, and exactly TWO exits, both the same `ret 4` at 0x967A7 (C2 04 00), one reached at DEPTH 0 -- so `stack_args 4`. The frame balances: `sub esp,0x14` at 0x96564 plus pushes of ebx/edi/ebp/esi against `pop edi; pop ebx; add esp,0x14; ret 4` at 0x967A2. The end is the last ret byte plus 4 NOPs (0x967AA..0x967AF) before the next entry 0x967B0. It has exactly one reference in the image, the aligned `.rdata` dword at 0x001CD32C, which is the 0x80BD0/0x94AB0 pattern again: a vtable-installed function with no direct caller."
+ },
+ {
   "start": "0x000967B0",
   "end": "0x000967E0",
   "section": ".text",
