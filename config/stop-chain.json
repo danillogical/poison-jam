@@ -166,15 +166,28 @@
   {
    "id": 27,
    "address": "0x00096B60",
+   "state": "RUNTIME_CONFIRMED",
+   "repair_commit": "46f5c48",
+   "evidence": [
+    {
+     "run": "20261006-024003-212-f13-exercise-stop27",
+     "role": "confirmed"
+    }
+   ],
+   "note": "The sibling of 0x00096560: no manifest span, no owner and no dispatch tuple, with a byte-identical prologue. Recovered as [0x00096B60, 0x00096DBA) with stack_args 4 from a fully enumerated 180-instruction walk (two exits, both `ret 4` at 0x96DB7, one at depth 0); its only image reference is the aligned .rdata dword at 0x001CD3AC. The recovery landed in 46f5c48. CONFIRMED by f13, which descends from that commit and logs the ABI-verified return."
+  },
+  {
+   "id": 28,
+   "address": "0x00081860",
    "state": "REPAIRED",
    "repair_commit": null,
    "evidence": [
     {
-     "run": "20261006-022404-045-f12-exercise-stop26",
+     "run": "20261006-024003-212-f13-exercise-stop27",
      "role": "discovered"
     }
    ],
-   "note": "The sibling of 0x00096560: no manifest span, no owner and no dispatch tuple, with a byte-identical prologue. f12 logged `[ICALL] Failed to resolve VA 0x00096B60` right after confirming 0x00096560. Recovered as [0x00096B60, 0x00096DBA) with stack_args 4 from a fully enumerated 180-instruction walk (two exits, both `ret 4` at 0x96DB7, one at depth 0); its only image reference is the aligned .rdata dword at 0x001CD3AC. The repair is in the working tree; no run has executed it, so the state stays REPAIRED, the evidence stays `discovered`, and the row carries no repair_commit until one exists."
+   "note": "The 927-instruction gap immediately after 0x00080BD0's corrected end 0x00081853, separated from it by thirteen NOP bytes and tail-jumped to by two manifest entries (0x00082770, 0x00082790). f13 logged `[ICALL] Failed to resolve VA 0x00081860` after confirming stop 27. Recovered as [0x00081860, 0x0008274B) with stack_args 4: five exits, all `ret 4`, at least one at depth 0. The repair is in the working tree; no run has executed it, so the state stays REPAIRED, the evidence stays `discovered`, and the row carries no repair_commit until one exists."
   }
  ]
 }

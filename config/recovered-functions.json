@@ -5434,6 +5434,14 @@
   "stack_args": 0
  },
  {
+  "start": "0x00081860",
+  "end": "0x0008274B",
+  "section": ".text",
+  "kind": "routine",
+  "stack_args": 4,
+  "evidence": "F7d runtime stop 28. Run 20261006-024003-212-f13-exercise-stop27 confirmed stop 27 (0x00096B60) and then logged `[ICALL] Failed to resolve VA 0x00081860`. The address had NO manifest span and NO owner, so an indirect call to it trapped. It sits in the 13-byte gap immediately after 0x00080BD0's corrected end 0x00081853, and that gap is THIRTEEN NOP BYTES (0x81853..0x8185F) -- an alignment boundary, which is independent evidence that 0x81860 is a real start rather than mid-instruction. Two manifest entries tail-jump to it as well (0x00082770 and 0x00082790 both end in `jmp 0x81860`), which is entry evidence from a second independent source. Extent and ABI derived from the bytes: a fully enumerated walk of [0x81860, 0x82770) has 927 instructions, NO truncated decode, NO fall-off, and FIVE exits, ALL of them `ret 4` (at 0x82748, 0x826A4, 0x8271D, 0x825C1 and 0x82748 again), with at least one reached at DEPTH 0 -- so `stack_args 4`. The frame balances: `sub esp,0xe8` at 0x81860 plus pushes of ebx/ebp/esi/edi against the matching epilogues. The end is the last ret byte plus 3 NOPs (0x8274B..0x8274E) before the next entry 0x82770. This is the largest single recovered body of the F7d stops (927 instructions) and the same unowned-gap class as 0x00096560, 0x00096B60, 0x00094AB0 and 0x0005C840."
+ },
+ {
   "start": "0x00082770",
   "end": "0x00082790",
   "section": ".text",
