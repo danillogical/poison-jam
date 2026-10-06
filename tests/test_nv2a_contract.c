@@ -106,6 +106,8 @@ static void ramht_install(uint8_t *instance, uint32_t handle, uint32_t tag,
 
 int main(void)
 {
+    /* The contract is "unknown methods reject"; a leaked environment variable must not change it. */
+    nv2a_admit_unknown_override(0);
     const uint32_t ram_size = 64u * 1024u * 1024u;
     uint8_t *ram = calloc(1, ram_size), *ramin = calloc(1, 1024u * 1024u);
     uint8_t *instance = calloc(1, 0x20000u);

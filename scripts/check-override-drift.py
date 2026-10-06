@@ -34,6 +34,12 @@ that documents its removal.
     runtime does not read cannot make a run exploratory (`jsrf_run_profile.py` says
     exactly this). It is reported as information, because the interesting case is a
     name a document calls *synthetic completion* while the runtime ignores it.
+
+**The reverse direction.** A name the runtime reads must be classified or documented:
+it appears in `scripts/jsrf_run_profile.py` or in `docs/jsrf-run-profiles.md` (as an
+exact token, or under a documented family such as `RECOMP_TRACE_*`). A name in neither
+is reported as `unclassified_override` and fails the check, so a new toolkit switch
+cannot silently default to strict.
 """
 from __future__ import annotations
 
@@ -145,6 +151,19 @@ def claims_synthetic_completion(text: str) -> bool:
             or 'answers a poll' in lowered)
 
 
+def unclassified(names, doc_text: str, classifier_text: str) -> list[str]:
+    """Names the runtime reads that neither the classifier nor the run-profiles doc covers.
+
+    Covered means an exact token in either text (so `RECOMP_FOO` is not covered by
+    `RECOMP_FOO_BAR`), or a member of a `PREFIX_*` family the document names.
+    """
+    tokens = set(NAME.findall(doc_text)) | set(NAME.findall(classifier_text))
+    families = re.findall(r'\b((?:RECOMP|JSRF)_[A-Z0-9_]*)\*', doc_text)
+    return sorted(name for name in names
+                  if name not in tokens
+                  and not any(name.startswith(family) for family in families))
+
+
 def main() -> int:
     global TOOLKIT
     parser = argparse.ArgumentParser(description=__doc__)
@@ -192,6 +211,20 @@ def main() -> int:
                                f"by a name the runtime ignores"),
                     'line': place['text'],
                 })
+
+    doc_path = ROOT / 'docs' / 'jsrf-run-profiles.md'
+    classifier_path = ROOT / 'scripts' / 'jsrf_run_profile.py'
+    doc_text = doc_path.read_text(encoding='utf-8') if doc_path.is_file() else ''
+    classifier_text = classifier_path.read_text(encoding='utf-8')
+    for name in unclassified(read, doc_text, classifier_text):
+        findings.append({
+            'check': 'override_drift', 'reason': 'unclassified_override',
+            'detail': (f"{name} is read by the toolkit ({read[name][0]}) but is in "
+                       f"neither scripts/jsrf_run_profile.py nor "
+                       f"docs/jsrf-run-profiles.md; classify it as exploratory or "
+                       f"document it as observation or feature enablement"),
+            'line': name,
+        })
 
     record = {
         'checker': CHECKER_VERSION,

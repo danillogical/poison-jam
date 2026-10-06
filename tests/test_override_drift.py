@@ -130,5 +130,75 @@ class DriftVerdictTests(unittest.TestCase):
                     f'{line.strip()!r}')
 
 
+class UnclassifiedOverrideTests(unittest.TestCase):
+    """Reverse direction: a name the toolkit reads must be classified or documented.
+
+    Assumed interface: `drift.unclassified(names, doc_text, classifier_text)`
+    returns the sorted list of names in `names` that appear neither as a token
+    in `classifier_text` nor in `doc_text` (as an exact token or under a
+    documented family such as `RECOMP_TRACE_*`). `main()` reports each as a
+    finding with reason `unclassified_override` and exits nonzero.
+    """
+
+    def test_a_brand_new_name_is_unclassified(self) -> None:
+        self.assertEqual(
+            drift.unclassified({'RECOMP_BRAND_NEW': ['src/a.c']}, 'nothing here', 'X = 1'),
+            ['RECOMP_BRAND_NEW'])
+
+    def test_a_name_in_the_run_profiles_doc_is_covered(self) -> None:
+        self.assertEqual(
+            drift.unclassified({'RECOMP_BRAND_NEW': ['src/a.c']},
+                               '| `RECOMP_BRAND_NEW` | observation only |', ''), [])
+
+    def test_a_name_in_the_classifier_is_covered(self) -> None:
+        self.assertEqual(
+            drift.unclassified({'RECOMP_BRAND_NEW': ['src/a.c']}, '',
+                               "NEW = 'RECOMP_BRAND_NEW'"), [])
+
+    def test_a_documented_family_covers_members(self) -> None:
+        self.assertEqual(
+            drift.unclassified({'RECOMP_TRACE_FOO': ['src/a.c']},
+                               'All `RECOMP_TRACE_*` switches are observation.', ''), [])
+
+    def test_a_family_does_not_cover_other_prefixes(self) -> None:
+        self.assertEqual(
+            drift.unclassified({'RECOMP_OTHER_FOO': ['src/a.c']},
+                               'All `RECOMP_TRACE_*` switches are observation.', ''),
+            ['RECOMP_OTHER_FOO'])
+
+    def test_a_prefix_of_a_longer_token_is_not_an_exact_mention(self) -> None:
+        self.assertEqual(
+            drift.unclassified({'RECOMP_FOO': ['src/a.c']}, '`RECOMP_FOO_BAR`', ''),
+            ['RECOMP_FOO'])
+
+    def test_main_reports_an_unclassified_name_from_a_fixture_toolkit(self) -> None:
+        import json
+        import subprocess
+        import sys
+        with tempfile.TemporaryDirectory() as name:
+            toolkit = Path(name)
+            (toolkit / 'src').mkdir()
+            (toolkit / 'src' / 'a.c').write_text(
+                'getenv("RECOMP_BRAND_NEW");\n', encoding='utf-8')
+            result = subprocess.run(
+                [sys.executable, '-X', 'utf8',
+                 str(ROOT / 'scripts' / 'check-override-drift.py'),
+                 '--toolkit', str(toolkit), '--json'],
+                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        findings = json.loads(result.stdout)['findings']
+        self.assertTrue(any(f['reason'] == 'unclassified_override'
+                            and 'RECOMP_BRAND_NEW' in f['detail'] for f in findings),
+                        findings)
+
+    def test_the_real_toolkit_has_no_unclassified_names(self) -> None:
+        if not drift.TOOLKIT.is_dir():
+            self.skipTest('no sibling toolkit checkout')
+        names = drift.read_names(drift.source_files())
+        doc = (ROOT / 'docs' / 'jsrf-run-profiles.md').read_text(encoding='utf-8')
+        classifier = (ROOT / 'scripts' / 'jsrf_run_profile.py').read_text(encoding='utf-8')
+        self.assertEqual(drift.unclassified(names, doc, classifier), [])
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

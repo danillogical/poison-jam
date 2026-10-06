@@ -205,6 +205,7 @@ if(BUILD_TESTING)
         ENVIRONMENT "RECOMP_APU_TRACE=1;RECOMP_APU_PWRITE_WATCH=1"
         PASS_REGULAR_EXPRESSION "AC-PWRITE events=2 in_image_i=1 above_image_i=1 ngp_skipped=0 invalid=0")
     add_test(NAME jsrf_gpu_inspection COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_gpu_inspection.py)
+    add_test(NAME jsrf_logq COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_logq.py)
     add_test(NAME jsrf_fcmov_clamp COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_fcmov_clamp.py)
     add_test(NAME jsrf_recovery_span_ownership COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_recovery_span_ownership.py)
     # Stack-depth CFG validation over the recovered manifest.  Registered because

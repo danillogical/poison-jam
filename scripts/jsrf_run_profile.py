@@ -44,6 +44,9 @@ PAD_PRESS = 'RECOMP_PAD_PRESS'
 KMEM_LEGACY = 'RECOMP_KMEM_LEGACY'
 NV2A_ACTIONS = 'RECOMP_NV2A_ACTIONS'
 GUEST_SERIAL = 'RECOMP_GUEST_SERIAL'
+NV2A_ADMIT_UNKNOWN = 'RECOMP_NV2A_ADMIT_UNKNOWN'
+WORKERS = 'RECOMP_WORKERS'
+GP_INPUT_PERTURB = 'RECOMP_APU_GP_INPUT_PERTURB'
 
 # Retired semantic overrides: names that once changed guest-visible behavior,
 # whose implementation was deliberately deleted, and which active policy still
@@ -429,6 +432,11 @@ def classify_settings(entries: Any) -> dict[str, Any]:
         # Serialised guest mode (toolkit 179439b, 2026-09-30) replaces the scheduling
         # model itself and lets a waiter overrun the lock; presence alone is enough.
         (GUEST_SERIAL, 'runs one guest thread at a time with bounded-wait overruns when present'),
+        # Discovery and bisecting switches: unknown NV2A methods are admitted as captured
+        # state (ledger L44) and worker routines can run inline, which may deadlock.
+        (NV2A_ADMIT_UNKNOWN, 'admits NV2A methods missing from the table as captured state when present (ledger L44)'),
+        (GP_INPUT_PERTURB, 'substitutes the GP DSP mixbuffer and peripheral inputs when present'),
+        (WORKERS, 'changes the worker model (inline workers may deadlock) when present'),
     ):
         if name.casefold() in values:
             active.append(f'{name} {reason}')

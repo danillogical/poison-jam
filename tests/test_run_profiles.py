@@ -217,6 +217,17 @@ class ProfileClassifierTests(unittest.TestCase):
                         classify_settings(settings(RECOMP_GPU_ACK='0', **{name: value}))[
                             'classification'], EXPLORATORY)
 
+    def test_unknown_method_admission_and_worker_mode_are_exploratory(self):
+        """Admitted-unknown NV2A methods are not executed; inline workers change semantics."""
+        for name in ('RECOMP_NV2A_ADMIT_UNKNOWN', 'RECOMP_WORKERS'):
+            for value in ('', '0', '1', 'inline'):
+                with self.subTest(name=name, value=value):
+                    result = classify_settings(
+                        settings(RECOMP_GPU_ACK='0', **{name: value}))
+                    self.assertEqual(result['classification'], EXPLORATORY)
+                    self.assertTrue(any(name in reason for reason in result['reasons']),
+                                    result['reasons'])
+
     def test_upstream_capability_switches_stay_strict(self):
         """Real capability or observation, not a faked answer."""
         for name in ('RECOMP_ASYNC_IO', 'RECOMP_USB_HC', 'RECOMP_USB_NDP',

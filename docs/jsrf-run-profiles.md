@@ -55,6 +55,7 @@ The classifier follows each runtime's actual semantics:
 | `RECOMP_DSP_ACK`, `RECOMP_POKE`, `RECOMP_FORCE_RETURN`, `RECOMP_PAD_PRESS` | Upstream v0.12 bring-up switches (toolkit `2925f0b`); see §"Synthetic completion". | Must be absent. Presence is exploratory whatever the value, including values the runtime would parse as nothing. |
 | `RECOMP_KMEM_LEGACY`, `RECOMP_NV2A_ACTIONS` | Toolkit fork fixes `db96e30..2a349c8` (2026-09-28); see §"Legacy and unadmitted behaviour". | Must be absent. Presence is exploratory whatever the value. |
 | `RECOMP_GUEST_SERIAL` | Serialised guest mode (toolkit `179439b`, 2026-09-30); see §"Legacy and unadmitted behaviour". | Must be absent. Presence is exploratory whatever the value. |
+| `RECOMP_NV2A_ADMIT_UNKNOWN`, `RECOMP_WORKERS` | NV2A unknown-method admission (ledger L44) and the worker model; see §"Legacy and unadmitted behaviour". | Must be absent. Presence is exploratory whatever the value. |
 
 Environment names are compared case-insensitively, as on Windows. Duplicate
 spellings of one setting are `UNKNOWN`; do not convert a list of settings into a
@@ -88,7 +89,7 @@ the exception defined next.
 
 The bare minimum is pragmatic: the project takes the path of least resistance to the
 title screen and then the rest of the slice. For **bare-minimum milestones**
-(`plan-jsrf-bare-minimum.md` §1 and §8):
+(`plan-jsrf-bare-minimum.md`, "Definition of done" and "Milestones"):
 
 - An **exploratory** run may satisfy the milestone, provided every path the result relies
   on that is not *emulated* or *translated* — every synthetic-completion switch, stub,
@@ -163,14 +164,18 @@ exploratory.
 ### Legacy and unadmitted behaviour — exploratory by presence
 
 Added with the owner-directed toolkit fixes `db96e30..2a349c8` (2026-09-28;
-`docs/jsrf-technical-record.md` §7). Neither is synthetic completion, and neither can support
-a strict claim.
+`docs/jsrf-technical-record.md` §7) and later switches that change guest-visible behaviour without
+modelling hardware. Some let work complete that the model does not perform (`RECOMP_NV2A_ADMIT_UNKNOWN`
+advances GET past methods it does not execute), and none can support a strict claim.
 
 | Override | What it does | Why it cannot satisfy acceptance |
 |---|---|---|
 | `RECOMP_KMEM_LEGACY` | Restores the kernel memory semantics the fixes replaced: `NtFreeVirtualMemory` always failing, reservation base hints ignored, commit-only calls succeeding anywhere, contiguous frees and oversized heap reuse as before. | It exists only to A/B the fix. The old semantics are known wrong, so a run with them measures the defect, not the title. |
 | `RECOMP_GUEST_SERIAL` | Lets one host thread run guest code at a time and runs the GPU ISR, DPCs and timer DPCs at tick checkpoints, deferred while the guest's IRQL blocks them (compatibility ledger L34). `RECOMP_GUEST_SERIAL_TIMEOUT_MS` sets the bounded wait. | It replaces the scheduling model, and a waiter that times out runs anyway, so a run mixes serialised and concurrent execution; `[GSERIAL]` counts the overruns. A bare-minimum milestone may rely on it with L34 listed. |
 | `RECOMP_NV2A_ACTIONS` | Arms NV2A behaviour the strict model otherwise lacks: semaphore release (`0x1D70`), the software-method trap (NOP with a non-zero parameter), and the `FLIP_STALL` hold. | Modelled device behaviour that has **not been admitted** under §"Unconditional modeled hardware causes"; the evidence for admission is recorded in the toolkit's `docs/technical/nv2a-action-methods.md`. Until the owner admits it (it would then become unconditional and this switch would be retired), a run with it is exploratory. |
+| `RECOMP_NV2A_ADMIT_UNKNOWN` | Discovery switch (ledger L44); the runtime acts only on the exact value `1`. A method the table does not list, on a class the table knows, is captured as state and handed to the consumer instead of rejecting the walk. It is **not executed**. | The walk no longer stops at a method the strict model rejects, so the guest proceeds on a stream the strict run would not have accepted. The run record must list the admitted methods from the `[PFIFO] admit-unknown` lines, and no claim about an admitted method's behaviour follows. |
+| `RECOMP_WORKERS` | `inline` runs a title's worker routines on the calling thread instead of spawning one (toolkit `src/kernel/kernel_bridge.c:699`, `:8146`). | It changes the scheduling model, and a worker that blocks waiting for requests never returns, so the run may deadlock. A bisecting tool for separating a concurrency bug from everything else, never acceptance evidence. |
+| `RECOMP_APU_GP_INPUT_PERTURB` | `zero`, `max` or `prng[:seed]`: substitutes the values the GP DSP reads from the mixbuffer and peripheral inputs (toolkit `src/apu/apu_watch.c:145`); the toolkit logs `[GPPERTURB]`. | Substituted inputs are synthesised data, so a run measures the DSP's response to a control, not the title. Discovery instrumentation only. |
 
 ### Feature enablement — real capability, not a bypass
 
@@ -183,6 +188,8 @@ a strict claim.
 | `RECOMP_USB_HC`, `RECOMP_USB_NDP` | Upstream v0.12: opt-in OHCI host-controller features and port count. |
 | `RECOMP_ASYNC_IO` | Upstream v0.12 (`991ff12`, `517682e`): reads on handles opened asynchronous return pending and complete later, as the console does. Both settings are model behaviour; runs with and without it are not a single-variable comparison with each other. |
 | `RECOMP_KEYBOARD` | Upstream v0.12: the host keyboard stands in for a pad. Real host input, not synthesised. |
+| `RECOMP_USB_PORT` | Which OHCI root-hub port the emulated pad arrives on (`0` or `1`; toolkit `src/usb/ohci.c:928`), which decides the controller slot XAPI assigns. Selects where a real device appears; synthesises no input. |
+| `RECOMP_APU_MIXDOWN_ALL` | Selects the host monitor mixdown of the APU mixbins (default wide, `2` for the earlier even/odd fold; toolkit `src/apu/apu_mixdown.c:62`). Writes only the host audio monitor buffer, no guest state. |
 | `RECOMP_VP` | BearddOddity pushbuffer executor (toolkit merge `a253876`): vertex-program batches are interpreted unless the value is `0`. Read only by the executor under `RECOMP_PB_EXEC`. The legacy feed required the GPU-ack gate; Architecture A (toolkit `a71f937`) uses the owner commit consumer independently of that gate. Profile classification rules are unchanged. |
 
 **Enabling a feature does not turn stub answers into modelled ones.** A claim is only
@@ -235,7 +242,7 @@ once a minute while it does not, starting AFTER_S seconds after the window threa
 first sample; no guest write), `RECOMP_WATCH`, `RECOMP_WATCH_RAW`; from the 2026-09-28 fork fixes:
 `RECOMP_FFP_TRACE` and `RECOMP_TRACE_FLIP` (executor tracing), and `RECOMP_GUEST_METER` (counts host
 threads inside lifted guest code; changes no guest state or scheduling); from 2026-09-30:
-`RECOMP_RDATA_GUARD` (reports stores into read-only XBE sections and lets each complete, ledger L32)
+`RECOMP_PB_EXEC_VERBOSE` (executor logging, `nv2a_pb_exec.c:61`); `RECOMP_WATCHDOG_SECS` (after N seconds a watchdog thread dumps registers and recent indirect calls and exits the process, `xbox_memory_layout.c:2170`; it only ends the run); `JSRF_TRACE_A2H_DR`, `JSRF_TRACE_A2H_SLOT` and `JSRF_TRACE_A2H_SLOTW` (A2h slot/alias write witnesses; off is inert and the handler changes only the faulting thread's own single-step state); `RECOMP_APU_DMA_DESC_TRACE`, `RECOMP_APU_GP_B9_TRACE`, `RECOMP_APU_GP_DECODE` and `RECOMP_APU_PWRITE_WATCH` (GP DSP trace files, each with an optional `..._FILE` path name: `RECOMP_APU_DMA_DESC_TRACE_FILE`, `RECOMP_APU_GP_B9_TRACE_FILE`, `RECOMP_APU_PWRITE_WATCH_FILE`); and the literal `JSRF_FATAL`, which is not an environment variable but a substring the kernel bridge looks for in a created path to dump the guest stack (ledger L41); `RECOMP_RDATA_GUARD` (reports stores into read-only XBE sections and lets each complete, ledger L32)
 and `RECOMP_READ_DIRECT` (reads files straight into guest memory, as before the bounce buffer, L29). `RECOMP_PB_WRAP_TRACE` is no
 longer read: the executor merge replaced the wrap scan it traced.
 

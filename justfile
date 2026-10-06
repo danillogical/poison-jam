@@ -11,6 +11,7 @@
 #   just regen          full translation pass (regenerates src/recomp/gen)
 #   just strict-run     strict-profile guest run (RECOMP_GPU_ACK=0 is set FOR you)
 #   just explore-run    exploratory-profile guest run
+#   just title-run      exploratory title-path run with its four switches set
 #   just probe          bounded fixture-profile probe run
 #   just check          every repository checker
 #   just ttd-record     WinDbg TTD recording of one strict run (T1)
@@ -21,6 +22,7 @@
 #   just secret-audit   scan reachable Git blobs for secret-shaped content
 #   just symbols        XDK symbol database from the original XBE (T2)
 #   just logq           DuckDB-backed log queries (T8)
+#   just gpu-report     decode a run's pending pushbuffer, name what the walk rejects
 #
 # Two host facts this file exists to stop rediscovering:
 #
@@ -69,6 +71,12 @@ strict-run label="strict":
 # Exploratory-profile guest run; labels it, adds no override.
 explore-run label="explore":
     {{python}} -X utf8 scripts/run-jsrf.py --seconds 5 --label {{label}} --profile exploratory
+
+# The title-path exploratory run. It sets the four switches every title-path run
+# since g07 relied on, instead of inheriting them from the shell: run f8 lost
+# them that way and its result was not comparable. List the ledger IDs in the record.
+title-run label="title" seconds="300":
+    $env:RECOMP_APU_TRAP = "1"; $env:RECOMP_PB_EXEC = "1"; $env:RECOMP_FB_WINDOW = "1"; $env:RECOMP_FB_PRESENT_DUMP_EVERY = "10"; {{python}} -X utf8 scripts/run-jsrf.py --seconds {{seconds}} --label {{label}} --profile exploratory
 
 # Bounded probe run (fixture profile).
 probe name label="probe":
@@ -215,3 +223,7 @@ symbols:
 # DuckDB-backed log queries (T8).
 logq run query:
     {{python}} -X utf8 scripts/logq.py "{{run}}" --query {{query}}
+
+# Decode the pending pushbuffer of a run and name what the walk would reject.
+gpu-report run *args:
+    {{python}} -X utf8 scripts/jsrf_gpu.py "{{run}}" {{args}}

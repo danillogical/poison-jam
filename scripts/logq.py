@@ -30,6 +30,11 @@ after a format change shows up as a coverage drop rather than as a smaller numbe
   recovered       `[RECOVERED] 0x... returned; ABI verified (...)` and failures
   traces          `[TRACE] -> name (va) from=... esp=... eax=... ...`
   gmeter          `[GMETER] ...` when `RECOMP_GUEST_METER=1`
+  presents        `[FBPRESENT] t=Ns presents=N hash=H CHANGED|unchanged`
+  pfifo           one row per `[PFIFO]` decision line (submit, reject,
+                  still_rejecting, recovered, admit_unknown, budget_exhausted);
+                  `user_write` register traces are not decisions and are not rows
+  gpu_flips       `[GPU] flips N (...), flip stalls M`
 
 **Values are the log's, not the tool's.** Every table stores what the line says;
 `--query` runs the caller's SQL against them, and the saved queries under
@@ -79,6 +84,12 @@ TRACE = re.compile(
     r'\[TRACE\]\s+(->|<-)\s+(\S+)\s+\(0x([0-9A-Fa-f]+)\)\s+(.*)$')
 TRACE_FIELD = re.compile(r'(\w+)=([0-9A-Fa-f]+)')
 GMETER = re.compile(r'\[GMETER\]\s*(.*)$')
+FBPRESENT = re.compile(
+    r'\[FBPRESENT\]\s+t=(\d+)s\s+presents=(-?\d+)\s+hash=([0-9A-Fa-f]+)\s+(CHANGED|unchanged)')
+PFIFO = re.compile(
+    r'\[PFIFO\]\s+(submit|reject|still rejecting|recovered|admit-unknown|budget_exhausted)\b(.*)$')
+PFIFO_FIELD = re.compile(r'(\w+)=(\w+)')
+GPU_FLIPS = re.compile(r'\[GPU\]\s+flips\s+(\d+)\b.*?flip stalls\s+(\d+)')
 TAG = re.compile(r'^\s*\[([A-Z0-9_-]+)\]')
 
 
@@ -104,11 +115,37 @@ def read_lines(path: Path, run_name: str) -> list[tuple[int, str, str, str]]:
     return rows
 
 
+def _hex(fields: dict[str, str], key: str) -> int | None:
+    value = fields.get(key)
+    return int(value, 16) if value is not None else None
+
+
+def pfifo_row(run_name: str, lineno: int, kind: str, rest: str) -> tuple:
+    """(run, lineno, kind, diag, n, method, subch, param, at, get, put, class_id)."""
+    fields = dict(PFIFO_FIELD.findall(rest))
+    n = None
+    if kind == 'submit':
+        found = re.match(r'\s*#(\d+)', rest)
+        n = int(found.group(1)) if found else None
+    elif kind == 'still rejecting' and 'n' in fields:
+        n = int(fields['n'])
+    elif kind == 'recovered':
+        found = re.match(r'\s*after\s+(\d+)\s+rejections', rest)
+        n = int(found.group(1)) if found else None
+    subch = fields.get('subch')
+    return (run_name, lineno, kind.replace('-', '_').replace(' ', '_'),
+            fields.get('diag'), n, _hex(fields, 'method'),
+            int(subch) if subch is not None else None, _hex(fields, 'param'),
+            _hex(fields, 'at'), _hex(fields, 'get'), _hex(fields, 'put'),
+            _hex(fields, 'class'))
+
+
 def parse_all(rows: list[tuple[int, str, str, str]], run_name: str) -> dict[str, list[tuple]]:
     """Every tag-specific table, built in one pass."""
     kernel_calls, kmem_rejects, icalls, alias_icalls = [], [], [], []
     checkpoints, recovered, recovered_failed, traces, gmeter = [], [], [], [], []
     kmem_summary: list[tuple] = []
+    presents, pfifo, gpu_flips = [], [], []
 
     for _run, lineno, _tag, text in rows:
         match = KERNEL_CALL.search(text)
@@ -154,12 +191,25 @@ def parse_all(rows: list[tuple[int, str, str, str]], run_name: str) -> dict[str,
         match = GMETER.search(text)
         if match:
             gmeter.append((run_name, lineno, match.group(1)))
+        match = FBPRESENT.search(text)
+        if match:
+            t, count, digest, state = match.groups()
+            presents.append((run_name, lineno, int(t), int(count), digest,
+                             state == 'CHANGED'))
+        match = PFIFO.search(text)
+        if match:
+            pfifo.append(pfifo_row(run_name, lineno, match.group(1), match.group(2)))
+        match = GPU_FLIPS.search(text)
+        if match:
+            gpu_flips.append((run_name, lineno, int(match.group(1)),
+                              int(match.group(2))))
     return {
         'kernel_calls': kernel_calls, 'kmem_summary': kmem_summary,
         'kmem_rejects': kmem_rejects, 'icalls': icalls,
         'alias_icalls': alias_icalls, 'checkpoints': checkpoints,
         'recovered': recovered, 'recovered_failed': recovered_failed,
         'traces': traces, 'gmeter': gmeter,
+        'presents': presents, 'pfifo': pfifo, 'gpu_flips': gpu_flips,
     }
 
 
@@ -178,6 +228,12 @@ SCHEMA = (
     ('traces', '(run VARCHAR, lineno BIGINT, direction VARCHAR, name VARCHAR, '
                'va VARCHAR, caller VARCHAR, esp VARCHAR, eax VARCHAR)'),
     ('gmeter', '(run VARCHAR, lineno BIGINT, text VARCHAR)'),
+    ('presents', '(run VARCHAR, lineno BIGINT, t BIGINT, presents BIGINT, '
+                 'hash VARCHAR, changed BOOLEAN)'),
+    ('pfifo', '(run VARCHAR, lineno BIGINT, kind VARCHAR, diag VARCHAR, n BIGINT, '
+              'method BIGINT, subch BIGINT, param BIGINT, "at" BIGINT, get BIGINT, '
+              'put BIGINT, class_id BIGINT)'),
+    ('gpu_flips', '(run VARCHAR, lineno BIGINT, flips BIGINT, stalls BIGINT)'),
     ('lines', '(run VARCHAR, lineno BIGINT, tag VARCHAR, text VARCHAR)'),
 )
 

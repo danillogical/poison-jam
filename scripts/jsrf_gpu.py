@@ -5,11 +5,15 @@ This decoder is an offline diagnostic, not an implementation of PFIFO semantics.
 """
 import argparse
 import json
+import re
+import struct
+import subprocess
 from pathlib import Path
 from jsrf_dump import CaptureError, DumpMemory
 
 
-def decode_queue(read, begin, end, get, put, max_words=1024, max_packets=256):
+# Default budgets mirror the toolkit walk so budget_exhausted here means what it means there.
+def decode_queue(read, begin, end, get, put, max_words=4096, max_packets=1024):
     packets, consumed, visited, ret = [], 0, set(), None
     def result(status, detail=''):
         return dict(status=status, detail=detail, words_read=consumed, packets=packets)
@@ -72,6 +76,107 @@ def decode_queue(read, begin, end, get, put, max_words=1024, max_packets=256):
         return result('missing_memory',str(error))
 
 
+# Subchannel bindings when no SET_OBJECT is seen; see docs/jsrf-nv2a-method-inventory.md notes.
+DEFAULT_SUBCHANNEL_CLASS = {0: 0x97, 1: 0x39, 2: 0x9F, 3: 0x62}
+WALK_DIAGNOSTIC = dict(budget_exhausted='budget_exhausted', control_flow_loop='control_flow_loop',
+                       nested_call='control_flow_loop', reserved_opcode='reserved_opcode',
+                       invalid_target='invalid_target', unexpected_return='invalid_target',
+                       truncated_packet='truncated_packet', method_range_overflow='method_range_overflow',
+                       missing_memory='unreadable_pushbuffer', invalid_pointer='invalid_get_put')
+
+
+def load_method_table(path):
+    """Parse nv2a_method_table.c into {class_id: {method, ...}}."""
+    text = Path(path).read_text(encoding='utf-8', errors='replace')
+    classes = {m.group(1): int(m.group(2), 16) for m in re.finditer(r'#define\s+(\w+_CLASS)\s+(0x[0-9a-fA-F]+)u?', text)}
+    arrays = {m.group(1): {int(v, 16) for v in re.findall(r'0x[0-9a-fA-F]+', m.group(2))}
+              for m in re.finditer(r'g_methods_(\w+)\s*\[\s*\]\s*=\s*\{([^}]*)\}', text)}
+    table = {}
+    for m in re.finditer(r'case\s+(\w+_CLASS)\s*:\s*return\s+in_table\(\s*g_methods_(\w+)', text):
+        if m.group(1) in classes and m.group(2) in arrays:
+            table[classes[m.group(1)]] = arrays[m.group(2)]
+    return table
+
+
+def missing_methods(packets, table, bindings=DEFAULT_SUBCHANNEL_CLASS):
+    """Methods the toolkit walk would reject: SET_OBJECT (0x0000) rebinds, 0x0100 is exempt."""
+    bound, found = dict(bindings), {}
+    for packet in packets:
+        if 'method' not in packet: continue
+        sub, incrementing = packet['subchannel'], packet['kind'] == 'incrementing'
+        for i in range(packet['count']):
+            method = packet['method'] + (4*i if incrementing else 0)
+            if method == 0x0000: bound[sub] = None
+            elif method != 0x0100:
+                class_id = bound.get(sub)
+                if class_id is None: reason = 'binding_unknown'
+                elif method not in table.get(class_id, ()): reason = 'not_in_table'
+                else: continue
+                key = (sub, class_id, method)
+                if key in found: found[key]['occurrences'] += 1
+                else: found[key] = dict(va=packet['va'], subchannel=sub, class_id=class_id, method=method,
+                                        occurrences=1, reason=reason)
+            if not incrementing: break
+    return list(found.values())
+
+
+def predicted_walk_diagnostic(queue, missing):
+    """Name the walk's nv2a_submit_diagnostic() string for this decode; 'unknown' when not established."""
+    status = queue.get('status')
+    if missing: return 'unsupported_method'
+    diagnostic = WALK_DIAGNOSTIC.get(status)
+    if diagnostic: return diagnostic
+    return 'ok' if status in ('decoded', 'empty') and missing is not None else 'unknown'
+
+
+# NV2A_SUBMIT_* codes, toolkit src/nv2a/nv2a_core.c (nv2a_submit_diagnostic).
+SUBMIT_DIAGNOSTIC_NAMES = {
+    0: 'ok', 1: 'unmapped_pushbuffer', 2: 'unreadable_pushbuffer', 3: 'reserved_opcode',
+    4: 'truncated_packet', 5: 'budget_exhausted', 6: 'control_flow_loop', 7: 'invalid_target',
+    8: 'method_range_overflow', 9: 'sink_capacity', 10: 'invalid_get_put',
+    11: 'unsupported_method', 12: 'invalid_handle', 13: 'semaphore_fault',
+    14: 'software_method_trap', 15: 'flip_stall', 16: 'held_software_method',
+    17: 'held_flip_stall', 18: 'software_method_unchecked'}
+SUBMIT_STATE_FIELDS = ('generation', 'diag', 'method', 'subchannel', 'param', 'at', 'get',
+                       'put', 'successes', 'rejections', 'consecutive_rejections',
+                       'admitted_unknown')
+SUBMIT_STATE_SIZE = 4 * len(SUBMIT_STATE_FIELDS)
+
+
+def decode_submit_state(raw):
+    """Decode g_nv2a_submit_state (NV2ASubmitState: 12 little-endian u32); extra bytes are ignored."""
+    if len(raw) < SUBMIT_STATE_SIZE:
+        raise ValueError(f'submit state needs {SUBMIT_STATE_SIZE} bytes, got {len(raw)}')
+    state = dict(zip(SUBMIT_STATE_FIELDS, struct.unpack_from('<12I', raw)))
+    state['diag_name'] = SUBMIT_DIAGNOSTIC_NAMES.get(state['diag'], 'unknown')
+    state['torn'] = bool(state['generation'] & 1)   # odd while a walk is writing it
+    return state
+
+
+def read_submit_state(folder, warnings):
+    """Submit state from the dump through the archived linker map, or None with a warning."""
+    folder = Path(folder)
+    map_path = folder/'jsrf_recomp.map'
+    if not (folder/'process.dmp').exists() or not map_path.exists():
+        warnings.append('Submit state unavailable: needs process.dmp and jsrf_recomp.map in the archive.')
+        return None
+    try:
+        with DumpMemory(folder) as memory:
+            raw = memory.host_symbol(map_path, 'g_nv2a_submit_state', SUBMIT_STATE_SIZE)
+        return decode_submit_state(raw)
+    except (CaptureError, OSError, ValueError, struct.error) as error:
+        warnings.append(f'Submit state unavailable (g_nv2a_submit_state; a build before 2026-10-06 lacks it): {error}')
+        return None
+
+
+def toolkit_revision(toolkit):
+    try:
+        done = subprocess.run(['git', '-C', str(toolkit), 'rev-parse', '--short', 'HEAD'],
+                              capture_output=True, text=True, timeout=10)
+        return done.stdout.strip() or None if done.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError): return None
+
+
 def load_snapshots(folder):
     path = Path(folder)/'gpu-snapshots.jsonl'
     if not path.exists(): return []
@@ -82,8 +187,9 @@ def load_snapshots(folder):
     return snapshots
 
 
-def analyze(folder):
+def analyze(folder, toolkit=None):
     folder = Path(folder)
+    toolkit = Path(toolkit) if toolkit else Path(__file__).resolve().parents[2]/'xboxrecomp'
     snapshots = load_snapshots(folder)
     if not snapshots: return dict(status='unavailable',warnings=['No frozen GPU snapshots in this archive.'])
     final = snapshots[-1]
@@ -95,11 +201,16 @@ def analyze(folder):
     unreadable = [name for name,value in regs.items() if value is None]
     if unreadable: warnings.append('Unreadable registers: '+', '.join(unreadable))
     observations=[]
+    def norm(value):
+        # A pointer at the ring end is the ring start.
+        if value is not None and device.get('push_end') is not None and device.get('push_begin') is not None \
+                and 0x80000000+value==device['push_end']: return device['push_begin']-0x80000000
+        return value
     for snap in snapshots:
         r=snap['registers']
         observations.append(dict(index=snap['index'],tag=snap['tag'],tick_ms=snap['tick_ms'],
                                  reason=snap['reason'],tid=snap['tid'],get=r.get('USER_DMA_GET'),put=r.get('USER_DMA_PUT')))
-    pairs=[(o['get'],o['put']) for o in observations if o['get'] is not None and o['put'] is not None]
+    pairs=[(norm(o['get']),norm(o['put'])) for o in observations if o['get'] is not None and o['put'] is not None]
     progress='insufficient_observations'
     if len(pairs)>=2:
         progress = 'pointer_changes_observed' if len(set(pairs))>1 else 'pending_unchanged' if pairs[-1][0]!=pairs[-1][1] else 'equal_unchanged'
@@ -112,11 +223,20 @@ def analyze(folder):
             with DumpMemory(folder) as memory:
                 queue=decode_queue(memory.word,device.get('push_begin'),device.get('push_end'),
                                    0x80000000+get,0x80000000+put)
+    table_path = toolkit/'src'/'nv2a'/'nv2a_method_table.c'
+    method_table = dict(path=str(table_path), toolkit_rev=toolkit_revision(toolkit))
+    try: table = load_method_table(table_path)
+    except OSError:
+        table = None
+        warnings.append(f'Toolkit method table not found at {table_path}; unsupported methods were not checked.')
+    missing = None if table is None else missing_methods(queue.get('packets', []), table)
+    submit_state = read_submit_state(folder, warnings)
     if progress == 'pending_unchanged':
         warnings.append('Pending queue unchanged across observed stops; inspect CPU waiter stacks. Unobserved intermediate changes are possible.')
     return dict(version=1,status='captured',snapshot_count=len(snapshots),fixture=final.get('fixture'),
                 ack_enabled=final.get('ack_enabled'),registers=regs,device=device,queue=queue,
-                progress=progress,observations=observations,warnings=warnings)
+                progress=progress,observations=observations,warnings=warnings,
+                missing_methods=missing,predicted_diagnostic=predicted_walk_diagnostic(queue,missing),method_table=method_table,submit_state=submit_state)
 
 
 def markdown(report):
@@ -124,7 +244,8 @@ def markdown(report):
     lines += ['- '+warning for warning in report.get('warnings',[])]
     if report['status']!='captured': return '\n'.join(lines)+'\n'
     lines += ['',f"Observed queue history: **{report['progress']}**.",
-              f"Final pending queue decode: **{report['queue']['status']}**.",'',
+              f"Final pending queue decode: **{report['queue']['status']}**.",
+              f"Predicted walk diagnostic: **{report['predicted_diagnostic']}**.",'',
               '| Snapshot | Reason | Thread | Tick (ms) | GET | PUT |','|---|---|---|---|---|---|']
     def hx(value): return 'unavailable' if value is None else f'0x{value:08X}'
     for row in report['observations']:
@@ -136,7 +257,19 @@ def markdown(report):
     for packet in report['queue'].get('packets',[]):
         lines.append(f"- {hx(packet['va'])}: {packet['kind'] if 'kind' in packet else 'incomplete'}; header {hx(packet['header'])}" +
                      (f"; method {hx(packet['method'])}, count {packet['count']}" if 'method' in packet else ''))
-    lines += ['',report['queue'].get('detail','')]
+    state = report.get('submit_state')
+    if state is None: lines += ['', 'Submit state: unavailable.']
+    else:
+        lines += ['', f"Submit state: last walk **{state['diag_name']}**; {state['consecutive_rejections']} consecutive rejection(s); "
+                      f"method {hx(state['method'])}, subchannel {state['subchannel']}, param {hx(state['param'])}; "
+                      f"torn: {'yes' if state['torn'] else 'no'}."]
+    lines += ['',report['queue'].get('detail',''),'','## Methods in the pending stream the table lacks','']
+    missing = report['missing_methods']
+    if missing is None: lines.append('Method table unavailable; unsupported methods were not checked.')
+    elif not missing: lines.append('None.')
+    else:
+        lines += ['| Subchannel | Class | Method | First VA | Occurrences |','|---|---|---|---|---|']
+        lines += [f"| {m['subchannel']} | {'unknown' if m['class_id'] is None else hx(m['class_id'])} | {hx(m['method'])} | {hx(m['va'])} | {m['occurrences']} |" for m in missing]
     return '\n'.join(lines)+'\n'
 
 
@@ -144,12 +277,13 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('run',type=Path)
     parser.add_argument('--write',action='store_true',help='write gpu-report.json and gpu-report.md into the archive')
+    parser.add_argument('--toolkit',type=Path,help='toolkit checkout holding src/nv2a/nv2a_method_table.c (default: sibling xboxrecomp)')
     parser.add_argument('--compare',type=Path,help='compare final register storage against another archive')
     args=parser.parse_args()
     try:
-        report=analyze(args.run)
+        report=analyze(args.run,args.toolkit)
         if args.compare:
-            other=analyze(args.compare)
+            other=analyze(args.compare,args.toolkit)
             report['register_changes']={key:dict(before=other.get('registers',{}).get(key),after=value)
                                         for key,value in report.get('registers',{}).items()
                                         if other.get('registers',{}).get(key)!=value}
