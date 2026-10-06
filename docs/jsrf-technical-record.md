@@ -2265,5 +2265,47 @@ counting, with the commented-tuple case as a control and the two real archived c
 8927 rows) as end-to-end controls. The structural fix — deriving the count with `sizeof` — is
 unaffected and remains the primary defence.
 
+**A latent hazard that is NOT a live defect, and how the difference was settled.** Ten addresses have
+both a recovered body (`sub_<va>` in `recovered.c`, with a `case` in `jsrf_lookup_recovered`) and an
+alias shim in the generated dispatch table that routes them to a **different** symbol:
+
+```text
+0x00027B00 -> recomp_alias_00027B00 -> sub_00027CD0
+0x0002C360 -> recomp_alias_0002C360 -> sub_0002D1E0
+0x00032610 -> recomp_alias_00032610 -> sub_00033800
+0x00032C70 -> recomp_alias_00032C70 -> sub_00033800
+0x00033C50 -> recomp_alias_00033C50 -> sub_000355B0
+0x00034200 -> recomp_alias_00034200 -> sub_000355B0
+0x000348A0 -> recomp_alias_000348A0 -> sub_000355B0
+0x00035640 -> recomp_alias_00035640 -> sub_000360D0
+0x00037550 -> recomp_alias_00037550 -> sub_00038530
+0x0014FEF0 -> recomp_alias_0014FEF0 -> sub_00150231
+```
+
+A spelling-level census of the archive suggests these shims fire *after* their recovery: 44
+`[ALIAS-ICALL]` lines name one of these ten targets across 28 runs, including runs whose commit is
+descended from the recovery. **That reading is wrong, and the way it was refuted is the point.**
+
+`RECOMP_ICALL` tries `recomp_lookup_manual` **first**, and that function returns
+`jsrf_lookup_recovered(va)`, which has a `case` for every recovered body. So once an address is
+recovered the shim is **unreachable**. The decisive test is not git ancestry (which only bounds the
+*commit*) but each run's **own archived `recovered.c`**, which is the artifact the run was built
+from:
+
+| firings where the run's own build already had the `case` | **0** |
+|---|---|
+| firings where the build did not yet have it | 44 |
+
+Every firing predates that address's recovery. So the class is **closed by recovery**, not live, and
+these ten shim tuples are a **latent hazard rather than a current defect**: they are dead code today,
+and they would become a wrong-body misdispatch only if the recovered `case` were ever removed while
+the tuple stayed.
+
+Two lessons, both already paid for elsewhere in this record. **A text search over archived logs is
+not evidence about which build produced them** — the `0x00032610`/f25 error was exactly that, and this
+is the same mistake in the opposite direction: a true-looking positive instead of a false one. And
+**ancestry bounds a commit, not an artifact**: `recovered.c` is untracked, so the only authority for
+what a run executed is the copy inside its own `source.zip`.
+
 
 

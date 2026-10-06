@@ -6,23 +6,27 @@ evolved and why.
 
 ## Status at last update
 
-Turn `title-004`. Toolkit `2cee914`; game `8e5b93a`, `2a1dbc9`. `just check` green; CTest 39/39;
-`test_run_profiles.py` 46 tests OK; `test_generation_provenance.py` 36 tests OK;
-`test_dispatch_table_size.py` 12 controls OK.
+Turn `title-004`. Toolkit `2cee914`; game `59f3ebf`. `just check` green; CTest **40/40**;
+`test_run_profiles.py` 46 OK; `test_generation_provenance.py` 36 OK;
+`test_dispatch_table_size.py` 15 OK; `test_stop_chain.py` 25 OK;
+`test_recovery_span_ownership.py` 10 OK. Both repositories pushed and clean.
 
-**A1 and A2 are done.** **The title screen is NOT reached and M15 is NOT claimed.** Presents still
-freeze at exactly 1000 with the disclaimer hash `5bdaea576b8509f5` unchanged.
+**The title screen is NOT reached and M15 is NOT claimed.** Presents still freeze at exactly 1000
+with the disclaimer hash `5bdaea576b8509f5` unchanged.
 
 | # | Item | State |
 |---|---|---|
 | A1 | checkout rename, operational | **DONE** — `2a1dbc9`. 26 strict archives recovered from 0. |
-| A2 | dispatch count/array invariant | **DONE** — `8e5b93a` + toolkit `2cee914`. Derived count, gate, 12 controls. |
+| A2 | dispatch count/array invariant | **DONE** — `8e5b93a` + toolkit `2cee914`. Derived count, gate, 15 controls. |
 | A2b | `--write` erasing the provenance history | **DONE** — fixed inside `8e5b93a`; 4 controls + byte-identical round-trip controls. |
-| A3 | `0xB06E0` | open — folded into the under-wide repair batch |
-| D7 | stop 22 `0x48DB0` | open — same batch |
-| A4 | certified-continuation gate | open — see PLAN_CHANGE |
-| B5 | structural misdispatch census | open |
-| C6 | exercised evidence for `0xB5EB0` | open — deferred until after the batch |
+| A3 | `0xB06E0` | **DONE** — `892dd1e`. End `0xB09E0`; zero trap stubs; counts erratum in TR §18. |
+| A4 | certified-continuation record gate | **DONE** — `b1aca89`, ledger L43, 25 controls, both review holes closed in `0763de8`. |
+| D7 | stop 22 `0x48DB0` | **DONE and RUNTIME-CONFIRMED** — `892dd1e`, confirmed by f9 (`0445a80`). |
+| C6 | exercised evidence for `0xB5EB0` | **DONE — CONFIRMED by f9.** Two runs had missed it; the third executed it. |
+| F7b | stop 25 `0xAE655` (census-predicted) | **DONE** — `0445a80`. First stop the census called in advance. |
+| F7c | the certified under-wide class | **DONE** — `59f3ebf`. 152 spans widened; SUSPICIOUS 135→74. |
+| B5 | structural misdispatch census | open — the alias-shim class, kept separate |
+| — | the 7 entries whose `stack_args` disagrees with certified `N` | open — a separate finding, not folded into an extent repair |
 
 ## PLAN_CHANGE
 
@@ -150,35 +154,81 @@ as one. The same check shows g07 does not descend from `0xB5EB0`'s repair either
 only ever have been `NOT_EXERCISED` from that run. An unprovable revision is reported UNKNOWN, never
 as refuted.
 
-### The batch's runtime state: NOT EXERCISED, and one of my own runs was methodologically wrong
+### The batch's runtime state: both stops CONFIRMED by f9
 
 Run **f8** (`20261006-002553-667-f8-underwide-batch`, exploratory, 423 s, `diagnostic_deadline`)
 reached `guest_entry` with **zero** `Failed to resolve`, **zero** ABI failures and **zero**
-alias-misdispatch lines. It exercised **none** of the repaired addresses (`0xB5EB0`, `0x48DB0`,
-`0xB06E0`, `0x48690`, `0x154540`). So the batch is **NOT runtime-confirmed**, and the honest record
-is NOT EXERCISED — the same discipline g06 required.
+alias-misdispatch lines, and exercised **none** of the repaired addresses. On its own that would have
+been NOT EXERCISED.
 
-**But f8 is not a comparable run, and that is my error, not the code's.** It produced only **195**
+**But f8 is not a comparable run, and that was my error, not the code's.** It produced only **195**
 ABI-verified returns against g07's and g08's **546**, never reached a single `[FBPRESENT]` line, and
 its last returns are an entirely different set. The cause is measured, not inferred: g07 and g08
 carry `RECOMP_APU_TRAP=1`, `RECOMP_PB_EXEC=1`, `RECOMP_FB_WINDOW=1` and
 `RECOMP_FB_PRESENT_DUMP_EVERY=10` in their recorded settings, and **f8 carries none of them** —
 `just explore-run` adds no override, and these are inherited from the environment. So f8 is not a
-regression, and it is not evidence against the repair; it is a different, much earlier path. A
-comparable run is required before any statement about the batch can be made, and the next run sets
-the same four variables.
+regression and not evidence against the repair; it is a different, much earlier path. This is the
+differential-debugging rule applied to a *run* rather than a binary: compare against what the earlier
+run actually had, not against what it is remembered to have had.
 
-This is the differential-debugging rule applied to a *run* rather than a binary: compare against
-what the earlier run actually had, not against what it is remembered to have had.
+**The comparable run resolves it.** f9 (`20261006-003520-133-f9-underwide-batch-pb`, exploratory,
+257 s, `unhandled_exception`, 550 returns, presents frozen at exactly 1000 with the disclaimer hash
+`5bdaea576b8509f5` unchanged) is the first run ever to execute either repaired address:
+
+```text
+[RECOVERED] 0x00048DB0 returned; ABI verified (ESP/EBX/ESI/EDI)
+[RECOVERED] 0x000B5EB0 returned; ABI verified (ESP/EBX/ESI/EDI)
+```
+
+So **stop 21 `0xB5EB0` and stop 22 `0x48DB0` are RUNTIME-CONFIRMED**, and `0xB5EB0` — repaired from
+the bytes and then missed by two consecutive runs — is finally discharged. f9 then stopped on
+`[ICALL] Failed to resolve VA 0x000AE655`, which the census had already predicted (F7b).
 
 ## PLAN_CHANGE
 
-- **Changed:** the runtime verification for the repair batch is re-run with the canonical
-  exploratory override set, and f8 is recorded as methodologically non-comparable rather than as a
+- **Changed:** the runtime verification was re-run with the canonical exploratory override set after
+  f8 proved non-comparable, and f8 is recorded as methodologically non-comparable rather than as a
   clean result.
 - **Evidence:** the four overrides are present in g07's and g08's recorded `settings` and absent from
   f8's, measured from `metadata.json`; f8 produced 195 returns and no presents against 546 and 1000.
+  f9 with those four set produced 550 returns and confirmed both stops.
 - **Why:** recording f8 as evidence for or against the batch would compare two different
-  configurations, which is exactly the single-variable error `docs/jsrf-run-profiles.md` warns
-  about. No claim is made from it in either direction.
+  configurations, which is exactly the single-variable error `docs/jsrf-run-profiles.md` warns about.
+  No claim is made from f8 in either direction, and the run that *is* comparable is cited instead.
+
+## F7c — the certified under-wide class
+
+152 spans widened to their real end in one validated batch (`59f3ebf`), each certified by a fully
+enumerated walk whose every exit is one `ret N` at depth 0. Five assertions guarded every write:
+widening only; instruction-boundary end; declared `stack_args` equals certified `N`; no other
+manifest start crossed; extended walk fully enumerated.
+
+**Eight candidates were skipped rather than guessed at**, and one of them is the strongest evidence
+that the assertions matter: `0x43EC0` would have swallowed the manifest start `0x44000` — the
+`0xB5EB0` lesson — and assertion 4 caught it mechanically. The other seven have a declared
+`stack_args` that disagrees with their certified `N`; that is a separate finding and is tracked as
+one rather than folded into an extent repair.
+
+| gate | before | after |
+|---|---|---|
+| stack-depth SUSPICIOUS | 135 | **74** |
+| — CUT_EPILOGUE | 68 | **19** |
+| — FALL_OFF_END | 24 | **12** |
+| check-span-exits CUT-TARGET | 308 | **225** |
+| fatal trap-call sites in `recovered.c` | — | **0** |
+
+`KNOWN_OPEN` shrank 60 → 31, again exactly the measured set — and the stale-member control added
+earlier this turn is what caught the 29 that this batch repaired, by failing before the list was
+updated. That control has now paid for itself twice in one turn.
+
+## Remaining work, in order
+
+1. **The 7 `stack_args`/`N` disagreements** (`0x202A0`, `0x20420`, `0x204D0`, `0x34070`, `0x38460`,
+   `0x705E0`, `0x171B50`): a separate ABI finding, each needing its own evidence.
+2. **B5, the structural misdispatch census** of the 134 alias shims, on the Advisor's four
+   independent byte-derived axes (position, reachability, shape, evidence), keeping the
+   `OUTSIDE_OWNER` class separate — all four named cases (`0xE9A40`, `0x100AB0`, `0x1199C0`,
+   `0x13A340`) fall in it, so TR §12's "harmless mid-body label" reasoning covers at most the 75
+   `INSIDE` shims.
+3. **One more bounded run** to test F7c and reach the next stop.
 
