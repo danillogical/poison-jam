@@ -1553,3 +1553,42 @@ the measured axes and silently erases the hand-maintained `amendments` and `rege
 history; it dropped 34 amendments. They were re-attached from `HEAD`. A session that runs
 `--write` without noticing loses the provenance narrative, so this is recorded as a backlog item.
 
+## 11. The over-wide `tail_jump_alias` record is now the dominant stop class (2026-10-05)
+
+**Run g03 cleared `0x00094AB0` on an exercised path and immediately produced the same defect
+again.** Its log holds exactly one `[RECOVERED] 0x00094AB0 returned; ABI verified (ESP/EBX/ESI/EDI)`
+line — so the return is path-exercised, not merely present — and then stops at
+`[ICALL] Failed to resolve VA 0x000496E0`. That address appears in **no** earlier archived run, so
+it is a new stop rather than a re-observation.
+
+**The shape, measured twice now.** Both `0x94AB0` and `0x496E0` are complete functions with **no
+analysis-database entry of their own**, living inside an over-wide `tail_jump_alias` record:
+
+| address | swallowed by | its own body | exits | `stack_args` |
+|---|---|---|---|---|
+| `0x94AB0` | *nothing* — an unanalyzed gap `0x94AA3..0x95FC0` | `0x94AB0..0x95FB2` | 3 × plain `ret` at depth 0 | 0 |
+| `0x496E0` | `sub_00049520 [0x49520, 0x4A6F0)` | `0x496E0..0x497D6` | 1 × `ret 8` at depth 0 | 8 |
+
+`0x496E0`'s swallowing record overruns four other real functions: the manifest already owns
+`0x497E0`, `0x49A80`, `0x49E80` and `0x4A6C0` as separate entries, so the `0x49520` span is wrong
+for the same reason `0x139B30`'s was — it is an alias-parent extent, not a function extent.
+
+**Why the validator did not already flag `0x496E0`.** It is not in the manifest, and
+`check-stack-depth.py` validates manifest entries. The detector for this class is
+`scripts/check-table-targets.py`, which reports **120 candidates** and had already flagged
+`0x94AB0` as UNCOVERED. The actionable reading is that the next several stops are likely to come
+from that population and can be cleared from the bytes before spending a run — `0x496E0` was
+recovered, gated, regenerated, built and tested with no run at all, and only needs one to confirm.
+
+**The title screen is still not reached.** Presents stop at exactly 1000 in g03 as in every prior
+run, and the disclaimer hash `5bdaea576b8509f5` is unchanged throughout. The two newest stops are
+in code the disclaimer hold reaches, not in the presenter, so they do not yet bear on the
+1000-present ceiling; that ceiling remains the open question it was.
+
+**Two runs were lost to environment faults, recorded rather than hidden.** `g01` was killed by a
+tool interruption mid-run and left no `result.json`. `g02` then failed in 2.7 s at
+`[SAVE] root rejected: requested directory is not writable (winerror=5)` without reaching
+`guest_entry` — a stale-state artifact of the interrupted run, not a code regression; the
+save-root was verified writable by hand and `g03` ran normally. Neither loss is evidence about any
+code change, and neither is counted as a stop.
+

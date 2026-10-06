@@ -15,18 +15,18 @@
     "src/recomp/gen/recomp_stubs_recovery.c": "5897e497ad2f789241a9b2f95653023b306f3d4849a80406ca586ed7706d9bbb",
     "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
     "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-    "src/recomp/recovered/recovered.c": "822e82befa3fc7fe5efe290c3f0cfd66fc45937b4677433bac5cbf9983d261a1",
+    "src/recomp/recovered/recovered.c": "9e077203ca3c1f2034c3010f0729cf744b26af70628d0790cf3a357ea35483f8",
     "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-    "src/recomp/recovered/recovered_11c1_test.c": "ff12bef2b21ebe285b5d7c7aa5891c6120cf8e1c3ed76b5ee587eefb91dcce8b",
+    "src/recomp/recovered/recovered_11c1_test.c": "b443f854a9dc39c76032797aa015df39f57f32d29fef25548da720df2adbfad5",
     "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
   },
   "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
   "generators": {
     "project": {
       "dirty": true,
-      "revision": "abb86d4a4392f07df791c6351616ac4d900992d2",
+      "revision": "c1546c64a4f63de934e8d58ca3d4ec54a3511563",
       "state": "MEASURED",
-      "status_sha256": "fa81ee46337ed4ce1dd4854d32dab4e3625696cb7a0df78ac89c26cd5549f679"
+      "status_sha256": "6d2358f2391816ccc22c84040c7645ef546fd76af0c559c373bf003577ec798d"
     },
     "scripts/recover-functions.py": "c951fe5ed787253bd523d16502a231772197043b84a3b20e4c7b680b55c03847",
     "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
@@ -46,14 +46,14 @@
       "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
     },
     "config/manual-functions.json": {
-      "bytes": 102668,
+      "bytes": 102701,
       "present": true,
-      "sha256": "8359e4faec3973a562462ed7f74d829a2e3200114db63e123c72df30ebb3209a"
+      "sha256": "fa0527c773adfd5c00b6225e7ebf6b245609b6630e1c9e004b036200de83a4b2"
     },
     "config/recovered-functions.json": {
-      "bytes": 2915188,
+      "bytes": 2916536,
       "present": true,
-      "sha256": "709d6d08b345200eea4b70537dc4afd94409ebabf52293fe142178100dfe5f3a"
+      "sha256": "b5cb67e848379812f28195b985d4dffa7dca4549e6bb15f1e47115669a8610d9"
     },
     "config/recovery-unresolved.json": {
       "bytes": 7364,
@@ -91,9 +91,9 @@
       "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
     },
     "tools/disasm/output/functions.recovered.json": {
-      "bytes": 6105707,
+      "bytes": 6107249,
       "present": true,
-      "sha256": "1032f7941759dbce7898a66997646d50cb61319c85c5384b3a358deca579502a"
+      "sha256": "0861bb072ffab07ca8fe7aa61ed72c359930e32ceed7ca3ba4eca053052ae559"
     }
   },
   "known_unknowns": [],
@@ -165,8 +165,8 @@
       },
       "src/recomp/recovered/recovered.c": {
         "markers": {
-          "JSRF_ABI_CONTINUE": 9315,
-          "RECOMP_ABI_CALL": 10308,
+          "JSRF_ABI_CONTINUE": 9318,
+          "RECOMP_ABI_CALL": 10312,
           "RECOMP_GENERATED_CODE": 1,
           "g_seh_ebp": 6298
         },
@@ -174,8 +174,8 @@
       }
     },
     "totals": {
-      "JSRF_ABI_CONTINUE": 9315,
-      "RECOMP_ABI_CALL": 10316,
+      "JSRF_ABI_CONTINUE": 9318,
+      "RECOMP_ABI_CALL": 10320,
       "RECOMP_GENERATED_CODE": 5,
       "g_seh_ebp": 6304
     }
@@ -1383,6 +1383,46 @@
           "path": "src/recomp/recovered/recovered_11c1_test.c",
           "old_sha256": "62b39ea1af197d1631627b81ca358eac0826916a8ed16577ba6ef184ccbf7fa6",
           "new_sha256": "ff12bef2b21ebe285b5d7c7aa5891c6120cf8e1c3ed76b5ee587eefb91dcce8b"
+        }
+      ]
+    },
+    {
+      "kind": "input and generated output",
+      "date": "2026-10-05",
+      "cause": "`0x000496E0` recovered as `[0x000496E0, 0x000497D6)` with `stack_args 8`. Run 20261005-174422-643-g03-94ab0 cleared `0x00094AB0` (ABI-verified return, presents still stopping at exactly 1000) and then stopped on `[ICALL] Failed to resolve VA 0x000496E0` -- an address that appears in no earlier archived run, so it is a genuinely new stop rather than a re-observation. Like `0x00094AB0` it is a complete function with no analysis-database entry of its own, sitting inside the large `tail_jump_alias` record `sub_00049520 [0x49520, 0x4A6F0)` that overruns several real functions. Body by reachable CFG walk from the entry: 76 instructions, exactly one reachable exit, `ret 8` (`C2 08 00`) at `0x000497D1` reached at stack depth 0, no tail call, no fall-through and no unresolved transfer on the walk, so `stack_args = N - d = 8`. The end `0x000497D6` is the byte after that `ret`, followed by 10 NOPs and then the next manifest entry at `0x000497E0`. `recovered.c` 3105 -> 3106 functions; the regenerated wrapper checks `+12` and the body emits `esp += 12; return; /* ret 8 */`, which agree. `scripts/check-stack-depth.py` reports it PROVED, and `just check` plus the full CTest suite pass.",
+      "evidence": [
+        "run g03's log holds exactly one `[RECOVERED] 0x00094AB0 returned; ABI verified` line, so stop 17 was cleared on an exercised path",
+        "the same log's only `Failed to resolve` line is `0x000496E0`, and a search of all 122 archived `jsrf_run.log` files finds that address in g03 alone",
+        "one reachable exit `ret 8` at 0x000497D1 reached at depth 0; the depth-independent gating rule applies, so no callee summary is involved",
+        "the end boundary is byte-derived: 0x000497D1 `C2 08 00`, then NOPs, then the next manifest entry at 0x000497E0",
+        "the regenerated wrapper constant `+12` equals `4 + stack_args 8`, and the body emits `esp += 12; return; /* ret 8 */`",
+        "the previous amendment's `new_sha256` values are the prior state used here, so the pair cannot drift; the first attempt duplicated the twenty-repair cause text and was rewritten to record this recovery alone"
+      ],
+      "paths": [
+        {
+          "path": "config/recovered-functions.json",
+          "old_sha256": "709d6d08b345200eea4b70537dc4afd94409ebabf52293fe142178100dfe5f3a",
+          "new_sha256": "b5cb67e848379812f28195b985d4dffa7dca4549e6bb15f1e47115669a8610d9"
+        },
+        {
+          "path": "config/manual-functions.json",
+          "old_sha256": "8359e4faec3973a562462ed7f74d829a2e3200114db63e123c72df30ebb3209a",
+          "new_sha256": "fa0527c773adfd5c00b6225e7ebf6b245609b6630e1c9e004b036200de83a4b2"
+        },
+        {
+          "path": "tools/disasm/output/functions.recovered.json",
+          "old_sha256": "1032f7941759dbce7898a66997646d50cb61319c85c5384b3a358deca579502a",
+          "new_sha256": "0861bb072ffab07ca8fe7aa61ed72c359930e32ceed7ca3ba4eca053052ae559"
+        },
+        {
+          "path": "src/recomp/recovered/recovered.c",
+          "old_sha256": "822e82befa3fc7fe5efe290c3f0cfd66fc45937b4677433bac5cbf9983d261a1",
+          "new_sha256": "9e077203ca3c1f2034c3010f0729cf744b26af70628d0790cf3a357ea35483f8"
+        },
+        {
+          "path": "src/recomp/recovered/recovered_11c1_test.c",
+          "old_sha256": "ff12bef2b21ebe285b5d7c7aa5891c6120cf8e1c3ed76b5ee587eefb91dcce8b",
+          "new_sha256": "b443f854a9dc39c76032797aa015df39f57f32d29fef25548da720df2adbfad5"
         }
       ]
     }

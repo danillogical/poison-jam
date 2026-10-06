@@ -82,7 +82,27 @@ stayed green. **The gate passes with no baseline file at all.**
 | # | Stop / defect | Fix | Confirmed by |
 |---|---|---|---|
 | — | 20 entries declaring `stack_args 0` whose bodies end in `ret 4` (`ret 0x14` for `0x80028`) | each set to its body's own ret immediate | validator + independent 20/20 reproduction; no run needed — see below |
-| 17 | `[ICALL] Failed to resolve VA 0x00094AB0` | recovered `0x94AB0..0x95FB2`, `stack_args 0` | g01 run (see the run record) |
+| 17 | `[ICALL] Failed to resolve VA 0x00094AB0` | recovered `0x94AB0..0x95FB2`, `stack_args 0` | **g03**: `[RECOVERED] 0x00094AB0 returned; ABI verified` |
+| 18 | `[ICALL] Failed to resolve VA 0x000496E0` | recovered `0x496E0..0x497D6`, `stack_args 8` | **next stop, not yet fixed** — found by g03 |
+
+**Run g03 (`20261005-174422-643-g03-94ab0`, exploratory, 246 s).** It is the first run to
+exercise `0x94AB0`: the log holds exactly one `[RECOVERED] 0x00094AB0 returned; ABI verified
+(ESP/EBX/ESI/EDI)` line, so the return is path-exercised rather than merely present. It then
+advanced to `[ICALL] Failed to resolve VA 0x000496E0`, an address that appears in **no** earlier
+archived run — a genuinely new stop, not a re-observation. `0x496E0` is the `0x94AB0` class again:
+a complete function with no analysis-database entry of its own, sitting inside the large
+`tail_jump_alias` record `sub_00049520 [0x49520, 0x4A6F0)` that overruns several real functions.
+Its body has exactly one reachable exit, `ret 8` at `0x000497D1` reached at depth 0, so
+`stack_args 8`; it is recovered as `[0x496E0, 0x497D6)`. **Presents still stop at exactly 1000**,
+the disclaimer hash `5bdaea576b8509f5` is unchanged throughout, and **the title screen was not
+reached**. g03 is **exploratory** and carries no acceptance evidence.
+
+**Two runs were lost to environment faults, recorded rather than hidden.** `g01` was killed by a
+tool interruption mid-run and left no `result.json`; `g02` then failed in 2.7 s at
+`[SAVE] root rejected: requested directory is not writable (winerror=5)` without reaching
+`guest_entry` — a stale-state artifact of the interrupted run, not a code regression. The
+save-root was verified writable by hand and `g03` ran normally. Neither loss is evidence about
+any code change.
 
 **The twenty.** `0x246E0`, `0x42CA0`, `0x80028`, `0x86180`, `0xA5050`, `0xCD890`, `0xD03F0`,
 `0xD62A0`, `0xDB820`, `0xE2050`, `0xE2A00`, `0xE3700`, `0xEDA10`, `0xF4C60`, `0xF8AF0`, `0x11B660`,
@@ -111,10 +131,20 @@ never a silent zero. **1051 of 3105 entries are `UNKNOWN`** — a stated coverag
 
 **Known open, reported but not gated (the next work, in priority order).** `0x96560` (UNCOVERED,
 real prologue) and `0x96F80` (SWALLOWED by `sub_00096F60`, whose span overruns its own `ret` at
-`0x96F7A`) are the same missing-entry class as `0x94AB0` and were found by the same scan.
-`0x20760` is a **live TRUNCATED defect the existing `check-entry-extents.py` calls harmless
+`0x96F7A`) are the same missing-entry class as `0x94AB0` and `0x496E0`, and were found by the same
+scan. `0x20760` is a **live TRUNCATED defect the existing `check-entry-extents.py` calls harmless
 PADDING** — its `je 0x20801` at `0x207F7` makes the two bytes at `0x20801` reachable, so the old
-gate's linear "unreachable after the terminator" reasoning is wrong there.
+gate's linear "unreachable after the terminator" reasoning is wrong there. The five
+`STACK_ARGS`-class entries the gate deliberately reports rather than fails — `0x21010`, `0xF4FF0`,
+`0x102490`, `0x152BC0`, `0x1BCB14` — each have a reachable `ret` at an UNKNOWN depth, so
+`stack_args = N − d` cannot be evaluated for them; they need the unresolved callee resolved first,
+not a guessed value.
+
+**Repair rate to expect.** Run g03 shows the stop chain still advancing one site per run at this
+point in boot, and the newest two stops (`0x94AB0`, `0x496E0`) were both the *same* class — a
+complete function swallowed by an over-wide `tail_jump_alias` record. `scripts/check-table-targets.py`
+reports 120 such candidates, so the next several stops are likely to come from that population and
+can be cleared from the bytes before spending a run, as `0x496E0` was.
 
 **Evidence discipline for this session.** The manifest's twenty values and the `0x94AB0` extent are
 byte-derived; a control regeneration before any edit reproduced `recovered.c` byte for byte

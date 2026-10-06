@@ -2618,6 +2618,14 @@
     "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0004A6F0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00048DB0..0x00048FBB, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
   },
   {
+    "start": "0x000496E0",
+    "end": "0x000497D6",
+    "section": ".text",
+    "kind": "routine",
+    "stack_args": 8,
+    "evidence": "A complete function with no analysis-database entry of its own, found by run 20261005-174422-643-g03-94ab0: `[ICALL] Failed to resolve VA 0x000496E0`. It sits inside the large `tail_jump_alias` record sub_00049520 [0x49520, 0x4A6F0), which overruns several real functions -- the same swallowed-entry class as 0x00094AB0 and 0x00096F80. Body 0x000496E0..0x000497D6 by reachable CFG walk from the entry: 76 instructions, exactly ONE reachable exit, `ret 8` (`C2 08 00`) at 0x000497D1, reached at stack depth 0, with no tail call, no fall-through and no unresolved transfer anywhere on the walk. stack_args 8 follows from `stack_args = N - d` with N = 8 and d = 0, and it is confirmed by the gating rule's depth-independent form: every reachable exit is the same `ret 8` at depth 0. The end 0x000497D6 is the byte after that `ret`, followed by 10 NOPs and then the next manifest entry at 0x000497E0, which is the convention the sibling entries in this range already use. The body is a state-check-and-notify routine: it tests the global at 0x1FA1CC, clears it, calls through vtable slot 0x11c, then compares 0x251D48 against 2 and calls slot 0x148, and finally calls 0x6E130 with ecx = 0x252790."
+  },
+  {
     "start": "0x000497E0",
     "end": "0x00049A80",
     "section": ".text",
