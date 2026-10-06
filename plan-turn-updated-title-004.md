@@ -6,27 +6,31 @@ evolved and why.
 
 ## Status at last update
 
-Turn `title-004`. Toolkit `2cee914`; game `59f3ebf`. `just check` green; CTest **40/40**;
+Turn `title-004`. Toolkit `2cee914`; game `8cd1e08`. `just check` green; CTest **40/40**;
 `test_run_profiles.py` 46 OK; `test_generation_provenance.py` 36 OK;
 `test_dispatch_table_size.py` 15 OK; `test_stop_chain.py` 25 OK;
 `test_recovery_span_ownership.py` 10 OK. Both repositories pushed and clean.
 
-**The title screen is NOT reached and M15 is NOT claimed.** Presents still freeze at exactly 1000
-with the disclaimer hash `5bdaea576b8509f5` unchanged.
+**The title screen is NOT reached and M15 is NOT claimed.** Presents freeze with the disclaimer hash
+`5bdaea576b8509f5` unchanged throughout.
 
 | # | Item | State |
 |---|---|---|
 | A1 | checkout rename, operational | **DONE** — `2a1dbc9`. 26 strict archives recovered from 0. |
 | A2 | dispatch count/array invariant | **DONE** — `8e5b93a` + toolkit `2cee914`. Derived count, gate, 15 controls. |
-| A2b | `--write` erasing the provenance history | **DONE** — fixed inside `8e5b93a`; 4 controls + byte-identical round-trip controls. |
+| A2b | `--write` erasing the provenance history | **DONE** — fixed inside `8e5b93a`; byte-identical round-trip controls. |
 | A3 | `0xB06E0` | **DONE** — `892dd1e`. End `0xB09E0`; zero trap stubs; counts erratum in TR §18. |
 | A4 | certified-continuation record gate | **DONE** — `b1aca89`, ledger L43, 25 controls, both review holes closed in `0763de8`. |
-| D7 | stop 22 `0x48DB0` | **DONE and RUNTIME-CONFIRMED** — `892dd1e`, confirmed by f9 (`0445a80`). |
-| C6 | exercised evidence for `0xB5EB0` | **DONE — CONFIRMED by f9.** Two runs had missed it; the third executed it. |
-| F7b | stop 25 `0xAE655` (census-predicted) | **DONE** — `0445a80`. First stop the census called in advance. |
+| D7 | stop 22 `0x48DB0` | **DONE and RUNTIME-CONFIRMED** — `892dd1e`, confirmed by f9. |
+| C6 | exercised evidence for `0xB5EB0` | **DONE — CONFIRMED by f9.** Two runs missed it; the third executed it. |
+| F7b | stop 25 `0xAE560` (census-predicted) | **DONE and CONFIRMED by f10** — `0445a80`, `fc6f2d4`. |
 | F7c | the certified under-wide class | **DONE** — `59f3ebf`. 152 spans widened; SUSPICIOUS 135→74. |
-| B5 | structural misdispatch census | open — the alias-shim class, kept separate |
-| — | the 7 entries whose `stack_args` disagrees with certified `N` | open — a separate finding, not folded into an extent repair |
+| F7d | the 7 extent-hidden-ABI entries | **DONE** — `8cd1e08`. Both fields wrong; SUSPICIOUS 74→67. |
+| — | stop 26 `0x96560` | **DONE** — `fc6f2d4`. Recovered `[0x96560, 0x967AA)`, `stack_args` 4. |
+| B5 | structural misdispatch census | **DONE** — `0cc6d5d`. Four axes; the outside-owner class is separate. |
+| — | the 10 dead alias shims | recorded as a **latent hazard, not a live defect** (`0cc6d5d`). |
+| — | `0x96F80` | measured candidate with a **named proof gap** (`f986b31`); stays `UNQUALIFIED`. |
+| — | the remaining 25 `KNOWN_OPEN` | open — the residue after three repair batches |
 
 ## PLAN_CHANGE
 
@@ -219,16 +223,70 @@ one rather than folded into an extent repair.
 
 `KNOWN_OPEN` shrank 60 → 31, again exactly the measured set — and the stale-member control added
 earlier this turn is what caught the 29 that this batch repaired, by failing before the list was
-updated. That control has now paid for itself twice in one turn.
+updated. That control has paid for itself **three times** in one turn (60 → 31 → 25).
+
+## F7d — the extent-hidden-ABI class
+
+The 7 entries F7c skipped on purpose, now repaired as both an extent **and** an ABI fix
+(`8cd1e08`). In each, the declared span ended before the body's own `ret`, so the walk over it fell
+off and `check-stack-depth.py` reported only `SUSPICIOUS/FALL_OFF_END`: the reachable `ret` was not
+visible, so the wrapper's expected delta could never be exercised. That is the `0x7DA30`/`0x152BC0`
+shape. Widening yields a fully enumerated walk with exactly one distinct immediate at **depth 0**,
+which by the project identity `stack_args = N` fixes both fields.
+
+| entry | end | `stack_args` |
+|---|---|---|
+| `0x202A0` | `0x20311` → `0x20329` | absent → 16 |
+| `0x20420` | `0x20468` → `0x204C6` | absent → 16 |
+| `0x204D0` | `0x20506` → `0x20563` | absent → 16 |
+| `0x34070` | `0x34088` → `0x341F1` | absent → 4 |
+| `0x38460` | `0x3848E` → `0x38528` | absent → 4 |
+| `0x705E0` | `0x70608` → `0x70642` | absent → 12 |
+| `0x171B50` | `0x171D03` → `0x171DF8` | 8 → 4 |
+
+Six had **no `stack_args` key at all** and so defaulted to 0, which is why their wrappers checked
+`+4` while the bodies emitted far more. Every regenerated wrapper now matches its own body exactly
+(`+20, +20, +20, +8, +8, +16, +8` = `4 + stack_args`).
+
+| gate | start of turn | now |
+|---|---|---|
+| stack-depth SUSPICIOUS | 138 | **67** |
+| — CUT_EPILOGUE | 70 | **13** |
+| — FALL_OFF_END | 25 | **11** |
+| check-span-exits CUT-TARGET | 323 | **210** |
+| fatal trap-call sites in `recovered.c` | — | **0** |
+| `KNOWN_OPEN` | 66 | **25** |
+
+## B5 — the misdispatch census, and a latent hazard that is not a live defect
+
+The census of the 134 alias shims on four independent byte-derived axes (`0cc6d5d`) reproduces the
+Advisor's measurements exactly: **75 INSIDE / 33 BEFORE_OWNER / 26 NO_OWNER_SPAN**;
+**75 REACHED / 33 NOT_REACHED / 26 UNDECIDED**; **80 CONTINUATION / 37 OPAQUE / 14 COMPLETE /
+3 NO_DEPTH0_RET**. All four cases TR §12 named (`0xE9A40`, `0x100AB0`, `0x1199C0`, `0x13A340`) fall
+in the **59 outside-owner** shims, so §12's "harmless mid-body label" reasoning covers at most the 75
+`INSIDE` ones.
+
+Ten addresses have both a recovered body and a shim routing them elsewhere. A spelling-level census
+says those shims fire *after* recovery — 44 `[ALIAS-ICALL]` lines across 28 runs, including runs
+descended from the recovery commit. **That reading is wrong.** `RECOMP_ICALL` tries
+`recomp_lookup_manual` first, which returns the recovered body, so the shim is unreachable. Testing
+each run's **own archived `recovered.c`**:
+
+| firings where the run's own build already had the `case` | **0** |
+|---|---|
+| firings where the build did not yet have it | 44 |
+
+Every firing predates that address's recovery. The class is **closed by recovery, not live**, and the
+ten tuples are a **latent hazard**: dead code today, a wrong-body misdispatch only if the recovered
+`case` were removed while the tuple stayed. Recorded as a hazard with its evidence, not acted on.
 
 ## Remaining work, in order
 
-1. **The 7 `stack_args`/`N` disagreements** (`0x202A0`, `0x20420`, `0x204D0`, `0x34070`, `0x38460`,
-   `0x705E0`, `0x171B50`): a separate ABI finding, each needing its own evidence.
-2. **B5, the structural misdispatch census** of the 134 alias shims, on the Advisor's four
-   independent byte-derived axes (position, reachability, shape, evidence), keeping the
-   `OUTSIDE_OWNER` class separate — all four named cases (`0xE9A40`, `0x100AB0`, `0x1199C0`,
-   `0x13A340`) fall in it, so TR §12's "harmless mid-body label" reasoning covers at most the 75
-   `INSIDE` shims.
-3. **One more bounded run** to test F7c and reach the next stop.
+1. **One more bounded run** to test F7d and reach the next stop.
+2. **The remaining 25 `KNOWN_OPEN`** entries: the residue after three repair batches, each needing
+   its own certificate rather than a heuristic.
+3. **`0x96F80`** stays `UNQUALIFIED` by design; its proof gap is named in TR §18 and the detector's
+   `UNQUALIFIED` verdict is pinned by a test. Not to be reversed without new evidence.
+4. **The alias-shim census's actionable classes** (`SWALLOWED_FUNCTION` = 12, and the 59
+   outside-owner shims) — a repair batch in its own right, kept separate from the under-wide class.
 
