@@ -117,6 +117,22 @@ body never pushed, which is the signature of a mid-function entry or an over-wid
 circular. `0x1BCB14` is now documented correctly: it starts mid-function and pops `esi`/`ebx` it never
 pushed, so `d = +8` and `N + d = 12` — exactly its declared value, which is why it must stay ungated.
 
+**Independent verification of the thunk repair and the sign correction.** Two verifier subagents
+failed to launch, so these checks were run directly against the committed tree rather than delegated.
+Each is reproducible:
+
+| claim | how it was checked | result |
+|---|---|---|
+| `stack_args = N + d` | `Analyzer._transfer(<push esi>, 0)` returns `-4`, so `d = ESP_now − ESP_entry`; a `ret N` leaves `entry + d + 4 + N` while the wrapper asserts `entry + 4 + stack_args` | **confirmed** — `N + d` |
+| the sign cannot affect the gate | the gated branch reads only `d == 0`, where the two forms coincide | **confirmed** — no gated verdict can change |
+| "29 entries, all `d > 0`, min 4 max 100" | re-measured with the checker's own `Analyzer` | **confirmed exactly**: 29 entries, `d < 0` count 0, min 4, max 100. Under the wrong sign 25 appeared negative; under `N + d`, none do |
+| `0x1BCB14` is right at `d = +8` | disassembled `[0x1BCB14, 0x1BCBCC)`: it pushes at `0x1BCB48`, `0x1BCBA8`, `0x1BCBBA`, `0x1BCBBC` and pops `esi`/`ebx` at `0x1BCBC7`/`0x1BCBC8` — registers it never pushed — then `ret 4` | **confirmed** — `N + d = 4 + 8 = 12` = its declared value |
+| the g05 thunk chain | read from the frozen dump after `check-dump-mapping.py` passed | **confirmed byte for byte**: entry esp `0x00F7FD30` → object `0x0106C870` → vtable `0x001E0F00` → `+0x6c` = `0x00154420`; observed delta 16 = `4 + 12` |
+| `0x154420`'s exits | reachable walk from `0x154420` | **confirmed** — `ret 0xc` (`C2 0C 00`) at `0x154440` and `0x15445D`; cleanup 12 |
+| each thunk is in exactly one table | scanned all `.data`/`.rdata` for aligned dwords | **confirmed** — `0x154520` only at `0x1E0F70`, `0x154540` only at `0x1E0F74` |
+| the false epilogue is gone | searched the manifest and the technical record for `add esp,0x50` | **2 hits, both correct**: `0x94AB0`'s own real epilogue, and the explicit retraction paragraph |
+| the baseline has no duplicates | compared all `updates` causes | **confirmed** — 38 records, 38 distinct |
+
 **Run g06 (`20261005-192455-691-g06-thunk`, exploratory, 905 s) confirms NOTHING about stop 20, and
 that is the honest reading.** It ended `diagnostic_deadline` — the bounded capture expired, not a
 crash — after 457 ABI-verified returns, with **zero** `ABI FAILURE` and **zero**
