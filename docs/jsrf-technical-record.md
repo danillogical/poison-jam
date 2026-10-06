@@ -2050,7 +2050,7 @@ evidence above is what the repair rests on instead.
 `0x000B6732` and the false split `0x000B5F3A` removed. That alone does not link: `recomp_dispatch.c` is
 translation-owned and still carried `{ 0x000B5F3Au, (recomp_func_t)sub_000B5F3A }`, so the build failed
 with `LNK2001: unresolved external symbol sub_000B5F3A`. `config/generated-patches.json` gains
-`remove-b5f3a-dispatch` (**L42**), following the `remove-54750-stub` precedent: the patch system
+`remove-b5f3a-dispatch` (**L02**), following the `remove-54750-stub` precedent: the patch system
 requires a non-empty replacement, so the tuple is replaced by a comment rather than deleted, and
 `patch-generated.py` re-applies it after every regeneration. `recovered.c` 3157 functions; manifest
 entries 3158 → 3157.
@@ -2068,5 +2068,118 @@ the next function", and that discriminator is not established here.
 **Verification.** CTest **38/38**; `just check` green; both static gates pass; provenance manifest and
 preservation baseline re-recorded with their hand-maintained history preserved (41 amendments,
 3 regenerations). Commit `64945a3`. **The title screen is still not reached and M15 is not claimed.**
+
+
+## 16. A host crash this turn shipped, found by a control rather than a gate (2026-10-05)
+
+**The defect, and why no checker saw it.** `remove-b5f3a-dispatch` removed the
+`0x000B5F3A` dispatch tuple but left
+
+```c
+static const size_t g_recomp_table_size = 8928;   /* the array now holds 8927 */
+```
+
+`recomp_dispatch_init` loops `for (i = 0; i < g_recomp_table_size; i++)`, so it read one entry past the
+end of `g_recomp_table` and wrote `g_flat_table[...]` from the garbage it read. The process died with a
+host access violation (`0xC0000005`, **write**) at `recomp_dispatch.c:9299` inside
+`recomp_dispatch_init`, **before `guest_entry`**, in runs g08 and g08b: 4 s,
+`missing_checkpoints=[guest_entry]`, and the minidump resolved `RIP` to
+`recomp_dispatch_init+0xC3`.
+
+**Every static gate passed on that tree.** `just check`, the full CTest suite and
+`check-merge-structure.py` all accept a dispatch table whose declared size exceeds its contents — there
+is no checker that compares `g_recomp_table_size` to the tuple count. This is the sharpest instance so
+far of the pattern the plan already records: a green suite is not a statement about a class no checker
+covers.
+
+**The control that localized it, instead of guessing.** g07's **archived** binary was re-run in the same
+environment. It reached `guest_entry`; the new build died at the same log line (75 → 76). That ruled out
+environment, disk and nondeterminism *before* any code was touched, and it is why the fix took one
+attempt rather than a bisect. The same technique is what the plan asks for when a run regresses: compare
+against the archived binary, not against memory of the previous run.
+
+**The fix.** A companion patch, `fix-dispatch-table-size` (L02), decrements the count to 8927.
+`PATCH_FIELDS` permits one `before`/`after` per patch, so this is a second patch rather than a second
+edit of the first. g08c then reached `guest_entry` with `checkpoints_passed: true`.
+
+**The durable lesson, stated as a rule.** A patch that removes an entry from a generated table must
+correct that table's declared count in the same change. `patch-generated.py` cannot enforce it — it
+checks that `before` matched, not that the surrounding arithmetic stayed consistent — so it belongs in
+the review checklist for any future table-editing patch.
+
+
+## 17. The Advisor ruling, and two of this turn's measurements it corrected (2026-10-05)
+
+**Route.** The Persistent Advisor failed to launch **three times** on `claude/claude-opus-5-5` @ xhigh,
+each child dying before finishing with no closing message. Per workflow §1 that was reported rather than
+silently replaced, and per §7 the owner directed the route change to **`codex/gpt-6.1-sol` @ xhigh**.
+This section is therefore the first *real* Advisor ruling of the turn, and it is attributed to that
+route. The Turn Planner and the Turn Reviewer both ran normally, so the earlier failure was specific to
+that spawn rather than to the route being unavailable.
+
+**Correction 1: the 192/234 "fatal stub" count was a spelling count, not a fatal count.** Scanning
+bodies that contain a `RECOMP_ITAIL` for `g_seh_ebp = ebp; sub_<va>(); return;` finds **192 bodies and
+234 distinct targets** — and the Advisor reproduced those numbers exactly. But that spelling is also how
+a *normal* recovered call is emitted, so the population is **generic external tail targets**, not fatal
+stubs and not table arms. Intersecting against the actual production trap definitions gives
+**27 bodies / 50 distinct targets**. The turn's earlier position breakdown (115 manifest / 74 dispatched
+/ 30 unevidenced / 15 before-start) was measured on the inflated set and **should not be relied on**.
+
+**Correction 2: `0xFC370` is not an unrelated-guard example.** The turn used it to argue that a located
+`cmp/ja` may belong to a different switch, because its table read produced the implausible arm
+`0x20200`. The original bytes show the real shape is a **two-level selector map**:
+
+```asm
+0xFC387  cmp   eax, 8
+0xFC38A  ja    0xFC47A
+0xFC490  ...   ; nine selector bytes {0,2,2,0,2,0,2,1,0}
+0xFC484  ...   ; three dword slots, reached via movzx eax, byte [eax+0xFC490]
+```
+
+So `0x20200` is selector-map data misread as a fourth pointer, and the emitted body correctly recognises
+three local targets. The general lesson is the Advisor's: a guard must be tied to the **actual index
+value at the jump**, including any byte/word remapping, not to a register name or the nearest `cmp`.
+Requiring `N + 1` to equal the run of consecutive in-`.text` dwords is neither necessary nor sufficient —
+`0xFC370` needs nine selector bytes and three dwords, while `0xB5EB0` needs exactly nine dwords.
+
+**What the Advisor recommended, and what this turn does with it.**
+
+| recommendation | disposition |
+|---|---|
+| do **not** gate "out-of-span arm" alone: table tails and shared continuations can legitimately leave a span, and pointer membership, decodability and alignment do not prove a table's extent | **accepted** — no under-wide gate is added |
+| gate a narrower *certified lost continuation* class, zero-baseline, repairing every qualifying finding first | **accepted as backlog**, with the required proof rule recorded: prove a reachable guard-to-jump path, prove the guard tests the same index value (through any remap), verify no intervening clobber and that the default edge bypasses the jump, and read exactly the reachable slots from file-backed bytes; anything else is `UNPROVEN`, printed, never `CLEAN` |
+| keep the broad census **mandatory and visible**; do not add the population to a frozen baseline | **accepted** — `tests/test_recovery_span_ownership.py`'s `KNOWN_OPEN` subtraction is explicitly *not* closure |
+| `0xB06E0` is a **proved** static defect and should be repaired as a small unit, not left in an indefinite backlog | **accepted** — see below; the turn did not repair it, and records that |
+
+**`0xB06E0`, independently re-verified from the original bytes.** The Advisor's witness is stronger than
+a table-extent argument and the turn reproduced it:
+
+```asm
+0xB06E0  push esi
+0xB06E1  mov  esi, ecx
+0xB06E3  mov  eax, [esi+0x128]
+0xB06E9  cmp  eax, -1
+0xB06EC  je   0xB09DC
+...
+0xB09D9  pop  edi ; pop ebp ; pop ebx
+0xB09DC  pop  esi
+0xB09DD  ret  4
+```
+
+The manifest span is `[0xB06E0, 0xB0811)`, so the function's **own epilogue** at `0xB09DC` lies outside
+it, and the emitted body calls the fatal stub `sub_000B09DC` four times and `sub_000B09D9` twice. A
+valid object with `[ecx+0x128] == 0xFFFFFFFF` selects a plain return requiring no table heuristic at
+all. It is a **proved static production defect**. It is **not** repaired in this turn — the remediation
+scope is records-only plus the crash fix — and it is recorded as the next static work with its proof
+rule, not as a deferred unknown. **No g07/g08 path has been observed to reach it**, which affects its
+priority and not whether it is broken.
+
+**A correction to this turn's own under-wide prose.** §15 called the 71-pair adjacent-entry population
+"dominated by legitimate splits" and cited the `0x200A5`/`0x200A8`/`0x200AD` run as "a chain of real
+continuations". The Advisor's point stands: those nine micro-entries are contained by `0x1FFF0`, most
+have no `stack_args`, their only "pointers" are consecutive dwords in a packed `.data` run, and calling
+them real continuations is **inference the bytes argue against**. They are **identity-unproven**, not
+legitimate, and are recorded that way.
+
 
 

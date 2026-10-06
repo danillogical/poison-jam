@@ -107,22 +107,99 @@ over-run into `0x96F80` is real but not provable, and a control asserts it stays
 | — | 45 `HIDDEN_ENTRY` containers | span tightened to its own reachable end; the consumed address gets its own reviewed entry | byte-derived + the gate; no run needed |
 | — | 5 `OVERLAP` containers | span tightened; the consumed address already owned an entry | `0x5BF00`→`0x5C840`, `0x18AFA0`→8 entries, `0x18C150`→2, `0x190FB0`, `0x1910C0` |
 | — | 2 `SHADOWED` containers | span tightened only | `0x556D0`, `0xC42E0` already have generated bodies — a real `LNK2005` proved it |
-| 20 | `ABI FAILURE 0x00154540 expected +24` (delta 16) | two this-adjusting thunks corrected 20→12; swallowed `0x154560` recovered (`stack_args 20`) | **g05 found it; g06 did NOT exercise it; g07 CONFIRMED it** — `[RECOVERED] 0x00154540 returned; ABI verified` |
-| 21 | `[ICALL] Failed to resolve VA 0x000B5F82` | `0xB5EB0` restored to its real end `0xB6732`; false split `0xB5F3A` removed; generated patch `remove-b5f3a-dispatch` (L42) | **g07 found it**; byte-derived repair, **not yet runtime-confirmed** |
+| 20 | `ABI FAILURE 0x00154540 expected +24` (delta 16) | two this-adjusting thunks corrected 20→12; swallowed `0x154560` recovered (`stack_args 20`) | **g05 found it; g06 did NOT exercise it; g07 AND g08 both CONFIRMED it** — `[RECOVERED] 0x00154540 returned; ABI verified` |
+| 21 | `[ICALL] Failed to resolve VA 0x000B5F82` | `0xB5EB0` restored to its real end `0xB6732`; false split `0xB5F3A` removed; generated patches `remove-b5f3a-dispatch` + `fix-dispatch-table-size` (L02) | **g07 found it; g08 did NOT exercise `0xB5EB0`** — byte-derived repair, still **NOT runtime-confirmed** |
+| 22 | `ABI FAILURE 0x00048DB0 expected +4` (observed delta `-0xA8`) | **not yet repaired** — `0x48DB0`'s walk has two `UNKNOWN`-depth tails and a fall-off at its declared end | **g08 found it** |
+| — | host crash at `recomp_dispatch.c:9299` **before `guest_entry`** | my own `remove-b5f3a-dispatch` removed a tuple but left `g_recomp_table_size = 8928`; companion patch decrements it to 8927 | g08/g08b died in 4 s; **g08c reached `guest_entry`** |
 
-**Census: 50 containers, 63 consumed addresses, every container a `tail_jump_alias` record** — the same
-dominant stop class §11 names. The consumed bodies are substantial, not stubs: 50 to 1213 bytes,
-**median 360**. Of the 48 additions, **38 are `PROVED`** (a fully enumerated walk reaches a `ret N` at
+**A host crash this turn shipped, and the control that found it.** `remove-b5f3a-dispatch` removed the
+`0x000B5F3A` dispatch tuple but left `g_recomp_table_size = 8928` while the array held 8927, so
+`recomp_dispatch_init` read one entry past the end and wrote from the garbage: a host access violation
+at `recomp_dispatch.c:9299`, **before `guest_entry`**, in g08 and g08b. **Every static gate passed on
+that tree** — `just check`, CTest and `check-merge-structure.py` all accept a dispatch table whose
+declared size exceeds its contents, the sharpest instance yet of a green suite saying nothing about a
+class no checker covers. It was localized by re-running **g07's archived binary** in the same environment
+(it reached `guest_entry`; the new build died at the same log line), not by guessing. Fixed by the
+companion patch `fix-dispatch-table-size`; g08c then reached `guest_entry` with
+`checkpoints_passed: true`. **Durable rule: a patch that removes a table entry must correct that table's
+declared count in the same change.**
+
+**g08 (`20261005-223404-818-g08-b5eb0-fixed`, exploratory, 247.7 s) — stop 20 re-confirmed, stop 21 NOT
+exercised, stop 22 found.** It re-confirmed `0x00154540` with an ABI-verified return, but **never
+executed `0xB5EB0`**, so stop 21 stays **NOT runtime-confirmed** and is recorded as NOT EXERCISED
+rather than as a pass — the same discipline g06 required. It then produced
+`ABI FAILURE 0x00048DB0 esp 00F7FE50->00F7FDA8 expected +4`. `0x48DB0`'s declared span is
+`[0x48DB0, 0x48FBB)` and its own walk has **no resolved exit**: two tails at `UNKNOWN` depth
+(`0x496AC`, `0x49669`) plus a fall-off at its end, so its extent or its `stack_args` is wrong. It is
+**not yet repaired**.
+
+**Advisor ruling (first real one this turn).** The owner directed the route change to
+`codex/gpt-6.1-sol` @ xhigh after the previous route failed three times. It corrected two of this turn's
+measurements, both recorded in TR §17:
+
+- the **192 bodies / 234 targets** "fatal stub" population is a **generic external-tail spelling** count,
+  not a fatal one — only **27 bodies / 50 targets** resolve to actual production trap definitions. The
+  earlier position breakdown (115/74/30/15) was measured on the inflated set and must not be relied on;
+- **`0xFC370` is not an unrelated-guard example.** Its real shape is a two-level selector map
+  (`cmp eax,8; ja; movzx eax, byte [eax+0xFC490]; jmp [eax*4+0xFC484]`), nine selector bytes selecting
+  three dword slots, so `0x20200` is selector-map data misread as a fourth pointer. A guard must be tied
+  to the **actual index value at the jump**, through any remap — not to a register name or the nearest
+  `cmp`, and not to "`N+1` equals the consecutive-in-`.text` run", which is neither necessary nor
+  sufficient.
+
+**Its recommendation, dispositioned:** do **not** gate "out-of-span arm" alone (accepted — no under-wide
+gate is added); gate a narrower *certified lost continuation* class zero-baseline with a stated proof
+rule (accepted as backlog, rule recorded in TR §17); keep the broad census mandatory and visible and do
+not add it to a frozen baseline (accepted — `KNOWN_OPEN` subtraction is explicitly **not** closure); and
+repair `0xB06E0` as a small unit rather than leaving it indefinite (**accepted, and not done this turn**
+— recorded as the next static work).
+
+**`0xB06E0` is a proved static defect, re-verified from the original bytes.** Its span
+`[0xB06E0, 0xB0811)` stops before its **own epilogue** at `0xB09DC` (`pop esi; ret 4`), and the emitted
+body calls the fatal stub `sub_000B09DC` four times and `sub_000B09D9` twice. A valid object with
+`[ecx+0x128] == 0xFFFFFFFF` selects a plain return needing no table heuristic. **No g07/g08 path has
+been observed to reach it**, which affects priority, not whether it is broken.
+
+**The next actions, in order.** (1) Repair `0x48DB0` (stop 22) from the bytes. (2) Repair `0xB06E0`
+with a negative old-span control, then re-run the hidden-entry and stack-depth gates. (3) A further
+bounded exploratory run to exercise `0xB5EB0` — two consecutive runs have now failed to reach it, so the
+honest state is **NOT EXERCISED**, not fixed. (4) Backlog: the certified-continuation gate, the
+misdispatch census (`0xE9A40`, `0x100AB0`, `0x1199C0`, `0x13A340`, still **not run**), the nine
+identity-unproven `0x200A5`–`0x200F7` micro-entries contained by `0x1FFF0`, and the
+`check-generation-provenance.py --write` history-erasure defect.
+
+**Census: 50 containers, 63 consumed addresses, 48 of the 50 containers `tail_jump_alias` records** —
+the same dominant stop class §11 names (the two `OVERLAP` containers `0x190FB0` and `0x1910C0` have no
+database record). The consumed bodies are substantial, not stubs: 50 to 1213 bytes,
+**median 366**. Of the 48 additions, **38 are `PROVED`** (a fully enumerated walk reaches a `ret N` at
 depth 0, so `stack_args = N` by the §10 identity) and **10 are `INFERRED`** (every reachable `ret`
 agrees on `N`, but no path reaches one at depth 0).
 
-**A prototype written before the checker agreed with `check-table-targets.py`'s existing in-span rule
-on 50 of 52 candidates**, the two differences being exactly the two opaque-exit containers, and it
-re-found `0x96F80` — which §12 had already recorded as a known open instance — without being told
-about it. That is the reproduction control for "not overfitted to `0x7DBD0`".
+**Consistency check, not independent reproduction (corrected by Turn Review 1).** A prototype written
+before the checker agreed with `check-table-targets.py`'s existing in-span rule on 50 of 52 candidates,
+the two differences being exactly the two opaque-exit containers, and it re-found `0x96F80`. **The
+reviewer is right that this is weaker than it was first written.** The prototype is **not in the
+repository**, so its 50/52 agreement cannot be re-run; both methods read the **same aligned-dword
+sweep**, so they share an evidence source rather than being independent; and `0x96F80` was **already
+listed as known-open** in this plan (and is hard-coded in the selfcheck and tests), so "re-found
+unprompted" cannot be re-checked. It is recorded as a **shared-source consistency check**. What does
+carry weight is the committed bad→good controls and the reviewer's own replay on `b065050`'s manifest.
 
-**Three real defects were caught by tests rather than by reasoning, and two were silent.** Each is now
-a guard:
+**Four real defects were caught, and only one by a test.** The earlier wording said "three caught by
+tests, each now a guard", which overstates the mechanism (corrected by Turn Review 1):
+
+1. **`apply()` keyed additions to the container's start**, dropping all 50 while reporting success —
+   caught by an **ad-hoc set-difference count**, not a test.
+2. **Two additions collided with generated bodies** (`0x556D0`, `0xC42E0`) — caught by the **linker**.
+3. **`0xB3C30` was given an extent one tail-jump short** — this one **was** caught by
+   `tests/test_recovery_span_ownership.py`, and it is the only one with a standing regression.
+4. **The dispatch-table size crash** (`recomp_dispatch.c:9299`, before `guest_entry`) — caught by
+   **running g07's archived binary as a control**, not by any test.
+
+`repair-hidden-entries.py` now **implements** the pre-write checks its docstring had only claimed
+(gate cleanliness, no duplicate start, in-`.text` additions, standalone liftability); before this
+remediation the docstring described checks `main()` did not perform, which is the same silent-success
+shape as defect 1.
 
 1. **`apply()` keyed additions to the container's start**, so all 50 new entries were dropped while the
    script printed `wrote 3110 entries` and the checker still passed — removing the additions removes
@@ -135,9 +212,14 @@ a guard:
    so the generated body called a fatal stub for its own continuation —
    `tests/test_recovery_span_ownership.py` caught it.
 
-**A jump-table under-read cannot produce a false finding.** Of the 50 gate containers, 6 have a
-reachable jump-table `jmp`; none has a table that stopped at `MAX_JUMP_TABLE` or whose next dword was
-still executable, and no dropped arm lands on a consumed address.
+**A jump-table under-read guarantee, corrected.** The detector's docstring claimed an under-read table
+"degrades the entry to `UNQUALIFIED`". Turn Review 1 showed that is **stronger than the code**:
+`Analyzer.walk` records an `indirect` exit only when *no* arm it read is in span, so a table that stops
+early but has at least one in-span arm is still treated as enumerated. Measured on the 50 gate
+containers: **none has a dropped arm**, so the gate is sound for this population — but the guarantee
+does not generalise, and TR §17 records the Advisor's bounded rule for a future one. The `OVERLAP`
+docstring also read broader than the code: it covers evidenced starts in the **over-run past the
+own-body end**, not all overlapping spans.
 
 ### Stop 20 — runtime-confirmed by g07
 
@@ -178,7 +260,7 @@ jump-table-arm evidence is what the repair rests on instead.
 **The repair needed a second, non-obvious step.** Restoring the span alone does not link:
 `recomp_dispatch.c` is translation-owned and still carried
 `{ 0x000B5F3Au, (recomp_func_t)sub_000B5F3A }`, so the build failed with `LNK2001: unresolved external
-symbol sub_000B5F3A`. `config/generated-patches.json` gains `remove-b5f3a-dispatch` (**L42**), following
+symbol sub_000B5F3A`. `config/generated-patches.json` gains `remove-b5f3a-dispatch` (**L02**), following
 the `remove-54750-stub` precedent — the patch system requires a non-empty replacement, so the tuple
 becomes a comment. `recovered.c` **3157** functions; manifest entries 3158 → 3157.
 
