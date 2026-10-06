@@ -2466,15 +2466,18 @@ but a re-run is not a **byte-for-byte** reproduction of the original environment
 new sample from the same distribution. That distinction is the difference between a reproducible
 *experiment* and a reproducible *result*, and only the former is available here.
 
-Two further observations from the replay, recorded as measured-at-the-time and subject to the same
-caveat. **Neither is independent confirmation of anything**, because both rest on the deleted log:
+Two further observations from the replay. **The first turns out to be verifiable after all, and this
+corrects my own caveat** — an earlier revision marked it NOT VERIFIED along with the counts, which was
+wrong:
 
-- the replay's disclaimer hash was recorded as `87683a748e27d071`, **not** `5bdaea576b8509f5`. If
-  accurate this would mean the same binary can reach a different *visual* state, not merely a different
-  count — but the artifact is gone, so the claim is **NOT VERIFIED** and is not used to support the
-  "path witness, not a per-binary constant" reading. That reading rests instead on the retained runs.
+- the disclaimer hash `87683a748e27d071` is **not** unique to the deleted replay. It appears in **36
+  retained runs**, every one of which also shows `5bdaea576b8509f5` in the same run — so a single run
+  passes through **both** visual states. That is *directly observed* on retained artifacts and does not
+  depend on the deleted log at all. It establishes that the disclaimer hash is a **path/phase witness,
+  not a stable per-binary constant**, which is the reading the Reviewer's concern was about; the
+  observation was correct, and only my sourcing of it was wrong.
 - the replay produced **fewer** returns (385) than any of f9–f11 (550/553/440), again on identical
-  bytes to f9. Same caveat: recorded, not verified.
+  bytes to f9. Same caveat as the counts: recorded, not verified.
 
 The replay directory is deliberately **not** kept under `logs/runs/`: it was produced by invoking the
 collector directly rather than through `scripts/run-jsrf.py`, so it carries no `metadata.json` and is
