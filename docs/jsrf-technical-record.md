@@ -2283,7 +2283,7 @@ alias shim in the generated dispatch table that routes them to a **different** s
 ```
 
 A spelling-level census of the archive suggests these shims fire *after* their recovery: 44
-`[ALIAS-ICALL]` lines name one of these ten targets across 28 runs, including runs whose commit is
+`[ALIAS-ICALL]` lines name one of these ten targets across **32** runs, including runs whose commit is
 descended from the recovery. **That reading is wrong, and the way it was refuted is the point.**
 
 `RECOMP_ICALL` tries `recomp_lookup_manual` **first**, and that function returns
@@ -2380,20 +2380,23 @@ f9 archived binary   sha256 43e639d7be16be97...
 replay binary        sha256 43e639d7be16be97...   IDENTICAL (byte-for-byte)
 ```
 
-f9's own executable, replayed in the same environment with the same four overrides:
+f9's own executable, replayed in the same environment with the same four overrides. **The two counts
+below are NOT VERIFIED by any artifact on disk** — the replay log was deleted before this section was
+written (see the caveats below), so they are recorded observations only:
 
-| run | binary | max `presents=` | ABI-verified returns |
-|---|---|---|---|
-| f9 (recorded) | `43e639d7…` | **1000** | 550 |
-| f9 **replayed** | `43e639d7…` (identical) | **394** | 385 |
+| run | binary | max `presents=` | ABI-verified returns | status |
+|---|---|---|---|---|
+| f9 (recorded) | `43e639d7…` | **1000** | 550 | verified: log retained |
+| f9 **replayed** | `43e639d7…` (identical) | **394** | 385 | **NOT VERIFIED: log deleted** |
 
-**The same bytes produced 394 presents where they had produced 1000.** That is a genuine and
-load-bearing result, and it is also *all* it is. Stated precisely, in three parts:
+**The recorded observation is that the same bytes produced 394 presents where they had produced
+1000.** Stated precisely, in three parts:
 
-- **Recorded:** the present count differs between two runs of the **same binary** — 394 vs 1000 on
-  byte-identical executables in the same environment. Same-binary variation in this title is already
-  documented as first-class (g03–g08 reached different addresses on identical binaries), so this
-  reproduces a known property rather than discovering one.
+- **Recorded, NOT VERIFIED:** the present count differed between two runs of the **same binary** —
+  394 vs 1000, on byte-identical executables in the same environment. The 394/385 pair is a deleted-log
+  observation and carries no on-disk artifact, so it is reported as recorded rather than established.
+  What *is* independently verifiable is the retained f9/f10/f11 series (1000/888/888 presents,
+  550/553/440 returns), which is enough to show same-binary variation exists.
 - **Causal attribution: UNRESOLVED.** The difference between f9's 1000 and f10/f11's 888 **cannot be
   attributed to F7c**, because an uncontrolled variable of at least the same magnitude is present. But
   one replay of one pre-F7c binary **does not bound** the batch effect either: it shows that variation
@@ -2402,6 +2405,12 @@ load-bearing result, and it is also *all* it is. Stated precisely, in three part
   of this section made it. The honest statement is exactly: *recorded same-binary variation; causal
   attribution unresolved.*
 - **NOT established: the mechanism**, in either direction, and not established that F7c has no effect.
+
+**The Reviewer's fix is applied, and its strongest point is retained:** the earlier revisions both
+promoted a deleted measurement toward a causal conclusion. The current text records the observation,
+marks it NOT VERIFIED, and leaves causal status explicitly unresolved. **No new replay is run**, since
+the Reviewer judged an honest downgrade sufficient and a new sample would not resolve the causality
+either — it would only add another sample to a distribution whose spread is already demonstrated.
 
 **Corrections to this section, both raised by the Turn Reviewer, are recorded rather than made
 silently.** The first heading claimed the change was "settled … not the batch"; the second revision

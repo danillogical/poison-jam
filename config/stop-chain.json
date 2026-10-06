@@ -154,14 +154,14 @@
    "id": 26,
    "address": "0x00096560",
    "state": "REPAIRED",
-   "repair_commit": null,
+   "repair_commit": "fc6f2d4",
    "evidence": [
     {
      "run": "20261006-011638-029-f10-underwide-batch152",
      "role": "discovered"
     }
    ],
-   "note": "An unowned gap: no manifest span, no owner and no dispatch tuple, so an indirect call to it trapped. f10 logged `[ICALL] Failed to resolve VA 0x00096560` with 0x00047710 as ICALL history frame 2. Recovered as [0x00096560, 0x000967AA) with stack_args 4 from a fully enumerated walk (two exits, both `ret 4` at 0x967A7, one at depth 0). Its only image reference is the aligned .rdata dword at 0x001CD32C. The repair is in the working tree; the repair commit is not yet known, so this row carries no repair_commit and is therefore not citable as a confirmation until one exists."
+   "note": "An unowned gap: no manifest span, no owner and no dispatch tuple, so an indirect call to it trapped. f10 logged `[ICALL] Failed to resolve VA 0x00096560` with 0x00047710 as ICALL history frame 2. Recovered as [0x00096560, 0x000967AA) with stack_args 4 from a fully enumerated walk (two exits, both `ret 4` at 0x967A7, one at depth 0). Its only image reference is the aligned .rdata dword at 0x001CD32C. The recovery landed in fc6f2d4. NO run has executed it since, so the state stays REPAIRED and the evidence stays `discovered`: the repair_commit being known does not make this runtime-confirmed, and the gate requires a confirming role before that could be claimed."
   }
  ]
 }

@@ -6,8 +6,9 @@ evolved and why.
 
 ## Status at last update
 
-Turn `title-004`. Toolkit `2cee914`; game `8cd1e08`. `just check` green; CTest **40/40**;
-`test_run_profiles.py` 46 OK; `test_generation_provenance.py` 36 OK;
+Turn `title-004`. Toolkit `2cee914`; game endpoint `8454b81` (F7d repair `8cd1e08`, stop 26 `fc6f2d4`,
+residue measurement `ae9c090`, present-count qualification `02d190e` and `8454b81`). `just check`
+green; CTest **40/40**; `test_run_profiles.py` 46 OK; `test_generation_provenance.py` 36 OK;
 `test_dispatch_table_size.py` 15 OK; `test_stop_chain.py` 25 OK;
 `test_recovery_span_ownership.py` 10 OK. Both repositories pushed and clean.
 
@@ -273,7 +274,7 @@ in the **59 outside-owner** shims, so §12's "harmless mid-body label" reasoning
 `INSIDE` ones.
 
 Ten addresses have both a recovered body and a shim routing them elsewhere. A spelling-level census
-says those shims fire *after* recovery — 44 `[ALIAS-ICALL]` lines across 28 runs, including runs
+says those shims fire *after* recovery — 44 `[ALIAS-ICALL]` lines across **32** runs, including runs
 descended from the recovery commit. **That reading is wrong.** `RECOMP_ICALL` tries
 `recomp_lookup_manual` first, which returns the recovered body, so the shim is unreachable. Testing
 each run's **own archived `recovered.c`**:
@@ -288,7 +289,9 @@ ten tuples are a **latent hazard**: dead code today, a wrong-body misdispatch on
 
 ## Remaining work, in order
 
-1. **One more bounded run** to test F7d and reach the next stop.
+1. **One more bounded run** to exercise F7d and stop 26 (`0x96560`), and to reach the next stop. f11
+   has already tested F7c/F7d at the extent level with no new stop; this run is for *exercised*
+   evidence, which neither f10 nor f11 provides for `0x96560`.
 2. **The remaining 25 `KNOWN_OPEN`** entries: the residue after three repair batches, each needing
    its own certificate rather than a heuristic.
 3. **`0x96F80`** stays `UNQUALIFIED` by design; its proof gap is named in TR §18 and the detector's
