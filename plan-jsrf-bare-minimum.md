@@ -50,11 +50,14 @@ guest** (code review 2026-10-06; a hypothesis until step 1 below decides it):
 - Until 2026-10-06 the rejection was invisible: the per-submit line stopped at submission 63. The
   toolkit now logs `[PFIFO] reject …` on the first rejection and on every diagnostic change, and
   publishes `g_nv2a_submit_state` for dumps.
-- **The fence mirror (L17) removes back-pressure**: it reports every fence complete whether or not
-  the walk consumed the commands, so after a rejection D3D keeps writing the ring. The guest keeps
-  running (its update counters move), and the bytes at GET in a late dump may already be a later
-  frame's. Read a decode at GET as the *current* blocker; the first `[PFIFO] reject` line names the
-  original one.
+- **The fence mirror (L17) removed back-pressure** in every archived run: it reported every fence
+  complete whether or not the walk consumed the commands, so after a rejection D3D kept writing the
+  ring, the guest kept running (its update counters moved), and the bytes at GET in a late archived dump
+  may be a later frame's — read such a decode as the *current* blocker; the first `[PFIFO] reject` line
+  names the original one. **Since toolkit 2026-10-06** the mirror publishes the fence of the last
+  consumed kick, and a rejected walk is re-tried every 100 ms; a sticky rejection now leaves the guest
+  spinning in D3D's ring-space wait at `0x1914F0`, as on hardware. `RECOMP_FENCE_MIRROR_LIVE=1` restores
+  the old mirror for an A/B.
 - `GET ≠ PUT` alone does not mean "unknown method": budget, loop, sink, invalid handle, bad target
   and reserved-opcode rejections also pin GET. Branch on the diagnostic.
 - The ceiling moved from 1000 to 888 with the F7b/F7c batches (TR §19). It is recorded as a
@@ -103,9 +106,12 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
    that the table lacks. Read the main thread's wait site in `stacks.txt` beside it.
 2. **One bounded `just title-run`** on the 2026-10-06 toolkit. The first `[PFIFO] reject` line names
    the original rejection and `just gpu-report` prints `g_nv2a_submit_state`; `[FBPHASE] … (stalled 1s)`
-   reads the boot-phase object once presents stop, so it shows whether the guest's update counters still
-   move. The same run exercises stop 28 (`0x81860`); do not spend separate runs on the stop chain until
-   the ceiling is explained.
+   reads the boot-phase object once presents stop, and `stacks.txt` shows whether the main thread sits in
+   `0x1914F0` (a sticky rejection with the new fence mirror). This toolkit also changed four behaviours
+   at once (fence mirror, present choice, `STATUS_USER_APC`, heap merging), so repeat the run with
+   `RECOMP_FENCE_MIRROR_LIVE=1` as an A/B, and confirm `title.adx` reads still advance (a regression check
+   for the APC change; JSRF's `SleepEx` callers ignore the status). The same run exercises stop 28
+   (`0x81860`); do not spend separate runs on the stop chain until the ceiling is explained.
 3. **Branch on the diagnostic**, not on `GET ≠ PUT` alone:
    - `unsupported_method` → one bounded run with `RECOMP_NV2A_ADMIT_UNKNOWN=1` (L44, exploratory) lists
      every missing method of the next scene in one pass (`[PFIFO] admit-unknown`). Classify each as a
@@ -119,13 +125,14 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
      walk bounds); the switch does not apply.
    - `GET == PUT` → the guest itself stopped submitting: find the main-thread wait (f9 of 10-04 sat in
      `NtDelayExecution` under `sub_00013F80`, called from `0x6FA3C` in `0x6F9E0`).
-4. **When a new scene appears, check the present path before trusting the window.** The window is
-   handed `drawn_offset`, which only drawn batches update — the software rasteriser's triangles (the
-   `nv2a_backend` draw path also sets it, but no backend is registered). A clear, an untransformed
-   (vertex-program) batch or a new render target leaves it on the old buffer
-   (`xboxrecomp/src/kernel/nv2a_pb_exec.c`, FLIP_STALL). An unchanged hash after the ceiling clears is
-   not proof the guest did not advance: compare `drawn_offset` with `color_offset` and read
-   `batches_untransformed` in the `[GPU]` report.
+4. **When a new scene appears, read the present lines before trusting the window.** Until 2026-10-06
+   the window was handed `drawn_offset`, which only the software rasteriser's triangles update, so a
+   frame of clears or untransformed (vertex-program) batches presented the previous buffer. The present
+   choice now falls back to the buffer the frame cleared or targeted, and logs
+   `[FBPRESENT] presenting targeted 0x…` the first 8 times it does. Untransformed batches are still not
+   rasterised (`batches_untransformed` in the `[GPU]` report), so a targeted frame can show only its
+   clear colour: an unchanged or blank picture after the ceiling clears is not proof the guest did not
+   advance.
 5. **M15** as F6 states, then M16 onward.
 
 ## Backlog (not on the critical path until it blocks)
@@ -136,11 +143,12 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
   outside-owner shims; census commit `0cc6d5d`, counts in `git show dcc93ab:plan-turn-updated-title-004.md`
   "B5"), and the `gap_prologue` root cause (needs a full regeneration; batch the 12 sibling spans, each
   verified by decode before landing).
-- **Toolkit review findings (2026-10-06), open:** the fence mirror's missing back-pressure (L17; publish
-  the walk's consumed fence instead while the MMIO owner is active); the stale present (`drawn_offset`,
-  next action 4); alertable waits that wait again after delivering an APC (NT returns `STATUS_USER_APC`
-  at once) — matters for streaming, before M24; free heap blocks that stop coalescing across a
-  placeholder slot — only if out-of-memory returns; the `[APUWAIT]` line cap.
+- **Toolkit review findings (2026-10-06):** the fence mirror, the stale present, `STATUS_USER_APC` and
+  heap merging were fixed the same day and await their first Windows run (next action 2; CTest
+  `kernel_file_apc_test`, `kmem`, `fence_snapshot`, `nv2a_present_track`, `nv2a_submit_diag`). Open: the
+  `[APUWAIT]` line cap, and JSRF kick sites other than `0x191390` — the new fence mirror assumes each
+  advances `[dev+0x30]` before writing PUT; list every caller of `0x1912A0` on Windows before trusting
+  it (a lagging site would stall a normal frame in `0x1914F0` with no `[PFIFO] reject`).
 - **Undiagnosed:** the XBE `DOLBY` section being written although marked read-only (section protection
   is not enforced; seen with the `0xFFC00000` fill, which TR §9 explains as the `0x32610` misdispatch,
   closed by its recovery), and the second cause of the disc-error dialog at ~950 s with no OOM

@@ -45,6 +45,7 @@ KMEM_LEGACY = 'RECOMP_KMEM_LEGACY'
 NV2A_ACTIONS = 'RECOMP_NV2A_ACTIONS'
 GUEST_SERIAL = 'RECOMP_GUEST_SERIAL'
 NV2A_ADMIT_UNKNOWN = 'RECOMP_NV2A_ADMIT_UNKNOWN'
+FENCE_MIRROR_LIVE = 'RECOMP_FENCE_MIRROR_LIVE'
 WORKERS = 'RECOMP_WORKERS'
 GP_INPUT_PERTURB = 'RECOMP_APU_GP_INPUT_PERTURB'
 
@@ -435,6 +436,7 @@ def classify_settings(entries: Any) -> dict[str, Any]:
         # Discovery and bisecting switches: unknown NV2A methods are admitted as captured
         # state (ledger L44) and worker routines can run inline, which may deadlock.
         (NV2A_ADMIT_UNKNOWN, 'admits NV2A methods missing from the table as captured state when present (ledger L44)'),
+        (FENCE_MIRROR_LIVE, 'mirrors the submitted fence live, without waiting for the walk to consume it, when present (ledger L17)'),
         (GP_INPUT_PERTURB, 'substitutes the GP DSP mixbuffer and peripheral inputs when present'),
         (WORKERS, 'changes the worker model (inline workers may deadlock) when present'),
     ):

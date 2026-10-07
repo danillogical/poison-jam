@@ -228,6 +228,16 @@ class ProfileClassifierTests(unittest.TestCase):
                     self.assertTrue(any(name in reason for reason in result['reasons']),
                                     result['reasons'])
 
+    def test_live_fence_mirror_is_exploratory(self):
+        """The live fence mirror answers the guest's fence read before the walk commits."""
+        name = 'RECOMP_FENCE_MIRROR_LIVE'
+        for value in ('', '0', '1', 'anything'):
+            with self.subTest(value=value):
+                result = classify_settings(settings(RECOMP_GPU_ACK='0', **{name: value}))
+                self.assertEqual(result['classification'], EXPLORATORY)
+                self.assertTrue(any(name in reason for reason in result['reasons']),
+                                result['reasons'])
+
     def test_upstream_capability_switches_stay_strict(self):
         """Real capability or observation, not a faked answer."""
         for name in ('RECOMP_ASYNC_IO', 'RECOMP_USB_HC', 'RECOMP_USB_NDP',
