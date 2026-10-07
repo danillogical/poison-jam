@@ -113,7 +113,7 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 | F4b | done 2026-10-04 | the no-op `fcmove`/`fcmovne` lift held the SEGA fade; toolkit `671ab0a` translates them |
 | F5 | parked | intro movies: if Sofdec blocks, skip and ledger it (*patched*/*intentionally ignored*); decoding is M29 |
 | F7 | done through stop 28 | the dispatch stop chain above; residue in the backlog |
-| **F8** | **cleared 2026-10-06** | the present ceiling: `unsupported_method 0x1810`, one stale table entry; the table now carries it and a run with neither the live-mirror nor the admit-unknown switch reaches presents 2410 with zero rejections (TR §22) |
+| **F8** | **cleared 2026-10-06** (toolkit `505cda5`) | the present ceiling: `unsupported_method 0x1810`, one stale table entry; the table now carries it and a run with neither the live-mirror nor the admit-unknown switch reaches presents 2410 with zero rejections (TR §22) |
 | **F8b** | **next** | the same class again — `unsupported_method 0x0BB0` plus `0BB4`/`0BB8`/`0BBC`/`1724`/`1728` — then `budget_exhausted`, which needs walk bounds (TR §22) |
 | F6 = M15 | open | a frame dump of the title screen plus the run record with its ledger IDs; its hash is neither disclaimer hash; compared by eye with an xemu screenshot of the same screen (T3); reproduced by the Turn Reviewer |
 

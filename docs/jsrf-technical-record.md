@@ -2660,7 +2660,9 @@ with it. Confirming it would need a retained discriminating experiment (e.g. rep
 binaries against a fixed method table), not the A/B above.
 
 **The fix, and its provenance.** The table is generated from measured submission rings, so the fix is
-to regenerate it from a ring that contains the method (never to relax the rejection — L39):
+to regenerate it from a ring that contains the method (never to relax the rejection — L39). The fix
+landed as **toolkit `505cda5b96e5b2a70492825df34151594805a1e5`** ("nv2a: admit DRAW_ARRAYS, the method
+the walk rejected the title on"; the only change is the generated table, +`0x1810`):
 
 ```text
 python -X utf8 scripts/gen-nv2a-method-inventory.py \
