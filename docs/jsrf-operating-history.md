@@ -2731,3 +2731,17 @@ Game `PUSHED_TO: origin / BRANCH: master / COMMIT: d80f49e7841256ae7de67f9369788
 `game/` path; largest new blob 213 KB; `scripts/secret-audit.py` over the 31 outgoing blobs: 0 hits.
 Nothing here has run on Windows yet: the next Windows turn builds both, runs CTest (including
 `nv2a_submit_diag`, `jsrf_logq` and `jsrf_nv2a_registers`) and takes the plan's next actions.
+
+**The four open review findings, fixed the same day (owner request).** The fence mirror now publishes
+the fence of the last consumed kick and a rejected walk is re-tried every 100 ms (L17, L40); the
+present choice falls back to the buffer a frame cleared or targeted; alertable waits probe a signalled
+object first and otherwise return `STATUS_USER_APC` after delivering (L42); heap frees merge without
+leaving placeholders. The advisor rejected the first fence design (pausing the mirror deadlocks a
+rejection that would clear, because D3D's ring-space wait at `0x1914F0` never kicks) before any code
+was written. Toolkit
+`PUSHED_TO: origin / BRANCH: main / COMMIT: dc04dc0344369ea95cbff2cfc62213a26ad5324d / REMOTE_URL: https://github.com/danillogical/xboxrecomp / RESULT: fast-forward d5b0b83..dc04dc0 main -> main`.
+Game
+`PUSHED_TO: origin / BRANCH: master / COMMIT: f92db3fb16d337739eeaa2f58b276246fcc68853 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 1dffbd6..f92db3f master -> master`
+(5 text files; no `game/` path; secret audit over the outgoing objects: 0 hits). Verified on the Mac
+by `posix_check` native/cross/python; `kernel_file_apc_test` and every runtime effect are first
+exercised on Windows.
