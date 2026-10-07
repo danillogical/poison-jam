@@ -137,17 +137,36 @@ SUBMIT_DIAGNOSTIC_NAMES = {
     11: 'unsupported_method', 12: 'invalid_handle', 13: 'semaphore_fault',
     14: 'software_method_trap', 15: 'flip_stall', 16: 'held_software_method',
     17: 'held_flip_stall', 18: 'software_method_unchecked'}
-SUBMIT_STATE_FIELDS = ('generation', 'diag', 'method', 'subchannel', 'param', 'at', 'get',
-                       'put', 'successes', 'rejections', 'consecutive_rejections',
-                       'admitted_unknown')
+SUBMIT_STATE_BASE_FIELDS = ('generation', 'diag', 'method', 'subchannel', 'param', 'at', 'get',
+                            'put', 'successes', 'rejections', 'consecutive_rejections',
+                            'admitted_unknown')
+# The latched FIRST budget stop. Added because the stop that mattered most --
+# inside a packet's parameters -- printed nothing at all: only the header path
+# dumped, and the submit log stops at 64 walks. `budget_local_pc` is where the
+# walk was consuming; `at` is the rollback origin, which is not the same thing.
+SUBMIT_STATE_BUDGET_FIELDS = ('budget_stops', 'budget_local_pc', 'budget_words',
+                              'budget_packets', 'budget_count', 'budget_method',
+                              'budget_ret', 'budget_in_param', 'budget_at_packet_limit')
+SUBMIT_STATE_FIELDS = SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS
+SUBMIT_STATE_BASE_SIZE = 4 * len(SUBMIT_STATE_BASE_FIELDS)
 SUBMIT_STATE_SIZE = 4 * len(SUBMIT_STATE_FIELDS)
 
 
 def decode_submit_state(raw):
-    """Decode g_nv2a_submit_state (NV2ASubmitState: 12 little-endian u32); extra bytes are ignored."""
-    if len(raw) < SUBMIT_STATE_SIZE:
-        raise ValueError(f'submit state needs {SUBMIT_STATE_SIZE} bytes, got {len(raw)}')
-    state = dict(zip(SUBMIT_STATE_FIELDS, struct.unpack_from('<12I', raw)))
+    """Decode g_nv2a_submit_state (NV2ASubmitState, little-endian u32 fields).
+
+    The field lists are the authority, not hardcoded counts. The struct GREW when
+    the budget transcript was added, so an archive built before that has only the
+    base fields; those are decoded and the new ones are simply absent (rather than
+    reading adjacent memory as if it were the transcript). A literal count here
+    would silently misread every field after an addition.
+    """
+    if len(raw) < SUBMIT_STATE_BASE_SIZE:
+        raise ValueError(f'submit state needs {SUBMIT_STATE_BASE_SIZE} bytes, got {len(raw)}')
+    have = len(raw) // 4
+    fields = SUBMIT_STATE_FIELDS[:have]
+    state = dict(zip(fields, struct.unpack_from('<%dI' % len(fields), raw)))
+    state['has_budget_transcript'] = have >= len(SUBMIT_STATE_FIELDS)
     state['diag_name'] = SUBMIT_DIAGNOSTIC_NAMES.get(state['diag'], 'unknown')
     state['torn'] = bool(state['generation'] & 1)   # odd while a walk is writing it
     return state
@@ -263,6 +282,20 @@ def markdown(report):
         lines += ['', f"Submit state: last walk **{state['diag_name']}**; {state['consecutive_rejections']} consecutive rejection(s); "
                       f"method {hx(state['method'])}, subchannel {state['subchannel']}, param {hx(state['param'])}; "
                       f"torn: {'yes' if state['torn'] else 'no'}."]
+        # The latched FIRST budget stop. Printed whenever one happened, because
+        # this is the record the log could not carry: the stop inside a packet's
+        # parameters printed nothing at all, and the submit log stops at 64 walks.
+        if state.get('budget_stops'):
+            where = ('INSIDE a packet\'s parameters' if state.get('budget_in_param')
+                     else 'at a packet header')
+            limit = ('the 1024-packet cap' if state.get('budget_at_packet_limit')
+                     else 'the 4096-word cap')
+            lines += [f"First budget stop (of {state['budget_stops']}): {where}, hit {limit}; "
+                      f"local_pc {hx(state.get('budget_local_pc', 0))} "
+                      f"(NOT the rollback origin {hx(state['at'])}); "
+                      f"words {state.get('budget_words')}, packets {state.get('budget_packets')}, "
+                      f"straddling packet method {hx(state.get('budget_method', 0))} "
+                      f"count {state.get('budget_count')}, ret {hx(state.get('budget_ret', 0))}."]
     lines += ['',report['queue'].get('detail',''),'','## Methods in the pending stream the table lacks','']
     missing = report['missing_methods']
     if missing is None: lines.append('Method table unavailable; unsupported methods were not checked.')
