@@ -51,17 +51,22 @@ Verified with `logs/workers/title008/verify_sameflip.py` and `show_transition.py
 | `flip_stalls == present serial` (the keying holds) | **242 / 242** |
 
 The candidate set is every value the guest ever wrote to `SET_SURFACE_COLOR_OFFSET` — three
-surfaces: `0x00084000`, `0x0011C000`, `0x001B2000` (and `flip_modulo=3`, so the title is
-**triple-buffered**). The presenter can only ever publish `drawn_offset`, `targeted_offset` or
+surfaces: `0x00084000`, `0x0011C000`, `0x001B2000` (and `flip_modulo=3`, i.e. a **three-entry flip
+index ring**, not three proven scanout-buffer roles: `0x84000` is an offscreen render target). The
+presenter can only ever publish `drawn_offset`, `targeted_offset` or
 `color_offset`, and each of those is set by that method, so the set is complete for what the
 presenter can publish.
 
 ### What this establishes (OBSERVED, same-event)
 
-**Case A is eliminated for the traced window.** `present_track_flip` selected a surface, and the
+**The copy/publication mismatch is eliminated for the traced window; semantic source selection is
+UNQUALIFIED.** `present_track_flip` selected a surface, and the
 bytes published at that same flip were *that surface's bytes*, 242 times out of 242, by the
-`drawn_this_frame` branch. The presenter did not publish a stale or wrong buffer, and it did not
-fall back.
+`drawn_this_frame` branch — so the presenter did not publish a stale or wrong buffer and did not
+fall back. **That is copy/publication consistency, not proof of correct guest-intended selection:**
+`reason` restates the same heuristic, and a concrete unresolved alternative exists (at flip 2425 an
+earlier composite writes `0x11C000`, then a later `self=1` batch writes `0x84000`, and the tracker picks
+`0x84000` because it prefers the last surface drawn). **No selection bug is claimed.**
 
 **The black is guest-drawn content.** At the transition the guest *drew black into the surface it
 then selected and published*, while the other two buffers still held the previous
@@ -101,11 +106,12 @@ in `0x84000` at 2424 and in `0x11C000` at 2425–2426.
   and has answered its question; the remaining work is the per-frame batch ring that links the
   drawing of the swap surface to the texture it sampled.
 - **Evidence:** the 242/242 same-flip equality and the `drawn_this_frame` reason at 242/242
-  (above). Selection and presentation are measured correct, so instrumenting them further cannot
-  answer the remaining question.
-- **Why:** the user's decision tree assigns Case A to a source-selection bug. The measurement puts
-  the defect in the guest's own drawing/composite, so the batch ring (Turn Planner §1.1, §7 Case B)
-  is the next discriminator rather than more selection tracing.
+  (above). That is copy/publication consistency; it does **not** establish correct guest-intended
+  selection, so this PLAN_CHANGE is **superseded** by the third one below.
+- **Why:** the user's decision tree assigns Case A to a source-selection bug. The measurement
+  narrowed it to copy/publication consistency rather than eliminating the semantic question, so the
+  batch ring (Turn Planner §1.1) was the next discriminator. **Superseded:** the ring did not settle it
+  either, and the actual cause turned out to be the missing viewport constants (third PLAN_CHANGE).
 
 ## Second finding: the black does NOT depend on the `0x1964` stall
 
@@ -137,9 +143,10 @@ therefore not the cause of the black; it only ends the run.
   screen origin and every scene batch drew zero-area triangles. `0x0AF0` was **unhandled entirely**.
 - **Evidence:** TR §23.8 — the toolkit's own `nv2a_regs.h` names `XFCTX_VPSCL = 0x3a = 58` /
   `XFCTX_VPOFF = 0x3b = 59`; the executor's `vp_method` never writes them; `0x0AF0` appears in the
-  report's unhandled top ten at `x28024`. After the fix, on **one trace configuration**, distinct
-  published hashes go **11 → 659**, `0x0AF0` disappears from the unhandled list, and the 17
-  post-transition flips each get a distinct hash where before they repeated one black hash.
+  report's unhandled top ten at `x28024`. After the fix, against the pre-fix run, distinct
+  `[FBPRESENT]` hashes go **10 → 658**, `0x0AF0` disappears from the unhandled list, and the transition
+  window (flips 2426–2440) goes from one repeated black hash to **16 distinct hashes** — with flips 2425
+  and 2441 **still black**, so the fix is not total.
   `0x80084000` (93.5 % non-black, 2677 colours) renders a full 3D city scene and `0x8011C000` a
   "Now Loading" screen.
 - **Why:** this is a measured cause with a before/after on a controlled configuration, so it supersedes
@@ -194,8 +201,9 @@ flip 2425 (published 156ed4086987e325, black):
   b[1] target=0x00084000  tex=0x80084000  self=1 tris=2 px=306081
 ```
 
-`px=307200` is exactly `640*480`. So the composite writes every pixel of the frame. **That is what the
-ring establishes, and it is all it establishes about the composite.**
+`px=307200` is exactly `640*480`. **`px` counts `put_pixel` write calls (`nv2a_pb_exec.c:1867`), not
+unique pixel coverage**, so this is "307200 raster write calls, consistent with a full-screen pass" —
+**not** proof of correct copy or full coverage, and not what the ring establishes about the composite.
 
 **RETRACTED: the "faithful copy / Case C" conclusion was an OVERCLAIM.** The Turn Reviewer challenged
 it and I verified the challenge independently against the raw ring:

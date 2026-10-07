@@ -3363,7 +3363,7 @@ with a large uninitialised fraction, 1417 colours, against a fully rendered live
   being set, which is consistent with it never meeting an unknown method in a *committed* submission — the
   39 were already in the table — but that is `INFERRED`, not measured.
 
-## §23.6 The same-flip trace: the presenter is CORRECT, and the guest drew the black
+## §23.6 The same-flip trace: copy/publication consistency, and the guest drew the black
 
 **Why this measurement was needed.** Every previous draw/present comparison paired a frozen minidump
 with a published hash sampled at a *different* instant, so "the presenter chose a black surface" and
@@ -3396,8 +3396,9 @@ force a resolve, write guest memory, or alter the present call, and `RECOMP_FB_V
 **The candidate set is complete by construction.** It is exactly the three values the guest ever wrote
 to `SET_SURFACE_COLOR_OFFSET` — `0x00084000`, `0x0011C000`, `0x001B2000` — and `present_track_flip`
 can only ever return `drawn_offset`, `targeted_offset` or `color_offset`, each of which that method
-sets. So no presented surface can lie outside the set. `flip_modulo=3`: the title is
-**triple-buffered**, not double-buffered.
+sets. So no presented surface can lie outside the set. `flip_modulo=3` means the guest programs a
+**three-entry flip index ring**; it does **not** by itself establish three equivalent scanout buffers —
+`0x84000` is an offscreen render target (TR §23.8), so the three offsets are not interchangeable roles.
 
 **The transition, same-flip** (`logs/workers/title008/show_transition.py`):
 
@@ -3608,8 +3609,9 @@ batch with `px=306081`, not by the full-screen `px=307200` composite. The "unifo
 withdrawn.
 
 **What survives.** The ring establishes the *shape* of the frame — a full-screen pass samples
-`0x80084000` into a swap surface every frame, and the swap surface is what the flip publishes
-(§23.6) — and it establishes that the `self=1` batches which rasterise nothing (`tris=0 px=0`) cannot
+`0x80084000` every frame and writes a swap surface, and the swap surface is what the flip publishes in
+15 of the 17 black flips (the other 2 write `0x84000` itself, per the writer-shape table above) — and it
+establishes that the `self=1` batches which rasterise nothing (`tris=0 px=0`) cannot
 be the cause. It does **not** establish where the black originates.
 
 **A NEW missing-method class appeared, so the 29 admission was exercised.** With the 29 in the table
@@ -3627,11 +3629,25 @@ handles that family** at `nv2a_pb_exec.c:2922-2934`, but only for `attr == 0` (p
 admitting `0x1A30` would activate an existing arm rather than add behaviour — but it is a
 **render gap**: inline per-vertex diffuse colour is dropped.
 
-**The `0x1A30` witness is NOT EXERCISED so far.** A dedicated 620 s run
-(`20261007-120946-505-title008-witness-1A30`) and a 900 s run (`…-witness-1A30-long`) both logged
-**zero** `admit-unknown` lines, so neither met `0x1A30` in a committed unit. Run-to-run variation is
-first-class here, so this is `NOT EXERCISED`, not a refutation; the class stays open and cannot be
-admitted from these runs.
+**The `0x1A30` class IS runtime-witnessed, and an earlier claim in this section that it was
+NOT EXERCISED was WRONG.** The 620 s run `20261007-120946-505-title008-witness-1A30` logged zero
+`admit-unknown` lines, and that was the only run checked before writing the first version of this
+paragraph. **The 900 s run `20261007-122836-322-title008-witness-1A30-long` logged 38**
+(`log_sha256 db0ec342e12cbbd7e38157645af4ebf6e285d28c918f7bc20e11ea9f9906b066`), including
+`[PFIFO] admit-unknown class=97 method=1A30 param=00000000 at=0005BB04` — so the class has a genuine
+runtime witness and the earlier "NOT EXERCISED" statement was a **premature conclusion drawn from one
+run of a class known to vary run to run**. Turn Review caught it. The witnessed set is:
+
+```
+1A30 1A34 1A38 1A3C 1A40 1A44 1A48 1A4C   1968   0700 0704 0708 070C 0710 0714 0718 071C
+0720 0724 0728 072C 0730 0734 0738 073C   1518 151C 1520 1524   1734   17F8   18C8 18CC
+1B80 1B84   1E20 1E24   1E74
+```
+
+(38 methods; `1A30` is `SET_VERTEX_DATA4F_M + 0x30` = attribute 3 diffuse component 0, and `0700-073C`
+is a 16-method incrementing run.) The run then ended on `unhandled_exception` after a
+`budget_exhausted` at `LIMIT=packets(1024)` (`successes=3639`) from which it **recovered**, so its
+terminal state is a separate blocker, not the witness.
 
 **Instrumentation gaps, recorded as limitations rather than fixed.** The Turn Planner's start plan
 (§1.3) listed three fixes to the draft trace that were **not** implemented: (a) per-surface
@@ -3681,10 +3697,10 @@ surface they draw into once the collapse is fixed — a feedback read.
 
 | measure | before D1 | after D1 |
 |---|---|---|
-| distinct published hashes over the whole run | **11** | **659** |
+| distinct `[FBPRESENT]` hashes over the whole run | **10** | **658** |
 | `0x0AF0` in the unhandled list | yes (`x28024`) | **absent** |
 | triangles rasterised (final report) | 58378 | 40966 |
-| the 17 black flips after the transition | constant `156ed4086987e325` | **every flip a distinct hash** |
+| flips 2426–2440 (the transition window) | one repeated black hash | **16 distinct hashes** |
 
 At the dump instant the surfaces are:
 
@@ -3700,12 +3716,31 @@ the legend). Both were previously black or a partial fragment. Preserved:
 `logs/workers/title008/surfD1/0x80084000.png` and `…/0x8011C000.png`.
 
 **Classification.** The collapse and the missing `0x0AF0` handling are `OBSERVED`; the causal link from
-that to the black is **PROVED for this configuration** by the before/after on one trace configuration
-(distinct published hashes 11 → 659, and the transition frames going from one repeated black hash to a
-distinct hash per flip). It is **not** a claim that every remaining difference is explained, and it is
-**not** M15: the title screen itself — emblem, "PLEASE PRESS START TO BEGIN" over the street — has still
-not been observed on the recomp, and the `0x80084000` city scene is not yet compared like-for-like with
-the xemu reference.
+that to the black is **strongly supported for this configuration** by the before/after (distinct
+`[FBPRESENT]` hashes 10 → 658, and the transition window going from one repeated black hash to 16
+distinct hashes across flips 2426–2440), with the trace-budget confounder noted below. **Two flips in
+that window are still black** — 2425 and 2441 — so the fix does not make every post-transition frame
+non-black. It is **not** a strictly controlled experiment, **not** a claim that every remaining
+difference is explained, and **not** M15: the title screen itself — emblem, "PLEASE PRESS START TO
+BEGIN" over the street — has still not been observed on the recomp, and the `0x80084000` city scene is
+not yet compared like-for-like with the xemu reference.
+
+**Run identity, and the one thing that is NOT a controlled comparison.** The deciding run
+`20261007-124149-033-title008-d1-viewport` recorded toolkit revision `52e6d12` **plus a working-tree
+patch** (`patch_sha256 cad1114a0c22…`), i.e. the D1 fix before it was committed; its executable is
+`0311303e…`. The comparison run `20261007-115809-590-title008-ring-admitted` recorded the **clean**
+`52e6d12` (`patch_sha256 e3b0c442…`, the empty-string hash) and executable `764f66ae…`. So the two runs
+differ in the D1 patch **and** in the `RECOMP_FLIP_TRACE` budget (400 vs 900) while sharing
+`FROM=2400 CHANGE=1` and the same no-admit profile. Both runs also emit only **42 traced events**, so
+the budget cap was **non-binding** in both — which reduces but does not remove the confounder. The two
+runs additionally diverge in guest path (`ADXIO` 36 vs 6, `[READ]` 293 vs 283), so "one trace
+configuration" must not be read as "one identical guest execution". **The `10 → 658` distinct-hash
+result is therefore a before/after with those confounders**, not a strictly controlled A/B. The effect
+is far too large for them to account for, but the claim is stated as what it is. Both runs also stop on
+the **same** `0x1A30` reject at the same `at=00059420 get=00059420 put=0005C7B4` (`successes` 3560 vs
+3557), which is itself evidence that the fix did not change where the walk stops. The committed fix
+`d690d54` is the same change the run exercised (verified: `0x0AF0`→`s_vp.c[58]`,
+`0x0A20`→`s_vp.c[59]`, and the stage-0 gate are all present in the committed source).
 
 **What this does to the earlier sections.** §23.6's and §23.7's retractions stand: the presenter was
 never shown to be at fault, and the flip-time hash ordering argument is unaffected by this fix. What

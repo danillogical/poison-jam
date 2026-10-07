@@ -48,9 +48,9 @@ pre-fix `…ring-admitted`), against that run:
 
 | measure | before D1 | after D1 |
 |---|---|---|
-| distinct published hashes, whole run | **11** | **659** |
+| distinct `[FBPRESENT]` hashes, whole run | **10** | **658** |
 | `0x0AF0` in the unhandled list | yes (`x28024`) | **absent** |
-| the 17 post-transition flips | constant `156ed4086987e325` | **a distinct hash each** |
+| flips 2426–2440 (transition window) | one repeated black hash | **16 distinct hashes** (2425 and 2441 still black) |
 
 At the dump (mapping gate `matches 1 / content-mismatch 0`): `0x80084000` = `efddce3b5bb02ab1`,
 **93.5 %** non-black, **2677** colours — rendered, a **full 3D city scene** (towers, sky, clouds, road
@@ -103,19 +103,24 @@ path (no `title.adx` re-reads, no save probe — path divergence OBSERVED, the s
 INFERRED), which is why it logged zero `admit-unknown` lines. Runs after the table regeneration or the
 D1 fix use **different executables** and must not be compared without re-checking `exe_sha256`.
 
-**The stop is now `0x1A30`, and it is a render gap.** With the 29 in the table the run rejects on
-**`0x1A30`** (not `0x1964`), so the admission was exercised. `0x1A30` is
-`NV097_SET_VERTEX_DATA4F_M + 0x30` = **attribute 3 (diffuse), component 0** of the 4-float inline vertex
-family — a family the executor **already handles** (`nv2a_pb_exec.c:2922-2934`) but only for `attr==0`
-(position) and `attr==9` (texcoord 0); every other attribute is accepted and **ignored**, so inline
-per-vertex diffuse colour is dropped. Its runtime witness is **NOT EXERCISED** (620 s and 900 s runs,
-both zero `admit-unknown`), so the class stays open and must not be admitted from a decode.
+**The stop is now `0x1A30`, and it is a render gap — and that class is ALSO runtime-witnessed.** With
+the 29 in the table the run rejects on **`0x1A30`** (not `0x1964`), so the admission was exercised.
+`0x1A30` is `NV097_SET_VERTEX_DATA4F_M + 0x30` = **attribute 3 (diffuse), component 0** of the 4-float
+inline vertex family — a family the executor **already handles** (`nv2a_pb_exec.c:2922-2934`) but only
+for `attr==0` (position) and `attr==9` (texcoord 0); every other attribute is accepted and **ignored**,
+so inline per-vertex diffuse colour is dropped. **A first claim here that this class was NOT EXERCISED
+was WRONG and is retracted:** it rested on one 620 s run with zero `admit-unknown` lines, but the 900 s
+run `20261007-122836-322-title008-witness-1A30-long` logged **38 distinct** witnesses
+(`log_sha256 db0ec342…`), including `1A30/1A34/1A38/1A3C`. Those 38 are admitted from that witness:
+**NV097 444 → 482, exactly +38, zero removals, no other class changed** (mechanically verified). The
+witnessed set also names `0700-073C`, `1518-1524`, `1734`, `17F8`, `18C8/18CC`, `1968`, `1B80/1B84`,
+`1E20/1E24`, `1E74`. That run then died on the fatal `[ICALL] 0x00159330` after 624 s.
 
-**Other live blockers, none of them presentation.** The trace-admit run died on
-`[ICALL] Failed to resolve VA 0x00159330` (fatal by default, `0xE0424943`; absent from
-`recomp_dispatch.c`, with NOP padding then a clean prologue at the address, i.e. an omitted function
-reached only indirectly). And `[PFIFO] budget_exhausted … LIMIT=packets(1024)` appeared but
-**recovered** on the next walk, so it is a pacing cost rather than the L40 stop — track its count.
+**Other live blockers, none of them presentation.** The fatal
+`[ICALL] Failed to resolve VA 0x00159330` (`0xE0424943`; absent from `recomp_dispatch.c`, with NOP
+padding then a clean prologue at the address, i.e. an omitted function reached only indirectly) now
+ends runs. And `[PFIFO] budget_exhausted … LIMIT=packets(1024)` appeared but **recovered** on the next
+walk, so it is a pacing cost rather than the L40 stop — track its count.
 
 **SUPERSEDED by the Current work section above.** The block that stood here claimed the
 same-flip trace "ELIMINATES source selection" and that the ring showed a "faithful copy / Case
@@ -372,7 +377,7 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 | **F8b** | **done 2026-10-07** (toolkit `46b3265`) | the same class: the six runtime-witnessed methods `0BB0`/`0BB4`/`0BB8`/`0BBC`/`1724`/`1728`, admitted from the `[PFIFO] admit-unknown` witness (+6 on class `0x97`, zero removals). Ordered delivery pinned by a mutation-validated contract. Whether the post-admission run exercised them is **not demonstrated** — see "Current work" |
 | **F8c** | **admission CLEARED 2026-10-07** (toolkit witness-capacity fix) | the 39 NV097 methods are now **runtime-witnessed**, not decode-derived: the `[PFIFO] admit-unknown` witness was truncated at 16 by its own cap and is fixed, so one run logs 39. Table regenerated **+39, zero removals** (NV097 376 → 415). A no-switch run then moved the stop from `unsupported_method 0x0420` to **`sink_capacity`** (TR §23.3). **Corroborating decode is the NO-ADMIT run's report (39), not the witness run's (35)** — Turn Review corrected the earlier citation |
 | **F8d** | **capacity bound CLEARED 2026-10-07** (toolkit `1f86fbb`, `e85f331`) | the submission walk now commits in **units at whole-packet boundaries** (per-unit atomicity, L40), so a 5732-word submission is consumed instead of rejected. **Measured:** GET advanced `0x50B1C` → `0x5A060` (9553 words, 2.33 budgets) and the stop moved off `sink_capacity`. **Three real defects were found by tests/review, not by inspection:** `sink_count` was reset once per walk so a second unit overran `sink[]`; the old header check bounded a unit by a submission-wide count so it fired before the yield; and `admitted_unknown` re-added every earlier unit at each unit commit (published 10227 for 6137 — found by Turn Review, fixed in `e85f331`). Raising the 4096 cap was NOT the fix |
-| **F8e** | **CLEARED — the black was the missing vertex-program viewport constants** (toolkit this turn, TR §23.8) | the XDK vertex programs end with `MUL o0.xyz = r12 * c[58]` / `MAD o0.xyz = r12 * r1 + c[59]`, and **the executor never loaded `c[58]`/`c[59]`**: `0x0A20` reached only the fixed-function `s_gpu.vp_offset`, and **`0x0AF0` was unhandled entirely** (`x28024` in the report's unhandled top ten). With both slots zero, **every vertex-program vertex collapses to the screen origin**, the triangles have zero area, and the batch draws nothing — so `0x84000` was cleared to black each frame and never refilled, and the composite then faithfully copied black. **Fix:** `0x0AF0-0x0AFC` → `s_vp.c[58]` and `0x0A20-0x0A2C` → `s_vp.c[59]` as well as `vp_offset`; plus stage 0's `SET_TEXTURE_CONTROL0` enable bit honoured. **Measured** (`20261007-124149-033-title008-d1-viewport` vs the pre-fix `…ring-admitted`): distinct published hashes **11 → 659**, `0x0AF0` gone from the unhandled list, the 17 post-transition flips a **distinct hash each**; `0x80084000` = `efddce3b5bb02ab1` (93.5 % non-black, 2677 colours) renders a **full 3D city scene**, and `0x8011C000` = `eaaa65df05fa3144` (100 % non-black) a **"Now Loading"** screen. **Not M15** |
+| **F8e** | **CLEARED — the black was the missing vertex-program viewport constants** (toolkit this turn, TR §23.8) | the XDK vertex programs end with `MUL o0.xyz = r12 * c[58]` / `MAD o0.xyz = r12 * r1 + c[59]`, and **the executor never loaded `c[58]`/`c[59]`**: `0x0A20` reached only the fixed-function `s_gpu.vp_offset`, and **`0x0AF0` was unhandled entirely** (`x28024` in the report's unhandled top ten). With both slots zero, **every vertex-program vertex collapses to the screen origin**, the triangles have zero area, and the batch draws nothing — so `0x84000` was cleared to black each frame and never refilled, and the composite then faithfully copied black. **Fix:** `0x0AF0-0x0AFC` → `s_vp.c[58]` and `0x0A20-0x0A2C` → `s_vp.c[59]` as well as `vp_offset`; plus stage 0's `SET_TEXTURE_CONTROL0` enable bit honoured. **Measured** (`20261007-124149-033-title008-d1-viewport` vs the pre-fix `…ring-admitted`; the two also differ in trace budget and guest path, so this is a before/after with confounders): distinct `[FBPRESENT]` hashes **10 → 658**, `0x0AF0` gone from the unhandled list, the transition window (flips 2426–2440) going from one repeated black hash to **16 distinct hashes** (2425 and 2441 remain black); `0x80084000` = `efddce3b5bb02ab1` (93.5 % non-black, 2677 colours) renders a **full 3D city scene**, and `0x8011C000` = `eaaa65df05fa3144` (100 % non-black) a **"Now Loading"** screen. **Not M15** |
 | F6 = M15 | open | **criterion corrected 2026-10-07** (TR §23): the title screen itself, identified by CONTENT and confirmed by eye, with its hash recorded — **not** "a hash that is neither of two listed ones". The old blacklist was unsound: `87683a748e27d071` is the blue Dolby card, and the graffiti disclaimer renders in **four** hashes, three of them unlisted, so a run ending on the disclaimer (as the ceiling-clearing run did) satisfied the old letter. **An xemu reference of the real title now exists** (`logs/workers/title007/xemu/deliverable/`: emblem + "PLEASE PRESS START TO BEGIN" over a perspective city street, 640×480, reached with no input) and is the comparator. Also needs the run record with ledger IDs and Turn Reviewer reproduction |
 
 ## Next actions, in order
@@ -380,26 +385,25 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 1. **The black interval is CLEARED — the missing vertex-program viewport constants were the cause** (TR
    §23.8). Do not re-investigate it as a presentation or composite defect. `0x0AF0` now feeds
    `s_vp.c[58]` and `0x0A20` feeds `s_vp.c[59]` as well as `vp_offset`, and stage 0's enable bit is
-   honoured. Measured on one trace configuration: distinct published hashes **11 → 659**, the
-   post-transition flips a distinct hash each, `0x80084000` a full 3D city scene and `0x8011C000` a
+   honoured. Measured against the pre-fix run: distinct `[FBPRESENT]` hashes **10 → 658**, `0x0AF0` gone
+   from the unhandled list, the transition window (flips 2426–2440) going from one repeated black hash
+   to **16 distinct hashes** (2425 and 2441 are still black), `0x80084000` a full 3D city scene and `0x8011C000` a
    "Now Loading" screen. **Next: look for the title screen itself** — the emblem and
    "PLEASE PRESS START TO BEGIN" — and compare it by content with the xemu reference. Note the guest
    currently stops on the **`0x1A30`** missing method, so the run must get past that to progress.
-2. **`0x1A30` is the next method class, and it is a render gap.** It is
-   `NV097_SET_VERTEX_DATA4F_M + 0x30` = **attribute 3 (diffuse), component 0**; the executor handles
-   that family (`nv2a_pb_exec.c:2922-2934`) only for `attr==0` and `attr==9`, so inline per-vertex
-   diffuse colour is **accepted and ignored**. It needs a **runtime witness** before admission, never a
-   decode; two attempts (620 s, 900 s) are **NOT EXERCISED**. The witness run's own list also names
-   `0x0700-0x073C`, `0x18C8/0x18CC`, `0x1518-0x1524`, `0x1B80/0x1B84`, `0x17F8`, `0x1E20/0x1E24`,
-   `0x1E74`, `0x1734`, `0x1968` — most are immediate-mode vertex methods the executor already decodes.
+2. **`0x1A30` and 37 more methods are ADMITTED from a runtime witness** (NV097 444 → 482, +38, zero
+   removals). The remaining work in this class is the **render gap**: `0x1A30` is attribute 3
+   (diffuse) component 0 of the 4-float inline vertex family, which the executor decodes at
+   `nv2a_pb_exec.c:2922-2934` but acts on only for `attr==0` and `attr==9`. Inline per-vertex diffuse
+   colour is currently dropped.
 3. **The 29-method class is CLOSED** — admitted from a genuine runtime witness (`0580-05AC`,
    `06C0-06FC`, `1964`; +29, zero removals, mechanically verified per class). Do not re-admit, and do
    not take any of them from a decode.
-4. **Also live, and neither is presentation:** the fatal `[ICALL] Failed to resolve VA 0x00159330`
-   (`0xE0424943`; absent from `recomp_dispatch.c`, NOP padding then a clean prologue — an omitted
-   function reached only indirectly, so route it through recovery/relift), and the 1024-packet
-   `budget_exhausted` that **recovered** on the next walk (a pacing cost; track its count, and revisit
-   L40's "the 1024-packet cap stays a stop" if it starts recurring every kick).
+4. **Recover `0x00159330`** — the fatal `[ICALL]` (`0xE0424943`) that now ends runs: absent from
+   `recomp_dispatch.c`, NOP padding then a clean prologue, i.e. an omitted function reached only
+   indirectly, so route it through recovery/relift. The 1024-packet `budget_exhausted` that
+   **recovered** is a pacing cost; track its count and revisit L40's "the 1024-packet cap stays a stop"
+   only if it starts recurring every kick.
 5. **Correct the two eliminated premises so they are not re-run.** The `sub_0019E438` "spin" is ordinary
    DirectSound lock traffic (all 16356 calls return 1; enter/leave balanced 24702/24702). The pinned
    composites from `RECOMP_FB_VA=0x8011C000` are **accumulation artifacts, not a title**, and pinned vs
