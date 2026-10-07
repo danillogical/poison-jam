@@ -2614,5 +2614,88 @@ spans, and both are short (`0x30` and `0x60` bytes). They were *not* found by a 
 spans already existed, which is the point: the census can distinguish "unowned gap" from "owned but
 possibly wrong extent", and only the first class was live here.
 
+## 22. The present ceiling was one stale method-table entry: `0x1810` (2026-10-06)
+
+**Explained, then cleared.** The ceiling was the submission walk rejecting the whole stream with
+`unsupported_method` on method `0x1810`, which is `NV097_DRAW_ARRAYS`. It was **absent from the
+generated admission table** (`xboxrecomp/src/nv2a/nv2a_method_table.c`, ledger L39) between `0x1808`
+and `0x1818`, although the toolkit's executor **already implemented it**
+(`xboxrecomp/src/kernel/nv2a_pb_exec.c`, `case NV097_DRAW_ARRAYS`, whose own comment calls it "the
+method this title actually draws with"). The table was stale relative to the executor — the same
+class as the `0x1720` case recorded in L39, not a missing implementation.
+
+**Three independent witnesses agreed on the first rejection, all naming the same method at the same
+address.** They are listed because they are different artifacts, not three readings of one:
+
+| witness | artifact | what it said |
+|---|---|---|
+| `[PFIFO] reject` | new-mirror run `20261006-203929-286-title005-ceiling` | `diag=unsupported_method method=1810 subch=0 param=03000000 at=00008EF0 get=00008EF0 put=0000A6D4 successes=15 rejections=1`, then `still rejecting n=16`, `n=256` |
+| `g_nv2a_submit_state` | same dump, `just gpu-report` | `last walk unsupported_method; 2695 consecutive rejection(s); method 0x00001810`; predicted diagnostic `unsupported_method`; pending-stream table lists exactly one missing method, `class 0x97 method 0x1810 first VA 0x80009ADC` |
+| the guest's own bytes | same dump, decoded at GET | the packet at `0x80009ADC` is `non_incrementing; header 0x40041810; method 0x00001810, count 1` |
+
+**The archived runs already contained it, and this refutes the earlier reading.** All five target
+dumps (f9, g06, f10, f12, f13) log `[PFIFO] submit #12 diag=unsupported_method ... method=1810
+at=00008EF0` as the **first** rejection, with GET pinned at `0x8EF0` and no later `diag=ok`. So the
+rejection was never a new regression, and "flips and presents stopped together, therefore the guest
+stopped submitting" does not follow: it is what a rejected walk produces (L40 — the walk commits
+all-or-nothing, so no flip, no commit consumer, and no 10 s `[GPU]` report).
+
+**Why the archived dumps could not show it, and why the ceiling count moved 1000 → 888.** With the
+pre-2026-10-06 live fence mirror (L17) every fence was reported complete whether or not the walk
+consumed it, so after a rejection D3D kept writing the ring and overwrote the rejected bytes. The
+A/B run `20261006-205306-080-title005-ceiling-ab-live` (`RECOMP_FENCE_MIRROR_LIVE=1`) reproduces that:
+24 reject lines, 8 recoveries, and the walk moves *past* `0x8EF0` to a later blocker
+(`at=00033D04`, `unsupported_method` then `reserved_opcode`), reaching presents=620. So an archived
+dump's ring at GET is a later frame's bytes, and TR §19's 1000/888 difference is a property of how
+far that accidental rescue got, not of the guest's scene.
+
+**The fix, and its provenance.** The table is generated from measured submission rings, so the fix is
+to regenerate it from a ring that contains the method (never to relax the rejection — L39):
+
+```text
+python -X utf8 scripts/gen-nv2a-method-inventory.py \
+  20260922-110235-244-spanfix-1185b0 \
+  20260930-230206-594-f4-frames-after-horizon-fix \
+  20261006-203929-286-title005-ceiling
+```
+
+Set difference against the committed table: **exactly `+0x1810`, nothing removed** (380 → 381
+entries; NV097 370). Each run is decoded only to **its own** log-derived ring top. A determinism
+control — regenerating from the two pre-existing runs alone — reproduced the committed table
+byte-for-byte, so the change is attributable to the new run alone. The generated inventory document
+now records the union of 3 runs / 385 pairs.
+
+**The ceiling is cleared, and this is a new measurement rather than a re-reading.** Run
+`20261006-210559-268-title005-fixed` (420 s, no exploratory switch beyond `just title-run`'s
+standard four): **0 reject lines, 0 still-rejecting, 0 recovered, 0 admit-unknown**,
+`Submit state: last walk ok; 0 consecutive rejection(s)`, `Methods in the pending stream the table
+lacks: None`, final GET == PUT, and **presents = 2410** against the old 888. The independent
+confirmation run `20261006-215642-480-title005-confirm` reproduces it on the durable tree:
+0 rejections, `last walk ok`, presents = 1680 at 297 s (a 300 s bound), 10 distinct frame hashes.
+The `[GPU]` counters corroborate that frames were really drawn: `rasterised 14246 triangles; 0
+batches skipped as not screen-space; 0 batches via the fixed-function transform` and `batches: 8318
+textured, 0 with no texcoords, 0 with texcoords but no usable stage`.
+
+**What this does not establish.** It is exploratory evidence (the run carries `RECOMP_APU_TRAP`,
+`RECOMP_PB_EXEC`, `RECOMP_FB_WINDOW`, `RECOMP_FB_PRESENT_DUMP_EVERY`), so it is not a fidelity claim.
+**M15 is not reached**: the window and BMP dumps show the run still ending on the graffiti
+disclaimer, and no title-screen frame exists. And a *second* blocker in the same class was then
+measured: after 3498 successes the walk rejects on `unsupported_method method=0BB0` (a
+`NV097_SET_TRANSFORM_CONSTANT` slot), with the pending region also carrying `0BB4`, `0BB8`, `0BBC`,
+`1724` and `1728` — six methods, all register-state, confirmed at runtime by
+`RECOMP_NV2A_ADMIT_UNKNOWN=1` in run `20261006-213505-255-title005-admit3`
+(`[PFIFO] admit-unknown class=97 method=…`). Once those are admitted, the same run hits a **different**
+diagnostic, `budget_exhausted` (L40's per-walk word budget), which needs its own fix and no switch.
+
+**A methodological caution for the next packet.** Regenerating the table from those later runs
+directly is **not** safe as done here. Their rings have wrapped: decoding
+`20261006-211635-913-title005-m15` from `0x1000` to its log-derived top stops with
+`bad_target 0x00100000`, and including it inflates the union from 381 to 434 methods, adding a dense
+`0x1848`–`0x18F8` run (54 entries) that the *real* walk never required — the real walk rejected at
+`0x2FF4C` for `0x0BB0`, which is past most of those packets. The generator's decode and the model's
+walk can diverge on a wrapped ring, so a table entry must be taken from a run whose decode **reached
+PUT**, or from the `[PFIFO] admit-unknown` list of a run that actually exercised the method. The
+`0x1810` fix above satisfies this: its source run reached PUT.
+
 
 

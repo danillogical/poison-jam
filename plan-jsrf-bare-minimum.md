@@ -35,34 +35,50 @@ SEGA → Smilebit → ADX → Dolby → the graffiti disclaimer (frame hashes `5
 dispatch failures stop there too (g06 `20261005-192455-691-g06-thunk`, 905 s; f9
 `20261004-185558-235-f9-frames`, 1203 s). **The title screen is not reached and M15 is not claimed.**
 
-**The present ceiling is the critical path, and its most likely cause is in the GPU model, not the
-guest** (code review 2026-10-06; a hypothesis until step 1 below decides it):
+**The present ceiling was one stale method-table entry, and it is cleared** (TR §22). It was the
+submission walk rejecting the whole stream with `unsupported_method` on method `0x1810`
+(`NV097_DRAW_ARRAYS`), which was missing from the generated admission table (L39) although the
+executor already implemented it (`xboxrecomp/src/kernel/nv2a_pb_exec.c`, `case NV097_DRAW_ARRAYS`).
+Three independent witnesses named it: the `[PFIFO] reject` line, `g_nv2a_submit_state` in
+`just gpu-report`, and the guest's own bytes at GET. **All five archived dumps already logged it as
+their first rejection at submit #12**, so it was never a regression. The table was regenerated from a
+ring that contains the method (exactly `+0x1810`, nothing removed) and the ceiling is gone: a
+no-switch run reaches **presents = 2410** against the old 888 with **zero rejections** and
+`last walk ok`, independently reproduced by `20261006-215642-480-title005-confirm`. **M15 is still not
+claimed** — the run still ends on the graffiti disclaimer.
 
-- The submission walk commits all-or-nothing (L40): a rejected walk moves no GET, publishes no flip
-  and calls no commit consumer (`xboxrecomp/src/nv2a/nv2a_core.c` `nv2a_submit_pending`). The 10 s
-  `[GPU]` report runs only from that consumer (`xboxrecomp/src/kernel/nv2a_pb_exec.c`
-  `pb_exec_commit_consumer`), so "flips
-  and presents stop together and the report never resumes" is what a rejected walk produces. The
-  earlier reading "both stopped, so the guest stopped submitting" does not follow.
-- The admitted-method table (L39) was measured from the logo and disclaimer pushbuffers only, so the
-  first new scene is likely to send a method it lacks — the F4 stall on `0x1720` was this class. A
-  rejected walk is sticky: every later kick re-walks from the same GET.
-- Until 2026-10-06 the rejection was invisible: the per-submit line stopped at submission 63. The
-  toolkit now logs `[PFIFO] reject …` on the first rejection and on every diagnostic change, and
-  publishes `g_nv2a_submit_state` for dumps.
-- **The fence mirror (L17) removed back-pressure** in every archived run: it reported every fence
-  complete whether or not the walk consumed the commands, so after a rejection D3D kept writing the
-  ring, the guest kept running (its update counters moved), and the bytes at GET in a late archived dump
-  may be a later frame's — read such a decode as the *current* blocker; the first `[PFIFO] reject` line
-  names the original one. **Since toolkit 2026-10-06** the mirror publishes the fence of the last
-  consumed kick, and a rejected walk is re-tried every 100 ms; a sticky rejection now leaves the guest
-  spinning in D3D's ring-space wait at `0x1914F0`, as on hardware. `RECOMP_FENCE_MIRROR_LIVE=1` restores
-  the old mirror for an A/B.
+**The next blocker is the same class, and then a different one** (TR §22):
+
+- `unsupported_method method=0BB0` (an `NV097_SET_TRANSFORM_CONSTANT` slot) after 3498 successes, with
+  the pending region also carrying `0BB4`, `0BB8`, `0BBC`, `1724`, `1728` — six register-state
+  methods, confirmed at runtime by `RECOMP_NV2A_ADMIT_UNKNOWN=1`
+  (`20261006-213505-255-title005-admit3`). They need regenerating into the table.
+- Once those are admitted the same run hits `budget_exhausted` (L40's per-walk word budget), which is
+  a **different** class: its own fix (walk bounds / incremental commit), no switch, and never a
+  relaxed rejection (L39).
+- **Provenance caution.** Those later rings have **wrapped**, so the generator's decode and the
+  model's walk can diverge: decoding `20261006-211635-913-title005-m15` from `0x1000` stops with
+  `bad_target 0x00100000` and would inflate the table by a dense `0x1848`–`0x18F8` run the real walk
+  never required. Take a new entry only from a decode that **reached PUT**, or from an
+  `[PFIFO] admit-unknown` line of a run that exercised it.
+
+Standing facts from this turn's measurements:
+
+- The submission walk commits all-or-nothing (L40), so a rejected walk moves no GET, publishes no flip
+  and calls no commit consumer — "flips and presents stop together and the 10 s `[GPU]` report never
+  resumes" is what a rejection produces. The earlier reading "both stopped, so the guest stopped
+  submitting" does not follow.
+- **The pre-2026-10-06 fence mirror (L17) removed back-pressure**: it reported every fence complete
+  whether or not the walk consumed the commands, so after a rejection D3D kept writing the ring and an
+  archived dump's bytes at GET are a *later* frame's — the first `[PFIFO] reject` line names the
+  original blocker, and the `RECOMP_FENCE_MIRROR_LIVE=1` A/B (`20261006-205306-080`) shows the walk
+  moving past `0x8EF0` to a later blocker. Since toolkit 2026-10-06 the mirror publishes the fence of
+  the last consumed kick and a rejected walk is re-tried every 100 ms; a sticky rejection leaves the
+  guest in D3D's ring-space wait at `0x1914F0`, as on hardware.
 - `GET ≠ PUT` alone does not mean "unknown method": budget, loop, sink, invalid handle, bad target
   and reserved-opcode rejections also pin GET. Branch on the diagnostic.
-- The ceiling moved from 1000 to 888 with the F7b/F7c batches (TR §19). It is recorded as a
-  correlation; once the diagnostic is known, check whether the batch simply changed when the next scene
-  starts.
+- The 1000 → 888 change (TR §19) is explained by the same mechanism: it was how far the live mirror's
+  accidental rescue got, not a property of the guest's scene.
 
 **The dispatch stop chain (F7) is cleared through stop 28.** Each stop was a missing, swallowed or
 mis-sized recovered function found by one run; the class is now mostly found statically.
@@ -93,38 +109,27 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 | F4b | done 2026-10-04 | the no-op `fcmove`/`fcmovne` lift held the SEGA fade; toolkit `671ab0a` translates them |
 | F5 | parked | intro movies: if Sofdec blocks, skip and ledger it (*patched*/*intentionally ignored*); decoding is M29 |
 | F7 | done through stop 28 | the dispatch stop chain above; residue in the backlog |
-| **F8** | **next** | **the present ceiling**: name the walk diagnostic at the freeze and clear it — next actions 1–4 |
+| **F8** | **cleared 2026-10-06** | the present ceiling: `unsupported_method 0x1810`, one stale table entry; the table now carries it and a no-switch run reaches presents 2410 with zero rejections (TR §22) |
+| **F8b** | **next** | the same class again — `unsupported_method 0x0BB0` plus `0BB4`/`0BB8`/`0BBC`/`1724`/`1728` — then `budget_exhausted`, which needs walk bounds (TR §22) |
 | F6 = M15 | open | a frame dump of the title screen plus the run record with its ledger IDs; its hash is neither disclaimer hash; compared by eye with an xemu screenshot of the same screen (T3); reproduced by the Turn Reviewer |
 
 ## Next actions, in order
 
-1. **Decide the ceiling without a run.** On the archived freeze runs — f9 `20261004-185558-235-f9-frames`,
-   g06 `20261005-192455-691-g06-thunk`, and title-004's `20261006-011638-029-f10-underwide-batch152`,
-   `20261006-022404-045-f12-exercise-stop26`, `20261006-024003-212-f13-exercise-stop27` — grep the log
-   for `[PFIFO] budget_exhausted` (printed unconditionally) and run `just gpu-report <run>`: final
-   GET vs PUT, the walk diagnostic the pending stream would hit, and the (class, method) pairs it carries
-   that the table lacks. Read the main thread's wait site in `stacks.txt` beside it.
-2. **One bounded `just title-run`** on the 2026-10-06 toolkit. The first `[PFIFO] reject` line names
-   the original rejection and `just gpu-report` prints `g_nv2a_submit_state`; `[FBPHASE] … (stalled 1s)`
-   reads the boot-phase object once presents stop, and `stacks.txt` shows whether the main thread sits in
-   `0x1914F0` (a sticky rejection with the new fence mirror). This toolkit also changed four behaviours
-   at once (fence mirror, present choice, `STATUS_USER_APC`, heap merging), so repeat the run with
-   `RECOMP_FENCE_MIRROR_LIVE=1` as an A/B, and confirm `title.adx` reads still advance (a regression check
-   for the APC change; JSRF's `SleepEx` callers ignore the status). The same run exercises stop 28
-   (`0x81860`); do not spend separate runs on the stop chain until the ceiling is explained.
-3. **Branch on the diagnostic**, not on `GET ≠ PUT` alone:
-   - `unsupported_method` → one bounded run with `RECOMP_NV2A_ADMIT_UNKNOWN=1` (L44, exploratory) lists
-     every missing method of the next scene in one pass (`[PFIFO] admit-unknown`). Classify each as a
-     *state* method or an *action* method (xemu `pgraph`/nv2a docs) before it enters the table through
-     `scripts/gen-nv2a-method-inventory.py` (pass `--put=` explicitly: the ring top it reads from the log
-     stops at submission 63); action methods need an implementation, not just admission. Rerun
-     **without** the switch. If an admitted run then shows GET == PUT with the guest waiting, suspect an
-     admitted action method before anything else.
-   - `invalid_handle`, a class outside the table, `budget_exhausted`, `control_flow_loop`,
-     `sink_capacity`, `invalid_target`, `reserved_opcode` → each needs its own fix (RAMHT/class support,
-     walk bounds); the switch does not apply.
-   - `GET == PUT` → the guest itself stopped submitting: find the main-thread wait (f9 of 10-04 sat in
-     `NtDelayExecution` under `sub_00013F80`, called from `0x6FA3C` in `0x6F9E0`).
+1. **Admit the six measured methods, from sound provenance.** `0x0BB0`, `0x0BB4`, `0x0BB8`, `0x0BBC`,
+   `0x1724`, `0x1728` are confirmed at runtime by `[PFIFO] admit-unknown` in
+   `20261006-213505-255-title005-admit3`. Regenerate the table through
+   `scripts/gen-nv2a-method-inventory.py`, taking each entry only from a decode that **reached PUT**
+   or from an `admit-unknown` line: the later rings have **wrapped**, and including
+   `20261006-211635-913-title005-m15`'s full decode stops at `bad_target 0x00100000` and invents a
+   dense `0x1848`–`0x18F8` run the real walk never required (TR §22). They are register-state methods,
+   so capture is the implementation; the executor's action handling is unaffected.
+2. **Then fix `budget_exhausted`** (L40's per-walk word budget), which the same run hits once the six
+   are admitted. This is a different class: walk bounds or incremental commit, its own measurement,
+   **no switch**, and never a relaxed rejection (L39). Measure first whether the guest really sends one
+   over-budget submission or the walk is running away on a mis-parse.
+3. **Do not spend runs on the dispatch stop chain** until the ceiling path is finished; stop 28
+   (`0x81860`) is still **not exercised** by any run this turn (`scripts/check-run-exercised.py`
+   reports NOT EXERCISED for every post-fix run), so `config/stop-chain.json` is unchanged.
 4. **When a new scene appears, read the present lines before trusting the window.** Until 2026-10-06
    the window was handed `drawn_offset`, which only the software rasteriser's triangles update, so a
    frame of clears or untransformed (vertex-program) batches presented the previous buffer. The present
@@ -143,12 +148,23 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
   outside-owner shims; census commit `0cc6d5d`, counts in `git show dcc93ab:plan-turn-updated-title-004.md`
   "B5"), and the `gap_prologue` root cause (needs a full regeneration; batch the 12 sibling spans, each
   verified by decode before landing).
-- **Toolkit review findings (2026-10-06):** the fence mirror, the stale present, `STATUS_USER_APC` and
-  heap merging were fixed the same day and await their first Windows run (next action 2; CTest
-  `kernel_file_apc_test`, `kmem`, `fence_snapshot`, `nv2a_present_track`, `nv2a_submit_diag`). Open: the
-  `[APUWAIT]` line cap, and JSRF kick sites other than `0x191390` — the new fence mirror assumes each
-  advances `[dev+0x30]` before writing PUT; list every caller of `0x1912A0` on Windows before trusting
-  it (a lagging site would stall a normal frame in `0x1914F0` with no `[PFIFO] reject`).
+- **Toolkit review findings (2026-10-06): exercised on Windows this turn.** The four `dc04dc0`
+  behaviours were judged: the **fence mirror** holds back-pressure as designed (a rejected walk leaves
+  GET pinned and the guest in the ring-space wait, with a `[PFIFO] reject` line present) and the
+  `RECOMP_FENCE_MIRROR_LIVE=1` A/B reproduces the old behaviour, so the mirror is sound on Windows —
+  the 1000/888 count was a property of the old mirror, not a regression (TR §22). CTest
+  `kernel_file_apc_test` (its `STATUS_USER_APC` assertions), `kmem`, `fence_snapshot`,
+  `nv2a_present_track`, `nv2a_submit_diag` all pass; `just test` 44/44 and `just check` clean. Still
+  open: the `[APUWAIT]` line cap, and **stop 28 (`0x81860`) is still not exercised** by any run.
+  **Fence-ordering audit done (static, read-only):** `0x1912A0` has exactly 5 direct callers (two
+  independent derivations, and the address occurs as a raw dword 0 times, so no indirect site exists).
+  The literal comment "D3D advances the counter before it writes PUT" is **false for two of them**
+  (`0x19167C` on its `0x19165C` path, and the `0x192440` bring-up kick), but neither can manufacture a
+  false ceiling: `0x191390` returns the **pre**-advance counter as the fence and then advances by 2, so
+  the live counter is always ≥ any recorded fence. A real staleness path exists in principle —
+  `0x191390` with arg bit 1 advances *without* kicking, and `nv2a_retry_stalled_walk` can commit with no
+  new kick — but it is not what happened here, and it is distinguishable at runtime (a lagging mirror
+  produces no `[PFIFO] reject` and no rise in `consecutive_rejections`; a rejected walk does both).
 - **Undiagnosed:** the XBE `DOLBY` section being written although marked read-only (section protection
   is not enforced; seen with the `0xFFC00000` fill, which TR §9 explains as the `0x32610` misdispatch,
   closed by its recovery), and the second cause of the disc-error dialog at ~950 s with no OOM
