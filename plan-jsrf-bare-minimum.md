@@ -121,12 +121,13 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 
 1. **Admit the six measured methods, from sound provenance.** `0x0BB0`, `0x0BB4`, `0x0BB8`, `0x0BBC`,
    `0x1724`, `0x1728` are confirmed at runtime by `[PFIFO] admit-unknown` in
-   `20261006-213505-255-title005-admit3`. Regenerate the table through
-   `scripts/gen-nv2a-method-inventory.py`, taking each entry only from a decode that **reached PUT**
-   or from an `admit-unknown` line: the later rings have **wrapped**, and including
-   `20261006-211635-913-title005-m15`'s full decode stops at `bad_target 0x00100000` and invents a
-   dense `0x1848`–`0x18F8` run the real walk never required (TR §22). They are register-state methods,
-   so capture is the implementation; the executor's action handling is unaffected.
+   `20261006-213505-255-title005-admit3`; those records are queued only after a successful commit, so
+   they are **stronger than any decode**. Take the six from that witness, and expect **exactly +6 on
+   class `0x97` and zero removals**. Do **not** regenerate the union from the later wrapped rings: TR §22
+   records that a "reached PUT" decode can still invent methods, because the generator is not the model's
+   walk (it ignores the non-incrementing bit and lacks the model's `0x1FFC` method-range rejection).
+   The generator now fails closed on an incomplete decode and on any removal, so a wrong run set is an
+   error rather than a silent table rewrite.
 2. **Then fix `budget_exhausted`** (L40's per-walk word budget), which the same run hits once the six
    are admitted. This is a different class: walk bounds or incremental commit, its own measurement,
    **no switch**, and never a relaxed rejection (L39). Measure first whether the guest really sends one

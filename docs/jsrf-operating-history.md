@@ -2800,3 +2800,39 @@ the full order for the turn is: toolkit `505cda5` at 05:19:39Z, then the game's 
 Next Windows turn: admit the six
 runtime-confirmed state methods (`0BB0`/`0BB4`/`0BB8`/`0BBC`/`1724`/`1728`) and then fix
 `budget_exhausted`.
+
+## 2026-10-06 (later) — staffing substitution, and the generator's fail-closed guards
+
+**Owner-authorised staffing change.** The `claude` route ran out of tokens, so the owner directed that
+`codex/gpt-6.1-sol` stand in for it at matching effort: the Turn Planner role at `high` and the
+Persistent Advisor role at `xhigh` (workflow §1 otherwise pins both to
+`claude/claude-opus-5-5`). The Turn Reviewer already used `codex/gpt-6.1-sol` at `high`, so that role
+is unchanged. This is an owner decision, recorded here as required; §1 remains the authority and a
+future session should use the claude route again unless the owner says otherwise.
+
+**`scripts/gen-nv2a-method-inventory.py` now fails closed (game `52657f4`).** The generator writes two
+tracked files — this repo's `docs/jsrf-nv2a-method-inventory.md` and the toolkit's
+`nv2a_method_table.c` — and parses argv by hand. Two destructive paths were measured, not theorised:
+`--help` fell through both filters and regenerated from the default single old run, dropping ~86
+methods while printing `wrote ...`; and `--budget=0` stopped the walk on its first word and wrote a
+three-method table over the real toolkit file. Both were caught and restored from git, and both are
+now refused, along with an incomplete decode (a run that did not reach PUT) and any generation that
+would remove methods. `--table-out`/`--doc-out` redirect both writes so the tool can be exercised
+without touching either repository, and the documented three-run invocation still reproduces both
+committed artifacts with zero differing lines.
+
+**A durable provenance limit found while testing the guards (TR §22).** "Reached PUT" is necessary but
+**not sufficient**: the generator is not the model's walk. It increments every parameter's method
+(`m = method + 4 * i`) while the model honours the non-incrementing bit and rejects an incrementing
+span past `0x1FFC`. Two verified fixtures diverge — header `0x400C1810` (non-incrementing, three
+params) yields `1810/1814/1818` where the model writes `1810` three times, and header `0x00081FFC`
+yields `1FFC/2000` where the model rejects with `method_range`. So the next packet must admit methods
+from a **runtime committed witness** (`[PFIFO] admit-unknown`, queued only after a successful commit),
+not from a decode whose only credential is reaching its own chosen PUT. The `0x1810` fix is unaffected:
+it is a single-parameter incrementing packet, independently confirmed at runtime.
+
+**A safety lesson about the test suite itself.** Running the guard tests against a *reverted* generator
+destroys the real artifacts, because the reverted script ignores the redirect flags — that happened
+twice during this work, both times caught and restored from git. The suite now preflights whether the
+script under test can redirect both writes and **skips** the whole suite if it cannot, so producing a
+RED baseline can no longer damage the tree.
