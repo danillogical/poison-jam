@@ -66,10 +66,400 @@
       "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
       "log_line": 81486,
       "witness": "[PFIFO] admit-unknown class=97 method=1728 param=00395018 at=000301D4"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0420",
+      "name": "NV097_SET_TEXTURE_MATRIX_ENABLE",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107901,
+      "witness": "[PFIFO] admit-unknown class=97 method=0420 param=00000000 at=0004D62C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0424",
+      "name": "NV097_SET_TEXTURE_MATRIX_ENABLE + 0x4",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107902,
+      "witness": "[PFIFO] admit-unknown class=97 method=0424 param=00000000 at=0004D634"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0428",
+      "name": "NV097_SET_TEXTURE_MATRIX_ENABLE + 0x8",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107903,
+      "witness": "[PFIFO] admit-unknown class=97 method=0428 param=00000000 at=0004D63C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x042C",
+      "name": "NV097_SET_TEXTURE_MATRIX_ENABLE + 0xC",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107904,
+      "witness": "[PFIFO] admit-unknown class=97 method=042C param=00000000 at=0004D644"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0480",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107905,
+      "witness": "[PFIFO] admit-unknown class=97 method=0480 param=BF258EC8 at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0484",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX + 0x4",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107906,
+      "witness": "[PFIFO] admit-unknown class=97 method=0484 param=3D99C272 at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0488",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX + 0x8",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107907,
+      "witness": "[PFIFO] admit-unknown class=97 method=0488 param=3F424FEB at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x048C",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX + 0xC",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107908,
+      "witness": "[PFIFO] admit-unknown class=97 method=048C param=00000000 at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0490",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX + 0x10",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107909,
+      "witness": "[PFIFO] admit-unknown class=97 method=0490 param=3D060DB4 at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0494",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX + 0x14",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107910,
+      "witness": "[PFIFO] admit-unknown class=97 method=0494 param=3F7F38AE at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0498",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX + 0x18",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107911,
+      "witness": "[PFIFO] admit-unknown class=97 method=0498 param=BD90D95A at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x049C",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX + 0x1C",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107912,
+      "witness": "[PFIFO] admit-unknown class=97 method=049C param=00000000 at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x04A0",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX + 0x20",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107913,
+      "witness": "[PFIFO] admit-unknown class=97 method=04A0 param=BF4314A1 at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x04A4",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX + 0x24",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107914,
+      "witness": "[PFIFO] admit-unknown class=97 method=04A4 param=BCAB330B at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x04A8",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX + 0x28",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107915,
+      "witness": "[PFIFO] admit-unknown class=97 method=04A8 param=BF25AEEA at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x04AC",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX + 0x2C",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107916,
+      "witness": "[PFIFO] admit-unknown class=97 method=04AC param=00000000 at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x04B0",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX + 0x30",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107917,
+      "witness": "[PFIFO] admit-unknown class=97 method=04B0 param=00000000 at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x04B4",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX + 0x34",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107918,
+      "witness": "[PFIFO] admit-unknown class=97 method=04B4 param=00000000 at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x04B8",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX + 0x38",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107919,
+      "witness": "[PFIFO] admit-unknown class=97 method=04B8 param=00000000 at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x04BC",
+      "name": "NV097_SET_MODEL_VIEW_MATRIX + 0x3C",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107920,
+      "witness": "[PFIFO] admit-unknown class=97 method=04BC param=3F800000 at=0004D66C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0680",
+      "name": "NV097_SET_COMPOSITE_MATRIX",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107921,
+      "witness": "[PFIFO] admit-unknown class=97 method=0680 param=C3B31E6E at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0684",
+      "name": "NV097_SET_COMPOSITE_MATRIX + 0x4",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107922,
+      "witness": "[PFIFO] admit-unknown class=97 method=0684 param=419F01C6 at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0688",
+      "name": "NV097_SET_COMPOSITE_MATRIX + 0x8",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107923,
+      "witness": "[PFIFO] admit-unknown class=97 method=0688 param=42E4CBDA at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x068C",
+      "name": "NV097_SET_COMPOSITE_MATRIX + 0xC",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107924,
+      "witness": "[PFIFO] admit-unknown class=97 method=068C param=00000000 at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0690",
+      "name": "NV097_SET_COMPOSITE_MATRIX + 0x10",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107925,
+      "witness": "[PFIFO] admit-unknown class=97 method=0690 param=C2F7E1B7 at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0694",
+      "name": "NV097_SET_COMPOSITE_MATRIX + 0x14",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107926,
+      "witness": "[PFIFO] admit-unknown class=97 method=0694 param=C3A111BC at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0698",
+      "name": "NV097_SET_COMPOSITE_MATRIX + 0x18",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107927,
+      "witness": "[PFIFO] admit-unknown class=97 method=0698 param=C293790A at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x069C",
+      "name": "NV097_SET_COMPOSITE_MATRIX + 0x1C",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107928,
+      "witness": "[PFIFO] admit-unknown class=97 method=069C param=00000000 at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06A0",
+      "name": "NV097_SET_COMPOSITE_MATRIX + 0x20",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107929,
+      "witness": "[PFIFO] admit-unknown class=97 method=06A0 param=CAF21CFF at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06A4",
+      "name": "NV097_SET_COMPOSITE_MATRIX + 0x24",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107930,
+      "witness": "[PFIFO] admit-unknown class=97 method=06A4 param=C8547977 at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06A8",
+      "name": "NV097_SET_COMPOSITE_MATRIX + 0x28",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107931,
+      "witness": "[PFIFO] admit-unknown class=97 method=06A8 param=CACDA0E1 at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06AC",
+      "name": "NV097_SET_COMPOSITE_MATRIX + 0x2C",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107932,
+      "witness": "[PFIFO] admit-unknown class=97 method=06AC param=CB1EDC28 at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06B0",
+      "name": "NV097_SET_COMPOSITE_MATRIX + 0x30",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107933,
+      "witness": "[PFIFO] admit-unknown class=97 method=06B0 param=BEF2109C at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06B4",
+      "name": "NV097_SET_COMPOSITE_MATRIX + 0x34",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107934,
+      "witness": "[PFIFO] admit-unknown class=97 method=06B4 param=BC546E97 at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06B8",
+      "name": "NV097_SET_COMPOSITE_MATRIX + 0x38",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107935,
+      "witness": "[PFIFO] admit-unknown class=97 method=06B8 param=BECD965C at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06BC",
+      "name": "NV097_SET_COMPOSITE_MATRIX + 0x3C",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107936,
+      "witness": "[PFIFO] admit-unknown class=97 method=06BC param=00000000 at=0004D6B0"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1748",
+      "name": "NV097 method 0x1748 (no register name)",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107939,
+      "witness": "[PFIFO] admit-unknown class=97 method=1748 param=00F10014 at=0004E18C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1B40",
+      "name": "NV097 method 0x1B40 (no register name)",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107937,
+      "witness": "[PFIFO] admit-unknown class=97 method=1B40 param=00ED0000 at=0004DF40"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1B44",
+      "name": "NV097 method 0x1B44 (no register name)",
+      "run": "20261007-061613-201-title007-witness-full",
+      "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
+      "log_line": 107938,
+      "witness": "[PFIFO] admit-unknown class=97 method=1B44 param=08810629 at=0004DF40"
     }
   ],
   "known_limitations": [
-    "These six are the methods the walk committed on the LAST successful submission before the budget rejection. They are NOT a complete list of what the region needs: an offline decode of the same region shows eight further methods missing from the table (0x0420, 0x0424, 0x0428, 0x042C, 0x0480, 0x0680, 0x1748, 0x1B40), the first at word 493 of GET=0x494F4..PUT=0x4E680. Those were never logged because the admitting walk was the one that hit the word budget and so never committed. Admitting these six is therefore necessary but NOT sufficient to clear that region; see TR section 22.",
+    "SUPERSEDED 2026-10-07 (title-007). This limitation said the six were an incomplete list because the admitting walk hit the word budget and never committed, so further methods (0x0420, 0x0424, 0x0428, 0x042C, 0x0480, 0x0680, 0x1748, 0x1B40) were never logged. The real cause was the witness's own 16-entry cap (NV2A_ADMIT_PENDING), which truncated the queue: the tail was lost from the LOG, not from the commit. The toolkit fix sizes the witness by NV2A_ADMIT_LOG_MAX (256), and the 39-method set below is now the COMPLETE runtime witness from one run. Measured 2026-10-07: the witness (39 distinct) and the offline decode of the same region (39 distinct) are the SAME SET, exactly. They previously disagreed only because the witness was truncated. See TR section 22 and section 23.2.",
     "The admitting run is exploratory (RECOMP_NV2A_ADMIT_UNKNOWN=1), so this is discovery evidence, not fidelity evidence.",
     "A witness is evidence that a method was SUBMITTED and staged, not that the model executes it faithfully."
   ]

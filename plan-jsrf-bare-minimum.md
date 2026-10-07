@@ -52,6 +52,42 @@ SEGA → Smilebit → ADX → Dolby → the graffiti disclaimer. Then presents s
 dispatch failures stop there too (g06 `20261005-192455-691-g06-thunk`, 905 s; f9
 `20261004-185558-235-f9-frames`, 1203 s). **The title screen is not reached and M15 is not claimed.**
 
+**The "freeze on the disclaimer" was WRONG, and it is corrected here** (TR §23.2). The disclaimer is a
+**timed hold**, not a stall, and it ends with **no switch and no input**: it begins at presents **1461** and
+is left at presents **2424** (t≈408–420 s), replaced by `e886cadf72766a64` and then black. Confirmed in
+three independent runs including one with no admit switch, and reproduced this turn. **Every run that
+looked "stuck" simply ended first** — presents advance at only ~6/s, so the 300 s `just title-run` recipe
+ends at presents ~1450–1800 and `title005-fixed` ended at 2410, just short of 2424. A run must therefore
+reach **past presents 2424** to say anything about the title; the 300 s recipe cannot.
+
+**The `0x00084000` measurement is DONE, and it eliminates the presentation hypothesis** (TR §23.2). Read
+offline from archived minidumps at guest VA **`0x80084000`** (never `0x00084000`, which is XBE `.text`), the
+three surfaces show **drawn = presented**: `0x8011C000` and `0x801B2000` both hash `8205f3a6d2e48df5`,
+which **is** that run's last `[FBPRESENT]` hash, and rendering it shows the disclaimer. So the presenter is
+faithful, and the §23.1 composites are not evidence of a draw/present mismatch. This was the plan's stated
+first decision point; it resolves to **neither A nor B alone**: nothing title-like was drawn at the 300 s
+snapshot, and at the transition a **new 3D scene** appears in `0x80084000` while the walk rejects.
+
+**An xemu reference of the real title now exists** (TR §23.2,
+`logs/workers/title007/xemu/deliverable/`): boot → Smilebit → ADX → Dolby → disclaimer (42.5–52.5 s) →
+fade to black (57.5 s) → 3D city backdrop (60 s) → JSRF emblem → **"PLEASE PRESS START TO BEGIN" (≈85–95 s)**,
+640×480, reached with **no input at all**. The real title is a **perspective street view with a green
+elevated highway**, fully presented. The recomp's 3D scene does **not** match it as rendered (47.8 %
+pure-black sky vs 1.4–15.1 %; 0.0 % green-dominant vs 8.8–16.1 %), so **it is not claimed as the title**.
+
+**The current blocker is the submission-capacity bound, and method admission is cleared** (TR §23.3). The
+39-method list was previously decode-derived and "provenance NOT established" because the
+`[PFIFO] admit-unknown` witness was truncated at **16** entries by its own cap (`NV2A_ADMIT_PENDING`), so the
+log lost the tail. Fixed this turn (witness sized by `NV2A_ADMIT_LOG_MAX`, mutation-validated): one run now
+logs **39** methods, and that set is **exactly** the decoded set, 39 = 39. Recorded in
+`config/nv2a-runtime-witnessed-methods.json`. The table was regenerated from the witness union —
+**+39, zero removals** (NV097 376 → 415) — and a run **without** the admit switch moved the stop from
+`unsupported_method 0x0420` to **`sink_capacity`** at `get=0x50B1C`, with `missing_methods` now **empty**.
+So the ordering is: **method admission first, then the capacity bound.** The rejected submission is
+**5732 words** (~1.4 budgets) and, per the Advisor's replay of the model's own packet rules, splits at
+**whole-packet boundaries** into exactly two units. The fix is bounded prefix commit at packet boundaries
+(L40's own "incremental-commit packet"), **not** raising the 4096 cap.
+
 **The present ceiling was one stale method-table entry, and it is cleared** (TR §22). It was the
 submission walk rejecting the whole stream with `unsupported_method` on method `0x1810`
 (`NV097_DRAW_ARRAYS`), which was missing from the generated admission table (L39) although the
@@ -192,51 +228,40 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 | F7 | done through stop 28 | the dispatch stop chain above; residue in the backlog |
 | **F8** | **cleared 2026-10-06** (toolkit `505cda5`) | the present ceiling: `unsupported_method 0x1810`, one stale table entry; the table now carries it and a run with neither the live-mirror nor the admit-unknown switch reaches presents 2410 with zero rejections (TR §22) |
 | **F8b** | **done 2026-10-07** (toolkit `46b3265`) | the same class: the six runtime-witnessed methods `0BB0`/`0BB4`/`0BB8`/`0BBC`/`1724`/`1728`, admitted from the `[PFIFO] admit-unknown` witness (+6 on class `0x97`, zero removals). Ordered delivery pinned by a mutation-validated contract. Whether the post-admission run exercised them is **not demonstrated** — see "Current work" |
-| **F8c** | **next** | the region beyond the six needs **39 NV097 methods** (decode-derived, provenance NOT established — see "Current work"); then the over-budget submission (a 271-parameter `0x1800` write exhausting inside a packet). Raising the budget is explicitly NOT the fix |
-| F6 = M15 | open | **criterion corrected 2026-10-07** (TR §23): the title screen itself, identified by CONTENT and confirmed by eye, with its hash recorded — **not** "a hash that is neither of two listed ones". The old blacklist was unsound: `87683a748e27d071` is the blue Dolby card, and the graffiti disclaimer renders in **four** hashes, three of them unlisted, so a run ending on the disclaimer (as the ceiling-clearing run did) satisfied the old letter. Also needs the run record with ledger IDs, an xemu comparison, and Turn Reviewer reproduction |
+| **F8c** | **admission CLEARED 2026-10-07** (toolkit witness-capacity fix) | the 39 NV097 methods are now **runtime-witnessed**, not decode-derived: the `[PFIFO] admit-unknown` witness was truncated at 16 by its own cap and is fixed, so one run logs 39 and the set **exactly** equals the decode (39 = 39). Table regenerated **+39, zero removals** (NV097 376 → 415). A no-switch run then moved the stop from `unsupported_method 0x0420` to **`sink_capacity`**, `missing_methods` **empty** (TR §23.3) |
+| **F8d** | **next** | the submission-capacity bound: a **5732-word** (~1.4 budget) submission rejected at the header check `nv2a_core.c:1796`. Fix is **bounded prefix commit at whole-packet boundaries** (L40's "incremental-commit packet"), two units, fence published only at the original PUT. **Raising the 4096 cap is explicitly NOT the fix** |
+| F6 = M15 | open | **criterion corrected 2026-10-07** (TR §23): the title screen itself, identified by CONTENT and confirmed by eye, with its hash recorded — **not** "a hash that is neither of two listed ones". The old blacklist was unsound: `87683a748e27d071` is the blue Dolby card, and the graffiti disclaimer renders in **four** hashes, three of them unlisted, so a run ending on the disclaimer (as the ceiling-clearing run did) satisfied the old letter. **An xemu reference of the real title now exists** (`logs/workers/title007/xemu/deliverable/`: emblem + "PLEASE PRESS START TO BEGIN" over a perspective city street, 640×480, reached with no input) and is the comparator. Also needs the run record with ledger IDs and Turn Reviewer reproduction |
 
 ## Next actions, in order
 
-1. **Find out why the picture stops changing while the guest keeps drawing (M15's actual blocker).** In the
-   keyboard-enabled run the guest is still submitting at the end — 5345 draws, 9224 rasterised triangles,
-   834M pixels, 1760 flips — yet the presented image stays on the disclaimer. Two hypotheses are already
-   eliminated **by measurement**, so do not re-run them: the `sub_0019E438` "spin" is ordinary DirectSound
-   lock traffic (all 16356 calls return 1; enter/leave balanced 24702/24702), and the draw-surface composites
-   from pinning `RECOMP_FB_VA=0x8011C000` are **accumulation artifacts, not a title** — `0x11C000`/`0x1B2000`
-   are never cleared (only `0x00084000` and `0x00000000` ever are), so a buffer drawn-but-never-cleared
-   smears many frames together, and the ink sets lose and regain ~90% of their content between steps.
-   **The input hypothesis is still OPEN, and both documented input paths are UNREACHABLE.** My first test of
-   it was invalid (keyboard state comes only from `WM_KEYDOWN` window messages, so a headless run sees an
-   all-zero key array whether or not `RECOMP_KEYBOARD=1` is set). The toolkit's own pad seam is worse than
-   that: `RECOMP_PAD_PRESS` exists in `src/usb/usb_gamepad.c` and has the right shape (it pulses an edge, not
-   a level), but it is reached only through the OHCI endpoint path, which runs only after `xbox_OhciInit` —
-   and **`xbox_OhciInit` is defined and declared but never called anywhere in either repository**.
-   `xbox_InputInit` is likewise never called: nothing in the game's startup wires input at all. A run with
-   `RECOMP_USB=1 RECOMP_PAD_PRESS=0x10,2000,250` logs no `PAD: synthesising` line, confirming it. So **no
-   current switch can deliver input to the guest**, and "the intro waits for a press" stays unverified.
-   Wiring USB input up is a candidate next step and is real work (the controller must be enabled before the
-   guest's XAPI probes it), not a switch flip.
-   The other next measurement avoids the accumulation trap: dump the surface the guest actually **clears and
-   draws** (`0x00084000`) beside the presented frame, or instrument the flip to record which surface it hands
-   the window.
-2. **Establish the reject region's temporal provenance, then confirm the missing methods at runtime.**
-   The decode says **39** NV097 methods are missing from the region the walk was consuming, but that decode
-   is taken from the **final** dump and the archived log has only three pointer samples for the post-reject
-   phase, so a full ring lap cannot be excluded and the bytes are **not proven** to be what the walk read.
-   The instrument for this now exists (see "Current work"): a run that reaches a budget stop latches where
-   it happened, which limit fired, and the straddling packet, into the exported submit state. Take that
-   measurement, then admit methods **from a runtime witness**, never from the decode.
-3. **Then fix the over-budget submission.** Evidence strongly indicates the walk exhausts the 4096-word
-   budget **inside a packet** (a non-incrementing `0x1800` write with 271 parameters, on the parameter path
-   at `nv2a_core.c:1578` — the header-path dump at `:1671` is unconditional and never printed). **Raising
-   the budget is not the fix** (owner constraint, L40): the durable direction is bounded resumable prefix
-   dispatch that keeps the cap and preserves carry, order and all-or-nothing rollback, and does not publish
-   the fence for the original PUT until it is consumed. Do not trust the published `at`/`get` (they are the
-   rollback origin) or the "last 32 visits" array (written only at headers, so it is sparse on a
-   parameter-heavy stream).
+1. **Finish the submission-capacity fix (F8d), then re-run past the transition.** The `0x00084000`
+   measurement is done (TR §23.2) and it eliminates the presentation hypothesis: drawn = presented, and the
+   guest is blocked in the submission walk, not in the presenter. The stop is now `sink_capacity` at the
+   header check `nv2a_core.c:1796` on a **5732-word** (~1.4 budget) submission. The fix is **bounded prefix
+   commit at whole-packet boundaries** inside one `nv2a_submit_pending` call: end the unit at the header,
+   commit it all-or-nothing, continue a new unit from that header, and publish the fence **only** when the
+   final unit reaches the original PUT. **Raising the 4096 cap is not the fix** (owner constraint, L40). Two
+   hazards the Advisor named must be handled: `sink_count` is reset only at walk start, so two units over
+   4096 methods would **overflow `sink[]`** (reset per unit), and the removed caps were the cycle backstop
+   (add a per-call word bound of `pushbuffer_size/4`). Ledger L40 must be reworded to **per-unit** atomicity.
+2. **Correct the two eliminated premises so they are not re-run.** The `sub_0019E438` "spin" is ordinary
+   DirectSound lock traffic (all 16356 calls return 1; enter/leave balanced 24702/24702). The pinned
+   composites from `RECOMP_FB_VA=0x8011C000` are **accumulation artifacts, not a title**, and pinned vs
+   unpinned hash counts are **not comparable** because `RECOMP_FB_VA` makes `xbox_FramebufferWindowPresent`
+   early-return (`fb_present.c:66-69`). **One premise here was also wrong and is corrected:** the claim that
+   `0x11C000`/`0x1B2000` are "never cleared" is **FALSE** — across the archive the `clear surface` field
+   takes `0x0011C000` 45× and `0x001B2000` 43×. The "only `0x84000` and `0x0` are ever cleared" reading came
+   from the clear-colour line, which prints only the first 8 **distinct clear colours** (`nv2a_pb_exec.c`
+   `seen[8]`), not the first 8 clears.
+3. **Input is NOT the current blocker, and this is now measured, not assumed.** The xemu reference reaches
+   the full title — emblem, backdrop and "PLEASE PRESS START TO BEGIN" — with **no input at all**, and the
+   recomp's own boot reaches the disclaimer and the transition with no input. Input cannot currently be
+   delivered (both `xbox_OhciInit` and `xbox_InputInit` are defined and declared but **never called**), but
+   wiring it up is **not** on the critical path to M15; it is M16's subject. Do not spend the turn on it
+   while the walk is blocked.
 4. **Do not spend runs on the dispatch stop chain** until the ceiling path is finished; stop 28
-   (`0x81860`) is still **not exercised** by any run this turn (`scripts/check-run-exercised.py`
-   reports NOT EXERCISED for every post-fix run), so `config/stop-chain.json` is unchanged.
+   (`0x81860`) is still **not exercised** by any run (`scripts/check-run-exercised.py` reports NOT EXERCISED
+   for every post-fix run), so `config/stop-chain.json` is unchanged.
 5. **When a new scene appears, read the present lines before trusting the window.** Until 2026-10-06
    the window was handed `drawn_offset`, which only the software rasteriser's triangles update, so a
    frame of clears or untransformed (vertex-program) batches presented the previous buffer. The present
@@ -244,8 +269,12 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
    `[FBPRESENT] presenting targeted 0x…` the first 8 times it does. Untransformed batches are still not
    rasterised (`batches_untransformed` in the `[GPU]` report), so a targeted frame can show only its
    clear colour: an unchanged or blank picture after the ceiling clears is not proof the guest did not
-   advance.
-6. **M15** as F6 states, then M16 onward.
+   advance. **Watch the `0x0680` `composite_set` latch** (TR §23.3): it is never cleared, so a later 2D
+   overlay sent as screen-space vertices could be transformed as 3D and go missing — a render risk now that
+   the composite range is admitted, not a reason to withhold admission.
+6. **A run must reach past presents 2424 to be informative.** The 300 s `just title-run` recipe ends at
+   presents ~1450–1800, before the transition; use ≥540 s.
+7. **M15** as F6 states — the title screen by content against the captured xemu reference — then M16 onward.
 
 ## Backlog (not on the critical path until it blocks)
 
@@ -319,8 +348,8 @@ gate.
 | 12 | Window and clear | ≥ 60 presented frames whose clear follows the guest's own clear methods | logos presented (exploratory); not accepted |
 | 13 | One game-owned UI primitive | first UI frame vs xemu ref, SSIM ≥ 0.95 on its bounding box | open |
 | 14 | One menu texture | decoded texture bytes equal the xemu ref dump or an independent decode | open |
-| **15** | **Title screen** | 60 consecutive frames vs xemu ref (SSIM ≥ 0.90); intro FMV handling stated | **open — F8, then F6** |
-| 16 | Controller input | with `RECOMP_USB`, a host pad press produces the guest's own XID report and the title's input state changes; `RECOMP_PAD_PRESS` is not admissible | open (toolkit-provided: verify, not build) |
+| **15** | **Title screen** | 60 consecutive frames vs xemu ref (SSIM ≥ 0.90); intro FMV handling stated | **open — F8d (capacity), then F6.** The xemu reference is captured (emblem + "PLEASE PRESS START TO BEGIN" over a perspective city street, 640×480, no input needed); the recomp's 3D scene does **not** match it yet |
+| 16 | Controller input | with `RECOMP_USB`, a host pad press produces the guest's own XID report and the title's input state changes; `RECOMP_PAD_PRESS` is not admissible | open (toolkit-provided: verify, not build). **Not on M15's critical path:** xemu reaches the full title with no input |
 | 17 | Main menu navigation | host pad drives start/options/back; the menu-state global changes | open |
 | 18 | New game loads the opening area | loader completes; files read archived with sizes and hashes; object count > 0 | open |
 | 19 | Opening scene and character | spawn frame vs xemu ref SSIM ≥ 0.90; depth/transforms at three camera positions | open (needs ML7 or executor shading) |

@@ -3043,5 +3043,162 @@ not later cited as evidence of a rendering fault.
 The draw-surface composites are accumulation artifacts and must not be cited as evidence of a rendered
 title. The pinned-surface hash sequence is not comparable with the unpinned one.
 
+## §23.2 The `0x00084000` measurement: drawn = presented, and the disclaimer is a timed hold, not a freeze
+
+**The §23.1 "the picture stops changing while the guest keeps drawing" framing is corrected here.** Two of
+its load-bearing statements were wrong, and the measurement the plan asked for (`0x00084000` beside the
+presented frame) has now been taken. Everything below is `OBSERVED` unless marked `INFERRED`.
+
+**How the surface was read without perturbing anything.** `0x00084000` is the raw `color_offset` register
+value; `dma_resolve` (`xboxrecomp/src/nv2a/nv2a_pb_exec.c:111-136`) maps it to guest VA **`0x80084000`** in
+the 64 MB contiguous window. Reading it needs no run at all: the archived minidump is read offline with
+`scripts/inspect-jsrf.py memory <run> 0x80084000 614400 --out f.bin`, after
+`scripts/check-dump-mapping.py` passes. **Trap:** `memory <run> 0x00084000` returns XBE `.text` — `0x84000`
+is inside `.text` (`0x11000..0x18CB30`), so the contiguous-window form is mandatory. Decoding is 640×480
+RGB565 at pitch 1280 (`[GPU] … 2bpp`), converted exactly as `fb_convert` does, hashed with the same FNV-1a
+as `fb_hash_rgb`. This is a **read of a frozen dump**: presentation behaviour is untouched, which is the
+property `RECOMP_FB_VA` provably lacks (`fb_present.c:66-69` early-returns when it is set).
+
+**Drawn equals presented. There is no draw/present divergence.** For
+`20261007-001831-252-…-sixadmitted`, the three surfaces read from the dump are:
+
+| surface | fnv1a(fb_convert) | non-black | in the run's presented stream |
+|---|---|---|---|
+| `0x80084000` | `156ed4086987e325` | 0.000 | yes |
+| `0x8011C000` | `8205f3a6d2e48df5` | 0.133 | **yes — and it is the run's LAST present** |
+| `0x801B2000` | `8205f3a6d2e48df5` | 0.133 | yes |
+
+Rendering `0x8011C000` shows the graffiti disclaimer. So at the frozen instant the presented frame
+genuinely **is** the disclaimer; the presenter is not showing a stale or wrong surface. (The three surfaces
+are **not** always byte-identical, contrary to the reading that motivated this measurement: in
+`20261007-014848-201-…-budgetcatch` the draw surface is `0x0011C000` while the clear surface is
+`0x00084000`, and only `0x80084000` holds content.)
+
+**The disclaimer is a timed hold that ends by itself — no switch, no input.** The disclaimer begins at
+presents **1461** and is left at presents **2424** (t≈408–420 s), replaced by `e886cadf72766a64` and then
+black `156ed4086987e325`. Confirmed in three independent runs, including `title005-m15` which had **no**
+`RECOMP_NV2A_ADMIT_UNKNOWN`, and reproduced by this turn's own `title007-long3d`:
+
+| run | disclaimer starts | leaves | run ends |
+|---|---|---|---|
+| `20261006-211635-913-title005-m15` | t=244 s, p=1461 | t=408 s, p=2424 → `e886cadf…` | t=418 s, p=2425 |
+| `20261006-213505-255-title005-admit3` | t=257 s, p=1461 | t=420 s, p=2424 → `e886cadf…` | t=496 s, p=2439 |
+| `20261007-054545-206-title007-long3d` | t=245 s, p=1461 | t=408 s, p=2424 → `e886cadf…` | t=697 s, p=2441 |
+
+**Every run that looked "stuck on the disclaimer" simply ended first.** Presents advance at only ~6/s, so
+the 300 s `just title-run` recipe ends at presents ~1450–1800, and `title005-fixed` ended at t=417 s /
+presents 2410 — just short of 2424. The presented stream is **not** cycling: before the transition the
+disclaimer hash persists for ~1000 presents, and after it the run continues to new states. "The presented
+image stays on the disclaimer" therefore describes a run that stopped, not a guest that froze.
+
+**Right after the transition the guest loads title-stage assets, and the walk rejects.** `budgetcatch`
+(606 s) opens `Media\Disp\SprNorm1.bin/.dat`, `Media\Z_ADX\BGM\title.adx`, `UDATA\…\SaveMeta.xbx`, and
+reloads `Player\Corn/Beat/Gum/Yoyo`. Then, in the same region, the submission walk rejects. The rejected
+submission is **5732 words** on the current tree (`get=0x50810 put=0x561A0`), and the stop is the
+header-side capacity check at `nv2a_core.c:1796` (`sink_capacity`), not the word budget
+(`budget_stops=0`). **A 3D city scene is sitting in `0x80084000` at that moment** (hash
+`3b0dfcc68ba437ff`, 50.4 % non-black, 795 colours) while the other two surfaces are black.
+
+**The 3D scene is NOT the title screen, and this is now measured, not assumed.** An xemu reference of the
+real title was captured this turn (`logs/workers/title007/xemu/deliverable/`): boot → Smilebit → ADX →
+Dolby → graffiti disclaimer (42.5–52.5 s) → fade to black (57.5 s) → **3D city backdrop (60 s)** → JSRF
+emblem assembling → **"PLEASE PRESS START TO BEGIN" (≈85–95 s)**, 640×480, reached with **no input at all**.
+The real title is a **perspective street view** with a green elevated highway, and it is **fully presented**.
+The recomp's surface is an orthographic-looking evenly-spaced palisade, measured at **47.8 % pure-black sky
+vs 1.4–15.1 %** in xemu and **0.0 % green-dominant pixels vs 8.8–16.1 %**. So it is a different scene as
+rendered (`INFERRED`, moderate confidence; the comparison is an RGB565 dump with a large uninitialised
+fraction against a fully rendered live frame, so it is not like-for-like).
+
+**Consequences that change the plan.**
+
+- The critical path is **not** presentation and **not** USB input. The presenter faithfully shows what the
+  guest drew; the guest is blocked in the submission walk at the title transition.
+- The "freeze" framing in §23.1 and in the plan's "Current work" is superseded by this section.
+- A run must reach past presents 2424 to say anything about the title at all; the 300 s recipe cannot.
+- **M15 is still not claimed.** The xemu title is now captured and available as the comparator, but the
+  recomp has not presented title content.
+
+**Claim limits.** The dump reads are single frozen instants, not flip-synchronised time series, so they
+establish "drawn equals presented at the dump instant", not a per-frame correspondence. The 39-method set
+and the rejected submission's contents are decode-derived (§23.3 establishes their runtime provenance). The
+3D-scene classification is `INFERRED` from a non-like-for-like comparison. No strict run is involved.
+
+## §23.3 The 39-method list was truncated by the witness's own 16-entry cap, and is now runtime-witnessed
+
+**The defect.** The `[PFIFO] admit-unknown` line is the only admissible provenance for adding a method to
+the generated admission table (L39: a new entry comes from a `[PFIFO] admit-unknown` line of a run that
+exercised it, or a decode that reached PUT). The record is emitted only after a **successful commit**, and
+its queue was capped at 16 entries:
+
+```c
+#define NV2A_ADMIT_LOG_MAX  256
+#define NV2A_ADMIT_PENDING  16      /* the truncating cap */
+```
+
+with the per-walk `AdmitRecord admitted[NV2A_ADMIT_PENDING]`, the fill guard `admitted_count <
+NV2A_ADMIT_PENDING`, and the drain guard `g_admit_pending_count >= NV2A_ADMIT_PENDING`
+(`xboxrecomp/src/nv2a/nv2a_core.c`). A submission with more than 16 unknown methods therefore logged
+exactly 16 and **silently dropped the rest** — which is why the archived `budgetcatch` run reported 16
+methods and the plan's own decode reported 39, and why the plan could only say the decode was "conditional"
+and "provenance NOT established". The truncation was in the **log**, not in the commit: the walk had
+committed the region, but the witness could not describe it.
+
+**The fix (toolkit, uncommitted at the time of writing).** The redundant second constant is deleted and the
+three witness arrays and both guards are sized by the existing `NV2A_ADMIT_LOG_MAX` (256). The cap was
+strictly redundant: an entry reaches `g_admit_pending` only after surviving the dedupe check, which already
+refuses at `g_admit_seen_count >= NV2A_ADMIT_LOG_MAX`, so pending could never hold more than 256 distinct
+entries. `admitted_total` (the published `admitted_unknown` count) increments **outside** the guard and was
+therefore already uncapped — only the witness was truncated. Nothing in the admission decision, staging,
+actions or rollback is touched.
+
+**Mutation-validated.** A new test submits **20** distinct unknown NV097 methods in one walk and asserts
+both the line count and that each specific method is named exactly once. Forcing the capacity back to 16
+makes it fail with `admit-unknown lines: 16, want 20` and names the four dropped tail methods; at 256 it
+passes. The Orchestrator reproduced this mutation check independently.
+
+**Result: the witness now equals the decode exactly.** With the fix, one run
+(`20261007-061613-201-title007-witness-full`) logged **39** distinct methods:
+
+```
+0x0420-0x042C, 0x0480-0x04BC, 0x0680-0x06BC, 0x1748, 0x1B40, 0x1B44
+```
+
+and that set is **exactly** the set `gpu-report.json` derives by decoding the same region — 39 = 39, zero
+difference either way. The two previously disagreeing sources now agree, so the 39 no longer need the
+"conditional, decode-derived" caveat: they are **runtime-witnessed**, and the decode is corroboration. They
+are recorded in `config/nv2a-runtime-witnessed-methods.json` with the run, log SHA-256 and line number.
+
+**What each admitted method actually does (executor audit, `OBSERVED`).** Admission activates existing
+behaviour, but only for some of them:
+
+| methods | classification | consumer |
+|---|---|---|
+| `0x0680-0x06BC` | **CONSUMED** | `nv2a_pb_exec.c:2940-2946` sets `s_gpu.composite`; `fetch_position` (`:843`) uses it as the fixed-function transform |
+| `0x0480-0x04AC` | **CONSUMED** | `lit_color` (`:1813`, used `:1825-1826`) reads `s_reg[0x0480/4 .. +11]`; gated at `:1818` on lighting enable `s_reg[0x0314]` and a normal attribute |
+| `0x04B0-0x04BC` | captured only | model-view row 3; the data is `(0,0,0,1)` |
+| `0x0420-0x042C` | captured only | `NV097_SET_TEXTURE_MATRIX_ENABLE` (`nv2a_regs.h:1064`); the witnessed params are all 0 (disabled), so no consumer is needed for this scene |
+| `0x1748` | **CONSUMED** | `0x1720+10*4`: vertex-array **offset** for attribute 10, via the attr-offset arm `:2961` |
+| `0x1B40`, `0x1B44` | captured only — **render gap** | texture **stage 1** offset/format; only stage 0 (`0x1B00`/`0x1B04`) feeds `s_gpu.tex` (`:2811`, `:2900`), so stage-1 texturing is silently not sampled |
+
+Two corrections to earlier readings, both `OBSERVED`: `0x0420` is **not** a transform constant (those are
+`0x0B80-0x0BFC`, `nv2a_regs.h:1096`, already handled by `vp_method`), and `0x0480` is
+`NV097_SET_MODEL_VIEW_MATRIX` (`:1068`), a 16-dword span, not a `0x0480`-`0x04AC` composite run.
+`d->pgraph.methods[]` (`nv2a_core.c:1823`) has **no reader outside tests** — a state sink with no consumer.
+
+**Admission is exactly additive and clears the stop.** Regenerating the table from the witness union
+(`+39`, **zero removals**, NV097 376 → 415) and re-running **without** `RECOMP_NV2A_ADMIT_UNKNOWN` moved the
+stop from `unsupported_method 0x0420` at `get=0x50810` to `sink_capacity` at `get=0x50B1C`, with
+`missing_methods` now **empty**. The class ordering is therefore: **method admission first, then the
+submission-capacity bound.** The `sink_capacity`/`budget_exhausted` stops seen in earlier
+`ADMIT_UNKNOWN=1` runs appeared only because the switch let the walk travel further into the same
+submission.
+
+**Claim limits.** The admission run is exploratory (`RECOMP_NV2A_ADMIT_UNKNOWN=1` for the witness; the
+validating run used no switch but is still an exploratory title-run, not a strict run), so this is discovery
+evidence, not fidelity evidence. A witness is evidence that a method was **submitted and staged**, not that
+the model executes it faithfully. The `0x0680` `composite_set` latch is never cleared, so a later 2D overlay
+sent as screen-space vertices could be transformed as 3D — `INFERRED`, and a render risk to watch, not a
+reason to withhold admission.
+
 
 
