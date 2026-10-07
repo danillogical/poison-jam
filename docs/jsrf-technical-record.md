@@ -2968,11 +2968,21 @@ helper, called ~120 times per 10 presents as ordinary per-frame API traffic:
 skipping it at DISPATCH_LEVEL. That costs time, not correctness: the lock is always acquired and always
 released.
 
-**Input is NOT the blocker — measured, not assumed.** The hypothesis was that the intro waits for a button
-press that never arrives. A run with `RECOMP_KEYBOARD=1` explicitly armed (confirmed in
-`metadata.json`'s effective settings) produced a **state-for-state identical** frame sequence to the run
-without it — the first 12 `CHANGED` hashes match exactly. So enabling input changes nothing, and the guest's
-input path is not what gates the transition.
+**Input is NOT shown to be the blocker, but my first test of it was INVALID.** The hypothesis was that the intro
+waits for a button press that never arrives. I ran a comparison with `RECOMP_KEYBOARD=1` explicitly armed
+(confirmed in `metadata.json`'s effective settings) and it produced a **state-for-state identical** frame
+sequence to the run without it — first 12 `CHANGED` hashes matching exactly. **That comparison does not
+establish anything about input**, and is retracted as evidence: keyboard state is read from
+`s_key_down[]` in `fb_present.c`, which is written **only by `WM_KEYDOWN`/`WM_SYSKEYDOWN` window messages**
+(`fb_present.c`, `fb_wndproc`). A run with no focused window and no synthetic keypress therefore sees an
+all-zero key array whether or not `RECOMP_KEYBOARD=1` is set, so the two runs *must* look identical — the
+test could not have distinguished them. What the observation does show is that **enabling the keyboard path
+changes nothing on its own**, which is a much weaker statement.
+
+To test the input hypothesis properly the guest must actually receive a press: run with the framebuffer
+window focused and send a key, or add a way to inject pad state without the window (there is no
+`RECOMP_PAD`-style override in the toolkit today — the only input switches are `RECOMP_KEYBOARD` and
+`RECOMP_USB`). Until that measurement is made, "the intro waits for a press" remains **unverified**.
 
 **The guest keeps working while the picture stops changing.** In that same run the GPU report shows the guest
 still submitting and drawing at the end: 5345 draws, 9224 rasterised triangles, 834 million pixels written,
