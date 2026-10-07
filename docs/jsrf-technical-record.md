@@ -2892,5 +2892,59 @@ Establishing exercise needs either a contemporaneous walk transcript or a run wh
 captured beyond the 64-line cap. The runtime evidence that the six are needed remains the admit3 witness, and
 the executor-level evidence is the ordered contract above.
 
+## §23 The M15 frame criterion was unsound: the disclaimer renders in four hashes, and one blacklisted hash is a logo
+
+**The defect.** M15 was defined as "a title-frame BMP whose hash is **neither** `5bdaea576b8509f5` **nor**
+`87683a748e27d071`". That is a hash **blacklist**, and a blacklist is only sound if the listed hashes cover
+every non-title state. They do not. Both halves are wrong:
+
+- **`87683a748e27d071` is the blue Dolby card, not a disclaimer** — 94.8% saturated blue with a small black
+  box (`logs/workers/title005/tp0011.bmp`). Blacklisting it excludes a *logo* frame, which is arbitrary: the
+  SEGA, Smilebit and ADX cards are equally non-title and were never listed.
+- **The graffiti disclaimer renders in FOUR distinct hashes, and only ONE is listed.** Measured across every
+  archived frame directory:
+
+  | hash | content | on the old blacklist |
+  |---|---|---|
+  | `5bdaea576b8509f5` | graffiti disclaimer | **yes** |
+  | `089fe3b826bbc18d` | graffiti disclaimer | no |
+  | `cf836ec8430ffb6d` | graffiti disclaimer | no |
+  | `8205f3a6d2e48df5` | graffiti disclaimer | no |
+
+  All four are the same artwork — a red prohibition icon on an ~88% black field with a block of white text —
+  and they differ because the notice **fades and shifts** between renderings. At a fixed binarisation
+  threshold, `089fe3b826bbc18d` and `5bdaea576b8509f5` agree on **100.00%** of pixels, while a control pair
+  (the Dolby card against a disclaimer) agrees on only **11%**. So they are the same image, not merely
+  similar ones.
+
+**Why this is not hypothetical.** The run that "cleared the ceiling" —
+`20261007-001831-252-20261007-title006-sixadmitted` — ends with
+`[FBPRESENT] t=298s presents=1490 hash=8205f3a6d2e48df5 unchanged`, and that hash is the graffiti
+disclaimer. Under the old wording that run **satisfied M15's letter while showing no title screen**. The
+same is true of `20261006-211635-913-title005-m15` (`tp0013`/`tp0016` are `8205f3a6d2e48df5`).
+
+**How the hashes were established.** Every distinct frame in `logs/workers/**` was hashed with the same
+FNV-1a the model uses (`fb_hash_rgb`, `xboxrecomp/src/video/fb_present.c`: FNV-1a over the published frame's
+pixels top-down, each pixel `(r<<16)|(g<<8)|b`), and then classified by pixel content rather than by hash.
+The reproduction is exact — **9 of 9** dumped frames reproduce the hash the log printed for them
+(`156ed4086987e325` at t=0s through `8205f3a6d2e48df5` at t=291s) — so a BMP is provably the frame the log
+hashed, and its content therefore *names* that hash. Tools: `logs/workers/title006/frame-hashes.py`,
+`disclaimer-census.py`, `same-artwork.py`, `classify-frames.py`, `contact-sheet.py`.
+
+**The corrected criterion.** M15 requires the **title screen itself**, identified by content: a frame that
+is neither a logo card nor a disclaimer notice, confirmed by looking at it, with its hash recorded. "Not one
+of two hashes" is retired, because it admits at least three disclaimer renderings and rejects a logo.
+
+**What the frames show about progress, for the record.** The boot sequence is **advancing, not looping**.
+In `20261007-022608-843-…-frames`, 10 of the 15 distinct states appear for the first time in the second half
+of the run, and the sequence ends on states never seen before — the opposite of a short repeated cycle. The
+earlier appearance of a "loop" came from reading two different runs' frames as one series: `logs/workers/title005`
+holds both a `t*` set and a `tp*` set from separate runs, and only the `tp*` set closes on itself. Even there
+the closure is the *disclaimer* state recurring, which is what a fade does, not the whole boot repeating.
+
+**Claim limits.** These are content measurements of archived BMPs, not a new run and not a fidelity claim.
+The disclaimer's four hashes are established for the archived builds; a different build could render it
+differently again, which is exactly why the criterion must not be a hash blacklist.
+
 
 

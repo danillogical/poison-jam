@@ -26,11 +26,28 @@ discipline. This plan owns the objective, the milestones and what to do next.
 - **The Orchestrator runs the fast path**; the Turn Reviewer reproduces a milestone claim, with its
   ledger IDs, rather than accepting the description.
 
-## Current work (state 2026-10-06)
+## Current work (state 2026-10-07)
+
+**The M15 acceptance criterion is UNSOUND as written, and it is now corrected here.** The milestone was
+defined as "a title-frame BMP whose hash is **neither** `5bdaea576b8509f5` **nor** `87683a748e27d071`" — a
+hash *blacklist*. Measured directly from the archived frames (every distinct frame hashed with the same
+FNV-1a the model uses, `fb_hash_rgb`, and classified by pixel content), two things are wrong:
+
+- **`87683a748e27d071` is not a disclaimer at all — it is the blue Dolby card** (94.8% saturated blue with a
+  small black box). Blacklisting it excludes a *logo* state, which is arbitrary.
+- **The graffiti disclaimer renders in FOUR distinct hashes, only ONE of which is blacklisted**:
+  `5bdaea576b8509f5` (listed) plus `089fe3b826bbc18d`, `cf836ec8430ffb6d` and `8205f3a6d2e48df5` (all
+  unlisted; each is a red prohibition icon on a ~88% black field). The hash differs because the notice fades
+  and shifts between renderings.
+
+**This is not hypothetical: the run that "cleared the ceiling" ended on an UNLISTED disclaimer.**
+`20261007-001831-252-…-sixadmitted`'s last `[FBPRESENT]` is `hash=8205f3a6d2e48df5`, which is the graffiti
+disclaimer — so under the old wording that run would have **satisfied M15's letter while showing no title
+screen**. The criterion must be rewritten to require the *title screen itself*, identified by content, not
+by "not one of two hashes". Candidate hashes are recorded in `docs/jsrf-technical-record.md` §23.
 
 **What boots.** With the title-path switches (`just title-run`, ledger L14–L18, L20–L25, L39, L40):
-SEGA → Smilebit → ADX → Dolby → the graffiti disclaimer (frame hashes `5bdaea576b8509f5` and
-`87683a748e27d071`, both states seen in one run). Then presents stop at a fixed count: **1000** in
+SEGA → Smilebit → ADX → Dolby → the graffiti disclaimer. Then presents stop at a fixed count: **1000** in
 30 of 35 runs before game `0445a80`, **888** in all four after it (TR §19). Runs with **zero**
 dispatch failures stop there too (g06 `20261005-192455-691-g06-thunk`, 905 s; f9
 `20261004-185558-235-f9-frames`, 1203 s). **The title screen is not reached and M15 is not claimed.**
