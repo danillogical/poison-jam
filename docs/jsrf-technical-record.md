@@ -2946,5 +2946,69 @@ the closure is the *disclaimer* state recurring, which is what a fade does, not 
 The disclaimer's four hashes are established for the archived builds; a different build could render it
 differently again, which is exactly why the criterion must not be a hash blacklist.
 
+## §23.1 What the guest is doing when it stops: measured, and two hypotheses eliminated
+
+**The "busy-wait" reading was wrong, and it is retracted here.** A run's log is ~70% `[TRACE]` calls to one
+function, `sub_0019E438`, which looks like a spin. It is not. The trace is on *because*
+`config/trace-functions.json` lists that address, and the function is the DirectSound conditional-lock
+helper, called ~120 times per 10 presents as ordinary per-frame API traffic:
+
+- `call dword ptr [0x1c4064]` is a **kernel thunk table** entry, not a data pointer. The slot resolves to
+  ordinal 277 = `RtlEnterCriticalSection` (table base `0x1C3F60`, slot 65; the image bytes at file
+  `0x1B4104` are `15 01 00 80` → `0x80000115` → ordinal `0x115`).
+- **All 16356 calls returned `eax=1`** — "I acquired the lock" — so the fall-through lock path ran every
+  time and the `fs:[0x24]` IRQL gate never held.
+- The ordinals are **exactly balanced**: `RtlEnterCriticalSection` 24702 and `RtlLeaveCriticalSection` 24702,
+  zero outstanding. That is work, not contention. `docs/reviews/rulings/f4-submission-capacity.md` had
+  already reached this ("a shared conditional-enter helper with ~50 callers").
+
+**A fidelity gap is recorded but is NOT the blocker.** The toolkit never publishes IRQL into the guest TIB —
+`xbox_memory_layout.c` fills `fs:[0x00/0x04/0x08/0x18/0x20/0x28]` only, while IRQL lives in host TLS
+(`kernel_hal.c`). So `fs:[0x24]` is permanently 0 and the guest takes the lock every time instead of
+skipping it at DISPATCH_LEVEL. That costs time, not correctness: the lock is always acquired and always
+released.
+
+**Input is NOT the blocker — measured, not assumed.** The hypothesis was that the intro waits for a button
+press that never arrives. A run with `RECOMP_KEYBOARD=1` explicitly armed (confirmed in
+`metadata.json`'s effective settings) produced a **state-for-state identical** frame sequence to the run
+without it — the first 12 `CHANGED` hashes match exactly. So enabling input changes nothing, and the guest's
+input path is not what gates the transition.
+
+**The guest keeps working while the picture stops changing.** In that same run the GPU report shows the guest
+still submitting and drawing at the end: 5345 draws, 9224 rasterised triangles, 834 million pixels written,
+5345 textured batches, and 1760 flips. `presents` climbs steadily to 1800 with no stall. So this is not a
+stalled guest, an idle GPU, or a dead audio thread (`[APUWAIT]` shows the DSP frame count advancing, no APU
+errors anywhere).
+
+**What remains unexplained, and the next measurement.** The guest draws into `0x0011C000` and `0x001B2000`
+(16 and 10 report blocks) while the presenter's target is `0x00084000`. That looks like a present/draw
+mismatch, and dumping the draw surface does produce frames that never appear in the presented stream
+(`ed6e4b6298b2550c`, `70e07e9ac0aadb14`, `7b3d7b694f3d6ad5` — rich SEGA/Smilebit/Dolby/ADX composites).
+**But those are NOT a title screen, and the mismatch reading is not established.** Two measurements say so:
+
+- **`0x11C000` and `0x1B2000` are never cleared.** Over a whole run the only surfaces ever cleared are
+  `0x00084000` and `0x00000000`. A buffer that is drawn to but never cleared **accumulates across frames**,
+  so its content is a smear of many frames rather than any frame the guest composed — which is exactly what
+  the composites look like.
+- **The ink sets confirm it.** In the pinned-draw-surface run the frames are not stable: `dp0001` has 10331
+  ink samples, `dp0002` drops to 1856, `dp0003` returns to 10050. A real frame does not lose 90% of its
+  content and get it back. Only some steps are supersets; most are not, which is accumulation plus
+  partial clears, not a rendered scene.
+- The one `[FBPRESENT] presenting targeted 0x00084000` line appears **once** in the run, not throughout: the
+  log prints the targeted fallback only for the first 8 occurrences, and the normal path follows
+  `drawn_offset` silently. So "the presenter targets `0x84000` for the whole run" was an over-read of a
+  single log line, and is retracted.
+
+So the honest position: the guest is still drawing at the end, the presented image stays on the disclaimer,
+and **why the picture stops changing is not yet established**. The next measurement must avoid the
+accumulation trap: dump the surface the guest actually **clears and draws** (`0x00084000`) alongside the
+presented frame, or instrument the flip to record which surface it hands the window, rather than pinning the
+window to a buffer that is never cleared.
+
+**Claim limits.** These are measurements of archived runs. No new run reached the title; M15 is not claimed.
+The "input is not the blocker" result holds for `RECOMP_KEYBOARD=1` on this build — it does not show that
+input is *correct*, only that enabling it does not change the frame sequence. The draw-surface composites are
+accumulation artifacts and must not be cited as evidence of a rendered title.
+
 
 

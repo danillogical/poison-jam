@@ -193,18 +193,30 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 | **F8** | **cleared 2026-10-06** (toolkit `505cda5`) | the present ceiling: `unsupported_method 0x1810`, one stale table entry; the table now carries it and a run with neither the live-mirror nor the admit-unknown switch reaches presents 2410 with zero rejections (TR §22) |
 | **F8b** | **done 2026-10-07** (toolkit `46b3265`) | the same class: the six runtime-witnessed methods `0BB0`/`0BB4`/`0BB8`/`0BBC`/`1724`/`1728`, admitted from the `[PFIFO] admit-unknown` witness (+6 on class `0x97`, zero removals). Ordered delivery pinned by a mutation-validated contract. Whether the post-admission run exercised them is **not demonstrated** — see "Current work" |
 | **F8c** | **next** | the region beyond the six needs **39 NV097 methods** (decode-derived, provenance NOT established — see "Current work"); then the over-budget submission (a 271-parameter `0x1800` write exhausting inside a packet). Raising the budget is explicitly NOT the fix |
-| F6 = M15 | open | a frame dump of the title screen plus the run record with its ledger IDs; its hash is neither disclaimer hash; compared by eye with an xemu screenshot of the same screen (T3); reproduced by the Turn Reviewer |
+| F6 = M15 | open | **criterion corrected 2026-10-07** (TR §23): the title screen itself, identified by CONTENT and confirmed by eye, with its hash recorded — **not** "a hash that is neither of two listed ones". The old blacklist was unsound: `87683a748e27d071` is the blue Dolby card, and the graffiti disclaimer renders in **four** hashes, three of them unlisted, so a run ending on the disclaimer (as the ceiling-clearing run did) satisfied the old letter. Also needs the run record with ledger IDs, an xemu comparison, and Turn Reviewer reproduction |
 
 ## Next actions, in order
 
-1. **Establish the reject region's temporal provenance, then confirm the missing methods at runtime.**
+1. **Find out why the picture stops changing while the guest keeps drawing (M15's actual blocker).** In the
+   keyboard-enabled run the guest is still submitting at the end — 5345 draws, 9224 rasterised triangles,
+   834M pixels, 1760 flips — yet the presented image stays on the disclaimer. Three hypotheses are already
+   eliminated **by measurement**, so do not re-run them: the `sub_0019E438` "spin" is ordinary DirectSound
+   lock traffic (all 16356 calls return 1; enter/leave balanced 24702/24702); **`RECOMP_KEYBOARD=1` changes
+   nothing** (state-for-state identical frame sequence); and the draw-surface composites from pinning
+   `RECOMP_FB_VA=0x8011C000` are **accumulation artifacts, not a title** — `0x11C000`/`0x1B2000` are never
+   cleared (only `0x00084000` and `0x00000000` ever are), so a buffer drawn-but-never-cleared smears many
+   frames together, and the ink sets lose and regain ~90% of their content between steps. The next
+   measurement must therefore avoid that trap: dump the surface the guest actually **clears and draws**
+   (`0x00084000`) beside the presented frame, or instrument the flip to record which surface it hands the
+   window — do not pin the window to an uncleared buffer.
+2. **Establish the reject region's temporal provenance, then confirm the missing methods at runtime.**
    The decode says **39** NV097 methods are missing from the region the walk was consuming, but that decode
    is taken from the **final** dump and the archived log has only three pointer samples for the post-reject
    phase, so a full ring lap cannot be excluded and the bytes are **not proven** to be what the walk read.
    The instrument for this now exists (see "Current work"): a run that reaches a budget stop latches where
    it happened, which limit fired, and the straddling packet, into the exported submit state. Take that
    measurement, then admit methods **from a runtime witness**, never from the decode.
-2. **Then fix the over-budget submission.** Evidence strongly indicates the walk exhausts the 4096-word
+3. **Then fix the over-budget submission.** Evidence strongly indicates the walk exhausts the 4096-word
    budget **inside a packet** (a non-incrementing `0x1800` write with 271 parameters, on the parameter path
    at `nv2a_core.c:1578` — the header-path dump at `:1671` is unconditional and never printed). **Raising
    the budget is not the fix** (owner constraint, L40): the durable direction is bounded resumable prefix
@@ -212,10 +224,10 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
    the fence for the original PUT until it is consumed. Do not trust the published `at`/`get` (they are the
    rollback origin) or the "last 32 visits" array (written only at headers, so it is sparse on a
    parameter-heavy stream).
-3. **Do not spend runs on the dispatch stop chain** until the ceiling path is finished; stop 28
+4. **Do not spend runs on the dispatch stop chain** until the ceiling path is finished; stop 28
    (`0x81860`) is still **not exercised** by any run this turn (`scripts/check-run-exercised.py`
    reports NOT EXERCISED for every post-fix run), so `config/stop-chain.json` is unchanged.
-4. **When a new scene appears, read the present lines before trusting the window.** Until 2026-10-06
+5. **When a new scene appears, read the present lines before trusting the window.** Until 2026-10-06
    the window was handed `drawn_offset`, which only the software rasteriser's triangles update, so a
    frame of clears or untransformed (vertex-program) batches presented the previous buffer. The present
    choice now falls back to the buffer the frame cleared or targeted, and logs
@@ -223,7 +235,7 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
    rasterised (`batches_untransformed` in the `[GPU]` report), so a targeted frame can show only its
    clear colour: an unchanged or blank picture after the ceiling clears is not proof the guest did not
    advance.
-5. **M15** as F6 states, then M16 onward.
+6. **M15** as F6 states, then M16 onward.
 
 ## Backlog (not on the critical path until it blocks)
 
