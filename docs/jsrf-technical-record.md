@@ -2725,5 +2725,15 @@ walk can diverge on a wrapped ring, so a table entry must be taken from a run wh
 PUT**, or from the `[PFIFO] admit-unknown` list of a run that actually exercised the method. The
 `0x1810` fix above satisfies this: its source run reached PUT.
 
+**The divergence is measurable, and it is a mis-parse rather than a real method family.** The packets
+that produce the dense range carry implausible counts and overlapping spans — in m15's ring,
+`header 0x1C200000` (method `0x0000`, count **1800**), `header 0x1100F82C` (method `0x182C`, count
+**1088**, spanning `0x182C`–`0x2928`), and `header 0x1078E800` (method `0x0800`, count **1054**,
+spanning `0x0800`–`0x1874`). A real NV097 submission does not set `count` to 1800 on method 0, and
+those spans sweep across the whole `0x18xx` vertex-format block, which is exactly why the union grew by
+a contiguous 4-byte-stride run. So the count fields are being read out of bytes the walk never treated
+as a header. Any future table growth must therefore be justified per method — a decode that reached PUT,
+or an `admit-unknown` line — and **never** by "the generator's union said so".
+
 
 
