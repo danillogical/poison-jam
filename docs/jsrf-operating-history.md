@@ -2759,14 +2759,21 @@ counts (TR §22 states the claim limit). Pushes for this turn:
 
 Toolkit
 `PUSHED_TO: origin / BRANCH: main / COMMIT: 505cda5b96e5b2a70492825df34151594805a1e5 / REMOTE_URL: https://github.com/danillogical/xboxrecomp / RESULT: fast-forward dc04dc0..505cda5 main -> main`.
-Game (two commits, pushed together; final commit is the records amendment)
-`PUSHED_TO: origin / BRANCH: master / COMMIT: 2d99b308325b875c0343af9864e59ec835b6b9b8 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 5e7a1a3..a8691e1 then a8691e1..2d99b30 master -> master`.
+Game (four substantive commits, pushed in three batches)
+`PUSHED_TO: origin / BRANCH: master / COMMIT: a8691e1, 2d99b30, 7e5db3c, a3e0b2f / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 5e7a1a3..a8691e1, then a8691e1..2d99b30, then 2d99b30..7e5db3c, then 7e5db3c..a3e0b2f master -> master`
+— the four are `a8691e1` (records), `2d99b30` (admitted-method list and wait witness), `7e5db3c`
+(review-1 remediation) and `a3e0b2f` (the evidenced wrapped-ring caution). This receipt paragraph is
+itself carried by a later game commit; that commit's own hash cannot be named here without making the
+receipt false, so it is identified by position (the commit containing this text) rather than by a
+hash, and it is pushed with the same remote and branch.
 
 Toolkit-first order is recorded from the **local reflogs**, which are the only retained evidence of
 it: `refs/remotes/origin/main` was updated by push at 2026-10-06 22:19:39 and
 `refs/remotes/origin/master` at 22:19:55. The order was not independently witnessed, so it is recorded
-as reflog evidence and not as a verified observation. The outgoing game commits are records-only (6
-text files, then 2): no `game/` path; the `secret-audit` 2 hits are the audit script's own pattern
+as reflog evidence and not as a verified observation. The toolkit has **no** commit after `505cda5`:
+the whole fix is that one commit, so no later toolkit push exists to order against. The outgoing game
+commits are records-only (6 text files, then 2, then 5, then 1): no `game/` path; the `secret-audit` 2
+hits are the audit script's own pattern
 literals and predate this turn; largest blob 203 KB. Next Windows turn: admit the six
 runtime-confirmed state methods (`0BB0`/`0BB4`/`0BB8`/`0BBC`/`1724`/`1728`) and then fix
 `budget_exhausted`.
