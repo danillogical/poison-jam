@@ -3027,10 +3027,21 @@ accumulation trap: dump the surface the guest actually **clears and draws** (`0x
 presented frame, or instrument the flip to record which surface it hands the window, rather than pinning the
 window to a buffer that is never cleared.
 
+**A discrepancy that looked alarming, and its explanation.** The pinned-surface run changes hash hundreds of
+times (431 distinct values) while the unpinned run's picture is frozen on the disclaimer, which invites the
+reading "the real framebuffer is live and the presenter is showing a stale copy". That reading is **wrong**,
+and the mechanism is visible in the code: `xbox_FramebufferWindowPresent` returns immediately when
+`RECOMP_FB_VA` is set (`fb_present.c`, `if (getenv("RECOMP_FB_VA")) return;` — "pinned: leave the old path
+alone"). So in a pinned run the published-frame copy is never updated and the window reads guest memory
+directly on its own clock, while the `[FBPRESENT]` hash is computed over whatever `s_rgb` last held. The two
+runs are therefore **not measuring the same thing**: the pinned hash sequence describes a live read of
+`0x00084000`, and the unpinned one describes the published copy. Neither is a present/draw mismatch, and the
+pinned numbers cannot be compared with the unpinned ones at all. This is recorded so the 431-change figure is
+not later cited as evidence of a rendering fault.
+
 **Claim limits.** These are measurements of archived runs. No new run reached the title; M15 is not claimed.
-The "input is not the blocker" result holds for `RECOMP_KEYBOARD=1` on this build — it does not show that
-input is *correct*, only that enabling it does not change the frame sequence. The draw-surface composites are
-accumulation artifacts and must not be cited as evidence of a rendered title.
+The draw-surface composites are accumulation artifacts and must not be cited as evidence of a rendered
+title. The pinned-surface hash sequence is not comparable with the unpinned one.
 
 
 
