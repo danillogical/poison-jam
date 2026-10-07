@@ -81,12 +81,35 @@ table byte-for-byte, so the change is attributable to the new run alone.
 
 ## Remaining work
 
-- Post-fix run with **neither** switch (`20261006-...-title005-fixed`, 420 s) — in flight.
-- Judge the four `dc04dc0` behaviours on Windows (fence mirror, present fallback,
-  `STATUS_USER_APC`, heap merging).
-- Stop 28 (`0x81860`) exercised? Only from a run that reaches it.
-- M15: title-frame BMP with a hash that is neither disclaimer hash, ledger IDs, xemu comparison,
-  Reviewer reproduction.
+- Post-fix run with **neither** switch (`20261006-210559-268-title005-fixed`, 420 s) — **done**:
+  0 rejections, 0 admit-unknown, `last walk ok`, presents **2410**. Independently reproduced by
+  `20261006-215642-480-title005-confirm` (presents 1680 at 297 s).
+- Judge the four `dc04dc0` behaviours on Windows — **done**: the fence mirror holds back-pressure as
+  designed (a rejected walk pins GET and leaves the guest in the `0x1914F0` ring-space wait — the
+  stack frame at `recovered.c:399957` is inside `loc_001914F0` — with a `[PFIFO] reject` line
+  present), and the `RECOMP_FENCE_MIRROR_LIVE=1` A/B reproduces the old behaviour, so the 1000/888
+  count was the old mirror's property, not a regression. CTest `kernel_file_apc_test` (its
+  `STATUS_USER_APC` assertions), `kmem`, `fence_snapshot`, `nv2a_present_track`, `nv2a_submit_diag`
+  all pass; `just test` 44/44; `just check` clean.
+- Stop 28 (`0x81860`) exercised? **NO — NOT EXERCISED** by every post-fix run
+  (`scripts/check-run-exercised.py`); `config/stop-chain.json` left unchanged.
+- M15: **not reached.** The run still ends on the graffiti disclaimer; the BMPs
+  (`logs/workers/title005/`) and the `[FBPRESENT]` hashes show no title screen.
+
+## Next blocker (recorded, not fixed this turn)
+
+Two, in order, both now in the plan's "Next actions":
+
+1. Same class as this turn's fix — `unsupported_method 0x0BB0` plus `0BB4`, `0BB8`, `0BBC`, `1724`,
+   `1728`, all runtime-confirmed by `[PFIFO] admit-unknown` in `20261006-213505-255-title005-admit3`.
+2. A different class — `budget_exhausted` (L40's per-walk word budget), which that run hits once the
+   six are admitted; needs walk bounds / incremental commit, no switch.
+
+**Provenance caution for #1:** those later rings have wrapped, so the generator's decode and the
+model's walk can diverge (decoding `20261006-211635-913-title005-m15` from `0x1000` stops with
+`bad_target 0x00100000` and would inflate the table by a dense `0x1848`–`0x18F8` run the real walk
+never required). Take a new entry only from a decode that **reached PUT** or from an
+`admit-unknown` line. The committed `+0x1810` fix satisfies this: its source run reached PUT.
 
 ## Completion criteria (from the start plan, unchanged)
 

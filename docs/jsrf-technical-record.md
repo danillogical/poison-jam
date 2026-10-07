@@ -2683,9 +2683,26 @@ disclaimer, and no title-screen frame exists. And a *second* blocker in the same
 measured: after 3498 successes the walk rejects on `unsupported_method method=0BB0` (a
 `NV097_SET_TRANSFORM_CONSTANT` slot), with the pending region also carrying `0BB4`, `0BB8`, `0BBC`,
 `1724` and `1728` — six methods, all register-state, confirmed at runtime by
-`RECOMP_NV2A_ADMIT_UNKNOWN=1` in run `20261006-213505-255-title005-admit3`
-(`[PFIFO] admit-unknown class=97 method=…`). Once those are admitted, the same run hits a **different**
-diagnostic, `budget_exhausted` (L40's per-walk word budget), which needs its own fix and no switch.
+`RECOMP_NV2A_ADMIT_UNKNOWN=1` in run `20261006-213505-255-title005-admit3`. That run's record lists
+every admitted method, with its class, as L44 requires (verbatim from its log; `class=97` is
+`NV097_KELVIN_PRIMITIVE`):
+
+```text
+  [PFIFO] admit-unknown class=97 method=0BB0 param=00000000 at=0002FF9C
+  [PFIFO] admit-unknown class=97 method=0BB4 param=00000000 at=0002FF9C
+  [PFIFO] admit-unknown class=97 method=0BB8 param=3CD5AD3F at=0002FF9C
+  [PFIFO] admit-unknown class=97 method=0BBC param=00000000 at=0002FF9C
+  [PFIFO] admit-unknown class=97 method=1724 param=0039500C at=000301CC
+  [PFIFO] admit-unknown class=97 method=1728 param=00395018 at=000301D4
+```
+
+The earlier enumeration run `20261006-205823-760-title005-admit-unknown` (before the `0x1810` fix) is
+the same class of record and listed exactly one method: `admit-unknown class=97 method=1810
+param=03000000 at=00009ADC`. Note that a third run of the same kind,
+`20261006-212529-647-title005-admit2`, **did not fire the banner at all** — it took a different path
+(run-to-run variation), so the six methods above are treated as confirmed only from `admit3`, which
+did. Once those are admitted, the same run hits a **different** diagnostic, `budget_exhausted` (L40's
+per-walk word budget), which needs its own fix and no switch.
 
 **A methodological caution for the next packet.** Regenerating the table from those later runs
 directly is **not** safe as done here. Their rings have wrapped: decoding
