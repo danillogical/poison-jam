@@ -2861,7 +2861,12 @@ capped at 64 lines (`if (submits < 64)`), so the maximum `put=` in a log is **no
 pointers come from `gpu-snapshots.jsonl`. Second, `[FBPRESENT]` *lines* are sampled (on change, every 10
 presents, or every 10 s), so a line count is not the `presents=` counter — comparing them produced a
 phantom "163 vs 2410" regression. Like-for-like the counters are new **1490**, fixed **2410** (at 420 s vs
-300 s) and confirm **1680**, so there is no regression, and `46b3265` is purely additive.
+300 s) and confirm **1680**. That correction invalidates the old comparison; it does **not** establish that
+there is no regression. The runs differ in duration, in executable hash, and in where in the late spin each
+one happened to be when its deadline fired, so the counters cannot separate a real behavioural change from
+run-to-run variation. What *can* be said is narrow: the admission is purely additive in the table (exactly
+`+6` on class `0x97`, zero removals), and no run has shown a rejection or a new code path since. A
+no-regression claim would need a matched-duration A/B on one binary.
 
 **And whether the post-admission run exercised the changed path is NOT DEMONSTRATED.** `20261007-001831-252-…-sixadmitted`
 drained the walk (`GET == PUT == 0x66E30`) with **zero rejections** and `last walk ok`. What can and cannot
@@ -2880,11 +2885,12 @@ be concluded:
   data point *for that address*, but labelling that word a packet header assumes a packet boundary that has
   not been established.
 
-So the honest statement is: the run shows the admission **broke nothing**, and it does **not** demonstrate
-that the six were exercised, needed, or delivered. Establishing exercise needs either a contemporaneous
-walk transcript or a run whose submission history is captured beyond the 64-line cap. The runtime evidence
-that the six are needed remains the admit3 witness, and the executor-level evidence is the ordered contract
-above.
+So the honest statement is: this run shows **no observed harm** from the admission, and it does **not**
+demonstrate that the six were exercised, needed, or delivered. Even "broke nothing" is stronger than the
+evidence: exercise was not demonstrated, so the run is close to silent about the changed path either way.
+Establishing exercise needs either a contemporaneous walk transcript or a run whose submission history is
+captured beyond the 64-line cap. The runtime evidence that the six are needed remains the admit3 witness, and
+the executor-level evidence is the ordered contract above.
 
 
 

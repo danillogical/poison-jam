@@ -249,12 +249,28 @@ class DumpTests(unittest.TestCase):
 
 
 class SubmitStateDecodeTests(unittest.TestCase):
-    """`g_nv2a_submit_state`: 12 little-endian u32 fields (NV2ASubmitState)."""
+    """`g_nv2a_submit_state`: the base 12 u32 fields, plus the budget transcript.
+
+    The struct GREW when the budget transcript was added, so the decoder must not
+    assume one layout. Reading the full size from an archive built BEFORE the
+    change does not fail -- it reads whatever globals follow and reports them as a
+    transcript. That happened for real: a pre-change archive reported
+    `budget_count = 44040355`, unrelated memory presented as a packet parameter
+    count. These tests pin both layouts and the size selection that separates them.
+    """
     FIELDS=('generation','diag','method','subchannel','param','at','get','put',
             'successes','rejections','consecutive_rejections','admitted_unknown')
+    BUDGET_FIELDS=('budget_stops','budget_local_pc','budget_words','budget_packets',
+                   'budget_count','budget_method','budget_ret','budget_in_param',
+                   'budget_at_packet_limit')
     def pack(self,generation=2,diag=11):
+        """The OLD (pre-transcript) 12-field layout."""
         return struct.pack('<12I',generation,diag,0xF40,1,0xDEADBEEF,0x1800,0x1000,
                            0x2000,7,300,299,4)
+    def pack_full(self,generation=2,diag=5):
+        """The NEW layout: base fields followed by the budget transcript."""
+        return self.pack(generation,diag)+struct.pack(
+            '<9I',1,0x4D4F4,4096,233,4,0x1760,0,1,0)
     def test_fields_and_diag_name(self):
         state=jsrf_gpu.decode_submit_state(self.pack())
         self.assertEqual([state[k] for k in self.FIELDS],
@@ -271,6 +287,138 @@ class SubmitStateDecodeTests(unittest.TestCase):
         with self.assertRaises(ValueError): jsrf_gpu.decode_submit_state(self.pack()[:47])
     def test_extra_trailing_bytes_are_ignored(self):
         self.assertEqual(jsrf_gpu.decode_submit_state(self.pack()+b'\0'*8)['put'],0x2000)
+
+    def test_old_layout_reports_no_transcript(self):
+        """A pre-change archive must NOT be credited with transcript fields."""
+        state=jsrf_gpu.decode_submit_state(self.pack())
+        self.assertIs(state['has_budget_transcript'],False)
+        for field in self.BUDGET_FIELDS:
+            self.assertNotIn(field,state,
+                             'a 12-field buffer must not yield %s' % field)
+    def test_new_layout_decodes_the_transcript(self):
+        state=jsrf_gpu.decode_submit_state(self.pack_full())
+        self.assertIs(state['has_budget_transcript'],True)
+        self.assertEqual([state[k] for k in self.BUDGET_FIELDS],
+                         [1,0x4D4F4,4096,233,4,0x1760,0,1,0])
+    def test_field_count_matches_the_size_constants(self):
+        """The sizes are derived from the field tuples, so they cannot drift."""
+        self.assertEqual(jsrf_gpu.SUBMIT_STATE_BASE_SIZE,
+                         4*len(jsrf_gpu.SUBMIT_STATE_BASE_FIELDS))
+        self.assertEqual(jsrf_gpu.SUBMIT_STATE_SIZE,
+                         4*len(jsrf_gpu.SUBMIT_STATE_FIELDS))
+        self.assertEqual(len(jsrf_gpu.SUBMIT_STATE_FIELDS),
+                         len(jsrf_gpu.SUBMIT_STATE_BASE_FIELDS)+len(self.BUDGET_FIELDS))
+
+
+class SubmitStateSizeTests(unittest.TestCase):
+    """The archive's own linker map states how big its struct is.
+
+    This is the regression that mattered: the reader asked for the CURRENT size
+    unconditionally, so a pre-change archive had adjacent globals read as
+    transcript fields. The map is the right source because it is present in every
+    archive and describes the build that produced it -- unlike a source-hash
+    lookup, which finds nothing for a run built from a dirty tree.
+    """
+    def _map(self, gap):
+        # Two symbols `gap` bytes apart, in the map's own column format.
+        return (' Preferred load address is 140000000\n'
+                ' 0001:00000000       g_nv2a_submit_state      0000000142687500     a.obj\n'
+                ' 0001:00000000       g_after_state            %016X     a.obj\n'
+                % (0x142687500+gap))
+    def _size(self, gap):
+        import tempfile, os
+        fd,path=tempfile.mkstemp(suffix='.map'); os.close(fd)
+        try:
+            with open(path,'w',encoding='utf-8') as f: f.write(self._map(gap))
+            return jsrf_gpu._submit_state_declared_size(path)
+        finally: os.unlink(path)
+    def test_old_archive_declares_the_base_size(self):
+        self.assertEqual(self._size(64),64)
+    def test_new_archive_declares_the_full_size(self):
+        self.assertEqual(self._size(96),96)
+    def test_absent_symbol_is_none(self):
+        import tempfile, os
+        fd,path=tempfile.mkstemp(suffix='.map'); os.close(fd)
+        try:
+            with open(path,'w',encoding='utf-8') as f:
+                f.write(' Preferred load address is 140000000\n')
+            self.assertIsNone(jsrf_gpu._submit_state_declared_size(path))
+        finally: os.unlink(path)
+
+    def test_size_decision_uses_the_declared_size(self):
+        """The DECISION is what regressed, so test it directly.
+
+        A decoder test cannot catch this: the decoder is handed a length and
+        decodes it. The bug was in CHOOSING the length, so an archive declaring 64
+        bytes must yield the base size even though this checkout's struct is
+        larger.
+        """
+        w=[]
+        self.assertEqual(jsrf_gpu.submit_state_size_for_archive(64,w),
+                         jsrf_gpu.SUBMIT_STATE_BASE_SIZE)
+        self.assertEqual(w,[])
+        w=[]
+        self.assertEqual(jsrf_gpu.submit_state_size_for_archive(96,w),
+                         jsrf_gpu.SUBMIT_STATE_SIZE)
+        self.assertEqual(w,[])
+    def test_unstated_size_falls_back_to_the_base_layout(self):
+        w=[]
+        self.assertEqual(jsrf_gpu.submit_state_size_for_archive(None,w),
+                         jsrf_gpu.SUBMIT_STATE_BASE_SIZE)
+        self.assertTrue(any('not stated' in m for m in w))
+    def test_too_small_is_refused_not_truncated(self):
+        w=[]
+        self.assertIsNone(jsrf_gpu.submit_state_size_for_archive(16,w))
+        self.assertTrue(any('smaller than' in m for m in w))
+    def test_end_to_end_old_archive_yields_no_transcript(self):
+        """The regression, end to end: a 64-byte declaration must not yield fields."""
+        w=[]
+        size=jsrf_gpu.submit_state_size_for_archive(64,w)
+        state=jsrf_gpu.decode_submit_state(struct.pack('<%dI'%len(jsrf_gpu.SUBMIT_STATE_BASE_FIELDS),
+                                                       2,5,0,0,0,0x494F4,0x494F4,0x4E680,3519,1,1,0)[:size])
+        self.assertIs(state['has_budget_transcript'],False)
+        self.assertNotIn('budget_count',state)
+
+
+class ReadSubmitStateIntegrationTests(unittest.TestCase):
+    """`read_submit_state` on REAL archived dumps, which is where the bug lived.
+
+    The decoder tests cannot catch the original defect: the decoder is handed a
+    length and decodes it faithfully. The bug was that `read_submit_state` asked
+    for the CURRENT struct size from an archive built BEFORE the struct grew, so
+    the extra bytes came from whatever globals follow `g_nv2a_submit_state`. On the
+    real pre-change archive that produced `budget_count = 44040355`.
+
+    These tests go through `read_submit_state` itself, so a regression in the size
+    CHOICE fails them. They skip when the archives are not present (they are
+    gitignored evidence, not part of a fresh checkout).
+    """
+    RUNS=Path(__file__).resolve().parents[1]/'logs'/'runs'
+    OLD='20261006-213505-255-title005-admit3'      # built before the transcript
+    NEW='20261007-014848-201-20261007-title006-budgetcatch'  # built after
+
+    def _read(self, run):
+        folder=self.RUNS/run
+        if not (folder/'process.dmp').exists() or not (folder/'jsrf_recomp.map').exists():
+            self.skipTest('archive %s is not present' % run)
+        w=[]
+        return jsrf_gpu.read_submit_state(folder,w),w
+
+    def test_pre_change_archive_reports_no_transcript(self):
+        state,w=self._read(self.OLD)
+        self.assertIsNotNone(state,'the pre-change archive must still decode its base fields')
+        self.assertIs(state['has_budget_transcript'],False,
+                      'a pre-change archive was credited with transcript fields')
+        self.assertNotIn('budget_count',state,
+                         'budget fields came from memory after the struct')
+        self.assertEqual(state['diag_name'],'budget_exhausted')
+        self.assertEqual(state['successes'],3519)
+
+    def test_post_change_archive_reports_the_transcript(self):
+        state,w=self._read(self.NEW)
+        self.assertIsNotNone(state)
+        self.assertIs(state['has_budget_transcript'],True)
+        self.assertIn('budget_stops',state)
 
 
 if __name__=='__main__': unittest.main()

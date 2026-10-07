@@ -103,11 +103,15 @@ constraint, L40): the direction is bounded resumable prefix dispatch preserving 
 and not publishing the fence for the original PUT until it is consumed.
 
 **Whether the post-admission run exercised the changed path is NOT DEMONSTRATED.** The run drained the walk
-with zero rejections and `last walk ok`, and that shows the admission **broke nothing**. But final-ring
-absence is not proof of absence (the ring is reused; bytes at `0x2FF4C` demonstrably differ from m15),
-"zero rejections" is not proof (the pre-admission `fixed` run also had zero), and the `[PFIFO] submit` log is
-capped at 64 lines so it cannot establish that `PUT` never wrapped. Establishing exercise needs a
-contemporaneous transcript or a run captured beyond the 64-line cap.
+with zero rejections and `last walk ok`, which shows **no observed harm** from the admission — but even that
+is stronger than the evidence, since exercise was not demonstrated, so the run is close to silent about the
+changed path either way. Final-ring absence is not proof of absence (the ring is reused; bytes at `0x2FF4C`
+demonstrably differ from m15), "zero rejections" is not proof (the pre-admission `fixed` run also had zero),
+and the `[PFIFO] submit` log is capped at 64 lines so it cannot establish that `PUT` never wrapped. Nor do
+the present counters establish **no regression**: they are 1490 / 2410 / 1680 at **unequal durations**, on
+different executable hashes, so they invalidate the old line-count comparison without separating a real
+behavioural change from run-to-run variation. Establishing exercise or non-regression needs a matched-duration
+A/B on one binary, or a contemporaneous transcript.
 
 **The first-stop instrument now exists (toolkit `4b6cc2f`/`76c76fd`, game `1d71631`).** The previous turn could
 only *infer* "inside a packet" from the absence of a dump, because only the header path printed and the submit

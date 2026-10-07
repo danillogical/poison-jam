@@ -4,12 +4,13 @@ Encoding reference: xemu pfifo.c, revision 75650bd8cd91945f7b79774e2cee0b200ca37
 This decoder is an offline diagnostic, not an implementation of PFIFO semantics.
 """
 import argparse
+import hashlib
 import json
 import re
 import struct
 import subprocess
 from pathlib import Path
-from jsrf_dump import CaptureError, DumpMemory
+from jsrf_dump import CaptureError, DumpMemory, MAP_LINE
 
 
 # Default budgets mirror the toolkit walk so budget_exhausted here means what it means there.
@@ -172,16 +173,72 @@ def decode_submit_state(raw):
     return state
 
 
-def read_submit_state(folder, warnings):
+def _submit_state_declared_size(map_path):
+    """Bytes the ARCHIVE's own linker map gives `g_nv2a_submit_state`.
+
+    This is the archive describing itself, which is what makes it reliable: the
+    map lays out globals in address order, so the distance to the NEXT symbol is
+    the struct's size in that build. Measured: 64 bytes before the budget
+    transcript existed, 96 after.
+
+    A source-hash lookup was tried first and is NOT usable here -- `build-source`
+    records the SHA-256 of the file content, and a run built from a dirty tree
+    matches no commit, so the lookup silently found nothing. The map is present
+    in every archive and needs no history.
+    """
+    text = Path(map_path).read_text(encoding='utf-8', errors='replace')
+    # MAP_LINE groups: 1 = symbol name, 2 = address at the preferred base.
+    rows = [(m.group(1), int(m.group(2), 16))
+            for m in map(MAP_LINE.match, text.splitlines()) if m]
+    for i, (name, address) in enumerate(rows):
+        if name != 'g_nv2a_submit_state':
+            continue
+        # The next symbol's address bounds this one.
+        if i + 1 < len(rows) and rows[i + 1][1] > address:
+            return rows[i + 1][1] - address
+    return None
+
+
+def submit_state_size_for_archive(declared, warnings):
+    """How many bytes of `g_nv2a_submit_state` to read from an archive.
+
+    Split out from `read_submit_state` so the DECISION is testable without a dump.
+    The regression this guards is silent: asking for the current size from an
+    archive built before the struct grew does not fail, it reads whatever globals
+    follow and reports them as transcript fields (measured: budget_count =
+    44040355 from unrelated memory). A test that only exercises the decoder cannot
+    catch that, because the decoder is handed a length and dutifully decodes it.
+
+    `declared` is the size the ARCHIVE's linker map states, or None if it does not
+    state one. Returning None means "do not decode".
+    """
+    if declared is None:
+        warnings.append('Submit state size not stated by the archive map; '
+                        'decoding the base fields only.')
+        return SUBMIT_STATE_BASE_SIZE
+    if declared >= SUBMIT_STATE_SIZE:
+        return SUBMIT_STATE_SIZE
+    if declared >= SUBMIT_STATE_BASE_SIZE:
+        return SUBMIT_STATE_BASE_SIZE
+    warnings.append(f'Submit state is {declared} bytes in this archive, smaller than '
+                    f'the {SUBMIT_STATE_BASE_SIZE}-byte base layout; not decoded.')
+    return None
+
+
+def read_submit_state(folder, warnings, toolkit=None):
     """Submit state from the dump through the archived linker map, or None with a warning."""
     folder = Path(folder)
     map_path = folder/'jsrf_recomp.map'
     if not (folder/'process.dmp').exists() or not map_path.exists():
         warnings.append('Submit state unavailable: needs process.dmp and jsrf_recomp.map in the archive.')
         return None
+    # Ask for the size the ARCHIVE declares, not the size this checkout has.
+    size = submit_state_size_for_archive(_submit_state_declared_size(map_path), warnings)
+    if size is None:
+        return None
     try:
         with DumpMemory(folder) as memory:
-            raw = memory.host_symbol(map_path, 'g_nv2a_submit_state', SUBMIT_STATE_SIZE)
+            raw = memory.host_symbol(map_path, 'g_nv2a_submit_state', size)
         return decode_submit_state(raw)
     except (CaptureError, OSError, ValueError, struct.error) as error:
         warnings.append(f'Submit state unavailable (g_nv2a_submit_state; a build before 2026-10-06 lacks it): {error}')
@@ -249,7 +306,7 @@ def analyze(folder, toolkit=None):
         table = None
         warnings.append(f'Toolkit method table not found at {table_path}; unsupported methods were not checked.')
     missing = None if table is None else missing_methods(queue.get('packets', []), table)
-    submit_state = read_submit_state(folder, warnings)
+    submit_state = read_submit_state(folder, warnings, toolkit)
     if progress == 'pending_unchanged':
         warnings.append('Pending queue unchanged across observed stops; inspect CPU waiter stacks. Unobserved intermediate changes are possible.')
     return dict(version=1,status='captured',snapshot_count=len(snapshots),fixture=final.get('fixture'),
