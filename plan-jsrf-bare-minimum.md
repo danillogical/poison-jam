@@ -64,6 +64,48 @@ still ends on the graffiti disclaimer.
   never required. Take a new entry only from a decode that **reached PUT**, or from an
   `[PFIFO] admit-unknown` line of a run that exercised it.
 
+**The six are admitted (game `779c6a0`, toolkit `46b3265`), and the next blocker is bigger than the six.** The
+admission came from the runtime witness, not a decode: `config/nv2a-runtime-witnessed-methods.json` records each
+`[PFIFO] admit-unknown` line with its run, log line and log SHA-256, and the generator unions them
+(`--witness=`). The delta is mechanically verified as **exactly `+{0BB0,0BB4,0BB8,0BBC,1724,1728}` on class
+`0x97`**, zero removals, no other class changed, `0x1810` retained (381 → 387, NV097 370 → 376). The executor
+already implemented all six (`vp_method`'s constant arm and the `0x1720`-range attribute arm), so admission
+activates existing behaviour rather than adding any. Ordered delivery is now pinned by
+`run_ordered_constant_contract` in `tests/test_nv2a_hal.c`, which reads the real executor through a new narrow
+accessor (`nv2a_pb_exec_vp_view`, toolkit `ec98ffe`); it was validated by mutation — a last-value-only constant
+handler fails 15 of its assertions.
+
+**`budget_exhausted` is NOT the next blocker, and admitting six is not sufficient.** An offline decode of the
+rejected region (GET `0x494F4`..PUT `0x4E680`, 5219 words, no wrap) shows **eight further methods missing from
+the table** — `0x0420`, `0x0424`, `0x0428`, `0x042C` (`SET_TEXTURE_MATRIX_ENABLE` +0..+0xC), `0x0480`
+(`SET_MODEL_VIEW_MATRIX`), `0x0680` (`SET_COMPOSITE_MATRIX`), `0x1748`, `0x1B40` — the first at word 493, well
+before the 4096-word cap. They were never witnessed because `RECOMP_NV2A_ADMIT_UNKNOWN=1` **bypasses** the
+`unsupported_method` reject, so the walk continued past them, and the witness queue is populated only on a
+successful commit — which a budget-rejected walk never reaches. **So a normal walk will reject on `0x0420`
+before it ever sees the budget.** Provenance caution: these eight are decode-derived, not runtime-witnessed, so
+they must be confirmed by a run (a no-switch run that reaches that region) before being admitted as fact.
+
+**The budget mechanism is measured, not yet fixed.** The detailed budget dump at `nv2a_core.c:1671` never
+appeared in the admit3 log, and that dump is unconditional on the header path — so exhaustion came from the
+**parameter** path (`:1578`), i.e. **inside** a packet, not from the 1024-packet limit. The straddling packet is
+a non-incrementing `0x1800` write with 271 parameters. With the budget raised, the same region decodes cleanly to
+PUT (235 packets, no loop, no reserved opcode, no bad target), and its bytes are verified intact (identical to
+the capture-time decode's first 235 packets), so this is a genuine over-budget submission rather than a
+mis-parse. **Raising the budget is not the fix** (owner constraint): the durable direction is bounded resumable
+prefix dispatch, keeping the cap and preserving carry/order/rollback, and not publishing the fence for the
+original PUT until it is consumed.
+
+**The admission run did NOT exercise the changed path.** `20261007-001831-252-...-sixadmitted` drained the walk
+(`GET == PUT == 0x66E30`) with **zero rejections** and `last walk ok`, but a presence scan of its whole ring
+finds **none** of the six. Two corrections to my own earlier measurements, both recorded so they are not
+repeated: the `[PFIFO] submit` log is capped at 64 lines (`if (submits < 64)`), so its max `put=` is not the
+final PUT (the real pointers come from `gpu-snapshots.jsonl`); and `[FBPRESENT]` **lines** are sampled, so a line
+count is not the `presents=` counter (like-for-like: new 1490, fixed 2410 at 420 s, confirm 1680 at 300 s — no
+regression, and `46b3265` is purely additive).
+
+The next action is therefore **not** `budget_exhausted`: it is to reach that region with a no-switch run so the
+eight methods can be confirmed at runtime and admitted from evidence, then to fix the budget.
+
 Standing facts from this turn's measurements:
 
 - The submission walk commits all-or-nothing (L40), so a rejected walk moves no GET, publishes no flip
@@ -114,24 +156,31 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 | F5 | parked | intro movies: if Sofdec blocks, skip and ledger it (*patched*/*intentionally ignored*); decoding is M29 |
 | F7 | done through stop 28 | the dispatch stop chain above; residue in the backlog |
 | **F8** | **cleared 2026-10-06** (toolkit `505cda5`) | the present ceiling: `unsupported_method 0x1810`, one stale table entry; the table now carries it and a run with neither the live-mirror nor the admit-unknown switch reaches presents 2410 with zero rejections (TR §22) |
-| **F8b** | **next** | the same class again — `unsupported_method 0x0BB0` plus `0BB4`/`0BB8`/`0BBC`/`1724`/`1728` — then `budget_exhausted`, which needs walk bounds (TR §22) |
+| **F8b** | **done 2026-10-07** (toolkit `46b3265`) | the same class: the six runtime-witnessed methods `0BB0`/`0BB4`/`0BB8`/`0BBC`/`1724`/`1728`, admitted from the `[PFIFO] admit-unknown` witness (+6 on class `0x97`, zero removals). Ordered delivery pinned by a mutation-validated contract. **The changed path was NOT exercised by the post-admission run** — see "Current work" |
+| **F8c** | **next** | the region beyond the six needs **eight further methods** (`0420`/`0424`/`0428`/`042C`/`0480`/`0680`/`1748`/`1B40`), decode-derived and not yet runtime-confirmed; then the genuine over-budget submission (a non-incrementing `0x1800` write with 271 parameters, exhausting inside a packet). Raising the budget is explicitly NOT the fix |
 | F6 = M15 | open | a frame dump of the title screen plus the run record with its ledger IDs; its hash is neither disclaimer hash; compared by eye with an xemu screenshot of the same screen (T3); reproduced by the Turn Reviewer |
 
 ## Next actions, in order
 
-1. **Admit the six measured methods, from sound provenance.** `0x0BB0`, `0x0BB4`, `0x0BB8`, `0x0BBC`,
-   `0x1724`, `0x1728` are confirmed at runtime by `[PFIFO] admit-unknown` in
-   `20261006-213505-255-title005-admit3`; those records are queued only after a successful commit, so
-   they are **stronger than any decode**. Take the six from that witness, and expect **exactly +6 on
-   class `0x97` and zero removals**. Do **not** regenerate the union from the later wrapped rings: TR §22
-   records that a "reached PUT" decode can still invent methods, because the generator is not the model's
-   walk (it ignores the non-incrementing bit and lacks the model's `0x1FFC` method-range rejection).
-   The generator now fails closed on an incomplete decode and on any removal, so a wrong run set is an
-   error rather than a silent table rewrite.
-2. **Then fix `budget_exhausted`** (L40's per-walk word budget), which the same run hits once the six
-   are admitted. This is a different class: walk bounds or incremental commit, its own measurement,
-   **no switch**, and never a relaxed rejection (L39). Measure first whether the guest really sends one
-   over-budget submission or the walk is running away on a mis-parse.
+1. **Reach the region past the six with a NO-SWITCH run, and confirm the eight at runtime.** The six are
+   admitted (game `779c6a0`, toolkit `46b3265`), but the region beyond them needs **eight more methods**
+   (`0420`, `0424`, `0428`, `042C`, `0480`, `0680`, `1748`, `1B40`), the first at word 493 of
+   GET `0x494F4`..PUT `0x4E680`. They are **decode-derived, not runtime-witnessed** — the admit3 run
+   bypassed the reject with `RECOMP_NV2A_ADMIT_UNKNOWN=1`, so it never logged them. TR §22 says a decode
+   can invent methods, so **do not admit them from the decode alone**: get a run that reaches that region
+   and witness them, exactly as the six were witnessed. Runs so far drain the walk early
+   (`GET == PUT`, zero rejections) and never get there, so reaching it may need a different path or a
+   longer/differently-timed run; report honestly if it cannot be reached.
+2. **Then fix the genuine over-budget submission.** Once the walk gets that far it exhausts the 4096-word
+   budget **inside a packet** (a non-incrementing `0x1800` write with 271 parameters, on the parameter path
+   at `nv2a_core.c:1578` — proven because the header-path dump at `:1671` never printed). The region
+   decodes cleanly to PUT with the budget raised, so it is a real 5219-word submission, not a mis-parse.
+   **Raising the budget is not the fix** (owner constraint, L40): the durable direction is bounded
+   resumable prefix dispatch that keeps the cap and preserves carry, order and all-or-nothing rollback,
+   and does not publish the fence for the original PUT until it is consumed. Instrument the local stop PC
+   first — the published `at`/`get` are the rollback origin, not the failure frontier, and the existing
+   "last 32 visits" array is written only at headers, so it is sparse and non-chronological on a
+   parameter-heavy stream. **No switch**, and never a relaxed rejection (L39).
 3. **Do not spend runs on the dispatch stop chain** until the ceiling path is finished; stop 28
    (`0x81860`) is still **not exercised** by any run this turn (`scripts/check-run-exercised.py`
    reports NOT EXERCISED for every post-fix run), so `config/stop-chain.json` is unchanged.

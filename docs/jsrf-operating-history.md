@@ -2836,3 +2836,46 @@ destroys the real artifacts, because the reverted script ignores the redirect fl
 twice during this work, both times caught and restored from git. The suite now preflights whether the
 script under test can redirect both writes and **skips** the whole suite if it cannot, so producing a
 RED baseline can no longer damage the tree.
+
+## 2026-10-07 — the six witnessed methods admitted; the blocker beyond them is eight more
+
+**Staffing, continued.** Claude capacity was still exhausted, so the owner re-authorised the same
+temporary substitution for this continuation: Turn Planner `codex/gpt-6.1-sol` @ `high`, Persistent
+Advisor `codex/gpt-6.1-sol` @ `xhigh`, Turn Reviewer `codex/gpt-6.1-sol` @ `high`, Orchestrator and
+Workers `workbuddy-ai/deepseek-v4.1-flash` @ `high`. The roster in workflow §1 was **not** edited; this
+remains an owner-authorised substitution, and a future session returns to the claude route unless the
+owner says otherwise.
+
+**F8b done (toolkit `46b3265`, game `779c6a0`).** The six methods `0x0BB0`/`0BB4`/`0BB8`/`0BBC` and
+`0x1724`/`0x1728` are admitted from the runtime `[PFIFO] admit-unknown` witness — not from a decode, per
+the limit recorded above. Admission is durable and auditable: `config/nv2a-runtime-witnessed-methods.json`
+carries each witness with its run, log line and log SHA-256, and the generator unions it via `--witness=`,
+failing closed on an unknown class, an unaligned method, a missing provenance field, or an unreadable
+manifest. Measured delta: exactly `+6` on class `0x97`, zero removals, no other class changed, `0x1810`
+retained (381 → 387). Ordered delivery is pinned by a contract in `tests/test_nv2a_hal.c` that reads the
+real executor through a new narrow accessor (toolkit `ec98ffe`); it was validated by **mutation** — a
+last-value-only constant handler fails 15 of its assertions. Full suite 45/45, `just check` GREEN.
+
+**The next blocker is not the one the plan predicted.** Decoding the region the walk was consuming when it
+reported the budget shows **eight further methods missing from the table** (`0420`, `0424`, `0428`, `042C`,
+`0480`, `0680`, `1748`, `1B40`), the first at word 493 of a 5219-word span — far inside the 4096-word
+budget. They were never witnessed because `RECOMP_NV2A_ADMIT_UNKNOWN=1` *bypasses* the method reject, and
+the witness queue only fills on a successful commit, which a budget-rejected walk never reaches. So the
+six-line witness is a **lower bound**, and a normal walk will reject on `0x0420` before it ever sees the
+budget. Those eight are decode-derived and must be runtime-confirmed before admission.
+
+**Budget mechanism measured, fix deliberately not applied.** The header-path budget dump never printed,
+while the parameter path emits none — so exhaustion was **inside a packet** (a non-incrementing `0x1800`
+write with 271 parameters). With the budget raised the region decodes cleanly to PUT and its bytes are
+verified intact, so it is a genuine over-budget submission, not a mis-parse. Raising the budget is
+explicitly **not** the fix; the direction is bounded resumable prefix dispatch preserving carry, order and
+rollback.
+
+**Honest coverage note.** The post-admission title run drained the walk with zero rejections, but its ring
+contains none of the six methods, so the changed path was **NOT EXERCISED** by it. Two of my own
+measurements were wrong and are corrected: `[PFIFO] submit` logging is capped at 64 lines (so its max
+`put=` is not the final PUT), and `[FBPRESENT]` lines are sampled (so a line count is not the `presents=`
+counter — the apparent "163 vs 2410" regression was a units error; like-for-like it is 1490 vs 2410 at
+420 s vs 300 s, i.e. no regression).
+
+Push receipts: toolkit `505cda5..46b3265` and `46b3265..ec98ffe`, then game `610b12d..779c6a0`.

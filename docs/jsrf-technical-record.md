@@ -2780,5 +2780,77 @@ implementation claiming equivalence. The `0x1810` fix above still satisfies the 
 single-parameter incrementing packet, so the increment rule does not apply to it, and its arrival was
 independently confirmed by `[PFIFO] admit-unknown`.
 
+### §22.1 The six witnessed methods, and why admitting them is not the end of the blocker
+
+**Done.** `0x0BB0`/`0x0BB4`/`0x0BB8`/`0x0BBC` and `0x1724`/`0x1728` are admitted from the runtime witness
+(toolkit `46b3265`, game `779c6a0`). Provenance is the `[PFIFO] admit-unknown` record, which the walk
+queues only inside the successful-commit block, so it witnesses a method the walk really staged **and
+committed** — strictly stronger than a decode, per §22 above. The admission is durable rather than a hand
+edit: `config/nv2a-runtime-witnessed-methods.json` carries each witness with its run, log line and log
+SHA-256, and the generator unions it (`--witness=`), refusing an unknown class, an unaligned method, a
+missing witness/run/hash field, or an unreadable manifest. The measured delta is exactly
+`+{0BB0,0BB4,0BB8,0BBC,1724,1728}` on class `0x97`, zero removals, no other class changed, `0x1810`
+retained (381 → 387; NV097 370 → 376). All six were already implemented in the executor — the constants by
+`vp_method`'s range arm, the offsets by the `0x1720`-range arm — so admission activated existing behaviour
+and added no executor code.
+
+**Ordered delivery is now pinned, and the contract was validated by mutation.** A final-state check cannot
+distinguish correct ordered delivery from a dispatcher that merely holds the last value written. Reading
+the implementation rather than assuming it: the constant **component** is a pure function of the method
+(`((method - 0x0B80)/4) % 4`) and the **index** advances only on the fourth component (`0x0BBC`), so
+permuting `0x0BB0`/`0BB4`/`0BB8` while leaving `0x0BBC` last is byte-identical and is *not* observable —
+a test claiming to check that order would be checking nothing. What is observable, and therefore pinned by
+`run_ordered_constant_contract` (`tests/test_nv2a_hal.c`, reading the real executor through the new narrow
+`nv2a_pb_exec_vp_view`, toolkit `ec98ffe`): two successive groups must land in successive constants with
+the cursor advancing once per group; an early group close must **split** the group across two constants;
+and interleaved vertex-array offsets must stay independently addressable with the last write per attribute
+winning. Replacing the constant handler with a last-value-only version makes **15** of those assertions
+fail. (The cursor advances once on an early close, not twice — only `0x0BBC` matches `slot % 4 == 3`; an
+earlier draft of this test asserted twice and was wrong, and the implementation was right.)
+
+**The blocker beyond the six is NOT `budget_exhausted`, and it is eight more methods.** An offline decode of
+the region the walk was consuming when it reported the budget (GET `0x494F4`..PUT `0x4E680`, 5219 words, no
+wrap) finds **eight methods missing from the table**: `0x0420`, `0x0424`, `0x0428`, `0x042C`
+(`NV097_SET_TEXTURE_MATRIX_ENABLE` +0/+4/+8/+0xC), `0x0480` (`SET_MODEL_VIEW_MATRIX`), `0x0680`
+(`SET_COMPOSITE_MATRIX`), `0x1748`, `0x1B40` — the first at word 493, far inside the 4096-word budget. The
+raw headers were read directly and are real (`header 0x00040420` → method `0x0420` count 1; `0x00400480` →
+`0x0480` count 16, consistent with a 4×4 matrix). **Why they were never witnessed:** the admitting run set
+`RECOMP_NV2A_ADMIT_UNKNOWN=1`, which *bypasses* the `unsupported_method` reject, so the walk sailed past
+them; and the witness queue is populated only on a successful commit, which a budget-rejected walk never
+reaches. So the six-line witness is a **lower bound** on what a region needs, not an inventory — a limit now
+recorded in the manifest itself. Consequence: **a normal walk will reject on `0x0420` before it ever sees
+the budget**, so these eight are the immediate next blocker, and they are decode-derived and must be
+runtime-confirmed before admission, exactly as the six were.
+
+**The budget mechanism is measured.** The detailed dump at `nv2a_core.c:1671` is unconditional on the header
+path and did **not** appear in the admit3 log, while the parameter path (`:1578`) jumps to `done` with no
+dump — so exhaustion happened **inside a packet**, not at the 1024-packet limit. The straddling packet is a
+non-incrementing `0x1800` write carrying 271 parameters. With the budget raised the same region decodes
+cleanly to PUT (235 packets; no loop, reserved opcode or bad target), and its bytes are verified intact
+(identical to the capture-time decode's first 235 packets), so this is a genuine 5219-word submission rather
+than a mis-parse of a wrapped ring. **Raising the budget is not the fix** (owner constraint, L40): the
+durable direction is bounded resumable prefix dispatch that keeps the cap and preserves carry, order and
+all-or-nothing rollback, and does not publish the fence for the original PUT until it is consumed. Two
+diagnostic traps are recorded so they are not re-discovered: the published `at`/`get` are the **rollback
+origin**, not the local failure frontier; and the "last 32 visit addresses" array is written only at
+headers (`trace[words & 31]`), so on a parameter-heavy stream it is sparse, stale and non-chronological —
+and a mid-packet exhaustion bypasses it entirely.
+
+**Two of my own measurements were wrong, and the corrections matter.** First, `[PFIFO] submit` logging is
+capped at 64 lines (`if (submits < 64)`), so the maximum `put=` in a log is **not** the final PUT; the real
+pointers come from `gpu-snapshots.jsonl`. Second, `[FBPRESENT]` *lines* are sampled (on change, every 10
+presents, or every 10 s), so a line count is not the `presents=` counter — comparing them produced a
+phantom "163 vs 2410" regression. Like-for-like the counters are new **1490**, fixed **2410** (at 420 s vs
+300 s) and confirm **1680**, so there is no regression, and `46b3265` is purely additive.
+
+**And the post-admission run did not exercise the changed path.** `20261007-001831-252-…-sixadmitted`
+drained the walk (`GET == PUT == 0x66E30`) with **zero rejections** and `last walk ok`, but a presence scan
+of its entire ring finds **none** of the six methods — the guest never submitted them, so the run is
+**NOT EXERCISED** with respect to this change. It therefore shows the admission broke nothing; it does not
+show the six are needed or delivered. The runtime evidence that they are needed remains the admit3 witness,
+and the executor-level evidence is the ordered contract above. Run-to-run variation is first-class here:
+reaching the region needs a run that gets past the early drain, which none of the three post-admission runs
+did.
+
 
 
