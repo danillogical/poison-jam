@@ -3416,19 +3416,49 @@ published.** The disclaimer itself renders into **all three** buffers with ident
 (`8205f3a6d2e48df5`) across flips 2200–2423, and the fade step appears as `e886cadf72766a64` in
 `0x84000` at 2424 and in `0x11C000` at 2425–2426.
 
-**Classification: Case A (source selection) is eliminated for the traced window.** Selection and
-publication agree at every flip by the `drawn_this_frame` branch; the presenter did not publish a
-stale or wrong buffer and never fell back. **The defect is in what the guest drew**, not in which
-surface was chosen — which is the opposite of the branch the plan previously held open, and it is why
-the earlier "the presenter may choose a black surface" reading is now closed rather than merely
-unproven.
+**Classification: the copy/publication mismatch is eliminated in the observed window; semantic source
+selection remains UNQUALIFIED.** What the 242/242 equality proves is narrow, and worth stating exactly:
+**whatever surface the tracker selected, the bytes published were that surface's own bytes** — no stale
+copy, no wrong-buffer copy, no fallback. The `reason=` field additionally shows the tracker took its
+`drawn_this_frame` branch every time. **`reason` is not an oracle:** it restates the same heuristic
+rather than establishing that the heuristic was right, so this is *copy/publication consistency*, not
+correct guest-intended selection.
 
-**What this does NOT establish.** Not that the guest never drew the title: this run's own dump holds a
-rich 3D city scene in `0x80084000` (`1e971149626031f6`, 52.4 % non-black), and that same surface is
-bound as a texture (`[TEXUSE] 0x80084000 640x480 fmt 0x11 lin`, 52 report blocks, up to 2474 batches).
-Not which operation should have turned the drawn content into the xemu-visible title, and not whether
-the black is a fade the guest asked for, a composite that produced black, or a pass that never ran.
-Those need the per-frame batch ring, which is in the instrument but whose output is analysed below.
+**What it does NOT prove is that the tracker selected the surface the *guest* intended to present.**
+A concrete unresolved alternative exists in the ring ordering itself: at flip 2425 an earlier composite
+batch writes `0x11C000` while sampling `0x84000`, then a later `self=1` batch writes `0x84000`, and
+`present_track_flip` then selects `0x84000` because it prefers the last surface drawn. Whether the
+guest intended `0x11C000` (the buffer the composite just filled) or `0x84000` is **not established** by
+this instrument. So the earlier "the presenter is correct" and "Case A eliminated" phrasings are
+narrowed to: **copy/publication mismatch eliminated in the observed window; semantic source selection
+unqualified.** Ruling the rule out as a defect class would need the guest's own flip-buffer mapping —
+an intended-source oracle this instrument does not have. **No selection bug is claimed**: the
+ordering above is a concrete remaining *alternative*, not a demonstrated defect.
+
+**Perturbation status: state non-mutation is supported by the code; timing non-perturbation is
+UNQUALIFIED.** The instrument changes no guest state and calls nothing that could (it reads guest RAM
+and `fprintf`s). But there is **no matched trace-on/trace-off control on one binary reaching a
+comparable terminal** — the available trace-off runs differ in `RECOMP_NV2A_ADMIT_UNKNOWN` and take a
+different path — so the claim that per-flip hashing of several 640×480 surfaces while holding the PFIFO
+lock left timing unchanged is `UNQUALIFIED` and must not be made.
+
+**Instrument limitations, recorded rather than fixed.** The candidate registry holds at most 8 distinct
+`SET_SURFACE_COLOR_OFFSET` values (this title uses 3, so the cap was not reached, but a title with more
+would silently truncate the set); candidate hashes use the *current* clip and pitch rather than each
+surface's own last geometry, and the bound-texture hash uses the surface geometry rather than the
+texture's own dimensions and pitch (harmless here because all three candidates share
+`pitch=1280 clip=640x480`, and the linear texture is also 640×480, but wrong in general); and
+`_CHANGE` keys on the decision tuple only, not on content. `flip_modulo=3` establishes a configured
+**three-entry flip index ring**, not independently three scanout-buffer roles — `0x84000` is the
+offscreen target, so the three `SET_SURFACE_COLOR_OFFSET` values are not three equivalent scanout
+buffers.
+
+**What this does NOT establish (beyond the above).** Not that the guest never drew the title: this
+run's own dump holds a rich 3D city scene in `0x80084000` (`1e971149626031f6`, 52.4 % non-black), and
+that same surface is bound as a texture (`[TEXUSE] 0x80084000 640x480 fmt 0x11 lin`, 52 report blocks,
+up to 2474 batches). Not which operation should have turned the drawn content into the xemu-visible
+title, and not whether the black is a fade the guest asked for, a composite that produced black, or a
+pass that never ran.
 
 **The 29 methods are now runtime-witnessed and admitted.** Run
 `20261007-113354-706-title008-trace-admit` (`RECOMP_NV2A_ADMIT_UNKNOWN=1`, 620 s) logged **67**
@@ -3459,23 +3489,63 @@ Game CTest 45/45, toolkit CTest 11/11, 213 toolkit Python tests, `just check` ex
 rejections`). So the 1024-packet cap and the unresolved call are both now live blockers, separate
 from presentation.
 
-**`0x1964` is genuine, not a misread header.** The ring word really is `0x00041964` — count 1,
-subchannel 0, method `0x1964`, non-incrementing bit clear — i.e. an element of the
-`NV097_SET_VERTEX_DATA4UB` inline array (`0x1940 + 0x24`, attribute 9, `param=FF000000`). The
-`0x0580` span decodes to a `count=12` packet (SET_INVERSE_MODEL_VIEW_MATRIX plus 11 rows) and the
+**`0x1964` is genuine, not a misread header.** The witness line names the offset
+`at=0005DAE4`, but **the ring is reused, so those bytes no longer hold the header** — reading
+`0x8005DAE4` in the witness run's own final dump now gives `00000000 00AD641B …`. The header word was
+therefore re-decoded from an archived dump where it still exists, and the provenance is stated per
+run rather than assumed:
+
+| run | dump offset holding `00041964` | context |
+|---|---|---|
+| `20261007-085324-850-title007-blacktrace` | `0x8005DAE0` | `08870C29 **00041964** FF000000 000C03C0` |
+| `20261007-110933-718-title008-trace-noadmit` | `0x80004540` | `**00041964** FF000000 000C03C0 00008511` |
+
+Decoding `0x00041964`: count = `(h >> 18) & 0x7FF` = 1, subchannel = `(h >> 13) & 7` = 0,
+method = `h & 0x1FFC` = `0x1964`, and the non-incrementing bit (`0x40000000`) is **clear**. The
+following word is `FF000000`, matching the reject/witness `param=FF000000`. So it is a genuine
+incrementing packet whose single method is `0x1964` = `NV097_SET_VERTEX_DATA4UB + 0x24`
+(`0x1940 + 0x24`), i.e. **attribute 9 (texcoord 0), component 0** of the 4-byte inline vertex family.
+The `0x0580` span decodes to a `count=12` packet (SET_INVERSE_MODEL_VIEW_MATRIX plus 11 rows) and the
 `0x06C0` span to `count=16` (SET_TEXTURE_MATRIX plus 15): ordinary incrementing matrix uploads.
 
-**Binary identity of the three runs in this section.** All three — the no-admit trace, the
-admit-witness, and the trace-admit witness — ran the **same executable**,
-`exe_sha256 = 9818c3464aa82de7c8dd08d3f4b57c2c5d58ddce3d6ea16a5d8e989fe71e835f`, i.e. the build whose
-method table still had **415** NV097 entries. They differ only in `RECOMP_NV2A_ADMIT_UNKNOWN`, so the
-no-admit/admit comparison is a clean A/B on one binary. The 29 admitted methods therefore were **not**
-in the table those runs used: the witness run saw them only because the admit switch bypasses the
-reject. Any run made after the regeneration uses a different executable and must not be compared with
-these without re-checking `exe_sha256`. Their log SHA-256s are `247760b2…` (no-admit trace),
-`036b0af3…` (admit-witness) and `c80b4679…` (trace-admit witness).
+**`0x1A30`, the new stop, is the same family and is a render gap.** It is
+`NV097_SET_VERTEX_DATA4F_M + 0x30` = `0x1A00 + 0x30` = attribute 3 (diffuse), component 0. The executor
+**already decodes that family** at `nv2a_pb_exec.c:2922-2934`, but only for `attr == 0` (position) and
+`attr == 9` (texcoord 0); every other attribute, including 3, is accepted and **ignored**. So admitting
+`0x1A30` would activate an existing arm rather than add behaviour — and the arm itself is a gap:
+inline per-vertex diffuse colour is dropped. It needs a **runtime witness** before admission (two
+attempts, 620 s and 900 s, are `NOT EXERCISED`).
 
-## §23.7 The batch ring: the composite is FAITHFUL, and the defect is upstream (Case C)
+**Binary identity of the three runs in this section: same executable, CONFOUNDED settings.** All three
+ran the **same executable**,
+`exe_sha256 = 9818c3464aa82de7c8dd08d3f4b57c2c5d58ddce3d6ea16a5d8e989fe71e835f` (the build whose method
+table still had **415** NV097 entries), which is why they can be compared at all. But they are **not** a
+clean A/B: they differ in more than the admit switch —
+
+| run | `RECOMP_NV2A_ADMIT_UNKNOWN` | `RECOMP_FLIP_TRACE` |
+|---|---|---|
+| `…110933…trace-noadmit` | unset | `400 FROM=2200 CHANGE=1` |
+| `…112201…admit-witness` | `1` | unset |
+| `…113354…trace-admit` | `1` | `900 FROM=2400 CHANGE=1` |
+
+So the trace and the admit switch are **confounded**, and no causal or timing claim may rest on
+comparing these three. They are same-binary observations whose *settings* differ. The 29 admitted
+methods were **not** in the table these runs used: the witness run saw them only because the admit
+switch bypasses the reject. Any run made after the regeneration uses a different executable and must
+not be compared with these without re-checking `exe_sha256`. Their log SHA-256s are `247760b2…`
+(no-admit trace), `036b0af3…` (admit-witness) and `c80b4679…` (trace-admit witness).
+
+**A path divergence between them is a separate defect, not a control.** `admit-witness` and the
+earlier `witness2` never read `title.adx` after opening it (0 `[READ]`, 0 `[ADXIO]`) and made no
+post-transition save probe, whereas `trace-noadmit`, `trace-admit` and `blacktrace` each read
+`title.adx` twice (51200 + 800768 bytes), logged 6 `[ADXIO]` lines and made 1 `SaveMeta` probe. The
+**path divergence is OBSERVED**; that `admit-witness` therefore never reached the submissions
+containing the 29 methods is **INFERRED** (no independent walk/stage witness establishes it), and the
+specific IO/APC cause is **INFERRED** as well. What is `NOT EXERCISED` regardless of cause is the
+runtime witness for those methods in that run. Separately, the no-reject 620 s black run does show
+that the black need not coincide with the `0x1964` reject, but it is not a same-title-path control.
+
+## §23.7 The batch ring: what it establishes, and what it does NOT (corrected after Turn Review)
 
 **The measurement.** The same-flip trace was extended with a per-frame batch ring (toolkit `52e6d12`):
 for each traced flip, the last 32 batches since the previous flip, each recording the target colour
@@ -3486,63 +3556,163 @@ did it and what that batch read*.
 
 **Run `20261007-115809-590-title008-ring-admitted`** (620 s, no admit switch, **the 29 admitted**, so a
 different executable from §23.6; `RECOMP_FLIP_TRACE=900 FROM=2400 CHANGE=1`; 42 flips traced;
-`diagnostic_deadline`; analysed by `logs/workers/title008/composite_source.py` and `analyze_ring.py`).
+`diagnostic_deadline`). Helpers: `logs/workers/title008/composite_source.py`, `analyze_ring.py`,
+`writer_shape.py`.
 
-**The frame structure at the black flips is uniform and complete:**
+**What the ring shows (OBSERVED).** Every traced frame contains a textured batch that writes a swap
+surface while sampling `0x80084000`, and it reports `px=307200` — which is exactly `640*480`. **`px`
+counts `put_pixel` write calls (`nv2a_pb_exec.c:1867`), not unique pixel coverage**, so this is
+"307200 raster write calls, consistent with a full-screen pass", **not** proof of correct copy or of
+full coverage. A pass may write the same pixel repeatedly and leave others untouched.
 
 ```
-frame batches=16 drew=1 textured=16 self_sample=15 untransformed=0
-  b[0]      target=0x001B2000  tex=0x80084000  fmt=0x11 640x480 self=0 tris=1 px=307200
-  b[1..15]  target=0x00084000  tex=0x80084000  fmt=0x11 640x480 self=1 tris=0 px=0
+flip 2400 (published 8205f3a6d2e48df5, NON-black):
+  b[0] target=0x001b2000  tex=0x80084000  self=0 px=307200
+  b[1..3] target=0x00084000 tex=0x806b6000 self=0 px=159037/306081
+
+flip 2425 (published 156ed4086987e325, black):
+  b[0] target=0x0011c000  tex=0x80084000  self=0 tris=1 px=307200
+  b[1] target=0x00084000  tex=0x80084000  self=1 tris=2 px=306081
 ```
 
-`px=307200` is exactly `640*480`. **The composite is a full-screen textured quad that covers every
-pixel of the frame, and it runs every frame.**
+**CORRECTION — the earlier "faithful copy / Case C" conclusion was an OVERCLAIM, and it is retracted.**
+The first version of this section concluded from "all 17 black flips had a black bound-texture hash"
+that the composite was a *correct copy of a black source*, placing the defect upstream. **That does not
+follow**, and the flaw is structural, not a matter of degree:
 
-**The composite publishes exactly what its source held.** For all **17** black flips, the bound
-texture (`0x80084000`) was **itself black** — `0 of 17` had a non-black source:
+- Every surface hash in the trace — candidates **and** the bound texture — is taken at **flip time**,
+  i.e. **after every batch in the frame has run**.
+- At flip 2425 the composite `b[0]` samples `0x80084000` and writes `0x0011C000`; **then `b[1]`
+  overwrites `0x00084000`** (`tris=2 px=306081`, sampling `0x80084000` itself).
+- So the recorded source hash is the source's **post-frame** content, not what the composite actually
+  read when it executed. "The source was black at the flip" and "the source held content when the
+  composite sampled it, and was cleared afterwards" are **indistinguishable** from this evidence.
 
-| flip | selected | sampled source | `0x84000` | `0x1B2000` | `0x11C000` |
-|---|---|---|---|---|---|
-| 2425 | `0x84000` | `156e…` black | `156e…` | **`8205…`** | **`e886…`** |
-| 2426 | `0x1B2000` | `156e…` black | `156e…` | `156e…` | **`e886…`** |
-| 2427–2441 | alternating | `156e…` black | `156e…` | `156e…` | `156e…` |
+The trace therefore does **not** establish that the composite read black, and it does **not** close the
+sampling / UV / blend / ordering branches. Those are **reopened**. Measuring the source at the moment a
+batch executes is a strictly stronger requirement the current instrument does not meet.
 
-**Classification: Case C, sharply — the defect is UPSTREAM of the composite.** The pass that turns
-`0x80084000` into the swap buffer is a *correct copy*: it samples `0x80084000` and writes what it
-finds, over the whole frame. At the flips that publish black, `0x80084000` **is** black. So "why is the
-composite black" is the wrong question — it is not black by defect, it is faithfully reproducing a
-black source. The question is **why `0x80084000` stopped holding the scene**.
+**CORRECTION — a factual error in the same section.** The claim "the frame structure is uniform: 16
+batches, the writing batch `self=0 px=307200`, at all 17 black flips" is **false for 2 of the 17**. The
+measured distribution of the last batch that wrote the selected surface
+(`logs/workers/title008/writer_shape.py`) is:
 
-This also revises the reading of §23.5: the rich 3D city scene found in `0x80084000` at that archived
-dump belonged to a *different* run whose walk had already stopped, not to the flips that publish black
-here.
+| writer shape | flips |
+|---|---|
+| `self=0 px=307200 tris=1` | 15 |
+| `self=0 px=306081 tris=2` | 25 |
+| `self=1 px=306081 tris=2` | 2 |
 
-**The `self=1` batches are inert, not the cause.** 15 of the 16 batches per frame sample the surface
-they write (a feedback read), but **all 15 report `tris=0 px=0`** — they are counted and rasterise
-nothing, so they cannot produce black. The single batch that does write (`tris=1 px=307200`) has
-`self=0`: it samples `0x84000` while writing a *different* surface, which is the correct,
-non-feedback composite. So both the composite and the feedback reads are accounted for, and neither is
-the defect. **`0x84000` is cleared and then receives only the 15 non-rasterising batches**, which is
-consistent with it being cleared to black each frame and never refilled.
+so at 2 of 17 black flips (2425 and one other) the selected surface was written by a **`self=1`**
+batch with `px=306081`, not by the full-screen `px=307200` composite. The "uniform" wording is
+withdrawn.
 
-**A NEW missing-method class appeared, so the admission was exercised.** With the 29 in the table the
-run stops at
+**What survives.** The ring establishes the *shape* of the frame — a full-screen pass samples
+`0x80084000` into a swap surface every frame, and the swap surface is what the flip publishes
+(§23.6) — and it establishes that the `self=1` batches which rasterise nothing (`tris=0 px=0`) cannot
+be the cause. It does **not** establish where the black originates.
+
+**A NEW missing-method class appeared, so the 29 admission was exercised.** With the 29 in the table
+the run stops at
 
 ```
 [PFIFO] reject diag=unsupported_method method=1A30 subch=0 param=00000000 at=00059420 get=00059420 put=0005C7B4 successes=3560 rejections=1
 ```
 
-i.e. **`0x1A30`**, not `0x1964`. The stop *moving* is itself evidence that the admitted methods were
-exercised and that the guest advanced. `0x1A30` is a new class and needs its own **runtime witness**
-before admission — never a decode (L39's provenance rule).
+i.e. **`0x1A30`**, not `0x1964`. The stop *moving* is evidence the admitted methods were exercised and
+the guest advanced. **`0x1A30` is `NV097_SET_VERTEX_DATA4F_M + 0x30`** (`0x1A00 + 0x30`) = attribute 3
+(diffuse colour), component 0, of the 4-float inline vertex family — and the executor **already
+handles that family** at `nv2a_pb_exec.c:2922-2934`, but only for `attr == 0` (position) and
+`attr == 9` (texcoord 0); every other attribute, including 3, is accepted and **ignored**. So
+admitting `0x1A30` would activate an existing arm rather than add behaviour — but it is a
+**render gap**: inline per-vertex diffuse colour is dropped.
 
-**The `0x1A30` witness is NOT EXERCISED so far.** A dedicated 620 s run with
-`RECOMP_NV2A_ADMIT_UNKNOWN=1` (`20261007-120946-505-title008-witness-1A30`) logged **zero**
-`admit-unknown` lines and **zero** rejects, ending on the black at presents 2440 — i.e. that run never
-met `0x1A30` in a committed unit. Run-to-run variation is first-class here, so this is
-`NOT EXERCISED`, not a refutation; the method cannot be admitted from this run, and the class stays
-open.
+**The `0x1A30` witness is NOT EXERCISED so far.** A dedicated 620 s run
+(`20261007-120946-505-title008-witness-1A30`) and a 900 s run (`…-witness-1A30-long`) both logged
+**zero** `admit-unknown` lines, so neither met `0x1A30` in a committed unit. Run-to-run variation is
+first-class here, so this is `NOT EXERCISED`, not a refutation; the class stays open and cannot be
+admitted from these runs.
+
+**Instrumentation gaps, recorded as limitations rather than fixed.** The Turn Planner's start plan
+(§1.3) listed three fixes to the draft trace that were **not** implemented: (a) per-surface
+geometry/pitch for each candidate rather than the current clip and pitch, (b) the bound-texture hash
+using the texture's own geometry, and (c) a content-aware `_CHANGE` key. (a) and (b) did not affect
+this run's conclusion because all three candidate surfaces share `pitch=1280 clip=640x480`, and (c)
+cannot have suppressed the transition because the selected surface changes across it — but they are
+real gaps and a future run with mixed surface geometry must not reuse this instrument unchanged.
 
 
 
+
+## §23.8 The black had a concrete cause: the vertex-program viewport constants were never loaded
+
+**The cause (OBSERVED, then fixed and measured).** The XDK vertex programs this title runs end with the
+standard viewport step:
+
+```
+MUL o0.xyz = r12 * c[58]
+MAD o0.xyz = r12 * r1 + c[59]   FINAL
+```
+
+`c[58]` and `c[59]` are the hardware's viewport **scale** and **offset** slots — `nv2a_regs.h` names
+them `NV_IGRAPH_XF_XFCTX_VPSCL = 0x3a = 58` and `NV_IGRAPH_XF_XFCTX_VPOFF = 0x3b = 59`, and xemu's
+pgraph writes exactly those slots from `SET_VIEWPORT_SCALE` (`0x0AF0`) and `SET_VIEWPORT_OFFSET`
+(`0x0A20`). **The executor never loaded them.** `0x0A20` went only to `s_gpu.vp_offset`, which only the
+fixed-function path reads, and **`0x0AF0` was not handled at all** — it sat in the report's unhandled
+top ten with `x28024 last=0x43A00000 (320.0)`, alongside `0x0AF4 = -240` and `0x0AF8 = 16777215`.
+
+Consequence: with `c[58] = c[59] = 0`, **every vertex of every vertex-program batch collapses to the
+screen origin**. The triangles have zero area, `raster_triangle` returns at its `area == 0` test before
+`tris_drawn` or `drawn_offset` are updated, and the batch draws **nothing**. That is why `0x84000` was
+cleared to black every frame and then never refilled — and the full-screen composite then faithfully
+copied that black. It also explains the ring's otherwise strange shape: the batches targeting `0x84000`
+report `tris=0 px=0`.
+
+**The fix (toolkit, this turn).** `0x0AF0-0x0AFC` now writes `s_vp.c[58]` and `0x0A20-0x0A2C` writes
+`s_vp.c[59]` **as well as** `s_gpu.vp_offset`, so the vertex-program path and the fixed-function path
+each get what they read. In the same change, stage 0's enable bit
+(`SET_TEXTURE_CONTROL0` `0x1B0C`, bit 30) is now honoured, defaulting to enabled: the scene batches
+disable stage 0 while a texture offset is still bound, and without the gate they would sample the very
+surface they draw into once the collapse is fixed — a feedback read.
+
+**Measured effect on run `20261007-124149-033-title008-d1-viewport`** (620 s, no admit switch,
+`RECOMP_FLIP_TRACE=400 FROM=2400 CHANGE=1`, mapping gate `matches 1 / content-mismatch 0`), against
+`20261007-115809-590-title008-ring-admitted` (the same configuration before the fix):
+
+| measure | before D1 | after D1 |
+|---|---|---|
+| distinct published hashes over the whole run | **11** | **659** |
+| `0x0AF0` in the unhandled list | yes (`x28024`) | **absent** |
+| triangles rasterised (final report) | 58378 | 40966 |
+| the 17 black flips after the transition | constant `156ed4086987e325` | **every flip a distinct hash** |
+
+At the dump instant the surfaces are:
+
+| surface | hash | non-black | distinct colours |
+|---|---|---|---|
+| `0x80084000` | `efddce3b5bb02ab1` | **0.935** | **2677** |
+| `0x8011C000` | `eaaa65df05fa3144` | **1.000** | 5 |
+| `0x801B2000` | `156ed4086987e325` | 0.000 | 1 |
+
+**Rendered, `0x80084000` is a full 3D city scene** — towers, sky, clouds, road markings and the green
+elevated highway — and `0x8011C000` is a **"Now Loading"** screen (flat teal field, a progress bar and
+the legend). Both were previously black or a partial fragment. Preserved:
+`logs/workers/title008/surfD1/0x80084000.png` and `…/0x8011C000.png`.
+
+**Classification.** The collapse and the missing `0x0AF0` handling are `OBSERVED`; the causal link from
+that to the black is **PROVED for this configuration** by the before/after on one trace configuration
+(distinct published hashes 11 → 659, and the transition frames going from one repeated black hash to a
+distinct hash per flip). It is **not** a claim that every remaining difference is explained, and it is
+**not** M15: the title screen itself — emblem, "PLEASE PRESS START TO BEGIN" over the street — has still
+not been observed on the recomp, and the `0x80084000` city scene is not yet compared like-for-like with
+the xemu reference.
+
+**What this does to the earlier sections.** §23.6's and §23.7's retractions stand: the presenter was
+never shown to be at fault, and the flip-time hash ordering argument is unaffected by this fix. What
+changes is the *critical path*: the black was not a composite or selection defect at all, and the
+"reopen sampling/UV/blend/ordering" instruction is now superseded by a measured upstream cause — with
+the caveat that the sampling/UV/blend question is still not positively established, only made moot for
+this symptom.
+
+**The new stop is `0x1A30`**, unchanged by the fix and still `NOT EXERCISED` as a witness
+(`[PFIFO] reject diag=unsupported_method method=1A30 … successes=3557`).

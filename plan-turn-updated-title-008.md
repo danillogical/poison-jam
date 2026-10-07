@@ -129,83 +129,123 @@ Two consequences:
 no-admit run, but the black is *also* present in the admit run where nothing rejects. The reject is
 therefore not the cause of the black; it only ends the run.
 
+## PLAN_CHANGE (third): the root cause was found and fixed, and Case C is withdrawn
+
+- **Changed:** the critical path. The black interval is no longer attributed to the composite, the
+  presenter, or an unknown upstream draw. It was the **missing vertex-program viewport constants**:
+  `0x0AF0`/`0x0A20` never reached `s_vp.c[58]`/`c[59]`, so every vertex-program vertex collapsed to the
+  screen origin and every scene batch drew zero-area triangles. `0x0AF0` was **unhandled entirely**.
+- **Evidence:** TR §23.8 — the toolkit's own `nv2a_regs.h` names `XFCTX_VPSCL = 0x3a = 58` /
+  `XFCTX_VPOFF = 0x3b = 59`; the executor's `vp_method` never writes them; `0x0AF0` appears in the
+  report's unhandled top ten at `x28024`. After the fix, on **one trace configuration**, distinct
+  published hashes go **11 → 659**, `0x0AF0` disappears from the unhandled list, and the 17
+  post-transition flips each get a distinct hash where before they repeated one black hash.
+  `0x80084000` (93.5 % non-black, 2677 colours) renders a full 3D city scene and `0x8011C000` a
+  "Now Loading" screen.
+- **Why:** this is a measured cause with a before/after on a controlled configuration, so it supersedes
+  the earlier speculation. The sampling/UV/blend branches are no longer the critical path — though they
+  remain **not positively established**, only made moot for this symptom.
+
+## Case classification (final, corrected)
+
+- **Case A (source selection):** the **copy/publication mismatch is eliminated** in the observed
+  window (242/242 published == selected, `drawn_this_frame`). **Semantic source selection is
+  UNQUALIFIED** — `reason` restates the same heuristic, and the flip-2425 ordering (earlier composite
+  writes `0x11C000`, later `self=1` batch writes `0x84000`, tracker picks `0x84000`) is a concrete
+  unresolved alternative. **No selection bug is claimed.**
+- **Case B (composite produced black):** **withdrawn.** The ring's flip-time hashes cannot distinguish
+  a black source from a source cleared after the read, so this was never established; and the actual
+  cause was upstream in the vertex path.
+- **Case C (upstream draw):** **CONFIRMED by the fix.** The scene batches produced no pixels because
+  their vertices collapsed. This is the measured answer.
+- **M15:** **not reached.** The title screen itself — emblem, "PLEASE PRESS START TO BEGIN" — has not
+  been observed on the recomp, and the `0x80084000` city scene has not been compared like-for-like with
+  the xemu reference.
+
 ## Next steps, in order
 
-1. **Per-frame batch ring** (Turn Planner §1.1): the last N batches since the previous flip —
-   target `color_offset`, stage-0 texture offset/format/dims/pitch/addr, blend enable+factors, draw
-   path, `idx_count`, and the UVs/texel actually sampled. Emitted only on traced flips. This is what
-   connects "the guest drew black into `0x84000`" to *which batch did it and what it sampled*.
-2. Re-run the deciding experiment with the ring and classify Case B vs Case C.
-3. Retry the 29-method witness (a longer run, or the reject-point witness Worker B described) —
-   recorded as NOT EXERCISED so far.
-4. Records: plan **Current work**, TR §23.6, ledger as needed.
-5. Commit + push toolkit first, then game.
-6. Fresh Turn Reviewer (`codex/gpt-6.1-sol` @ high).
+1. **Get past `0x1A30`** — the new missing-method stop (`SET_VERTEX_DATA4F_M + 0x30`, attribute 3
+   diffuse, which the executor accepts and ignores). It needs a **runtime witness** before admission;
+   two attempts are NOT EXERCISED. The witness run also names `0x0700-0x073C`, `0x18C8/0x18CC`,
+   `0x1518-0x1524`, `0x1B80/0x1B84`, `0x17F8`, `0x1E20/0x1E24`, `0x1E74`, `0x1734`, `0x1968`.
+2. **Look for the title screen** on the D1 build once the walk gets past that stop, and compare it by
+   **content** with `logs/workers/title007/xemu/deliverable/`.
+3. **Recover `0x00159330`** (the fatal `[ICALL]`, an omitted function reached only indirectly).
+4. **Consider the presenter rule** — present the swap buffer the `FLIP_INC` closed rather than the last
+   surface drawn — as a separate correctness question, not as the cause of the black.
+5. Records: TR §23.6–§23.8, plan Current work, ledger L46/L47/L48, this plan.
+6. Commit + push toolkit first, then game; then a fresh Turn Reviewer.
 
-## The ring measurement is DONE: Case C, and the composite is FAITHFUL
+## The ring measurement is DONE, and it REOPENED the composite branch (Turn Review correction)
 
 **Run `20261007-115809-590-title008-ring-admitted`** (620 s, no admit switch, **29 methods now in the
 table**, `RECOMP_FLIP_TRACE=900 FROM=2400 CHANGE=1`; 42 flips traced; `diagnostic_deadline`). Analysed
-by `logs/workers/title008/composite_source.py` and `analyze_ring.py`.
+by `logs/workers/title008/composite_source.py`, `analyze_ring.py`, `writer_shape.py`.
 
-**The composite is a full-screen textured pass, and it works.** Every traced flip carries a ring. The
-frame structure at the black flips is:
+**What the ring shows (OBSERVED).** Every traced frame contains a full-screen textured batch that
+writes a swap surface while sampling `0x80084000`:
 
 ```
-frame batches=16 drew=1 textured=16 self_sample=15 untransformed=0
-  b[0]  target=0x001B2000  tex=0x80084000  fmt=0x11 640x480 self=0 tris=1 px=307200
-  b[1..15] target=0x00084000 tex=0x80084000 fmt=0x11 640x480 self=1 tris=0 px=0
+flip 2400 (published 8205f3a6d2e48df5, NON-black):
+  b[0] target=0x001b2000  tex=0x80084000  self=0 px=307200
+  b[1..3] target=0x00084000 tex=0x806b6000 self=0 px=159037/306081
+flip 2425 (published 156ed4086987e325, black):
+  b[0] target=0x0011c000  tex=0x80084000  self=0 tris=1 px=307200
+  b[1] target=0x00084000  tex=0x80084000  self=1 tris=2 px=306081
 ```
 
-`px=307200` is exactly `640*480`: **the composite covers the whole frame**. `tris=1` for a
-full-screen quad. So the pass that turns `0x80084000` into the swap buffer **runs and writes every
-pixel**.
+`px=307200` is exactly `640*480`. So the composite writes every pixel of the frame. **That is what the
+ring establishes, and it is all it establishes about the composite.**
 
-**And it publishes exactly what its source held.** For all **17** black flips, the composite's source
-(the bound texture, `0x80084000`) was **itself black** — `0 of 17` had a non-black source:
+**RETRACTED: the "faithful copy / Case C" conclusion was an OVERCLAIM.** The Turn Reviewer challenged
+it and I verified the challenge independently against the raw ring:
 
-| flip | selected | sampled source | candidate 0x84000 | candidate 0x1B2000 | candidate 0x11C000 |
-|---|---|---|---|---|---|
-| 2425 | `0x84000` | `156e…` black | `156e…` | **`8205…`** | **`e886…`** |
-| 2426 | `0x1B2000` | `156e…` black | `156e…` | `156e…` | **`e886…`** |
-| 2427–2441 | alternating | `156e…` black | `156e…` | `156e…` | `156e…` |
+- **Every surface hash — candidates and the bound texture — is taken at flip time, after every batch in
+  the frame has run.** At flip 2425 the composite `b[0]` samples `0x84000` and writes `0x11C000`, and
+  **then `b[1]` overwrites `0x84000`** (`tris=2 px=306081`, sampling `0x84000` itself). So the recorded
+  source hash is the source's *post-frame* content, not what the composite read. "The source was black
+  at the flip" and "the source held content when the composite sampled it, and was cleared afterwards"
+  are **indistinguishable** from this evidence.
+- **The "uniform 16-batch frame with a `self=0 px=307200` writer at all 17 black flips" claim is FALSE
+  for 2 of the 17.** Measured writer shapes: `self=0 px=307200` on 15 flips, `self=0 px=306081` on 25,
+  `self=1 px=306081` on 2.
 
-**This is Case C, and it is a sharp result: the defect is UPSTREAM of the composite.** The composite
-samples `0x80084000` and publishes it faithfully; at the black flips `0x80084000` *is* black. So the
-question is no longer "why is the composite black" (it is not — it is a correct copy) but **"why did
-`0x80084000` stop holding the scene?"**.
+**So the sampling / UV / blend / ordering branches are REOPENED, not closed.** What survives: the frame
+*shape*, and that the `tris=0 px=0` feedback batches cannot be the cause. The next instrument must
+**hash each batch's sampled source at the moment that batch executes**.
 
-Note the contrast with the earlier archived run (`§23.5`), where `0x80084000` held a rich 3D city
-scene at the dump instant: that was a *different* run whose walk had stopped. Here, at the flips that
-publish black, the source is genuinely black.
-
-**A NEW missing-method class appeared, and the stop moved.** With the 29 admitted, the run stops at
+**A NEW missing-method class appeared, and the stop moved.** With the 29 admitted the run rejects on
 
 ```
 [PFIFO] reject diag=unsupported_method method=1A30 subch=0 param=00000000 at=00059420 get=00059420 put=0005C7B4 successes=3560 rejections=1
 ```
 
-i.e. **`0x1A30`**, not `0x1964` — the 29-method admission *did* move the stop, which is itself
-evidence the admitted methods were exercised. This is a new class and needs its own runtime witness
-before admission (never a decode). A witness run is in flight.
+i.e. **`0x1A30`**, not `0x1964` — so the admitted methods *were* exercised. `0x1A30` is
+**`NV097_SET_VERTEX_DATA4F_M + 0x30`** = **attribute 3 (diffuse), component 0** of the 4-float inline
+vertex family, which the executor already handles at `nv2a_pb_exec.c:2922-2934` but only for `attr==0`
+and `attr==9`; other attributes are accepted and **ignored**. Admitting it activates an existing arm,
+and it is a **render gap**: inline per-vertex diffuse colour is dropped. Its witness is **NOT
+EXERCISED** (two runs, 620 s and 900 s, zero `admit-unknown`), so the class stays open.
 
-**The `self=1` batches are not the defect.** 15 of 16 batches per frame sample the surface they write
-(`self=1`) — that is a feedback read, and on hardware the sampled copy is the pre-pass contents. But
-all 15 have `tris=0 px=0`: they are **counted but rasterise nothing**, so they write nothing and
-cannot be the cause. The one batch that does write (`tris=1 px=307200`) is `self=0` — it samples
-`0x84000` while writing a *different* surface (`0x1B2000`/`0x11C000`), which is the correct,
-non-feedback composite. **So the composite is clean and the feedback reads are inert.**
+**Instrumentation gaps recorded, not fixed** (Turn Planner §1.3 items not implemented): per-surface
+geometry for each candidate; the bound-texture hash using the texture's own geometry; and a
+content-aware `_CHANGE` key. The first two did not affect this run's conclusion (all three candidates
+share `pitch=1280 clip=640x480`), but a future run with mixed geometry must not reuse this instrument
+unchanged.
 
-## PLAN_CHANGE (second)
+## PLAN_CHANGE (second, corrected)
 
-- **Changed:** the plan's §7 branch selection. The ring measurement selects **Case C**, not Case B:
-  the composite is faithful and its source is black, so no composite/UV/blend fix is indicated.
-- **Evidence:** `composite_source.py` — 17/17 black flips had a black composite source, and the
-  writing batch is `self=0` with `px=307200` (full frame).
-- **Why:** the user's tree assigns Case B to "another candidate surface has the content / the pass
-  produced black". Neither holds: the pass produced black *because its input was black*. The critical
-  path moves upstream to whatever should have filled `0x80084000`, and to the newly exposed
-  `0x1A30` missing-method stop.
+- **Changed:** the plan's §7 branch selection. The first version of this record selected **Case C** on
+  the strength of "the composite's source was black at every black flip". **That selection is
+  withdrawn.** The trace's flip-time hashes cannot distinguish a black source from a source cleared
+  after it was read, so **no case is selected** and the sampling/UV/blend/ordering branches are
+  reopened.
+- **Evidence:** the raw ring at flip 2425 (`b[0]` composite, then `b[1]` overwrites the source), and
+  the writer-shape histogram (`logs/workers/title008/writer_shape.py`) which contradicts the "uniform"
+  wording.
+- **Why:** the user's standard is that a conclusion must follow from the evidence, and the same-event
+  requirement extends to *when* a hash is taken. The remaining work is a stronger instrument plus the
+  newly exposed `0x1A30` stop.
 
 ## Completion criteria (unchanged from the start plan)
 

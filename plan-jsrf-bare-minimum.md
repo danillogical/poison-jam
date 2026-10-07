@@ -28,83 +28,105 @@ discipline. This plan owns the objective, the milestones and what to do next.
 
 ## Current work (state 2026-10-07, turn title-008)
 
-**The same-flip trace is DONE, and it ELIMINATES source selection: the presenter is correct, and the
-guest drew the black** (TR §23.6, toolkit `52e6d12`). The instrument (`RECOMP_FLIP_TRACE`, off by
-default) records at one `NV097_FLIP_STALL`, keyed on `(flip_stalls, present serial)`: every surface
-the guest named with `SET_SURFACE_COLOR_OFFSET`, a content hash for each computed exactly as
-`fb_present.c` converts a published frame, the hash of the bytes actually handed to the window, the
-surface `present_track_flip` selected **and the branch that chose it**, and a ring of the frame's last
-batches with each batch's target, bound texture, and whether it sampled the surface it wrote. It is
-read-only. On `20261007-110933-718-title008-trace-noadmit` (no admit switch, 620 s, 242 flips traced
-across disclaimer → fade → black):
+**THE BLACK INTERVAL IS EXPLAINED AND FIXED: the vertex-program viewport constants were never loaded**
+(TR §23.8, toolkit this turn). The XDK vertex programs end with the standard viewport step
+`MUL o0.xyz = r12 * c[58]` / `MAD o0.xyz = r12 * r1 + c[59]`, where `c[58]`/`c[59]` are the hardware's
+viewport **scale**/**offset** slots (`XFCTX_VPSCL = 0x3a = 58`, `XFCTX_VPOFF = 0x3b = 59`). **The
+executor never loaded them:** `0x0A20` went only to `s_gpu.vp_offset` (read by the fixed-function path
+only) and **`0x0AF0` was not handled at all** — it sat in the report's unhandled top ten at `x28024`.
+With `c[58] = c[59] = 0` **every vertex-program vertex collapses to the screen origin**, the triangles
+have zero area, `raster_triangle` returns at its `area == 0` test, and the batch draws nothing — which
+is why `0x84000` was cleared to black each frame and never refilled, and why the full-screen composite
+then faithfully copied black.
 
-| Check | Result |
-|---|---|
-| published hash **==** selected-surface hash, same flip | **242 / 242** |
-| branch that selected it | `drawn_this_frame` **242 / 242** (never stale, fallback or targeted-only) |
-| selected surface in the enumerated candidate set | **242 / 242** |
-| published matched **no** candidate | **0** |
-| `flip_stalls == present serial` | **242 / 242** |
+**The fix, and its measured effect.** `0x0AF0-0x0AFC` now writes `s_vp.c[58]` and `0x0A20-0x0A2C`
+writes `s_vp.c[59]` **in addition to** `s_gpu.vp_offset`, so both consumers get what they read; and
+stage 0's enable bit (`SET_TEXTURE_CONTROL0` `0x1B0C` bit 30) is now honoured (default enabled), so the
+scene batches that disable stage 0 stop sampling the surface they draw into. Run
+`20261007-124149-033-title008-d1-viewport` (620 s, no admit switch, same trace configuration as the
+pre-fix `…ring-admitted`), against that run:
 
-The candidate set is complete by construction — exactly the three `SET_SURFACE_COLOR_OFFSET` values
-(`0x84000`, `0x11C000`, `0x1B2000`), and the flip can only return `drawn_offset`, `targeted_offset` or
-`color_offset`. **`flip_modulo=3`: the title is TRIPLE-buffered.** At flip 2425 the selected surface
-(`0x84000`, `drawn_this_frame=1`) held black while `0x1B2000` still held the disclaimer and `0x11C000`
-the fade — leftovers from earlier frames. **The guest drew black into the buffer it then selected and
-published.** So **Case A is eliminated**; the defect is in what the guest drew, and the earlier "the
-presenter may choose a black surface" reading is closed rather than merely unproven.
+| measure | before D1 | after D1 |
+|---|---|---|
+| distinct published hashes, whole run | **11** | **659** |
+| `0x0AF0` in the unhandled list | yes (`x28024`) | **absent** |
+| the 17 post-transition flips | constant `156ed4086987e325` | **a distinct hash each** |
 
-**The 29 methods are now runtime-witnessed and ADMITTED, and F8e's missing-method class is closed.**
+At the dump (mapping gate `matches 1 / content-mismatch 0`): `0x80084000` = `efddce3b5bb02ab1`,
+**93.5 %** non-black, **2677** colours — rendered, a **full 3D city scene** (towers, sky, clouds, road
+markings, the green elevated highway); `0x8011C000` = `eaaa65df05fa3144`, **100 %** non-black — a
+**"Now Loading"** screen. Preserved: `logs/workers/title008/surfD1/0x80084000.png` and
+`…/0x8011C000.png`. **Classification:** the collapse and the missing `0x0AF0` are OBSERVED; the causal
+link to the black is **PROVED for this configuration** by the before/after on one trace configuration.
+It is **not** M15 and **not** a like-for-like comparison with the xemu reference.
+
+**The same-flip trace did its job, and its claims are narrowed** (TR §23.6, §23.7, corrected after Turn
+Review). The instrument (`RECOMP_FLIP_TRACE`, off by default) records at one `NV097_FLIP_STALL`, keyed
+on `(flip_stalls, present serial)`, every surface the guest named with `SET_SURFACE_COLOR_OFFSET`, a
+content hash of each, the hash of the bytes actually handed to the window, the surface
+`present_track_flip` selected **and the branch that chose it**, and a ring of the frame's last batches.
+**What it establishes:** at **242/242** traced flips the published bytes were the **selected surface's
+own bytes**, by the `drawn_this_frame` branch — i.e. **copy/publication consistency**. **What it does
+NOT establish:** that the tracker selected the surface the **guest** intended. `reason` restates the
+same heuristic rather than validating it, and a concrete unresolved alternative exists — at flip 2425
+an earlier composite writes `0x11C000` sampling `0x84000`, then a later `self=1` batch writes
+`0x84000`, and the tracker selects `0x84000` because it prefers the last surface drawn. **No selection
+bug is claimed**; that branch is an unresolved alternative, not a demonstrated defect. The earlier
+"Case A eliminated / the presenter is correct" phrasings are narrowed accordingly, and **timing
+non-perturbation is UNQUALIFIED** (no matched trace-on/off control on one binary).
+
+**Two overclaims from this turn were caught by Turn Review and RETRACTED.** (a) The ring's "faithful
+copy / Case C" reading: every surface hash — candidate **and** bound texture — is taken at **flip
+time, after every batch in the frame has run**, so at flip 2425 the composite reads `0x84000` and a
+**later** batch overwrites it; "source was black" and "source was cleared after the read" are
+indistinguishable. Sampling/UV/blend/ordering are **reopened** (now largely moot given §23.8, but not
+positively established). (b) The "uniform 16-batch frame with a `self=0 px=307200` writer at all 17
+black flips" claim is **false for 2 of 17** (measured: `self=0 px=307200` on 15, `self=0 px=306081` on
+25, `self=1 px=306081` on 2), and `px` counts **`put_pixel` write calls**, not unique coverage.
+Instrument limitations are recorded in TR §23.6/§23.7 rather than fixed: a candidate cap of 8, hashes
+using the current clip/pitch rather than each surface's own geometry, the bound-texture hash using
+surface geometry, a decision-only `_CHANGE` key, and `flip_modulo=3` proving a **flip-index** ring, not
+three scanout-buffer roles.
+
+**The 29-method class is CLOSED — admitted from a genuine runtime witness.** Run
 `20261007-113354-706-title008-trace-admit` logged **67** `[PFIFO] admit-unknown` lines including **all
-29** (`0580-05AC`, `06C0-06FC`, `1964`) from a committed walk — a genuine runtime witness, not a decode.
-`config/nv2a-runtime-witnessed-methods.json` gained 29 entries (run, log SHA-256, line, verbatim
-witness text); the table regenerated to **NV097 415 → 444, exactly +29, zero removals, no other class
-changed, `0x1810` and the prior 39 retained** (mechanically diffed per class). Game CTest 45/45,
-toolkit CTest 11/11, 213 toolkit Python tests, `just check` exit 0.
+29** (`0580-05AC`, `06C0-06FC`, `1964`) from a committed walk. `config/nv2a-runtime-witnessed-methods.json`
+gained 29 entries (run, log SHA-256, line, verbatim witness text); the table regenerated to **NV097
+415 → 444, exactly +29, zero removals, no other class changed** (mechanically diffed per class).
+`0x1964`'s header word was re-decoded from `20261007-085324-850-title007-blacktrace` at `0x8005DAE0`
+(`00041964 FF000000`) because the witness run's ring was reused and its own offset no longer holds it.
 
-**Two premises carried into this turn are corrected.**
+**Binary-identity caution.** The no-admit trace, the admit-witness and the trace-admit witness ran the
+**same executable** (`9818c346…`) but with **confounded settings** (differing `ADMIT_UNKNOWN` **and**
+`FLIP_TRACE` windows), so they are **not** a clean A/B. The `admit-witness` run also took a different
+path (no `title.adx` re-reads, no save probe — path divergence OBSERVED, the stalled-read explanation
+INFERRED), which is why it logged zero `admit-unknown` lines. Runs after the table regeneration or the
+D1 fix use **different executables** and must not be compared without re-checking `exe_sha256`.
 
-- **The black does NOT depend on the `0x1964` reject.** `20261007-112201-379-title008-admit-witness`
-  reached **presents 2850** with **zero** reject lines and **zero** `admit-unknown` lines, and its dump
-  has all three surfaces black. The guest kept flipping black frames with the walk alive; the reject
-  only ends the run.
-- **That run is NOT EXERCISED as a witness** (zero `admit-unknown`), so it could admit nothing — the
-  outcome the Turn Planner warned about. The witness came from the third run.
+**The stop is now `0x1A30`, and it is a render gap.** With the 29 in the table the run rejects on
+**`0x1A30`** (not `0x1964`), so the admission was exercised. `0x1A30` is
+`NV097_SET_VERTEX_DATA4F_M + 0x30` = **attribute 3 (diffuse), component 0** of the 4-float inline vertex
+family — a family the executor **already handles** (`nv2a_pb_exec.c:2922-2934`) but only for `attr==0`
+(position) and `attr==9` (texcoord 0); every other attribute is accepted and **ignored**, so inline
+per-vertex diffuse colour is dropped. Its runtime witness is **NOT EXERCISED** (620 s and 900 s runs,
+both zero `admit-unknown`), so the class stays open and must not be admitted from a decode.
 
-**New live blockers, separate from presentation.** The trace-admit run died on
-`[ICALL] Failed to resolve VA 0x00159330` (fatal by default, `0xE0424943`), after a
-`budget_exhausted` at `LIMIT=packets(1024)` from which it **recovered**. Both are now on the critical
-path and neither is a presentation defect.
+**Other live blockers, none of them presentation.** The trace-admit run died on
+`[ICALL] Failed to resolve VA 0x00159330` (fatal by default, `0xE0424943`; absent from
+`recomp_dispatch.c`, with NOP padding then a clean prologue at the address, i.e. an omitted function
+reached only indirectly). And `[PFIFO] budget_exhausted … LIMIT=packets(1024)` appeared but
+**recovered** on the next walk, so it is a pacing cost rather than the L40 stop — track its count.
 
-**What the admit run suggests but does not establish.** It published a **non-black** frame
-(`bc8c31b3fb72c160`, presents 2443) whose dump renders as **UI/overlay atlas material** — repeated
-posters, decals and character-icon cards in a grid — while `0x8011C000` stayed black and its draw
-coordinate range exploded (`x -3260.4..4505.2`). That is consistent with the guest reaching a later
-phase with the 29 admitted, but it is **not** a title and **not** a composed 3D backdrop, so M15 is
-still not claimed. Whether it is the title's own UI layer over a missing/black backdrop, or an
-intermediate texture presented by mistake, is the next question and is not yet measured.
-
-**The batch ring then selected Case C: the composite is FAITHFUL, and the defect is UPSTREAM** (TR
-§23.7, run `20261007-115809-590-title008-ring-admitted`, 620 s, the 29 admitted, 42 flips traced). The
-ring shows every black frame is:
-
-```
-frame batches=16 drew=1 textured=16 self_sample=15 untransformed=0
-  b[0]      target=0x001B2000  tex=0x80084000  self=0 tris=1 px=307200   <- the composite
-  b[1..15]  target=0x00084000  tex=0x80084000  self=1 tris=0 px=0        <- counted, rasterise nothing
-```
-
-`px=307200` is exactly `640*480`, so the composite is a **full-screen pass that covers every pixel**,
-and for **all 17 black flips its source `0x80084000` was itself black** (`0 of 17` had a non-black
-source). So the pass is a **correct copy of a black surface**, not a broken composite. The 15 `self=1`
-feedback batches are **inert** (`tris=0 px=0`) and cannot be the cause. **The question is therefore why
-`0x80084000` stopped holding the scene** — the critical path is upstream of the composite, and the
-composite/UV/blend branch (Case B) is closed.
-
-**The stop moved to a NEW missing-method class, so the 29 were exercised.** With them in the table the
-run rejects on **`0x1A30`** (not `0x1964`), which is evidence the guest advanced past the old wall. A
-dedicated witness run (`20261007-120946-505-title008-witness-1A30`) logged **zero** `admit-unknown`
-lines, so `0x1A30` is **NOT EXERCISED** and cannot be admitted yet; the class stays open.
+**SUPERSEDED by the Current work section above.** The block that stood here claimed the
+same-flip trace "ELIMINATES source selection" and that the ring showed a "faithful copy / Case
+C". Both were **retracted during Turn Review** (TR §23.6, §23.7): copy/publication consistency
+is established, semantic source selection stays **unqualified**, no case is selected from the
+ring, and the black is explained instead by the **missing vertex-program viewport constants**
+(TR §23.8). What survives is the 242/242 published==selected equality, the `drawn_this_frame`
+branch, the three-surface candidate set, and `flip_modulo=3` as a **flip-index** ring (not three
+proven scanout-buffer roles). The "uniform 16-batch frame" wording and the `px` "writes every
+pixel" reading are retracted: `px` counts `put_pixel` write calls, not unique coverage, and 2 of
+the 17 black flips had a `self=1 px=306081` writer.
 
 **The M15 acceptance criterion is UNSOUND as written, and it is now corrected here.** The milestone was
 defined as "a title-frame BMP whose hash is **neither** `5bdaea576b8509f5` **nor** `87683a748e27d071`" — a
@@ -350,33 +372,35 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 | **F8b** | **done 2026-10-07** (toolkit `46b3265`) | the same class: the six runtime-witnessed methods `0BB0`/`0BB4`/`0BB8`/`0BBC`/`1724`/`1728`, admitted from the `[PFIFO] admit-unknown` witness (+6 on class `0x97`, zero removals). Ordered delivery pinned by a mutation-validated contract. Whether the post-admission run exercised them is **not demonstrated** — see "Current work" |
 | **F8c** | **admission CLEARED 2026-10-07** (toolkit witness-capacity fix) | the 39 NV097 methods are now **runtime-witnessed**, not decode-derived: the `[PFIFO] admit-unknown` witness was truncated at 16 by its own cap and is fixed, so one run logs 39. Table regenerated **+39, zero removals** (NV097 376 → 415). A no-switch run then moved the stop from `unsupported_method 0x0420` to **`sink_capacity`** (TR §23.3). **Corroborating decode is the NO-ADMIT run's report (39), not the witness run's (35)** — Turn Review corrected the earlier citation |
 | **F8d** | **capacity bound CLEARED 2026-10-07** (toolkit `1f86fbb`, `e85f331`) | the submission walk now commits in **units at whole-packet boundaries** (per-unit atomicity, L40), so a 5732-word submission is consumed instead of rejected. **Measured:** GET advanced `0x50B1C` → `0x5A060` (9553 words, 2.33 budgets) and the stop moved off `sink_capacity`. **Three real defects were found by tests/review, not by inspection:** `sink_count` was reset once per walk so a second unit overran `sink[]`; the old header check bounded a unit by a submission-wide count so it fired before the yield; and `admitted_unknown` re-added every earlier unit at each unit commit (published 10227 for 6137 — found by Turn Review, fixed in `e85f331`). Raising the 4096 cap was NOT the fix |
-| **F8e** | **Case C — the composite is FAITHFUL; the defect is UPSTREAM** (toolkit `52e6d12`) | the black is **not** a presenter defect: at 242/242 traced flips the published bytes were the selected surface's own bytes, by the `drawn_this_frame` branch, keyed on `(flip_stalls, present serial)` (TR §23.6). The batch ring then showed the composite is a **full-screen pass** (`px=307200` = 640×480) that **correctly copies** `0x80084000`, and for **all 17 black flips that source was itself black** (TR §23.7). So the pass is not broken — **`0x80084000` stopped holding the scene**, and the critical path is upstream of the composite. The 15 `self=1` feedback batches are inert (`tris=0 px=0`). The **29 methods are admitted from a genuine runtime witness** (+29, zero removals); the stop then moved to a **new** class **`0x1A30`** (NOT EXERCISED so far) |
+| **F8e** | **CLEARED — the black was the missing vertex-program viewport constants** (toolkit this turn, TR §23.8) | the XDK vertex programs end with `MUL o0.xyz = r12 * c[58]` / `MAD o0.xyz = r12 * r1 + c[59]`, and **the executor never loaded `c[58]`/`c[59]`**: `0x0A20` reached only the fixed-function `s_gpu.vp_offset`, and **`0x0AF0` was unhandled entirely** (`x28024` in the report's unhandled top ten). With both slots zero, **every vertex-program vertex collapses to the screen origin**, the triangles have zero area, and the batch draws nothing — so `0x84000` was cleared to black each frame and never refilled, and the composite then faithfully copied black. **Fix:** `0x0AF0-0x0AFC` → `s_vp.c[58]` and `0x0A20-0x0A2C` → `s_vp.c[59]` as well as `vp_offset`; plus stage 0's `SET_TEXTURE_CONTROL0` enable bit honoured. **Measured** (`20261007-124149-033-title008-d1-viewport` vs the pre-fix `…ring-admitted`): distinct published hashes **11 → 659**, `0x0AF0` gone from the unhandled list, the 17 post-transition flips a **distinct hash each**; `0x80084000` = `efddce3b5bb02ab1` (93.5 % non-black, 2677 colours) renders a **full 3D city scene**, and `0x8011C000` = `eaaa65df05fa3144` (100 % non-black) a **"Now Loading"** screen. **Not M15** |
 | F6 = M15 | open | **criterion corrected 2026-10-07** (TR §23): the title screen itself, identified by CONTENT and confirmed by eye, with its hash recorded — **not** "a hash that is neither of two listed ones". The old blacklist was unsound: `87683a748e27d071` is the blue Dolby card, and the graffiti disclaimer renders in **four** hashes, three of them unlisted, so a run ending on the disclaimer (as the ceiling-clearing run did) satisfied the old letter. **An xemu reference of the real title now exists** (`logs/workers/title007/xemu/deliverable/`: emblem + "PLEASE PRESS START TO BEGIN" over a perspective city street, 640×480, reached with no input) and is the comparator. Also needs the run record with ledger IDs and Turn Reviewer reproduction |
 
 ## Next actions, in order
 
-1. **The same-flip trace is DONE, and it ELIMINATED source selection** (TR §23.6, toolkit `52e6d12`).
-   Do not re-do it. At **242/242** traced flips the published bytes were the selected surface's **own**
-   bytes, by the `drawn_this_frame` branch, keyed on `(flip_stalls, present serial)`; the candidate set
-   is complete by construction (the three `SET_SURFACE_COLOR_OFFSET` surfaces) and the title is
-   **triple-buffered** (`flip_modulo=3`). The guest **drew black into the buffer it then selected and
-   published**. **The presenter is not the defect**, so the earlier "the presenter may choose a black
-   surface" branch is closed, not merely unproven.
-2. **The next blocker is UPSTREAM of the composite, and it is `0x1A30`.** The batch ring closed the
-   composite branch (TR §23.7): the pass is a full-screen correct copy of `0x80084000`, and that
-   surface is black at every black flip. So the work is:
-   - **why `0x80084000` stops holding the scene** — it is cleared each frame and then receives only the
-     15 batches that rasterise nothing (`tris=0 px=0`), so the 3D scene draw is producing no pixels;
-   - **`0x1A30`**, the new missing-method stop the 29-method admission exposed. It needs a **runtime
-     witness** before admission, never a decode; one attempt is already **NOT EXERCISED**;
-   - the fatal `[ICALL] Failed to resolve VA 0x00159330` (`0xE0424943`) that ended the admit run;
-   - `[PFIFO] budget_exhausted … LIMIT=packets(1024)`, from which the admit run **recovered** — L40's
-     note that the 1024-packet cap deliberately stays a *stop* now needs revisiting, because admitting
-     the 29 makes the guest submit many more one-word packets.
+1. **The black interval is CLEARED — the missing vertex-program viewport constants were the cause** (TR
+   §23.8). Do not re-investigate it as a presentation or composite defect. `0x0AF0` now feeds
+   `s_vp.c[58]` and `0x0A20` feeds `s_vp.c[59]` as well as `vp_offset`, and stage 0's enable bit is
+   honoured. Measured on one trace configuration: distinct published hashes **11 → 659**, the
+   post-transition flips a distinct hash each, `0x80084000` a full 3D city scene and `0x8011C000` a
+   "Now Loading" screen. **Next: look for the title screen itself** — the emblem and
+   "PLEASE PRESS START TO BEGIN" — and compare it by content with the xemu reference. Note the guest
+   currently stops on the **`0x1A30`** missing method, so the run must get past that to progress.
+2. **`0x1A30` is the next method class, and it is a render gap.** It is
+   `NV097_SET_VERTEX_DATA4F_M + 0x30` = **attribute 3 (diffuse), component 0**; the executor handles
+   that family (`nv2a_pb_exec.c:2922-2934`) only for `attr==0` and `attr==9`, so inline per-vertex
+   diffuse colour is **accepted and ignored**. It needs a **runtime witness** before admission, never a
+   decode; two attempts (620 s, 900 s) are **NOT EXERCISED**. The witness run's own list also names
+   `0x0700-0x073C`, `0x18C8/0x18CC`, `0x1518-0x1524`, `0x1B80/0x1B84`, `0x17F8`, `0x1E20/0x1E24`,
+   `0x1E74`, `0x1734`, `0x1968` — most are immediate-mode vertex methods the executor already decodes.
 3. **The 29-method class is CLOSED** — admitted from a genuine runtime witness (`0580-05AC`,
    `06C0-06FC`, `1964`; +29, zero removals, mechanically verified per class). Do not re-admit, and do
    not take any of them from a decode.
-4. **Correct the two eliminated premises so they are not re-run.** The `sub_0019E438` "spin" is ordinary
+4. **Also live, and neither is presentation:** the fatal `[ICALL] Failed to resolve VA 0x00159330`
+   (`0xE0424943`; absent from `recomp_dispatch.c`, NOP padding then a clean prologue — an omitted
+   function reached only indirectly, so route it through recovery/relift), and the 1024-packet
+   `budget_exhausted` that **recovered** on the next walk (a pacing cost; track its count, and revisit
+   L40's "the 1024-packet cap stays a stop" if it starts recurring every kick).
+5. **Correct the two eliminated premises so they are not re-run.** The `sub_0019E438` "spin" is ordinary
    DirectSound lock traffic (all 16356 calls return 1; enter/leave balanced 24702/24702). The pinned
    composites from `RECOMP_FB_VA=0x8011C000` are **accumulation artifacts, not a title**, and pinned vs
    unpinned hash counts are **not comparable** because `RECOMP_FB_VA` makes `xbox_FramebufferWindowPresent`
