@@ -2984,6 +2984,18 @@ window focused and send a key, or add a way to inject pad state without the wind
 `RECOMP_PAD`-style override in the toolkit today — the only input switches are `RECOMP_KEYBOARD` and
 `RECOMP_USB`). Until that measurement is made, "the intro waits for a press" remains **unverified**.
 
+**And the toolkit's own pad-injection seam is DEAD CODE, which is why the obvious way to test it fails.**
+`src/usb/usb_gamepad.c` already has `RECOMP_PAD_PRESS` — a synthetic button pulse with the right shape for a
+"press Start" screen (it pulses rather than latching, because a title wants an edge). But it is reached only
+through `usb_gamepad_report`, whose only caller is `ohci.c`'s endpoint path, which runs only once
+`xbox_OhciInit` has enabled the controller — and **`xbox_OhciInit` is defined and declared in `ohci.h` but
+never called anywhere in either repository.** A run with `RECOMP_USB=1 RECOMP_PAD_PRESS=0x10,2000,250`
+therefore logs no `PAD: synthesising …` line at all, exactly as observed. `xbox_InputInit` is likewise never
+called: nothing in the game's startup wires input. So **both** documented input paths are unreachable at this
+boot stage, and no input can be delivered to the guest by any current switch — which is a stronger and more
+useful statement than "input did not change anything". Wiring USB input up is a candidate next step, but it is
+a real piece of work (the controller must be enabled before the guest's XAPI probes it), not a switch flip.
+
 **The guest keeps working while the picture stops changing.** In that same run the GPU report shows the guest
 still submitting and drawing at the end: 5345 draws, 9224 rasterised triangles, 834 million pixels written,
 5345 textured batches, and 1760 flips. `presents` climbs steadily to 1800 with no stall. So this is not a

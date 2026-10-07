@@ -205,13 +205,20 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
    from pinning `RECOMP_FB_VA=0x8011C000` are **accumulation artifacts, not a title** — `0x11C000`/`0x1B2000`
    are never cleared (only `0x00084000` and `0x00000000` ever are), so a buffer drawn-but-never-cleared
    smears many frames together, and the ink sets lose and regain ~90% of their content between steps.
-   **The input hypothesis is still OPEN, and my first test of it was invalid**: keyboard state comes only
-   from `WM_KEYDOWN` window messages, so a run with no focused window sees an all-zero key array whether or
-   not `RECOMP_KEYBOARD=1` is set — the comparison could not have distinguished the two. Testing it needs a
-   real keypress delivered to the window, or a way to inject pad state without one (there is no
-   `RECOMP_PAD`-style override today). The other next measurement avoids the accumulation trap: dump the
-   surface the guest actually **clears and draws** (`0x00084000`) beside the presented frame, or instrument
-   the flip to record which surface it hands the window.
+   **The input hypothesis is still OPEN, and both documented input paths are UNREACHABLE.** My first test of
+   it was invalid (keyboard state comes only from `WM_KEYDOWN` window messages, so a headless run sees an
+   all-zero key array whether or not `RECOMP_KEYBOARD=1` is set). The toolkit's own pad seam is worse than
+   that: `RECOMP_PAD_PRESS` exists in `src/usb/usb_gamepad.c` and has the right shape (it pulses an edge, not
+   a level), but it is reached only through the OHCI endpoint path, which runs only after `xbox_OhciInit` —
+   and **`xbox_OhciInit` is defined and declared but never called anywhere in either repository**.
+   `xbox_InputInit` is likewise never called: nothing in the game's startup wires input at all. A run with
+   `RECOMP_USB=1 RECOMP_PAD_PRESS=0x10,2000,250` logs no `PAD: synthesising` line, confirming it. So **no
+   current switch can deliver input to the guest**, and "the intro waits for a press" stays unverified.
+   Wiring USB input up is a candidate next step and is real work (the controller must be enabled before the
+   guest's XAPI probes it), not a switch flip.
+   The other next measurement avoids the accumulation trap: dump the surface the guest actually **clears and
+   draws** (`0x00084000`) beside the presented frame, or instrument the flip to record which surface it hands
+   the window.
 2. **Establish the reject region's temporal provenance, then confirm the missing methods at runtime.**
    The decode says **39** NV097 methods are missing from the region the walk was consuming, but that decode
    is taken from the **final** dump and the archived log has only three pointer samples for the post-reject
