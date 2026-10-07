@@ -2749,5 +2749,36 @@ a contiguous 4-byte-stride run. So the count fields are being read out of bytes 
 as a header. Any future table growth must therefore be justified per method — a decode that reached PUT,
 or an `admit-unknown` line — and **never** by "the generator's union said so".
 
+**"Reached PUT" is necessary but NOT sufficient: the decoder is not the model's walk.** Read side by
+side, `scripts/gen-nv2a-method-inventory.py` and `nv2a_core.c`'s `nv2a_submit_pending` differ in ways
+that make the generator *invent* methods on a syntactically perfect, unwrapped ring. The generator's
+packet expansion uses `m = method + 4 * i` unconditionally, while the model increments the method only
+when the non-incrementing bit is clear (`nv2a_core.c`, `non_inc = (h & 0x40000000u) != 0`) and rejects
+an incrementing span that runs past `0x1FFC` (`NV2A_SUBMIT_METHOD_RANGE`). Two in-memory fixtures
+demonstrate the divergence:
+
+| synthetic packet | generator reports | model does |
+|---|---|---|
+| `0x400C1810` (non-incrementing, 3 params) | methods `1810`, `1814`, `1818`; reached PUT | three writes to `1810` |
+| `0x00081FFC` (incrementing, count 2) | methods `1FFC`, `2000`; reached PUT | rejects: method-range overflow |
+
+So a "reached PUT" decode can still fabricate an entry the hardware would never write, and the
+`0x1848`–`0x18F8` run above is the same class of artifact on a wrapped ring. Three further mismatches
+are recorded so they are not rediscovered: the generator takes the ring top as the **maximum PUT in the
+log** (not the current one), fixes `GET` at `0x1000` (so it has no notion of ring wrap), and derives a
+subchannel's class from a **hardcoded table** rather than from the RAMHT binding state at the time.
+Structural heuristics — implausible counts, overlapping method ranges — are useful *warnings* and not
+validity proofs, because bulk and repeated state writes are legal.
+
+**The provenance rule this leaves.** For the next packet, admit methods from a **runtime committed
+witness** (`[PFIFO] admit-unknown`, whose records are queued only inside the successful-commit block
+after the consumer has received every staged method in order), or from a replay of the same frozen
+pending stream with correct ring bounds, bindings and packet semantics — not from a decoder run whose
+only credential is that it reached its own chosen PUT. `scripts/jsrf_gpu.py`'s queue decoder already
+implements several of the missing checks and is the better thing to share and test than a second
+implementation claiming equivalence. The `0x1810` fix above still satisfies the rule: `0x1810` is a
+single-parameter incrementing packet, so the increment rule does not apply to it, and its arrival was
+independently confirmed by `[PFIFO] admit-unknown`.
+
 
 

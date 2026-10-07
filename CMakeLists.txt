@@ -207,6 +207,16 @@ if(BUILD_TESTING)
     add_test(NAME jsrf_gpu_inspection COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_gpu_inspection.py)
     add_test(NAME jsrf_logq COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_logq.py)
     add_test(NAME jsrf_fcmov_clamp COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_fcmov_clamp.py)
+    # The NV2A method-inventory generator writes TWO tracked files (this repo's
+    # docs/jsrf-nv2a-method-inventory.md and the toolkit's nv2a_method_table.c)
+    # and parses argv by hand.  `--help` used to fall through that hand parsing,
+    # so the run-name list took its default of ONE old run and the table was
+    # rewritten with ~86 methods dropped -- a destructive no-op that looked like
+    # a successful run (2026-10-06).  These tests pin the guards that make bad
+    # input fail closed instead.
+    add_test(NAME jsrf_nv2a_inventory_guard
+        COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_gen_nv2a_method_inventory_guard.py)
+    set_tests_properties(jsrf_nv2a_inventory_guard PROPERTIES TIMEOUT 300)
     add_test(NAME jsrf_recovery_span_ownership COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_recovery_span_ownership.py)
     # Stack-depth CFG validation over the recovered manifest.  Registered because
     # the four defects it detects (0x80BD0, 0xBB7B0, 0x7DA30, 0x74C70) each cost a
