@@ -2808,33 +2808,53 @@ winning. Replacing the constant handler with a last-value-only version makes **1
 fail. (The cursor advances once on an early close, not twice — only `0x0BBC` matches `slot % 4 == 3`; an
 earlier draft of this test asserted twice and was wrong, and the implementation was right.)
 
-**The blocker beyond the six is NOT `budget_exhausted`, and it is eight more methods.** An offline decode of
-the region the walk was consuming when it reported the budget (GET `0x494F4`..PUT `0x4E680`, 5219 words, no
-wrap) finds **eight methods missing from the table**: `0x0420`, `0x0424`, `0x0428`, `0x042C`
-(`NV097_SET_TEXTURE_MATRIX_ENABLE` +0/+4/+8/+0xC), `0x0480` (`SET_MODEL_VIEW_MATRIX`), `0x0680`
-(`SET_COMPOSITE_MATRIX`), `0x1748`, `0x1B40` — the first at word 493, far inside the 4096-word budget. The
-raw headers were read directly and are real (`header 0x00040420` → method `0x0420` count 1; `0x00400480` →
+**The blocker beyond the six is NOT `budget_exhausted`, and the method list is larger than first reported.**
+An offline decode of the region the walk was consuming when it reported the budget (GET `0x494F4`..PUT
+`0x4E680`, 5219 words) reports **39 distinct NV097 methods missing from the table**, via the repository's own
+`jsrf_gpu.missing_methods`, which expands an incrementing packet's parameter slots. They are
+`0x0420`–`0x042C`, the full `0x0480`–`0x04BC` and `0x0680`–`0x06BC` runs (16 each — the model-view and
+composite 4×4 matrices), `0x1748`, and `0x1B40`/`0x1B44`. An earlier count of "eight" in this record was
+**wrong and is corrected here**: it listed only each packet's START method
+(`0x0420`, `0x0424`, `0x0428`, `0x042C`, `0x0480`, `0x0680`, `0x1748`, `0x1B40`) and ignored the incremented
+slots of a `count=16` matrix upload. The eight are packet-start *families*, not the full method list. The raw
+headers were read directly and are real (`header 0x00040420` → method `0x0420` count 1; `0x00400480` →
 `0x0480` count 16, consistent with a 4×4 matrix). **Why they were never witnessed:** the admitting run set
-`RECOMP_NV2A_ADMIT_UNKNOWN=1`, which *bypasses* the `unsupported_method` reject, so the walk sailed past
-them; and the witness queue is populated only on a successful commit, which a budget-rejected walk never
-reaches. So the six-line witness is a **lower bound** on what a region needs, not an inventory — a limit now
-recorded in the manifest itself. Consequence: **a normal walk will reject on `0x0420` before it ever sees
-the budget**, so these eight are the immediate next blocker, and they are decode-derived and must be
-runtime-confirmed before admission, exactly as the six were.
+`RECOMP_NV2A_ADMIT_UNKNOWN=1`, which *bypasses* the `unsupported_method` reject, so the walk sailed past them;
+and the witness queue is populated only on a successful commit, which a budget-rejected walk never reaches. So
+the six-line witness is a **lower bound** on what a region needs, not an inventory — a limit now recorded in
+the manifest itself. **Provenance limit:** this list is **decode-derived and its temporal provenance is NOT
+established** (see below), so it must be runtime-confirmed before admission, exactly as the six were. A
+normal walk will reject on the first of them well before it ever sees the budget.
 
-**The budget mechanism is measured.** The detailed dump at `nv2a_core.c:1671` is unconditional on the header
-path and did **not** appear in the admit3 log, while the parameter path (`:1578`) jumps to `done` with no
-dump — so exhaustion happened **inside a packet**, not at the 1024-packet limit. The straddling packet is a
-non-incrementing `0x1800` write carrying 271 parameters. With the budget raised the same region decodes
-cleanly to PUT (235 packets; no loop, reserved opcode or bad target), and its bytes are verified intact
-(identical to the capture-time decode's first 235 packets), so this is a genuine 5219-word submission rather
-than a mis-parse of a wrapped ring. **Raising the budget is not the fix** (owner constraint, L40): the
-durable direction is bounded resumable prefix dispatch that keeps the cap and preserves carry, order and
-all-or-nothing rollback, and does not publish the fence for the original PUT until it is consumed. Two
-diagnostic traps are recorded so they are not re-discovered: the published `at`/`get` are the **rollback
-origin**, not the local failure frontier; and the "last 32 visit addresses" array is written only at
-headers (`trace[words & 31]`), so on a parameter-heavy stream it is sparse, stale and non-chronological —
-and a mid-packet exhaustion bypasses it entirely.
+**The region's temporal provenance is NOT established, and an earlier claim that it was is retracted.** A
+first attempt was **circular**: it decoded the reject-time pointer range and the capture-time pointer range
+from the *same* final dump and compared their common prefix, which compares the same bytes with themselves.
+A second attempt tried to bound the rewritten arc from the producer's `PUT` trajectory, but the archived log
+contains only **three** pointer samples for that phase — the reject at `PUT=0x4E680`, one `still rejecting` at
+`PUT=0x6D060`, and the final `0x3E984` — so the actual distance travelled is `114881 + k·131072` words for
+unknown `k`, and **a full lap cannot be excluded**. (An earlier draft of this record said "monotonic across
+all 170 re-reject lines": that is wrong. The log has **2** reject/still-reject lines; `170` is the
+`rejections=` *counter*, which is not a count of pointer records.) Therefore the 5219-word span is decoded
+from the final dump but **not proven to be what the walk read at the reject**, and every conclusion drawn
+from its bytes — including the 39-method list — is **conditional**. Confirming it needs a contemporaneous
+first-stop transcript or bytes, which is the next turn's measurement.
+
+**The budget mechanism is strongly indicated but not proven.** The detailed dump at `nv2a_core.c:1671` is
+unconditional on the header path and did **not** appear in the admit3 log, while the parameter path
+(`:1578`) jumps to `done` with no dump — so exhaustion happened **inside a packet**, not at the 1024-packet
+limit, *conditional on stderr being complete and unfiltered*. The archived `build-source.json` hash for
+`nv2a_core.c` matches the current source, so the two paths are as described. With the budget raised the same
+region decodes cleanly to PUT (235 packets; no loop, reserved opcode or bad target), and the decode stops in
+the parameter path exactly as the missing dump implies. The specific straddling packet (a non-incrementing
+`0x1800` write with 271 parameters) is **read from the decode and inherits its provenance limit**; that the
+title genuinely submitted a 5219-word stream is therefore a hypothesis consistent with the evidence, not an
+established fact. **Raising the budget is not the fix** (owner constraint, L40): the durable direction is
+bounded resumable prefix dispatch that keeps the cap and preserves carry, order and all-or-nothing rollback,
+and does not publish the fence for the original PUT until it is consumed. Two diagnostic traps are recorded
+so they are not re-discovered: the published `at`/`get` are the **rollback origin**, not the local failure
+frontier; and the "last 32 visit addresses" array is written only at headers (`trace[words & 31]`), so on a
+parameter-heavy stream it is sparse, stale and non-chronological — and a mid-packet exhaustion bypasses it
+entirely.
 
 **Two of my own measurements were wrong, and the corrections matter.** First, `[PFIFO] submit` logging is
 capped at 64 lines (`if (submits < 64)`), so the maximum `put=` in a log is **not** the final PUT; the real
@@ -2843,14 +2863,28 @@ presents, or every 10 s), so a line count is not the `presents=` counter — com
 phantom "163 vs 2410" regression. Like-for-like the counters are new **1490**, fixed **2410** (at 420 s vs
 300 s) and confirm **1680**, so there is no regression, and `46b3265` is purely additive.
 
-**And the post-admission run did not exercise the changed path.** `20261007-001831-252-…-sixadmitted`
-drained the walk (`GET == PUT == 0x66E30`) with **zero rejections** and `last walk ok`, but a presence scan
-of its entire ring finds **none** of the six methods — the guest never submitted them, so the run is
-**NOT EXERCISED** with respect to this change. It therefore shows the admission broke nothing; it does not
-show the six are needed or delivered. The runtime evidence that they are needed remains the admit3 witness,
-and the executor-level evidence is the ordered contract above. Run-to-run variation is first-class here:
-reaching the region needs a run that gets past the early drain, which none of the three post-admission runs
-did.
+**And whether the post-admission run exercised the changed path is NOT DEMONSTRATED.** `20261007-001831-252-…-sixadmitted`
+drained the walk (`GET == PUT == 0x66E30`) with **zero rejections** and `last walk ok`. What can and cannot
+be concluded:
+
+- A presence scan of the final ring finds none of the six, but that is **not** evidence of absence: the ring
+  is reused, and the bytes at `0x2FF4C` demonstrably differ between this run and m15, so absence at one VA
+  cannot exclude the six being submitted **elsewhere**, and absence in the final dump cannot exclude them
+  having been submitted and overwritten.
+- "Zero rejections post-admission" is **not** evidence either, and the control that breaks it is the
+  pre-admission `fixed` run, which also finished with zero rejections.
+- An attempt to use the write order (the `PUT` never wrapped, so bytes below a submit's end were written
+  before it and never rewritten) is **not sound as stated**: the `[PFIFO] submit` log is capped at 64 lines,
+  so it cannot establish that `PUT` never wrapped across the whole run, and the final `PUT` alone does not
+  either. The observation that the header at `0x2FF4C` is `method 0x1824` rather than `0x0BB0` is a genuine
+  data point *for that address*, but labelling that word a packet header assumes a packet boundary that has
+  not been established.
+
+So the honest statement is: the run shows the admission **broke nothing**, and it does **not** demonstrate
+that the six were exercised, needed, or delivered. Establishing exercise needs either a contemporaneous
+walk transcript or a run whose submission history is captured beyond the 64-line cap. The runtime evidence
+that the six are needed remains the admit3 witness, and the executor-level evidence is the ordered contract
+above.
 
 
 

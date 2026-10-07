@@ -35,6 +35,7 @@ Run:  python -X utf8 -m unittest tests.test_gen_nv2a_method_inventory_guard
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -236,6 +237,114 @@ class GuardTests(unittest.TestCase):
         self.assertIn("DROP methods", proc.stdout)
         self.assertIn("name every run whose ring matters", proc.stdout)
         self.assertIn("--allow-removals", proc.stdout)
+
+
+class WitnessManifestTests(unittest.TestCase):
+    """The runtime-witness manifest must not be able to admit an unjustified method.
+
+    This is a provenance gate, not a formatting gate. The manifest is the ONLY
+    input whose entries are taken on trust -- every other method in the table is
+    derived from a decode -- so a manifest that can name one method while quoting
+    a witness for another would let the table admit a method no witness justified.
+    That was a real defect: an entry declaring `method 0x1734` but quoting the
+    `0x0BB0` record, with `log_sha256 = "not-a-sha"` and no `log_line`, was
+    accepted, and `0x1734` was admitted. Each vector below is now refused, and
+    both artifacts must be left untouched when it is.
+    """
+
+    VALID = {
+        "class": "0x97",
+        "method": "0x0BB0",
+        "run": "20261006-213505-255-title005-admit3",
+        "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
+        "log_line": 81481,
+        "witness": "[PFIFO] admit-unknown class=97 method=0BB0 param=00000000 at=0002FF9C",
+    }
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="nv2a-witness-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.table = self.tmp / "table.c"
+        self.doc = self.tmp / "doc.md"
+        self.manifest = self.tmp / "witness.json"
+        if TOOLKIT_TABLE.is_file():
+            shutil.copy2(TOOLKIT_TABLE, self.table)
+
+    def run_with(self, entry, extra=()):
+        """Generate from one run with a one-entry manifest, both outputs redirected.
+
+        `--allow-removals` is passed by the acceptance CONTROL only: generating
+        from one old run is a strict subset of the committed three-run table, so
+        the removal guard would otherwise fire first and the control would be
+        testing the removal guard instead of the witness gate.
+        """
+        self.manifest.write_text(json.dumps({"entries": [entry]}), encoding="utf-8")
+        return subprocess.run(
+            [sys.executable, "-X", "utf8", str(SCRIPT),
+             "--table-out=%s" % self.table, "--doc-out=%s" % self.doc,
+             "--witness=%s" % self.manifest, *extra, GENERATING_RUNS[0]],
+            capture_output=True, text=True, timeout=300)
+
+    def assert_refused(self, proc, needle):
+        self.assertNotEqual(proc.returncode, 0, "this manifest must be refused")
+        self.assertIn(needle, proc.stderr)
+        if TOOLKIT_TABLE.is_file():
+            self.assertEqual(_sha(self.table), _sha(TOOLKIT_TABLE),
+                             "a refused manifest still modified the table")
+
+    def test_valid_entry_is_accepted(self):
+        """The control: a genuine entry must still work, or the gate is vacuous.
+
+        The witness is accepted only if the generation SUCCEEDS, so the assertion
+        is that the manifest is not what stopped it. `--allow-removals` isolates
+        the witness gate from the removal guard, which would otherwise fire for
+        an unrelated reason (one run is a subset of the committed three-run set).
+        """
+        proc = self.run_with(dict(self.VALID), extra=("--allow-removals",))
+        self.assertEqual(proc.returncode, 0,
+                         "a valid witness must be accepted: %s" % proc.stderr[-400:])
+        # It must have actually admitted the method, not merely exited 0.
+        text = self.table.read_text(encoding="utf-8")
+        self.assertIn("0x0BB0u,", text)
+
+    def test_declared_method_must_match_the_witness(self):
+        """The reported defect: name one method, quote a record for another."""
+        bad = dict(self.VALID, method="0x1734")
+        self.assert_refused(self.run_with(bad), "contradicts itself")
+
+    def test_declared_class_must_match_the_witness(self):
+        bad = dict(self.VALID, **{"class": "0x39"})
+        self.assert_refused(self.run_with(bad), "contradicts itself")
+
+    def test_witness_must_be_an_admit_unknown_record(self):
+        bad = dict(self.VALID, witness="trust me, I saw it")
+        self.assert_refused(self.run_with(bad), "not a [PFIFO] admit-unknown record")
+
+    def test_hash_must_be_sha256_shaped(self):
+        bad = dict(self.VALID, log_sha256="not-a-sha")
+        self.assert_refused(self.run_with(bad), "64 hex characters")
+
+    def test_stale_hash_is_refused_when_the_archive_is_present(self):
+        """A present log whose hash disagrees means the witness is stale or edited."""
+        if not (ROOT / "logs" / "runs" / self.VALID["run"] / "jsrf_run.log").is_file():
+            self.skipTest("the witness archive is not present")
+        bad = dict(self.VALID, log_sha256="0" * 64)
+        self.assert_refused(self.run_with(bad), "stale or edited")
+
+    def test_fabricated_witness_text_is_refused(self):
+        """Right hash, but the quoted record is not in the log."""
+        if not (ROOT / "logs" / "runs" / self.VALID["run"] / "jsrf_run.log").is_file():
+            self.skipTest("the witness archive is not present")
+        bad = dict(self.VALID, witness=self.VALID["witness"].replace("param=00000000",
+                                                                    "param=DEADBEEF"))
+        self.assert_refused(self.run_with(bad), "does not appear")
+
+    def test_missing_provenance_fields_are_refused(self):
+        for field in ("run", "log_sha256", "witness"):
+            with self.subTest(missing=field):
+                bad = dict(self.VALID)
+                del bad[field]
+                self.assert_refused(self.run_with(bad), "no auditable provenance")
 
 
 @unittest.skipUnless(HAVE_ARCHIVES, "generating archives are not present")

@@ -437,6 +437,44 @@ if witness_path is not None:
             if not str(e.get(field, "")).strip():
                 raise SystemExit("gen-nv2a-method-inventory: %s is missing `%s`, so it "
                                  "has no auditable provenance" % (where, field))
+        # A manifest is hand-maintained, so the DECLARED class/method must agree
+        # with the witness TEXT. Without this, an entry can name one method and
+        # quote a record for another -- the table would then admit a method no
+        # witness ever justified, which is exactly the failure this file exists to
+        # prevent.
+        text = str(e["witness"])
+        m = re.search(r"admit-unknown\s+class=([0-9A-Fa-f]+)\s+method=([0-9A-Fa-f]+)", text)
+        if not m:
+            raise SystemExit("gen-nv2a-method-inventory: %s has a `witness` that is not "
+                             "a [PFIFO] admit-unknown record: %r" % (where, text))
+        w_cls, w_meth = int(m.group(1), 16), int(m.group(2), 16)
+        if (w_cls, w_meth) != (cls_id, meth_id):
+            raise SystemExit("gen-nv2a-method-inventory: %s declares class=0x%02X "
+                             "method=0x%04X but its witness quotes class=0x%02X "
+                             "method=0x%04X -- the manifest contradicts itself"
+                             % (where, cls_id, meth_id, w_cls, w_meth))
+        # A hash that is not a hash cannot be checked later, so it is a typo, not
+        # provenance. 64 hex characters is the sha256 the manifest documents.
+        sha = str(e["log_sha256"]).strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", sha):
+            raise SystemExit("gen-nv2a-method-inventory: %s has a log_sha256 that is "
+                             "not 64 hex characters: %r" % (where, e["log_sha256"]))
+        # If the witness's archive is present, verify the hash AND that the quoted
+        # record really is in that log. Absent archives are allowed (the logs are
+        # gitignored), but a PRESENT log that disagrees is a hard error: that is a
+        # stale or edited witness, the failure mode this check exists for.
+        run_log = root / "logs" / "runs" / str(e["run"]) / "jsrf_run.log"
+        if run_log.is_file():
+            import hashlib
+            actual = hashlib.sha256(run_log.read_bytes()).hexdigest()
+            if actual != sha:
+                raise SystemExit("gen-nv2a-method-inventory: %s quotes log_sha256 %s "
+                                 "but %s hashes to %s -- the witness is stale or edited"
+                                 % (where, sha, run_log, actual))
+            body = run_log.read_text(encoding="utf-8", errors="replace")
+            if text.strip() not in body:
+                raise SystemExit("gen-nv2a-method-inventory: %s quotes a witness that "
+                                 "does not appear in %s" % (where, run_log))
         WITNESS_ENTRIES.append((CLASS_BY_ID[cls_id], meth_id, e))
 
 # ---- the generated table ----------------------------------------------------

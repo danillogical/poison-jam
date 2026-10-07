@@ -2856,26 +2856,42 @@ retained (381 → 387). Ordered delivery is pinned by a contract in `tests/test_
 real executor through a new narrow accessor (toolkit `ec98ffe`); it was validated by **mutation** — a
 last-value-only constant handler fails 15 of its assertions. Full suite 45/45, `just check` GREEN.
 
-**The next blocker is not the one the plan predicted.** Decoding the region the walk was consuming when it
-reported the budget shows **eight further methods missing from the table** (`0420`, `0424`, `0428`, `042C`,
-`0480`, `0680`, `1748`, `1B40`), the first at word 493 of a 5219-word span — far inside the 4096-word
-budget. They were never witnessed because `RECOMP_NV2A_ADMIT_UNKNOWN=1` *bypasses* the method reject, and
-the witness queue only fills on a successful commit, which a budget-rejected walk never reaches. So the
-six-line witness is a **lower bound**, and a normal walk will reject on `0x0420` before it ever sees the
-budget. Those eight are decode-derived and must be runtime-confirmed before admission.
+**The next blocker is not the one the plan predicted, and the count was corrected by review.** Decoding the
+region the walk was consuming when it reported the budget reports **39** NV097 methods missing from the table
+(`0420`–`042C`, the full `0480`–`04BC` and `0680`–`06BC` runs, `1748`, `1B40`/`1B44`), found through the
+repository's own `jsrf_gpu.missing_methods`, which expands an incrementing packet's parameter slots. An
+earlier "eight" was **wrong** — it counted only packet START methods. They were never witnessed because
+`RECOMP_NV2A_ADMIT_UNKNOWN=1` *bypasses* the method reject, and the witness queue only fills on a successful
+commit, which a budget-rejected walk never reaches. So the six-line witness is a **lower bound**.
 
-**Budget mechanism measured, fix deliberately not applied.** The header-path budget dump never printed,
-while the parameter path emits none — so exhaustion was **inside a packet** (a non-incrementing `0x1800`
-write with 271 parameters). With the budget raised the region decodes cleanly to PUT and its bytes are
-verified intact, so it is a genuine over-budget submission, not a mis-parse. Raising the budget is
-explicitly **not** the fix; the direction is bounded resumable prefix dispatch preserving carry, order and
-rollback.
+**Temporal provenance of that region is NOT established, and the review caught a circular proof.** The first
+check decoded the reject-time and capture-time pointer ranges from the *same* final dump and compared their
+common prefix — which compares the same bytes with themselves. The replacement bounded the rewritten arc from
+the `PUT` trajectory, but the archived log holds only **three** pointer samples for that phase (the reject at
+`PUT=0x4E680`, one `still rejecting` at `0x6D060`, and the final `0x3E984`), so the distance is
+`114881 + k·131072` words for unknown `k` and a full lap cannot be excluded. (A draft claim of "170 re-reject
+lines" was also wrong: `170` is the `rejections=` counter, not a count of pointer records.) The 39-method
+list is therefore **conditional**, and must not be admitted without a runtime witness.
 
-**Honest coverage note.** The post-admission title run drained the walk with zero rejections, but its ring
-contains none of the six methods, so the changed path was **NOT EXERCISED** by it. Two of my own
-measurements were wrong and are corrected: `[PFIFO] submit` logging is capped at 64 lines (so its max
+**Budget mechanism: strongly indicated, not proven.** The header-path dump is unconditional and never
+printed, while the parameter path emits none, so exhaustion was **inside a packet** — conditional on complete
+stderr. Raising the budget remains explicitly **not** the fix.
+
+**Honest coverage note, revised.** The post-admission title run drained the walk with zero rejections and
+`last walk ok`, which shows the admission **broke nothing**. Whether it **exercised** the six is **NOT
+demonstrated**: final-ring absence is not proof of absence (the ring is reused, and the bytes at `0x2FF4C`
+demonstrably differ from m15), "zero rejections" is not proof (the pre-admission `fixed` run also had zero),
+and the `[PFIFO] submit` log is capped at 64 lines so it cannot establish that `PUT` never wrapped. Two of my
+earlier measurements were wrong and are corrected: `[PFIFO] submit` logging is capped at 64 lines (so its max
 `put=` is not the final PUT), and `[FBPRESENT]` lines are sampled (so a line count is not the `presents=`
-counter — the apparent "163 vs 2410" regression was a units error; like-for-like it is 1490 vs 2410 at
-420 s vs 300 s, i.e. no regression).
+counter — the apparent "163 vs 2410" regression was a units error; the counters are 1490 / 2410 / 1680 with
+unequal durations, which shows only that the additive diff is not a proven regression, not that none exists).
+
+**Review also hardened the witness path.** The pinned generator accepted a manifest entry whose declared
+class/method contradicted its quoted witness, with an invalid hash and no log line — i.e. it could admit a
+method no witness justified. Validation now cross-checks the witness text against the declared class and
+method, requires a 64-hex `log_sha256`, and — when the archive is present — verifies the log's actual hash and
+that the quoted record appears in it. Four forgery vectors (contradictory entry, stale hash, fabricated
+witness text, malformed hash) were each verified to fail closed with both artifacts untouched.
 
 Push receipts: toolkit `505cda5..46b3265` and `46b3265..ec98ffe`, then game `610b12d..779c6a0`.
