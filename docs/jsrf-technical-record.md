@@ -3200,5 +3200,103 @@ the model executes it faithfully. The `0x0680` `composite_set` latch is never cl
 sent as screen-space vertices could be transformed as 3D — `INFERRED`, and a render risk to watch, not a
 reason to withhold admission.
 
+## §23.4 The capacity bound was per-submission, and a real title kick is 1.4 budgets
+
+**The defect.** The submission walk committed a whole submission all-or-nothing, bounded by
+`NV2A_SUBMIT_MAX_WORDS` = 4096 words (`nv2a_state.h`). A real JSRF **title-transition kick is 5732 words**
+(measured `get=0x50810 put=0x561A0`), about **1.4 budgets**, so the walk rejected it at the header-side
+capacity check (`nv2a_core.c`, `sink_count + staged_count + count > NV2A_SUBMIT_MAX_WORDS`). The guest
+therefore never got past the title transition: the picture stopped changing at the graffiti disclaimer while
+the guest kept drawing. This is the blocker the `0x00084000` measurement localized (§23.2).
+
+**The fix (toolkit `1f86fbb`).** The walk now consumes the ring in **units** that each end at a
+**whole-packet boundary** and each commit **all-or-nothing**. Atomicity is per unit, not per submission;
+ledger L40 was reworded accordingly. The yield predicate is the **word term only**, evaluated at a packet
+header:
+
+```
+unit_words + 1 + count > NV2A_SUBMIT_MAX_WORDS   →  end the unit AT this header
+```
+
+A packet is at most 2047 parameters (an 11-bit field), so a unit that starts empty always fits at least one
+complete packet and the loop always advances. That is why **no in-packet carry is needed**, and why **a
+packet is never split** — the only case that could commit half a matrix upload. The **1024-packet cap
+deliberately stays a stop, not a yield**: 1025 one-word packets is under the word budget, and treating it as
+a yield would make the pinned case in `tests/test_nv2a_contract.c` accept.
+
+**Two real defects were found by the new tests, not by inspection.** Both would have been silent:
+
+1. **`sink[]` overflow.** `d->pfifo.sink_count` is written by the commit loop and was reset only once per
+   walk. Two units staging more than 4096 methods between them therefore wrote **past the end of `sink[]`**.
+   It is now reset per unit. The test that catches it stages **6138** methods across two units; a stream
+   totalling exactly 4096 would fill the array exactly and hide the overflow.
+2. **The old header check pre-empted the yield.** It bounded a *unit* using a **submission-wide** count
+   (`sink_count + staged_count + count`, with `staged_count` never reset), so it fired before the yield could
+   split the submission at all — the first attempt at this fix still rejected the real stream with
+   `sink_capacity`. It is now unit-scoped and defensive.
+
+**Fence and rollback semantics are preserved, and now cover the multi-unit case.** `GET` advances per unit,
+so a rejected **later** unit leaves `GET` at that unit's start and the earlier units stay committed;
+`NV2A_COMMIT` is published only when the walk reaches the **original PUT**, so a walk that rejects in unit
+*k* commits units 1..*k*-1 and publishes **no** fence. A retry delivers only the failing unit and never
+re-delivers an earlier one. Each of those properties has a mutation-validated test.
+
+**Measured result.** With the 39 methods admitted (§23.3) and no admit switch, the previously-rejected kick
+is **consumed**: `GET` advanced from `0x50B1C` to `0x5A060` — **9553 words, 2.33 budgets** — `successes`
+rose to 3529, and the stop moved off `sink_capacity` to a **new missing-method class** (29 methods:
+`0x0580-0x05AC`, `0x06C0-0x06FC`, `0x1964`). The class ordering is therefore: **method admission, then the
+capacity bound, then admission again.** Raising the 4096 cap was **not** the fix.
+
+**Claim limits.** These runs are exploratory title-runs, not strict runs, so this is discovery and progress
+evidence, not a fidelity claim. `M15 is still not claimed`: the title screen has not been observed on the
+recomp. The `units`/`units_total`/`loop_bound` fields are published in `g_nv2a_submit_state` but the
+archived `gpu-report.json` predates the report-side decode of them, so the unit counts above are read from
+the walk's behaviour (`GET` advance, one `NV2A_COMMIT`) rather than from the run report.
+
+## §23.5 After the capacity fix: the walk runs clean, and the presented stream is black
+
+**The next blocker, stated with its limits.** With the unit fix (§23.4) and the 39 methods admitted
+(§23.3), and `RECOMP_NV2A_ADMIT_UNKNOWN=1`, the walk now runs **4533 successful submissions with zero
+rejections** and `missing_methods` empty — a large step past the `successes=3523` wall every previous run
+hit. Presents advance to **3120**, well past the 2441 the old capacity stop capped them at.
+
+**But the picture is black, and this is NOT explained yet.** From the frozen dump
+(`20261007-081204-797-title007-witness2`, mapping gate `matches 1 / content-mismatch 0`):
+
+| surface | content at the dump |
+|---|---|
+| `0x80084000` | all zero (`156ed4086987e325`, 1 distinct value) |
+| `0x8011C000` | all zero |
+| `0x801B2000` | all zero |
+
+and the presented stream is `156ed4086987e325` (black) for every sample from presents 2450 to 3120 — about
+**190 seconds of black**. The `[GPU]` report meanwhile claims **1.7 billion pixels written**, 19065 textured
+batches, 15146 triangles rasterised and `brightest pixel written 0xFFFFFFFF`, with `draw surface 0x0011C000
+-> 0x8011C000`. So the model reports drawing a great deal into `0x8011C000` while that surface reads black.
+
+**This is a genuine contradiction and it is deliberately left open.** It is *not* established as a
+regression: `0x8011C000` also reads black at the dump in the pre-fix runs, and the dump is a **single
+instant**, whereas the pixel counter is **cumulative over the whole run** — so the counter and the dump are
+not measuring the same thing, and "1.7 billion pixels" does not imply "the surface holds them at the dump".
+Two candidate explanations are recorded without being preferred, because neither is measured yet:
+
+- the guest draws elsewhere now (a surface address this investigation does not read), and `0x8011C000` is
+  simply stale at the dump instant;
+- the writes are being refused or redirected. `surface_write_refused` refuses a surface that overlaps the
+  loaded image (`g_xbox_image_lo..hi`), and **`0x00084000` and `0x0011C000` both fall inside the XBE `.text`
+  span `0x11000..0x18CB30`**, which is exactly the class that guard exists for. **No `REFUSING` line appears
+  in the run**, so this path did not fire — but `dma_resolve` has a second branch for the same case (an
+  offset that hits the image and is under `XBOX_CONTIG_SIZE` is redirected to `XBOX_CONTIG_BASE + offset`),
+  and whether the write and the read agree under that redirect is **not measured**.
+
+Note also that xemu's black is a **brief fade** (about 2.5 s, at 57.5 s) between the disclaimer and the
+backdrop, whereas the recomp holds black for ~190 s, so the recomp is not simply reproducing xemu's fade.
+
+**The measurement this needs.** The per-flip role trace the Advisor specified: at the **same**
+`NV097_FLIP_STALL`, hash all three surfaces **and** the published copy, and record which surface
+`present_track_flip` chose and why, keyed on `(flip_stalls, present serial)` — never on timestamps. That
+distinguishes "the guest draws elsewhere" from "the write and the read disagree" in one run, and it is
+read-only, so it cannot perturb the present path.
+
 
 

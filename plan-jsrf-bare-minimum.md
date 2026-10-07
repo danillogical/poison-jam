@@ -88,6 +88,34 @@ So the ordering is: **method admission first, then the capacity bound.** The rej
 **whole-packet boundaries** into exactly two units. The fix is bounded prefix commit at packet boundaries
 (L40's own "incremental-commit packet"), **not** raising the 4096 cap.
 
+**The capacity bound is CLEARED, and it was two real defects, not one** (TR §23.4, toolkit `1f86fbb`). The
+walk now commits in **units that end at whole-packet boundaries**, each all-or-nothing (L40 reworded to
+per-unit atomicity). The yield predicate is the word term only, so a packet is never split and no in-packet
+carry is needed; the 1024-packet cap deliberately stays a **stop**, because 1025 one-word packets is under
+the word budget and `tests/test_nv2a_contract.c` pins that it rejects. **The new tests found two silent
+defects that inspection had missed**: `sink_count` was reset once per walk, so a second unit overran
+`sink[]` (the catching test stages 6138 methods — a 4096-method stream fills the array exactly and hides
+it); and the old header check bounded a unit by a **submission-wide** count, so it fired *before* the yield
+and the first attempt at this fix still rejected the real stream. **Measured:** with the 39 admitted and no
+admit switch, the previously-rejected kick is **consumed** — `GET` advanced `0x50B1C` → `0x5A060`
+(**9553 words, 2.33 budgets**), `successes` rose to 3529, and the stop moved to a **new missing-method
+class: 29 methods** (`0x0580-0x05AC`, `0x06C0-0x06FC`, `0x1964`).
+
+**NEW BLOCKER, and it is unexplained: the walk now runs clean but the picture is black** (TR §23.5). With
+the unit fix plus `ADMIT_UNKNOWN=1`, the walk reaches **4533 successes with zero rejections** and
+`missing_methods` empty — far past the `successes=3523` wall — and presents advance to **3120**. But all
+three surfaces read **all-zero** at the frozen dump and the presented stream is black from presents 2450 to
+3120 (**~190 s**), while the `[GPU]` report claims **1.7 billion pixels written** into `0x8011C000`. This is
+**not established as a regression** (`0x8011C000` is black at the dump in pre-fix runs too, and the dump is
+one instant while the pixel counter is cumulative, so they are not measuring the same thing). Two candidate
+explanations are recorded without preference: the guest draws elsewhere and `0x8011C000` is stale, or the
+write and the read disagree — note **`0x00084000` and `0x0011C000` both fall inside the XBE `.text` span
+`0x11000..0x18CB30`**, which is the class `surface_write_refused` exists for, though **no `REFUSING` line
+appeared**. xemu's black is a **~2.5 s fade**, not a 190 s hold, so this is not xemu's fade being
+reproduced. **The measurement it needs is the per-flip role trace** (hash all three surfaces *and* the
+published copy at the SAME `NV097_FLIP_STALL`, keyed on `(flip_stalls, present serial)`, never timestamps),
+which is read-only and separates the two explanations in one run.
+
 **The present ceiling was one stale method-table entry, and it is cleared** (TR §22). It was the
 submission walk rejecting the whole stream with `unsupported_method` on method `0x1810`
 (`NV097_DRAW_ARRAYS`), which was missing from the generated admission table (L39) although the
@@ -229,7 +257,8 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 | **F8** | **cleared 2026-10-06** (toolkit `505cda5`) | the present ceiling: `unsupported_method 0x1810`, one stale table entry; the table now carries it and a run with neither the live-mirror nor the admit-unknown switch reaches presents 2410 with zero rejections (TR §22) |
 | **F8b** | **done 2026-10-07** (toolkit `46b3265`) | the same class: the six runtime-witnessed methods `0BB0`/`0BB4`/`0BB8`/`0BBC`/`1724`/`1728`, admitted from the `[PFIFO] admit-unknown` witness (+6 on class `0x97`, zero removals). Ordered delivery pinned by a mutation-validated contract. Whether the post-admission run exercised them is **not demonstrated** — see "Current work" |
 | **F8c** | **admission CLEARED 2026-10-07** (toolkit witness-capacity fix) | the 39 NV097 methods are now **runtime-witnessed**, not decode-derived: the `[PFIFO] admit-unknown` witness was truncated at 16 by its own cap and is fixed, so one run logs 39 and the set **exactly** equals the decode (39 = 39). Table regenerated **+39, zero removals** (NV097 376 → 415). A no-switch run then moved the stop from `unsupported_method 0x0420` to **`sink_capacity`**, `missing_methods` **empty** (TR §23.3) |
-| **F8d** | **next** | the submission-capacity bound: a **5732-word** (~1.4 budget) submission rejected at the header check `nv2a_core.c:1796`. Fix is **bounded prefix commit at whole-packet boundaries** (L40's "incremental-commit packet"), two units, fence published only at the original PUT. **Raising the 4096 cap is explicitly NOT the fix** |
+| **F8d** | **capacity bound CLEARED 2026-10-07** (toolkit `1f86fbb`) | the submission walk now commits in **units at whole-packet boundaries** (per-unit atomicity, L40), so a 5732-word submission is consumed instead of rejected. **Measured:** GET advanced `0x50B1C` → `0x5A060` (9553 words, 2.33 budgets) and the stop moved off `sink_capacity`. Two real defects were found by the new tests, not by inspection: `sink_count` was reset once per walk so a second unit overran `sink[]`, and the old header check bounded a unit by a submission-wide count so it fired before the yield. Raising the 4096 cap was NOT the fix |
+| **F8e** | **next** | the next missing-method class: **29 methods** (`0x0580-0x05AC`, `0x06C0-0x06FC`, `0x1964`) at `get=0x56F34`, `successes=3529`. Same class as F8b/F8c — take them from a **runtime witness**, never from the decode |
 | F6 = M15 | open | **criterion corrected 2026-10-07** (TR §23): the title screen itself, identified by CONTENT and confirmed by eye, with its hash recorded — **not** "a hash that is neither of two listed ones". The old blacklist was unsound: `87683a748e27d071` is the blue Dolby card, and the graffiti disclaimer renders in **four** hashes, three of them unlisted, so a run ending on the disclaimer (as the ceiling-clearing run did) satisfied the old letter. **An xemu reference of the real title now exists** (`logs/workers/title007/xemu/deliverable/`: emblem + "PLEASE PRESS START TO BEGIN" over a perspective city street, 640×480, reached with no input) and is the comparator. Also needs the run record with ledger IDs and Turn Reviewer reproduction |
 
 ## Next actions, in order
