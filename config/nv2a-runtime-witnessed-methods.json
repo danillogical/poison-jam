@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "purpose": "Runtime-witnessed NV2A method admissions. Each entry is a method the MODEL'S OWN WALK reported as unknown and then admitted at runtime, so its provenance is a committed-witness record rather than an offline decode. The generator unions these into the table. Read by scripts/gen-nv2a-method-inventory.py --witness=<this file>.",
+  "why": [
+    "TR section 22 establishes that the inventory generator's decode is NOT the model's walk: it increments every parameter's method, while nv2a_core.c honours the non-incrementing bit and rejects an incrementing span past 0x1FFC. A decode that 'reached PUT' can therefore invent methods.",
+    "The [PFIFO] admit-unknown record is emitted only inside the successful-commit block (nv2a_core.c, the g_admit_pending queue), so it witnesses a method the walk actually staged and committed. That is strictly stronger evidence than a decode.",
+    "This file exists so admission is durable and auditable: the table can be regenerated without re-decoding a wrapped ring, and without hand-editing a generated file (which the next regeneration would silently drop)."
+  ],
+  "entries": [
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0BB0",
+      "name": "NV097_SET_TRANSFORM_CONSTANT + 0x30",
+      "run": "20261006-213505-255-title005-admit3",
+      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
+      "log_line": 81481,
+      "witness": "[PFIFO] admit-unknown class=97 method=0BB0 param=00000000 at=0002FF9C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0BB4",
+      "name": "NV097_SET_TRANSFORM_CONSTANT + 0x34",
+      "run": "20261006-213505-255-title005-admit3",
+      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
+      "log_line": 81482,
+      "witness": "[PFIFO] admit-unknown class=97 method=0BB4 param=00000000 at=0002FF9C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0BB8",
+      "name": "NV097_SET_TRANSFORM_CONSTANT + 0x38",
+      "run": "20261006-213505-255-title005-admit3",
+      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
+      "log_line": 81483,
+      "witness": "[PFIFO] admit-unknown class=97 method=0BB8 param=3CD5AD3F at=0002FF9C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0BBC",
+      "name": "NV097_SET_TRANSFORM_CONSTANT + 0x3C",
+      "run": "20261006-213505-255-title005-admit3",
+      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
+      "log_line": 81484,
+      "witness": "[PFIFO] admit-unknown class=97 method=0BBC param=00000000 at=0002FF9C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1724",
+      "name": "NV097_SET_VERTEX_DATA_ARRAY_OFFSET + 4",
+      "run": "20261006-213505-255-title005-admit3",
+      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
+      "log_line": 81485,
+      "witness": "[PFIFO] admit-unknown class=97 method=1724 param=0039500C at=000301CC"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1728",
+      "name": "NV097_SET_VERTEX_DATA_ARRAY_OFFSET + 8",
+      "run": "20261006-213505-255-title005-admit3",
+      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
+      "log_line": 81486,
+      "witness": "[PFIFO] admit-unknown class=97 method=1728 param=00395018 at=000301D4"
+    }
+  ],
+  "known_limitations": [
+    "These six are the methods the walk committed on the LAST successful submission before the budget rejection. They are NOT a complete list of what the region needs: an offline decode of the same region shows eight further methods missing from the table (0x0420, 0x0424, 0x0428, 0x042C, 0x0480, 0x0680, 0x1748, 0x1B40), the first at word 493 of GET=0x494F4..PUT=0x4E680. Those were never logged because the admitting walk was the one that hit the word budget and so never committed. Admitting these six is therefore necessary but NOT sufficient to clear that region; see TR section 22.",
+    "The admitting run is exploratory (RECOMP_NV2A_ADMIT_UNKNOWN=1), so this is discovery evidence, not fidelity evidence.",
+    "A witness is evidence that a method was SUBMITTED and staged, not that the model executes it faithfully."
+  ]
+}

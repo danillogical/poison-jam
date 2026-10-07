@@ -48,7 +48,8 @@ root = Path(__file__).resolve().parents[1]
 #     typo (e.g. `--puts=`) cannot quietly regenerate from the wrong ring set.
 #
 # A generator that writes two tracked files must fail closed on bad input.
-KNOWN_OPTS = {"get", "put", "budget", "table-out", "doc-out", "allow-removals"}
+KNOWN_OPTS = {"get", "put", "budget", "table-out", "doc-out", "witness",
+              "allow-removals"}
 
 if any(a in ("-h", "--help") for a in sys.argv[1:]):
     print(__doc__)
@@ -68,6 +69,13 @@ if any(a in ("-h", "--help") for a in sys.argv[1:]):
     print("  --doc-out=P     where to write this repo's method inventory document")
     print("                  (default: docs/jsrf-nv2a-method-inventory.md; env var")
     print("                  JSRF_NV2A_DOC_OUT does the same)")
+    print("  --witness=P     a runtime-witnessed method manifest (JSON) to UNION into")
+    print("                  the table. Use this for methods the MODEL'S OWN WALK")
+    print("                  reported via [PFIFO] admit-unknown: that record is emitted")
+    print("                  only after a successful commit, so it is stronger evidence")
+    print("                  than any decode. Default:")
+    print("                  config/nv2a-runtime-witnessed-methods.json (env var")
+    print("                  JSRF_NV2A_WITNESS does the same; --witness=none disables)")
     print("  --allow-removals  permit a table that removes existing methods")
     print("                  (refused by default: a removal re-breaks the walk)")
     print()
@@ -346,8 +354,90 @@ out += ["",
         "  not the list the model walks and the walk stopped at method 0x1BCC."]
 # The document text is built here but NOT written: both artifacts are written
 # together at the end, after the removal and completeness guards, so a refused
-# regeneration leaves the tree untouched.
-inventory_doc = "\n".join(out) + "\n"
+# regeneration leaves the tree untouched. The runtime-witness section is appended
+# BELOW, after the manifest is parsed, because it needs the parsed entries.
+
+# ---- runtime-witnessed admissions -------------------------------------------
+# A decode is not the model's walk (TR section 22): it increments every parameter's
+# method, while `nv2a_submit_pending` honours the non-incrementing bit and rejects
+# an incrementing span past 0x1FFC. A decode that "reached PUT" can therefore
+# INVENT a method, so a decoded entry is not by itself sound provenance.
+#
+# The `[PFIFO] admit-unknown` record is different in kind: the walk queues it only
+# inside the successful-commit block (after the consumer has received every staged
+# method), so it witnesses a method the walk really staged AND committed. This
+# manifest unions those witnesses into the table, which makes the admission
+# durable and auditable: the table can be regenerated without re-decoding a
+# wrapped ring, and without hand-editing a generated file that the next
+# regeneration would silently drop.
+WITNESS_ENTRIES = []
+witness_path = None
+if "witness" in opts:
+    witness_path = None if opts["witness"].strip().lower() in ("", "none") else opts["witness"]
+elif os.environ.get("JSRF_NV2A_WITNESS", "").strip().lower() in ("", "none"):
+    witness_path = None
+else:
+    witness_path = os.environ.get("JSRF_NV2A_WITNESS") or str(
+        root / "config" / "nv2a-runtime-witnessed-methods.json")
+if witness_path is None and "witness" not in opts:
+    witness_path = str(root / "config" / "nv2a-runtime-witnessed-methods.json")
+
+CLASS_FOR_NAME = {"NV097_KELVIN_PRIMITIVE": "NV097_CLASS",
+                  "NV_MEMORY_TO_MEMORY_FORMAT": "NV_MEMCPY_CLASS",
+                  "NV_IMAGE_BLIT": "NV_IMAGEBLIT_CLASS",
+                  "NV_CONTEXT_SURFACES_2D": "NV_SURFACES2D_CLASS"}
+CLASS_BY_ID = {0x97: "NV097_CLASS", 0x39: "NV_MEMCPY_CLASS",
+               0x9F: "NV_IMAGEBLIT_CLASS", 0x62: "NV_SURFACES2D_CLASS"}
+
+if witness_path is not None:
+    import json
+    wp = Path(witness_path)
+    if not wp.is_file():
+        raise SystemExit("gen-nv2a-method-inventory: --witness=%s is not a readable "
+                         "file (pass --witness=none to generate without witnesses)"
+                         % witness_path)
+    try:
+        manifest = json.loads(wp.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SystemExit("gen-nv2a-method-inventory: cannot parse the witness "
+                         "manifest %s: %s" % (wp, exc))
+    entries = manifest.get("entries")
+    if not isinstance(entries, list) or not entries:
+        raise SystemExit("gen-nv2a-method-inventory: witness manifest %s has no "
+                         "`entries` list" % wp)
+    for i, e in enumerate(entries):
+        where = "entry %d of %s" % (i, wp)
+        if not isinstance(e, dict):
+            raise SystemExit("gen-nv2a-method-inventory: %s is not an object" % where)
+        cls = str(e.get("class", "")).strip().lower()
+        meth = str(e.get("method", "")).strip().lower()
+        # Validate hard: a manifest is hand-maintained, so a typo must be an error
+        # rather than a silently-wrong admission.
+        try:
+            cls_id = int(cls, 16)
+        except ValueError:
+            raise SystemExit("gen-nv2a-method-inventory: %s has a non-hex class %r"
+                             % (where, e.get("class")))
+        try:
+            meth_id = int(meth, 16)
+        except ValueError:
+            raise SystemExit("gen-nv2a-method-inventory: %s has a non-hex method %r"
+                             % (where, e.get("method")))
+        if cls_id not in CLASS_BY_ID:
+            raise SystemExit("gen-nv2a-method-inventory: %s names class 0x%02X, which "
+                             "has no generated table (known: %s)"
+                             % (where, cls_id,
+                                " ".join("0x%02X" % c for c in sorted(CLASS_BY_ID))))
+        if not 0 <= meth_id <= 0x1FFC or meth_id % 4:
+            raise SystemExit("gen-nv2a-method-inventory: %s names method 0x%X, which "
+                             "is not an aligned NV097 method" % (where, meth_id))
+        # The witness text, the run and the log hash are the provenance. Require
+        # them: an entry without its witness cannot be audited later.
+        for field in ("run", "log_sha256", "witness"):
+            if not str(e.get(field, "")).strip():
+                raise SystemExit("gen-nv2a-method-inventory: %s is missing `%s`, so it "
+                                 "has no auditable provenance" % (where, field))
+        WITNESS_ENTRIES.append((CLASS_BY_ID[cls_id], meth_id, e))
 
 # ---- the generated table ----------------------------------------------------
 by_class = defaultdict(set)
@@ -355,6 +445,46 @@ for sub, m in order:
     if m != 0x0000:          # SET_OBJECT is handled separately
         by_class[CLASS_MACRO[sub]].add(m)
 by_class["NV097_CLASS"] |= {0x0100, 0x0200, 0x0204}   # NOP + the two clip methods
+
+# Union the runtime witnesses. Deduplicate so the same witness twice is idempotent.
+witness_added = defaultdict(set)
+for macro, meth_id, _e in WITNESS_ENTRIES:
+    if meth_id not in by_class[macro]:
+        witness_added[macro].add(meth_id)
+    by_class[macro].add(meth_id)
+
+# Now that the witnesses are parsed, finish the document.
+if WITNESS_ENTRIES:
+    wout = ["",
+            "## Runtime-witnessed admissions (not decoded)",
+            "",
+            "These methods were NOT taken from a decode. Each was reported by the model's",
+            "own walk as `[PFIFO] admit-unknown`, a record emitted only inside the",
+            "successful-commit block -- after the commit consumer received every staged",
+            "method -- so it witnesses a method the walk really staged and committed.",
+            "That is strictly stronger evidence than a decode, because the decoder is not",
+            "the model's walk (TR section 22).",
+            "",
+            "Source manifest: `%s`" % os.path.relpath(witness_path, str(root)).replace("\\", "/"),
+            "",
+            "| class | method | run | log line | witness |",
+            "|---|---|---|---|---|"]
+    for macro, meth_id, e in sorted(WITNESS_ENTRIES, key=lambda t: (t[0], t[1])):
+        wout.append("| %s | `0x%04X` | `%s` | %s | `%s` |"
+                    % (macro, meth_id, e.get("run"), e.get("log_line"),
+                       e.get("witness")))
+    wout += ["",
+             "Admitted by this generation: %s."
+             % (", ".join("%s +%d" % (m, len(v)) for m, v in sorted(witness_added.items())
+                          if v) or "none (all already present)"),
+             "",
+             "**Known limitation.** The admitting run is exploratory, and its witness",
+             "queue is populated only for methods that COMMIT. A walk that is later",
+             "rejected (for example on the word budget) never commits, so the methods it",
+             "admitted are never logged. This list is therefore a lower bound on what a",
+             "given region needs, not a complete inventory."]
+    out += wout
+inventory_doc = "\n".join(out) + "\n"
 
 lines = [
     "/* Generated by scripts/gen-nv2a-method-inventory.py -- do not edit by hand.",

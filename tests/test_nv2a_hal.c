@@ -515,6 +515,183 @@ static int run_executor_clear_contract(void)
     return ok;
 }
 
+/* ── Ordered transform-constant / vertex-binding delivery ───────────────────
+ *
+ * Admitting `0x0BB0`/`0BB4`/`0BB8`/`0BBC` and `0x1724`/`0x1728` is only worth
+ * anything if the executor DELIVERS them in order. A dispatcher that merely ends
+ * up holding the last value written would pass a final-state check, so this
+ * contract asserts the properties that distinguish the two.
+ *
+ * What the implementation actually makes observable (read off
+ * `vp_method` in nv2a_pb_exec.c, not assumed):
+ *   - the constant COMPONENT is a pure function of the method,
+ *     `((method - 0x0B80)/4) % 4`, and the constant INDEX advances only on the
+ *     FOURTH component (method `0x0BBC`);
+ *   - so two successive full groups (`0BB0,0BB4,0BB8,0BBC` twice) must land in
+ *     SUCCESSIVE constants with the cursor advancing once per group -- that is
+ *     the assertion a last-value-only implementation fails, because it would
+ *     keep overwriting one constant and leave the cursor at 1;
+ *   - and closing a group EARLY (sending `0BBC` before the other three) SPLITS
+ *     the group across two constants, which is observable and therefore pinned.
+ *     (The cursor advances once, not twice: only `0BBC` matches `slot % 4 == 3`.)
+ *
+ * A permutation of the first three components while `0BBC` stays last is NOT
+ * observable (identical bytes), so this contract does not pretend to test it.
+ */
+static int run_ordered_constant_contract(void)
+{
+    const uint32_t ram_size = 64u * 1024u * 1024u;
+    uint8_t *ram = (uint8_t *)calloc(1, ram_size);
+    uint8_t *ramin = (uint8_t *)calloc(1, 1024u * 1024u);
+    uint8_t *instance = (uint8_t *)calloc(1, 0x20000u);
+    uint32_t *pb = (uint32_t *)VirtualAlloc(NULL, 0x2000,
+                                            MEM_RESERVE | MEM_COMMIT,
+                                            PAGE_READWRITE);
+    NV2AState *gpu;
+    Nv2aPbExecVpView view;
+    int ok = 1;
+    if (!ram || !ramin || !instance || !pb) return 0;
+
+    nv2a_reset_standalone_for_test();
+    gpu = nv2a_init_standalone(ram, ram_size, ramin, 1024u * 1024u);
+    if (!gpu) return 0;
+    if (!nv2a_set_pushbuffer_window(gpu, (uint8_t *)pb, 0, 0x2000)) return 0;
+    if (!nv2a_bind_instance_memory(0x83fe0000u, instance, 0x20000u)) return 0;
+    {
+        uint32_t *pair = (uint32_t *)(instance + 0x6u * 8u);
+        uint32_t *object = (uint32_t *)(instance + (0x300u << 4));
+        pair[0] = 0x6u; pair[1] = NV_RAMHT_STATUS | 0x300u;
+        object[0] = 0x97u; object[1] = object[2] = object[3] = 0;
+    }
+    /* The real executor must be the consumer for this to test anything. */
+    _putenv_s("RECOMP_PB_EXEC", "1");
+    nv2a_pb_exec_register_commit_consumer();
+    if (!nv2a_pb_exec_consumer_registered()) {
+        fprintf(stderr, "FAIL ordered: executor did not register\n");
+        VirtualFree(pb, 0, MEM_RELEASE); free(instance); free(ramin); free(ram);
+        return 0;
+    }
+
+    /* Distinct, non-trivial float bit patterns, so a value check is meaningful
+     * and a mis-ordered copy cannot pass by symmetry. */
+    const uint32_t A[4] = { 0x3F800000u, 0x40000000u, 0x40400000u, 0x40800000u };
+    const uint32_t B[4] = { 0xC0000000u, 0xC0400000u, 0xC0800000u, 0xC0A00000u };
+    /* CONSTANT_LOAD = 5, deliberately not 0: a dispatcher that ignores the
+     * method and starts at constant 0 would otherwise pass by accident. */
+    const uint32_t START = 5u;
+
+    /* Two full groups. Each header is a one-parameter incrementing packet. */
+    memset(pb, 0, 0x2000);
+    {
+        int w = 0;
+        pb[w++] = (1u << 18); pb[w++] = 0x6u;                    /* SET_OBJECT */
+        pb[w++] = (1u << 18) | 0x1EA4u; pb[w++] = START;         /* CONSTANT_LOAD */
+        for (int g = 0; g < 2; ++g) {
+            const uint32_t *v = g == 0 ? A : B;
+            for (int c = 0; c < 4; ++c) {
+                pb[w++] = (1u << 18) | (0x0BB0u + 4u * (uint32_t)c);
+                pb[w++] = v[c];
+            }
+        }
+        gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET] = 0;
+        gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_PUT] = (uint32_t)w * 4u;
+    }
+    ok &= exec_check(nv2a_submit_pending(gpu), 1, "ordered: constant stream accepted");
+
+    memset(&view, 0, sizeof(view));
+    nv2a_pb_exec_vp_view(&view);
+    ok &= exec_check(view.const_load, START + 2u,
+                     "ordered: two groups advance the load cursor twice");
+
+    /* The decisive assertions: group 0 landed at START and group 1 at START+1,
+     * each component intact. A last-value-only dispatcher would hold B at START
+     * and leave the cursor at START+1. */
+    for (int c = 0; c < 4; ++c) {
+        uint32_t got_a, got_b;
+        memcpy(&got_a, &view.consts[START][c], 4);
+        memcpy(&got_b, &view.consts[START + 1][c], 4);
+        if (got_a != A[c]) {
+            fprintf(stderr, "FAIL ordered: const[%u][%d] = %08X, expected %08X (group A)\n",
+                    START, c, got_a, A[c]);
+            ok = 0;
+        }
+        if (got_b != B[c]) {
+            fprintf(stderr, "FAIL ordered: const[%u][%d] = %08X, expected %08X (group B)\n",
+                    START + 1, c, got_b, B[c]);
+            ok = 0;
+        }
+    }
+
+    /* Closing a group EARLY is observable: `0BBC` writes component 3 of the
+     * CURRENT constant and advances the cursor immediately, so the three
+     * components that follow land in the NEXT constant. That split across two
+     * constants is what a last-value-only implementation cannot reproduce.
+     *
+     * Note the cursor advances ONCE here, not twice: only `slot % 4 == 3`
+     * advances it, and `0BBC` is the only one of these four that does. The
+     * observable difference is the SPLIT, not the count. */
+    memset(pb, 0, 0x2000);
+    {
+        int w = 0;
+        pb[w++] = (1u << 18); pb[w++] = 0x6u;
+        pb[w++] = (1u << 18) | 0x1EA4u; pb[w++] = 0x20u;         /* START = 32 */
+        pb[w++] = (1u << 18) | 0x0BBCu; pb[w++] = A[3];          /* close early */
+        pb[w++] = (1u << 18) | 0x0BB0u; pb[w++] = B[0];
+        pb[w++] = (1u << 18) | 0x0BB4u; pb[w++] = B[1];
+        pb[w++] = (1u << 18) | 0x0BB8u; pb[w++] = B[2];
+        gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET] = 0;
+        gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_PUT] = (uint32_t)w * 4u;
+    }
+    ok &= exec_check(nv2a_submit_pending(gpu), 1, "ordered: early-close stream accepted");
+    memset(&view, 0, sizeof(view));
+    nv2a_pb_exec_vp_view(&view);
+    ok &= exec_check(view.const_load, 0x20u + 1u,
+                     "ordered: the early close advances the cursor once, at 0BBC");
+    {
+        uint32_t c32_0, c32_3, c33_0, c33_1, c33_2, c33_3;
+        memcpy(&c32_0, &view.consts[0x20][0], 4);
+        memcpy(&c32_3, &view.consts[0x20][3], 4);
+        memcpy(&c33_0, &view.consts[0x21][0], 4);
+        memcpy(&c33_1, &view.consts[0x21][1], 4);
+        memcpy(&c33_2, &view.consts[0x21][2], 4);
+        memcpy(&c33_3, &view.consts[0x21][3], 4);
+        ok &= exec_check(c32_3, A[3], "ordered: early close wrote component 3 of the first group");
+        ok &= exec_check(c32_0, 0u, "ordered: the first group's component 0 was never written");
+        ok &= exec_check(c33_0, B[0], "ordered: the tail landed in the NEXT constant");
+        ok &= exec_check(c33_1, B[1], "ordered: tail component 1");
+        ok &= exec_check(c33_2, B[2], "ordered: tail component 2");
+        ok &= exec_check(c33_3, 0u, "ordered: the second group's component 3 is still unwritten");
+    }
+
+    /* Vertex-array offsets: attribute 1 and 2 must be independently addressable
+     * and the LAST write per attribute must win, so an interleaved order is
+     * observable as a final state too. */
+    memset(pb, 0, 0x2000);
+    {
+        int w = 0;
+        pb[w++] = (1u << 18); pb[w++] = 0x6u;
+        pb[w++] = (1u << 18) | 0x1724u; pb[w++] = 0x00001000u;
+        pb[w++] = (1u << 18) | 0x1728u; pb[w++] = 0x00002000u;
+        pb[w++] = (1u << 18) | 0x1724u; pb[w++] = 0x00003000u;   /* re-write attr 1 */
+        gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET] = 0;
+        gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_PUT] = (uint32_t)w * 4u;
+    }
+    ok &= exec_check(nv2a_submit_pending(gpu), 1, "ordered: vertex-offset stream accepted");
+    memset(&view, 0, sizeof(view));
+    nv2a_pb_exec_vp_view(&view);
+    ok &= exec_check(view.attr_offset[1], 0x00003000u,
+                     "ordered: attribute 1 holds the LAST value written");
+    ok &= exec_check(view.attr_offset[2], 0x00002000u,
+                     "ordered: attribute 2 was not disturbed by attribute 1");
+
+    nv2a_set_commit_consumer(NULL);
+    VirtualFree(pb, 0, MEM_RELEASE);
+    free(instance);
+    free(ramin);
+    free(ram);
+    return ok;
+}
+
 int main(void)
 {
     int ok = 1;
@@ -522,6 +699,7 @@ int main(void)
     ok &= run_consumer_contract();
     ok &= run_executor_counter_contract();
     ok &= run_executor_clear_contract();
+    ok &= run_ordered_constant_contract();
     if (!ok) { fprintf(stderr, "FAIL: committed-method consumer contract\n"); return 1; }
     puts("PASS: committed-method consumer (owner path -> real executor)");
     return 0;

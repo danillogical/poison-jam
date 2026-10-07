@@ -422,3 +422,31 @@ Distinct pairs: 385. Total words: 84163.
   masking. An earlier version classified by `h >> 30`, which agrees over
   the first 0x1B24 words and diverges after, so the table it produced was
   not the list the model walks and the walk stopped at method 0x1BCC.
+
+## Runtime-witnessed admissions (not decoded)
+
+These methods were NOT taken from a decode. Each was reported by the model's
+own walk as `[PFIFO] admit-unknown`, a record emitted only inside the
+successful-commit block -- after the commit consumer received every staged
+method -- so it witnesses a method the walk really staged and committed.
+That is strictly stronger evidence than a decode, because the decoder is not
+the model's walk (TR section 22).
+
+Source manifest: `config/nv2a-runtime-witnessed-methods.json`
+
+| class | method | run | log line | witness |
+|---|---|---|---|---|
+| NV097_CLASS | `0x0BB0` | `20261006-213505-255-title005-admit3` | 81481 | `[PFIFO] admit-unknown class=97 method=0BB0 param=00000000 at=0002FF9C` |
+| NV097_CLASS | `0x0BB4` | `20261006-213505-255-title005-admit3` | 81482 | `[PFIFO] admit-unknown class=97 method=0BB4 param=00000000 at=0002FF9C` |
+| NV097_CLASS | `0x0BB8` | `20261006-213505-255-title005-admit3` | 81483 | `[PFIFO] admit-unknown class=97 method=0BB8 param=3CD5AD3F at=0002FF9C` |
+| NV097_CLASS | `0x0BBC` | `20261006-213505-255-title005-admit3` | 81484 | `[PFIFO] admit-unknown class=97 method=0BBC param=00000000 at=0002FF9C` |
+| NV097_CLASS | `0x1724` | `20261006-213505-255-title005-admit3` | 81485 | `[PFIFO] admit-unknown class=97 method=1724 param=0039500C at=000301CC` |
+| NV097_CLASS | `0x1728` | `20261006-213505-255-title005-admit3` | 81486 | `[PFIFO] admit-unknown class=97 method=1728 param=00395018 at=000301D4` |
+
+Admitted by this generation: NV097_CLASS +6.
+
+**Known limitation.** The admitting run is exploratory, and its witness
+queue is populated only for methods that COMMIT. A walk that is later
+rejected (for example on the word budget) never commits, so the methods it
+admitted are never logged. This list is therefore a lower bound on what a
+given region needs, not a complete inventory.
