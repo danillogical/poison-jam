@@ -81,16 +81,19 @@ table byte-for-byte, so the change is attributable to the new run alone.
 
 ## Remaining work
 
-- Post-fix run with **neither** switch (`20261006-210559-268-title005-fixed`, 420 s) — **done**:
+- Post-fix run with **neither** the live-mirror nor the admit-unknown switch
+  (`20261006-210559-268-title005-fixed`, 420 s; standard exploratory title profile) — **done**:
   0 rejections, 0 admit-unknown, `last walk ok`, presents **2410**. Independently reproduced by
   `20261006-215642-480-title005-confirm` (presents 1680 at 297 s).
 - Judge the four `dc04dc0` behaviours on Windows — **done**: the fence mirror holds back-pressure as
   designed (a rejected walk pins GET and leaves the guest in the `0x1914F0` ring-space wait — the
   stack frame at `recovered.c:399957` is inside `loc_001914F0` — with a `[PFIFO] reject` line
-  present), and the `RECOMP_FENCE_MIRROR_LIVE=1` A/B reproduces the old behaviour, so the 1000/888
-  count was the old mirror's property, not a regression. CTest `kernel_file_apc_test` (its
-  `STATUS_USER_APC` assertions), `kmem`, `fence_snapshot`, `nv2a_present_track`, `nv2a_submit_diag`
-  all pass; `just test` 44/44; `just check` clean.
+  present), and the `RECOMP_FENCE_MIRROR_LIVE=1` A/B reproduces the **overwrite-rescue mechanism**, so
+  the 1000/888 count is **not** evidence of a regression in the new mirror. The A/B reaches 620
+  presents, **not** 888 or 1000, so it does **not** settle those exact historical counts (TR §22).
+  CTest `kernel_file_apc_test` (its `STATUS_USER_APC` assertions), `kmem`, `fence_snapshot`,
+  `nv2a_present_track`, `nv2a_submit_diag` all pass; `just test` 44/44 with a retained
+  `build/Testing/Temporary/LastTest.log`; `just check` clean.
 - Stop 28 (`0x81860`) exercised? **NO — NOT EXERCISED** by every post-fix run
   (`scripts/check-run-exercised.py`); `config/stop-chain.json` left unchanged.
 - M15: **not reached.** The run still ends on the graffiti disclaimer; the BMPs
@@ -114,6 +117,27 @@ never required). Take a new entry only from a decode that **reached PUT** or fro
 ## Completion criteria (from the start plan, unchanged)
 
 Step 0 counts recorded; the ceiling explained in the TR with three-way agreement and the A/B;
-each `dc04dc0` behaviour judged on Windows; the ceiling cleared with no exploratory switch and
-every admitted method listed; either M15 or the next blocker recorded. Both repositories committed
-and pushed, toolkit first.
+each `dc04dc0` behaviour judged on Windows; the ceiling cleared with neither the live-mirror nor the
+admit-unknown switch and every admitted method listed; either M15 or the next blocker recorded. Both
+repositories committed and pushed, toolkit first.
+
+## Review 1 remediation (Reviewer returned FIX on two record findings; no code change)
+
+Both blocking findings are record-accuracy corrections; the Reviewer independently verified the
+`0x1810` fix and explicitly ruled out any rollback.
+
+- **B1 (overstated causal claim) — corrected.** The categorical "the 1000→888 difference *is* how far
+  accidental rescue got" wording is replaced in TR §22, `plan-jsrf-bare-minimum.md` (Current work and
+  backlog) and this file with the honest claim limit: the A/B demonstrates the **mechanism** (24 reject
+  lines, 8 recoveries, the walk moving past `0x8EF0` to `0x33D04`) but reaches **620** presents, not 888
+  or 1000, and TR §19's runs differ in more than one revision, so the exact counts remain a hypothesis
+  consistent with the mechanism. Also corrected the "no exploratory switch" phrasing to "neither the
+  live-mirror nor the admit-unknown switch; standard exploratory title profile".
+- **B2 (missing push receipts) — corrected.** The `PUSHED_TO / BRANCH / COMMIT / REMOTE_URL / RESULT`
+  receipts for toolkit `505cda5` and game `a8691e1`+`2d99b30` are recorded in
+  `docs/jsrf-operating-history.md`, including the honest note that toolkit-first order rests on the
+  local reflogs (22:19:39 vs 22:19:55) and was not independently witnessed.
+- **Advisory folded in.** `just test` was re-run so a complete retained
+  `build/Testing/Temporary/LastTest.log` (44 numbered tests, no failure) backs the 44/44 claim, and the
+  fence-audit conclusion stays qualified (five direct callers by two methods; absence of the raw dword
+  is not proof that computed indirect calls cannot exist).

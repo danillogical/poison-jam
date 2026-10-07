@@ -2745,3 +2745,28 @@ Game
 (5 text files; no `game/` path; secret audit over the outgoing objects: 0 hits). Verified on the Mac
 by `posix_check` native/cross/python; `kernel_file_apc_test` and every runtime effect are first
 exercised on Windows.
+
+**Turn `title-005` (Windows): the present ceiling was one stale method-table entry, and it is
+cleared.** The submission walk rejected the whole stream with `unsupported_method` on `0x1810`
+(`NV097_DRAW_ARRAYS`), which was missing from the generated admission table although the executor
+already implemented it; the table was regenerated (+`0x1810`, nothing removed) and a run with neither
+the live-mirror nor the admit-unknown switch reaches presents **2410** against the old 888 with zero
+rejections and `last walk ok` (TR §22). **M15 is not reached** — the run still ends on the graffiti
+disclaimer. The four `dc04dc0` behaviours were judged on Windows: the fence mirror holds back-pressure
+as designed, and the `RECOMP_FENCE_MIRROR_LIVE=1` A/B demonstrates the overwrite-rescue mechanism.
+That A/B reaches **620** presents, not 888 or 1000, so it does **not** settle the exact historical
+counts (TR §22 states the claim limit). Pushes for this turn:
+
+Toolkit
+`PUSHED_TO: origin / BRANCH: main / COMMIT: 505cda5b96e5b2a70492825df34151594805a1e5 / REMOTE_URL: https://github.com/danillogical/xboxrecomp / RESULT: fast-forward dc04dc0..505cda5 main -> main`.
+Game (two commits, pushed together; final commit is the records amendment)
+`PUSHED_TO: origin / BRANCH: master / COMMIT: 2d99b308325b875c0343af9864e59ec835b6b9b8 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 5e7a1a3..a8691e1 then a8691e1..2d99b30 master -> master`.
+
+Toolkit-first order is recorded from the **local reflogs**, which are the only retained evidence of
+it: `refs/remotes/origin/main` was updated by push at 2026-10-06 22:19:39 and
+`refs/remotes/origin/master` at 22:19:55. The order was not independently witnessed, so it is recorded
+as reflog evidence and not as a verified observation. The outgoing game commits are records-only (6
+text files, then 2): no `game/` path; the `secret-audit` 2 hits are the audit script's own pattern
+literals and predate this turn; largest blob 203 KB. Next Windows turn: admit the six
+runtime-confirmed state methods (`0BB0`/`0BB4`/`0BB8`/`0BBC`/`1724`/`1728`) and then fix
+`budget_exhausted`.

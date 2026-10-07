@@ -44,8 +44,10 @@ Three independent witnesses named it: the `[PFIFO] reject` line, `g_nv2a_submit_
 their first rejection at submit #12**, so it was never a regression. The table was regenerated from a
 ring that contains the method (exactly `+0x1810`, nothing removed) and the ceiling is gone: a
 no-switch run reaches **presents = 2410** against the old 888 with **zero rejections** and
-`last walk ok`, independently reproduced by `20261006-215642-480-title005-confirm`. **M15 is still not
-claimed** — the run still ends on the graffiti disclaimer.
+`last walk ok`, independently reproduced by `20261006-215642-480-title005-confirm`. ("No switch" here
+means neither the live-mirror nor the admit-unknown switch; the runs are standard exploratory
+`just title-run`s, so this is progress, not a fidelity claim.) **M15 is still not claimed** — the run
+still ends on the graffiti disclaimer.
 
 **The next blocker is the same class, and then a different one** (TR §22):
 
@@ -77,8 +79,10 @@ Standing facts from this turn's measurements:
   guest in D3D's ring-space wait at `0x1914F0`, as on hardware.
 - `GET ≠ PUT` alone does not mean "unknown method": budget, loop, sink, invalid handle, bad target
   and reserved-opcode rejections also pin GET. Branch on the diagnostic.
-- The 1000 → 888 change (TR §19) is explained by the same mechanism: it was how far the live mirror's
-  accidental rescue got, not a property of the guest's scene.
+- The 1000 → 888 change (TR §19) is **not** fully explained. The overwrite-rescue mechanism above is
+  the supported explanation, but the A/B run reaches presents **620**, not 888 or 1000, so it does not
+  isolate those exact historical counts, and §19's runs differ in more than one revision. Treat the
+  counts as a hypothesis consistent with the mechanism, not a settled causal finding (TR §22).
 
 **The dispatch stop chain (F7) is cleared through stop 28.** Each stop was a missing, swallowed or
 mis-sized recovered function found by one run; the class is now mostly found statically.
@@ -109,7 +113,7 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 | F4b | done 2026-10-04 | the no-op `fcmove`/`fcmovne` lift held the SEGA fade; toolkit `671ab0a` translates them |
 | F5 | parked | intro movies: if Sofdec blocks, skip and ledger it (*patched*/*intentionally ignored*); decoding is M29 |
 | F7 | done through stop 28 | the dispatch stop chain above; residue in the backlog |
-| **F8** | **cleared 2026-10-06** | the present ceiling: `unsupported_method 0x1810`, one stale table entry; the table now carries it and a no-switch run reaches presents 2410 with zero rejections (TR §22) |
+| **F8** | **cleared 2026-10-06** | the present ceiling: `unsupported_method 0x1810`, one stale table entry; the table now carries it and a run with neither the live-mirror nor the admit-unknown switch reaches presents 2410 with zero rejections (TR §22) |
 | **F8b** | **next** | the same class again — `unsupported_method 0x0BB0` plus `0BB4`/`0BB8`/`0BBC`/`1724`/`1728` — then `budget_exhausted`, which needs walk bounds (TR §22) |
 | F6 = M15 | open | a frame dump of the title screen plus the run record with its ledger IDs; its hash is neither disclaimer hash; compared by eye with an xemu screenshot of the same screen (T3); reproduced by the Turn Reviewer |
 
@@ -151,8 +155,8 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 - **Toolkit review findings (2026-10-06): exercised on Windows this turn.** The four `dc04dc0`
   behaviours were judged: the **fence mirror** holds back-pressure as designed (a rejected walk leaves
   GET pinned and the guest in the ring-space wait, with a `[PFIFO] reject` line present) and the
-  `RECOMP_FENCE_MIRROR_LIVE=1` A/B reproduces the old behaviour, so the mirror is sound on Windows —
-  the 1000/888 count was a property of the old mirror, not a regression (TR §22). CTest
+  `RECOMP_FENCE_MIRROR_LIVE=1` A/B reproduces the overwrite-rescue mechanism, so the 1000/888 count
+  is **not** evidence of a regression in the new mirror (TR §22). CTest
   `kernel_file_apc_test` (its `STATUS_USER_APC` assertions), `kmem`, `fence_snapshot`,
   `nv2a_present_track`, `nv2a_submit_diag` all pass; `just test` 44/44 and `just check` clean. Still
   open: the `[APUWAIT]` line cap, and **stop 28 (`0x81860`) is still not exercised** by any run.

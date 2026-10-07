@@ -2640,14 +2640,24 @@ rejection was never a new regression, and "flips and presents stopped together, 
 stopped submitting" does not follow: it is what a rejected walk produces (L40 — the walk commits
 all-or-nothing, so no flip, no commit consumer, and no 10 s `[GPU]` report).
 
-**Why the archived dumps could not show it, and why the ceiling count moved 1000 → 888.** With the
+**Why the archived dumps could not show it, and the status of the 1000 → 888 count.** With the
 pre-2026-10-06 live fence mirror (L17) every fence was reported complete whether or not the walk
 consumed it, so after a rejection D3D kept writing the ring and overwrote the rejected bytes. The
-A/B run `20261006-205306-080-title005-ceiling-ab-live` (`RECOMP_FENCE_MIRROR_LIVE=1`) reproduces that:
-24 reject lines, 8 recoveries, and the walk moves *past* `0x8EF0` to a later blocker
-(`at=00033D04`, `unsupported_method` then `reserved_opcode`), reaching presents=620. So an archived
-dump's ring at GET is a later frame's bytes, and TR §19's 1000/888 difference is a property of how
-far that accidental rescue got, not of the guest's scene.
+A/B run `20261006-205306-080-title005-ceiling-ab-live` (`RECOMP_FENCE_MIRROR_LIVE=1`) **demonstrates
+that mechanism**: 24 reject lines, 8 recoveries, and the walk moves *past* `0x8EF0` to a later blocker
+(`at=00033D04`, `unsupported_method` then `reserved_opcode`). So an archived dump's ring at GET is a
+later frame's bytes, and no archived dump can name the original blocker from its bytes alone.
+
+**Claim limit on the count itself.** The A/B run's last present measurement is **620**, not 888 or
+1000. It therefore establishes the *mechanism* — a rejected walk plus live-mirror overwrite, with the
+guest continuing on bytes a later re-walk parsed — but it does **not** isolate why the historical runs
+stopped at exactly 1000 and exactly 888, and it does not by itself rule out a second contributing
+cause. §19 records that those runs differ in more than one revision (F7b `0445a80` re-ended `0xAE560`,
+the very function f9 trapped in; plus the review fixes and F7c) and that same-binary runs vary, and its
+replay log was deleted. So "the count difference is fully explained" is **not** established: the
+overwrite-rescue mechanism is the supported explanation, the exact counts are a hypothesis consistent
+with it. Confirming it would need a retained discriminating experiment (e.g. replaying the historical
+binaries against a fixed method table), not the A/B above.
 
 **The fix, and its provenance.** The table is generated from measured submission rings, so the fix is
 to regenerate it from a ring that contains the method (never to relax the rejection — L39):
@@ -2666,8 +2676,9 @@ byte-for-byte, so the change is attributable to the new run alone. The generated
 now records the union of 3 runs / 385 pairs.
 
 **The ceiling is cleared, and this is a new measurement rather than a re-reading.** Run
-`20261006-210559-268-title005-fixed` (420 s, no exploratory switch beyond `just title-run`'s
-standard four): **0 reject lines, 0 still-rejecting, 0 recovered, 0 admit-unknown**,
+`20261006-210559-268-title005-fixed` (420 s, standard exploratory `just title-run` profile: the four
+title-path switches plus `RECOMP_GPU_ACK` defaulting on; neither the live-mirror nor the
+admit-unknown switch): **0 reject lines, 0 still-rejecting, 0 recovered, 0 admit-unknown**,
 `Submit state: last walk ok; 0 consecutive rejection(s)`, `Methods in the pending stream the table
 lacks: None`, final GET == PUT, and **presents = 2410** against the old 888. The independent
 confirmation run `20261006-215642-480-title005-confirm` reproduces it on the durable tree:
