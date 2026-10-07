@@ -2767,13 +2767,24 @@ itself carried by a later game commit; that commit's own hash cannot be named he
 receipt false, so it is identified by position (the commit containing this text) rather than by a
 hash, and it is pushed with the same remote and branch.
 
-Toolkit-first order is recorded from the **local reflogs**, which are the only retained evidence of
-it: `refs/remotes/origin/main` was updated by push at 2026-10-06 22:19:39 and
-`refs/remotes/origin/master` at 22:19:55. The order was not independently witnessed, so it is recorded
-as reflog evidence and not as a verified observation. The toolkit has **no** commit after `505cda5`:
-the whole fix is that one commit, so no later toolkit push exists to order against. The outgoing game
-commits are records-only (6 text files, then 2, then 5, then 1): no `game/` path; the `secret-audit` 2
-hits are the audit script's own pattern
-literals and predate this turn; largest blob 203 KB. Next Windows turn: admit the six
+Toolkit-first order has **two independent witnesses**, neither of them a push transcript (none was
+kept):
+
+1. The **local reflogs**: `refs/remotes/origin/main` updated by push at 2026-10-06 22:19:39 local
+   (−07:00) and `refs/remotes/origin/master` at 22:19:55.
+2. The **GitHub server-side activity API** (`https://api.github.com/repos/danillogical/<repo>/activity`,
+   re-fetched for this record): toolkit `dc04dc0…→505cda5…` on `refs/heads/main` at
+   **2026-10-07T05:19:39Z**, then game `5e7a1a3…→a8691e1…` on `refs/heads/master` at
+   **2026-10-07T05:19:54Z** — 15 s later, same UTC instants as the reflogs. Later pushes from this turn
+   are also recorded there: game `a8691e1→2d99b30` at 05:21:31Z, `2d99b30→7e5db3c` at 05:42:30Z,
+   `7e5db3c→a3e0b2f` at 05:43:51Z, and `a3e0b2f→06b1e3d` at 05:45:37Z; all are fast-forwards
+   (`before` is the ancestor, `after` the pushed tip).
+
+The toolkit has **no** commit after `505cda5`, so no later toolkit push exists to order against. The
+outgoing game commits are records-only: **0 secret-audit hits scoped to this turn's objects** (14 + 8 +
+4 + 4 = 30 objects over `5e7a1a3..2d99b30`, `2d99b30..7e5db3c`, `7e5db3c..a3e0b2f`, `a3e0b2f..06b1e3d`,
+each blob audited individually), no `game/` path, largest blob 212 KB. (A whole-history
+`just secret-audit` reports 2 hits; both are the audit script's own pattern literals and predate this
+turn.) Next Windows turn: admit the six
 runtime-confirmed state methods (`0BB0`/`0BB4`/`0BB8`/`0BBC`/`1724`/`1728`) and then fix
 `budget_exhausted`.

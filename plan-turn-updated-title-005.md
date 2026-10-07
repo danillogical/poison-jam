@@ -30,16 +30,19 @@ Evidence, all on Windows, toolkit `dc04dc0`:
 **The hypothesis in the brief is CONFIRMED** (`unsupported_method`), and the `GET ≠ PUT` reading
 that the guest had stopped submitting is refuted for these runs.
 
-**`RECOMP_FENCE_MIRROR_LIVE=1` A/B** (`20261006-205306-080-title005-ceiling-ab-live`) reproduces the
-old behaviour: 24 reject lines, 8 recoveries, walks past `0x8EF0` to a later blocker
-(`at=00033D04`, `unsupported_method` then `reserved_opcode`), presents=620 by 296 s. This confirms
-the planner's inference: the old live mirror let D3D overwrite the stuck bytes and later re-walks
-parsed whatever was there, so an archived dump's ring at GET is **not** the original blocker.
+**`RECOMP_FENCE_MIRROR_LIVE=1` A/B** (`20261006-205306-080-title005-ceiling-ab-live`) demonstrates the
+overwrite-rescue mechanism: 24 reject lines, 8 recoveries, and the walk moves past `0x8EF0` to a later
+blocker (`at=00033D04`, `unsupported_method` then `reserved_opcode`), reaching presents=**620** by
+296 s. So the old live mirror let D3D overwrite the stuck bytes and later re-walks parsed whatever was
+there, and an archived dump's ring at GET is **not** the original blocker. **But 620 is not 888 or
+1000**, so this does not establish the historical counts — the mechanism is demonstrated, the exact
+numbers are unexplained (TR §22 states the limit).
 
 **`RECOMP_NV2A_ADMIT_UNKNOWN=1`** run `20261006-205823-760-title005-admit-unknown` listed **exactly
 one** missing method for the whole next scene — `[PFIFO] admit-unknown class=97 method=1810` — with
 zero reject lines, `Submit state: last walk ok; 0 consecutive rejection(s)`, reaching
-**presents=1760** by 297 s and 10 distinct frame hashes. So the ceiling is exactly this one method.
+**presents=1760** by 297 s and 10 distinct frame hashes. So the **first** ceiling is exactly this one
+method.
 
 ## The fix
 

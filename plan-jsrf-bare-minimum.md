@@ -160,8 +160,9 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
   `kernel_file_apc_test` (its `STATUS_USER_APC` assertions), `kmem`, `fence_snapshot`,
   `nv2a_present_track`, `nv2a_submit_diag` all pass; `just test` 44/44 and `just check` clean. Still
   open: the `[APUWAIT]` line cap, and **stop 28 (`0x81860`) is still not exercised** by any run.
-  **Fence-ordering audit done (static, read-only):** `0x1912A0` has exactly 5 direct callers (two
-  independent derivations, and the address occurs as a raw dword 0 times, so no indirect site exists).
+  **Fence-ordering audit done (static, read-only):** `0x1912A0` has exactly 5 direct callers, found by
+  two independent methods; no raw dword spelling of the address was found in the image, which is **not**
+  proof that a computed or indirect call cannot exist.
   The literal comment "D3D advances the counter before it writes PUT" is **false for two of them**
   (`0x19167C` on its `0x19165C` path, and the `0x192440` bring-up kick), but neither can manufacture a
   false ceiling: `0x191390` returns the **pre**-advance counter as the fence and then advances by 2, so

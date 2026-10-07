@@ -2687,10 +2687,22 @@ The `[GPU]` counters corroborate that frames were really drawn: `rasterised 1424
 batches skipped as not screen-space; 0 batches via the fixed-function transform` and `batches: 8318
 textured, 0 with no texcoords, 0 with texcoords but no usable stage`.
 
+**Retained regression evidence for this turn.** The game suite's `ctest` log lives under the
+gitignored `build/`, where the next run overwrites it, so it is copied to
+`logs/workers/title005/LastTest-44of44.log` (99 KB, sha256
+`5ca5653ba8c63dc1728a9f7acebfb5165f17f857205c7c793f995369dcfa3925`, ctest run 2026-10-06 22:34–22:37
+local): **44 numbered tests, no failure**. 43 report `Test Passed.` and the 44th
+(`jsrf_apu_watch_fixture_pwrite_watch`) passes on a `PASS_REGULAR_EXPRESSION` instead, so it has no
+such line; the `failed` substrings in that file are the tests' own `0 failed` check summaries and
+pre-existing `ERROR [SYNC]` lines, not failures. `just check`'s output is retained beside it as
+`logs/workers/title005/just-check.txt` (exit 0). Both are evidence copies, not repository content:
+`logs/` is gitignored.
+
 **What this does not establish.** It is exploratory evidence (the run carries `RECOMP_APU_TRAP`,
 `RECOMP_PB_EXEC`, `RECOMP_FB_WINDOW`, `RECOMP_FB_PRESENT_DUMP_EVERY`), so it is not a fidelity claim.
 **M15 is not reached**: the window and BMP dumps show the run still ending on the graffiti
-disclaimer, and no title-screen frame exists. And a *second* blocker in the same class was then
+disclaimer, and no title-screen frame exists **in the inspected dumps or in any logged present hash**.
+And a *second* blocker in the same class was then
 measured: after 3498 successes the walk rejects on `unsupported_method method=0BB0` (a
 `NV097_SET_TRANSFORM_CONSTANT` slot), with the pending region also carrying `0BB4`, `0BB8`, `0BBC`,
 `1724` and `1728` — six methods, all register-state, confirmed at runtime by
