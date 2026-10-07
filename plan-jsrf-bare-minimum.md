@@ -109,6 +109,17 @@ absence is not proof of absence (the ring is reused; bytes at `0x2FF4C` demonstr
 capped at 64 lines so it cannot establish that `PUT` never wrapped. Establishing exercise needs a
 contemporaneous transcript or a run captured beyond the 64-line cap.
 
+**The first-stop instrument now exists (toolkit `4b6cc2f`/`76c76fd`, game `1d71631`).** The previous turn could
+only *infer* "inside a packet" from the absence of a dump, because only the header path printed and the submit
+log stops at 64 walks. Both budget exits now call one emitter that latches the FIRST stop into the exported
+submit state — which limit fired and where, the straddling packet and its remaining count, and a dense
+chronological trajectory of the last 64 consumed words (headers *and* parameters). `budget_local_pc` is
+separate from `submit_diag_get`, which is the **rollback origin**, not the failure point. The game report
+decodes the new fields, with the base fields still decodable so older archives read correctly. Pinned by a
+deterministic mid-packet test (counts `2047, 2043, 5` — the shape is forced by the sink guard, since one packet
+can never exceed 2047 parameters), validated by mutation. **The next run that reaches a budget stop will now
+record where it happened, which is the measurement step 1 below needs.**
+
 Standing facts from this turn's measurements:
 
 - The submission walk commits all-or-nothing (L40), so a rejected walk moves no GET, publishes no flip
@@ -169,10 +180,9 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
    The decode says **39** NV097 methods are missing from the region the walk was consuming, but that decode
    is taken from the **final** dump and the archived log has only three pointer samples for the post-reject
    phase, so a full ring lap cannot be excluded and the bytes are **not proven** to be what the walk read.
-   First measurement: latch a contemporaneous first-stop transcript (fetched address + word for headers,
-   parameters and control transitions, initial GET/PUT/window/bindings/carry, local stop PC, word/packet
-   counts and which limit fired) plus the pending bytes at that moment. That single measurement settles both
-   the budget question and the method list. Only then admit methods, from a runtime witness.
+   The instrument for this now exists (see "Current work"): a run that reaches a budget stop latches where
+   it happened, which limit fired, and the straddling packet, into the exported submit state. Take that
+   measurement, then admit methods **from a runtime witness**, never from the decode.
 2. **Then fix the over-budget submission.** Evidence strongly indicates the walk exhausts the 4096-word
    budget **inside a packet** (a non-incrementing `0x1800` write with 271 parameters, on the parameter path
    at `nv2a_core.c:1578` — the header-path dump at `:1671` is unconditional and never printed). **Raising

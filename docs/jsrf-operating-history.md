@@ -2895,3 +2895,36 @@ that the quoted record appears in it. Four forgery vectors (contradictory entry,
 witness text, malformed hash) were each verified to fail closed with both artifacts untouched.
 
 Push receipts: toolkit `505cda5..46b3265` and `46b3265..ec98ffe`, then game `610b12d..779c6a0`.
+
+**Review remediation and the first-stop instrument.** The Turn Review returned **FIX** on five blockers; all were
+closed (game `726402f`, toolkit `b95a24e`): the witness gate was hardened so a manifest entry whose declared
+class/method contradicts its quoted witness, or whose hash is malformed or stale, or whose quoted record is
+absent from the archive, is refused (nine regression tests, six of which fail against the pre-fix generator);
+the incomplete "eight methods" count was corrected to **39**; the circular temporal proof was retracted and the
+region's provenance recorded as **not established**; changed-path coverage and no-regression were downgraded to
+**not demonstrated**; and the toolkit header that contradicted its own handler was fixed.
+
+Then the measurement the Reviewer said was missing. The walk's budget stop was the least observable event in
+the model: it can fire at a packet HEADER or inside a packet's PARAMETERS, and **only the header path printed**,
+so the case that actually happened stopped silently — which is why the previous turn could only *infer* "inside
+a packet" from the absence of a dump. Two further limits compounded it: the `[PFIFO] submit` lines stop after 64
+walks, and the "last 32 visit addresses" array was written only at headers but indexed by TOTAL words, so its
+slots were sparse, stale and out of order — it could not distinguish a long valid stream from a cyclic walk,
+the one thing it existed to do.
+
+Toolkit `4b6cc2f`/`76c76fd` and game `1d71631` replace that with one emitter both exits call, latching the
+FIRST stop into the exported submit state so it survives the log cap, stderr filtering and the retries that
+follow a rejection: which limit fired and where, the straddling packet, and a dense chronological trajectory of
+the last 64 consumed words (headers *and* parameters). `budget_local_pc` is deliberately separate from
+`submit_diag_get`, which is the **rollback origin** the stream is retried from — reporting that as the failure
+point is a known trap. The game report decodes the new fields, keeping the base fields decodable so archives
+built before the change still read correctly rather than misreading adjacent memory as a transcript.
+
+Pinned by a deterministic test whose shape is forced by the walk's own guards: the sink guard rejects a header
+when `staged + count > 4096`, and one packet carries at most 2047 parameters, so a single packet can **never**
+reach 4096 words — the stop would always land on a header. The parameter path needs counts `2047, 2043, 5`, so
+the third header passes the sink check (`staged + 5 = 4095`) and the word cap fires with one parameter unread.
+Validated by mutation: deleting the parameter-path call makes the test fail.
+
+Push receipts: toolkit `ec98ffe..b95a24e`, `b95a24e..4b6cc2f`, `4b6cc2f..76c76fd`; game `94b3e32..726402f`,
+`726402f..1d71631`.
