@@ -243,7 +243,15 @@ once a minute while it does not, starting AFTER_S seconds after the window threa
 first sample; no guest write), `RECOMP_WATCH`, `RECOMP_WATCH_RAW`; from the 2026-09-28 fork fixes:
 `RECOMP_FFP_TRACE` and `RECOMP_TRACE_FLIP` (executor tracing), and `RECOMP_GUEST_METER` (counts host
 threads inside lifted guest code; changes no guest state or scheduling); from 2026-09-30:
-`RECOMP_PB_EXEC_VERBOSE` (executor logging, `nv2a_pb_exec.c:61`); `RECOMP_WATCHDOG_SECS` (after N seconds a watchdog thread dumps registers and recent indirect calls and exits the process, `xbox_memory_layout.c:2170`; it only ends the run); `JSRF_TRACE_A2H_DR`, `JSRF_TRACE_A2H_SLOT` and `JSRF_TRACE_A2H_SLOTW` (A2h slot/alias write witnesses; off is inert and the handler changes only the faulting thread's own single-step state); `RECOMP_APU_DMA_DESC_TRACE`, `RECOMP_APU_GP_B9_TRACE`, `RECOMP_APU_GP_DECODE` and `RECOMP_APU_PWRITE_WATCH` (GP DSP trace files, each with an optional `..._FILE` path name: `RECOMP_APU_DMA_DESC_TRACE_FILE`, `RECOMP_APU_GP_B9_TRACE_FILE`, `RECOMP_APU_PWRITE_WATCH_FILE`); and the literal `JSRF_FATAL`, which is not an environment variable but a substring the kernel bridge looks for in a created path to dump the guest stack (ledger L41); `RECOMP_RDATA_GUARD` (reports stores into read-only XBE sections and lets each complete, ledger L32)
+`RECOMP_PB_EXEC_VERBOSE` (executor logging, `nv2a_pb_exec.c:61`); from 2026-10-07:
+`RECOMP_FLIP_TRACE` (budget), `RECOMP_FLIP_TRACE_FROM` (first flip) and `RECOMP_FLIP_TRACE_CHANGE`
+(print only when the decision key moves) — the same-flip draw/present trace at `NV097_FLIP_STALL`,
+off by default. It reads the per-frame present flags before `present_track_flip` clears them,
+records the surface every `SET_SURFACE_COLOR_OFFSET` names, hashes each candidate and the published
+copy, and keeps a ring of the frame's last batches. It does not choose, redirect, force a resolve,
+write guest memory or alter the present call; it is a pure read plus `fprintf`, and it is
+observation only.
+`RECOMP_WATCHDOG_SECS` (after N seconds a watchdog thread dumps registers and recent indirect calls and exits the process, `xbox_memory_layout.c:2170`; it only ends the run); `JSRF_TRACE_A2H_DR`, `JSRF_TRACE_A2H_SLOT` and `JSRF_TRACE_A2H_SLOTW` (A2h slot/alias write witnesses; off is inert and the handler changes only the faulting thread's own single-step state); `RECOMP_APU_DMA_DESC_TRACE`, `RECOMP_APU_GP_B9_TRACE`, `RECOMP_APU_GP_DECODE` and `RECOMP_APU_PWRITE_WATCH` (GP DSP trace files, each with an optional `..._FILE` path name: `RECOMP_APU_DMA_DESC_TRACE_FILE`, `RECOMP_APU_GP_B9_TRACE_FILE`, `RECOMP_APU_PWRITE_WATCH_FILE`); and the literal `JSRF_FATAL`, which is not an environment variable but a substring the kernel bridge looks for in a created path to dump the guest stack (ledger L41); `RECOMP_RDATA_GUARD` (reports stores into read-only XBE sections and lets each complete, ledger L32)
 and `RECOMP_READ_DIRECT` (reads files straight into guest memory, as before the bounce buffer, L29). `RECOMP_PB_WRAP_TRACE` is no
 longer read: the executor merge replaced the wrap scan it traced.
 

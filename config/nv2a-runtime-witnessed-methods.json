@@ -10,66 +10,6 @@
     {
       "class": "0x97",
       "class_name": "NV097_KELVIN_PRIMITIVE",
-      "method": "0x0BB0",
-      "name": "NV097_SET_TRANSFORM_CONSTANT + 0x30",
-      "run": "20261006-213505-255-title005-admit3",
-      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
-      "log_line": 81481,
-      "witness": "[PFIFO] admit-unknown class=97 method=0BB0 param=00000000 at=0002FF9C"
-    },
-    {
-      "class": "0x97",
-      "class_name": "NV097_KELVIN_PRIMITIVE",
-      "method": "0x0BB4",
-      "name": "NV097_SET_TRANSFORM_CONSTANT + 0x34",
-      "run": "20261006-213505-255-title005-admit3",
-      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
-      "log_line": 81482,
-      "witness": "[PFIFO] admit-unknown class=97 method=0BB4 param=00000000 at=0002FF9C"
-    },
-    {
-      "class": "0x97",
-      "class_name": "NV097_KELVIN_PRIMITIVE",
-      "method": "0x0BB8",
-      "name": "NV097_SET_TRANSFORM_CONSTANT + 0x38",
-      "run": "20261006-213505-255-title005-admit3",
-      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
-      "log_line": 81483,
-      "witness": "[PFIFO] admit-unknown class=97 method=0BB8 param=3CD5AD3F at=0002FF9C"
-    },
-    {
-      "class": "0x97",
-      "class_name": "NV097_KELVIN_PRIMITIVE",
-      "method": "0x0BBC",
-      "name": "NV097_SET_TRANSFORM_CONSTANT + 0x3C",
-      "run": "20261006-213505-255-title005-admit3",
-      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
-      "log_line": 81484,
-      "witness": "[PFIFO] admit-unknown class=97 method=0BBC param=00000000 at=0002FF9C"
-    },
-    {
-      "class": "0x97",
-      "class_name": "NV097_KELVIN_PRIMITIVE",
-      "method": "0x1724",
-      "name": "NV097_SET_VERTEX_DATA_ARRAY_OFFSET + 4",
-      "run": "20261006-213505-255-title005-admit3",
-      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
-      "log_line": 81485,
-      "witness": "[PFIFO] admit-unknown class=97 method=1724 param=0039500C at=000301CC"
-    },
-    {
-      "class": "0x97",
-      "class_name": "NV097_KELVIN_PRIMITIVE",
-      "method": "0x1728",
-      "name": "NV097_SET_VERTEX_DATA_ARRAY_OFFSET + 8",
-      "run": "20261006-213505-255-title005-admit3",
-      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
-      "log_line": 81486,
-      "witness": "[PFIFO] admit-unknown class=97 method=1728 param=00395018 at=000301D4"
-    },
-    {
-      "class": "0x97",
-      "class_name": "NV097_KELVIN_PRIMITIVE",
       "method": "0x0420",
       "name": "NV097_SET_TEXTURE_MATRIX_ENABLE",
       "run": "20261007-061613-201-title007-witness-full",
@@ -270,6 +210,126 @@
     {
       "class": "0x97",
       "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0580",
+      "name": "NV097_SET_INVERSE_MODEL_VIEW_MATRIX",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109551,
+      "witness": "[PFIFO] admit-unknown class=97 method=0580 param=BF258EC8 at=0005DCDC"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0584",
+      "name": "NV097_SET_INVERSE_MODEL_VIEW_MATRIX + 0x4",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109552,
+      "witness": "[PFIFO] admit-unknown class=97 method=0584 param=3D99C272 at=0005DCDC"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0588",
+      "name": "NV097_SET_INVERSE_MODEL_VIEW_MATRIX + 0x8",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109553,
+      "witness": "[PFIFO] admit-unknown class=97 method=0588 param=3F424FEB at=0005DCDC"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x058C",
+      "name": "NV097_SET_INVERSE_MODEL_VIEW_MATRIX + 0xC",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109554,
+      "witness": "[PFIFO] admit-unknown class=97 method=058C param=00000000 at=0005DCDC"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0590",
+      "name": "NV097_SET_INVERSE_MODEL_VIEW_MATRIX + 0x10",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109555,
+      "witness": "[PFIFO] admit-unknown class=97 method=0590 param=3D060DB4 at=0005DCDC"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0594",
+      "name": "NV097_SET_INVERSE_MODEL_VIEW_MATRIX + 0x14",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109556,
+      "witness": "[PFIFO] admit-unknown class=97 method=0594 param=3F7F38AE at=0005DCDC"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0598",
+      "name": "NV097_SET_INVERSE_MODEL_VIEW_MATRIX + 0x18",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109557,
+      "witness": "[PFIFO] admit-unknown class=97 method=0598 param=BD90D959 at=0005DCDC"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x059C",
+      "name": "NV097_SET_INVERSE_MODEL_VIEW_MATRIX + 0x1C",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109558,
+      "witness": "[PFIFO] admit-unknown class=97 method=059C param=00000000 at=0005DCDC"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x05A0",
+      "name": "NV097_SET_INVERSE_MODEL_VIEW_MATRIX + 0x20",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109559,
+      "witness": "[PFIFO] admit-unknown class=97 method=05A0 param=BF4314A0 at=0005DCDC"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x05A4",
+      "name": "NV097_SET_INVERSE_MODEL_VIEW_MATRIX + 0x24",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109560,
+      "witness": "[PFIFO] admit-unknown class=97 method=05A4 param=BCAB330C at=0005DCDC"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x05A8",
+      "name": "NV097_SET_INVERSE_MODEL_VIEW_MATRIX + 0x28",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109561,
+      "witness": "[PFIFO] admit-unknown class=97 method=05A8 param=BF25AEE9 at=0005DCDC"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x05AC",
+      "name": "NV097_SET_INVERSE_MODEL_VIEW_MATRIX + 0x2C",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109562,
+      "witness": "[PFIFO] admit-unknown class=97 method=05AC param=00000000 at=0005DCDC"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
       "method": "0x0680",
       "name": "NV097_SET_COMPOSITE_MATRIX",
       "run": "20261007-061613-201-title007-witness-full",
@@ -430,12 +490,242 @@
     {
       "class": "0x97",
       "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06C0",
+      "name": "NV097_SET_TEXTURE_MATRIX",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109535,
+      "witness": "[PFIFO] admit-unknown class=97 method=06C0 param=3F000000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06C4",
+      "name": "NV097_SET_TEXTURE_MATRIX + 0x4",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109536,
+      "witness": "[PFIFO] admit-unknown class=97 method=06C4 param=00000000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06C8",
+      "name": "NV097_SET_TEXTURE_MATRIX + 0x8",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109537,
+      "witness": "[PFIFO] admit-unknown class=97 method=06C8 param=00000000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06CC",
+      "name": "NV097_SET_TEXTURE_MATRIX + 0xC",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109538,
+      "witness": "[PFIFO] admit-unknown class=97 method=06CC param=3F000000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06D0",
+      "name": "NV097_SET_TEXTURE_MATRIX + 0x10",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109539,
+      "witness": "[PFIFO] admit-unknown class=97 method=06D0 param=00000000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06D4",
+      "name": "NV097_SET_TEXTURE_MATRIX + 0x14",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109540,
+      "witness": "[PFIFO] admit-unknown class=97 method=06D4 param=BF000000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06D8",
+      "name": "NV097_SET_TEXTURE_MATRIX + 0x18",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109541,
+      "witness": "[PFIFO] admit-unknown class=97 method=06D8 param=00000000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06DC",
+      "name": "NV097_SET_TEXTURE_MATRIX + 0x1C",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109542,
+      "witness": "[PFIFO] admit-unknown class=97 method=06DC param=3F000000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06E0",
+      "name": "NV097_SET_TEXTURE_MATRIX + 0x20",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109543,
+      "witness": "[PFIFO] admit-unknown class=97 method=06E0 param=00000000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06E4",
+      "name": "NV097_SET_TEXTURE_MATRIX + 0x24",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109544,
+      "witness": "[PFIFO] admit-unknown class=97 method=06E4 param=00000000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06E8",
+      "name": "NV097_SET_TEXTURE_MATRIX + 0x28",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109545,
+      "witness": "[PFIFO] admit-unknown class=97 method=06E8 param=00000000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06EC",
+      "name": "NV097_SET_TEXTURE_MATRIX + 0x2C",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109546,
+      "witness": "[PFIFO] admit-unknown class=97 method=06EC param=00000000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06F0",
+      "name": "NV097_SET_TEXTURE_MATRIX + 0x30",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109547,
+      "witness": "[PFIFO] admit-unknown class=97 method=06F0 param=00000000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06F4",
+      "name": "NV097_SET_TEXTURE_MATRIX + 0x34",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109548,
+      "witness": "[PFIFO] admit-unknown class=97 method=06F4 param=00000000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06F8",
+      "name": "NV097_SET_TEXTURE_MATRIX + 0x38",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109549,
+      "witness": "[PFIFO] admit-unknown class=97 method=06F8 param=00000000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x06FC",
+      "name": "NV097_SET_TEXTURE_MATRIX + 0x3C",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109550,
+      "witness": "[PFIFO] admit-unknown class=97 method=06FC param=3F800000 at=0005DC3C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0BB0",
+      "name": "NV097_SET_TRANSFORM_CONSTANT + 0x30",
+      "run": "20261006-213505-255-title005-admit3",
+      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
+      "log_line": 81481,
+      "witness": "[PFIFO] admit-unknown class=97 method=0BB0 param=00000000 at=0002FF9C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0BB4",
+      "name": "NV097_SET_TRANSFORM_CONSTANT + 0x34",
+      "run": "20261006-213505-255-title005-admit3",
+      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
+      "log_line": 81482,
+      "witness": "[PFIFO] admit-unknown class=97 method=0BB4 param=00000000 at=0002FF9C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0BB8",
+      "name": "NV097_SET_TRANSFORM_CONSTANT + 0x38",
+      "run": "20261006-213505-255-title005-admit3",
+      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
+      "log_line": 81483,
+      "witness": "[PFIFO] admit-unknown class=97 method=0BB8 param=3CD5AD3F at=0002FF9C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0BBC",
+      "name": "NV097_SET_TRANSFORM_CONSTANT + 0x3C",
+      "run": "20261006-213505-255-title005-admit3",
+      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
+      "log_line": 81484,
+      "witness": "[PFIFO] admit-unknown class=97 method=0BBC param=00000000 at=0002FF9C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1724",
+      "name": "NV097_SET_VERTEX_DATA_ARRAY_OFFSET + 4",
+      "run": "20261006-213505-255-title005-admit3",
+      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
+      "log_line": 81485,
+      "witness": "[PFIFO] admit-unknown class=97 method=1724 param=0039500C at=000301CC"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1728",
+      "name": "NV097_SET_VERTEX_DATA_ARRAY_OFFSET + 8",
+      "run": "20261006-213505-255-title005-admit3",
+      "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
+      "log_line": 81486,
+      "witness": "[PFIFO] admit-unknown class=97 method=1728 param=00395018 at=000301D4"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
       "method": "0x1748",
       "name": "NV097 method 0x1748 (no register name)",
       "run": "20261007-061613-201-title007-witness-full",
       "log_sha256": "bd2df809e859d804f68966b29e09ed313f8dca06847242e55529d9bd1f9c3395",
       "log_line": 107939,
       "witness": "[PFIFO] admit-unknown class=97 method=1748 param=00F10014 at=0004E18C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1964",
+      "name": "NV097_SET_VERTEX_DATA4UB + 0x24 (attribute 9, no register name)",
+      "run": "20261007-113354-706-title008-trace-admit",
+      "log_sha256": "c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853",
+      "log_line": 109534,
+      "witness": "[PFIFO] admit-unknown class=97 method=1964 param=FF000000 at=0005DAE4"
     },
     {
       "class": "0x97",
