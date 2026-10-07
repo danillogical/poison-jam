@@ -3059,20 +3059,30 @@ RGB565 at pitch 1280 (`[GPU] … 2bpp`), converted exactly as `fb_convert` does,
 as `fb_hash_rgb`. This is a **read of a frozen dump**: presentation behaviour is untouched, which is the
 property `RECOMP_FB_VA` provably lacks (`fb_present.c:66-69` early-returns when it is set).
 
-**Drawn equals presented. There is no draw/present divergence.** For
+**The two surfaces that hold content hold the disclaimer, and that matches the last published sample —
+but this is NOT a same-flip comparison, and it does not eliminate the presentation branch.** For
 `20261007-001831-252-…-sixadmitted`, the three surfaces read from the dump are:
 
 | surface | fnv1a(fb_convert) | non-black | in the run's presented stream |
 |---|---|---|---|
 | `0x80084000` | `156ed4086987e325` | 0.000 | yes |
-| `0x8011C000` | `8205f3a6d2e48df5` | 0.133 | **yes — and it is the run's LAST present** |
+| `0x8011C000` | `8205f3a6d2e48df5` | 0.133 | **yes — and it matches the run's LAST present sample** |
 | `0x801B2000` | `8205f3a6d2e48df5` | 0.133 | yes |
 
-Rendering `0x8011C000` shows the graffiti disclaimer. So at the frozen instant the presented frame
-genuinely **is** the disclaimer; the presenter is not showing a stale or wrong surface. (The three surfaces
-are **not** always byte-identical, contrary to the reading that motivated this measurement: in
-`20261007-014848-201-…-budgetcatch` the draw surface is `0x0011C000` while the clear surface is
-`0x00084000`, and only `0x80084000` holds content.)
+**What this establishes** (corrected 2026-10-07 after Turn Review): at that frozen instant the surfaces
+holding content held the graffiti disclaimer, and that hash **matches the run's last asynchronously
+published `[FBPRESENT]` sample**. So the §23.1 composites are not evidence of a draw/present mismatch, and
+the presenter is not obviously showing a stale copy *at that instant*.
+
+**What it does NOT establish, and the earlier wording overstated.** The frozen surfaces and the published
+hash are **not paired at the same flip** — the published hash is the last sample from the window thread,
+the surfaces are read from a dump taken at an unrelated moment. The frozen **draw** surface
+(`0x80084000`) is **black** while the other two hold the disclaimer, so the dump does not identify which
+surface the guest intended to present at the transition, and it cannot rule out a **source-selection,
+latch or role mismatch later in the run**. In particular the later black interval (§23.5) is exactly the
+kind of state this measurement does **not** cover. **Presentation/source-role hypotheses therefore remain
+open**, and the branch must not be pruned on this evidence; distinguishing it needs the synchronized
+per-flip trace described in §23.5.
 
 **The disclaimer is a timed hold that ends by itself — no switch, no input.** The disclaimer begins at
 presents **1461** and is left at presents **2424** (t≈408–420 s), replaced by `e886cadf72766a64` and then
@@ -3119,9 +3129,11 @@ fraction against a fully rendered live frame, so it is not like-for-like).
   recomp has not presented title content.
 
 **Claim limits.** The dump reads are single frozen instants, not flip-synchronised time series, so they
-establish "drawn equals presented at the dump instant", not a per-frame correspondence. The 39-method set
-and the rejected submission's contents are decode-derived (§23.3 establishes their runtime provenance). The
-3D-scene classification is `INFERRED` from a non-like-for-like comparison. No strict run is involved.
+establish only that **the surfaces holding content held the disclaimer at that instant**, and that the hash
+agrees with the last asynchronous published sample — **not** a per-frame correspondence, and not that the
+presented surface was correctly selected. The 39-method set and the rejected submission's contents are
+decode-derived (§23.3 establishes their runtime provenance). The 3D-scene classification is `INFERRED` from
+a non-like-for-like comparison. No strict run is involved.
 
 ## §23.3 The 39-method list was truncated by the witness's own 16-entry cap, and is now runtime-witnessed
 
@@ -3156,17 +3168,21 @@ both the line count and that each specific method is named exactly once. Forcing
 makes it fail with `admit-unknown lines: 16, want 20` and names the four dropped tail methods; at 256 it
 passes. The Orchestrator reproduced this mutation check independently.
 
-**Result: the witness now equals the decode exactly.** With the fix, one run
-(`20261007-061613-201-title007-witness-full`) logged **39** distinct methods:
+**Result: the witness is complete, and it is corroborated by a different run's report.** With the fix,
+one run (`20261007-061613-201-title007-witness-full`) logged **39** distinct methods:
 
 ```
 0x0420-0x042C, 0x0480-0x04BC, 0x0680-0x06BC, 0x1748, 0x1B40, 0x1B44
 ```
 
-and that set is **exactly** the set `gpu-report.json` derives by decoding the same region — 39 = 39, zero
-difference either way. The two previously disagreeing sources now agree, so the 39 no longer need the
-"conditional, decode-derived" caveat: they are **runtime-witnessed**, and the decode is corroboration. They
-are recorded in `config/nv2a-runtime-witnessed-methods.json` with the run, log SHA-256 and line number.
+**The corroborating report is the NO-ADMIT run, not the witness run** (corrected 2026-10-07 after the
+Turn Reviewer checked it). `20261007-060314-395-title007-noadmit`'s `gpu-report.json` derives **exactly**
+these 39 methods, and the witness set equals it with zero difference either way. The **witness run's own**
+report lists **35** — it is missing `0x0420`, `0x0424`, `0x0428`, `0x042C` — because that run admitted those
+four in an earlier submission, so they were no longer missing at the final dump's GET. The two reports are
+therefore not interchangeable, and an earlier version of this section cited the wrong one. The provenance
+claim is unchanged: the 39 are **runtime-witnessed**, and the decode is corroboration. They are recorded in
+`config/nv2a-runtime-witnessed-methods.json` with the run, log SHA-256 and line number.
 
 **What each admitted method actually does (executor audit, `OBSERVED`).** Admission activates existing
 behaviour, but only for some of them:
@@ -3297,6 +3313,55 @@ backdrop, whereas the recomp holds black for ~190 s, so the recomp is not simply
 `present_track_flip` chose and why, keyed on `(flip_stalls, present serial)` — never on timestamps. That
 distinguishes "the guest draws elsewhere" from "the write and the read disagree" in one run, and it is
 read-only, so it cannot perturb the present path.
+
+**FIRST DISCRIMINATING RESULT (2026-10-07, `20261007-085324-850-title007-blacktrace`).** The black interval
+reproduces **without** the admit switch: the run stops at `unsupported_method 0x1964` (`successes=3529`,
+`GET=0x5A700 != PUT=0x4D9B8`), and the presented stream is black from presents **2425 to 2442** (t=519–688 s,
+~170 s) — the same persistent black. The surfaces at that dump (mapping gate `matches 1 / content-mismatch 0`):
+
+| surface | hash | non-black | distinct colours |
+|---|---|---|---|
+| `0x80084000` | `d4fa6747357b9e60` | **0.523** | **1417** |
+| `0x8011C000` | `156ed4086987e325` | 0.000 | 1 |
+| `0x801B2000` | `156ed4086987e325` | 0.000 | 1 |
+
+**So the guest IS drawing a rich scene while the presented frame is black.** `0x80084000` holds a 3D city
+scene — skyline, clouds, a curving road, and crucially a **green elevated highway** and green-tinted
+structures — while both swap surfaces read pure black. This **localizes the black interval to the
+draw→present path** and it is the opposite of the earlier reading that nothing was being drawn. Rendered:
+`logs/workers/title007/surf/bt_084000.png`.
+
+**This is NOT yet a presentation-bug claim, and it is deliberately not one.** What it establishes
+(`OBSERVED`): at that instant the surface carrying content is `0x80084000`, and the surfaces the presenter
+would publish from are black. What it does **not** establish: whether `0x80084000` is the surface the guest
+*intended* to present, whether a composite/resolve from it into a swap buffer is expected and did not run,
+whether a flip is missing, or whether `present_track_flip` chose a black surface. Those need the
+same-flip trace above; the dump is still one instant.
+
+**A content observation that bears on the M15 comparison.** Against the xemu title backdrop the earlier
+`budgetcatch` frame scored **0.0 % green-dominant** pixels, which was one reason it was called a different
+scene. This frame scores **1.9 %** green-dominant and shows the elevated green highway, i.e. it now shares
+the xemu backdrop's most distinctive feature. The comparison remains **non-like-for-like** (an RGB565 dump
+with a large uninitialised fraction, 1417 colours, against a fully rendered live frame with 69,391), so
+**this is not a title match and M15 is not claimed** — but the earlier "different scene" reading is now
+**weaker than recorded**, and the scene should be re-compared after the draw→present path is resolved.
+
+**Two clarifications from Turn Review, both resolved.**
+
+- **Build identity of the black run is NOT in doubt.** `20261007-081204-797-title007-witness2`'s
+  `build-source.json` records core hash `4816db98…`, which Turn Review read as differing from committed
+  `1f86fbb` (`93edd031…`). That difference is **line endings, not content**: the archive hashes the file
+  **as it was on disk (CRLF)**, while a git blob is **LF**. The archived hash is **exactly** the CRLF form of
+  the committed `1f86fbb` file, and `nv2a_state.h` and `nv2a_pb_exec.c` match the same way (the generated
+  method table matches in LF form because it was written by the generator). So the black run **did** use the
+  committed unit-commit semantics, and the 29 later methods are genuinely absent from the table it used.
+- **`missing_methods = 0` in that run is an EMPTY-QUEUE ARTIFACT, not evidence that every method is
+  implemented.** At that dump `GET == PUT` (`0x1B86C`), so the pending stream is empty and the report has
+  nothing to decode. Contrast the no-admit run, where `GET (0x56F34) != PUT (0x4E088)` and the report names
+  29 missing methods. **No claim may rest on a zero `missing_methods` without first checking `GET == PUT`.**
+  The run also logged **no** `admit-unknown` lines and reported `admitted_unknown = 0` despite the switch
+  being set, which is consistent with it never meeting an unknown method in a *committed* submission — the
+  39 were already in the table — but that is `INFERRED`, not measured.
 
 
 

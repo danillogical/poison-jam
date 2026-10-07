@@ -60,13 +60,19 @@ looked "stuck" simply ended first** — presents advance at only ~6/s, so the 30
 ends at presents ~1450–1800 and `title005-fixed` ended at 2410, just short of 2424. A run must therefore
 reach **past presents 2424** to say anything about the title; the 300 s recipe cannot.
 
-**The `0x00084000` measurement is DONE, and it eliminates the presentation hypothesis** (TR §23.2). Read
-offline from archived minidumps at guest VA **`0x80084000`** (never `0x00084000`, which is XBE `.text`), the
-three surfaces show **drawn = presented**: `0x8011C000` and `0x801B2000` both hash `8205f3a6d2e48df5`,
-which **is** that run's last `[FBPRESENT]` hash, and rendering it shows the disclaimer. So the presenter is
-faithful, and the §23.1 composites are not evidence of a draw/present mismatch. This was the plan's stated
-first decision point; it resolves to **neither A nor B alone**: nothing title-like was drawn at the 300 s
-snapshot, and at the transition a **new 3D scene** appears in `0x80084000` while the walk rejects.
+**The `0x00084000` measurement is DONE, and its conclusion is NARROWER than first recorded** (TR §23.2,
+corrected after Turn Review). Read offline from archived minidumps at guest VA **`0x80084000`** (never
+`0x00084000`, which is XBE `.text`), `0x8011C000` and `0x801B2000` both hash `8205f3a6d2e48df5`, which
+**matches that run's last `[FBPRESENT]` sample**, and rendering it shows the disclaimer. **What that
+establishes:** at that frozen instant the two surfaces holding content held the disclaimer, and that hash
+agrees with the last asynchronously published sample — so the §23.1 composites are not evidence of a
+draw/present mismatch. **What it does NOT establish:** the frozen surfaces and the published hash are **not
+paired at the same flip**, and the frozen *draw* surface (`0x80084000`) is black while others hold the
+disclaimer. So this does **not** globally eliminate the presentation/source-selection branch, and it does
+not show the presenter is never stale or mis-selected later. **Presentation/source-role hypotheses stay
+open until synchronized per-flip evidence distinguishes them.** This was the plan's stated first decision
+point; it resolves to **neither A nor B alone**: nothing title-like was drawn at the 300 s snapshot, and at
+the transition a **new 3D scene** appears in `0x80084000` while the walk rejects.
 
 **An xemu reference of the real title now exists** (TR §23.2,
 `logs/workers/title007/xemu/deliverable/`): boot → Smilebit → ADX → Dolby → disclaimer (42.5–52.5 s) →
@@ -75,18 +81,21 @@ fade to black (57.5 s) → 3D city backdrop (60 s) → JSRF emblem → **"PLEASE
 elevated highway**, fully presented. The recomp's 3D scene does **not** match it as rendered (47.8 %
 pure-black sky vs 1.4–15.1 %; 0.0 % green-dominant vs 8.8–16.1 %), so **it is not claimed as the title**.
 
-**The current blocker is the submission-capacity bound, and method admission is cleared** (TR §23.3). The
-39-method list was previously decode-derived and "provenance NOT established" because the
+**Method admission at the title transition was cleared, then the capacity bound was too** (TR §23.3, §23.4).
+The 39-method list was previously decode-derived and "provenance NOT established" because the
 `[PFIFO] admit-unknown` witness was truncated at **16** entries by its own cap (`NV2A_ADMIT_PENDING`), so the
 log lost the tail. Fixed this turn (witness sized by `NV2A_ADMIT_LOG_MAX`, mutation-validated): one run now
-logs **39** methods, and that set is **exactly** the decoded set, 39 = 39. Recorded in
+logs **39** methods. **The corroborating decode is the NO-ADMIT run's report, not the witness run's** — the
+witness run's own report lists **35** (it had already admitted `0x0420-0x042C` earlier, so they were no
+longer missing at its final GET), and the no-admit run's report is the one that decodes exactly the same 39
+(Turn Review corrected an earlier citation of the wrong report). Recorded in
 `config/nv2a-runtime-witnessed-methods.json`. The table was regenerated from the witness union —
 **+39, zero removals** (NV097 376 → 415) — and a run **without** the admit switch moved the stop from
-`unsupported_method 0x0420` to **`sink_capacity`** at `get=0x50B1C`, with `missing_methods` now **empty**.
-So the ordering is: **method admission first, then the capacity bound.** The rejected submission is
-**5732 words** (~1.4 budgets) and, per the Advisor's replay of the model's own packet rules, splits at
-**whole-packet boundaries** into exactly two units. The fix is bounded prefix commit at packet boundaries
-(L40's own "incremental-commit packet"), **not** raising the 4096 cap.
+`unsupported_method 0x0420` to **`sink_capacity`** at `get=0x50B1C`. So the ordering is: **method admission
+first, then the capacity bound.** The rejected submission is **5732 words** (~1.4 budgets) and, per the
+Advisor's replay of the model's own packet rules, splits at **whole-packet boundaries** into exactly two
+units. The fix is bounded prefix commit at packet boundaries (L40's own "incremental-commit packet"), **not**
+raising the 4096 cap.
 
 **The capacity bound is CLEARED, and it was two real defects, not one** (TR §23.4, toolkit `1f86fbb`). The
 walk now commits in **units that end at whole-packet boundaries**, each all-or-nothing (L40 reworded to
@@ -101,20 +110,25 @@ admit switch, the previously-rejected kick is **consumed** — `GET` advanced `0
 (**9553 words, 2.33 budgets**), `successes` rose to 3529, and the stop moved to a **new missing-method
 class: 29 methods** (`0x0580-0x05AC`, `0x06C0-0x06FC`, `0x1964`).
 
-**NEW BLOCKER, and it is unexplained: the walk now runs clean but the picture is black** (TR §23.5). With
-the unit fix plus `ADMIT_UNKNOWN=1`, the walk reaches **4533 successes with zero rejections** and
-`missing_methods` empty — far past the `successes=3523` wall — and presents advance to **3120**. But all
-three surfaces read **all-zero** at the frozen dump and the presented stream is black from presents 2450 to
-3120 (**~190 s**), while the `[GPU]` report claims **1.7 billion pixels written** into `0x8011C000`. This is
-**not established as a regression** (`0x8011C000` is black at the dump in pre-fix runs too, and the dump is
-one instant while the pixel counter is cumulative, so they are not measuring the same thing). Two candidate
-explanations are recorded without preference: the guest draws elsewhere and `0x8011C000` is stale, or the
-write and the read disagree — note **`0x00084000` and `0x0011C000` both fall inside the XBE `.text` span
-`0x11000..0x18CB30`**, which is the class `surface_write_refused` exists for, though **no `REFUSING` line
-appeared**. xemu's black is a **~2.5 s fade**, not a 190 s hold, so this is not xemu's fade being
-reproduced. **The measurement it needs is the per-flip role trace** (hash all three surfaces *and* the
-published copy at the SAME `NV097_FLIP_STALL`, keyed on `(flip_stalls, present serial)`, never timestamps),
-which is read-only and separates the two explanations in one run.
+**BLOCKER: the picture is black while the guest IS drawing — now LOCALIZED to the draw→present path**
+(TR §23.5). With the unit fix plus `ADMIT_UNKNOWN=1` the walk reaches **4533 successes with zero
+rejections** and presents advance to **3120**, far past the `successes=3523` wall. **The discriminating
+measurement has been run** (`20261007-085324-850-title007-blacktrace`, **no** admit switch, stops at
+`unsupported_method 0x1964`, presents black 2425→2442, ~170 s): at that dump **`0x80084000` holds a rich 3D
+city scene** — `d4fa6747357b9e60`, **52.3 %** non-black, **1417** colours, including the green elevated
+highway — while **both swap surfaces read pure black**. So the guest is drawing and the black is
+**downstream of the draw**; the earlier "all three surfaces zero" reading came from the admit run, whose
+`GET == PUT` made the dump an empty-queue instant. **Cumulative pixel writes and final content are different
+measurements**, so "1.7 billion pixels vs black" is not a contradiction. **This is not yet a
+presentation-bug claim**: one instant does not show whether `0x84000` is the intended present source,
+whether a composite/resolve from it should have run, whether a flip is missing, or whether
+`present_track_flip` chose a black surface. **The next step is the same-flip trace** (hash every candidate
+surface *and* the published copy at one `NV097_FLIP_STALL`, with `present_track_flip`'s choice and reason,
+keyed on `(flip_stalls, present serial)` — never timestamps, never `RECOMP_FB_VA`), which separates
+**refusal** (`surface_write_refused` / the `dma_resolve` image redirect), **redirection**, **clearing** and
+**source selection** in one run. Note **`0x00084000` and `0x0011C000` both fall inside the XBE `.text` span
+`0x11000..0x18CB30`**, the class that guard exists for, though **no `REFUSING` line appeared**. xemu's black
+is a **~2.5 s fade**, not a 170 s hold, so this is not xemu's fade being reproduced.
 
 **The present ceiling was one stale method-table entry, and it is cleared** (TR §22). It was the
 submission walk rejecting the whole stream with `unsupported_method` on method `0x1810`
@@ -256,23 +270,30 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 | F7 | done through stop 28 | the dispatch stop chain above; residue in the backlog |
 | **F8** | **cleared 2026-10-06** (toolkit `505cda5`) | the present ceiling: `unsupported_method 0x1810`, one stale table entry; the table now carries it and a run with neither the live-mirror nor the admit-unknown switch reaches presents 2410 with zero rejections (TR §22) |
 | **F8b** | **done 2026-10-07** (toolkit `46b3265`) | the same class: the six runtime-witnessed methods `0BB0`/`0BB4`/`0BB8`/`0BBC`/`1724`/`1728`, admitted from the `[PFIFO] admit-unknown` witness (+6 on class `0x97`, zero removals). Ordered delivery pinned by a mutation-validated contract. Whether the post-admission run exercised them is **not demonstrated** — see "Current work" |
-| **F8c** | **admission CLEARED 2026-10-07** (toolkit witness-capacity fix) | the 39 NV097 methods are now **runtime-witnessed**, not decode-derived: the `[PFIFO] admit-unknown` witness was truncated at 16 by its own cap and is fixed, so one run logs 39 and the set **exactly** equals the decode (39 = 39). Table regenerated **+39, zero removals** (NV097 376 → 415). A no-switch run then moved the stop from `unsupported_method 0x0420` to **`sink_capacity`**, `missing_methods` **empty** (TR §23.3) |
-| **F8d** | **capacity bound CLEARED 2026-10-07** (toolkit `1f86fbb`) | the submission walk now commits in **units at whole-packet boundaries** (per-unit atomicity, L40), so a 5732-word submission is consumed instead of rejected. **Measured:** GET advanced `0x50B1C` → `0x5A060` (9553 words, 2.33 budgets) and the stop moved off `sink_capacity`. Two real defects were found by the new tests, not by inspection: `sink_count` was reset once per walk so a second unit overran `sink[]`, and the old header check bounded a unit by a submission-wide count so it fired before the yield. Raising the 4096 cap was NOT the fix |
-| **F8e** | **next** | the next missing-method class: **29 methods** (`0x0580-0x05AC`, `0x06C0-0x06FC`, `0x1964`) at `get=0x56F34`, `successes=3529`. Same class as F8b/F8c — take them from a **runtime witness**, never from the decode |
+| **F8c** | **admission CLEARED 2026-10-07** (toolkit witness-capacity fix) | the 39 NV097 methods are now **runtime-witnessed**, not decode-derived: the `[PFIFO] admit-unknown` witness was truncated at 16 by its own cap and is fixed, so one run logs 39. Table regenerated **+39, zero removals** (NV097 376 → 415). A no-switch run then moved the stop from `unsupported_method 0x0420` to **`sink_capacity`** (TR §23.3). **Corroborating decode is the NO-ADMIT run's report (39), not the witness run's (35)** — Turn Review corrected the earlier citation |
+| **F8d** | **capacity bound CLEARED 2026-10-07** (toolkit `1f86fbb`, `e85f331`) | the submission walk now commits in **units at whole-packet boundaries** (per-unit atomicity, L40), so a 5732-word submission is consumed instead of rejected. **Measured:** GET advanced `0x50B1C` → `0x5A060` (9553 words, 2.33 budgets) and the stop moved off `sink_capacity`. **Three real defects were found by tests/review, not by inspection:** `sink_count` was reset once per walk so a second unit overran `sink[]`; the old header check bounded a unit by a submission-wide count so it fired before the yield; and `admitted_unknown` re-added every earlier unit at each unit commit (published 10227 for 6137 — found by Turn Review, fixed in `e85f331`). Raising the 4096 cap was NOT the fix |
+| **F8e** | **next — and the current blocker, now LOCALIZED** | the black interval is **downstream of the draw**: during it `0x80084000` holds a rich 3D scene (`d4fa6747357b9e60`, 52.3 % non-black, 1417 colours) while both swap surfaces read black (TR §23.5), and it reproduces **without** the admit switch. Needs the **same-flip trace** (one `FLIP_STALL`: all candidate surfaces + published copy + `present_track_flip`'s choice and reason, keyed on `(flip_stalls, present serial)`) to separate refusal / redirection / clearing / source selection. A further missing-method class (**29**: `0x0580-0x05AC`, `0x06C0-0x06FC`, `0x1964`) is also outstanding, to be taken from a **runtime witness**, never the decode |
 | F6 = M15 | open | **criterion corrected 2026-10-07** (TR §23): the title screen itself, identified by CONTENT and confirmed by eye, with its hash recorded — **not** "a hash that is neither of two listed ones". The old blacklist was unsound: `87683a748e27d071` is the blue Dolby card, and the graffiti disclaimer renders in **four** hashes, three of them unlisted, so a run ending on the disclaimer (as the ceiling-clearing run did) satisfied the old letter. **An xemu reference of the real title now exists** (`logs/workers/title007/xemu/deliverable/`: emblem + "PLEASE PRESS START TO BEGIN" over a perspective city street, 640×480, reached with no input) and is the comparator. Also needs the run record with ledger IDs and Turn Reviewer reproduction |
 
 ## Next actions, in order
 
-1. **Finish the submission-capacity fix (F8d), then re-run past the transition.** The `0x00084000`
-   measurement is done (TR §23.2) and it eliminates the presentation hypothesis: drawn = presented, and the
-   guest is blocked in the submission walk, not in the presenter. The stop is now `sink_capacity` at the
-   header check `nv2a_core.c:1796` on a **5732-word** (~1.4 budget) submission. The fix is **bounded prefix
-   commit at whole-packet boundaries** inside one `nv2a_submit_pending` call: end the unit at the header,
-   commit it all-or-nothing, continue a new unit from that header, and publish the fence **only** when the
-   final unit reaches the original PUT. **Raising the 4096 cap is not the fix** (owner constraint, L40). Two
-   hazards the Advisor named must be handled: `sink_count` is reset only at walk start, so two units over
-   4096 methods would **overflow `sink[]`** (reset per unit), and the removed caps were the cycle backstop
-   (add a per-call word bound of `pushbuffer_size/4`). Ledger L40 must be reworded to **per-unit** atomicity.
+1. **The next blocker is the black interval on the draw→present path, and it is now LOCALIZED.** F8d is
+   **already cleared** (toolkit `1f86fbb`, plus `e85f331` for the multi-unit admission count found by Turn
+   Review) — do not re-do it. **The discriminating measurement has been started and already discriminates**
+   (TR §23.5, `20261007-085324-850-title007-blacktrace`): during the black interval — which reproduces
+   **without** the admit switch, stopping at `unsupported_method 0x1964` with presents black from 2425 to
+   2442, ~170 s — `0x80084000` holds a **rich 3D city scene** (`d4fa6747357b9e60`, **52.3 %** non-black,
+   **1417** colours, including the green elevated highway) while **both swap surfaces read pure black**.
+   So the guest **is** drawing, and the black is downstream of the draw. **This is not yet a
+   presentation-bug claim**: the dump is one instant and does not show whether `0x84000` is the intended
+   present source, whether a composite/resolve from it is expected and failed to run, whether a flip is
+   missing, or whether `present_track_flip` chose a black surface. The next step is the **same-flip trace**:
+   at one `NV097_FLIP_STALL`, hash every candidate surface *and* the published copy and record
+   `present_track_flip`'s chosen surface and its reason, keyed on `(flip_stalls, present serial)` — never
+   timestamps, never `RECOMP_FB_VA`, never a guest/presenter mutation. That separates **refusal**
+   (`surface_write_refused` / the `dma_resolve` image redirect) from **redirection**, **clearing** and
+   **source selection** in one run. **The 29-method class is still outstanding** (`0x0580-0x05AC`,
+   `0x06C0-0x06FC`, `0x1964`) and must come from a **runtime witness**, never the decode.
 2. **Correct the two eliminated premises so they are not re-run.** The `sub_0019E438` "spin" is ordinary
    DirectSound lock traffic (all 16356 calls return 1; enter/leave balanced 24702/24702). The pinned
    composites from `RECOMP_FB_VA=0x8011C000` are **accumulation artifacts, not a title**, and pinned vs
