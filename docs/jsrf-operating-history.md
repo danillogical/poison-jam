@@ -2928,3 +2928,31 @@ Validated by mutation: deleting the parameter-path call makes the test fail.
 
 Push receipts: toolkit `ec98ffe..b95a24e`, `b95a24e..4b6cc2f`, `4b6cc2f..76c76fd`; game `94b3e32..726402f`,
 `726402f..1d71631`.
+
+**A second review round found two real defects in that new instrument, both mine.** Toolkit `07e7dac`, game
+`02c5abc`.
+
+1. **The trajectory kept rolling after the first stop.** The scalars latched but `submit_trace_word` ran on
+   every later walk, so a dump paired the FIRST stop's scalars with the MOST RECENT walk's words — and a retry
+   consumes different bytes, since the guest keeps writing the ring. Recording now stops once a stop is latched.
+2. **My test could not detect it, and neither could I when I first checked.** It retried the *same* stream and
+   compared counts, which are identical either way; only contents differ. Worse, the corrupted word lands
+   mid-window, so removing the freeze guard still passed. The test now corrupts a word inside the window and
+   compares all 64 entries, and removing the guard fails with exactly the expected evidence
+   (`trajectory[32] ... word 111107DD->DEADBEEF`). **Lesson worth keeping: a retry test must change the bytes
+   and compare the whole window, or it tests the counter rather than the recording.**
+3. **A regression I introduced in the reader.** `jsrf_gpu.py` asked for the current struct size
+   unconditionally, so a pre-change archive had adjacent globals read as budget fields — admit3 reported
+   `budget_count = 44040355` from unrelated memory. The size now comes from the archive's **own linker map**
+   (64 bytes before the transcript, 96 after). A source-hash lookup was tried first and is unusable:
+   `build-source.json` records the SHA-256 of file *content*, and a run built from a dirty tree matches no
+   commit. The decision is split into a testable function and covered by a test that goes through
+   `read_submit_state` on both real archives, because a decoder test cannot catch a size-choice bug.
+
+The review also confirmed the earlier fixes hold (B1/B2/B3/B5 closed) and that **B4 was still open at the pinned
+revision**: the record said "so there is no regression" from counters at unequal durations, and that the
+admission "broke nothing" while exercise was undemonstrated. Both are now retracted — the counters invalidate
+the old comparison without establishing the absence of a regression, and an unexercised run is close to silent
+about the changed path either way.
+
+Push receipts: toolkit `76c76fd..07e7dac`; game `10654f0..02c5abc`.
