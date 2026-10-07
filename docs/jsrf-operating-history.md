@@ -2784,9 +2784,19 @@ kept):
 
 The toolkit has **no** commit after `505cda5`, so no later toolkit push exists to order against. The
 outgoing game commits are records-only: **0 secret-audit hits scoped to this turn's objects** (14 + 8 +
-4 + 4 = 30 objects over `5e7a1a3..2d99b30`, `2d99b30..7e5db3c`, `7e5db3c..a3e0b2f`, `a3e0b2f..06b1e3d`,
-each blob audited individually), no `game/` path, largest blob 212 KB. (A whole-history
-`just secret-audit` reports 2 hits; both are the audit script's own pattern literals and predate this
-turn.) Next Windows turn: admit the six
+4 + 4 + 6 = 36 objects over `5e7a1a3..2d99b30`, `2d99b30..7e5db3c`, `7e5db3c..a3e0b2f`,
+`a3e0b2f..06b1e3d`, `3cc084b..594c1e8`, each blob audited individually), no `game/` path, largest blob
+212 KB. (A whole-history `just secret-audit` reports 2 hits; both are the audit script's own pattern
+literals and predate this turn.)
+
+**The closing push of this turn** (`594c1e8`, which deleted the four `plan-turn-*-title-005.md`
+artifacts) is recorded here as a follow-up commit, because a commit cannot carry a receipt for its own
+push. Toolkit was pushed first and was already up to date at `505cda5` (`Everything up-to-date`); the
+game closing push is confirmed server-side by the activity API as `3cc084b…→594c1e8…` on
+`refs/heads/master` at **2026-10-07T05:51:51Z**, matching the local reflog at 22:51:51 (−07:00). So
+the full order for the turn is: toolkit `505cda5` at 05:19:39Z, then the game's six pushes at
+05:19:54Z, 05:21:31Z, 05:42:30Z, 05:43:51Z, 05:45:37Z and 05:51:51Z.
+
+Next Windows turn: admit the six
 runtime-confirmed state methods (`0BB0`/`0BB4`/`0BB8`/`0BBC`/`1724`/`1728`) and then fix
 `budget_exhausted`.
