@@ -58,12 +58,19 @@ and caps its vblank-accounted wait at four frames. Pinned by two tests that can 
 exact uptime; `volatile` reads defeat MSVC's 128-bit constant folding, which otherwise **hides** the
 overflow — an earlier version passed the wrong way round) and `vblank_clock_step_test` (drives
 `nv2a_vblank_advance` across a backward step: **0** pulses in 10 frames with the old rule, **9** with
-the fix). **Field-confirmed:** run `20261008-043848-133-title009-clockfix-1800` (`exe_sha256
-51a27649…`, 1800 s, timed to straddle the next wrap at t≈1535 s) opens `title.adx` at present ~2433
-and **reads it** — six `[ADXIO]` lines with `pos` advancing `0x19 → 0x1A0`, the same shape as
-`witness-0298` and exactly what 507 could not do — and keeps its worker threads alive. **Every
-archived run must now be classified by whether its window contains a wrap** before its results are
-compared with another run's.
+the fix). **Field-confirmed ACROSS A WRAP:** run `20261008-043848-133-title009-clockfix-1800`
+(`exe_sha256 51a27649…`, 1804.7 s) started at `11:38:50Z` and therefore contained a wrap instant
+**612 s in** (`11:49:03Z`) — the condition that killed 507's workers at 290 s. The fixed binary does
+the opposite at every landmark: the worker threads stay alive past the wrap (to present 2438, main
+thread to 2494), `title.adx` is opened **and read** (**12** `[ADXIO]` lines, `pos` `0x19 → 0x1A0`,
+byte-identical in shape to `witness-0298`), the guest reaches the heavy 3D title phase, and it logs
+**63 budget stops with 63 resumes at the committed boundary and 0 mismatched**, zero `still
+rejecting`, zero ICALL, zero EXCEPTION. The vblank audit confirms the mechanism independently:
+`vblank_pulses = 1337`, `vblank_guest_acks = 1235` (92 %), `vblank_already_pending = 101` (8 %,
+ordinary jitter), `vblank_irq_asserted = 1253` — the display kept pulsing and the guest kept
+acknowledging straight through the wrap. **The root cause is confirmed, not merely correlated.**
+Every archived run must still be classified by whether its window contains a wrap before its results
+are compared with another run's.
 
 **`budget_exhausted` is Case A — benign resumable chunking — and its real defect is a zero-commit
 livelock** (TR §24.1, L54). The walk now keeps a per-stop ring and a resume audit: on the
@@ -80,7 +87,8 @@ never does, and `if (packets >= 1024)` runs **before** the yield, so a packet-de
 the cap having committed **zero** units; `regs[NV_PFIFO_CACHE1_DMA_GET] = pc` is inside `if (ok)`, so
 GET pins and every retry repeats the same walk. **Measured in the real guest:** the diagnostic run
 `20261008-041233-960-title009-cap128` stopped on the **first boot submission** (128 one-word packets,
-zero units committed) and the guest **never booted**. At the shipped cap the margin is **exactly
+zero units committed), pinned GET at 0 through `submit #0`…`#63`, and ended with **zero
+`[FBPRESENT]` lines and `successes=3`** — the guest reached `guest_entry` but produced no frames. At the shipped cap the margin is **exactly
 zero** — the control reports `walk_packet_max = 1024` against a boot kick of exactly 1024 words. The
 packet term protects no array (`staged[]`/`sink[]` are word-bounded per unit, `seen[]` has its own
 guard), so it is a runaway bound, not an architectural limit. **L40's 1024-packet STOP is unchanged**
@@ -89,21 +97,26 @@ binary. The fix (per-unit yield plus a real cycle guard, versus accepting the ma
 amendment and is **deferred**.
 
 **What is next: executor throughput in the 3D title phase** (TR §24.3). With the clock fixed, the
-surviving run shows what lies past the loading screen: it opens and **reads** `title.adx`, then
-advances into a heavy 3D phase at roughly **one present per 24 s** (presents 2442 → 2457 over
-t = 541 → 898 s, ~1M triangles). That is where all 12 budget stops occur, and they recover. A 900 s
-run cannot reach "PLEASE PRESS START TO BEGIN" at that rate. Separately, the render composition
-loses its texture stage at the transition: the `[GPU]` batch counters step from a stable ~17–25 %
-"texcoords but no usable stage" to a steady **93.8 %** at present ~2457 (independently verified from
-the increments between cumulative reports), while the city scene the executor *can* rasterise
-(`efddce3b5bb02ab1`) is published in **none** of 188 archived runs. **That stage loss is the guest's
-own instruction, measured, not lost state:** the fixed run
-`20261008-043848-133-title009-clockfix-1800` reports **1079 of 1079 untexturable batches as `stage
-disabled by the guest`** and **zero** as `no offset` / `no dimensions` / `unusable format` / `other`,
-so the sticky stage-0 gate is honouring an explicit `SET_TEXTURE_CONTROL0` clear. The "sticky gate is
-a regression dropping the backdrop" hypothesis is therefore **falsified by a per-batch
-discriminator**. What those disabled-stage batches should draw instead stays open. **M15 is NOT
-reached.**
+surviving runs show what lies past the loading screen, and the cost is now measured as **geometry**:
+on `20261008-043848-133-title009-clockfix-1800` the present rate falls **110×** (5.53 → 0.05 per
+second) exactly where the per-report triangle count rises **87×** (median 359 → 31347), while the
+run's average is 875 pixels per triangle over ~1.9M triangles and ~1.6 billion pixel writes. The
+software rasteriser is the cost, so **a 900 s run cannot reach "PLEASE PRESS START TO BEGIN" at 0.05
+presents/s** and no walk repair changes that. The next measurement is where inside the rasteriser the
+time goes (per-triangle setup versus per-pixel sampling), not another run of the same length.
+
+**Separately, the render composition loses its texture stage at the transition:** the `[GPU]` batch
+counters step from a stable ~17–25 % "texcoords but no usable stage" to a steady **93.8 %** at
+present ~2457 (independently verified from the increments between cumulative reports), while the
+city scene the executor *can* rasterise (`efddce3b5bb02ab1`) is published in **none** of 188
+archived runs. **That stage loss is the guest's own instruction, measured, not lost state:** the
+fixed run
+`20261008-043848-133-title009-clockfix-1800` reports **every** untexturable batch as `stage
+disabled by the guest` and **zero** as `no offset` / `no dimensions` / `unusable format` / `other`,
+at every report from the first (85) to the last sampled (2833), so the sticky stage-0 gate is
+honouring an explicit `SET_TEXTURE_CONTROL0` clear. The "sticky gate is a regression dropping the
+backdrop" hypothesis is therefore **falsified by a per-batch discriminator**. What those
+disabled-stage batches should draw instead stays open. **M15 is NOT reached.**
 
 **SUPERSEDED by the Current work section above** (turn title-009). The blocks that follow are the
 title-008 narrative, kept for provenance: the method-table progression and the indirect-call
@@ -493,7 +506,38 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 
 ## Next actions, in order
 
-1. **The black interval is CLEARED — the missing vertex-program viewport constants were the cause** (TR
+0. **THE HOST CLOCK OVERFLOW IS FIXED — do not re-investigate the `Now Loading` hold as a guest, GPU
+   or walk defect** (TR §24.2, L53, toolkit `eccd94b`). It was `qemu_clock_get_ns` overflowing in a
+   signed 64-bit product every 922.3 s of host uptime; the reading jumped backward, no vblank pulse
+   was emitted, and the ADX worker threads blocked forever. Field-confirmed across a wrap by
+   `20261008-043848-133-title009-clockfix-1800`. **Standing rule from this: classify every archived
+   run by whether `[start, start + duration]` contains a wrap instant before comparing it with
+   another run** (`logs/workers/title009/orch/wrap_in_window.py` computes the schedule;
+   `vsync_death.py` gives the per-run worker-liveness discriminator). Runs in the archive that
+   straddled a wrap took a different guest path and are not comparable on the merits.
+
+1. **NEXT BLOCKER: the title backdrop is DRAWN but NOT PRESENTED** (TR §24.3). On the fixed binary
+   the draw surface `0x80084000` holds a full 3D city (towers, clouds, the green elevated highway —
+   `logs/workers/title009/clockfix/0x80084000.png`), matching the xemu reference's content at t=60 s,
+   but hashing the three surfaces shows `0x80084000` is **not** among the published `[FBPRESENT]`
+   hashes while `0x8011C000` and `0x801B2000` (near-blank) are. The plan's long-unresolved
+   draw-versus-present question is therefore the live critical path, now with real title content in
+   the draw surface. **The next measurement is the same-flip trace (`RECOMP_FLIP_TRACE`, L47) on this
+   fixed binary**, which pairs `present_track_flip`'s choice and reason with the surface the guest
+   targeted at ONE `NV097_FLIP_STALL` — the instrument exists and is off by default.
+2. **Then executor throughput**, which bounds how far a run can get: the present rate falls 110×
+   (5.53 → 0.05/s) exactly where the per-report triangle count rises 87× (median 359 → 31347), at
+   875 pixels per triangle over ~1.9M triangles. Where inside the rasteriser the time goes
+   (per-triangle setup versus per-pixel sampling) is the measurement; another 900 s run is not.
+3. **`budget_exhausted` is CLASSIFIED — Case A, benign resumable chunking** (TR §24.1, L54), on 63
+   stops with 63 resumes at the committed boundary and 0 mismatched on the fixed binary. Do not
+   re-litigate it. Its one real defect is the **zero-commit livelock** from the cap's scope, recorded
+   and deliberately deferred: L40's 1024-packet STOP is unchanged, and the fix needs an L40 amendment.
+4. **Do not re-investigate the 93.8 % "no usable stage" regime as lost texture state** (TR §24.3):
+   every untexturable batch in the fixed run is the guest's own explicit `SET_TEXTURE_CONTROL0`
+   disable, zero from lost state. The sticky stage-0 gate is honouring the guest.
+
+5. **The black interval is CLEARED — the missing vertex-program viewport constants were the cause** (TR
    §23.8). Do not re-investigate it as a presentation or composite defect. `0x0AF0` now feeds
    `s_vp.c[58]` and `0x0A20` feeds `s_vp.c[59]` as well as `vp_offset`, and stage 0's enable bit is
    honoured. Measured against the pre-fix run: distinct `[FBPRESENT]` hashes **10 → 658**, `0x0AF0` gone
