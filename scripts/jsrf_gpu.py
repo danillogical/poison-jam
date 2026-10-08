@@ -175,9 +175,18 @@ SUBMIT_STATE_VBLANK_FIELDS = (
     'vblank_enable_writes', 'vblank_enable_last', 'vblank_enable_cleared',
     'vblank_irq_asserted', 'vblank_irq_deasserted', 'vblank_last_ack_value',
     'vblank_pending_last')
+# The resume-quality audit, appended after the vblank fields. These are the
+# counters that make Case A machine-readable rather than log-derived:
+# `resume_drained` counts resumptions whose walk reached the stop's PUT (the
+# whole submission consumed), and `resume_stalled` counts resumptions that began
+# at the right boundary but made NO progress -- the zero-commit livelock, which
+# a boundary-only comparison cannot name.
+SUBMIT_STATE_RESUME_QUALITY_FIELDS = ('budget_resume_stalled',
+                                      'budget_resume_drained')
 SUBMIT_STATE_FIELDS = (SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS
                        + SUBMIT_STATE_UNIT_FIELDS + SUBMIT_STATE_CONTINUATION_FIELDS
-                       + SUBMIT_STATE_VBLANK_FIELDS)
+                       + SUBMIT_STATE_VBLANK_FIELDS
+                       + SUBMIT_STATE_RESUME_QUALITY_FIELDS)
 SUBMIT_STATE_BASE_SIZE = 4 * len(SUBMIT_STATE_BASE_FIELDS)
 SUBMIT_STATE_BUDGET_SIZE = 4 * len(SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS)
 SUBMIT_STATE_UNIT_SIZE = 4 * len(SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS
@@ -185,6 +194,9 @@ SUBMIT_STATE_UNIT_SIZE = 4 * len(SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_
 SUBMIT_STATE_CONTINUATION_SIZE = 4 * len(
     SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS + SUBMIT_STATE_UNIT_FIELDS
     + SUBMIT_STATE_CONTINUATION_FIELDS)
+SUBMIT_STATE_VBLANK_SIZE = 4 * len(
+    SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS + SUBMIT_STATE_UNIT_FIELDS
+    + SUBMIT_STATE_CONTINUATION_FIELDS + SUBMIT_STATE_VBLANK_FIELDS)
 SUBMIT_STATE_SIZE = 4 * len(SUBMIT_STATE_FIELDS)
 
 
@@ -206,7 +218,10 @@ def decode_submit_state(raw):
     state['has_continuation_audit'] = have >= len(
         SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS + SUBMIT_STATE_UNIT_FIELDS
         + SUBMIT_STATE_CONTINUATION_FIELDS)
-    state['has_vblank_audit'] = have >= len(SUBMIT_STATE_FIELDS)
+    state['has_vblank_audit'] = have >= len(
+        SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS + SUBMIT_STATE_UNIT_FIELDS
+        + SUBMIT_STATE_CONTINUATION_FIELDS + SUBMIT_STATE_VBLANK_FIELDS)
+    state['has_resume_quality'] = have >= len(SUBMIT_STATE_FIELDS)
     # The histogram arrives as flat fields (the struct holds an array, but the
     # decoder's field-list shape is flat); reassemble it so a reader does not
     # have to know how many bins there are.
@@ -264,6 +279,8 @@ def submit_state_size_for_archive(declared, warnings):
         return SUBMIT_STATE_BASE_SIZE
     if declared >= SUBMIT_STATE_SIZE:
         return SUBMIT_STATE_SIZE
+    if declared >= SUBMIT_STATE_VBLANK_SIZE:
+        return SUBMIT_STATE_VBLANK_SIZE
     if declared >= SUBMIT_STATE_CONTINUATION_SIZE:
         return SUBMIT_STATE_CONTINUATION_SIZE
     if declared >= SUBMIT_STATE_UNIT_SIZE:
@@ -418,6 +435,16 @@ def markdown(report):
                       f"re-walked tail {state.get('budget_rewalked_words', 0)} words; "
                       f"walks {state.get('walk_serial', 0)} "
                       f"({state.get('walk_retry_count', 0)} stalled retries)."]
+            # The resume-quality counters are what make the classification
+            # machine-readable. `drained` is the drain evidence (the walk
+            # reached the stop's PUT); `stalled` is the zero-commit livelock,
+            # which a boundary-only comparison cannot name.
+            if state.get('has_resume_quality'):
+                lines += [f"Resume quality: **drained {state.get('budget_resume_drained', 0)}** "
+                          f"(walk reached the stop's PUT), "
+                          f"**stalled {state.get('budget_resume_stalled', 0)}** "
+                          f"(right boundary, no progress). A run whose drained count equals "
+                          f"its stop count resumed every stop to completion."]
             lines += [f"Packets per walk: max {state.get('walk_packet_max', 0)}, "
                       f"words max {state.get('walk_words_max', 0)}; "
                       f"occupied log2 bins {top if top else 'none'} "

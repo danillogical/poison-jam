@@ -317,7 +317,8 @@ class SubmitStateDecodeTests(unittest.TestCase):
                  + jsrf_gpu.SUBMIT_STATE_BUDGET_FIELDS
                  + jsrf_gpu.SUBMIT_STATE_UNIT_FIELDS
                  + jsrf_gpu.SUBMIT_STATE_CONTINUATION_FIELDS
-                 + jsrf_gpu.SUBMIT_STATE_VBLANK_FIELDS)
+                 + jsrf_gpu.SUBMIT_STATE_VBLANK_FIELDS
+                 + jsrf_gpu.SUBMIT_STATE_RESUME_QUALITY_FIELDS)
         self.assertEqual(list(tiers), list(jsrf_gpu.SUBMIT_STATE_FIELDS),
                          'the tiers must concatenate to the full field list, '
                          'in struct order')

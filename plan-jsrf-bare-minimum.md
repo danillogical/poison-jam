@@ -28,49 +28,45 @@ discipline. This plan owns the objective, the milestones and what to do next.
 
 ## Current work (state 2026-10-08, turn title-009)
 
-**THE `Now Loading` HOLD WAS A HOST CLOCK OVERFLOW, AND IT IS FIXED** (TR §24.2, toolkit this turn).
-`qemu_clock_get_ns` computed `(int64_t)(QPC * 1e9 / freq)` — the product in a **signed 64-bit**
-temporary, so it overflowed once per `2^63/1e9` counts of host uptime (**922.3 s** at this host's
-10 MHz counter) and the reading jumped backward from ~`+9.2e18` to ~`-9.2e18`. `ptimer_service_thread`
-uses that as `now_ns` against a `next_vblank_ns` still near `+9.2e18`, so after the wrap **neither the
-pulse test nor the re-arm test could be true and no vblank pulse was emitted** until the clock climbed
-back (the computed wait also became ~49 days). No pulse → no PCRTC interrupt → no ISR → no DPC → no
-`KeSetEvent(0x0019D630)` → the two ADX worker threads (`0x0013B1C0`, `0x0013B230`) block forever →
-`title.adx` is opened and **never read** → the guest holds on the animated loading screen. **This was
-never a guest or GPU blocker.**
+**A HOST CLOCK OVERFLOW EXISTS AND IS FIXED — BUT IT IS NOT ESTABLISHED AS THE CAUSE OF THE
+`Now Loading` HOLD** (TR §24.2, L53, toolkit this turn + the review remediation). Two things must be
+kept apart, because conflating them was this turn's main error.
 
-**Measured, and it explains a divergence that was previously attributed to the method table.**
-Attributing every `[KERNEL] summary` block to its thread by `esp=`: run `…003812-419-title008-507`
-crossed a wrap **290 s in** and its worker threads' blocks stopped at present **1555** while the main
-thread ran to **3712**; the runs whose windows contained no wrap (`witness-0298`, both
-`title009-cap1024` controls) kept those workers alive to the end. `title.adx` is the log
-discriminator: 507 opens it with **zero** `[ADXIO]` lines; `witness-0298` logs six with `pos`
-advancing `0x19 → 0x1A0`. **So 507 vs `witness-0298` differed by run start time, not by method
-table**, and the earlier "507 has zero exhaustions ⇒ exhaustion is not causal" inference is
-**withdrawn as confounded**. The dump falsifies the competing "lost enable / disconnected vector /
-stuck acknowledge" family: `PCRTC_INTR_EN_0 = 1`, `PMC_INTR_EN_0 = 1`, vector 3 connected,
-`g_nv2a_irq_line = 0`, DPC queue empty, event unsignalled, thread exit flags 0.
+*ESTABLISHED.* `qemu_clock_get_ns` formed `QPC * 1e9` in a **signed 64-bit** temporary, giving two
+distinct wrap points: the **signed** overflow at **922.337 s** of host uptime (the negative int64
+becomes a huge uint64, so the consumer sees a **forward** jump, which is harmless because it
+satisfies `now >= next` and re-arms) and the **unsigned** product wrap at **1844.674 s**, where the
+consumer sees a **backward** jump to near zero. The backward one is harmful: the vblank deadline is
+still near 2^64, so neither the pulse test nor the re-arm test can be true and no pulse is emitted
+until the reading climbs back. **The fix** is `nv2a_qpc_to_ns` in `src/nv2a/host_clock.h`
+(`(c/f)*1e9 + (c%f)*1e9/f`), now shared by `qemu_clock_get_ns` and `apu_shim.h`'s
+`qemu_clock_get_us` so they cannot drift, plus a backward-step re-arm and a four-frame wait cap in
+the vblank loop. **This repair is correct and stays on its own merit** — the overflow would corrupt
+the display clock and the guest-visible PTIMER at a fixed uptime. It is pinned by
+`host_clock_wrap_test`, which now calls the **real shipped conversion** and was **mutation-validated**:
+replacing the shipped body with the overflowing form makes it fail (exit 1, `moved backward 1 time(s)
+across the unsigned wrap`), restoring it returns exit 0. `vblank_clock_step_test` covers the loop's
+rule (0 pulses in 10 frames with the pre-fix rule, 9 with the fix).
 
-**The fix.** Overflow-safe `(c/f)*1e9 + (c%f)*1e9/f` in `qemu_clock_get_ns`, the same pattern fixed
-in `apu_shim.h`'s `qemu_clock_get_us`; the vblank loop additionally re-arms on a backward clock step
-and caps its vblank-accounted wait at four frames. Pinned by two tests that can fail:
-`host_clock_wrap_test` (the OLD form really does jump backward; the new form is monotonic and equals
-exact uptime; `volatile` reads defeat MSVC's 128-bit constant folding, which otherwise **hides** the
-overflow — an earlier version passed the wrong way round) and `vblank_clock_step_test` (drives
-`nv2a_vblank_advance` across a backward step: **0** pulses in 10 frames with the old rule, **9** with
-the fix). **Field-confirmed ACROSS A WRAP:** run `20261008-043848-133-title009-clockfix-1800`
-(`exe_sha256 51a27649…`, 1804.7 s) started at `11:38:50Z` and therefore contained a wrap instant
-**612 s in** (`11:49:03Z`) — the condition that killed 507's workers at 290 s. The fixed binary does
-the opposite at every landmark: the worker threads stay alive past the wrap (to present 2438, main
-thread to 2494), `title.adx` is opened **and read** (**12** `[ADXIO]` lines, `pos` `0x19 → 0x1A0`,
-byte-identical in shape to `witness-0298`), the guest reaches the heavy 3D title phase, and it logs
-**63 budget stops with 63 resumes at the committed boundary and 0 mismatched**, zero `still
-rejecting`, zero ICALL, zero EXCEPTION. The vblank audit confirms the mechanism independently:
-`vblank_pulses = 1337`, `vblank_guest_acks = 1235` (92 %), `vblank_already_pending = 101` (8 %,
-ordinary jitter), `vblank_irq_asserted = 1253` — the display kept pulsing and the guest kept
-acknowledging straight through the wrap. **The root cause is confirmed, not merely correlated.**
-Every archived run must still be classified by whether its window contains a wrap before its results
-are compared with another run's.
+*WITHDRAWN.* The claim that the overflow **caused** any archived worker death is **falsified**. Turn
+Review computed wrap instants independently and found **6 wrapped runs that kept their workers**
+(including `…223953-965-title008-frames-late`, wrap 13 s in, workers alive 565 s past it) and **7
+unwrapped runs that lost them** (`long3d`, `units`, `units4`, `blacktrace`, `trace-noadmit`,
+`admitted39`, `title005-admit3`), with **0 of 16 deaths within ±5 s of a wrap**. The flagship example
+fails on its own numbers: in run 507 the workers' last `[KERNEL] summary` is at present **t=284** while
+the unsigned wrap falls **293.6 s** in — they stop **9.6 s before** it, and a cause must precede its
+effect. The "field confirmation" does not discriminate either (`frames-late` kept its workers on the
+**unfixed** binary), and the run was still executing when an earlier commit asserted its results.
+
+**So the `Now Loading` hold is OPEN again, with a corrected problem statement.** It correlates with the
+ADX vsync/file worker threads (`0x0013B1C0`, `0x0013B230`) ceasing to advance, `title.adx` being opened
+and never read, and the guest staying on the animated loading loop — but the cause of **those** deaths
+is **not** the host clock, because it happens in runs whose windows contain no wrap at all. **Start
+from the unwrapped deaths** (`long3d`, `units`, `blacktrace`, `trace-noadmit`, `admitted39`,
+`title005-admit3`), which share the symptom with no wrap to blame. The comparability rule below still
+stands: classify every archived run by whether `[start, start + duration]` contains a wrap instant
+before comparing it with another run (`logs/workers/title009/orch/wrap_in_window.py`,
+`vsync_death.py`).
 
 **`budget_exhausted` is Case A — benign resumable chunking — and its real defect is a zero-commit
 livelock** (TR §24.1, L54). The walk now keeps a per-stop ring and a resume audit: on the
@@ -506,17 +502,32 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 
 ## Next actions, in order
 
-0. **THE HOST CLOCK OVERFLOW IS FIXED — do not re-investigate the `Now Loading` hold as a guest, GPU
-   or walk defect** (TR §24.2, L53, toolkit `eccd94b`). It was `qemu_clock_get_ns` overflowing in a
-   signed 64-bit product every 922.3 s of host uptime; the reading jumped backward, no vblank pulse
-   was emitted, and the ADX worker threads blocked forever. Field-confirmed across a wrap by
-   `20261008-043848-133-title009-clockfix-1800`. **Standing rule from this: classify every archived
-   run by whether `[start, start + duration]` contains a wrap instant before comparing it with
-   another run** (`logs/workers/title009/orch/wrap_in_window.py` computes the schedule;
-   `vsync_death.py` gives the per-run worker-liveness discriminator). Runs in the archive that
-   straddled a wrap took a different guest path and are not comparable on the merits.
+0. **A HOST CLOCK OVERFLOW IS FIXED, BUT IT IS NOT THE CAUSE OF THE `Now Loading` HOLD — do not
+   re-investigate the hold as a clock problem** (TR §24.2, L53). The overflow is real (the unsigned
+   product wrap at **1844.674 s** of host uptime makes the consumer's reading jump backward and
+   stops vblank delivery) and the fix is correct and mutation-validated. **The causal claim was
+   falsified by Turn Review** and is withdrawn: 6 wrapped runs kept their workers, 7 unwrapped runs
+   lost them, and run 507's workers stop 9.6 s BEFORE its wrap. **The open blocker is therefore the
+   ADX worker-thread death itself** — start from the unwrapped deaths (`long3d`, `units`,
+   `blacktrace`, `trace-noadmit`, `admitted39`, `title005-admit3`), which share the symptom with no
+   wrap to blame. **A note, not a rule:** an archived run whose window contains a wrap instant did have its
+   clock reading step, so it is worth knowing which runs those are (`wrap_in_window.py` computes
+   the schedule; `vsync_death.py` is the per-run worker-liveness discriminator). That is a fact
+   about the run, not a reason to exclude it: the earlier claim that wrapped runs took a
+   different guest path is **not** supported, since six wrapped runs behaved like unwrapped ones.
 
-1. **NEXT BLOCKER: the title backdrop is DRAWN but NOT PRESENTED** (TR §24.3). On the fixed binary
+0b. **First measurement for the reopened blocker: vblank delivery is ~30-80x below nominal**
+   (TR §24.2). `clockfix-1800` exported `vblank_pulses = 1337` over ~1780 s (0.75 Hz) and
+   `035729-cap1024` 1104 over 904 s (1.23 Hz), against a model nominal of at least 40 Hz.
+   `nv2a_vblank_advance` re-arms **without pulsing** when the service thread wakes four or more
+   frames late, and that thread shares `g_mmio_owner_lock` with the MMIO/walk path, so lock
+   starvation is a candidate — INFERRED, not tested. **Do the offline step first:** compare the 16
+   worker-death times against the heavy-3D onset (the first `[GPU]` report carrying the triangle
+   step). **Then instrument** `vblank_rearm_late`, `vblank_max_gap_ns` and the owner-lock max hold.
+   **Falsifier:** if surviving and dying runs show the same maximum pulse gap, lock starvation is
+   not the cause either.
+
+1. **NEXT BLOCKER: a city scene is DRAWN but NOT PRESENTED** (TR §24.3). On the fixed binary
    the draw surface `0x80084000` holds a full 3D city (towers, clouds, the green elevated highway —
    `logs/workers/title009/clockfix/0x80084000.png`), matching the xemu reference's content at t=60 s,
    but hashing the three surfaces shows `0x80084000` is **not** among the published `[FBPRESENT]`
@@ -567,7 +578,7 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
      `0x000C3408`), which `check-hidden-entries.py --show-all` named. **Both EXERCISED**, each with a
      clean ABI-verified return; the stop chain advanced exactly one address per repair.
    The preservation baseline and provenance manifest were refreshed for each (they exist to make this
-   kind of regeneration auditable). Game CTest 45/45 after each.
+   kind of regeneration auditable). Game CTest 47/47 after each.
 5. **The 25-method class is ADMITTED** from a genuine runtime witness (run
    `20261008-001451-422-title008-witness-0298`, 25 distinct `admit-unknown` lines; NV097 482 → 507,
    +25, zero removals). It was needed because run `20261007-235846-887-title008-c3410-fixed`
