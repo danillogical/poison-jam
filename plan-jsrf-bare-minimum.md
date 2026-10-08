@@ -521,11 +521,18 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
    `035729-cap1024` 1104 over 904 s (1.23 Hz), against a model nominal of at least 40 Hz.
    `nv2a_vblank_advance` re-arms **without pulsing** when the service thread wakes four or more
    frames late, and that thread shares `g_mmio_owner_lock` with the MMIO/walk path, so lock
-   starvation is a candidate — INFERRED, not tested. **Do the offline step first:** compare the 16
-   worker-death times against the heavy-3D onset (the first `[GPU]` report carrying the triangle
-   step). **Then instrument** `vblank_rearm_late`, `vblank_max_gap_ns` and the owner-lock max hold.
-   **Falsifier:** if surviving and dying runs show the same maximum pulse gap, lock starvation is
-   not the cause either.
+   starvation is a candidate — INFERRED, not tested. **The offline step is DONE and it is a NULL result** — do not repeat it as a formality.
+   `logs/workers/title009/orch/death_vs_onset.py` compared every run's worker-death time against the
+   heavy-3D onset (the first `[GPU]` report where the per-report triangle count steps up by an order
+   of magnitude). Of the **10 runs with an early worker death**, **6 never reach a 3D onset at all**
+   and die at 30-423 s; of the 4 that do, **3 die 638 s, 588 s and 421 s BEFORE it** and 1 dies 42 s
+   after. So the deaths do **not** cluster at the phase change. In run 507 the workers are already
+   dead at t=284 while the main thread does not open `title.adx` until t=457 — **the deaths precede
+   both the 3D onset and the load**, i.e. they happen while the guest is still in the logo/loading
+   phase, earlier in the causal chain than either candidate so far.
+   **Next: instrument** `vblank_rearm_late`, `vblank_max_gap_ns` and the owner-lock max hold, and
+   test the pulse-gap falsifier: **if surviving and dying runs show the same maximum pulse gap,
+   lock starvation is not the cause either.**
 
 1. **NEXT BLOCKER: a city scene is DRAWN but NOT PRESENTED** (TR §24.3). On the fixed binary
    the draw surface `0x80084000` holds a full 3D city (towers, clouds, the green elevated highway —
