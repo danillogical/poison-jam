@@ -13,9 +13,9 @@
   "src/recomp/gen/recomp_stubs_recovery.c": "0349cd04cb9b786710d8869cad4f5018ee4f0a947d6e3322ea18b56ec18fb62c",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-  "src/recomp/recovered/recovered.c": "e65511043e00a637d5c7509492f5486d5000ebc6ac33f32c0854be3536edeea6",
+  "src/recomp/recovered/recovered.c": "d0796060f885efea5d75bb5298e17842f774dcb2833156dc0cfae45bb93626f3",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "84d07e77823532b35a45c94aaceef31453db133a7d803cb5ee74e26e90f871c0",
+  "src/recomp/recovered/recovered_11c1_test.c": "955b4afd3dda47080b0254118504df4cd32fbc5d4b46fdca20159c163075cbb5",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -485,6 +485,14 @@
     "src/recomp/recovered/recovered_11c1_test.c"
    ],
    "reason": "Stop 27 confirmed and stop 28 recovered. Run 20261006-024003-212-f13-exercise-stop27 (exploratory, 350 s, unhandled_exception, 560 ABI-verified returns -- up from 556 -- presents frozen at 888 with the disclaimer hash 5bdaea576b8509f5 unchanged) logged `[RECOVERED] 0x00096B60 returned; ABI verified`, the first run ever to execute the address recovered as stop 27, and then stopped on `[ICALL] Failed to resolve VA 0x00081860`. That address sits in the 13-byte gap immediately after 0x00080BD0's corrected end 0x00081853, and the gap is THIRTEEN NOP BYTES -- an alignment boundary, independent evidence that 0x81860 is a real start. Two manifest entries tail-jump to it (0x00082770 and 0x00082790 both end `jmp 0x81860`), a second independent source. Recovered as [0x00081860, 0x0008274B) with stack_args 4: a fully enumerated 927-instruction walk with no truncated decode, no fall-off, and FIVE exits, ALL of them `ret 4`, with at least one at DEPTH 0; the frame `sub esp,0xe8` plus four pushes balances against the matching epilogues. The regenerated body is 1494 lines with 5 returns and ZERO fatal trap stubs. recovered.c 3160 -> 3161 functions. stack-depth 1981 PROVED / 1113 UNKNOWN / 67 SUSPICIOUS, findings unchanged."
+  },
+  {
+   "date": "2026-10-07",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "Recovered 0x00159330, the function the title run reaches only by an indirect call. It had no analysis-database entry at all -- no direct call site put it there -- so the run logged `[ICALL] Failed to resolve VA 0x00159330` and aborted with the fatal 0xE0424943 after ~624 s (run 20261007-122836-322-title008-witness-1A30-long; the same failure ended 20261007-113354-706-title008-trace-admit). The address is a complete function, not an internal label: 0x00159321-0x0015932F is NOP padding, 0x00159330 begins a clean prologue (push ecx; push esi; mov esi,[esp+0xC]), the body runs to 0x00159416 `ret 0xc`, and 0x00159419-0x0015941F is further NOP padding before the next function at 0x00159420. Added to config/recovered-functions.json with stack_args 12 -- the epilogue returns 12 bytes of arguments, which check-stack-depth.py caught as DEFECT/STACK_ARGS when it was omitted. No other generated file changed."
   }
  ]
 }

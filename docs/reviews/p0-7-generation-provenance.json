@@ -15,29 +15,29 @@
   "src/recomp/gen/recomp_stubs_recovery.c": "0349cd04cb9b786710d8869cad4f5018ee4f0a947d6e3322ea18b56ec18fb62c",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "4bdc2f4b998b4cb9c9eab20a5f3ed8b9436db77ce5a43c4d225478c0607275c8",
-  "src/recomp/recovered/recovered.c": "e65511043e00a637d5c7509492f5486d5000ebc6ac33f32c0854be3536edeea6",
+  "src/recomp/recovered/recovered.c": "d0796060f885efea5d75bb5298e17842f774dcb2833156dc0cfae45bb93626f3",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "84d07e77823532b35a45c94aaceef31453db133a7d803cb5ee74e26e90f871c0",
+  "src/recomp/recovered/recovered_11c1_test.c": "955b4afd3dda47080b0254118504df4cd32fbc5d4b46fdca20159c163075cbb5",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
  "generators": {
   "project": {
    "dirty": true,
-   "revision": "79f9f8f90a457e1f935cb18e37998be22878bc21",
+   "revision": "827b5379984c9174d1ddc159807f062f03334584",
    "state": "MEASURED",
-   "status_sha256": "fd4422947ba609d0f24a869ac7c08ec65780c3f6fb162c67521284f712498d2a"
+   "status_sha256": "6d2358f2391816ccc22c84040c7645ef546fd76af0c559c373bf003577ec798d"
   },
   "scripts/recover-functions.py": "c951fe5ed787253bd523d16502a231772197043b84a3b20e4c7b680b55c03847",
   "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
   "toolkit": {
    "dirty": false,
-   "revision": "2cee91466d6725e1bc440a8d182d42d88d49efe5",
+   "revision": "6d4c16e0fa491662b803207e2add3fdc2b43d4b0",
    "state": "MEASURED",
    "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "tools/recomp/lifter.py": "fc202d8bec0842e8c02a092664e4b185e2c96744ecc9994984814df8fe499ab7",
-  "tools/recomp/translator.py": "c76c9525d163e194aaba9e4ce0aafd94d10d35a7571a3f61e678a9cc4b2103c7"
+  "tools/recomp/translator.py": "d51782a883f9a3b36be1d82ac7cae3a01dbbaf9c065b3e2f9b0e9a6301261122"
  },
  "inputs": {
   "config/boundary-fixes.json": {
@@ -46,14 +46,14 @@
    "sha256": "3479669a44e616d8ccd5215cd71722d4deb42b74f97338606a02afba94e586f0"
   },
   "config/manual-functions.json": {
-   "bytes": 104615,
+   "bytes": 104648,
    "present": true,
-   "sha256": "564fb288327b2fcf2efcab3b4e31d5173a72b41c4776b1c7327a8f6fc52d9d93"
+   "sha256": "5538e0c95b081935ef83d587d6a22dd3b8219e807bdc5c651341b6a4ba7bbc4f"
   },
   "config/recovered-functions.json": {
-   "bytes": 3076721,
+   "bytes": 3096636,
    "present": true,
-   "sha256": "261977dc29585614e712f24a02b41e0003d7e214bd3d0562b04019b2eab04b34"
+   "sha256": "1d1a5b88bdc4ad85a5b77ec49e82b6e5d7dcd52273f19dc948eb7e49d7b35680"
   },
   "config/recovery-unresolved.json": {
    "bytes": 4625,
@@ -91,9 +91,9 @@
    "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
   },
   "tools/disasm/output/functions.recovered.json": {
-   "bytes": 6322516,
+   "bytes": 6323887,
    "present": true,
-   "sha256": "d2feb958ce4fee7e75db7b4266c2950a541d2e5bad6a2809e9aabfbd23537589"
+   "sha256": "f78e9cd41f1e17ee95eaf772f25c824089d8ca2e2ee27372d944207a64da9c45"
   }
  },
  "known_unknowns": [],
@@ -165,8 +165,8 @@
    },
    "src/recomp/recovered/recovered.c": {
     "markers": {
-     "JSRF_ABI_CONTINUE": 9483,
-     "RECOMP_ABI_CALL": 10898,
+     "JSRF_ABI_CONTINUE": 9486,
+     "RECOMP_ABI_CALL": 10900,
      "RECOMP_GENERATED_CODE": 1,
      "g_seh_ebp": 5735
     },
@@ -174,8 +174,8 @@
    }
   },
   "totals": {
-   "JSRF_ABI_CONTINUE": 9483,
-   "RECOMP_ABI_CALL": 10906,
+   "JSRF_ABI_CONTINUE": 9486,
+   "RECOMP_ABI_CALL": 10908,
    "RECOMP_GENERATED_CODE": 5,
    "g_seh_ebp": 5741
   }

@@ -399,11 +399,27 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 3. **The 29-method class is CLOSED** — admitted from a genuine runtime witness (`0580-05AC`,
    `06C0-06FC`, `1964`; +29, zero removals, mechanically verified per class). Do not re-admit, and do
    not take any of them from a decode.
-4. **Recover `0x00159330`** — the fatal `[ICALL]` (`0xE0424943`) that now ends runs: absent from
-   `recomp_dispatch.c`, NOP padding then a clean prologue, i.e. an omitted function reached only
-   indirectly, so route it through recovery/relift. The 1024-packet `budget_exhausted` that
-   **recovered** is a pacing cost; track its count and revisit L40's "the 1024-packet cap stays a stop"
-   only if it starts recurring every kick.
+4. **`0x00159330` is RECOVERED** — the fatal `[ICALL]` (`0xE0424943`) that ended runs. It had **no
+   analysis-database entry at all**, because it is reached **only by an indirect call**, so no direct
+   call site ever put it there. The address is a complete function, not an internal label:
+   `0x159321-0x15932F` is NOP padding, `0x159330` begins a clean prologue (`push ecx; push esi;
+   mov esi,[esp+0xC]`), the body runs to `0x159416 ret 0xc`, and `0x159419-0x15941F` is further NOP
+   padding before the next function at `0x159420`. Added to `config/recovered-functions.json` with
+   **`stack_args: 12`** — `check-stack-depth.py` caught the omission as `DEFECT/STACK_ARGS`, which is
+   the gate working as intended. Stop 29 in `config/stop-chain.json`; the preservation baseline and
+   provenance manifest were refreshed (they exist to make exactly this kind of regeneration
+   auditable). Game CTest 45/45 after it.
+   **A run now completes without the failure but does NOT exercise the address:** run
+   `20261007-200329-265-title008-recovered-159330` (900 s, table at 482) reached the **full 900 s**,
+   presents **2808**, **1024 distinct** hashes, with **zero** `[ICALL] Failed`, `[EXCEPTION]` and
+   `[PFIFO] reject` lines — where the previous branch died at ~624 s. But
+   `scripts/check-run-exercised.py` reports `0x00159330` **NOT exercised**, so that run takes a path
+   that never reaches it and proves nothing about the repair; the stop-chain row stays `REPAIRED` with
+   no `repair_commit`. At the dump all three surfaces are a flat **"Now Loading"** screen
+   (`66e8421869c27824` / `b6c0b88aa933bc64`) — a real game UI state, further than any previous run on
+   this branch, but **not** the title and **not** M15.
+   The 1024-packet `budget_exhausted` that **recovered** is a pacing cost; track its count and revisit
+   L40's "the 1024-packet cap stays a stop" only if it starts recurring every kick.
 5. **Correct the two eliminated premises so they are not re-run.** The `sub_0019E438` "spin" is ordinary
    DirectSound lock traffic (all 16356 calls return 1; enter/leave balanced 24702/24702). The pinned
    composites from `RECOMP_FB_VA=0x8011C000` are **accumulation artifacts, not a title**, and pinned vs

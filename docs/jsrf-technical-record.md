@@ -3749,5 +3749,77 @@ changes is the *critical path*: the black was not a composite or selection defec
 the caveat that the sampling/UV/blend question is still not positively established, only made moot for
 this symptom.
 
-**The new stop is `0x1A30`**, unchanged by the fix and still `NOT EXERCISED` as a witness
-(`[PFIFO] reject diag=unsupported_method method=1A30 … successes=3557`).
+**The new stop is `0x1A30`**, unchanged by the fix and is **no longer the stop**: the 38-method class that included it was admitted from the
+runtime witness in §23.7, and a run with the table at 482 methods reaches the fatal `[ICALL]` below
+instead of any method rejection.
+
+## §23.9 `0x00159330`: a function reachable only by an indirect call, and the recovery
+
+**The failure.** With the method table at 482 entries, the title run no longer stops on any
+`unsupported_method`; it dies on
+
+```
+[ICALL] Failed to resolve VA 0x00159330 (thread calls: 754321, tid=38536, ms=253925453)
+[EXCEPTION] tid=38536 code=0xE0424943 RIP=0x7FFAA6E241CA
+```
+
+which is fatal by default. First seen at the end of `20261007-113354-706-title008-trace-admit` and
+reproduced in `20261007-122836-322-title008-witness-1A30-long` (624 s, `unhandled_exception`).
+
+**Why it was missing, and why that is a different class from every earlier stop.** Every earlier
+stop-chain entry was a *mis-sized or swallowed span*: the address existed in the analysis database but
+with a wrong extent. `0x00159330` has **no database entry at all**. The reason is stated by the
+database itself: no function in `tools/disasm/output/functions.json` lists `0x00159330` in its
+`calls_to`, i.e. **nothing calls it directly** — it is reached only through an indirect call, so no
+call-target detection ever recorded it and no decode pass ever lifted it.
+
+**It is a complete function, not an internal label.** The original XBE bytes settle that:
+
+```
+0015931E ret      4
+00159321 nop ... 0015932F nop        (15 bytes of padding)
+00159330 push     ecx                <- clean prologue
+00159331 push     esi
+00159332 mov      esi, dword ptr [esp + 0xc]
+...
+00159416 ret      0xc
+00159419 nop ... 0015941F nop        (7 bytes of padding)
+00159420 push     esi                <- the next function, sub_00159420
+```
+
+So the extent is `[0x00159330, 0x00159419)`.
+
+**The recovery.** Added to `config/recovered-functions.json` with **`stack_args: 12`** — the epilogue
+is `ret 0xc`, so the function pops 12 bytes of arguments. `check-stack-depth.py` reported
+`DEFECT/STACK_ARGS: ret 0xc at 0x00159416 is reached at depth 0, so stack_args must be 12, not 0` when
+that field was first omitted, **which is the gate doing its job** rather than a defect that reached a
+run. Regeneration recovered 3162 functions; `sub_00159330` is dispatched at
+`src/recomp/recovered/recovered.c` and carries the standard ABI check (`esp` expected `+16`).
+
+**Two reviewed records had to move with it, by design.** `docs/reviews/p0-full-generated-baseline.json`
+gained an `updates` entry (the 17 protected generated files are hashed there, and `recovered.c` and
+the recovered-test fixture legitimately changed), and `docs/reviews/p0-7-generation-provenance.json`
+was rewritten with `--write` from measured inputs. Both gates exist precisely so a regeneration of this
+kind cannot pass silently, and both were re-run green afterwards. `config/stop-chain.json` gained
+**stop 29** for this address, with both failing runs recorded under the `discovered` role (the gate
+rejects invented roles, which is why the entry uses the one the checker defines). Game CTest 45/45
+after the change.
+
+**Status: REPAIRED, and a run now completes without it — but the run did NOT exercise it.** Run
+`20261007-200329-265-title008-recovered-159330` (900 s, no admit switch, table at 482 methods,
+`diagnostic_deadline`, mapping gate `matches 1 / content-mismatch 0`) ran the **full 900 s** to
+presents **2808** with **1024 distinct** `[FBPRESENT]` hashes, **zero** `[ICALL] Failed` lines, **zero**
+`[EXCEPTION]` lines and **zero** `[PFIFO] reject` lines. That is a real step: the previous runs on this
+branch died at ~624 s on `0x00159330`, and this one does not. **But
+`scripts/check-run-exercised.py` reports `0x00159330` was NOT exercised** (454 other recovered entries
+returned with a clean ABI check, not this one), so this run **takes a path that never reaches the
+address** and proves nothing about the recovery itself. The stop-chain row therefore keeps
+`state: REPAIRED` and no `repair_commit`: exercise still needs a run that actually reaches
+`0x00159330`.
+
+**What that run does show.** At the dump instant all three surfaces are a flat **"Now Loading"** screen
+(`0x80084000` and `0x8011C000` = `66e8421869c27824`, `0x801B2000` = `b6c0b88aa933bc64`; 100 %
+non-black, 5 colours each). So the recomp now reaches and **holds a real game UI state** — the loading
+screen — rather than black or the disclaimer, which is further than any previous run on this branch.
+It is **not** the title screen and **not** M15. Preserved:
+`logs/workers/title008/surfR/0x80084000.png`.
