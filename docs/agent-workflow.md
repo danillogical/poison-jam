@@ -24,7 +24,7 @@ the DeepSeek Harness (DSH).
 | **Turn Planner** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: high` | `claude/claude-opus-5-5` @ `high` |
 | **Workers** | `provider: workbuddy-ai`, `model: deepseek-v4.1-flash`, `reasoning_effort: high` | `workbuddy-ai/deepseek-v4.1-flash` @ `high` |
 | **Persistent Advisor** | `provider: claude`, `model: claude-opus-5-5`, `reasoning_effort: xhigh` | `claude/claude-opus-5-5` @ `xhigh` (one continuable child per session) |
-| **Turn Reviewer** | `provider: codex`, `model: gpt-6.1-sol`, `reasoning_effort: high` | `codex/gpt-6.1-sol` @ `high` (fresh child per review) |
+| **Turn Reviewer** | `provider: workbuddy-ai`, `model: deepseek-v4.1-flash`, `reasoning_effort: max` | `workbuddy-ai/deepseek-v4.1-flash` @ `max` (fresh child per review) |
 
 Spawn with all three parameters exactly as the row gives them. The session allow-list in
 the active DSH profile must contain every spawned route above.

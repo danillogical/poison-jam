@@ -148,8 +148,43 @@ SUBMIT_STATE_BASE_FIELDS = ('generation', 'diag', 'method', 'subchannel', 'param
 SUBMIT_STATE_BUDGET_FIELDS = ('budget_stops', 'budget_local_pc', 'budget_words',
                               'budget_packets', 'budget_count', 'budget_method',
                               'budget_ret', 'budget_in_param', 'budget_at_packet_limit')
-SUBMIT_STATE_FIELDS = SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS
+# Unit accounting, appended after the budget transcript so an older reader stops
+# before it rather than misreading it as a budget field.
+SUBMIT_STATE_UNIT_FIELDS = ('units', 'units_total', 'loop_bound')
+# The continuation audit, appended after the unit fields for the same reason.
+# `budget_resume_matched` / `budget_resume_mismatched` are the load-bearing
+# pair: benign chunking resumes at the committed boundary every time, so
+# mismatched stays zero. `walk_packet_hist` is the log2 histogram of packets
+# per walk -- the measurement that says whether the 1024 cap is near-binding
+# at all, as opposed to merely present.
+SUBMIT_STATE_CONTINUATION_FIELDS = (
+    'budget_events_total', 'budget_resume_matched', 'budget_resume_mismatched',
+    'budget_rewalked_words', 'budget_rewalked_packets', 'walk_serial',
+    'walk_retry_count', 'walk_packet_max', 'walk_words_max',
+    'walk_packet_hist0', 'walk_packet_hist1', 'walk_packet_hist2',
+    'walk_packet_hist3', 'walk_packet_hist4', 'walk_packet_hist5',
+    'walk_packet_hist6', 'walk_packet_hist7', 'walk_packet_hist8',
+    'walk_packet_hist9', 'walk_packet_hist10', 'walk_packet_hist11',
+    'budget_last_seq', 'budget_last_start_get', 'budget_last_committed_get',
+    'budget_last_put', 'budget_last_local_pc', 'budget_last_tail_words',
+    'budget_last_units', 'budget_last_resume_start_get',
+    'budget_last_resume_end_get', 'budget_last_resume_ok', 'budget_last_resumed')
+# The vblank delivery audit, appended after the continuation fields.
+SUBMIT_STATE_VBLANK_FIELDS = (
+    'vblank_pulses', 'vblank_already_pending', 'vblank_guest_acks',
+    'vblank_enable_writes', 'vblank_enable_last', 'vblank_enable_cleared',
+    'vblank_irq_asserted', 'vblank_irq_deasserted', 'vblank_last_ack_value',
+    'vblank_pending_last')
+SUBMIT_STATE_FIELDS = (SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS
+                       + SUBMIT_STATE_UNIT_FIELDS + SUBMIT_STATE_CONTINUATION_FIELDS
+                       + SUBMIT_STATE_VBLANK_FIELDS)
 SUBMIT_STATE_BASE_SIZE = 4 * len(SUBMIT_STATE_BASE_FIELDS)
+SUBMIT_STATE_BUDGET_SIZE = 4 * len(SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS)
+SUBMIT_STATE_UNIT_SIZE = 4 * len(SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS
+                                 + SUBMIT_STATE_UNIT_FIELDS)
+SUBMIT_STATE_CONTINUATION_SIZE = 4 * len(
+    SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS + SUBMIT_STATE_UNIT_FIELDS
+    + SUBMIT_STATE_CONTINUATION_FIELDS)
 SUBMIT_STATE_SIZE = 4 * len(SUBMIT_STATE_FIELDS)
 
 
@@ -167,7 +202,18 @@ def decode_submit_state(raw):
     have = len(raw) // 4
     fields = SUBMIT_STATE_FIELDS[:have]
     state = dict(zip(fields, struct.unpack_from('<%dI' % len(fields), raw)))
-    state['has_budget_transcript'] = have >= len(SUBMIT_STATE_FIELDS)
+    state['has_budget_transcript'] = have >= len(SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS)
+    state['has_continuation_audit'] = have >= len(
+        SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS + SUBMIT_STATE_UNIT_FIELDS
+        + SUBMIT_STATE_CONTINUATION_FIELDS)
+    state['has_vblank_audit'] = have >= len(SUBMIT_STATE_FIELDS)
+    # The histogram arrives as flat fields (the struct holds an array, but the
+    # decoder's field-list shape is flat); reassemble it so a reader does not
+    # have to know how many bins there are.
+    bins = [state.pop(f'walk_packet_hist{i}') for i in range(12)
+            if f'walk_packet_hist{i}' in state]
+    if bins:
+        state['walk_packet_hist'] = bins
     state['diag_name'] = SUBMIT_DIAGNOSTIC_NAMES.get(state['diag'], 'unknown')
     state['torn'] = bool(state['generation'] & 1)   # odd while a walk is writing it
     return state
@@ -218,6 +264,12 @@ def submit_state_size_for_archive(declared, warnings):
         return SUBMIT_STATE_BASE_SIZE
     if declared >= SUBMIT_STATE_SIZE:
         return SUBMIT_STATE_SIZE
+    if declared >= SUBMIT_STATE_CONTINUATION_SIZE:
+        return SUBMIT_STATE_CONTINUATION_SIZE
+    if declared >= SUBMIT_STATE_UNIT_SIZE:
+        return SUBMIT_STATE_UNIT_SIZE
+    if declared >= SUBMIT_STATE_BUDGET_SIZE:
+        return SUBMIT_STATE_BUDGET_SIZE
     if declared >= SUBMIT_STATE_BASE_SIZE:
         return SUBMIT_STATE_BASE_SIZE
     warnings.append(f'Submit state is {declared} bytes in this archive, smaller than '
@@ -353,6 +405,52 @@ def markdown(report):
                       f"words {state.get('budget_words')}, packets {state.get('budget_packets')}, "
                       f"straddling packet method {hx(state.get('budget_method', 0))} "
                       f"count {state.get('budget_count')}, ret {hx(state.get('budget_ret', 0))}."]
+        # The continuation audit. This is the part the first-stop latch cannot
+        # provide: whether the SAME submission resumed at the boundary the last
+        # committed unit published. `mismatched` staying zero is what makes
+        # "benign chunking" a measurement rather than an assumption.
+        if state.get('has_continuation_audit'):
+            hist = state.get('walk_packet_hist') or []
+            top = [i for i, n in enumerate(hist) if n]
+            lines += [f"Budget continuation: {state.get('budget_events_total', 0)} stop(s); "
+                      f"resumes matched {state.get('budget_resume_matched', 0)}, "
+                      f"**mismatched {state.get('budget_resume_mismatched', 0)}**; "
+                      f"re-walked tail {state.get('budget_rewalked_words', 0)} words; "
+                      f"walks {state.get('walk_serial', 0)} "
+                      f"({state.get('walk_retry_count', 0)} stalled retries)."]
+            lines += [f"Packets per walk: max {state.get('walk_packet_max', 0)}, "
+                      f"words max {state.get('walk_words_max', 0)}; "
+                      f"occupied log2 bins {top if top else 'none'} "
+                      f"(bin i holds walks with 2^i..2^(i+1)-1 packets)."]
+            if state.get('budget_last_seq'):
+                lines += [f"Last stop #{state['budget_last_seq']}: start_get "
+                          f"{hx(state.get('budget_last_start_get', 0))}, committed_get "
+                          f"{hx(state.get('budget_last_committed_get', 0))}, put "
+                          f"{hx(state.get('budget_last_put', 0))}, local_pc "
+                          f"{hx(state.get('budget_last_local_pc', 0))}, rolled-back tail "
+                          f"{state.get('budget_last_tail_words', 0)} words, "
+                          f"{state.get('budget_last_units', 0)} unit(s) committed; "
+                          f"resume start {hx(state.get('budget_last_resume_start_get', 0))} "
+                          f"-> end {hx(state.get('budget_last_resume_end_get', 0))}, "
+                          f"ok {state.get('budget_last_resume_ok')}, "
+                          f"resumed {state.get('budget_last_resumed')}."]
+        # The vblank delivery audit. This is the measurement the IRQ delivery
+        # log cannot provide (it prints only the first three deliveries), and
+        # it separates "the display stopped pulsing" from "the guest stopped
+        # acknowledging" from "the line was left asserted".
+        if state.get('has_vblank_audit'):
+            pulses = state.get('vblank_pulses', 0)
+            acks = state.get('vblank_guest_acks', 0)
+            stale = state.get('vblank_already_pending', 0)
+            lines += [f"Vblank delivery: {pulses} pulse(s), {acks} guest "
+                      f"acknowledgement(s) (W1C), {stale} pulse(s) that found the bit "
+                      f"still set; enable writes {state.get('vblank_enable_writes', 0)} "
+                      f"(last {hx(state.get('vblank_enable_last', 0))}, "
+                      f"{state.get('vblank_enable_cleared', 0)} cleared VBLANK); "
+                      f"IRQ line transitions {state.get('vblank_irq_asserted', 0)} "
+                      f"up / {state.get('vblank_irq_deasserted', 0)} down; "
+                      f"last ack {hx(state.get('vblank_last_ack_value', 0))}, "
+                      f"pending left {hx(state.get('vblank_pending_last', 0))}."]
     lines += ['',report['queue'].get('detail',''),'','## Methods in the pending stream the table lacks','']
     missing = report['missing_methods']
     if missing is None: lines.append('Method table unavailable; unsupported methods were not checked.')

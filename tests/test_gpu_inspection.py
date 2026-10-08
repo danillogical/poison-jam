@@ -301,13 +301,28 @@ class SubmitStateDecodeTests(unittest.TestCase):
         self.assertEqual([state[k] for k in self.BUDGET_FIELDS],
                          [1,0x4D4F4,4096,233,4,0x1760,0,1,0])
     def test_field_count_matches_the_size_constants(self):
-        """The sizes are derived from the field tuples, so they cannot drift."""
+        """The sizes are derived from the field tuples, so they cannot drift.
+
+        The struct has grown in stages (base -> budget transcript -> unit
+        accounting -> continuation audit -> vblank audit) and each stage is a
+        separately declared tier, so the check is that the tiers are a
+        partition of the full field list: appending a field to the full tuple
+        without adding it to a tier, or vice versa, is what this catches.
+        """
         self.assertEqual(jsrf_gpu.SUBMIT_STATE_BASE_SIZE,
                          4*len(jsrf_gpu.SUBMIT_STATE_BASE_FIELDS))
         self.assertEqual(jsrf_gpu.SUBMIT_STATE_SIZE,
                          4*len(jsrf_gpu.SUBMIT_STATE_FIELDS))
-        self.assertEqual(len(jsrf_gpu.SUBMIT_STATE_FIELDS),
-                         len(jsrf_gpu.SUBMIT_STATE_BASE_FIELDS)+len(self.BUDGET_FIELDS))
+        tiers = (jsrf_gpu.SUBMIT_STATE_BASE_FIELDS
+                 + jsrf_gpu.SUBMIT_STATE_BUDGET_FIELDS
+                 + jsrf_gpu.SUBMIT_STATE_UNIT_FIELDS
+                 + jsrf_gpu.SUBMIT_STATE_CONTINUATION_FIELDS
+                 + jsrf_gpu.SUBMIT_STATE_VBLANK_FIELDS)
+        self.assertEqual(list(tiers), list(jsrf_gpu.SUBMIT_STATE_FIELDS),
+                         'the tiers must concatenate to the full field list, '
+                         'in struct order')
+        self.assertEqual(len(tiers), len(set(tiers)),
+                         'a field appears in two tiers')
 
 
 class SubmitStateSizeTests(unittest.TestCase):
@@ -357,9 +372,21 @@ class SubmitStateSizeTests(unittest.TestCase):
         self.assertEqual(jsrf_gpu.submit_state_size_for_archive(64,w),
                          jsrf_gpu.SUBMIT_STATE_BASE_SIZE)
         self.assertEqual(w,[])
+        # A 96-byte archive is the UNIT-accounting layout (base 48 + budget
+        # transcript 36 + units 12). It must yield that tier, not the current
+        # full size: reading the newer continuation/vblank fields out of a
+        # struct that predates them would decode whatever globals follow as
+        # audit data -- the exact regression this decision exists to prevent.
         w=[]
         self.assertEqual(jsrf_gpu.submit_state_size_for_archive(96,w),
-                         jsrf_gpu.SUBMIT_STATE_SIZE)
+                         jsrf_gpu.SUBMIT_STATE_UNIT_SIZE)
+        self.assertEqual(jsrf_gpu.SUBMIT_STATE_UNIT_SIZE, 96)
+        self.assertEqual(w,[])
+        # And the current layout yields the full size.
+        w=[]
+        self.assertEqual(
+            jsrf_gpu.submit_state_size_for_archive(jsrf_gpu.SUBMIT_STATE_SIZE, w),
+            jsrf_gpu.SUBMIT_STATE_SIZE)
         self.assertEqual(w,[])
     def test_unstated_size_falls_back_to_the_base_layout(self):
         w=[]

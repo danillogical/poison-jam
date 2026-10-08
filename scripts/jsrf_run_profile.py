@@ -48,6 +48,11 @@ NV2A_ADMIT_UNKNOWN = 'RECOMP_NV2A_ADMIT_UNKNOWN'
 FENCE_MIRROR_LIVE = 'RECOMP_FENCE_MIRROR_LIVE'
 WORKERS = 'RECOMP_WORKERS'
 GP_INPUT_PERTURB = 'RECOMP_APU_GP_INPUT_PERTURB'
+# DIAGNOSTIC ONLY. The 1024-packet cap is deliberately a STOP (ledger L40), so
+# this override exists to make the cap an EXPERIMENTAL VARIABLE: varying it on
+# one binary is the controlled test of benign chunking vs starvation. Any value
+# changes the walk's rejection behaviour, so presence is exploratory.
+NV2A_PACKET_CAP = 'RECOMP_NV2A_PACKET_CAP'
 
 # Retired semantic overrides: names that once changed guest-visible behavior,
 # whose implementation was deliberately deleted, and which active policy still
@@ -439,6 +444,10 @@ def classify_settings(entries: Any) -> dict[str, Any]:
         (FENCE_MIRROR_LIVE, 'mirrors the submitted fence live, without waiting for the walk to consume it, when present (ledger L17)'),
         (GP_INPUT_PERTURB, 'substitutes the GP DSP mixbuffer and peripheral inputs when present'),
         (WORKERS, 'changes the worker model (inline workers may deadlock) when present'),
+        # Diagnostic-only cap override: it changes which submissions the walk
+        # rejects, so a run with it set is measuring the cap, not the title.
+        # The 1024-packet default stays a STOP (ledger L40).
+        (NV2A_PACKET_CAP, 'changes the submission walk packet cap away from its 1024 default when present (diagnostic; ledger L40)'),
     ):
         if name.casefold() in values:
             active.append(f'{name} {reason}')

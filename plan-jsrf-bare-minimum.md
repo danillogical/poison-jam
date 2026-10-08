@@ -26,7 +26,90 @@ discipline. This plan owns the objective, the milestones and what to do next.
 - **The Orchestrator runs the fast path**; the Turn Reviewer reproduces a milestone claim, with its
   ledger IDs, rather than accepting the description.
 
-## Current work (state 2026-10-07, turn title-008)
+## Current work (state 2026-10-08, turn title-009)
+
+**THE `Now Loading` HOLD WAS A HOST CLOCK OVERFLOW, AND IT IS FIXED** (TR §24.2, toolkit this turn).
+`qemu_clock_get_ns` computed `(int64_t)(QPC * 1e9 / freq)` — the product in a **signed 64-bit**
+temporary, so it overflowed once per `2^63/1e9` counts of host uptime (**922.3 s** at this host's
+10 MHz counter) and the reading jumped backward from ~`+9.2e18` to ~`-9.2e18`. `ptimer_service_thread`
+uses that as `now_ns` against a `next_vblank_ns` still near `+9.2e18`, so after the wrap **neither the
+pulse test nor the re-arm test could be true and no vblank pulse was emitted** until the clock climbed
+back (the computed wait also became ~49 days). No pulse → no PCRTC interrupt → no ISR → no DPC → no
+`KeSetEvent(0x0019D630)` → the two ADX worker threads (`0x0013B1C0`, `0x0013B230`) block forever →
+`title.adx` is opened and **never read** → the guest holds on the animated loading screen. **This was
+never a guest or GPU blocker.**
+
+**Measured, and it explains a divergence that was previously attributed to the method table.**
+Attributing every `[KERNEL] summary` block to its thread by `esp=`: run `…003812-419-title008-507`
+crossed a wrap **290 s in** and its worker threads' blocks stopped at present **1555** while the main
+thread ran to **3712**; the runs whose windows contained no wrap (`witness-0298`, both
+`title009-cap1024` controls) kept those workers alive to the end. `title.adx` is the log
+discriminator: 507 opens it with **zero** `[ADXIO]` lines; `witness-0298` logs six with `pos`
+advancing `0x19 → 0x1A0`. **So 507 vs `witness-0298` differed by run start time, not by method
+table**, and the earlier "507 has zero exhaustions ⇒ exhaustion is not causal" inference is
+**withdrawn as confounded**. The dump falsifies the competing "lost enable / disconnected vector /
+stuck acknowledge" family: `PCRTC_INTR_EN_0 = 1`, `PMC_INTR_EN_0 = 1`, vector 3 connected,
+`g_nv2a_irq_line = 0`, DPC queue empty, event unsignalled, thread exit flags 0.
+
+**The fix.** Overflow-safe `(c/f)*1e9 + (c%f)*1e9/f` in `qemu_clock_get_ns`, the same pattern fixed
+in `apu_shim.h`'s `qemu_clock_get_us`; the vblank loop additionally re-arms on a backward clock step
+and caps its vblank-accounted wait at four frames. Pinned by two tests that can fail:
+`host_clock_wrap_test` (the OLD form really does jump backward; the new form is monotonic and equals
+exact uptime; `volatile` reads defeat MSVC's 128-bit constant folding, which otherwise **hides** the
+overflow — an earlier version passed the wrong way round) and `vblank_clock_step_test` (drives
+`nv2a_vblank_advance` across a backward step: **0** pulses in 10 frames with the old rule, **9** with
+the fix). **Field-confirmed:** run `20261008-043848-133-title009-clockfix-1800` (`exe_sha256
+51a27649…`, 1800 s, timed to straddle the next wrap at t≈1535 s) opens `title.adx` at present ~2433
+and **reads it** — six `[ADXIO]` lines with `pos` advancing `0x19 → 0x1A0`, the same shape as
+`witness-0298` and exactly what 507 could not do — and keeps its worker threads alive. **Every
+archived run must now be classified by whether its window contains a wrap** before its results are
+compared with another run's.
+
+**`budget_exhausted` is Case A — benign resumable chunking — and its real defect is a zero-commit
+livelock** (TR §24.1, L54). The walk now keeps a per-stop ring and a resume audit: on the
+instrumented control `20261008-032308-212-title009-cap1024` there were **17 stops, 17 resumes that
+began exactly at the previous stop's committed boundary, and 0 that did not**. Every stop is followed
+by `[PFIFO] recovered after 1 rejections get==put` with `successes` advancing by 1; GET advances
+monotonically within each event; no `still rejecting`, `bad_target`, `loop`, `truncated` or
+`method_range` appears anywhere in the archive; `ret` is 0 at every latched stop, so the
+"`ret` lost across a rejection" hazard is **latent and unexercised**. The 12 title-phase stop
+addresses reproduce **byte-identically** across binaries and guest paths (12/12).
+
+**The cap's scope is a real defect, recorded not fixed.** `unit_words` resets per unit but `packets`
+never does, and `if (packets >= 1024)` runs **before** the yield, so a packet-dense stream reaches
+the cap having committed **zero** units; `regs[NV_PFIFO_CACHE1_DMA_GET] = pc` is inside `if (ok)`, so
+GET pins and every retry repeats the same walk. **Measured in the real guest:** the diagnostic run
+`20261008-041233-960-title009-cap128` stopped on the **first boot submission** (128 one-word packets,
+zero units committed) and the guest **never booted**. At the shipped cap the margin is **exactly
+zero** — the control reports `walk_packet_max = 1024` against a boot kick of exactly 1024 words. The
+packet term protects no array (`staged[]`/`sink[]` are word-bounded per unit, `seen[]` has its own
+guard), so it is a runaway bound, not an architectural limit. **L40's 1024-packet STOP is unchanged**
+and the new diagnostic `RECOMP_NV2A_PACKET_CAP` (L55) exists only so the question can be asked on one
+binary. The fix (per-unit yield plus a real cycle guard, versus accepting the margin) needs an L40
+amendment and is **deferred**.
+
+**What is next: executor throughput in the 3D title phase** (TR §24.3). With the clock fixed, the
+surviving run shows what lies past the loading screen: it opens and **reads** `title.adx`, then
+advances into a heavy 3D phase at roughly **one present per 24 s** (presents 2442 → 2457 over
+t = 541 → 898 s, ~1M triangles). That is where all 12 budget stops occur, and they recover. A 900 s
+run cannot reach "PLEASE PRESS START TO BEGIN" at that rate. Separately, the render composition
+loses its texture stage at the transition: the `[GPU]` batch counters step from a stable ~17–25 %
+"texcoords but no usable stage" to a steady **93.8 %** at present ~2457 (independently verified from
+the increments between cumulative reports), while the city scene the executor *can* rasterise
+(`efddce3b5bb02ab1`) is published in **none** of 188 archived runs. **That stage loss is the guest's
+own instruction, measured, not lost state:** the fixed run
+`20261008-043848-133-title009-clockfix-1800` reports **1079 of 1079 untexturable batches as `stage
+disabled by the guest`** and **zero** as `no offset` / `no dimensions` / `unusable format` / `other`,
+so the sticky stage-0 gate is honouring an explicit `SET_TEXTURE_CONTROL0` clear. The "sticky gate is
+a regression dropping the backdrop" hypothesis is therefore **falsified by a per-batch
+discriminator**. What those disabled-stage batches should draw instead stays open. **M15 is NOT
+reached.**
+
+**SUPERSEDED by the Current work section above** (turn title-009). The blocks that follow are the
+title-008 narrative, kept for provenance: the method-table progression and the indirect-call
+recoveries remain valid and are cited above, but their **causal** readings do not — in particular the
+"run 507 has zero exhaustions" inference is withdrawn, and the `Now Loading` hold is now explained by
+the host clock overflow (TR §24.2) rather than by anything in the guest.
 
 **TWO MORE ABUTTING-ALIAS RECOVERIES, BOTH NOW EXERCISED, AND THE STOP MOVED BACK TO METHOD
 ADMISSION** (TR §23.11). After `0x00159330` (§23.9) two consecutive runs died on indirect targets of

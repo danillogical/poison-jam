@@ -3975,3 +3975,184 @@ per run is the measurement to take before changing the cap.
 milestone. **M15 is not reached:** the title screen — the emblem and "PLEASE PRESS START TO BEGIN"
 over the street scene — has still not been observed, and the comparator is
 `logs/workers/title007/xemu/deliverable/`.
+
+## §24.1 `budget_exhausted` is benign resumable chunking, and its real defect is a zero-commit livelock
+
+**Classification: Case A (benign resumable chunking), with one genuine structural defect that is
+NOT the archive's behaviour.** Two independent lines of evidence, and they agree.
+
+**Every archived stop resumes at the committed boundary.** The walk now keeps a per-stop ring
+(`NV2ABudgetEvent`) recording, at the event, the walk origin, the GET its last committed unit
+published, PUT, the frontier, the units committed, the rolled-back tail and `ret`; and it compares
+the NEXT walk's start GET against that committed boundary. On the instrumented control run
+`20261008-032308-212-title009-cap1024` (900 s, `exe_sha256 50664d4e…`, the default cap):
+
+| measure | value |
+|---|---|
+| budget stops | **17** |
+| resumes that began exactly at the previous stop's committed boundary | **17** |
+| resumes that did not (the Case C signature) | **0** |
+| walks / stalled retries | 4660 / 16 |
+| words re-walked by retries | 41096 |
+
+Each stop is followed by `[PFIFO] recovered after 1 rejections get=<PUT> put=<PUT>` with `successes`
+advancing by exactly 1; GET advances monotonically **within** each event (stop GET → last committed
+unit's boundary → PUT); and there is no `still rejecting` line, no `bad_target`, no `loop`, no
+`truncated` and no `method_range` anywhere in the archive. `ret` is `0` at every latched stop, so
+the "`ret` lost across a rejection" hazard is **latent and unexercised**, not a live defect.
+
+**The stop addresses reproduce exactly across binaries and guest paths.** The 12 title-phase stops
+in the uninstrumented `20261008-001451-422-title008-witness-0298` are byte-identical, in order, to
+the first 12 stops of the instrumented control: `0x705B0, 0x428F4, 0x1BB4C, 0x70BC0, 0x49F10,
+0x23D50, 0x5920C, 0x332F0, 0x1457C, 0x69550, 0x49ED8, 0x239E8` (12/12). The event is a property of
+the submitted stream, not of a build or a path.
+
+**The cap is walk-cumulative while the word budget is per-unit, and that asymmetry permits a real
+livelock.** `unit_words` resets at each unit commit, but `packets` never does, and the check
+`if (packets >= 1024)` runs **before** the yield. For a packet-dense stream the word yield never
+fires first, so the walk reaches the cap having committed **zero** units;
+`regs[NV_PFIFO_CACHE1_DMA_GET] = pc` sits inside `if (ok)`, so GET never moves and every retry
+re-walks the identical stream to the identical stop.
+
+Measured two ways:
+
+- **In the real guest.** Run `20261008-041233-960-title009-cap128` (the cap lowered to 128 as a
+  diagnostic) stopped on the **first boot submission** — `get=0 put=0x1000`, the first 128 words
+  being 128 one-word packets — with `words=128 packets=128` and **zero** units committed. GET stayed
+  pinned at 0 through `submit #0` … `submit #7` and the guest **never booted**. So "unreachable for
+  JSRF" is false.
+- **At the shipped cap the margin is exactly zero.** The control run reports `walk_packet_max = 1024`
+  against a boot kick of `put=0x1000` = 1024 words. The loop exits at `pc == put` before the cap
+  check runs again, so a boot kick one packet longer would livelock at the default.
+
+Pinned by two tests that can fail: `test_packet_cap_can_pin_get_without_a_commit` (1025 two-word
+packets → `units=0`, `committed_get == start_get`, GET pinned across five retries,
+`budget_events_total >= 6`) and `test_budget_stop_resumes_at_committed_boundary` (1030 five-word
+packets, so a unit DOES commit: `committed_get != start_get`, GET advances, and the resume is
+audited as a MATCH).
+
+**What the packet term actually protects: nothing.** `staged[]` and `sink[]` are word-bounded per
+unit (`NV2A_SUBMIT_MAX_WORDS`), and `seen[]` has its own 512-entry guard. The packet term is a
+runaway/cycle bound, not an architectural limit; real hardware has no such counter. Its scope is
+therefore the open design question, and changing it is **deferred**: the 1024-packet default remains
+a STOP (L40), the diagnostic `RECOMP_NV2A_PACKET_CAP` exists so the question can be asked on one
+binary, and the livelock is recorded rather than papered over. A per-unit counter that still stops
+does NOT fix the livelock; the options and their masking risks are recorded in the plan.
+
+**Normalization, because raw counts are not comparable.** Of 185 archived runs, **7** contain any
+budget rejection. Anchoring on the literal `[PFIFO] reject diag=budget_exhausted` (a bare `reject`
+matches `commit_rejected=0` 840 times in one run — the trap that corrupted an earlier count):
+`witness-0298` 12, `frames-late` 2, `c3410-fixed` 2, and 1 each in `title005-admit3`,
+`trace-admit`, `witness-1A30-long`, `c2730-fixed`. Every event is `LIMIT=packets(1024)`; **none**
+is the word limit. The `[FBPRESENT]` **line** count is not the `presents=` **counter** (2614 vs
+3717 in run 507); normalize on the counter.
+
+**Withdrawn inference.** The earlier reading "run 507 has zero exhaustions, so exhaustion is not
+causal for the loading hold" is **confounded and is withdrawn**: 507 and `witness-0298` took
+different guest paths (see §24.2), so they were never a single-variable comparison. The conclusion
+that exhaustion is not the loading blocker survives, but for the different reason recorded in §24.2.
+
+## §24.2 The `Now Loading` hold was a HOST CLOCK OVERFLOW, not a guest or GPU blocker
+
+**The defect.** `qemu_clock_get_ns` (`xboxrecomp/src/nv2a/qemu_shim.h`) computed
+`(int64_t)(count.QuadPart * 1000000000LL / freq.QuadPart)`. The product is formed in a **signed
+64-bit** temporary, so it overflows once per `2^63/1e9` QPC counts — **922.3 s of host uptime** at
+this host's 10 MHz counter (1844.67 s for the full unsigned period) — and the quotient then jumps
+backward from about `+9.2e18` to about `-9.2e18`. `ptimer_service_thread` uses that value as
+`now_ns` and compares it with `next_vblank_ns`, which is still near `+9.2e18`. After the wrap
+neither `now_ns >= next_vblank_ns` nor the re-arm test `now_ns >= next_vblank_ns + 4*frame_ns` is
+true, so **no vblank pulse is emitted** until the reading climbs back. The computed wait becomes
+enormous, so the service thread also stops waking.
+
+**The chain.** No pulse → no PCRTC interrupt → no ISR → no `KeInsertQueueDpc` → the producer
+`0x193D90` never calls `KeSetEvent` on `0x0019D630` → the two ADX middleware worker threads (guest
+starts `0x0013B1C0` and `0x0013B230`, looping `call 0x18CE50` / `call 0x141E50`) block forever →
+`title.adx` is opened and **never read** → the screen holds on the animated `Now Loading` loop.
+
+**Measured, per archived run** (attributing every `[KERNEL] summary` block to its thread by the
+`esp=` field, then comparing the last present serial of the worker threads against the main
+thread's):
+
+| run | wrap instant (s into run) | worker threads' last present | main thread's last present | verdict |
+|---|---|---|---|---|
+| `…003812-419-title008-507` | **290** | 1555 | 3712 | workers died early |
+| `…032308-212-title009-cap1024` | none | 2431 | 2460 | workers live |
+| `…035729-047-title009-cap1024` | none | 2432 | 2462 | workers live |
+| `…001451-422-title008-witness-0298` | none | 2429 | 2442 | workers live |
+
+`title.adx` is the discriminator in the log: in 507 it is opened at present 2433 with **zero**
+`[ADXIO]` lines after it; in `witness-0298` the open is followed by six `[ADXIO]` lines whose `pos`
+advances `0x19 → 0x1A0` and `sec` `0x19 → 0x187`. Every archived run whose window contains a wrap
+loses those workers; every run whose window does not, keeps them.
+
+**The dump rules out the competing explanations**, so the "lost enable / disconnected vector /
+stuck acknowledgement" family is **falsified**: `PCRTC_INTR_EN_0 = 1`, `PMC_INTR_EN_0 = 1`, the
+vector is connected (`g_connected_isr[3] = 0x0019D47C`), `g_nv2a_irq_line = 0`, the DPC queue is
+empty (`g_dpc_head == g_dpc_tail`), the guest event `0x19D630` has `SignalState = 0`, and the
+threads' exit flags are 0 — they were never told to stop. Enables intact, guest still waiting, so
+**the source stopped**.
+
+**Fix (toolkit).** `qemu_clock_get_ns` computes ns overflow-safely as
+`(c/f)*1e9 + (c%f)*1e9/f`, keeping every intermediate in range; `apu_shim.h`'s
+`qemu_clock_get_us` had the identical pattern and is fixed the same way. The vblank service loop
+additionally re-arms when the clock steps **backward** and caps its vblank-accounted wait at a few
+frames, so a clock source the model does not control cannot silently stop vblank delivery again.
+
+**Pinned by two tests that can fail.**
+`host_clock_wrap_test` reproduces the shim's own expression (old and current) over the wrap
+boundary in signed 64-bit modular arithmetic and asserts that the **old** form really does jump
+backward, that the new form is strictly monotonic, and that it equals exact uptime. Its `count` is
+passed through a `volatile` read deliberately: without it MSVC constant-folds the literal arguments
+in 128-bit precision and **hides the overflow** — an earlier version of this test passed the wrong
+way round for exactly that reason.
+`vblank_clock_step_test` drives the loop's scheduling rule (`nv2a_vblank_advance`, extracted as a
+pure function) across a backward step. Control: with the pre-fix rule the same scenario yields
+**0** pulses in 10 frames; with the fix, **9**. It also asserts a healthy clock pulses once per
+frame, so the harness is capable of observing a pulse at all.
+
+**Not proven.** The exact code path is inferred from the source; the deaths land 0.2–1.7 s *before*
+the computed wrap rather than the ~4 frames the reading predicts, and one run (`recovered-159330`)
+died 10 s early. The timing correlation is otherwise overwhelming (7 of 8 wraps, a ±2 s match).
+
+**Field-confirmed on the fixed binary.** Run `20261008-043848-133-title009-clockfix-1800`
+(`exe_sha256 51a27649…`, 1800 s, the same switch set as the archived title-path runs, timed to
+straddle the next wrap instant at t≈1535 s) reproduces the surviving behaviour and not the failing
+one: the guest opens `title.adx` at present ~2433 and then **reads it**, logging six `[ADXIO]` lines
+whose `pos` advances `0x19 → 0x1A0` and `sec` `0x19 → 0x187` — the same shape as `witness-0298`, and
+exactly what run 507 could not do. Its worker threads are alive to the end of the observable window.
+This is the falsifier the mechanism named, and it passed.
+
+**Consequence for every earlier comparison.** 507 vs `witness-0298` differed by **run start time**,
+not by method table: 507 crossed a wrap at 290 s and 0298 did not. Any archived run must be
+classified by whether `[start, start + duration]` contains a wrap instant before its results are
+compared with another run's.
+
+## §24.3 The guest's real blocker after the clock fix is executor throughput, not the walk
+
+With the clock fixed, the surviving run (`witness-0298`, no wrap) shows what lies past the loading
+screen: it opens and **reads** `title.adx`, then advances into a heavy 3D phase at roughly **one
+present per 24 s** (presents 2442 → 2457 over t = 541 → 898 s), with about 1M triangles rasterised.
+That phase is where all 12 budget stops occur, and they recover. So the ordering after this turn is:
+clock (fixed) → executor throughput in the 3D title scene → the packet-cap scope question.
+
+**The recomp's render composition also loses its texture stage at the transition.** Independent
+verification of the `[GPU]` batch counters (which are cumulative, so only the increments between
+reports are meaningful) shows a stable ~17–25 % "texcoords but no usable stage" regime through the
+logos, then a step to a steady **93.8 %** at present ~2457 — `dNoStage 435` against `dTex 29` — held
+for the rest of the run. At the same time the city scene the executor *can* rasterise
+(`efddce3b5bb02ab1`, 93.6 % non-black, 2677 colours) is published in **none** of 188 archived runs:
+it exists only in the dump's draw surface.
+
+**The stage loss is the GUEST's own instruction, not lost state.** The executor now reports which
+term of the stage-validity predicate failed, and the fixed run
+`20261008-043848-133-title009-clockfix-1800` answers it: of the untexturable batches, **1079 are
+`stage disabled by the guest`, and 0 are `no offset`, `no dimensions`, `unusable format` or
+`other`** — at every report, from the first (85) to the last (1079). So the sticky `s_tex0_enabled`
+gate introduced by the D1 fix (L48) is **honouring an explicit `SET_TEXTURE_CONTROL0` clear** rather
+than losing texture state, and the 93.8 % regime is the guest disabling stage 0 for those batches.
+That **retires** the "the sticky gate is a regression that drops the title backdrop" hypothesis: it
+was the leading candidate after the counter step was measured, and it is now falsified by a
+per-batch discriminator rather than by argument. What those disabled-stage batches should draw
+instead, and whether the city scene should have been published from a different surface, remain
+open. **M15 remains unreached.**
+
