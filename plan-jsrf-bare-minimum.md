@@ -535,12 +535,15 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
    about the run, not a reason to exclude it: the earlier claim that wrapped runs took a
    different guest path is **not** supported, since six wrapped runs behaved like unwrapped ones.
 
-0b. **First measurement for the reopened blocker: vblank delivery is ~30-80x below nominal**
-   (TR §24.2). `clockfix-1800` exported `vblank_pulses = 1337` over ~1780 s (0.75 Hz) and
-   `035729-cap1024` 1104 over 904 s (1.23 Hz), against a model nominal of at least 40 Hz.
-   `nv2a_vblank_advance` re-arms **without pulsing** when the service thread wakes four or more
-   frames late, and that thread shares `g_mmio_owner_lock` with the MMIO/walk path, so lock
-   starvation is a candidate — INFERRED, not tested. **The offline step is DONE and it is a NULL result** — do not repeat it as a formality.
+0b. **Two leads for the reopened blocker, and the cheap one is already SPENT.**
+   *(i) The vblank-rate lead.* Delivery is ~30-80x below nominal (TR §24.2): `clockfix-1800`
+   exported `vblank_pulses = 1337` over ~1780 s (0.75 Hz) and `035729-cap1024` 1104 over 904 s
+   (1.23 Hz), against a model nominal of at least 40 Hz. `nv2a_vblank_advance` re-arms **without
+   pulsing** when the service thread wakes four or more frames late, and that thread shares
+   `g_mmio_owner_lock` with the MMIO/walk path, so lock starvation is a candidate — INFERRED, not
+   tested. *(ii) The wrap association* (item 0 above): present at 41.7 % vs 12.3 %, mechanism not
+   established.
+   **The offline step is DONE and it is a NULL result — do not repeat it as a formality.**
    `logs/workers/title009/orch/death_vs_onset.py` compared every run's worker-death time against the
    heavy-3D onset (the first `[GPU]` report where the per-report triangle count steps up by an order
    of magnitude). Of the **10 runs with an early worker death**, **6 never reach a 3D onset at all**
