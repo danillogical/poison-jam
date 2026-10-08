@@ -3700,7 +3700,7 @@ surface they draw into once the collapse is fixed — a feedback read.
 | distinct `[FBPRESENT]` hashes over the whole run | **10** | **658** |
 | `0x0AF0` in the unhandled list | yes (`x28024`) | **absent** |
 | triangles rasterised (final report) | 58378 | 40966 |
-| flips 2426–2440 (the transition window) | one repeated black hash | **16 distinct hashes** |
+| flips 2426–2440 (the transition window) | one repeated black hash | **15 distinct hashes** (15 observations; the wider 2425-2441 window has 29 observations and 16) |
 
 At the dump instant the surfaces are:
 
@@ -3717,8 +3717,7 @@ the legend). Both were previously black or a partial fragment. Preserved:
 
 **Classification.** The collapse and the missing `0x0AF0` handling are `OBSERVED`; the causal link from
 that to the black is **strongly supported for this configuration** by the before/after (distinct
-`[FBPRESENT]` hashes 10 → 658, and the transition window going from one repeated black hash to 16
-distinct hashes across flips 2426–2440), with the trace-budget confounder noted below. **Two flips in
+`[FBPRESENT]` hashes 10 → 658, and the transition window going from one repeated black hash to 15 distinct hashes across flips 2426-2440 (15 observations)), with the trace-budget confounder noted below. **Two flips in
 that window are still black** — 2425 and 2441 — so the fix does not make every post-transition frame
 non-black. It is **not** a strictly controlled experiment, **not** a claim that every remaining
 difference is explained, and **not** M15: the title screen itself — emblem, "PLEASE PRESS START TO
@@ -3805,21 +3804,22 @@ kind cannot pass silently, and both were re-run green afterwards. `config/stop-c
 rejects invented roles, which is why the entry uses the one the checker defines). Game CTest 45/45
 after the change.
 
-**Status: REPAIRED, and a run now completes without it — but the run did NOT exercise it.** Run
+**Status: REPAIRED; runtime confirmation ABSENT.** Run
 `20261007-200329-265-title008-recovered-159330` (900 s, no admit switch, table at 482 methods,
 `diagnostic_deadline`, mapping gate `matches 1 / content-mismatch 0`) ran the **full 900 s** to
-presents **2808** with **1024 distinct** `[FBPRESENT]` hashes, **zero** `[ICALL] Failed` lines, **zero**
+presents **2808** with **1023 distinct** `[FBPRESENT]` hashes, **zero** `[ICALL] Failed` lines, **zero**
 `[EXCEPTION]` lines and **zero** `[PFIFO] reject` lines. That is a real step: the previous runs on this
 branch died at ~624 s on `0x00159330`, and this one does not. **But
-`scripts/check-run-exercised.py` reports `0x00159330` was NOT exercised** (454 other recovered entries
-returned with a clean ABI check, not this one), so this run **takes a path that never reaches the
-address** and proves nothing about the recovery itself. The stop-chain row therefore keeps
-`state: REPAIRED` and no `repair_commit`: exercise still needs a run that actually reaches
-`0x00159330`.
+`scripts/check-run-exercised.py` reports no clean ABI-verified return for `0x00159330`** (454 other
+recovered entries returned cleanly, not this one). That checker measures **clean returns, not entry
+coverage**, so the correct statement is **runtime confirmation absent and entry coverage UNQUALIFIED**
+— not "the run never reaches the address". The stop-chain row therefore keeps `state: REPAIRED` and no
+`repair_commit`.
 
-**What that run does show.** At the dump instant all three surfaces are a flat **"Now Loading"** screen
-(`0x80084000` and `0x8011C000` = `66e8421869c27824`, `0x801B2000` = `b6c0b88aa933bc64`; 100 %
-non-black, 5 colours each). So the recomp now reaches and **holds a real game UI state** — the loading
-screen — rather than black or the disclaimer, which is further than any previous run on this branch.
-It is **not** the title screen and **not** M15. Preserved:
-`logs/workers/title008/surfR/0x80084000.png`.
+**What that run does show.** At the dump instant the published frame is a **"Now Loading"** image
+(`0x80084000` and `0x8011C000` = `66e8421869c27824`, `0x801B2000` = `b6c0b88aa933bc64`; 307200 pixels,
+100 % non-black, 5 colours each), and the log's last `[FBPRESENT]` at t=898 s is `CHANGED`, so frames were
+still being published at the deadline. That establishes **a Now Loading image at the dump instant**, not a
+sustained functional loading state and not a new milestone: the D1 run already presented a Now Loading
+screen (`eaaa65df05fa3144` at presents 2440), so this is not progress past every previous run. It is
+**not** the title screen and **not** M15. Preserved: `logs/workers/title008/surfR/0x80084000.png`.

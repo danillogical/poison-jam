@@ -145,11 +145,11 @@ therefore not the cause of the black; it only ends the run.
   `XFCTX_VPOFF = 0x3b = 59`; the executor's `vp_method` never writes them; `0x0AF0` appears in the
   report's unhandled top ten at `x28024`. After the fix, against the pre-fix run, distinct
   `[FBPRESENT]` hashes go **10 → 658**, `0x0AF0` disappears from the unhandled list, and the transition
-  window (flips 2426–2440) goes from one repeated black hash to **16 distinct hashes** — with flips 2425
+  window (flips 2426–2440) goes from one repeated black hash to **15 distinct hashes** (15 observations; the wider 2425-2441 window has 29 observations and 16) — with flips 2425
   and 2441 **still black**, so the fix is not total.
   `0x80084000` (93.5 % non-black, 2677 colours) renders a full 3D city scene and `0x8011C000` a
   "Now Loading" screen.
-- **Why:** this is a measured cause with a before/after on a controlled configuration, so it supersedes
+- **Why:** this is a measured cause with a before/after on one trace configuration (the two runs also differ in trace budget and guest path, so it is not a strictly controlled experiment), so it supersedes
   the earlier speculation. The sampling/UV/blend branches are no longer the critical path — though they
   remain **not positively established**, only made moot for this symptom.
 
@@ -163,7 +163,7 @@ therefore not the cause of the black; it only ends the run.
 - **Case B (composite produced black):** **withdrawn.** The ring's flip-time hashes cannot distinguish
   a black source from a source cleared after the read, so this was never established; and the actual
   cause was upstream in the vertex path.
-- **Case C (upstream draw):** **CONFIRMED by the fix.** The scene batches produced no pixels because
+- **Case C (upstream draw):** **strongly supported, not proven.** The scene batches produced no pixels because
   their vertices collapsed. This is the measured answer.
 - **M15:** **not reached.** The title screen itself — emblem, "PLEASE PRESS START TO BEGIN" — has not
   been observed on the recomp, and the `0x80084000` city scene has not been compared like-for-like with
@@ -171,16 +171,25 @@ therefore not the cause of the black; it only ends the run.
 
 ## Next steps, in order
 
-1. **Get past `0x1A30`** — the new missing-method stop (`SET_VERTEX_DATA4F_M + 0x30`, attribute 3
-   diffuse, which the executor accepts and ignores). It needs a **runtime witness** before admission;
-   two attempts are NOT EXERCISED. The witness run also names `0x0700-0x073C`, `0x18C8/0x18CC`,
-   `0x1518-0x1524`, `0x1B80/0x1B84`, `0x17F8`, `0x1E20/0x1E24`, `0x1E74`, `0x1734`, `0x1968`.
-2. **Look for the title screen** on the D1 build once the walk gets past that stop, and compare it by
-   **content** with `logs/workers/title007/xemu/deliverable/`.
-3. **Recover `0x00159330`** (the fatal `[ICALL]`, an omitted function reached only indirectly).
+1. **`0x1A30` and 37 more methods are ADMITTED** from a genuine runtime witness (run
+   `20261007-122836-322-title008-witness-1A30-long`, 38 distinct `admit-unknown` lines; NV097
+   444 -> 482, +38, zero removals). **An earlier statement here that this class was NOT EXERCISED was
+   WRONG** — it rested on one 620 s run with zero `admit-unknown` lines, and the 900 s run witnessed
+   the class. The remaining work in this class is the **render gap**: `0x1A30` is attribute 3
+   (diffuse) component 0 of the 4-float inline vertex family, which the executor decodes at
+   `nv2a_pb_exec.c:2958-2964` but acts on only for `attr == 0` and `attr == 9`, so inline per-vertex
+   diffuse colour is dropped.
+2. **`0x00159330` is RECOVERED** (stop 29). The run
+   `20261007-200329-265-title008-recovered-159330` completes the full 900 s with **zero**
+   ICALL/exception/reject lines, but `check-run-exercised.py` reports the address **NOT exercised**,
+   so the repair is unproven and the row stays `REPAIRED`.
+3. **Look for the title screen** on this build and compare it by **content** with
+   `logs/workers/title007/xemu/deliverable/`. The latest run reaches and holds a flat **"Now
+   Loading"** screen (`66e8421869c27824`) with the scene animating every frame — real progress, but
+   **not** the title.
 4. **Consider the presenter rule** — present the swap buffer the `FLIP_INC` closed rather than the last
    surface drawn — as a separate correctness question, not as the cause of the black.
-5. Records: TR §23.6–§23.8, plan Current work, ledger L46/L47/L48, this plan.
+5. Records: TR §23.6–§23.9, plan Current work, ledger L46–L50, this plan.
 6. Commit + push toolkit first, then game; then a fresh Turn Reviewer.
 
 ## The ring measurement is DONE, and it REOPENED the composite branch (Turn Review correction)
@@ -230,10 +239,12 @@ it and I verified the challenge independently against the raw ring:
 
 i.e. **`0x1A30`**, not `0x1964` — so the admitted methods *were* exercised. `0x1A30` is
 **`NV097_SET_VERTEX_DATA4F_M + 0x30`** = **attribute 3 (diffuse), component 0** of the 4-float inline
-vertex family, which the executor already handles at `nv2a_pb_exec.c:2922-2934` but only for `attr==0`
+vertex family, which the executor already handles at `nv2a_pb_exec.c:2958-2964` but only for `attr==0`
 and `attr==9`; other attributes are accepted and **ignored**. Admitting it activates an existing arm,
-and it is a **render gap**: inline per-vertex diffuse colour is dropped. Its witness is **NOT
-EXERCISED** (two runs, 620 s and 900 s, zero `admit-unknown`), so the class stays open.
+and it is a **render gap**: inline per-vertex diffuse colour is dropped. Its witness is
+**ESTABLISHED** by the 900 s run `20261007-122836-322-title008-witness-1A30-long` (38 distinct
+`admit-unknown` lines), so the class is **admitted, not open**. An earlier statement in this plan that
+it was NOT EXERCISED was **wrong**: it rested on the single 620 s run that logged zero admits.
 
 **Instrumentation gaps recorded, not fixed** (Turn Planner §1.3 items not implemented): per-surface
 geometry for each candidate; the bound-texture hash using the texture's own geometry; and a
@@ -258,5 +269,6 @@ unchanged.
 ## Completion criteria (unchanged from the start plan)
 
 Trace committed and off by default; a run past presents 2424 with keyed lines and inspected dumps;
-the result classified as Case A/B/C with OBSERVED/PROVED/INFERRED labels; the 29 admitted from a
-witness or recorded NOT EXERCISED; records updated; M15 only on title content confirmed by eye.
+the result classified as Case A/B/C with OBSERVED/PROVED/INFERRED labels; the 29 and 38 admitted from
+runtime witnesses; `0x159330` recovered (runtime confirmation absent); records updated; M15 only on title
+content confirmed by eye.

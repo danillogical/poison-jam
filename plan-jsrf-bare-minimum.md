@@ -43,21 +43,24 @@ then faithfully copied black.
 writes `s_vp.c[59]` **in addition to** `s_gpu.vp_offset`, so both consumers get what they read; and
 stage 0's enable bit (`SET_TEXTURE_CONTROL0` `0x1B0C` bit 30) is now honoured (default enabled), so the
 scene batches that disable stage 0 stop sampling the surface they draw into. Run
-`20261007-124149-033-title008-d1-viewport` (620 s, no admit switch, same trace configuration as the
+`20261007-124149-033-title008-d1-viewport` (620 s, no admit switch, the same trace *settings* as the
 pre-fix `…ring-admitted`), against that run:
 
 | measure | before D1 | after D1 |
 |---|---|---|
 | distinct `[FBPRESENT]` hashes, whole run | **10** | **658** |
 | `0x0AF0` in the unhandled list | yes (`x28024`) | **absent** |
-| flips 2426–2440 (transition window) | one repeated black hash | **16 distinct hashes** (2425 and 2441 still black) |
+| flips 2426–2440 (transition window) | one repeated black hash | **15 distinct hashes** (15 observations; the wider 2425-2441 window has 29 observations and 16) (2425 and 2441 still black) |
 
 At the dump (mapping gate `matches 1 / content-mismatch 0`): `0x80084000` = `efddce3b5bb02ab1`,
 **93.5 %** non-black, **2677** colours — rendered, a **full 3D city scene** (towers, sky, clouds, road
 markings, the green elevated highway); `0x8011C000` = `eaaa65df05fa3144`, **100 %** non-black — a
 **"Now Loading"** screen. Preserved: `logs/workers/title008/surfD1/0x80084000.png` and
 `…/0x8011C000.png`. **Classification:** the collapse and the missing `0x0AF0` are OBSERVED; the causal
-link to the black is **PROVED for this configuration** by the before/after on one trace configuration.
+link to the black is **strongly supported but not proven** by the before/after, which is not a
+controlled experiment: the two runs differ in trace budget (400 vs 900, non-binding at 42 events each),
+guest path (`ADXIO` 36 vs 6), and the stage-0 change was bundled with the viewport change. Both stop on the
+same `0x1A30` reject at the same `at`/`get`/`put`, which is evidence the fix did not move the walk's stop.
 It is **not** M15 and **not** a like-for-like comparison with the xemu reference.
 
 **The same-flip trace did its job, and its claims are narrowed** (TR §23.6, §23.7, corrected after Turn
@@ -377,7 +380,7 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 | **F8b** | **done 2026-10-07** (toolkit `46b3265`) | the same class: the six runtime-witnessed methods `0BB0`/`0BB4`/`0BB8`/`0BBC`/`1724`/`1728`, admitted from the `[PFIFO] admit-unknown` witness (+6 on class `0x97`, zero removals). Ordered delivery pinned by a mutation-validated contract. Whether the post-admission run exercised them is **not demonstrated** — see "Current work" |
 | **F8c** | **admission CLEARED 2026-10-07** (toolkit witness-capacity fix) | the 39 NV097 methods are now **runtime-witnessed**, not decode-derived: the `[PFIFO] admit-unknown` witness was truncated at 16 by its own cap and is fixed, so one run logs 39. Table regenerated **+39, zero removals** (NV097 376 → 415). A no-switch run then moved the stop from `unsupported_method 0x0420` to **`sink_capacity`** (TR §23.3). **Corroborating decode is the NO-ADMIT run's report (39), not the witness run's (35)** — Turn Review corrected the earlier citation |
 | **F8d** | **capacity bound CLEARED 2026-10-07** (toolkit `1f86fbb`, `e85f331`) | the submission walk now commits in **units at whole-packet boundaries** (per-unit atomicity, L40), so a 5732-word submission is consumed instead of rejected. **Measured:** GET advanced `0x50B1C` → `0x5A060` (9553 words, 2.33 budgets) and the stop moved off `sink_capacity`. **Three real defects were found by tests/review, not by inspection:** `sink_count` was reset once per walk so a second unit overran `sink[]`; the old header check bounded a unit by a submission-wide count so it fired before the yield; and `admitted_unknown` re-added every earlier unit at each unit commit (published 10227 for 6137 — found by Turn Review, fixed in `e85f331`). Raising the 4096 cap was NOT the fix |
-| **F8e** | **CLEARED — the black was the missing vertex-program viewport constants** (toolkit this turn, TR §23.8) | the XDK vertex programs end with `MUL o0.xyz = r12 * c[58]` / `MAD o0.xyz = r12 * r1 + c[59]`, and **the executor never loaded `c[58]`/`c[59]`**: `0x0A20` reached only the fixed-function `s_gpu.vp_offset`, and **`0x0AF0` was unhandled entirely** (`x28024` in the report's unhandled top ten). With both slots zero, **every vertex-program vertex collapses to the screen origin**, the triangles have zero area, and the batch draws nothing — so `0x84000` was cleared to black each frame and never refilled, and the composite then faithfully copied black. **Fix:** `0x0AF0-0x0AFC` → `s_vp.c[58]` and `0x0A20-0x0A2C` → `s_vp.c[59]` as well as `vp_offset`; plus stage 0's `SET_TEXTURE_CONTROL0` enable bit honoured. **Measured** (`20261007-124149-033-title008-d1-viewport` vs the pre-fix `…ring-admitted`; the two also differ in trace budget and guest path, so this is a before/after with confounders): distinct `[FBPRESENT]` hashes **10 → 658**, `0x0AF0` gone from the unhandled list, the transition window (flips 2426–2440) going from one repeated black hash to **16 distinct hashes** (2425 and 2441 remain black); `0x80084000` = `efddce3b5bb02ab1` (93.5 % non-black, 2677 colours) renders a **full 3D city scene**, and `0x8011C000` = `eaaa65df05fa3144` (100 % non-black) a **"Now Loading"** screen. **Not M15** |
+| **F8e** | **CLEARED — the black was the missing vertex-program viewport constants** (toolkit this turn, TR §23.8) | the XDK vertex programs end with `MUL o0.xyz = r12 * c[58]` / `MAD o0.xyz = r12 * r1 + c[59]`, and **the executor never loaded `c[58]`/`c[59]`**: `0x0A20` reached only the fixed-function `s_gpu.vp_offset`, and **`0x0AF0` was unhandled entirely** (`x28024` in the report's unhandled top ten). With both slots zero, **every vertex-program vertex collapses to the screen origin**, the triangles have zero area, and the batch draws nothing — so `0x84000` was cleared to black each frame and never refilled, and the composite then faithfully copied black. **Fix:** `0x0AF0-0x0AFC` → `s_vp.c[58]` and `0x0A20-0x0A2C` → `s_vp.c[59]` as well as `vp_offset`; plus stage 0's `SET_TEXTURE_CONTROL0` enable bit honoured. **Measured** (`20261007-124149-033-title008-d1-viewport` vs the pre-fix `…ring-admitted`; the two also differ in trace budget and guest path, so this is a before/after with confounders): distinct `[FBPRESENT]` hashes **10 → 658**, `0x0AF0` gone from the unhandled list, the transition window (flips 2426–2440) going from one repeated black hash to **15 distinct hashes** (15 observations; 2425 and 2441 remain black); `0x80084000` = `efddce3b5bb02ab1` (93.5 % non-black, 2677 colours) renders a **full 3D city scene**, and `0x8011C000` = `eaaa65df05fa3144` (100 % non-black) a **"Now Loading"** screen. **Not M15** |
 | F6 = M15 | open | **criterion corrected 2026-10-07** (TR §23): the title screen itself, identified by CONTENT and confirmed by eye, with its hash recorded — **not** "a hash that is neither of two listed ones". The old blacklist was unsound: `87683a748e27d071` is the blue Dolby card, and the graffiti disclaimer renders in **four** hashes, three of them unlisted, so a run ending on the disclaimer (as the ceiling-clearing run did) satisfied the old letter. **An xemu reference of the real title now exists** (`logs/workers/title007/xemu/deliverable/`: emblem + "PLEASE PRESS START TO BEGIN" over a perspective city street, 640×480, reached with no input) and is the comparator. Also needs the run record with ledger IDs and Turn Reviewer reproduction |
 
 ## Next actions, in order
@@ -387,7 +390,7 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
    `s_vp.c[58]` and `0x0A20` feeds `s_vp.c[59]` as well as `vp_offset`, and stage 0's enable bit is
    honoured. Measured against the pre-fix run: distinct `[FBPRESENT]` hashes **10 → 658**, `0x0AF0` gone
    from the unhandled list, the transition window (flips 2426–2440) going from one repeated black hash
-   to **16 distinct hashes** (2425 and 2441 are still black), `0x80084000` a full 3D city scene and `0x8011C000` a
+   to **15 distinct hashes** (15 observations; 2425 and 2441 are still black), `0x80084000` a full 3D city scene and `0x8011C000` a
    "Now Loading" screen. **Next: look for the title screen itself** — the emblem and
    "PLEASE PRESS START TO BEGIN" — and compare it by content with the xemu reference. Note the guest
    currently stops on the **`0x1A30`** missing method, so the run must get past that to progress.
@@ -411,7 +414,7 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
    auditable). Game CTest 45/45 after it.
    **A run now completes without the failure but does NOT exercise the address:** run
    `20261007-200329-265-title008-recovered-159330` (900 s, table at 482) reached the **full 900 s**,
-   presents **2808**, **1024 distinct** hashes, with **zero** `[ICALL] Failed`, `[EXCEPTION]` and
+   presents **2808**, **1023 distinct** hashes, with **zero** `[ICALL] Failed`, `[EXCEPTION]` and
    `[PFIFO] reject` lines — where the previous branch died at ~624 s. But
    `scripts/check-run-exercised.py` reports `0x00159330` **NOT exercised**, so that run takes a path
    that never reaches it and proves nothing about the repair; the stop-chain row stays `REPAIRED` with
