@@ -28,6 +28,31 @@ discipline. This plan owns the objective, the milestones and what to do next.
 
 ## Current work (state 2026-10-07, turn title-008)
 
+**TWO MORE ABUTTING-ALIAS RECOVERIES, BOTH NOW EXERCISED, AND THE STOP MOVED BACK TO METHOD
+ADMISSION** (TR §23.11). After `0x00159330` (§23.9) two consecutive runs died on indirect targets of
+the **abutting-alias** class: `0x000C2730` (5 overlapping `tail_jump_alias` entries ending at
+`0x000C276F`; the manifest entry `0x000C2700` declared that same end) and `0x000C3410` (7 such entries
+ending at `0x000C3670`; entry `0x000C33C0` declared `0x000C3500`). Both were confirmed from the XBE
+(`ret`, NOP padding, then a clean prologue at the failing address) and both needed **two** fixes —
+recover the function **and** narrow the container's declared end, which
+`check-hidden-entries.py --show-all` named for me. Stops 30 and 31.
+
+**Both are EXERCISED**, which is the evidence §23.9 could not produce for its own repair:
+`check-run-exercised.py` reports `PASS 0x000C2730 was exercised`, and the next run logged a clean
+return for **both** `0x000C2730` and `0x000C3410`. The stop chain advanced exactly one address per
+repair. Run `20261007-235846-887-title008-c3410-fixed` then completed the **full 900 s** with
+**zero** `[ICALL] Failed` and **zero** `[EXCEPTION]` lines — the first run on this branch to reach the
+deadline with no fatal indirect call.
+
+**The stop is now `unsupported_method 0x0298`** (`NV097_SET_COLOR_MATERIAL`, a lighting-state method;
+the table carries `0x0290`, `0x0294`, `0x02A4`, `0x02A8` but not `0x0298`), so presents hold at 2444
+from t=458 s. That is the ordinary admission path and needs a **runtime witness** before admission.
+
+**Two latent siblings of the same class are recorded, not fixed:** `OVER_RUN` containers
+`0x000C002C-0x000C004A` (body ends `0x000C003F`, next prologue `0x000C0050`) and
+`0x000CD890-0x000CDAC0` (body ends `0x000CD8AE`, next function `0x000CD8B0`). The gate does not call
+them failures and no run has reached them.
+
 **THE BLACK INTERVAL IS EXPLAINED AND FIXED: the vertex-program viewport constants were never loaded**
 (TR §23.8, toolkit this turn). The XDK vertex programs end with the standard viewport step
 `MUL o0.xyz = r12 * c[58]` / `MAD o0.xyz = r12 * r1 + c[59]`, where `c[58]`/`c[59]` are the hardware's
@@ -402,28 +427,42 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 3. **The 29-method class is CLOSED** — admitted from a genuine runtime witness (`0580-05AC`,
    `06C0-06FC`, `1964`; +29, zero removals, mechanically verified per class). Do not re-admit, and do
    not take any of them from a decode.
-4. **`0x00159330` is RECOVERED** — the fatal `[ICALL]` (`0xE0424943`) that ended runs. It had **no
-   analysis-database entry at all**, because it is reached **only by an indirect call**, so no direct
-   call site ever put it there. The address is a complete function, not an internal label:
-   `0x159321-0x15932F` is NOP padding, `0x159330` begins a clean prologue (`push ecx; push esi;
-   mov esi,[esp+0xC]`), the body runs to `0x159416 ret 0xc`, and `0x159419-0x15941F` is further NOP
-   padding before the next function at `0x159420`. Added to `config/recovered-functions.json` with
-   **`stack_args: 12`** — `check-stack-depth.py` caught the omission as `DEFECT/STACK_ARGS`, which is
-   the gate working as intended. Stop 29 in `config/stop-chain.json`; the preservation baseline and
-   provenance manifest were refreshed (they exist to make exactly this kind of regeneration
-   auditable). Game CTest 45/45 after it.
-   **A run now completes without the failure but does NOT exercise the address:** run
-   `20261007-200329-265-title008-recovered-159330` (900 s, table at 482) reached the **full 900 s**,
-   presents **2808**, **1023 distinct** hashes, with **zero** `[ICALL] Failed`, `[EXCEPTION]` and
-   `[PFIFO] reject` lines — where the previous branch died at ~624 s. But
-   `scripts/check-run-exercised.py` reports `0x00159330` **NOT exercised**, so that run takes a path
-   that never reaches it and proves nothing about the repair; the stop-chain row stays `REPAIRED` with
-   no `repair_commit`. At the dump all three surfaces are a flat **"Now Loading"** screen
-   (`66e8421869c27824` / `b6c0b88aa933bc64`) — a real game UI state, further than any previous run on
-   this branch, but **not** the title and **not** M15.
-   The 1024-packet `budget_exhausted` that **recovered** is a pacing cost; track its count and revisit
-   L40's "the 1024-packet cap stays a stop" only if it starts recurring every kick.
-5. **Correct the two eliminated premises so they are not re-run.** The `sub_0019E438` "spin" is ordinary
+4. **THREE indirect-call targets are RECOVERED, and two of them are EXERCISED** (TR §23.9-§23.11,
+   stops 29-31). All three were reached only by an indirect call, so no direct call site recorded
+   them, and all three are complete functions after NOP padding with a clean prologue:
+   - `0x00159330` (`[0x159330, 0x159419)`, `ret 0xc`, **`stack_args: 12`**). It had **no** database
+     entry at all. `check-stack-depth.py` caught the missing `stack_args` as `DEFECT/STACK_ARGS`.
+     **Runtime confirmation ABSENT**: `check-run-exercised.py` reports it not exercised, so the row
+     stays `REPAIRED` with no `repair_commit`.
+   - `0x000C2730` and `0x000C3410` — the **abutting-alias** class, where 5 and 7 overlapping
+     `tail_jump_alias` entries swallow the address. Each needed **two** fixes: recover the function
+     **and** narrow the container entry's declared end (`0x000C2700` → `0x000C272D`, `0x000C33C0` →
+     `0x000C3408`), which `check-hidden-entries.py --show-all` named. **Both EXERCISED**, each with a
+     clean ABI-verified return; the stop chain advanced exactly one address per repair.
+   The preservation baseline and provenance manifest were refreshed for each (they exist to make this
+   kind of regeneration auditable). Game CTest 45/45 after each.
+5. **The 25-method class is ADMITTED** from a genuine runtime witness (run
+   `20261008-001451-422-title008-witness-0298`, 25 distinct `admit-unknown` lines; NV097 482 → 507,
+   +25, zero removals). It was needed because run `20261007-235846-887-title008-c3410-fixed`
+   completed the **full 900 s** with **zero** `[ICALL] Failed` and **zero** `[EXCEPTION]` lines — the
+   first run on this branch to reach the deadline with no fatal indirect call — and then rejected on
+   `unsupported_method 0x0298` (`NV097_SET_COLOR_MATERIAL`), holding presents at 2444 from t=458 s.
+   The witnessed set also names `0x03A8-0x03BC`, `0x0A10-0x0A18` and the 16-method `0x1000-0x103C`
+   run; all are **captured only** (the executor does not act on them).
+6. **`budget_exhausted` is now RECURRING, and this changes its status.** In the witness run it fired
+   **12 times** (each recovered, but each costing a walk), against a single occurrence before. L40
+   says the 1024-packet cap deliberately stays a *stop*; with the admitted methods the guest submits
+   many more one-word packets, so that decision now needs revisiting on evidence. Track the count per
+   run before changing anything.
+7. **Two latent siblings of the abutting-alias class are recorded, not fixed:**
+   `OVER_RUN` containers `0x000C002C-0x000C004A` (body ends `0x000C003F`, next prologue
+   `0x000C0050`) and `0x000CD890-0x000CDAC0` (body ends `0x000CD8AE`, next function `0x000CD8B0`).
+   The gate does not call them failures and no run has reached them; recover them from evidence.
+8. **Correct the two eliminated premises so they are not re-run.** The `sub_0019E438` "spin" is ordinary
+   DirectSound lock traffic (all 16356 calls return 1; enter/leave balanced 24702/24702). The pinned
+   composites from `RECOMP_FB_VA=0x8011C000` are **accumulation artifacts, not a title**, and pinned vs
+   unpinned hash counts are **not comparable** because `RECOMP_FB_VA` makes `xbox_FramebufferWindowPresent`
+   early-return (`fb_present.c:66-69`). **One premise here was also wrong and is corrected:** the claim that
    DirectSound lock traffic (all 16356 calls return 1; enter/leave balanced 24702/24702). The pinned
    composites from `RECOMP_FB_VA=0x8011C000` are **accumulation artifacts, not a title**, and pinned vs
    unpinned hash counts are **not comparable** because `RECOMP_FB_VA` makes `xbox_FramebufferWindowPresent`

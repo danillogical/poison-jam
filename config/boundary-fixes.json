@@ -1,37 +1,42 @@
 [
-  {
-    "start": "0x00154D70",
-    "end": "0x00154DB7",
-    "evidence": "Original conditional branch at 0x00154D75 targets internal block 0x00154DAA, whose RET 12 ends at 0x00154DB7. Existing parent ends at 0x00154D82 and tail-calls a no-op stub for the other branch."
-  },
-  {
-    "start": "0x00199830",
-    "end": "0x001998CF",
-    "evidence": "Parent jumps at 0x00199871 to internal loop 0x00199877. Loop backedge targets 0x00199873 and epilogue restores all pushes before RET 4 at 0x001998CC."
-  },
-  {
-    "start": "0x001998D0",
-    "end": "0x00199A11",
-    "evidence": "Enumerate-mode parent jumps at 0x0019991D to internal loop 0x00199923; four-format jump table at 0x00199A14 targets 0x001999C5/D8/EB/FE. Final RET 12 at 0x00199A0E; stop before following padding and table data."
-  },
-  {
-    "start": "0x00199A30",
-    "end": "0x00199A5E",
-    "evidence": "Adapter/device validation branches inside parent; calls 0x0018CB40 for valid caps output. All exits RET 12; final at 0x00199A5B."
-  },
-  {
-    "start": "0x00199A60",
-    "end": "0x00199ADE",
-    "evidence": "Observed missing 0x00199A70 is a branch from 0x00199A66, not a function entry. Format capability checks use 0x0019A058 table, all exits RET 24 through 0x00199ADB."
-  },
-  {
-    "start": "0x00199AE0",
-    "end": "0x00199B32",
-    "evidence": "Adjacent depth/format compatibility query branches to 0x00199AF0 and 0x00199B15; all paths RET 20, last at 0x00199B2F."
-  },
-  {
-    "start": "0x00190240",
-    "end": "0x00190335",
-    "evidence": "Raw analysis split the submit path at 0x0019025A, where the argument test's je at 0x00190250 and the jne at 0x0019026C make it look like a separate entry. It is not: 0x0019025A is an internal branch target of the same single-entry function, and the real body runs straight through to RET 4 at 0x00190332 with NOP padding from 0x00190335. The recovered entry 0x00190240-0x00190335 is the reviewed span; recovery-unresolved.json independently placed an existing diagnostic trap at 0x001919C0, not at 0x0019025A, so widening the parent here leaves every trap address outside the span."
-  }
+ {
+  "start": "0x00154D70",
+  "end": "0x00154DB7",
+  "evidence": "Original conditional branch at 0x00154D75 targets internal block 0x00154DAA, whose RET 12 ends at 0x00154DB7. Existing parent ends at 0x00154D82 and tail-calls a no-op stub for the other branch."
+ },
+ {
+  "start": "0x00199830",
+  "end": "0x001998CF",
+  "evidence": "Parent jumps at 0x00199871 to internal loop 0x00199877. Loop backedge targets 0x00199873 and epilogue restores all pushes before RET 4 at 0x001998CC."
+ },
+ {
+  "start": "0x001998D0",
+  "end": "0x00199A11",
+  "evidence": "Enumerate-mode parent jumps at 0x0019991D to internal loop 0x00199923; four-format jump table at 0x00199A14 targets 0x001999C5/D8/EB/FE. Final RET 12 at 0x00199A0E; stop before following padding and table data."
+ },
+ {
+  "start": "0x00199A30",
+  "end": "0x00199A5E",
+  "evidence": "Adapter/device validation branches inside parent; calls 0x0018CB40 for valid caps output. All exits RET 12; final at 0x00199A5B."
+ },
+ {
+  "start": "0x00199A60",
+  "end": "0x00199ADE",
+  "evidence": "Observed missing 0x00199A70 is a branch from 0x00199A66, not a function entry. Format capability checks use 0x0019A058 table, all exits RET 24 through 0x00199ADB."
+ },
+ {
+  "start": "0x00199AE0",
+  "end": "0x00199B32",
+  "evidence": "Adjacent depth/format compatibility query branches to 0x00199AF0 and 0x00199B15; all paths RET 20, last at 0x00199B2F."
+ },
+ {
+  "start": "0x00190240",
+  "end": "0x00190335",
+  "evidence": "Raw analysis split the submit path at 0x0019025A, where the argument test's je at 0x00190250 and the jne at 0x0019026C make it look like a separate entry. It is not: 0x0019025A is an internal branch target of the same single-entry function, and the real body runs straight through to RET 4 at 0x00190332 with NOP padding from 0x00190335. The recovered entry 0x00190240-0x00190335 is the reviewed span; recovery-unresolved.json independently placed an existing diagnostic trap at 0x001919C0, not at 0x0019025A, so widening the parent here leaves every trap address outside the span."
+ },
+ {
+  "start": "0x000C2700",
+  "end": "0x000C272D",
+  "evidence": "check-hidden-entries.py reports OVERLAP for 0x000C2700-0x000C276F: the declared end 0x000C276F swallows the separate evidenced entry 0x000C2730, and the body actually ends at 0x000C272D. The original XBE settles it: `ret` at 0x000C2724, a two-instruction tail (`mov [ecx+0x34],2` then `ret` at 0x000C272C), then NOP padding at 0x000C272D-0x000C272F, then a clean prologue at 0x000C2730 (`sub esp,0x18; push esi; mov esi,ecx`). The same defect appears on four sibling entries (sub_000C2480, sub_000C2500, sub_000C2560, sub_000C25D0) which all also declare end 0x000C276F; this fix corrects the one whose span the gate flagged, and the siblings are recorded as residue rather than fixed speculatively. Evidence: logs/runs/20261007-223953-965-title008-frames-late (`[ICALL] Failed to resolve VA 0x000C2730`, fatal 0xE0424943); disassembly of the original XBE; 2026-10-07."
+ }
 ]

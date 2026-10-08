@@ -436,6 +436,12 @@ Source manifest: `config/nv2a-runtime-witnessed-methods.json`
 
 | class | method | run | log line | witness |
 |---|---|---|---|---|
+| NV097_CLASS | `0x0298` | `20261008-001451-422-title008-witness-0298` | 111157 | `[PFIFO] admit-unknown class=97 method=0298 param=00000000 at=0007A538` |
+| NV097_CLASS | `0x03A8` | `20261008-001451-422-title008-witness-0298` | 111161 | `[PFIFO] admit-unknown class=97 method=03A8 param=00000000 at=0007A550` |
+| NV097_CLASS | `0x03AC` | `20261008-001451-422-title008-witness-0298` | 111162 | `[PFIFO] admit-unknown class=97 method=03AC param=00000000 at=0007A550` |
+| NV097_CLASS | `0x03B0` | `20261008-001451-422-title008-witness-0298` | 111163 | `[PFIFO] admit-unknown class=97 method=03B0 param=00000000 at=0007A550` |
+| NV097_CLASS | `0x03B4` | `20261008-001451-422-title008-witness-0298` | 111164 | `[PFIFO] admit-unknown class=97 method=03B4 param=3F800000 at=0007A560` |
+| NV097_CLASS | `0x03BC` | `20261008-001451-422-title008-witness-0298` | 111181 | `[PFIFO] admit-unknown class=97 method=03BC param=00000001 at=0007A5B4` |
 | NV097_CLASS | `0x0420` | `20261007-061613-201-title007-witness-full` | 107901 | `[PFIFO] admit-unknown class=97 method=0420 param=00000000 at=0004D62C` |
 | NV097_CLASS | `0x0424` | `20261007-061613-201-title007-witness-full` | 107902 | `[PFIFO] admit-unknown class=97 method=0424 param=00000000 at=0004D634` |
 | NV097_CLASS | `0x0428` | `20261007-061613-201-title007-witness-full` | 107903 | `[PFIFO] admit-unknown class=97 method=0428 param=00000000 at=0004D63C` |
@@ -516,10 +522,29 @@ Source manifest: `config/nv2a-runtime-witnessed-methods.json`
 | NV097_CLASS | `0x0734` | `20261007-122836-322-title008-witness-1A30-long` | 109611 | `[PFIFO] admit-unknown class=97 method=0734 param=00000000 at=000156C0` |
 | NV097_CLASS | `0x0738` | `20261007-122836-322-title008-witness-1A30-long` | 109612 | `[PFIFO] admit-unknown class=97 method=0738 param=00000000 at=000156C0` |
 | NV097_CLASS | `0x073C` | `20261007-122836-322-title008-witness-1A30-long` | 109613 | `[PFIFO] admit-unknown class=97 method=073C param=3F800000 at=000156C0` |
+| NV097_CLASS | `0x0A10` | `20261008-001451-422-title008-witness-0298` | 111158 | `[PFIFO] admit-unknown class=97 method=0A10 param=3F800000 at=0007A540` |
+| NV097_CLASS | `0x0A14` | `20261008-001451-422-title008-witness-0298` | 111159 | `[PFIFO] admit-unknown class=97 method=0A14 param=3F800000 at=0007A540` |
+| NV097_CLASS | `0x0A18` | `20261008-001451-422-title008-witness-0298` | 111160 | `[PFIFO] admit-unknown class=97 method=0A18 param=3F800000 at=0007A540` |
 | NV097_CLASS | `0x0BB0` | `20261006-213505-255-title005-admit3` | 81481 | `[PFIFO] admit-unknown class=97 method=0BB0 param=00000000 at=0002FF9C` |
 | NV097_CLASS | `0x0BB4` | `20261006-213505-255-title005-admit3` | 81482 | `[PFIFO] admit-unknown class=97 method=0BB4 param=00000000 at=0002FF9C` |
 | NV097_CLASS | `0x0BB8` | `20261006-213505-255-title005-admit3` | 81483 | `[PFIFO] admit-unknown class=97 method=0BB8 param=3CD5AD3F at=0002FF9C` |
 | NV097_CLASS | `0x0BBC` | `20261006-213505-255-title005-admit3` | 81484 | `[PFIFO] admit-unknown class=97 method=0BBC param=00000000 at=0002FF9C` |
+| NV097_CLASS | `0x1000` | `20261008-001451-422-title008-witness-0298` | 111165 | `[PFIFO] admit-unknown class=97 method=1000 param=00000000 at=0007A568` |
+| NV097_CLASS | `0x1004` | `20261008-001451-422-title008-witness-0298` | 111166 | `[PFIFO] admit-unknown class=97 method=1004 param=00000000 at=0007A568` |
+| NV097_CLASS | `0x1008` | `20261008-001451-422-title008-witness-0298` | 111167 | `[PFIFO] admit-unknown class=97 method=1008 param=00000000 at=0007A568` |
+| NV097_CLASS | `0x100C` | `20261008-001451-422-title008-witness-0298` | 111168 | `[PFIFO] admit-unknown class=97 method=100C param=3F800000 at=0007A568` |
+| NV097_CLASS | `0x1010` | `20261008-001451-422-title008-witness-0298` | 111169 | `[PFIFO] admit-unknown class=97 method=1010 param=3F800000 at=0007A568` |
+| NV097_CLASS | `0x1014` | `20261008-001451-422-title008-witness-0298` | 111170 | `[PFIFO] admit-unknown class=97 method=1014 param=3F800000 at=0007A568` |
+| NV097_CLASS | `0x1018` | `20261008-001451-422-title008-witness-0298` | 111171 | `[PFIFO] admit-unknown class=97 method=1018 param=00000000 at=0007A568` |
+| NV097_CLASS | `0x101C` | `20261008-001451-422-title008-witness-0298` | 111172 | `[PFIFO] admit-unknown class=97 method=101C param=00000000 at=0007A568` |
+| NV097_CLASS | `0x1020` | `20261008-001451-422-title008-witness-0298` | 111173 | `[PFIFO] admit-unknown class=97 method=1020 param=00000000 at=0007A568` |
+| NV097_CLASS | `0x1024` | `20261008-001451-422-title008-witness-0298` | 111174 | `[PFIFO] admit-unknown class=97 method=1024 param=7149F2CA at=0007A590` |
+| NV097_CLASS | `0x1028` | `20261008-001451-422-title008-witness-0298` | 111175 | `[PFIFO] admit-unknown class=97 method=1028 param=3E0CAE50 at=0007A598` |
+| NV097_CLASS | `0x102C` | `20261008-001451-422-title008-witness-0298` | 111176 | `[PFIFO] admit-unknown class=97 method=102C param=3EB5D37D at=0007A598` |
+| NV097_CLASS | `0x1030` | `20261008-001451-422-title008-witness-0298` | 111177 | `[PFIFO] admit-unknown class=97 method=1030 param=BF6CB6C2 at=0007A598` |
+| NV097_CLASS | `0x1034` | `20261008-001451-422-title008-witness-0298` | 111178 | `[PFIFO] admit-unknown class=97 method=1034 param=3E821555 at=0007A598` |
+| NV097_CLASS | `0x1038` | `20261008-001451-422-title008-witness-0298` | 111179 | `[PFIFO] admit-unknown class=97 method=1038 param=3F282109 at=0007A598` |
+| NV097_CLASS | `0x103C` | `20261008-001451-422-title008-witness-0298` | 111180 | `[PFIFO] admit-unknown class=97 method=103C param=BF35C3A0 at=0007A598` |
 | NV097_CLASS | `0x1518` | `20261007-122836-322-title008-witness-1A30-long` | 109543 | `[PFIFO] admit-unknown class=97 method=1518 param=BF800000 at=0005BB38` |
 | NV097_CLASS | `0x151C` | `20261007-122836-322-title008-witness-1A30-long` | 109544 | `[PFIFO] admit-unknown class=97 method=151C param=BF800000 at=0005BB38` |
 | NV097_CLASS | `0x1520` | `20261007-122836-322-title008-witness-1A30-long` | 109545 | `[PFIFO] admit-unknown class=97 method=1520 param=3F000000 at=0005BB38` |
@@ -549,7 +574,7 @@ Source manifest: `config/nv2a-runtime-witnessed-methods.json`
 | NV097_CLASS | `0x1E24` | `20261007-122836-322-title008-witness-1A30-long` | 109551 | `[PFIFO] admit-unknown class=97 method=1E24 param=00000000 at=0005C654` |
 | NV097_CLASS | `0x1E74` | `20261007-122836-322-title008-witness-1A30-long` | 109552 | `[PFIFO] admit-unknown class=97 method=1E74 param=00000000 at=0005C688` |
 
-Admitted by this generation: NV097_CLASS +112.
+Admitted by this generation: NV097_CLASS +137.
 
 **Known limitation.** The admitting run is exploratory, and its witness
 queue is populated only for methods that COMMIT. A walk that is later

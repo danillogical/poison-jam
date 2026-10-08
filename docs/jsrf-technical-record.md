@@ -3823,3 +3823,155 @@ still being published at the deadline. That establishes **a Now Loading image at
 sustained functional loading state and not a new milestone: the D1 run already presented a Now Loading
 screen (`eaaa65df05fa3144` at presents 2440), so this is not progress past every previous run. It is
 **not** the title screen and **not** M15. Preserved: `logs/workers/title008/surfR/0x80084000.png`.
+
+## §23.10 `0x000C2730`: the abutting-alias class again, and what the frame dumps really covered
+
+**A second fatal indirect target, and a different mechanism from §23.9.** With `0x00159330` repaired,
+a 900 s frame-dump run (`20261007-223953-965-title008-frames-late`) died instead on
+
+```
+[ICALL] Failed to resolve VA 0x000C2730 (thread calls: 753332, tid=51056, ms=293873203)
+[EXCEPTION] tid=51056 code=0xE0424943
+```
+
+at presents 2442 / 588 s. Unlike §23.9 — where the function had **no** database entry because nothing
+calls it directly — this one **is** inside the database, but only as the tail of an alias: **five**
+overlapping `tail_jump_alias` entries (`sub_000C2480`, `sub_000C2500`, `sub_000C2560`, `sub_000C25D0`,
+`sub_000C2700`) all declare an end of `0x000C276F`. The manifest entry `0x000C2700` declared that same
+end, so the span that should have stopped short ran over `0x000C2730` and the address had no entry of
+its own.
+
+**It is a complete function.** The XBE bytes show `ret` at `0x000C2724`, a two-instruction tail ending
+in `ret` at `0x000C272C`, NOP padding at `0x000C272D-0x000C272F`, then a clean prologue at
+`0x000C2730` (`sub esp,0x18; push esi; mov esi,ecx`) running to `ret` at `0x000C276E`, with
+`0x000C276F` starting the next function. Extent `[0x000C2730, 0x000C276F)`; bare `ret`, so
+`stack_args: 0`.
+
+**The repair needed two halves, and the gate named the second one.** Recovering `0x000C2730` alone was
+not enough: `check-hidden-entries.py` then reported
+`OVERLAP entry 0x000C2700-0x000C276F: body ends at 0x000C272D (declared end 0x000C276F): the span
+covers the separate manifest entry 0x000C2730`, i.e. the gate measured the real boundary for me. So
+`0x000C2700`'s end was narrowed to `0x000C272D` and the manifest now reports
+`PASS: no manifest span consumes a separate evidenced entry`. Stop 30 records it; the preservation
+baseline and provenance manifest were refreshed; game CTest 45/45 after the change.
+
+**Residue, recorded rather than fixed speculatively.** Four sibling entries (`0x000C2480`,
+`0x000C2500`, `0x000C2560`, `0x000C25D0`) carry the same original over-run in the analysis database but
+are **already narrowed in the manifest**, so they are not live defects. They are noted here so the next
+session does not rediscover them as new.
+
+**CORRECTION to a claim made earlier in this turn, about the frame dumps.** A previous statement in
+this turn's commit message said the frame-dump run "ends on the Created by Smilebit card". **That is
+wrong, and the measurement says so.** The window-thread dump is capped at 400 files
+(`fb_present.c:250`, `writes < 400`), and in that run the cap was reached at **t=169 s / presents 655**
+— not at the end. The Smilebit hash `df72defcc5d40360` first appears at **t=93 s / presents 451** and
+recurs at 655, so it is an **early logo phase**. The 400 dumped frames therefore cover only the first
+~169 s of a 900 s run. The sequence is the boot logo animation (a new hash nearly every frame from
+presents 11 onward), and reading it as the run's terminal state was a mistake about **coverage**, not
+about content. Any future frame-dump run must either raise the cap or use
+`RECOMP_FB_PRESENT_DUMP_AFTER_S` to skip the logos — the latter is what the late-capture runs do.
+
+## §23.11 Two more abutting-alias recoveries, both now EXERCISED, and the latent siblings
+
+**The class repeated twice, and each fix moved the stop by one address.** After `0x00159330` (§23.9),
+two consecutive runs died on indirect targets of the **abutting-alias** class (§23.10):
+
+| run | fatal target | mechanism | result |
+|---|---|---|---|
+| `…223953-965-…-frames-late` | `0x000C2730` | 5 overlapping `tail_jump_alias` entries end at `0x000C276F`; manifest entry `0x000C2700` declared the same end | recovered, entry end narrowed to `0x000C272D` |
+| `…233030-481-…-c2730-fixed` | `0x000C3410` | 7 overlapping `tail_jump_alias` entries end at `0x000C3670`; manifest entry `0x000C33C0` declared `0x000C3500` | recovered, entry end narrowed to `0x000C3408` |
+
+Both were found the same way: the XBE shows `ret`, then NOP padding, then a clean prologue at the
+failing address (`sub esp,0x18` for `0x000C2730`, `sub esp,0x2c` for `0x000C3410`), and
+`check-hidden-entries.py` — run with `--show-all` — named the container and its real boundary for me
+(`body ends at 0x000C272D`, `body ends at 0x000C3408`). Stops 30 and 31 record them.
+
+**Both are now EXERCISED, which is the evidence §23.9 could not produce for its own repair.**
+`scripts/check-run-exercised.py` reports `PASS 0x000C2730 was exercised` for run
+`20261007-233030-481-…` (a clean ABI-verified return before the failure moved on), and the next run
+`20261007-235846-887-title008-c3410-fixed` logged one clean return each for `0x000C2730` **and**
+`0x000C3410`. So the stop chain advanced by exactly one address per repair, which is the pattern that
+makes these recoveries verifiable rather than speculative.
+
+**That run then completed the full 900 s with no fatal call at all**: `diagnostic_deadline`,
+**zero** `[ICALL] Failed` lines, **zero** `[EXCEPTION]` lines, presents 2444, 138 distinct published
+hashes. It is the first run on this branch to reach the deadline without a fatal indirect call.
+
+**The stop has moved back to method admission, not to a call.** The same run's three
+`[PFIFO] reject` lines are two `budget_exhausted` (both recovered) and then
+
+```
+[PFIFO] reject diag=unsupported_method method=0298 subch=0 param=00000000 at=00078320 get=00078320 put=0007BEFC successes=3636 rejections=3
+```
+
+`0x0298` is `NV097_SET_COLOR_MATERIAL` — a **lighting-state** method, and the table carries `0x0290`,
+`0x0294`, `0x02A4`, `0x02A8` but **not** `0x0298`. Presents therefore hold at 2444 from t=458 s.
+This is the ordinary admission path and needs a runtime witness before admission, never a decode.
+
+**Latent siblings of the same class, recorded not fixed.** `check-hidden-entries.py --show-all`
+reports two remaining `OVER_RUN` containers in this region whose over-run holds no manifest entry:
+
+```
+OVER_RUN  entry 0x000C002C-0x000C004A: body ends at 0x000C003F ... no evidenced entry in the over-run
+OVER_RUN  entry 0x000CD890-0x000CDAC0: body ends at 0x000CD8AE ... no evidenced entry in the over-run
+```
+
+Both look like the same defect: at `0x000C003F` the body continues to `ret 4` at `0x000C0047` and a
+clean prologue begins at `0x000C0050` (`sub esp,0x14; push ebx; push ebp; push esi; push edi`), and at
+`0x000CD8AE` NOP padding ends and a function begins at `0x000CD8B0`. They are **not** fixed here
+because no run has reached them and the gate does not call them failures — they are named so the next
+session can recover them from evidence rather than rediscovery.
+
+## §23.12 The indirect-call chain is cleared, and the stop moved back to method admission
+
+**Three recoveries, two mechanisms, and the chain cleared.** After §23.11 the runs stop dying on
+unresolved indirect calls:
+
+| repair | class | exercised? |
+|---|---|---|
+| `0x00159330` | no database entry at all (nothing calls it directly) | **runtime confirmation absent** |
+| `0x000C2730` | abutting alias: 5 `tail_jump_alias` entries swallow it | **EXERCISED** |
+| `0x000C3410` | abutting alias: 7 `tail_jump_alias` entries swallow it | **EXERCISED** |
+
+Run `20261007-235846-887-title008-c3410-fixed` logged a clean ABI-verified return for **both**
+`0x000C2730` and `0x000C3410` and completed the **full 900 s** with **zero** `[ICALL] Failed` and
+**zero** `[EXCEPTION]` lines — the first run on this branch to reach the deadline with no fatal
+indirect call. `check-run-exercised.py` confirms `PASS 0x000C2730 was exercised`.
+
+**The stop returned to method admission, and one witness cleared it.** That run then rejected on
+`unsupported_method 0x0298` (`NV097_SET_COLOR_MATERIAL` — a lighting-state method; the table carried
+`0x0290`, `0x0294`, `0x02A4`, `0x02A8` but not `0x0298`), holding presents at 2444 from t=458 s. A
+900 s witness run (`20261008-001451-422-title008-witness-0298`, log SHA-256
+`d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865`) logged **25 distinct**
+`admit-unknown` methods, and they were admitted from that witness: **NV097 482 → 507, exactly +25,
+zero removals, no other class changed**. The set is `0x0298`, `0x03A8-0x03BC`, `0x0A10-0x0A18`, and a
+16-method `0x1000-0x103C` run.
+
+**Measured effect.** Run `20261008-003812-419-title008-507` (900 s, no admit switch):
+
+| measure | before (482) | after (507) |
+|---|---|---|
+| `[PFIFO] reject` lines | 3 (2 budget + `0x0298`) | **0** |
+| `unsupported_method` rejects | 1 | **0** |
+| last present | 2444 | **3717** |
+| distinct `[FBPRESENT]` hashes | 138 | **1525** |
+| `[ICALL] Failed` / `[EXCEPTION]` | 0 / 0 | **0 / 0** |
+
+So the admitted methods let the walk consume a stream it previously rejected, and the guest advanced
+by ~1270 presents.
+
+**`budget_exhausted` is now RECURRING, which changes its status.** It fired **once** in the 482 run and
+**twelve times** in the 25-method witness run (each time recovered on the next walk, but each costing a
+walk). L40 records the deliberate decision that the 1024-packet cap stays a *stop* rather than a yield,
+on the reasoning that 1025 one-word packets is under the word budget. The admitted methods make the
+guest submit far more small packets, so that reasoning now needs revisiting **on evidence**: the count
+per run is the measurement to take before changing the cap.
+
+**What the run shows on screen, stated narrowly.** At the dump instant (mapping gate
+`matches 1 / content-mismatch 0`) all three surfaces are a flat **"Now Loading"** image —
+`0x8011C000` = `b3d20bc079d1e6e4`, `0x80084000` and `0x801B2000` = `5132208e7524c004`, 307200 pixels,
+100 % non-black, 5 colours each — and frames are still being published at t=898 s. That is a
+**Now Loading image at the dump instant**, not a sustained functional loading state and not a new
+milestone. **M15 is not reached:** the title screen — the emblem and "PLEASE PRESS START TO BEGIN"
+over the street scene — has still not been observed, and the comparator is
+`logs/workers/title007/xemu/deliverable/`.

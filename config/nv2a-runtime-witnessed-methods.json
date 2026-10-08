@@ -10,6 +10,66 @@
     {
       "class": "0x97",
       "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0298",
+      "name": "NV097_SET_COLOR_MATERIAL",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111157,
+      "witness": "[PFIFO] admit-unknown class=97 method=0298 param=00000000 at=0007A538"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x03A8",
+      "name": "NV097 method 0x03A8 (no register name)",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111161,
+      "witness": "[PFIFO] admit-unknown class=97 method=03A8 param=00000000 at=0007A550"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x03AC",
+      "name": "NV097 method 0x03A8 (no register name) + 0x4",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111162,
+      "witness": "[PFIFO] admit-unknown class=97 method=03AC param=00000000 at=0007A550"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x03B0",
+      "name": "NV097 method 0x03A8 (no register name) + 0x8",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111163,
+      "witness": "[PFIFO] admit-unknown class=97 method=03B0 param=00000000 at=0007A550"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x03B4",
+      "name": "NV097 method 0x03A8 (no register name) + 0xC",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111164,
+      "witness": "[PFIFO] admit-unknown class=97 method=03B4 param=3F800000 at=0007A560"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x03BC",
+      "name": "NV097 method 0x03A8 (no register name) + 0x14",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111181,
+      "witness": "[PFIFO] admit-unknown class=97 method=03BC param=00000001 at=0007A5B4"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
       "method": "0x0420",
       "name": "NV097_SET_TEXTURE_MATRIX_ENABLE",
       "run": "20261007-061613-201-title007-witness-full",
@@ -810,6 +870,36 @@
     {
       "class": "0x97",
       "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0A10",
+      "name": "NV097 method 0x0A10 (no register name)",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111158,
+      "witness": "[PFIFO] admit-unknown class=97 method=0A10 param=3F800000 at=0007A540"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0A14",
+      "name": "NV097 method 0x0A10 (no register name) + 0x4",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111159,
+      "witness": "[PFIFO] admit-unknown class=97 method=0A14 param=3F800000 at=0007A540"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x0A18",
+      "name": "NV097 method 0x0A10 (no register name) + 0x8",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111160,
+      "witness": "[PFIFO] admit-unknown class=97 method=0A18 param=3F800000 at=0007A540"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
       "method": "0x0BB0",
       "name": "NV097_SET_TRANSFORM_CONSTANT + 0x30",
       "run": "20261006-213505-255-title005-admit3",
@@ -846,6 +936,166 @@
       "log_sha256": "840e307802874c25f8bbe34ea1f97a3d918d3ccf98e2ad6e35e921e5a7743538",
       "log_line": 81484,
       "witness": "[PFIFO] admit-unknown class=97 method=0BBC param=00000000 at=0002FF9C"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1000",
+      "name": "NV097 method 0x1000 (no register name)",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111165,
+      "witness": "[PFIFO] admit-unknown class=97 method=1000 param=00000000 at=0007A568"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1004",
+      "name": "NV097 method 0x1000 (no register name) + 0x4",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111166,
+      "witness": "[PFIFO] admit-unknown class=97 method=1004 param=00000000 at=0007A568"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1008",
+      "name": "NV097 method 0x1000 (no register name) + 0x8",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111167,
+      "witness": "[PFIFO] admit-unknown class=97 method=1008 param=00000000 at=0007A568"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x100C",
+      "name": "NV097 method 0x1000 (no register name) + 0xC",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111168,
+      "witness": "[PFIFO] admit-unknown class=97 method=100C param=3F800000 at=0007A568"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1010",
+      "name": "NV097 method 0x1000 (no register name) + 0x10",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111169,
+      "witness": "[PFIFO] admit-unknown class=97 method=1010 param=3F800000 at=0007A568"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1014",
+      "name": "NV097 method 0x1000 (no register name) + 0x14",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111170,
+      "witness": "[PFIFO] admit-unknown class=97 method=1014 param=3F800000 at=0007A568"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1018",
+      "name": "NV097 method 0x1000 (no register name) + 0x18",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111171,
+      "witness": "[PFIFO] admit-unknown class=97 method=1018 param=00000000 at=0007A568"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x101C",
+      "name": "NV097 method 0x1000 (no register name) + 0x1C",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111172,
+      "witness": "[PFIFO] admit-unknown class=97 method=101C param=00000000 at=0007A568"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1020",
+      "name": "NV097 method 0x1000 (no register name) + 0x20",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111173,
+      "witness": "[PFIFO] admit-unknown class=97 method=1020 param=00000000 at=0007A568"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1024",
+      "name": "NV097 method 0x1000 (no register name) + 0x24",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111174,
+      "witness": "[PFIFO] admit-unknown class=97 method=1024 param=7149F2CA at=0007A590"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1028",
+      "name": "NV097 method 0x1000 (no register name) + 0x28",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111175,
+      "witness": "[PFIFO] admit-unknown class=97 method=1028 param=3E0CAE50 at=0007A598"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x102C",
+      "name": "NV097 method 0x1000 (no register name) + 0x2C",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111176,
+      "witness": "[PFIFO] admit-unknown class=97 method=102C param=3EB5D37D at=0007A598"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1030",
+      "name": "NV097 method 0x1000 (no register name) + 0x30",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111177,
+      "witness": "[PFIFO] admit-unknown class=97 method=1030 param=BF6CB6C2 at=0007A598"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1034",
+      "name": "NV097 method 0x1000 (no register name) + 0x34",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111178,
+      "witness": "[PFIFO] admit-unknown class=97 method=1034 param=3E821555 at=0007A598"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x1038",
+      "name": "NV097 method 0x1000 (no register name) + 0x38",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111179,
+      "witness": "[PFIFO] admit-unknown class=97 method=1038 param=3F282109 at=0007A598"
+    },
+    {
+      "class": "0x97",
+      "class_name": "NV097_KELVIN_PRIMITIVE",
+      "method": "0x103C",
+      "name": "NV097 method 0x1000 (no register name) + 0x3C",
+      "run": "20261008-001451-422-title008-witness-0298",
+      "log_sha256": "d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865",
+      "log_line": 111180,
+      "witness": "[PFIFO] admit-unknown class=97 method=103C param=BF35C3A0 at=0007A598"
     },
     {
       "class": "0x97",

@@ -209,6 +209,32 @@
     }
    ],
    "note": "The fatal `[ICALL] Failed to resolve VA 0x00159330` that ends the title run (0xE0424943) after the method-admission class clears. Unlike every earlier stop this one is NOT a mis-sized or swallowed span: the function has no analysis-database entry at all, because it is reached ONLY by an indirect call, so no direct call site ever recorded it and no decode pass saw it. The address is a complete function: 0x00159321-0x0015932F is NOP padding, 0x00159330 begins a clean prologue (push ecx; push esi; mov esi,[esp+0xC]), the body runs to 0x00159416 `ret 0xc`, and 0x00159419-0x0015941F is further NOP padding before the next function at 0x00159420. Recovered as [0x00159330, 0x00159419) with stack_args 12 -- the epilogue returns 12 bytes of arguments, and check-stack-depth.py reported DEFECT/STACK_ARGS when that was first omitted, so the gate is what caught it. First reproduced in 20261007-122836-322-title008-witness-1A30-long (unhandled_exception at 624 s, the same failure at the end of the 900 s budget). The repair is committed. A 900 s run on the repaired build completes without the ICALL failure (zero [ICALL] Failed, [EXCEPTION] and [PFIFO] reject lines), but check-run-exercised.py reports no clean ABI-verified return for this address, and that checker measures clean returns rather than entry coverage -- so runtime confirmation is ABSENT and entry coverage is UNQUALIFIED. The state stays REPAIRED and no repair_commit is recorded until a run confirms it."
+  },
+  {
+   "id": 30,
+   "address": "0x000C2730",
+   "state": "REPAIRED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261007-223953-965-title008-frames-late",
+     "role": "discovered"
+    }
+   ],
+   "note": "The fatal `[ICALL] Failed to resolve VA 0x000C2730` (0xE0424943) that ended the 900 s frame-dump run at presents 2442 / 588 s. This is the abutting-alias class recover-functions.py exists for: the analysis database carries FIVE overlapping tail_jump_alias entries (sub_000C2480, sub_000C2500, sub_000C2560, sub_000C25D0, sub_000C2700) all claiming to end at 0x000C276F, and the manifest entry 0x000C2700 declared that same end, so 0x000C2730 had no entry and the span that should have stopped short ran over it. The original XBE shows a complete function: `ret` at 0x000C2724, a two-instruction tail ending in `ret` at 0x000C272C, NOP padding at 0x000C272D-0x000C272F, then a clean prologue at 0x000C2730 (sub esp,0x18; push esi; mov esi,ecx) running to `ret` at 0x000C276E. Fixed two ways, both required: 0x000C2730 recovered as [0x000C2730, 0x000C276F) with stack_args 0, and the 0x000C2700 entry end narrowed to 0x000C272D -- check-hidden-entries.py reported OVERLAP and named that boundary, which is the gate doing its job. Four sibling entries still carry the original over-run in the analysis database but are already narrowed in the manifest, so they are residue rather than open defects. The repair is committed; no run has yet confirmed execution, so the state stays REPAIRED and no repair_commit is recorded."
+  },
+  {
+   "id": 31,
+   "address": "0x000C3410",
+   "state": "REPAIRED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261007-233030-481-title008-c2730-fixed",
+     "role": "discovered"
+    }
+   ],
+   "note": "The fatal `[ICALL] Failed to resolve VA 0x000C3410` (0xE0424943) at presents 2443, in the same abutting-alias class as stop 30 and the same region. Seven overlapping tail_jump_alias entries (sub_000C2FE0, sub_000C30C0, sub_000C3100, sub_000C3140, sub_000C31B0, sub_000C3350, sub_000C33C0) all declare an end of 0x000C3670, and the manifest entry 0x000C33C0 declared 0x000C3500, so the address had no entry of its own. The XBE shows `ret` at 0x000C3407, NOP padding at 0x000C3408-0x000C340F, then a clean prologue at 0x000C3410 (sub esp,0x2c; push esi; mov esi,ecx). Fixed both ways: 0x000C3410 recovered as [0x000C3410, 0x000C3670) with stack_args 0, and 0x000C33C0 ended at 0x000C3408 -- check-hidden-entries.py --show-all named that boundary. IMPORTANT PROVENANCE: this run proves stop 30 was EXERCISED. 0x000C2730 returned with a clean ABI check once before the failure moved on, so the previous repair works and the stop chain advanced by exactly one address. The state here stays REPAIRED because no run has yet confirmed THIS address executing."
   }
  ]
 }

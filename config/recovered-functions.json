@@ -8120,10 +8120,10 @@
  },
  {
   "start": "0x000C2700",
-  "end": "0x000C276F",
+  "end": "0x000C272D",
   "section": ".text",
   "kind": "routine",
-  "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CDCB0, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_000C276F under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000C2700 at sub_000C276F. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x000C2700..0x000C276F. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
+  "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CDCB0, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_000C276F under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000C2700 at sub_000C276F. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x000C2700..0x000C276F. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21). END TIGHTENED 2026-10-07: the declared end 0x000C276F swallowed the separate evidenced entry 0x000C2730 (check-hidden-entries.py OVERLAP, which names the real boundary \"body ends at 0x000C272D\"). The original XBE agrees: `ret` at 0x000C2724, a two-instruction tail ending in `ret` at 0x000C272C, NOP padding at 0x000C272D-0x000C272F, then a clean prologue at 0x000C2730. Four sibling entries (0x000C2480, 0x000C2500, 0x000C2560, 0x000C25D0) carry the same original over-run in the analysis database but are already narrowed in this manifest; this entry was not.",
   "stack_args": 0
  },
  {
@@ -8191,10 +8191,10 @@
  },
  {
   "start": "0x000C33C0",
-  "end": "0x000C3500",
+  "end": "0x000C3408",
   "section": ".text",
   "kind": "routine",
-  "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CDCB0, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_000C3670 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000C33C0 at sub_000C3670. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x000C33C0..0x000C3670. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
+  "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CDCB0, whose entries are all distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_000C3670 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000C33C0 at sub_000C3670. A virtual call then enters the wrong function. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x000C33C0..0x000C3670. Evidence: logs/runs/20260921-160209-538-crt-initializers-bounds/ and the alias-fold findings in report-deepseek.md (2026-09-21). END TIGHTENED 2026-10-07: the declared end 0x000C3500 ran over the separate function 0x000C3410. check-hidden-entries.py --show-all reported \"entry 0x000C33C0-0x000C3500: body ends at 0x000C3408\", and the XBE agrees (`ret` at 0x000C3407, then NOP padding to 0x000C340F, then the prologue at 0x000C3410).",
   "stack_args": 0
  },
  {
@@ -25076,5 +25076,21 @@
   "kind": "routine",
   "evidence": "Recovered because the function is reached ONLY by an indirect call, so no direct call site put it in the analysis database and it has no entry at all: the run log reports [ICALL] Failed to resolve VA 0x00159330, which is fatal (0xE0424943) and now ends the title run after ~624 s. The address is a complete function, not an internal label: 0x00159321-0x0015932F is NOP padding, 0x00159330 begins a clean prologue (push ecx; push esi; mov esi,[esp+0xC]), the body runs to 0x00159416 ret 0xc, and 0x00159419-0x0015941F is further NOP padding before the next function at 0x00159420. Its calls are 0x00145A99 twice (a memcpy-shaped helper) and its callees resolve. Body 0x00159330..0x00159419. Evidence: logs/runs/20261007-122836-322-title008-witness-1A30-long (unhandled_exception, 624.065 s) and 20261007-113354-706-title008-trace-admit; disassembly of the original XBE; 2026-10-07. The epilogue is ret 0xc at 0x00159416 reached at depth 0, so stack_args is 12 (check-stack-depth.py DEFECT/STACK_ARGS caught the omission).",
   "stack_args": 12
+ },
+ {
+  "start": "0x000C2730",
+  "end": "0x000C276F",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Recovered because the function is swallowed by an abutting alias span, the class recover-functions.py exists for. Five overlapping tail_jump_alias entries in tools/disasm/output/functions.json (sub_000C2480, sub_000C2500, sub_000C2560, sub_000C25D0, sub_000C2700) all claim to end at 0x000C276F, so 0x000C2730 had no entry of its own and the run logged `[ICALL] Failed to resolve VA 0x000C2730`, fatal (0xE0424943), at presents 2442 after 587 s (logs/runs/20261007-223953-965-title008-frames-late). The address is a complete function, not an internal label: 0x000C272D-0x000C272F is NOP padding, 0x000C2730 begins a clean prologue (sub esp,0x18; push esi; mov esi,ecx), and the body ends with `ret` at 0x000C276E, immediately before 0x000C276F which starts the next function. Extent [0x000C2730, 0x000C276F). No stack arguments (the epilogue is a bare `ret`). 2026-10-07.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x000C3410",
+  "end": "0x000C3670",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Recovered because the function is swallowed by abutting alias spans, the same class as 0x000C2730 and in the same region: seven overlapping tail_jump_alias entries (sub_000C2FE0, sub_000C30C0, sub_000C3100, sub_000C3140, sub_000C31B0, sub_000C3350, sub_000C33C0) all declare an end of 0x000C3670, so 0x000C3410 had no entry of its own and the run logged `[ICALL] Failed to resolve VA 0x000C3410`, fatal (0xE0424943), at presents 2443 after 569 s (logs/runs/20261007-233030-481-title008-c2730-fixed). The address is a complete function: `ret` at 0x000C3407, NOP padding at 0x000C3408-0x000C340F, then a clean prologue at 0x000C3410 (sub esp,0x2c; push esi; mov esi,ecx). The body runs through 0x000C3668 and the region ends with NOP padding at 0x000C366D-0x000C366F before the next function at 0x000C3670, so the entry ends there. check-hidden-entries.py --show-all named the container and its real boundary: \"entry 0x000C33C0-0x000C3500: body ends at 0x000C3408\". 2026-10-07.",
+  "stack_args": 0
  }
 ]
