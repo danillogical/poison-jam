@@ -304,10 +304,11 @@ class SubmitStateDecodeTests(unittest.TestCase):
         """The sizes are derived from the field tuples, so they cannot drift.
 
         The struct has grown in stages (base -> budget transcript -> unit
-        accounting -> continuation audit -> vblank audit) and each stage is a
-        separately declared tier, so the check is that the tiers are a
-        partition of the full field list: appending a field to the full tuple
-        without adding it to a tier, or vice versa, is what this catches.
+        accounting -> continuation audit -> vblank audit -> resume quality ->
+        vblank scheduling/lock telemetry) and each stage is a separately
+        declared tier, so the check is that the tiers are a partition of the
+        full field list: appending a field to the full tuple without adding it
+        to a tier, or vice versa, is what this catches.
         """
         self.assertEqual(jsrf_gpu.SUBMIT_STATE_BASE_SIZE,
                          4*len(jsrf_gpu.SUBMIT_STATE_BASE_FIELDS))
@@ -318,7 +319,9 @@ class SubmitStateDecodeTests(unittest.TestCase):
                  + jsrf_gpu.SUBMIT_STATE_UNIT_FIELDS
                  + jsrf_gpu.SUBMIT_STATE_CONTINUATION_FIELDS
                  + jsrf_gpu.SUBMIT_STATE_VBLANK_FIELDS
-                 + jsrf_gpu.SUBMIT_STATE_RESUME_QUALITY_FIELDS)
+                 + jsrf_gpu.SUBMIT_STATE_RESUME_QUALITY_FIELDS
+                 + jsrf_gpu.SUBMIT_STATE_VBLANK_SCHED_FIELDS
+                 + jsrf_gpu.SUBMIT_STATE_LOCK_FIELDS)
         self.assertEqual(list(tiers), list(jsrf_gpu.SUBMIT_STATE_FIELDS),
                          'the tiers must concatenate to the full field list, '
                          'in struct order')

@@ -183,10 +183,33 @@ SUBMIT_STATE_VBLANK_FIELDS = (
 # a boundary-only comparison cannot name.
 SUBMIT_STATE_RESUME_QUALITY_FIELDS = ('budget_resume_stalled',
                                       'budget_resume_drained')
+# The vblank scheduling / re-arm and owner-lock telemetry, appended after the
+# resume-quality fields (title-010).
+#
+# WHY THESE MATTER. `vblank_pulses` is 30-80x below nominal in every archived
+# run and a bare scalar cannot say whether delivery is slow or STOPPED, nor
+# whether the cause is the service loop's late-wake branch (which re-arms
+# without pulsing) or the owner lock (which the ptimer thread needs in order to
+# pulse at all, and which the guest holds across the entire submission walk).
+# `vblank_passes` is the denominator that turns the pulse count into a rate;
+# `vblank_rearm_late` counts the no-pulse branch; `lock_hold_max_ms` and
+# `lock_wait_max_ms` separate "a long hold blocked the pulser" from "the pulser
+# was never scheduled". The `_ms` stamps are process-start-relative, so they
+# share an epoch with each other -- unlike `[FBPRESENT] t=`, which is relative
+# to the first present.
+SUBMIT_STATE_VBLANK_SCHED_FIELDS = (
+    'vblank_rearm_late', 'vblank_passes', 'vblank_frame_ns',
+    'vblank_rearm_late_max_ms', 'vblank_max_gap_ms',
+    'vblank_last_pass_ms', 'vblank_last_pulse_ms')
+SUBMIT_STATE_LOCK_FIELDS = (
+    'lock_hold_max_ms', 'lock_wait_max_ms', 'lock_hold_last_tid',
+    'lock_owner_tid', 'lock_acquisitions')
 SUBMIT_STATE_FIELDS = (SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS
                        + SUBMIT_STATE_UNIT_FIELDS + SUBMIT_STATE_CONTINUATION_FIELDS
                        + SUBMIT_STATE_VBLANK_FIELDS
-                       + SUBMIT_STATE_RESUME_QUALITY_FIELDS)
+                       + SUBMIT_STATE_RESUME_QUALITY_FIELDS
+                       + SUBMIT_STATE_VBLANK_SCHED_FIELDS
+                       + SUBMIT_STATE_LOCK_FIELDS)
 SUBMIT_STATE_BASE_SIZE = 4 * len(SUBMIT_STATE_BASE_FIELDS)
 SUBMIT_STATE_BUDGET_SIZE = 4 * len(SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS)
 SUBMIT_STATE_UNIT_SIZE = 4 * len(SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS
@@ -197,6 +220,10 @@ SUBMIT_STATE_CONTINUATION_SIZE = 4 * len(
 SUBMIT_STATE_VBLANK_SIZE = 4 * len(
     SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS + SUBMIT_STATE_UNIT_FIELDS
     + SUBMIT_STATE_CONTINUATION_FIELDS + SUBMIT_STATE_VBLANK_FIELDS)
+SUBMIT_STATE_RESUME_QUALITY_SIZE = 4 * len(
+    SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS + SUBMIT_STATE_UNIT_FIELDS
+    + SUBMIT_STATE_CONTINUATION_FIELDS + SUBMIT_STATE_VBLANK_FIELDS
+    + SUBMIT_STATE_RESUME_QUALITY_FIELDS)
 SUBMIT_STATE_SIZE = 4 * len(SUBMIT_STATE_FIELDS)
 
 
@@ -221,7 +248,15 @@ def decode_submit_state(raw):
     state['has_vblank_audit'] = have >= len(
         SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS + SUBMIT_STATE_UNIT_FIELDS
         + SUBMIT_STATE_CONTINUATION_FIELDS + SUBMIT_STATE_VBLANK_FIELDS)
-    state['has_resume_quality'] = have >= len(SUBMIT_STATE_FIELDS)
+    state['has_resume_quality'] = have >= len(
+        SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS + SUBMIT_STATE_UNIT_FIELDS
+        + SUBMIT_STATE_CONTINUATION_FIELDS + SUBMIT_STATE_VBLANK_FIELDS
+        + SUBMIT_STATE_RESUME_QUALITY_FIELDS)
+    state['has_vblank_sched'] = have >= len(
+        SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS + SUBMIT_STATE_UNIT_FIELDS
+        + SUBMIT_STATE_CONTINUATION_FIELDS + SUBMIT_STATE_VBLANK_FIELDS
+        + SUBMIT_STATE_RESUME_QUALITY_FIELDS + SUBMIT_STATE_VBLANK_SCHED_FIELDS)
+    state['has_lock_telemetry'] = have >= len(SUBMIT_STATE_FIELDS)
     # The histogram arrives as flat fields (the struct holds an array, but the
     # decoder's field-list shape is flat); reassemble it so a reader does not
     # have to know how many bins there are.
@@ -478,6 +513,33 @@ def markdown(report):
                       f"up / {state.get('vblank_irq_deasserted', 0)} down; "
                       f"last ack {hx(state.get('vblank_last_ack_value', 0))}, "
                       f"pending left {hx(state.get('vblank_pending_last', 0))}."]
+        # The vblank scheduling / re-arm and owner-lock telemetry. `pulses`
+        # alone cannot distinguish a slow display from a stopped one; the pass
+        # count is the denominator and `rearm_late` names the branch that
+        # re-arms without pulsing. The lock line separates a long HOLD (the
+        # walk starving the pulser) from a long WAIT (the pulser queued behind
+        # the walk) -- opposite remedies, so they are reported apart.
+        if state.get('has_vblank_sched'):
+            passes = state.get('vblank_passes', 0)
+            late = state.get('vblank_rearm_late', 0)
+            pulses_s = state.get('vblank_pulses', 0)
+            rate = (pulses_s / passes) if passes else 0.0
+            lines += [f"Vblank scheduling: {passes} service pass(es), {late} "
+                      f"late re-arm(s) that did NOT pulse (max lateness "
+                      f"{state.get('vblank_rearm_late_max_ms', 0)} ms); max "
+                      f"pulse-to-pulse gap {state.get('vblank_max_gap_ms', 0)} ms; "
+                      f"frame period {state.get('vblank_frame_ns', 0)} us; "
+                      f"pulses/pass {rate:.4f}; last pass at "
+                      f"{state.get('vblank_last_pass_ms', 0)} ms, last pulse at "
+                      f"{state.get('vblank_last_pulse_ms', 0)} ms "
+                      f"(process-relative)."]
+        if state.get('has_lock_telemetry'):
+            lines += [f"Owner lock: {state.get('lock_acquisitions', 0)} "
+                      f"acquisition(s); max hold "
+                      f"{state.get('lock_hold_max_ms', 0)} ms (holder tid "
+                      f"{state.get('lock_hold_last_tid', 0)}), max wait-to-acquire "
+                      f"{state.get('lock_wait_max_ms', 0)} ms; owner tid now "
+                      f"{state.get('lock_owner_tid', 0)}."]
     lines += ['',report['queue'].get('detail',''),'','## Methods in the pending stream the table lacks','']
     missing = report['missing_methods']
     if missing is None: lines.append('Method table unavailable; unsupported methods were not checked.')
