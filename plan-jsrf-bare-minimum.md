@@ -60,22 +60,39 @@ effect. The "field confirmation" does not discriminate either (`frames-late` kep
 
 **So the `Now Loading` hold is OPEN again, with a corrected problem statement.** It correlates with the
 ADX vsync/file worker threads (`0x0013B1C0`, `0x0013B230`) ceasing to advance, `title.adx` being opened
-and never read, and the guest staying on the animated loading loop — but the cause of **those** deaths
-is **not** the host clock, because it happens in runs whose windows contain no wrap at all. **Start
-from the unwrapped deaths** (`long3d`, `units`, `blacktrace`, `trace-noadmit`, `admitted39`,
-`title005-admit3`), which share the symptom with no wrap to blame. The comparability rule below still
+and never read, and the guest staying on the animated loading loop.
+
+**The wrap association is PRESENT but its mechanism is NOT established — this is the strongest
+surviving lead, and an earlier version of this plan wrongly closed it off.** Independently reproduced
+over the 81 runs with ADX workers (`logs/workers/title009/orch/verify_contingency.py`): a run whose
+window contains a wrap loses a worker **41.7 %** of the time versus **12.3 %** for one whose window
+does not. So wrapped runs are roughly three times likelier to lose their workers, and the correct
+reading is **"association present, mechanism not yet shown"** — not "the wrap predicts nothing".
+
+**And the timing figures that were used to dismiss it were an epoch error.** Three different clocks
+are in play: the overflow is in the **QPC** product (boot-relative); `[CHECKPOINT] ms=` is
+**GetTickCount64**; and `[FBPRESENT] t=Ns` is `GetTickCount()` minus the tick at the **first present**
+(`fb_present.c`), not process start. Measured on this host, `QPC - GetTickCount64 = +4.2 s`. Run 507
+is 9.6 s from its wrap on the uncorrected axis but only about 3.4 s once both offsets are applied.
+**Any future timing comparison in this area must align the epochs first.** The comparability rule below still
 stands: classify every archived run by whether `[start, start + duration]` contains a wrap instant
 before comparing it with another run (`logs/workers/title009/orch/wrap_in_window.py`,
 `vsync_death.py`).
 
 **`budget_exhausted` is Case A — benign resumable chunking — and its real defect is a zero-commit
 livelock** (TR §24.1, L54). The walk now keeps a per-stop ring and a resume audit: on the
-instrumented control `20261008-032308-212-title009-cap1024` there were **17 stops, 17 resumes that
-began exactly at the previous stop's committed boundary, and 0 that did not**. Every stop is followed
-by `[PFIFO] recovered after 1 rejections get==put` with `successes` advancing by 1; GET advances
-monotonically within each event; no `still rejecting`, `bad_target`, `loop`, `truncated` or
-`method_range` appears anywhere in the archive; `ret` is 0 at every latched stop, so the
-"`ret` lost across a rejection" hazard is **latent and unexercised**. The 12 title-phase stop
+instrumented control `20261008-032308-212-title009-cap1024` there were **17 stops, every one of which
+DRAINED** — each is followed by `[PFIFO] recovered after 1 rejections get==put` with `successes`
+advancing by exactly 1, and the 17 stop addresses are distinct. **That drain evidence is what
+establishes the classification, not the audit's "17 matched / 0 mismatched"**: as first written the
+audit compared the boundary against the same register, so "matched" was the default even with zero
+progress; the toolkit now requires progress and names the zero-progress case `budget_resume_stalled`.
+**In the control run** there is no `still rejecting` line, no `invalid_target`, no
+`control_flow_loop`, no `truncated` and no `method_range`; `ret` is 0 at every latched stop, so the
+"`ret` lost across a rejection" hazard is **latent and unexercised**. (Scope note: the earlier
+"anywhere in the archive" wording was FALSE and is withdrawn — there are **44** `[PFIFO] still
+rejecting` lines archive-wide: `unsupported_method` 29, `sink_capacity` 8, `budget_exhausted` 3,
+`invalid_target` 2, `reserved_opcode` 2. `bad_target` and `loop` are enum spellings that never print.) The 12 title-phase stop
 addresses reproduce **byte-identically** across binaries and guest paths (12/12).
 
 **The cap's scope is a real defect, recorded not fixed.** `unit_words` resets per unit but `packets`
@@ -105,14 +122,16 @@ time goes (per-triangle setup versus per-pixel sampling), not another run of the
 counters step from a stable ~17–25 % "texcoords but no usable stage" to a steady **93.8 %** at
 present ~2457 (independently verified from the increments between cumulative reports), while the
 city scene the executor *can* rasterise (`efddce3b5bb02ab1`) is published in **none** of 188
-archived runs. **That stage loss is the guest's own instruction, measured, not lost state:** the
-fixed run
-`20261008-043848-133-title009-clockfix-1800` reports **every** untexturable batch as `stage
-disabled by the guest` and **zero** as `no offset` / `no dimensions` / `unusable format` / `other`,
-at every report from the first (85) to the last sampled (2833), so the sticky stage-0 gate is
-honouring an explicit `SET_TEXTURE_CONTROL0` clear. The "sticky gate is a regression dropping the
-backdrop" hypothesis is therefore **falsified by a per-batch discriminator**. What those
-disabled-stage batches should draw instead stays open. **M15 is NOT reached.**
+archived runs. **That stage loss is a measured correlation whose counter cannot exclude lost state:** the fixed
+run `20261008-043848-133-title009-clockfix-1800` reports **every** untexturable batch as `stage
+disabled by the guest` and **zero** as `no offset` / `no dimensions` / `unusable format` /
+`other` — at all 179 reports, with a final total of **4187** matching the `batches:` no-usable-stage
+count exactly. **But the discriminator tests the enable bit first, so it cannot distinguish "the
+guest disabled stage 0" from "the model cleared or never received the enable bit"** — the very
+hypothesis it was written to exclude. So the "sticky gate is a regression dropping the rendered
+scene" hypothesis is **NOT falsified; it is unresolved**, and whether the guest intended stage 0
+disabled for those batches is **INFERRED, not established**. A stronger discriminator would latch
+whether `SET_TEXTURE_CONTROL0` was ever written, how many times, and its last value.
 
 **SUPERSEDED by the Current work section above** (turn title-009). The blocks that follow are the
 title-008 narrative, kept for provenance: the method-table progression and the indirect-call

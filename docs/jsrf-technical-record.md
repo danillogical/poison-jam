@@ -4090,7 +4090,7 @@ causal for the loading hold" is **confounded and is withdrawn**: 507 and `witnes
 different guest paths (see §24.2), so they were never a single-variable comparison. The conclusion
 that exhaustion is not the loading blocker survives, but for the different reason recorded in §24.2.
 
-## §24.2 The `Now Loading` hold: a host clock overflow exists and is FIXED, but it is NOT established as the cause
+## §24.2 The `Now Loading` hold: a host clock overflow exists and is FIXED; the wrap is ASSOCIATED with worker loss, but the mechanism is not established
 
 **Status: the repair stands; the causal attribution was WITHDRAWN after Turn Review.** This section
 originally claimed that a host clock overflow *caused* the `Now Loading` hold. The overflow is real,
@@ -4133,63 +4133,68 @@ separately, and that the signed one is a *forward* jump, so the two cannot be co
 `vblank_clock_step_test` covers the loop's rule (0 pulses in 10 frames with the pre-fix rule, 9 with
 the fix).
 
-### An OPEN lead: vblank delivery is far below nominal even in the surviving runs
+### What is WITHDRAWN, and what SURVIVES as an association
 
-The fix's own audit counters show that vblank delivery is **not healthy** on the runs that kept their
-workers, which the withdrawn text mis-described as "the display kept pulsing". `clockfix-1800` exported
-`vblank_pulses = 1337` over ~1780 s (about **0.75 Hz**); `035729-cap1024` exported 1104 over 904 s
-(about **1.23 Hz**). The model's nominal rate is at least **40 Hz** (`nv2a_display_frame_ns`, with a
-60 Hz fallback), so delivery is roughly 30-80x short.
+**Two separate corrections were needed here, and the first attempt over-corrected
+in the opposite direction.** The original text claimed the wrap *caused* the
+worker deaths; the first remediation replaced that with "wrap windows do not
+predict worker loss". **That replacement was also false**, and Turn Review 2
+caught it. What the archive actually shows is an **association whose mechanism is
+not established**.
 
-`nv2a_vblank_advance` re-arms **without pulsing** whenever the service thread wakes four or more frames
-late (`now >= next + 4*frame`), and that thread takes `g_mmio_owner_lock` -- the same lock the MMIO and
-submission-walk path holds. It is therefore **INFERRED, not shown**, that long walks starve the service
-thread. This is a candidate cause for the reopened `Now Loading` blocker and a plausible link to the
-worker deaths, but it has not been tested. **The falsifier:** if surviving runs and dying runs show the
-same maximum pulse gap, lock starvation is not the cause either.
+**The association is present (independently reproduced).** Over the 81 archived
+runs that have ADX worker threads, taking "loss" as any worker stopping at least
+30 s before the last present:
 
-### What is NOT established, and was WITHDRAWN
+| | workers lost | workers kept | loss rate |
+|---|---|---|---|
+| run window contains a wrap | 10 | 14 | **41.7 %** |
+| run window contains no wrap | 7 | 50 | **12.3 %** |
 
-**The claim that the overflow caused any archived worker death is FALSIFIED.** The original text
-asserted, as measured fact, that "every archived run whose window contains a wrap loses those workers;
-every run whose window does not, keeps them." A Turn Reviewer computed wrap instants independently
-(from host boot time, cross-checked against `[CHECKPOINT] ms=` over ~100 runs) and attributed
-`[KERNEL] summary` blocks by `esp=`, and found direct counterexamples on both sides:
+(`logs/workers/title009/orch/verify_contingency.py`.) So a wrapped run is about
+**three times likelier** to lose a worker. The universal form the original text
+asserted — *every* wrapped run loses them, *every* unwrapped run keeps them — is
+still **false**, and the six wrapped-but-kept runs remain counterexamples to it.
+Both things are true at once: the association is real, the universality is not.
 
-- **wrapped, workers KEPT:** `20261007-223953-965-title008-frames-late` (wrap 13 s in, workers alive
-  to 578 s — 565 s past the wrap), `20261008-043848-133-title009-clockfix-1800` (wrap 615 s),
-  `20261005-114334-406-f30-8aeb0`, `20261006-205823-760-title005-admit-unknown`,
-  `20261007-003312-828-20261007-title006-ex3`, `20261004-204852-370-f13-adxcaller`;
-- **unwrapped, workers LOST:** `20261007-054545-206-title007-long3d`, `…units`, `…units4`,
-  `…blacktrace`, `…trace-noadmit`, `…admitted39`, `20261006-213505-255-title005-admit3`.
+**The timing figures that were used to dismiss it were an epoch error.** Three
+different clocks are in play and they do not share a zero:
 
-**The flagship example fails on its own numbers, and a cause must precede its effect.** In
-`20261008-003812-419-title008-507` the worker threads' last `[KERNEL] summary` is at present **t=284**,
-while the unsigned wrap falls **293.6 s** into the run — the workers stop **9.6 s BEFORE** the wrap.
-Independently reproduced here. The records had also given three mutually inconsistent figures for this
-one event ("t~286 s, wrap 290 s", and "0.2-1.7 s before").
+- the overflow is in the **QPC** product, so a wrap instant is a QPC (uptime)
+  instant;
+- `[CHECKPOINT] ms=` is **GetTickCount64**, also boot-relative but a different
+  clock — measured on this host, `QPC - GetTickCount64 = +4.2 s`;
+- `[FBPRESENT] t=Ns` is `GetTickCount()` minus the tick at the **first present**
+  (`fb_present.c`, `t0 = GetTickCount()` in `fb_present_observe`), i.e. relative
+  to the first present, **not** to process start.
 
-**Also withdrawn:** the claim that the dump "falsifies the competing explanations" was left
-`UNVERIFIED` by the review (the enables/vector/DPC/event sub-claim was read but not re-derived).
-And the "field confirmation" does **not** discriminate: `clockfix-1800` kept its workers across a
-wrap, but so did `frames-late` on the **unfixed** binary, while seven unwrapped runs lost theirs. That
-run shows the fix is not harmful; it does not show the fix is why the workers survived. (It was also
-still executing when an earlier commit asserted its results.)
+Comparing a QPC instant against an `[FBPRESENT]` timestamp without correcting for
+both offsets is what produced the "9.6 s before the wrap" figure. With the QPC
+offset alone run 507 moves to about −5.3 s, and with the first-present offset as
+well to about −3.4 s — i.e. **at the wrap, within the observation cadence**,
+rather than before it. Across the 16 worker deaths the count falling within ±5 s
+of a wrap goes from 0 (naive) to several once the epochs are aligned.
 
-**So the `Now Loading` hold is OPEN again**, with a corrected problem statement: the hold correlates
-with the ADX vsync/file worker threads (guest starts `0x0013B1C0`, `0x0013B230`) ceasing to advance,
-`title.adx` being opened and never read, and the guest staying on the animated loading loop — but the
-cause of **those** deaths is **not** the host clock, since it happens in runs whose windows contain no
-wrap at all. The next investigation must start from the unwrapped deaths (`long3d`, `units`,
-`blacktrace`, `trace-noadmit`, `admitted39`, `title005-admit3`), which share the symptom with no wrap
-to blame.
+**Therefore:** the clock fix stands as a latent-defect repair, **and** the wrap
+remains the strongest surviving lead for the worker deaths — but the *mechanism*
+by which a wrap would kill a worker has **not** been shown, and the deaths that
+occur in runs with no wrap in their window are **not explained by it at all**.
+Both facts must stay in view: a session that treats the wrap as settled will miss
+the unwrapped deaths, and a session that treats it as irrelevant will skip the
+strongest lead.
 
-**Consequence for every earlier comparison.** 507 vs `witness-0298` differed by **run start time**
-among other things, and any archived run must still be classified by whether `[start, start +
-duration]` contains a wrap instant before its results are compared with another run's
-(`logs/workers/title009/orch/wrap_in_window.py`; the per-run worker-liveness discriminator is
-`logs/workers/title009/orch/vsync_death.py`). That rule survives the withdrawal — it is a
-comparability precaution, not the causal claim.
+**The dump sub-claim remains UNVERIFIED.** The claim that the dump "falsifies the
+competing explanations" (both interrupt enables set, vector 3 connected, the irq
+line low, the DPC queue empty, the guest event unsignalled, the threads' exit
+flags zero) was read but never re-derived by either review. It is recorded as the
+turn's own reading of 507's dump, not as an established fact.
+
+**Open lead, unchanged:** vblank delivery is ~30–80x below nominal even in the
+surviving runs (`clockfix-1800` 1337 pulses over ~1780 s = 0.75 Hz;
+`035729-cap1024` 1104 over 904 s = 1.22 Hz; the model's nominal is at least
+40 Hz). `nv2a_vblank_advance` re-arms without pulsing when the service thread
+wakes four or more frames late, and that thread shares `g_mmio_owner_lock` with
+the walk, so lock starvation is a candidate — INFERRED, not tested.
 
 ## §24.3 The guest's real blocker after the clock fix is executor throughput, not the walk
 
