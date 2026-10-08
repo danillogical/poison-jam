@@ -24,9 +24,9 @@
  "generators": {
   "project": {
    "dirty": true,
-   "revision": "827b5379984c9174d1ddc159807f062f03334584",
+   "revision": "0cba32aa068a3ea44bbe0235a757d330fce5e8c6",
    "state": "MEASURED",
-   "status_sha256": "6d2358f2391816ccc22c84040c7645ef546fd76af0c559c373bf003577ec798d"
+   "status_sha256": "3892fb9742d39995c2ae7636509451cb3130a75a8b3ecf9c35c1138ba12f07a4"
   },
   "scripts/recover-functions.py": "c951fe5ed787253bd523d16502a231772197043b84a3b20e4c7b680b55c03847",
   "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
@@ -51,9 +51,9 @@
    "sha256": "5538e0c95b081935ef83d587d6a22dd3b8219e807bdc5c651341b6a4ba7bbc4f"
   },
   "config/recovered-functions.json": {
-   "bytes": 3096636,
+   "bytes": 3052804,
    "present": true,
-   "sha256": "1d1a5b88bdc4ad85a5b77ec49e82b6e5d7dcd52273f19dc948eb7e49d7b35680"
+   "sha256": "b47621b1f7e90e21c65d18faaf683f76c83b875691856d69a552a68aaa5acac4"
   },
   "config/recovery-unresolved.json": {
    "bytes": 4625,
