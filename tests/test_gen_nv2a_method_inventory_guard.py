@@ -56,6 +56,13 @@ GENERATING_RUNS = [
     "20260930-230206-594-f4-frames-after-horizon-fix",
     "20261006-203929-286-title005-ceiling",
 ]
+# The default run the generator decodes when none is named, and the run most
+# fail-closed tests pass. Its absence (a checkout without `logs/`) must skip the
+# tests that need it, not fail them.
+HAVE_FIRST_RUN = (ROOT / "logs" / "runs" / "20260922-110235-244-spanfix-1185b0"
+                  / "jsrf_run.log").is_file()
+needs_first_run = unittest.skipUnless(
+    HAVE_FIRST_RUN, "the archived run logs/runs/20260922-... is not present")
 HAVE_ARCHIVES = all((ROOT / "logs" / "runs" / r / "jsrf_run.log").is_file()
                     for r in GENERATING_RUNS)
 
@@ -173,6 +180,7 @@ class GuardTests(unittest.TestCase):
         self.assert_nothing_written(proc)
         self.assertIn("missing a value", proc.stderr)
 
+    @needs_first_run
     def test_empty_table_out_fails_closed(self):
         """`--table-out=` must not silently fall back to the real toolkit path.
 
@@ -239,6 +247,7 @@ class GuardTests(unittest.TestCase):
         self.assertIn("--allow-removals", proc.stdout)
 
 
+@needs_first_run
 class WitnessManifestTests(unittest.TestCase):
     """The runtime-witness manifest must not be able to admit an unjustified method.
 
@@ -345,6 +354,79 @@ class WitnessManifestTests(unittest.TestCase):
                 bad = dict(self.VALID)
                 del bad[field]
                 self.assert_refused(self.run_with(bad), "no auditable provenance")
+
+
+class ScratchTreeWitnessTests(unittest.TestCase):
+    """Witness-switch behaviour that needs no archived run.
+
+    The script locates everything from its own path, so these tests copy it into
+    a scratch tree with a stub decoder and a four-word fake ring. The scratch
+    tree's DEFAULT witness manifest is deliberately unparseable: any run that
+    still reads it fails with "cannot parse", which makes "witnesses disabled"
+    observable.
+    """
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="nv2a-scratch-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        tree = self.tmp / "tree"
+        (tree / "scripts").mkdir(parents=True)
+        (tree / "config").mkdir()
+        (tree / "logs" / "runs" / "r1").mkdir(parents=True)
+        shutil.copy2(SCRIPT, tree / "scripts" / SCRIPT.name)
+        (tree / "scripts" / "jsrf_dump.py").write_text(
+            "import struct\n"
+            "class DumpMemory:\n"
+            "    def __init__(self, run): pass\n"
+            "    def read(self, va, n):\n"
+            "        raw = struct.pack('<4I', 0x00040100, 0, 0x00040104, 0)\n"
+            "        return raw[:n].ljust(n, b'\\0')\n"
+            "    def close(self): pass\n", encoding="utf-8")
+        (tree / "logs" / "runs" / "r1" / "jsrf_run.log").write_text(
+            "  [PFIFO] submit #0 diag=ok get=00001000 put=00001010 method=000 "
+            "subch=0 param=0 at=0\n", encoding="utf-8")
+        (tree / "config" / "nv2a-runtime-witnessed-methods.json").write_text(
+            "not json", encoding="utf-8")
+        self.tree = tree
+        self.table = self.tmp / "table.c"
+        self.doc = self.tmp / "doc.md"
+
+    def run_gen(self, *argv, env=None):
+        environment = dict(os.environ)
+        environment.pop("JSRF_NV2A_WITNESS", None)
+        environment.update(env or {})
+        return subprocess.run(
+            [sys.executable, "-X", "utf8", str(self.tree / "scripts" / SCRIPT.name),
+             "--table-out=%s" % self.table, "--doc-out=%s" % self.doc,
+             "--allow-removals", *argv, "r1"],
+            capture_output=True, text=True, timeout=120, env=environment)
+
+    def test_control_the_default_manifest_is_read(self):
+        proc = self.run_gen()
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("cannot parse the witness", proc.stderr)
+
+    def test_flag_none_disables_witnesses(self):
+        proc = self.run_gen("--witness=none")
+        self.assertEqual(proc.returncode, 0, proc.stderr[-400:])
+        self.assertTrue(self.table.is_file())
+
+    def test_env_none_disables_witnesses(self):
+        """`JSRF_NV2A_WITNESS=none` used to be re-defaulted to the manifest."""
+        proc = self.run_gen(env={"JSRF_NV2A_WITNESS": "none"})
+        self.assertEqual(proc.returncode, 0,
+                         "JSRF_NV2A_WITNESS=none still read the manifest: %s"
+                         % proc.stderr[-400:])
+        self.assertTrue(self.table.is_file())
+
+    def test_empty_witness_flag_fails_closed(self):
+        """`--witness=` must be an error like `--table-out=`, never "no witnesses"."""
+        proc = self.run_gen("--witness=")
+        self.assertNotEqual(proc.returncode, 0,
+                            "an empty --witness= was accepted as 'no witnesses'")
+        self.assertIn("needs a path", proc.stderr)
+        self.assertFalse(self.table.exists(), "the table was written by a refused run")
+        self.assertFalse(self.doc.exists(), "the document was written by a refused run")
 
 
 @unittest.skipUnless(HAVE_ARCHIVES, "generating archives are not present")

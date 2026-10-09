@@ -75,7 +75,8 @@ if any(a in ("-h", "--help") for a in sys.argv[1:]):
     print("                  only after a successful commit, so it is stronger evidence")
     print("                  than any decode. Default:")
     print("                  config/nv2a-runtime-witnessed-methods.json (env var")
-    print("                  JSRF_NV2A_WITNESS does the same; --witness=none disables)")
+    print("                  JSRF_NV2A_WITNESS does the same; `none` in either disables;")
+    print("                  an empty --witness= is an error)")
     print("  --allow-removals  permit a table that removes existing methods")
     print("                  (refused by default: a removal re-breaks the walk)")
     print()
@@ -371,16 +372,25 @@ out += ["",
 # wrapped ring, and without hand-editing a generated file that the next
 # regeneration would silently drop.
 WITNESS_ENTRIES = []
+DEFAULT_WITNESS = str(root / "config" / "nv2a-runtime-witnessed-methods.json")
+# "none" is an explicit request for no witnesses; it is tracked apart from "unset"
+# (which uses the manifest) so the default can never re-apply over it. An EMPTY
+# --witness= is an error, like --table-out=: it must not mean "no witnesses".
+if "witness" in opts and not opts["witness"].strip():
+    raise SystemExit("gen-nv2a-method-inventory: --witness= needs a path "
+                     "(or `none` to generate without witnesses)")
+witnesses_disabled = False
 witness_path = None
 if "witness" in opts:
-    witness_path = None if opts["witness"].strip().lower() in ("", "none") else opts["witness"]
-elif os.environ.get("JSRF_NV2A_WITNESS", "").strip().lower() in ("", "none"):
-    witness_path = None
+    if opts["witness"].strip().lower() == "none":
+        witnesses_disabled = True
+    else:
+        witness_path = opts["witness"]
+elif os.environ.get("JSRF_NV2A_WITNESS", "").strip().lower() == "none":
+    witnesses_disabled = True
 else:
-    witness_path = os.environ.get("JSRF_NV2A_WITNESS") or str(
-        root / "config" / "nv2a-runtime-witnessed-methods.json")
-if witness_path is None and "witness" not in opts:
-    witness_path = str(root / "config" / "nv2a-runtime-witnessed-methods.json")
+    witness_path = os.environ.get("JSRF_NV2A_WITNESS") or DEFAULT_WITNESS
+assert witnesses_disabled == (witness_path is None)
 
 CLASS_FOR_NAME = {"NV097_KELVIN_PRIMITIVE": "NV097_CLASS",
                   "NV_MEMORY_TO_MEMORY_FORMAT": "NV_MEMCPY_CLASS",

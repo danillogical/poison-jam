@@ -411,6 +411,95 @@ class SubmitStateSizeTests(unittest.TestCase):
         self.assertNotIn('budget_count',state)
 
 
+class SubmitStateTierTests(unittest.TestCase):
+    """The size DECISION for every layout the struct has had, and the exported size.
+
+    Tiers are recounted from `NV2ASubmitState` in the toolkit's nv2a_state.h:
+    base 12 words, +9 budget transcript, +3 units, +32 continuation, +10 vblank,
+    +2 resume quality, +7 vblank scheduling, +5 owner lock.
+    """
+    TIERS=[('base',48),('budget',84),('units',96),('continuation',224),
+           ('vblank',264),('resume',272),('sched',300),('full',320)]
+
+    def test_the_reader_knows_the_full_layout(self):
+        self.assertEqual(jsrf_gpu.SUBMIT_STATE_SIZE,320)
+
+    def test_every_known_layout_yields_its_own_tier(self):
+        for name,size in self.TIERS:
+            with self.subTest(tier=name,size=size):
+                w=[]
+                self.assertEqual(jsrf_gpu.submit_state_size_for_archive(size,w),size)
+                self.assertEqual(w,[])
+
+    def test_a_non_tier_size_floors_to_the_tier_below_with_a_warning(self):
+        for declared,expect in ((100,96),(230,224),(266,264),(270,264),(273,272),
+                                (290,272),(310,300),(330,320)):
+            with self.subTest(declared=declared):
+                w=[]
+                self.assertEqual(jsrf_gpu.submit_state_size_for_archive(declared,w),expect)
+                self.assertTrue(w,'a non-tier size was floored silently')
+
+    def test_exported_size_overrides_the_map_distance(self):
+        # Assumed seam: submit_state_size_for_archive(declared, warnings, exported=None).
+        w=[]
+        self.assertEqual(jsrf_gpu.submit_state_size_for_archive(64,w,exported=320),320)
+        self.assertEqual(w,[])
+        w=[]
+        self.assertEqual(jsrf_gpu.submit_state_size_for_archive(320,w,exported=96),96)
+        self.assertEqual(w,[])
+        w=[]
+        self.assertEqual(jsrf_gpu.submit_state_size_for_archive(None,w,exported=272),272)
+        self.assertEqual(w,[],'an exported size must not also warn that the map is silent')
+        w=[]
+        self.assertEqual(jsrf_gpu.submit_state_size_for_archive(None,w,exported=None),48)
+        self.assertTrue(w)
+
+    def test_exported_non_tier_size_floors_with_a_warning(self):
+        w=[]
+        self.assertEqual(jsrf_gpu.submit_state_size_for_archive(84,w,exported=290),272)
+        self.assertTrue(w)
+
+    def test_read_submit_state_prefers_the_exported_size(self):
+        """Through `read_submit_state` with the dump replaced by a recorder.
+
+        Assumed: the exported size is read as 4 little-endian bytes of
+        `g_nv2a_submit_state_size` via `DumpMemory.host_symbol`; a read that
+        raises CaptureError means the archive predates the export, and the map
+        distance decides.
+        """
+        import os
+        from unittest import mock
+        calls=[]
+        def make(exported):
+            class FakeDump:
+                def __init__(self,folder): pass
+                def __enter__(self): return self
+                def __exit__(self,*a): return False
+                def host_symbol(self,map_path,name,length,*a,**k):
+                    calls.append((name,length))
+                    if name=='g_nv2a_submit_state_size':
+                        if exported is None: raise CaptureError('absent')
+                        return struct.pack('<I',exported)
+                    return bytes(length)
+            return FakeDump
+        with tempfile.TemporaryDirectory() as folder:
+            (Path(folder)/'process.dmp').write_bytes(b'')
+            (Path(folder)/'jsrf_recomp.map').write_text(
+                ' Preferred load address is 140000000\n'
+                ' 0001:00000000       g_nv2a_submit_state      0000000142687500     a.obj\n'
+                ' 0001:00000000       g_after_state            0000000142687554     a.obj\n',
+                encoding='utf-8')                      # the map distance says 84
+            for exported,expect in ((320,320),(None,84)):
+                with self.subTest(exported=exported):
+                    del calls[:]
+                    with mock.patch.object(jsrf_gpu,'DumpMemory',make(exported)):
+                        state=jsrf_gpu.read_submit_state(folder,[])
+                    self.assertIsNotNone(state)
+                    reads=[c for c in calls if c[0]=='g_nv2a_submit_state']
+                    self.assertEqual(reads,[('g_nv2a_submit_state',expect)])
+                    self.assertIs(state['has_lock_telemetry'],expect==320)
+
+
 class ReadSubmitStateIntegrationTests(unittest.TestCase):
     """`read_submit_state` on REAL archived dumps, which is where the bug lived.
 

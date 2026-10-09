@@ -224,7 +224,16 @@ SUBMIT_STATE_RESUME_QUALITY_SIZE = 4 * len(
     SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS + SUBMIT_STATE_UNIT_FIELDS
     + SUBMIT_STATE_CONTINUATION_FIELDS + SUBMIT_STATE_VBLANK_FIELDS
     + SUBMIT_STATE_RESUME_QUALITY_FIELDS)
+SUBMIT_STATE_SCHED_SIZE = 4 * len(
+    SUBMIT_STATE_BASE_FIELDS + SUBMIT_STATE_BUDGET_FIELDS + SUBMIT_STATE_UNIT_FIELDS
+    + SUBMIT_STATE_CONTINUATION_FIELDS + SUBMIT_STATE_VBLANK_FIELDS
+    + SUBMIT_STATE_RESUME_QUALITY_FIELDS + SUBMIT_STATE_VBLANK_SCHED_FIELDS)
 SUBMIT_STATE_SIZE = 4 * len(SUBMIT_STATE_FIELDS)
+# Every layout the struct has had, smallest first.
+SUBMIT_STATE_TIERS = (SUBMIT_STATE_BASE_SIZE, SUBMIT_STATE_BUDGET_SIZE,
+                      SUBMIT_STATE_UNIT_SIZE, SUBMIT_STATE_CONTINUATION_SIZE,
+                      SUBMIT_STATE_VBLANK_SIZE, SUBMIT_STATE_RESUME_QUALITY_SIZE,
+                      SUBMIT_STATE_SCHED_SIZE, SUBMIT_STATE_SIZE)
 
 
 def decode_submit_state(raw):
@@ -295,7 +304,12 @@ def _submit_state_declared_size(map_path):
     return None
 
 
-def submit_state_size_for_archive(declared, warnings):
+# Map distances measured in builds that predate the exported size: the 48-byte base
+# struct followed by alignment padding reads as 64 and is the base layout.
+SUBMIT_STATE_LEGACY_MAP_DISTANCES = {64: SUBMIT_STATE_BASE_SIZE}
+
+
+def submit_state_size_for_archive(declared, warnings, exported=None):
     """How many bytes of `g_nv2a_submit_state` to read from an archive.
 
     Split out from `read_submit_state` so the DECISION is testable without a dump.
@@ -305,28 +319,41 @@ def submit_state_size_for_archive(declared, warnings):
     44040355 from unrelated memory). A test that only exercises the decoder cannot
     catch that, because the decoder is handed a length and dutifully decodes it.
 
-    `declared` is the size the ARCHIVE's linker map states, or None if it does not
-    state one. Returning None means "do not decode".
+    `exported` is the archive's own `g_nv2a_submit_state_size`, which is exact and
+    wins when valid. `declared` is the map distance to the next symbol, which
+    includes alignment padding and so can overstate the size; it is the fallback for
+    archives that predate the export, or None if the map states nothing. A size that
+    is not a known layout is floored to the largest tier below it, with a warning.
+    Returning None means "do not decode".
     """
-    if declared is None:
+    if isinstance(exported, int) and exported >= SUBMIT_STATE_BASE_SIZE:
+        size, source = exported, 'exported g_nv2a_submit_state_size'
+    elif declared is None:
         warnings.append('Submit state size not stated by the archive map; '
                         'decoding the base fields only.')
         return SUBMIT_STATE_BASE_SIZE
-    if declared >= SUBMIT_STATE_SIZE:
-        return SUBMIT_STATE_SIZE
-    if declared >= SUBMIT_STATE_VBLANK_SIZE:
-        return SUBMIT_STATE_VBLANK_SIZE
-    if declared >= SUBMIT_STATE_CONTINUATION_SIZE:
-        return SUBMIT_STATE_CONTINUATION_SIZE
-    if declared >= SUBMIT_STATE_UNIT_SIZE:
-        return SUBMIT_STATE_UNIT_SIZE
-    if declared >= SUBMIT_STATE_BUDGET_SIZE:
-        return SUBMIT_STATE_BUDGET_SIZE
-    if declared >= SUBMIT_STATE_BASE_SIZE:
-        return SUBMIT_STATE_BASE_SIZE
-    warnings.append(f'Submit state is {declared} bytes in this archive, smaller than '
+    else:
+        size, source = declared, 'map distance'
+    if size in SUBMIT_STATE_LEGACY_MAP_DISTANCES and source == 'map distance':
+        return SUBMIT_STATE_LEGACY_MAP_DISTANCES[size]
+    for tier in reversed(SUBMIT_STATE_TIERS):
+        if size >= tier:
+            if size != tier:
+                warnings.append(f'Submit state size {size} ({source}) is not a known layout; '
+                                f'reading the {tier}-byte tier below it.')
+            return tier
+    warnings.append(f'Submit state is {size} bytes in this archive, smaller than '
                     f'the {SUBMIT_STATE_BASE_SIZE}-byte base layout; not decoded.')
     return None
+
+
+def _exported_submit_state_size(memory, map_path, image):
+    """The archive's `g_nv2a_submit_state_size`, or None for a build that lacks it."""
+    try:
+        raw = memory.host_symbol(map_path, 'g_nv2a_submit_state_size', 4, image=image)
+        return struct.unpack('<I', raw)[0]
+    except (CaptureError, OSError, ValueError, struct.error):
+        return None
 
 
 def read_submit_state(folder, warnings, toolkit=None):
@@ -336,12 +363,18 @@ def read_submit_state(folder, warnings, toolkit=None):
     if not (folder/'process.dmp').exists() or not map_path.exists():
         warnings.append('Submit state unavailable: needs process.dmp and jsrf_recomp.map in the archive.')
         return None
-    # Ask for the size the ARCHIVE declares, not the size this checkout has.
-    size = submit_state_size_for_archive(_submit_state_declared_size(map_path), warnings)
-    if size is None:
-        return None
+    image = folder/'jsrf_recomp.exe'
+    image = image if image.is_file() else None
     try:
         with DumpMemory(folder) as memory:
+            # The map distance includes alignment padding, so it can round up to a larger
+            # tier and read neighbouring globals as fields; the exported size is exact.
+            exported = _exported_submit_state_size(memory, map_path, image)
+            # Ask for the size the ARCHIVE declares, not the size this checkout has.
+            size = submit_state_size_for_archive(
+                _submit_state_declared_size(map_path), warnings, exported=exported)
+            if size is None:
+                return None
             raw = memory.host_symbol(map_path, 'g_nv2a_submit_state', size)
         return decode_submit_state(raw)
     except (CaptureError, OSError, ValueError, struct.error) as error:
