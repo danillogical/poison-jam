@@ -2956,3 +2956,20 @@ the old comparison without establishing the absence of a regression, and an unex
 about the changed path either way.
 
 Push receipts: toolkit `76c76fd..07e7dac`; game `10654f0..02c5abc`.
+
+## 2026-10-09 — review of title-007..010, and the upstream v0.13.1 merge (Mac session)
+
+A review of toolkit `dc04dc0..5d6ebbd` and game `5e7a1a3..068eaec` found two walk defects introduced
+by the unit commits (`1f86fbb`) and fixed them before the merge (toolkit `fafe0f6`, game `51bc1ff`; see
+the plan's Current work). Upstream v0.13.1 was then merged as one commit, `409c635`, with upstream's
+pushbuffer executor adopted and the fork's integration ported into it (owner decisions: land on main;
+adopt the executor). The inventory and the resolution as applied are
+`docs/reviews/upstream-v0.13.1-merge.md`; the summary is TR §1 "v0.13.1 sync". Nothing has run on
+Windows yet; the plan's next action −1 is the merge's gate.
+
+Toolkit
+`PUSHED_TO: origin / BRANCH: main / COMMIT: 409c63541aa526819828b26089bdffae08ff69f9 / REMOTE_URL: https://github.com/danillogical/xboxrecomp / RESULT: fast-forward fafe0f6..409c635 main -> main`
+(earlier the same session: `5d6ebbd..fafe0f6`). Game
+`PUSHED_TO: origin / BRANCH: master / COMMIT: 49379d0683bcafcedec54f70c86181b1ff2a3e9e / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 51bc1ff..49379d0 master -> master`
+(earlier: `068eaec..51bc1ff`). Outgoing game commits: no `game/` path, 6 blobs (largest 333 KB),
+`scripts/secret-audit.py` 0 hits.
