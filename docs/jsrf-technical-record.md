@@ -60,6 +60,33 @@ are synthetic → exploratory). Upstream's APU change of note: ADPCM's reserved 
 validated and the step index is clamped — JSRF ends every ADPCM buffer in a `0x08` pad, and 3.5–4.4 % of
 its blocks had been silenced.
 
+### v0.13.1 sync (Mac session, 2026-10-09)
+
+Merged upstream `193e299` (v0.13.0 "Given Back" + v0.13.1 "Cut Short", 100 commits) into the fork's
+reviewed main `fafe0f6` as toolkit `409c635`; merge-base `ea60cfa`. Eighteen files conflicted (~75
+hunks). The per-hunk inventory, the dispositions as applied and the owner's two decisions are
+`docs/reviews/upstream-v0.13.1-merge.md`. In short:
+
+- **Executor (owner decision): upstream's `nv2a_pb_exec.c` is the base**, because the two files are
+  separate rewrites of one base and cannot be merged hunk by hunk. Upstream's vertex programs, register
+  combiners, depth, near-plane clipping, four texture stages and threaded raster come in; the fork's
+  owner commit consumer, present tracker and FLIP_STALL publication, L47 flip trace, L48 stage-0 gate,
+  counters/`vp_view` test APIs and fixed-function/lighting/AA paths were ported into it. `GET_REPORT` is
+  counted, never written (L44, rule 2). The fork's VP interpreter and `RECOMP_VP` are retired.
+- **Everywhere else the fork's structure wins**; upstream's lifter/translator/disasm fixes, OHCI and pad
+  scripts, window title and build fixes are taken. Not taken: `RECOMP_HEAP_RECLAIM`, `RECOMP_EXT_VMA`,
+  `RECOMP_TITLE_KEVENTS`, `RECOMP_GUEST_LOCK`, `KPCR.Irql` publication, APU interrupt delivery, the
+  contiguous page-0 skip, #159's per-edge joins.
+- **Clean hunks that would have shipped defects**, fixed: recursive `g_heap_lock` acquisitions inside
+  `heap_*_locked` (a hang on the first heap free) and a second self-recursive `heap_alloc_locked`; the
+  arming call of the deleted `RECOMP_APU_DSP_ACK` (a rule-3 FAIL); `APU_TRAP_BYTES` shrinking
+  `RECOMP_APU_TRAP`'s range so the GP DSP model would be bypassed.
+- **Verified on macOS:** `tools/posix_check.py` native (12 suites), cross (the whole tree compiles and
+  links for Windows; the 3 known `d3d8_smoke` failures only) and python (714 passed); the structural
+  check clean on `409c635` (130 files, 152 switches); the rule-3 scan clean; upstream's 13 surviving
+  switches classified in `docs/jsrf-run-profiles.md`. **Not yet run on Windows:** the title-path A/B
+  against `fafe0f6` decides it, and `git revert -m 1 409c635` undoes it as one commit.
+
 ---
 
 ## 2. Generated code

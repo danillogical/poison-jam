@@ -429,6 +429,10 @@ def classify_settings(entries: Any) -> dict[str, Any]:
         (POKE, 'holds guest globals at fixed values when present'),
         (FORCE_RETURN, 'makes force-return functions answer a constant when present'),
         (PAD_PRESS, 'synthesises controller button presses when present'),
+        # Upstream v0.13 scripted input (toolkit merge of 193e299): the same class as
+        # PAD_PRESS, presses no player or host device produced.
+        ('RECOMP_PAD_SCRIPT', 'replays a timed button and stick script on the emulated pad when present'),
+        ('RECOMP_PAD_LIVE', 'appends button presses from a file while the title runs when present'),
         # Owner-directed toolkit fixes (toolkit db96e30..2a349c8). The legacy switch restores
         # kernel memory semantics now known to be wrong; the NV2A switch arms
         # modelled device behaviour that has not been admitted yet

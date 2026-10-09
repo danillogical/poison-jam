@@ -28,6 +28,19 @@ discipline. This plan owns the objective, the milestones and what to do next.
 
 ## Current work (state 2026-10-08, turn title-010)
 
+**Toolkit changed on the Mac after title-010 (2026-10-08/09) — NOTHING below has run on Windows.**
+(1) Review fixes `fafe0f6`: a walk that committed a unit inside a pushbuffer subroutine and then
+stopped wedged every later walk on `invalid_target` (the return address was carried only under
+actions + a hold) — now carried at every unit commit; a partial commit now publishes the last committed
+semaphore-release fence (`NV2A_COMMIT_PARTIAL`); a vblank pass four or more frames late pulses once
+instead of not at all; the PFIFO-alias PUT write reports its kick; `g_nv2a_submit_state_size` is
+exported; the clock anchor is race-free. Game `51bc1ff`: `jsrf_gpu.py` size tiers and the witness switch.
+(2) **Upstream v0.13.1 merged as `409c635`** (TR §1 "v0.13.1 sync", `docs/reviews/upstream-v0.13.1-merge.md`):
+upstream's pushbuffer executor is now the base — vertex programs, register combiners, depth,
+near-plane clipping, four texture stages, threaded raster — with the fork's consumer, present tracker,
+flip trace, stage-0 gate and fixed-function paths ported in (L18); `RECOMP_VP` is retired. Both are
+first exercised by next action −1.
+
 **THE ARCHIVED "ADX WORKER DEATHS" ARE NOT DEATHS, AND THE POPULATION DOES NOT REPRODUCE ON THE
 FIXED BINARY.** This retires the previous turn's critical hypothesis. Two independent lines agree.
 
@@ -628,6 +641,18 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 | F6 = M15 | open | **criterion corrected 2026-10-07** (TR §23): the title screen itself, identified by CONTENT and confirmed by eye, with its hash recorded — **not** "a hash that is neither of two listed ones". The old blacklist was unsound: `87683a748e27d071` is the blue Dolby card, and the graffiti disclaimer renders in **four** hashes, three of them unlisted, so a run ending on the disclaimer (as the ceiling-clearing run did) satisfied the old letter. **An xemu reference of the real title now exists** (`logs/workers/title007/xemu/deliverable/`: emblem + "PLEASE PRESS START TO BEGIN" over a perspective city street, 640×480, reached with no input) and is the comparator. Also needs the run record with ledger IDs and Turn Reviewer reproduction |
 
 ## Next actions, in order
+
+−1. **Verify the toolkit before relying on any run** (the W7 chore gate). Build toolkit `409c635` and the
+   game; both CTests (new: `kernel_regressions`, `nv2a_vsh`, `nv2a_combiner`, `fp_precision`; changed:
+   `nv2a_submit_diag`, `fence_snapshot`, `nv2a_read_guard_test` arm 5, `vblank_sched_telemetry_test`,
+   `kernel_file_apc_test`, `jsrf_nv2a_hal`); `just check`. Then an exploratory `just title-run` A/B of
+   `409c635` against `fafe0f6` (the pre-merge, post-review-fix toolkit) at the same seconds: draws,
+   triangles and `batches_ffp`; `[TEXUSE]`; the `[FBPRESENT]` reason mix; flips == presents; owner-lock
+   maximum hold and late re-arms (title-010 baseline 68 ms, 0.0 %); presents at matched t = 120 s (2568);
+   `[HEAP] free #1` passing; the APU trap-range line and `[APUWAIT]` 3→0. A merge-caused regression →
+   `git revert -m 1 409c635` with the evidence, not a forward patch. Take the pending R3 control (the
+   unfixed binary past 236 s) from a worktree pinned to the pre-cache toolkit `5fd62cb`, so the merge
+   cannot confound it.
 
 0. **THE ADX WORKER DEATHS ARE RETIRED — do not re-investigate them** (turn title-010; see "Current
    work"). They are live threads parked on the D3D vblank event `0x0019D630`, not exits; the

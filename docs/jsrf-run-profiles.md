@@ -52,7 +52,7 @@ The classifier follows each runtime's actual semantics:
 | `JSRF_ALLOW_UNRESOLVED` | Presence continues after unresolved calls, including empty or `0`. | Must be absent. |
 | `JSRF_ABI_CONTINUE` | Presence continues after ABI failures, including empty or `0`. | Must be absent. |
 | `RECOMP_APU_DSP_ACK` | C `strtoul(..., 0)` parses addresses; each nonzero address is cleared on APU ticks, up to eight nonzero entries. | Must be absent or parse to zero addresses. Unsupported/malformed inputs are `UNKNOWN`, never clean. |
-| `RECOMP_DSP_ACK`, `RECOMP_POKE`, `RECOMP_FORCE_RETURN`, `RECOMP_PAD_PRESS` | Upstream v0.12 bring-up switches (toolkit `2925f0b`); see §"Synthetic completion". | Must be absent. Presence is exploratory whatever the value, including values the runtime would parse as nothing. |
+| `RECOMP_DSP_ACK`, `RECOMP_POKE`, `RECOMP_FORCE_RETURN`, `RECOMP_PAD_PRESS`, `RECOMP_PAD_SCRIPT`, `RECOMP_PAD_LIVE` | Upstream v0.12 bring-up switches (toolkit `2925f0b`); see §"Synthetic completion". | Must be absent. Presence is exploratory whatever the value, including values the runtime would parse as nothing. |
 | `RECOMP_KMEM_LEGACY`, `RECOMP_NV2A_ACTIONS` | Toolkit fork fixes `db96e30..2a349c8` (2026-09-28); see §"Legacy and unadmitted behaviour". | Must be absent. Presence is exploratory whatever the value. |
 | `RECOMP_GUEST_SERIAL` | Serialised guest mode (toolkit `179439b`, 2026-09-30); see §"Legacy and unadmitted behaviour". | Must be absent. Presence is exploratory whatever the value. |
 | `RECOMP_NV2A_ADMIT_UNKNOWN`, `RECOMP_WORKERS`, `RECOMP_FENCE_MIRROR_LIVE` | NV2A unknown-method admission (ledger L44), the worker model, and the pre-2026-10-06 live fence mirror (L17); see §"Legacy and unadmitted behaviour". | Must be absent. Presence is exploratory whatever the value. |
@@ -116,6 +116,7 @@ title screen and then the rest of the slice. For **bare-minimum milestones**
 | `RECOMP_POKE=<va>:<value>[,...]` | Upstream v0.12 (`3332005`): holds guest globals at fixed values. | The guest reads a value no guest code or model produced. |
 | `RECOMP_FORCE_RETURN` | Upstream v0.12 (`37a21c8`): functions translated with `--force-return` answer a constant. Inert unless the generated code carries it, which JSRF's does not today. | A function's answer is replaced with a chosen constant. |
 | `RECOMP_PAD_PRESS=<mask>` | Upstream v0.12 (`8da86c1`): synthesises a pulsing button press on the emulated pad. | Input no player or host device produced. A bring-up probe by its own description. |
+| `RECOMP_PAD_SCRIPT`, `RECOMP_PAD_LIVE` | Upstream v0.13 (`967f379`, `68b3db9`): a timed button/stick script, and presses appended to a file while the title runs, on the emulated pad. | Input no player or host device produced, as with `RECOMP_PAD_PRESS`. |
 | ~~`RECOMP_VBLANK`~~ | **Removed 2026-09-22 (A2).** It used to assert vblank by OR-ing into `NV_PCRTC_INTR_0` and `NV_PMC_INTR_0`, both of which are write-1-to-clear — so it cleared pending bits instead of setting them and could never assert anything. The vblank source is now part of the model (`nv2a_vblank_pulse` on the display clock), the guest's own W1C is the only acknowledgment, and both of the guest's enables gate delivery. There is nothing left to override. | **Removed, so it cannot satisfy acceptance at all.** Recorded here because the audit named it; there is no override left to set, and vblank delivery is now modelled rather than asserted. |
 
 ### Retired overrides — a third category, and it is revision-relative
@@ -192,7 +193,9 @@ advances GET past methods it does not execute), and none can support a strict cl
 | `RECOMP_KEYBOARD` | Upstream v0.12: the host keyboard stands in for a pad. Real host input, not synthesised. |
 | `RECOMP_USB_PORT` | Which OHCI root-hub port the emulated pad arrives on (`0` or `1`; toolkit `src/usb/ohci.c:928`), which decides the controller slot XAPI assigns. Selects where a real device appears; synthesises no input. |
 | `RECOMP_APU_MIXDOWN_ALL` | Selects the host monitor mixdown of the APU mixbins (default wide, `2` for the earlier even/odd fold; toolkit `src/apu/apu_mixdown.c:62`). Writes only the host audio monitor buffer, no guest state. |
-| `RECOMP_VP` | BearddOddity pushbuffer executor (toolkit merge `a253876`): vertex-program batches are interpreted unless the value is `0`. Read only by the executor under `RECOMP_PB_EXEC`. The legacy feed required the GPU-ack gate; Architecture A (toolkit `a71f937`) uses the owner commit consumer independently of that gate. Profile classification rules are unchanged. |
+| `RECOMP_NO_VSH`, `RECOMP_NO_COMBINERS` | Upstream v0.13 executor (toolkit merge of `193e299`): vertex programs run for every program-mode batch (`nv2a_vsh_interp.c`) and the register combiners run once the title programs them (`nv2a_combiner.c`); each switch turns its stage off. Translated rendering (L18). They replace the fork executor's `RECOMP_VP`, retired with that merge. |
+| `RECOMP_RASTER_THREADS` | Upstream v0.13: rasteriser worker threads (default: processors minus 4; `1` = none). Performance only — rows are disjoint and the workers take no runtime locks — but it changes how long the walk holds the owner lock. |
+| `RECOMP_USB_PADS` | Upstream v0.13: one to four emulated pads; composes with `RECOMP_USB_PORT`. |
 
 **Enabling a feature does not turn stub answers into modelled ones.** A claim is only
 as strict as the source of each value it relies on, so the run's label is necessary but
@@ -244,7 +247,11 @@ once a minute while it does not, starting AFTER_S seconds after the window threa
 first sample; no guest write), `RECOMP_WATCH`, `RECOMP_WATCH_RAW`; from the 2026-09-28 fork fixes:
 `RECOMP_FFP_TRACE` and `RECOMP_TRACE_FLIP` (executor tracing), and `RECOMP_GUEST_METER` (counts host
 threads inside lifted guest code; changes no guest state or scheduling); from 2026-09-30:
-`RECOMP_PB_EXEC_VERBOSE` (executor logging, `nv2a_pb_exec.c:61`); from 2026-10-07:
+`RECOMP_PB_EXEC_VERBOSE` (executor logging, `nv2a_pb_exec.c:61`); from the upstream v0.13 merge:
+`RECOMP_FRAME_TRACE` and `RECOMP_FRAME_TRACE_METHODS` (flag-file-armed per-frame trace),
+`RECOMP_FB_DUMP_FLIPS` (a BMP per flip), `RECOMP_VSH_TRACE` and `RECOMP_VSH_DUMP` (vertex-program
+tracing and program dumps), `RECOMP_PB_REPORT_MS` (cadence of the ack-thread GPU report; under the MMIO
+owner the executor report stays consumer-only) and `RECOMP_USB_STATS` (a 5 s OHCI counter line); from 2026-10-07:
 `RECOMP_FLIP_TRACE` (budget), `RECOMP_FLIP_TRACE_FROM` (first flip) and `RECOMP_FLIP_TRACE_CHANGE`
 (print only when the decision key moves) — the same-flip draw/present trace at `NV097_FLIP_STALL`,
 off by default. It reads the per-frame present flags before `present_track_flip` clears them,
