@@ -2973,3 +2973,44 @@ Toolkit
 `PUSHED_TO: origin / BRANCH: master / COMMIT: 49379d0683bcafcedec54f70c86181b1ff2a3e9e / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 51bc1ff..49379d0 master -> master`
 (earlier: `068eaec..51bc1ff`). Outgoing game commits: no `game/` path, 6 blobs (largest 333 KB),
 `scripts/secret-audit.py` 0 hits.
+
+## 2026-10-09 — plan condensed again; turns title-005…010 summarised
+
+`plan-jsrf-bare-minimum.md` had regrown to 1,012 lines: 474 of them were the closed title-009 turn's
+narrative (itself carrying title-008's), and "Next actions" was three numbered lists concatenated across
+turns. The superseded section is now a pointer, "Next actions, in order" is one list (−1 and 0-6) plus a
+"Settled — do not re-run" list, and the still-open items from the cut text moved into the Backlog. **The
+full text before the cut is `git show 2a580f7:plan-jsrf-bare-minimum.md`**; the facts it held are in TR
+§22-§25 and ledger L39-L55. Turn boundaries below are reconstructed from `git log` and the run labels
+(no `plan-turn-*` file exists for title-006 or title-009); the four toolkit hashes the table cites
+(`505cda5`, `46b3265`, `1f86fbb`, `5d6ebbd`) were confirmed against the Mac's toolkit clone.
+
+| Turn | First commit | What moved | Landmarks |
+|---|---|---|---|
+| title-005 | `a8691e1` | The present ceiling was one stale method-table entry, `0x1810`; a no-switch run reaches presents 2410 with zero rejections (toolkit `505cda5`, TR §22). The four `dc04dc0` behaviours judged on Windows; the 1000 → 888 count recorded as a hypothesis. | `a8691e1`, `2d99b30`, `7e5db3c`, `594c1e8` |
+| title-006 | `52657f4` | The method-inventory generator fails closed; the six witnessed methods admitted from a runtime manifest with mutation-validated ordered delivery (toolkit `46b3265`); the first-stop budget instrument and archive-size-aware decoder; two Turn Review rounds. | `52657f4`, `779c6a0`, `726402f`, `1d71631`, `02c5abc`, `12cfb44` |
+| title-007 | `14f56ad` | The M15 criterion rewritten from a hash blacklist to content; the `0x80084000` measurement and the disclaimer as a timed hold; input shown undeliverable (dead pad seam); the 39-method admission and the capacity bound cleared in whole-packet units (toolkit `1f86fbb`). Turn Review 1 returned FIX. | `14f56ad`, `74566ed`, `e7dd47b`, `078e176`, `b349768`, `56f8974`, `773083a` |
+| title-008 | `1c594a9` | The same-flip trace (L47) and the 29-method admission; the black interval explained by the missing viewport constants and fixed (L48); the 38-method admission; three indirect-call recoveries (stops 29-31) and the 25-method admission; Turn Review 3 corrections. | `1c594a9`, `73ff567`, `827b537`, `0cba32a`, `11458dd`, `d63e792` |
+| title-009 | `f007ebc` | The host clock overflow found and fixed (L53); `budget_exhausted` classified Case A with its packet-cap livelock recorded (L54, L55); the city drawn but not presented; the wrap-causation claim retracted, then corrected, in Turn Review 2. | `f007ebc`, `f426331`, `def4860`, `e9f187e`, `98b8a94`, `73d5d2c` |
+| title-010 | `9526ea2` | The ADX "worker deaths" shown to be parked waiters and retired; the walk's per-word `VirtualQuery` fixed (toolkit `5d6ebbd`); the present-rate wall re-attributed to flip frequency; vblank and owner-lock telemetry decoded. | `9526ea2`, `1a3ae2e`, `068eaec` |
+
+**What the six turns did not do:** reach the title screen. M15 is still open; the Mac review and the
+v0.13.1 merge that followed title-010 are in the entry above.
+
+**Checking the cut.** A second worker diffed the old plan against the new one (W5). It found five open
+items the cut had dropped (the flip-2425 selection alternative, sampling/UV/blend/ordering reopened, the
+binary-identity and run-comparability rules, the `batches_untransformed` reading, and F8b's owed A/B),
+one wrong pointer (the `+4.2 s` epoch offset is TR §24.2, not §25.8), and two results recorded as more
+settled than the TR allows: `budget_exhausted` rests on the 17-stop drain, not on the pre-repair 63/63/0
+audit, which carries no weight (TR §24.1); and the stop chain is cleared through stop 27, with stop 28
+repaired but not exercised. All were restored or corrected before commit.
+
+**Other housekeeping in the same pass.** The closed title-008 turn files (`plan-turn-start-title-008.md`,
+`plan-turn-updated-title-008.md`) and `scripts/test-native-gpu.ps1` (replaced by its Python port) are
+deleted. Toolkit `a5e2762` tidies after the merge: two `nv2a_backend.h` comments name the merged vertex
+interpreter, the translator cites `Lifter._lift_fpu` instead of a line range, README states the fork's own
+test count, and three unused statics are removed; `tools/posix_check.py native cross python` passed on
+the Mac with only the known failures.
+
+Toolkit
+`PUSHED_TO: origin / BRANCH: main / COMMIT: a5e2762d7f075865617b8ee90c340d79cd87d699 / REMOTE_URL: https://github.com/danillogical/xboxrecomp / RESULT: fast-forward 409c635..a5e2762 main -> main`
