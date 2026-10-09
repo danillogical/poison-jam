@@ -4277,3 +4277,171 @@ was ever written, how many times, and its last value, so "never received" is dis
 scene should have been published from a different surface, also remain open. **M15 remains
 unreached.**
 
+
+## §25. The ADX "worker deaths" are parked waiters, not deaths; the walk's per-word `VirtualQuery` was the real cost (turn title-010)
+
+### §25.1 The inherited worker-death population is an artifact of its detector
+
+`logs/workers/title009/orch/verify_contingency.py` reproduces its recorded figure exactly
+(81 runs; wrapped 10 L / 14 K = 41.7 %, unwrapped 7 L / 50 K = 12.3 %). Its death signal is
+unsound in two measured ways:
+
+1. **`0x007BFFCC` is the MAIN thread.** The loader logs
+   `Stack: 8192 KB at Xbox VA 0x00780000 (ESP = 0x00F7FFF0)`, so the main stack spans
+   `0x00780000..0x00F80000`, and `0x007BFFCC` lies inside it. The worker set is
+   `{'01220F50','012A0F8C','01320F88','007BFFCC'}`, and the script takes
+   `worker_last = MAX(t)` over that set — so `worker_last` was normally the **main thread's own**
+   last sample and `lost` was normally false. A "death" was reported only when the main thread
+   happened not to print a summary after its last present. The detector therefore measured the
+   main thread's print timing, not worker liveness. The script's own comment says the intent was
+   "the LAST summary among workers", which the code does not implement.
+2. **Exact-`esp` matching splits one thread across keys.** On
+   `20261008-043848-133-title009-clockfix-1800` the worker at stack `0x01220FF0` is sampled at both
+   `0x01220F50` (163 blocks) and `0x01220F48` (201 blocks); in
+   `20261007-060314-395-title007-noadmit` at **six** addresses
+   (`0x01220EA8/EAC/EC8/F08/F48/F50`). Keeping one drops most of that thread's samples.
+
+Re-attributed by **owning stack** (main = the loader's 8 MB region; worker = the 64 KB slice each
+`spawned worker` line names), `logs/workers/title010/orch/recompute_contingency.py` gives:
+
+| detector | wrapped | unwrapped |
+|---|---|---|
+| prior (exact esp) | 5 L / 19 K = 20.8 % | **10 L / 50 K = 16.7 %** |
+| corrected (stack) | 8 L / 16 K = 33.3 % | **0 L / 60 K = 0.0 %** |
+
+**All ten "unwrapped deaths" disappear**, gaps collapsing from 37–455 s to 0. The plan's cited
+unwrapped list (`long3d`, `units`, `units4`, `blacktrace`, `trace-noadmit`, `admitted39`,
+`title005-admit3`) shows 10–23 s gaps under **both** detectors and is not reproduced by the cited
+script at all.
+
+### §25.2 The workers are live waiters on the D3D vblank event
+
+In every captured run the two ADX threads are `state=1` with a native stack of
+`xbox_KeWaitInplaceEvent` ← `bridge_KeWaitForSingleObject` ← `sub_0018CE50` ← `body_0013B1C0`, and
+**zero** runs log `worker thread returned` or `PsTerminateSystemThread`. The turn's `[WAIT]`
+instrument names the object directly: on `20261008-155241-052-title010-R1-telemetry` **all 256**
+logged long waits are `timeout=INFINITE` on `0x0019D630`. A "death" is therefore
+**the vblank event ceasing to be signalled**, not a thread exit.
+
+### §25.3 No death population on the fixed binary (Case D)
+
+| run | duration | wrap in window | wrap offset | worker exits |
+|---|---|---|---|---|
+| `…155203-preflight` | 24.2 s | no | — | 0 |
+| `…155241-R1` | 904.3 s | **YES** | **+763.1 s** | 0 |
+| `…185536-R2` | 906.2 s | **YES** | **+854.6 s** | 0 |
+
+R1's predictions were recorded before its artifacts were read
+(`logs/workers/title010/orch/WRAP_CROSSING_PREDICTION.md`); every worker printed heartbeats after
+the wrap (25/25/25/26) and worker/main liveness lag was 3.9 s. Two independent wrap crossings, no
+loss. **The archived death population does not reproduce on the fixed binary.** Note the falsifier
+in `HYPOTHESIS.md` required a worker to go quiet with no anomaly; **none did**, so the correct
+statement is "no death population", not "H falsified".
+
+### §25.4 A correction: the Planner's "whole-guest stall" class is wrong
+
+The class (`long3d`, `units`, `units4`, `blacktrace`, `trace-noadmit`, `admitted39`, `admit3`) was
+described as "the main thread's own last ring event comes 150–270 s before the run ends". Measured
+(`logs/workers/title010/orch/ring_liveness.py`), the main thread is the **most recently active
+thread in the capture** (lag 0.00 s; 128 events in 0.3–0.4 s) and `[FBPRESENT]` continues to within
+**7–18 s** of the actual end (`long3d` 697 s of 704.4 s). Those are ordinary live runs whose workers
+sit 13–25 s behind main.
+
+### §25.5 The walk's per-word `VirtualQuery` is a first-order cost
+
+`submit_read_word` (`nv2a_core.c:1261-1282`) called `VirtualQuery` **once per pushbuffer word**,
+under `g_mmio_owner_lock`. Measured on this host at the base of a 64 MB mapped view (the shape of
+the nv2a contiguous window) with `logs/workers/title010/orch/vq_bench.py`:
+
+| region | untouched | all pages touched |
+|---|---|---|
+| private commit | 1.63 µs | **184.9 µs** |
+| **mapped view** (what nv2a uses) | 12.0 µs | **378.1 µs** |
+
+An earlier estimate in this turn assumed 1–3 µs and concluded 0.1–2 % of wall time; **that is
+retracted.** The measurement is corroborated from a different instrument: R1's `walk_words_max`
+8144 × 185 µs = **1507 ms** against its measured max lock hold of **1636 ms** (8 %).
+
+The fix (toolkit `5d6ebbd`) caches the validated span for one walk. The address bounds, alignment,
+the full protection predicate including `PAGE_NOACCESS`/`PAGE_GUARD`, and the region-end test all
+still gate acceptance; a page that fails is never cached, and the cache is walk-scoped. Pinned by
+the new `nv2a_read_guard` test against a **real** `PAGE_GUARD` page, mutation-validated (widening the
+cache to claim the whole ring makes the test die with an ACCESS_VIOLATION).
+
+| statistic | R1 (no cache) | R2 (no cache) | **R3 (cache)** |
+|---|---|---|---|
+| late re-arms / passes | 2941/4256 = **69.1 %** | 2961/4123 = **71.8 %** | **0 / 11924 = 0.0 %** |
+| max owner-lock hold | 1636 ms | 1219 ms | **68 ms** |
+| max pulse-to-pulse gap | 13 995 ms | 14 791 ms | **78 ms** |
+| pulses per pass | 0.297 | 0.275 | **0.979** |
+| presents at matched `t=120 s` | 628 | 641 | **2568 (4.1×)** |
+
+**R3 terminated early** at 236.5 s, `outcome=unhandled_exception`, on the fatal unresolved call
+`0xE0424943` at VA **`0x9188C`**. The crash stack attributes it to a **pre-existing** hole, not the
+cache: `sub_0009188C` is a generated recovery stub whose entire body is
+`recomp_icall_fail_log(0x0009188C); abort();`, reached from `body_00091830`, and §20 already records
+`0x91830`'s internal target `0x9188C` as decoding to ordinary code and **not repaired**. No frame
+of the walk, the cache or the owner lock is on that stack. **Not yet shown** is that the hole is
+merely *newly reached*; the control (unfixed binary past 236 s) has not been run.
+
+### §25.6 The present-rate wall is flip frequency, not rasteriser throughput
+
+`flips == presents` exactly (2494 = 2494 in `clockfix-1800`), so the flip counter is the guest's own
+swap count. It collapses from **~2.77 /s** early to **0.035–0.047 /s** in the tail — **59–80×**
+— reproducing across **four runs and three binaries** while `[GPU] draws` and the triangle count
+keep climbing (~485 draws and ~28 000 triangles per 10 s report). **Draws-per-flip is stable**
+(542.6 middle vs 541.9 late), so it is **one flip per frame**: the frame rate itself collapsed to
+~0.04 frames/s. TR §24.3's "the software rasteriser is the cost" explains frame *content*, not frame
+*count*; the present-rate wall is the latter.
+
+### §25.7 The presenter is usually right; the remaining questions are structural
+
+Parsing the five archived `[FLIPTRACE]` runs mechanically: **324 of 370** traced flips (87.6 %)
+select the draw surface `0x80084000`, all with `reason=drawn_this_frame`. The plan's "the
+presentation path sends `0x8011C000`/`0x801B2000`" holds for `clockfix-1800`'s end state (its city
+hash `31b1469f9c922c32` appears **0** times among 711 distinct published hashes) but is **not**
+general. Structural gaps, recorded and not fixed:
+
+- the guest's own `flip_read`/`flip_write`/`flip_modulo` (`modulo=3`) is stored and read **only** by
+  two debug prints (`nv2a_pb_exec.c:1165`, `:3301`), never by `present_track_flip`;
+- the `[GPU]` report's "draw surface" prints `s_gpu.drawn_offset` (`:3597`), the **same variable**
+  `present_track_flip` prefers, so it agrees by construction and can never reveal a selection error;
+  it is also sampled at the 10 s report tick, *after* the last flip;
+- the commit consumer drops every class != 0x97 (`:1373-1376`), and the count alone could not name a
+  blit — a census added this turn (toolkit `5fd62cb`) identifies each class and flags
+  `NV_IMAGE_BLIT` (0x9F) explicitly;
+- at flip 2426 in `…110933-trace-noadmit` the presenter published a **black** surface while a
+  non-black candidate existed in the same frame (`cand[2] 0x8011C000` = `e886cadf72766a64`). The
+  instrument cannot separate "the drawing batch wrote black" from "the wrong surface was selected",
+  because every candidate hash is taken at flip time after all batches ran (§23.6/§23.7 limit).
+
+### §25.8 Instrumentation added (and one limitation found by using it)
+
+Process-start-relative monotonic clock (`nv2a_mono_clock.h`) stamped on worker spawn, per-thread
+heartbeat, worker return and wait events; vblank re-arm/pass/gap telemetry **published by the ptimer
+thread itself** so it cannot freeze with the walk; owner-lock hold/wait maxima with holder tid; and
+bounded `[WAIT]` prints with **unbounded totals**.
+
+- **Why a new clock was needed.** `[CHECKPOINT] ms=` cannot be a timeline: a whole 1800 s run
+  carries **3** checkpoint lines, all inside its first 78 lines. `[FBPRESENT] t=` is
+  first-present-relative. The new stamps share one epoch, and two independent clocks agree to
+  **0.08 s** on R1's worker/main liveness gap (heartbeat 3923 ms vs ring 4.00 s), which is what makes
+  the new telemetry comparable to the archived rings.
+- **Why the ptimer thread publishes its own counters.** The rest of `NV2ASubmitState` is published
+  from inside `nv2a_submit_pending`, so a run whose walk stops exports a **frozen** state — and a
+  frozen pulse count is exactly what the archived "0.75 pulses/s" figures cannot distinguish from a
+  slow display.
+- **A limitation found by using it.** The `[WAIT]` print cap of 256 saturated at **93 950 ms of a
+  904 300 ms run (10.4 %)**, so the printed waits described only the opening phase. Totals now keep
+  counting past the cap (toolkit `e487f78`), so silence can no longer be read as absence.
+
+### §25.9 Withdrawn, and must be re-derived before being cited
+
+Per this section: the `death_vs_onset` null result (computed on the broken population); anything
+keyed on exact `esp` or on `[KERNEL] summary` cadence; the "6 kept / 7 lost" counterexample lists;
+"0 of 16 deaths within ±5 s of a wrap"; and the Planner's "whole-guest stall" class (§25.4). The
+clock-overflow repair (§24.2, L53) stands on its own merit. `budget_exhausted`'s Case A
+classification (§24.1, L54) is untouched by this turn.
+
+**M15 remains unreached.** No title screen — emblem or `PLEASE PRESS START TO BEGIN` — has been
+observed on the recomp.

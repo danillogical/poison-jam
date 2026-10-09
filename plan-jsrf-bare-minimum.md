@@ -26,7 +26,115 @@ discipline. This plan owns the objective, the milestones and what to do next.
 - **The Orchestrator runs the fast path**; the Turn Reviewer reproduces a milestone claim, with its
   ledger IDs, rather than accepting the description.
 
-## Current work (state 2026-10-08, turn title-009)
+## Current work (state 2026-10-08, turn title-010)
+
+**THE ARCHIVED "ADX WORKER DEATHS" ARE NOT DEATHS, AND THE POPULATION DOES NOT REPRODUCE ON THE
+FIXED BINARY.** This retires the previous turn's critical hypothesis. Two independent lines agree.
+
+*The detector that produced the population was unsound.* The title-009 contingency
+(`verify_contingency.py`, which reproduces its recorded 41.7 % vs 12.3 % exactly) attributed a
+`[KERNEL] summary` block to a thread by **exact `esp` string** against
+`{'01220F50','012A0F8C','01320F88','007BFFCC'}`, and took `worker_last = MAX(t)` over that set.
+Two measured defects: **`0x007BFFCC` is the MAIN thread** — the loader logs `Stack: 8192 KB at Xbox VA
+0x00780000 (ESP = 0x00F7FFF0)`, so the main stack is `0x00780000..0x00F80000` and that address is
+inside it — so `worker_last` was normally the main thread's own last sample and a "death" was
+reported only when the main thread happened not to print after its last present; and exact-esp
+matching **splits one thread across keys** (the worker at stack `0x01220FF0` appears at both
+`0x01220F50` and `0x01220F48`, and in `title007-noadmit` at six addresses). Re-attributed by owning
+stack (`logs/workers/title010/orch/recompute_contingency.py`): wrapped **8 L / 16 K = 33.3 %**,
+unwrapped **0 L / 60 K = 0.0 %** — **all ten "unwrapped deaths" disappear**, their gaps collapsing
+from 37–455 s to 0. The plan's cited unwrapped list (`long3d`, `units`, `units4`, `blacktrace`,
+`trace-noadmit`, `admitted39`, `title005-admit3`) shows 10–23 s gaps under **both** detectors and is
+not reproduced by the cited script at all.
+
+*What the workers actually are.* They are **live threads parked on the D3D vertical-blank event
+`0x0019D630`**, not exits: every captured run shows `state=1` and a native stack in
+`xbox_KeWaitInplaceEvent` ← `bridge_KeWaitForSingleObject` ← `sub_0018CE50` ← `body_0013B1C0`, and
+**zero** `worker thread returned` / `PsTerminateSystemThread` lines. The new `[WAIT]` instrument
+confirms it directly: all 256 logged long waits are `timeout=INFINITE` on `0x0019D630`.
+
+*On the fixed binary there is no death population.* R1 (`…155241`, 904.3 s) and R2 (`…185536`,
+906.2 s) each contain an unsigned QPC wrap (+763.1 s, +854.6 s) and each kept **every** worker
+through and past it, with zero exits. That is **Case D** — workers are off the M15 critical path.
+Predictions for R1 were written before its artifacts were read
+(`logs/workers/title010/orch/WRAP_CROSSING_PREDICTION.md`); 3 of 4 held and the fourth failed in an
+informative direction (below).
+
+**A REAL SECOND DEFECT, MEASURED AND NOW LARGELY FIXED: the walk's per-word `VirtualQuery`.**
+`submit_read_word` (`nv2a_core.c:1261-1282`) called `VirtualQuery` **once per pushbuffer word**,
+under `g_mmio_owner_lock` — which the ptimer thread needs in order to pulse vblank. Measured on this
+host at the base of a 64 MB mapped view (`logs/workers/title010/orch/vq_bench.py`): **12 µs**
+untouched but **378 µs** once resident, because `VirtualQuery` walks the region's page-descriptor
+chain. The arithmetic corroborates the run's own telemetry from a different instrument: R1's
+`walk_words_max` 8144 × 185 µs = **1507 ms** against its measured max hold of **1636 ms** (8 %).
+
+*Measured effect of caching the validated span per walk* (toolkit `5d6ebbd`, `nv2a_read_guard` test):
+
+| statistic | R1 (no cache) | R2 (no cache) | **R3 (cache)** |
+|---|---|---|---|
+| late re-arms / passes | 2941/4256 = **69.1 %** | 2961/4123 = **71.8 %** | **0 / 11924 = 0.0 %** |
+| max owner-lock hold | 1636 ms | 1219 ms | **68 ms** |
+| max pulse-to-pulse gap | 13 995 ms | 14 791 ms | **78 ms** |
+| pulses per pass | 0.297 | 0.275 | **0.979** |
+| presents at matched `t=120 s` | 628 | 641 | **2568 (4.1×)** |
+
+**R3 terminated early** at 236.5 s with `outcome=unhandled_exception` on the fatal unresolved call
+`0xE0424943` at VA **`0x9188C`**. The crash stack attributes it to a **pre-existing latent defect,
+not the cache**: `sub_0009188C` is a generated recovery stub whose whole body is
+`recomp_icall_fail_log(0x0009188C); abort();`, reached from `body_00091830` — and TR §20 already
+records `0x91830` as an entry whose internal target `0x9188C` decodes as ordinary code and was
+**not repaired**. The stack contains no frame from the walk, the cache or the owner lock. What is
+**not** yet shown is that the hole is merely *newly reached* rather than newly created; the control
+(the unfixed binary taken past 236 s) **has not been run**.
+
+**THE PRESENT-RATE WALL IS FLIP FREQUENCY, NOT RASTERISER THROUGHPUT — a correction to TR §24.3.**
+The guest's own flip counter (`flips == presents` exactly, so it is the swap count and not a model
+proxy) collapses from **~2.77 /s** early to **0.035–0.047 /s** in the tail — a **59–80× collapse
+that reproduces across four runs and three binaries** — while `[GPU] draws` and triangles keep
+climbing at ~485 draws and ~28 000 triangles per 10 s report. And **draws-per-flip is stable**
+(542.6 middle vs 541.9 late in `clockfix-1800`), which means **one flip per frame**: the guest does
+swap, once per frame, and the frame rate itself has collapsed to ~0.04 frames/s. So the rasteriser
+explains frame *content*, not frame *count*.
+
+**THE PRESENTER IS USUALLY RIGHT, SO THE DRAW→PRESENT QUESTION IS RE-FRAMED.** At **324 of 370**
+traced flips (87.6 %) `present_track_flip` hands the window the draw surface `0x80084000`, always by
+`reason=drawn_this_frame`. The plan's "the presentation path sends `0x8011C000`/`0x801B2000`" is
+true of `clockfix-1800`'s end state (its city hash `31b1469f9c922c32` appears **0** times among 711
+distinct published hashes) but is **not** a general property. Structural gaps remain and are
+recorded, not fixed: the guest's own `flip_read`/`flip_write`/`flip_modulo` index
+(`flip_modulo=3`) is stored and read only by two debug prints, never by `present_track_flip`; the
+report's "draw surface" line prints the *same variable* the presenter prefers, so it can never
+reveal a selection error; and the commit consumer drops every non-NV097 class (14 methods in
+`clockfix-1800`) with a count that could not name a blit — `NV_IMAGE_BLIT` (0x9F) is now identified
+explicitly by a census added this turn (toolkit `5fd62cb`).
+
+**Also corrected:** the Planner's "WHOLE-GUEST STALL" class (`long3d`, `units`, `units4`,
+`blacktrace`, `trace-noadmit`, `admitted39`, `admit3`) is **wrong**. Measured from the rings, the
+main thread is the **most recently active thread in the capture** (lag 0.00 s, 128 events in
+0.3–0.4 s) and `[FBPRESENT]` continues to within **7–18 s** of the actual run end (long3d: 697 s of
+704.4 s). Those are ordinary live runs whose workers are parked 13–25 s behind main.
+
+**Instrumentation added this turn** (toolkit `2be32ad`, `e487f78`, `5fd62cb`, `5d6ebbd`; game
+`9526ea2`): a process-start-relative monotonic clock (`nv2a_mono_clock.h`) stamped on the worker
+spawn, heartbeat, return and wait events — because `[CHECKPOINT]` cannot be a timeline (a whole
+1800 s run has **3** checkpoint lines, all in its first 78 lines) and `[FBPRESENT] t=` is
+first-present-relative; vblank re-arm/pass/gap telemetry published by the ptimer thread itself so it
+cannot freeze with the walk; owner-lock hold/wait maxima with the holder's tid; and a bounded
+`[WAIT]` print with **unbounded totals** (the print cap saturated at 10.4 % of a run before that was
+fixed). Two independent clocks agree to **0.08 s** on R1's worker/main liveness gap, which is what
+makes the new telemetry comparable to the archived rings.
+
+**Not established, and deliberately not claimed:** that the cache fix raises the heavy-phase flip
+rate (R3 crashed before that phase, and its matched-time gain was 2.6–6.7× against a predicted
+~10×); that the `0x9188C` hole is newly reached rather than newly created; the in-game average walk
+length, so the walk's share of wall time is a **bound**; and whether the vblank shortfall slows the
+guest's *pacing* — note **presents exceed vblank pulses** on R1 (2458 vs 1264, ratio **1.94**), so
+presents are **not** 1:1 gated on vblank and the shortfall does not gate the renderer.
+
+**M15 is NOT reached.** No title screen — no emblem, no `PLEASE PRESS START TO BEGIN` — has been
+observed on the recomp.
+
+## Current work (state 2026-10-08, turn title-009) — SUPERSEDED by the section above
 
 **A HOST CLOCK OVERFLOW EXISTS AND IS FIXED — BUT IT IS NOT ESTABLISHED AS THE CAUSE OF THE
 `Now Loading` HOLD** (TR §24.2, L53, toolkit this turn + the review remediation). Two things must be
@@ -521,19 +629,55 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 
 ## Next actions, in order
 
-0. **A HOST CLOCK OVERFLOW IS FIXED, BUT IT IS NOT THE CAUSE OF THE `Now Loading` HOLD — do not
-   re-investigate the hold as a clock problem** (TR §24.2, L53). The overflow is real (the unsigned
-   product wrap at **1844.674 s** of host uptime makes the consumer's reading jump backward and
-   stops vblank delivery) and the fix is correct and mutation-validated. **The causal claim was
-   falsified by Turn Review** and is withdrawn: 6 wrapped runs kept their workers, 7 unwrapped runs
-   lost them, and run 507's workers stop 9.6 s BEFORE its wrap. **The open blocker is therefore the
-   ADX worker-thread death itself** — start from the unwrapped deaths (`long3d`, `units`,
-   `blacktrace`, `trace-noadmit`, `admitted39`, `title005-admit3`), which share the symptom with no
-   wrap to blame. **A note, not a rule:** an archived run whose window contains a wrap instant did have its
-   clock reading step, so it is worth knowing which runs those are (`wrap_in_window.py` computes
-   the schedule; `vsync_death.py` is the per-run worker-liveness discriminator). That is a fact
-   about the run, not a reason to exclude it: the earlier claim that wrapped runs took a
-   different guest path is **not** supported, since six wrapped runs behaved like unwrapped ones.
+0. **THE ADX WORKER DEATHS ARE RETIRED — do not re-investigate them** (turn title-010; see "Current
+   work"). They are live threads parked on the D3D vblank event `0x0019D630`, not exits; the
+   population came from a detector that keyed on exact `esp` against a set containing the **main
+   thread** and then took a MAX over it; re-attributed by owning stack the unwrapped loss rate is
+   **0/60** and all ten "unwrapped deaths" vanish. On the fixed binary R1 and R2 each crossed an
+   unsigned QPC wrap and kept every worker, with zero exits — **Case D**. The old "6 kept / 7 lost"
+   lists, the `death_vs_onset` null result, the "0 of 16 within ±5 s" figure and anything keyed on
+   exact `esp` or `[KERNEL] summary` cadence are **withdrawn** and must be re-derived before being
+   cited again. The clock overflow repair (L53) still stands on its own merit.
+
+0b. **THE NEXT BLOCKER IS THE `VirtualQuery` PER-WORD WALK COST, AND THE FIX IS IN AND MEASURED.**
+   `submit_read_word` called `VirtualQuery` once per pushbuffer word under the owner lock; measured
+   at 12 us untouched / **378 us** resident on a 64 MB view. Caching the validated span per walk
+   (toolkit `5d6ebbd`) took late re-arms from **69.1 % to 0.0 %** of passes, max lock hold
+   **1636 to 68 ms**, max vblank gap **13 995 to 78 ms**, and presents at matched `t=120 s`
+   **628 to 2568**. **Two follow-ups, in this order:**
+   - **(i) Attribute the R3 crash.** R3 terminated at 236.5 s on the fatal unresolved call
+     `0xE0424943` at VA `0x9188C`. Its stack shows the generated recovery stub
+     `sub_0009188C` (`recomp_icall_fail_log(...); abort();`) reached from `body_00091830` — and TR §20
+     already records `0x91830`'s internal target `0x9188C` as decoding to ordinary code and
+     **not repaired**. So it is a **pre-existing latent hole**, and no frame of the walk or the cache
+     is on that stack. What is **not** shown is that the hole is merely *newly reached*: run the
+     **unfixed** binary past 236 s and see whether it crashes the same way. If it does not, the cache
+     is implicated and must be reverted pending investigation.
+   - **(ii) Reach the heavy phase and test the flip-rate prediction.** The pre-registered prediction
+     was heavy-phase flips/s up ~10x; R3's matched-time gain was 2.6-6.7x but it crashed before that
+     phase, so the prediction is **untested**. Reaching it needs the `0x9188C` hole closed first.
+
+0c. **THE PRESENT-RATE WALL IS FLIP FREQUENCY, NOT RASTERISER THROUGHPUT — TR §24.3 is corrected for
+   the present-rate wall.** `flips == presents` exactly, and the rate collapses **59-80x**
+   (~2.77 /s to 0.035-0.047 /s) across four runs and three binaries while draws and triangles keep
+   climbing. **Draws-per-flip is stable** (542.6 vs 541.9), so it is **one flip per frame** and the
+   *frame rate* has collapsed — ~0.04 frames/s. Do not target rasteriser speed for the present-rate
+   wall; the frame count is the quantity to move.
+
+0d. **THE PRESENTER IS USUALLY RIGHT (324/370 traced flips select `0x80084000`), so the remaining
+   draw→present questions are structural, not "wrong source":** the guest's own
+   `flip_read`/`flip_write`/`flip_modulo` index (`modulo=3`) is captured and never reaches
+   `present_track_flip`; the report's "draw surface" prints the same variable the presenter prefers
+   and so can never show a selection error; and the commit consumer drops all non-NV097 classes with
+   a count that cannot name a blit (`NV_IMAGE_BLIT` 0x9F now flagged explicitly by the census in
+   toolkit `5fd62cb`). Measure before choosing among these.
+
+0e. **SUPERSEDED (turn title-009) — kept for provenance only.** The text below treated the ADX
+   worker deaths as the open blocker and the clock overflow's causal status as the live question.
+   Both are resolved above: the deaths are not deaths, and the overflow is a latent repair.
+   (The fragment that stood here — "the earlier claim that wrapped runs took a different guest path
+   is **not** supported, since six wrapped runs behaved like unwrapped ones" — belongs to that
+   superseded analysis and is retained only inside the title-009 block.)
 
 0b. **Two leads for the reopened blocker, and the cheap one is already SPENT.**
    *(i) The vblank-rate lead.* Delivery is ~30-80x below nominal (TR §24.2): `clockfix-1800`
