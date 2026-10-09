@@ -84,8 +84,25 @@ hunks). The per-hunk inventory, the dispositions as applied and the owner's two 
 - **Verified on macOS:** `tools/posix_check.py` native (12 suites), cross (the whole tree compiles and
   links for Windows; the 3 known `d3d8_smoke` failures only) and python (714 passed); the structural
   check clean on `409c635` (130 files, 152 switches); the rule-3 scan clean; upstream's 13 surviving
-  switches classified in `docs/jsrf-run-profiles.md`. **Not yet run on Windows:** the title-path A/B
-  against `fafe0f6` decides it, and `git revert -m 1 409c635` undoes it as one commit.
+  switches classified in `docs/jsrf-run-profiles.md`.
+- **Windows gate (2026-10-09, driven from the Mac over ssh; toolkit `a5e2762` = the merge plus a
+  no-behaviour tidy, game `a2f185e`).** `just build`; game CTest **49/49**; toolkit CTest **15/15**; the
+  four standalone toolkit test projects (`tests/kernel_regressions` 16/16, `nv2a_vsh`, `nv2a_combiner`,
+  `fp_precision` 1/1 each — none is in either CTest, so each is configured with `cmake -S tests/<name>`);
+  `just check` all passed.
+- **Title-run A/B, 300 s each, one game commit, identical switches:** A =
+  `20261009-141651-461-title011-ab-a5e2762`, B = `20261009-142247-172-title011-ab-fafe0f6` (different
+  `exe_sha256`). Both reach the deadline with zero `[ICALL] Failed`/`[EXCEPTION]` lines, `[HEAP] free #1`
+  present, the APU trap range present and `[APUWAIT]` 4 in each (so "3 → 0" is not met by either; R3
+  also has 4). **A is slower:** presents at t = 120 s **960 vs 1750** (B passes the disclaimer
+  transition at ~2427; A ends at 2240, still climbing); late re-arms **1587/5745 = 27.6 % vs 56/13363 =
+  0.4 %**; owner-lock max hold **192 vs 83 ms**; max pulse gap 204 vs 91 ms. A wrote no more pixels
+  than B: on the same `[GPU] … pixels written` counter A 1.14e9 against B 1.51e9 (that counter
+  undercounts under the threaded raster, per `put_pixel`'s note; A's program-path count is 1.32e9). So
+  the cost is per pixel, attributed in §26. The
+  owner ruled that a performance regression on a non-working prototype is not a revert criterion: the
+  merge stays. `[FBPRESENT]` lines carry no reason field, so the plan's "reason mix" metric does not
+  exist in these logs; the presenter's reason is only in `RECOMP_FLIP_TRACE` output.
 
 ---
 
@@ -4304,6 +4321,8 @@ was ever written, how many times, and its last value, so "never received" is dis
 scene should have been published from a different surface, also remain open. **M15 remains
 unreached.**
 
+**Update (2026-10-09, §26.3):** the CONTROL0 latch shows the guest itself writes stage 0's CONTROL0 with
+ENABLE clear (7 581 of 16 230 writes), so `stage disabled` is guest intent.
 
 ## §25. The ADX "worker deaths" are parked waiters, not deaths; the walk's per-word `VirtualQuery` was the real cost (turn title-010)
 
@@ -4409,7 +4428,12 @@ cache: `sub_0009188C` is a generated recovery stub whose entire body is
 `recomp_icall_fail_log(0x0009188C); abort();`, reached from `body_00091830`, and §20 already records
 `0x91830`'s internal target `0x9188C` as decoding to ordinary code and **not repaired**. No frame
 of the walk, the cache or the owner lock is on that stack. **Not yet shown** is that the hole is
-merely *newly reached*; the control (unfixed binary past 236 s) has not been run.
+merely *newly reached*. **The control ran and is inconclusive** (2026-10-09):
+`20261009-142848-669-title011-R3-control-5fd62cb` — the pre-cache toolkit `5fd62cb`, R3's exact switches
+and 900 s — reached the deadline with no crash line, but only **1320** presents (last hash
+`87683a748e27d071`, the Dolby card), against R3's **2885** at its crash. It never reached the point where
+R3 died, so it neither implicates nor clears the cache; a no-cache control would need several times
+900 s. Closing `0x9188C` directly is the cheaper route.
 
 ### §25.6 The present-rate wall is flip frequency, not rasteriser throughput
 
@@ -4472,3 +4496,49 @@ classification (§24.1, L54) is untouched by this turn.
 
 **M15 remains unreached.** No title screen — emblem or `PLEASE PRESS START TO BEGIN` — has been
 observed on the recomp.
+
+---
+
+## §26. Executor time, the telemetry epoch and the stage-0 writes (2026-10-09, after the merge gate)
+
+### §26.1 The telemetry clock had one zero per file, now one per process
+
+`nv2a_mono_now_ns` was `static inline` in `nv2a_mono_clock.h` with its anchor in a function-local
+static, so every translation unit that called it kept its own anchor and its own zero. Two did:
+`kernel_bridge.c` (`[KERNEL] summary t_ms=`, the worker and wait stamps) and `nv2a_mmio_hook.c`
+(owner-lock and vblank stamps), which §25.8 compared as one timeline; the executor-time line (§26.2)
+in `nv2a_pb_exec.c` is a third. The offset between them was the
+gap between each file's first call, unbounded in principle. Fixed (toolkit, this session) by one
+`g_nv2a_mono_anchor_count` defined in `nv2a_core.c`. Pinned by `nv2a_mono_clock` (native and CTest):
+two translation units, the second anchors, 60 ms pass, and the first file's first reading must
+already include them. **It failed on the old header** (first reading 0 ns) and passes on the fixed
+one. Any comparison of stamps from those two files made before this fix carries an unknown offset;
+§25.8's results should be re-checked against that before being extended.
+
+### §26.2 Where executor time goes: pixel fill
+
+Always-on QPC buckets in `nv2a_pb_exec.c`, printed as `[GPU] executor time:` and exported through
+`nv2a_pb_exec_timing`: `exec` (the whole commit-consumer call), `vsh` (the vertex-program transform
+loop), `tri` (program-path triangle raster), `fill` (`xf_rows_parallel`, inside `tri`, wall time on the
+executor thread including the raster pool's wait) and `ffp` (the screen-space path). Measured on the
+merged executor (`20261009-145632-182-title011-instr`, 300 s, title-run switches), final report at
+t_ms = 292 945: **busy 217 611 ms; vertex programs 46 ms; triangle setup 41 ms; pixel fill 207 409 ms;
+screen-space 0**. The instrument costs little: presents at t = 120 s 940 against the uninstrumented A's
+960. With `RECOMP_NO_VSH=1` (`20261009-150139-277-title011-instr-novsh`) the same batches go through
+the screen-space path: busy 182 488 ms of which screen-space 171 232 ms, presents at t = 120 s 1290,
+late re-arms 1250/8144 = 15.3 %, max hold 167 ms. So the merge's slowdown is **per-pixel cost**, not
+vertex-program execution: ~1.3-1.5 billion pixels per 300 s at ~110-160 ns each, inside the walk's
+owner lock, which is what starves the vblank pulse. The pre-merge executor wrote at least as many
+pixels (§1, B) faster; its per-pixel cost was not instrumented.
+
+### §26.3 The guest disables stage 0 itself
+
+The stage-0 `SET_TEXTURE_CONTROL0` latch (`nv2a_pb_exec_tex0_control`; the `CONTROL0 stage 0:` report
+line) answers §24.3's open question. In the instrumented run the guest wrote stage 0's CONTROL0
+**16 230** times, **7 581** with ENABLE clear, last value `0x00000000`; the no-VSH run, 18 168 and 8 485.
+Every `stage disabled` batch therefore follows a guest write that cleared the bit; it is not a bit the
+model lost or never received. What those batches should draw is still open.
+
+The HAL fixture `jsrf_nv2a_hal` pins the latch (two stage-0 writes, one disabling, a stage-1 write
+that must not count) and the timing buckets' nesting invariants. Both instruments are observation
+only and need no ledger entry or run-profile classification.

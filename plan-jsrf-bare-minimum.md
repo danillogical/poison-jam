@@ -26,20 +26,22 @@ discipline. This plan owns the objective, the milestones and what to do next.
 - **The Orchestrator runs the fast path**; the Turn Reviewer reproduces a milestone claim, with its
   ledger IDs, rather than accepting the description.
 
-## Current work (state 2026-10-08, turn title-010)
+## Current work (state 2026-10-09: title-010, then the Windows gate of the v0.13.1 merge)
 
-**Toolkit changed on the Mac after title-010 (2026-10-08/09) — NOTHING below has run on Windows.**
-(1) Review fixes `fafe0f6`: a walk that committed a unit inside a pushbuffer subroutine and then
-stopped wedged every later walk on `invalid_target` (the return address was carried only under
-actions + a hold) — now carried at every unit commit; a partial commit now publishes the last committed
-semaphore-release fence (`NV2A_COMMIT_PARTIAL`); a vblank pass four or more frames late pulses once
-instead of not at all; the PFIFO-alias PUT write reports its kick; `g_nv2a_submit_state_size` is
-exported; the clock anchor is race-free. Game `51bc1ff`: `jsrf_gpu.py` size tiers and the witness switch.
-(2) **Upstream v0.13.1 merged as `409c635`** (TR §1 "v0.13.1 sync", `docs/reviews/upstream-v0.13.1-merge.md`):
-upstream's pushbuffer executor is now the base — vertex programs, register combiners, depth,
-near-plane clipping, four texture stages, threaded raster — with the fork's consumer, present tracker,
-flip trace, stage-0 gate and fixed-function paths ported in (L18); `RECOMP_VP` is retired. Both are
-first exercised by next action −1.
+**The v0.13.1 merge passed its Windows gate, and it costs speed, not function** (2026-10-09, run from
+the Mac over ssh; TR §1 "v0.13.1 sync", TR §26). The Mac-side toolkit changes after title-010 — the
+review fixes `fafe0f6` and the upstream merge `409c635` (upstream's executor as the base, the fork's
+consumer, present tracker, flip trace, stage-0 gate and fixed-function paths ported in; L18) — build
+and pass every suite on Windows (game CTest 49/49, toolkit CTest 15/15, the four standalone toolkit
+test projects, `just check`). The 300 s title-run A/B on one game commit: neither binary crashes, but
+the merged executor reaches **960** presents at t = 120 s against **1750** for `fafe0f6`, with late
+re-arms **27.6 %** against **0.4 %** and a 192 ms owner-lock hold. The new executor-time instrument
+attributes it: **pixel fill is 207 s of the executor's 218 s busy time** (the executor is busy 74 % of
+the run, under the owner lock), vertex programs 46 ms; turning vertex programs off moves the same pixels onto the
+screen-space path and stays slow. The owner's call: a performance regression on a non-working
+prototype is not a revert criterion, so the merge stays and the cost is next action 2's subject.
+The same session fixed the telemetry clock's per-file epoch and showed the guest itself disables
+stage 0 (16230 `SET_TEXTURE_CONTROL0` writes, 7581 with ENABLE clear; TR §26).
 
 **THE ARCHIVED "ADX WORKER DEATHS" ARE NOT DEATHS, AND THE POPULATION DOES NOT REPRODUCE ON THE
 FIXED BINARY.** This retires the previous turn's critical hypothesis. Two independent lines agree.
@@ -97,8 +99,10 @@ not the cache**: `sub_0009188C` is a generated recovery stub whose whole body is
 `recomp_icall_fail_log(0x0009188C); abort();`, reached from `body_00091830` — and TR §20 already
 records `0x91830` as an entry whose internal target `0x9188C` decodes as ordinary code and was
 **not repaired**. The stack contains no frame from the walk, the cache or the owner lock. What is
-**not** yet shown is that the hole is merely *newly reached* rather than newly created; the control
-(the unfixed binary taken past 236 s) **has not been run**.
+**not** yet shown is that the hole is merely *newly reached* rather than newly created: the control
+(`20261009-142848-669-title011-R3-control-5fd62cb`, the pre-cache toolkit, 900 s) ran clean but reached
+only **1320** presents, still on the Dolby card, against R3's **2885** at its crash — **inconclusive**
+(TR §25.5).
 
 **THE PRESENT-RATE WALL IS FLIP FREQUENCY, NOT RASTERISER THROUGHPUT — a correction to TR §24.3.**
 The guest's own flip counter (`flips == presents` exactly, so it is the swap count and not a model
@@ -181,27 +185,20 @@ are the "Settled — do not re-run" list. The turn-by-turn summary is in
 
 ## Next actions, in order
 
-−1. **Verify the toolkit before relying on any run** (the W7 chore gate). Build toolkit `a5e2762` (the merge
-   `409c635` plus a comment-and-unused-static tidy, no behaviour change) and the
-   game; both CTests (new: `kernel_regressions`, `nv2a_vsh`, `nv2a_combiner`, `fp_precision`; changed:
-   `nv2a_submit_diag`, `fence_snapshot`, `nv2a_read_guard_test` arm 5, `vblank_sched_telemetry_test`,
-   `kernel_file_apc_test`, `jsrf_nv2a_hal`); `just check`. Then an exploratory `just title-run` A/B of
-   `409c635` against `fafe0f6` (the pre-merge, post-review-fix toolkit) at the same seconds: draws,
-   triangles and `batches_ffp`; `[TEXUSE]`; the `[FBPRESENT]` reason mix; flips == presents; owner-lock
-   maximum hold and late re-arms (title-010 baseline 68 ms, 0.0 %); presents at matched t = 120 s (2568);
-   `[HEAP] free #1` passing; the APU trap-range line and `[APUWAIT]` 3→0. A merge-caused regression →
-   `git revert -m 1 409c635` with the evidence, not a forward patch. Take the pending R3 control (the
-   unfixed binary past 236 s) from a worktree pinned to the pre-cache toolkit `5fd62cb`, so the merge
-   cannot confound it.
+−1. **Done 2026-10-09** (TR §1 "v0.13.1 sync"): the merge builds and passes every suite on Windows; the
+   A/B shows no crash and no functional regression in 300 s but a pixel-fill slowdown (next action 2);
+   the R3 control ran and was inconclusive (next action 0).
 
-0. **Attribute the R3 crash, then test the flip-rate prediction.** R3 ended at 236.5 s on the fatal
+0. **Close `0x9188C`, then test the flip-rate prediction.** R3 ended at 236.5 s on the fatal
    unresolved call `0xE0424943` at VA `0x9188C`: `sub_0009188C` is a generated stub
    (`recomp_icall_fail_log(...); abort();`) reached from `body_00091830`, and TR §20 already records
    `0x91830`'s internal target `0x9188C` as ordinary code, not repaired — no walk/cache frame is on the
-   stack. (i) Run the unfixed binary past 236 s (the control in −1): if it does not crash the same way
-   the cache `5d6ebbd` is implicated and is reverted pending investigation. (ii) Reaching the heavy
-   phase needs `0x9188C` closed first; the pre-registered prediction (heavy-phase flips/s up ~10×; R3's
-   matched-time gain was 2.6-6.7×) is untested.
+   stack. The pre-cache control (`…142848-669-title011-R3-control-5fd62cb`) reached only 1320 presents
+   in 900 s against R3's 2885 at the crash, so it cannot attribute the hole (TR §25.5); a no-cache control
+   would need several times longer. Repair `0x9188C` the way stops 29–31 were repaired (disassemble
+   `0x91830`, `check-hidden-entries.py`), then a run past R3's crash point settles both questions. The
+   pre-registered prediction (heavy-phase flips/s up ~10×; R3's matched-time gain was 2.6-6.7×) is
+   untested.
 1. **A city scene is drawn but not presented — the structural draw→present questions** (TR §24.3 as
    corrected by §25.7). On the fixed binary `0x80084000` holds a full 3D city
    (`logs/workers/title009/clockfix/0x80084000.png`), hash `31b1469f9c922c32`, published in **0** of
@@ -217,16 +214,18 @@ are the "Settled — do not re-run" list. The turn-by-turn summary is in
    composite writes `0x11C000` sampling `0x84000`, then a later `self=1` batch writes `0x84000`, and the
    tracker selects `0x84000` because it prefers the last surface drawn.
 2. **Executor throughput and frame count.** The present-rate wall is flip frequency: `flips == presents`
-   falls ~2.77 /s → 0.035-0.047 /s (59-80×, four runs, three binaries) while ~485 draws and ~28 000
-   triangles per 10 s report keep climbing and draws-per-flip stays at ~542, i.e. one flip per frame at
-   ~0.04 frames/s (TR §25.6). `clockfix-1800` shows the present rate falling 110× (5.53 → 0.05 /s) as
-   the per-report triangle count rises 87× (median 359 → 31347; 875 pixels per triangle, ~1.9M
-   triangles). A 900 s run cannot reach "PLEASE PRESS START TO BEGIN" at 0.05 presents/s. The
-   measurement is where inside the executor the time goes (per-triangle setup vs per-pixel sampling) —
-   on the merged `409c635` executor (threaded raster), not another run of the same length.
+   falls ~2.77 /s → 0.035-0.047 /s (59-80×, four runs, three binaries) while draws keep climbing and
+   draws-per-flip stays at ~542, i.e. one flip per frame (TR §25.6). **Measured on the merged executor
+   (TR §26):** `[GPU] executor time` puts **pixel fill at 207 s of 218 s busy** in a 300 s run (vertex
+   programs 46 ms, triangle setup 41 ms), ~1.3-1.5 billion pixels from ~13-15 k mostly full-screen
+   triangles, ~110-160 ns per pixel, all under the owner lock (late re-arms 28.8 %). The pre-merge
+   executor wrote at least as many pixels and reached 1750 presents at t = 120 s against 940-960. Levers when it
+   gates M15: take the fill off the owner lock, a cheaper per-pixel path for the composite/blur passes,
+   or the raster pool's thresholds. The owner's direction: performance on a non-working prototype is not
+   a blocker by itself.
 3. **A run must reach past presents 2424 to be informative.** The disclaimer is a timed hold, presents
-   1461 → 2424 (t≈408-420 s); the 300 s `just title-run` ends at presents ~1450-1800, before the
-   transition. Use ≥540 s.
+   1461 → 2424 (t≈408-420 s); the 300 s `just title-run` ends at presents ~1450-2435 (2210-2240 on the
+   merged executor), at or before the transition. Use ≥540 s.
 4. **Hold: no runs on the dispatch stop chain** until the ceiling path is finished. Stop 28 (`0x81860`)
    is still not exercised by any run (`scripts/check-run-exercised.py` reports NOT EXERCISED for every
    post-fix run), so `config/stop-chain.json` is unchanged.
@@ -302,11 +301,11 @@ are the "Settled — do not re-run" list. The turn-by-turn summary is in
   have states that contradict their notes (stop 30 `REPAIRED` with `repair_commit: null` while stop 31 says
   it was exercised; stop 29 says the repair is committed but names none); the `0x000C2700` evidence text
   still quotes the pre-tightening body end; `tests/test_nv2a_hal.c` vertex-offset asserts compare raw
-  offsets that `dma_resolve` may rewrite; list every caller of `0x1912A0` (the fence mirror assumes each
-  advances `[dev+0x30]` before writing PUT). Toolkit, Windows-only: the long-wait instrument
+  offsets that `dma_resolve` may rewrite. The stop-chain rows need evidence rows that
+  `check-stop-chain.py` verifies against the run archives; their repair commits are stop 28 `49bfd4e`,
+  stop 29 `0cba32a`, stops 30–31 `d63e792`. Toolkit, Windows-only: the long-wait instrument
   (`kernel_bridge.c`, `bridge_log_long_wait`) logs only after a wait returns, so a permanently parked
-  thread is silent — publish an "in wait since T on X" slot; `nv2a_mono_clock.h` gives each translation
-  unit its own anchor although its comment claims a shared epoch.
+  thread is silent — publish an "in wait since T on X" slot.
 
 - **Packet-cap zero-commit livelock** (L40, L54, L55; TR §24.1). `unit_words` resets per unit but `packets`
   never does, and `if (packets >= 1024)` runs before the yield, so a packet-dense stream reaches the cap
@@ -318,10 +317,10 @@ are the "Settled — do not re-run" list. The turn-by-turn summary is in
   times in the 25-method witness run vs once before, so track its count per run first. A run on the
   repaired binary is still owed to confirm `budget_resume_stalled` behaves as designed at scale (TR §24.1).
   The "`ret` lost across a rejection" hazard is latent (`ret` is 0 at every latched stop).
-- **Texture-stage discriminator** (TR §24.3): latch whether `SET_TEXTURE_CONTROL0` was ever written, how
-  often and its last value, so "guest disabled stage 0" is distinguishable from "model cleared or never
-  received the bit". Also open: what the disabled-stage batches should draw, and whether the city scene
-  should have been published from another surface. Re-check against the merged executor first.
+- **Stage 0 is disabled by the guest** (TR §24.3, TR §26): the CONTROL0 latch shows 16230 stage-0
+  `SET_TEXTURE_CONTROL0` writes, 7581 with ENABLE clear, last `0x00000000`, so `stage disabled` is guest
+  intent, not a lost bit. Still open: what the disabled-stage batches should draw, and whether the city
+  scene should have been published from another surface.
 - **Inline per-vertex diffuse colour dropped** (render gap behind the `0x1A30` admission): attribute 3
   component 0 of the 4-float inline vertex family was acted on only for `attr==0` and `attr==9`
   (`nv2a_pb_exec.c:2922-2934` before the v0.13.1 merge — re-check). Admitted methods the executor only

@@ -72,6 +72,13 @@ hand (the HAL PCI contract fails identically before and after the merge on macOS
 passing, the APU trap-range line and `[APUWAIT]` 3→0 — with the six risks in §6 below. The
 inventory's renderer packets R1–R5 are superseded by the port; its risk list still applies.
 
+**Measured on Windows (2026-10-09; TR §1 "v0.13.1 sync", TR §26).** The build, game CTest 49/49,
+toolkit CTest 15/15, the four standalone projects and `just check` all passed. The 300 s A/B ran
+without a crash in either binary, but the merged executor is slower: presents at t = 120 s 960 against
+1750, late re-arms 27.6 % against 0.4 %. The executor-time instrument attributes the cost to per-pixel
+fill under the owner lock. The owner kept the merge, since speed on a non-working prototype is not a
+revert criterion.
+
 ---
 
 ## Inventory (written before resolution)

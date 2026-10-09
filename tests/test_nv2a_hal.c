@@ -390,6 +390,105 @@ static int run_executor_counter_contract(void)
     return ok;
 }
 
+/* The observation seams for executor time and the stage-0 texture enable.
+ *
+ * Stage-0 CONTROL0 writes must be counted, and the last value and enable flag latched.
+ * Stage 1-3 writes use the same method at stride 0x40 and must leave the stage-0 latch alone.
+ * Time buckets are checked by invariant only, since their magnitude is host-dependent. */
+static int timing_nested(const Nv2aPbExecTiming *t, const char *name)
+{
+    int ok = 1;
+    if (t->fill_ns > t->tri_ns) {
+        fprintf(stderr, "FAIL %s: fill_ns %llu > tri_ns %llu\n", name,
+                (unsigned long long)t->fill_ns, (unsigned long long)t->tri_ns);
+        ok = 0;
+    }
+    if (t->vsh_ns + t->tri_ns + t->ffp_ns > t->exec_ns) {
+        fprintf(stderr, "FAIL %s: vsh+tri+ffp %llu > exec_ns %llu\n", name,
+                (unsigned long long)(t->vsh_ns + t->tri_ns + t->ffp_ns),
+                (unsigned long long)t->exec_ns);
+        ok = 0;
+    }
+    return ok;
+}
+
+static int run_executor_instrument_contract(void)
+{
+    const uint32_t ram_size = 64u * 1024u * 1024u;
+    uint8_t *ram = (uint8_t *)calloc(1, ram_size);
+    uint8_t *ramin = (uint8_t *)calloc(1, 1024u * 1024u);
+    uint8_t *instance = (uint8_t *)calloc(1, 0x20000u);
+    uint32_t *pb = (uint32_t *)VirtualAlloc(NULL, 0x2000,
+                                            MEM_RESERVE | MEM_COMMIT,
+                                            PAGE_READWRITE);
+    NV2AState *gpu;
+    Nv2aPbExecTex0 tex_before, tex_after;
+    Nv2aPbExecTiming t_before, t_after;
+    int ok = 1;
+    if (!ram || !ramin || !instance || !pb) return 0;
+
+    nv2a_reset_standalone_for_test();
+    gpu = nv2a_init_standalone(ram, ram_size, ramin, 1024u * 1024u);
+    if (!gpu) return 0;
+    if (!nv2a_set_pushbuffer_window(gpu, (uint8_t *)pb, 0, 0x2000)) return 0;
+    if (!nv2a_bind_instance_memory(0x83fe0000u, instance, 0x20000u)) return 0;
+    {
+        uint32_t *pair = (uint32_t *)(instance + 0x6u * 8u);
+        uint32_t *object = (uint32_t *)(instance + (0x300u << 4));
+        pair[0] = 0x6u; pair[1] = NV_RAMHT_STATUS | 0x300u;
+        object[0] = 0x97u; object[1] = object[2] = object[3] = 0;
+    }
+    _putenv_s("RECOMP_PB_EXEC", "1");
+    nv2a_pb_exec_register_commit_consumer();
+    if (!nv2a_pb_exec_consumer_registered()) {
+        fprintf(stderr, "FAIL instrument: RECOMP_PB_EXEC present but not registered\n");
+        VirtualFree(pb, 0, MEM_RELEASE); free(instance); free(ramin); free(ram);
+        return 0;
+    }
+
+    memset(&tex_before, 0, sizeof(tex_before));
+    memset(&t_before, 0, sizeof(t_before));
+    nv2a_pb_exec_tex0_control(&tex_before);
+    nv2a_pb_exec_timing(&t_before);
+
+    memset(pb, 0, 0x2000);
+    pb[0] = (1u << 18);            pb[1] = 0x6u;          /* SET_OBJECT NV097 */
+    pb[2] = (1u << 18) | 0x1B0Cu;  pb[3] = 0x00000000u;   /* stage 0, ENABLE clear */
+    pb[4] = (1u << 18) | 0x1B4Cu;  pb[5] = 0x12345678u;   /* stage 1, must not count */
+    pb[6] = (1u << 18) | 0x1B0Cu;  pb[7] = 0x40000000u;   /* stage 0, ENABLE set */
+    gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET] = 0;
+    gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_PUT] = 32;
+    ok &= exec_check(nv2a_submit_pending(gpu), 1, "instrument: CONTROL0 stream accepted");
+
+    memset(&tex_after, 0, sizeof(tex_after));
+    memset(&t_after, 0, sizeof(t_after));
+    nv2a_pb_exec_tex0_control(&tex_after);
+    nv2a_pb_exec_timing(&t_after);
+
+    ok &= exec_check(tex_after.writes - tex_before.writes, 2,
+                     "instrument: only the two stage-0 writes are counted");
+    ok &= exec_check(tex_after.disables - tex_before.disables, 1,
+                     "instrument: exactly one stage-0 write cleared ENABLE");
+    ok &= exec_check(tex_after.last, 0x40000000u,
+                     "instrument: last is the final stage-0 value, not stage 1's");
+    ok &= exec_check(tex_after.enabled, 1, "instrument: stage 0 ends enabled");
+
+    ok &= exec_check(t_after.exec_ns >= t_before.exec_ns, 1, "instrument: exec_ns monotonic");
+    ok &= exec_check(t_after.vsh_ns >= t_before.vsh_ns, 1, "instrument: vsh_ns monotonic");
+    ok &= exec_check(t_after.tri_ns >= t_before.tri_ns, 1, "instrument: tri_ns monotonic");
+    ok &= exec_check(t_after.fill_ns >= t_before.fill_ns, 1, "instrument: fill_ns monotonic");
+    ok &= exec_check(t_after.ffp_ns >= t_before.ffp_ns, 1, "instrument: ffp_ns monotonic");
+    ok &= timing_nested(&t_before, "instrument: nesting before");
+    ok &= timing_nested(&t_after, "instrument: nesting after");
+
+    nv2a_set_commit_consumer(NULL);
+    VirtualFree(pb, 0, MEM_RELEASE);
+    free(instance);
+    free(ramin);
+    free(ram);
+    return ok;
+}
+
 /* A recorder back end. With one registered, clear_surface() hands the clear to
  * the back end and returns BEFORE touching guest memory -- which is the only
  * way to exercise a REAL committed clear from this fixture, whose memory
@@ -698,6 +797,7 @@ int main(void)
     ok &= run_hal_pci_contract();
     ok &= run_consumer_contract();
     ok &= run_executor_counter_contract();
+    ok &= run_executor_instrument_contract();
     ok &= run_executor_clear_contract();
     ok &= run_ordered_constant_contract();
     if (!ok) { fprintf(stderr, "FAIL: committed-method consumer contract\n"); return 1; }

@@ -3018,3 +3018,27 @@ Toolkit
 Game
 `PUSHED_TO: origin / BRANCH: master / COMMIT: c10d1a21fac72f25f2d27ae8d2a057588e95cf56 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 2a580f7..c10d1a2 master -> master`.
 Outgoing game commit: no `game/` path, 2 blobs (largest 239 KB), `scripts/secret-audit.py` 0 hits.
+
+## 2026-10-09 — the v0.13.1 merge's Windows gate, the telemetry epoch, and two executor instruments
+
+First session run from the Mac against the Windows box over ssh. The owner's rule: code on the Mac, copy
+the files over with `scp`, and build, test, commit and push from Windows. Nothing is pushed from the Mac.
+
+- **Next action −1, done.** Toolkit `a5e2762` and game `a2f185e` build, and every suite passes: game
+  CTest 49/49, toolkit CTest 15/15, the four standalone toolkit test projects, and `just check`. The
+  300 s A/B (`…141651-461-title011-ab-a5e2762` against `…142247-172-title011-ab-fafe0f6`) shows no crash
+  in either binary, but the merged executor is slower: presents at t = 120 s 960 against 1750, and late
+  re-arms 27.6 % against 0.4 %. The owner kept the merge; a performance regression on a non-working
+  prototype is not a revert criterion (TR §1).
+- **R3 control, inconclusive.** `…142848-669-title011-R3-control-5fd62cb` ran 900 s clean but reached
+  only 1320 presents, against R3's 2885 at its crash (TR §25.5). Closing `0x9188C` is next action 0.
+- **Telemetry epoch fixed.** The `nv2a_mono_clock.h` anchor was one per translation unit. It is now one
+  `g_nv2a_mono_anchor_count` in `nv2a_core.c`, pinned by a two-file test that failed before the fix
+  (TR §26.1).
+- **Two instruments, always on.**
+  - `[GPU] executor time:` attributes the slowdown: pixel fill is 207 s of 218 s busy, and vertex
+    programs take 46 ms. With `RECOMP_NO_VSH=1` the same pixels go through the screen-space path, which
+    is still slow (TR §26.2).
+  - The stage-0 CONTROL0 latch shows the guest itself disables stage 0: 7581 of 16230 writes clear
+    ENABLE (TR §26.3).
+  - Both are pinned by a new arm of `jsrf_nv2a_hal`.
