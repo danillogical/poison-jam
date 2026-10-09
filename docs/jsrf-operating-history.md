@@ -3069,3 +3069,9 @@ Still run from the Mac over ssh.
   `RECOMP_NO_VSH` run also hit (TR §26.4).
 - **A bisect against toolkit `5d6ebbd`** did not build: the game tree's new tests use the newer toolkit's
   APIs.
+- **Register combiners off** (`…163657-288-title011-nocombiners`): no fatal path and `title.adx` read,
+  but the same hold at 2435 as B. R1 and R2 hold there too; only R3 ever passed it (TR §26.4).
+
+Game
+`PUSHED_TO: origin / BRANCH: master / COMMIT: 57af797ea45fa6f86847e0a5f13920d08001254b / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 38aab04..57af797 master -> master`.
+Outgoing: no `game/` path, 9 blobs (largest 3.06 MB, `config/recovered-functions.json`), `scripts/secret-audit.py` 0 hits.

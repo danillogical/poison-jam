@@ -191,9 +191,15 @@ are the "Settled — do not re-run" list. The turn-by-turn summary is in
 
 0. **`0x9188C` is closed (stop 32, TR §26.4); find why the merged build takes the game's fatal path at the
    transition, then test the flip-rate prediction.** The first run on the repaired tree stopped at presents
-   2429 in `JSRF_FATAL.ERR` without reaching the address. The INFERRED lead is a vblank-starved ADX stream:
-   no `title.adx` read, pulses per pass 0.18. Test it by cutting pixel cost (e.g. `RECOMP_NO_COMBINERS=1`)
-   and checking whether vblank recovers and `title.adx` is read. Background: R3 ended at 236.5 s on the fatal
+   2429 in `JSRF_FATAL.ERR` without reaching the address. With `RECOMP_NO_COMBINERS=1` there is no fatal
+   path and `title.adx` is read, but presents then hold at 2435. That is the old "Now Loading" hold, which
+   R1, R2 and B also show; only R3 ever passed it (TR §26.4). Two questions remain:
+   - why the merged executor with combiners on takes the fatal path;
+   - what releases the hold. R3, the one run that passed, had ~49 vblank pulses/s and zero late re-arms,
+     against ≤ 23 /s elsewhere (INFERRED, n = 1). A run with vblank delivery restored, e.g. the fill taken
+     off the owner lock, would test it.
+
+   Background: R3 ended at 236.5 s on the fatal
    unresolved call `0xE0424943` at VA `0x9188C`: `sub_0009188C` is a generated stub
    (`recomp_icall_fail_log(...); abort();`) reached from `body_00091830`, and TR §20 already records
    `0x91830`'s internal target `0x9188C` as ordinary code, not repaired — no walk/cache frame is on the

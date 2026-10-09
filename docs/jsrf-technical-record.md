@@ -4574,7 +4574,28 @@ now carry the merged lifter's semantics; the generated chunks keep the pre-merge
 
 The same fatal path appears in the `RECOMP_NO_VSH` run (§26.2). It does not appear in R1, R2, R3, B or
 the control. **Not established:** the trigger. The runs that took the path never read `title.adx` (no
-`[ADXIO]`), while B and R3 do at this transition. Pulses per pass were 0.18 here against 0.51 (B) and
-0.98 (R3), and the ADX workers wait on the vblank event `0x19D630`. A vblank-starved ADX stream that times
-the loading job out is **INFERRED**, consistent with §26.2's pixel fill under the owner lock but not
-shown.
+`[ADXIO]`), while B and R3 do at this transition.
+
+**Register combiners off avoids the fatal path, but not the hold.**
+`20261009-163657-288-title011-nocombiners` (600 s, `RECOMP_NO_COMBINERS=1`, built from game `57af797`,
+toolkit `de39fb1`):
+- no `[FATAL-*]` line and no crash;
+- `title.adx` read (6 `[ADXIO]` lines, as in B);
+- presents hold at **2435** from about 250 s to the end, the same hold B shows, and stop 32 is still not
+  reached.
+
+**Three outcomes at this transition, measured over seven runs:**
+
+| outcome | runs | evidence |
+|---|---|---|
+| passes | R3 only (toolkit `5d6ebbd`) | 2885 presents by 227 s |
+| holds after reading `title.adx` | R1, R2 (title-010 toolkits), B (`fafe0f6`), no-combiners | reach ~2430 (R1/R2 at ~480 s), then creep to 2435-2458 to the end; 6-9 `[ADXIO]` lines; no `[FATAL-*]` |
+| fatal path, no `title.adx` read | the repair run and no-VSH (merged executor, combiners on) | `JSRF_FATAL.ERR` at presents ~2429 |
+
+- **The hold is not new.** It is the "Now Loading" hold the plan lists as unexplained, and R1/R2 show it
+  on older toolkits.
+- **R3 is the outlier.** It is also the run with by far the best vblank delivery: ~49 pulses/s and zero
+  late re-arms, against ≤ 23 /s for every other run and ~1.3 /s for R1/R2. That is consistent with a
+  vblank-paced loading step, but one run cannot show it (**INFERRED**).
+- **What is new is the fatal path,** on the merged executor with register combiners enabled. Its trigger
+  is open. The `5d6ebbd` bisect could not build against this game tree.
