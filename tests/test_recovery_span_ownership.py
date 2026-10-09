@@ -68,12 +68,16 @@ import bisect
 # `ret` immediate), plus 0x96560 recovered as stop 26. 31 -> 25, again exactly
 # the measured set.
 #
+# SHRUNK AGAIN 2026-10-09 by 1: 0x91830 widened from 0x91882 to its real end
+# 0x918A1. Its end had been cut at the database's false tail_jump_alias entry
+# 0x91882, so its je to 0x9188C left the body (R3's fatal stop). 25 -> 24.
+#
 # NOTE ON THE CERTIFICATE WORDING used in the entries' `evidence` strings: when one
 # says an entry was certified "at depth 0", it means a DEPTH-0 WITNESS EXISTS, not
 # that every path's depth was resolved. 81 of the 159 repaired entries have at
 # least one exit the model reports UNKNOWN depth. The full certificate is stated
 # once in docs/jsrf-technical-record.md section 20.
-KNOWN_OPEN = {int(x, 16) for x in """11105 1F000 20760 2A000 4037C 44000 45DB0 52050 73C20 91830 A76E0 AEE80 C7D40 D02D0 E0710 E0CF0 EC0B0 F02F0 10A0E0 110B20 11FE90 127810 142400 1783D0 180038""".split()}
+KNOWN_OPEN = {int(x, 16) for x in """11105 1F000 20760 2A000 4037C 44000 45DB0 52050 73C20 A76E0 AEE80 C7D40 D02D0 E0710 E0CF0 EC0B0 F02F0 10A0E0 110B20 11FE90 127810 142400 1783D0 180038""".split()}
 
 
 def boundary_stub_calls(text, entries, unresolved):

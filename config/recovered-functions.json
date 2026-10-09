@@ -5747,10 +5747,10 @@
  },
  {
   "start": "0x00091830",
-  "end": "0x00091882",
+  "end": "0x000918A1",
   "section": ".text",
   "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00091980 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00091830..0x00091882, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00091980 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00091830..0x000918A1: sub esp,0xc and three pushes, then pop edi/esi/ebx, add esp,0xc and ret at 0x918A0, NOP padding to 0x918AF and the next function at 0x918B0. The earlier end 0x00091882 was the analysis database's tail_jump_alias entry sub_00091882, a push ecx mid-function with no caller and no pointer to it (its one raw dword match is inside DSOUND data), so the je at 0x91878 to 0x9188C left the lifted body and reached an abort stub (R3, 20261008-191232-038-title010-R3-vqcache-AB). Evidence: report-deepseek.md, 2026-09-21; widened 2026-10-09."
  },
  {
   "start": "0x000918B0",

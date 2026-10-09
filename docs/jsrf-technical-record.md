@@ -4542,3 +4542,39 @@ model lost or never received. What those batches should draw is still open.
 The HAL fixture `jsrf_nv2a_hal` pins the latch (two stage-0 writes, one disabling, a stage-1 write
 that must not count) and the timing buckets' nesting invariants. Both instruments are observation
 only and need no ledger entry or run-profile classification.
+
+### §26.4 `0x9188C` repaired; the next run stops in the game's own fatal-error path
+
+**The repair.** R3's fatal target `0x9188C` is not a function. It is the target of `je 0x9188c` at
+`0x91878` inside `0x91830`, a complete method of the `.data` table at `0x20D8D0`: `sub esp,0xc`, three
+pushes, …, `pop edi/esi/ebx`, `add esp,0xc`, `ret` at `0x918A0`, NOP padding to `0x918AF`, next function
+`0x918B0`. Its recovered entry had been ended at `0x91882`, the analysis database's `tail_jump_alias`
+entry `sub_00091882`. That is a `push ecx` mid-function with no caller; its only raw dword match in the
+image lies inside DSOUND data. So the branch left the lifted body and reached an abort stub. Widened to
+`[0x91830, 0x918A1)` (stop 32): the branch is now `goto loc_0009188C`, `0x9188C` left
+`recovery-unresolved.json`, and `0x91830` left the span-ownership `KNOWN_OPEN` set (25 → 24;
+stack-depth `CUT_EPILOGUE` 14 → 13). §20's "no depth-0 `ret`" for this entry does not hold from the
+entry itself: the `ret` at `0x918A0` is at depth 0.
+
+**What the regeneration brought with it.** `recover-functions.py` re-lifts every recovered function
+with the toolkit's current lifter, now upstream v0.13.1's, which emits `RECOMP_FP_PC` (x87 precision
+control) and `RECOMP_ICALL_SAFE_AT_CC`. The game's generated `recomp_types.h` predated them, so it was
+refreshed from the toolkit template and the project's four header patches re-applied by
+`scripts/patch-generated.py` (14/14 applied). The template is otherwise a superset of the old header. The
+preservation baseline and provenance manifest were re-recorded. All 3164 recovered functions therefore
+now carry the merged lifter's semantics; the generated chunks keep the pre-merge lift.
+
+**The first run on the repaired tree did not reach the address.** `20261009-160259-224-title011-9188C-fixed`
+(900 s, uncommitted tree) has no crash line, but presents stop at **2429** at t ≈ 353 s:
+- After the `Media\Player\Gum*` loads, a loading job (`job=01330060`, `+98=30000074`) enters the
+  disc-error path three times (`[FATAL-TAIL]`/`[FATAL-CTOR]`, L41).
+- The guest then opens `Z:\Media\Cache\JSRF_FATAL.ERR`.
+- The main thread then sleeps under `sub_00145C28` ← `sub_00145CA6` ← `sub_00013F80` to the end.
+- The GPU is idle: `GET == PUT`, last walk ok.
+
+The same fatal path appears in the `RECOMP_NO_VSH` run (§26.2). It does not appear in R1, R2, R3, B or
+the control. **Not established:** the trigger. The runs that took the path never read `title.adx` (no
+`[ADXIO]`), while B and R3 do at this transition. Pulses per pass were 0.18 here against 0.51 (B) and
+0.98 (R3), and the ADX workers wait on the vblank event `0x19D630`. A vblank-starved ADX stream that times
+the loading job out is **INFERRED**, consistent with §26.2's pixel fill under the owner lock but not
+shown.

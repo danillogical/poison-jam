@@ -3053,3 +3053,19 @@ Toolkit
 Game
 `PUSHED_TO: origin / BRANCH: master / COMMIT: 2d478050564a5d34e5fe9538a3134d9fb7804291 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward a2f185e..2d47805 master -> master`.
 Outgoing game commit: no `game/` path, 5 blobs (largest 339 KB), `scripts/secret-audit.py` 0 hits.
+
+## 2026-10-09 (later) — next action 0: `0x9188C` closed; the transition now ends in the game's fatal path
+
+Still run from the Mac over ssh.
+- **The repair.** R3's fatal `0x9188C` is a branch target inside `0x91830`, whose recovered entry had been
+  cut at a false database entry (`0x91882`). The entry is widened to `[0x91830, 0x918A1)` and recorded as
+  stop 32.
+- **What the regeneration needed.** Recovery regeneration on the merged toolkit re-lifts all recovered
+  functions with upstream's lifter. The generated `recomp_types.h` was refreshed from the template and
+  the project patches re-applied; the provenance manifest and preservation baseline were re-recorded.
+- **Gate:** CTest 50/50 and `just check` pass.
+- **First run on the repaired tree** (`…160259-224-title011-9188C-fixed`): it never reached the
+  address. It stopped at presents 2429 in the game's own fatal-error path (`JSRF_FATAL.ERR`), which the
+  `RECOMP_NO_VSH` run also hit (TR §26.4).
+- **A bisect against toolkit `5d6ebbd`** did not build: the game tree's new tests use the newer toolkit's
+  APIs.

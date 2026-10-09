@@ -235,6 +235,19 @@
     }
    ],
    "note": "The fatal `[ICALL] Failed to resolve VA 0x000C3410` (0xE0424943) at presents 2443, in the same abutting-alias class as stop 30 and the same region. Seven overlapping tail_jump_alias entries (sub_000C2FE0, sub_000C30C0, sub_000C3100, sub_000C3140, sub_000C31B0, sub_000C3350, sub_000C33C0) all declare an end of 0x000C3670, and the manifest entry 0x000C33C0 declared 0x000C3500, so the address had no entry of its own. The XBE shows `ret` at 0x000C3407, NOP padding at 0x000C3408-0x000C340F, then a clean prologue at 0x000C3410 (sub esp,0x2c; push esi; mov esi,ecx). Fixed both ways: 0x000C3410 recovered as [0x000C3410, 0x000C3670) with stack_args 0, and 0x000C33C0 ended at 0x000C3408 -- check-hidden-entries.py --show-all named that boundary. IMPORTANT PROVENANCE: this run proves stop 30 was EXERCISED. 0x000C2730 returned with a clean ABI check once before the failure moved on, so the previous repair works and the stop chain advanced by exactly one address. The state here stays REPAIRED because no run has yet confirmed THIS address executing."
+  },
+  {
+   "id": 32,
+   "address": "0x00091830",
+   "state": "REPAIRED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261008-191232-038-title010-R3-vqcache-AB",
+     "role": "discovered"
+    }
+   ],
+   "note": "The fatal `[ICALL] Failed to resolve VA 0x0009188C` (0xE0424943) that ended R3 at 236.5 s / presents 2885; the ICALL history names 0x00091830 as frame 15. 0x0009188C is not a function: it is the target of the je at 0x00091878 inside 0x00091830, whose recovered entry had been ended at 0x00091882 -- the analysis database's tail_jump_alias entry sub_00091882, a push ecx mid-function with no caller and no pointer to it (its one raw dword match is inside DSOUND data). The XBE shows one function: sub esp,0xc and three pushes at 0x00091830, pop edi/esi/ebx, add esp,0xc, ret at 0x000918A0, NOP padding to 0x000918AF, next function 0x000918B0. Fixed by widening the entry to [0x00091830, 0x000918A1); the je became an internal goto and 0x0009188C left recovery-unresolved.json. NOT YET EXERCISED: the first run on the repaired tree (20261009-160259-224-title011-9188C-fixed, uncommitted tree) stalled at presents 2429 in the game's own fatal-error path (JSRF_FATAL.ERR) before reaching this address."
   }
  ]
 }

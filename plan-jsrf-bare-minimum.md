@@ -189,15 +189,18 @@ are the "Settled — do not re-run" list. The turn-by-turn summary is in
    A/B shows no crash and no functional regression in 300 s but a pixel-fill slowdown (next action 2);
    the R3 control ran and was inconclusive (next action 0).
 
-0. **Close `0x9188C`, then test the flip-rate prediction.** R3 ended at 236.5 s on the fatal
+0. **`0x9188C` is closed (stop 32, TR §26.4); find why the merged build takes the game's fatal path at the
+   transition, then test the flip-rate prediction.** The first run on the repaired tree stopped at presents
+   2429 in `JSRF_FATAL.ERR` without reaching the address. The INFERRED lead is a vblank-starved ADX stream:
+   no `title.adx` read, pulses per pass 0.18. Test it by cutting pixel cost (e.g. `RECOMP_NO_COMBINERS=1`)
+   and checking whether vblank recovers and `title.adx` is read. Background: R3 ended at 236.5 s on the fatal
    unresolved call `0xE0424943` at VA `0x9188C`: `sub_0009188C` is a generated stub
    (`recomp_icall_fail_log(...); abort();`) reached from `body_00091830`, and TR §20 already records
    `0x91830`'s internal target `0x9188C` as ordinary code, not repaired — no walk/cache frame is on the
    stack. The pre-cache control (`…142848-669-title011-R3-control-5fd62cb`) reached only 1320 presents
    in 900 s against R3's 2885 at the crash, so it cannot attribute the hole (TR §25.5); a no-cache control
-   would need several times longer. Repair `0x9188C` the way stops 29–31 were repaired (disassemble
-   `0x91830`, `check-hidden-entries.py`), then a run past R3's crash point settles both questions. The
-   pre-registered prediction (heavy-phase flips/s up ~10×; R3's matched-time gain was 2.6-6.7×) is
+   would need several times longer. A run built from the repair commit that passes R3's crash point
+   confirms stop 32 and settles the cache attribution. The pre-registered prediction (heavy-phase flips/s up ~10×; R3's matched-time gain was 2.6-6.7×) is
    untested.
 1. **A city scene is drawn but not presented — the structural draw→present questions** (TR §24.3 as
    corrected by §25.7). On the fixed binary `0x80084000` holds a full 3D city
@@ -342,7 +345,7 @@ are the "Settled — do not re-run" list. The turn-by-turn summary is in
   workers are parked rather than dead (TR §25), but what held the loading loop is not shown; and the
   1000 → 888 present-count change, a hypothesis consistent with the overwrite-rescue mechanism (TR §19, §22).
 
-- **Stop-chain residue:** 210 span-exit `CUT-TARGET` (TR §20), 25 `KNOWN_OPEN` (`tests/test_recovery_span_ownership.py`), 67 SUSPICIOUS,
+- **Stop-chain residue:** 210 span-exit `CUT-TARGET` (TR §20), 24 `KNOWN_OPEN` (`tests/test_recovery_span_ownership.py`), 67 SUSPICIOUS,
   `0x96F80` (`UNQUALIFIED`, named proof gap, TR §18), the 10 dead alias shims (a latent hazard, not a
   live defect, TR §18), the alias-shim census's actionable classes (12 `SWALLOWED_FUNCTION`, 59
   outside-owner shims; census commit `0cc6d5d`, counts in `git show dcc93ab:plan-turn-updated-title-004.md`
