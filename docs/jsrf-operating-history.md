@@ -3042,3 +3042,14 @@ the files over with `scp`, and build, test, commit and push from Windows. Nothin
   - The stage-0 CONTROL0 latch shows the guest itself disables stage 0: 7581 of 16230 writes clear
     ENABLE (TR §26.3).
   - Both are pinned by a new arm of `jsrf_nv2a_hal`.
+
+Pushed from Windows, with `gh` as the credential helper for the push. Git Credential Manager has no
+usable store in an ssh session.
+
+Toolkit
+`PUSHED_TO: origin / BRANCH: main / COMMIT: de39fb1a76a9b2e57b447695bd8c91c2ead94654 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward a5e2762..de39fb1 main -> main`
+(`066962e` the telemetry epoch, `de39fb1` the instruments).
+
+Game
+`PUSHED_TO: origin / BRANCH: master / COMMIT: 2d478050564a5d34e5fe9538a3134d9fb7804291 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward a2f185e..2d47805 master -> master`.
+Outgoing game commit: no `game/` path, 5 blobs (largest 339 KB), `scripts/secret-audit.py` 0 hits.
