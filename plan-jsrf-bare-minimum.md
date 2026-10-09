@@ -832,6 +832,19 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
 
 ## Backlog (not on the critical path until it blocks)
 
+- **From the 2026-10-09 Mac review — need the XBE or a Windows run:** `config/recovered-functions.json`
+  entry `0x000C3410..0x000C3670` contains the separately recovered `0x000C3500..0x000C3670` (two bodies
+  over one range — the `0xC2700` class; run `check-hidden-entries.py` and disassemble before choosing
+  which end is right; a config edit needs a provenance amendment); `config/stop-chain.json` stops 29–31
+  have states that contradict their notes (stop 30 `REPAIRED` with `repair_commit: null` while stop 31 says
+  it was exercised; stop 29 says the repair is committed but names none); the `0x000C2700` evidence text
+  still quotes the pre-tightening body end; `tests/test_nv2a_hal.c` vertex-offset asserts compare raw
+  offsets that `dma_resolve` may rewrite; list every caller of `0x1912A0` (the fence mirror assumes each
+  advances `[dev+0x30]` before writing PUT). Toolkit, Windows-only: the long-wait instrument
+  (`kernel_bridge.c`, `bridge_log_long_wait`) logs only after a wait returns, so a permanently parked
+  thread is silent — publish an "in wait since T on X" slot; `nv2a_mono_clock.h` gives each translation
+  unit its own anchor although its comment claims a shared epoch.
+
 - **Stop-chain residue:** 25 `KNOWN_OPEN` (`tests/test_recovery_span_ownership.py`), 67 SUSPICIOUS,
   `0x96F80` (`UNQUALIFIED`, named proof gap, TR §18), the 10 dead alias shims (a latent hazard, not a
   live defect, TR §18), the alias-shim census's actionable classes (12 `SWALLOWED_FUNCTION`, 59
