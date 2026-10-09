@@ -672,14 +672,14 @@ and a run without the four title-path switches is not comparable (f8 of 2026-10-
    a count that cannot name a blit (`NV_IMAGE_BLIT` 0x9F now flagged explicitly by the census in
    toolkit `5fd62cb`). Measure before choosing among these.
 
-0e. **SUPERSEDED (turn title-009) — kept for provenance only.** The text below treated the ADX
+0e. **SUPERSEDED (turn title-009) — kept for provenance only.** The items below treated the ADX
    worker deaths as the open blocker and the clock overflow's causal status as the live question.
-   Both are resolved above: the deaths are not deaths, and the overflow is a latent repair.
-   (The fragment that stood here — "the earlier claim that wrapped runs took a different guest path
-   is **not** supported, since six wrapped runs behaved like unwrapped ones" — belongs to that
-   superseded analysis and is retained only inside the title-009 block.)
+   Both are resolved above: the deaths are not deaths, and the overflow is a latent repair. Their
+   "0b" numbering is retained verbatim from title-009 so the superseded text is unedited; it does
+   **not** refer to this turn's 0b, which is the `VirtualQuery` blocker.
 
-0b. **Two leads for the reopened blocker, and the cheap one is already SPENT.**
+   *(Superseded title-009 item follows.)* **Two leads for the reopened blocker, and the cheap one is
+   already SPENT.**
    *(i) The vblank-rate lead.* Delivery is ~30-80x below nominal (TR §24.2): `clockfix-1800`
    exported `vblank_pulses = 1337` over ~1780 s (0.75 Hz) and `035729-cap1024` 1104 over 904 s
    (1.23 Hz), against a model nominal of at least 40 Hz. `nv2a_vblank_advance` re-arms **without
