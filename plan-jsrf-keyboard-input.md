@@ -47,10 +47,36 @@ This file does not duplicate the permanent rules owned elsewhere:
 - `include/xbox/xboxrecomp.h` exposes `ohci.h` and `usb_gamepad.h`.
 - `tests/keyboard_pad/keyboard_pad_test.c` — T1–T5, registered as ctest `keyboard_pad`.
 
-**Next action:** the pad now enumerates, configures, and is **polled** — so R2 is reachable. Close the
-loop on the live keyboard press: run to the title with `RECOMP_KEYBOARD=1`, hold Enter at
-`PLEASE PRESS START TO BEGIN`, and confirm the guest's own title state advances (R2/R3), then reproduce
-(R4). If a new stop appears first, close it as stops 34–35 were.
+**Next action:** R1 and R2 are measured (below). The remaining step is **R3/R4**: reach the real title
+with the live keyboard path and confirm `PLEASE PRESS START TO BEGIN` advances on a real Enter press,
+then reproduce. The title takes ~1580 s, so use `just title-run`-scale seconds with
+`RECOMP_KEYBOARD=1` and the window injector (`logs/k16-run3.ps1`), which found the window by class name
+and delivered Enter.
+
+### R1 and R2 measured: a real Enter press reaches the guest's controller report (2026-10-10)
+
+Run `20261010-082122-361-k16-r5-title` (152 s), and reproduced on the durable tree in
+`20261010-082548-322-k16-r5-title`. Enter was delivered to the framebuffer window's own
+`WM_KEYDOWN` handler (the real `fb_wndproc`), so the host side is the real keyboard path, not a
+synthetic env-var press:
+
+```text
+[KEY] down vk=0x0D                                                    R1  host event observed
+[INPUT] kbd_env=1 window_has_RETURN=1 InputGetState=0 buttons=0x0010  R2  guest report: Start
+[INPUT] kbd_env=1 window_has_RETURN=0 InputGetState=0 buttons=0x0000  R2  release clears it
+[OHCI0] stats: 8555 periodic transfers; reports 8555 setups 8         report served to the guest
+```
+
+`buttons=0x0010` is `XBOX_GAMEPAD_START`; `InputGetState=0` is success, so the report the guest reads
+is `usb_gamepad_report` — the function the `RECOMP_KEYBOARD` overlay feeds — not the disconnected
+fallback. Chain, each link measured: **physical key → window `WM_KEYDOWN` → `s_key_down` →
+`keyboard_state` → `xbox_InputGetState` → `usb_gamepad_report` → the pad's interrupt endpoint → the
+guest.**
+
+The window is found by its class name `XboxRecompFramebuffer` (`EnumWindows`), because
+`Process.MainWindowHandle` is 0 for it — it is created on a worker thread. `SendKeys` cannot reach it
+from a non-interactive shell; `PostMessage` of `WM_KEYDOWN`/`WM_KEYUP` drives the same window
+procedure.
 
 ### Stops 34 and 35 closed; the pad is polled (2026-10-10)
 

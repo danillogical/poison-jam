@@ -287,18 +287,18 @@
    "id": 35,
    "address": "0x001BDE21",
    "state": "RUNTIME_CONFIRMED",
-   "repair_commit": "4370cd6",
+   "repair_commit": "ab4e7f1",
    "evidence": [
     {
      "run": "20261010-025008-492-k16-stop34-ok",
      "role": "discovered"
     },
     {
-     "run": "20261010-030748-775-k16-stop35-durable",
+     "run": "20261010-082548-322-k16-r5-title",
      "role": "returned"
     }
    ],
-   "note": "Fatal `[ICALL] Failed to resolve VA 0x001BDE21` (0xE0424943) immediately after stop 34 was repaired and returned, i.e. the chain advanced exactly one address. Reached only by an indirect call, so no decode pass lifted it; the analysis database has no entry and the region below is uncovered (nearest span below is sub_001BD621 [0x001BD621, 0x001BD63B), next is 0x001BE7DE). Bytes are a complete function: follows a clean `pop edi; pop esi; pop ebx; ret 8` at 0x001BDE1B-0x001BDE1E, takes `this` in ECX, copies 8-byte records from [eax+0x34] to [eax+0x14] for the count at [eax+0x66], bare `ret` at 0x001BDE5C. REPAIRED: recovery entry [0x001BDE21, 0x001BDE5D), stack_args 0. The end had to be one byte PAST the `ret` (0x001BDE5D, not 0x001BDE5C), or the body has no epilogue and returns with ESP unmoved -- measured as `ABI FAILURE 0x001BDE21 esp ... expected +4` in run 20261010-025515-426. After the correction, run 20261010-030025-850 shows `[RECOVERED] 0x001BDE21 returned; ABI verified (ESP/EBX/ESI/EDI)`."
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x001BDE21` (0xE0424943) immediately after stop 34 was repaired and returned, i.e. the chain advanced exactly one address. Reached only by an indirect call, so no decode pass lifted it; the analysis database has no entry and the region below is uncovered (nearest span below is sub_001BD621 [0x001BD621, 0x001BD63B), next is 0x001BE7DE). Bytes are a complete function: follows a clean `pop edi; pop esi; pop ebx; ret 8` at 0x001BDE1B-0x001BDE1E, takes `this` in ECX, copies 8-byte records from [eax+0x34] to [eax+0x14] for the count at [eax+0x66], bare `ret` at 0x001BDE5C. REPAIRED: recovery entry [0x001BDE21, 0x001BDE5D), stack_args 0. The end had to be one byte PAST the `ret` (0x001BDE5D, not 0x001BDE5C), or the body has no epilogue and returns with ESP unmoved -- measured as `ABI FAILURE 0x001BDE21 esp ... expected +4` in run 20261010-025515-426. After the correction, run 20261010-030025-850 shows `[RECOVERED] 0x001BDE21 returned; ABI verified (ESP/EBX/ESI/EDI)`. THIRD correction: the extent also had to include the `jmp 0x14b41e` at 0x001BDE5D (a target of the `jne 0x1bde5d` at 0x001BDE4B), so end is 0x001BDE62 -- the 5-byte jmp's end. With end 0x001BDE5D the lifter emitted a call to sub_001BDE5D, which is not a function, and the run died on `[ICALL] Failed to resolve VA 0x001BDE5D`. repair_commit ab4e7f1, confirmed by 20261010-082548-322 (same revision)."
   }
  ]
 }
