@@ -111,6 +111,22 @@
    "before": "static const size_t g_recomp_table_size = 8927;",
    "after": "static const size_t g_recomp_table_size =\n    sizeof(g_recomp_table) / sizeof(g_recomp_table[0]);",
    "reason": "Companion to `remove-b5f3a-dispatch`, and a real crash a previous turn shipped and then found. That patch removed one tuple from `g_recomp_table` but left the hand-written literal `g_recomp_table_size = 8928` while the array held 8927. `recomp_dispatch_init` loops `for (i = 0; i < g_recomp_table_size; i++)`, so it read one entry past the end of the array and wrote `g_flat_table[...]` from the garbage it read -- a host access violation (0xC0000005, write) at recomp_dispatch.c:9299 inside `recomp_dispatch_init`, BEFORE guest_entry, reproduced in runs g08 and g08b (4 s, missing_checkpoints=[guest_entry], RIP resolved from the minidump to `recomp_dispatch_init+0xC3`). No static gate caught it: `just check`, the CTest suite and `check-merge-structure.py` all passed on a table whose declared size exceeded its contents. This patch now removes the second truth instead of correcting it: the count is DERIVED from the array it describes, so it cannot disagree with its contents and the defect class is structurally impossible rather than merely detected. The toolkit generator emits the same derived form (tools/recomp/translator.py `_write_dispatch_table`), so this patch reports `already applied` on a regenerated tree and still repairs a tree carrying the old literal. `scripts/check-dispatch-table.py` is the independent gate for trees produced by any other route, and `tests/test_dispatch_table_size.py` is the control proving it fails on the exact 8928-vs-8927 mismatch."
+  },
+  {
+   "after": "loc_00025599: ;\n    eax = MEM32(esp + 0x10);\n    goto loc_000255B2; /* L56: skip the 15 s wall-clock disc-error timeout; the recomp runs slower than hardware */",
+   "before": "loc_00025599: ;\n    eax = MEM32(esp + 0x10);",
+   "function": "0x00025400",
+   "id": "l56-timeout-25400",
+   "ledger": "L56",
+   "reason": "never take the elapsed >= 0xE4E1C0 us branch to the 0x6F730 call at 0x255AD; exit as the not-timed-out path does"
+  },
+  {
+   "after": "loc_0006650B: ;\n    eax = MEM32(esp + 8);\n    goto loc_00066526; /* L56: skip the 15 s wall-clock disc-error timeout; the recomp runs slower than hardware */",
+   "before": "loc_0006650B: ;\n    eax = MEM32(esp + 8);",
+   "function": "0x00066440",
+   "id": "l56-timeout-66440",
+   "ledger": "L56",
+   "reason": "never set bit 0 of [esi+0xA4] on elapsed >= 0xE4E1C0 us; 0x664B0 turns that bit into a 0x6F730 call"
   }
  ],
  "schema": 1

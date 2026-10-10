@@ -68,6 +68,14 @@ for entry in entries:
         if anchor not in code:
             raise RuntimeError('0x25310 fatal-tail observation anchor missing')
         code = code.replace(anchor, hooked, 1)
+        # L56: the 15 s wall-clock "still pending" test (elapsed >= 0xE4E1C0 us)
+        # never fires; exit as the not-timed-out path does. The recomp runs far
+        # slower than hardware, so a slow load would otherwise read as a disc error.
+        timeout = 'loc_00025366: ;\n    eax = MEM32(esp + 8);'
+        if timeout not in code:
+            raise RuntimeError('0x25310 L56 timeout anchor missing')
+        code = code.replace(timeout, timeout + '\n    goto loc_0002538A; '
+                            '/* L56: skip the 15 s wall-clock disc-error timeout */', 1)
     if address == 0x00196800:
         code=code.replace(
             'eax = (uint32_t)((int32_t)eax * (int32_t)ecx);',

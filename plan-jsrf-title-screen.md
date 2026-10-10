@@ -62,9 +62,10 @@ presents. Seven runs show three outcomes (TR §26.4):
 
 ## Lines of attack (ranked; the orchestrator re-ranks)
 
-1. **Run the title path with `RECOMP_NO_COMBINERS=1`.** It avoids the fatal path. Add it to
-   `just title-run` with a ledger line. Advances when a run reaches the hold with no `[FATAL-*]`
-   line.
+1. **Done 2026-10-09: the fatal path is closed (L56).** It was the title's own 15 s wall-clock
+   "load still pending" timeout (`0xE4E1C0` µs in `0x25310`, `0x25400`, `0x66440`; TR §8). The recomp's
+   slowness tripped it. L56 skips it; `…213955-475-title012-timeout-off` (900 s) has no `[FATAL-*]`
+   line, reads `title.adx`, and holds.
 2. **Break the "Now Loading" hold.**
    - Find what the main thread and the loader wait on during it: digest the stacks of a held run, then
      guest-code analysis of the wait (the lifted C in `src/recomp/gen/`, plus `inspect-jsrf.py disasm`).
@@ -84,6 +85,9 @@ presents. Seven runs show three outcomes (TR §26.4):
    expensive passes, or take the fill off the owner lock.
 
 ## Ruled out (do not re-run)
+
+- **`RECOMP_NO_COMBINERS` avoiding the fatal path.** One run with it held and the next went fatal
+  (`…204648-520-title012-hold-a`); it was run-to-run variation around a wall-clock timeout (L56).
 
 - **Vblank delivery alone deciding the hold.** R1 and R2 (~1.3 pulses/s) hold like B (~23 /s);
   only R3 passed (TR §26.4).

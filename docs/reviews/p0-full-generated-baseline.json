@@ -1,7 +1,7 @@
 {
  "files": {
   "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "96192a504a4cc3bc4fa819902cca837a491027ba9eab0b4e97b41fdb902c4e3d",
-  "src/recomp/gen/recomp_0000.c": "004c64213e10184003e62b4b04854e1ee6f845a8ad82d364c7e98fe4ce85a00e",
+  "src/recomp/gen/recomp_0000.c": "4db074a90166590ca387126d7015a9b0e324a0f3c47e7301e65a92418e2a222c",
   "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
   "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
   "src/recomp/gen/recomp_0003.c": "5e36ccfcb9e419c1ce695cb2e185c5832897f563ed6eb0eaca0b00d2176ef489",
@@ -13,7 +13,7 @@
   "src/recomp/gen/recomp_stubs_recovery.c": "10470ba7e0dd012225afd023bcdf922d32b03f38e1868df2454bf0b9d07b313f",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "7c1720c624b65175171499a5663b7382a4d97beaa15b59d314e714b0ea44c741",
-  "src/recomp/recovered/recovered.c": "01525afbe7935a6a0ddbf74722ebbc72c434c341e69b7414bcac7390cb2c4468",
+  "src/recomp/recovered/recovered.c": "460f5512e3371c9354e937bead2d56244f3cb5900b195e05ceed01c54a85ac3a",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
   "src/recomp/recovered/recovered_11c1_test.c": "9b75e73a34bdbef832ebc6b454896c11494901dc93026c7b3686e9486ad63717",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
@@ -523,6 +523,14 @@
     "src/recomp/recovered/recovered_11c1_test.c"
    ],
    "reason": "Widened the recovered entry 0x00091830 from end 0x00091882 to its real end 0x000918A1. R3 (20261008-191232-038-title010-R3-vqcache-AB) died on the fatal unresolved call 0x0009188C, the target of the je at 0x00091878 inside 0x00091830: the entry's end had been cut at the analysis database's tail_jump_alias entry 0x00091882, a push ecx mid-function with no caller and no pointer to it, so the branch left the lifted body and reached an abort stub. The body runs sub esp,0xc / three pushes ... pop edi/esi/ebx, add esp,0xc, ret at 0x000918A0, with NOP padding to 0x000918AF and the next function at 0x000918B0. recover-functions.py re-lifted every recovered function with the merged (upstream v0.13.1) lifter, which emits RECOMP_FP_PC and RECOMP_ICALL_SAFE_AT_CC, so recomp_types.h was refreshed from the toolkit template and the project's patches re-applied with scripts/patch-generated.py."
+  },
+  {
+   "date": "2026-10-09",
+   "files": [
+    "src/recomp/gen/recomp_0000.c",
+    "src/recomp/recovered/recovered.c"
+   ],
+   "reason": "L56: the title-transition 15 s wall-clock disc-error timeout is skipped at its three sites (0x25400 and 0x66440 via config/generated-patches.json, 0x25310 via the recover-functions.py anchor), because the recomp runs far slower than hardware and a slow load read as a disc error (TR 8, 26.4)."
   }
  ]
 }

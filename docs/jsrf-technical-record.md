@@ -428,13 +428,13 @@ sources disagree; FLIP_STALL meets 3–4.
 
 ## 8. Disc-error timeout and the boot clock (2026-10-05)
 
-The pending-I/O path in `0x25400` is not a 15-second timeout. `0x145560` is `rdtsc` into an 8-byte guest
+The pending-I/O path in `0x25400` is a 15-second wall-clock timeout (corrected 2026-10-09). `0x145560` is `rdtsc` into an 8-byte guest
 buffer; `xbox_ReadTimeStampCounter()` scales QPC to `XBOX_TSC_HZ` (733,333,333), the same value the title
 stores at `0x145571` (`0x2BB5C755`; held at `[0x20CC50]`). `0x6E910` (`ret 0x14`) subtracts two samples,
 multiplies by `0xF4240` via `0x17CA70` (`_allmul`) and divides by the frequency at `[ecx+8]` via
 `0x17C9C0` (`_alldiv`), `ecx = 0x20CC48`: microseconds of wall time. `0x25400` takes the fatal call at
 `0x255AD` only when `[esi+0x64] == 0x103` (`STATUS_PENDING`, written by `0x146078`) and the quotient is ≥
-`0xE4E1C0` (240,000,000); start sample `[esi+0x188]`/`[esi+0x18C]`. `0x25310` compares the same threshold
+`0xE4E1C0` (15,000,000 µs, i.e. 15 s; L56 disables it); start sample `[esi+0x188]`/`[esi+0x18C]`. `0x25310` compares the same threshold
 before its tail jump to `0x6F730`; the path string is at `[esi+0x78]`, and `~` from `[0x1C4DF0]` is
 appended for the side file. L41 observes `0x6F730` and the `0x2537E` tail (§26.4).
 
@@ -1220,3 +1220,27 @@ at **2435** from about 250 s to the end, the same hold B shows; stop 32 not reac
   loading step, but one run cannot show it (**INFERRED**).
 - **What is new is the fatal path,** on the merged executor with register combiners enabled. Its trigger is
   open. The `5d6ebbd` bisect could not build against this game tree.
+
+### §26.5 The fatal path was the title's own 15 s load timeout; skipping it leaves only the hold
+
+**Mechanism (MEASURED, disassembly).** `0x25310` sends a job to `0x6F730` only when all of these hold:
+- `[esi+0x44] == 1`;
+- the type's poll (`[0x1EC0F0 + 4*type]`) returned 0;
+- elapsed microseconds since the job's start sample `+190/+194` are ≥ `0xE4E1C0` (15 s).
+
+`+98` plays no part. The same 15 s test sits in `0x25400` (`0x255AD`) and `0x66440` (`0x6650B`, setting
+bit 0 of `[esi+0xA4]`, which `0x664B0` turns into a `0x6F730` call). These are the only three
+`0xE4E1C0` immediates in the XBE.
+
+In `20261009-204648-520-title012-hold-a`, job `0x01330060` (type 1, poll `0x320A0`) had a start sample of
+262.12 s of rdtsc, and the tail fired between `t_ms` 277 557 and 278 056 (INFERRED: just past 15 s;
+two clocks with different origins).
+
+That run used `RECOMP_NO_COMBINERS=1` and still went fatal, so the earlier "combiners on" correlation
+(§26.4) was variation.
+
+**L56 skips all three tests.** `20261009-213955-475-title012-timeout-off` (900 s, `just title-run`):
+- no `[FATAL-*]` line, no crash;
+- `title.adx` read (6 `[ADXIO]`);
+- presents reach 2430 at 396 s, then hold at 2435 to the end (6 distinct hashes after 2430);
+- stop 32 still not reached.
