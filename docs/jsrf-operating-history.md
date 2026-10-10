@@ -3075,3 +3075,16 @@ Still run from the Mac over ssh.
 Game
 `PUSHED_TO: origin / BRANCH: master / COMMIT: 57af797ea45fa6f86847e0a5f13920d08001254b / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 38aab04..57af797 master -> master`.
 Outgoing: no `game/` path, 9 blobs (largest 3.06 MB, `config/recovered-functions.json`), `scripts/secret-audit.py` 0 hits.
+
+## 2026-10-09 — the bare-minimum plan retired; `plan-jsrf-title-screen.md` replaces it
+
+The owner retired `plan-jsrf-bare-minimum.md` and asked for an open-ended plan aimed at one thing, the
+title screen.
+- **Stance:** pragmatic, like Mercenaries Recompiled. Patches, bypasses and faked signals are acceptable,
+  and performance and fidelity are not goals. One ledger line per shortcut stays.
+- **Who decides:** the orchestrator picks each next experiment until M15 is met.
+- **Where the old text is:** `git show d6b8336:plan-jsrf-bare-minimum.md`. It holds the slice's
+  Definition of done, milestones M16–M30, the backlog, the settled results and the IDs other files cite.
+- **Pointers:** every live pointer (`AGENTS.md`, `docs/agent-workflow.md`, the ledger, run profiles, TR,
+  `scripts/check-agent-docs.py`, `scripts/check-override-drift.py` and their tests) now names the new
+  file. Historical comments name the retired one.

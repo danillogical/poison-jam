@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """cite.py -- tool-cited values for JSRF records (plan T10).
 
-Two recorded failures motivate this tool (plan-jsrf-bare-minimum.md sections 3 and 6):
+Two recorded failures motivate this tool (plan-jsrf-bare-minimum.md sections 3 and 6; retired plan, `git show d6b8336:plan-jsrf-bare-minimum.md`):
 
 * twelve recorded extraction errors, one of which was a hand-transcribed byte
   reversal that stood as a "permanent" refutation for 35 minutes;

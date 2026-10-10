@@ -2,7 +2,7 @@
 
 What the project has established, by subsystem, with the evidence and limits each result rests on.
 It consolidates the review records of closed packets (their full text is in git history; the last
-tree holding them is `d6a1bc0`). The plan (`plan-jsrf-bare-minimum.md`) owns current status and
+tree holding them is `d6a1bc0`). The plan (`plan-jsrf-title-screen.md`) owns current status and
 next action; this file owns the durable technical facts behind them. Toolkit-side design and licence
 records live in the toolkit itself: `xboxrecomp/src/apu/dsp/PROVENANCE.md` and
 `xboxrecomp/src/apu/GP-INTEGRATION.md`.

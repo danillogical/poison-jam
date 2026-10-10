@@ -36,14 +36,14 @@ WORKFLOW_BODY = """# Workflow
 
 Retired: `gpt-5.6-sol`, `hy3`, `glm-5.3` are historical names.
 
-The plan is `plan-jsrf-bare-minimum.md`.
+The plan is `plan-jsrf-title-screen.md`.
 """
 
 AGENTS_BODY = """# Guide
 
 Read `docs/agent-workflow.md` for the roster.
 
-Read `plan-jsrf-bare-minimum.md` for acceptance and the current blocker.
+Read `plan-jsrf-title-screen.md` for acceptance and the current blocker.
 
 Build with `just build`; run the checkers with `just check`.
 
@@ -78,7 +78,7 @@ class CorpusMixin:
         (self.root / 'scripts').mkdir(parents=True)
         self.write('docs/agent-workflow.md', WORKFLOW_BODY)
         self.write('AGENTS.md', AGENTS_BODY)
-        self.write('plan-jsrf-bare-minimum.md', PLAN_BODY)
+        self.write('plan-jsrf-title-screen.md', PLAN_BODY)
         self.write('docs/session-start-template.md', TEMPLATE_BODY)
         self.write('scripts/check-agent-docs.py', '# placeholder\n')
         # The justfile the T6 recipe check audits.  Built from the checker's own
@@ -184,13 +184,13 @@ class RosterDuplicationTests(CorpusMixin, unittest.TestCase):
 
 class RetiredNameTests(CorpusMixin, unittest.TestCase):
     def test_unlabelled_retired_name_is_rejected(self):
-        self.write('plan-jsrf-bare-minimum.md',
+        self.write('plan-jsrf-title-screen.md',
                    PLAN_BODY + '\nUse gpt-5.6-sol for this packet.\n')
         findings = self.audit()
         self.assertIn('unlabelled_retired_name', self.reasons(findings))
 
     def test_labelled_retired_name_is_accepted(self):
-        self.write('plan-jsrf-bare-minimum.md',
+        self.write('plan-jsrf-title-screen.md',
                    PLAN_BODY + '\nThese are historical: gpt-5.6-sol and hy3.\n')
         findings = self.audit()
         self.assertNotIn('unlabelled_retired_name', self.reasons(findings))
@@ -295,14 +295,14 @@ class CommandPathTests(CorpusMixin, unittest.TestCase):
         instruction would make adopting a plan that names its own future tools
         impossible without writing them first.
         """
-        self.write('plan-jsrf-bare-minimum.md',
+        self.write('plan-jsrf-title-screen.md',
                    PLAN_BODY + '\n| **T8** | `scripts/logq.py` (planned) loads lines | ok |\n')
         findings = self.audit()
         self.assertNotIn('broken_command_path', self.reasons(findings))
 
     def test_planned_marker_does_not_excuse_an_unmarked_mention(self):
         """The marker is per-line: the same path elsewhere still fails."""
-        self.write('plan-jsrf-bare-minimum.md',
+        self.write('plan-jsrf-title-screen.md',
                    PLAN_BODY + '\n| **T8** | `scripts/logq.py` (planned) loads lines | ok |\n'
                    '\nRun `scripts/logq.py` to check the counts.\n')
         findings = self.audit()
@@ -331,7 +331,7 @@ class AuthorityLinkTests(CorpusMixin, unittest.TestCase):
         failure that file's own header warns about.
         """
         # The plan must record P0.1 as accepted for the contradiction to exist.
-        self.write('plan-jsrf-bare-minimum.md',
+        self.write('plan-jsrf-title-screen.md',
                    '# Plan\n\n**Status:** P0.1 accepted. P0.3 in progress. P0.4 pending.\n\n'
                    '**Next action:** finish P0.3.\n')
         self.write('AGENTS.md', AGENTS_BODY
@@ -363,7 +363,7 @@ class NextPacketTests(CorpusMixin, unittest.TestCase):
     def test_plan_without_a_status_line_still_detects_contradiction(self):
         """Regression: the condensed plan records acceptance in a section, with
         no `**Status:**` line. The check must still read it."""
-        self.write('plan-jsrf-bare-minimum.md',
+        self.write('plan-jsrf-title-screen.md',
                    '# Plan\n\n## CURRENT PACKET — none\n\n## P0 — ACCEPTED\n\n'
                    'P0.1 accepted with the rest of P0.\n')
         self.write('AGENTS.md', AGENTS_BODY
@@ -373,7 +373,7 @@ class NextPacketTests(CorpusMixin, unittest.TestCase):
         self.assertNotIn('unreadable_status', self.reasons(findings))
 
     def test_missing_plan_is_rejected(self):
-        (self.root / 'plan-jsrf-bare-minimum.md').unlink()
+        (self.root / 'plan-jsrf-title-screen.md').unlink()
         findings = self.audit()
         self.assertIn('missing_input', self.reasons(findings))
 

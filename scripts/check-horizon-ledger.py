@@ -41,7 +41,7 @@ RUNS = ROOT / 'logs' / 'runs'
 
 CHECKER_VERSION = 'jsrf-horizon-ledger/3'
 
-# The ledger's scope (owner decision recorded in plan-jsrf-bare-minimum.md, 2026-09-30):
+# The ledger's scope (owner decision recorded in plan-jsrf-bare-minimum.md, 2026-09-30; retired plan; `git show d6b8336:plan-jsrf-bare-minimum.md`):
 # strict runs from 2026-09-29 onward; the earlier runs are not backfilled. The bare
 # invocation applies it, so it no longer reports pre-scope runs as failures;
 # `--since all` covers the whole archive.

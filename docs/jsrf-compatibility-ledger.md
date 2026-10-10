@@ -3,7 +3,7 @@
 **Why this exists (owner decision, 2026-09-30):** the bare minimum is pragmatic. Take the path of
 least resistance to the title screen, and record here every way the port departs from running the
 original code on real hardware. A shortcut is allowed; an **unrecorded** shortcut is not. The plan
-(`plan-jsrf-bare-minimum.md`) owns what to do next; this file owns what the port currently is.
+(`plan-jsrf-title-screen.md`) owns what to do next; this file owns what the port currently is.
 
 ## Classes
 

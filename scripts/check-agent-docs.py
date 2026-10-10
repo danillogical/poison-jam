@@ -26,7 +26,7 @@ CHECKER_VERSION = 'jsrf-agent-docs/3'
 
 AGENTS = 'AGENTS.md'
 WORKFLOW = 'docs/agent-workflow.md'
-PLAN = 'plan-jsrf-bare-minimum.md'
+PLAN = 'plan-jsrf-title-screen.md'
 JUSTFILE = 'justfile'
 
 # Plan T6 fixes these recipe names: they are the mechanical spelling of the host

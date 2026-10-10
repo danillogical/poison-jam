@@ -2,7 +2,7 @@
 
 **Scope:** technical ABI/signal/reentry contract and historical measurement;
 not a current packet/status authority. Current acceptance and execution state live in
-`plan-jsrf-bare-minimum.md` and review records. Instruction evidence was produced with
+`plan-jsrf-title-screen.md` and review records. Instruction evidence was produced with
 `python -X utf8 scripts/inspect-jsrf.py disasm` on the original XBE. The contract records
 the recovered production bodies for `0x00193D90`, `0x00194210`, `0x00197AAC`, and
 `0x00196C4A` without making a current acceptance claim.

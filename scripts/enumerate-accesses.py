@@ -79,7 +79,7 @@ UINT32 = 0xFFFFFFFF
 #
 # `docs/jsrf-technical-record.md` section 4 (`PIO_FREE`): 28 direct reads, "reconciled by
 # normalised value: 10 hex-spelled + 18 signed-decimal-spelled sites".
-# `plan-jsrf-bare-minimum.md` T9: "reproduces `PIO_FREE` = 28 sites (10 hex + 18 decimal
+# `plan-jsrf-bare-minimum.md` (retired plan; `git show d6b8336:plan-jsrf-bare-minimum.md`) T9: "reproduces `PIO_FREE` = 28 sites (10 hex + 18 decimal
 # spellings) and the vtable base = 3 references (TR section 6)".
 
 PIO_FREE_VA = 0xFE820010
