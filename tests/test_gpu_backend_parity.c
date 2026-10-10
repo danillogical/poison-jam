@@ -86,6 +86,15 @@ void jsrf_slot_watch_write(uint32_t provenance, uint32_t before, uint32_t after,
 #define TEX_C5    0x00670000u     /* 16x16 R5G6B5 linear             */
 #define SURF_C6   0x00470000u     /* case 2c: 64x64 A8R8G8B8         */
 #define VB_C6     0x00680000u
+#define SURF_C7   0x00410000u     /* case 5: 64x64 A8R8G8B8          */
+#define SURF_C8   0x00420000u     /* case 6                          */
+#define SURF_C9   0x00430000u     /* case 7                          */
+#define SURF_C10  0x00450000u     /* case 8                          */
+#define VB_C7     0x00690000u
+#define VB_C8     0x006A0000u
+#define VB_C9     0x006B0000u
+#define VB_C10    0x006C0000u
+#define TEX_C9    0x006D0000u     /* case 7: stage 1, 8x8 R5G6B5 linear */
 #define FILTER_NEAREST 0x01010000u   /* SET_TEXTURE_FILTER: MIN=1 (bits 16-23), MAG=1 (24-27) */
 #define FILTER_LINEAR  0x02020000u   /* MIN=2, MAG=2 */
 #define SURF_BYTES 0x00010000u    /* span pre-filled/cleared per surface */
@@ -140,16 +149,34 @@ static void pb_vertex_format(uint32_t vb, int textured)
 }
 static void pb_texture_off(void) { pb(0x1B0C, 0); }
 /* Stage 0, linear, clamp. fmt: 0x11 R5G6B5, 0x12 A8R8G8B8. */
+static void pb_texture_stage(uint32_t st, uint32_t va, uint32_t fmt, uint32_t w, uint32_t h,
+                             uint32_t pitch, uint32_t filter)
+{
+    uint32_t b = 0x1B00u + st * 0x40u;
+    pb(b + 0x14, filter);                          /* SET_TEXTURE_FILTER */
+    pb(b + 0x00, va);
+    pb(b + 0x04, 0x1u | (2u << 4) | (fmt << 8) | (1u << 16));
+    pb(b + 0x08, 0x0303u);                         /* clamp U and V */
+    pb(b + 0x10, pitch << 16);                     /* CONTROL1: pitch */
+    pb(b + 0x1C, (w << 16) | h);                   /* IMAGE_RECT */
+    pb(b + 0x0C, 1u << 30);                        /* CONTROL0: ENABLE */
+}
+/* Stages 1-3 accept only the methods in the toolkit's NV097 whitelist, which omits their CONTROL1
+ * (pitch) and IMAGE_RECT; so a second texture has to be swizzled, sized by log2 in the format word. */
+static void pb_texture_swz(uint32_t st, uint32_t va, uint32_t fmt, uint32_t lw, uint32_t lh,
+                           uint32_t filter)
+{
+    uint32_t b = 0x1B00u + st * 0x40u;
+    pb(b + 0x14, filter);
+    pb(b + 0x00, va);
+    pb(b + 0x04, 0x1u | (2u << 4) | (fmt << 8) | (1u << 16) | (lw << 20) | (lh << 24));
+    pb(b + 0x08, 0x0303u);
+    pb(b + 0x0C, 1u << 30);
+}
 static void pb_texture_on(uint32_t va, uint32_t fmt, uint32_t w, uint32_t h, uint32_t pitch,
                           uint32_t filter)
 {
-    pb(0x1B14, filter);                            /* SET_TEXTURE_FILTER */
-    pb(0x1B00, va);
-    pb(0x1B04, 0x1u | (2u << 4) | (fmt << 8) | (1u << 16));
-    pb(0x1B08, 0x0303u);                           /* clamp U and V */
-    pb(0x1B10, pitch << 16);                       /* CONTROL1: pitch */
-    pb(0x1B1C, (w << 16) | h);                     /* IMAGE_RECT */
-    pb(0x1B0C, 1u << 30);                          /* CONTROL0: ENABLE */
+    pb_texture_stage(0, va, fmt, w, h, pitch, filter);
 }
 static void pb_draw_triangles(uint32_t nverts)
 {
@@ -183,7 +210,7 @@ typedef struct {
     Surf surf[2];
 } Scene;
 
-static Scene g_scene[6];
+static Scene g_scene[10];
 
 /* Case 1 and 4 share one scene shape at different addresses. */
 static void build_clear_tri(uint32_t surf, uint32_t vb, int flip, Scene *sc, const char *name)
@@ -295,6 +322,168 @@ static void build_case3(int flip)
         fabs(0.5 * (24.0 * 24.0 - 2.0 * 4.0)) };
 }
 
+
+/* ── Register-combiner cases (5..8) ──────────────────────────────────────────
+ * The CPU executor evaluates combiners only on its vertex-program path
+ * (raster_xf_triangle's use_rc); its fixed-function path never does. So these
+ * cases run in program mode with a five-instruction pass-through vertex program
+ * (positions are already screen space, as the executor expects), which makes
+ * both sides evaluate nv2a_rc_eval's arithmetic. Linear textures are addressed
+ * in texels, as in case 2. */
+#define RC_STRIDE 36u    /* pos@0 diffuse@12 specular@16 uv0@20 uv1@28 */
+
+/* mov o[addr], v[in] (MAC op 1, all four components); `final` ends the program. */
+static void vsh_mov(int slot, uint32_t addr, uint32_t in, int final)
+{
+    uint32_t w[4] = { 0, 0, 0, 0 }, k;
+    w[1] = (1u << 21) | (in << 9) | 0x1Bu;          /* mov, input index, swizzle xyzw */
+    w[2] = (2u << 26);                               /* A source mux: input */
+    w[3] = (0xFu << 12) | (1u << 11) | (addr << 3) | (final ? 1u : 0u);
+    (void)slot;
+    for (k = 0; k < 4; k++) pb(0x0B00u + 4u * k, w[k]);
+}
+
+static void pb_vertex_format_rc(uint32_t vb)
+{
+    const uint32_t col = 0u | (4u << 4) | (RC_STRIDE << 8);
+    const uint32_t f2 = 2u | (2u << 4) | (RC_STRIDE << 8);
+    pb(0x1720 + 0 * 4, vb);        pb(0x1760 + 0 * 4, 2u | (3u << 4) | (RC_STRIDE << 8));
+    pb(0x1720 + 3 * 4, vb + 12);   pb(0x1760 + 3 * 4, col);
+    pb(0x1720 + 4 * 4, vb + 16);   pb(0x1760 + 4 * 4, col);
+    pb(0x1720 + 9 * 4, vb + 20);   pb(0x1760 + 9 * 4, f2);
+    pb(0x1720 + 10 * 4, vb + 28);  pb(0x1760 + 10 * 4, f2);
+}
+
+/* oPos<-v0, oD0<-v3, oD1<-v4, oT0<-v9, oT1<-v10. */
+static void pb_vertex_program_rc(void)
+{
+    pb(0x1E94, 2u);                                  /* TRANSFORM_EXECUTION_MODE: program */
+    pb(0x1E9C, 0u);                                  /* PROGRAM_LOAD slot 0 */
+    pb(0x1EA0, 0u);                                  /* PROGRAM_START slot 0 */
+    vsh_mov(0, 0, 0, 0);
+    vsh_mov(1, 3, 3, 0);
+    vsh_mov(2, 4, 4, 0);
+    vsh_mov(3, 9, 9, 0);
+    vsh_mov(4, 10, 10, 1);
+}
+
+static void put_vertex_rc(uint32_t vb, int i, float x, float y, uint32_t diffuse, uint32_t spec,
+                          float u0, float v0, float u1, float v1)
+{
+    uint8_t *p = G(vb + (uint32_t)i * RC_STRIDE);
+    float *f = (float *)p;
+    f[0] = x; f[1] = y; f[2] = 0.5f;
+    *(uint32_t *)(p + 12) = diffuse;
+    *(uint32_t *)(p + 16) = spec;
+    f[5] = u0; f[6] = v0; f[7] = u1; f[8] = v1;
+}
+
+/* Combiner register bytes: reg | alpha<<4. */
+#define RC_ZERO 0x00u
+#define RC_C0   0x01u
+#define RC_V0   0x04u
+#define RC_V1   0x05u
+#define RC_T0   0x08u
+#define RC_T1   0x09u
+#define RC_R0   0x0Cu
+#define RC_SUM  0x0Eu
+#define RC_A(r) ((r) | 0x10u)
+
+/* One general stage: r0 = a * b (RGB) and a.alpha * b.alpha (alpha). */
+static void pb_rc_stage_product(uint32_t a, uint32_t b)
+{
+    pb(0x0AC0, (a << 24) | (b << 16));               /* COLOR_ICW(0) */
+    pb(0x0260, (RC_A(a) << 24) | (RC_A(b) << 16));   /* ALPHA_ICW(0) */
+    pb(0x1E40, RC_R0 << 4);                          /* COLOR_OCW(0): AB -> r0 */
+    pb(0x0AA0, RC_R0 << 4);                          /* ALPHA_OCW(0) */
+}
+
+/* Common scene: the case-2 triangle (stage 0 in texels); stage 1 is swizzled so its uv is
+ * normalised, and transposed to differ from stage 0. */
+static void build_rc_scene(int idx, uint32_t surf, uint32_t vb, uint32_t diffuse, uint32_t spec,
+                           const char *name)
+{
+    const uint32_t clear = 0xFF101010u;
+    put_vertex_rc(vb, 0, 8.0f, 8.0f, diffuse, spec, 0.0f, 0.0f, 0.0f, 0.0f);
+    put_vertex_rc(vb, 1, 56.0f, 8.0f, diffuse, spec, 8.0f, 0.0f, 0.0f, 1.0f);
+    put_vertex_rc(vb, 2, 8.0f, 56.0f, diffuse, spec, 0.0f, 8.0f, 1.0f, 0.0f);
+    pb_draw_triangles(3);
+    pb_flip();
+    g_scene[idx].name = name;
+    g_scene[idx].nsurf = 1;
+    g_scene[idx].surf[0] = (Surf){ surf, 64, 64, 4, clear, 48 + 48 + 48 * 1.41421356, 0.5 * 48 * 48 };
+}
+
+static void rc_begin(uint32_t surf, uint32_t vb)
+{
+    pb_begin();
+    pb_surface(surf, 64, 64, 4);
+    pb_clear(0xFF101010u);
+    pb_texture_on(TEX_C2, 0x11, 8, 8, 16, FILTER_NEAREST);
+    pb(0x1B4C, 0);                                   /* stage 1 off unless a case enables it */
+    pb_vertex_format_rc(vb);
+    pb_vertex_program_rc();
+}
+
+/* final = D + mix(C, B, A); with A=B=C=0 it passes D through. Alpha from G. */
+static void pb_rc_final(uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint32_t g)
+{
+    pb(0x0288, (a << 24) | (b << 16) | (c << 8) | d);   /* SPECULAR_FOG_CW0 */
+    pb(0x028C, g << 8);                                 /* SPECULAR_FOG_CW1 */
+}
+
+/* 5: one stage, r0 = tex0 * diffuse; the final combiner passes r0 through. */
+static void build_case5(int flip)
+{
+    (void)flip;
+    rc_begin(SURF_C7, VB_C7);
+    pb(0x1E70, 1u);                                  /* SHADER_STAGE_PROGRAM: stage 0 = 2D */
+    pb(0x1E60, 1u);                                  /* COMBINER_CONTROL: 1 stage */
+    pb_rc_stage_product(RC_T0, RC_V0);
+    pb_rc_final(RC_ZERO, RC_ZERO, RC_ZERO, RC_R0, RC_A(RC_R0));
+    build_rc_scene(6, SURF_C7, VB_C7, 0xFFFFFFFFu, 0, "5 combiner: tex0 * diffuse (white), final passthrough");
+}
+
+/* 6: lerp through the final combiner, c0 = 0x80808080: c0*tex0 + (1-c0)*diffuse. */
+static void build_case6(int flip)
+{
+    (void)flip;
+    rc_begin(SURF_C8, VB_C8);
+    pb(0x1E70, 1u);
+    pb(0x1E60, 1u);
+    pb(0x0A60, 0x80808080u);                         /* FACTOR0(0) */
+    pb(0x0A80, 0x80808080u);                         /* FACTOR1(0) */
+    pb(0x1E20, 0x80808080u);                         /* SPECULAR_FOG_FACTOR c0: the final combiner's c0 */
+    pb(0x1E24, 0x80808080u);
+    pb_rc_final(RC_C0, RC_T0, RC_V0, RC_ZERO, RC_A(RC_V0));
+    build_rc_scene(7, SURF_C8, VB_C8, 0xFF2080E0u, 0, "6 combiner: lerp c0=0x80808080 of tex0 and diffuse (final A*B+(1-A)*C)");
+}
+
+/* 7: two textures, r0 = tex0 * tex1 (tex1 sampled with transposed coordinates). */
+static void build_case7(int flip)
+{
+    (void)flip;
+    rc_begin(SURF_C9, VB_C9);
+    pb_texture_swz(1, TEX_C9, 0x05, 3, 3, FILTER_NEAREST);   /* SZ_R5G6B5 8x8 */
+    pb(0x1E70, 1u | (1u << 5));                      /* stages 0 and 1 = 2D */
+    pb(0x1E60, 1u);
+    pb_rc_stage_product(RC_T0, RC_T1);
+    pb_rc_final(RC_ZERO, RC_ZERO, RC_ZERO, RC_R0, RC_A(RC_R0));
+    build_rc_scene(8, SURF_C9, VB_C9, 0xFFFFFFFFu, 0, "7 combiner: two textures, tex0 * tex1");
+}
+
+/* 8: final-combiner specular add: out = (tex0 * diffuse) + v1 through the V1+R0 sum. */
+static void build_case8(int flip)
+{
+    (void)flip;
+    rc_begin(SURF_C10, VB_C10);
+    pb(0x1E70, 1u);
+    pb(0x1E60, 1u);
+    pb_rc_stage_product(RC_T0, RC_V0);
+    pb_rc_final(RC_ZERO, RC_ZERO, RC_ZERO, RC_SUM, RC_A(RC_V0));
+    build_rc_scene(9, SURF_C10, VB_C10, 0xFFC8C8C8u, 0xFF402010u, "8 combiner: specular add, (tex0 * diffuse) + v1 via final sum");
+}
+
 static void write_guest_data(void)
 {
     uint32_t x, y;
@@ -307,6 +496,15 @@ static void write_guest_data(void)
         for (x = 0; x < 16; x++)
             *(uint16_t *)(G(TEX_C5) + y * 32 + x * 2) =
                 pack565(60 + x * 12, 60 + y * 12, 220 - x * 6 - y * 6);
+    /* Case 7's second texture: a different pattern, bright enough that the product stays visible. */
+    for (y = 0; y < 8; y++)
+        for (x = 0; x < 8; x++)
+        {
+            /* Morton order: x bits in the even positions, y bits in the odd ones. */
+            uint32_t m = (x & 1) | ((y & 1) << 1) | ((x & 2) << 1) | ((y & 2) << 2)
+                       | ((x & 4) << 2) | ((y & 4) << 3);
+            *(uint16_t *)(G(TEX_C9) + m * 2) = pack565(255 - x * 16, 140 + y * 12, 200 + x * 6);
+        }
 }
 
 /* ── Running ─────────────────────────────────────────────────────────────── */
@@ -518,9 +716,13 @@ static int check_linear(const Surf *s, const uint8_t *ref, const uint8_t *got)
 }
 
 typedef void (*build_fn)(int flip);
-static const build_fn k_build[6] = { build_case1, build_case2, build_case3, build_case4, build_case2b, build_case2c };
+static const build_fn k_build[10] = { build_case1, build_case2, build_case3, build_case4, build_case2b, build_case2c,
+                                      build_case5, build_case6, build_case7, build_case8 };
 /* Cases the back end runs with a flip and compares; case 3 (index 3) is the no-flip control. */
 static const int k_parity[5] = { 0, 1, 4, 2, 5 };
+/* Combiner cases: they switch the executor to program mode and set rc_seen for good, so both
+ * passes run them after everything else, including the no-flip control. */
+static const int k_rc[4] = { 6, 7, 8, 9 };
 
 int main(void)
 {
@@ -529,7 +731,7 @@ int main(void)
     uint8_t *ramin = (uint8_t *)calloc(1, 1024u * 1024u);
     uint8_t *instance = (uint8_t *)calloc(1, 0x20000u);
     static uint8_t xbe[0x2000];
-    uint8_t *ref[6][2], *got[6][2];
+    uint8_t *ref[10][2], *got[10][2];
     uint8_t *pbmem = (uint8_t *)VirtualAlloc(NULL, 0x4000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     int ok = 1, c, i;
 
@@ -637,9 +839,50 @@ int main(void)
         free(after);
     }
 
+    puts("-- D3D11 back end: register combiners (program mode) --");
+    for (i = 0; i < 4; i++) {
+        c = k_rc[i];
+        k_build[c](1);
+        prefill(&g_scene[c]);
+        printf(" case %s\n", g_scene[c].name);
+        ok &= submit("d3d11 (flipped)");
+        got[c][0] = snapshot(&g_scene[c].surf[0]);
+    }
+    /* The combiner cases' CPU references run last, with the back end unregistered: once a title
+     * programs the combiners the executor's rc_seen never clears, and the back end then applies the
+     * leftover combiner to fixed-function batches (the CPU path ignores it), which would corrupt
+     * cases 1-4. */
+    puts("-- software executor: register combiners (program mode) --");
+    nv2a_backend_register(NULL);
+    for (i = 0; i < 4; i++) {
+        c = k_rc[i];
+        k_build[c](1);
+        prefill(&g_scene[c]);
+        printf(" case %s\n", g_scene[c].name);
+        ok &= submit("software");
+        ref[c][0] = snapshot(&g_scene[c].surf[0]);
+    }
+    puts("-- parity (combiners) --");
+    {
+        static const char *rtag[4] = { "case5/modulate", "case6/lerp", "case7/two-tex", "case8/spec-add" };
+        for (i = 0; i < 4; i++) {
+            c = k_rc[i];
+            if (!ref[c][0] || !got[c][0]) { ok = 0; continue; }
+            ok &= check_parity(rtag[i], &g_scene[c].surf[0], ref[c][0], got[c][0], 1);
+        }
+        /* Cross-check: a one-stage tex0 * white-diffuse combiner is case 2's fixed-function
+         * modulate, on the same triangle and texture, so the two surfaces must agree. */
+        if (ref[1][0] && ref[6][0] && got[1][0] && got[6][0]) {
+            ok &= check_parity("case5-vs-case2/cpu", &g_scene[6].surf[0], ref[1][0], ref[6][0], 1);
+            ok &= check_parity("case5-vs-case2/gpu", &g_scene[6].surf[0], got[1][0], got[6][0], 1);
+        } else {
+            ok = 0;
+        }
+    }
+
     nv2a_backend_register(NULL);
     nv2a_set_commit_consumer(NULL);
-    for (c = 0; c < 6; c++)
+    for (c = 0; c < 10; c++)
         for (i = 0; i < 2; i++) { free(ref[c][i]); free(got[c][i]); }
     VirtualFree(pbmem, 0, MEM_RELEASE);
     free(instance); free(ramin); free(ram);

@@ -1436,3 +1436,25 @@ than the CPU path's. The press-start frame is kept on Windows in
 - mip level 0 only;
 - runs that create the D3D11 device stall the run collector before `process.dmp`, likely on a
   GPU-driver thread; these runs used a direct launcher instead.
+
+**Phase B: multi-texture and register combiners on the GPU.**
+- **Seam:** `Nv2aBatch` gains `extra` (per-vertex specular, fog and `tex[4][4]`), `textures[4]`, `combiner`
+  (the executor's live `Nv2aCombiner`) and `fog_color`.
+- **Shaders:** the back end generates an HLSL pixel shader that mirrors `nv2a_rc_eval`, cached by the
+  shape-defining registers.
+- **Parity** (`jsrf_gpu_backend_parity`, program-mode batches, the only ones the CPU path combines):
+  - multiply, lerp, two-texture multiply and specular-add cases all at 98.83 %, the same edge band as before;
+  - the GPU's combiner multiply equals the fixed-function modulate surface exactly.
+- **Run `gpube-b3`** (700 s, hardware, `just title-run` switches plus `RECOMP_GPU_BACKEND=d3d11`):
+  - every one of 461 851 draws through 16 combiner shaders (425 ms of compiling, no failures, no fallbacks);
+  - no crash; press-start by **526 s**;
+  - executor busy 242 s of 694 s (vertex programs 79.8 s, screen-space/FFP 97.0 s).
+
+The press-start frame matches xemu's capture in composition (the station canopy, buses, street). The
+skater is drawn as a black silhouette, in the CPU path's M15 frames too, so it predates the back end.
+
+Open:
+- the black characters;
+- linear textures on stages 1–3, whose CONTROL1/IMAGE_RECT methods the method table does not admit;
+- fog on the fixed-function path;
+- the collector stall.

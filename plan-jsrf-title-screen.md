@@ -65,7 +65,7 @@ its frame-sequence scores match the first run's exactly). The emblem and logo sc
 `…221513-243` and `…223657-233`. Per this plan, the retired plan's post-title milestones (M16 onward,
 `git show d6b8336:plan-jsrf-bare-minimum.md`) come back next; that is the owner's call.
 
-**Hardware rendering (2026-10-10, L59, TR §29).** `RECOMP_GPU_BACKEND=d3d11` puts rasterising on the GPU; press-start comes at ~464 s instead of ~1580 s. Phase B (combiners, stages 1–3) and the collector stall are open.
+**Hardware rendering (2026-10-10, L59, TR §29).** `RECOMP_GPU_BACKEND=d3d11` puts rasterising on the GPU; press-start comes at ~464 s instead of ~1580 s. Phase B (combiners, stages 1–3 on the GPU) is done: press-start by 526 s with the xemu capture's look, except black character silhouettes (pre-existing). The collector stall is open.
 
 **The next stop:** the same run died at 1598 s, after the title, on `[ICALL] Failed to resolve VA
 0x000BE190` (stop 33, DISCOVERED). Closing it is the first line below; the reproduction run follows it.
