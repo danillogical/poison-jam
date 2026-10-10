@@ -13,9 +13,9 @@
   "src/recomp/gen/recomp_stubs_recovery.c": "10470ba7e0dd012225afd023bcdf922d32b03f38e1868df2454bf0b9d07b313f",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "7c1720c624b65175171499a5663b7382a4d97beaa15b59d314e714b0ea44c741",
-  "src/recomp/recovered/recovered.c": "da826afdb6a405079aed992d616fcc7808d0f2cde8ede119a4a7078fcd66f31a",
+  "src/recomp/recovered/recovered.c": "b015ad7d3443880f5b3463db05b37c4200734a3dbcf932445aec5cae26382c38",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "cd1c79def4dc6113c2d635e1259ca624c1c1e09fa821ffa0abf0f27068a13c51",
+  "src/recomp/recovered/recovered_11c1_test.c": "d75c195afbc89bf09814cd003bb7baf84533f7415f2885f07b6baf45706f054f",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -539,6 +539,14 @@
     "src/recomp/recovered/recovered_11c1_test.c"
    ],
    "reason": "Stop 33: 0x000BDFD0 ended at 0x000BE17B, and 0x000BE190 (a vtable-only scalar deleting destructor it had swallowed) and its callee 0x000BDAE0 recovered; recovered.c regenerated (3166 functions)."
+  },
+  {
+   "date": "2026-10-10",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "0x0007E000 gains stack_args 8: its body consumes 8 bytes and tail-jumps to 0x0007D900, whose ret supplies the fourth word (net +12, ret 8 semantics); the wrapper asserted +4 and aborted the live-input run at the title. stack_args feeds only the wrapper check, not the body; recovered.c regenerated."
   }
  ]
 }

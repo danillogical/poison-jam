@@ -18,6 +18,18 @@ set RECOMP_APU_TRAP=1
 set RECOMP_PB_EXEC=1
 set RECOMP_FB_WINDOW=1
 
+rem Input, so a real keypress reaches the guest (both off by default, ledger L57/L58):
+rem RECOMP_USB models the MCPX OHCI controller so JSRF's own XAPI enumerates a pad;
+rem RECOMP_KEYBOARD maps the focused window's keys onto that pad (Enter -> Xbox Start).
+rem Without them the window takes the keys and nothing reaches the guest.
+set RECOMP_USB=1
+set RECOMP_KEYBOARD=1
+
+rem Print the guest-visible input report once a second, so a press can be confirmed:
+rem [INPUT] kbd_env=1 window_has_RETURN=1 buttons=0x0010 (0x0010 is XBOX_GAMEPAD_START).
+set RECOMP_INPUT_DIAG=1
+set RECOMP_KEY_TRACE=1
+
 rem Saves go here, so the default disk images in %%LOCALAPPDATA%%\xboxrecomp are left alone.
 set SAVE_ROOT=%~dp0logs\play-save
 if not exist "%SAVE_ROOT%" mkdir "%SAVE_ROOT%"

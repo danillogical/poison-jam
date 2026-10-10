@@ -15,7 +15,7 @@
   "src/recomp/gen/recomp_stubs_recovery.c": "10470ba7e0dd012225afd023bcdf922d32b03f38e1868df2454bf0b9d07b313f",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "7c1720c624b65175171499a5663b7382a4d97beaa15b59d314e714b0ea44c741",
-  "src/recomp/recovered/recovered.c": "62e2d7559bf71f6d42c69512ed5c6a6e0aa859cdf642de655d999cde793e2974",
+  "src/recomp/recovered/recovered.c": "b015ad7d3443880f5b3463db05b37c4200734a3dbcf932445aec5cae26382c38",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
   "src/recomp/recovered/recovered_11c1_test.c": "d75c195afbc89bf09814cd003bb7baf84533f7415f2885f07b6baf45706f054f",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
@@ -24,9 +24,9 @@
  "generators": {
   "project": {
    "dirty": true,
-   "revision": "85c1c01dbe057521bee45efb4a41539d8d7eac39",
+   "revision": "e0d5a9d9bd58f540b1653efc321f4de5da63bb63",
    "state": "MEASURED",
-   "status_sha256": "ce417f96ef10ef10a399dd432a9a53dc49f1d7b1a3916dd67933084ddc86d3c5"
+   "status_sha256": "64fb423af3b364bbd0b2f58388d00f71005ba5077c37d42375fc18310776e991"
   },
   "scripts/recover-functions.py": "c23b7d52fac7bce8a8a63a62a06fafaa9cb375cfe9b047aa5215e664a0586b77",
   "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
@@ -51,9 +51,9 @@
    "sha256": "648957c5a07b159cf9a8cb2b18e4cb32c85c78e5f9c6dffb210e9d483497e5fb"
   },
   "config/recovered-functions.json": {
-   "bytes": 3088640,
+   "bytes": 3063930,
    "present": true,
-   "sha256": "affbf3802e5844353865d96afb77d97dd9c5daa3f4d67b5172258fc7b5a99bb2"
+   "sha256": "17e2b1b20292229465296f419040b7676f2120b40baa0742b3ce7c37cc5faf08"
   },
   "config/recovery-unresolved.json": {
    "bytes": 4427,
@@ -91,9 +91,9 @@
    "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
   },
   "tools/disasm/output/functions.recovered.json": {
-   "bytes": 6335887,
+   "bytes": 6336308,
    "present": true,
-   "sha256": "9a086dcf11508cadafba89889b1dc517cfc3b6fab380a6f445fefeb67faa80f2"
+   "sha256": "e894094ecd7147b5b4f64580fc427f0bc0c690fe45f7c3e924034e54204b9505"
   }
  },
  "known_unknowns": [],
