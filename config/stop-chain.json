@@ -277,7 +277,20 @@
      "role": "discovered"
     }
    ],
-   "note": "Fatal `[ICALL] Failed to resolve VA 0x001BE689` (0xE0424943) at ms=479789734 in the first run where the emulated Xbox pad enumerated (K16, ledger L57). It is reached immediately after SET_CONFIGURATION(1) completes, so it is inside the driver's post-configuration path (its object-building code at 0x001BE689 reads `word [0x2647B2]` and `dword [0x2647B4]`). 0x001BE689 has NO function record in tools/disasm/output/functions.json, and the bytes at that address are a bare `mov ax, word ptr [0x2647b2]` with no prologue, so it is an indirect-call target rather than a function entry -- the same class as stops 29-32 (0x00159330, 0x000C2730, 0x000C3410, 0x000BE190): a function nothing calls directly, so no decode pass lifted it. Closing it needs the real entry extent recovered from the XBE and the ICALL-history frames preserved. NOT yet repaired: no recovery entry exists."
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x001BE689` (0xE0424943) at ms=479789734 in the first run where the emulated Xbox pad enumerated (K16, ledger L57). It is reached immediately after SET_CONFIGURATION(1) completes, so it is inside the driver's post-configuration path (its object-building code at 0x001BE689 reads `word [0x2647B2]` and `dword [0x2647B4]`). 0x001BE689 has NO function record in tools/disasm/output/functions.json, and the bytes at that address are a bare `mov ax, word ptr [0x2647b2]` with no prologue, so it is an indirect-call target rather than a function entry -- the same class as stops 29-32 (0x00159330, 0x000C2730, 0x000C3410, 0x000BE190): a function nothing calls directly, so no decode pass lifted it. Closing it needs the real entry extent recovered from the XBE and the ICALL-history frames preserved. NOT yet repaired: no recovery entry exists. REPAIRED: recovery entry [0x001BE689, 0x001BE7DE), stack_args 4, added to config/recovered-functions.json; run 20261010-025008-492 shows `[RECOVERED] 0x001BE689 returned; ABI verified (ESP/EBX/ESI/EDI)` and the stop chain advanced exactly one address, to 0x001BDE21."
+  },
+  {
+   "id": 35,
+   "address": "0x001BDE21",
+   "state": "DISCOVERED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261010-025008-492-k16-stop34-ok",
+     "role": "discovered"
+    }
+   ],
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x001BDE21` (0xE0424943) immediately after stop 34 was repaired and returned, i.e. the chain advanced exactly one address. Reached only by an indirect call, so no decode pass lifted it; the analysis database has no entry and the region below is uncovered (nearest span below is sub_001BD621 [0x001BD621, 0x001BD63B), next is 0x001BE7DE). Bytes are a complete function: follows a clean `pop edi; pop esi; pop ebx; ret 8` at 0x001BDE1B-0x001BDE1E, takes `this` in ECX, copies 8-byte records from [eax+0x34] to [eax+0x14] for the count at [eax+0x66], bare `ret` at 0x001BDE5C. REPAIRED: recovery entry [0x001BDE21, 0x001BDE5D), stack_args 0. The end had to be one byte PAST the `ret` (0x001BDE5D, not 0x001BDE5C), or the body has no epilogue and returns with ESP unmoved -- measured as `ABI FAILURE 0x001BDE21 esp ... expected +4` in run 20261010-025515-426. After the correction, run 20261010-030025-850 shows `[RECOVERED] 0x001BDE21 returned; ABI verified (ESP/EBX/ESI/EDI)`."
   }
  ]
 }

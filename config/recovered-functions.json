@@ -25108,5 +25108,21 @@
   "kind": "routine",
   "evidence": "Recovered because the function is reached ONLY from 0x000BE190 (its one direct call, at 0x000BE193; no other rel32 call or jmp and no pointer to it anywhere in the image), which is itself reached only through the vtable at 0x001CDAE0, so no direct call site put it in tools/disasm/output/functions.json and it has no entry at all: the database entry 0x000BD8D0 ends at 0x000BDAE0 and the next, 0x000BDBA0, starts after it. Recovering 0x000BE190 alone would only move the fatal unresolved call one frame down. The address is a complete function, not an internal label: 0x000BDADD `ret 0x10` ends the previous function, and 0x000BDAE0 begins a clean SEH-framed prologue (push -1; push 0x188658; mov eax,fs:[0]; push eax; mov fs:[0],esp; push ecx; push esi; mov esi,ecx; push edi). It is the class destructor: it re-stores the vtable 0x001CDAE0 into [esi] at 0x000BDAFE, releases the members through 0x0004A900, 0x000607B0 and 0x000178D0, calls the base destructor 0x00011000, restores fs:[0], add esp,0x10 and ends with `ret` at 0x000BDB91, then NOP padding 0x000BDB92-0x000BDB9F before 0x000BDBA0. Its callees 0x000128C0, 0x0004A900, 0x000607B0, 0x000178D0 and 0x00011000 all have database entries. Body 0x000BDAE0..0x000BDB92. No stack arguments (the epilogue is a bare `ret` at depth 0). 2026-10-09.",
   "stack_args": 0
+ },
+ {
+  "start": "0x001BE689",
+  "end": "0x001BE7DE",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Reached only by an indirect call, so no decode pass lifted it: run 20261010-022809-116-k16-dma-range2 died on `[ICALL] Failed to resolve VA 0x001BE689` (0xE0424943) immediately after SET_CONFIGURATION(1) completed, i.e. in the driver's post-configuration path. The analysis database has no entry for it and the nearest declared span above is sub_001BD621 [0x001BD621, 0x001BD63B), so the whole region to 0x001BE7DE is uncovered. The bytes are a complete function: it follows a clean `leave; ret 8` at 0x001BE682-0x001BE686 (no padding), starts `mov ax, word [0x2647B2]` with no prologue (so it takes its argument in ECX and returns with `pop ebx; ret 4` at 0x001BE7DA-0x001BE7DB), and terminates before the next function's `push ebp; mov ebp, esp` at 0x001BE7DE. It builds a descriptor block at 0x002647D0 (0x30/0x40 bytes, the two callback pointers 0x001BE388 and the ESI context) and submits it through the object at ECX. stack_args 4. Stop 34 in config/stop-chain.json. stack_args 4: the function ends `pop ebx; ret 4` at 0x001BE7DA, so the wrapper's expected ESP delta is +4 (the wrapper's own callee-pop convention makes that +8 in the generated body, which is why the first generation reported `esp ... expected +4` and failed; the value here is the RET immediate, as for 0x00159330 with stack_args 12).",
+  "stack_args": 4
+ },
+ {
+  "start": "0x001BDE21",
+  "end": "0x001BDE5D",
+  "section": ".text",
+  "kind": "routine",
+  "stack_args": 0,
+  "evidence": "Reached only by an indirect call, so no decode pass lifted it: run 20261010-025008-492 died on `[ICALL] Failed to resolve VA 0x001BDE21` (0xE0424943) immediately after the previous gap entry 0x001BE689 was recovered and returned cleanly, i.e. the stop chain advanced exactly one address. The analysis database has no entry for it: the nearest declared span below is sub_001BD621 [0x001BD621, 0x001BD63B) and the next is 0x001BE7DE, so the whole region is uncovered. The bytes are a complete function: it follows a clean `pop edi; pop esi; pop ebx; ret 8` at 0x001BDE1B-0x001BDE1E (no padding), takes its `this` in ECX (`mov eax, ecx`), copies 8-byte records out of `[eax+0x34]` into `[eax+0x14]` with `rep movsd`/`rep movsb` for the count at `[eax+0x66]`, and terminates with a bare `ret` at 0x001BDE5C (no cleanup, so stack_args 0) after a tail-jump at 0x001BDE5D. Stop 35 in config/stop-chain.json. End corrected to 0x001BDE5D: the first value (0x001BDE5C) stopped AT the final `ret`, so the body had no epilogue and returned with ESP unmoved (ABI FAILURE `esp ... expected +4`). The end is exclusive and must be one byte past the `ret`, as for 0x00159330 (ret 0xc at 0x00159416, end 0x00159419)."
  }
 ]
