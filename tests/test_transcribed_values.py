@@ -146,7 +146,8 @@ class RealTreeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_it_examines_a_non_trivial_number_of_records(self) -> None:
-        self.assertGreater(len(checker.record_files()), 10)
+        # The 2026-10-09 clean-up left 8 records; the floor only proves the scan is not empty.
+        self.assertGreater(len(checker.record_files()), 5)
 
 
 if __name__ == '__main__':

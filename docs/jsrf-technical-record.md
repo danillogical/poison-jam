@@ -1,14 +1,17 @@
 # JSRF technical record
 
-What the project has established, by subsystem, with the evidence and limits each result rests on.
-It consolidates the review records of closed packets (their full text is in git history; the last
-tree holding them is `d6a1bc0`). The plan (`plan-jsrf-title-screen.md`) owns current status and
-next action; this file owns the durable technical facts behind them. Toolkit-side design and licence
-records live in the toolkit itself: `xboxrecomp/src/apu/dsp/PROVENANCE.md` and
-`xboxrecomp/src/apu/GP-INTEGRATION.md`.
+The facts the project has established and that are still in force, by subsystem, with the evidence and
+limits each rests on. The plan (`plan-jsrf-title-screen.md`) owns status and next action; this file owns
+the technical facts behind them. Toolkit-side design and licence records live in the toolkit:
+`xboxrecomp/src/apu/dsp/PROVENANCE.md` and `xboxrecomp/src/apu/GP-INTEGRATION.md`.
+
+**Condensed record (owner-approved deep clean, 2026-10-09).** Narrative, process history, superseded
+readings and push receipts were removed; every section number a live file cites is kept. **The full
+previous text is `git show 9d5257f:docs/jsrf-technical-record.md`**; the review records it consolidated
+are in git at `d6a1bc0`. Retractions and process lessons are in `docs/jsrf-lessons-learned.md`.
 
 Profiles: "strict" means `RECOMP_GPU_ACK=0` with no synthetic-completion switch
-(`docs/jsrf-run-profiles.md`). Runs are under `logs/runs/` (gitignored, local).
+(`docs/jsrf-run-profiles.md`). Runs are under `logs/runs/` (gitignored, on the Windows box).
 
 ---
 
@@ -19,31 +22,30 @@ rules are in `AGENTS.md`.
 
 ### v0.11.0 sync (packet A4s-r6, accepted 2026-09-25)
 
-Merged upstream `766ecef` into local main; ten files changed on both sides. Hunk resolution rules, in
-order: **H1 containment** (if one side's additions and deletions contain the other's, take it);
-**H2 disjoint edit union** (no base line changed by both sides: apply both sides' edits, local
-insertions first at a shared point); **H3 version/comment only** (take upstream for those lines).
-Clean hunks can still produce defects — the merge created a duplicate `case 138` and a duplicate
-`bridge_KeResetEvent` — so `scripts/check-merge-structure.py` (conflict markers, duplicate `case`
-labels, duplicate file-scope definitions over the evidence binary's build inputs) runs on the resolved
-tree **before** the build. The general rule that upstream merges never silently change admitted
+Merged upstream `766ecef`; ten files changed on both sides. Hunk rules, in order: **H1 containment** (if
+one side's additions and deletions contain the other's, take it); **H2 disjoint edit union** (no base
+line changed by both sides: apply both, local insertions first at a shared point); **H3 version/comment
+only** (take upstream). Clean hunks can still produce defects — the merge created a duplicate `case 138`
+and a duplicate `bridge_KeResetEvent` — so `scripts/check-merge-structure.py` (conflict markers,
+duplicate `case` labels, duplicate file-scope definitions over the evidence binary's build inputs) runs
+on the resolved tree **before** the build. The rule that upstream merges never silently change admitted
 evidence semantics is in `docs/jsrf-run-profiles.md`.
 
 **AC'97 hunk ruling (Advisor).** Upstream kept a set-only codec-ready write under
-`getenv("RECOMP_AC97_READY")`, coupled the APU unmap to it, and added a NABM "RR" write trap. Resolved
-to the **local** side: the accepted A3a model owns `GS.bit8`; `RECOMP_APU_TRAP` gates only the APU 512K
+`getenv("RECOMP_AC97_READY")`, coupled the APU unmap to it, and added a NABM "RR" write trap. Resolved to
+the **local** side: the accepted A3a model owns `GS.bit8`; `RECOMP_APU_TRAP` gates only the APU 512K
 unmap; no `getenv("RECOMP_AC97_READY")` and no `|= MCPX_AC97_CODEC_READY` anywhere. Upstream's
 `ac97_clear_reset_bits`/`ac97_write_veh`/`ac97_arm_write_trap` may exist but **nothing may call
-`ac97_arm_write_trap`**. Arming it is its own change packet, and must change the model: the trap makes
-page `0xFEC00000–0xFEC00FFF` read-only, which holds `GLOB_CNT` and `GLOB_STA`, so the tick thread's
-`InterlockedOr/And` would fault every tick. The cleaner design evaluates `GS.bit8 := GC.bit1` in the
-VEH's single-step half after each trapped guest write. Merge-check scope is the evidence binary's build
-inputs, matched in the form that carries semantics (quoted env names, non-comment tokens, call sites).
+`ac97_arm_write_trap`**: arming it is its own change packet and must change the model, because the trap
+makes page `0xFEC00000–0xFEC00FFF` (holding `GLOB_CNT` and `GLOB_STA`) read-only, so the tick thread's
+`InterlockedOr/And` would fault every tick; the cleaner design evaluates `GS.bit8 := GC.bit1` in the
+VEH's single-step half after each trapped guest write. **Merge-check scope** is the evidence binary's
+build inputs, matched in the form that carries semantics (quoted env names, non-comment tokens, call
+sites).
 
 ### v0.12.0+ sync (owner, 2026-09-28)
 
-Merged upstream `ea60cfa` into local main as `2925f0b` (121 upstream commits), pushed to the fork.
-Three files conflicted (7 hunks):
+Merged upstream `ea60cfa` as `2925f0b` (121 upstream commits). Three files conflicted (7 hunks):
 
 | File | Resolution |
 |---|---|
@@ -53,26 +55,25 @@ Three files conflicted (7 hunks):
 | `lifter.py` ×2 | independent additions, both sides |
 | `lifter.py` ×2 | the same `rep cmps/scas` width fix on both sides, upstream's form |
 
-AC'97 invariants held; structural check clean; build, `ctest`, toolkit tests pass; a strict run with
-the baseline's settings reached the same stop. Upstream's nine new switches are classified in
-`docs/jsrf-run-profiles.md` (`RECOMP_DSP_ACK`, `RECOMP_POKE`, `RECOMP_FORCE_RETURN`, `RECOMP_PAD_PRESS`
-are synthetic → exploratory). Upstream's APU change of note: ADPCM's reserved header byte is no longer
-validated and the step index is clamped — JSRF ends every ADPCM buffer in a `0x08` pad, and 3.5–4.4 % of
-its blocks had been silenced.
+AC'97 invariants held; structural check clean; build, `ctest`, toolkit tests pass; a strict run reached
+the baseline's stop. Upstream's nine new switches are classified in `docs/jsrf-run-profiles.md`
+(`RECOMP_DSP_ACK`, `RECOMP_POKE`, `RECOMP_FORCE_RETURN`, `RECOMP_PAD_PRESS` are synthetic → exploratory).
+ADPCM's reserved header byte is no longer validated and the step index is clamped: JSRF ends every ADPCM
+buffer in a `0x08` pad, and 3.5–4.4 % of its blocks had been silenced.
 
 ### v0.13.1 sync (Mac session, 2026-10-09)
 
 Merged upstream `193e299` (v0.13.0 "Given Back" + v0.13.1 "Cut Short", 100 commits) into the fork's
-reviewed main `fafe0f6` as toolkit `409c635`; merge-base `ea60cfa`. Eighteen files conflicted (~75
-hunks). The per-hunk inventory, the dispositions as applied and the owner's two decisions are
-`docs/reviews/upstream-v0.13.1-merge.md`. In short:
+reviewed main `fafe0f6` as toolkit `409c635`; merge-base `ea60cfa`. Eighteen files conflicted (~75 hunks).
+Per-hunk inventory, dispositions and the owner's two decisions:
+`git show 9d5257f:docs/reviews/upstream-v0.13.1-merge.md` (the record below is the live summary).
 
-- **Executor (owner decision): upstream's `nv2a_pb_exec.c` is the base**, because the two files are
-  separate rewrites of one base and cannot be merged hunk by hunk. Upstream's vertex programs, register
-  combiners, depth, near-plane clipping, four texture stages and threaded raster come in; the fork's
-  owner commit consumer, present tracker and FLIP_STALL publication, L47 flip trace, L48 stage-0 gate,
-  counters/`vp_view` test APIs and fixed-function/lighting/AA paths were ported into it. `GET_REPORT` is
-  counted, never written (L44, rule 2). The fork's VP interpreter and `RECOMP_VP` are retired.
+- **Executor (owner decision): upstream's `nv2a_pb_exec.c` is the base** — the two files are separate
+  rewrites of one base. Upstream's vertex programs, register combiners, depth, near-plane clipping, four
+  texture stages and threaded raster come in; the fork's owner commit consumer, present tracker and
+  FLIP_STALL publication, L47 flip trace, L48 stage-0 gate, counters/`vp_view` test APIs and
+  fixed-function/lighting/AA paths were ported into it. `GET_REPORT` is counted, never written (L44,
+  rule 2). The fork's VP interpreter and `RECOMP_VP` are retired.
 - **Everywhere else the fork's structure wins**; upstream's lifter/translator/disasm fixes, OHCI and pad
   scripts, window title and build fixes are taken. Not taken: `RECOMP_HEAP_RECLAIM`, `RECOMP_EXT_VMA`,
   `RECOMP_TITLE_KEVENTS`, `RECOMP_GUEST_LOCK`, `KPCR.Irql` publication, APU interrupt delivery, the
@@ -81,28 +82,25 @@ hunks). The per-hunk inventory, the dispositions as applied and the owner's two 
   `heap_*_locked` (a hang on the first heap free) and a second self-recursive `heap_alloc_locked`; the
   arming call of the deleted `RECOMP_APU_DSP_ACK` (a rule-3 FAIL); `APU_TRAP_BYTES` shrinking
   `RECOMP_APU_TRAP`'s range so the GP DSP model would be bypassed.
-- **Verified on macOS:** `tools/posix_check.py` native (12 suites), cross (the whole tree compiles and
-  links for Windows; the 3 known `d3d8_smoke` failures only) and python (714 passed); the structural
-  check clean on `409c635` (130 files, 152 switches); the rule-3 scan clean; upstream's 13 surviving
-  switches classified in `docs/jsrf-run-profiles.md`.
-- **Windows gate (2026-10-09, driven from the Mac over ssh; toolkit `a5e2762` = the merge plus a
-  no-behaviour tidy, game `a2f185e`).** `just build`; game CTest **49/49**; toolkit CTest **15/15**; the
-  four standalone toolkit test projects (`tests/kernel_regressions` 16/16, `nv2a_vsh`, `nv2a_combiner`,
-  `fp_precision` 1/1 each — none is in either CTest, so each is configured with `cmake -S tests/<name>`);
-  `just check` all passed.
+- **Verified on macOS:** `tools/posix_check.py` native (12 suites), cross (whole tree compiles and links
+  for Windows; the 3 known `d3d8_smoke` failures only) and python (714 passed); structural check clean on
+  `409c635` (130 files, 152 switches); rule-3 scan clean; upstream's 13 surviving switches classified in
+  `docs/jsrf-run-profiles.md`.
+- **Windows gate (2026-10-09, toolkit `a5e2762` = the merge plus a no-behaviour tidy, game `a2f185e`).**
+  `just build`; game CTest **49/49**; toolkit CTest **15/15**; the four standalone toolkit test projects
+  (`tests/kernel_regressions` 16/16, `nv2a_vsh`, `nv2a_combiner`, `fp_precision` 1/1 each — none is in
+  either CTest, so each is configured with `cmake -S tests/<name>`); `just check` all passed.
 - **Title-run A/B, 300 s each, one game commit, identical switches:** A =
   `20261009-141651-461-title011-ab-a5e2762`, B = `20261009-142247-172-title011-ab-fafe0f6` (different
-  `exe_sha256`). Both reach the deadline with zero `[ICALL] Failed`/`[EXCEPTION]` lines, `[HEAP] free #1`
-  present, the APU trap range present and `[APUWAIT]` 4 in each (so "3 → 0" is not met by either; R3
-  also has 4). **A is slower:** presents at t = 120 s **960 vs 1750** (B passes the disclaimer
-  transition at ~2427; A ends at 2240, still climbing); late re-arms **1587/5745 = 27.6 % vs 56/13363 =
-  0.4 %**; owner-lock max hold **192 vs 83 ms**; max pulse gap 204 vs 91 ms. A wrote no more pixels
-  than B: on the same `[GPU] … pixels written` counter A 1.14e9 against B 1.51e9 (that counter
-  undercounts under the threaded raster, per `put_pixel`'s note; A's program-path count is 1.32e9). So
-  the cost is per pixel, attributed in §26. The
-  owner ruled that a performance regression on a non-working prototype is not a revert criterion: the
-  merge stays. `[FBPRESENT]` lines carry no reason field, so the plan's "reason mix" metric does not
-  exist in these logs; the presenter's reason is only in `RECOMP_FLIP_TRACE` output.
+  `exe_sha256`). Both reach the deadline with zero `[ICALL] Failed`/`[EXCEPTION]`, `[HEAP] free #1`
+  present, the APU trap range present and `[APUWAIT]` 4 in each (R3 also has 4). **A is slower:** presents
+  at t = 120 s **960 vs 1750** (B passes the disclaimer transition at ~2427; A ends at 2240, still
+  climbing); late re-arms **1587/5745 = 27.6 % vs 56/13363 = 0.4 %**; owner-lock max hold **192 vs 83
+  ms**; max pulse gap 204 vs 91 ms. A wrote no more pixels: `[GPU] … pixels written` A 1.14e9 against B
+  1.51e9 (that counter undercounts under the threaded raster, per `put_pixel`'s note; A's program-path
+  count is 1.32e9), so the cost is per pixel (§26.2). **Owner ruling: a performance regression on a
+  non-working prototype is not a revert criterion; the merge stays.** `[FBPRESENT]` lines carry no reason
+  field; the presenter's reason is only in `RECOMP_FLIP_TRACE` output.
 
 ---
 
@@ -110,79 +108,46 @@ hunks). The per-hunk inventory, the dispositions as applied and the owner's two 
 
 ### Regeneration with the v0.12 lifter (owner, 2026-09-28)
 
-Command (from the game root, toolkit on `PYTHONPATH`):
-`python -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name "Jet
-Set Radio Future" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c
---trace-functions config/trace-functions.json`.
+The full-pass command is in `AGENTS.md` (it now adds `--backedge-yield`).
 
 - **Analysis inputs are the toolkit's** gitignored `tools/{disasm,func_id,abi_analysis}/output` (dated
-  2026-09-21, the inputs of the previous pass). Every previously generated function is in the toolkit's
-  8768-entry `functions.json`; 713 are absent from the game's 8437-entry one (which `relift-selected.py`
-  and `recover-functions.py` use). A 2026-09-22 attempt with the game's database was reverted as
-  unattributable. The provenance manifest records the toolkit files as `toolkit:` inputs.
-- **Re-applied after the pass:** `relift-selected.py boundaries` (7 reviewed boundary fixes: 5 in
-  generated code, 2 in `recovered.c`); the project's exact-delta ABI additions to `recomp_types.h`
-  (three-way merge against the template at toolkit `484887b`); the six A4b2 `jsrf_watch_store` hooks
-  (anchored on guest label and store). `recovered.c` untouched (recovery-owned).
-- **Result:** 5580 → 5740 generated functions (+161 switch-arm entries, −1 folded tail); dispatch
-  8768 → 8928; zero dropped `rcl`/`rcr`; untranslated instructions now emit `RECOMP_UNIMPL`.
+  2026-09-21). Every previously generated function is in the toolkit's 8768-entry `functions.json`; 713
+  are absent from the game's 8437-entry one (which `relift-selected.py` and `recover-functions.py` use).
+  The provenance manifest records the toolkit files as `toolkit:` inputs.
+- **Re-applied after a pass:** `relift-selected.py boundaries` (7 reviewed boundary fixes: 5 in generated
+  code, 2 in `recovered.c`); the project's exact-delta ABI additions to `recomp_types.h`
+  (`recomp_delta_ok`, `recomp_delta_allowed`, `recomp_abi_regs_exempt`, `jsrf_trace_delta_mismatch`,
+  `jsrf_trace_seq`, the delta-checking `RECOMP_ABI_CALL`); the six A4b2 `jsrf_watch_store` hooks via
+  `scripts/apply-a4b2-hooks.py` (anchors on the guest label or store, refuses an anchor that does not
+  resolve exactly once, idempotent; a missing observation hook fails no build, it empties the artifact).
+- **Result:** 5580 → 5740 generated functions (+161 switch-arm entries, −1 folded tail); dispatch 8768 →
+  8928; zero dropped `rcl`/`rcr`; untranslated instructions emit `RECOMP_UNIMPL`.
 - **Two fixes it required.** `sub_00162B9D` (`mov eax, 0x800401F0; ret 0xc`, a COM error tail of two
-  recovered parents) is folded by the new translator and no longer emitted, so it is hand-written in
-  `src/recomp_manual.c` (manual list and lookup). `recomp_unimpl` is defined there per the toolkit
-  template: the instruction stays a no-op, is reported as `[UNIMPL] … REACHED`, and
+  recovered parents) is folded by the translator, so it is hand-written in `src/recomp_manual.c` (L05).
+  `recomp_unimpl` is defined there per the toolkit template: a no-op reported as `[UNIMPL] … REACHED`;
   `RECOMP_UNIMPL_TRAP=1` aborts at the first one.
-- **Comparison** (strict, `RECOMP_APU_TRAP=1`, 8 s; old `20260928-183145-568-crt-divide-fix-strict`,
-  new `20260928-185612-449-regen-v012-strict`): both STRICT, same A3a witness, same allocation and
-  terminal event; the 18 traced DirectSound functions have identical entry counts.
+- **Comparison** (strict, `RECOMP_APU_TRAP=1`, 8 s; old `20260928-183145-568-crt-divide-fix-strict`, new
+  `20260928-185612-449-regen-v012-strict`): same A3a witness, allocation and terminal event; the 18 traced
+  DirectSound functions have identical entry counts.
 - **Open difference — D3D resource release.** Both builds make the same 116 contiguous allocations
   (ordinal 166). The old build frees 54 through `sub_00192830` (ordinal 171 from `0x001928BB`); the new
-  build never enters `sub_00192830` (diagnostic trace `20260928-190035-939-regen-trace-192830`,
-  positive control 634 other entries). Its own translation is equivalent in both trees, so one of its
-  ten callers decides differently; main-thread critical-section pairs drop by ~160. Which build is
-  faithful is not established. Rollback point: game `0f7ef9c`.
-
-### Phase 0 re-baseline on Windows (owner-directed chores, 2026-09-29)
-
-Plan §4 V1–V4, run on the Windows host at game `a62b5ce`→`44becd4`, toolkit `2a349c8`. This is the first
-time the fork fixes `db96e30..2a349c8` were built and run on Windows.
-
-**V1 — build and test.** `scripts/build-jsrf.py` exit 0. Game `ctest`: **26/26 passed**, including the
-toolkit's `xbox_kmem`, `xbox_guest_meter` and `nv2a_actions`. Standalone toolkit projects, both built
-with the host's generator (**Visual Studio 18 2026** — the host has no VS 2022, so a `Visual Studio 17
-2022` configure fails; this is an environment fact, not a code defect): `tests/kernel_data_exports`
-**5/5** and `tests/kernel_file_status` **5/5**, each including the same three toolkit tests.
-
-**V2 — regeneration.** 5740/8928 functions (0 failed), 653342 lines of C; 7 unresolved targets stubbed;
-23 unimplemented instructions (17 mnemonics); `recomp_funcs.h` and `recomp_stubs_unresolved.c`
-byte-identical to the previous pass. Build and ctest pass again (26/26); provenance `--check` ok.
-The pass reverted two hand-applied project deltas, which were restored: the ABI additions in
-`recomp_types.h` (`recomp_delta_ok`, `recomp_delta_allowed`, `recomp_abi_regs_exempt`,
-`jsrf_trace_delta_mismatch`, `jsrf_trace_seq`, and the delta-checking `RECOMP_ABI_CALL`), and the six
-A4b2 `jsrf_watch_store` hooks. `scripts/apply-a4b2-hooks.py` now does the hooks by anchoring on the
-**guest label or store** the translator emits rather than a line number, refuses an anchor that does not
-resolve exactly once, and is idempotent — hand-editing them is how a hook silently disappears, and
-because they are observation-only a missing one does not fail a build; it empties the watch artifact,
-which reads as "the guest never wrote there". The pass also picked up the toolkit's new port-I/O
-declarations (C6's prerequisite) automatically.
-
-`FLAGS: 10 conditional(s) in 7 function(s)`. Nine are the jcc-form reads toolkit `ca4257c` predicted
-(4 live into the function, 5 where an `adc` must answer `jl`/`jg`/`jo` in `adc [eax],al` byte runs); the
-tenth is a `loope` in `sub_0010634E` that `ca4257c`'s census did not count because it counted jcc sites
-only, and which is **byte-identical** to the pre-regeneration tree — not a regression. The 8 sites the
-census called live bugs are fixed: `sub_00015130` (`loc_000153A9`), `sub_00130FD0`, `sub_000A0F10`,
-`sub_001C0B86` carry no fallback read and use materialised `_fc_*` conditions. The plan's V2 criterion
-read "≤ 9", which compared a jcc-only census against a wider report; it is now tied to the named sites
-(Advisor ruling, recorded in the plan).
-
-**V3/V4 — see §5** (the strict horizon) and §7 (the device-field verdicts).
+  never enters it (trace `20260928-190035-939-regen-trace-192830`, positive control 634 other entries), so
+  one of its ten callers decides differently. Which build is faithful is not established.
+- **Phase 0 re-baseline on Windows (2026-09-29, game `a62b5ce`→`44becd4`, toolkit `2a349c8`):** game ctest
+  26/26, standalone `tests/kernel_data_exports` 5/5 and `tests/kernel_file_status` 5/5, built with
+  **Visual Studio 18 2026** (the host has no VS 2022). Regeneration 5740/8928 (0 failed), 653342 lines, 7
+  unresolved targets stubbed, 23 unimplemented instructions (17 mnemonics). `FLAGS: 10 conditional(s) in
+  7 function(s)`: nine are the jcc-form reads toolkit `ca4257c` predicted, the tenth a `loope` in
+  `sub_0010634E`, byte-identical to the pre-regeneration tree; the 8 sites `ca4257c` called live bugs
+  (`sub_00015130` `loc_000153A9`, `sub_00130FD0`, `sub_000A0F10`, `sub_001C0B86`) use materialised
+  `_fc_*` conditions. Re-verified 2026-09-30 (`20260930-001405-390-v1-verified-strict`). V3/V4: §5, §7.
 
 ### CRT 64-bit divide helpers (owner, 2026-09-28)
 
-The previous generated tree dropped every `rcr` in the MSVC CRT divide helpers' normalisation loop, so
-64-bit divides with divisors above 32 bits were wrong. Measured on the old generated `__aulldiv`:
-`0x2540BE4000 / 0x100000001` gave `0x40BE3FFF` (correct `0x25`); `1000 / 7` was right. They are now
-hand-written in `src/jsrf_crt.c`, listed in `config/manual-functions.json`, and tested by
-`tests/test_crt_divide.c` (2116 cases, stack and preserved registers):
+The old generated tree dropped every `rcr` in the MSVC CRT divide helpers' normalisation loop: old
+`__aulldiv` gave `0x2540BE4000 / 0x100000001` = `0x40BE3FFF` (correct `0x25`). They are hand-written in
+`src/jsrf_crt.c`, listed in `config/manual-functions.json`, and tested by `tests/test_crt_divide.c` (2116
+cases, stack and preserved registers) — the **recovered CRT table**:
 
 | VA | Helper | Result | Preserves |
 |---|---|---|---|
@@ -192,1059 +157,197 @@ hand-written in `src/jsrf_crt.c`, listed in `config/manual-functions.json`, and 
 | `0x001816B0` | `__aulldvrm` | quotient `edx:eax`, remainder `ebx:ecx` | `esi` |
 
 All stdcall `ret 0x10`, dividend low/high then divisor low/high; 24 call sites via `RECOMP_ABI_CALL`.
-They did not cause the A2h allocation (same request after the fix). Removal gate: delete the manual
-entries and the `jsrf_crt.c` bodies together if generated code should own them again.
+Removal gate (L04): delete the manual entries and the `jsrf_crt.c` bodies together. `0x17CA70` is
+`_allmul` (§8).
 
 ---
 
 ## 3. AC'97 codec-ready model (packet A3a-r25, accepted 2026-09-24)
 
-**Model** (toolkit `c97ce2c`, `src/kernel/xbox_memory_layout.c`, `nv2a_ack_thread`):
+**Model** (toolkit `c97ce2c`, `src/kernel/xbox_memory_layout.c`, `nv2a_ack_thread`; L20):
 `GS(0xFEC00130).bit8 := GC(0xFEC0012C).bit1`, level-evaluated every tick, atomic, outside the
 `g_apu_mmio_trapped` gate; `GC` is read only. It replaced the synthetic `RECOMP_AC97_READY` override.
-Witness line: `[A3A] ac97 witness: gc=0x00000002 gs=0x00000100`.
+Witness: `[A3A] ac97 witness: gc=0x00000002 gs=0x00000100`.
 
-**Result.** One strict run (`20260924-100502-623-a3a-codec-model`) selected `R-PASS`: no relaunch
-(the baseline self-relaunched via `HalReturnToFirmware`), the codec poll succeeded (`ret=0x001A7432`),
-the vector-6 ISR `0x001A72E0` was connected, and the guest reached DSP initialisation. **Limits:** one
-strict codec wait satisfied by modelled state; not faithful hardware behaviour (secondary sources only),
-audio, DSP handshake, liveness or boot. W1C on `GLOB_STA` is not modelled (its consumer `sub_001A71B3`
-is reachable only from the vector-6 ISR). The packet (`docs/packets/a3a-ac97-codec-model.md`) is kept
-because `scripts/ac2-provenance.py` reads its pins.
+**Result.** Strict run `20260924-100502-623-a3a-codec-model` selected `R-PASS`: no relaunch (the baseline
+self-relaunched via `HalReturnToFirmware`), the codec poll succeeded (`ret=0x001A7432`), the vector-6 ISR
+`0x001A72E0` was connected, and the guest reached DSP initialisation. **Limits:** one strict codec wait
+satisfied by modelled state; not faithful hardware behaviour, audio, liveness or boot. W1C on `GLOB_STA`
+is not modelled (its consumer `sub_001A71B3` is reachable only from the vector-6 ISR). The packet
+`docs/packets/a3a-ac97-codec-model.md` is kept because `scripts/ac2-provenance.py` reads its pins.
 
-**Admission evidence** (the secondary-source path of `docs/jsrf-run-profiles.md` §"Unconditional
-modeled hardware causes"; no public MCPX/ACI datasheet exists):
+**Admission evidence** (secondary-source path of `docs/jsrf-run-profiles.md` §"Unconditional modeled
+hardware causes"; no public MCPX/ACI datasheet exists):
 
-- **xemu** (Xbox-specific address map): `hw/audio/ac97.c` @ `2799183ecc5119269be01c340d0c9465dbb04d02`
-  (SHA-256 `BD2A95FD…E554B`): L65 `#define GS_S0CR (1 << 8) /* ro */`, L135 `GLOB_STA = 0x30`, L785
-  `val = s->glob_sta | GS_S0CR;` (unconditional; no `#ifdef XBOX` encloses it). `hw/xbox/mcpx/aci.c`
-  @ `704ece9ac661f325aa51bb0b28d326063633227b` (SHA-256 `9A784826…986D2`): NAM at `+0x0`, NABM at
-  `+0x100`; `hw/xbox/xbox.c:334` instantiates `mcpx-aci`. NABM `0x100 + 0x2C/0x30` puts `GLOB_CNT`/
-  `GLOB_STA` at `0xFEC0012C`/`0xFEC00130`.
-- **Linux** `sound/pci/intel8x0.c` @ tag `v6.6` (SHA-256 `F5F1AE46…B5FFC`): L140 `ICH_AC97COLD
-  0x00000002`, L163 `ICH_PCR 0x00000100 /* primary (AC_SDIN0) codec ready */`; L2360–2361 sets
-  `ICH_AC97COLD` when it reads 0 to *finish* the cold reset (so bit 1 is active-low `Cold Reset#`);
-  L2295–2298 clears it to re-arm the reset.
-- **Limits of the evidence:** xemu's Xbox-specific part is the address map; its bit-8 behaviour is
-  generic QEMU code with a `TODO` for reset requests. Both descend from the Intel AC'97/ICH
-  specification. The toolkit extracts other subsystems from xemu but has no AC'97 model of its own.
-- **Guest corroboration (not counted as a source):** `sub_001A6C94` sets `GC` bit 1, clears bits 2–3
-  (turning the link on), then polls `GS` bit 8 up to 1000 times — coherent only under the active-low
-  reading.
+- **xemu:** `hw/audio/ac97.c` @ `2799183ecc5119269be01c340d0c9465dbb04d02` (SHA-256 `BD2A95FD…E554B`):
+  L65 `#define GS_S0CR (1 << 8) /* ro */`, L135 `GLOB_STA = 0x30`, L785 `val = s->glob_sta | GS_S0CR;`
+  (unconditional). `hw/xbox/mcpx/aci.c` @ `704ece9ac661f325aa51bb0b28d326063633227b` (SHA-256
+  `9A784826…986D2`): NAM at `+0x0`, NABM at `+0x100`; `hw/xbox/xbox.c:334` instantiates `mcpx-aci`. NABM
+  `0x100 + 0x2C/0x30` puts `GLOB_CNT`/`GLOB_STA` at `0xFEC0012C`/`0xFEC00130`.
+- **Linux** `sound/pci/intel8x0.c` @ `v6.6` (SHA-256 `F5F1AE46…B5FFC`): L140 `ICH_AC97COLD 0x00000002`,
+  L163 `ICH_PCR 0x00000100 /* primary (AC_SDIN0) codec ready */`; L2360–2361 sets `ICH_AC97COLD` when it
+  reads 0 to finish the cold reset (bit 1 is active-low `Cold Reset#`); L2295–2298 clears it to re-arm.
+- **Limits:** xemu's Xbox-specific part is the address map; its bit-8 behaviour is generic QEMU code with
+  a `TODO` for reset requests. Both descend from the Intel AC'97/ICH specification.
+- **Guest corroboration (not a source):** `sub_001A6C94` sets `GC` bit 1, clears bits 2–3, then polls
+  `GS` bit 8 up to 1000 times — coherent only under the active-low reading.
 
 ---
 
 ## 4. APU and the GP DSP
 
-### The spin (A4a-r2, discovery, accepted 2026-09-24)
-
-The guest writes `3` to the DSP pending word `W = MEM32(0x001BA858)+0x810 = 0x803C0810` and spins at
-`loc_001A18D0` (`sub_001A1769`) until it is cleared. With observation-only APU tracing
+**The spin (A4a-r2, 2026-09-24).** The guest writes `3` to the DSP pending word `W =
+MEM32(0x001BA858)+0x810` and spins at `loc_001A18D0` (`sub_001A1769`) until it is cleared. Observed
 (`20260924-191833-331-a4a-r2-trap-trace`): GPSADDR `0x02040 = 803CC000`, GPSMAXSGE `0x020D4 = 8`, GPRST
-`0x3FFFC` written `1` then `3`; zero GP/EP reads; SGE[0] points at block `B = 803C0000`, whose `0x5CC`
-bytes equal the XBE image at file offset `0x1A7D60` (`0x001BA0A0`) with `3` at `B+0x810`. Row `O-6`:
-the next packet is the GP DSP56300 engine.
+`0x3FFFC` written `1` then `3`; SGE[0] points at block `B = 803C0000`, whose `0x5CC` bytes equal the XBE
+image at file offset `0x1A7D60` (`0x001BA0A0`) with `3` at `B+0x810`. The word's address varies per run
+(`0x803C0810` then, `0x803BC810` on 2026-10-04).
 
-### Port (A4b1-r4, accepted 2026-09-26)
+**Port (A4b1-r4, 2026-09-26; L21).** xemu's DSP56300 core vendored byte-exact at
+`67cc79e663038d1f55448c0f566b37dde016adf6` (17 files) with 29 marked local modifications; the combined
+work is GPL-2.0-or-later (owner approved). The synthetic `RECOMP_APU_DSP_ACK` path was deleted. The APU
+library builds with `NDEBUG`, so xemu's `assert(!"Unhandled dsp dma buffer")` is compiled out and an
+unimplemented `buf_id` read consumes stale bytes as GP input (now accounted, gated on `is_gp`). Open:
+enumerate `NDEBUG`-elided asserts in `src/apu/dsp/` that change GP state or inputs (known: `unk2`/`unk13`,
+the `format` default, `dsp_offset` out of range); EP routing.
 
-xemu's DSP56300 core vendored byte-exact at `67cc79e663038d1f55448c0f566b37dde016adf6` (17 files) with
-29 marked local modifications; the combined work is GPL-2.0-or-later (the owner approved the licence).
-Provenance, per-file hashes, licences and modifications: `xboxrecomp/src/apu/dsp/PROVENANCE.md`.
-Device semantics DS1–DS7 (bootstrap, per-frame run, guest-DMA translation, the atomic GP write choke
-point, the lossless watched-word ledger, input accounting, trace): `xboxrecomp/src/apu/GP-INTEGRATION.md`.
-The synthetic `RECOMP_APU_DSP_ACK` path was deleted. Acceptance: stage 1 `NOT ACCEPTED` on `AC-PORT`,
-corrected, stage 2 `AGREED`; row `R1-PASS`. Lesson recorded twice in that packet: read the shipped
-configuration, not just source — the APU library builds with `NDEBUG`, so xemu's
-`assert(!"Unhandled dsp dma buffer")` is compiled out and an unimplemented `buf_id` read consumes stale
-bytes as GP input (now accounted, gated on `is_gp`).
+**The GP clears the pending word (A4b2-r8, accepted 2026-09-27).** In one strict run (`RECOMP_GPU_ACK=0`,
+`RECOMP_APU_TRAP=1`) the `3→0` transition at `B+0x810` was performed by the GP engine's memory-write path
+executing the validated image, with no synthetic ack or competing CPU zero (`AC-CLEAR`: a `GP_CLEAR` latch
+from a successful compare-exchange `3→0`). It depends on no stub: descriptor block 24 (`[GPDMADESC]
+GP_CLEAR produced by block_addr=0018`) is all immediates; the `0xFFFFB3` reads feed only loop-control
+scratch `x:$007c..$007f`; only image I (`P 0000..0172`) had executed. **Not established:** that the guest
+observed the zero or progressed; DSP56300 correctness; GP→CPU interrupts; EP execution. A4b2's P4
+condition is toolkit-identity-sensitive and must be re-established before anything inherits it.
 
-Follow-ups recorded then: enumerate `NDEBUG`-elided asserts in `src/apu/dsp/` that change GP state or
-inputs (known: `unk2`/`unk13`, the `format` default, `dsp_offset` out of range); EP routing; the game
-repository has no licence file.
-
-### The GP clears the pending word (A4b2-r8, accepted 2026-09-27)
-
-**Establishes:** in one strict run (`RECOMP_GPU_ACK=0`, `RECOMP_APU_TRAP=1`, observation-only trace)
-the `3→0` transition at `B+0x810` was performed by the GP engine's memory-write path while executing
-the validated image, after the anchored guest store was recorded, with no synthetic ack or instrumented
-competing CPU zero (`AC-CLEAR`: a `GP_CLEAR` latch from a successful compare-exchange `3→0`).
-**Does not establish:** that the guest observed the zero, exited the spin or progressed; boot,
-liveness, DirectSound or audio; DSP56300 instruction-level correctness; GP→CPU interrupts; EP execution.
-Stage 1 `ACCEPT`, all ten criteria agreed; the reviewer rebuilt the `[GPIN]` blocks independently.
-
-**Input qualifier — the exchange depends on no stub.** The descriptor that produces the exchange is
-block 24, measured directly (`[GPDMADESC] GP_CLEAR produced by block_addr=0018`): control `0x59E2`
-(`P 00F1`), count `6` (`P 000D`), DSP offset `0` (`P 000A`), scratch offset `0x800` (`P 000B`),
-destination `0x4018` (`P 0009`/builder `P 00EB`), trigger `0x25` masked (`P 00C1`/`P 00D6`) — all
-immediates. The two stub inputs do not reach it: `0xFFFFB3`'s four reads feed only loop-control scratch
-`x:$007c..$007f`; VP `MIXBUF` feeds the separate audio-output descriptor. Alias/entry checks closed
-(disjoint builder regions, 39 direct X writes miss the descriptor, the sole computed reader `P 00B9`
-reads `0x24` on all six executions). At the exchange only image I (`P 0000..0172`) had executed; a
-second image was loaded (3510 P writes above `0x172`) but not executed — loaded ≠ executed.
-Non-reliance discovery row: `O-TWO-LEG` (`L1 = PROVEN`, `L2 = INVARIANT`).
-
-**Carried constraint:** A4b2's P4 condition is toolkit-identity-sensitive. The toolkit has advanced
-(`2925f0b`), so the discovery-transfer bridge must be re-established before anything inherits P4.
-
-### Boot mailbox on 2026-10-04 (measured, not a new acceptance)
-
-The pending word is still `MEM32(0x001BA858)+0x810`. On the runs below that anchor was
-`0x803BC000`, so the word was `0x803BC810`, not the earlier run's `0x803C0810`. The SGE table
-was at `0x803C8000` and entry 0 was physical `0x003BC000`. Contiguous high-water on the stuck
-run was `0x56C000`, above both offsets, so `apu_translate` case 2 accepts them. No
-`[GPDMA] unmapped` line was logged.
-
-`20261004-174418-621-f6-fatal-caller` (1200 s, exploratory, `diagnostic_deadline`) stopped with
-that word still 3. The main guest thread was in `sub_001A1769` at `loc_001A18D0`, holding
-critical section `0x1BA050` (acquired by `0x19E438`, which is `RtlEnterCriticalSection` ordinal
-277, and released only after the spin returns). The APU object is heap and was not in the
-minidump, so GPRST was not readable. This run never opened a framebuffer window.
-
-`20261004-182724-545-f7-apuwait` (183 s, same exploratory environment, plus a capped host log
-on the APU frame thread, toolkit `712f70d`) did not stick. The first sample already had `GPRST=3`,
-`gp.realtime=1`, `GPSADDR=0x003C8000`, SGE entry 0 `0x003BC000` → `0x803BC000`, and the word
-0. The word was 3 at frame-thread call 225 and 0 at call 226, after the GP had run 84326
-cycles on that frame. Boot then opened the framebuffer window, opened `Beat.bin`, touched
-`JSRF_CACHE_COMPLETE.CMP`, and the GPU log reached 655 flips. At the deadline the main thread
-was in `nv2a_submit_pending`, not in the spin.
-
-What that does and does not say: when GPRST is already 3 and the frame thread is running the
-GP, this mailbox clears within one audio frame and the guest leaves the spin. It does not say
-why f6 stayed at 3 for 1200 s. It does not re-establish the A4b2 strict `GP_CLEAR` latch, and
-`RECOMP_DSP_ACK` was not set. The log does not write guest memory.
+**Boot mailbox (2026-10-04).** `20261004-174418-621-f6-fatal-caller` (1200 s) stopped with the word still
+3, main thread in `sub_001A1769` at `loc_001A18D0` holding critical section `0x1BA050` (acquired by
+`0x19E438`, `RtlEnterCriticalSection` ordinal 277). `20261004-182724-545-f7-apuwait` (toolkit `712f70d`)
+did not stick: `GPRST=3`, `gp.realtime=1`, `GPSADDR=0x003C8000`; the word was 3 at frame-thread call 225
+and 0 at call 226, after 84326 GP cycles. When GPRST is already 3 and the frame thread runs the GP, the
+mailbox clears within one audio frame; why f6 stayed at 3 is not established.
 
 ### `PIO_FREE` (`0xFE820010`)
 
-- **Gate-only at the 28 direct reads (A4p-r1, discovery, accepted 2026-09-24, `O-GATE`).** Every
-  direct read in `DSOUND` is a threshold re-poll whose value reaches no use, under an explicit x86
-  calling-convention premise checked at every boundary relied on (C1: `ecx`/`edx` dead after calls,
-  checked read-before-write; C2: register-argument checks at calls, one level; C3: `ecx` dead at `ret`,
-  `edx` dead unless a caller reads it; C4 per the ruling). The population came from the XBE, reconciled
-  by normalised value: 10 hex-spelled + 18 signed-decimal-spelled sites. Limits: the premise is
-  inferred; direct reads only; not register-indirect/computed access, timing, or whether `0x80` is the
-  true device value.
-- **Why it does not contaminate A4b2 (Advisor Q1).** Stub dependence is judged one wait and one value
-  at a time: the `PIO_FREE` answers decide whether and when the guest reaches the spin, not the data the
-  GP acts on.
-- **Deferred at `O-OPEN` (Advisor ruling).** The `0x80` stub passes all 13 constant gates (two,
-  `0x001A3EB3` and `0x001A3FDB`, at exact equality) and is unproven for 15 variable gates (demand
-  `k × byte[+0x64]` needs byte ≤ `32/k`). Hardware semantics are unknown and unsourced. Object-identity
-  analysis was ruled out of proportion. **Reopen only** on newly admitted hardware source evidence, or a
-  specific strict claim traversing named gates (then demand-driven per gate, never a forward census).
+- **Gate-only at the 28 direct reads (A4p-r1, 2026-09-24, `O-GATE`).** Every direct read in `DSOUND` is a
+  threshold re-poll whose value reaches no use, under an explicit x86 calling-convention premise (C1:
+  `ecx`/`edx` dead after calls; C2: register-argument checks at calls, one level; C3: `ecx` dead at `ret`,
+  `edx` dead unless a caller reads it). The population came from the XBE, **reconciled by normalised
+  value: 10 hex-spelled + 18 signed-decimal-spelled sites** — a one-spelling grep found 10 of 28
+  (`AGENTS.md`, §6). Limits: direct reads only; not computed access, timing, or whether `0x80` is the true
+  device value.
+- **It does not contaminate A4b2:** stub dependence is judged one wait and one value at a time; the
+  `PIO_FREE` answers decide whether and when the guest reaches the spin, not the data the GP acts on.
+- **Deferred at `O-OPEN` (L23).** The `0x80` stub passes all 13 constant gates (two, `0x001A3EB3` and
+  `0x001A3FDB`, at exact equality) and is unproven for 15 variable gates (demand `k × byte[+0x64]` needs
+  byte ≤ `32/k`). Reopen only on admitted hardware source evidence, or a strict claim traversing named
+  gates.
 
 ---
 
 ## 5. The A2h line: the strict terminal event
 
-### Where strict runs end
+**Closed 2026-09-30.** The strict horizon was the kernel thunk table being overwritten by a misdispatched
+image copy; fixing two alias folds moved a strict run from a fault at ~6 s to its 93 s deadline.
 
-**The kernel thunk table is overwritten, and the first thunk call after that faults.** This replaces the
-single-stop-site framing that stood until 2026-09-29 (Phase 0 V3). The measured terminal event is not one
-slot dying: it is the whole table being clobbered, after which *whichever thread next calls through any
-thunk* raises `0xE0424943`.
-
-- **The table.** `0x001C3F60..0x001C413F`, 120 slots of 4 bytes, the head of `.rdata`
-  (`VA=0x001C3F60 vsize=161792 raw=0x001B4000`). In the original XBE every slot holds an
-  `0x80000NNN` kernel thunk — `0x001C4064` = `0x80000115` = ordinal 277, and slot *N* is at
-  `0x1C3F60 + N*4` with ordinal `value & 0x1FF`.
-- **What replaces it (MEASURED, V3 dumps).** A record array of 40-byte stride whose index field counts
-  upward: `0x79` at `0x1C3E08`, `0x80` at `0x1C3F18`, `0x88` at `0x1C4058`. The other fields are
-  constant-looking — `0x3E800000` (0.25f), `0x41200000` (10.0f), `0xFFFFFFFF`, `1`, `0x001FA1D8`.
-  In the V3(a) dump **0 of the 120 slots hold a patched `0xFE……` thunk**: 31 hold `0`, 89 hold
-  record fields.
-- **Every observed invalid target is a record field at the slot its call read**, which is what makes
-  this one event rather than several:
+- **The table.** `0x001C3F60..0x001C413F`, 120 slots of 4 bytes, the head of `.rdata` (`VA=0x001C3F60
+  vsize=161792 raw=0x001B4000`). In the original XBE every slot holds an `0x80000NNN` kernel thunk —
+  `0x001C4064` = `0x80000115` = ordinal 277 (slot 65) — and **slot *N* is at `0x1C3F60 + N*4`** with
+  ordinal `value & 0x1FF`. At runtime the slots hold the installed `FE000000 FE000004 FE000008 …` thunks
+  (`[0x1C4064]` = `0xFE000104`).
+- **The terminal event was the whole table overwritten**, after which whichever thread next called
+  through any thunk raised `0xE0424943`. The table held a 40-byte-stride record array (index field `0x79`
+  at `0x1C3E08`, `0x80` at `0x1C3F18`, `0x88` at `0x1C4058`; constant fields `0x3E800000` (0.25f),
+  `0x41200000` (10.0f), `0xFFFFFFFF`, `1`, `0x001FA1D8`); 0 of 120 slots patched, 31 holding `0`. Every
+  invalid target was a record field at the slot its call read:
 
   | Slot | Slot VA | XBE value (ordinal) | Read as | Failing call returns to |
   |---|---|---|---|---|
-  | 46 | `0x001C4018` | `0x8000009F` (159) | `0x00000001` | `0x0018CE73` (the `ret` after `0x0018CE6D call [0x1C4018]`) |
+  | 46 | `0x001C4018` | `0x8000009F` (159) | `0x00000001` | `0x0018CE73` |
   | 65 | `0x001C4064` | `0x80000115` (277) | `0x00000000` | `0x0014982E` |
   | 68 | `0x001C4070` | `0x8000007C` (124) | `0x41200000` | `0x00147D36` |
   | 70 | `0x001C4078` | `0x800000E7` (231) | `0x00000000` | `0x00147DBC` |
   | 71 | `0x001C407C` | `0x800000E0` (224) | `0x3E800000` | `0x00147DE2` |
 
-- **Which site is first varies, and that is the race, not the horizon.** Six strict V3 runs on one
-  build produced four different first sites: `0x00149828` 3/6, `0x00147D30` 1/6, `0x00147DDC` 1/6,
-  `0x00147DB6` 1/6. A worker thread can die before the main thread (`0x00147D30` in V3(a), tid 63012,
-  main thread at 5175 kernel calls). **The old site did not move**: `0x00149828` still fires in half
-  the runs. The set is evidence of the race; the horizon is the clobber.
-- **The old baseline had it too.** The 2026-09-28 dump (`20260928-185612-449-regen-v012-strict`) holds
-  the identical record array at the same addresses, so the lifter and kernel-memory changes did **not**
-  move this horizon. Its terminal event was `0x0014982E`, the same slot 65.
-- **Bearing on the A2h line.** The terminal read is a slot in a table that is overwritten wholesale, so
-  the A2h attribution watched a different address from the terminal event: its slot `0x0019D62C`
-  (`base 0x0019B200 + 0x242C`) is in `g_Device`, not in `.rdata`. Its `last_write=001D5078` record
-  (`20260928-121142-929-a2h-attrib-exp2-3b`) is real but is not this event. C1 is retargeted to the
-  writer of the record array; the obvious instrument is a write watch on `0x1C3F60`.
-
-### The writer of the record array (F1, 2026-09-30) — `O-OPEN` closed
-
-**The array is not constructed at the table: it is copied there, from the XBE's own `.data`.** The
-writer is `sub_00038530+0x398`, reached as `rip=exe+0x5361B8`, and it is a `rep movsd` image copy.
-Measured in `20260930-221404-630-f1b-rdata-guard` (strict; `RECOMP_RDATA_GUARD=1`, ledger L32).
-
-- **The writer, from the guard.** All **256** `[RDATA-GUARD] write` reports — the guard's total cap,
-  `RO_GUARD_TOTAL_REPORTS` — carry `rip=exe+0x5361B8` on tid 24300. Symbolised against
-  `build/Release/jsrf_recomp.map`: `sub_00038530` at `0x140535E20`, so `+0x398`. That function's
-  generated body contains `rep movsd`/`rep movsb` idioms (`src/recomp/gen/recomp_0000.c`), and it is
-  the slot writer already named by A2h (TR §5, row `O-OPEN`) — the same function, a different site.
-- **The copy is image-wide, not a table poke.** The guard's reports run from `0x00011000` upward, four
-  dwords per 4 KB page, all from the same writer. They **stop at `0x0005000C`** because the guard hit
-  its 256-report total cap after 64 pages — so the guard proves the copy's *start, direction and
-  writer*, and it does **not** by itself prove the copy reaches the table. The reach to the table is
-  established by the shifted-provenance map below, which covers the whole range.
-- **Shifted byte provenance (AGENTS.md: this establishes provenance, and is never a correction).**
-  The dump at guest VA `V` equals the original XBE at `V + 0x37608`. Sampled at 4 KB granularity over
-  `0x00011000..0x001C5000`: **431 of 436 pages are `SHIFTED`, 0 are original**, 5 unreadable. Spot
-  checks over `.text` match exactly (`0x00011000`, `0x00018000`, `0x00020000`, `0x00030000`,
-  `0x00080000`, `0x00100000`, `0x00140000`, `0x00180000`). The page holding the table, `0x001C4000`,
-  is in the `SHIFTED` set.
-- **The record array is the XBE's `.data` at `0x001FB568`.** The dump's 128 bytes at the table VA
-  `0x001C3F60` are **byte-identical** to the original XBE's bytes at `0x001FB568`. Applying the same
-  `+0x37608` shift to the table destination gives exactly that address. So the array is not produced by
-  the guest at run time; it is *read from the image* and written over the table.
-- **What the table should hold.** The original XBE at `0x001C3F60` holds `800000BB 800000BE 80000121
-  800000EC …` — all `0x80000NNN` kernel ordinals. **0** dwords of that shape survive anywhere in
-  `0x001C0000..0x001C8000` in the dump.
-- **Consequence for the terminal event.** The horizon is unchanged: the table is overwritten and the
-  next thunk call faults. The two F1 runs differ in *which* call faults first (`0x0014982E` tid 47532
-  without the guard; `0x00147CF8` tid 26240 with it) because the fault races the copy's progress —
-  the same race TR §5 already records. The guard reports stop at log line 20892 and the fault is at
-  20919, so the copy was still running when the first thunk call read a half-written slot.
-- **The mechanism to fix.** A `rep movsd` whose destination should not be `0x00011000` and whose
-  length should not be 1.70 MB. `sub_00038530` computes both; the cheapest honest fix is at the
-  translation or the argument, not at the table.
-
-### F4: the GPU walk stops on the first method it does not know (2026-09-30)
-
-**No frames are produced, and the reason is not the executor's rendering — it is that the submission
-walk never consumes a command.** Measured on the fixed build in
-`20260930-230206-594-f4-frames-after-horizon-fix` (exploratory; `RECOMP_PB_EXEC=1`, `RECOMP_FB_WINDOW=1`,
-`RECOMP_GPU_ACK` default-on, 123.3 s, 629,781 log lines, 0 invalid ICALLs, 0 exceptions, 0 ABI failures,
-0 `[UNIMPL]`).
-
-- **The walk is stuck.** The run logs **64** `[PFIFO] submit` lines. The first ten advance `get` normally
-  (`0x1000`, `0x2764`, `0x344C`, … `0x8B5C`). Every one of the remaining **54** reports the *same*
-  `get=00008EF0` while `put` keeps advancing — the walk is not moving.
-- **The first failure is a method the model does not handle.** Submits #12 onward carry
-  `diag=unsupported_method … method=1720 … at=00008EF0`. `0x1720` is
-  `NV097_SET_VERTEX_DATA_ARRAY_OFFSET` (`nv2a_regs.h:1141`). The submit record names the method and the
-  parameter (`param=003CA000`, a guest VA), so the command is decoded; the walk simply has no case for
-  it and stops at that address.
-- **Consequence.** `get` never passes `0x8EF0`, so nothing after that command in the pushbuffer is ever
-  interpreted. `FLIP`, `present` and `FB_DUMP` are all **0**: there is nothing for the executor or the
-  window to draw, and enabling them cannot help until the walk advances.
-
-**So F4's next step is not in the renderer.** The cheapest honest class is to give the strict walk a
-case for `NV097_SET_VERTEX_DATA_ARRAY_OFFSET` — store the offset as method state, as `9fd83c6` already
-does for other NV097 parameters (`PGRAPHState.methods`, ledger D3) — and re-run to see whether the walk
-then reaches a draw method or stops on the next unknown. That is a toolkit change with its own test.
-
-**IMPLEMENTED 2026-09-30 in toolkit `1f9309a`.** The method is admitted through the measured, generated
-inventory rather than by loosening the unknown-method policy: the walk still rejects anything absent
-from `src/nv2a/nv2a_method_table.c`, and `0x1720` is now in it because a real submission contained it.
-Seven NV097 methods were admitted, every one measured — `0x1720`, `0x172C`, `0x1730`, `0x1744` (the
-vertex-data-array-offset slots the title uses) and `0x1800`, `0x1804`, `0x1808` (PGRAPH antialiasing,
-blend, blend-colour). It is deliberately **not** the whole `0x1720..0x175C` array: the array is
-indexed, so a blanket range would admit slots the title never submits; only the four measured slots are
-admitted, and the first unmeasured slot (`0x1724`) still rejects. Admitted methods flow through the
-existing state path (`pgraph_method` stores them in `PGRAPHState.methods`); **no execution semantics
-were invented** for the method.
-
-**Two generator defects had to be fixed first**, both in `scripts/gen-nv2a-method-inventory.py`, and
-each is why the method was invisible to the tool that builds the table:
-
-- its decode **budget was 4096 words**, but `0x1720` first appears at word **8124** of the F4 ring's
-  72,353 — so a decode that reported "reached PUT" for the older ring could never reach the method the
-  walk was stuck on;
-- it derived the table from **one** ring. The F4 ring alone would have **dropped 148 methods** the
-  older ring contributes, because the two rings overlap only partly. The table is now the **union** of
-  the rings named on the command line, and every entry is still something a real submission contained.
-
-**Focused tests** (five new functions in the toolkit's `tests/nv2a_actions_test.c`): the measured
-command is accepted and staged with GET advancing past it; the indexed-range control (four measured
-slots accepted, `0x1724` still rejected); unrelated unknown methods still rejected with GET unmoved;
-the same method on an `NV_MEMCPY`-bound subchannel and on an unbound subchannel still rejected; and a
-stream through the `0x1720` block commits. Verified both ways — all pass with the fix, and **15
-failures without it**, with GET pinned at `0x1000` and `unsupported_method` — so the tests exercise the
-change rather than merely coexisting with it. No existing test was weakened: the `0x0104` rejection
-case in `test_semaphore_written_only_on_commit` still uses a method absent from the table.
-
-**What this does NOT establish: that frames exist.** Whether the walk now advances beyond GET `0x8EF0`,
-and what the next stop or first draw/flip event is, is the next measurement — and it is a separate
-step, not a conclusion of this one.
-
-**MEASURED 2026-09-30 (smoke run `20261001-004608-186-f4-smoke-1720-admitted`): the blocker MOVED, and
-GET did NOT advance.** The `unsupported_method` diagnostic is **gone entirely** (0 occurrences, where
-the previous run had 54), so the `0x1720` admission works as intended. But the walk now stops with a
-*different* diagnostic at the *same* address:
-
-- `[PFIFO] submit #12 diag=sink_capacity get=00008EF0 put=0000A440`, and all 52 submissions after it
-  report the same `get=00008EF0` while `put` advances to `0x47A84`. Max GET is still `0x00008EF0`.
-- **Cause, decoded from the ring:** the failing submission's window is `0x8EF0..0xA440` (1364 words,
-  259 packets, 0 jump words), and it stages **1109 methods**. The sink is a per-submission staging
-  array of **1024** entries (`nv2a_core.c`, `sink[1024]`), reset at the start of each submission
-  (`nv2a_core.c:1468`), so the cap is hit **within one submission** — the walk overflows at packet
-  #239, having staged 1025. This is not accumulation across submissions.
-- Integrity is unchanged and clean: 0 invalid ICALLs, 0 exceptions, 0 ABI failures, 0 `[UNIMPL]`.
-  `FLIP`, `present` and `FB_DUMP` are still all 0 — no frames, as expected while the walk is stopped.
-- **A stale comment at `nv2a_core.c:1461-1467` says "its 256 cap"** while the array and the test are
-  1024. Worth correcting when that code is next touched; it is a comment, not behaviour.
-
-**So the next blocker is a capacity limit, not a missing method.** It is deliberately **not** fixed in
-this pass: the instruction was to record the new measured state and stop so the next packet can be
-reviewed. What a fix would have to decide — and what this measurement does not decide — is whether the
-right answer is a larger sink, a sink that drains as it fills, or whether staging 1109 methods in one
-submission means the walk should be committing incrementally. That is a design question about what the
-sink is *for*, not a constant to raise.
-
-**F4 capacity ruling, 2026-10-01 (owner-directed chore; implemented and accepted; F4 MET exploratory).** The Persistent
-Advisor chose A′: size both `staged[]` and `sink[]` to the existing 4096-word budget, place staging in
-PFIFO state rather than the stack, and preserve all-or-nothing submission admission and the other
-rejection rules. This is cheapest within the existing architecture, not hardware-faithful incremental
-PFIFO→PGRAPH dispatch. L40 records the deliberate atomicity approximation; it creates no new modeled
-hardware cause. The exact response, observed/inferred basis, focused regressions, next-stop procedure
-and reversal conditions are in `docs/reviews/rulings/f4-submission-capacity.md`. Advisor child
-`4e6d87e1-f748-48b3-a0a4-a6e5728bfeee`, `claude/claude-opus-5-5` @ `high`, continuity PASS.
-
-**Focused regression measured.** Game `tests/test_nv2a_contract.c` replaces only the old
-`USER sink capacity` rejection with acceptance of 1109 methods over 555 packets (1664 words;
-same method count, not the real packet shape) and a single count-1025 packet (1026 words).
-Assertions cover acceptance, method count, GET=PUT and one successful commit; the multi-packet case
-also checks packet count. With only the worker's toolkit patch reversed, those new cases produce
-9 assertion failures (exit 1); after restoring it, all 344 register/clock contracts pass (exit 0).
-Toolkit `nv2a_actions_test` reports all checks passed. Exact commands are the Release CMake targets
-`jsrf_nv2a_test` and `nv2a_actions_test`, followed by their binaries; no guest run is implied by these
-fixtures. The 2048-word fixture cannot represent a >4096-word budget stop, so the existing packet-
-budget rejection remains and static assertions pin both method capacities to the word budget.
-Toolkit commit `e8a6e03`. Full validation measured: toolkit Release build exit 0, CTest 5/5,
-30 lifter unittests; game `just check` exit 0 and `just test` build plus 29/29 CTest.
-`xbox_guest_meter` passed both suites.
-
-**Bounded smoke measured:** `20261001-020407-358-f4-capacity-fix-smoke` on game `3be0adb`
-(archived record-only row-98 citation diff) / toolkit `e8a6e03`; Session directly read result and
-metadata. Requested 45 s, actual 48.336403 s, `diagnostic_deadline`, exit 3, dump/profile/checkpoints
-valid. Exploratory default-on GPU_ACK plus APU_TRAP, PB_EXEC, FB_WINDOW and log budget 100000.
-Active ledger L14–L18, L20–L25, L39, L40; L19 dormant. All 64 printed submissions (#0–63) report
-OK and GET=PUT through `0x47A84`; frozen GET=PUT `0x16648`. Ring wrap/continued progress beyond
-logged submission 63 is INFERRED, not a complete trace. No sink/budget diagnostic or 32-address
-budget trace; no observed rejected submission. **Draw/indices/triangles/pixels/clear, clip/surface
-and flip/present are UNKNOWN for this capture, not zero** — corrected by the Advisor fault-diagnosis
-ruling (2026-10-01): the only `[GPU]` executor report lines in the log are 34–43, printed during
-`xbox_MemoryLayoutInit` before the guest ran (line 39 is the `memory_ready` checkpoint), and the
-runtime report fires only with `RECOMP_NV2A_TRACE` or VERBOSE, neither of which was set; `submit`
-printing also stops at #63. The capacity stop is gone in exploratory scope; **F4 frames are
-not satisfied and the strict horizon did not move**. Mapping gate: 1 match, 0 content mismatch.
-Advisor independently inspected artifacts and ruled **W14 CONTINUE** until 11:00 UTC or two more
-smokes, whichever comes first, then another ceiling call unless a finding is accepted or a strict
-horizon moves. **Initial next assignment (superseded below):** a read-only worker answers deadline
-main/render wait sites first; GPU-specific flip/interrupt survey only if those waits point at GPU;
-no second smoke or fix authorized at that point.
-
-**Post-smoke premise correction (read-only archive, no rerun).** Main tid 6984 was live
-at the deadline: it made kernel calls through #30073, at log line 111298 (Session direct
-read of `jsrf_run.log:111290–111300`), and that call returned. Advisor independently grouped
-last-4000-line kernel calls by ordinal/return/tid and noted recurring helpers. Worker confirmed
-277/294 as `RtlEnterCriticalSection`/`RtlLeaveCriticalSection` from the toolkit table. Original
-XBE mapping places the hot helpers `0x0019E438`, `0x0019F266`, `0x001A0480`, the lock
-`0x001BA050`, and candidate global `0x001BA04C` in **DSOUND**, not renderer setup.
-The mapped direct absolute write `mov [0x001BA04C],1` is at **`0x001A2317`** (file `0x18FFD7`),
-not the worker's withdrawn approximate address. Global `0x001BA04C` reads 0 at capture; this
-neither proves the writer never ran nor excludes alias/reset writes. Its semantics and causal
-relation to no frames are **not established**. Global `0x001BA6F0` has no XBE file backing but is
-valid guest RAM, holding live heap pointer `0x01120004`; absence of file backing does not invalidate
-its runtime state. Named helper ranges have no local backedge, but their enclosing loop is unread;
-no inference about frame/time-bounded outer progress follows. Two other threads wait on DSOUND
-event `0x0019D630`; signaler unknown. No GPU wait observed for main, not a general exclusion.
-Final queue history is insufficient: the 64-word preview supports neither "no flip was ever
-submitted" nor "an unacted flip is excluded". Neither claim is made. Artifact:
-`logs/workers/f4-drained-no-frames-brief.md` (corrected).
-
-**Fault-diagnosis ruling returned (Advisor, 2026-10-01) — this supersedes the initial read-only
-assignment above; the ruling text is recorded verbatim in `docs/reviews/rulings/f4-submission-capacity.md`.**
-The guest looks like a **running game loop**, not a stalled one. Observed: main tid 6984 sits in game
-code `sub_00161C20 → 161A90 → 161920 → 1669A0 →` XAPILIB `XGetDevices` (`0x001BD5FF`, +0xFF) polling
-input — ordinary per-frame activity — with `DirectSoundDoWork` (`0x0019F260`) and the DSOUND critical
-section (`0x0019E438` = `DirectSoundEnterCriticalSection`, CS `0x001BA050`) repeating. `0x001BA04C` is
-DSOUND library state, **not** a render-arming flag (48 references, 43 `cmp …,0`, one write
-`mov [0x001BA04C],1` at `0x001A2317` inside a DSOUND method calling `0x1A1C8A`): **dropped as the F4
-lead**. Thread 59696 is in D3D `BlockUntilVerticalBlank` (ret `0x0018CE73`), and that return site
-appears **1,622** times, so vblank delivery is INFERRED to work and the interrupt-delivery hypothesis
-drops to **low**. INFERRED from raw stack words (not unwound): D3D state-call addresses (`SetStateUP`,
-`UpdateProjectionViewportTransform`, `SetScissors`) lie in main's live stack region, suggesting a
-render path. **The open question is only whether it renders and presents, and this capture cannot
-answer it.**
-
-**Observation run `20261001-023335-656-f4-observation-60s` (2026-10-01): the instrumentation was
-inert — architecture A.** Run with `RECOMP_NV2A_TRACE=1` and `RECOMP_PB_SCAN=1` on the smoke's
-exploratory set, game `c01e292` / toolkit `e8a6e03`, `exe_sha256 1ecf8363…` (byte-identical to the
-capacity smoke's binary): 62.580312 s `diagnostic_deadline`, exit 3, dump/checkpoints/
-`gpu_report_ok` good, 21 threads, 165 named frames. The run produced **no post-guest render output**:
-zero `[PB]` lines, and no line after `guest_entry` (log line 75) matching draw/flip/pixel/surface.
-**Root cause, MEASURED in source (Advisor):** `src/main.c:529` installs the MMIO state owner →
-`src/nv2a/nv2a_mmio_hook.c:681` `xbox_Nv2aClaimRegisterOwner()` →
-`src/kernel/xbox_memory_layout.c:173-179` clears `g_nv2a_ack_enabled`; the legacy GPU body
-`:1048-1177` (busy-bit acks, DMA_GET mirroring, pushbuffer scan, executor call, periodic report) is
-inside that enabled check and therefore never runs. `RECOMP_PB_EXEC`/`RECOMP_PB_SCAN`/
-`RECOMP_NV2A_TRACE` are **set but inert** on this build — a **new instrument defect**, not a guest
-finding. **MEASURED:** 64 `[PFIFO] submit` lines all `diag=ok`, GET=PUT through `0x47A84`, so
-committed methods are real; the six `[GPU]` lines are all at log 32-38, before `guest_entry`.
-**INFERRED, not measured:** that the executor is never called under the owner, and hence that no
-render work executes — a code-path reachability inference. **The run's runtime counters are UNKNOWN**,
-and must not be recorded as measured zero. Stop = `metadata.json` `started_utc`
-`2026-10-01T09:33:36.447445+00:00` + `result.json` `duration_seconds` 62.580312 =
-**2026-10-01 09:34:39.027757**.
-
-**Ruling A (Advisor) and the approved design preflight — FINAL GO; Architecture A IMPLEMENTED AND
-ACCEPTED.** Toolkit `a71f9374ddb2a6685b790493855c835842228212` (9 files, +329/−10): the Advisor read
-the diff itself and ruled **ACCEPT/GO** with **final validation green** — core 5/5 in 2.34 s, 30
-lifter unittests, game 29/29 CTest in 28.81 s, all checks pass, conformant to the approved design.
-The **actual `FrameCounter` audit found 0 host registrants** (evidence cite "Advisor grep 2026-10-01":
-0 game host registrations, definition/header only in the toolkit), which differs from the worker's
-backend-only audit; that worker item stays pending and **does not block**. **Runtime is still pending
-and no frames claim is made**; the clean pair is committed and pushed **before** the smoke. The fix
-must reach the owner's
-NV097→`PB_EXEC` path with **no second walk and no second GET**; a rejection must stay **atomic**
-(reject without executing); fixtures must pin **clear/flip counts**; and the next run must show a
-**post-guest periodic `[GPU]` report** as positive proof the path is live. W14 is extended **until
-A's first smoke plus one diagnostic**. **No more inert reruns.** The final order is **capture per
-entry class → bindings → `action_commit` → consumer (ordered all committed classes; the kernel
-executes the NV097 subset) → last method → GET**.
-**Interface refinement (Advisor APPROVED):** the seam takes **four arguments
-`(subch, class_id, method, param)`** and **all committed entries reach the core callback**; the
-**kernel wrapper** filters to NV097 and keeps the skip count — this **replaces the earlier
-3-argument NV097-only-core-consumer** shape, since a policy-free core is the better factoring (the
-core sees what the executor sees, not a pre-filtered subset). Order and atomicity are unchanged
-(callback still after `action_commit`, inside the ok path); tests must show a **non-NV097 entry
-leaving the `EXEC` counters unchanged** while the **wrapper's skip count increments**, the core's
-local-callback tests must check the **correct class including across a rebind**, and the **skip count
-is read for the report under the same PFIFO lock**. Not a new shortcut, and **no new ledger class
-entry**. The runtime seam is a **core static function plus a setter** — no env var, no weak symbol,
-and the point of "no `extern`" is that the **core holds no `extern` reference to the executor** while
-the **kernel does register the seam**; registered **before the guest starts**, with `PB_EXEC`
-presence as the only trigger. Integration uses the **existing HAL target links across the whole
-toolkit** (the fallback is a dedicated real-exec minimal stub target only if the HAL cannot be a
-fixture); the earlier "A2 new targets" proposal is **superseded**. Standalone core tests cover order,
-atomicity and rebind with a local callback. The owner lock uses a **free getter on the existing
-active flag** (not a submission snapshot, not lock coupling), and the legacy guard **logs once and
-skips `EXEC`**. The **report runs only under the consumer lock at a 10 s cadence**. Flip accounting
-adds a **NEW `flip_stalls` counter**: `0x0130` is a completed swap that calls `FrameCounterFlip` but
-**does not increment the existing `s_gpu.flips`**, while **`0x012C` is the `s_gpu.flips++`**. A
-**game-side registrant audit is mandatory**, with **no blocking callbacks under the lock**. **L18's
-edit lands at the coordinated cross-repository checkpoint** — the toolkit code commit plus the game
-ledger record citing that toolkit SHA, pushed **toolkit first** (Advisor-ACKed binding: "same commit"
-means that same checkpoint, since the two repositories are separate and cannot share one commit
-object). **Until the code is accepted, L18 keeps its old entry** — no speculative acceptance.
-Recorded durably in `docs/reviews/rulings/f4-submission-capacity.md`.
-
-**Push checkpoint (2026-10-01, capacity fix and smoke record).** Both clean and fast-forward;
-public game outgoing audit 0 secret hits, no asset/lifted-code additions or blob >100 MB.
-Toolkit first, then game; remote branch SHAs independently matched local HEADs after push.
-
-```text
-PUSHED_TO: origin (toolkit)
-BRANCH: main
-COMMIT: e8a6e03793d417106993b863fa3240a3abae0caa
-REMOTE_URL: https://github.com/danillogical/xboxrecomp.git
-RESULT: exit 0; 1f9309a..e8a6e03 main -> main; ls-remote equals HEAD
-
-PUSHED_TO: origin (game)
-BRANCH: master
-COMMIT: d86c8418adf27c6a03521218c9069716d567596b
-REMOTE_URL: https://github.com/danillogical/poison-jam.git
-RESULT: exit 0; 2a7324b..d86c841 master -> master; ls-remote equals HEAD
-```
-
-**Architecture A push checkpoint (2026-10-01).** Toolkit first, then game; no force, no `upstream`;
-both trees clean at the pushed commits. Gate results: toolkit max outgoing blob 281,957 B, 0 behind /
-1 ahead, intended 9 source paths only; game 7 intended paths (five records, two tests), no `game/` or
-asset path, max outgoing blob 91,095 B, **7-blob outgoing secret audit 0 hits, exit 0**. Both pushes
-were re-verified by `git ls-remote` against local HEAD.
-
-```text
-PUSHED_TO: origin (toolkit)
-BRANCH: main
-COMMIT: a71f9374ddb2a6685b790493855c835842228212
-REMOTE_URL: https://github.com/danillogical/xboxrecomp.git
-RESULT: exit 0; e8a6e03..a71f937 main -> main; ls-remote equals HEAD
-
-PUSHED_TO: origin (game)
-BRANCH: master
-COMMIT: f676b1c3f2543a46e31240c793f707699923cc45
-REMOTE_URL: https://github.com/danillogical/poison-jam.git
-RESULT: exit 0; c01e292..f676b1c master -> master; ls-remote equals HEAD
-```
-
-**F4 — MET, exploratory (2026-10-01; Advisor-attributed summary — the Advisor's verbatim ruling is in
-the appendix of `docs/reviews/rulings/f4-submission-capacity.md`).** Frames exist: the 60 s run
-`20261001-033129-276-f4-a-smoke-60s` (game `f676b1c` / toolkit `a71f937`) rendered a clean,
-correctly coloured "Presented by SEGA®" logo into its draw surface — **OBSERVED from the image**, not
-inferred. Draws rising across successive reports (147 → 840) plus that coherent image is the
-**semantic liveness witness** the profiles doc requires; `diagnostic_deadline` alone was not. Ledger
-IDs: L14, L15, L17, L18 (via the commit consumer), L20–L25, L39, L40; **L16 set but inert under the
-owner**; L19 dormant. **No strict or fidelity claim**; the unhandled-method count is advisory (a
-picture is correct, effects may be missing). Acceptance is carried with the **F6 milestone Review**,
-not separately. **W14 reset at 10:32:32 UTC** on this first critical-path frame finding; the earlier
-extension is consumed and closed. The 180 s observation run `20261001-033805-242-f5-sequence-180s`
-(same pair plus `RECOMP_FB_DUMP`) is recorded as **observed** in the strict-horizon ledger and the
-ruling: 25 BMPs with 2 distinct hashes in ordered blocks (8 black, then 17 SEGA); pixels are the
-**guest draw surface** (`dma_resolve(drawn_offset ? drawn_offset : color_offset)`), not the window;
-one separate extensionless window-buffer capture at 10:38:19 (one-shot, `frames==600`, `fb_present.c:341`,
-accepted by the F5 ruling as SEGA at that instant only); counts are **lower bounds**. The 180 s run's
-last report is `L205921–205927` (**clears 2943, draws 2943, flips 987, stalls 987**) with its own
-`[GPU] clear #3000` at **L207880** of 209257; the **60 s** run's last report is `L115261–115267`
-(**clears 840, draws 840, flips 286, stalls 286**) with `clear #900` at **L117696** of 119913 — the
-two runs are **not** to be mixed. That run produced **no horizon move and no W14 change**; the F5
-consult ruling that followed is below.
-
-**F5 consult ruling (2026-10-01; Advisor-attributed summary — verbatim in the F5 appendix of
-`docs/reviews/rulings/f4-submission-capacity.md`).** **The logo phase is not a stall.** The guest is
-doing its **first-boot HDD cache fill**, slowly. **OBSERVED** (Advisor read the 180 s run): **360
-`[PATH]` opens of `\Device\Harddisk0\Partition5\Media\…~`, 184 distinct**, steady at 20–33 per 10 s
-report through the end of the log (last line 209119, `e010.bin`); the save-root cache holds
-`Cache00-02.tbl`, `DmCache00-02.tbl` and **`JSRF_CACHE_COMPLETE00.CMP` written 10:39:41** (~96 s in)
-with **Cache02 started 10:39:42**; payload **182 small files, 67.9 MB**; copy rate **~1.0–1.3 distinct
-files/s in every recent run, with or without the executor** (48 s: 64; 60 s: 82 and 80; 180 s: 184),
-so **the executor does not limit it**.
-*(Population clarification, dated 2026-10-01 — the figures above are the Advisor's and are retained as
-written; the 182 is its broader observation and is **not** re-designated.)* Re-measured at the **same
-population**, this 180 s run's roots are **`Cache` 181/23**, **`Cache/Media` 181/22**, **tables root
-7/0**; the later retry1 run shows **227/23**, **227/22**, **28/0**. The byte figure **70,021,120 across
-227 files includes the 28 tables/markers**, so it is a **TOTAL Cache byte count, not a payload-only
-byte count** (payload file count 199); subtract table sizes before calling anything a payload size.
-**INFERRED:** the SEGA screen covers the fill, which goes in
-stages (00 complete, then 01–03). **UNCERTAIN:** whether JSRF really **gates** the logo on fill
-completion. The word **"stop" is REJECTED** for the frozen sample: a single frozen `VirtualQuery`
-sample in `submit_read_word` is a **capture-time location, not a stop** — the guest is live; the
-per-word `VirtualQuery` is a **perf lead only, not a defect**. The window claim is accepted only as
-**one-shot at 10:38:19.247 (`frames==600`, `fb_present.c:341`), SEGA**, with nothing claimed after it.
-**NEXT (authorized):** ONE **600 s** observation run, same clean pair and profile (the records commit
-changes only the game SHA), plus `RECOMP_FB_DUMP` and **`RECOMP_FB_WINDOW_DUMP_EVERY=600`** (both
-observation-only), with the **≥15 GB disk gate** checked first (each save-root is ~5.3 GB of partition
-images); readout per-10 s draws/flips + BMP hash + window hash, the `JSRF_CACHE_COMPLETE*.CMP` and
-`Cache0N.tbl` mtimes, and the cached-file count per interval; three decision rows as recorded in the
-appendix. **A seeded cache is PREPARED, NOT AUTHORISED** — no owner decision now and no
-implementation. **W14 clock unchanged at 10:32:32.** Reversals as listed in the appendix.
-
-**600 s observation run TAKEN — `20261001-043629-961-f5-observe-600s-c4bcd2b-retry1` (2026-10-01;
-exploratory; NOT a title and NOT a horizon move).** Second attempt after the invalid truncated one;
-parent-owned managed job `pwsh-2573`, collected with `job_output(wait)`. Same pushed pair as authorized for
-the replacement — game **`c4bcd2b9b323ff94a711cc3f89fafea72af36b4d`**, toolkit
-**`a71f9374ddb2a6685b790493855c835842228212`** — fresh empty root, no seed,
-`exe_sha256 7027fafad9cd706981ea2f4c0fd898935db133b09f2da99fb5c7e8559a43b303`
-(unchanged: no build change). Profile **exploratory** (requested exploratory;
-`RECOMP_GPU_ACK` absent, effective default enabled). `diagnostic_deadline`,
-exit **3**, `dump_ok` true, 21 threads, **166 named frames**, 1 snapshot, 0 dropped,
-`save_root_verified` true, `missing_checkpoints []`, `checkpoints_passed` true, `gpu_report_ok` true.
-**Stop (UTC) = `metadata.started_utc` `11:36:30.743170` + `result.duration_seconds` `603.170746` =
-`11:46:33.913916`** — computed from metadata, **not** the script's launch line (`11:36:29Z`).
-Helper hashes (full, as the owner requested observer source SHAs): **census helper**
-`55E10B51F58B59569567BA4EC540E646208576A7EEBB8940635720912F7195A9`; **window watcher**
-`0801459DDF6CB35CECD2DC007C6BEA539364F1CDF363470E84FCBD35B4332EC9`; **launch script**
-`73B186402E04D06A1C64B60F7C42C8BB514A08CACF54722C569A2B916D92AFB8`.
-**Ledger IDs for this run:** L14, L15, **L16** (legacy ack body retired; executor feed replaced by the
-consumer), L17, **L18** (owner consumer, active), L20–L25, L39, L40; **L19 dormant**. **No
-strict-horizon move; W14 reset unchanged at 10:32:32** — as of **12:10 UTC the clock has elapsed
-1 h 38 m**. Outer shell job reported `1` while
-WRAP/result is `3` — **statuses only, no cause claimed**.
-
-**Exact typed counters (final row, primary source `logs/workers/f5-retry1/gpu-reports-v2.csv`; v2 used
-for all fields):** `clears` 10500,
-`draws` 10500, `with_coordinates` 10500, `indices` 52482, `flips` 3506, `flip_stalls` 3506,
-`unhandled_methods` 1178547, `distinct_unhandled` 242, `non_NV097_skipped` 14. **Counts rise across
-the 61 blocks; the images are static SEGA by eye — the rising counts are not new images. Still not the
-title.**
-
-**Window vs draw-surface comparison — NOT pixel-equivalent.** The **60 near-time pairs** have
-**0 equal pixel pairs**. The separate full pixel comparison of `w0000.bmp` with `f066.bmp` found
-**55157 differing channel bytes out of 921600 (5.98%)**, **max channel delta 7**. This is not an
-aggregate count across 60 pairs. The difference is small but real; the paired data goes to the
-**Advisor**, and **no admissibility, fidelity, or transform claim is made here**.
-
-**Tables and markers (measured):** all **19 tables have `distinct_mtimes = 1`** over 10 s samples
-("not observed to change", not "written once"); only the **nine zero-byte `.CMP` markers** change
-after first appearing. **Exact padding fact** — from the UTF-8 raw
-`logs/workers/f5-retry1/table-prefix-test-utf8.txt`: **19/19 save-root tables are the DVD bytes
-followed by zero padding rounded up to a 512-byte sector** (3786→4096, 5869→6144, 72→512, 938→1024,
-688→1024; deltas [86, 275, 310, 336, 440]). Whether that padding is benign is the Advisor's call, not
-asserted here. `Cache09`/`CMP09` are **absent on both sides** — an observed consistency of this
-title's cache layout, **not** an expected shape and not a guest-count claim.
-
-**Not done and not claimed:** **no new run and no seed** until the CMP/table check loop is explained
-from retry1's artifacts (Advisor no-rerun ruling, verbatim in the ruling appendix). **No wrapper
-argument mapping, no `IoStatus` reading, and no loop-cause interpretation is recorded** — those remain
-pending the Advisor's judgment. The tiny-table byte read was a **separate read-only authorization
-whose exact text is not yet recovered**; it is not presented as covered by the census ruling.
-
-**Advisor lineage (§4.4 recovery provenance, 2026-10-01).** The **three rulings above were produced by
-replacement child `c0ecc88b-756e-4256-9852-1bd8b7398735`**, and **their metadata stands unchanged**.
-That child then **failed twice with no error text and no closing message**, so a **further same-route
-§4.4 replacement** was spawned — child **`c623447b-19f2-4abf-83bb-bdd85719556e`**, `claude`/
-`claude-opus-5-5` @ `high`, **parent-pinned**, briefed from files, **not a fallback**; its continuity
-marker **`ADVISOR-RECOVERY-1210-F5`** was **ACKed in a received message**: it acknowledged the
-pushed pair, the prior no-rerun rule, and reading the workflow and recovery brief. The ACK does not
-self-verify route/effort; those are recorded by the spawn. No new design ruling from it is yet acted on.
-That child then **completed three turns with zero turn errors but delivered no substantive answer**, so
-a **further same-route §4.4 replacement**
-was spawned — **current child `63c4869f-3689-41b2-89b8-f5429f8b5927`**, same route / `high`,
-parent-pinned, **ACK 1 and ACK 2 both received**, and it **delivered the F5 directory-probe ruling
-(A–E) and reply 3** — recorded verbatim in the ruling appendix. **Total Advisor children: 4** —
-original `4e6d87e1…`, `c0ecc88b…`, `c623447b…`, current `63c4869f…` — alongside **3 workers + 1 startup
-Reviewer** (no fresh Reviewer yet). The **CMP caller cross-reference** work is ongoing at the original
-worker. **Observations integration remains authorized; no new run.**
-
-**F5 D1 probe — INCONCLUSIVE (2026-10-01).** The read-only directory-context probe did **not** reach
-the candidate table: `s_dir_contexts` live VA `0x00007FF708EB7780` has **0 ranges containing it** in
-the dump, **0/4928** readable 8-byte slots, and the dump's **113 memory ranges** cover **0.96%** of the
-exe image (`.data` 1.31%, `.text` 0.01%; `.rdata`/`.pdata`/`.rsrc`/`.reloc` absent). **Cause is NOT
-proven.** Precisely: the **table's occupancy in the live process is UNKNOWN** — the capture simply
-**does not include the array** — so D1 shows *absence from the dump*, **not** absence from the process.
-The pre-check's "0 overlap" line is **superseded** by the coverage measurement. Raw:
-`logs/workers/f5-retry1/symbol-locate-utf8.txt`, `dump-coverage-utf8.txt`.
-*(Had not yet approved D2 at the time of the D1 inspection; D2 was subsequently approved — see below.)*
-**Current D2 authorization is recorded below; no new run until its RED/GREEN and test gate passes.**
-
-**F5 D2 — design ruling received and packet APPROVED (2026-10-01).** The same child
-(`63c4869f…`) delivered the **F5 D2 design ruling** by `send_message` (full text verbatim in the
-ruling appendix; design source `logs/workers/f5-directory-context-d2-design-verbatim.md`). It rules the
-fix shape: **one release function** (`xbox_dir_context_release`) called at **both `xbox_NtClose` sites
-(`kernel_file.c:316`, `:907`) before `CloseHandle`** *and* at **`bridge_NtClose`
-(`kernel_bridge.c:747-749`)**, because **`bridge_NtClose` does not go through `xbox_NtClose`** — hooking
-only the latter would give a **false GREEN on the guest path**. Release semantics free the slot for
-every entry matching the handle; invalid/NULL/synthetic handles are a no-op; **query semantics, the
-dot-directory filtering, the `FindNextFile`-failure cleanup and line `:234` are unchanged**. The
-**deterministic RED** is a 64-open/65th-query test plus a 200-round churn assertion — **VERIFIED RED on
-`a71f937` in both modes: 2/2 CTest tests failed, rc 8, 0.29 s**, with **64 opened / 64 queried**, the
-**65th query failing with status `0x80000006`** and **churn failing at round 1 of 200** with the same
-status. **Parent-read RED evidence (current):** the parent read `red-direct.log` (initial ~70 lines),
-the load-bearing counts in both modes from `red-ctest.log`, and — after the worker's conversion — the
-**converted raws `red-direct-raw-utf8.txt` (lines 73–82)** and **`red-bridge-raw-utf8.txt` (lines
-138–149)**, which **confirm the same counts and the same `0x80000006` status** in both modes; the
-**UTF-16 originals are preserved** with their raw/BOM and hash. *(Historical qualification: at the time
-of the failure the raws were UTF-16 and unreadable; they are **now converted and verified**.)* A worker
-**5/5-per-mode** claim is **worker-reported**; the **2/2 result is parent-verified**. The earlier
-**8-run 4-fail/4-pass result is superseded and NOT an accepted RED** (`RestartScan 1` masked the
-stale-context path), and **cause is NOT proven** by this RED. The bridge test uses **`NtOpenFile`
-(ordinal 202), not `NtCreateFile`**; **three actual test-seam wrappers** were built — **open, query,
-close** — so the **"fourth wrapper" wording is historical** (it came from the design-stage harness
-discussion, where `NtCreateFile` was a possible extra) and the **`NtCreateFile` wrapper is not
-required** (Advisor harness-plan ACK, verbatim in the ruling appendix; no direct-only GREEN). **Packet:
-`docs/packets/f5-directory-context-close.md` — **ACCEPTED** (RED verified, GREEN verified, 300 s smoke
-PASS-F5 criterion (a)): the **unnumbered `JSRF_CACHE_COMPLETE.CMP` was created** (0 B,
-`CreationTimeUtc == LastWriteTimeUtc == 2026-10-01T13:27:49.9575858Z`), the **CMP loop stopped**, and
-state 0's nine-probe check completed. **W14 RESET from that actual marker event: horizon
-`13:27:49.9575858Z`, ceiling `17:27:49.9575858Z`, reset count 0** — the eligible event is the **marker,
-not a frame**; **no title claim** (the frame is still SEGA, so criterion (c) is not met). **New stop:
-F6 candidate, UNCLASSIFIED** — the earlier "`1A03` loop/poll" reading is **superseded**: the **277/294
-traffic is PER-FRAME RENDER WORK** (277@19E452 = 12 × 515; 294 sites = 3 × 515 and 1 × 515; IRQL pairs
-≈515; **E_FAIL paths 0 times**), i.e. **≈515 frames over ≈90 s ≈ 5.7 fps** (rate estimate only). At
-capture the root stack runs `… → 13A80 → 14D090 → 198F10 → 198ED0 → 191390 → 1912A0` with **PFB_WBC = 0**
-and **GET == PUT == 0x5B50C** — a **snapshot fact, not proof of no stall at any other time**. **(A)** slow
-frame/time-counted sequence vs **(B)** step gated on an event (audio/movie/thread with
-`RECOMP_APU_TRAP=1`) is **not yet decided; not called a stall or hang**. **Next: read-only** —
-disassemble `13A80`'s vtable dispatch from **`13CB2–13EE4`** plus **`14D090`**, then read the object's
-step/timer fields from the new dump (**mapping gate already passed**); **no run, no fix, no seeding**.
-**GREEN gates
-(measured):** focused 2/2 in 0.19 s; toolkit CTest
-**7/7 in 2.71 s**; lifter **Ran 134, OK (skipped=1)** in 14.460 s; game CTest **31/31 in 31.32 s**;
-game `just check` all passed. **Advisor GREEN: APPROVED**, scope matching D2; **the untracked
-`tests/dir_context_release_test.c` must be committed with the fix before any toolkit push.**
-**SMOKE RULING (verbatim in the appendix): `--seconds 300`, EXPLORATORY**, identical retry1
-environment (`RECOMP_APU_TRAP=1`, `RECOMP_FB_WINDOW=1`, `RECOMP_FB_WINDOW_DUMP_EVERY=600`,
-`RECOMP_KERNEL_LOG_BUDGET=100000`, `RECOMP_NV2A_TRACE=1`, `RECOMP_PB_EXEC=1`, `RECOMP_PB_SCAN=1`,
-**`RECOMP_GPU_ACK` absent/default**), `RECOMP_FB_DUMP` pointed at a **new** directory, fresh isolated
-disposable `--save-root`, **no seed**, **no `:234` change**, Release build via `just build` with the
-identity check passing, and the run on a committed tree (or the toolkit dirty state recorded — the
-runner archives `toolkit.patch`). **30 s and 60 s are rejected**: retry1's first marker appeared at
-**~205 s**, so they never reach F5. **Ledger IDs L14–L18, L20–L25, L39, L40; L19 dormant** (parent
-verifies against the ledger). **Interpretation:** PASS-F5 (unnumbered marker created, OR ordinal-207
-results no longer alternating `0x80000006` with marker creates bounded, OR new progress past the SEGA
-screen); **FAIL-SAME** (nine numbered markers recreated repeatedly and ordinal 207 still returning
-`0x80000006`) — stop, do not extend, bring the counts; **FAIL-DIFFERENT** (207 all `0` but markers still
-loop) — bring the `25040` state evidence. Mapping gate before any guest-VA dump read. **The ordinal-207
-counts are qualified per the Advisor's audit ACK: 1244 strict calls (the 1245 included the summary
-line, a false positive), and 1022/539/482/1 with the window starting at `COMPLETE00` (the earlier
-1021/538/482/1 was off by one at the boundary). Adjacency matching is approximate because threads
-interleave, so "alternating 0/0x80000006" is supporting evidence only, not per-call proof. The 205 s
-figure comes from retry1 save-root file CreationTime (host timestamps, not guest log time).** **No
-W14 reset at that time**; the reset came later from the actual marker event. **No guest run until GREEN;
-no seeding; no `:234` change.** Risks
-recorded, not fixed here: the lazy `InitializeCriticalSection` race, and the query using `ctx` outside
-the lock after lookup. **The "other `CloseHandle`-of-taken-token paths" item is a write-audit
-requirement, not a standing risk:** the **worker's grep found no other such close site**. The parent independently searched
-`kernel_bridge.c` for `CloseHandle` and `bridge_take_handle` and read the token-removal helper:
-`bridge_NtClose` is the sole caller of `bridge_take_handle`; the other native closes belong to
-thread/event paths, not owned file tokens. **D1 was inconclusive
-(occupancy UNKNOWN), so no causality claim is made** — the mechanism rests on the source reading.
-
-**Records push (actual, 2026-10-01).** Toolkit first, then game; both exit 0, trees clean, remote
-equality verified by `git ls-remote`:
-
-```text
-PUSHED_TO: origin (toolkit, first)
-BRANCH: main
-COMMIT: a71f9374ddb2a6685b790493855c835842228212
-REMOTE_URL: https://github.com/danillogical/xboxrecomp.git
-RESULT: exit 0; "Everything up-to-date"; local HEAD == ls-remote
-
-PUSHED_TO: origin (game, second)
-BRANCH: master
-COMMIT: d1f30e1ec43e11d55cc47a4d5de0debe20a0d114
-REMOTE_URL: https://github.com/danillogical/poison-jam.git
-RESULT: exit 0; c4bcd2b..d1f30e1 master -> master; local HEAD == ls-remote
-```
-
-**D2 toolkit push (actual, 2026-10-01).** The accepted D2 code, toolkit first:
-
-```text
-PUSHED_TO: origin
-BRANCH: main
-COMMIT: a8262014eec9cd8d720184f7f2fb7dce4652105d
-REMOTE_URL: https://github.com/danillogical/xboxrecomp.git
-RESULT: SUCCESS — fast-forward a71f937 -> a826201; parent job pwsh-3305 collected, rc 0;
-        outgoing 5 files, 571 insertions / 1 deletion, test file included;
-        5 blobs scanned, 0 hits; 0 secrets; largest object 407267 B
-```
-
-**D2 game push (actual, 2026-10-01).** The records closure, game second — this closes the D2 work:
-
-```text
-PUSHED_TO: origin
-BRANCH: master
-COMMIT: e7e9a4a19f50171048708ab0a2a6a0601c91da42
-REMOTE_URL: https://github.com/danillogical/poison-jam.git
-RESULT: SUCCESS — fast-forward d1f30e1 -> e7e9a4a; parent job pwsh-3372 collected; tree clean
-        before the push; outgoing 8 DOC blobs (commits 15d8af1 and e7e9a4a);
-        zero assets, zero secrets, none over 100 MB; largest object 125040 B
-```
-
-**Deferred optional test advisory.** Do not add a diagnostic-is-OK assertion after the measured
-red/green runs merely for churn; reopen if a future failure of the 1109-method case fails without
-naming its diagnostic. Advisor accepted this deferral after independently inspecting both diffs.
-
-**Not established.** Whether `0x1720` is the *only* blocker or the first of a series: the walk stops at
-the first unknown method, so the population of unhandled methods JSRF's first frames need is unknown
-until the walk advances past this one. The `[PFIFO]` line is a bounded log, so it bounds this run, not
-the title's method set.
-
-### F3: the horizon is closed — two wrong tail-jump aliases, fixed (2026-09-30)
-
-**The A2h/C1 terminal event is closed.** The kernel thunk table is no longer overwritten, `.text` is
-no longer displaced, and a strict run now reaches its 93-second deadline instead of faulting at ~6 s.
-
-**Cause.** Two entries of the function-pointer table at `.data 0x001EC0F8..` were folded into their
-abutting neighbours by the translator's `tail_jump_alias` rule and had their bodies deleted, so a call
-through the table entered an unrelated function:
-
-| Address | Table slot | Folded into | Its own code ends | Its jump table |
-|---|---|---|---|---|
-| `0x00037550` | `0x001EC108` | `sub_00038530` | `0x00037603` (bare `ret`) | `0x00037FB4` |
-| `0x00026780` | `0x001EC10C` | `sub_000278F0` | `0x00026816`+epilogue | `0x0002730C` |
-
-**The `0x00037550` span and ABI were re-verified after review, and `stack_args: 0` is correct.** The
-review question was whether the `ret 4` at `0x00038525` belongs to this function, since the recovery
-entry declares no stack arguments and `recover-functions.py` derives its expectation as
-`stack_delta = 4 + stack_args` (`scripts/recover-functions.py:77-86`). It does **not** belong to it.
-Three independent measurements agree:
-
-1. **The translator's control-flow-following decoder reaches exactly one `ret` from `0x00037550`: a
-   bare `ret` at `0x00037603`** (`c3`), the end of the function's own SEH epilogue
-   (`xor eax,eax` / `mov ecx,[esp+0x218]` / `pop edi/esi/ebp/ebx` / `mov fs:[0],ecx` /
-   `add esp,0x214` / `ret`). Every switch arm jumps to `0x000375E9`/`0x000375EB` and leaves there.
-2. **`0x00038525` is not reachable from `0x00037550` at all.** The decoder's set ends at `0x00037FAD`;
-   `0x00038525` is 0x5B8 bytes beyond it and is only reached from a different function. Decoding
-   `0x00038460..0x00038530` and `0x0003848E..0x00038530` both reach it — and both are `ret 4`
-   functions of their own, so the `ret 4` belongs to them.
-3. **The runtime ABI check passed on the fixed build.** Run
-   `20260930-225739-446-f3-alias-fix-2-strict` logs
-   `[RECOVERED] 0x00037550 returned; ABI verified (ESP/EBX/ESI/EDI)`, and there is no
-   `ABI FAILURE 0x00037550` line anywhere in it. The generated wrapper asserts
-   `g_esp == before_stack + 4`, so the guest's own call convention confirms the bare `ret`.
-
-An earlier version of this table and of the bullet below said the function "ends `ret 4` at
-`0x00038525`". That was wrong — it described the fold's span end, not the function's own code — and it
-is corrected here rather than deleted, because it is the kind of error that would otherwise justify a
-wrong `stack_args` in the next recovery entry.
-
-`sub_00038530`'s `rep movsd` copied the XBE image from `+0x37608` over `.text` and `.rdata`, 1.70 MB
-from `0x00011000` to the thunk table. The generated dispatch named the first substitution itself:
-`[ALIAS-ICALL] target=0x00037550 owner=0x00038530`.
-
-**Fix.** A recovery entry for each address in `config/recovered-functions.json`, with the span ending
-at the function's own jump table — the table is data, not code. `recomp_lookup_manual` consults
-`jsrf_lookup_recovered` before the alias table, so the recovered body wins. The spans were chosen from
-the bytes and verified before use: all table targets lie inside the span, every one carries a label in
-the emitted body, and there are 0 dangling gotos and 0 `RECOMP_UNIMPL` markers.
-
-**Two further config spans were tightened**, because each ran past its function's terminator into bytes
-that decode as instructions, which aborts `scripts/recover-functions.py` and blocked the regeneration:
-`0x000BCF40` (`end` `0x000BD8D0`→`0x000BD8B0`, its `ret`; the old value decoded padding as `aaa`) and
-`0x001063A0` (`0x00106580`→`0x00106560`, its `ret`). With all four edits the regeneration completes —
-**3075 functions**, the first successful run of `scripts/recover-functions.py` in this session.
-
-**Measured effect, strict profile, `RECOMP_APU_TRAP=1`, budget 100000:**
-
-| Run | Outcome | Evidence |
-|---|---|---|
-| `20260930-221054-913-f0b-first-run-new-toolkit` (before) | `0xE0424943` at 5.8 s | 17,906 log lines; table held the record array |
-| `20260930-225440-580-f3-alias-fix-strict` (`0x00037550` fixed) | `0xC0000409` at 14.6 s, `[RECOVERED] ABI FAILURE 0x00026780` | the **next slot in the same table**; 77,608 lines |
-| `20260930-225739-446-f3-alias-fix-2-strict` (both fixed) | `diagnostic_deadline` at **93.0 s** | 487,394 lines; **0** invalid ICALLs, **0** `0xE0424943`, **0** exceptions, **0** ABI failures, **0** `[UNIMPL]` |
-
-The decisive check is the dump's own integrity gate, which reads guest VA `0x00011000`:
-
-- **Before:** `CONTENT_MISMATCH` in every run — the dump held the XBE's bytes from `+0x37608`.
-- **After:** `matches: 1, content-mismatch: 0`. `.text` at `0x00011000` is `852C518B 30418BD2 …`,
-  byte-identical to the original XBE, and the thunk table at `0x001C3F60` holds the runtime's installed
-  `FE000000 FE000004 FE000008 …` thunks rather than the record array.
-
-**This confirms the F3 diagnosis by its own stated test** — "fixing the alias should move the strict
-horizon" — and the prediction held twice, once per alias.
-
-**Not established.** Why the guest's call reaches these table entries in the first place, and whether
-any *other* `tail_jump_alias` fold still deletes a table-referenced entry. The census that would answer
-the latter is not yet a valid instrument (see plan §13 as of `dcc93ab`). The 93-second run ended at its own deadline
-with no fault, so the next stop is unknown and is F3's continuing subject.
-
-### F3 evidence: why the `0x00037550` fold is fatal (2026-09-30)
-
-**The guest called `0x00037550`; the port ran `sub_00038530` instead.** That substitution is the whole
-defect, and it is measured end to end.
-
-- **The substitution is observed, not inferred.** `[ALIAS-ICALL] target=0x00037550
-  owner=0x00038530` is printed by the generated dispatch's own `recomp_alias_observe`
-  (`src/recomp/gen/recomp_dispatch.c`). It appears in **both** F1 runs, and in the guard run it is at
-  log line 17896 — **19 lines before** the first `[RDATA-GUARD] write` at 17915, on the same thread
-  (tid 24300). The copy is what the guest got *instead of* calling `0x00037550`.
-- **`0x00037550` is a real function with its own body.** Its own code ends at a bare `ret` at
-  `0x00037603`, the end of its SEH epilogue; `0x00038525` holds a `ret 4` that belongs to
-  `0x00038460`/`0x0003848E`, not to this function (see the re-verification above). It has its own SEH
-  prologue at its start (`push -1` / `mov eax, fs:[0]` / `push 0x1870EE`) and a jump table at
-  `0x00037FB4` on `[esi+0x15DC]`.
-- **It is a function entry by definition.** It occurs **exactly once** as a 32-bit pointer in the XBE,
-  in a run of distinct `.text` addresses at `.data VA 0x001EC108` — neighbours `0x00036640`,
-  `0x00028500`, `0x00037550`, `0x00026780`, `0x00038890`, `0x0002AD60`. It has **0** direct
-  `call`/`jmp` sites landing on it, so that table is the only way it is reached — which is exactly
-  why a fold is fatal here and invisible in the call graph.
-- **The translator folded it.** `tools/disasm/output/functions.json` classifies `0x00037550` as
-  `detection_method: tail_jump_alias`, `confidence: 0.88`, spanning `0x00037550..0x00038530` — i.e. it
-  gives the function the *fold target's* start as its end and deletes its body. `sub_00038530` is
-  separately `call_target`, `0.9`, `0x00038530..0x0003885D`.
-- **No generated body exists for it.** `sub_00037550` appears **0** times as a definition or call in
-  `src/recomp/gen/*.c`; it exists only as the alias pair in `recomp_dispatch.c` and as the dispatch
-  table's entry.
-- **This is the same defect class the config already records.** `config/recovered-functions.json`'s
-  entry for `0x000BCF40` describes it in the same words: *"The translation pass read that table as a
-  switch table, classified this address `detection_method=tail_jump_alias` and folded it into
-  `sub_000BD8D0` under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch
-  tuple `0x000BCF40` at `sub_000BD8D0`. A virtual call then enters the wrong function."* `0x000BCF40`
-  was fixed by a recovery entry plus a boundary fix, and the alias table then named the recovered
-  body.
-- **The fix path is therefore known and precedented.** `recomp_lookup_manual` consults
-  `jsrf_lookup_recovered` before the alias table, so a recovery entry for `0x00037550` takes precedence
-  and restores the real body. It was applied as recorded above; at the time of this measurement
-  `jsrf_lookup_recovered` had **3074** cases and **none** for `0x00037550`.
-
-**Bearing on the horizon.** This is upstream of the clobber: the fold is why the wrong function runs,
-and the wrong function's `rep movsd` is what overwrites the image. Fixing the alias should move the
-strict horizon, and that is the test of this diagnosis — it was applied, and the horizon moved.
-
-**Not established.** Why the guest's call reaches this table entry in the first place, and whether any
-*other* `tail_jump_alias` fold in this image still deletes a table-referenced function entry. The
-latter needs a census, and the one attempted in this session was not a valid instrument (plan §13 as of `dcc93ab`).
-
-The ~571 MB allocation failure that precedes the fault (`NtAllocateVirtualMemory`, `0xC0000017`)
-**is handled** by the guest (`0x00149E56 test eax,eax` / `jl 0x149eec`, clean return through
-`__SEH_epilog`), so it is not the cause (Advisor critical-path ruling, 2026-09-27); V3(a) and V3(c)
-reproduce that return and still fault afterwards. The producer line that chased the allocation size is
-parked; reopen only if the clobber proves downstream of that error handling, or a later gate needs the
-size explained.
-
-**Phase 0 V3 measurements** (game `44becd4`, toolkit `2a349c8`, 8 s, `RECOMP_GPU_ACK=0
-RECOMP_APU_TRAP=1 RECOMP_KERNEL_LOG_BUDGET=100000`). All three classified as the plan requires;
-`[UNIMPL]` lines: **0** in all seven V3 logs; `RtlRaiseException` and `0xE06D7363`: **0**.
-
-| Run | Label | Profile | First terminal site | Kernel calls | Stop (UTC) |
-|---|---|---|---|---|---|
-| (a) | `20260929-231110-868-rebaseline-strict` | STRICT | `0x00147D36` (tid 63012) | 6456 | 06:11:16.686 |
-| (b) | `20260929-231200-429-rebaseline-kmem-legacy` | EXPLORATORY | `0x00147DBC` (tid 28756) | 6431 | 06:12:06.024 |
-| (c) | `20260929-231211-023-rebaseline-gmeter` | STRICT | `0x0014982E` (tid 46508) | 6321 | 06:12:16.688 |
-
-`[KMEM] summary` (a): `legacy=0 regions=13 hint_ok=0 hint_conflict=0 reserve_ok=15 reserve_fail=0
-alloc_invalid=0 commit_region=52 commit_heap_block=0 commit_rejected=0 pages_zeroed=734 decommit_ok=0
-decommit_failed=0 release_ok=2 release_failed=0 free_bad_type=0 region_table_full=0 contig_free_ok=0
-contig_free_unknown=0 contig_untracked=0 contig_split_skipped=0 heap_split=3 heap_split_full=0
-heap_carve_ok=0 heap_carve_busy=0 heap_carve_full=0`; (c) is identical except `commit_region=54
-pages_zeroed=738`. (b) prints `legacy=1` alone, which is the override's own switch. (a) and (c) print the
-same two rejects — `kind=release_failed … type=0x8000 status=0xC00000A0` and `kind=reserve_failed
-base=0x00000000 size=0x23B20430 type=0x801000 status=0xC0000017` — and **(b) prints no `[KMEM] reject`
-line at all**, which is the legacy path's behaviour (the reserve hint is not evaluated, so the
-`reserve_failed` reject is not emitted). All three print the same ten data exports: ordinals 16, 40, 156,
-164, 259, 322, 323, 325, 354, 356 (slots 15, 30, 62, 58, 67, 87, 38, 39, 40, 55 →
-`0x00740000..0x007404A0`). `[GMETER]` (c) only: `max=4 inside=1 contended=2954 host_kcalls=2
-anomalies=0`, entries/contended/nested/exits `kernel=4426/2856/0/4432`, `isr=60/51/0/59`,
-`dpc=59/43/0/59`.
-
-**(b) is the same event, not a different one.** The legacy kernel-memory semantics change *when* the
-clobber lands, not whether it does: (b)'s dump holds the identical record array (0 of 120 slots patched,
-the same five slot values). What differs is which thunk call happens first *after* the clobber — in (b)
-`0x00147D36` is still a working call (`#809: ordinal 124 (slot 68) ret=0x00147D36`) and the first fault
-is one call later at `0x00147DBC`; in (a) `0x00147D36` is the first fault. The two runs are not
-comparable beyond that (`docs/jsrf-run-profiles.md`: a strict run may stop earlier than an exploratory
-one), and no claim about the clobber's *cause* is drawn from the A/B.
-
-**Independent re-verification (2026-09-30, owner-directed startup session).** Phase 0 V1–V4 were already
-executed and committed by the preceding session at this same revision pair (`44becd4`/`56372dc`). Rather
-than re-run them, this session re-measured their recorded values against the archived artifacts and the
-current tree, and executed the outstanding V5. Every value below was re-derived, not copied:
-
-| V | Recorded value | Re-measured this session | Result |
-|---|---|---|---|
-| V1 | build exit 0; game ctest 26/26; `kernel_data_exports` 5/5; `kernel_file_status` 5/5 | `build-jsrf.py` exit 0; ctest **26/26**; both standalone projects rebuilt and **5/5** each | agrees |
-| V2 | `FLAGS: 10 conditional(s) in 7 function(s)`; 5740/8928 | full pass re-run into `logs/v2repro/gen`: **`FLAGS: 10 conditional(s) in 7 function(s)`, 5 `state: none` + 5 `adc cannot answer`**, the same ten named sites; chunks sum **5740** (banners) with **5739** bodies (`sub_00162B9D` is folded and hand-written in `recomp_manual.c`); dispatch **8928 unique**; provenance `--check` ok | agrees |
-| V2 | "no site outside the pre-regeneration set" | the leftover-`_flags` function sets at `e73e495` and at `44becd4` are **identical (3868 functions; NEW = NONE, dropped = NONE)** | agrees |
-| V2 | the 8 sites `ca4257c` called live bugs read no fallback | `sub_00015130`, `sub_00130FD0`, `sub_000A0F10`, `sub_001C0B86`: bare `if (!_flags)` reads **0** each, materialised `_fc_` conditions present (10/16/4/4) | agrees |
-| V3 | (a) strict, (b) exploratory, (c) strict | re-classified: **STRICT / EXPLORATORY / STRICT** | agrees |
-| V3 | horizon = the thunk table clobber; first site varies | fresh strict run `20260930-001405-390-v1-verified-strict` on the binary built this session: **STRICT**, `0x0014982E` (tid 64532), 6488 kernel calls, 0 `[UNIMPL]`, the same ten data exports, `legacy=0`, same two `[KMEM] reject` lines | agrees |
-| V4 | the five disassembly sites and their bytes | all five re-disassembled and byte-matched; the only `+0x242C` store is `sub_0018CE30` at `recomp_0004.c:54015` | agrees |
-| V4 | `sub_00038530` object base / overlap | `arm_base=0x0019B200` (= `g_Device`), `+0x242C` → `0x0019D62C`; extent ends `0x0019DCE0`; overlaps `g_Device` **yes**, overlaps the page of `0x001C4064` **no** | agrees |
-| V4 | `+0x2440` REFUTED | **does not hold** — see the `+0x2440` REOPENED note in §7 | **corrected** |
-
-Two limits on the re-verification, stated rather than left implicit:
-
-- **All five archived dumps are `CONTENT_MISMATCH`** under `scripts/check-dump-mapping.py` (the 2026-09-28
-  baseline too). They remain structurally readable at their actual guest VAs, and the values above were
-  read that way; no value here is an image-content claim, and no shifted read was used as a repair.
-- The `[KMEM]` reserve-hint counter at `0x1495E3` and commit counter at `0x14961B` are **not** printed by
-  the runtime as counters. Both are call sites of the **same** thunk slot: `0x001495F3 call [0x1C3F88]`
-  (reserve) and `0x0014962C call [0x1C3F88]` (commit), and `0x001C3F88` is slot 10 → ordinal 184. The run
-  log shows them as `#9: ordinal 184 (slot 10) … ret=0x001495F9` and `#10: ordinal 184 (slot 10) …
-  ret=0x00149632`, **exactly one each** in every run examined (the three V3 runs and the 2026-09-30
-  verification run). So the per-run value is 1 reserve-hint call and 1 commit call; there is no aggregate
-  counter to quote, and `NtAllocateVirtualMemory`/`NtFreeVirtualMemory` are not individually named by the
-  runtime's kernel log. Recorded because an owner instruction asked for the counter.
-
-**V5 — recovered-functions audit (2026-09-30, one DeepSeek worker, read-only).** For all 3074 entries of
-`config/recovered-functions.json`, does the current translator now emit that address's body natively?
-**Answer: 122 OBSOLETE, 2952 STILL_NEEDED, 0 UNKNOWN.** The verdict set is exactly the config entry set
-(3074 addresses, no duplicates).
-
-| class | mechanism | count |
-|---|---|---|
-| OBSOLETE | default full pass (no option) | 58 |
-| OBSOLETE | `--coalesce-functions` | 64 |
-| STILL_NEEDED | no current option emits a body for it | 2952 |
-| UNKNOWN | — | 0 |
-
-- **Evidence is generated-code pointers, not reasoning.** OBSOLETE requires `{ 0x<ADDR>u,
-  (recomp_func_t)sub_<ADDR> }` in a scratch pass's `recomp_dispatch.c` **and** an `Original: 0x<ADDR> -`
-  banner over `void sub_<ADDR>(void)`. STILL_NEEDED is either a fold (the dispatch tuple names a
-  `recomp_alias_<ADDR>` wrapper whose body is `<OWNER>();`) or no dispatch at all.
-- **The committed `src/recomp/gen/` tree cannot answer this**, in either direction: it defines **0** of the
-  3074 addresses because `config/manual-functions.json` lists all 3074. All evidence came from three
-  scratch full passes under `logs/` (recorded-database, fresh-database, and `--coalesce-functions`).
-- **Controls, 0 failures:** 25 ordinary generated functions classify `OWN_BODY` (positive — what a native
-  body looks like); 15 sampled folds stay folded; 7 data addresses are `NO_DISPATCH` in both trees
-  (negative — what "no body" looks like).
-- **Two of the three mechanisms the plan named do not retire anything.** `jump_table_entry_starts` is 60
-  (recorded db) / 54 (fresh db), and **0** of the 3074 addresses are in that set, so switch-arm recovery is
-  not the mechanism. The returning-body probe is not either: it reports true for 2487 of the 3074, but it
-  was already true when the entries were written — being true is *why* the detector classifies them
-  `tail_jump_alias` instead of standalone functions. Only `--coalesce-functions` retires entries (64).
-- **Recorded database vs current sources:** the two passes agree on 3073 of 3074; the single difference
-  (`0x00040001`) is STILL_NEEDED either way, so the table is unaffected.
-
-Artifacts (all under gitignored `logs/`): `v5-recovered-audit.md` (full per-entry table, 1.4 MB),
-`v5/verdicts.json` (the 3074 verdicts), `v5/controls.log`, `v5/coalesce-sweep.json`,
-`v5-gen/`, `v5-gen-fresh/`, `v5-gen-coalesce/`. **No entry was retired** — retirement is later work.
-
-**Qualification for the retirement packet.** OBSOLETE means "a body for this address is emitted", not "the
-reviewed span is identical". Comparing emitted spans with the reviewed `end`: **53 exact**, **66 wider**
-(the body carries the reviewed span plus a neighbour's tail or padding), **3 shorter** (`0x00190FB0`,
-`0x001910C0`, `0x001912A0`). The three shorter ones are benign and byte-checked: each emitted span ends on
-the routine's own `ret` (e.g. `0x0019101D-0x0019101F` = `c2 0c 00`, the `ret 0xC` the entry's evidence
-names), and the address the reviewed `end` reached is a *separate* recovered entry with its own emitted
-body — the reviewed `end` was widened over the next routine. A retirement packet must therefore re-check
-each of the 122 spans rather than assume the reviewed `end` was right.
-
-**One OBSOLETE row's emitted body genuinely overlaps another's** — the one case a retirement packet must
-handle rather than merely re-check. Of the 122: 57 are enclosed by exactly one emitted body, **64 are the
-`--coalesce-functions` rows whose address is not inside the *default* pass's bodies at all** (they are
-emitted only under that option), and **1 overlaps**:
-
-| row | emitted body | conflict |
-|---|---|---|
-| `0x00162AB0` | `sub_00162AB0` `[0x00162AB0, 0x00162BA5)` | starts strictly inside `sub_00162A20` `[0x00162A20, 0x00162B9D)` and runs **8 bytes past its end** |
-
-Those 8 bytes are the `sub_00162B9D` tail (`0x00162B9D: mov eax,0x800401F0; ret 0xc`) — the same COM error
-tail §2 records as folded by the new translator and hand-written in `src/recomp_manual.c`. Both
-`0x00162A20` and `0x00162AB0` are OBSOLETE rows in `config/recovered-functions.json`, so one region carries
-two entries and an overlapping emitted span: retiring either alone must first establish which body the
-runtime actually needs there.
-
-*Method note.* This overlap came from the V5 worker's own final consistency check, which passed its three
-defect gates (0 sweep/fold disagreements, 0 verdict-rule mismatches, 0 `OWN_BODY` rows lacking their own
-banner) and reported the nested bodies as a residual observation. Re-checked here with half-open interval
-semantics, which separates a genuine overlap from ordinary **adjacency** (one body ending exactly where the
-next begins — normal in a chunked translation, not a hazard). Two of the three addresses that check flagged
-(`0x00190FB0`, `0x001910C0`) are adjacent, not overlapping; only `0x00162AB0` genuinely overlaps.
-
-**Null-slot triage (A2h-null-slot-triage-r1, accepted, `O-NO-BOUNDARY-TRANSITION`).** `[0x1C4064]`
-read its installed value `0xFE000104` (raw `0x80000115`, index 65) at every one of 15,498 sampled
-kernel-bridge boundaries on all six threads — per-thread series complete, no gap or duplicate. The
-last boundary (`#5555`, ordinal 294) still read `0xFE000104`, and the next event is the terminal read of
-`0`, with no bridge call between. Macro mismatch, torn read, static displacement and stack-over-data
-were refuted offline. No instrument observed the guest code in that final gap.
-
-### Slot-writer attribution (A2h-slot-writer-attribution-r2, accepted 2026-09-28, row `O-OPEN`)
-
-The line then watched the D3D device's callback slot: `software_device = MEM32(0x19DCE0)` (observed
-`0x0019B200`), slot `+0x242C` = `0x0019D62C`. The packet's terminal oracle is a genuinely exercised
-fourth read at `0x00193E62` tied to `0x00193EB5 call eax`; every run's terminal target was `0`. How this
-slot's value relates to the terminal read is exactly what the successor must establish.
-
-- **Finding (K≥2):** the recompiled body of `sub_00038530` (`0x00038530..0x0003885D`, 813 bytes, a
-  structure initialiser) writes `0x001D5078` into the slot, reproducibly (same native RVA `0x52FE38` in
-  two runs with different image bases and threads), and it is **not** the static candidate
-  `0x00199F45` (in `sub_00199DB0`). The installer is `sub_0018CE30` (guest write at `0x0018CE3A`).
-- **`0x001D5078` is data:** a pointer to the ADX filename `"djv000_0.adx"` in an `.rdata` table of 59
-  code→filename entries — a data-as-call if it is ever called.
-- **Third actor:** `VCRUNTIME140.dll`'s `memset`/`memmove` also writes the watched page (the same two
-  RIPs, 4 bytes apart, in three runs with three image bases). It may be what zeroes the slot between the
-  competitor's write and the terminal read — a hypothesis to **test** ("memset write immediately
-  preceding terminal-zero by tick order"), never assert.
-- **Row withheld:** the bar is writer observed **and** matching terminal **and** controls green; the
-  terminal read `0` in every run. A post-hoc "scoped row" was refused: rows are frozen predicates.
-- **Advisories carried to the successor:** `installer_control_hits` counts any game-module slot store
-  (over-inclusive name); `term_base_ok=0 / base_changed=1` in every ON run (the terminal slot could not
-  be re-derived); `unexpected_exception` (~780) and `first_touch_dropped` (~9000) are unanalysed.
-- **Static chain (four-edges analysis):** the slot has exactly one direct store; the index-51 dispatch
-  `0x000D4DA2 jmp dword ptr [eax+0xcc]` selects thunk `sub_00153790`, which forwards its first argument
-  as `sub_00199DB0`'s index. The store hits the slot only for index 2064 (`0x810`), and no reachable code
-  materialises that value; the smallest missing edge is that dispatch's caller.
-
-### The specified successor (Advisor ruling, 2026-09-28)
-
-Bounded runs (pre-specified N, early stop) for writer-observed + terminal-match + controls green;
-zero qualifying ⇒ report and re-refer. Split the classifier's `unknown` class into host-identifiable
-(module-range classified, e.g. `VCRUNTIME140` → `HOST` with the module named) and truly unplaceable
-(fail closed). `ledger_mismatch` runs are contrast only. Test the CRT-`memset` lead. A run that cannot
-be verified and recorded inside the session window is not evidence — it is an unaccounted draw
-against N. New baseline: toolkit `2925f0b`, game ≥ `e73e495`; re-derive native RVAs per run.
-
-### Instrument facts
-
-- Page-protection watch only (no debug registers). Every write to a watched page, slot or not, is
-  recorded, single-stepped and the page re-armed read-only — page sharing makes any "leave RW" shortcut
-  blind to the slot.
-- A native RIP is classified by range (recompiled-module bounds vs host image), never by decoding guest
-  bytes at it. Mapping a RIP to a guest function uses the run's own linker map; the **symbol** is right
-  but the **offset** is not guest-meaningful (generated C is ~5.5× the guest size; the installer's
-  native offset was `0x5D` for a guest offset of `0x3A`).
-- Debug-register arming coverage: `dr_disarm_all` (`tools/harness/collect.c`) zeroes DR0/DR7 on every
-  live thread, so its disarm count is not an arm count; every successful arm and every create-thread
-  event must be printed as it happens.
-- Harness `winerror=5` failures at 0.51 GB free were **disk exhaustion** (full pass at ~62 GB free). A
-  clean-baseline reproduction excludes the diff, not the machine.
+- **The first fault site varies run to run; that is the race, not the horizon** (D4). Six strict V3 runs
+  on one build gave four first sites: `0x00149828` 3/6, `0x00147D30` 1/6, `0x00147DDC` 1/6, `0x00147DB6`
+  1/6; a worker thread can die before main. The 2026-09-28 baseline
+  (`20260928-185612-449-regen-v012-strict`) holds the identical array.
+- **The writer (F1).** `sub_00038530+0x398` (`rip=exe+0x5361B8`), a `rep movsd` image copy
+  (`20260930-221404-630-f1b-rdata-guard`, `RECOMP_RDATA_GUARD=1`, L32; all 256 reports, the guard's cap,
+  from tid 24300, starting at `0x00011000`). The dump at guest VA `V` equals the XBE at `V + 0x37608`
+  (431 of 436 sampled pages `SHIFTED`, 0 original); the 128 bytes at `0x001C3F60` are byte-identical to
+  the XBE's `.data` at `0x001FB568`. Shifted provenance establishes byte origin; it is never a correction
+  (`AGENTS.md`).
+- **The cause (F3, D5).** Two entries of the function-pointer table at `.data 0x001EC0F8..` had been
+  folded into abutting neighbours by the translator's `tail_jump_alias` rule, their bodies deleted, so a
+  call through the table entered an unrelated function (`[ALIAS-ICALL] target=0x00037550
+  owner=0x00038530`, 19 lines before the first guard write):
+
+  | Address | Table slot | Folded into | Its own code ends | Its jump table |
+  |---|---|---|---|---|
+  | `0x00037550` | `0x001EC108` | `sub_00038530` | `0x00037603` (bare `ret`) | `0x00037FB4` |
+  | `0x00026780` | `0x001EC10C` | `sub_000278F0` | `0x00026816`+epilogue | `0x0002730C` |
+
+  `0x00037550` occurs once as a pointer, has 0 direct callers, and the database gave it
+  `tail_jump_alias`, `confidence: 0.88`, span `0x00037550..0x00038530`. Its `stack_args: 0` is correct:
+  the decoder reaches only the bare `ret` at `0x00037603`; the `ret 4` at `0x00038525` belongs to
+  `0x00038460`/`0x0003848E`; the runtime ABI check passed.
+- **The fix.** A recovery entry for each address, span ending at the function's own jump table
+  (`recomp_lookup_manual` consults `jsrf_lookup_recovered` before the alias table), plus two spans
+  tightened to their `ret` (`0x000BCF40` end `0x000BD8D0`→`0x000BD8B0`; `0x001063A0`
+  `0x00106580`→`0x00106560`).
+
+  | Run | Outcome | Evidence |
+  |---|---|---|
+  | `20260930-221054-913-f0b-first-run-new-toolkit` (before) | `0xE0424943` at 5.8 s | table held the record array |
+  | `20260930-225440-580-f3-alias-fix-strict` (`0x00037550` fixed) | `0xC0000409` at 14.6 s, `[RECOVERED] ABI FAILURE 0x00026780` | the next slot in the same table |
+  | `20260930-225739-446-f3-alias-fix-2-strict` (both fixed) | `diagnostic_deadline` at **93.0 s** | **0** invalid ICALLs, **0** `0xE0424943`, **0** exceptions, **0** ABI failures, **0** `[UNIMPL]` |
+
+  Dump gate after: `matches: 1, content-mismatch: 0`; `.text` at `0x00011000` is `852C518B 30418BD2 …`,
+  byte-identical to the XBE. Every archived dump before the fix is `CONTENT_MISMATCH`.
+- **The ~571 MB allocation failure** before the fault (`NtAllocateVirtualMemory`, `0xC0000017`) is handled
+  by the guest (`0x00149E56 test eax,eax` / `jl 0x149eec`); it was not the cause.
+- **Phase 0 V3 runs** (game `44becd4`, toolkit `2a349c8`, 8 s, `RECOMP_GPU_ACK=0 RECOMP_APU_TRAP=1`):
+  `20260929-231110-868-rebaseline-strict` (STRICT, `0x00147D36`), `20260929-231200-429-rebaseline-kmem-legacy`
+  (EXPLORATORY, `RECOMP_KMEM_LEGACY=1`, `0x00147DBC`), `20260929-231211-023-rebaseline-gmeter` (STRICT,
+  `0x0014982E`). The strict two print `[KMEM] reject` `kind=reserve_failed base=0x00000000 size=0x23B20430
+  type=0x801000 status=0xC0000017`. **All three print the same ten kernel data exports (L10): ordinals 16,
+  40, 156, 164, 259, 322, 323, 325, 354, 356 (slots 15, 30, 62, 58, 67, 87, 38, 39, 40, 55 →
+  `0x00740000..0x007404A0`).** `[GMETER]`: `max=4 inside=1 contended=2954 host_kcalls=2 anomalies=0` (D4).
+- **V5 recovered-functions audit (2026-09-30):** of the then 3074 entries, **122 OBSOLETE** (58 under the
+  default pass, 64 only under `--coalesce-functions`), **2952 STILL_NEEDED, 0 UNKNOWN**. OBSOLETE means "a
+  body is emitted", not "the span is identical" (53 exact, 66 wider, 3 shorter; `0x00162AB0`'s emitted
+  body overlaps `sub_00162A20` by the `sub_00162B9D` tail). None retired; a retirement packet must
+  re-check each span.
+- **The A2h slot watch was a different address:** `g_Device+0x242C` = `0x0019D62C`; its
+  `last_write=001D5078` (`20260928-121142-929-a2h-attrib-exp2-3b`) is a pointer to `"djv000_0.adx"` in an
+  `.rdata` table of 59 code→filename entries, not the terminal event; the slot's installer is
+  `sub_0018CE30` (§7). Instrument facts: classify a native RIP by module range; a linker-map symbol is
+  right but its offset is not guest-meaningful (generated C is ~5.5× the guest size); `dr_disarm_all`
+  zeroes DR0/DR7 on every live thread, so its disarm count is not an arm count.
+
+### F4/F5: the first frames and the HDD cache fill (2026-09-30 – 2026-10-01; exploratory)
+
+- **F4.** The walk stopped on `unsupported_method` `0x1720` (`NV097_SET_VERTEX_DATA_ARRAY_OFFSET`) at
+  `get=00008EF0` (`20260930-230206-594-f4-frames-after-horizon-fix`); toolkit `1f9309a` admitted seven
+  measured methods (`0x1720`, `0x172C`, `0x1730`, `0x1744`, `0x1800`, `0x1804`, `0x1808`; `0x1724` still
+  rejects) and made the table the union of the named rings (L39). Next `sink_capacity`: 1364 words, 259
+  packets, 1109 methods against `sink[1024]`; toolkit `e8a6e03` sized staging to the 4096-word budget (L40;
+  units since, §23.4; ruling `docs/reviews/rulings/f4-submission-capacity.md`).
+- **Architecture A (toolkit `a71f937`, L18).** Under the MMIO state owner the legacy GPU body never ran, so
+  `RECOMP_PB_EXEC`/`RECOMP_PB_SCAN`/`RECOMP_NV2A_TRACE` were inert. The core now calls a seam `(subch,
+  class_id, method, param)` for every committed entry after `action_commit`; the kernel wrapper filters
+  NV097; `0x0130` counts `flip_stalls`, `0x012C` is `s_gpu.flips++`. First frames:
+  `20261001-033129-276-f4-a-smoke-60s` drew the "Presented by SEGA®" logo.
+- **F5: the logo phase is the first-boot HDD cache fill** (`\Device\Harddisk0\Partition5\Media\…~`, ~1.0–1.3
+  distinct files/s with or without the executor). F5 D2 (toolkit `a826201`,
+  `git show 9d5257f:docs/packets/f5-directory-context-close.md`): directory contexts were never released at close, so the
+  65th query failed with `0x80000006`; `xbox_dir_context_release` now runs at both `xbox_NtClose` sites and
+  at `bridge_NtClose` (which does not go through `xbox_NtClose`). Open risks: the lazy
+  `InitializeCriticalSection` race, and the query using `ctx` outside the lock after lookup.
+- **Main-thread facts:** `0x0019E438` = `DirectSoundEnterCriticalSection` (CS `0x001BA050`), `0x0019F260` =
+  `DirectSoundDoWork`; `0x001BA04C` is DSOUND state (one write, `mov [0x001BA04C],1` at `0x001A2317`).
 
 ---
 
@@ -1256,708 +359,170 @@ against N. New baseline: toolkit `2925f0b`, game ≥ `e73e495`; re-derive native
   walk (the A2h analysis used 30,118 seeds → 673,726 instruction starts). **Aligned dword scans miss
   unaligned immediates** (`mov dword ptr [esi], imm32` put `0x001E1270` at a non-4-aligned address);
   raw-byte scans are the fallback.
-- **No hand counts in decision inputs:** tool-computed, from a named artifact, with a positive control
-  and loss accounting.
+- **No hand counts in decision inputs:** tool-computed, from a named artifact, with a positive control and
+  loss accounting.
 - **Attribute a terminal event** by reading the instructions past the failing call, never by temporal
-  co-occurrence; an untested lead must not harden into accepted fact.
+  co-occurrence.
 - **Read what ships:** build configuration (`NDEBUG`), line endings (`core.autocrlf` changes hashes of
   checked-out files), and which analysis database actually produced generated code.
-- **Carry-forward lists are re-justified per packet;** a brief cannot add criteria to a frozen contract.
 
 ---
 
 ## 7. Fork audit and owner-directed toolkit fixes (2026-09-28/29)
 
-**Status: committed to toolkit `main` (`db96e30..2a349c8`) and game `master`, and not verified on
-Windows.** No MSVC build, no `ctest`, no regeneration and no JSRF run has used this toolkit revision.
-Verification here was a MinGW-w64 cross-build of every toolkit target (zig 0.16, clang 21; only the
-three `d3d8_smoke` executables fail, at link, for want of `d3dcompiler`), the toolkit's pytest suite
-(643 passed, 2 skipped, 1 macOS-only undefined-behaviour negative control), and host-native runs of
-the new pure-logic C tests.
+Toolkit `db96e30..2a349c8`, first built and run on Windows in Phase 0 (§2). **Fork audit:** all 23 forks of
+`sp00nznet/xboxrecomp` and two second-level forks compared by content against `db96e30`. Reuse bounds:
+DanielJVoxSmart is GPL-3.0 since `88cde2c` (ideas only); Tiptup300's semaphore code is from an unnamed
+source (ideas only); many NoRain211 commits carry an "Antigravity" bot identity. DanielJVoxSmart's own
+JSRF bring-up stalled in `sub_001497DC` on two root causes already fixed here (flags lost across `lock
+xadd`, so every COM `Release()` destroyed the object; the missed function `0x00154DAA`).
 
-### The audit
-
-All 23 forks of `sp00nznet/xboxrecomp` and two second-level forks were compared **by content** against
-the fork's `main` `db96e30` (= upstream `ea60cfa` + local work); upstream squash-merges fork PRs, so
-ancestry overstates what is missing. Upstream's own `work/*` branches hold nothing beyond `main`.
-Licences that bound reuse: DanielJVoxSmart is GPL-3.0 since `88cde2c` (ideas only); Tiptup300's
-semaphore code is from an unnamed source (ideas only); many NoRain211 commits carry an "Antigravity"
-bot identity (noted in the commits that took them, per upstream `CONTRIBUTING.md`).
-
-DanielJVoxSmart brought JSRF up on its own HLE runtime (`docs/technical/third-title-jsrf.md` at
-`DanielJVoxSmart/main` `505ae8e`, 2026-09-20). It stalled in `sub_001497DC` — the allocator that holds
-our strict terminal call at `0x00149828` — and its two root causes (flags lost across `lock xadd`, so
-every COM `Release()` destroyed the object; the missed function `0x00154DAA`) are already fixed in this
-toolkit and game. It then died on two indirect calls to non-code with an unreconciled contradiction
-between two of its own measurements. Provenance only; not evidence about this build.
-
-### XDK D3D device fields — verified against JSRF bytes (Phase 0 V4, 2026-09-29)
-
-From `~/src/halo-ce-universal` (Halo CE Xbox, XDK ~3911, a matching decompilation; `libs/d3d8` is
-GPL-3.0 and RXDK-derived, so **facts only, no code**): `libs/d3d8/device_layout.h:180-182` and
-`d3dbase.cpp:142` (`SetVerticalBlankCallback` stores `g_pDevice->m_Miniport.m_pVerticalBlankCallback`).
-Matched to JSRF offsets by role, anchored on measurements already in `docs/jsrf-kick-get-contract.md`,
-`jsrf-callback-reentry-contract.md` and §5; the miniport context starts at device `+0x2268`.
-
-V4 disassembled each site in the original XBE. The offsets and the five names are now **CONFIRMED**;
-the inference that `sub_00038530` writes this slot is **REFUTED** (see below the table).
+**XDK D3D device fields (Phase 0 V4).** From `~/src/halo-ce-universal` (Halo CE, XDK ~3911; `libs/d3d8` is
+GPL-3.0 and RXDK-derived, **facts only, no code**): `libs/d3d8/device_layout.h:180-182`,
+`d3dbase.cpp:142`. The miniport context starts at device `+0x2268`; `g_Device` is
+`0x0019B200`–`0x0019DCE0` (`+0x2AE0`), pointer at `[0x19DCE0]`.
 
 | JSRF device offset | XDK field (Halo name) | Verdict | Bytes |
 |---|---|---|---|
-| `+0x242C` | `m_pVerticalBlankCallback` | **CONFIRMED** | `0x0018CE30: mov eax,[esp+4]; mov ecx,[0x19DCE0]; mov [ecx+0x242C],eax; ret 4` — the only store to `+0x242C` in the whole generated tree |
-| `+0x2430` | `m_VerticalBlankEvent` (KEVENT) | **CONFIRMED** | `0x0018CE67: add eax,0x2430; push eax; call [0x1C4018]` — `[0x1C4018]` is the ordinal-159 `KeWaitForSingleObject` thunk (`0x8000009F`), and the run log shows `ordinal 159 (slot 46) … ret=0x0018CE73` |
-| `+0x2434` | that event's `Header.SignalState` | **CONFIRMED** | `0x0018CE5B: mov dword ptr [eax+0x2434],0` — cleared before the wait, as `KeClearEvent` inline does |
-| `+0x2440` | `m_BusyBlockEvent` | **REOPENED — INFERRED-LOCATED** (was REFUTED; see below) | `0x00191497: mov [edi+0x2444],ebp` (SignalState) and `0x00191501: lea esi,[edi+0x2440]` → `0x00191519: call [0x1c4018]` (the same ordinal-159 `KeWaitForSingleObject` thunk as `+0x2430`). `sub_0018CE80` is a table copy, not a second event — that part stands |
+| `+0x242C` | `m_pVerticalBlankCallback` | **CONFIRMED** | `0x0018CE30: mov eax,[esp+4]; mov ecx,[0x19DCE0]; mov [ecx+0x242C],eax; ret 4` — the only store to `+0x242C` |
+| `+0x2430` | `m_VerticalBlankEvent` (KEVENT) | **CONFIRMED** | `0x0018CE67: add eax,0x2430; push eax; call [0x1C4018]` — the ordinal-159 `KeWaitForSingleObject` thunk; log `ordinal 159 (slot 46) … ret=0x0018CE73` |
+| `+0x2434` | that event's `Header.SignalState` | **CONFIRMED** | `0x0018CE5B: mov dword ptr [eax+0x2434],0` |
+| `+0x2440` | `m_BusyBlockEvent` | **INFERRED-LOCATED** | `0x00191497: mov [edi+0x2444],ebp`; `0x00191501: lea esi,[edi+0x2440]` → `0x00191519` wait via the same thunk; base from `0x00191446 mov edi,[0x19DCE0]`; never observed executing (`ret=0x0019151B` 0 times) |
 
-Role names, each **CONFIRMED** by its own bytes: `0x0018CE30` `SetVerticalBlankCallback` (19 bytes,
-stores its first argument at `+0x242C` and returns `ret 4`); `0x0018CE50` `BlockUntilVerticalBlank`
-(clears `+0x2434`, then waits on `+0x2430` through the ordinal-159 thunk); `0x00193D90`
-`CMiniport::VBlank` (`sub esp,0x14`; `call 0x193C40` = `rdtsc`; reads/writes `[esi+0x208]`,
-`[esi+0x20C]`, `[esi+0x1F4]` — a frame counter and time base); `0x00194210` `ServiceGrInterrupt`
-(`mov [esi+0x400720],0` clears PGRAPH `0x400720`; reads `0x400100`, `0x400704` and `0x400108`, i.e.
-PGRAPH INTR/TRAPPED_ADDR/TRAPPED_DATA); `0x00193F70` `SoftwareMethod` (`sub esp,0x14`; `lea
-edx,[ecx-1]; jmp dword ptr [edx*4+0x1941B4]` — a method-index switch, and the table at `0x001941B4`
-holds eight in-module VAs `0x00193F87`, `0x0019401C`, `0x0019412A`, `0x0019412A`, `0x00194144`,
-`0x0019415D`, `0x0019415D`, `0x00194173`).
+Role names, each confirmed by its bytes: `0x0018CE30` `SetVerticalBlankCallback`; `0x0018CE50`
+`BlockUntilVerticalBlank` (clears `+0x2434`, waits on `+0x2430`); `0x00193D90` `CMiniport::VBlank` (`call
+0x193C40` = `rdtsc`; `[esi+0x208]`, `[esi+0x20C]`, `[esi+0x1F4]` — frame counter and time base);
+`0x00194210` `ServiceGrInterrupt` (clears PGRAPH `0x400720`; reads `0x400100`, `0x400704`, `0x400108`);
+`0x00193F70` `SoftwareMethod` (`jmp dword ptr [edx*4+0x1941B4]`, eight in-module targets). A KEVENT field
+need not have a literal-offset store (`+0x2430` has none). `sub_00038530` does **not** write `+0x242C`.
 
-**`+0x2440` REOPENED (2026-09-30, V4 re-verification).** The row above previously read **REFUTED**, on the
-criterion "no store to `+0x2440` exists anywhere in the generated tree". That criterion does not
-discriminate: the field it sits beside, `+0x2430`, **also** has no store anywhere in the tree, and V4
-CONFIRMED it on its *wait* site. Re-run mechanically over both spellings the lifter emits (hex and signed
-decimal, per `AGENTS.md`):
-
-| offset | stores (hex form) | stores (dec form) |
-|---|---|---|
-| `+0x242C` | 1 | 0 |
-| `+0x2430` | **0** | 0 |
-| `+0x2434` | 1 | 0 |
-| `+0x2440` | **0** | 0 |
-| `+0x2444` | 1 | 0 |
-
-Absence of a store therefore cannot separate a real event field from a non-field, and `+0x2440` has the
-same evidence *shape* as the confirmed `+0x2430`:
-
-- **It is waited on through the same thunk.** `0x00191501 lea esi,[edi+0x2440]` … `0x00191519 call edi`
-  where `0x00191507 mov edi,[0x1C4018]` — `[0x1C4018]` is the ordinal-159 `KeWaitForSingleObject` thunk
-  (`0x8000009F`) that `+0x2430` also uses.
-- **Its base is `g_Device`.** At `0x00191446 mov edi,[0x19DCE0]`, `edi` is the device pointer; no
-  instruction writes `edi` between there and the only branch to the wait (`0x001914CB jae 0x191501` —
-  `0x001914E5` and `0x001914FC` are on the `0x001914E2`/`0x001914FC` paths that `ret` at `0x001914FE`
-  without reaching `0x00191501`). So the wait target is `g_Device+0x2440`.
-- **It has a SignalState field at `+4`.** `0x00191497 mov [edi+0x2444],ebp`, exactly as the confirmed
-  event has `mov [eax+0x2434],0`. The two offsets are `0x10` apart, one `KEVENT`
-  (`DISPATCHER_HEADER`) apart.
-
-**Verdict: INFERRED-LOCATED, not CONFIRMED.** The *offset and its wait* are measured; the *name*
-`m_BusyBlockEvent` still comes from the Halo XDK layout by role-matching, which is the same kind of
-inference V4 accepted for the three CONFIRMED rows. It is not raised to CONFIRMED here because the
-role-match itself has not been re-derived from the reference this session, and the `+0x2440` wait site
-has **not been observed executing**: `ordinal 159 … ret=0x0019151B` appears **0** times in all four V3
-runs and in the 2026-09-30 verification run, while the `+0x2430` wait (`ret=0x0018CE73`) appears 124–140
-times. An unexecuted path is not a refuted one, but it is also not a measurement of the field.
-
-*Method note for W2/W10.* This is the second recorded case of a refutation that came from the **absence**
-of a witness rather than from a positive measurement — `docs/jsrf-run-profiles.md` §"Evidence rule" already
-forbids that ("Absence of a witness is never a positive attribution"), and the criterion here failed for a
-sharper reason: the witness it demanded is not expected to exist for this class of field at all, because a
-KEVENT is armed by *whoever signals it* through a pointer, not by a literal-offset store. The same
-V4 pass that refuted `+0x2440` for having no store had CONFIRMED `+0x2430` — which has no store either.
-
-**`sub_00038530` does NOT write `+0x242C` — REFUTED.** V4 asked whether the object that function
-initialises overlaps `g_Device`. It does not reach the slot: the A2h ARM record
-(`20260928-121142-929-a2h-attrib-exp2-3b`: `armed base=0019B200 slot=0019D62C page=0019D000 off=62C
-aliases=29/29`) gives the watched object base as `0x0019B200`, and `0x0019B200 + 0x242C = 0x0019D62C`
-exactly. That base **is** `g_Device` (`0x0019B200`–`0x0019DCE0`, `+0x2AE0`), and the object's extent
-ends at `0x0019DCE0` — so it does **not** overlap the page holding `0x001C4064` (`0x001C4000`–`0x001C4FFF`).
-The `+0x242C` store the A2h packet attributed to `sub_00038530` is `MEM32(ecx + 0x242C) = eax` at
-`recomp_0004.c:54015`, which is inside **`sub_0018CE30`** — the legitimate installer — not `sub_00038530`.
-The current `sub_00038530` body stores only up to `+0xA4` directly plus indexed stores through pointers
-read from `[edi+0x50/0x14/0x28/0x3C/0x64/0x78/0xA4]`, so the A2h write reached the slot through one of
-those pointers, not by a literal offset. **The `0x001D5078` write is therefore a data-driven store into
-`g_Device`, not evidence that a JSRF object overlaps `g_Device`.** The A2h packet's own coherence verdict
-for that run was already `MISMATCH => UNKNOWN`.
-
-**The A2h slot is not the terminal event** (see §5): the terminal read is a slot of the kernel thunk
-table in `.rdata`, which is overwritten wholesale, while the A2h watch sat on `g_Device` at
-`0x0019D62C`. The two addresses are unrelated.
-
-### Corrections to earlier records
-
-- **The "`VCRUNTIME140` memset/memmove" writer (§5) is most likely guest code.** The lifter lowers
-  guest `rep stos`/`rep movs` to host `memset`/`memcpy` (`xboxrecomp/tools/recomp/lifter.py`, the rep
-  string paths; `grep -o` over the committed tree finds 95 `memset(` and 464 `memcpy(` in
-  `src/recomp/gen/recomp_000*.c`, 114 and 652 with `recovered.c`), and `src/jsrf_crt.c` routes
-  guest memmove to host `memmove`. The successor's specified "`VCRUNTIME140` → HOST" split would
-  misattribute it; attribution must use the native return address into the recompiled module. This
-  changes an Advisor-specified input, so it goes back to the Advisor before the successor is designed.
-- **`0x1B00/0x1B04/0x1B08/0x1BC8/0x1BCC` are texture-stage methods** (`xboxrecomp/src/nv2a/nv2a_regs.h`
-  NV097 texture block), not "the programmable-vertex path" as `docs/jsrf-operating-history.md` (2026-09-22)
-  says. Vertex-program evidence is `0x1E94` and the `0x0B80+` constants.
-- **The game has implicit function declarations of its own** (found by the clang cross-build; MSVC
-  only warns, C4013): `xbox_inb`/`xbox_outb` in `src/recomp/gen/recomp_0002.c`, `_0004.c`, `_0005.c`
-  (harmless — `SET_LO8` masks the assumed `int` — and fixed in the toolkit template for the next
-  regeneration), `recomp_dispatch_init` (`src/main.c:634`), `recomp_delta_allowed`
-  (`src/diagnostics.c:324`), `dr_tid_exited` (`tools/harness/collect.c:732`, a static defined after
-  use), `sub_00193D10`/`sub_00196C83` (`tests/test_recovery_11c1.c`). The toolkit now builds with
-  `/we4013`; the game must not inherit it until these are declared.
-
-### Toolkit changes `db96e30..2a349c8`
+**Corrections that stand.** The lifter lowers guest `rep stos`/`rep movs` to host `memset`/`memcpy` (95
+`memset(` and 464 `memcpy(` in `src/recomp/gen/recomp_000*.c`; 114 and 652 with `recovered.c`), so a host
+CRT RIP is usually guest code. `0x1B00/0x1B04/0x1B08/0x1BC8/0x1BCC` are texture-stage methods. The game
+has implicit function declarations of its own (`xbox_inb`/`xbox_outb` in generated chunks,
+`recomp_dispatch_init` in `src/main.c`, `recomp_delta_allowed` in `src/diagnostics.c`, `dr_tid_exited` in
+`tools/harness/collect.c`, `sub_00193D10`/`sub_00196C83` in `tests/test_recovery_11c1.c`); the toolkit
+builds with `/we4013`, the game must not until these are declared.
 
 | Commit | Change | Strict-path effect |
 |---|---|---|
-| `c4adb9b` | Merge BearddOddity `pr-a-small-fixes` (split of upstream PR #128, rebased on v0.12.0): 64-bit per-thread kernel call counter, pseudo-handle sign extension, `STATUS_CONFLICTING_ADDRESSES` → `ERROR_INVALID_ADDRESS`, OHCI DATA UNDERRUN | handle/USB/log fixes; A2h counters stay `RECOMP_TLS`, printed digits unchanged |
-| `a253876` | Merge BearddOddity `pr-b-pushbuffer-executor`: CPU executor (FFP, vertex programs, lighting), DMA-engine walker | none: runs only in the GPU-ack thread body (`RECOMP_GPU_ACK≠0`) under `RECOMP_PB_EXEC`; `xbox_Nv2aAckBusyBits` checks the ack gate itself |
-| `a9188d9` | Toolkit C builds with `/we4013` / `-Werror=implicit-function-declaration`; the two existing violations declared (A2h alias census, DSP P-write watch) | none (same code generated) |
+| `c4adb9b` | BearddOddity `pr-a-small-fixes`: 64-bit per-thread kernel call counter, pseudo-handle sign extension, `STATUS_CONFLICTING_ADDRESSES` → `ERROR_INVALID_ADDRESS`, OHCI DATA UNDERRUN | handle/USB/log fixes |
+| `a253876` | BearddOddity `pr-b-pushbuffer-executor`: CPU executor (FFP, vertex programs, lighting), DMA-engine walker | under `RECOMP_PB_EXEC` only |
 | `cde1ccb` | Revan67: a DPC queued during a drain runs on the next timer pass | a self-requeueing DPC can no longer spin the timer thread |
-| `4b4a62d` | All 34 kernel DATA exports (nxdk `xboxkrnl.exe.def`, Cxbx-Reloaded `KernelThunk.cpp`) patch to backed data; 88, 89, 102, 120, 154, 162, 240, 245, 249, 321 were function thunks. Their old storage overlapped the IDE channel object at `0x500` | **thunk values change** for those ten ordinals if imported (each printed at init); 277/`[0x1C4064]` and KeTickCount unchanged; 120/154 are set once and not advanced |
+| `4b4a62d` | All 34 kernel DATA exports patch to backed data; 88, 89, 102, 120, 154, 162, 240, 245, 249, 321 were function thunks; their old storage overlapped the IDE channel object at `0x500` | thunk values change for those ten if imported; 277 and KeTickCount unchanged; 120/154 set once, not advanced |
 | `1534c4a` | `NtCreateFile`: host `ERROR_FILE_EXISTS` → `STATUS_OBJECT_NAME_COLLISION` | that one failure code |
-| `305efd1` | Guest concurrency meter, `RECOMP_GUEST_METER=1` | none when unset (observation only) |
-| `093174c`, `787b7d7`, `1d85934` | Heap blocks split on reuse; `MmFreeContiguousMemory` frees in the contiguous arena (it called `xbox_HeapFree` on an arena address); reservations tracked as regions with NT semantics — a reserve hint is honoured or refused with `STATUS_CONFLICTING_ADDRESSES`, a commit must land in a region (zero-filled after decommit), `NtFreeVirtualMemory` reads the 32-bit guest values (it dereferenced them as 8-byte host values and failed every call) and really decommits/releases. `[KMEM] summary` counters | **yes** — allocation addresses and failure codes change; `RECOMP_KMEM_LEGACY=1` restores the old behaviour exactly for A/B |
+| `305efd1` | Guest concurrency meter, `RECOMP_GUEST_METER=1` | observation only |
+| `093174c`, `787b7d7`, `1d85934` | Heap blocks split on reuse; `MmFreeContiguousMemory` frees in the contiguous arena; reservations tracked as regions with NT semantics (reserve hint honoured or refused with `STATUS_CONFLICTING_ADDRESSES`, commit must land in a region, `NtFreeVirtualMemory` reads 32-bit guest values); `[KMEM] summary` | **yes** — allocation addresses and failure codes change; `RECOMP_KMEM_LEGACY=1` restores the old behaviour for A/B |
 | `123ca65` | One SRW lock around every heap entry point | removes an unsynchronised shared table |
-| `b6cea28`, `e8972a1` | HeatXD: 8/16-bit `mul`/`imul`/`div`/`idiv` in their narrow forms (4 JSRF sites, e.g. `sub_000307F8`) | at next regeneration |
-| `69842cf`, `79a0070` | NoRain211: jump table read from slot 1 when slot 0 is unusable, not when pointers precede slot 0 | at next regeneration |
-| `caeee80` | `movsx` from `bp`/`sp` (1 JSRF site, `0x0005D58D`) | at next regeneration |
-| `73974ab` | Indirect calls through alias entries counted (`g_recomp_alias_icall_count`), first 8 printed as `[ALIAS-ICALL]` | at next regeneration; `recomp_lookup(alias)` then returns a counting wrapper, so `src/main.c`'s A2h start set grows by up to 135 (cap 16384) |
-| `ca4257c` | A join whose predecessors disagree computes its condition on each edge; leftover `_flags` reads are reported (`FLAGS:`) and `--strict-flags` fails on them. Of 17 annotated sites in the generated tree, 8 were live bugs (always-false branches: `loc_000153A9` in `sub_00015130`, five in `sub_00130FD0`, `sub_000A0F10`, `sub_001C0B86`); 9 remain and are reported (flags live into the function, or data decoded as code). The 144 bare `if (!_flags)` are REP-compare loops and correct | at next regeneration; previously dead branches become live |
-| `f61a0af` | Runtime template declares `xbox_in*`/`xbox_out*` | at next regeneration |
-| `822c9de` | The D3D11 translator keys on the real NV097 method numbers (`nv2a_regs.h`; eight local constants were wrong) and reads a subchannel by its bound class | none: JSRF never reaches that translator |
-| `6864f1f`, `30d7322`, `aa650ca` | **Dormant unless `RECOMP_NV2A_ACTIONS` is exactly `1`:** semaphore release (`0x1A4` handle via RAMHT, `0x1D6C` offset, `0x1D70` written only if the stream commits); a non-zero NOP with PGRAPH `DEBUG_3` bit 20 set traps (TRAPPED_ADDR/DATA, NSOURCE, INTR ERROR, FIFO access off, vector 3) and holds the walk until the guest both clears ERROR and re-enables `0x400720`, GET left past the NOP as in xemu; `0x1D8C`/`0x1D90` land in `0x401A88`/`0x40186C`; `FLIP_STALL` holds while the flip READ index equals WRITE, released only by the guest's `0x40071C` write | none when unset — a differential driver fed 6000 random streams plus ISR register writes through the old (`a9188d9`) and new cores and every state field matched; the synthetic fence mirror writing the semaphore's word is logged and counted |
+| `a9188d9`, `b6cea28`, `e8972a1`, `69842cf`, `79a0070`, `caeee80`, `73974ab`, `f61a0af` | `/we4013`; narrow 8/16-bit `mul`/`imul`/`div`/`idiv` (4 JSRF sites, e.g. `sub_000307F8`); jump table from slot 1 when slot 0 is unusable; `movsx` from `bp`/`sp` (`0x0005D58D`); alias indirect calls counted (`[ALIAS-ICALL]`, first 8); runtime template declares `xbox_in*`/`xbox_out*` | at regeneration |
+| `ca4257c` | A join whose predecessors disagree computes its condition per edge; leftover `_flags` reads reported (`FLAGS:`), `--strict-flags` fails on them; 8 of 17 annotated sites were live always-false branches; the 144 bare `if (!_flags)` are REP-compare loops and correct | at regeneration |
+| `822c9de` | D3D11 translator keys on real NV097 method numbers | none for JSRF |
+| `6864f1f`, `30d7322`, `aa650ca` | Dormant unless `RECOMP_NV2A_ACTIONS` is exactly `1`: semaphore release (`0x1A4`, `0x1D6C`, `0x1D70` written only if the stream commits); non-zero NOP trap with PGRAPH `DEBUG_3` bit 20; `0x1D8C`/`0x1D90` → `0x401A88`/`0x40186C`; `FLIP_STALL` holds while READ == WRITE, released by the guest's `0x40071C` write | none when unset (6000-stream differential driver matched) |
 | `2a349c8` | Admission evidence: `docs/technical/nv2a-action-methods.md` | — |
 
-**Admission status of the NV2A action methods** (the toolkit doc has the sources: xemu `f9b1403`,
-envytools `f102b82`, nxdk pbkit `58427c0`, Linux v6.6 nouveau, each with lines and SHA-256; JSRF's ISR and
-the XDK reconstruction are corroboration only). Against §"Admission criteria" of
-`docs/jsrf-run-profiles.md`: criterion 1 is unmet for all three by design (they are behind a switch until
-admitted). **Semaphore release fails criterion 4 as written**: the release tells D3D that the rendering
-before it finished, and the strict model does not render, so it can stand in for work the guest then
-relies on; only its DMA-object lookup has two sources. **NOP trap** meets criteria 2–4 except two points
-where the sources disagree (whether the data check is gated by `DEBUG_3` bit 20 — a non-zero NOP with the
-bit clear stops as `software_method_unchecked` rather than guessing — and the exact NSOURCE bit).
-**FLIP_STALL** meets 3–4; its counters have two sources, its stall condition only xemu. None of it can run
-end to end in JSRF until `0x00193F70` (`SoftwareMethod`) is recovered.
+Against `docs/jsrf-run-profiles.md` §"Admission criteria": semaphore release fails criterion 4 (it can
+stand in for rendering the strict model does not do); NOP trap meets 2–4 except two points where the
+sources disagree; FLIP_STALL meets 3–4.
+
+---
 
 ## 8. Disc-error timeout and the boot clock (2026-10-05)
 
-The pending-I/O path in `0x25400` is not a 15-second timeout. Measured from the original bytes and the
-runtime that serves them:
-
-- `0x145560` is `rdtsc` into an 8-byte guest buffer (`ret 4`). The lifter emits
-  `xbox_ReadTimeStampCounter()`, which scales `QueryPerformanceCounter` to `XBOX_TSC_HZ`
-  (733,333,333). The constant the title compiles in is the same value: `0x145571` stores
-  `0x2BB5C755` and returns 1, and the 1500 s dump holds that pair at `[0x20CC50]`
-  (`check-dump-mapping.py` matched `.text` at `0x11000`).
-- `0x6E910` (`ret 0x14`) subtracts two TSC samples, multiplies by `0xF4240` (1,000,000) via
-  `0x17CA70` (`_allmul`), and divides by the 64-bit frequency at `[ecx+8]` via `0x17C9C0`
-  (`_alldiv`). Callers pass `ecx = 0x20CC48`. The quotient is microseconds of wall time when the
-  scaler matches that frequency.
-- `0x25400` takes the fatal call at `0x255AD` only when `[esi+0x64] == 0x103` (`STATUS_PENDING`,
-  written by `0x146078` into the overlapped block) and that quotient's high half is positive or its
-  low half is at least `0xE4E1C0` (240,000,000). The start sample is `[esi+0x188]` / `[esi+0x18C]`,
-  not the `+0x190` / `+0x194` pair `0x25310` uses. The same 240,000,000 threshold is what `0x25310`
-  compares before its tail jump to `0x6F730`. The path string lives at `[esi+0x78]` (the copy starts
-  with `'Z'`) and a `~` from `[0x1C4DF0]` is appended for the side file.
-
-Which of the four `0x6F730` entries fires at the ~950 s marker is not established by this section.
-The ~2 updates/s logo hold is not this scaler running slow: the scaler is what makes the 240 s
-threshold 240 s of wall time. `RECOMP_PB_EXEC`'s `FLIP_STALL` returns as soon as it is asked
-(`nv2a_pb_exec.c`), and the vblank thread targets 60 Hz unless the mode timing is 40–240 Hz, so
-neither clock is a 2 Hz source.
+The pending-I/O path in `0x25400` is not a 15-second timeout. `0x145560` is `rdtsc` into an 8-byte guest
+buffer; `xbox_ReadTimeStampCounter()` scales QPC to `XBOX_TSC_HZ` (733,333,333), the same value the title
+stores at `0x145571` (`0x2BB5C755`; held at `[0x20CC50]`). `0x6E910` (`ret 0x14`) subtracts two samples,
+multiplies by `0xF4240` via `0x17CA70` (`_allmul`) and divides by the frequency at `[ecx+8]` via
+`0x17C9C0` (`_alldiv`), `ecx = 0x20CC48`: microseconds of wall time. `0x25400` takes the fatal call at
+`0x255AD` only when `[esi+0x64] == 0x103` (`STATUS_PENDING`, written by `0x146078`) and the quotient is ≥
+`0xE4E1C0` (240,000,000); start sample `[esi+0x188]`/`[esi+0x18C]`. `0x25310` compares the same threshold
+before its tail jump to `0x6F730`; the path string is at `[esi+0x78]`, and `~` from `[0x1C4DF0]` is
+appended for the side file. L41 observes `0x6F730` and the `0x2537E` tail (§26.4).
 
 ## 9. The alias-fold misdispatch class: wrong return value → corrupt loop bound → wild write (2026-10-05)
 
-**A single misdispatched function can corrupt 363 KiB of guest memory, and the mechanism is now
-fully accounted for.** This is a defect class, not a one-off, and it is why an unresolved-looking
-symptom (`[ICALL] Failed to resolve VA 0xFFC00000`, a NaN bit pattern rather than an address) was
-actually a *return-value* defect.
-
-**The chain, every link observed from run `20261005-011634-413-f23-7da30`'s dump and the original
-bytes:**
-
-1. **The misdispatch.** `0x9CC40` at `0x9CCC0` does `push i; push 3; push ebp; push 1; call
-   0x25700`. `0x25700` is a table dispatcher: `cmp edx,0x21` bounds the index, then
-   `mov edx,[edx*4+0x1EC200]` and `call edx` with 3 stack arguments. Index 1 selects
-   `[0x1EC204] = 0x00032610`. That address had **no body of its own** — the 2026-09-21 translation
-   pass folded it as a `tail_jump_alias` into `sub_00033800` — so the call ran `sub_00033800`,
-   which is `mov eax,1; ret 4`. That is the `[ALIAS-ICALL] target=0x00032610 owner=0x00033800`
-   line, seen in f23 only.
-2. **Two effects, one silent.** `ret 4` against a real `ret 0xc` leaves guest `esp` 8 bytes low
-   inside `0x9CC40`; and the wrong **return value `eax = 1`** flows onward.
-3. **The wrong value becomes a pointer.** At `0x9CCCF` the `1` goes into `ebp`, passes a nonzero
-   test, `new(0x118)` runs, and constructor `0x15420` stores its argument — the `1` — at
-   `[obj+0x38]`, where an object pointer belongs. The object is `0x034D5110`.
-4. **The loop runs away.** `0x15D90` derives its loop counts from `[esi+0x38]`. With `[esi+0x38] =
-   1`, `[esi+0x110]` reads `(count-1)/1` with `count = 0`, i.e. **`0xFFFFFFFF`**; the saved outer
-   counter is **31,739**. The inner loop walks a 12-byte float3 array based at `0x231D40`
-   (`mov edi,0x231d40` at `0x15E17`) and a paired heap buffer based at `0x034C3E40`.
-5. **Why the fill is NaN.** The loop normalises each vector through `0x14C3B0` / `0x14C460`.
-   Normalising a **zero** vector gives `0 · rsqrt(0) = 0 · inf`, and the SSE default quiet NaN is
-   **`0xFFC00000`** — the title's own "no value" sentinel, which is why this first looked like a
-   deliberate sentinel fill rather than computed garbage.
-6. **The arithmetic closes exactly.** `0x231D40 + 12 × 31,739 = 0x28ED04`, which is both the
-   guest's `edi` at capture and the exact end of the observed fill; and
-   `0x034C3E40 + 0x5C × 31,740 = 0x0378CCD0`, the paired `ebx`. The fill is therefore **computed**,
-   not a `memset`, and it is the writer's own loop rather than a wild store.
-
-**The observed damage:** a uniform `0xFFC00000` run at `0x233ED0..0x28ED04` (93,057 of 93,069
-words) that overwrote the `DOLBY` section image (`0x27E080`), live globals including `0x251D6C`,
-and the thread-trampoline control block — so the trampoline's `mov eax,[0x25efb8]; test eax,eax;
-je` saw non-zero and called `0xFFC00000`, producing the misleading `[ICALL] Failed to resolve`
-fatal. Writing past the end of `.data` into `DOLBY` is a consequence, not a separate defect:
-enforcing XBE section write-protection would only fault earlier. (Whether the retail loader
-enforces section write flags at all is **inferred, not verified**; treat it as a backlog diagnostic
-idea, not a fidelity defect.)
-
-**Why it is not a regression and not a race.** The fill follows **deterministically** from the
-misdispatch once the path is taken. The *path* is what varies run to run: `f24` never reached
-`0x9CC40`, going idle in the `0x13F80` presenter loop and taking the game's own fatal path after 9
-presents. So a clean run proves nothing unless it reaches the path.
-
-**Acceptance criterion this implies (path-aware).** For this class, a run counts only if it logs
-`[RECOVERED] 0x00032610 returned`, has **no** `ALIAS-ICALL target=0x00032610`, shows **no** NaN at
-`0x27E080` or `0x25EFB8`, and stops **beyond** `0x9CC40`. A run that takes the f24 branch has
-exercised nothing and must be recorded as not exercised and rerun.
-
-**What would change this account:** a run that logs the ABI-verified return for `0x00032610` and
-*still* shows the fill — that would mean `[obj+0x38]` has a second source.
-
-**Generalisation.** The generated dispatch carries **134 alias tuples**. Any of them reached
-through a data table runs its *owner's body from the start*, which is wrong whenever the alias
-target is a genuine function. Ten unrecovered ones are referenced from data sections and were
-audited: `0xE9A40` (ref `0x1CEE84`, its rets are 4 and its owner's are 0), `0x102700`
-(`0x1D1DD4`), `0x1199C0` (`0x1D7B6C`), `0x13A340` (`0x1DEA64`) — all `.rdata` and therefore
-highest priority — plus `.data` references to `0x40002`, `0x100AB0`, `0x1A2078`, `0x1BD800`,
-`0x1C3800`; `0xB090B` is referenced only from `$$XTIMAGE` and is probably coincidental. Each must
-be verified from the bytes before recovery, because some data references will be coincidental.
+`20261005-011634-413-f23-7da30`: `0x9CC40` calls dispatcher `0x25700` (`cmp edx,0x21`; `mov
+edx,[edx*4+0x1EC200]`; 3 stack args); index 1 is `[0x1EC204] = 0x00032610`, folded into `sub_00033800`
+(`mov eax,1; ret 4`). The `1` became `[obj+0x38]` of `0x034D5110`, `0x15D90`'s loop count `0xFFFFFFFF`
+(outer 31,739), and normalised zero vectors the SSE quiet NaN `0xFFC00000` over `0x233ED0..0x28ED04`
+(93,057 of 93,069 words; `0x231D40 + 12 × 31,739 = 0x28ED04`), overwriting the `DOLBY` image
+(`0x27E080`), `0x251D6C` and the thread trampoline (`mov eax,[0x25efb8]` then called `0xFFC00000`).
+**Path-aware criterion:** a run counts only if it logs `[RECOVERED] 0x00032610 returned`, no `ALIAS-ICALL
+target=0x00032610`, no NaN at `0x27E080`/`0x25EFB8`, and stops beyond `0x9CC40`. The dispatch carries
+**134 alias tuples**; data-referenced unrecovered aliases: `0xE9A40` (`0x1CEE84`), `0x102700`
+(`0x1D1DD4`), `0x1199C0` (`0x1D7B6C`), `0x13A340` (`0x1DEA64`) in `.rdata`; `0x40002`, `0x100AB0`,
+`0x1A2078`, `0x1BD800`, `0x1C3800` in `.data`; `0xB090B` only from `$$XTIMAGE`.
 
 ## 10. Stack-contract contradictions are statically decidable, and 20 were live (2026-10-05)
 
-**Four defects in one session each cost a game run and every one was decidable from the original
-bytes.** `scripts/check-stack-depth.py` is the detector: a reachable CFG walk over every manifest
-entry that computes `d = ESP − ESP_at_entry` and compares the declared `stack_args` with what the
-reachable exits actually do.
+`scripts/check-stack-depth.py` walks every manifest entry's reachable CFG with `d = ESP − ESP_at_entry`
+(`push` → `d -= 4`). The wrapper asserts `g_esp == before_stack + 4 + stack_args` and a `ret N` leaves
+`esp = entry + d + 4 + N`, so **`stack_args = N + d`**; the gate fails on any reachable `ret N` at **`d =
+0`** whose `N` differs. The general form is not gated: all **29** entries with a resolved nonzero-depth
+`ret N` have `d > 0` (min 4, max 100) — an extent question. A `call` contributes its callee's own `ret N`;
+an unresolvable callee makes the depth `UNKNOWN`. Repaired: `0x00021010` 0→**16**, `0x000F4FF0` 0→**4**,
+`0x00102490` 0→**4** (`0x1025B0` recovered, `stack_args 0`), `0x00152BC0` 8→**24** (`0x152DE0` recovered,
+`stack_args 8`), and 20 entries declared 0 whose bodies end `ret 4` (`ret 0x14` for `0x00080028`):
+`0x246E0`, `0x42CA0`, `0x80028`, `0x86180`, `0xA5050`, `0xCD890`, `0xD03F0`, `0xD62A0`, `0xDB820`,
+`0xE2050`, `0xE2A00`, `0xE3700`, `0xEDA10`, `0xF4C60`, `0xF8AF0`, `0x11B660`, `0x120400`, `0x124B00`,
+`0x134D50`, `0x139B30`. Control `0x1BCB14` starts mid-function, `d = +8`, `4 + 8 = 12` = its declared
+value, run-verified in 106 runs; never gated. Other classes are `SUSPICIOUS` (`RET_DEPTH` per path,
+`FALL_OFF_END`, `CUT_EPILOGUE`, `TRUNCATED`). Tests: `--selfcheck`, `tests/test_stack_depth.py` (CTest
+`jsrf_stack_depth`). `check-generation-provenance.py --write` erases the hand-maintained
+`amendments`/`regenerations` history; re-attach it from `HEAD`.
 
-**The identity the whole thing rests on.** `scripts/recover-functions.py` asserts
-`g_esp == before_stack + 4 + stack_args` after a recovered body, and a `ret N` leaves
-`esp = entry_esp + d + 4 + N` (the convention is `push` -> `d -= 4`, so `d`
-is `ESP_at_ret − ESP_entry`). Equating them gives
+## 11. The over-wide `tail_jump_alias` record is the dominant stop class (2026-10-05)
 
-```
-stack_args = N + d          at a reachable `ret N`
-```
-
-So at a reachable `ret N` reached at `d = 0`, `stack_args` must be `N`. That is the class the gate
-fails on, and the restriction to `d = 0` is load-bearing: the general `N + d`
-form was implemented and **rejected on measurement**. With the walk required to be fully resolved,
-**29** entries have a resolved nonzero-depth `ret N`, and in **every one** `d > 0` (min 4, max 100):
-the `ret` is reached with *more* stack than at entry, i.e. the walk popped registers the body never
-pushed. That is the signature of a mid-function entry or of an over-wide span whose walk ran into a
-neighbouring function, so a nonzero `d` is only as trustworthy as the span extent — and asserting the
-extent is right in order to conclude the value is wrong is circular. All 29 also disagree with their
-declared value, and none has a verified return in any archived run, so nothing is hidden by leaving
-them to `RET_DEPTH`, which is the code that exists for exactly that adjudication.
-
-**The conclusion is about this entry; the depth may rest on callee summaries.** An earlier draft of
-this section said the rule "mentions no callee", which is false. A `call` contributes its callee's
-own `ret N` immediate, derived by walking the callee, and finding that callee's extent uses the
-manifest and the analysis database. Measured proof that this matters: treating every `call` as
-depth-neutral finds **zero** defects on the pre-turn manifest, because all twenty need their callee's
-cleanup resolved before the walk reaches the `ret` at depth 0. The precise claim is that the
-*conclusion* is a statement about this entry's declared value, while the *depth* it depends on is
-computed from other functions.
-
-**A false-negative in the first shipped rule hid four more defects, and it was found twice
-independently.** The first rule required *every* reachable exit to be a `ret N` at depth 0. Because
-`stack_args = N + d` holds on each path separately, one `ret` site reached at depth 0 by one path and
-at UNKNOWN by another (through an indirect call) failed the all-depths test, so the whole entry
-reported only `UNKNOWN/PARTIAL` — a live defect hidden behind an unrelated unresolved path. The rule
-now gates on **any** reachable `ret N` at depth 0. Measured: 20 defects before, **24** on the
-pre-turn manifest, 4 on the current one, all repaired:
-
-| entry | declared | correct | why |
-|---|---|---|---|
-| `0x00021010` | 0 (key ABSENT) | **16** | only exit is `ret 0x10` at `0x21101` at depth 0; wrapper checked `+4`, body emits `esp += 20` |
-| `0x000F4FF0` | 0 | **4** | every exit is `ret 4`; two are at depth 0 |
-| `0x00102490` | 0 | **4** | `ret 4` at `0x102588` at depth 0 |
-| `0x00152BC0` | 8 | **24** | all six exits are `ret 0x18`; `0x152DCF` is at depth 0 |
-
-Two of the four were also swallowing a whole function each, so both spans were tightened and the
-swallowed functions recovered: `0x102490` covered `0x1025B0` (`sub esp,0x1c; push esi; push edi` …
-`pop edi; pop esi; add esp,0x1c; ret`, `stack_args 0`), and `0x152BC0` covered `0x152DE0`
-(`mov edx,[esp+8]; cmp edx,[0x264e74]; push edi` … `pop edi; ret 8`, `stack_args 8`).
-**`0x152BC0`'s wrong 8 was inherited from `0x152DE0`'s own correct `ret 8`** — the `0x74C70`
-pattern of a value belonging to a different body. `0x1BCB14` remains the control the rule must not
-touch: a single `ret 4` declared as 12. It **starts mid-function** and pops `esi`/`ebx` it never
-pushed, so `d = +8` and `N + d = 4 + 8 = 12` — exactly the declared value, which is why it is right.
-It has **no** depth-0 path, so the gate never touches it, and it is run-verified in 106 archived runs.
-
-**The 20 live defects.** Twenty entries declared `stack_args 0` (four by an ABSENT key, so the
-generated wrapper used the `0` default) while their bodies end in `ret 4` — `ret 0x14` for
-`0x00080028`, the one exception. The wrappers checked `+4` where the bodies really net `+8`
-(`+24` for `0x00080028`), so **every one of them would have aborted with `[RECOVERED] ABI FAILURE
-… expected +4` the moment it ran**, and none ever ran: the twenty addresses appear in 0 of 122
-archived `jsrf_run.log` files, in no `returned; ABI verified` line, in no `ABI FAILURE` line and
-in no textual mention. They are `0x246E0`, `0x42CA0`, `0x80028`, `0x86180`, `0xA5050`, `0xCD890`,
-`0xD03F0`, `0xD62A0`, `0xDB820`, `0xE2050`, `0xE2A00`, `0xE3700`, `0xEDA10`, `0xF4C60`, `0xF8AF0`,
-`0x11B660`, `0x120400`, `0x124B00`, `0x134D50`, `0x139B30`. All twenty are `detection_method:
-tail_jump_alias` in the analysis database, i.e. they are exactly the addresses their manifest
-entries exist to un-fold (§9's class); a scan of every `.text` byte for `E8`/`E9`/`EB`/`7x`/`0F 8x`
-finds **zero** transfers to any of them, so the wrapper's contract is a call contract and no
-tail-jump argument rescues the old value.
-
-**Why the other four classes do not gate, measured rather than asserted.** On the committed
-manifest the census is 20 `STACK_ARGS`, 24 `RET_DEPTH`, 26 `FALL_OFF_END`, 71 `CUT_EPILOGUE` and
-2 `TRUNCATED`. The span classes overlap `scripts/check-span-exits.py`'s existing 360-finding
-CUT-TARGET population (156 entries) — a class the project already knows about and deliberately does
-not gate — and the rest need per-entry boundary adjudication. Gating them would have required
-freezing 71+ live defects in a baseline, which is exactly how `0x000307A0` stayed hidden inside
-`config/entry-extent-baseline.json` while `just check` stayed green. They are counted, named and
-reported as `SUSPICIOUS` instead.
-
-**Two models were implemented and discarded on evidence.** Treating calls as depth-neutral, and
-consuming a call's argument pushes, both fail: the second cannot tell a prologue save from an
-argument push and produced depth `−52` on `0x0007DA30` where the truth is `0`. A heuristic that
-reports confident nonsense is worse than no model, so a `call` now contributes its callee's own
-`ret N` immediate, derived by walking the callee, and an unresolvable callee makes the depth
-`UNKNOWN` — never a silent zero.
-
-**What the validator cannot decide, stated rather than hidden.** 1051 of 3105 entries are
-`UNKNOWN`: an unresolved indirect call or jump, or an `esp` written from a register. `0x7DA30`'s
-own corrected span is one of them — its three `call dword ptr [...]` sites leave the pre-`ret`
-depth unresolved, so the hidden `ret 4` is caught by the *truncated-span* form (the form the run
-actually hit) and not by the depth arithmetic.
-
-**Controls.** `--selfcheck` replays all seven historical defects (`0x80BD0`, `0x7DA30` twice,
-`0x74C70`, `0xBB7B0`, `0x307A0`, `0x246E0`) at their **pre-fix** spans and asserts the verdict
-*and* code each was diagnosed under, plus the negative half that every corrected entry is clean —
-a control that fired on both the bad and the good span would prove nothing.
-`tests/test_stack_depth.py` (CTest `jsrf_stack_depth`) adds that the gate passes with **no**
-baseline, that it can actually fail (a reverted entry is rejected and named), that two runs agree
-byte for byte, and that the JSON report covers every entry.
-
-**Tool defect found on the way.** `scripts/check-generation-provenance.py --write` records only
-the measured axes and silently erases the hand-maintained `amendments` and `regenerations`
-history; it dropped 34 amendments. They were re-attached from `HEAD`. A session that runs
-`--write` without noticing loses the provenance narrative, so this is recorded as a backlog item.
-
-## 11. The over-wide `tail_jump_alias` record is now the dominant stop class (2026-10-05)
-
-**Run g03 cleared `0x00094AB0` on an exercised path and immediately produced the same defect
-again.** Its log holds exactly one `[RECOVERED] 0x00094AB0 returned; ABI verified (ESP/EBX/ESI/EDI)`
-line — so the return is path-exercised, not merely present — and then stops at
-`[ICALL] Failed to resolve VA 0x000496E0`. That address appears in **no** earlier archived run, so
-it is a new stop rather than a re-observation.
-
-**The shape, measured twice now.** Both `0x94AB0` and `0x496E0` are complete functions with **no
-analysis-database entry of their own**, living inside an over-wide `tail_jump_alias` record:
-
-| address | swallowed by | its own body | exits | `stack_args` | how the value was obtained |
-|---|---|---|---|---|---|
-| `0x94AB0` | *nothing* — an unanalyzed gap `0x94AA3..0x95FC0` | `0x94AB0..0x95FB2` | 3 × plain `ret` at depth 0 | 0 | **PROVED** by the gate |
-| `0x496E0` | `sub_00049520 [0x49520, 0x4A6F0)` | `0x496E0..0x497D6` | 1 × `ret 8` | 8 | **INFERRED** — the gate says `UNKNOWN` |
-
-**`0x496E0`'s value is inferred, and an earlier draft of this section overstated it.** The gate
-reports that entry `UNKNOWN/PARTIAL`, not `PROVED`, because its body makes **seven** indirect
-`call dword ptr [...]` calls (`[ecx+0x11c]`, `[edx+0x148]`, `[edi+0x144]`, `[edx+0x154]` twice,
-`[ecx+0x154]`, `[edx+0x144]`), so the depth at the `ret 8` is not statically resolvable and there is
-no depth-0 path to gate on. The value 8 comes from the byte *pattern* instead: no call is followed by
-an `add esp,N` fix-up, so each callee removes its own arguments (stdcall/thiscall). The frame is
-`push esi` (`0x496E7`), `push edi` (`0x49744`), `pop edi` (`0x4977B`) and `pop esi` (`0x497B7`) --
-**there is no `sub esp,N` anywhere in the body and no `ebx`/`ebp` save** -- then a final argument
-block (`push ecx`, `push 1`, `push eax` at `0x497BF`..`0x497CA`), `call dword ptr [edx+0x144]` at
-`0x497CB`, and `ret 8` at `0x497D1`. The callee removes the three argument words, so the depth is
-back to 0 at that `ret 8`. A single `ret N` after a balanced frame makes 8 the only value consistent
-with that pattern, but the depth-0 claim is a convention here, not an observation.
-
-*(An earlier revision of this paragraph gave the epilogue as `pop edi; pop esi; pop ebp; pop ebx;
-add esp,0x50; ret 8`. That is `0x94AB0`'s epilogue, pasted in by mistake, and it is corrected here.
-The mistake was caught by adversarial review and is recorded rather than quietly removed, because
-"the value was right but the cited bytes were another function's" is exactly the kind of error that
-makes an inference look like an observation.)*
-
-`0x5C840` is recorded the same way for the same reason. The distinction
-matters because the two cases have different failure modes: a `PROVED` value is forced by the bytes,
-whereas an `INFERRED` one is a strong hypothesis that a run can still falsify.
-
-`0x496E0`'s swallowing record overruns four other real functions: the manifest already owns
-`0x497E0`, `0x49A80`, `0x49E80` and `0x4A6C0` as separate entries, so the `0x49520` span is wrong
-for the same reason `0x139B30`'s was — it is an alias-parent extent, not a function extent.
-
-**Why the validator did not already flag `0x496E0`.** It is not in the manifest, and
-`check-stack-depth.py` validates manifest entries. The detector for this class is
-`scripts/check-table-targets.py`, which reports **120 candidates** and had already flagged
-`0x94AB0` as UNCOVERED. The actionable reading is that the next several stops are likely to come
-from that population and can be cleared from the bytes before spending a run — `0x496E0` was
-recovered, gated, regenerated, built and tested with no run at all, and only needs one to confirm.
-
-**The title screen is still not reached.** Presents stop at exactly 1000 in g03 as in every prior
-run, and the disclaimer hash `5bdaea576b8509f5` is unchanged throughout. The two newest stops are
-in code the disclaimer hold reaches, not in the presenter, so they do not yet bear on the
-1000-present ceiling; that ceiling remains the open question it was.
-
-**Two runs were lost to environment faults, recorded rather than hidden.** `g01` was killed by a
-tool interruption mid-run and left no `result.json`. `g02` then failed in 2.7 s at
-`[SAVE] root rejected: requested directory is not writable (winerror=5)` without reaching
-`guest_entry` — a stale-state artifact of the interrupted run, not a code regression; the
-save-root was verified writable by hand and `g03` ran normally. Neither loss is evidence about any
-code change, and neither is counted as a stop.
-
-**Run g04 took a different path, and that is the nondeterminism, not a regression.**
-`20261005-175848-754-g04-496e0` (exploratory, 250 s) exercised `0x94AB0` again — one
-`[RECOVERED] 0x00094AB0 returned; ABI verified` line — and then stopped at
-`[ICALL] Failed to resolve VA 0x0005C840`, an address in no earlier run. So g04 **neither confirms
-nor refutes** the `0x496E0` repair: it never reached that address. Two runs of the same executable
-have now taken different paths through the same boot region (g03 → `0x496E0`, g04 → `0x5C840`),
-which is the third independent instance of the run-to-run variation this project records as a
-first-class constraint, and the reason a single run cannot establish progress.
-
-**`0x5C840` is the third instance of the class, and it needed a byte derivation the model could not
-do.** A complete function with no analysis-database entry of its own, sitting before the over-wide
-`tail_jump_alias` records `sub_0005C990` and `sub_0005CB90` (both `[0x5C990, 0x5D3B0)`, both
-overrunning real functions). It has **zero rel32 callers** and exactly one reference in the image,
-the `.data` dword at `0x001FA1C0` — the `0x80BD0`/`0x94AB0` pattern. `scripts/check-stack-depth.py`
-reports it `UNKNOWN`, not `PROVED`, because two calls on its walk are not statically resolvable.
-Its `stack_args 0` is therefore derived from the byte *pattern* rather than the model: neither call
-is followed by an `add esp,N` fix-up, the direct call at `0x5C86C` to `0x1BAB20` has no pushes
-before it (its arguments arrive in ecx/edx), and the vtable call at `0x5C87E` has exactly two. With
-those two edges read off, both resolvable exits — `0x5C979 jmp 0x1BAA50` (target cleanup 0) and
-`0x5C982` plain `ret` — sit at depth 0 and total 4. **The record keeps the distinction: this value
-is inferred from a byte pattern on a partially-resolved walk, not proved by the gate.**
-
-**The class is now large enough to be worth naming.** Three consecutive stops
-(`0x94AB0`, `0x496E0`, `0x5C840`) are all "complete function missing its own entry, swallowed by or
-adjacent to an over-wide `tail_jump_alias` record", and `scripts/check-table-targets.py` reports
-**120 candidates** of exactly this shape. `0x496E0` and `0x5C840` were each recovered, gated,
-regenerated, built and tested with **no run at all**, so the remaining population can be worked
-from the bytes in batches rather than one run per stop. What a run is still needed for is
-confirming that the *dispatched* address was the one repaired — and g04 shows even that is not
-guaranteed on the first attempt.
-
-
-
+Stops 17–19 were complete functions with no database entry of their own, inside or beside an over-wide
+`tail_jump_alias` record: `0x94AB0` (gap `0x94AA3..0x95FC0`; three plain `ret` at depth 0; `stack_args 0`
+PROVED); `0x496E0` (in `sub_00049520 [0x49520, 0x4A6F0)`; body `0x496E0..0x497D6`, one `ret 8`;
+`stack_args 8` INFERRED from the frame `push esi` `0x496E7`, `push edi` `0x49744`, `pop edi` `0x4977B`,
+`pop esi` `0x497B7`); `0x5C840` (before `sub_0005C990`/`sub_0005CB90`, both `[0x5C990, 0x5D3B0)`; one
+reference, `.data` `0x001FA1C0`; `stack_args 0` INFERRED). g05 (`20261005-185514-638-g05-confirm`)
+confirmed `0x496E0` and `0x5C840`. The detector for unresolvable table targets is
+`scripts/check-table-targets.py`.
 
 ## 12. The missing-entry population is a table-level defect, and the detector is blind to part of it (2026-10-05)
 
-**Three consecutive runtime stops were the same defect, so the population was censused rather than
-worked one stop at a time.** `scripts/check-table-targets.py` reports **117** candidates (not 120:
-the three already-recovered addresses `0x94AB0`, `0x496E0`, `0x5C840` each had an aligned
-`.data`/`.rdata` dword and have left the list). The sweep behind that number, measured from the XBE:
-4117 aligned `.data`/`.rdata` dwords whose value lands in `.text`, of which 3632 already resolve at
-runtime (**no work**), 485 do not, and 117 pass the boundary filter. Classification: **53 swallowed
-by a manifest span, 10 swallowed by a database span only, 54 UNCOVERED true gaps.**
-
-**24 of the 117 are pure noise**, and that matters because they inflate the apparent backlog: 13
-have a padding byte (`0x90`) *at* the candidate VA, and 11 are not 4-byte aligned. Ten of the 13 come
-from a single 16-bit word array at `.rdata:0x0022E1B4` whose bytes read `...6000 0200 6100 0800
-6200 0800...`, so the filter passes only because the preceding word's high byte happens to be `0x90`.
-Tightening the filter to require "not a padding byte at the VA" and "4-byte aligned" takes 117 to
-**93**. That test should be added.
-
-**Four live defects of the section-9 class are invisible to that census, and this is a scoping
-limit rather than a bug in the checker.** `check-table-targets.py` filters on `runtime_starts()`,
-which asks "can the runtime resolve this address", and that is the *correct* predicate for its
-stated purpose: finding addresses that reach an indirect call and **do not resolve at all**, i.e. a
-trap. A `tail_jump_alias` folded into its parent **does** resolve — the dispatch tuple names an
-`recomp_alias_XXXX` shim — so it is outside that purpose by construction. But the shim runs a
-*different function*, so the address is still wrong, just wrong in the section-9 way (a wrong body
-rather than no body):
-
-```
-static void recomp_alias_000E9A40(void) { recomp_alias_observe(77u); sub_000E9D80(); }
-{ 0x000E9A40u, (recomp_func_t)recomp_alias_000E9A40 },
-```
-
-`0xE9A40`'s own body is a complete function with a 0x12-case switch and `ret 4`; the shim runs
-`sub_000E9D80` instead. Verified against `src/recomp/gen/recomp_dispatch.c`: there are **134** alias
-shims and **every one** calls a `sub_` that is not its own address, so this is a property of the
-whole alias-fold mechanism rather than of these four. Re-running the sweep with `genuine_starts()`
-instead of `runtime_starts()` gives **121** rather than 117, and the four it surfaces are
-`0xE9A40`, `0x100AB0`, `0x1199C0` and `0x13A340` — each a complete body with its own switch table
-and `ret`, reachable through a `.rdata`/`.data` pointer.
-
-**So the correct statement is not "the checker is blind" but "traps and misdispatches are two
-populations and only one is censused."** What is needed is a *separate* detector for the
-misdispatch class — one that asks whether an address's dispatch entry runs its own body — rather
-than changing this checker's predicate, because changing it would mix the two populations and make
-the trap list noisy. Of the 134 shims, the actionable subset is the aliases whose own address is a
-genuine function (a real prologue and its own `ret`); the rest are genuine mid-body labels for which
-running the parent's body from the start is correct. `0xE9A40`, `0x100AB0`, `0x1199C0` and
-`0x13A340` are four such, and §9's list of ten data-referenced aliases is the same population. This
-is the next detector change, and it is a new checker rather than an edit to this one.
-
-**Some defects are in existing entries rather than missing ones, and the documented span convention
-is what hides them.** `0x7DBD0` is a complete 190-instruction function swallowed by the manifest
-entry `0x7DAE0–0x7DE20`, whose declared end is **both** that entry's own end *and* the next database
-function start — so by the documented convention the entry is "correct" and still hides a function.
-The same shape appears in `0x1FF90` (its own `ret 4` at `0x1FFE7`, declared end `0x200A5`, 189 bytes
-of over-run swallowing `0x1FFF0`) and `0x91C00` (its own `ret` at `0x91C23`, declared end `0x91EB0`,
-swallowing `0x91C30` and `0x91D70`). So "end at the next function start" is necessary but not
-sufficient: an entry whose own reachable body ends well before that start is over-wide, and the
-bytes between are someone else's function.
-
-**Whole tables are missing members, so this is not a run of accidents.** Sampled function-pointer
-tables and their missing-entry counts: `0x001F97B4` (the `0x496E0` family) has only 6 of 13 entries
-as database starts; `0x00215530` 40 of 46; `0x0020D8A8` 24 of 27; `0x001EC288` 26 of 33;
-`0x001CD2E0` 92 of 96; `0x001CA6C8` 61 of 64; `0x001CAC60` 78 of 80; `0x001EBCF4` 24 of 26;
-`0x002165F0` 25 of 29; `0x001CD7F8` 47 of 48. Every sampled table has missing members.
-
-**A cheap, strong discriminator was found and should be folded into the detectors.** For a candidate
-inside a container span, walk the *container's* own reachable control flow and ask whether the
-candidate is an instruction boundary reachable from the container's entry. If it is, the address is
-an internal label of the container, not a separate function — the `0x30508`/`0x3060E` situation. Of
-the 117, only **2** are reachable-from-container, and both are legitimate recoveries because their
-containers are bogus `gap_prologue` database entries with garbage bodies (`sub_00028826` decodes to
-`mov edi,edi; sub eax,[ebp-0x7a9cfffe]; …`). The other 115 are not reachable from their container's
-entry, i.e. genuinely separate entry points the container merely covers.
-
-**A method that looked authoritative was rejected.** A callee-aware stack-depth tracker produced
-depth conflicts at 47–830 distinct addresses per candidate and nonsensical exit depths (`−7120`,
-`−10260`), because a LIFO worklist visits a join point by whichever path happens to arrive first.
-It was discarded in favour of single-exit-immediate plus prologue/epilogue frame balance, with
-everything else labelled **INFERRED** rather than overclaimed. This is the same lesson as §10's
-discarded call models: a depth model that cannot keep joins consistent reports confident nonsense,
-and nonsense is worse than an explicit unknown.
-
+- **The sweep, from the XBE:** 4117 aligned `.data`/`.rdata` dwords land in `.text`; 3632 already resolve
+  at runtime, 485 do not, **117** pass the boundary filter (53 swallowed by a manifest span, 10 by a
+  database span only, 54 UNCOVERED gaps).
+- **The noise filter:** 24 of the 117 are noise — 13 have a padding byte (`0x90`) at the candidate VA (ten
+  from one 16-bit word array at `.rdata:0x0022E1B4`), 11 are not 4-byte aligned. Requiring "not a padding
+  byte at the VA" and "4-byte aligned" takes **117 to 93**: an unaligned dword value is not an entry.
+- **Traps and misdispatches are two populations; only one is censused.** `check-table-targets.py` filters
+  on `runtime_starts()` (does the address resolve at all) — correct for traps. A folded
+  `tail_jump_alias` resolves to a shim that runs a different function, e.g. `static void
+  recomp_alias_000E9A40(void) { recomp_alias_observe(77u); sub_000E9D80(); }`; all 134 shims call a `sub_`
+  other than their own address. With `genuine_starts()` the sweep gives 121; the four extra are
+  `0xE9A40`, `0x100AB0`, `0x1199C0`, `0x13A340`. The actionable subset is aliases whose own address is a
+  genuine function; the rest are mid-body labels for which running the parent from its start is correct.
+  So the **MISDISPATCH** population needs its own detector (§14 reports it, ungated).
+- **Over-wide existing entries:** `0x7DBD0` (190 instructions) swallowed by `0x7DAE0–0x7DE20`, whose end is
+  also the next database start; `0x1FF90` (own `ret 4` at `0x1FFE7`, declared end `0x200A5`, swallowing
+  `0x1FFF0`); `0x91C00` (own `ret` at `0x91C23`, declared end `0x91EB0`, swallowing `0x91C30`, `0x91D70`).
+  "End at the next function start" is necessary but not sufficient.
+- **Whole tables miss members:** `0x001F97B4` 6 of 13 entries are database starts; `0x00215530` 40/46;
+  `0x0020D8A8` 24/27; `0x001EC288` 26/33; `0x001CD2E0` 92/96; `0x001CA6C8` 61/64; `0x001CAC60` 78/80;
+  `0x001EBCF4` 24/26; `0x002165F0` 25/29; `0x001CD7F8` 47/48.
+- **Discriminator:** a candidate reachable from its container's own entry is an internal label; of the
+  117 only 2 are, both in bogus `gap_prologue` containers (`sub_00028826`).
 
 ## 13. The this-adjusting thunk: a fourth missing-entry shape, and an observed stack_args (2026-10-05)
 
-**Run g05 cleared two stops and immediately produced a class the previous three had not shown.**
-`20261005-185514-638-g05-confirm` (exploratory, 253 s) logged exactly one
-`[RECOVERED] 0x000496E0 returned; ABI verified` and one for `0x0005C840`, so stops 18 and 19 are
-confirmed by an exercised path rather than merely found. It then logged
-
-```
-[RECOVERED] ABI FAILURE 0x00154540 esp 00F7FD30->00F7FD40 expected +24
-```
-
-**The shape.** `0x154540` and `0x154520` are *this-adjusting thunks*:
-
-```
-0x154540  mov eax, [esp+4]        ; eax = the object
-          mov ecx, [eax]          ; ecx = the object's vtable
-          mov edx, [esp+8]
-          add edx, 2              ; adjust the second argument
-          mov [esp+8], edx
-          mov [esp+4], eax        ; this-adjust
-          jmp dword ptr [ecx+0x6c]   ; indirect TAIL jump to the real method
-```
-
-Both bodies are seven instructions, end at `0x154558` / `0x154538`, and are followed by 8 NOPs. The
-`add edx,N` differs (2 versus 6), which is the whole point of the pair: they are the two adjustor
-entries for the same virtual method at different base offsets.
-
-**Why this needs a different rule.** A tail jump reuses the frame, so the cleanup the *caller*
-performs is the **tail target's** `ret N`, not anything in the thunk. So the thunk's `stack_args`
-must equal its target's cleanup — and that is only a well-defined constant if the thunk lives in
-exactly one vtable.
-
-**Settled by observation rather than inference.** The run's frozen dump, with its mapping verified
-by `scripts/check-dump-mapping.py` before any guest memory was read, gives the whole chain:
-
-| step | value |
-|---|---|
-| wrapper entry esp (from the ABI failure line) | `0x00F7FD30` |
-| `[esp+4]` — the object | `0x0106C870` |
-| `[0x0106C870]` — its vtable | `0x001E0F00` |
-| `[0x001E0F00 + 0x6c]` — the real method | `0x00154420` |
-| `0x00154420`'s reachable exits | four `ret 0xc` (`C2 0C 00`) at `0x154440`, `0x15445D`, `0x1544FA`, `0x15450E` |
-| therefore the expected delta | `4 + 12 = 16` |
-| the measured delta | `0x00F7FD40 − 0x00F7FD30 = 16` |
-
-**The arithmetic closes exactly**, which is what makes this an observation rather than a plausible
-story. Both thunks are corrected 20 → 12.
-
-**Where the wrong 20 came from, again.** `0x154540`'s declared span `[0x154540, 0x1548E0)` had
-swallowed a complete function at `0x154560` — prologue `sub esp,0x60; push ebp`, two exits
-`ret 0x14` = 20 — so the declared 20 was *that* function's value. This is the third instance of the
-`0x74C70` pattern (a `stack_args` inherited from a neighbouring body, after `0x152BC0`), and it is
-now the single most common way a wrong value enters this manifest. The span is tightened to
-`0x154558` and the swallowed function recovered as `[0x154560, 0x1548DC)` with `stack_args 20`.
-
-**Why a single constant is not universally safe for this shape.** A `jmp [reg+0x6c]` is generic: a
-scan of all 126 vtable-like runs whose `+0x6c` slot resolves into `.text` finds cleanups of **0
-(64 cases), 4 (15), 8 (3), 12 (2) and 20 (2)**, plus 40 unresolvable. So "the target cleans up 12"
-is a fact about *these two thunks' single vtable*, not a rule about the instruction. Both thunks
-occur in exactly one aligned dword each (`0x1E0F74` and `0x1E0F70` in the table based at
-`0x1E0F00`), which is what makes the value well-defined, and that is stated in the evidence rather
-than assumed.
-
-**A sign error in the identity, found by adversarial review.** The convention in
-`scripts/check-stack-depth.py` is `push` → `d -= 4`, so `d = ESP_at_ret − ESP_entry` and a `ret N`
-leaves `esp = entry + d + 4 + N`. Equating with the wrapper's `entry + 4 + stack_args` gives
-
-```
-stack_args = N + d
-```
-
-**not** `N − d`, which earlier revisions of §10, the plan and the checker's own comments said. The
-gate was never wrong — the two forms agree at `d == 0`, and the gate only uses `d == 0` — but the
-prose was, and so was the *stated reason* for not gating the general form. The corrected reason is
-measured: of the **29** entries with a resolved nonzero-depth `ret N`, **every one** has `d > 0`
-(min 4, max 100). A positive `d` means the `ret` is reached with more stack than at entry, i.e. the
-walk popped registers the body never pushed — the signature of a mid-function entry or of an
-over-wide span whose walk ran into a neighbouring function. That is an **extent** question, and
-asserting the extent is right in order to conclude the declared value is wrong would be circular.
-The earlier text's "negative values are the tell" was an artifact of the wrong sign: under `N − d`,
-25 of those 29 appeared negative; under `N + d`, none do.
-
-`0x1BCB14` is the entry this correction explains: it **starts mid-function** and pops `esi`/`ebx` it
-never pushed, so `d = +8` and `N + d = 4 + 8 = 12`, exactly its declared value. It is run-verified in
-106 archived runs and must never be gated.
-
-**`RET_DEPTH` is now reported per path.** It previously required a fully resolved walk, which hid 14
-of those 29 entries behind an unrelated unresolved path — the same false-negative shape as the
-gating rule, one class down. Findings went 24 → 39 and it remains `SUSPICIOUS`, so widening it cannot
-block the gate; it only makes the population visible.
-
+Stop 20: `[RECOVERED] ABI FAILURE 0x00154540 esp 00F7FD30->00F7FD40 expected +24`. `0x154540`/`0x154520`
+are adjustor thunks (`add edx,2`/`6`; `jmp dword ptr [ecx+0x6c]`), so `stack_args` equals the tail
+target's cleanup: object `0x0106C870`, vtable `0x001E0F00`, method `0x00154420` with four `ret 0xc`; 4 +
+12 = 16 = measured. Both corrected 20 → 12; the 20 came from the swallowed `0x154560` (`ret 0x14`),
+recovered as `[0x154560, 0x1548DC)` `stack_args 20`. A `+0x6c` slot's cleanup is not a rule (126 vtable
+runs: 0 ×64, 4 ×15, 8 ×3, 12 ×2, 20 ×2, 40 unresolvable).
 
 ## 14. The hidden-entry detector: a span can be over-wide while its `end` is "correct" (2026-10-05)
 
-**The failure class, and why the existing detectors cannot see it.** `scripts/check-entry-extents.py`
-fails when a declared `end` lands mid-instruction, and the documented convention for that end is "the
-next function entry". Both can be satisfied while the entry is still **too wide**. The motivating
-case:
-
-```
-0x0007DAE0   declared [0x7DAE0, 0x7DE20)
-             its own reachable body ends at 0x7DBCB `ret`, then 4 NOPs
-             a complete 190-instruction function begins at 0x7DBD0
-0x7DE20      is BOTH this entry's declared end AND the end of the function at 0x7DBD0
-```
-
-So an end-versus-next-start check calls `0x7DAE0` correct. It is not: `0x7DBD0`'s only reference in
-the whole image is the aligned `.rdata` dword at `0x0020D3C8`, no span owns it, and dispatch is an
-**exact-match** binary search (`recomp_lookup`), so an indirect call through that dword traps with
-`[ICALL] Failed to resolve VA 0x0007DBD0`. §12 recorded the same shape for `0x1FF90` (consumes
-`0x1FFF0`) and `0x91C00` (consumes `0x91C30` and `0x91D70`) but had no detector for it.
-
-**The invariant, and why each half is load-bearing.**
-
-> A manifest entry's declared span must not extend past the end of its own reachable body into an
-> address that has independent evidence of being a separate executable entry.
-
-*Half 1 — the body provably ends early.* `Analyzer.walk` is reused from
-`scripts/check-stack-depth.py`, not reimplemented. The finding requires the walk to be **fully
-enumerated**: no truncated decode, **no fall-off at all**, no `indirect`/`terminal` exit, and the last
-reachable instruction a terminator. That combination is what turns "the walk never visited this
-address" into a proof — every path was followed to a known successor, so the reachable set is
-complete and the address is not in it.
-
-This is the `0x80BD0` lesson used in the safe direction, and the distinction is the whole point.
-`0x80BD0` has **zero** rel32 callers and is a real standalone SEH function reached only through the
-`.rdata` dword at `0x1CD000`; a previous session widened `0x80340` to `0x81853` on the reasoning
-"no rel32 branch references these interior addresses" and was wrong. So the test here is **not**
-caller absence. It is that *this entry's own control flow was completely enumerated and did not
-arrive at the address*.
-
-*Half 2 — the address has independent entry evidence.* Two sources, both measured: an aligned
-`.data`/`.rdata` dword whose value lands in `.text` (how these functions are dispatched at all), and
-an address another manifest entry already starts at (then the two spans overlap and one is wrong by
-construction). A raw pointer sweep is noisy, so the candidate must also be plausible as an
-instruction start: 4-byte aligned, not itself a padding byte, decodable, and preceded by an
-alignment-padding boundary. The last two are the tests §12 measured as taking the sibling census from
-117 to 93.
-
-**Verdicts, and the three gating classes.**
+`scripts/check-hidden-entries.py`: a manifest span must not extend past its own reachable body into an
+address with independent evidence of being a separate entry. The body must be fully enumerated (no
+truncation, no fall-off, no `indirect`/`terminal` exit) — not caller absence (`0x80BD0` has zero rel32
+callers and is real). Evidence: an aligned `.data`/`.rdata` dword landing there, or another manifest
+start, passing §12's filter.
 
 | verdict | meaning | gate |
 |---|---|---|
@@ -1968,1483 +533,314 @@ alignment-padding boundary. The last two are the tests §12 measured as taking t
 | `OVER_RUN` | the over-run holds no evidenced entry | reported |
 | `UNQUALIFIED` | the walk has an opaque exit, so separation is not provable | reported |
 
-The gate needs **no baseline**, for the same reason §10's gate gates only its `STACK_ARGS` class:
-each gating class is a property of this entry's own bytes plus one other address's independent
-reference, with no whole-program reasoning. `UNQUALIFIED` is never silently clean — `0x96F60` ends in
-`jmp dword ptr [eax+8]`, so its over-run into `0x96F80` is real but *not provable*, and a control
-asserts it stays undecided rather than being reported as a separation.
-
-`MISDISPATCH` is the population §12 said needed a *separate* detector from `check-table-targets.py`:
-an alias shim **does** resolve, so the trap checker cannot see it, but the symbol answering it is its
-parent's, so entering it runs the wrong body. It is reported rather than gated because §12 leaves the
-actionable subset open ("the rest are genuine mid-body labels for which running the parent's body
-from the start is correct").
-
-**Census on the pre-repair manifest: 50 containers, 63 consumed addresses.** 45 `HIDDEN_ENTRY`, 5
-`OVERLAP`, 2 `SHADOWED`, 2 `UNQUALIFIED` (the `0x96F60`/`0xAEE80` pair), 265 `OVER_RUN`. Every
-container is a `tail_jump_alias` record, which is the same dominant stop class §11 names. The
-consumed bodies are substantial, not stubs: sizes 50 to 1213 bytes, **median 360**.
-
-**The repairs, and what each value rests on.** 50 spans tightened to their own reachable end; 48 new
-reviewed entries; 5 consumed addresses already owned an entry and 2 (`0x556D0`, `0xC42E0`) already had
-a generated body, so those got no entry. Of the 48 additions, **38 are `PROVED`** — a fully enumerated
-walk reaches a `ret N` at depth 0, so `stack_args = N` by §10's identity — and **10 are `INFERRED`**,
-where the walk is enumerated and every reachable `ret` agrees on `N` but no path reaches one at depth
-0. The record keeps that distinction rather than flattening it.
-
-**Three real defects were caught by tests rather than by reasoning, and each is now a guard.** They
-are recorded because the first two were *silent*:
-
-1. **`apply()` keyed additions to the container's start**, so all 50 new entries were dropped while
-   the run printed `wrote 3110 entries` and the checker still passed — because removing the additions
-   removes the finding. It was caught by counting `set(after) - set(before)` instead of trusting the
-   exit code. Additions are now keyed by their own start and a duplicate-start check runs before the
-   write.
-2. **Two additions collided with generated bodies** (`0x556D0`, `0xC42E0`): the generated chunk
-   already defines `sub_<va>`, so the link failed with
-   `LNK2005: sub_000556D0 already defined in recovered.obj`. The first version of the checker decided
-   "resolves at runtime" from a set that defaults to empty, which misclassified both. `SHADOWED` is
-   that class, read from `recomp_dispatch.c`'s own-symbol tuples.
-3. **`0xB3C30` was given an extent one tail-jump short.** Bounded at its first candidate end
-   (`0xB3D67`) its walk looks complete, but two of its exits are tail jumps to `0xB3DCF`/`0xB3DD0`,
-   which are internal to the real body ending at `0xB3DD4`. The generated body then called a fatal
-   stub for its own continuation, and `tests/test_recovery_span_ownership.py` caught it.
-   `repair-hidden-entries.py:resolve()` now rejects any bound whose exits include a tail to an address
-   that is not a boundary.
-
-**Independent reproduction of the population.** A prototype written before the checker agreed with
-`check-table-targets.py`'s existing in-span rule on **50 of 52** candidates, the two differences being
-exactly the two opaque-exit containers. The detector also re-finds `0x96F80`, which §12 had already
-recorded as a known open instance of the class, without being told about it.
-
-**A jump-table under-read cannot produce a false finding.** Of the 50 gate containers, 6 have a
-reachable jump-table `jmp`; none has a table that stopped at `MAX_JUMP_TABLE` or whose next dword was
-still executable code, and no dropped arm lands on a consumed address. Any `jmp` the walk cannot fully
-resolve is recorded opaque, which degrades the entry to `UNQUALIFIED` rather than to a finding.
-
-**A known tool defect was hit twice and worked around, not fixed.** `check-generation-provenance.py
---write` records only the measured axes and erases the hand-maintained `amendments` and
-`regenerations` history — it dropped 39 and 1 respectively this session (the plan already records this
-from a prior turn). They were re-attached from the pre-write copy both times, so the file now holds 40
-amendments and 2 regenerations. **The tool is still wrong**; the workaround is not a fix.
-
-**Verification.** `just check` green; CTest **38/38** (was 37; `jsrf_hidden_entries` added); stack-depth
-`--selfcheck` **10/10**; hidden-entry `--selfcheck` 5/5 controls plus 17 unit tests including a
-deciding negative control that re-injects the motivating defect into a temporary manifest and requires
-the real gate to exit nonzero; `recovered.c` regenerated (3158 functions); preservation baseline
-re-recorded with its `updates` history preserved. **The title screen is still not reached and M15 is
-not claimed.**
-
+No baseline. First census: 50 containers, 63 consumed addresses (45 `HIDDEN_ENTRY`, 5 `OVERLAP`, 2
+`SHADOWED`, 2 `UNQUALIFIED` — `0x96F60`/`0xAEE80`; 265 `OVER_RUN`); 50 spans tightened, 48 entries added
+(38 PROVED, 10 INFERRED). Guards: additions keyed by their own start; `SHADOWED` read from
+`recomp_dispatch.c` (the `0x556D0`/`0xC42E0` LNK2005); `repair-hidden-entries.py:resolve()` rejects a bound
+whose exits tail to a non-boundary (`0xB3C30`, real end `0xB3DD4`).
 
 ## 15. Stop 20 is runtime-confirmed, and g07 exposed the mirror-image span defect (2026-10-05)
 
-**Stop 20 is confirmed by an exercised path, not merely found.** Run g07
-(`20261005-211627-927-g07-thunk`, exploratory, 900 s budget, ended `unhandled_exception` at 241 s) logs
-exactly one
-
-```
-[RECOVERED] 0x00154540 returned; ABI verified (ESP/EBX/ESI/EDI)
-```
-
-which is the confirmation g05 found but g06 missed. The distinction the previous turn insisted on was
-correct and is now discharged: the thunk repair — two this-adjusting thunks corrected 20 → 12, with the
-swallowed `0x154560` recovered — is **runtime-confirmed**. The same run also exercised `0x5BF00`/
-`0x5C840`, `0x496E0` and `0x488B0`.
-
-**Honest reading of the same run.** Presents still froze at exactly **1000** with the disclaimer hash
-`5bdaea576b8509f5` unchanged, and the thunk executed *after* that freeze: the `[FBPRESENT] presents=1000`
-line is 75471 and the ABI-verified return is 105311, in a 105,337-line log. So g07 confirms the repair
-and advances the stop chain; **it is not title progress**, and the 1000-present ceiling is untouched by
-it.
-
-**g07 then produced a stop of a class the new detector does not cover — the mirror image of §14.**
-`[ICALL] Failed to resolve VA 0x000B5F82`. §14's class is an **over-wide** span that consumes a
-neighbour; this is an **under-wide** span that cuts its own function:
-
-```
-0x000B5EB0  declared [0x000B5EB0, 0x000B5F3A)   <- tightened by an earlier pass
-            its OWN jump table at 0x000B5F0F has 9 arms
-            8 of those arms lie beyond 0xB5F3A: 0xB5F82, 0xB632D, 0xB6574, 0xB670E
-            so the lifter emitted RECOMP_ITAIL instead of a resolved switch
-            the guest took the 0xB5F82 arm and trapped
-```
-
-The emitted C states the mechanism exactly. With the tightened end the body is one line —
-`g_seh_ebp = ebp; RECOMP_ITAIL(MEM32(eax * 4 + 0xB6734)); return;` — naming no arm at all. With the
-real end it is a `switch` whose five distinct arms all resolve to `loc_` labels, and the body contains
-no unresolved `sub_` call.
-
-**`0x000B5F3A` is not an entry, and four independent observations say so:**
-
-| observation | detail |
-|---|---|
-| its owner's own table | `0xB5EB0`'s jump table has an arm at `0xB5F16` that **falls through** into `0xB5F3A`; the `call` at `0xB5F35` is immediately followed by it |
-| its "pointer" | the only aligned dword naming it is `0x228214`, inside a packed `.data` run whose neighbours read `0x61510442`, `0x00985100`, `0x38009753` — data, not a table |
-| its exit | its walk ends at the same `0xB672F ret 4` as `0xB5EB0`, i.e. the same function |
-| its arm set | every arm of `0xB5EB0`'s table lies inside `[0xB5EB0, 0xB6732)`, so the widened body owns the address |
-
-**A discriminator was tried and discarded, and the reason is worth keeping.** The
-"reads a register before writing it" test that proved `sub_000BBA04` a false entry **does not
-generalise**: 684 genuine manifest entries trip it (330 read `ecx` first, 321 read `ebp` — a thiscall
-entry legitimately reads `ecx`, and a `mov [esp+N], ebp` prologue legitimately reads `ebp`). Reporting
-those as false entries would have been confident nonsense. The owner-reachability and jump-table-arm
-evidence above is what the repair rests on instead.
-
-**The repair, and the second link failure it caused.** `0x000B5EB0` is restored to its real end
-`0x000B6732` and the false split `0x000B5F3A` removed. That alone does not link: `recomp_dispatch.c` is
-translation-owned and still carried `{ 0x000B5F3Au, (recomp_func_t)sub_000B5F3A }`, so the build failed
-with `LNK2001: unresolved external symbol sub_000B5F3A`. `config/generated-patches.json` gains
-`remove-b5f3a-dispatch` (**L02**), following the `remove-54750-stub` precedent: the patch system
-requires a non-empty replacement, so the tuple is replaced by a comment rather than deleted, and
-`patch-generated.py` re-applies it after every regeneration. `recovered.c` 3157 functions; manifest
-entries 3158 → 3157.
-
-**The class is now named, and it is not yet detected.** §14's detector looks for a span that over-runs
-its own body; this defect is a span that stops *before* its own jump table's arms. The two share a
-witness — the owner's own reachable CFG — but run in opposite directions, and a span can be wrong in
-both at once. The candidate population for the under-wide half was measured as **71** adjacent-entry
-pairs where the owner's walk reaches the next entry's start, but that population is dominated by
-legitimate splits (the `0x200A5`/`0x200A8`/`0x200AD` micro-fragment run is a chain of real
-continuations), so it is **recorded as an open measurement, not as a gate**. A detector for it needs a
-discriminator that separates "the owner's table arm reaches this address" from "this address is simply
-the next function", and that discriminator is not established here.
-
-**Verification.** CTest **38/38**; `just check` green; both static gates pass; provenance manifest and
-preservation baseline re-recorded with their hand-maintained history preserved (41 amendments,
-3 regenerations). Commit `64945a3`. **The title screen is still not reached and M15 is not claimed.**
-
+g07 (`20261005-211627-927-g07-thunk`) logged `[RECOVERED] 0x00154540 returned; ABI verified`, then
+`[ICALL] Failed to resolve VA 0x000B5F82`: `0x000B5EB0` had been tightened to `[0x000B5EB0, 0x000B5F3A)`,
+cutting its own 9-arm jump table at `0x000B5F0F`, so the lifter emitted `RECOMP_ITAIL`. Restored to end
+`0x000B6732`; the false split `0x000B5F3A` removed with `config/generated-patches.json`
+`remove-b5f3a-dispatch` (**L02**). This is the **under-wide** class, the mirror of §14.
 
 ## 16. A host crash this turn shipped, found by a control rather than a gate (2026-10-05)
 
-**The defect, and why no checker saw it.** `remove-b5f3a-dispatch` removed the
-`0x000B5F3A` dispatch tuple but left
+`remove-b5f3a-dispatch` left `g_recomp_table_size = 8928` over 8927 rows, so `recomp_dispatch_init` read
+past the array (`0xC0000005` at `recomp_dispatch_init+0xC3`, before `guest_entry`). Fixed by patch
+`fix-dispatch-table-size` (L02). **Rule:** a patch that removes an entry from a generated table corrects
+its declared count in the same change; `check-dispatch-table.py` counts comment-stripped rows (§18).
 
-```c
-static const size_t g_recomp_table_size = 8928;   /* the array now holds 8927 */
-```
+## 17. The Advisor ruling, and two measurements it corrected (2026-10-05)
 
-`recomp_dispatch_init` loops `for (i = 0; i < g_recomp_table_size; i++)`, so it read one entry past the
-end of `g_recomp_table` and wrote `g_flat_table[...]` from the garbage it read. The process died with a
-host access violation (`0xC0000005`, **write**) at `recomp_dispatch.c:9299` inside
-`recomp_dispatch_init`, **before `guest_entry`**, in runs g08 and g08b: 4 s,
-`missing_checkpoints=[guest_entry]`, and the minidump resolved `RIP` to
-`recomp_dispatch_init+0xC3`.
-
-**Every static gate passed on that tree.** `just check`, the full CTest suite and
-`check-merge-structure.py` all accept a dispatch table whose declared size exceeds its contents — there
-is no checker that compares `g_recomp_table_size` to the tuple count. This is the sharpest instance so
-far of the pattern the plan already records: a green suite is not a statement about a class no checker
-covers.
-
-**The control that localized it, instead of guessing.** g07's **archived** binary was re-run in the same
-environment. It reached `guest_entry`; the new build died at the same log line (75 → 76). That ruled out
-environment, disk and nondeterminism *before* any code was touched, and it is why the fix took one
-attempt rather than a bisect. The same technique is what the plan asks for when a run regresses: compare
-against the archived binary, not against memory of the previous run.
-
-**The fix.** A companion patch, `fix-dispatch-table-size` (L02), decrements the count to 8927.
-`PATCH_FIELDS` permits one `before`/`after` per patch, so this is a second patch rather than a second
-edit of the first. g08c then reached `guest_entry` with `checkpoints_passed: true`.
-
-**The durable lesson, stated as a rule.** A patch that removes an entry from a generated table must
-correct that table's declared count in the same change. `patch-generated.py` cannot enforce it — it
-checks that `before` matched, not that the surrounding arithmetic stayed consistent — so it belongs in
-the review checklist for any future table-editing patch.
-
-
-## 17. The Advisor ruling, and two of this turn's measurements it corrected (2026-10-05)
-
-**Route.** The Persistent Advisor failed to launch **three times** on `claude/claude-opus-5-5` @ xhigh,
-each child dying before finishing with no closing message. Per workflow §1 that was reported rather than
-silently replaced, and per §7 the owner directed the route change to **`codex/gpt-6.1-sol` @ xhigh**.
-This section is therefore the first *real* Advisor ruling of the turn, and it is attributed to that
-route. The Turn Planner and the Turn Reviewer both ran normally, so the earlier failure was specific to
-that spawn rather than to the route being unavailable.
-
-**Forward erratum for commit `64945a3`.** That commit's message says the patch
-`remove-b5f3a-dispatch` carries ledger **`(L42)`**. That is **wrong**. Its ledger is **L02**
-("Reviewed recovered bodies … and boundary fixes"), the entry its own precedent `remove-54750-stub`
-cites; L42 is "File completion APCs run at the next alertable wait", which is kernel APC timing and has
-nothing to do with this patch. Turn Review 1 caught it, and because `scripts/patch-generated.py` only
-checks that a ledger ID *exists*, `just check` had passed regardless. The published commit is **not**
-amended or force-pushed; this paragraph is the erratum. The correction landed in
-`config/generated-patches.json` (ledger `L02`), the L02 row, and every active citation.
-
-**Correction 1: the 192/234 "fatal stub" count was a spelling count, not a fatal count.** Scanning
-bodies that contain a `RECOMP_ITAIL` for `g_seh_ebp = ebp; sub_<va>(); return;` finds **192 bodies and
-234 distinct targets** — and the Advisor reproduced those numbers exactly. But that spelling is also how
-a *normal* recovered call is emitted, so the population is **generic external tail targets**, not fatal
-stubs and not table arms. Intersecting against the actual production trap definitions gives
-**27 bodies / 50 distinct targets**. The turn's earlier position breakdown (115 manifest / 74 dispatched
-/ 30 unevidenced / 15 before-start) was measured on the inflated set and **should not be relied on**.
-
-**Correction 2: `0xFC370` is not an unrelated-guard example.** The turn used it to argue that a located
-`cmp/ja` may belong to a different switch, because its table read produced the implausible arm
-`0x20200`. The original bytes show the real shape is a **two-level selector map**:
-
-```asm
-0xFC387  cmp   eax, 8
-0xFC38A  ja    0xFC47A
-0xFC490  ...   ; nine selector bytes {0,2,2,0,2,0,2,1,0}
-0xFC484  ...   ; three dword slots, reached via movzx eax, byte [eax+0xFC490]
-```
-
-So `0x20200` is selector-map data misread as a fourth pointer, and the emitted body correctly recognises
-three local targets. The general lesson is the Advisor's: a guard must be tied to the **actual index
-value at the jump**, including any byte/word remapping, not to a register name or the nearest `cmp`.
-Requiring `N + 1` to equal the run of consecutive in-`.text` dwords is neither necessary nor sufficient —
-`0xFC370` needs nine selector bytes and three dwords, while `0xB5EB0` needs exactly nine dwords.
-
-**What the Advisor recommended, and what this turn does with it.**
-
-| recommendation | disposition |
-|---|---|
-| do **not** gate "out-of-span arm" alone: table tails and shared continuations can legitimately leave a span, and pointer membership, decodability and alignment do not prove a table's extent | **accepted** — no under-wide gate is added |
-| gate a narrower *certified lost continuation* class, zero-baseline, repairing every qualifying finding first | **accepted as backlog**, with the required proof rule recorded: prove a reachable guard-to-jump path, prove the guard tests the same index value (through any remap), verify no intervening clobber and that the default edge bypasses the jump, and read exactly the reachable slots from file-backed bytes; anything else is `UNPROVEN`, printed, never `CLEAN` |
-| keep the broad census **mandatory and visible**; do not add the population to a frozen baseline | **accepted** — `tests/test_recovery_span_ownership.py`'s `KNOWN_OPEN` subtraction is explicitly *not* closure |
-| `0xB06E0` is a **proved** static defect and should be repaired as a small unit, not left in an indefinite backlog | **accepted** — see below; the turn did not repair it, and records that |
-
-**`0xB06E0`, independently re-verified from the original bytes.** The Advisor's witness is stronger than
-a table-extent argument and the turn reproduced it:
-
-```asm
-0xB06E0  push esi
-0xB06E1  mov  esi, ecx
-0xB06E3  mov  eax, [esi+0x128]
-0xB06E9  cmp  eax, -1
-0xB06EC  je   0xB09DC
-...
-0xB09D9  pop  edi ; pop ebp ; pop ebx
-0xB09DC  pop  esi
-0xB09DD  ret  4
-```
-
-The manifest span is `[0xB06E0, 0xB0811)`, so the function's **own epilogue** at `0xB09DC` lies outside
-it, and the emitted body calls the fatal stub `sub_000B09DC` **twice** and `sub_000B09D9` **four**
-times. A
-valid object with `[ecx+0x128] == 0xFFFFFFFF` selects a plain return requiring no table heuristic at
-all. It is a **proved static production defect**. It is **not** repaired in this turn — the remediation
-scope is records-only plus the crash fix — and it is recorded as the next static work with its proof
-rule, not as a deferred unknown. **No g07/g08 path has been observed to reach it**, which affects its
-priority and not whether it is broken.
-
-**A correction to this turn's own under-wide prose.** §15 called the 71-pair adjacent-entry population
-"dominated by legitimate splits" and cited the `0x200A5`/`0x200A8`/`0x200AD` run as "a chain of real
-continuations". The Advisor's point stands: those nine micro-entries are contained by `0x1FFF0`, most
-have no `stack_args`, their only "pointers" are consecutive dwords in a packed `.data` run, and calling
-them real continuations is **inference the bytes argue against**. They are **identity-unproven**, not
-legitimate, and are recorded that way.
-
+- **Ledger erratum:** commit `64945a3`'s message gives `remove-b5f3a-dispatch` ledger `(L42)`; it is
+  **L02** (`scripts/patch-generated.py` only checks that an ID exists). Not amended; this is the erratum.
+- **The 192/234 "fatal stub" count was a spelling count.** `g_seh_ebp = ebp; sub_<va>(); return;` in
+  `RECOMP_ITAIL` bodies is also how a normal recovered call is emitted; intersected with production trap
+  definitions it is **27 bodies / 50 distinct targets**.
+- **`0xFC370` is a two-level selector map** (`cmp eax,8` at `0xFC387`, nine selector bytes at `0xFC490`,
+  three dword slots at `0xFC484`); `0x20200` is selector data. A guard must be tied to the actual index
+  value at the jump, including any remap.
+- **Accepted rulings:** no gate on "out-of-span arm" alone; a *certified lost continuation* gate is backlog
+  with its proof rule (reachable guard-to-jump path; the guard tests the same index value through any
+  remap; no intervening clobber; the default edge bypasses the jump; exactly the reachable slots read from
+  file-backed bytes; else `UNPROVEN`); the broad census stays visible
+  (`tests/test_recovery_span_ownership.py` `KNOWN_OPEN` is not closure).
+- **`0xB06E0` is a proved static production defect** (stop 23): `push esi; mov esi,ecx; mov
+  eax,[esi+0x128]; cmp eax,-1; je 0xB09DC` … `0xB09DC pop esi; 0xB09DD ret 4`. Its span `[0xB06E0,
+  0xB0811)` ended at a `tail_jump_alias` start inside its own body, so the epilogue lay outside it and the
+  emitted body called the fatal trap stub `sub_000B09DC` **twice** and `sub_000B09D9` **four** times
+  (counts corrected in §18). Since repaired by F7c (end `0x000B09E0`, `stack_args 4`).
+- **The `0x200A5`/`0x200A8`/`0x200AD` micro-entries** contained by `0x1FFF0` are identity-unproven.
 
 ## 18. Errata and the under-wide class's own census (2026-10-06)
 
-**Erratum: the `0xB06E0` trap-stub counts were reversed.** §17, the plan and commit `892dd1e`'s
-message all said the pre-repair body called `sub_000B09DC` four times and `sub_000B09D9` twice. The
-measured counts are the **opposite**: `sub_000B09DC` **twice** (`0xB06EC`, `0xB06FF`) and
-`sub_000B09D9` **four** times (`0xB0720`, `0xB0743`, `0xB07CC`, `0xB07D8`). Re-measured from the
-archived pre-repair body in `logs/runs/20261005-223404-818-g08-b5eb0-fixed/source.zip`, which is the
-authority for what that run was built from, and independently by the Persistent Advisor. The counts
-are corrected in §17, the plan and `config/stop-chain.json` row 23; the published commit is **not**
-amended, so this paragraph is the erratum. The defect and its repair are unaffected.
+- **Erratum:** the `0xB06E0` stub counts are `sub_000B09DC` **twice** (`0xB06EC`, `0xB06FF`) and
+  `sub_000B09D9` **four** times (`0xB0720`, `0xB0743`, `0xB07CC`, `0xB07D8`), re-measured from
+  `logs/runs/20261005-223404-818-g08-b5eb0-fixed/source.zip`; corrected in §17 and `config/stop-chain.json`
+  row 23 (commit `892dd1e`'s message had them reversed). The hidden-entry detector is for over-wide spans
+  and returns `CLEAN` when a walk falls off its end; `check-stack-depth.py` saw `0xB06E0` only as
+  `SUSPICIOUS/CUT_EPILOGUE`.
+- **The under-wide census:**
 
-**Why the hidden-entry detector missed `0xB06E0`.** `HiddenEntryFinder.body()` returns `None` (hence
-`CLEAN`) whenever the walk falls off its declared end, and the old span fell off at `0xB0811` at depth
-`-16`. The detector is for **over-wide** spans by construction; `0xB06E0` was **under-wide**, the
-mirror class. `check-stack-depth.py` did see it, but only as `SUSPICIOUS/CUT_EPILOGUE`, which does not
-gate. That is the honest statement of the coverage gap, and it is why the under-wide class needs its
-own evidence rather than an extension of the over-wide gate.
+  | measure | count |
+  |---|---|
+  | entries whose own fully-enumerated walk reaches a **fatal** trap stub | **128** |
+  | entries where a **conditional** branch leaves the span to an address that is neither a manifest start nor inside any genuine span, and extending to the next manifest start certifies one single `ret N` | **150 PROVED, 4 INFERRED** |
+  | of the certified set, entries whose certified `N` disagrees with the declared `stack_args` | **10** |
 
-**The under-wide class, measured structurally.** The Orchestrator's census walks every manifest entry
-over its own declared span and asks two questions. It finds:
+  Unconditional out-of-span `jmp`s are a measurement, not a gate. First prediction confirmed:
+  `0x000AE560-0x000AE5F1 -> end 0x000AE659 N=4`, hit in `20261006-003520-133-f9-underwide-batch-pb`
+  (`0xAE655` is the shared epilogue). That run also confirmed stops 21 (`0x000B5EB0`) and 22
+  (`0x00048DB0`). F7c repaired 152 and F7d 7 (§20); disagreeing-`N` candidates were skipped.
+- **Confirming-role rules (L43, `check-run-exercised.py`):** a return line is not exclusive with failure
+  (`20260930-225440-580-f3-alias-fix-strict` logs both for `0x00026780`), so a confirming run must have no
+  ABI-failure line for the address and must not set `JSRF_ABI_CONTINUE`; and the run's archived `(end,
+  stack_args)` (from `source.zip`) must equal the current one.
+- **Dispatch gate:** `check-dispatch-table.py` counts comment-stripped rows; controls are the archived
+  crash trees `20261005-222801-316-g08-b5eb0` and `20261005-222917-439-g08b-repro` (8928 declared, 8927
+  rows).
+- **Latent, not live:** ten addresses have both a recovered body and an alias shim to another symbol
+  (`0x00027B00→sub_00027CD0`, `0x0002C360→sub_0002D1E0`, `0x00032610→sub_00033800`,
+  `0x00032C70→sub_00033800`, `0x00033C50→sub_000355B0`, `0x00034200→sub_000355B0`,
+  `0x000348A0→sub_000355B0`, `0x00035640→sub_000360D0`, `0x00037550→sub_00038530`,
+  `0x0014FEF0→sub_00150231`). `RECOMP_ICALL` tries `recomp_lookup_manual` → `jsrf_lookup_recovered`
+  first, so the shim is unreachable once recovered: 0 of 44 archived `[ALIAS-ICALL]` firings came from a
+  build whose own `recovered.c` had the `case`. Only the run's own `source.zip` says what it executed.
+- **`0x96F80` stays `UNQUALIFIED`:** container `0x96F60` `[0x96F60, 0x97190)` ends in a plain `ret` at
+  `0x96F7A` but also has an indirect tail `jmp dword ptr [eax+8]` at `0x96F76`; `0x96F80` has two `.rdata`
+  dwords (`0x001CD36C`, `0x001CD3EC`) and a clean 153-instruction walk to `ret 4` at `0x97187`. Pinned by
+  `tests/test_hidden_entries.py::test_indirect_exit_is_not_gated`.
 
-| measure | count |
-|---|---|
-| entries whose own fully-enumerated walk reaches a **fatal** trap stub | **128** |
-| entries where a **conditional** branch leaves the span to an address that is neither a manifest start nor inside any genuine span, and extending to the next manifest start certifies one single `ret N` | **150 PROVED, 4 INFERRED** |
-| of the certified set, entries whose certified `N` disagrees with the declared `stack_args` | **10** |
+## 19. A present-count change correlated with F7c (2026-10-06)
 
-The conditional and unconditional populations are kept **separate**: for an unconditional `jmp` out
-of span, "this function's own continuation" and "a legitimate tail call to a separate function" are
-not distinguishable from the bytes alone, so that subset is a measurement and not a gate. The
-conditional subset is the defensible one, and its first prediction was correct in advance — see below.
-
-**The census's first call, and it was right.** Before any run reached it, the census reported
-`0x000AE560-0x000AE5F1 -> end 0x000AE659 N=4`, listing seven conditional branches to `0xAE655`. Run
-`20261006-003520-133-f9-underwide-batch-pb` then logged `[ICALL] Failed to resolve VA 0x000AE655`
-with `0x000AE560` as ICALL-history frame 15, immediately after that body's ABI-verified return.
-`0xAE655` is the shared epilogue (`pop esi` at `0xAE5ED`, `ret 4` at `0xAE5EE`) that the declared end
-cut off. Repaired to end `0x000AE659`; `stack_args 4` was already right, since both exits are `ret 4`
-at depth 0.
-
-**Stops 21 and 22 are runtime-confirmed.** The same run is the first ever to execute either repaired
-address, and it logs both `[RECOVERED] 0x000B5EB0 returned; ABI verified` and
-`[RECOVERED] 0x00048DB0 returned; ABI verified`. So `0xB5EB0` — repaired from the bytes and then
-missed by two consecutive runs — is finally confirmed, and the found-versus-confirmed distinction is
-discharged for both.
-
-**The certified-continuation gate, and two holes in it that were found by review.** `L43` and
-`config/stop-chain.json` bind each stop row to the archived runs that establish it. Review found two
-producer-side holes, both real and both now closed with a control taken from a real archive:
-
-1. **The return line is not exclusive with failure.** `20260930-225440-580-f3-alias-fix-strict` logs
-   `0x00026780 returned; ABI verified` at line 75094 and `ABI FAILURE 0x00026780 ... expected +4` at
-   line 77608, and `check-run-exercised.py` reported **PASS** for it. A confirming role now also
-   requires that the address has no ABI-failure line in that log, and that the run did not set
-   `JSRF_ABI_CONTINUE` (which turns the check into a report, so its returns prove less).
-2. **Descent from the repair commit is necessary but not sufficient.** A later commit can move the
-   span again. The archive carries `source.zip`, so the run's own
-   `config/recovered-functions.json` is available in 134 of 135 archives; a confirming role now also
-   requires the archived `(end, stack_args)` tuple to equal the current one. `0xAE560` is the live
-   example: f9 executed `(end 0x000AE5F1, stack_args 4)` and the tree now says
-   `(end 0x000AE659, stack_args 4)`.
-
-Both rules are enforced, both have a real-archive control, and all seven current confirming citations
-were re-verified against them.
-
-**The dispatch gate counted spelling, not rows.** `check-dispatch-table.py` matched row text without
-stripping comments, so a tuple commented out rather than replaced by prose left the array one row
-short of its declared count and the checker **passed**. The table body is now comment-stripped before
-counting, with the commented-tuple case as a control and the two real archived crash trees
-(`20261005-222801-316-g08-b5eb0` and `20261005-222917-439-g08b-repro`, both declared 8928 against
-8927 rows) as end-to-end controls. The structural fix — deriving the count with `sizeof` — is
-unaffected and remains the primary defence.
-
-**A latent hazard that is NOT a live defect, and how the difference was settled.** Ten addresses have
-both a recovered body (`sub_<va>` in `recovered.c`, with a `case` in `jsrf_lookup_recovered`) and an
-alias shim in the generated dispatch table that routes them to a **different** symbol:
-
-```text
-0x00027B00 -> recomp_alias_00027B00 -> sub_00027CD0
-0x0002C360 -> recomp_alias_0002C360 -> sub_0002D1E0
-0x00032610 -> recomp_alias_00032610 -> sub_00033800
-0x00032C70 -> recomp_alias_00032C70 -> sub_00033800
-0x00033C50 -> recomp_alias_00033C50 -> sub_000355B0
-0x00034200 -> recomp_alias_00034200 -> sub_000355B0
-0x000348A0 -> recomp_alias_000348A0 -> sub_000355B0
-0x00035640 -> recomp_alias_00035640 -> sub_000360D0
-0x00037550 -> recomp_alias_00037550 -> sub_00038530
-0x0014FEF0 -> recomp_alias_0014FEF0 -> sub_00150231
-```
-
-A spelling-level census of the archive suggests these shims fire *after* their recovery: 44
-`[ALIAS-ICALL]` lines name one of these ten targets across **32** runs, including runs whose commit is
-descended from the recovery. **That reading is wrong, and the way it was refuted is the point.**
-
-`RECOMP_ICALL` tries `recomp_lookup_manual` **first**, and that function returns
-`jsrf_lookup_recovered(va)`, which has a `case` for every recovered body. So once an address is
-recovered the shim is **unreachable**. The decisive test is not git ancestry (which only bounds the
-*commit*) but each run's **own archived `recovered.c`**, which is the artifact the run was built
-from:
-
-| firings where the run's own build already had the `case` | **0** |
-|---|---|
-| firings where the build did not yet have it | 44 |
-
-Every firing predates that address's recovery. So the class is **closed by recovery**, not live, and
-these ten shim tuples are a **latent hazard rather than a current defect**: they are dead code today,
-and they would become a wrong-body misdispatch only if the recovered `case` were ever removed while
-the tuple stayed.
-
-Two lessons, both already paid for elsewhere in this record. **A text search over archived logs is
-not evidence about which build produced them** — the `0x00032610`/f25 error was exactly that, and this
-is the same mistake in the opposite direction: a true-looking positive instead of a false one. And
-**ancestry bounds a commit, not an artifact**: `recovered.c` is untracked, so the only authority for
-what a run executed is the copy inside its own `source.zip`.
-
-**`0x96F80`: measured, and still not gated, with the gap named.** The sibling of the recovered
-`0x00096560`, and the other half of the plan's known-open UNCOVERED pair. The measurement is now
-sharper than the plan's original note:
-
-| fact | measurement |
-|---|---|
-| `0x96F60`'s declared span | `[0x96F60, 0x97190)` — it over-runs its own body by 0x1415 bytes |
-| `0x96F60`'s own reachable end | a plain `ret` at `0x96F7A` at **depth 0**, then NOPs to `0x96F7B` |
-| `0x96F60`'s other exit | an **indirect** tail jump `jmp dword ptr [eax+8]` at `0x96F76`, depth 0 |
-| `0x96F80`'s independent entry evidence | **two** aligned `.rdata` dwords, `0x001CD36C` and `0x001CD3EC` |
-| `0x96F80`'s own walk | fully enumerated: 153 instructions, two exits, both `ret 4` at `0x97187`, one at **depth 0** |
-
-So `0x96F80` looks like a separate function by every measure *except* the one the hidden-entry
-detector requires. Its proof needs the containing body to be **provably** finished, and that proof
-requires the walk to be fully enumerated with no `indirect`/`terminal` exit; `0x96F60` has one. The
-detector therefore reports `0x96F80` as consumed but leaves the verdict `UNQUALIFIED`, and
-`tests/test_hidden_entries.py::test_indirect_exit_is_not_gated` pins that deliberately.
-
-**It stays unqualified, and that is the right call rather than an oversight.** An indirect tail jump
-does leave the function, so an argument that it "cannot fall through to `0x96F80`" is available — but
-it is an argument about where a *resolved-at-run-time* target goes, which is precisely the class of
-claim the `0x80BD0` lesson forbids making from the bytes alone. Reversing a deliberate `UNQUALIFIED`
-to widen a gate would be the `N + d` mistake again. It is recorded here as a **measured candidate
-with a named proof gap**, not as a defect and not as closed.
-
-
-## 19. A present-count change correlated with F7c, recorded and not yet explained (2026-10-06)
-
-**Observed.** Three consecutive exploratory runs on this turn's own binaries, all with the same four
-canonical overrides and all reaching `guest_entry`:
-
-| run | project revision | max `presents=` | ABI-verified returns | outcome |
-|---|---|---|---|---|
-| f9 | `b1aca89` (before F7c) | **1000** | 550 | `unhandled_exception` |
-| f10 | `59f3ebf` (F7c) | **888** | 553 | `unhandled_exception` |
-| f11 | `8cd1e08` (F7d) | **888** | 440 | `diagnostic_deadline` |
-
-The disclaimer hash is `5bdaea576b8509f5` and unchanged in all three, so the *content* on screen is
-the same. What changed is the flip **count** at which the presenter stops being called: f9 logs
-`[FBPHASE]` at 400, 900, 990 and 1000; f10 and f11 log it only at 400. The `[FBPRESENT]` series shows
-the same shape — f9 reaches 1000 at t=235 s, f10 stalls at 888 from t=329 s, f11 at 888 from t=401 s.
-
-**What this is and is not.** It is a **behaviour difference correlated with the F7c batch** (152
-manifest spans widened to their body's real end), and it is recorded as an observation. It is **not**
-established as a regression, and no mechanism is claimed:
-
-**The confounder set, stated exactly per run rather than as one delta.** The Turn Planner checked this
-and my earlier wording ("f10 and f11 differ from f9 by F7c *and* F7d together") was wrong for f10.
-Measured by ancestry:
-
-| run | revision | contains |
-|---|---|---|
-| f9 | `b1aca89` | — (baseline for this comparison) |
-| f10 | `59f3ebf` | **F7b `0445a80`**, `0763de8`, **F7c `59f3ebf`** — but **not** F7d |
-| f11 | `8cd1e08` | all of the above **plus F7d `8cd1e08`** |
-| f12 | `cee0c27` | all of the above plus `fc6f2d4` (stop 26) |
-| f13 | `79f9f8f` | all of the above plus stop 27 |
-
-So f9→f10 is **three** changes (F7b, the review fixes, F7c), and f9→f11 is four. Notably **F7b
-(`0445a80`) re-ended `0xAE560` — the very function f9 trapped in** — which makes it a plausible
-confounder rather than a background one. And the F7c *single-variable* pair is `0763de8` vs `59f3ebf`,
-not anything involving f9: "a run at `b1aca89`" would be a same-binary replay of f9, not an F7c
-isolation.
-
-- The runs differ in duration and outcome (`unhandled_exception` vs `diagnostic_deadline`).
-- More returns (553 in f10 vs 550 in f9) with *fewer* presents is not the shape of a lost code path;
-  it is the shape of a different path.
-
-**Same-binary variation is documented, but not by g03–g08.** An earlier revision of this section
-cited "g03 through g08 reached demonstrably different addresses on identical binaries". **That is
-false**, and the Turn Planner caught it: g03–g08 have six *different* executable hashes
-(`b670e0f8`, `d1078ee2`, `deaeac13`, `9b6eb76f`, `80861c65`, `0188f9a1`), because each run followed a
-repair. The genuine same-binary pairs in the archive are:
-
-| pair | binary | presents | returns |
-|---|---|---|---|
-| f25 / f26 | `ca867957d99a` | 960 / 193 | — |
-| f11 / f12 | `f2c67aec053c` | 888 / 888 | 440 / 556 |
-
-f25/f26 are the pair the plan already cites for the Smilebit-card stall, and they are a **24× spread
-in presents on one binary**. f11/f12 show the same count with a 116-return difference. Those are the
-citations for same-binary variation; the g03–g08 claim is withdrawn.
-
-**It is also not a title-screen regression, because 1000 was never the title screen.** The disclaimer
-card is still what is on screen in every run, at the same hash. M15 was not reached before this change
-and is not reached after it.
-
-**What would settle it.** The F7c **single-variable** comparison is `0763de8` (pre-F7c) versus
-`59f3ebf` (F7c) — those two differ by exactly that batch. A run at `b1aca89` would instead be a
-same-binary replay of f9, which tests run-to-run variance and **not** the F7c question; the Planner is
-right that my earlier wording conflated the two. Until one of those is run, the honest statement is the
-table above: a measured count change, correlated with several changes, unexplained. It is
-carried in the plan's remaining work rather than being quietly dropped, and no acceptance claim
-rests on the present count in either direction.
-
-**What the replay establishes, and what it does not.** The experiment was run, and it used the
-**archived binary** rather than a rebuild — the differential method this record already mandates when
-a run regresses:
-
-```text
-f9 archived binary   sha256 43e639d7be16be97...
-replay binary        sha256 43e639d7be16be97...   IDENTICAL (byte-for-byte)
-```
-
-f9's own executable, replayed in the same environment with the same four overrides. **The two counts
-below are NOT VERIFIED by any artifact on disk** — the replay log was deleted before this section was
-written (see the caveats below), so they are recorded observations only:
-
-| run | binary | max `presents=` | ABI-verified returns | status |
-|---|---|---|---|---|
-| f9 (recorded) | `43e639d7…` | **1000** | 550 | verified: log retained |
-| f9 **replayed** | `43e639d7…` (identical) | **394** | 385 | **NOT VERIFIED: log deleted** |
-
-**The recorded observation is that the same bytes produced 394 presents where they had produced
-1000.** Stated precisely, in three parts:
-
-- **Recorded, NOT VERIFIED:** the present count differed between two runs of the **same binary** —
-  394 vs 1000. The 394/385 pair is a deleted-log observation and carries no on-disk artifact, so it is
-  reported as recorded rather than established. **The retained f9/f10/f11 series cannot substitute for
-  it**: those are three *different* binaries (`43e639d7`, `6c2eed73`, `f2c67aec`), so they are not
-  same-binary evidence at all. What *is* independently verifiable is the **f25/f26 pair**
-  (`ca867957d99a`, 960 vs 193 presents) and the **f11/f12 pair** (`f2c67aec053c`, 888/888 presents,
-  440/556 returns) — both same-binary, both retained.
-- **Causal attribution: UNRESOLVED.** The difference between f9's 1000 and f10/f11's 888 **cannot be
-  attributed to F7c**, because the runs differ by F7b, F7c and F7d together. One replay of one pre-F7c
-  binary **does not bound** the batch effect either: it shows that variation *of some size* exists, not
-  that it is larger than whatever the batch may contribute. Saying "the variation dominates the effect"
-  would be a second overclaim in the opposite direction, and an earlier revision of this section made
-  it. The honest statement is exactly: *recorded same-binary variation; causal attribution unresolved.*
-- **NOT established: the mechanism**, in either direction, and not established that F7c has no effect.
-
-**The Reviewer's fix is applied, and its strongest point is retained:** the earlier revisions both
-promoted a deleted measurement toward a causal conclusion. The current text records the observation,
-marks it NOT VERIFIED, and leaves causal status explicitly unresolved. **No new replay is run**, since
-the Reviewer judged an honest downgrade sufficient and a new sample would not resolve the causality
-either — it would only add another sample to a distribution whose spread is already demonstrated.
-
-**Corrections to this section are recorded rather than made silently.** The first heading claimed the
-change was "settled … not the batch"; the second revision claimed the variation "dominates any effect";
-a third cited g03–g08 as same-binary evidence. **All three were withdrawn**, the last by the Turn
-Planner. The pattern — a true result stated more strongly than its evidence — is worth having in the
-record, and it is notable that each overclaim was introduced while fixing the previous one.
-
-**A neutral observation, recorded without explanation.** Across the whole retained archive, the
-pre-`0445a80` runs that reach a present count at all stop at **exactly 1000** (30 of 35 runs; the
-exceptions are f24 at 9, f26 at 193, g08c at 113, g01 at 730 and f25 at 960, all of which ended early),
-and **all four** post-`0445a80` runs (f10–f13) stop at **exactly 888**. That is a clean correlation
-with the F7b boundary (`0445a80`, the `0xAE560` repair), and it is recorded as a correlation only:
-f10–f13 also carry F7c and F7d, the sample is four, and no mechanism is proposed. It is the kind of
-observation that should be *stated* rather than left for someone to rediscover as a surprise.
-
-**Two caveats on the replay's evidence value, stated because the Reviewer is right about them.**
-The replay's log was deleted, so `394`, `385` and the hash below are **NOT VERIFIED** by any artifact
-now on disk; they were read before deletion and are reported as such. And "input-only repeatability"
-is weaker than it sounds: f9's archive preserves the *executable*, so the experiment can be re-run,
-but a re-run is not a **byte-for-byte** reproduction of the original environment or output — it is a
-new sample from the same distribution. That distinction is the difference between a reproducible
-*experiment* and a reproducible *result*, and only the former is available here.
-
-Two further observations from the replay. **The first turns out to be verifiable after all, and this
-corrects my own caveat** — an earlier revision marked it NOT VERIFIED along with the counts, which was
-wrong:
-
-- the disclaimer hash `87683a748e27d071` is **not** unique to the deleted replay. It appears in **36
-  retained runs**, every one of which also shows `5bdaea576b8509f5` in the same run — so a single run
-  passes through **both** visual states. That is *directly observed* on retained artifacts and does not
-  depend on the deleted log at all. It establishes that the disclaimer hash is a **path/phase witness,
-  not a stable per-binary constant**, which is the reading the Reviewer's concern was about; the
-  observation was correct, and only my sourcing of it was wrong.
-- the replay produced **fewer** returns (385) than any of f9–f11 (550/553/440), again on identical
-  bytes to f9. Same caveat as the counts: recorded, not verified.
-
-The replay directory is deliberately **not** kept under `logs/runs/`: it was produced by invoking the
-collector directly rather than through `scripts/run-jsrf.py`, so it carries no `metadata.json` and is
-not a conforming archive. Leaving it there made `check-run-profile.py --all` report `missing 1`, which
-would have been an unearned defect in the archive tally.
-
-**Stated precisely: the replay's log was removed, and the experiment can be repeated.** The Turn
-Planner is right that "repeatable" must not be read as reproducing the *result*.
-`logs/runs/20261006-015500-000-f9replay-pre-f7c/` was deleted, so the two counts above are no longer
-re-readable from disk; they are recorded here and were read directly from that log before deletion.
-What is preserved is the **input**: f9's own archive still holds `jsrf_recomp.exe` with sha256
-`43e639d7be16be97…`, so the same executable can be run again. That is the weaker but honest position —
-an experiment whose *artifact* was discarded but whose *input* is retained — and **it is not
-byte-for-byte reproducibility of the environment or the output**, because a re-run is a new sample.
-"The evidence is recorded" and "the evidence is available" are not the same claim, and neither is
-"the experiment can be repeated".
-
+Superseded by §22: the 1000/888 present ceilings were the walk rejecting `0x1810`. Still useful:
+same-binary variation is documented by the retained pairs f25/f26 (`ca867957d99a`, presents 960 / 193)
+and f11/f12 (`f2c67aec053c`, 888 / 888, returns 440 / 556).
 
 ## 20. The under-wide residue: 5 measured, 1 certifiable, 4 explicitly not (2026-10-06)
 
-After F7c and F7d, `check-stack-depth.py` still reports **13 `CUT_EPILOGUE`** and **11 `FALL_OFF_END`**
-findings. The question worth answering is how many of those are the *same class* the two batches
-repaired, and the answer is **not all of them** — which is why they are measured rather than repaired.
-
-Each residual `CUT_EPILOGUE` was tested with the same certificate the batches used: widen to the next
-evidenced start and require a fully enumerated walk whose every exit is one `ret N`, with **at least
-one** exit reached at **depth 0**.
+After F7c/F7d, `check-stack-depth.py` reported 13 `CUT_EPILOGUE` and 11 `FALL_OFF_END` (the 11 are a
+different question). Each residual `CUT_EPILOGUE` under the certificate below:
 
 | entry | epilogue | widen to next start | enumerated? | distinct `ret` immediate | certifiable? |
 |---|---|---|---|---|---|
 | `0x43EC0` | `pop edi; pop esi; pop ebx; ret 4` | `0x44400` | **yes** | `0x4`, at depth 0 | **yes** — but it crosses `0x44000` |
 | `0x52050` | `pop esi; ret` | `0x52090` | no | — | no |
-| `0x5BAD0` | *not an epilogue*: the bytes at `0x5BB31` decode as `push edi; lea edi,…`, i.e. code | `0x5BB90` | no | — | no |
-| `0x91830` | *not an epilogue*: `0x9188C` decodes as `mov eax,[esp+0xc]; inc esp; …` | `0x918B0` | yes | `0x0` | no — no depth-0 `ret` |
-| `0xD4860` | *not an epilogue*: `0xD487A` decodes as `push ebx; push edi; …` | `0xD5150` | no | — | no |
+| `0x5BAD0` | not an epilogue: `0x5BB31` decodes as `push edi; lea edi,…` | `0x5BB90` | no | — | no |
+| `0x91830` | not an epilogue: `0x9188C` decodes as `mov eax,[esp+0xc]; inc esp; …` | `0x918B0` | yes | `0x0` | no — **superseded by §26.4** (repaired; the `ret` at `0x918A0` is at depth 0) |
+| `0xD4860` | not an epilogue: `0xD487A` decodes as `push ebx; push edi; …` | `0xD5150` | no | — | no |
 
-**So exactly one of the five is the same class, and it is the one F7c already refused.** `0x43EC0`'s
-control flow reaches `0x44227` (`pop edi; pop esi; pop ebx; ret 4`) — which pops exactly the three
-registers `0x43EC0` pushes — and widening to the next start certifies a single `ret 4` at depth 0. But
-that widening **crosses the manifest start `0x44000`**, so F7c's assertion 4 stopped it. Two readings
-remain live and the bytes do not choose between them:
+`0x43EC0` vs `0x44000` is unresolved (`0x44000`: `.data` dword at `0x0022A394` in a packed run, database
+`tail_jump_alias`, but its own manifest entry, dispatch tuple and clean walk); not repaired. The Turn
+Reviewer re-derived all **159** certificates (152 F7c, 7 F7d) from the XBE; 0 failed; 81 have at least one
+exit of `UNKNOWN` depth (76 + 5).
 
-- `0x43EC0` is under-wide and `0x44000` is a false entry, or
-- `0x44000` is a real entry and `0x44227` is a *separate* shared epilogue reached by tail call.
-
-The evidence is genuinely split. `0x44000` has a `.data` dword at `0x0022A394`, but that dword sits in
-a packed run (`0x05038000`, `0x010000`, `0x010000`, `0x00000000`, …) rather than a clean vtable, so it
-is weak entry evidence — and the analysis database labels `0x44000` itself `tail_jump_alias`, which is
-the false-entry signature. Against that, `0x44000` has its own manifest entry and its own dispatch
-tuple, and its own walk is clean. **Not repaired**, and recorded as the one measured case where the
-certificate and the entry evidence disagree.
-
-**The other four are not epilogue cuts at all, and saying so is the useful result.** Three of them
-(`0x5BAD0`, `0x91830`, `0xD4860`) have a "jump target" that decodes as **ordinary code** rather than an
-epilogue, so the finding is a misread continuation and not a truncated span. One (`0x52050`) widens
-into a walk that is not fully enumerated, so the certificate cannot conclude anything. Reporting these
-as "13 remaining defects of the same class" would have been wrong in four of five cases, and it is the
-same error shape as the 192/234 spelling count: a headline number that does not survive being
-measured per instance.
-
-**The remaining 11 `FALL_OFF_END` are a different question** and are not claimed to be this class.
-They include entries whose walk reaches the declared end with no return *and* no function there, which
-is consistent with a genuinely incomplete body or with a shared tail outside the span; each needs its
-own evidence. They are left reported and ungated, as they have been.
-
-**Independent reproduction of the whole batch, and a wording erratum.** The Turn Reviewer re-derived
-all **159** certificates (152 from F7c, 7 from F7d) from the original XBE with its own CFG walk and
-reproduced every one: widening only, instruction-boundary end, no manifest-start crossing, no
-fall-off, no truncation, every exit a `ret` with the same immediate, and **at least one** depth-0
-witness. Zero failed, zero walk limits hit. So the repairs are sound.
-
-It also found that **81 of the 159 have at least one exit whose depth the model reports `UNKNOWN`**
-(the Reviewer measured 76 of the F7c set and 5 of the F7d set; this record's own re-measure over the
-same set gives 81. **76 + 5 = 81, so there is no discrepancy** — an earlier revision of this paragraph
-invented a "classification difference" to explain a difference that does not exist, which is its own
-small overclaim). `0x21200`, `0x202A0` and `0x171B50` are examples: each has a depth-0 witness *and*
-UNKNOWN-depth exits.
-
-**The certificate, stated once and in full, so no shorthand is needed anywhere else.** For a repaired
-under-wide span:
+**The certificate, stated once and in full.** For a repaired under-wide span:
 
 > The walk is **fully enumerated** (no truncated decode, no fall-off, no opaque exit); **every exit is a
 > `ret`**; **exactly one distinct immediate `N`** appears across those exits; and **at least one** exit
 > is reached at **depth 0**. That depth-0 witness is what licenses `stack_args = N`. The depths of the
 > other exits are **not claimed** and may be `UNKNOWN`.
 
-Where the manifest's `evidence` strings, the preservation baseline or the plan say an entry was
-certified "at depth 0", they mean **the existence of that witness**, not that every path's depth was
-resolved. That shorthand is defined here rather than reworded in 159 places, and the one place it was
-stated as "every exit … at depth 0" — the living plan — was **false as written** and is corrected
-there.
-
-This is a **proof-statement** error, not a repair error: nothing was widened on the strength of a depth
-claim that does not hold, because the certificate never required all depths to resolve.
-
-It is recorded rather than quietly reworded because it is the fourth wording overclaim this turn has
-had to withdraw, and the pattern — a true result stated more strongly than its evidence — is worth
-having in the record as a pattern.
-
+Where `evidence` strings, the preservation baseline or the plan say an entry was certified "at depth 0",
+they mean that witness exists, not that every path's depth was resolved.
 
 ## 21. The `0x96xxx` vtable family: a sibling found by runtime, then closed by census (2026-10-06)
 
-**The family exists and is now fully covered.** The `.rdata` vtables at `0x001CD2xx`–`0x001CD4xx`
-hold **25 distinct pointers** into `0x96000`–`0x98000`. Two of them were unowned gaps that only a run
-revealed:
-
-| stop | address | how found | repair |
-|---|---|---|---|
-| 26 | `0x00096560` | f10 `[ICALL] Failed to resolve VA 0x00096560` | `[0x96560, 0x967AA)`, `stack_args` 4 — **RUNTIME-CONFIRMED by f12** |
-| 27 | `0x00096B60` | f12, immediately after confirming stop 26 | `[0x96B60, 0x96DBA)`, `stack_args` 4 |
-
-`0x96B60`'s prologue is **byte-identical** to `0x96560`'s (`mov eax,[esp+4]; sub esp,0x14; cmp
-eax,4`), so they are parallel methods of one family rather than two unrelated gaps. Both have exactly
-one image reference — an aligned `.rdata` dword (`0x001CD32C` and `0x001CD3AC`) — and **zero direct
-callers**, the `0x80BD0`/`0x94AB0` vtable-installed pattern. That is why neither was found by any
-static sweep for callers, and why each cost a run.
-
-**Closed by census rather than by waiting for the next run.** After stop 27 the same sweep was run over
-the whole family: every one of the 25 pointers either owns its own manifest span, or is a recorded
-deliberate exception. Exactly one exception remains:
-
-| pointer | status |
-|---|---|
-| `0x00096F80` | **no span, deliberately**: its container `0x96F60` has an indirect tail jump `jmp dword ptr [eax+8]`, so the hidden-entry proof cannot be completed and the detector's verdict stays `UNQUALIFIED` (§18) |
-| the other 24 | each owns a span, including `0x96070`, `0x967B0`, `0x96980`, `0x972C0`–`0x973D0`, `0x97830`–`0x97870`, `0x97C70`, `0x97C90` |
-
-So the family is **finished as a class**: the two members that a run could reach have been repaired,
-and the one that remains is excluded by a proof rule rather than by an oversight. This is the census
-doing what the runtime chain cannot — closing a family instead of discovering its members one 380-second
-run at a time.
-
-**`0x967B0` and `0x96980` are worth noting as a contrast.** Both are family members with their own
-spans, and both are short (`0x30` and `0x60` bytes). They were *not* found by a run because their
-spans already existed, which is the point: the census can distinguish "unowned gap" from "owned but
-possibly wrong extent", and only the first class was live here.
+The `.rdata` vtables at `0x001CD2xx`–`0x001CD4xx` hold 25 distinct pointers into `0x96000`–`0x98000`.
+Stop 26 `0x00096560` (`[0x96560, 0x967AA)`, `stack_args` 4) and stop 27 `0x00096B60` (`[0x96B60,
+0x96DBA)`, `stack_args` 4) share a prologue (`mov eax,[esp+4]; sub esp,0x14; cmp eax,4`), one `.rdata`
+reference each (`0x001CD32C`, `0x001CD3AC`) and zero direct callers. 24 of 25 own a span; the exception
+is `0x00096F80` (§18).
 
 ## 22. The present ceiling was one stale method-table entry: `0x1810` (2026-10-06)
 
-**Explained, then cleared.** The ceiling was the submission walk rejecting the whole stream with
-`unsupported_method` on method `0x1810`, which is `NV097_DRAW_ARRAYS`. It was **absent from the
-generated admission table** (`xboxrecomp/src/nv2a/nv2a_method_table.c`, ledger L39) between `0x1808`
-and `0x1818`, although the toolkit's executor **already implemented it**
-(`xboxrecomp/src/kernel/nv2a_pb_exec.c`, `case NV097_DRAW_ARRAYS`, whose own comment calls it "the
-method this title actually draws with"). The table was stale relative to the executor — the same
-class as the `0x1720` case recorded in L39, not a missing implementation.
+- **Cause.** The walk rejected the whole stream with `unsupported_method` on `0x1810` (`NV097_DRAW_ARRAYS`),
+  absent from the generated admission table (`xboxrecomp/src/nv2a/nv2a_method_table.c`, L39) though the
+  executor implemented it: `[PFIFO] reject … method=1810 subch=0 param=03000000 at=00008EF0 get=00008EF0
+  put=0000A6D4 successes=15 rejections=1` (`20261006-203929-286-title005-ceiling`); the packet at
+  `0x80009ADC` is `header 0x40041810`. The five archived target dumps (f9, g06, f10, f12, f13) all show it
+  as the first rejection. With the pre-2026-10-06 live fence mirror (L17) D3D kept writing the ring after
+  a rejection, so archived rings at GET are later frames' bytes; the A/B
+  `20261006-205306-080-title005-ceiling-ab-live` (`RECOMP_FENCE_MIRROR_LIVE=1`) moved past `0x8EF0` to
+  `at=00033D04`. The first `admit-unknown` enumeration, `20261006-205823-760-title005-admit-unknown`,
+  listed exactly `class=97 method=1810 param=03000000 at=00009ADC`.
+- **Fix: toolkit `505cda5b96e5b2a70492825df34151594805a1e5`**, the generated table +`0x1810` only (380 →
+  381; NV097 370), generated from the three runs the committed table comes from:
 
-**Three independent witnesses agreed on the first rejection, all naming the same method at the same
-address.** They are listed because they are different artifacts, not three readings of one:
+  ```text
+  python -X utf8 scripts/gen-nv2a-method-inventory.py \
+    20260922-110235-244-spanfix-1185b0 \
+    20260930-230206-594-f4-frames-after-horizon-fix \
+    20261006-203929-286-title005-ceiling
+  ```
 
-| witness | artifact | what it said |
-|---|---|---|
-| `[PFIFO] reject` | new-mirror run `20261006-203929-286-title005-ceiling` | `diag=unsupported_method method=1810 subch=0 param=03000000 at=00008EF0 get=00008EF0 put=0000A6D4 successes=15 rejections=1`, then `still rejecting n=16`, `n=256` |
-| `g_nv2a_submit_state` | same dump, `just gpu-report` | `last walk unsupported_method; 2695 consecutive rejection(s); method 0x00001810`; predicted diagnostic `unsupported_method`; pending-stream table lists exactly one missing method, `class 0x97 method 0x1810 first VA 0x80009ADC` |
-| the guest's own bytes | same dump, decoded at GET | the packet at `0x80009ADC` is `non_incrementing; header 0x40041810; method 0x00001810, count 1` |
+  Each run is decoded only to its own log-derived ring top; the first two alone reproduce the old table
+  byte-for-byte.
+- **Cleared:** `20261006-210559-268-title005-fixed` (420 s, `just title-run`): 0 rejects, `last walk ok`,
+  presents **2410** (old 888); confirm `20261006-215642-480-title005-confirm`: 1680 presents at 297 s.
+- **The decoder is not the model's walk.** The generator expands `m = method + 4 * i` unconditionally;
+  `nv2a_core.c` increments only when the non-incrementing bit (`h & 0x40000000u`) is clear and rejects an
+  incrementing span past `0x1FFC` (`NV2A_SUBMIT_METHOD_RANGE`):
 
-**The archived runs already contained it, and this refutes the earlier reading.** All five target
-dumps (f9, g06, f10, f12, f13) log `[PFIFO] submit #12 diag=unsupported_method ... method=1810
-at=00008EF0` as the **first** rejection, with GET pinned at `0x8EF0` and no later `diag=ok`. So the
-rejection was never a new regression, and "flips and presents stopped together, therefore the guest
-stopped submitting" does not follow: it is what a rejected walk produces (L40 — the walk commits
-all-or-nothing, so no flip, no commit consumer, and no 10 s `[GPU]` report).
+  | synthetic packet | generator reports | model does |
+  |---|---|---|
+  | `0x400C1810` (non-incrementing, 3 params) | methods `1810`, `1814`, `1818`; reached PUT | three writes to `1810` |
+  | `0x00081FFC` (incrementing, count 2) | methods `1FFC`, `2000`; reached PUT | rejects: method-range overflow |
 
-**Why the archived dumps could not show it, and the status of the 1000 → 888 count.** With the
-pre-2026-10-06 live fence mirror (L17) every fence was reported complete whether or not the walk
-consumed it, so after a rejection D3D kept writing the ring and overwrote the rejected bytes. The
-A/B run `20261006-205306-080-title005-ceiling-ab-live` (`RECOMP_FENCE_MIRROR_LIVE=1`) **demonstrates
-that mechanism**: 24 reject lines, 8 recoveries, and the walk moves *past* `0x8EF0` to a later blocker
-(`at=00033D04`, `unsupported_method` then `reserved_opcode`). So an archived dump's ring at GET is a
-later frame's bytes, and no archived dump can name the original blocker from its bytes alone.
-
-**Claim limit on the count itself.** The A/B run's last present measurement is **620**, not 888 or
-1000. It therefore establishes the *mechanism* — a rejected walk plus live-mirror overwrite, with the
-guest continuing on bytes a later re-walk parsed — but it does **not** isolate why the historical runs
-stopped at exactly 1000 and exactly 888, and it does not by itself rule out a second contributing
-cause. §19 records that those runs differ in more than one revision (F7b `0445a80` re-ended `0xAE560`,
-the very function f9 trapped in; plus the review fixes and F7c) and that same-binary runs vary, and its
-replay log was deleted. So "the count difference is fully explained" is **not** established: the
-overwrite-rescue mechanism is the supported explanation, the exact counts are a hypothesis consistent
-with it. Confirming it would need a retained discriminating experiment (e.g. replaying the historical
-binaries against a fixed method table), not the A/B above.
-
-**The fix, and its provenance.** The table is generated from measured submission rings, so the fix is
-to regenerate it from a ring that contains the method (never to relax the rejection — L39). The fix
-landed as **toolkit `505cda5b96e5b2a70492825df34151594805a1e5`** ("nv2a: admit DRAW_ARRAYS, the method
-the walk rejected the title on"; the only change is the generated table, +`0x1810`):
-
-```text
-python -X utf8 scripts/gen-nv2a-method-inventory.py \
-  20260922-110235-244-spanfix-1185b0 \
-  20260930-230206-594-f4-frames-after-horizon-fix \
-  20261006-203929-286-title005-ceiling
-```
-
-Set difference against the committed table: **exactly `+0x1810`, nothing removed** (380 → 381
-entries; NV097 370). Each run is decoded only to **its own** log-derived ring top. A determinism
-control — regenerating from the two pre-existing runs alone — reproduced the committed table
-byte-for-byte, so the change is attributable to the new run alone. The generated inventory document
-now records the union of 3 runs / 385 pairs.
-
-**The ceiling is cleared, and this is a new measurement rather than a re-reading.** Run
-`20261006-210559-268-title005-fixed` (420 s, standard exploratory `just title-run` profile: the four
-title-path switches plus `RECOMP_GPU_ACK` defaulting on; neither the live-mirror nor the
-admit-unknown switch): **0 reject lines, 0 still-rejecting, 0 recovered, 0 admit-unknown**,
-`Submit state: last walk ok; 0 consecutive rejection(s)`, `Methods in the pending stream the table
-lacks: None`, final GET == PUT, and **presents = 2410** against the old 888. The independent
-confirmation run `20261006-215642-480-title005-confirm` reproduces it on the durable tree:
-0 rejections, `last walk ok`, presents = 1680 at 297 s (a 300 s bound), 10 distinct frame hashes.
-The `[GPU]` counters corroborate that frames were really drawn: `rasterised 14246 triangles; 0
-batches skipped as not screen-space; 0 batches via the fixed-function transform` and `batches: 8318
-textured, 0 with no texcoords, 0 with texcoords but no usable stage`.
-
-**Retained regression evidence for this turn.** The game suite's `ctest` log lives under the
-gitignored `build/`, where the next run overwrites it, so it is copied to
-`logs/workers/title005/LastTest-44of44.log` (99 KB, sha256
-`5ca5653ba8c63dc1728a9f7acebfb5165f17f857205c7c793f995369dcfa3925`, ctest run 2026-10-06 22:34–22:37
-local): **44 numbered tests, no failure**. 43 report `Test Passed.` and the 44th
-(`jsrf_apu_watch_fixture_pwrite_watch`) passes on a `PASS_REGULAR_EXPRESSION` instead, so it has no
-such line; the `failed` substrings in that file are the tests' own `0 failed` check summaries and
-pre-existing `ERROR [SYNC]` lines, not failures. `just check`'s output is retained beside it as
-`logs/workers/title005/just-check.txt` (exit 0). Both are evidence copies, not repository content:
-`logs/` is gitignored.
-
-**What this does not establish.** It is exploratory evidence (the run carries `RECOMP_APU_TRAP`,
-`RECOMP_PB_EXEC`, `RECOMP_FB_WINDOW`, `RECOMP_FB_PRESENT_DUMP_EVERY`), so it is not a fidelity claim.
-**M15 is not reached**: the window and BMP dumps show the run still ending on the graffiti
-disclaimer, and no title-screen frame exists **in the inspected dumps or in any logged present hash**.
-And a *second* blocker in the same class was then
-measured: after 3498 successes the walk rejects on `unsupported_method method=0BB0` (a
-`NV097_SET_TRANSFORM_CONSTANT` slot), with the pending region also carrying `0BB4`, `0BB8`, `0BBC`,
-`1724` and `1728` — six methods, all register-state, confirmed at runtime by
-`RECOMP_NV2A_ADMIT_UNKNOWN=1` in run `20261006-213505-255-title005-admit3`. That run's record lists
-every admitted method, with its class, as L44 requires (verbatim from its log; `class=97` is
-`NV097_KELVIN_PRIMITIVE`):
-
-```text
-  [PFIFO] admit-unknown class=97 method=0BB0 param=00000000 at=0002FF9C
-  [PFIFO] admit-unknown class=97 method=0BB4 param=00000000 at=0002FF9C
-  [PFIFO] admit-unknown class=97 method=0BB8 param=3CD5AD3F at=0002FF9C
-  [PFIFO] admit-unknown class=97 method=0BBC param=00000000 at=0002FF9C
-  [PFIFO] admit-unknown class=97 method=1724 param=0039500C at=000301CC
-  [PFIFO] admit-unknown class=97 method=1728 param=00395018 at=000301D4
-```
-
-The earlier enumeration run `20261006-205823-760-title005-admit-unknown` (before the `0x1810` fix) is
-the same class of record and listed exactly one method: `admit-unknown class=97 method=1810
-param=03000000 at=00009ADC`. Note that a third run of the same kind,
-`20261006-212529-647-title005-admit2`, **did not fire the banner at all** — it took a different path
-(run-to-run variation), so the six methods above are treated as confirmed only from `admit3`, which
-did. Once those are admitted, the same run hits a **different** diagnostic, `budget_exhausted` (L40's
-per-walk word budget), which needs its own fix and no switch.
-
-**A methodological caution for the next packet.** Regenerating the table from those later runs
-directly is **not** safe as done here. Their rings have wrapped: decoding
-`20261006-211635-913-title005-m15` from `0x1000` to its log-derived top stops with
-`bad_target 0x00100000`, and including it inflates the union from 381 to 434 methods, adding a dense
-`0x1848`–`0x18F8` run (54 entries) that the *real* walk never required — the real walk rejected at
-`0x2FF4C` for `0x0BB0`, which is past most of those packets. The generator's decode and the model's
-walk can diverge on a wrapped ring, so a table entry must be taken from a run whose decode **reached
-PUT**, or from the `[PFIFO] admit-unknown` list of a run that actually exercised the method. The
-`0x1810` fix above satisfies this: its source run reached PUT.
-
-**The divergence is measurable, and it is a mis-parse rather than a real method family.** The packets
-that produce the dense range carry implausible counts and overlapping spans — in m15's ring,
-`header 0x1C200000` (method `0x0000`, count **1800**), `header 0x1100F82C` (method `0x182C`, count
-**1088**, spanning `0x182C`–`0x2928`), and `header 0x1078E800` (method `0x0800`, count **1054**,
-spanning `0x0800`–`0x1874`). A real NV097 submission does not set `count` to 1800 on method 0, and
-those spans sweep across the whole `0x18xx` vertex-format block, which is exactly why the union grew by
-a contiguous 4-byte-stride run. So the count fields are being read out of bytes the walk never treated
-as a header. Any future table growth must therefore be justified per method — a decode that reached PUT,
-or an `admit-unknown` line — and **never** by "the generator's union said so".
-
-**"Reached PUT" is necessary but NOT sufficient: the decoder is not the model's walk.** Read side by
-side, `scripts/gen-nv2a-method-inventory.py` and `nv2a_core.c`'s `nv2a_submit_pending` differ in ways
-that make the generator *invent* methods on a syntactically perfect, unwrapped ring. The generator's
-packet expansion uses `m = method + 4 * i` unconditionally, while the model increments the method only
-when the non-incrementing bit is clear (`nv2a_core.c`, `non_inc = (h & 0x40000000u) != 0`) and rejects
-an incrementing span that runs past `0x1FFC` (`NV2A_SUBMIT_METHOD_RANGE`). Two in-memory fixtures
-demonstrate the divergence:
-
-| synthetic packet | generator reports | model does |
-|---|---|---|
-| `0x400C1810` (non-incrementing, 3 params) | methods `1810`, `1814`, `1818`; reached PUT | three writes to `1810` |
-| `0x00081FFC` (incrementing, count 2) | methods `1FFC`, `2000`; reached PUT | rejects: method-range overflow |
-
-So a "reached PUT" decode can still fabricate an entry the hardware would never write, and the
-`0x1848`–`0x18F8` run above is the same class of artifact on a wrapped ring. Three further mismatches
-are recorded so they are not rediscovered: the generator takes the ring top as the **maximum PUT in the
-log** (not the current one), fixes `GET` at `0x1000` (so it has no notion of ring wrap), and derives a
-subchannel's class from a **hardcoded table** rather than from the RAMHT binding state at the time.
-Structural heuristics — implausible counts, overlapping method ranges — are useful *warnings* and not
-validity proofs, because bulk and repeated state writes are legal.
-
-**The provenance rule this leaves.** For the next packet, admit methods from a **runtime committed
-witness** (`[PFIFO] admit-unknown`, whose records are queued only inside the successful-commit block
-after the consumer has received every staged method in order), or from a replay of the same frozen
-pending stream with correct ring bounds, bindings and packet semantics — not from a decoder run whose
-only credential is that it reached its own chosen PUT. `scripts/jsrf_gpu.py`'s queue decoder already
-implements several of the missing checks and is the better thing to share and test than a second
-implementation claiming equivalence. The `0x1810` fix above still satisfies the rule: `0x1810` is a
-single-parameter incrementing packet, so the increment rule does not apply to it, and its arrival was
-independently confirmed by `[PFIFO] admit-unknown`.
+  It also takes the ring top as the maximum PUT in the log, fixes `GET` at `0x1000` (no ring wrap), and
+  derives a subchannel's class from a hardcoded table. On a wrapped ring
+  (`20261006-211635-913-title005-m15`) it stops at `bad_target 0x00100000` and inflates the union 381 →
+  434 with a fake dense `0x1848`–`0x18F8` run (e.g. `header 0x1C200000`, count 1800).
+- **Provenance rule:** admit a method only from a **runtime committed witness** (`[PFIFO] admit-unknown`,
+  queued only inside the successful-commit block) or a faithful replay of the frozen pending stream, never
+  because a decode reached its own PUT. Witnesses live in `config/nv2a-runtime-witnessed-methods.json`
+  (run, log line, log SHA-256); the generator unions them (`--witness=`).
 
 ### §22.1 The six witnessed methods, and why admitting them is not the end of the blocker
 
-**Done.** `0x0BB0`/`0x0BB4`/`0x0BB8`/`0x0BBC` and `0x1724`/`0x1728` are admitted from the runtime witness
-(toolkit `46b3265`, game `779c6a0`). Provenance is the `[PFIFO] admit-unknown` record, which the walk
-queues only inside the successful-commit block, so it witnesses a method the walk really staged **and
-committed** — strictly stronger than a decode, per §22 above. The admission is durable rather than a hand
-edit: `config/nv2a-runtime-witnessed-methods.json` carries each witness with its run, log line and log
-SHA-256, and the generator unions it (`--witness=`), refusing an unknown class, an unaligned method, a
-missing witness/run/hash field, or an unreadable manifest. The measured delta is exactly
-`+{0BB0,0BB4,0BB8,0BBC,1724,1728}` on class `0x97`, zero removals, no other class changed, `0x1810`
-retained (381 → 387; NV097 370 → 376). All six were already implemented in the executor — the constants by
-`vp_method`'s range arm, the offsets by the `0x1720`-range arm — so admission activated existing behaviour
-and added no executor code.
-
-**Ordered delivery is now pinned, and the contract was validated by mutation.** A final-state check cannot
-distinguish correct ordered delivery from a dispatcher that merely holds the last value written. Reading
-the implementation rather than assuming it: the constant **component** is a pure function of the method
-(`((method - 0x0B80)/4) % 4`) and the **index** advances only on the fourth component (`0x0BBC`), so
-permuting `0x0BB0`/`0BB4`/`0BB8` while leaving `0x0BBC` last is byte-identical and is *not* observable —
-a test claiming to check that order would be checking nothing. What is observable, and therefore pinned by
-`run_ordered_constant_contract` (`tests/test_nv2a_hal.c`, reading the real executor through the new narrow
-`nv2a_pb_exec_vp_view`, toolkit `ec98ffe`): two successive groups must land in successive constants with
-the cursor advancing once per group; an early group close must **split** the group across two constants;
-and interleaved vertex-array offsets must stay independently addressable with the last write per attribute
-winning. Replacing the constant handler with a last-value-only version makes **15** of those assertions
-fail. (The cursor advances once on an early close, not twice — only `0x0BBC` matches `slot % 4 == 3`; an
-earlier draft of this test asserted twice and was wrong, and the implementation was right.)
-
-**The blocker beyond the six is NOT `budget_exhausted`, and the method list is larger than first reported.**
-An offline decode of the region the walk was consuming when it reported the budget (GET `0x494F4`..PUT
-`0x4E680`, 5219 words) reports **39 distinct NV097 methods missing from the table**, via the repository's own
-`jsrf_gpu.missing_methods`, which expands an incrementing packet's parameter slots. They are
-`0x0420`–`0x042C`, the full `0x0480`–`0x04BC` and `0x0680`–`0x06BC` runs (16 each — the model-view and
-composite 4×4 matrices), `0x1748`, and `0x1B40`/`0x1B44`. An earlier count of "eight" in this record was
-**wrong and is corrected here**: it listed only each packet's START method
-(`0x0420`, `0x0424`, `0x0428`, `0x042C`, `0x0480`, `0x0680`, `0x1748`, `0x1B40`) and ignored the incremented
-slots of a `count=16` matrix upload. The eight are packet-start *families*, not the full method list. The raw
-headers were read directly and are real (`header 0x00040420` → method `0x0420` count 1; `0x00400480` →
-`0x0480` count 16, consistent with a 4×4 matrix). **Why they were never witnessed:** the admitting run set
-`RECOMP_NV2A_ADMIT_UNKNOWN=1`, which *bypasses* the `unsupported_method` reject, so the walk sailed past them;
-and the witness queue is populated only on a successful commit, which a budget-rejected walk never reaches. So
-the six-line witness is a **lower bound** on what a region needs, not an inventory — a limit now recorded in
-the manifest itself. **Provenance limit:** this list is **decode-derived and its temporal provenance is NOT
-established** (see below), so it must be runtime-confirmed before admission, exactly as the six were. A
-normal walk will reject on the first of them well before it ever sees the budget.
-
-**The region's temporal provenance is NOT established, and an earlier claim that it was is retracted.** A
-first attempt was **circular**: it decoded the reject-time pointer range and the capture-time pointer range
-from the *same* final dump and compared their common prefix, which compares the same bytes with themselves.
-A second attempt tried to bound the rewritten arc from the producer's `PUT` trajectory, but the archived log
-contains only **three** pointer samples for that phase — the reject at `PUT=0x4E680`, one `still rejecting` at
-`PUT=0x6D060`, and the final `0x3E984` — so the actual distance travelled is `114881 + k·131072` words for
-unknown `k`, and **a full lap cannot be excluded**. (An earlier draft of this record said "monotonic across
-all 170 re-reject lines": that is wrong. The log has **2** reject/still-reject lines; `170` is the
-`rejections=` *counter*, which is not a count of pointer records.) Therefore the 5219-word span is decoded
-from the final dump but **not proven to be what the walk read at the reject**, and every conclusion drawn
-from its bytes — including the 39-method list — is **conditional**. Confirming it needs a contemporaneous
-first-stop transcript or bytes, which is the next turn's measurement.
-
-**The budget mechanism is strongly indicated but not proven.** The detailed dump at `nv2a_core.c:1671` is
-unconditional on the header path and did **not** appear in the admit3 log, while the parameter path
-(`:1578`) jumps to `done` with no dump — so exhaustion happened **inside a packet**, not at the 1024-packet
-limit, *conditional on stderr being complete and unfiltered*. The archived `build-source.json` hash for
-`nv2a_core.c` matches the current source, so the two paths are as described. With the budget raised the same
-region decodes cleanly to PUT (235 packets; no loop, reserved opcode or bad target), and the decode stops in
-the parameter path exactly as the missing dump implies. The specific straddling packet (a non-incrementing
-`0x1800` write with 271 parameters) is **read from the decode and inherits its provenance limit**; that the
-title genuinely submitted a 5219-word stream is therefore a hypothesis consistent with the evidence, not an
-established fact. **Raising the budget is not the fix** (owner constraint, L40): the durable direction is
-bounded resumable prefix dispatch that keeps the cap and preserves carry, order and all-or-nothing rollback,
-and does not publish the fence for the original PUT until it is consumed. Two diagnostic traps are recorded
-so they are not re-discovered: the published `at`/`get` are the **rollback origin**, not the local failure
-frontier; and the "last 32 visit addresses" array is written only at headers (`trace[words & 31]`), so on a
-parameter-heavy stream it is sparse, stale and non-chronological — and a mid-packet exhaustion bypasses it
-entirely.
-
-**Two of my own measurements were wrong, and the corrections matter.** First, `[PFIFO] submit` logging is
-capped at 64 lines (`if (submits < 64)`), so the maximum `put=` in a log is **not** the final PUT; the real
-pointers come from `gpu-snapshots.jsonl`. Second, `[FBPRESENT]` *lines* are sampled (on change, every 10
-presents, or every 10 s), so a line count is not the `presents=` counter — comparing them produced a
-phantom "163 vs 2410" regression. Like-for-like the counters are new **1490**, fixed **2410** (at 420 s vs
-300 s) and confirm **1680**. That correction invalidates the old comparison; it does **not** establish that
-there is no regression. The runs differ in duration, in executable hash, and in where in the late spin each
-one happened to be when its deadline fired, so the counters cannot separate a real behavioural change from
-run-to-run variation. What *can* be said is narrow: the admission is purely additive in the table (exactly
-`+6` on class `0x97`, zero removals), and no run has shown a rejection or a new code path since. A
-no-regression claim would need a matched-duration A/B on one binary.
-
-**And whether the post-admission run exercised the changed path is NOT DEMONSTRATED.** `20261007-001831-252-…-sixadmitted`
-drained the walk (`GET == PUT == 0x66E30`) with **zero rejections** and `last walk ok`. What can and cannot
-be concluded:
-
-- A presence scan of the final ring finds none of the six, but that is **not** evidence of absence: the ring
-  is reused, and the bytes at `0x2FF4C` demonstrably differ between this run and m15, so absence at one VA
-  cannot exclude the six being submitted **elsewhere**, and absence in the final dump cannot exclude them
-  having been submitted and overwritten.
-- "Zero rejections post-admission" is **not** evidence either, and the control that breaks it is the
-  pre-admission `fixed` run, which also finished with zero rejections.
-- An attempt to use the write order (the `PUT` never wrapped, so bytes below a submit's end were written
-  before it and never rewritten) is **not sound as stated**: the `[PFIFO] submit` log is capped at 64 lines,
-  so it cannot establish that `PUT` never wrapped across the whole run, and the final `PUT` alone does not
-  either. The observation that the header at `0x2FF4C` is `method 0x1824` rather than `0x0BB0` is a genuine
-  data point *for that address*, but labelling that word a packet header assumes a packet boundary that has
-  not been established.
-
-So the honest statement is: this run shows **no observed harm** from the admission, and it does **not**
-demonstrate that the six were exercised, needed, or delivered. Even "broke nothing" is stronger than the
-evidence: exercise was not demonstrated, so the run is close to silent about the changed path either way.
-Establishing exercise needs either a contemporaneous walk transcript or a run whose submission history is
-captured beyond the 64-line cap. The runtime evidence that the six are needed remains the admit3 witness, and
-the executor-level evidence is the ordered contract above.
+- `0x0BB0`/`0x0BB4`/`0x0BB8`/`0x0BBC` and `0x1724`/`0x1728`, witnessed by
+  `20261006-213505-255-title005-admit3`, admitted in toolkit `46b3265` / game `779c6a0` (381 → 387, NV097
+  370 → 376, zero removals); all six were already implemented. (`20261006-212529-647-title005-admit2`
+  took a different path and fired no banner.)
+- `run_ordered_constant_contract` (`tests/test_nv2a_hal.c`, via `nv2a_pb_exec_vp_view`, toolkit `ec98ffe`)
+  pins ordered constant delivery (component `((method - 0x0B80)/4) % 4`, index advances on `0x0BBC`); a
+  last-value-only handler fails 15 assertions.
+- Counting traps: `[PFIFO] submit` logging stops at 64 lines, and `[FBPRESENT]` lines are sampled (on
+  change, every 10 presents, or every 10 s) — read `gpu-snapshots.jsonl` and the `presents=` counter. The
+  published `at`/`get` of a budget stop are the rollback origin; the "last 32 visit addresses" array is
+  written only at headers. The 39-method follow-on is settled in §23.3.
 
 ## §23 The M15 frame criterion was unsound: the disclaimer renders in four hashes, and one blacklisted hash is a logo
 
-**The defect.** M15 was defined as "a title-frame BMP whose hash is **neither** `5bdaea576b8509f5` **nor**
-`87683a748e27d071`". That is a hash **blacklist**, and a blacklist is only sound if the listed hashes cover
-every non-title state. They do not. Both halves are wrong:
+**`87683a748e27d071` is the blue Dolby card** (94.8 % saturated blue; `logs/workers/title005/tp0011.bmp`),
+and the graffiti disclaimer renders in four hashes, so the old blacklist criterion ("neither
+`5bdaea576b8509f5` nor `87683a748e27d071`") admitted disclaimer frames:
 
-- **`87683a748e27d071` is the blue Dolby card, not a disclaimer** — 94.8% saturated blue with a small black
-  box (`logs/workers/title005/tp0011.bmp`). Blacklisting it excludes a *logo* frame, which is arbitrary: the
-  SEGA, Smilebit and ADX cards are equally non-title and were never listed.
-- **The graffiti disclaimer renders in FOUR distinct hashes, and only ONE is listed.** Measured across every
-  archived frame directory:
+| hash | content | on the old blacklist |
+|---|---|---|
+| `5bdaea576b8509f5` | graffiti disclaimer | **yes** |
+| `089fe3b826bbc18d` | graffiti disclaimer | no |
+| `cf836ec8430ffb6d` | graffiti disclaimer | no |
+| `8205f3a6d2e48df5` | graffiti disclaimer | no |
 
-  | hash | content | on the old blacklist |
-  |---|---|---|
-  | `5bdaea576b8509f5` | graffiti disclaimer | **yes** |
-  | `089fe3b826bbc18d` | graffiti disclaimer | no |
-  | `cf836ec8430ffb6d` | graffiti disclaimer | no |
-  | `8205f3a6d2e48df5` | graffiti disclaimer | no |
+They are one artwork that fades and shifts (at a fixed threshold `089fe3b8…` and `5bdaea57…` agree on
+100.00 % of pixels; Dolby vs disclaimer 11 %). Frame hashes are FNV-1a over the published frame's pixels
+top-down, each pixel `(r<<16)|(g<<8)|b` (`fb_hash_rgb`, `xboxrecomp/src/video/fb_present.c`); 9 of 9
+dumped frames reproduce their logged hash. `20261007-001831-252-20261007-title006-sixadmitted` ended on
+`8205f3a6d2e48df5` and met the old wording with no title on screen. **M15 is identified by content** (the plan's criterion). The
+boot sequence advances rather than loops (`20261007-022608-843-…-frames`: 10 of 15 distinct states first
+appear in the second half).
 
-  All four are the same artwork — a red prohibition icon on an ~88% black field with a block of white text —
-  and they differ because the notice **fades and shifts** between renderings. At a fixed binarisation
-  threshold, `089fe3b826bbc18d` and `5bdaea576b8509f5` agree on **100.00%** of pixels, while a control pair
-  (the Dolby card against a disclaimer) agrees on only **11%**. So they are the same image, not merely
-  similar ones.
+## §23.1 What the guest is doing when it stops
 
-**Why this is not hypothetical.** The run that "cleared the ceiling" —
-`20261007-001831-252-20261007-title006-sixadmitted` — ends with
-`[FBPRESENT] t=298s presents=1490 hash=8205f3a6d2e48df5 unchanged`, and that hash is the graffiti
-disclaimer. Under the old wording that run **satisfied M15's letter while showing no title screen**. The
-same is true of `20261006-211635-913-title005-m15` (`tp0013`/`tp0016` are `8205f3a6d2e48df5`).
-
-**How the hashes were established.** Every distinct frame in `logs/workers/**` was hashed with the same
-FNV-1a the model uses (`fb_hash_rgb`, `xboxrecomp/src/video/fb_present.c`: FNV-1a over the published frame's
-pixels top-down, each pixel `(r<<16)|(g<<8)|b`), and then classified by pixel content rather than by hash.
-The reproduction is exact — **9 of 9** dumped frames reproduce the hash the log printed for them
-(`156ed4086987e325` at t=0s through `8205f3a6d2e48df5` at t=291s) — so a BMP is provably the frame the log
-hashed, and its content therefore *names* that hash. Tools: `logs/workers/title006/frame-hashes.py`,
-`disclaimer-census.py`, `same-artwork.py`, `classify-frames.py`, `contact-sheet.py`.
-
-**The corrected criterion.** M15 requires the **title screen itself**, identified by content: a frame that
-is neither a logo card nor a disclaimer notice, confirmed by looking at it, with its hash recorded. "Not one
-of two hashes" is retired, because it admits at least three disclaimer renderings and rejects a logo.
-
-**What the frames show about progress, for the record.** The boot sequence is **advancing, not looping**.
-In `20261007-022608-843-…-frames`, 10 of the 15 distinct states appear for the first time in the second half
-of the run, and the sequence ends on states never seen before — the opposite of a short repeated cycle. The
-earlier appearance of a "loop" came from reading two different runs' frames as one series: `logs/workers/title005`
-holds both a `t*` set and a `tp*` set from separate runs, and only the `tp*` set closes on itself. Even there
-the closure is the *disclaimer* state recurring, which is what a fade does, not the whole boot repeating.
-
-**Claim limits.** These are content measurements of archived BMPs, not a new run and not a fidelity claim.
-The disclaimer's four hashes are established for the archived builds; a different build could render it
-differently again, which is exactly why the criterion must not be a hash blacklist.
-
-## §23.1 What the guest is doing when it stops: measured, and two hypotheses eliminated
-
-**The "busy-wait" reading was wrong, and it is retracted here.** A run's log is ~70% `[TRACE]` calls to one
-function, `sub_0019E438`, which looks like a spin. It is not. The trace is on *because*
-`config/trace-functions.json` lists that address, and the function is the DirectSound conditional-lock
-helper, called ~120 times per 10 presents as ordinary per-frame API traffic:
-
-- `call dword ptr [0x1c4064]` is a **kernel thunk table** entry, not a data pointer. The slot resolves to
-  ordinal 277 = `RtlEnterCriticalSection` (table base `0x1C3F60`, slot 65; the image bytes at file
-  `0x1B4104` are `15 01 00 80` → `0x80000115` → ordinal `0x115`).
-- **All 16356 calls returned `eax=1`** — "I acquired the lock" — so the fall-through lock path ran every
-  time and the `fs:[0x24]` IRQL gate never held.
-- The ordinals are **exactly balanced**: `RtlEnterCriticalSection` 24702 and `RtlLeaveCriticalSection` 24702,
-  zero outstanding. That is work, not contention. `docs/reviews/rulings/f4-submission-capacity.md` had
-  already reached this ("a shared conditional-enter helper with ~50 callers").
-
-**A fidelity gap is recorded but is NOT the blocker.** The toolkit never publishes IRQL into the guest TIB —
-`xbox_memory_layout.c` fills `fs:[0x00/0x04/0x08/0x18/0x20/0x28]` only, while IRQL lives in host TLS
-(`kernel_hal.c`). So `fs:[0x24]` is permanently 0 and the guest takes the lock every time instead of
-skipping it at DISPATCH_LEVEL. That costs time, not correctness: the lock is always acquired and always
-released.
-
-**Input is NOT shown to be the blocker, but my first test of it was INVALID.** The hypothesis was that the intro
-waits for a button press that never arrives. I ran a comparison with `RECOMP_KEYBOARD=1` explicitly armed
-(confirmed in `metadata.json`'s effective settings) and it produced a **state-for-state identical** frame
-sequence to the run without it — first 12 `CHANGED` hashes matching exactly. **That comparison does not
-establish anything about input**, and is retracted as evidence: keyboard state is read from
-`s_key_down[]` in `fb_present.c`, which is written **only by `WM_KEYDOWN`/`WM_SYSKEYDOWN` window messages**
-(`fb_present.c`, `fb_wndproc`). A run with no focused window and no synthetic keypress therefore sees an
-all-zero key array whether or not `RECOMP_KEYBOARD=1` is set, so the two runs *must* look identical — the
-test could not have distinguished them. What the observation does show is that **enabling the keyboard path
-changes nothing on its own**, which is a much weaker statement.
-
-To test the input hypothesis properly the guest must actually receive a press: run with the framebuffer
-window focused and send a key, or add a way to inject pad state without the window (there is no
-`RECOMP_PAD`-style override in the toolkit today — the only input switches are `RECOMP_KEYBOARD` and
-`RECOMP_USB`). Until that measurement is made, "the intro waits for a press" remains **unverified**.
-
-**And the toolkit's own pad-injection seam is DEAD CODE, which is why the obvious way to test it fails.**
-`src/usb/usb_gamepad.c` already has `RECOMP_PAD_PRESS` — a synthetic button pulse with the right shape for a
-"press Start" screen (it pulses rather than latching, because a title wants an edge). But it is reached only
-through `usb_gamepad_report`, whose only caller is `ohci.c`'s endpoint path, which runs only once
-`xbox_OhciInit` has enabled the controller — and **`xbox_OhciInit` is defined and declared in `ohci.h` but
-never called anywhere in either repository.** A run with `RECOMP_USB=1 RECOMP_PAD_PRESS=0x10,2000,250`
-therefore logs no `PAD: synthesising …` line at all, exactly as observed. `xbox_InputInit` is likewise never
-called: nothing in the game's startup wires input. So **both** documented input paths are unreachable at this
-boot stage, and no input can be delivered to the guest by any current switch — which is a stronger and more
-useful statement than "input did not change anything". Wiring USB input up is a candidate next step, but it is
-a real piece of work (the controller must be enabled before the guest's XAPI probes it), not a switch flip.
-
-**The guest keeps working while the picture stops changing.** In that same run the GPU report shows the guest
-still submitting and drawing at the end: 5345 draws, 9224 rasterised triangles, 834 million pixels written,
-5345 textured batches, and 1760 flips. `presents` climbs steadily to 1800 with no stall. So this is not a
-stalled guest, an idle GPU, or a dead audio thread (`[APUWAIT]` shows the DSP frame count advancing, no APU
-errors anywhere).
-
-**What remains unexplained, and the next measurement.** The guest draws into `0x0011C000` and `0x001B2000`
-(16 and 10 report blocks) while the presenter's target is `0x00084000`. That looks like a present/draw
-mismatch, and dumping the draw surface does produce frames that never appear in the presented stream
-(`ed6e4b6298b2550c`, `70e07e9ac0aadb14`, `7b3d7b694f3d6ad5` — rich SEGA/Smilebit/Dolby/ADX composites).
-**But those are NOT a title screen, and the mismatch reading is not established.** Two measurements say so:
-
-- **`0x11C000` and `0x1B2000` are never cleared.** Over a whole run the only surfaces ever cleared are
-  `0x00084000` and `0x00000000`. A buffer that is drawn to but never cleared **accumulates across frames**,
-  so its content is a smear of many frames rather than any frame the guest composed — which is exactly what
-  the composites look like.
-- **The ink sets confirm it.** In the pinned-draw-surface run the frames are not stable: `dp0001` has 10331
-  ink samples, `dp0002` drops to 1856, `dp0003` returns to 10050. A real frame does not lose 90% of its
-  content and get it back. Only some steps are supersets; most are not, which is accumulation plus
-  partial clears, not a rendered scene.
-- The one `[FBPRESENT] presenting targeted 0x00084000` line appears **once** in the run, not throughout: the
-  log prints the targeted fallback only for the first 8 occurrences, and the normal path follows
-  `drawn_offset` silently. So "the presenter targets `0x84000` for the whole run" was an over-read of a
-  single log line, and is retracted.
-
-So the honest position: the guest is still drawing at the end, the presented image stays on the disclaimer,
-and **why the picture stops changing is not yet established**. The next measurement must avoid the
-accumulation trap: dump the surface the guest actually **clears and draws** (`0x00084000`) alongside the
-presented frame, or instrument the flip to record which surface it hands the window, rather than pinning the
-window to a buffer that is never cleared.
-
-**A discrepancy that looked alarming, and its explanation.** The pinned-surface run changes hash hundreds of
-times (431 distinct values) while the unpinned run's picture is frozen on the disclaimer, which invites the
-reading "the real framebuffer is live and the presenter is showing a stale copy". That reading is **wrong**,
-and the mechanism is visible in the code: `xbox_FramebufferWindowPresent` returns immediately when
-`RECOMP_FB_VA` is set (`fb_present.c`, `if (getenv("RECOMP_FB_VA")) return;` — "pinned: leave the old path
-alone"). So in a pinned run the published-frame copy is never updated and the window reads guest memory
-directly on its own clock, while the `[FBPRESENT]` hash is computed over whatever `s_rgb` last held. The two
-runs are therefore **not measuring the same thing**: the pinned hash sequence describes a live read of
-`0x00084000`, and the unpinned one describes the published copy. Neither is a present/draw mismatch, and the
-pinned numbers cannot be compared with the unpinned ones at all. This is recorded so the 431-change figure is
-not later cited as evidence of a rendering fault.
-
-**Claim limits.** These are measurements of archived runs. No new run reached the title; M15 is not claimed.
-The draw-surface composites are accumulation artifacts and must not be cited as evidence of a rendered
-title. The pinned-surface hash sequence is not comparable with the unpinned one.
+`sub_0019E438` dominates `[TRACE]` only because `config/trace-functions.json` lists it; it is the DSOUND
+conditional-lock helper (`call dword ptr [0x1c4064]` = ordinal 277 `RtlEnterCriticalSection`); Enter/Leave
+exactly balanced (24702/24702). The toolkit publishes no IRQL into the guest TIB (`fs:[0x24]` stays 0),
+which costs time, not correctness. **No input can reach the guest at this stage:** keyboard state is
+written only by `WM_KEYDOWN`/`WM_SYSKEYDOWN`; `RECOMP_PAD_PRESS` (`src/usb/usb_gamepad.c`) is reached only
+through OHCI, and `xbox_OhciInit` and `xbox_InputInit` are never called. xemu reaches the title with no
+input (§23.2). `RECOMP_FB_VA` makes `xbox_FramebufferWindowPresent` return early, so a pinned run's hashes
+are not comparable with an unpinned run's.
 
 ## §23.2 The `0x00084000` measurement: drawn = presented, and the disclaimer is a timed hold, not a freeze
 
-**The §23.1 "the picture stops changing while the guest keeps drawing" framing is corrected here.** Two of
-its load-bearing statements were wrong, and the measurement the plan asked for (`0x00084000` beside the
-presented frame) has now been taken. Everything below is `OBSERVED` unless marked `INFERRED`.
+- **Reading surfaces from a dump.** `0x00084000` is the raw `color_offset`; `dma_resolve` maps it to
+  **`0x80084000`** in the 64 MB contiguous window. Read offline with `scripts/inspect-jsrf.py memory <run>
+  0x80084000 614400 --out f.bin` after `check-dump-mapping.py` passes (`memory <run> 0x00084000` returns
+  XBE `.text`, `0x11000..0x18CB30`); decode 640×480 RGB565 at pitch 1280 as `fb_convert` does. The three
+  surfaces are `0x80084000` (offscreen render target), `0x8011C000`, `0x801B2000`.
+- **The disclaimer is a timed hold that ends by itself:** it begins at presents **1461** and is left at
+  **2424** (→ `e886cadf72766a64`, then black `156ed4086987e325`):
 
-**How the surface was read without perturbing anything.** `0x00084000` is the raw `color_offset` register
-value; `dma_resolve` (`xboxrecomp/src/nv2a/nv2a_pb_exec.c:111-136`) maps it to guest VA **`0x80084000`** in
-the 64 MB contiguous window. Reading it needs no run at all: the archived minidump is read offline with
-`scripts/inspect-jsrf.py memory <run> 0x80084000 614400 --out f.bin`, after
-`scripts/check-dump-mapping.py` passes. **Trap:** `memory <run> 0x00084000` returns XBE `.text` — `0x84000`
-is inside `.text` (`0x11000..0x18CB30`), so the contiguous-window form is mandatory. Decoding is 640×480
-RGB565 at pitch 1280 (`[GPU] … 2bpp`), converted exactly as `fb_convert` does, hashed with the same FNV-1a
-as `fb_hash_rgb`. This is a **read of a frozen dump**: presentation behaviour is untouched, which is the
-property `RECOMP_FB_VA` provably lacks (`fb_present.c:66-69` early-returns when it is set).
+  | run | disclaimer starts | leaves | run ends |
+  |---|---|---|---|
+  | `20261006-211635-913-title005-m15` | t=244 s, p=1461 | t=408 s, p=2424 → `e886cadf…` | t=418 s, p=2425 |
+  | `20261006-213505-255-title005-admit3` | t=257 s, p=1461 | t=420 s, p=2424 → `e886cadf…` | t=496 s, p=2439 |
+  | `20261007-054545-206-title007-long3d` | t=245 s, p=1461 | t=408 s, p=2424 → `e886cadf…` | t=697 s, p=2441 |
 
-**The two surfaces that hold content hold the disclaimer, and that matches the last published sample —
-but this is NOT a same-flip comparison, and it does not eliminate the presentation branch.** For
-`20261007-001831-252-…-sixadmitted`, the three surfaces read from the dump are:
-
-| surface | fnv1a(fb_convert) | non-black | in the run's presented stream |
-|---|---|---|---|
-| `0x80084000` | `156ed4086987e325` | 0.000 | yes |
-| `0x8011C000` | `8205f3a6d2e48df5` | 0.133 | **yes — and it matches the run's LAST present sample** |
-| `0x801B2000` | `8205f3a6d2e48df5` | 0.133 | yes |
-
-**What this establishes** (corrected 2026-10-07 after Turn Review): at that frozen instant the surfaces
-holding content held the graffiti disclaimer, and that hash **matches the run's last asynchronously
-published `[FBPRESENT]` sample**. So the §23.1 composites are not evidence of a draw/present mismatch, and
-the presenter is not obviously showing a stale copy *at that instant*.
-
-**What it does NOT establish, and the earlier wording overstated.** The frozen surfaces and the published
-hash are **not paired at the same flip** — the published hash is the last sample from the window thread,
-the surfaces are read from a dump taken at an unrelated moment. The frozen **draw** surface
-(`0x80084000`) is **black** while the other two hold the disclaimer, so the dump does not identify which
-surface the guest intended to present at the transition, and it cannot rule out a **source-selection,
-latch or role mismatch later in the run**. In particular the later black interval (§23.5) is exactly the
-kind of state this measurement does **not** cover. **Presentation/source-role hypotheses therefore remain
-open**, and the branch must not be pruned on this evidence; distinguishing it needs the synchronized
-per-flip trace described in §23.5.
-
-**The disclaimer is a timed hold that ends by itself — no switch, no input.** The disclaimer begins at
-presents **1461** and is left at presents **2424** (t≈408–420 s), replaced by `e886cadf72766a64` and then
-black `156ed4086987e325`. Confirmed in three independent runs, including `title005-m15` which had **no**
-`RECOMP_NV2A_ADMIT_UNKNOWN`, and reproduced by this turn's own `title007-long3d`:
-
-| run | disclaimer starts | leaves | run ends |
-|---|---|---|---|
-| `20261006-211635-913-title005-m15` | t=244 s, p=1461 | t=408 s, p=2424 → `e886cadf…` | t=418 s, p=2425 |
-| `20261006-213505-255-title005-admit3` | t=257 s, p=1461 | t=420 s, p=2424 → `e886cadf…` | t=496 s, p=2439 |
-| `20261007-054545-206-title007-long3d` | t=245 s, p=1461 | t=408 s, p=2424 → `e886cadf…` | t=697 s, p=2441 |
-
-**Every run that looked "stuck on the disclaimer" simply ended first.** Presents advance at only ~6/s, so
-the 300 s `just title-run` recipe ends at presents ~1450–1800, and `title005-fixed` ended at t=417 s /
-presents 2410 — just short of 2424. The presented stream is **not** cycling: before the transition the
-disclaimer hash persists for ~1000 presents, and after it the run continues to new states. "The presented
-image stays on the disclaimer" therefore describes a run that stopped, not a guest that froze.
-
-**Right after the transition the guest loads title-stage assets, and the walk rejects.** `budgetcatch`
-(606 s) opens `Media\Disp\SprNorm1.bin/.dat`, `Media\Z_ADX\BGM\title.adx`, `UDATA\…\SaveMeta.xbx`, and
-reloads `Player\Corn/Beat/Gum/Yoyo`. Then, in the same region, the submission walk rejects. The rejected
-submission is **5732 words** on the current tree (`get=0x50810 put=0x561A0`), and the stop is the
-header-side capacity check at `nv2a_core.c:1796` (`sink_capacity`), not the word budget
-(`budget_stops=0`). **A 3D city scene is sitting in `0x80084000` at that moment** (hash
-`3b0dfcc68ba437ff`, 50.4 % non-black, 795 colours) while the other two surfaces are black.
-
-**The 3D scene is NOT the title screen, and this is now measured, not assumed.** An xemu reference of the
-real title was captured this turn (`logs/workers/title007/xemu/deliverable/`): boot → Smilebit → ADX →
-Dolby → graffiti disclaimer (42.5–52.5 s) → fade to black (57.5 s) → **3D city backdrop (60 s)** → JSRF
-emblem assembling → **"PLEASE PRESS START TO BEGIN" (≈85–95 s)**, 640×480, reached with **no input at all**.
-The real title is a **perspective street view** with a green elevated highway, and it is **fully presented**.
-The recomp's surface is an orthographic-looking evenly-spaced palisade, measured at **47.8 % pure-black sky
-vs 1.4–15.1 %** in xemu and **0.0 % green-dominant pixels vs 8.8–16.1 %**. So it is a different scene as
-rendered (`INFERRED`, moderate confidence; the comparison is an RGB565 dump with a large uninitialised
-fraction against a fully rendered live frame, so it is not like-for-like).
-
-**Consequences that change the plan.**
-
-- The critical path is **not** presentation and **not** USB input. The presenter faithfully shows what the
-  guest drew; the guest is blocked in the submission walk at the title transition.
-- The "freeze" framing in §23.1 and in the plan's "Current work" is superseded by this section.
-- A run must reach past presents 2424 to say anything about the title at all; the 300 s recipe cannot.
-- **M15 is still not claimed.** The xemu title is now captured and available as the comparator, but the
-  recomp has not presented title content.
-
-**Claim limits.** The dump reads are single frozen instants, not flip-synchronised time series, so they
-establish only that **the surfaces holding content held the disclaimer at that instant**, and that the hash
-agrees with the last asynchronous published sample — **not** a per-frame correspondence, and not that the
-presented surface was correctly selected. The 39-method set and the rejected submission's contents are
-decode-derived (§23.3 establishes their runtime provenance). The 3D-scene classification is `INFERRED` from
-a non-like-for-like comparison. No strict run is involved.
+  Presents advance ~6/s through the logos, so a run must pass ~2424–2430 presents to say anything about
+  the title.
+- **After the transition the guest loads title assets:** `Media\Disp\SprNorm1.bin/.dat`,
+  `Media\Z_ADX\BGM\title.adx`, `UDATA\…\SaveMeta.xbx`, and reloads `Player\Corn/Beat/Gum/Yoyo`.
+- **The xemu reference** (`logs/workers/title007/xemu/deliverable/`): boot → Smilebit → ADX → Dolby →
+  graffiti disclaimer (42.5–52.5 s) → fade to black (57.5 s) → 3D city backdrop (60 s) → JSRF emblem
+  assembling → **"PLEASE PRESS START TO BEGIN" (≈85–95 s)**, 640×480, **no input**; a perspective street
+  view with a green elevated highway, fully presented.
+- Dump reads are single frozen instants; §23.6 pairs draw and present at one flip.
 
 ## §23.3 The 39-method list was truncated by the witness's own 16-entry cap, and is now runtime-witnessed
 
-**The defect.** The `[PFIFO] admit-unknown` line is the only admissible provenance for adding a method to
-the generated admission table (L39: a new entry comes from a `[PFIFO] admit-unknown` line of a run that
-exercised it, or a decode that reached PUT). The record is emitted only after a **successful commit**, and
-its queue was capped at 16 entries:
+- **Defect.** The `[PFIFO] admit-unknown` queue was capped by `NV2A_ADMIT_PENDING 16` while the dedupe log
+  allowed `NV2A_ADMIT_LOG_MAX 256` (`xboxrecomp/src/nv2a/nv2a_core.c`), so a submission with more than 16
+  unknown methods logged 16 and dropped the rest. The truncation was in the log, not the commit.
+- **Fix:** the second constant deleted; the witness is sized by `NV2A_ADMIT_LOG_MAX`. A test with 20
+  unknown methods in one walk fails at 16 (`admit-unknown lines: 16, want 20`) and passes at 256.
+- **Result:** `20261007-061613-201-title007-witness-full` logged **39** methods — `0x0420-0x042C,
+  0x0480-0x04BC, 0x0680-0x06BC, 0x1748, 0x1B40, 0x1B44` — exactly the set
+  `20261007-060314-395-title007-noadmit`'s `gpu-report.json` derives (the witness run's own report lists
+  35, having admitted `0x0420`–`0x042C` earlier). L45.
+- **What each did (pre-merge executor audit):**
 
-```c
-#define NV2A_ADMIT_LOG_MAX  256
-#define NV2A_ADMIT_PENDING  16      /* the truncating cap */
-```
+  | methods | classification | consumer |
+  |---|---|---|
+  | `0x0680-0x06BC` | **CONSUMED** | sets `s_gpu.composite`; `fetch_position` uses it as the fixed-function transform |
+  | `0x0480-0x04AC` | **CONSUMED** | `lit_color` reads `s_reg[0x0480/4 .. +11]`, gated on lighting enable `s_reg[0x0314]` and a normal attribute |
+  | `0x04B0-0x04BC` | captured only | model-view row 3; the data is `(0,0,0,1)` |
+  | `0x0420-0x042C` | captured only | `NV097_SET_TEXTURE_MATRIX_ENABLE`; the witnessed params are all 0 |
+  | `0x1748` | **CONSUMED** | `0x1720+10*4`: vertex-array offset for attribute 10 |
+  | `0x1B40`, `0x1B44` | captured only — render gap then | texture stage 1 offset/format; only stage 0 fed `s_gpu.tex` (the v0.13.1 executor brings four stages, §1; not re-audited) |
 
-with the per-walk `AdmitRecord admitted[NV2A_ADMIT_PENDING]`, the fill guard `admitted_count <
-NV2A_ADMIT_PENDING`, and the drain guard `g_admit_pending_count >= NV2A_ADMIT_PENDING`
-(`xboxrecomp/src/nv2a/nv2a_core.c`). A submission with more than 16 unknown methods therefore logged
-exactly 16 and **silently dropped the rest** — which is why the archived `budgetcatch` run reported 16
-methods and the plan's own decode reported 39, and why the plan could only say the decode was "conditional"
-and "provenance NOT established". The truncation was in the **log**, not in the commit: the walk had
-committed the region, but the witness could not describe it.
-
-**The fix (toolkit, uncommitted at the time of writing).** The redundant second constant is deleted and the
-three witness arrays and both guards are sized by the existing `NV2A_ADMIT_LOG_MAX` (256). The cap was
-strictly redundant: an entry reaches `g_admit_pending` only after surviving the dedupe check, which already
-refuses at `g_admit_seen_count >= NV2A_ADMIT_LOG_MAX`, so pending could never hold more than 256 distinct
-entries. `admitted_total` (the published `admitted_unknown` count) increments **outside** the guard and was
-therefore already uncapped — only the witness was truncated. Nothing in the admission decision, staging,
-actions or rollback is touched.
-
-**Mutation-validated.** A new test submits **20** distinct unknown NV097 methods in one walk and asserts
-both the line count and that each specific method is named exactly once. Forcing the capacity back to 16
-makes it fail with `admit-unknown lines: 16, want 20` and names the four dropped tail methods; at 256 it
-passes. The Orchestrator reproduced this mutation check independently.
-
-**Result: the witness is complete, and it is corroborated by a different run's report.** With the fix,
-one run (`20261007-061613-201-title007-witness-full`) logged **39** distinct methods:
-
-```
-0x0420-0x042C, 0x0480-0x04BC, 0x0680-0x06BC, 0x1748, 0x1B40, 0x1B44
-```
-
-**The corroborating report is the NO-ADMIT run, not the witness run** (corrected 2026-10-07 after the
-Turn Reviewer checked it). `20261007-060314-395-title007-noadmit`'s `gpu-report.json` derives **exactly**
-these 39 methods, and the witness set equals it with zero difference either way. The **witness run's own**
-report lists **35** — it is missing `0x0420`, `0x0424`, `0x0428`, `0x042C` — because that run admitted those
-four in an earlier submission, so they were no longer missing at the final dump's GET. The two reports are
-therefore not interchangeable, and an earlier version of this section cited the wrong one. The provenance
-claim is unchanged: the 39 are **runtime-witnessed**, and the decode is corroboration. They are recorded in
-`config/nv2a-runtime-witnessed-methods.json` with the run, log SHA-256 and line number.
-
-**What each admitted method actually does (executor audit, `OBSERVED`).** Admission activates existing
-behaviour, but only for some of them:
-
-| methods | classification | consumer |
-|---|---|---|
-| `0x0680-0x06BC` | **CONSUMED** | `nv2a_pb_exec.c:2940-2946` sets `s_gpu.composite`; `fetch_position` (`:843`) uses it as the fixed-function transform |
-| `0x0480-0x04AC` | **CONSUMED** | `lit_color` (`:1813`, used `:1825-1826`) reads `s_reg[0x0480/4 .. +11]`; gated at `:1818` on lighting enable `s_reg[0x0314]` and a normal attribute |
-| `0x04B0-0x04BC` | captured only | model-view row 3; the data is `(0,0,0,1)` |
-| `0x0420-0x042C` | captured only | `NV097_SET_TEXTURE_MATRIX_ENABLE` (`nv2a_regs.h:1064`); the witnessed params are all 0 (disabled), so no consumer is needed for this scene |
-| `0x1748` | **CONSUMED** | `0x1720+10*4`: vertex-array **offset** for attribute 10, via the attr-offset arm `:2961` |
-| `0x1B40`, `0x1B44` | captured only — **render gap** | texture **stage 1** offset/format; only stage 0 (`0x1B00`/`0x1B04`) feeds `s_gpu.tex` (`:2811`, `:2900`), so stage-1 texturing is silently not sampled |
-
-Two corrections to earlier readings, both `OBSERVED`: `0x0420` is **not** a transform constant (those are
-`0x0B80-0x0BFC`, `nv2a_regs.h:1096`, already handled by `vp_method`), and `0x0480` is
-`NV097_SET_MODEL_VIEW_MATRIX` (`:1068`), a 16-dword span, not a `0x0480`-`0x04AC` composite run.
-`d->pgraph.methods[]` (`nv2a_core.c:1823`) has **no reader outside tests** — a state sink with no consumer.
-
-**Admission is exactly additive and clears the stop.** Regenerating the table from the witness union
-(`+39`, **zero removals**, NV097 376 → 415) and re-running **without** `RECOMP_NV2A_ADMIT_UNKNOWN` moved the
-stop from `unsupported_method 0x0420` at `get=0x50810` to `sink_capacity` at `get=0x50B1C`, with
-`missing_methods` now **empty**. The class ordering is therefore: **method admission first, then the
-submission-capacity bound.** The `sink_capacity`/`budget_exhausted` stops seen in earlier
-`ADMIT_UNKNOWN=1` runs appeared only because the switch let the walk travel further into the same
-submission.
-
-**Claim limits.** The admission run is exploratory (`RECOMP_NV2A_ADMIT_UNKNOWN=1` for the witness; the
-validating run used no switch but is still an exploratory title-run, not a strict run), so this is discovery
-evidence, not fidelity evidence. A witness is evidence that a method was **submitted and staged**, not that
-the model executes it faithfully. The `0x0680` `composite_set` latch is never cleared, so a later 2D overlay
-sent as screen-space vertices could be transformed as 3D — `INFERRED`, and a render risk to watch, not a
-reason to withhold admission.
+  `0x0420` is not a transform constant (those are `0x0B80-0x0BFC`); `0x0480` is
+  `NV097_SET_MODEL_VIEW_MATRIX`, a 16-dword span. The `0x0680` `composite_set` latch is never cleared
+  (INFERRED render risk).
+- **Admission is additive and clears the stop:** NV097 376 → 415, zero removals; the stop moved from
+  `unsupported_method 0x0420` at `get=0x50810` to `sink_capacity` at `get=0x50B1C` (§23.4).
 
 ## §23.4 The capacity bound was per-submission, and a real title kick is 1.4 budgets
 
-**The defect.** The submission walk committed a whole submission all-or-nothing, bounded by
-`NV2A_SUBMIT_MAX_WORDS` = 4096 words (`nv2a_state.h`). A real JSRF **title-transition kick is 5732 words**
-(measured `get=0x50810 put=0x561A0`), about **1.4 budgets**, so the walk rejected it at the header-side
-capacity check (`nv2a_core.c`, `sink_count + staged_count + count > NV2A_SUBMIT_MAX_WORDS`). The guest
-therefore never got past the title transition: the picture stopped changing at the graffiti disclaimer while
-the guest kept drawing. This is the blocker the `0x00084000` measurement localized (§23.2).
+A title-transition kick is **5732 words** (`get=0x50810 put=0x561A0`) against `NV2A_SUBMIT_MAX_WORDS` =
+4096. **Fix (toolkit `1f86fbb`, L40):** the walk consumes the ring in **units** that end at a whole-packet
+boundary and each commit all-or-nothing; a unit ends at a header when `unit_words + 1 + count >
+NV2A_SUBMIT_MAX_WORDS`. A packet is at most 2047 parameters, so a unit always fits one and a packet is
+never split. `sink_count` resets per unit (two units staging 6138 methods had overflowed `sink[]`). `GET`
+advances per unit; `NV2A_COMMIT` is published only on reaching the original PUT; a retry re-delivers only
+the failing unit. Measured: GET `0x50B1C` → `0x5A060` (9553 words, 2.33 budgets), `successes` 3529; next
+stop the 29-method class (`0x0580-0x05AC`, `0x06C0-0x06FC`, `0x1964`; L46, §23.6).
 
-**The fix (toolkit `1f86fbb`).** The walk now consumes the ring in **units** that each end at a
-**whole-packet boundary** and each commit **all-or-nothing**. Atomicity is per unit, not per submission;
-ledger L40 was reworded accordingly. The yield predicate is the **word term only**, evaluated at a packet
-header:
+## §23.5 After the capacity fix: the presented stream is black
 
-```
-unit_words + 1 + count > NV2A_SUBMIT_MAX_WORDS   →  end the unit AT this header
-```
-
-A packet is at most 2047 parameters (an 11-bit field), so a unit that starts empty always fits at least one
-complete packet and the loop always advances. That is why **no in-packet carry is needed**, and why **a
-packet is never split** — the only case that could commit half a matrix upload. The **1024-packet cap
-deliberately stays a stop, not a yield**: 1025 one-word packets is under the word budget, and treating it as
-a yield would make the pinned case in `tests/test_nv2a_contract.c` accept.
-
-**Two real defects were found by the new tests, not by inspection.** Both would have been silent:
-
-1. **`sink[]` overflow.** `d->pfifo.sink_count` is written by the commit loop and was reset only once per
-   walk. Two units staging more than 4096 methods between them therefore wrote **past the end of `sink[]`**.
-   It is now reset per unit. The test that catches it stages **6138** methods across two units; a stream
-   totalling exactly 4096 would fill the array exactly and hide the overflow.
-2. **The old header check pre-empted the yield.** It bounded a *unit* using a **submission-wide** count
-   (`sink_count + staged_count + count`, with `staged_count` never reset), so it fired before the yield could
-   split the submission at all — the first attempt at this fix still rejected the real stream with
-   `sink_capacity`. It is now unit-scoped and defensive.
-
-**Fence and rollback semantics are preserved, and now cover the multi-unit case.** `GET` advances per unit,
-so a rejected **later** unit leaves `GET` at that unit's start and the earlier units stay committed;
-`NV2A_COMMIT` is published only when the walk reaches the **original PUT**, so a walk that rejects in unit
-*k* commits units 1..*k*-1 and publishes **no** fence. A retry delivers only the failing unit and never
-re-delivers an earlier one. Each of those properties has a mutation-validated test.
-
-**Measured result.** With the 39 methods admitted (§23.3) and no admit switch, the previously-rejected kick
-is **consumed**: `GET` advanced from `0x50B1C` to `0x5A060` — **9553 words, 2.33 budgets** — `successes`
-rose to 3529, and the stop moved off `sink_capacity` to a **new missing-method class** (29 methods:
-`0x0580-0x05AC`, `0x06C0-0x06FC`, `0x1964`). The class ordering is therefore: **method admission, then the
-capacity bound, then admission again.** Raising the 4096 cap was **not** the fix.
-
-**Claim limits.** These runs are exploratory title-runs, not strict runs, so this is discovery and progress
-evidence, not a fidelity claim. `M15 is still not claimed`: the title screen has not been observed on the
-recomp. The `units`/`units_total`/`loop_bound` fields are published in `g_nv2a_submit_state` but the
-archived `gpu-report.json` predates the report-side decode of them, so the unit counts above are read from
-the walk's behaviour (`GET` advance, one `NV2A_COMMIT`) rather than from the run report.
-
-## §23.5 After the capacity fix: the walk runs clean, and the presented stream is black
-
-**The next blocker, stated with its limits.** With the unit fix (§23.4) and the 39 methods admitted
-(§23.3), and `RECOMP_NV2A_ADMIT_UNKNOWN=1`, the walk now runs **4533 successful submissions with zero
-rejections** and `missing_methods` empty — a large step past the `successes=3523` wall every previous run
-hit. Presents advance to **3120**, well past the 2441 the old capacity stop capped them at.
-
-**But the picture is black, and this is NOT explained yet.** From the frozen dump
-(`20261007-081204-797-title007-witness2`, mapping gate `matches 1 / content-mismatch 0`):
-
-| surface | content at the dump |
-|---|---|
-| `0x80084000` | all zero (`156ed4086987e325`, 1 distinct value) |
-| `0x8011C000` | all zero |
-| `0x801B2000` | all zero |
-
-and the presented stream is `156ed4086987e325` (black) for every sample from presents 2450 to 3120 — about
-**190 seconds of black**. The `[GPU]` report meanwhile claims **1.7 billion pixels written**, 19065 textured
-batches, 15146 triangles rasterised and `brightest pixel written 0xFFFFFFFF`, with `draw surface 0x0011C000
--> 0x8011C000`. So the model reports drawing a great deal into `0x8011C000` while that surface reads black.
-
-**This is a genuine contradiction and it is deliberately left open.** It is *not* established as a
-regression: `0x8011C000` also reads black at the dump in the pre-fix runs, and the dump is a **single
-instant**, whereas the pixel counter is **cumulative over the whole run** — so the counter and the dump are
-not measuring the same thing, and "1.7 billion pixels" does not imply "the surface holds them at the dump".
-Two candidate explanations are recorded without being preferred, because neither is measured yet:
-
-- the guest draws elsewhere now (a surface address this investigation does not read), and `0x8011C000` is
-  simply stale at the dump instant;
-- the writes are being refused or redirected. `surface_write_refused` refuses a surface that overlaps the
-  loaded image (`g_xbox_image_lo..hi`), and **`0x00084000` and `0x0011C000` both fall inside the XBE `.text`
-  span `0x11000..0x18CB30`**, which is exactly the class that guard exists for. **No `REFUSING` line appears
-  in the run**, so this path did not fire — but `dma_resolve` has a second branch for the same case (an
-  offset that hits the image and is under `XBOX_CONTIG_SIZE` is redirected to `XBOX_CONTIG_BASE + offset`),
-  and whether the write and the read agree under that redirect is **not measured**.
-
-Note also that xemu's black is a **brief fade** (about 2.5 s, at 57.5 s) between the disclaimer and the
-backdrop, whereas the recomp holds black for ~190 s, so the recomp is not simply reproducing xemu's fade.
-
-**The measurement this needs.** The per-flip role trace the Advisor specified: at the **same**
-`NV097_FLIP_STALL`, hash all three surfaces **and** the published copy, and record which surface
-`present_track_flip` chose and why, keyed on `(flip_stalls, present serial)` — never on timestamps. That
-distinguishes "the guest draws elsewhere" from "the write and the read disagree" in one run, and it is
-read-only, so it cannot perturb the present path.
-
-**FIRST DISCRIMINATING RESULT (2026-10-07, `20261007-085324-850-title007-blacktrace`).** The black interval
-reproduces **without** the admit switch: the run stops at `unsupported_method 0x1964` (`successes=3529`,
-`GET=0x5A700 != PUT=0x4D9B8`), and the presented stream is black from presents **2425 to 2442** (t=519–688 s,
-~170 s) — the same persistent black. The surfaces at that dump (mapping gate `matches 1 / content-mismatch 0`):
-
-| surface | hash | non-black | distinct colours |
-|---|---|---|---|
-| `0x80084000` | `d4fa6747357b9e60` | **0.523** | **1417** |
-| `0x8011C000` | `156ed4086987e325` | 0.000 | 1 |
-| `0x801B2000` | `156ed4086987e325` | 0.000 | 1 |
-
-**So the guest IS drawing a rich scene while the presented frame is black.** `0x80084000` holds a 3D city
-scene — skyline, clouds, a curving road, and crucially a **green elevated highway** and green-tinted
-structures — while both swap surfaces read pure black. This **localizes the black interval to the
-draw→present path** and it is the opposite of the earlier reading that nothing was being drawn. Rendered:
-`logs/workers/title007/surf/bt_084000.png`.
-
-**This is NOT yet a presentation-bug claim, and it is deliberately not one.** What it establishes
-(`OBSERVED`): at that instant the surface carrying content is `0x80084000`, and the surfaces the presenter
-would publish from are black. What it does **not** establish: whether `0x80084000` is the surface the guest
-*intended* to present, whether a composite/resolve from it into a swap buffer is expected and did not run,
-whether a flip is missing, or whether `present_track_flip` chose a black surface. Those need the
-same-flip trace above; the dump is still one instant.
-
-**A content observation that bears on the M15 comparison.** Against the xemu title image the earlier
-`budgetcatch` frame scored **0.0 % green-dominant** pixels, which was one reason it was called a different
-scene. This frame scores **1.9 %** green-dominant and shows the elevated green highway, i.e. it now shares
-the xemu backdrop's most distinctive feature. The comparison remains **non-like-for-like** (an RGB565 dump
-with a large uninitialised fraction, 1417 colours, against a fully rendered live frame with 69,391), so
-**this is not a title match and M15 is not claimed** — but the earlier "different scene" reading is now
-**weaker than recorded**, and the scene should be re-compared after the draw→present path is resolved.
-
-**Two clarifications from Turn Review, both resolved.**
-
-- **Build identity of the black run is NOT in doubt.** `20261007-081204-797-title007-witness2`'s
-  `build-source.json` records core hash `4816db98…`, which Turn Review read as differing from committed
-  `1f86fbb` (`93edd031…`). That difference is **line endings, not content**: the archive hashes the file
-  **as it was on disk (CRLF)**, while a git blob is **LF**. The archived hash is **exactly** the CRLF form of
-  the committed `1f86fbb` file, and `nv2a_state.h` and `nv2a_pb_exec.c` match the same way (the generated
-  method table matches in LF form because it was written by the generator). So the black run **did** use the
-  committed unit-commit semantics, and the 29 later methods are genuinely absent from the table it used.
-- **`missing_methods = 0` in that run is an EMPTY-QUEUE ARTIFACT, not evidence that every method is
-  implemented.** At that dump `GET == PUT` (`0x1B86C`), so the pending stream is empty and the report has
-  nothing to decode. Contrast the no-admit run, where `GET (0x56F34) != PUT (0x4E088)` and the report names
-  29 missing methods. **No claim may rest on a zero `missing_methods` without first checking `GET == PUT`.**
-  The run also logged **no** `admit-unknown` lines and reported `admitted_unknown = 0` despite the switch
-  being set, which is consistent with it never meeting an unknown method in a *committed* submission — the
-  39 were already in the table — but that is `INFERRED`, not measured.
+Superseded by §23.8 (cause found and fixed). In `20261007-081204-797-title007-witness2` all three
+surfaces read zero at the dump and the presented stream was black from presents 2450 to 3120. Kept:
+`missing_methods = 0` with `GET == PUT` is an
+empty-queue artifact, so check `GET == PUT` first; archived `build-source.json` hashes are of the CRLF
+on-disk file, so they differ from LF git blobs.
 
 ## §23.6 The same-flip trace: copy/publication consistency, and the guest drew the black
 
-**Why this measurement was needed.** Every previous draw/present comparison paired a frozen minidump
-with a published hash sampled at a *different* instant, so "the presenter chose a black surface" and
-"the guest drew elsewhere afterwards" could not be separated. This section reports the first
-measurement that pairs them at one event.
+**Instrument** (toolkit `52e6d12`, `RECOMP_FLIP_TRACE`, L47, off by default): at one `NV097_FLIP_STALL`,
+keyed on `(flip_stalls, present serial)`, it records every surface named by `SET_SURFACE_COLOR_OFFSET`
+with a content hash (same FNV-1a-64 and RGB conversion as `fb_present.c`), the hash of the bytes handed
+to the window, the surface `present_track_flip` selected and the branch that chose it, and a ring of the
+frame's last batches. Read-only; `RECOMP_FB_VA` not used.
 
-**The instrument** (toolkit `52e6d12`, `RECOMP_FLIP_TRACE`, off by default). At one
-`NV097_FLIP_STALL`, keyed on `(flip_stalls, present serial)`, it records: every surface the guest has
-ever named with `SET_SURFACE_COLOR_OFFSET`; a content hash for each, computed with the *same*
-FNV-1a-64 over the *same* RGB conversion `fb_present.c` applies to a published frame (so a hash here
-is comparable with an `[FBPRESENT]` line and with the archived surface hashes); the hash of the bytes
-actually handed to the window; the surface `present_track_flip` selected and the **branch that chose
-it**; and a ring of the frame's last batches with each batch's target, bound texture, and whether it
-sampled the surface it was writing. The per-frame flags are read *before* `present_track_flip` clears
-them and the published hash *after* the present call. It is read-only: it does not choose, redirect,
-force a resolve, write guest memory, or alter the present call, and `RECOMP_FB_VA` is not used.
-
-**Run `20261007-110933-718-title008-trace-noadmit`** (exploratory, no admit switch, 620 s,
-`RECOMP_FLIP_TRACE=400 FROM=2200 CHANGE=1`; mapping gate `matches 1 / content-mismatch 0`).
-242 flips traced (2200→2441), spanning disclaimer → fade → black:
+**`20261007-110933-718-title008-trace-noadmit`** (620 s, `RECOMP_FLIP_TRACE=400 FROM=2200 CHANGE=1`; 242
+flips, 2200→2441):
 
 | Check | Result |
 |---|---|
 | published hash **==** selected-surface hash, at the same flip | **242 / 242** |
-| branch that selected it | `drawn_this_frame` **242 / 242** — never stale, never fallback, never targeted-only |
-| selected surface present in the enumerated candidate set | **242 / 242** |
+| branch that selected it | `drawn_this_frame` **242 / 242** |
+| selected surface in the candidate set | **242 / 242** |
 | published matched **no** candidate | **0** |
-| `flip_stalls == present serial` (the keying holds) | **242 / 242** |
+| `flip_stalls == present serial` | **242 / 242** |
 
-**The candidate set is complete by construction.** It is exactly the three values the guest ever wrote
-to `SET_SURFACE_COLOR_OFFSET` — `0x00084000`, `0x0011C000`, `0x001B2000` — and `present_track_flip`
-can only ever return `drawn_offset`, `targeted_offset` or `color_offset`, each of which that method
-sets. So no presented surface can lie outside the set. `flip_modulo=3` means the guest programs a
-**three-entry flip index ring**; it does **not** by itself establish three equivalent scanout buffers —
-`0x84000` is an offscreen render target (TR §23.8), so the three offsets are not interchangeable roles.
-
-**The transition, same-flip** (`logs/workers/title008/show_transition.py`):
+The candidate set is exactly `0x00084000`, `0x0011C000`, `0x001B2000`; `flip_modulo=3` is a three-entry
+flip index ring, not three equivalent scanout buffers.
 
 | flip | selected → published VA | published | `0x84000` | `0x1B2000` | `0x11C000` | bound texture |
 |---|---|---|---|---|---|---|
@@ -3454,233 +850,47 @@ sets. So no presented surface can lie outside the set. `flip_modulo=3` means the
 | 2426 | `0x1B2000` | `156ed4086987e325` | `156e…` | `156e…` | **`e886…`** | `156e…` |
 | 2427–2441 | alternating | `156ed4086987e325` | `156e…` | `156e…` | `156e…` | `156e…` |
 
-**OBSERVED, same-event.** At flip 2425 the selected surface (`0x84000`, `drawn_this_frame=1`) held
-**black**, while `0x1B2000` still held the disclaimer and `0x11C000` the fade — content left over from
-*earlier* frames, not new content. **The guest drew black into the buffer it then selected and
-published.** The disclaimer itself renders into **all three** buffers with identical content
-(`8205f3a6d2e48df5`) across flips 2200–2423, and the fade step appears as `e886cadf72766a64` in
-`0x84000` at 2424 and in `0x11C000` at 2425–2426.
+**Classification:** copy/publication mismatch **eliminated** in the observed window; the guest drew black
+into the buffer it then selected. **Semantic source selection is UNQUALIFIED**: `reason` restates the same
+heuristic, and at flip 2425 a composite writes `0x11C000` while sampling `0x84000` before a later `self=1`
+batch writes `0x84000`, which the tracker then prefers; no selection bug is claimed. **Timing
+non-perturbation is UNQUALIFIED** (no matched trace-on/off control on one binary). **Limitations:** the
+registry caps at 8 offsets; candidate hashes use the current clip/pitch and the bound-texture hash uses
+surface geometry; `_CHANGE` keys on the decision tuple, not content.
 
-**Classification: the copy/publication mismatch is eliminated in the observed window; semantic source
-selection remains UNQUALIFIED.** What the 242/242 equality proves is narrow, and worth stating exactly:
-**whatever surface the tracker selected, the bytes published were that surface's own bytes** — no stale
-copy, no wrong-buffer copy, no fallback. The `reason=` field additionally shows the tracker took its
-`drawn_this_frame` branch every time. **`reason` is not an oracle:** it restates the same heuristic
-rather than establishing that the heuristic was right, so this is *copy/publication consistency*, not
-correct guest-intended selection.
+**The 29 methods are witnessed and admitted:** `20261007-113354-706-title008-trace-admit`
+(`RECOMP_NV2A_ADMIT_UNKNOWN=1`) logged 67 `admit-unknown` lines including all 29 (log SHA-256
+`c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853`); NV097 415 → 444, zero removals.
+`0x1964` is genuine: header `0x00041964` (count 1, subchannel 0, incrementing), param `FF000000` —
+`NV097_SET_VERTEX_DATA4UB + 0x24` (attribute 9, component 0) — found at `0x8005DAE0` in
+`20261007-085324-850-title007-blacktrace` and `0x80004540` in trace-noadmit.
+`20261007-112201-379-title008-admit-witness` reached presents 2850 with zero rejects and black surfaces,
+so the black did not depend on the `0x1964` reject. The three runs share `exe_sha256 9818c346…` but differ
+in settings; do not A/B them. Path divergence: `admit-witness` and `witness2` never read `title.adx` after
+opening it (0 `[READ]`, 0 `[ADXIO]`); trace-noadmit, trace-admit and blacktrace read it twice (51200 +
+800768 bytes, 6 `[ADXIO]`).
 
-**What it does NOT prove is that the tracker selected the surface the *guest* intended to present.**
-A concrete unresolved alternative exists in the ring ordering itself: at flip 2425 an earlier composite
-batch writes `0x11C000` while sampling `0x84000`, then a later `self=1` batch writes `0x84000`, and
-`present_track_flip` then selects `0x84000` because it prefers the last surface drawn. Whether the
-guest intended `0x11C000` (the buffer the composite just filled) or `0x84000` is **not established** by
-this instrument. So the earlier "the presenter is correct" and "Case A eliminated" phrasings are
-narrowed to: **copy/publication mismatch eliminated in the observed window; semantic source selection
-unqualified.** Ruling the rule out as a defect class would need the guest's own flip-buffer mapping —
-an intended-source oracle this instrument does not have. **No selection bug is claimed**: the
-ordering above is a concrete remaining *alternative*, not a demonstrated defect.
+## §23.7 The batch ring: what it establishes, and what it does NOT
 
-**Perturbation status: state non-mutation is supported by the code; timing non-perturbation is
-UNQUALIFIED.** The instrument changes no guest state and calls nothing that could (it reads guest RAM
-and `fprintf`s). But there is **no matched trace-on/trace-off control on one binary reaching a
-comparable terminal** — the available trace-off runs differ in `RECOMP_NV2A_ADMIT_UNKNOWN` and take a
-different path — so the claim that per-flip hashing of several 640×480 surfaces while holding the PFIFO
-lock left timing unchanged is `UNQUALIFIED` and must not be made.
-
-**Instrument limitations, recorded rather than fixed.** The candidate registry holds at most 8 distinct
-`SET_SURFACE_COLOR_OFFSET` values (this title uses 3, so the cap was not reached, but a title with more
-would silently truncate the set); candidate hashes use the *current* clip and pitch rather than each
-surface's own last geometry, and the bound-texture hash uses the surface geometry rather than the
-texture's own dimensions and pitch (harmless here because all three candidates share
-`pitch=1280 clip=640x480`, and the linear texture is also 640×480, but wrong in general); and
-`_CHANGE` keys on the decision tuple only, not on content. `flip_modulo=3` establishes a configured
-**three-entry flip index ring**, not independently three scanout-buffer roles — `0x84000` is the
-offscreen target, so the three `SET_SURFACE_COLOR_OFFSET` values are not three equivalent scanout
-buffers.
-
-**What this does NOT establish (beyond the above).** Not that the guest never drew the title: this
-run's own dump holds a rich 3D city scene in `0x80084000` (`1e971149626031f6`, 52.4 % non-black), and
-that same surface is bound as a texture (`[TEXUSE] 0x80084000 640x480 fmt 0x11 lin`, 52 report blocks,
-up to 2474 batches). Not which operation should have turned the drawn content into the xemu-visible
-title, and not whether the black is a fade the guest asked for, a composite that produced black, or a
-pass that never ran.
-
-**The 29 methods are now runtime-witnessed and admitted.** Run
-`20261007-113354-706-title008-trace-admit` (`RECOMP_NV2A_ADMIT_UNKNOWN=1`, 620 s) logged **67**
-`[PFIFO] admit-unknown` lines including **all 29** targets — `0580-05AC` (12),
-`06C0-06FC` (16) and `1964` — so the witness is genuine and comes from a committed walk, not from a
-decode. `config/nv2a-runtime-witnessed-methods.json` gained 29 entries (run, log SHA-256
-`c80b467985c80a924eb38bc6e85dc582be3696f656e36a06410d7264d7d0c853`, line number, and the verbatim
-witness text) and the table was regenerated: **NV097 415 → 444, exactly +29, zero removals, no other
-class changed, `0x1810` and the prior 39 retained** (mechanically diffed per class, not eyeballed).
-Game CTest 45/45, toolkit CTest 11/11, 213 toolkit Python tests, `just check` exit 0.
-
-**Two corrections to premises carried into this turn.**
-
-- **The persistent black does not depend on the `0x1964` reject.** Run
-  `20261007-112201-379-title008-admit-witness` (`ADMIT_UNKNOWN=1`, 620 s) reached **presents 2850**
-  with **zero** `[PFIFO] reject` lines and **zero** `admit-unknown` lines, and its dump has all three
-  surfaces black. So the guest kept flipping black frames with the walk alive; the reject only ends
-  the run. The earlier wording — that the black "reproduces without the admit switch, stopping at
-  `unsupported_method 0x1964`" — is true of the no-admit run but must not be read as the reject
-  *causing* the black.
-- **That same run is NOT EXERCISED as a witness.** Zero `admit-unknown` lines means it never met those
-  methods in a committed unit, exactly the outcome the Turn Planner warned about; it cannot admit
-  anything. The witness came from the third run instead.
-
-**An unresolved call ends the admit run, and it is a different class.** The trace-admit run died with
-`[ICALL] Failed to resolve VA 0x00159330` (fatal by default, `0xE0424943`), after a
-`budget_exhausted` at `LIMIT=packets(1024)` from which it *recovered* (`recovered after 1
-rejections`). So the 1024-packet cap and the unresolved call are both now live blockers, separate
-from presentation.
-
-**`0x1964` is genuine, not a misread header.** The witness line names the offset
-`at=0005DAE4`, but **the ring is reused, so those bytes no longer hold the header** — reading
-`0x8005DAE4` in the witness run's own final dump now gives `00000000 00AD641B …`. The header word was
-therefore re-decoded from an archived dump where it still exists, and the provenance is stated per
-run rather than assumed:
-
-| run | dump offset holding `00041964` | context |
-|---|---|---|
-| `20261007-085324-850-title007-blacktrace` | `0x8005DAE0` | `08870C29 **00041964** FF000000 000C03C0` |
-| `20261007-110933-718-title008-trace-noadmit` | `0x80004540` | `**00041964** FF000000 000C03C0 00008511` |
-
-Decoding `0x00041964`: count = `(h >> 18) & 0x7FF` = 1, subchannel = `(h >> 13) & 7` = 0,
-method = `h & 0x1FFC` = `0x1964`, and the non-incrementing bit (`0x40000000`) is **clear**. The
-following word is `FF000000`, matching the reject/witness `param=FF000000`. So it is a genuine
-incrementing packet whose single method is `0x1964` = `NV097_SET_VERTEX_DATA4UB + 0x24`
-(`0x1940 + 0x24`), i.e. **attribute 9 (texcoord 0), component 0** of the 4-byte inline vertex family.
-The `0x0580` span decodes to a `count=12` packet (SET_INVERSE_MODEL_VIEW_MATRIX plus 11 rows) and the
-`0x06C0` span to `count=16` (SET_TEXTURE_MATRIX plus 15): ordinary incrementing matrix uploads.
-
-**`0x1A30`, the new stop, is the same family and is a render gap.** It is
-`NV097_SET_VERTEX_DATA4F_M + 0x30` = `0x1A00 + 0x30` = attribute 3 (diffuse), component 0. The executor
-**already decodes that family** at `nv2a_pb_exec.c:2922-2934`, but only for `attr == 0` (position) and
-`attr == 9` (texcoord 0); every other attribute, including 3, is accepted and **ignored**. So admitting
-`0x1A30` would activate an existing arm rather than add behaviour — and the arm itself is a gap:
-inline per-vertex diffuse colour is dropped. It needs a **runtime witness** before admission (two
-attempts, 620 s and 900 s, are `NOT EXERCISED`).
-
-**Binary identity of the three runs in this section: same executable, CONFOUNDED settings.** All three
-ran the **same executable**,
-`exe_sha256 = 9818c3464aa82de7c8dd08d3f4b57c2c5d58ddce3d6ea16a5d8e989fe71e835f` (the build whose method
-table still had **415** NV097 entries), which is why they can be compared at all. But they are **not** a
-clean A/B: they differ in more than the admit switch —
-
-| run | `RECOMP_NV2A_ADMIT_UNKNOWN` | `RECOMP_FLIP_TRACE` |
-|---|---|---|
-| `…110933…trace-noadmit` | unset | `400 FROM=2200 CHANGE=1` |
-| `…112201…admit-witness` | `1` | unset |
-| `…113354…trace-admit` | `1` | `900 FROM=2400 CHANGE=1` |
-
-So the trace and the admit switch are **confounded**, and no causal or timing claim may rest on
-comparing these three. They are same-binary observations whose *settings* differ. The 29 admitted
-methods were **not** in the table these runs used: the witness run saw them only because the admit
-switch bypasses the reject. Any run made after the regeneration uses a different executable and must
-not be compared with these without re-checking `exe_sha256`. Their log SHA-256s are `247760b2…`
-(no-admit trace), `036b0af3…` (admit-witness) and `c80b4679…` (trace-admit witness).
-
-**A path divergence between them is a separate defect, not a control.** `admit-witness` and the
-earlier `witness2` never read `title.adx` after opening it (0 `[READ]`, 0 `[ADXIO]`) and made no
-post-transition save probe, whereas `trace-noadmit`, `trace-admit` and `blacktrace` each read
-`title.adx` twice (51200 + 800768 bytes), logged 6 `[ADXIO]` lines and made 1 `SaveMeta` probe. The
-**path divergence is OBSERVED**; that `admit-witness` therefore never reached the submissions
-containing the 29 methods is **INFERRED** (no independent walk/stage witness establishes it), and the
-specific IO/APC cause is **INFERRED** as well. What is `NOT EXERCISED` regardless of cause is the
-runtime witness for those methods in that run. Separately, the no-reject 620 s black run does show
-that the black need not coincide with the `0x1964` reject, but it is not a same-title-path control.
-
-## §23.7 The batch ring: what it establishes, and what it does NOT (corrected after Turn Review)
-
-**The measurement.** The same-flip trace was extended with a per-frame batch ring (toolkit `52e6d12`):
-for each traced flip, the last 32 batches since the previous flip, each recording the target colour
-surface, the bound texture (offset, format, dimensions, valid, whether texcoords were present),
-whether the batch **sampled the surface it was writing** (`self=`), and the triangles and pixels it
-actually produced. This is what connects "the guest drew black into `0x84000`" (§23.6) to *which batch
-did it and what that batch read*.
-
-**Run `20261007-115809-590-title008-ring-admitted`** (620 s, no admit switch, **the 29 admitted**, so a
-different executable from §23.6; `RECOMP_FLIP_TRACE=900 FROM=2400 CHANGE=1`; 42 flips traced;
-`diagnostic_deadline`). Helpers: `logs/workers/title008/composite_source.py`, `analyze_ring.py`,
-`writer_shape.py`.
-
-**What the ring shows (OBSERVED).** Every traced frame contains a textured batch that writes a swap
-surface while sampling `0x80084000`, and it reports `px=307200` — which is exactly `640*480`. **`px`
-counts `put_pixel` write calls (`nv2a_pb_exec.c:1867`), not unique pixel coverage**, so this is
-"307200 raster write calls, consistent with a full-screen pass", **not** proof of correct copy or of
-full coverage. A pass may write the same pixel repeatedly and leave others untouched.
+`20261007-115809-590-title008-ring-admitted` (620 s, the 29 admitted, `RECOMP_FLIP_TRACE=900 FROM=2400
+CHANGE=1`, 42 flips): every traced frame contains a textured batch that writes a swap surface while
+sampling `0x80084000` with `px=307200` (`640*480`). **`px` counts `put_pixel` write calls, not unique
+coverage.**
 
 ```
-flip 2400 (published 8205f3a6d2e48df5, NON-black):
-  b[0] target=0x001b2000  tex=0x80084000  self=0 px=307200
-  b[1..3] target=0x00084000 tex=0x806b6000 self=0 px=159037/306081
-
 flip 2425 (published 156ed4086987e325, black):
   b[0] target=0x0011c000  tex=0x80084000  self=0 tris=1 px=307200
   b[1] target=0x00084000  tex=0x80084000  self=1 tris=2 px=306081
 ```
 
-**CORRECTION — the earlier "faithful copy / Case C" conclusion was an OVERCLAIM, and it is retracted.**
-The first version of this section concluded from "all 17 black flips had a black bound-texture hash"
-that the composite was a *correct copy of a black source*, placing the defect upstream. **That does not
-follow**, and the flaw is structural, not a matter of degree:
-
-- Every surface hash in the trace — candidates **and** the bound texture — is taken at **flip time**,
-  i.e. **after every batch in the frame has run**.
-- At flip 2425 the composite `b[0]` samples `0x80084000` and writes `0x0011C000`; **then `b[1]`
-  overwrites `0x00084000`** (`tris=2 px=306081`, sampling `0x80084000` itself).
-- So the recorded source hash is the source's **post-frame** content, not what the composite actually
-  read when it executed. "The source was black at the flip" and "the source held content when the
-  composite sampled it, and was cleared afterwards" are **indistinguishable** from this evidence.
-
-The trace therefore does **not** establish that the composite read black, and it does **not** close the
-sampling / UV / blend / ordering branches. Those are **reopened**. Measuring the source at the moment a
-batch executes is a strictly stronger requirement the current instrument does not meet.
-
-**CORRECTION — a factual error in the same section.** The claim "the frame structure is uniform: 16
-batches, the writing batch `self=0 px=307200`, at all 17 black flips" is **false for 2 of the 17**. The
-measured distribution of the last batch that wrote the selected surface
-(`logs/workers/title008/writer_shape.py`) is:
-
-| writer shape | flips |
-|---|---|
-| `self=0 px=307200 tris=1` | 15 |
-| `self=0 px=306081 tris=2` | 25 |
-| `self=1 px=306081 tris=2` | 2 |
-
-so at 2 of 17 black flips (2425 and one other) the selected surface was written by a **`self=1`**
-batch with `px=306081`, not by the full-screen `px=307200` composite. The "uniform" wording is
-withdrawn.
-
-**What survives.** The ring establishes the *shape* of the frame — a full-screen pass samples
-`0x80084000` every frame and writes a swap surface, and the swap surface is what the flip publishes in
-15 of the 17 black flips (the other 2 write `0x84000` itself, per the writer-shape table above) — and it
-establishes that the `self=1` batches which rasterise nothing (`tris=0 px=0`) cannot
-be the cause. It does **not** establish where the black originates.
-
-**A NEW missing-method class appeared, so the 29 admission was exercised.** With the 29 in the table
-the run stops at
-
-```
-[PFIFO] reject diag=unsupported_method method=1A30 subch=0 param=00000000 at=00059420 get=00059420 put=0005C7B4 successes=3560 rejections=1
-```
-
-i.e. **`0x1A30`**, not `0x1964`. The stop *moving* is evidence the admitted methods were exercised and
-the guest advanced. **`0x1A30` is `NV097_SET_VERTEX_DATA4F_M + 0x30`** (`0x1A00 + 0x30`) = attribute 3
-(diffuse colour), component 0, of the 4-float inline vertex family — and the executor **already
-handles that family** at `nv2a_pb_exec.c:2922-2934`, but only for `attr == 0` (position) and
-`attr == 9` (texcoord 0); every other attribute, including 3, is accepted and **ignored**. So
-admitting `0x1A30` would activate an existing arm rather than add behaviour — but it is a
-**render gap**: inline per-vertex diffuse colour is dropped.
-
-**The `0x1A30` class IS runtime-witnessed, and an earlier claim in this section that it was
-NOT EXERCISED was WRONG.** The 620 s run `20261007-120946-505-title008-witness-1A30` logged zero
-`admit-unknown` lines, and that was the only run checked before writing the first version of this
-paragraph. **The 900 s run `20261007-122836-322-title008-witness-1A30-long` logged 38**
-(`log_sha256 db0ec342e12cbbd7e38157645af4ebf6e285d28c918f7bc20e11ea9f9906b066`), including
-`[PFIFO] admit-unknown class=97 method=1A30 param=00000000 at=0005BB04` — so the class has a genuine
-runtime witness and the earlier "NOT EXERCISED" statement was a **premature conclusion drawn from one
-run of a class known to vary run to run**. Turn Review caught it. The witnessed set is:
+**Every surface hash in the trace is taken at flip time, after every batch has run**, so it cannot tell
+"the composite read black" from "the source was cleared after the composite read it". Writer shape of the
+selected surface over the 42 flips: `self=0 px=307200 tris=1` 15, `self=0 px=306081 tris=2` 25, `self=1
+px=306081 tris=2` 2. The run stopped at `[PFIFO] reject diag=unsupported_method method=1A30 … at=00059420
+get=00059420 put=0005C7B4 successes=3560`. **The 38-method class is witnessed** by
+`20261007-122836-322-title008-witness-1A30-long` (900 s; log SHA-256
+`db0ec342e12cbbd7e38157645af4ebf6e285d28c918f7bc20e11ea9f9906b066`; the 620 s
+`20261007-120946-505-title008-witness-1A30` logged none) and admitted (L49):
 
 ```
 1A30 1A34 1A38 1A3C 1A40 1A44 1A48 1A4C   1968   0700 0704 0708 070C 0710 0714 0718 071C
@@ -3688,589 +898,132 @@ run of a class known to vary run to run**. Turn Review caught it. The witnessed 
 1B80 1B84   1E20 1E24   1E74
 ```
 
-(38 methods; `1A30` is `SET_VERTEX_DATA4F_M + 0x30` = attribute 3 diffuse component 0, and `0700-073C`
-is a 16-method incrementing run.) The run then ended on `unhandled_exception` after a
-`budget_exhausted` at `LIMIT=packets(1024)` (`successes=3639`) from which it **recovered**, so its
-terminal state is a separate blocker, not the witness.
-
-**Instrumentation gaps, recorded as limitations rather than fixed.** The Turn Planner's start plan
-(§1.3) listed three fixes to the draft trace that were **not** implemented: (a) per-surface
-geometry/pitch for each candidate rather than the current clip and pitch, (b) the bound-texture hash
-using the texture's own geometry, and (c) a content-aware `_CHANGE` key. (a) and (b) did not affect
-this run's conclusion because all three candidate surfaces share `pitch=1280 clip=640x480`, and (c)
-cannot have suppressed the transition because the selected surface changes across it — but they are
-real gaps and a future run with mixed surface geometry must not reuse this instrument unchanged.
-
-
-
+`0x1A30` is `NV097_SET_VERTEX_DATA4F_M + 0x30` (attribute 3 diffuse, component 0); the pre-merge executor
+decoded that family only for attributes 0 and 9.
 
 ## §23.8 The black had a concrete cause: the vertex-program viewport constants were never loaded
 
-**The cause (OBSERVED, then fixed and measured).** The XDK vertex programs this title runs end with the
-standard viewport step:
+The XDK vertex programs end with `MUL o0.xyz = r12 * c[58]` / `MAD o0.xyz = r12 * r1 + c[59] FINAL`;
+`c[58]`/`c[59]` are `NV_IGRAPH_XF_XFCTX_VPSCL = 0x3a` / `VPOFF = 0x3b`, loaded by `SET_VIEWPORT_SCALE`
+(`0x0AF0`) and `SET_VIEWPORT_OFFSET` (`0x0A20`). The executor never loaded them (`0x0AF0` unhandled,
+`x28024 last=0x43A00000 (320.0)`), so every vertex-program vertex collapsed to the origin and drew nothing.
+**Fix (toolkit `d690d54`, L48):** `0x0AF0-0x0AFC` → `s_vp.c[58]`, `0x0A20-0x0A2C` → `s_vp.c[59]` and
+`s_gpu.vp_offset`; stage 0's enable bit (`SET_TEXTURE_CONTROL0` `0x1B0C`, bit 30) honoured, default
+enabled (scene batches disable stage 0 while a texture offset is bound, which would otherwise be a
+feedback read).
 
-```
-MUL o0.xyz = r12 * c[58]
-MAD o0.xyz = r12 * r1 + c[59]   FINAL
-```
-
-`c[58]` and `c[59]` are the hardware's viewport **scale** and **offset** slots — `nv2a_regs.h` names
-them `NV_IGRAPH_XF_XFCTX_VPSCL = 0x3a = 58` and `NV_IGRAPH_XF_XFCTX_VPOFF = 0x3b = 59`, and xemu's
-pgraph writes exactly those slots from `SET_VIEWPORT_SCALE` (`0x0AF0`) and `SET_VIEWPORT_OFFSET`
-(`0x0A20`). **The executor never loaded them.** `0x0A20` went only to `s_gpu.vp_offset`, which only the
-fixed-function path reads, and **`0x0AF0` was not handled at all** — it sat in the report's unhandled
-top ten with `x28024 last=0x43A00000 (320.0)`, alongside `0x0AF4 = -240` and `0x0AF8 = 16777215`.
-
-Consequence: with `c[58] = c[59] = 0`, **every vertex of every vertex-program batch collapses to the
-screen origin**. The triangles have zero area, `raster_triangle` returns at its `area == 0` test before
-`tris_drawn` or `drawn_offset` are updated, and the batch draws **nothing**. That is why `0x84000` was
-cleared to black every frame and then never refilled — and the full-screen composite then faithfully
-copied that black. It also explains the ring's otherwise strange shape: the batches targeting `0x84000`
-report `tris=0 px=0`.
-
-**The fix (toolkit, this turn).** `0x0AF0-0x0AFC` now writes `s_vp.c[58]` and `0x0A20-0x0A2C` writes
-`s_vp.c[59]` **as well as** `s_gpu.vp_offset`, so the vertex-program path and the fixed-function path
-each get what they read. In the same change, stage 0's enable bit
-(`SET_TEXTURE_CONTROL0` `0x1B0C`, bit 30) is now honoured, defaulting to enabled: the scene batches
-disable stage 0 while a texture offset is still bound, and without the gate they would sample the very
-surface they draw into once the collapse is fixed — a feedback read.
-
-**Measured effect on run `20261007-124149-033-title008-d1-viewport`** (620 s, no admit switch,
-`RECOMP_FLIP_TRACE=400 FROM=2400 CHANGE=1`, mapping gate `matches 1 / content-mismatch 0`), against
-`20261007-115809-590-title008-ring-admitted` (the same configuration before the fix):
-
-| measure | before D1 | after D1 |
+| measure | before (`…115809-590-…ring-admitted`) | after (`20261007-124149-033-title008-d1-viewport`) |
 |---|---|---|
-| distinct `[FBPRESENT]` hashes over the whole run | **10** | **658** |
-| `0x0AF0` in the unhandled list | yes (`x28024`) | **absent** |
+| distinct `[FBPRESENT]` hashes over the run | **10** | **658** |
+| `0x0AF0` in the unhandled list | yes (`x28024`) | absent |
 | triangles rasterised (final report) | 58378 | 40966 |
-| flips 2426–2440 (the transition window) | one repeated black hash | **15 distinct hashes** (15 observations; the wider 2425-2441 window has 29 observations and 16) |
+| flips 2426–2440 | one repeated black hash | 15 distinct hashes |
 
-At the dump instant the surfaces are:
-
-| surface | hash | non-black | distinct colours |
-|---|---|---|---|
-| `0x80084000` | `efddce3b5bb02ab1` | **0.935** | **2677** |
-| `0x8011C000` | `eaaa65df05fa3144` | **1.000** | 5 |
-| `0x801B2000` | `156ed4086987e325` | 0.000 | 1 |
-
-**Rendered, `0x80084000` is a full 3D city scene** — towers, sky, clouds, road markings and the green
-elevated highway — and `0x8011C000` is a **"Now Loading"** screen (flat teal field, a progress bar and
-the legend). Both were previously black or a partial fragment. Preserved:
-`logs/workers/title008/surfD1/0x80084000.png` and `…/0x8011C000.png`.
-
-**Classification.** The collapse and the missing `0x0AF0` handling are `OBSERVED`; the causal link from
-that to the black is **strongly supported for this configuration** by the before/after (distinct
-`[FBPRESENT]` hashes 10 → 658, and the transition window going from one repeated black hash to 15 distinct hashes across flips 2426-2440 (15 observations)), with the trace-budget confounder noted below. **Two flips in
-that window are still black** — 2425 and 2441 — so the fix does not make every post-transition frame
-non-black. It is **not** a strictly controlled experiment, **not** a claim that every remaining
-difference is explained, and **not** M15: the title screen itself — emblem, "PLEASE PRESS START TO
-BEGIN" over the street — has still not been observed on the recomp, and the `0x80084000` city scene is
-not yet compared like-for-like with the xemu reference.
-
-**Run identity, and the one thing that is NOT a controlled comparison.** The deciding run
-`20261007-124149-033-title008-d1-viewport` recorded toolkit revision `52e6d12` **plus a working-tree
-patch** (`patch_sha256 cad1114a0c22…`), i.e. the D1 fix before it was committed; its executable is
-`0311303e…`. The comparison run `20261007-115809-590-title008-ring-admitted` recorded the **clean**
-`52e6d12` (`patch_sha256 e3b0c442…`, the empty-string hash) and executable `764f66ae…`. So the two runs
-differ in the D1 patch **and** in the `RECOMP_FLIP_TRACE` budget (400 vs 900) while sharing
-`FROM=2400 CHANGE=1` and the same no-admit profile. Both runs also emit only **42 traced events**, so
-the budget cap was **non-binding** in both — which reduces but does not remove the confounder. The two
-runs additionally diverge in guest path (`ADXIO` 36 vs 6, `[READ]` 293 vs 283), so "one trace
-configuration" must not be read as "one identical guest execution". **The `10 → 658` distinct-hash
-result is therefore a before/after with those confounders**, not a strictly controlled A/B. The effect
-is far too large for them to account for, but the claim is stated as what it is. Both runs also stop on
-the **same** `0x1A30` reject at the same `at=00059420 get=00059420 put=0005C7B4` (`successes` 3560 vs
-3557), which is itself evidence that the fix did not change where the walk stops. The committed fix
-`d690d54` is the same change the run exercised (verified: `0x0AF0`→`s_vp.c[58]`,
-`0x0A20`→`s_vp.c[59]`, and the stage-0 gate are all present in the committed source).
-
-**What this does to the earlier sections.** §23.6's and §23.7's retractions stand: the presenter was
-never shown to be at fault, and the flip-time hash ordering argument is unaffected by this fix. What
-changes is the *critical path*: the black was not a composite or selection defect at all, and the
-"reopen sampling/UV/blend/ordering" instruction is now superseded by a measured upstream cause — with
-the caveat that the sampling/UV/blend question is still not positively established, only made moot for
-this symptom.
-
-**The new stop is `0x1A30`**, unchanged by the fix and is **no longer the stop**: the 38-method class that included it was admitted from the
-runtime witness in §23.7, and a run with the table at 482 methods reaches the fatal `[ICALL]` below
-instead of any method rejection.
+At the dump `0x80084000` = `efddce3b5bb02ab1` (0.935 non-black, 2677 colours, a full 3D city scene) and
+`0x8011C000` = `eaaa65df05fa3144` (a "Now Loading" screen). Flips 2425 and 2441 are still black. This is a
+before/after with confounders (the D1 patch on `52e6d12`, executable `0311303e…` vs clean `764f66ae…`;
+trace budget 400 vs 900, non-binding), not a controlled A/B; both stop on the same `0x1A30` reject.
 
 ## §23.9 `0x00159330`: a function reachable only by an indirect call, and the recovery
 
-**The failure.** With the method table at 482 entries, the title run no longer stops on any
-`unsupported_method`; it dies on
-
-```
-[ICALL] Failed to resolve VA 0x00159330 (thread calls: 754321, tid=38536, ms=253925453)
-[EXCEPTION] tid=38536 code=0xE0424943 RIP=0x7FFAA6E241CA
-```
-
-which is fatal by default. First seen at the end of `20261007-113354-706-title008-trace-admit` and
-reproduced in `20261007-122836-322-title008-witness-1A30-long` (624 s, `unhandled_exception`).
-
-**Why it was missing, and why that is a different class from every earlier stop.** Every earlier
-stop-chain entry was a *mis-sized or swallowed span*: the address existed in the analysis database but
-with a wrong extent. `0x00159330` has **no database entry at all**. The reason is stated by the
-database itself: no function in `tools/disasm/output/functions.json` lists `0x00159330` in its
-`calls_to`, i.e. **nothing calls it directly** — it is reached only through an indirect call, so no
-call-target detection ever recorded it and no decode pass ever lifted it.
-
-**It is a complete function, not an internal label.** The original XBE bytes settle that:
-
-```
-0015931E ret      4
-00159321 nop ... 0015932F nop        (15 bytes of padding)
-00159330 push     ecx                <- clean prologue
-00159331 push     esi
-00159332 mov      esi, dword ptr [esp + 0xc]
-...
-00159416 ret      0xc
-00159419 nop ... 0015941F nop        (7 bytes of padding)
-00159420 push     esi                <- the next function, sub_00159420
-```
-
-So the extent is `[0x00159330, 0x00159419)`.
-
-**The recovery.** Added to `config/recovered-functions.json` with **`stack_args: 12`** — the epilogue
-is `ret 0xc`, so the function pops 12 bytes of arguments. `check-stack-depth.py` reported
-`DEFECT/STACK_ARGS: ret 0xc at 0x00159416 is reached at depth 0, so stack_args must be 12, not 0` when
-that field was first omitted, **which is the gate doing its job** rather than a defect that reached a
-run. Regeneration recovered 3162 functions; `sub_00159330` is dispatched at
-`src/recomp/recovered/recovered.c` and carries the standard ABI check (`esp` expected `+16`).
-
-**Two reviewed records had to move with it, by design.** `docs/reviews/p0-full-generated-baseline.json`
-gained an `updates` entry (the 17 protected generated files are hashed there, and `recovered.c` and
-the recovered-test fixture legitimately changed), and `docs/reviews/p0-7-generation-provenance.json`
-was rewritten with `--write` from measured inputs. Both gates exist precisely so a regeneration of this
-kind cannot pass silently, and both were re-run green afterwards. `config/stop-chain.json` gained
-**stop 29** for this address, with both failing runs recorded under the `discovered` role (the gate
-rejects invented roles, which is why the entry uses the one the checker defines). Game CTest 45/45
-after the change.
-
-**Status: REPAIRED; runtime confirmation ABSENT.** Run
-`20261007-200329-265-title008-recovered-159330` (900 s, no admit switch, table at 482 methods,
-`diagnostic_deadline`, mapping gate `matches 1 / content-mismatch 0`) ran the **full 900 s** to
-presents **2808** with **1023 distinct** `[FBPRESENT]` hashes, **zero** `[ICALL] Failed` lines, **zero**
-`[EXCEPTION]` lines and **zero** `[PFIFO] reject` lines. That is a real step: the previous runs on this
-branch died at ~624 s on `0x00159330`, and this one does not. **But
-`scripts/check-run-exercised.py` reports no clean ABI-verified return for `0x00159330`** (454 other
-recovered entries returned cleanly, not this one). That checker measures **clean returns, not entry
-coverage**, so the correct statement is **runtime confirmation absent and entry coverage UNQUALIFIED**
-— not "the run never reaches the address". The stop-chain row therefore keeps `state: REPAIRED` and no
-`repair_commit`.
-
-**What that run does show.** At the dump instant the published frame is a **"Now Loading"** image
-(`0x80084000` and `0x8011C000` = `66e8421869c27824`, `0x801B2000` = `b6c0b88aa933bc64`; 307200 pixels,
-100 % non-black, 5 colours each), and the log's last `[FBPRESENT]` at t=898 s is `CHANGED`, so frames were
-still being published at the deadline. That establishes **a Now Loading image at the dump instant**, not a
-sustained functional loading state and not a new milestone: the D1 run already presented a Now Loading
-screen (`eaaa65df05fa3144` at presents 2440), so this is not progress past every previous run. It is
-**not** the title screen and **not** M15. Preserved: `logs/workers/title008/surfR/0x80084000.png`.
+`[ICALL] Failed to resolve VA 0x00159330` (first in `…113354-706-title008-trace-admit`, again in
+`…122836-322-…-witness-1A30-long`). No database entry at all (nothing calls it directly). Bytes: `ret 4` at
+`0x0015931E`, padding, prologue `push ecx; push esi` at `0x00159330`, `ret 0xc` at `0x00159416`, next
+function `0x00159420`. Recovered `[0x00159330, 0x00159419)`, `stack_args: 12` (stop 29, L50).
+`20261007-200329-265-title008-recovered-159330` (900 s) ran to presents 2808 with 1023 distinct hashes and
+no `[ICALL] Failed`/`[EXCEPTION]`/reject; **runtime confirmation absent** (no clean ABI-verified return;
+entry coverage UNQUALIFIED).
 
 ## §23.10 `0x000C2730`: the abutting-alias class again, and what the frame dumps really covered
 
-**A second fatal indirect target, and a different mechanism from §23.9.** With `0x00159330` repaired,
-a 900 s frame-dump run (`20261007-223953-965-title008-frames-late`) died instead on
-
-```
-[ICALL] Failed to resolve VA 0x000C2730 (thread calls: 753332, tid=51056, ms=293873203)
-[EXCEPTION] tid=51056 code=0xE0424943
-```
-
-at presents 2442 / 588 s. Unlike §23.9 — where the function had **no** database entry because nothing
-calls it directly — this one **is** inside the database, but only as the tail of an alias: **five**
-overlapping `tail_jump_alias` entries (`sub_000C2480`, `sub_000C2500`, `sub_000C2560`, `sub_000C25D0`,
-`sub_000C2700`) all declare an end of `0x000C276F`. The manifest entry `0x000C2700` declared that same
-end, so the span that should have stopped short ran over `0x000C2730` and the address had no entry of
-its own.
-
-**It is a complete function.** The XBE bytes show `ret` at `0x000C2724`, a two-instruction tail ending
-in `ret` at `0x000C272C`, NOP padding at `0x000C272D-0x000C272F`, then a clean prologue at
-`0x000C2730` (`sub esp,0x18; push esi; mov esi,ecx`) running to `ret` at `0x000C276E`, with
-`0x000C276F` starting the next function. Extent `[0x000C2730, 0x000C276F)`; bare `ret`, so
-`stack_args: 0`.
-
-**The repair needed two halves, and the gate named the second one.** Recovering `0x000C2730` alone was
-not enough: `check-hidden-entries.py` then reported
-`OVERLAP entry 0x000C2700-0x000C276F: body ends at 0x000C272D (declared end 0x000C276F): the span
-covers the separate manifest entry 0x000C2730`, i.e. the gate measured the real boundary for me. So
-`0x000C2700`'s end was narrowed to `0x000C272D` and the manifest now reports
-`PASS: no manifest span consumes a separate evidenced entry`. Stop 30 records it; the preservation
-baseline and provenance manifest were refreshed; game CTest 45/45 after the change.
-
-**Residue, recorded rather than fixed speculatively.** Four sibling entries (`0x000C2480`,
-`0x000C2500`, `0x000C2560`, `0x000C25D0`) carry the same original over-run in the analysis database but
-are **already narrowed in the manifest**, so they are not live defects. They are noted here so the next
-session does not rediscover them as new.
-
-**CORRECTION to a claim made earlier in this turn, about the frame dumps.** A previous statement in
-this turn's commit message said the frame-dump run "ends on the Created by Smilebit card". **That is
-wrong, and the measurement says so.** The window-thread dump is capped at 400 files
-(`fb_present.c:250`, `writes < 400`), and in that run the cap was reached at **t=169 s / presents 655**
-— not at the end. The Smilebit hash `df72defcc5d40360` first appears at **t=93 s / presents 451** and
-recurs at 655, so it is an **early logo phase**. The 400 dumped frames therefore cover only the first
-~169 s of a 900 s run. The sequence is the boot logo animation (a new hash nearly every frame from
-presents 11 onward), and reading it as the run's terminal state was a mistake about **coverage**, not
-about content. Any future frame-dump run must either raise the cap or use
-`RECOMP_FB_PRESENT_DUMP_AFTER_S` to skip the logos — the latter is what the late-capture runs do.
+`20261007-223953-965-title008-frames-late` died on `[ICALL] Failed to resolve VA 0x000C2730` (presents
+2442, 588 s): five overlapping `tail_jump_alias` entries (`sub_000C2480`, `…C2500`, `…C2560`, `…C25D0`,
+`…C2700`) end at `0x000C276F`, and manifest entry `0x000C2700` declared that end. Bytes: `ret` at
+`0x000C272C`, padding, prologue `sub esp,0x18; push esi; mov esi,ecx` at `0x000C2730`, `ret` at
+`0x000C276E`. Recovered `[0x000C2730, 0x000C276F)`, `stack_args 0`; `0x000C2700` narrowed to `0x000C272D`
+(stop 30). **The window-thread frame dump is capped at 400 files** (`fb_present.c`, `writes < 400`; in that
+run hit at t=169 s / presents 655), so use `RECOMP_FB_PRESENT_DUMP_AFTER_S` for late capture.
 
 ## §23.11 Two more abutting-alias recoveries, both now EXERCISED, and the latent siblings
-
-**The class repeated twice, and each fix moved the stop by one address.** After `0x00159330` (§23.9),
-two consecutive runs died on indirect targets of the **abutting-alias** class (§23.10):
 
 | run | fatal target | mechanism | result |
 |---|---|---|---|
 | `…223953-965-…-frames-late` | `0x000C2730` | 5 overlapping `tail_jump_alias` entries end at `0x000C276F`; manifest entry `0x000C2700` declared the same end | recovered, entry end narrowed to `0x000C272D` |
 | `…233030-481-…-c2730-fixed` | `0x000C3410` | 7 overlapping `tail_jump_alias` entries end at `0x000C3670`; manifest entry `0x000C33C0` declared `0x000C3500` | recovered, entry end narrowed to `0x000C3408` |
 
-Both were found the same way: the XBE shows `ret`, then NOP padding, then a clean prologue at the
-failing address (`sub esp,0x18` for `0x000C2730`, `sub esp,0x2c` for `0x000C3410`), and
-`check-hidden-entries.py` — run with `--show-all` — named the container and its real boundary for me
-(`body ends at 0x000C272D`, `body ends at 0x000C3408`). Stops 30 and 31 record them.
-
-**Both are now EXERCISED, which is the evidence §23.9 could not produce for its own repair.**
-`scripts/check-run-exercised.py` reports `PASS 0x000C2730 was exercised` for run
-`20261007-233030-481-…` (a clean ABI-verified return before the failure moved on), and the next run
-`20261007-235846-887-title008-c3410-fixed` logged one clean return each for `0x000C2730` **and**
-`0x000C3410`. So the stop chain advanced by exactly one address per repair, which is the pattern that
-makes these recoveries verifiable rather than speculative.
-
-**That run then completed the full 900 s with no fatal call at all**: `diagnostic_deadline`,
-**zero** `[ICALL] Failed` lines, **zero** `[EXCEPTION]` lines, presents 2444, 138 distinct published
-hashes. It is the first run on this branch to reach the deadline without a fatal indirect call.
-
-**The stop has moved back to method admission, not to a call.** The same run's three
-`[PFIFO] reject` lines are two `budget_exhausted` (both recovered) and then
-
-```
-[PFIFO] reject diag=unsupported_method method=0298 subch=0 param=00000000 at=00078320 get=00078320 put=0007BEFC successes=3636 rejections=3
-```
-
-`0x0298` is `NV097_SET_COLOR_MATERIAL` — a **lighting-state** method, and the table carries `0x0290`,
-`0x0294`, `0x02A4`, `0x02A8` but **not** `0x0298`. Presents therefore hold at 2444 from t=458 s.
-This is the ordinary admission path and needs a runtime witness before admission, never a decode.
-
-**Latent siblings of the same class, recorded not fixed.** `check-hidden-entries.py --show-all`
-reports two remaining `OVER_RUN` containers in this region whose over-run holds no manifest entry:
-
-```
-OVER_RUN  entry 0x000C002C-0x000C004A: body ends at 0x000C003F ... no evidenced entry in the over-run
-OVER_RUN  entry 0x000CD890-0x000CDAC0: body ends at 0x000CD8AE ... no evidenced entry in the over-run
-```
-
-Both look like the same defect: at `0x000C003F` the body continues to `ret 4` at `0x000C0047` and a
-clean prologue begins at `0x000C0050` (`sub esp,0x14; push ebx; push ebp; push esi; push edi`), and at
-`0x000CD8AE` NOP padding ends and a function begins at `0x000CD8B0`. They are **not** fixed here
-because no run has reached them and the gate does not call them failures — they are named so the next
-session can recover them from evidence rather than rediscovery.
+Stops 30 and 31 (L51). `20261007-235846-887-title008-c3410-fixed` logged a clean return for both and ran
+the full 900 s with no fatal call (presents 2444). Latent `OVER_RUN` siblings, not fixed:
+`0x000C002C-0x000C004A` (body ends `0x000C003F`; prologue at `0x000C0050`) and `0x000CD890-0x000CDAC0`
+(body ends `0x000CD8AE`; function at `0x000CD8B0`).
 
 ## §23.12 The indirect-call chain is cleared, and the stop moved back to method admission
 
-**Three recoveries, two mechanisms, and the chain cleared.** After §23.11 the runs stop dying on
-unresolved indirect calls:
-
-| repair | class | exercised? |
-|---|---|---|
-| `0x00159330` | no database entry at all (nothing calls it directly) | **runtime confirmation absent** |
-| `0x000C2730` | abutting alias: 5 `tail_jump_alias` entries swallow it | **EXERCISED** |
-| `0x000C3410` | abutting alias: 7 `tail_jump_alias` entries swallow it | **EXERCISED** |
-
-Run `20261007-235846-887-title008-c3410-fixed` logged a clean ABI-verified return for **both**
-`0x000C2730` and `0x000C3410` and completed the **full 900 s** with **zero** `[ICALL] Failed` and
-**zero** `[EXCEPTION]` lines — the first run on this branch to reach the deadline with no fatal
-indirect call. `check-run-exercised.py` confirms `PASS 0x000C2730 was exercised`.
-
-**The stop returned to method admission, and one witness cleared it.** That run then rejected on
-`unsupported_method 0x0298` (`NV097_SET_COLOR_MATERIAL` — a lighting-state method; the table carried
-`0x0290`, `0x0294`, `0x02A4`, `0x02A8` but not `0x0298`), holding presents at 2444 from t=458 s. A
-900 s witness run (`20261008-001451-422-title008-witness-0298`, log SHA-256
-`d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865`) logged **25 distinct**
-`admit-unknown` methods, and they were admitted from that witness: **NV097 482 → 507, exactly +25,
-zero removals, no other class changed**. The set is `0x0298`, `0x03A8-0x03BC`, `0x0A10-0x0A18`, and a
-16-method `0x1000-0x103C` run.
-
-**Measured effect.** Run `20261008-003812-419-title008-507` (900 s, no admit switch):
-
-| measure | before (482) | after (507) |
-|---|---|---|
-| `[PFIFO] reject` lines | 3 (2 budget + `0x0298`) | **0** |
-| `unsupported_method` rejects | 1 | **0** |
-| last present | 2444 | **3717** |
-| distinct `[FBPRESENT]` hashes | 138 | **1525** |
-| `[ICALL] Failed` / `[EXCEPTION]` | 0 / 0 | **0 / 0** |
-
-So the admitted methods let the walk consume a stream it previously rejected, and the guest advanced
-by ~1270 presents.
-
-**`budget_exhausted` is now RECURRING, which changes its status.** It fired **once** in the 482 run and
-**twelve times** in the 25-method witness run (each time recovered on the next walk, but each costing a
-walk). L40 records the deliberate decision that the 1024-packet cap stays a *stop* rather than a yield,
-on the reasoning that 1025 one-word packets is under the word budget. The admitted methods make the
-guest submit far more small packets, so that reasoning now needs revisiting **on evidence**: the count
-per run is the measurement to take before changing the cap.
-
-**What the run shows on screen, stated narrowly.** At the dump instant (mapping gate
-`matches 1 / content-mismatch 0`) all three surfaces are a flat **"Now Loading"** image —
-`0x8011C000` = `b3d20bc079d1e6e4`, `0x80084000` and `0x801B2000` = `5132208e7524c004`, 307200 pixels,
-100 % non-black, 5 colours each — and frames are still being published at t=898 s. That is a
-**Now Loading image at the dump instant**, not a sustained functional loading state and not a new
-milestone. **M15 is not reached:** the title screen — the emblem and "PLEASE PRESS START TO BEGIN"
-over the street scene — has still not been observed, and the comparator is
-`logs/workers/title007/xemu/deliverable/`.
+The c3410-fixed run then rejected `unsupported_method method=0298` (`NV097_SET_COLOR_MATERIAL`) at
+`get=00078320 put=0007BEFC successes=3636`. `20261008-001451-422-title008-witness-0298` (log SHA-256
+`d3a7419dcfc09cde4d5b9b63dfdcd14c3bcdc59b27b0ab9aca71a4faf0a0d865`) witnessed 25 methods — `0x0298`,
+`0x03A8-0x03BC`, `0x0A10-0x0A18`, `0x1000-0x103C` — admitted: NV097 482 → 507, zero removals (L52).
+`20261008-003812-419-title008-507` (900 s): 0 rejects (was 3), last present **3717** (was 2444), 1525
+distinct hashes (was 138), no fatal call; at the dump all three surfaces show "Now Loading"
+(`0x8011C000` = `b3d20bc079d1e6e4`, the others `5132208e7524c004`).
 
 ## §24.1 `budget_exhausted` is benign resumable chunking, and its real defect is a zero-commit livelock
 
-**Classification: Case A (benign resumable chunking), with one genuine structural defect that is
-NOT the archive's behaviour.** The classification rests on the **drain evidence** (below). It does
-**not** rest on the resume audit, which Turn Review showed was near-vacuous as first written; that is
-recorded here rather than quietly dropped, and the audit has since been repaired.
+**Case A, on the drain evidence** (per-stop ring `NV2ABudgetEvent`): control
+`20261008-032308-212-title009-cap1024` (900 s, default cap) has 17 budget stops, each followed by
+`[PFIFO] recovered after 1 rejections get=<PUT> put=<PUT>` with `successes` +1, at 17 distinct addresses.
+The 12 title-phase stop addresses of `…001451-422-…-witness-0298` equal the control's first 12
+(`0x705B0, 0x428F4, 0x1BB4C, 0x70BC0, 0x49F10, 0x23D50, 0x5920C, 0x332F0, 0x1457C, 0x69550, 0x49ED8,
+0x239E8`). Every archived budget event is `LIMIT=packets(1024)`, none the word limit; anchor counts on
+the literal `[PFIFO] reject diag=budget_exhausted`.
 
-**The drain evidence (this is what establishes Case A).** The walk now keeps a per-stop ring
-(`NV2ABudgetEvent`) recording, at the event, the walk origin, the GET its last committed unit
-published, PUT, the frontier, the units committed, the rolled-back tail and `ret`. On the
-instrumented control run `20261008-032308-212-title009-cap1024` (900 s, `exe_sha256 50664d4e…`, the
-default cap):
-
-| measure | value |
-|---|---|
-| budget stops | **17** |
-| stops whose recovery line reports `get == put` (the whole submission drained) | **17** |
-| stops whose `successes` advanced by exactly 1 | **17** |
-| stops with a distinct address (no repeated walk) | **17** |
-| walks / stalled retries | 4660 / 16 |
-| words re-walked by retries | 41096 |
-
-Each stop is followed by `[PFIFO] recovered after 1 rejections get=<PUT> put=<PUT>` with `successes`
-advancing by exactly 1, and GET advances monotonically **within** each event (stop GET → last
-committed unit's boundary → PUT). **In the control run** there is no `still rejecting` line, no
-`invalid_target`, no `control_flow_loop`, no `truncated` and no `method_range`. `ret` is `0` at every
-latched stop, so the "`ret` lost across a rejection" hazard is **latent and unexercised**, not a live
-defect.
-
-**Two corrections to the claims first written here** (both Turn Review findings):
-
-- **"no `still rejecting` … anywhere in the archive" was FALSE and is withdrawn.** There are **44**
-  `[PFIFO] still rejecting` lines across the archive — by printed diagnostic, `unsupported_method`
-  29, `sink_capacity` 8, `budget_exhausted` 3, `invalid_target` 2, `reserved_opcode` 2. Two of the
-  `budget_exhausted` ones are in `20261008-041233-960-title009-cap128`, the very run cited below as
-  the livelock demonstration. The sentence was true of the **control run alone**; the scope word
-  "archive" was the error. Separately, `bad_target` and `loop` are **enum** spellings that never
-  print (the printed names are `invalid_target` and `control_flow_loop`), so a literal grep for them
-  returns zero vacuously and proves nothing.
-- **The resume audit as first written could not discriminate, and has been repaired.** It counted a
-  resume as "matched" when the next walk began at the previous stop's committed boundary — but
-  `budget_expected_get` is captured from GET at the stop and compared against the **same register**
-  at the next walk, and GET only advances on a commit, so "matched" was the **default** outcome even
-  for a retry that made **zero** progress. The suite's own
-  `test_packet_cap_can_pin_get_without_a_commit` drives exactly that case for five retries and would
-  have scored 5/5 matched. The audit now requires **progress** (GET advanced, or a unit committed, or
-  the walk reached PUT) for `matched`, and records the third outcome, `budget_resume_stalled`, for
-  "right boundary, no progress"; the pinned-livelock test now asserts 5 stalls and 0 matches, so the
-  counter can fail again if it goes vacuous. `budget_expected_put` was written and never read — it is
-  still recorded for the ring but is not a decision input.
-
-**The stop addresses reproduce exactly across binaries and guest paths.** The 12 title-phase stops
-in the uninstrumented `20261008-001451-422-title008-witness-0298` are byte-identical, in order, to
-the first 12 stops of the instrumented control: `0x705B0, 0x428F4, 0x1BB4C, 0x70BC0, 0x49F10,
-0x23D50, 0x5920C, 0x332F0, 0x1457C, 0x69550, 0x49ED8, 0x239E8` (12/12). The event is a property of
-the submitted stream, not of a build or a path.
-
-**The cap is walk-cumulative while the word budget is per-unit, and that asymmetry permits a real
-livelock.** `unit_words` resets at each unit commit, but `packets` never does, and the check
-`if (packets >= 1024)` runs **before** the yield. For a packet-dense stream the word yield never
-fires first, so the walk reaches the cap having committed **zero** units;
-`regs[NV_PFIFO_CACHE1_DMA_GET] = pc` sits inside `if (ok)`, so GET never moves and every retry
-re-walks the identical stream to the identical stop.
-
-Measured two ways:
-
-- **In the real guest.** Run `20261008-041233-960-title009-cap128` (the cap lowered to 128 as a
-  diagnostic) stopped on the **first boot submission** — `get=0 put=0x1000`, the first 128 words
-  being 128 one-word packets — with `words=128 packets=128` and **zero** units committed. GET stayed
-  pinned at 0 through `submit #0` … `submit #63`, `[PFIFO] still rejecting n=16` and `n=256` follow,
-  and the run ends with **zero `[FBPRESENT]` lines and `successes=3`** — the guest reached
-  `guest_entry` but produced no frames at all. So "unreachable for JSRF" is false.
-- **At the shipped cap the margin is exactly zero.** The control run reports `walk_packet_max = 1024`
-  against a boot kick of `put=0x1000` = 1024 words. The loop exits at `pc == put` before the cap
-  check runs again, so a boot kick one packet longer would livelock at the default.
-
-Pinned by two tests that can fail: `test_packet_cap_can_pin_get_without_a_commit` (1025 two-word
-packets → `units=0`, `committed_get == start_get`, GET pinned across five retries,
-`budget_events_total >= 6`) and `test_budget_stop_resumes_at_committed_boundary` (1030 five-word
-packets, so a unit DOES commit: `committed_get != start_get`, GET advances, and the resume is
-audited as a MATCH).
-
-**What the packet term actually protects: nothing.** `staged[]` and `sink[]` are word-bounded per
-unit (`NV2A_SUBMIT_MAX_WORDS`), and `seen[]` has its own 512-entry guard. The packet term is a
-runaway/cycle bound, not an architectural limit; real hardware has no such counter. Its scope is
-therefore the open design question, and changing it is **deferred**: the 1024-packet default remains
-a STOP (L40), the diagnostic `RECOMP_NV2A_PACKET_CAP` exists so the question can be asked on one
-binary, and the livelock is recorded rather than papered over. A per-unit counter that still stops
-does NOT fix the livelock; the options and their masking risks are recorded in the plan.
-
-**Re-confirmed on the fixed binary, at scale, in the regime that actually stops — on the DRAIN
-evidence.** Run `20261008-043848-133-title009-clockfix-1800` (1804.7 s) reaches the same heavy 3D
-phase and reports **63 budget stops**, `successes` 6903, `walk_packet_max` 1024, `walk_words_max`
-11612, and **zero** `still rejecting` lines. Its `budget_resume_matched = 63` /
-`mismatched = 0` were produced by the **pre-repair, near-vacuous** audit (the run predates the
-repair), so they are recorded but carry no weight; the drain evidence for it is the per-stop
-recovery lines, which Turn Review verified independently for the control and which hold here by
-construction (0 `still rejecting`). **A run on the repaired binary is still owed** to confirm
-`budget_resume_stalled` behaves as designed at scale.
-
-**Normalization, because raw counts are not comparable.** Of the archived runs, **11** contain any
-budget rejection (Turn Review's anchored extractor; the earlier "7" predated the two
-`title009-cap1024` controls, the cap-128 diagnostic and the clockfix run). Anchoring on the literal `[PFIFO] reject diag=budget_exhausted` (a bare `reject`
-matches `commit_rejected=0` 840 times in one run — the trap that corrupted an earlier count):
-`witness-0298` 12, `frames-late` 2, `c3410-fixed` 2, and 1 each in `title005-admit3`,
-`trace-admit`, `witness-1A30-long`, `c2730-fixed`. Every event is `LIMIT=packets(1024)`; **none**
-is the word limit. The `[FBPRESENT]` **line** count is not the `presents=` **counter** (2614 vs
-3717 in run 507); normalize on the counter.
-
-**Withdrawn inference.** The earlier reading "run 507 has zero exhaustions, so exhaustion is not
-causal for the loading hold" is **confounded and is withdrawn**: 507 and `witness-0298` took
-different guest paths (see §24.2), so they were never a single-variable comparison. The conclusion
-that exhaustion is not the loading blocker survives, but for the different reason recorded in §24.2.
+**The livelock (L54).** `unit_words` resets per unit but `packets` never does, and `if (packets >= 1024)`
+runs before the yield, so a packet-dense stream can reach the cap with **zero** units committed and GET
+pinned. Shown with the cap at 128 (`20261008-041233-960-title009-cap128`, `RECOMP_NV2A_PACKET_CAP`, L55):
+the first boot submission (`get=0 put=0x1000`) livelocked; zero `[FBPRESENT]`, `successes=3`. At the
+shipped cap the margin is zero (`walk_packet_max = 1024` against a 1024-word boot kick). Tests:
+`test_packet_cap_can_pin_get_without_a_commit`, `test_budget_stop_resumes_at_committed_boundary`; the
+resume audit records `budget_resume_stalled`. The packet term protects nothing architectural; changing it
+is deferred. `20261008-043848-133-title009-clockfix-1800` (1804.7 s): 63 budget stops, `successes` 6903,
+`walk_words_max` 11612, 0 `still rejecting`.
 
 ## §24.2 The `Now Loading` hold: a host clock overflow exists and is FIXED; the wrap is ASSOCIATED with worker loss, but the mechanism is not established
 
-**Status: the repair stands; the causal attribution was WITHDRAWN after Turn Review.** This section
-originally claimed that a host clock overflow *caused* the `Now Loading` hold. The overflow is real,
-the fix is correct, and the fix was independently reproduced — but the archive does **not** support
-the causal claim, and a fresh Turn Reviewer falsified it. Both halves are recorded separately below,
-because conflating them is exactly the error that was made.
-
-### What is ESTABLISHED
-
-**The defect.** `qemu_clock_get_ns` computed `(int64_t)(count.QuadPart * 1000000000LL / freq.QuadPart)`,
-forming the product in a **signed 64-bit** temporary. Two distinct wrap points follow, and they were
-previously conflated:
+**Established (L53).** `qemu_clock_get_ns` formed `count * 1000000000LL / freq` in a signed 64-bit
+temporary:
 
 | wrap | count | uptime at 10 MHz | consumer sees (`uint64_t now_ns`) |
 |---|---|---|---|
-| signed product overflow | `2^63/1e9` = 9223372037 | **922.337 s** | jumps **FORWARD** (negative int64 -> huge uint64) |
+| signed product overflow | `2^63/1e9` = 9223372037 | **922.337 s** | jumps **FORWARD** |
 | unsigned product wrap | `2^64/1e9` = 18446744074 | **1844.674 s** | jumps **BACKWARD** to near zero |
 
-The **backward** jump is the harmful one: `ptimer_service_thread` keeps its vblank deadline
-(`next_vblank_ns`) in the same units, so a reading that restarts near zero while the deadline sits
-near 2^64 satisfies neither the pulse test nor the re-arm test, and the computed wait becomes
-enormous. No pulse means no PCRTC interrupt, no ISR, no DPC and no `KeSetEvent` for a vblank waiter.
-The forward jump is harmless by comparison because it satisfies `now >= next` and re-arms.
-
-**The fix (toolkit).** The conversion is now `nv2a_qpc_to_ns` in `src/nv2a/host_clock.h`
-(`(c/f)*1e9 + (c%f)*1e9/f`), which keeps every intermediate in range and is monotonic for any uptime
-below ~292 years; `qemu_clock_get_ns` and `apu_shim.h`'s `qemu_clock_get_us` both call it, so the two
-cannot drift. The vblank service loop additionally re-arms when the clock steps backward and caps its
-vblank-accounted wait at four frames. **This repair is correct and worth keeping on its own merit**
-regardless of causation: the overflow is a genuine defect that would corrupt the display clock and the
-guest-visible PTIMER at a fixed uptime, and the guard is cheap.
-
-**Pinned by a test that CAN fail.** `host_clock_wrap_test` now calls the **real shipped conversions**
-(the earlier version duplicated the formula, so reverting the shim left it green — a Turn Review
-finding). The pre-fix expression lives beside them as `nv2a_qpc_to_ns_overflowing`, so the control arm
-runs the arithmetic the runtime used to. **Demonstrated by mutation:** replacing the shipped body with
-the overflowing form makes the test fail with `moved backward 1 time(s) across the unsigned wrap` and
-`disagrees with exact uptime`, exit 1; restoring it returns exit 0. It asserts both wrap points
-separately, and that the signed one is a *forward* jump, so the two cannot be conflated again.
-`vblank_clock_step_test` covers the loop's rule (0 pulses in 10 frames with the pre-fix rule, 9 with
-the fix).
-
-### What is WITHDRAWN, and what SURVIVES as an association
-
-**Two separate corrections were needed here, and the first attempt over-corrected
-in the opposite direction.** The original text claimed the wrap *caused* the
-worker deaths; the first remediation replaced that with "wrap windows do not
-predict worker loss". **That replacement was also false**, and Turn Review 2
-caught it. What the archive actually shows is an **association whose mechanism is
-not established**.
-
-**The association is present (independently reproduced).** Over the 81 archived
-runs that have ADX worker threads, taking "loss" as any worker stopping at least
-30 s before the last present:
-
-| | workers lost | workers kept | loss rate |
-|---|---|---|---|
-| run window contains a wrap | 10 | 14 | **41.7 %** |
-| run window contains no wrap | 7 | 50 | **12.3 %** |
-
-(`logs/workers/title009/orch/verify_contingency.py`.) So a wrapped run is about
-**three times likelier** to lose a worker. The universal form the original text
-asserted — *every* wrapped run loses them, *every* unwrapped run keeps them — is
-still **false**, and the six wrapped-but-kept runs remain counterexamples to it.
-Both things are true at once: the association is real, the universality is not.
-
-**The timing figures that were used to dismiss it were an epoch error.** Three
-different clocks are in play and they do not share a zero:
-
-- the overflow is in the **QPC** product, so a wrap instant is a QPC (uptime)
-  instant;
-- `[CHECKPOINT] ms=` is **GetTickCount64**, also boot-relative but a different
-  clock — measured on this host, `QPC - GetTickCount64 = +4.2 s`;
-- `[FBPRESENT] t=Ns` is `GetTickCount()` minus the tick at the **first present**
-  (`fb_present.c`, `t0 = GetTickCount()` in `fb_present_observe`), i.e. relative
-  to the first present, **not** to process start.
-
-Comparing a QPC instant against an `[FBPRESENT]` timestamp without correcting for
-both offsets is what produced the "9.6 s before the wrap" figure. With the QPC
-offset alone run 507 moves to about −5.3 s, and with the first-present offset as
-well to about −3.4 s — i.e. **at the wrap, within the observation cadence**,
-rather than before it. Across the 16 worker deaths the count falling within ±5 s
-of a wrap goes from 0 (naive) to several once the epochs are aligned.
-
-**Therefore:** the clock fix stands as a latent-defect repair, **and** the wrap
-remains the strongest surviving lead for the worker deaths — but the *mechanism*
-by which a wrap would kill a worker has **not** been shown, and the deaths that
-occur in runs with no wrap in their window are **not explained by it at all**.
-Both facts must stay in view: a session that treats the wrap as settled will miss
-the unwrapped deaths, and a session that treats it as irrelevant will skip the
-strongest lead.
-
-**The dump sub-claim remains UNVERIFIED.** The claim that the dump "falsifies the
-competing explanations" (both interrupt enables set, vector 3 connected, the irq
-line low, the DPC queue empty, the guest event unsignalled, the threads' exit
-flags zero) was read but never re-derived by either review. It is recorded as the
-turn's own reading of 507's dump, not as an established fact.
-
-**Open lead, unchanged:** vblank delivery is ~30–80x below nominal even in the
-surviving runs (`clockfix-1800` 1337 pulses over ~1780 s = 0.75 Hz;
-`035729-cap1024` 1104 over 904 s = 1.22 Hz; the model's nominal is at least
-40 Hz). `nv2a_vblank_advance` re-arms without pulsing when the service thread
-wakes four or more frames late, and that thread shares `g_mmio_owner_lock` with
-the walk, so lock starvation is a candidate — INFERRED, not tested.
+The backward jump stops `ptimer_service_thread`'s vblank (no pulse, no PCRTC interrupt, no `KeSetEvent`).
+Fix: `nv2a_qpc_to_ns` in `src/nv2a/host_clock.h` (`(c/f)*1e9 + (c%f)*1e9/f`), used by `qemu_clock_get_ns`
+and `apu_shim.h`'s `qemu_clock_get_us`; the vblank loop re-arms on a backward step and caps its wait at
+four frames. Tests: `host_clock_wrap_test` (calls the shipped conversions; mutation-validated),
+`vblank_clock_step_test` (0 vs 9 pulses in 10 frames). **Withdrawn:** that the wrap was shown to cause the
+hold or the "worker deaths"; per §25 the deaths are workers parked on the vblank event, the unwrapped ones
+were a detector artifact, and the fixed binary shows none (§25.3). Clock zeros differ: QPC, `[CHECKPOINT]
+ms=` (GetTickCount64; QPC − GetTickCount64 = +4.2 s on this host) and `[FBPRESENT] t=`
+(first-present-relative). Vblank delivery in the clock-fixed runs was ~30–80× below a nominal of at least
+40 Hz (`clockfix-1800` 1337 pulses over ~1780 s = 0.75 Hz); lock starvation via the shared
+`g_mmio_owner_lock` was the candidate (measured in §25.5).
 
 ## §24.3 The guest's real blocker after the clock fix is executor throughput, not the walk
 
-With the clock fixed, the surviving runs show what lies past the loading screen: the guest opens and
-**reads** `title.adx`, then advances into a heavy 3D phase. The cost is now measured, and it is
-**geometry**, not a stall:
+With the clock fixed the guest opens and reads `title.adx`, then enters a heavy 3D phase:
 
 | phase | presents | triangles rasterised per report | present rate |
 |---|---|---|---|
 | logos / loading (to t≈420 s) | 1 → 2439 | ~359 median | ~5.5 /s |
 | title 3D phase (t≈480 s →) | 2439 → 2461 | **~31347 median** | **~0.05 /s** |
 
-On `20261008-043848-133-title009-clockfix-1800` the present rate falls **110×** (5.53 → 0.05 per
-second) exactly where the per-report triangle count rises **87×** (median 359 → 31347), while the
-pixels-per-triangle average over the run is 875 — i.e. the batches are large, dense and numerous, and
-the software rasteriser is doing ~1.8 billion pixel writes and ~1.9 million triangles. That is the
-next blocker: **a 900 s run cannot reach "PLEASE PRESS START TO BEGIN" at 0.05 presents/s**, and no
-amount of walk repair changes it. It is a throughput problem in the executor, and the honest next
-measurement is where inside the rasteriser the time goes (per-triangle setup vs per-pixel sampling)
-rather than another run of the same length.
+On `20261008-043848-133-title009-clockfix-1800` the present rate falls 110× (5.53 → 0.05 /s) where the
+per-report triangle count rises 87×; ~1.8 billion pixel writes, ~1.9 million triangles, 875 pixels per
+triangle. (The present wall is flip frequency, §25.6; executor time is pixel fill, §26.2.)
 
-**AND A CITY SCENE IS DRAWN BUT NOT PRESENTED — the milestone-relevant finding of this turn.** The clock
-fix lets the guest reach the real title phase, and the render is now genuine content: the final
-`0x80084000` surface (exported from the dump, mapping gate `matches 1 / content-mismatch 0`, rendered
-to `logs/workers/title009/clockfix/0x80084000.png`) is a **full 3D city backdrop** — towers, clouds,
-the green elevated highway, road markings, billboards — with the same content character as the xemu
-reference at t=60 s (`logs/workers/title007/xemu/run2/client/0023_00060.0s.png`). The `[GPU]` report
-agrees: `draw surface 0x00084000 -> 0x80084000`.
-
-**But that surface is NOT the one published.** (It is a city scene, not a proven title backdrop: a render comparison by eye is not a content match.) Hashing the three exported surfaces with the project's
-own FNV-1a-64 (`fb_hash_words`, integer-division RGB565→RGB888 as in `fb_present.c`) and matching
-against the run's published `[FBPRESENT]` hashes:
+**A city scene drawn but not presented in that run.** The final `0x80084000` (rendered to
+`logs/workers/title009/clockfix/0x80084000.png`) is a full 3D city backdrop like xemu's at t=60 s
+(`logs/workers/title007/xemu/run2/client/0023_00060.0s.png`), by eye only:
 
 | surface | hash | published in this run? |
 |---|---|---|
@@ -4278,141 +1031,55 @@ against the run's published `[FBPRESENT]` hashes:
 | `0x8011C000` | `9c7539413e3b8e4a` | yes |
 | `0x801B2000` | `c95814fe744a3c90` | yes |
 
-The two surfaces the window actually received render as near-blank fields. So the guest **draws the
-city scene into `0x84000` and the presenter hands the window a different surface** — the same
-draw-versus-present split the plan recorded as unresolved, now reproduced on the fixed binary with
-real title content in the draw surface. **M15 is still NOT reached** (no emblem, no "PLEASE PRESS
-START TO BEGIN", and the city was never presented), but this narrows the next blocker to the
-present/source-selection path rather than to guest progress or the walk.
+The city `efddce3b5bb02ab1` (§23.8) is published in none of 188 archived runs. This end state is not
+general (§25.7).
 
-**The recomp's render composition also loses its texture stage at the transition.** Independent
-verification of the `[GPU]` batch counters (which are cumulative, so only the increments between
-reports are meaningful) shows a stable ~17–25 % "texcoords but no usable stage" regime through the
-logos, then a step to a steady **93.8 %** at present ~2457 — `dNoStage 435` against `dTex 29` — held
-for the rest of the run. At the same time the city scene the executor *can* rasterise
-(`efddce3b5bb02ab1`, 93.6 % non-black, 2677 colours) is published in **none** of 188 archived runs:
-it exists only in the dump's draw surface.
-
-**The stage loss is a MEASURED CORRELATION, and the counter that measures it cannot exclude lost
-state** (corrected after Turn Review). The executor now reports which term of the stage-validity
-predicate failed, and on `20261008-043848-133-title009-clockfix-1800` **every** untexturable batch is
-reported as `stage disabled by the guest`, with `0` reported as `no offset`, `no dimensions`,
-`unusable format` or `other` — at every one of the 179 reports. The counters do partition exactly:
-the final `no-stage cause` total is **4187**, matching the `batches:` line's "no usable stage" count of
-4187. (An earlier version of this record quoted **1079**, which is the value at sample 30 of 179, not
-the run's total. Corrected.)
-
-**But the label "by the guest" is an interpretation of a bit the model holds, not an observation of
-guest intent, and the discriminator cannot support the claim it was written to support.** The
-implementation tests `if (!s_tex0_enabled)` **first** (`nv2a_pb_exec.c`), and `s_tex0_enabled` is a
-single sticky global set only by `NV097_SET_TEXTURE_CONTROL0`, with no per-context or per-frame
-tracking of whether the method was ever received. So the counter distinguishes "the enable bit is 0"
-from "the enable bit is 1 but offset/dimensions/format are missing" — it **cannot** distinguish "the
-guest disabled stage 0" from "the model cleared or never received the enable bit". The hypothesis it
-was meant to exclude is exactly the one it would misreport.
-
-**What therefore stands and what does not.** The 93.8 % untexturable regime at present ~2457 is
-OBSERVED. That those batches carry an explicit `SET_TEXTURE_CONTROL0` clear **in the model's state**
-is OBSERVED. That the **guest** asked for it is **INFERRED, not established**. The "sticky gate is a
-regression that drops the rendered scene" hypothesis is therefore **not falsified** — it is
-unresolved, and a stronger discriminator is needed: one that records whether `SET_TEXTURE_CONTROL0`
-was ever written, how many times, and its last value, so "never received" is distinguishable from
-"explicitly cleared". What those disabled-stage batches should draw instead, and whether the city
-scene should have been published from a different surface, also remain open. **M15 remains
-unreached.**
-
-**Update (2026-10-09, §26.3):** the CONTROL0 latch shows the guest itself writes stage 0's CONTROL0 with
-ENABLE clear (7 581 of 16 230 writes), so `stage disabled` is guest intent.
+**Texture stage loss at the transition.** Batch counters show ~17–25 % "texcoords but no usable stage"
+through the logos, then a steady **93.8 %** at present ~2457 (`dNoStage 435` against `dTex 29`); every
+untexturable batch is `stage disabled by the guest` (final `no-stage cause` 4187 = the `batches:` line's
+4187). **§26.3 settles it: the guest itself writes stage 0's CONTROL0 with ENABLE clear.** What those
+batches should draw is open.
 
 ## §25. The ADX "worker deaths" are parked waiters, not deaths; the walk's per-word `VirtualQuery` was the real cost (turn title-010)
 
 ### §25.1 The inherited worker-death population is an artifact of its detector
 
-`logs/workers/title009/orch/verify_contingency.py` reproduces its recorded figure exactly
-(81 runs; wrapped 10 L / 14 K = 41.7 %, unwrapped 7 L / 50 K = 12.3 %). Its death signal is
-unsound in two measured ways:
-
-1. **`0x007BFFCC` is the MAIN thread.** The loader logs
-   `Stack: 8192 KB at Xbox VA 0x00780000 (ESP = 0x00F7FFF0)`, so the main stack spans
-   `0x00780000..0x00F80000`, and `0x007BFFCC` lies inside it. The worker set is
-   `{'01220F50','012A0F8C','01320F88','007BFFCC'}`, and the script takes
-   `worker_last = MAX(t)` over that set — so `worker_last` was normally the **main thread's own**
-   last sample and `lost` was normally false. A "death" was reported only when the main thread
-   happened not to print a summary after its last present. The detector therefore measured the
-   main thread's print timing, not worker liveness. The script's own comment says the intent was
-   "the LAST summary among workers", which the code does not implement.
-2. **Exact-`esp` matching splits one thread across keys.** On
-   `20261008-043848-133-title009-clockfix-1800` the worker at stack `0x01220FF0` is sampled at both
-   `0x01220F50` (163 blocks) and `0x01220F48` (201 blocks); in
-   `20261007-060314-395-title007-noadmit` at **six** addresses
-   (`0x01220EA8/EAC/EC8/F08/F48/F50`). Keeping one drops most of that thread's samples.
-
-Re-attributed by **owning stack** (main = the loader's 8 MB region; worker = the 64 KB slice each
-`spawned worker` line names), `logs/workers/title010/orch/recompute_contingency.py` gives:
+`logs/workers/title009/orch/verify_contingency.py` counted `0x007BFFCC` as a worker, but it lies in the
+**main** thread's stack (`0x00780000..0x00F80000`, `ESP = 0x00F7FFF0`), so it measured main's print
+timing; exact-`esp` matching also split one worker across keys. By owning stack
+(`logs/workers/title010/orch/recompute_contingency.py`):
 
 | detector | wrapped | unwrapped |
 |---|---|---|
 | prior (exact esp) | 5 L / 19 K = 20.8 % | **10 L / 50 K = 16.7 %** |
 | corrected (stack) | 8 L / 16 K = 33.3 % | **0 L / 60 K = 0.0 %** |
 
-**All ten "unwrapped deaths" disappear**, gaps collapsing from 37–455 s to 0. The plan's cited
-unwrapped list (`long3d`, `units`, `units4`, `blacktrace`, `trace-noadmit`, `admitted39`,
-`title005-admit3`) shows 10–23 s gaps under **both** detectors and is not reproduced by the cited
-script at all.
-
 ### §25.2 The workers are live waiters on the D3D vblank event
 
-In every captured run the two ADX threads are `state=1` with a native stack of
-`xbox_KeWaitInplaceEvent` ← `bridge_KeWaitForSingleObject` ← `sub_0018CE50` ← `body_0013B1C0`, and
-**zero** runs log `worker thread returned` or `PsTerminateSystemThread`. The turn's `[WAIT]`
-instrument names the object directly: on `20261008-155241-052-title010-R1-telemetry` **all 256**
-logged long waits are `timeout=INFINITE` on `0x0019D630`. A "death" is therefore
-**the vblank event ceasing to be signalled**, not a thread exit.
+The two ADX threads are `state=1` in `xbox_KeWaitInplaceEvent` ← `bridge_KeWaitForSingleObject` ←
+`sub_0018CE50` ← `body_0013B1C0`; no run logs a worker return or `PsTerminateSystemThread`. On
+`20261008-155241-052-title010-R1-telemetry` all 256 logged long waits are `timeout=INFINITE` on
+`0x0019D630`. A "death" is the vblank event ceasing to be signalled.
 
 ### §25.3 No death population on the fixed binary (Case D)
 
-| run | duration | wrap in window | wrap offset | worker exits |
-|---|---|---|---|---|
-| `…155203-preflight` | 24.2 s | no | — | 0 |
-| `…155241-R1` | 904.3 s | **YES** | **+763.1 s** | 0 |
-| `…185536-R2` | 906.2 s | **YES** | **+854.6 s** | 0 |
+`…155203-preflight` (24.2 s, no wrap), `…155241-R1` (904.3 s, wrap at +763.1 s) and `…185536-R2` (906.2 s,
+wrap at +854.6 s): 0 worker exits; every worker printed heartbeats after the wrap.
 
-R1's predictions were recorded before its artifacts were read
-(`logs/workers/title010/orch/WRAP_CROSSING_PREDICTION.md`); every worker printed heartbeats after
-the wrap (25/25/25/26) and worker/main liveness lag was 3.9 s. Two independent wrap crossings, no
-loss. **The archived death population does not reproduce on the fixed binary.** Note the falsifier
-in `HYPOTHESIS.md` required a worker to go quiet with no anomaly; **none did**, so the correct
-statement is "no death population", not "H falsified".
+### §25.4 A correction: the "whole-guest stall" class is wrong
 
-### §25.4 A correction: the Planner's "whole-guest stall" class is wrong
-
-The class (`long3d`, `units`, `units4`, `blacktrace`, `trace-noadmit`, `admitted39`, `admit3`) was
-described as "the main thread's own last ring event comes 150–270 s before the run ends". Measured
-(`logs/workers/title010/orch/ring_liveness.py`), the main thread is the **most recently active
-thread in the capture** (lag 0.00 s; 128 events in 0.3–0.4 s) and `[FBPRESENT]` continues to within
-**7–18 s** of the actual end (`long3d` 697 s of 704.4 s). Those are ordinary live runs whose workers
-sit 13–25 s behind main.
+For `long3d`, `units`, `units4`, `blacktrace`, `trace-noadmit`, `admitted39`, `admit3` the main thread is the
+most recently active thread (lag 0.00 s) and `[FBPRESENT]` continues to within 7–18 s of the end
+(`logs/workers/title010/orch/ring_liveness.py`).
 
 ### §25.5 The walk's per-word `VirtualQuery` is a first-order cost
 
-`submit_read_word` (`nv2a_core.c:1261-1282`) called `VirtualQuery` **once per pushbuffer word**,
-under `g_mmio_owner_lock`. Measured on this host at the base of a 64 MB mapped view (the shape of
-the nv2a contiguous window) with `logs/workers/title010/orch/vq_bench.py`:
-
-| region | untouched | all pages touched |
-|---|---|---|
-| private commit | 1.63 µs | **184.9 µs** |
-| **mapped view** (what nv2a uses) | 12.0 µs | **378.1 µs** |
-
-An earlier estimate in this turn assumed 1–3 µs and concluded 0.1–2 % of wall time; **that is
-retracted.** The measurement is corroborated from a different instrument: R1's `walk_words_max`
-8144 × 185 µs = **1507 ms** against its measured max lock hold of **1636 ms** (8 %).
-
-The fix (toolkit `5d6ebbd`) caches the validated span for one walk. The address bounds, alignment,
-the full protection predicate including `PAGE_NOACCESS`/`PAGE_GUARD`, and the region-end test all
-still gate acceptance; a page that fails is never cached, and the cache is walk-scoped. Pinned by
-the new `nv2a_read_guard` test against a **real** `PAGE_GUARD` page, mutation-validated (widening the
-cache to claim the whole ring makes the test die with an ACCESS_VIOLATION).
+`submit_read_word` called `VirtualQuery` once per pushbuffer word under `g_mmio_owner_lock`. Measured
+(`logs/workers/title010/orch/vq_bench.py`, 64 MB view): private commit 1.63 µs untouched / **184.9 µs** all
+touched; **mapped view** 12.0 µs / **378.1 µs**. R1: `walk_words_max` 8144 × 185 µs = 1507 ms against a max
+lock hold of 1636 ms. **Fix (toolkit `5d6ebbd`):** a walk-scoped cache of the validated span (bounds,
+alignment, the full protection predicate incl. `PAGE_NOACCESS`/`PAGE_GUARD`, and the region end still gate;
+a failing page is never cached); test `nv2a_read_guard` against a real `PAGE_GUARD` page.
 
 | statistic | R1 (no cache) | R2 (no cache) | **R3 (cache)** |
 |---|---|---|---|
@@ -4422,80 +1089,47 @@ cache to claim the whole ring makes the test die with an ACCESS_VIOLATION).
 | pulses per pass | 0.297 | 0.275 | **0.979** |
 | presents at matched `t=120 s` | 628 | 641 | **2568 (4.1×)** |
 
-**R3 terminated early** at 236.5 s, `outcome=unhandled_exception`, on the fatal unresolved call
-`0xE0424943` at VA **`0x9188C`**. The crash stack attributes it to a **pre-existing** hole, not the
-cache: `sub_0009188C` is a generated recovery stub whose entire body is
-`recomp_icall_fail_log(0x0009188C); abort();`, reached from `body_00091830`, and §20 already records
-`0x91830`'s internal target `0x9188C` as decoding to ordinary code and **not repaired**. No frame
-of the walk, the cache or the owner lock is on that stack. **Not yet shown** is that the hole is
-merely *newly reached*. **The control ran and is inconclusive** (2026-10-09):
-`20261009-142848-669-title011-R3-control-5fd62cb` — the pre-cache toolkit `5fd62cb`, R3's exact switches
-and 900 s — reached the deadline with no crash line, but only **1320** presents (last hash
-`87683a748e27d071`, the Dolby card), against R3's **2885** at its crash. It never reached the point where
-R3 died, so it neither implicates nor clears the cache; a no-cache control would need several times
-900 s. Closing `0x9188C` directly is the cheaper route.
+**R3** (`20261008-191232-038-title010-R3-vqcache-AB`) passed the transition (2885 presents) and died at
+236.5 s on `0xE0424943` at VA **`0x9188C`**, a pre-existing hole in `0x91830` (repaired §26.4), with no
+frame of the walk, cache or lock on the stack. The control `20261009-142848-669-title011-R3-control-5fd62cb`
+(pre-cache toolkit `5fd62cb`, R3's switches, 900 s) reached only 1320 presents (last hash
+`87683a748e27d071`) and is inconclusive.
 
 ### §25.6 The present-rate wall is flip frequency, not rasteriser throughput
 
-`flips == presents` exactly (2494 = 2494 in `clockfix-1800`), so the flip counter is the guest's own
-swap count. It collapses from **~2.77 /s** early to **0.035–0.047 /s** in the tail — **59–80×**
-— reproducing across **four runs and three binaries** while `[GPU] draws` and the triangle count
-keep climbing (~485 draws and ~28 000 triangles per 10 s report). **Draws-per-flip is stable**
-(542.6 middle vs 541.9 late), so it is **one flip per frame**: the frame rate itself collapsed to
-~0.04 frames/s. TR §24.3's "the software rasteriser is the cost" explains frame *content*, not frame
-*count*; the present-rate wall is the latter.
+`flips == presents` exactly (2494 = 2494 in `clockfix-1800`). The flip rate collapses from ~2.77 /s to
+0.035–0.047 /s late (59–80×) across four runs and three binaries while draws and triangles keep climbing
+(~485 draws, ~28 000 triangles per 10 s report); draws-per-flip is stable (542.6 vs 541.9).
 
 ### §25.7 The presenter is usually right; the remaining questions are structural
 
-Parsing the five archived `[FLIPTRACE]` runs mechanically: **324 of 370** traced flips (87.6 %)
-select the draw surface `0x80084000`, all with `reason=drawn_this_frame`. The plan's "the
-presentation path sends `0x8011C000`/`0x801B2000`" holds for `clockfix-1800`'s end state (its city
-hash `31b1469f9c922c32` appears **0** times among 711 distinct published hashes) but is **not**
-general. Structural gaps, recorded and not fixed:
+Over the five archived `[FLIPTRACE]` runs, **324 of 370** traced flips (87.6 %) select the draw surface
+`0x80084000`, all `reason=drawn_this_frame`; `clockfix-1800`'s end state (city hash `31b1469f9c922c32` 0
+times among 711 distinct published hashes, §24.3) is not general. Structural gaps, not fixed (pre-merge
+executor; the v0.13.1 merge ported the tracker and flip-trace paths, §1, not re-audited):
 
-- the guest's own `flip_read`/`flip_write`/`flip_modulo` (`modulo=3`) is stored and read **only** by
-  two debug prints (`nv2a_pb_exec.c:1165`, `:3301`), never by `present_track_flip`;
-- the `[GPU]` report's "draw surface" prints `s_gpu.drawn_offset` (`:3597`), the **same variable**
-  `present_track_flip` prefers, so it agrees by construction and can never reveal a selection error;
-  it is also sampled at the 10 s report tick, *after* the last flip;
-- the commit consumer drops every class != 0x97 (`:1373-1376`), and the count alone could not name a
-  blit — a census added this turn (toolkit `5fd62cb`) identifies each class and flags
-  `NV_IMAGE_BLIT` (0x9F) explicitly;
-- at flip 2426 in `…110933-trace-noadmit` the presenter published a **black** surface while a
-  non-black candidate existed in the same frame (`cand[2] 0x8011C000` = `e886cadf72766a64`). The
-  instrument cannot separate "the drawing batch wrote black" from "the wrong surface was selected",
-  because every candidate hash is taken at flip time after all batches ran (§23.6/§23.7 limit).
+- the guest's `flip_read`/`flip_write`/`flip_modulo` (`modulo=3`) are only printed, never read by
+  `present_track_flip`;
+- the `[GPU]` report's "draw surface" prints `s_gpu.drawn_offset`, the variable `present_track_flip`
+  prefers, so it agrees by construction, and it is sampled after the last flip;
+- the commit consumer drops every class != 0x97; a census (toolkit `5fd62cb`) names each class and flags
+  `NV_IMAGE_BLIT` (0x9F);
+- at flip 2426 in `…110933-trace-noadmit` a black surface was published while `cand[2] 0x8011C000` =
+  `e886cadf72766a64` existed; flip-time hashing (§23.6/§23.7) cannot separate the causes.
 
 ### §25.8 Instrumentation added (and one limitation found by using it)
 
-Process-start-relative monotonic clock (`nv2a_mono_clock.h`) stamped on worker spawn, per-thread
-heartbeat, worker return and wait events; vblank re-arm/pass/gap telemetry **published by the ptimer
-thread itself** so it cannot freeze with the walk; owner-lock hold/wait maxima with holder tid; and
-bounded `[WAIT]` prints with **unbounded totals**.
+A monotonic clock (`nv2a_mono_clock.h`; one epoch per process since §26.1) stamps worker spawn, heartbeat,
+return and wait events; vblank re-arm/pass/gap telemetry is published by the ptimer thread itself, so it
+cannot freeze with the walk; owner-lock hold/wait maxima with holder tid; `[WAIT]` prints are bounded but
+totals are not (toolkit `e487f78`; the 256-print cap had covered only 93 950 ms of a 904 300 ms run).
+`[CHECKPOINT] ms=` is not a timeline (3 lines per 1800 s run, all in the first 78 lines).
 
-- **Why a new clock was needed.** `[CHECKPOINT] ms=` cannot be a timeline: a whole 1800 s run
-  carries **3** checkpoint lines, all inside its first 78 lines. `[FBPRESENT] t=` is
-  first-present-relative. The new stamps share one epoch, and two independent clocks agree to
-  **0.08 s** on R1's worker/main liveness gap (heartbeat 3923 ms vs ring 4.00 s), which is what makes
-  the new telemetry comparable to the archived rings.
-- **Why the ptimer thread publishes its own counters.** The rest of `NV2ASubmitState` is published
-  from inside `nv2a_submit_pending`, so a run whose walk stops exports a **frozen** state — and a
-  frozen pulse count is exactly what the archived "0.75 pulses/s" figures cannot distinguish from a
-  slow display.
-- **A limitation found by using it.** The `[WAIT]` print cap of 256 saturated at **93 950 ms of a
-  904 300 ms run (10.4 %)**, so the printed waits described only the opening phase. Totals now keep
-  counting past the cap (toolkit `e487f78`), so silence can no longer be read as absence.
+### §25.9 Withdrawn
 
-### §25.9 Withdrawn, and must be re-derived before being cited
-
-Per this section: the `death_vs_onset` null result (computed on the broken population); anything
-keyed on exact `esp` or on `[KERNEL] summary` cadence; the "6 kept / 7 lost" counterexample lists;
-"0 of 16 deaths within ±5 s of a wrap"; and the Planner's "whole-guest stall" class (§25.4). The
-clock-overflow repair (§24.2, L53) stands on its own merit. `budget_exhausted`'s Case A
-classification (§24.1, L54) is untouched by this turn.
-
-**M15 remains unreached.** No title screen — emblem or `PLEASE PRESS START TO BEGIN` — has been
-observed on the recomp.
+Do not cite: the `death_vs_onset` null result; anything keyed on exact `esp` or on `[KERNEL] summary`
+cadence; the "6 kept / 7 lost" lists; "0 of 16 deaths within ±5 s of a wrap"; the "whole-guest stall"
+class. The clock repair (§24.2, L53) and Case A (§24.1, L54) stand.
 
 ---
 
@@ -4503,86 +1137,73 @@ observed on the recomp.
 
 ### §26.1 The telemetry clock had one zero per file, now one per process
 
-`nv2a_mono_now_ns` was `static inline` in `nv2a_mono_clock.h` with its anchor in a function-local
-static, so every translation unit that called it kept its own anchor and its own zero. Two did:
-`kernel_bridge.c` (`[KERNEL] summary t_ms=`, the worker and wait stamps) and `nv2a_mmio_hook.c`
-(owner-lock and vblank stamps), which §25.8 compared as one timeline; the executor-time line (§26.2)
-in `nv2a_pb_exec.c` is a third. The offset between them was the
-gap between each file's first call, unbounded in principle. Fixed (toolkit, this session) by one
-`g_nv2a_mono_anchor_count` defined in `nv2a_core.c`. Pinned by `nv2a_mono_clock` (native and CTest):
-two translation units, the second anchors, 60 ms pass, and the first file's first reading must
-already include them. **It failed on the old header** (first reading 0 ns) and passes on the fixed
-one. Any comparison of stamps from those two files made before this fix carries an unknown offset;
-§25.8's results should be re-checked against that before being extended.
+`nv2a_mono_now_ns` kept its anchor in a function-local static of a `static inline` header, so each
+translation unit had its own zero (`kernel_bridge.c`, `nv2a_mmio_hook.c`, `nv2a_pb_exec.c`). Fixed by one
+`g_nv2a_mono_anchor_count` defined in `nv2a_core.c`; pinned by `nv2a_mono_clock` (native and CTest: two
+translation units 60 ms apart; it failed on the old header with a first reading of 0 ns). Cross-file stamp
+comparisons made before this fix (§25.8) carry an unknown offset and should be re-checked before being
+extended.
 
 ### §26.2 Where executor time goes: pixel fill
 
 Always-on QPC buckets in `nv2a_pb_exec.c`, printed as `[GPU] executor time:` and exported through
-`nv2a_pb_exec_timing`: `exec` (the whole commit-consumer call), `vsh` (the vertex-program transform
-loop), `tri` (program-path triangle raster), `fill` (`xf_rows_parallel`, inside `tri`, wall time on the
-executor thread including the raster pool's wait) and `ffp` (the screen-space path). Measured on the
-merged executor (`20261009-145632-182-title011-instr`, 300 s, title-run switches), final report at
-t_ms = 292 945: **busy 217 611 ms; vertex programs 46 ms; triangle setup 41 ms; pixel fill 207 409 ms;
-screen-space 0**. The instrument costs little: presents at t = 120 s 940 against the uninstrumented A's
-960. With `RECOMP_NO_VSH=1` (`20261009-150139-277-title011-instr-novsh`) the same batches go through
-the screen-space path: busy 182 488 ms of which screen-space 171 232 ms, presents at t = 120 s 1290,
-late re-arms 1250/8144 = 15.3 %, max hold 167 ms. So the merge's slowdown is **per-pixel cost**, not
-vertex-program execution: ~1.3-1.5 billion pixels per 300 s at ~110-160 ns each, inside the walk's
-owner lock, which is what starves the vblank pulse. The pre-merge executor wrote at least as many
-pixels (§1, B) faster; its per-pixel cost was not instrumented.
+`nv2a_pb_exec_timing`: `exec` (whole commit-consumer call), `vsh` (vertex-program transform loop), `tri`
+(program-path triangle raster), `fill` (`xf_rows_parallel`, inside `tri`, wall time on the executor thread
+including the raster pool's wait) and `ffp` (screen-space path). Merged executor,
+`20261009-145632-182-title011-instr` (300 s, title-run switches), final report at t_ms = 292 945: **busy
+217 611 ms; vertex programs 46 ms; triangle setup 41 ms; pixel fill 207 409 ms; screen-space 0**; presents
+at t = 120 s 940 against the uninstrumented A's 960. With `RECOMP_NO_VSH=1`
+(`20261009-150139-277-title011-instr-novsh`): busy 182 488 ms of which screen-space 171 232 ms, presents at
+t = 120 s 1290, late re-arms 1250/8144 = 15.3 %, max hold 167 ms. **So the merge's slowdown is per-pixel
+cost**, not vertex-program execution: ~1.3-1.5 billion pixels per 300 s at ~110-160 ns each, inside the
+walk's owner lock, which starves the vblank pulse. The pre-merge executor wrote at least as many pixels
+(§1, B) faster; its per-pixel cost was not instrumented.
 
 ### §26.3 The guest disables stage 0 itself
 
 The stage-0 `SET_TEXTURE_CONTROL0` latch (`nv2a_pb_exec_tex0_control`; the `CONTROL0 stage 0:` report
-line) answers §24.3's open question. In the instrumented run the guest wrote stage 0's CONTROL0
-**16 230** times, **7 581** with ENABLE clear, last value `0x00000000`; the no-VSH run, 18 168 and 8 485.
-Every `stage disabled` batch therefore follows a guest write that cleared the bit; it is not a bit the
-model lost or never received. What those batches should draw is still open.
-
-The HAL fixture `jsrf_nv2a_hal` pins the latch (two stage-0 writes, one disabling, a stage-1 write
-that must not count) and the timing buckets' nesting invariants. Both instruments are observation
-only and need no ledger entry or run-profile classification.
+line): in the instrumented run the guest wrote stage 0's CONTROL0 **16 230** times, **7 581** with ENABLE
+clear, last value `0x00000000`; the no-VSH run 18 168 and 8 485. Every `stage disabled` batch follows a
+guest write that cleared the bit; it is not a bit the model lost or never received. What those batches
+should draw is open. The HAL fixture `jsrf_nv2a_hal` pins the latch (two stage-0 writes, one disabling, a
+stage-1 write that must not count) and the timing buckets' nesting invariants. Both instruments are
+observation only (no ledger entry or run-profile classification).
 
 ### §26.4 `0x9188C` repaired; the next run stops in the game's own fatal-error path
 
-**The repair.** R3's fatal target `0x9188C` is not a function. It is the target of `je 0x9188c` at
-`0x91878` inside `0x91830`, a complete method of the `.data` table at `0x20D8D0`: `sub esp,0xc`, three
-pushes, …, `pop edi/esi/ebx`, `add esp,0xc`, `ret` at `0x918A0`, NOP padding to `0x918AF`, next function
-`0x918B0`. Its recovered entry had been ended at `0x91882`, the analysis database's `tail_jump_alias`
-entry `sub_00091882`. That is a `push ecx` mid-function with no caller; its only raw dword match in the
-image lies inside DSOUND data. So the branch left the lifted body and reached an abort stub. Widened to
-`[0x91830, 0x918A1)` (stop 32): the branch is now `goto loc_0009188C`, `0x9188C` left
-`recovery-unresolved.json`, and `0x91830` left the span-ownership `KNOWN_OPEN` set (25 → 24;
-stack-depth `CUT_EPILOGUE` 14 → 13). §20's "no depth-0 `ret`" for this entry does not hold from the
-entry itself: the `ret` at `0x918A0` is at depth 0.
+**The repair (stop 32).** `0x9188C` is the target of `je 0x9188c` at `0x91878` inside `0x91830`, a complete
+method of the `.data` table at `0x20D8D0`: `sub esp,0xc`, three pushes, …, `pop edi/esi/ebx`, `add
+esp,0xc`, `ret` at `0x918A0`, NOP padding to `0x918AF`, next function `0x918B0`. Its recovered entry had
+ended at `0x91882`, the database's `tail_jump_alias` entry `sub_00091882` (a `push ecx` mid-function with
+no caller; its only raw dword match lies inside DSOUND data), so the branch reached an abort stub. Widened
+to `[0x91830, 0x918A1)`: the branch is now `goto loc_0009188C`; `0x9188C` left `recovery-unresolved.json`;
+`0x91830` left the span-ownership `KNOWN_OPEN` set (25 → 24); stack-depth `CUT_EPILOGUE` 14 → 13. The
+`ret` at `0x918A0` is at depth 0 (correcting §20).
 
-**What the regeneration brought with it.** `recover-functions.py` re-lifts every recovered function
-with the toolkit's current lifter, now upstream v0.13.1's, which emits `RECOMP_FP_PC` (x87 precision
-control) and `RECOMP_ICALL_SAFE_AT_CC`. The game's generated `recomp_types.h` predated them, so it was
-refreshed from the toolkit template and the project's four header patches re-applied by
-`scripts/patch-generated.py` (14/14 applied). The template is otherwise a superset of the old header. The
-preservation baseline and provenance manifest were re-recorded. All 3164 recovered functions therefore
-now carry the merged lifter's semantics; the generated chunks keep the pre-merge lift.
+**What the regeneration brought.** `recover-functions.py` re-lifts every recovered function with the
+current (v0.13.1) lifter, which emits `RECOMP_FP_PC` (x87 precision control) and
+`RECOMP_ICALL_SAFE_AT_CC`; the game's `recomp_types.h` was refreshed from the toolkit template and the four
+header patches re-applied by `scripts/patch-generated.py` (14/14 applied). The preservation baseline and
+provenance manifest were re-recorded. All 3164 recovered functions carry the merged lifter's semantics;
+the generated chunks keep the pre-merge lift.
 
-**The first run on the repaired tree did not reach the address.** `20261009-160259-224-title011-9188C-fixed`
-(900 s, uncommitted tree) has no crash line, but presents stop at **2429** at t ≈ 353 s:
-- After the `Media\Player\Gum*` loads, a loading job (`job=01330060`, `+98=30000074`) enters the
-  disc-error path three times (`[FATAL-TAIL]`/`[FATAL-CTOR]`, L41).
-- The guest then opens `Z:\Media\Cache\JSRF_FATAL.ERR`.
-- The main thread then sleeps under `sub_00145C28` ← `sub_00145CA6` ← `sub_00013F80` to the end.
-- The GPU is idle: `GET == PUT`, last walk ok.
+**The first run on the repaired tree did not reach the address.**
+`20261009-160259-224-title011-9188C-fixed` (900 s, uncommitted tree) has no crash line, but presents stop at
+**2429** at t ≈ 353 s:
+- after the `Media\Player\Gum*` loads, a loading job (`job=01330060`, `+98=30000074`) enters the
+  disc-error path three times (`[FATAL-TAIL]`/`[FATAL-CTOR]`, L41);
+- the guest then opens `Z:\Media\Cache\JSRF_FATAL.ERR`;
+- the main thread then sleeps under `sub_00145C28` ← `sub_00145CA6` ← `sub_00013F80` to the end;
+- the GPU is idle: `GET == PUT`, last walk ok.
 
-The same fatal path appears in the `RECOMP_NO_VSH` run (§26.2). It does not appear in R1, R2, R3, B or
-the control. **Not established:** the trigger. The runs that took the path never read `title.adx` (no
-`[ADXIO]`), while B and R3 do at this transition.
+The same fatal path appears in the `RECOMP_NO_VSH` run (§26.2), not in R1, R2, R3, B or the control.
+**Not established:** the trigger. The runs that took the path never read `title.adx` (no `[ADXIO]`), while
+B and R3 do at this transition.
 
 **Register combiners off avoids the fatal path, but not the hold.**
-`20261009-163657-288-title011-nocombiners` (600 s, `RECOMP_NO_COMBINERS=1`, built from game `57af797`,
-toolkit `de39fb1`):
-- no `[FATAL-*]` line and no crash;
-- `title.adx` read (6 `[ADXIO]` lines, as in B);
-- presents hold at **2435** from about 250 s to the end, the same hold B shows, and stop 32 is still not
-  reached.
+`20261009-163657-288-title011-nocombiners` (600 s, `RECOMP_NO_COMBINERS=1`, game `57af797`, toolkit
+`de39fb1`): no `[FATAL-*]` line and no crash; `title.adx` read (6 `[ADXIO]` lines, as in B); presents hold
+at **2435** from about 250 s to the end, the same hold B shows; stop 32 not reached.
 
 **Three outcomes at this transition, measured over seven runs:**
 
@@ -4592,10 +1213,10 @@ toolkit `de39fb1`):
 | holds after reading `title.adx` | R1, R2 (title-010 toolkits), B (`fafe0f6`), no-combiners | reach ~2430 (R1/R2 at ~480 s), then creep to 2435-2458 to the end; 6-9 `[ADXIO]` lines; no `[FATAL-*]` |
 | fatal path, no `title.adx` read | the repair run and no-VSH (merged executor, combiners on) | `JSRF_FATAL.ERR` at presents ~2429 |
 
-- **The hold is not new.** It is the "Now Loading" hold the plan lists as unexplained, and R1/R2 show it
-  on older toolkits.
-- **R3 is the outlier.** It is also the run with by far the best vblank delivery: ~49 pulses/s and zero
-  late re-arms, against ≤ 23 /s for every other run and ~1.3 /s for R1/R2. That is consistent with a
-  vblank-paced loading step, but one run cannot show it (**INFERRED**).
-- **What is new is the fatal path,** on the merged executor with register combiners enabled. Its trigger
-  is open. The `5d6ebbd` bisect could not build against this game tree.
+- **The hold is not new.** It is the "Now Loading" hold the plan lists as unexplained, and R1/R2 show it on
+  older toolkits.
+- **R3 is the outlier.** It also has by far the best vblank delivery: ~49 pulses/s and zero late re-arms,
+  against ≤ 23 /s for every other run and ~1.3 /s for R1/R2. That is consistent with a vblank-paced
+  loading step, but one run cannot show it (**INFERRED**).
+- **What is new is the fatal path,** on the merged executor with register combiners enabled. Its trigger is
+  open. The `5d6ebbd` bisect could not build against this game tree.
