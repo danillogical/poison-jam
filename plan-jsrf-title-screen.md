@@ -46,7 +46,7 @@ minimum").
 
 ## Current state (2026-10-09, late)
 
-**M15 is reached (first observation).** Run `20261009-225354-960-title012-m15-long` (1800 s,
+**M15 is MET (2026-10-09).** First observation: Run `20261009-225354-960-title012-m15-long` (1800 s,
 `just title-run`, game `82f80f1`, toolkit `60bf20a`) presented the title screen at ~1580 s: the JSRF
 emblem, "PLEASE PRESS START TO BEGIN", the JETSETRADIOFUTURE logo and the SEGA/Smilebit line, matching
 the xemu capture (present dump `m15\f_p0389.bmp` in that run's folder on Windows, sha256
@@ -59,8 +59,11 @@ What got it there, all on 2026-10-09:
 - toolkit `60bf20a` (the APU frame thread no longer starves guest threads, which was the "Now Loading"
   hold).
 
-**Still owed for M15 to be closed:** a second run that shows the press-start frame. The emblem and logo
-screen alone has appeared in three runs (`…221513-243`, `…223657-233`, `…225354-960`).
+**Reproduced** by `20261009-232934-172-title012-m15-repro2` (1800 s, the same build): the same
+press-start frame (`m15\f_p0209.bmp`, sha256 `71ebdbd5bb35ed756b16abd54d29a4fb3f90641c7f1792f140401736368fc419`;
+its frame-sequence scores match the first run's exactly). The emblem and logo screen alone also appeared in
+`…221513-243` and `…223657-233`. Per this plan, the retired plan's post-title milestones (M16 onward,
+`git show d6b8336:plan-jsrf-bare-minimum.md`) come back next; that is the owner's call.
 
 **The next stop:** the same run died at 1598 s, after the title, on `[ICALL] Failed to resolve VA
 0x000BE190` (stop 33, DISCOVERED). Closing it is the first line below; the reproduction run follows it.

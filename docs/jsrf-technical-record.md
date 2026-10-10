@@ -1286,3 +1286,8 @@ Kept on Windows in the run's `m15\` folder; `f_p0389.bmp` sha256
 
 The run then ends at 1598 s / presents 3135 on `[ICALL] Failed to resolve VA 0x000BE190` (stop 33).
 
+**M15 reproduced.** `20261009-232934-172-title012-m15-repro2` (1800 s, same build, dumps after 1300 s)
+shows the same press-start frame (`m15\f_p0209.bmp`, sha256 `71ebdbd5…c419`). The six best press-start
+band scores match the first run's exactly (522, 509, 498, 484, 471, 467). That run also ends on stop 33
+(`0x000BE190`), at 1696 s / presents 3135.
+
