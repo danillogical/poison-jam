@@ -47,11 +47,38 @@ This file does not duplicate the permanent rules owned elsewhere:
 - `include/xbox/xboxrecomp.h` exposes `ohci.h` and `usb_gamepad.h`.
 - `tests/keyboard_pad/keyboard_pad_test.c` — T1–T5, registered as ctest `keyboard_pad`.
 
-**Next action:** close stop 34 (`0x001BE689`), the indirect-call target the driver enters immediately
-after `SET_CONFIGURATION`. It is the same class as stops 29–32 and needs the real entry extent
-recovered from the XBE. Once the driver finishes configuring the pad, the port-0 interrupt endpoint
-(0x81) is what carries `usb_gamepad_report`, and that is the point at which a keyboard press can reach
-the guest — R2.
+**Next action:** the pad now enumerates, configures, and is **polled** — so R2 is reachable. Close the
+loop on the live keyboard press: run to the title with `RECOMP_KEYBOARD=1`, hold Enter at
+`PLEASE PRESS START TO BEGIN`, and confirm the guest's own title state advances (R2/R3), then reproduce
+(R4). If a new stop appears first, close it as stops 34–35 were.
+
+### Stops 34 and 35 closed; the pad is polled (2026-10-10)
+
+Both were indirect-call targets with no analysis-database entry, the L50/L51 class, and each was
+reached only because the previous stop closed — the chain advanced exactly one address each time
+(`config/stop-chain.json`, both `RUNTIME_CONFIRMED`, `repair_commit 4370cd6`):
+
+| stop | address | extent | stack_args | what it is |
+|---|---|---|---|---|
+| 34 | `0x001BE689` | `[0x001BE689, 0x001BE7DE)` | 4 | driver post-configuration; builds the descriptor block at `0x002647D0` and submits it |
+| 35 | `0x001BDE21` | `[0x001BDE21, 0x001BDE5D)` | 0 | copies 8-byte records `[eax+0x34]`→`[eax+0x14]`, count at `[eax+0x66]` |
+
+Both first generated with the wrong ABI and the harness caught it — the check working as intended:
+`stack_args` must be the `RET` immediate (4), and the `end` must be one byte **past** the `ret`
+(`0x001BDE5D`, not `0x001BDE5C`, or the body has no epilogue and returns with ESP unmoved).
+
+**Measured on the durable tree `4370cd6`** (run `20261010-030748-775-k16-stop35-durable`, 189 s):
+
+```text
+[RECOVERED] 0x001BE689 returned; ABI verified (ESP/EBX/ESI/EDI)
+[RECOVERED] 0x001BDE21 returned; ABI verified (ESP/EBX/ESI/EDI)
+[OHCI0] stats: 5153 periodic transfers; reports 5153 setups 8 out0 6
+ED 00081970 info=00201081 ...          <- the pad's interrupt IN endpoint (0x81)
+```
+
+5153 input reports served through `usb_gamepad_report` — the exact function the `RECOMP_KEYBOARD`
+overlay feeds (L58). The guest is polling the pad's interrupt endpoint, so a host keypress now has a
+live path to the guest. R2/R3 are the remaining measurement.
 
 ### Measured: the model is driven, and the descriptor walk was the blocker (2026-10-10)
 

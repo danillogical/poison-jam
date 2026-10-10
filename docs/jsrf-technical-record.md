@@ -1358,3 +1358,42 @@ SETUP 00 09 value 0001 index 0000 len 0     SET_CONFIGURATION(1)
 `[ICALL] Failed to resolve VA 0x001BE689` (stop 34, `config/stop-chain.json`), immediately after
 `SET_CONFIGURATION`. `0x001BE689` has no function record and no prologue — an indirect-call target, the
 same class as stops 29–32. Enumeration working is what made it reachable.
+
+### §27.1 Stops 34 and 35: two more indirect-call targets, and the pad is polled (2026-10-10)
+
+Both were reached only because the previous stop closed, so the chain advanced exactly one address
+each time — the discipline that makes these cheap. Both have no analysis-database entry and sit in the
+uncovered region `[0x001BD63B, 0x001BE7DE)`; the nearest declared span below is `sub_001BD621`
+`[0x001BD621, 0x001BD63B)`.
+
+| stop | address | extent | stack_args | shape |
+|---|---|---|---|---|
+| 34 | `0x001BE689` | `[0x001BE689, 0x001BE7DE)` | 4 | follows a clean `leave; ret 8` with no padding; takes its argument in ECX, builds a descriptor block at `0x002647D0` (callbacks `0x001BE388` + the ESI context) and submits it through the object in ECX; `pop ebx; ret 4` |
+| 35 | `0x001BDE21` | `[0x001BDE21, 0x001BDE5D)` | 0 | follows `pop edi; pop esi; pop ebx; ret 8`; copies 8-byte records `[eax+0x34]`→`[eax+0x14]` for the count at `[eax+0x66]`; bare `ret` |
+
+**Two ABI mistakes, both caught by the harness rather than by a run.** This is the check doing its job,
+and both are recorded because the same two mistakes are easy to repeat:
+
+- `stack_args` is the **`RET` immediate**, not the wrapper's expected delta. Stop 34 with `stack_args`
+  unset generated `esp += 8; /* ret 4 */` against an expected `+4`:
+  `ABI FAILURE 0x001BE689 esp 007BFF64->007BFF6C expected +4`. Setting `stack_args 4` produced
+  `esp += 8` against `+8` — consistent. (Sibling `0x00011CE0`, also `ret 4`, has `stack_args 4` and the
+  same `+8` body, confirming the convention.)
+- The `end` must be one byte **past** the final `ret`. Stop 35 with `end 0x001BDE5C` stopped *at* the
+  `ret`, so the body had no epilogue and returned with ESP unmoved:
+  `ABI FAILURE 0x001BDE21 esp 00F7FB2C->00F7FB2C expected +4`. `end 0x001BDE5D` emitted
+  `esp += 4; return; /* ret */`. Same shape as `0x00159330` (`ret 0xc` at `0x00159416`, end
+  `0x00159419`).
+
+**Measured on the durable tree `4370cd6`** (run `20261010-030748-775-k16-stop35-durable`, 189 s):
+
+```text
+[RECOVERED] 0x001BE689 returned; ABI verified (ESP/EBX/ESI/EDI)
+[RECOVERED] 0x001BDE21 returned; ABI verified (ESP/EBX/ESI/EDI)
+[OHCI0] stats: 5153 periodic transfers; reports 5153 setups 8 out0 6
+ED 00081970 info=00201081 ...
+```
+
+5153 input reports served through `usb_gamepad_report` — the function the keyboard overlay (L58)
+feeds — and the guest is polling the pad's interrupt IN endpoint `0x81`. A host keypress therefore has
+a live path into the guest; what remains is the measurement that the guest's own title state reacts.
