@@ -131,6 +131,13 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/gen)
     target_link_libraries(jsrf_nv2a_hal_test PRIVATE xboxrecomp)
     add_test(NAME jsrf_nv2a_hal COMMAND jsrf_nv2a_hal_test)
+    add_executable(jsrf_gpu_backend_parity_test tests/test_gpu_backend_parity.c)
+    target_include_directories(jsrf_gpu_backend_parity_test PRIVATE
+        ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/gen)
+    target_link_libraries(jsrf_gpu_backend_parity_test PRIVATE xboxrecomp)
+    add_test(NAME jsrf_gpu_backend_parity COMMAND jsrf_gpu_backend_parity_test)
+    set_tests_properties(jsrf_gpu_backend_parity PROPERTIES TIMEOUT 60)
     add_executable(jsrf_inplace_event_test
         ${XBOXRECOMP_DIR}/tests/kernel_inplace_event_test.c)
     target_include_directories(jsrf_inplace_event_test PRIVATE

@@ -197,6 +197,8 @@ advances GET past methods it does not execute), and none can support a strict cl
 | `RECOMP_NO_VSH`, `RECOMP_NO_COMBINERS` | Upstream v0.13 executor (toolkit merge of `193e299`): vertex programs run for every program-mode batch (`nv2a_vsh_interp.c`) and the register combiners run once the title programs them (`nv2a_combiner.c`); each switch turns its stage off. Translated rendering (L18). They replace the fork executor's `RECOMP_VP`, retired with that merge. |
 | `RECOMP_RASTER_THREADS` | Upstream v0.13: rasteriser worker threads (default: processors minus 4; `1` = none). Performance only — rows are disjoint and the workers take no runtime locks — but it changes how long the walk holds the owner lock. |
 | `RECOMP_USB_PADS` | Upstream v0.13: one to four emulated pads; composes with `RECOMP_USB_PORT`. |
+| `RECOMP_GPU_BACKEND` | `d3d11` installs the Direct3D 11 back end (toolkit `src/video/nv2a_d3d11_backend.c`, L59): the executor still decodes, transforms and runs vertex programs on the CPU, and the GPU rasterises and samples; render targets are written back to guest memory at every flip. Translated rendering; absent means the CPU rasteriser. |
+| `RECOMP_GPU_WARP` | `1` forces the D3D11 back end onto the WARP software adapter instead of the hardware GPU (deterministic tests). |
 
 **Enabling a feature does not turn stub answers into modelled ones.** A claim is only
 as strict as the source of each value it relies on, so the run's label is necessary but

@@ -1397,3 +1397,42 @@ ED 00081970 info=00201081 ...
 5153 input reports served through `usb_gamepad_report` — the function the keyboard overlay (L58)
 feeds — and the guest is polling the pad's interrupt IN endpoint `0x81`. A host keypress therefore has
 a live path into the guest; what remains is the measurement that the guest's own title state reacts.
+
+## §29. The D3D11 back end: the GPU rasterises, the title arrives ~3.4× sooner (2026-10-10)
+
+**What it is (L59).** The executor already handed decoded batches to a registered back end
+(`nv2a_backend.h`), and none existed. Toolkit `src/video/nv2a_d3d11_backend.c` implements one:
+- render targets cached per guest surface;
+- stage-0 textures decoded from guest memory, re-hashed per flip;
+- a texture at a live render target's address sampled from that target on the GPU;
+- a readback of every target drawn since the last flip into guest memory, at the flip.
+
+Vertex work stays on the CPU. Texture filters follow `SET_TEXTURE_FILTER` (MAG 1 and MIN 1/3/5 nearest,
+everything else linear; `nv2a_regs.h:1250-1253`).
+
+**Parity** (`jsrf_gpu_backend_parity`, WARP), software against GPU after a flip:
+- untextured: 100 %;
+- nearest-sampled texture: 98.83 %; the mismatches are one diagonal edge band, a rasteriser edge rule;
+- render-to-texture: 100 % for both surfaces;
+- negative control: 0 % before the flip, 100 % after.
+
+**Runs** (launched without the collector, see below; hardware Intel Iris Xe):
+
+| | CPU rasteriser (M15 runs) | GPU back end |
+|---|---|---|
+| presents ≥ 2885 (R3's old crash point) | 1157 s | **347 s** (`gpube-a3`) |
+| "PLEASE PRESS START TO BEGIN" | ~1580 s | **by 464 s** (`gpube-a3b`) |
+| presents at the end | 3135 at 1591 s, then stop 33 | 4023 at 889 s, no crash |
+| executor busy | 95 % pixel fill | 200 s of 751 s; vertex programs 96.8 s, screen-space/FFP 34.3 s, pixel fill 0 |
+
+`gpube-a3`'s back-end totals: 599 368 draws, 128 M triangles, 3 990 flips, 7 979 readbacks (25.8 s), and
+518 251 texture-cache hits for 1 326 uploads. The title frames are textured and filtered, closer to xemu
+than the CPU path's. The press-start frame is kept on Windows in
+`xbr-mac\direct-gpube-a3b\fb\f_p0348.bmp`.
+
+**Known gaps:**
+- stage 0 only: no combiners and no stages 1–3;
+- culling ignored;
+- mip level 0 only;
+- runs that create the D3D11 device stall the run collector before `process.dmp`, likely on a
+  GPU-driver thread; these runs used a direct launcher instead.

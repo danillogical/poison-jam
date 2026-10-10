@@ -18,6 +18,9 @@ set RECOMP_APU_TRAP=1
 set RECOMP_PB_EXEC=1
 set RECOMP_FB_WINDOW=1
 
+rem Rasterise on the GPU (ledger L59): the title arrives in minutes instead of ~26 minutes.
+set RECOMP_GPU_BACKEND=d3d11
+
 rem Input, so a real keypress reaches the guest (both off by default, ledger L57/L58):
 rem RECOMP_USB models the MCPX OHCI controller so JSRF's own XAPI enumerates a pad;
 rem RECOMP_KEYBOARD maps the focused window's keys onto that pad (Enter -> Xbox Start).
