@@ -88,6 +88,10 @@ The raw records (reviews, packets, rulings, the full history and technical recor
   "A faithful copy of a black source" was retracted: every hash is taken after all of the frame's batches ran (TR §23.7).
   Rule: here only.
 
+- **A host lock that its holder re-takes in a loop starves guest threads on Windows.**
+  The APU frame thread held its mutex for its whole loop and was behind schedule, so a guest audio thread waited minutes and blocked the main thread through a guest critical section (TR §26.6).
+  Rule: long-running host loops hand the lock to announced waiters (`apu_lock_handoff.h`); look for host-lock waits in frozen stacks before guessing at a guest-side wait.
+
 ## Runs and comparisons
 
 - **The same binary takes different paths; compare like with like.**

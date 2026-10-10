@@ -44,21 +44,26 @@ minimum").
 - It advances, re-ranks or drops a line of attack.
 - It keeps going until M15 is met, stopping only for the owner-decisions below.
 
-## Current state (2026-10-09)
+## Current state (2026-10-09, late)
 
-**Toolkit `de39fb1`, game `d6b8336`.** Every recent run reaches the disclaimer→title transition at ~2430
-presents. Seven runs show three outcomes (TR §26.4):
+**M15 is reached (first observation).** Run `20261009-225354-960-title012-m15-long` (1800 s,
+`just title-run`, game `82f80f1`, toolkit `60bf20a`) presented the title screen at ~1580 s: the JSRF
+emblem, "PLEASE PRESS START TO BEGIN", the JETSETRADIOFUTURE logo and the SEGA/Smilebit line, matching
+the xemu capture (present dump `m15\f_p0389.bmp` in that run's folder on Windows, sha256
+`5e663a97bd5f11d1596b16d74bb77ebf090d931141aaff0f4a3fb5387fa4d3b3`; TR §26.6). Ledger IDs relied on:
+L56 (the load timeout), plus the `just title-run` switches (L16, L18, L47; `RECOMP_APU_TRAP`).
 
-| outcome | runs |
-|---|---|
-| **passes**, 2885 presents by 227 s | R3 only (`20261008-191232-038-title010-R3-vqcache-AB`, toolkit `5d6ebbd`) |
-| **holds** in the "Now Loading" hold after reading `title.adx`, creeping to 2435-2458 | R1, R2, B (`fafe0f6`), and `RECOMP_NO_COMBINERS=1` (`…163657-288-title011-nocombiners`) |
-| **fatal path**: `JSRF_FATAL.ERR`, no `title.adx` read | the merged executor with combiners on (`…160259-224-title011-9188C-fixed`, the no-VSH run) |
+What got it there, all on 2026-10-09:
+- stop 32 (`0x91830` widened; now runtime-confirmed);
+- L56 (the title's 15 s wall-clock load timeout skipped);
+- toolkit `60bf20a` (the APU frame thread no longer starves guest threads, which was the "Now Loading"
+  hold).
 
-- **Repaired but not yet exercised:** `0x9188C`, the crash that ended R3 (stop 32, TR §26.4).
-- **Performance** is not a goal, but it bounds what a run can reach. The merged executor spends ~95 % of
-  its time in pixel fill under the owner lock (TR §26.2), and a 600 s run is the practical unit.
-- The guest disables texture stage 0 itself (TR §26.3).
+**Still owed for M15 to be closed:** a second run that shows the press-start frame. The emblem and logo
+screen alone has appeared in three runs (`…221513-243`, `…223657-233`, `…225354-960`).
+
+**The next stop:** the same run died at 1598 s, after the title, on `[ICALL] Failed to resolve VA
+0x000BE190` (stop 33, DISCOVERED). Closing it is the first line below; the reproduction run follows it.
 
 ## Lines of attack (ranked; the orchestrator re-ranks)
 
@@ -77,8 +82,8 @@ presents. Seven runs show three outcomes (TR §26.4):
 3. **The fatal path itself**, only if combiners turn out to be needed for the title's look. Find what
    the loading job `0x01330060` (`+98=30000074`) failed on (TR §26.4; the L41 instrumentation is in
    place).
-4. **New stops.** Each `[ICALL] Failed` that appears is closed as stops 29–32 were. Stop 32 should be
-   confirmed by the first run that passes R3's point.
+4. **New stops — now first.** Stop 33 (`0x000BE190`) ends the run after the title. Close it as stops
+   29–32 were, then rerun ≥ 1800 s to reproduce the press-start frame.
 5. **Presentation.** If the title renders into a surface but is not shown, the draw→present questions
    (TR §24.3, §25.7, the flip trace L47, `RECOMP_FB_VA`) and the surface dumps.
 6. **Throughput,** only if a run cannot reach the title in ~900 s. Pragmatic levers: skip or cap the

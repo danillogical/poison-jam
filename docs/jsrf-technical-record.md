@@ -1244,3 +1244,45 @@ That run used `RECOMP_NO_COMBINERS=1` and still went fatal, so the earlier "comb
 - `title.adx` read (6 `[ADXIO]`);
 - presents reach 2430 at 396 s, then hold at 2435 to the end (6 distinct hashes after 2430);
 - stop 32 still not reached.
+
+### §26.6 The "Now Loading" hold was APU lock starvation; fixed, the title screen renders
+
+**Mechanism (MEASURED, frozen stacks of `20261009-213955-475-title012-timeout-off`):**
+- The main guest thread is blocked entering the DirectSound critical section `0x001BA050`
+  (`sub_0019E438` ← `sub_001A040A` ← …).
+- That section is held by the audio thread (start `0x0013B1C0`). It is blocked in an APU MMIO write
+  (`sub_001A3570+0x1DF` → `fe_method` → `voice_lock`, `apu_vp.c:148`) on the APU state mutex `d->lock`.
+- The frame thread `mcpx_apu_frame_thread` holds that mutex for its whole loop. It releases it only in
+  `throttle()`'s timed wait, which runs only when the thread is ahead of schedule. Our DSP emulation runs
+  behind real time, and Windows locks are not fair.
+- The audio thread starved for 89 s, then 381 s; the main thread only got the section between those
+  holds. R3's single pass was a lucky schedule.
+
+**Fix (toolkit `60bf20a`).** `apu_lock_handoff.h`: guest-reachable takers announce themselves
+(`apu_lock_contended`), and the frame thread yields the lock to them once per frame (`apu_lock_handoff`,
+bounded). Native test `apu_lock_handoff`: waiter latency 0.0 ms with the hand-off, 66–101 ms without it
+on macOS. It is not a shortcut, so it has no ledger line.
+
+**Result.** `20261009-221513-243-title012-apu-handoff` (900 s, `just title-run`) passes 2430 presents at
+345 s and reaches 2747, with 318 distinct frames after the transition, 192 `[ADXIO]` lines, no crash
+and no `[FATAL-*]` line. Its final dump, rendered as 640×480 R5G6B5, shows **the title screen**:
+- surfaces `0x8011C000` and `0x801B2000` carry the JSRF emblem, the "JETSETRADIOFUTURE" logo with ™,
+  and "Original Game © SEGA / © Smilebit/SEGA, 2002" over the city flythrough;
+- the layout matches xemu's `jsrf-title-screen-xemu.png`;
+- `0x80084000` is the bare city scene drawn beneath.
+
+The reproduction `20261009-223657-233-title012-m15-repro` (900 s) passes 2430 at 359 s and reaches
+2728. Its present dumps from 330 s show the logo assembling, still unfinished at 898 s, so the two
+runs reached different points of the animation. Stop 32 has still not been exercised.
+
+**M15, first observation.** `20261009-225354-960-title012-m15-long` (1800 s; present dumps after 900 s):
+- passes 2885 presents at 1157 s, R3's old crash point;
+- `0x00091830` returns with a clean ABI check (stop 32 confirmed);
+- the present dumps from ~1580 s (`f_p0384`–`f_p0389`) show **"PLEASE PRESS START TO BEGIN"** with the
+  emblem, logo and copyright line, as in xemu's press-start capture.
+
+Kept on Windows in the run's `m15\` folder; `f_p0389.bmp` sha256
+`5e663a97bd5f11d1596b16d74bb77ebf090d931141aaff0f4a3fb5387fa4d3b3`.
+
+The run then ends at 1598 s / presents 3135 on `[ICALL] Failed to resolve VA 0x000BE190` (stop 33).
+
