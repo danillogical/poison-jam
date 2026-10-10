@@ -9,8 +9,9 @@ the whole game. Work in small, verifiable milestones and explain defects with ev
 At session start read, in this order:
 
 1. `docs/agent-workflow.md` — **staffing, roles, review, escalation**
-2. `plan-jsrf-title-screen.md` — **Current work, blocker, next action, M15 objective**
-3. `docs/jsrf-run-profiles.md` — **strict vs exploratory evidence rules**
+2. `plan-jsrf-keyboard-input.md` — **Current work, blocker, next action, K16 objective**
+3. `plan-jsrf-title-screen.md` — the completed M15 history (title screen reached and reproduced)
+4. `docs/jsrf-run-profiles.md` — **strict vs exploratory evidence rules**
 
 Fetch both repositories and inspect their status before editing. Preserve unrelated edits.
 
@@ -373,7 +374,7 @@ Interpretation limits:
 ## GPU inspection
 
 For the current guest stop and next step, use the **Current work** section of
-`plan-jsrf-title-screen.md`; do not store a current stop in this file.
+`plan-jsrf-keyboard-input.md`; do not store a current stop in this file.
 
 ```powershell
 python -X utf8 scripts\run-jsrf.py --seconds 5 --label gpu-setup

@@ -320,6 +320,18 @@ static LONG CALLBACK veh_handler(PEXCEPTION_POINTERS exception)
                                  (uint32_t)guest_fault,
                                  (int)exception->ExceptionRecord->ExceptionInformation[0]))
             return EXCEPTION_CONTINUE_EXECUTION;
+        /* The MCPX USB host controllers, which JSRF's own XAPI drives.
+         *
+         * xbox_OhciInit unmaps 0xFED00000/0xFED08000 and registers its own
+         * handler, which runs first -- so this branch is normally not the one
+         * that answers. It is here so the routing does not depend on handler
+         * order: without it, any change to the registration order would turn
+         * every USB register access into a printed access violation instead of
+         * a serviced transfer. Same shape as the NV2A and APU branches. */
+        if (guest_fault >= 0xFED00000u && guest_fault < 0xFED09000u &&
+            xbox_OhciOwnsAddress((uint32_t)guest_fault) &&
+            xbox_OhciHandleMmio(exception->ContextRecord, (uint32_t)guest_fault))
+            return EXCEPTION_CONTINUE_EXECUTION;
         _lock_file(stderr);
         fprintf(stderr, "[EXCEPTION first-chance] tid=%lu code=0x%08lX RIP=0x%llX fault=0x%llX (%s)\n",
             GetCurrentThreadId(), (unsigned long)code,
@@ -518,6 +530,30 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
     }
     xbox_kernel_bridge_init();
     nv2a_hook_init(g_xbox_mem_offset);
+
+    /* The MCPX USB host controllers, which JSRF's own XAPI drives directly.
+     *
+     * The title reaches its gamepad through the XAPI code statically linked
+     * into default.xbe, not through anything the toolkit can shim: sub_001BD108
+     * describes the 4 KB block at 0xFED00000 and takes its interrupt vector
+     * through HalGetInterruptVector (ordinal 44, thunk slot 92), and the driver
+     * then reads and writes the OHCI registers itself. Measured on the M15 run
+     * (logs/runs/20261009-232934-172-title012-m15-repro2): the guest connected
+     * the ISR on vector 1 -- `KeConnectInterrupt: vector 1 -> routine
+     * 0x001C288F` -- and built its controller object at 0x01092408 holding
+     * FED00000 / 1000 / 80081000. What it did NOT have was a controller behind
+     * the aperture: with xbox_OhciInit never called the two 4 KB blocks are
+     * plain RAM, so HcRevision reads 0, no root-hub port ever reports a device,
+     * and the pad is never enumerated. (The guard at 0x001BD117 skips this
+     * mapping only when the MCPX revision byte reads 0xA1; the bridge publishes
+     * 0xB1, so the mapping path is the one this title takes.)
+     *
+     * Called after guest memory is mapped (the model needs the offset and
+     * disables itself without one) and before the guest starts, because XAPI
+     * probes the registers during its own initialisation. Gated by RECOMP_USB
+     * inside the model, so a run that does not want it is unchanged. */
+    xbox_OhciInit();
+
     /* Connect the card's interrupt line to the guest's GPU vector.
      *
      * The model asserts it from its own display clock when a pending bit is
@@ -644,6 +680,9 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
     xbox_kernel_shutdown();
     nv2a_hook_shutdown();
     a2h_cross_validate_stop();
+    /* Say whether the guest's USB driver ever looked at the controller, and
+     * how the model answered. Bounded: two lines, at exit. */
+    xbox_OhciReport();
     xbox_A2hSlotWatchStop();
     xbox_MemoryLayoutShutdown();
     free(xbe_data);

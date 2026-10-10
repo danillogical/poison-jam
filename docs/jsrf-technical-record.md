@@ -1291,3 +1291,70 @@ shows the same press-start frame (`m15\f_p0209.bmp`, sha256 `71ebdbd5…c419`). 
 band scores match the first run's exactly (522, 509, 498, 484, 471, 467). That run also ends on stop 33
 (`0x000BE190`), at 1696 s / presents 3135.
 
+
+## §27. K16: the guest's own USB controller is live, and the pad enumerates (2026-10-10)
+
+**The question.** M15 left the title at `PLEASE PRESS START TO BEGIN` with no way to press Start. The
+retired plan recorded that `xbox_OhciInit` and `xbox_InputInit` were never called, and `TR §23.1`
+concluded "no input can reach the guest at this stage". That is true of those two functions and
+misleading about the guest: the *guest's own* USB path is live.
+
+**The guest path is live, measured.** In the M15 reproduction `20261009-232934-172-title012-m15-repro2`:
+
+- `jsrf_run.log:688` — `[KERNEL] KeConnectInterrupt: vector 1 -> routine 0x001C288F context 0x01092408`.
+  That print is unconditional (not budget-gated), and vector 1 is `OHCI_VECTOR` (`ohci.c:52`), so the
+  guest's XAPI connected its USB interrupt.
+- The guest controller object at that context, read from the run's own dump:
+  `0x01092408: FED00000 00001000 80081000` — OHCI base, size `0x1000`, contiguous DMA address.
+- `0x001C288F` is the OHCI ISR: it reads `[ecx+0x10]`/`[ecx+0xc]` (HcInterruptEnable/HcInterruptStatus)
+  and tests bit 31.
+
+**The histogram is not evidence of absence.** `[KERNEL] summary` prints the top six ordinals and the
+per-call `#n:` lines stop at the 200-call budget (`kernel_bridge.c:10074-10098`, `:470`), so a
+once-per-boot call to ordinal 44/98/177 cannot appear there. Reading `ordinal 98 x0` as "never called"
+is a sampling artifact. Measured instead, in `20261010-022809-116`: `ordinal 44 (slot 92)` returns `1`
+with call site `ret=0x001BD137` — the instruction after the `0xFED00000` store in `sub_001BD108`.
+
+**What was actually missing: the model behind the aperture.** With `xbox_OhciInit` never called, the two
+4 KiB blocks at `0xFED00000`/`0xFED08000` are plain committed RAM, so `HcRevision` reads 0, no root-hub
+port reports a device, and the pad is never enumerated. Two toolkit fixes were needed (ledger L57):
+
+1. **Self-registration.** `xbox_OhciInit` unmapped the two blocks and relied on the embedder's VEH to
+   route the faults, documented only in a source comment. It now registers its own handler (`FIRST=1`,
+   so it runs before an embedder's crash printer), and the game VEH also carries an explicit
+   `0xFED00000` branch so the behaviour does not depend on handler order.
+
+2. **`bus_resolve` decides by the register-programmed range, not by an address test.** The driver hands
+   the controller *physical* addresses (`MmGetPhysicalAddress` drops bit 31 for the contiguous arena,
+   `kernel_memory.c:182`). JSRF's descriptors are LOW physical addresses — `HcHCCA=0x00081000`,
+   `HcControlHeadED=0x000819A0` — which also fall inside `.text`'s VA range purely because the
+   contiguous allocator numbers from 0. The old resolver tested the image first, so they resolved to
+   code bytes: every ED read back garbage, `ohci_pad_for()` found no device, `ohci_do_td` moved nothing,
+   and the controller re-armed the same transfer forever — `setups 0 reports 0` with
+   `HcInterruptStatus`'s WritebackDoneHead raised thousands of times (run `20261010-020002-826`).
+
+   Neither address test works, and the counterexample for each is measured. The image test sends
+   JSRF's descriptors to code. The "is the window form allocated" test sends the driver's own `.data`
+   descriptor buffer `0x002648DC` into the 1200K *surface* allocation, because `0x802648DC` is inside
+   it: run `20261010-021943-631` read `0x002648DC` back as zeros while `0x802648DC` held
+   `01100112 08000000` (the device descriptor, little-endian). So the range is taken from what the
+   driver *programmed*: `HcHCCA`, `HcControlHeadED` and `HcBulkHeadED` each record their allocation's
+   extent via `xbox_ContiguousBlockSize`, and `bus_resolve` redirects only inside that. `HCR` clears it.
+   This is exact for a driver writing window addresses (DDS9) and for one writing
+   `MmGetPhysicalAddress` results (JSRF, Burnout 3).
+
+**Measured after, run `20261010-022809-116-k16-dma-range2`:** the emulated pad enumerates and configures —
+
+```text
+SETUP 80 06 value 0100 index 0000 len 8     GET_DESCRIPTOR(DEVICE)
+IN ep0 8 bytes (8/8)
+SETUP 00 05 value 0001 index 0000 len 0     SET_ADDRESS(1)
+SETUP 80 06 value 0200 index 0000 len 80    GET_DESCRIPTOR(CONFIGURATION)
+IN ep0 8 bytes (8/8) x4 -> (32/32)          four 8-byte TDs, one descriptor
+SETUP 00 09 value 0001 index 0000 len 0     SET_CONFIGURATION(1)
+```
+
+**The next stop, and it is a new one (branch F).** The run then dies on
+`[ICALL] Failed to resolve VA 0x001BE689` (stop 34, `config/stop-chain.json`), immediately after
+`SET_CONFIGURATION`. `0x001BE689` has no function record and no prologue — an indirect-call target, the
+same class as stops 29–32. Enumeration working is what made it reachable.

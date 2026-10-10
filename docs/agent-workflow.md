@@ -188,7 +188,7 @@ Record material changes with the same `PLAN_CHANGE` form and continue working.
 ## 3. Starting a session
 
 1. Read `AGENTS.md`, this file, the **Current work** section of
-   `plan-jsrf-title-screen.md`, and `docs/jsrf-run-profiles.md`.
+   `plan-jsrf-keyboard-input.md`, and `docs/jsrf-run-profiles.md`.
 2. Fetch both repositories and inspect their status. Preserve unrelated edits.
 3. Confirm the Orchestrator's route and effort from harness metadata.
 4. Spawn the Persistent Advisor as one continuable child using its §1 route and effort.

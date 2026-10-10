@@ -265,6 +265,19 @@
     }
    ],
    "note": "The fatal `[ICALL] Failed to resolve VA 0x000BE190` (0xE0424943) that ended the M15 run at 1598 s / presents 3135 (and its reproduction at 1696 s), after the title screen. 0x000BE190 is a scalar deleting destructor reached only through slot 0 of the vtable at 0x001CDAE0 (its one raw dword in the XBE), so it has no analysis-database entry; the recovered entry 0x000BDFD0 declared end 0x000BE1B0 and swallowed it, lifting its switch and index tables (0x000BE17C, 0x000BE188) as junk. Fixed: 0x000BDFD0 ended at 0x000BE17B (its last ret 4 is at 0x000BE178), 0x000BE190 recovered as [0x000BE190, 0x000BE1AE) with stack_args 4, and its callee 0x000BDAE0 (the destructor, no entry anywhere) as [0x000BDAE0, 0x000BDB92). check-hidden-entries.py reported the OVER_RUN but found no evidenced entry, because a .rdata vtable slot behind a jump table is not evidence it recognises. NOT YET EXERCISED."
+  },
+  {
+   "id": 34,
+   "address": "0x001BE689",
+   "state": "DISCOVERED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261010-022809-116-k16-dma-range2",
+     "role": "discovered"
+    }
+   ],
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x001BE689` (0xE0424943) at ms=479789734 in the first run where the emulated Xbox pad enumerated (K16, ledger L57). It is reached immediately after SET_CONFIGURATION(1) completes, so it is inside the driver's post-configuration path (its object-building code at 0x001BE689 reads `word [0x2647B2]` and `dword [0x2647B4]`). 0x001BE689 has NO function record in tools/disasm/output/functions.json, and the bytes at that address are a bare `mov ax, word ptr [0x2647b2]` with no prologue, so it is an indirect-call target rather than a function entry -- the same class as stops 29-32 (0x00159330, 0x000C2730, 0x000C3410, 0x000BE190): a function nothing calls directly, so no decode pass lifted it. Closing it needs the real entry extent recovered from the XBE and the ICALL-history frames preserved. NOT yet repaired: no recovery entry exists."
   }
  ]
 }
