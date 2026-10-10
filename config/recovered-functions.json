@@ -7880,10 +7880,10 @@
  },
  {
   "start": "0x000BDFD0",
-  "end": "0x000BE1B0",
+  "end": "0x000BE17B",
   "section": ".text",
   "kind": "routine",
-  "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CDAE0, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_000BE1B0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000BDFD0 at sub_000BE1B0. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x000BDFD0..0x000BE1B0. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
+  "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CDAE0, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_000BE1B0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000BDFD0 at sub_000BE1B0. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x000BDFD0..0x000BE1B0. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21). END TIGHTENED 2026-10-09: the declared end 0x000BE1B0 (the analysis database's tail_jump_alias end) swallowed the separate function 0x000BE190, slot 0 of this same table at 0x001CDAE0, so the run 20261009-225354-960-title012-m15-long died on `[ICALL] Failed to resolve VA 0x000BE190` (0xE0424943) at 1598 s. The original XBE: this body's last exit is `ret 4` at 0x000BE178, one NOP at 0x000BE17B, then data, not code -- the 3-dword switch table at 0x000BE17C (0x000BE0F6, 0x000BE028, 0x000BE175) read by `jmp [eax*4+0xBE17C]` at 0x000BE021 and the 7-byte index table at 0x000BE188 (00 01 02 02 02 00 01) read at 0x000BE01A, a NOP at 0x000BE18F, and the clean prologue of 0x000BE190. The old span lifted those table bytes as dead instructions that fell through into sub_000BE1B0. check-hidden-entries.py --show-all reports OVER_RUN here and names the real boundary \"body ends at 0x000BE17B\". Every switch arm and branch target lies below 0x000BE17B; the switch reads its table from guest memory, so the table needs no span.",
   "stack_args": 4
  },
  {
@@ -25091,6 +25091,22 @@
   "section": ".text",
   "kind": "routine",
   "evidence": "Recovered because the function is swallowed by abutting alias spans, the same class as 0x000C2730 and in the same region: seven overlapping tail_jump_alias entries (sub_000C2FE0, sub_000C30C0, sub_000C3100, sub_000C3140, sub_000C31B0, sub_000C3350, sub_000C33C0) all declare an end of 0x000C3670, so 0x000C3410 had no entry of its own and the run logged `[ICALL] Failed to resolve VA 0x000C3410`, fatal (0xE0424943), at presents 2443 after 569 s (logs/runs/20261007-233030-481-title008-c2730-fixed). The address is a complete function: `ret` at 0x000C3407, NOP padding at 0x000C3408-0x000C340F, then a clean prologue at 0x000C3410 (sub esp,0x2c; push esi; mov esi,ecx). The body runs through 0x000C3668 and the region ends with NOP padding at 0x000C366D-0x000C366F before the next function at 0x000C3670, so the entry ends there. check-hidden-entries.py --show-all named the container and its real boundary: \"entry 0x000C33C0-0x000C3500: body ends at 0x000C3408\". 2026-10-07.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x000BE190",
+  "end": "0x000BE1AE",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Recovered because the function is reached ONLY through a vtable and is swallowed by an over-wide manifest span: it has no entry in tools/disasm/output/functions.json (nothing calls it directly), and the recovered entry 0x000BDFD0 declared an end of 0x000BE1B0 across it, so the run logged `[ICALL] Failed to resolve VA 0x000BE190`, fatal (0xE0424943), at 1598 s / presents 3135, after the title screen (logs/runs/20261009-225354-960-title012-m15-long; Xbox eax=0x001CDAE0, ecx=esi=the object, so the failing call was `call [eax]` through slot 0). The only reference to the address in the whole image is the aligned .rdata dword at 0x001CDAE0, slot 0 of the vtable that the constructor 0x000BD8D0 stores at 0x000BD925 (mov dword [ebx],0x1CDAE0) and the destructor 0x000BDAE0 re-stores at 0x000BDAFE; slots 1-3 are 0x000BDBA0, 0x000BDE30 and 0x000BDFD0. It is the scalar deleting destructor of that class: push esi; mov esi,ecx; call 0x000BDAE0 (the destructor); test byte [esp+8],1; je; push esi; call 0x0004A900 (operator delete); add esp,4; mov eax,esi; pop esi; `ret 4` at 0x000BE1AB, then NOP padding 0x000BE1AE-0x000BE1AF before the next function 0x000BE1B0 (the same shape as slot 0 of the sibling table at 0x001CDB20). 0x000BE17C-0x000BE18F before it is 0x000BDFD0's switch and index tables and a NOP, not code. Body 0x000BE190..0x000BE1AE. The epilogue is `ret 4` reached at depth 0, so stack_args is 4 (the delete flag). Its callee 0x000BDAE0 had no entry either and is recovered with it. 2026-10-09.",
+  "stack_args": 4
+ },
+ {
+  "start": "0x000BDAE0",
+  "end": "0x000BDB92",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Recovered because the function is reached ONLY from 0x000BE190 (its one direct call, at 0x000BE193; no other rel32 call or jmp and no pointer to it anywhere in the image), which is itself reached only through the vtable at 0x001CDAE0, so no direct call site put it in tools/disasm/output/functions.json and it has no entry at all: the database entry 0x000BD8D0 ends at 0x000BDAE0 and the next, 0x000BDBA0, starts after it. Recovering 0x000BE190 alone would only move the fatal unresolved call one frame down. The address is a complete function, not an internal label: 0x000BDADD `ret 0x10` ends the previous function, and 0x000BDAE0 begins a clean SEH-framed prologue (push -1; push 0x188658; mov eax,fs:[0]; push eax; mov fs:[0],esp; push ecx; push esi; mov esi,ecx; push edi). It is the class destructor: it re-stores the vtable 0x001CDAE0 into [esi] at 0x000BDAFE, releases the members through 0x0004A900, 0x000607B0 and 0x000178D0, calls the base destructor 0x00011000, restores fs:[0], add esp,0x10 and ends with `ret` at 0x000BDB91, then NOP padding 0x000BDB92-0x000BDB9F before 0x000BDBA0. Its callees 0x000128C0, 0x0004A900, 0x000607B0, 0x000178D0 and 0x00011000 all have database entries. Body 0x000BDAE0..0x000BDB92. No stack arguments (the epilogue is a bare `ret` at depth 0). 2026-10-09.",
   "stack_args": 0
  }
 ]

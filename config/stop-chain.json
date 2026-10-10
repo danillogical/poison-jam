@@ -256,7 +256,7 @@
   {
    "id": 33,
    "address": "0x000BE190",
-   "state": "DISCOVERED",
+   "state": "REPAIRED",
    "repair_commit": null,
    "evidence": [
     {
@@ -264,7 +264,7 @@
      "role": "discovered"
     }
    ],
-   "note": "The fatal `[ICALL] Failed to resolve VA 0x000BE190` (0xE0424943) that ended the M15 run at 1598 s / presents 3135, after the title screen with \"PLEASE PRESS START TO BEGIN\" had been presented. The ICALL history shows only kernel-thunk frames (0xFE0001xx), so the caller is not named. Not yet analysed."
+   "note": "The fatal `[ICALL] Failed to resolve VA 0x000BE190` (0xE0424943) that ended the M15 run at 1598 s / presents 3135 (and its reproduction at 1696 s), after the title screen. 0x000BE190 is a scalar deleting destructor reached only through slot 0 of the vtable at 0x001CDAE0 (its one raw dword in the XBE), so it has no analysis-database entry; the recovered entry 0x000BDFD0 declared end 0x000BE1B0 and swallowed it, lifting its switch and index tables (0x000BE17C, 0x000BE188) as junk. Fixed: 0x000BDFD0 ended at 0x000BE17B (its last ret 4 is at 0x000BE178), 0x000BE190 recovered as [0x000BE190, 0x000BE1AE) with stack_args 4, and its callee 0x000BDAE0 (the destructor, no entry anywhere) as [0x000BDAE0, 0x000BDB92). check-hidden-entries.py reported the OVER_RUN but found no evidenced entry, because a .rdata vtable slot behind a jump table is not evidence it recognises. NOT YET EXERCISED."
   }
  ]
 }
