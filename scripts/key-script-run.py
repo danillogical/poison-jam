@@ -707,6 +707,10 @@ def main(argv=None):
         "sources": run_jsrf.source_entries(),
     }
     (out / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    # The source present at launch, as run-jsrf archives it: check-stop-chain reads the manifest from it.
+    if subprocess.run([sys.executable, str(ROOT / "scripts" / "archive-run-source.py"), str(out)]).returncode != 0:
+        print("Source archiving failed.", file=sys.stderr)
+        return 2
 
     log("=== start label=%s seconds=%d script=%s ===" % (args.label, args.seconds, args.script))
     stdout = open(out / "run.out", "w")

@@ -13,9 +13,9 @@
   "src/recomp/gen/recomp_stubs_recovery.c": "4dd33ce3387a2706e070196a1221cdf48c5bdd8868147b8ed44ee0163da85410",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "7c1720c624b65175171499a5663b7382a4d97beaa15b59d314e714b0ea44c741",
-  "src/recomp/recovered/recovered.c": "db8fc2da9a6010392d153d70858d42ed660c13abd2aa9d8876e289c1ca0ccec8",
+  "src/recomp/recovered/recovered.c": "1aaf4528c4c78510ac47881763d62414688021d4dbcf5945d4048abe84bafb95",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "b844a29edc0f0ac7cf44ac48b40f131daf558dd36247e6a0e9cd0fc3c21d60b5",
+  "src/recomp/recovered/recovered_11c1_test.c": "ec4c4b1c27a059620a71633f502d91478654f1f8af3beb2370ebf4a4097380e4",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -566,6 +566,14 @@
     "src/recomp/recovered/recovered_11c1_test.c"
    ],
    "reason": "stop 37: 0x307A0 widened through 0x3084E; the 0x30800 false split removed (recovery entry and dispatch line)"
+  },
+  {
+   "date": "2026-10-11",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "stop 38: recovery entry 0x000352D0 (NEW GAME path)"
   }
  ]
 }
