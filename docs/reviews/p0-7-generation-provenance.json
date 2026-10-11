@@ -15,26 +15,26 @@
   "src/recomp/gen/recomp_stubs_recovery.c": "4dd33ce3387a2706e070196a1221cdf48c5bdd8868147b8ed44ee0163da85410",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "7c1720c624b65175171499a5663b7382a4d97beaa15b59d314e714b0ea44c741",
-  "src/recomp/recovered/recovered.c": "a8bd503e26349375d07e7a431c884c17475632d00e15e7a5eddca6f96257e196",
+  "src/recomp/recovered/recovered.c": "3429ffe20d7d6541e510a6601a97063d1deae7dec7edad31822cc56cf6ca448d",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "d9f0d69188413ddbefb8318e21fd0426ffd3d14c979f3d029a88e3e9dbde1528",
+  "src/recomp/recovered/recovered_11c1_test.c": "0f05140cf3ea36511ccc23dfd6516d453fcd2a37d244dd506d7cfc79d1bc5334",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
  "generators": {
   "project": {
    "dirty": true,
-   "revision": "c0bf18d01d95cdfc966af20d7a20725fd8fc50bd",
+   "revision": "0742fa58bca6e409e07d17868ff15e6f0f398847",
    "state": "MEASURED",
    "status_sha256": "506419cf61410635f49dc5f5575b18e21047a924b33adca92867c2c9d7cead23"
   },
   "scripts/recover-functions.py": "c23b7d52fac7bce8a8a63a62a06fafaa9cb375cfe9b047aa5215e664a0586b77",
   "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
   "toolkit": {
-   "dirty": false,
+   "dirty": true,
    "revision": "0b1dd40ce3611859ecbb3f9ac9d1886bf9b7385d",
    "state": "MEASURED",
-   "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   "status_sha256": "86f83454efbe3bf2abb8129660ff4c279b0595c1d0b6347b3af1c114e8d046d3"
   },
   "tools/recomp/lifter.py": "c83c894c06b489a298405097ab0a8d6423a9a7bb2454abb53f9feeca7eef58fc",
   "tools/recomp/translator.py": "66482655f7b48129ae51cf77cd7185e71843e18e59aaa4729fd17e9bea8b10cd"
@@ -46,14 +46,14 @@
    "sha256": "59cce1fe5a124dded9d1724a54b002f672c56e66e10e798a921a5b361bff782d"
   },
   "config/manual-functions.json": {
-   "bytes": 104945,
+   "bytes": 104978,
    "present": true,
-   "sha256": "72c6f7a3600923cf692b3566575f7945cf8936263bcbe4de14dc0a6effa29de9"
+   "sha256": "fed0531fbb5a3591a95d7b52d164c32e5720c9292b35a68a5258aba87c8a27b9"
   },
   "config/recovered-functions.json": {
-   "bytes": 3070018,
+   "bytes": 3071054,
    "present": true,
-   "sha256": "f022db737a28a93d438d77eeafc1e0b652e7d78639f2cfc8309001da62376956"
+   "sha256": "9baf5ba7510617b25d6ac754894cdc9f8ec411d47578db526f26e15527beaf4d"
   },
   "config/recovery-unresolved.json": {
    "bytes": 4394,
@@ -91,9 +91,9 @@
    "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
   },
   "tools/disasm/output/functions.recovered.json": {
-   "bytes": 6343415,
+   "bytes": 6344293,
    "present": true,
-   "sha256": "9741607c61bdaa2ce16a4e0729ab738f0ec7a674a5400b1bcb097571f7857166"
+   "sha256": "1a8dad6d9c86e24c09c28872ebcbe5c205a8ce24e4994927d51715f70c2294f8"
   }
  },
  "known_unknowns": [],
@@ -165,19 +165,19 @@
    },
    "src/recomp/recovered/recovered.c": {
     "markers": {
-     "JSRF_ABI_CONTINUE": 9510,
-     "RECOMP_ABI_CALL": 10967,
+     "JSRF_ABI_CONTINUE": 9513,
+     "RECOMP_ABI_CALL": 11001,
      "RECOMP_GENERATED_CODE": 1,
-     "g_seh_ebp": 5726
+     "g_seh_ebp": 5727
     },
     "present": true
    }
   },
   "totals": {
-   "JSRF_ABI_CONTINUE": 9510,
-   "RECOMP_ABI_CALL": 10978,
+   "JSRF_ABI_CONTINUE": 9513,
+   "RECOMP_ABI_CALL": 11012,
    "RECOMP_GENERATED_CODE": 5,
-   "g_seh_ebp": 5732
+   "g_seh_ebp": 5733
   }
  },
  "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",

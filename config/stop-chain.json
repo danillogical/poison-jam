@@ -350,15 +350,32 @@
   {
    "id": 39,
    "address": "0x00038090",
-   "state": "REPAIRED",
-   "repair_commit": null,
+   "state": "RUNTIME_CONFIRMED",
+   "repair_commit": "0742fa5",
    "evidence": [
     {
      "run": "20261011-041449-960-keyscript-newgame-6",
      "role": "discovered"
+    },
+    {
+     "run": "20261011-043947-565-keyscript-newgame-7",
+     "role": "returned"
     }
    ],
-   "note": "Fatal `[ICALL] Failed to resolve VA 0x00038090` (0xE0424943) on the NEW GAME path, immediately after stop 38 returned. Reached only by an indirect call; the analysis database has no entry starting there. A thiscall method that frees the members of [this+0x15d0] and unlinks its argument from the list at [this+0x15c8]. REPAIRED: recovery entry [0x00038090, 0x0003845E), stack_args 4 (three exits, each `pop edi; pop esi; pop ebp; ret 4`). NOT YET EXERCISED."
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x00038090` (0xE0424943) on the NEW GAME path, immediately after stop 38 returned. Reached only by an indirect call; the analysis database has no entry starting there. A thiscall method that frees the members of [this+0x15d0] and unlinks its argument from the list at [this+0x15c8]. REPAIRED: recovery entry [0x00038090, 0x0003845E), stack_args 4 (three exits, each `pop edi; pop esi; pop ebp; ret 4`). CONFIRMED: 20261011-043947-565-keyscript-newgame-7 (built from 0742fa5) shows `[RECOVERED] 0x00038090 returned; ABI verified`, and the chain advanced to 0x000273C0 (stop 40)."
+  },
+  {
+   "id": 40,
+   "address": "0x000273C0",
+   "state": "REPAIRED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261011-043947-565-keyscript-newgame-7",
+     "role": "discovered"
+    }
+   ],
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x000273C0` (0xE0424943) on the NEW GAME path, immediately after stop 39 returned. Reached only by an indirect call; no analysis-database entry. A thiscall method of the same family as stop 39 (frees the members of [this+0x1624], unlinks its argument). REPAIRED: recovery entry [0x000273C0, 0x00027854), stack_args 4. NOT YET EXERCISED."
   }
  ]
 }
