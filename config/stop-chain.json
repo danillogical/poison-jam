@@ -299,6 +299,32 @@
     }
    ],
    "note": "Fatal `[ICALL] Failed to resolve VA 0x001BDE21` (0xE0424943) immediately after stop 34 was repaired and returned, i.e. the chain advanced exactly one address. Reached only by an indirect call, so no decode pass lifted it; the analysis database has no entry and the region below is uncovered (nearest span below is sub_001BD621 [0x001BD621, 0x001BD63B), next is 0x001BE7DE). Bytes are a complete function: follows a clean `pop edi; pop esi; pop ebx; ret 8` at 0x001BDE1B-0x001BDE1E, takes `this` in ECX, copies 8-byte records from [eax+0x34] to [eax+0x14] for the count at [eax+0x66], bare `ret` at 0x001BDE5C. REPAIRED: recovery entry [0x001BDE21, 0x001BDE5D), stack_args 0. The end had to be one byte PAST the `ret` (0x001BDE5D, not 0x001BDE5C), or the body has no epilogue and returns with ESP unmoved -- measured as `ABI FAILURE 0x001BDE21 esp ... expected +4` in run 20261010-025515-426. After the correction, run 20261010-030025-850 shows `[RECOVERED] 0x001BDE21 returned; ABI verified (ESP/EBX/ESI/EDI)`. THIRD correction: the extent also had to include the `jmp 0x14b41e` at 0x001BDE5D (a target of the `jne 0x1bde5d` at 0x001BDE4B), so end is 0x001BDE62 -- the 5-byte jmp's end. With end 0x001BDE5D the lifter emitted a call to sub_001BDE5D, which is not a function, and the run died on `[ICALL] Failed to resolve VA 0x001BDE5D`. repair_commit ab4e7f1, confirmed by 20261010-082548-322 (same revision)."
+  },
+  {
+   "id": 36,
+   "address": "0x00047600",
+   "state": "REPAIRED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261011-024437-669-keyscript-newgame-2",
+     "role": "discovered"
+    }
+   ],
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x00047600` (0xE0424943) in run keyscript-newgame-2, the first keyscript run to choose NEW GAME at the main menu. Reached only by an indirect call (likely a vtable slot), so no decode pass lifted it; the analysis database has no entry and [0x000475F4, 0x00047690) is uncovered (nearest spans: sub_00047550 [0x00047550, 0x000475F4) below, sub_00047690 above). Same class as stops 29-35. Bytes are a complete thiscall method after 12 NOPs: `push ebp; push esi; mov esi, [esp+0xc]; ... mov ebp, ecx`, virtual calls through [edx+0x14] and [edx+0x20], and `pop esi; pop ebp; ret 4` at 0x0004768A. REPAIRED: recovery entry [0x00047600, 0x0004768D), stack_args 4, added to config/recovered-functions.json; end is one byte past the `ret 4`, and all branch targets are inside the span (no tail-jmp, no jump table). EXERCISED: run keyscript-newgame-3 logs `[RECOVERED] 0x00047600 returned; ABI verified (ESP/EBX/ESI/EDI)` (jsrf_run.log:14172), and the stop chain advanced to stop 37 (0x00030800) a few calls later. repair_commit is still to be recorded: it is the commit that lands this entry. The return was observed in 20261011-025555-232-keyscript-newgame-3 (`[RECOVERED] 0x00047600 returned; ABI verified`), but that run used the uncommitted repair, so the confirming citation waits for a run built from the repair commit."
+  },
+  {
+   "id": 37,
+   "address": "0x00030800",
+   "state": "REPAIRED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261011-025555-232-keyscript-newgame-3",
+     "role": "discovered"
+    }
+   ],
+   "note": "Fatal `[RECOVERED] ABI FAILURE 0x00030800 esp 00F7FEAC->00F7FEBC expected +8; ... si 0165F3A0->01415100 di 01330060->0142EF70`, then fail-fast 0xC0000409 at 138 s, in run keyscript-newgame-3 after NEW GAME was chosen at the main menu, right after stop 36 returned. 0x00030800 is not a function: it is the loop-exit label of the thiscall method 0x000307A0 (slot 0x001EC288 of the table at 0x001EC200; `push esi; push edi; mov edi, ecx`, one stack argument, three exits all `pop edi; pop esi; ret 4` at 0x000307FB, 0x00030832 and 0x00030849). The code at 0x00030800 uses that function's esi/edi and pops the ESI/EDI its prologue pushed. Nothing else reaches it: the only branches to it are the `je 0x30800` at 0x000307F2 and the `je 0x30849` at 0x000307E3, no call, jmp or immediate in the image names it, and its one aligned dword (0x0022BBF8) is a bit mask in a .data mask run. The recovered 0x000307A0 had been ended at 0x00030800 on the false belief that it was a separate entry, so the lifter emitted both branches as tail calls: into the separate recovery entry sub_00030800, whose checked wrapper saw +16 (pop edi, pop esi, ret 4) instead of +8 and aborted, and into the recovery trap sub_00030849. The analysis database carries the same false split (tail_jump_alias sub_000307A0 [0x000307A0, 0x000307F8) and sub_00030800 [0x00030800, 0x00030D70)). Same class as stop 32 (0x00091830 widened past a false tail_jump_alias) and F6b (0x000B5F3A, a false split removed with its dispatch tuple). REPAIRED: 0x000307A0 widened to [0x000307A0, 0x0003084E), stack_args 4, one byte past the last `ret 4`; the 0x00030800 entry removed; generated patch `remove-30800-dispatch` drops its dispatch tuple. NOT YET EXERCISED: expect `[RECOVERED] 0x000307A0 returned; ABI verified (ESP/EBX/ESI/EDI)` and no ABI FAILURE at 0x00030800. That confirmation names 0x000307A0, not this row's address, so confirming this row needs the row re-addressed (as stop 32 is addressed at its container) or a new row."
   }
  ]
 }

@@ -23,27 +23,43 @@ Script steps (JSON list, run in order):
   {"wait_stable": {"timeout": 30, "seconds": 3, "max_mean_delta": 2}}
   {"snap": "name"}
 
-Output goes to `logs/keyscript-<label>/` (frames, save root, jsrf_run.log, result.json).  The
-save root is private to the run, so the default save images are never touched.  No RECOMP_PAD_*
-switch is set: the pad is driven through the emulated USB path, not injected.
+Output goes to `logs/runs/<YYYYMMDD-HHMMSS-mmm>-keyscript-<label>/`, the same archive tree as
+`run-jsrf.py`: frames, save root, jsrf_run.log, keyscript.log, result.json and a metadata.json
+(exe hash, project/toolkit revision and dirty state, env switches, exploratory profile, log hash)
+so `check-stop-chain.py` accepts the run as a citation.  The save root is private to the run, so
+the default save images are never touched.  No RECOMP_PAD_* switch is set: the pad is driven
+through the emulated USB path, not injected.
 
 Usage:  python -X utf8 scripts/key-script-run.py <label> <seconds> <script.json> [KEY=VALUE ...]
+
+Adopt a finished run from the old `logs/keyscript-<label>/` layout (copies it into the archive
+tree; revisions are supplied by the caller and recorded as unmeasured):
+        python -X utf8 scripts/key-script-run.py --adopt logs/keyscript-<label> \\
+            --project-rev <sha> --toolkit-rev <sha> [--toolkit-dirty] [--project-dirty] [--exe-sha256 <hex>]
 
 Windows only (window enumeration and PostMessage use user32).
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
+import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-EXE = ROOT / "build" / "Release" / "jsrf_recomp.exe"
+BUILD = ROOT / "build" / "Release"
+EXE = BUILD / "jsrf_recomp.exe"
+TOOLKIT = ROOT.parent / "xboxrecomp"
+# Build outputs copied into the run directory; the collector is not used by this driver.
+KEY_ARTIFACTS = ("jsrf_recomp.exe", "jsrf_recomp.pdb", "jsrf_recomp.map", "build-source.json")
 
 WM_KEYDOWN, WM_KEYUP = 0x0100, 0x0101
 WINDOW_CLASS = b"XboxRecompFramebuffer"
@@ -473,6 +489,107 @@ class Run:
         raise ScriptError("unknown step %r" % kind)
 
 
+def load_run_jsrf():
+    """Import scripts/run-jsrf.py (hyphenated name) so its archive helpers are reused, not copied."""
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    spec = importlib.util.spec_from_file_location("run_jsrf", Path(here) / "run-jsrf.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def run_stamp(moment):
+    """Run-directory timestamp, formatted exactly as run-jsrf.py names its runs."""
+    return moment.strftime("%Y%m%d-%H%M%S-") + "%03d" % (moment.microsecond // 1000)
+
+
+def file_sha256(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def adopt(argv):
+    """Archive a finished old-layout run folder under logs/runs/, recording what was not measured."""
+    ap = argparse.ArgumentParser(prog="key-script-run.py --adopt")
+    ap.add_argument("--adopt", required=True, type=Path, metavar="OLD_DIR")
+    ap.add_argument("--project-rev", required=True)
+    ap.add_argument("--toolkit-rev", required=True)
+    ap.add_argument("--project-dirty", action="store_true")
+    ap.add_argument("--toolkit-dirty", action="store_true")
+    ap.add_argument("--exe-sha256", default=None, help="only if the executable's hash is actually known")
+    args = ap.parse_args(argv)
+    for rev in (args.project_rev, args.toolkit_rev):
+        if not re.fullmatch(r"[0-9a-fA-F]{7,40}", rev):
+            ap.error("revision must be a hex commit id: %r" % rev)
+    if args.exe_sha256 is not None and not re.fullmatch(r"[0-9a-fA-F]{64}", args.exe_sha256):
+        ap.error("--exe-sha256 must be 64 hex digits")
+    old = args.adopt.resolve()
+    for name in ("jsrf_run.log", "result.json"):
+        if not (old / name).is_file():
+            print("cannot adopt %s: missing %s" % (old, name), file=sys.stderr)
+            return 2
+    if not old.name.startswith("keyscript-"):
+        print("expected an old-layout folder named keyscript-<label>: %s" % old, file=sys.stderr)
+        return 2
+    label = old.name[len("keyscript-"):]
+    result = json.loads((old / "result.json").read_text(encoding="utf-8-sig"))
+    mtimes = [p.stat().st_mtime for p in old.rglob("*") if p.is_file()]
+    started = datetime.fromtimestamp(min(mtimes))
+    dest = ROOT / "logs" / "runs" / ("%s-keyscript-%s" % (run_stamp(started), label))
+    if dest.exists():
+        print("already archived: %s" % dest, file=sys.stderr)
+        return 2
+    shutil.copytree(old, dest)  # copy, not move: the old folder is left untouched
+
+    run_jsrf = load_run_jsrf()
+    overrides = dict(kv.split("=", 1) for kv in result.get("overrides", []))
+    env = dict(DEFAULT_ENV)
+    env.update(overrides)
+    settings = run_jsrf.environment_settings(env)
+    unmeasured = [
+        "repository_identities.*.revision and dirty state: supplied by the caller after the run",
+        "repository_identities.*.patch_sha256 and status_sha256: no patch or status was archived",
+        "xbe_sha256 and artifact hashes: not recorded at run time",
+        "settings: reconstructed from the driver's DEFAULT_ENV plus result.json overrides, not read from the launched process",
+    ]
+    if args.exe_sha256 is None:
+        unmeasured.insert(0, "exe_sha256: executable was not hashed or archived")
+    metadata = {
+        "adopted": True,
+        "adoption_note": ("Archived after the run finished from %s. Repository revisions and dirty state "
+                          "were supplied by the operator, not measured by the driver; fields listed in "
+                          "'unmeasured' are null or reconstructed." % old.name),
+        "adopted_utc": datetime.now(timezone.utc).isoformat(),
+        "adopted_from": str(old),
+        "unmeasured": unmeasured,
+        "started_local_derived": started.isoformat(),
+        "started_utc": None,
+        "cwd": str(ROOT),
+        "seconds": result.get("seconds"),
+        "probe": "",
+        "profile_source": "keyscript-adopted",
+        "project_archived": False,
+        "configuration": "Release",
+        "xbe_sha256": None,
+        "exe_sha256": args.exe_sha256.lower() if args.exe_sha256 else None,
+        "settings": settings,
+        "keyscript_profile": {"requested_profile": "exploratory", "classification": "exploratory",
+                              "note": "declared, not classifier-verified: settings are reconstructed"},
+        "repository_identities": {
+            "project": {"revision": args.project_rev, "dirty": args.project_dirty,
+                        "patch_sha256": None, "status_sha256": None, "supplied_after_run": True},
+            "toolkit": {"revision": args.toolkit_rev, "dirty": args.toolkit_dirty,
+                        "patch_sha256": None, "status_sha256": None, "supplied_after_run": True},
+        },
+        "key_script": {"path": result.get("script"), "sha256": None},
+        "run_log_sha256": file_sha256(dest / "jsrf_run.log"),
+    }
+    (dest / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    print("Adopted: %s" % dest)
+    return 0
+
+
 def parse_args(argv):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("label")
@@ -488,7 +605,10 @@ def parse_args(argv):
 
 
 def main(argv=None):
-    args = parse_args(sys.argv[1:] if argv is None else argv)
+    argv = sys.argv[1:] if argv is None else argv
+    if "--adopt" in argv:
+        return adopt(argv)
+    args = parse_args(argv)
     try:
         steps = parse_script(json.loads(args.script.read_text(encoding="utf-8")))
     except (OSError, ValueError, ScriptError) as e:
@@ -501,11 +621,29 @@ def main(argv=None):
         print("another jsrf_recomp.exe is running; stop it first", file=sys.stderr)
         return 2
 
-    out = ROOT / "logs" / ("keyscript-%s" % args.label)
+    run_jsrf = load_run_jsrf()
+    env = dict(os.environ)
+    inherited_settings = run_jsrf.environment_settings(env)
+    try:
+        run_jsrf.validate_launch_profile("exploratory", "", inherited_settings)
+    except run_jsrf.ProfileError as e:
+        print("refusing exploratory launch: %s" % e, file=sys.stderr)
+        return 2
+
+    started = datetime.now()
+    out = ROOT / "logs" / "runs" / ("%s-keyscript-%s" % (run_stamp(started), args.label))
     frames = out / "frames"
-    (out / "timeline").mkdir(parents=True, exist_ok=True)
-    frames.mkdir(parents=True, exist_ok=True)
-    (out / "save").mkdir(exist_ok=True)
+    out.mkdir(parents=True, exist_ok=False)
+    (out / "timeline").mkdir()
+    frames.mkdir()
+    (out / "save").mkdir()
+    for name in KEY_ARTIFACTS:
+        if (BUILD / name).is_file():
+            shutil.copy2(BUILD / name, out / name)
+    run_exe = out / "jsrf_recomp.exe"
+    (out / "toolkit.patch").write_bytes(run_jsrf.run_git(TOOLKIT, "diff", "--binary", "HEAD", binary=True))
+    (out / "toolkit-status.txt").write_text(run_jsrf.run_git(TOOLKIT, "status", "--porcelain"), encoding="utf-8")
+    project_archived = run_jsrf.archive_project_state(out)
     # Trailing underscore keeps the window dump's literal name distinct from the executor's
     # own "%s%05d.bmp" dumps; the runtime writes the prefix verbatim.
     live = frames / "w_"
@@ -518,16 +656,61 @@ def main(argv=None):
         with open(keylog, "a", encoding="utf-8") as f:
             f.write(line + "\n")
 
-    env = dict(os.environ)
     env.update(DEFAULT_ENV)
     env.update({"JSRF_LOG_PATH": str(logpath), "RECOMP_FB_DUMP": str(live)})
     for kv in args.overrides:
         k, v = kv.split("=", 1)
         env[k] = v
+    effective_settings = run_jsrf.environment_settings(env)
+    try:
+        profile_record = run_jsrf.make_profile_record("exploratory", inherited_settings, effective_settings, "")
+    except run_jsrf.ProfileError as e:
+        print("cannot classify run: %s" % e, file=sys.stderr)
+        return 2
+    command = [str(run_exe), "--save-root=" + str(out / "save")]
+    project_identity = None
+    if project_archived:
+        project_identity = run_jsrf.repository_identity(ROOT, out / "project.patch", out / "project-status.txt")
+        project_identity["dirty"] = bool((out / "project-status.txt").read_text(encoding="utf-8").strip())
+    toolkit_identity = run_jsrf.repository_identity(TOOLKIT, out / "toolkit.patch", out / "toolkit-status.txt")
+    toolkit_identity["dirty"] = bool((out / "toolkit-status.txt").read_text(encoding="utf-8").strip())
+    artifact_sha256 = {n: file_sha256(out / n) for n in KEY_ARTIFACTS if (out / n).is_file()}
+    # Not stored as `run_profile`: the strict archive validator in jsrf_run_profile.py requires a
+    # collector command and artifacts this driver does not have, and would class the run UNKNOWN.
+    # Without it the run classifies by its settings (legacy path), which is what exploratory means here.
+    metadata = {
+        "started_utc": datetime.now(timezone.utc).isoformat(),
+        "cwd": str(ROOT),
+        "seconds": args.seconds,
+        "probe": "",
+        "profile_source": "keyscript",
+        "expected_checkpoints": [],
+        "project_archived": project_archived,
+        "configuration": "Release",
+        "xbe_path": str(ROOT / "game" / "default.xbe"),
+        "xbe_sha256": file_sha256(ROOT / "game" / "default.xbe"),
+        "exe_sha256": artifact_sha256["jsrf_recomp.exe"],
+        "pdb_sha256": artifact_sha256.get("jsrf_recomp.pdb"),
+        "map_sha256": artifact_sha256.get("jsrf_recomp.map"),
+        "build_source_sha256": artifact_sha256.get("build-source.json"),
+        "artifact_sha256": artifact_sha256,
+        "settings": effective_settings,
+        "keyscript_profile": profile_record,
+        "disk_gate": {"skipped": True, "reason": "key-script driver does not run the disk gate"},
+        "command": command,
+        "repository_identities": {"project": project_identity, "toolkit": toolkit_identity},
+        "save_root": {"archive_root": str(out.resolve()),
+                      "expected_resolved_path": str((out / "save").resolve()),
+                      "observed_resolved_path": None, "observed_path_layer_root": None,
+                      "disposable": True, "verified": False},
+        "key_script": {"path": str(args.script), "sha256": file_sha256(args.script)},
+        "sources": run_jsrf.source_entries(),
+    }
+    (out / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
     log("=== start label=%s seconds=%d script=%s ===" % (args.label, args.seconds, args.script))
     stdout = open(out / "run.out", "w")
-    proc = subprocess.Popen([str(EXE), "--save-root=" + str(out / "save")], cwd=str(ROOT),
+    proc = subprocess.Popen(command, cwd=str(ROOT),
                             env=env, stdout=stdout, stderr=subprocess.STDOUT)
     t0 = time.time()
     log("game pid=%d started" % proc.pid)
@@ -587,8 +770,16 @@ def main(argv=None):
         "log_counts": counts,
         "last_fbpresent": last_present,
         "timeline_frames": run.timeline_seq,
+        "outcome": "keyscript_complete" if script_ok and len(results) == len(steps)
+                   and not any(r.get("skipped") for r in results) else "keyscript_incomplete",
+        "duration_seconds": round(run.elapsed(), 1),
     }
     (out / "result.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    log_text = logpath.read_text(encoding="utf-8", errors="replace") if logpath.is_file() else ""
+    metadata["run_log_sha256"] = file_sha256(logpath) if logpath.is_file() else None
+    seen, layer, verified = run_jsrf.save_root_observation(log_text, metadata["save_root"]["expected_resolved_path"])
+    metadata["save_root"].update(observed_resolved_path=seen, observed_path_layer_root=layer, verified=verified)
+    (out / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     log("=== end script_ok=%s ran=%.1fs killed=%s exit=%s ===" % (
         result["script_ok"], run.elapsed(), killed, proc.returncode))
     for r in results:
