@@ -20,7 +20,10 @@
  *     by at most one pixel along the shape's perimeter: the two rasterisers use
  *     different edge rules.
  * The CPU path is flat shaded (first vertex colour) and the back end Gouraud
- * shades, so every case uses one diffuse colour for all vertices. */
+ * shades, so every case uses one diffuse colour for all vertices.
+ *   - The DXT cases (D1..D4) set a per-surface tolerance of 3 instead (TOL_DXT): the only
+ *     difference left there is how a BC unit and the CPU decoder round the 565 endpoint
+ *     expansion and the 1/3, 1/2, n/7 and n/5 interpolations, a couple of LSBs. */
 #include "kernel/kernel.h"
 #include "nv2a_state.h"
 #include "nv2a_mmio_hook.h"
@@ -95,6 +98,18 @@ void jsrf_slot_watch_write(uint32_t provenance, uint32_t before, uint32_t after,
 #define VB_C9     0x006B0000u
 #define VB_C10    0x006C0000u
 #define TEX_C9    0x006D0000u     /* case 7: stage 1, 8x8 R5G6B5 linear */
+#define SURF_D1   0x00510000u     /* DXT case 1: 64x64 A8R8G8B8      */
+#define SURF_D2   0x00520000u     /* DXT case 2                      */
+#define SURF_D3   0x00530000u     /* DXT case 3                      */
+#define SURF_D4   0x00540000u     /* DXT case 4                      */
+#define VB_D1     0x00710000u
+#define VB_D2     0x00720000u
+#define VB_D3     0x00730000u
+#define VB_D4     0x00740000u
+#define TEX_D1    0x00750000u     /* 16x16 DXT1, opaque              */
+#define TEX_D2    0x00760000u     /* 16x16 DXT1, 3-colour blocks     */
+#define TEX_D3    0x00770000u     /* 16x16 DXT5                      */
+#define TEX_D4    0x00780000u     /* 8x6 DXT1                        */
 #define FILTER_NEAREST 0x01010000u   /* SET_TEXTURE_FILTER: MIN=1 (bits 16-23), MAG=1 (24-27) */
 #define FILTER_LINEAR  0x02020000u   /* MIN=2, MAG=2 */
 #define SURF_BYTES 0x00010000u    /* span pre-filled/cleared per surface */
@@ -102,6 +117,7 @@ void jsrf_slot_watch_write(uint32_t provenance, uint32_t before, uint32_t after,
 
 #define TOL_8888 8
 #define TOL_565  9
+#define TOL_DXT  3      /* DXT cases: BC decode vs CPU decode rounding, per 8-bit channel */
 #define COVER_TOL 24
 
 /* ── Pushbuffer builder ──────────────────────────────────────────────────── */
@@ -203,14 +219,16 @@ static uint16_t pack565(uint32_t r, uint32_t g, uint32_t b)
 }
 
 /* ── The cases ───────────────────────────────────────────────────────────── */
-typedef struct { uint32_t va, w, h, bpp, clear; double perim, area; } Surf;
+/* tol: per-channel tolerance; 0 means the default for the surface's bpp. */
+typedef struct { uint32_t va, w, h, bpp, clear; double perim, area; int tol; } Surf;
 typedef struct {
     const char *name;
     int nsurf;
     Surf surf[2];
 } Scene;
 
-static Scene g_scene[10];
+#define NCASES 14       /* 0..9 as before, 10..13 the DXT cases */
+static Scene g_scene[NCASES];
 
 /* Case 1 and 4 share one scene shape at different addresses. */
 static void build_clear_tri(uint32_t surf, uint32_t vb, int flip, Scene *sc, const char *name)
@@ -484,6 +502,217 @@ static void build_case8(int flip)
     build_rc_scene(9, SURF_C10, VB_C10, 0xFFC8C8C8u, 0xFF402010u, "8 combiner: specular add, (tex0 * diffuse) + v1 via final sum");
 }
 
+
+/* ── DXT cases (10..13) ──────────────────────────────────────────────────────
+ * DXT1/DXT3/DXT5 (formats 0x0C/0x0E/0x0F) are linear 4x4 blocks in row-major block order. A
+ * block-compressed texture takes its size from log2 in the format word and is sampled with
+ * normalised coordinates (like a swizzled one), and has no pitch. Each case draws the whole
+ * texture 1:1 as a quad (two triangles) at (8,8) on a 64x64 A8R8G8B8 surface with point
+ * filtering and white diffuse, so every pixel is one texel. The quad is two triangles, so the
+ * diagonal runs through pixel centres; the 64x64 surface keeps the 98% bar clear of it.
+ *
+ * Every texel of every texture is far from the clear colour (checked when the blocks were
+ * written: each opaque palette entry differs from 0x101010 by more than COVER_TOL in some
+ * channel), so coverage is exactly the opaque texels. Blocks were checked against both the CPU
+ * decoder and an independent BC1/BC3 reference (rounded interpolation): they agree within 2
+ * per channel, which TOL_DXT covers with a LSB to spare for the GPU.
+ *
+ * Texel (x,y) of a block is at bit 2*(4y+x) of the 32-bit colour index word (DXT1/DXT5 colour
+ * half), and bit 3*(4y+x) of the 48-bit DXT5 alpha index word; both little-endian after the
+ * two endpoints. c0/c1 are R5G6B5 little-endian. */
+/* 16x16 DXT1, 4x4 blocks row-major, every block opaque (c0 > c1). */
+static const uint8_t k_dxt1_opaque_16x16[] = {
+    /* block (0,0): c0=#F7C321 (0xF604) > c1=#DE7DA5 (0xDBF4), 4-colour; texel(x,y) index=(x+2y+0)&3, all four entries used */
+    0x04, 0xF6, 0xF4, 0xDB, 0xE4, 0x4E, 0xE4, 0x4E,
+    /* block (1,0): c0=#D634C6 (0xD1B8) > c1=#217DBD (0x23F7), 4-colour; texel(x,y) index=(x+2y+1)&3, all four entries used */
+    0xB8, 0xD1, 0xF7, 0x23, 0x39, 0x93, 0x39, 0x93,
+    /* block (2,0): c0=#290873 (0x284E) > c1=#08D3F7 (0x0E9E), 4-colour; texel(x,y) index=(x+2y+2)&3, all four entries used */
+    0x4E, 0x28, 0x9E, 0x0E, 0x4E, 0xE4, 0x4E, 0xE4,
+    /* block (3,0): c0=#F7C3A5 (0xF614) > c1=#EF457B (0xEA2F), 4-colour; texel(x,y) index=(x+2y+3)&3, all four entries used */
+    0x14, 0xF6, 0x2F, 0xEA, 0x93, 0x39, 0x93, 0x39,
+    /* block (0,1): c0=#B5456B (0xB22D) > c1=#42BEB5 (0x45F6), 4-colour; texel(x,y) index=(x+2y+4)&3, all four entries used */
+    0x2D, 0xB2, 0xF6, 0x45, 0xE4, 0x4E, 0xE4, 0x4E,
+    /* block (1,1): c0=#F75D5A (0xF2EB) > c1=#3141C6 (0x3218), 4-colour; texel(x,y) index=(x+2y+5)&3, all four entries used */
+    0xEB, 0xF2, 0x18, 0x32, 0x39, 0x93, 0x39, 0x93,
+    /* block (2,1): c0=#AD7973 (0xABCE) > c1=#3169D6 (0x335A), 4-colour; texel(x,y) index=(x+2y+6)&3, all four entries used */
+    0xCE, 0xAB, 0x5A, 0x33, 0x4E, 0xE4, 0x4E, 0xE4,
+    /* block (3,1): c0=#AD04E7 (0xA83C) > c1=#297931 (0x2BC6), 4-colour; texel(x,y) index=(x+2y+7)&3, all four entries used */
+    0x3C, 0xA8, 0xC6, 0x2B, 0x93, 0x39, 0x93, 0x39,
+    /* block (0,2): c0=#E78ADE (0xE45B) > c1=#29306B (0x298D), 4-colour; texel(x,y) index=(x+2y+8)&3, all four entries used */
+    0x5B, 0xE4, 0x8D, 0x29, 0xE4, 0x4E, 0xE4, 0x4E,
+    /* block (1,2): c0=#EFAE7B (0xED6F) > c1=#4AC784 (0x4E30), 4-colour; texel(x,y) index=(x+2y+9)&3, all four entries used */
+    0x6F, 0xED, 0x30, 0x4E, 0x39, 0x93, 0x39, 0x93,
+    /* block (2,2): c0=#BD71DE (0xBB9B) > c1=#AD2C42 (0xA968), 4-colour; texel(x,y) index=(x+2y+10)&3, all four entries used */
+    0x9B, 0xBB, 0x68, 0xA9, 0x4E, 0xE4, 0x4E, 0xE4,
+    /* block (3,2): c0=#F76542 (0xF328) > c1=#397DC6 (0x3BF8), 4-colour; texel(x,y) index=(x+2y+11)&3, all four entries used */
+    0x28, 0xF3, 0xF8, 0x3B, 0x93, 0x39, 0x93, 0x39,
+    /* block (0,3): c0=#9C3CDE (0x99FB) > c1=#08AA63 (0x0D4C), 4-colour; texel(x,y) index=(x+2y+12)&3, all four entries used */
+    0xFB, 0x99, 0x4C, 0x0D, 0xE4, 0x4E, 0xE4, 0x4E,
+    /* block (1,3): c0=#DEA27B (0xDD0F) > c1=#84CBE7 (0x865C), 4-colour; texel(x,y) index=(x+2y+13)&3, all four entries used */
+    0x0F, 0xDD, 0x5C, 0x86, 0x39, 0x93, 0x39, 0x93,
+    /* block (2,3): c0=#DEAE21 (0xDD64) > c1=#429AF7 (0x44DE), 4-colour; texel(x,y) index=(x+2y+14)&3, all four entries used */
+    0x64, 0xDD, 0xDE, 0x44, 0x4E, 0xE4, 0x4E, 0xE4,
+    /* block (3,3): c0=#E7107B (0xE08F) > c1=#4AC7EF (0x4E3D), 4-colour; texel(x,y) index=(x+2y+15)&3, all four entries used */
+    0x8F, 0xE0, 0x3D, 0x4E, 0x93, 0x39, 0x93, 0x39,
+};
+
+/* 16x16 DXT1; blocks (1,0), (2,1), (3,2) use the 3-colour+transparent mode. */
+static const uint8_t k_dxt1_alpha_16x16[] = {
+    /* block (0,0): opaque, c0=#AD4121 (0xAA04) > c1=#AD3C84 (0xA9F0), 4-colour; index=(x+2y+0)&3 */
+    0x04, 0xAA, 0xF0, 0xA9, 0xE4, 0x4E, 0xE4, 0x4E,
+    /* block (1,0): c0=#9C96E7 (0x9CBC) < c1=#C6CF4A (0xC669), 3-colour mode, entry 2 = midpoint, index 3 transparent at (2,1) */
+    0xBC, 0x9C, 0x69, 0xC6, 0x24, 0x39, 0x92, 0x24,
+    /* block (2,0): opaque, c0=#AD517B (0xAA8F) > c1=#94B608 (0x95A1), 4-colour; index=(x+2y+2)&3 */
+    0x8F, 0xAA, 0xA1, 0x95, 0x4E, 0xE4, 0x4E, 0xE4,
+    /* block (3,0): opaque, c0=#E769AD (0xE355) > c1=#52967B (0x54AF), 4-colour; index=(x+2y+3)&3 */
+    0x55, 0xE3, 0xAF, 0x54, 0x93, 0x39, 0x93, 0x39,
+    /* block (0,1): opaque, c0=#7B34EF (0x79BD) > c1=#008208 (0x0401), 4-colour; index=(x+2y+4)&3 */
+    0xBD, 0x79, 0x01, 0x04, 0xE4, 0x4E, 0xE4, 0x4E,
+    /* block (1,1): opaque, c0=#FF8E6B (0xFC6D) > c1=#94AECE (0x9579), 4-colour; index=(x+2y+5)&3 */
+    0x6D, 0xFC, 0x79, 0x95, 0x39, 0x93, 0x39, 0x93,
+    /* block (2,1): c0=c1=#18F773 (0x1FAE), 3-colour mode (c0 <= c1); entries 0,1,2 are all that colour, index 3 transparent at texels (0,0),(3,3) */
+    0xAE, 0x1F, 0xAE, 0x1F, 0x93, 0x24, 0x49, 0xD2,
+    /* block (3,1): opaque, c0=#9CCBCE (0x9E59) > c1=#8C2063 (0x890C), 4-colour; index=(x+2y+7)&3 */
+    0x59, 0x9E, 0x0C, 0x89, 0x93, 0x39, 0x93, 0x39,
+    /* block (0,2): opaque, c0=#6B9ECE (0x6CF9) > c1=#5A5508 (0x5AA1), 4-colour; index=(x+2y+8)&3 */
+    0xF9, 0x6C, 0xA1, 0x5A, 0xE4, 0x4E, 0xE4, 0x4E,
+    /* block (1,2): opaque, c0=#FF75EF (0xFBBD) > c1=#948A63 (0x944C), 4-colour; index=(x+2y+9)&3 */
+    0xBD, 0xFB, 0x4C, 0x94, 0x39, 0x93, 0x39, 0x93,
+    /* block (2,2): opaque, c0=#ADE35A (0xAF0B) > c1=#7B5973 (0x7ACE), 4-colour; index=(x+2y+10)&3 */
+    0x0B, 0xAF, 0xCE, 0x7A, 0x4E, 0xE4, 0x4E, 0xE4,
+    /* block (3,2): c0=#5A4529 (0x5A25) < c1=#7BD321 (0x7E84), 3-colour mode, entry 2 = midpoint, index 3 transparent at (2,1),(3,1),(2,3),(3,3) */
+    0x25, 0x5A, 0x84, 0x7E, 0x50, 0xFA, 0x50, 0xFA,
+    /* block (0,3): opaque, c0=#F74DFF (0xF27F) > c1=#184DFF (0x1A7F), 4-colour; index=(x+2y+12)&3 */
+    0x7F, 0xF2, 0x7F, 0x1A, 0xE4, 0x4E, 0xE4, 0x4E,
+    /* block (1,3): opaque, c0=#F7C773 (0xF62E) > c1=#4A2C84 (0x4970), 4-colour; index=(x+2y+13)&3 */
+    0x2E, 0xF6, 0x70, 0x49, 0x39, 0x93, 0x39, 0x93,
+    /* block (2,3): opaque, c0=#42DB18 (0x46C3) > c1=#1828EF (0x195D), 4-colour; index=(x+2y+14)&3 */
+    0xC3, 0x46, 0x5D, 0x19, 0x4E, 0xE4, 0x4E, 0xE4,
+    /* block (3,3): opaque, c0=#D610A5 (0xD094) > c1=#941808 (0x90C1), 4-colour; index=(x+2y+15)&3 */
+    0x94, 0xD0, 0xC1, 0x90, 0x93, 0x39, 0x93, 0x39,
+};
+
+/* 16x16 DXT5: 16-byte blocks, alpha half first. */
+static const uint8_t k_dxt5_16x16[] = {
+    /* block (0,0): a0=255 a1=20 8-alpha mode (a0 > a1), alpha index=(4y+x+0)&7; colour c0=#FF0410 (0xF822) c0 > c1 c1=#420C9C (0x4073), index=(x+2y+0)&3 */
+    0xFF, 0x14, 0x88, 0xC6, 0xFA, 0x88, 0xC6, 0xFA, 0x22, 0xF8, 0x73, 0x40, 0xE4, 0x4E, 0xE4, 0x4E,
+    /* block (1,0): a0=17 a1=203 6-alpha mode (a0 <= a1; entries 6,7 = 0,255), alpha index=(4y+x+1)&7; colour c0=#C641C6 (0xC218) c0 > c1 c1=#94714A (0x9389), index=(x+2y+1)&3 */
+    0x11, 0xCB, 0xD1, 0x58, 0x1F, 0xD1, 0x58, 0x1F, 0x18, 0xC2, 0x89, 0x93, 0x39, 0x93, 0x39, 0x93,
+    /* block (2,0): a0=239 a1=38 8-alpha mode (a0 > a1), alpha index=(4y+x+2)&7; colour c0=#DE284A (0xD949) c0 > c1 c1=#C69A39 (0xC4C7), index=(x+2y+2)&3 */
+    0xEF, 0x26, 0x1A, 0xEB, 0x23, 0x1A, 0xEB, 0x23, 0x49, 0xD9, 0xC7, 0xC4, 0x4E, 0xE4, 0x4E, 0xE4,
+    /* block (3,0): a0=31 a1=209 6-alpha mode (a0 <= a1; entries 6,7 = 0,255), alpha index=(4y+x+3)&7; colour c0=#BDB273 (0xBD8E) c0 > c1 c1=#31516B (0x328D), index=(x+2y+3)&3 */
+    0x1F, 0xD1, 0x63, 0x7D, 0x44, 0x63, 0x7D, 0x44, 0x8E, 0xBD, 0x8D, 0x32, 0x93, 0x39, 0x93, 0x39,
+    /* block (0,1): a0=223 a1=56 8-alpha mode (a0 > a1), alpha index=(4y+x+4)&7; colour c0=#52B2D6 (0x559A) c0 > c1 c1=#427518 (0x43A3), index=(x+2y+4)&3 */
+    0xDF, 0x38, 0xAC, 0x8F, 0x68, 0xAC, 0x8F, 0x68, 0x9A, 0x55, 0xA3, 0x43, 0xE4, 0x4E, 0xE4, 0x4E,
+    /* block (1,1): a0=45 a1=215 6-alpha mode (a0 <= a1; entries 6,7 = 0,255), alpha index=(4y+x+5)&7; colour c0=#2941E7 (0x2A1C) c0 < c1 (still 4-colour in DXT5) c1=#AD6594 (0xAB32), index=(x+2y+5)&3 */
+    0x2D, 0xD7, 0xF5, 0x11, 0x8D, 0xF5, 0x11, 0x8D, 0x1C, 0x2A, 0x32, 0xAB, 0x39, 0x93, 0x39, 0x93,
+    /* block (2,1): a0=207 a1=74 8-alpha mode (a0 > a1), alpha index=(4y+x+6)&7; colour c0=#D618E7 (0xD0DC) c0 > c1 c1=#528231 (0x5406), index=(x+2y+6)&3 */
+    0xCF, 0x4A, 0x3E, 0xA2, 0xB1, 0x3E, 0xA2, 0xB1, 0xDC, 0xD0, 0x06, 0x54, 0x4E, 0xE4, 0x4E, 0xE4,
+    /* block (3,1): a0=59 a1=221 6-alpha mode (a0 <= a1; entries 6,7 = 0,255), alpha index=(4y+x+7)&7; colour c0=#A5D3B5 (0xA696) c0 > c1 c1=#4230AD (0x4195), index=(x+2y+7)&3 */
+    0x3B, 0xDD, 0x47, 0x34, 0xD6, 0x47, 0x34, 0xD6, 0x96, 0xA6, 0x95, 0x41, 0x93, 0x39, 0x93, 0x39,
+    /* block (0,2): a0=191 a1=92 8-alpha mode (a0 > a1), alpha index=(4y+x+8)&7; colour c0=#B518F7 (0xB0DE) c0 > c1 c1=#42C36B (0x460D), index=(x+2y+8)&3 */
+    0xBF, 0x5C, 0x88, 0xC6, 0xFA, 0x88, 0xC6, 0xFA, 0xDE, 0xB0, 0x0D, 0x46, 0xE4, 0x4E, 0xE4, 0x4E,
+    /* block (1,2): a0=73 a1=227 6-alpha mode (a0 <= a1; entries 6,7 = 0,255), alpha index=(4y+x+9)&7; colour c0=#B5FB6B (0xB7CD) c0 > c1 c1=#9449EF (0x925D), index=(x+2y+9)&3 */
+    0x49, 0xE3, 0xD1, 0x58, 0x1F, 0xD1, 0x58, 0x1F, 0xCD, 0xB7, 0x5D, 0x92, 0x39, 0x93, 0x39, 0x93,
+    /* block (2,2): a0=175 a1=110 8-alpha mode (a0 > a1), alpha index=(4y+x+10)&7; colour c0=#CE51EF (0xCA9D) c0 > c1 c1=#2196A5 (0x24B4), index=(x+2y+10)&3 */
+    0xAF, 0x6E, 0x1A, 0xEB, 0x23, 0x1A, 0xEB, 0x23, 0x9D, 0xCA, 0xB4, 0x24, 0x4E, 0xE4, 0x4E, 0xE4,
+    /* block (3,2): a0=87 a1=233 6-alpha mode (a0 <= a1; entries 6,7 = 0,255), alpha index=(4y+x+11)&7; colour c0=#D6CF7B (0xD66F) c0 > c1 c1=#8C08B5 (0x8856), index=(x+2y+11)&3 */
+    0x57, 0xE9, 0x63, 0x7D, 0x44, 0x63, 0x7D, 0x44, 0x6F, 0xD6, 0x56, 0x88, 0x93, 0x39, 0x93, 0x39,
+    /* block (0,3): a0=159 a1=128 8-alpha mode (a0 > a1), alpha index=(4y+x+12)&7; colour c0=#A54D6B (0xA26D) c0 > c1 c1=#189E7B (0x1CEF), index=(x+2y+12)&3 */
+    0x9F, 0x80, 0xAC, 0x8F, 0x68, 0xAC, 0x8F, 0x68, 0x6D, 0xA2, 0xEF, 0x1C, 0xE4, 0x4E, 0xE4, 0x4E,
+    /* block (1,3): a0=101 a1=239 6-alpha mode (a0 <= a1; entries 6,7 = 0,255), alpha index=(4y+x+13)&7; colour c0=#BD41B5 (0xBA16) c0 > c1 c1=#1800FF (0x181F), index=(x+2y+13)&3 */
+    0x65, 0xEF, 0xF5, 0x11, 0x8D, 0xF5, 0x11, 0x8D, 0x16, 0xBA, 0x1F, 0x18, 0x39, 0x93, 0x39, 0x93,
+    /* block (2,3): a0=143 a1=146 6-alpha mode (a0 <= a1; entries 6,7 = 0,255), alpha index=(4y+x+14)&7; colour c0=#29C3CE (0x2E19) c0 > c1 c1=#10925A (0x148B), index=(x+2y+14)&3 */
+    0x8F, 0x92, 0x3E, 0xA2, 0xB1, 0x3E, 0xA2, 0xB1, 0x19, 0x2E, 0x8B, 0x14, 0x4E, 0xE4, 0x4E, 0xE4,
+    /* block (3,3): a0=128 a1=128 6-alpha mode with a0 == a1, alpha index=(4y+x+15)&7; colour c0=#394D63 (0x3A6C) c0 > c1 c1=#00B2A5 (0x0594), index=(x+2y+15)&3 */
+    0x80, 0x80, 0x47, 0x34, 0xD6, 0x47, 0x34, 0xD6, 0x6C, 0x3A, 0x94, 0x05, 0x93, 0x39, 0x93, 0x39,
+};
+
+/* 8x6 DXT1: 2x2 blocks, the bottom row only half used. */
+static const uint8_t k_dxt1_8x6[] = {
+    /* block (0,0): c0=#EF9A9C (0xECD3) > c1=#63FBDE (0x67DB), 4-colour; index=(x+2y+0)&3 */
+    0xD3, 0xEC, 0xDB, 0x67, 0xE4, 0x4E, 0xE4, 0x4E,
+    /* block (1,0): c0=#B549F7 (0xB25E) > c1=#31F3DE (0x379B), 4-colour; index=(x+2y+1)&3 */
+    0x5E, 0xB2, 0x9B, 0x37, 0x39, 0x93, 0x39, 0x93,
+    /* block (0,1) (rows 2,3 lie below the 6-row image): c0=#F7D3CE (0xF699) > c1=#9C49B5 (0x9A56), 4-colour; index=(x+2y+2)&3 */
+    0x99, 0xF6, 0x56, 0x9A, 0x4E, 0xE4, 0x4E, 0xE4,
+    /* block (1,1) (rows 2,3 lie below the 6-row image): c0=#CEDF42 (0xCEE8) > c1=#5A9E18 (0x5CE3), 4-colour; index=(x+2y+3)&3 */
+    0xE8, 0xCE, 0xE3, 0x5C, 0x93, 0x39, 0x93, 0x39,
+};
+
+/* Stage 0, a block-compressed texture. The size is log2 in the format word; IMAGE_RECT is sent
+ * only when the size is not a power of two (the 8x6 case), and then it overrides the log2 size. */
+static void pb_texture_dxt(uint32_t va, uint32_t fmt, uint32_t w, uint32_t h, uint32_t filter)
+{
+    uint32_t lw = 0, lh = 0;
+    while ((1u << lw) < w) lw++;
+    while ((1u << lh) < h) lh++;
+    pb(0x1B00u + 0x14, filter);
+    pb(0x1B00u + 0x00, va);
+    pb(0x1B00u + 0x04, 0x1u | (2u << 4) | (fmt << 8) | (1u << 16) | (lw << 20) | (lh << 24));
+    pb(0x1B00u + 0x08, 0x0303u);
+    if ((1u << lw) != w || (1u << lh) != h)
+        pb(0x1B00u + 0x1C, (w << 16) | h);
+    pb(0x1B00u + 0x0C, 1u << 30);
+}
+
+/* One case: clear, then the texture as a w x h quad at (8,8). Blend is off, so the surface
+ * keeps the texel alpha (compared, as 8888 surfaces always are); with alpha_test the texels
+ * under alpha 0x80 are discarded. `texels` is the number of texels that should be visible. */
+static void build_dxt_case(int idx, uint32_t surf, uint32_t vb, uint32_t tex, uint32_t fmt,
+                           uint32_t w, uint32_t h, int alpha_test, unsigned texels, const char *name)
+{
+    const uint32_t clear = 0xFF101010u, white = 0xFFFFFFFFu;
+    const float x0 = 8.0f, y0 = 8.0f, x1 = 8.0f + (float)w, y1 = 8.0f + (float)h;
+    pb_begin();
+    pb_surface(surf, 64, 64, 4);
+    pb_clear(clear);
+    pb(0x0304, 0);                                 /* SET_BLEND_ENABLE off */
+    pb(0x0300, (uint32_t)alpha_test);              /* SET_ALPHA_TEST_ENABLE */
+    pb(0x033C, 0x204u);                            /* ALPHA_FUNC GREATER */
+    pb(0x0340, 0x80u);                             /* ALPHA_REF */
+    pb_texture_dxt(tex, fmt, w, h, FILTER_NEAREST);
+    pb_vertex_format(vb, 1);
+    put_vertex(vb, 0, x0, y0, white, 0.0f, 0.0f);
+    put_vertex(vb, 1, x1, y0, white, 1.0f, 0.0f);
+    put_vertex(vb, 2, x0, y1, white, 0.0f, 1.0f);
+    put_vertex(vb, 3, x1, y0, white, 1.0f, 0.0f);
+    put_vertex(vb, 4, x1, y1, white, 1.0f, 1.0f);
+    put_vertex(vb, 5, x0, y1, white, 0.0f, 1.0f);
+    pb_draw_triangles(6);
+    pb_flip();
+    pb(0x0300, 0);                                 /* after the flip: later cases expect it off */
+    g_scene[idx].name = name;
+    g_scene[idx].nsurf = 1;
+    g_scene[idx].surf[0] = (Surf){ surf, 64, 64, 4, clear, 2.0 * (w + h), (double)texels, TOL_DXT };
+}
+
+static void build_case9a(int flip)
+{
+    (void)flip;
+    build_dxt_case(10, SURF_D1, VB_D1, TEX_D1, 0x0C, 16, 16, 0, 256,
+                   "D1 DXT1 16x16, opaque 4-colour blocks (c0 > c1), point filter");
+}
+static void build_case9b(int flip)
+{
+    (void)flip;
+    /* 7 texels use index 3 of a 3-colour block, so they are transparent and alpha-tested away. */
+    build_dxt_case(11, SURF_D2, VB_D2, TEX_D2, 0x0C, 16, 16, 1, 256 - 7,
+                   "D2 DXT1 16x16, 3-colour+transparent blocks, alpha test GREATER 0x80");
+}
+static void build_case9c(int flip)
+{
+    (void)flip;
+    build_dxt_case(12, SURF_D3, VB_D3, TEX_D3, 0x0F, 16, 16, 0, 256,
+                   "D3 DXT5 16x16, 8- and 6-alpha blocks, alpha compared in the surface");
+}
+static void build_case9d(int flip)
+{
+    (void)flip;
+    build_dxt_case(13, SURF_D4, VB_D4, TEX_D4, 0x0C, 8, 6, 0, 48,
+                   "D4 DXT1 8x6, height not a multiple of 4 (decode fallback)");
+}
+
 static void write_guest_data(void)
 {
     uint32_t x, y;
@@ -505,6 +734,10 @@ static void write_guest_data(void)
                        | ((x & 4) << 2) | ((y & 4) << 3);
             *(uint16_t *)(G(TEX_C9) + m * 2) = pack565(255 - x * 16, 140 + y * 12, 200 + x * 6);
         }
+    memcpy(G(TEX_D1), k_dxt1_opaque_16x16, sizeof k_dxt1_opaque_16x16);
+    memcpy(G(TEX_D2), k_dxt1_alpha_16x16, sizeof k_dxt1_alpha_16x16);
+    memcpy(G(TEX_D3), k_dxt5_16x16, sizeof k_dxt5_16x16);
+    memcpy(G(TEX_D4), k_dxt1_8x6, sizeof k_dxt1_8x6);
 }
 
 /* ── Running ─────────────────────────────────────────────────────────────── */
@@ -575,10 +808,15 @@ typedef struct {
     int worst;
 } Cmp;
 
+static int surf_tol(const Surf *s)
+{
+    return s->tol ? s->tol : s->bpp == 2 ? TOL_565 : TOL_8888;
+}
+
 static Cmp compare(const Surf *s, const uint8_t *ref, const uint8_t *got)
 {
     Cmp r;
-    int tol = s->bpp == 2 ? TOL_565 : TOL_8888;
+    int tol = surf_tol(s);
     int clr[4], x, y;
     unsigned good = 0, bad_region = 0;
     uint8_t cpx[4];
@@ -632,7 +870,7 @@ static int check_parity(const char *label, const Surf *s, const uint8_t *ref, co
 
     if (expect_match && c.all_pct < 100.0) {
         /* First few disagreements, so a failure names pixels rather than percentages. */
-        int x, y, shown = 0, tol = s->bpp == 2 ? TOL_565 : TOL_8888;
+        int x, y, shown = 0, tol = surf_tol(s);
         for (y = 0; y < (int)s->h && shown < 8; y++)
             for (x = 0; x < (int)s->w && shown < 8; x++) {
                 size_t o = ((size_t)y * s->w + (size_t)x) * s->bpp;
@@ -716,13 +954,17 @@ static int check_linear(const Surf *s, const uint8_t *ref, const uint8_t *got)
 }
 
 typedef void (*build_fn)(int flip);
-static const build_fn k_build[10] = { build_case1, build_case2, build_case3, build_case4, build_case2b, build_case2c,
-                                      build_case5, build_case6, build_case7, build_case8 };
+static const build_fn k_build[NCASES] = { build_case1, build_case2, build_case3, build_case4, build_case2b, build_case2c,
+                                      build_case5, build_case6, build_case7, build_case8,
+                                      build_case9a, build_case9b, build_case9c, build_case9d };
 /* Cases the back end runs with a flip and compares; case 3 (index 3) is the no-flip control. */
 static const int k_parity[5] = { 0, 1, 4, 2, 5 };
 /* Combiner cases: they switch the executor to program mode and set rc_seen for good, so both
  * passes run them after everything else, including the no-flip control. */
 static const int k_rc[4] = { 6, 7, 8, 9 };
+/* DXT cases: fixed-function, so they run with cases 1-4 and before the combiners switch the executor to
+ * program mode. They leave blend and alpha test off. */
+static const int k_dxt[4] = { 10, 11, 12, 13 };
 
 int main(void)
 {
@@ -731,7 +973,7 @@ int main(void)
     uint8_t *ramin = (uint8_t *)calloc(1, 1024u * 1024u);
     uint8_t *instance = (uint8_t *)calloc(1, 0x20000u);
     static uint8_t xbe[0x2000];
-    uint8_t *ref[10][2], *got[10][2];
+    uint8_t *ref[NCASES][2], *got[NCASES][2];
     uint8_t *pbmem = (uint8_t *)VirtualAlloc(NULL, 0x4000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     int ok = 1, c, i;
 
@@ -778,6 +1020,14 @@ int main(void)
         ok &= submit("software");
         for (i = 0; i < g_scene[c].nsurf; i++) ref[c][i] = snapshot(&g_scene[c].surf[i]);
     }
+    for (i = 0; i < 4; i++) {
+        c = k_dxt[i];
+        k_build[c](1);
+        prefill(&g_scene[c]);
+        printf(" case %s\n", g_scene[c].name);
+        ok &= submit("software");
+        ref[c][0] = snapshot(&g_scene[c].surf[0]);
+    }
 
     /* (b) D3D11 back end. */
     _putenv_s("RECOMP_GPU_WARP", "1");     /* deterministic adapter; the back end logs "[GPUBE] device:" on stderr */
@@ -800,6 +1050,15 @@ int main(void)
         }
     }
 
+    for (i = 0; i < 4; i++) {
+        c = k_dxt[i];
+        k_build[c](1);
+        prefill(&g_scene[c]);
+        printf(" case %s\n", g_scene[c].name);
+        ok &= submit("d3d11 (flipped)");
+        got[c][0] = snapshot(&g_scene[c].surf[0]);
+    }
+
     puts("-- parity --");
     {
         static const char *tag[6] = { "case1", "case2", "case3", "case4", "case2b", "case2c" };
@@ -815,6 +1074,16 @@ int main(void)
                 if (!ref[c][i] || !got[c][i]) { ok = 0; continue; }
                 ok &= check_parity(label, &g_scene[c].surf[i], ref[c][i], got[c][i], 1);
             }
+        }
+    }
+
+    puts("-- parity (DXT) --");
+    {
+        static const char *dtag[4] = { "dxt1-opaque", "dxt1-3colour-alphatest", "dxt5-alpha", "dxt1-8x6" };
+        for (i = 0; i < 4; i++) {
+            c = k_dxt[i];
+            if (!ref[c][0] || !got[c][0]) { ok = 0; continue; }
+            ok &= check_parity(dtag[i], &g_scene[c].surf[0], ref[c][0], got[c][0], 1);
         }
     }
 
@@ -882,7 +1151,7 @@ int main(void)
 
     nv2a_backend_register(NULL);
     nv2a_set_commit_consumer(NULL);
-    for (c = 0; c < 10; c++)
+    for (c = 0; c < NCASES; c++)
         for (i = 0; i < 2; i++) { free(ref[c][i]); free(got[c][i]); }
     VirtualFree(pbmem, 0, MEM_RELEASE);
     free(instance); free(ramin); free(ram);
