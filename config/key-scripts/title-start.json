@@ -1,0 +1,6 @@
+[
+  {"wait_title": {"timeout": 300}},
+  {"key_until": {"vk": "RETURN", "hold": 2.0, "until": "menu", "every": 6, "max": 20}},
+  {"sleep": 3},
+  {"snap": "after-start"}
+]

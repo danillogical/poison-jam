@@ -1,0 +1,16 @@
+[
+  {"wait_title": {"timeout": 300}},
+  {"key_until": {"vk": "RETURN", "hold": 2.0, "until": "menu", "every": 6, "max": 20}},
+  {"sleep": 3},
+  {"snap": "main-menu"},
+  {"key": {"vk": "Z", "hold": 1.5}},
+  {"wait_change": {"timeout": 60, "min_mean_delta": 8}},
+  {"sleep": 10},
+  {"snap": "after-new-game-10s"},
+  {"sleep": 30},
+  {"snap": "after-new-game-40s"},
+  {"sleep": 60},
+  {"snap": "after-new-game-100s"},
+  {"sleep": 90},
+  {"snap": "after-new-game-190s"}
+]

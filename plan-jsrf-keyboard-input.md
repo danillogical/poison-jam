@@ -20,7 +20,24 @@ This file does not duplicate the permanent rules owned elsewhere:
 - The retired post-title milestone table is available at
   `git show d6b8336:plan-jsrf-bare-minimum.md`.
 
-## Current work (2026-10-10)
+## Current work (2026-10-11)
+
+**K16 is MET (2026-10-11).** A real Enter press at the title opens JSRF's own main menu (NEW GAME / LOAD GAME /
+VS MODE), through the live keyboard path, with no `RECOMP_PAD_*` switch:
+- R3: `keyscript-k16-r3b`. The title was detected at 119 s and Enter held 2 s; `[KEY] down vk=0x0D`, `[INPUT] ...
+  buttons=0x0010`, then release to `0x0000`; the next frames show the menu.
+- R4: `keyscript-newgame-2`. The menu came up on the first press at 113 s.
+- Ledger IDs: L57, L58, L59, L60, plus the title-path switches.
+- Driver: `scripts/key-script-run.py`, with `config/key-scripts/title-start.json`.
+
+**A press is ignored for a while after the title first shows.** In `keyscript-newgame-1` a press at 52 s
+reached the guest report but the title stayed, then went to its attract demo. So the driver's
+`key_until` re-presses every 6 s until the menu detector fires.
+
+**Next (K17 and M18):** NEW GAME (Z = Xbox A) is accepted and leads into the game's own path, which stopped
+on stop 36 (`[ICALL] Failed to resolve VA 0x00047600`, `config/stop-chain.json`).
+
+## Earlier work (2026-10-10)
 
 **Architecture is measured, not assumed** — see "Measured data-flow" below. Two findings move the plan:
 
