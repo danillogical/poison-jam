@@ -563,11 +563,17 @@ for macro in ("NV097_CLASS", "NV_MEMCPY_CLASS", "NV_IMAGEBLIT_CLASS", "NV_SURFAC
     lines.append("};")
     lines.append("")
 lines += [
+    "/* The tables are sorted ascending, which the generator guarantees. */",
     "static bool in_table(const uint16_t *t, unsigned n, uint32_t method)",
     "{",
-    "    for (unsigned i = 0; i < n; ++i)",
-    "        if (t[i] == method) return true;",
-    "    return false;",
+    "    unsigned lo = 0, hi = n;",
+    "    if (method > 0xFFFFu) return false;",
+    "    while (lo < hi) {",
+    "        unsigned mid = lo + (hi - lo) / 2;",
+    "        if ((uint32_t)t[mid] < method) lo = mid + 1;",
+    "        else hi = mid;",
+    "    }",
+    "    return lo < n && (uint32_t)t[lo] == method;",
     "}",
     "",
     "/* Is this a method the model can execute on a subchannel bound to class_id?",
