@@ -1492,3 +1492,16 @@ functions; their enter/exit lines were 216 k of a run log's 253 k lines, each `f
 
 The next large step is running vertex programs and the fixed-function transform on the GPU.
 
+### §30.1 Vertex programs on the GPU: 164 s to ~115 s (2026-10-11)
+
+Vertex-program batches that run the combiners now go to the D3D11 back end untransformed, and the program runs as a translated HLSL vertex shader (L60; toolkit `07b723a`, game `71e0075`).
+- **Measured:** 298k program draws through 21 shaders in a 200 s run, no compile failures or fallbacks.
+- **PRESS START,** frame-confirmed in four runs: 120, 113, 116 and 115 s (`direct-apuirq-1..4`).
+- **Main-thread profile:** `nv2a_vsh_run` is gone. The main thread is still ~94 % busy, now spread over attribute fetch (`fetch_attr`, `fetch_position`, `xbox_GetMemoryOffset`, ~21 %), the walk and commit (~16 %), texture hashing (6 %) and the fixed-function path (~5 %).
+
+Two faults that the faster title run exposed were fixed on the way:
+- **The packet-cap livelock (L54, toolkit `3648380`).** The cap is now a per-unit yield, which amends L40.
+- **An intermittent boot hang at DirectSound init (L61).** The APU's interrupt never reached the guest's ISR.
+
+The next large step toward 90 s is uploading the guest vertex arrays raw instead of fetching attributes on the CPU (Mercenaries `nv2a_pgraph_d3d11.c:3825-3862` builds the input layout from the NV097 formats).
+

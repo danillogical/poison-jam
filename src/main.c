@@ -573,6 +573,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
     if (xbox_Nv2aAttachIrqLine() != 0)
         fprintf(stderr, "[NV2A] interrupt line not attached; the guest will"
                         " not see GPU interrupts\n");
+    /* The APU model exists only under RECOMP_APU_TRAP; DirectSound's ISR services its front-end trap. */
+    if (g_apu_state && xbox_ApuAttachIrqLine() != 0)
+        fprintf(stderr, "[APU] interrupt line not attached; the guest will"
+                        " not see APU interrupts\n");
     if (!nv2a_hook_install_aperture((void *)(0xFD000000u + g_xbox_mem_offset),
                                     16u * 1024u * 1024u)) {
         fprintf(stderr, "[NV2A] failed to install MMIO state owner\n");
