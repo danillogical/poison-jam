@@ -25805,5 +25805,13 @@
   "kind": "routine",
   "stack_args": 0,
   "evidence": "Reached only by an indirect call on the NEW GAME path: 20261011-070048-935-keyscript-newgame-12 died on `[ICALL] Failed to resolve VA 0x000A5B60` right after stop 44 returned. It sat inside the over-wide recovery span of 0x000A5AF0 (now narrowed to its own `ret`). A thiscall method with a 0x50-byte frame: `sub esp, 0x50; push ebx/ebp/esi/edi; mov esi, ecx`, a two-level switch on [esi+0x208]-4 (`movzx eax, byte [eax+0xa60b8]; jmp [eax*4+0xa60a4]`), and a single exit `pop edi/esi/ebp/ebx; add esp, 0x50; ret` at 0x000A6090-0x000A60A3 (no immediate, so stack_args 0). The jump tables at 0x000A60A4 and 0x000A60B8 are data after the `ret` and stay outside the span. Every direct branch targets the span. Stop 45 in config/stop-chain.json."
+ },
+ {
+  "start": "0x00044BA0",
+  "end": "0x00044C33",
+  "section": ".text",
+  "kind": "routine",
+  "stack_args": 0,
+  "evidence": "Reached only by an indirect call on the NEW GAME path: 20261011-071740-969-keyscript-newgame-13 died on `[ICALL] Failed to resolve VA 0x00044BA0` right after stop 45 returned. No manifest or analysis entry covers it. It follows the `add esp, 0x10; ret` of the function before (0x00044B95) and NOP padding at 0x00044B96-0x00044B9F. A leaf thiscall method: reads [ecx+0xe0], computes a clamped value and stores it at [[ecx+0xdc]+0x50]; no pushes, a single `ret` at 0x00044C32, so stack_args 0; NOP padding follows. Every branch in the span targets the span. Stop 46 in config/stop-chain.json."
  }
 ]

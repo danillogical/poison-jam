@@ -448,15 +448,32 @@
   {
    "id": 45,
    "address": "0x000A5B60",
-   "state": "REPAIRED",
-   "repair_commit": null,
+   "state": "RUNTIME_CONFIRMED",
+   "repair_commit": "864c1b6",
    "evidence": [
     {
      "run": "20261011-070048-935-keyscript-newgame-12",
      "role": "discovered"
+    },
+    {
+     "run": "20261011-071740-969-keyscript-newgame-13",
+     "role": "returned"
     }
    ],
-   "note": "Fatal `[ICALL] Failed to resolve VA 0x000A5B60` right after stop 44 returned. 0x000A5B60 is a separate function inside the over-wide recovery span [0x000A5AF0, 0x000A60D0) of 0x000A5AF0. REPAIRED: 0x000A5AF0 narrowed to [0x000A5AF0, 0x000A5B5F) and 0x000A5B60 recovered as [0x000A5B60, 0x000A60A4), stack_args 0. NOT YET EXERCISED."
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x000A5B60` right after stop 44 returned. 0x000A5B60 is a separate function inside the over-wide recovery span [0x000A5AF0, 0x000A60D0) of 0x000A5AF0. REPAIRED: 0x000A5AF0 narrowed to [0x000A5AF0, 0x000A5B5F) and 0x000A5B60 recovered as [0x000A5B60, 0x000A60A4), stack_args 0. CONFIRMED: 20261011-071740-969-keyscript-newgame-13 (built from 864c1b6) shows `[RECOVERED] 0x000A5B60 returned; ABI verified`; the chain advanced to 0x00044BA0 (stop 46)."
+  },
+  {
+   "id": 46,
+   "address": "0x00044BA0",
+   "state": "REPAIRED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261011-071740-969-keyscript-newgame-13",
+     "role": "discovered"
+    }
+   ],
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x00044BA0` right after stop 45 returned. A leaf thiscall method with no manifest or analysis entry, reached indirectly. REPAIRED: recovery entry [0x00044BA0, 0x00044C33), stack_args 0. NOT YET EXERCISED."
   }
  ]
 }
