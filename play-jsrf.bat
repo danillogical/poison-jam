@@ -21,6 +21,10 @@ set RECOMP_FB_WINDOW=1
 rem Rasterise on the GPU (ledger L59): the title arrives in minutes instead of ~26 minutes.
 set RECOMP_GPU_BACKEND=d3d11
 
+rem No per-call [TRACE] lines for the traced DirectSound functions: at ~500 lines a second,
+rem each flushed, they cost more time to the title than anything else measured (technical record section 30).
+set RECOMP_TRACE_BUDGET=0
+
 rem Input, so a real keypress reaches the guest (both off by default, ledger L57/L58):
 rem RECOMP_USB models the MCPX OHCI controller so JSRF's own XAPI enumerates a pad;
 rem RECOMP_KEYBOARD maps the focused window's keys onto that pad (Enter -> Xbox Start).
@@ -37,7 +41,7 @@ rem Saves go here, so the default disk images in %%LOCALAPPDATA%%\xboxrecomp are
 set SAVE_ROOT=%~dp0logs\play-save
 if not exist "%SAVE_ROOT%" mkdir "%SAVE_ROOT%"
 
-echo Starting JSRF on the GPU. PRESS START appears after about 9 minutes; close the window or press Ctrl+C to stop.
+echo Starting JSRF on the GPU. PRESS START appears after about 3 minutes; close the window or press Ctrl+C to stop.
 "build\Release\jsrf_recomp.exe" --save-root="%SAVE_ROOT%" %*
 echo jsrf_recomp.exe exited with code %ERRORLEVEL%
 endlocal

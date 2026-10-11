@@ -1458,3 +1458,37 @@ Open:
 - linear textures on stages 1–3, whose CONTROL1/IMAGE_RECT methods the method table does not admit;
 - fog on the fixed-function path;
 - the collector stall.
+
+## §30. Time to the title: 517 s to 164 s on the GPU path (2026-10-10)
+
+**Method.** WPR CPU traces (`wpr -start CPU`, exported with `xperf -symbols`, the build's PDB plus Microsoft's
+public symbols), read per thread. The main host thread runs the guest's main thread and the whole
+pushbuffer walk and executor. It was 92-95 % busy for the whole trace, so its CPU is the time to the title.
+The APU frame thread and `nv2a_ack_thread` each keep a core busy, on other cores (the host has 20).
+PRESS START is found by `find_press_start.py`; it appears at about present 3122-3180 in every scored run.
+
+| step (toolkit / game commit) | main-thread cost removed | PRESS START |
+|---|---|---|
+| baseline, `ac8951d` | | 517 s |
+| method admission table: binary search, not a 600-entry scan (`cb21b8f`, `bab6203`) | 32 % | 377 s |
+| DXT textures uploaded as BC1/2/3, not decoded per texel (`07697cc`) | ~6 % | ~350 s (presents) |
+| pushbuffer page check kept across walks, SEH-guarded read; TSC executor timers (`1996f28`) | ~9 % + ~4 % | ~314 s (presents) |
+| vertex program decoded once, not per vertex (`3958383`) | ~1 % | 311 s |
+| `RECOMP_TRACE_BUDGET=0`: no per-call `[TRACE]` lines | file I/O on the guest threads | 167 s |
+| one method check per word, with a one-entry cache (`2b7efdc`) | ~2 % | **164 s** |
+
+Runs `direct-it1-bsearch` … `direct-it6-impl` (Windows, `xbr-mac`), all `RECOMP_GPU_BACKEND=d3d11` with
+the title-path switches. The press-start and city frames match the earlier GPU runs' look.
+
+**The trace lines were the largest single cost.** `config/trace-functions.json` traces 18 DirectSound
+functions; their enter/exit lines were 216 k of a run log's 253 k lines, each `fflush`ed.
+`RECOMP_TRACE_BUDGET=0` turns them off, and `play-jsrf.bat` sets it. `just title-run` keeps them, for diagnosis.
+
+**Left on the main thread** (the 311 s profile, before the trace change):
+- the CPU vertex-program interpreter, 26 %;
+- the walk and commit, ~13 %;
+- `xbox_GetMemoryOffset` calls from the executor, ~4.5 %;
+- texture re-hashing per flip, ~2.4 %.
+
+The next large step is running vertex programs and the fixed-function transform on the GPU.
+
