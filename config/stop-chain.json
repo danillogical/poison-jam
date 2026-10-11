@@ -431,15 +431,32 @@
   {
    "id": 44,
    "address": "0x0010A050",
-   "state": "REPAIRED",
-   "repair_commit": null,
+   "state": "RUNTIME_CONFIRMED",
+   "repair_commit": "b19b7df",
    "evidence": [
     {
      "run": "20261011-062258-664-keyscript-newgame-11",
      "role": "discovered"
+    },
+    {
+     "run": "20261011-070048-935-keyscript-newgame-12",
+     "role": "returned"
     }
    ],
-   "note": "Fatal `[ICALL] Failed to resolve VA 0x0010A050` (0xE0424943): the tail-call target of 0x0010A0E0's switch arms, reached once stop 43 widened that switch. No body existed for it. REPAIRED: recovery entry [0x0010A050, 0x0010A0B5), stack_args 0. NOT YET EXERCISED."
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x0010A050` (0xE0424943): the tail-call target of 0x0010A0E0's switch arms, reached once stop 43 widened that switch. No body existed for it. REPAIRED: recovery entry [0x0010A050, 0x0010A0B5), stack_args 0. CONFIRMED: 20261011-070048-935-keyscript-newgame-12 (built from f9d33f8, which descends from b19b7df) shows `[RECOVERED] 0x0010A050 returned; ABI verified`; the chain advanced to 0x000A5B60 (stop 45)."
+  },
+  {
+   "id": 45,
+   "address": "0x000A5B60",
+   "state": "REPAIRED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261011-070048-935-keyscript-newgame-12",
+     "role": "discovered"
+    }
+   ],
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x000A5B60` right after stop 44 returned. 0x000A5B60 is a separate function inside the over-wide recovery span [0x000A5AF0, 0x000A60D0) of 0x000A5AF0. REPAIRED: 0x000A5AF0 narrowed to [0x000A5AF0, 0x000A5B5F) and 0x000A5B60 recovered as [0x000A5B60, 0x000A60A4), stack_args 0. NOT YET EXERCISED."
   }
  ]
 }

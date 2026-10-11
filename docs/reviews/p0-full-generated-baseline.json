@@ -1,6 +1,6 @@
 {
  "files": {
-  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "8414c22da746360bd2036088b45491819318eb6e20c3c27f2f7dfaa5c53604b6",
+  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "86f8c7dc10d7b0e60d55dc91059aded4cfe2eae0914dcd7163002b86b907fe28",
   "src/recomp/gen/recomp_0000.c": "4db074a90166590ca387126d7015a9b0e324a0f3c47e7301e65a92418e2a222c",
   "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
   "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
@@ -10,10 +10,10 @@
   "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
   "src/recomp/gen/recomp_dispatch.c": "fc57d967299a2f9a669334e658b03776a77823c6ced676fc22793bc150d2483c",
   "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-  "src/recomp/gen/recomp_stubs_recovery.c": "be951feb7ef7fa26381b8913d37bb5193ce725fe3da30a4187f6059b85565420",
+  "src/recomp/gen/recomp_stubs_recovery.c": "941f4713546620bf780e8604eba4d4b661f6b9e9344e63336774ba8a3c055d2e",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "7c1720c624b65175171499a5663b7382a4d97beaa15b59d314e714b0ea44c741",
-  "src/recomp/recovered/recovered.c": "ea8af8aec700e209c0507602d5faa3cac9f77b20d7cd45a04340af4aaf51a54a",
+  "src/recomp/recovered/recovered.c": "655537dce1c11d638ca2c6620e5f22874e3566c81f2202ad9cbb2fbf6a40025f",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
   "src/recomp/recovered/recovered_11c1_test.c": "777c08fa4524517eb50469008b2b15a12d1423be9f8f5ab7271d591c8d4d72bc",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
@@ -637,6 +637,15 @@
     "src/recomp/recovered/recovered_11c1_test.c"
    ],
    "reason": "table-scan batch: 72 indirect-only functions recovered, 16 over-wide entries narrowed"
+  },
+  {
+   "date": "2026-10-11",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c"
+   ],
+   "reason": "stop 45: 0x000A5AF0 narrowed; 0x000A5B60 recovered"
   }
  ]
 }
