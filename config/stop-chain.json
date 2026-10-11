@@ -333,15 +333,32 @@
   {
    "id": 38,
    "address": "0x000352D0",
-   "state": "REPAIRED",
-   "repair_commit": null,
+   "state": "RUNTIME_CONFIRMED",
+   "repair_commit": "c0bf18d",
    "evidence": [
     {
      "run": "20261011-033709-181-keyscript-newgame-4",
      "role": "discovered"
+    },
+    {
+     "run": "20261011-041449-960-keyscript-newgame-6",
+     "role": "returned"
     }
    ],
-   "note": "Fatal `[ICALL] Failed to resolve VA 0x000352D0` (0xE0424943), edx=0x000352D0 ecx=0x01330060, in run keyscript-newgame-4 after NEW GAME was chosen at the main menu, right after stop 37's container 0x000307A0 returned cleanly, i.e. the chain advanced exactly one address. Reached only by an indirect call (edx is the target, likely a vtable slot), so no decode pass lifted it: the analysis database has no function entry there, it lies inside the tail_jump_alias spans sub_00033BA0 ... sub_000348A0 (all ending 0x000355B0) whose recovered entries end at or before 0x00035018, and the bytes below it (0x00035018-0x000352CF) are jump and data tables of the recovered 0x000348A0 method. Same class as stops 29-36. Bytes are a complete thiscall method (`push ebx; push esi; mov esi, ecx; mov eax, [esi+0x1600]; xor ebx, ebx; ... push edi`) that tears down the objects at [this+0x1600] and then [this+0x15fc], and ends `pop edi; pop esi; pop ebx; ret 4` at 0x00035552. REPAIRED: recovery entry [0x000352D0, 0x00035555), stack_args 4, added to config/recovered-functions.json; end is one byte past the `ret 4`, every branch target (up to 0x3554F) is inside the span, and there is no tail-jmp and no jump table. No interior fragment: nothing is declared inside the extent in the recovered, manual or boundary-fixes manifests or the analysis database, so no widening, removal or generated patch was needed (unlike stop 37). NOT YET EXERCISED: expect `[RECOVERED] 0x000352D0 returned; ABI verified (ESP/EBX/ESI/EDI)` in a run built from the repair. repair_commit is still to be recorded: it is the commit that lands this entry."
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x000352D0` (0xE0424943), edx=0x000352D0 ecx=0x01330060, in run keyscript-newgame-4 after NEW GAME was chosen at the main menu, right after stop 37's container 0x000307A0 returned cleanly, i.e. the chain advanced exactly one address. Reached only by an indirect call (edx is the target, likely a vtable slot), so no decode pass lifted it: the analysis database has no function entry there, it lies inside the tail_jump_alias spans sub_00033BA0 ... sub_000348A0 (all ending 0x000355B0) whose recovered entries end at or before 0x00035018, and the bytes below it (0x00035018-0x000352CF) are jump and data tables of the recovered 0x000348A0 method. Same class as stops 29-36. Bytes are a complete thiscall method (`push ebx; push esi; mov esi, ecx; mov eax, [esi+0x1600]; xor ebx, ebx; ... push edi`) that tears down the objects at [this+0x1600] and then [this+0x15fc], and ends `pop edi; pop esi; pop ebx; ret 4` at 0x00035552. REPAIRED: recovery entry [0x000352D0, 0x00035555), stack_args 4, added to config/recovered-functions.json; end is one byte past the `ret 4`, every branch target (up to 0x3554F) is inside the span, and there is no tail-jmp and no jump table. No interior fragment: nothing is declared inside the extent in the recovered, manual or boundary-fixes manifests or the analysis database, so no widening, removal or generated patch was needed (unlike stop 37). NOT YET EXERCISED: expect `[RECOVERED] 0x000352D0 returned; ABI verified (ESP/EBX/ESI/EDI)` in a run built from the repair. repair_commit is still to be recorded: it is the commit that lands this entry. CONFIRMED: 20261011-041449-960-keyscript-newgame-6 (built from c0bf18d) shows `[RECOVERED] 0x000352D0 returned; ABI verified`, and the chain advanced to 0x00038090 (stop 39)."
+  },
+  {
+   "id": 39,
+   "address": "0x00038090",
+   "state": "REPAIRED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261011-041449-960-keyscript-newgame-6",
+     "role": "discovered"
+    }
+   ],
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x00038090` (0xE0424943) on the NEW GAME path, immediately after stop 38 returned. Reached only by an indirect call; the analysis database has no entry starting there. A thiscall method that frees the members of [this+0x15d0] and unlinks its argument from the list at [this+0x15c8]. REPAIRED: recovery entry [0x00038090, 0x0003845E), stack_args 4 (three exits, each `pop edi; pop esi; pop ebp; ret 4`). NOT YET EXERCISED."
   }
  ]
 }
