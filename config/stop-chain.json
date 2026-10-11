@@ -380,6 +380,19 @@
     }
    ],
    "note": "Fatal `[ICALL] Failed to resolve VA 0x000273C0` (0xE0424943) on the NEW GAME path, immediately after stop 39 returned. Reached only by an indirect call; no analysis-database entry. A thiscall method of the same family as stop 39 (frees the members of [this+0x1624], unlinks its argument). REPAIRED: recovery entry [0x000273C0, 0x00027854), stack_args 4. CONFIRMED: 20261011-050619-018-keyscript-newgame-8 (built from 2fe91d7) shows `[RECOVERED] 0x000273C0 returned; ABI verified`; the chain advanced to 0x0003A900 (stop 41)."
+  },
+  {
+   "id": 41,
+   "address": "0x0003A900",
+   "state": "REPAIRED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261011-050619-018-keyscript-newgame-8",
+     "role": "discovered"
+    }
+   ],
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x0003A900` (0xE0424943), ecx=0x001EFFB0, in run keyscript-newgame-8 on the NEW GAME path, after stop 40 returned and the teardown table at 0x001EC288 had run (0x00030230, 0x00032790, 0x000352D0, 0x00038090, 0x000273C0, 0x00031360, 0x00037370, 0x000365C0, 0x0002D040 all return ABI-verified) and the Media\\Mark\\PRESS texture loads had started. NOT a member of the teardown family: no dword equal to 0x0003A900 exists anywhere in the XBE. The message is the recovery trap sub_0003A900 (src/recomp/gen/recomp_stubs_recovery.c; listed in config/recovery-unresolved.json), reached by the direct tail-jump `mov ecx, 0x1effb0; jmp 0x3a900` at 0x0007BDFC-0x0007BE01 in the recovered 0x0007BDD0, taken after its state call through the table at 0x0020D2B8 (last ICALL 0x0007C560, which sets state 0x1C). Bytes: `inc dword ptr [ecx+0x10]; ret`, after `ret 4` and 12 NOPs. REPAIRED: recovery entry [0x0003A900, 0x0003A904), stack_args 0. NOT YET EXERCISED: expect `[RECOVERED] 0x0003A900 returned; ABI verified (ESP/EBX/ESI/EDI)`. repair_commit is still to be recorded: it is the commit that lands this entry. Pre-recovered from the vtable scan in the same change, with no run yet and so no row: entries 5, 9, 15, 16 and 18 of the teardown table [0x001EC288, 0x001EC30C) (0x00028860 [0x00028860, 0x00028955), 0x0002B340 [0x0002B340, 0x0002BFAF), 0x00035DC0 [0x00035DC0, 0x00036043), 0x00034680 [0x00034680, 0x00034801), 0x0002CC90 [0x0002CC90, 0x0002CFBA), all stack_args 4), the only entries of that table and of its four sibling per-type tables at 0x001EC068, 0x001EC0F0, 0x001EC178 and 0x001EC200 that did not resolve; and 0x000439F0 [0x000439F0, 0x00043B73), stack_args 0, the one unresolved slot of the four .rdata vtables that hold stop 36 (0x00047600, slot 8 of 0x001CA490, 0x001CA5A8, 0x001CA5CC and 0x001CAA8C)."
   }
  ]
 }
