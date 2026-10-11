@@ -23,11 +23,20 @@
  * shades, so every case uses one diffuse colour for all vertices.
  *   - The DXT cases (D1..D4) set a per-surface tolerance of 3 instead (TOL_DXT): the only
  *     difference left there is how a BC unit and the CPU decoder round the 565 endpoint
- *     expansion and the 1/3, 1/2, n/7 and n/5 interpolations, a couple of LSBs. */
+ *     expansion and the 1/3, 1/2, n/7 and n/5 interpolations, a couple of LSBs.
+ *   - The vertex-program cases (V1..V6, and V7 in its own process) set a per-surface tolerance of 4
+ *     (TOL_VSH): GPU rcp/rsq/exp2/log2/pow and fused mad are approximate to a few ULP, and the GPU
+ *     interpolates colours from unrounded floats where the CPU path quantises, so a few 8-bit steps
+ *     are expected and 4/255 is the bar. Cases with varying colours use w = 1 positions, so the
+ *     CPU's screen-space interpolation and the GPU's perspective-correct one are the same function;
+ *     the cases with a varying w (V1, V6) use one flat colour.
+ *   - Run with `--vsh-off-only` (and RECOMP_GPU_VSH=0 in the environment, as CTest sets it) the
+ *     binary runs only V7, the V1 scene with the back end's GPU program path switched off. */
 #include "kernel/kernel.h"
 #include "nv2a_state.h"
 #include "nv2a_mmio_hook.h"
 #include "kernel/nv2a_backend.h"
+#include "kernel/nv2a_vsh_interp.h"
 #include "video/nv2a_d3d11_backend.h"
 #include "recomp_types.h"
 #include <math.h>
@@ -97,6 +106,18 @@ void jsrf_slot_watch_write(uint32_t provenance, uint32_t before, uint32_t after,
 #define VB_C8     0x006A0000u
 #define VB_C9     0x006B0000u
 #define VB_C10    0x006C0000u
+#define SURF_V1   0x00550000u     /* vertex-program cases V1..V6, 64x64 A8R8G8B8 */
+#define SURF_V2   0x00560000u
+#define SURF_V3   0x00570000u
+#define SURF_V4   0x00580000u
+#define SURF_V5   0x00590000u
+#define SURF_V6   0x005A0000u
+#define VB_V1     0x00790000u     /* three 64-byte vertices each */
+#define VB_V2     0x007A0000u
+#define VB_V3     0x007B0000u
+#define VB_V4     0x007C0000u
+#define VB_V5     0x007D0000u
+#define VB_V6     0x007E0000u
 #define TEX_C9    0x006D0000u     /* case 7: stage 1, 8x8 R5G6B5 linear */
 #define SURF_D1   0x00510000u     /* DXT case 1: 64x64 A8R8G8B8      */
 #define SURF_D2   0x00520000u     /* DXT case 2                      */
@@ -118,6 +139,7 @@ void jsrf_slot_watch_write(uint32_t provenance, uint32_t before, uint32_t after,
 #define TOL_8888 8
 #define TOL_565  9
 #define TOL_DXT  3      /* DXT cases: BC decode vs CPU decode rounding, per 8-bit channel */
+#define TOL_VSH  4      /* vertex-program cases: GPU float maths and colour interpolation, per 8-bit channel */
 #define COVER_TOL 24
 
 /* ── Pushbuffer builder ──────────────────────────────────────────────────── */
@@ -227,7 +249,7 @@ typedef struct {
     Surf surf[2];
 } Scene;
 
-#define NCASES 14       /* 0..9 as before, 10..13 the DXT cases */
+#define NCASES 21       /* 0..9 as before, 10..13 the DXT cases, 14..19 V1..V6, 20 V7 */
 static Scene g_scene[NCASES];
 
 /* Case 1 and 4 share one scene shape at different addresses. */
@@ -713,6 +735,572 @@ static void build_case9d(int flip)
                    "D4 DXT1 8x6, height not a multiple of 4 (decode fallback)");
 }
 
+/* ── Vertex-program cases (V1..V6, V7) ───────────────────────────────────────
+ * Each case is a short hand-written NV2A vertex program, drawn as one triangle into its own 64x64
+ * A8R8G8B8 surface with the register combiners on (one stage that produces zero, and a final
+ * combiner that outputs v0, or the fog mix for V5), so a back end that runs programs takes the GPU
+ * path and the software executor runs the same program on its interpreter.
+ *
+ * The span between VSH-ENCODER-BEGIN and -END uses nothing but the C library and
+ * kernel/nv2a_vsh_interp.h: the instruction encoder, the case programs/constants/vertices, a double
+ * precision model of each case, and a self-check that runs every program through nv2a_vsh_run and
+ * compares it with the model. It runs first in main, and can be compiled alone against
+ * nv2a_vsh_interp.c to check the encoder without Windows.
+ *
+ * Vertex layout: four float4 attributes, v0 position, v1 and v2 case data, v3 diffuse; 64 bytes. */
+/* VSH-ENCODER-BEGIN */
+#define VS_STRIDE 64u
+
+enum { MAC_NOP, MAC_MOV, MAC_MUL, MAC_ADD, MAC_MAD, MAC_DP3, MAC_DPH, MAC_DP4, MAC_DST, MAC_MIN,
+       MAC_MAX, MAC_SLT, MAC_SGE, MAC_ARL };
+enum { ILU_NOP, ILU_MOV, ILU_RCP, ILU_RCC, ILU_RSQ, ILU_EXP, ILU_LOG, ILU_LIT };
+enum { O_POS = 0, O_D0 = 3, O_D1 = 4, O_FOG = 5 };
+enum { VS_K_NONE, VS_K_TEMP, VS_K_IN, VS_K_CONST };       /* the 2-bit source mux values */
+enum { VS_MVP = 1, VS_A0, VS_PAIR, VS_SFU, VS_FOG, VS_BEHIND };
+
+/* One source operand. `kind` is the mux; `idx` the temp number, input number or constant number. */
+typedef struct { uint8_t kind, idx, neg, swz, rel; } VsSrc;
+
+/* One instruction, before packing. tmask/imask are the write masks of the MAC and ILU halves into
+ * temp `tdst` (a paired ILU writes R1 whatever tdst says); omask != 0 writes o[oaddr] from the MAC
+ * result, or from the ILU result when ofrom_ilu. Masks are x=8 y=4 z=2 w=1. */
+typedef struct {
+    uint8_t mac, ilu;
+    VsSrc a, b, c;
+    uint8_t tdst, tmask, imask, oaddr, omask, ofrom_ilu, final;
+} VsIns;
+
+static int g_vs_enc_conflict;    /* set when two sources need different input or constant numbers */
+
+/* "xyzw" style swizzle, optionally led by '-' for negate. A short string repeats its last letter,
+ * as D3D does (".x" is xxxx); NULL is xyzw. Packed x highest, 2 bits each. */
+static uint8_t vs_swz(const char *s, uint8_t *neg)
+{
+    int comp[4] = { 0, 1, 2, 3 }, n = 0, i;
+    *neg = 0;
+    if (s && *s == '-') { *neg = 1; s++; }
+    if (s && *s) {
+        for (; s[n] && n < 4; n++) {
+            const char *p = strchr("xyzw", s[n]);
+            comp[n] = p ? (int)(p - "xyzw") : 0;
+        }
+        for (i = n; i < 4; i++) comp[i] = comp[n - 1];
+    }
+    return (uint8_t)((comp[0] << 6) | (comp[1] << 4) | (comp[2] << 2) | comp[3]);
+}
+static VsSrc vs_src(int kind, int idx, int rel, const char *sw)
+{
+    VsSrc r;
+    r.kind = (uint8_t)kind; r.idx = (uint8_t)idx; r.rel = (uint8_t)rel;
+    r.swz = vs_swz(sw, &r.neg);
+    return r;
+}
+static VsSrc vs_none(void) { return vs_src(VS_K_NONE, 0, 0, NULL); }
+static VsSrc vs_r(int n, const char *sw)  { return vs_src(VS_K_TEMP, n, 0, sw); }
+static VsSrc vs_v(int n, const char *sw)  { return vs_src(VS_K_IN, n, 0, sw); }
+static VsSrc vs_c(int n, const char *sw)  { return vs_src(VS_K_CONST, n, 0, sw); }
+static VsSrc vs_ca(int n, const char *sw) { return vs_src(VS_K_CONST, n, 1, sw); }   /* c[a0.x + n] */
+
+static VsIns vs_op(int mac, int ilu, VsSrc a, VsSrc b, VsSrc c)
+{
+    VsIns i;
+    memset(&i, 0, sizeof i);
+    i.mac = (uint8_t)mac; i.ilu = (uint8_t)ilu; i.a = a; i.b = b; i.c = c;
+    return i;
+}
+static VsIns vs_tmp(VsIns i, int reg, int tmask, int imask)
+{
+    i.tdst = (uint8_t)reg; i.tmask = (uint8_t)tmask; i.imask = (uint8_t)imask;
+    return i;
+}
+static VsIns vs_out(VsIns i, int addr, int mask, int from_ilu)
+{
+    i.oaddr = (uint8_t)addr; i.omask = (uint8_t)mask; i.ofrom_ilu = (uint8_t)from_ilu;
+    return i;
+}
+static VsIns vs_fin(VsIns i) { i.final = 1; return i; }
+
+/* Pack one instruction per the field table at the top of the toolkit's nv2a_vsh_interp.c. The
+ * input number and the constant number are shared by all three sources. */
+static void vs_encode(const VsIns *s, uint32_t w[4])
+{
+    const VsSrc *src[3];
+    uint32_t in_idx = 0, cidx = 0, rel = 0, neg[3], swz[3], mux[3], reg[3];
+    int i, have_in = 0, have_c = 0;
+
+    src[0] = &s->a; src[1] = &s->b; src[2] = &s->c;
+    for (i = 0; i < 3; i++) {
+        neg[i] = src[i]->neg; swz[i] = src[i]->swz; mux[i] = src[i]->kind;
+        reg[i] = src[i]->kind == VS_K_TEMP ? src[i]->idx : 0u;
+        if (src[i]->kind == VS_K_IN) {
+            if (have_in && in_idx != src[i]->idx) g_vs_enc_conflict = 1;
+            in_idx = src[i]->idx; have_in = 1;
+        }
+        if (src[i]->kind == VS_K_CONST) {
+            if (have_c && (cidx != src[i]->idx || rel != src[i]->rel)) g_vs_enc_conflict = 1;
+            cidx = src[i]->idx; rel = src[i]->rel; have_c = 1;
+        }
+    }
+    w[0] = 0;
+    w[1] = ((uint32_t)s->ilu << 25) | ((uint32_t)s->mac << 21) | (cidx << 13) | (in_idx << 9)
+         | (neg[0] << 8) | swz[0];
+    w[2] = (reg[0] << 28) | (mux[0] << 26) | (neg[1] << 25) | (swz[1] << 17) | (reg[1] << 13)
+         | (mux[1] << 11) | (neg[2] << 10) | (swz[2] << 2) | (reg[2] >> 2);
+    w[3] = ((reg[2] & 3u) << 30) | (mux[2] << 28) | ((uint32_t)s->tmask << 24)
+         | ((uint32_t)s->tdst << 20) | ((uint32_t)s->imask << 16) | ((uint32_t)s->omask << 12)
+         | ((s->omask ? 1u : 0u) << 11) | ((uint32_t)s->oaddr << 3) | ((uint32_t)s->ofrom_ilu << 2)
+         | (rel << 1) | (uint32_t)s->final;
+}
+
+typedef struct { float pos[4], aux1[4], aux2[4], col[4]; } VsVert;       /* v0, v1, v2, v3 */
+typedef struct { uint32_t index; float v[4]; } VsConst;
+typedef struct {
+    VsIns ins[16]; int nins;
+    VsConst k[12]; int nk;
+    VsVert v[3];
+} VsCase;
+
+static void vs_add(VsCase *c, VsIns i) { c->ins[c->nins++] = i; }
+static void vs_konst(VsCase *c, uint32_t idx, float x, float y, float z, float w)
+{
+    VsConst *k = &c->k[c->nk++];
+    k->index = idx; k->v[0] = x; k->v[1] = y; k->v[2] = z; k->v[3] = w;
+}
+static void vs_vert(VsCase *c, int i, const float *pos, const float *a1, const float *a2,
+                    const float *col)
+{
+    memcpy(c->v[i].pos, pos, 16); memcpy(c->v[i].aux1, a1, 16);
+    memcpy(c->v[i].aux2, a2, 16); memcpy(c->v[i].col, col, 16);
+}
+
+/* The Xbox D3D program tail, with oD0 = v3 first: four dp4 of v0 against the matrix in c[96..99]
+ * into R12 (which is oPos), then
+ *     mul R12.xyz, R12, c[58]  +  rcc R1.x, R12.w
+ *     mad oPos.xyz, R12, R1.x, c[59]
+ * c[58]/c[59] are the viewport scale and offset in pixels. */
+static void vs_mvp_program(VsCase *c)
+{
+    int k;
+    vs_add(c, vs_out(vs_op(MAC_MOV, 0, vs_v(3, NULL), vs_none(), vs_none()), O_D0, 0xF, 0));
+    for (k = 0; k < 4; k++)
+        vs_add(c, vs_tmp(vs_op(MAC_DP4, 0, vs_v(0, NULL), vs_c(96 + k, NULL), vs_none()),
+                         12, 8 >> k, 0));
+    vs_add(c, vs_tmp(vs_op(MAC_MUL, ILU_RCC, vs_r(12, NULL), vs_c(58, NULL), vs_r(12, "w")),
+                     12, 0xE, 0x8));
+    vs_add(c, vs_fin(vs_out(vs_op(MAC_MAD, 0, vs_r(12, NULL), vs_r(1, "x"), vs_c(59, NULL)),
+                            O_POS, 0xE, 0)));
+    vs_konst(c, 58, 32.0f, -32.0f, 0.5f, 1.0f);
+    vs_konst(c, 59, 32.0f, 32.0f, 0.5f, 0.0f);
+}
+
+/* mov oPos, v0: the position is already in pixels with w = 1. */
+static void vs_pass_pos(VsCase *c)
+{
+    vs_add(c, vs_out(vs_op(MAC_MOV, 0, vs_v(0, NULL), vs_none(), vs_none()), O_POS, 0xF, 0));
+}
+
+static void vs_make(int which, VsCase *c)
+{
+    static const float spos[3][4] = { { 8, 8, 0.5f, 1 }, { 56, 12, 0.5f, 1 }, { 20, 58, 0.5f, 1 } };
+    static const float none4[4] = { 0, 0, 0, 1 };
+    memset(c, 0, sizeof *c);
+    switch (which) {
+    case VS_MVP: {
+        /* A general matrix (all four columns used) with w = 0.2x - 0.1y + z + 0.5, so w runs 2..4
+         * over the triangle; z_ndc = (0.5 z - 0.5) / w stays well inside the clip volume. */
+        static const float p[3][4] = { { -1.2f, 1.4f, 2.0f, 1 }, { 2.5f, 0.5f, 3.0f, 1 },
+                                       { -0.3f, -1.6f, 2.5f, 1 } };
+        static const float col[4] = { 0.85f, 0.45f, 0.15f, 1.0f };
+        int i;
+        vs_mvp_program(c);
+        vs_konst(c, 96, 1.0f, 0.1f, 0.0f, 0.25f);
+        vs_konst(c, 97, -0.1f, 1.0f, 0.0f, 0.0f);
+        vs_konst(c, 98, 0.0f, 0.0f, 0.5f, -0.5f);
+        vs_konst(c, 99, 0.2f, -0.1f, 1.0f, 0.5f);
+        for (i = 0; i < 3; i++) vs_vert(c, i, p[i], none4, none4, col);
+        break;
+    }
+    case VS_A0: {
+        /* arl a0.x, v1.x; mov oD0, c[a0.x + 20]: vertex i picks colour table entry aux1.x. */
+        static const float pick[3] = { 2, 0, 3 };
+        int i;
+        vs_pass_pos(c);
+        vs_add(c, vs_op(MAC_ARL, 0, vs_v(1, "x"), vs_none(), vs_none()));
+        vs_add(c, vs_fin(vs_out(vs_op(MAC_MOV, 0, vs_ca(20, NULL), vs_none(), vs_none()),
+                                O_D0, 0xF, 0)));
+        vs_konst(c, 20, 1, 0, 0, 1);
+        vs_konst(c, 21, 0, 1, 0, 1);
+        vs_konst(c, 22, 0, 0, 1, 1);
+        vs_konst(c, 23, 1, 1, 0, 1);
+        for (i = 0; i < 3; i++) {
+            float a1[4] = { pick[i], 0, 0, 1 };
+            vs_vert(c, i, spos[i], a1, none4, none4);
+        }
+        break;
+    }
+    case VS_PAIR: {
+        /* mul R3, v3, c30 paired with rcp R1.x, R3.x: the ILU reads the OLD R3 (v1) while the MAC
+         * overwrites R3; then colour = R3 * R1.x + c31. */
+        static const float a1[3][4] = { { 2, 0, 0, 1 }, { 4, 0, 0, 1 }, { 5, 0, 0, 1 } };
+        static const float col[3][4] = { { 1.0f, 0.6f, 0.2f, 1 }, { 0.4f, 1.0f, 0.8f, 1 },
+                                         { 0.8f, 0.2f, 1.0f, 1 } };
+        int i;
+        vs_pass_pos(c);
+        vs_add(c, vs_tmp(vs_op(MAC_MOV, 0, vs_v(1, NULL), vs_none(), vs_none()), 3, 0xF, 0));
+        vs_add(c, vs_tmp(vs_op(MAC_MUL, ILU_RCP, vs_v(3, NULL), vs_c(30, NULL), vs_r(3, "x")),
+                         3, 0xF, 0x8));
+        vs_add(c, vs_out(vs_op(MAC_MAD, 0, vs_r(3, NULL), vs_r(1, "x"), vs_c(31, NULL)),
+                         O_D0, 0xE, 0));
+        vs_add(c, vs_fin(vs_out(vs_op(MAC_MOV, 0, vs_c(31, "w"), vs_none(), vs_none()),
+                                O_D0, 0x1, 0)));
+        vs_konst(c, 30, 1.0f, 1.25f, 0.8f, 1.0f);
+        vs_konst(c, 31, 0.2f, 0.1f, 0.1f, 1.0f);
+        for (i = 0; i < 3; i++) vs_vert(c, i, spos[i], a1[i], none4, col[i]);
+        break;
+    }
+    case VS_SFU: {
+        /* v1 = (n.l, n.h, pad, power), v2 = (exp input, dst factor, log input, 1).
+         *   r = lit(v1).z                      = (n.h)^power
+         *   g = exp(v2.x).y                    = frac(v2.x)
+         *   b = log(v2.z).y * 0.4 + dst.z      = mantissa(v2.z) * 0.4 + v1.z
+         *   a = dst(v1, v2).y * dst.w          = v1.y * v2.y * v2.w
+         * Inputs are away from integers and powers of two, where floor() would flip on a ULP. */
+        static const float a1[3][4] = { { 0.9f, 0.6f, 0.1f, 2.0f }, { 0.5f, 0.8f, 0.1f, 3.0f },
+                                        { 0.7f, 0.7f, 0.1f, 4.0f } };
+        static const float a2[3][4] = { { 0.3f, 0.9f, 3.0f, 1 }, { 1.45f, 0.8f, 5.0f, 1 },
+                                        { 2.7f, 0.7f, 1.5f, 1 } };
+        int i;
+        vs_pass_pos(c);
+        vs_add(c, vs_tmp(vs_op(0, ILU_LIT, vs_none(), vs_none(), vs_v(1, NULL)), 4, 0, 0xF));
+        vs_add(c, vs_tmp(vs_op(0, ILU_EXP, vs_none(), vs_none(), vs_v(2, "x")), 5, 0, 0xF));
+        vs_add(c, vs_tmp(vs_op(0, ILU_LOG, vs_none(), vs_none(), vs_v(2, "z")), 6, 0, 0xF));
+        vs_add(c, vs_tmp(vs_op(MAC_MOV, 0, vs_v(1, NULL), vs_none(), vs_none()), 8, 0xF, 0));
+        vs_add(c, vs_tmp(vs_op(MAC_MOV, 0, vs_v(2, NULL), vs_none(), vs_none()), 9, 0xF, 0));
+        vs_add(c, vs_tmp(vs_op(MAC_DST, 0, vs_r(8, NULL), vs_r(9, NULL), vs_none()), 7, 0xF, 0));
+        vs_add(c, vs_out(vs_op(MAC_MOV, 0, vs_r(4, "z"), vs_none(), vs_none()), O_D0, 0x8, 0));
+        vs_add(c, vs_out(vs_op(MAC_MOV, 0, vs_r(5, "y"), vs_none(), vs_none()), O_D0, 0x4, 0));
+        vs_add(c, vs_out(vs_op(MAC_MAD, 0, vs_r(6, "y"), vs_c(40, "x"), vs_r(7, "z")),
+                         O_D0, 0x2, 0));
+        vs_add(c, vs_fin(vs_out(vs_op(MAC_MUL, 0, vs_r(7, "y"), vs_r(7, "w"), vs_none()),
+                                O_D0, 0x1, 0)));
+        vs_konst(c, 40, 0.4f, 0, 0, 0);
+        for (i = 0; i < 3; i++) vs_vert(c, i, spos[i], a1[i], a2[i], none4);
+        break;
+    }
+    case VS_FOG: {
+        /* oFog.x = v1.x (the fog "distance"). The method table admits SET_FOG_ENABLE and
+         * SET_FOG_COLOR but not SET_FOG_MODE (0x029C) or SET_FOG_PARAMS (0x09C0/0x09C4), so the mode
+         * and parameters stay at their zero defaults and the executor's factor is
+         * clamp(0 + d * 0 - 1) = 0 everywhere: the fog is enabled and the final combiner mixes it,
+         * so the output is the fog colour, but the per-vertex value of oFog is not visible in it. */
+        static const float a1[3][4] = { { 0.1f, 0, 0, 1 }, { 0.5f, 0, 0, 1 }, { 0.9f, 0, 0, 1 } };
+        static const float col[4] = { 0.9f, 0.35f, 0.2f, 1.0f };
+        int i;
+        vs_pass_pos(c);
+        vs_add(c, vs_out(vs_op(MAC_MOV, 0, vs_v(3, NULL), vs_none(), vs_none()), O_D0, 0xF, 0));
+        vs_add(c, vs_fin(vs_out(vs_op(MAC_MOV, 0, vs_v(1, "x"), vs_none(), vs_none()),
+                                O_FOG, 0xF, 0)));
+        for (i = 0; i < 3; i++) vs_vert(c, i, spos[i], a1[i], none4, col);
+        break;
+    }
+    case VS_BEHIND: {
+        /* The MVP program with x_clip = x, y_clip = y, w = z, z_clip = w / 2, so z_ndc is a flat
+         * 0.5 and the z clip planes coincide with the w = 0 plane. Vertex 2 has w = -0.5. */
+        static const float p[3][4] = { { -0.6f, 0.5f, 2.0f, 1 }, { 0.9f, 0.4f, 3.0f, 1 },
+                                       { 0.3f, -1.2f, -0.5f, 1 } };
+        static const float col[4] = { 0.2f, 0.8f, 0.9f, 1.0f };
+        int i;
+        vs_mvp_program(c);
+        vs_konst(c, 96, 1.0f, 0.0f, 0.0f, 0.0f);
+        vs_konst(c, 97, 0.0f, 1.0f, 0.0f, 0.0f);
+        vs_konst(c, 98, 0.0f, 0.0f, 0.5f, 0.0f);
+        vs_konst(c, 99, 0.0f, 0.0f, 1.0f, 0.0f);
+        for (i = 0; i < 3; i++) vs_vert(c, i, p[i], none4, none4, col);
+        break;
+    }
+    }
+}
+
+static const float *vs_const_of(const VsCase *c, uint32_t idx)
+{
+    int i;
+    for (i = 0; i < c->nk; i++) if (c->k[i].index == idx) return c->k[i].v;
+    return NULL;
+}
+
+/* Clip-space position of vertex i: the matrix in c[96..99] applied to v0 (double). */
+static void vs_clip(const VsCase *c, int i, double out[4])
+{
+    int r, k;
+    for (r = 0; r < 4; r++) {
+        const float *row = vs_const_of(c, 96u + (uint32_t)r);
+        out[r] = 0.0;
+        for (k = 0; k < 4; k++) out[r] += (double)row[k] * c->v[i].pos[k];
+    }
+}
+
+/* Where the epilogue puts vertex i: x, y, z in pixels and depth, then clip w. */
+static void vs_project(const VsCase *c, int i, double out[4])
+{
+    const float *sc = vs_const_of(c, 58), *of = vs_const_of(c, 59);
+    double cl[4];
+    int k;
+    vs_clip(c, i, cl);
+    for (k = 0; k < 3; k++) out[k] = cl[k] * sc[k] / cl[3] + of[k];
+    out[3] = cl[3];
+}
+
+/* The case's expected oD0 at vertex i, independent of the interpreter (double precision). */
+static void vs_expect_d0(int which, const VsCase *c, int i, double d0[4])
+{
+    const VsVert *v = &c->v[i];
+    int k;
+    for (k = 0; k < 4; k++) d0[k] = v->col[k];
+    switch (which) {
+    case VS_A0: {
+        const float *t = vs_const_of(c, 20u + (uint32_t)floor(v->aux1[0] + 0.001f));
+        for (k = 0; k < 4; k++) d0[k] = t[k];
+        break;
+    }
+    case VS_PAIR: {
+        const float *k30 = vs_const_of(c, 30), *k31 = vs_const_of(c, 31);
+        for (k = 0; k < 3; k++) d0[k] = (double)v->col[k] * k30[k] / v->aux1[0] + k31[k];
+        d0[3] = k31[3];
+        break;
+    }
+    case VS_SFU: {
+        double x = v->aux2[0], z = v->aux2[2], e = floor(log2(z));
+        d0[0] = pow(v->aux1[1], v->aux1[3]);
+        d0[1] = x - floor(x);
+        d0[2] = z / pow(2.0, e) * vs_const_of(c, 40)[0] + v->aux1[2];
+        d0[3] = (double)v->aux1[1] * v->aux2[1] * v->aux2[3];
+        break;
+    }
+    default: break;
+    }
+}
+
+static int vs_close(double a, double b, double tol) { return fabs(a - b) <= tol; }
+
+/* Run every case's program on its vertices in the interpreter and compare with the model.
+ * Returns 1 if all agree. Also leaves the interpreter loaded with the last case; the pushbuffers
+ * reload everything they use. */
+static int vs_selfcheck(void)
+{
+    static const char *const nm[7] = { "", "V1 MVP", "V2 a0-relative", "V3 paired MAC+ILU",
+                                       "V4 lit/exp/log/dst", "V5 fog", "V6 behind camera" };
+    int ok = 1, which, i, k, j;
+
+    g_vs_enc_conflict = 0;
+    for (which = VS_MVP; which <= VS_BEHIND; which++) {
+        VsCase c;
+        vs_make(which, &c);
+        for (i = 0; i < c.nins; i++) {
+            uint32_t w[4];
+            vs_encode(&c.ins[i], w);
+            nv2a_vsh_set_instruction((uint32_t)i, w);
+        }
+        for (i = 0; i < c.nk; i++) nv2a_vsh_set_constant(c.k[i].index, c.k[i].v);
+        nv2a_vsh_set_start_slot(0);
+        for (i = 0; i < 3; i++) {
+            float in[NV2A_VSH_INPUTS][4];
+            Nv2aVshOutput o;
+            double want[4], d0[4];
+            int good = 1;
+            for (j = 0; j < NV2A_VSH_INPUTS; j++) { in[j][0] = in[j][1] = in[j][2] = 0; in[j][3] = 1; }
+            memcpy(in[0], c.v[i].pos, 16); memcpy(in[1], c.v[i].aux1, 16);
+            memcpy(in[2], c.v[i].aux2, 16); memcpy(in[3], c.v[i].col, 16);
+            if (!nv2a_vsh_run((const float (*)[4])in, &o)) {
+                printf("  [vsh-check] %s vertex %d: program did not run to FINAL\n", nm[which], i);
+                ok = 0;
+                continue;
+            }
+            if (which == VS_MVP || which == VS_BEHIND) {
+                vs_project(&c, i, want);
+                for (k = 0; k < 4; k++)
+                    good &= vs_close(o.pos[k], want[k], k == 3 ? 1e-4 : 2e-3);
+            } else {
+                for (k = 0; k < 4; k++) good &= vs_close(o.pos[k], c.v[i].pos[k], 1e-6);
+            }
+            vs_expect_d0(which, &c, i, d0);
+            for (k = 0; k < 4; k++) good &= vs_close(o.d0[k], d0[k], 1e-4);
+            if (which == VS_FOG) good &= vs_close(o.fog[0], c.v[i].aux1[0], 1e-6);
+            printf("  [vsh-check] %-18s v%d pos %9.4f %9.4f %7.4f %7.4f  d0 %.4f %.4f %.4f %.4f  %s\n",
+                   nm[which], i, o.pos[0], o.pos[1], o.pos[2], o.pos[3],
+                   o.d0[0], o.d0[1], o.d0[2], o.d0[3], good ? "ok" : "MISMATCH");
+            if (which == VS_FOG) printf("      oFog.x %.4f (want %.4f)\n", o.fog[0], c.v[i].aux1[0]);
+            if (which == VS_MVP || which == VS_BEHIND)
+                printf("      model pos %9.4f %9.4f %7.4f %7.4f\n", want[0], want[1], want[2], want[3]);
+            else
+                printf("      model d0  %.4f %.4f %.4f %.4f\n", d0[0], d0[1], d0[2], d0[3]);
+            if (!good) ok = 0;
+        }
+    }
+    if (g_vs_enc_conflict) {
+        printf("  [vsh-check] encoder: a source set needed two different input or constant numbers\n");
+        ok = 0;
+    }
+    return ok;
+}
+
+/* Pixels (centres at +0.5) covered by the part of case VS_BEHIND's triangle that is in front of the
+ * eye, by solving for the point of the triangle on each pixel's ray: with the clip-space (x, y, w)
+ * of the three vertices as columns of M, a pixel is visible iff M^-1 (u, v, 1) has no negative
+ * component (u, v the pixel in normalised device coordinates). `edge` counts covered pixels with
+ * an uncovered 4-neighbour on the surface: the length of the boundary, in pixels. */
+static double vs_det3(const double a[3], const double b[3], const double c[3])
+{
+    return a[0] * (b[1] * c[2] - b[2] * c[1]) - b[0] * (a[1] * c[2] - a[2] * c[1])
+         + c[0] * (a[1] * b[2] - a[2] * b[1]);
+}
+static void vs_predict_visible(const VsCase *c, unsigned *count, unsigned *edge)
+{
+    static uint8_t in[64 * 64];
+    const float *sc = vs_const_of(c, 58), *of = vs_const_of(c, 59);
+    double col[3][3], cl[4], det;
+    int i, x, y;
+
+    for (i = 0; i < 3; i++) {
+        vs_clip(c, i, cl);
+        col[i][0] = cl[0]; col[i][1] = cl[1]; col[i][2] = cl[3];
+    }
+    det = vs_det3(col[0], col[1], col[2]);
+    *count = *edge = 0;
+    memset(in, 0, sizeof in);
+    for (y = 0; y < 64; y++)
+        for (x = 0; x < 64; x++) {
+            double rhs[3] = { ((double)x + 0.5 - of[0]) / sc[0], ((double)y + 0.5 - of[1]) / sc[1], 1.0 };
+            double al = vs_det3(rhs, col[1], col[2]) / det;
+            double be = vs_det3(col[0], rhs, col[2]) / det;
+            double ga = vs_det3(col[0], col[1], rhs) / det;
+            in[y * 64 + x] = al >= 0 && be >= 0 && ga >= 0;
+            *count += in[y * 64 + x];
+        }
+    for (y = 0; y < 64; y++)
+        for (x = 0; x < 64; x++)
+            if (in[y * 64 + x] && ((x > 0 && !in[y * 64 + x - 1]) || (x < 63 && !in[y * 64 + x + 1])
+                                || (y > 0 && !in[(y - 1) * 64 + x]) || (y < 63 && !in[(y + 1) * 64 + x])))
+                ++*edge;
+}
+/* VSH-ENCODER-END */
+
+/* ── Vertex-program pushbuffers ──────────────────────────────────────────── */
+#define FOG_COLOR_V5     0xFFF09020u    /* SET_FOG_COLOR: R in bits 0-7, so R=0x20 G=0x90 B=0xF0 */
+#define RC_FOG  0x03u
+
+static uint32_t f2u(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }
+
+static void pb_vertex_format_vs(uint32_t vb)
+{
+    uint32_t i;
+    for (i = 0; i < 4; i++) {
+        pb(0x1720 + i * 4, vb + i * 16);
+        pb(0x1760 + i * 4, 2u | (4u << 4) | (VS_STRIDE << 8));
+    }
+    /* Clear the slots the older cases use; the method table admits offsets only for v0..v5, v9, v10. */
+    for (i = 4; i < 11; i++) {
+        if (i == 5 || (i > 5 && i < 9)) continue;
+        pb(0x1720 + i * 4, 0);
+        pb(0x1760 + i * 4, 0);
+    }
+}
+
+static void pb_vs_program(const VsCase *c)
+{
+    int i, k;
+    pb(0x1E94, 2u);                                  /* TRANSFORM_EXECUTION_MODE: program */
+    pb(0x1E9C, 0u);                                  /* PROGRAM_LOAD slot 0 */
+    pb(0x1EA0, 0u);                                  /* PROGRAM_START slot 0 */
+    for (i = 0; i < c->nins; i++) {
+        uint32_t w[4];
+        vs_encode(&c->ins[i], w);
+        for (k = 0; k < 4; k++) pb(0x0B00u + 4u * (uint32_t)k, w[k]);
+    }
+    for (i = 0; i < c->nk; i++) {
+        pb(0x1EA4, c->k[i].index);                   /* CONSTANT_LOAD */
+        for (k = 0; k < 4; k++) pb(0x0B80u + 4u * (uint32_t)k, f2u(c->k[i].v[k]));
+    }
+}
+
+static void put_vs_vertices(uint32_t vb, const VsCase *c)
+{
+    int i;
+    for (i = 0; i < 3; i++) {
+        uint8_t *p = G(vb + (uint32_t)i * VS_STRIDE);
+        memcpy(p, c->v[i].pos, 16); memcpy(p + 16, c->v[i].aux1, 16);
+        memcpy(p + 32, c->v[i].aux2, 16); memcpy(p + 48, c->v[i].col, 16);
+    }
+}
+
+/* One vertex-program case into scene slot `idx`. */
+static void build_vs(int which, int idx, uint32_t surf, uint32_t vb, const char *name)
+{
+    const uint32_t clear = 0xFF101010u;
+    VsCase c;
+    double a[3][4];
+    Surf s;
+    int i;
+
+    vs_make(which, &c);
+    pb_begin();
+    pb_surface(surf, 64, 64, 4);
+    pb_clear(clear);
+    pb(0x0304, 0);                                   /* blend off */
+    pb(0x0300, 0);                                   /* alpha test off */
+    pb_texture_off();
+    pb(0x1B4C, 0);                                   /* stage 1 off */
+    pb_vertex_format_vs(vb);
+    pb(0x02A4, which == VS_FOG);                     /* FOG_ENABLE */
+    if (which == VS_FOG)
+        pb(0x02A8, FOG_COLOR_V5);
+    pb(0x1E70, 0);                                   /* no texture shader stages */
+    pb(0x1E60, 1u);                                  /* COMBINER_CONTROL: 1 stage */
+    pb_rc_stage_product(RC_ZERO, RC_ZERO);           /* r0 = 0, unused */
+    if (which == VS_FOG)
+        pb_rc_final(RC_A(RC_FOG), RC_V0, RC_FOG, RC_ZERO, RC_A(RC_V0));   /* f*diffuse + (1-f)*fog */
+    else
+        pb_rc_final(RC_ZERO, RC_ZERO, RC_ZERO, RC_V0, RC_A(RC_V0));
+    pb_vs_program(&c);
+    put_vs_vertices(vb, &c);
+    pb_draw_triangles(3);
+    pb_flip();
+
+    s.va = surf; s.w = 64; s.h = 64; s.bpp = 4; s.clear = clear; s.tol = TOL_VSH;
+    if (which == VS_MVP || which == VS_BEHIND) {
+        for (i = 0; i < 3; i++) vs_project(&c, i, a[i]);
+    } else {
+        for (i = 0; i < 3; i++) { a[i][0] = c.v[i].pos[0]; a[i][1] = c.v[i].pos[1]; }
+    }
+    if (which == VS_BEHIND) {
+        unsigned count, edge;
+        vs_predict_visible(&c, &count, &edge);
+        s.area = count; s.perim = edge;
+    } else {
+        s.perim = hypot(a[1][0] - a[0][0], a[1][1] - a[0][1]) + hypot(a[2][0] - a[1][0], a[2][1] - a[1][1])
+                + hypot(a[0][0] - a[2][0], a[0][1] - a[2][1]);
+        s.area = fabs(0.5 * ((a[1][0] - a[0][0]) * (a[2][1] - a[0][1]) - (a[1][1] - a[0][1]) * (a[2][0] - a[0][0])));
+    }
+    g_scene[idx].name = name;
+    g_scene[idx].nsurf = 1;
+    g_scene[idx].surf[0] = s;
+}
+
+static void build_vs1(int flip) { (void)flip; build_vs(VS_MVP, 14, SURF_V1, VB_V1,
+    "V1 vertex program: 4 x dp4 MVP (perspective, w 2..4) + D3D screen epilogue (mul/rcc, mad), flat colour"); }
+static void build_vs2(int flip) { (void)flip; build_vs(VS_A0, 15, SURF_V2, VB_V2,
+    "V2 vertex program: arl a0.x, mov oD0 from c[a0.x + 20], colour per vertex"); }
+static void build_vs3(int flip) { (void)flip; build_vs(VS_PAIR, 16, SURF_V3, VB_V3,
+    "V3 vertex program: paired MAC (mul to R3) + ILU (rcp to R1) in one instruction"); }
+static void build_vs4(int flip) { (void)flip; build_vs(VS_SFU, 17, SURF_V4, VB_V4,
+    "V4 vertex program: lit, exp, log and dst into oD0"); }
+static void build_vs5(int flip) { (void)flip; build_vs(VS_FOG, 18, SURF_V5, VB_V5,
+    "V5 vertex program: writes oFog with fog enabled (mode/params not settable: factor 0, output is the fog colour)"); }
+static void build_vs6(int flip) { (void)flip; build_vs(VS_BEHIND, 19, SURF_V6, VB_V6,
+    "V6 vertex program: triangle with a vertex behind the camera (w < 0), coverage only"); }
+/* V7 is V1 in a process of its own with RECOMP_GPU_VSH=0 (see main). */
+static void build_vs7(int flip) { (void)flip; build_vs(VS_MVP, 20, SURF_V1, VB_V1,
+    "V7 same scene as V1 with RECOMP_GPU_VSH=0 (the back end transforms on the CPU)"); }
+
 static void write_guest_data(void)
 {
     uint32_t x, y;
@@ -756,7 +1344,11 @@ static int submit(const char *what)
     printf("  %s: accepted=%d draws+%u clears+%u tris+%u flips_stall+%u unhandled+%u\n",
            what, ok, a.draws - b.draws, a.clears - b.clears, a.tris_drawn - b.tris_drawn,
            a.flip_stalls - b.flip_stalls, a.unhandled - b.unhandled);
-    if (!ok) fprintf(stderr, "FAIL: pushbuffer rejected (%s)\n", what);
+    if (!ok)
+        fprintf(stderr, "FAIL: pushbuffer rejected (%s): %s, subchannel %u method 0x%04X param 0x%08X, get 0x%X\n",
+                what, nv2a_submit_diagnostic(g_gpu->pfifo.submit_diag),
+                g_gpu->pfifo.submit_diag_subchannel, g_gpu->pfifo.submit_diag_method,
+                g_gpu->pfifo.submit_diag_param, g_gpu->pfifo.submit_diag_get);
     return ok;
 }
 
@@ -953,10 +1545,36 @@ static int check_linear(const Surf *s, const uint8_t *ref, const uint8_t *got)
     return ok;
 }
 
+/* Case V6: a triangle partly behind the camera. The CPU path clips at w = 1e-3 and the GPU at its
+ * own near plane, so the colours are information only; coverage must agree to within the length of
+ * the clipped region's boundary, and the CPU reference must match the geometry's predicted count. */
+static int check_coverage_only(const char *label, const Surf *s, const uint8_t *ref, const uint8_t *got)
+{
+    Cmp c = compare(s, ref, got);
+    int ok = 1;
+
+    printf("  [%s] colour match %.2f%% (information only), coverage ref=%u got=%u (xor %u, allowed %.0f),\n"
+           "      predicted visible pixels %.0f (CPU reference must be within 10%%)\n",
+           label, c.all_pct, c.cov_ref, c.cov_got, c.cov_diff, s->perim, s->area);
+    if (c.cov_ref < s->area * 0.9 || c.cov_ref > s->area * 1.1) {
+        fprintf(stderr, "FAIL [%s]: CPU reference covers %u px, geometry predicts %.0f\n",
+                label, c.cov_ref, s->area);
+        ok = 0;
+    }
+    if (c.cov_diff > s->perim) {
+        fprintf(stderr, "FAIL [%s]: coverage differs by %u px (allowed %.0f)\n",
+                label, c.cov_diff, s->perim);
+        ok = 0;
+    }
+    return ok;
+}
+
 typedef void (*build_fn)(int flip);
 static const build_fn k_build[NCASES] = { build_case1, build_case2, build_case3, build_case4, build_case2b, build_case2c,
                                       build_case5, build_case6, build_case7, build_case8,
-                                      build_case9a, build_case9b, build_case9c, build_case9d };
+                                      build_case9a, build_case9b, build_case9c, build_case9d,
+                                      build_vs1, build_vs2, build_vs3, build_vs4, build_vs5, build_vs6,
+                                      build_vs7 };
 /* Cases the back end runs with a flip and compares; case 3 (index 3) is the no-flip control. */
 static const int k_parity[5] = { 0, 1, 4, 2, 5 };
 /* Combiner cases: they switch the executor to program mode and set rc_seen for good, so both
@@ -965,8 +1583,11 @@ static const int k_rc[4] = { 6, 7, 8, 9 };
 /* DXT cases: fixed-function, so they run with cases 1-4 and before the combiners switch the executor to
  * program mode. They leave blend and alpha test off. */
 static const int k_dxt[4] = { 10, 11, 12, 13 };
+/* Vertex-program cases V1..V6; the other process (--vsh-off-only) runs V7 alone. */
+static const int k_vs[6] = { 14, 15, 16, 17, 18, 19 };
+static const int k_vs_off[1] = { 20 };
 
-int main(void)
+int main(int argc, char **argv)
 {
     const uint32_t ram_size = 64u * 1024u * 1024u;
     uint8_t *ram = (uint8_t *)calloc(1, ram_size);
@@ -976,9 +1597,23 @@ int main(void)
     uint8_t *ref[NCASES][2], *got[NCASES][2];
     uint8_t *pbmem = (uint8_t *)VirtualAlloc(NULL, 0x4000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     int ok = 1, c, i;
+    /* --vsh-off-only: the second CTest registration. The back end reads RECOMP_GPU_VSH once per
+     * process, so the CPU-transform fallback needs a process of its own, and this mode runs V7 alone. */
+    int only_off = argc > 1 && strcmp(argv[1], "--vsh-off-only") == 0;
+    const int *vs_list = only_off ? k_vs_off : k_vs;
+    int nvs = only_off ? 1 : 6;
+    int nbasic = only_off ? 0 : 6, ndxt = only_off ? 0 : 4, npar = only_off ? 0 : 5,
+        nrc = only_off ? 0 : 4;
 
     memset(ref, 0, sizeof ref); memset(got, 0, sizeof got);
     if (!ram || !ramin || !instance || !pbmem) { fprintf(stderr, "FAIL: allocation\n"); return 1; }
+    if (only_off) {
+        const char *e = getenv("RECOMP_GPU_VSH");
+        if (!e || strcmp(e, "0") != 0) {
+            fprintf(stderr, "FAIL: --vsh-off-only needs RECOMP_GPU_VSH=0 in the environment\n");
+            return 1;
+        }
+    }
     g_pb = (uint32_t *)pbmem;
 
     /* Guest RAM: a synthetic, section-less XBE is enough for the memory layout. */
@@ -989,6 +1624,9 @@ int main(void)
         fprintf(stderr, "FAIL: xbox_MemoryLayoutInit\n");
         return 1;
     }
+
+    puts("-- vertex-program encoder vs interpreter --");
+    ok &= vs_selfcheck();
 
     nv2a_reset_standalone_for_test();
     g_gpu = nv2a_init_standalone(ram, ram_size, ramin, 1024u * 1024u);
@@ -1013,14 +1651,14 @@ int main(void)
     /* (a) CPU reference for every case. Case 4's reference is the same scene as
      * case 1 at its own address. */
     puts("-- software executor --");
-    for (c = 0; c < 6; c++) {
+    for (c = 0; c < nbasic; c++) {
         k_build[c](1);
         prefill(&g_scene[c]);
         printf(" case %s\n", g_scene[c].name);
         ok &= submit("software");
         for (i = 0; i < g_scene[c].nsurf; i++) ref[c][i] = snapshot(&g_scene[c].surf[i]);
     }
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < ndxt; i++) {
         c = k_dxt[i];
         k_build[c](1);
         prefill(&g_scene[c]);
@@ -1038,7 +1676,7 @@ int main(void)
         return 0;
     }
     puts("-- D3D11 back end --");
-    for (i = 0; i < 5; i++) {
+    for (i = 0; i < npar; i++) {
         c = k_parity[i];
         k_build[c](1);
         prefill(&g_scene[c]);
@@ -1050,7 +1688,7 @@ int main(void)
         }
     }
 
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < ndxt; i++) {
         c = k_dxt[i];
         k_build[c](1);
         prefill(&g_scene[c]);
@@ -1065,7 +1703,7 @@ int main(void)
         static const char *tag3[5] = { "case1", "case2", "case3", "case4", "case2b" };
         int k;
         (void)tag3;
-        for (k = 0; k < 5; k++) {
+        for (k = 0; k < npar; k++) {
             c = k_parity[k];
             if (c == 5) { ok &= check_linear(&g_scene[5].surf[0], ref[5][0], got[5][0]); continue; }
             for (i = 0; i < g_scene[c].nsurf; i++) {
@@ -1080,7 +1718,7 @@ int main(void)
     puts("-- parity (DXT) --");
     {
         static const char *dtag[4] = { "dxt1-opaque", "dxt1-3colour-alphatest", "dxt5-alpha", "dxt1-8x6" };
-        for (i = 0; i < 4; i++) {
+        for (i = 0; i < ndxt; i++) {
             c = k_dxt[i];
             if (!ref[c][0] || !got[c][0]) { ok = 0; continue; }
             ok &= check_parity(dtag[i], &g_scene[c].surf[0], ref[c][0], got[c][0], 1);
@@ -1090,6 +1728,7 @@ int main(void)
     /* Case 4, negative control: the back-end pass WITHOUT the flip must leave the
      * guest surface untouched (so it differs from the CPU result); the readback
      * happens at the flip, which is then issued alone and must close the gap. */
+    if (!only_off) {
     puts("-- negative control (no flip) --");
     build_case4(0);
     prefill(&g_scene[3]);
@@ -1107,10 +1746,22 @@ int main(void)
             ok &= check_parity("case4/after-flip", &g_scene[3].surf[0], ref[3][0], after, 1);
         free(after);
     }
+    }
 
     puts("-- D3D11 back end: register combiners (program mode) --");
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < nrc; i++) {
         c = k_rc[i];
+        k_build[c](1);
+        prefill(&g_scene[c]);
+        printf(" case %s\n", g_scene[c].name);
+        ok &= submit("d3d11 (flipped)");
+        got[c][0] = snapshot(&g_scene[c].surf[0]);
+    }
+    /* Vertex-program cases, still on the back end. The combiners are on, so a program batch is
+     * drawn by running the program on the GPU unless RECOMP_GPU_VSH=0. */
+    puts("-- D3D11 back end: vertex programs --");
+    for (i = 0; i < nvs; i++) {
+        c = vs_list[i];
         k_build[c](1);
         prefill(&g_scene[c]);
         printf(" case %s\n", g_scene[c].name);
@@ -1123,8 +1774,17 @@ int main(void)
      * cases 1-4. */
     puts("-- software executor: register combiners (program mode) --");
     nv2a_backend_register(NULL);
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < nrc; i++) {
         c = k_rc[i];
+        k_build[c](1);
+        prefill(&g_scene[c]);
+        printf(" case %s\n", g_scene[c].name);
+        ok &= submit("software");
+        ref[c][0] = snapshot(&g_scene[c].surf[0]);
+    }
+    puts("-- software executor: vertex programs --");
+    for (i = 0; i < nvs; i++) {
+        c = vs_list[i];
         k_build[c](1);
         prefill(&g_scene[c]);
         printf(" case %s\n", g_scene[c].name);
@@ -1134,20 +1794,49 @@ int main(void)
     puts("-- parity (combiners) --");
     {
         static const char *rtag[4] = { "case5/modulate", "case6/lerp", "case7/two-tex", "case8/spec-add" };
-        for (i = 0; i < 4; i++) {
+        for (i = 0; i < nrc; i++) {
             c = k_rc[i];
             if (!ref[c][0] || !got[c][0]) { ok = 0; continue; }
             ok &= check_parity(rtag[i], &g_scene[c].surf[0], ref[c][0], got[c][0], 1);
         }
         /* Cross-check: a one-stage tex0 * white-diffuse combiner is case 2's fixed-function
          * modulate, on the same triangle and texture, so the two surfaces must agree. */
-        if (ref[1][0] && ref[6][0] && got[1][0] && got[6][0]) {
+        if (only_off) {
+            /* the fixed-function and combiner cases did not run in this process */
+        } else if (ref[1][0] && ref[6][0] && got[1][0] && got[6][0]) {
             ok &= check_parity("case5-vs-case2/cpu", &g_scene[6].surf[0], ref[1][0], ref[6][0], 1);
             ok &= check_parity("case5-vs-case2/gpu", &g_scene[6].surf[0], got[1][0], got[6][0], 1);
         } else {
             ok = 0;
         }
     }
+
+    puts("-- parity (vertex programs) --");
+    {
+        static const char *const vtag[6] = { "V1/mvp-epilogue", "V2/a0-relative", "V3/paired-mac-ilu",
+                                             "V4/lit-exp-log-dst", "V5/fog", "V6/behind-camera (coverage only)" };
+        for (i = 0; i < nvs; i++) {
+            c = vs_list[i];
+            if (!ref[c][0] || !got[c][0]) { ok = 0; continue; }
+            if (only_off)
+                ok &= check_parity("V7/mvp-epilogue, RECOMP_GPU_VSH=0", &g_scene[c].surf[0],
+                                   ref[c][0], got[c][0], 1);
+            else if (c == 19)
+                ok &= check_coverage_only(vtag[i], &g_scene[c].surf[0], ref[c][0], got[c][0]);
+            else
+                ok &= check_parity(vtag[i], &g_scene[c].surf[0], ref[c][0], got[c][0], 1);
+        }
+    }
+    /* Whether the GPU program path was taken is not observable in this process: the back end keeps
+     * vsh_draws/vsh_fallback in file-scope state that only its [GPUBE] stats line (stderr; printed at
+     * the first flip and then every 10 s) exposes, and the executor's own count of GPU-drawn program
+     * batches is likewise only in its stderr report. So nothing is asserted; compare the
+     * [GPUBE] vsh_draws= value in a run's stderr (expected > 0 in the normal run, 0 with RECOMP_GPU_VSH=0). */
+    printf("note: vsh_draws / vsh_fallback are readable only on the [GPUBE] stats line (stderr); "
+           "not asserted here (%s)\n",
+           only_off ? "this process has RECOMP_GPU_VSH=0, so vsh_draws should read 0"
+                    : "vsh_draws should be > 0 once the V1..V6 draws are counted");
+    fflush(stdout);
 
     nv2a_backend_register(NULL);
     nv2a_set_commit_consumer(NULL);

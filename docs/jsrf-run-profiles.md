@@ -198,6 +198,7 @@ advances GET past methods it does not execute), and none can support a strict cl
 | `RECOMP_RASTER_THREADS` | Upstream v0.13: rasteriser worker threads (default: processors minus 4; `1` = none). Performance only — rows are disjoint and the workers take no runtime locks — but it changes how long the walk holds the owner lock. |
 | `RECOMP_USB_PADS` | Upstream v0.13: one to four emulated pads; composes with `RECOMP_USB_PORT`. |
 | `RECOMP_GPU_BACKEND` | `d3d11` installs the Direct3D 11 back end (toolkit `src/video/nv2a_d3d11_backend.c`, L59): the executor still decodes, transforms and runs vertex programs on the CPU, and the GPU rasterises and samples; render targets are written back to guest memory at every flip. Translated rendering; absent means the CPU rasteriser. |
+| `RECOMP_GPU_VSH` | With the D3D11 back end, vertex-program batches that run the register combiners are drawn by the program itself, translated to an HLSL vertex shader (toolkit `src/video/nv2a_vsh_hlsl.c`, L60); `0` keeps them on the CPU interpreter. Translated rendering; absent means on. |
 | `RECOMP_GPU_WARP` | `1` forces the D3D11 back end onto the WARP software adapter instead of the hardware GPU (deterministic tests). |
 
 **Enabling a feature does not turn stub answers into modelled ones.** A claim is only
@@ -253,7 +254,7 @@ threads inside lifted guest code; changes no guest state or scheduling); from 20
 `RECOMP_PB_EXEC_VERBOSE` (executor logging, `nv2a_pb_exec.c:61`); from the upstream v0.13 merge:
 `RECOMP_FRAME_TRACE` and `RECOMP_FRAME_TRACE_METHODS` (flag-file-armed per-frame trace),
 `RECOMP_FB_DUMP_FLIPS` (a BMP per flip), `RECOMP_VSH_TRACE` and `RECOMP_VSH_DUMP` (vertex-program
-tracing and program dumps), `RECOMP_PB_REPORT_MS` (cadence of the ack-thread GPU report; under the MMIO
+tracing and program dumps), `RECOMP_VSH_HLSL_DUMP` (each translated vertex shader's HLSL, once), `RECOMP_PB_REPORT_MS` (cadence of the ack-thread GPU report; under the MMIO
 owner the executor report stays consumer-only) and `RECOMP_USB_STATS` (a 5 s OHCI counter line); from 2026-10-07:
 `RECOMP_FLIP_TRACE` (budget), `RECOMP_FLIP_TRACE_FROM` (first flip) and `RECOMP_FLIP_TRACE_CHANGE`
 (print only when the decision key moves) — the same-flip draw/present trace at `NV097_FLIP_STALL`,

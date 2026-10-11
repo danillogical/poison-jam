@@ -138,6 +138,12 @@ if(BUILD_TESTING)
     target_link_libraries(jsrf_gpu_backend_parity_test PRIVATE xboxrecomp)
     add_test(NAME jsrf_gpu_backend_parity COMMAND jsrf_gpu_backend_parity_test)
     set_tests_properties(jsrf_gpu_backend_parity PROPERTIES TIMEOUT 60)
+    # The back end reads RECOMP_GPU_VSH once per process, so the CPU-transform fallback of the
+    # vertex-program path is its own process: the same binary, V7 only.
+    add_test(NAME jsrf_gpu_backend_parity_vsh_off
+             COMMAND jsrf_gpu_backend_parity_test --vsh-off-only)
+    set_tests_properties(jsrf_gpu_backend_parity_vsh_off PROPERTIES
+        TIMEOUT 60 ENVIRONMENT "RECOMP_GPU_VSH=0")
     add_executable(jsrf_inplace_event_test
         ${XBOXRECOMP_DIR}/tests/kernel_inplace_event_test.c)
     target_include_directories(jsrf_inplace_event_test PRIVATE
