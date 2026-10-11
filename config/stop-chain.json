@@ -465,15 +465,32 @@
   {
    "id": 46,
    "address": "0x00044BA0",
-   "state": "REPAIRED",
-   "repair_commit": null,
+   "state": "RUNTIME_CONFIRMED",
+   "repair_commit": "126788c",
    "evidence": [
     {
      "run": "20261011-071740-969-keyscript-newgame-13",
      "role": "discovered"
+    },
+    {
+     "run": "20261011-073550-626-keyscript-newgame-14",
+     "role": "returned"
     }
    ],
-   "note": "Fatal `[ICALL] Failed to resolve VA 0x00044BA0` right after stop 45 returned. A leaf thiscall method with no manifest or analysis entry, reached indirectly. REPAIRED: recovery entry [0x00044BA0, 0x00044C33), stack_args 0. NOT YET EXERCISED."
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x00044BA0` right after stop 45 returned. A leaf thiscall method with no manifest or analysis entry, reached indirectly. REPAIRED: recovery entry [0x00044BA0, 0x00044C33), stack_args 0. CONFIRMED: 20261011-073550-626-keyscript-newgame-14 (built from 126788c) shows `[RECOVERED] 0x00044BA0 returned; ABI verified`; the chain advanced to 0x00044C90 (stop 47)."
+  },
+  {
+   "id": 47,
+   "address": "0x00044C90",
+   "state": "REPAIRED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261011-073550-626-keyscript-newgame-14",
+     "role": "discovered"
+    }
+   ],
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x00044C90` right after stop 46 returned, the second indirect-only method in the uncovered region after 0x00044BA0. REPAIRED: recovery entry [0x00044C90, 0x00044E72), stack_args 0, together with its eight uncovered neighbours in 0x00044C33-0x00045DC0 (0x00044C40, 0x00044E80, 0x00044F00, 0x00045040, 0x000450E0, 0x00045220, 0x00045450, 0x00045B70); 0x00045910 is left out (no `ret`, a tail-jump to 0x001BAA50 only). NOT YET EXERCISED."
   }
  ]
 }

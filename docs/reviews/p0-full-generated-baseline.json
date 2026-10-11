@@ -1,6 +1,6 @@
 {
  "files": {
-  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "a69dc614956c8b5c1ff5468459214a1bf4d1d2741c2e97215b4c7f996fcdc637",
+  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "dbab1dfe6f162d8b59f6a715fb19e38c401adf290bd7092b491253fd3c41b6e0",
   "src/recomp/gen/recomp_0000.c": "4db074a90166590ca387126d7015a9b0e324a0f3c47e7301e65a92418e2a222c",
   "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
   "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
@@ -10,12 +10,12 @@
   "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
   "src/recomp/gen/recomp_dispatch.c": "fc57d967299a2f9a669334e658b03776a77823c6ced676fc22793bc150d2483c",
   "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-  "src/recomp/gen/recomp_stubs_recovery.c": "7cb88e274b72a45530f9b1f0b7e4d55074f5f9bf7348cf2314f459e5bf498d57",
+  "src/recomp/gen/recomp_stubs_recovery.c": "807541db8b3e7a60ed4d1a67750975f34339a98d37adb6591bbd61a784215668",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "7c1720c624b65175171499a5663b7382a4d97beaa15b59d314e714b0ea44c741",
-  "src/recomp/recovered/recovered.c": "68757fce9395172194b48418069188b190f1ed3447df3c92202af4cb340c1dd6",
+  "src/recomp/recovered/recovered.c": "77eafd694fae2a5d66b705c569145967723caeefb9701a2a4e8aac1608a1e23a",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "777c08fa4524517eb50469008b2b15a12d1423be9f8f5ab7271d591c8d4d72bc",
+  "src/recomp/recovered/recovered_11c1_test.c": "8648e7b974c831139d4b6e8bb5354e6c4d9ecb4054d777333a8cca323b8386fe",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -655,6 +655,16 @@
     "src/recomp/recovered/recovered.c"
    ],
    "reason": "stop 46: recovery entry 0x00044BA0"
+  },
+  {
+   "date": "2026-10-11",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "stop 47 and its uncovered neighbours in 0x44C33-0x45DC0"
   }
  ]
 }
