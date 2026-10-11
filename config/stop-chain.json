@@ -482,15 +482,32 @@
   {
    "id": 47,
    "address": "0x00044C90",
-   "state": "REPAIRED",
-   "repair_commit": null,
+   "state": "RUNTIME_CONFIRMED",
+   "repair_commit": "ad46964",
    "evidence": [
     {
      "run": "20261011-073550-626-keyscript-newgame-14",
      "role": "discovered"
+    },
+    {
+     "run": "20261011-115355-245-keyscript-newgame-15",
+     "role": "returned"
     }
    ],
-   "note": "Fatal `[ICALL] Failed to resolve VA 0x00044C90` right after stop 46 returned, the second indirect-only method in that stretch after 0x00044BA0. REPAIRED: recovery entry [0x00044C90, 0x00044E72), stack_args 0. Its neighbours in 0x00044C33-0x00045DC0 were also recovered at first, but the main translation pass already lifts them (recomp_0000.c) and the duplicate bodies failed to link, so only 0x00044C90 is kept. NOT YET EXERCISED."
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x00044C90` right after stop 46 returned, the second indirect-only method in that stretch after 0x00044BA0. REPAIRED: recovery entry [0x00044C90, 0x00044E72), stack_args 0. Its neighbours in 0x00044C33-0x00045DC0 were also recovered at first, but the main translation pass already lifts them (recomp_0000.c) and the duplicate bodies failed to link, so only 0x00044C90 is kept. CONFIRMED: 20261011-115355-245-keyscript-newgame-15 (built from bd218cc, which descends from ad46964) shows `[RECOVERED] 0x00044C90 returned; ABI verified`; the chain advanced to 0x000F7F21 (stop 48)."
+  },
+  {
+   "id": 48,
+   "address": "0x000F7F21",
+   "state": "REPAIRED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261011-115355-245-keyscript-newgame-15",
+     "role": "discovered"
+    }
+   ],
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x000F7F21` (0xE0424943) in run keyscript-newgame-15. 0x000F7F21 is not a function: it is the first arm of the 9-way switch in the thiscall method 0x000F7F00 (slot 3 of the table at 0x001D0770; `mov eax, [esp+4]; sub esp, 0x70; cmp eax, 8; push ebx; mov ebx, ecx; ja 0xf8075; movzx eax, byte [eax+0xf8088]; jmp [eax*4+0xf807c]`). The jump table at 0x000F807C holds three arms (0x000F7F21, 0x000F806E, 0x000F8075) and the byte index table at 0x000F8088 maps indices 0..8 onto them. The recovery entry for 0x000F7F00 ended at 0x000F8000, in the middle of its own body, so the table lay beyond the span, the lifter could not resolve the indirect jump and the first arm became an indirect call. A second recovery entry [0x000F8000, 0x000F80A0) was the same false split as stop 37's 0x00030800: it started at the `lea edx, [ebx+0xb0]` after the `mov ecx, [eax]` at 0x000F7FFE, used the caller's ebx and frame, and also swallowed the jump table. The method has two exits, both `pop ebx; add esp, 0x70; ret 4` (0x000F806B and 0x000F8079). Nothing else reaches 0x000F8000: a byte scan of every section for rel8/rel32 call, jmp, jcc, loop and jcxz targets finds none, the one aligned dword equal to it (0x0022B344) is a bit mask in a .data mask run, the analysis database has no caller or call to it (its sub_000F8000 is a tail_jump_alias [0x000F8000, 0x000F80C0) overlapping the real body), and the only dispatch tuple is removed by the generated patch remove-f8000-dispatch. REPAIRED: 0x000F7F00 widened to [0x000F7F00, 0x000F807C), stack_args 4, one byte past the last `ret 4` and before the jump table; the 0x000F8000 entry removed (ledger L02). Same class as stops 32 and 37. NOT YET EXERCISED: expect `[RECOVERED] 0x000F7F00 returned; ABI verified (ESP/EBX/ESI/EDI)` and no ABI FAILURE at 0x000F8000. That confirmation names 0x000F7F00, not this row's address, so confirming this row needs the row re-addressed (as stop 32 is addressed at its container) or a new row."
   }
  ]
 }
