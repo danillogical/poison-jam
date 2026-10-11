@@ -78,7 +78,8 @@ import bisect
 # least one exit the model reports UNKNOWN depth. The full certificate is stated
 # once in docs/jsrf-technical-record.md section 20.
 # SHRUNK 2026-10-11 by 1 entry: 0x10A0E0, widened over its switch for stop 43 (config/stop-chain.json).
-KNOWN_OPEN = {int(x, 16) for x in """11105 1F000 20760 2A000 4037C 44000 45DB0 52050 73C20 A76E0 AEE80 C7D40 D02D0 E0710 E0CF0 EC0B0 F02F0 110B20 11FE90 127810 142400 1783D0 180038""".split()}
+# SHRUNK 2026-10-11 by 4 more: 0xAEE80, 0xD02D0, 0x110B20 and 0x11FE90, narrowed to their own exits by the table-scan batch.
+KNOWN_OPEN = {int(x, 16) for x in """11105 1F000 20760 2A000 4037C 44000 45DB0 52050 73C20 A76E0 C7D40 E0710 E0CF0 EC0B0 F02F0 127810 142400 1783D0 180038""".split()}
 
 
 def boundary_stub_calls(text, entries, unresolved):
