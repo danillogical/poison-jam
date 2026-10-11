@@ -367,15 +367,19 @@
   {
    "id": 40,
    "address": "0x000273C0",
-   "state": "REPAIRED",
-   "repair_commit": null,
+   "state": "RUNTIME_CONFIRMED",
+   "repair_commit": "2fe91d7",
    "evidence": [
     {
      "run": "20261011-043947-565-keyscript-newgame-7",
      "role": "discovered"
+    },
+    {
+     "run": "20261011-050619-018-keyscript-newgame-8",
+     "role": "returned"
     }
    ],
-   "note": "Fatal `[ICALL] Failed to resolve VA 0x000273C0` (0xE0424943) on the NEW GAME path, immediately after stop 39 returned. Reached only by an indirect call; no analysis-database entry. A thiscall method of the same family as stop 39 (frees the members of [this+0x1624], unlinks its argument). REPAIRED: recovery entry [0x000273C0, 0x00027854), stack_args 4. NOT YET EXERCISED."
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x000273C0` (0xE0424943) on the NEW GAME path, immediately after stop 39 returned. Reached only by an indirect call; no analysis-database entry. A thiscall method of the same family as stop 39 (frees the members of [this+0x1624], unlinks its argument). REPAIRED: recovery entry [0x000273C0, 0x00027854), stack_args 4. CONFIRMED: 20261011-050619-018-keyscript-newgame-8 (built from 2fe91d7) shows `[RECOVERED] 0x000273C0 returned; ABI verified`; the chain advanced to 0x0003A900 (stop 41)."
   }
  ]
 }
