@@ -847,7 +847,37 @@ int main(void)
          * earlier as a SET_OBJECT with handle 0 and never test the budget. */
         for (unsigned i = 0; i < 1025; ++i) pb[i] = 0x100u;
         submit_reset(gpu, 0, 1025 * 4);
-        REJECT_CASE("USER packet/word budget", 0, 1025 * 4, "budget_exhausted");
+        /* The packet cap (1024) is a per-unit yield, not a stop: this stream is
+         * accepted, committed as one unit of 1024 packets and one of 1, and GET
+         * reaches PUT. It used to be rejected as budget_exhausted, with GET
+         * pinned at the start, so every retry repeated the same rejected walk. */
+        ok &= check(nv2a_submit_pending(gpu), 1, "USER 1025 NOP packets accepted");
+        ok &= check(gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET], 1025 * 4,
+                    "USER 1025 NOP packets GET reaches PUT");
+        ok &= check(gpu->pfifo.submit_packets, 1025,
+                    "USER 1025 NOP packets walks every packet");
+        ok &= check(gpu->pfifo.submit_walk_units, 2,
+                    "USER 1025 NOP packets commit in 2 units");
+        ok &= check(submit_diag_is(gpu, "budget_exhausted"), 0,
+                    "USER 1025 NOP packets set no budget diagnostic");
+
+        /* More than two caps' worth cannot be built here: the fixture window
+         * is 0x2000 bytes = 2048 words, so at most 2048 one-word packets, i.e.
+         * 2 units at the default cap. Lowering the cap shows the same walk
+         * consumed across many units: 1000 NOPs at a cap of 100 is 10 units. */
+        memset(pb, 0, 0x2000);
+        for (unsigned i = 0; i < 1000; ++i) pb[i] = 0x100u;
+        nv2a_packet_cap_override(100);
+        submit_reset(gpu, 0, 1000 * 4);
+        ok &= check(nv2a_submit_pending(gpu), 1, "USER 1000 NOP packets at cap 100 accepted");
+        ok &= check(gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET], 1000 * 4,
+                    "USER 1000 NOP packets at cap 100 GET reaches PUT");
+        ok &= check(gpu->pfifo.submit_packets, 1000,
+                    "USER 1000 NOP packets at cap 100 walks every packet");
+        ok &= check(gpu->pfifo.submit_walk_units, 10,
+                    "USER 1000 NOP packets at cap 100 commit in 10 units");
+        nv2a_packet_cap_override(0);
+        ok &= check(nv2a_packet_cap(), 1024, "USER packet cap restored to its default");
 
         memset(pb, 0, 0x2000); pb[0] = (2u << 18) | 0x1ffcu;
         submit_reset(gpu, 0, 12);
@@ -864,8 +894,8 @@ int main(void)
          * unreachable at the walk bound -- a staged method consumes a word, so
          * staged <= words <= budget -- and the static assertions pin exactly
          * that relationship between the budget and the two capacities. The
-         * packet-budget case above still rejects with the same atomicity
-         * checks. What is testable is that the method cap no longer rejects: */
+         * packet cap above is a unit yield, not a rejection.
+         * What is testable is that the method cap no longer rejects: */
         {
             /* (a) More than 1024 staged methods spread over several packets --
              * the real method count, in a different packet shape. Under the old
