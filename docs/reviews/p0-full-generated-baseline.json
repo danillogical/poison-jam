@@ -13,9 +13,9 @@
   "src/recomp/gen/recomp_stubs_recovery.c": "f0046ee761a4aaa6e096c5694e8e6b050c634afab7969cfd6da866b58f4037e7",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "7c1720c624b65175171499a5663b7382a4d97beaa15b59d314e714b0ea44c741",
-  "src/recomp/recovered/recovered.c": "4f5ad50360e7d0aee8a87aeea8a9d6d6dbdd4c6c6373a7f85a484ad5bc00a824",
+  "src/recomp/recovered/recovered.c": "69dafbfb5a79e5f1bb4f5eeeb83edab0a8139bd0ee6460aa1446181b3158c5cd",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "3a7951de7e340fbd3a76584a776098b610a38b25b6530d0fcd34fbfce51aa4aa",
+  "src/recomp/recovered/recovered_11c1_test.c": "03aef9bfdf1c286fc406383027b5849c4f602ad5869df92fa821fefdf319a87b",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -600,6 +600,14 @@
     "src/recomp/recovered/recovered_11c1_test.c"
    ],
    "reason": "stop 41 (0x0003A900) and six teardown-table methods pre-recovered from the vtable scan"
+  },
+  {
+   "date": "2026-10-11",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "stop 42: 0x000A5050 narrowed to its own ret; 0x000A5070 recovered"
   }
  ]
 }

@@ -15,18 +15,18 @@
   "src/recomp/gen/recomp_stubs_recovery.c": "f0046ee761a4aaa6e096c5694e8e6b050c634afab7969cfd6da866b58f4037e7",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "7c1720c624b65175171499a5663b7382a4d97beaa15b59d314e714b0ea44c741",
-  "src/recomp/recovered/recovered.c": "4f5ad50360e7d0aee8a87aeea8a9d6d6dbdd4c6c6373a7f85a484ad5bc00a824",
+  "src/recomp/recovered/recovered.c": "69dafbfb5a79e5f1bb4f5eeeb83edab0a8139bd0ee6460aa1446181b3158c5cd",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "3a7951de7e340fbd3a76584a776098b610a38b25b6530d0fcd34fbfce51aa4aa",
+  "src/recomp/recovered/recovered_11c1_test.c": "03aef9bfdf1c286fc406383027b5849c4f602ad5869df92fa821fefdf319a87b",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
  "generators": {
   "project": {
    "dirty": true,
-   "revision": "1858b032ca83c5718d0d46344faf7e40dee7eea6",
+   "revision": "06479109ea45a99ca34a7496d8146bc92b2c0846",
    "state": "MEASURED",
-   "status_sha256": "b0436b4bd68c82a65b0cd79c1a4172cc6455cc7215c10b2747fb8ea67b6dc259"
+   "status_sha256": "506419cf61410635f49dc5f5575b18e21047a924b33adca92867c2c9d7cead23"
   },
   "scripts/recover-functions.py": "c23b7d52fac7bce8a8a63a62a06fafaa9cb375cfe9b047aa5215e664a0586b77",
   "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
@@ -46,14 +46,14 @@
    "sha256": "59cce1fe5a124dded9d1724a54b002f672c56e66e10e798a921a5b361bff782d"
   },
   "config/manual-functions.json": {
-   "bytes": 105209,
+   "bytes": 105242,
    "present": true,
-   "sha256": "4231197c44221174875ed683ce70d229530fff8977578963c323ef68dcef9591"
+   "sha256": "ca80d8fbb532904263a1ff3d302e956e777553829d8eea5026505aaea7fc46a3"
   },
   "config/recovered-functions.json": {
-   "bytes": 3086060,
+   "bytes": 3087437,
    "present": true,
-   "sha256": "132c49a44b2b8d40733965c51c34c0ff66fed2e53b65ae357a88909634cfd12e"
+   "sha256": "3e51882e2544f2d0bee773854d2bf4e24847e8499672c22c7f9d834f3553ba19"
   },
   "config/recovery-unresolved.json": {
    "bytes": 4361,
@@ -91,9 +91,9 @@
    "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
   },
   "tools/disasm/output/functions.recovered.json": {
-   "bytes": 6359624,
+   "bytes": 6361216,
    "present": true,
-   "sha256": "2a44feeeff85a381804a18a57a321119fecb9fffae966eb22336ff19fc5a4a1e"
+   "sha256": "10622abe24536d0684ae2d063301b5aa6d104293fd0b6945b345eb601e7267d6"
   }
  },
  "known_unknowns": [],
@@ -165,19 +165,19 @@
    },
    "src/recomp/recovered/recovered.c": {
     "markers": {
-     "JSRF_ABI_CONTINUE": 9534,
-     "RECOMP_ABI_CALL": 11199,
+     "JSRF_ABI_CONTINUE": 9537,
+     "RECOMP_ABI_CALL": 11200,
      "RECOMP_GENERATED_CODE": 1,
-     "g_seh_ebp": 5732
+     "g_seh_ebp": 5730
     },
     "present": true
    }
   },
   "totals": {
-   "JSRF_ABI_CONTINUE": 9534,
-   "RECOMP_ABI_CALL": 11210,
+   "JSRF_ABI_CONTINUE": 9537,
+   "RECOMP_ABI_CALL": 11211,
    "RECOMP_GENERATED_CODE": 5,
-   "g_seh_ebp": 5738
+   "g_seh_ebp": 5736
   }
  },
  "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",
