@@ -34,8 +34,9 @@ VS MODE), through the live keyboard path, with no `RECOMP_PAD_*` switch:
 reached the guest report but the title stayed, then went to its attract demo. So the driver's
 `key_until` re-presses every 6 s until the menu detector fires.
 
-**Next (K17 and M18):** NEW GAME (Z = Xbox A) is accepted and leads into the game's own path, which stopped
-on stop 36 (`[ICALL] Failed to resolve VA 0x00047600`, `config/stop-chain.json`).
+**K17 (partial):** accept works end to end: NEW GAME (Z = Xbox A) is taken by the game's menu and A advances the
+opening dialogue (`keyscript-newgame-16`, `keyscript-intro-1`). Still to show: directional navigation and back/cancel.
+The path past NEW GAME needed 13 stop repairs (36-48; TR §31).
 
 ## Earlier work (2026-10-10)
 

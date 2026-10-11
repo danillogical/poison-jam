@@ -1505,3 +1505,22 @@ Two faults that the faster title run exposed were fixed on the way:
 
 The next large step toward 90 s is uploading the guest vertex arrays raw instead of fetching attributes on the CPU (Mercenaries `nv2a_pgraph_d3d11.c:3825-3862` builds the input layout from the NV097 formats).
 
+## §31. From the title into the game: Start, the menu, NEW GAME, the opening cutscene (2026-10-11)
+
+**K16 is met.** A real Enter press opens the main menu (NEW GAME / LOAD GAME / VS MODE) through the live keyboard path (L57/L58): `keyscript-k16-r3b` and `keyscript-newgame-2` (`logs/runs/`). The title ignores Start for a while after it first shows, so the driver re-presses every 6 s until the menu detector fires. NEW GAME is Z (Xbox A); A also advances dialogue.
+
+**The driver** is `scripts/key-script-run.py` with `config/key-scripts/` (`title-start.json`, `new-game.json`, `intro.json`): it launches the exe directly (the collector stalls with a D3D11 device), recognises screens by frame content, holds real keys on the framebuffer window, and archives each run under `logs/runs/` with the metadata and source archive `check-stop-chain.py` reads.
+
+**Choosing NEW GAME exposed 13 stops (36-48), one per run,** each closed by recovering the function from the XBE and confirmed by an ABI-verified return in a run built from the repair commit (`config/stop-chain.json`):
+- indirect-only methods with no entry: `0x47600`, `0x352D0`, `0x38090`, `0x273C0`, `0x3A900` (a tail-call target), `0x44BA0`, `0x44C90`;
+- recovery spans that swallowed another function (the stop-37 and stop-42 patterns): `0x307A0`/`0x30800`, `0x0A5050`/`0x0A5070`, `0x0A5AF0`/`0x0A5B60`;
+- spans that cut a switch: `0x10A0E0` (case arm `0x10A0F9`) and its tail-call target `0x10A050`, and `0xF7F00` (case arm `0xF7F21`, with a false split `0xF8000`).
+
+Three static batches were merged to get ahead of the one-per-run rate (all found by scans, not runs): a teardown-table and vtable scan (7), a whole-image function-pointer-table scan (72 recovered, 16 over-wide entries narrowed), and an over-run scan (20 recovered, 18 narrowed; the 33 SEH thunks left out). They repaired five `KNOWN_OPEN` members of `tests/test_recovery_span_ownership.py`.
+
+**Two faults the longer run exposed, fixed in the toolkit:**
+- the walk's word-budget yield tested only method headers, so a full unit ending at a jump/call/return pinned GET (L54, second case, `0b1dd40`);
+- a heap block the guest made read-only (it does so every frame) kept that protection after `NtFreeVirtualMemory`, so the next allocation's zero-fill faulted (`7acde2c`, test `xbox_vm_reuse`).
+
+**Where it stands:** `keyscript-newgame-16` ran 480 s with no ICALL, ABI failure, exception or walk rejection. `keyscript-intro-1` pressed A through the opening dialogue ("This is the GG's Garage. Hey, where's our pizza?") and reached the in-game HUD (spray-can counter, health bar, trick meter). **The 3D world is black in gameplay** though the back end is busy (746k draws, 157M triangles, no fallbacks, no undecodable textures); the cutscene's 3D background does render, dim. That is the next problem.
+
