@@ -1,6 +1,6 @@
 {
  "files": {
-  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "0572b97d0a9836ab9f428c945e45e2d693de4f1f4c1b86da1d69b433e5e5ff80",
+  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "370235105ca8dcf08ef2fccdd6c1c950a9b3072059fb6d447f279c9770eb3ce0",
   "src/recomp/gen/recomp_0000.c": "4db074a90166590ca387126d7015a9b0e324a0f3c47e7301e65a92418e2a222c",
   "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
   "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
@@ -10,12 +10,12 @@
   "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
   "src/recomp/gen/recomp_dispatch.c": "fc57d967299a2f9a669334e658b03776a77823c6ced676fc22793bc150d2483c",
   "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-  "src/recomp/gen/recomp_stubs_recovery.c": "f0046ee761a4aaa6e096c5694e8e6b050c634afab7969cfd6da866b58f4037e7",
+  "src/recomp/gen/recomp_stubs_recovery.c": "9b4efbebe2c8037f7b6ff58bb59cf53e16f068b6f28ab3f5cbbf07c0a3ad0e2d",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "7c1720c624b65175171499a5663b7382a4d97beaa15b59d314e714b0ea44c741",
-  "src/recomp/recovered/recovered.c": "69dafbfb5a79e5f1bb4f5eeeb83edab0a8139bd0ee6460aa1446181b3158c5cd",
+  "src/recomp/recovered/recovered.c": "96f496d9ed977405d91871877ad1f0e5e015453c0510455a760592739ea33be5",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "03aef9bfdf1c286fc406383027b5849c4f602ad5869df92fa821fefdf319a87b",
+  "src/recomp/recovered/recovered_11c1_test.c": "b006b150a61bf40456fe988a4b8488098e581f134938381d3a5a0ec068afd911",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -608,6 +608,16 @@
     "src/recomp/recovered/recovered_11c1_test.c"
    ],
    "reason": "stop 42: 0x000A5050 narrowed to its own ret; 0x000A5070 recovered"
+  },
+  {
+   "date": "2026-10-11",
+   "files": [
+    "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c",
+    "src/recomp/gen/recomp_stubs_recovery.c",
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "stop 43: 0x0010A0E0 widened over its switch"
   }
  ]
 }

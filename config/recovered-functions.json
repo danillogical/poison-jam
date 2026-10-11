@@ -13991,10 +13991,10 @@
  },
  {
   "start": "0x0010A0E0",
-  "end": "0x0010A1C6",
+  "end": "0x0010A35F",
   "section": ".text",
   "kind": "routine",
-  "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001D2060, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_0010A390 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x0010A0E0 at sub_0010A390. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x0010A0E0..0x0010A390. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
+  "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001D2060, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_0010A390 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x0010A0E0 at sub_0010A390. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x0010A0E0..0x0010A390. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21). END WIDENED 0x0010A1C6 -> 0x0010A35F (2026-10-11, stop 43): the body is a switch on [esi+0x8c] (`cmp eax, 8; ja 0x10a35d; jmp [eax*4+0x10a360]`) whose case arms run to the single `pop esi; ret` at 0x0010A35D-0x0010A35E; the jump table itself is data at 0x0010A360 and stays outside the span. With the end at 0x0010A1C6 the case 0x0010A0F9 was outside the body and resolved as a call, so 20261011-055930-198-keyscript-newgame-10 died on `[ICALL] Failed to resolve VA 0x0010A0F9`. The `jmp 0x10a050` arms are tail-jumps to another function.",
   "stack_args": 0
  },
  {
