@@ -25815,75 +25815,11 @@
   "evidence": "Reached only by an indirect call on the NEW GAME path: 20261011-071740-969-keyscript-newgame-13 died on `[ICALL] Failed to resolve VA 0x00044BA0` right after stop 45 returned. No manifest or analysis entry covers it. It follows the `add esp, 0x10; ret` of the function before (0x00044B95) and NOP padding at 0x00044B96-0x00044B9F. A leaf thiscall method: reads [ecx+0xe0], computes a clamped value and stores it at [[ecx+0xdc]+0x50]; no pushes, a single `ret` at 0x00044C32, so stack_args 0; NOP padding follows. Every branch in the span targets the span. Stop 46 in config/stop-chain.json."
  },
  {
-  "start": "0x00044C40",
-  "end": "0x00044C8D",
-  "section": ".text",
-  "kind": "routine",
-  "stack_args": 4,
-  "evidence": "Found by a sweep of the uncovered region 0x00044C33-0x00045DC0 after stops 46 and 47 (0x00044BA0, 0x00044C90) were both indirect-only methods there with no entry; 20261011-073550-626-keyscript-newgame-14 died on `[ICALL] Failed to resolve VA 0x00044C90`. The region was split at NOP padding that follows a `ret` or unconditional `jmp`; this function is [0x00044C40, 0x00044C8D), every direct branch in it targets the span, and every `ret` in it has immediate 4, so stack_args 4. No manifest, manual or analysis entry covers it. Not yet reached by a run; recovered with its neighbours."
- },
- {
   "start": "0x00044C90",
   "end": "0x00044E72",
   "section": ".text",
   "kind": "routine",
   "stack_args": 0,
-  "evidence": "Found by a sweep of the uncovered region 0x00044C33-0x00045DC0 after stops 46 and 47 (0x00044BA0, 0x00044C90) were both indirect-only methods there with no entry; 20261011-073550-626-keyscript-newgame-14 died on `[ICALL] Failed to resolve VA 0x00044C90`. The region was split at NOP padding that follows a `ret` or unconditional `jmp`; this function is [0x00044C90, 0x00044E72), every direct branch in it targets the span, and every `ret` in it has immediate 0, so stack_args 0. No manifest, manual or analysis entry covers it. Stop 47 in config/stop-chain.json."
- },
- {
-  "start": "0x00044E80",
-  "end": "0x00044EF5",
-  "section": ".text",
-  "kind": "routine",
-  "stack_args": 0,
-  "evidence": "Found by a sweep of the uncovered region 0x00044C33-0x00045DC0 after stops 46 and 47 (0x00044BA0, 0x00044C90) were both indirect-only methods there with no entry; 20261011-073550-626-keyscript-newgame-14 died on `[ICALL] Failed to resolve VA 0x00044C90`. The region was split at NOP padding that follows a `ret` or unconditional `jmp`; this function is [0x00044E80, 0x00044EF5), every direct branch in it targets the span, and every `ret` in it has immediate 0, so stack_args 0. No manifest, manual or analysis entry covers it. Not yet reached by a run; recovered with its neighbours."
- },
- {
-  "start": "0x00044F00",
-  "end": "0x00045037",
-  "section": ".text",
-  "kind": "routine",
-  "stack_args": 8,
-  "evidence": "Found by a sweep of the uncovered region 0x00044C33-0x00045DC0 after stops 46 and 47 (0x00044BA0, 0x00044C90) were both indirect-only methods there with no entry; 20261011-073550-626-keyscript-newgame-14 died on `[ICALL] Failed to resolve VA 0x00044C90`. The region was split at NOP padding that follows a `ret` or unconditional `jmp`; this function is [0x00044F00, 0x00045037), every direct branch in it targets the span, and every `ret` in it has immediate 8, so stack_args 8. No manifest, manual or analysis entry covers it. Not yet reached by a run; recovered with its neighbours."
- },
- {
-  "start": "0x00045040",
-  "end": "0x000450D1",
-  "section": ".text",
-  "kind": "routine",
-  "stack_args": 20,
-  "evidence": "Found by a sweep of the uncovered region 0x00044C33-0x00045DC0 after stops 46 and 47 (0x00044BA0, 0x00044C90) were both indirect-only methods there with no entry; 20261011-073550-626-keyscript-newgame-14 died on `[ICALL] Failed to resolve VA 0x00044C90`. The region was split at NOP padding that follows a `ret` or unconditional `jmp`; this function is [0x00045040, 0x000450D1), every direct branch in it targets the span, and every `ret` in it has immediate 20, so stack_args 20. No manifest, manual or analysis entry covers it. Not yet reached by a run; recovered with its neighbours."
- },
- {
-  "start": "0x000450E0",
-  "end": "0x0004521E",
-  "section": ".text",
-  "kind": "routine",
-  "stack_args": 20,
-  "evidence": "Found by a sweep of the uncovered region 0x00044C33-0x00045DC0 after stops 46 and 47 (0x00044BA0, 0x00044C90) were both indirect-only methods there with no entry; 20261011-073550-626-keyscript-newgame-14 died on `[ICALL] Failed to resolve VA 0x00044C90`. The region was split at NOP padding that follows a `ret` or unconditional `jmp`; this function is [0x000450E0, 0x0004521E), every direct branch in it targets the span, and every `ret` in it has immediate 20, so stack_args 20. No manifest, manual or analysis entry covers it. Not yet reached by a run; recovered with its neighbours."
- },
- {
-  "start": "0x00045220",
-  "end": "0x00045446",
-  "section": ".text",
-  "kind": "routine",
-  "stack_args": 0,
-  "evidence": "Found by a sweep of the uncovered region 0x00044C33-0x00045DC0 after stops 46 and 47 (0x00044BA0, 0x00044C90) were both indirect-only methods there with no entry; 20261011-073550-626-keyscript-newgame-14 died on `[ICALL] Failed to resolve VA 0x00044C90`. The region was split at NOP padding that follows a `ret` or unconditional `jmp`; this function is [0x00045220, 0x00045446), every direct branch in it targets the span, and every `ret` in it has immediate 0, so stack_args 0. No manifest, manual or analysis entry covers it. Not yet reached by a run; recovered with its neighbours."
- },
- {
-  "start": "0x00045450",
-  "end": "0x00045909",
-  "section": ".text",
-  "kind": "routine",
-  "stack_args": 0,
-  "evidence": "Found by a sweep of the uncovered region 0x00044C33-0x00045DC0 after stops 46 and 47 (0x00044BA0, 0x00044C90) were both indirect-only methods there with no entry; 20261011-073550-626-keyscript-newgame-14 died on `[ICALL] Failed to resolve VA 0x00044C90`. The region was split at NOP padding that follows a `ret` or unconditional `jmp`; this function is [0x00045450, 0x00045909), every direct branch in it targets the span, and every `ret` in it has immediate 0, so stack_args 0. No manifest, manual or analysis entry covers it. Not yet reached by a run; recovered with its neighbours."
- },
- {
-  "start": "0x00045B70",
-  "end": "0x00045DAF",
-  "section": ".text",
-  "kind": "routine",
-  "stack_args": 0,
-  "evidence": "Found by a sweep of the uncovered region 0x00044C33-0x00045DC0 after stops 46 and 47 (0x00044BA0, 0x00044C90) were both indirect-only methods there with no entry; 20261011-073550-626-keyscript-newgame-14 died on `[ICALL] Failed to resolve VA 0x00044C90`. The region was split at NOP padding that follows a `ret` or unconditional `jmp`; this function is [0x00045B70, 0x00045DAF), every direct branch in it targets the span, and every `ret` in it has immediate 0, so stack_args 0. No manifest, manual or analysis entry covers it. Not yet reached by a run; recovered with its neighbours."
+  "evidence": "Found by a sweep of the uncovered region 0x00044C33-0x00045DC0 after stops 46 and 47 (0x00044BA0, 0x00044C90) were both indirect-only methods there with no entry; 20261011-073550-626-keyscript-newgame-14 died on `[ICALL] Failed to resolve VA 0x00044C90`. The region was split at NOP padding that follows a `ret` or unconditional `jmp`; this function is [0x00044C90, 0x00044E72), every direct branch in it targets the span, and every `ret` in it has immediate 0, so stack_args 0. No manifest, manual or analysis entry covers it. Unlike its neighbours, which the main translation pass already lifts (recomp_0000.c), it had no body. Stop 47 in config/stop-chain.json."
  }
 ]

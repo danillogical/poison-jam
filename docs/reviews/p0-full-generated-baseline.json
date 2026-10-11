@@ -13,9 +13,9 @@
   "src/recomp/gen/recomp_stubs_recovery.c": "807541db8b3e7a60ed4d1a67750975f34339a98d37adb6591bbd61a784215668",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "7c1720c624b65175171499a5663b7382a4d97beaa15b59d314e714b0ea44c741",
-  "src/recomp/recovered/recovered.c": "77eafd694fae2a5d66b705c569145967723caeefb9701a2a4e8aac1608a1e23a",
+  "src/recomp/recovered/recovered.c": "8b431f4488d82dc937aeeef2f0d6b5249a7f97e43466462260462e74fd125030",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "8648e7b974c831139d4b6e8bb5354e6c4d9ecb4054d777333a8cca323b8386fe",
+  "src/recomp/recovered/recovered_11c1_test.c": "777c08fa4524517eb50469008b2b15a12d1423be9f8f5ab7271d591c8d4d72bc",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "purpose": "P0 prerequisite preservation baseline; not a generation reproducibility claim",
@@ -665,6 +665,14 @@
     "src/recomp/recovered/recovered_11c1_test.c"
    ],
    "reason": "stop 47 and its uncovered neighbours in 0x44C33-0x45DC0"
+  },
+  {
+   "date": "2026-10-11",
+   "files": [
+    "src/recomp/recovered/recovered.c",
+    "src/recomp/recovered/recovered_11c1_test.c"
+   ],
+   "reason": "stop 47: the eight already-lifted neighbours removed from the recovery manifest"
   }
  ]
 }

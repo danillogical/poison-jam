@@ -490,7 +490,7 @@
      "role": "discovered"
     }
    ],
-   "note": "Fatal `[ICALL] Failed to resolve VA 0x00044C90` right after stop 46 returned, the second indirect-only method in the uncovered region after 0x00044BA0. REPAIRED: recovery entry [0x00044C90, 0x00044E72), stack_args 0, together with its eight uncovered neighbours in 0x00044C33-0x00045DC0 (0x00044C40, 0x00044E80, 0x00044F00, 0x00045040, 0x000450E0, 0x00045220, 0x00045450, 0x00045B70); 0x00045910 is left out (no `ret`, a tail-jump to 0x001BAA50 only). NOT YET EXERCISED."
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x00044C90` right after stop 46 returned, the second indirect-only method in that stretch after 0x00044BA0. REPAIRED: recovery entry [0x00044C90, 0x00044E72), stack_args 0. Its neighbours in 0x00044C33-0x00045DC0 were also recovered at first, but the main translation pass already lifts them (recomp_0000.c) and the duplicate bodies failed to link, so only 0x00044C90 is kept. NOT YET EXERCISED."
   }
  ]
 }
