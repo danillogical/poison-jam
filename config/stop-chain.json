@@ -419,14 +419,27 @@
    "id": 43,
    "address": "0x0010A0F9",
    "state": "REPAIRED",
-   "repair_commit": null,
+   "repair_commit": "72bfa51",
    "evidence": [
     {
      "run": "20261011-055930-198-keyscript-newgame-10",
      "role": "discovered"
     }
    ],
-   "note": "Fatal `[ICALL] Failed to resolve VA 0x0010A0F9` (0xE0424943) right after stop 42 returned. 0x0010A0F9 is not a function: it is a case arm of the switch in the recovered COM method 0x0010A0E0 (`jmp [eax*4+0x10a360]`), whose recovery span ended at 0x0010A1C6, cutting the switch. REPAIRED: 0x0010A0E0 widened to [0x0010A0E0, 0x0010A35F), up to its `ret` and before its jump table. The confirming return will name 0x0010A0E0, so this row stays REPAIRED."
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x0010A0F9` (0xE0424943) right after stop 42 returned. 0x0010A0F9 is not a function: it is a case arm of the switch in the recovered COM method 0x0010A0E0 (`jmp [eax*4+0x10a360]`), whose recovery span ended at 0x0010A1C6, cutting the switch. REPAIRED: 0x0010A0E0 widened to [0x0010A0E0, 0x0010A35F), up to its `ret` and before its jump table. The confirming return will name 0x0010A0E0, so this row stays REPAIRED. After the repair, 20261011-062258-664-keyscript-newgame-11 (built from 72bfa51) took the switch's case arms and reached their tail-call target 0x0010A050 (stop 44), so the widened span is exercised; the row stays REPAIRED because its address is a case arm, not a function."
+  },
+  {
+   "id": 44,
+   "address": "0x0010A050",
+   "state": "REPAIRED",
+   "repair_commit": null,
+   "evidence": [
+    {
+     "run": "20261011-062258-664-keyscript-newgame-11",
+     "role": "discovered"
+    }
+   ],
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x0010A050` (0xE0424943): the tail-call target of 0x0010A0E0's switch arms, reached once stop 43 widened that switch. No body existed for it. REPAIRED: recovery entry [0x0010A050, 0x0010A0B5), stack_args 0. NOT YET EXERCISED."
   }
  ]
 }

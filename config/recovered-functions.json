@@ -25213,5 +25213,13 @@
   "kind": "routine",
   "stack_args": 0,
   "evidence": "Reached only by an indirect call on the NEW GAME path: 20261011-054315-912-keyscript-newgame-9 died on `[ICALL] Failed to resolve VA 0x000A5070` (0xE0424943) right after stop 41 returned. It sat inside the over-wide recovery span of 0x000A5050 (now narrowed to its own `ret 4`), so it had no entry of its own. A thiscall method: `push esi; push edi; mov esi, ecx`, calls 0x00011CA0, 0x000127E0, 0x00011BD0 and 0x000A4CF0, copies a 0x30-byte record from the table at 0x002155E8 into [esi+0x84], and returns through a single `pop edi; pop esi; ret` at 0x000A5389-0x000A538B (no immediate, so stack_args 0); 0x000A538C-0x000A538F are NOP padding before 0x000A5390. Every branch in the span targets the span (checked mechanically over the disassembly). Stop 42 in config/stop-chain.json."
+ },
+ {
+  "start": "0x0010A050",
+  "end": "0x0010A0B5",
+  "section": ".text",
+  "kind": "routine",
+  "stack_args": 0,
+  "evidence": "The tail-call target of the switch arms of 0x0010A0E0 (`mov ecx, esi; pop esi; jmp 0x10a050` at 0x0010A11F, 0x0010A190 and four more). Once stop 43 widened 0x0010A0E0 over its switch, 20261011-062258-664-keyscript-newgame-11 died on `[ICALL] Failed to resolve VA 0x0010A050`, because nothing provided a body for it. A thiscall method: `push esi; mov esi, ecx`, reads [esi+0xb4], calls 0x000128C0 and 0x001084E0, updates the state at [esi+0x74..0xa0]/[esi+0x8c], and returns through `pop esi; ret` at 0x0010A0A4 or 0x0010A0B3 (no immediate, so stack_args 0); 0x0010A0B5-0x0010A0BF are NOP padding before 0x0010A0C0. Every branch in the span targets the span. Stop 44 in config/stop-chain.json."
  }
 ]
