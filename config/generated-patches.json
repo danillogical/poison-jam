@@ -121,6 +121,14 @@
    "ledger": "L02"
   },
   {
+   "id": "remove-100041-body-label-dispatch",
+   "file": "recomp_dispatch.c",
+   "before": "    { 0x00100041u, (recomp_func_t)sub_00100041 },\n    { 0x00100047u, (recomp_func_t)sub_00100047 },\n    { 0x0010004Au, (recomp_func_t)sub_0010004A },\n    { 0x0010004Du, (recomp_func_t)sub_0010004D },\n    { 0x00100053u, (recomp_func_t)sub_00100053 },\n    { 0x00100055u, (recomp_func_t)sub_00100055 },\n    { 0x00100058u, (recomp_func_t)sub_00100058 },\n    { 0x0010005Au, (recomp_func_t)sub_0010005A },\n",
+   "after": "    /* 0x00100041..0x0010005A are internal labels in sub_000FFFD0, not dispatchable entries. */\n",
+   "reason": "The original disassembly has one body beginning at 0x000FFFD0 and ending at 0x001005B5. The eight generated tuples 0x00100041, 0x00100047, 0x0010004A, 0x0010004D, 0x00100053, 0x00100055, 0x00100058 and 0x0010005A are instruction labels within that body; their standalone recovered wrappers were removed from config/recovered-functions.json after the 0x000FFFD0 ABI failure exposed the old truncated span. recomp_dispatch.c is translation-owned, so this durable patch removes the stale tuples after regeneration.",
+   "ledger": "L02"
+  },
+  {
    "id": "fix-dispatch-table-size",
    "file": "recomp_dispatch.c",
    "ledger": "L02",

@@ -2,7 +2,7 @@
  "checker_version": "jsrf-generation-provenance/1",
  "full_translation_command": "python -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name \"Jet Set Radio Future\" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json --backedge-yield",
  "generated_outputs": {
-  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "ac858d2203ff7b74d0f2cce662a0429dd872da586e97eef1dfe4bdfe62622505",
+  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "6832757b95a2231b20a2fba8012bf2660716d7012cf940a2f8de6ab4d379f76d",
   "src/recomp/gen/recomp_0000.c": "4db074a90166590ca387126d7015a9b0e324a0f3c47e7301e65a92418e2a222c",
   "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
   "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
@@ -10,31 +10,31 @@
   "src/recomp/gen/recomp_0004.c": "cebdfa390daac3e0310db718e1d255b5b6e24c752b3e913b2b115deb4899ed08",
   "src/recomp/gen/recomp_0005.c": "62fc70e44afd27ea802728d72d249f3a55418ff5604d21065ea055def2a40707",
   "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
-  "src/recomp/gen/recomp_dispatch.c": "256357f9c45aed1e0269ba83a6bfb16ad74f8c86803de6f4f2c5bf3f7747f39a",
+  "src/recomp/gen/recomp_dispatch.c": "c9a3406f0eb21bb742ba6f792e7b89abb5a132942cd7792e9e88a3d9c4a602ae",
   "src/recomp/gen/recomp_funcs.h": "6305e3855c3661a3d28330bc819d27ca3ae308942f950fab638822e92cfce3ed",
-  "src/recomp/gen/recomp_stubs_recovery.c": "2df11c1eb30a8146dbec619f9bf9b47dd750142ace1ddf9e055d7b75f8d4d804",
+  "src/recomp/gen/recomp_stubs_recovery.c": "db03f6fbf209421165c86765452294ecd6c8aaa9f2a1e6f5f536098c09be5d74",
   "src/recomp/gen/recomp_stubs_unresolved.c": "f5054d0f14a616fc956601627e3dd01af41e9f505615336269fc88933b1b1eb0",
   "src/recomp/gen/recomp_types.h": "7c1720c624b65175171499a5663b7382a4d97beaa15b59d314e714b0ea44c741",
-  "src/recomp/recovered/recovered.c": "b260172e5bc1f1dc96c4ce973581e2a8d21b2b2ab9d05300cbaafb883bd21192",
+  "src/recomp/recovered/recovered.c": "5f9de41eb14976e58fbad126a1fc92801a1ed332d4f8a0cc12633c7adbde7a4b",
   "src/recomp/recovered/recovered_11b4b4_test.c": "d13044267b13183c0ea43fda1e44b52da950cdd73d646a39b2240521dfed7ad3",
-  "src/recomp/recovered/recovered_11c1_test.c": "2d72be31e54866b933a72cc4fadab9de663e149aad98a861d058095d7fe70152",
+  "src/recomp/recovered/recovered_11c1_test.c": "f48af1d598f6556f5cf5511553abd1f4f9251c7b57c7dd98ebfd9a16a2f9f88c",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
  "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
  "generators": {
   "project": {
    "dirty": true,
-   "revision": "b67daad8d94059dccac52e54e245b9386aa7dc9b",
+   "revision": "5bb8c839a468968aaf0d8785bd6935e2fb694a23",
    "state": "MEASURED",
-   "status_sha256": "8a663ba8b11d1acccc1dafa81d78b33a024e316c8f978d56ecfa5cf3141aeaef"
+   "status_sha256": "c4c1fb4c3486b465d363230d84c217ec1df14b87c623c51b363667c060574ae7"
   },
   "scripts/recover-functions.py": "c23b7d52fac7bce8a8a63a62a06fafaa9cb375cfe9b047aa5215e664a0586b77",
   "scripts/relift-selected.py": "6525ba181f0338ca232f30bbb9c04421a349b87f9dc5fef457f41c8b69518cbf",
   "toolkit": {
-   "dirty": true,
-   "revision": "0644dd759d9f84c20bb300980ad592971844533a",
+   "dirty": false,
+   "revision": "8e200100949ffb2b253a4ac7884c06a9d71d8713",
    "state": "MEASURED",
-   "status_sha256": "696b184a7e47f530d73b1ed951430c75171bb6980ac6c71ffe0ed94cae60a975"
+   "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "tools/recomp/lifter.py": "c83c894c06b489a298405097ab0a8d6423a9a7bb2454abb53f9feeca7eef58fc",
   "tools/recomp/translator.py": "66482655f7b48129ae51cf77cd7185e71843e18e59aaa4729fd17e9bea8b10cd"
@@ -46,19 +46,19 @@
    "sha256": "59cce1fe5a124dded9d1724a54b002f672c56e66e10e798a921a5b361bff782d"
   },
   "config/manual-functions.json": {
-   "bytes": 108674,
+   "bytes": 108410,
    "present": true,
-   "sha256": "b6a6df8015b667f12476c96d41acd2061190aa056bd22f36223a4139506be5ad"
+   "sha256": "a2b5e03a27130b568bb63cae4efaa885b75984ce00226dfada17fed5bd9f874b"
   },
   "config/recovered-functions.json": {
-   "bytes": 3261838,
+   "bytes": 3255627,
    "present": true,
-   "sha256": "0acdf88e8d6ffcfe262834d4a4d497bb67341cb0a90ff617e77e84fbaab42f57"
+   "sha256": "e6cf8d5805990d0cf9a51bf1858f2962d47f164c09d77dad5b367a1c07de8278"
   },
   "config/recovery-unresolved.json": {
-   "bytes": 3470,
+   "bytes": 3437,
    "present": true,
-   "sha256": "b840da5b607b5bafb0f2090311143621a511b04745ca33bcd8e26e8760832676"
+   "sha256": "9b5eba0b99d18b37e7b522e3ebc22e992177b930fc44a45e05d68c62950e77fc"
   },
   "game/default.xbe": {
    "bytes": 2281472,
@@ -91,9 +91,9 @@
    "sha256": "530416274e304eb7c6426140e0b6f82b5e031e32d5f63698ffb00e887c3f96eb"
   },
   "tools/disasm/output/functions.recovered.json": {
-   "bytes": 6553415,
+   "bytes": 6548144,
    "present": true,
-   "sha256": "65030492d538712161ad6e3ff4855895149c6cc55c19b4873bd61412bd3f77f1"
+   "sha256": "8db14c3b305c5170ffd745a9a0a625e2d3cf8baa7bb6f5e9ae887138ab8116d2"
   }
  },
  "known_unknowns": [],
@@ -165,19 +165,19 @@
    },
    "src/recomp/recovered/recovered.c": {
     "markers": {
-     "JSRF_ABI_CONTINUE": 9822,
-     "RECOMP_ABI_CALL": 11918,
+     "JSRF_ABI_CONTINUE": 9798,
+     "RECOMP_ABI_CALL": 11921,
      "RECOMP_GENERATED_CODE": 1,
-     "g_seh_ebp": 5748
+     "g_seh_ebp": 5734
     },
     "present": true
    }
   },
   "totals": {
-   "JSRF_ABI_CONTINUE": 9822,
-   "RECOMP_ABI_CALL": 11929,
+   "JSRF_ABI_CONTINUE": 9798,
+   "RECOMP_ABI_CALL": 11932,
    "RECOMP_GENERATED_CODE": 5,
-   "g_seh_ebp": 5754
+   "g_seh_ebp": 5740
   }
  },
  "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",

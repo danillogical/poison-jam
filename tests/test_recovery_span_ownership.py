@@ -164,6 +164,20 @@ class SpanOwnershipTest(unittest.TestCase):
         self.assertEqual(self.entries[0x425D0], 0x42745)
         self.assertNotIn(0x425D0, self.unresolved)
 
+    def test_fffd0_owns_full_body_and_internal_labels_are_not_entries(self):
+        # The original walk has one owner from its prologue at 0xFFFD0 through
+        # the shared ret 4 at 0x1005B5.  The eight former entries below are
+        # instruction labels in that same body; retaining them creates wrappers
+        # with the wrong stack contract and truncates the owner's saved-register
+        # epilogue.
+        self.assertEqual(self.entries[0xFFFD0], 0x1005B5)
+        internal = (0x100041, 0x100047, 0x10004A, 0x10004D,
+                    0x100053, 0x100055, 0x100058, 0x10005A)
+        self.assertTrue(set(internal).isdisjoint(self.entries))
+        self.assertIn('Original: 0x000FFFD0 - 0x001005B5', self.text)
+        for address in internal:
+            self.assertNotIn(f'sub_{address:08X}', self.text)
+
     def test_thunk_contract_and_receivers(self):
         # tail-jump thunks pop what their slot-1/3 receivers pop (ret 0xC)
         for a in (0x47470, 0x47540):
