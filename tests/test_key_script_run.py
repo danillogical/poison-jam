@@ -64,6 +64,18 @@ def talk_frame():
     return a
 
 
+def icon_blob(a, top, left):
+    """A sparse blue face in the talk-icon band, as the real balloon renders it.
+
+    The real balloon is a white bubble whose blue face covers 52-74 pixels in a 22-37 px
+    wide, 37-38 px tall footprint -- sparse, not a solid block, which is why the detector
+    caps the count as well as the height."""
+    for r in range(0, 37, 4):
+        for c in range(0, 22, 4):
+            a[top + r, left + c] = (16, 101, 156)
+    return a
+
+
 def balloon_icon_frame():
     """Gameplay with the "?" balloon icon: 122 white pixels, which is not a talk."""
     a = frame((40, 40, 40))
@@ -128,17 +140,14 @@ class Detectors(unittest.TestCase):
 
         Its threshold is load-bearing: across the archived Packet 001 presses, an icon at
         press time talked 4/4 times and never failed, while 38 of 45 presses without one
-        opened no talk."""
+        opened no talk. The measured balloon is 22-37 px wide and 37-38 px tall (52-74 blue
+        pixels), so the patches here are sized to that."""
         a = hud_frame()
         self.assertFalse(ksr.is_talk_icon(a))
-        a[140:160, 360:380] = (16, 101, 156)          # 20x20 = 400 blue pixels
+        icon_blob(a, 140, 360)                        # sparse face, as measured
         self.assertTrue(ksr.is_talk_icon(a))
-        a[140:160, 360:380] = (0, 0, 0)
-        a[140:147, 360:380] = (16, 101, 156)          # 7x20 = 140, still above 40
-        self.assertTrue(ksr.is_talk_icon(a))
-        a[140:142, 360:380] = (0, 0, 0)               # 5x20 = 100
-        a[140:141, 360:380] = (16, 101, 156)
-        a[142:147, 360:380] = (0, 0, 0)               # 1x20 = 20, below threshold
+        a[140:177, 360:382] = (40, 40, 40)
+        a[140:143, 360:365] = (16, 101, 156)          # 3x5 = 15 px, below the threshold
         self.assertFalse(ksr.is_talk_icon(a))
 
     def test_talk_icon_is_false_on_a_dialogue_frame(self):
@@ -146,6 +155,21 @@ class Detectors(unittest.TestCase):
         a = talk_frame()
         a[140:160, 360:380] = (16, 101, 156)
         self.assertFalse(ksr.is_talk_icon(a))
+
+    def test_talk_icon_rejects_the_blue_location_banner(self):
+        """The band also catches the blue Dogenzaka Hill banner, which is not a talk.
+
+        A real balloon is 22-37 px wide and 37-38 px tall in the band (52-74 blue pixels);
+        the banner is 26 px wide and 67 px tall (107 pixels). Its count sits just above the
+        largest real icon, so only the height separates them."""
+        a = hud_frame()
+        # A tall, narrow blue strip, as the banner appears in the band: 26 wide, 67 tall.
+        a[120:187, 360:386] = (16, 101, 156)
+        self.assertFalse(ksr.is_talk_icon(a))
+        # A balloon-shaped blob of the measured size is accepted.
+        a[120:187, 360:386] = (40, 40, 40)
+        icon_blob(a, 140, 360)                        # 22x37 sparse face
+        self.assertTrue(ksr.is_talk_icon(a))
 
 
 class ParseScript(unittest.TestCase):
