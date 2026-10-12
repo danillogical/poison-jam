@@ -248,7 +248,8 @@ v0.12: `RECOMP_IRQL_TRACE`, `RECOMP_KEY_TRACE`, `RECOMP_INPUT_DIAG`, `RECOMP_PB_
 `RECOMP_FB_PRESENT_DUMP_AFTER_S` (window-thread sample of published flips: a log
 every N flips and at least every 10 s, a BMP when the visible image changes and
 once a minute while it does not, starting AFTER_S seconds after the window thread's
-first sample; no guest write), `RECOMP_WATCH`, `RECOMP_WATCH_RAW`; from the 2026-09-28 fork fixes:
+first sample; no guest write), `RECOMP_WATCH`, `RECOMP_WATCH_RAW`, `RECOMP_WATCH_WHO` (adds the
+writing thread, native RIP and, for a host thread, its native frames to each watch report); from the 2026-09-28 fork fixes:
 `RECOMP_FFP_TRACE` and `RECOMP_TRACE_FLIP` (executor tracing), and `RECOMP_GUEST_METER` (counts host
 threads inside lifted guest code; changes no guest state or scheduling); from 2026-09-30:
 `RECOMP_PB_EXEC_VERBOSE` (executor logging, `nv2a_pb_exec.c:61`); from the upstream v0.13 merge:
