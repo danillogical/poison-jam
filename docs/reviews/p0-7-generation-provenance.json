@@ -6,7 +6,7 @@
   "src/recomp/gen/recomp_0000.c": "4db074a90166590ca387126d7015a9b0e324a0f3c47e7301e65a92418e2a222c",
   "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
   "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
-  "src/recomp/gen/recomp_0003.c": "5e36ccfcb9e419c1ce695cb2e185c5832897f563ed6eb0eaca0b00d2176ef489",
+  "src/recomp/gen/recomp_0003.c": "1d59dbb80759c90006bbce53cd8b12a350a029b2003ee08787586d6495f166e8",
   "src/recomp/gen/recomp_0004.c": "cebdfa390daac3e0310db718e1d255b5b6e24c752b3e913b2b115deb4899ed08",
   "src/recomp/gen/recomp_0005.c": "62fc70e44afd27ea802728d72d249f3a55418ff5604d21065ea055def2a40707",
   "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
@@ -24,17 +24,17 @@
  "generators": {
   "project": {
    "dirty": true,
-   "revision": "bd218cc251229f84bb8aedd17f87b79ea20b0e08",
+   "revision": "01f7304674c7ba5a64ad18fcef96ecc5c74f9bc2",
    "state": "MEASURED",
-   "status_sha256": "2c1bf3d316b88806a6f209508b57fd8a156898f776059ae4f6f6231f4aed2a3b"
+   "status_sha256": "9b9a0405ec0d00c7e99e8bd9c278ee7426c6b55bde645a4c89aae2ad7eaf9f43"
   },
   "scripts/recover-functions.py": "c23b7d52fac7bce8a8a63a62a06fafaa9cb375cfe9b047aa5215e664a0586b77",
-  "scripts/relift-selected.py": "2b4d195b9419356dca4b9f037320da57ed8ad471dfce74a2269368ac05d1e4cc",
+  "scripts/relift-selected.py": "c212fd9b41a40150569ec55c93e7ea3f03aacaea1913e47af2c7172805d66294",
   "toolkit": {
-   "dirty": false,
+   "dirty": true,
    "revision": "7acde2c4d3a196c304821b11e01f336b1e16da3b",
    "state": "MEASURED",
-   "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   "status_sha256": "e284ac7c3fd84f8447e3f9090fd4d54dec03e951c25a29903ede0b5fab4dd0fa"
   },
   "tools/recomp/lifter.py": "c83c894c06b489a298405097ab0a8d6423a9a7bb2454abb53f9feeca7eef58fc",
   "tools/recomp/translator.py": "66482655f7b48129ae51cf77cd7185e71843e18e59aaa4729fd17e9bea8b10cd"
@@ -1615,6 +1615,11 @@
    "kind": "input and generated output",
    "date": "2026-10-06",
    "cause": "Stop 27 confirmed and stop 28 recovered. Run 20261006-024003-212-f13-exercise-stop27 (exploratory, 350 s, unhandled_exception, 560 ABI-verified returns -- up from 556 -- presents frozen at 888 with the disclaimer hash 5bdaea576b8509f5 unchanged) logged `[RECOVERED] 0x00096B60 returned; ABI verified`, the first run ever to execute the address recovered as stop 27, and then stopped on `[ICALL] Failed to resolve VA 0x00081860`. That address sits in the 13-byte gap immediately after 0x00080BD0's corrected end 0x00081853, and the gap is THIRTEEN NOP BYTES -- an alignment boundary, independent evidence that 0x81860 is a real start. Two manifest entries tail-jump to it (0x00082770 and 0x00082790 both end `jmp 0x81860`), a second independent source. Recovered as [0x00081860, 0x0008274B) with stack_args 4: a fully enumerated 927-instruction walk with no truncated decode, no fall-off, and FIVE exits, ALL of them `ret 4`, with at least one at DEPTH 0; the frame `sub esp,0xe8` plus four pushes balances against the matching epilogues. The regenerated body is 1494 lines with 5 returns and ZERO fatal trap stubs. recovered.c 3160 -> 3161 functions. stack-depth 1981 PROVED / 1113 UNKNOWN / 67 SUSPICIOUS, findings unchanged."
+  },
+  {
+   "kind": "generated output",
+   "date": "2026-10-11",
+   "cause": "Targeted relift `python -X utf8 scripts/relift-selected.py comiss` (list in config/relift-comiss.json): the 8 generated bodies whose comiss/ucomiss branches still tested the bare relation, lifted before toolkit 894ceef gave an unordered (NaN) compare its ZF/PF/CF. Only recomp_0003.c changes: 23 jb/je/cmovb conditions gain the unordered term, plus header CC comments. Measured cause: 0x0014C100 (ray-plane test) returned a hit for a NaN ray from a stationary player, so the warp trigger pass 0x00024AE0 set [req+0x38] every frame, 0x00080340 re-entered the warp 0x00092750 every frame, and its 60-frame countdown at +0xC58 never ran out to the fade-in."
   }
  ],
  "regenerations": [

@@ -33,7 +33,7 @@ for a,name in json.loads((root/'config/manual-functions.json').read_text()).item
     if int(a,16) in db:db[int(a,16)]['name']=name
 t=FunctionTranslator(data,db,labels)
 mode=sys.argv[1]
-assert mode in ('atomics','wide-string-compare','boundaries','trace','fcmov')
+assert mode in ('atomics','wide-string-compare','boundaries','trace','fcmov','comiss')
 # A targeted guest-call trace.
 #
 # --trace-functions on a full regeneration rewrites every chunk, so a
@@ -81,6 +81,11 @@ for path in (root/'src/recomp/gen').glob('recomp_*.c'):
         # fcmovcc was dropped as a bare comment until the toolkit's 671ab0a; relift
         # exactly the bodies that carry the dropped form.
         if mode=='fcmov':wanted=bool(re.search(r'/\* FPU: fcmov\w+ ',old))
+        # comiss/ucomiss set ZF, PF and CF together on an unordered (NaN) compare;
+        # the toolkit's 894ceef reads that for jb/jbe/je/jne/jp. Relift the bodies
+        # whose SSE-compare branches still test the bare relation.
+        if mode=='comiss':wanted=bool(re.search(r'/\* u?comis[sd] \*/',old)) and bool(
+            re.search(r'if \(\(_fca (?:<|<=|==|!=) _fcb\)\) goto',old))
         if mode=='boundaries':wanted=any(int(f['start'],16)==a for f in boundaries)
         if mode=='trace':wanted=a in trace_addresses
         if not wanted:continue

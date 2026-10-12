@@ -21,6 +21,7 @@ Script steps (JSON list, run in order):
   {"sleep": 5}
   {"wait_change": {"timeout": 30, "min_mean_delta": 8}}     records, never fails
   {"wait_stable": {"timeout": 30, "seconds": 3, "max_mean_delta": 2}}
+  {"touch": "path"} / {"remove": "path"}                    create / delete a file (arms RECOMP_FRAME_TRACE)
   {"snap": "name"}
 
 Output goes to `logs/runs/<YYYYMMDD-HHMMSS-mmm>-keyscript-<label>/`, the same archive tree as
@@ -206,6 +207,10 @@ def parse_script(data):
             if o["screen"] not in SCREENS:
                 raise ScriptError("wait_screen: screen must be one of %s" % ", ".join(sorted(SCREENS)))
             o["timeout"] = _num(kind, "timeout", o["timeout"], 1)
+        elif kind in ("touch", "remove"):
+            if not isinstance(body, str) or not body:
+                raise ScriptError("%s: a file path is required" % kind)
+            o = {"path": body}
         elif kind == "snap":
             if not isinstance(body, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", body):
                 raise ScriptError("snap: name must be a simple string")
@@ -483,6 +488,16 @@ class Run:
             test = SCREENS[o["screen"]]
             ok = self.wait_for(o["timeout"], lambda: self.frame is not None and test(self.frame))
             return {"satisfied": ok}
+        if kind == "touch":
+            Path(o["path"]).parent.mkdir(parents=True, exist_ok=True)
+            Path(o["path"]).write_bytes(b"")
+            return {"touched": o["path"]}
+        if kind == "remove":
+            try:
+                Path(o["path"]).unlink()
+                return {"removed": o["path"]}
+            except FileNotFoundError:
+                return {"removed": None}
         if kind == "snap":
             self.tick()
             return {"file": self.snap(o["name"])}
