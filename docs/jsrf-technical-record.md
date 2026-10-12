@@ -1943,3 +1943,5 @@ data (an NPC or event table naming Gum's position, which this packet did not fin
 is the only Media file referencing TE002/TE003, and the talk table at `0x021E7xxx` is a message
 table, not placement data), or a steering search that reads the guest camera/position rather than
 holding keys for wall-clock durations.
+
+PUSHED_TO: poison-jam / BRANCH: master / COMMIT: 4f0d05b51e12bd7a06a102266e30ac1f3665f356 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: success, fast-forward from b0b43c9 over two commits (45c27aa, 4f0d05b). Validation: CTest 60/60, `just check` all checkers passed, four test files green (20 + 6 + 28 + 12 tests), secret audit 0 hits over 219 blobs, no forbidden paths, largest outgoing blob 144,676 bytes. Toolkit 8e20010 is unchanged and was not pushed.
