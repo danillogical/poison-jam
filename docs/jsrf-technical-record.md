@@ -1874,3 +1874,5 @@ spawn by open-loop movement in any of the four cardinal headings, and the talk-a
 appears at no other position on those paths. The next packet needs either a named route to Gum
 from game data (an event or stage table naming her position) or a scripted search that steers by
 the icon and by camera rather than by wall-clock holds.
+
+PUSHED_TO: poison-jam / BRANCH: master / COMMIT: 2b6df90d40828637a77e313939072109aa522f6e / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: success, fast-forward from 4737c18 over four commits (b1056df, 36d5430, 47baa88, 2b6df90). Validation: CTest 60/60, `just check` all checkers passed, four test files green (18 + 6 + 28 + 12 tests), secret audit 0 hits over 219 blobs, no forbidden paths, largest outgoing blob 139,371 bytes. Toolkit 8e20010 is unchanged and was not pushed.
