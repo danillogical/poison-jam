@@ -142,6 +142,14 @@ void jsrf_slot_watch_write(uint32_t provenance, uint32_t before, uint32_t after,
 #define TOL_VSH  4      /* vertex-program cases: GPU float maths and colour interpolation, per 8-bit channel */
 #define COVER_TOL 24
 
+/* Controlled opposite-winding culling fixture.  These addresses are isolated from
+ * the historical parity scenes so the state/cache cases can revisit one target. */
+#define CULL_SURF_BASE 0x00800000u
+#define CULL_VB_BASE   0x00900000u
+#define CULL_CLEAR     0xFF101010u
+#define CULL_RED       0xFFFF0000u
+#define CULL_GREEN     0xFF00FF00u
+
 /* ── Pushbuffer builder ──────────────────────────────────────────────────── */
 static uint32_t *g_pb;
 static uint32_t g_pbn;
@@ -1301,6 +1309,72 @@ static void build_vs6(int flip) { (void)flip; build_vs(VS_BEHIND, 19, SURF_V6, V
 static void build_vs7(int flip) { (void)flip; build_vs(VS_MVP, 20, SURF_V1, VB_V1,
     "V7 same scene as V1 with RECOMP_GPU_VSH=0 (the back end transforms on the CPU)"); }
 
+static void prefill(const Scene *sc);
+static uint8_t *snapshot(const Surf *s);
+static int submit(const char *what);
+static void cull_state(uint32_t enable, uint32_t face, uint32_t winding);
+static int cull_region(const uint8_t *px, int x0, int y0, int x1, int y1, uint32_t want,
+                       unsigned *match, unsigned *nonclear);
+
+static void put_vs_cull_pair(uint32_t vb)
+{
+    static const float pos[6][4] = {
+        { 4, 4, .5f, 1 }, { 28, 4, .5f, 1 }, { 4, 28, .5f, 1 },
+        { 36, 36, .5f, 1 }, { 36, 60, .5f, 1 }, { 60, 36, .5f, 1 }
+    };
+    static const float col[2][4] = { { 1, 0, 0, 1 }, { 0, 1, 0, 1 } };
+    static const float zero[4] = { 0, 0, 0, 1 };
+    int i;
+    for (i = 0; i < 6; i++) {
+        uint8_t *p = G(vb + (uint32_t)i * VS_STRIDE);
+        memcpy(p, pos[i], 16); memcpy(p + 16, zero, 16); memcpy(p + 32, zero, 16);
+        memcpy(p + 48, col[i / 3], 16);
+    }
+}
+
+static void build_cull_program_pb(uint32_t surf, uint32_t vb, uint32_t enable,
+                                  uint32_t face, uint32_t winding)
+{
+    VsCase c;
+    memset(&c, 0, sizeof c);
+    vs_pass_pos(&c);
+    vs_add(&c, vs_fin(vs_out(vs_op(MAC_MOV, 0, vs_v(3, NULL), vs_none(), vs_none()),
+                              O_D0, 0xF, 0)));
+    pb_begin(); pb_surface(surf, 64, 64, 4); pb_clear(CULL_CLEAR);
+    pb(0x0304, 0); pb(0x0300, 0); pb_texture_off(); pb(0x1B4C, 0);
+    pb_vertex_format_vs(vb); pb(0x02A4, 0); pb(0x1E70, 0); pb(0x1E60, 1u);
+    pb_rc_stage_product(RC_ZERO, RC_ZERO);
+    pb_rc_final(RC_ZERO, RC_ZERO, RC_ZERO, RC_V0, RC_A(RC_V0));
+    pb_vs_program(&c); put_vs_cull_pair(vb); cull_state(enable, face, winding);
+    pb_draw_triangles(6); pb_flip();
+}
+
+static int run_cull_program_cases(void)
+{
+    static const struct { uint32_t e, f, w; int l, r; const char *name; } cases[] = {
+        { 0, 0x405, 0x900, 1, 1, "P0" }, { 1, 0x405, 0x900, 1, 0, "P1" },
+        { 1, 0x404, 0x900, 0, 1, "P2" }, { 1, 0x405, 0x901, 0, 1, "P3" },
+        { 1, 0x404, 0x901, 1, 0, "P4" }, { 1, 0x408, 0x900, 0, 0, "P5" }
+    };
+    int i, ok = 1;
+    for (i = 0; i < (int)(sizeof cases / sizeof cases[0]); i++) {
+        uint32_t surf = CULL_SURF_BASE + 0xA0000u + (uint32_t)i * 0x10000u;
+        uint32_t vb = CULL_VB_BASE + 0xA0000u + (uint32_t)i * 0x10000u;
+        Surf s = { surf, 64, 64, 4, CULL_CLEAR, 0, 0, 0 };
+        uint8_t *out; unsigned lm, ln, rm, rn;
+        build_cull_program_pb(surf, vb, cases[i].e, cases[i].f, cases[i].w);
+        prefill(&(Scene){ cases[i].name, 1, { s } });
+        if (!submit(cases[i].name) || !(out = snapshot(&s))) { ok = 0; continue; }
+        cull_region(out, 0, 0, 32, 32, CULL_RED, &lm, &ln); cull_region(out, 32, 32, 64, 64, CULL_GREEN, &rm, &rn);
+        printf("  cull %s: L %u/%u R %u/%u\n", cases[i].name, lm, ln, rm, rn);
+        if ((cases[i].l && lm < 200) || (!cases[i].l && ln != 0)
+            || (cases[i].r && rm < 200) || (!cases[i].r && rn != 0)) ok = 0;
+        free(out);
+    }
+    pb_begin(); cull_state(0, 0x405, 0x900); pb_flip(); submit("program cull reset");
+    return ok;
+}
+
 static void write_guest_data(void)
 {
     uint32_t x, y;
@@ -1365,6 +1439,133 @@ static uint8_t *snapshot(const Surf *s)
     uint8_t *p = (uint8_t *)malloc(n);
     if (p) memcpy(p, G(s->va), n);
     return p;
+}
+
+static void cull_state(uint32_t enable, uint32_t face, uint32_t winding)
+{
+    pb(0x0308, enable);
+    pb(0x039C, face);
+    pb(0x03A0, winding);
+}
+
+static void cull_pair(uint32_t vb, float ox, float oy)
+{
+    put_vertex(vb, 0, ox + 4, oy + 4, CULL_RED, 0, 0);
+    put_vertex(vb, 1, ox + 28, oy + 4, CULL_RED, 0, 0);
+    put_vertex(vb, 2, ox + 4, oy + 28, CULL_RED, 0, 0);
+    put_vertex(vb, 3, ox + 36, oy + 36, CULL_GREEN, 0, 0);
+    put_vertex(vb, 4, ox + 36, oy + 60, CULL_GREEN, 0, 0);
+    put_vertex(vb, 5, ox + 60, oy + 36, CULL_GREEN, 0, 0);
+    pb_vertex_format(vb, 0);
+    pb_draw_triangles(6);
+}
+
+static void cull_pair_regions(uint32_t vb, float ox, float oy)
+{
+    /* K6 uses 32x32 quadrants: each pair occupies the upper-left and lower-right
+     * halves of its quadrant, avoiding overlap with adjacent state batches. */
+    put_vertex(vb, 0, ox + 2, oy + 2, CULL_RED, 0, 0);
+    put_vertex(vb, 1, ox + 14, oy + 2, CULL_RED, 0, 0);
+    put_vertex(vb, 2, ox + 2, oy + 14, CULL_RED, 0, 0);
+    put_vertex(vb, 3, ox + 18, oy + 18, CULL_GREEN, 0, 0);
+    put_vertex(vb, 4, ox + 18, oy + 30, CULL_GREEN, 0, 0);
+    put_vertex(vb, 5, ox + 30, oy + 18, CULL_GREEN, 0, 0);
+    pb_vertex_format(vb, 0);
+    pb_draw_triangles(6);
+}
+
+static int cull_region(const uint8_t *px, int x0, int y0, int x1, int y1, uint32_t want,
+                       unsigned *match, unsigned *nonclear)
+{
+    int x, y;
+    *match = *nonclear = 0;
+    for (y = y0; y < y1; y++) for (x = x0; x < x1; x++) {
+        uint32_t v = *(const uint32_t *)(px + ((size_t)y * 64u + (size_t)x) * 4u);
+        if (v == want) (*match)++;
+        if (v != CULL_CLEAR) (*nonclear)++;
+    }
+    return *match >= 200;
+}
+
+static int run_cull_ff_cases(void)
+{
+    static const struct { uint32_t e, f, w; int l, r; const char *name; } cases[] = {
+        { 0, 0x405, 0x900, 1, 1, "K0" }, { 1, 0x405, 0x900, 1, 0, "K1" },
+        { 1, 0x404, 0x900, 0, 1, "K2" }, { 1, 0x405, 0x901, 0, 1, "K3" },
+        { 1, 0x404, 0x901, 1, 0, "K4" }, { 1, 0x408, 0x900, 0, 0, "K5" }
+    };
+    int ok = 1, i;
+    for (i = 0; i < (int)(sizeof cases / sizeof cases[0]); i++) {
+        uint32_t surf = CULL_SURF_BASE + (uint32_t)i * 0x10000u;
+        uint32_t vb = CULL_VB_BASE + (uint32_t)i * 0x10000u;
+        Surf s = { surf, 64, 64, 4, CULL_CLEAR, 0, 0, 0 };
+        unsigned lm, ln, rm, rn;
+        uint8_t *out;
+        pb_begin(); pb_surface(surf, 64, 64, 4); pb_clear(CULL_CLEAR);
+        cull_state(cases[i].e, cases[i].f, cases[i].w); cull_pair(vb, 0, 0); pb_flip();
+        prefill(&(Scene){ "cull", 1, { s } });
+        if (!submit(cases[i].name) || !(out = snapshot(&s))) { ok = 0; continue; }
+        cull_region(out, 0, 0, 32, 32, CULL_RED, &lm, &ln);
+        cull_region(out, 32, 32, 64, 64, CULL_GREEN, &rm, &rn);
+        if ((cases[i].l && lm < 200) || (!cases[i].l && ln != 0)
+            || (cases[i].r && rm < 200) || (!cases[i].r && rn != 0)) ok = 0;
+        printf("  cull %s: L %u/%u R %u/%u\n", cases[i].name, lm, ln, rm, rn);
+        free(out);
+    }
+    /* K6 changes state on one target between every draw, exercising the cache and
+     * the unconditional RSSetState binding. */
+    {
+        uint32_t surf = CULL_SURF_BASE + 0x70000u, vb = CULL_VB_BASE + 0x70000u;
+        Surf s = { surf, 64, 64, 4, CULL_CLEAR, 0, 0, 0 };
+        uint8_t *out; unsigned m, n; int q;
+        pb_begin(); pb_surface(surf, 64, 64, 4); pb_clear(CULL_CLEAR);
+        cull_state(1, 0x405, 0x900); cull_pair_regions(vb + 0x000, 0, 0);
+        cull_state(1, 0x404, 0x900); cull_pair_regions(vb + 0x400, 32, 0);
+        cull_state(0, 0x405, 0x900); cull_pair_regions(vb + 0x800, 0, 32);
+        cull_state(1, 0x405, 0x901); cull_pair_regions(vb + 0xC00, 32, 32); pb_flip();
+        prefill(&(Scene){ "cull K6", 1, { s } });
+        if (!submit("K6") || !(out = snapshot(&s))) ok = 0;
+        else {
+            for (q = 0; q < 4; q++) {
+                int ox = (q & 1) ? 32 : 0, oy = (q & 2) ? 32 : 0;
+                cull_region(out, ox, oy, ox + 16, oy + 16, CULL_RED, &m, &n);
+                if (q == 0 && (m < 40 || n == 0)) ok = 0;
+                if (q == 1 && n != 0) ok = 0;
+                if (q == 2 && m < 40) ok = 0;
+                if (q == 3 && n != 0) ok = 0;
+                cull_region(out, ox + 16, oy + 16, ox + 32, oy + 32, CULL_GREEN, &m, &n);
+                if (q == 0 && n != 0) ok = 0;
+                if (q == 1 && m < 40) ok = 0;
+                if (q == 2 && m < 40) ok = 0;
+                if (q == 3 && m < 40) ok = 0;
+            }
+            free(out);
+        }
+    }
+    /* K7: clears are independent of rasterizer culling. */
+    {
+        uint32_t surf = CULL_SURF_BASE + 0x80000u; Surf s = { surf, 64, 64, 4, CULL_CLEAR, 0, 0, 0 };
+        const uint32_t want = 0xFF2040A0u;
+        uint8_t *out; int x, y, bad = 0;
+        pb_begin(); pb_surface(surf, 64, 64, 4); cull_state(1, 0x408, 0x900);
+        pb(0x0200, (32u << 16) | 16u); pb(0x0204, (32u << 16) | 16u);
+        pb_clear(want); pb_flip();
+        prefill(&(Scene){ "cull K7", 1, { s } });
+        if (!submit("K7") || !(out = snapshot(&s))) ok = 0;
+        else {
+            for (y = 0; y < 64; y++) for (x = 0; x < 64; x++) {
+                uint32_t got = *(uint32_t *)(out + ((size_t)y * 64u + (size_t)x) * 4u);
+                uint32_t expect = x >= 16 && x < 48 && y >= 16 && y < 48
+                                ? want : 0x5A5A5A5Au;
+                if (got != expect) bad = 1;
+            }
+            free(out); if (bad) ok = 0;
+        }
+        /* Leave the executor in the historical permissive state for the
+         * subsequent combiner/program parity cases. */
+        pb_begin(); cull_state(0, 0x405, 0x900); pb_flip(); submit("cull reset");
+    }
+    return ok;
 }
 
 /* Unpack one pixel to A,R,G,B bytes. */
@@ -1746,6 +1947,8 @@ int main(int argc, char **argv)
             ok &= check_parity("case4/after-flip", &g_scene[3].surf[0], ref[3][0], after, 1);
         free(after);
     }
+    puts("-- D3D11 back end: face culling --");
+    ok &= run_cull_ff_cases();
     }
 
     puts("-- D3D11 back end: register combiners (program mode) --");
@@ -1768,6 +1971,8 @@ int main(int argc, char **argv)
         ok &= submit("d3d11 (flipped)");
         got[c][0] = snapshot(&g_scene[c].surf[0]);
     }
+    puts("-- D3D11 back end: face culling (program path) --");
+    ok &= run_cull_program_cases();
     /* The combiner cases' CPU references run last, with the back end unregistered: once a title
      * programs the combiners the executor's rc_seen never clears, and the back end then applies the
      * leftover combiner to fixed-function batches (the CPU path ignores it), which would corrupt
