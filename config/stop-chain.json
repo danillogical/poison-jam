@@ -508,6 +508,23 @@
     }
    ],
    "note": "Fatal `[ICALL] Failed to resolve VA 0x000F7F21` (0xE0424943) in run keyscript-newgame-15. 0x000F7F21 is not a function: it is the first arm of the 9-way switch in the thiscall method 0x000F7F00 (slot 3 of the table at 0x001D0770; `mov eax, [esp+4]; sub esp, 0x70; cmp eax, 8; push ebx; mov ebx, ecx; ja 0xf8075; movzx eax, byte [eax+0xf8088]; jmp [eax*4+0xf807c]`). The jump table at 0x000F807C holds three arms (0x000F7F21, 0x000F806E, 0x000F8075) and the byte index table at 0x000F8088 maps indices 0..8 onto them. The recovery entry for 0x000F7F00 ended at 0x000F8000, in the middle of its own body, so the table lay beyond the span, the lifter could not resolve the indirect jump and the first arm became an indirect call. A second recovery entry [0x000F8000, 0x000F80A0) was the same false split as stop 37's 0x00030800: it started at the `lea edx, [ebx+0xb0]` after the `mov ecx, [eax]` at 0x000F7FFE, used the caller's ebx and frame, and also swallowed the jump table. The method has two exits, both `pop ebx; add esp, 0x70; ret 4` (0x000F806B and 0x000F8079). Nothing else reaches 0x000F8000: a byte scan of every section for rel8/rel32 call, jmp, jcc, loop and jcxz targets finds none, the one aligned dword equal to it (0x0022B344) is a bit mask in a .data mask run, the analysis database has no caller or call to it (its sub_000F8000 is a tail_jump_alias [0x000F8000, 0x000F80C0) overlapping the real body), and the only dispatch tuple is removed by the generated patch remove-f8000-dispatch. REPAIRED: 0x000F7F00 widened to [0x000F7F00, 0x000F807C), stack_args 4, one byte past the last `ret 4` and before the jump table; the 0x000F8000 entry removed (ledger L02). Same class as stops 32 and 37. NOT YET EXERCISED: expect `[RECOVERED] 0x000F7F00 returned; ABI verified (ESP/EBX/ESI/EDI)` and no ABI FAILURE at 0x000F8000. That confirmation names 0x000F7F00, not this row's address, so confirming this row needs the row re-addressed (as stop 32 is addressed at its container) or a new row. Confirmed through 0x000F7F00: 20261011-122511-472-keyscript-newgame-16 (built from 0f368e0) shows `[RECOVERED] 0x000F7F00 returned; ABI verified`, no ICALL, ABI failure, exception or walk rejection in 480 s, and the opening cutscene on screen. The row stays REPAIRED because its address, 0x000F7F21, is a case arm, not a function."
+  },
+  {
+   "id": 49,
+   "address": "0x000FFFD0",
+   "state": "RUNTIME_CONFIRMED",
+   "repair_commit": "9b0af4eb8ec33cf11b1a191d7079f27a1d0fb6dd",
+   "evidence": [
+    {
+     "run": "20261011-221941-413-keyscript-culling-skate",
+     "role": "discovered"
+    },
+    {
+     "run": "20261011-223618-932-keyscript-culling-skate-fixed",
+     "role": "returned"
+    }
+   ],
+   "note": "ABI FAILURE after the skate jump: ESP 00F7FED0 -> 00F7FEC4, expected +8. The recovery span [0x000FFFD0,0x000FFFE1) contained only six prologue instructions and three unmatched pushes. Original XBE body runs to 0x001005B5, with restoring RET 4 exits at 0x001005A4 and 0x001005B2. REPAIRED: full owner restored with stack_args 4; eight false internal entries 0x00100041/47/4A/4D/53/55/58/5A and their manual/dispatch symbols removed. CONFIRMED: fixed skate run on 34553f9 (descends from 9b0af4e) records `[RECOVERED] 0x000FFFD0 returned; ABI verified (ESP/EBX/ESI/EDI)`, all 71 script steps complete, and no further ABI failure through the 480 s bound. Zero driver fatal counts in the discovering run do not override its ABI abort or incomplete script."
   }
  ]
 }

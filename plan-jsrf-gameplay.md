@@ -27,7 +27,8 @@ This session fetched and verified clean, synchronized game
 - **K16 complete:** live keyboard Enter reaches guest Start and opens the real main
   menu (`keyscript-k16-r3b`, `keyscript-newgame-2`; TR §31). Keyboard Z / Xbox A
   selects NEW GAME and advances dialogue. Gameplay and the HUD are reachable
-  (`keyscript-intro-1`). K17's full directional/back acceptance is still unproven.
+  (`keyscript-intro-1`). Garage movement is now observed below; K17's broader
+  menu-direction/back acceptance remains separate.
 - **The Garage black-world defect is fixed:** stale unordered SSE compares repeatedly
   rearmed the warp fade; APU DSP physical-address translation overwrote stage vertex
   buffers. Targeted relifts and toolkit `293a97b` restored floor, walls, fences and
@@ -59,20 +60,25 @@ This session fetched and verified clean, synchronized game
   matching INCR/DECR stencil state, followed by a stencil-EQUAL darkening pass
   (TR §31.3). Shadows improved; hardware fidelity and stencil-value readback are
   unproven. The old zero CPU-pixel counter did not establish absent GPU output.
-- **The historical alpha-tested quad remains unclosed, not a proven defect.**
-  Its old transformed vertices were off screen; it was absent from the new complete
-  frame. Do not choose an alpha-test fix from this evidence.
-- Forward movement, left/right turns, an airborne jump pose and camera following
-  are visible. Backward movement was skipped after an ABI abort at `0x000FFFD0`.
+- **The alpha-tested quad family produces output.** A later complete frame after
+  skating records 1,139 passing samples from its texture/primitive family. That
+  draw uses alpha ref 0; the historical ref-204 draw was off screen and remains
+  unclosed. There is no measured alpha-test defect to fix (TR §31.4).
+- **The full skate path completes:** `20261011-223618-932-keyscript-culling-skate-fixed`
+  executes all 71 steps in 302 s and continues presenting through the 480 s bound.
+  Forward motion, both turns, jump/grind behavior, backward-input movement and
+  camera following are visible in pre/post frames. The next measured blocker,
+  truncated recovery owner `0x000FFFD0`, was repaired in `9b0af4e` and returned
+  with its ABI verified. No further fatal/ABI blocker was observed in this run.
 
 ## Immediate next task
 
-Run the full unchanged `skate.json` on game `9b0af4e`, which restores the truncated
-`0x000FFFD0` effect method through its original `RET 4` epilogues and removes eight
-false internal entries. Focused recovery checks/build passed; runtime return and
-backward movement still need confirmation. Record the earliest remaining blocker
-from that run; do not reopen stencil or choose a lighting/combiner feature from
-appearance alone.
+The rendering/movement checkpoint is reached on the exploratory path. Extend the
+opening-area automation to exercise graffiti, audio and save/resume, then record
+the earliest actual failure. Those behaviors remain unvalidated, rather than
+known renderer defects. No separate lighting/combiner feature is justified by
+the measured Garage view. Keep the historical off-screen ref-204 quad and
+eye-plane-crossing/hardware shadow fidelity as explicit coverage limits.
 
 ## Working loop
 
@@ -98,10 +104,10 @@ appearance alone.
    technical record/ledger. Preserve original assets/saves. Commit and push verified
    work, toolkit first when both repos changed; finish with clean synchronized trees.
 
-## Natural checkpoint for the next session
+## Completed checkpoint and next session
 
-Culling implemented, focused test green, gameplay runtime confirming its effect,
-the next blocker measured, and both repositories pushed and clean. Stop there if the
-next defect is a separate substantial problem. Do not claim the opening-area slice
-complete until player visibility, movement, turning, jumping and camera response are
-each supported by runtime observations.
+Culling has deciding production-path tests and gameplay evidence. Player visibility,
+movement, turning, jumping and camera response are supported by observations;
+the adjacent ABI stop is repaired and runtime-confirmed. This does not establish
+strict fidelity or complete graffiti/audio/save acceptance. Start the next session
+from the pushed baseline and measure those remaining opening-area behaviors.

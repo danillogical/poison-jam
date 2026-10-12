@@ -1633,3 +1633,62 @@ mutation/green receipts and representative frame copies are retained in ignored
 PUSHED_TO: xboxrecomp / BRANCH: main / COMMIT: 8e200100949ffb2b253a4ac7884c06a9d71d8713 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: success, fast-forward from 4e302de.
 
 PUSHED_TO: poison-jam / BRANCH: master / COMMIT: 5bb8c839a468968aaf0d8785bd6935e2fb694a23 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: success, fast-forward from 2e1d632; rendering evidence and the adjacent gameplay stop are recorded above.
+
+### §31.4 Complete skate path after the adjacent recovery repair (2026-10-11)
+
+The next measured blocker after culling was the jump/effect path's ABI failure at
+`0x000FFFD0` (stop 49), not a further rendering-state divergence. Its recovered
+span ended at `0x000FFFE1`, after six prologue instructions and three unmatched
+pushes. Original XBE instructions establish the owner through `0x001005B5`,
+with restoring `RET 4` exits at `0x001005A4` and `0x001005B2`. Game
+`9b0af4eb8ec33cf11b1a191d7079f27a1d0fb6dd` restores that owner with stack_args 4,
+removes eight false internal recovery/manual/dispatch entries
+(`0x00100041/47/4A/4D/53/55/58/5A`), and removes the now-internal unresolved
+dependency `0x00100080`. Recovery-span regressions pass; independent review
+confirmed the full owner and both exits. The regenerated local retail-derived
+output stays ignored. Five preservation-baseline hashes were refreshed with an
+appended history entry after the full suite detected stale pre-repair hashes;
+the preservation test was retained and passes.
+
+`20261011-223618-932-keyscript-culling-skate-fixed` launches from clean game
+`34553f94cbe7d92c83a0172d941a16024b32196d` (descends from the repair) and clean
+toolkit `8e200100949ffb2b253a4ac7884c06a9d71d8713`. Its unchanged `skate.json`
+completes all 71 steps by 302 s. The run continues to the 480.3 s diagnostic
+deadline, with changing presents through 479 s, no observed ABI failure and zero
+ICALL/fatal/walk-rejection counters. It records
+`[RECOVERED] 0x000FFFD0 returned; ABI verified (ESP/EBX/ESI/EDI)`.
+The deadline kill's exit code 1 is expected, not a normal guest exit.
+
+Named pre/post frames support forward motion, both turning directions and camera
+following. `post-06-jump.png` shows airborne/grind behavior, sparks and the
+"FarSide Stab Soul" trick with score 100. Backward input changes position and
+heading with camera response (`pre/post-08-back.png`); the character turns to
+travel in the opposite direction rather than demonstrating literal reverse
+skating. Colored clothing/skates and localized shadows persist. Representative
+baseline, culling, jump and backward frames are retained in ignored
+`logs/culling-evidence/` alongside the original archives.
+
+Tracing was armed only after the final backward snapshot, keeping query stalls
+out of all input steps. A complete flip 13616 includes draw `1546609`: the
+historical quad's primitive/texture family (prim 8, four vertices,
+`0x810CB000`, format 07), now partly on screen. It submits BACK/CW, alpha GREATER
+with ref **0**, and binds D3D11 BACK/CCW=false. The real draw query reports
+**1,139 passing samples**. Its first three surface positions span
+x approximately -686..67 and y -736..17 with positive CW area. This disproves
+a blanket claim that the quad family has no GPU output. It does not establish
+the historical off-screen ref-204 case as fixed, nor require an alpha-test change.
+
+This is EXPLORATORY evidence under the same L16, L18, L47, L56–L60 shortcuts as
+§31.3. The archive verifies its disposable save root; original saves are preserved.
+The measured rendering/movement checkpoint is reached. The adjacent measured
+blocker was repaired and runtime-confirmed; no further fatal/ABI blocker was
+observed within this bound. Graffiti, audio and save/resume remain unvalidated.
+Measure them next rather than selecting a lighting/combiner feature from appearance.
+
+Final validation after the boundary repair and baseline refresh: game CTest
+**56/56 passed**, `just check` passed, and the focused recovery suite passed
+11/11. Toolkit final-tree CTest is **20/20** on recheck and Python discovery is
+235 tests (two skips, one expected failure), as qualified in §31.3. Both culling
+parity tests pass after the production-mapping mutation is restored. Final
+changes after the clean runtime launch only update evidence, stop confirmation
+and measured preservation hashes; they do not change executable code.
