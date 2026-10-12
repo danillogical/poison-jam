@@ -11,7 +11,7 @@ The raw records (reviews, packets, rulings, the full history and technical recor
   Rule: `scripts/qualify-premise.py` question 1.
 - **An instrument whose positive control never fired has observed nothing, and zero hits need coverage.**
   The A2h DR0 write watch ran ~15 runs over three packets before anyone saw that no `#DB` had ever arrived, even for a known write (2026-09-28). A body with no trace hook logs nothing whether or not it runs.
-  Rule: `scripts/check-instrument-controls.py` (`just instrument-check`); `docs/agent-workflow.md` §6.4.
+  Rule: `scripts/check-instrument-controls.py` (`just instrument-check`); `AGENTS.md` "Evidence".
 - **A text match in a log is not an execution witness.**
   Run f25 was credited with `0x00032610`; all 14 matches were its own directory name in `[SAVE]` paths. A `returned; ABI verified` line can also precede an `ABI FAILURE` for the same address.
   Rule: `scripts/check-run-exercised.py`; `scripts/check-stop-chain.py` with `config/stop-chain.json`.
@@ -123,7 +123,7 @@ The raw records (reviews, packets, rulings, the full history and technical recor
   Rule: register every gate in `justfile` `check` or `CMakeLists.txt`.
 - **A test must be able to fail, and must not damage the tree.**
   `host_clock_wrap_test` duplicated the formula and passed with the fix reverted; guard tests run against a reverted generator overwrote its committed tables twice.
-  Rule: `docs/agent-workflow.md` §6.6 (show it failing by mutation); `tests/test_gen_nv2a_method_inventory_guard.py`'s redirect preflight.
+  Rule: `AGENTS.md` "Evidence" (demonstrate a deciding regression detects its defect); `tests/test_gen_nv2a_method_inventory_guard.py`'s redirect preflight.
 - **Disk and TTD fail quietly.**
   A full disk truncates archives into what looks like a guest hang; TTD (~170 MB/s) stops at its size cap, and an 8 GB cut was read as "TTD cannot see the write"; an orphaned `cdb` kept a deleted 16 GB trace allocated.
   Rule: `scripts/check-disk-gate.py` (15 GB for runs); `docs/jsrf-run-profiles.md` "TTD trace query"; look for `cdb.exe` before trusting free space (here only).
@@ -145,9 +145,9 @@ The raw records (reviews, packets, rulings, the full history and technical recor
 - **Put a ceiling on a line of attack.**
   The A2h NULL line ran five packets, each fix exposing the next caveat, until it was dropped as "explanation, not decidability" (2026-09-28).
   Rule: plan (the orchestrator drops lines); `scripts/check-horizon-ledger.py`.
-- **One independent review, after the work is finished.**
+- **Review the finished evidence without an automatic review loop.**
   Review caught the overclaims of TR §19, §20 and §24.2, each written while fixing the last; but one 2026-10-03 turn spent 75 % of its time in a review loop.
-  Rule: `docs/agent-workflow.md` §4 "Turn Reviewer" (no automatic second review); plan "Working loop" (a different worker writes a code step's test).
+  Rule: the current plan's "Working loop" and final-tree validation in `AGENTS.md`.
 - **Ceremony that cost more than it caught (packet lifecycle retired 2026-10-03).**
   P0.2's review contract reached interface revision 14; in A3a and P0.2 each repair introduced the next defect; a parser for reviewer prose met an unbounded qualifier vocabulary; 31 of 36 session verification records were never cited.
   Rule: `scripts/check-record-hygiene.py` keeps review records to dispositions and findings.

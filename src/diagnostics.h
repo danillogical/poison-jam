@@ -10,7 +10,7 @@
  * WHY THIS EXISTS: the terminal event of the trapped run is a raw-zero indirect call through
  * the kernel thunk slot at guest VA 0x001C4064 -- a slot whose image content is a valid
  * ordinal-277 thunk. Deciding WHO zeroed it requires a decision input that cannot drop the
- * deciding event, which per docs/agent-workflow.md 6.1.6 means a write-once latch or an
+ * deciding event, which per AGENTS.md (Evidence) means a write-once latch or an
  * uncapped counter updated AT the event, NOT a capped or sampled log. A log line can be
  * dropped by the kernel-log budget, by concurrent stderr, or by a RaiseException that
  * terminates before a flush -- and a dropped line would be exactly the deciding event.

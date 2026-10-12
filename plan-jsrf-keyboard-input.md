@@ -1,6 +1,8 @@
 # Jet Set Radio Future: keyboard input to press Start
 
-**Status: execution authority** (owner, 2026-10-10).
+**Status: historical keyboard/input record.** K16 is complete; current work is owned by
+`plan-jsrf-gameplay.md` (owner, 2026-10-11). Remaining K17 acceptance is carried there.
+The objectives and work entries below retain their historical context.
 
 This plan begins after `plan-jsrf-title-screen.md` reached M15. The title-screen plan remains the
 historical record for reaching and reproducing the title; this file owns the next objective:
@@ -10,7 +12,6 @@ historical record for reaching and reproducing the title; this file owns the nex
 
 This file does not duplicate the permanent rules owned elsewhere:
 
-- `docs/agent-workflow.md` owns the DSH staffing/workflow when DSH is the active harness.
 - `AGENTS.md` owns build, evidence, repository, machine, and push discipline.
 - `docs/jsrf-run-profiles.md` owns strict/exploratory/fixture classification.
 - `docs/jsrf-technical-record.md` owns established technical facts (`TR §n`).
@@ -523,8 +524,7 @@ Use the game repo for:
 
 A title-specific direct patch to the game's "press Start" state is not the goal.
 
-If the cheapest implementation point is ambiguous, ask the Persistent Advisor when DSH is in use, or make
-the corresponding evidence-driven architecture decision in the active harness.
+If the cheapest implementation point is ambiguous, resolve it from source and measured evidence.
 
 ## Keep M15 stable
 

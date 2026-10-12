@@ -1,6 +1,7 @@
 # JSRF operating history
 
-A dated outline of how the project got here; **historical only**, never a status or staffing authority (the plan and `docs/agent-workflow.md` are).
+A dated outline of how the project got here; **historical only**, never an execution authority
+(`plan-jsrf-gameplay.md` owns current work; `AGENTS.md` owns engineering operations).
 The full old text (3,090 lines) is `git show 9d5257f:docs/jsrf-operating-history.md`.
 Lessons drawn from it are in `docs/jsrf-lessons-learned.md`.
 
@@ -17,6 +18,7 @@ Lessons drawn from it are in `docs/jsrf-lessons-learned.md`.
 | 2026-10-09 (Mac review) | Review of title-007..010 fixed two walk defects; upstream v0.13.1 merged as one commit with upstream's pushbuffer executor adopted. | toolkit `fafe0f6`, `409c635`; game `51bc1ff`; `git show 9d5257f:docs/reviews/upstream-v0.13.1-merge.md` |
 | 2026-10-09 (plan condensed) | Plan cut from 1,012 lines; turns title-005 to 010 summarised (stale method-table entry `0x1810`, fail-closed generator, host clock overflow L53, ADX worker deaths retired); title screen not reached. | `git show 2a580f7:plan-jsrf-bare-minimum.md`; toolkit `5d6ebbd`, `a5e2762`; game `c10d1a2` |
 | 2026-10-09 (Mac over ssh) | Merge gate passed (CTest 49/49, 15/15) but merged executor slower; telemetry epoch fixed; two executor instruments added; `0x9188C` closed (stop 32); transition ends in the game's fatal path; bare-minimum plan retired for `plan-jsrf-title-screen.md`. | toolkit `de39fb1`; game `2d47805`, `57af797`, `d6b8336`, `9d5257f`; TR sections 25-26 |
+| 2026-10-11 (workflow migration) | Project-local OMP settings and short execution policy established; retired orchestration document and route-allowlist gate removed; engineering guide condensed; title/input plans retained as history and `plan-jsrf-gameplay.md` made current. No renderer change; stencil baseline retained and culling left for the next session. | starting game `ce33f49`, unchanged toolkit `4e302de`; TR §31.2; OMP 18.9.0 `config get` and RPC `get_state` verified project plan-role resolution and High effort, empty plan fallback chain and sibling scope isolation |
 
 ## Push receipts
 

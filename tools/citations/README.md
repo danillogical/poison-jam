@@ -4,8 +4,8 @@ Each line is one `jsrf-citation/1` record written by `scripts/cite.py record`. T
 a **cited output**, not a claim, so `cite.py check` does not lint its own literals; a record
 that cites the store names it with `CITE-STORE:`.
 
-A citation is keyed by **the property the decision classifies** (`docs/agent-workflow.md`
-section 6.1.6b), not by the read that observed it. `record --key-kind guest-va` keys by
+A citation is keyed by **the property the decision classifies**, not by the read that
+observed it. `record --key-kind guest-va` keys by
 guest virtual address; `--key-universe FILE` bounds the store by the finite key set the
 owning packet enumerates from source, and `record` refuses a key outside it.
 

@@ -1,6 +1,6 @@
 """Controls for W2's premise-qualification gate.
 
-Plan W2 requires five items before any Planner call, and names what each prevents:
+The historical W2 investigation identified five premise checks and what each prevents:
 "A2h-r6 six revisions on a fixed failure; the 571 MB premise ~5 days, refuted by the
 `test eax`/`jl` four instructions after the call; 15 DR0 ON runs before zero hits
 were noticed; the slot field named by the Halo XDK layout only after the owner's
@@ -27,6 +27,8 @@ import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -85,10 +87,14 @@ class ProfileParsingTests(unittest.TestCase):
         `checked 1; strict 1, exploratory 0, fixture 0, unknown 0, missing 0`.
         Taking the last token of the whole output yielded "missing".
         """
-        run = ROOT / 'logs' / 'runs' / '20260930-001405-390-v1-verified-strict'
-        if not run.is_dir():
-            self.skipTest('the archived strict run is not present')
-        result = gate.check_run(run, {'fixed_by': []})
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / 'captured-strict'
+            run.mkdir()
+            output = (f'{run.name} ... STRICT\n\n'
+                      'checked 1; strict 1, exploratory 0, fixture 0, unknown 0, missing 0\n')
+            with patch.object(gate.subprocess, 'run',
+                              return_value=SimpleNamespace(stdout=output)):
+                result = gate.check_run(run, {'fixed_by': []})
         self.assertEqual(result['profile'], 'STRICT', result.get('profile_output'))
         self.assertEqual(result['profile_verdict'], 'PASS')
 
@@ -192,7 +198,7 @@ class DryRunItemTests(unittest.TestCase):
 
 
 class SymptomSearchItemTests(unittest.TestCase):
-    """Item 5: the symptom is searched for before a Planner call."""
+    """Item 5: the symptom is searched for before relying on a premise."""
 
     def test_no_symptom_is_unknown(self) -> None:
         self.assertEqual(gate.check_symptom_search(None)['verdict'], 'UNKNOWN')
@@ -236,13 +242,13 @@ class VerdictTests(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, '-X', 'utf8',
              str(ROOT / 'scripts' / 'qualify-premise.py'),
-             '--run', '20260930-001405-390-v1-verified-strict'],
+             '--run', 'run-that-is-not-archived'],
             capture_output=True, text=True)
-        # No --fixed-by, no --positive-control: two items are UNKNOWN, so the gate
-        # must refuse even though three items pass.
+        # An unresolved run is a failed premise, and the missing symptom search is
+        # UNKNOWN. Both must keep the overall gate closed.
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn('INCOMPLETE', result.stdout)
-        self.assertIn('Do NOT take this premise to the Planner', result.stdout)
+        self.assertIn('Resolve failed or UNKNOWN', result.stdout)
 
     def test_the_report_does_not_crash_on_a_missing_detail(self) -> None:
         """The regression: the report read `entry['detail']` unconditionally."""
@@ -251,7 +257,7 @@ class VerdictTests(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, '-X', 'utf8',
              str(ROOT / 'scripts' / 'qualify-premise.py'),
-             '--run', '20260930-001405-390-v1-verified-strict',
+             '--run', 'run-that-is-not-archived',
              '--failing-instruction', '0x00149828'],
             capture_output=True, text=True)
         self.assertNotIn('Traceback', result.stderr, result.stderr)

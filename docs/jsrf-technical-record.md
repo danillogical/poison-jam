@@ -1,7 +1,7 @@
 # JSRF technical record
 
 The facts the project has established and that are still in force, by subsystem, with the evidence and
-limits each rests on. The plan (`plan-jsrf-title-screen.md`) owns status and next action; this file owns
+limits each rests on. The plan (`plan-jsrf-gameplay.md`) owns status and next action; this file owns
 the technical facts behind them. Toolkit-side design and licence records live in the toolkit:
 `xboxrecomp/src/apu/dsp/PROVENANCE.md` and `xboxrecomp/src/apu/GP-INTEGRATION.md`.
 
@@ -1534,3 +1534,22 @@ Three static batches were merged to get ahead of the one-per-run rate (all found
 
 **Result** (`20261011-180827-975-keyscript-groundfix1`): the fade lifts by itself, and the Garage draws with its floor, walls, fences and skyline, the player idling. **Still wrong:** characters render as dark silhouettes; stencil isn't implemented, so shadow overlays darken the whole frame; two batches with valid positions draw nothing (a shadow volume and an alpha-tested quad).
 
+### §31.2 Stencil gates the fullscreen shadow darkening (2026-10-11)
+
+Toolkit `4e302def8472fe17425bf28de117675a91a550b0` implements NV2A stencil
+state in the executor and D3D11 backend: D24S8 storage, masks, comparison/ref,
+fail/depth-fail/pass operations and stencil clears. This supersedes §31.1's
+"stencil isn't implemented" observation; it does not settle the other rendering issues.
+
+Exploratory run `20261011-194754-768-keyscript-stencil1` (420 s) shows the brighter
+Garage in `gameplay-b.png` once stencil gates the fullscreen shadow darkening.
+`result.json` records `keyscript_complete`, `script_ok: true` and zero ICALL,
+fatal and walk-rejection counts. Metadata records game `33c3928`, toolkit `d37f47d`
+with a dirty patch; the three archived toolkit source files compare equal to `4e302de`
+after newline normalization. `check-run-profile.py` reclassifies the run EXPLORATORY
+(default GPU acknowledgement enabled), not strict fidelity evidence. Existing title,
+input and GPU compatibility paths include L16, L18, L47 and L56–L60.
+
+Characters still appear as dark silhouettes. Shadows remain wrong; the backend still
+uses `D3D11_CULL_NONE`. Missing culling is the next task, while the previously observed
+shadow-volume and alpha-tested-quad batches remain separate unclosed observations.

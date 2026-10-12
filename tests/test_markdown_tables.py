@@ -32,9 +32,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # The durable documents whose tables a reader depends on.
 DOCUMENTS = [
-    ROOT / "plan-jsrf-title-screen.md",
+    ROOT / "plan-jsrf-gameplay.md",
     ROOT / "AGENTS.md",
-    ROOT / "docs" / "agent-workflow.md",
     ROOT / "docs" / "jsrf-run-profiles.md",
 ]
 

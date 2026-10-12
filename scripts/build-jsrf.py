@@ -21,7 +21,7 @@ toolchain a well-formed environment.
 
 **`--parallel N` for N > 1 fails under a CONFINED file policy, and works under
 full access -- this is policy-dependent, not a property of the tree.** MSBuild's
-multi-node workers talk over named pipes, which a confined DSH sandbox blocks.
+multi-node workers talk over named pipes, which a confined sandbox can block.
 The failure is silent and looks like a code defect: exit 1 with **no error text at
 all**, the log stopping at `Checking File Globs`, and `-- /verbosity:diagnostic`
 reporting `Done building target "ResolveProjectReferences" ... -- FAILED` with

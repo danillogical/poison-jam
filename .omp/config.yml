@@ -1,0 +1,7 @@
+# OMP 18.9.0 project settings; IDs use the installed catalog's spelling.
+modelRoleStorage: project
+modelRoles:
+  plan: anthropic/claude-opus-5-5:high
+retry:
+  fallbackChains:
+    plan: []

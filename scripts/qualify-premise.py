@@ -1,7 +1,6 @@
-"""`scripts/qualify-premise.py`: W2's qualification gate before any Planner call.
+"""`scripts/qualify-premise.py`: qualify a runtime premise before relying on it.
 
-Plan W2 requires, "run by DeepSeek", that **before any Planner call** the session
-answers five questions and attaches the output to the brief:
+This optional evidence tool answers five questions about a proposed investigation:
 
 1. **Disassemble past the failing instruction.**  The failure cited as the blocker
    must actually be a failure at that instruction, not an assumption about it.
@@ -29,8 +28,8 @@ is a premise that a mechanical check would have refused.
 
 **This is a gate, not a judge.**  It reports `PASS`, `FAIL` or `UNKNOWN` per item and
 refuses overall on any FAIL.  It does not decide whether a premise is *interesting*,
-and it does not replace the Planner's adequacy review -- it stops a brief that is
-mechanically unsound from reaching the Planner at all.
+and it does not replace engineering judgment -- it identifies a mechanically
+unsound premise before further work relies on it.
 
 **Fail closed.**  An item the gate cannot evaluate is `UNKNOWN`, and `UNKNOWN`
 blocks: a gate that defaults to PASS would be worse than no gate, because it would
@@ -376,8 +375,8 @@ def check_symptom_search(symptom: str | None, prior_art_root: Path | None = None
     """
     if not symptom:
         return {'verdict': 'UNKNOWN',
-                'detail': ('no --symptom given; the plan requires the symptom to be '
-                           'searched for before a Planner call')}
+                'detail': ('no --symptom given; the prior-art search cannot be '
+                           'evaluated without a symptom')}
     hits: dict[str, list[str]] = {}
     pattern = re.compile(re.escape(symptom), re.IGNORECASE)
     for label, root in (('toolkit', TOOLKIT),
@@ -465,14 +464,18 @@ def main() -> int:
         'run_argument': args.run,
         'purpose': args.purpose,
         'run_resolved': str(run_dir) if run_dir else None,
-        'note': ('W2 requires this gate to run before any Planner call and its '
-                 'output to be attached to the brief. UNKNOWN blocks: a gate that '
+        'note': ('This tool qualifies a runtime premise for an investigation. '
+                 'UNKNOWN blocks qualification: a gate that '
                  'defaulted to PASS would carry the appearance of qualification '
                  'without the substance.'),
     }
 
     items: dict[str, dict] = {}
     if run_dir is None:
+        items['disassembly'] = {
+            'verdict': 'UNKNOWN',
+            'detail': 'the run could not be resolved, so its instruction cannot be checked',
+        }
         items['run'] = {'verdict': 'FAIL',
                         'detail': f'the run {args.run!r} could not be resolved'}
     else:
@@ -541,8 +544,8 @@ def main() -> int:
         print(f'  VERDICT: {record["verdict"]}')
         if record['verdict'] != 'QUALIFIED':
             print()
-            print('  Do NOT take this premise to the Planner. The plan requires this')
-            print('  gate to pass before any Planner call, and UNKNOWN blocks.')
+            print('  This premise is not qualified. Resolve failed or UNKNOWN')
+            print('  evidence before relying on it in an investigation.')
     return 0 if record['verdict'] == 'QUALIFIED' else 1
 
 

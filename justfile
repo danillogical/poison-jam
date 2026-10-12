@@ -118,15 +118,11 @@ instrument-record instrument control address log:
 transcribed-check:
     {{python}} -X utf8 scripts/check-transcribed-values.py
 
-# W8s allow-list coverage: every roster route must be selectable.
-route-check:
-    {{python}} -X utf8 scripts/check-route-allowlist.py
-
 # W4/W12s record-hygiene lint: run before a review.
 record-check:
     {{python}} -X utf8 scripts/check-record-hygiene.py
 
-# W2s premise-qualification gate: run this BEFORE any Planner call.
+# Qualify a runtime premise before relying on it in an investigation.
 qualify run *args:
     {{python}} -X utf8 scripts/qualify-premise.py --run {{run}} {{args}}
 

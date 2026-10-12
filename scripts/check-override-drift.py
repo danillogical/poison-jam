@@ -59,8 +59,7 @@ from jsrf_run_profile import RETIRED_OVERRIDES  # noqa: E402
 CHECKER_VERSION = 'jsrf-override-drift/1'
 
 # Documents that describe override behaviour to a reader.
-DOCUMENTS = ('AGENTS.md', 'docs/jsrf-run-profiles.md', 'docs/agent-workflow.md',
-             'plan-jsrf-title-screen.md')
+DOCUMENTS = ('AGENTS.md', 'docs/jsrf-run-profiles.md', 'plan-jsrf-gameplay.md')
 
 # `RECOMP_*` / `JSRF_*` names as they appear in a document.
 NAME = re.compile(r'\b((?:RECOMP|JSRF)_[A-Z0-9_]+)\b')

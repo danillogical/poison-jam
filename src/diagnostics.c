@@ -23,7 +23,7 @@ static RECOMP_TLS JsrfThread *current;
 /* ── A2h NULL-slot latch ───────────────────────────────────────────────────────
  *
  * Deciding what zeroed the kernel thunk slot at 0x001C4064 requires a decision input that
- * cannot drop the deciding event (docs/agent-workflow.md 6.1.6). A log line CAN be dropped --
+ * cannot drop the deciding event (AGENTS.md, Evidence). A log line CAN be dropped --
  * by the kernel-log budget, by concurrent stderr, or by a terminal RaiseException that runs
  * before a flush -- so the authoritative record is this write-once latch, and the log lines are
  * corroboration only.

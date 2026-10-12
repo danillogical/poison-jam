@@ -1,18 +1,19 @@
 # Jet Set Radio Future: the plan to the title screen
 
-**Status: execution authority** (owner, 2026-10-09). It replaces `plan-jsrf-bare-minimum.md`, which is
+**Status: historical M15 record; complete and reproduced.** Current execution authority is
+`plan-jsrf-gameplay.md` (owner, 2026-10-11). The objectives and work entries below retain
+their historical context. This plan replaced `plan-jsrf-bare-minimum.md`, which is
 retired. Its full text is `git show d6b8336:plan-jsrf-bare-minimum.md`, including the slice's
 Definition of done, milestones M16–M30, the backlog and the IDs other files cite (V, T, W, C, ML, F).
 Those return once M15 is met.
 
 **Authorities, so this file does not repeat them.**
-- `docs/agent-workflow.md` owns roles.
 - `docs/jsrf-run-profiles.md` owns evidence profiles.
 - `docs/jsrf-technical-record.md` ("TR §n") owns established facts.
 - `docs/jsrf-compatibility-ledger.md` owns every shortcut (`Lnn`).
 - `config/stop-chain.json` owns the runtime stop chain.
 - `AGENTS.md` owns build and repository discipline.
-- This plan owns the objective, the current state and what to try next.
+- This plan retains the M15 objective, observations and historical lines of attack.
 
 ## Objective: M15
 

@@ -1,10 +1,9 @@
-"""Audit the agent-facing documents for stale or duplicated authority.
+"""Audit the active guide and gameplay plan for stale or broken instructions.
 
-P0.3 makes the single-authority split checkable.  The failure this exists to
-catch is not a typo: it is a **fact copied into several files**, which is how five
-stale claims survived on 2026-09-22 — including one that forbade the reviewer the
-policy required.  A duplicated roster is the same mechanism even when labelled
-"summary", so this checker fails on duplication rather than trusting the label.
+The checker keeps the two active authorities present, within the AGENTS byte
+budget, and mechanically valid: commands point at real files and documented
+recipes exist.  Routing configuration lives in `.omp/config.yml`; project work
+lives in `plan-jsrf-gameplay.md`.
 
 Usage::
 
@@ -22,11 +21,11 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CHECKER_VERSION = 'jsrf-agent-docs/3'
+CHECKER_VERSION = 'jsrf-agent-docs/4'
 
 AGENTS = 'AGENTS.md'
-WORKFLOW = 'docs/agent-workflow.md'
-PLAN = 'plan-jsrf-title-screen.md'
+CONFIG = '.omp/config.yml'
+PLAN = 'plan-jsrf-gameplay.md'
 JUSTFILE = 'justfile'
 
 # Plan T6 fixes these recipe names: they are the mechanical spelling of the host
@@ -41,7 +40,6 @@ REQUIRED_RECIPES = (
     'stack-depth',
     'qualify',
     'record-check',
-    'route-check',
     'transcribed-check',
     'instrument-check', 'instrument-record',
 )
@@ -54,42 +52,6 @@ AGENTS_BUDGET = 65536
 # 4 KiB of the hard limit has no room for the next session's operating note, and
 # the 2026-09-22 truncation happened exactly at the limit.
 AGENTS_HEADROOM = 4096
-
-# A fact must have exactly one owner.  These are the active-policy files: a role
-# route name appearing in more than one of them means the roster is duplicated.
-ROSTER_OWNER = WORKFLOW
-ROSTER_PATTERN = re.compile(
-    r'\b(?:workbuddy-ai/[\w.\-]+|codex[/:][\w.\-]+|gpt-6-[\w.\-]+|hy4[\w.\-]*)\b')
-
-# Retired names may appear, but only where the surrounding text marks them as
-# history.  These are the labels that make a mention historical.
-HISTORICAL_MARKERS = (
-    'historical', 'retired', 'superseded', 'archive', 'no longer', 'used to',
-    'formerly', 'history',
-)
-# A retired name may also appear in a *factual* statement about what a provider
-# serves.  "workbuddy-ai advertises only …, gpt-5.5 and kimi-k3" is a measurement
-# of the catalog, not an instruction to use it, and flagging it would be a false
-# positive that trains a reader to ignore the check.
-CATALOG_MARKERS = (
-    'advertis', 'does not serve', 'catalog', 'list_subagent_models', 'serves up to',
-    'does not advertise',
-)
-# Routes this project no longer assigns. A document may name one only where the
-# surrounding text marks it as history.
-#
-# Plan W15 asks for `kimi-k3`, `claude-opus-5-5` and `hy4-preview-f` to be added.
-# **That list is partly stale and was corrected against the current §1 roster
-# rather than copied**: `claude-opus-5-5` is the *current* Persistent Advisor
-# (`docs/agent-workflow.md` §1), so listing it as retired would make this checker
-# flag the workflow's own roster row. The two that are genuinely retired as
-# assignments -- `hy4-preview-f` (T11's subject: `record-review.py` defaulted to
-# it) and `kimi-k3` -- are added. Both are still *served* by the provider, which
-# is exactly why a stale document can name one without looking wrong.
-RETIRED_NAMES = (
-    'gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.5', 'grok-cli',
-    'hy3', 'hy4-preview-f', 'kimi-k3', 'glm-5.3',
-)
 
 # Commands the documents tell a session to run.  A path that does not exist is a
 # broken instruction, and the guide has already carried one (scripts/build-jsrf.ps1).
@@ -114,10 +76,7 @@ PLANNED_MARKERS = (
     'retired',
 )
 
-AUTHORITY_LINKS = (
-    (AGENTS, WORKFLOW),
-    (AGENTS, PLAN),
-)
+AUTHORITY_LINKS = ((AGENTS, CONFIG), (AGENTS, PLAN))
 
 
 def read(path: Path) -> str:
@@ -153,96 +112,10 @@ def check_agents_budget() -> list[dict]:
     return findings
 
 
-def check_roster_single_authority() -> list[dict]:
-    """The roster must live in the workflow, not be restated in AGENTS.md."""
-    findings: list[dict] = []
-    workflow = ROOT / WORKFLOW
-    agents = ROOT / AGENTS
-    if not workflow.is_file() or not agents.is_file():
-        return [{'check': 'roster_single_authority', 'reason': 'missing_input',
-                 'detail': 'workflow or AGENTS.md is missing'}]
-
-    if not ROSTER_PATTERN.search(read(workflow)):
-        findings.append({
-            'check': 'roster_single_authority', 'reason': 'owner_has_no_roster',
-            'detail': f'{WORKFLOW} owns the roster but names no route',
-        })
-
-    agents_text = read(agents)
-    # A roster *table* puts one route per row, so a per-line count never sees it.
-    # Collect route names across the whole file instead, skipping lines whose
-    # context marks them historical or catalog-factual.
-    lines = agents_text.split('\n')
-    offenders: list[tuple[int, str, list[str]]] = []
-    for line_number, line in enumerate(lines, start=1):
-        names = ROSTER_PATTERN.findall(line)
-        if not names:
-            continue
-        lowered = line.casefold()
-        window = ' '.join(lines[max(0, line_number - 4):line_number]).casefold()
-        context = window + ' ' + lowered
-        if any(marker in context for marker in HISTORICAL_MARKERS):
-            continue
-        if any(marker in context for marker in CATALOG_MARKERS):
-            continue
-        offenders.append((line_number, line, names))
-
-    distinct = {name for _n, _l, names in offenders for name in names}
-    if len(distinct) >= 2:
-        first = offenders[0]
-        findings.append({
-            'check': 'roster_single_authority', 'reason': 'duplicated_roster',
-            'detail': f'{AGENTS}:{first[0]} and {len(offenders) - 1} other line(s) name '
-                      f'{len(distinct)} routes; the roster belongs only in {WORKFLOW}',
-            'line': first[1].strip()[:200],
-        })
-    elif len(distinct) == 1:
-        first = offenders[0]
-        findings.append({
-            'check': 'roster_single_authority', 'reason': 'stray_route_name',
-            'detail': f'{AGENTS}:{first[0]} names route {sorted(distinct)[0]!r} outside '
-                      f'{WORKFLOW} without marking it historical',
-            'line': first[1].strip()[:200],
-        })
-    return findings
-
-
-def check_retired_names_labelled() -> list[dict]:
-    """A retired model name may appear only where it is marked as history."""
-    findings: list[dict] = []
-    for name in (AGENTS, WORKFLOW, PLAN):
-        path = ROOT / name
-        if not path.is_file():
-            findings.append({'check': 'retired_names', 'reason': 'missing_input',
-                             'detail': f'{name} is missing'})
-            continue
-        lines = read(path).split('\n')
-        for index, line in enumerate(lines, start=1):
-            lowered = line.casefold()
-            for retired in RETIRED_NAMES:
-                if retired not in lowered:
-                    continue
-                # Look at a small window: a list of retired names is often
-                # introduced by a heading on an earlier line.
-                window = ' '.join(lines[max(0, index - 4):index]).casefold()
-                context = window + ' ' + lowered
-                if any(marker in context for marker in HISTORICAL_MARKERS):
-                    continue
-                if any(marker in context for marker in CATALOG_MARKERS):
-                    continue
-                findings.append({
-                    'check': 'retired_names', 'reason': 'unlabelled_retired_name',
-                    'detail': f'{name}:{index} names retired route {retired!r} '
-                              f'without a historical marker',
-                    'line': line.strip()[:200],
-                })
-    return findings
-
-
 def check_command_paths() -> list[dict]:
     """Every script/test path a document names must exist, unless it is planned."""
     findings: list[dict] = []
-    for name in (AGENTS, WORKFLOW, PLAN):
+    for name in (AGENTS, PLAN):
         path = ROOT / name
         if not path.is_file():
             continue
@@ -343,76 +216,11 @@ def check_authority_links() -> list[dict]:
     return findings
 
 
-def check_next_packet_agreement() -> list[dict]:
-    """AGENTS.md must not treat a packet as outstanding that the plan accepts.
-
-    This used to also compare the plan with a session report's CURRENT STATE
-    block.  Session reports are no longer kept in the repository, so the plan is
-    the only status source and the comparison is AGENTS.md against the plan.
-    """
-    findings: list[dict] = []
-    for name in (AGENTS, PLAN):
-        path = ROOT / name
-        if not path.is_file():
-            findings.append({'check': 'next_packet', 'reason': 'missing_input',
-                             'detail': f'{name} is missing'})
-    if findings:
-        return findings
-
-    # Read acceptance from the whole plan, not from one `**Status:**` line: the
-    # plan records accepted packets in its own sections, and a condensed plan has
-    # no single Status line to anchor on.
-    plan_status_text = read(ROOT / PLAN)
-
-    # AGENTS.md must not carry a *status* claim that contradicts the plan.
-    #
-    # Measured before this check existed: AGENTS.md said "P0.1 awaits advisor
-    # adjudication ... do not begin P0.2 yet" while the plan said P0.1 accepted.
-    # A stale status in the one file every session loads automatically is the
-    # exact failure the file's own header warns about.
-    #
-    # The comparison is on the **verb for the same packet**, not on whether the
-    # packet is mentioned: an earlier version only flagged packets absent from the
-    # plan, and both P0.1 and P0.2 appear there, so it still missed the case.
-    agents_text = read(ROOT / AGENTS)
-    blocking_re = re.compile(
-        r'(?i)\b(P0\.\d)\b[^.\n]{0,80}?\b(awaits?|awaiting|pending|'
-        r'not\s+accepted|do\s+not\s+begin|in\s+progress|blocked)\b'
-        r'|\b(awaits?|awaiting|pending|not\s+accepted|do\s+not\s+begin|blocked)\b'
-        r'[^.\n]{0,80}?\b(P0\.\d)\b')
-    for line_number, line in enumerate(agents_text.split('\n'), start=1):
-        stripped = line.strip()
-        if stripped.startswith('>') or stripped.startswith('|'):
-            continue          # quoted policy and tables are historical/procedural
-        match = blocking_re.search(stripped)
-        if not match:
-            continue
-        if any(marker in stripped.casefold() for marker in HISTORICAL_MARKERS):
-            continue
-        named = {g for g in match.groups()
-                 if g and re.fullmatch(r'P0\.\d', g)}
-        for packet in sorted(named):
-            # The plan says this packet is accepted while AGENTS.md still blocks it.
-            if re.search(rf'{re.escape(packet)}\b[^.\n]{{0,40}}?\baccepted\b',
-                         plan_status_text, re.IGNORECASE):
-                findings.append({
-                    'check': 'next_packet', 'reason': 'agents_status_disagreement',
-                    'detail': f'{AGENTS}:{line_number} still treats {packet} as '
-                              f'outstanding while {PLAN} records it accepted; one of '
-                              f'them is stale',
-                    'line': stripped[:200],
-                })
-    return findings
-
-
 CHECKS = (
     ('agents_budget', check_agents_budget),
-    ('roster_single_authority', check_roster_single_authority),
-    ('retired_names', check_retired_names_labelled),
     ('command_paths', check_command_paths),
     ('just_recipes', check_just_recipes),
     ('authority_links', check_authority_links),
-    ('next_packet', check_next_packet_agreement),
 )
 
 
