@@ -73,29 +73,30 @@ This session fetched and verified clean, synchronized game
 
 - **The HUD spray-can counter read zero on every observed Garage frame (observation).**
   Packet 001 measured the counter band at exactly 140 white pixels ("00") on all 1954
-  gameplay frames it captured across its runs, with 296 further frames at 0 that are
-  menus and fades; no non-zero counter value was observed. What that supports is
-  narrower than "the Garage cannot grant cans": the Garage tutorial was never
-  completed, Gum's TE002 lesson was never obtained, and the stage transition out of
-  the Garage was never attempted. No spray target was identified in the Garage's own
-  talk scripts or stage assets, but absence in those files is not a measurement of the
-  stage's collision or target data (TR §31.5).
-  The runner gained live guest-memory reads (`peek`/`ram_snap`), a snapshot search and
-  an acceptance checker, and two real detector defects were fixed: in-game talks have
-  no letterbox, and `key_until` used to test only after releasing the key. The checker
-  is tooling: it compares an acceptance run against a control, and passing it is not
-  by itself evidence that graffiti was painted.
+  gameplay frames it captured, with 296 further frames at 0 that are menus and fades; no
+  non-zero counter value was observed. Those frames all precede Gum's lesson, which no run
+  obtained, so the zero counter says nothing about later tutorial steps, can pickups or
+  spray targets. The talk-script text and `e000.dat` naming Shibuya Terminal are hypotheses
+  about where graffiti starts, not measurements (TR §§31.5, 31.6).
+
+- **The Corn talk needs proximity; no talkable NPC is reachable from the Garage spawn (Packet
+  001-FIX).** The game shows a "talk available" balloon above the player; a controlled
+  comparison found that with it present an R press opened a talk 2/2 times, and without it
+  0/8, while every press was demonstrably delivered. The earlier "unreliable R-talk" reading
+  was a detector defect: `is_dialogue` required a letterbox, and the first talk-icon test
+  accepted the blue Dogenzaka Hill banner. Walking the icon-guided loop out from the spawn in
+  all four headings found no second talkable character, so Gum's TE002 lesson was not obtained
+  and no progression witness could be established (TR §31.6).
 
 ## Immediate next task
 
-The rendering/movement checkpoint is reached. Packet 001 measured the Garage's HUD
-counter at zero throughout, but did not complete the Garage tutorial, obtain Gum's
-TE002 lesson, or attempt the stage transition, so the route to a spray is
-unestablished rather than known-absent (TR §31.5). Establish that prerequisite: a
-reproducible Gum interaction and the game-owned progression it causes, with a
-no-action control, before claiming any graffiti or stage-transition blocker. Then
-extend the automation to audio and save/resume. Keep the historical off-screen ref-204
-quad and eye-plane-crossing/hardware shadow fidelity as explicit coverage limits.
+The rendering/movement checkpoint is reached, and Packet 001-FIX measured why the Garage route
+stalled: the talk needs proximity, and no talkable NPC other than Corn is reachable from the
+spawn by open-loop movement in any cardinal heading (TR §31.6). Establish a route to Gum before
+any graffiti work — either from game data naming her position, or by a search that steers on the
+talk icon and the camera rather than wall-clock holds. The zero counter and the script texts are
+not evidence that the Garage lacks cans or targets. Keep the historical off-screen ref-204 quad
+and eye-plane-crossing/hardware shadow fidelity as explicit coverage limits.
 
 ## Working loop
 

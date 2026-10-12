@@ -1739,21 +1739,21 @@ fades). The larger counts in that band (950–991, 1125) are not the counter: 11
 band (`talk-held.png`: 1125 px, `is_dialogue` true). No frame was observed at any non-zero
 counter value.
 
-**The R-talk is unreliable, not mis-parameterised.** With `key_until {vk 51, hold 1.2, until
-dialogue, every 3, max 4}` at the identical position: E3 opened the talk on the first press
-(`talk-held.png`, 28 386 balloon px) and E11 opened eight (`presses` falling to 2 after the
-first); E16, E17 and E18 opened none across six cycles each (`satisfied: false, presses 4`),
-including E18 which used E3's exact parameters and moved nothing between attempts. A single
-0.4 s press (E2d) and a duration-matched no-input control (E2c) bracket the mechanism: R
-reaches the guest — a 16 s R window moves the frame by mean 42.8 against 3.6 for the same
-interval with no input — but the talk is not obtainable by open-loop input at a stable rate.
-The verified prefix is therefore the position, not the talk.
+**The R-talk follows the game's talk indicator (re-analysed in §31.6).** With `key_until
+{vk 51, hold 1.2, until dialogue, every 3, max 4}` at the identical position: E3 opened the
+talk on the first press (`talk-held.png`, 28 386 balloon px) and E11 opened eight; E16, E17 and
+E18 opened none across six cycles each (`satisfied: false, presses 4`), including E18 which
+used E3's exact parameters. This section originally called that "unreliable". §31.6 shows it is
+proximity: the game's "talk available" balloon was on screen at press time in all 4 successful
+presses and in none of the 38 failures, and a controlled closed-loop comparison opened a talk
+2/2 while the open-loop method opened 0/8 with every press demonstrably delivered. The talk
+needs the player to be close; the open-loop method rolls out of range first.
 
 **Two real defects were found and fixed in the runner**, each with a negative control:
 
 | Defect | Measurement | Fix |
 |---|---|---|
-| `is_dialogue` required a letterbox (top/bottom black ≥ 0.95). In-game talks have none. | Gum/Corn's talk: balloon 27 901 px at black fractions 0.066/0.007; cutscene pages 0.998. | `is_dialogue` = balloon count alone. |
+| `is_dialogue` required a letterbox (top/bottom black ≥ 0.95). In-game talks have none. | Corn's TE003 talk: balloon 27 901 px at black fractions 0.066/0.007; cutscene pages 0.998. | `is_dialogue` = balloon count alone (`4737c18`; §31.6 later adds the icon-absent guard). |
 | `key_until` released the key, then tested the screen. A talk that only shows while the key is held was never seen. | `[KEY] down vk=0x33` sent, `satisfied: false` in E1 while the balloon was on screen at t=247.4 s. | Test during the hold, then again after release. |
 
 `is_hud` also now excludes dialogue (a talk still draws 830 bar-yellow px, so `key_until …
@@ -1789,3 +1789,88 @@ or if it succeeds and still yields no spray route, does the stage transition bec
 measured blocker.
 
 PUSHED_TO: poison-jam / BRANCH: master / COMMIT: bc35c02e0adacc8252b9f612d3efa9f4b6cc6134 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: success, fast-forward from fbb3d9b. Validation: CTest 59/59, `just check` all checkers passed, secret audit 0 hits over 216 blobs, no forbidden paths, largest blob 3,255,627 bytes. Toolkit 8e20010 is unchanged and was not pushed.
+
+### §31.6 Packet 001-FIX: the Corn talk needs proximity, and no talkable NPC is reachable from the Garage spawn (2026-10-12)
+
+**Status: BLOCKED-ROUTE (Gum not reachable), with the Packet 001 variability explained and both
+reviewed checker defects closed.** No graffiti interaction was produced. Gum's `TE002` was not
+obtained. This section supersedes the variability paragraph in §31.5.
+
+**Baseline.** Game `4737c18bece9719d222f50876dfdf93e77efbffe` plus this packet's commits; toolkit
+`8e200100949ffb2b253a4ac7884c06a9d71d8713`, unchanged. EXPLORATORY under
+`docs/jsrf-run-profiles.md`; relied-on ledger IDs **L16, L18, L56–L61** (L61 is active because
+`DEFAULT_ENV` sets `RECOMP_APU_TRAP=1`; §31.5's list omitted it). Run roots are under
+`logs/runs/20261012-*p001fix-*` and are not committed.
+
+**F1 and F2, the reviewed checker defects.** Both were reproduced first, then fixed, then pinned by
+regressions that fail on the old checker.
+
+| Defect | Reproduced mutation | Before | After |
+|---|---|---|---|
+| F1: the mapping control was never validated, only required to exist | `ctl-xbe-text` value 0, `matches` null, in both runs | `failures=[]` | `ctl-xbe-text value 0 is not the XBE control 0x852C518B` |
+| F2: spray-block steps matched by kind only | a 1 s sleep in acceptance against 30 s in control, inside the block | `failures=[]` | `spray block step 900 differs: ('sleep', '{"seconds": 1.0}') vs ('sleep', '{"seconds": 30.0}')` |
+
+F1 now checks the VA, size, value, `matches`, single occurrence and result.json/peeks.jsonl
+agreement. F2 compares the options that decide what the guest experiences, inside and outside the
+block, including the boundary peeks; the only permitted substitution is an action key against a
+control sleep of equal duration, and the only normalization is `expect` on declared witness peeks.
+The generic half moved to `scripts/keyscript_pair.py`, which the new
+`scripts/check-progression-run.py` reuses; that checker also requires identical `exe_sha256` and
+`xbe_sha256` and a verified save root, so a pair from different builds is not a control.
+
+**The Corn-talk variability is proximity, not delivery.** The talk indicator is the game's own
+"talk available" balloon: a blue face inside a white bubble above and to the right of the player.
+Over 3784 archived Packet 001 frames the band reads < 10 blue pixels on 3516, 10–39 on 18 and
+>= 40 on 250. Across every `key_until` R press from E2 onward, an icon at press time talked 4/4
+times and never failed, while 38 of the 45 presses without one opened no talk — including every
+E16/E17/E18 attempt, whose `post-00-fwd1` frame had shown the icon about a second earlier.
+
+A controlled comparison held the executable, XBE, environment, save root, 36-step prefix and
+`wait_screen hud` guard fixed, and varied only the positioning method. Every press was delivered
+(`key_seen` 1, Δpresents +296 to +429, read from the executable's own `s_key_down` and
+`s_present_serial`):
+
+| Method | Runs | Attempts | Icon at press | Talks |
+|---|---|---|---|---|
+| Closed loop: walk to the icon, then press R | V1, V2 | 2 | present (blue 52, 58) | **2/2** |
+| Open loop: hold forward 3.0 s, then press R (Packet 001's method) | V3, V4b | 8 | **absent (0) every time** | **0/8** |
+
+The start-pose R hold, with no proximity, opened no talk in either closed-loop run. So the earlier
+reading of "unreliable R-talk" was wrong: the talk is reliable and gated by proximity, and the
+open-loop method rolls out of range before the press. That is rule 9c.2 of the plan — normal
+prerequisite plus automation state — not an input-delivery or guest failure.
+
+**A one-off crash, recorded and not repaired.** V4 exited at 58.6 s with `exit_code` 0xC0000005
+after a `[EXCEPTION first-chance] ... fault=0x10000FFBE (read)` at a host RIP, during the
+`TalkEvent` preload. The identical script rerun (V4b) ran the full 480 s with no crash, and V1–V3
+read the same `TE007.bin` at the same point, so it is not reproducible. It is recorded rather than
+repaired; a new recovery class is out of scope for this packet.
+
+**The survey found no talkable NPC in the Garage.** The icon-guided closed loop was walked out
+from the spawn in all four headings, six legs each, capturing the talk from inside each R hold.
+No icon and no talk appeared in any leg: forward (G1), left (G4, after the detector fix), right
+(G5) and back (G6) all returned `satisfied=False` for all six legs, and the four endpoints are
+genuinely distinct places (mutual frame deltas 46–59). A full 360° rotation at the spawn (E6,
+`scan-00..07`) shows the icon at exactly one heading — Corn's. Every archived run's icon appears
+only at steps 36–41, the spawn. The player reached the open plaza and the Dogenzaka Hill sign, but
+no second talkable character. **Gum was not located**, so her `TE002` lesson was not obtained and
+no progression witness could be established.
+
+**A detector defect found by using it.** The first version of `is_talk_icon` accepted the blue
+Dogenzaka Hill location banner, so G2b "reached an icon" and pressed R at a banner, and G3 did the
+same while reporting a successful walk. The count cap added first did not fix it — the banner's
+text measures 44 px tall mid-fade, inside the real icon's 37–50 px range. The corrected test is the
+bubble: a real indicator carries 583–857 white pixels around the blue blob, the banner carries
+zero. Verified: all six archived real icons detected, all three banner frames rejected, and the
+E2+ tally unchanged. The two runs spent before this fix (G2b, G3) are invalid as survey evidence.
+
+**Not established.** Whether the Garage grants spray cans or contains a spray target: the zero
+counter of §31.5 precedes Gum's lesson, the talk-script text is not stage data, and no stage
+collision or target data was read. Whether leaving the Garage is gated: unmeasured. The Shibuya
+Terminal transition was not attempted.
+
+**The next blocker, measured.** A talkable NPC other than Corn is not reachable from the Garage
+spawn by open-loop movement in any of the four cardinal headings, and the talk-available icon
+appears at no other position on those paths. The next packet needs either a named route to Gum
+from game data (an event or stage table naming her position) or a scripted search that steers by
+the icon and by camera rather than by wall-clock holds.
