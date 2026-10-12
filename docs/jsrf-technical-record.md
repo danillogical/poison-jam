@@ -1524,3 +1524,13 @@ Three static batches were merged to get ahead of the one-per-run rate (all found
 
 **Where it stands:** `keyscript-newgame-16` ran 480 s with no ICALL, ABI failure, exception or walk rejection. `keyscript-intro-1` pressed A through the opening dialogue ("This is the GG's Garage. Hey, where's our pizza?") and reached the in-game HUD (spray-can counter, health bar, trick meter). **The 3D world is black in gameplay** though the back end is busy (746k draws, 157M triangles, no fallbacks, no undecodable textures); the cutscene's 3D background does render, dim. That is the next problem.
 
+### §31.1 The Garage renders: the fade lifts and the floor draws (2026-10-11)
+
+**The black world was not a renderer fault.** The frame trace (`RECOMP_FRAME_TRACE`, now also logging each batch's first vertices) showed every gameplay frame drawing the world, then a fullscreen quad of diffuse `(0,0,0,1)` (the game's world fade, vertex array `0x80083000`) just before the HUD. Depth was correct (matches xemu's `z / 2^24` for both the fixed-function and program paths). With that quad skipped the world showed, so the question was why the game never faded in.
+
+**Cause 1: stale SSE-compare lifts.** The player's warp entry `0x92750` re-ran every frame, re-arming its 60-frame countdown and the fade to black. The warp-trigger test `0x0014C100` rejects a zero-length segment, whose direction is NaN, with `comiss xmm0, 0; je`. On the chip an unordered compare takes `je`. Eight generated bodies in `recomp_0003.c` predate the lifter fix `894ceef` and tested a bare `_fca == _fcb`, so the test reported a hit every frame. Fixed by relifting them (`scripts/relift-selected.py comiss`, `config/relift-comiss.json`; game `fb7aefc`).
+
+**Cause 2: APU DSP scratch on the stage's vertex buffers.** The floor's vertex arrays were written at stage load, then overwritten by 24-bit DSP words. The sound library hands the DSP ordinary-RAM pages by physical address (`MmGetPhysicalAddress`, `0x01430000` up). `apu_translate` sent addresses below the contiguous high-water mark to the contiguous window, which by then held the vertex buffers. `MmGetPhysicalAddress` now records per page whether its latest answer was for ordinary RAM, and the APU honours that first (toolkit `293a97b`; `RECOMP_WATCH_WHO=1` attributes watch hits to a thread, and found the DSP).
+
+**Result** (`20261011-180827-975-keyscript-groundfix1`): the fade lifts by itself, and the Garage draws with its floor, walls, fences and skyline, the player idling. **Still wrong:** characters render as dark silhouettes; stencil isn't implemented, so shadow overlays darken the whole frame; two batches with valid positions draw nothing (a shadow volume and an alpha-tested quad).
+

@@ -83,9 +83,9 @@ for path in (root/'src/recomp/gen').glob('recomp_*.c'):
         if mode=='fcmov':wanted=bool(re.search(r'/\* FPU: fcmov\w+ ',old))
         # comiss/ucomiss set ZF, PF and CF together on an unordered (NaN) compare;
         # the toolkit's 894ceef reads that for jb/jbe/je/jne/jp. Relift the bodies
-        # whose SSE-compare branches still test the bare relation.
+        # whose SSE-compare branches or cmovs still test the bare relation.
         if mode=='comiss':wanted=bool(re.search(r'/\* u?comis[sd] \*/',old)) and bool(
-            re.search(r'if \(\(_fca (?:<|<=|==|!=) _fcb\)\) goto',old))
+            re.search(r'if \(\(_fca (?:<|<=|==|!=) _fcb\)\) (?:goto|\w+ = )',old))
         if mode=='boundaries':wanted=any(int(f['start'],16)==a for f in boundaries)
         if mode=='trace':wanted=a in trace_addresses
         if not wanted:continue

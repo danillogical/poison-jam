@@ -71,7 +71,7 @@ Time to the title is now **~115 s** (TR §30, §30.1): five CPU-cost fixes, `REC
 **The next stop:** the same run died at 1598 s, after the title, on `[ICALL] Failed to resolve VA
 0x000BE190` (stop 33, DISCOVERED). Closing it is the first line below; the reproduction run follows it.
 
-**Post-title (2026-10-11, TR §31).** K16 met: a real Enter press opens the main menu. NEW GAME (Z) starts the game and reaches the opening cutscene and the in-game HUD after 13 more stops (36-48, `config/stop-chain.json`). **Next:** the 3D world is black in gameplay while the HUD draws; diagnose it (compare the cutscene's render path with gameplay's; per-surface dumps via `render_surfaces.py`). Then M19-M21 (the player moves), and K17's directional/back keys.
+**Post-title (2026-10-11, TR §31).** K16 met: a real Enter press opens the main menu. NEW GAME (Z) starts the game and reaches the opening cutscene and the in-game HUD after 13 more stops (36-48, `config/stop-chain.json`). The black world is fixed (TR §31.1): stale SSE-compare lifts re-triggered a warp every frame, and the APU DSP's scratch aliased the stage's vertex buffers. The Garage renders with its floor. **Next:** stencil (shadows), the dark characters, then M19-M21 (the player moves) and K17's directional/back keys.
 
 ## Lines of attack (ranked; the orchestrator re-ranks)
 

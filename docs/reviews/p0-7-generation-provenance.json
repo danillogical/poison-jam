@@ -6,7 +6,7 @@
   "src/recomp/gen/recomp_0000.c": "4db074a90166590ca387126d7015a9b0e324a0f3c47e7301e65a92418e2a222c",
   "src/recomp/gen/recomp_0001.c": "08651e6547c08b6b818ad215dd65d3ebfe0be4128f951a0d6eb7922417fc61c4",
   "src/recomp/gen/recomp_0002.c": "a9374f37a5a5d68b3d0e8d7d8e0737c71b6fb5f30a5020d26a1bbeec7963efc9",
-  "src/recomp/gen/recomp_0003.c": "1d59dbb80759c90006bbce53cd8b12a350a029b2003ee08787586d6495f166e8",
+  "src/recomp/gen/recomp_0003.c": "37036b89a1f44db10cb1f1cfb118d82176265d63a33e0d66544325f452ed48bf",
   "src/recomp/gen/recomp_0004.c": "cebdfa390daac3e0310db718e1d255b5b6e24c752b3e913b2b115deb4899ed08",
   "src/recomp/gen/recomp_0005.c": "62fc70e44afd27ea802728d72d249f3a55418ff5604d21065ea055def2a40707",
   "src/recomp/gen/recomp_abi_deltas.c": "2c554ef6faa7d9db4b8a18bf4dcfc080b4ea4860cdcff627df8b4139077e7d74",
@@ -24,17 +24,17 @@
  "generators": {
   "project": {
    "dirty": true,
-   "revision": "01f7304674c7ba5a64ad18fcef96ecc5c74f9bc2",
+   "revision": "b67daad8d94059dccac52e54e245b9386aa7dc9b",
    "state": "MEASURED",
-   "status_sha256": "9b9a0405ec0d00c7e99e8bd9c278ee7426c6b55bde645a4c89aae2ad7eaf9f43"
+   "status_sha256": "8a663ba8b11d1acccc1dafa81d78b33a024e316c8f978d56ecfa5cf3141aeaef"
   },
   "scripts/recover-functions.py": "c23b7d52fac7bce8a8a63a62a06fafaa9cb375cfe9b047aa5215e664a0586b77",
-  "scripts/relift-selected.py": "c212fd9b41a40150569ec55c93e7ea3f03aacaea1913e47af2c7172805d66294",
+  "scripts/relift-selected.py": "6525ba181f0338ca232f30bbb9c04421a349b87f9dc5fef457f41c8b69518cbf",
   "toolkit": {
    "dirty": true,
-   "revision": "7acde2c4d3a196c304821b11e01f336b1e16da3b",
+   "revision": "0644dd759d9f84c20bb300980ad592971844533a",
    "state": "MEASURED",
-   "status_sha256": "e284ac7c3fd84f8447e3f9090fd4d54dec03e951c25a29903ede0b5fab4dd0fa"
+   "status_sha256": "696b184a7e47f530d73b1ed951430c75171bb6980ac6c71ffe0ed94cae60a975"
   },
   "tools/recomp/lifter.py": "c83c894c06b489a298405097ab0a8d6423a9a7bb2454abb53f9feeca7eef58fc",
   "tools/recomp/translator.py": "66482655f7b48129ae51cf77cd7185e71843e18e59aaa4729fd17e9bea8b10cd"
@@ -1620,6 +1620,11 @@
    "kind": "generated output",
    "date": "2026-10-11",
    "cause": "Targeted relift `python -X utf8 scripts/relift-selected.py comiss` (list in config/relift-comiss.json): the 8 generated bodies whose comiss/ucomiss branches still tested the bare relation, lifted before toolkit 894ceef gave an unordered (NaN) compare its ZF/PF/CF. Only recomp_0003.c changes: 23 jb/je/cmovb conditions gain the unordered term, plus header CC comments. Measured cause: 0x0014C100 (ray-plane test) returned a hit for a NaN ray from a stationary player, so the warp trigger pass 0x00024AE0 set [req+0x38] every frame, 0x00080340 re-entered the warp 0x00092750 every frame, and its 60-frame countdown at +0xC58 never ran out to the fade-in."
+  },
+  {
+   "kind": "generated output",
+   "date": "2026-10-11",
+   "cause": "Targeted relift python -X utf8 scripts/relift-selected.py comiss, its selection widened to SSE-compare cmovs: 0x0015AAF0 still tested a bare _fca <= _fcb in a cmovbe, which scripts/check-sse-unordered.py flagged. Only recomp_0003.c changes. config/relift-comiss.json now lists all nine relifted bodies."
   }
  ],
  "regenerations": [
