@@ -83,7 +83,7 @@ def make_run(root: Path, name, *, cans, tag=None, control=False, spray_present=T
                       "unreadable": False})
     (d / "peeks.jsonl").write_text("".join(json.dumps(p) + "\n" for p in peeks), encoding="utf-8")
     (d / "metadata.json").write_text(json.dumps({
-        "exe_sha256": "e" * 64, "xbe_sha256": "x" * 64,
+        "exe_sha256": "e" * 64, "xbe_sha256": "a" * 64,
         "save_root": {"verified": True, "disposable": True}}), encoding="utf-8")
     for n in snaps:
         (d / (n + ".png")).write_bytes(b"\x89PNG\r\n\x1a\n")
@@ -196,6 +196,44 @@ class Decision(unittest.TestCase):
         c = make_run(self.tmp, "c11", cans=(3, 3, 3, 3), control=True)
         fails, _ = self.decide(a, c)
         self.assertTrue(any("unreadable page" in f for f in fails), fails)
+
+    def test_missing_build_identity_is_rejected(self):
+        """Two runs that both omit the identity fields must not compare as equal.
+
+        `None == None` is True, so removing `exe_sha256` and `xbe_sha256` from both metadata
+        files used to pass the pair as comparable -- a control from an unknown build."""
+        a = make_run(self.tmp, "a14", cans=(3, 3, 2, 2))
+        c = make_run(self.tmp, "c14", cans=(3, 3, 3, 3), control=True)
+        for d in (a, c):
+            m = json.loads((d / "metadata.json").read_text(encoding="utf-8"))
+            m.pop("exe_sha256", None)
+            m.pop("xbe_sha256", None)
+            (d / "metadata.json").write_text(json.dumps(m), encoding="utf-8")
+        fails, _ = self.decide(a, c)
+        self.assertTrue(any("exe_sha256 is missing or malformed" in f for f in fails), fails)
+        self.assertTrue(any("xbe_sha256 is missing or malformed" in f for f in fails), fails)
+
+    def test_malformed_build_identity_is_rejected(self):
+        """A short or non-hex value is not an identity."""
+        a = make_run(self.tmp, "a15", cans=(3, 3, 2, 2))
+        c = make_run(self.tmp, "c15", cans=(3, 3, 3, 3), control=True)
+        for d in (a, c):
+            m = json.loads((d / "metadata.json").read_text(encoding="utf-8"))
+            m["exe_sha256"] = "e" * 40          # not 64 hex chars
+            m["xbe_sha256"] = "not-a-hash"
+            (d / "metadata.json").write_text(json.dumps(m), encoding="utf-8")
+        fails, _ = self.decide(a, c)
+        self.assertTrue(any("exe_sha256 is missing or malformed" in f for f in fails), fails)
+        self.assertTrue(any("xbe_sha256 is missing or malformed" in f for f in fails), fails)
+
+    def test_pair_from_different_builds_fails(self):
+        a = make_run(self.tmp, "a16", cans=(3, 3, 2, 2))
+        c = make_run(self.tmp, "c16", cans=(3, 3, 3, 3), control=True)
+        m = json.loads((c / "metadata.json").read_text(encoding="utf-8"))
+        m["exe_sha256"] = "f" * 64
+        (c / "metadata.json").write_text(json.dumps(m), encoding="utf-8")
+        fails, _ = self.decide(a, c)
+        self.assertTrue(any("executables differ" in f for f in fails), fails)
 
     def test_missing_result_is_exit_2(self):
         rc = cgr.main([str(self.tmp / "nope"), str(self.tmp / "nope2")])

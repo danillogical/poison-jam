@@ -75,7 +75,7 @@ def make_run(root: Path, name, *, control=False, expect_second=5, observed_secon
                       "matches": None if want is None else value == want})
     (d / "peeks.jsonl").write_text("".join(json.dumps(p) + "\n" for p in peeks), encoding="utf-8")
     (d / "metadata.json").write_text(json.dumps({
-        "exe_sha256": "e" * 64, "xbe_sha256": "x" * 64,
+        "exe_sha256": "e" * 64, "xbe_sha256": "a" * 64,
         "save_root": {"verified": True, "disposable": True}}), encoding="utf-8")
     for n in SNAPS:
         (d / (n + ".png")).write_bytes(b"\x89PNG\r\n\x1a\n")

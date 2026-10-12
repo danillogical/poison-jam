@@ -9,6 +9,7 @@ without the frames and game-owned witness it names.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 # AGENTS.md mapping control: guest VA 0x00011000 begins with the bytes 8b 51 2c 85, so its
@@ -120,7 +121,11 @@ def check_xbe_control(label, run):
 
 
 def check_identity(accept, control):
-    """A control from another build or an unverified save root is not a control."""
+    """A control from another build or an unverified save root is not a control.
+
+    Missing identity is rejected, not treated as agreement: two runs that both omit
+    `exe_sha256`/`xbe_sha256` would otherwise compare equal (`None == None`) and a pair from
+    different builds would pass as comparable."""
     fails = []
     metas = {}
     for label, run in (("acceptance", accept), ("control", control)):
@@ -131,6 +136,10 @@ def check_identity(accept, control):
         metas[label] = meta
         if (meta.get("save_root") or {}).get("verified") is not True:
             fails.append("%s: save root not verified" % label)
+        for field in ("exe_sha256", "xbe_sha256"):
+            value = meta.get(field)
+            if not isinstance(value, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", value):
+                fails.append("%s: %s is missing or malformed (%r)" % (label, field, value))
     if len(metas) == 2:
         a, c = metas["acceptance"], metas["control"]
         if a.get("exe_sha256") != c.get("exe_sha256"):
