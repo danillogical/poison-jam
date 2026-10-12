@@ -456,13 +456,9 @@ BAR_BAND = (42, 58, 398, 516)
 ICON_MIN_RED = 250
 BAR_MIN_YELLOW = 800
 # Dialogue draws a white speech balloon in the upper middle. Cutscene pages also letterbox the
-# frame; in-game NPC talks do not, so the balloon alone is the test. Gameplay never letterboxes
-# (<= 0.17 of the band) and never exceeds 744 balloon pixels (its "?" balloon icon is 122).
-DIALOG_TOP_BAND = (2, 34, 0, 640)
-DIALOG_BOTTOM_BAND = (450, 478, 0, 640)
+# frame; in-game NPC talks do not, so the balloon alone is the test. Gameplay never exceeds 744
+# balloon pixels (its "?" balloon icon is 122); a talk measures 23,000-29,000.
 BALLOON_BAND = (50, 120, 100, 540)
-DIALOG_BLACK_LEVEL = 24
-DIALOG_MIN_BLACK_FRACTION = 0.95
 BALLOON_WHITE_LEVEL = 220
 BALLOON_MIN_WHITE = 10000
 
@@ -500,13 +496,6 @@ def is_hud(a):
     scale = (a.shape[0] * a.shape[1]) / (rw * rh)
     return (hud_icon_red_count(a) >= ICON_MIN_RED * scale
             or hud_bar_yellow_count(a) >= BAR_MIN_YELLOW * scale)
-
-
-def _black_fraction(a, band_rect):
-    """Fraction of pixels in the band whose brightest channel is below DIALOG_BLACK_LEVEL."""
-    b = _band(a, band_rect)
-    dark = (b.max(axis=2) < DIALOG_BLACK_LEVEL)
-    return float(dark.sum()) / float(dark.size) if dark.size else 0.0
 
 
 def dialogue_balloon_white_count(a):

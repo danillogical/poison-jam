@@ -34,8 +34,12 @@ class SearchError(Exception):
     pass
 
 
-def load_snapshot(run_dir, name, width):
-    """(aligned array at `width`, base VA, unreadable page VAs) for one snapshot."""
+def load_snapshot(run_dir, name):
+    """(raw bytes, base VA, unreadable page VAs) for one snapshot, read once.
+
+    The caller derives each width's view from these bytes. Reading per width instead would
+    re-read the same 64 MiB for every width, and the acceptance search loads several
+    snapshots across several widths."""
     run_dir = Path(run_dir)
     sidecar_path = run_dir / "ram" / (name + ".json")
     bin_path = run_dir / "ram" / (name + ".bin")
@@ -50,11 +54,18 @@ def load_snapshot(run_dir, name, width):
     if length != len(raw):
         raise SearchError("%s: %s sidecar says %d bytes, file has %d"
                           % (run_dir, name, length, len(raw)))
+    unreadable = {int(v, 0) for v in sidecar.get("unreadable_pages", [])}
+    return raw, va, unreadable
+
+
+def view_at_width(raw, va, width, run_dir, name):
+    """A little-endian `width`-byte view of `raw`, or a SearchError naming the misalignment."""
     if va % width:
         raise SearchError("%s: %s base 0x%08X is not %d-byte aligned" % (run_dir, name, va, width))
-    arr = np.frombuffer(raw, dtype=DTYPES[width])
-    unreadable = {int(v, 0) for v in sidecar.get("unreadable_pages", [])}
-    return arr, va, unreadable
+    if len(raw) % width:
+        raise SearchError("%s: %s length %d is not a multiple of %d"
+                          % (run_dir, name, len(raw), width))
+    return np.frombuffer(raw, dtype=np.uint8).view(DTYPES[width])
 
 
 class RunSet:
@@ -66,11 +77,11 @@ class RunSet:
         self.widths = widths
         self.by_width = {w: {} for w in widths}
         self.unreadable = set()
-        for w in widths:
-            for name in names:
-                arr, va, bad = load_snapshot(self.dir, name, w)
-                self.by_width[w][name] = (arr, va)
-                self.unreadable |= bad
+        for name in names:
+            raw, va, bad = load_snapshot(self.dir, name)
+            for w in widths:
+                self.by_width[w][name] = (view_at_width(raw, va, w, self.dir, name), va)
+            self.unreadable |= bad
 
     def arrays(self, width):
         return self.by_width[width]

@@ -178,6 +178,21 @@ class ParseScript(unittest.TestCase):
         with self.assertRaises(ksr.ScriptError):      # repeats would send two KEYDOWNs
             self.parse([{"hold_keys": {"vks": ["3", "3"], "hold": 1.0}}])
 
+    def test_snap_options_parse_and_validate(self):
+        """`snap`/`snap_after` let a press capture a talk that only shows while held."""
+        steps = self.parse([{"key": {"vk": "3", "hold": 1.2, "snap": "talk-00"}},
+                            {"key_until": {"vk": "3", "until": "dialogue", "hold": 2.0,
+                                           "snap": "talk-01", "snap_after": 1.5}}])
+        self.assertEqual(steps[0][1]["snap"], "talk-00")
+        self.assertIsNone(steps[0][1].get("snap_after"))
+        self.assertEqual(steps[1][1]["snap"], "talk-01")
+        self.assertEqual(steps[1][1]["snap_after"], 1.5)
+        self.assertEqual(self.parse([{"key": {"vk": "3"}}])[0][1]["snap"], None)
+        with self.assertRaises(ksr.ScriptError):      # a path is not a snapshot name
+            self.parse([{"key": {"vk": "3", "snap": "../escape"}}])
+        with self.assertRaises(ksr.ScriptError):
+            self.parse([{"key_until": {"vk": "3", "until": "dialogue", "snap": "a/b"}}])
+
 
 class ReadHostPages(unittest.TestCase):
     """The page reader against this test's own process, with a deliberately unmapped page."""
