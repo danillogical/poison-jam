@@ -79,10 +79,10 @@ This session fetched and verified clean, synchronized game
   spray targets. The talk-script text and `e000.dat` naming Shibuya Terminal are hypotheses
   about where graffiti starts, not measurements (TR §§31.5, 31.6).
 
-- **Gum is resident as data but her talk state never activated on the sampled paths (Packet
-  001-FIX2).** The Garage is Stg00; `Gum.bin`/`Gum.dat` are opened by the game and her model is
+- **Gum's assets are resident; her NPC instance and activation state remain unidentified (Packet
+  001-FIX2).** The run loads Stg00 assets; `Gum.bin`/`Gum.dat` are opened by the game and her model is
   resident in guest memory, and all four tutorial talk scripts are loaded. Corn's live talk slot
-  is `0` outside his talk and holds his script during it, while Gum's slot holds her TE002
+  is `0` outside his talk and holds his script during it, while a slot holds the TE002
   pointer constantly — a resident table entry, not an activation state. A ten-burst forward walk
   moved for seven frames and then stopped against a wall in an alley, and no second talkable NPC
   was located on the sampled paths. That is "not located on sampled paths", not proven absence:
@@ -91,10 +91,11 @@ This session fetched and verified clean, synchronized game
 
 ## Immediate next task
 
-The rendering/movement checkpoint is reached. Packet 001-FIX2 measured why the Garage route
-stalls: the forward corridor from spawn dead-ends against a wall, and no second talkable NPC was
+The rendering/movement checkpoint is reached; graffiti and Gum's tutorial remain incomplete.
+Packet 001-FIX2's sampled forward route stopped at a wall, and no second talkable NPC was
 located on the sampled paths, though Gum's model and her TE002 script are both resident in guest
-memory (TR §31.7). Establish Gum's position and activation from game data, or steer on guest
+memory (TR §31.7). Asset residency does not establish an active NPC or prove that her talk never
+activates. Establish Gum's position and activation from game data, or steer on guest
 camera/position state rather than wall-clock holds, before any graffiti work. The zero counter
 and the script texts are not evidence that the Garage lacks cans or targets. Keep the historical
 off-screen ref-204 quad and eye-plane-crossing/hardware shadow fidelity as explicit coverage
