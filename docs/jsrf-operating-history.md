@@ -32,3 +32,14 @@ Game
 
 Game
 `PUSHED_TO: origin / BRANCH: master / COMMIT: 57af797ea45fa6f86847e0a5f13920d08001254b / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 38aab04..57af797 master -> master`
+
+Game — OMP workflow migration
+`PUSHED_TO: origin / BRANCH: master / COMMIT: c450701a930ca7af2b5d3b55888a41ef68eb8a08 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward ce33f49..c450701 HEAD -> master`
+
+Validation: `just check`; 78 tests via `python -X utf8 -m unittest
+tests.test_agent_docs tests.test_retired_routes tests.test_markdown_tables
+tests.test_override_drift tests.test_qualify_premise tests.test_precommit_hooks`;
+OMP 18.9.0 config inspection and RPC `get_state` resolving `@plan`; sibling config
+scope control; staged public-content gate; outgoing blob audit (25 blobs, zero secret
+hits, no forbidden asset/save/generated paths or blobs over 100 MB). Toolkit remained
+clean and synchronized at `4e302def8472fe17425bf28de117675a91a550b0`; no toolkit push.
