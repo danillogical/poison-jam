@@ -544,10 +544,10 @@ BALLOON_MIN_WHITE = 10000
 # count >= 40. See is_talk_icon for the tally that makes this threshold decisive.
 TALK_ICON_BAND = (120, 230, 330, 430)
 TALK_ICON_MIN_BLUE = 40
-# The band also catches the blue Dogenzaka Hill location banner. Real balloons are 37-38 px
-# tall in the band (blue 52-74); the banner is 67 px tall (107 blue), so height separates them.
-TALK_ICON_MAX_BLUE = 120
-TALK_ICON_MAX_HEIGHT = 50
+# The band also catches the blue Dogenzaka Hill location banner (blue text on a blue field).
+# A real talk indicator is a blue face inside a WHITE balloon, so it carries 583-857 white
+# pixels around the blue blob while every banner frame carries none.
+TALK_ICON_MIN_BUBBLE_WHITE = 150
 
 
 def _band(a, band_rect):
@@ -631,27 +631,31 @@ def is_talk_icon(a):
     `post-00-fwd1` frame had shown the icon about a second earlier, before the player rolled
     out of range. The talk needs proximity; this icon is how the game states it.
 
-    The band also catches the blue Dogenzaka Hill location banner, so the shape is checked too.
-    Measured in the band over the press frames: a real balloon is 22-37 px wide and 37-38 px
-    tall (blue pixels 52-74), while the banner is 26 px wide and 67 px tall (107 pixels). The
-    count alone cannot separate them -- the banner's 107 sits just above the largest real icon
-    -- but its height does, with a gap from 38 to 67."""
+    The band also catches the blue Dogenzaka Hill location banner, which is blue text on a
+    blue field. What separates them is the bubble: a real talk indicator is a blue face inside
+    a WHITE balloon, so it carries hundreds of white pixels immediately around the blue blob
+    (583-857 measured over the six archived icons), while every banner frame carries none.
+    Height alone did not separate them -- the banner's text measures 44 px tall mid-fade,
+    under any cap that still admits the 37-50 px real icon."""
     if not is_hud(a):
         return False
     rw, rh = TITLE_REF_SIZE
     scale = (a.shape[0] * a.shape[1]) / (rw * rh)
     n = talk_icon_blue_count(a)
-    if not (TALK_ICON_MIN_BLUE * scale <= n <= TALK_ICON_MAX_BLUE * scale):
+    if n < TALK_ICON_MIN_BLUE * scale:
         return False
     b = _band(a, TALK_ICON_BAND)
-    m = ((b[:, :, 2] > 150) & (b[:, :, 0] < 90)
-         & (b[:, :, 1] > 60) & (b[:, :, 1] < 160))
     import numpy as _np
-    ys, xs = _np.nonzero(m)
+    blue = ((b[:, :, 2] > 150) & (b[:, :, 0] < 90)
+            & (b[:, :, 1] > 60) & (b[:, :, 1] < 160))
+    ys, xs = _np.nonzero(blue)
     if not len(xs):
         return False
-    height = int(ys.max() - ys.min() + 1)
-    return height <= TALK_ICON_MAX_HEIGHT * scale
+    pad = 3
+    y0, y1 = max(0, ys.min() - pad), min(b.shape[0], ys.max() + pad + 1)
+    x0, x1 = max(0, xs.min() - pad), min(b.shape[1], xs.max() + pad + 1)
+    white = (b[y0:y1, x0:x1].min(axis=2) > BALLOON_WHITE_LEVEL)
+    return int(white.sum()) >= TALK_ICON_MIN_BUBBLE_WHITE * scale
 
 
 SCREENS["talk_icon"] = is_talk_icon

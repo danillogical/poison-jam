@@ -65,14 +65,18 @@ def talk_frame():
 
 
 def icon_blob(a, top, left):
-    """A sparse blue face in the talk-icon band, as the real balloon renders it.
+    """A sparse blue face in a WHITE balloon, as the real talk indicator renders.
 
     The real balloon is a white bubble whose blue face covers 52-74 pixels in a 22-37 px
-    wide, 37-38 px tall footprint -- sparse, not a solid block, which is why the detector
-    caps the count as well as the height."""
+    wide, 37-50 px tall footprint. The white bubble is what separates it from the blue
+    Dogenzaka Hill banner, which is blue text on a blue field with no white around it."""
     for r in range(0, 37, 4):
         for c in range(0, 22, 4):
             a[top + r, left + c] = (16, 101, 156)
+    a[top - 6:top + 43, left - 8:left + 30] = np.where(
+        a[top - 6:top + 43, left - 8:left + 30] == (16, 101, 156),
+        a[top - 6:top + 43, left - 8:left + 30],
+        np.array([255, 255, 255], dtype=np.uint8))
     return a
 
 
@@ -159,16 +163,15 @@ class Detectors(unittest.TestCase):
     def test_talk_icon_rejects_the_blue_location_banner(self):
         """The band also catches the blue Dogenzaka Hill banner, which is not a talk.
 
-        A real balloon is 22-37 px wide and 37-38 px tall in the band (52-74 blue pixels);
-        the banner is 26 px wide and 67 px tall (107 pixels). Its count sits just above the
-        largest real icon, so only the height separates them."""
+        The banner is blue text on a blue field; a real talk indicator is a blue face inside
+        a white balloon. Height alone did not separate them (the banner measures 44 px tall
+        mid-fade, inside the real icon's range), so the white bubble is the test."""
         a = hud_frame()
-        # A tall, narrow blue strip, as the banner appears in the band: 26 wide, 67 tall.
-        a[120:187, 360:386] = (16, 101, 156)
+        a[120:187, 360:386] = (16, 101, 156)          # blue on blue: no bubble
+        self.assertGreaterEqual(ksr.talk_icon_blue_count(a), ksr.TALK_ICON_MIN_BLUE)
         self.assertFalse(ksr.is_talk_icon(a))
-        # A balloon-shaped blob of the measured size is accepted.
         a[120:187, 360:386] = (40, 40, 40)
-        icon_blob(a, 140, 360)                        # 22x37 sparse face
+        icon_blob(a, 140, 360)                        # blue face inside a white balloon
         self.assertTrue(ksr.is_talk_icon(a))
 
 
