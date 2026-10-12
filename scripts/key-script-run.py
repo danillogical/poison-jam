@@ -511,9 +511,15 @@ def is_dialogue(a):
     run 20261012-020638-074-keyscript-p001-e1: Gum's talk balloon covers 27,901 white pixels
     at black fractions of only 0.066/0.007, while the letterboxed intro pages reach 0.998.
     Requiring the letterbox therefore missed every in-game talk, so `key_until ... dialogue`
-    could never fire on one. Gameplay never exceeds 744 balloon pixels (the "?" icon), so the
-    balloon count alone separates a talk from play."""
-    return dialogue_balloon_white_count(a) >= BALLOON_MIN_WHITE
+    could never fire on one.
+
+    The spray-can icon is a free second test: it is drawn on every gameplay frame (374 px
+    measured) and never during a talk, so requiring its absence rejects a bright outdoor
+    scene that happens to fill the balloon band. Across 3357 frames of this packet's runs it
+    suppressed no talk, and the largest balloon on a non-dialogue frame was 1076 against the
+    10000 threshold."""
+    return (dialogue_balloon_white_count(a) >= BALLOON_MIN_WHITE
+            and hud_icon_red_count(a) == 0)
 
 
 SCREENS = {"title": is_title, "menu": is_menu, "hud": is_hud, "dialogue": is_dialogue}

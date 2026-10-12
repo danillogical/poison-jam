@@ -102,6 +102,16 @@ class Detectors(unittest.TestCase):
         self.assertFalse(ksr.is_dialogue(a))
         self.assertTrue(ksr.is_hud(a))
 
+    def test_bright_scene_with_the_hud_icon_is_not_a_talk(self):
+        """A gameplay frame whose band happens to be white must not read as a talk.
+
+        The spray-can icon is drawn on every gameplay frame and never during a talk, so its
+        presence rejects a bright outdoor scene that fills the balloon band."""
+        a = frame((255, 255, 255))
+        a[64:108, 462:492] = (220, 20, 20)          # the icon, as on every gameplay frame
+        self.assertGreaterEqual(ksr.dialogue_balloon_white_count(a), ksr.BALLOON_MIN_WHITE)
+        self.assertFalse(ksr.is_dialogue(a))
+
     def test_black_frame_is_neither(self):
         a = frame((0, 0, 0))
         self.assertFalse(ksr.is_hud(a))

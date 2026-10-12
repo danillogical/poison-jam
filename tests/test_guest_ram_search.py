@@ -159,6 +159,28 @@ class Search(unittest.TestCase):
         rc = grs.main(["--run", self.fx.path("e4a"), "--width", "1", "--eq", "nope=0"])
         self.assertEqual(rc, 2)
 
+    def test_width_views_share_one_buffer(self):
+        """Every width must be a view of one read, not a copy.
+
+        The refactor that reads each snapshot once depends on this: a silent copy would put
+        the acceptance search's memory back at one 64 MiB buffer per snapshot per width. A
+        full-array comparison also pins the tail, where a length error would show."""
+        raw, va, _ = grs.load_snapshot(self.fx.path("e4a"), "s0-start")
+        base = np.frombuffer(raw, dtype=np.uint8)
+        for width in (1, 2, 4):
+            view = grs.view_at_width(raw, va, width, "e4a", "s0-start")
+            self.assertTrue(np.shares_memory(view, base), "width %d copied the buffer" % width)
+            self.assertFalse(view.flags.owndata)
+            np.testing.assert_array_equal(view, np.frombuffer(raw, dtype=grs.DTYPES[width]))
+
+    def test_runset_loads_each_snapshot_once(self):
+        """The RunSet holds one raw buffer per snapshot, shared by all its width views."""
+        rs = grs.RunSet(self.fx.path("e4a"), ["s0-start", "s1-idle"], [1, 2, 4])
+        for width in (1, 2, 4):
+            for name in ("s0-start", "s1-idle"):
+                arr, _ = rs.arrays(width)[name]
+                self.assertFalse(arr.flags.owndata, "width %d %s owns its data" % (width, name))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
