@@ -1,0 +1,277 @@
+[
+ {
+  "wait_title": {
+   "timeout": 300
+  }
+ },
+ {
+  "key_until": {
+   "vk": "RETURN",
+   "hold": 2.0,
+   "until": "menu",
+   "every": 6,
+   "max": 20
+  }
+ },
+ {
+  "sleep": 3
+ },
+ {
+  "snap": "main-menu"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.5
+  }
+ },
+ {
+  "wait_change": {
+   "timeout": 60,
+   "min_mean_delta": 8
+  }
+ },
+ {
+  "sleep": 8
+ },
+ {
+  "snap": "cutscene"
+ },
+ {
+  "sleep": 6
+ },
+ {
+  "sleep": 16
+ },
+ {
+  "snap": "intro-00"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-01"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-02"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-03"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-04"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-05"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-06"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-07"
+ },
+ {
+  "sleep": 20
+ },
+ {
+  "snap": "gameplay-a"
+ },
+ {
+  "sleep": 3
+ },
+ {
+  "snap": "pre-00-fwd1"
+ },
+ {
+  "key": {
+   "vk": 104,
+   "hold": 3.0
+  }
+ },
+ {
+  "snap": "post-00-fwd1"
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "snap": "pre-01-fwd2"
+ },
+ {
+  "key": {
+   "vk": 104,
+   "hold": 4.0
+  }
+ },
+ {
+  "snap": "post-01-fwd2"
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "snap": "pre-02-turn-right"
+ },
+ {
+  "key": {
+   "vk": 102,
+   "hold": 2.0
+  }
+ },
+ {
+  "snap": "post-02-turn-right"
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "snap": "pre-03-fwd3"
+ },
+ {
+  "key": {
+   "vk": 104,
+   "hold": 3.0
+  }
+ },
+ {
+  "snap": "post-03-fwd3"
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "snap": "pre-04-turn-left"
+ },
+ {
+  "key": {
+   "vk": 100,
+   "hold": 2.0
+  }
+ },
+ {
+  "snap": "post-04-turn-left"
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "snap": "pre-05-fwd4"
+ },
+ {
+  "key": {
+   "vk": 104,
+   "hold": 3.0
+  }
+ },
+ {
+  "snap": "post-05-fwd4"
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "snap": "pre-06-jump"
+ },
+ {
+  "key": {
+   "vk": 90,
+   "hold": 0.6
+  }
+ },
+ {
+  "snap": "post-06-jump"
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "snap": "pre-07-fwd5"
+ },
+ {
+  "key": {
+   "vk": 104,
+   "hold": 2.0
+  }
+ },
+ {
+  "snap": "post-07-fwd5"
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "snap": "pre-08-back"
+ },
+ {
+  "key": {
+   "vk": 98,
+   "hold": 2.0
+  }
+ },
+ {
+  "snap": "post-08-back"
+ },
+ {
+  "sleep": 2
+ }
+]

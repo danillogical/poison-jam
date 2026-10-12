@@ -1,0 +1,82 @@
+[
+ {
+  "wait_title": {
+   "timeout": 300
+  }
+ },
+ {
+  "key_until": {
+   "vk": "RETURN",
+   "hold": 2.0,
+   "until": "menu",
+   "every": 6,
+   "max": 20
+  }
+ },
+ {
+  "sleep": 3
+ },
+ {
+  "snap": "menu-0"
+ },
+ {
+  "key": {
+   "vk": "DOWN",
+   "hold": 0.8
+  }
+ },
+ {
+  "sleep": 3
+ },
+ {
+  "snap": "menu-1-down"
+ },
+ {
+  "key": {
+   "vk": "DOWN",
+   "hold": 0.8
+  }
+ },
+ {
+  "sleep": 3
+ },
+ {
+  "snap": "menu-2-down"
+ },
+ {
+  "key": {
+   "vk": "UP",
+   "hold": 0.8
+  }
+ },
+ {
+  "sleep": 3
+ },
+ {
+  "snap": "menu-3-up"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 6
+ },
+ {
+  "snap": "menu-4-accept"
+ },
+ {
+  "key": {
+   "vk": "X",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 6
+ },
+ {
+  "snap": "menu-5-back"
+ }
+]
