@@ -16,10 +16,11 @@ checkpoint and are not claimed complete here.
 
 ## Current state
 
-The starting durable baseline is game `ce33f494e32b8bca4e6a42b97374520cdcfe1929`
-and toolkit `4e302def8472fe17425bf28de117675a91a550b0`, both fetched and synchronized
-with origin before this workflow migration. No renderer implementation changed in
-the migration.
+This session fetched and verified clean, synchronized game
+`2e1d6323c274b098184cb26cb065ece6551073e6` and toolkit
+`4e302def8472fe17425bf28de117675a91a550b0`. Culling is now pushed as toolkit
+`8e200100949ffb2b253a4ac7884c06a9d71d8713`; production-path tests are game
+`5bb8c839a468968aaf0d8785bd6935e2fb694a23` (TR §31.3).
 
 - **M15 complete and reproduced:** the real title with `PLEASE PRESS START TO BEGIN`
   (TR §26.6; title plan's two accepting runs).
@@ -43,27 +44,35 @@ the migration.
   exercises menu directions, accept and back. Script contents establish available
   actions, not acceptance of every movement, camera or menu behavior.
 
+## Current rendering and gameplay checkpoint
+
+- **Face culling is implemented and tested.** Disabled, FRONT, BACK, ALL and
+  CW/CCW selection pass controlled WARP pixel tests on fixed-function, GPU-program
+  and CPU-transformed program paths. Inverting the production mapping fails both
+  focused CTests. Same-target transitions and partial clears are covered.
+- **The dark player silhouette is resolved in the measured Garage view.**
+  `20261011-221941-413-keyscript-culling-skate` shows colored clothing/skates and
+  a localized shadow against the verified stencil baseline. A complete frame in
+  `20261011-222515-360-keyscript-culling-trace` confirms the character outline
+  uses FRONT/CW while the colored body uses BACK/CW, with matching bound D3D11 states.
+- **Shadow volumes produce GPU samples.** The paired FRONT/BACK passes bind
+  matching INCR/DECR stencil state, followed by a stencil-EQUAL darkening pass
+  (TR §31.3). Shadows improved; hardware fidelity and stencil-value readback are
+  unproven. The old zero CPU-pixel counter did not establish absent GPU output.
+- **The historical alpha-tested quad remains unclosed, not a proven defect.**
+  Its old transformed vertices were off screen; it was absent from the new complete
+  frame. Do not choose an alpha-test fix from this evidence.
+- Forward movement, left/right turns, an airborne jump pose and camera following
+  are visible. Backward movement was skipped after an ABI abort at `0x000FFFD0`.
+
 ## Immediate next task
 
-**Implement face culling in the toolkit's D3D11 backend.**
-`src/video/nv2a_d3d11_backend.c` currently creates a rasterizer with
-`D3D11_CULL_NONE`; the executor already captures cull enable, cull face and front
-face in `src/kernel/nv2a_pb_exec.c` / `src/kernel/nv2a_backend.h`.
-Map those guest states across the backend draw paths and verify winding after the
-screen-to-clip transform. Use focused opposite-winding/cull-state cases, then gameplay
-evidence. Do this in the next engineering session, not the workflow migration.
-
-## Current rendering issues
-
-- Missing face culling: both windings currently rasterize.
-- Shadows remain wrong: stencil removed the fullscreen darkening, but shadow rendering
-  still needs culling; further defects must be measured after that change.
-- Characters remain dark/silhouette-like, visible in the stencil run's `gameplay-b.png`.
-- A shadow-volume batch previously had valid positions but no useful pixels (TR §31.1).
-- An alpha-tested quad previously had valid positions but no useful pixels (TR §31.1).
-
-Keep these as separate observations. Do not assume culling fixes the character,
-shadow-volume or alpha-test issues without runtime evidence.
+Run the full unchanged `skate.json` on game `9b0af4e`, which restores the truncated
+`0x000FFFD0` effect method through its original `RET 4` epilogues and removes eight
+false internal entries. Focused recovery checks/build passed; runtime return and
+backward movement still need confirmation. Record the earliest remaining blocker
+from that run; do not reopen stencil or choose a lighting/combiner feature from
+appearance alone.
 
 ## Working loop
 
