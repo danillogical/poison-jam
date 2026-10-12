@@ -71,14 +71,24 @@ This session fetched and verified clean, synchronized game
   truncated recovery owner `0x000FFFD0`, was repaired in `9b0af4e` and returned
   with its ABI verified. No further fatal/ABI blocker was observed in this run.
 
+- **The Garage opening grants no spray cans.** Packet 001 measured the HUD spray-can
+  counter at exactly 140 white pixels ("00") on every gameplay frame of every run,
+  while the tutorial scripts teach only talk, jump and grind; the first graffiti
+  mission is Shibuya Terminal. Graffiti is therefore not reachable in the Garage, and
+  the packet stopped as BLOCKED-ROUTE rather than tuning inputs further (TR §31.5).
+  The runner gained live guest-memory reads (`peek`/`ram_snap`), a snapshot search and
+  an acceptance checker, and two real detector defects were fixed: in-game talks have
+  no letterbox, and `key_until` used to test only after releasing the key.
+
 ## Immediate next task
 
-The rendering/movement checkpoint is reached on the exploratory path. Extend the
-opening-area automation to exercise graffiti, audio and save/resume, then record
-the earliest actual failure. Those behaviors remain unvalidated, rather than
-known renderer defects. No separate lighting/combiner feature is justified by
-the measured Garage view. Keep the historical off-screen ref-204 quad and
-eye-plane-crossing/hardware shadow fidelity as explicit coverage limits.
+The rendering/movement checkpoint is reached on the exploratory path, and the Garage
+tutorial's limit is now measured: it issues no spray cans, so graffiti needs the
+Shibuya Terminal transition rather than more Garage input tuning (TR §31.5). Reach
+that stage through actual gameplay and complete the first real graffiti interaction
+with a game-owned witness; then extend the automation to audio and save/resume. Keep
+the historical off-screen ref-204 quad and eye-plane-crossing/hardware shadow
+fidelity as explicit coverage limits.
 
 ## Working loop
 

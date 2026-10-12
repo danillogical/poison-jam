@@ -1698,3 +1698,83 @@ The four outgoing game commits through `181697f` were audited individually:
 signatures, no secret matches, and no blob over 100 MB (largest 3,255,627 bytes).
 
 PUSHED_TO: poison-jam / BRANCH: master / COMMIT: 181697fdc99c210eeacf1449107b3e94fbcf5624 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: success, fast-forward from 5bb8c83; full skate, stop-49 confirmation and final checks close this checkpoint. Toolkit 8e20010 was pushed first and remains synchronized.
+
+### §31.5 Packet 001: the Garage tutorial grants no spray cans, so graffiti is not reachable there (2026-10-12)
+
+**Status: BLOCKED-ROUTE.** No graffiti interaction was produced, and the measurements below
+say why: the measured Garage opening is a talk-and-jump tutorial that issues no spray cans
+and contains no spray target. This is an observation about the measured opening, not a claim
+about the rest of the game.
+
+**Baseline.** Game `fbb3d9b9807a559aad59a1720c5a5d795ff60abc`, toolkit
+`8e200100949ffb2b253a4ac7884c06a9d71d8713`, both clean. All runs are EXPLORATORY under
+`docs/jsrf-run-profiles.md`; the relied-on ledger IDs are **L16, L18, L56, L57, L58, L59, L60**
+(L47 is inactive: no `RECOMP_FLIP_TRACE`). Run roots are under `logs/runs/20261012-*p001-*`
+and are not committed.
+
+**The R-trigger talk works, and its owner is Corn, not Gum.** The `?` balloon NPC beside the
+player after skate steps 0–37 answers the R trigger with a speech balloon whose text is
+`TE003.bin` — "Why don't you talk to her now?" (read from
+`logs/runs/20261012-024119-788-keyscript-p001-e3b/hold-03.png`, the game's font rendering
+`y` as `B`). `TE000/1` is the same character: "This is the GG's Garage… Find Gum… Just get
+close to her and pull the Right Trigger." So the balloon owner is the NPC who points at Gum;
+the earlier plan reading of that frame as "Gum" is corrected here.
+
+**What the Garage opening actually teaches.** The talk scripts are plain on disk
+(`game/Media/Event/TalkEvent/TE0NN.bin`). `TE002` is Gum's lesson and its only instruction is
+`Press the [A button] to jump.` Across all 100 `TE*.bin` files, the only "Press the … button"
+instructions are `TE002`/`TE177` (A: jump), `TE181` (Y: while moving), `TE191`/`TE201` (X:
+grind). **No tutorial script teaches spraying, and none mentions graffiti.** The first
+graffiti mission is `game/Media/Event/Event/e000.dat` — "This is Shibuya Terminal… cover up
+that freaky-looking graffiti!" — a different stage.
+
+**The HUD spray-can counter is zero throughout.** Band rows 84–108, cols 496–540, all
+channels > 200. Every gameplay frame in every Packet 001 run reads exactly **140 white
+pixels**, the documented `00` glyph pattern; 1954 frames read 140 and 296 read 0 (menus and
+fades). The larger counts in that band (950–991, 1125) are not the counter: 1125 is exactly
+45×25, the whole band, and those frames are dialogue frames whose speech balloon covers the
+band (`talk-held.png`: 1125 px, `is_dialogue` true). No frame was observed at any non-zero
+counter value.
+
+**The R-talk is unreliable, not mis-parameterised.** With `key_until {vk 51, hold 1.2, until
+dialogue, every 3, max 4}` at the identical position: E3 opened the talk on the first press
+(`talk-held.png`, 28 386 balloon px) and E11 opened eight (`presses` falling to 2 after the
+first); E16, E17 and E18 opened none across six cycles each (`satisfied: false, presses 4`),
+including E18 which used E3's exact parameters and moved nothing between attempts. A single
+0.4 s press (E2d) and a duration-matched no-input control (E2c) bracket the mechanism: R
+reaches the guest — a 16 s R window moves the frame by mean 42.8 against 3.6 for the same
+interval with no input — but the talk is not obtainable by open-loop input at a stable rate.
+The verified prefix is therefore the position, not the talk.
+
+**Two real defects were found and fixed in the runner**, each with a negative control:
+
+| Defect | Measurement | Fix |
+|---|---|---|
+| `is_dialogue` required a letterbox (top/bottom black ≥ 0.95). In-game talks have none. | Gum/Corn's talk: balloon 27 901 px at black fractions 0.066/0.007; cutscene pages 0.998. | `is_dialogue` = balloon count alone. |
+| `key_until` released the key, then tested the screen. A talk that only shows while the key is held was never seen. | `[KEY] down vk=0x33` sent, `satisfied: false` in E1 while the balloon was on screen at t=247.4 s. | Test during the hold, then again after release. |
+
+`is_hud` also now excludes dialogue (a talk still draws 830 bar-yellow px, so `key_until …
+hud` would otherwise return on the dialogue it waits out), and `key`/`key_until` gained
+`snap`/`snap_after` so a transient talk can be captured from inside the press. `hold_keys`
+holds 2–4 keys at once. New tests pin the unletterboxed talk, the balloon-icon false
+positive, the dialogue-excludes-HUD rule and the `hold_keys` parser; the guest-memory reader
+is covered by a `VirtualAlloc`/`PAGE_NOACCESS` test and the search and acceptance checker
+have their own synthetic-run suites.
+
+**Tooling added (read-only observation).** `peek`/`ram_snap` read guest memory through
+`ReadProcessMemory` at `g_xbox_mem_offset`; the positive control `0x00011000` read
+`0x852C518B` exactly in E1, with 0 unreadable pages in a full 64 MiB snapshot.
+`scripts/guest-ram-search.py` matches predicates across snapshots with controls, and
+`scripts/check-graffiti-run.py` decides an acceptance/control pair. Both are committed with
+their tests; they are not specific to graffiti.
+
+**Inference, stated as such.** That the Garage contains no spray target is inferred from
+three independent measurements — the constant zero counter, the tutorial scripts' complete
+absence of a spray lesson, and the first graffiti mission naming Shibuya Terminal — and from
+no graffiti or `Mark` wall file being written in any run. It is not a direct read of stage
+collision or target data. Whether Gum's `TE002` line is even reachable before leaving the
+Garage is unproven: no run obtained her talk.
+
+**The next blocker is a separate objective.** Reaching the first spray means reaching
+Shibuya Terminal through actual gameplay, which is a different stage transition and a
+different packet. This packet stops here rather than expanding into it.

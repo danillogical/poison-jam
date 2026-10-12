@@ -17,12 +17,21 @@ Script steps (JSON list, run in order):
   {"wait_screen": {"screen": "menu", "timeout": 60}}        wait for a named screen (title, menu)
   {"key_until": {"vk": "RETURN", "until": "menu", "every": 6, "max": 10}}
                                                             press until a named screen appears
-  {"key": {"vk": "RETURN", "hold": 2.0}}                    name from the table, or a number
+  {"key": {"vk": "RETURN", "hold": 2.0, "snap": "n"}}       name from the table, or a number;
+                                                            snap captures the frame while held
+  {"hold_keys": {"vks": ["3", "Z"], "hold": 2.0}}           hold several keys at once
   {"sleep": 5}
   {"wait_change": {"timeout": 30, "min_mean_delta": 8}}     records, never fails
   {"wait_stable": {"timeout": 30, "seconds": 3, "max_mean_delta": 2}}
   {"touch": "path"} / {"remove": "path"}                    create / delete a file (arms RECOMP_FRAME_TRACE)
+  {"peek": {"name": "n", "va": "0xADDR", "size": 4, "expect": 0}}
+                                                            read one guest value into peeks.jsonl
+  {"ram_snap": "name"} / {"ram_snap": {"name": "n", "va": "0xADDR", "length": 0x1000}}
+                                                            write a guest RAM range to ram/<name>.bin
   {"snap": "name"}
+
+`peek` and `ram_snap` read guest memory through ReadProcessMemory and change no guest state;
+they are the only way to observe a guest value in a run, because this driver produces no dump.
 
 Output goes to `logs/runs/<YYYYMMDD-HHMMSS-mmm>-keyscript-<label>/`, the same archive tree as
 `run-jsrf.py`: frames, save root, jsrf_run.log, keyscript.log, result.json and a metadata.json
@@ -117,6 +126,14 @@ LOG_COUNTS = (
 )
 FBPRESENT_RE = re.compile(r"\[FBPRESENT\] t=\S+ presents=\d+.*")
 
+# Guest RAM is 64 MiB (xboxrecomp/src/kernel/xbox_memory_layout.h XBOX_TOTAL_RAM), reachable
+# both as canonical RAM at its own VA and through the contiguous window at 0x80000000.
+GUEST_RAM_SIZE = 0x04000000
+# Page size for the read fallback and for ram_snap alignment.
+GUEST_PAGE_SIZE = 0x1000
+# ReadProcessMemory chunk size; a failed chunk is retried page by page.
+READ_CHUNK = 0x100000
+
 
 class ScriptError(Exception):
     pass
@@ -165,11 +182,135 @@ def _num(kind, key, value, minimum=0.0):
     return float(value)
 
 
+def _parse_va(value, kind):
+    """A guest VA from an int or a string parsed with int(x, 0)."""
+    if isinstance(value, bool):
+        raise ScriptError("%s: bad va %r" % (kind, value))
+    if isinstance(value, int):
+        va = value
+    elif isinstance(value, str):
+        try:
+            va = int(value, 0)
+        except ValueError:
+            raise ScriptError("%s: bad va %r" % (kind, value)) from None
+    else:
+        raise ScriptError("%s: bad va %r" % (kind, value))
+    if va < 0:
+        raise ScriptError("%s: va must not be negative" % kind)
+    return va
+
+
+def _check_guest_range(va, length, kind, floor=0x1000):
+    """Reject a range that is not inside canonical RAM or the contiguous window."""
+    for lo, hi in ((floor, GUEST_RAM_SIZE), (0x80000000, 0x80000000 + GUEST_RAM_SIZE)):
+        if va >= lo and va + length <= hi:
+            return
+    raise ScriptError("%s: 0x%08X+%d is outside guest RAM" % (kind, va, length))
+
+
+def read_host_pages(handle, address, length):
+    """Read `length` bytes at host `address`; return (bytes, guest page offsets that failed).
+
+    Observation only: ReadProcessMemory, never a write. A chunk that fails to read is retried
+    page by page, so one unmapped page does not hide its readable neighbours. Unreadable pages
+    are zero-filled and reported -- they are never presented as data."""
+    import ctypes
+    import ctypes.wintypes as wt
+
+    k32 = ctypes.windll.kernel32
+    k32.ReadProcessMemory.argtypes = [wt.HANDLE, ctypes.c_void_p, ctypes.c_void_p,
+                                      ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
+    k32.ReadProcessMemory.restype = wt.BOOL
+    buf = bytearray(length)
+    failed = []
+
+    def read_at(off, size):
+        got = ctypes.c_size_t(0)
+        dst = (ctypes.c_char * size).from_buffer(buf, off)
+        ok = k32.ReadProcessMemory(handle, ctypes.c_void_p(address + off), dst, size,
+                                   ctypes.byref(got))
+        return bool(ok) and got.value == size
+
+    off = 0
+    while off < length:
+        size = min(READ_CHUNK, length - off)
+        if not read_at(off, size):
+            for page in range(off, off + size, GUEST_PAGE_SIZE):
+                psize = min(GUEST_PAGE_SIZE, length - page)
+                if not read_at(page, psize):
+                    failed.append(page)
+        off += size
+    return bytes(buf), failed
+
+
+class GuestMemory:
+    """Read guest memory from the live game process. Observation only: never writes.
+
+    Guest VA `v` lives at host address `v + g_xbox_mem_offset`, where the offset is the
+    runtime value of the executable's own `g_xbox_mem_offset` global (every mapped window,
+    including the contiguous one, is reachable through it)."""
+
+    def __init__(self, pid, map_path):
+        self.pid = pid
+        self.map_path = Path(map_path)
+        self.handle = None
+        self.offset = None
+
+    def _resolve(self):
+        import ctypes
+        import ctypes.wintypes as wt
+
+        k32 = ctypes.windll.kernel32
+        k32.OpenProcess.argtypes = [wt.DWORD, wt.BOOL, wt.DWORD]
+        k32.OpenProcess.restype = wt.HANDLE
+        # PROCESS_QUERY_INFORMATION | PROCESS_VM_READ
+        handle = k32.OpenProcess(0x0410, False, self.pid)
+        if not handle:
+            raise ScriptError("cannot read guest memory: OpenProcess winerror=%d"
+                              % ctypes.get_last_error())
+        self.handle = handle
+        k32.K32EnumProcessModulesEx.argtypes = [wt.HANDLE, ctypes.c_void_p, wt.DWORD,
+                                                ctypes.POINTER(wt.DWORD), wt.DWORD]
+        arr = (ctypes.c_void_p * 64)()
+        needed = wt.DWORD(0)
+        if not k32.K32EnumProcessModulesEx(handle, arr, ctypes.sizeof(arr),
+                                           ctypes.byref(needed), 3):
+            raise ScriptError("cannot read guest memory: EnumProcessModules winerror=%d"
+                              % ctypes.get_last_error())
+        base = int(arr[0])
+        here = str(Path(__file__).resolve().parent)
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import jsrf_dump
+        addr, preferred = jsrf_dump.map_symbol(str(self.map_path), "g_xbox_mem_offset")
+        slot = base + (addr - preferred)
+        raw = ctypes.c_int64()
+        if not k32.ReadProcessMemory(handle, ctypes.c_void_p(slot), ctypes.byref(raw), 8, None):
+            raise ScriptError("cannot read guest memory: g_xbox_mem_offset unreadable")
+        if raw.value == 0:
+            raise ScriptError("g_xbox_mem_offset is 0: guest memory not mapped yet")
+        self.offset = raw.value
+
+    def read(self, va, length):
+        """(bytes, unreadable guest page VAs) at guest VA `va`."""
+        if self.offset is None:
+            self._resolve()
+        data, failed = read_host_pages(self.handle, self.offset + va, length)
+        return data, [va + off for off in failed]
+
+    def close(self):
+        if self.handle:
+            import ctypes
+            ctypes.windll.kernel32.CloseHandle(self.handle)
+            self.handle = None
+
+
 def parse_script(data):
     """Validate a decoded script and return a list of (kind, options) tuples."""
     if not isinstance(data, list) or not data:
         raise ScriptError("script must be a non-empty JSON list of steps")
     steps = []
+    peek_names, snap_names = set(), set()
     for i, raw in enumerate(data):
         if not isinstance(raw, dict) or len(raw) != 1:
             raise ScriptError("step %d: must be an object with exactly one key" % i)
@@ -178,10 +319,20 @@ def parse_script(data):
             o = _opts(kind, body, {"timeout": 300})
             o["timeout"] = _num(kind, "timeout", o["timeout"], 1)
         elif kind == "key":
-            o = _opts(kind, body, {"vk": None, "hold": 2.0})
+            o = _opts(kind, body, {"vk": None, "hold": 2.0, "snap": None})
             if o["vk"] is None:
                 raise ScriptError("key: vk is required")
             o["vk"] = parse_vk(o["vk"])
+            o["hold"] = _num(kind, "hold", o["hold"], 0)
+            if o["snap"] is not None and not re.fullmatch(r"[A-Za-z0-9_.-]+", str(o["snap"])):
+                raise ScriptError("key: snap must match [A-Za-z0-9_.-]+")
+        elif kind == "hold_keys":
+            o = _opts(kind, body, {"vks": None, "hold": 1.0})
+            if not isinstance(o["vks"], list) or not 2 <= len(o["vks"]) <= 4:
+                raise ScriptError("hold_keys: vks must be a list of 2 to 4 keys")
+            o["vks"] = [parse_vk(v) for v in o["vks"]]
+            if len(set(o["vks"])) != len(o["vks"]):
+                raise ScriptError("hold_keys: vks must be distinct")
             o["hold"] = _num(kind, "hold", o["hold"], 0)
         elif kind == "sleep":
             o = {"seconds": _num(kind, "seconds", body, 0)}
@@ -195,13 +346,17 @@ def parse_script(data):
             o["seconds"] = _num(kind, "seconds", o["seconds"], 0)
             o["max_mean_delta"] = _num(kind, "max_mean_delta", o["max_mean_delta"], 0)
         elif kind == "key_until":
-            o = _opts(kind, body, {"vk": None, "hold": 2.0, "until": None, "every": 6.0, "max": 10})
+            o = _opts(kind, body, {"vk": None, "hold": 2.0, "until": None, "every": 6.0,
+                                   "max": 10, "snap": None, "snap_after": 0})
             if o["vk"] is None or o["until"] not in SCREENS:
                 raise ScriptError("key_until: vk and until (one of %s) are required" % ", ".join(sorted(SCREENS)))
             o["vk"] = parse_vk(o["vk"])
             o["hold"] = _num(kind, "hold", o["hold"], 0)
             o["every"] = _num(kind, "every", o["every"], 0)
             o["max"] = int(_num(kind, "max", o["max"], 1))
+            o["snap_after"] = _num(kind, "snap_after", o["snap_after"], 0)
+            if o["snap"] is not None and not re.fullmatch(r"[A-Za-z0-9_.-]+", str(o["snap"])):
+                raise ScriptError("key_until: snap must match [A-Za-z0-9_.-]+")
         elif kind == "wait_screen":
             o = _opts(kind, body, {"screen": None, "timeout": 60})
             if o["screen"] not in SCREENS:
@@ -215,8 +370,44 @@ def parse_script(data):
             if not isinstance(body, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", body):
                 raise ScriptError("snap: name must be a simple string")
             o = {"name": body}
+        elif kind == "peek":
+            o = _opts(kind, body, {"name": None, "va": None, "size": 4, "expect": None})
+            if not isinstance(o["name"], str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", o["name"]):
+                raise ScriptError("peek: name must be a simple string")
+            if o["va"] is None:
+                raise ScriptError("peek: va is required")
+            o["va"] = _parse_va(o["va"], "peek")
+            if o["size"] not in (1, 2, 4):
+                raise ScriptError("peek: size must be 1, 2 or 4")
+            _check_guest_range(o["va"], o["size"], "peek")
+            if o["expect"] is not None:
+                if isinstance(o["expect"], bool) or not isinstance(o["expect"], int) or o["expect"] < 0:
+                    raise ScriptError("peek: expect must be a non-negative int")
+        elif kind == "ram_snap":
+            if isinstance(body, str):
+                o = {"name": body, "va": 0, "length": GUEST_RAM_SIZE}
+            else:
+                o = _opts(kind, body, {"name": None, "va": 0, "length": GUEST_RAM_SIZE})
+                o["va"] = _parse_va(o["va"], "ram_snap")
+            if not isinstance(o["name"], str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", o["name"]):
+                raise ScriptError("ram_snap: name must be a simple string")
+            if o["va"] % 0x1000:
+                raise ScriptError("ram_snap: va must be page-aligned")
+            if not isinstance(o["length"], int) or o["length"] <= 0 or o["length"] % 0x1000:
+                raise ScriptError("ram_snap: length must be a positive multiple of 0x1000")
+            if o["length"] > GUEST_RAM_SIZE:
+                raise ScriptError("ram_snap: length must not exceed 0x%X" % GUEST_RAM_SIZE)
+            _check_guest_range(o["va"], o["length"], "ram_snap", floor=0x0)
         else:
             raise ScriptError("step %d: unknown step %r" % (i, kind))
+        if kind == "peek":
+            if o["name"] in peek_names:
+                raise ScriptError("peek: duplicate name %r" % o["name"])
+            peek_names.add(o["name"])
+        if kind == "ram_snap":
+            if o["name"] in snap_names:
+                raise ScriptError("ram_snap: duplicate name %r" % o["name"])
+            snap_names.add(o["name"])
         steps.append((kind, o))
     return steps
 
@@ -256,7 +447,87 @@ def is_menu(a):
     return menu_orange_count(a) >= MENU_MIN_ORANGE * (a.shape[0] * a.shape[1]) / (rw * rh)
 
 
-SCREENS = {"title": is_title, "menu": is_menu}
+# HUD bands, calibrated on every frame of run
+# 20261011-223618-932-keyscript-culling-skate-fixed (160 frames): the spray-can icon
+# reads 368-371 red pixels on gameplay frames and 0 on dialogue pages, fades and menus;
+# the health bar reads 1640 yellow pixels on gameplay frames and 0 elsewhere.
+ICON_BAND = (64, 108, 462, 492)
+BAR_BAND = (42, 58, 398, 516)
+ICON_MIN_RED = 250
+BAR_MIN_YELLOW = 800
+# Dialogue draws a white speech balloon in the upper middle. Cutscene pages also letterbox the
+# frame; in-game NPC talks do not, so the balloon alone is the test. Gameplay never letterboxes
+# (<= 0.17 of the band) and never exceeds 744 balloon pixels (its "?" balloon icon is 122).
+DIALOG_TOP_BAND = (2, 34, 0, 640)
+DIALOG_BOTTOM_BAND = (450, 478, 0, 640)
+BALLOON_BAND = (50, 120, 100, 540)
+DIALOG_BLACK_LEVEL = 24
+DIALOG_MIN_BLACK_FRACTION = 0.95
+BALLOON_WHITE_LEVEL = 220
+BALLOON_MIN_WHITE = 10000
+
+
+def _band(a, band_rect):
+    """The band of `a` (HxWx3) named by (top, bottom, left, right) in 640x480 reference coordinates."""
+    h, w = a.shape[0], a.shape[1]
+    top, bottom, left, right = band_rect
+    rw, rh = TITLE_REF_SIZE
+    return a[int(top * h / rh):int(bottom * h / rh), int(left * w / rw):int(right * w / rw), :3]
+
+
+def hud_icon_red_count(a):
+    """Red pixels of the HUD spray-can icon."""
+    b = _band(a, ICON_BAND)
+    return int(((b[:, :, 0] > 170) & (b[:, :, 1] < 70) & (b[:, :, 2] < 70)).sum())
+
+
+def hud_bar_yellow_count(a):
+    """Yellow pixels of the HUD health bar."""
+    b = _band(a, BAR_BAND)
+    return int(((b[:, :, 0] > 180) & (b[:, :, 1] > 120) & (b[:, :, 2] < 80)).sum())
+
+
+def is_hud(a):
+    """True on an in-game HUD frame: the spray-can icon or the health bar is drawn.
+
+    The OR keeps the detector working if the icon changes colour once cans are held. A talk
+    still draws a partial health bar (830 yellow pixels measured), so a speech balloon wins:
+    without this, `key_until ... hud` would return on the first frame of the dialogue it is
+    meant to wait out."""
+    if is_dialogue(a):
+        return False
+    rw, rh = TITLE_REF_SIZE
+    scale = (a.shape[0] * a.shape[1]) / (rw * rh)
+    return (hud_icon_red_count(a) >= ICON_MIN_RED * scale
+            or hud_bar_yellow_count(a) >= BAR_MIN_YELLOW * scale)
+
+
+def _black_fraction(a, band_rect):
+    """Fraction of pixels in the band whose brightest channel is below DIALOG_BLACK_LEVEL."""
+    b = _band(a, band_rect)
+    dark = (b.max(axis=2) < DIALOG_BLACK_LEVEL)
+    return float(dark.sum()) / float(dark.size) if dark.size else 0.0
+
+
+def dialogue_balloon_white_count(a):
+    """White pixels of the speech balloon band."""
+    b = _band(a, BALLOON_BAND)
+    return int((b > BALLOON_WHITE_LEVEL).all(axis=2).sum())
+
+
+def is_dialogue(a):
+    """True when a speech balloon is on screen, letterboxed or not.
+
+    Cutscene dialogue letterboxes the frame, but an in-game NPC talk does not. Measured on
+    run 20261012-020638-074-keyscript-p001-e1: Gum's talk balloon covers 27,901 white pixels
+    at black fractions of only 0.066/0.007, while the letterboxed intro pages reach 0.998.
+    Requiring the letterbox therefore missed every in-game talk, so `key_until ... dialogue`
+    could never fire on one. Gameplay never exceeds 744 balloon pixels (the "?" icon), so the
+    balloon count alone separates a talk from play."""
+    return dialogue_balloon_white_count(a) >= BALLOON_MIN_WHITE
+
+
+SCREENS = {"title": is_title, "menu": is_menu, "hud": is_hud, "dialogue": is_dialogue}
 
 
 def mean_delta(a, b):
@@ -344,9 +615,10 @@ def count_log(path):
 class Run:
     """The launched game, its frame dump, and the step executor."""
 
-    def __init__(self, out, proc, live, window, deadline, t0, log):
+    def __init__(self, out, proc, live, window, deadline, t0, log, guest=None):
         self.out, self.proc, self.live, self.win = out, proc, live, window
         self.deadline, self.t0, self.log = deadline, t0, log
+        self.guest = guest
         self.hwnd = None
         self.frame = None
         self.frame_id = 0            # increments whenever a new frame is read
@@ -438,10 +710,28 @@ class Run:
             self.log("KEYDOWN vk=0x%02X" % o["vk"])
             try:
                 self.pause(o["hold"])
+                # A talk that only shows while the key is held (Gum's lesson) is gone by the
+                # time a following `snap` runs, so let the press capture it from inside.
+                if o.get("snap"):
+                    self.snap(o["snap"])
             finally:
                 self.win.key(self.hwnd, o["vk"], False)
                 self.log("KEYUP vk=0x%02X" % o["vk"])
-            return {"sent": True, "vk": o["vk"], "hold": o["hold"]}
+            return {"sent": True, "vk": o["vk"], "hold": o["hold"], "snap": o.get("snap")}
+        if kind == "hold_keys":
+            self.wait_for(30, lambda: self.hwnd is not None)
+            if self.hwnd is None:
+                return {"sent": False, "error": "no window"}
+            for vk in o["vks"]:
+                self.win.key(self.hwnd, vk, True)
+                self.log("KEYDOWN vk=0x%02X" % vk)
+            try:
+                self.pause(o["hold"])
+            finally:
+                for vk in reversed(o["vks"]):
+                    self.win.key(self.hwnd, vk, False)
+                    self.log("KEYUP vk=0x%02X" % vk)
+            return {"sent": True, "vks": o["vks"], "hold": o["hold"]}
         if kind == "sleep":
             self.pause(o["seconds"])
             return {}
@@ -479,9 +769,28 @@ class Run:
             return {"satisfied": ok}
         if kind == "key_until":
             test = SCREENS[o["until"]]
+            self.wait_for(30, lambda: self.hwnd is not None)
+            if self.hwnd is None:
+                return {"satisfied": False, "presses": 0, "error": "no window"}
             for n in range(1, o["max"] + 1):
-                self.run_step("key", {"vk": o["vk"], "hold": o["hold"]})
-                if self.wait_for(o["every"], lambda: self.frame is not None and test(self.frame)):
+                # Test while the key is held, then again just after release. A talk that
+                # only shows during the press (Gum's first lesson) is missed entirely by a
+                # release-then-test loop, while a page that persists is caught either way.
+                self.win.key(self.hwnd, o["vk"], True)
+                self.log("KEYDOWN vk=0x%02X" % o["vk"])
+                hit = False
+                try:
+                    hit = self.wait_for(o["hold"], lambda: self.frame is not None and test(self.frame))
+                    if hit and o.get("snap"):
+                        # The balloon appears before its typewriter finishes and the talk ends
+                        # on its own, so a snap taken at detection catches a partial line.
+                        if o.get("snap_after"):
+                            self.pause(o["snap_after"])
+                        self.snap(o["snap"])
+                finally:
+                    self.win.key(self.hwnd, o["vk"], False)
+                    self.log("KEYUP vk=0x%02X" % o["vk"])
+                if hit or self.wait_for(o["every"], lambda: self.frame is not None and test(self.frame)):
                     return {"satisfied": True, "presses": n}
             return {"satisfied": False, "presses": o["max"]}
         if kind == "wait_screen":
@@ -501,7 +810,64 @@ class Run:
         if kind == "snap":
             self.tick()
             return {"file": self.snap(o["name"])}
+        if kind == "peek":
+            return self._peek(o)
+        if kind == "ram_snap":
+            return self._ram_snap(o)
         raise ScriptError("unknown step %r" % kind)
+
+    def _peek(self, o):
+        """Read one guest value and append a lossless record to peeks.jsonl."""
+        rec = {"name": o["name"], "va": "0x%08X" % o["va"], "size": o["size"],
+               "expect": o["expect"], "t_s": round(self.elapsed(), 2)}
+        try:
+            if self.guest is None:
+                raise ScriptError("no guest memory reader")
+            data, unreadable = self.guest.read(o["va"], o["size"])
+            value = int.from_bytes(data, "little")
+            rec.update({"value": value, "value_hex": "0x%X" % value,
+                        "unreadable": bool(unreadable),
+                        "matches": (None if o["expect"] is None
+                                    else (not unreadable and value == o["expect"]))})
+        except (ScriptError, OSError) as e:
+            rec.update({"error": str(e), "matches": False})
+        self.log("PEEK %s va=%s size=%d value=%s expect=%s matches=%s"
+                 % (o["name"], rec["va"], o["size"], rec.get("value_hex", "-"),
+                    o["expect"], rec.get("matches")))
+        self._append_jsonl("peeks.jsonl", rec)
+        return rec
+
+    def _ram_snap(self, o):
+        """Write a guest RAM range to ram/<name>.bin plus a sidecar, and report its hash."""
+        import hashlib
+
+        rec = {"name": o["name"], "va": "0x%08X" % o["va"], "length": o["length"],
+               "t_s": round(self.elapsed(), 2)}
+        if self.guest is None:
+            rec.update({"error": "no guest memory reader"})
+            self._append_jsonl("ram-snaps.jsonl", rec)
+            return rec
+        t0 = time.time()
+        data, unreadable = self.guest.read(o["va"], o["length"])
+        (self.out / "ram").mkdir(exist_ok=True)
+        (self.out / "ram" / (o["name"] + ".bin")).write_bytes(data)
+        rec.update({"sha256": hashlib.sha256(data).hexdigest(),
+                    "unreadable_pages": ["0x%08X" % v for v in unreadable],
+                    "read_s": round(time.time() - t0, 2), "file": o["name"] + ".bin"})
+        (self.out / "ram" / (o["name"] + ".json")).write_text(
+            json.dumps(rec, indent=2) + "\n", encoding="utf-8")
+        self.log("RAM %s va=%s length=%d unreadable=%d" % (o["name"], rec["va"], o["length"],
+                                                          len(unreadable)))
+        self._append_jsonl("ram-snaps.jsonl", rec)
+        out = dict(rec)
+        out["unreadable_pages"] = len(unreadable)
+        return out
+
+    def _append_jsonl(self, name, rec):
+        """Append one JSON line. The file is the lossless record of the deciding event."""
+        with open(self.out / name, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+            f.flush()
 
 
 def load_run_jsrf():
@@ -733,7 +1099,11 @@ def main(argv=None):
                             env=env, stdout=stdout, stderr=subprocess.STDOUT)
     t0 = time.time()
     log("game pid=%d started" % proc.pid)
-    run = Run(out, proc, live, Window(), args.seconds, t0, log)
+    guest = None
+    if any(kind in ("peek", "ram_snap") for kind, _ in steps):
+        # Only open a handle when the script actually reads guest memory.
+        guest = GuestMemory(proc.pid, out / "jsrf_recomp.map")
+    run = Run(out, proc, live, Window(), args.seconds, t0, log, guest)
 
     results = []
     script_ok = True
@@ -773,6 +1143,8 @@ def main(argv=None):
             proc.wait(timeout=30)
         except subprocess.TimeoutExpired:
             pass
+        if guest is not None:
+            guest.close()
         stdout.close()
 
     counts, last_present = count_log(logpath)
