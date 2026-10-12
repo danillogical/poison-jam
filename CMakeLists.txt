@@ -222,6 +222,7 @@ if(BUILD_TESTING)
     add_test(NAME jsrf_key_script_run COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_key_script_run.py)
     add_test(NAME jsrf_guest_ram_search COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_guest_ram_search.py)
     add_test(NAME jsrf_check_graffiti_run COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_check_graffiti_run.py)
+    add_test(NAME jsrf_check_progression_run COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_check_progression_run.py)
     add_test(NAME jsrf_fcmov_clamp COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_fcmov_clamp.py)
     # The NV2A method-inventory generator writes TWO tracked files (this repo's
     # docs/jsrf-nv2a-method-inventory.md and the toolkit's nv2a_method_table.c)

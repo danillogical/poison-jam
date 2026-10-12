@@ -1699,12 +1699,15 @@ signatures, no secret matches, and no blob over 100 MB (largest 3,255,627 bytes)
 
 PUSHED_TO: poison-jam / BRANCH: master / COMMIT: 181697fdc99c210eeacf1449107b3e94fbcf5624 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: success, fast-forward from 5bb8c83; full skate, stop-49 confirmation and final checks close this checkpoint. Toolkit 8e20010 was pushed first and remains synchronized.
 
-### §31.5 Packet 001: the Garage tutorial grants no spray cans, so graffiti is not reachable there (2026-10-12)
+### §31.5 Packet 001: the Garage HUD counter read zero; the tutorial's route to a spray is unestablished (2026-10-12)
 
-**Status: BLOCKED-ROUTE.** No graffiti interaction was produced, and the measurements below
-say why: the measured Garage opening is a talk-and-jump tutorial that issues no spray cans
-and contains no spray target. This is an observation about the measured opening, not a claim
-about the rest of the game.
+**Status: BLOCKED-ROUTE, corrected by Packet 001-FIX.** No graffiti interaction was produced.
+The status was originally recorded as "the Garage issues no spray cans and contains no spray
+target". Codex review classified that as an overclaim and Packet 001-FIX qualifies it here:
+what was actually measured is that the HUD counter read zero on every observed frame, while
+the Garage tutorial was never completed, Gum's `TE002` lesson was never obtained, and the
+stage transition out of the Garage was never attempted. The route to a spray is therefore
+**unestablished**, not established-absent.
 
 **Baseline.** Game `fbb3d9b9807a559aad59a1720c5a5d795ff60abc`, toolkit
 `8e200100949ffb2b253a4ac7884c06a9d71d8713`, both clean. All runs are EXPLORATORY under
@@ -1768,15 +1771,21 @@ have their own synthetic-run suites.
 `scripts/check-graffiti-run.py` decides an acceptance/control pair. Both are committed with
 their tests; they are not specific to graffiti.
 
-**Inference, stated as such.** That the Garage contains no spray target is inferred from
-three independent measurements — the constant zero counter, the tutorial scripts' complete
-absence of a spray lesson, and the first graffiti mission naming Shibuya Terminal — and from
-no graffiti or `Mark` wall file being written in any run. It is not a direct read of stage
-collision or target data. Whether Gum's `TE002` line is even reachable before leaving the
-Garage is unproven: no run obtained her talk.
+**Inference, stated as such, and narrowed by Packet 001-FIX.** The original text inferred that
+the Garage contains no spray target from three measurements — the zero counter, the tutorial
+scripts' absence of a spray lesson, and the first graffiti mission naming Shibuya Terminal.
+Packet 001-FIX review rejects that as overclaimed: the counter is a momentary observation of
+one HUD value, the scripts are one class of asset rather than the stage's collision/target
+data, and the Shibuya mission text says where the *first mission* is, not that the Garage has
+no target. What the evidence supports is that no spray target was *found*, not that none
+exists. Whether Gum's `TE002` line is reachable before leaving the Garage is unproven: no run
+obtained her talk.
 
-**The next blocker is a separate objective.** Reaching the first spray means reaching
-Shibuya Terminal through actual gameplay, which is a different stage transition and a
-different packet. This packet stops here rather than expanding into it.
+**The next step is a prerequisite, not a stage transition.** Packet 001 recorded leaving the
+Garage as the next blocker, but that conclusion rested on the unestablished claim above.
+Packet 001-FIX replaces it: the prerequisite is a reproducible Gum interaction and the
+game-owned progression it causes, with a no-action control. Only if that prerequisite fails,
+or if it succeeds and still yields no spray route, does the stage transition become the
+measured blocker.
 
 PUSHED_TO: poison-jam / BRANCH: master / COMMIT: bc35c02e0adacc8252b9f612d3efa9f4b6cc6134 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: success, fast-forward from fbb3d9b. Validation: CTest 59/59, `just check` all checkers passed, secret audit 0 hits over 216 blobs, no forbidden paths, largest blob 3,255,627 bytes. Toolkit 8e20010 is unchanged and was not pushed.

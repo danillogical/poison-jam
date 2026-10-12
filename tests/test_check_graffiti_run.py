@@ -26,6 +26,7 @@ cgr = load_module()
 
 SNAPS = ("gameplay-start", "cans-collected", "pre-spray", "spray-during", "post-spray",
          "post-spray-late")
+XBE_WORD = 0x852C518B
 
 
 def spray_block(r_vk=True, hold=0.5, control=False):
@@ -33,23 +34,26 @@ def spray_block(r_vk=True, hold=0.5, control=False):
     if control:
         block = [{"step": "sleep", "n": 90, "options": {"seconds": hold}}]
     else:
-        block = [{"step": "key", "n": 90, "options": {"vk": r_vk and 0x33 or 0x5A, "hold": hold}}]
+        block = [{"step": "key", "n": 90,
+                  "options": {"vk": r_vk and 0x33 or 0x5A, "hold": hold, "snap": None}}]
     return block
 
 
 def make_run(root: Path, name, *, cans, tag=None, control=False, spray_present=True,
-             satisfied=True, script_ok=True, snaps=SNAPS, r_vk=0x33):
+             satisfied=True, script_ok=True, snaps=SNAPS, r_vk=0x33, hold=0.5):
+    """A run laid out as key-script-run.py writes it: VAs as ints in result.json, as strings
+    in peeks.jsonl, and a peek step carrying the value it read."""
     d = root / name
     d.mkdir(parents=True)
     steps = [
-        {"step": "peek", "n": 0, "options": {"name": "ctl-xbe-text", "va": "0x00011000",
-                                             "size": 4, "expect": 0x852C518B}},
+        {"step": "peek", "n": 0, "value": XBE_WORD,
+         "options": {"name": "ctl-xbe-text", "va": 0x00011000, "size": 4, "expect": XBE_WORD}},
         {"step": "snap", "n": 1, "options": {"name": "gameplay-start"}},
         {"step": "peek", "n": 2, "options": {"name": "cans-collected", "expect": cans[0]}},
         {"step": "snap", "n": 3, "options": {"name": "cans-collected"}},
         {"step": "peek", "n": 4, "options": {"name": "cans-pre-spray", "expect": cans[1]}},
         {"step": "snap", "n": 5, "options": {"name": "pre-spray"}},
-        *spray_block(r_vk=r_vk, control=control),
+        *spray_block(r_vk=r_vk, hold=hold, control=control),
         {"step": "snap", "n": 6, "options": {"name": "spray-during"}},
         {"step": "snap", "n": 7, "options": {"name": "post-spray"}},
         {"step": "peek", "n": 8, "options": {"name": "cans-post-spray", "expect": cans[2]}},
@@ -66,7 +70,8 @@ def make_run(root: Path, name, *, cans, tag=None, control=False, spray_present=T
             s["satisfied"] = satisfied
     (d / "result.json").write_text(json.dumps({"label": name, "script_ok": script_ok,
                                                "steps": steps}), encoding="utf-8")
-    peeks = [{"name": "ctl-xbe-text", "value": 0x852C518B, "matches": True, "unreadable": False},
+    peeks = [{"name": "ctl-xbe-text", "va": "0x00011000", "size": 4, "expect": XBE_WORD,
+              "value": XBE_WORD, "matches": True, "unreadable": False},
              {"name": "cans-collected", "value": cans[0], "matches": True, "unreadable": False},
              {"name": "cans-pre-spray", "value": cans[1], "matches": True, "unreadable": False},
              {"name": "cans-post-spray", "value": cans[2], "matches": True, "unreadable": False},
@@ -77,9 +82,35 @@ def make_run(root: Path, name, *, cans, tag=None, control=False, spray_present=T
         peeks.append({"name": "tag-post-spray", "value": tag[1], "matches": True,
                       "unreadable": False})
     (d / "peeks.jsonl").write_text("".join(json.dumps(p) + "\n" for p in peeks), encoding="utf-8")
+    (d / "metadata.json").write_text(json.dumps({
+        "exe_sha256": "e" * 64, "xbe_sha256": "x" * 64,
+        "save_root": {"verified": True, "disposable": True}}), encoding="utf-8")
     for n in snaps:
         (d / (n + ".png")).write_bytes(b"\x89PNG\r\n\x1a\n")
     return d
+
+
+def edit_json(path, fn):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    fn(data)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def edit_peeks(d, name, **changes):
+    lines = [json.loads(x) for x in (d / "peeks.jsonl").read_text(encoding="utf-8").splitlines()
+             if x.strip()]
+    for r in lines:
+        if r["name"] == name:
+            r.update(changes)
+    (d / "peeks.jsonl").write_text("".join(json.dumps(r) + "\n" for r in lines), encoding="utf-8")
+
+
+def insert_after_block_action(d, step):
+    """Insert `step` right after the spray-block action (the step numbered 90)."""
+    def fn(r):
+        i = next(i for i, s in enumerate(r["steps"]) if s.get("n") == 90)
+        r["steps"].insert(i + 1, step)
+    edit_json(d / "result.json", fn)
 
 
 class Decision(unittest.TestCase):
@@ -120,23 +151,18 @@ class Decision(unittest.TestCase):
     def test_mismatched_step_outside_spray_block_fails(self):
         a = make_run(self.tmp, "a5", cans=(3, 3, 2, 2))
         c = make_run(self.tmp, "c5", cans=(3, 3, 3, 3), control=True)
-        r = json.loads((c / "result.json").read_text(encoding="utf-8"))
-        r["steps"].insert(0, {"step": "sleep", "n": 999, "options": {"seconds": 1}})
-        (c / "result.json").write_text(json.dumps(r), encoding="utf-8")
+        edit_json(c / "result.json", lambda r: r["steps"].insert(
+            1, {"step": "sleep", "n": 999, "options": {"seconds": 1}}))
         fails, _ = self.decide(a, c)
         self.assertTrue(any("differ outside the spray block" in f for f in fails), fails)
 
     def test_unsatisfied_key_until_fails(self):
         a = make_run(self.tmp, "a6", cans=(3, 3, 2, 2))
-        a2 = json.loads((a / "result.json").read_text(encoding="utf-8"))
-        a2["steps"].insert(1, {"step": "key_until", "n": 998, "satisfied": False,
-                               "options": {"vk": 0x33, "until": "dialogue"}})
-        (a / "result.json").write_text(json.dumps(a2), encoding="utf-8")
         c = make_run(self.tmp, "c6", cans=(3, 3, 3, 3), control=True)
-        c2 = json.loads((c / "result.json").read_text(encoding="utf-8"))
-        c2["steps"].insert(1, {"step": "key_until", "n": 998, "satisfied": False,
-                               "options": {"vk": 0x33, "until": "dialogue"}})
-        (c / "result.json").write_text(json.dumps(c2), encoding="utf-8")
+        for d in (a, c):
+            edit_json(d / "result.json", lambda r: r["steps"].insert(
+                1, {"step": "key_until", "n": 998, "satisfied": False,
+                    "options": {"vk": 0x33, "until": "dialogue"}}))
         fails, _ = self.decide(a, c)
         self.assertTrue(any("not satisfied" in f for f in fails), fails)
 
@@ -159,18 +185,14 @@ class Decision(unittest.TestCase):
 
     def test_unmatched_peek_fails(self):
         a = make_run(self.tmp, "a10", cans=(3, 3, 2, 2))
-        p = (a / "peeks.jsonl").read_text(encoding="utf-8").replace('"matches": true',
-                                                                    '"matches": false', 1)
-        (a / "peeks.jsonl").write_text(p, encoding="utf-8")
+        edit_peeks(a, "cans-collected", matches=False)
         c = make_run(self.tmp, "c10", cans=(3, 3, 3, 3), control=True)
         fails, _ = self.decide(a, c)
         self.assertTrue(any("did not match" in f for f in fails), fails)
 
     def test_unreadable_peek_fails(self):
         a = make_run(self.tmp, "a11", cans=(3, 3, 2, 2))
-        p = (a / "peeks.jsonl").read_text(encoding="utf-8").replace('"unreadable": false',
-                                                                    '"unreadable": true', 1)
-        (a / "peeks.jsonl").write_text(p, encoding="utf-8")
+        edit_peeks(a, "cans-collected", unreadable=True)
         c = make_run(self.tmp, "c11", cans=(3, 3, 3, 3), control=True)
         fails, _ = self.decide(a, c)
         self.assertTrue(any("unreadable page" in f for f in fails), fails)
@@ -178,6 +200,64 @@ class Decision(unittest.TestCase):
     def test_missing_result_is_exit_2(self):
         rc = cgr.main([str(self.tmp / "nope"), str(self.tmp / "nope2")])
         self.assertEqual(rc, 2)
+
+    # F1: the mapping control is validated by value, not by the record's presence.
+    def test_xbe_control_value_zero_fails(self):
+        a = make_run(self.tmp, "a12", cans=(3, 3, 2, 2))
+        c = make_run(self.tmp, "c12", cans=(3, 3, 3, 3), control=True)
+        edit_peeks(a, "ctl-xbe-text", value=0, matches=None)
+        fails, _ = self.decide(a, c)
+        self.assertTrue(any("is not the XBE control 0x852C518B" in f for f in fails), fails)
+
+    def test_xbe_control_wrong_va_fails(self):
+        a = make_run(self.tmp, "a13", cans=(3, 3, 2, 2))
+        c = make_run(self.tmp, "c13", cans=(3, 3, 3, 3), control=True)
+        edit_peeks(a, "ctl-xbe-text", va="0x00012000")
+        edit_json(a / "result.json", lambda r: r["steps"][0]["options"].update(va=0x00012000))
+        fails, _ = self.decide(a, c)
+        self.assertTrue(any("not 0x00011000 size 4" in f for f in fails), fails)
+
+    # F2: every non-action step must match on its options, inside and outside the block.
+    def test_block_sleep_durations_differ_fails(self):
+        a = make_run(self.tmp, "a14", cans=(3, 3, 2, 2))
+        c = make_run(self.tmp, "c14", cans=(3, 3, 3, 3), control=True)
+        insert_after_block_action(a, {"step": "sleep", "n": 91, "options": {"seconds": 1}})
+        insert_after_block_action(c, {"step": "sleep", "n": 91, "options": {"seconds": 30}})
+        fails, _ = self.decide(a, c)
+        self.assertTrue(any("spray block step 91 differs" in f for f in fails), fails)
+
+    def test_block_non_action_key_differs_fails(self):
+        a = make_run(self.tmp, "a15", cans=(3, 3, 2, 2))
+        c = make_run(self.tmp, "c15", cans=(3, 3, 3, 3), control=True)
+        insert_after_block_action(a, {"step": "key", "n": 91,
+                                      "options": {"vk": 0x5A, "hold": 1.0, "snap": None}})
+        insert_after_block_action(c, {"step": "key", "n": 91,
+                                      "options": {"vk": 0x58, "hold": 1.0, "snap": None}})
+        fails, _ = self.decide(a, c)
+        self.assertTrue(any("spray block step" in f and "differs" in f for f in fails), fails)
+
+    def test_non_witness_peek_after_block_differs_fails(self):
+        a = make_run(self.tmp, "a16", cans=(3, 3, 2, 2))
+        c = make_run(self.tmp, "c16", cans=(3, 3, 3, 3), control=True)
+        for d, want in ((a, 1), (c, 2)):
+            edit_json(d / "result.json", lambda r, want=want: r["steps"].append(
+                {"step": "peek", "n": 57,
+                 "options": {"name": "hud-late", "va": 0x2000, "size": 4, "expect": want}}))
+        fails, _ = self.decide(a, c)
+        self.assertTrue(any("differ outside the spray block" in f for f in fails), fails)
+
+    def test_action_duration_mismatch_fails(self):
+        a = make_run(self.tmp, "a17", cans=(3, 3, 2, 2), hold=0.5)
+        c = make_run(self.tmp, "c17", cans=(3, 3, 3, 3), control=True, hold=0.7)
+        fails, _ = self.decide(a, c)
+        self.assertTrue(any("no matching control sleep" in f for f in fails), fails)
+
+    def test_pair_from_different_builds_fails(self):
+        a = make_run(self.tmp, "a18", cans=(3, 3, 2, 2))
+        c = make_run(self.tmp, "c18", cans=(3, 3, 3, 3), control=True)
+        edit_json(c / "metadata.json", lambda m: m.update(exe_sha256="f" * 64))
+        fails, _ = self.decide(a, c)
+        self.assertTrue(any("executables differ" in f for f in fails), fails)
 
 
 if __name__ == "__main__":

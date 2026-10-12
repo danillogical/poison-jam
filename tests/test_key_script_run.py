@@ -6,7 +6,10 @@ from __future__ import annotations
 
 import ctypes
 import importlib.util
+import json
 import sys
+import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -118,7 +121,31 @@ class Detectors(unittest.TestCase):
         self.assertFalse(ksr.is_dialogue(a))
 
     def test_screens_include_the_new_detectors(self):
-        self.assertEqual(set(ksr.SCREENS), {"title", "menu", "hud", "dialogue"})
+        self.assertEqual(set(ksr.SCREENS), {"title", "menu", "hud", "dialogue", "talk_icon"})
+
+    def test_talk_icon_needs_the_blue_balloon(self):
+        """The talk indicator is a blue-faced balloon in its band, on a HUD frame.
+
+        Its threshold is load-bearing: across the archived Packet 001 presses, an icon at
+        press time talked 4/4 times and never failed, while 38 of 45 presses without one
+        opened no talk."""
+        a = hud_frame()
+        self.assertFalse(ksr.is_talk_icon(a))
+        a[140:160, 360:380] = (16, 101, 156)          # 20x20 = 400 blue pixels
+        self.assertTrue(ksr.is_talk_icon(a))
+        a[140:160, 360:380] = (0, 0, 0)
+        a[140:147, 360:380] = (16, 101, 156)          # 7x20 = 140, still above 40
+        self.assertTrue(ksr.is_talk_icon(a))
+        a[140:142, 360:380] = (0, 0, 0)               # 5x20 = 100
+        a[140:141, 360:380] = (16, 101, 156)
+        a[142:147, 360:380] = (0, 0, 0)               # 1x20 = 20, below threshold
+        self.assertFalse(ksr.is_talk_icon(a))
+
+    def test_talk_icon_is_false_on_a_dialogue_frame(self):
+        """A talk covers the band, so the icon must not be claimed while a page is up."""
+        a = talk_frame()
+        a[140:160, 360:380] = (16, 101, 156)
+        self.assertFalse(ksr.is_talk_icon(a))
 
 
 class ParseScript(unittest.TestCase):
@@ -188,6 +215,27 @@ class ParseScript(unittest.TestCase):
         with self.assertRaises(ksr.ScriptError):      # repeats would send two KEYDOWNs
             self.parse([{"hold_keys": {"vks": ["3", "3"], "hold": 1.0}}])
 
+    def test_key_down_and_key_up_parse_and_validate(self):
+        """A key held across steps is what lets a talk be captured while R stays down."""
+        steps = self.parse([{"key_down": "3"}, {"sleep": 1}, {"key_up": {"vk": "3"}}])
+        self.assertEqual([k for k, _ in steps], ["key_down", "sleep", "key_up"])
+        self.assertEqual(steps[0][1]["vk"], 0x33)
+        self.assertEqual(steps[2][1]["vk"], 0x33)
+        for bad, why in (
+                ([{"key_down": "3"}, {"key_down": "3"}, {"key_up": "3"}], "already held"),
+                ([{"key_up": "3"}], "is not held"),
+                ([{"key_down": "3"}, {"key": {"vk": "3", "hold": 1}}], "held by key_down"),
+                ([{"key_down": "3"}, {"key_until": {"vk": "3", "until": "hud"}}],
+                 "held by key_down"),
+                ([{"key_down": "3"}, {"hold_keys": {"vks": ["3", "Z"], "hold": 1}}],
+                 "held by key_down"),
+                ([{"key_down": "3"}], "without key_up"),
+        ):
+            with self.assertRaises(ksr.ScriptError, msg=why):
+                self.parse(bad)
+        with self.assertRaises(ksr.ScriptError):
+            self.parse([{"key_down": "3"}, {"key_up": "3"}, {"key_up": "3"}])
+
     def test_snap_options_parse_and_validate(self):
         """`snap`/`snap_after` let a press capture a talk that only shows while held."""
         steps = self.parse([{"key": {"vk": "3", "hold": 1.2, "snap": "talk-00"}},
@@ -202,6 +250,96 @@ class ParseScript(unittest.TestCase):
             self.parse([{"key": {"vk": "3", "snap": "../escape"}}])
         with self.assertRaises(ksr.ScriptError):
             self.parse([{"key_until": {"vk": "3", "until": "dialogue", "snap": "a/b"}}])
+
+
+class PressTelemetry(unittest.TestCase):
+    """presses.jsonl records the host's own view of a press, with fakes for the live pieces."""
+
+    class FakeWin:
+        def __init__(self):
+            self.calls = []
+
+        def key(self, hwnd, vk, down):
+            self.calls.append((vk, down))
+
+        def is_foreground(self, hwnd):
+            return True
+
+    class FakeProc:
+        def poll(self):
+            return None
+
+    class FakeGuest:
+        def __init__(self, values):
+            self.values = values
+            self.reads = []
+
+        def host_read(self, symbol, size, offset=0):
+            self.reads.append((symbol, size, offset))
+            if symbol == "s_key_down":
+                return self.values.get("key_seen", 0)
+            return self.values.get(symbol, 0)
+
+    def make_run(self, tmp, values):
+        win = self.FakeWin()
+        guest = self.FakeGuest(values)
+        run = ksr.Run(tmp, self.FakeProc(), tmp / "live.bmp", win, 60.0, time.time(),
+                      lambda *a, **k: None, guest)
+        run.hwnd = 1
+        return run, win, guest
+
+    def test_key_down_then_key_up_writes_one_press_record(self):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            values = {"s_present_serial": 100, "s_flips": 7}
+            run, win, guest = self.make_run(tmp, values)
+            # The up-read must see the guest having advanced during the hold.
+            guest.values = values
+            run.run_step("key_down", {"vk": 0x33})
+            values["s_present_serial"] = 105
+            values["key_seen"] = 1
+            run.run_step("key_up", {"vk": 0x33})
+            lines = [json.loads(x) for x in (tmp / "presses.jsonl").read_text().splitlines()
+                     if x.strip()]
+            self.assertEqual(len(lines), 1)
+            rec = lines[0]
+            self.assertEqual(rec["vk"], 0x33)
+            self.assertEqual(rec["key_seen"], 1)
+            self.assertTrue(rec["foreground"])
+            self.assertGreater(rec["presents_up"], rec["presents_down"])
+            self.assertFalse(run.held)
+            self.assertIn((0x33, True), win.calls)
+            self.assertIn((0x33, False), win.calls)
+
+    def test_release_held_posts_keyup_for_an_unclosed_press(self):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            run, win, guest = self.make_run(tmp, {"s_present_serial": 1, "s_flips": 1})
+            run.run_step("key_down", {"vk": "3"})
+            self.assertTrue(run.held)
+            released = run.release_held()
+            self.assertEqual(released, [0x33])
+            self.assertFalse(run.held)
+            self.assertIn((0x33, False), win.calls)
+            rec = json.loads((tmp / "presses.jsonl").read_text().splitlines()[0])
+            self.assertEqual(rec["released_by"], "cleanup")
+
+    def test_telemetry_failure_does_not_stop_the_press(self):
+        """A host read that fails must record the error and let the press proceed."""
+        class Boom:
+            def host_read(self, symbol, size, offset=0):
+                raise ksr.ScriptError("no such symbol")
+
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            win = self.FakeWin()
+            run = ksr.Run(tmp, self.FakeProc(), tmp / "live.bmp", win, 60.0, time.time(),
+                          lambda *a, **k: None, Boom())
+            run.hwnd = 1
+            res = run.run_step("key", {"vk": 0x5A, "hold": 0.0})
+            self.assertTrue(res["sent"])
+            self.assertIn("telemetry_error", res["press"])
+            self.assertIn((0x5A, True), win.calls)
 
 
 class ReadHostPages(unittest.TestCase):

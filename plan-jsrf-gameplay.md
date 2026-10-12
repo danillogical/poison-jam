@@ -71,24 +71,31 @@ This session fetched and verified clean, synchronized game
   truncated recovery owner `0x000FFFD0`, was repaired in `9b0af4e` and returned
   with its ABI verified. No further fatal/ABI blocker was observed in this run.
 
-- **The Garage opening grants no spray cans.** Packet 001 measured the HUD spray-can
-  counter at exactly 140 white pixels ("00") on every gameplay frame of every run,
-  while the tutorial scripts teach only talk, jump and grind; the first graffiti
-  mission is Shibuya Terminal. Graffiti is therefore not reachable in the Garage, and
-  the packet stopped as BLOCKED-ROUTE rather than tuning inputs further (TR §31.5).
+- **The HUD spray-can counter read zero on every observed Garage frame (observation).**
+  Packet 001 measured the counter band at exactly 140 white pixels ("00") on all 1954
+  gameplay frames it captured across its runs, with 296 further frames at 0 that are
+  menus and fades; no non-zero counter value was observed. What that supports is
+  narrower than "the Garage cannot grant cans": the Garage tutorial was never
+  completed, Gum's TE002 lesson was never obtained, and the stage transition out of
+  the Garage was never attempted. No spray target was identified in the Garage's own
+  talk scripts or stage assets, but absence in those files is not a measurement of the
+  stage's collision or target data (TR §31.5).
   The runner gained live guest-memory reads (`peek`/`ram_snap`), a snapshot search and
   an acceptance checker, and two real detector defects were fixed: in-game talks have
-  no letterbox, and `key_until` used to test only after releasing the key.
+  no letterbox, and `key_until` used to test only after releasing the key. The checker
+  is tooling: it compares an acceptance run against a control, and passing it is not
+  by itself evidence that graffiti was painted.
 
 ## Immediate next task
 
-The rendering/movement checkpoint is reached on the exploratory path, and the Garage
-tutorial's limit is now measured: it issues no spray cans, so graffiti needs the
-Shibuya Terminal transition rather than more Garage input tuning (TR §31.5). Reach
-that stage through actual gameplay and complete the first real graffiti interaction
-with a game-owned witness; then extend the automation to audio and save/resume. Keep
-the historical off-screen ref-204 quad and eye-plane-crossing/hardware shadow
-fidelity as explicit coverage limits.
+The rendering/movement checkpoint is reached. Packet 001 measured the Garage's HUD
+counter at zero throughout, but did not complete the Garage tutorial, obtain Gum's
+TE002 lesson, or attempt the stage transition, so the route to a spray is
+unestablished rather than known-absent (TR §31.5). Establish that prerequisite: a
+reproducible Gum interaction and the game-owned progression it causes, with a
+no-action control, before claiming any graffiti or stage-transition blocker. Then
+extend the automation to audio and save/resume. Keep the historical off-screen ref-204
+quad and eye-plane-crossing/hardware shadow fidelity as explicit coverage limits.
 
 ## Working loop
 

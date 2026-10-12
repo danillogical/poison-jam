@@ -14,11 +14,13 @@ KEYUP guarantees a sample lands inside the press.  No key-repeat is sent during 
 
 Script steps (JSON list, run in order):
   {"wait_title": {"timeout": 300}}                          fails the script on timeout
-  {"wait_screen": {"screen": "menu", "timeout": 60}}        wait for a named screen (title, menu)
+  {"wait_screen": {"screen": "menu", "timeout": 60}}        wait for a named screen (title, menu, hud, dialogue, talk_icon)
   {"key_until": {"vk": "RETURN", "until": "menu", "every": 6, "max": 10}}
                                                             press until a named screen appears
   {"key": {"vk": "RETURN", "hold": 2.0, "snap": "n"}}       name from the table, or a number;
                                                             snap captures the frame while held
+  {"key_down": "3"} / {"key_up": "3"}                       hold a key across steps; the guest
+                                                            keeps it until key_up
   {"hold_keys": {"vks": ["3", "Z"], "hold": 2.0}}           hold several keys at once
   {"sleep": 5}
   {"wait_change": {"timeout": 30, "min_mean_delta": 8}}     records, never fails
@@ -32,6 +34,10 @@ Script steps (JSON list, run in order):
 
 `peek` and `ram_snap` read guest memory through ReadProcessMemory and change no guest state;
 they are the only way to observe a guest value in a run, because this driver produces no dump.
+Every press (`key`, `key_until`, `hold_keys`, `key_down`/`key_up`) also appends a record to
+`presses.jsonl`: the host's own view of what happened, read from the executable's `s_key_down`,
+`s_present_serial` and `s_flips` globals and from the window's focus state. It answers whether a
+press reached the guest at all, which a frame cannot.
 
 Output goes to `logs/runs/<YYYYMMDD-HHMMSS-mmm>-keyscript-<label>/`, the same archive tree as
 `run-jsrf.py`: frames, save root, jsrf_run.log, keyscript.log, result.json and a metadata.json
@@ -255,8 +261,13 @@ class GuestMemory:
         self.map_path = Path(map_path)
         self.handle = None
         self.offset = None
+        self._base = None
+        self._symbols = {}
 
-    def _resolve(self):
+    def _open(self):
+        """Open the process and cache its module base. Idempotent."""
+        if self.handle is not None:
+            return
         import ctypes
         import ctypes.wintypes as wt
 
@@ -277,13 +288,54 @@ class GuestMemory:
                                            ctypes.byref(needed), 3):
             raise ScriptError("cannot read guest memory: EnumProcessModules winerror=%d"
                               % ctypes.get_last_error())
-        base = int(arr[0])
+        self._base = int(arr[0])
+
+    def host_address(self, symbol):
+        """The host address of a symbol in the executable, from the map file."""
+        if symbol in self._symbols:
+            return self._symbols[symbol]
+        self._open()
+        here = str(Path(__file__).resolve().parent)
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import jsrf_dump
+        try:
+            addr, preferred = jsrf_dump.map_symbol(str(self.map_path), symbol)
+        except Exception as e:                      # CaptureError or a missing symbol
+            raise ScriptError("host symbol %s: %s" % (symbol, e))
+        value = self._base + (addr - preferred)
+        self._symbols[symbol] = value
+        return value
+
+    def host_read(self, symbol, size, offset=0):
+        """A little-endian unsigned integer read from a host symbol. Observation only."""
+        import ctypes
+        import ctypes.wintypes as wt
+
+        self._open()
+        k32 = ctypes.windll.kernel32
+        k32.ReadProcessMemory.argtypes = [wt.HANDLE, ctypes.c_void_p, ctypes.c_void_p,
+                                          ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
+        buf = (ctypes.c_ubyte * size)()
+        n = ctypes.c_size_t(0)
+        if not k32.ReadProcessMemory(self.handle, ctypes.c_void_p(self.host_address(symbol) + offset),
+                                     buf, size, ctypes.byref(n)):
+            raise ScriptError("host symbol %s unreadable" % symbol)
+        return int.from_bytes(bytes(buf), "little")
+
+    def _resolve(self):
+        import ctypes
+        import ctypes.wintypes as wt
+
+        self._open()
+        k32 = ctypes.windll.kernel32
+        handle = self.handle
         here = str(Path(__file__).resolve().parent)
         if here not in sys.path:
             sys.path.insert(0, here)
         import jsrf_dump
         addr, preferred = jsrf_dump.map_symbol(str(self.map_path), "g_xbox_mem_offset")
-        slot = base + (addr - preferred)
+        slot = self._base + (addr - preferred)
         raw = ctypes.c_int64()
         if not k32.ReadProcessMemory(handle, ctypes.c_void_p(slot), ctypes.byref(raw), 8, None):
             raise ScriptError("cannot read guest memory: g_xbox_mem_offset unreadable")
@@ -311,6 +363,7 @@ def parse_script(data):
         raise ScriptError("script must be a non-empty JSON list of steps")
     steps = []
     peek_names, snap_names = set(), set()
+    held = set()          # vks a key_down opened and no key_up has closed yet
     for i, raw in enumerate(data):
         if not isinstance(raw, dict) or len(raw) != 1:
             raise ScriptError("step %d: must be an object with exactly one key" % i)
@@ -324,6 +377,8 @@ def parse_script(data):
                 raise ScriptError("key: vk is required")
             o["vk"] = parse_vk(o["vk"])
             o["hold"] = _num(kind, "hold", o["hold"], 0)
+            if o["vk"] in held:
+                raise ScriptError("key: vk 0x%02X is held by key_down" % o["vk"])
             if o["snap"] is not None and not re.fullmatch(r"[A-Za-z0-9_.-]+", str(o["snap"])):
                 raise ScriptError("key: snap must match [A-Za-z0-9_.-]+")
         elif kind == "hold_keys":
@@ -333,7 +388,26 @@ def parse_script(data):
             o["vks"] = [parse_vk(v) for v in o["vks"]]
             if len(set(o["vks"])) != len(o["vks"]):
                 raise ScriptError("hold_keys: vks must be distinct")
+            for vk in o["vks"]:
+                if vk in held:
+                    raise ScriptError("hold_keys: vk 0x%02X is held by key_down" % vk)
             o["hold"] = _num(kind, "hold", o["hold"], 0)
+        elif kind == "key_down":
+            o = _opts(kind, body if isinstance(body, dict) else {"vk": body}, {"vk": None})
+            if o["vk"] is None:
+                raise ScriptError("key_down: vk is required")
+            o["vk"] = parse_vk(o["vk"])
+            if o["vk"] in held:
+                raise ScriptError("key_down: vk 0x%02X already held" % o["vk"])
+            held.add(o["vk"])
+        elif kind == "key_up":
+            o = _opts(kind, body if isinstance(body, dict) else {"vk": body}, {"vk": None})
+            if o["vk"] is None:
+                raise ScriptError("key_up: vk is required")
+            o["vk"] = parse_vk(o["vk"])
+            if o["vk"] not in held:
+                raise ScriptError("key_up: vk 0x%02X is not held" % o["vk"])
+            held.discard(o["vk"])
         elif kind == "sleep":
             o = {"seconds": _num(kind, "seconds", body, 0)}
         elif kind == "wait_change":
@@ -355,6 +429,8 @@ def parse_script(data):
             o["every"] = _num(kind, "every", o["every"], 0)
             o["max"] = int(_num(kind, "max", o["max"], 1))
             o["snap_after"] = _num(kind, "snap_after", o["snap_after"], 0)
+            if o["vk"] in held:
+                raise ScriptError("key_until: vk 0x%02X is held by key_down" % o["vk"])
             if o["snap"] is not None and not re.fullmatch(r"[A-Za-z0-9_.-]+", str(o["snap"])):
                 raise ScriptError("key_until: snap must match [A-Za-z0-9_.-]+")
         elif kind == "wait_screen":
@@ -409,6 +485,8 @@ def parse_script(data):
                 raise ScriptError("ram_snap: duplicate name %r" % o["name"])
             snap_names.add(o["name"])
         steps.append((kind, o))
+    if held:
+        raise ScriptError("key_down without key_up: 0x%02X" % sorted(held)[0])
     return steps
 
 
@@ -461,6 +539,11 @@ BAR_MIN_YELLOW = 800
 BALLOON_BAND = (50, 120, 100, 540)
 BALLOON_WHITE_LEVEL = 220
 BALLOON_MIN_WHITE = 10000
+# The "talk available" balloon: a white bubble with a blue face, up and right of the player's
+# head. Calibrated over 3784 archived Packet 001 frames: 3516 count < 10, 18 count 10-39, 250
+# count >= 40. See is_talk_icon for the tally that makes this threshold decisive.
+TALK_ICON_BAND = (120, 230, 330, 430)
+TALK_ICON_MIN_BLUE = 40
 
 
 def _band(a, band_rect):
@@ -508,7 +591,7 @@ def is_dialogue(a):
     """True when a speech balloon is on screen, letterboxed or not.
 
     Cutscene dialogue letterboxes the frame, but an in-game NPC talk does not. Measured on
-    run 20261012-020638-074-keyscript-p001-e1: Gum's talk balloon covers 27,901 white pixels
+    run 20261012-020638-074-keyscript-p001-e1: Corn's TE003 talk balloon covers 27,901 white pixels
     at black fractions of only 0.066/0.007, while the letterboxed intro pages reach 0.998.
     Requiring the letterbox therefore missed every in-game talk, so `key_until ... dialogue`
     could never fire on one.
@@ -523,6 +606,34 @@ def is_dialogue(a):
 
 
 SCREENS = {"title": is_title, "menu": is_menu, "hud": is_hud, "dialogue": is_dialogue}
+SCREENS["talk_icon"] = None  # assigned below, after its helper is defined
+
+
+def talk_icon_blue_count(a):
+    """Blue pixels of the "talk available" balloon above and right of the player's head."""
+    b = _band(a, TALK_ICON_BAND)
+    return int(((b[:, :, 2] > 150) & (b[:, :, 0] < 90)
+                & (b[:, :, 1] > 60) & (b[:, :, 1] < 160)).sum())
+
+
+def is_talk_icon(a):
+    """True when the game is showing its "talk available" balloon.
+
+    Measured over 3784 archived Packet 001 frames with this detector: 3516 count < 10,
+    18 count 10-39 (boot logos and partial fades), 250 count >= 40. That threshold is
+    decisive rather than merely separating classes: across every `key_until` R press from
+    E2 onward, an icon at press time talked 4/4 times and never failed, while 38 of the 45
+    presses without one opened no talk -- including every E16/E17/E18 attempt, whose
+    `post-00-fwd1` frame had shown the icon about a second earlier, before the player rolled
+    out of range. The talk needs proximity; this icon is how the game states it."""
+    if not is_hud(a):
+        return False
+    rw, rh = TITLE_REF_SIZE
+    scale = (a.shape[0] * a.shape[1]) / (rw * rh)
+    return talk_icon_blue_count(a) >= TALK_ICON_MIN_BLUE * scale
+
+
+SCREENS["talk_icon"] = is_talk_icon
 
 
 def mean_delta(a, b):
@@ -581,6 +692,16 @@ class Window:
     def key(self, hwnd, vk, down):
         self.user32.PostMessageA(hwnd, WM_KEYDOWN if down else WM_KEYUP, vk, 0)
 
+    def is_foreground(self, hwnd):
+        """True when `hwnd` is the foreground window.
+
+        WM_KILLFOCUS clears every held key, so a press can be posted and still lost. Recording
+        focus at release time is what tells a delivery failure from a proximity failure."""
+        try:
+            return self.user32.GetForegroundWindow() == hwnd
+        except Exception:
+            return None
+
 
 def game_running():
     """True when a jsrf_recomp.exe process already exists."""
@@ -621,6 +742,24 @@ class Run:
         self.timeline_seq = 0
         self._tl_next = 0.0
         self._tl_mean = None
+        self.held = {}               # vk -> open press record, for key_down/key_up
+
+    def release_held(self):
+        """Post KEYUP for every key a key_down left held. Called before the process dies, so a
+        script that ends mid-hold cannot leave a key stuck in the guest or the host."""
+        released = []
+        for vk, rec in list(self.held.items()):
+            try:
+                if self.hwnd is not None:
+                    self.win.key(self.hwnd, vk, False)
+                    self.log("KEYUP vk=0x%02X (released by cleanup)" % vk)
+            finally:
+                rec["t_up_s"] = round(self.elapsed(), 3)
+                rec["released_by"] = "cleanup"
+                self.press_release(rec, [vk])
+                self.held.pop(vk, None)
+                released.append(vk)
+        return released
 
     def elapsed(self):
         return time.time() - self.t0
@@ -683,6 +822,31 @@ class Run:
             self.tick()
         return False
 
+    def press_probe(self, vk):
+        """Host-side state read just before a KEYDOWN: present serial, flips, key arrival."""
+        out = {"presents_down": None, "flips_down": None}
+        try:
+            out["presents_down"] = self.guest.host_read("s_present_serial", 4)
+            out["flips_down"] = self.guest.host_read("s_flips", 4)
+        except (ScriptError, OSError, AttributeError) as e:
+            out["telemetry_error"] = str(e)
+        return out
+
+    def press_release(self, rec, vks):
+        """Complete a press record just before KEYUP: what the guest did, and whether the
+        window still had focus. WM_KILLFOCUS clears every held key, so a press can be lost
+        while its KEYDOWN was genuinely posted; this is what distinguishes the two."""
+        try:
+            rec["presents_up"] = self.guest.host_read("s_present_serial", 4)
+            rec["flips_up"] = self.guest.host_read("s_flips", 4)
+            rec["key_seen"] = [self.guest.host_read("s_key_down", 1, vk) for vk in vks] \
+                if len(vks) > 1 else self.guest.host_read("s_key_down", 1, vks[0])
+            rec["foreground"] = self.win.is_foreground(self.hwnd)
+        except (ScriptError, OSError, AttributeError) as e:
+            rec["telemetry_error"] = str(e)
+        self._append_jsonl("presses.jsonl", rec)
+        return rec
+
     def run_step(self, kind, o):
         """Execute one step and return its result dict (without timing)."""
         if kind == "wait_title":
@@ -701,32 +865,69 @@ class Run:
             self.wait_for(30, lambda: self.hwnd is not None)
             if self.hwnd is None:
                 return {"sent": False, "error": "no window"}
+            rec = {"step": "key", "vk": o["vk"], "t_down_s": round(self.elapsed(), 3)}
+            rec.update(self.press_probe(o["vk"]))
             self.win.key(self.hwnd, o["vk"], True)
             self.log("KEYDOWN vk=0x%02X" % o["vk"])
             try:
                 self.pause(o["hold"])
-                # A talk that only shows while the key is held (Gum's lesson) is gone by the
-                # time a following `snap` runs, so let the press capture it from inside.
+                # A talk that only shows while the key is held (Corn's TE003 talk) is gone by
+                # the time a following `snap` runs, so let the press capture it from inside.
                 if o.get("snap"):
                     self.snap(o["snap"])
             finally:
                 self.win.key(self.hwnd, o["vk"], False)
                 self.log("KEYUP vk=0x%02X" % o["vk"])
-            return {"sent": True, "vk": o["vk"], "hold": o["hold"], "snap": o.get("snap")}
+            rec["t_up_s"] = round(self.elapsed(), 3)
+            self.press_release(rec, [o["vk"]])
+            return {"sent": True, "vk": o["vk"], "hold": o["hold"], "snap": o.get("snap"),
+                    "press": rec}
         if kind == "hold_keys":
             self.wait_for(30, lambda: self.hwnd is not None)
             if self.hwnd is None:
                 return {"sent": False, "error": "no window"}
+            rec = {"step": "hold_keys", "vks": list(o["vks"]),
+                   "t_down_s": round(self.elapsed(), 3)}
+            rec.update(self.press_probe(o["vks"][0]))
             for vk in o["vks"]:
                 self.win.key(self.hwnd, vk, True)
                 self.log("KEYDOWN vk=0x%02X" % vk)
             try:
                 self.pause(o["hold"])
+                if o.get("snap"):
+                    self.snap(o["snap"])
             finally:
                 for vk in reversed(o["vks"]):
                     self.win.key(self.hwnd, vk, False)
                     self.log("KEYUP vk=0x%02X" % vk)
-            return {"sent": True, "vks": o["vks"], "hold": o["hold"]}
+            rec["t_up_s"] = round(self.elapsed(), 3)
+            self.press_release(rec, list(o["vks"]))
+            return {"sent": True, "vks": o["vks"], "hold": o["hold"], "press": rec}
+        if kind == "key_down":
+            # Hold a key across steps. The talk balloon appears only while R is held, and
+            # whether the guest still has the key at the moment of interest is exactly what
+            # a press-and-release step cannot express.
+            self.wait_for(30, lambda: self.hwnd is not None)
+            if self.hwnd is None:
+                return {"sent": False, "error": "no window"}
+            vk = o["vk"] if isinstance(o["vk"], int) else parse_vk(o["vk"])
+            rec = {"step": "key_down", "vk": vk, "t_down_s": round(self.elapsed(), 3)}
+            rec.update(self.press_probe(vk))
+            self.win.key(self.hwnd, vk, True)
+            self.log("KEYDOWN vk=0x%02X (held)" % vk)
+            self.held[vk] = rec
+            return {"sent": True, "vk": vk}
+        if kind == "key_up":
+            self.wait_for(30, lambda: self.hwnd is not None)
+            if self.hwnd is None:
+                return {"sent": False, "error": "no window"}
+            vk = o["vk"] if isinstance(o["vk"], int) else parse_vk(o["vk"])
+            self.win.key(self.hwnd, vk, False)
+            self.log("KEYUP vk=0x%02X" % vk)
+            rec = self.held.pop(vk, {"step": "key_up", "vk": vk})
+            rec["t_up_s"] = round(self.elapsed(), 3)
+            self.press_release(rec, [vk])
+            return {"sent": True, "vk": vk, "press": rec}
         if kind == "sleep":
             self.pause(o["seconds"])
             return {}
@@ -767,10 +968,14 @@ class Run:
             self.wait_for(30, lambda: self.hwnd is not None)
             if self.hwnd is None:
                 return {"satisfied": False, "presses": 0, "error": "no window"}
+            presses = []
             for n in range(1, o["max"] + 1):
                 # Test while the key is held, then again just after release. A talk that
-                # only shows during the press (Gum's first lesson) is missed entirely by a
+                # only shows during the press (Corn's TE003 talk) is missed entirely by a
                 # release-then-test loop, while a page that persists is caught either way.
+                rec = {"step": "key_until", "vk": o["vk"], "press": n,
+                       "until": o["until"], "t_down_s": round(self.elapsed(), 3)}
+                rec.update(self.press_probe(o["vk"]))
                 self.win.key(self.hwnd, o["vk"], True)
                 self.log("KEYDOWN vk=0x%02X" % o["vk"])
                 hit = False
@@ -785,9 +990,13 @@ class Run:
                 finally:
                     self.win.key(self.hwnd, o["vk"], False)
                     self.log("KEYUP vk=0x%02X" % o["vk"])
+                rec["t_up_s"] = round(self.elapsed(), 3)
+                rec["hit"] = hit
+                self.press_release(rec, [o["vk"]])
+                presses.append(rec)
                 if hit or self.wait_for(o["every"], lambda: self.frame is not None and test(self.frame)):
-                    return {"satisfied": True, "presses": n}
-            return {"satisfied": False, "presses": o["max"]}
+                    return {"satisfied": True, "presses": n, "presses_log": presses}
+            return {"satisfied": False, "presses": o["max"], "presses_log": presses}
         if kind == "wait_screen":
             test = SCREENS[o["screen"]]
             ok = self.wait_for(o["timeout"], lambda: self.frame is not None and test(self.frame))
@@ -1094,10 +1303,9 @@ def main(argv=None):
                             env=env, stdout=stdout, stderr=subprocess.STDOUT)
     t0 = time.time()
     log("game pid=%d started" % proc.pid)
-    guest = None
-    if any(kind in ("peek", "ram_snap") for kind, _ in steps):
-        # Only open a handle when the script actually reads guest memory.
-        guest = GuestMemory(proc.pid, out / "jsrf_recomp.map")
+    # Always open the handle: press telemetry reads host symbols (presents, flips, the key
+    # array) on every run, not just runs with explicit peeks. It stays observation only.
+    guest = GuestMemory(proc.pid, out / "jsrf_recomp.map")
     run = Run(out, proc, live, Window(), args.seconds, t0, log, guest)
 
     results = []
@@ -1131,6 +1339,13 @@ def main(argv=None):
         while run.alive() and not run.expired() and script_ok:
             run.tick()
     finally:
+        # A script that ended mid-hold must not leave a key stuck; release before the kill.
+        try:
+            released = run.release_held()
+            if released:
+                log("released held keys: %s" % ", ".join("0x%02X" % v for v in released))
+        except Exception as e:
+            log("release_held failed: %s" % e)
         if run.alive():
             proc.kill()
             killed = True

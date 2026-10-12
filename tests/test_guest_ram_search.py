@@ -5,11 +5,13 @@ Run directly: python -X utf8 tests/test_guest_ram_search.py
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import shutil
 import struct
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 import numpy as np
@@ -158,6 +160,60 @@ class Search(unittest.TestCase):
     def test_missing_snapshot_is_exit_2(self):
         rc = grs.main(["--run", self.fx.path("e4a"), "--width", "1", "--eq", "nope=0"])
         self.assertEqual(rc, 2)
+
+    def test_range_includes_lo_excludes_hi(self):
+        """--range survives on LO <= v < HI, at the boundary too.
+
+        Values are planted at a known VA so the boundary is unambiguous."""
+        d = Path(self.fx.path("e4a"))
+        raw = bytearray((d / "ram" / "s0-start.bin").read_bytes())
+        raw[0x8000:0x8004] = struct.pack("<I", 7)      # LO: kept
+        raw[0x8004:0x8008] = struct.pack("<I", 8)      # HI: excluded
+        (d / "ram" / "s0-start.bin").write_bytes(bytes(raw))
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = grs.main(["--run", str(d), "--width", "4", "--range", "s0-start=7:8"])
+        self.assertEqual(rc, 0)
+        self.assertIn("0x00008000", buf.getvalue())
+        self.assertNotIn("0x00008004", buf.getvalue())
+
+    def test_find_file_reports_each_occurrence_at_base_plus_offset(self):
+        """A byte string is located by guest VA, so an asset can be tied to live memory."""
+        d = Path(self.fx.path("e4a"))
+        raw = (d / "ram" / "s0-start.bin").read_bytes()
+        needle = b"FINDME-1234"
+        off = 0x1234
+        patched = raw[:off] + needle + raw[off + len(needle):]
+        (d / "ram" / "s0-start.bin").write_bytes(patched)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = grs.main(["--run", str(d), "--find-ascii", "FINDME-1234",
+                           "--snapshot", "s0-start"])
+        self.assertEqual(rc, 0)
+        self.assertIn("0x%08X" % off, buf.getvalue())
+
+    def test_find_file_drops_an_occurrence_on_an_unreadable_page(self):
+        """A hole is zero-filled, so a match touching one must never be reported."""
+        d = Path(self.fx.path("e4c"))
+        sidecar = json.loads((d / "ram" / "s0-start.json").read_text())
+        sidecar["unreadable_pages"] = ["0x00001000"]
+        (d / "ram" / "s0-start.json").write_text(json.dumps(sidecar))
+        raw = (d / "ram" / "s0-start.bin").read_bytes()
+        off = 0x1200                                   # inside the declared-bad page
+        patched = raw[:off] + b"HOLEMARKER" + raw[off + 10:]
+        (d / "ram" / "s0-start.bin").write_bytes(patched)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = grs.main(["--run", str(d), "--find-ascii", "HOLEMARKER",
+                           "--snapshot", "s0-start"])
+        self.assertEqual(rc, 1, "the only occurrence sits on an unreadable page")
+        self.assertEqual(buf.getvalue().strip(), "")
+
+    def test_find_mode_rejects_predicates(self):
+        with self.assertRaises(SystemExit) as cm:
+            grs.main(["--run", self.fx.path("e4a"), "--find-ascii", "x",
+                      "--snapshot", "s0-start", "--eq", "s0-start=0"])
+        self.assertEqual(cm.exception.code, 2)
 
     def test_width_views_share_one_buffer(self):
         """Every width must be a view of one read, not a copy.

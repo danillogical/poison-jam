@@ -28,6 +28,7 @@ from pathlib import Path
 import numpy as np
 
 DTYPES = {1: np.dtype("<u1"), 2: np.dtype("<u2"), 4: np.dtype("<u4")}
+GUEST_PAGE_SIZE = 0x1000
 
 
 class SearchError(Exception):
@@ -92,10 +93,14 @@ def main(argv=None):
     ap.add_argument("--run", action="append", default=[], metavar="DIR", required=True)
     ap.add_argument("--width", action="append", default=[], type=int, choices=(1, 2, 4))
     ap.add_argument("--eq", action="append", default=[], metavar="NAME=INT")
+    ap.add_argument("--range", action="append", default=[], metavar="NAME=LO:HI")
     ap.add_argument("--same", action="append", default=[], metavar="N1,N2[,...]")
     ap.add_argument("--lt", action="append", default=[], metavar="A:B")
     ap.add_argument("--ne", action="append", default=[], metavar="A:B")
     ap.add_argument("--control", action="append", default=[], metavar="DIR:A:B")
+    ap.add_argument("--find-file", metavar="PATH")
+    ap.add_argument("--find-ascii", metavar="TEXT")
+    ap.add_argument("--snapshot", metavar="NAME")
     ap.add_argument("--limit", type=int, default=200)
     args = ap.parse_args(argv)
 
@@ -106,6 +111,13 @@ def main(argv=None):
         if not name or not value:
             ap.error("--eq must be NAME=INT: %r" % spec)
         eq.append((name, int(value, 0)))
+    ranges = []
+    for spec in args.range:
+        name, _, span = spec.partition("=")
+        lo, _, hi = span.partition(":")
+        if not name or not lo or not hi:
+            ap.error("--range must be NAME=LO:HI: %r" % spec)
+        ranges.append((name, int(lo, 0), int(hi, 0)))
     same = [tuple(s.split(",")) for s in args.same]
     lt = [tuple(s.split(":")) for s in args.lt]
     ne = [tuple(s.split(":")) for s in args.ne]
@@ -121,6 +133,7 @@ def main(argv=None):
         controls.append((parts[0], parts[1], parts[2]))
 
     names = [n for n, _ in eq]
+    names += [n for n, _, _ in ranges]
     for group in same:
         names += list(group)
     for a, b in lt + ne:
@@ -130,6 +143,44 @@ def main(argv=None):
         if n not in seen:
             seen.add(n)
             ordered.append(n)
+
+    if args.find_file or args.find_ascii:
+        # Locate a byte string inside one snapshot and report its guest VAs. This is how a
+        # loaded asset (a talk script) is tied to the live address the game reads it from.
+        if args.find_file and args.find_ascii:
+            ap.error("--find-file and --find-ascii are mutually exclusive")
+        if len(args.run) != 1:
+            ap.error("find mode needs exactly one --run")
+        if not args.snapshot:
+            ap.error("find mode needs --snapshot NAME")
+        if eq or ranges or same or lt or ne or controls:
+            ap.error("find mode cannot be combined with predicates")
+        needle = (Path(args.find_file).read_bytes() if args.find_file
+                  else args.find_ascii.encode("utf-8"))
+        if not needle:
+            ap.error("find mode needs a non-empty needle")
+        try:
+            raw, va, unreadable = load_snapshot(args.run[0], args.snapshot)
+        except (SearchError, OSError, KeyError, ValueError) as e:
+            print("error: %s" % e, file=sys.stderr)
+            return 2
+        found = 0
+        start = 0
+        while True:
+            i = raw.find(needle, start)
+            if i < 0:
+                break
+            start = i + 1
+            # Never report an address whose bytes touch an unreadable page: a hole would
+            # zero-fill and could match by accident.
+            pages = {((va + i + k) & ~(GUEST_PAGE_SIZE - 1))
+                     for k in range(0, len(needle), GUEST_PAGE_SIZE)}
+            pages |= {((va + i + len(needle) - 1) & ~(GUEST_PAGE_SIZE - 1))}
+            if pages & unreadable:
+                continue
+            print("0x%08X" % (va + i))
+            found += 1
+        return 0 if found else 1
 
     try:
         runs = [RunSet(d, ordered, widths) for d in args.run]
@@ -165,6 +216,9 @@ def main(argv=None):
                 for name, want in eq:
                     arr, _ = value_of(name)
                     m &= (arr == want)
+                for name, lo, hi in ranges:
+                    arr, _ = value_of(name)
+                    m &= (arr >= lo) & (arr < hi)
                 for group in same:
                     arr0, _ = value_of(group[0])
                     for other in group[1:]:

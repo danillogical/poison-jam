@@ -1,8 +1,12 @@
-"""Decide a Packet 001 graffiti acceptance run against its control run.
+"""Decide a graffiti acceptance run against its control run.
 
-Reads `result.json` and `peeks.jsonl` from each run and applies fixed, named checks. A
-graffiti acceptance is only credible with a control that performs the same inputs except the
-spray: the witness must move in the acceptance runs and stay put in the control.
+Reads `result.json`, `peeks.jsonl` and `metadata.json` from each run and applies fixed, named
+checks. A graffiti acceptance is only credible with a control that performs the same inputs
+except the spray: the witness must move in the acceptance run and stay put in the control.
+
+The verdict decides tooling conditions only -- the mapping control, build identity, input
+equivalence and the declared can-counter witness. A PASS is not proof of painted graffiti
+without the frames and game-owned witness it names.
 
 Usage: python -X utf8 scripts/check-graffiti-run.py <accept-run-dir> <control-run-dir>
 Exit:  0 PASS, 1 FAIL (every failed check is listed), 2 unreadable input.
@@ -13,136 +17,32 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import keyscript_pair as kp  # noqa: E402
+
 REQUIRED_SNAPS = ("gameplay-start", "cans-collected", "pre-spray", "spray-during",
                   "post-spray", "post-spray-late")
 SPRAY_VK = 0x33  # the R trigger, per toolkit src/input/keyboard_pad.c ('3')
+# Peeks whose `expect` may legitimately differ between acceptance and control: the witness.
+GRAFFITI_WITNESS_PEEKS = ("cans-pre-spray", "cans-post-spray", "cans-late",
+                          "tag-pre-spray", "tag-post-spray")
 
-
-class CheckError(Exception):
-    pass
-
-
-def load(run_dir):
-    run_dir = Path(run_dir)
-    result_path = run_dir / "result.json"
-    peeks_path = run_dir / "peeks.jsonl"
-    if not result_path.is_file():
-        raise CheckError("%s: no result.json" % run_dir)
-    result = json.loads(result_path.read_text(encoding="utf-8"))
-    peeks = []
-    if peeks_path.is_file():
-        for line in peeks_path.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                peeks.append(json.loads(line))
-    by_name = {}
-    for p in peeks:
-        by_name[p["name"]] = p
-    return {"dir": run_dir, "result": result, "peeks": peeks, "by_name": by_name}
-
-
-def peek_value(run, name):
-    p = run["by_name"].get(name)
-    if p is None:
-        return None
-    return p.get("value")
-
-
-def steps_of(run):
-    """The (kind, options) sequence of the run, as recorded.
-
-    A peek's `expect` may legitimately differ between acceptance and control for any peek at
-    or after `cans-pre-spray` (the witness is expected to move), so those expects are
-    normalized away and compared by name only."""
-    steps = run["result"].get("steps", [])
-    marker = None
-    for i, s in enumerate(steps):
-        if s.get("step") == "peek" and s.get("options", {}).get("name") == "cans-pre-spray":
-            marker = i
-            break
-    out = []
-    for i, s in enumerate(steps):
-        opts = dict(s.get("options") or {})
-        if (marker is not None and i >= marker and s.get("step") == "peek"):
-            opts.pop("expect", None)
-        out.append((s.get("step"), json.dumps(opts, sort_keys=True)))
-    return out
-
-
-def spray_block_bounds(run):
-    """(start, end) indices of the steps between the pre- and post-spray peeks."""
-    steps = run["result"].get("steps", [])
-    start = end = None
-    for i, s in enumerate(steps):
-        if s.get("step") == "peek" and s.get("options", {}).get("name") == "cans-pre-spray":
-            start = i
-        if s.get("step") == "peek" and s.get("options", {}).get("name") == "cans-post-spray":
-            end = i
-    return start, end
+CheckError = kp.CheckError
+load = kp.load
+peek_value = kp.peek_value
 
 
 def check(accept, control):
     """Return (failures, summary)."""
     fails = []
-
     for label, run in (("acceptance", accept), ("control", control)):
-        r = run["result"]
-        if not r.get("script_ok"):
-            fails.append("%s: script_ok is false" % label)
-        for s in r.get("steps", []):
-            if "satisfied" in s and not s["satisfied"]:
-                fails.append("%s: step %s (%s) not satisfied"
-                             % (label, s.get("n"), s.get("step")))
-        for p in run["peeks"]:
-            if p.get("matches") is False:
-                fails.append("%s: peek %s did not match (value=%s expect=%s)"
-                             % (label, p.get("name"), p.get("value"), p.get("expect")))
-            if p.get("unreadable"):
-                fails.append("%s: peek %s hit an unreadable page" % (label, p.get("name")))
-        if "ctl-xbe-text" not in run["by_name"]:
-            fails.append("%s: no ctl-xbe-text peek" % label)
-
-    # Step sequences must agree outside the spray block; inside it, each acceptance R press
-    # pairs with a control sleep of the same duration.
-    a_steps, c_steps = steps_of(accept), steps_of(control)
-    a_start, a_end = spray_block_bounds(accept)
-    c_start, c_end = spray_block_bounds(control)
-    if a_start is None or a_end is None:
-        fails.append("acceptance: no spray block (cans-pre-spray/cans-post-spray peeks)")
-    if c_start is None or c_end is None:
-        fails.append("control: no spray block (cans-pre-spray/cans-post-spray peeks)")
-    if not fails:
-        outside_a = a_steps[:a_start] + a_steps[a_end + 1:]
-        outside_c = c_steps[:c_start] + c_steps[c_end + 1:]
-        if outside_a != outside_c:
-            for i, (x, y) in enumerate(zip(outside_a, outside_c)):
-                if x != y:
-                    fails.append("steps differ outside the spray block at %d: %s vs %s"
-                                 % (i, x, y))
-                    break
-            else:
-                fails.append("step counts differ outside the spray block: %d vs %d"
-                             % (len(outside_a), len(outside_c)))
-        else:
-            pairs = 0
-            a_block = accept["result"]["steps"][a_start + 1:a_end]
-            c_block = control["result"]["steps"][c_start + 1:c_end]
-            if len(a_block) != len(c_block):
-                fails.append("spray block lengths differ: %d vs %d" % (len(a_block), len(c_block)))
-            else:
-                for x, y in zip(a_block, c_block):
-                    if x.get("step") == "key" and x.get("options", {}).get("vk") == SPRAY_VK:
-                        if not (y.get("step") == "sleep"
-                                and abs(y.get("options", {}).get("seconds", -1)
-                                        - x.get("options", {}).get("hold", -2)) < 1e-6):
-                            fails.append("acceptance R press at step %s has no matching control "
-                                         "sleep of the same duration" % x.get("n"))
-                        pairs += 1
-                    elif x.get("step") != y.get("step"):
-                        fails.append("spray block step %s differs: %s vs %s"
-                                     % (x.get("n"), x.get("step"), y.get("step")))
-            if pairs == 0:
-                fails.append("no R press inside the spray block: nothing distinguishes "
-                             "acceptance from control")
+        fails += kp.check_basics(label, run)
+        fails += kp.check_xbe_control(label, run)
+    fails += kp.check_identity(accept, control)
+    fails += kp.compare_steps(accept, control, start_name="cans-pre-spray",
+                              end_name="cans-post-spray", action_vk=SPRAY_VK,
+                              witness_names=GRAFFITI_WITNESS_PEEKS, action_label="R press",
+                              block_label="spray")
 
     # The witness: cans fall on the spray in acceptance, and never in control.
     a_collected = peek_value(accept, "cans-collected")
