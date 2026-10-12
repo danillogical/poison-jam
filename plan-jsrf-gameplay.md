@@ -79,24 +79,26 @@ This session fetched and verified clean, synchronized game
   spray targets. The talk-script text and `e000.dat` naming Shibuya Terminal are hypotheses
   about where graffiti starts, not measurements (TR §§31.5, 31.6).
 
-- **The Corn talk needs proximity; no talkable NPC is reachable from the Garage spawn (Packet
-  001-FIX).** The game shows a "talk available" balloon above the player; a controlled
-  comparison found that with it present an R press opened a talk 2/2 times, and without it
-  0/8, while every press was demonstrably delivered. The earlier "unreliable R-talk" reading
-  was a detector defect: `is_dialogue` required a letterbox, and the first talk-icon test
-  accepted the blue Dogenzaka Hill banner. Walking the icon-guided loop out from the spawn in
-  all four headings found no second talkable character, so Gum's TE002 lesson was not obtained
-  and no progression witness could be established (TR §31.6).
+- **Gum is resident as data but her talk state never activated on the sampled paths (Packet
+  001-FIX2).** The Garage is Stg00; `Gum.bin`/`Gum.dat` are opened by the game and her model is
+  resident in guest memory, and all four tutorial talk scripts are loaded. Corn's live talk slot
+  is `0` outside his talk and holds his script during it, while Gum's slot holds her TE002
+  pointer constantly — a resident table entry, not an activation state. A ten-burst forward walk
+  moved for seven frames and then stopped against a wall in an alley, and no second talkable NPC
+  was located on the sampled paths. That is "not located on sampled paths", not proven absence:
+  the paths were open-loop wall-clock movement with no camera steering and no guest coordinate
+  read (TR §31.7).
 
 ## Immediate next task
 
-The rendering/movement checkpoint is reached, and Packet 001-FIX measured why the Garage route
-stalled: the talk needs proximity, and no talkable NPC other than Corn is reachable from the
-spawn by open-loop movement in any cardinal heading (TR §31.6). Establish a route to Gum before
-any graffiti work — either from game data naming her position, or by a search that steers on the
-talk icon and the camera rather than wall-clock holds. The zero counter and the script texts are
-not evidence that the Garage lacks cans or targets. Keep the historical off-screen ref-204 quad
-and eye-plane-crossing/hardware shadow fidelity as explicit coverage limits.
+The rendering/movement checkpoint is reached. Packet 001-FIX2 measured why the Garage route
+stalls: the forward corridor from spawn dead-ends against a wall, and no second talkable NPC was
+located on the sampled paths, though Gum's model and her TE002 script are both resident in guest
+memory (TR §31.7). Establish Gum's position and activation from game data, or steer on guest
+camera/position state rather than wall-clock holds, before any graffiti work. The zero counter
+and the script texts are not evidence that the Garage lacks cans or targets. Keep the historical
+off-screen ref-204 quad and eye-plane-crossing/hardware shadow fidelity as explicit coverage
+limits.
 
 ## Working loop
 

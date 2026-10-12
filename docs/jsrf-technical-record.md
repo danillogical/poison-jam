@@ -1790,11 +1790,13 @@ measured blocker.
 
 PUSHED_TO: poison-jam / BRANCH: master / COMMIT: bc35c02e0adacc8252b9f612d3efa9f4b6cc6134 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: success, fast-forward from fbb3d9b. Validation: CTest 59/59, `just check` all checkers passed, secret audit 0 hits over 216 blobs, no forbidden paths, largest blob 3,255,627 bytes. Toolkit 8e20010 is unchanged and was not pushed.
 
-### §31.6 Packet 001-FIX: the Corn talk needs proximity, and no talkable NPC is reachable from the Garage spawn (2026-10-12)
+### §31.6 Packet 001-FIX: the Corn talk needs proximity; Gum not located on the sampled paths (2026-10-12)
 
-**Status: BLOCKED-ROUTE (Gum not reachable), with the Packet 001 variability explained and both
-reviewed checker defects closed.** No graffiti interaction was produced. Gum's `TE002` was not
-obtained. This section supersedes the variability paragraph in §31.5.
+**Status: BLOCKED — Gum not located on the sampled paths, with the Packet 001 variability
+explained and both reviewed checker defects closed.** No graffiti interaction was produced. Gum's
+`TE002` was not obtained. This section supersedes the variability paragraph in §31.5. Its
+reachability wording is narrowed by §31.7: the sampled paths were open-loop wall-clock movement
+with no camera steering and no guest coordinate read, so "not located" is not "not reachable".
 
 **Baseline.** Game `4737c18bece9719d222f50876dfdf93e77efbffe` plus this packet's commits; toolkit
 `8e200100949ffb2b253a4ac7884c06a9d71d8713`, unchanged. EXPLORATORY under
@@ -1876,3 +1878,68 @@ from game data (an event or stage table naming her position) or a scripted searc
 the icon and by camera rather than by wall-clock holds.
 
 PUSHED_TO: poison-jam / BRANCH: master / COMMIT: 2b6df90d40828637a77e313939072109aa522f6e / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: success, fast-forward from 4737c18 over four commits (b1056df, 36d5430, 47baa88, 2b6df90). Validation: CTest 60/60, `just check` all checkers passed, four test files green (18 + 6 + 28 + 12 tests), secret audit 0 hits over 219 blobs, no forbidden paths, largest outgoing blob 139,371 bytes. Toolkit 8e20010 is unchanged and was not pushed.
+
+### §31.7 Packet 001-FIX2: the Garage is Stg00, Gum's model is resident, and her talk state never activates (2026-10-12)
+
+**Status: BLOCKED — Gum's talk state is never activated on the sampled paths, and the reachable
+geometry dead-ends.** No graffiti interaction was produced. This section narrows §31.6's
+reachability wording and adds the data-first NPC/stage evidence that section lacked.
+
+**Baseline.** Game `b0b43c911f3cb58c4a2c9ee77441cdf37851d13e` plus this packet's commit; toolkit
+`8e200100949ffb2b253a4ac7884c06a9d71d8713`, unchanged. EXPLORATORY under
+`docs/jsrf-run-profiles.md`; relied-on ledger IDs **L16, L18, L56–L61**. Run roots are under
+`logs/runs/20261012-*p001fix2-*` and are not committed.
+
+**The pair checkers accepted missing build identity.** `check_identity` compared `exe_sha256`
+and `xbe_sha256` with `!=`, so two runs that both omitted the fields compared equal
+(`None == None`) and a pair from unknown builds passed as comparable. Reproduced by removing
+both fields from both metadata files: `failures=[]`. The fields must now be present and 64 hex
+characters, per run, before the equality comparison runs. Negative controls: both fields
+missing, both malformed, and a genuinely different executable.
+
+**The loaded stage is Stg00, which is the Garage.** The spawn run's log loads `Media\Stage\Stg00_*`
+last, after cache preloads of Stg10/Stg12, and the game's own `Cache00.tbl` associates `Stg00`
+with the Garage's talk events. The "Dogenzaka Hill" banner observed on a survey path is a
+location caption, not the loaded stage. This corrects §31.6's use of that banner as a cue.
+
+**Gum is instantiated as an asset but has no active talk state.** Measured in the V1 run's
+snapshots (`logs/runs/20261012-060300-903-keyscript-p001fix-v1/ram/`):
+
+- `Media\Player\Gum.bin` and `Gum.dat` are opened by the game (23 "Gum" path lines in
+  `jsrf_run.log`), and her model's bytes are resident at two stable guest VAs
+  (`0x020F568C`, `0x023C192C`) in every snapshot.
+- All four tutorial talk scripts are resident: TE002 (Gum) at `0x035611F0`, TE003 (Corn) at
+  `0x021E7440`, TE004 at `0x021E7770`, TE005 at `0x0343B5D6`.
+- **Corn's live talk slot `0x03562D30` is `0` in all eight non-talk snapshots and holds his
+  TE003 text pointer during the talk.** That is a genuine talk-state variable.
+- **Gum's slot `0x03558090` holds her TE002 pointer constantly — in the talk and in all eight
+  non-talk snapshots.** It is a resident table entry, not an activation state.
+
+So Gum is present as loaded data and her lesson is available to the game, but no talk state for
+her was observed. Whether that is because she is placed elsewhere in the stage, is gated behind
+an unmeasured prerequisite, or is simply not an NPC at this point in the tutorial is **not
+established** by this evidence.
+
+**The forward path from spawn dead-ends.** A ten-burst forward walk (`logs/runs/20261012-081405-261-keyscript-p001fix2-past`)
+moved through frames 0–6 (successive frame deltas 30–42) and then stopped dead at frame 7
+(deltas 0.3, 0.1, 0.1) against a wall in a narrow alley. Only the first R press, at Corn's
+position, opened a talk; the nine after it did not. Corn's "?" balloon is visible in the first
+frame and no other NPC appears along the path.
+
+**Corrected reachability claim.** §31.6 said no talkable NPC other than Corn "is reachable from
+the Garage spawn". The supportable statement is narrower: on the sampled paths — four cardinal
+headings and one forward walk-through — no second talkable NPC was located, and the forward path
+terminates against geometry. That does not establish absence or unreachability, because the
+sampled paths are open-loop wall-clock movement with no camera steering and the guest coordinates
+were never read. The plan and §31.6's title are corrected accordingly.
+
+**Not established.** Gum's stage position, her activation condition, whether she is an NPC at
+this tutorial point, whether the Garage grants spray cans or contains a spray target, and whether
+leaving the Garage is gated. The Shibuya Terminal transition was not attempted.
+
+**The next measured blocker.** The forward corridor from spawn ends against a wall, and the
+sampled side headings show no second NPC. The next packet needs either a route read from game
+data (an NPC or event table naming Gum's position, which this packet did not find: `Cache00.tbl`
+is the only Media file referencing TE002/TE003, and the talk table at `0x021E7xxx` is a message
+table, not placement data), or a steering search that reads the guest camera/position rather than
+holding keys for wall-clock durations.
