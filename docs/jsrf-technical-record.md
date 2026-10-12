@@ -1553,3 +1553,83 @@ input and GPU compatibility paths include L16, L18, L47 and L56–L60.
 Characters still appear as dark silhouettes. Shadows remain wrong; the backend still
 uses `D3D11_CULL_NONE`. Missing culling is the next task, while the previously observed
 shadow-volume and alpha-tested-quad batches remain separate unclosed observations.
+
+### §31.3 Face culling restores character outlines and shadow-volume facing (2026-10-11)
+
+The baseline was fetched and verified clean/synchronized: game
+`2e1d6323c274b098184cb26cb065ece6551073e6`, toolkit
+`4e302def8472fe17425bf28de117675a91a550b0`. Toolkit
+`8e200100949ffb2b253a4ac7884c06a9d71d8713` implements the missing backend state;
+the executor and `Nv2aRenderState` already carried NV097 `SET_CULL_FACE_ENABLE`
+(`0x0308`), `SET_CULL_FACE` (`0x039C`) and `SET_FRONT_FACE` (`0x03A0`).
+
+Surface y-down coordinates pass through `1-y*2/h` and the D3D11 viewport back
+to y-down. CW (`0x900`) therefore maps to `FrontCounterClockwise=FALSE`, CCW
+(`0x901`) to `TRUE`. The backend pre-creates cull-none and FRONT/BACK × CW/CCW
+rasterizer states with the existing solid-fill, scissor and depth-clip properties,
+then binds one on every transformed or GPU-program draw. `FRONT_AND_BACK`
+(`0x408`) suppresses the batch without CPU fallback. Clears use cull-none.
+This establishes front-of-eye winding; eye-plane-crossing fidelity was not measured.
+
+Game `5bb8c839a468968aaf0d8785bd6935e2fb694a23` adds deciding WARP pixel fixtures:
+separate red CW and green CCW triangles each cover 276 pixels. Disabled culling
+draws both; FRONT/BACK and winding changes select the expected region; ALL draws
+neither. This runs through fixed-function, GPU vertex-program and CPU-transformed
+program paths, with same-target state alternation and a partial clear under ALL.
+Inverting the production winding selection fails both parity CTests; restoration
+passes both. The tests use the actual executor/backend, not a CPU culling oracle.
+
+`20261011-221941-413-keyscript-culling-skate` uses the unchanged `skate.json`
+and clean game/toolkit revisions above. Its `gameplay-a.png` compared with the
+verified stencil run's `gameplay-a.png`/`gameplay-b.png` shows colored clothing
+and skates with a localized shadow, replacing the dark silhouette. Forward motion,
+both turns, camera following and an airborne jump pose are visible in the named
+pre/post frames. It aborted after the jump on `ABI FAILURE 0x000FFFD0`; backward
+steps were skipped. `script_ok` is false and exit code is `0xC0000409`, despite
+the driver's ICALL/fatal/walk counters being zero. Those counters do not cover
+every ABI abort. Per-frame window dumps improve capture cadence, not guest behavior.
+
+The complete flip-to-flip trace in `20261011-222515-360-keyscript-culling-trace`
+joins submitted methods → executor state → actual `RSGetState`/depth-stencil state
+→ real draw queries, with an end-of-frame marker. On target `0x80084000`:
+
+- Character body draws `1216629..1216632` request BACK/CW; the dark, texture-off
+  3,168-index pass `1216633` requests FRONT/CW and binds D3D11 FRONT/CCW=false.
+  Its interpreter reference diffuse is `(0.08,0,0,1)` and its GPU query reports
+  823 passing samples. The same vertex buffer and slightly expanded reference
+  positions identify the outline pass: drawing both faces previously covered
+  the body. This is a separate culling use from the shadow volumes, not evidence
+  that lighting or texture stages needed a change.
+- Shadow-volume draws `1216699/1216700`, 3,529 strip indices each, request
+  FRONT/CW with stencil INCR, then BACK/CW with DECR, depth GEQUAL and ZERO/ONE
+  blending. Actual D3D11 states are FRONT then BACK, CCW=false, and matching
+  stencil operations. Queries report 811,598 / 760,618 passing samples including
+  overdraw. The following stencil-EQUAL fullscreen darkening draw `1216701`
+  reports 51,300 passing samples. This is the predicted face-separated stencil
+  behavior and agrees with the localized visual shadow. It is not a hardware
+  shadow-fidelity comparison or a direct stencil-value readback.
+- The historical alpha-tested quad (prim 8, ref 204, texture `0x810CB000`) is
+  absent from this complete frame; it is not claimed fixed. Reinspection of the
+  old groundfix trace puts its transformed vertices entirely off screen
+  (x approximately -3124..-1538, y -2496..-910). Valid input positions and zero
+  CPU pixels did not establish an alpha-test defect.
+
+Backend occlusion queries count samples passing depth/stencil, not unique pixels,
+and a zero count cannot disprove z-fail stencil effects. A 50 ms timeout is recorded
+as UNKNOWN; several queries timed out, including body draw `1216629`. Executor
+`cpu_px` is explicitly labelled and is not a GPU-output counter. Program outputs
+in the trace are labelled interpreter references, not GPU shader readbacks;
+constant-writing programs are never replayed for observation.
+
+The runs remain EXPLORATORY (default GPU acknowledgement), relying on L16, L18,
+L47 and L56–L60. Both use verified disposable save roots; original saves/assets
+are preserved. Before the adjacent ABI repair, game CTest passed 56/56 and
+`just check` passed; standalone toolkit CTest passed 20/20 on recheck (the first
+run hit a guest-meter completion-event timing assertion), and its discovered
+Python suite passed 235 tests with two skips and one expected failure. Culling
+mutation/green receipts and representative frame copies are retained in ignored
+`logs/culling-evidence/`.
+
+PUSHED_TO: xboxrecomp / BRANCH: main / COMMIT: 8e200100949ffb2b253a4ac7884c06a9d71d8713 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: success, fast-forward from 4e302de.
+
+PUSHED_TO: poison-jam / BRANCH: master / COMMIT: 5bb8c839a468968aaf0d8785bd6935e2fb694a23 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: success, fast-forward from 2e1d632; rendering evidence and the adjacent gameplay stop are recorded above.
