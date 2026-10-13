@@ -91,15 +91,23 @@ This session fetched and verified clean, synchronized game
 
 ## Immediate next task
 
-The rendering/movement checkpoint is reached; graffiti and Gum's tutorial remain incomplete.
-Packet 001-FIX2's sampled forward route stopped at a wall, and no second talkable NPC was
-located on the sampled paths, though Gum's model and her TE002 script are both resident in guest
-memory (TR §31.7). Asset residency does not establish an active NPC or prove that her talk never
-activates. Establish Gum's position and activation from game data, or steer on guest
-camera/position state rather than wall-clock holds, before any graffiti work. The zero counter
-and the script texts are not evidence that the Garage lacks cans or targets. Keep the historical
-off-screen ref-204 quad and eye-plane-crossing/hardware shadow fidelity as explicit coverage
-limits.
+**Gum's tutorial is reached** (TR §31.9): closed-loop steering took the player to her platform, R
+started her scripted talk, and the progress flags moved `0x70 -> 0x71 -> 0x75/0x78`. The owner made
+playing her tutorial onward a **human test** with a controller (XInput works; TR §31.10).
+
+Next, in order:
+
+1. **The pause menu (stop 52 onward).** Start in gameplay walks a chain of omitted functions
+   (`0x00114080` is open). Classify the 104 fatal stub targets in `config/recovery-unresolved.json`,
+   recover the clean omitted-function entries in one batch, and rerun the pause script until
+   pause, menu navigation and resume work.
+2. **Owner-reported rendering defects:** the wrong background colour behind the Smilebit logo, and
+   flickering dialogue text and speaker name that drop characters.
+3. Then the remaining DoD checks: K17's B-back return to the main menu, the 15-minute soak, and
+   the audio sanity check.
+
+Keep the historical off-screen ref-204 quad and eye-plane-crossing/hardware shadow fidelity as
+explicit coverage limits.
 
 ## Working loop
 

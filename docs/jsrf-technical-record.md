@@ -2006,3 +2006,86 @@ defect become a suspect.
 **Not established.** Whether Gum's box (9 units below the spawn floor) is reachable on foot, and which
 stage owns the Dogenzaka Hill banner (the stage loader isn't resident in gameplay; a snapshot at the
 banner diffed against the spawn would decide it).
+
+### §31.9 Gum's tutorial starts from real input: closed-loop steering reaches her platform (2026-10-12)
+
+**Status: Gum's lesson obtained once, by real input; a reproduction run is recorded below.**
+The player was steered to Gum's platform, pressed R inside her zone, and the game ran her scripted
+talk. The talk ended on her jump lesson: "Let's see how much air you can grab. Press the A button",
+then **GO!** with "Press the A button" on the HUD. EXPLORATORY; ledger IDs **L16, L18, L56–L61**.
+
+**Run:** `logs/runs/20261012-203811-675-keyscript-gum-h/`, script `config/key-scripts/gum-tutorial.json`.
+It is intro.json's 46 steps plus closed-loop `goto` legs:
+
+1. to the rail at (345, 300);
+2. with `jump_when_stuck`, to (180, 290), then (60, 320), then within 45 units of Gum;
+3. then R, then eight A presses.
+
+**Progression witness (bank 0, `0x001EFFB0+0x6A14`; flags-0..3 snapshots).**
+
+| Flag | Spawn | At Gum, before R | After R | After the talk |
+|---|---|---|---|---|
+| `0x70` | 1 | 1 | 0 | 0 |
+| `0x71` | 0 | 0 | **1** | 0 |
+| `0x75`, `0x78` | 0 | 0 | 0 | **1** |
+
+Game mode `obj(9)+0x5C` read `0x1F` (scripted talk) after R. That is the chain §31.8 predicted:
+condition 4 sets `0x71`, which arms event 8, whose end sets the next flags.
+
+**The route, measured from `goto.jsonl` tracks of runs gum-b..gum-h.**
+
+- **Spawn walkway (y 0).** It is bounded to the west by a rail along x ≈ 332. Jumping while
+  pushing into the rail sometimes grinds along it in an unpredictable direction.
+- **Sunken trench (y −30, z ≈ 384–420, x −296..60).** It runs along the north face of Gum's
+  platform. Falling off the walkway's west end (x ≈ −100, z ≈ 457) lands in it. Its west end is
+  closed, and east of x ≈ 60 the floor drops to −60.
+- **Gum's platform (y −9).** gum-h reached it from the trench: the stuck-jump sequence climbed out
+  near (70, −31, 384) and the final leg ended at (−106.6, −9, 332).
+
+The exact climb is not yet characterised; the route depends on where stuck jumps happen.
+
+**Steering additions.** `goto` gained `jump_when_stuck` (a jump toward the target, alternating with
+left and right sidesteps) and a stuck warm-up. Pure helpers `goto_stop_reason` and `stuck_action`
+are tested in `tests/test_key_script_run.py`.
+
+**Owner decision (2026-10-12).** Reaching Gum and playing her tutorial further is a **human test**.
+The next work is XInput support, so the owner can play with a controller.
+
+### §31.10 Controller input and the pause-menu stop chain (2026-10-12)
+
+**XInput (toolkit `e365e04`).** A real Xbox One controller over Bluetooth enumerates as XInput port 0
+on the Windows host. Through `RECOMP_USB=1` it drives the emulated pad that the game's own XAPI reads.
+The owner's session printed `[INPUT] … buttons=0x0010` for Start pressed on the pad.
+
+- The translation is the pure `xbox_PadFromXInput`, covered by the `pad_map` CTest.
+- LB maps to White and RB to Black.
+- Empty ports are polled once a second.
+- The pad's rumble report `[0, 6, left16, right16]` now reaches `XInputSetState`. The XID
+  descriptor's 6-byte output size and `FF FF FF FF` capability mask give the 16-bit layout.
+  `RECOMP_NO_RUMBLE=1` turns rumble off (feature enablement, `docs/jsrf-run-profiles.md`).
+
+**The pause menu froze (owner report).** Start in gameplay died on unresolved indirect calls, one
+after another. Each stop below was found by the pause script (`C:\Users\logic\xbr-mac\pause.json`:
+intro, then Start, Down/Up, Start, move, Start, B).
+
+| Stop | Address | Class | Repair |
+|---|---|---|---|
+| 50 | `0x0005208A` | span cut short: `0x00052050`'s recorded end `0x00052088` stopped before its `jmp eax` mode-handler dispatch and its `pop esi; ret` | end → `0x0005208C`; `0x52050` removed from `KNOWN_OPEN` in `tests/test_recovery_span_ownership.py` |
+| 51 | `0x00079740` | omitted function: after nop padding, absent from the database, a fatal stub | recovered `[0x79740, 0x79B47)`; recursive descent found 8 plain `ret` exits and 9 tail jumps |
+| 51 family | `0x78CC0`, `0x79030`, `0x790D0`, `0x79140` | omitted tail-jump targets of `0x79740` | recovered; `0x78CC0`'s five-entry jump table at `0x79014` stays outside its span |
+| 52 | `0x00114080` | omitted function, same shape | open |
+
+Before the fix, the cut-short `0x00052050` skipped its handler dispatch for **every** mode
+through table `0x001F9C48`, not only the pause. The run
+`20261012-221821-806-keyscript-pause-fix-2` logs `0x00052050` and `0x00079740` returning with
+their ABI verified before stop 52.
+
+**Omitted functions as a class.** `config/recovery-unresolved.json` lists 104 fatal stub targets,
+and stops 51 and 52 share one shape: a function entry after nop padding that the analysis
+database lacks. A batch classification of the 104 is the next repair step.
+
+**Owner-reported rendering defects, not yet investigated.**
+
+1. Before the title, the background behind the Smilebit logo is the wrong colour.
+2. Dialogue text flickers and drops characters. That includes the opening Corn talk and its
+   speaker name "Corn".

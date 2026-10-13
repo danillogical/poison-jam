@@ -38,7 +38,8 @@ Script steps (JSON list, run in order):
                                                             append position, heading yaw and camera yaw of
                                                             guest objects (default 0x2C, the player) to positions.jsonl
   {"goto": {"target": [x, z], "radius": 25, "timeout": 120, "pulse": 0.4, "player_obj": "0x2C",
-            "until": [{"off": "0x300", "eq": 1}], "snap": "name"}}
+            "until": [{"off": "0x300", "eq": 1}], "snap": "name",
+            "jump_when_stuck": false, "jump_hold": 0.3, "jump_follow": 1.0}}
                                                             closed-loop walk: each pulse reads the player's position and
                                                             the camera from guest memory, holds the camera-relative
                                                             numpad keys toward the target (steer_keys) for `pulse`
@@ -47,6 +48,12 @@ Script steps (JSON list, run in order):
                                                             (recorded, never fails the script).  One line per iteration
                                                             goes to goto.jsonl; five pulses that move under 5 units total
                                                             log `stuck` and try one sidestep pulse, alternating sides.
+                                                            Stuck detection arms once the player has moved over 1 unit
+                                                            from the start or 8 pulses have passed.  With
+                                                            `jump_when_stuck`, stuck events cycle jump / sidestep left /
+                                                            jump / sidestep right: a jump holds the steer keys plus Z
+                                                            (VK 0x5A, the A button) for `jump_hold` seconds, then the
+                                                            steer keys alone for `jump_follow` seconds.
 
 `peek` and `ram_snap` read guest memory through ReadProcessMemory and change no guest state;
 they are the only way to observe a guest value in a run, because this driver produces no dump.
@@ -178,6 +185,25 @@ STEER_KEYS = {
 }
 STUCK_PULSES = 5
 STUCK_MIN_MOVE = 5.0
+STUCK_ARM_MOVE = 1.0       # horizontal distance from the goto start that arms stuck detection
+STUCK_ARM_PULSES = 8       # or this many pulses, whichever comes first
+VK_JUMP = 0x5A             # Z on the emulated keyboard pad: the A button
+
+
+def goto_stop_reason(dist, radius, until_results):
+    """Why a goto should stop now: "radius", "until" (a non-empty list, all true), or None."""
+    if dist <= radius:
+        return "radius"
+    if isinstance(until_results, list) and until_results and all(until_results):
+        return "until"
+    return None
+
+
+def stuck_action(n):
+    """Action for the n-th stuck event (0-based) when jumping is enabled."""
+    if n % 2 == 0:
+        return "jump"
+    return "side_left" if n % 4 == 1 else "side_right"
 
 
 def resolve_chain(read_u32, chain):
@@ -582,7 +608,8 @@ def parse_script(data):
             o["objs"] = _parse_obj_ids(kind, o["objs"])
         elif kind == "goto":
             o = _opts(kind, body, {"target": None, "radius": 25, "timeout": 120, "pulse": 0.4,
-                                   "player_obj": PLAYER_OBJ, "until": [], "snap": None})
+                                   "player_obj": PLAYER_OBJ, "until": [], "snap": None,
+                                   "jump_when_stuck": False, "jump_hold": 0.3, "jump_follow": 1.0})
             t = o["target"]
             if (not isinstance(t, list) or len(t) != 2
                     or any(isinstance(v, bool) or not isinstance(v, (int, float))
@@ -593,6 +620,10 @@ def parse_script(data):
             o["timeout"] = _num(kind, "timeout", o["timeout"], 1)
             o["pulse"] = _num(kind, "pulse", o["pulse"], 0.05)
             o["player_obj"] = _parse_obj_ids(kind, [o["player_obj"]])[0]
+            if not isinstance(o["jump_when_stuck"], bool):
+                raise ScriptError("goto: jump_when_stuck must be true or false")
+            o["jump_hold"] = _num(kind, "jump_hold", o["jump_hold"], 0.05)
+            o["jump_follow"] = _num(kind, "jump_follow", o["jump_follow"], 0)
             if not isinstance(o["until"], list):
                 raise ScriptError("goto: until must be a list")
             conds = []
@@ -1246,11 +1277,14 @@ class Run:
         """Walk the player toward o["target"] (x, z) by closed-loop steering; see the docstring."""
         self.wait_for(30, lambda: self.hwnd is not None)
         if self.hwnd is None:
-            return {"satisfied": False, "iterations": 0, "stuck": 0, "error": "no window"}
+            return {"satisfied": False, "iterations": 0, "stuck": 0, "jumps": 0,
+                    "error": "no window"}
         tx, tz = o["target"]
         start = time.time()
-        iterations = stuck = 0
+        iterations = stuck = jumps = 0
         side = 1
+        origin = None              # horizontal position at the first successful read
+        armed = False              # stuck detection waits out the game ignoring early pulses
         hist = []                  # horizontal positions at the last iterations
         reason, last = "timeout", None
         while self.alive() and not self.expired():
@@ -1264,6 +1298,11 @@ class Run:
                 self.pause(o["pulse"])
                 continue
             iterations += 1
+            if origin is None:
+                origin = (pos[0], pos[2])
+            if not armed and (math.hypot(pos[0] - origin[0], pos[2] - origin[1]) > STUCK_ARM_MOVE
+                              or iterations > STUCK_ARM_PULSES):
+                armed = True
             dx, dz = tx - pos[0], tz - pos[2]
             dist = math.hypot(dx, dz)
             cam_yaw = math.atan2(cam[0], cam[2])
@@ -1273,10 +1312,8 @@ class Run:
             rec = {"t_s": round(self.elapsed(), 2), "pos": [round(v, 2) for v in pos],
                    "cam_yaw_deg": round(math.degrees(cam_yaw), 1),
                    "rel_deg": round(math.degrees(rel), 1), "dist": round(dist, 2)}
-            if dist <= o["radius"]:
-                reason = "radius"
-            elif o["until"] and all(v == c["eq"] for v, c in zip(untils, o["until"])):
-                reason = "until"
+            reason = goto_stop_reason(
+                dist, o["radius"], [v == c["eq"] for v, c in zip(untils, o["until"])]) or "timeout"
             if reason != "timeout":
                 rec.update({"keys": [], "stop": reason})
                 self._append_jsonl("goto.jsonl", rec)
@@ -1287,21 +1324,46 @@ class Run:
                 break
             hist = (hist + [(pos[0], pos[2])])[-(STUCK_PULSES + 1):]
             moved = sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(hist, hist[1:]))
-            if len(hist) == STUCK_PULSES + 1 and moved < STUCK_MIN_MOVE:
+            jump = False
+            if armed and len(hist) == STUCK_PULSES + 1 and moved < STUCK_MIN_MOVE:
+                action = stuck_action(stuck) if o["jump_when_stuck"] else "sidestep"
                 stuck += 1
-                bearing = math.atan2(dx, dz) + side * math.pi / 2
-                keys = steer_keys(math.sin(bearing), math.cos(bearing), cam[0], cam[2])
-                rec.update({"stuck": True, "stuck_n": stuck, "moved": round(moved, 2),
-                            "sidestep": side, "keys": list(keys)})
-                self.log("goto stuck #%d (moved %.2f over %d pulses); sidestep %+d"
-                         % (stuck, moved, STUCK_PULSES, side))
-                side = -side
+                if action == "jump":
+                    jump = True
+                    jumps += 1
+                    keys = steer_keys(dx, dz, cam[0], cam[2])
+                    rec.update({"stuck": True, "stuck_n": stuck, "moved": round(moved, 2),
+                                "action": "jump", "keys": list(keys)})
+                    self.log("goto stuck #%d (moved %.2f over %d pulses); jump"
+                             % (stuck, moved, STUCK_PULSES))
+                else:
+                    if action == "side_left":
+                        side = -1
+                    elif action == "side_right":
+                        side = 1
+                    bearing = math.atan2(dx, dz) + side * math.pi / 2
+                    keys = steer_keys(math.sin(bearing), math.cos(bearing), cam[0], cam[2])
+                    rec.update({"stuck": True, "stuck_n": stuck, "moved": round(moved, 2),
+                                "sidestep": side, "action": action, "keys": list(keys)})
+                    self.log("goto stuck #%d (moved %.2f over %d pulses); sidestep %+d"
+                             % (stuck, moved, STUCK_PULSES, side))
+                    if action == "sidestep":
+                        side = -side
                 hist = []
             else:
                 keys = steer_keys(dx, dz, cam[0], cam[2])
                 rec["keys"] = list(keys)
             self._append_jsonl("goto.jsonl", rec)
-            if keys:
+            if jump:
+                self.press_keys("goto", list(keys) + [VK_JUMP], o["jump_hold"],
+                                {"dist": rec["dist"], "action": "jump"})
+                if o["jump_follow"] > 0:
+                    if keys:
+                        self.press_keys("goto", keys, o["jump_follow"],
+                                        {"dist": rec["dist"], "action": "jump_follow"})
+                    else:
+                        self.pause(o["jump_follow"])
+            elif keys:
                 self.press_keys("goto", keys, o["pulse"], {"dist": rec["dist"]})
             else:
                 self.pause(o["pulse"])
@@ -1312,17 +1374,17 @@ class Run:
             last = {"position": [round(v, 2) for v in pos],
                     "distance": round(math.hypot(tx - pos[0], tz - pos[2]), 2),
                     "until_values": untils}
-            if reason == "timeout" and last["distance"] <= o["radius"]:
-                reason = "radius"
-            elif reason == "timeout" and o["until"] and all(
-                    v == c["eq"] for v, c in zip(untils, o["until"])):
-                reason = "until"
+            if reason == "timeout":
+                reason = goto_stop_reason(
+                    last["distance"], o["radius"],
+                    [v == c["eq"] for v, c in zip(untils, o["until"])]) or "timeout"
         except ScriptError:
             pass
         snap = self.snap(o["snap"]) if o.get("snap") else None
         res = {"satisfied": reason != "timeout", "reason": reason, "iterations": iterations,
-               "stuck": stuck, "final": last, "snap": snap}
-        self.log("goto %s iterations=%d stuck=%d final=%s" % (reason, iterations, stuck, last))
+               "stuck": stuck, "jumps": jumps, "final": last, "snap": snap}
+        self.log("goto %s iterations=%d stuck=%d jumps=%d final=%s"
+                 % (reason, iterations, stuck, jumps, last))
         return res
 
     def _log_pos(self, o):

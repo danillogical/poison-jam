@@ -1,0 +1,452 @@
+[
+ {
+  "wait_title": {
+   "timeout": 300
+  }
+ },
+ {
+  "key_until": {
+   "vk": "RETURN",
+   "hold": 2.0,
+   "until": "menu",
+   "every": 6,
+   "max": 20
+  }
+ },
+ {
+  "sleep": 3
+ },
+ {
+  "snap": "main-menu"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.5
+  }
+ },
+ {
+  "wait_change": {
+   "timeout": 60,
+   "min_mean_delta": 8
+  }
+ },
+ {
+  "sleep": 30
+ },
+ {
+  "snap": "intro-00"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-01"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-02"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-03"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-04"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-05"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-06"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-07"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-08"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-09"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-10"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-11"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 12
+ },
+ {
+  "snap": "intro-12"
+ },
+ {
+  "sleep": 5
+ },
+ {
+  "wait_screen": {
+   "screen": "hud",
+   "timeout": 60
+  }
+ },
+ {
+  "log_pos": {
+   "name": "spawn",
+   "objs": [
+    "0x2C",
+    "0x2E"
+   ]
+  }
+ },
+ {
+  "ram_snap": {
+   "name": "flags-0",
+   "va": "0x1EF000",
+   "length": 32768
+  }
+ },
+ {
+  "goto": {
+   "target": [
+    345,
+    300
+   ],
+   "radius": 15,
+   "timeout": 90
+  }
+ },
+ {
+  "log_pos": "rail"
+ },
+ {
+  "goto": {
+   "target": [
+    180,
+    290
+   ],
+   "radius": 20,
+   "timeout": 120,
+   "jump_when_stuck": true,
+   "snap": "plaza"
+  }
+ },
+ {
+  "log_pos": "plaza"
+ },
+ {
+  "goto": {
+   "target": [
+    60,
+    320
+   ],
+   "radius": 20,
+   "timeout": 120,
+   "jump_when_stuck": true,
+   "snap": "mid"
+  }
+ },
+ {
+  "log_pos": "mid"
+ },
+ {
+  "goto": {
+   "target": [
+    -140,
+    330
+   ],
+   "radius": 45,
+   "timeout": 150,
+   "jump_when_stuck": true,
+   "snap": "gum"
+  }
+ },
+ {
+  "log_pos": "gum"
+ },
+ {
+  "log_pos": {
+   "name": "at-gum",
+   "objs": [
+    "0x2C",
+    "0x2E"
+   ]
+  }
+ },
+ {
+  "peek": {
+   "name": "avail-1",
+   "chain": [
+    "0x22FCE0",
+    "0x148",
+    "0x300"
+   ]
+  }
+ },
+ {
+  "peek": {
+   "name": "zone-1",
+   "chain": [
+    "0x22FCE0",
+    "0x148",
+    "0x2FC"
+   ]
+  }
+ },
+ {
+  "snap": "at-gum"
+ },
+ {
+  "ram_snap": {
+   "name": "flags-1",
+   "va": "0x1EF000",
+   "length": 32768
+  }
+ },
+ {
+  "key": {
+   "vk": "3",
+   "hold": 1.2,
+   "snap": "r-held"
+  }
+ },
+ {
+  "sleep": 2
+ },
+ {
+  "snap": "r-after"
+ },
+ {
+  "peek": {
+   "name": "mode-2",
+   "chain": [
+    "0x22FCE0",
+    "0xBC",
+    "0x5C"
+   ]
+  }
+ },
+ {
+  "ram_snap": {
+   "name": "flags-2",
+   "va": "0x1EF000",
+   "length": 32768
+  }
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 3
+ },
+ {
+  "snap": "talk-00"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 3
+ },
+ {
+  "snap": "talk-01"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 3
+ },
+ {
+  "snap": "talk-02"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 3
+ },
+ {
+  "snap": "talk-03"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 3
+ },
+ {
+  "snap": "talk-04"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 3
+ },
+ {
+  "snap": "talk-05"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 3
+ },
+ {
+  "snap": "talk-06"
+ },
+ {
+  "key": {
+   "vk": "Z",
+   "hold": 1.0
+  }
+ },
+ {
+  "sleep": 3
+ },
+ {
+  "snap": "talk-07"
+ },
+ {
+  "peek": {
+   "name": "mode-3",
+   "chain": [
+    "0x22FCE0",
+    "0xBC",
+    "0x5C"
+   ]
+  }
+ },
+ {
+  "ram_snap": {
+   "name": "flags-3",
+   "va": "0x1EF000",
+   "length": 32768
+  }
+ },
+ {
+  "log_pos": "end"
+ }
+]

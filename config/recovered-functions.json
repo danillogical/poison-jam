@@ -3443,10 +3443,10 @@
  },
  {
   "start": "0x00052050",
-  "end": "0x00052088",
+  "end": "0x0005208C",
   "section": ".text",
   "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00052640 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00052050..0x00052088, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00052640 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00052050..0x00052088, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. End corrected 2026-10-12 from 0x00052088 to 0x0005208C (stop 50): the tightened end cut off the tail jmp eax at 0x00052088 and the pop esi; ret at 0x0005208A, so every mode handler dispatched through 0x001F9C48 was skipped and the zero-entry exit became an unresolved indirect call to 0x0005208A when the pause menu opened."
  },
  {
   "start": "0x00052090",
@@ -4610,6 +4610,46 @@
   "section": ".text",
   "kind": "routine",
   "evidence": "A method of the function-pointer table at 0x001CCC58. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_00078B50 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000789F0 at sub_00078B50. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x000789F0..0x00078B50, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00078CC0",
+  "end": "0x00079014",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (stop 51 family, the pause menu): a tail-jump target of the recovered 0x00079740 that the analysis database lacks and recovery-unresolved.json listed as a fatal stub once 0x00079740 was lifted; it follows nop padding after the previous function's ret. Recursive descent from the entry plus the five switch arms 0x78DDD, 0x78E33, 0x78E82, 0x78F58, 0x78F8C (`cmp eax, 4; ja 0x78ffe; jmp [eax*4+0x79014]`): 241 instructions, extent 0x00078CC0..0x00079014, plain ret exits at 0x78D26, 0x78DAD and 0x79013, so stack_args 0. The five-entry jump table is data at 0x00079014 and stays outside the span, as for stop 43. SEH frame set up from fs:[0]. No database entry inside the extent.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00079030",
+  "end": "0x000790C2",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (stop 51 family, the pause menu): a tail-jump target of the recovered 0x00079740 that the analysis database lacks and recovery-unresolved.json listed as a fatal stub once 0x00079740 was lifted; it follows nop padding after the previous function's ret. Recursive descent: 51 instructions, extent 0x00079030..0x000790C2, plain ret exits at 0x79082 and 0x790C1, so stack_args 0; no tail jumps; no database entry inside.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x000790D0",
+  "end": "0x00079138",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (stop 51 family, the pause menu): a tail-jump target of the recovered 0x00079740 that the analysis database lacks and recovery-unresolved.json listed as a fatal stub once 0x00079740 was lifted; it follows nop padding after the previous function's ret. Recursive descent: 33 instructions, extent 0x000790D0..0x00079138, one plain ret at 0x79137, so stack_args 0; no tail jumps; no database entry inside.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00079140",
+  "end": "0x000791B4",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (stop 51 family, the pause menu): a tail-jump target of the recovered 0x00079740 that the analysis database lacks and recovery-unresolved.json listed as a fatal stub once 0x00079740 was lifted; it follows nop padding after the previous function's ret. Recursive descent: 37 instructions, extent 0x00079140..0x000791B4, one plain ret at 0x791B3, so stack_args 0; no tail jumps; no database entry inside.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00079740",
+  "end": "0x00079B47",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (stop 51, the pause menu): 0x00079740 follows nop padding after the ret at 0x0007973A, is absent from the analysis database, and was a fatal unresolved stub, reached by an indirect call from the 0x000789F0 family when the pause menu opens (run 20261012-214658-151-keyscript-pause-fix). Recursive descent from the entry: 291 instructions, extent 0x00079740..0x00079B47, eight plain ret exits (0x797CD, 0x79849, 0x798BA, 0x79937, 0x799A8, 0x79A25, 0x79A96, 0x79B13), so stack_args 0; nine tail jumps to eight sibling entries 0x78CC0, 0x79030, 0x790D0, 0x79140, 0x79360, 0x79440, 0x79520, 0x79630; no database entry inside the extent; next entry 0x00079B50 after nop padding.",
   "stack_args": 0
  },
  {

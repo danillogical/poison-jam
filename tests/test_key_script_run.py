@@ -475,6 +475,87 @@ class ParseChainPeekGotoLogPos(unittest.TestCase):
             self.parse([{"log_pos": {"name": "n", "bogus": 1}}])
 
 
+class GotoStopReason(unittest.TestCase):
+    def test_radius_is_inclusive(self):
+        self.assertEqual(ksr.goto_stop_reason(25, 25, []), "radius")
+        self.assertEqual(ksr.goto_stop_reason(24.9, 25, []), "radius")
+        self.assertIsNone(ksr.goto_stop_reason(25.1, 25, []))
+
+    def test_radius_wins_over_until(self):
+        self.assertEqual(ksr.goto_stop_reason(1, 25, [True, True]), "radius")
+        self.assertEqual(ksr.goto_stop_reason(25, 25, [True]), "radius")
+
+    def test_until_all_truthy_stops(self):
+        self.assertEqual(ksr.goto_stop_reason(100, 25, [True]), "until")
+        self.assertEqual(ksr.goto_stop_reason(100, 25, [True, 1, True]), "until")
+
+    def test_until_partial_does_not_stop(self):
+        self.assertIsNone(ksr.goto_stop_reason(100, 25, [True, False]))
+        self.assertIsNone(ksr.goto_stop_reason(100, 25, [False]))
+        self.assertIsNone(ksr.goto_stop_reason(100, 25, [True, 0]))
+
+    def test_empty_until_never_stops(self):
+        self.assertIsNone(ksr.goto_stop_reason(100, 25, []))
+
+
+class StuckAction(unittest.TestCase):
+    def test_first_ten_events(self):
+        want = ["jump", "side_left", "jump", "side_right", "jump",
+                "side_left", "jump", "side_right", "jump", "side_left"]
+        self.assertEqual([ksr.stuck_action(n) for n in range(10)], want)
+
+    def test_large_n(self):
+        self.assertEqual(ksr.stuck_action(1000), "jump")
+        self.assertEqual(ksr.stuck_action(1001), "side_left")
+        self.assertEqual(ksr.stuck_action(1003), "side_right")
+        self.assertEqual(ksr.stuck_action(10 ** 9 + 1), "side_left")
+        self.assertEqual(ksr.stuck_action(10 ** 9 + 3), "side_right")
+
+
+class GotoJumpOptions(unittest.TestCase):
+    def goto(self, **kw):
+        body = {"target": [0, 0]}
+        body.update(kw)
+        return ksr.parse_script([{"goto": body}])[0][1]
+
+    def test_vk_jump_is_z(self):
+        self.assertEqual(ksr.VK_JUMP, 0x5A)
+
+    def test_defaults(self):
+        o = self.goto()
+        self.assertIs(o["jump_when_stuck"], False)
+        self.assertEqual(o["jump_hold"], 0.3)
+        self.assertEqual(o["jump_follow"], 1.0)
+        self.assertEqual(o["radius"], 25)
+        self.assertEqual(o["timeout"], 120)
+        self.assertEqual(o["pulse"], 0.4)
+
+    def test_jump_when_stuck_must_be_bool(self):
+        self.assertIs(self.goto(jump_when_stuck=True)["jump_when_stuck"], True)
+        self.assertIs(self.goto(jump_when_stuck=False)["jump_when_stuck"], False)
+        for bad in (1, 0, "yes", None):
+            with self.assertRaises(ksr.ScriptError):
+                self.goto(jump_when_stuck=bad)
+
+    def test_jump_hold_bounds(self):
+        self.assertEqual(self.goto(jump_hold=0.05)["jump_hold"], 0.05)
+        self.assertEqual(self.goto(jump_hold=2)["jump_hold"], 2.0)
+        for bad in (0.01, -1, "0.3", True):
+            with self.assertRaises(ksr.ScriptError):
+                self.goto(jump_hold=bad)
+
+    def test_jump_follow_bounds(self):
+        self.assertEqual(self.goto(jump_follow=0)["jump_follow"], 0.0)
+        self.assertEqual(self.goto(jump_follow=2.5)["jump_follow"], 2.5)
+        for bad in (-0.1, -1, "1", True):
+            with self.assertRaises(ksr.ScriptError):
+                self.goto(jump_follow=bad)
+
+    def test_unknown_option_still_rejected(self):
+        with self.assertRaises(ksr.ScriptError):
+            self.goto(jump_everywhere=True)
+
+
 class PressTelemetry(unittest.TestCase):
     """presses.jsonl records the host's own view of a press, with fakes for the live pieces."""
 
