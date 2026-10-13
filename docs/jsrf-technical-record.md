@@ -1947,3 +1947,62 @@ table, not placement data), or a steering search that reads the guest camera/pos
 holding keys for wall-clock durations.
 
 PUSHED_TO: poison-jam / BRANCH: master / COMMIT: 4f0d05b51e12bd7a06a102266e30ac1f3665f356 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: success, fast-forward from b0b43c9 over two commits (45c27aa, 4f0d05b). Validation: CTest 60/60, `just check` all checkers passed, four test files green (20 + 6 + 28 + 12 tests), secret audit 0 hits over 219 blobs, no forbidden paths, largest outgoing blob 144,676 bytes. Toolkit 8e20010 is unchanged and was not pushed.
+
+### §31.8 Gum located from guest state: a live NPC waiting in her own talk zone (2026-10-12)
+
+**Status: LOCATED. Gum is a live, talkable NPC, and no recomp defect is implicated.** The tutorial is
+waiting for the player to enter Gum's talk zone and press R. No earlier run entered that zone; §31.6's
+open-loop walks passed outside it. This corrects §31.7's open question about her activation state.
+
+**Baseline.** Game `ee14665`, toolkit `8e20010`, both clean. EXPLORATORY; ledger IDs **L16, L18,
+L56–L61**. New run `logs/runs/20261012-164534-838-keyscript-gum-a/` (10 full RAM snapshots across rest,
+forward, turn and L-trigger moves); `20261012-060300-903-keyscript-p001fix-v1` re-analysed.
+
+**Guest layout (measured).**
+
+- `obj(id)` = `[[0x0022FCE0] + 0x98 + 4*id]` (7668 slots, read by `0x128C0`). These are heap pointers,
+  so they move between runs.
+- Player, Corn and Gum are character objects `obj(0x2C/0x2D/0x2E)` (vtable `0x1CCFF8`), each tied to
+  its resident model file through `+0x2A4`/`+0xC90`.
+- Character fields:
+  - position `+0xCA4`, 3×f32 with y up;
+  - heading `+0x34C` = (sin θ, 0, cos θ), with θ the low 16 bits of `+0xCC0`;
+  - camera eye `+0x328` and forward `+0x334`;
+  - state `+0xE50`: 1 for the player, `0x18` for an idle NPC, `0x19` for an NPC talking.
+- The left stick is camera-relative, and the L trigger snaps the camera to the heading.
+- NPC controllers are `obj(0xC+n)` (vtable `0x1CD570`): Corn `0x11`, Gum `0x12`. Talk sub-state
+  `+0x8B4`: 8 idle, 9 talking.
+- Talk zones are a list at `[0x0020C754]` (next pointer `+0x18C`), each a 6-plane box at `+0x50`.
+- On the player: `+0x300` = 1 means inside a zone (the game's talk icon), and `+0x2FC` is that
+  zone's id.
+- Game mode is `obj(9)+0x5C` (`0xF` free roam, `0x1E`/`0x1F` scripted talk).
+- Progress flags are bit banks in the static object `0x001EFFB0`, encoded per `0x39B50`.
+- Corn's "talk slot" `0x03562D30` of §31.7 is the talk-UI object `obj(0x1DDE)+0x1A0`.
+- The live mission data is `Media\Mission\mssn0101.bin`.
+
+**Positions.**
+
+| Who | Position (x, y, z) | Talk zone (x, z) |
+|---|---|---|
+| Player at spawn | (407.97, 0, 489.92), heading 286.9° | — |
+| Corn | (243.37, 0, 540), 172 units ahead of the spawn | zone 6: x 194..293, z 490..588 |
+| Gum | (−140, −9, 330), 571 units from the spawn, 33° left of the spawn heading, 9 units lower | zone 1: x −190..−90, y −13.8..41, z 280..380 |
+
+**Trace.** Across Corn's talk, Gum stays idle (`0x18`/8) at a fixed position while Corn goes
+`0x18` → `0x19` → `0x18`, and **no progress flag changes**. Corn's zone is chat-only: text TE003, and
+game mode stays `0xF`.
+
+**What advances the tutorial (static analysis, consistent with the measured flags).**
+
+1. The free-roam frame `0x5BAD0` evaluates the mission's condition table. Pending condition 4 needs
+   flag `0x70` (set) and "agent 0 inside the zone with `+0x17C = 1` and R newly pressed" (`0x6C680`,
+   with the R edge from `0xA8150`/`0x6C640`).
+2. Meeting it sets `0x71`, which arms event 8: a scripted talk through modes `0x1E`/`0x1F`.
+
+The decisive check is therefore closed-loop: stand inside Gum's box (`+0x300 == 1`, `+0x2FC == 1`),
+press R, and watch flag `0x71` and the game mode. Only if `0x71` stays clear there does a recomp
+defect become a suspect.
+
+**Not established.** Whether Gum's box (9 units below the spawn floor) is reachable on foot, and which
+stage owns the Dogenzaka Hill banner (the stage loader isn't resident in gameplay; a snapshot at the
+banner diffed against the spawn would decide it).

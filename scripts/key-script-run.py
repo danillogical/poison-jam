@@ -28,14 +28,30 @@ Script steps (JSON list, run in order):
   {"touch": "path"} / {"remove": "path"}                    create / delete a file (arms RECOMP_FRAME_TRACE)
   {"peek": {"name": "n", "va": "0xADDR", "size": 4, "expect": 0}}
                                                             read one guest value into peeks.jsonl
+  {"peek": {"name": "n", "chain": ["0x22FCE0", "0x148", "0xCA4"], "type": "f32", "count": 3}}
+                                                            follow a pointer chain (see resolve_chain), then
+                                                            read `count` u32 or f32 values at the end
   {"ram_snap": "name"} / {"ram_snap": {"name": "n", "va": "0xADDR", "length": 0x1000}}
                                                             write a guest RAM range to ram/<name>.bin
   {"snap": "name"}
+  {"log_pos": "name"} / {"log_pos": {"name": "n", "objs": ["0x2C", "0x2E"]}}
+                                                            append position, heading yaw and camera yaw of
+                                                            guest objects (default 0x2C, the player) to positions.jsonl
+  {"goto": {"target": [x, z], "radius": 25, "timeout": 120, "pulse": 0.4, "player_obj": "0x2C",
+            "until": [{"off": "0x300", "eq": 1}], "snap": "name"}}
+                                                            closed-loop walk: each pulse reads the player's position and
+                                                            the camera from guest memory, holds the camera-relative
+                                                            numpad keys toward the target (steer_keys) for `pulse`
+                                                            seconds, and repeats until within `radius` (horizontal), or
+                                                            every `until` u32 at player_ch+off holds, or the timeout
+                                                            (recorded, never fails the script).  One line per iteration
+                                                            goes to goto.jsonl; five pulses that move under 5 units total
+                                                            log `stuck` and try one sidestep pulse, alternating sides.
 
 `peek` and `ram_snap` read guest memory through ReadProcessMemory and change no guest state;
 they are the only way to observe a guest value in a run, because this driver produces no dump.
 Every press (`key`, `key_until`, `hold_keys`, `key_down`/`key_up`) also appends a record to
-`presses.jsonl`: the host's own view of what happened, read from the executable's `s_key_down`,
+`presses.jsonl` (a `goto` pulse appends one record per key hold): the host's own view of what happened, read from the executable's `s_key_down`,
 `s_present_serial` and `s_flips` globals and from the window's focus state. It answers whether a
 press reached the guest at all, which a frame cannot.
 
@@ -61,9 +77,11 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import time
@@ -145,6 +163,70 @@ class ScriptError(Exception):
     pass
 
 
+# Guest object table: obj(id) is the u32 at [[OBJ_TABLE_PTR] + OBJ_TABLE_BASE + 4*id].
+OBJ_TABLE_PTR = 0x0022FCE0
+OBJ_TABLE_BASE = 0x98
+OFF_POS = 0xCA4          # 3 x f32 (x, y, z), y up
+OFF_CAMERA = 0x334       # camera forward, 3 x f32; only x and z are used
+OFF_HEADING = 0x34C      # (sin yaw, 0, cos yaw)
+PLAYER_OBJ = 0x2C
+VK_FORWARD, VK_BACK, VK_LEFT, VK_RIGHT = 0x68, 0x62, 0x64, 0x66   # numpad 8 / 2 / 4 / 6
+# Sector k (45 degrees each, positive = right of the camera forward) -> keys held.
+STEER_KEYS = {
+    0: (VK_FORWARD,), 1: (VK_FORWARD, VK_RIGHT), 2: (VK_RIGHT,), 3: (VK_BACK, VK_RIGHT),
+    4: (VK_BACK,), -4: (VK_BACK,), -3: (VK_BACK, VK_LEFT), -2: (VK_LEFT,), -1: (VK_FORWARD, VK_LEFT),
+}
+STUCK_PULSES = 5
+STUCK_MIN_MOVE = 5.0
+
+
+def resolve_chain(read_u32, chain):
+    """Follow a pointer chain and return the final address without reading it.
+
+    The address starts at chain[0]; each later element does addr = read_u32(addr) + elem.
+    A null pointer partway through raises ScriptError."""
+    if not chain:
+        raise ScriptError("empty pointer chain")
+    addr = chain[0]
+    for elem in chain[1:]:
+        ptr = read_u32(addr)
+        if ptr == 0:
+            raise ScriptError("null pointer at 0x%08X in chain" % addr)
+        addr = ptr + elem
+    return addr
+
+
+def wrap_angle(a):
+    """Wrap radians into (-pi, pi]."""
+    a = math.fmod(a, 2 * math.pi)
+    if a > math.pi:
+        a -= 2 * math.pi
+    elif a <= -math.pi:
+        a += 2 * math.pi
+    return a
+
+
+def relative_angle(dx, dz, fwd_x, fwd_z):
+    """Radians in (-pi, pi] from the camera forward to the bearing (dx, dz); positive = right."""
+    return wrap_angle(math.atan2(dx, dz) - math.atan2(fwd_x, fwd_z))
+
+
+def steer_keys(dx, dz, fwd_x, fwd_z):
+    """VK codes that walk toward (dx, dz) given the camera forward (fwd_x, fwd_z).
+
+    The left stick is camera-relative, so the bearing is taken relative to the camera yaw
+    (atan2(x, z)) and rounded to one of eight 45 degree sectors.  A zero-length (dx, dz) gives ()."""
+    if dx == 0 and dz == 0:
+        return ()
+    sector = round(math.degrees(relative_angle(dx, dz, fwd_x, fwd_z)) / 45.0)
+    return STEER_KEYS[int(sector)]
+
+
+def object_chain(obj_id, off=0):
+    """The pointer chain that ends at (guest object `obj_id`) + off."""
+    return [OBJ_TABLE_PTR, OBJ_TABLE_BASE + 4 * obj_id, off]
+
+
 def parse_vk(value):
     """Return a virtual-key code from a name in VK_NAMES or a number (int or '0x0D')."""
     if isinstance(value, bool):
@@ -212,6 +294,19 @@ def _check_guest_range(va, length, kind, floor=0x1000):
         if va >= lo and va + length <= hi:
             return
     raise ScriptError("%s: 0x%08X+%d is outside guest RAM" % (kind, va, length))
+
+
+def _parse_obj_ids(kind, values):
+    """A non-empty list of guest object ids (ints or int(x, 0) strings, 0..255)."""
+    if not isinstance(values, list) or not values:
+        raise ScriptError("%s: objs must be a non-empty list of object ids" % kind)
+    ids = []
+    for v in values:
+        i = _parse_va(v, kind)
+        if i > 0xFF:
+            raise ScriptError("%s: object id %r out of range" % (kind, v))
+        ids.append(i)
+    return ids
 
 
 def read_host_pages(handle, address, length):
@@ -447,18 +542,69 @@ def parse_script(data):
                 raise ScriptError("snap: name must be a simple string")
             o = {"name": body}
         elif kind == "peek":
-            o = _opts(kind, body, {"name": None, "va": None, "size": 4, "expect": None})
+            o = _opts(kind, body, {"name": None, "va": None, "size": 4, "expect": None,
+                                   "chain": None, "type": "u32", "count": 1})
+            given = body or {}
             if not isinstance(o["name"], str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", o["name"]):
                 raise ScriptError("peek: name must be a simple string")
-            if o["va"] is None:
-                raise ScriptError("peek: va is required")
-            o["va"] = _parse_va(o["va"], "peek")
-            if o["size"] not in (1, 2, 4):
-                raise ScriptError("peek: size must be 1, 2 or 4")
-            _check_guest_range(o["va"], o["size"], "peek")
+            if o["chain"] is not None:
+                if o["va"] is not None or "size" in given:
+                    raise ScriptError("peek: a chain peek takes type/count, not va or size")
+                if not isinstance(o["chain"], list) or not o["chain"]:
+                    raise ScriptError("peek: chain must be a non-empty list")
+                o["chain"] = [_parse_va(e, "peek") for e in o["chain"]]
+                if o["type"] not in ("u32", "f32"):
+                    raise ScriptError("peek: type must be u32 or f32")
+                if isinstance(o["count"], bool) or not isinstance(o["count"], int) \
+                        or not 1 <= o["count"] <= 64:
+                    raise ScriptError("peek: count must be an int from 1 to 64")
+                _check_guest_range(o["chain"][0], 4 if len(o["chain"]) > 1 else 4 * o["count"], "peek")
+                if o["expect"] is not None and (o["type"] != "u32" or o["count"] != 1):
+                    raise ScriptError("peek: expect applies only to a single u32")
+            else:
+                if "type" in given or "count" in given:
+                    raise ScriptError("peek: type/count need a chain")
+                if o["va"] is None:
+                    raise ScriptError("peek: va or chain is required")
+                o["va"] = _parse_va(o["va"], "peek")
+                if o["size"] not in (1, 2, 4):
+                    raise ScriptError("peek: size must be 1, 2 or 4")
+                _check_guest_range(o["va"], o["size"], "peek")
             if o["expect"] is not None:
                 if isinstance(o["expect"], bool) or not isinstance(o["expect"], int) or o["expect"] < 0:
                     raise ScriptError("peek: expect must be a non-negative int")
+        elif kind == "log_pos":
+            if isinstance(body, str):
+                body = {"name": body}
+            o = _opts(kind, body, {"name": None, "objs": [PLAYER_OBJ]})
+            if not isinstance(o["name"], str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", o["name"]):
+                raise ScriptError("log_pos: name must be a simple string")
+            o["objs"] = _parse_obj_ids(kind, o["objs"])
+        elif kind == "goto":
+            o = _opts(kind, body, {"target": None, "radius": 25, "timeout": 120, "pulse": 0.4,
+                                   "player_obj": PLAYER_OBJ, "until": [], "snap": None})
+            t = o["target"]
+            if (not isinstance(t, list) or len(t) != 2
+                    or any(isinstance(v, bool) or not isinstance(v, (int, float))
+                           or not math.isfinite(v) for v in t)):
+                raise ScriptError("goto: target must be [x, z] numbers")
+            o["target"] = [float(t[0]), float(t[1])]
+            o["radius"] = _num(kind, "radius", o["radius"], 0)
+            o["timeout"] = _num(kind, "timeout", o["timeout"], 1)
+            o["pulse"] = _num(kind, "pulse", o["pulse"], 0.05)
+            o["player_obj"] = _parse_obj_ids(kind, [o["player_obj"]])[0]
+            if not isinstance(o["until"], list):
+                raise ScriptError("goto: until must be a list")
+            conds = []
+            for c in o["until"]:
+                if not isinstance(c, dict) or set(c) != {"off", "eq"}:
+                    raise ScriptError("goto: each until entry needs exactly off and eq")
+                if isinstance(c["eq"], bool) or not isinstance(c["eq"], int) or c["eq"] < 0:
+                    raise ScriptError("goto: until eq must be a non-negative int")
+                conds.append({"off": _parse_va(c["off"], "goto"), "eq": c["eq"]})
+            o["until"] = conds
+            if o["snap"] is not None and not re.fullmatch(r"[A-Za-z0-9_.-]+", str(o["snap"])):
+                raise ScriptError("goto: snap must match [A-Za-z0-9_.-]+")
         elif kind == "ram_snap":
             if isinstance(body, str):
                 o = {"name": body, "va": 0, "length": GUEST_RAM_SIZE}
@@ -1043,10 +1189,162 @@ class Run:
             return self._peek(o)
         if kind == "ram_snap":
             return self._ram_snap(o)
+        if kind == "log_pos":
+            return self._log_pos(o)
+        if kind == "goto":
+            return self._goto(o)
         raise ScriptError("unknown step %r" % kind)
+
+    def read_u32(self, va):
+        """One u32 of guest memory; ScriptError if it is outside RAM or unreadable."""
+        return self.read_words(va, 1, "<I")[0]
+
+    def read_words(self, va, count, fmt="<I"):
+        """`count` little-endian 4-byte values (fmt is the struct code) at guest `va`."""
+        if self.guest is None:
+            raise ScriptError("no guest memory reader")
+        _check_guest_range(va, 4 * count, "guest read")
+        data, unreadable = self.guest.read(va, 4 * count)
+        if unreadable:
+            raise ScriptError("guest read 0x%08X+%d unreadable" % (va, 4 * count))
+        return struct.unpack("<%d%s" % (count, fmt[-1]), data)
+
+    def object_address(self, obj_id, off=0):
+        """Guest address of (object `obj_id`) + off, re-read through the object table."""
+        return resolve_chain(self.read_u32, object_chain(obj_id, off))
+
+    def object_state(self, obj_id):
+        """(char pointer, position xyz, camera forward xyz, heading xyz) of a guest object."""
+        ch = self.object_address(obj_id)
+        pos = self.read_words(ch + OFF_POS, 3, "<f")
+        cam = self.read_words(ch + OFF_CAMERA, 3, "<f")
+        head = self.read_words(ch + OFF_HEADING, 3, "<f")
+        if not all(math.isfinite(v) for v in pos + cam + head):
+            raise ScriptError("object 0x%02X has non-finite position/camera" % obj_id)
+        return ch, pos, cam, head
+
+    def press_keys(self, step, vks, seconds, extra=None):
+        """Hold `vks` for `seconds` (the hold_keys mechanism, for any number of keys) and append
+        the press record; returns the record."""
+        rec = {"step": step, "vks": list(vks), "t_down_s": round(self.elapsed(), 3)}
+        rec.update(extra or {})
+        rec.update(self.press_probe(vks[0]))
+        for vk in vks:
+            self.win.key(self.hwnd, vk, True)
+            self.log("KEYDOWN vk=0x%02X" % vk)
+        try:
+            self.pause(seconds)
+        finally:
+            for vk in reversed(vks):
+                self.win.key(self.hwnd, vk, False)
+                self.log("KEYUP vk=0x%02X" % vk)
+        rec["t_up_s"] = round(self.elapsed(), 3)
+        self.press_release(rec, list(vks))
+        return rec
+
+    def _goto(self, o):
+        """Walk the player toward o["target"] (x, z) by closed-loop steering; see the docstring."""
+        self.wait_for(30, lambda: self.hwnd is not None)
+        if self.hwnd is None:
+            return {"satisfied": False, "iterations": 0, "stuck": 0, "error": "no window"}
+        tx, tz = o["target"]
+        start = time.time()
+        iterations = stuck = 0
+        side = 1
+        hist = []                  # horizontal positions at the last iterations
+        reason, last = "timeout", None
+        while self.alive() and not self.expired():
+            try:
+                ch, pos, cam, _ = self.object_state(o["player_obj"])
+                untils = [self.read_u32(ch + c["off"]) for c in o["until"]]
+            except ScriptError as e:
+                self._append_jsonl("goto.jsonl", {"t_s": round(self.elapsed(), 2), "error": str(e)})
+                if time.time() - start >= o["timeout"]:
+                    break
+                self.pause(o["pulse"])
+                continue
+            iterations += 1
+            dx, dz = tx - pos[0], tz - pos[2]
+            dist = math.hypot(dx, dz)
+            cam_yaw = math.atan2(cam[0], cam[2])
+            rel = relative_angle(dx, dz, cam[0], cam[2])
+            last = {"position": [round(v, 2) for v in pos], "distance": round(dist, 2),
+                    "until_values": untils}
+            rec = {"t_s": round(self.elapsed(), 2), "pos": [round(v, 2) for v in pos],
+                   "cam_yaw_deg": round(math.degrees(cam_yaw), 1),
+                   "rel_deg": round(math.degrees(rel), 1), "dist": round(dist, 2)}
+            if dist <= o["radius"]:
+                reason = "radius"
+            elif o["until"] and all(v == c["eq"] for v, c in zip(untils, o["until"])):
+                reason = "until"
+            if reason != "timeout":
+                rec.update({"keys": [], "stop": reason})
+                self._append_jsonl("goto.jsonl", rec)
+                break
+            if time.time() - start >= o["timeout"]:
+                rec.update({"keys": [], "stop": "timeout"})
+                self._append_jsonl("goto.jsonl", rec)
+                break
+            hist = (hist + [(pos[0], pos[2])])[-(STUCK_PULSES + 1):]
+            moved = sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(hist, hist[1:]))
+            if len(hist) == STUCK_PULSES + 1 and moved < STUCK_MIN_MOVE:
+                stuck += 1
+                bearing = math.atan2(dx, dz) + side * math.pi / 2
+                keys = steer_keys(math.sin(bearing), math.cos(bearing), cam[0], cam[2])
+                rec.update({"stuck": True, "stuck_n": stuck, "moved": round(moved, 2),
+                            "sidestep": side, "keys": list(keys)})
+                self.log("goto stuck #%d (moved %.2f over %d pulses); sidestep %+d"
+                         % (stuck, moved, STUCK_PULSES, side))
+                side = -side
+                hist = []
+            else:
+                keys = steer_keys(dx, dz, cam[0], cam[2])
+                rec["keys"] = list(keys)
+            self._append_jsonl("goto.jsonl", rec)
+            if keys:
+                self.press_keys("goto", keys, o["pulse"], {"dist": rec["dist"]})
+            else:
+                self.pause(o["pulse"])
+        # The state the loop ended on, read once more so the result reflects the last pulse.
+        try:
+            ch, pos, _, _ = self.object_state(o["player_obj"])
+            untils = [self.read_u32(ch + c["off"]) for c in o["until"]]
+            last = {"position": [round(v, 2) for v in pos],
+                    "distance": round(math.hypot(tx - pos[0], tz - pos[2]), 2),
+                    "until_values": untils}
+            if reason == "timeout" and last["distance"] <= o["radius"]:
+                reason = "radius"
+            elif reason == "timeout" and o["until"] and all(
+                    v == c["eq"] for v, c in zip(untils, o["until"])):
+                reason = "until"
+        except ScriptError:
+            pass
+        snap = self.snap(o["snap"]) if o.get("snap") else None
+        res = {"satisfied": reason != "timeout", "reason": reason, "iterations": iterations,
+               "stuck": stuck, "final": last, "snap": snap}
+        self.log("goto %s iterations=%d stuck=%d final=%s" % (reason, iterations, stuck, last))
+        return res
+
+    def _log_pos(self, o):
+        """Append position, heading yaw and camera yaw of each requested object to positions.jsonl."""
+        rec = {"name": o["name"], "t_s": round(self.elapsed(), 2), "objs": {}}
+        for obj in o["objs"]:
+            try:
+                ch, pos, cam, head = self.object_state(obj)
+                rec["objs"]["0x%02X" % obj] = {
+                    "ch": "0x%08X" % ch, "pos": [round(v, 3) for v in pos],
+                    "heading_yaw_deg": round(math.degrees(math.atan2(head[0], head[2])), 2),
+                    "camera_yaw_deg": round(math.degrees(math.atan2(cam[0], cam[2])), 2)}
+            except ScriptError as e:
+                rec["objs"]["0x%02X" % obj] = {"error": str(e)}
+        self.log("LOGPOS %s %s" % (o["name"], json.dumps(rec["objs"])))
+        self._append_jsonl("positions.jsonl", rec)
+        return rec
 
     def _peek(self, o):
         """Read one guest value and append a lossless record to peeks.jsonl."""
+        if o.get("chain") is not None:
+            return self._peek_chain(o)
         rec = {"name": o["name"], "va": "0x%08X" % o["va"], "size": o["size"],
                "expect": o["expect"], "t_s": round(self.elapsed(), 2)}
         try:
@@ -1063,6 +1361,28 @@ class Run:
         self.log("PEEK %s va=%s size=%d value=%s expect=%s matches=%s"
                  % (o["name"], rec["va"], o["size"], rec.get("value_hex", "-"),
                     o["expect"], rec.get("matches")))
+        self._append_jsonl("peeks.jsonl", rec)
+        return rec
+
+    def _peek_chain(self, o):
+        """Follow o["chain"], read `count` u32/f32 values there, and append the record."""
+        rec = {"name": o["name"], "chain": ["0x%X" % e for e in o["chain"]], "type": o["type"],
+               "count": o["count"], "expect": o["expect"], "t_s": round(self.elapsed(), 2)}
+        try:
+            va = resolve_chain(self.read_u32, o["chain"])
+            rec["va"] = "0x%08X" % va
+            vals = self.read_words(va, o["count"], "<f" if o["type"] == "f32" else "<I")
+            rec["values"] = list(vals)
+            if o["type"] == "u32":
+                rec["values_hex"] = ["0x%X" % v for v in vals]
+            if o["count"] == 1:
+                rec["value"] = vals[0]
+            rec["matches"] = None if o["expect"] is None else vals[0] == o["expect"]
+        except ScriptError as e:
+            rec.update({"error": str(e), "matches": False})
+        self.log("PEEK %s chain=%s va=%s values=%s matches=%s"
+                 % (o["name"], rec["chain"], rec.get("va", "-"), rec.get("values", "-"),
+                    rec.get("matches")))
         self._append_jsonl("peeks.jsonl", rec)
         return rec
 

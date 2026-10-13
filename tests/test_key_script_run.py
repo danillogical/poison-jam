@@ -7,6 +7,7 @@ from __future__ import annotations
 import ctypes
 import importlib.util
 import json
+import math
 import sys
 import tempfile
 import time
@@ -277,6 +278,201 @@ class ParseScript(unittest.TestCase):
             self.parse([{"key": {"vk": "3", "snap": "../escape"}}])
         with self.assertRaises(ksr.ScriptError):
             self.parse([{"key_until": {"vk": "3", "until": "dialogue", "snap": "a/b"}}])
+
+
+F, B, L, R = 0x68, 0x62, 0x64, 0x66
+SECTOR_KEYS = {0: (F,), 1: (F, R), 2: (R,), 3: (B, R), 4: (B,),
+               -4: (B,), -3: (B, L), -2: (L,), -1: (F, L)}
+
+
+def yaw_vec(deg, scale=1.0):
+    """The (x, z) vector whose bearing atan2(x, z) is `deg`."""
+    r = math.radians(deg)
+    return (scale * math.sin(r), scale * math.cos(r))
+
+
+class ResolveChain(unittest.TestCase):
+    def test_follows_pointers_and_adds_offsets(self):
+        mem = {0x1000: 0x5000, 0x5010: 0x9000}
+        reads = []
+
+        def rd(a):
+            reads.append(a)
+            return mem[a]
+        self.assertEqual(ksr.resolve_chain(rd, [0x1000, 0x10, 0xCA4]), 0x9000 + 0xCA4)
+        self.assertEqual(reads, [0x1000, 0x5010])
+
+    def test_single_element_chain_does_no_read(self):
+        def rd(a):
+            raise AssertionError("must not read")
+        self.assertEqual(ksr.resolve_chain(rd, [0x22FCE0]), 0x22FCE0)
+
+    def test_null_pointer_partway_raises(self):
+        mem = {0x1000: 0x5000, 0x5010: 0}
+        with self.assertRaises(ksr.ScriptError):
+            ksr.resolve_chain(lambda a: mem[a], [0x1000, 0x10, 0x20, 0x30])
+
+    def test_null_at_first_read_raises(self):
+        with self.assertRaises(ksr.ScriptError):
+            ksr.resolve_chain(lambda a: 0, [0x1000, 0x10])
+
+
+class SteerKeys(unittest.TestCase):
+    def check_sectors(self, cam_deg):
+        fwd = yaw_vec(cam_deg)
+        for k, keys in SECTOR_KEYS.items():
+            for jitter in (-10, 0, 10):
+                tx, tz = yaw_vec(cam_deg + 45 * k + jitter, 7.0)
+                self.assertEqual(ksr.steer_keys(tx, tz, *fwd), keys,
+                                 "cam=%s sector=%s jitter=%s" % (cam_deg, k, jitter))
+
+    def test_all_sectors_camera_forward_z(self):
+        self.check_sectors(0)
+
+    def test_all_sectors_camera_off_axis(self):
+        self.check_sectors(137)
+
+    def test_positive_bearing_is_right(self):
+        self.assertEqual(ksr.steer_keys(1, 0, 0, 1), (R,))
+        self.assertEqual(ksr.steer_keys(-1, 0, 0, 1), (L,))
+        self.assertEqual(ksr.steer_keys(0, 1, 0, 1), (F,))
+        self.assertEqual(ksr.steer_keys(0, -1, 0, 1), (B,))
+
+    def test_wraparound_camera_170_target_minus_170_is_forward(self):
+        fwd = yaw_vec(170)
+        tx, tz = yaw_vec(-170)
+        self.assertEqual(ksr.steer_keys(tx, tz, *fwd), (F,))
+
+    def test_wraparound_the_other_way_is_forward(self):
+        fwd = yaw_vec(-170)
+        tx, tz = yaw_vec(170)
+        self.assertEqual(ksr.steer_keys(tx, tz, *fwd), (F,))
+
+    def test_zero_length_returns_empty(self):
+        self.assertEqual(ksr.steer_keys(0, 0, 0, 1), ())
+        self.assertEqual(ksr.steer_keys(0.0, 0.0, 0.6, -0.8), ())
+
+    def test_scale_invariance(self):
+        for cam in (0, 137, -60):
+            for rel in range(-180, 180, 20):
+                if abs(abs(rel) % 45 - 22.5) < 3:
+                    continue
+                base = ksr.steer_keys(*yaw_vec(cam + rel), *yaw_vec(cam))
+                for s in (0.001, 3.0, 1e4):
+                    self.assertEqual(ksr.steer_keys(*yaw_vec(cam + rel, s), *yaw_vec(cam)), base)
+                    self.assertEqual(ksr.steer_keys(*yaw_vec(cam + rel), *yaw_vec(cam, s)), base)
+
+    def test_rotation_invariance(self):
+        for rel in (0, 30, 60, 100, 130, 170, -30, -80, -110, -150):
+            base = ksr.steer_keys(*yaw_vec(rel), *yaw_vec(0))
+            for rot in (17, 90, 137, 200, -75):
+                self.assertEqual(ksr.steer_keys(*yaw_vec(rel + rot), *yaw_vec(rot)), base,
+                                 "rel=%s rot=%s" % (rel, rot))
+
+
+class ParseChainPeekGotoLogPos(unittest.TestCase):
+    def parse(self, steps):
+        return ksr.parse_script(steps)
+
+    def peek(self, **kw):
+        body = {"name": "n"}
+        body.update(kw)
+        return [{"peek": body}]
+
+    def test_chain_peek_accepted(self):
+        steps = self.parse([{"peek": {"name": "n", "chain": ["0x22FCE0", "0x148", "0xCA4"],
+                                      "type": "f32", "count": 3}}])
+        o = steps[0][1]
+        self.assertEqual(steps[0][0], "peek")
+        self.assertEqual(o["chain"], [0x22FCE0, 0x148, 0xCA4])
+        self.assertEqual(o["type"], "f32")
+        self.assertEqual(o["count"], 3)
+
+    def test_old_va_size_form_still_accepted(self):
+        steps = self.parse(self.peek(va="0x11000", size=4))
+        self.assertEqual(steps[0][1]["va"], 0x11000)
+
+    def test_chain_type_must_be_u32_or_f32(self):
+        for bad in ("u16", "f64", "", 4):
+            with self.assertRaises(ksr.ScriptError):
+                self.parse(self.peek(chain=["0x22FCE0", "0x10"], type=bad))
+        for good in ("u32", "f32"):
+            self.parse(self.peek(chain=["0x22FCE0", "0x10"], type=good))
+
+    def test_chain_count_range(self):
+        for bad in (0, -1, 65, 1.5, "3"):
+            with self.assertRaises(ksr.ScriptError):
+                self.parse(self.peek(chain=["0x22FCE0", "0x10"], count=bad))
+        for good in (1, 64):
+            self.parse(self.peek(chain=["0x22FCE0", "0x10"], count=good))
+
+    def test_chain_with_va_or_size_rejected(self):
+        with self.assertRaises(ksr.ScriptError):
+            self.parse(self.peek(chain=["0x22FCE0", "0x10"], va="0x11000"))
+        with self.assertRaises(ksr.ScriptError):
+            self.parse(self.peek(chain=["0x22FCE0", "0x10"], size=4))
+
+    def test_type_or_count_without_chain_rejected(self):
+        with self.assertRaises(ksr.ScriptError):
+            self.parse(self.peek(va="0x11000", type="f32"))
+        with self.assertRaises(ksr.ScriptError):
+            self.parse(self.peek(va="0x11000", count=2))
+
+    def test_duplicate_chain_peek_name_rejected(self):
+        with self.assertRaises(ksr.ScriptError) as cm:
+            self.parse(self.peek(chain=["0x22FCE0", "0x10"]) + self.peek(va="0x11000"))
+        self.assertIn("duplicate", str(cm.exception))
+
+    GOTO = {"target": [10, -20.5], "radius": 25, "timeout": 120, "pulse": 0.4,
+            "player_obj": "0x2C", "until": [{"off": "0x300", "eq": 1}], "snap": "n"}
+
+    def goto(self, **kw):
+        body = dict(self.GOTO)
+        body.update(kw)
+        return self.parse([{"goto": body}])
+
+    def test_goto_full_form_accepted(self):
+        steps = self.goto()
+        self.assertEqual(steps[0][0], "goto")
+        o = steps[0][1]
+        self.assertEqual(o["target"], [10.0, -20.5])
+        self.assertEqual(o["radius"], 25)
+        self.assertEqual(o["until"], [{"off": 0x300, "eq": 1}])
+        self.assertEqual(o["snap"], "n")
+
+    def test_goto_defaults(self):
+        o = self.parse([{"goto": {"target": [1, 2]}}])[0][1]
+        self.assertEqual((o["radius"], o["timeout"], o["pulse"]), (25, 120, 0.4))
+        self.assertEqual(o["until"], [])
+
+    def test_goto_target_required_and_two_numbers(self):
+        with self.assertRaises(ksr.ScriptError):
+            self.parse([{"goto": {"radius": 5}}])
+        for bad in ([1], [1, 2, 3], "1,2", [1, "2"], [None, 2], [True, 2], 5):
+            with self.assertRaises(ksr.ScriptError):
+                self.goto(target=bad)
+
+    def test_goto_numeric_options_validated(self):
+        for key in ("radius", "timeout", "pulse"):
+            with self.assertRaises(ksr.ScriptError):
+                self.goto(**{key: "fast"})
+        o = self.goto(radius=3.5, timeout=60, pulse=0.2)[0][1]
+        self.assertEqual((o["radius"], o["timeout"], o["pulse"]), (3.5, 60, 0.2))
+
+    def test_goto_unknown_option_rejected(self):
+        with self.assertRaises(ksr.ScriptError):
+            self.goto(speed=3)
+
+    def test_log_pos_string_and_object_forms(self):
+        a = self.parse([{"log_pos": "name"}])
+        self.assertEqual(a[0][0], "log_pos")
+        self.assertEqual(a[0][1]["name"], "name")
+        b = self.parse([{"log_pos": {"name": "n", "objs": ["0x2C", "0x2E"]}}])
+        self.assertEqual(b[0][1]["objs"], [0x2C, 0x2E])
+
+    def test_log_pos_unknown_option_rejected(self):
+        with self.assertRaises(ksr.ScriptError):
+            self.parse([{"log_pos": {"name": "n", "bogus": 1}}])
 
 
 class PressTelemetry(unittest.TestCase):
