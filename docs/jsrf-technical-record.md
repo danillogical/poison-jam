@@ -2112,3 +2112,39 @@ returned with their ABI verified. The frames show:
 1. Before the title, the background behind the Smilebit logo is the wrong colour.
 2. Dialogue text flickers and drops characters. That includes the opening Corn talk and its
    speaker name "Corn".
+
+### §31.11 Fixes from the other JSRF ports: the Smilebit card, and a baseline for the dialogue clobber (2026-10-13)
+
+The owner asked to port the fixes from andeecollard/jsrf-recomp and nworkers/reJSRF. Each one was
+checked against our code first. The plan, with what already exists here and what doesn't apply, is
+in the session plan. Records land here as each fix is gated.
+
+**F1: the clear colour (toolkit `e7c2efb`, from jsrf-recomp `e2e739c`).**
+
+- `SET_COLOR_CLEAR_VALUE` arrives already in the surface's format.
+- The executor reduced a 16-bit value to 5:6:5 again, and the D3D11 backend used it as a 32-bit
+  diffuse, so the white Smilebit card rendered cyan.
+- In `20261013-000422-621-keyscript-talk-dwell`, the card reads (255,255,255).
+- The dimmer frames of the same card at 5.7 s and 10.2 s, (41,44,41), suggest the logo fades already
+  render. F3 (gamma) is to be confirmed before it is worked on.
+- `tests/test_gpu_backend_parity.c` clears its 16bpp cases with a real 565 word now, and gained a
+  clear-contract check.
+
+**The dialogue-clobber baseline (for F2).** `config/key-scripts/intro.json`'s prefix was run, then
+20 snapshots per page, 0.5 s apart, on Corn's first two dialogue pages:
+
+- **The "Corn" name label:** visible in **1 of 40** snapshots (`p0-02`).
+- **The balloon text:** wrong in 39 of 40. "He$, Ìhere's our pi%%a?" and "pi%%a gu$" are the page-1
+  font's glyphs drawn over page-0 cells.
+- The one correct frame is the one where the label shows.
+
+jsrf-recomp traced the same pattern to the fence: `D3D_SetFence` (`0x00191390`) releases the
+pre-increment `[dev+0x30]`. Our fence mirror publishes the counter itself (`fence_snapshot_commit`),
+so `VertexBuffer_Lock` on the shared font buffer returns before the GPU has drawn it.
+
+**Tooling.**
+
+- `scripts/text-stability.py`: A B A flicker vs page turns, on window or present dumps, with tests.
+- `config/key-scripts/e2e.json`: the owner's end-to-end run. Intro, skate forward, jump twice, pause,
+  resume, skate, jump twice. It completed in `20261012-234748-502-keyscript-e2e-baseline` with no
+  ICALL or fatal; x went 408 → 329 → 292 → 220 → 180.

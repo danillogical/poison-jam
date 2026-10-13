@@ -250,6 +250,7 @@ static uint16_t pack565(uint32_t r, uint32_t g, uint32_t b)
 
 /* ── The cases ───────────────────────────────────────────────────────────── */
 /* tol: per-channel tolerance; 0 means the default for the surface's bpp. */
+/* clear: A8R8G8B8 for a 32bpp surface, the raw 5:6:5 word for a 16bpp one. */
 typedef struct { uint32_t va, w, h, bpp, clear; double perim, area; int tol; } Surf;
 typedef struct {
     const char *name;
@@ -263,7 +264,9 @@ static Scene g_scene[NCASES];
 /* Case 1 and 4 share one scene shape at different addresses. */
 static void build_clear_tri(uint32_t surf, uint32_t vb, int flip, Scene *sc, const char *name)
 {
-    const uint32_t clear = 0xFF204060u, diffuse = 0xFFE06020u;
+    /* A 16-bit surface's clear value is its own 5:6:5 word (D3D converts before the pushbuffer):
+     * 0x220C is R=4 G=16 B=12, i.e. about the 0x204060 the 8888 cases use. */
+    const uint32_t clear = 0x0000220Cu, diffuse = 0xFFE06020u;
     pb_begin();
     pb_surface(surf, 64, 64, 2);
     pb_clear(clear);
@@ -1617,7 +1620,7 @@ static Cmp compare(const Surf *s, const uint8_t *ref, const uint8_t *got)
     memset(&r, 0, sizeof r);
     /* The clear colour as the surface stores it, expanded the same way. */
     if (s->bpp == 2) {
-        uint16_t v = pack565((s->clear >> 16) & 255, (s->clear >> 8) & 255, s->clear & 255);
+        uint16_t v = (uint16_t)s->clear;
         memcpy(cpx, &v, 2);
     } else {
         memcpy(cpx, &s->clear, 4);
@@ -1647,6 +1650,51 @@ static Cmp compare(const Surf *s, const uint8_t *ref, const uint8_t *got)
     r.region_bad = bad_region;
     r.region_allowed = s->perim + 0.02 * r.region;
     return r;
+}
+
+/* Clear-value contract: the value is in the surface's own format, so a 16bpp surface holds
+ * exactly its low 16 bits and a 32bpp one the full word, in every pixel, after the flip. */
+typedef struct { uint32_t bpp, value, expect; } ClearCase;
+static int run_clear_contract(const char *who, int with_upper_bits)
+{
+    static const ClearCase cases[] = {
+        { 2, 0x0000FFFFu, 0xFFFFu }, { 2, 0x000020E4u, 0x20E4u }, { 2, 0x00000000u, 0x0000u },
+        { 2, 0x0000F800u, 0xF800u }, { 4, 0xFF204060u, 0xFF204060u },
+        { 2, 0xDEAD20E4u, 0x20E4u },
+    };
+    size_t n, k, nbad;
+    int ok = 1;
+    for (n = 0; n < sizeof cases / sizeof cases[0]; n++) {
+        const ClearCase *c = &cases[n];
+        uint32_t va = c->bpp == 2 ? SURF_C1 : SURF_C2;
+        Surf s;
+        uint8_t *px;
+        if (c->value >> 16 && c->bpp == 2 && !with_upper_bits)
+            continue;
+        memset(&s, 0, sizeof s);
+        s.va = va; s.w = 64; s.h = 64; s.bpp = c->bpp;
+        memset(G(va), SENTINEL, SURF_BYTES);
+        pb_begin(); pb_surface(va, 64, 64, c->bpp); pb_clear(c->value); pb_flip();
+        ok &= submit(who);
+        px = snapshot(&s);
+        if (!px) { ok = 0; continue; }
+        nbad = 0;
+        for (k = 0; k < 64u * 64u; k++) {
+            uint32_t got = c->bpp == 2 ? ((uint16_t *)px)[k] : ((uint32_t *)px)[k];
+            if (got != c->expect) nbad++;
+        }
+        printf("  [%s] clear contract %ubpp value 0x%08X: want 0x%0*X in all pixels, %u differ%s\n",
+               who, c->bpp * 8, c->value, (int)c->bpp * 2, c->expect, (unsigned)nbad,
+               nbad ? "  FAIL" : "");
+        if (nbad) {
+            fprintf(stderr, "FAIL: %s clear contract %ubpp 0x%08X: pixel 0 is 0x%X, want 0x%X\n", who,
+                    c->bpp * 8, c->value,
+                    c->bpp == 2 ? ((uint16_t *)px)[0] : ((uint32_t *)px)[0], c->expect);
+            ok = 0;
+        }
+        free(px);
+    }
+    return ok;
 }
 
 static int check_parity(const char *label, const Surf *s, const uint8_t *ref, const uint8_t *got,
@@ -1868,6 +1916,9 @@ int main(int argc, char **argv)
         ref[c][0] = snapshot(&g_scene[c].surf[0]);
     }
 
+    puts("-- clear-value contract (software executor) --");
+    ok &= run_clear_contract("software", 1);
+
     /* (b) D3D11 back end. */
     _putenv_s("RECOMP_GPU_WARP", "1");     /* deterministic adapter; the back end logs "[GPUBE] device:" on stderr */
     puts("-- RECOMP_GPU_WARP=1 (adapter line: see '[GPUBE] device:' below) --");
@@ -1915,6 +1966,9 @@ int main(int argc, char **argv)
             }
         }
     }
+
+    puts("-- clear-value contract (D3D11 back end) --");
+    ok &= run_clear_contract("d3d11", 0);
 
     puts("-- parity (DXT) --");
     {
