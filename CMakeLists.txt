@@ -144,6 +144,24 @@ if(BUILD_TESTING)
              COMMAND jsrf_gpu_backend_parity_test --vsh-off-only)
     set_tests_properties(jsrf_gpu_backend_parity_vsh_off PROPERTIES
         TIMEOUT 60 ENVIRONMENT "RECOMP_GPU_VSH=0")
+    # The Vulkan sibling: the same pushbuffers against the Vulkan back end on a software driver
+    # (lavapipe, XBR_VK_SW_ICD). It skips (77) when no software ICD is configured or when the back end
+    # cannot be installed -- notably in an elevated process, where the loader ignores VK_DRIVER_FILES.
+    add_executable(jsrf_gpu_backend_parity_vk_test tests/test_gpu_backend_parity_vk.c)
+    target_include_directories(jsrf_gpu_backend_parity_vk_test PRIVATE
+        ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/gen)
+    target_link_libraries(jsrf_gpu_backend_parity_vk_test PRIVATE xboxrecomp)
+    if(XBR_VK_SW_ICD)
+        file(TO_NATIVE_PATH "${XBR_VK_SW_ICD}" _vk_icd)
+        add_test(NAME jsrf_gpu_backend_parity_vk COMMAND jsrf_gpu_backend_parity_vk_test)
+        set_tests_properties(jsrf_gpu_backend_parity_vk PROPERTIES TIMEOUT 300 SKIP_RETURN_CODE 77
+            ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd};VK_ICD_FILENAMES=${_vk_icd};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
+    else()
+        add_test(NAME jsrf_gpu_backend_parity_vk
+                 COMMAND jsrf_gpu_backend_parity_vk_test --skip "XBR_VK_SW_ICD is not set")
+        set_tests_properties(jsrf_gpu_backend_parity_vk PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
+    endif()
     add_executable(jsrf_inplace_event_test
         ${XBOXRECOMP_DIR}/tests/kernel_inplace_event_test.c)
     target_include_directories(jsrf_inplace_event_test PRIVATE

@@ -14,6 +14,7 @@
 #include "apu.h"
 #include "apu_mmio_hook.h"
 #include "nv2a_d3d11_backend.h"
+#include "nv2a_vk_backend.h"
 
 extern RECOMP_TLS uint32_t g_eax, g_ecx, g_edx, g_esp;
 extern RECOMP_TLS uint32_t g_ebx, g_esi, g_edi;
@@ -469,14 +470,16 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
     g_xbox_mem_offset = xbox_GetMemoryOffset();
     checkpoint("memory_ready");
 
-    /* RECOMP_GPU_BACKEND=d3d11 hands the executor's batches to the D3D11 back
-     * end, so they rasterise on the GPU instead of the CPU. The executor was
+    /* RECOMP_GPU_BACKEND=d3d11 or =vulkan hands the executor's batches to that
+     * back end, so they rasterise on the GPU instead of the CPU. The executor was
      * registered on the submission walk by xbox_MemoryLayoutInit, and the guest
      * has not submitted anything yet, so this is the point to install it. */
     {
         const char *be = getenv("RECOMP_GPU_BACKEND");
         if (be && strcmp(be, "d3d11") == 0)
             nv2a_d3d11_backend_install();
+        else if (be && strcmp(be, "vulkan") == 0)
+            nv2a_vk_backend_install();
     }
 
     /* The emulated APU, which the toolkit has shipped all along and which no

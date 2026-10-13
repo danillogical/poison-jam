@@ -2236,3 +2236,46 @@ table keys on the hash and checks the word count plus a digest, because the hash
 - emit `[[vk::location(n)]]` so the input location equals the attribute index.
 
 **Not traced:** a D3D reload of a 12-instruction program from a device-held buffer at `0x198936`.
+
+### §31.13 Phase V: a Vulkan backend (V0–V2, 2026-10-13)
+
+**The owner's direction:** compile-time code over live translation, and Vulkan for a future Android
+port. D3D11 stays only as the reference (memory `jsrf-native-vulkan-direction`).
+
+**V0 (toolkit `9f39537`): build plumbing.**
+
+- Vulkan is found from the SDK, and `xbr_add_spirv` compiles `.hlsl` with `dxc -spirv`, validates it
+  and embeds it; a shader error fails the build.
+- `vk_smoke` runs on the RTX 4070 and on lavapipe 26.2.4. Software-ICD tests need a non-elevated
+  ctest (`C:\Users\logic\xbr-mac\ctest-limited.py`).
+
+**V1: the backend core** (`src/video/nv2a_vk_backend.c`, `RECOMP_GPU_BACKEND=vulkan`,
+`RECOMP_VK_DEVICE`, ledger L62).
+
+- **Structure:** it mirrors the D3D11 backend function by function:
+  - targets backed by guest memory, with load, flush on flip, and flush-before-sample;
+  - depth per zeta;
+  - the clear, including the clear-colour fix;
+  - stage-0 texture × diffuse with alpha test and blend/depth/stencil/cull;
+  - a pipeline cache with dynamic viewport and scissor.
+- **Shaders:** compiled at build time only. `vulkan-1.dll` is loaded at run time.
+- **E2E on the RTX 4070:** `…-112303-640-keyscript-vk-e2e-val` runs with no crash, ICALL or fatal,
+  and with 0 validation errors and warnings (synchronization validation too).
+- **Matches D3D11:** logos, title and menu, Garage geometry, HUD and the pause map.
+- **Still wrong:** the combiner-shaded surfaces (cel-shaded characters, part of the city) are drawn
+  as stage 0 × diffuse until V3. That fools `key-script-run.py`'s menu detector, so the stock e2e
+  stalls at the title on Vulkan.
+- **Speed:** vertex programs run on the CPU until V5, and flips were 6,036 against D3D11's 10,918 on
+  the same script.
+
+**V2: parity tests.**
+
+- `tests/test_gpu_backend_parity_vk.c` (`jsrf_gpu_backend_parity_vk`, lavapipe) covers:
+  - the clear contract;
+  - textured, untextured, alpha-tested, culling, depth and stencil cases;
+  - the 16bpp round trip, reshape and eviction;
+  - flush-before-sample.
+- **Mutations:** the cull winding, the clear expansion and flush-before-sample each fail it.
+- **A known difference, an XFAIL:** a 16-bit target first cleared in a frame reads destination alpha
+  0 where the CPU path reads 1, a deliberate mirror of D3D11 (`nv2a_vk_backend.c:1096`).
+- **Next: V3**, the combiner uber-shader compiled ahead of time.
