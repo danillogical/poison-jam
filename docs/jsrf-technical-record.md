@@ -2182,3 +2182,57 @@ so `VertexBuffer_Lock` on the shared font buffer returns before the GPU has draw
 
 These, not shading, are the performance levers. The owner chose ahead-of-time code over live
 translation (Phase S, then a library lift), which removes them at the source.
+
+### §31.12 The vertex programs are static data: the ahead-of-time shader corpus (2026-10-13)
+
+**F3 (gamma ramp) is dropped, measured.** `logs/runs/20261013-023140-810-keyscript-logo-fade` (the
+present dumps from boot) shows smooth ramps:
+
+- the SEGA card's mean brightness goes 0 → 11.6 → 0 over about 90 presents;
+- the Smilebit card's background goes 0, 8, 16, … 246, 255 and back in steps of 8.
+
+The fades render without a gamma ramp.
+
+**Where the programs live.**
+
+- **The game's own shaders:** 125 XDK vertex-shader functions in the XBE's `.data`, packed between VA
+  `0x001FC730` and `0x0020B8F0`.
+  - Each is a header dword (low word `0x2078`, high word the instruction count) followed by 16-byte
+    NV2A instructions, with the last one FINAL.
+  - They are reached through pointer tables at `0x20C508`/`0x20C598` and immediate pointers (e.g.
+    `0x698D9`).
+  - All of them go through one game wrapper into `D3DDevice_CreateVertexShader` (`0x18FF90`, called
+    at `0x14E28A`).
+- **Direct3D's own:** three pass-through programs at `0x19A258`, `0x19A318` and `0x19A3C8`, chosen
+  at `0x1903A0`.
+- **No transformation:** both paths copy the words unchanged (`0x18FC80`, `rep movsd` into
+  `SET_TRANSFORM_PROGRAM`).
+- **`game/Media/` has none:** all 3,220 files were scanned, and the only hits were one- and
+  two-instruction noise.
+
+**Counts.**
+
+| | Programs |
+|---|---|
+| Static, total | 128 (126 distinct, no hash collisions) |
+| Used by an e2e run (`20261013-023551-222-keyscript-e2e-vshcorpus`) | 21 |
+| Matched on hash, length and input mask | 21/21 |
+| Write `c[]` | 0 |
+
+**Statically extracted programs match live ones.**
+
+- `nv2a_vsh_program_info`'s hash and input mask depend on the instruction words alone.
+- `nv2a_vsh_hlsl` fed the in-place XBE words produces byte-identical HLSL to the live run for all 21.
+- All 126 compile with `dxc -spirv -T vs_6_0` and pass `spirv-val` (Vulkan SDK 1.4.357 on the host).
+
+**The S2 corpus source is static extraction**, with a logged-miss fallback as the safety net. The
+table keys on the hash and checks the word count plus a digest, because the hash is a 32-bit FNV.
+`scripts/find-vertex-programs.py` reports offsets, VAs, hashes and masks only, never asset bytes.
+
+**Vulkan notes for Phase V/S:**
+
+- D3D's clip-space y points up, so use a negative viewport height or `-fvk-invert-y`;
+- `SV_ClipDistance0` needs `shaderClipDistance`;
+- emit `[[vk::location(n)]]` so the input location equals the attribute index.
+
+**Not traced:** a D3D reload of a 12-instruction program from a device-held buffer at `0x198936`.
