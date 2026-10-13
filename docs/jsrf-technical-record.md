@@ -2073,16 +2073,39 @@ intro, then Start, Down/Up, Start, move, Start, B).
 | 50 | `0x0005208A` | span cut short: `0x00052050`'s recorded end `0x00052088` stopped before its `jmp eax` mode-handler dispatch and its `pop esi; ret` | end → `0x0005208C`; `0x52050` removed from `KNOWN_OPEN` in `tests/test_recovery_span_ownership.py` |
 | 51 | `0x00079740` | omitted function: after nop padding, absent from the database, a fatal stub | recovered `[0x79740, 0x79B47)`; recursive descent found 8 plain `ret` exits and 9 tail jumps |
 | 51 family | `0x78CC0`, `0x79030`, `0x790D0`, `0x79140` | omitted tail-jump targets of `0x79740` | recovered; `0x78CC0`'s five-entry jump table at `0x79014` stays outside its span |
-| 52 | `0x00114080` | omitted function, same shape | open |
+| 52 | `0x00114080` | omitted function, same shape | recovered `[0x114080, 0x1140CC)` in the batch below |
 
 Before the fix, the cut-short `0x00052050` skipped its handler dispatch for **every** mode
 through table `0x001F9C48`, not only the pause. The run
 `20261012-221821-806-keyscript-pause-fix-2` logs `0x00052050` and `0x00079740` returning with
 their ABI verified before stop 52.
 
-**Omitted functions as a class.** `config/recovery-unresolved.json` lists 104 fatal stub targets,
-and stops 51 and 52 share one shape: a function entry after nop padding that the analysis
-database lacks. A batch classification of the 104 is the next repair step.
+**Omitted functions as a class, repaired in one batch.** `config/recovery-unresolved.json` listed
+102 fatal stub targets after stop 51. Each was classified by its bytes:
+
+- **25 omitted functions, recovered.** Each sits after a terminator plus padding, with one consistent
+  `ret` immediate, no indirect `jmp`, and no database or recovered start inside its recursive-descent
+  extent. That includes stop 52, the twelve `0x119C20`..`0x11B2F0` siblings, and DSOUND's
+  `0x19F040` (`ret 8`).
+- **0 truncated owners.**
+- **77 ambiguous, left alone:**
+  - 63 interior labels of their own database functions;
+  - 3 unbounded indirect `jmp`;
+  - 4 non-code bytes after `0x127810`;
+  - 5 that are clean apart from a database false split or an overlap: `0x6FE40`, `0x6FFA0`,
+    `0x70060`, `0xB8A60`, `0x111C10`;
+  - 2 with bad exits: `0x77000`, `0xC1050`.
+
+Regeneration added no new unresolved targets (102 → 77).
+
+**Pause works.** `logs/runs/20261012-225247-299-keyscript-pause-batch` ran the whole pause script with
+no `[ICALL]`, ABI failure or fatal, and `0x00052050`, `0x00079740`, `0x00078CC0` and `0x00114080`
+returned with their ABI verified. The frames show:
+
+- the pause map (Garage, Shibuya Terminal, Dogenzaka Hill, RETURN TO GAME);
+- the side-menu highlight moving;
+- gameplay resumed and the player moving;
+- a second pause closed by B.
 
 **Owner-reported rendering defects, not yet investigated.**
 

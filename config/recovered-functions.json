@@ -5874,6 +5874,22 @@
   "evidence": "Recovered because manifest entry 0x00091C00 declared [0x00091C00, 0x00091EB0) but its own reachable body ends at 0x00091C24, and this address lies in the over-run with independent entry evidence: aligned pointer at 0x0020D8E4. scripts/check-hidden-entries.py proves the containment; the span is tightened to the container's own end and this address gets its own body so the runtime resolves it instead of trapping. stack_args 0 was PROVED."
  },
  {
+  "start": "0x00091FC0",
+  "end": "0x00092053",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x00091FC0 follows nop padding after the ret at 0x00091FB1, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x00093940 and 0x00093A50. Recursive descent from the entry: 29 instructions, extent 0x00091FC0..0x00092053, one plain ret exit at 0x92052, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x00092060 after nop padding.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00092060",
+  "end": "0x000920F3",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x00092060 follows nop padding after the ret at 0x00092052, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x00093850. Recursive descent from the entry: 29 instructions, extent 0x00092060..0x000920F3, one plain ret exit at 0x920F2, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x00092100 after nop padding.",
+  "stack_args": 0
+ },
+ {
   "start": "0x00092100",
   "end": "0x000921A0",
   "section": ".text",
@@ -7808,6 +7824,14 @@
   "stack_args": 0
  },
  {
+  "start": "0x000B9270",
+  "end": "0x000B94AC",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x000B9270 follows the ret at 0x000B9247 that ends the omitted 0x000B8A60, that function's seven-entry switch table at 0x000B9248..0x000B9264 (data, not code) and nop padding, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x000B9960. Recursive descent from the entry: 140 instructions, extent 0x000B9270..0x000B94AC, three plain ret exits at 0xB9284, 0xB9487, 0xB94AB, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x000B94B0 after nop padding. The analysis database's 0x000B9087..0x000B94B0 runs across this entry; that start is a false split inside the previous function, not an entry of this one. Skipped alignment filler inside: 0xB93CD..0xB93D0 (8d4900).",
+  "stack_args": 0
+ },
+ {
   "start": "0x000B9940",
   "end": "0x000B9960",
   "section": ".text",
@@ -8565,6 +8589,14 @@
   "kind": "routine",
   "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CDFF0, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_000C6690 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000C6670 at sub_000C6690. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x000C6670..0x000C6690. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
   "stack_args": 4
+ },
+ {
+  "start": "0x000C6820",
+  "end": "0x000C694B",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x000C6820 follows nop padding after the jmp 0x1baa50 at 0x000C680F, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x000C6B50. Recursive descent from the entry: 99 instructions, extent 0x000C6820..0x000C694B, one plain ret exit at 0xC694A, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x000C6950 after nop padding. The analysis database's 0x000C67E8..0x000C6950 runs across this entry; that start is a false split inside the previous function, not an entry of this one.",
+  "stack_args": 0
  },
  {
   "start": "0x000C6B50",
@@ -9978,6 +10010,14 @@
   "stack_args": 4
  },
  {
+  "start": "0x000D52A0",
+  "end": "0x000D534E",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x000D52A0 follows nop padding after the ret at 0x000D529D, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x000D5350. Recursive descent from the entry: 43 instructions, extent 0x000D52A0..0x000D534E, two plain ret exits at 0xD5340, 0xD534D, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x000D5350 after nop padding.",
+  "stack_args": 0
+ },
+ {
   "start": "0x000D5350",
   "end": "0x000D5390",
   "section": ".text",
@@ -10456,6 +10496,22 @@
   "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000D97D0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000D9780..0x000D97D0, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
  },
  {
+  "start": "0x000D9920",
+  "end": "0x000D9A07",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x000D9920 follows nop padding after the ret at 0x000D991B, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x000D9BA0. Recursive descent from the entry: 60 instructions, extent 0x000D9920..0x000D9A07, one plain ret exit at 0xD9A06, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x000D9A10 after nop padding.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x000D9A10",
+  "end": "0x000D9A86",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x000D9A10 follows nop padding after the ret at 0x000D9A06, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x000D9CD0 and 0x000D9DA0 and 0x000D9E60. Recursive descent from the entry: 34 instructions, extent 0x000D9A10..0x000D9A86, two plain ret exits at 0xD9A79, 0xD9A85, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x000D9A90 after nop padding.",
+  "stack_args": 0
+ },
+ {
   "start": "0x000D9A90",
   "end": "0x000D9BA0",
   "section": ".text",
@@ -10560,6 +10616,14 @@
   "stack_args": 0
  },
  {
+  "start": "0x000DA3E0",
+  "end": "0x000DA5A6",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x000DA3E0 follows nop padding after the ret at 0x000DA3DE, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x000DA700. Recursive descent from the entry: 138 instructions, extent 0x000DA3E0..0x000DA5A6, one plain ret exit at 0xDA5A5, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x000DA5B0 after nop padding.",
+  "stack_args": 0
+ },
+ {
   "start": "0x000DA6E0",
   "end": "0x000DA700",
   "section": ".text",
@@ -10652,6 +10716,22 @@
   "section": ".text",
   "kind": "routine",
   "evidence": "Recovered because the alias fold had redirected its dispatch to sub_000DAC90 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x000DAC20..0x000DAC90, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x000DAF90",
+  "end": "0x000DB0E3",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x000DAF90 follows nop padding after the ret at 0x000DAF80, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x000DB330. Recursive descent from the entry: 107 instructions, extent 0x000DAF90..0x000DB0E3, two plain ret exits at 0xDB0CE, 0xDB0E2, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x000DB0F0 after nop padding. Skipped alignment filler inside: 0xDAFBD..0xDAFC0 (8d4900).",
+  "stack_args": 0
+ },
+ {
+  "start": "0x000DB0F0",
+  "end": "0x000DB253",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x000DB0F0 follows nop padding after the ret at 0x000DB0E2, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x000DB3D0. Recursive descent from the entry: 107 instructions, extent 0x000DB0F0..0x000DB253, one plain ret exit at 0xDB252, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x000DB260 after nop padding.",
   "stack_args": 0
  },
  {
@@ -11973,6 +12053,14 @@
   "stack_args": 0
  },
  {
+  "start": "0x000E7260",
+  "end": "0x000E73C8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x000E7260 follows nop padding after the jmp 0x1baa50 at 0x000E724F, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x000E7620. Recursive descent from the entry: 94 instructions, extent 0x000E7260..0x000E73C8, one plain ret exit at 0xE73C7, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x000E73D0 after nop padding.",
+  "stack_args": 0
+ },
+ {
   "start": "0x000E7450",
   "end": "0x000E7470",
   "section": ".text",
@@ -12155,6 +12243,14 @@
   "stack_args": 4
  },
  {
+  "start": "0x000EAFC0",
+  "end": "0x000EB157",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x000EAFC0 follows nop padding after the ret 4 at 0x000EAFB1, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x000EB200. Recursive descent from the entry: 122 instructions, extent 0x000EAFC0..0x000EB157, one plain ret exit at 0xEB156, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x000EB160 after nop padding.",
+  "stack_args": 0
+ },
+ {
   "start": "0x000EB1E0",
   "end": "0x000EB200",
   "section": ".text",
@@ -12177,6 +12273,14 @@
   "kind": "routine",
   "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001CEED8, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_000EB3C0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x000EB390 at sub_000EB3C0. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x000EB390..0x000EB3C0. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
   "stack_args": 4
+ },
+ {
+  "start": "0x000EB440",
+  "end": "0x000EB531",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x000EB440 follows nop padding after the jmp 0x1baa50 at 0x000EB432, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x000EB740. Recursive descent from the entry: 81 instructions, extent 0x000EB440..0x000EB531, one plain ret exit at 0xEB530, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x000EB540 after nop padding.",
+  "stack_args": 0
  },
  {
   "start": "0x000EB630",
@@ -14310,6 +14414,14 @@
   "stack_args": 0
  },
  {
+  "start": "0x00114080",
+  "end": "0x001140CC",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x00114080 follows nop padding after the ret at 0x00114076, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x001145F0 (stop 52, the pause menu). Recursive descent from the entry: 22 instructions, extent 0x00114080..0x001140CC, one plain ret exit at 0x1140CB, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x001140D0 after nop padding.",
+  "stack_args": 0
+ },
+ {
   "start": "0x001145D0",
   "end": "0x001145F0",
   "section": ".text",
@@ -14483,6 +14595,54 @@
   "stack_args": 4
  },
  {
+  "start": "0x00119C20",
+  "end": "0x00119CD4",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x00119C20 follows nop padding after the ret at 0x00119C13, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x00119EC0. Recursive descent from the entry: 66 instructions, extent 0x00119C20..0x00119CD4, two plain ret exits at 0x119CC1, 0x119CD3, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x00119CE0 after nop padding.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00119CE0",
+  "end": "0x00119D96",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x00119CE0 follows nop padding after the ret at 0x00119CD3, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x00119EC0. Recursive descent from the entry: 69 instructions, extent 0x00119CE0..0x00119D96, three plain ret exits at 0x119D14, 0x119D33, 0x119D95, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x00119DA0 after nop padding.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00119DA0",
+  "end": "0x00119DD3",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x00119DA0 follows nop padding after the ret at 0x00119D95, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x00119EC0. Recursive descent from the entry: 21 instructions, extent 0x00119DA0..0x00119DD3, one plain ret exit at 0x119DD2, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x00119DE0 after nop padding.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00119DE0",
+  "end": "0x00119E13",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x00119DE0 follows nop padding after the ret at 0x00119DD2, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x00119EC0. Recursive descent from the entry: 21 instructions, extent 0x00119DE0..0x00119E13, one plain ret exit at 0x119E12, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x00119E20 after nop padding.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00119E20",
+  "end": "0x00119E53",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x00119E20 follows nop padding after the ret at 0x00119E12, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x00119EC0. Recursive descent from the entry: 21 instructions, extent 0x00119E20..0x00119E53, one plain ret exit at 0x119E52, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x00119E60 after nop padding.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00119E60",
+  "end": "0x00119E93",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x00119E60 follows nop padding after the ret at 0x00119E52, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x00119EC0. Recursive descent from the entry: 21 instructions, extent 0x00119E60..0x00119E93, one plain ret exit at 0x119E92, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x00119EA0 after nop padding.",
+  "stack_args": 0
+ },
+ {
   "start": "0x00119EA0",
   "end": "0x00119EC0",
   "section": ".text",
@@ -14537,6 +14697,22 @@
   "kind": "routine",
   "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001D7C20, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_0011AC40 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x0011AC20 at sub_0011AC40. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x0011AC20..0x0011AC40. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21).",
   "stack_args": 4
+ },
+ {
+  "start": "0x0011B290",
+  "end": "0x0011B2E4",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x0011B290 follows nop padding after the ret at 0x0011B288, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x0011B660. Recursive descent from the entry: 22 instructions, extent 0x0011B290..0x0011B2E4, one plain ret exit at 0x11B2E3, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x0011B2F0 after nop padding.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0011B2F0",
+  "end": "0x0011B322",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x0011B2F0 follows nop padding after the ret at 0x0011B2E3, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x0011B660. Recursive descent from the entry: 14 instructions, extent 0x0011B2F0..0x0011B322, one plain ret exit at 0x11B321, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x0011B330 after nop padding.",
+  "stack_args": 0
  },
  {
   "start": "0x0011B660",
@@ -14857,6 +15033,14 @@
   "kind": "routine",
   "evidence": "A method of the function-pointer table at 0x001DE938. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_00135310 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x001352F0 at sub_00135310. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x001352F0..0x00135310, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
   "stack_args": 4
+ },
+ {
+  "start": "0x00136410",
+  "end": "0x00136550",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x00136410 follows nop padding after the ret 0xc at 0x0013640C, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x00134F00. Recursive descent from the entry: 109 instructions, extent 0x00136410..0x00136550, one plain ret exit at 0x13654F, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x00136550 immediately after.",
+  "stack_args": 0
  },
  {
   "start": "0x001373A0",
@@ -19802,6 +19986,14 @@
   "section": ".text",
   "kind": "routine",
   "evidence": "Recovered because the alias fold had redirected its dispatch to sub_0016AF80 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x0016AFD6..0x0016B00C, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0016B090",
+  "end": "0x0016B0CF",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x0016B090 follows nop padding after the ret 0xc at 0x0016B085, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x0018A77B. Recursive descent from the entry: 23 instructions, extent 0x0016B090..0x0016B0CF, one plain ret exit at 0x16B0CE, so stack_args 0; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x0016B0D0 after nop padding.",
   "stack_args": 0
  },
  {
@@ -24976,6 +25168,14 @@
   "kind": "routine",
   "evidence": "Entered from data: the address is an aligned dword in a .rdata vtable, so it is a function entry by definition. The translation pass classified it tail_jump_alias and folded it into the next entry under the ff4d442 abutting-alias rule -- this entry's end equals that entry's start -- which deleted the body and pointed the dispatch tuple at the wrong function, so a virtual call through the slot executes an unrelated body. The body is a complete function that terminates before the fold target, so the original never fell through into it. Found by scripts/scan-alias-redirects.py, which lists every redirect in this shape. Here: slot 0 of the vtable at 0x001E0DF0 and the immediate stored at 0x001E0DB0. Body 0x0019EE34..0x0019EE50 is the scalar deleting destructor -- TEST byte [ESP+4],1; MOV ESI,ECX; MOV [ESI],0x1E0DB0; conditional CALL 0x1A0F09; MOV EAX,ESI; POP ESI; RET 4 -- while the fold sent the slot to 0x0019EE50, an unrelated function. Evidence: report-deepseek.md, 2026-09-22.",
   "stack_args": 4
+ },
+ {
+  "start": "0x0019F040",
+  "end": "0x0019F05C",
+  "section": "DSOUND",
+  "kind": "routine",
+  "evidence": "Omitted function (pause-menu batch, classification of the 104 recovery-unresolved.json fatal stubs): 0x0019F040 follows directly after the ret 8 at 0x0019F03D, is absent from the analysis database, and was a fatal unresolved stub reached by a tail jump from the recovered 0x001684E0. Recursive descent from the entry: 10 instructions, extent 0x0019F040..0x0019F05C, one ret 8 exit at 0x19F059, so stack_args 2; no tail jumps and no indirect jmp; no database or recovered entry inside the extent; next entry 0x0019F05C immediately after. Direct call to 0x0019E6BD, which is not a database start.",
+  "stack_args": 2
  },
  {
   "start": "0x001A4A9B",

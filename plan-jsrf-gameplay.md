@@ -97,12 +97,15 @@ playing her tutorial onward a **human test** with a controller (XInput works; TR
 
 Next, in order:
 
-1. **The pause menu (stop 52 onward).** Start in gameplay walks a chain of omitted functions
-   (`0x00114080` is open). Classify the 104 fatal stub targets in `config/recovery-unresolved.json`,
-   recover the clean omitted-function entries in one batch, and rerun the pause script until
-   pause, menu navigation and resume work.
-2. **Owner-reported rendering defects:** the wrong background colour behind the Smilebit logo, and
-   flickering dialogue text and speaker name that drop characters.
+1. **The pause menu works** (stops 50–52 and a 25-function omitted-function batch; TR §31.10).
+   77 ambiguous fatal targets remain in `config/recovery-unresolved.json`; repair each when a run
+   reaches it, or port reJSRF's analysis passes (`nworkers/xboxrecomp` `2649f5f`, `65648d4`) and
+   regenerate.
+2. **Owner-reported rendering defects:** flickering dialogue text and speaker name that drop
+   characters. The lead is andeecollard/jsrf-recomp `5358eec`: `D3D_SetFence` (`0x00191390`)
+   releases the pre-increment `[dev+0x30]`, so our fence mirror's published counter makes every
+   fence wait a no-op and the shared font vertex buffer is overwritten before it is drawn. Also the
+   wrong background colour behind the Smilebit logo.
 3. Then the remaining DoD checks: K17's B-back return to the main menu, the 15-minute soak, and
    the audio sanity check.
 
