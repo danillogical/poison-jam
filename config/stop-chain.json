@@ -525,6 +525,49 @@
     }
    ],
    "note": "ABI FAILURE after the skate jump: ESP 00F7FED0 -> 00F7FEC4, expected +8. The recovery span [0x000FFFD0,0x000FFFE1) contained only six prologue instructions and three unmatched pushes. Original XBE body runs to 0x001005B5, with restoring RET 4 exits at 0x001005A4 and 0x001005B2. REPAIRED: full owner restored with stack_args 4; eight false internal entries 0x00100041/47/4A/4D/53/55/58/5A and their manual/dispatch symbols removed. CONFIRMED: fixed skate run on 34553f9 (descends from 9b0af4e) records `[RECOVERED] 0x000FFFD0 returned; ABI verified (ESP/EBX/ESI/EDI)`, all 71 script steps complete, and no further ABI failure through the 480 s bound. Zero driver fatal counts in the discovering run do not override its ABI abort or incomplete script."
+  },
+  {
+   "id": 50,
+   "address": "0x0005208A",
+   "state": "REPAIRED",
+   "repair_commit": "b2418e75b67dfeedc0302794e30e8cc11a871697",
+   "evidence": [
+    {
+     "run": "20261012-205344-091-keyscript-gum-tutorial-repro",
+     "role": "discovered"
+    }
+   ],
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x0005208A` when the pause menu opens (the owner's controller session and the gum-tutorial reproduction both hit it). 0x0005208A is not a function: it is the `pop esi; ret` exit of the recovered 0x00052050, whose recorded end 0x00052088 also cut off its `jmp eax` dispatch through the mode-handler table 0x001F9C48, so every mode handler was skipped. REPAIRED: end widened to 0x0005208C; 0x52050 removed from KNOWN_OPEN. The pause-batch run 20261012-225247-299 logs `[RECOVERED] 0x00052050 returned; ABI verified` and completes the pause script; the row stays REPAIRED because its address is an exit label of 0x00052050, not a function, as for stop 43."
+  },
+  {
+   "id": 51,
+   "address": "0x00079740",
+   "state": "RUNTIME_CONFIRMED",
+   "repair_commit": "b2418e75b67dfeedc0302794e30e8cc11a871697",
+   "evidence": [
+    {
+     "run": "20261012-214658-151-keyscript-pause-fix",
+     "role": "discovered"
+    },
+    {
+     "run": "20261012-225247-299-keyscript-pause-batch",
+     "role": "returned"
+    }
+   ],
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x00079740` after stop 50 returned. An omitted function: after nop padding, absent from the analysis database. REPAIRED: recovered [0x00079740, 0x00079B47) with its tail-jump targets 0x00078CC0, 0x00079030, 0x000790D0 and 0x00079140, also omitted. CONFIRMED: the pause-batch run logs 0x00079740 and 0x00078CC0 returning with their ABI verified."
+  },
+  {
+   "id": 52,
+   "address": "0x00114080",
+   "state": "REPAIRED",
+   "repair_commit": "25b3f1d2c2002d5997b5e39d8c8e6c6980209861",
+   "evidence": [
+    {
+     "run": "20261012-221821-806-keyscript-pause-fix-2",
+     "role": "discovered"
+    }
+   ],
+   "note": "Fatal `[ICALL] Failed to resolve VA 0x00114080` after stop 51 returned. Omitted function, recovered [0x00114080, 0x001140CC) in the 25-function batch of TR §31.10. The pause-batch run (20261012-225247-299) logs `[RECOVERED] 0x00114080 returned; ABI verified` and completes the pause script, but it was built from the uncommitted tree before 25b3f1d, so the row stays REPAIRED until a run built from 25b3f1d or later confirms it."
   }
  ]
 }

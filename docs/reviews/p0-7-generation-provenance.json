@@ -23,10 +23,10 @@
  "generation_mode": "full regeneration 2026-09-28 with the toolkit 2925f0b lifter, then relift-selected.py boundaries; hand edits re-applied (recomp_types.h project additions, A4b2 watch hooks)",
  "generators": {
   "project": {
-   "dirty": true,
-   "revision": "b2418e75b67dfeedc0302794e30e8cc11a871697",
+   "dirty": false,
+   "revision": "25b3f1d2c2002d5997b5e39d8c8e6c6980209861",
    "state": "MEASURED",
-   "status_sha256": "ebd007e28d6288851473ff3259bc6e46630f3e13a4bfd90b2a54ab2b1646df85"
+   "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "scripts/recover-functions.py": "c23b7d52fac7bce8a8a63a62a06fafaa9cb375cfe9b047aa5215e664a0586b77",
   "scripts/relift-selected.py": "6525ba181f0338ca232f30bbb9c04421a349b87f9dc5fef457f41c8b69518cbf",
@@ -51,9 +51,9 @@
    "sha256": "eb7a03a8c52e628e656c2a5b6984a04460e469553fc0c4ae5a5bf99d3b2b1b6b"
   },
   "config/recovered-functions.json": {
-   "bytes": 3276936,
+   "bytes": 3303097,
    "present": true,
-   "sha256": "68856bad2a649a9f690a7d8d4d8cbe101f4e938fad98351518e161acc2665f77"
+   "sha256": "7d52ca7073ced95a09df4342f6c2909ccbe80572a4fa9f1cbfa454b150466046"
   },
   "config/recovery-unresolved.json": {
    "bytes": 2546,
