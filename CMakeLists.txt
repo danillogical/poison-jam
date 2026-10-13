@@ -160,6 +160,21 @@ if(BUILD_TESTING)
     target_link_libraries(jsrf_dpc_queue_test PRIVATE xboxrecomp)
     add_test(NAME jsrf_dpc_queue_bridge COMMAND jsrf_dpc_queue_test)
     set_tests_properties(jsrf_dpc_queue_bridge PROPERTIES TIMEOUT 20)
+    # A semaphore release (0x1D70) writes its value into a release-opted fence
+    # mirror's word and the mirror tick then leaves it alone; live mode never
+    # latches. Needs the whole kernel, so it links the game's xboxrecomp target.
+    # One process per mode: RECOMP_FENCE_MIRROR_LIVE is read once.
+    add_executable(jsrf_fence_release_runtime_test
+        ${XBOXRECOMP_DIR}/tests/fence_release_runtime_test.c)
+    target_include_directories(jsrf_fence_release_runtime_test PRIVATE
+        ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/kernel
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/gen)
+    target_link_libraries(jsrf_fence_release_runtime_test PRIVATE xboxrecomp)
+    add_test(NAME jsrf_fence_release_runtime COMMAND jsrf_fence_release_runtime_test normal)
+    set_tests_properties(jsrf_fence_release_runtime PROPERTIES TIMEOUT 60)
+    add_test(NAME jsrf_fence_release_runtime_live COMMAND jsrf_fence_release_runtime_test live)
+    set_tests_properties(jsrf_fence_release_runtime_live PROPERTIES TIMEOUT 60
+        ENVIRONMENT "RECOMP_FENCE_MIRROR_LIVE=1")
     # A4b1 step 8 (AC-FIX).  Registered TWICE, on purpose: the trace is read
     # once and cached (apu_watch_trace_enabled), so one process can only ever
     # exercise one arm.  The trace-on arm checks the line-vs-snapshot rule; the

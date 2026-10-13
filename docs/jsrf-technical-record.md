@@ -2148,3 +2148,37 @@ so `VertexBuffer_Lock` on the shared font buffer returns before the GPU has draw
 - `config/key-scripts/e2e.json`: the owner's end-to-end run. Intro, skate forward, jump twice, pause,
   resume, skate, jump twice. It completed in `20261012-234748-502-keyscript-e2e-baseline` with no
   ICALL or fatal; x went 408 → 329 → 292 → 220 → 180.
+
+**F2: the fence, fixed.** Toolkit `xbox_Nv2aFenceRelease`; game `src/main.c` opts in with
+`XBOX_FENCE_MIRROR_RELEASES`; ledger L17.
+
+- **How it works now.** The executor writes each `0x1D70` semaphore release (`D3D_SetFence`'s
+  pre-increment counter, `0x001913AD`/`0x001913BE`) into `*[[0x19DCE0]+0x34]` in stream order, and
+  the fence mirror stands down after the first release.
+- **Why that is safe.** Vertex data is copied out of guest RAM synchronously at END on the
+  PUT-writing thread, and the D3D11 backend never rereads guest vertex memory, so a release is written
+  only after the draws before it have consumed their vertices.
+
+| Run | "Corn" label | Balloon text |
+|---|---|---|
+| Fixed: `20261013-010408-599-keyscript-talk-dwell-f2b` | 40/40 | correct 40/40 |
+| A/B, same build, `RECOMP_FENCE_MIRROR_LIVE=1`: `20261013-011950-899-keyscript-talk-dwell-f2-live` | 1/40 | defect back |
+
+- **e2e:** `20261013-010916-545-keyscript-e2e-f2` completes with no ICALL or fatal.
+- **The cost:** about 4–8% fewer presents (11042 vs 12017 over 559 s), since the title now waits
+  where it never did. jsrf-recomp measured 1.3%.
+- **Tests:** `fence_snapshot` (95 checks) and `jsrf_fence_release_runtime` / `_live` (real
+  memory layout, tick and executor hook). The mutations that ignore the latch, or latch in live mode,
+  fail them.
+
+**Where the frame time goes (e2e-f2, 550 s), and why Phase S is not a speed fix.**
+
+- **Already on the GPU:** every vertex-program batch (524,775, 0 declined to the CPU, 21 shaders,
+  2.85 s total compile) and every combiner draw (593k, 15 shaders, 0.4 s).
+- **Executor busy: 339 s.** That includes:
+  - 123 s of fixed-function/screen-space work transformed on the CPU;
+  - 90 s of per-vertex attribute fetch for program batches.
+- **Render-target readbacks: 76.5 s** (21,835, about 2 per flip).
+
+These, not shading, are the performance levers. The owner chose ahead-of-time code over live
+translation (Phase S, then a library lift), which removes them at the source.

@@ -611,9 +611,14 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
      * ends -- which is exactly what the previous registration did.
      *
      * The title's own code publishes this word itself at 0x0019133B as
-     * `[dev+0x30] - 2`, so the counter at +0x30 is the quantity the wait wants
-     * and the counter is what is mirrored here. Nothing executes the push
-     * buffer synchronously, so the counter is the honest answer.
+     * `[dev+0x30] - 2`. D3D_SetFence (0x00191390) releases `[dev+0x30]` through
+     * method 0x1D70 and only then adds 2, so the counter itself is one fence
+     * ahead of anything the GPU can have written; mirroring it made every
+     * D3D_BlockOnTime (0x00191440) return at once, and the font pages, which
+     * share one vertex buffer, overwrote each other before they were drawn.
+     * XBOX_FENCE_MIRROR_RELEASES lets the executor write each 0x1D70 parameter
+     * in stream order instead, after the draws before it have copied their
+     * vertices; the counter mirror covers only the time before the first one.
      *
      * This is a HOST-SIDE WRITER into guest memory and it is a plausible competitor for the
      * software-device slot, so it is checked rather than assumed: the device pointer global is at
@@ -626,7 +631,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
      * through fence_readable, which handles the contiguous window, so
      * registering before the device exists is fine.
      */
-    if (xbox_Nv2aMirrorFence(0x0019DCE0u, 0x30u, 0x34u) != 0)
+    if (xbox_Nv2aMirrorFenceEx(0x0019DCE0u, 0x30u, 0x34u, XBOX_FENCE_MIRROR_RELEASES) != 0)
         fprintf(stderr, "[NV2A] fence mirror registration failed\n");
 
     /* ── THE RECOMPILED START SET, PUBLISHED BEFORE THE WATCH CAN ARM ────────────────────────────
