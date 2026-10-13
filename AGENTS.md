@@ -1,5 +1,16 @@
 # JSRF Windows recompilation: engineering guide
 
+## Orchestration
+
+- **Codex agent (Plan Orchestrator):** use `$codex-omp-orchestrator` and its Codex
+  Plan Orchestrator reference.
+- **Primary OMP agent (Turn Orchestrator):** use `$codex-omp-orchestrator` and its
+  OMP Turn Orchestrator reference.
+- **Other OMP roles:** remain subagents and follow the skill's subagent guidance
+  within the Turn Orchestrator's assignment.
+
+## Project
+
 Port Jet Set Radio Future to Windows through Xbox static recompilation. First reach a
 playable opening area with movement, graffiti, audio and save/resume; then expand to
 the whole game. Work in small, verifiable milestones and explain defects with evidence.
