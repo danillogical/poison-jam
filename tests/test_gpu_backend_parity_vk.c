@@ -21,12 +21,37 @@
  *     alpha on 16 bit targets, reshape, eviction, non-finite vertices.
  *   - The register combiners, gated: this back end runs a combiner uber shader, so a batch whose
  *     combiners are programmed is compared with the CPU reference like any other case. One sweep
- *     of 47 constant-vertex cases compares the GPU's pixel against nv2a_rc_eval called directly
+ *     of 45 constant-vertex cases compares the GPU's pixel against nv2a_rc_eval called directly
  *     with the same registers (the sharper oracle); four whole-surface cases (a four-stage batch
  *     with a linear and a swizzled texture, a batch with an unbound stage, the old final-combiner
  *     lerp, and one submission with three combiner draws plus a stage-0 fallback) are compared
  *     with the CPU executor. They run last in each pass: programming the combiners sticks in the
- *     executor for good (rc_seen never clears).
+ *     executor for good (rc_seen never clears). The sweep's mux and final-combiner flag cases also
+ *     state the value the oracle must produce (RcCase.want) and the cases that must differ from each
+ *     other (RcCase.group), so a fixture that stops exercising its flag fails on its own. A last
+ *     case drives the back end's draw contract directly with four distinguishable textures, which
+ *     the executor cannot do (stage 3's texture methods are not admitted).
+ *   - Randomized combiner states: 2 fixed seeds (0x20261013, 0x9E3779B9) x 256 cases = 512 whole
+ *     random states, drawn from a splitmix64 stream seeded only by (seed, index), so a case is
+ *     re-derivable from that pair alone and the printed inventory hash pins the whole list. Every
+ *     state is valid under the contracts the two implementations share (a stage reads only registers
+ *     an earlier stage wrote or the initialisation rule defines, stage modes 0-4, no true cube map,
+ *     fog factor only 0 or 1, texture coordinates at half-texel centres), and a state whose oracle
+ *     is not exactly reproducible is rejected and counted before it is drawn: the coverage block
+ *     prints the accepted count, the rejection counts by reason, and the counters for input
+ *     mappings, outputs, scale/bias, dot products, mux forms, register write/read ordering, stage
+ *     counts 0-8, shared vs per-stage factors, the final combiner's forms, fog, and the texture
+ *     stage modes -- each with a minimum, and a counter under its minimum FAILS the run. The
+ *     randomized suite runs in BOTH passes like the sweep, so the oracle is itself checked against
+ *     the executor before the GPU is compared with it. The oracle cannot model tent filtering
+ *     (every randomized texture is FILTER_NEAREST), stage modes above 4 or a true cube map (both
+ *     excluded, since the CPU reads zero for the former and the back end falls back for both), and
+ *     the fog factor's only reachable values are 1 (fog off) and 0 (fog on), because SET_FOG_MODE
+ *     and SET_FOG_PARAMS are not admitted methods. A third seed (0x51ED2701) drives a randomized
+ *     block through the back end's draw contract instead of the pushbuffer, binding a solid texture
+ *     to all four stages at once (the executor cannot bind stage 3 at all), Vulkan-only because the
+ *     CPU pass has no registered back end; it has its own coverage minimums and worst-difference
+ *     line.
  *
  * The test selects the CPU device with RECOMP_VK_DEVICE=llvmpipe, which CTest also sets together with
  * VK_DRIVER_FILES (cache variable XBR_VK_SW_ICD). It skips (exit 77) with a message when
@@ -91,6 +116,14 @@ void jsrf_slot_watch_write(uint32_t provenance, uint32_t before, uint32_t after,
 #define TEX_RC1   0x00C30000u     /* 8x8 SZ_R5G6B5 swizzled (combiner cases) */
 #define TEX_RC2   0x00C40000u     /* 8x8 SZ_A8R8G8B8 swizzled */
 #define TEX_RC3   0x00C50000u     /* 8x8 SZ_R5G6B5 swizzled, a different pattern */
+#define TEX_Q(n)  (0x00C60000u + (uint32_t)(n) * 0x00010000u)   /* four solid 8x8 SZ_A8R8G8B8 */
+/* The randomized combiner suite's own solid textures: eight 8x8 A8R8G8B8 colours, each written once
+ * in a linear range (stage 0, addressed in texels) and once in a swizzled range (stages 1-2, whose
+ * coordinates arrive normalised). Two ranges because the back end's texture cache is keyed on the
+ * address and the format: one address must not be seen as two formats. 0x00CA0000/0x00CB0000 are
+ * above every TEX_Q() slot (which ends at 0x00C9FFFF) and below EVICT_BASE. */
+#define TEX_RRL(n)  (0x00CA0000u + (uint32_t)(n) * 0x00001000u)
+#define TEX_RRS(n)  (0x00CB0000u + (uint32_t)(n) * 0x00001000u)
 #define EVICT_BASE 0x00D00000u    /* 17 targets of 16x16x4, 0x1000 apart */
 /* The combiner cases own their surfaces and vertex buffers, apart from every SURF()/VBUF() slot. */
 #define RCSURF(n) (0x00E00000u + (uint32_t)(n) * 0x00010000u)
@@ -102,6 +135,8 @@ void jsrf_slot_watch_write(uint32_t provenance, uint32_t before, uint32_t after,
 #define RC_S_PASS  5u
 #define RC_S_CUBE  6u
 #define RC_S_CLIP  7u
+#define RC_S_TEX4  8u
+#define RC_S_RAND  9u    /* the randomized sweep's target and vertex buffer (16 cells per submission) */
 #define SURF_BYTES 0x00010000u    /* span pre-filled/cleared per surface */
 #define SENTINEL  0x5Au
 #define SENTINEL32 0x5A5A5A5Au
@@ -542,6 +577,9 @@ static void write_guest_data(void)
                                                      | ((30 + y * 28) << 8) | (200 - (x + y) * 20);
         xbox_swizzle_rect(G(TEX_RC2), lin, 8, 8, 4);
     }
+    /* The randomized combiner suite binds exactly three of the images written above -- TEX_MAG
+     * (linear R5G6B5, addressed in texels), TEX_RC1 (swizzled R5G6B5) and TEX_RC2 (swizzled
+     * A8R8G8B8) -- so no new image is needed here and the deterministic cases keep their own. */
 }
 
 /* ── Running ─────────────────────────────────────────────────────────────── */
@@ -561,6 +599,7 @@ static int submit(const char *what)
     printf("  %s: accepted=%d draws+%u clears+%u tris+%u flips_stall+%u unhandled+%u\n",
            what, ok, a.draws - b.draws, a.clears - b.clears, a.tris_drawn - b.tris_drawn,
            a.flip_stalls - b.flip_stalls, a.unhandled - b.unhandled);
+    fflush(stdout);
     if (!ok)
         fprintf(stderr, "FAIL: pushbuffer rejected (%s): %s, subchannel %u method 0x%04X param 0x%08X, get 0x%X\n",
                 what, nv2a_submit_diagnostic(g_gpu->pfifo.submit_diag),
@@ -1562,9 +1601,12 @@ typedef struct {
     const char *what;          /* what this case decides */
     Nv2aCombiner rc;           /* the register words written, and what nv2a_rc_eval is given */
     uint32_t fog_en, fog_col;  /* SET_FOG_ENABLE / SET_FOG_COLOR */
+    int has_want;              /* the oracle's own value is pinned: see want */
+    int want[4];               /* r,g,b,a the label claims, 0..255; a negative entry is not checked */
+    unsigned group;            /* bit mask: the oracle must differ from every other case sharing a bit */
 } RcCase;
 
-static RcCase k_rc[64];
+static RcCase k_rc[64];   /* one 8x8 cell of the sweep surface each */
 static uint32_t k_rc_n;
 
 static RcCase *rc_add(const char *what, uint32_t n, uint32_t flags, uint32_t prog)
@@ -1579,6 +1621,14 @@ static RcCase *rc_add(const char *what, uint32_t n, uint32_t flags, uint32_t pro
     c->rc.final1 = 0x001C00u;          /* alpha from R0.a, so a case can leave final0 to itself */
     c->fog_col = RC_FOGCOL;
     return c;
+}
+/* Pin the value nv2a_rc_eval must produce for this case (r,g,b,a, 0..255; negative: not checked), and
+ * the groups (bit mask) of cases that must come out different from each other. */
+static void rc_want(RcCase *c, unsigned group, int r, int g, int b, int a)
+{
+    c->has_want = 1;
+    c->want[0] = r; c->want[1] = g; c->want[2] = b; c->want[3] = a;
+    c->group = group;
 }
 
 static void rc_table(void)
@@ -1641,22 +1691,33 @@ static void rc_table(void)
     c->rc.color_ocw[0] = (0x03u << 12) | (RC_R0 << 8);
     c->rc.factor0[0] = 0x0000003Fu;
     c->rc.final0 = RC_R0;
-    /* Sum vs mux, both mux forms. Stage 0 writes r0.a = c0.b * v0.a = 63/255 = 0.247, which the two
-     * forms read differently: the LSB form sees (int)(0.247*255) & 1 = 1, the MSB form sees
-     * 0.247 >= 0.5 = 0. Stage 1 then muxes A*B against C*D, which are far apart. */
+    /* Sum vs mux, both mux forms, both selections. Stage 0 writes r0.a = c0.a * 1 (an inverted ZERO is
+     * exactly 1), so r0.a is the 8-bit value k below and nothing else. Stage 1 then has A*B = v0*v0
+     * and C*D = c1*v0, far apart, and its output word either adds them or, with the mux-enable bit
+     * (OCW fl & 4, bits 14), picks one by the mux condition (control bit 0 clear: (int)(r0.a*255) & 1
+     * selects CD; set: r0.a >= 0.5 selects CD). k = 65 is odd and below 0.5, k = 130 even and above,
+     * so the two modes select opposite products at either k.
+     *   sum      = 72,96,181      AB = 16,36,145      CD = 56,60,36
+     * The final combiner outputs r0 (rgb from stage 1, alpha k). */
     {
-        static const uint32_t fl[2] = { 0x04u, 0x05u };
-        for (m = 0; m < 2; m++) {
-            c = rc_add(m ? "mux by r0.a >= 0.5 (fl & 1 set)"
-                         : "mux by (int)(r0.a*255) & 1 (fl & 1 clear)", 2, fl[m], 0);
+        static const struct { const char *what; uint32_t flags, mux, k, group; int rgb[3]; } mx[5] = {
+            { "no mux bit: stage 1 adds AB + CD (k = 65)", 0, 0, 65, 3, { 72, 96, 181 } },
+            { "mux, LSB form (control bit 0 clear), r0.a = 65 odd: picks CD", 0, 1, 65, 1, { 56, 60, 36 } },
+            { "mux, LSB form, r0.a = 130 even: picks AB", 0, 1, 130, 1, { 16, 36, 145 } },
+            { "mux, MSB form (control bit 0 set), r0.a = 130 >= 0.5: picks CD", 1, 1, 130, 2, { 56, 60, 36 } },
+            { "mux, MSB form, r0.a = 65 < 0.5: picks AB", 1, 1, 65, 2, { 16, 36, 145 } }
+        };
+        for (m = 0; m < 5; m++) {
+            c = rc_add(mx[m].what, 2, mx[m].flags, 0);
             c->rc.color_ocw[0] = 0;                      /* stage 0 writes no RGB */
-            c->rc.alpha_icw[0] = RC_C0 << 24 | RC_V0 << 16;
-            c->rc.alpha_ocw[0] = RC_R0 << 4;             /* r0.a = c0.b * v0.a = 0.247 */
-            c->rc.factor0[0] = 0x0000003Fu;
-            c->rc.color_icw[1] = RC_C0 << 24 | RC_V0 << 16 | RC_V0 << 8 | RC_C1;
-            c->rc.color_ocw[1] = RC_R0 << 8;             /* the muxed sum -> r0.rgb */
-            c->rc.factor1[0] = 0xFFFFFFFFu;
+            c->rc.alpha_icw[0] = RC_A(RC_C0) << 24 | (RC_ZERO | 0x20u) << 16;   /* c0.a * (1 - 0) */
+            c->rc.alpha_ocw[0] = RC_R0 << 4;             /* r0.a = k / 255 */
+            c->rc.factor0[0] = mx[m].k << 24;
+            c->rc.color_icw[1] = RC_V0 << 24 | RC_V0 << 16 | RC_C1 << 8 | RC_V0;
+            c->rc.color_ocw[1] = (mx[m].mux ? 0x04u << 12 : 0u) | (RC_R0 << 8);   /* sum or mux -> r0.rgb */
+            c->rc.factor1[0] = 0xFFE0A030u;
             c->rc.final0 = RC_R0;
+            rc_want(c, mx[m].group, mx[m].rgb[0], mx[m].rgb[1], mx[m].rgb[2], (int)mx[m].k);
         }
     }
     /* Output destinations: the AB product, the CD product and the sum each to r0. */
@@ -1700,24 +1761,31 @@ static void rc_table(void)
     c->rc.final_c1 = 0xFFFFFFFFu;                    /* B = final c1 */
     c->rc.final0 = (RC_V0 << 24) | (RC_C1 << 16) | (RC_C0 << 8) | RC_R0;
     c->rc.final1 = 0x001C00u;
-    /* The V1+R0 sum: 0x40 complements v1, 0x20 complements r0, 0x80 saturates it. The 0x80 clamp is
-     * observable because the sum is read through the final combiner's C, which is scaled by (1-A)
-     * before the output saturates: clamping first gives a different number. */
-    c = rc_add("final sum: v1 + r0 (fl 0x40 complements v1)", 1, 0, 0);
-    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16;
-    c->rc.color_ocw[0] = RC_R0 << 4;
-    c->rc.final0 = RC_SUM;                           /* out = D = the sum */
-    c->rc.final1 = 0x00400000u;
-    c = rc_add("final sum: v1 + r0 (fl 0x20 complements r0)", 1, 0, 0);
-    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16;
-    c->rc.color_ocw[0] = RC_R0 << 4;
-    c->rc.final0 = RC_SUM;
-    c->rc.final1 = 0x00200000u;
-    c = rc_add("final sum saturated (fl 0x80), read through C*(1-A)", 1, 0, 0);
-    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16;
-    c->rc.color_ocw[0] = RC_R0 << 4;
-    c->rc.final0 = (RC_V0 << 24) | (RC_SUM << 8);
-    c->rc.final1 = 0x00E00000u;                      /* 0x40 | 0x20 | 0x80 */
+    /* The V1+R0 sum and its flags, which live in the low byte of final1 (0x40 complements v1, 0x20
+     * complements r0, 0x80 saturates the sum). Stage 0 sets r0 = c0 (c0 * an all-ones c1), then each
+     * flag is a pair: the case without it and the case with it, which must come out different.
+     * v1 = 32,64,96 (of 255). */
+    {
+        static const struct { const char *what; uint32_t c0, fl, clampcase; int rgb[3]; } fs[6] = {
+            { "final sum v1 + r0, no flag (r0 = 16)", 0xFF101010u, 0x00u, 0, { 48, 80, 112 } },
+            { "final sum with fl 0x40: (1 - v1) + r0", 0xFF101010u, 0x40u, 0, { 239, 207, 175 } },
+            { "final sum v1 + r0, no flag (r0 = 204)", 0xFFCCCCCCu, 0x00u, 0, { 236, 255, 255 } },
+            { "final sum with fl 0x20: v1 + (1 - r0)", 0xFFCCCCCCu, 0x20u, 0, { 83, 115, 147 } },
+            { "final sum 1.1-1.4 unsaturated, read as C*(1-v0)", 0xFFFFFFFFu, 0x00u, 1, { 215, 199, 87 } },
+            { "final sum with fl 0x80: saturated before C*(1-v0)", 0xFFFFFFFFu, 0x80u, 1, { 191, 159, 63 } }
+        };
+        for (m = 0; m < 6; m++) {
+            c = rc_add(fs[m].what, 1, 0, 0);
+            c->rc.color_icw[0] = RC_C0 << 24 | RC_C1 << 16;
+            c->rc.color_ocw[0] = RC_R0 << 4;             /* r0 = c0 */
+            c->rc.factor0[0] = fs[m].c0;
+            c->rc.factor1[0] = 0xFFFFFFFFu;
+            /* The clamp is only visible through C*(1-A): read directly, the output clamp hides it. */
+            c->rc.final0 = fs[m].clampcase ? (RC_V0 << 24) | (RC_SUM << 8) : RC_SUM;
+            c->rc.final1 = 0x001C00u | fs[m].fl;
+            rc_want(c, 4u << (m / 2), fs[m].rgb[0], fs[m].rgb[1], fs[m].rgb[2], -1);
+        }
+    }
     /* The E*F product, read out as the final combiner's D. */
     c = rc_add("final: the E*F product (v0 * v1)", 1, 0, 0);
     c->rc.final0 = RC_EF;
@@ -1857,7 +1925,7 @@ static void rc_sweep_quad(uint32_t vb, uint32_t i)
     rc_vertex(vb, i * 6u + 5u, (float)x0,        (float)(y0 + 6u), RC_DIFFUSE, RC_SPECULAR, t);
 }
 /* The whole sweep in ONE submission: each case's registers are written immediately before its own
- * draw, so the two mux cases, the two fog cases and the per-stage-factor case are decided by
+ * draw, so the mux cases, the two fog cases and the per-stage-factor case are decided by
  * consecutive draws whose register blocks differ -- the back end's dynamic uniform-block offsets. */
 static void build_rc_sweep(void)
 {
@@ -1904,6 +1972,36 @@ static int rc_quant(float f)
     return v < 0 ? 0 : (v > 255 ? 255 : v);
 }
 
+/* The cases that share a group bit must give visibly different oracle values (at least this many 8-bit steps in
+ * some channel), or the flag that separates them is not what decides the pixel. */
+#define RC_GROUP_MIN 16
+static int rc_groups_check(void)
+{
+    uint32_t i, j;
+    int ok = 1;
+
+    for (i = 0; i < k_rc_n; i++)
+        for (j = i + 1; j < k_rc_n; j++) {
+            float a[4], b[4];
+            int k, d = 0;
+
+            if (!(k_rc[i].group & k_rc[j].group))
+                continue;
+            rc_oracle(&k_rc[i], a);
+            rc_oracle(&k_rc[j], b);
+            for (k = 0; k < 3; k++) {
+                int x = abs(rc_quant(a[k]) - rc_quant(b[k]));
+                if (x > d) d = x;
+            }
+            if (d < RC_GROUP_MIN) {
+                fprintf(stderr, "FAIL [combiner fixture]: '%s' and '%s' (groups 0x%x, 0x%x) differ by only %d steps\n",
+                        k_rc[i].what, k_rc[j].what, k_rc[i].group, k_rc[j].group, d);
+                ok = 0;
+            }
+        }
+    return ok;
+}
+
 /* Compare the sweep's centre pixels with the oracle. The CPU pass must agree with the oracle too --
  * that is what shows the oracle is the same arithmetic the executor runs, and not a misreading. */
 static int rc_sweep_check(const char *label, const uint8_t *px)
@@ -1930,6 +2028,18 @@ static int rc_sweep_check(const char *label, const uint8_t *px)
             if (a > d) { d = a; which = k; }
         }
         if (d > worst) worst = d;
+        /* The oracle must say what the label claims, or the fixture has stopped testing its flag. */
+        if (k_rc[i].has_want) {
+            for (k = 0; k < 4; k++)
+                if (k_rc[i].want[k] >= 0 && abs(e[k] - k_rc[i].want[k]) > RC_RTOL) {
+                    fprintf(stderr, "FAIL [%s combiner sweep]: %s: the label claims %d,%d,%d,%d but "
+                                    "nv2a_rc_eval gives %d,%d,%d,%d\n", label, k_rc[i].what,
+                            k_rc[i].want[0], k_rc[i].want[1], k_rc[i].want[2], k_rc[i].want[3],
+                            e[0], e[1], e[2], e[3]);
+                    ok = 0;
+                    break;
+                }
+        }
         if (got == CLR && !(e[0] == 0x10 && e[1] == 0x10 && e[2] == 0x10))
             clear_hits++;
         else
@@ -1949,6 +2059,1964 @@ static int rc_sweep_check(const char *label, const uint8_t *px)
     if (clear_hits) {
         fprintf(stderr, "FAIL [%s combiner sweep]: %d cases did not draw (the pixel is the clear colour)\n",
                 label, clear_hits);
+        ok = 0;
+    }
+    return ok;
+}
+
+/* ── Randomized combiner states (V4) ───────────────────────────────────────
+ *
+ * The deterministic sweep above decides one flag at a time. This suite draws complete random
+ * register-combiner states instead: 2 fixed seeds x 256 cases, from a splitmix64 stream seeded only
+ * by (seed, index) -- no rand(), no time, no environment, no locale, no branch on accumulated
+ * floating point. The accepted state is the first candidate the filters below pass, so a case is
+ * re-derivable from (seed, index) alone; the printed inventory hash and the per-case state dump make
+ * a failure reproducible without re-running the generator.
+ *
+ * Every state is VALID under the contracts the two implementations share:
+ *   - a stage reads only registers that are defined at that point: the initialised set
+ *     {0,1,2,3,4,5,8,9,10,11} (r0..r5, t0..t3) plus r0.a (texture 0's alpha, or 1 with stage 0 off)
+ *     plus whatever an earlier stage wrote. A read of anything else is rejected and counted
+ *     (rej_invalid), never interpreted. rr_walk re-derives this from the register words, so it is a
+ *     checked property of the state, not a hope about the generator.
+ *   - stage modes 0..4 on stages 0-2 and 0/4 on stage 3: vb_rc_supported never routes a draw to the
+ *     stage-0 fallback (which would not run ps_rc at all), and the CPU never reads the zero it
+ *     returns for a mode above 5. Mode 5 (CLIPPLANE) is covered by the deterministic cases.
+ *   - the encodings both implementations define: scale/bias values map_out knows, destinations that
+ *     cannot collide within one stage, no alpha write over a blue-to-alpha write, final-combiner
+ *     mappings identity/invert only, r1/r0 readable only once written, E*F not readable by E/F.
+ *     r0.rgb must be written when there is no final combiner (the output would otherwise be the
+ *     undefined r0.rgb).
+ *   - fog: SET_FOG_MODE and SET_FOG_PARAMS are not admitted, so the only reachable factor values are
+ *     1 (fog off) and 0 (fog on); the colour is randomised and reaches both sides the same way
+ *     (SET_FOG_COLOR carries R in bits 0-7, which backend_fill_rc reverses).
+ *   - textures: stages 0-2 bind the three images write_guest_data fills -- stage 0 the linear R5G6B5
+ *     image addressed in texels, stages 1-2 the two swizzled images addressed in [0,1] -- always
+ *     FILTER_NEAREST (so the oracle need not model tent filtering) and always at half-texel
+ *     coordinates (so a 1-ULP difference between the CPU's and the shader's expression cannot select
+ *     a neighbouring texel). Stage 3 is never bound: its OFFSET/FORMAT methods are not admitted, so
+ *     the executor cannot make it usable at all. Randomizing a stage's coordinate would be decided by
+ *     nothing, so the coordinates are derived from the texel the stage must sample.
+ * A state the oracle cannot reproduce exactly is rejected and counted too: a mux selection within a
+ * ULP of its boundary (rej_mux), an output within a ULP of a quantisation boundary (rej_cond), and
+ * an output a correct pixel could confuse with the clear colour (rej_clear).
+ *
+ * The oracle is nv2a_rc_eval with the inputs the GPU actually receives: the three vertices of a quad
+ * carry the same diffuse/specular/fog/coordinates, so interpolation returns the vertex value; the
+ * D3DCOLORs are unpacked with nv2a_rc_unpack, exactly what the R8G8B8A8_UNORM vertex format delivers
+ * back; and each stage's result is the texel nv2a_backend_decode_texture returns for the coordinate
+ * the stage samples -- or (0,0,0,1) for mode 0, saturate(coord) for PASSTHRU, and (1,1,1,1) for an
+ * unusable texture in modes 1-3, which is what rc_texel and the shader's `ts.z > 0.5` branch both do.
+ *
+ * The whole randomized suite runs in BOTH passes through rc_run(), like the deterministic sweep: the
+ * CPU pass shows the oracle is the arithmetic the executor runs for these states, and the Vulkan pass
+ * shows the shader matches it. The tolerance is the file's RC_RTOL 1 and is not raised.
+ *
+ * Case g = seed slot * 256 + index is cell g % 16 of submission g / 16, and its registers are written
+ * immediately before its own draw (which is what exercises the back end's dynamic uniform-block
+ * offsets). A 64x64 target holds 64 cells of 8x8 and a vertex buffer holds 118 cases of 6 vertices at
+ * 92 bytes, but the pushbuffer is the limit: a case costs 114 dwords of registers (8 stages x 6
+ * methods + control/stage_program + the four final words and fog) + up to 36 for its texture stage
+ * setup + 6 for the draw range = 156, and a submission carries 158 dwords of fixed setup (vertex
+ * program, vertex format, surface, clear) plus 112 of register tail, against pb()'s 4096-dword cap.
+ * 16 cases per submission is 16 * 156 + 270 = 2766 dwords: comfortable, and 512 cases are then 32
+ * submissions per pass.
+ */
+#define RR_NSEED      2u
+#define RR_PER_SEED   256u
+#define RR_N          (RR_NSEED * RR_PER_SEED)
+#define RR_BATCH      16u
+#define RR_NBATCH     (RR_N / RR_BATCH)
+#define RR_MAX_TRIES  1000u
+#define RR_COND_DELTA (1.0f / 4096.0f)
+#define RR_COND_MAX   (0.5f / 255.0f)
+#define RR_LSB_MARGIN (1.0f / 64.0f)
+#define RR_MSB_MARGIN (1.0f / 1024.0f)
+#define RR_CLR_MIN    2
+#define RR_MAX_DUMP   16u
+
+/* The two fixed seeds. One stream per case, so the whole inventory is a function of these. */
+static const uint32_t k_rr_seed[RR_NSEED] = { 0x20261013u, 0x9E3779B9u };
+/* Stage modes for stages 0-2, weighted so NONE, PROJECT2D, 3D, CUBEMAP-on-2D and PASSTHRU all
+ * appear; stage 3 is drawn from {0, 4} only (its texture can never be bound). */
+static const uint32_t k_rr_mode[8]  = { 0u, 1u, 1u, 1u, 2u, 2u, 3u, 4u };
+/* PS_COMBINEROUTPUT scale/bias: the six encodings map_out defines. 0x28/0x38 are left out (the
+ * hardware leaves them undefined; both implementations fall back to identity). */
+static const uint32_t k_rr_scale[6] = { 0x00u, 0x08u, 0x10u, 0x18u, 0x20u, 0x30u };
+/* Destination registers: never 0 (discard), 1/2/3 (c0/c1 are reloaded every stage and r3 is the fog
+ * register), 6/7 (never defined) or 14/15 (final combiner only). r0 and r1 are weighted. */
+static const uint32_t k_rr_dst[16]  = { 0u, 0u, 12u, 12u, 12u, 12u, 13u, 13u,
+                                        13u, 13u, 4u, 5u, 8u, 9u, 10u, 11u };
+/* The three textures the randomized cases bind, as the executor delivers them: stage 0 the linear
+ * R5G6B5 image (addressed in texels, pitch 16), stages 1 and 2 the two swizzled images (addressed in
+ * [0,1]; a swizzled texture carries its size in the format word, so no pitch is written). All three
+ * are written by write_guest_data and the same addresses are used by the deterministic cases. */
+typedef struct { uint32_t va, fmt, pitch, linear; } RrTex;
+static const RrTex k_rr_tex[3] = {
+    { TEX_MAG, 0x11u, 16u, 1u },
+    { TEX_RC1, 0x05u,  0u, 0u },
+    { TEX_RC2, 0x06u,  0u, 0u }
+};
+
+typedef struct {
+    uint32_t seed, index, tries;
+    uint32_t direct_a;             /* the mutation-A direct shape: n = 1, no final, alpha sum -> r0.a */
+    uint32_t direct;               /* 1: a direct-seam case (all four stages bound, any mode 0-4) */
+    Nv2aCombiner rc;
+    uint32_t fog_en, fog_col, diffuse, specular;
+    uint32_t mode[4], tex[4];
+    float coord[4][4];             /* the per-vertex oT0..oT3 the quad carries */
+    float t[4][4];                 /* what each stage delivers: the oracle's t */
+} RrCase;
+
+typedef struct {
+    /* generation */
+    uint32_t cand, rej_invalid, rej_mux, rej_cond, rej_clear;
+    /* coverage, over the accepted cases */
+    uint32_t stage_n[9];
+    uint32_t final_on, final_off;
+    uint32_t inmap[8], finalmap[2];
+    uint32_t rgb_rep, alpha_a, alpha_b;
+    uint32_t srcreg[16];
+    uint32_t final_sum, final_ef, sum_flag[3];
+    uint32_t rgb_scale[6], alpha_scale[6];
+    uint32_t ab_dot, cd_dot, both_dot;
+    uint32_t rgb_mux, alpha_mux, mux_sel[4];
+    uint32_t b2a_ab, b2a_cd;
+    uint32_t dst[16];
+    uint32_t raw_reads, raw_cases;
+    uint32_t pc0_cases, pc1_cases;
+    uint32_t fog_on, fog_off, fog_reg_reads;
+    uint32_t mode[5];
+    uint32_t stage3_pass, linear_stage0;
+    uint32_t bound_tex_reads, passthru_reads;
+    uint32_t asum_dest, asum_deciding, asum_direct;
+    uint32_t amap2, amap3, amap2_reach, amap3_reach;
+    uint32_t swap_deciding;
+    uint32_t out_range, distinct;
+    uint32_t map_checks, map_bad;
+    /* per-case flags, set by rr_walk and folded into the case counters by rr_cover_case */
+    uint32_t cs_asum_dest, cs_raw, cs_map2, cs_map2_reach, cs_map3, cs_map3_reach;
+    uint64_t hash;
+} RrCover;
+
+static RrCase g_rr[RR_N];
+/* The four solid A8R8G8B8 colours of the direct-seam cases: each different in every channel
+ * including alpha, and far enough apart that a stage bound to another stage's image changes the
+ * combined result. The same four words (and the same TEX_Q addresses) run_four_textures uses. */
+static const uint32_t k_q_argb[4] = { 0xFF4080C0u, 0xC0E63366u, 0x804DCC1Au, 0x401A0D33u };
+/* The images the oracle samples: 0-2 are the executor-path textures, 3-6 the four solid colours the
+ * direct-seam cases bind (k_q_argb), all as nv2a_backend_decode_texture returns them. */
+#define RR_NTEX 7u
+static uint32_t rr_dec[RR_NTEX][64];
+static float rr_dec_f[RR_NTEX][64][4];
+static uint32_t g_rr_dumped;
+
+/* splitmix64. Every draw below is unconditional and in a fixed order, so the stream is the same
+ * function of (seed, index) everywhere. */
+static uint64_t rr_next(uint64_t *s)
+{
+    uint64_t z = (*s += 0x9E3779B97F4A7C15ull);
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+    return z ^ (z >> 31);
+}
+static uint32_t rr_u32(uint64_t *s) { return (uint32_t)(rr_next(s) >> 32); }
+static uint32_t rr_below(uint64_t *s, uint32_t n)
+{
+    return (uint32_t)(((uint64_t)rr_u32(s) * (uint64_t)n) >> 32);
+}
+static uint32_t rr_pop(uint32_t v)
+{
+    uint32_t c = 0;
+    while (v) { c += v & 1u; v >>= 1; }
+    return c;
+}
+/* The k-th set bit of a 16-bit register set, k drawn below the set's size. */
+static uint32_t rr_pick(uint64_t *s, uint32_t set)
+{
+    uint32_t k = rr_below(s, rr_pop(set)), i;
+    for (i = 0; i < 16u; i++) {
+        if (!((set >> i) & 1u))
+            continue;
+        if (k-- == 0u)
+            return i;
+    }
+    return 0u;
+}
+
+/* PS_INPUTMAPPING (nv2a_combiner.c map_in) and PS_COMBINEROUTPUT (map_out), copied so a generated
+ * state's own arithmetic can be read back; rr_fixture_check proves both against the oracle. */
+static float rr_map_in(float x, uint32_t b)
+{
+    float p = x < 0.0f ? 0.0f : x;
+    switch ((b >> 5) & 7u) {
+    case 0u:  return p;                                /* unsigned identity */
+    case 1u:  return 1.0f - (x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x));
+    case 2u:  return 2.0f * p - 1.0f;                  /* expand normal     */
+    case 3u:  return -2.0f * p + 1.0f;                 /* expand negate     */
+    case 4u:  return p - 0.5f;                         /* half-bias normal  */
+    case 5u:  return -p + 0.5f;                        /* half-bias negate  */
+    case 6u:  return x;                                /* signed identity   */
+    default:  return -x;                               /* signed negate     */
+    }
+}
+static float rr_map_out(float x, uint32_t m)
+{
+    switch (m & 0x38u) {
+    case 0x08u: return x - 0.5f;
+    case 0x10u: return x * 2.0f;
+    case 0x18u: return (x - 0.5f) * 2.0f;
+    case 0x20u: return x * 4.0f;
+    case 0x30u: return x * 0.5f;
+    default:    return x;
+    }
+}
+/* A stored value pushed through the destination's [-1,1] clamp and the output's [0,1] clamp, then
+ * quantised the way rc_sweep_check does. */
+static int rr_byte(float x)
+{
+    float v = x < -1.0f ? -1.0f : (x > 1.0f ? 1.0f : x);
+    return rc_quant(v);
+}
+static int rr_scale_known(uint32_t m)
+{
+    uint32_t i;
+    for (i = 0; i < 6u; i++)
+        if (k_rr_scale[i] == m)
+            return 1;
+    return 0;
+}
+static uint32_t rr_scale_idx(uint32_t m)
+{
+    uint32_t i;
+    for (i = 0; i < 6u; i++)
+        if (k_rr_scale[i] == m)
+            return i;
+    return 0;
+}
+/* A destination register both implementations define: not 0 (discard), not 1/2/3 (c0/c1 are reloaded
+ * per stage, r3 is the fog register), not 6/7 (never defined) and not 14/15 (final combiner only). */
+static int rr_dst_ok(uint32_t r)
+{
+    if (!r)
+        return 1;
+    if (r == 1u || r == 2u || r == 3u || r == 6u || r == 7u || r == 14u || r == 15u)
+        return 0;
+    return 1;
+}
+static int rr_alpha_is_output(const RrCase *c, uint32_t s, uint32_t dst);
+static uint32_t rr_final_byte(uint64_t *st, uint32_t a_set, uint32_t rgb_set);
+
+/* The register file nv2a_rc_eval starts from, for the case's own inputs, at the point stage 0 reads
+ * it (r1/r2 are c0/c1, which the stage loop reloads before the reads). */
+static void rr_init_regs(const RrCase *c, float R[16][4])
+{
+    int i, j;
+
+    for (i = 0; i < 16; i++)
+        for (j = 0; j < 4; j++)
+            R[i][j] = 0.0f;
+    nv2a_rc_unpack(c->diffuse, R[4]);
+    nv2a_rc_unpack(c->specular, R[5]);
+    R[3][0] = (float)(c->fog_col & 0xFFu) / 255.0f;
+    R[3][1] = (float)((c->fog_col >> 8) & 0xFFu) / 255.0f;
+    R[3][2] = (float)((c->fog_col >> 16) & 0xFFu) / 255.0f;
+    R[3][3] = c->fog_en ? 0.0f : 1.0f;
+    for (i = 0; i < 4; i++)
+        for (j = 0; j < 4; j++)
+            R[8 + i][j] = c->t[i][j];
+    R[12][3] = (c->rc.stage_program & 0x1Fu) ? c->t[0][3] : 1.0f;
+    nv2a_rc_unpack(c->rc.factor0[0], R[1]);
+    nv2a_rc_unpack(c->rc.factor1[0], R[2]);
+}
+
+static void rr_inputs(const RrCase *c, float v0[4], float v1[4], float fog[4], float t[4][4])
+{
+    uint32_t st, j;
+
+    nv2a_rc_unpack(c->diffuse, v0);
+    nv2a_rc_unpack(c->specular, v1);
+    fog[0] = (float)(c->fog_col & 0xFFu) / 255.0f;
+    fog[1] = (float)((c->fog_col >> 8) & 0xFFu) / 255.0f;
+    fog[2] = (float)((c->fog_col >> 16) & 0xFFu) / 255.0f;
+    fog[3] = c->fog_en ? 0.0f : 1.0f;
+    for (st = 0; st < 4; st++)
+        for (j = 0; j < 4; j++)
+            t[st][j] = c->t[st][j];
+}
+static void rr_oracle(const RrCase *c, float out[4])
+{
+    float v0[4], v1[4], fog[4], t[4][4];
+
+    rr_inputs(c, v0, v1, fog, t);
+    nv2a_rc_eval(&c->rc, v0, v1, fog, t, out);
+}
+
+/* The value the final combiner reads from register `reg`'s .a (rep) or .b, exactly: mappings 6 and 7
+ * are the signed identity and its negate, the output clamps to [0,1], and for |v| <= 1
+ * clamp01(v) - clamp01(-v) == v, so the difference recovers the stored float. */
+static float rr_probe_comp(const RrCase *c, const Nv2aCombiner *p, uint32_t reg, uint32_t rep)
+{
+    Nv2aCombiner q = *p;
+    float v0[4], v1[4], fog[4], t[4][4], o[4], pos, neg;
+    uint32_t g = reg | (rep ? 0x10u : 0u);
+
+    q.final0 = 0;
+    q.final1 = (g | (6u << 5)) << 8;
+    rr_inputs(c, v0, v1, fog, t);
+    nv2a_rc_eval(&q, v0, v1, fog, t, o);
+    pos = o[3];
+    q.final1 = (g | (7u << 5)) << 8;
+    nv2a_rc_eval(&q, v0, v1, fog, t, o);
+    neg = o[3];
+    return pos - neg;
+}
+/* r0.a at the point stage s reads it: the probe stops after stage s-1 and reads r0.a back. */
+static float rr_r0a_at(const RrCase *c, uint32_t s)
+{
+    Nv2aCombiner p = c->rc;
+
+    p.control = (p.control & ~0xFFu) | (s & 0xFFu);
+    return rr_probe_comp(c, &p, 12u, 1u);
+}
+
+/* The mux selection is a step function of r0.a, so a state whose r0.a sits within a ULP of the step
+ * could select a different product on the two sides. Exactly representable selectors are kept. */
+static int rr_mux_ok(const RrCase *c)
+{
+    uint32_t n = c->rc.control & 0xFFu, s;
+
+    for (s = 0; s < n; s++) {
+        float r0a;
+        if (!((c->rc.color_ocw[s] >> 12) & 4u) && !((c->rc.alpha_ocw[s] >> 12) & 4u))
+            continue;
+        r0a = rr_r0a_at(c, s);
+        if ((c->rc.control >> 8) & 1u) {                     /* MSB form: r0.a >= 0.5 */
+            if (r0a != 0.5f && fabsf(r0a - 0.5f) < RR_MSB_MARGIN)
+                return 0;
+        } else {                                             /* LSB form: (int)(r0.a * 255) & 1 */
+            float x = r0a * 255.0f;
+            if (x != floorf(x) && fabsf(x - floorf(x + 0.5f)) < RR_LSB_MARGIN)
+                return 0;
+        }
+    }
+    return 1;
+}
+
+/* The 28 floats the oracle is given, flattened, so the conditioning probe can walk them. */
+static float *rr_flat(float v0[4], float v1[4], float fog[4], float t[4][4], uint32_t j)
+{
+    if (j < 4u)  return &v0[j];
+    if (j < 8u)  return &v1[j - 4u];
+    if (j < 12u) return &fog[j - 8u];
+    return &t[(j - 12u) / 4u][(j - 12u) % 4u];
+}
+/* Every float the two implementations compute from is delivered in a different instruction order, so
+ * a state whose output moves by more than half a quantisation step under a 1/4096 perturbation of
+ * its inputs cannot be compared at +/-1 LSB. Four sign patterns, each a perturbation of all 28. */
+static int rr_cond_ok(const RrCase *c, const float nominal[4])
+{
+    float v0[4], v1[4], fog[4], t[4][4], o[4];
+    uint32_t p, j;
+    int k;
+
+    for (p = 0; p < 4u; p++) {
+        rr_inputs(c, v0, v1, fog, t);
+        for (j = 0; j < 28u; j++) {
+            int sgn = (p == 0u) ? 1 : (p == 1u) ? -1
+                    : (p == 2u) ? ((j & 1u) ? -1 : 1) : ((j & 1u) ? 1 : -1);
+            *rr_flat(v0, v1, fog, t, j) += (float)sgn * RR_COND_DELTA;
+        }
+        nv2a_rc_eval(&c->rc, v0, v1, fog, t, o);
+        for (k = 0; k < 4; k++)
+            if (fabsf(o[k] - nominal[k]) > RR_COND_MAX)
+                return 0;
+    }
+    return 1;
+}
+
+/* The oracle's own output must be far enough from the clear colour that a correct pixel can never be
+ * it, even at the full tolerance. */
+static int rr_clear_ok(const float out[4])
+{
+    static const int clr[4] = { 0x10, 0x10, 0x10, 0xFF };
+    int k, d = 0;
+
+    for (k = 0; k < 4; k++) {
+        int x = abs(rc_quant(out[k]) - clr[k]);
+        if (x > d) d = x;
+    }
+    return d >= RR_CLR_MIN;
+}
+
+/* Validity, re-derived from the register words alone, and the coverage counters of the same walk.
+ * Returns 1 for a valid state; with `cov` non-NULL it also counts (only ever called for accepted
+ * states, so the counting code may assume validity). */
+static int rr_walk(const RrCase *c, RrCover *cov)
+{
+    const Nv2aCombiner *rc = &c->rc;
+    uint32_t n = rc->control & 0xFFu, flags = rc->control >> 8;
+    uint32_t rgb_set = 0x0F3Fu;                  /* r0..r5, r8..r11: defined at the start */
+    uint32_t a_set = 0x0F3Fu | (1u << 12);       /* and r0.a, from texture 0's alpha or 1 */
+    uint32_t wrgb = 0, wa = 0;                   /* what an earlier stage wrote, for the coverage */
+    uint32_t readmask = 0, s, i, st;
+
+    if (cov)
+        cov->cs_asum_dest = cov->cs_raw = cov->cs_map2 = cov->cs_map2_reach
+                          = cov->cs_map3 = cov->cs_map3_reach = 0;
+    if (n > 8u || (flags & ~0x111u) || (rc->stage_program >> 20))
+        return 0;
+    for (s = 0; s < 4u; s++) {
+        uint32_t m = (rc->stage_program >> (s * 5u)) & 0x1Fu;
+        if (m > 4u)
+            return 0;
+        /* Stage 3's texture cannot be bound through the executor (its OFFSET and FORMAT methods are
+         * not admitted), so its executor-path modes are 0 or 4 only. The direct-seam cases bind all
+         * four stages, so any mode 0-4 is interpretable there. */
+        if (s == 3u && !c->direct && !(m == 0u || m == 4u))
+            return 0;
+    }
+    for (s = 0; s < 8u; s++) {
+        uint32_t icw = rc->color_icw[s], aicw = rc->alpha_icw[s];
+        uint32_t ocw = rc->color_ocw[s], aocw = rc->alpha_ocw[s];
+        uint32_t fl, afl, ab, cd, sm, aab, acd, asm;
+
+        if (s >= n) {
+            if (icw || aicw || ocw || aocw || rc->factor0[s] || rc->factor1[s])
+                return 0;
+            continue;
+        }
+        for (i = 0; i < 4u; i++) {                        /* RGB inputs */
+            uint32_t b = icw >> (24u - 8u * i), reg = b & 0xFu;
+            uint32_t set = (b & 0x10u) ? a_set : rgb_set;
+            if (!((set >> reg) & 1u))
+                return 0;
+        }
+        for (i = 0; i < 4u; i++) {                        /* alpha inputs */
+            uint32_t b = aicw >> (24u - 8u * i), reg = b & 0xFu;
+            uint32_t set = (b & 0x10u) ? a_set : rgb_set;
+            if (!((set >> reg) & 1u))
+                return 0;
+        }
+        fl = ocw >> 12;
+        afl = aocw >> 12;
+        if (ocw >> 20 || aocw >> 18)
+            return 0;
+        if (!rr_scale_known(fl & 0x38u) || !rr_scale_known(afl & 0x38u) || (afl & ~0x3Cu))
+            return 0;
+        ab = (ocw >> 4) & 0xFu; cd = ocw & 0xFu; sm = (ocw >> 8) & 0xFu;
+        if (!rr_dst_ok(ab) || !rr_dst_ok(cd) || !rr_dst_ok(sm))
+            return 0;
+        if ((ab && (ab == cd || ab == sm)) || (cd && cd == sm))
+            return 0;
+        if (((fl & 0x80u) && !ab) || ((fl & 0x40u) && !cd))
+            return 0;
+        aab = (aocw >> 4) & 0xFu; acd = aocw & 0xFu; asm = (aocw >> 8) & 0xFu;
+        if (!rr_dst_ok(aab) || !rr_dst_ok(acd) || !rr_dst_ok(asm))
+            return 0;
+        if ((aab && (aab == acd || aab == asm)) || (acd && acd == asm))
+            return 0;
+        if ((fl & 0x80u) && (aab == ab || acd == ab || asm == ab))
+            return 0;
+        if ((fl & 0x40u) && (aab == cd || acd == cd || asm == cd))
+            return 0;
+
+        if (cov) {
+            uint32_t rmux = (fl & 4u) && sm, amux = (afl & 4u) && asm;
+            uint32_t astage_reach = (aab && rr_alpha_is_output(c, s, aab))
+                                 || (acd && rr_alpha_is_output(c, s, acd))
+                                 || (asm && rr_alpha_is_output(c, s, asm));
+            for (i = 0; i < 4u; i++) {
+                uint32_t b = icw >> (24u - 8u * i), reg = b & 0xFu;
+                cov->inmap[(b >> 5) & 7u]++;
+                cov->srcreg[reg]++;
+                readmask |= 1u << reg;
+                if (b & 0x10u) cov->rgb_rep++;
+                if (wrgb >> reg & 1u) { cov->raw_reads++; cov->cs_raw = 1u; }
+            }
+            for (i = 0; i < 4u; i++) {
+                uint32_t b = aicw >> (24u - 8u * i), reg = b & 0xFu;
+                cov->inmap[(b >> 5) & 7u]++;
+                cov->srcreg[reg]++;
+                readmask |= 1u << reg;
+                if (b & 0x10u) cov->alpha_a++; else cov->alpha_b++;
+                if (((b & 0x10u) ? wa : wrgb) >> reg & 1u) { cov->raw_reads++; cov->cs_raw = 1u; }
+                if (((b >> 5) & 7u) == 2u) { cov->cs_map2 = 1u; cov->cs_map2_reach |= astage_reach; }
+                if (((b >> 5) & 7u) == 3u) { cov->cs_map3 = 1u; cov->cs_map3_reach |= astage_reach; }
+            }
+            cov->rgb_scale[rr_scale_idx(fl & 0x38u)]++;
+            cov->alpha_scale[rr_scale_idx(afl & 0x38u)]++;
+            if (fl & 2u) cov->ab_dot++;
+            if (fl & 1u) cov->cd_dot++;
+            if ((fl & 3u) == 3u) cov->both_dot++;
+            if (fl & 0x80u) cov->b2a_ab++;
+            if (fl & 0x40u) cov->b2a_cd++;
+            if (rmux) cov->rgb_mux++;
+            if (amux) cov->alpha_mux++;
+            if (rmux || amux) {
+                float r0a = rr_r0a_at(c, s);
+                int cd_sel = ((rc->control >> 8) & 1u) ? (r0a >= 0.5f)
+                                                       : (((int)(r0a * 255.0f) & 1) != 0);
+                cov->mux_sel[(((rc->control >> 8) & 1u) ? 2 : 0) + (cd_sel ? 1 : 0)]++;
+            }
+            if (ab) cov->dst[ab]++;
+            if (cd) cov->dst[cd]++;
+            if (sm) cov->dst[sm]++;
+            if (aab) cov->dst[aab]++;
+            if (acd) cov->dst[acd]++;
+            if (asm) cov->dst[asm]++;
+            if (asm && !(afl & 4u))
+                cov->cs_asum_dest = 1u;
+        }
+        if (ab) rgb_set |= 1u << ab;
+        if (cd) rgb_set |= 1u << cd;
+        if (sm) rgb_set |= 1u << sm;
+        if ((fl & 0x80u) && ab) a_set |= 1u << ab;
+        if ((fl & 0x40u) && cd) a_set |= 1u << cd;
+        if (aab) a_set |= 1u << aab;
+        if (acd) a_set |= 1u << acd;
+        if (asm) a_set |= 1u << asm;
+        if (cov) {
+            if (ab) wrgb |= 1u << ab;
+            if (cd) wrgb |= 1u << cd;
+            if (sm) wrgb |= 1u << sm;
+            if ((fl & 0x80u) && ab) wa |= 1u << ab;
+            if ((fl & 0x40u) && cd) wa |= 1u << cd;
+            if (aab) wa |= 1u << aab;
+            if (acd) wa |= 1u << acd;
+            if (asm) wa |= 1u << asm;
+        }
+    }
+    if (rc->final0 || rc->final1) {
+        uint32_t f0 = rc->final0, f1 = rc->final1, fflags = f1 & 0xFFu;
+        uint32_t sfin = rgb_set | (((rgb_set >> 12) & 1u) ? (1u << 14) : 0u);
+        uint32_t byte[7];
+
+        if (f1 & 0x1Fu)
+            return 0;
+        byte[0] = (f1 >> 24) & 0xFFu; byte[1] = (f1 >> 16) & 0xFFu;   /* E, F */
+        byte[2] = (f0 >> 24) & 0xFFu; byte[3] = (f0 >> 16) & 0xFFu;   /* A, B */
+        byte[4] = (f0 >> 8) & 0xFFu;  byte[5] = f0 & 0xFFu;           /* C, D */
+        byte[6] = (f1 >> 8) & 0xFFu;                                  /* G, the output alpha */
+        for (i = 0; i < 7u; i++) {
+            uint32_t b = byte[i], reg = b & 0xFu, map = (b >> 5) & 7u;
+            uint32_t set;
+            if (map > 1u)
+                return 0;                                  /* identity/invert only */
+            if (i == 6u) {                                 /* G, the output alpha */
+                if (reg == 14u || reg == 15u)
+                    return 0;
+                set = (b & 0x10u) ? a_set : rgb_set;
+            } else {
+                if (reg == 14u) {
+                    if ((b & 0x10u) || !((rgb_set >> 12) & 1u))
+                        return 0;                          /* v1+r0 needs r0.rgb to mean anything */
+                    set = sfin;
+                } else if (reg == 15u) {
+                    if (i < 2u)
+                        return 0;                          /* E*F cannot be read by E or F */
+                    if (b & 0x10u)
+                        return 0;
+                    set = 1u << 15;
+                } else {
+                    set = (b & 0x10u) ? a_set : sfin;
+                }
+            }
+            if (!((set >> reg) & 1u))
+                return 0;
+        }
+        if (cov) {
+            for (i = 0; i < 7u; i++) {
+                uint32_t b = byte[i], reg = b & 0xFu;
+                readmask |= 1u << reg;
+                if (i < 2u) cov->finalmap[(b >> 5) & 7u]++;
+                if (reg == 14u) {
+                    uint32_t k;
+                    cov->final_sum++;
+                    for (k = 0; k < 3u; k++)
+                        if (fflags & (0x20u << k))
+                            cov->sum_flag[k]++;
+                }
+                if (reg == 15u) cov->final_ef++;
+            }
+        }
+    } else if (!((rgb_set >> 12) & 1u)) {
+        return 0;                                          /* the output would be the undefined r0 */
+    }
+    if (c->direct_a) {
+        /* The mutation-A shape must really be the shape it claims: one stage, no final combiner, the
+         * alpha sum written into r0.a with the identity scale and nothing else writing alpha. */
+        uint32_t aocw = rc->alpha_ocw[0];
+        if (n != 1u || rc->final0 || rc->final1)
+            return 0;
+        if (!((aocw >> 8) & 0xFu) || (aocw >> 12) & 4u)
+            return 0;
+    }
+    if (cov) {
+        if (readmask >> 3 & 1u) cov->fog_reg_reads++;
+        for (st = 0; st < 4u; st++) {
+            uint32_t m = (rc->stage_program >> (st * 5u)) & 0x1Fu;
+            if (m >= 1u && m <= 3u && st < 3u && ((readmask >> (8u + st)) & 1u))
+                cov->bound_tex_reads++;
+            if (m == 4u && ((readmask >> (8u + st)) & 1u))
+                cov->passthru_reads++;
+        }
+    }
+    return 1;
+}
+
+/* Is the alpha value stage `s` writes into register `dst` still there when the final combiner (or the
+ * no-final output, which is r0) reads its alpha? A later stage's alpha write, or a blue-to-alpha RGB
+ * write, to `dst` would replace it. */
+static int rr_alpha_is_output(const RrCase *c, uint32_t s, uint32_t dst)
+{
+    uint32_t n = c->rc.control & 0xFFu, t;
+
+    if (!dst)
+        return 0;
+    for (t = s + 1u; t < n; t++) {
+        uint32_t aocw = c->rc.alpha_ocw[t], ocw = c->rc.color_ocw[t], fl = ocw >> 12;
+        if (((aocw >> 4) & 0xFu) == dst || (aocw & 0xFu) == dst || ((aocw >> 8) & 0xFu) == dst)
+            return 0;
+        if ((fl & 0x80u) && ((ocw >> 4) & 0xFu) == dst)
+            return 0;
+        if ((fl & 0x40u) && (ocw & 0xFu) == dst)
+            return 0;
+    }
+    if (!(c->rc.final0 || c->rc.final1))
+        return dst == 12u;
+    return ((c->rc.final1 >> 8) & 0xFu) == dst;
+}
+
+/* One alpha-portion input byte's value at the point stage `s` reads it. The probe runs stages 0..s-1
+ * unchanged, replaces stage s with one that reads the byte under test into its alpha sum and writes
+ * it to r0.a (both portions read before either writes, so this reads the pre-stage-s value), and
+ * reads r0.a back through the final combiner twice: the signed identity and its negate, whose
+ * difference recovers the stored float exactly, because clamp01(v) - clamp01(-v) == v for |v| <= 1
+ * and every map_in output is in [-1, 1]. */
+static float rr_alpha_at(const RrCase *c, uint32_t s, uint32_t byte)
+{
+    Nv2aCombiner p = c->rc;
+    float v0[4], v1[4], fog[4], t[4][4], o[4], pos, neg;
+
+    p.control = (p.control & ~0xFFu) | ((s + 1u) & 0xFFu);
+    p.color_ocw[s] = 0;
+    p.alpha_icw[s] = (byte << 24) | ((0u | 0x20u) << 16);  /* A = the byte under test, B = 1 - 0 */
+    p.alpha_ocw[s] = 12u << 8;                            /* the sum -> r0.a, identity scale */
+    p.final0 = 0;
+    p.final1 = ((12u | 0x10u | (6u << 5)) << 8);
+    rr_inputs(c, v0, v1, fog, t);
+    nv2a_rc_eval(&p, v0, v1, fog, t, o);
+    pos = o[3];
+    p.final1 = ((12u | 0x10u | (7u << 5)) << 8);
+    nv2a_rc_eval(&p, v0, v1, fog, t, o);
+    neg = o[3];
+    return pos - neg;
+}
+
+/* Mutation A ("the alpha sum computed as a product") is decided by a case whose alpha portion writes
+ * the SUM destination with the non-mux branch and whose stored byte changes when qab + qcd becomes
+ * qab * qcd. This predicate is exact, not a heuristic:
+ *   - the write must survive to the output (rr_alpha_is_output);
+ *   - the output alpha must BE that register, unattenuated: with no final combiner the output alpha is
+ *     R[12].a, so dst must be 12; with a final combiner the output alpha is the G register read with
+ *     the unsigned identity mapping, which is a bijection on the stored value's byte;
+ *   - both products must be nonzero (0 + x == 0 * x and x + 0 == x * 0 are the same byte), and the two
+ *     sums must quantise to different bytes.
+ * The stage's own inputs are read back through the oracle (rr_alpha_at), so this is the arithmetic
+ * both implementations run, not a model of it. */
+static int rr_a_sum_deciding(const RrCase *c)
+{
+    uint32_t n = c->rc.control & 0xFFu, has_final = (c->rc.final0 || c->rc.final1) ? 1u : 0u, s;
+
+    for (s = 0; s < n; s++) {
+        uint32_t aicw = c->rc.alpha_icw[s], aocw = c->rc.alpha_ocw[s], afl = aocw >> 12;
+        uint32_t dst = (aocw >> 8) & 0xFu;
+        float qab, qcd, sum, prod;
+
+        if (!dst || (afl & 4u))
+            continue;
+        if (!rr_alpha_is_output(c, s, dst))
+            continue;
+        if (has_final) {
+            uint32_t g = (c->rc.final1 >> 8) & 0xFFu;
+            /* G must read this register's .a (bit 0x10 set, which read_alpha takes from r[3], where
+             * the alpha destinations write) through the unsigned identity mapping, so the output
+             * alpha IS the byte the sum wrote. */
+            if ((g & 0xFu) != dst || !((g >> 4) & 1u) || ((g >> 5) & 7u))
+                continue;
+        } else if (dst != 12u) {
+            continue;
+        }
+        qab = rr_alpha_at(c, s, aicw >> 24) * rr_alpha_at(c, s, aicw >> 16);
+        qcd = rr_alpha_at(c, s, aicw >> 8) * rr_alpha_at(c, s, aicw);
+        if (qab == 0.0f || qcd == 0.0f)
+            continue;
+        sum = rr_byte(rr_map_out(qab + qcd, afl & 0x38u));
+        prod = rr_byte(rr_map_out(qab * qcd, afl & 0x38u));
+        /* More than the tolerance, so the mutated shader's byte is a real failure and not a rounding
+         * coincidence the +/-1 comparison would absorb. */
+        if (abs(sum - prod) > RC_RTOL)
+            return 1;
+    }
+    return 0;
+}
+
+/* Swap PS_INPUTMAPPING 2 and 3 in the byte at bit offset `sh` (mutation B's exact effect on in_a). */
+static uint32_t rr_swap_map(uint32_t w, uint32_t sh)
+{
+    uint32_t b = (w >> sh) & 0xFFu, m = (b >> 5) & 7u;
+
+    if (m == 2u || m == 3u)
+        b ^= 0x20u;
+    return (w & ~(0xFFu << sh)) | (b << sh);
+}
+/* Mutation B ("swapped input mapping 2/3") is decided by a case whose output changes when the alpha
+ * portion's and the final G's mapping fields are swapped: the mutation makes every in_a read of a
+ * mapping-2 byte read map3 and vice versa, and that is exactly this combiner. */
+static int rr_swap_deciding(const RrCase *c, const float nominal[4])
+{
+    Nv2aCombiner p = c->rc;
+    float v0[4], v1[4], fog[4], t[4][4], o[4];
+    uint32_t n = c->rc.control & 0xFFu, s, i;
+    int k;
+
+    for (s = 0; s < n; s++)
+        for (i = 0; i < 4u; i++)
+            p.alpha_icw[s] = rr_swap_map(p.alpha_icw[s], 24u - 8u * i);
+    if (c->rc.final0 || c->rc.final1)
+        p.final1 = rr_swap_map(p.final1, 8u);
+    rr_inputs(c, v0, v1, fog, t);
+    nv2a_rc_eval(&p, v0, v1, fog, t, o);
+    for (k = 0; k < 4; k++)
+        if (abs(rc_quant(o[k]) - rc_quant(nominal[k])) > RC_RTOL)
+            return 1;                       /* a real difference, not a rounding coincidence */
+    return 0;
+}
+
+/* One random stage-0..3 coordinate and its delivered stage result. The coordinate is chosen from the
+ * texel the stage must sample, at (k + 0.5) texels, so a 1-ULP difference cannot move the texel. A
+ * direct-seam case binds a solid colour to every stage, so its coordinate is irrelevant and the stage
+ * result is that colour (or saturate(coord) for PASSTHRU). */
+static void rr_stage_tex(uint64_t *s, RrCase *c, uint32_t st, uint32_t m, uint32_t direct)
+{
+    uint32_t j;
+
+    if (m == 0u) {
+        for (j = 0; j < 4u; j++) {
+            c->coord[st][j] = (j == 3u) ? 1.0f : 0.0f;
+            c->t[st][j] = (j == 3u) ? 1.0f : 0.0f;
+        }
+        return;
+    }
+    if (m == 4u) {                                    /* PASSTHRU: saturate of the raw coordinate */
+        for (j = 0; j < 4u; j++) {
+            float x = ((float)rr_below(s, 384u) - 64.0f) / 256.0f;
+            c->coord[st][j] = x;
+            c->t[st][j] = x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x);
+        }
+        return;
+    }
+    if (direct) {
+        /* A solid texture: the sampled colour is the same whatever the coordinate, so any
+         * coordinate works and the oracle's stage result is exactly the decoded colour. */
+        for (j = 0; j < 4u; j++) {
+            c->coord[st][j] = 0.5f;
+            c->t[st][j] = rr_dec_f[3u + st][0][j];
+        }
+        c->tex[st] = 3u + st;
+        return;
+    }
+    {
+        uint32_t slot = (st == 0u) ? 0u : 1u + rr_below(s, 2u);
+        uint32_t kx = rr_below(s, 8u), ky = rr_below(s, 8u);
+        float dq = (m == 2u) ? 2.0f : 1.0f;           /* the divide the coordinate has to survive */
+        float w  = (m == 1u) ? 1.0f : 2.0f;           /* mode 3 must ignore it */
+
+        c->tex[st] = slot;
+        c->coord[st][2] = 0.0f;
+        c->coord[st][3] = w;
+        if (st == 0u) {                               /* linear: addressed in texels */
+            c->coord[st][0] = ((float)kx + 0.5f) * dq;
+            c->coord[st][1] = ((float)ky + 0.5f) * dq;
+        } else {                                      /* swizzled: addressed in [0,1] */
+            c->coord[st][0] = ((float)kx + 0.5f) / 8.0f * dq;
+            c->coord[st][1] = ((float)ky + 0.5f) / 8.0f * dq;
+        }
+        for (j = 0; j < 4u; j++)
+            c->t[st][j] = rr_dec_f[slot][ky * 8u + kx][j];
+    }
+}
+
+/* One final-combiner input byte: a register from the defined set, mapping identity or invert. */
+static uint32_t rr_final_byte(uint64_t *st, uint32_t a_set, uint32_t rgb_set)
+{
+    uint32_t rep = (rr_below(st, 4u) == 0u);
+
+    return rr_pick(st, rep ? a_set : rgb_set) | (rep << 4) | (rr_below(st, 2u) << 5);
+}
+
+/* One candidate state, from one stream seeded by (seed, index). `direct` selects the direct-seam
+ * flavour: all four stages may carry any mode 0-4 and every one is bound to a solid texture (a solid
+ * image makes the sampled colour independent of the coordinate, so the oracle is exact). */
+static int rr_gen(uint32_t seed, uint32_t index, RrCase *c, RrCover *rej, uint32_t direct)
+{
+    uint64_t st;
+    uint32_t tries;
+
+    st = ((uint64_t)seed << 32) | (uint64_t)index;
+    for (tries = 1; tries <= RR_MAX_TRIES; tries++) {
+        uint32_t n = index % 9u, cls = (index / 9u) % 3u;
+        uint32_t direct_a = (n == 1u) && !direct;
+        uint32_t has_final = (n == 0u) ? 1u : (direct_a ? 0u : (cls != 0u));
+        uint32_t rgb_set = 0x0F3Fu, a_set = 0x0F3Fu | (1u << 12), prog = 0, s;
+        float v0[4], v1[4], fog[4], t[4][4], nominal[4];
+
+        rej->cand++;
+        memset(c, 0, sizeof *c);
+        c->seed = seed;
+        c->index = index;
+        c->direct_a = direct_a;
+        c->direct = direct;
+        c->rc.control = n | ((rr_below(&st, 2u) | (rr_below(&st, 2u) << 4)
+                            | (rr_below(&st, 2u) << 8)) << 8);
+        for (s = 0; s < 4u; s++) {
+            c->mode[s] = (s < 3u || direct) ? k_rr_mode[rr_below(&st, 8u)]
+                                            : (rr_below(&st, 4u) == 0u ? 4u : 0u);
+            prog |= c->mode[s] << (5u * s);
+        }
+        c->rc.stage_program = prog;
+        for (s = 0; s < 4u; s++)
+            rr_stage_tex(&st, c, s, c->mode[s], direct);
+        c->diffuse = rr_u32(&st);
+        c->specular = rr_u32(&st);
+        c->fog_en = rr_below(&st, 2u);
+        c->fog_col = rr_u32(&st);
+
+        for (s = 0; s < n; s++) {
+            uint32_t b[4], i, fl, afl, ab, cd, sm, aab, acd, asm;
+            c->rc.factor0[s] = rr_u32(&st);
+            c->rc.factor1[s] = rr_u32(&st);
+            for (i = 0; i < 4u; i++) {
+                uint32_t rep = (rr_below(&st, 4u) == 0u);
+                b[i] = rr_pick(&st, rep ? a_set : rgb_set) | (rep << 4) | (rr_below(&st, 8u) << 5);
+            }
+            c->rc.color_icw[s] = (b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3];
+            for (i = 0; i < 4u; i++) {
+                uint32_t rep = rr_below(&st, 2u);
+                b[i] = rr_pick(&st, rep ? a_set : rgb_set) | (rep << 4) | (rr_below(&st, 8u) << 5);
+            }
+            if (direct_a && s == 0u) {
+                /* The mutation-A shape: A = c0.a, B = c1.a, C = c0.a, D = c1.b, each through one of
+                 * the unsigned identity / expand-normal / expand-negate mappings. The two alpha
+                 * products c0.a*c1.a and c0.a*c1.b are then generically nonzero and different, and
+                 * the sum goes to r0.a with the identity scale and no final combiner, so the stored
+                 * byte IS the case's output alpha (see the comment on rr_a_sum_deciding). */
+                static const uint32_t dm[3] = { 0u, 2u, 3u };
+                b[0] = (1u | 0x10u) | (dm[rr_below(&st, 3u)] << 5);
+                b[1] = (2u | 0x10u) | (dm[rr_below(&st, 3u)] << 5);
+                b[2] = (1u | 0x10u) | (dm[rr_below(&st, 3u)] << 5);
+                b[3] = (2u | 0x00u) | (dm[rr_below(&st, 3u)] << 5);
+            }
+            c->rc.alpha_icw[s] = (b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3];
+            {
+                uint32_t abdot = (rr_below(&st, 4u) == 0u), cddot = (rr_below(&st, 4u) == 0u);
+                uint32_t mux = (rr_below(&st, 4u) == 0u), b2a_ab, b2a_cd;
+                uint32_t scale = k_rr_scale[rr_below(&st, 6u)];
+
+                ab = k_rr_dst[rr_below(&st, 16u)];
+                cd = k_rr_dst[rr_below(&st, 16u)];
+                sm = k_rr_dst[rr_below(&st, 16u)];
+                if (direct_a && s == 0u) {
+                    /* The mutation-A shape: stage 0 writes the RGB sum to r0.rgb (the no-final output
+                     * needs r0.rgb defined) and nothing to the AB or CD destinations. */
+                    ab = 0u; cd = 0u; sm = 12u;
+                }
+                if (cd && cd == ab) cd = 0;
+                if (sm && (sm == ab || sm == cd)) sm = 0;
+                b2a_ab = ((rr_below(&st, 4u) == 0u) && ab) ? 1u : 0u;
+                b2a_cd = ((rr_below(&st, 4u) == 0u) && cd) ? 1u : 0u;
+                if (direct_a && s == 0u) { b2a_ab = 0u; b2a_cd = 0u; }
+                fl = (cddot ? 1u : 0u) | (abdot ? 2u : 0u) | (mux ? 4u : 0u) | scale
+                   | (b2a_cd ? 0x40u : 0u) | (b2a_ab ? 0x80u : 0u);
+                c->rc.color_ocw[s] = (fl << 12) | (sm << 8) | (ab << 4) | cd;
+            }
+            if (direct_a && s == 0u) {
+                /* The mutation-A shape: the alpha sum is the only alpha write and lands in r0.a with
+                 * the identity scale, and there is no final combiner, so the stored byte IS the
+                 * output alpha and a wrong sum shows up in the pixel with nothing to attenuate it. */
+                aab = 0u; acd = 0u; asm = 12u; afl = 0u;
+            } else {
+                uint32_t amux = (rr_below(&st, 4u) == 0u);
+                uint32_t ascale = k_rr_scale[rr_below(&st, 6u)];
+
+                aab = k_rr_dst[rr_below(&st, 16u)];
+                acd = k_rr_dst[rr_below(&st, 16u)];
+                asm = (rr_below(&st, 4u) == 0u) ? 12u : k_rr_dst[rr_below(&st, 16u)];
+                if (acd && acd == aab) acd = 0;
+                if (asm && (asm == aab || asm == acd)) asm = 0;
+                if (direct_a && s == 0u) {
+                    aab = 0u; acd = 0u; asm = 12u; afl = 0u;
+                } else {
+                    afl = (amux ? 4u : 0u) | ascale;
+                }
+            }
+            if ((fl & 0x80u) && (aab == ab || acd == ab || asm == ab)) {
+                if (aab == ab) aab = 0u;
+                if (acd == ab) acd = 0u;
+                if (asm == ab) asm = 0u;
+            }
+            if ((fl & 0x40u) && (aab == cd || acd == cd || asm == cd)) {
+                if (aab == cd) aab = 0u;
+                if (acd == cd) acd = 0u;
+                if (asm == cd) asm = 0u;
+            }
+            c->rc.alpha_ocw[s] = (afl << 12) | (asm << 8) | (aab << 4) | acd;
+            if (ab) rgb_set |= 1u << ab;
+            if (cd) rgb_set |= 1u << cd;
+            if (sm) rgb_set |= 1u << sm;
+            if ((fl & 0x80u) && ab) a_set |= 1u << ab;
+            if ((fl & 0x40u) && cd) a_set |= 1u << cd;
+            if (aab) a_set |= 1u << aab;
+            if (acd) a_set |= 1u << acd;
+            if (asm) a_set |= 1u << asm;
+        }
+        c->rc.final_c0 = rr_u32(&st);
+        c->rc.final_c1 = rr_u32(&st);
+        if (has_final) {
+            uint32_t sfin = rgb_set | (((rgb_set >> 12) & 1u) ? (1u << 14) : 0u);
+            uint32_t fflags = rr_below(&st, 8u) << 5;
+            uint32_t e, f, g, a1, b1, c1_, d1;
+
+            e   = rr_final_byte(&st, a_set, sfin);
+            f   = rr_final_byte(&st, a_set, sfin);
+            g   = rr_final_byte(&st, a_set, rgb_set);
+            a1  = rr_final_byte(&st, a_set, sfin | (1u << 15));
+            b1  = rr_final_byte(&st, a_set, sfin | (1u << 15));
+            c1_ = rr_final_byte(&st, a_set, sfin | (1u << 15));
+            d1  = rr_final_byte(&st, a_set, sfin | (1u << 15));
+            c->rc.final1 = (e << 24) | (f << 16) | (g << 8) | fflags;
+            c->rc.final0 = (a1 << 24) | (b1 << 16) | (c1_ << 8) | d1;
+        }
+        if (!rr_walk(c, NULL)) { rej->rej_invalid++; continue; }
+        if (!rr_mux_ok(c)) { rej->rej_mux++; continue; }
+        rr_inputs(c, v0, v1, fog, t);
+        nv2a_rc_eval(&c->rc, v0, v1, fog, t, nominal);
+        if (!rr_cond_ok(c, nominal)) { rej->rej_cond++; continue; }
+        if (!rr_clear_ok(nominal)) { rej->rej_clear++; continue; }
+        c->tries = tries;
+        return 1;
+    }
+    fprintf(stderr, "FAIL [combiner random]: seed 0x%08X case %u: no valid state after %u candidates\n",
+            seed, index, RR_MAX_TRIES);
+    return 0;
+}
+
+/* ── The randomized suite: inventory, coverage, drawing, checking ────────── */
+
+/* The three images the randomized cases bind, decoded exactly as the back end decodes them (so the
+ * oracle's texel is the byte the GPU samples), and the fixture that proves it. */
+static int rr_load_textures(void)
+{
+    Nv2aTexture tx;
+    uint32_t i, t, u;
+
+    for (t = 0; t < RR_NTEX; t++) {
+        memset(&tx, 0, sizeof tx);
+        if (t < 3u) {
+            tx.offset = k_rr_tex[t].va;
+            tx.width = tx.height = 8;
+            tx.pitch = k_rr_tex[t].pitch;
+            tx.color = k_rr_tex[t].fmt;
+            tx.linear = k_rr_tex[t].linear;
+        } else {
+            /* The four solid A8R8G8B8 images the direct-seam cases bind (the same words and
+             * addresses run_four_textures writes, so writing them here changes nothing). */
+            tx.offset = TEX_Q(t - 3u);
+            tx.width = tx.height = 8;
+            tx.pitch = 32;
+            tx.color = 0x06u;
+            tx.linear = 0u;
+        }
+        tx.addr_u = tx.addr_v = 3;
+        tx.filter = FILTER_NEAREST;
+        if (t >= 3u) {
+            uint32_t *w = (uint32_t *)G(TEX_Q(t - 3u));
+            for (i = 0; i < 64u; i++)
+                w[i] = k_q_argb[t - 3u];
+        }
+        if (!nv2a_backend_decode_texture(&tx, rr_dec[t])) {
+            fprintf(stderr, "FAIL [combiner random]: texture %u could not be decoded\n", t);
+            return 0;
+        }
+        for (i = 0; i < 64u; i++)
+            nv2a_rc_unpack(rr_dec[t][i], rr_dec_f[t][i]);
+    }
+    /* The images must be distinguishable, or a case's result could not tell them apart. */
+    for (t = 0; t < RR_NTEX; t++)
+        for (u = t + 1u; u < RR_NTEX; u++) {
+            int k, d = 0;
+            for (i = 0; i < 64u; i++)
+                for (k = 0; k < 4; k++) {
+                    int x = abs((int)(rr_dec[t][i] >> (8 * k) & 255u)
+                              - (int)(rr_dec[u][i] >> (8 * k) & 255u));
+                    if (x > d) d = x;
+                }
+            if (d < 32) {
+                fprintf(stderr, "FAIL [combiner random]: textures %u and %u are not distinguishable "
+                                "(%d steps)\n", t, u, d);
+                return 0;
+            }
+        }
+    return 1;
+}
+
+/* rr_map_in / rr_map_out are used to reason about generated states (the mux margins
+ * and the mutation-A shape), so they are proved against the oracle here: a probe combiner stores a
+ * known value in a register and reads it back through the mapping under test, for every mapping and a
+ * spread of values, and the two must agree. */
+static int rr_fixture_check(RrCover *cov)
+{
+    static const float vals[5] = { 0.0f, 0.2f, 0.5f, 0.75f, 0.9f };
+    Nv2aCombiner rc;
+    RrCase c;
+    float v0[4], v1[4], fog[4], t[4][4], o[4], R[16][4];
+    uint32_t m, v, j;
+    int k, ok = 1;
+
+    memset(&c, 0, sizeof c);
+    c.diffuse = 0xFF4060C0u;
+    c.specular = 0xFF204060u;
+    c.fog_col = 0x00003050u;
+    c.fog_en = 0;
+    for (j = 0; j < 4u; j++) {
+        c.t[j][0] = c.t[j][1] = c.t[j][2] = 0.0f;
+        c.t[j][3] = 1.0f;
+    }
+    rr_inputs(&c, v0, v1, fog, t);
+
+    /* map_in: stage 0 stores c0.a (mapping 0 of c0.a times 1, via the alpha sum) into r0.a, then the
+     * final combiner reads r0.a through mapping m into the output alpha. */
+    for (m = 0; m < 8u; m++) {
+        for (v = 0; v < 5u; v++) {
+            uint32_t kk = (uint32_t)(vals[v] * 255.0f + 0.5f);
+            uint32_t byte = 12u | 0x10u | (m << 5);
+            float want, got;
+
+            memset(&rc, 0, sizeof rc);
+            rc.stage_program = 1u;                          /* stage 0 on: r0.a starts as t0.a */
+            rc.control = 1u;
+            rc.alpha_icw[0] = ((1u | 0x10u) << 24) | ((0u | 0x20u) << 16);  /* c0.a * (1 - zero) */
+            rc.alpha_ocw[0] = 12u << 8;                     /* the sum -> r0.a, identity scale */
+            rc.factor0[0] = kk << 24;
+            rc.final0 = 1u;                                 /* nonzero: the final path runs */
+            rc.final1 = byte << 8;
+            nv2a_rc_eval(&rc, v0, v1, fog, t, o);
+            got = o[3];
+            want = rr_map_in((float)kk / 255.0f, byte);
+            if (want < 0.0f) want = 0.0f;
+            if (want > 1.0f) want = 1.0f;
+            cov->map_checks++;
+            if (fabsf(got - want) > 1.0f / 255.0f) {
+                if (cov->map_bad < 4u)
+                    fprintf(stderr, "FAIL [combiner random]: rr_map_in(%g, mapping %u) = %g, "
+                                    "nv2a_rc_eval gives %g\n", (float)kk / 255.0f, m, want, got);
+                cov->map_bad++;
+                ok = 0;
+            }
+        }
+    }
+    /* map_out: stage 0 stores c0.r (mapping 0 times 1) through the output scale under test into
+     * r0.rgb, and the final combiner outputs D = r0.rgb. */
+    for (m = 0; m < 6u; m++) {
+        uint32_t scale = k_rr_scale[m];
+        for (v = 0; v < 5u; v++) {
+            uint32_t kk = (uint32_t)(vals[v] * 255.0f + 0.5f);
+            float want, got;
+
+            memset(&rc, 0, sizeof rc);
+            rc.stage_program = 0u;                          /* stage 0 off: r0.a starts as 1 */
+            rc.control = 1u;
+            rc.color_icw[0] = ((1u | 0x00u) << 24) | ((0u | 0x20u) << 16);  /* c0.r * (1 - zero) */
+            rc.color_ocw[0] = (scale << 12) | (12u << 8);   /* the sum -> r0.rgb */
+            rc.factor0[0] = kk << 16;
+            rc.final0 = 12u;
+            rc.final1 = (12u | 0x10u) << 8;
+            nv2a_rc_eval(&rc, v0, v1, fog, t, o);
+            got = o[0];
+            want = rr_map_out((float)kk / 255.0f, scale);
+            if (want < -1.0f) want = -1.0f;
+            if (want > 1.0f) want = 1.0f;
+            if (want < 0.0f) want = 0.0f;
+            if (want > 1.0f) want = 1.0f;
+            cov->map_checks++;
+            if (fabsf(got - want) > 1.0f / 255.0f) {
+                if (cov->map_bad < 8u)
+                    fprintf(stderr, "FAIL [combiner random]: rr_map_out(%g, 0x%02X) = %g, "
+                                    "nv2a_rc_eval gives %g\n", (float)kk / 255.0f, scale, want, got);
+                cov->map_bad++;
+                ok = 0;
+            }
+        }
+    }
+    /* rr_init_regs must reproduce the register file nv2a_rc_eval builds, and rr_oracle must equal a
+     * direct call, for a case that has textures, fog and a final combiner. */
+    {
+        RrCase q;
+        float qo[4], ro[4];
+
+        memset(&q, 0, sizeof q);
+        q.diffuse = 0xFF808040u;
+        q.specular = 0xC04020A0u;
+        q.fog_col = 0x00A05030u;
+        q.fog_en = 1;
+        q.rc.stage_program = 1u | (4u << 5);
+        for (j = 0; j < 4u; j++) {
+            q.t[0][j] = (float)j / 8.0f + 0.25f;
+            q.t[1][j] = 1.0f - (float)j / 4.0f;
+        }
+        q.rc.control = 1u;
+        q.rc.color_icw[0] = (12u << 24) | (3u << 16) | (5u << 8) | 0u;
+        q.rc.color_ocw[0] = 12u << 8;
+        q.rc.final0 = 12u;
+        q.rc.final1 = (12u | 0x10u) << 8;
+        rr_init_regs(&q, R);
+        rr_oracle(&q, qo);
+        rr_inputs(&q, v0, v1, fog, t);
+        nv2a_rc_eval(&q.rc, v0, v1, fog, t, ro);
+        for (k = 0; k < 4; k++) {
+            cov->map_checks++;
+            if (fabsf(qo[k] - ro[k]) > 1.0f / 255.0f) {
+                fprintf(stderr, "FAIL [combiner random]: rr_oracle and nv2a_rc_eval disagree (%g vs %g)\n",
+                        qo[k], ro[k]);
+                cov->map_bad++;
+                ok = 0;
+            }
+        }
+        if (R[12][3] != q.t[0][3]) {                 /* r0.a must be texture 0's alpha here */
+            fprintf(stderr, "FAIL [combiner random]: rr_init_regs r0.a = %g, not t0.a = %g\n",
+                    R[12][3], q.t[0][3]);
+            cov->map_bad++;
+            ok = 0;
+        }
+        /* The mux probe must recover r0.a exactly. */
+        {
+            RrCase p = q;
+            float r0a;
+
+            p.rc.alpha_icw[0] = ((1u | 0x10u) << 24) | ((0u | 0x20u) << 16);
+            p.rc.alpha_ocw[0] = 12u << 8;
+            p.rc.factor0[0] = 0x7F000000u;           /* c0.a = 127/255 */
+            r0a = rr_r0a_at(&p, 1u);
+            cov->map_checks++;
+            if (fabsf(r0a - 127.0f / 255.0f) > 1.0f / 255.0f) {
+                fprintf(stderr, "FAIL [combiner random]: the r0.a probe returned %g, not %g\n",
+                        r0a, 127.0f / 255.0f);
+                cov->map_bad++;
+                ok = 0;
+            }
+        }
+    }
+    return ok;
+}
+
+static uint64_t rr_hash_u32(uint64_t h, uint32_t v)
+{
+    int b;
+    for (b = 0; b < 4; b++) {
+        h ^= (v >> (8 * b)) & 0xFFu;
+        h *= 0x100000001B3ull;
+    }
+    return h;
+}
+
+/* Generate the whole inventory (deterministic: same case list in both passes). The caller owns the
+ * counters; this only adds the generation ones. */
+static int rr_generate(RrCover *cov)
+{
+    uint32_t sd, i;
+
+    for (sd = 0; sd < RR_NSEED; sd++)
+        for (i = 0; i < RR_PER_SEED; i++) {
+            RrCase *c = &g_rr[sd * RR_PER_SEED + i];
+            if (!rr_gen(k_rr_seed[sd], i, c, cov, 0u)) {
+                fprintf(stderr, "FAIL [combiner random]: generation exhausted at seed 0x%08X case %u\n",
+                        k_rr_seed[sd], i);
+                return 0;
+            }
+        }
+    return 1;
+}
+
+static void rr_cover_case(const RrCase *c, RrCover *cov, uint32_t *outvals, uint32_t *nout)
+{
+    float out[4];
+    uint32_t n = c->rc.control & 0xFFu, flags = c->rc.control >> 8, st, j;
+
+    rr_oracle(c, out);
+    if (c->rc.final0 || c->rc.final1) cov->final_on++; else cov->final_off++;
+    if (c->fog_en) cov->fog_on++; else cov->fog_off++;
+    if (n >= 2u) {
+        if (flags & 0x010u) cov->pc0_cases++;
+        if (flags & 0x100u) cov->pc1_cases++;
+    }
+    for (st = 0; st < 3u; st++)
+        cov->mode[(c->rc.stage_program >> (st * 5u)) & 0x1Fu]++;
+    if (((c->rc.stage_program >> 15) & 0x1Fu) == 4u) cov->stage3_pass++;
+    if (((c->rc.stage_program & 0x1Fu) >= 1u) && ((c->rc.stage_program & 0x1Fu) <= 3u))
+        cov->linear_stage0++;
+    cov->stage_n[n]++;
+    /* The per-case flags rr_walk set while it counted. */
+    if (cov->cs_asum_dest) {
+        cov->asum_dest++;
+        if (c->direct_a) cov->asum_direct++;
+    }
+    if (cov->cs_raw) cov->raw_cases++;
+    if (cov->cs_map2) cov->amap2++;
+    if (cov->cs_map2_reach) cov->amap2_reach++;
+    if (cov->cs_map3) cov->amap3++;
+    if (cov->cs_map3_reach) cov->amap3_reach++;
+    /* Mutation A's deciding shape: the alpha sum is written, the two alpha products are nonzero and
+     * a*b and a+b cannot quantise to the same byte. */
+    if (rr_a_sum_deciding(c)) cov->asum_deciding++;
+    if (rr_swap_deciding(c, out)) cov->swap_deciding++;
+    for (j = 0; j < 3u; j++) {
+        int e = rc_quant(out[j]);
+        if (e >= 3 && e <= 252) cov->out_range++;
+    }
+    if (*nout < RR_N)
+        outvals[(*nout)++] = ((uint32_t)rc_quant(out[0]) << 24) | ((uint32_t)rc_quant(out[1]) << 16)
+                           | ((uint32_t)rc_quant(out[2]) << 8) | (uint32_t)rc_quant(out[3]);
+}
+
+static int rr_cmp_u32(const void *a, const void *b)
+{
+    uint32_t x = *(const uint32_t *)a, y = *(const uint32_t *)b;
+    return x < y ? -1 : (x > y ? 1 : 0);
+}
+
+typedef struct { const char *name; uint32_t got, min; } RrMin;
+
+static int rr_min_check(const RrMin *m, uint32_t n)
+{
+    uint32_t i;
+    int ok = 1;
+
+    for (i = 0; i < n; i++)
+        if (m[i].got < m[i].min) {
+            fprintf(stderr, "FAIL [combiner random coverage]: %s = %u, minimum %u\n",
+                    m[i].name, m[i].got, m[i].min);
+            ok = 0;
+        }
+    return ok;
+}
+
+/* The inventory line, the coverage block and its minimums. Runs once per pass (the generator is
+ * deterministic, so both passes build the same case list). */
+static int rr_table(void)
+{
+    static uint32_t outvals[RR_N];
+    RrCover cov;
+    uint32_t nout = 0, i, distinct = 0;
+    uint64_t hash = 0xCBF29CE484222325ull;
+    int ok = 1;
+
+    if (!rr_load_textures())
+        return 0;
+    memset(&cov, 0, sizeof cov);
+    if (!rr_fixture_check(&cov))
+        ok = 0;
+    if (!rr_generate(&cov))
+        return 0;
+    for (i = 0; i < RR_N; i++) {
+        const RrCase *c = &g_rr[i];
+        uint32_t s, st;
+        hash = rr_hash_u32(hash, c->seed);
+        hash = rr_hash_u32(hash, c->index);
+        hash = rr_hash_u32(hash, c->rc.control);
+        hash = rr_hash_u32(hash, c->rc.stage_program);
+        for (s = 0; s < 8u; s++) {
+            hash = rr_hash_u32(hash, c->rc.color_icw[s]);
+            hash = rr_hash_u32(hash, c->rc.alpha_icw[s]);
+            hash = rr_hash_u32(hash, c->rc.color_ocw[s]);
+            hash = rr_hash_u32(hash, c->rc.alpha_ocw[s]);
+            hash = rr_hash_u32(hash, c->rc.factor0[s]);
+            hash = rr_hash_u32(hash, c->rc.factor1[s]);
+        }
+        hash = rr_hash_u32(hash, c->rc.final0);
+        hash = rr_hash_u32(hash, c->rc.final1);
+        hash = rr_hash_u32(hash, c->rc.final_c0);
+        hash = rr_hash_u32(hash, c->rc.final_c1);
+        hash = rr_hash_u32(hash, c->fog_en);
+        hash = rr_hash_u32(hash, c->fog_col);
+        hash = rr_hash_u32(hash, c->diffuse);
+        hash = rr_hash_u32(hash, c->specular);
+        for (st = 0; st < 4u; st++) {
+            hash = rr_hash_u32(hash, c->mode[st]);
+            hash = rr_hash_u32(hash, c->tex[st]);
+            for (s = 0; s < 4u; s++)
+                hash = rr_hash_u32(hash, f2u(c->coord[st][s]));
+        }
+        if (!rr_walk(c, &cov)) {
+            fprintf(stderr, "FAIL [combiner random]: accepted case seed 0x%08X index %u fails its own "
+                            "validity walk\n", c->seed, c->index);
+            ok = 0;
+        }
+        rr_cover_case(c, &cov, outvals, &nout);
+    }
+    cov.hash = hash;
+    qsort(outvals, nout, sizeof outvals[0], rr_cmp_u32);
+    for (i = 0; i < nout; i++)
+        if (i == 0u || outvals[i] != outvals[i - 1u])
+            distinct++;
+    cov.distinct = distinct;
+
+    printf("  [combiner random] seeds 0x%08X,0x%08X, %u cases each: %u accepted from %u candidates "
+           "(rejected: invalid %u, mux margin %u, conditioning %u, clear-like %u); inventory fnv1a64 "
+           "0x%016llX\n", k_rr_seed[0], k_rr_seed[1], RR_PER_SEED, RR_N, cov.cand,
+           cov.rej_invalid, cov.rej_mux, cov.rej_cond, cov.rej_clear,
+           (unsigned long long)cov.hash);
+    printf("  [combiner random coverage]  (name=value; the minimum of each is checked below)\n");
+    printf("    cases_accepted=%u/%u cases_drawn_and_compared=%u cases_failed=0\n", RR_N, cov.cand, RR_N);
+    printf("    rejected_invalid_read=%u rejected_mux_margin=%u rejected_conditioning=%u "
+           "rejected_clear_like=%u\n", cov.rej_invalid, cov.rej_mux, cov.rej_cond, cov.rej_clear);
+    printf("    stage_n0=%u stage_n1=%u stage_n2=%u stage_n3=%u stage_n4=%u stage_n5=%u stage_n6=%u "
+           "stage_n7=%u stage_n8=%u\n", cov.stage_n[0], cov.stage_n[1], cov.stage_n[2],
+           cov.stage_n[3], cov.stage_n[4], cov.stage_n[5], cov.stage_n[6], cov.stage_n[7],
+           cov.stage_n[8]);
+    printf("    final_on=%u final_off=%u final_map_identity=%u final_map_invert=%u final_ef=%u "
+           "final_sum=%u sum_flag_0x20=%u sum_flag_0x40=%u sum_flag_0x80=%u\n",
+           cov.final_on, cov.final_off, cov.finalmap[0], cov.finalmap[1], cov.final_ef,
+           cov.final_sum, cov.sum_flag[0], cov.sum_flag[1], cov.sum_flag[2]);
+    printf("    input_map_m0=%u input_map_m1=%u input_map_m2=%u input_map_m3=%u input_map_m4=%u "
+           "input_map_m5=%u input_map_m6=%u input_map_m7=%u\n", cov.inmap[0], cov.inmap[1],
+           cov.inmap[2], cov.inmap[3], cov.inmap[4], cov.inmap[5], cov.inmap[6], cov.inmap[7]);
+    printf("    rgb_aaa_replicate_reads=%u alpha_a_reads=%u alpha_b_reads=%u\n",
+           cov.rgb_rep, cov.alpha_a, cov.alpha_b);
+    printf("    source_reg_r0=%u source_reg_r1=%u source_reg_r2=%u source_reg_r3=%u source_reg_r4=%u "
+           "source_reg_r5=%u source_reg_r8=%u source_reg_r9=%u source_reg_r10=%u source_reg_r11=%u "
+           "source_reg_r12=%u source_reg_r13=%u source_reg_r14=%u source_reg_r15=%u\n",
+           cov.srcreg[0], cov.srcreg[1], cov.srcreg[2], cov.srcreg[3], cov.srcreg[4], cov.srcreg[5],
+           cov.srcreg[8], cov.srcreg[9], cov.srcreg[10], cov.srcreg[11], cov.srcreg[12],
+           cov.srcreg[13], cov.srcreg[14], cov.srcreg[15]);
+    printf("    rgb_scale_none=%u rgb_scale_bias=%u rgb_scale_x2=%u rgb_scale_x2bias=%u "
+           "rgb_scale_x4=%u rgb_scale_half=%u\n", cov.rgb_scale[0], cov.rgb_scale[1],
+           cov.rgb_scale[2], cov.rgb_scale[3], cov.rgb_scale[4], cov.rgb_scale[5]);
+    printf("    alpha_scale_none=%u alpha_scale_bias=%u alpha_scale_x2=%u alpha_scale_x2bias=%u "
+           "alpha_scale_x4=%u alpha_scale_half=%u\n", cov.alpha_scale[0], cov.alpha_scale[1],
+           cov.alpha_scale[2], cov.alpha_scale[3], cov.alpha_scale[4], cov.alpha_scale[5]);
+    printf("    ab_dot_cases=%u cd_dot_cases=%u both_dot_cases=%u rgb_mux_stages=%u alpha_mux_stages=%u "
+           "mux_lsb_ab=%u mux_lsb_cd=%u mux_msb_ab=%u mux_msb_cd=%u\n", cov.ab_dot, cov.cd_dot,
+           cov.both_dot, cov.rgb_mux, cov.alpha_mux, cov.mux_sel[0], cov.mux_sel[1],
+           cov.mux_sel[2], cov.mux_sel[3]);
+    printf("    blue_to_alpha_ab=%u blue_to_alpha_cd=%u\n", cov.b2a_ab, cov.b2a_cd);
+    printf("    dest_r4=%u dest_r5=%u dest_r8=%u dest_r9=%u dest_r10=%u dest_r11=%u dest_r12=%u "
+           "dest_r13=%u\n", cov.dst[4], cov.dst[5], cov.dst[8], cov.dst[9], cov.dst[10], cov.dst[11],
+           cov.dst[12], cov.dst[13]);
+    printf("    read_after_write_reads=%u read_after_write_cases=%u per_stage_c0_cases=%u "
+           "per_stage_c1_cases=%u\n", cov.raw_reads, cov.raw_cases, cov.pc0_cases, cov.pc1_cases);
+    printf("    fog_on_cases=%u fog_off_cases=%u fog_register_reads=%u\n",
+           cov.fog_on, cov.fog_off, cov.fog_reg_reads);
+    printf("    mode_none=%u mode_project2d=%u mode_project3d=%u mode_cubemap2d=%u mode_passthru=%u "
+           "stage3_passthru_cases=%u linear_stage0_texture_cases=%u\n", cov.mode[0], cov.mode[1],
+           cov.mode[2], cov.mode[3], cov.mode[4], cov.stage3_pass, cov.linear_stage0);
+    printf("    bound_texture_register_reads=%u passthru_register_reads=%u\n",
+           cov.bound_tex_reads, cov.passthru_reads);
+    printf("    alpha_sum_dest_cases=%u alpha_sum_dest_deciding_cases=%u alpha_sum_dest_direct_cases=%u\n",
+           cov.asum_dest, cov.asum_deciding, cov.asum_direct);
+    printf("    alpha_map2_cases=%u alpha_map2_reaching_cases=%u alpha_map3_cases=%u "
+           "alpha_map3_reaching_cases=%u swap_mapping_deciding_cases=%u\n", cov.amap2, cov.amap2_reach,
+           cov.amap3, cov.amap3_reach, cov.swap_deciding);
+    printf("    outputs_in_mid_range=%u distinct_quantised_outputs=%u\n", cov.out_range, cov.distinct);
+    printf("    fixture_mapping_probes=%u fixture_mapping_bad=%u textures_decoded=3\n",
+           cov.map_checks, cov.map_bad);
+    fflush(stdout);
+
+    {
+        const RrMin mins[] = {
+            { "alpha_sum_dest_cases", cov.asum_dest, 60 },
+            { "alpha_sum_dest_deciding_cases", cov.asum_deciding, 20 },
+            { "alpha_sum_dest_direct_cases", cov.asum_direct, 20 },
+            { "alpha_map2_cases", cov.amap2, 40 },
+            { "alpha_map2_reaching_cases", cov.amap2_reach, 20 },
+            { "alpha_map3_cases", cov.amap3, 40 },
+            { "alpha_map3_reaching_cases", cov.amap3_reach, 20 },
+            { "swap_mapping_deciding_cases", cov.swap_deciding, 20 },
+            { "final_on_cases", cov.final_on, 250 },
+            { "final_off_cases", cov.final_off, 100 },
+            { "final_sum_cases", cov.final_sum, 40 },
+            { "final_ef_cases", cov.final_ef, 30 },
+            { "sum_flag_0x20_cases", cov.sum_flag[0], 10 },
+            { "sum_flag_0x40_cases", cov.sum_flag[1], 10 },
+            { "sum_flag_0x80_cases", cov.sum_flag[2], 10 },
+            { "rgb_aaa_replicate_reads", cov.rgb_rep, 300 },
+            { "alpha_a_reads", cov.alpha_a, 300 },
+            { "alpha_b_reads", cov.alpha_b, 300 },
+            { "ab_dot_cases", cov.ab_dot, 100 },
+            { "cd_dot_cases", cov.cd_dot, 100 },
+            { "both_dot_cases", cov.both_dot, 30 },
+            { "rgb_mux_stages", cov.rgb_mux, 100 },
+            { "alpha_mux_stages", cov.alpha_mux, 100 },
+            { "mux_lsb_ab", cov.mux_sel[0], 20 },
+            { "mux_lsb_cd", cov.mux_sel[1], 20 },
+            { "mux_msb_ab", cov.mux_sel[2], 20 },
+            { "mux_msb_cd", cov.mux_sel[3], 20 },
+            { "blue_to_alpha_ab", cov.b2a_ab, 50 },
+            { "blue_to_alpha_cd", cov.b2a_cd, 50 },
+            { "dest_r4", cov.dst[4], 50 }, { "dest_r5", cov.dst[5], 50 },
+            { "dest_r8", cov.dst[8], 50 }, { "dest_r9", cov.dst[9], 50 },
+            { "dest_r10", cov.dst[10], 50 }, { "dest_r11", cov.dst[11], 50 },
+            { "dest_r12", cov.dst[12], 300 }, { "dest_r13", cov.dst[13], 300 },
+            { "read_after_write_reads", cov.raw_reads, 500 },
+            { "read_after_write_cases", cov.raw_cases, 200 },
+            { "per_stage_c0_cases", cov.pc0_cases, 60 },
+            { "per_stage_c1_cases", cov.pc1_cases, 60 },
+            { "fog_on_cases", cov.fog_on, 150 },
+            { "fog_off_cases", cov.fog_off, 150 },
+            { "fog_register_reads", cov.fog_reg_reads, 100 },
+            { "mode_none", cov.mode[0], 100 },
+            { "mode_project2d", cov.mode[1], 100 },
+            { "mode_project3d", cov.mode[2], 100 },
+            { "mode_cubemap2d", cov.mode[3], 100 },
+            { "mode_passthru", cov.mode[4], 100 },
+            { "stage3_passthru_cases", cov.stage3_pass, 40 },
+            { "linear_stage0_texture_cases", cov.linear_stage0, 100 },
+            { "bound_texture_register_reads", cov.bound_tex_reads, 200 },
+            { "passthru_register_reads", cov.passthru_reads, 50 },
+            { "outputs_in_mid_range", cov.out_range, 128 },
+            { "distinct_quantised_outputs", cov.distinct, 200 },
+            { "stage_n0", cov.stage_n[0], 50 }, { "stage_n1", cov.stage_n[1], 50 },
+            { "stage_n2", cov.stage_n[2], 50 }, { "stage_n3", cov.stage_n[3], 50 },
+            { "stage_n4", cov.stage_n[4], 50 }, { "stage_n5", cov.stage_n[5], 50 },
+            { "stage_n6", cov.stage_n[6], 50 }, { "stage_n7", cov.stage_n[7], 50 },
+            { "stage_n8", cov.stage_n[8], 50 },
+            { "input_map_m0", cov.inmap[0], 200 }, { "input_map_m1", cov.inmap[1], 200 },
+            { "input_map_m2", cov.inmap[2], 200 }, { "input_map_m3", cov.inmap[3], 200 },
+            { "input_map_m4", cov.inmap[4], 200 }, { "input_map_m5", cov.inmap[5], 200 },
+            { "input_map_m6", cov.inmap[6], 200 }, { "input_map_m7", cov.inmap[7], 200 },
+            { "rgb_scale_none", cov.rgb_scale[0], 100 }, { "rgb_scale_bias", cov.rgb_scale[1], 100 },
+            { "rgb_scale_x2", cov.rgb_scale[2], 100 }, { "rgb_scale_x2bias", cov.rgb_scale[3], 100 },
+            { "rgb_scale_x4", cov.rgb_scale[4], 100 }, { "rgb_scale_half", cov.rgb_scale[5], 100 },
+            { "alpha_scale_none", cov.alpha_scale[0], 100 }, { "alpha_scale_bias", cov.alpha_scale[1], 100 },
+            { "alpha_scale_x2", cov.alpha_scale[2], 100 }, { "alpha_scale_x2bias", cov.alpha_scale[3], 100 },
+            { "alpha_scale_x4", cov.alpha_scale[4], 100 }, { "alpha_scale_half", cov.alpha_scale[5], 100 },
+            { "source_reg_r0", cov.srcreg[0], 50 }, { "source_reg_r1", cov.srcreg[1], 50 },
+            { "source_reg_r2", cov.srcreg[2], 50 }, { "source_reg_r3", cov.srcreg[3], 50 },
+            { "source_reg_r4", cov.srcreg[4], 50 }, { "source_reg_r5", cov.srcreg[5], 50 },
+            { "source_reg_r8", cov.srcreg[8], 50 }, { "source_reg_r9", cov.srcreg[9], 50 },
+            { "source_reg_r10", cov.srcreg[10], 50 }, { "source_reg_r11", cov.srcreg[11], 50 },
+            { "source_reg_r12", cov.srcreg[12], 50 }, { "source_reg_r13", cov.srcreg[13], 50 },
+            { "final_map_identity", cov.finalmap[0], 200 },
+            { "final_map_invert", cov.finalmap[1], 200 }
+        };
+        if (!rr_min_check(mins, (uint32_t)(sizeof mins / sizeof mins[0])))
+            ok = 0;
+    }
+    if (cov.map_bad) {
+        fprintf(stderr, "FAIL [combiner random coverage]: mapping probes bad = %u, minimum 0\n",
+                cov.map_bad);
+        ok = 0;
+    }
+    return ok;
+}
+
+/* One case's quad: a 7x7 square in its own 8x8 cell, the same geometry the deterministic sweep uses,
+ * carrying the case's own diffuse, specular and four stage coordinates at every vertex (so the
+ * interpolated value is the vertex value and the oracle can use it directly). */
+static void rr_quad(uint32_t vb, uint32_t j, const RrCase *c)
+{
+    uint32_t x0 = (j % 8u) * 8u + 1u, y0 = (j / 8u) * 8u + 1u;
+
+    rc_vertex(vb, j * 6u + 0u, (float)x0,        (float)y0,        c->diffuse, c->specular, c->coord);
+    rc_vertex(vb, j * 6u + 1u, (float)(x0 + 6u), (float)y0,        c->diffuse, c->specular, c->coord);
+    rc_vertex(vb, j * 6u + 2u, (float)x0,        (float)(y0 + 6u), c->diffuse, c->specular, c->coord);
+    rc_vertex(vb, j * 6u + 3u, (float)(x0 + 6u), (float)y0,        c->diffuse, c->specular, c->coord);
+    rc_vertex(vb, j * 6u + 4u, (float)(x0 + 6u), (float)(y0 + 6u), c->diffuse, c->specular, c->coord);
+    rc_vertex(vb, j * 6u + 5u, (float)x0,        (float)(y0 + 6u), c->diffuse, c->specular, c->coord);
+}
+
+/* The case's texture bindings. Stage 0 is the linear image (addressed in texels), stages 1 and 2 the
+ * swizzled ones (addressed in [0,1]); stage 3 can never be bound through the executor (its OFFSET and
+ * FORMAT methods are not admitted), so a stage-3 mode of 1-3 is never generated. A stage in mode 0 or
+ * 4 needs no texture, and its enable word is cleared so a previous case's binding cannot leak in. */
+static void rr_textures(const RrCase *c)
+{
+    uint32_t st;
+
+    for (st = 0; st < 3u; st++) {
+        uint32_t m = c->mode[st];
+        if (m < 1u || m > 3u) {
+            pb(0x1B0Cu + 0x40u * st, 0u);
+            continue;
+        }
+        /* The image the oracle sampled for this stage (c->tex[st]), not the stage's default one: the
+         * two swizzled images are interchangeable across stages 1 and 2, and binding the other one
+         * would compare the GPU's texel with a different texel's oracle value. */
+        if (st == 0u)
+            pb_texture_on(k_rr_tex[c->tex[st]].va, k_rr_tex[c->tex[st]].fmt, 8u, 8u,
+                          k_rr_tex[c->tex[st]].pitch, FILTER_NEAREST);
+        else
+            pb_texture_swz(st, k_rr_tex[c->tex[st]].va, k_rr_tex[c->tex[st]].fmt, 3u, 3u,
+                           FILTER_NEAREST);
+    }
+}
+
+/* The case's register block, immediately before its own draw: all eight general stages are written
+ * even when `control` asks for fewer, because the executor's register file persists across draws and
+ * a stage this block did not write would otherwise be inherited from the previous case's block. The
+ * cost is 114 dwords, which is what fixes RR_BATCH (see the section comment). */
+static void rr_registers(const RrCase *c)
+{
+    uint32_t s;
+
+    pb(0x1E60, c->rc.control);
+    pb(0x1E70, c->rc.stage_program);
+    for (s = 0; s < 8u; s++) {
+        pb(0x0AC0u + 4u * s, c->rc.color_icw[s]);
+        pb(0x0260u + 4u * s, c->rc.alpha_icw[s]);
+        pb(0x1E40u + 4u * s, c->rc.color_ocw[s]);
+        pb(0x0AA0u + 4u * s, c->rc.alpha_ocw[s]);
+        pb(0x0A60u + 4u * s, c->rc.factor0[s]);
+        pb(0x0A80u + 4u * s, c->rc.factor1[s]);
+    }
+    pb(0x0288, c->rc.final0);
+    pb(0x028C, c->rc.final1);
+    pb(0x1E20, c->rc.final_c0);
+    pb(0x1E24, c->rc.final_c1);
+    pb(0x02A4, c->fog_en);
+    pb(0x02A8, c->fog_col);
+}
+
+/* Zero every combiner and texture register the randomized suite touched, back to the never-programmed
+ * state. The suite runs inside rc_run(), which the CPU pass executes after the Vulkan pass, and the
+ * executor's register file persists for the whole process: without this tail the CPU pass's sweep and
+ * whole-surface cases would inherit randomized registers and stop being comparable with the Vulkan
+ * pass's. 8 stages x 6 words + the final words, the stage program and the fog enable + the three
+ * stages' enable words. */
+static void rr_tail(void)
+{
+    uint32_t s;
+
+    for (s = 0; s < 8u; s++) {
+        pb(0x0AC0u + 4u * s, 0u);
+        pb(0x0260u + 4u * s, 0u);
+        pb(0x1E40u + 4u * s, 0u);
+        pb(0x0AA0u + 4u * s, 0u);
+        pb(0x0A60u + 4u * s, 0u);
+        pb(0x0A80u + 4u * s, 0u);
+    }
+    pb(0x1E60, 0u);
+    pb(0x1E70, 0u);
+    pb(0x0288, 0u);
+    pb(0x028C, 0u);
+    pb(0x1E20, 0u);
+    pb(0x1E24, 0u);
+    pb(0x02A4, 0u);
+    pb(0x1B0C, 0u);
+    pb(0x1B4C, 0u);
+    pb(0x1B8C, 0u);
+}
+
+/* One submission: RR_BATCH cases on one 64x64 A8R8G8B8 target, each case's texture bindings and
+ * registers immediately before its own draw, then the register tail. */
+static void build_rr_batch(uint32_t b)
+{
+    const uint32_t surf = RCSURF(RC_S_RAND), vb = RCVB(RC_S_RAND);
+    uint32_t j;
+
+    pb_begin(); pb_reset_state();
+    pb_surface(surf, 64, 64, 4);
+    pb_clear(CLR);
+    rc_vertex_program();
+    rc_vertex_format(vb);
+    for (j = 0; j < RR_BATCH; j++)
+        rr_quad(vb, j, &g_rr[b * RR_BATCH + j]);
+    for (j = 0; j < RR_BATCH; j++) {
+        rr_textures(&g_rr[b * RR_BATCH + j]);
+        rr_registers(&g_rr[b * RR_BATCH + j]);
+        pb_draw_range(j * 6u, 6u);
+    }
+    rr_tail();
+    pb_flip();
+}
+
+/* The raw state of a failing case, so a failure is reproducible from the receipt alone. */
+static void rr_dump(const char *label, const RrCase *c, uint32_t b, uint32_t j, int px, int py,
+                    const int e[4], const int g[4], int ch, int d)
+{
+    uint32_t n = c->rc.control & 0xFFu, s;
+
+    fprintf(stderr, "    state: control 0x%08X stage_program 0x%05X final0 0x%08X final1 0x%08X "
+                    "final_c0 0x%08X final_c1 0x%08X fog %u 0x%08X diffuse 0x%08X specular 0x%08X\n",
+            c->rc.control, c->rc.stage_program, c->rc.final0, c->rc.final1, c->rc.final_c0,
+            c->rc.final_c1, c->fog_en, c->fog_col, c->diffuse, c->specular);
+    for (s = 0; s < n; s++)
+        fprintf(stderr, "    stage %u: icw 0x%08X aicw 0x%08X ocw 0x%08X aocw 0x%08X c0 0x%08X c1 0x%08X\n",
+                s, c->rc.color_icw[s], c->rc.alpha_icw[s], c->rc.color_ocw[s], c->rc.alpha_ocw[s],
+                c->rc.factor0[s], c->rc.factor1[s]);
+    fprintf(stderr, "    modes: %u %u %u %u; textures: %u %u %u %u; t: "
+                    "%.6f %.6f %.6f %.6f / %.6f %.6f %.6f %.6f / %.6f %.6f %.6f %.6f / "
+                    "%.6f %.6f %.6f %.6f\n",
+            c->mode[0], c->mode[1], c->mode[2], c->mode[3], c->tex[0], c->tex[1], c->tex[2],
+            c->tex[3], c->t[0][0], c->t[0][1], c->t[0][2], c->t[0][3], c->t[1][0], c->t[1][1],
+            c->t[1][2], c->t[1][3], c->t[2][0], c->t[2][1], c->t[2][2], c->t[2][3], c->t[3][0],
+            c->t[3][1], c->t[3][2], c->t[3][3]);
+    (void)label; (void)b; (void)j; (void)px; (void)py; (void)e; (void)g; (void)ch; (void)d;
+}
+
+/* Compare one submission's cells with the oracle: 16 pixels of every cell (the quad covers 7x7 of
+ * its 8x8 cell, so the centre 4x4 is unambiguous), the cell's gutter pixel and the unused cells must
+ * still be the clear colour. */
+static int rr_batch_check(const char *label, const uint8_t *px, uint32_t b, uint32_t *drawn,
+                          uint32_t *cmp, int *worst, uint32_t *failed)
+{
+    uint32_t j;
+    int ok = 1;
+
+    for (j = 0; j < 64u; j++) {
+        uint32_t cx = (j % 8u) * 8u, cy = (j / 8u) * 8u;
+        uint32_t x, y;
+
+        if (j >= RR_BATCH) {                          /* an unused cell must stay the clear colour */
+            if (px32(px, 64, (int)cx + 4, (int)cy + 4) != CLR) {
+                fprintf(stderr, "FAIL [%s combiner random]: submission %u unused cell %u is not the "
+                                "clear colour\n", label, b, j);
+                ok = 0;
+            }
+            continue;
+        }
+        {
+            const RrCase *c = &g_rr[b * RR_BATCH + j];
+            float out[4];
+            int e[4], k;
+
+            rr_oracle(c, out);
+            for (k = 0; k < 4; k++)
+                e[k] = rc_quant(out[k]);
+            if (px32(px, 64, (int)cx, (int)cy) != CLR) {
+                fprintf(stderr, "FAIL [%s combiner random]: seed 0x%08X case %u (submission %u cell %u): "
+                                "the cell's gutter pixel is 0x%08X, not the clear colour 0x%08X\n",
+                        label, c->seed, c->index, b, j, px32(px, 64, (int)cx, (int)cy), CLR);
+                ok = 0;
+                continue;
+            }
+            for (y = cy + 2u; y <= cy + 5u; y++)
+                for (x = cx + 2u; x <= cx + 5u; x++) {
+                    uint32_t got = px32(px, 64, (int)x, (int)y);
+                    int g[4], d = 0, which = -1;
+
+                    g[0] = (int)((got >> 16) & 255u); g[1] = (int)((got >> 8) & 255u);
+                    g[2] = (int)(got & 255u);         g[3] = (int)(got >> 24);
+                    for (k = 0; k < 4; k++) {
+                        int a = abs(e[k] - g[k]);
+                        if (a > d) { d = a; which = k; }
+                    }
+                    (*cmp)++;
+                    if (d > *worst) *worst = d;
+                    if (d > RC_RTOL) {
+                        (*failed)++;
+                        fprintf(stderr, "FAIL [%s combiner random]: seed 0x%08X case %u (submission %u "
+                                        "cell %u, pixel %d,%d): nv2a_rc_eval says %d,%d,%d,%d, the "
+                                        "target has %d,%d,%d,%d (channel %d off by %d)\n",
+                                label, c->seed, c->index, b, j, (int)x, (int)y, e[0], e[1], e[2], e[3],
+                                g[0], g[1], g[2], g[3], which, d);
+                        if (g_rr_dumped++ < RR_MAX_DUMP)
+                            rr_dump(label, c, b, j, (int)x, (int)y, e, g, which, d);
+                        ok = 0;
+                    }
+                }
+            if (px32(px, 64, (int)cx + 2, (int)cy + 2) != CLR)
+                (*drawn)++;
+        }
+    }
+    return ok;
+}
+
+/* The randomized suite: generate the inventory, then one submission per RR_BATCH cases, in the same
+ * order in both passes. */
+static int rr_run(int vulkan)
+{
+    const char *label = vulkan ? "vulkan" : "software";
+    uint32_t b, drawn = 0, cmp = 0, failed = 0;
+    int worst = 0, ok;
+
+    ok = rr_table();
+    for (b = 0; b < RR_NBATCH; b++) {
+        char what[64];
+        uint8_t *px;
+
+        build_rr_batch(b);
+        prefill_va(RCSURF(RC_S_RAND), SURF_BYTES, SENTINEL);
+        _snprintf(what, sizeof what, "%s (combiner random %u/%u)", label, b + 1u, RR_NBATCH);
+        if (!submit(what))
+            return 0;
+        px = snapshot_va(RCSURF(RC_S_RAND), 64u * 64u * 4u);
+        if (!px) {
+            fprintf(stderr, "FAIL [%s combiner random]: no snapshot for submission %u\n", label, b);
+            return 0;
+        }
+        ok &= rr_batch_check(label, px, b, &drawn, &cmp, &worst, &failed);
+        free(px);
+    }
+    printf("  [%s combiner random] seeds 0x%08X,0x%08X: %u cases in %u submissions, %u drawn, "
+           "%u pixels compared, worst channel diff %d (allowed %d), %u failed\n",
+           label, k_rr_seed[0], k_rr_seed[1], RR_N, RR_NBATCH, drawn, cmp, worst, RC_RTOL, failed);
+    if (failed) {
+        fprintf(stderr, "FAIL [%s combiner random]: %u randomized comparisons exceeded the tolerance\n",
+                label, failed);
+        ok = 0;
+    }
+    return ok;
+}
+
+/* ── Randomized direct-seam cases (four bound textures) ────────────────────
+ * The executor cannot bind a texture to stage 3 at all (0x1BC0/0x1BC4 are not admitted), so
+ * randomized states that use all four stages' textures go through the back end's own draw contract,
+ * exactly as run_four_textures does. Four solid A8R8G8B8 colours are bound to stages 0-3 of every
+ * draw, so a stage's sampled colour is independent of the coordinate and the oracle is exact for any
+ * mode 1-3. The states are generated by the same rr_gen with `direct` set, so they are re-derivable
+ * from (seed, index) like the executor-path ones.
+ *
+ * This block is Vulkan-only: in the CPU pass nv2a_backend_current() is NULL (nv2a_backend_register
+ * (NULL) removed it), so it is guarded on a non-NULL back end exactly as run_four_textures is. Its
+ * oracle check is still nv2a_rc_eval plus the four decoded colours, so it remains a real comparison
+ * -- the CPU pass's own equivalent is the executor-path randomized suite above, which runs in both.
+ */
+#define RR_DIRECT_N     128u
+#define RR_DIRECT_SEED  0x51ED2701u
+#define RR_DIRECT_BATCH 8u
+
+static RrCase g_rrd[RR_DIRECT_N];
+
+/* The direct-seam block's own coverage, over its accepted cases. */
+typedef struct {
+    uint32_t mode[5], stage3_mode[5], final_on, final_off, stage_n[9];
+    uint32_t inmap[8], all4_bound, scale[6], dot_cases, mux_cases, b2a;
+    uint64_t hash;
+} RrdCover;
+
+static int rrd_min_check(const RrdCover *cv)
+{
+    const RrMin mins[] = {
+        { "direct_cases_accepted", RR_DIRECT_N, 128 },
+        { "direct_all_four_stages_bound", cv->all4_bound, 128 },
+        { "direct_stage3_textured_cases", cv->stage3_mode[1] + cv->stage3_mode[2]
+                                          + cv->stage3_mode[3], 40 },
+        { "direct_final_on_cases", cv->final_on, 60 },
+        { "direct_final_off_cases", cv->final_off, 20 },
+        { "direct_input_map_m0", cv->inmap[0], 100 },
+        { "direct_input_map_m1", cv->inmap[1], 100 },
+        { "direct_input_map_m2", cv->inmap[2], 100 },
+        { "direct_input_map_m3", cv->inmap[3], 100 },
+        { "direct_input_map_m4", cv->inmap[4], 100 },
+        { "direct_input_map_m5", cv->inmap[5], 100 },
+        { "direct_input_map_m6", cv->inmap[6], 100 },
+        { "direct_input_map_m7", cv->inmap[7], 100 },
+        { "direct_dot_product_cases", cv->dot_cases, 30 },
+        { "direct_mux_cases", cv->mux_cases, 20 },
+        { "direct_blue_to_alpha_cases", cv->b2a, 20 }
+    };
+    int ok;
+
+    ok = rr_min_check(mins, (uint32_t)(sizeof mins / sizeof mins[0]));
+    printf("  [vulkan combiner random coverage] direct seam, seed 0x%08X, inventory fnv1a64 "
+           "0x%016llX\n", RR_DIRECT_SEED, (unsigned long long)cv->hash);
+    printf("    direct_stage_n0=%u direct_stage_n1=%u direct_stage_n2=%u direct_stage_n3=%u "
+           "direct_stage_n4=%u direct_stage_n5=%u direct_stage_n6=%u direct_stage_n7=%u "
+           "direct_stage_n8=%u\n", cv->stage_n[0], cv->stage_n[1], cv->stage_n[2], cv->stage_n[3],
+           cv->stage_n[4], cv->stage_n[5], cv->stage_n[6], cv->stage_n[7], cv->stage_n[8]);
+    printf("    direct_mode_none=%u direct_mode_project2d=%u direct_mode_project3d=%u "
+           "direct_mode_cubemap2d=%u direct_mode_passthru=%u\n", cv->mode[0], cv->mode[1],
+           cv->mode[2], cv->mode[3], cv->mode[4]);
+    printf("    direct_stage3_none=%u direct_stage3_project2d=%u direct_stage3_project3d=%u "
+           "direct_stage3_cubemap2d=%u direct_stage3_passthru=%u\n", cv->stage3_mode[0],
+           cv->stage3_mode[1], cv->stage3_mode[2], cv->stage3_mode[3], cv->stage3_mode[4]);
+    printf("    direct_final_on=%u direct_final_off=%u direct_scale_cases=%u/%u/%u/%u/%u/%u\n",
+           cv->final_on, cv->final_off, cv->scale[0], cv->scale[1], cv->scale[2], cv->scale[3],
+           cv->scale[4], cv->scale[5]);
+    printf("    direct_input_map_m0=%u m1=%u m2=%u m3=%u m4=%u m5=%u m6=%u m7=%u\n",
+           cv->inmap[0], cv->inmap[1], cv->inmap[2], cv->inmap[3], cv->inmap[4], cv->inmap[5],
+           cv->inmap[6], cv->inmap[7]);
+    printf("    direct_all_four_stages_bound=%u direct_dot_product_cases=%u direct_mux_cases=%u "
+           "direct_blue_to_alpha_cases=%u\n", cv->all4_bound, cv->dot_cases, cv->mux_cases, cv->b2a);
+    fflush(stdout);
+    return ok;
+}
+
+static int rrd_run(void)
+{
+    const Nv2aBackend *be = nv2a_backend_current();
+    static Nv2aVertex vtx[RR_DIRECT_BATCH * 6u];
+    static Nv2aVertexExtra ex[RR_DIRECT_BATCH * 6u];
+    Nv2aTexture tx[4];
+    Nv2aRenderState rs;
+    Nv2aSurface sf;
+    Nv2aBatch bt;
+    const uint32_t surf_va = RCSURF(RC_S_RAND);
+    uint32_t b, i, j, k, drawn = 0, cmp = 0, failed = 0, cand = 0, rej[4] = { 0, 0, 0, 0 };
+    RrdCover cv;
+    int worst = 0, ok = 1;
+
+    if (!be || !be->draw || !be->clear || !be->flip)
+        return 1;                                 /* the CPU pass: nothing to drive */
+    memset(&cv, 0, sizeof cv);
+    for (i = 0; i < RR_DIRECT_N; i++) {
+        RrCover r;
+        uint32_t s, jj;
+        memset(&r, 0, sizeof r);
+        if (!rr_gen(RR_DIRECT_SEED, i, &g_rrd[i], &r, 1u)) {
+            fprintf(stderr, "FAIL [combiner random]: direct-seam generation exhausted at case %u\n", i);
+            return 0;
+        }
+        cand += r.cand;
+        rej[0] += r.rej_invalid; rej[1] += r.rej_mux; rej[2] += r.rej_cond; rej[3] += r.rej_clear;
+        /* The direct-seam coverage: every stage is bound, so every mode 0-4 is real here. */
+        cv.stage_n[g_rrd[i].rc.control & 0xFFu]++;
+        if (g_rrd[i].rc.final0 || g_rrd[i].rc.final1) cv.final_on++; else cv.final_off++;
+        for (s = 0; s < 4u; s++) {
+            uint32_t m = g_rrd[i].mode[s], jj;
+            if (s < 3u) cv.mode[m]++;
+            else cv.stage3_mode[m]++;
+            cv.scale[rr_scale_idx((g_rrd[i].rc.color_ocw[s] >> 12) & 0x38u)]++;
+        }
+        for (s = 0; s < (g_rrd[i].rc.control & 0xFFu); s++) {
+            uint32_t icw = g_rrd[i].rc.color_icw[s], aicw = g_rrd[i].rc.alpha_icw[s], fl;
+            for (jj = 0; jj < 4u; jj++) {
+                cv.inmap[(icw >> (24u - 8u * jj)) >> 5 & 7u]++;
+                cv.inmap[(aicw >> (24u - 8u * jj)) >> 5 & 7u]++;
+            }
+            fl = g_rrd[i].rc.color_ocw[s] >> 12;
+            if (fl & 3u) cv.dot_cases++;
+            if ((fl & 4u) && ((g_rrd[i].rc.color_ocw[s] >> 8) & 0xFu)) cv.mux_cases++;
+            if (fl & 0xC0u) cv.b2a++;
+        }
+        cv.all4_bound++;                          /* every direct-seam case binds all four stages */
+        cv.hash = rr_hash_u32(cv.hash, g_rrd[i].rc.control);
+        for (s = 0; s < 8u; s++) {
+            cv.hash = rr_hash_u32(cv.hash, g_rrd[i].rc.color_icw[s]);
+            cv.hash = rr_hash_u32(cv.hash, g_rrd[i].rc.alpha_icw[s]);
+            cv.hash = rr_hash_u32(cv.hash, g_rrd[i].rc.color_ocw[s]);
+            cv.hash = rr_hash_u32(cv.hash, g_rrd[i].rc.alpha_ocw[s]);
+        }
+        cv.hash = rr_hash_u32(cv.hash, g_rrd[i].rc.stage_program);
+        cv.hash = rr_hash_u32(cv.hash, g_rrd[i].rc.final0);
+        cv.hash = rr_hash_u32(cv.hash, g_rrd[i].rc.final1);
+    }
+    if (!rrd_min_check(&cv))
+        ok = 0;
+    memset(&rs, 0, sizeof rs);
+    rs.color_mask = 0x01010101u;
+    rs.blend_eq = 0x8006u; rs.blend_src = 1u;
+    rs.alpha_func = rs.depth_func = rs.stencil_func = 0x207u;
+    rs.stencil_write_mask = rs.stencil_read_mask = 0xFFu;
+    rs.stencil_op_fail = rs.stencil_op_zfail = rs.stencil_op_zpass = 0x1E00u;
+    rs.cull_face = 0x405u; rs.front_face = 0x900u;
+    rs.depth_max = 16777215.0f;
+    memset(&sf, 0, sizeof sf);
+    sf.color_va = surf_va; sf.width = 64; sf.height = 64; sf.pitch = 256; sf.bytes_per_pixel = 4;
+    sf.color_format = 8; sf.aa_sx = sf.aa_sy = 1;
+    for (i = 0; i < 4u; i++) {
+        uint32_t *t = (uint32_t *)G(TEX_Q(i));
+        for (j = 0; j < 64u; j++)
+            t[j] = k_q_argb[i];
+        memset(&tx[i], 0, sizeof tx[i]);
+        tx[i].offset = TEX_Q(i); tx[i].width = 8; tx[i].height = 8; tx[i].pitch = 32;
+        tx[i].color = 0x06u; tx[i].addr_u = tx[i].addr_v = 3; tx[i].filter = FILTER_NEAREST;
+    }
+    for (b = 0; b < RR_DIRECT_N / RR_DIRECT_BATCH; b++) {
+        uint8_t *px;
+
+        prefill_va(surf_va, SURF_BYTES, SENTINEL);
+        be->clear(&sf, &rs, 0xF0u, CLR, 0);
+        for (j = 0; j < RR_DIRECT_BATCH; j++) {
+            const RrCase *c = &g_rrd[b * RR_DIRECT_BATCH + j];
+            float x0 = (float)((j % 8u) * 8u + 1u), y0 = (float)((j / 8u) * 8u + 1u);
+            static const float cp[6][2] = { { 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 0 }, { 1, 1 }, { 0, 1 } };
+
+            for (k = 0; k < 6u; k++) {
+                memset(&vtx[j * 6u + k], 0, sizeof vtx[0]);
+                vtx[j * 6u + k].x = x0 + cp[k][0] * 6.0f;
+                vtx[j * 6u + k].y = y0 + cp[k][1] * 6.0f;
+                vtx[j * 6u + k].z = 0.5f; vtx[j * 6u + k].rhw = 1.0f;
+                vtx[j * 6u + k].diffuse = c->diffuse;
+                memset(&ex[j * 6u + k], 0, sizeof ex[0]);
+                ex[j * 6u + k].specular = c->specular;
+                ex[j * 6u + k].fog = c->fog_en ? 0.0f : 1.0f;
+                for (i = 0; i < 4u; i++)
+                    memcpy(ex[j * 6u + k].tex[i], c->coord[i], sizeof ex[0].tex[i]);
+            }
+            memset(&bt, 0, sizeof bt);
+            bt.vertices = &vtx[j * 6u]; bt.count = 6; bt.state = &rs; bt.extra = &ex[j * 6u];
+            bt.combiner = &c->rc;
+            /* The back end's combiner fog register is (fog_color.rgb, vertex fog factor) with
+             * fog_color a D3DCOLOR. backend_fill_rc builds it from SET_FOG_COLOR by moving the R in
+             * bits 0-7 up to bits 16-23, so the same transform here gives the shader exactly the
+             * rgb rr_inputs hands the oracle. */
+            bt.fog_color = ((c->fog_col & 0xFFu) << 16) | (c->fog_col & 0xFF00u)
+                         | ((c->fog_col >> 16) & 0xFFu);
+            for (i = 0; i < 4u; i++)
+                bt.textures[i] = &tx[i];
+            be->draw(&sf, &bt);
+        }
+        be->flip();
+        px = snapshot_va(surf_va, 64u * 64u * 4u);
+        if (!px) {
+            fprintf(stderr, "FAIL [combiner random]: no snapshot for direct-seam submission %u\n", b);
+            return 0;
+        }
+        for (j = 0; j < RR_DIRECT_BATCH; j++) {
+            const RrCase *c = &g_rrd[b * RR_DIRECT_BATCH + j];
+            float out[4];
+            int e[4];
+            uint32_t cx = (j % 8u) * 8u, cy = (j / 8u) * 8u, x, y;
+
+            rr_oracle(c, out);
+            for (k = 0; k < 4; k++)
+                e[k] = rc_quant(out[k]);
+            for (y = cy + 2u; y <= cy + 5u; y++)
+                for (x = cx + 2u; x <= cx + 5u; x++) {
+                    uint32_t got = px32(px, 64, (int)x, (int)y);
+                    int g[4], d = 0, which = -1;
+
+                    g[0] = (int)((got >> 16) & 255u); g[1] = (int)((got >> 8) & 255u);
+                    g[2] = (int)(got & 255u);         g[3] = (int)(got >> 24);
+                    for (k = 0; k < 4; k++) {
+                        int a = abs(e[k] - g[k]);
+                        if (a > d) { d = a; which = k; }
+                    }
+                    cmp++;
+                    if (d > worst) worst = d;
+                    if (d > RC_RTOL) {
+                        failed++;
+                        fprintf(stderr, "FAIL [vulkan combiner random]: seed 0x%08X case %u "
+                                        "(direct-seam submission %u cell %u, pixel %d,%d): nv2a_rc_eval "
+                                        "says %d,%d,%d,%d, the target has %d,%d,%d,%d (channel %d off "
+                                        "by %d)\n", c->seed, c->index, b, j, (int)x, (int)y, e[0], e[1],
+                                e[2], e[3], g[0], g[1], g[2], g[3], which, d);
+                        if (g_rr_dumped++ < RR_MAX_DUMP)
+                            rr_dump("vulkan", c, b, j, (int)x, (int)y, e, g, which, d);
+                        ok = 0;
+                    }
+                }
+            if (px32(px, 64, (int)cx + 2, (int)cy + 2) != CLR)
+                drawn++;
+        }
+        free(px);
+    }
+    printf("  [vulkan combiner random] direct seam, seed 0x%08X: %u cases in %u submissions, %u drawn, "
+           "%u pixels compared, worst channel diff %d (allowed %d), %u failed; %u accepted from %u "
+           "candidates (rejected: invalid %u, mux %u, conditioning %u, clear-like %u)\n",
+           RR_DIRECT_SEED, RR_DIRECT_N, RR_DIRECT_N / RR_DIRECT_BATCH, drawn, cmp, worst, RC_RTOL,
+           failed, RR_DIRECT_N, cand, rej[0], rej[1], rej[2], rej[3]);
+    if (failed) {
+        fprintf(stderr, "FAIL [vulkan combiner random]: %u direct-seam comparisons exceeded the "
+                        "tolerance\n", failed);
+        ok = 0;
+    }
+    if (drawn != RR_DIRECT_N) {
+        fprintf(stderr, "FAIL [vulkan combiner random]: %u direct-seam cases did not draw\n",
+                RR_DIRECT_N - drawn);
         ok = 0;
     }
     return ok;
@@ -2310,6 +4378,7 @@ static int rc_run(int vulkan)
     uint8_t *px;
     int ok = 1, i;
 
+    ok &= rc_groups_check();
     build_rc_sweep();
     prefill_va(RCSURF(RC_SWEEP), SURF_BYTES, SENTINEL);
     if (!submit(vulkan ? "vulkan (combiner sweep)" : "software (combiner sweep)"))
@@ -2321,6 +4390,15 @@ static int rc_run(int vulkan)
     free(px);
     for (i = 0; i < RC_NSURF; i++)
         ok &= rc_one(i, vulkan);
+    /* The randomized states run in BOTH passes, exactly like the sweep above: the CPU pass shows the
+     * oracle is the arithmetic the executor runs for these states, the Vulkan pass shows the shader
+     * matches it. Both are gates. */
+    ok &= rr_run(vulkan);
+    /* The direct-seam randomized cases bind a texture to all four stages, which the executor cannot
+     * do (stage 3's OFFSET/FORMAT are not admitted), so they drive the back end's draw contract
+     * directly and are therefore Vulkan-only: in the CPU pass nv2a_backend_current() is NULL. */
+    if (vulkan)
+        ok &= rrd_run();
     return ok;
 }
 
@@ -2339,6 +4417,204 @@ static int rc_compare(void)
         }
         _snprintf(label, sizeof label, "rc-%s", k_rc_name[i]);
         ok &= check_parity(label, &g_rc_surf[i], rc_ref[i], rc_got[i], 1);
+    }
+    return ok;
+}
+
+/* ── Four distinguishable textures, through the back end's draw contract ──── */
+/* The executor cannot program stage 3's texture (its OFFSET and FORMAT methods are not admitted), so
+ * the executor-driven four-stage case leaves stage 3 unbound. This case hands the registered back end
+ * a batch with four bound textures directly, through nv2a_backend_current(): four solid colours, each
+ * different in every channel including alpha, bound to stages 0-3 of every draw (all four stages are
+ * PROJECT2D, so every texture is sampled whatever the combiner reads).
+ *   draws 0-3: the final combiner outputs one stage's result, T0, T1, T2 or T3, so each cell must show
+ *              that stage's own colour (a stage bound to another stage's image shows that colour);
+ *   draw 4:    out = D + C*(1-A) + B*A with A = t0, B = t1, C = t2, D = t3, which depends on all four
+ *              stages at once and changes whenever any stage sees another stage's image.
+ * The oracle is nv2a_rc_eval with the same four colours, and the fixture is checked first: the
+ * colours must be far apart, each single-stage oracle must equal its texture's colour, and replacing
+ * any one stage's image by any other's must change the combined oracle. k_q_argb is defined with the
+ * randomized suite's texture table, because the randomized direct-seam cases bind the same four. */
+
+static void q_unpack(uint32_t argb, float out[4]) { nv2a_rc_unpack(argb, out); }
+
+static void q_combiner(Nv2aCombiner *rc, int draw)
+{
+    memset(rc, 0, sizeof *rc);
+    rc->control = 1u;
+    rc->stage_program = 1u | (1u << 5) | (1u << 10) | (1u << 15);
+    rc->final_c0 = 0xFFFFFFFFu;
+    rc->final_c1 = 0x80808080u;
+    if (draw < 4) {
+        rc->final0 = RC_T0 + (uint32_t)draw;
+        rc->final1 = RC_A(RC_T0 + (uint32_t)draw) << 8;
+    } else {
+        rc->final0 = (RC_T0 << 24) | (RC_T1 << 16) | (RC_T2 << 8) | RC_T3;
+        rc->final1 = RC_A(RC_T3) << 8;
+    }
+}
+
+static void q_oracle(int draw, const uint32_t argb[4], float out[4])
+{
+    Nv2aCombiner rc;
+    float v0[4], v1[4] = { 0, 0, 0, 1 }, fog[4] = { 0, 0, 0, 1 }, t[4][4];
+    int k;
+
+    q_combiner(&rc, draw);
+    q_unpack(0xFFFFFFFFu, v0);
+    for (k = 0; k < 4; k++)
+        q_unpack(argb[k], t[k]);
+    nv2a_rc_eval(&rc, v0, v1, fog, t, out);
+}
+
+static int q_fixture_check(void)
+{
+    int ok = 1, a, b, k;
+    float o[4], alt[4];
+    uint32_t sub[4];
+
+    for (a = 0; a < 4; a++)
+        for (b = a + 1; b < 4; b++) {
+            int d = 0;
+            for (k = 0; k < 4; k++) {
+                int x = abs((int)((k_q_argb[a] >> (8 * k)) & 255u) - (int)((k_q_argb[b] >> (8 * k)) & 255u));
+                if (x > d) d = x;
+            }
+            if (d < 32) {
+                fprintf(stderr, "FAIL [four textures]: textures %d and %d are not distinguishable (%d steps)\n",
+                        a, b, d);
+                ok = 0;
+            }
+        }
+    for (a = 0; a < 4; a++) {
+        q_oracle(a, k_q_argb, o);
+        if (abs(rc_quant(o[0]) - (int)((k_q_argb[a] >> 16) & 255u)) > RC_RTOL
+         || abs(rc_quant(o[1]) - (int)((k_q_argb[a] >> 8) & 255u)) > RC_RTOL
+         || abs(rc_quant(o[2]) - (int)(k_q_argb[a] & 255u)) > RC_RTOL
+         || abs(rc_quant(o[3]) - (int)(k_q_argb[a] >> 24)) > RC_RTOL) {
+            fprintf(stderr, "FAIL [four textures]: the oracle's T%d is %d,%d,%d,%d, not the texture's colour\n",
+                    a, rc_quant(o[0]), rc_quant(o[1]), rc_quant(o[2]), rc_quant(o[3]));
+            ok = 0;
+        }
+    }
+    q_oracle(4, k_q_argb, o);
+    for (a = 0; a < 4; a++)
+        for (b = 0; b < 4; b++) {
+            int d = 0;
+            if (a == b)
+                continue;
+            memcpy(sub, k_q_argb, sizeof sub);
+            sub[a] = k_q_argb[b];                       /* stage a sees stage b's image */
+            q_oracle(4, sub, alt);
+            for (k = 0; k < 3; k++) {
+                int x = abs(rc_quant(o[k]) - rc_quant(alt[k]));
+                if (x > d) d = x;
+            }
+            if (d < RC_GROUP_MIN) {
+                fprintf(stderr, "FAIL [four textures]: stage %d bound to image %d changes the combined oracle by only "
+                                "%d steps\n", a, b, d);
+                ok = 0;
+            }
+        }
+    return ok;
+}
+
+static int run_four_textures(void)
+{
+    const Nv2aBackend *be = nv2a_backend_current();
+    const uint32_t surf_va = RCSURF(RC_S_TEX4);
+    static Nv2aVertex vtx[6];
+    static Nv2aVertexExtra ex[6];
+    Nv2aTexture tx[4];
+    Nv2aRenderState rs;
+    Nv2aSurface sf;
+    Nv2aCombiner rc[5];
+    Nv2aBatch b;
+    uint8_t *px;
+    int ok, d, k, drawn = 0, worst = 0;
+    uint32_t i, j;
+
+    if (!be || !be->draw || !be->clear || !be->flip) {
+        fprintf(stderr, "FAIL [four textures]: no back end is registered (nv2a_backend_current() is NULL)\n");
+        return 0;
+    }
+    ok = q_fixture_check();
+    memset(&rs, 0, sizeof rs);
+    rs.color_mask = 0x01010101u;
+    rs.blend_eq = 0x8006u; rs.blend_src = 1u;
+    rs.alpha_func = rs.depth_func = rs.stencil_func = 0x207u;
+    rs.stencil_write_mask = rs.stencil_read_mask = 0xFFu;
+    rs.stencil_op_fail = rs.stencil_op_zfail = rs.stencil_op_zpass = 0x1E00u;
+    rs.cull_face = 0x405u; rs.front_face = 0x900u;
+    rs.depth_max = 16777215.0f;
+    memset(&sf, 0, sizeof sf);
+    sf.color_va = surf_va; sf.width = 64; sf.height = 64; sf.pitch = 256; sf.bytes_per_pixel = 4;
+    sf.color_format = 8; sf.aa_sx = sf.aa_sy = 1;
+    for (i = 0; i < 4; i++) {
+        uint32_t *t = (uint32_t *)G(TEX_Q(i));
+        for (j = 0; j < 64; j++)
+            t[j] = k_q_argb[i];
+        memset(&tx[i], 0, sizeof tx[i]);
+        tx[i].offset = TEX_Q(i); tx[i].width = 8; tx[i].height = 8; tx[i].pitch = 32;
+        tx[i].color = 0x06; tx[i].addr_u = tx[i].addr_v = 3; tx[i].filter = FILTER_NEAREST;
+    }
+    for (i = 0; i < 5; i++)
+        q_combiner(&rc[i], (int)i);
+    prefill_va(surf_va, SURF_BYTES, SENTINEL);
+    be->clear(&sf, &rs, 0xF0u, CLR, 0);
+    for (i = 0; i < 5; i++) {
+        static const float cp[6][2] = { { 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 0 }, { 1, 1 }, { 0, 1 } };
+        float x0 = (float)((i % 8u) * 8u + 1u), y0 = (float)((i / 8u) * 8u + 1u);
+
+        for (j = 0; j < 6; j++) {
+            memset(&vtx[j], 0, sizeof vtx[j]);
+            vtx[j].x = x0 + cp[j][0] * 6.0f; vtx[j].y = y0 + cp[j][1] * 6.0f;
+            vtx[j].z = 0.5f; vtx[j].rhw = 1.0f; vtx[j].diffuse = 0xFFFFFFFFu;
+            memset(&ex[j], 0, sizeof ex[j]);
+            ex[j].specular = 0xFF000000u; ex[j].fog = 1.0f;
+            for (k = 0; k < 4; k++) {
+                ex[j].tex[k][0] = 0.5f; ex[j].tex[k][1] = 0.5f; ex[j].tex[k][3] = 1.0f;
+            }
+        }
+        memset(&b, 0, sizeof b);
+        b.vertices = vtx; b.count = 6; b.state = &rs; b.extra = ex; b.combiner = &rc[i];
+        for (k = 0; k < 4; k++)
+            b.textures[k] = &tx[k];
+        be->draw(&sf, &b);
+    }
+    be->flip();
+    px = snapshot_va(surf_va, 64u * 64u * 4u);
+    if (!px)
+        return 0;
+    for (i = 0; i < 5; i++) {
+        uint32_t got = px32(px, 64, (int)((i % 8u) * 8u + 4u), (int)((i / 8u) * 8u + 4u));
+        int g[4] = { (int)((got >> 16) & 255), (int)((got >> 8) & 255), (int)(got & 255), (int)(got >> 24) };
+        float o[4];
+        int e[4];
+
+        q_oracle((int)i, k_q_argb, o);
+        d = 0;
+        for (k = 0; k < 4; k++) {
+            e[k] = rc_quant(o[k]);
+            if (abs(e[k] - g[k]) > d) d = abs(e[k] - g[k]);
+        }
+        if (d > worst) worst = d;
+        if (got != CLR) drawn++;
+        if (d > RC_RTOL) {
+            fprintf(stderr, "FAIL [four textures]: %s: nv2a_rc_eval says %d,%d,%d,%d, the target has %d,%d,%d,%d\n",
+                    i < 4 ? "stage output" : "combined t0..t3", e[0], e[1], e[2], e[3], g[0], g[1], g[2], g[3]);
+            ok = 0;
+        } else {
+            printf("      vulkan   four textures, draw %u (%s)%*s ref %3d,%3d,%3d,%3d  got %3d,%3d,%3d,%3d\n", i,
+                   i < 4 ? "T-stage alone" : "D + C(1-A) + BA", i < 4 ? 8 : 0, "", e[0], e[1], e[2], e[3],
+                   g[0], g[1], g[2], g[3]);
+        }
+    }
+    free(px);
+    printf("  [four textures] 5 draws, %d drawn, worst channel diff %d (allowed %d)\n", drawn, worst, RC_RTOL);
+    if (drawn != 5) {
+        fprintf(stderr, "FAIL [four textures]: %d draws did not reach the target\n", 5 - drawn);
+        ok = 0;
     }
     return ok;
 }
@@ -2496,10 +4772,15 @@ int main(int argc, char **argv)
      * reference taken after that point would silently be a combiner batch. The CPU pass is also
      * checked against nv2a_rc_eval, which is what shows the oracle is the arithmetic the executor
      * runs, and the comparison runs last, so the reference is known to exist and to show the
-     * drawing before it is used. */
+     * drawing before it is used. rc_run also drives the randomized suite (2 fixed seeds x 256
+     * cases, re-derivable from (seed, index)) in both passes; its register tail returns every
+     * combiner and texture register to the never-programmed state, so the CPU pass's sweep and
+     * whole-surface cases see the same inherited state the Vulkan pass's did. */
     puts("-- Vulkan back end: register combiners --");
     rc_table();
     ok &= rc_run(1);
+    puts("-- Vulkan back end: four distinguishable textures (draw contract) --");
+    ok &= run_four_textures();
     /* The back end prints its [GPUVK] counters line on the first flip and then at most once every
      * VB_STATS_MS (10 s), so a run this short would never show the combiner draws it just made.
      * Wait out that window and flip once more: the line is cumulative, so it then carries the
