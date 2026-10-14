@@ -89,7 +89,7 @@ the exception defined next.
 
 The bare minimum is pragmatic: the project takes the path of least resistance to the
 title screen and then the rest of the slice. For **bare-minimum milestones**
-(M15 in the historical `plan-jsrf-title-screen.md`; current opening-area work in
+(M15 in the retired title-screen plan, `git show 3f414ba:plan-jsrf-title-screen.md`; current opening-area work in
 `plan-jsrf-gameplay.md`; later milestones in the retired plan,
 `git show d6b8336:plan-jsrf-bare-minimum.md`):
 

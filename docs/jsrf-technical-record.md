@@ -2306,9 +2306,9 @@ invoked by the executable.
 **Tests** (`jsrf_gpu_backend_parity_vk`, lavapipe, written by a different worker than the implementation):
 
 - a 39-case sweep whose centre pixel is compared with `nv2a_rc_eval` called directly on the same
-  registers — all eight input mappings, all six output scale/bias values, the dot-product flags, both
-  mux forms, the destination nibbles, blue-to-alpha both ways, the `R0` reset, the final combiner's
-  forms and alpha source, and fog. **Worst channel difference 0** (tolerance 1).
+  registers. **Worst channel difference 0** (tolerance 1). Independent review subsequently found
+  that the cases labelled mux and final complement/clamp did not enable those behaviors; the repaired
+  discriminating coverage is recorded in §31.15. This original pass does not prove those semantics.
 - six whole-surface cases against the CPU executor: the promoted former XFAIL lerp (98.83%), four
   stages with a linear and two swizzled textures plus an unbound stage (100.00%), three combiner draws
   with different state plus a stage-0 fallback draw in ONE submission (100.00%), PASSTHRU (100.00%),
@@ -2326,13 +2326,243 @@ invoked by the executable.
 shader. The real main menu renders correctly (orange NEW GAME entry, JSRF wordmark, city behind), and the
 title-screen characters are cel-shaded with their outlines.
 
-**Still open (not V3).** The stock script does not reach the Garage on Vulkan, and the cause is the known
-`key_script_run.py` menu-detector defect, not the renderer: step 1's `key_until until=menu` accepted the
+**Initial gate failure, corrected by §31.15.** This stock run did not reach the Garage on Vulkan:
+step 1's `key_until until=menu` accepted the
 attract-mode city frame, which scores 601 orange pixels against a 600 threshold (measured on
 `01_key_until_after.png`). The pre-V3 Vulkan run failed the same step the same way with a score of 665, so
-this is pre-existing and V3 improved the margin rather than causing it. Fixing the detector is plan step 3.
+this is pre-existing. The script continued on the wrong screens; it did not literally stop at step 1.
+The initial diagnosis was incomplete: the title detector also accepted the white Smilebit logo.
+Fixing both detectors is plan step 3. The 12,473 presents cannot establish a speed comparison with a
+D3D11 run that traversed gameplay.
 The other `[GPUVK]` counter that moved is `readback_ms`, 202 s of the 560 s frame budget, which is the
 target readback path V1 flagged as future performance work.
 
 PUSHED_TO: xboxrecomp / BRANCH: main / COMMIT: d23ca42964aca8cbb7097ff51271dacdab235c4b / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: success, fast-forward from 4f8a880. Validation: toolkit and game build via `scripts/build-jsrf.py`, full game CTest 68/68 with the Vulkan parity test running on lavapipe (not skipped), the standalone `nv2a_combiner` and `nv2a_vsh` projects green, `just check` all checkers passed. Upstream push URL is DISABLED and was not touched.
 PUSHED_TO: poison-jam / BRANCH: master / COMMIT: d74ce42c5f0e0b5446871181cd5b0a17b7b24857 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: success, fast-forward from f842c6f over one commit. Validation: full CTest 68/68 and `just check` all checkers passed on the committed tree, the VK parity test re-run green (11.38 s), secret audit 2 hits over 6,498 blobs both pre-existing self-matches inside `scripts/secret-audit.py` and its documentation (commits 1b56942, 6a97c86; neither blob is in this commit), no forbidden paths, largest outgoing blob 168,662 bytes. Toolkit d23ca42 was pushed first.
+
+### §31.15 V3 review repairs and the detector handoff (2026-10-13)
+
+**Shared, uncommitted work.** Committed bases are game `3f414ba` and toolkit `d23ca42`. The owner
+asked for the changes to remain in the shared Windows checkout and for an updated plan/hand-back
+prompt, rather than a commit. No new push is claimed here. The original OMP remediation operation
+ended `unknown_outcome` after the owner pause (`settle_stalled: queued_message_count=1`); its review
+run was automatically stopped and refused a subsequent STOP decision. These independently checked
+handoff findings do not rewrite that operation's bridge outcome as success.
+
+**Two detector defects, not a measured renderer regression.** The menu's orange-only test accepted
+the attract city. The title's two minimum-white tests also accepted the white Smilebit card: its
+sampled white fill is 61–68% in the press band and 100% in the wordmark band, versus 19%/43% in the
+measured real title. The repair retains the menu's dark-bar structural witness and requires title
+white fill below 40%/70% respectively. Independently re-reading the labelled local corpus rejects
+the logo/city negatives and accepts the illuminated real title and selected NEW GAME menu. Blinking
+title text need not match on every frame; `wait_title` polls continuously. Other menu selections are
+not the selected-NEW-GAME checkpoint this detector intentionally recognizes.
+
+`tests/test_key_script_run.py` now runs **90/90**, including local archive checks (no skip). Independent
+in-memory negative controls remove both title upper bounds or replace `is_menu` with its former
+orange-only rule: **5 and 7 tests fail**, respectively, with no errors. Shared source bytes are never
+modified by these controls. `config/key-scripts/e2e.json` remains byte-unchanged, SHA256
+`72c0360f90f9b92d5e5ed1b2cadab2a206717d28139413f84ea0f940aa4f9575`.
+
+**The three combiner-coverage gaps are repaired.**
+
+- The mux cases now set the output mux-enable bit, derive alpha from an explicit alpha source,
+  and separate sum, LSB and MSB selection with both outcomes. Oracle-value pins and pairwise output
+  separation reject a fixture that stops exercising the behavior in its label.
+- Final complement/clamp flags now occupy `final1 & 0xFF`. Separate pairs expose complement-v1,
+  complement-r0 and clamp-before-mix; the unclamped result cannot be hidden by final saturation.
+- A read-only `nv2a_backend_current()` accessor permits a direct backend-contract fixture with
+  **four actually bound distinguishable textures**, followed by a draw combining all four.
+  The pushbuffer fixture's real stage-3 admission limitation remains unchanged and documented.
+
+Independent guarded build succeeds. The real lavapipe parity rerun passes in 11.48 s: **45/45**
+semantic pixels and **5/5** direct four-texture draws, worst channel difference **0** against the
+CPU oracle (tolerance 1), plus the six existing whole-surface cases. The separate worker's full-suite
+receipt, inspected independently, reports **68/68** in 200.84 s with Vulkan running rather than
+skipping. Scratch-copy shader mutations demonstrably fail the deciding test: ignore mux-enable,
+invert mux selection, read final flags from the wrong byte, remove final clamp, bind texture 2 to
+stage 3. Raw failures identify the corresponding mux/final/four-texture pixels; the baseline passes.
+Production shader SHA256 remains `a895d00737d4727aa2d741271c048f84dc102001625921e8ce3f5b3b14c43571`,
+and its bytes match the restored scratch source. No production mutation is retained.
+
+**Garage-reaching stock runs, independently checked.**
+
+| Archive | Backend | Title / HUD checkpoint | Presents / run duration |
+|---|---|---|---|
+| `20261013-204203-694-keyscript-e2e-vk-v3b` | Vulkan, RTX 4070 Laptop GPU | 213.5 / 449.6 s | 6,024 / 560.5 s |
+| `20261013-205232-358-keyscript-e2e-d3d-v3b` | D3D11 reference | 123.7 / 360.1 s | 11,073 / 560.4 s |
+| `20261013-211154-309-keyscript-e2e-vk-v3-handoff-val` | Vulkan RTX 4070, Khronos validation loaded | 86.8 / 317.3 s | 13,035 / 560.5 s |
+
+Both archives verify **exploratory**, with the recorded executable SHA256
+`1a17261c6a4b6d7eefc6a32849aa6196e833a11db05f490123403933e12cd990`, matching the independent rebuilt
+executable. Both have dirty-tree source/patch identities, not new clean-head commits. The archived
+runner matches the current repaired source. Both scripts complete with 0 ICALL/fatal counts and no
+ABI failure. Bounded process termination is not a guest crash. `start.png`, `paused.png` and
+`resumed.png` show the actual Garage, pause map and return to play; player jacket/skin/skate colours,
+outlines and shadows agree in the corresponding start views. Movement is also measured by player
+coordinates: Vulkan x/z goes 407.971/489.922 → 285.453/527.087 across the scripted phases; D3D11 goes
+407.971/489.922 → 199.063/535.004. Different progress is consistent with timed input at different
+render rates, not a frame-aligned equivalence result.
+
+Whole-run averages are about 10.8 versus 19.8 presents/s, including loading/intro. These are bounded
+observations, not a controlled steady-state comparison or a causal performance diagnosis. CPU vertex
+program execution and synchronous submissions/readbacks remain candidates to measure; V5 removes
+the former. The earlier 12,473-present title/menu-only run must not be compared as a Vulkan speedup.
+
+The successful Vulkan archive above has **no enabled Khronos-layer setting**. Its zero validation
+counters therefore cannot establish a validation pass. The final independent stock run
+`20261013-211154-309-keyscript-e2e-vk-v3-handoff-val` explicitly enables the layer; Vulkan loader output
+witnesses insertion of `VK_LAYER_KHRONOS_validation` from the SDK DLL. All **72 steps complete** by
+360.1 s, including visually checked Garage player shading, a jump, pause map and return to play.
+It continues through the 560.5 s bound with **0 ICALL/fatal/ABI failures and 0 validation errors or
+warnings**. Last GPU counters: `rc_draws=1440727 rc_fallback=0`; 13,035 presents, readbacks 210.971 s.
+The profile verifies **exploratory**, the isolated save root verifies, and the executable SHA256
+matches the other runs and independent build. Player x/z moves 407.971/489.922 → 186.056/531.595.
+Its roughly 23.3 whole-run presents/s differs substantially from the earlier Vulkan capture, so a
+stable slowdown or speedup is not established by these runs. No runtime code changed between them.
+Relied-on ledger IDs for the Vulkan path: L16, L17, L18, L47, L56, L57, L58, L61, L62; D3D11 reference
+additionally uses L59/L60. These pragmatic exploratory results do not prove hardware fidelity.
+
+**V3's shared-tree gates are verified; next:** V4 randomized combiner tests, V5/V6 static
+vertex programs and their independent tests, V7 acceptance and V8 owner play. The shared repair tree
+must be preserved and reviewed before committing. Session reports/mutation receipts remain outside
+the repository; no retail screenshots, generated SPIR-V or owner assets were added to Git.
+
+### §31.16 V4: randomized register-combiner states on lavapipe (2026-10-14)
+
+**Shared, uncommitted work; no commit or push in this packet.** `tests/test_gpu_backend_parity_vk.c`
+gains a randomized suite beside the unchanged 45-case sweep, five four-bound-texture draws and six
+whole-surface cases. Production shader/backend source is untouched: `src/video/shaders/nv2a_vk_rc.hlsl`
+SHA256 stays `a895d00737d4727aa2d741271c048f84dc102001625921e8ce3f5b3b14c43571`, and the toolkit's only
+dirty files remain the two preserved read-only-accessor edits. No CMake change was needed; the suite
+lives in the existing `jsrf_gpu_backend_parity_vk` target, and the CTest count stays 68.
+
+- **Generator.** SplitMix64, one stream per case seeded from `(seed << 32) | index`; fixed seeds
+  `0x20261013` and `0x9E3779B9`, 256 cases each; no `rand()`, time, environment, locale or
+  accumulated-state branching. A case is re-derived from `(seed, index)` alone, which the receipts
+  demonstrate: two independent runs print the same inventory `fnv1a64 0xAC0466A6CBF3C5D7` and an
+  identical coverage block. 16 cases per submission on one 64x64 A8R8G8B8 target, 32 submissions per
+  pass, through the executor's admitted methods only: stages 0-2 in NONE/PROJECT2D/PROJECT3D/
+  CUBEMAP-on-2D/PASSTHRU with solid synthetic textures (stage 0 the linear R5G6B5 image addressed in
+  texels, stages 1-2 the swizzled images addressed in [0,1]), stage 3 NONE/PASSTHRU because its texture
+  methods are not admitted. A per-submission tail returns every combiner and texture register the suite
+  touched to the never-programmed zero state, so the CPU pass's later deterministic cases inherit the
+  same state the Vulkan pass's did.
+- **Validity, derived from the contracts rather than assumed.** `rr_walk` re-derives the readable
+  register set from the written words and rejects any state that reads a register no earlier stage
+  wrote (only `r0.a` is defined at entry), that uses a forbidden stage mode or mapping, that repeats a
+  destination, or that violates the final combiner's flag/byte rules; fog is 0 or 1 only, because
+  `SET_FOG_MODE`/`SET_FOG_PARAMS` are not admitted methods. `rr_map_in`/`rr_map_out` are checked against
+  `nv2a_rc_eval` itself over 75 probes (0 bad), and the r0.a initialisation rule is checked directly.
+  Candidates rejected before counting: invalid 8, mux-selector margin 21, conditioning 8, clear-like 0
+  (549 candidates for 512 accepted, so the states are states, not retries).
+- **Coverage.** All **98** printed minimums are met, including 0..8 general stages (56-58 each), every
+  input mapping (1959-2084), all six RGB and six alpha scale/bias encodings, AB/CD/both dot products,
+  all four mux selections, blue-to-alpha both ways, register write/read ordering (388 cases, 4475
+  reads), per-stage factors, the final combiner's SUM/EF forms and its 0x20/0x40/0x80 flags, fog on/off,
+  and stage modes 0-4. Distinct quantised outputs: **328**. Every accepted case is drawn and compared;
+  nothing is silently skipped and `RC_RTOL` stays 1.
+- **Result.** Vulkan **512/512** cases drawn, 8192 pixels compared, worst channel difference **1**
+  (tolerance 1); CPU executor 512/512, worst **0**; the direct-seam block adds **128/128** accepted
+  cases with four bound textures (seed `0x51ED2701`, 2048 pixels, worst 1). The preserved deterministic
+  results are unchanged (sweep 45/45 worst 0 in both passes, four textures 5/5 worst 0, six
+  whole-surface cases passing). `[GPUVK] rc_draws=698 rc_fallback=1` is exactly the 58 pre-existing
+  draws plus the 640 randomized ones, with 0 validation errors/warnings.
+- **Mutations (scratch copy `C:\Users\logic\xbr-mac\pv02mut\`; the V3 receipts in `v3mut\` untouched).**
+  Both required mutations change only the shader, and both were first measured to **pass** the
+  preexisting deterministic suite — so the randomized cases are their only detector, which is the
+  packet's explicit criterion:
+  - alpha-portion sum computed as a product (`qab + qcd` → `qab * qcd`): **1104** randomized pixel comparisons
+    fail (1024 executor-path + 80 direct-seam reported by the suite), first at seed `0x20261013`
+    case 10, oracle `0,0,0,24` vs GPU `0,0,0,0`; deterministic-sweep failures: **0**.
+  - alpha input mappings 2/3 swapped in `in_a`: **1840** randomized pixel comparisons fail
+    (1536 executor-path + 304 direct-seam), first at seed
+    `0x20261013` case 1, oracle `141,231,65,0` vs GPU `141,231,65,51`; deterministic-sweep failures:
+    **0**.
+  After each run the scratch source is restored and asserted equal to the production hash, and the
+  restored rebuild passes.
+  Codex independently checked the raw summary counters and corrected the initial report's totals:
+  its 1025/1537 counts included summary failure lines and omitted direct-seam pixel failures.
+- **Gates.** `just build` succeeded (executable SHA256 unchanged at `1a17261c…12cd990`); the targeted
+  actual-lavapipe run exits 0 in 11.55 s with no skip; full CTest **68/68** in 207.6 s with the parity
+  test run rather than skipped; `just check` exit 0. Exit 77 is never treated as a pass.
+- **A negative result worth keeping.** Exchanging only A and B (or only C and D) in the shader is
+  **not** a defect and no test can detect it: `A*B == B*A` and `dot(A,B) == dot(B,A)`. A measured
+  swap-A-B build passes the whole suite. A genuine input-mapping mutation must change the mapping byte
+  or exchange the operand sets across AB and CD; both such mutations fail.
+- **Scope.** A fixture-grade host pixel comparison of the uber shader against `nv2a_rc_eval` on
+  lavapipe. It is not a guest run under any `docs/jsrf-run-profiles.md` profile and proves no hardware
+  fidelity. Randomized textures use nearest filtering only, and CLIPPLANE, modes above 5 and states
+  outside the validity rules are deliberately not randomized. Receipts stay outside Git; no retail
+  assets, generated SPIR-V or oversized blobs were added.
+
+**V4's randomized combiner gate is measured on the shared tree; next:** V5/V6 static vertex programs and
+their independent tests, V7 acceptance and V8 owner play.
+
+### §31.17 V5 planning hold and UNKNOWN bridge timeout (2026-10-14)
+
+Operation `op_0mv7t35cp477c8233c1e140b1` yielded, then ended `unknown_outcome`
+with `settle_timeout`; supervision run `run_0mv7n55d5f6128e228923d76d` automatically
+stopped. This establishes neither V5 completion nor a renderer defect. The last
+parent-session assistant action is a pending planning-workflow question. A separate
+Opus planner was stopped after OMP identified the conflict with the skill's ban on
+a separate planning process. Its bridge-facing API exposes no plan-mode switch;
+OMP's probe of `xd://propose` refused outside active plan mode. The documented
+headless alternative was reported by OMP, and requires an explicit owner exception
+to the current skill instruction before use.
+
+Independent reconciliation found no V5 production changes or completion report.
+The parity source retains SHA256
+`af210fe78c8b02ec62b27ad18307eef6c20ad6913a20618187f978c0ec37ed62`;
+runner, runner-test and both toolkit accessor hashes also match the preserved tree.
+Both origins were fetched and remain synchronized at game `3f414ba` and toolkit
+`d23ca42`. V3/V4 acceptance remains intact. No commit or push occurred.
+
+Owner-requested configuration reload is a separate recovery action, not proof of
+planning or implementation. Preserve context and edits before host replacement;
+do not reuse the stopped supervision run or fabricate an UNKNOWN acceptance.
+Retry only after resolving the planning mechanism and creating an authorized run
+that retains the unused ceilings: eight further operations, two remediation cycles.
+Recovery reports stay outside the repository.
+
+### §31.18 Handoff cleanup and the V5 planning resolution (2026-10-14)
+
+**The planning blocker (§31.17) is resolved by an owner decision, not a tooling change.**
+`plan-jsrf-gameplay.md`'s remaining steps (V5, V6, N2, N3, V7, V8, N4, N6) are **pre-approved**, so the
+executing agent runs them directly, without its own planning phase or a separate headless planner
+(plan rule N1). Each step is sized to finish in one operation (N5).
+
+**What was verified and committed.**
+
+- Before committing, the shared tree passed on Windows:
+  - `just build`;
+  - the full CTest via `ctest-limited.py`, 68/68, with `jsrf_gpu_backend_parity_vk` running on
+    lavapipe (15.6 s);
+  - `just check`;
+  - `tests/test_key_script_run.py` 90/90.
+- **Hashes:** the shader (`a895d007…`), the parity test (`af210fe7…`) and `e2e.json` (`72c0360f…`) match
+  the values §§31.15–31.16 quote.
+- **Spot-checks of V4:** `rr_walk` rejects reads of registers no earlier stage defined (RGB and alpha
+  sets kept separately), stage-3 modes the executor can't bind, non-zero unused stages, duplicate
+  destinations and unknown scale encodings. Each randomized batch is pushbuffer-submitted through the
+  executor (`build_rr_batch` → `submit`), with sentinel-prefilled surfaces.
+- **Commits:**
+  - toolkit `4753474`: the `nv2a_backend_current()` accessor;
+  - game `2e8b84a`: the detectors;
+  - game `434dde1`: the V3 repairs and V4;
+  - then the records.
+
+**Cleanup.**
+
+- The completed title-screen and keyboard-input plans are removed; they remain in git history at
+  `3f414ba`, and references were reworded.
+- `plan-jsrf-gameplay.md` is condensed into the sole plan.
+- Ledger L62 is condensed to its contract and status.
+
+**New plan items from what stalled or misled the last run.**
+
+- **N2, a controlled benchmark:** whole-run present totals varied from 10.8 to 23.3/s on Vulkan with
+  one build, so they can't support a performance claim.
+- **N3, validation discipline:** a run whose loader didn't witness the Khronos layer can't claim a
+  validation pass, as with the first successful V3b run.
+- **N4, readback and synchronisation:** 202–211 s of each 560 s run is readback.
