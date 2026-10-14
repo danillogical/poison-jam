@@ -2595,8 +2595,10 @@ process starts, and the Vulkan back end never translates or compiles anything.**
   strictly ascending with no duplicate, and re-scans the XBE for coverage. **126/126 entries
   recompiled byte-identical; 126 XBE programs, none missing, none extra.** Corpus
   `sha256 31378834c81a819ff8c902ff17dd7a8077c11ce267d01a321491a6f4175ce741`, 4,173,304 bytes,
-  1,158,080 SPIR-V bytes. `--check` regenerates byte-identically (determinism), and a one-byte edit
-  makes it fail.
+  1,158,080 SPIR-V bytes. `--check` regenerates byte-identically (determinism). Reproduced: with
+  byte 12345 of the corpus XORed with 0xFF, `--check` reports
+  `differs (committed ... sha256 7e3fb464..., regenerated ... 31378834...)` and exits 1; the byte was
+  then restored and the sha asserted back to `31378834...`.
 - **Decorations, verified in the emitted SPIR-V.** `[[vk::binding(9, 0)]]`/`[[vk::binding(10, 0)]]`,
   `[[vk::location(n)]]` on each input at its attribute index, outputs at locations 0..6 matching
   `ps_rc`'s inputs, and `SV_ClipDistance0`. All 126 entries were checked, not a sample.
@@ -2619,16 +2621,22 @@ process starts, and the Vulkan back end never translates or compiles anything.**
   the once-per-hash line present; a corrupt `len` and a corrupt digest each declined with
   `identity_fail` and no hit; two same-mask corpus programs producing their own pixels; and two
   negative controls. **Result: PASS on lavapipe (3.2 s), and both negative controls exit 1 with the
-  check correctly failing the injected defect.** The controls' own value was checked too: with the
-  defect removed they exit 2 and name the check that missed it.
-- **External mutation, applied to production source** (not a copy): the pipeline key's program
+  check correctly failing the injected defect.** The controls' own value was reproduced, not merely
+  reported: with check 1 neutralized in a scratch copy of the test, control 1 prints
+  `check 1 MISSED the simulated defect` and exits 2, and a CTest case using the registered
+  `PASS_REGULAR_EXPRESSION`/`FAIL_REGULAR_EXPRESSION` then reports that case as **Failed**, which is
+  what `WILL_FAIL` could not have done.
+- **External mutation, applied in place to the shared production source** (not a scratch tree), to
+  the backend as it stood at `f1609da6`, i.e. before the review's S1 reorder: the pipeline key's program
   identity removed *and* the guard that refuses a key/entry mismatch disabled, so the key silently
   aliases programs. The gating test **fails** with
   `[pair] EC6C788B and F2833A7D produced the SAME surface on the GPU though the interpreter separates
   them: the pipeline cache is serving one program's shader for the other` and
   `gpu surfaces differ in 0 of 4096 pixels`. Source restored to
   `sha256 f1609da67c3889607e699eeac3076dba8b7c447719eb839c9ea9d2067c34ea47` (asserted equal) and the
-  restored build passes.
+  restored build passes. The mutation covered the **pre-S1** backend: the S1 lookup reorder landed
+  afterwards, and the shipped backend is `32d83dd0`. The gating test was re-run green on that final
+  build but was **not** re-mutated there, so the mutation evidence is for `f1609da6`.
 - **e2e gate.** The unchanged stock `config/key-scripts/e2e.json` on Vulkan (`e2e-vk-v5`, 560 s):
   script complete, 72 steps, no unsatisfied step, 0 ICALL/ABI/fatal, exploratory profile.
   **`vsh_misses=0` with positive activity: `vsh_hits=1238406`, `vsh_tris=329351108`,
@@ -2642,6 +2650,12 @@ process starts, and the Vulkan back end never translates or compiles anything.**
   are registered with CTest, so neither can be skipped by not being run.
 - **Also fixed while here:** `jsrf_vsh_aot_test` and `just shaders` were added to the checkers'
   expectations (`scripts/check-agent-docs.py` requires the recipe; `AGENTS.md` documents it).
+- **What the V5 run does and does not claim.** `20261014-144815-512-keyscript-e2e-vk-v5` set only
+  `RECOMP_GPU_BACKEND=vulkan`: no `VK_INSTANCE_LAYERS`, so its `validation_errors=0` counter is
+  vacuous and it makes **no** validation-pass claim (plan N3 belongs to V7). Its claim is the
+  vertex-program gate: 0 misses with 1.24M corpus-shader draws and 329M triangles. The
+  D3D11-matching-shading comparison and the 0-validation-errors result are the **V3 handoff run's**
+  (`20261013-211154-309-keyscript-e2e-vk-v3-handoff-val`), not this one.
 - **Independent review (a reviewer that wrote none of it) found five defects; all were resolved.**
   - *A fresh checkout could never build* (P1): the generator looked for the host tool only inside
     the game's build tree, and that tree cannot be configured until the corpus exists, so the two
