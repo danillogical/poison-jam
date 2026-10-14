@@ -15,6 +15,7 @@
 #include "apu_mmio_hook.h"
 #include "nv2a_d3d11_backend.h"
 #include "nv2a_vk_backend.h"
+#include "nv2a_vsh_programs.h"
 
 extern RECOMP_TLS uint32_t g_eax, g_ecx, g_edx, g_esp;
 extern RECOMP_TLS uint32_t g_ebx, g_esi, g_edi;
@@ -473,13 +474,25 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
     /* RECOMP_GPU_BACKEND=d3d11 or =vulkan hands the executor's batches to that
      * back end, so they rasterise on the GPU instead of the CPU. The executor was
      * registered on the submission walk by xbox_MemoryLayoutInit, and the guest
-     * has not submitted anything yet, so this is the point to install it. */
+     * has not submitted anything yet, so this is the point to install it.
+     *
+     * The Vulkan back end also gets the ahead-of-time vertex-program corpus
+     * (src/recomp/gen/shaders/nv2a_vsh_programs.c, built offline by
+     * `just shaders`). The back end never translates or compiles a guest vertex
+     * program at run time: it looks the batch's program up in this table by
+     * hash and re-checks its identity against the words the guest uploaded. A
+     * program the corpus does not carry is declined, and the executor's CPU
+     * interpreter draws that batch instead. The table is static storage, so
+     * handing it over here -- before any guest submission -- is the whole
+     * registration. */
     {
         const char *be = getenv("RECOMP_GPU_BACKEND");
         if (be && strcmp(be, "d3d11") == 0)
             nv2a_d3d11_backend_install();
-        else if (be && strcmp(be, "vulkan") == 0)
+        else if (be && strcmp(be, "vulkan") == 0) {
             nv2a_vk_backend_install();
+            nv2a_vk_backend_set_programs(nv2a_vsh_programs, nv2a_vsh_program_count);
+        }
     }
 
     /* The emulated APU, which the toolkit has shipped all along and which no

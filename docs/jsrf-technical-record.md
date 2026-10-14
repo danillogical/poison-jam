@@ -2566,3 +2566,110 @@ executing agent runs them directly, without its own planning phase or a separate
 - **N3, validation discipline:** a run whose loader didn't witness the Khronos layer can't claim a
   validation pass, as with the first successful V3b run.
 - **N4, readback and synchronisation:** 202–211 s of each 560 s run is readback.
+
+### §31.19 V5: the static vertex-program corpus on the Vulkan path (2026-10-14)
+
+**The title's 128 static vertex programs (126 distinct) now run from a table compiled before the
+process starts, and the Vulkan back end never translates or compiles anything.** V5 of
+`plan-jsrf-gameplay.md`; it supersedes §31.12's "still run on the CPU interpreter" and L62's
+`draw_program` NULL.
+
+- **Generator (game).** `scripts/gen-shaders.py` imports `find-vertex-programs.py` by path and reuses
+  its scan (`xbe_sections`, `scan_functions`, `scan_referenced`, `program_info`, `plausible`) rather
+  than copying it, so the extraction cannot drift from the tool the corpus was measured with. It
+  aborts on any change to the measured properties: 128 programs / 126 distinct word sequences / 126
+  distinct hashes / 0 collisions / 0 programs writing `c[]` / len 1..136 / mask popcount 1..16. It
+  runs the toolkit host tool and `dxc`/`spirv-val` offline and writes
+  `src/recomp/gen/shaders/nv2a_vsh_programs.{c,h}`, which stay untracked like the rest of
+  `src/recomp/gen/`. `just shaders` is the only spelling; CMake refuses to configure without the
+  output, naming that recipe.
+- **Host tool (toolkit).** `nv2a_vsh_hlsl_tool.c` links `nv2a_vsh_hlsl.c` and adds `--vk`: nine fixed
+  rewrites plus one per set mask bit, each required to match exactly once or the tool exits 3. It also
+  rejects a `--mask` the instructions do not imply, so a mismatched mask cannot produce an
+  unselectable shader. Built by `src/video/CMakeLists.txt` outside `if(XBR_VULKAN_FOUND)`.
+- **Corpus identity, independently re-derived.** Every entry carries `hash`, `len`, `input_mask` and a
+  64-bit FNV-1a digest over its own words (`nv2a_vsh_aot.h`). `scripts/check-vsh-aot-table.py` is a
+  separate read of the artifact: it recomputes each digest from the emitted words, rebuilds each
+  shader from those same words with the real host tool and `dxc` and compares the bytes with the
+  SPIR-V stored beside them, validates every stored module with `spirv-val`, checks the table is
+  strictly ascending with no duplicate, and re-scans the XBE for coverage. **126/126 entries
+  recompiled byte-identical; 126 XBE programs, none missing, none extra.** Corpus
+  `sha256 31378834c81a819ff8c902ff17dd7a8077c11ce267d01a321491a6f4175ce741`, 4,173,304 bytes,
+  1,158,080 SPIR-V bytes. `--check` regenerates byte-identically (determinism), and a one-byte edit
+  makes it fail.
+- **Decorations, verified in the emitted SPIR-V.** `[[vk::binding(9, 0)]]`/`[[vk::binding(10, 0)]]`,
+  `[[vk::location(n)]]` on each input at its attribute index, outputs at locations 0..6 matching
+  `ps_rc`'s inputs, and `SV_ClipDistance0`. All 126 entries were checked, not a sample.
+- **Back end.** `vb_draw_program` looks the batch's program up by hash with a binary search, then
+  re-checks `len`, `input_mask`, the entry digest, the digest recomputed from the batch's words and
+  the words themselves; any mismatch is an `identity_fail` and a decline, never another program's
+  shader. A miss returns 0 so the executor's CPU interpreter draws the batch, and logs the hash once.
+  The pipeline key carries `prog_hash`, because 126 programs share only 13 masks and a mask-only key
+  would serve one program's shader for another.
+- **Three defects found and fixed during V5**, all in the back end and all reported with evidence
+  rather than caught by the author's own tests: the stream buffer lacked
+  `VK_BUFFER_USAGE_INDEX_BUFFER_BIT` though the program path binds an index buffer from it; the
+  descriptor pool reserved 2 dynamic UBOs per set where the program set uses 3 (binding 0, 9, 10), so
+  program draws would have begun failing partway through a run; and `VbPipeKey` had no program
+  identity, so two same-mask programs shared a pipeline and one was drawn with the other's shader.
+- **Gating test, authored by a different worker** (`tests/test_vsh_aot_programs.c`, target
+  `jsrf_vsh_aot`, registered in the game's CTest). Six checks: corpus identity against the live
+  interpreter; a real table hit through the GPU with positive `hits`/`tris`/`const_uploads`, the
+  first-hit latch and a CPU pixel comparison; a miss that falls back with the CPU still drawing and
+  the once-per-hash line present; a corrupt `len` and a corrupt digest each declined with
+  `identity_fail` and no hit; two same-mask corpus programs producing their own pixels; and two
+  negative controls. **Result: PASS on lavapipe (3.2 s), and both negative controls exit 1 with the
+  check correctly failing the injected defect.** The controls' own value was checked too: with the
+  defect removed they exit 2 and name the check that missed it.
+- **External mutation, applied to production source** (not a copy): the pipeline key's program
+  identity removed *and* the guard that refuses a key/entry mismatch disabled, so the key silently
+  aliases programs. The gating test **fails** with
+  `[pair] EC6C788B and F2833A7D produced the SAME surface on the GPU though the interpreter separates
+  them: the pipeline cache is serving one program's shader for the other` and
+  `gpu surfaces differ in 0 of 4096 pixels`. Source restored to
+  `sha256 f1609da67c3889607e699eeac3076dba8b7c447719eb839c9ea9d2067c34ea47` (asserted equal) and the
+  restored build passes.
+- **e2e gate.** The unchanged stock `config/key-scripts/e2e.json` on Vulkan (`e2e-vk-v5`, 560 s):
+  script complete, 72 steps, no unsatisfied step, 0 ICALL/ABI/fatal, exploratory profile.
+  **`vsh_misses=0` with positive activity: `vsh_hits=1238406`, `vsh_tris=329351108`,
+  `vsh_const_uploads=1238406`, `vsh_identity_fail=0`, `vsh_declines=0`**, and the executor's
+  independent summary agrees (`1237449` batches / `329098067` triangles drawn by the back end, 0
+  declined to the CPU). Zero misses with zero activity would not have been proof, so the activity is
+  the gate. The run's `exe_sha256` equals the executable the final tree builds. The earlier run
+  `20261014-135941-640-keyscript-e2e-vk-v5` carries the same verdict on the pre-review-fix build.
+  `scripts/check-vsh-run.py` encodes exactly that and reads both sources; its fixtures include the
+  zero-activity case, the disagreeing-sources case and a spoofed line. Both it and the table checker
+  are registered with CTest, so neither can be skipped by not being run.
+- **Also fixed while here:** `jsrf_vsh_aot_test` and `just shaders` were added to the checkers'
+  expectations (`scripts/check-agent-docs.py` requires the recipe; `AGENTS.md` documents it).
+- **Independent review (a reviewer that wrote none of it) found five defects; all were resolved.**
+  - *A fresh checkout could never build* (P1): the generator looked for the host tool only inside
+    the game's build tree, and that tree cannot be configured until the corpus exists, so the two
+    steps deadlocked. `gen-shaders.py` now configures and builds the toolkit's `nv2a_vsh_hlsl` target
+    itself (into gitignored `build/vsh-tool/`) when the tool is absent, and the bootstrap was verified
+    by hiding the tool and regenerating.
+  - *The table checker never checked an entry's 32-bit hash against its own words* (P2): a table whose
+    rows kept their hash columns while their words and SPIR-V were swapped passed it. It now
+    recomputes the FNV-1a 32 the back end searches on, requires the array names to match the hash, and
+    a fixture pins it; the reviewer's exact swap input is now rejected.
+  - *The gating test could report SKIP for an already-failed check* (P2): a failed corpus check
+    followed by an unavailable device exited 77, which CTest counts as "Not Run", so a broken corpus
+    stayed green. A skip now requires every check so far to have passed.
+  - *The gating test never compared its second same-mask program with its own CPU reference* (P2), so
+    a table with that program's SPIR-V swapped would still pass. Both programs now get the same
+    comparison, and the author demonstrated the new check catching the swap the old one missed.
+  - *A program the corpus lacks could be counted as a decline instead of a miss* (P2) when the batch
+    also failed a setup check. `nv2a_vk_backend.h` defines `declines` as "found, but this draw could
+    not be set up", so the lookup now precedes the setup checks: only a program the corpus carries can
+    be a decline.
+- **Reviewer verdicts worth keeping:** no translation or compilation at run time on the Vulkan path
+  (`nv2a_vsh_hlsl(` is called only by the offline host tool and the D3D11 back end;
+  `nv2a_vk_backend.c` has no dxc/D3DCompile/shaderc/glslang and creates its program module from
+  `e->spirv`); identity safety holds; the pipeline cache key is sound (20 `uint32_t`, static-asserted,
+  no padding); no VUID-class error found, including a gating-test run under
+  `VK_LAYER_KHRONOS_validation` reporting 0 errors and 0 warnings.
+- **Not claimed:** no hardware-fidelity claim, and V6's synthetic V1-V7 HLSL equality/pixel/digest
+  suite and V7's final acceptance are separate steps. The run is exploratory, not strict.
+
+**Next:** V6 (a different worker's synthetic vertex-program suite), then N2/N3/V7/V8.
+

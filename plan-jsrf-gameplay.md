@@ -47,6 +47,14 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
 - **The key-script title and menu detectors are fixed** (game `2e8b84a`). The unchanged stock
   `config/key-scripts/e2e.json` reaches the Garage on both backends, with matching character shading.
   The validated Vulkan run is `20261013-211154-309-keyscript-e2e-vk-v3-handoff-val`.
+- **V5: the vertex programs come from a static corpus** (TR §31.19, ledger L62). `just shaders`
+  extracts the 128 programs (126 distinct) from the XBE, translates them with the toolkit's new
+  `nv2a_vsh_hlsl` host tool and compiles them offline with `dxc`; the Vulkan back end looks a batch's
+  program up by hash and re-checks its identity against the words. A miss returns 0 and the CPU
+  interpreter draws it. Nothing is translated or compiled at run time. The stock e2e on Vulkan
+  (`20261014-133626-679-keyscript-e2e-vk-v5`) has **0 vertex-program misses with 1.2M corpus-shader
+  draws** (319M triangles), and the independently authored gating test `jsrf_vsh_aot` passes with its
+  two negative controls and a production mutation detected.
 
 ## Remaining work, pre-approved by the owner (2026-10-14)
 
@@ -65,28 +73,6 @@ for:
 bridge timeout loses one step at most. Every code step gets its gating test from a **different**
 worker. Commit and push each gated step (toolkit first, then game); don't carry finished work
 uncommitted.
-
-### V5: vertex programs from the static corpus (about 1.5 h; the design is decided)
-
-1. A new generator script in `scripts/` (e.g. `gen-shaders`) reuses `find-vertex-programs.py`'s
-   extraction: 128 programs, 126 distinct.
-2. It runs `nv2a_vsh_hlsl` (a host tool built from `src/video/nv2a_vsh_hlsl.c`), then
-   `dxc -spirv -T vs_6_0`.
-3. It writes a C table keyed by the FNV hash, checked with length plus a digest of the words.
-4. `just shaders` writes it into gitignored `src/recomp/gen/shaders/`, linked into the exe.
-5. Vulkan's `draw_program` looks the program up in the table. **A miss returns 0**, so the
-   executor's CPU interpreter draws it, and logs the hash once. **No live compile.**
-
-**Constraints:**
-
-- Keep V1's y/winding convention (surface pixel = framebuffer pixel; `-fvk-invert-y`).
-- `SV_ClipDistance0` needs `shaderClipDistance`.
-- Emit `[[vk::location(n)]]` so the location equals the attribute index.
-- Add INDEX usage to the stream.
-- Put `input_mask` in the pipeline key.
-- Put the 192×float4 constants (3 KB) per draw in a stream-backed UBO.
-
-**Gate:** build; CTest; an e2e stats line showing 0 misses.
 
 ### V6: vertex-program tests (about 1 h, a different worker)
 

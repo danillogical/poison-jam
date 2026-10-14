@@ -62,6 +62,7 @@ durable record for the work they close.
 Prefer supported `just` recipes; `just --list` lists them:
 
 ```powershell
+just shaders               # ahead-of-time NV2A vertex-program corpus (once per checkout)
 just build                 # guarded Release build and identity checks
 just test                  # build, then full CTest suite
 just ctest                 # CTest against the current build
@@ -72,6 +73,12 @@ just probe <name> <label>  # bounded fixture probe
 just doctor                # environment report
 just disk                  # space gate and retention plan
 ```
+
+`just shaders` must run once in a fresh checkout, before the first `just build`:
+the Vulkan back end's vertex-program corpus is retail-derived and untracked, so
+CMake fails with a clear message until it exists. It compiles offline with the
+Vulkan SDK's `dxc` and `spirv-val` (set `VULKAN_SDK`); nothing is compiled at run
+time.
 
 Underlying commands when a recipe is unavailable:
 

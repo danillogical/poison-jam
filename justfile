@@ -9,6 +9,7 @@
 #   just test           build, then the full CTest suite
 #   just ctest          CTest only, against the current build
 #   just regen          full translation pass (regenerates src/recomp/gen)
+#   just shaders        ahead-of-time NV2A vertex-program corpus (V5)
 #   just strict-run     strict-profile guest run (RECOMP_GPU_ACK=0 is set FOR you)
 #   just explore-run    exploratory-profile guest run
 #   just title-run      exploratory title-path run with its four switches set
@@ -63,6 +64,16 @@ ctest:
 regen:
     $env:PYTHONPATH = "{{toolkit}}"; {{python}} -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name "Jet Set Radio Future" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json --backedge-yield; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/patch-generated.py; if ($LASTEXITCODE -ne 0) { exit 1 }
+
+# Ahead-of-time NV2A vertex-program corpus (V5): extract the title's static
+# programs from game/default.xbe, translate each with the toolkit's
+# nv2a_vsh_hlsl, compile it to SPIR-V with the Vulkan SDK's dxc, validate it
+# with spirv-val, and emit src/recomp/gen/shaders/. Retail-derived and
+# gitignored, like src/recomp/gen itself, so a fresh checkout must run this
+# before CMake can configure. Offline and deterministic; `--check` re-generates
+# into a temporary directory and compares bytes instead of writing.
+shaders:
+    {{python}} -X utf8 scripts/gen-shaders.py
 
 # Strict-profile guest run; sets RECOMP_GPU_ACK=0 for you.
 strict-run label="strict":

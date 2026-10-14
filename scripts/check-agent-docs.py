@@ -33,7 +33,7 @@ JUSTFILE = 'justfile'
 # Renaming or deleting one silently breaks every record that cites it, so the
 # check is by name.  `check` and `doctor` are additionally the gate recipes.
 REQUIRED_RECIPES = (
-    'build', 'test', 'ctest', 'regen', 'strict-run', 'explore-run', 'probe',
+    'build', 'test', 'ctest', 'regen', 'shaders', 'strict-run', 'explore-run', 'probe',
     'check', 'ttd-record', 'ttd-writes', 'doctor', 'analyze', 'disk',
     'secret-audit', 'symbols', 'logq', 'enumerate', 'cite-check',
     'horizon-check', 'override-check', 'dump-controls',
