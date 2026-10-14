@@ -138,10 +138,26 @@ TITLE_MIN_WHITE = 300
 # boot logos, so the press band alone cannot mistake a logo's white text for the title.
 MARK_BAND = (300, 372, 135, 505)
 MARK_MIN_WHITE = 2500
-# The main menu's highlighted entry (NEW GAME): orange text in this band, 1623 samples on the menu, 0 on
-# the title, its attract demo and the boot logos.
+# The most of each band that may be white on the title: text, not a filled screen. Measured on the
+# title 0.19 (press) and 0.43 (wordmark); the white Smilebit card 0.61-0.68 and 1.00; an attract-city
+# frame up to 0.77 on the wordmark band.
+TITLE_MAX_FILL = 0.40
+MARK_MAX_FILL = 0.70
+# The main menu's highlighted entry (NEW GAME): orange text on a dark bar. Measured over 502 frames of
+# the archived e2e runs, colour alone is NOT enough: the attract-mode city reaches 601 orange samples in
+# this band against a 600 threshold, and it was accepted as the menu by the V3 run (2026-10-13). The real
+# menu scores 1623. So the colour gate stays, and a structural witness decides.
 MENU_BAND = (215, 265, 225, 440)
 MENU_MIN_ORANGE = 600
+# The structural witness: orange glyph pixels that have dark menu-bar pixels within 3 rows above AND
+# below them. Measured over those 502 frames the separation is clean and wide -- 257 on all 17 real-menu
+# frames (both back ends, every resolution-1 frame), and at most 66 on everything else (attract city,
+# title, in-game, boot logos). 130 sits in that gap, so this is a structural test, not a tuned threshold.
+MENU_LINE_NEW = (228, 258, 225, 440)     # the NEW GAME line: the orange glyphs
+MENU_GLYPH_MIN = (200, 110, 210, 70)     # r >, g >, g <, b < : the highlight's glyph colour bounds
+MENU_BAR_DARK = 115                      # max channel of a menu-bar (dark teal) pixel
+MENU_BAR_GAP = 3                         # rows above/below that must contain bar pixels
+MENU_MIN_BAR_GLYPHS = 130
 TITLE_WHITE_LEVEL = 200
 POLL_SECONDS = 0.25
 # Sparse timeline: sample every TIMELINE_SECONDS, keep when the mean moved more than the delta.
@@ -679,27 +695,81 @@ def title_white_count(a, band_rect=TITLE_BAND):
     return int(((band[:, :, 0] > lvl) & (band[:, :, 1] > lvl) & (band[:, :, 2] > lvl)).sum())
 
 
+def band_samples(a, band_rect=TITLE_BAND):
+    """Pixels title_white_count samples in a band (every 2nd row and column), at the frame size of `a`."""
+    h, w = a.shape[0], a.shape[1]
+    top, bottom, left, right = band_rect
+    rw, rh = TITLE_REF_SIZE
+    t, b = int(round(top * h / rh)), int(round(bottom * h / rh))
+    l, r = int(round(left * w / rw)), int(round(right * w / rw))
+    return len(range(t, b, 2)) * len(range(l, r, 2))
+
+
 def is_title(a):
-    """True when both the press-start band and the wordmark band reach their 640x480 thresholds, scaled by the frame's area."""
+    """True when the press-start text and the wordmark are white text, not a white screen.
+
+    Both bands must reach their 640x480 thresholds, scaled by the frame's area, and neither may be
+    mostly white: the white Smilebit card fills 61-68% of the press band and 100% of the wordmark band,
+    where the title fills at most 19% and 43%, so without the upper bound `wait_title` fired on the
+    logos and the script ran ahead of the game."""
     rw, rh = TITLE_REF_SIZE
     scale = (a.shape[0] * a.shape[1]) / (rw * rh)
-    return (title_white_count(a) >= TITLE_MIN_WHITE * scale
-            and title_white_count(a, MARK_BAND) >= MARK_MIN_WHITE * scale)
+    press, mark = title_white_count(a), title_white_count(a, MARK_BAND)
+    return (TITLE_MIN_WHITE * scale <= press <= TITLE_MAX_FILL * band_samples(a)
+            and MARK_MIN_WHITE * scale <= mark <= MARK_MAX_FILL * band_samples(a, MARK_BAND))
 
 
 def menu_orange_count(a):
     """Orange pixels (the highlighted menu entry) in the menu band, scaled to the frame size of `a`."""
+    b = _band(a, MENU_BAND)
+    return int(((b[:, :, 0] > 160) & (b[:, :, 1] > 100) & (b[:, :, 2] < 90)).sum())
+
+
+def menu_bar_glyphs(a):
+    """Orange highlight glyph pixels that sit ON a dark menu bar: bar pixels within MENU_BAR_GAP rows
+    above and below.
+
+    This is the structural half of `is_menu`. The NEW GAME entry is orange text drawn on one of the
+    menu's dark bars, so its glyph pixels have dark neighbours above and below them. Coloured city
+    geometry that merely falls in the band does not: it is textured, so it has no such vertical pairing.
+    The rows above/below are searched at the full frame width, so an upscaled frame only lengthens the
+    glyphs; it does not add or remove the pairing.
+    """
+    import numpy as np
+
+    b = _band(a, MENU_LINE_NEW)
+    r, g, bl = b[:, :, 0], b[:, :, 1], b[:, :, 2]
+    gr, gg, gb, gm = MENU_GLYPH_MIN
+    glyph = (r > gr) & (g > gg) & (g < gb) & (bl < gm)
+    if not glyph.any():
+        return 0
+    dark = a.max(axis=2) < MENU_BAR_DARK
     h, w = a.shape[0], a.shape[1]
-    top, bottom, left, right = MENU_BAND
-    rw, rh = TITLE_REF_SIZE
-    band = a[int(top * h / rh):int(bottom * h / rh), int(left * w / rw):int(right * w / rw), :3]
-    return int(((band[:, :, 0] > 160) & (band[:, :, 1] > 100) & (band[:, :, 2] < 90)).sum())
+    y0 = int(MENU_LINE_NEW[0] * h / TITLE_REF_SIZE[1])
+    x0 = int(MENU_LINE_NEW[2] * w / TITLE_REF_SIZE[0])
+    # The search distance scales with the frame: at 2x the glyph strokes are two pixels tall, so a fixed
+    # three-row window would land inside the stroke instead of on the bar around it.
+    gap = max(MENU_BAR_GAP, MENU_BAR_GAP * h // TITLE_REF_SIZE[1])
+    n = 0
+    for yy, xx in zip(*np.where(glyph)):
+        gy, gx = y0 + int(yy), x0 + int(xx)
+        if (dark[max(0, gy - gap):gy, gx].any()
+                and dark[gy + 1:gy + 1 + gap, gx].any()):
+            n += 1
+    return n
 
 
 def is_menu(a):
-    """True on the main menu (NEW GAME / LOAD GAME / VS MODE)."""
+    """True on the main menu (NEW GAME / LOAD GAME / VS MODE).
+
+    Colour alone is not enough: the attract-mode city reaches 601 orange samples in the menu band
+    against a 600 threshold, so the V3 run accepted the city as the menu and its script ran on the wrong
+    screens. The colour gate therefore stays as a cheap filter and the structural witness above decides.
+    """
     rw, rh = TITLE_REF_SIZE
-    return menu_orange_count(a) >= MENU_MIN_ORANGE * (a.shape[0] * a.shape[1]) / (rw * rh)
+    if menu_orange_count(a) < MENU_MIN_ORANGE * (a.shape[0] * a.shape[1]) / (rw * rh):
+        return False
+    return menu_bar_glyphs(a) >= MENU_MIN_BAR_GLYPHS
 
 
 # HUD bands, calibrated on every frame of run

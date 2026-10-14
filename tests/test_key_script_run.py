@@ -176,6 +176,253 @@ class Detectors(unittest.TestCase):
         self.assertTrue(ksr.is_talk_icon(a))
 
 
+MENU_ORANGE_RGB = (255, 157, 0)   # the real NEW GAME highlight colour (measured on the archived menu)
+
+
+def menu_bar_frame(orange_glyphs=0, city=False):
+    """A synthetic menu-like frame: orange pixels in the NEW GAME line box.
+
+    Two shapes, both measured from the archived runs (see MENU_LINE_NEW's comment):
+
+    - `orange_glyphs=N`: the real menu's shape -- a ~30 px dark entry bar whose orange glyph band is ~3 px
+      tall at its centre, so every glyph pixel has dark bar colour within a few rows above AND below.
+    - `city=True`: the attract-mode city's shape -- orange pixels with bright scene colour around them and
+      no dark bar, which is what made the colour-only detector accept the city."""
+    a = frame((70, 95, 60))
+    top, bottom, left, right = ksr.MENU_LINE_NEW
+    mid = (top + bottom) // 2
+    if city:
+        # Bright textured colour through the box, orange pixels at the lower edge with bright green above
+        # and below -- no dark bar, exactly the measured city frame (which scored 601 in this band, just
+        # over the 600 gate, with only 7 of those pixels having dark bar colour around them).
+        a[top:bottom, left:right] = (115, 121, 82)
+        a[mid:mid + 6, left:right] = (131, 178, 90)
+        for y in range(mid + 8, bottom, 3):
+            a[y:y + 2, left:right] = (205, 145, 49)
+        return a
+    a[top:bottom, left:right] = (8, 40, 41)           # the dark entry bar
+    # The real glyph band spans rows 234..252 of the 228..258 box (measured: 1397 glyph pixels over ~19
+    # rows) as letter strokes with dark bar between them, so most glyph pixels have bar colour within a
+    # few rows both above and below. Model that: 3-px-tall orange strokes with 2-px dark gaps, which is
+    # what makes the vertical pairing hold for the whole glyph band rather than only at its edges.
+    gtop, gbot = top + 6, bottom - 6
+    for y in range(gtop, gbot, 5):
+        for i in range(orange_glyphs):
+            x = left + 6 + i * 4
+            a[y:min(y + 3, gbot), x:x + 2] = MENU_ORANGE_RGB
+    return a
+
+
+class MenuDetector(unittest.TestCase):
+    """The menu detector must not accept colour alone.
+
+    Defect it pins (V3 run 20261013-185536-693-keyscript-e2e-vk-v3): `is_menu` was
+    `menu_orange_count >= 600`, and the attract-mode city reached 601, so `key_until ... menu`
+    was satisfied on the city and the whole script then ran against the wrong screens."""
+
+    def test_menu_detected_on_glyph_lines(self):
+        """Orange glyph strokes on the NEW GAME bar, plus a LOAD GAME line, is the menu."""
+        self.assertTrue(ksr.is_menu(menu_bar_frame(orange_glyphs=60)))
+
+    def test_city_colour_is_not_the_menu(self):
+        """Orange pixels reaching the colour threshold with bright scene colour around them are NOT the
+        menu. This is the V3 defect exactly: the attract-mode city scored 601 against a 600 threshold."""
+        a = menu_bar_frame(city=True)
+        self.assertGreaterEqual(ksr.menu_orange_count(a), ksr.MENU_MIN_ORANGE)
+        self.assertEqual(ksr.menu_bar_glyphs(a), 0)
+        self.assertFalse(ksr.is_menu(a))
+
+    def test_orange_glyphs_without_a_bar_are_not_the_menu(self):
+        """Orange glyph shapes on bright scene colour, with no dark bar around them, are not the menu:
+        the witness needs the bar, not just orange strokes."""
+        a = frame((180, 150, 60))                     # bright city-ish colour everywhere
+        top, bottom, left, _ = ksr.MENU_LINE_NEW
+        mid = (top + bottom) // 2
+        for i in range(60):
+            x = left + 6 + i * 4
+            a[mid - 1:mid + 2, x:x + 2] = MENU_ORANGE_RGB
+        self.assertGreaterEqual(ksr.menu_orange_count(a), ksr.MENU_MIN_ORANGE)
+        self.assertFalse(ksr.is_menu(a))
+
+    def test_no_orange_is_not_the_menu(self):
+        """No orange at all is never the menu (the title screen and the in-game pause)."""
+        self.assertFalse(ksr.is_menu(frame((40, 40, 40))))
+
+    def test_menu_detection_survives_upscaling(self):
+        """A 2x nearest upscale of the menu is still the menu, and of the colour-only frame still is
+        not. The bar-gap search scales with the frame, so longer glyph runs do not defeat it."""
+        pos = menu_bar_frame(orange_glyphs=60)
+        neg = menu_bar_frame(city=True)
+        up = lambda a: np.repeat(np.repeat(a, 2, axis=0), 2, axis=1)
+        self.assertTrue(ksr.is_menu(up(pos)))
+        self.assertFalse(ksr.is_menu(up(neg)))
+
+    def test_menu_detection_survives_brightness(self):
+        """The detector must not depend on a particular exposure: a dimmed menu is still the menu, and a
+        brightened colour-only frame still is not."""
+        pos = menu_bar_frame(orange_glyphs=60)
+        neg = menu_bar_frame(city=True)
+        dim = np.clip(pos.astype(np.float32) * 0.85, 0, 255).astype(np.uint8)
+        bright = np.clip(neg.astype(np.float32) * 1.2, 0, 255).astype(np.uint8)
+        self.assertTrue(ksr.is_menu(dim))
+        self.assertFalse(ksr.is_menu(bright))
+
+
+def title_frame(press_fill, mark_fill, size=(640, 480), bg=(10, 10, 10)):
+    """A dark frame whose press-start and wordmark bands hold white column stripes.
+
+    The stripe width is chosen on the detector's sampled grid (every 2nd row and column), so the sampled
+    white fraction of each band is `press_fill` / `mark_fill` to within one sampled column."""
+    w, h = size
+    a = np.zeros((h, w, 3), dtype=np.uint8) + np.array(bg, dtype=np.uint8)
+    for band, fill in ((ksr.TITLE_BAND, press_fill), (ksr.MARK_BAND, mark_fill)):
+        top, bottom, left, right = band
+        t, b = int(round(top * h / 480)), int(round(bottom * h / 480))
+        l, r = int(round(left * w / 640)), int(round(right * w / 640))
+        k = int(round(fill * len(range(l, r, 2))))
+        a[t:b, l:l + 2 * k] = (255, 255, 255)
+    return a
+
+
+class TitleDetector(unittest.TestCase):
+    """`is_title` must want white text in both bands, not a white fill.
+
+    Defect it pins: the white Smilebit logo card satisfied the lower bounds, so `wait_title` fired on the
+    logos and the end-to-end script desynchronised from the game."""
+
+    def test_all_white_frame_is_not_the_title(self):
+        self.assertFalse(ksr.is_title(frame((255, 255, 255))))
+
+    def test_all_black_frame_is_not_the_title(self):
+        self.assertFalse(ksr.is_title(frame((0, 0, 0))))
+
+    def test_white_text_on_dark_is_the_title(self):
+        a = title_frame(0.20, 0.43)
+        self.assertTrue(ksr.is_title(a))
+
+    def test_fixture_hits_the_target_fractions(self):
+        """Guard the fixture itself: the sampled fractions are the ones the tests claim."""
+        a = title_frame(0.20, 0.43)
+        self.assertAlmostEqual(ksr.title_white_count(a) / ksr.band_samples(a), 0.20, delta=0.02)
+        self.assertAlmostEqual(ksr.title_white_count(a, ksr.MARK_BAND) / ksr.band_samples(a, ksr.MARK_BAND),
+                               0.43, delta=0.02)
+
+    def test_title_survives_scaling(self):
+        self.assertTrue(ksr.is_title(title_frame(0.20, 0.43, size=(1280, 960))))
+
+    def test_all_white_frame_is_not_the_title_at_2x(self):
+        self.assertFalse(ksr.is_title(np.full((960, 1280, 3), 255, dtype=np.uint8)))
+
+    def test_one_band_only_is_not_the_title(self):
+        self.assertFalse(ksr.is_title(title_frame(0.20, 0.0)))     # press band only
+        self.assertFalse(ksr.is_title(title_frame(0.0, 0.43)))     # wordmark band only
+
+    def test_too_little_white_is_not_the_title(self):
+        self.assertFalse(ksr.is_title(title_frame(0.05, 0.43)))    # ~124 sampled < 300
+        self.assertFalse(ksr.is_title(title_frame(0.20, 0.10)))    # ~666 sampled < 2500
+
+    def test_press_fill_above_its_upper_bound_is_not_the_title(self):
+        self.assertTrue(ksr.is_title(title_frame(0.38, 0.43)))
+        self.assertFalse(ksr.is_title(title_frame(0.43, 0.43)))
+
+    def test_wordmark_fill_above_its_upper_bound_is_not_the_title(self):
+        self.assertTrue(ksr.is_title(title_frame(0.20, 0.68)))
+        self.assertFalse(ksr.is_title(title_frame(0.20, 0.73)))
+
+    def test_upper_bounds_hold_at_2x(self):
+        self.assertFalse(ksr.is_title(title_frame(0.43, 0.43, size=(1280, 960))))
+        self.assertFalse(ksr.is_title(title_frame(0.20, 0.73, size=(1280, 960))))
+
+
+def orange_blobs_frame(bar_above, bar_below, size_scale=1):
+    """A bright frame with 60 orange glyph strokes in the NEW GAME line, and optionally dark bar rows
+    directly above and/or below each stroke row (so the pairing can be broken on one side)."""
+    a = frame((180, 150, 60))
+    top, bottom, left, _ = ksr.MENU_LINE_NEW
+    for y in range(top + 6, bottom - 6, 10):      # 10 apart so one row's bar is not its neighbour's
+        for i in range(60):
+            x = left + 6 + i * 4
+            a[y:y + 3, x:x + 2] = MENU_ORANGE_RGB
+        if bar_above:
+            a[y - 2:y, :] = (8, 40, 41)
+        if bar_below:
+            a[y + 3:y + 5, :] = (8, 40, 41)
+    if size_scale > 1:
+        a = np.repeat(np.repeat(a, size_scale, axis=0), size_scale, axis=1)
+    return a
+
+
+class MenuDetectorGates(unittest.TestCase):
+    """The two gates of `is_menu`, each exercised alone (the cases above cover the main shapes)."""
+
+    def test_fixture_pairs_bars_when_asked(self):
+        a = orange_blobs_frame(True, True)
+        self.assertGreaterEqual(ksr.menu_orange_count(a), ksr.MENU_MIN_ORANGE)
+        self.assertTrue(ksr.is_menu(a))
+
+    def test_dark_bar_on_one_side_only_is_not_the_menu(self):
+        for above, below in ((True, False), (False, True)):
+            a = orange_blobs_frame(above, below)
+            self.assertGreaterEqual(ksr.menu_orange_count(a), ksr.MENU_MIN_ORANGE)
+            self.assertFalse(ksr.is_menu(a), "bar above=%s below=%s" % (above, below))
+
+    def test_orange_blobs_with_no_bar_are_not_the_menu_at_2x(self):
+        a = orange_blobs_frame(False, False, size_scale=2)
+        self.assertGreaterEqual(ksr.menu_orange_count(a), ksr.MENU_MIN_ORANGE * 4)
+        self.assertFalse(ksr.is_menu(a))
+
+    def test_bar_pairing_survives_2x(self):
+        self.assertTrue(ksr.is_menu(orange_blobs_frame(True, True, size_scale=2)))
+
+    def test_colour_gate_is_required(self):
+        """Enough barred glyph pixels but fewer than 600 orange in the band is not the menu."""
+        a = menu_bar_frame(orange_glyphs=14)
+        self.assertGreaterEqual(ksr.menu_bar_glyphs(a), ksr.MENU_MIN_BAR_GLYPHS)
+        self.assertLess(ksr.menu_orange_count(a), ksr.MENU_MIN_ORANGE)
+        self.assertFalse(ksr.is_menu(a))
+
+
+class ArchivedMenuFrames(unittest.TestCase):
+    """Verify the detector on the real archived frames, locally only.
+
+    `logs/` is gitignored, so these frames exist on this machine and never in the repository: no retail
+    screenshot is committed. The class skips when the archive is absent, which keeps the suite green on a
+    fresh clone while still running the real-frame check where the evidence lives.
+
+    The two negatives are the exact frames the colour-only detector accepted, which is the defect this
+    work fixes (V3 run 20261013-185536-693-keyscript-e2e-vk-v3)."""
+
+    V3 = ROOT / "logs/runs/20261013-185536-693-keyscript-e2e-vk-v3"
+    D3D11 = ROOT / "logs/runs/20261013-010916-545-keyscript-e2e-f2"
+    POSITIVES = ("paused.png", "57_key_after.png")
+    NEGATIVES = ("01_key_until_after.png", "main-menu.png")
+
+    @staticmethod
+    def _load(path):
+        from PIL import Image
+        with Image.open(path) as im:
+            return np.asarray(im.convert("RGB")).copy()
+
+    def _frames(self, root, names):
+        return [(n, root / n) for n in names]
+
+    @unittest.skipUnless((ROOT / "logs/runs/20261013-185536-693-keyscript-e2e-vk-v3/paused.png").exists()
+                         and (ROOT / "logs/runs/20261013-010916-545-keyscript-e2e-f2/main-menu.png").exists(),
+                         "archived e2e frames are local-only (logs/ is gitignored)")
+    def test_real_frames_classify(self):
+        """The actual menus are the menu and the attract-city frames are not, at 1x and 2x."""
+        for name, path in (self._frames(self.V3, self.POSITIVES)
+                           + self._frames(self.D3D11, ("main-menu.png",))):
+            a = self._load(path)
+            self.assertTrue(ksr.is_menu(a), "%s must be the main menu" % name)
+            self.assertTrue(ksr.is_menu(np.repeat(np.repeat(a, 2, axis=0), 2, axis=1)),
+                            "%s must still be the menu at 2x" % name)
+        for name, path in (self._frames(self.V3, self.NEGATIVES)
+                           + self._frames(self.D3D11, ("paused.png",))):
+            a = self._load(path)
+            self.assertFalse(ksr.is_menu(a), "%s is not the main menu" % name)
+
+
 class ParseScript(unittest.TestCase):
     def parse(self, steps):
         return ksr.parse_script(steps)
