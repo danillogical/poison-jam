@@ -16,9 +16,9 @@ checkpoint and are not claimed complete here.
 
 ## Current state
 
-Verified at game `03731dd` and toolkit `4f8a880`: both clean, synchronized and pushed on
-2026-10-13. Check with `git status -sb` in `C:\Users\logic\Repos\poison-jam` and
-`C:\Users\logic\Repos\xboxrecomp`.
+Verified at game `f842c6f` and toolkit `4f8a880` on 2026-10-13 (the toolkit commit for V3 and the game
+commit for its tests and records are added below this section as they land). Check with `git status -sb`
+in `C:\Users\logic\Repos\poison-jam` and `C:\Users\logic\Repos\xboxrecomp`.
 
 - **Reachable:** M15, K16, the Garage, movement, Corn's talk, **Gum's tutorial** (TR §31.9,
   `config/key-scripts/gum-tutorial.json`) and the **pause menu** (stops 50–52 plus a 25-function
@@ -35,14 +35,18 @@ Verified at game `03731dd` and toolkit `4f8a880`: both clean, synchronized and p
 - **Shaders:** all 128 vertex programs are static XBE data, and the static words give HLSL identical
   to live and valid SPIR-V (TR §31.12, `scripts/find-vertex-programs.py`).
 - **The Vulkan backend** (`RECOMP_GPU_BACKEND=vulkan`, toolkit `src/video/nv2a_vk_backend.c`, ledger
-  L62, TR §31.13) has V0–V2 done:
+  L62, TR §31.13) has V0–V3 done:
   - build-time SPIR-V (`xbr_add_spirv`);
   - lavapipe for tests;
   - the backend core;
-  - parity tests `jsrf_gpu_backend_parity_vk`.
+  - parity tests `jsrf_gpu_backend_parity_vk`;
+  - **V3: the combiner uber-shader** (`src/video/shaders/nv2a_vk_rc.hlsl`, TR §31.14). One pixel shader
+    compiled ahead of time interprets the `Nv2aCombiner` registers from a per-draw uniform buffer
+    statement for statement with `nv2a_rc_eval` — general stages, final combiner, fog and all four
+    texture stages. No per-configuration generation and no runtime compile.
 
-  Combiner-shaded surfaces (characters, part of the city) are still drawn as stage 0 × diffuse, and
-  vertex programs run on the CPU.
+  Combiner-shaded surfaces (characters, part of the city) now render through it. Vertex programs still
+  run on the CPU (V5).
 - **Owner direction (2026-10-13)** — read it before choosing work:
   - **compile-time code over live translation;**
   - **Vulkan, for a future Android port;**
@@ -129,6 +133,16 @@ textures.
   characters must be shaded like the D3D11 run `logs/runs/20261013-010916-545-keyscript-e2e-f2`, and
   the run must reach the Garage with the stock script; the city colours fooled the menu detector
   before.
+- **DONE 2026-10-13** (TR §31.14, ledger L62): the shader, the UBO, the four stages, the pipeline-kind
+  field and `rc_draws`/`rc_fallback` are in; the deciding tests were written by a different worker.
+  Build, full CTest (68/68) and `just check` pass. E2E `logs/runs/20261013-185536-693-keyscript-e2e-vk-v3`
+  on the RTX 4070: 0 ICALL, 0 fatal, 0 validation errors, 12,473 presents against D3D11's 11,042,
+  `rc_draws=1692697 rc_fallback=0`, and the real main menu renders correctly with the title characters
+  cel-shaded. **The Garage gate is NOT met**: the stock script stops at step 1 because
+  `key-script-run.py`'s menu detector accepted the attract city frame at 601 orange pixels against a
+  600 threshold — the pre-existing defect this plan's step 3 owns (the pre-V3 Vulkan run failed the
+  same step at 665, so V3 widened the margin rather than causing it). Step 3 must land before this gate
+  can be re-run.
 
 ### 2. V4: combiner tests (about 1 h, routine, different worker)
 
@@ -245,5 +259,6 @@ test:
 ## Completed checkpoint and next session
 
 The opening area is playable on D3D11, with correct text and the pause menu, through the Gum tutorial.
-Phase V has a working Vulkan core with parity tests. The next session runs the 8-hour plan above,
-from game `03731dd` and toolkit `4f8a880`.
+Phase V has a working Vulkan core with parity tests and, since V3, ahead-of-time register combiners.
+The next session continues the 8-hour plan at step 3 (the key-script menu detector), which blocks the
+V3 Garage gate; V4 follows. V3 started from game `f842c6f` and toolkit `4f8a880`.

@@ -19,9 +19,14 @@
  *     depth (LESS with write on and off, test off with write on, the clear value), stencil (INCR,
  *     DECR with clamp, EQUAL, clear value, ignored without a depth buffer), a 16 bit round trip,
  *     alpha on 16 bit targets, reshape, eviction, non-finite vertices.
- *   - One register-combiner case as a documented known difference: this back end draws combiner
- *     batches as stage 0 x diffuse, so colours are expected to differ from the CPU reference
- *     (XFAIL); only coverage is gated.
+ *   - The register combiners, gated: this back end runs a combiner uber shader, so a batch whose
+ *     combiners are programmed is compared with the CPU reference like any other case. One sweep
+ *     of 47 constant-vertex cases compares the GPU's pixel against nv2a_rc_eval called directly
+ *     with the same registers (the sharper oracle); four whole-surface cases (a four-stage batch
+ *     with a linear and a swizzled texture, a batch with an unbound stage, the old final-combiner
+ *     lerp, and one submission with three combiner draws plus a stage-0 fallback) are compared
+ *     with the CPU executor. They run last in each pass: programming the combiners sticks in the
+ *     executor for good (rc_seen never clears).
  *
  * The test selects the CPU device with RECOMP_VK_DEVICE=llvmpipe, which CTest also sets together with
  * VK_DRIVER_FILES (cache variable XBR_VK_SW_ICD). It skips (exit 77) with a message when
@@ -31,6 +36,8 @@
 #include "nv2a_state.h"
 #include "nv2a_mmio_hook.h"
 #include "kernel/nv2a_backend.h"
+#include "kernel/nv2a_combiner.h"
+#include "d3d/d3d8_swizzle.h"
 #include "video/nv2a_vk_backend.h"
 #include "recomp_types.h"
 #include <math.h>
@@ -81,7 +88,20 @@ void jsrf_slot_watch_write(uint32_t provenance, uint32_t before, uint32_t after,
 #define TEX_MAG   0x00C00000u     /* 8x8 R5G6B5 linear, pitch 16     */
 #define TEX_ONE   0x00C10000u     /* 16x16 R5G6B5 linear, pitch 32   */
 #define TEX_ALPHA 0x00C20000u     /* 16x16 A8R8G8B8 linear, pitch 64 */
+#define TEX_RC1   0x00C30000u     /* 8x8 SZ_R5G6B5 swizzled (combiner cases) */
+#define TEX_RC2   0x00C40000u     /* 8x8 SZ_A8R8G8B8 swizzled */
+#define TEX_RC3   0x00C50000u     /* 8x8 SZ_R5G6B5 swizzled, a different pattern */
 #define EVICT_BASE 0x00D00000u    /* 17 targets of 16x16x4, 0x1000 apart */
+/* The combiner cases own their surfaces and vertex buffers, apart from every SURF()/VBUF() slot. */
+#define RCSURF(n) (0x00E00000u + (uint32_t)(n) * 0x00010000u)
+#define RCVB(n)   (0x00F00000u + (uint32_t)(n) * 0x00010000u)
+#define RC_SWEEP   0u
+#define RC_S_LERP  1u
+#define RC_S_FOUR  2u
+#define RC_S_MULTI 4u
+#define RC_S_PASS  5u
+#define RC_S_CUBE  6u
+#define RC_S_CLIP  7u
 #define SURF_BYTES 0x00010000u    /* span pre-filled/cleared per surface */
 #define SENTINEL  0x5Au
 #define SENTINEL32 0x5A5A5A5Au
@@ -91,7 +111,7 @@ enum {                            /* SURF()/VBUF()/ZETA() slots */
     N_RTT_A, N_RTT_B, N_FS_T, N_FS_U, N_NEG, N_ALPHA16, N_RESHAPE, N_ROUNDTRIP,
     N_DEPTH1, N_DEPTH2, N_STENCIL1, N_STENCIL2, N_STENCIL3, N_CMASK32, N_CMASK16,
     N_SCISSOR32, N_SCISSOR16, N_CULL0, N_CULL1, N_CULL2, N_CULL3, N_CULL4, N_CULL5, N_CULL6,
-    N_NONFINITE, N_XFAIL, N_CLEARC16, N_CLEARC32, N_ALPHA16B, N_NSLOTS
+    N_NONFINITE, N_RC_LERP, N_CLEARC16, N_CLEARC32, N_ALPHA16B, N_NSLOTS
 };
 
 #define FILTER_NEAREST 0x01010000u   /* SET_TEXTURE_FILTER: MIN=1 (bits 16-23), MAG=1 (24-27) */
@@ -192,10 +212,30 @@ static void pb_texture_on(uint32_t va, uint32_t fmt, uint32_t w, uint32_t h, uin
     pb(0x1B1C, (w << 16) | h);                     /* IMAGE_RECT */
     pb(0x1B0C, 1u << 30);                          /* CONTROL0: ENABLE */
 }
+/* Stages 1-3 accept only the methods in the toolkit's NV097 admitted list, which omits their
+ * CONTROL1 (pitch) and IMAGE_RECT; so a second texture has to be swizzled, sized by log2 in the
+ * format word. (It omits 0x1BC0/0x1BC4 as well, so stage 3's OFFSET and FORMAT cannot be written
+ * at all: stage 3 can never be a usable texture.) */
+static void pb_texture_swz(uint32_t st, uint32_t va, uint32_t fmt, uint32_t lw, uint32_t lh,
+                           uint32_t filter)
+{
+    uint32_t b = 0x1B00u + st * 0x40u;
+    pb(b + 0x14, filter);
+    pb(b + 0x00, va);
+    pb(b + 0x04, 0x1u | (2u << 4) | (fmt << 8) | (1u << 16) | (lw << 20) | (lh << 24));
+    pb(b + 0x08, 0x0303u);
+    pb(b + 0x0C, 1u << 30);
+}
 static void pb_draw_triangles(uint32_t nverts)
 {
     pb(0x17FC, 5u);                                /* BEGIN TRIANGLES */
     pb(0x1810, ((nverts - 1u) << 24) | 0u);        /* DRAW_ARRAYS from 0 */
+    pb(0x17FC, 0u);                                /* END */
+}
+static void pb_draw_range(uint32_t start, uint32_t nverts)
+{
+    pb(0x17FC, 5u);                                /* BEGIN TRIANGLES */
+    pb(0x1810, ((nverts - 1u) << 24) | start);     /* DRAW_ARRAYS from `start` */
     pb(0x17FC, 0u);                                /* END */
 }
 static void pb_flip(void) { pb(0x0130, 0); }       /* FLIP_STALL */
@@ -486,6 +526,22 @@ static void write_guest_data(void)
             *(uint32_t *)(G(TEX_ALPHA) + y * 64 + x * 4) =
                 (a << 24) | ((60 + x * 12) << 16) | ((60 + y * 12) << 8) | (220 - x * 6 - y * 6);
         }
+    /* Two 8x8 swizzled textures (the Xbox default layout: stages 1-3 can only be bound
+     * swizzled, since their IMAGE_RECT and CONTROL1 are not in the admitted method list).
+     * The pattern is written linear and swizzled with the toolkit's own xbox_swizzle_rect,
+     * so it is the layout the sampler reads. */
+    {
+        uint8_t lin[8 * 8 * 4];
+        for (y = 0; y < 8; y++)
+            for (x = 0; x < 8; x++)
+                *(uint16_t *)(lin + (y * 8 + x) * 2) = pack565(20 + x * 30, 230 - y * 28, 40 + (x ^ y) * 26);
+        xbox_swizzle_rect(G(TEX_RC1), lin, 8, 8, 2);
+        for (y = 0; y < 8; y++)
+            for (x = 0; x < 8; x++)
+                *(uint32_t *)(lin + (y * 8 + x) * 4) = 0xFF000000u | ((240 - x * 26) << 16)
+                                                     | ((30 + y * 28) << 8) | (200 - (x + y) * 20);
+        xbox_swizzle_rect(G(TEX_RC2), lin, 8, 8, 4);
+    }
 }
 
 /* ── Running ─────────────────────────────────────────────────────────────── */
@@ -1405,18 +1461,39 @@ static int run_nonfinite(void)
     return ok && !red && green >= 500;
 }
 
-/* ── Register-combiner batches: a documented known difference ────────────── */
-/* The CPU executor evaluates combiners only on its vertex-program path, so this runs in program mode
- * with a pass-through vertex program. The Vulkan back end draws combiner batches as stage 0 x diffuse,
- * so a combiner that does anything else -- here a lerp through the final combiner -- differs from
- * the CPU reference in colour (XFAIL) while the triangle still lands in the same place (gated).
- * It runs last in each pass: programming the combiners sticks in the executor for good. */
+/* ── Register combiners ────────────────────────────────────────────────────
+ * The back end runs a combiner uber shader, so a batch whose combiners are programmed is compared
+ * with the CPU reference like any other case. Two references are used:
+ *   - a sweep of one small quad per case, whose centre pixel is compared with nv2a_rc_eval called
+ *     directly with the same register words. That is the sharper oracle: it can be driven to any
+ *     input mapping byte, output scale/bias, dot-product flag, mux form and final-combiner form,
+ *     which the executor cannot be steered to. The sweep is run against the CPU executor first, so
+ *     the oracle itself is checked against the executor's own pixels.
+ *   - whole-surface cases compared with the CPU executor.
+ * The CPU executor evaluates the combiners only on its vertex-program path, so every case runs in
+ * program mode with a constant pass-through vertex program. Programming the combiners sticks in the
+ * executor for good (rc_seen never clears), so these cases run LAST in each pass, with the CPU
+ * reference pass before the back end is installed.
+ *
+ * The target is A8R8G8B8 and the output is quantised to 8 bits per channel, so the comparison
+ * tolerance is 1: the GPU evaluates the same float32 expression with a different instruction order
+ * (one dot-product instruction where the CPU has three multiplies and two adds), which is worth at
+ * most one unit in the last place before quantisation. The measured worst case is reported.
+ */
 #define RC_STRIDE 36u    /* pos@0 diffuse@12 specular@16 uv0@20 uv1@28 */
 #define RC_ZERO 0x00u
 #define RC_C0   0x01u
+#define RC_C1   0x02u
+#define RC_FOG  0x03u
 #define RC_V0   0x04u
+#define RC_V1   0x05u
 #define RC_T0   0x08u
+#define RC_T1   0x09u
+#define RC_T2   0x0Au
+#define RC_T3   0x0Bu
 #define RC_R0   0x0Cu
+#define RC_SUM  0x0Eu
+#define RC_EF   0x0Fu
 #define RC_A(r) ((r) | 0x10u)
 
 static void vsh_mov(uint32_t addr, uint32_t in, int final)
@@ -1429,11 +1506,11 @@ static void vsh_mov(uint32_t addr, uint32_t in, int final)
 }
 static void build_combiner(void)
 {
-    const uint32_t vb = VBUF(N_XFAIL), col = 0u | (4u << 4) | (RC_STRIDE << 8), f2 = 2u | (2u << 4) | (RC_STRIDE << 8);
+    const uint32_t vb = VBUF(N_RC_LERP), col = 0u | (4u << 4) | (RC_STRIDE << 8), f2 = 2u | (2u << 4) | (RC_STRIDE << 8);
     const uint32_t diffuse = 0xFF2080E0u;
     int i;
     pb_begin(); pb_reset_state();
-    pb_surface(SURF(N_XFAIL), 64, 64, 4);
+    pb_surface(SURF(N_RC_LERP), 64, 64, 4);
     pb_clear(CLR);
     pb_texture_on(TEX_MAG, 0x11, 8, 8, 16, FILTER_NEAREST);
     pb(0x1720 + 0 * 4, vb);        pb(0x1760 + 0 * 4, 2u | (3u << 4) | (RC_STRIDE << 8));
@@ -1469,7 +1546,802 @@ static void build_combiner(void)
     pb_draw_triangles(3);
     pb_flip();
 }
-static const Surf k_xfail_surf = { SURF(N_XFAIL), 64, 64, 4, CLR, 48 + 48 + 48 * 1.41421356, 0.5 * 48 * 48, 0 };
+static const Surf k_rc_lerp_surf = { SURF(N_RC_LERP), 64, 64, 4, CLR, 48 + 48 + 48 * 1.41421356, 0.5 * 48 * 48, 0 };
+
+/* ── The sweep: the centre pixel of one quad per case vs nv2a_rc_eval ────── */
+#define RC_RSTRIDE 92u    /* the back end's VbRcVertex: pos@0 rhw@12 d0@16 d1@20 fog@24 t0..t3@28 */
+#define RC_RTOL    1
+
+/* Constant per-vertex values: an attribute that is the same at all three vertices interpolates to
+ * itself, so the oracle uses these numbers directly. */
+#define RC_DIFFUSE  0xFF4060C0u    /* v0 = 0.251 0.376 0.753 1.0 */
+#define RC_SPECULAR 0xFF204060u    /* v1 = 0.125 0.251 0.376 1.0 */
+#define RC_FOGCOL   0x00003050u    /* SET_FOG_COLOR: R in bits 0-7, so rgb = 0.188 0.314 0.0 */
+
+typedef struct {
+    const char *what;          /* what this case decides */
+    Nv2aCombiner rc;           /* the register words written, and what nv2a_rc_eval is given */
+    uint32_t fog_en, fog_col;  /* SET_FOG_ENABLE / SET_FOG_COLOR */
+} RcCase;
+
+static RcCase k_rc[64];
+static uint32_t k_rc_n;
+
+static RcCase *rc_add(const char *what, uint32_t n, uint32_t flags, uint32_t prog)
+{
+    RcCase *c = &k_rc[k_rc_n++];
+    memset(c, 0, sizeof *c);
+    c->what = what;
+    c->rc.control = (n & 0xFFu) | (flags << 8);
+    c->rc.stage_program = prog;
+    c->rc.final_c0 = 0xFFFFFFFFu;
+    c->rc.final_c1 = 0x80808080u;
+    c->rc.final1 = 0x001C00u;          /* alpha from R0.a, so a case can leave final0 to itself */
+    c->fog_col = RC_FOGCOL;
+    return c;
+}
+
+static void rc_table(void)
+{
+    RcCase *c;
+    uint32_t m;
+
+    k_rc_n = 0;
+
+    /* Input mappings 0..7: A carries the mapping and B the unsigned identity, so the sum output is
+     * v0 mapped by m, times v0. Mappings 6 and 7 keep the negative values the others clamp away. */
+    for (m = 0; m < 8; m++) {
+        c = rc_add("input mapping", 1, 0, 0);
+        c->rc.color_icw[0] = (RC_V0 | (m << 5)) << 24 | RC_V0 << 16;
+        c->rc.color_ocw[0] = RC_R0 << 8;
+        c->rc.final0 = RC_R0;
+    }
+    /* The 0x10 bit replicates .a in the RGB portion. */
+    c = rc_add("the 0x10 bit makes the RGB portion read .aaa", 1, 0, 0);
+    c->rc.color_icw[0] = (RC_V0 | 0x10u) << 24 | RC_V0 << 16;
+    c->rc.color_ocw[0] = RC_R0 << 8;
+    c->rc.final0 = RC_R0;
+    /* The alpha portion's 0x10 bit picks .a over .b; the alpha is observable because the final
+     * combiner takes its alpha from r0.a (final1's G field, with the 0x10 bit set). */
+    c = rc_add("alpha portion: the 0x10 bit picks .a (c0.a * v0.a)", 1, 0, 0);
+    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16;
+    c->rc.color_ocw[0] = RC_R0 << 8;
+    c->rc.alpha_icw[0] = (RC_C0 | 0x10u) << 24 | (RC_V0 | 0x10u) << 16;
+    c->rc.alpha_ocw[0] = RC_R0 << 4;
+    c->rc.factor0[0] = 0x80000000u;
+    c->rc.final0 = RC_R0;
+    c = rc_add("alpha portion without 0x10: reads .b (c0.b * v0.b = 0)", 1, 0, 0);
+    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16;
+    c->rc.color_ocw[0] = RC_R0 << 8;
+    c->rc.alpha_icw[0] = RC_C0 << 24 | RC_V0 << 16;
+    c->rc.alpha_ocw[0] = RC_R0 << 4;
+    c->rc.factor0[0] = 0x80000000u;
+    c->rc.final0 = RC_R0;
+    /* Every map_out scale/bias (the RGB output's OCW bits 0x38). */
+    {
+        static const uint32_t mo[6] = { 0x00u, 0x08u, 0x10u, 0x18u, 0x20u, 0x30u };
+        for (m = 0; m < 6; m++) {
+            c = rc_add("output scale/bias", 1, 0, 0);
+            c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16;
+            c->rc.color_ocw[0] = (mo[m] << 12) | (RC_R0 << 8);
+            c->rc.final0 = RC_R0;
+        }
+    }
+    /* Dot products: the AB portion, the CD portion, and both at once. */
+    c = rc_add("dot product on A.B (fl & 2)", 1, 0, 0);
+    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16 | RC_V0 << 8 | RC_V0;
+    c->rc.color_ocw[0] = (0x02u << 12) | (RC_R0 << 8);
+    c->rc.final0 = RC_R0;
+    c = rc_add("dot product on C.D (fl & 1)", 1, 0, 0);
+    c->rc.color_icw[0] = RC_ZERO << 24 | RC_V0 << 16 | RC_V0 << 8 | RC_V0;
+    c->rc.color_ocw[0] = (0x01u << 12) | (RC_R0 << 8);
+    c->rc.final0 = RC_R0;
+    c = rc_add("dot products on both portions (fl & 3)", 1, 0, 0);
+    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16 | RC_V0 << 8 | RC_C0;
+    c->rc.color_ocw[0] = (0x03u << 12) | (RC_R0 << 8);
+    c->rc.factor0[0] = 0x0000003Fu;
+    c->rc.final0 = RC_R0;
+    /* Sum vs mux, both mux forms. Stage 0 writes r0.a = c0.b * v0.a = 63/255 = 0.247, which the two
+     * forms read differently: the LSB form sees (int)(0.247*255) & 1 = 1, the MSB form sees
+     * 0.247 >= 0.5 = 0. Stage 1 then muxes A*B against C*D, which are far apart. */
+    {
+        static const uint32_t fl[2] = { 0x04u, 0x05u };
+        for (m = 0; m < 2; m++) {
+            c = rc_add(m ? "mux by r0.a >= 0.5 (fl & 1 set)"
+                         : "mux by (int)(r0.a*255) & 1 (fl & 1 clear)", 2, fl[m], 0);
+            c->rc.color_ocw[0] = 0;                      /* stage 0 writes no RGB */
+            c->rc.alpha_icw[0] = RC_C0 << 24 | RC_V0 << 16;
+            c->rc.alpha_ocw[0] = RC_R0 << 4;             /* r0.a = c0.b * v0.a = 0.247 */
+            c->rc.factor0[0] = 0x0000003Fu;
+            c->rc.color_icw[1] = RC_C0 << 24 | RC_V0 << 16 | RC_V0 << 8 | RC_C1;
+            c->rc.color_ocw[1] = RC_R0 << 8;             /* the muxed sum -> r0.rgb */
+            c->rc.factor1[0] = 0xFFFFFFFFu;
+            c->rc.final0 = RC_R0;
+        }
+    }
+    /* Output destinations: the AB product, the CD product and the sum each to r0. */
+    c = rc_add("destination nibble 4: the AB product -> r0", 1, 0, 0);
+    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16;
+    c->rc.color_ocw[0] = RC_R0 << 4;
+    c->rc.final0 = RC_R0;
+    c = rc_add("destination nibble 0: the CD product -> r0", 1, 0, 0);
+    c->rc.color_icw[0] = RC_ZERO << 24 | RC_V0 << 16 | RC_V0 << 8 | RC_V0;
+    c->rc.color_ocw[0] = RC_R0;
+    c->rc.final0 = RC_R0;
+    c = rc_add("destination nibble 8: the sum -> r0", 1, 0, 0);
+    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16 | RC_C0 << 8 | RC_C0;
+    c->rc.color_ocw[0] = RC_R0 << 8;
+    c->rc.factor0[0] = 0x0000003Fu;
+    c->rc.final0 = RC_R0;
+    /* Blue to alpha: fl 0x80 takes the AB output's blue into the destination's alpha, fl 0x40 the
+     * CD output's. The alpha is then read back by the final combiner. */
+    c = rc_add("blue to alpha from the AB output (fl 0x80)", 1, 0, 0);
+    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16;
+    c->rc.color_ocw[0] = (0x80u << 12) | (RC_R0 << 4);
+    c->rc.final0 = RC_ZERO;
+    c = rc_add("blue to alpha from the CD output (fl 0x40)", 1, 0, 0);
+    c->rc.color_icw[0] = RC_ZERO << 24 | RC_V0 << 16 | RC_V0 << 8 | RC_V0;
+    c->rc.color_ocw[0] = (0x40u << 12) | RC_R0;
+    c->rc.final0 = RC_ZERO;
+    /* A stage that "writes" register 0 leaves it zero for a later stage to read. */
+    c = rc_add("a write to register 0 leaves it zero", 2, 0, 0);
+    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16;
+    c->rc.color_ocw[0] = 0;                          /* the destination nibble is 0: discarded */
+    c->rc.color_icw[1] = RC_ZERO << 24 | RC_V0 << 16;
+    c->rc.color_ocw[1] = RC_R0 << 8;
+    c->rc.final0 = RC_R0;
+    /* The final combiner's mix with a non-trivial A: D + C*(1-A) + B*A. */
+    c = rc_add("final: D + C*(1-A) + B*A with A = v0", 1, 0, 0);
+    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16;
+    c->rc.color_ocw[0] = RC_R0 << 4;                 /* r0.rgb = v0 * v0 */
+    c->rc.factor0[0] = 0x0000003Fu;
+    c->rc.factor1[0] = 0xFFFFFFFFu;
+    c->rc.final_c0 = 0x0000003Fu;                    /* C = final c0 */
+    c->rc.final_c1 = 0xFFFFFFFFu;                    /* B = final c1 */
+    c->rc.final0 = (RC_V0 << 24) | (RC_C1 << 16) | (RC_C0 << 8) | RC_R0;
+    c->rc.final1 = 0x001C00u;
+    /* The V1+R0 sum: 0x40 complements v1, 0x20 complements r0, 0x80 saturates it. The 0x80 clamp is
+     * observable because the sum is read through the final combiner's C, which is scaled by (1-A)
+     * before the output saturates: clamping first gives a different number. */
+    c = rc_add("final sum: v1 + r0 (fl 0x40 complements v1)", 1, 0, 0);
+    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16;
+    c->rc.color_ocw[0] = RC_R0 << 4;
+    c->rc.final0 = RC_SUM;                           /* out = D = the sum */
+    c->rc.final1 = 0x00400000u;
+    c = rc_add("final sum: v1 + r0 (fl 0x20 complements r0)", 1, 0, 0);
+    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16;
+    c->rc.color_ocw[0] = RC_R0 << 4;
+    c->rc.final0 = RC_SUM;
+    c->rc.final1 = 0x00200000u;
+    c = rc_add("final sum saturated (fl 0x80), read through C*(1-A)", 1, 0, 0);
+    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16;
+    c->rc.color_ocw[0] = RC_R0 << 4;
+    c->rc.final0 = (RC_V0 << 24) | (RC_SUM << 8);
+    c->rc.final1 = 0x00E00000u;                      /* 0x40 | 0x20 | 0x80 */
+    /* The E*F product, read out as the final combiner's D. */
+    c = rc_add("final: the E*F product (v0 * v1)", 1, 0, 0);
+    c->rc.final0 = RC_EF;
+    c->rc.final1 = (RC_V0 << 24) | (RC_V1 << 16) | (RC_R0 << 8);
+    /* Alpha from final1 >> 8, from a register the RGB path does not use. */
+    c = rc_add("final alpha comes from final1 >> 8 (v0.b)", 1, 0, 0);
+    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16;
+    c->rc.color_ocw[0] = RC_R0 << 8;
+    c->rc.final0 = RC_R0;
+    c->rc.final1 = RC_V0 << 8;
+    /* The no-final-combiner path: the output is r0, rgb and alpha. */
+    c = rc_add("no final combiner: out = r0", 1, 0, 0);
+    c->rc.color_icw[0] = RC_V0 << 24 | RC_V0 << 16;
+    c->rc.color_ocw[0] = RC_R0 << 4;
+    c->rc.alpha_icw[0] = RC_C0 << 24 | RC_V0 << 16;
+    c->rc.alpha_ocw[0] = RC_R0 << 4;
+    c->rc.factor0[0] = 0x0000003Fu;
+    c->rc.final0 = 0;
+    c->rc.final1 = 0;
+    /* Fog: R3 is (fog colour rgb, vertex fog factor), read out through the final combiner. The
+     * executor's fog unit ignores the per-vertex distance here (SET_FOG_MODE 0x029C and
+     * SET_FOG_PARAMS 0x09C0/0x09C4 are not admitted methods, so the mode stays 0 and the factor is
+     * 0 with fog on, 1 with it off), so those are the two reachable factor values. */
+    c = rc_add("fog: R3.rgb is the fog colour, R3.a the factor (fog off: 1)", 1, 0, 0);
+    c->rc.final0 = RC_FOG;
+    c->rc.final1 = (RC_FOG | 0x10u) << 8;
+    c->fog_en = 0;
+    c = rc_add("fog: the same registers with fog on (factor 0)", 1, 0, 0);
+    c->rc.final0 = RC_FOG;
+    c->rc.final1 = (RC_FOG | 0x10u) << 8;
+    c->fog_en = 1;
+    /* Per-stage c0/c1 (COMBINERCOUNT flags 0x010 / 0x100): factor0[1] and factor1[1] differ from
+     * factor0[0], so ignoring the flags changes the pixel. */
+    c = rc_add("per-stage c0/c1 factors (flags 0x010 | 0x100)", 2, 0x110u, 0);
+    c->rc.color_icw[0] = RC_C0 << 24 | RC_C0 << 16;
+    c->rc.color_ocw[0] = RC_R0 << 8;
+    c->rc.factor0[0] = 0x0000003Fu;
+    c->rc.color_icw[1] = RC_R0 << 24 | RC_C0 << 16 | RC_C1 << 8 | RC_C0;
+    c->rc.color_ocw[1] = RC_R0 << 8;
+    c->rc.factor0[1] = 0xFFFFFFFFu;
+    c->rc.factor1[1] = 0x80808080u;
+    c->rc.final0 = RC_R0;
+    /* The specular and fog registers as stage sources. */
+    c = rc_add("specular and fog registers as stage sources", 1, 0, 0);
+    c->rc.color_icw[0] = RC_V1 << 24 | RC_FOG << 16;
+    c->rc.color_ocw[0] = RC_R0 << 8;
+    c->rc.final0 = RC_R0;
+}
+
+/* The register words of one case, in the order the executor reads them. Two stages are written even
+ * for a one-stage case, so no case inherits an earlier case's register. */
+static void rc_registers(const RcCase *c)
+{
+    uint32_t s;
+
+    pb(0x1E60, c->rc.control);
+    pb(0x1E70, c->rc.stage_program);
+    for (s = 0; s < 2; s++) {
+        pb(0x0AC0u + 4u * s, c->rc.color_icw[s]);
+        pb(0x0260u + 4u * s, c->rc.alpha_icw[s]);
+        pb(0x1E40u + 4u * s, c->rc.color_ocw[s]);
+        pb(0x0AA0u + 4u * s, c->rc.alpha_ocw[s]);
+        pb(0x0A60u + 4u * s, c->rc.factor0[s]);
+        pb(0x0A80u + 4u * s, c->rc.factor1[s]);
+    }
+    pb(0x0288, c->rc.final0);
+    pb(0x028C, c->rc.final1);
+    pb(0x1E20, c->rc.final_c0);
+    pb(0x1E24, c->rc.final_c1);
+    pb(0x02A4, c->fog_en);
+    pb(0x02A8, c->fog_col);
+}
+
+/* One 92-byte combiner vertex, as the back end's VbRcVertex. */
+static void rc_vertex(uint32_t vb, uint32_t i, float x, float y, uint32_t diffuse,
+                      uint32_t specular, const float t[4][4])
+{
+    uint8_t *p = G(vb + i * RC_RSTRIDE);
+    float *f = (float *)p;
+
+    f[0] = x; f[1] = y; f[2] = 0.5f;
+    f[3] = 1.0f;                                   /* oPos.w = 1, so rhw = 1 */
+    *(uint32_t *)(p + 16) = diffuse;
+    *(uint32_t *)(p + 20) = specular;
+    f[6] = 0.5f;                                   /* oFog: the fog unit ignores it */
+    memcpy(p + 28, t, 64);
+}
+/* Attribute n -> the layout above, with the vertex program reading v0, v3, v4, v5, v9, v10 and v1/v2
+ * for oT3/oT2 (see rc_vertex_program: slots 11-15 have no admitted offset method, so the last two
+ * texture coordinates come from the settable slots 1 and 2 instead). */
+static void rc_vertex_format(uint32_t vb)
+{
+    static const struct { uint32_t a, off, type, size; } at[8] = {
+        { 0, 0, 2, 3 }, { 3, 16, 0, 4 }, { 4, 20, 0, 4 }, { 5, 24, 2, 1 },
+        { 9, 28, 2, 4 }, { 10, 44, 2, 4 }, { 2, 60, 2, 4 }, { 1, 76, 2, 4 }
+    };
+    uint32_t i;
+
+    for (i = 0; i < 8; i++) {
+        pb(0x1720u + 4u * at[i].a, vb + at[i].off);
+        pb(0x1760u + 4u * at[i].a, at[i].type | (at[i].size << 4) | (RC_RSTRIDE << 8));
+    }
+}
+/* The constant pass-through program: oPos = v0, oD0 = v3, oD1 = v4, oFog = v5, oT0 = v9, oT1 = v10,
+ * oT2 = v2, oT3 = v1. Its last instruction carries FINAL.
+ *
+ * oT2 and oT3 come from v2 and v1 rather than from v11 and v12 because the attribute offsets of
+ * slots 6-8 and 11-15 (0x1738-0x1748, 0x174C-0x175C) are not in the executor's admitted method
+ * list: an attribute that cannot be programmed reads (0,0,0,1), so oT2 and oT3 would be constant
+ * at every vertex and stages 2 and 3 would sample one texel each. Both the CPU program path
+ * (raster_xf_triangle) and the Vulkan one (backend_xf_vertex) take a stage's coordinate from the
+ * program's oT{st}, so re-sourcing it makes both vary together. */
+static void rc_vertex_program(void)
+{
+    pb(0x1E94, 2u);                                /* TRANSFORM_EXECUTION_MODE: program */
+    pb(0x1E9C, 0u);                                /* PROGRAM_LOAD slot 0 */
+    pb(0x1EA0, 0u);                                /* PROGRAM_START slot 0 */
+    vsh_mov(0, 0, 0); vsh_mov(3, 3, 0); vsh_mov(4, 4, 0); vsh_mov(5, 5, 0);
+    vsh_mov(9, 9, 0); vsh_mov(10, 10, 0); vsh_mov(11, 2, 0); vsh_mov(12, 1, 1);
+}
+
+/* Case i's quad: a 7x7 square in its own cell of the 64x64 target, so all cases can be compared
+ * from one submission. */
+static void rc_sweep_quad(uint32_t vb, uint32_t i)
+{
+    float t[4][4];
+    uint32_t x0 = (i % 8u) * 8u + 1u, y0 = (i / 8u) * 8u + 1u, k;
+
+    memset(t, 0, sizeof t);
+    for (k = 0; k < 4; k++)
+        t[k][3] = 1.0f;
+    rc_vertex(vb, i * 6u + 0u, (float)x0,        (float)y0,        RC_DIFFUSE, RC_SPECULAR, t);
+    rc_vertex(vb, i * 6u + 1u, (float)(x0 + 6u), (float)y0,        RC_DIFFUSE, RC_SPECULAR, t);
+    rc_vertex(vb, i * 6u + 2u, (float)x0,        (float)(y0 + 6u), RC_DIFFUSE, RC_SPECULAR, t);
+    rc_vertex(vb, i * 6u + 3u, (float)(x0 + 6u), (float)y0,        RC_DIFFUSE, RC_SPECULAR, t);
+    rc_vertex(vb, i * 6u + 4u, (float)(x0 + 6u), (float)(y0 + 6u), RC_DIFFUSE, RC_SPECULAR, t);
+    rc_vertex(vb, i * 6u + 5u, (float)x0,        (float)(y0 + 6u), RC_DIFFUSE, RC_SPECULAR, t);
+}
+/* The whole sweep in ONE submission: each case's registers are written immediately before its own
+ * draw, so the two mux cases, the two fog cases and the per-stage-factor case are decided by
+ * consecutive draws whose register blocks differ -- the back end's dynamic uniform-block offsets. */
+static void build_rc_sweep(void)
+{
+    const uint32_t surf = RCSURF(RC_SWEEP), vb = RCVB(RC_SWEEP);
+    uint32_t i;
+
+    pb_begin(); pb_reset_state();
+    pb_surface(surf, 64, 64, 4);
+    pb_clear(CLR);
+    rc_vertex_program();
+    rc_vertex_format(vb);
+    for (i = 0; i < k_rc_n; i++)
+        rc_sweep_quad(vb, i);
+    for (i = 0; i < k_rc_n; i++) {
+        rc_registers(&k_rc[i]);
+        pb_draw_range(i * 6u, 6u);
+    }
+    pb_flip();
+}
+
+/* The sweep's oracle: nv2a_rc_eval on the same registers and the same constant vertex values. Every
+ * stage is NONE (stage_program 0), so a stage's result is (0,0,0,1), and the fog factor is 1 with
+ * fog off and 0 with it on, which is what the executor's fog unit produces for the admitted methods. */
+static void rc_oracle(const RcCase *c, float out[4])
+{
+    float v0[4], v1[4], fog[4], t[4][4];
+    uint32_t k, j;
+
+    nv2a_rc_unpack(RC_DIFFUSE, v0);
+    nv2a_rc_unpack(RC_SPECULAR, v1);
+    fog[0] = (float)(c->fog_col & 0xFFu) / 255.0f;
+    fog[1] = (float)((c->fog_col >> 8) & 0xFFu) / 255.0f;
+    fog[2] = (float)((c->fog_col >> 16) & 0xFFu) / 255.0f;
+    fog[3] = c->fog_en ? 0.0f : 1.0f;
+    for (k = 0; k < 4; k++)
+        for (j = 0; j < 4; j++)
+            t[k][j] = j == 3 ? 1.0f : 0.0f;
+    nv2a_rc_eval(&c->rc, v0, v1, fog, t, out);
+}
+
+static int rc_quant(float f)
+{
+    int v = (int)((f < 0.0f ? 0.0f : (f > 1.0f ? 1.0f : f)) * 255.0f + 0.5f);
+    return v < 0 ? 0 : (v > 255 ? 255 : v);
+}
+
+/* Compare the sweep's centre pixels with the oracle. The CPU pass must agree with the oracle too --
+ * that is what shows the oracle is the same arithmetic the executor runs, and not a misreading. */
+static int rc_sweep_check(const char *label, const uint8_t *px)
+{
+    uint32_t i;
+    int ok = 1, drawn = 0, clear_hits = 0, worst = 0;
+
+    for (i = 0; i < k_rc_n; i++) {
+        uint32_t x = (i % 8u) * 8u + 2u, y = (i / 8u) * 8u + 3u;
+        uint32_t got = px32(px, 64, x, y);
+        float out[4];
+        int e[4], g[4], d, k, which = -1;
+
+        rc_oracle(&k_rc[i], out);
+        for (k = 0; k < 4; k++)
+            e[k] = rc_quant(out[k]);
+        /* The target is A8R8G8B8, so the word is A<<24 | R<<16 | G<<8 | B and the oracle's
+         * out[0..3] is r, g, b, a. */
+        g[0] = (int)((got >> 16) & 255); g[1] = (int)((got >> 8) & 255);
+        g[2] = (int)(got & 255); g[3] = (int)(got >> 24);
+        d = 0;
+        for (k = 0; k < 4; k++) {
+            int a = abs(e[k] - g[k]);
+            if (a > d) { d = a; which = k; }
+        }
+        if (d > worst) worst = d;
+        if (got == CLR && !(e[0] == 0x10 && e[1] == 0x10 && e[2] == 0x10))
+            clear_hits++;
+        else
+            drawn++;
+        if (d > RC_RTOL) {
+            fprintf(stderr, "FAIL [%s combiner sweep]: %s: nv2a_rc_eval says %d,%d,%d,%d, the target has "
+                            "%d,%d,%d,%d (channel %d off by %d)\n", label, k_rc[i].what,
+                    e[0], e[1], e[2], e[3], g[0], g[1], g[2], g[3], which, d);
+            ok = 0;
+        } else {
+            printf("      %-8s %-58s ref %3d,%3d,%3d,%3d  got %3d,%3d,%3d,%3d\n", label,
+                   k_rc[i].what, e[0], e[1], e[2], e[3], g[0], g[1], g[2], g[3]);
+        }
+    }
+    printf("  [%s combiner sweep] %u cases, %d drawn (not the clear colour), worst channel diff %d (allowed %d)\n",
+           label, k_rc_n, drawn, worst, RC_RTOL);
+    if (clear_hits) {
+        fprintf(stderr, "FAIL [%s combiner sweep]: %d cases did not draw (the pixel is the clear colour)\n",
+                label, clear_hits);
+        ok = 0;
+    }
+    return ok;
+}
+
+/* ── Whole-surface combiner cases, compared with the CPU executor ────────── */
+#define RC_NSURF 6
+#define RC_LERP  0
+#define RC_FOUR  1
+#define RC_MULTI 2
+#define RC_PASS  3
+#define RC_CUBE  4
+#define RC_CLIP  5
+static const char *const k_rc_name[RC_NSURF] = { "lerp", "four stages", "multi-draw",
+                                                 "passthru", "cubemap-2d", "clipplane" };
+static Surf g_rc_surf[RC_NSURF];
+static uint8_t *rc_ref[RC_NSURF], *rc_got[RC_NSURF];
+
+/* Four stages, four different textures: stage 0 is a linear 8x8 R5G6B5 texture addressed in texels
+ * (ts = 1/8, 1/8), stages 1 and 2 are swizzled, of different formats and contents (ts = 1, 1), and
+ * stage 3 has no usable texture at all (samples white, ts.z = 0). The output is t0*t1 + t2*t3, so
+ * every stage must be sampled at its own scale for the pixel to come out right. */
+static void build_rc_four(void)
+{
+    const uint32_t vb = RCVB(RC_S_FOUR);
+    float t[4][4];
+    static const float px[6][2] = { { 8, 8 }, { 56, 8 }, { 8, 56 }, { 56, 8 }, { 56, 56 }, { 8, 56 } };
+    static const float uv[6][4][2] = {
+        { { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } },
+        { { 8, 0 }, { 1, 0 }, { 1, 0 }, { 1, 0 } },
+        { { 0, 8 }, { 0, 1 }, { 0, 1 }, { 0, 1 } },
+        { { 8, 0 }, { 1, 0 }, { 1, 0 }, { 1, 0 } },
+        { { 8, 8 }, { 1, 1 }, { 1, 1 }, { 1, 1 } },
+        { { 0, 8 }, { 0, 1 }, { 0, 1 }, { 0, 1 } }
+    };
+    uint32_t i, k;
+
+    pb_begin(); pb_reset_state();
+    pb_surface(RCSURF(RC_S_FOUR), 64, 64, 4);
+    pb_clear(CLR);
+    rc_vertex_program();
+    rc_vertex_format(vb);
+    pb_texture_on(TEX_MAG, 0x11, 8, 8, 16, FILTER_NEAREST);
+    pb_texture_swz(1, TEX_RC1, 0x05, 3, 3, FILTER_NEAREST);
+    pb_texture_swz(2, TEX_RC2, 0x06, 3, 3, FILTER_NEAREST);
+    for (i = 0; i < 6; i++) {
+        memset(t, 0, sizeof t);
+        for (k = 0; k < 4; k++) {
+            t[k][0] = uv[i][k][0]; t[k][1] = uv[i][k][1];
+            t[k][2] = 0.0f; t[k][3] = 1.0f;
+        }
+        /* Stage 0 is the only linear stage, so it is the one whose coordinate scale differs from
+         * the swizzled stages'; give it a non-unit q as well (xy scaled by the same 2, so the
+         * texels it samples are unchanged but an implementation that skipped the /q divide would
+         * sample elsewhere). */
+        t[0][0] *= 2.0f; t[0][1] *= 2.0f; t[0][3] = 2.0f;
+        rc_vertex(vb, i, px[i][0], px[i][1], 0xFFFFFFFFu, 0, t);
+    }
+    pb(0x1E60, 1u);
+    pb(0x1E70, 1u | (1u << 5) | (1u << 10) | (1u << 15));   /* stages 0-3: PROJECT2D */
+    pb(0x0AC0, (RC_T0 << 24) | (RC_T1 << 16) | (RC_T2 << 8) | RC_T3);
+    pb(0x1E40, RC_R0 << 8);                        /* the sum -> r0.rgb */
+    pb(0x0260, 0); pb(0x0AA0, 0);
+    pb(0x0A60, 0); pb(0x0A80, 0);
+    pb(0x0288, RC_R0);                             /* final: out = D = r0 */
+    pb(0x028C, 0x001C00u);                         /* alpha = r0.a = texture 0's alpha */
+    pb(0x1E20, 0xFFFFFFFFu); pb(0x1E24, 0x80808080u);
+    pb(0x02A4, 0u);
+    pb(0x02A8, RC_FOGCOL);
+    pb_draw_triangles(6);
+    pb_flip();
+    g_rc_surf[RC_FOUR] = (Surf){ RCSURF(RC_S_FOUR), 64, 64, 4, CLR, 4 * 48, 48 * 48, 0 };
+}
+
+/* One submission, one target, three draws with DIFFERENT state, so the back end's uniform-block
+ * offsets must be distinct and correctly aligned and its descriptor sets reused:
+ *   A: a combiner batch the back end cannot translate (stage 0's mode is 7, which vb_rc_supported
+ *      rejects), so the GPU draws it through its stage-0 pipeline while the CPU executor still runs
+ *      the combiners. This combiner never reads a texture result and the stage-0 pipeline samples
+ *      white, so both produce the vertex colour: the stage-0 and combiner pipelines coexist in one
+ *      frame and it is still comparable with the CPU reference.
+ *   B: a combiner batch, one stage, textured.
+ *   C: a combiner batch with two stages and the final combiner's mix.
+ * A literal stage-0-vs-combiner split of the same batch is not available: the executor's rc_seen is
+ * process-global and sticky, so a batch drawn before the combiners are programmed is a combiner
+ * batch on the second pass too. The fallback path is the pipeline split that is stable across passes. */
+static void build_rc_multi(void)
+{
+    const uint32_t vb = RCVB(RC_S_MULTI);
+    float t[4][4];
+    static const float q[3][4] = { { 4, 4, 28, 28 }, { 36, 4, 60, 28 }, { 4, 36, 60, 60 } };
+    static const float cp[6][2] = { { 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 0 }, { 1, 1 }, { 0, 1 } };
+    double perim = 0.0, area = 0.0;
+    uint32_t i, j, k;
+
+    pb_begin(); pb_reset_state();
+    pb_surface(RCSURF(RC_S_MULTI), 64, 64, 4);
+    pb_clear(CLR);
+    rc_vertex_program();
+    rc_vertex_format(vb);
+    for (i = 0; i < 3; i++) {
+        /* The band the reference must cover, taken from the same quad the vertices come from, so a
+         * later edit to q[] cannot leave the declared geometry behind. */
+        double w = q[i][2] - q[i][0], h = q[i][3] - q[i][1];
+        perim += w + h + hypot(w, h);
+        area += w * h;
+        for (j = 0; j < 6; j++) {
+            float x = q[i][0] + cp[j][0] * (q[i][2] - q[i][0]);
+            float y = q[i][1] + cp[j][1] * (q[i][3] - q[i][1]);
+            memset(t, 0, sizeof t);
+            for (k = 0; k < 4; k++) {
+                t[k][0] = 0; t[k][1] = 0; t[k][2] = 0; t[k][3] = 1.0f;
+            }
+            t[0][0] = cp[j][0] * 8.0f; t[0][1] = cp[j][1] * 8.0f;   /* stage 0: texels */
+            t[1][0] = cp[j][0]; t[1][1] = cp[j][1];                 /* stage 1: [0,1] */
+            rc_vertex(vb, i * 6u + j, x, y, RC_DIFFUSE, RC_SPECULAR, t);
+        }
+    }
+    /* A: mode 7 on stage 0, so the back end falls back to its stage-0 pipeline. */
+    pb(0x1E60, 1u);
+    pb(0x1E70, 7u);
+    pb(0x0AC0, (RC_V0 << 24) | (RC_C1 << 16));
+    pb(0x1E40, RC_R0 << 8);
+    pb(0x0260, 0); pb(0x0AA0, 0);
+    pb(0x0A60, 0); pb(0x0A80, 0xFFFFFFFFu);
+    pb(0x0288, RC_R0);
+    pb(0x028C, 0x001300u);                         /* alpha = R3.a = the fog factor = 1 */
+    pb(0x1E20, 0xFFFFFFFFu); pb(0x1E24, 0x80808080u);
+    pb(0x02A4, 0u); pb(0x02A8, RC_FOGCOL);
+    pb_draw_range(0, 6);
+    /* B: one stage, textured, a different register block. */
+    pb_texture_on(TEX_MAG, 0x11, 8, 8, 16, FILTER_NEAREST);
+    pb(0x1E60, 1u);
+    pb(0x1E70, 1u);
+    pb(0x0AC0, (RC_T0 << 24) | (RC_V0 << 16));
+    pb(0x1E40, RC_R0 << 8);
+    pb(0x0260, (RC_T0 << 24) | (RC_V0 << 16));
+    pb(0x0AA0, RC_R0 << 4);
+    pb(0x0A60, 0); pb(0x0A80, 0);
+    pb(0x0288, RC_R0);
+    pb(0x028C, 0x001C00u);
+    pb(0x1E20, 0xFFFFFFFFu); pb(0x1E24, 0x80808080u);
+    pb(0x02A4, 0u); pb(0x02A8, RC_FOGCOL);
+    pb_draw_range(6, 6);
+    /* C: two stages and the final combiner's mix. */
+    pb(0x1E60, 2u);
+    pb(0x1E70, 1u | (1u << 5));
+    pb(0x0AC0, (RC_T0 << 24) | (RC_V0 << 16));
+    pb(0x1E40, RC_R0 << 8);
+    pb(0x0260, 0); pb(0x0AA0, 0);
+    pb(0x0A60, 0); pb(0x0A80, 0);
+    pb(0x0AC4, (RC_R0 << 24) | (RC_C0 << 16) | (RC_C1 << 8) | RC_V1);
+    pb(0x1E44, RC_R0 << 8);
+    pb(0x0264, 0); pb(0x0AA4, 0);
+    pb(0x0A64, 0x0000003Fu); pb(0x0A84, 0x80808080u);
+    pb(0x0288, (RC_V0 << 24) | (RC_C0 << 16) | (RC_R0 << 8));
+    pb(0x028C, 0x001C00u);
+    pb(0x1E20, 0xFFFFFFFFu); pb(0x1E24, 0x80808080u);
+    pb(0x02A4, 0u); pb(0x02A8, RC_FOGCOL);
+    pb_draw_range(12, 6);
+    pb_flip();
+    g_rc_surf[RC_MULTI] = (Surf){ RCSURF(RC_S_MULTI), 64, 64, 4, CLR, perim, area, 0 };
+}
+
+/* ── Stage modes the sweep's oracle cannot express ───────────────────────── */
+/* The sweep's oracle fixes every stage result at (0,0,0,1), so the stage modes whose result depends
+ * on the interpolated coordinate -- PASSTHRU, CUBEMAP on a 2D texture and CLIPPLANE -- are decided
+ * by whole-surface cases against the CPU executor instead. */
+
+/* One quad: six vertices of a rectangle, each carrying the four stage coordinates as (x,y,z,w). */
+static void rc_quad_verts(uint32_t vb, const float px[6][2], const float uv[6][4][4])
+{
+    float t[4][4];
+    uint32_t i, k;
+
+    for (i = 0; i < 6; i++) {
+        memset(t, 0, sizeof t);
+        for (k = 0; k < 4; k++)
+            memcpy(t[k], uv[i][k], sizeof t[k]);
+        rc_vertex(vb, i, px[i][0], px[i][1], 0xFFFFFFFFu, 0, t);
+    }
+}
+/* The register block of a stage-mode case. `clip` is SET_SHADER_CLIP_PLANE_MODE, written even when
+ * it is 0 so no case inherits another's clip planes. */
+static void rc_mode_registers(uint32_t n, uint32_t prog, uint32_t clip, uint32_t icw, uint32_t ocw,
+                              uint32_t factor0, uint32_t fin0, uint32_t fin1)
+{
+    pb(0x1E60, n);
+    pb(0x1E70, prog);
+    pb(0x17F8, clip);
+    pb(0x0AC0, icw);
+    pb(0x1E40, ocw);
+    pb(0x0260, 0); pb(0x0AA0, 0);
+    pb(0x0A60, factor0); pb(0x0A80, 0xFFFFFFFFu);
+    pb(0x0288, fin0); pb(0x028C, fin1);
+    pb(0x1E20, 0xFFFFFFFFu); pb(0x1E24, 0x80808080u);
+    pb(0x02A4, 0u); pb(0x02A8, RC_FOGCOL);
+}
+
+/* Mode 4, PASSTHRU: the stage result is saturate(t0), so the pixel is a direct function of the
+ * interpolated coordinate. The coordinates run from -0.25 to 1.25 and the stage adds 0.5 to half of
+ * them, so a missing saturate gives 0.376 where the saturate gives 0.502: both are inside (0,1), so
+ * the final clamp cannot hide the difference. */
+static void build_rc_pass(void)
+{
+    const uint32_t vb = RCVB(RC_S_PASS);
+    static const float px[6][2] = { { 8, 8 }, { 56, 8 }, { 8, 56 }, { 56, 8 }, { 56, 56 }, { 8, 56 } };
+    float uv[6][4][4];
+    uint32_t i, k;
+
+    for (i = 0; i < 6; i++) {
+        float ux = px[i][0] < 32.0f ? -0.25f : 1.25f;
+        float uy = px[i][1] < 32.0f ? 0.25f : 0.75f;
+        memset(uv[i], 0, sizeof uv[i]);
+        for (k = 0; k < 4; k++) {
+            uv[i][k][0] = ux; uv[i][k][1] = uy; uv[i][k][3] = 1.0f;
+        }
+    }
+    pb_begin(); pb_reset_state();
+    pb_surface(RCSURF(RC_S_PASS), 64, 64, 4);
+    pb_clear(CLR);
+    rc_vertex_program();
+    rc_vertex_format(vb);
+    rc_quad_verts(vb, px, uv);
+    /* A = t0 with the signed identity mapping, so the saturate of mode 4 is the only clamp;
+     * B = c0 = 0.502, C = c0, D = c1 = 1.0: out = saturate(t0) * 0.502 + 0.502. */
+    rc_mode_registers(1u, 4u, 0u,
+                      ((RC_T0 | (6u << 5)) << 24) | (RC_C0 << 16) | (RC_C0 << 8) | RC_C1,
+                      RC_R0 << 8, 0x80808080u, RC_R0, 0x001C00u);
+    pb_draw_triangles(6);
+    pb_flip();
+    g_rc_surf[RC_PASS] = (Surf){ RCSURF(RC_S_PASS), 64, 64, 4, CLR, 4 * 48, 48 * 48, 0 };
+}
+
+/* Mode 3, CUBEMAP on a 2D texture: the stage samples t0.xy without dividing by q. The coordinates are
+ * texel-addressed (0..8 on a linear 8x8 texture) and t0.w is 2, so an implementation that divided by
+ * q -- the mode 1/2 rule -- would sample a different texel and change every pixel. */
+static void build_rc_cube(void)
+{
+    const uint32_t vb = RCVB(RC_S_CUBE);
+    static const float px[6][2] = { { 8, 8 }, { 56, 8 }, { 8, 56 }, { 56, 8 }, { 56, 56 }, { 8, 56 } };
+    float uv[6][4][4];
+    uint32_t i, k;
+
+    for (i = 0; i < 6; i++) {
+        float ux = (px[i][0] - 8.0f) * 8.0f / 48.0f;
+        float uy = (px[i][1] - 8.0f) * 8.0f / 48.0f;
+        memset(uv[i], 0, sizeof uv[i]);
+        for (k = 0; k < 4; k++) {
+            uv[i][k][0] = ux; uv[i][k][1] = uy; uv[i][k][2] = 0.0f; uv[i][k][3] = 2.0f;
+        }
+    }
+    pb_begin(); pb_reset_state();
+    pb_surface(RCSURF(RC_S_CUBE), 64, 64, 4);
+    pb_clear(CLR);
+    rc_vertex_program();
+    rc_vertex_format(vb);
+    rc_quad_verts(vb, px, uv);
+    pb_texture_on(TEX_MAG, 0x11, 8, 8, 16, FILTER_NEAREST);
+    /* out = the stage result itself: A = t0, B = c1 = 1.0, the AB product to r0. */
+    rc_mode_registers(1u, 3u, 0u, (RC_T0 << 24) | (RC_C1 << 16), RC_R0 << 4,
+                      0xFFFFFFFFu, RC_R0, 0x001C00u);
+    pb_draw_triangles(6);
+    pb_flip();
+    g_rc_surf[RC_CUBE] = (Surf){ RCSURF(RC_S_CUBE), 64, 64, 4, CLR, 4 * 48, 48 * 48, 0 };
+}
+
+/* Mode 5, CLIPPLANE: the stage discards the pixel whose coordinate's sign matches the clip-plane
+ * bit. Two draws in one submission cover both directions of the comparison:
+ *   quad A, clip bit 0 SET   -> the pixels with t0.x >= 0 are discarded, so the LEFT half survives;
+ *   quad B, clip bit 0 CLEAR -> the pixels with t0.x <  0 are discarded, so the RIGHT half survives.
+ * An inverted comparison swaps the two halves, so each draw's kept region moves and the CPU
+ * reference no longer matches. The kept pixels are white (the final combiner's D = c1) and the
+ * discarded ones keep the clear colour, so the reference visibly shows both regions. */
+static void build_rc_clip(void)
+{
+    const uint32_t vb = RCVB(RC_S_CLIP);
+    static const float px[2][6][2] = {
+        { { 4, 4 }, { 28, 4 }, { 4, 28 }, { 28, 4 }, { 28, 28 }, { 4, 28 } },
+        { { 36, 4 }, { 60, 4 }, { 36, 28 }, { 60, 4 }, { 60, 28 }, { 36, 28 } }
+    };
+    static const float mid[2] = { 16.0f, 48.0f };
+    double perim, area;
+    uint32_t q, i, k;
+
+    pb_begin(); pb_reset_state();
+    pb_surface(RCSURF(RC_S_CLIP), 64, 64, 4);
+    pb_clear(CLR);
+    rc_vertex_program();
+    rc_vertex_format(vb);
+    for (q = 0; q < 2; q++)
+        for (i = 0; i < 6; i++) {
+            float t[4][4];
+            float ux = px[q][i][0] < mid[q] ? -1.0f : 1.0f;
+
+            memset(t, 0, sizeof t);
+            for (k = 0; k < 4; k++) {
+                t[k][0] = ux; t[k][1] = 0.5f; t[k][3] = 1.0f;
+            }
+            rc_vertex(vb, q * 6u + i, px[q][i][0], px[q][i][1], 0xFFFFFFFFu, 0, t);
+        }
+    /* Both draws use the same combiner (no stage write; the output is the final combiner's D = c1,
+     * i.e. white) and differ only in the clip-plane mode. Half of each 24x24 quad survives, so the
+     * band is two 12x24 rectangles. */
+    {
+        double w = 12.0, h = 24.0;
+        perim = 2.0 * (w + h + hypot(w, h));
+        area = 2.0 * w * h;
+    }
+    rc_mode_registers(1u, 5u, 0x1u, 0u, 0u, 0xFFFFFFFFu, RC_C1, 0x001C00u);
+    pb_draw_range(0, 6);
+    rc_mode_registers(1u, 5u, 0x0u, 0u, 0u, 0xFFFFFFFFu, RC_C1, 0x001C00u);
+    pb_draw_range(6, 6);
+    pb_flip();
+    g_rc_surf[RC_CLIP] = (Surf){ RCSURF(RC_S_CLIP), 64, 64, 4, CLR, perim, area, 0 };
+}
+
+/* Build and run one whole-surface case. Each pass stores its own pixels: the CPU pass's are the
+ * reference the Vulkan pass's are compared with, after both have run. */
+static int rc_one(int which, int vulkan)
+{
+    const Surf *s;
+    char label[64];
+
+    if (which == RC_LERP) {
+        build_combiner();
+        g_rc_surf[RC_LERP] = k_rc_lerp_surf;
+    } else if (which == RC_FOUR) {
+        build_rc_four();
+    } else if (which == RC_MULTI) {
+        build_rc_multi();
+    } else if (which == RC_PASS) {
+        build_rc_pass();
+    } else if (which == RC_CUBE) {
+        build_rc_cube();
+    } else {
+        build_rc_clip();
+    }
+    s = &g_rc_surf[which];
+    prefill_va(s->va, SURF_BYTES, SENTINEL);
+    _snprintf(label, sizeof label, "%s (rc %s)", vulkan ? "vulkan" : "software", k_rc_name[which]);
+    if (!submit(label))
+        return 0;
+    if (vulkan)
+        rc_got[which] = snapshot(s);
+    else
+        rc_ref[which] = snapshot(s);
+    if (!(vulkan ? rc_got[which] : rc_ref[which])) {
+        fprintf(stderr, "FAIL: no snapshot for the rc %s case (%s pass)\n", k_rc_name[which],
+                vulkan ? "Vulkan" : "CPU");
+        return 0;
+    }
+    return 1;
+}
+
+/* The whole combiner suite, in the same order in both passes. */
+static int rc_run(int vulkan)
+{
+    uint8_t *px;
+    int ok = 1, i;
+
+    build_rc_sweep();
+    prefill_va(RCSURF(RC_SWEEP), SURF_BYTES, SENTINEL);
+    if (!submit(vulkan ? "vulkan (combiner sweep)" : "software (combiner sweep)"))
+        return 0;
+    px = snapshot_va(RCSURF(RC_SWEEP), 64u * 64u * 4u);
+    if (!px)
+        return 0;
+    ok &= rc_sweep_check(vulkan ? "vulkan" : "software", px);
+    free(px);
+    for (i = 0; i < RC_NSURF; i++)
+        ok &= rc_one(i, vulkan);
+    return ok;
+}
+
+/* The whole-surface cases: the reference must itself show the drawing and the two passes must agree,
+ * with the same tolerances as every other parity case. */
+static int rc_compare(void)
+{
+    int ok = 1, i;
+
+    for (i = 0; i < RC_NSURF; i++) {
+        char label[64];
+        if (!rc_ref[i] || !rc_got[i]) {
+            fprintf(stderr, "FAIL: the rc %s case has no CPU reference or no Vulkan result\n", k_rc_name[i]);
+            ok = 0;
+            continue;
+        }
+        _snprintf(label, sizeof label, "rc-%s", k_rc_name[i]);
+        ok &= check_parity(label, &g_rc_surf[i], rc_ref[i], rc_got[i], 1);
+    }
+    return ok;
+}
 
 /* ── main ────────────────────────────────────────────────────────────────── */
 int main(int argc, char **argv)
@@ -1479,7 +2351,7 @@ int main(int argc, char **argv)
     uint8_t *ramin = (uint8_t *)calloc(1, 1024u * 1024u);
     uint8_t *instance = (uint8_t *)calloc(1, 0x20000u);
     static uint8_t xbe[0x2000];
-    uint8_t *ref[NPAR][2], *got[NPAR][2], *xref = NULL, *xgot = NULL;
+    uint8_t *ref[NPAR][2], *got[NPAR][2];
     uint8_t *pbmem;
     int ok = 1, c, i, k;
 
@@ -1619,39 +2491,34 @@ int main(int argc, char **argv)
     puts("-- non-finite vertices --");
     ok &= run_nonfinite();
 
-    /* The combiner case: Vulkan first, then the CPU reference with the back end unregistered. */
-    puts("-- Vulkan back end: register-combiner batch (known difference) --");
-    build_combiner();
-    prefill_va(k_xfail_surf.va, SURF_BYTES, SENTINEL);
-    ok &= submit("vulkan (combiner)");
-    xgot = snapshot(&k_xfail_surf);
-    puts("-- software executor: register-combiner batch --");
+    /* The register combiners. The Vulkan pass runs first and the CPU reference pass second, because
+     * programming the combiners sticks in the executor for good (rc_seen never clears): every CPU
+     * reference taken after that point would silently be a combiner batch. The CPU pass is also
+     * checked against nv2a_rc_eval, which is what shows the oracle is the arithmetic the executor
+     * runs, and the comparison runs last, so the reference is known to exist and to show the
+     * drawing before it is used. */
+    puts("-- Vulkan back end: register combiners --");
+    rc_table();
+    ok &= rc_run(1);
+    /* The back end prints its [GPUVK] counters line on the first flip and then at most once every
+     * VB_STATS_MS (10 s), so a run this short would never show the combiner draws it just made.
+     * Wait out that window and flip once more: the line is cumulative, so it then carries the
+     * rc_draws this suite produced. */
+    Sleep(10300);
+    pb_begin(); pb_flip();
+    ok &= submit("vulkan (combiner counter flush)");
+    puts("-- software executor: register combiners --");
     nv2a_backend_register(NULL);
-    build_combiner();
-    prefill_va(k_xfail_surf.va, SURF_BYTES, SENTINEL);
-    ok &= submit("software (combiner)");
-    xref = snapshot(&k_xfail_surf);
-    if (xref && xgot) {
-        Cmp cm = compare(&k_xfail_surf, xref, xgot);
-        printf("  [combiner lerp] colour match %.2f%% (worst channel diff %d), coverage ref=%u got=%u (xor %u, allowed %.0f)\n",
-               cm.all_pct, cm.worst, cm.cov_ref, cm.cov_got, cm.cov_diff, k_xfail_surf.perim);
-        if (cm.cov_diff > k_xfail_surf.perim) {
-            fprintf(stderr, "FAIL [combiner lerp]: the batch is not drawn where the CPU draws it (coverage xor %u > %.0f)\n",
-                    cm.cov_diff, k_xfail_surf.perim);
-            ok = 0;
-        }
-        if (cm.all_pct >= 98.0)
-            puts("  XPASS [combiner lerp]: colours now match the CPU reference; the back end runs combiners, "
-                 "so promote this case to a gating parity case");
-        else
-            puts("  XFAIL [combiner lerp]: colours differ, as documented (combiner batches are drawn as stage 0 x diffuse)");
-    } else ok = 0;
+    rc_table();
+    ok &= rc_run(0);
+    puts("-- register combiners: the whole-surface cases --");
+    ok &= rc_compare();
 
     fflush(stdout);
     nv2a_set_commit_consumer(NULL);
     for (c = 0; c < NPAR; c++)
         for (i = 0; i < 2; i++) { free(ref[c][i]); free(got[c][i]); }
-    free(xref); free(xgot);
+    for (i = 0; i < RC_NSURF; i++) { free(rc_ref[i]); free(rc_got[i]); }
     VirtualFree(pbmem, 0, MEM_RELEASE);
     free(instance); free(ramin); free(ram);
     xbox_MemoryLayoutShutdown();

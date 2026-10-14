@@ -2238,7 +2238,6 @@ table keys on the hash and checks the word count plus a digest, because the hash
 **Not traced:** a D3D reload of a 12-instruction program from a device-held buffer at `0x198936`.
 
 ### §31.13 Phase V: a Vulkan backend (V0–V2, 2026-10-13)
-
 **The owner's direction:** compile-time code over live translation, and Vulkan for a future Android
 port. D3D11 stays only as the reference (memory `jsrf-native-vulkan-direction`).
 
@@ -2278,4 +2277,59 @@ port. D3D11 stays only as the reference (memory `jsrf-native-vulkan-direction`).
 - **Mutations:** the cull winding, the clear expansion and flush-before-sample each fail it.
 - **A known difference, an XFAIL:** a 16-bit target first cleared in a frame reads destination alpha
   0 where the CPU path reads 1, a deliberate mirror of D3D11 (`nv2a_vk_backend.c:1096`).
-- **Next: V3**, the combiner uber-shader compiled ahead of time.
+
+### §31.14 V3: the combiner uber-shader (2026-10-13)
+
+**One pixel shader, compiled before runtime.** `src/video/shaders/nv2a_vk_rc.hlsl` holds `vs_rc` and
+`ps_rc`, built twice by `xbr_add_spirv` (dxc + spirv-val at build time; `INVERT_Y` on the vertex entry
+only). `ps_rc` interprets the batch's `Nv2aCombiner` from a per-draw uniform buffer statement for
+statement with `nv2a_rc_eval`: the same register file `R0..R15`, the same input mappings and output
+scale/bias, the same read-before-write order, the general stages, the final combiner, fog and all four
+texture stages. There is no per-configuration generation and no runtime compile — `dxc` is never
+invoked by the executable.
+
+- **Uniform buffer:** `VbRcConstants`, 528 bytes, every member a 16-byte vector or an array of them, so
+  C and HLSL cannot disagree on offsets. Four `static_assert`s pin the size and the offsets of `ts`
+  (432), `ctl` (496) and `fin` (512), and the emitted SPIR-V's `OpMemberDecorate` offsets were read
+  back and match exactly (0/128/256/384/400/416/432/496/512).
+- **Descriptors:** the combiner pipeline has its OWN set layout (`dsl_rc`, bindings 0 uniform-dynamic,
+  1-4 sampled images, 5-8 samplers) and pipeline layout, so the stage-0 layout, its shader and the whole
+  stage-0 path are byte-identical to V1. The UBO is a slice of the existing 32 MiB stream, reserved
+  together with the vertices and the descriptor set so no submission can fall between writing the UBO
+  and the draw that reads it, and bound with one dynamic offset.
+- **Pipeline kind:** a new `rc` field in `VbPipeKey` selects the 92-byte combiner vertex, the new
+  shaders and the new layout. `vb_rc_supported` mirrors `gb_rc_key`'s rejection rule (stage modes above
+  5, true cube maps), so an untranslatable batch is drawn the stage-0 way.
+- **Counters:** `rc_unsupported` is gone. `rc_draws` counts combiner batches the uber shader drew and
+  `rc_fallback` those that could not be translated. `grep rc_unsupported` returns nothing.
+
+**Tests** (`jsrf_gpu_backend_parity_vk`, lavapipe, written by a different worker than the implementation):
+
+- a 39-case sweep whose centre pixel is compared with `nv2a_rc_eval` called directly on the same
+  registers — all eight input mappings, all six output scale/bias values, the dot-product flags, both
+  mux forms, the destination nibbles, blue-to-alpha both ways, the `R0` reset, the final combiner's
+  forms and alpha source, and fog. **Worst channel difference 0** (tolerance 1).
+- six whole-surface cases against the CPU executor: the promoted former XFAIL lerp (98.83%), four
+  stages with a linear and two swizzled textures plus an unbound stage (100.00%), three combiner draws
+  with different state plus a stage-0 fallback draw in ONE submission (100.00%), PASSTHRU (100.00%),
+  CUBEMAP-on-a-2D-texture (100.00%) and CLIPPLANE with both comparison directions (100.00%).
+- **Five mutations each fail it**, with the shader restored byte-for-byte afterwards: an output
+  scale/bias change, swapped input mappings 2/3, an inverted CLIPPLANE comparison, a removed
+  projective divide, and a removed PASSTHRU saturate. The stage-1/stage-2 image bindings were also
+  swapped to show the multi-texture case is load-bearing.
+- The former combiner XFAIL branch is deleted: a colour disagreement now fails the run.
+
+**E2E on the RTX 4070** (`20261013-185536-693-keyscript-e2e-vk-v3`, 560 s, stock `config/key-scripts/e2e.json`,
+`RECOMP_GPU_BACKEND=vulkan` plus the Khronos validation layer): 0 ICALL, 0 fatal, **0 validation errors and
+0 warnings**, 12,473 presents against the D3D11 reference run's 11,042, and the last `[GPUVK]` line reads
+`rc_draws=1692697 rc_fallback=0` — every combiner batch that reached the back end was drawn by the uber
+shader. The real main menu renders correctly (orange NEW GAME entry, JSRF wordmark, city behind), and the
+title-screen characters are cel-shaded with their outlines.
+
+**Still open (not V3).** The stock script does not reach the Garage on Vulkan, and the cause is the known
+`key_script_run.py` menu-detector defect, not the renderer: step 1's `key_until until=menu` accepted the
+attract-mode city frame, which scores 601 orange pixels against a 600 threshold (measured on
+`01_key_until_after.png`). The pre-V3 Vulkan run failed the same step the same way with a score of 665, so
+this is pre-existing and V3 improved the margin rather than causing it. Fixing the detector is plan step 3.
+The other `[GPUVK]` counter that moved is `readback_ms`, 202 s of the 560 s frame budget, which is the
+target readback path V1 flagged as future performance work.
