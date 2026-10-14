@@ -52,9 +52,10 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
   `nv2a_vsh_hlsl` host tool and compiles them offline with `dxc`; the Vulkan back end looks a batch's
   program up by hash and re-checks its identity against the words. A miss returns 0 and the CPU
   interpreter draws it. Nothing is translated or compiled at run time. The stock e2e on Vulkan
-  (`20261014-133626-679-keyscript-e2e-vk-v5`) has **0 vertex-program misses with 1.2M corpus-shader
-  draws** (319M triangles), and the independently authored gating test `jsrf_vsh_aot` passes with its
-  two negative controls and a production mutation detected.
+  (`20261014-144815-512-keyscript-e2e-vk-v5`, exe `5e80272d`) has **0 vertex-program misses with
+  1.24M corpus-shader draws** (329M triangles), and the independently authored gating test
+  `jsrf_vsh_aot` passes with its two negative controls, and detects a targeted production mutation
+  applied to `nv2a_vk_backend.c` (`f1609da6`) that removed the pipeline key's program identity.
 
 ## Remaining work, pre-approved by the owner (2026-10-14)
 

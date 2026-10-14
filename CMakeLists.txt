@@ -196,15 +196,19 @@ if(BUILD_TESTING)
         set_tests_properties(jsrf_vsh_aot PROPERTIES TIMEOUT 300 SKIP_RETURN_CODE 77
             ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd_aot};VK_ICD_FILENAMES=${_vk_icd_aot};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
         # The gating test's own negative controls, as separate cases: they prove the
-        # checks are load-bearing, and each EXITS NONZERO when it correctly detects the
-        # injected defect, so a green CTest run would otherwise be the opposite of the
-        # result.  WILL_FAIL inverts that: the case passes only if the control detects.
+        # checks are load-bearing. Each reports the CHECK's verdict as its exit status --
+        # 1 when the check correctly failed the injected defect (the expected, load-bearing
+        # result) and 2 when it missed it. WILL_FAIL cannot express that: it would also
+        # accept exit 2 (a control that missed the defect) and any crash, so the case is
+        # asserted on the exact success line instead, which only the exit-1 path prints.
         add_test(NAME jsrf_vsh_aot_control1
                  COMMAND jsrf_vsh_aot_test --negative-control 1)
         add_test(NAME jsrf_vsh_aot_control2
                  COMMAND jsrf_vsh_aot_test --negative-control 2)
         set_tests_properties(jsrf_vsh_aot_control1 jsrf_vsh_aot_control2 PROPERTIES
-            TIMEOUT 300 WILL_FAIL TRUE SKIP_RETURN_CODE 77
+            TIMEOUT 300
+            PASS_REGULAR_EXPRESSION "correctly FAILED the simulated defect"
+            FAIL_REGULAR_EXPRESSION "MISSED the simulated defect"
             ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd_aot};VK_ICD_FILENAMES=${_vk_icd_aot};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
     else()
         add_test(NAME jsrf_vsh_aot COMMAND jsrf_vsh_aot_test --skip "XBR_VK_SW_ICD is not set")
