@@ -96,6 +96,23 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
   an identical image), and passes on the repaired source; nine V6 CTest cases, full CTest 83/83,
   `just check` passed. Test-only: no toolkit change.
 
+- **R1: a stale shader corpus is refused at build time** (TR §31.22). The runtime identity check
+  proves the guest words, not which translator or compiler produced their SPIR-V, so a translator or
+  dxc change after `just shaders` used to link wrong pixels silently. The generator now records a
+  provenance block (schema, the three translator source hashes, the tool hash and args, the
+  `dxc --version` string and dxc args, the corpus counts) into both generated files, and
+  `scripts/vsh_aot_provenance.py`'s single `check_corpus()` sequence is what both the build guard and
+  the fixtures call. `scripts/build-jsrf.py` recomputes and refuses a mismatch before configure,
+  naming `just shaders`; there is no bypass and no auto-regeneration. `tool.sha256` is recorded but
+  advisory — measured, the MSVC tool executable is not reproducible (three clean rebuilds of
+  identical sources gave three hashes), so a decisive tool hash would refuse a corpus `just shaders`
+  had just produced; tool freshness is enforced at generation time by mtime instead. `just check` now
+  runs the REAL `check-vsh-aot-table.py` (`entries=126 recompiled_and_matched=126 xbe_distinct=126
+  problems=0`). Gate: a whitespace content edit to `nv2a_vsh_hlsl.c` in a scratch tree makes the build
+  refuse naming the field and `just shaders`; offline regeneration clears it. A different worker wrote
+  the 68-test regression, mutation-controlled (15 weakening edits each detected, one per guard step).
+  Full CTest 84/84, `just check` passed. Test-only: toolkit untouched at `5668278`.
+
 **Owner review accepted V5 and V6** at game `2a350ec` / toolkit `5668278` (2026-10-15).
 R1–R5 below are approved follow-ups, not reasons to reopen those milestones. The review was a code
 review; it did not rebuild the Windows checkout or re-read its run logs.
@@ -123,7 +140,7 @@ positive controls. No commit signing, co-author or signature trailers. Session r
 N2 remains a prerequisite of V7. R5 is low priority and follows V7; schedule it after N6 so it does
 not interrupt the required sequence. Each step or listed N4/N6 subitem is a separate operation.
 
-### R1: detect a stale shader corpus
+### R1: detect a stale shader corpus — DONE (TR §31.22; see Done above)
 
 The runtime identity check proves the guest words, not which translator or compiler produced their
 SPIR-V. Synthetic table CTests do not validate the real generated corpus.

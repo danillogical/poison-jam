@@ -2883,5 +2883,78 @@ authored by a worker distinct from every V5 author.
 - **No production change.** V6 is test-only: the toolkit is untouched at `5668278`, so this step adds
   no toolkit commit.
 
+### §31.22 R1: a stale vertex-program corpus is refused at build time (2026-10-15)
+
+**What R1 is.** V5 (§§31.19–31.20) proves the runtime identity check over the guest *words* a batch
+uploads. It says nothing about which translator or compiler produced those words' SPIR-V. So if
+`nv2a_vsh_hlsl.c`, its header, its CLI or dxc's version/flags change after `just shaders` ran, the
+game links SPIR-V no current source can produce: wrong pixels, with no signal at run time. Nothing
+re-checked the real table — not `just build`, not `just check`, not CTest — and the CMake comment
+for the synthetic `jsrf_vsh_aot_table` case implied those `--skip-spirv` fixtures guarded it. R1
+records the inputs that produced the corpus and refuses a mismatch before the compiler sees it.
+
+- **The provenance schema** is one definition, `scripts/vsh_aot_provenance.py`: schema version, the
+  SHA-256 of the three translator sources (`nv2a_vsh_hlsl.c`, `nv2a_vsh_hlsl.h`,
+  `nv2a_vsh_hlsl_tool.c`), the host tool's SHA-256, the tool's and dxc's argument vectors with file
+  operands as placeholders, the normalized `dxc --version` string, and the corpus's own
+  `programs`/`distinct` counts. The generator emits it into BOTH generated files between
+  `JSRF-VSH-AOT-PROVENANCE-BEGIN`/`-END` markers. It carries no absolute path, username or timestamp,
+  so the DECIDING fields are identical wherever the same inputs are regenerated — but the recorded
+  `tool.sha256` is not, because the executable is not reproducible (see below). That is why
+  `gen-shaders.py --check` compares with the advisory lines blanked on both sides and everything
+  else exactly, and why an equivalent tool binary does not make a current corpus look stale.
+- **One sequence, called twice.** `check_corpus(corpus_dir, want)` in that module is the only
+  implementation of the guard: missing file, no block, more than one block, a malformed block, every
+  deciding field present and equal, the two files recording the SAME block, and the block's
+  `distinct` agreeing with the table's own declared `nv2a_vsh_program_count`. `scripts/build-jsrf.py`
+  calls it before the CMake configure step and the fixtures call the same function, so a fixture
+  cannot pass against a private copy while the shipped guard drifts.
+- **The count check reads the file that defines it.** `nv2a_vsh_program_count = 126` is a definition
+  in the `.c`; the `.h` only declares `extern`. A check that scanned the header would be vacuous.
+- **`tool.sha256` is recorded but ADVISORY, never decisive.** Measured on this host, the executable is
+  not reproducible: three clean rebuilds of byte-identical sources gave three different
+  `nv2a_vsh_hlsl.exe` hashes. The cause is the link-time `TimeDateStamp` plus, for the game-tree
+  layout, an embedded absolute PDB path — so the hash depends on the clock and the checkout
+  location. A decisive tool hash would therefore refuse a corpus `just shaders` had just produced.
+  Freshness is enforced where it can actually corrupt the corpus — at GENERATION time, and by
+  CONTENT first: the generator reads the existing corpus's recorded `source.*` hashes (a durable
+  record of the last generation) and forces a rebuild whenever they differ from the current sources,
+  whatever the timestamps say; mtime is the second line of defence for a first generation. This
+  closed a falsified claim: with mtime alone, editing a source's content and giving it an mtime
+  BELOW the tool's let the generator reuse the old tool and record the new hash — a corpus whose
+  provenance named bytes the tool never read, which then passed the guard. An explicit
+  `JSRF_NV2A_VSH_HLSL` override cannot be proven fresh at all, so it prints an advisory naming the
+  recorded (advisory) `tool.sha256` as the only trace rather than implying verification, and
+  `assert_tool_current()` refuses outright when a tool the script owns is older than a source. The
+  scratch gate exercised this: after the whitespace edit the generator reported the tool STALE and
+  rebuilt it before generating.
+- **The real table is now checked.** `just check` runs `scripts/check-vsh-aot-table.py` with no flags
+  (~20 s): it re-derives every entry's hash and digest from the stored words, rebuilds each shader
+  from those words and compares bytes, validates the stored SPIR-V, and re-scans the XBE for
+  coverage — `entries=126 recompiled_and_matched=126 ascending=yes duplicates=0 xbe_distinct=126
+  problems=0`. The device-free synthetic `--skip-spirv` CTest stays, but the CMake comment now states
+  what it actually guards: the checker's own failure modes, not the currency of the retail table.
+- **The gate: a whitespace content edit to the translator makes the build refuse, and regeneration
+  clears it.** In a scratch tree (`xbr-mac/r1-scratch`, `game/` junctioned so the original XBE is read
+  in place and never copied or altered): baseline `python scripts/build-jsrf.py` exit 0; appending one
+  comment line to `nv2a_vsh_hlsl.c` (`c749f0c7…` → `674c7827…`, a CONTENT change, not an mtime
+  touch) makes the next build exit 1 before configure, naming both corpus files, the field
+  `source.nv2a_vsh_hlsl.c`, both hashes and `just shaders`; offline regeneration then rebuilds the
+  stale tool and writes a corpus the guard accepts (exit 0). The refusal is a provenance rejection,
+  not a compiler or bootstrap failure. Original assets, saves and the owner's checkout were untouched
+  (production translator still `c749f0c7…`, production toolkit clean at `5668278`).
+- **The regression is a different worker's and is load-bearing.** `tests/test_vsh_aot_provenance.py`
+  (68 tests) calls the production guard, not a copy. It asserts the DECISIVE REASON for every refusal,
+  and it is mutation-controlled: 15 weakening edits to scratch copies of the module are each detected
+  — including one per `check_corpus` step (missing file, blockless, multi-block, malformed, per-field,
+  two-file agreement, count) — while three cosmetic edits stay green. `test_check_corpus_is_the_entry_
+  point_the_build_calls` reads `build-jsrf.py` and asserts it calls `prov.check_corpus(`, so the two
+  cannot drift apart.
+- **Gates.** `just build` clean with `corpus : schema 1, 128 programs, 126 distinct`; 84 CTest cases
+  (83 before, plus `jsrf_vsh_aot_provenance`); full CTest **84/84** on lavapipe, no skips; `just check`
+  passes including the new real-table step. Corpus program content is unchanged by R1 — only the
+  provenance comment was added (the table body is byte-identical). Test-only in effect: no runtime
+  path changed, the toolkit is untouched at `5668278`, so no toolkit commit.
+
 **Next:** N2 (the controlled benchmark), then N3/V7/V8.
 

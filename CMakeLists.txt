@@ -565,15 +565,46 @@ if(BUILD_TESTING)
         COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_stop_chain.py)
     set_tests_properties(jsrf_stop_chain PROPERTIES TIMEOUT 300)
     # V5's corpus and run-gate checkers, registered like the other pure-Python tests
-    # so a broken corpus cannot pass merely because nobody ran them by hand.  The
-    # table checker re-derives every entry's identity from the generated artifact and
-    # its fixtures pin the ways a corrupt table must be rejected; the run gate reads a
-    # completed run's two independent counter sources.  Both are fast and need no device.
+    # so a broken corpus cannot pass merely because nobody ran them by hand.
+    #
+    # What jsrf_vsh_aot_table actually covers, precisely: its fixtures build
+    # SYNTHETIC tables and run the checker with --skip-spirv --skip-coverage, so
+    # they are device-free unit tests of the CHECKER -- that it rejects an unsorted
+    # table, a wrong digest, a wrong size field and so on.  They compile no shader
+    # and never read the real generated corpus, so they do NOT guard it, and an
+    # earlier version of this comment implied they did.  The real table's 126
+    # entries, recompiled from their own words and compared byte for byte against
+    # the retail XBE, are guarded by `just check` (scripts/check-vsh-aot-table.py
+    # with no flags, ~20 s) -- not by this test.  The run gate reads a completed
+    # run's two independent counter sources.
     add_test(NAME jsrf_vsh_aot_table
         COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_vsh_aot_table.py)
     add_test(NAME jsrf_vsh_run_gate
         COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_vsh_run_gate.py)
     set_tests_properties(jsrf_vsh_aot_table jsrf_vsh_run_gate PROPERTIES TIMEOUT 120)
+    # R1's provenance fixtures, registered for the same reason: the guard that refuses a
+    # stale translator or dxc is only as good as the proof that it refuses.  The fixtures
+    # call the shipped scripts/vsh_aot_provenance.py by path -- `check_corpus`, the ONE
+    # sequence `scripts/build-jsrf.py` runs -- and assert the decisive reason for every
+    # refusal: a moved source hash, dxc version, dxc/tool args, programs, distinct or
+    # schema, a missing deciding field, a malformed block, a missing or blockless corpus
+    # file, two blocks in one file, the two files recording different provenance, and a
+    # `distinct` that disagrees with the table's declared `nv2a_vsh_program_count`.  The
+    # deliberate rule that tool.sha256 is advisory and never decisive is pinned too
+    # (MSVC's linker is not reproducible, so a decisive tool hash would refuse a corpus
+    # `just shaders` had just produced).  Two classes mutate scratch copies of the guard
+    # -- one field of `compare`, one step of `check_corpus` -- and require the case tables
+    # to flip, so a neutered comparison cannot leave the suite green.  The two
+    # FALSE-POSITIVE fixes are covered too, because a guard that rejects a current
+    # corpus blocks legitimate work: `expected(tool_path=None)` omits the advisory
+    # field, a corpus is accepted when no host tool exists (and the build's summary
+    # says `tool hash not recorded` instead of crashing), and `strip_advisory` -- the
+    # `gen-shaders.py --check` comparison -- blanks the advisory line and nothing
+    # else, with the build's own guard exercised from a source cut of build-jsrf.py.
+    # Pure Python, no device, ~15 s (the real-corpus class reads the generated table).
+    add_test(NAME jsrf_vsh_aot_provenance
+        COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_vsh_aot_provenance.py)
+    set_tests_properties(jsrf_vsh_aot_provenance PROPERTIES TIMEOUT 120)
     # A2h-arming-coverage-attribution C1/C2.  The fixture lives in the toolkit's tests/
     # directory, like tests/apu_watch_fixture_test.c and tests/kernel_inplace_event_test.c,
     # because it is a standalone collector fixture and the game repo keeps no fixture of
