@@ -52,9 +52,11 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
   `nv2a_vsh_hlsl` host tool and compiles them offline with `dxc`; the Vulkan back end looks a batch's
   program up by hash and re-checks its identity against the words. A miss returns 0 and the CPU
   interpreter draws it. Nothing is translated or compiled at run time. The stock e2e on Vulkan
-  (`20261014-144815-512-keyscript-e2e-vk-v5`, exe `5e80272d`) has **0 vertex-program misses with
-  1.24M corpus-shader draws** (329M triangles), and the independently authored gating test
-  `jsrf_vsh_aot` passes with its two negative controls.
+  (`20261014-144815-512-keyscript-e2e-vk-v5`, exe `5e80272d`, superseded by the repair below) had
+  **0 vertex-program misses with 1.24M corpus-shader draws** (329M triangles); the repaired build's
+  run is `20261014-165814-809-keyscript-e2e-vk-v5r` (exe `23fbe93d`), **0 misses with 1.22M
+  corpus-shader draws**. The independently authored gating test `jsrf_vsh_aot` passes with its two
+  negative controls.
 - **V5 repair: a rejected identity was dereferenced while logging** (TR §31.20). An independent Codex
   review rejected V5 on this: `vb_program_lookup` rejected a corpus entry with NULL `words` or a wrong
   `len`, then its diagnostic digested that same rejected storage (`0xC0000005` for both, reproduced by

@@ -2650,7 +2650,9 @@ process starts, and the Vulkan back end never translates or compiles anything.**
   are registered with CTest, so neither can be skipped by not being run.
 - **Also fixed while here:** `jsrf_vsh_aot_test` and `just shaders` were added to the checkers'
   expectations (`scripts/check-agent-docs.py` requires the recipe; `AGENTS.md` documents it).
-- **What the V5 run does and does not claim.** `20261014-144815-512-keyscript-e2e-vk-v5` set only
+- **What the V5 run does and does not claim.** (Superseded by §31.20: the repaired build's run is
+  `20261014-165814-809-keyscript-e2e-vk-v5r`, exe `23fbe93d`, with the same verdict. The text below
+  describes the pre-repair run and its own claims.) `20261014-144815-512-keyscript-e2e-vk-v5` set only
   `RECOMP_GPU_BACKEND=vulkan`: no `VK_INSTANCE_LAYERS`, so its `validation_errors=0` counter is
   vacuous and it makes **no** validation-pass claim (plan N3 belongs to V7). Its claim is the
   vertex-program gate: 0 misses with 1.24M corpus-shader draws and 329M triangles. The
