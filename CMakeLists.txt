@@ -214,6 +214,26 @@ if(BUILD_TESTING)
         add_test(NAME jsrf_vsh_aot COMMAND jsrf_vsh_aot_test --skip "XBR_VK_SW_ICD is not set")
         set_tests_properties(jsrf_vsh_aot PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
     endif()
+    # The malformed-entry regression: a corpus entry whose `words` is NULL or whose `len` is wrong
+    # must be REJECTED and logged, not walked. Registered UNCONDITIONALLY and with no --skip path
+    # and no SKIP_RETURN_CODE: it never returns 77, and a device it cannot install on is a hard
+    # failure, because "the check did not run" must not be able to look like a pass. The
+    # software-ICD environment is added when one is configured, so the case runs on lavapipe here.
+    add_executable(jsrf_vsh_aot_malformed_test
+        tests/test_vsh_aot_malformed.c ${RECOMP_SHADER_SOURCES})
+    target_include_directories(jsrf_vsh_aot_malformed_test PRIVATE
+        ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a ${XBOXRECOMP_DIR}/src/video
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/gen
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/gen/shaders)
+    target_link_libraries(jsrf_vsh_aot_malformed_test PRIVATE xboxrecomp)
+    add_test(NAME jsrf_vsh_aot_malformed COMMAND jsrf_vsh_aot_malformed_test)
+    set_tests_properties(jsrf_vsh_aot_malformed PROPERTIES TIMEOUT 300)
+    if(XBR_VK_SW_ICD)
+        file(TO_NATIVE_PATH "${XBR_VK_SW_ICD}" _vk_icd_mal)
+        set_tests_properties(jsrf_vsh_aot_malformed PROPERTIES
+            ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd_mal};VK_ICD_FILENAMES=${_vk_icd_mal};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
+    endif()
     add_executable(jsrf_inplace_event_test
         ${XBOXRECOMP_DIR}/tests/kernel_inplace_event_test.c)
     target_include_directories(jsrf_inplace_event_test PRIVATE

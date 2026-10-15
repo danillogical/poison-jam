@@ -54,8 +54,21 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
   interpreter draws it. Nothing is translated or compiled at run time. The stock e2e on Vulkan
   (`20261014-144815-512-keyscript-e2e-vk-v5`, exe `5e80272d`) has **0 vertex-program misses with
   1.24M corpus-shader draws** (329M triangles), and the independently authored gating test
-  `jsrf_vsh_aot` passes with its two negative controls, and detects a targeted production mutation
-  applied to `nv2a_vk_backend.c` (`f1609da6`) that removed the pipeline key's program identity.
+  `jsrf_vsh_aot` passes with its two negative controls.
+- **V5 repair: a rejected identity was dereferenced while logging** (TR §31.20). An independent Codex
+  review rejected V5 on this: `vb_program_lookup` rejected a corpus entry with NULL `words` or a wrong
+  `len`, then its diagnostic digested that same rejected storage (`0xC0000005` for both, reproduced by
+  a probe that compiles the two functions verbatim). The diagnostic now logs a reason from scalar
+  fields only. A **different worker** authored the regression
+  (`jsrf_vsh_aot_malformed`, `tests/test_vsh_aot_malformed.c`): it copies the corpus in memory,
+  corrupts only the copy (`words` NULL, `len` `UINT32_MAX`/±1, missing shader), and requires a clean
+  rejection with `identity_fail` +1, no hit, real CPU-fallback pixels and no crash. It **crashes on the
+  shipped `32d83dd0` and passes on the repaired `84f987cd`**. The deciding pipeline-identity mutation
+  was then **re-run against the final repaired source in a scratch tree**
+  (`xbr-mac/v5mut`, production never mutated in place): baseline `84f987cd` PASS, mutant `d8a41429`
+  FAIL (`gpu surfaces differ in 0 of 4096 pixels`), restored `84f987cd` PASS. Final gate: CTest
+  **74/74** on lavapipe, `just check` passed, and the e2e `20261014-165814-809-keyscript-e2e-vk-v5r`
+  (exe `23fbe93d`) has **0 misses with 1.22M corpus-shader draws**.
 
 ## Remaining work, pre-approved by the owner (2026-10-14)
 

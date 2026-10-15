@@ -2685,5 +2685,66 @@ process starts, and the Vulkan back end never translates or compiles anything.**
 - **Not claimed:** no hardware-fidelity claim, and V6's synthetic V1-V7 HLSL equality/pixel/digest
   suite and V7's final acceptance are separate steps. The run is exploratory, not strict.
 
+### §31.20 V5 repair: the rejected-identity diagnostic walked the storage it had rejected (2026-10-14)
+
+**An independent Codex review rejected V5 on one defect, and it was real.** `vb_program_lookup` rejects
+a corpus entry whose `words` is NULL or whose `len` disagrees with the batch, increments
+`identity_fail`, and returns NULL so the CPU interpreter draws the batch. It then called
+`vb_program_log_once(p, e)`, whose identity-failure diagnostic computed
+`nv2a_vsh_aot_digest(e->words, e->len)` — traversing exactly the storage it had just rejected. NULL
+`words` dereferenced NULL; an oversized `len` read far past the entry. Both reproduced as
+`0xC0000005` by a probe that compiles the two production functions verbatim with the real headers
+(`pv04-identity-probe.py`, receipt under `xbr-mac/pv04-codex-identity-probe/`). This is isolated
+function evidence; no guest crash was observed.
+
+- **The fix** removes the digest call entirely. The diagnostic now chooses a short reason from scalar
+  fields only (`the instruction count differs` / `the input mask differs` / `the corpus entry has no
+  words` / `the corpus entry has no shader` / `the words or digest differ`) and prints the entry's
+  `len`, `input_mask` and `digest` beside the batch's. It reads no pointer field's target, does no
+  length-derived arithmetic, and adds no clamp or guessed guard. `vb_program_lookup`'s accept/reject
+  decision, its counters and its `return NULL` are byte-for-byte unchanged.
+- **No second out-of-bounds read.** The reject condition is a short-circuit chain, and every
+  dereference is guarded by an earlier term: `e->len != p->program_len` first, then
+  `!e->words || !e->spirv || !e->spirv_size`, and only then the digest of `e->words` for `e->len` and
+  the `memcmp` of `e->len * 16` bytes. That ordering is load-bearing and is now commented as such.
+- **Verification.** The Codex reproducer now exits 0 in all three modes (`valid` selects,
+  `null-words` and `oversized-length` give `selected=0 identity_fail=1` with the new reason text).
+  A **different worker** authored a regression through the real backend/executor seam
+  (`tests/test_vsh_aot_malformed.c`, `jsrf_vsh_aot_malformed`) that copies the corpus in memory,
+  corrupts only the copy (`words = NULL`, `len = UINT32_MAX`, `len ± 1`, missing shader), and asserts
+  for each: `identity_fail` advances by one, no new `hits`, the executor's CPU interpreter drew the
+  batch (real pixels), the process survived, and the real table is untouched — then restores the real
+  table and re-asserts the positive control. It **fails on the unfixed `32d83dd0` and passes on the
+  repaired `5de9f892`**.
+- **Independent reviews of the repair.** A code review found no defects: it walked the short-circuit
+  chain term by term and confirmed every dereference is guarded by an earlier one, that rejection
+  semantics are unchanged, and that no blanket success or guessed guard was introduced. It also
+  flagged that the ordering was load-bearing but undocumented, so the comment above the condition now
+  says so explicitly. A security review of the malformed-entry/bounds/diagnostic handling reported
+  **no demonstrated and no suspected findings**: every read and write in these functions is bounded by a
+  named check (`memcmp` and both digest calls gated behind the `len` and
+  `!e->words` terms; the `(size_t)` cast applied before the multiply, so no overflow; the binary
+  search clamped to `[0, s_nprograms)`; `va_prog[16]` bounded by the `bit < 16` loop; the miss-log
+  array bounded by its own check; the stream arithmetic bounded by `VB_STREAM_BYTES`). One residual
+  trust assumption is recorded as such: an entry's `spirv_size` is its own claim, which is why the
+  generator invariant matters — I verified all 126 generated `vp_words_<tag>[N][4]` arrays have
+  `N == len` exactly (0 mismatches), so the "words shorter than len" case does not occur.
+- **The deciding production mutation was re-run on the FINAL repaired source, in a scratch tree**
+  (`xbr-mac/v5mut`, its own toolkit copy and build dir; the shared production file was never mutated
+  in place). Three states, hashes pinned: repaired baseline `5de9f892` **PASS**; mutant
+  (`dr.key.prog_hash = 0` plus the key/entry guard disabled) `590ba781` **FAIL** with
+  `gpu surfaces differ in 0 of 4096 pixels` and `the pipeline cache is serving one program's shader
+  for the other`; restored `5de9f892` **PASS**. The earlier mutation evidence on `f1609da6` was for
+  the pre-S1 backend and did not cover the shipped source; this run does.
+
+- **Final identities after the repair.** Toolkit `src/video/nv2a_vk_backend.c`
+  `sha256 84f987cd0ba2b39d913e775cf4cf19c7651354cfdce25ae550d794065c54ce6e` (the fix is the earlier
+  `5de9f892`; `84f987cd` adds only the ordering comment). Game executable
+  `sha256 23fbe93d984fa85d87e5658763c9aa369e3d37b899ae32dd2794472e4eff6c4c`. The malformed regression
+  `tests/test_vsh_aot_malformed.c` `sha256 d970cb1153f2d41d...`. Gates on the repaired tree:
+  `just build` clean, CTest **74/74** on lavapipe, `just check` all checkers passed, and the e2e run
+  `20261014-165814-809-keyscript-e2e-vk-v5r` binds to that executable with **0 misses and 1.22M
+  corpus-shader draws** (324.8M triangles), 72 steps, no ICALL/ABI/fatal.
+
 **Next:** V6 (a different worker's synthetic vertex-program suite), then N2/N3/V7/V8.
 
