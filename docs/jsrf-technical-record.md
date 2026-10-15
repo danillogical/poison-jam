@@ -2885,6 +2885,11 @@ authored by a worker distinct from every V5 author.
 
 ### §31.22 R1: a stale vertex-program corpus is refused at build time (2026-10-15)
 
+**Review status: implementation `9078b47` was rejected by independent Codex review.** The narrative
+below records that implementation and its tests; its advisory tool identity and warning-only override
+are not the approved R1 acceptance contract. The deciding counterexamples and required repair are in
+§31.23. V5/V6 remain accepted.
+
 **What R1 is.** V5 (§§31.19–31.20) proves the runtime identity check over the guest *words* a batch
 uploads. It says nothing about which translator or compiler produced those words' SPIR-V. So if
 `nv2a_vsh_hlsl.c`, its header, its CLI or dxc's version/flags change after `just shaders` ran, the
@@ -2958,3 +2963,33 @@ records the inputs that produced the corpus and refuses a mismatch before the co
 
 **Next:** N2 (the controlled benchmark), then N3/V7/V8.
 
+
+
+### §31.23 R1 review rejection: tool identity, freshness and toolkit binding (2026-10-15)
+
+Independent checks of the shipped `9078b47` found three gaps against the approved R1 gate:
+
+- **Tool identity is not decisive.** On the real current corpus, production `check_corpus` returns
+  `(True, [], [])` for matching provenance. Changing only expected `tool.sha256` to 64 zeroes still
+  returns `True` with advisories. Removing that field from both temporary generated-file blocks
+  returns `(True, [], [])`. Missing or changed tool identity therefore passes; the approved gate
+  requires refusal. Executable non-reproducibility across relinks does not prevent comparison with
+  the actual executable that generated the corpus. Stable tool selection must make that comparison
+  useful through bootstrap, generation and build.
+- **A stale explicit override is accepted.** A private copy of the real host executable, with mtime
+  set to epoch 1, is older than all three actual sources. With `JSRF_NV2A_VSH_HLSL` selecting it,
+  production `locate_host_tool` returns it with `cannot be PROVEN fresh ... advisory`. The approved
+  freshness gate must rebuild a verified owned tool or refuse, while preserving an arbitrary override.
+- **The validated toolkit is not bound to the linked one.** The unmodified AST-extracted build-guard
+  functions accept temporary corpus provenance for an alternate three-source toolkit with a whitespace
+  content change, while preflight and the actual CMake cache still select the sibling toolkit. This
+  is a reduced guard test, not a claim that wrong pixels were observed. Align the authoritative paths
+  or refuse the mismatch before configure.
+
+These counterexamples used temporary private generated files/tool copies and did not change the
+production tree, assets or saves. The independently run provenance/table/build suites pass 130 tests;
+real-table validation reports `entries=126 recompiled_and_matched=126 ascending=yes duplicates=0
+xbe_distinct=126 problems=0`. Those positive results do not test away the three missing refusals.
+Repair forward with a different worker's regression and final-source baseline/mutation/restored
+proof, including the actual supported build refusal before configure. R1 remains pending; R2 has not
+started. The previously accepted V5/V6 milestones are unchanged.
