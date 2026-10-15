@@ -234,6 +234,155 @@ if(BUILD_TESTING)
         set_tests_properties(jsrf_vsh_aot_malformed PROPERTIES
             ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd_mal};VK_ICD_FILENAMES=${_vk_icd_mal};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
     endif()
+    # ── V6: the vertex-program conformance gate (plan-jsrf-gameplay.md, step V6) ─────────────
+    # Authored by a worker distinct from V5's authors, and it asks a different question from V5's
+    # gate: not "is the generated retail corpus self-consistent" but "does the offline translation
+    # pipeline and the corpus seam reproduce the INTERPRETER for the synthetic V1..V7 taxonomy",
+    # on the bytes and on the pixels. Its fixtures are the parity test's own V1..V6 programs: the
+    # region between that file's VSH-ENCODER-BEGIN/END markers is extracted verbatim here at
+    # configure time (re-extracting whenever the file changes), so the encoder cannot drift from
+    # the one the parity test uses. The fixture SPIR-V is compiled at BUILD time from those same
+    # words with the same dxc/flags scripts/gen-shaders.py uses for the retail corpus. What is
+    # checked at run time is narrower than "the blob came from those words": the test recomputes
+    # the header's words hash from the words it uploads and the header's spirv_hash from the bytes
+    # of the blob it carries, so a hand-edited or half-regenerated header is caught. The generation
+    # step (the generator writes each fixture's words and hands that file to the tool) plus the
+    # pixel comparison are what actually tie the shader to the program.
+    #
+    # Registered only when the Vulkan shader toolchain is present, like the toolkit's vk_smoke
+    # suite: without dxc there is no gate to run, and an unregistered test is honest where a
+    # green no-op would not be. With a toolchain but no device, the test exits 77 (Not Run) unless
+    # one of its checks has already failed, in which case it is a hard failure.
+    #
+    # XBR_VULKAN_FOUND itself is a plain variable in the toolkit subdirectory's scope and does not
+    # reach here; the cache entries the toolkit's find_program/find_package created do.
+    if(XBR_DXC AND XBR_SPIRV_VAL AND Vulkan_LIBRARY)
+        set(VSH_CONF_DIR "${CMAKE_CURRENT_BINARY_DIR}/vsh-conformance")
+        file(MAKE_DIRECTORY "${VSH_CONF_DIR}" "${VSH_CONF_DIR}/scratch")
+        set(_vsh_parity "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_gpu_backend_parity.c")
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_vsh_parity}")
+        file(READ "${_vsh_parity}" _vsh_text)
+        # file(READ) already collapses CRLF to LF; be explicit so the markers and the
+        # post-write comparison below are unambiguous whatever the file's endings are.
+        string(REPLACE "\r\n" "\n" _vsh_text "${_vsh_text}")
+        string(FIND "${_vsh_text}" "/* VSH-ENCODER-BEGIN */" _vsh_b)
+        string(FIND "${_vsh_text}" "/* VSH-ENCODER-END */" _vsh_e)
+        if(_vsh_b EQUAL -1 OR _vsh_e EQUAL -1 OR _vsh_e LESS _vsh_b)
+            message(FATAL_ERROR
+                "V6: the VSH-ENCODER-BEGIN/END markers are not in ${_vsh_parity}; the "
+                "conformance gate's fixtures come from that region and cannot be extracted")
+        endif()
+        string(LENGTH "/* VSH-ENCODER-END */" _vsh_tail)
+        math(EXPR _vsh_len "${_vsh_e} + ${_vsh_tail} - ${_vsh_b}")
+        string(SUBSTRING "${_vsh_text}" ${_vsh_b} ${_vsh_len} _vsh_region)
+        file(WRITE "${VSH_CONF_DIR}/vsh_encoder_region.inc" "${_vsh_region}")
+        # Verify the copy really is the region: read it back, normalize its endings the same way,
+        # and compare. A mismatch fails the CONFIGURE, so a drifted extraction cannot reach a
+        # build. (file(WRITE) writes the host's line endings; the region's content is unchanged,
+        # which is what matters for the compiler and for the drift guarantee.)
+        file(READ "${VSH_CONF_DIR}/vsh_encoder_region.inc" _vsh_back)
+        string(REPLACE "\r\n" "\n" _vsh_back "${_vsh_back}")
+        if(NOT _vsh_back STREQUAL _vsh_region)
+            message(FATAL_ERROR
+                "V6: the extracted encoder region does not round-trip (${_vsh_len} bytes "
+                "extracted, ${_vsh_back} read back); the fixtures would not be the parity test's")
+        endif()
+        message(STATUS "V6: extracted ${_vsh_len} bytes of the V1..V7 encoder from "
+                       "tests/test_gpu_backend_parity.c and verified the copy")
+
+        # The generator: the same source, compiled as a build-time tool (VSH_CONFORMANCE_EMIT_FIXTURES).
+        add_executable(jsrf_vsh_conformance_gen tests/test_vsh_conformance.c)
+        target_include_directories(jsrf_vsh_conformance_gen PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a ${XBOXRECOMP_DIR}/src/video
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/gen
+            ${VSH_CONF_DIR})
+        target_compile_definitions(jsrf_vsh_conformance_gen PRIVATE
+            VSH_CONFORMANCE_EMIT_FIXTURES)
+        target_link_libraries(jsrf_vsh_conformance_gen PRIVATE xboxrecomp)
+
+        add_custom_command(
+            OUTPUT "${VSH_CONF_DIR}/vsh_fixtures.inc"
+            COMMAND jsrf_vsh_conformance_gen
+                    --out "${VSH_CONF_DIR}/vsh_fixtures.inc"
+                    --work "${VSH_CONF_DIR}/scratch"
+                    --tool "$<TARGET_FILE:nv2a_vsh_hlsl>"
+                    --dxc "${XBR_DXC}"
+                    --spirv-val "${XBR_SPIRV_VAL}"
+            DEPENDS jsrf_vsh_conformance_gen nv2a_vsh_hlsl "${_vsh_parity}"
+            COMMENT "V6: compiling the V1..V6 fixture programs to SPIR-V from their own words"
+            VERBATIM)
+
+        add_executable(jsrf_vsh_conformance_test
+            tests/test_vsh_conformance.c ${RECOMP_SHADER_SOURCES}
+            "${VSH_CONF_DIR}/vsh_fixtures.inc")
+        target_include_directories(jsrf_vsh_conformance_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a ${XBOXRECOMP_DIR}/src/video
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/gen
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/gen/shaders
+            ${VSH_CONF_DIR})
+        target_link_libraries(jsrf_vsh_conformance_test PRIVATE xboxrecomp)
+
+        file(TO_NATIVE_PATH "${XBR_VK_SW_ICD}" _vk_icd_conf)
+        set(_vsh_conf_env
+            "VK_DRIVER_FILES=${_vk_icd_conf};VK_ICD_FILENAMES=${_vk_icd_conf};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
+        set(_vsh_conf_tool "$<TARGET_FILE:nv2a_vsh_hlsl>")
+
+        if(XBR_VK_SW_ICD)
+            add_test(NAME jsrf_vsh_conformance
+                     COMMAND jsrf_vsh_conformance_test --tool "${_vsh_conf_tool}")
+            set_tests_properties(jsrf_vsh_conformance PROPERTIES TIMEOUT 600
+                SKIP_RETURN_CODE 77 ENVIRONMENT "${_vsh_conf_env}")
+            # V7 is V1's scene with RECOMP_GPU_VSH=0, and the executor reads that variable once
+            # per process, so it is its own case.
+            add_test(NAME jsrf_vsh_conformance_v7
+                     COMMAND jsrf_vsh_conformance_test --v7-only --tool "${_vsh_conf_tool}")
+            set_tests_properties(jsrf_vsh_conformance_v7 PROPERTIES TIMEOUT 300
+                SKIP_RETURN_CODE 77
+                ENVIRONMENT "RECOMP_GPU_VSH=0;${_vsh_conf_env}")
+            # The gate's own negative controls, as separate cases: they prove the checks are
+            # load-bearing. Each reports the CHECK's verdict as its exit status -- 1 when the check
+            # correctly failed the injected defect (the expected, load-bearing result) and 2 when it
+            # missed it. WILL_FAIL cannot express that: it would also accept exit 2 (a control that
+            # missed the defect) and any crash, so the case is asserted on the exact success line
+            # instead, which only the exit-1 path prints.
+            add_test(NAME jsrf_vsh_conformance_control1
+                     COMMAND jsrf_vsh_conformance_test --negative-control 1 --tool "${_vsh_conf_tool}")
+            add_test(NAME jsrf_vsh_conformance_control2
+                     COMMAND jsrf_vsh_conformance_test --negative-control 2 --tool "${_vsh_conf_tool}")
+            add_test(NAME jsrf_vsh_conformance_control3
+                     COMMAND jsrf_vsh_conformance_test --negative-control 3 --tool "${_vsh_conf_tool}")
+            add_test(NAME jsrf_vsh_conformance_control4
+                     COMMAND jsrf_vsh_conformance_test --negative-control 4 --tool "${_vsh_conf_tool}")
+            # Control 5 is the one that feeds check_cpu -- the predicate behind checks 2, 3 and 4 --
+            # a real mismatch: V3's table entry pointed at V5's SPIR-V, which shares its input_mask,
+            # so the identity check still passes and only the pixels are wrong.
+            add_test(NAME jsrf_vsh_conformance_control5
+                     COMMAND jsrf_vsh_conformance_test --negative-control 5 --tool "${_vsh_conf_tool}")
+            # Control 6 feeds check 1's output-location assertion a moved varying: t1 from
+            # location 4 to 7. The location COUNT is unchanged and the combiner reads d0 alone, so
+            # no pixel check can see it -- which is why the locations are asserted by name. Needs
+            # no device, like control 1.
+            add_test(NAME jsrf_vsh_conformance_control6
+                     COMMAND jsrf_vsh_conformance_test --negative-control 6 --tool "${_vsh_conf_tool}")
+            set_tests_properties(jsrf_vsh_conformance_control1 jsrf_vsh_conformance_control2
+                                 jsrf_vsh_conformance_control3 jsrf_vsh_conformance_control4
+                                 jsrf_vsh_conformance_control5 jsrf_vsh_conformance_control6
+                                 PROPERTIES TIMEOUT 300
+                PASS_REGULAR_EXPRESSION "correctly FAILED the simulated defect"
+                FAIL_REGULAR_EXPRESSION "MISSED the simulated defect"
+                ENVIRONMENT "${_vsh_conf_env}")
+        else()
+            add_test(NAME jsrf_vsh_conformance
+                     COMMAND jsrf_vsh_conformance_test --skip "XBR_VK_SW_ICD is not set")
+            set_tests_properties(jsrf_vsh_conformance PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
+        endif()
+    else()
+        message(STATUS "V6: the vertex-program conformance gate is not registered -- Vulkan, dxc "
+                       "and spirv-val are all needed to compile its fixtures")
+    endif()
+
     add_executable(jsrf_inplace_event_test
         ${XBOXRECOMP_DIR}/tests/kernel_inplace_event_test.c)
     target_include_directories(jsrf_inplace_event_test PRIVATE

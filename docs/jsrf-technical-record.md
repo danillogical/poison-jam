@@ -2749,5 +2749,78 @@ function evidence; no guest crash was observed.
   `20261014-165814-809-keyscript-e2e-vk-v5r` binds to that executable with **0 misses and 1.22M
   corpus-shader draws** (324.8M triangles), 72 steps, no ICALL/ABI/fatal.
 
-**Next:** V6 (a different worker's synthetic vertex-program suite), then N2/N3/V7/V8.
+### §31.21 V6: the synthetic vertex-program conformance gate (2026-10-14)
+
+**V6 asks a different question from V5.** V5 (§§31.19–31.20) asks whether the generated retail corpus
+and the back end's lookup are self-consistent. V6 asks whether the **offline translation pipeline and
+the corpus seam reproduce the interpreter** for the synthetic V1–V7 taxonomy — on the bytes and on the
+pixels. It is a separate test (`tests/test_vsh_conformance.c`, `jsrf_vsh_conformance` and its cases)
+authored by a worker distinct from every V5 author.
+
+- **Fixtures are the parity test's own programs, not a re-invention.** The V1–V7 taxonomy already
+  existed in `tests/test_gpu_backend_parity.c`, between its `VSH-ENCODER-BEGIN`/`END` markers: V1 `MVP`
+  (four `dp4` against c[96..99] plus the D3D epilogue), V2 `A0` (`arl a0.x, v1.x` then
+  `mov oD0, c[a0.x+20]`), V3 `PAIR` (a MAC and an ILU in one instruction, reading the old R3), V4 `SFU`
+  (`lit`/`exp`/`log`/`dst`), V5 `FOG` (`oFog.x = v1.x`), V6 `BEHIND` (the MVP program with a vertex
+  behind the eye), V7 (V1's words under `RECOMP_GPU_VSH=0`). CMake extracts that region verbatim at
+  configure time, verifies the copy round-trips, and re-extracts whenever the parity test changes, so
+  the encoder cannot drift. No fixture code is shared with V5.
+- **The SPIR-V fixtures are compiled at build time from the fixtures' own words**, with the same host
+  tool, `dxc` flags and `spirv-val` the retail corpus uses; the test recomputes a hash of the words and
+  matches the generator's record, so no stored blob is involved. Fixture identities (`len`, mask, hash,
+  digest) are computed at run time by `nv2a_vsh_program_info` and `nv2a_vsh_aot_digest`, never guessed.
+  The fixtures are verified absent from the 126-entry retail corpus by hash *and* digest.
+- **What it checks.** (1) The host tool's plain output is byte-identical to calling `nv2a_vsh_hlsl`
+  directly for all ten rows, and the `--vk` form differs only by the expected decorations: exactly two
+  bindings (9, 10), an input location per mask bit **at its own bit number**, and each output varying
+  asserted **by name** at `ps_rc`'s location (`d0`→0 … `t3`→6) plus `SV_Position` — values, not just
+  counts, because the independent verifier showed a moved output location otherwise passed. (2) A
+  table hit matches the CPU interpreter's pixels on lavapipe: all 4096 pixels' four channels, tolerance
+  4 (the parity tests' `TOL_VSH`), coverage differing by at most `max(4, perimeter/4)`, at least 500
+  non-clear pixels. (3) A miss advances `misses`, not `hits`, and leaves the interpreter's pixels.
+  (4) A corrupt `len` and a corrupt `digest` each advance `identity_fail` with no hit and CPU fallback.
+  (5) `RECOMP_GPU_VSH=0` (V7) leaves every counter at zero: the corpus is never consulted.
+- **The pixel rule is the established one**, not a new allowance: the boundary band is the
+  interpreter's own perimeter from `vs_predict_visible`, and the tolerance is the parity suite's. The
+  coverage bound was **tightened** from the perimeter to `max(4, perimeter/4)` after an independent
+  probe showed the looser rule accepted a whole-pixel geometric error (V1 shifted 1 px: xor 78 against
+  a 28 bound). Every case's measured xor is 0, so the slack is unused.
+- **The gate found real coverage holes and closed them.** V2's a0-relative indexing was never
+  pixel-compared (it was the miss), so `floor` → truncation would have passed; V2 is now in the table
+  and drawn with fractional a0 inputs (2.9999 / 0.9999 / 0.5) where `floor(x+0.001)` and `trunc(x)`
+  select different constants. The alpha channel was not compared at all, hiding V4's `dst` `y`/`w`
+  results; all four channels are compared now, and the test asserts V4's alpha is non-opaque at 1176
+  pixels so the alpha half cannot become vacuous. No fixture used MAC op 3 (`add`), so an `add`
+  regression would have slipped through; fixture X4 uses it and is pixel-compared. And a
+  false-pass hole in the harness itself — the stderr log path could fall back to `.` and read a stale
+  file — is fixed with a pid-unique path under `TEMP`/`TMP` and a hard failure if it cannot be opened.
+- **Independent verification.** A worker distinct from the author ran **18 mutants** on a scratch
+  toolkit copy (production byte-identical before and after) and found **7 false passes**, of which one
+  was a real defect and one a real fixture gap — both fixed and re-checked. Its re-check then found
+  **six MAC ops with no fixture coverage at all** (`dp3`, `dph`, `min`, `max`, `slt`, `sge`): mutating
+  any of them passed the whole gate. All six are now closed by fixtures X5–X10, each a full fixture with
+  its own identity, table entry and CPU-vs-GPU comparison, and each mutation-confirmed caught by its own
+  fixture (`FAIL: [X5] only 79.10% of pixels agree … worst 44`, and similarly for X6–X10). The fixture
+  count is 13 (V1–V5, MISS, X4–X10). The encoder shares one input index across all three sources, so
+  `dp3`/`dph` take their second operand from a constant; that is a limit of the test encoder, not the
+  ISA, and it is documented in the header. Two of the author's own
+  claims were confirmed by construction: check 1 is an equality between the host tool and the same
+  linked function, so a change *inside* `nv2a_vsh_hlsl.c` moves both sides (the `m1c` mutant is caught
+  by check 2's pixels instead, and the gate as a whole still fails it); and the structural assertion on
+  the shader body is the **sole** catcher for a dropped `saturate`. Recorded as accepted limitations:
+  check 4 needs **both** digest terms removed to fire (either alone leaves the sibling term rejecting),
+  the fog-parameter mutant is value-equivalent, and depth test/write and `SET_FOG_MODE` are unreachable
+  in these batches by design. MAC ops 0–13 all have discriminating fixtures; **MAC 14/15 (which the
+  translator maps to `A`) and ILU 1 (`mov`) / 4 (`rsqrt`) remain uncovered** — the independent verifier
+  mutated those four paths and the gate accepted them, but no retail program is known to use them and no
+  defect is suspected behind them, so no fixture was added and the gap is recorded rather than papered
+  over.
+- **Gates.** `just build` clean; the eight V6 CTest cases (the gate, V7, and controls 1–6) all pass on
+  lavapipe, never skipped; full CTest **82/82**; `just check` all checkers passed. The controls assert
+  the check's own verdict, so a control that misses its defect exits 2 and the case fails rather than
+  passing on any nonzero exit.
+- **No production change.** V6 is test-only: the toolkit is untouched at `5668278`, so this step adds
+  no toolkit commit.
+
+**Next:** N2 (the controlled benchmark), then N3/V7/V8.
 

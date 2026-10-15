@@ -71,6 +71,16 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
   FAIL (`gpu surfaces differ in 0 of 4096 pixels`), restored `84f987cd` PASS. Final gate: CTest
   **74/74** on lavapipe, `just check` passed, and the e2e `20261014-165814-809-keyscript-e2e-vk-v5r`
   (exe `23fbe93d`) has **0 misses with 1.22M corpus-shader draws**.
+- **V6: the synthetic vertex-program conformance gate** (TR §31.21, `tests/test_vsh_conformance.c`).
+  A worker distinct from every V5 author built the gate on the parity test's own V1–V7 programs
+  (extracted at configure time, so the encoder cannot drift). It checks the offline host tool's bytes
+  against `nv2a_vsh_hlsl` directly, the `--vk` decorations including each output varying's location by
+  name, a table hit against the CPU interpreter's pixels, a miss and a corrupt identity falling back to
+  the CPU, and V7 under `RECOMP_GPU_VSH=0`. An independent worker ran 18 mutants and found 7 false
+  passes — one a real defect (output locations only counted, not value-checked), one a real fixture gap
+  (no fixture used MAC `add`), and then six MAC ops (`dp3`/`dph`/`min`/`max`/`slt`/`sge`) with no
+  coverage at all — all fixed and mutation-confirmed. Thirteen fixtures, eight CTest cases, full CTest
+  82/82, `just check` passed. Test-only: no toolkit change.
 
 ## Remaining work, pre-approved by the owner (2026-10-14)
 
@@ -89,15 +99,6 @@ for:
 bridge timeout loses one step at most. Every code step gets its gating test from a **different**
 worker. Commit and push each gated step (toolkit first, then game); don't carry finished work
 uncommitted.
-
-### V6: vertex-program tests (about 1 h, a different worker)
-
-- Offline HLSL is byte-identical to the live `nv2a_vsh_hlsl` output for synthetic V1–V7-style
-  programs.
-- A table hit matches the CPU interpreter's pixels on lavapipe.
-- A miss falls back.
-- A corrupt digest is rejected.
-- Mutations fail.
 
 ### N2: a controlled benchmark (about 0.5 h)
 
