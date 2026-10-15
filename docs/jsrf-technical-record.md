@@ -2733,10 +2733,11 @@ function evidence; no guest crash was observed.
   `N == len` exactly (0 mismatches), so the "words shorter than len" case does not occur.
 - **The deciding production mutation was re-run on the FINAL repaired source, in a scratch tree**
   (`xbr-mac/v5mut`, its own toolkit copy and build dir; the shared production file was never mutated
-  in place). Three states, hashes pinned: repaired baseline `5de9f892` **PASS**; mutant
-  (`dr.key.prog_hash = 0` plus the key/entry guard disabled) `590ba781` **FAIL** with
+  in place). Three states, hashes pinned in the final measured receipt: repaired baseline
+  `84f987cd` **PASS**; mutant
+  (`dr.key.prog_hash = 0` plus the key/entry guard disabled) `d8a41429` **FAIL** with
   `gpu surfaces differ in 0 of 4096 pixels` and `the pipeline cache is serving one program's shader
-  for the other`; restored `5de9f892` **PASS**. The earlier mutation evidence on `f1609da6` was for
+  for the other`; restored `84f987cd` **PASS**. The earlier mutation evidence on `f1609da6` was for
   the pre-S1 backend and did not cover the shipped source; this run does.
 
 - **Final identities after the repair.** Toolkit `src/video/nv2a_vk_backend.c`
