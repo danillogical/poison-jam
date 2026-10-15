@@ -2144,9 +2144,10 @@ static int check_alpha_coverage(void)
  * g_perim[1]/g_area[1] are the interpreter's own geometry for it.
  *
  * V2 is chosen over V1 because its per-vertex oD0 comes from c[20..23] = (1,0,0,1), (0,1,0,1),
- * (0,0,1,1), (1,1,0,1) at the a0 picks 3, 1, 0, so its drawn region spans a wide range in every
- * channel -- V1's is a single flat colour. The per-channel legs therefore do not have to assume
- * what the reference holds: each leg computes the largest difference IT engineered from the
+ * (0,0,1,1), (1,1,0,1) at the a0 picks 3, 1, 0, so its drawn region spans a wide range across the
+ * four channels -- V1's is a single flat colour. The measured span is printed by the check itself
+ * (e.g. red and green each reach 255 on 4 pixels, blue is 0 on 1176, alpha is 255 everywhere), and
+ * the legs do NOT assume it: each leg computes the largest difference IT engineered from the
  * reference's own bytes (`expect`), sends every byte to the far end of its range, and asserts
  * `worst_rgb == expect`. That is exact whatever the reference contains, and the numbers are
  * printed so the real span is visible rather than inferred. The compiler-independent exactness

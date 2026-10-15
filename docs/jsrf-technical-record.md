@@ -2853,7 +2853,9 @@ authored by a worker distinct from every V5 author.
 - **The regression is a separate worker's, and it drives the real predicate.**
   `jsrf_vsh_conformance_channelgate` (a device-free process that exits before the Vulkan back end is
   installed, so it can never report a skip) calls `compare`/`check_cpu` on a real captured CPU
-  reference — V2, chosen because its drawn region reaches 0 and 255 in every channel — and asserts
+  reference — V2, chosen because its drawn region spans both ends of the range across the four
+  channels (measured and printed: alpha 255 in all 4096 pixels, red and green each reach 255 on 4
+  pixels, blue is 0 on 1176) — and asserts
   measured quantities, never merely "the call failed": an exact copy is accepted with worst difference
   0; an alpha-only difference of 255 on all 4096 pixels is rejected (worst alpha 255, match 0.00%);
   an alpha difference of 2 is still accepted; red-only, green-only and blue-only images are each
@@ -2862,17 +2864,20 @@ authored by a worker distinct from every V5 author.
   value); and an alpha-only change leaves `cov_xor` at 0. The positive control gates the negative legs:
   if the exact copy is not accepted, the legs are not evaluated and the check fails, so a broken
   prerequisite cannot be reported as a pass.
-- **The new case fails on both bad states and passes on the repair**, on the project's own compiler.
-  Scratch A/B/C runs (`xbr-mac/pv05r2/ab`, `xbr-mac/pv05r-verify`, with only the extraction swapped and
+- **The new case fails on both bad states and passes on the repair** — but on different compilers,
+  because the two states are wrong in different ways. Scratch A/B/C runs (`xbr-mac/pv05r2/ab`,
+  `xbr-mac/pv05r-verify`, with only the extraction swapped and
   the interface kept, so the regression compiles against each): the committed-original form exits 0
-  under MSVC (masked, accidentally correct) and **fails under clang-cl** at the exact-copy control
+  under MSVC (the shift count is masked, so it is accidentally correct there) and **fails under
+  clang-cl** at the exact-copy control
   (`1176 drawn-region pixels disagree`); the count-indexed form **fails under both** compilers with 7
   gate failures, including `a blue-only difference was not discriminated: worst_rgb 0 (required > 4 and
   equal to the engineered max 255)` and `covered(0x00101010) = 1 but must be 0`; the repaired source
-  passes both.
+  passes both. So the state that fails under the compiler this gate actually ships with (MSVC) is the
+  partial, not the original.
 - **Gates.** `just build` clean; the nine V6 CTest cases (the gate, V7, controls 1–6, and the new
   channel gate) all pass on
-  lavapipe, never skipped; full CTest **82/82**; `just check` all checkers passed. The controls assert
+  lavapipe, never skipped; full CTest **83/83**; `just check` all checkers passed. The controls assert
   the check's own verdict, so a control that misses its defect exits 2 and the case fails rather than
   passing on any nonzero exit.
 - **No production change.** V6 is test-only: the toolkit is untouched at `5668278`, so this step adds
