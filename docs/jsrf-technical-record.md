@@ -2775,9 +2775,14 @@ authored by a worker distinct from every V5 author.
   bindings (9, 10), an input location per mask bit **at its own bit number**, and each output varying
   asserted **by name** at `ps_rc`'s location (`d0`→0 … `t3`→6) plus `SV_Position` — values, not just
   counts, because the independent verifier showed a moved output location otherwise passed. (2) A
-  table hit matches the CPU interpreter's pixels on lavapipe: all 4096 pixels' four channels, tolerance
-  4 (the parity tests' `TOL_VSH`), coverage differing by at most `max(4, perimeter/4)`, at least 500
-  non-clear pixels. (3) A miss advances `misses`, not `hits`, and leaves the interpreter's pixels.
+  table hit matches the CPU interpreter's pixels on lavapipe: all 4096 pixels' four channels —
+  `chan_diff`'s set is the named indices `{CH_A, CH_R, CH_G, CH_B}`, and it alone decides `match` and
+  `region_bad` — at tolerance 4 (the parity tests' `TOL_VSH`). Coverage is judged **RGB-only**
+  (`chan_diff_rgb`'s set is `{CH_R, CH_G, CH_B}`), because the clear colour is opaque and an
+  alpha-only difference must not count as "this pixel was drawn"; the coverage may differ by at most
+  `max(4, perimeter/4)`, and at least 500 pixels must be non-clear. See the channel repair below for
+  why this is stated as index sets rather than as "the first n channels". (3) A miss advances
+  `misses`, not `hits`, and leaves the interpreter's pixels.
   (4) A corrupt `len` and a corrupt `digest` each advance `identity_fail` with no hit and CPU fallback.
   (5) `RECOMP_GPU_VSH=0` (V7) leaves every counter at zero: the corpus is never consulted.
 - **The pixel rule is the established one**, not a new allowance: the boundary band is the
@@ -2789,8 +2794,14 @@ authored by a worker distinct from every V5 author.
   pixel-compared (it was the miss), so `floor` → truncation would have passed; V2 is now in the table
   and drawn with fractional a0 inputs (2.9999 / 0.9999 / 0.5) where `floor(x+0.001)` and `trunc(x)`
   select different constants. The alpha channel was not compared at all, hiding V4's `dst` `y`/`w`
-  results; all four channels are compared now, and the test asserts V4's alpha is non-opaque at 1176
-  pixels so the alpha half cannot become vacuous. No fixture used MAC op 3 (`add`), so an `add`
+  results; all four channels are compared now, and `check_alpha_coverage` fails if **no** fixture's
+  reference has a drawn pixel whose alpha is not 255 — V4's `dst`/`exp`/`log` model values reach the
+  surface only through `oD0.w` (0.54/0.64/0.49, i.e. alpha 138/163/125) — so the alpha half cannot
+  become vacuous without the gate saying so. (The earlier text here said the test asserts "V4's alpha
+  is non-opaque at 1176 pixels". The check does not assert a count: it requires *at least one* such
+  pixel across all fixtures, and prints each fixture's count. V4's printed count is 1176, so the
+  number was right and the "asserts" was not.)
+  No fixture used MAC op 3 (`add`), so an `add`
   regression would have slipped through; fixture X4 uses it and is pixel-compared. And a
   false-pass hole in the harness itself — the stderr log path could fall back to `.` and read a stale
   file — is fixed with a pid-unique path under `TEMP`/`TMP` and a hard failure if it cannot be opened.
@@ -2815,7 +2826,52 @@ authored by a worker distinct from every V5 author.
   mutated those four paths and the gate accepted them, but no retail program is known to use them and no
   defect is suspected behind them, so no fixture was added and the gap is recorded rather than papered
   over.
-- **Gates.** `just build` clean; the eight V6 CTest cases (the gate, V7, and controls 1–6) all pass on
+- **The four-channel pixel predicate was wrong twice, and is now repaired and regression-tested
+  (2026-10-15).** An independent review rejected the gate as committed (`19cde77`). Two forms were
+  wrong, in different places, and neither was visible to any other check in the file — on a correct
+  fixture every compared pixel agrees, so a predicate that silently drops a channel still reports a
+  perfect image:
+  1. **The committed original** extracted channel `i` with `(a >> (16 - 8 * i))`, a right shift by −8
+     at `i = 3`: undefined behaviour, so the fourth channel was whatever the build made of it, and
+     the outcome **varies per build**. One clang-cl `/O2` build of the verbatim helper compared
+     **alpha only** (an image wrong by 255 in red, green or blue was accepted); a second clang-cl
+     build instead rejected an *exact copy* of the reference, because the fourth channel's garbage
+     broke the positive control; MSVC 19.51 masked the shift count to 24 and happened to be correct
+     there. No single printed value describes this form, which is why its evidence is a
+     `clang-cl -fsanitize=shift` trap build (it aborts at the invalid shift) plus the scratch runs,
+     not a number. `chan_alpha` printed the right value throughout, but it is only a
+     diagnostic: `chan_diff` is what decides a match and the drawn-region mismatch count.
+  2. **The first repair** replaced the arithmetic with a shift table `{24,16,8,0}` indexed by a
+     channel *count*, so the "RGB-only" set became the first three entries — alpha, red, green. Blue
+     was never compared and alpha leaked into the coverage test, where the clear colour is opaque and
+     an alpha-only difference therefore counted as "this pixel was drawn". This form is well defined
+     and wrong on **every** compiler.
+  The repair replaces both with named channel-index sets: `chan_diff` is `{CH_A, CH_R, CH_G, CH_B}`
+  and alone decides `match` and `region_bad`; `chan_diff_rgb` is `{CH_R, CH_G, CH_B}` and alone
+  decides coverage. `chan8(v, c)` shifts by `24 - 8 * c`, legal for every index `0..3`. Sets are named
+  rather than counted, so no caller can get a set by accident. No tolerance or threshold changed.
+- **The regression is a separate worker's, and it drives the real predicate.**
+  `jsrf_vsh_conformance_channelgate` (a device-free process that exits before the Vulkan back end is
+  installed, so it can never report a skip) calls `compare`/`check_cpu` on a real captured CPU
+  reference — V2, chosen because its drawn region reaches 0 and 255 in every channel — and asserts
+  measured quantities, never merely "the call failed": an exact copy is accepted with worst difference
+  0; an alpha-only difference of 255 on all 4096 pixels is rejected (worst alpha 255, match 0.00%);
+  an alpha difference of 2 is still accepted; red-only, green-only and blue-only images are each
+  rejected with `worst_rgb` 255 and the other two RGB channels exactly 0; `covered()` classifies the
+  literal boundary words correctly (blue +25 drawn, +24 not, alpha 0 and 0xFB not drawn whatever their
+  value); and an alpha-only change leaves `cov_xor` at 0. The positive control gates the negative legs:
+  if the exact copy is not accepted, the legs are not evaluated and the check fails, so a broken
+  prerequisite cannot be reported as a pass.
+- **The new case fails on both bad states and passes on the repair**, on the project's own compiler.
+  Scratch A/B/C runs (`xbr-mac/pv05r2/ab`, `xbr-mac/pv05r-verify`, with only the extraction swapped and
+  the interface kept, so the regression compiles against each): the committed-original form exits 0
+  under MSVC (masked, accidentally correct) and **fails under clang-cl** at the exact-copy control
+  (`1176 drawn-region pixels disagree`); the count-indexed form **fails under both** compilers with 7
+  gate failures, including `a blue-only difference was not discriminated: worst_rgb 0 (required > 4 and
+  equal to the engineered max 255)` and `covered(0x00101010) = 1 but must be 0`; the repaired source
+  passes both.
+- **Gates.** `just build` clean; the nine V6 CTest cases (the gate, V7, controls 1–6, and the new
+  channel gate) all pass on
   lavapipe, never skipped; full CTest **82/82**; `just check` all checkers passed. The controls assert
   the check's own verdict, so a control that misses its defect exits 2 and the case fails rather than
   passing on any nonzero exit.

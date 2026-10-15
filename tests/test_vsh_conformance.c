@@ -1023,22 +1023,74 @@ static uint32_t px32(const uint8_t *p, int x, int y)
 {
     return *(const uint32_t *)(p + ((size_t)y * SURF_W + (size_t)x) * 4u);
 }
-/* The largest difference over the named channels, in 8-bit steps. */
-static int chan_diff_n(uint32_t a, uint32_t b, int nchan)
+/* Channel indices into an A8R8G8B8 word, most significant byte first. The names are the
+ * combiner's own order (see src/video/shaders/nv2a_vk_rc.hlsl), and they are INDICES, not
+ * counts: the RGB-only set is {CH_R, CH_G, CH_B} = {1, 2, 3}, not "the first three". */
+#define CH_A 0
+#define CH_R 1
+#define CH_G 2
+#define CH_B 3
+
+/* Channel `c` of an A8R8G8B8 word as a 0..255 value. The shift is written as 24 - 8 * c so that
+ * every channel of the word is addressable and every shift for c = 0..3 is legal: 24, 16, 8, 0.
+ *
+ * WHY THIS SHAPE EXISTS (Codex rejected V6 on it, 2026-10-15). Two successive forms were wrong.
+ *
+ * 1. The original `chan_diff_n` extracted with `(a >> (16 - 8 * i))`, so i = 3 was a right shift
+ *    by -8: undefined behaviour, and the fourth channel was therefore whatever the build happened
+ *    to do. The outcome VARIES PER BUILD, which is the point: one clang-cl /O2 compilation of this
+ *    verbatim source printed a difference of 0 for pixels differing only in red, green or blue, so
+ *    its deciding predicate compared alpha only; a second clang-cl build (the orchestrator's, on
+ *    the full test) instead rejected an EXACT COPY of the reference, because the fourth channel's
+ *    garbage broke the positive control; and MSVC 19.51 masked the shift count to 24 and happened
+ *    to be correct. No single printed value describes this form, so its evidence is a scratch
+ *    sanitizer run (clang-cl -fsanitize=shift traps at the invalid shift), not a number.
+ *    `chan_alpha` printed the right value throughout, but it is only a diagnostic: THIS helper
+ *    decides the match count and the drawn-region mismatches, so a wrong value here silently
+ *    disables a channel in the predicate that accepts or rejects an image.
+ *
+ * 2. The first repair replaced it with a shift table {24, 16, 8, 0} indexed by a COUNT ("the first
+ *    n channels"), which made the RGB-only set {0, 1, 2} = ALPHA, red, green: blue was still never
+ *    compared, and alpha leaked into the coverage test -- where the clear colour is opaque, so an
+ *    alpha-only difference counted as "this pixel was drawn". That form is wrong on every compiler
+ *    (it is well defined, just the wrong set), which is why the decisive regression runs against
+ *    THIS state rather than against the UB form.
+ *
+ * Both are gone. Sets are named, not counted, so no caller can get a set by accident: the RGB set
+ * is spelled {CH_R, CH_G, CH_B}, and a fourth channel can only be reached through CH_A. */
+static int chan8(uint32_t v, int c)
+{
+    return (int)((v >> (24 - 8 * c)) & 0xFFu);
+}
+
+/* The largest per-channel difference over an EXPLICIT channel set, in 8-bit steps. */
+static int chan_diff_set(uint32_t a, uint32_t b, const int *ch, int n)
 {
     int i, m = 0;
-    for (i = 0; i < nchan; i++) {
-        int d = (int)((a >> (16 - 8 * i)) & 0xFFu) - (int)((b >> (16 - 8 * i)) & 0xFFu);
+    for (i = 0; i < n; i++) {
+        int d = chan8(a, ch[i]) - chan8(b, ch[i]);
         if (d < 0) d = -d;
         if (d > m) m = d;
     }
     return m;
 }
-static int chan_diff(uint32_t a, uint32_t b) { return chan_diff_n(a, b, 4); }   /* A R G B */
-static int chan_diff_rgb(uint32_t a, uint32_t b) { return chan_diff_n(a, b, 3); }
+/* All four channels: the surface is A8R8G8B8 and V4's dst/exp/log results reach it only through
+ * oD0.w, so this is the predicate that decides a match (compare) and a drawn-region mismatch. */
+static int chan_diff(uint32_t a, uint32_t b)
+{
+    static const int all[4] = { CH_A, CH_R, CH_G, CH_B };
+    return chan_diff_set(a, b, all, 4);
+}
+/* RGB only: the coverage test's channel set, because the clear colour is opaque and an alpha-only
+ * difference must not count as "this pixel was drawn". */
+static int chan_diff_rgb(uint32_t a, uint32_t b)
+{
+    static const int rgb[3] = { CH_R, CH_G, CH_B };
+    return chan_diff_set(a, b, rgb, 3);
+}
 static int chan_alpha(uint32_t a, uint32_t b)
 {
-    int d = (int)(a >> 24) - (int)(b >> 24);
+    int d = chan8(a, CH_A) - chan8(b, CH_A);
     return d < 0 ? -d : d;
 }
 static int covered(uint32_t v) { return chan_diff_rgb(v, CLR) > COVER_TOL; }
@@ -2063,6 +2115,321 @@ static int check_alpha_coverage(void)
     return ok;
 }
 
+/* ── The channel gate: the predicate that ACCEPTS or REJECTS an image, driven directly ────────
+ * WHY THIS EXISTS. `chan_diff` (all four channels) decides a pixel match, the drawn-region
+ * mismatch count, and hence whether check_cpu accepts an image at all; `chan_diff_rgb` decides
+ * whether a pixel was drawn. Codex rejected V6 twice on that pair, in two different ways, and each
+ * wrong form was invisible to every other check in this file:
+ *
+ *   A. The committed original extracted channel i with `(a >> (16 - 8 * i))` -- a right shift by -8
+ *      at i = 3, undefined behaviour, so the fourth channel was whatever the build made of it and
+ *      the result VARIES PER BUILD: one clang-cl /O2 build compared alpha only and accepted an
+ *      image wrong by 255 in red, green or blue; another clang-cl build instead rejected an exact
+ *      copy of the reference; MSVC 19.51 masked the count and happened to be correct. That is why
+ *      this state's evidence is the shift-sanitizer trap and a scratch run, not a CTest
+ *      expectation and not one printed value.
+ *   B. The first repair replaced the shift with a table indexed by a COUNT, so the "RGB-only" set
+ *      became the first three entries {alpha, red, green}: blue was never compared and alpha leaked
+ *      into the coverage test, where an alpha-only difference counted as "this pixel was drawn".
+ *      That form is wrong on every compiler.
+ *
+ * Neither form is visible to the rest of the gate: on a correct fixture every compared pixel
+ * agrees, so a predicate that silently drops a channel still reports a perfect image. This check
+ * drives the predicate with images that differ in exactly one channel and asserts the MEASURED
+ * quantities -- worst alpha, worst RGB, the match rate, cov_xor -- never merely `!check_cpu(...)`.
+ *
+ * THE REFERENCE: V2 (g_cpu[1], the a0-relative-constant case). It is a real captured CPU
+ * reference, so every geometry term check_cpu applies (drawn >= 500, the perimeter band, the
+ * coverage area) is satisfied by the fixture itself rather than by special-casing, and
+ * g_perim[1]/g_area[1] are the interpreter's own geometry for it.
+ *
+ * V2 is chosen over V1 because its per-vertex oD0 comes from c[20..23] = (1,0,0,1), (0,1,0,1),
+ * (0,0,1,1), (1,1,0,1) at the a0 picks 3, 1, 0, so its drawn region spans a wide range in every
+ * channel -- V1's is a single flat colour. The per-channel legs therefore do not have to assume
+ * what the reference holds: each leg computes the largest difference IT engineered from the
+ * reference's own bytes (`expect`), sends every byte to the far end of its range, and asserts
+ * `worst_rgb == expect`. That is exact whatever the reference contains, and the numbers are
+ * printed so the real span is visible rather than inferred. The compiler-independent exactness
+ * assertion is made on literal words in leg 5, where the arithmetic is known: against a zero base
+ * word each of red, green and blue at 0xFF is a 255-step difference, and both the all-four set and
+ * the RGB set must report it.
+ *
+ * Its alpha is 255 in every pixel -- oD0.w = 1 in all four constants V2 can pick, and the clear
+ * colour is opaque -- so an alpha-only leg is a pure alpha difference with no RGB component to
+ * confound it. Leg 2's own note prints the measured worst alpha, so that is checked, not assumed.
+ * The per-channel 0/255 counts are measured and printed below, not assumed either. */
+static int gate_chan(const uint8_t *p, unsigned idx, int c)
+{
+    return (int)((px32(p, (int)(idx % SURF_W), (int)(idx / SURF_W)) >> (24 - 8 * c)) & 0xFFu);
+}
+static void gate_set(uint8_t *p, unsigned idx, int c, int v)
+{
+    uint32_t *w = (uint32_t *)(p + (size_t)idx * 4u);
+    *w = (*w & ~(0xFFu << (24 - 8 * c))) | ((uint32_t)(v & 0xFF) << (24 - 8 * c));
+}
+
+static int check_channel_gate(void)
+{
+    const uint8_t *src = g_cpu[1];                  /* V2: see the comment above */
+    const double perim = g_perim[1], area = g_area[1];
+    uint8_t *ref, *got;
+    int ok = 1, ci;
+    unsigned p;
+
+    note("-- the channel gate: the four-channel predicate of check_cpu, driven directly --\n");
+    if (!src) {
+        fail("FAIL: [channel-gate] there is no V2 CPU reference to build the legs from, so the "
+             "predicate that accepts or rejects an image cannot be exercised\n");
+        return 0;
+    }
+    ref = (uint8_t *)malloc((size_t)PIXELS * 4u);
+    got = (uint8_t *)malloc((size_t)PIXELS * 4u);
+    if (!ref || !got) {
+        fail("FAIL: [channel-gate] the two %u-pixel buffers could not be allocated\n", PIXELS);
+        free(ref); free(got);
+        return 0;
+    }
+    memcpy(ref, src, (size_t)PIXELS * 4u);
+    {
+        /* The per-channel legs' own prerequisite, measured: a channel in which the reference has
+         * neither 0 nor 255 cannot be sent to a 255-step difference, so the packet's exact value
+         * would not be reachable through it. Printed so the reference's real span is visible
+         * rather than inferred; the legs themselves assert the difference they engineered. */
+        unsigned z[4][2];
+        int c;
+        memset(z, 0, sizeof z);
+        for (p = 0; p < PIXELS; p++)
+            for (c = CH_A; c <= CH_B; c++) {
+                int v = gate_chan(ref, p, c);
+                if (v == 0) z[c][0]++;
+                if (v == 255) z[c][1]++;
+            }
+        note("  [channel-gate] reference V2: pixels whose channel is 0 / 255: A %u/%u, R %u/%u, "
+             "G %u/%u, B %u/%u (each 255-step leg needs at least one)\n",
+             z[CH_A][0], z[CH_A][1], z[CH_R][0], z[CH_R][1], z[CH_G][0], z[CH_G][1],
+             z[CH_B][0], z[CH_B][1]);
+    }
+
+    /* ── Leg 1: the positive control, FIRST. An exact copy must be accepted with no difference
+     * anywhere. Without this the negative legs below would prove nothing: a predicate that
+     * rejected everything would "pass" them. ── */
+    memcpy(got, ref, (size_t)PIXELS * 4u);
+    {
+        Cmp c = compare(ref, got, perim);
+        int pass = check_cpu("channel-gate/exact", ref, got, perim, area);
+        note("  [channel-gate] exact copy: worst channel diff %u (required 0), check_cpu %s "
+             "(required PASS)\n", c.worst, pass ? "PASS" : "FAIL");
+        if (c.worst != 0u || !pass) {
+            fail("FAIL: [channel-gate] the exact-copy positive control did not hold (worst channel "
+                 "diff %u, required 0; check_cpu %s, required PASS): the negative legs below would "
+                 "prove nothing, so they are not evaluated\n", c.worst, pass ? "PASS" : "FAIL");
+            free(ref); free(got);
+            return 0;
+        }
+    }
+
+    /* ── Leg 2: an ALPHA-ONLY image beyond the tolerance must be REJECTED. All 4096 pixels: V2's
+     * reference is opaque in every pixel (oD0.w = 1 in all four constants it can pick), so
+     * 255 -> 0 is a change in every pixel, i.e. 100% of them -- far past the 2% that the 98%
+     * match rule allows to differ, so the rejection can only come from the predicate, not from a
+     * partial change. ── */
+    memcpy(got, ref, (size_t)PIXELS * 4u);
+    for (p = 0; p < PIXELS; p++) gate_set(got, p, CH_A, 0);
+    {
+        Cmp c = compare(ref, got, perim);
+        int pass = check_cpu("channel-gate/alpha-only (REQUIRED to fail)", ref, got, perim, area);
+        note("  [channel-gate] alpha-only on all %u pixels (255 -> 0): worst alpha diff %u "
+             "(required > %d), match %.2f%% (required < 98%%), check_cpu %s (required FAIL)\n",
+             PIXELS, c.worst_a, TOL_VSH, 100.0 * c.match / (double)PIXELS, pass ? "PASS" : "FAIL");
+        if (c.worst_a <= (unsigned)TOL_VSH || c.match * 100u >= PIXELS * 98u || pass) {
+            fail("FAIL: [channel-gate] an alpha-only difference of 255 on every pixel was not "
+                 "rejected: worst alpha diff %u (required > %d), match %.2f%% (required < 98%%), "
+                 "check_cpu %s (required FAIL) -- the four-channel predicate does not compare "
+                 "alpha\n", c.worst_a, TOL_VSH, 100.0 * c.match / (double)PIXELS,
+                 pass ? "PASS" : "FAIL");
+            ok = 0;
+        }
+    }
+
+    /* ── Leg 3: an alpha-only difference WITHIN the tolerance must still be ACCEPTED, or the
+     * alpha half of the predicate would merely have become an unconditional failure. Every pixel
+     * whose alpha is at least the delta is lowered by exactly TOL_VSH - 2 = 2 (a value inside the
+     * band rather than at its edge, so a one-off in the comparison cannot decide the leg). ── */
+    memcpy(got, ref, (size_t)PIXELS * 4u);
+    {
+        unsigned n = 0;
+        Cmp c;
+        int pass;
+        for (p = 0; p < PIXELS; p++) {
+            int a = gate_chan(ref, p, CH_A);
+            if (a >= 2) { gate_set(got, p, CH_A, a - 2); n++; }
+        }
+        c = compare(ref, got, perim);
+        pass = check_cpu("channel-gate/alpha-in-tolerance", ref, got, perim, area);
+        note("  [channel-gate] alpha-only by 2 on %u of %u pixels: worst alpha diff %u (required "
+             "<= %d), match %.2f%% (required 100%%), check_cpu %s (required PASS)\n", n, PIXELS,
+             c.worst_a, TOL_VSH, 100.0 * c.match / (double)PIXELS, pass ? "PASS" : "FAIL");
+        if (n == 0u || c.worst_a > (unsigned)TOL_VSH || c.match != PIXELS || !pass) {
+            fail("FAIL: [channel-gate] an alpha-only difference of 2 was not accepted: %u pixels "
+                 "changed (required > 0), worst alpha diff %u (required <= %d), match %.2f%% "
+                 "(required 100%%), check_cpu %s (required PASS) -- the alpha leg rejects "
+                 "in-tolerance differences too\n", n, c.worst_a, TOL_VSH,
+                 100.0 * c.match / (double)PIXELS, pass ? "PASS" : "FAIL");
+            ok = 0;
+        }
+    }
+
+    /* ── Leg 4: PER-CHANNEL discrimination, so a channel-order repair cannot merely move the blind
+     * spot from one channel to another. Three legs, each changing ONLY one channel of ALL 4096
+     * pixels -- the other two RGB channels are asserted to be EXACTLY unchanged (alpha is left
+     * intact by construction but is not asserted here, since a change to it would not be an RGB
+     * leg), so the leg cannot pass by disturbing the whole image. A byte is sent to the far end of
+     * its range, so the smallest difference in a leg is 128 and the match rate is 0%: the image
+     * must be REJECTED.
+     *
+     * The exact per-channel arithmetic is asserted by the literal-word legs below, which are
+     * compiler-independent: measured against a ZERO word, one channel at 0xFF is a difference of
+     * exactly 255, so red, green and blue are each asserted to reach 255 through BOTH the all-four
+     * set and the RGB set. Here the assertion is on the MEASURED `worst_rgb` against the maximum
+     * this leg engineered from the reference's own bytes, so the leg is decisive without assuming
+     * any particular reference content. ── */
+    for (ci = 0; ci < 3; ci++) {
+        static const int k_ch[3] = { CH_R, CH_G, CH_B };
+        static const int k_other[3][2] = { { CH_G, CH_B }, { CH_R, CH_B }, { CH_R, CH_G } };
+        static const char *const k_ch_name[3] = { "red", "green", "blue" };
+        unsigned n255 = 0, expect = 0, untouched;
+        Cmp c;
+        int pass;
+
+        memcpy(got, ref, (size_t)PIXELS * 4u);
+        for (p = 0; p < PIXELS; p++) {
+            int b = gate_chan(ref, p, k_ch[ci]);
+            int nb = (b == 0 || b == 255) ? 255 - b : (b >= 128 ? 0 : 255);
+            unsigned d = (unsigned)(b > nb ? b - nb : nb - b);
+            gate_set(got, p, k_ch[ci], nb);
+            if (d > expect) expect = d;
+            if (d == 255u) n255++;
+        }
+        c = compare(ref, got, perim);
+        untouched = (unsigned)chan_diff_set(
+            px32(ref, 0, 0), px32(got, 0, 0), k_other[ci], 2);
+        for (p = 1; p < PIXELS; p++) {
+            unsigned d = (unsigned)chan_diff_set(
+                px32(ref, (int)(p % SURF_W), (int)(p / SURF_W)),
+                px32(got, (int)(p % SURF_W), (int)(p / SURF_W)), k_other[ci], 2);
+            if (d > untouched) untouched = d;
+        }
+        pass = check_cpu("channel-gate/<channel>-only (REQUIRED to fail)", ref, got, perim, area);
+        note("  [channel-gate] %s-only on all %u pixels: worst_rgb %u (required > %d, engineered "
+             "max %u, %u pixels differ by exactly 255), other two channels worst %u (required 0), "
+             "match %.2f%% (required < 98%%), check_cpu %s (required FAIL)\n", k_ch_name[ci],
+             PIXELS, c.worst_rgb, TOL_VSH, expect, n255, untouched,
+             100.0 * c.match / (double)PIXELS, pass ? "PASS" : "FAIL");
+        if (c.worst_rgb <= (unsigned)TOL_VSH || c.worst_rgb != expect || untouched != 0u || pass
+            || c.match * 100u >= PIXELS * 98u) {
+            fail("FAIL: [channel-gate] a %s-only difference was not discriminated: worst_rgb %u "
+                 "(required > %d and equal to the engineered max %u), other two channels worst %u "
+                 "(required 0), match %.2f%% (required < 98%%), check_cpu %s (required FAIL) -- the "
+                 "RGB set of the predicate does not contain %s\n", k_ch_name[ci], c.worst_rgb,
+                 TOL_VSH, expect, untouched, 100.0 * c.match / (double)PIXELS,
+                 pass ? "PASS" : "FAIL", k_ch_name[ci]);
+            ok = 0;
+        }
+    }
+
+    /* ── Leg 5: the COVERAGE classification, on literal words, plus the EXACT per-channel
+     * arithmetic. `covered()` is the RGB-only test that decides whether a pixel was drawn, and it
+     * is where a set built from a COUNT goes wrong on every compiler: {0,1,2} of a shift table is
+     * {alpha, red, green}, so blue becomes invisible and alpha starts counting as geometry. Each
+     * assertion is on `covered()` itself, the function the harness uses, or on `chan_diff`/
+     * `chan_diff_rgb`, the two predicates that decide an image. COVER_TOL is 24, so a 25-step blue
+     * difference is drawn and a 24-step one is not. ── */
+    {
+        struct { uint32_t v; int want; const char *what; } k_cov[] = {
+            { 0xFF1010FFu, 1, "blue +255 over the clear colour (RGB-only: must be drawn)" },
+            { 0xFF101029u, 1, "blue +25, one step past COVER_TOL 24 (must be drawn)" },
+            { 0xFF101028u, 0, "blue +24, exactly at COVER_TOL 24 (must NOT be drawn)" },
+            { 0x00101010u, 0, "alpha 0 with RGB == the clear colour (alpha is not geometry)" },
+            { 0xFB101010u, 0, "alpha 0xFB with RGB == the clear colour (alpha is not geometry)" },
+            { 0xFF101010u, 0, "the clear colour itself (must NOT be drawn)" },
+            { 0xFFFF1010u, 1, "red +239 (must be drawn)" },
+            { 0xFF10FF10u, 1, "green +239 (must be drawn)" },
+        };
+        /* The exact per-channel arithmetic. The RGB channels are measured against a ZERO base word,
+         * where one channel at 0xFF is a difference of exactly 255 -- the clear colour's bytes are
+         * 0x10, so against CLR the same channel would be 239 and the assertion would be about CLR
+         * rather than about the channel set. The alpha-isolation pair stays anchored to CLR, where
+         * an alpha-only change is the case that must not reach the coverage test. */
+        struct { uint32_t a; uint32_t b; int all; int rgb; const char *what; } k_exact[] = {
+            { 0x00FF0000u, 0x00000000u, 255, 255, "red at 0xFF over a zero word: the all-four and "
+                                                  "RGB sets must both report 255" },
+            { 0x0000FF00u, 0x00000000u, 255, 255, "green at 0xFF over a zero word: the all-four and "
+                                                  "RGB sets must both report 255" },
+            { 0x000000FFu, 0x00000000u, 255, 255, "blue at 0xFF over a zero word: the all-four and "
+                                                  "RGB sets must both report 255 -- a set built "
+                                                  "from a COUNT cannot, which is the defect this "
+                                                  "leg exists for" },
+            { 0x00101010u, CLR, 255,   0, "alpha 0 against the clear colour: the all-four set must "
+                                          "report 255 and the RGB set must report 0 (alpha is not "
+                                          "geometry)" },
+            { 0xFF101010u, CLR,   0,   0, "the clear colour against itself: neither set may report "
+                                          "anything" },
+        };
+        size_t k;
+        for (k = 0; k < sizeof k_cov / sizeof k_cov[0]; k++) {
+            int got_cov = covered(k_cov[k].v);
+            int drgb = chan_diff_rgb(k_cov[k].v, CLR);
+            note("  [channel-gate] covered(0x%08X) = %d (required %d), chan_diff_rgb vs CLR = %d "
+                 "(COVER_TOL %d): %s\n", k_cov[k].v, got_cov, k_cov[k].want, drgb, COVER_TOL,
+                 k_cov[k].what);
+            if (got_cov != k_cov[k].want) {
+                fail("FAIL: [channel-gate] covered(0x%08X) = %d but must be %d (chan_diff_rgb vs "
+                     "the clear colour = %d, COVER_TOL %d): %s\n", k_cov[k].v, got_cov,
+                     k_cov[k].want, drgb, COVER_TOL, k_cov[k].what);
+                ok = 0;
+            }
+        }
+        for (k = 0; k < sizeof k_exact / sizeof k_exact[0]; k++) {
+            int all = chan_diff(k_exact[k].a, k_exact[k].b);
+            int rgb = chan_diff_rgb(k_exact[k].a, k_exact[k].b);
+            note("  [channel-gate] chan_diff(0x%08X, 0x%08X) = %d (required %d), chan_diff_rgb = "
+                 "%d (required %d): %s\n", k_exact[k].a, k_exact[k].b, all, k_exact[k].all, rgb,
+                 k_exact[k].rgb, k_exact[k].what);
+            if (all != k_exact[k].all || rgb != k_exact[k].rgb) {
+                fail("FAIL: [channel-gate] chan_diff(0x%08X, 0x%08X) = %d (required %d) and "
+                     "chan_diff_rgb = %d (required %d): %s -- the channel set of the predicate is "
+                     "wrong\n", k_exact[k].a, k_exact[k].b, all, k_exact[k].all, rgb,
+                     k_exact[k].rgb, k_exact[k].what);
+                ok = 0;
+            }
+        }
+    }
+
+    /* ── Leg 6: an alpha-only difference must not move the coverage classification, i.e. cov_xor
+     * must stay 0. This is the leg that fails when alpha is in the RGB-only set: with the clear
+     * colour opaque, an alpha-only change would then count as a drawn pixel and the geometric
+     * comparison would be measured against the wrong region. ── */
+    memcpy(got, ref, (size_t)PIXELS * 4u);
+    for (p = 0; p < PIXELS; p++) gate_set(got, p, CH_A, 0);
+    {
+        Cmp c = compare(ref, got, perim);
+        note("  [channel-gate] alpha-only on all %u pixels: cov_xor %u (required 0), cov_ref %u, "
+             "cov_got %u, coverage allowed %.0f (alpha must not count as geometry)\n", PIXELS,
+             c.cov_xor, c.cov_ref, c.cov_got, c.cov_allowed);
+        if (c.cov_xor != 0u) {
+            fail("FAIL: [channel-gate] an alpha-only difference moved the coverage classification: "
+                 "cov_xor %u (required 0), cov_ref %u, cov_got %u -- the RGB-only coverage test "
+                 "counts alpha, so a pixel's alpha decides whether it was drawn\n", c.cov_xor,
+                 c.cov_ref, c.cov_got);
+            ok = 0;
+        }
+    }
+
+    free(ref);
+    free(got);
+    return ok;
+}
+
 static int gpu_pass(void)
 {
     int ok = 1, i;
@@ -2726,7 +3093,7 @@ int main(int argc, char **argv)
     uint8_t *pbmem;
     const char *tool_override = NULL;
     char *log = NULL;
-    int ok = 1, i, neg = 0, v7_only = 0;
+    int ok = 1, i, neg = 0, v7_only = 0, channel_gate = 0;
 
     /* --skip must run NO check at all, so it is handled before anything else. */
     for (i = 1; i < argc; i++)
@@ -2741,6 +3108,8 @@ int main(int argc, char **argv)
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--v7-only") == 0) {
             v7_only = 1;
+        } else if (strcmp(argv[i], "--channel-gate") == 0) {
+            channel_gate = 1;
         } else if (strcmp(argv[i], "--negative-control") == 0) {
             if (i + 1 >= argc) { fprintf(stderr, "FAIL: --negative-control needs an argument\n"); return 1; }
             neg = atoi(argv[++i]);
@@ -2760,6 +3129,16 @@ int main(int argc, char **argv)
     if (neg != 0 && v7_only) {
         fail("FAIL: --negative-control and --v7-only are separate processes: the controls need the "
              "program path ENABLED, and --v7-only needs it disabled\n");
+        return 1;
+    }
+    if (channel_gate && (neg != 0 || v7_only)) {
+        /* --channel-gate is a device-independent process of its own: it runs every check up to the
+         * channel gate and exits WITHOUT installing the Vulkan back end. Controls 2..5 need that
+         * back end, so combining them would silently drop the control; --v7-only needs the program
+         * path disabled, which this process does not arrange. */
+        fail("FAIL: --channel-gate is a separate process (no Vulkan back end is installed), so it "
+             "cannot be combined with --negative-control (whose controls need the back end) or "
+             "--v7-only (which needs the program path disabled)\n");
         return 1;
     }
     if (!start_stderr_capture()) {
@@ -2949,6 +3328,29 @@ int main(int argc, char **argv)
     }
 
     ok &= check_alpha_coverage();
+
+    /* The predicate that accepts or rejects an image, driven directly. It runs in EVERY process
+     * that reaches this point -- including the always-run gate and the negative controls that get
+     * here -- so a repair that drops or mis-orders a channel cannot pass by being unobserved. */
+    ok &= check_channel_gate();
+
+    if (channel_gate) {
+        /* The device-independent process: everything up to and including the channel gate has run,
+         * and the Vulkan back end is deliberately NOT installed, so this can never report a skip
+         * and needs no ICD, no device and no environment. A single unambiguous line, and the exit
+         * status is the checks' verdict -- a failure here is a FAILURE, never a skip. */
+        fflush(stdout);
+        if (!ok) {
+            fail("FAIL: channel-gate: a check failed, so this is a failure rather than a skip\n");
+            fflush(stdout);
+            return 1;
+        }
+        puts("PASS: channel-gate (the four-channel predicate rejects an alpha-only image and "
+             "accepts an in-tolerance one, all four channels discriminate, and coverage stays "
+             "RGB-only)");
+        fflush(stdout);
+        return 0;
+    }
 
     if (!getenv("RECOMP_VK_DEVICE")) _putenv_s("RECOMP_VK_DEVICE", "llvmpipe");
     if (!getenv("RECOMP_GPU_BACKEND")) _putenv_s("RECOMP_GPU_BACKEND", "vulkan");

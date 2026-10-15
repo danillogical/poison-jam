@@ -81,6 +81,18 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
   (no fixture used MAC `add`), and then six MAC ops (`dp3`/`dph`/`min`/`max`/`slt`/`sge`) with no
   coverage at all — all fixed and mutation-confirmed. Thirteen fixtures, eight CTest cases, full CTest
   82/82, `just check` passed. Test-only: no toolkit change.
+- **V6 repair: the four-channel pixel predicate was wrong twice** (TR §31.21). An independent review
+  rejected the gate as committed: `chan_diff_n` extracted the fourth channel with a right shift by -8
+  (undefined behaviour; under clang-cl the deciding predicate compared alpha only), and the first
+  repair indexed a shift table by a channel *count*, so the "RGB-only" set became alpha/red/green —
+  blue was never compared and alpha leaked into the coverage test. Both forms are replaced by named
+  channel-index sets (`chan_diff` = `{A,R,G,B}` decides a match; `chan_diff_rgb` = `{R,G,B}` decides
+  coverage), and a worker distinct from both the fix author and the original V6 author added
+  `jsrf_vsh_conformance_channelgate`, which drives the real predicate: an alpha-only image is rejected,
+  an in-tolerance one accepted, red/green/blue each discriminate, and coverage stays RGB-only. A
+  scratch A/B/C run shows the new case **fails on the committed original and on the partial state and
+  passes on the repaired source**; nine V6 CTest cases, full CTest 83/83, `just check` passed.
+  Test-only: no toolkit change.
 
 ## Remaining work, pre-approved by the owner (2026-10-14)
 

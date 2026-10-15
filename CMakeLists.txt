@@ -378,6 +378,16 @@ if(BUILD_TESTING)
                      COMMAND jsrf_vsh_conformance_test --skip "XBR_VK_SW_ICD is not set")
             set_tests_properties(jsrf_vsh_conformance PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
         endif()
+
+        # The channel gate: the four-channel predicate that accepts or rejects an image, driven
+        # directly (an alpha-only image must be rejected, an in-tolerance one accepted, each of red,
+        # green and blue must discriminate, and coverage must stay RGB-only). It is DELIBERATELY
+        # outside the XBR_VK_SW_ICD branch above: the process exits before the Vulkan back end is
+        # installed, so it needs no ICD, no device and no environment, and it can never report a
+        # skip -- there is no SKIP_RETURN_CODE, and none should be added.
+        add_test(NAME jsrf_vsh_conformance_channelgate
+                 COMMAND jsrf_vsh_conformance_test --channel-gate --tool "${_vsh_conf_tool}")
+        set_tests_properties(jsrf_vsh_conformance_channelgate PROPERTIES TIMEOUT 120)
     else()
         message(STATUS "V6: the vertex-program conformance gate is not registered -- Vulkan, dxc "
                        "and spirv-val are all needed to compile its fixtures")
