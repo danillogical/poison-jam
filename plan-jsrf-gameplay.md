@@ -96,7 +96,11 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
   an identical image), and passes on the repaired source; nine V6 CTest cases, full CTest 83/83,
   `just check` passed. Test-only: no toolkit change.
 
-## Remaining work, pre-approved by the owner (2026-10-14)
+**Owner review accepted V5 and V6** at game `2a350ec` / toolkit `5668278` (2026-10-15).
+R1–R5 below are approved follow-ups, not reasons to reopen those milestones. The review was a code
+review; it did not rebuild the Windows checkout or re-read its run logs.
+
+## Remaining work, pre-approved by the owner (2026-10-15)
 
 **N1, the execution rule: these steps are the approved plan.** Execute them in order, directly. Don't
 open a separate planning phase or start a headless planner for them; the previous operation stalled
@@ -112,7 +116,54 @@ for:
 **N5: one step per operation.** Each step below is sized to finish and report on its own, so a
 bridge timeout loses one step at most. Every code step gets its gating test from a **different**
 worker. Commit and push each gated step (toolkit first, then game); don't carry finished work
-uncommitted.
+uncommitted. Quote the deciding mutation results, with final-source identities and baseline/restored
+positive controls. No commit signing, co-author or signature trailers. Session reports stay outside git.
+
+**Execution order:** R1 → R2 → R3 → N2 → V7 under N3 → V8 → N4 (including R4) → N6.
+N2 remains a prerequisite of V7. R5 is low priority and follows V7; schedule it after N6 so it does
+not interrupt the required sequence. Each step or listed N4/N6 subitem is a separate operation.
+
+### R1: detect a stale shader corpus
+
+The runtime identity check proves the guest words, not which translator or compiler produced their
+SPIR-V. Synthetic table CTests do not validate the real generated corpus.
+
+- Record provenance in generated `nv2a_vsh_programs.h`/`.c`: SHA-256 of toolkit
+  `nv2a_vsh_hlsl.c`, `nv2a_vsh_hlsl.h`, `nv2a_vsh_hlsl_tool.c` and the host tool itself, plus the
+  `dxc --version` string and dxc arguments.
+- Have `scripts/build-jsrf.py` or CMake configure recompute that provenance and refuse a mismatch,
+  naming `just shaders`. Never silently link stale shaders.
+- Run `check-vsh-aot-table.py` against the **real** generated table in `just check`, with its real
+  XBE/compiler inputs; retain device-free synthetic tests in CTest. Correct CMake's comment that
+  currently implies those synthetic tests alone guard the real corpus.
+- Before generation, rebuild the host tool or prove it is newer than all three source inputs,
+  including a tool selected through an override or an existing build directory.
+
+**Gate:** a whitespace content edit to `nv2a_vsh_hlsl.c` in a scratch copy makes the build refuse
+with `just shaders`; regeneration clears the refusal. A different worker tests matching provenance
+(accepted) and mismatched provenance (rejected). Quote the stale-input mutation, refusal and restored
+pass; preserve original assets and the ignored retail corpus.
+
+### R2: an empty corpus when the Vulkan SDK is absent
+
+Vulkan is optional. If Vulkan or dxc is unavailable, generate an empty table at configure time
+(`nv2a_vsh_program_count = 0`) and print that status; program batches use CPU interpretation.
+With Vulkan and dxc available, a missing corpus remains a fatal error naming `just shaders`.
+
+**Gate:** a scripted configure with `VULKAN_SDK` unset, Vulkan/dxc unavailable and no corpus succeeds
+and reports the empty corpus; a configure with Vulkan available and no corpus still refuses with
+`just shaders`. A different worker writes both configure tests. Quote the deciding branch mutations
+and positive controls. Run these in scratch configurations; do not remove the owner's local corpus.
+
+### R3: include culled program batches in miss accounting
+
+Move `vb_program_lookup` above the cull-all early return in `vb_draw_program`, so a program used only
+in fully culled draws is still included in corpus coverage. Count the lookup outcome, then return 1
+for cull-all even on a miss: both GPU and CPU paths draw nothing. Document that return-value choice.
+
+**Gate:** a different worker tests a cull-all batch whose program is absent from the corpus:
+`misses` advances by one and nothing draws. Quote a mutation that restores the old ordering and
+makes the new gate fail, then the restored pass. R1–R3 must land before V7.
 
 ### N2: a controlled benchmark (about 0.5 h)
 
@@ -162,7 +213,17 @@ Readbacks take 202–211 s of a 560 s run, and V1 submits and fence-waits simply
 - sub-allocated memory;
 - a persisted pipeline cache.
 
-Measure each with N2. Parity tests must stay green.
+Measure each with N2. Parity tests must stay green. Each code subitem gets a different worker's
+gate and deciding mutation evidence.
+
+#### R4: measure pipeline-cache pressure (part of N4)
+
+Program pipelines are keyed by program hash and render state; `VB_MAX_PIPES` is 256. Read the
+`pipelines=` values near the start, middle and end of the archived
+`20261014-165814-809-keyscript-e2e-vk-v5r` run, and add an eviction counter to the stats line.
+If e2e evicts pipelines, increase capacity and/or persist a `VkPipelineCache` as warranted by that
+evidence; coordinate with N4's persisted-cache subitem. Measure changes with N2. The counter and any
+cache change need a different worker's meaningful gate and quoted deciding mutation results.
 
 ### N6: Vulkan-only audit items carried over from jsrf-recomp (each with a test)
 
@@ -170,6 +231,19 @@ Measure each with N2. Parity tests must stay green.
 - The alpha of a render target sampled as LIN_X8R8G8B8 must read 1 (their G54).
 - The fixed-function infinite-light sign in the executor (`max(0, dot(N, L))`).
 - Verify one depth surface per zeta.
+
+### R5: reduce duplicated decode logic (low priority, after V7)
+
+The input-mask rule is duplicated by the interpreter's `decode_program`, the host tool's
+`derived_mask`, and `find-vertex-programs.py`'s `program_info`; the tool also applies Vulkan bindings
+and locations through guarded text replacement. Prefer a Vulkan option in `nv2a_vsh_hlsl.c` that
+emits decorations directly and shared production decode through `nv2a_vsh_program_info` or a shared
+header for the host tool. Preserve semantics and avoid expanding into unrelated translation work.
+
+**Gate:** a different worker verifies byte-identical corpus output before and after with
+`gen-shaders.py --check`, plus the V6 conformance suite green. Quote a deciding decoration/decode
+mutation that the gate rejects and a restored pass. This follow-up is pre-approved but low priority;
+it is not a V7 acceptance prerequisite.
 
 ## Facts, tools and traps
 
