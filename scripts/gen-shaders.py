@@ -17,10 +17,37 @@ Both files are retail-derived generated output and stay untracked, like
 
 Everything is offline and deterministic: no timestamp, no absolute path, no
 unordered iteration reaches the emitted bytes, and `--check` regenerates into a
-temporary directory and compares with the committed corpus.  That comparison
-blanks only the ADVISORY field (`tool.sha256`, whose binary is not reproducible on
-this toolchain), so a different-but-equivalent host tool cannot make a current
-corpus look stale; every other byte is compared exactly.
+temporary directory and compares the result with the committed corpus BYTE FOR
+BYTE.  There is no exempt field: the block now records a decisive tool identity,
+so a regenerated file that differs anywhere -- including its `tool.sha256` line --
+is reported as a stale corpus that `just shaders` must regenerate.  `--check`
+resolves the host tool by FINDING it (`check_host_tool` -> `find_host_tool`): it
+never configures, builds or writes anything, so a check cannot move the decisive
+`tool.sha256` it is checking, and it refuses -- naming `just shaders` -- when the
+tool the corpus records is absent, or when that tool may not stand for the sources
+the corpus records (both triggers of the freshness rule below, applied exactly as
+`scripts/build-jsrf.py` applies them).
+
+THE ONE TOOLKIT (generator == CMake link == build guard)
+--------------------------------------------------------
+The three translator sources the corpus records are read from ONE resolved toolkit
+root: `resolve_toolkit()` prefers the build tree's cached `XBOXRECOMP_DIR`, falls
+back to `$XBOXRECOMP_DIR`, then to the sibling checkout -- and REFUSES when the
+cache and the environment name different trees, because CMake links the cached one
+while the generator and the guard would read the other.  `scripts/build-jsrf.py`
+resolves it once through this same function and reports it in preflight, so no
+third, hard-coded path can disagree with what is linked.
+
+The host tool whose SHA-256 is recorded is the artifact this repository OWNS
+(`build/vsh-tool`), and that tree is itself a CMake build tree of ONE toolkit: the
+configure that created it recorded its toolkit in the tree's own cache as
+`CMAKE_HOME_DIRECTORY`, and `cmake --build` in it compiles THAT tree from then on.
+So the tree is read back and compared with the resolved toolkit before its artifact
+is used or rebuilt, and a tree configured against a different checkout is REFUSED
+(`toolkit_binding_conflict`, in both this generator and the build guard): a rebuild
+there would produce a binary built from one toolkit while the corpus recorded the
+other's source hashes -- the same "recorded identity describes a binary nobody
+verified" defect one level down.
 
 The corpus records its own provenance, in both emitted files: the SHA-256 of the
 three toolkit translator sources, of the host tool, and the compiler's version
@@ -36,8 +63,8 @@ by two independent triggers:
 
   * CONTENT.  The EXISTING corpus's recorded `source.*` hashes are compared with
     the sources on disk.  A difference means the sources moved since the last
-    generation, so no tool from that generation may be trusted, and the tool is
-    rebuilt REGARDLESS of mtime.  This is what closes the case mtime cannot see:
+    generation, so no tool from that generation may be trusted, and an owned tool
+    is rebuilt REGARDLESS of mtime.  This is what closes the case mtime cannot see:
     an archive extraction, an `rsync --times`, or a restored backup that gives a
     stale tool a NEWER mtime than sources it never read.
   * MTIME.  A tool older than a source cannot have been built from it.  This is
@@ -47,10 +74,22 @@ by two independent triggers:
 When a rebuild is needed the generator forces one, because CMake's own rule is
 "rebuild if an input is NEWER than the output" and a content change with an older
 mtime looks up to date to it (measured: a plain `--target nv2a_vsh_hlsl` build left
-both the object file and the executable byte-identical).  A tool this script did
-not build -- an explicit `JSRF_NV2A_VSH_HLSL` override -- cannot be rebuilt or
-verified by content, so its limit is printed as an explicit advisory rather than
-accepted in silence.
+both the object file and the executable byte-identical).
+
+An explicit `JSRF_NV2A_VSH_HLSL` override is the ONE tool whose freshness this
+script cannot re-derive, because it must not rebuild or replace a path that came
+from the environment.  It is therefore REFUSED when either trigger fires, naming
+the override and both remedies (rebuild it yourself, or unset the variable and let
+this script build the tool it owns).  An advisory is not a freshness check: a
+stale override that is merely warned about is a stale tool recording hashes for
+bytes it never read, which is the defect this whole mechanism exists to prevent.
+
+The tool whose hash is RECORDED is the artifact this repository owns -- the
+`nv2a_vsh_hlsl.exe` under `build/vsh-tool` -- and not the game build tree's copy
+of it.  `just build` relinks that copy (MSVC embeds a PDB signature, so its hash
+moves without an input moving), and this script runs before that tree is even
+configured on a fresh checkout; pinning the record to the owned artifact makes the
+recorded identity stable across a game build and identifiable afterwards.
 
 The extraction is IMPORTED from `scripts/find-vertex-programs.py`, never copied,
 so the two cannot drift.  The scan properties below are THIS title's measured
@@ -63,7 +102,8 @@ standalone.  When no game build tree exists yet -- which is exactly the fresh
 checkout, because the game's CMake refuses to configure without this corpus --
 the script configures the toolkit into `build/vsh-tool/` and builds just the
 `nv2a_vsh_hlsl` target.  So `just shaders` works before the first `just build`.
-`JSRF_NV2A_VSH_HLSL` overrides the tool's path when it lives elsewhere.
+`JSRF_NV2A_VSH_HLSL` overrides the tool's path when it lives elsewhere; a stale
+override is refused, never rebuilt or replaced.
 
 Usage:  python -X utf8 scripts/gen-shaders.py [--game game] [--check]
 """
@@ -82,30 +122,31 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = Path(__file__).resolve().parent
-TOOLKIT = Path(os.environ.get('XBOXRECOMP_DIR', str(ROOT.parent / 'xboxrecomp')))
-AOT_HEADER = TOOLKIT / 'src/video/nv2a_vsh_aot.h'
 OUT_DIR = ROOT / 'src/recomp/gen/shaders'
 C_NAME = 'nv2a_vsh_programs.c'
 H_NAME = 'nv2a_vsh_programs.h'
 
 # The two executable layouts a CMake build tree can leave behind: multi-config
-# (Visual Studio) and single-config.  One definition, used for the game build
-# tree's candidates and for the bootstrap search.
+# (Visual Studio) and single-config.  Only the owned build tree below uses this.
 _TOOL_SUFFIXES = (('src', 'video', 'Release', 'nv2a_vsh_hlsl.exe'),
                   ('src', 'video', 'nv2a_vsh_hlsl.exe'))
 
-# The game's build tree; the toolkit is added under it as `xboxrecomp`.  The host
-# tool: the same binary either CMake layout can leave behind.  Built by the
-# toolkit's src/video/CMakeLists.txt.
+# The game's build tree.  It is named here for the CMakeCache lookup that binds
+# the toolkit, NOT as a place to look for the host tool: `just build` relinks
+# `build/xboxrecomp/.../nv2a_vsh_hlsl.exe` (MSVC embeds a PDB signature, so its
+# hash moves without an input moving), and on a fresh checkout this guard runs
+# before that tree is configured at all -- so that copy can never be the binary
+# whose hash the corpus records.
 GAME_BUILD_DIR = ROOT / 'build'
-HOST_TOOL_CANDIDATES = tuple(GAME_BUILD_DIR / 'xboxrecomp' / Path(*parts)
-                             for parts in _TOOL_SUFFIXES)
 
 # Where the tool is built when no game build tree exists yet.  This is the
 # bootstrap: the game's CMake refuses to configure without the generated corpus,
 # so on a fresh checkout this toolkit-only build is the only way to get the tool
-# that produces that corpus.  Under build/ (gitignored).
-TOOL_BUILD_DIR = ROOT / 'build' / 'vsh-tool'
+# that produces that corpus.  Under build/ (gitignored).  It is also the ONLY
+# build tree this script owns, and therefore the only one whose nv2a_vsh_hlsl it
+# will rebuild: its artifact is the one the corpus records (see the module
+# docstring).
+TOOL_BUILD_DIR = GAME_BUILD_DIR / 'vsh-tool'
 
 # How a stale tool is rebuilt, when this script owns the build tree it lives in.
 # These two vectors are spelled here for the argv this script RUNS, and the
@@ -154,15 +195,192 @@ sys.modules['find_vertex_programs'] = fvp
 _spec.loader.exec_module(fvp)
 
 # The provenance schema is shared with the build guard, which re-derives the same
-# values; load it by path for the same reason.
+# values; load it by path for the same reason.  ONE instance per process, though:
+# `scripts/build-jsrf.py` loads this same file before it loads this script, and a
+# second copy loaded here would define a second `ProvenanceError` class -- so a
+# refusal raised here (an unreadable translator source, a cache/environment
+# conflict) would NOT be caught by that script's `except prov.ProvenanceError` and
+# would surface as a traceback instead of the refusal it is.
+def _same_file(a, b):
+    try:
+        return (os.path.normcase(os.path.realpath(str(a)))
+                == os.path.normcase(os.path.realpath(str(b))))
+    except (OSError, ValueError):
+        return False
+
+
 _PROV_PATH = SCRIPTS / 'vsh_aot_provenance.py'
 if not _PROV_PATH.is_file():
     die(f'{_PROV_PATH} is missing: it owns the provenance schema this generator '
         f'records and scripts/build-jsrf.py re-derives.')
-_prov_spec = importlib.util.spec_from_file_location('vsh_aot_provenance', _PROV_PATH)
-prov = importlib.util.module_from_spec(_prov_spec)
-sys.modules['vsh_aot_provenance'] = prov
-_prov_spec.loader.exec_module(prov)
+_loaded_prov = sys.modules.get('vsh_aot_provenance')
+if _loaded_prov is not None and getattr(_loaded_prov, '__file__', None) \
+        and _same_file(_loaded_prov.__file__, _PROV_PATH):
+    prov = _loaded_prov
+else:
+    _prov_spec = importlib.util.spec_from_file_location('vsh_aot_provenance', _PROV_PATH)
+    prov = importlib.util.module_from_spec(_prov_spec)
+    sys.modules['vsh_aot_provenance'] = prov
+    _prov_spec.loader.exec_module(prov)
+
+
+# The build tree whose CMakeCache names the toolkit CMake actually links: the
+# game's own build tree, at `build/`.  `resolve_toolkit` reads it there so the
+# guard, the generator and the `add_subdirectory` cannot drift onto different
+# checkouts (see the module docstring).
+CACHE_NAME = 'CMakeCache.txt'
+# One CMakeCache entry, tolerant of the `//`-comment lines CMake writes above each
+# entry, of surrounding whitespace, and of the entry's TYPE: a configure writes
+# `NAME:PATH=<value>` (or `:INTERNAL`, `:FILEPATH`, `:STRING`), and a configure that
+# fails early can leave a variable `:UNINITIALIZED` -- the VALUE is what matters
+# here, so any type is accepted.  The variable name is anchored and must be
+# followed by the type-or-`=` separator, so a DIFFERENT variable whose name merely
+# starts the same way (`XBOXRECOMP_DIRECTORY`) cannot match.
+_CACHE_ENTRY = r'^\s*{name}\s*(?::\s*[A-Za-z_][A-Za-z0-9_]*\s*)?=\s*(.*?)\s*$'
+CACHE_RE = re.compile(_CACHE_ENTRY.format(name='XBOXRECOMP_DIR'), re.MULTILINE)
+# The OWNED host-tool tree's own configure root: `cmake -S <toolkit> -B
+# build/vsh-tool` records that toolkit as `CMAKE_HOME_DIRECTORY`, and the tree's own
+# build system compiles THAT tree's sources from then on -- whichever toolkit this
+# repository later resolves (see `toolkit_binding_conflict`).
+HOME_DIR_RE = re.compile(_CACHE_ENTRY.format(name='CMAKE_HOME_DIRECTORY'), re.MULTILINE)
+
+
+def cache_entry(path, entry_re):
+    """One CMakeCache entry's value, or None when the cache or the entry is absent.
+
+    A missing cache, a missing entry and an empty value are all "this build tree has
+    not spoken": the caller decides whether that means "fall through to another
+    source" (`cached_toolkit`) or "not a problem on its own"
+    (`owned_tool_toolkit`).
+    """
+    path = Path(path)
+    if not path.is_file():
+        return None
+    match = entry_re.search(path.read_text(encoding='utf-8', errors='replace'))
+    if not match or not match.group(1).strip():
+        return None
+    return match.group(1).strip()
+
+
+def cached_toolkit(build_dir=None):
+    """`XBOXRECOMP_DIR` as the build tree's CMakeCache recorded it, or None.
+
+    A missing cache, a missing entry and an empty value are all "the build tree
+    has not spoken": the caller falls through to the environment and then to the
+    sibling checkout.
+    """
+    raw = cache_entry(Path(build_dir or GAME_BUILD_DIR) / CACHE_NAME, CACHE_RE)
+    if raw is None:
+        return None
+    value = Path(raw)
+    # CMake stores an absolute path in a PATH cache entry.  A relative one could
+    # only come from a hand-edited cache, and the directory configure ran in is
+    # this repository, so that is what it is resolved against.
+    return value if value.is_absolute() else (ROOT / value)
+
+
+def owned_tool_toolkit(tool_build_dir=None):
+    """The toolkit the OWNED host-tool tree was configured against, or None.
+
+    `build/vsh-tool` is one CMake build tree of ONE toolkit: its cache records that
+    toolkit as `CMAKE_HOME_DIRECTORY`, and `cmake --build` in it compiles THAT tree's
+    sources from then on -- whichever toolkit this repository resolves now.  So the
+    tree's identity has to be read back before its artifact is used or rebuilt; the
+    `tool.sha256` the corpus records is otherwise an identity nobody verified (the
+    defect R1R exists to close, one level down).
+
+    None means the tree has not been configured (or the entry is missing), which is
+    not a problem on its own: a caller may supply a bare tool file, and the bootstrap
+    configures the tree itself -- the tool-hash comparison and the fail-closed
+    `cmake --build` are the checks then.
+    """
+    raw = cache_entry(Path(tool_build_dir or TOOL_BUILD_DIR) / CACHE_NAME, HOME_DIR_RE)
+    if raw is None:
+        return None
+    value = Path(raw)
+    return value if value.is_absolute() else (ROOT / value)
+
+
+def toolkit_binding_conflict(toolkit, tool_build_dir=None, label=None):
+    """Why the owned tool tree may not be used for `toolkit`, or None.
+
+    The ONE wording of this refusal, so the generator (`main`) and the build guard
+    (`scripts/build-jsrf.py`, which imports this) name the same trees and the same
+    remedy.  The condition is a cache that EXISTS and names another toolkit: the
+    owned tree's build system is then rooted in a checkout that is not the one whose
+    sources the corpus records, so a rebuild there would produce a binary from one
+    toolkit while the corpus recorded the other's source hashes.
+
+    `JSRF_NV2A_VSH_HLSL` being set does not exempt the tree: a run that used the
+    override would still leave `build/vsh-tool` rooted in the wrong checkout, so the
+    next run that falls back to the owned artifact would rebuild it from there.
+    """
+    tree = Path(tool_build_dir or TOOL_BUILD_DIR)
+    configured = owned_tool_toolkit(tree)
+    if configured is None:
+        return None
+    if os.path.normcase(os.path.realpath(str(configured))) == os.path.normcase(
+            os.path.realpath(str(toolkit))):
+        return None
+    resolved = f'{toolkit}' + (f' ({label})' if label else '')
+    return (
+        f'the host-tool build tree {tree} was configured against a DIFFERENT toolkit: its '
+        f'{CACHE_NAME} records CMAKE_HOME_DIRECTORY={configured}, but the toolkit this build '
+        f'resolves and links is {resolved}. Rebuilding in {tree} would compile {configured}\'s '
+        f'sources into the executable whose SHA-256 the corpus records as {toolkit}\'s, so the '
+        f'recorded identity would describe a binary built from other code. Remedy: delete {tree} '
+        f'and re-run `just shaders`, which reconfigures it against {toolkit}; or point the build '
+        f'tree (its cached XBOXRECOMP_DIR, i.e. -DXBOXRECOMP_DIR=<path>) and XBOXRECOMP_DIR at '
+        f'{configured}, the toolkit that tree already uses.')
+
+
+def resolve_toolkit(build_dir=None):
+    """The ONE toolkit root this repository binds to: `(path, label)`.
+
+    Three places name a toolkit: the build tree's cached `XBOXRECOMP_DIR` (what
+    CMake's `add_subdirectory` actually links and includes), `$XBOXRECOMP_DIR`,
+    and the sibling checkout.  When the cache and the environment disagree, the
+    generator and the guard would record and validate one tree's sources while the
+    game links the other's -- a mismatch no later check can see, because both
+    sides are internally consistent.  That case is therefore a REFUSAL naming both
+    paths, not a preference.
+
+    Otherwise the cache wins (it is what the build links), then the environment,
+    then the sibling.  The winner must be a toolkit checkout -- `CMakeLists.txt`
+    and all three translator sources -- because a toolkit that is merely *named*
+    proves nothing about the code the corpus was built from.
+    """
+    cached_raw = cached_toolkit(build_dir)
+    env_raw = os.environ.get('XBOXRECOMP_DIR')
+    if cached_raw is not None and env_raw and (
+            os.path.normcase(os.path.realpath(str(cached_raw)))
+            != os.path.normcase(os.path.realpath(str(env_raw)))):
+        raise prov.ProvenanceError(
+            f'the build tree caches XBOXRECOMP_DIR={cached_raw} but the environment sets '
+            f'XBOXRECOMP_DIR={env_raw}: CMake would link one toolkit while the shader '
+            f'generator and the corpus guard read the other, so the corpus could not be '
+            f'proven to describe the SPIR-V that gets linked. Configure with '
+            f'-DXBOXRECOMP_DIR=<the toolkit you want>, or unset XBOXRECOMP_DIR in the '
+            f'environment, so both name the same tree; if the corpus came from the other '
+            f'tree, re-run `just shaders` afterwards.')
+    if cached_raw is not None:
+        root, label = cached_raw, "the build tree's cached XBOXRECOMP_DIR"
+    elif env_raw:
+        root, label = Path(env_raw), 'XBOXRECOMP_DIR'
+    else:
+        root, label = ROOT.parent / 'xboxrecomp', 'the sibling checkout'
+    root = Path(os.path.realpath(str(root)))
+    missing = [p for p in [root / 'CMakeLists.txt', *prov.source_paths(root).values()]
+               if not p.is_file()]
+    if missing:
+        raise prov.ProvenanceError(
+            f'the toolkit {root} ({label}) is not a toolkit checkout: it is missing '
+            + ', '.join(str(p) for p in missing)
+            + '. It must carry CMakeLists.txt and the three translator sources ('
+            + ', '.join(prov.SOURCE_NAMES) + '); point the build tree at the right tree '
+            'with -DXBOXRECOMP_DIR=<path>, set XBOXRECOMP_DIR, or check the toolkit out '
+            'beside this repo, then re-run `just shaders`.')
+    return root, label
 
 
 def check_arg_vectors():
@@ -198,22 +416,23 @@ def aot_digest(words):
     return h
 
 
-def header_digest_constants():
+def header_digest_constants(toolkit):
     """The digest constants as nv2a_vsh_aot.h actually defines them."""
-    if not AOT_HEADER.is_file():
-        die(f'{AOT_HEADER} is missing: the toolkit must be checked out beside this '
+    header = Path(toolkit) / 'src/video/nv2a_vsh_aot.h'
+    if not header.is_file():
+        die(f'{header} is missing: the toolkit must be checked out beside this '
             f'repo (set XBOXRECOMP_DIR otherwise); the generated table includes its header.')
-    text = AOT_HEADER.read_text(encoding='utf-8')
+    text = header.read_text(encoding='utf-8')
     found = {}
     for name in ('NV2A_VSH_AOT_DIGEST_SEED', 'NV2A_VSH_AOT_DIGEST_PRIME'):
         m = re.search(r'#define\s+' + name + r'\s+(0[xX][0-9a-fA-F]+)', text)
         if not m:
-            die(f'{AOT_HEADER} no longer defines {name}: the identity digest changed, '
+            die(f'{header} no longer defines {name}: the identity digest changed, '
                 f'so this generator must be updated with it.')
         found[name] = int(m.group(1), 16)
     seed, prime = found['NV2A_VSH_AOT_DIGEST_SEED'], found['NV2A_VSH_AOT_DIGEST_PRIME']
     if (seed, prime) != (DIGEST_SEED, DIGEST_PRIME):
-        die(f'{AOT_HEADER} digest constants are seed=0x{seed:X} prime=0x{prime:X}, but this '
+        die(f'{header} digest constants are seed=0x{seed:X} prime=0x{prime:X}, but this '
             f'script computes seed=0x{DIGEST_SEED:X} prime=0x{DIGEST_PRIME:X}: the two must '
             f'agree, update scripts/gen-shaders.py.')
     return seed, prime
@@ -314,9 +533,9 @@ def guard(found, distinct, scanned):
             'collisions': len(collisions), 'writes_c': sum(f['writes_c'] for f in distinct)}
 
 
-def translator_sources():
+def translator_sources(toolkit):
     """The three translator sources, refusing a toolkit that is not checked out."""
-    paths = prov.source_paths(TOOLKIT)
+    paths = prov.source_paths(toolkit)
     for path in paths.values():
         if not path.is_file():
             die(f'the translator source {path} is missing: the toolkit must be checked '
@@ -325,7 +544,7 @@ def translator_sources():
     return paths
 
 
-def newer_than_tool(host):
+def newer_than_tool(host, toolkit):
     """The translator sources strictly newer than `host`, newest first.
 
     mtime is the mechanism (see the module docstring): a tool older than any input
@@ -333,17 +552,17 @@ def newer_than_tool(host):
     would silently emit a corpus no current source can reproduce.
     """
     mtime = host.stat().st_mtime
-    newer = [(p.stat().st_mtime, name, p) for name, p in translator_sources().items()
+    newer = [(p.stat().st_mtime, name, p) for name, p in translator_sources(toolkit).items()
              if p.stat().st_mtime > mtime]
     return [(name, path) for _, name, path in sorted(newer, reverse=True)]
 
 
-def stale_message(host, label, newer):
+def stale_message(host, label, newer, toolkit):
     return (f'the host tool {label} is STALE: it is older than '
             + ', '.join(str(p) for _, p in newer)
             + f'. A corpus generated with it would record inputs it was not built '
               f'from. Rebuild it with `{REBUILD_HINT}` (a fresh toolkit build tree '
-              f'may need `cmake -S {TOOLKIT} -B <dir>` first).')
+              f'may need `cmake -S {toolkit} -B <dir>` first).')
 
 
 def tool_label(host):
@@ -356,8 +575,10 @@ def tool_label(host):
 def _tool_in(build_dir):
     """The host tool a CMake build tree has built, in either layout.
 
-    The game build tree adds the toolkit as the subdirectory `xboxrecomp`, so its
-    tool sits one level deeper than the bootstrap's own tree's.
+    Only the owned bootstrap tree (`build/vsh-tool`) is searched through this, but
+    it is written for both layouts a CMake tree can take (`<dir>/src/video[/Release]`)
+    and for a tree whose own nested `xboxrecomp` subdirectory holds the toolkit, so
+    the same lookup stays correct if the owned tree is ever configured differently.
     """
     for root in (build_dir, build_dir / 'xboxrecomp'):
         for parts in _TOOL_SUFFIXES:
@@ -370,9 +591,10 @@ def _tool_in(build_dir):
 def rebuild_host_tool(build_dir, why):
     """Rebuild the `nv2a_vsh_hlsl` target of `build_dir`; return the new executable.
 
-    Only ever called for a tree this script owns (the game build tree or the
-    bootstrap): an explicit `JSRF_NV2A_VSH_HLSL` override is refused instead, never
-    silently replaced by a different tool.
+    Only ever called for the tree this script owns (`build/vsh-tool`): an explicit
+    `JSRF_NV2A_VSH_HLSL` override is refused instead, never silently replaced by a
+    different tool, and the game build tree is not a candidate for the recorded
+    identity at all.
     """
     argv = ['cmake', '--build', str(build_dir), '--config', 'Release',
             '--target', 'nv2a_vsh_hlsl']
@@ -388,11 +610,14 @@ def rebuild_host_tool(build_dir, why):
 
 
 def owning_build_dir(host, tool_build_dir):
-    """The build tree `host` was built in, when it is one this script can rebuild."""
-    for tree in (GAME_BUILD_DIR, tool_build_dir):
-        if _tool_in(tree) == host:
-            return tree
-    return None
+    """The build tree `host` was built in, when it is one this script can rebuild.
+
+    Only the owned tree counts.  The game build tree is NOT a place this script
+    looks for a host tool at all (see `find_host_tool` and the module docstring),
+    so a binary that lives there is never "owned" -- and a tool named by
+    `JSRF_NV2A_VSH_HLSL` is explicitly not this script's to rebuild or replace.
+    """
+    return tool_build_dir if _tool_in(tool_build_dir) == host else None
 
 
 def recorded_sources():
@@ -421,7 +646,7 @@ def recorded_sources():
     return None
 
 
-def sources_changed_since_last_generation():
+def sources_changed_since_last_generation(toolkit):
     """`{name: (recorded, now)}` for sources the existing corpus recorded differently.
 
     Empty when there is no corpus yet, or when every recorded source hash equals the
@@ -431,12 +656,29 @@ def sources_changed_since_last_generation():
     recorded = recorded_sources()
     if not recorded:
         return {}
-    now = prov.source_hashes(TOOLKIT)
+    now = prov.source_hashes(toolkit)
     return {name: (recorded.get(name), now.get(name))
             for name in now if recorded.get(name) != now.get(name)}
 
 
-def force_tool_rebuild(build_dir, why):
+def tool_staleness(host, toolkit):
+    """`(changed, newer)`: why `host` may not be used to record the current sources.
+
+    `changed` is the CONTENT record: `{name: (recorded, now)}` for translator
+    sources the existing corpus recorded differently (`{}` when there is no corpus
+    to compare against).  `newer` is the MTIME record: the translator sources
+    strictly newer than `host`, newest first.
+
+    Public because the build guard calls it: the guard must reach the same verdict
+    about a tool as the generator would, and this is the ONE definition of that
+    verdict.  Both triggers mean the same thing -- the tool cannot be shown to have
+    read the sources the corpus names -- so any non-empty result is a refusal at
+    generation time.
+    """
+    return sources_changed_since_last_generation(toolkit), newer_than_tool(host, toolkit)
+
+
+def force_tool_rebuild(build_dir, why, toolkit):
     """Rebuild the tool even though CMake may see its objects as up to date.
 
     Needed because CMake's rule is "rebuild if an input is NEWER than the output": a
@@ -464,7 +706,7 @@ def force_tool_rebuild(build_dir, why):
         detail = f'{len(removed)} object file(s) discarded'
     else:
         now = time.time()
-        for path in translator_sources().values():
+        for path in translator_sources(toolkit).values():
             os.utime(path, (now, now))
         detail = 'no object files were found, so the sources were touched instead'
     print(f'gen-shaders: {why}; forcing a recompile of nv2a_vsh_hlsl in {build_dir} '
@@ -472,8 +714,8 @@ def force_tool_rebuild(build_dir, why):
     return rebuild_host_tool(build_dir, 'the tool must be rebuilt from the current sources')
 
 
-def fresh_or_rebuild(host, tool_build_dir):
-    """`host` if it can be PROVEN current, else rebuild it in its own tree.
+def fresh_or_rebuild(host, tool_build_dir, toolkit):
+    """`host` if it can be PROVEN current, else rebuild it in the tree this script owns.
 
     Two independent reasons to rebuild, in order of strength:
 
@@ -484,10 +726,12 @@ def fresh_or_rebuild(host, tool_build_dir):
     2. MTIME: the tool is older than a source, so it cannot have been built from it.
 
     If neither fires, the tool is used as-is.  If a rebuild is needed but the tool is
-    not one this script can rebuild, it refuses with the rebuild hint.
+    not one this script can rebuild -- i.e. it is not the artifact of the owned tree,
+    which for a caller of this function means it came from `JSRF_NV2A_VSH_HLSL` or
+    from a tree this script does not own -- it refuses with the rebuild hint instead
+    of touching a path that is not its to rewrite.
     """
-    changed = sources_changed_since_last_generation()
-    newer = newer_than_tool(host)
+    changed, newer = tool_staleness(host, toolkit)
     if not changed and not newer:
         return host
     label = tool_label(host)
@@ -497,16 +741,17 @@ def fresh_or_rebuild(host, tool_build_dir):
             names = ', '.join(sorted(changed))
             die(f'the host tool {label} cannot be trusted: the corpus records different '
                 f'content for {names}, so the sources moved since it was built, and it is '
-                f'not one this script can rebuild (it is not under {GAME_BUILD_DIR} or '
-                f'{tool_build_dir}). Rebuild it with `{REBUILD_HINT}` and re-run.')
-        die(stale_message(host, label, newer))
+                f'not one this script can rebuild (it is not the artifact of '
+                f'{tool_build_dir}). It is not overwritten here; rebuild it with '
+                f'`{REBUILD_HINT}` and re-run.')
+        die(stale_message(host, label, newer, toolkit))
     if changed:
         why = ('the corpus records different source content for ' + ', '.join(sorted(changed))
                + ', so the host tool predates the current sources')
     else:
-        why = stale_message(host, label, newer)
-    rebuilt = force_tool_rebuild(tree, why)
-    newer = newer_than_tool(rebuilt)
+        why = stale_message(host, label, newer, toolkit)
+    rebuilt = force_tool_rebuild(tree, why, toolkit)
+    newer = newer_than_tool(rebuilt, toolkit)
     if newer:
         die(f'{tool_label(rebuilt)} is still older than '
             + ', '.join(str(p) for _, p in newer)
@@ -515,41 +760,122 @@ def fresh_or_rebuild(host, tool_build_dir):
     return rebuilt
 
 
-def find_host_tool(tool_build_dir):
+def find_host_tool(tool_build_dir=None):
     """The host tool already present on this host, or None.  Builds nothing.
 
     This is the ONE definition of "which tool would this host use", and both this
     generator and `scripts/build-jsrf.py` read it: the guard re-derives the
     corpus's provenance from the same binary the generator would have run, so the
-    order -- an explicit `JSRF_NV2A_VSH_HLSL` override, the game build tree's
-    candidate, then the bootstrap tree -- must not be spelled a second time.
+    order -- an explicit `JSRF_NV2A_VSH_HLSL` override, then the OWNED artifact
+    under `build/vsh-tool` -- must not be spelled a second time.
+
+    The owned artifact is the only build-tree copy considered.  The game build
+    tree's copy is deliberately excluded: `just build` relinks it, this script runs
+    before that tree is configured on a fresh checkout, and `--check`/the guard
+    would then compare the recorded hash against a binary that has nothing to do
+    with the corpus (see the module docstring).  An override names an existing file
+    or nothing: it is never silently ignored and never replaced.
     """
     override = os.environ.get('JSRF_NV2A_VSH_HLSL')
     if override:
         p = Path(override)
         return p if p.is_file() else None
-    for p in HOST_TOOL_CANDIDATES:
-        if p.is_file():
-            return p
-    return _tool_in(tool_build_dir)
+    return _tool_in(tool_build_dir or TOOL_BUILD_DIR)
 
 
-def rebuild_reasons(host):
-    """`(changed, newer)`: why `host` may not be used to record the current sources."""
-    return sources_changed_since_last_generation(), newer_than_tool(host)
+def staleness_refusal(host, toolkit):
+    """Why `host` may not be trusted with the current sources: `(trigger, detail)` or None.
+
+    THE shared freshness rule.  `--check` (below) and the build guard
+    (`scripts/build-jsrf.py`, which imports this) must reach the same verdict about a
+    tool, so the rule is defined once here and only its wording differs at the two
+    call sites.  The two triggers are the ones `tool_staleness` measures:
+
+      * `('content', {name: (recorded, now)})` -- the existing corpus records different
+        source content than the sources on disk.  The sources moved since the last
+        generation, so no tool from that generation may record them.  Refused for
+        EVERY tool, the owned artifact included.
+      * `('override', [(name, path)])` -- the tool is an environment override
+        (`JSRF_NV2A_VSH_HLSL`) older than a source.  Only an override is refused on
+        mtime alone: it is the one binary whose freshness nobody can re-derive, because
+        it must never be rebuilt or replaced.  An owned artifact that is merely older
+        on mtime is NOT refused -- its recorded source CONTENT still matches, so the
+        sources behind it are the same bytes and only their mtimes moved (a checkout,
+        a copy, an `rsync --times`); a tool built from different sources, or merely
+        relinked, has a different hash and is already refused by `tool.sha256`.
+      * `None` -- nothing fires; the tool may be used.
+
+    `tool_staleness` reads the translator sources, so a source vanishing between
+    resolution and this call raises `prov.ProvenanceError`; callers turn that into
+    their own refusal rather than a traceback.
+    """
+    changed, newer = tool_staleness(host, toolkit)
+    if changed:
+        return 'content', changed
+    if newer and os.environ.get('JSRF_NV2A_VSH_HLSL'):
+        return 'override', newer
+    return None
 
 
-def override_advisory(label, changed, newer):
-    """The explicit LIMIT of what an override can prove.  Printed, never a refusal.
+def check_host_tool(tool_build_dir, toolkit):
+    """`--check`'s tool: FOUND, never built, and not stale.  Returns `(path, label)`.
 
-    An override is a legitimate escape hatch, but it is a tool this script did not
-    build, so nothing available here can establish that the binary was built from the
-    sources on disk: the tool hash is not reproducible on this toolchain (MSVC embeds
-    a PDB signature), so it cannot be checked by content either.  Accepting it in
-    silence would present an unproven tool as a verified one -- exactly the failure
-    this whole mechanism exists to prevent -- so the limit is stated instead, and the
-    recorded `tool.sha256` is named for what it is: the only trace of which binary
-    ran, not evidence that it is current.
+    `--check` answers a read-only question -- does the committed corpus still match
+    what these inputs produce? -- so it must not be able to change the answer.
+    Resolving through `locate_host_tool` could force-rebuild the owned artifact, and a
+    rebuild moves the decisive `tool.sha256` of the very corpus the check was asked
+    about (and can leave the tree refused).  So this path uses `find_host_tool` -- no
+    configure, no build, no write of any kind -- and, when a tool exists, applies the
+    same freshness rule as the build guard (`staleness_refusal`) with the same
+    remedy: `just shaders` is what rebuilds a tool and records the sources again.
+    """
+    host = find_host_tool(tool_build_dir)
+    if host is None:
+        override = os.environ.get('JSRF_NV2A_VSH_HLSL')
+        if override:
+            state = (f'JSRF_NV2A_VSH_HLSL={override} is set but is not an existing file '
+                     f'(a path named by the environment is never ignored or replaced)')
+        else:
+            state = (f'JSRF_NV2A_VSH_HLSL is not set and the tool this repository owns is not '
+                     f'built under {tool_build_dir} (either CMake layout)')
+        die(f'--check cannot compare the corpus: {state}, and --check never builds or '
+            f'rebuilds anything. Run `just shaders`, which builds the tool this repository '
+            f'owns and records its identity; without a tool there is nothing to compare the '
+            f'corpus\'s recorded tool.sha256 against.')
+    label = tool_label(host)
+    refusal = staleness_refusal(host, toolkit)
+    if refusal is not None and refusal[0] == 'content':
+        detail = '\n'.join(
+            f'  - {name}: the corpus records {recorded!r}, {toolkit} has {now!r}'
+            for name, (recorded, now) in sorted(refusal[1].items()))
+        die(f'--check cannot compare the corpus against {label}: the sources moved since it was '
+            f'generated, and this is a check, so nothing is rebuilt.\n{detail}\n'
+            f'Regenerate with `just shaders`, which rebuilds the tool this repository owns from '
+            f'the current sources and records them; --check then compares a corpus its own tool '
+            f'produced.')
+    if refusal is not None:
+        die(f'--check cannot compare the corpus against {label}: it is older than '
+            + ', '.join(str(p) for _, p in refusal[1])
+            + f', so it cannot be shown to have been built from the sources the corpus '
+              f'records, and --check never rebuilds or replaces a path named by the environment. '
+              f'Rebuild that executable, or unset JSRF_NV2A_VSH_HLSL so `just shaders` builds and '
+              f'records the tool this repository owns, and re-run --check.')
+    return host, label
+
+
+def override_stale_message(label, changed, newer):
+    """Why an explicit override is refused, with the remedies and the no-touch rule.
+
+    `label` is the `JSRF_NV2A_VSH_HLSL=<path>` spelling, so the refusal names the
+    exact environment value the caller set.
+
+    The remedies differ by trigger, and the difference is not cosmetic.  The MTIME
+    trigger is the half a rebuild clears.  The CONTENT trigger is not: it compares the
+    sources the EXISTING corpus recorded with the sources on disk and never looks at
+    this executable, so rebuilding the override cannot clear it -- what clears it is
+    UNSETTING the variable, so that `just shaders` rebuilds the tool this script owns
+    from the current sources and records them; the override may be set again
+    afterwards.
     """
     reasons = []
     if changed:
@@ -557,47 +883,74 @@ def override_advisory(label, changed, newer):
                        + ', '.join(sorted(changed)))
     if newer:
         reasons.append('it is older than ' + ', '.join(str(p) for _, p in newer))
-    return (f'gen-shaders: advisory: the host tool {label} cannot be PROVEN fresh ('
+    if changed:
+        options = ['unset JSRF_NV2A_VSH_HLSL, which is what clears the content trigger: it '
+                   'compares the sources the existing corpus RECORDED with the sources on disk '
+                   'and never looks at this executable, so rebuilding it cannot clear it -- '
+                   f'`just shaders` then rebuilds the tool this script owns in {TOOL_BUILD_DIR} '
+                   'from the current sources and records them, after which the override may be '
+                   'set again']
+        if newer:
+            options.append(f'rebuild it from the current sources (`{REBUILD_HINT}`), which '
+                           'clears the mtime trigger but not the content one')
+    else:
+        options = [f'rebuild it from the current sources (`{REBUILD_HINT}`)',
+                   'unset JSRF_NV2A_VSH_HLSL so this script builds and uses the tool it owns in '
+                   f'{TOOL_BUILD_DIR}']
+    return (f'{label} is STALE and must not generate this corpus: '
             + '; '.join(reasons)
-            + '), and a tool named explicitly is never rebuilt in place. The corpus will '
-              'record its sha256 as the only trace of which binary produced it; that '
-              'field is advisory, so the block cannot be shown to come from the sources '
-              'on disk. Unset JSRF_NV2A_VSH_HLSL to let this script rebuild the tool it '
-              f'owns, or rebuild this one with `{REBUILD_HINT}`.')
+            + '. A tool named by the environment is never rebuilt or replaced by this script '
+              '-- it will not overwrite that path, and it cannot prove the binary came from the '
+              'sources on disk. Remedy: '
+            + '; or '.join(options) + '.')
 
 
-def locate_host_tool(tool_build_dir):
+def locate_host_tool(tool_build_dir=None, toolkit=None):
     """The nv2a_vsh_hlsl host tool: an existing build, else build it from the toolkit.
 
-    Whichever way it is found -- an explicit override, a candidate under the game
-    build tree, or the bootstrap -- it must be shown current before it is used: by
-    the corpus's recorded source CONTENT, and by mtime.  The game's CMake refuses to
-    configure without the generated corpus, so on a fresh checkout the game's build
-    tree does not exist yet and cannot produce this tool; the toolkit configures and
-    builds standalone, so that is the bootstrap.
+    Whichever way it is found -- an explicit override or the artifact of the owned
+    build tree -- it must be shown current before it is used: by the corpus's
+    recorded source CONTENT, and by mtime.  The game's CMake refuses to configure
+    without the generated corpus, so on a fresh checkout the game's build tree does
+    not exist yet and cannot produce this tool; the toolkit configures and builds
+    standalone, so that is the bootstrap.
 
-    An explicit override is the one case that cannot be verified and cannot be
-    rebuilt, so its limit is stated loudly rather than assumed away.
+    An explicit override is the one case that cannot be rebuilt here, so it is
+    REFUSED when either trigger fires rather than used with a warning: the recorded
+    `tool.sha256` makes the corpus's identity decisive, and a stale binary recording
+    hashes for bytes it never read is exactly the defect this mechanism exists to
+    prevent.  `toolkit` is the resolved root whose sources the corpus records; when
+    omitted it is resolved here (a cache/environment conflict is a refusal).
     """
+    tool_build_dir = Path(tool_build_dir) if tool_build_dir is not None else TOOL_BUILD_DIR
+    if toolkit is None:
+        toolkit = resolve_toolkit()[0]
     override = os.environ.get('JSRF_NV2A_VSH_HLSL')
     if override and not Path(override).is_file():
-        die(f'JSRF_NV2A_VSH_HLSL={override} does not exist.')
+        die(f'JSRF_NV2A_VSH_HLSL={override} does not exist. It is not ignored and not '
+            f'replaced: unset it to let this script build and use the tool it owns in '
+            f'{TOOL_BUILD_DIR}, or point it at the executable you built.')
     host = find_host_tool(tool_build_dir)
-    if host is None:
-        return build_host_tool(tool_build_dir)
     if override:
         label = f'JSRF_NV2A_VSH_HLSL={override}'
-        changed, newer = rebuild_reasons(host)
+        changed, newer = tool_staleness(host, toolkit)
         if changed or newer:
-            print(override_advisory(label, changed, newer), file=sys.stderr)
+            die(override_stale_message(label, changed, newer))
         return host, label
-    return fresh_or_rebuild(host, tool_build_dir), tool_label(host)
+    if host is None:
+        return build_host_tool(tool_build_dir, toolkit)
+    return fresh_or_rebuild(host, tool_build_dir, toolkit), tool_label(host)
 
 
-def build_host_tool(build_dir):
-    """Configure and build the toolkit's nv2a_vsh_hlsl target; return its exe."""
-    if not (TOOLKIT / 'CMakeLists.txt').is_file():
-        die(f'{TOOLKIT} is not a toolkit checkout: the host tool is built from there '
+def build_host_tool(build_dir, toolkit):
+    """Configure and build the toolkit's nv2a_vsh_hlsl target; return its exe.
+
+    The bootstrap: only reached when the owned tree has no artifact yet, and only
+    ever builds into `build_dir`, which is this script's own tree.
+    """
+    toolkit = Path(toolkit)
+    if not (toolkit / 'CMakeLists.txt').is_file():
+        die(f'{toolkit} is not a toolkit checkout: the host tool is built from there '
             f'(set XBOXRECOMP_DIR).')
 
     exe = _tool_in(build_dir)
@@ -605,7 +958,7 @@ def build_host_tool(build_dir):
         print(f'gen-shaders: nv2a_vsh_hlsl.exe is not built yet; configuring the toolkit '
               f'in {build_dir} and building it', file=sys.stderr)
         build_dir.mkdir(parents=True, exist_ok=True)
-        argv = ['cmake', '-S', str(TOOLKIT), '-B', str(build_dir)]
+        argv = ['cmake', '-S', str(toolkit), '-B', str(build_dir)]
         cp = subprocess.run(argv, capture_output=True, text=True)
         if cp.returncode != 0:
             die(f'`{" ".join(argv)}` failed (exit {cp.returncode}):\n'
@@ -614,7 +967,7 @@ def build_host_tool(build_dir):
         # path that did not exist before the build is the one that does now.
         exe = rebuild_host_tool(build_dir, 'the toolkit build tree has no host tool yet')
     else:
-        exe = fresh_or_rebuild(exe, build_dir)
+        exe = fresh_or_rebuild(exe, build_dir, toolkit)
     return exe, tool_label(exe)
 
 
@@ -686,15 +1039,17 @@ def compile_program(rec, scratch, host, dxc, spirv_val):
     return spirv, hlsl_path
 
 
-def provenance(host, dxc, stats):
+def provenance(host, dxc, stats, toolkit):
     """The provenance block body for the corpus generated NOW.
 
     `check_arg_vectors` has already refused if this script's command lines differ
     from the recorded ones, so the block describes exactly what ran. The counts
     come from `guard`'s measurement of this title, so a table whose own row count
-    disagrees with its block is a refusal on the build side.
+    disagrees with its block is a refusal on the build side.  `toolkit` is the
+    resolved root this run read its sources from, so the block records the sources
+    the corpus was actually built from.
     """
-    return prov.render_block(prov.expected(TOOLKIT, host, dxc,
+    return prov.render_block(prov.expected(toolkit, host, dxc,
                                            programs=stats['programs'],
                                            distinct=stats['distinct']))
 
@@ -768,37 +1123,32 @@ def render_h(entries, block):
         '#endif /* JSRF_NV2A_VSH_PROGRAMS_H */\n')
 
 
-def assert_tool_current(host, label, rebuildable):
-    """Refuse to generate if a tool this script OWNS is older than a translator source.
+def assert_tool_current(host, label, toolkit):
+    """Refuse to generate if the tool is older than a translator source.
 
     The property R1 must guarantee: a tool must never be used to record a source hash
-    for bytes it did not read.  `fresh_or_rebuild` has already rebuilt or refused on
-    both triggers, so this is the backstop -- it makes the invariant explicit at the
-    point of use rather than leaving it implicit in the resolution path.
-
-    `rebuildable` is False only for an explicit `JSRF_NV2A_VSH_HLSL` override, which
-    is a deliberate escape hatch: it is a tool this script did not build and cannot
-    verify by content (the tool hash is not reproducible), so refusing it would
-    remove the escape hatch while proving nothing.  `locate_host_tool` has already
-    printed the explicit advisory that its freshness is UNPROVEN, which is the honest
-    treatment of that case; here it is exempted from the backstop for the same reason.
+    for bytes it did not read.  `locate_host_tool` has already rebuilt an owned tool
+    or refused both an owned tool and a stale override on that rule, so this is the
+    backstop -- it makes the invariant explicit at the point of use rather than
+    leaving it implicit in the resolution path.  There is no exemption: a tool the
+    script owns has just been rebuilt if it needed it, and an override that needed it
+    was refused rather than used, so reaching here with a stale tool means the
+    resolution path is broken.
     """
-    if not rebuildable:
-        return
-    newer = newer_than_tool(host)
+    newer = newer_than_tool(host, toolkit)
     if newer:
-        die(stale_message(host, label, newer)
+        die(stale_message(host, label, newer, toolkit)
             + ' Nothing will be generated with it: the corpus would record source '
               'hashes the tool never read.')
 
 
-def build(game, scratch, host, dxc, spirv_val):
+def build(game, scratch, host, dxc, spirv_val, toolkit):
     """Generate the corpus; returns ({filename: bytes}, SPIR-V byte total, measured stats)."""
     found, scanned = extract(game)
     attach_words(found, game)
     distinct = dedupe(found)
     stats = guard(found, distinct, scanned)
-    block = provenance(host, dxc, stats)
+    block = provenance(host, dxc, stats, toolkit)
     entries = []
     total = 0
     for rec in sorted(distinct, key=lambda r: r['hash']):
@@ -818,30 +1168,54 @@ def main(argv=None):
     ap.add_argument('--game', type=Path, default=ROOT / 'game',
                     help='directory holding default.xbe and Media/ (default: game)')
     ap.add_argument('--check', action='store_true',
-                    help='regenerate into a temporary directory and compare with the committed '
-                         'output (the advisory tool.sha256 line is blanked on both sides; '
-                         'change nothing)')
+                    help='regenerate into a temporary directory and compare the result with '
+                         'the committed corpus BYTE FOR BYTE -- no field is exempt, so a '
+                         'difference (including the recorded tool identity, which is '
+                         'decisive) means the corpus is stale; change nothing: the host tool '
+                         'is found and never built, rebuilt or touched, and no file in this '
+                         'tree is written')
     args = ap.parse_args(argv)
 
-    # The digest is defined in the toolkit's header; fail here rather than emit a
+    # ONE toolkit for the whole run: the tree whose sources the corpus records and
+    # whose CMake the build links.  A cache/environment conflict is a refusal here
+    # rather than a preference, because both choices would be self-consistent.
+    try:
+        toolkit, toolkit_from = resolve_toolkit()
+    except prov.ProvenanceError as error:
+        die(str(error))
+    # The owned tool tree is tied by its OWN cache to whichever toolkit configured
+    # it, and its build system compiles THAT tree's sources.  If that is not the
+    # resolved toolkit, nothing here may use or rebuild the tree -- not even a run
+    # that would use an override, because the tree would stay rooted in the wrong
+    # checkout (see `toolkit_binding_conflict`).  Checked before the tool is found,
+    # used or rebuilt.
+    conflict = toolkit_binding_conflict(toolkit, TOOL_BUILD_DIR, toolkit_from)
+    if conflict:
+        die(conflict)
+    # The digest is defined in that toolkit's header; fail here rather than emit a
     # table whose identity fields the back end would reject.
-    header_digest_constants()
+    header_digest_constants(toolkit)
     # The block must describe the command lines this run uses, not other ones.
     check_arg_vectors()
 
-    host, host_from = locate_host_tool(TOOL_BUILD_DIR)
-    # A tool this script owns can be rebuilt and so must be provably current; an
-    # override elsewhere is the one case it cannot prove or fix, and
-    # `locate_host_tool` has already said so out loud.
-    assert_tool_current(host, host_from,
-                        rebuildable=owning_build_dir(host, TOOL_BUILD_DIR) is not None)
+    if args.check:
+        # A check must not be able to change what it is checking: the tool is FOUND
+        # (never built, so `tool.sha256` cannot move under it) and refused when it may
+        # not stand for the sources the corpus records.
+        host, host_from = check_host_tool(TOOL_BUILD_DIR, toolkit)
+    else:
+        host, host_from = locate_host_tool(TOOL_BUILD_DIR, toolkit)
+        # The backstop: the corpus must never record a source hash for bytes the tool
+        # that ran never read.  `locate_host_tool` has already rebuilt an owned tool or
+        # refused a stale override, so this can only fire if that path is broken.
+        assert_tool_current(host, host_from, toolkit)
     dxc, spirv_val = locate_vulkan_tools()
     host_sha = prov.sha256_file(host)
 
     if args.check:
         with tempfile.TemporaryDirectory(prefix='gen-shaders-check-') as tmp:
             tmp_path = Path(tmp)
-            files, total, stats = build(args.game, tmp_path, host, dxc, spirv_val)
+            files, total, stats = build(args.game, tmp_path, host, dxc, spirv_val, toolkit)
             bad = 0
             for name, data in files.items():
                 target = OUT_DIR / name
@@ -850,32 +1224,29 @@ def main(argv=None):
                     bad += 1
                     continue
                 have = target.read_bytes()
-                # Compare with the ADVISORY fields blanked on both sides: a different
-                # but equivalent host tool binary must not make a current corpus look
-                # stale.  Everything outside those lines is compared exactly.
-                if prov.strip_advisory(have.decode('utf-8', 'replace')) != \
-                   prov.strip_advisory(data.decode('utf-8', 'replace')):
+                # BYTE-EXACT: the block now records a DECISIVE tool identity, so two
+                # different-but-equivalent host tool binaries describe two different
+                # corpora -- `just shaders` is what makes them agree, and any
+                # difference here (tool identity included) is a stale corpus.  The
+                # committed bytes are what gets compiled, so they are the claim.
+                if have != data:
                     print(f'check: {name} differs (committed {len(have)} bytes sha256 '
-                          f'{hashlib.sha256(have).hexdigest()}, regenerated {len(data)} bytes sha256 '
-                          f'{hashlib.sha256(data).hexdigest()})', file=sys.stderr)
+                          f'{hashlib.sha256(have).hexdigest()}, regenerated {len(data)} bytes '
+                          f'sha256 {hashlib.sha256(data).hexdigest()}); the comparison is '
+                          f'byte-exact and the recorded tool identity is decisive',
+                          file=sys.stderr)
                     bad += 1
-                elif have != data:
-                    # Only advisory lines differ: report it, do not fail.  The corpus is
-                    # current; the recorded tool hash is a different binary.
-                    print(f'check: {name} current; only the advisory provenance differs '
-                          f'({len(data)} bytes, committed sha256 '
-                          f'{hashlib.sha256(have).hexdigest()}, regenerated '
-                          f'{hashlib.sha256(data).hexdigest()})')
                 else:
-                    print(f'check: {name} identical ({len(data)} bytes sha256 '
+                    print(f'check: {name} identical, byte for byte ({len(data)} bytes sha256 '
                           f'{hashlib.sha256(data).hexdigest()})')
             if bad:
                 print(f'check: FAILED ({bad} file(s) differ); regenerate with `just shaders`',
                       file=sys.stderr)
                 return 1
-            print(f'check: OK, {stats["programs"]} programs, {stats["distinct"]} distinct, '
-                  f'{stats["hashes"]} hashes, {stats["collisions"]} collisions, '
-                  f'{total} SPIR-V bytes, host tool {host_from} sha256 {host_sha}')
+            print(f'check: OK, toolkit {toolkit} ({toolkit_from}), {stats["programs"]} programs, '
+                  f'{stats["distinct"]} distinct, {stats["hashes"]} hashes, '
+                  f'{stats["collisions"]} collisions, {total} SPIR-V bytes, host tool '
+                  f'{host_from} sha256 {host_sha}')
             return 0
 
     scratch = OUT_DIR / '_scratch'
@@ -883,7 +1254,7 @@ def main(argv=None):
         shutil.rmtree(scratch)
     scratch.mkdir(parents=True)
     try:
-        files, total, stats = build(args.game, scratch, host, dxc, spirv_val)
+        files, total, stats = build(args.game, scratch, host, dxc, spirv_val, toolkit)
         OUT_DIR.mkdir(parents=True, exist_ok=True)
         for name, data in files.items():
             (OUT_DIR / name).write_bytes(data)
@@ -901,7 +1272,8 @@ def main(argv=None):
     print(f'shaders: {stats["programs"]} programs, {stats["distinct"]} distinct word sequences, '
           f'{stats["hashes"]} distinct hashes, {stats["collisions"]} hash collisions, '
           f'{stats["writes_c"]} write c[]; {len(files[C_NAME])} bytes of table, '
-          f'{total} SPIR-V bytes, host tool {host_from} sha256 {host_sha}')
+          f'{total} SPIR-V bytes, toolkit {toolkit} ({toolkit_from}), host tool {host_from} '
+          f'sha256 {host_sha}')
     print(f'shaders: {C_NAME} {len(files[C_NAME])} bytes sha256 {c_sha}')
     return 0
 

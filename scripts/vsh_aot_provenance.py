@@ -8,35 +8,64 @@ pixels, with no signal at run time.  This module is the single definition of
 what the generator records and what the build guard re-derives, so the two can
 never disagree about the schema.
 
-THE THREAT AND WHY THE REFUSAL KEYS ON SOURCES
-----------------------------------------------
-The refusal must fire when an input that determines the SPIR-V has moved.  The
-three translator sources and dxc's version/flags all satisfy that.  The host
-tool's own executable hash does NOT: measured on this host, three clean
-rebuilds of byte-identical sources produced three different
-`nv2a_vsh_hlsl.exe` hashes, because MSVC embeds a non-reproducible PDB
-signature.  The tool hash is therefore RECORDED for traceability and diagnosis
-(it answers "which binary produced this?") but is deliberately NOT a refusal
-condition -- a guard that demanded a stable tool hash would fail every clean
-rebuild, and a guard that can only pass by accident is worse than none.
+WHAT IS RECORDED, AND WHY EVERY FIELD DECIDES
+---------------------------------------------
+Every field in the block is an input that determines the emitted SPIR-V, and every
+one of them is DECIDING: a corpus that omits a field, or records a value that
+differs from the inputs in this tree, is refused.  There are no advisory fields.
 
-Freshness of the tool (that it was built from the sources recorded here) is
-enforced at GENERATION time, in `gen-shaders.py`, by comparing the executable's
-mtime against all three sources.  That split is deliberate: generation is the
-only moment at which a stale tool can actually corrupt the corpus.
+`tool.sha256` is the SHA-256 of the executable that actually performed the
+translation, and that executable is the ONE this repository owns: the
+`nv2a_vsh_hlsl.exe` under `gen_shaders.TOOL_BUILD_DIR` (`<repo>/build/vsh-tool`), in
+either CMake layout.  The game build tree's copy is deliberately not a candidate --
+`just build` relinks it (MSVC embeds a PDB signature, so its hash moves without an
+input moving) and this guard runs before that tree is even configured.  The owned
+artifact's hash moves on EVERY rebuild of it: a rebuild from moved sources, and also
+a forced rebuild from identical ones -- the link is not reproducible on this
+toolchain (see REPRODUCIBILITY below), so a forced rebuild that made the compiler run
+again moves the hash even when nothing in the sources changed.  A hash comparison
+therefore cannot be read as "the same bytes, so the same sources"; it compares the
+actual generating binary with the actual binary in use, and any move means the corpus
+must be regenerated.  When no tool has been built at all the field cannot be
+compared, and that is a refusal here rather than a
+pass: a caller that cannot say which executable produced the corpus it is guarding
+has not verified anything.
+
+A moved binary -- a rebuilt tool, a replaced executable, a different build input --
+therefore conservatively requires `just shaders`: regeneration is the offline step
+that re-records the identity, and this guard never guesses that two different
+executables are equivalent.
+
+FRESHNESS: GENERATION ENFORCES IT, THE GUARD RE-CHECKS IT
+---------------------------------------------------------
+The hash comparison above is of *identity*, not of *newness*: two different hashes
+could be a tool rebuilt from the same sources or a tool built from older ones.
+Freshness -- that the tool was built from the sources the corpus records -- is
+therefore enforced at GENERATION time, in `gen-shaders.py`, by two independent
+triggers:
+
+  * CONTENT.  The EXISTING corpus's recorded `source.*` hashes against the sources
+    on disk.  A difference means the sources moved since the last generation, so no
+    tool from that generation may be trusted, whatever its mtime.
+  * MTIME.  A tool older than a source cannot have been built from it.
+
+The build guard re-checks both: content for every corpus, plus mtime whenever the
+tool is an environment override (`JSRF_NV2A_VSH_HLSL`) -- the one binary whose
+freshness the guard cannot re-derive, because it must never rebuild or replace a
+path that came from the environment.
 
 REPRODUCIBILITY
 ---------------
-The emitted block contains no absolute path, no username and no timestamp, so the
-DECIDING fields are identical wherever the same inputs are regenerated.  The
-recorded `tool.sha256` is NOT reproducible, and that is the reason it is advisory:
-measured on this host, three clean rebuilds of byte-identical sources produced three
-different `nv2a_vsh_hlsl.exe` hashes.  Inspection of the PE headers shows why -- each
-executable carries its own link-time `TimeDateStamp`, and the game-tree build also
-embeds an absolute PDB path, so the hash depends on the checkout location as well as
-the clock.  Two runs with equivalent tool binaries therefore produce byte-different
-corpus files describing the SAME corpus; `strip_advisory` exists so a comparison can
-ignore exactly that field.
+The emitted block contains no absolute path, no username and no timestamp, so a
+corpus regenerated from the same sources by the same tool is byte-identical.
+The executable is NOT reproducible on this toolchain: measured on this host, three
+clean rebuilds of byte-identical sources produced three different
+`nv2a_vsh_hlsl.exe` hashes, because each PE carries its own link-time
+`TimeDateStamp` and the game-tree build also embeds an absolute PDB path.  That is
+precisely why generation pins the tool to the owned artifact rather than to whatever
+binary happens to be around, and why `--check` compares bytes exactly: a different
+tool identity IS a different corpus, and `just shaders` is what makes them agree.
+
 Arguments are recorded with their file operands replaced by placeholders
 (`{bin}`, `{mask}`, `{out}`); only the flags that affect the output are
 recorded.  `dxc --version` is normalized to a single whitespace-collapsed line.
@@ -54,7 +83,11 @@ from pathlib import Path
 # Bumped when the block's field set changes in a way a reader must notice.  A
 # mismatch is a refusal, not a warning: a guard that silently accepts a schema
 # it does not understand is the "missing provenance became a pass" failure.
-SCHEMA = 1
+# Schema 2 makes `tool.sha256` a DECIDING field (schema 1 recorded it as advisory
+# data), so a corpus written by schema 1 is refused and must be regenerated with
+# `just shaders` -- the recorded tool identity of a schema-1 block was never
+# checked and therefore proves nothing about the binary that ran.
+SCHEMA = 2
 
 BEGIN_MARK = 'JSRF-VSH-AOT-PROVENANCE-BEGIN'
 END_MARK = 'JSRF-VSH-AOT-PROVENANCE-END'
@@ -137,21 +170,29 @@ def expected(toolkit, tool_path, dxc, programs=None, distinct=None):
     `programs`/`distinct` are the corpus's own measured counts; they are included
     so a block whose counts disagree with the table it sits in is a refusal.
 
-    `tool_path` may be None, which OMITS `tool.sha256`.  That case exists because
-    the tool hash is advisory: a corpus can be perfectly current while no host tool
-    is built (the corpus lives in `src/recomp/gen/shaders` and survives deleting
-    `build/`), and a guard that refused then would reject a valid tree.  The
-    generator always passes a real path, so the recorded block always carries the
-    field.
+    `tool_path` is REQUIRED and must be an existing file: `tool.sha256` is a
+    deciding field, so a caller that cannot name the executable it expects cannot
+    produce a full expectation at all -- and must be refused here rather than
+    silently compare one field less.  (The guard resolves the tool through
+    `gen_shaders.find_host_tool` first and refuses when there is none; this is the
+    second, independent door onto the same rule.)
     """
+    if tool_path is None:
+        raise ProvenanceError(
+            'no host tool was named, so tool.sha256 -- a deciding field -- cannot be '
+            'part of the expectation.  The executable that generated the corpus must be '
+            f'known before it can be checked; {REMEDY}.')
+    if not Path(tool_path).is_file():
+        raise ProvenanceError(
+            f'the host tool {tool_path} named for this expectation does not exist, so '
+            f'tool.sha256 cannot be derived from it; {REMEDY}.')
     values = {
         'schema': str(SCHEMA),
         'dxc.version': dxc_version(dxc),
         'dxc.args': ' '.join(DXC_ARGS),
         'tool.args': ' '.join(TOOL_ARGS),
+        'tool.sha256': sha256_file(tool_path),
     }
-    if tool_path is not None:
-        values['tool.sha256'] = sha256_file(tool_path)
     for name, digest in source_hashes(toolkit).items():
         values[f'source.{name}'] = digest
     if programs is not None:
@@ -161,45 +202,27 @@ def expected(toolkit, tool_path, dxc, programs=None, distinct=None):
     return values
 
 
-# Fields that are RECORDED but never REFUSED on.  `tool.sha256` is here because
-# the executable is not reproducible on this toolchain (see the module docstring):
-# a guard that compared it would reject a corpus that a `just shaders` run had
-# just produced, because the subsequent toolkit relink changes the hash without
-# changing a single input that determines the SPIR-V.  The value stays in the
-# block so a reader can ask "which binary produced this?", and `compare` reports a
-# difference as advice -- it never fails on it.
-ADVISORY_FIELDS = ('tool.sha256',)
-
-
 def compare(recorded, want):
-    """`(ok, problems, advisories)`: recorded fields against what the inputs say now.
+    """`(ok, problems)`: recorded fields against what the inputs say now.
 
-    Both directions are checked over the DECIDING fields.  A field the block lacks
-    is as much a refusal as a field that disagrees -- that is the "missing
-    provenance must not become a pass" rule -- and an unknown field means the block
-    was written by a schema this guard does not implement.
-
-    ADVISORY_FIELDS are compared for the report only; a difference there is an
-    `advisory`, never a problem, so the tool hash can move (a relink) without
-    refusing a current corpus.
+    EVERY key in `want` decides, `tool.sha256` included.  Both directions are
+    checked: a field the block lacks is as much a refusal as a field that
+    disagrees -- that is the "missing provenance must not become a pass" rule --
+    and an unknown field means the block was written by a schema this guard does
+    not implement (or by a generator that recorded something it no longer knows
+    how to interpret), which must not be waved through either.
     """
     problems = []
-    advisories = []
     for key in want:
-        if key in ADVISORY_FIELDS:
-            if key in recorded and recorded[key] != want[key]:
-                advisories.append(f'{key} differs (recorded {recorded[key]!r}, '
-                                  f'now {want[key]!r}) -- advisory only, not a refusal')
-            continue
         if key not in recorded:
             problems.append(f'{key} is not recorded in the corpus provenance')
         elif recorded[key] != want[key]:
             problems.append(f'{key} differs: the corpus records {recorded[key]!r}, '
                             f'the current inputs give {want[key]!r}')
     for key in recorded:
-        if key not in want and key not in ADVISORY_FIELDS:
+        if key not in want:
             problems.append(f'the corpus records {key!r}, which this guard does not know')
-    return (not problems), problems, advisories
+    return (not problems), problems
 
 
 # The corpus files a generated table is spread across, in the order the guard
@@ -216,30 +239,8 @@ COUNT_RE = re.compile(r'nv2a_vsh_program_count\s*=\s*(\d+)\s*;')
 COUNT_FILE = 'nv2a_vsh_programs.c'
 
 
-def strip_advisory(text):
-    """`text` with every ADVISORY_FIELDS line removed from its provenance block(s).
-
-    `gen-shaders.py --check` compares regenerated bytes against the committed corpus.
-    The tool hash is advisory, so two runs using different-but-equivalent host tool
-    binaries produce byte-different files that describe the SAME corpus -- and a
-    byte comparison would call that a stale corpus.  Blanking only the advisory
-    lines makes `--check` ask the question that matters ("is this corpus current?")
-    without making the advisory field decisive, which is exactly the mistake the
-    build guard avoids.
-    """
-    out = []
-    for line in text.splitlines(keepends=True):
-        bare = re.sub(r'^\s*\*?\s*', '', line).strip()
-        key = bare.split(' = ', 1)[0].strip() if ' = ' in bare else None
-        if key in ADVISORY_FIELDS:
-            out.append(re.sub(r'(?<=\s)\S.*$', '<advisory>\n', line) if ' = ' in line else line)
-        else:
-            out.append(line)
-    return ''.join(out)
-
-
 def check_corpus(corpus_dir, want, files=CORPUS_FILES):
-    """The production corpus-provenance check: `(ok, problems, advisories)`.
+    """The production corpus-provenance check: `(ok, problems)`.
 
     This is the ONE sequence the build guard runs and the ONE the fixtures call, so
     a fixture cannot pass against a private copy of the logic while the shipped
@@ -249,7 +250,10 @@ def check_corpus(corpus_dir, want, files=CORPUS_FILES):
       * a well-formed block in each (`parse_block`'s own problems);
       * exactly one block per file (none is "the inputs are unknown", two is
         "which one is current?");
-      * every deciding field present and equal (`compare`);
+      * every deciding field present and equal (`compare`), INCLUDING
+        `tool.sha256`: the executable that produced the table is one of the inputs
+        that determine its bytes, so a corpus that does not record it (or records
+        a different one) is refused;
       * the two files recording the SAME block, so one cannot be regenerated
         without the other;
       * the block's `distinct` agreeing with the table's declared
@@ -260,27 +264,28 @@ def check_corpus(corpus_dir, want, files=CORPUS_FILES):
     resolution stay the caller's business.
     """
     problems = []
-    advisories = []
     recorded = {}
     texts = {}
 
     # An empty or partial `want` would compare NOTHING and report success, which is
     # the "missing provenance became a pass" failure in its worst form: a guard that
     # vacuously accepts everything.  `check_corpus` therefore refuses a caller that
-    # cannot say what it expects.  (Not reachable from `build-jsrf.py`, which always
-    # passes a full `expected(...)`; this closes the trap for any future caller.)
+    # cannot say what it expects -- and `tool.sha256` is on that list, so a caller
+    # that could not find a host tool cannot silently drop the tool expectation and
+    # pass a corpus generated by an entirely different executable.
     required = [k for k in (['schema'] + [f'source.{n}' for n in SOURCE_NAMES]
-                            + ['tool.args', 'dxc.version', 'dxc.args', 'programs', 'distinct'])
+                            + ['tool.sha256', 'tool.args', 'dxc.version', 'dxc.args',
+                               'programs', 'distinct'])
                 if k not in want]
     if required:
         return False, ['the caller supplied no expectation for '
                        + ', '.join(sorted(required))
-                       + ', so this check could not compare them'], []
+                       + ', so this check could not compare them']
     if len(files) != 2:
         # The two-file agreement step below unpacks exactly two names; a caller
         # passing a different arity must get a refusal, not a ValueError.
         return False, [f'{len(files)} corpus file(s) were named, but this check needs '
-                       f'exactly two (the header and the source that defines the count)'], []
+                       f'exactly two (the header and the source that defines the count)']
 
     for name in files:
         path = Path(corpus_dir) / name
@@ -301,9 +306,8 @@ def check_corpus(corpus_dir, want, files=CORPUS_FILES):
             problems.append(f'{path} records {len(blocks)} provenance blocks, expected one')
             continue
         recorded[name] = blocks[0]
-        _, field_problems, field_advisories = compare(blocks[0], want)
+        _, field_problems = compare(blocks[0], want)
         problems += [f'{path}: {p}' for p in field_problems]
-        advisories += [f'{path}: {a}' for a in field_advisories]
 
     if len(recorded) == len(files):
         first, second = (recorded[name] for name in files)
@@ -321,7 +325,7 @@ def check_corpus(corpus_dir, want, files=CORPUS_FILES):
             problems.append(f'the block records distinct = '
                             f'{recorded[files[0]].get("distinct")!r} but the table it sits '
                             f'in declares nv2a_vsh_program_count = {declared.group(1)}')
-    return (not problems), problems, advisories
+    return (not problems), problems
 
 
 def render_block(values, indent=' * '):

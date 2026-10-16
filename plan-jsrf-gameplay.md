@@ -96,12 +96,17 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
   an identical image), and passes on the repaired source; nine V6 CTest cases, full CTest 83/83,
   `just check` passed. Test-only: no toolkit change.
 
-- **R1 implementation `9078b47` is rejected and awaits repair** (TR §§31.22–31.23). It records
-  provenance and adds the real 126-entry table check, but independent review reproduced three gaps:
-  a changed or missing host-tool hash is accepted, a stale explicit tool override is accepted with a
-  warning, and the guard can validate a toolkit different from the one CMake builds. Green unit tests
-  and a current real corpus do not close those gaps. Restore the approved decisive identity/freshness
-  and toolkit binding before marking R1 done or starting R2. V5/V6 acceptance is unchanged.
+- **R1 is repaired and awaits independent acceptance** (TR §§31.22–31.24). The rejected first
+  implementation `9078b47` recorded provenance but left three gaps: a changed or missing host-tool
+  hash was accepted, a stale explicit tool override was accepted with a warning, and the guard could
+  validate a toolkit different from the one CMake builds. The repair makes `tool.sha256` recorded and
+  DECISIVE (schema 2), bound to the one generating tool the repository owns
+  (`build/vsh-tool/.../nv2a_vsh_hlsl.exe`), refuses a stale `JSRF_NV2A_VSH_HLSL` override instead of
+  warning, resolves ONE toolkit for the guard, the generator and the CMake link (refusing a
+  cache/environment disagreement), and checks the owned tool tree's own `CMAKE_HOME_DIRECTORY`
+  against it. A different worker's regression fails eight weakening mutants of the new gates with a
+  comment-only control green, and the real scratch gate shows a whitespace content edit refused
+  before configure and cleared by regeneration. V5/V6 acceptance is unchanged; R2 has not started.
 
 **Owner review accepted V5 and V6** at game `2a350ec` / toolkit `5668278` (2026-10-15).
 R1–R5 below are approved follow-ups, not reasons to reopen those milestones. The review was a code
@@ -130,26 +135,42 @@ positive controls. No commit signing, co-author or signature trailers. Session r
 N2 remains a prerequisite of V7. R5 is low priority and follows V7; schedule it after N6 so it does
 not interrupt the required sequence. Each step or listed N4/N6 subitem is a separate operation.
 
-### R1: detect a stale shader corpus — repair pending (TR §31.23)
+### R1: detect a stale shader corpus — repaired, awaiting independent acceptance (TR §§31.23–31.24)
 
 The runtime identity check proves the guest words, not which translator or compiler produced their
 SPIR-V. Synthetic table CTests do not validate the real generated corpus.
 
-- Record provenance in generated `nv2a_vsh_programs.h`/`.c`: SHA-256 of toolkit
-  `nv2a_vsh_hlsl.c`, `nv2a_vsh_hlsl.h`, `nv2a_vsh_hlsl_tool.c` and the host tool itself, plus the
-  `dxc --version` string and dxc arguments.
-- Have `scripts/build-jsrf.py` or CMake configure recompute that provenance and refuse a mismatch,
+- Record provenance in generated `nv2a_vsh_programs.h`/`.c` (schema 2): SHA-256 of toolkit
+  `nv2a_vsh_hlsl.c`, `nv2a_vsh_hlsl.h`, `nv2a_vsh_hlsl_tool.c`, the generating tool itself, the
+  `dxc --version` string and dxc arguments, and the corpus's own counts. Every field decides,
+  `tool.sha256` included, so a corpus that omits one is refused rather than passed.
+- The recorded executable is the ONE the repository owns, `build/vsh-tool/.../nv2a_vsh_hlsl.exe`; the
+  game build tree's copy is not a candidate, because a relink moves its hash without an input moving.
+  Only `just shaders` rebuilds the owned artifact, so deleting or relinking it, moving a translator
+  source, or pointing the build at another toolkit requires `just shaders` before `just build`.
+- Have `scripts/build-jsrf.py` recompute that provenance before configure and refuse a mismatch,
   naming `just shaders`. Never silently link stale shaders.
+- ONE toolkit binds the guard, the generator and the CMake link: the build tree's cached
+  `XBOXRECOMP_DIR` wins, the environment and the sibling are fallbacks, and a disagreement between
+  the cache and the environment refuses naming both paths. The owned tool tree's own
+  `CMAKE_HOME_DIRECTORY` is checked against that same resolution, so a tool built from another
+  checkout cannot stand for these sources. A `JSRF_NV2A_VSH_HLSL` override is freshness-verified
+  (content first, mtime second) and refused when stale; it is never rebuilt, replaced or overwritten,
+  and it cannot record a source change the corpus does not already record.
 - Run `check-vsh-aot-table.py` against the **real** generated table in `just check`, with its real
-  XBE/compiler inputs; retain device-free synthetic tests in CTest. Correct CMake's comment that
-  currently implies those synthetic tests alone guard the real corpus.
-- Before generation, rebuild the host tool or prove it is newer than all three source inputs,
-  including a tool selected through an override or an existing build directory.
+  XBE/compiler inputs and the same resolved tool; retain device-free synthetic tests in CTest.
 
-**Gate:** a whitespace content edit to `nv2a_vsh_hlsl.c` in a scratch copy makes the build refuse
-with `just shaders`; regeneration clears the refusal. A different worker tests matching provenance
-(accepted) and mismatched provenance (rejected). Quote the stale-input mutation, refusal and restored
-pass; preserve original assets and the ignored retail corpus.
+**Gate (met; awaiting Codex acceptance).** Matching provenance and a normal fresh bootstrap pass, and
+the full CTest run is green. A different worker's regression (126 tests in the provenance file, 166
+in the focused suite) fails eight weakening mutants of the new gates — the tool hash made advisory,
+dropped from the required expectations, `expected(tool_path=None)`, the guard's no-tool and
+stale-override refusals, the guard call moved after configure, and the toolkit-conflict check
+neutered — with a comment-only control green, and it drives the real `build-jsrf.py` in a scratch
+tree to show a corpus mismatch refused before configure (no configure marker, no configure log). The
+real scratch gate: the baseline supported build accepts; a whitespace content edit to
+`nv2a_vsh_hlsl.c` makes it refuse before configure, naming the field and `just shaders`; offline
+regeneration rebuilds the owned tool from the current sources and re-records the identity; the build
+accepts again. A tool-only replacement and a cache-versus-environment toolkit mismatch both refuse.
 
 ### R2: an empty corpus when the Vulkan SDK is absent
 

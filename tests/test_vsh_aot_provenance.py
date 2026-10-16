@@ -1,44 +1,61 @@
-"""Fixtures for the R1 provenance guard, `scripts/vsh_aot_provenance.py`.
+"""Fixtures for the R1 provenance gate.
 
-The guard under test is the only thing between a stale translator, dxc or flag
-set and a corpus of SPIR-V the game will happily link and draw with, so these
-fixtures call the SHIPPED module by path -- the same `expected`, `render_block`,
-`parse_block`, `compare` and `check_corpus` that `scripts/gen-shaders.py` writes
-with and `scripts/build-jsrf.py` refuses with.  Nothing here re-implements the
-schema: a fixture that passes against its own copy of the schema proves nothing
-about the shipped guard.
+Three shipped things are under test, and all three are load-bearing:
 
-`check_corpus` is the production sequence (`build-jsrf.py` calls it and nothing
-else), so the corpus fixtures go through it rather than replaying its steps: its
-own steps -- a missing file, a blockless file, two blocks in one file, the two
-files disagreeing, and the block's `distinct` against the table's declared
-`nv2a_vsh_program_count` -- are the ones a drift would silently lose, and
-`CorpusSequenceTests` exists to make that loss visible.
+  * `scripts/vsh_aot_provenance.py` -- the schema, the comparison and the ONE
+    production sequence (`check_corpus`) that `scripts/build-jsrf.py` runs;
+  * `scripts/gen-shaders.py` -- the ONE toolkit binding (`resolve_toolkit`), the
+    generator that RECORDS `tool.sha256`, and the freshness rule for an environment
+    override (`JSRF_NV2A_VSH_HLSL`);
+  * `scripts/build-jsrf.py` -- the guard that must refuse a stale corpus BEFORE the
+    CMake configure step, which is the first thing that mutates anything.
 
-Every refusal case asserts the DECISIVE REASON -- the problem text must name the
-field that moved -- so "something failed" cannot stand in for "this field
-failed", and a refusal that fires for the wrong reason cannot pass.
+`tool.sha256` is RECORDED and DECISIVE (schema 2): the executable that produced the
+corpus is one of the inputs that determine its bytes, so a corpus recording a
+different tool -- or recording no tool at all -- is a refusal, not an advisory.  The
+tool is the OWNED artifact (`build/vsh-tool`), whose hash moves only when the
+generator rebuilds it; the game build tree's copy is deliberately not a candidate,
+because `just build` relinks it with a non-reproducible PDB signature.
 
-`MutationTests` and `CorpusMutationTests` are the load-bearing ones.  A suite
-that only ever feeds the guard inputs it built itself is a tautology: it stays
-green if the guard is neutered.  So they mutate a SCRATCH copy of the module --
-`return True, [], []`, or dropping one field from the deciding loop, or dropping
-one step of `check_corpus` -- and require the same case table to FLIP: a case the
-real guard refuses must be ACCEPTED by the mutant.  The end-to-end counterpart
-lives in `C:/Users/logic/xbr-mac/r1-verify/` (a scratch tree whose guard is
-mutated, with the whole suite run against it).
+The classes that carry the weight:
 
-`tool.sha256` is asserted in both directions because its rule is deliberate:
-recorded, reported as an advisory when it differs, and NEVER a refusal.  MSVC's
-linker embeds a non-reproducible PDB signature, so three clean rebuilds of
-byte-identical sources give three `nv2a_vsh_hlsl.exe` hashes; a decisive tool
-hash would refuse a corpus that `just shaders` had just produced.
+  * `ToolkitBindingTests`, `ToolkitBindingConflictTests` and `OverrideFreshnessTests`
+    drive `resolve_toolkit`, `toolkit_binding_conflict` and `locate_host_tool` on
+    hand-written build trees and temp tool copies, so the cache/environment conflict,
+    the OWNED tool tree's own binding (its `CMAKE_HOME_DIRECTORY` against the toolkit
+    this build resolves) and the stale override are all refused with the reasons the
+    contract names (both trees, both remedies, the no-touch rule).
+  * `CheckHostToolTests` holds `--check` to being a check: the tool is FOUND, never
+    built, and an owned artifact whose recorded source CONTENT still matches comes back
+    with its sha256 and mtime unchanged, while `staleness_refusal` refuses the same file
+    the moment it is an environment override.
+  * `BuildEntryRefusalTests` runs the REAL `scripts/build-jsrf.py` in a scratch tree
+    whose stub `CMakeLists.txt` writes a marker file as its first action.  The marker
+    (and the absence of `logs/configure-current.log`) is the observable that proves
+    the guard refused BEFORE configure -- a text assertion that a function name
+    appears earlier in a file cannot show that.
+  * `CheckEndToEndTests` runs the real `scripts/gen-shaders.py --check` in a scratch
+    tree whose `game` is the REAL `game/` directory (nothing of it is copied): exit 0
+    byte-exact with an artifact mtime-older than a touched source, and that artifact
+    byte-for-byte and mtime-for-mtime unchanged afterwards.
+  * `WeakeningMutantTests` copies the shipped scripts, applies ONE localized text
+    substitution, and re-runs the focused assertions in a child process with
+    `JSRF_R1_SCRIPTS=<mutant dir>`: the mutant must turn the suite RED, and a
+    comment-only edit must stay green.  A suite that only ever runs against the code
+    it was written beside is a tautology; this is the proof it is not.
+
+`JSRF_R1_SCRIPTS` (a directory; the repository's `scripts/` by default) is the
+fixture's source of the provenance module, the generator and the build entry.  CTest
+and `just check` never set it, so they always exercise the shipped tree.
 """
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -47,15 +64,24 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / 'scripts'
-# The shipped module, and the one every fixture imports by default.  The override
-# exists only so the mutation harness can run THIS SUITE against a mutated scratch
-# copy (prove the suite is load-bearing, not a tautology); the shipped default is
-# the repository file, and CTest and `just check` never set it.
+
+# The script directory the fixtures LOAD from.  `JSRF_R1_SCRIPTS` exists only so the
+# mutation harness can run this suite against a scratch copy (prove the suite is
+# load-bearing, not a tautology); the shipped default is the repository directory, and
+# CTest and `just check` never set it.
+SCRIPTS_DIR = Path(os.environ.get('JSRF_R1_SCRIPTS', str(SCRIPTS)))
+# The repository files, and the ONLY source the mutants are cut from: a mutant is one
+# localized edit to the shipped text, never an edit to an already-mutated copy.
 SHIPPED = SCRIPTS / 'vsh_aot_provenance.py'
-PROVENANCE = Path(os.environ.get('JSRF_R1_PROVENANCE', str(SHIPPED)))
-# The corpus directory, overridable for the same reason: the real-corpus fixtures
-# need a corpus that CARRIES the block, and the shipped one is regenerated by a
-# separate step (`just shaders`).  CTest and `just check` never set either override.
+SHIPPED_GEN = SCRIPTS / 'gen-shaders.py'
+SHIPPED_BUILD = SCRIPTS / 'build-jsrf.py'
+PROVENANCE = SCRIPTS_DIR / 'vsh_aot_provenance.py'
+GEN_SHADERS_PATH = SCRIPTS_DIR / 'gen-shaders.py'
+BUILD_JSRF = SCRIPTS_DIR / 'build-jsrf.py'
+
+# The corpus directory, overridable for the same reason: the real-corpus fixtures need
+# a corpus that CARRIES the block, and the shipped one is regenerated by a separate step
+# (`just shaders`).  CTest and `just check` never set either override.
 CORPUS_DIR = Path(os.environ.get('JSRF_R1_CORPUS_DIR',
                                  str(ROOT / 'src' / 'recomp' / 'gen' / 'shaders')))
 CORPUS_C = CORPUS_DIR / 'nv2a_vsh_programs.c'
@@ -65,12 +91,25 @@ VULKAN_SDK = Path(os.environ.get('VULKAN_SDK', r'C:\VulkanSDK\1.4.357.0'))
 DXC = VULKAN_SDK / 'Bin' / 'dxc.exe'
 XBE = ROOT / 'game' / 'default.xbe'
 
-# The host tool the generator records.  Only its sha256 is read here, so any
-# candidate works; the first that exists is the one `gen-shaders.py` would pick.
+# The host tool whose hash the corpus records: the OWNED artifact, in either CMake
+# layout.  The game build tree's copy is deliberately absent -- `just build` relinks it
+# (so its hash moves without an input moving), which is why it can never be the binary
+# a corpus's decisive `tool.sha256` is compared against.
 TOOL_CANDIDATES = (
-    ROOT / 'build' / 'xboxrecomp' / 'src' / 'video' / 'Release' / 'nv2a_vsh_hlsl.exe',
     ROOT / 'build' / 'vsh-tool' / 'src' / 'video' / 'Release' / 'nv2a_vsh_hlsl.exe',
+    ROOT / 'build' / 'vsh-tool' / 'src' / 'video' / 'nv2a_vsh_hlsl.exe',
 )
+
+# The guard is not importable (the file runs the whole build at import), so the guard
+# fixtures exec its text up to this marker.
+PREFLIGHT_MARK = '# ── preflight'
+# The module names an exec of `build-jsrf.py` registers in `sys.modules`; a fixture that
+# loads a scratch copy of a script must not leave that copy registered for the next
+# class (`jsrf_build.toolkit_binding` resolves the toolkit through `sys.modules`).
+ISOLATED_MODULES = ('gen_shaders', 'vsh_aot_provenance', 'find_vertex_programs',
+                    'jsrf_build')
+
+_ABSENT = object()
 
 
 def load_module(path, name):
@@ -82,18 +121,71 @@ def load_module(path, name):
     return module
 
 
-prov = load_module(PROVENANCE, 'vsh_aot_provenance')
+@contextlib.contextmanager
+def isolated_imports():
+    """Undo the `sys.modules`/`sys.path` side effects of loading a scratch script."""
+    saved = {key: sys.modules.get(key, _ABSENT) for key in ISOLATED_MODULES}
+    saved_path = list(sys.path)
+    try:
+        yield
+    finally:
+        for key, value in saved.items():
+            if value is _ABSENT:
+                sys.modules.pop(key, None)
+            else:
+                sys.modules[key] = value
+        sys.path[:] = saved_path
 
-# A corpus file that must be ABSENT, as opposed to one that should take its default:
-# `c=None` cannot mean both, and the missing-file fixtures need the former.
-MISSING = object()
 
-# The guard's own view of the schema, not a copy of it.
-DECIDING_FIELDS = ('schema', 'source.nv2a_vsh_hlsl.c', 'source.nv2a_vsh_hlsl.h',
-                   'source.nv2a_vsh_hlsl_tool.c', 'tool.args', 'dxc.version',
-                   'dxc.args', 'programs', 'distinct')
-ADVISORY = tuple(prov.ADVISORY_FIELDS)
-FULL_FIELDS = DECIDING_FIELDS + ADVISORY
+@contextlib.contextmanager
+def patched_env(**changes):
+    """`os.environ` with `changes` applied; a `None` value DELETES the key.
+
+    Restored on exit, so a fixture that sets `JSRF_NV2A_VSH_HLSL` cannot leak into
+    another class -- the whole suite runs in one process under CTest.
+    """
+    saved = {key: os.environ.get(key, _ABSENT) for key in changes}
+    try:
+        for key, value in changes.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = str(value)
+        yield
+    finally:
+        for key, value in saved.items():
+            if value is _ABSENT:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def collect_refusal(call):
+    """The text of a refusal from `call`, which MUST refuse.
+
+    Three refusal shapes exist in the shipped scripts, and a fixture that only asserted
+    "it did not return" could pass on a refusal for the wrong reason:
+
+      * `gen-shaders.py`'s `die` prints the message to stderr and raises `SystemExit(1)`;
+      * `gen-shaders.resolve_toolkit` raises the schema's `ProvenanceError`;
+      * `build-jsrf.py` raises `SystemExit(message)`.
+
+    `ProvenanceError` is matched by NAME rather than by identity, because a fixture that
+    loaded its own instance of the schema module holds a different class object for the
+    same contract.
+    """
+    err = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(err):
+            result = call()
+    except SystemExit as exit_:
+        message = exit_.code if isinstance(exit_.code, str) else ''
+        return f'{message}\n{err.getvalue()}'
+    except Exception as error:
+        if type(error).__name__ != 'ProvenanceError':
+            raise
+        return f'{error}\n{err.getvalue()}'
+    raise AssertionError(f'the call was expected to refuse, but it returned {result!r}')
 
 
 def first_tool():
@@ -106,11 +198,50 @@ def first_tool():
 TOOL = first_tool()
 
 
+def copy_scripts(dest, source=None):
+    """`dest` as a copy of a script directory -- the substrate every scratch tree uses.
+
+    `__pycache__` is deliberately not copied: a stale bytecode cache would be one more
+    thing a mutant could hide behind.
+    """
+    dest = Path(dest)
+    shutil.copytree(source or SCRIPTS_DIR, dest,
+                    ignore=shutil.ignore_patterns('__pycache__'))
+    return dest
+
+
+prov = load_module(PROVENANCE, 'vsh_aot_provenance')
+
+
+def load_gen_shaders(scripts_dir=None):
+    """`gen-shaders.py` from `scripts_dir` (the fixture's script dir by default)."""
+    path = Path(scripts_dir or SCRIPTS_DIR) / 'gen-shaders.py'
+    with isolated_imports():
+        return load_module(path, 'gen_shaders')
+
+
+# A corpus file that must be ABSENT, as opposed to one that should take its default:
+# `c=None` cannot mean both, and the missing-file fixtures need the former.
+MISSING = object()
+
+# The guard's own field set, re-derived from the module rather than copied: every one of
+# these is DECIDING now, `tool.sha256` included, and a schema change that dropped one
+# would silently drop its mismatch and missing cases from this suite.
+DECIDING_FIELDS = ('schema', 'source.nv2a_vsh_hlsl.c', 'source.nv2a_vsh_hlsl.h',
+                   'source.nv2a_vsh_hlsl_tool.c', 'tool.sha256', 'tool.args',
+                   'dxc.version', 'dxc.args', 'programs', 'distinct')
+FULL_FIELDS = DECIDING_FIELDS
+# The old advisory machinery is GONE, not merely unused: `ADVISORY_FIELDS`/`strip_advisory`
+# were how a saved which-tool-you-ran-on comparison was turned into a pass, so their
+# absence is part of the contract and is asserted in `ModuleUnderTestTests`.
+REMOVED_ADVISORY_NAMES = ('ADVISORY_FIELDS', 'strip_advisory')
+
+
 def decision_cases(values):
     """Every `(name, recorded, want)` the guard MUST refuse.
 
-    Built from the field list the module itself exports, so adding a deciding
-    field to the schema automatically adds its mismatch and missing cases here.
+    Built from the field list the module itself exports, so adding a deciding field to
+    the schema automatically adds its mismatch and missing cases here.
     """
     cases = []
     for field in DECIDING_FIELDS:
@@ -137,8 +268,8 @@ class SyntheticInputs:
     """A toolkit / tool / dxc triple to call the real `expected` against.
 
     The three translator sources and the tool are throwaway files: the fixtures
-    exercise the guard's comparison, not the toolkit's contents, and the real
-    toolkit is a sibling checkout that may be mid-edit.
+    exercise the guard's comparison, not the toolkit's contents, and the real toolkit
+    is a sibling checkout that may be mid-edit.
     """
 
     def __init__(self, tmp, programs=126, distinct=126):
@@ -146,6 +277,7 @@ class SyntheticInputs:
         toolkit = self.dir / 'toolkit'
         video = toolkit / 'src' / 'video'
         video.mkdir(parents=True)
+        (toolkit / 'CMakeLists.txt').write_text('# fixture toolkit\n', encoding='utf-8')
         for name in prov.SOURCE_NAMES:
             (video / name).write_text(f'/* {name}, synthetic for the fixture */\n',
                                       encoding='utf-8')
@@ -179,8 +311,8 @@ def corpus_c(values, *, body=None, count=None, define_count=True):
 def corpus_h(values, *, body=None, count=None):
     """A `nv2a_vsh_programs.h`: the same block, and only an `extern` declaration.
 
-    `count` is not None only for the fixture that pins the `.c` as the file the
-    count is read from -- a check that scanned the header would be vacuous.
+    `count` is not None only for the fixture that pins the `.c` as the file the count is
+    read from -- a check that scanned the header would be vacuous.
     """
     block = prov.render_block(values) if body is None else body
     lines = ['/*', ' * The NV2A ahead-of-time vertex-program corpus header, synthetic.',
@@ -207,11 +339,11 @@ def xbe_corpus_counts():
     """`(programs, distinct)` as `scripts/find-vertex-programs.py` measures the XBE.
 
     The generator passes its own measured counts into `expected`, so the corpus's
-    recorded `programs`/`distinct` must equal what the scanner reports today; a
-    scanner change is a corpus change and this is where it surfaces.  Measured:
-    scanning the XBE alone gives 128 programs / 126 distinct, which is what
-    `scripts/gen-shaders.py` reports for the whole `game/` tree, so the Media files
-    contribute no record and the XBE alone reproduces the recorded counts.
+    recorded `programs`/`distinct` must equal what the scanner reports today; a scanner
+    change is a corpus change and this is where it surfaces.  Measured: scanning the XBE
+    alone gives 128 programs / 126 distinct, which is what `scripts/gen-shaders.py`
+    reports for the whole `game/` tree, so the Media files contribute no record and the
+    XBE alone reproduces the recorded counts.
     """
     fvp = load_module(SCRIPTS / 'find-vertex-programs.py', 'find_vertex_programs')
     data = XBE.read_bytes()
@@ -231,6 +363,31 @@ def table_row_count(text):
     if not body:
         return None
     return len(re.findall(r'vp_words_[0-9A-Fa-f]{8}', body.group(1)))
+
+
+def recorded_block(path):
+    """The single provenance block in `path`, or None when there is not exactly one."""
+    blocks, _problems = prov.parse_block(Path(path).read_text(encoding='utf-8',
+                                                             errors='replace'))
+    return blocks[0] if len(blocks) == 1 else None
+
+
+def shipped_sources_are_current(toolkit=None):
+    """True when the shipped corpus agrees about the sources, or does not exist yet.
+
+    The guard's CONTENT step compares what the shipped corpus recorded against the
+    sources on disk, and the fixtures that mean to exercise a LATER step need that step
+    to be quiet.  When it is not, the tree (not the fixture) is the problem, so those
+    fixtures skip with that reason rather than asserting through a broken state.
+    """
+    if not CORPUS_C.is_file():
+        return True
+    block = recorded_block(CORPUS_C)
+    if block is None:
+        return False
+    recorded = {k: v for k, v in block.items() if k.startswith('source.')}
+    return recorded == {f'source.{name}': digest
+                        for name, digest in prov.source_hashes(toolkit or TOOLKIT).items()}
 
 
 def _block_line(line, field):
@@ -256,8 +413,8 @@ def with_field(text, field, value):
 def without_field(text, field):
     """`text` with `field`'s line removed, inside the block only.
 
-    `render_block` refuses to render an incomplete schema (that is its own guard),
-    so a "missing field" corpus has to be built by taking a complete one apart.
+    `render_block` refuses to render an incomplete schema (that is its own guard), so a
+    "missing field" corpus has to be built by taking a complete one apart.
     """
     out, inside, dropped = [], False, 0
     for line in text.splitlines():
@@ -276,10 +433,10 @@ def without_field(text, field):
 def duplicate_field(text, field):
     """`text` with `field`'s recorded line repeated, inside the block only.
 
-    The second value is the same, so the block stays complete and self-consistent:
-    the ONLY thing wrong with it is the duplication, which is what makes the
-    malformed-block fixture isolate `parse_block`'s duplicate-key refusal instead
-    of also failing a field comparison.
+    The second value is the same, so the block stays complete and self-consistent: the
+    ONLY thing wrong with it is the duplication, which is what makes the malformed-block
+    fixture isolate `parse_block`'s duplicate-key refusal instead of also failing a field
+    comparison.
     """
     out, inside, copied = [], False, 0
     for line in text.splitlines():
@@ -303,10 +460,13 @@ class ProvenanceBase(unittest.TestCase):
     programs = 126
     distinct = 126
 
-    # Subclasses replace these; the base has none, so `mutation_table` on the base
-    # itself raises rather than silently mutating nothing.
+    # Subclasses own their tables; the base has none, so a mutation name that no table
+    # defines raises here rather than silently mutating nothing.
     MUTATIONS = {}
-    ACCEPTANCE_MUTATIONS = {}
+
+    def mutation_table(self, mutation):
+        """`[(anchor, replacement)]` for `mutation`; subclasses may replace the table."""
+        return self.MUTATIONS[mutation]
 
     @classmethod
     def setUpClass(cls):
@@ -319,18 +479,12 @@ class ProvenanceBase(unittest.TestCase):
     def tearDownClass(cls):
         cls._tmp.cleanup()
 
-    def mutation_table(self, mutation):
-        """`[(anchor, replacement)]` for `mutation`; subclasses own their tables."""
-        if mutation in self.ACCEPTANCE_MUTATIONS:
-            return self.ACCEPTANCE_MUTATIONS[mutation]
-        return self.MUTATIONS[mutation]
-
     def mutant(self, mutation):
         """`(module, path)` for a SCRATCH copy carrying `mutation`.
 
-        The repository file is only ever READ: the mutant is written into the
-        fixture's temp dir and loaded as its own module, so the case tables run
-        against real, separate code.
+        The repository file is only ever READ: the mutant is written into the fixture's
+        temp dir and loaded as its own module, so the case tables run against real,
+        separate code.
         """
         source = SHIPPED.read_text(encoding='utf-8')
         for old, new in self.mutation_table(mutation):
@@ -341,7 +495,8 @@ class ProvenanceBase(unittest.TestCase):
             source = source.replace(old, new)
         path = Path(self._tmp.name) / (re.sub(r'\W+', '_', mutation) + '.py')
         path.write_text(source, encoding='utf-8')
-        return load_module(path, 'vsh_aot_provenance_mutant'), path
+        with isolated_imports():
+            return load_module(path, 'vsh_aot_provenance_mutant'), path
 
     def corpus(self, name, c=MISSING, h=MISSING):
         """A corpus directory named `name`; `c`/`h` default to the matching pair."""
@@ -355,21 +510,18 @@ class ProvenanceBase(unittest.TestCase):
 
     def assert_refused(self, recorded, want, field, where=''):
         """The deciding comparison refuses, and the problem text names `field`."""
-        ok, problems, advisories = prov.compare(recorded, want)
+        ok, problems = prov.compare(recorded, want)
         self.assertFalse(ok, f'{where}: accepted provenance that must be refused '
                              f'(recorded {recorded.get(field)!r}, now {want.get(field)!r}); '
                              f'problems={problems!r}')
         self.assertTrue(any(field in p for p in problems),
                         f'{where}: refused, but no problem names {field!r}: {problems!r}')
-        self.assertEqual(advisories, [],
-                         f'{where}: a deciding-field case produced advice, which is a silent '
-                         f'acceptance of the deciding comparison: {advisories!r}')
 
     def assert_corpus_refused(self, corpus, needle, where='', want=None):
         """`check_corpus` refuses the directory, and the reason names `needle`."""
-        ok, problems, advisories = self.check(corpus, want)
+        ok, problems = self.check(corpus, want)
         self.assertFalse(ok, f'{where}: accepted a corpus that must be refused; '
-                             f'problems={problems!r} advisories={advisories!r}')
+                             f'problems={problems!r}')
         self.assertTrue(any(needle in p for p in problems),
                         f'{where}: refused without naming {needle!r}: {problems!r}')
         return problems
@@ -390,16 +542,14 @@ class MatchingProvenanceTests(ProvenanceBase):
                          'render_block -> parse_block lost or reordered a value')
 
     def test_matching_provenance_is_accepted(self):
-        ok, problems, advisories = prov.compare(self.values, self.values)
+        ok, problems = prov.compare(self.values, self.values)
         self.assertTrue(ok, f'a block that matches itself was refused: {problems!r}')
         self.assertEqual(problems, [])
-        self.assertEqual(advisories, [])
 
     def test_matching_corpus_directory_is_accepted(self):
-        ok, problems, advisories = self.check(self.corpus('matching'))
+        ok, problems = self.check(self.corpus('matching'))
         self.assertTrue(ok, f'a matching corpus directory was refused: {problems!r}')
         self.assertEqual(problems, [])
-        self.assertEqual(advisories, [])
 
     def test_render_block_is_stable_and_refuses_an_incomplete_schema(self):
         self.assertEqual(prov.render_block(self.values), self.block,
@@ -447,7 +597,7 @@ class MismatchRefusalTests(ProvenanceBase):
             with self.subTest(source=name):
                 want = dict(self.values)
                 want[field] = 'f' * 64
-                ok, problems, _ = prov.compare(dict(self.values), want)
+                ok, problems = prov.compare(dict(self.values), want)
                 self.assertFalse(ok)
                 self.assertEqual(len(problems), 1, f'a single moved source reported '
                                                    f'{len(problems)} problems: {problems!r}')
@@ -465,50 +615,118 @@ class MismatchRefusalTests(ProvenanceBase):
                 self.assertEqual(digest, prov.sha256_file(TOOLKIT / 'src' / 'video' / name))
 
 
-class AdvisoryToolHashTests(ProvenanceBase):
-    """Item 3: `tool.sha256` is recorded, reported, and never decisive."""
+class ToolHashDecisiveTests(ProvenanceBase):
+    """Item 3: `tool.sha256` is recorded and DECISIVE, in both directions.
 
-    def test_advisory_field_set_is_exactly_the_tool_hash(self):
-        self.assertEqual(ADVISORY, ('tool.sha256',),
-                         'the advisory set moved; if that was deliberate the fixture '
-                         'must be re-derived with it')
+    The schema-1 defect these fixtures exist for: the recorded tool identity was
+    advisory data, so a corpus that recorded a DIFFERENT tool -- or recorded no tool at
+    all -- was accepted with a printed advisory, and `expected(tool_path=None)` decided
+    the field simply by not expecting it.  The executable that produced the corpus is
+    one of the inputs that determine its bytes, so every case here must refuse, and the
+    refusal must NAME `tool.sha256` (or the missing expectation) rather than merely
+    failing.  `WeakeningMutantTests` M1/M2/M3 are the mutants these cases catch.
+    """
 
-    def test_a_different_tool_hash_is_accepted_with_an_advisory(self):
-        recorded = dict(self.values, **{'tool.sha256': 'a' * 64})
-        ok, problems, advisories = prov.compare(recorded, dict(self.values))
-        self.assertTrue(ok, f'a differing tool hash refused a corpus that `just shaders` '
-                            f'could have just produced: {problems!r}')
-        self.assertEqual(problems, [])
-        self.assertEqual(len(advisories), 1, f'expected exactly one advisory: {advisories!r}')
-        self.assertIn('tool.sha256', advisories[0])
-        self.assertIn('advisory', advisories[0])
+    def test_a_recorded_tool_hash_that_differs_is_refused_naming_both_values(self):
+        recorded = dict(self.values, **{'tool.sha256': '0' * 64})
+        ok, problems = prov.compare(recorded, dict(self.values))
+        self.assertFalse(ok, 'a differing tool hash was accepted, so the recorded tool '
+                            'identity is not decisive')
+        joined = '; '.join(problems)
+        self.assertIn('tool.sha256', joined)
+        self.assertIn('0' * 64, joined, f'the recorded (wrong) value was not named: {problems!r}')
+        self.assertIn(self.values['tool.sha256'], joined,
+                      f'the current (expected) value was not named: {problems!r}')
 
-    def test_a_different_tool_hash_is_accepted_through_check_corpus(self):
-        recorded = dict(self.values, **{'tool.sha256': 'b' * 64})
-        corpus = self.corpus('tool-hash', c=corpus_c(recorded), h=corpus_h(recorded))
-        ok, problems, advisories = self.check(corpus)
-        self.assertTrue(ok, f'refused on the tool hash alone: {problems!r}')
-        self.assertEqual(problems, [])
-        self.assertEqual(len(advisories), 2,
-                         f'one advisory per file, since both record the hash: {advisories!r}')
-        for advisory in advisories:
-            self.assertIn('tool.sha256', advisory)
+    def test_a_corpus_recording_a_different_tool_is_refused_through_check_corpus(self):
+        """Both files, so the refusal is the field comparison and not a split block."""
+        recorded = dict(self.values, **{'tool.sha256': '0' * 64})
+        corpus = self.corpus('recorded-other-tool', c=corpus_c(recorded),
+                             h=corpus_h(recorded))
+        self.assert_corpus_refused(corpus, 'tool.sha256', 'a different recorded tool')
 
-    def test_a_missing_tool_hash_is_also_not_a_refusal(self):
-        """The advisory is reported, not demanded: an absent field is not a refusal."""
-        recorded = {k: v for k, v in self.values.items() if k != 'tool.sha256'}
-        ok, problems, advisories = prov.compare(recorded, dict(self.values))
-        self.assertTrue(ok, f'a missing advisory field refused: {problems!r}')
-        self.assertEqual(problems, [])
+    def test_a_corpus_omitting_the_tool_hash_from_both_files_is_refused(self):
+        """Dropping the field everywhere must not make the check pass vacuously."""
+        corpus = self.corpus('no-tool-hash',
+                             c=without_field(corpus_c(self.values), 'tool.sha256'),
+                             h=without_field(corpus_h(self.values), 'tool.sha256'))
+        problems = self.assert_corpus_refused(corpus, 'tool.sha256',
+                                              'the field omitted from both files')
+        self.assertTrue(any('not recorded' in p for p in problems),
+                        f'the refusal must say the field is not recorded: {problems!r}')
 
-    def test_the_advisory_does_not_mask_a_deciding_difference(self):
-        """A moved source plus a moved tool hash refuses on the source."""
-        recorded = dict(self.values, **{'tool.sha256': 'c' * 64,
-                                        'source.nv2a_vsh_hlsl.c': 'd' * 64})
-        ok, problems, advisories = prov.compare(recorded, dict(self.values))
-        self.assertFalse(ok, 'an advisory field absorbed a deciding difference')
-        self.assertTrue(any('source.nv2a_vsh_hlsl.c' in p for p in problems), problems)
-        self.assertEqual(len(advisories), 1)
+    def test_an_empty_or_malformed_tool_hash_is_refused(self):
+        for value in ('', 'not-a-hash', '0' * 63, 'zz' * 32):
+            with self.subTest(tool_sha256=value):
+                recorded = dict(self.values, **{'tool.sha256': value})
+                corpus = self.corpus(f'bad-tool-hash-{len(value)}',
+                                     c=corpus_c(recorded), h=corpus_h(recorded))
+                self.assert_corpus_refused(corpus, 'tool.sha256',
+                                           f'a recorded tool hash of {value!r}')
+
+    def test_a_want_without_the_tool_hash_refuses_naming_the_missing_expectation(self):
+        """A caller that cannot name the tool cannot produce a full expectation."""
+        want = {k: v for k, v in self.values.items() if k != 'tool.sha256'}
+        ok, problems = self.check(self.corpus('want-without-tool'), want)
+        self.assertFalse(ok, 'a caller that supplied no tool expectation was allowed to '
+                            'compare one field less and pass')
+        joined = '; '.join(problems)
+        self.assertIn('tool.sha256', joined)
+        self.assertIn('no expectation', joined,
+                      f'the refusal must name the missing EXPECTATION, not merely a '
+                      f'difference: {problems!r}')
+
+    def test_a_corpus_and_a_want_that_both_lack_the_tool_hash_are_refused(self):
+        """Neither side can drop the field: the schema decides, not the caller."""
+        want = {k: v for k, v in self.values.items() if k != 'tool.sha256'}
+        corpus = self.corpus('both-lack-the-tool-hash',
+                             c=without_field(corpus_c(self.values), 'tool.sha256'),
+                             h=without_field(corpus_h(self.values), 'tool.sha256'))
+        problems = self.assert_corpus_refused(corpus, 'tool.sha256',
+                                              'both sides lacking the tool hash', want=want)
+        self.assertTrue(any('no expectation' in p for p in problems), problems)
+
+    def test_expected_requires_a_tool_path(self):
+        """`expected(..., None, ...)` is a refusal, not an omitted field."""
+        with self.assertRaises(prov.ProvenanceError) as caught:
+            prov.expected(self.inputs.toolkit, None, DXC,
+                          programs=self.programs, distinct=self.distinct)
+        message = str(caught.exception)
+        self.assertIn('tool.sha256', message,
+                      f'the refusal must name the field it cannot supply: {message!r}')
+        self.assertIn(prov.REMEDY, message,
+                      f'the refusal must name the remedy: {message!r}')
+
+    def test_expected_refuses_a_tool_path_that_does_not_exist(self):
+        missing = Path(self._tmp.name) / 'no-such-host-tool.exe'
+        with self.assertRaises(prov.ProvenanceError) as caught:
+            prov.expected(self.inputs.toolkit, missing, DXC,
+                          programs=self.programs, distinct=self.distinct)
+        message = str(caught.exception)
+        self.assertIn(str(missing), message)
+        self.assertIn('tool.sha256', message)
+
+    def test_expected_records_the_hash_of_the_tool_it_was_given(self):
+        self.assertEqual(self.values['tool.sha256'], prov.sha256_file(self.inputs.tool))
+        other = self.inputs.dir / 'another-tool.exe'
+        other.write_bytes(b'MZ a different synthetic tool\n')
+        values = prov.expected(self.inputs.toolkit, other, DXC,
+                               programs=self.programs, distinct=self.distinct)
+        self.assertNotEqual(values['tool.sha256'], self.values['tool.sha256'])
+        # And the two are distinguishable through the production sequence, which is what
+        # makes the recorded identity decide anything at all.
+        ok, problems = prov.compare(self.values, values)
+        self.assertFalse(ok)
+        self.assertTrue(any('tool.sha256' in p for p in problems), problems)
+
+    def test_the_advisory_machinery_is_gone(self):
+        """The weakened arm must not come back in any spelling."""
+        for name in REMOVED_ADVISORY_NAMES:
+            with self.subTest(name=name):
+                self.assertFalse(hasattr(prov, name),
+                                 f'{name} is back: the tool hash became advisory data again, '
+                                 f'which is the defect this suite exists to catch')
+        self.assertEqual(prov.SCHEMA, 2, 'schema 2 is what makes tool.sha256 deciding')
 
 
 class MissingFieldRefusalTests(ProvenanceBase):
@@ -538,7 +756,7 @@ class MissingFieldRefusalTests(ProvenanceBase):
         empty = f' * {prov.BEGIN_MARK}\n * {prov.END_MARK}'
         corpus = self.corpus('empty-block', c=corpus_c(self.values, body=empty),
                              h=corpus_h(self.values, body=empty))
-        ok, problems, _ = self.check(corpus)
+        ok, problems = self.check(corpus)
         self.assertFalse(ok, 'an empty provenance block was accepted')
         for field in DECIDING_FIELDS:
             if field not in self.values:
@@ -588,7 +806,7 @@ class MalformedBlockTests(ProvenanceBase):
         self.assertTrue(any('not "key = value"' in p for p in problems), problems)
 
     def test_an_unknown_schema_value_is_refused(self):
-        for unknown in ('2', '0', 'one'):
+        for unknown in ('3', '0', 'one'):
             with self.subTest(schema=unknown):
                 recorded = dict(self.values, schema=unknown)
                 corpus = self.corpus(f'schema-{unknown}', c=corpus_c(recorded),
@@ -614,7 +832,7 @@ class MalformedBlockTests(ProvenanceBase):
         self.assertEqual(len(blocks), 1)
         self.assertEqual(blocks[0], self.values,
                          'a stray line outside the markers was absorbed into the block')
-        ok, _, _ = self.check(self.corpus('stray-line', c=text))
+        ok, _ = self.check(self.corpus('stray-line', c=text))
         self.assertTrue(ok, 'a stray line outside the markers changed the verdict')
 
 
@@ -632,7 +850,7 @@ class InconsistentCountTests(ProvenanceBase):
     def test_the_counts_are_compared_as_values_not_as_strings(self):
         """`126` and `0126` are different recordings of the same count and must refuse."""
         recorded = dict(self.values, programs='0' + self.values['programs'])
-        ok, problems, _ = prov.compare(recorded, dict(self.values))
+        ok, problems = prov.compare(recorded, dict(self.values))
         self.assertFalse(ok, 'a re-spelled count was accepted; the recorded text is the '
                              'record')
         self.assertTrue(any('programs' in p for p in problems), problems)
@@ -641,10 +859,10 @@ class InconsistentCountTests(ProvenanceBase):
 class CorpusSequenceTests(ProvenanceBase):
     """The steps only `check_corpus` has -- the ones a drift would silently lose.
 
-    `scripts/build-jsrf.py` calls `check_corpus` and nothing else, so if one of
-    these steps is dropped the build stops refusing and no other fixture notices.
-    Each case here therefore drives the production function through a real
-    directory and asserts the step's own words.
+    `scripts/build-jsrf.py` calls `check_corpus` and nothing else, so if one of these
+    steps is dropped the build stops refusing and no other fixture notices.  Each case
+    here therefore drives the production function through a real directory and asserts
+    the step's own words.
     """
 
     def test_a_corpus_missing_the_c_file_is_refused(self):
@@ -699,8 +917,8 @@ class CorpusSequenceTests(ProvenanceBase):
     def test_a_distinct_that_disagrees_with_the_declared_count_is_refused(self):
         """The block must agree with the table it sits in, not only with itself.
 
-        This is what stops a block copied from a different corpus: the fields can
-        all match `want` while the table beside them holds a different number of rows.
+        This is what stops a block copied from a different corpus: the fields can all
+        match `want` while the table beside them holds a different number of rows.
         """
         corpus = self.corpus('count-disagrees', c=corpus_c(self.values, count=999),
                              h=corpus_h(self.values))
@@ -720,14 +938,14 @@ class CorpusSequenceTests(ProvenanceBase):
     def test_the_count_is_read_from_the_c_not_the_header(self):
         """A check that scanned the header would be vacuous: the value is in the `.c`.
 
-        A bogus count in the `.h` alone must therefore change nothing, and a bogus
-        count in the `.c` must refuse -- the two together pin the file the check reads.
+        A bogus count in the `.h` alone must therefore change nothing, and a bogus count
+        in the `.c` must refuse -- the two together pin the file the check reads.
         """
         corpus = self.corpus('h-bogus-count', c=corpus_c(self.values),
                              h=corpus_h(self.values, count=999))
-        ok, problems, advisories = self.check(corpus)
+        ok, problems = self.check(corpus)
         self.assertTrue(ok, f'a count in the header alone changed the verdict, so the check '
-                            f'is not reading the .c: {problems!r} {advisories!r}')
+                            f'is not reading the .c: {problems!r}')
 
         corpus = self.corpus('c-bogus-count', c=corpus_c(self.values, count=999),
                              h=corpus_h(self.values, count=999))
@@ -744,48 +962,58 @@ class CorpusSequenceTests(ProvenanceBase):
         for name in prov.CORPUS_FILES:
             with self.subTest(file=name):
                 self.assertTrue((corpus / name).is_file())
-        ok, problems, _ = self.check(corpus)
+        ok, problems = self.check(corpus)
         self.assertTrue(ok, problems)
 
+    def test_a_caller_that_supplies_no_expectation_at_all_is_refused(self):
+        """The vacuous-guard shape: an empty `want` compares nothing and reports success."""
+        problems = self.assert_corpus_refused(self.corpus('empty-want'), 'no expectation',
+                                              'an empty want', want={})
+        for field in DECIDING_FIELDS:
+            with self.subTest(field=field):
+                self.assertTrue(any(field in p for p in problems),
+                                f'the empty want did not name {field!r}: {problems!r}')
 
-class MutationTests(ProvenanceBase):
+    def test_a_caller_that_names_the_wrong_number_of_files_is_refused(self):
+        """The two-file step unpacks exactly two names; a different arity must refuse."""
+        for files in (('nv2a_vsh_programs.c',),
+                      ('nv2a_vsh_programs.c', 'nv2a_vsh_programs.h', 'extra.c')):
+            with self.subTest(files=files):
+                ok, problems = prov.check_corpus(self.corpus('arity'), self.values,
+                                                 files=files)
+                self.assertFalse(ok, f'{len(files)} file(s) were accepted as a corpus pair')
+                self.assertTrue(any('exactly two' in p for p in problems), problems)
+
+
+class CompareMutationTests(ProvenanceBase):
     """The deciding comparison cannot be removed or weakened unnoticed.
 
-    Each mutation is applied to a SCRATCH copy of `scripts/vsh_aot_provenance.py`
-    (the repository file is only ever read) and loaded as a separate module, so
-    the mutant is a real execution of the real code path.  The requirement is not
-    "the mutant behaves differently" but the stronger one: at least one case the
-    shipped guard refuses must be ACCEPTED by the mutant -- the suite is
-    load-bearing exactly when a neutered guard turns it red.
+    Each mutation is applied to a SCRATCH copy of `scripts/vsh_aot_provenance.py` (the
+    repository file is only ever read) and loaded as a separate module, so the mutant is
+    a real execution of the real code path.  The requirement is not "the mutant behaves
+    differently" but the stronger one: at least one case the shipped guard refuses must
+    be ACCEPTED by the mutant -- the suite is load-bearing exactly when a neutered guard
+    turns it red.  `WeakeningMutantTests` is the same requirement at file/process level.
     """
 
     MUTATIONS = {
         'compare returns ok unconditionally': [
-            ('    problems = []\n    advisories = []\n    for key in want:\n',
-             '    return (True, [], [])\n'
-             '    problems = []\n    advisories = []\n    for key in want:\n')],
+            ('    problems = []\n    for key in want:\n',
+             '    return (True, [])\n    problems = []\n    for key in want:\n')],
         'the deciding loop never iterates': [
-            ('    for key in want:\n        if key in ADVISORY_FIELDS:\n',
-             '    for key in []:\n        if key in ADVISORY_FIELDS:\n')],
+            ('    for key in want:\n', '    for key in []:\n')],
         'a source hash is dropped from the comparison': [
             ('    for key in want:\n',
              '    for key in want:\n'
              "        if key == 'source.nv2a_vsh_hlsl.c':\n"
              '            continue\n')],
-        'a value difference is not compared': [
-            ('        elif recorded[key] != want[key]:\n',
-             '        elif False:\n')],
+        'the tool hash is skipped again': [
+            ('    for key in want:\n',
+             '    for key in want:\n'
+             "        if key == 'tool.sha256':\n"
+             '            continue\n')],
         'an unknown field is no longer a refusal': [
-            ("        if key not in want and key not in ADVISORY_FIELDS:\n",
-             '        if False and key not in want:\n')],
-    }
-
-    # The one mutation that hardens rather than weakens the guard.  It is asserted
-    # separately (`test_making_the_tool_hash_decisive_is_detected`) because it flips
-    # an ACCEPTANCE into a refusal, which the refusal-case table cannot see.
-    ACCEPTANCE_MUTATIONS = {
-        'the tool hash is made decisive': [
-            ("ADVISORY_FIELDS = ('tool.sha256',)", 'ADVISORY_FIELDS = ()')],
+            ('        if key not in want:\n', '        if False and key not in want:\n')],
     }
 
     def test_the_case_table_is_refused_by_the_shipped_guard(self):
@@ -812,8 +1040,8 @@ class MutationTests(ProvenanceBase):
         cases = decision_cases(self.values)
         self.assertEqual(len(accepted(cases, module.compare)), len(cases),
                          'a guard that never refuses was not caught on every case')
-        ok, problems, advisories = module.compare(self.values, self.values)
-        self.assertEqual((ok, problems, advisories), (True, [], []))
+        ok, problems = module.compare(self.values, self.values)
+        self.assertEqual((ok, problems), (True, []))
 
     def test_dropping_one_source_is_caught_on_that_source_only(self):
         module, _ = self.mutant('a source hash is dropped from the comparison')
@@ -822,22 +1050,11 @@ class MutationTests(ProvenanceBase):
                                            'source.nv2a_vsh_hlsl.c is missing'],
                          f'the dropped field was not isolated: {flipped!r}')
 
-    def test_making_the_tool_hash_decisive_is_detected(self):
-        """The reverse mutation: 'hardening' the advisory field must also be caught.
-
-        This one is not caught by a refusal case flipping -- making the tool hash
-        decisive causes an ACCEPTANCE to turn into a refusal, which is the failure
-        mode that would refuse a corpus `just shaders` had just produced.  So it is
-        asserted directly, against the mutant module.
-        """
-        module, path = self.mutant('the tool hash is made decisive')
-        recorded = dict(self.values, **{'tool.sha256': 'a' * 64})
-        ok, problems, advisories = module.compare(recorded, dict(self.values))
-        self.assertFalse(ok, f'{path} still accepts a differing tool hash, so the mutation '
-                             f'did not take')
-        self.assertTrue(any('tool.sha256' in p for p in problems),
-                        f'the decisive tool hash was not named as the reason: {problems!r}')
-        self.assertEqual(advisories, [])
+    def test_skipping_the_tool_hash_is_caught_on_the_tool_hash_alone(self):
+        module, _ = self.mutant('the tool hash is skipped again')
+        flipped = sorted(accepted(decision_cases(self.values), module.compare))
+        self.assertEqual(flipped, ['tool.sha256 differs', 'tool.sha256 is missing'],
+                         f'the skipped field was not isolated: {flipped!r}')
 
     def test_the_mutants_are_weakened_guards_not_broken_modules(self):
         """A mutation must weaken the comparison, not crash or empty it.
@@ -850,8 +1067,8 @@ class MutationTests(ProvenanceBase):
             'the deciding loop never iterates': ('unknown-field', 'unknown.field'),
             'a source hash is dropped from the comparison': ('moved-source-h',
                                                              'source.nv2a_vsh_hlsl.h'),
-            'a value difference is not compared': ('missing-source-h',
-                                                   'source.nv2a_vsh_hlsl.h'),
+            'the tool hash is skipped again': ('missing-source-h',
+                                               'source.nv2a_vsh_hlsl.h'),
             'an unknown field is no longer a refusal': ('moved-source-h',
                                                         'source.nv2a_vsh_hlsl.h'),
         }
@@ -865,7 +1082,7 @@ class MutationTests(ProvenanceBase):
                     recorded['source.nv2a_vsh_hlsl.h'] = 'moved'
                 else:
                     del recorded['source.nv2a_vsh_hlsl.h']
-                ok, problems, _ = module.compare(recorded, dict(self.values))
+                ok, problems = module.compare(recorded, dict(self.values))
                 self.assertFalse(ok, f'{mutation!r} stopped refusing {needle!r} entirely, so it '
                                      f'is a broken module rather than a weakened guard')
                 self.assertTrue(any(needle in p for p in problems),
@@ -876,9 +1093,15 @@ class CorpusMutationTests(ProvenanceBase):
     """`check_corpus`'s own steps cannot be dropped unnoticed either.
 
     Each entry removes ONE step of the production sequence in a scratch copy.  The
-    corpus that entry's case builds is one the shipped function refuses; after the
-    step is removed the mutant must ACCEPT it, or the step is unguarded -- nothing
-    else in the suite drives it, so a silent drift there would keep the suite green.
+    corpus that entry's case builds is one the shipped function refuses; after the step
+    is removed the mutant must ACCEPT it, or the step is unguarded -- nothing else in the
+    suite drives it, so a silent drift there would keep the suite green.
+
+    The two-file agreement step is deliberately NOT among them: now that EVERY field
+    decides, two files that differ from each other cannot both equal `want`, so a corpus
+    that trips the two-file step trips the field comparison first and removing the step
+    changes no verdict.  Its message is still asserted (`CorpusSequenceTests`,
+    `RealCorpusTests`); it is the step's independent DETECTABILITY that is gone.
     """
 
     CORPUS_MUTATIONS = {
@@ -904,29 +1127,16 @@ class CorpusMutationTests(ProvenanceBase):
         'field problems are dropped': [
             ("        problems += [f'{path}: {p}' for p in field_problems]\n",
              '        problems += []\n')],
-        'field problems become advice': [
-            ("        problems += [f'{path}: {p}' for p in field_problems]\n",
-             "        advisories += [f'{path}: {p}' for p in field_problems]\n")],
-        'the two files are never compared': [
-            ('        if first != second:\n', '        if False:\n')],
         'the declared count is never compared': [
             ("        elif recorded[files[0]].get('distinct') != declared.group(1):\n",
              '        elif False:\n')],
+        'the tool hash is no longer required of the caller': [
+            ("                            + ['tool.sha256', 'tool.args', 'dxc.version', 'dxc.args',\n",
+             "                            + ['tool.args', 'dxc.version', 'dxc.args',\n")],
     }
 
     def mutation_table(self, mutation):
         return self.CORPUS_MUTATIONS[mutation]
-
-    def split_files(self, name):
-        """The `.c` and `.h` recording DIFFERENT provenance the field check tolerates.
-
-        The difference is in an advisory field, so each file still compares clean
-        against `want` -- only the two-file step can see the split.  That is exactly
-        the drift this step exists for, and it makes the step's fixture isolate it.
-        """
-        return self.corpus(name,
-                           c=corpus_c(dict(self.values, **{'tool.sha256': 'a' * 64})),
-                           h=corpus_h(dict(self.values, **{'tool.sha256': 'b' * 64})))
 
     def cases(self):
         """`{mutation: the corpus the shipped guard refuses and the mutant accepts}`."""
@@ -942,22 +1152,28 @@ class CorpusMutationTests(ProvenanceBase):
                             c=corpus_c(self.values) + corpus_c(self.values)),
             'malformed-block problems are dropped':
                 self.corpus('m-malformed',
-                            c=duplicate_field(corpus_c(self.values), 'dxc.version')),
+                            c=duplicate_field(corpus_c(self.values), 'tool.sha256')),
             'field problems are dropped':
                 self.corpus('m-moved-field', c=corpus_c(moved), h=corpus_h(moved)),
-            'field problems become advice':
-                self.corpus('m-moved-field-2', c=corpus_c(moved), h=corpus_h(moved)),
-            'the two files are never compared': self.split_files('m-split'),
             'the declared count is never compared':
                 self.corpus('m-count', c=corpus_c(self.values, count=999),
                             h=corpus_h(self.values)),
+            'the tool hash is no longer required of the caller':
+                self.corpus('m-no-tool-expectation',
+                            c=without_field(corpus_c(self.values), 'tool.sha256'),
+                            h=without_field(corpus_h(self.values), 'tool.sha256')),
         }
+
+    def wants(self):
+        """The `want` each case is checked against (one case shapes its own)."""
+        without_tool = {k: v for k, v in self.values.items() if k != 'tool.sha256'}
+        return {'the tool hash is no longer required of the caller': without_tool}
 
     def test_the_shipped_guard_refuses_every_case(self):
         """The control: the shipped function refuses all of them."""
         for mutation, corpus in self.cases().items():
             with self.subTest(case=mutation):
-                ok, problems, _ = self.check(corpus)
+                ok, problems = self.check(corpus, self.wants().get(mutation))
                 self.assertFalse(ok, f'the shipped guard accepted the corpus for '
                                      f'{mutation!r}: {problems!r}')
 
@@ -965,7 +1181,8 @@ class CorpusMutationTests(ProvenanceBase):
         for mutation, corpus in self.cases().items():
             with self.subTest(mutation=mutation):
                 module, path = self.mutant(mutation)
-                ok, problems, advisories = module.check_corpus(corpus, self.values)
+                ok, problems = module.check_corpus(corpus, self.wants().get(mutation)
+                                                   or self.values)
                 self.assertTrue(
                     ok,
                     f'the fixtures did not notice {mutation!r} in {path}: the shipped guard '
@@ -981,474 +1198,908 @@ class CorpusMutationTests(ProvenanceBase):
             'a blockless file is no longer refused':
                 self.corpus('p-two-blocks',
                             c=corpus_c(self.values) + corpus_c(self.values)),
-            'a second block is no longer refused': self.split_files('p-split'),
-            'the two files are never compared':
+            'a second block is no longer refused':
                 self.corpus('p-count', c=corpus_c(self.values, count=999),
                             h=corpus_h(self.values)),
+            'the tool hash is no longer required of the caller':
+                self.corpus('p-split', c=corpus_c(self.values),
+                            h=corpus_h(moved)),
         }
         for mutation, corpus in probes.items():
             with self.subTest(mutation=mutation):
                 module, _ = self.mutant(mutation)
-                ok, problems, _ = module.check_corpus(corpus, self.values)
+                ok, problems = module.check_corpus(corpus, self.values)
                 self.assertFalse(ok, f'{mutation!r} stopped refusing everything, so it is a '
                                      f'broken module rather than a weakened guard')
 
-    @unittest.skipIf(os.environ.get('JSRF_R1_NO_SUBPROCESS'),
-                     'the subprocess form runs the suite; it must not recurse')
-    def test_a_corpus_mutation_is_caught_through_the_whole_suite(self):
-        """The end-to-end form: the suite run against the mutant must go red.
-
-        This runs the suite in a subprocess with the override pointed at the mutant,
-        which is what the scratch harness does for every mutation; doing it here too
-        means a regression in the harness cannot hide the loss of a step.  The child
-        sets JSRF_R1_NO_SUBPROCESS so it does not spawn a child of its own.
-        """
-        module, path = self.mutant('the two files are never compared')
-        env = dict(os.environ, JSRF_R1_PROVENANCE=str(path), JSRF_R1_NO_SUBPROCESS='1')
-        cp = subprocess.run([sys.executable, '-X', 'utf8', '-m', 'unittest',
-                             'tests.test_vsh_aot_provenance'],
-                            cwd=str(ROOT), env=env, capture_output=True, text=True,
-                            timeout=300)
-        self.assertNotEqual(cp.returncode, 0,
-                            'the suite stayed green against a check_corpus whose two-file '
-                            f'comparison was removed:\n{cp.stderr[-3000:]}')
-        self.assertIn('FAILED', cp.stderr)
-        self.assertIn('CorpusMutationTests', cp.stderr)
-
 
 class ModuleUnderTestTests(unittest.TestCase):
-    """The fixtures must exercise the shipped module, never a copy of it."""
+    """The fixtures must exercise the shipped scripts, never a private copy."""
 
     def test_the_default_module_is_the_shipped_file(self):
-        override = os.environ.get('JSRF_R1_PROVENANCE')
+        override = os.environ.get('JSRF_R1_SCRIPTS')
         if override:
-            self.assertEqual(Path(prov.__file__).resolve(), Path(override).resolve(),
-                             'JSRF_R1_PROVENANCE is set but the fixtures did not honour it, '
-                             'so the mutation harness would silently test the wrong module')
+            self.assertEqual(Path(prov.__file__).resolve(),
+                             (Path(override) / 'vsh_aot_provenance.py').resolve(),
+                             'JSRF_R1_SCRIPTS is set but the fixtures did not honour it, so '
+                             'the mutation harness would silently test the wrong module')
             return
         self.assertEqual(Path(prov.__file__).resolve(), SHIPPED.resolve(),
                          'the fixtures imported a copy of the guard instead of the shipped '
                          'module')
         self.assertEqual(Path(prov.__file__).resolve(), PROVENANCE.resolve())
 
+    def test_the_three_scripts_come_from_the_same_directory(self):
+        """The override redirects the provenance module, the generator AND the entry.
+
+        One override for all three, because a mutant is a directory of scripts: a
+        fixture that redirected only the module could never exercise a mutated guard
+        entry (`scripts/build-jsrf.py`) or a mutated toolkit binding
+        (`scripts/gen-shaders.py`).
+        """
+        for path in (PROVENANCE, GEN_SHADERS_PATH, BUILD_JSRF):
+            with self.subTest(script=path.name):
+                self.assertTrue(path.is_file(), f'{path} is missing')
+                self.assertEqual(path.parent.resolve(), SCRIPTS_DIR.resolve())
+        if os.environ.get('JSRF_R1_SCRIPTS'):
+            self.assertNotEqual(SCRIPTS_DIR.resolve(), SCRIPTS.resolve(),
+                                'the override must point somewhere else, or the mutant '
+                                'would be the shipped tree')
+
     def test_the_shipped_module_is_the_schema_definition(self):
-        for name in ('SCHEMA', 'SOURCE_NAMES', 'DXC_ARGS', 'TOOL_ARGS', 'ADVISORY_FIELDS',
-                     'REMEDY', 'BEGIN_MARK', 'END_MARK', 'CORPUS_FILES', 'COUNT_FILE'):
+        for name in ('SCHEMA', 'SOURCE_NAMES', 'DXC_ARGS', 'TOOL_ARGS', 'REMEDY',
+                     'BEGIN_MARK', 'END_MARK', 'CORPUS_FILES', 'COUNT_FILE',
+                     'sha256_file', 'source_paths', 'source_hashes', 'dxc_version',
+                     'expected', 'compare', 'check_corpus', 'render_block', 'parse_block'):
             with self.subTest(name=name):
                 self.assertTrue(hasattr(prov, name), f'the schema no longer defines {name}')
-        self.assertEqual(prov.ADVISORY_FIELDS, ('tool.sha256',))
-        self.assertNotIn('source.nv2a_vsh_hlsl.c', prov.ADVISORY_FIELDS)
-        self.assertNotIn('dxc.version', prov.ADVISORY_FIELDS)
+        self.assertEqual(prov.SCHEMA, 2)
+        for source in prov.SOURCE_NAMES:
+            with self.subTest(source=source):
+                self.assertIn(f'source.{source}', FULL_FIELDS)
+
+    def test_the_advisory_api_is_deleted_not_merely_unused(self):
+        for name in REMOVED_ADVISORY_NAMES:
+            with self.subTest(name=name):
+                self.assertFalse(hasattr(prov, name))
 
     def test_check_corpus_is_the_entry_point_the_build_calls(self):
         """`build-jsrf.py` must call `check_corpus`, not a private sequence."""
-        text = (ROOT / 'scripts' / 'build-jsrf.py').read_text(encoding='utf-8')
+        text = BUILD_JSRF.read_text(encoding='utf-8')
         self.assertIn('prov.check_corpus(', text,
                       'the build no longer calls the shared entry point, so the fixtures '
                       'and the guard can drift apart')
         self.assertIn('def check_corpus(corpus_dir, want, files=CORPUS_FILES)',
-                      SHIPPED.read_text(encoding='utf-8'))
+                      PROVENANCE.read_text(encoding='utf-8'))
+
+    def test_the_build_entry_cut_loads_the_redirected_scripts(self):
+        """The entry resolves its modules relative to ITSELF, so the override redirects
+        the provenance module, the generator and the entry together (observable, not
+        inferred from the source text)."""
+        namespace = build_jsrf_cut(dxc=DXC)
+        for name, module in (('vsh_aot_provenance', namespace['prov']),
+                             ('gen-shaders', namespace['gen_shaders']),
+                             ('jsrf_build', namespace['jsrf_build'])):
+            with self.subTest(module=name):
+                self.assertEqual(Path(module.__file__).resolve(),
+                                 (SCRIPTS_DIR / f'{name}.py').resolve())
 
 
-class NoHostToolTests(ProvenanceBase):
-    """The no-host-tool case: a current corpus must not be refused for a missing tool.
+# ── the toolkit binding ──────────────────────────────────────────────────────
 
-    The tool hash is advisory, so a tree with no `build/` (the corpus lives in
-    `src/recomp/gen/shaders` and survives deleting it) is a valid tree.  These are
-    the false-positive fixtures: before this rule, `expected` demanded a tool path
-    and the build guard refused when none was found -- rejecting work that was fine.
+class SyntheticToolkit:
+    """A root that only has to satisfy `resolve_toolkit`'s checkout test.
+
+    The three sources are throwaway text: `resolve_toolkit` checks that they exist, and
+    the fixtures that need real content (the entry harness, the override freshness
+    cases) copy the sibling toolkit's files instead.
     """
 
-    def test_expected_without_a_tool_omits_only_the_tool_hash(self):
-        """`tool_path=None` drops `tool.sha256` and nothing else."""
-        with_tool = prov.expected(self.inputs.toolkit, self.inputs.tool, DXC,
-                                  programs=self.programs, distinct=self.distinct)
-        without = prov.expected(self.inputs.toolkit, None, DXC,
-                                programs=self.programs, distinct=self.distinct)
-        self.assertEqual(sorted(set(with_tool) - set(without)), ['tool.sha256'],
-                         'a no-tool `want` must omit exactly the advisory field')
-        self.assertEqual(set(without) - set(with_tool), set())
-        self.assertEqual({k: v for k, v in with_tool.items() if k != 'tool.sha256'},
-                         without,
-                         'the no-tool `want` differs from the with-tool one outside '
-                         'tool.sha256')
-        for field in DECIDING_FIELDS:
-            with self.subTest(field=field):
-                self.assertIn(field, without, f'{field} went missing from a no-tool want')
-        self.assertEqual(sorted(without), sorted(set(FULL_FIELDS) - {'tool.sha256'}))
-
-    def test_a_no_tool_want_still_refuses_a_moved_source(self):
-        """Omitting the advisory must not weaken anything deciding."""
-        want = prov.expected(self.inputs.toolkit, None, DXC,
-                             programs=self.programs, distinct=self.distinct)
-        for field in DECIDING_FIELDS:
-            with self.subTest(field=field):
-                moved = dict(self.values, **{field: f'moved-{field}'})
-                self.assert_refused(moved, want, field)
-
-    def test_a_recorded_tool_hash_is_accepted_when_want_has_none(self):
-        """The false positive itself: a recorded advisory vs a want that lacks it."""
-        want = prov.expected(self.inputs.toolkit, None, DXC,
-                             programs=self.programs, distinct=self.distinct)
-        ok, problems, advisories = prov.compare(dict(self.values), want)
-        self.assertTrue(ok, f'a recorded tool hash refused a no-tool want, which would '
-                            f'reject a current tree with no build/: {problems!r}')
-        self.assertEqual(problems, [])
-        self.assertEqual(advisories, [],
-                         f'nothing to advise about when the want has no tool hash: '
-                         f'{advisories!r}')
-
-    def test_a_no_tool_want_accepts_a_corpus_through_check_corpus(self):
-        """End to end through the production entry point, both files present."""
-        want = prov.expected(self.inputs.toolkit, None, DXC,
-                             programs=self.programs, distinct=self.distinct)
-        corpus = self.corpus('no-tool')
-        ok, problems, advisories = prov.check_corpus(corpus, want)
-        self.assertTrue(ok, f'a corpus with a recorded tool hash was refused when no host '
-                            f'tool exists: {problems!r}')
-        self.assertEqual(problems, [])
-        self.assertEqual(advisories, [])
-
-    def test_a_different_tool_hash_is_accepted_with_an_advisory_through_check_corpus(self):
-        """The other direction: the want HAS a different tool hash."""
-        want = dict(self.values, **{'tool.sha256': 'a' * 64})
-        corpus = self.corpus('other-tool')
-        ok, problems, advisories = prov.check_corpus(corpus, want)
-        self.assertTrue(ok, f'a different tool hash refused a current corpus: {problems!r}')
-        self.assertEqual(problems, [])
-        self.assertEqual(len(advisories), 2, f'one advisory per file: {advisories!r}')
-        for advisory in advisories:
-            self.assertIn('tool.sha256', advisory)
-            self.assertIn('advisory', advisory)
-
-    def test_a_missing_tool_hash_in_the_corpus_is_accepted_too(self):
-        """Neither direction of the advisory may refuse: absent recorded, absent want."""
-        without = {k: v for k, v in self.values.items() if k != 'tool.sha256'}
-        want = prov.expected(self.inputs.toolkit, None, DXC,
-                             programs=self.programs, distinct=self.distinct)
-        ok, problems, advisories = prov.compare(without, want)
-        self.assertTrue(ok, f'both sides lacking the advisory refused: {problems!r}')
-        self.assertEqual(problems, [])
-        self.assertEqual(advisories, [])
-
-    def test_the_no_tool_want_still_refuses_a_split_or_a_bad_count(self):
-        """The rest of `check_corpus` keeps working when the tool is absent."""
-        want = prov.expected(self.inputs.toolkit, None, DXC,
-                             programs=self.programs, distinct=self.distinct)
-        moved = dict(self.values, **{'dxc.version': 'MOVED'})
-        split = self.corpus('no-tool-split', c=corpus_c(self.values), h=corpus_h(moved))
-        ok, problems, _ = prov.check_corpus(split, want)
-        self.assertFalse(ok, 'a split corpus was accepted just because no tool was found')
-        self.assertTrue(any('record different provenance' in p for p in problems), problems)
-
-        count = self.corpus('no-tool-count', c=corpus_c(self.values, count=999))
-        ok, problems, _ = prov.check_corpus(count, want)
-        self.assertFalse(ok, 'a bad declared count was accepted with no tool')
-        self.assertTrue(any('nv2a_vsh_program_count' in p for p in problems), problems)
+    def __init__(self, parent, name='xboxrecomp'):
+        self.root = Path(parent) / name
+        (self.root / 'src' / 'video').mkdir(parents=True)
+        (self.root / 'CMakeLists.txt').write_text('# fixture toolkit root\n',
+                                                  encoding='utf-8')
+        for source in prov.SOURCE_NAMES:
+            (self.root / 'src' / 'video' / source).write_text(
+                f'/* {source}: fixture toolkit source */\n', encoding='utf-8')
 
 
-class StripAdvisoryTests(ProvenanceBase):
-    """`strip_advisory` must blank the advisory lines and nothing else.
+def write_cache(build_dir, value, comment=True):
+    """A hand-written `CMakeCache.txt` carrying one `XBOXRECOMP_DIR` entry.
 
-    `gen-shaders.py --check` compares the regenerated bytes against the committed
-    corpus with this function applied to both sides, so a different-but-equivalent
-    host tool binary stops looking like a stale corpus.  That is only safe if the
-    strip is EXACTLY as wide as the advisory: too narrow and `--check` keeps its
-    false positive, too wide and a moved source or dxc would be blanked away and
-    `--check` would stop noticing a genuinely stale corpus.
+    CMake writes a `//`-comment line above each entry, so the parser must tolerate both
+    that and a `//`-only line -- which is why the tolerant regex exists.
+    """
+    build = Path(build_dir)
+    build.mkdir(parents=True, exist_ok=True)
+    lines = []
+    if comment:
+        lines += ['//Path to the xboxrecomp toolkit root directory', '//']
+    lines.append(f'XBOXRECOMP_DIR:PATH={value}')
+    (build / 'CMakeCache.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+    return build
+
+
+def write_home_dir_cache(tool_build_dir, value, *, type_name='INTERNAL',
+                         entry='CMAKE_HOME_DIRECTORY'):
+    """A hand-written `CMakeCache.txt` recording `CMAKE_HOME_DIRECTORY`.
+
+    This is the OWNED TOOL tree's cache (`build/vsh-tool/CMakeCache.txt`), which is a
+    different file from the game build tree's: CMake records there the toolkit it
+    configured THAT tree against, and the production binding check reads it back before
+    the tree's artifact is used or rebuilt.  `type_name` is a knob because the entry's
+    type is not fixed -- a configure that failed early leaves `:UNINITIALIZED`, a
+    hand-written cache may carry no type at all -- while the VALUE is what decides.
+    """
+    build = Path(tool_build_dir)
+    build.mkdir(parents=True, exist_ok=True)
+    type_part = '' if type_name is None else f':{type_name}'
+    lines = ['//The top-level directory of the configure that produced this build tree',
+             '//',
+             f'{entry}{type_part}={value}']
+    (build / 'CMakeCache.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+    return build
+
+
+class ToolkitBindingTests(unittest.TestCase):
+    """Item 2: ONE toolkit -- the cache, the environment and the sibling cannot differ.
+
+    The measured defect: the guard hashed one toolkit (from the environment) while CMake
+    linked the cached one, and `jsrf_build.preflight` reported a third, hard-coded
+    sibling -- three self-consistent answers and a corpus that described SPIR-V nobody
+    linked.  `resolve_toolkit` is now the one binding, and a cache/environment
+    disagreement is a REFUSAL naming both paths (mutant M7 resolves it silently).
     """
 
-    def rendered(self, values):
-        """A corpus-shaped text: the block inside a C comment, as the generator emits."""
-        return corpus_c(values)
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory(prefix='jsrf-r1-toolkit-')
+        cls.gen = load_gen_shaders()
+        cls.cached = SyntheticToolkit(cls._tmp.name, 'cached-toolkit')
+        cls.other = SyntheticToolkit(cls._tmp.name, 'other-toolkit')
+        cls.empty = Path(cls._tmp.name) / 'empty-root'
+        cls.empty.mkdir()
 
-    def test_a_differing_advisory_compares_equal_after_stripping(self):
-        other = dict(self.values, **{'tool.sha256': 'b' * 64})
-        self.assertNotEqual(self.rendered(self.values), self.rendered(other),
-                            'the two texts must differ before stripping, or this fixture '
-                            'proves nothing')
-        self.assertEqual(prov.strip_advisory(self.rendered(self.values)),
-                         prov.strip_advisory(self.rendered(other)),
-                         'a differing tool hash survived stripping, so `--check` would '
-                         'still call a current corpus stale')
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
 
-    def test_a_differing_source_still_compares_unequal_after_stripping(self):
-        other = dict(self.values, **{'source.nv2a_vsh_hlsl.c': 'c' * 64})
-        self.assertNotEqual(prov.strip_advisory(self.rendered(self.values)),
-                            prov.strip_advisory(self.rendered(other)),
-                            'stripping blanked a SOURCE hash, which would make `--check` '
-                            'unable to notice a genuinely stale corpus')
+    def build(self, name, cache=MISSING, value=None):
+        """A scratch build dir with (or without) a hand-written cache entry."""
+        build = Path(self._tmp.name) / name
+        if cache is not MISSING:
+            write_cache(build, cache if value is None else value)
+        else:
+            build.mkdir(parents=True, exist_ok=True)
+        return build
 
-    def test_every_deciding_field_survives_stripping(self):
-        for field in DECIDING_FIELDS:
-            with self.subTest(field=field):
-                other = dict(self.values, **{field: f'moved-{field}'})
-                self.assertNotEqual(
-                    prov.strip_advisory(self.rendered(self.values)),
-                    prov.strip_advisory(self.rendered(other)),
-                    f'{field!r} was blanked by strip_advisory, so `--check` would miss it')
+    def test_the_cache_alone_binds_the_toolkit(self):
+        with patched_env(XBOXRECOMP_DIR=None):
+            root, label = self.gen.resolve_toolkit(
+                self.build('cache-only', str(self.cached.root)))
+        self.assertEqual(root, Path(os.path.realpath(str(self.cached.root))))
+        self.assertEqual(label, "the build tree's cached XBOXRECOMP_DIR")
 
-    def test_stripping_touches_only_the_advisory_lines(self):
-        """Only the advisory line's CONTENT changes; no other line is rewritten.
+    def test_the_environment_alone_binds_the_toolkit(self):
+        with patched_env(XBOXRECOMP_DIR=str(self.cached.root)):
+            root, label = self.gen.resolve_toolkit(self.build('no-cache'))
+        self.assertEqual(root, Path(os.path.realpath(str(self.cached.root))))
+        self.assertEqual(label, 'XBOXRECOMP_DIR')
 
-        `strip_advisory` blanks the value in place and leaves a blank line behind
-        (its replacement carries its own newline while `keepends` retains the
-        original).  That is harmless -- `parse_block` skips blank lines, `--check`
-        applies the strip to both sides, and a second strip is a no-op -- so this
-        asserts what actually matters: exactly one non-blank line differs, and it is
-        the advisory one.
+    def test_agreement_between_the_cache_and_the_environment_is_accepted(self):
+        # The same tree spelled two ways: the comparison must be on the resolved path,
+        # not on the text, or a normal build would refuse itself over `..`/`.`
+        spellings = (str(self.cached.root),
+                     str(self.cached.root / 'src' / 'video' / '..' / '..'))
+        for spelling in spellings:
+            with self.subTest(spelling=spelling):
+                with patched_env(XBOXRECOMP_DIR=spelling):
+                    root, label = self.gen.resolve_toolkit(
+                        self.build(f'both-equal-{len(spelling)}', str(self.cached.root)))
+                self.assertEqual(root, Path(os.path.realpath(str(self.cached.root))))
+                self.assertEqual(label, "the build tree's cached XBOXRECOMP_DIR")
+
+    def provenance_error(self, call):
+        """The message of a refusal that must BE the schema's `ProvenanceError`.
+
+        Matched by NAME, not by identity: `gen-shaders.py` loads the schema by path, so
+        the class object a fixture holds is not the one the generator raises -- only the
+        contract (the exception's name) is shared.
         """
-        text = self.rendered(self.values)
-        stripped = prov.strip_advisory(text)
-        self.assertNotEqual(stripped, text, 'nothing was stripped, so the fixture is '
-                                            'not exercising the function')
-        before = [line for line in text.splitlines() if line.strip()]
-        after = [line for line in stripped.splitlines() if line.strip()]
-        self.assertEqual(len(before), len(after),
-                         'stripping removed or added a non-blank line')
-        changed = [i for i, (one, two) in enumerate(zip(before, after)) if one != two]
-        self.assertEqual(len(changed), 1,
-                         f'exactly one line may change; {len(changed)} did: '
-                         f'{[before[i] for i in changed]}')
-        self.assertIn('tool.sha256', before[changed[0]])
-        self.assertNotIn(self.values['tool.sha256'], after[changed[0]])
+        with self.assertRaises(Exception) as caught:
+            call()
+        self.assertEqual(type(caught.exception).__name__, 'ProvenanceError',
+                         f'{type(caught.exception).__name__} is not the refusal the '
+                         f'contract names')
+        return str(caught.exception)
 
-    def test_stripping_only_adds_blank_lines_and_is_byte_comparison_only(self):
-        """The structural side effect, and the limit that makes it safe.
+    def test_a_cache_and_environment_conflict_is_refused_naming_both(self):
+        build = self.build('conflict', str(self.cached.root))
+        with patched_env(XBOXRECOMP_DIR=str(self.other.root)):
+            message = self.provenance_error(lambda: self.gen.resolve_toolkit(build))
+        self.assertIn(str(self.cached.root), message,
+                      f'the cached path was not named: {message!r}')
+        self.assertIn(str(self.other.root), message,
+                      f'the environment path was not named: {message!r}')
+        self.assertIn('-DXBOXRECOMP_DIR=', message,
+                      f'the refusal must name the configure remedy: {message!r}')
+        self.assertIn('unset XBOXRECOMP_DIR', message)
+        self.assertIn('just shaders', message,
+                      f'regenerating after switching trees is the other remedy: {message!r}')
 
-        Stripping leaves a blank line and a bare `<advisory>` marker where the value
-        was, so the result is deliberately NOT parseable provenance: `parse_block`
-        reports the marker line.  That is fine, because `gen-shaders.py --check` uses
-        the strip for a BYTE comparison and never feeds it to the guard -- and it is
-        the reason it must not be fed to the guard.  Both halves are asserted here so
-        the strip can never become a way to smuggle a weakened corpus past
-        `check_corpus`.
+    def test_neither_named_a_toolkit_falls_back_to_the_sibling_checkout(self):
+        # The sibling of the SCRIPTS' OWN root: with `JSRF_R1_SCRIPTS` pointed at a
+        # scratch copy, that root is the scratch dir, and the generator's fallback is its
+        # sibling -- a fixture that assumed the repository's layout would assert the wrong
+        # path (and would crash on a tree whose scratch sibling does not exist).
+        sibling = self.gen.ROOT.parent / 'xboxrecomp'
+        if not (sibling / 'CMakeLists.txt').is_file():
+            self.skipTest(f'no sibling toolkit checkout at {sibling}')
+        with patched_env(XBOXRECOMP_DIR=None):
+            root, label = self.gen.resolve_toolkit(self.build('no-cache-no-env'))
+        self.assertEqual(root, Path(os.path.realpath(str(sibling))))
+        self.assertEqual(label, 'the sibling checkout')
+
+    def test_a_root_that_is_not_a_checkout_is_refused_naming_the_missing_files(self):
+        build = self.build('not-a-checkout', str(self.empty))
+        with patched_env(XBOXRECOMP_DIR=None):
+            message = self.provenance_error(lambda: self.gen.resolve_toolkit(build))
+        self.assertIn(str(self.empty), message)
+        self.assertIn("the build tree's cached XBOXRECOMP_DIR", message,
+                      f'the refusal must name the label that CHOSE this root: {message!r}')
+        self.assertIn('CMakeLists.txt', message)
+        for name in prov.SOURCE_NAMES:
+            with self.subTest(source=name):
+                self.assertIn(name, message)
+        self.assertIn('just shaders', message)
+
+    def test_the_environment_root_is_validated_too(self):
+        with patched_env(XBOXRECOMP_DIR=str(self.empty)):
+            message = self.provenance_error(lambda: self.gen.resolve_toolkit(
+                self.build('env-empty')))
+        self.assertIn('XBOXRECOMP_DIR', message)
+        self.assertIn('CMakeLists.txt', message)
+
+    def test_cached_toolkit_reads_through_comment_lines(self):
+        build = self.build('with-comments', str(self.cached.root))
+        self.assertEqual(self.gen.cached_toolkit(build), Path(str(self.cached.root)))
+        self.assertEqual(self.gen.CACHE_NAME, 'CMakeCache.txt')
+        text = (build / 'CMakeCache.txt').read_text(encoding='utf-8')
+        self.assertIn('//', text, 'the fixture must actually carry comment lines')
+
+    def test_cached_toolkit_without_comments_still_resolves(self):
+        build = self.build('no-comments', str(self.cached.root))
+        write_cache(build, str(self.cached.root), comment=False)
+        self.assertEqual(self.gen.cached_toolkit(build), Path(str(self.cached.root)))
+
+    def test_cached_toolkit_resolves_a_relative_value_against_the_repo_root(self):
+        build = self.build('relative', '../xboxrecomp')
+        self.assertEqual(self.gen.cached_toolkit(build),
+                         self.gen.ROOT / '../xboxrecomp',
+                         'a hand-edited relative value must resolve against the repository '
+                         'root, which is where configure ran')
+
+    def test_cached_toolkit_says_nothing_when_the_cache_is_missing_or_silent(self):
+        self.assertIsNone(self.gen.cached_toolkit(self.build('absent-cache')))
+        for value in ('', '   '):
+            with self.subTest(value=value):
+                build = self.build(f'empty-entry-{len(value)}', value)
+                self.assertIsNone(self.gen.cached_toolkit(build),
+                                  'an empty cache entry is "the build tree has not spoken"')
+        build = self.build('no-entry')
+        (build / 'CMakeCache.txt').write_text('CMAKE_BUILD_TYPE:STRING=Release\n',
+                                              encoding='utf-8')
+        self.assertIsNone(self.gen.cached_toolkit(build))
+
+    def test_the_cache_beats_the_sibling_checkout(self):
+        """The measured defect asserted directly, minus the environment.
+
+        The cache is what CMake LINKS; the sibling checkout is only the last resort.  A
+        build whose cache names a toolkit must therefore bind to that toolkit rather than
+        to the sibling the guard could otherwise have reached.
         """
-        text = self.rendered(self.values)
-        stripped = prov.strip_advisory(text)
-        added = len(stripped.splitlines()) - len(text.splitlines())
-        self.assertEqual(added, 1, f'expected exactly one blank line to be added, got '
-                                   f'{added}')
-        _, problems = prov.parse_block(stripped)
-        self.assertTrue(any('<advisory>' in p for p in problems),
-                        f'the stripped text is expected to be unparsable, so that it '
-                        f'cannot be used as a corpus; parse_block said {problems!r}')
-        self.assertNotIn(self.values['tool.sha256'], stripped)
+        sibling = ROOT.parent / 'xboxrecomp'
+        with patched_env(XBOXRECOMP_DIR=None):
+            root, label = self.gen.resolve_toolkit(self.build('cache-beats-sibling',
+                                                              str(self.cached.root)))
+        self.assertEqual(root, Path(os.path.realpath(str(self.cached.root))))
+        self.assertNotEqual(str(root), str(sibling))
+        self.assertEqual(label, "the build tree's cached XBOXRECOMP_DIR")
 
-    def test_the_strip_is_not_a_way_past_the_guard(self):
-        """Feeding stripped text to the guard must NOT accept a stale corpus.
 
-        `check_corpus` reads files, so the case is built on disk: a corpus whose block
-        was stripped cannot be accepted, because the marker line is a parse problem.
-        This is what keeps `strip_advisory` a `--check` convenience rather than a
-        weakening of the deciding comparison.
+class ToolkitBindingConflictTests(unittest.TestCase):
+    """F1: the OWNED tool tree is bound to the toolkit it was configured against.
+
+    `build/vsh-tool` is one CMake build tree of ONE toolkit: its cache records that
+    toolkit as `CMAKE_HOME_DIRECTORY`, and `cmake --build` there compiles THAT tree's
+    sources from then on.  Using -- or rebuilding -- the tree while this repository
+    resolves a DIFFERENT toolkit would put one toolkit's code behind an executable whose
+    SHA-256 the corpus records as the other's, so the production guard and the generator
+    both refuse before the tree is touched.  The refusal names the tree, the toolkit it
+    was configured against, the toolkit this build resolves (with the rule that chose it),
+    the `CMAKE_HOME_DIRECTORY` value and the delete-and-re-run remedy.
+
+    A cache that is ABSENT, that has no such entry, or that names the SAME tree (in any
+    spelling or with any entry type) is NOT a conflict: a bare tool file and the
+    bootstrap configure are both legitimate, and the comparison is on the resolved path
+    rather than on the text.
+
+    `ToolkitBindingConflictTests` is also the catcher for mutant M8, so it must fail --
+    not skip -- when `toolkit_binding_conflict` stops refusing.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory(prefix='jsrf-r1-tool-tree-')
+        cls.gen = load_gen_shaders()
+        cls.a = SyntheticToolkit(cls._tmp.name, 'toolkit-a')
+        cls.b = SyntheticToolkit(cls._tmp.name, 'toolkit-b')
+        cls.label = 'the fixture toolkit'
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def tree_with(self, name, value=MISSING, *, type_name='INTERNAL',
+                  entry='CMAKE_HOME_DIRECTORY'):
+        """A scratch owned-tool tree with that cache; `MISSING` leaves none at all."""
+        tree = Path(self._tmp.name) / name
+        if value is MISSING:
+            tree.mkdir(parents=True, exist_ok=True)
+        else:
+            write_home_dir_cache(tree, value, type_name=type_name, entry=entry)
+        return tree
+
+    def conflict(self, toolkit, name, value=MISSING, **kwargs):
+        return self.gen.toolkit_binding_conflict(
+            toolkit, self.tree_with(name, value, **kwargs), self.label)
+
+    def test_a_tree_configured_against_another_toolkit_is_refused_naming_both_trees(self):
+        tree = self.tree_with('configured-against-a', str(self.a.root))
+        self.assertEqual(self.gen.owned_tool_toolkit(tree), self.a.root,
+                         'the fixture cache must be the entry the production reader reads')
+        # The entry's TYPE is not fixed (a failed configure leaves `:UNINITIALIZED`, a
+        # hand-written cache may carry none), and the VALUE is what decides.
+        for type_name in ('INTERNAL', 'PATH', 'FILEPATH', 'STRING', 'UNINITIALIZED', None):
+            with self.subTest(type_name=type_name):
+                write_home_dir_cache(tree, str(self.a.root), type_name=type_name)
+                message = self.gen.toolkit_binding_conflict(self.b.root, tree, self.label)
+                self.assertIsInstance(message, str,
+                                      'a tree configured against another toolkit was '
+                                      'accepted')
+                self.assertIn(str(tree), message,
+                              f'the refusal must name the tool tree: {message!r}')
+                self.assertIn(f'CMAKE_HOME_DIRECTORY={self.a.root}', message,
+                              f'the refusal must name the recorded value: {message!r}')
+                self.assertIn(str(self.a.root), message,
+                              f'the refusal must name the toolkit that tree was configured '
+                              f'against: {message!r}')
+                self.assertIn(str(self.b.root), message,
+                              f'the refusal must name the toolkit this build resolves: '
+                              f'{message!r}')
+                self.assertIn(f'{self.b.root} ({self.label})', message,
+                              f'the refusal must name WHICH rule chose the resolved '
+                              f'toolkit: {message!r}')
+                self.assertIn('DIFFERENT toolkit', message)
+                self.assertIn(f'delete {tree}', message,
+                              f'the remedy must delete the tree it names: {message!r}')
+                self.assertIn('just shaders', message,
+                              f'the remedy must name the regeneration recipe: {message!r}')
+                self.assertIn(f'reconfigures it against {self.b.root}', message,
+                              f'the remedy must say what the tree is reconfigured '
+                              f'against: {message!r}')
+
+    def test_an_override_does_not_exempt_the_tree(self):
+        """A run that used the override would still leave the tree rooted in the wrong
+        checkout, so the tree is refused before the override is even considered."""
+        tree = self.tree_with('with-override', str(self.a.root))
+        override = self.a.root / 'nv2a_vsh_hlsl.exe'
+        with patched_env(JSRF_NV2A_VSH_HLSL=str(override)):
+            message = self.gen.toolkit_binding_conflict(self.b.root, tree, self.label)
+        self.assertIsInstance(message, str,
+                              'an explicit override must not exempt the owned tool tree')
+
+    def test_a_tree_configured_against_the_resolved_toolkit_is_not_a_conflict(self):
+        variants = [('the exact path', str(self.a.root)),
+                    ('a trailing separator', str(self.a.root) + os.sep),
+                    ('a ..-spelling', str(self.a.root / 'src' / 'video' / '..' / '..')),
+                    ('forward slashes', str(self.a.root).replace(os.sep, '/'))]
+        if os.path.normcase('a') == os.path.normcase('A'):
+            variants.append(('an uppercase spelling', str(self.a.root).upper()))
+        for index, (spelling, value) in enumerate(variants):
+            with self.subTest(spelling=spelling):
+                self.assertIsNone(
+                    self.conflict(self.a.root, f'toolkit-a-{index}', value),
+                    f'{spelling!r} names the SAME tree, so it is not a conflict')
+        for type_name in ('INTERNAL', 'UNINITIALIZED', None):
+            with self.subTest(type_name=type_name):
+                self.assertIsNone(
+                    self.conflict(self.a.root, f'toolkit-a-type-{type_name}', str(self.a.root),
+                                  type_name=type_name))
+
+    def test_a_silent_cache_is_not_a_conflict(self):
+        """Absent cache, absent entry and an empty value are all "the tree has not spoken"."""
+        self.assertIsNone(self.conflict(self.b.root, 'no-cache'),
+                          'a tree that was never configured is not a conflict')
+        self.assertIsNone(self.conflict(self.b.root, Path(self._tmp.name) / 'never-created'),
+                          'a tree that does not exist at all is not a conflict')
+        entryless = self.tree_with('other-entries')
+        write_cache(entryless, str(self.a.root))
+        self.assertIsNone(self.gen.toolkit_binding_conflict(self.b.root, entryless,
+                                                            self.label),
+                          'an XBOXRECOMP_DIR entry is not a CMAKE_HOME_DIRECTORY one')
+        for type_name, value in (('INTERNAL', ''), ('INTERNAL', '   '),
+                                 ('UNINITIALIZED', '')):
+            with self.subTest(value=repr(value)):
+                self.assertIsNone(
+                    self.conflict(self.b.root, f'empty-{type_name}-{len(value)}', value,
+                                  type_name=type_name),
+                    'an empty value is "the tree has not spoken"')
+        lookalike = self.tree_with('lookalike', str(self.a.root),
+                                   entry='CMAKE_HOME_DIRECTORY_OLD')
+        self.assertIsNone(
+            self.gen.toolkit_binding_conflict(self.b.root, lookalike, self.label),
+            'a DIFFERENT variable whose name merely starts the same way is not the entry')
+
+
+# ── override freshness ───────────────────────────────────────────────────────
+
+class OverrideFreshnessTests(unittest.TestCase):
+    """Item 3: an environment override is freshness-verified, or refused.
+
+    Pre-fix, a stale `JSRF_NV2A_VSH_HLSL` was returned with a printed advisory and the
+    suite pinned that wording.  An advisory is not verification: the recorded
+    `tool.sha256` makes the corpus's tool identity decisive, so a binary that cannot be
+    shown to have read the sources it would record must be refused -- and it must NOT be
+    rebuilt or replaced, because it is a path the environment named.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        if TOOL is None:
+            raise unittest.SkipTest('no owned nv2a_vsh_hlsl.exe to copy')
+        sources = list(prov.source_paths(TOOLKIT).values())
+        if not all(p.is_file() for p in sources):
+            raise unittest.SkipTest(f'the toolkit sources are not present at {TOOLKIT}')
+        cls._tmp = tempfile.TemporaryDirectory(prefix='jsrf-r1-override-')
+        cls.dir = Path(cls._tmp.name)
+        cls.gen = load_gen_shaders()
+        cls.sources = sources
+        cls.before = min(p.stat().st_mtime for p in cls.sources) - 60
+        cls.after = max(p.stat().st_mtime for p in cls.sources) + 60
+        cls.tool_dir = cls.dir / 'vsh-tool'
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def tearDown(self):
+        os.environ.pop('JSRF_NV2A_VSH_HLSL', None)
+
+    def die_refusal(self, call):
+        """The message of a refusal that must come from `gen-shaders.py`'s `die`.
+
+        An override refusal is not the schema's `ProvenanceError`: it is the generator's
+        own `die` (SystemExit with the message on stderr), so the shape is asserted too.
         """
-        stripped_c = prov.strip_advisory(corpus_c(self.values))
-        corpus = self.corpus('stripped', c=stripped_c)
-        ok, problems, _ = self.check(corpus)
-        self.assertFalse(ok, 'a corpus whose provenance block was stripped was accepted')
-        self.assertTrue(any('malformed provenance block' in p for p in problems), problems)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            with self.assertRaises(SystemExit):
+                call()
+        return err.getvalue()
 
-    def test_stripping_is_idempotent_and_leaves_a_no_advisory_text_alone(self):
-        text = self.rendered(self.values)
-        stripped = prov.strip_advisory(text)
-        self.assertEqual(prov.strip_advisory(stripped), stripped,
-                         'stripping twice changed the text, so a second pass is not safe')
-        without = '\n'.join(line for line in text.splitlines()
-                            if 'tool.sha256' not in line)
-        self.assertEqual(prov.strip_advisory(without), without,
-                         'a text with no advisory line was rewritten anyway')
+    def override(self, name, mtime):
+        """A byte-identical copy of the owned artifact with `mtime` set."""
+        path = self.dir / name
+        shutil.copy2(TOOL, path)
+        os.utime(path, (mtime, mtime))
+        return path
 
-    def test_the_stripped_text_still_parses_to_the_same_deciding_fields(self):
-        """The blanking must not corrupt the block it sits in."""
-        text = self.rendered(self.values)
-        before = prov.parse_block(text)[0][0]
-        after = prov.parse_block(prov.strip_advisory(text))[0][0]
-        self.assertEqual({k: v for k, v in before.items() if k != 'tool.sha256'},
-                         {k: v for k, v in after.items() if k != 'tool.sha256'},
-                         'the fields other than the advisory changed under stripping')
+    def test_a_stale_override_is_refused_naming_the_override_and_both_remedies(self):
+        if not shipped_sources_are_current():
+            self.skipTest('the shipped corpus does not record the shipped sources, so the '
+                          'content step would fire before the override rule')
+        path = self.override('stale-nv2a_vsh_hlsl.exe', self.before)
+        with patched_env(JSRF_NV2A_VSH_HLSL=str(path)):
+            message = self.die_refusal(
+                lambda: self.gen.locate_host_tool(self.tool_dir, TOOLKIT))
+        self.assertIn(f'JSRF_NV2A_VSH_HLSL={path}', message,
+                      f'the refusal must name the exact override: {message!r}')
+        self.assertIn('is older than', message,
+                      f'the refusal must name the mtime reason: {message!r}')
+        newer = [p for p in self.sources if p.stat().st_mtime > self.before]
+        self.assertEqual(len(newer), 3, 'the fixture did not actually make the tool older '
+                                        'than all three sources')
+        for source in self.sources:
+            with self.subTest(source=source.name):
+                self.assertIn(source.name, message,
+                              f'the newer source was not named: {message!r}')
+        self.assertIn('cmake --build', message,
+                      f'the rebuild remedy was not named: {message!r}')
+        self.assertIn('unset JSRF_NV2A_VSH_HLSL', message,
+                      f'the "let the script use its own tool" remedy was not named: '
+                      f'{message!r}')
+        self.assertIn('never rebuilt or replaced', message,
+                      f'the no-touch rule was not stated: {message!r}')
+        self.assertNotIn('advisory', message.lower(),
+                         'the refusal still carries the old advisory wording, so the stale '
+                         'override is still a warning rather than a gate')
+        self.assertNotIn('PROVEN fresh', message)
 
-    def test_the_table_body_is_not_touched(self):
-        """Only provenance lines are blanked; the corpus's own C is untouched."""
-        text = self.rendered(self.values) + 'const int x = 42;\n'
-        self.assertTrue(prov.strip_advisory(text).endswith('const int x = 42;\n'))
-        self.assertIn('nv2a_vsh_program_count', prov.strip_advisory(text))
+    def test_a_fresh_override_whose_content_is_unchanged_is_accepted(self):
+        if not shipped_sources_are_current():
+            self.skipTest('the shipped corpus does not record the shipped sources, so the '
+                          'different-content refusal (not this acceptance) is the live rule')
+        path = self.override('fresh-nv2a_vsh_hlsl.exe', self.after)
+        with patched_env(JSRF_NV2A_VSH_HLSL=str(path)):
+            tool, label = self.gen.locate_host_tool(self.tool_dir, TOOLKIT)
+        self.assertEqual(Path(tool).resolve(), path.resolve(),
+                         'a current override must be used, not replaced by another tool')
+        self.assertEqual(label, f'JSRF_NV2A_VSH_HLSL={path}')
+        self.assertEqual(prov.sha256_file(path), prov.sha256_file(TOOL),
+                         'the fixture copy must be byte-identical or the content step, not '
+                         'the mtime rule, would be under test')
 
-    def test_stripping_the_real_corpus_changes_only_the_advisory_line(self):
-        """Against the shipped corpus: one line, in the block, and no other."""
-        if not CORPUS_C.is_file() or prov.BEGIN_MARK not in CORPUS_C.read_text(
-                encoding='utf-8'):
-            self.skipTest('the shipped corpus carries no block')
-        text = CORPUS_C.read_text(encoding='utf-8')
-        stripped = prov.strip_advisory(text)
-        before = [line for line in text.splitlines() if line.strip()]
-        after = [line for line in stripped.splitlines() if line.strip()]
-        self.assertEqual(len(before), len(after))
-        changed = [i for i, (one, two) in enumerate(zip(before, after)) if one != two]
-        self.assertEqual(len(changed), 1,
-                         f'exactly the advisory line must change, got {len(changed)}: '
-                         f'{[before[i] for i in changed]}')
-        self.assertIn('tool.sha256', before[changed[0]])
-        recorded = before[changed[0]].split(' = ', 1)[1].strip()
-        self.assertNotIn(recorded, after[changed[0]],
-                         'the recorded hash survived stripping')
-        # The table body below the block is byte-identical, so `--check` still
-        # compares the 4 MB of SPIR-V exactly.
-        tail = text[text.index(prov.END_MARK):]
-        self.assertIn(tail, stripped,
-                      'the corpus body below the provenance block was rewritten')
+    def test_an_override_that_is_set_but_missing_is_refused_naming_the_path(self):
+        absent = self.dir / 'no-such-override.exe'
+        with patched_env(JSRF_NV2A_VSH_HLSL=str(absent)):
+            message = self.die_refusal(
+                lambda: self.gen.locate_host_tool(self.tool_dir, TOOLKIT))
+        self.assertIn(str(absent), message)
+        self.assertIn('not ignored', message,
+                      f'a path named by the environment must never be silently ignored: '
+                      f'{message!r}')
+        self.assertIn('unset it', message)
+        self.assertFalse(absent.exists(), 'the refusal must not create the path it names')
+
+    def test_the_refused_override_is_not_rewritten_or_removed(self):
+        """The no-touch rule observed on the filesystem, not only in the wording."""
+        path = self.override('untouched-nv2a_vsh_hlsl.exe', self.before)
+        before = path.read_bytes()
+        mtime = path.stat().st_mtime
+        with patched_env(JSRF_NV2A_VSH_HLSL=str(path)):
+            self.die_refusal(lambda: self.gen.locate_host_tool(self.tool_dir, TOOLKIT))
+        self.assertEqual(path.read_bytes(), before,
+                         'the refusal rewrote a path the environment named')
+        self.assertEqual(path.stat().st_mtime, mtime,
+                         'the refusal touched the path the environment named')
 
 
-BUILD_JSRF = ROOT / 'scripts' / 'build-jsrf.py'
-PREFLIGHT_MARK = '# ── preflight'
+# ── the non-mutating `--check` path ──────────────────────────────────────────
+
+def owned_layout(tool=None):
+    """Where the owned artifact sits, relative to the tool build tree.
+
+    Derived from the REAL artifact's own path, so the fixtures build the tree this host
+    actually built (`src/video[/Release]/nv2a_vsh_hlsl.exe`) instead of assuming one.
+    """
+    try:
+        return Path(tool or TOOL).relative_to(ROOT / 'build' / 'vsh-tool').parts
+    except ValueError:
+        return ('src', 'video', 'Release', 'nv2a_vsh_hlsl.exe')
 
 
-def build_jsrf_cut(tool=MISSING, corpus_dir=None, toolkit=None, dxc=None):
+class CheckHostToolTests(unittest.TestCase):
+    """F2: `--check` FIND the tool and never builds, rebuilds or writes.
+
+    `locate_host_tool` may force a rebuild, and a rebuild moves the decisive
+    `tool.sha256` of the very corpus the check was asked about (and can leave the tree
+    refused), so `--check` goes through `check_host_tool`: `find_host_tool` only -- no
+    configure, no build, no write -- then the SAME `staleness_refusal` rule the build
+    guard uses, then a refusal naming `just shaders` when there is no tool at all.
+
+    The tolerated case is the interesting one: an OWNED artifact whose mtime is older
+    than the translator sources but whose recorded source CONTENT still matches.  Its
+    bytes and mtime must come out of the call unchanged -- if `--check` went through the
+    rebuilding path instead, `cmake --build` would run in a tree that has no build system
+    and the call would die rather than return the tool.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        if TOOL is None:
+            raise unittest.SkipTest('no owned nv2a_vsh_hlsl.exe to copy')
+        sources = list(prov.source_paths(TOOLKIT).values())
+        if not all(p.is_file() for p in sources):
+            raise unittest.SkipTest(f'the toolkit sources are not present at {TOOLKIT}')
+        cls._tmp = tempfile.TemporaryDirectory(prefix='jsrf-r1-check-')
+        cls.dir = Path(cls._tmp.name)
+        cls.gen = load_gen_shaders()
+        cls.sources = sources
+        cls.old = min(p.stat().st_mtime for p in sources) - 60
+        cls.tool_dir = cls.dir / 'vsh-tool'
+        cls.tool = cls.tool_dir / Path(*owned_layout())
+        cls.tool.parent.mkdir(parents=True)
+        shutil.copy2(TOOL, cls.tool)
+        os.utime(cls.tool, (cls.old, cls.old))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def tearDown(self):
+        os.environ.pop('JSRF_NV2A_VSH_HLSL', None)
+
+    def assert_stale_fixture(self):
+        """The fixture is what the case claims, before anything is asserted about it."""
+        self.assertLess(self.tool.stat().st_mtime,
+                        min(p.stat().st_mtime for p in self.sources),
+                        'the fixture tool is not older than every translator source, so the '
+                        'mtime trigger would not fire and the case would test nothing')
+        self.assertEqual(prov.sha256_file(self.tool), prov.sha256_file(TOOL),
+                         'the fixture copy must be byte-identical, or the CONTENT trigger '
+                         'rather than the owned-mtime tolerance would be under test')
+
+    def override_copy(self, name):
+        """A byte-identical copy of the owned artifact with a stale mtime."""
+        path = self.dir / name
+        shutil.copy2(TOOL, path)
+        os.utime(path, (self.old, self.old))
+        return path
+
+    def assert_unwritten(self, path, before_bytes, before_mtime, what):
+        self.assertEqual(path.read_bytes(), before_bytes, f'{what} rewrote {path}')
+        self.assertEqual(path.stat().st_mtime_ns, before_mtime, f'{what} touched {path}')
+
+    def test_a_stale_owned_copy_is_found_and_left_alone(self):
+        if not shipped_sources_are_current():
+            self.skipTest('the shipped corpus does not record the shipped sources, so the '
+                          'content step would fire before the mtime tolerance')
+        self.assert_stale_fixture()
+        before_bytes = self.tool.read_bytes()
+        before_mtime = self.tool.stat().st_mtime_ns
+        before_sha = prov.sha256_file(self.tool)
+        with patched_env(JSRF_NV2A_VSH_HLSL=None):
+            host, label = self.gen.check_host_tool(self.tool_dir, TOOLKIT)
+        self.assertEqual(Path(host).resolve(), self.tool.resolve(),
+                         'the tool must be FOUND where it lies, not rebuilt or replaced')
+        self.assertEqual(label, self.gen.tool_label(self.tool))
+        self.assertEqual(prov.sha256_file(self.tool), before_sha,
+                         '--check rewrote the tool it was asked to compare against')
+        self.assert_unwritten(self.tool, before_bytes, before_mtime, '--check')
+        self.assertFalse((self.tool_dir / 'CMakeCache.txt').exists(),
+                         '--check configured the tool tree it was asked to compare against')
+        self.assertEqual(sorted(p.name for p in self.tool.parent.iterdir()), [self.tool.name],
+                         '--check left build output beside the tool it was asked to '
+                         'compare against')
+
+    def test_staleness_refusal_tolerates_the_owned_mtime_and_refuses_the_override(self):
+        if not shipped_sources_are_current():
+            self.skipTest('the shipped corpus does not record the shipped sources, so the '
+                          'content step would fire before the mtime rule')
+        self.assert_stale_fixture()
+        with patched_env(JSRF_NV2A_VSH_HLSL=None):
+            self.assertIsNone(
+                self.gen.staleness_refusal(self.tool, TOOLKIT),
+                'an owned artifact merely older than the sources is the TOLERATED case: its '
+                'recorded source content still matches, so only mtimes moved')
+        with patched_env(JSRF_NV2A_VSH_HLSL=str(self.tool)):
+            refusal = self.gen.staleness_refusal(self.tool, TOOLKIT)
+        self.assertIsNotNone(refusal, 'the SAME file is refused once it is an override: '
+                                      'its freshness cannot be re-derived here')
+        trigger, detail = refusal
+        self.assertEqual(trigger, 'override')
+        self.assertEqual(sorted(name for name, _ in detail), sorted(prov.SOURCE_NAMES),
+                         'every source newer than the override must be named')
+        for name, path in detail:
+            with self.subTest(source=name):
+                self.assertIn(path, self.sources)
+
+    def test_a_stale_override_is_refused_by_the_check_path_naming_the_override(self):
+        if not shipped_sources_are_current():
+            self.skipTest('the shipped corpus does not record the shipped sources, so the '
+                          'content step would fire before the override rule')
+        stale = self.override_copy('stale-nv2a_vsh_hlsl.exe')
+        before_bytes = stale.read_bytes()
+        before_mtime = stale.stat().st_mtime_ns
+        with patched_env(JSRF_NV2A_VSH_HLSL=str(stale)):
+            message = collect_refusal(
+                lambda: self.gen.check_host_tool(self.tool_dir, TOOLKIT))
+        self.assertIn(str(stale), message,
+                      f'the refusal must name the exact override: {message!r}')
+        self.assertIn('is older than', message,
+                      f'the refusal must name the mtime reason: {message!r}')
+        self.assertIn('--check never rebuilds or replaces', message,
+                      f'the no-touch rule must be stated: {message!r}')
+        self.assertIn('unset JSRF_NV2A_VSH_HLSL', message,
+                      f'the "let the script use its own tool" remedy must be named: '
+                      f'{message!r}')
+        self.assertIn('just shaders', message,
+                      f'the remedy must name the regeneration recipe: {message!r}')
+        self.assert_unwritten(stale, before_bytes, before_mtime, 'the refusal')
+        self.assertEqual(prov.sha256_file(self.tool), prov.sha256_file(TOOL),
+                         'the refusal rewrote the OWNED artifact, which is not the tool the '
+                         'environment named')
+
+    def test_the_check_path_with_no_tool_at_all_refuses_naming_the_recipe(self):
+        empty = self.dir / 'empty-tree'
+        empty.mkdir()
+        with patched_env(JSRF_NV2A_VSH_HLSL=None):
+            message = collect_refusal(lambda: self.gen.check_host_tool(empty, TOOLKIT))
+        self.assertIn(str(empty), message,
+                      f'the refusal must name the tree it looked in: {message!r}')
+        self.assertIn('JSRF_NV2A_VSH_HLSL is not set', message)
+        self.assertIn('never builds or rebuilds anything', message,
+                      f'the read-only promise must be stated: {message!r}')
+        self.assertIn('just shaders', message,
+                      f'the refusal must name the regeneration recipe: {message!r}')
+        self.assertEqual(list(empty.iterdir()), [],
+                         '--check built or configured something to get itself a tool')
+
+    def test_the_check_path_refuses_an_override_that_is_not_a_file(self):
+        absent = self.dir / 'no-such-override.exe'
+        with patched_env(JSRF_NV2A_VSH_HLSL=str(absent)):
+            message = collect_refusal(
+                lambda: self.gen.check_host_tool(self.tool_dir, TOOLKIT))
+        self.assertIn(str(absent), message)
+        self.assertIn('not an existing file', message,
+                      f'a path named by the environment is never ignored or replaced: '
+                      f'{message!r}')
+        self.assertIn('just shaders', message)
+        self.assertFalse(absent.exists(), 'the refusal must not create the path it names')
+
+
+# ── the build guard ──────────────────────────────────────────────────────────
+
+def build_jsrf_cut(build_script=None, tool=MISSING, corpus_dir=None, dxc=None):
     """`scripts/build-jsrf.py` up to its preflight marker, exec'd in a fresh namespace.
 
     The module runs the whole build at import, so only its definitions are loaded --
-    exactly how the reviewer exercised the guard.  `gen_shaders.find_host_tool` is
-    stubbed so the no-tool path can be reached on a host that HAS a tool (this one
-    does), and `CORPUS_DIR`/`TOOLKIT`/`corpus_dxc` are redirected at the scratch
-    corpus.  The file's own text is the source of truth: nothing here re-implements
-    the guard.  `tool=MISSING` leaves the real search in place; `tool=None` stubs it
-    to "no host tool found".
+    exactly how the independent reviewer exercised the guard.  `gen_shaders.find_host_tool`
+    is stubbed so the no-tool path can be reached on a host that HAS a tool (this one
+    does), and `CORPUS_DIR`/`corpus_dxc` are redirected at the scratch corpus.  The file's
+    own text is the source of truth: nothing here re-implements the guard.  `tool=MISSING`
+    leaves the real search in place; `tool=None` stubs it to "no host tool found".
     """
-    text = BUILD_JSRF.read_text(encoding='utf-8')
+    path = Path(build_script or BUILD_JSRF)
+    text = path.read_text(encoding='utf-8')
     cut = text[:text.index(PREFLIGHT_MARK)]
     saved = sys.argv[:]
     sys.argv = ['build-jsrf.py']
-    namespace = {'__name__': 'build_jsrf_cut', '__file__': str(BUILD_JSRF)}
+    namespace = {'__name__': 'build_jsrf_cut', '__file__': str(path)}
     try:
-        exec(compile(cut, 'build-jsrf-cut', 'exec'), namespace)
+        with isolated_imports():
+            exec(compile(cut, 'build-jsrf-cut', 'exec'), namespace)
     finally:
         sys.argv = saved
     if tool is not MISSING:
         namespace['gen_shaders'].find_host_tool = lambda *a, **k: tool
     if corpus_dir is not None:
         namespace['CORPUS_DIR'] = Path(corpus_dir)
-    if toolkit is not None:
-        namespace['gen_shaders'].TOOLKIT = Path(toolkit)
     if dxc is not None:
         namespace['corpus_dxc'] = lambda: Path(dxc)
     return namespace
 
 
 class BuildGuardTests(unittest.TestCase):
-    """`scripts/build-jsrf.py`'s own guard: its no-tool path and its refusal.
+    """`scripts/build-jsrf.py`'s own guard: every refusal, and the summary of the pass.
 
-    The guard is not importable (the file runs the build at import), so these
-    fixtures exec its text up to the preflight marker -- the same technique the
-    independent reviewer used to reproduce the false positive.
+    The cases use the REAL toolkit and a copy of the REAL owned artifact, so the guard's
+    content record (the shipped corpus against the shipped sources) is the state a normal
+    build sees, and the cases isolate the rule under test rather than a broken tree.
     """
 
     @classmethod
     def setUpClass(cls):
+        if TOOL is None:
+            raise unittest.SkipTest('no owned nv2a_vsh_hlsl.exe to hash')
+        if not shipped_sources_are_current():
+            raise unittest.SkipTest('the shipped corpus does not record the shipped '
+                                    'sources, so this class would assert through a stale '
+                                    'tree rather than through the guard')
         cls._tmp = tempfile.TemporaryDirectory(prefix='jsrf-r1-build-')
-        cls.inputs = SyntheticInputs(cls._tmp.name, 128, 126)
-        cls.values = cls.inputs.values
-        cls.tool = cls.inputs.tool
-        cls.corpus = write_corpus(cls._tmp.name, 'corpus',
+        cls.dir = Path(cls._tmp.name)
+        cls.gen = load_gen_shaders()
+        cls.programs = cls.gen.EXPECT_PROGRAMS
+        cls.distinct = cls.gen.EXPECT_DISTINCT
+        cls.values = prov.expected(TOOLKIT, TOOL, DXC,
+                                   programs=cls.programs, distinct=cls.distinct)
+        cls.corpus = write_corpus(cls.dir, 'corpus',
                                   corpus_c(cls.values), corpus_h(cls.values))
-        cls.dxc = DXC
 
     @classmethod
     def tearDownClass(cls):
         cls._tmp.cleanup()
 
-    def cut(self, tool=MISSING, corpus_dir=None):
-        return build_jsrf_cut(
-            tool=tool,
-            corpus_dir=corpus_dir or self.corpus,
-            toolkit=self.inputs.toolkit,
-            dxc=self.dxc)
+    def tearDown(self):
+        os.environ.pop('JSRF_NV2A_VSH_HLSL', None)
 
-    def test_the_no_tool_path_accepts_and_its_summary_does_not_crash(self):
-        """Fix 2: a missing host tool is an advisory, not a refusal."""
-        namespace = self.cut(tool=None)
-        summary = namespace['check_corpus_provenance']()
-        self.assertIsInstance(summary, str)
-        self.assertIn('tool hash not recorded', summary,
-                      f'the no-tool summary must say the hash is not recorded: {summary!r}')
-        self.assertIn('advisory', summary)
-        self.assertIn(str(self.values['schema']), summary)
-        self.assertIn(str(self.values['programs']), summary)
-        self.assertIn(str(self.values['distinct']), summary)
+    def cut(self, tool=MISSING, corpus_dir=None):
+        return build_jsrf_cut(tool=tool, corpus_dir=corpus_dir or self.corpus, dxc=DXC)
+
+    def guard(self, namespace):
+        return namespace['check_corpus_provenance'](TOOLKIT, 'the fixture toolkit')
+
+    def other_corpus(self, name, values):
+        return write_corpus(self.dir, name, corpus_c(values), corpus_h(values))
 
     def test_the_with_tool_path_names_the_hash(self):
-        """The positive control for the summary's other arm."""
-        namespace = self.cut(tool=self.tool)
-        summary = namespace['check_corpus_provenance']()
-        self.assertIn('tool', summary)
+        """The positive control for the summary."""
+        summary = self.guard(self.cut(tool=TOOL))
+        self.assertIn('schema 2', summary)
+        self.assertIn(str(self.programs), summary)
+        self.assertIn(str(self.distinct), summary)
         self.assertIn(self.values['tool.sha256'], summary,
-                      f'the summary must name the recorded hash: {summary!r}')
-        self.assertNotIn('tool hash not recorded', summary)
+                      f'the summary must name the recorded DECIDING hash: {summary!r}')
+        self.assertIn(str(TOOL), summary, f'the summary must name the tool: {summary!r}')
 
-    def test_the_no_tool_path_refuses_a_moved_source_hash(self):
-        """The no-tool path must still be a guard, not a bypass."""
-        moved = dict(self.values, **{'source.nv2a_vsh_hlsl.h': 'f' * 64})
-        corpus = write_corpus(self._tmp.name, 'corpus-moved',
-                              corpus_c(moved), corpus_h(moved))
-        namespace = self.cut(tool=None, corpus_dir=corpus)
-        with self.assertRaises(SystemExit) as caught:
-            namespace['check_corpus_provenance']()
-        message = str(caught.exception)
-        self.assertIn('source.nv2a_vsh_hlsl.h', message,
-                      f'the refusal must name the moved field: {message!r}')
-        self.assertIn('just shaders', message,
-                      f'the refusal must name the remedy: {message!r}')
+    def test_no_host_tool_is_refused_naming_the_reason_and_the_remedy(self):
+        """The schema-1 defect: no tool used to become an advisory, i.e. a pass."""
+        message = collect_refusal(lambda: self.guard(self.cut(tool=None)))
+        self.assertIn('cannot be found', message)
+        self.assertIn('no JSRF_NV2A_VSH_HLSL override was set', message)
+        self.assertIn('build/vsh-tool', message,
+                      f'the refusal must name the owned artifact it owns: {message!r}')
+        self.assertIn('just shaders', message)
 
-    def test_the_with_tool_path_refuses_a_moved_source_hash(self):
-        """Reviewer note 4: the refusal itself, through the real call sequence."""
+    def test_a_missing_override_is_refused_naming_the_override(self):
+        absent = self.dir / 'no-such-override.exe'
+        cut = self.cut(tool=None)
+        with patched_env(JSRF_NV2A_VSH_HLSL=str(absent)):
+            message = collect_refusal(lambda: self.guard(cut))
+        self.assertIn(str(absent), message)
+        self.assertIn('just shaders', message)
+
+    def test_a_moved_source_hash_is_refused_by_name(self):
         moved = dict(self.values, **{'source.nv2a_vsh_hlsl_tool.c': 'f' * 64})
-        corpus = write_corpus(self._tmp.name, 'corpus-moved-tool',
-                              corpus_c(moved), corpus_h(moved))
-        namespace = self.cut(tool=self.tool, corpus_dir=corpus)
-        with self.assertRaises(SystemExit) as caught:
-            namespace['check_corpus_provenance']()
-        message = str(caught.exception)
+        cut = self.cut(tool=TOOL, corpus_dir=self.other_corpus('corpus-moved', moved))
+        message = collect_refusal(lambda: self.guard(cut))
         self.assertIn('source.nv2a_vsh_hlsl_tool.c', message)
         self.assertIn('just shaders', message)
         self.assertIn('STALE', message)
 
-    def test_a_missing_corpus_file_is_refused_by_name(self):
-        namespace = self.cut(tool=self.tool,
-                             corpus_dir=write_corpus(self._tmp.name, 'corpus-empty'))
-        with self.assertRaises(SystemExit) as caught:
-            namespace['check_corpus_provenance']()
-        message = str(caught.exception)
+    def test_a_moved_tool_hash_is_refused_by_name(self):
+        """The decisive field, through the real guard's own sequence."""
+        moved = dict(self.values, **{'tool.sha256': '0' * 64})
+        cut = self.cut(tool=TOOL, corpus_dir=self.other_corpus('corpus-other-tool', moved))
+        message = collect_refusal(lambda: self.guard(cut))
+        self.assertIn('tool.sha256', message,
+                      f'the guard must refuse a corpus recorded against another tool: '
+                      f'{message!r}')
+        self.assertIn('just shaders', message)
+        self.assertIn('STALE', message)
+
+    def test_a_corpus_missing_a_file_is_refused_by_name(self):
+        cut = self.cut(tool=TOOL, corpus_dir=write_corpus(self.dir, 'corpus-empty'))
+        message = collect_refusal(lambda: self.guard(cut))
         self.assertIn('nv2a_vsh_programs.c', message)
         self.assertIn('just shaders', message)
 
-    def test_a_differing_tool_hash_is_only_an_advisory_in_the_build(self):
-        """The false positive the reviewer found, at the build's own level."""
-        other = dict(self.values, **{'tool.sha256': 'a' * 64})
-        corpus = write_corpus(self._tmp.name, 'corpus-other-tool',
-                              corpus_c(other), corpus_h(other))
-        namespace = self.cut(tool=self.tool, corpus_dir=corpus)
-        summary = namespace['check_corpus_provenance']()
-        self.assertIsInstance(summary, str)
-        self.assertIn(self.values['tool.sha256'], summary,
-                      'the summary names the CURRENT tool hash, not the recorded one')
+    def test_a_stale_override_is_refused_naming_the_override(self):
+        """An override's freshness cannot be re-derived here, so it must REFUSE."""
+        stale = self.dir / 'stale-override.exe'
+        shutil.copy2(TOOL, stale)
+        oldest = min(prov.source_paths(TOOLKIT)[name].stat().st_mtime
+                     for name in prov.SOURCE_NAMES)
+        os.utime(stale, (oldest - 60, oldest - 60))
+        values = prov.expected(TOOLKIT, stale, DXC,
+                               programs=self.programs, distinct=self.distinct)
+        cut = self.cut(tool=stale, corpus_dir=self.other_corpus('corpus-stale-override',
+                                                                values))
+        with patched_env(JSRF_NV2A_VSH_HLSL=str(stale)):
+            message = collect_refusal(lambda: self.guard(cut))
+        self.assertIn(f'JSRF_NV2A_VSH_HLSL={stale}', message)
+        self.assertIn('is older than', message)
+        self.assertIn('just shaders', message)
+        self.assertNotIn('advisory', message.lower(),
+                         f'a stale override must be a refusal, not a warning: {message!r}')
 
     def test_the_guard_runs_before_cmake_configure(self):
-        """The guard cannot be moved after configure, where a stale corpus is compiled."""
+        """The ordering, asserted on the shipped text (the observable form lives in
+        `BuildEntryRefusalTests`, which runs the real script against a stub project)."""
         text = BUILD_JSRF.read_text(encoding='utf-8')
         self.assertEqual(text.count("'cmake', '-S'"), 1,
                          'the configure command line moved; this ordering fixture must '
                          'follow it')
         configure = text.index("'cmake', '-S'")
-        self.assertEqual(text.count('prov.check_corpus('), 1)
-        self.assertLess(text.index('prov.check_corpus('), configure,
-                        '`prov.check_corpus(` must appear before `cmake -S`, so the guard '
-                        'runs before anything is configured or compiled')
-        # The CALL, not the `def` above it: `print(f'corpus   : {check_corpus_provenance()}')`
-        # is the one that must precede the configure step.
-        call = text.index("corpus   : {check_corpus_provenance()}")
-        self.assertLess(call, configure,
-                        'the guard must be CALLED before the configure step')
-        self.assertGreater(call, text.index('def check_corpus_provenance()'),
-                           'the call must come after the definition')
+        self.assertEqual(text.count('check_corpus_provenance(BOUND_TOOLKIT'), 1)
+        self.assertLess(text.index('check_corpus_provenance(BOUND_TOOLKIT'), configure,
+                        'the corpus guard must be CALLED before `cmake -S`, so a stale '
+                        'corpus never reaches a configure step')
+        self.assertLess(text.index('BOUND_TOOLKIT, BOUND_TOOLKIT_FROM = resolve_bound_toolkit()'),
+                        text.index('corpus   : {check_corpus_provenance('),
+                        'the bound toolkit must be resolved before the guard is called')
 
     def test_the_guard_uses_the_shared_entry_point(self):
         text = BUILD_JSRF.read_text(encoding='utf-8')
@@ -1460,32 +2111,33 @@ class BuildGuardTests(unittest.TestCase):
         """The strongest positive control: nothing stubbed, the shipped tree.
 
         This is the call the build makes, on the corpus the build would compile.  It
-        skips only when there is nothing to accept (no corpus block, or no host tool
-        to hash) -- and the no-tool case is covered above, so the skip cannot hide a
-        false positive.
+        skips only when there is nothing to accept (no corpus block, or no host tool to
+        hash); the no-tool case is covered above, so the skip cannot hide a false
+        positive.
         """
         if not CORPUS_C.is_file() or prov.BEGIN_MARK not in CORPUS_C.read_text(
                 encoding='utf-8'):
             self.skipTest('the shipped corpus carries no provenance block')
         if TOOL is None:
             self.skipTest('no built nv2a_vsh_hlsl.exe to hash')
-        summary = build_jsrf_cut()['check_corpus_provenance']()
+        if os.environ.get('JSRF_R1_SCRIPTS'):
+            self.skipTest('this control reads the SHIPPED corpus through the SHIPPED '
+                          'entry, so it does not apply while the scripts are redirected')
+        summary = self.guard(build_jsrf_cut(dxc=DXC))
         self.assertIsInstance(summary, str)
-        self.assertIn(str(prov.SCHEMA), summary)
+        self.assertIn(f'schema {prov.SCHEMA}', summary)
         self.assertIn(prov.sha256_file(TOOL), summary,
-                      f'the real guard must name the real tool hash: {summary!r}')
-        self.assertNotIn('tool hash not recorded', summary)
+                      f'the real guard must name the real (decisive) tool hash: {summary!r}')
 
 
 class ShippedCorpusTests(ProvenanceBase):
     """The guard's verdict on the corpus file as it exists right now.
 
-    It skips only when there is nothing to judge: no corpus file yet (`just shaders`
-    has never run) or no built host tool to hash.  Given either, it asserts the
-    shipped behaviour -- a corpus that predates the block is REFUSED, a corpus that
-    carries one must be ACCEPTED against the current inputs -- and the first is the
-    state a checkout is in before `just shaders` runs, exactly when a silent pass
-    would be dangerous.
+    It skips only when there is nothing to judge: no corpus file yet (`just shaders` has
+    never run) or no built host tool to hash.  Given either, it asserts the shipped
+    behaviour -- a corpus that predates the block is REFUSED, a corpus that carries one
+    must be ACCEPTED against the current inputs, and the tool it records must be the
+    owned artifact, which is what makes the recorded identity mean anything.
     """
 
     def test_the_shipped_corpus_is_accepted_only_with_a_matching_block(self):
@@ -1493,7 +2145,7 @@ class ShippedCorpusTests(ProvenanceBase):
             self.skipTest(f'{CORPUS_C} is absent until `just shaders` runs')
         text = CORPUS_C.read_text(encoding='utf-8')
         if prov.BEGIN_MARK not in text:
-            ok, problems, _ = self.check(CORPUS_DIR)
+            ok, problems = self.check(CORPUS_DIR)
             self.assertFalse(ok, 'a corpus with no provenance block was accepted')
             self.assertTrue(any('records no provenance block' in p for p in problems),
                             problems)
@@ -1502,9 +2154,25 @@ class ShippedCorpusTests(ProvenanceBase):
             self.skipTest('no built nv2a_vsh_hlsl.exe to hash')
         programs, distinct = xbe_corpus_counts()
         want = prov.expected(TOOLKIT, TOOL, DXC, programs=programs, distinct=distinct)
-        ok, problems, _ = self.check(CORPUS_DIR, want)
+        ok, problems = self.check(CORPUS_DIR, want)
         self.assertTrue(ok, f'the shipped corpus does not match its inputs '
                             f'({prov.REMEDY}): {problems!r}')
+
+    def test_the_shipped_corpus_records_the_owned_artifact(self):
+        """The decisive identity, asserted on the artifact that actually ships."""
+        if not CORPUS_C.is_file():
+            self.skipTest(f'{CORPUS_C} is absent until `just shaders` runs')
+        block = recorded_block(CORPUS_C)
+        if block is None:
+            self.skipTest('the shipped corpus carries no usable provenance block')
+        if TOOL is None:
+            self.skipTest('no built nv2a_vsh_hlsl.exe to hash')
+        self.assertEqual(block.get('schema'), str(prov.SCHEMA))
+        self.assertEqual(block.get('tool.sha256'), prov.sha256_file(TOOL),
+                         'the corpus records a tool that is not the owned artifact, so the '
+                         'recorded identity does not describe the binary this repository '
+                         f'owns; {prov.REMEDY}')
+        self.assertIn('tool.sha256', block, 'the block must RECORD the tool identity')
 
 
 @unittest.skipUnless(CORPUS_C.is_file() and CORPUS_H.is_file(),
@@ -1512,10 +2180,10 @@ class ShippedCorpusTests(ProvenanceBase):
 class RealCorpusTests(ProvenanceBase):
     """The guard against the corpus that actually ships (read-only).
 
-    Skipped, with the reason below, while the corpus predates the provenance
-    block: the guard's refusal of a blockless corpus is covered synthetically in
-    `MalformedBlockTests`/`CorpusSequenceTests`, and a real corpus without a block
-    cannot exercise the comparison this class exists for.
+    Skipped, with the reason below, while the corpus predates the provenance block: the
+    guard's refusal of a blockless corpus is covered synthetically in
+    `MalformedBlockTests`/`CorpusSequenceTests`, and a real corpus without a block cannot
+    exercise the comparison this class exists for.
     """
 
     @classmethod
@@ -1531,8 +2199,8 @@ class RealCorpusTests(ProvenanceBase):
                     f'guard, so there is nothing to compare -- regenerate it '
                     f'({prov.REMEDY})')
         cls.programs, cls.distinct = xbe_corpus_counts()
-        # The leading `/* ... */` of each shipped file, block included: the fixtures
-        # below vary it instead of copying 3.9 MB of table body they do not exercise.
+        # The leading `/* ... */` of each shipped file, block included: the fixtures below
+        # vary it instead of copying 3.9 MB of table body they do not exercise.
         cls.c_comment = cls.corpus_c[:cls.corpus_c.index('*/') + 2] + '\n'
         cls.h_comment = cls.corpus_h[:cls.corpus_h.index('*/') + 2] + '\n'
 
@@ -1555,9 +2223,9 @@ class RealCorpusTests(ProvenanceBase):
         The provenance refusal keys on the block, and the count step reads
         `nv2a_vsh_program_count` out of the `.c` -- neither depends on the 3.9 MB of
         SPIR-V initializers below them.  Writing full copies for each of these cases
-        would add nothing they check, so the body is replaced by a marker and the
-        leading comment is kept verbatim from the shipped files.  The `.h` keeps only
-        its `extern`, so it never carries a count definition of its own.
+        would add nothing they check, so the body is replaced by a marker and the leading
+        comment is kept verbatim from the shipped files.  The `.h` keeps only its
+        `extern`, so it never carries a count definition of its own.
         """
         declared = re.search(r'nv2a_vsh_program_count\s*=\s*(\d+)\s*;', self.corpus_c)
         if count is None:
@@ -1586,18 +2254,10 @@ class RealCorpusTests(ProvenanceBase):
             self.skipTest('no built nv2a_vsh_hlsl.exe to hash')
         want = prov.expected(TOOLKIT, TOOL, DXC, programs=self.programs,
                              distinct=self.distinct)
-        ok, problems, advisories = prov.check_corpus(CORPUS_DIR, want)
+        ok, problems = prov.check_corpus(CORPUS_DIR, want)
         self.assertTrue(ok, f'the shipped corpus does not match its inputs '
                             f'({prov.REMEDY}): {problems!r}')
         self.assertEqual(problems, [])
-        # NOT `advisories == []`: the tool executable is not reproducible on MSVC, so a
-        # relink between generation and this run legitimately moves the recorded tool
-        # hash, and the guard's answer to that is an advisory.  What must hold is that
-        # every advisory is about the tool hash and nothing else.
-        for advisory in advisories:
-            self.assertIn('tool.sha256', advisory,
-                          f'a non-advisory field was reported as advice, which would be a '
-                          f'silent acceptance: {advisories!r}')
 
     def test_the_recorded_counts_agree_with_the_table_and_the_xbe(self):
         recorded = self.block_of(self.corpus_c)
@@ -1638,19 +2298,18 @@ class RealCorpusTests(ProvenanceBase):
             c_block=with_field(self.c_comment, 'dxc.version', '1.9.0.0000 (moved)'))
         self.assert_corpus_refused(corpus, 'dxc.version', want=want)
 
-    def test_a_real_corpus_with_a_moved_tool_hash_is_still_accepted(self):
+    def test_a_real_corpus_with_a_moved_tool_hash_is_refused(self):
+        """The schema-1 false positive: this used to be ACCEPTED with an advisory.
+
+        BOTH files move together, so the refusal is the decisive field comparison and not
+        the two-file step.
+        """
         want = self.block_of(self.corpus_c)
-        # BOTH files, because the two-file step compares the whole block: moving the
-        # hash in one file only would be a split (covered separately), not the
-        # advisory case this one is about.
         moved = with_field(self.c_comment, 'tool.sha256', 'a' * 64)
-        corpus = self.real_blocks('real-moved-tool', c_block=moved,
-                                  h_block=with_field(self.h_comment, 'tool.sha256', 'a' * 64))
-        ok, problems, advisories = prov.check_corpus(corpus, want)
-        self.assertTrue(ok, f'the real corpus was refused on the tool hash alone, which '
-                            f'a clean relink would trigger: {problems!r}')
-        self.assertEqual(problems, [])
-        self.assertTrue(advisories, 'a differing tool hash must still be reported')
+        corpus = self.real_blocks(
+            'real-moved-tool', c_block=moved,
+            h_block=with_field(self.h_comment, 'tool.sha256', 'a' * 64))
+        self.assert_corpus_refused(corpus, 'tool.sha256', want=want)
 
     def test_a_real_corpus_whose_two_files_disagree_is_refused(self):
         want = self.block_of(self.corpus_c)
@@ -1671,6 +2330,608 @@ class RealCorpusTests(ProvenanceBase):
         self.assertEqual(recorded['tool.args'], ' '.join(prov.TOOL_ARGS))
         self.assertEqual(recorded['schema'], str(prov.SCHEMA))
         self.assertNotIn('{', recorded['dxc.args'].replace('{bin}', ''))
+
+
+# ── the build entry, in a scratch tree ───────────────────────────────────────
+
+# The scratch project `scripts/build-jsrf.py` configures.  `file(WRITE ...)` is its
+# FIRST action, so "did configure run?" leaves a file behind that survives the process,
+# and the literal `add_subdirectory` in the comment below is what
+# `jsrf_build.preflight` greps for.  `project(... NONE)` needs no compiler, so the
+# scratch configure cannot fail for an unrelated reason.
+STUB_PROJECT_CMAKE = (
+    '# The scratch project the entry-level guard fixtures configure.  Its first action\n'
+    '# writes a marker into CMAKE_BINARY_DIR: the marker is how "the guard refused BEFORE\n'
+    '# configure" becomes observable instead of merely asserted in the source text.\n'
+    'cmake_minimum_required(VERSION 3.20)\n'
+    'file(WRITE "${CMAKE_BINARY_DIR}/R1R_CONFIGURE_RAN.txt" '
+    '"the scratch configure step ran\\n")\n'
+    'project(r1r_scratch NONE)\n'
+    '# The real tree derives its target inventory from this call; preflight greps for it.\n'
+    '# add_subdirectory(${XBOXRECOMP_DIR})\n')
+
+# `gen_shaders.resolve_toolkit` refuses a root without a CMakeLists.txt, and that is all
+# this file has to satisfy: the scratch toolkit is never configured.
+STUB_TOOLKIT_CMAKE = ('# Exists so `resolve_toolkit` accepts this root as a toolkit\n'
+                      '# checkout.  The scratch tree never configures the toolkit.\n')
+
+# The scratch "owned artifact".  It is hashed by the guard and never executed: the
+# fixtures assert the guard phase, which ends before anything would run the generator.
+FAKE_TOOL_BYTES = b'MZ scratch nv2a_vsh_hlsl.exe: hashed, never executed\r\n'
+
+MARKER_NAME = 'R1R_CONFIGURE_RAN.txt'
+CONFIGURE_LOG = 'configure-current.log'
+
+
+class ScratchRepo:
+    """A throwaway copy of the tree `scripts/build-jsrf.py` needs to run its guard.
+
+    `<root>/poison-jam/` holds `scripts/` (copied from the fixture's script dir -- so a
+    mutant build entry is what actually runs), `src/recomp/gen/shaders/` (the corpus),
+    `logs/`, the stub `CMakeLists.txt` and the fake owned tool under `build/vsh-tool/`.
+    `<root>/xboxrecomp/` is the toolkit the guard binds to through the sibling rule: a
+    stub `CMakeLists.txt` plus the three REAL translator sources, so the corpus's recorded
+    source hashes can be re-derived from it exactly as the guard does.
+    """
+
+    def __init__(self, tmp, programs=128, distinct=126):
+        self.root = Path(tmp)
+        self.repo = self.root / 'poison-jam'
+        self.toolkit = self.root / 'xboxrecomp'
+        copy_scripts(self.repo / 'scripts')
+        video = self.toolkit / 'src' / 'video'
+        video.mkdir(parents=True)
+        for name in prov.SOURCE_NAMES:
+            shutil.copy2(TOOLKIT / 'src' / 'video' / name, video / name)
+        (self.toolkit / 'CMakeLists.txt').write_text(STUB_TOOLKIT_CMAKE, encoding='utf-8')
+        (self.repo / 'logs').mkdir(parents=True, exist_ok=True)
+        (self.repo / 'CMakeLists.txt').write_text(STUB_PROJECT_CMAKE, encoding='utf-8')
+        self.corpus = self.repo / 'src' / 'recomp' / 'gen' / 'shaders'
+        self.corpus.mkdir(parents=True)
+        self.tool = (self.repo / 'build' / 'vsh-tool' / 'src' / 'video' / 'Release'
+                     / 'nv2a_vsh_hlsl.exe')
+        self.programs, self.distinct = programs, distinct
+        self.write_tool()
+        self.values = prov.expected(self.toolkit, self.tool, DXC,
+                                    programs=programs, distinct=distinct)
+        self.write_corpus()
+
+    # -- state -----------------------------------------------------------------
+    def write_tool(self):
+        self.tool.parent.mkdir(parents=True, exist_ok=True)
+        self.tool.write_bytes(FAKE_TOOL_BYTES)
+
+    def remove_tool(self):
+        self.tool.unlink()
+
+    def write_corpus(self, values=None):
+        values = self.values if values is None else values
+        (self.corpus / 'nv2a_vsh_programs.c').write_text(corpus_c(values), encoding='utf-8')
+        (self.corpus / 'nv2a_vsh_programs.h').write_text(corpus_h(values), encoding='utf-8')
+        return values
+
+    def write_cache(self, toolkit_value):
+        write_cache(self.repo / 'build', toolkit_value)
+
+    def reset(self):
+        """Back to the state a fresh, CURRENT tree is in (one scratch tree, many cases)."""
+        shutil.rmtree(self.repo / 'build', ignore_errors=True)
+        self.write_tool()
+        self.write_corpus()
+        for stale in (self.repo / 'logs' / CONFIGURE_LOG,
+                      self.repo / 'logs' / f'{Path(CONFIGURE_LOG).stem}-serial.log'):
+            if stale.exists():
+                stale.unlink()
+
+    # -- observables -----------------------------------------------------------
+    def marker(self):
+        """The file the stub configure writes -- present iff configure RAN."""
+        return (self.repo / 'build' / MARKER_NAME)
+
+    def configure_log(self):
+        return self.repo / 'logs' / CONFIGURE_LOG
+
+    def run(self, env_extra=None, timeout=300):
+        """Run the REAL entry script in the scratch tree, exactly as `just build` does."""
+        env = {k: v for k, v in os.environ.items()
+               if k not in ('XBOXRECOMP_DIR', 'JSRF_NV2A_VSH_HLSL', 'JSRF_R1_SCRIPTS',
+                            'JSRF_R1_NO_SUBPROCESS', 'JSRF_R1_CORPUS_DIR')}
+        # Inherited when the host sets it; the documented SDK root otherwise, because the
+        # guard's `corpus_dxc` reads `$VULKAN_SDK` and a fixture must not depend on the
+        # caller's shell.
+        env['VULKAN_SDK'] = str(VULKAN_SDK)
+        env.update(env_extra or {})
+        return subprocess.run(
+            [sys.executable, '-X', 'utf8', str(self.repo / 'scripts' / 'build-jsrf.py')],
+            cwd=str(self.repo), env=env, capture_output=True, text=True, timeout=timeout)
+
+
+@unittest.skipUnless(TOOLKIT.is_dir(), 'the sibling toolkit is not checked out')
+class BuildEntryRefusalTests(unittest.TestCase):
+    """Item 4: the REAL build entry refuses BEFORE configure.
+
+    Every negative case asserts three observables: a non-zero exit, a message that names
+    the intended reason AND `just shaders`, and the ABSENCE of both
+    `build/R1R_CONFIGURE_RAN.txt` (written by the stub project as its first action) and
+    `logs/configure-current.log` (opened by `run()` before it invokes cmake).  The marker
+    is what makes the ordering a measurement rather than a claim about source text.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        if TOOL is None:
+            raise unittest.SkipTest('no owned nv2a_vsh_hlsl.exe to copy')
+        cls._tmp = tempfile.TemporaryDirectory(prefix='jsrf-r1-entry-')
+        cls.repo = ScratchRepo(cls._tmp.name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def assert_refused_before_configure(self, completed, *needles):
+        self.assertNotEqual(completed.returncode, 0,
+                            f'the run succeeded, so the guard did not refuse:\n'
+                            f'{completed.stdout[-2000:]}\n{completed.stderr[-2000:]}')
+        message = f'{completed.stdout}\n{completed.stderr}'
+        for needle in needles:
+            with self.subTest(needle=needle):
+                self.assertIn(needle, message,
+                              f'the refusal did not name {needle!r}: {message[-2000:]}')
+        self.assertIn('just shaders', message,
+                      f'every corpus remedy names the regeneration recipe: {message[-2000:]}')
+        self.assertFalse(self.repo.marker().exists(),
+                         f'{self.repo.marker()} exists, so the stub project was configured '
+                         f'-- the guard did not refuse before configure')
+        self.assertFalse(self.repo.configure_log().exists(),
+                         f'{self.repo.configure_log()} exists, so `run()` was reached -- the '
+                         f'guard did not refuse before configure')
+
+    def test_a_matching_scratch_corpus_reaches_configure(self):
+        """The positive control: the guard PASSES and the marker proves configure ran.
+
+        The run may fail afterwards (the scratch project has no targets to inventory);
+        what is asserted is the guard phase, which is the whole point of this fixture.
+        """
+        self.repo.reset()
+        completed = self.repo.run()
+        message = f'{completed.stdout}\n{completed.stderr}'
+        self.assertIn('corpus   : schema 2', message,
+                      f'the guard summary was not printed: {message[-2000:]}')
+        self.assertIn(f'{self.repo.programs} programs', message)
+        self.assertIn(f'{self.repo.distinct} distinct', message)
+        self.assertIn(self.repo.values['tool.sha256'], message,
+                      f'the summary must name the hash of the fake owned tool: '
+                      f'{message[-2000:]}')
+        self.assertIn('nv2a_vsh_hlsl.exe', message)
+        self.assertTrue(self.repo.marker().is_file(),
+                        f'{self.repo.marker()} is missing, so configure never ran even '
+                        f'though the guard accepted the corpus: {message[-2000:]}')
+
+    def test_a_changed_tool_hash_refuses_before_configure(self):
+        self.repo.reset()
+        recorded = dict(self.repo.values, **{'tool.sha256': '0' * 64})
+        self.repo.write_corpus(recorded)
+        self.assert_refused_before_configure(self.repo.run(), 'tool.sha256', 'STALE')
+
+    def test_a_moved_source_hash_refuses_before_configure(self):
+        self.repo.reset()
+        moved = dict(self.repo.values, **{'source.nv2a_vsh_hlsl.h': 'f' * 64})
+        self.repo.write_corpus(moved)
+        self.assert_refused_before_configure(self.repo.run(),
+                                             'nv2a_vsh_hlsl.h', 'SOURCE content')
+
+    def test_a_tool_hash_omitted_from_both_files_refuses_before_configure(self):
+        self.repo.reset()
+        values = self.repo.values
+        (self.repo.corpus / 'nv2a_vsh_programs.c').write_text(
+            without_field(corpus_c(values), 'tool.sha256'), encoding='utf-8')
+        (self.repo.corpus / 'nv2a_vsh_programs.h').write_text(
+            without_field(corpus_h(values), 'tool.sha256'), encoding='utf-8')
+        self.assert_refused_before_configure(self.repo.run(), 'tool.sha256', 'not recorded')
+
+    def test_a_deleted_owned_tool_refuses_before_configure(self):
+        self.repo.reset()
+        self.repo.remove_tool()
+        self.assert_refused_before_configure(self.repo.run(), 'cannot be found',
+                                             'vsh-tool')
+
+    def test_a_stale_override_refuses_before_configure(self):
+        self.repo.reset()
+        stale = self.repo.root / 'stale-nv2a_vsh_hlsl.exe'
+        shutil.copy2(self.repo.tool, stale)
+        oldest = min(p.stat().st_mtime for p in prov.source_paths(self.repo.toolkit).values())
+        os.utime(stale, (oldest - 60, oldest - 60))
+        self.assert_refused_before_configure(
+            self.repo.run({'JSRF_NV2A_VSH_HLSL': str(stale)}),
+            f'JSRF_NV2A_VSH_HLSL={stale}', 'is older than', 'never overwritten or replaced')
+
+    def test_a_toolkit_conflict_refuses_before_configure(self):
+        self.repo.reset()
+        self.repo.write_cache(str(self.repo.root / 'another-toolkit'))
+        other = str(self.repo.root / 'another-toolkit')
+        self.assert_refused_before_configure(
+            self.repo.run({'XBOXRECOMP_DIR': str(self.repo.toolkit)}), other,
+            str(self.repo.toolkit), 'cannot be resolved', 'CMake would link one toolkit')
+        self.assertFalse(self.repo.marker().exists())
+
+    def test_an_owned_tool_tree_bound_to_another_toolkit_refuses_before_configure(self):
+        """F1 through the REAL entry: the guard's own cache check, before configure.
+
+        The scratch tree's GAME cache is untouched, so the resolved toolkit is the
+        sibling `xboxrecomp`; only `build/vsh-tool/CMakeCache.txt` names another
+        checkout -- which is the state a tool tree is left in when the toolkit it was
+        configured against is replaced.  The refusal must name both trees and the remedy
+        without running the stub project, and removing that one file must let the SAME
+        tree reach the guard's normal path (the positive control), so the refusal is
+        attributable to the binding and not to the scratch tree.
+        """
+        self.repo.reset()
+        other = self.repo.root / 'another-toolkit'
+        tree = write_home_dir_cache(self.repo.repo / 'build' / 'vsh-tool', str(other))
+        self.assert_refused_before_configure(
+            self.repo.run(), str(other), str(self.repo.toolkit), 'CMAKE_HOME_DIRECTORY',
+            'DIFFERENT toolkit')
+        (tree / 'CMakeCache.txt').unlink()
+        completed = self.repo.run()
+        message = f'{completed.stdout}\n{completed.stderr}'
+        self.assertIn('corpus   : schema 2', message,
+                      f'the guard summary was not printed once the mismatched cache was '
+                      f'removed: {message[-2000:]}')
+        self.assertTrue(self.repo.marker().is_file(),
+                        f'{self.repo.marker()} is missing, so configure never ran even '
+                        f'though the mismatched cache was gone: {message[-2000:]}')
+
+
+# ── `--check`, end to end, in a scratch tree ─────────────────────────────────
+
+class CheckEndToEndTests(unittest.TestCase):
+    """F2 end to end: the real `--check` in a scratch tree over the real `game/`.
+
+    The scripts, the corpus and the owned artifact are copies, so the comparison is
+    byte-exact against the shipped bytes; `--game` names the REAL `game/` directory, so
+    nothing of it is copied (the XBE and the Media files are only read).  The artifact's
+    mtime is set BELOW the translator sources -- which are then touched, their bytes
+    unchanged -- which is exactly the state `--check` must neither refuse nor rebuild:
+    an owned artifact whose recorded source CONTENT still matches.  Exit 0 with both
+    files byte-identical plus an artifact whose sha256 and mtime are unchanged afterwards
+    is what "the check neither changed the answer nor was unable to reach it" means.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        absent = [str(p) for p in (XBE, CORPUS_C, CORPUS_H, DXC) if not p.is_file()]
+        if TOOL is None:
+            absent.append('the owned nv2a_vsh_hlsl.exe')
+        if not TOOLKIT.is_dir():
+            absent.append(str(TOOLKIT))
+        if absent:
+            raise unittest.SkipTest('a real --check needs inputs this host does not have: '
+                                    + ', '.join(absent))
+        if not shipped_sources_are_current():
+            raise unittest.SkipTest('the shipped corpus does not record the shipped sources, '
+                                    'so --check would refuse before the comparison')
+        cls._tmp = tempfile.TemporaryDirectory(prefix='jsrf-r1-check-e2e-')
+        cls.root = Path(cls._tmp.name)
+        cls.repo = cls.root / 'poison-jam'
+        copy_scripts(cls.repo / 'scripts')
+        corpus = cls.repo / 'src' / 'recomp' / 'gen' / 'shaders'
+        corpus.mkdir(parents=True)
+        for path in (CORPUS_C, CORPUS_H):
+            shutil.copy2(path, corpus / path.name)
+        # The toolkit this scratch tree resolves through the sibling rule: the scratch
+        # root's `xboxrecomp`.  Only a CMakeLists.txt and `src/video` are needed
+        # (--check never configures anything: it reads the three translator sources and
+        # the `nv2a_vsh_aot.h` digest constants), and the directory is COPIED, so touching
+        # it below touches no real checkout.
+        video = cls.root / 'xboxrecomp' / 'src' / 'video'
+        video.parent.mkdir(parents=True)
+        shutil.copytree(TOOLKIT / 'src' / 'video', video)
+        (cls.root / 'xboxrecomp' / 'CMakeLists.txt').write_text(STUB_TOOLKIT_CMAKE,
+                                                               encoding='utf-8')
+        cls.copied = sorted(p for p in video.rglob('*') if p.is_file())
+        cls.touched = video / prov.SOURCE_NAMES[0]
+        cls.tool = cls.repo / 'build' / 'vsh-tool' / Path(*owned_layout())
+        cls.tool.parent.mkdir(parents=True)
+        shutil.copy2(TOOL, cls.tool)
+        os.utime(cls.tool, (min(p.stat().st_mtime for p in cls.copied) - 60,) * 2)
+        # "Touched": the toolkit's mtimes move ABOVE the artifact's; their bytes do not.
+        for path in cls.copied:
+            os.utime(path)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    @staticmethod
+    def env():
+        env = {k: v for k, v in os.environ.items()
+               if k not in ('XBOXRECOMP_DIR', 'JSRF_NV2A_VSH_HLSL', 'JSRF_R1_SCRIPTS',
+                            'JSRF_R1_NO_SUBPROCESS', 'JSRF_R1_CORPUS_DIR')}
+        env['VULKAN_SDK'] = str(VULKAN_SDK)
+        return env
+
+    def test_a_scratch_check_over_the_real_game_is_byte_exact_and_mutates_nothing(self):
+        for name in (*prov.SOURCE_NAMES, 'nv2a_vsh_aot.h'):
+            with self.subTest(source=name):
+                self.assertEqual(
+                    prov.sha256_file(self.touched.parent / name),
+                    prov.sha256_file(TOOLKIT / 'src' / 'video' / name),
+                    'the fixture copy must be byte-identical, or the CONTENT trigger '
+                    'rather than the owned-mtime tolerance is under test')
+        self.assertLess(self.tool.stat().st_mtime, self.touched.stat().st_mtime,
+                        'the fixture did not leave the artifact older than the touched '
+                        'source, so --check would be checked in the easy state')
+        tool_sha = prov.sha256_file(self.tool)
+        tool_mtime = self.tool.stat().st_mtime_ns
+        completed = subprocess.run(
+            [sys.executable, '-X', 'utf8', str(self.repo / 'scripts' / 'gen-shaders.py'),
+             '--check', '--game', str(ROOT / 'game')],
+            cwd=str(self.repo), env=self.env(), capture_output=True, text=True, timeout=600)
+        message = f'{completed.stdout}\n{completed.stderr}'
+        self.assertEqual(completed.returncode, 0,
+                         f'--check did not succeed byte-exactly: {message[-3000:]}')
+        self.assertIn('check: OK', message)
+        for name in ('nv2a_vsh_programs.c', 'nv2a_vsh_programs.h'):
+            with self.subTest(file=name):
+                self.assertIn(f'check: {name} identical, byte for byte', message)
+        self.assertEqual(prov.sha256_file(self.tool), tool_sha,
+                         '--check rebuilt (or replaced) the owned artifact it was asked to '
+                         'compare the corpus against')
+        self.assertEqual(self.tool.stat().st_mtime_ns, tool_mtime,
+                         '--check touched the owned artifact it was asked to compare the '
+                         'corpus against')
+        self.assertFalse((self.repo / 'build' / 'vsh-tool' / 'CMakeCache.txt').exists(),
+                         '--check configured the tool tree')
+        self.assertEqual(sorted(p.name for p in self.tool.parent.iterdir()), [self.tool.name],
+                         '--check left build output beside the artifact')
+
+    def test_the_generator_refuses_a_tool_tree_bound_to_another_toolkit_too(self):
+        """F1 on the generator's own path: `main` refuses before the tool is used.
+
+        The same scratch tree with one added `build/vsh-tool/CMakeCache.txt` -- the state
+        a tool tree is left in when the toolkit it was configured against is replaced.
+        `main` checks the binding BEFORE it finds, uses or rebuilds the tool, so the run
+        must die naming both trees and the remedy, and it must leave the owned artifact
+        (and everything else in the tree) byte-for-byte as it was.
+        """
+        other = self.root / 'another-toolkit'
+        tree = write_home_dir_cache(self.repo / 'build' / 'vsh-tool', str(other))
+        cache = tree / 'CMakeCache.txt'
+        self.addCleanup(lambda: cache.unlink(missing_ok=True))
+        tool_sha = prov.sha256_file(self.tool)
+        tool_mtime = self.tool.stat().st_mtime_ns
+        resolved = os.path.realpath(str(self.root / 'xboxrecomp'))
+        completed = subprocess.run(
+            [sys.executable, '-X', 'utf8', str(self.repo / 'scripts' / 'gen-shaders.py'),
+             '--check', '--game', str(ROOT / 'game')],
+            cwd=str(self.repo), env=self.env(), capture_output=True, text=True, timeout=600)
+        message = f'{completed.stdout}\n{completed.stderr}'
+        self.assertNotEqual(completed.returncode, 0,
+                            f'the generator used a tool tree bound to another toolkit: '
+                            f'{message[-2000:]}')
+        self.assertIn(str(other), message,
+                      f'the refusal must name the toolkit the tree was configured against: '
+                      f'{message[-2000:]}')
+        self.assertIn(resolved, message,
+                      f'the refusal must name the toolkit this build resolves: '
+                      f'{message[-2000:]}')
+        self.assertIn('the sibling checkout', message,
+                      f'the refusal must name the rule that chose the resolved toolkit: '
+                      f'{message[-2000:]}')
+        self.assertIn('DIFFERENT toolkit', message)
+        self.assertIn('just shaders', message,
+                      f'the refusal must name the regeneration recipe: {message[-2000:]}')
+        self.assertEqual(prov.sha256_file(self.tool), tool_sha,
+                         'the refused run touched the owned artifact')
+        self.assertEqual(self.tool.stat().st_mtime_ns, tool_mtime,
+                         'the refused run touched the owned artifact')
+
+
+# ── the weakening mutants ────────────────────────────────────────────────────
+
+class WeakeningMutantTests(unittest.TestCase):
+    """Item 5: the gates detect the weakenings they exist for.
+
+    Each mutant is ONE localized text substitution in a scratch copy of the shipped
+    scripts; the focused assertions then run in a CHILD process with
+    `JSRF_R1_SCRIPTS=<mutant dir>`, so the suite loads the mutant through the same
+    override a reviewer would use.  A mutant is DETECTED when that child fails, and the
+    failing case is reported -- a mutant nobody notices is a hole in the gate, and this
+    class is what proves the hole is closed.
+
+    The control is a comment-only edit: it must stay GREEN, or the harness would be
+    reporting "the child failed" for reasons that have nothing to do with the mutation.
+    """
+
+    MUTANTS = {
+        'M1 compare skips tool.sha256': {
+            'file': 'vsh_aot_provenance.py',
+            'subs': [('    for key in want:\n',
+                      '    for key in want:\n'
+                      "        if key == 'tool.sha256':\n"
+                      '            continue\n')],
+            'tests': 'tests.test_vsh_aot_provenance.ToolHashDecisiveTests',
+            'why': 'a corpus recording a different tool is accepted again',
+        },
+        'M2 check_corpus drops tool.sha256 from the required expectations': {
+            'file': 'vsh_aot_provenance.py',
+            'subs': [("                            + ['tool.sha256', 'tool.args', "
+                      "'dxc.version', 'dxc.args',\n",
+                      "                            + ['tool.args', 'dxc.version', "
+                      "'dxc.args',\n")],
+            'tests': 'tests.test_vsh_aot_provenance.ToolHashDecisiveTests',
+            'why': 'a caller that cannot name the tool passes again',
+        },
+        'M3 expected() accepts tool_path=None and omits the field': {
+            'file': 'vsh_aot_provenance.py',
+            'subs': [('    if tool_path is None:\n        raise ProvenanceError(\n',
+                      '    if False:\n        raise ProvenanceError(\n'),
+                     ('    if not Path(tool_path).is_file():\n',
+                      '    if False and not Path(tool_path).is_file():\n'),
+                     ("        'tool.sha256': sha256_file(tool_path),\n",
+                      "        **({'tool.sha256': sha256_file(tool_path)}\n"
+                      "           if tool_path is not None else {}),\n")],
+            'tests': 'tests.test_vsh_aot_provenance.ToolHashDecisiveTests',
+            'why': 'a missing tool silently removes the deciding expectation',
+        },
+        'M4 the guard accepts when no host tool is found': {
+            'file': 'build-jsrf.py',
+            'subs': [('    tool = gen_shaders.find_host_tool(gen_shaders.TOOL_BUILD_DIR)\n'
+                      '    if tool is None:\n',
+                      '    tool = gen_shaders.find_host_tool(gen_shaders.TOOL_BUILD_DIR)\n'
+                      '    if tool is None:\n'
+                      "        return 'schema 2, 0 programs, 0 distinct, tool (none) "
+                      "sha256 (none)'\n")],
+            'tests': 'tests.test_vsh_aot_provenance.BuildGuardTests',
+            'why': 'a corpus whose tool cannot be found passes again',
+        },
+        'M5 the guard warns instead of refusing a stale override': {
+            'file': 'build-jsrf.py',
+            'subs': [('    if refusal is not None:\n        newer = refusal[1]\n',
+                      '    if False:\n        newer = refusal[1]\n')],
+            'tests': 'tests.test_vsh_aot_provenance.BuildGuardTests',
+            'why': 'a stale environment override is used again',
+        },
+        'M6 the guard call moves after the cmake configure call': {
+            'file': 'build-jsrf.py',
+            'subs': [
+                ("print(f'corpus   : {check_corpus_provenance(BOUND_TOOLKIT, "
+                 "BOUND_TOOLKIT_FROM)}')\n",
+                 ''),
+                ("if not run(['cmake', '-S', '.', '-B', 'build'], "
+                 "'configure-current.log'):\n"
+                 "    raise SystemExit('CMake configure failed; see "
+                 "logs/configure-current.log.')\n",
+                 "if not run(['cmake', '-S', '.', '-B', 'build'], "
+                 "'configure-current.log'):\n"
+                 "    raise SystemExit('CMake configure failed; see "
+                 "logs/configure-current.log.')\n"
+                 "print(f'corpus   : {check_corpus_provenance(BOUND_TOOLKIT, "
+                 "BOUND_TOOLKIT_FROM)}')\n"),
+            ],
+            'tests': 'tests.test_vsh_aot_provenance.BuildEntryRefusalTests',
+            'why': 'a stale corpus is compiled first and refused afterwards',
+        },
+        'M7 resolve_toolkit resolves the cache/environment conflict silently': {
+            'file': 'gen-shaders.py',
+            'subs': [('    if cached_raw is not None and env_raw and (\n',
+                      '    if False and cached_raw is not None and env_raw and (\n')],
+            'tests': 'tests.test_vsh_aot_provenance.ToolkitBindingTests',
+            'why': 'the guard reads one toolkit while CMake links another',
+        },
+        'M8 toolkit_binding_conflict never refuses a differently-bound tool tree': {
+            'file': 'gen-shaders.py',
+            'subs': [('    configured = owned_tool_toolkit(tree)\n'
+                      '    if configured is None:\n',
+                      '    configured = owned_tool_toolkit(tree)\n'
+                      '    if True or configured is None:\n')],
+            'tests': 'tests.test_vsh_aot_provenance.ToolkitBindingConflictTests',
+            'why': 'the owned tool tree may be used and rebuilt against a toolkit it was '
+                   'not configured from, so the hash the corpus records would describe a '
+                   'binary built from another checkout',
+        },
+    }
+
+    CONTROL = {
+        'file': 'vsh_aot_provenance.py',
+        'subs': [('SCHEMA = 2\n',
+                  'SCHEMA = 2  # a comment-only edit: the harness must call this GREEN\n')],
+        'tests': 'tests.test_vsh_aot_provenance.ToolHashDecisiveTests',
+    }
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory(prefix='jsrf-r1-mutants-')
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def mutant_dir(self, name, spec):
+        """A copy of the SHIPPED scripts with `spec`'s single substitution applied.
+
+        The copy lands at `<base>/scripts/`, so the scratch tree has the shape both
+        consumers expect: `gen-shaders.py` resolves its own `ROOT` as `scripts/..`, and
+        `build-jsrf.py` loads its modules from `ROOT/scripts/`.
+        """
+        base = Path(self._tmp.name) / re.sub(r'\W+', '-', name)
+        scripts = copy_scripts(base / 'scripts', SCRIPTS)
+        target = scripts / spec['file']
+        source = target.read_text(encoding='utf-8')
+        for old, new in spec['subs']:
+            self.assertEqual(source.count(old), 1,
+                             f'the mutation anchor for {name!r} is no longer unique in '
+                             f"{spec['file']} ({source.count(old)} occurrences); the shipped "
+                             f'code changed shape and this mutant must follow it')
+            source = source.replace(old, new)
+        target.write_text(source, encoding='utf-8')
+        return scripts
+
+    def run_focused(self, scripts, case):
+        """Run `case` in a child process whose scripts are `scripts`."""
+        env = {k: v for k, v in os.environ.items()
+               if k not in ('JSRF_R1_SCRIPTS', 'JSRF_R1_NO_SUBPROCESS',
+                            'JSRF_R1_CORPUS_DIR')}
+        env['JSRF_R1_SCRIPTS'] = str(scripts)
+        env['JSRF_R1_NO_SUBPROCESS'] = '1'
+        return subprocess.run([sys.executable, '-X', 'utf8', '-m', 'unittest', '-v', case],
+                              cwd=str(ROOT), env=env, capture_output=True, text=True,
+                              timeout=600)
+
+    @staticmethod
+    def failing_cases(output):
+        """The `FAIL:`/`ERROR:` case names a child reported, for the per-mutant table."""
+        return [line.strip() for line in output.splitlines()
+                if line.startswith('FAIL:') or line.startswith('ERROR:')]
+
+    def verdict(self, name, spec):
+        scripts = self.mutant_dir(name, spec)
+        completed = self.run_focused(scripts, spec['tests'])
+        cases = self.failing_cases(completed.stderr)
+        detected = completed.returncode != 0
+        detail = cases[0] if cases else (completed.stderr.strip().splitlines() or ['-'])[-1]
+        print(f'r1r mutant: {name}: detected={"yes" if detected else "NO"} '
+              f'({spec["tests"].rsplit(".", 1)[-1]}, {len(cases)} failing case(s): {detail})')
+        return detected, cases, completed
+
+    @unittest.skipIf(os.environ.get('JSRF_R1_NO_SUBPROCESS'),
+                     'the subprocess form runs the focused suite; it must not recurse')
+    def test_every_weakening_mutant_is_detected(self):
+        for name, spec in self.MUTANTS.items():
+            with self.subTest(mutant=name):
+                detected, cases, completed = self.verdict(name, spec)
+                self.assertTrue(
+                    detected,
+                    f'{name} was NOT detected: the focused assertions still pass against a '
+                    f'tree where {spec["why"]}.'
+                    f'\n{completed.stdout[-2000:]}\n{completed.stderr[-2000:]}')
+                self.assertTrue(cases, f'{name} failed without naming a case:\n'
+                                       f'{completed.stderr[-2000:]}')
+
+    @unittest.skipIf(os.environ.get('JSRF_R1_NO_SUBPROCESS'),
+                     'the subprocess form runs the focused suite; it must not recurse')
+    def test_a_comment_only_edit_stays_green(self):
+        scripts = self.mutant_dir('control', self.CONTROL)
+        completed = self.run_focused(scripts, self.CONTROL['tests'])
+        print(f'r1r mutant: control (comment-only edit): '
+              f'detected={"no" if completed.returncode == 0 else "yes (BROKEN HARNESS)"}')
+        self.assertEqual(completed.returncode, 0,
+                         f'a comment-only edit turned the suite red, so the harness is '
+                         f'reporting something other than the mutation:'
+                         f'\n{completed.stdout[-2000:]}\n{completed.stderr[-2000:]}')
+
+    def test_the_mutant_directories_are_the_shipped_scripts(self):
+        """The substrate itself: a copy with one edit, and everything else byte-identical."""
+        scripts = self.mutant_dir('substrate-check', self.CONTROL)
+        for name in ('vsh_aot_provenance.py', 'gen-shaders.py', 'build-jsrf.py'):
+            with self.subTest(script=name):
+                self.assertTrue((scripts / name).is_file())
+        edited = (scripts / 'vsh_aot_provenance.py').read_text(encoding='utf-8')
+        shipped = SHIPPED.read_text(encoding='utf-8')
+        self.assertNotEqual(edited, shipped)
+        self.assertEqual(edited.replace(self.CONTROL['subs'][0][1], self.CONTROL['subs'][0][0]),
+                         shipped, 'the mutant differs from the shipped file by more than its '
+                                  'one substitution')
 
 
 def fake_dxc(tmp, lines):

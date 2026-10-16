@@ -78,7 +78,15 @@ just disk                  # space gate and retention plan
 the Vulkan back end's vertex-program corpus is retail-derived and untracked, so
 CMake fails with a clear message until it exists. It compiles offline with the
 Vulkan SDK's `dxc` and `spirv-val` (set `VULKAN_SDK`); nothing is compiled at run
-time.
+time. It also records the SHA-256 of the tool that translated the programs, and
+`build-jsrf.py` refuses a corpus it cannot compare against the tool the repository
+owns (`build/vsh-tool/.../nv2a_vsh_hlsl.exe`): delete or relink that artifact, move
+any of the toolkit's three translator sources (`nv2a_vsh_hlsl.c`, `.h`,
+`nv2a_vsh_hlsl_tool.c`), or leave an environment or cached `XBOXRECOMP_DIR` naming a
+different toolkit, and `just shaders` has to run again before `just build` accepts.
+`JSRF_NV2A_VSH_HLSL` names an external tool instead: it is read-only to this build
+(never rebuilt, replaced or overwritten) and must be newer than all three sources
+with the corpus's recorded sources unchanged, or the refusal stands.
 
 Underlying commands when a recipe is unavailable:
 

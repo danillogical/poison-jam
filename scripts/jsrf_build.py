@@ -3,10 +3,12 @@
 Three things this provides, each fixing a measured failure:
 
 1. **Preflight** (`preflight`).  Reports the resolved Python, CMake and CTest,
-   the toolchain dependencies, and the parallel setting -- *before* any mutation.
-   Tests must be able to distinguish a missing tool, an invalid parallel count, a
-   normalized environment, an ordinary compiler failure, and the measured silent
-   confined signature.
+   the toolchain dependencies, the parallel setting, and the ONE toolkit this run
+   is bound to (`toolkit`, `toolkit_source` -- the caller's resolved
+   `gen_shaders.resolve_toolkit`, never a path invented here) -- *before* any
+   mutation.  Tests must be able to distinguish a missing tool, an invalid
+   parallel count, a normalized environment, an ordinary compiler failure, and the
+   measured silent confined signature.
 2. **Target inventory derived from CMake** (`discover_required_targets`).  The
    hand-maintained list in `build-jsrf.py` names 11 targets, but CTest discovers
    **12** tests: `xbox_timestamp_publication` comes from the *toolkit*
@@ -23,6 +25,7 @@ Three things this provides, each fixing a measured failure:
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -82,8 +85,51 @@ def duplicate_case_keys(environ: dict[str, str] | None = None) -> list[str]:
     return sorted(name for names in seen.values() if len(names) > 1 for name in names)
 
 
-def preflight(parallel: int = 4, environ: dict[str, str] | None = None) -> dict[str, Any]:
-    """Report the resolved toolchain and refuse an unusable configuration."""
+def toolkit_binding(toolkit: Any = None) -> tuple[Path, str]:
+    """`(Path, label)` for the toolkit this run is bound to.
+
+    `toolkit` may be the `(path, label)` pair `gen_shaders.resolve_toolkit`
+    returned, a bare path, or None.  None resolves through that same function --
+    imported by path, because `scripts/gen-shaders.py` is a module in name only --
+    so a caller that does not resolve the toolkit itself still cannot end up
+    reporting a different tree from the one the corpus guard, the generator and the
+    CMake link use.  `BuildError` when no toolkit can be resolved.
+    """
+    if isinstance(toolkit, tuple) and len(toolkit) == 2:
+        return Path(toolkit[0]), str(toolkit[1])
+    if toolkit is not None:
+        return Path(toolkit), 'the caller-supplied toolkit'
+    module = sys.modules.get('gen_shaders')
+    if module is None:
+        spec = importlib.util.spec_from_file_location(
+            'gen_shaders', ROOT / 'scripts' / 'gen-shaders.py')
+        module = importlib.util.module_from_spec(spec)
+        sys.modules['gen_shaders'] = module
+        try:
+            spec.loader.exec_module(module)
+        except Exception as error:   # a generator that cannot load is a preflight problem
+            raise BuildError(f'the shader generator could not be loaded to resolve the '
+                             f'toolkit: {error}') from error
+    try:
+        path, label = module.resolve_toolkit()
+    except Exception as error:       # including the cache/environment conflict refusal
+        raise BuildError(f'the toolkit this build binds to cannot be resolved: {error}') \
+            from error
+    return Path(path), str(label)
+
+
+def preflight(parallel: int = 4, environ: dict[str, str] | None = None,
+              toolkit: Any = None) -> dict[str, Any]:
+    """Report the resolved toolchain and refuse an unusable configuration.
+
+    `toolkit` is the toolkit this run is BOUND to -- the `(path, label)` pair
+    `gen_shaders.resolve_toolkit` returned, which is what CMake links, what the
+    generator records and what the corpus guard compares against.  It is reported
+    as `toolkit`/`toolkit_source` (never a path invented here: a third, hard-coded
+    sibling path is exactly how the guard and the CMake link drifted apart).  With
+    `toolkit=None` this resolves through that same function, and a resolution
+    failure becomes a problem rather than a traceback.
+    """
     result: dict[str, Any] = {
         'python': sys.executable,
         'python_version': sys.version.split()[0],
@@ -104,21 +150,28 @@ def preflight(parallel: int = 4, environ: dict[str, str] | None = None) -> dict[
         result['problems'].append(
             f'--parallel must be a positive integer, got {parallel!r}')
 
-    # The toolkit carries targets CTest runs, so a missing sibling is fatal.
-    toolkit = ROOT.parent / 'xboxrecomp'
-    result['toolkit'] = str(toolkit)
-    if not toolkit.is_dir():
-        result['problems'].append(f'toolkit tree is missing: {toolkit}')
-    else:
-        cmake_lists = ROOT / 'CMakeLists.txt'
-        if not cmake_lists.is_file():
-            result['problems'].append('CMakeLists.txt is missing')
+    # The toolkit carries targets CTest runs, so a missing tree is fatal.  The tree
+    # checked here is the bound one, so this problem and the build's toolkit agree.
+    try:
+        toolkit_path, toolkit_source = toolkit_binding(toolkit)
+    except BuildError as error:
+        toolkit_path, toolkit_source = None, 'unresolved'
+        result['problems'].append(str(error))
+    result['toolkit'] = str(toolkit_path) if toolkit_path is not None else ''
+    result['toolkit_source'] = toolkit_source
+    if toolkit_path is not None:
+        if not toolkit_path.is_dir():
+            result['problems'].append(f'toolkit tree is missing: {toolkit_path}')
         else:
-            text = cmake_lists.read_text(encoding='utf-8', errors='replace')
-            if 'add_subdirectory' not in text:
-                result['problems'].append(
-                    'CMakeLists.txt no longer adds the toolkit subdirectory, so the '
-                    'derived target inventory would be incomplete')
+            cmake_lists = ROOT / 'CMakeLists.txt'
+            if not cmake_lists.is_file():
+                result['problems'].append('CMakeLists.txt is missing')
+            else:
+                text = cmake_lists.read_text(encoding='utf-8', errors='replace')
+                if 'add_subdirectory' not in text:
+                    result['problems'].append(
+                        'CMakeLists.txt no longer adds the toolkit subdirectory, so the '
+                        'derived target inventory would be incomplete')
 
     build_dir = ROOT / 'build'
     result['build_dir'] = str(build_dir)

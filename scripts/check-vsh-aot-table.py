@@ -26,7 +26,15 @@ Method, per entry, reading only the generated `nv2a_vsh_programs.c`:
 Exit 0 only when every check passes. Prints one line per entry problem and a
 final summary. Read-only: it writes only under --scratch.
 
+The default `--tool` is the executable the corpus RECORDS: an existing
+`JSRF_NV2A_VSH_HLSL`, else the tool this repository owns under `build/vsh-tool`,
+resolved by `gen_shaders.find_host_tool` (never the game build tree's own relinked
+copy, whose hash has nothing to do with this table).  With no such tool the check
+FAILS and names `just shaders`, which builds and records it; `--tool` overrides the
+resolution, and `--skip-spirv` needs no tool and no device at all.
+
 Usage: python -X utf8 scripts/check-vsh-aot-table.py [--c <path>] [--scratch <dir>]
+       [--tool <nv2a_vsh_hlsl.exe>] [--skip-spirv] [--skip-coverage]
 """
 import argparse
 import hashlib
@@ -58,6 +66,29 @@ def load_fvp():
         raise SystemExit(2)
     spec = importlib.util.spec_from_file_location('find_vertex_programs', path)
     mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def load_gen_shaders():
+    """`gen-shaders.py` by path: it owns the ONE host-tool resolution.
+
+    The tool this check recompiles with must be the binary the corpus's recorded
+    identity refers to, so the default is resolved by importing the generator's
+    `find_host_tool` (an existing `JSRF_NV2A_VSH_HLSL` override, else the OWNED
+    artifact under `build/vsh-tool`) instead of spelling a search order a second
+    time.  The game build tree's own copy is deliberately not a candidate: `just
+    build` relinks it, so its hash has nothing to do with this corpus.  Nothing is
+    built or written here; `find_host_tool` only looks.
+    """
+    import importlib.util
+    path = ROOT / 'scripts' / 'gen-shaders.py'
+    if not path.is_file():
+        print(f'FAIL: {path} is missing; it owns the host-tool resolution')
+        raise SystemExit(2)
+    spec = importlib.util.spec_from_file_location('gen_shaders', path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules['gen_shaders'] = mod
     spec.loader.exec_module(mod)
     return mod
 
@@ -143,7 +174,9 @@ def main(argv=None):
     ap.add_argument('--scratch', type=Path, default=None,
                     help='keep intermediates here instead of a temp dir')
     ap.add_argument('--tool', type=Path, default=None,
-                    help='the nv2a_vsh_hlsl host tool (default: search build trees)')
+                    help='the nv2a_vsh_hlsl host tool (default: the tool the corpus '
+                         'records -- an existing JSRF_NV2A_VSH_HLSL, else the owned '
+                         'build/vsh-tool artifact, resolved by gen_shaders.find_host_tool)')
     ap.add_argument('--skip-spirv', action='store_true',
                     help='parse and hash only; do not re-translate or recompile')
     ap.add_argument('--skip-coverage', action='store_true',
@@ -163,13 +196,15 @@ def main(argv=None):
 
     tool = args.tool
     if tool is None and not args.skip_spirv:
-        for cand in (ROOT / 'build' / 'xboxrecomp' / 'src' / 'video' / 'Release' / 'nv2a_vsh_hlsl.exe',
-                     ROOT / 'build' / 'xboxrecomp' / 'src' / 'video' / 'nv2a_vsh_hlsl.exe'):
-            if cand.is_file():
-                tool = cand
-                break
+        # The tool the corpus records, by the generator's own resolution -- never the
+        # game build tree's relinked copy, whose hash has nothing to do with this table.
+        tool = load_gen_shaders().find_host_tool()
     if not args.skip_spirv and tool is None:
-        print('FAIL: the nv2a_vsh_hlsl host tool was not found; build it or pass --tool')
+        print('FAIL: the nv2a_vsh_hlsl host tool was not found: JSRF_NV2A_VSH_HLSL is not '
+              f'set (or names a file that is not there) and the tool this repository owns, '
+              f'the nv2a_vsh_hlsl.exe under {ROOT / "build" / "vsh-tool"} (either CMake '
+              'layout), is not built; run `just shaders`, which builds and records that '
+              'tool, or pass --tool')
         return 2
     if not args.skip_spirv and (not DXC.is_file() or not SPIRV_VAL.is_file()):
         print(f'FAIL: dxc/spirv-val missing under {VULKAN_SDK}')

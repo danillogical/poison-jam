@@ -9,7 +9,10 @@ in the log to explain it.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
+import os
+import re
 import subprocess
 import sys
 import unittest
@@ -22,6 +25,67 @@ sys.path.insert(0, str(SCRIPTS))
 import jsrf_build  # noqa: E402
 
 BUILD_SCRIPT = SCRIPTS / 'build-jsrf.py'
+GENERATOR = SCRIPTS / 'gen-shaders.py'
+
+# The label `gen_shaders.resolve_toolkit` gives each way of naming a toolkit.  Asserting
+# against the closed set (rather than "some string") is what keeps `toolkit_source` an
+# account of WHERE the tree came from.
+TOOLKIT_LABELS = ("the build tree's cached XBOXRECOMP_DIR", 'XBOXRECOMP_DIR',
+                  'the sibling checkout')
+
+_ABSENT = object()
+
+
+class _Patched:
+    """One environment variable and `sys.modules['gen_shaders']`, restored on exit.
+
+    `toolkit_binding(None)` resolves the toolkit through `sys.modules['gen_shaders']`, so
+    a test that installs a generator must put `sys.modules` back afterwards -- the whole
+    suite runs in one process, under CTest.
+    """
+
+    def __init__(self, name, value, generator=_ABSENT):
+        self.name = name
+        self.value = value
+        self.generator = generator
+
+    def __enter__(self):
+        self.saved = os.environ.get(self.name, _ABSENT)
+        self.saved_generator = sys.modules.get('gen_shaders', _ABSENT)
+        os.environ[self.name] = str(self.value)
+        if self.generator is not _ABSENT:
+            sys.modules['gen_shaders'] = self.generator
+        return self
+
+    def __exit__(self, *exc):
+        if self.saved is _ABSENT:
+            os.environ.pop(self.name, None)
+        else:
+            os.environ[self.name] = self.saved
+        if self.saved_generator is _ABSENT:
+            sys.modules.pop('gen_shaders', None)
+        else:
+            sys.modules['gen_shaders'] = self.saved_generator
+        return False
+
+
+def load_generator():
+    """`scripts/gen-shaders.py` by path (it is a module in name only)."""
+    spec = importlib.util.spec_from_file_location('gen_shaders', GENERATOR)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def repo_cached_toolkit():
+    """The toolkit the repository's own build tree caches, or None."""
+    cache = ROOT / 'build' / 'CMakeCache.txt'
+    if not cache.is_file():
+        return None
+    for line in cache.read_text(encoding='utf-8', errors='replace').splitlines():
+        if line.startswith('XBOXRECOMP_DIR:PATH='):
+            return line.split('=', 1)[1].strip() or None
+    return None
 
 
 class PreflightTests(unittest.TestCase):
@@ -71,6 +135,83 @@ class PreflightTests(unittest.TestCase):
         """The real environment, collapsed, has no duplicate-case keys."""
         normalized = jsrf_build.normalized_environment()
         self.assertEqual(len(normalized), len(set(normalized)))
+
+    def test_preflight_reports_the_bound_toolkit(self):
+        """The toolkit the report names is the one the CALLER bound.
+
+        The measured defect: the guard hashed one tree, the CMake cache named another and
+        preflight printed a third, hard-coded sibling path.  The report must carry the
+        bound pair -- path and the label that chose it -- so the one `toolkit :` line
+        describes the tree every other step uses.
+        """
+        bound = (ROOT.parent / 'xboxrecomp', 'the fixture toolkit')
+        report = jsrf_build.preflight(4, toolkit=bound)
+        self.assertEqual(report['toolkit'], str(bound[0]))
+        self.assertEqual(report['toolkit_source'], 'the fixture toolkit')
+
+    def test_preflight_resolves_the_toolkit_through_the_generator(self):
+        """With no toolkit passed, the resolution is the generator's own.
+
+        Nothing here may invent a path (`toolkit_binding` calls
+        `gen_shaders.resolve_toolkit`), or the reported tree and the linked tree can
+        drift apart again.
+        """
+        generator = load_generator()
+        expected, label = generator.resolve_toolkit()
+        with _Patched('XBOXRECOMP_DIR', os.environ.get('XBOXRECOMP_DIR', ''),
+                      generator=generator):
+            report = jsrf_build.preflight(4)
+        self.assertEqual(report['toolkit'], str(expected))
+        self.assertEqual(report['toolkit_source'], label)
+        self.assertIn(report['toolkit_source'], TOOLKIT_LABELS,
+                      'the report must say WHERE the toolkit came from, from the closed '
+                      'set of ways it can be named')
+
+    def test_preflight_reports_a_missing_toolkit_as_a_problem(self):
+        missing = ROOT / 'no-such-toolkit-12345'
+        self.assertFalse(missing.is_dir())
+        report = jsrf_build.preflight(4, toolkit=(missing, 'the fixture toolkit'))
+        self.assertFalse(report['ok'])
+        self.assertTrue(any('toolkit tree is missing' in p for p in report['problems']),
+                        report['problems'])
+        self.assertEqual(report['toolkit'], str(missing))
+        self.assertEqual(report['toolkit_source'], 'the fixture toolkit')
+
+    def test_preflight_reports_a_toolkit_resolution_conflict(self):
+        """A cache/environment conflict is a PROBLEM the caller can print, not a traceback.
+
+        `resolve_toolkit` refuses when the build tree's cached `XBOXRECOMP_DIR` and the
+        environment name different trees; preflight has to surface that as a problem,
+        because the build must not configure while the guard and the CMake link could
+        read different checkouts.
+        """
+        cached = repo_cached_toolkit()
+        if cached is None:
+            self.skipTest('the repository build tree caches no XBOXRECOMP_DIR')
+        generator = load_generator()
+        other = str(ROOT / 'no-such-toolkit-12345')
+        self.assertNotEqual(os.path.normcase(os.path.realpath(other)),
+                            os.path.normcase(os.path.realpath(cached)))
+        with _Patched('XBOXRECOMP_DIR', other, generator=generator):
+            report = jsrf_build.preflight(4)
+        self.assertFalse(report['ok'], report)
+        self.assertTrue(any('cannot be resolved' in p for p in report['problems']),
+                        report['problems'])
+        joined = '; '.join(report['problems'])
+        match = re.search(r'caches XBOXRECOMP_DIR=(.*?) but the environment sets '
+                          r'XBOXRECOMP_DIR=(.*?): CMake would link', joined)
+        self.assertIsNotNone(match, f'the conflict must name both paths: {joined}')
+        # Compared as RESOLVED paths: the cache stores CMake's spelling (`/` and `..`),
+        # while the message renders the OS's, and the point is that the two PATHS differ.
+        self.assertEqual(os.path.normcase(os.path.realpath(match.group(1))),
+                         os.path.normcase(os.path.realpath(cached)),
+                         'the cached path must be named')
+        self.assertEqual(os.path.normcase(os.path.realpath(match.group(2))),
+                         os.path.normcase(os.path.realpath(other)),
+                         'the environment path must be named')
+        self.assertEqual(report['toolkit'], '')
+        self.assertEqual(report['toolkit_source'], 'unresolved',
+                         'an unresolved toolkit must not be reported as a path')
 
 
 class TargetInventoryTests(unittest.TestCase):

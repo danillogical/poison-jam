@@ -2961,7 +2961,9 @@ records the inputs that produced the corpus and refuses a mismatch before the co
   provenance comment was added (the table body is byte-identical). Test-only in effect: no runtime
   path changed, the toolkit is untouched at `5668278`, so no toolkit commit.
 
-**Next:** N2 (the controlled benchmark), then N3/V7/V8.
+**Next:** the independent rejection of this implementation and its repair are in §§31.23–31.24. The
+repair closes the three gaps; R1 then awaits Codex acceptance, and N2 (the controlled benchmark)
+follows, then N3/V7/V8.
 
 
 
@@ -2993,3 +2995,125 @@ xbe_distinct=126 problems=0`. Those positive results do not test away the three 
 Repair forward with a different worker's regression and final-source baseline/mutation/restored
 proof, including the actual supported build refusal before configure. R1 remains pending; R2 has not
 started. The previously accepted V5/V6 milestones are unchanged.
+
+### §31.24 R1R: decisive tool identity, a refused stale override and one bound toolkit (2026-10-15)
+
+**Status: R1 repaired, awaiting independent Codex acceptance.** V5/V6 remain accepted; R2 has not
+started. This section records the repair of the three counterexamples in §31.23, the defects an
+independent review of the repair itself found, and the evidence that closes them.
+
+**The three gaps, and what closes each.**
+
+- **Tool identity is now decisive and mandatory.** `scripts/vsh_aot_provenance.py` is at `schema = 2`:
+  `tool.sha256` is a deciding field, `ADVISORY_FIELDS` and `strip_advisory` are gone, `expected()`
+  requires the existing tool (no `tool_path=None` arm) and `check_corpus` refuses a caller that cannot
+  name the tool it expects. A corpus that records a changed hash, omits the field from both files, or
+  carries an empty value now refuses naming `tool.sha256`, on both files.
+- **The recorded executable is the one the repository owns.** The generating tool is
+  `build/vsh-tool/.../nv2a_vsh_hlsl.exe` (either CMake layout); the game build tree's copy is
+  deliberately not a candidate, because `just build` relinks it and its non-reproducible PDB
+  signature moves its hash without an input moving — and the guard runs before that tree is
+  configured at all. Only `just shaders` rebuilds the owned artifact, so the hash comparison is
+  between the actual generating binary and the actual binary in use. Deleting or relinking the
+  artifact requires `just shaders`; that is the conservative, approved behaviour, not a false
+  positive.
+- **A stale `JSRF_NV2A_VSH_HLSL` override is refused, not warned about.** `locate_host_tool` refuses
+  it when the corpus records different source content and/or it is older than a translator source,
+  and the build guard refuses the same states; no code path writes to, rebuilds, renames or copies
+  over a path named by the environment. The remedy text distinguishes the two triggers honestly: an
+  mtime trigger is cleared by rebuilding the override, while a content trigger can only be cleared by
+  UNSETTING the variable (that trigger compares the sources the existing corpus recorded with the
+  sources on disk and never looks at the override), after which `just shaders` rebuilds the owned tool
+  and records the new sources.
+- **One toolkit binds the guard, the generator and the CMake link.** `resolve_toolkit` prefers the
+  build tree's cached `XBOXRECOMP_DIR` (what `add_subdirectory` links), then `$XBOXRECOMP_DIR`, then
+  the sibling checkout, and REFUSES a cache/environment disagreement naming both paths; the winner
+  must be a real checkout (CMakeLists plus the three translator sources). The owned tool tree is bound
+  too: its own `CMakeCache.txt` `CMAKE_HOME_DIRECTORY` must name the same toolkit, or both the
+  generator and the guard refuse — without that check the generator could force-rebuild
+  `build/vsh-tool` from *another* checkout's sources while recording this one's hashes (the same
+  defect class one level down, found by the repair's own review). `check-vsh-aot-table.py` resolves
+  its default tool through the same function, so `just check` recompiles with the recorded identity.
+
+**Schema 2 and what the corpus actually changed.** The corpus is regenerated: the block now records
+`schema = 2` and `tool.sha256 = 375c7fb901109bfd51eecacda919e115db942aeb65e4fb9efbda6c7bb9aefb0e`
+(the owned artifact), with the three source hashes `c749f0c7…`/`b774047d…`/`9caf73e9…` unchanged.
+The table body is byte-identical to the R1 corpus (provenance block stripped: `ae96c76b…` for the
+`.c`, `9c8f306a…` for the `.h`), so R1R changes no program, no SPIR-V byte and no runtime path.
+`gen-shaders.py --check` is byte-exact and idempotent, and `--check` is non-mutating: it resolves the
+tool through `find_host_tool` and never builds, so a check cannot move the decisive identity.
+
+**The repair's own review.** An independent code review of the repair found a P1 and a P2, both fixed
+here: the owned-tool binding above, and `--check`'s ability to force-rebuild the tool (which would
+have flipped a passing tree to refused and left the generator and the guard disagreeing). It also
+flagged an override remedy that could not clear the trigger it was offered for, an over-narrow
+`CMakeCache.txt` entry type (`:PATH` only — now any type, so `:STRING`/`:UNINITIALIZED` are read),
+and two comments that justified mtime-only staleness with a relinked executable (a relink changes the
+hash and is refused anyway; the tolerated case is newer source mtimes with identical content). The
+repair also had to instantiate the provenance module once per process: loading it twice gave the guard
+a different `ProvenanceError` class than the generator raised, so two refusals could never be caught
+and surfaced as tracebacks. A security review of the change traced every override path use and every
+subprocess invocation and found no vulnerability (`shell=False` argument vectors throughout, no write
+to any non-owned path, refusals not skippable); its one informational note is the last-resort
+`force_tool_rebuild` lever that touches the resolved toolkit's source mtimes when no object files are
+found — pre-existing, mtime-only, never the override, never content.
+
+**The regression, and eight mutants it kills.** `tests/test_vsh_aot_provenance.py` (a different
+worker from the production author; 126 tests; 166 with `test_vsh_aot_table` and `test_build_jsrf`;
+~56 s for the case CTest runs) exercises the SHIPPED scripts, including a scratch-tree run of the
+real `scripts/build-jsrf.py` whose stub `CMakeLists.txt` records that configure ran: six negative
+cases (changed tool hash, moved source, omitted tool hash, missing tool, stale override, cache versus
+environment toolkit) each exit non-zero naming the intended reason and `just shaders` with NO
+configure marker and no `logs/configure-current.log`, while the matching-corpus positive control does
+reach configure. Its weakening mutants are applied to scratch copies of the scripts and run through
+`JSRF_R1_SCRIPTS`: M1 `compare` skips `tool.sha256`, M2 `check_corpus` drops it from the required
+expectations, M3 `expected()` accepts no tool, M4 the guard accepts a missing tool, M5 the guard warns
+on a stale override, M6 the guard call moves after the configure call, M7 the cache/environment
+conflict resolves silently, M8 the owned-tool binding never refuses — **all eight detected**
+(2–7 failing cases each, naming the case that caught them) with a comment-only control green.
+
+**The real scratch gate** (`C:/Users/logic/xbr-mac/r1r-scratch`, `game/` junctioned to the real
+assets so the XBE is read in place and never copied or altered; scratch toolkit with pristine sources
+`c749f0c7…`/`b774047d…`/`9caf73e9…`):
+
+- baseline: `python scripts/build-jsrf.py` exits 0, `corpus : schema 2, 128 programs, 126 distinct,
+  tool …build/vsh-tool/…nv2a_vsh_hlsl.exe sha256 cd24fa2e…`.
+- mutation: one comment line appended to `nv2a_vsh_hlsl.c` — `c749f0c7…` → `fd72b1bb…`, a CONTENT
+  change, not an mtime touch.
+- refusal: the next `build-jsrf.py` exits 1 BEFORE configure (the configure log's mtime is unchanged
+  and no marker appears), naming `nv2a_vsh_hlsl.c`, both hashes and `just shaders`.
+- regeneration: `gen-shaders.py` reports the corpus's recorded content differs, discards 2 object
+  files, force-recompiles the owned tool (`99984604…`), and records `source.nv2a_vsh_hlsl.c =
+  fd72b1bb…` with that tool hash; the next build is accepted (`exit 0`).
+- tool-only replacement: copying the real tree's artifact (`375c7fb9…`) over the scratch one makes
+  the build refuse naming `tool.sha256` and both hashes, before configure; `gen-shaders.py` re-records
+  it and the build is accepted again.
+- toolkit mismatch: `XBOXRECOMP_DIR=<the real toolkit>` with the scratch cache still naming the
+  scratch toolkit refuses before configure, naming both paths.
+- `--check` non-mutation: with a source mtime touched and its content unchanged, `--check` prints both
+  `identical, byte for byte` lines and leaves the artifact's sha256 AND mtime unchanged; with the
+  content changed it refuses naming `just shaders`, again leaving the artifact untouched.
+
+Production was untouched by the gate: the real toolkit sources are still
+`c749f0c7…`/`b774047d…`/`9caf73e9…`, the toolkit is clean at `5668278`, and the edited translator
+exists only under `r1r-scratch/`.
+
+**Gates on the final tree.** `just build` clean (`corpus : schema 2, 128 programs, 126 distinct, tool
+… 375c7fb9…`, 45 targets, 84 tests); focused suites **166/166 OK**, no skips; the real table
+`entries=126 recompiled_and_matched=126 ascending=yes duplicates=0 xbe_distinct=126 problems=0` with
+no `--skip-spirv`; `just check` → `check: all checkers passed`; full software-Vulkan CTest
+(`ctest-limited.py --output-on-failure`) **84/84 passed**, 296 s, no skips. No gameplay or benchmark
+run: this step is build tooling only, and no runtime path, corpus byte or SPIR-V byte changed.
+
+**Limits, stated rather than implied.** (1) The recorded identity is a BUILD identity: replacing,
+relinking or deleting `build/vsh-tool`, moving a translator source, or rebinding the toolkit all
+require `just shaders` before `just build` accepts — conservative by design, since a different
+executable is a different input. (2) An override cannot record a source change the corpus does not
+already record; unset it, regenerate, then set it again. (3) Relative `$XBOXRECOMP_DIR` and
+`JSRF_NV2A_VSH_HLSL` resolve against the process's current directory while a relative cached value
+resolves against the repository root; automation should pass absolute paths. (4) `build/CMakeCache.txt`
+and the owned tool tree are trusted local inputs: whoever can write them can already make CMake
+configure arbitrary code, and the change does not widen that. (5) The check is currency, not
+reproducibility: the recorded hash names the binary that ran, and the toolchain's PDB signature means
+two equivalent builds are two identities. (6) The corpus and its provenance stay retail-derived,
+untracked and ignored, as V5 established.

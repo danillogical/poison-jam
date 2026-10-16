@@ -54,12 +54,26 @@ import jsrf_build  # noqa: E402
 
 # The provenance schema is shared with the generator that records it; load it by
 # path because `vsh_aot_provenance.py` is a module in name only (it is imported by
-# two scripts, not installed).
-_prov_spec = importlib.util.spec_from_file_location(
-    'vsh_aot_provenance', root / 'scripts' / 'vsh_aot_provenance.py')
-prov = importlib.util.module_from_spec(_prov_spec)
-sys.modules['vsh_aot_provenance'] = prov
-_prov_spec.loader.exec_module(prov)
+# two scripts, not installed).  ONE instance per process: when this file is not the
+# first loader, reuse what is there, so `prov.ProvenanceError` is ONE class and a
+# refusal raised by a `gen_shaders` call is caught by the `except` clauses below
+# (a second copy would define a second class, and the refusal would escape as a
+# traceback).
+def _load_prov():
+    importlib_path = root / 'scripts' / 'vsh_aot_provenance.py'
+    loaded = sys.modules.get('vsh_aot_provenance')
+    if (loaded is not None and getattr(loaded, '__file__', None)
+            and os.path.normcase(os.path.realpath(str(loaded.__file__)))
+            == os.path.normcase(os.path.realpath(str(importlib_path)))):
+        return loaded
+    spec = importlib.util.spec_from_file_location('vsh_aot_provenance', importlib_path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules['vsh_aot_provenance'] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+prov = _load_prov()
 
 # The generator owns this title's measured program counts and the search order for
 # the host tool; import it by path for the same reason, so the guard cannot drift
@@ -163,7 +177,26 @@ def corpus_dxc():
     return dxc
 
 
-def check_corpus_provenance():
+def resolve_bound_toolkit():
+    """The ONE toolkit this build binds to, `(path, label)`; a conflict is a refusal.
+
+    CMake links and includes the toolkit its build tree caches (`XBOXRECOMP_DIR` in
+    `build/CMakeCache.txt`), while the generator and this guard read the sources
+    they name.  When those are different trees, every check here is self-consistent
+    and still describes SPIR-V nobody links, so the disagreement is a refusal rather
+    than a preference -- and it happens BEFORE preflight, so the toolkit this run
+    reports is the toolkit it will use.
+    """
+    try:
+        return gen_shaders.resolve_toolkit()
+    except prov.ProvenanceError as error:
+        raise SystemExit(
+            f'The toolkit this build binds to cannot be resolved: {error}\n'
+            'The corpus guard, the shader generator and the CMake link must name ONE '
+            'toolkit, so nothing is built or regenerated until they do.')
+
+
+def check_corpus_provenance(toolkit=None, toolkit_from=None):
     """Refuse a corpus the current inputs have moved past; return a summary string.
 
     This runs BEFORE the CMake configure step, so a stale corpus never reaches the
@@ -173,8 +206,40 @@ def check_corpus_provenance():
     waved through would not be a guard, and regenerating under a failing build is
     how the wrong half of a pipeline gets rewritten.
 
-    `tool.sha256` is compared but never decisive (the executable is not
-    reproducible on this toolchain), so it is reported as advisory only.
+    The checks run in this order, and NONE of them mutates anything:
+
+      1. the corpus files exist (they are what this build compiles);
+      2. the toolkit is resolved -- one tree for the guard, the generator and the
+         CMake link (`resolve_bound_toolkit`; the caller passes the same pair it
+         gave preflight, so there is exactly one resolution per run);
+      3. the OWNED tool tree (`build/vsh-tool`) is bound to that same toolkit.  Its
+         own cache records the toolkit it was configured against
+         (`CMAKE_HOME_DIRECTORY`), and its build system compiles that tree -- so a
+         tree bootstrapped against another checkout is a refusal before anything is
+         accepted, because the artifact it would rebuild is exactly the binary whose
+         hash the corpus records;
+      4. the generating tool is found.  It is the owned artifact
+         (`build/vsh-tool`) or an explicit `JSRF_NV2A_VSH_HLSL` override, and
+         `tool.sha256` is a DECIDING field, so "no tool" is a refusal here -- with
+         no tool there is nothing to compare the corpus's tool identity against,
+         and accepting the corpus would be accepting an unverified identity;
+      5. the tool's freshness, through `gen_shaders.staleness_refusal` -- the ONE
+         rule the generator's `--check` applies too: the corpus's recorded source
+         CONTENT must match the sources on disk (a moved source means the tool that
+         produced this corpus predates the content it names), and an ENVIRONMENT
+         OVERRIDE must also be newer than every source -- it is the one binary whose
+         freshness cannot be re-derived here, because this script must never rebuild
+         or replace a path that came from the environment.  The owned artifact's
+         mtime is NOT a refusal on its own: the generator refuses to record sources
+         its tool is older than, and an owned artifact whose recorded source content
+         still matches has only had its sources' mtimes moved since (a checkout, a
+         copy, an `rsync --times`) -- the tolerated case is newer mtimes with
+         IDENTICAL content, not a rebuilt executable, which would have a different
+         hash and be refused by `tool.sha256` already;
+      6. the expectation is derived from those inputs (`prov.expected`), which
+         requires the same existing tool again;
+      7. `prov.check_corpus` compares field by field and every difference is a
+         refusal.
     """
     missing = [CORPUS_DIR / name for name in CORPUS_FILES if not (CORPUS_DIR / name).is_file()]
     if missing:
@@ -184,26 +249,97 @@ def check_corpus_provenance():
             + '. It is retail-derived generated output and is not tracked in git, so a '
               f'fresh checkout has none until it is generated; {prov.REMEDY}.')
 
+    if toolkit is None:
+        toolkit, toolkit_from = resolve_bound_toolkit()
+
+    conflict = gen_shaders.toolkit_binding_conflict(toolkit, gen_shaders.TOOL_BUILD_DIR,
+                                                    toolkit_from)
+    if conflict:
+        raise SystemExit(conflict + ' Nothing is built or regenerated until the owned tool '
+                                    'tree and the toolkit this build resolves name the same '
+                                    'checkout.')
+
     tool = gen_shaders.find_host_tool(gen_shaders.TOOL_BUILD_DIR)
     if tool is None:
-        # NOT a refusal.  The tool is needed only to record `tool.sha256`, which is
-        # advisory and never decides: the corpus is current if its SOURCE hashes,
-        # dxc version/args and counts match, and the corpus survives deleting
-        # `build/`.  Refusing here would reject a valid tree on a clean rebuild.
-        print('corpus   : advisory: the nv2a_vsh_hlsl host tool was not found (searched '
-              + ', '.join(str(p) for p in gen_shaders.HOST_TOOL_CANDIDATES)
-              + '), so its hash cannot be re-recorded. The tool hash is advisory, so this '
-                'is not a refusal; build it with '
-                f'`{gen_shaders.REBUILD_HINT}` if you want it recorded.')
-    if tool is None and os.environ.get('JSRF_NV2A_VSH_HLSL'):
-        # An override that does not exist is still worth saying out loud: the caller
-        # named a tool, and the corpus cannot be compared against it.
-        print(f'corpus   : advisory: JSRF_NV2A_VSH_HLSL='
-              f'{os.environ["JSRF_NV2A_VSH_HLSL"]} does not exist, so that tool was not '
-              f'used for the advisory hash.')
+        # No decision to make: a corpus records the executable that produced it, and
+        # that record is decisive, so this guard cannot pass a corpus whose tool it
+        # cannot hash.  (A schema-1 corpus in the same state used to pass here with an
+        # advisory -- the defect this refusal replaces.)
+        override = os.environ.get('JSRF_NV2A_VSH_HLSL')
+        if override:
+            state = (f'JSRF_NV2A_VSH_HLSL={override} was set, but that is not an existing '
+                     f'file, and a path named by the environment is never ignored in favour '
+                     f'of another tool')
+        else:
+            state = ('no JSRF_NV2A_VSH_HLSL override was set, and the tool it would fall '
+                     'back to is not built')
+        raise SystemExit(
+            f'The executable that produced the NV2A vertex-program corpus cannot be found: '
+            f'{state}. The tool this repository owns is the nv2a_vsh_hlsl.exe under '
+            f'{gen_shaders.TOOL_BUILD_DIR} (build/vsh-tool, either CMake layout), and a '
+            f'corpus records which tool generated it as a DECIDING field, so the build '
+            f'refuses a corpus it cannot compare against a tool. Regenerate with '
+            f'`just shaders`, which builds and records the owned tool'
+            + ('; unset JSRF_NV2A_VSH_HLSL first, so the owned tool is the one that runs.'
+               if override else '.'))
+
+    # The freshness rule is `gen_shaders.staleness_refusal` -- the same one the
+    # generator's `--check` applies -- so the two can never disagree about whether a
+    # tool may stand for the sources the corpus records.
+    try:
+        refusal = gen_shaders.staleness_refusal(tool, toolkit)
+    except prov.ProvenanceError as error:
+        # `tool_staleness` reads the translator sources; one vanishing between the
+        # resolution above and this check is an unreadable provenance input, not a
+        # traceback.  Every refusal before configure names the same remedy.
+        names = ', '.join(prov.SOURCE_NAMES)
+        raise SystemExit(
+            f'The freshness of the executable that produced the NV2A vertex-program corpus '
+            f'({tool}) cannot be established: {error}. The corpus records the sources that '
+            f'produced it ({names}), so they must be readable from the toolkit {toolkit} '
+            f'({toolkit_from}) before the corpus can be accepted; restore the toolkit, then '
+            f'{prov.REMEDY} and rebuild.')
+    if refusal is not None and refusal[0] == 'content':
+        changed = refusal[1]
+        detail = '\n'.join(
+            f'  - {name}: the corpus records {recorded!r}, {toolkit} has {now!r}'
+            for name, (recorded, now) in sorted(changed.items()))
+        override = os.environ.get('JSRF_NV2A_VSH_HLSL')
+        # The content trigger compares the sources the EXISTING corpus RECORDED with
+        # the sources on disk and never looks at the tool, so when an override is set
+        # the honest remedy is to unset it: rebuilding it cannot clear this, and
+        # `just shaders` can only rebuild the owned tool once the override is gone.
+        remedy = (f' JSRF_NV2A_VSH_HLSL={override} is set: rebuilding that executable cannot '
+                  f'clear this trigger, because what differs is the content the corpus records '
+                  f'against the sources on disk. Unset JSRF_NV2A_VSH_HLSL, {prov.REMEDY} -- '
+                  f'which rebuilds the tool this repository owns from the current sources and '
+                  f'records them -- and rebuild; the override may be set again afterwards.'
+                  if override else '')
+        raise SystemExit(
+            f'The NV2A vertex-program corpus records different SOURCE content than the '
+            f'toolkit {toolkit} ({toolkit_from}) has now:\n{detail}\n'
+            f'A source that moved since the last generation means the tool that produced '
+            f'this corpus ({tool}) predates the content the corpus names. The corpus is '
+            f'retail-derived generated output; do not edit it. Regenerate it -- '
+            f'{prov.REMEDY} -- and rebuild.' + remedy)
+    if refusal is not None:
+        newer = refusal[1]
+        raise SystemExit(
+            f'JSRF_NV2A_VSH_HLSL={os.environ["JSRF_NV2A_VSH_HLSL"]} is older than '
+            + ', '.join(str(p) for _, p in newer)
+            + f', so it cannot be shown to have been built from the sources the corpus '
+              f'records and it cannot be rebuilt here (a path named by the environment is '
+              f'never overwritten or replaced by this build). Rebuild that executable '
+              f'yourself, or unset JSRF_NV2A_VSH_HLSL so {prov.REMEDY} generates with the '
+              f'tool this repository owns.')
+    # An owned artifact with mtime-only staleness is deliberately NOT refused here
+    # (see step 5 above): the tolerated state is translator sources whose mtimes are
+    # newer with IDENTICAL content -- their bytes have not moved, so nothing was built
+    # from different sources.  A rebuilt (or relinked) executable is not that case: it
+    # has a different hash, and `tool.sha256` refuses it below.
 
     try:
-        want = prov.expected(gen_shaders.TOOLKIT, tool, corpus_dxc(),
+        want = prov.expected(toolkit, tool, corpus_dxc(),
                              programs=gen_shaders.EXPECT_PROGRAMS,
                              distinct=gen_shaders.EXPECT_DISTINCT)
     except prov.ProvenanceError as error:
@@ -212,10 +348,8 @@ def check_corpus_provenance():
 
     # ONE production sequence, in the schema module, so the fixtures exercise the
     # guard the build actually runs rather than a private copy of it.
-    _, problems, advisories = prov.check_corpus(CORPUS_DIR, want)
+    _, problems = prov.check_corpus(CORPUS_DIR, want)
 
-    for advisory in advisories:
-        print(f'corpus   : advisory: {advisory}')
     if problems:
         detail = '\n'.join(f'  - {problem}' for problem in problems)
         raise SystemExit(
@@ -225,21 +359,22 @@ def check_corpus_provenance():
             f'The corpus is retail-derived generated output; do not edit it. Regenerate '
             f'it -- {prov.REMEDY} -- and rebuild.')
 
-    summary = (f'schema {want["schema"]}, {want["programs"]} programs, '
-               f'{want["distinct"]} distinct')
-    if tool is not None and 'tool.sha256' in want:
-        summary += f', tool {tool} sha256 {want["tool.sha256"]}'
-    else:
-        summary += ', tool hash not recorded (no host tool was found; it is advisory)'
-    return summary
+    return (f'schema {want["schema"]}, {want["programs"]} programs, '
+            f'{want["distinct"]} distinct, tool {tool} sha256 {want["tool.sha256"]}')
 
 
 # ── preflight ────────────────────────────────────────────────────────────────
-report = jsrf_build.preflight(args.parallel)
+# The toolkit is resolved ONCE, before anything is printed or touched: it is what
+# CMake links (via the build tree's cache), what the generator reads, and what the
+# guard compares against, so the `toolkit  :` line below reports the bound tree
+# rather than a third path that could silently disagree with both.
+BOUND_TOOLKIT, BOUND_TOOLKIT_FROM = resolve_bound_toolkit()
+
+report = jsrf_build.preflight(args.parallel, toolkit=(BOUND_TOOLKIT, BOUND_TOOLKIT_FROM))
 print(f'python   : {report["python"]} ({report["python_version"]})')
 print(f'cmake    : {report["cmake"]}')
 print(f'ctest    : {report["ctest"]}')
-print(f'toolkit  : {report["toolkit"]}')
+print(f'toolkit  : {report["toolkit"]} ({report["toolkit_source"]})')
 print(f'parallel : {report["parallel"]}')
 if report['duplicate_case_keys']:
     print(f'environment: collapsed duplicate-case keys {report["duplicate_case_keys"]}')
@@ -250,7 +385,7 @@ if not report['ok']:
 
 # BEFORE configure: the corpus is what the build compiles, and the configure step
 # is the first thing that mutates anything.  A stale corpus must never get that far.
-print(f'corpus   : {check_corpus_provenance()}')
+print(f'corpus   : {check_corpus_provenance(BOUND_TOOLKIT, BOUND_TOOLKIT_FROM)}')
 
 if not args.allow_regeneration:
     # Recovery regeneration can erase current ABI instrumentation, so it is off

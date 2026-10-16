@@ -71,7 +71,9 @@ regen:
 # with spirv-val, and emit src/recomp/gen/shaders/. Retail-derived and
 # gitignored, like src/recomp/gen itself, so a fresh checkout must run this
 # before CMake can configure. Offline and deterministic; `--check` re-generates
-# into a temporary directory and compares bytes instead of writing.
+# into a temporary directory and compares BYTE FOR BYTE instead of writing --
+# no field is exempt, so the recorded tool identity (a decisive field: the
+# binary whose sha256 the corpus records) has to match too.
 shaders:
     {{python}} -X utf8 scripts/gen-shaders.py
 

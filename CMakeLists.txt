@@ -15,7 +15,14 @@ add_compile_definitions(
     NOMINMAX
 )
 
-set(XBOXRECOMP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../xboxrecomp" CACHE PATH
+# The provenance guard resolves the ONE toolkit from this cache, so the default must follow
+# $ENV{XBOXRECOMP_DIR} rather than silently overriding it.
+if(DEFINED ENV{XBOXRECOMP_DIR} AND NOT "$ENV{XBOXRECOMP_DIR}" STREQUAL "")
+    set(_jsrf_toolkit_default "$ENV{XBOXRECOMP_DIR}")
+else()
+    set(_jsrf_toolkit_default "${CMAKE_CURRENT_SOURCE_DIR}/../xboxrecomp")
+endif()
+set(XBOXRECOMP_DIR "${_jsrf_toolkit_default}" CACHE PATH
     "Path to the xboxrecomp toolkit root directory")
 
 add_subdirectory(${XBOXRECOMP_DIR} ${CMAKE_BINARY_DIR}/xboxrecomp)
@@ -582,26 +589,64 @@ if(BUILD_TESTING)
     add_test(NAME jsrf_vsh_run_gate
         COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_vsh_run_gate.py)
     set_tests_properties(jsrf_vsh_aot_table jsrf_vsh_run_gate PROPERTIES TIMEOUT 120)
-    # R1's provenance fixtures, registered for the same reason: the guard that refuses a
-    # stale translator or dxc is only as good as the proof that it refuses.  The fixtures
-    # call the shipped scripts/vsh_aot_provenance.py by path -- `check_corpus`, the ONE
-    # sequence `scripts/build-jsrf.py` runs -- and assert the decisive reason for every
-    # refusal: a moved source hash, dxc version, dxc/tool args, programs, distinct or
-    # schema, a missing deciding field, a malformed block, a missing or blockless corpus
-    # file, two blocks in one file, the two files recording different provenance, and a
-    # `distinct` that disagrees with the table's declared `nv2a_vsh_program_count`.  The
-    # deliberate rule that tool.sha256 is advisory and never decisive is pinned too
-    # (MSVC's linker is not reproducible, so a decisive tool hash would refuse a corpus
-    # `just shaders` had just produced).  Two classes mutate scratch copies of the guard
-    # -- one field of `compare`, one step of `check_corpus` -- and require the case tables
-    # to flip, so a neutered comparison cannot leave the suite green.  The two
-    # FALSE-POSITIVE fixes are covered too, because a guard that rejects a current
-    # corpus blocks legitimate work: `expected(tool_path=None)` omits the advisory
-    # field, a corpus is accepted when no host tool exists (and the build's summary
-    # says `tool hash not recorded` instead of crashing), and `strip_advisory` -- the
-    # `gen-shaders.py --check` comparison -- blanks the advisory line and nothing
-    # else, with the build's own guard exercised from a source cut of build-jsrf.py.
-    # Pure Python, no device, ~15 s (the real-corpus class reads the generated table).
+    # R1's provenance fixtures, registered for the same reason: the gate that refuses a
+    # stale or unverifiable corpus is only as good as the proof that it refuses.  Six
+    # claims are pinned, each through the SHIPPED script that makes it.
+    #
+    # `tool.sha256` is recorded AND DECISIVE (schema 2).  The recorded executable is the
+    # owned artifact under build/vsh-tool -- the game build tree's copy is deliberately
+    # not a candidate, because `just build` relinks it with a non-reproducible PDB
+    # signature -- so a corpus recording a different tool, or omitting the field from
+    # BOTH files, refuses; `expected(tool_path=None)` refuses too, and a `want` that
+    # lacks tool.sha256 refuses naming the missing expectation.  Moving a source hash,
+    # dxc version, dxc/tool args, programs, distinct or schema, a missing deciding field,
+    # a malformed block, a missing or blockless corpus file, two blocks in one file, the
+    # two files recording different provenance, and a `distinct` that disagrees with the
+    # table's declared `nv2a_vsh_program_count` all refuse as well, each naming itself.
+    #
+    # ONE toolkit binds the guard, the generator and the CMake link: the build tree's
+    # cached XBOXRECOMP_DIR wins, the environment and the sibling are the fallbacks, a
+    # cache/environment disagreement is a refusal naming BOTH paths, and a root that is
+    # not a toolkit checkout is refused naming the missing files.  A `JSRF_NV2A_VSH_HLSL`
+    # override is freshness-verified (content first, mtime second) and REFUSED when
+    # stale, with both remedies and the rule that the script never rebuilds or replaces a
+    # path the environment named -- it is not an advisory.
+    #
+    # The OWNED tool tree carries its own binding: `build/vsh-tool`'s CMakeCache records
+    # the toolkit CMake configured THAT tree against (CMAKE_HOME_DIRECTORY, any entry
+    # type), and a tree configured against a different toolkit than the one this build
+    # resolves is refused -- by the generator and by the guard -- naming the tree, the
+    # toolkit it was configured against, the resolved toolkit and the delete-and-re-run
+    # remedy; a missing cache, a missing entry and the same tree in another spelling are
+    # not refusals.  `--check` is non-mutating: the tool is FOUND (`check_host_tool`
+    # -> `find_host_tool`, never built), the shared `staleness_refusal` rule applies
+    # (content refuses for every tool, mtime only for a JSRF_NV2A_VSH_HLSL override, so an
+    # owned artifact whose recorded source content still matches is returned untouched),
+    # and no tool at all refuses naming `just shaders`.
+    #
+    # The build entry refuses BEFORE the CMake configure step, and that is measured, not
+    # inferred from the source text: the fixtures run the real scripts/build-jsrf.py in a
+    # scratch tree whose stub CMakeLists.txt writes build/R1R_CONFIGURE_RAN.txt as its
+    # first action, so a refusal that lets configure run leaves the marker behind.  Seven
+    # negative cases (changed tool hash, moved source hash, tool hash omitted from both
+    # files, deleted owned tool, stale override, cache/environment conflict, and the owned
+    # tool tree bound to another toolkit) must exit non-zero naming the reason and
+    # `just shaders` with neither the marker nor logs/configure-current.log present, and a
+    # matching scratch corpus must reach configure and print `corpus   : schema 2, ...`
+    # naming the fake tool's hash.
+    #
+    # Finally the gates are shown to DETECT their own weakenings: a mutation harness
+    # copies the shipped scripts, applies one localized substitution, and re-runs the
+    # focused assertions in a child process with JSRF_R1_SCRIPTS pointed at the mutant.
+    # Eight mutants must turn it red (compare skipping tool.sha256, check_corpus dropping
+    # it from the required expectations, expected() accepting no tool, the guard
+    # accepting "no tool found", the guard warning instead of refusing a stale override,
+    # the guard call moved after `cmake -S`, resolve_toolkit silently resolving the
+    # cache/environment conflict, and toolkit_binding_conflict never refusing a
+    # differently-bound tool tree), and a comment-only edit must stay green.
+    # Pure Python, no device, ~55 s (real corpus + real cmake configure in a scratch
+    # tree, plus one real `gen-shaders.py --check` over the real game/ directory); the
+    # fixtures are temp-dir isolated and never write the repository.
     add_test(NAME jsrf_vsh_aot_provenance
         COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_vsh_aot_provenance.py)
     set_tests_properties(jsrf_vsh_aot_provenance PROPERTIES TIMEOUT 120)
