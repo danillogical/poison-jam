@@ -117,7 +117,9 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
   is compiled even when a retail corpus is present — and the build guard decides the capability
   fresh, so no cached verdict can pick a mode. A different worker's regression fails four mutants of
   the branch logic; the no-SDK configure succeeds and links the real game, and the SDK-present
-  no-corpus configure still refuses naming `just shaders`. R3 has not started.
+  no-corpus configure still refuses naming `just shaders`. Codex independently accepted R2 at
+  game `b28b7cb` / toolkit `b20ddba`: 176 tests passed, all four branch mutants detected, and the
+  final-source capability-OFF configure/link passed. R3 is next, under a separate operation.
 
 **Owner review accepted V5 and V6** at game `2a350ec` / toolkit `5668278` (2026-10-15).
 R1–R5 below are approved follow-ups, not reasons to reopen those milestones. The review was a code

@@ -3137,7 +3137,7 @@ R1 is accepted for continuation to R2; V5/V6 acceptance is unchanged.
 
 ### §31.25 R2: a build without the Vulkan toolchain compiles an honest empty corpus (2026-10-15)
 
-**Status: R2 done; awaiting independent Codex review.** V5/V6 and the R1 repair remain accepted;
+**Status: R2 independently accepted by Codex at game `b28b7cb` / toolkit `b20ddba`.** V5/V6 and the R1 repair remain accepted;
 toolkit `b20ddba` carries the one supporting change.
 
 **The defect.** Vulkan is optional in the toolkit, but the game's configure demanded
@@ -3244,3 +3244,34 @@ force a reconfigure, and `CMAKE_CONFIGURE_DEPENDS` entries are paths rather than
 and `logs/` stay trusted local trees, and the pre-existing trust that whoever can write the toolkit
 executes code at configure time now includes one extra probe configure. (6) The tests need the ignored
 lifted tree; they disclose that prerequisite, and never copy original assets or saves.
+
+**Independent Codex acceptance (2026-10-15).** Both repositories were fetched and found clean,
+synchronized at game `b28b7cb` / toolkit `b20ddba`. Codex inspected the production diff and the
+actual worker transcripts, then independently ran the final-source suites: 10 optional-Vulkan
+tests in 98.7 s and 166 provenance/table/build regressions in 40.7 s, all passing with no skips.
+The tests independently reproduced these deciding mutation results: M-A (unconditional corpus
+refusal) exit 1 with 3 failing cases; M-B (capable refusal weakened) exit 1 with 1; M-C (empty
+count = 1) exit 1 with 2; M-C2 (OFF also compiles retail corpus) exit 1 with 2. The comment-only
+control and restored production sources passed. All eight R1 weakening mutants remain detected.
+
+The archived full final-tree CTest receipt records 85/85 passed in 387.57 s; Codex inspected that
+receipt and the final `just check` / real-table 126/126 receipts rather than rerunning that suite.
+The original no-SDK full link predated review hardening. Codex therefore copied the final tracked
+R2 files into the owned private scratch tree, verified the toolkit capability file was identical,
+unset `VULKAN_SDK`, and reconfigured with Vulkan discovery disabled and nonexistent shader-tool
+paths. Configure and the real `jsrf_recomp` target build both exited 0; the generated table reports
+count 0 and the executable remains SHA-256
+`d2a8b54573bf123e24aaf76f02bdb0810aa32ceba3bf94fc1e447cd43c91336a`.
+This is a configure/link check, not a game run or a Vulkan validation-layer claim.
+
+Actual transcript models: separate fix and test workers used
+`opencode-go/deepseek-v4.1-flash:high`; the code reviewer used
+`anthropic/claude-opus-5-5:medium`; security used `muse-code/muse-spark-1.3:high`.
+No fallback was recorded. Codex audited all outgoing R2 blob versions independently in their
+own repositories: game 10 blobs, toolkit 2, zero secret hits or forbidden paths, all below 100 MB;
+both commit messages are unsigned and contain no co-author/signature trailers.
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: b20ddbae717336ac6c560bec98c64e15da0d33ed / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: synchronized fast-forward, toolkit pushed first.
+PUSHED_TO: origin / BRANCH: master / COMMIT: b28b7cbcdcf53b1c05551d8614538847b767bd1c / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: synchronized fast-forward, after toolkit.
+
+R2 is accepted for continuation to R3 only; the separate R3 accounting gate remains pending.
