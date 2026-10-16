@@ -256,7 +256,13 @@ reference); and a corpus-carried program fully culled (`cull_all` +1 only). Rest
 in a private toolkit copy makes exactly the missing-corpus assertion fail (`misses advanced by 0,
 expected exactly 1`), with baseline and restored runs green on the final source. R1–R3 land before V7.
 
-### N2: a controlled benchmark (about 0.5 h)
+### N2: a controlled benchmark — DONE (TR §31.27)
+
+Medians of three 60 s Garage windows: D3D11 on the Iris Xe **15.17** presents/s; Vulkan on the same
+Iris Xe **12.77**; Vulkan on the RTX 4070 **11.07**. Vulkan's cost is host-side sync and readback (N4).
+Run `config/key-scripts/garage-bench.json` and `scripts/bench-summary.py` for every performance claim.
+
+Original step text:
 
 Whole-run present totals aren't comparable: Vulkan runs varied from 10.8 to 23.3 presents/s on the
 same build, because the totals include boot and differ in progress. Add a key script that:

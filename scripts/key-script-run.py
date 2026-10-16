@@ -34,6 +34,12 @@ Script steps (JSON list, run in order):
   {"ram_snap": "name"} / {"ram_snap": {"name": "n", "va": "0xADDR", "length": 0x1000}}
                                                             write a guest RAM range to ram/<name>.bin
   {"snap": "name"}
+  {"bench": {"name": "garage", "seconds": 60, "poll_ms": 2}}
+                                                            no input: poll the host's s_present_serial every poll_ms
+                                                            (0.5-50, default 2) for `seconds`, then write the frame-time
+                                                            distribution of that window only to bench.json, keyed by name
+                                                            (see bench_intervals / bench_stats; a poll that sees the
+                                                            serial jump by n > 1 is counted in aliased_polls)
   {"log_pos": "name"} / {"log_pos": {"name": "n", "objs": ["0x2C", "0x2E"]}}
                                                             append position, heading yaw and camera yaw of
                                                             guest objects (default 0x2C, the player) to positions.jsonl
@@ -180,6 +186,95 @@ GUEST_RAM_SIZE = 0x04000000
 GUEST_PAGE_SIZE = 0x1000
 # ReadProcessMemory chunk size; a failed chunk is retried page by page.
 READ_CHUNK = 0x100000
+
+
+BENCH_NAME_RE = r"[A-Za-z_][A-Za-z0-9_-]*"
+BENCH_STALL_S = 0.1
+
+
+def bench_intervals(samples):
+    """Frame intervals from (t_seconds, present_serial) polls: (intervals_s, aliased_polls).
+
+    An interval is the time between consecutive polls at which the serial increased, divided by
+    the increase (the u32 serial may wrap).  A poll that saw an increase n > 1 yields n equal
+    intervals and counts once in aliased_polls.  The first increase only sets the reference time:
+    the window's first poll lands at an arbitrary phase of a frame, so it is not an interval end.
+    """
+    intervals, aliased, ref_t, prev = [], 0, None, None
+    for t, serial in samples:
+        if prev is not None:
+            n = (serial - prev) & 0xFFFFFFFF
+            if n:
+                if ref_t is not None:
+                    intervals.extend([(t - ref_t) / n] * n)
+                    if n > 1:
+                        aliased += 1
+                ref_t = t
+        prev = serial
+    return intervals, aliased
+
+
+def bench_poll_stats(samples):
+    """Poll bookkeeping for (t, serial) samples: polls, median period, polls with an increase, presents."""
+    gaps = sorted(b[0] - a[0] for a, b in zip(samples, samples[1:]))
+    incr = sum(1 for a, b in zip(samples, samples[1:]) if (b[1] - a[1]) & 0xFFFFFFFF)
+    presents = (samples[-1][1] - samples[0][1]) & 0xFFFFFFFF if samples else 0
+    return {"polls": len(samples),
+            "median_poll_period_ms": _median(gaps) * 1000.0 if gaps else None,
+            "increment_polls": incr, "presents": presents}
+
+
+def _median(values):
+    v = sorted(values)
+    if not v:
+        return None
+    mid = len(v) // 2
+    return v[mid] if len(v) % 2 else (v[mid - 1] + v[mid]) / 2.0
+
+
+def _percentile(sorted_values, q):
+    """Linear-interpolated q-th percentile (0..100) of an ascending list."""
+    if not sorted_values:
+        return None
+    pos = (len(sorted_values) - 1) * q / 100.0
+    lo = int(math.floor(pos))
+    hi = min(lo + 1, len(sorted_values) - 1)
+    return sorted_values[lo] + (sorted_values[hi] - sorted_values[lo]) * (pos - lo)
+
+
+def bench_stats(intervals, duration, presents, aliased_polls=0, poll=None):
+    """The bench.json measurements: intervals in seconds in, frame times in ms out.
+
+    `poll` is the bench_poll_stats dict (optional); its fields are merged in and
+    aliased_fraction is aliased_polls over polls that saw an increase.
+    """
+    ms = sorted(i * 1000.0 for i in intervals)
+    poll = poll or {}
+    incr = poll.get("increment_polls")
+    out = {
+        "duration_s": duration,
+        "polls": poll.get("polls"),
+        "median_poll_period_ms": poll.get("median_poll_period_ms"),
+        "presents": presents,
+        "presents_per_s": presents / duration if duration > 0 else None,
+        "frame_ms_p50": _percentile(ms, 50),
+        "frame_ms_p90": _percentile(ms, 90),
+        "frame_ms_p99": _percentile(ms, 99),
+        "frame_ms_max": ms[-1] if ms else None,
+        "frame_ms_mean": sum(ms) / len(ms) if ms else None,
+        "intervals": len(ms),
+        "aliased_polls": aliased_polls,
+        "increment_polls": incr,
+        "aliased_fraction": aliased_polls / incr if incr else None,
+        "stalls_over_100ms": sum(1 for i in intervals if i > BENCH_STALL_S),
+    }
+    return out
+
+
+def bench_device(log_text):
+    """The GPU named in the run log by the Vulkan backend, or None (the D3D11 path logs none)."""
+    m = re.search(r"\[GPUVK\] device: (.+?) \(type", log_text or "")
+    return m.group(1) if m else None
 
 
 class ScriptError(Exception):
@@ -500,6 +595,7 @@ def parse_script(data):
         raise ScriptError("script must be a non-empty JSON list of steps")
     steps = []
     peek_names, snap_names = set(), set()
+    bench_names = set()
     held = set()          # vks a key_down opened and no key_up has closed yet
     for i, raw in enumerate(data):
         if not isinstance(raw, dict) or len(raw) != 1:
@@ -547,6 +643,21 @@ def parse_script(data):
             held.discard(o["vk"])
         elif kind == "sleep":
             o = {"seconds": _num(kind, "seconds", body, 0)}
+        elif kind == "bench":
+            o = _opts(kind, body, {"name": None, "seconds": None, "poll_ms": 2})
+            if not isinstance(o["name"], str) or not re.fullmatch(BENCH_NAME_RE, o["name"]):
+                raise ScriptError("bench: name must be a simple identifier")
+            if o["name"] in bench_names:
+                raise ScriptError("bench: duplicate name %r" % o["name"])
+            bench_names.add(o["name"])
+            if o["seconds"] is None:
+                raise ScriptError("bench: seconds is required")
+            o["seconds"] = _num(kind, "seconds", o["seconds"], 0)
+            if o["seconds"] <= 0:
+                raise ScriptError("bench: seconds must be > 0")
+            o["poll_ms"] = _num(kind, "poll_ms", o["poll_ms"], 0.5)
+            if o["poll_ms"] > 50:
+                raise ScriptError("bench: poll_ms must be between 0.5 and 50")
         elif kind == "wait_change":
             o = _opts(kind, body, {"timeout": 30, "min_mean_delta": 8})
             o["timeout"] = _num(kind, "timeout", o["timeout"], 1)
@@ -1286,6 +1397,8 @@ class Run:
         if kind == "snap":
             self.tick()
             return {"file": self.snap(o["name"])}
+        if kind == "bench":
+            return self._bench(o)
         if kind == "peek":
             return self._peek(o)
         if kind == "ram_snap":
@@ -1295,6 +1408,55 @@ class Run:
         if kind == "goto":
             return self._goto(o)
         raise ScriptError("unknown step %r" % kind)
+
+    def _bench(self, o):
+        """Poll s_present_serial for o["seconds"], with no input, and write the window to bench.json."""
+        t_start = self.elapsed()
+        period = o["poll_ms"] / 1000.0
+        samples = []
+        t_end_pc = time.perf_counter() + o["seconds"]
+        next_pc = time.perf_counter()
+        while self.alive() and not self.expired():
+            now = time.perf_counter()
+            if now >= t_end_pc:
+                break
+            samples.append((now, self.guest.host_read("s_present_serial", 4)))
+            next_pc += period
+            wait = next_pc - time.perf_counter()
+            if wait > 0:
+                time.sleep(wait)
+            else:
+                next_pc = time.perf_counter()      # fell behind: do not burst to catch up
+        t_end = self.elapsed()
+        intervals, aliased = bench_intervals(samples)
+        poll = bench_poll_stats(samples)
+        duration = samples[-1][0] - samples[0][0] if len(samples) > 1 else 0.0
+        ctx = getattr(self, "bench_context", {})
+        log_path = self.out / "jsrf_run.log"
+        log_text = log_path.read_text(encoding="utf-8", errors="replace") if log_path.is_file() else ""
+        rec = {"name": o["name"], "t_start_s": round(t_start, 3), "t_end_s": round(t_end, 3),
+               "requested_seconds": o["seconds"], "poll_ms": o["poll_ms"]}
+        rec.update(bench_stats(intervals, duration, poll["presents"], aliased, poll))
+        rec.update({"backend": ctx.get("backend"), "exe_sha256": ctx.get("exe_sha256"),
+                    "device": bench_device(log_text)})
+        path = self.out / "bench.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        data[o["name"]] = rec
+        path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        f = lambda v, fmt: "-" if v is None else fmt % v
+        self.log("BENCH %s backend=%s window=%.1fs polls=%d poll=%sms presents=%d (%s/s) "
+                 "frame_ms p50=%s p90=%s p99=%s max=%s aliased=%d/%s stalls>100ms=%d"
+                 % (o["name"], rec["backend"], duration, rec["polls"],
+                    f(rec["median_poll_period_ms"], "%.2f"), rec["presents"],
+                    f(rec["presents_per_s"], "%.2f"), f(rec["frame_ms_p50"], "%.1f"),
+                    f(rec["frame_ms_p90"], "%.1f"), f(rec["frame_ms_p99"], "%.1f"),
+                    f(rec["frame_ms_max"], "%.1f"), aliased, rec["increment_polls"],
+                    rec["stalls_over_100ms"]))
+        return {"bench": o["name"], "presents": rec["presents"],
+                "presents_per_s": rec["presents_per_s"]}
 
     def read_u32(self, va):
         """One u32 of guest memory; ScriptError if it is outside RAM or unreadable."""
@@ -1784,6 +1946,8 @@ def main(argv=None):
     # array) on every run, not just runs with explicit peeks. It stays observation only.
     guest = GuestMemory(proc.pid, out / "jsrf_recomp.map")
     run = Run(out, proc, live, Window(), args.seconds, t0, log, guest)
+    run.bench_context = {"backend": env.get("RECOMP_GPU_BACKEND") or "cpu",
+                         "exe_sha256": artifact_sha256["jsrf_recomp.exe"]}
 
     results = []
     script_ok = True

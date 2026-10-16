@@ -926,5 +926,235 @@ class ReadHostPages(unittest.TestCase):
         self.assertEqual(failed, [ksr.GUEST_PAGE_SIZE])
 
 
+def steady_samples(frame_s, poll_s, seconds, start_serial=100):
+    """Polls every poll_s of a counter that increments every frame_s (increments land between polls)."""
+    out, t = [], 0.0
+    while t <= seconds + 1e-9:
+        out.append((t, start_serial + int(math.floor(t / frame_s + 1e-9))))
+        t += poll_s
+    return out
+
+
+def stream_from_intervals(intervals, lead=0.0105, start_serial=0):
+    """One poll per present at the exact present times, after a lead-in poll with no increase."""
+    samples, t, s = [(0.0, start_serial)], lead, start_serial
+    samples.append((t, s + 1))
+    s += 1
+    for dt in intervals:
+        t += dt
+        s += 1
+        samples.append((t, s))
+    return samples
+
+
+class BenchIntervals(unittest.TestCase):
+    def test_constant_60fps_polled_at_2ms(self):
+        samples = steady_samples(1 / 60.0, 0.002, 2.0)
+        intervals, aliased = ksr.bench_intervals(samples)
+        self.assertEqual(aliased, 0)
+        self.assertGreater(len(intervals), 100)
+        stats = ksr.bench_stats(intervals, 2.0, 120, aliased, ksr.bench_poll_stats(samples))
+        self.assertAlmostEqual(stats["frame_ms_p50"], 16.67, delta=2.1)   # one poll of quantisation
+        self.assertAlmostEqual(stats["frame_ms_mean"], 16.67, delta=0.3)
+        self.assertEqual(stats["aliased_fraction"], 0.0)
+        self.assertEqual(stats["stalls_over_100ms"], 0)
+
+    def test_constant_stream_exact(self):
+        # Increments land exactly on polls, so the intervals are exact.
+        samples = stream_from_intervals([0.016] * 10)
+        intervals, aliased = ksr.bench_intervals(samples)
+        self.assertEqual(len(intervals), 10)
+        for i in intervals:
+            self.assertAlmostEqual(i, 0.016, places=9)
+        self.assertEqual(aliased, 0)
+
+    def test_first_increase_gives_no_interval(self):
+        samples = [(0.0, 5), (0.002, 5), (0.004, 6)]
+        self.assertEqual(ksr.bench_intervals(samples), ([], 0))
+        samples.append((0.020, 7))
+        intervals, aliased = ksr.bench_intervals(samples)
+        self.assertEqual(len(intervals), 1)
+        self.assertAlmostEqual(intervals[0], 0.016)
+
+    def test_first_increase_aliased_is_not_counted(self):
+        # The reference-setting increase yields nothing, aliased or not.
+        intervals, aliased = ksr.bench_intervals([(0.0, 5), (0.01, 8)])
+        self.assertEqual((intervals, aliased), ([], 0))
+
+    def test_polls_without_increase_yield_nothing(self):
+        samples = [(0.0, 1), (0.01, 2), (0.012, 2), (0.014, 2), (0.016, 2), (0.03, 3)]
+        intervals, aliased = ksr.bench_intervals(samples)
+        self.assertEqual(len(intervals), 1)
+        self.assertAlmostEqual(intervals[0], 0.02)     # spans the idle polls, not 0.002
+        self.assertEqual(aliased, 0)
+
+    def test_interval_is_between_increases_not_between_polls(self):
+        samples = [(0.0, 0), (0.001, 1), (0.003, 1), (0.005, 1), (0.017, 2), (0.019, 2)]
+        intervals, _ = ksr.bench_intervals(samples)
+        self.assertEqual(len(intervals), 1)
+        self.assertAlmostEqual(intervals[0], 0.016)
+
+    def test_jittered_stream_exact_percentiles(self):
+        known = [0.010, 0.012, 0.014, 0.016, 0.018, 0.020, 0.022, 0.024, 0.026, 0.028, 0.030]
+        intervals, aliased = ksr.bench_intervals(stream_from_intervals(known))
+        self.assertEqual(aliased, 0)
+        self.assertEqual(len(intervals), len(known))
+        for got, want in zip(intervals, known):
+            self.assertAlmostEqual(got, want, places=9)
+        stats = ksr.bench_stats(intervals, 1.0, 12)
+        self.assertAlmostEqual(stats["frame_ms_p50"], 20.0, places=6)
+        self.assertAlmostEqual(stats["frame_ms_p90"], 28.0, places=6)   # position 9 of 0..10
+        self.assertAlmostEqual(stats["frame_ms_p99"], 29.8, places=6)    # 28 + 0.9 * 2
+        self.assertAlmostEqual(stats["frame_ms_max"], 30.0, places=6)
+        self.assertAlmostEqual(stats["frame_ms_mean"], 20.0, places=6)
+
+    def test_percentile_interpolates(self):
+        stats = ksr.bench_stats([0.010, 0.020, 0.030, 0.040], 1.0, 5)
+        self.assertAlmostEqual(stats["frame_ms_p50"], 25.0, places=6)
+        self.assertAlmostEqual(stats["frame_ms_p90"], 37.0, places=6)    # position 2.7
+        self.assertAlmostEqual(stats["frame_ms_p99"], 39.7, places=6)    # position 2.97
+
+    def test_percentiles_are_over_intervals_not_polls(self):
+        # Polls every 2 ms; presents at 10, 30, 60 and 150 ms -> intervals 20, 30, 90 ms.
+        present_at = [10, 30, 60, 150]
+        samples = [(ms / 1000.0, sum(1 for p in present_at if p <= ms)) for ms in range(0, 160, 2)]
+        intervals, aliased = ksr.bench_intervals(samples)
+        self.assertEqual(aliased, 0)
+        self.assertEqual([round(i * 1000) for i in intervals], [20, 30, 90])
+        poll = ksr.bench_poll_stats(samples)
+        self.assertEqual(poll["polls"], 80)
+        stats = ksr.bench_stats(intervals, 0.16, poll["presents"], aliased, poll)
+        self.assertAlmostEqual(stats["frame_ms_p50"], 30.0, places=6)    # raw poll gaps would say 2
+        self.assertAlmostEqual(stats["frame_ms_max"], 90.0, places=6)
+        self.assertAlmostEqual(stats["frame_ms_mean"], 140.0 / 3, places=6)
+
+    def test_stall(self):
+        known = [0.016] * 5 + [0.250] + [0.016] * 5
+        intervals, aliased = ksr.bench_intervals(stream_from_intervals(known))
+        stats = ksr.bench_stats(intervals, 1.0, 12, aliased)
+        self.assertAlmostEqual(stats["frame_ms_max"], 250.0, places=6)
+        self.assertEqual(stats["stalls_over_100ms"], 1)
+
+    def test_stall_threshold_is_strictly_over_100ms(self):
+        stats = ksr.bench_stats([0.100, 0.101, 0.05], 1.0, 4)
+        self.assertEqual(stats["stalls_over_100ms"], 1)
+
+    def test_aliasing_gives_n_equal_intervals(self):
+        samples = [(0.0, 10), (0.001, 11), (0.001 + 0.048, 14)]
+        intervals, aliased = ksr.bench_intervals(samples)
+        self.assertEqual(aliased, 1)
+        self.assertEqual(len(intervals), 3)
+        for i in intervals:
+            self.assertAlmostEqual(i, 0.016, places=9)
+
+    def test_aliased_fraction(self):
+        samples = [(0.0, 0), (0.01, 1), (0.02, 2), (0.05, 5), (0.06, 6)]
+        intervals, aliased = ksr.bench_intervals(samples)
+        poll = ksr.bench_poll_stats(samples)
+        self.assertEqual(aliased, 1)
+        self.assertEqual(poll["increment_polls"], 4)
+        stats = ksr.bench_stats(intervals, 0.06, poll["presents"], aliased, poll)
+        self.assertAlmostEqual(stats["aliased_fraction"], 0.25)
+
+    def test_wrap_around(self):
+        samples = [(0.0, 0xFFFFFFFE), (0.010, 0xFFFFFFFF), (0.042, 0x00000001), (0.058, 0x00000002)]
+        intervals, aliased = ksr.bench_intervals(samples)
+        self.assertEqual(aliased, 1)
+        self.assertEqual(len(intervals), 3)       # +2 across the wrap -> two 16 ms, then one 16 ms
+        for i in intervals:
+            self.assertAlmostEqual(i, 0.016, places=9)
+
+    def test_wrap_presents(self):
+        samples = [(0.0, 0xFFFFFFFF), (0.01, 0x00000001)]
+        self.assertEqual(ksr.bench_poll_stats(samples)["presents"], 2)
+        self.assertEqual(ksr.bench_intervals(samples), ([], 0))
+
+    def test_empty_and_no_increment_windows(self):
+        for samples in ([], [(0.0, 7)], [(0.0, 7), (0.002, 7), (0.004, 7)]):
+            intervals, aliased = ksr.bench_intervals(samples)
+            self.assertEqual((intervals, aliased), ([], 0))
+            poll = ksr.bench_poll_stats(samples)
+            self.assertEqual(poll["presents"], 0)
+            self.assertEqual(poll["polls"], len(samples))
+            self.assertEqual(poll["increment_polls"], 0)
+            stats = ksr.bench_stats(intervals, 1.0, poll["presents"], aliased, poll)
+            for k in ("frame_ms_p50", "frame_ms_p90", "frame_ms_p99", "frame_ms_max", "frame_ms_mean"):
+                self.assertIsNone(stats[k], k)
+            self.assertEqual(stats["stalls_over_100ms"], 0)
+            self.assertEqual(stats["presents_per_s"], 0)
+
+    def test_stats_empty_without_poll(self):
+        stats = ksr.bench_stats([], 5.0, 0)
+        self.assertIsNone(stats["frame_ms_p50"])
+        self.assertIsNone(stats["frame_ms_max"])
+
+    def test_presents_per_s(self):
+        stats = ksr.bench_stats([0.016] * 3, 2.0, 120)
+        self.assertAlmostEqual(stats["presents_per_s"], 60.0)
+
+    def test_poll_stats_fields(self):
+        samples = [(0.0, 1), (0.002, 1), (0.004, 2), (0.010, 2), (0.012, 4)]
+        poll = ksr.bench_poll_stats(samples)
+        self.assertEqual(poll["polls"], 5)
+        self.assertEqual(poll["increment_polls"], 2)
+        self.assertEqual(poll["presents"], 3)
+        # gaps: 2, 2, 6, 2 ms -> median 2 ms
+        self.assertAlmostEqual(poll["median_poll_period_ms"], 2.0, places=6)
+
+
+class BenchStepParse(unittest.TestCase):
+    def parse(self, steps):
+        return ksr.parse_script(steps)
+
+    def bench(self, **kw):
+        return {"bench": kw}
+
+    def test_accepts_full_form(self):
+        steps = self.parse([self.bench(name="garage", seconds=60, poll_ms=2)])
+        self.assertEqual(steps[0][0], "bench")
+        self.assertEqual(steps[0][1]["name"], "garage")
+        self.assertEqual(steps[0][1]["seconds"], 60)
+        self.assertEqual(steps[0][1]["poll_ms"], 2)
+
+    def test_poll_ms_defaults_to_2(self):
+        steps = self.parse([self.bench(name="g", seconds=1)])
+        self.assertEqual(steps[0][1]["poll_ms"], 2)
+
+    def test_poll_ms_bounds(self):
+        for ok in (0.5, 50, 10):
+            self.parse([self.bench(name="g", seconds=1, poll_ms=ok)])
+        for bad in (0.49, 0.1, 0, 50.01, 100, -1, "2", None, True):
+            with self.assertRaises(ksr.ScriptError, msg=repr(bad)):
+                self.parse([self.bench(name="g", seconds=1, poll_ms=bad)])
+
+    def test_name_required_and_pattern(self):
+        for ok in ("a", "_x", "garage-2", "A_b-9"):
+            self.parse([self.bench(name=ok, seconds=1)])
+        for bad in ("", "1abc", "-a", "a b", "a.b", "a/b", "é", 5, None):
+            with self.assertRaises(ksr.ScriptError, msg=repr(bad)):
+                self.parse([self.bench(name=bad, seconds=1)])
+        with self.assertRaises(ksr.ScriptError):
+            self.parse([self.bench(seconds=1)])
+
+    def test_seconds_required_and_positive(self):
+        with self.assertRaises(ksr.ScriptError):
+            self.parse([self.bench(name="g")])
+        for bad in (0, -1, "5", None, True):
+            with self.assertRaises(ksr.ScriptError, msg=repr(bad)):
+                self.parse([self.bench(name="g", seconds=bad)])
+        self.parse([self.bench(name="g", seconds=0.5)])
+
+    def test_duplicate_name_rejected(self):
+        with self.assertRaises(ksr.ScriptError):
+            self.parse([self.bench(name="g", seconds=1), self.bench(name="g", seconds=2)])
+        self.parse([self.bench(name="g", seconds=1), self.bench(name="h", seconds=2)])
+
+    def test_unknown_option_rejected(self):
+        with self.assertRaises(ksr.ScriptError):
+            self.parse([self.bench(name="g", seconds=1, extra=1)])
+        with self.assertRaises(ksr.ScriptError):
+            self.parse([self.bench(name="g", seconds=1, snap="x")])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

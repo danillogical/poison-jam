@@ -3334,8 +3334,10 @@ controls, `jsrf_vsh_aot_malformed`, the real-table case, the provenance case), `
 
 **Bounded game smoke** (`20261015-225417-747-keyscript-r3-smoke-vk`, `e2e.json` on
 `RECOMP_GPU_BACKEND=vulkan`, 560 s, exploratory profile, disposable isolated save): `keyscript_complete`,
-runner exit 0, 24,161 presents, `icall 0`/`fatal 0`, reaching the title, the menu, the intro, the Garage HUD
-and the two-run skate path with movement and jumps. exe `e116ad4fc329d624e6f3838fbaaab84887a1d3945d3b6606521f835f867d6656`,
+runner exit 0, 24,161 presents, `icall 0`/`fatal 0`. Its snapshots (viewed 2026-10-16) show the Garage
+with the HUD (`start`), the player skating (`a-forward`), the pause map (`paused`), the return to play beside
+Corn (`resumed`) and a later position (`b-after-jump2`); the logged positions change between legs. The jumps
+themselves are not visible in the sampled frames, so the run shows movement but not jumps. exe `e116ad4fc329d624e6f3838fbaaab84887a1d3945d3b6606521f835f867d6656`,
 xbe `fd190557…`, key script `72c0360f…`. The program path was live throughout — `vsh_hits` climbed past
 1,086,000 with `vsh_misses=0`, `vsh_identity_fail=0`, `vsh_declines=0`, `vsh_tris ≈ 288M`, i.e. the
 retail corpus covered every program this route uploaded. The run's `cull_all=0`: this script produces
@@ -3384,3 +3386,54 @@ PUSHED_TO: origin / BRANCH: master / COMMIT: 5842b381f60871e44fb84536eb08d9606d0
 R3 is accepted; the owner's requested stopping point is reached. N2 and later steps have not started.
 The current supervision lineage retains 10 operation slots and zero remediation cycles; resuming
 does not reset those limits. No next operation is authorized while the owner pause remains in force.
+
+### §31.27 N2: a controlled Garage benchmark, on both backends and the same GPU (2026-10-16)
+
+**The owner resumed the work with a Claude session on 2026-10-16.** Whole-run present totals are not
+comparable, so performance is now measured in a fixed window.
+
+**Tooling.**
+
+- **`bench` step** in `scripts/key-script-run.py`. For a fixed window and with no input, it polls the
+  exe's `s_present_serial` every 2 ms from outside the process (`GuestMemory.host_read`; the game is
+  unchanged) and writes `bench.json`.
+- **What `bench.json` records:** presents/s; frame-time p50/p90/p99/max/mean, computed from
+  increase-to-increase intervals, where a poll that saw +n gives n equal intervals and counts as
+  aliased; stalls over 100 ms; the backend, device and exe SHA-256.
+- **`config/key-scripts/garage-bench.json`:** the intro prefix, `wait_screen hud`, a 5 s settle, then
+  `bench garage 60`.
+- **`scripts/bench-summary.py`:** per-backend medians and ranges.
+- **Tests from a different worker:** `tests/test_key_script_run.py` (26 new) and
+  `tests/test_bench_summary.py` (17, CTest `jsrf_bench_summary`). The four deciding mutations fail
+  them:
+  - poll-to-poll intervals;
+  - percentiles over raw polls;
+  - +n giving one interval;
+  - the lower-middle median.
+
+**Measurement.**
+
+- **Common conditions:** exe `e116ad4f…` (the R3 build), exploratory profile, disposable saves, one run
+  at a time, 560 s bound. The window starts at the Garage spawn: `bench-start.png` shows the spawn
+  plaza and its HUD.
+- **Poll period:** 2.01–2.05 ms; **0 aliased polls in every run**.
+
+| Backend, device | Runs | Presents/s, median (range) | p50 / p90 / p99 frame (ms), median |
+|---|---|---|---|
+| D3D11, Intel Iris Xe (its default adapter) | `20261016-093255-486`, `-094405-138`, `-095327-949` `keyscript-n2-d3d11-1..3` | **15.17** (15.10–15.53) | 63.9 / 69.6 / 78.1 |
+| Vulkan, Intel Iris Xe (`RECOMP_VK_DEVICE=Intel`) | `20261016-103228-954`, `-104153-357`, `-105117-660` `keyscript-n2-vulkan-intel-1..3` | **12.77** (12.35–12.78) | 77.7 / 86.0 / 97.8 |
+| Vulkan, RTX 4070 (its default) | `20261016-100250-586`, `-101213-264`, `-102135-973` `keyscript-n2-vulkan-1..3` | **11.07** (9.90–11.30) | 89.9 / 93.9 / 102.4 |
+
+**Reading (inference, labelled).**
+
+- **Same GPU:** Vulkan is about 16% slower than D3D11.
+- **Faster GPU, slower result:** Vulkan on the discrete RTX 4070 is slower than on the integrated GPU.
+  The cost therefore sits in host-side synchronisation and readback (one fence wait per submission,
+  and every target read back across PCIe at each flip), not in GPU work. That is N4's list.
+- **Earlier whole-run presents/s** (10.8–23.3) were not this quantity and must not be compared with
+  these.
+- **Caveats:**
+  - the third RTX 4070 run was slower than the other two, and its 315 "stalls" are an artefact of its
+    p50 sitting at the 100 ms threshold;
+  - the D3D11 backend cannot be pointed at the RTX 4070, so no D3D11/NVIDIA row exists.
+- **From here on,** performance claims use this benchmark (plan N2).
