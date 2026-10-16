@@ -40,6 +40,15 @@
  *      result and the evidence that the check is load-bearing. Exit 2: the check PASSED the
  *      defect, so the check does not test what it claims. Nothing is written to disk in that
  *      mode, and the real table is never modified.
+ *   7. A fully culled batch records its corpus lookup (plan step R3). vb_draw_program looks
+ *      the batch's program up BEFORE the cull FRONT_AND_BACK early return, so a batch nothing
+ *      can see is still counted against the corpus: one miss when the corpus lacks its
+ *      program (and still no CPU transform -- the culled return wins), or one cull_all and no
+ *      fabricated hits/tris/const_uploads when the corpus carries it. The four cases R3.a..
+ *      R3.d below drive that real path and assert EXACT per-batch deltas (misses +1, cull_all
+ *      +1, declines/identity_fail unchanged, hits/tris/const_uploads unchanged), plus a
+ *      byte-exact sentinel surface for the culled batches, because only an exact delta
+ *      separates the new ordering from the old one.
  *
  * Every counter assertion reads nv2a_vk_backend_program_stats or the surface bytes. The only
  * log-line assertions are requirement 3's "the miss is not silent" and requirement 4's
@@ -318,6 +327,26 @@ static uint8_t *snapshot(uint32_t va, size_t n)
     return p;
 }
 
+/* 1 when every byte of the surface is still the prefill sentinel, i.e. the batch wrote
+ * nothing at all: no clear, no GPU draw and no CPU interpreter draw. A fully culled batch
+ * must leave the whole 64 KiB that way -- and this is not vacuous, because the positive
+ * control next to it draws the very same program into a cleared surface. */
+static int surface_is_sentinel(uint32_t va, const char *who)
+{
+    const uint8_t *p = G(va);
+    uint32_t i;
+    for (i = 0; i < SURF_BYTES; i++) {
+        if (p[i] != SENTINEL) {
+            fail("FAIL: [%s] the surface was written: byte %u is 0x%02X, the prefill sentinel "
+                 "is 0x%02X\n", who, (unsigned)i, p[i], SENTINEL);
+            return 0;
+        }
+    }
+    printf("  [%s] the surface is untouched: all %u bytes are the sentinel 0x%02X\n",
+           who, (unsigned)SURF_BYTES, SENTINEL);
+    return 1;
+}
+
 /* ── Surface comparison ──────────────────────────────────────────────────── */
 typedef struct { unsigned match, worst, cov_ref, cov_got, cov_xor; } Cmp;
 
@@ -379,21 +408,36 @@ static int submit(const char *what)
     return ok;
 }
 
-/* One batch: clear, upload the program and its constants, draw one triangle, flip. */
-static void build_batch(uint32_t surf, uint32_t vb, const uint32_t (*words)[4], uint32_t len,
-                        int flip)
+/* One batch: state, combiner, surface, optional clear, program and constants, one triangle,
+ * optional flip. `cull_front_back` writes the pair the executor turns into cull mode 3
+ * (SET_CULL_FACE_ENABLE 1 + SET_CULL_FACE FRONT_AND_BACK 0x408) after the reset, and `clear`
+ * decides whether the colour surface is cleared: the R3 cases need a batch that draws nothing
+ * at all, so that a prefilled surface is untouched only when nothing was written. */
+static void build_batch_flags(uint32_t surf, uint32_t vb, const uint32_t (*words)[4], uint32_t len,
+                              int flip, int cull_front_back, int clear)
 {
     pb_begin();
     pb_reset_state();
+    if (cull_front_back) {
+        pb(0x0308, 1u);                            /* SET_CULL_FACE_ENABLE */
+        pb(0x039C, 0x408u);                        /* SET_CULL_FACE FRONT_AND_BACK */
+    }
     pb_combiner();
     pb_surface(surf, 64, 64);
-    pb_clear(CLR);
+    if (clear) pb_clear(CLR);
     pb_constants();
     pb_program(words, len);
     pb_vertex_format(vb);
     write_vertices(vb);
     pb_draw_triangles(3);
     if (flip) pb_flip();
+}
+
+/* The original shape every earlier case uses: no culling, and the surface cleared. */
+static void build_batch(uint32_t surf, uint32_t vb, const uint32_t (*words)[4], uint32_t len,
+                        int flip)
+{
+    build_batch_flags(surf, vb, words, len, flip, 0, 1);
 }
 
 /* ── 1. Corpus identity, against the live interpreter ────────────────────── */
@@ -732,28 +776,295 @@ static int log_has(const char *text, const char *needle)
     return text && strstr(text, needle) != NULL;
 }
 
+/* The back end exposes `cull_all` (and its other whole-back-end counters) only on its
+ * "[GPUVK] ..." counters line: nv2a_vk_backend_program_stats has no field for it. vb_stats
+ * prints that line on a flip for the process's FIRST flip and then at most once every 10 s,
+ * so the R3 cases read it twice: once on the first flip (forced) and once after waiting the
+ * window out (see run_r3_cull_cases). Returns 1 and stores the value of `field` when a
+ * counters line beyond the `*seen` already read is present; `*seen` then counts them.
+ * Reads THIS process's own captured stderr, so a loader line without the field cannot be
+ * mistaken for one. */
+static int gpu_stats_field(const char *field, unsigned *seen, uint64_t *out)
+{
+    static const char k_prefix[] = "[GPUVK]";
+    char needle[64], *log, *p;
+    uint64_t vals[64];
+    unsigned n = 0;
+    int ok = 0;
+
+    _snprintf(needle, sizeof needle, "%s=", field);
+    log = read_log();
+    if (!log) return 0;
+    for (p = strstr(log, k_prefix); p && n < 64u; p = strstr(p + 1, k_prefix)) {
+        char *nl = strchr(p, '\n');
+        char *f = strstr(p, needle);
+        size_t span = nl ? (size_t)(nl - p) : strlen(p);
+        if (f && (size_t)(f - p) < span)
+            vals[n++] = _strtoui64(f + strlen(needle), NULL, 10);
+    }
+    free(log);
+    if (n > *seen) { *seen = n; *out = vals[n - 1u]; ok = 1; }
+    return ok;
+}
+
 /* ── The run ─────────────────────────────────────────────────────────────── */
-static uint8_t *g_cpu[4];
-static const uint32_t k_surf[4] = { SURF(0), SURF(1), SURF(2), SURF(3) };
-static const uint32_t k_vb[4] = { VBUF(0), VBUF(1), VBUF(2), VBUF(3) };
-enum { C_HIT_A, C_HIT_B, C_MISS, C_IDENT };
+/* One surface (and one vertex buffer) per batch the test draws, so no case can read
+ * another's pixels. The last three are the R3 cases': a fully culled batch must leave
+ * its surface byte-for-byte as it was prefilled. */
+#define NSURF 7
+static uint8_t *g_cpu[NSURF];
+static const uint32_t k_surf[NSURF] = { SURF(0), SURF(1), SURF(2), SURF(3), SURF(4), SURF(5), SURF(6) };
+static const uint32_t k_vb[NSURF] = { VBUF(0), VBUF(1), VBUF(2), VBUF(3), VBUF(4), VBUF(5), VBUF(6) };
+enum { C_HIT_A, C_HIT_B, C_MISS, C_IDENT, C_R3CULL, C_R3CULLHIT, C_R3VIS };
+
+/* ── 7. A fully culled batch still records its corpus lookup (R3) ───────────
+ * vb_draw_program looks a batch's program up BEFORE the cull FRONT_AND_BACK early
+ * return, so a batch nothing can see is still counted against the corpus: a miss when
+ * the corpus lacks its program (the culled return still wins -- neither the GPU nor
+ * the CPU draws it) and cull_all with no fabricated hits/tris/const_uploads when the
+ * corpus carries it. These cases drive that real path -- no second lookup, no cull
+ * decision of their own -- and assert EXACT per-batch counter deltas, because only an
+ * exact delta separates the two orderings: with the lookup after the cull return the
+ * first case's `misses` delta is 0, so a "<= 1" or "not more than" check would pass on
+ * both. `declines` and `identity_fail` are asserted UNCHANGED as well, because a batch
+ * the back end never offers shows a 0 delta there too, and a hash collision would show
+ * up as identity_fail rather than as a miss.
+ *
+ * The three cases:
+ *   R3.a  the corpus program R3.d culls, drawn visibly: the control that the corpus is
+ *         installed and that program really is a hit (hits +1, first_hit unchanged in
+ *         identity).
+ *   R3.b  cull FRONT_AND_BACK + a program the corpus does not carry: misses +1 exactly,
+ *         cull_all +1 exactly, nothing drawn, surface untouched.
+ *   R3.c  the SAME absent program, culling not-all: misses +1 exactly and the CPU
+ *         interpreter draws it (pixels match the CPU reference), i.e. a visible miss
+ *         still returns 0.
+ *   R3.d  a program the corpus CARRIES, fully culled: cull_all +1 exactly, no hit, no
+ *         triangle, no constant upload, surface untouched.
+ *
+ * cull_all is read from the "[GPUVK]" counters line (see gpu_stats_field). R3.b's flip
+ * is the process's first flip, so its line is forced; R3.d's flip is preceded by a wait
+ * of the 10 s stats window at the end of the sequence. The line is cumulative, so the
+ * two readings bracket R3.c as well: cull_all 0 -> 1 over R3.b, and 1 -> 2 over R3.d
+ * with R3.c in between proving the visible miss adds nothing.
+ */
+static int run_r3_cull_cases(void)
+{
+    const Nv2aVshAotEntry *ea = table_find(HASH_A);
+    Nv2aVkProgramStats b, a;
+    unsigned lines = 0;
+    uint64_t cull_all = 0;
+    double pm;
+    int ok = 1;
+
+    if (!ea) { fail("FAIL: [r3] %08X is not in the table\n", HASH_A); return 0; }
+    pm = perim_words(k_miss_words, 2, 0x0001u);
+
+    /* ── R3.a: the corpus program R3.d culls, drawn visibly first. ── */
+    puts("-- R3.a: the corpus program the culled batch carries, drawn visibly (control) --");
+    nv2a_vk_backend_program_stats(&b);
+    build_batch_flags(k_surf[C_HIT_A], k_vb[C_HIT_A], ea->words, ea->len, 0, 0, 1);
+    ok &= submit("r3 visible corpus hit");
+    nv2a_vk_backend_program_stats(&a);
+    printf("  [r3 visible hit] hits %llu -> %llu, tris %llu -> %llu, const_uploads %llu -> %llu, "
+           "first_hit_hash %08X\n",
+           (unsigned long long)b.hits, (unsigned long long)a.hits,
+           (unsigned long long)b.tris, (unsigned long long)a.tris,
+           (unsigned long long)b.const_uploads, (unsigned long long)a.const_uploads,
+           a.first_hit_hash);
+    if (a.hits != b.hits + 1) {
+        fail("FAIL: [r3 visible hit] hits advanced by %llu, expected exactly 1: the corpus does "
+             "not carry %08X, so the fully culled case below would prove nothing\n",
+             (unsigned long long)(a.hits - b.hits), ea->hash);
+        ok = 0;
+    }
+    if (a.tris != b.tris + 1 || a.const_uploads != b.const_uploads + 1) {
+        fail("FAIL: [r3 visible hit] tris %llu -> %llu and const_uploads %llu -> %llu, expected "
+             "exactly one triangle and one constant block\n",
+             (unsigned long long)b.tris, (unsigned long long)a.tris,
+             (unsigned long long)b.const_uploads, (unsigned long long)a.const_uploads);
+        ok = 0;
+    }
+    if (a.first_hit_hash != ea->hash) {
+        fail("FAIL: [r3 visible hit] first_hit_hash %08X, expected %08X\n",
+             a.first_hit_hash, ea->hash);
+        ok = 0;
+    }
+
+    /* ── R3.b: cull FRONT_AND_BACK + a program the corpus does not carry. ── */
+    puts("-- R3.b: cull FRONT_AND_BACK + a program the corpus does not carry --");
+    nv2a_vk_backend_program_stats(&b);
+    build_batch_flags(k_surf[C_R3CULL], k_vb[C_R3CULL], k_miss_words, 2, 1, 1, 0);
+    ok &= submit("r3 cull-all + absent program");
+    nv2a_vk_backend_program_stats(&a);
+    if (!gpu_stats_field("cull_all", &lines, &cull_all)) cull_all = 0;
+    printf("  [r3 cull-all miss] misses %llu -> %llu, cull_all (counters line) %llu, "
+           "hits %llu -> %llu, tris %llu -> %llu, const_uploads %llu -> %llu, "
+           "declines %llu -> %llu, identity_fail %llu -> %llu, first_miss %08X len %u mask %04X\n",
+           (unsigned long long)b.misses, (unsigned long long)a.misses, (unsigned long long)cull_all,
+           (unsigned long long)b.hits, (unsigned long long)a.hits,
+           (unsigned long long)b.tris, (unsigned long long)a.tris,
+           (unsigned long long)b.const_uploads, (unsigned long long)a.const_uploads,
+           (unsigned long long)b.declines, (unsigned long long)a.declines,
+           (unsigned long long)b.identity_fail, (unsigned long long)a.identity_fail,
+           a.first_miss_hash, a.first_miss_len, a.first_miss_mask);
+    if (a.misses != b.misses + 1) {
+        fail("FAIL: [r3 cull-all miss] misses advanced by %llu, expected exactly 1: a fully "
+             "culled batch must still record that the corpus does not carry its program\n",
+             (unsigned long long)(a.misses - b.misses));
+        ok = 0;
+    }
+    if (a.hits != b.hits || a.tris != b.tris || a.const_uploads != b.const_uploads) {
+        fail("FAIL: [r3 cull-all miss] a culled batch drew something: hits %llu -> %llu, tris "
+             "%llu -> %llu, const_uploads %llu -> %llu\n",
+             (unsigned long long)b.hits, (unsigned long long)a.hits,
+             (unsigned long long)b.tris, (unsigned long long)a.tris,
+             (unsigned long long)b.const_uploads, (unsigned long long)a.const_uploads);
+        ok = 0;
+    }
+    if (a.declines != b.declines) {
+        fail("FAIL: [r3 cull-all miss] declines advanced by %llu for a program the corpus does "
+             "not carry, which must be a miss and nothing else\n",
+             (unsigned long long)(a.declines - b.declines));
+        ok = 0;
+    }
+    if (a.identity_fail != b.identity_fail) {
+        fail("FAIL: [r3 cull-all miss] identity_fail advanced by %llu\n",
+             (unsigned long long)(a.identity_fail - b.identity_fail));
+        ok = 0;
+    }
+    if (a.first_miss_hash != MISS_HASH) {
+        fail("FAIL: [r3 cull-all miss] first_miss_hash %08X, expected %08X\n",
+             a.first_miss_hash, MISS_HASH);
+        ok = 0;
+    }
+    ok &= surface_is_sentinel(k_surf[C_R3CULL], "r3 cull-all miss");
+    if (!lines) {
+        fail("FAIL: [r3 cull-all miss] the back end printed no [GPUVK] counters line after the "
+             "batch, so cull_all cannot be read\n");
+        ok = 0;
+    } else if (cull_all != 1) {
+        fail("FAIL: [r3 cull-all miss] cull_all %llu, expected exactly 1 after one cull-all "
+             "batch\n", (unsigned long long)cull_all);
+        ok = 0;
+    } else {
+        printf("  [r3 cull-all miss] cull_all is exactly 1 on the counters line\n");
+    }
+
+    /* ── R3.c: the same absent program, culling not-all (the positive control). ──
+     * Built exactly like check 3's miss batch: cleared, and flipped, because the back end
+     * still owns the clear and only a flip writes it back to guest memory -- so the read-back
+     * surface is the clear plus the CPU interpreter's triangle, which is what the CPU
+     * reference holds too. */
+    puts("-- R3.c: the same absent program, culling not-all (positive control) --");
+    nv2a_vk_backend_program_stats(&b);
+    build_batch_flags(k_surf[C_R3VIS], k_vb[C_R3VIS], k_miss_words, 2, 1, 0, 1);
+    ok &= submit("r3 visible miss");
+    nv2a_vk_backend_program_stats(&a);
+    printf("  [r3 visible miss] misses %llu -> %llu, hits %llu -> %llu, declines %llu -> %llu, "
+           "identity_fail %llu -> %llu\n",
+           (unsigned long long)b.misses, (unsigned long long)a.misses,
+           (unsigned long long)b.hits, (unsigned long long)a.hits,
+           (unsigned long long)b.declines, (unsigned long long)a.declines,
+           (unsigned long long)b.identity_fail, (unsigned long long)a.identity_fail);
+    if (a.misses != b.misses + 1) {
+        fail("FAIL: [r3 visible miss] misses advanced by %llu, expected exactly 1\n",
+             (unsigned long long)(a.misses - b.misses));
+        ok = 0;
+    }
+    if (a.hits != b.hits || a.tris != b.tris || a.const_uploads != b.const_uploads) {
+        fail("FAIL: [r3 visible miss] hits/tris/const_uploads advanced by %llu/%llu/%llu for a "
+             "program the corpus does not carry\n",
+             (unsigned long long)(a.hits - b.hits), (unsigned long long)(a.tris - b.tris),
+             (unsigned long long)(a.const_uploads - b.const_uploads));
+        ok = 0;
+    }
+    if (a.declines != b.declines || a.identity_fail != b.identity_fail) {
+        fail("FAIL: [r3 visible miss] declines %llu -> %llu, identity_fail %llu -> %llu: a "
+             "visible miss is a miss and nothing else\n",
+             (unsigned long long)b.declines, (unsigned long long)a.declines,
+             (unsigned long long)b.identity_fail, (unsigned long long)a.identity_fail);
+        ok = 0;
+    }
+    {
+        uint8_t *im = snapshot(k_surf[C_R3VIS], 64u * 64u * 4u);
+        ok &= check_vs_cpu("r3 visible miss", g_cpu[C_R3VIS], im, pm);
+        free(im);
+    }
+
+    /* ── R3.d: a program the corpus carries, fully culled. ── */
+    puts("-- R3.d: a program the corpus carries, fully culled --");
+    nv2a_vk_backend_program_stats(&b);
+    build_batch_flags(k_surf[C_R3CULLHIT], k_vb[C_R3CULLHIT], ea->words, ea->len, 0, 1, 0);
+    ok &= submit("r3 cull-all + corpus program");
+    /* vb_stats prints at most once every 10 s: wait that window out and flip once more, so
+     * the counters line carries this batch's cull_all too. */
+    Sleep(10300);
+    pb_begin(); pb_flip();
+    ok &= submit("r3 cull-all + corpus program (counter flush)");
+    nv2a_vk_backend_program_stats(&a);
+    if (!gpu_stats_field("cull_all", &lines, &cull_all)) cull_all = 0;
+    printf("  [r3 cull-all carried] cull_all (counters line) %llu, misses %llu -> %llu, "
+           "hits %llu -> %llu, tris %llu -> %llu, const_uploads %llu -> %llu, "
+           "declines %llu -> %llu, identity_fail %llu -> %llu\n",
+           (unsigned long long)cull_all,
+           (unsigned long long)b.misses, (unsigned long long)a.misses,
+           (unsigned long long)b.hits, (unsigned long long)a.hits,
+           (unsigned long long)b.tris, (unsigned long long)a.tris,
+           (unsigned long long)b.const_uploads, (unsigned long long)a.const_uploads,
+           (unsigned long long)b.declines, (unsigned long long)a.declines,
+           (unsigned long long)b.identity_fail, (unsigned long long)a.identity_fail);
+    if (a.hits != b.hits || a.tris != b.tris || a.const_uploads != b.const_uploads) {
+        fail("FAIL: [r3 cull-all carried] a lookup match without a draw fabricated GPU work: "
+             "hits %llu -> %llu, tris %llu -> %llu, const_uploads %llu -> %llu\n",
+             (unsigned long long)b.hits, (unsigned long long)a.hits,
+             (unsigned long long)b.tris, (unsigned long long)a.tris,
+             (unsigned long long)b.const_uploads, (unsigned long long)a.const_uploads);
+        ok = 0;
+    }
+    if (a.misses != b.misses || a.declines != b.declines || a.identity_fail != b.identity_fail) {
+        fail("FAIL: [r3 cull-all carried] misses %llu -> %llu, declines %llu -> %llu, "
+             "identity_fail %llu -> %llu for a program the corpus carries\n",
+             (unsigned long long)b.misses, (unsigned long long)a.misses,
+             (unsigned long long)b.declines, (unsigned long long)a.declines,
+             (unsigned long long)b.identity_fail, (unsigned long long)a.identity_fail);
+        ok = 0;
+    }
+    ok &= surface_is_sentinel(k_surf[C_R3CULLHIT], "r3 cull-all carried");
+    if (cull_all != 2) {
+        fail("FAIL: [r3 cull-all carried] cull_all %llu, expected exactly 2 (R3.b's cull-all "
+             "batch, R3.c's visible miss adding nothing, and this one)\n",
+             (unsigned long long)cull_all);
+        ok = 0;
+    } else {
+        printf("  [r3 cull-all carried] cull_all is exactly 2: the cull-all batches each added 1 "
+               "and the visible miss added none\n");
+    }
+    return ok;
+}
 
 static int run_gpu_pass(void)
 {
-    int ok = 1;
-    uint8_t *img[4];
+    int ok = 1, z;
+    uint8_t *img[NSURF];
     Nv2aVkProgramStats before, after;
     const Nv2aVshAotEntry *ea = table_find(HASH_A), *eb = table_find(HASH_B);
     static Nv2aVshAotEntry copy[256];
     size_t ncopy = nv2a_vsh_program_count;
 
     double perim[3];
-    for (before.hits = 0; before.hits < 4; before.hits++) img[before.hits] = NULL;
+    for (z = 0; z < NSURF; z++) img[z] = NULL;
     perim[0] = ea ? perim_words(ea->words, ea->len, ea->input_mask) : 0.0;
     perim[1] = eb ? perim_words(eb->words, eb->len, eb->input_mask) : 0.0;
     perim[2] = perim_words(k_miss_words, 2, 0x0001u);
     printf("  triangle perimeters from the interpreter: A %.0f px, B %.0f px, miss %.0f px\n",
            perim[0], perim[1], perim[2]);
+
+    /* ── 7. The R3 cases come first on purpose: R3.b's cull-all batch owns the process's
+     * first flip, so the back end's counters line that carries cull_all is forced at that
+     * moment instead of being 10 s late. Nothing before them flips (the CPU pass has no
+     * back end registered at all). ── */
+    ok &= run_r3_cull_cases();
 
     /* ── 2. A real table hit. ── */
     puts("-- check 2: a corpus program drawn through the Vulkan program path --");
@@ -992,7 +1303,7 @@ static int run_gpu_pass(void)
         nv2a_vk_backend_set_programs(nv2a_vsh_programs, nv2a_vsh_program_count);
         printf("  [identity] the table is restored (%zu entries)\n", ncopy);
     }
-    for (before.hits = 0; before.hits < 4; before.hits++) free(img[before.hits]);
+    for (z = 0; z < NSURF; z++) free(img[z]);
     return ok;
 }
 
@@ -1008,6 +1319,8 @@ static int run_cpu_pass(void)
     ok &= submit("cpu hit B");
     build_batch(k_surf[C_MISS], k_vb[C_MISS], k_miss_words, 2, 1);
     ok &= submit("cpu miss");
+    build_batch(k_surf[C_R3VIS], k_vb[C_R3VIS], k_miss_words, 2, 1);
+    ok &= submit("cpu visible miss");
     build_batch(k_surf[C_IDENT], k_vb[C_IDENT], ea->words, ea->len, 1);
     ok &= submit("cpu identity");
     return ok;
@@ -1152,9 +1465,9 @@ int main(int argc, char **argv)
 
     /* ── The CPU reference pass. ── */
     puts("-- software executor (references) --");
-    for (i = 0; i < 4; i++) prefill(k_surf[i]);
+    for (i = 0; i < NSURF; i++) prefill(k_surf[i]);
     ok &= run_cpu_pass();
-    for (i = 0; i < 4; i++) g_cpu[i] = snapshot(k_surf[i], 64u * 64u * 4u);
+    for (i = 0; i < NSURF; i++) g_cpu[i] = snapshot(k_surf[i], 64u * 64u * 4u);
 
     /* ── The Vulkan back end, on the software driver. ── */
     if (!getenv("RECOMP_VK_DEVICE")) _putenv_s("RECOMP_VK_DEVICE", "llvmpipe");
@@ -1180,7 +1493,7 @@ int main(int argc, char **argv)
     }
     nv2a_vk_backend_set_programs(nv2a_vsh_programs, nv2a_vsh_program_count);
     puts("-- Vulkan back end --");
-    for (i = 0; i < 4; i++) prefill(k_surf[i]);
+    for (i = 0; i < NSURF; i++) prefill(k_surf[i]);
     ok &= run_gpu_pass();
 
     if (neg == 2) {
@@ -1222,14 +1535,14 @@ int main(int argc, char **argv)
 
     fflush(stdout);
     nv2a_set_commit_consumer(NULL);
-    for (i = 0; i < 4; i++) free(g_cpu[i]);
+    for (i = 0; i < NSURF; i++) free(g_cpu[i]);
     VirtualFree(pbmem, 0, MEM_RELEASE);
     free(instance); free(ramin); free(ram);
     xbox_MemoryLayoutShutdown();
 
     if (!ok) { fail("FAIL: vsh_aot_programs\n"); return 1; }
     puts("PASS: vsh_aot_programs (the corpus is self-consistent, a hit draws on the GPU, a miss "
-         "and a corrupt identity fall back to the CPU, and two same-mask programs keep their "
-         "own shaders)");
+         "and a corrupt identity fall back to the CPU, two same-mask programs keep their own "
+         "shaders, and a fully culled batch still records its corpus lookup)");
     return 0;
 }

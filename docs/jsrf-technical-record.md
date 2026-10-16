@@ -3275,3 +3275,84 @@ PUSHED_TO: origin / BRANCH: main / COMMIT: b20ddbae717336ac6c560bec98c64e15da0d3
 PUSHED_TO: origin / BRANCH: master / COMMIT: b28b7cbcdcf53b1c05551d8614538847b767bd1c / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: synchronized fast-forward, after toolkit.
 
 R2 is accepted for continuation to R3 only; the separate R3 accounting gate remains pending.
+
+### §31.26 R3: corpus coverage counts culled program batches (2026-10-15)
+
+**Status: implemented; awaiting independent Codex review.** V5/V6 and the R1/R2 repairs remain
+accepted; toolkit `a052de5` carries the change.
+
+**The defect.** `vb_draw_program` looked a batch's program up only after the cull FRONT_AND_BACK early
+return, so a program used exclusively in fully culled draws was never looked up at all: `misses`
+measured the corpus against *visible* batches, and V5's "0 misses" said nothing about the identities of
+culled ones. That is a coverage hole in a suite whose whole point is corpus coverage — the culling
+decision belongs to the draw, the identity belongs to the batch.
+
+**The change (toolkit `src/video/nv2a_vk_backend.c`).** The lookup now runs after the pointer/length
+guard block and **before** the cull check and before every per-draw check, so exactly one lookup
+happens per call and coverage is a property of the batch's identity, not of its visibility. The cull-all
+branch still increments `cull_all` and `return 1` **regardless of what the lookup found**: nothing
+visible is drawn by either path, so the executor must not transform the batch on the CPU (and returning
+1 also avoids the double `cull_all` count a fallback would produce). A batch whose program the corpus
+does not carry is a MISS and returns 0 for the existing CPU-interpreter fallback whatever its input
+mask — the independent review of this change caught that the first revision could count such a batch as
+both a miss and a decline, and that is fixed: `declines` stays reserved for a program the corpus
+carries that this draw cannot set up. No counter meaning changed; `vb_program_lookup` is untouched,
+including the documented load-bearing order of its identity guards; a culled batch still performs no
+setup, pipeline, descriptor, reserve, stream or draw work, so a lookup match without a draw fabricates
+no hit, triangle or upload.
+
+**The deciding fixture** (`tests/test_vsh_aot_programs.c`, run as `jsrf_vsh_aot`, a different worker
+from the change's author). It drives the real executor and Vulkan back end on lavapipe and measures
+`nv2a_vk_backend_program_stats` deltas around single batches:
+
+| case | observed |
+| --- | --- |
+| corpus-carried program, drawn visibly | `hits 0→1`, `tris 0→1`, `const_uploads 0→1`, `first_hit_hash EC6C788B` |
+| **cull-all batch, program absent from the corpus** | **`misses 0→1` exactly**, `cull_all = 1` on the counters line, `hits`/`tris`/`const_uploads` unchanged, `declines`/`identity_fail` unchanged, and the surface is byte-untouched (`all 65536 bytes are the sentinel 0x5A`) — nothing drawn by the GPU or by the CPU |
+| the same absent program, culling not-all | `misses 1→2` exactly, `declines`/`identity_fail` unchanged, and the CPU interpreter draws it: `100.00% of pixels within 8, worst channel diff 1, coverage cpu=1176 gpu=1176` |
+| corpus-carried program, fully culled | `cull_all = 2` (each cull-all batch +1, the visible miss +0), `misses`/`hits`/`tris`/`const_uploads` unchanged, surface sentinel |
+
+**The mutation, re-run by the orchestrator on the final source** (the test author's private scratch
+copy of the toolkit with the OLD ordering, `26b036d1…`, next to the fixed copy `873c1e7f…`; both
+binaries run with the lavapipe ICD, `RECOMP_GPU_BACKEND=vulkan`, `RECOMP_VK_DEVICE=llvmpipe`):
+
+- final-source build (real tree, from `just build`): **exit 0**, the missing-corpus line reads
+  `[r3 cull-all miss] misses 0 -> 1, cull_all (counters line) 1, hits 1 -> 1, tris 1 -> 1,
+  const_uploads 1 -> 1, declines 0 -> 0, identity_fail 0 -> 0` and the surface sentinel holds;
+- mutant (old ordering): **exit 1**, the only discriminating assertion is
+  `FAIL: [r3 cull-all miss] misses advanced by 0, expected exactly 1: a fully culled batch must still
+  record that the corpus does not carry its program` (plus the write-once latch symptom
+  `first_miss_hash 00000000, expected 80BC1DAA`) — every other R3 assertion and checks 1–5 still pass
+  on the mutant, so the miss delta is what separates the orderings, exactly as intended;
+- restored final source: **exit 0**, identical deltas.
+
+**Gates on the final tree.** `just build` clean (85 tests, 45 targets; identity recorded); targeted
+cases `-R jsrf_vsh_aot` **6/6 passed** (`jsrf_vsh_aot` 14.8 s including the new cases, both negative
+controls, `jsrf_vsh_aot_malformed`, the real-table case, the provenance case), `-R jsrf_vsh_conformance`
+**9/9 passed**, `-R jsrf_gpu_backend_parity` **3/3 passed**; full software-Vulkan CTest **85/85 passed**,
+414.5 s, no skips; `just check` → `check: all checkers passed`.
+
+**Bounded game smoke** (`20261015-225417-747-keyscript-r3-smoke-vk`, `e2e.json` on
+`RECOMP_GPU_BACKEND=vulkan`, 560 s, exploratory profile, disposable isolated save): `keyscript_complete`,
+exit 0, 24,161 presents, `icall 0`/`fatal 0`, reaching the title, the menu, the intro, the Garage HUD
+and the two-run skate path with movement and jumps. exe `e116ad4fc329d624e6f3838fbaaab84887a1d3945d3b6606521f835f867d6656`,
+xbe `fd190557…`, key script `72c0360f…`. The program path was live throughout — `vsh_hits` climbed past
+1,086,000 with `vsh_misses=0`, `vsh_identity_fail=0`, `vsh_declines=0`, `vsh_tris ≈ 288M`, i.e. the
+retail corpus covered every program this route uploaded. The run's `cull_all=0`: this script produces
+no fully culled program batches, so the R3 path itself is decided by the fixture above, not by the run.
+No validation-layer claim is made (no `VK_INSTANCE_LAYERS` was set), and this smoke is not N2 or V7
+acceptance.
+
+**Reviews.** The independent code review found no P0/P1/P2 — safety, counter meanings and the return
+contract all hold — and one P3 (the miss/decline double count described above), which is fixed and
+re-verified. A security review was not requested: the change adds no trust boundary (it reorders an
+in-function lookup; no new input parsing, command execution, credentials or IPC).
+
+**Limits.** (1) `cull_all` is not part of `Nv2aVkProgramStats`; the fixture reads it from the back
+end's `[GPUVK]` counters line (emitted on the first flip and then at most once per 10 s), which the case
+waits for deliberately. (2) A miss remains a *lookup* outcome: for a culled batch it means "the corpus
+does not carry this identity", not "this visibility produced no work". (3) The executor still counts a
+cull-all batch's triangles in its own `tris_program_gpu`/`tris_drawn`, which is pre-existing and
+unchanged. (4) The first-miss latch is write-once, so the fixture asserts it for consistency only and
+decides the ordering from counter deltas. (5) Original V5 coverage numbers are not revised: R3 changes
+what future runs measure, and no retrospective coverage is claimed for already-accepted runs.

@@ -121,6 +121,14 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
   game `b28b7cb` / toolkit `b20ddba`: 176 tests passed, all four branch mutants detected, and the
   final-source capability-OFF configure/link passed. R3 is next, under a separate operation.
 
+- **R3 is implemented and awaiting independent acceptance** (TR §31.26). The corpus lookup moved ahead
+  of the cull-all early return in `vb_draw_program`, so a fully culled batch still records whether the
+  corpus carries its program (`misses` +1 exactly for an absent one) while the cull-all branch keeps
+  returning 1 even on a miss — nothing visible is drawn by either path, so the executor does not
+  transform it on the CPU. Counter meanings are unchanged, a culled batch does no setup, allocation or
+  submission, and the deciding fixture proves the ordering with a per-batch delta plus a mutation that
+  cannot distinguish it any other way. R3 was the last prerequisite of V7; N2 remains a prerequisite too.
+
 **Owner review accepted V5 and V6** at game `2a350ec` / toolkit `5668278` (2026-10-15).
 R1–R5 below are approved follow-ups, not reasons to reopen those milestones. The review was a code
 review; it did not rebuild the Windows checkout or re-read its run logs.
@@ -224,15 +232,27 @@ fail rather than compile. OFF→ON→OFF in one build tree flips both the cached
 corpus source. A different worker's regression (10 scripted cases, 176 tests with the R1 suites)
 detects four mutants of the branch logic, and a direct `cmake -S . -B build` cannot bypass the guard.
 
-### R3: include culled program batches in miss accounting
+### R3: include culled program batches in miss accounting — implemented, awaiting independent acceptance
 
-Move `vb_program_lookup` above the cull-all early return in `vb_draw_program`, so a program used only
-in fully culled draws is still included in corpus coverage. Count the lookup outcome, then return 1
-for cull-all even on a miss: both GPU and CPU paths draw nothing. Document that return-value choice.
+`vb_program_lookup` now runs in `vb_draw_program` before the cull FRONT_AND_BACK early return, so a
+batch whose program the corpus does not carry is counted even when nothing is visible: **coverage is a
+property of the batch's identity, not of whether the batch was drawn**. The cull-all branch still
+returns 1 regardless of what the lookup found (nothing visible means nothing drawn by either path, so
+the executor must not transform the batch on the CPU), and the non-culled miss still returns 0 for the
+existing CPU-interpreter fallback. `misses`/`identity_fail` and their write-once latches keep the
+meanings `nv2a_vk_backend.h` documents: a batch whose program is absent is a miss and returns 0
+whatever its input mask, and `declines` stays reserved for a program the corpus carries that this draw
+cannot set up. No counter meaning changed; a culled batch still performs no setup, pipeline,
+descriptor, stream or draw work, so a match without a draw fabricates no hit, triangle or upload.
 
-**Gate:** a different worker tests a cull-all batch whose program is absent from the corpus:
-`misses` advances by one and nothing draws. Quote a mutation that restores the old ordering and
-makes the new gate fail, then the restored pass. R1–R3 must land before V7.
+**Gate (evidence in TR §31.26).** The real-backend fixture `jsrf_vsh_aot` now measures, around single
+executor batches on lavapipe: a corpus-carried program drawn visibly (hits/tris/const_uploads +1); a
+cull-all batch with an **absent** program (`misses` +1 exactly, `cull_all` +1, every other counter
+unchanged, the surface byte-untouched sentinel — nothing drawn on either path); the same absent
+program with culling not-all (`misses` +1 and the CPU interpreter draws it, pixel-parity with the CPU
+reference); and a corpus-carried program fully culled (`cull_all` +1 only). Restoring the old ordering
+in a private toolkit copy makes exactly the missing-corpus assertion fail (`misses advanced by 0,
+expected exactly 1`), with baseline and restored runs green on the final source. R1–R3 land before V7.
 
 ### N2: a controlled benchmark (about 0.5 h)
 
