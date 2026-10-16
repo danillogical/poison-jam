@@ -19,7 +19,16 @@ set RECOMP_PB_EXEC=1
 set RECOMP_FB_WINDOW=1
 
 rem Rasterise on the GPU (ledger L59): the title arrives in minutes instead of ~26 minutes.
+rem D3D11 by default; "play-jsrf.bat vulkan" uses the Vulkan back end (ledger L62) instead.
+rem Every other argument is passed through to the executable unchanged.
 set RECOMP_GPU_BACKEND=d3d11
+set JSRF_ARGS=
+:args
+if "%~1"=="" goto args_done
+if /i "%~1"=="vulkan" (set RECOMP_GPU_BACKEND=vulkan) else (set JSRF_ARGS=%JSRF_ARGS% %1)
+shift
+goto args
+:args_done
 
 rem No per-call [TRACE] lines for the traced DirectSound functions: at ~500 lines a second,
 rem each flushed, they cost more time to the title than anything else measured (technical record section 30).
@@ -41,7 +50,7 @@ rem Saves go here, so the default disk images in %%LOCALAPPDATA%%\xboxrecomp are
 set SAVE_ROOT=%~dp0logs\play-save
 if not exist "%SAVE_ROOT%" mkdir "%SAVE_ROOT%"
 
-echo Starting JSRF on the GPU. PRESS START appears after about 2 minutes; close the window or press Ctrl+C to stop.
-"build\Release\jsrf_recomp.exe" --save-root="%SAVE_ROOT%" %*
+echo Starting JSRF on the GPU (%RECOMP_GPU_BACKEND%). PRESS START appears after about 2 minutes; close the window or press Ctrl+C to stop.
+"build\Release\jsrf_recomp.exe" --save-root="%SAVE_ROOT%"%JSRF_ARGS%
 echo jsrf_recomp.exe exited with code %ERRORLEVEL%
 endlocal

@@ -282,7 +282,12 @@ performance claim from here on.
   pass.
 - Report validation errors and warnings from the backend's counters.
 
-### V7: acceptance (about 0.5 h)
+### V7: acceptance — DONE (TR §31.28)
+
+Vulkan `e2e.json` under the validation layer: complete, 0 errors (10 benign "attribute not consumed"
+warnings), 0 misses; frames match D3D11; dialogue 40/40.
+
+Original step text:
 
 `e2e.json` on Vulkan (RTX 4070), under N3. It must complete with no ICALL, ABI failure or validation
 error. Also check:
@@ -294,7 +299,11 @@ error. Also check:
 
 Record it in TR §31 and ledger L62.
 
-### V8: the owner plays on Vulkan (about 0.25 h)
+### V8: the owner plays on Vulkan — IN PROGRESS
+
+`play-jsrf.bat vulkan` is in place (TR §31.28); waiting for the owner's play report.
+
+Original step text:
 
 Add a Vulkan option to `play-jsrf.bat` (`play-jsrf.bat vulkan`) and ask the owner to play. The default
 backend switches only after the owner accepts; D3D11 is removed later.

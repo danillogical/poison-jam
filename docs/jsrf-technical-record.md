@@ -3437,3 +3437,59 @@ comparable, so performance is now measured in a fixed window.
     p50 sitting at the 100 ms threshold;
   - the D3D11 backend cannot be pointed at the RTX 4070, so no D3D11/NVIDIA row exists.
 - **From here on,** performance claims use this benchmark (plan N2).
+
+### §31.28 V7: Vulkan acceptance, and V8's play option (2026-10-16)
+
+All runs are exploratory, with disposable saves, on exe `e116ad4f…` (the R3 build, unchanged since).
+
+**`e2e.json` on Vulkan, RTX 4070, with `VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation`**
+(`20261016-111544-203-keyscript-v7-vk-val`):
+
+- `keyscript_complete`, with no unsatisfied step;
+- 0 ICALL, 0 ABI-failure lines, 0 fatal;
+- `validation_errors=0`;
+- `vsh_hits=363943`, `vsh_misses=0`, `vsh_identity_fail=0`, `vsh_declines=0`, `rc_fallback=0`.
+
+**The validation layer and its warnings.**
+
+- The run reports `validation_warnings=10`, all one message: `vkCreateGraphicsPipelines(): … Vertex
+  attribute at location 1/7/8 not consumed by vertex shader`.
+- The program pipeline declares one input per `input_mask` bit, and dxc removed reads the program
+  never uses. That is a performance warning, not an error, and it changes no pixel.
+- Those messages arrive through the backend's debug messenger, so **they themselves witness that the
+  layer was active**. The loader prints no insertion line without `VK_LOADER_DEBUG`.
+- The validation layer slows the run (6,663 flips against about 10,700 without it), so this run makes
+  no performance claim.
+
+**Frames against D3D11** (`20261016-112507-055-keyscript-v7-d3d`, the same script, also complete):
+
+| Step | Comparison |
+|---|---|
+| Corn's opening talk (`intro-00`) | the same text and "Corn" label |
+| Garage start | the same view, player colours and HUD |
+| Pause map | the same |
+| Logos | Vulkan's timeline shows SEGA, Smilebit ramping to (255,255,255) and back, then ADX |
+
+The last skate frame differs only in position: timed input at different frame rates.
+
+**Dialogue dwell on Vulkan** (`20261016-114049-947-keyscript-v7-vk-dwell2`):
+
+- the "Corn" label is present in **40/40** snapshots (white count 249 on all of them);
+- the balloon text is stable after each page's reveal.
+- A first attempt at 280 s reached only 35 snapshots (all with the label) before its deadline.
+
+**N2 medians** (§31.27): Vulkan 12.77 presents/s against D3D11 15.17 on the same Iris Xe, and 11.07 on
+the RTX 4070.
+
+**V7 is met.** Everything compiles ahead of time, the corpus covers every program the route uses, the
+validation layer reports no errors, the frames match D3D11 at the checked steps, and the dialogue is
+stable. Still open: the slower frame rate (N4) and owner acceptance (V8).
+
+**V8:**
+
+- `play-jsrf.bat vulkan` sets `RECOMP_GPU_BACKEND=vulkan`, and every other argument passes through to
+  the executable. The default stays D3D11.
+- Checked live: started from a helper and stopped after 30 s, the Vulkan mode logged
+  `[GPUVK] device: NVIDIA GeForce RTX 4070 Laptop GPU` and the default logged
+  `[GPUBE] device: hardware (Intel(R) Iris(R) Xe Graphics …)`.
+- Owner play is next.
