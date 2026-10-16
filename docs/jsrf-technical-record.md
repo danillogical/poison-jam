@@ -3117,3 +3117,21 @@ configure arbitrary code, and the change does not widen that. (5) The check is c
 reproducibility: the recorded hash names the binary that ran, and the toolchain's PDB signature means
 two equivalent builds are two identities. (6) The corpus and its provenance stay retail-derived,
 untracked and ignored, as V5 established.
+
+
+**Independent Codex acceptance of R1 repair (`c6eaf6b`).** The original counterexamples were
+re-run against production functions: matching corpus accepted; changed tool hash refused for both
+files; a tool hash missing from both files refused; an actual executable copied privately and made
+older than all three sources refused without changing that executable; cache/environment toolkit
+conflict refused. The unmodified AST-extracted build guard accepts the actual current baseline.
+The independently run focused suites pass **166 tests**, including the eight weakening mutants
+(each detected; M1 through M8: 7/2/2/2/1/6/1/7 failing cases) and a green comment-only control.
+The real checker independently matches **126/126** entries. Final scratch script hashes match the
+committed files, and inspected logs show baseline build exit 0, content mutation refused exit 1
+before configure, regeneration exit 0, restored build exit 0, and tool-only replacement refused
+exit 1. Full-suite receipt: 84/84, no skips; final `just check` receipt passed. The actual role
+transcripts confirm separate OpenCode Go DeepSeek implementation/test workers, Opus code review
+and Muse security review. All 13 outgoing blob versions were independently audited: no forbidden
+paths, no secret-pattern hits, largest 234548 bytes. Both repositories were clean and synchronized;
+toolkit remains `5668278`. No runtime, validation, fidelity or performance claim is added.
+R1 is accepted for continuation to R2; V5/V6 acceptance is unchanged.

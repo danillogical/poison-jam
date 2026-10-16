@@ -96,7 +96,7 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
   an identical image), and passes on the repaired source; nine V6 CTest cases, full CTest 83/83,
   `just check` passed. Test-only: no toolkit change.
 
-- **R1 is repaired and awaits independent acceptance** (TR §§31.22–31.24). The rejected first
+- **R1 repair is independently accepted** (TR §§31.22–31.24). The rejected first
   implementation `9078b47` recorded provenance but left three gaps: a changed or missing host-tool
   hash was accepted, a stale explicit tool override was accepted with a warning, and the guard could
   validate a toolkit different from the one CMake builds. The repair makes `tool.sha256` recorded and
@@ -135,7 +135,7 @@ positive controls. No commit signing, co-author or signature trailers. Session r
 N2 remains a prerequisite of V7. R5 is low priority and follows V7; schedule it after N6 so it does
 not interrupt the required sequence. Each step or listed N4/N6 subitem is a separate operation.
 
-### R1: detect a stale shader corpus — repaired, awaiting independent acceptance (TR §§31.23–31.24)
+### R1: detect a stale shader corpus — DONE (TR §§31.23–31.24)
 
 The runtime identity check proves the guest words, not which translator or compiler produced their
 SPIR-V. Synthetic table CTests do not validate the real generated corpus.
@@ -160,7 +160,7 @@ SPIR-V. Synthetic table CTests do not validate the real generated corpus.
 - Run `check-vsh-aot-table.py` against the **real** generated table in `just check`, with its real
   XBE/compiler inputs and the same resolved tool; retain device-free synthetic tests in CTest.
 
-**Gate (met; awaiting Codex acceptance).** Matching provenance and a normal fresh bootstrap pass, and
+**Gate (independently accepted at `c6eaf6b`).** Matching provenance and a normal fresh bootstrap pass, and
 the full CTest run is green. A different worker's regression (126 tests in the provenance file, 166
 in the focused suite) fails eight weakening mutants of the new gates — the tool hash made advisory,
 dropped from the required expectations, `expected(tool_path=None)`, the guard's no-tool and
