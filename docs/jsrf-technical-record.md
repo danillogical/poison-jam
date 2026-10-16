@@ -3493,3 +3493,8 @@ stable. Still open: the slower frame rate (N4) and owner acceptance (V8).
   `[GPUVK] device: NVIDIA GeForce RTX 4070 Laptop GPU` and the default logged
   `[GPUBE] device: hardware (Intel(R) Iris(R) Xe Graphics …)`.
 - Owner play is next.
+
+**V8 follow-up (2026-10-16, owner):** `play-jsrf.bat` now **defaults to Vulkan**. The new
+`play-jsrf-d3d11.bat` calls it with `d3d11` and passes every other argument through, so D3D11 stays
+available as the reference. `play-jsrf.bat d3d11` does the same. The key-script runner's own default
+(`DEFAULT_ENV`) is unchanged, so archived evidence keeps its meaning.

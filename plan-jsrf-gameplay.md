@@ -299,9 +299,10 @@ error. Also check:
 
 Record it in TR §31 and ledger L62.
 
-### V8: the owner plays on Vulkan — IN PROGRESS
+### V8: the owner plays on Vulkan — DEFAULT SWITCHED (owner, 2026-10-16)
 
-`play-jsrf.bat vulkan` is in place (TR §31.28); waiting for the owner's play report.
+`play-jsrf.bat` now starts the Vulkan back end; `play-jsrf-d3d11.bat` (or `play-jsrf.bat d3d11`) keeps
+D3D11 available as the reference. D3D11 is removed later. The key-script runner's default is unchanged.
 
 Original step text:
 

@@ -19,13 +19,13 @@ set RECOMP_PB_EXEC=1
 set RECOMP_FB_WINDOW=1
 
 rem Rasterise on the GPU (ledger L59): the title arrives in minutes instead of ~26 minutes.
-rem D3D11 by default; "play-jsrf.bat vulkan" uses the Vulkan back end (ledger L62) instead.
-rem Every other argument is passed through to the executable unchanged.
-set RECOMP_GPU_BACKEND=d3d11
+rem Vulkan by default (ledger L62, owner 2026-10-16); "play-jsrf.bat d3d11" (or play-jsrf-d3d11.bat)
+rem uses the D3D11 back end instead. Every other argument is passed through to the executable.
+set RECOMP_GPU_BACKEND=vulkan
 set JSRF_ARGS=
 :args
 if "%~1"=="" goto args_done
-if /i "%~1"=="vulkan" (set RECOMP_GPU_BACKEND=vulkan) else (set JSRF_ARGS=%JSRF_ARGS% %1)
+if /i "%~1"=="vulkan" (set RECOMP_GPU_BACKEND=vulkan) else if /i "%~1"=="d3d11" (set RECOMP_GPU_BACKEND=d3d11) else (set JSRF_ARGS=%JSRF_ARGS% %1)
 shift
 goto args
 :args_done
