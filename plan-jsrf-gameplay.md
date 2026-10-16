@@ -119,15 +119,17 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
   the branch logic; the no-SDK configure succeeds and links the real game, and the SDK-present
   no-corpus configure still refuses naming `just shaders`. Codex independently accepted R2 at
   game `b28b7cb` / toolkit `b20ddba`: 176 tests passed, all four branch mutants detected, and the
-  final-source capability-OFF configure/link passed. R3 is next, under a separate operation.
+  final-source capability-OFF configure/link passed.
 
-- **R3 is implemented and awaiting independent acceptance** (TR §31.26). The corpus lookup moved ahead
+- **R3 is independently accepted** at game `5842b38` / toolkit `a052de5` (TR §31.26). The corpus lookup moved ahead
   of the cull-all early return in `vb_draw_program`, so a fully culled batch still records whether the
   corpus carries its program (`misses` +1 exactly for an absent one) while the cull-all branch keeps
   returning 1 even on a miss — nothing visible is drawn by either path, so the executor does not
   transform it on the CPU. Counter meanings are unchanged, a culled batch does no setup, allocation or
   submission, and the deciding fixture proves the ordering with a per-batch delta plus a mutation that
-  cannot distinguish it any other way. R3 was the last prerequisite of V7; N2 remains a prerequisite too.
+  cannot distinguish it any other way. Codex independently reproduced the passing gate, the old-ordering
+  mutation failure and the restored pass. **Paused at the owner's request after R3.** N2 is next only
+  when the owner resumes; N2 remains a prerequisite of V7.
 
 **Owner review accepted V5 and V6** at game `2a350ec` / toolkit `5668278` (2026-10-15).
 R1–R5 below are approved follow-ups, not reasons to reopen those milestones. The review was a code
@@ -232,7 +234,7 @@ fail rather than compile. OFF→ON→OFF in one build tree flips both the cached
 corpus source. A different worker's regression (10 scripted cases, 176 tests with the R1 suites)
 detects four mutants of the branch logic, and a direct `cmake -S . -B build` cannot bypass the guard.
 
-### R3: include culled program batches in miss accounting — implemented, awaiting independent acceptance
+### R3: include culled program batches in miss accounting — DONE (TR §31.26)
 
 `vb_program_lookup` now runs in `vb_draw_program` before the cull FRONT_AND_BACK early return, so a
 batch whose program the corpus does not carry is counted even when nothing is visible: **coverage is a

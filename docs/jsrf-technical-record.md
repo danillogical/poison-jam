@@ -3278,7 +3278,7 @@ R2 is accepted for continuation to R3 only; the separate R3 accounting gate rema
 
 ### §31.26 R3: corpus coverage counts culled program batches (2026-10-15)
 
-**Status: implemented; awaiting independent Codex review.** V5/V6 and the R1/R2 repairs remain
+**Status: independently accepted by Codex at game `5842b38` / toolkit `a052de5`; paused at the owner's request.** V5/V6 and the R1/R2 repairs remain
 accepted; toolkit `a052de5` carries the change.
 
 **The defect.** `vb_draw_program` looked a batch's program up only after the cull FRONT_AND_BACK early
@@ -3334,12 +3334,15 @@ controls, `jsrf_vsh_aot_malformed`, the real-table case, the provenance case), `
 
 **Bounded game smoke** (`20261015-225417-747-keyscript-r3-smoke-vk`, `e2e.json` on
 `RECOMP_GPU_BACKEND=vulkan`, 560 s, exploratory profile, disposable isolated save): `keyscript_complete`,
-exit 0, 24,161 presents, `icall 0`/`fatal 0`, reaching the title, the menu, the intro, the Garage HUD
+runner exit 0, 24,161 presents, `icall 0`/`fatal 0`, reaching the title, the menu, the intro, the Garage HUD
 and the two-run skate path with movement and jumps. exe `e116ad4fc329d624e6f3838fbaaab84887a1d3945d3b6606521f835f867d6656`,
 xbe `fd190557…`, key script `72c0360f…`. The program path was live throughout — `vsh_hits` climbed past
 1,086,000 with `vsh_misses=0`, `vsh_identity_fail=0`, `vsh_declines=0`, `vsh_tris ≈ 288M`, i.e. the
 retail corpus covered every program this route uploaded. The run's `cull_all=0`: this script produces
 no fully culled program batches, so the R3 path itself is decided by the fixture above, not by the run.
+The archived `result.json` separately records `process.exit_code = 1` and
+`killed_at_deadline_or_failure = true`: the runner completed its 72-step script and stopped the game
+at the 560-second bound. The runner's exit 0 is not a normal game-exit claim.
 No validation-layer claim is made (no `VK_INSTANCE_LAYERS` was set), and this smoke is not N2 or V7
 acceptance.
 
@@ -3356,3 +3359,28 @@ cull-all batch's triangles in its own `tris_program_gpu`/`tris_drawn`, which is 
 unchanged. (4) The first-miss latch is write-once, so the fixture asserts it for consistency only and
 decides the ordering from counter deltas. (5) Original V5 coverage numbers are not revised: R3 changes
 what future runs measure, and no retrospective coverage is claimed for already-accepted runs.
+
+**Independent Codex review (2026-10-15).** Both repositories fetched clean and synchronized at the
+commits above. Codex inspected the implementation, the real executor-backed fixture, the old-ordering
+scratch diff and final source identities (backend `873c1e7f…`, fixture `924cb0c3…`). An independent
+medium-integrity software-Vulkan run of `jsrf_vsh_aot` passed (CTest exit 0, 15.59 s). The scratch
+old-ordering mutant then failed (CTest exit 8, 16.23 s) with
+`FAIL: [r3 cull-all miss] misses advanced by 0, expected exactly 1`, plus the first-miss latch symptom.
+The final production-source gate passed again afterward; no production source was mutated.
+The checked full-suite receipt is 85/85 passed in 414.50 s, no skips; the final `just check` receipt
+includes real-table 126/126 with SPIR-V checking. These full-suite receipts were inspected rather
+than independently rerun. The smoke archive's profile checker returned EXPLORATORY with zero
+UNKNOWN/MISSING archives; its executable SHA-256 matches `e116ad4f…` above. Its actual process
+termination is clarified above; no gameplay, performance or validation milestone was accepted here.
+
+Worker transcripts confirm distinct fix/test authors on `opencode-go/deepseek-v4.1-flash:high` and
+the code reviewer on `anthropic/claude-opus-5-5:medium`, no recorded fallback. Codex independently
+audited every outgoing R3 blob in its own repository (toolkit 1, game 4): zero secret hits, forbidden
+paths or oversized blobs. Both original R3 commits are unsigned with no co-author/signature trailers.
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: a052de502f7f167a144460b21943cb80740a97c5 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: synchronized fast-forward, toolkit pushed first.
+PUSHED_TO: origin / BRANCH: master / COMMIT: 5842b381f60871e44fb84536eb08d9606d0bf8a4 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: synchronized fast-forward, after toolkit.
+
+R3 is accepted; the owner's requested stopping point is reached. N2 and later steps have not started.
+The current supervision lineage retains 10 operation slots and zero remediation cycles; resuming
+does not reset those limits. No next operation is authorized while the owner pause remains in force.
