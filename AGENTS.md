@@ -88,6 +88,16 @@ different toolkit, and `just shaders` has to run again before `just build` accep
 (never rebuilt, replaced or overwritten) and must be newer than all three sources
 with the corpus's recorded sources unchanged, or the refusal stands.
 
+Vulkan, and therefore `just shaders`, is optional. The toolkit publishes one
+capability decision (`XBR_VULKAN_FOUND`, cache BOOL, recomputed every configure: the
+loader, its headers, `dxc` and `spirv-val` must all exist), and the game's configure
+branches on it: with the capability, the retail corpus is required and its
+provenance is validated inside that configure; without it, the configure generates an
+empty vertex-program corpus under `build/empty-corpus`
+(`nv2a_vsh_program_count = 0`), prints that status, and program batches run on the
+executor's CPU interpreter. A capability-off build therefore needs no corpus, no
+`dxc` and no `VULKAN_SDK`; `just shaders` itself still does.
+
 Underlying commands when a recipe is unavailable:
 
 ```powershell

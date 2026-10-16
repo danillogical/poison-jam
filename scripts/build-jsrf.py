@@ -33,6 +33,15 @@ Measured both ways 2026-09-22: `--parallel 1` builds cleanly when confined, and
 and do not record the parallel limit as a hard fact, because it is not one. An
 earlier version of this docstring stated the restriction unconditionally, which is
 exactly the mistake to avoid.
+
+The shader corpus is OPTIONAL, and this guard decides which side it is on: it asks the
+toolkit for its Vulkan capability with a fresh probe (`scripts/cmake/vulkan-capability`)
+and branches on that. With Vulkan and its shader tools the retail corpus is required and
+its provenance is validated before anything is configured; without them the build compiles
+the generated empty corpus and there is nothing to validate. `--check-corpus-only` is the
+entry the game's CMakeLists.txt calls from inside its own configure, so a real corpus
+cannot reach the compiler unvalidated -- see `scripts/cmake/vulkan-capability/CMakeLists.txt`
+and `xboxrecomp/cmake/XbrVulkan.cmake` for the bound decision itself.
 """
 from pathlib import Path
 import argparse
@@ -40,8 +49,10 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 
 root = Path(__file__).resolve().parents[1]
 logs = root / 'logs'
@@ -92,7 +103,47 @@ parser.add_argument('--allow-regeneration', action='store_true',
                     help='permit recovery regeneration (off by default: it can erase '
                          'current ABI instrumentation; see scripts/check-generation-'
                          'provenance.py, which records and checks that baseline)')
+parser.add_argument('--check-corpus-only', action='store_true',
+                    help='answer the corpus question and exit: ask the toolkit for its Vulkan '
+                         'capability with a fresh probe, then run the corpus provenance guard '
+                         'when the capability is available (or when --expect-capability-on '
+                         'says the caller already decided it is) and print the summary. No '
+                         'preflight, no configure, no build, no write to the corpus. This is '
+                         'the entry the game CMakeLists.txt calls from inside its own '
+                         'configure, so a real corpus cannot be compiled unvalidated.')
+parser.add_argument('--expect-capability-on', action='store_true',
+                    help='with --check-corpus-only: run the corpus guard UNCONDITIONALLY. The '
+                         'caller has already decided the capability is on, so a disagreement '
+                         'between this guard\'s probe and that decision can never SKIP the '
+                         'validation.')
+parser.add_argument('--toolkit', type=Path,
+                    help='with --check-corpus-only: resolve the corpus against THIS toolkit '
+                         'instead of the one this repository binds to (the build tree\'s cached '
+                         'XBOXRECOMP_DIR, then $XBOXRECOMP_DIR, then the sibling checkout). It '
+                         'must still be a real toolkit checkout, and it is the tree the '
+                         'capability probe is asked about and the tree the guard names. The '
+                         'game CMakeLists.txt passes its own ${XBOXRECOMP_DIR}, so a configure '
+                         'of a SECOND build tree is validated against the toolkit THAT '
+                         'configure links rather than the one another build tree cached.')
+parser.add_argument('--probe-parent', type=Path,
+                    help='with --check-corpus-only: create the capability probe\'s throwaway '
+                         'build tree under this directory instead of '
+                         '<game>/build/vulkan-capability. The game CMakeLists.txt passes '
+                         '${CMAKE_BINARY_DIR}, so a configure of another build tree never '
+                         'writes a probe tree into the build tree of the one beside it. The '
+                         'directory is created when absent and this run\'s leaf under it is '
+                         'removed afterwards, exactly as the default is.')
 args = parser.parse_args()
+
+if args.expect_capability_on and not args.check_corpus_only:
+    raise SystemExit('--expect-capability-on is only meaningful with --check-corpus-only: '
+                     'the build flow decides the capability itself, from its own probe.')
+
+if (args.toolkit is not None or args.probe_parent is not None) and not args.check_corpus_only:
+    raise SystemExit('--toolkit and --probe-parent are only meaningful with '
+                     '--check-corpus-only: the build flow resolves the toolkit it is bound to '
+                     '(the build tree\'s cache, then $XBOXRECOMP_DIR) and places its capability '
+                     'probe under the build tree it configures.')
 
 # The build set is DERIVED from CMake/CTest, not hand-maintained.  Measured: the
 # previous literal list named 11 targets while CTest discovers 12 tests --
@@ -194,6 +245,36 @@ def resolve_bound_toolkit():
             f'The toolkit this build binds to cannot be resolved: {error}\n'
             'The corpus guard, the shader generator and the CMake link must name ONE '
             'toolkit, so nothing is built or regenerated until they do.')
+
+
+def named_toolkit(path):
+    """The toolkit `--toolkit` names, as `(path, label)`; not a checkout is a refusal.
+
+    The configure that calls `--check-corpus-only` already decided which toolkit it links
+    (`-DXBOXRECOMP_DIR=...`, recorded in ITS cache), so resolving the toolkit through the MAIN
+    build tree's cache instead -- the default -- can refuse a legitimate configure with a
+    conflict that names a tree the caller never mentioned, and always answers about a tree
+    the caller may not link.  This makes the caller's own toolkit authoritative.
+
+    Authoritative is not unvalidated: the named tree must be a real toolkit checkout, by the
+    SAME rule the guard and the generator apply to the toolkit they resolve themselves
+    (`scripts/gen-shaders.py`'s `resolve_toolkit`): `CMakeLists.txt` and all three translator
+    sources, because a toolkit that is merely named proves nothing about the code the corpus
+    was built from.
+    """
+    root = Path(os.path.realpath(str(path)))
+    missing = [p for p in [root / 'CMakeLists.txt', *prov.source_paths(root).values()]
+               if not p.is_file()]
+    if missing:
+        raise SystemExit(
+            f'--toolkit {root} is not a toolkit checkout: it is missing '
+            + ', '.join(str(p) for p in missing)
+            + f'. It must carry CMakeLists.txt and the three translator sources ('
+            + ', '.join(prov.SOURCE_NAMES)
+            + '), the same rule the guard and the generator apply to the toolkit they resolve '
+              'for themselves; point --toolkit at the toolkit this configure links. Nothing is '
+              'built or regenerated until it does.')
+    return root, 'the --toolkit argument'
 
 
 def check_corpus_provenance(toolkit=None, toolkit_from=None):
@@ -363,12 +444,268 @@ def check_corpus_provenance(toolkit=None, toolkit_from=None):
             f'{want["distinct"]} distinct, tool {tool} sha256 {want["tool.sha256"]}')
 
 
+# ── the Vulkan capability, asked freshly on every run ────────────────────────
+# `scripts/cmake/vulkan-capability/CMakeLists.txt` is a trivial `project(... NONE)` tree
+# that `include()`s the toolkit's `cmake/XbrVulkan.cmake` and reports the verdict that file
+# decides.  Configuring it in a FRESH directory is what makes the answer THIS run's: the
+# game build tree's own cached `XBR_VULKAN_FOUND` is a statement about an earlier
+# configure, and a stale truth value must never decide which corpus a build compiles.
+#
+# A project rather than `cmake -P`: `find_package(Vulkan)` is not script-mode-safe
+# (CMake's FindVulkan calls `add_library`), while a `project(... NONE)` tree needs no
+# compiler and needs nothing built.
+PROBE_PROJECT = root / 'scripts' / 'cmake' / 'vulkan-capability'
+# The probe's throwaway build trees, under the game's OWN build output (never the source
+# tree, never the corpus).  This parent is SHARED with any other run in this tree, so
+# nothing here ever deletes or reuses it: every run gets a fresh leaf under it (`mkdtemp`),
+# and removes only that leaf.  A leaf of its own is also what keeps the answer fresh -- a
+# new leaf cannot inherit a cache an earlier configure left behind.
+PROBE_PARENT = gen_shaders.GAME_BUILD_DIR / 'vulkan-capability'
+PROBE_LOG = logs / 'vulkan-capability-probe.log'
+# The controls the game's own configure reads out of ITS cache.  Forwarding them is what
+# keeps this guard and that configure from answering different questions: a build whose
+# cache disables `find_package(Vulkan)`, or names the two tools, is asked about exactly
+# those.  `XBR_VULKAN_FOUND` is deliberately NOT forwarded -- recomputing it is the whole
+# point -- and `XBR_DXC`/`XBR_SPIRV_VAL` are forwarded as values, not trusted as verdicts:
+# the toolkit checks the paths EXIST, so a cached toolchain that has since been deleted
+# decides "unavailable" here just as it does in the configure.
+CAPABILITY_FORWARDED = ('XBR_DXC', 'XBR_SPIRV_VAL', 'XBR_VK_SW_ICD',
+                        'CMAKE_DISABLE_FIND_PACKAGE_Vulkan',
+                        # The rest of the loader discovery, for the same reason: a configure
+                        # that will see a cached `Vulkan_LIBRARY`, `Vulkan_INCLUDE_DIR`,
+                        # `Vulkan_DIR` or `CMAKE_PREFIX_PATH` must be asked about THOSE, or the
+                        # probe's fresh verdict can disagree with the configure that runs right
+                        # after it -- and the contract asks for ONE consistent decision.
+                        # Forwarded as cache VALUES, never trusted as verdicts: `find_package`
+                        # re-searches when a cached path is not a real file, so a loader that
+                        # has since been deleted decides "unavailable" in the probe exactly as
+                        # it does in the configure.
+                        'Vulkan_LIBRARY', 'Vulkan_INCLUDE_DIR', 'Vulkan_DIR',
+                        'CMAKE_PREFIX_PATH')
+# One CMakeCache entry of ANY type (`:PATH=`, `:FILEPATH=`, `:BOOL=`, and the
+# `:UNINITIALIZED` an early configure failure leaves).  The name is anchored and must be
+# followed by the type-or-`=` separator, so a longer variable cannot match.
+_CACHE_ENTRY = r'^\s*{name}\s*(?::\s*[A-Za-z_][A-Za-z0-9_]*\s*)?=\s*(.*?)\s*$'
+_TRUTHY = ('1', 'ON', 'TRUE', 'Y', 'YES')
+
+
+def cache_value(path, name):
+    """One CMakeCache entry's value, or None.
+
+    A missing cache, a missing entry and an empty value all mean "this build tree has not
+    spoken" -- the caller decides what that implies.
+    """
+    path = Path(path)
+    if not path.is_file():
+        return None
+    match = re.search(_CACHE_ENTRY.format(name=re.escape(name)),
+                      path.read_text(encoding='utf-8', errors='replace'), re.MULTILINE)
+    if not match:
+        return None
+    value = match.group(1).strip()
+    return value or None
+
+
+def probe_message(output):
+    """The failure message the probe project printed, collapsed to one line, or ''.
+
+    CMake wraps a `message(FATAL_ERROR ...)` across lines and pads it with indentation, so
+    the message is taken from the first `CMake Error`/`CMake Warning` line to the blank line
+    that ends it, with its whitespace collapsed.
+    """
+    lines = (output or '').splitlines()
+    for index, line in enumerate(lines):
+        if not (line.startswith('CMake Error') or line.startswith('CMake Warning')):
+            continue
+        collected = []
+        for following in lines[index + 1:]:
+            stripped = following.strip()
+            if not stripped or stripped.startswith('--') or stripped.startswith('CMake '):
+                break
+            collected.append(stripped)
+        if collected:
+            return ' '.join(' '.join(collected).split())
+    return ''
+
+
+def probe_capability(toolkit, probe_parent=None):
+    """The Vulkan capability, from a FRESH configure of the shipped probe project.
+
+    Returns `{asked, available, reason, loader, dxc, spirv_val}`.  `available` is the
+    decision the guard acts on, and it is True when `asked` is False -- a toolkit that
+    cannot answer the question at all (no probe project, no `cmake/XbrVulkan.cmake` to
+    include, a probe that failed to configure) leaves the retail corpus REQUIRED, exactly
+    as it was before the capability was decidable.  That is the conservative direction: it
+    can only ever demand the VALIDATED retail corpus, and it can never accept an empty or
+    unvalidated one.  It is also unreachable in a tree that can configure, because the
+    toolkit's own `CMakeLists.txt` includes that same cmake file unconditionally.
+
+    `probe_parent` is the directory the throwaway probe tree is created under (default
+    `PROBE_PARENT`); `--probe-parent` passes the build tree of the configure that called
+    this check, so a scratch configure does not write into another build tree.  A parent that
+    cannot be created is the same undetermined case as a probe that cannot be configured --
+    `available` stays True and the corpus stays required -- because failing OPEN there would
+    let an unanswered question compile an unvalidated corpus.
+    """
+    output = ''
+    probe_dir = None
+    created_parent = False
+    parent = Path(probe_parent) if probe_parent is not None else PROBE_PARENT
+    reason = ''
+    game_cache = gen_shaders.GAME_BUILD_DIR / gen_shaders.CACHE_NAME
+    try:
+        if not (PROBE_PROJECT / 'CMakeLists.txt').is_file():
+            reason = f'the capability probe project {PROBE_PROJECT} is missing'
+        else:
+            try:
+                if not parent.exists():
+                    # Created only when absent, and removed again at the end only when this run
+                    # was the one that made it (below): a parent another run already had is
+                    # never deleted, and no run ever deletes the parent as a whole.
+                    parent.mkdir(parents=True)
+                    created_parent = True
+                # A FRESH leaf of this run's own: `mkdtemp` cannot collide with a concurrent
+                # run's, so neither can remove or overwrite the other's probe tree while it is
+                # being configured.
+                probe_dir = Path(tempfile.mkdtemp(dir=parent, prefix='run-'))
+            except OSError as error:
+                # Fail CLOSED, and without a traceback: an unwritable parent (a file in the
+                # way, a read-only tree, no such drive) is a question this host could not ask,
+                # not a reason to compile an unvalidated corpus.
+                reason = (f'the capability probe tree could not be created under {parent} '
+                          f'({error.__class__.__name__}: {error}), so the toolkit was never '
+                          f'asked')
+            if probe_dir is not None:
+                argv = ['cmake', '-S', str(PROBE_PROJECT), '-B', str(probe_dir),
+                        f'-DXBOXRECOMP_DIR={toolkit}']
+                for name in CAPABILITY_FORWARDED:
+                    value = cache_value(game_cache, name)
+                    if value is not None:
+                        argv.append(f'-D{name}={value}')
+                try:
+                    answered = subprocess.run(argv, cwd=root, env=env, capture_output=True,
+                                              text=True)
+                except OSError as error:
+                    answered = None
+                    reason = (f'cmake could not be started ({error}), so the toolkit was never '
+                              f'asked')
+                if answered is None:
+                    return {'asked': False, 'available': True, 'reason': reason, 'loader': '',
+                            'dxc': '', 'spirv_val': ''}
+                output = (answered.stdout or '') + (answered.stderr or '')
+                cache = probe_dir / gen_shaders.CACHE_NAME
+                verdict = cache_value(cache, 'XBR_VULKAN_FOUND')
+                if answered.returncode != 0:
+                    reason = (probe_message(output)
+                              or f'the capability probe configure exited {answered.returncode}')
+                elif verdict is None:
+                    reason = f'the capability probe recorded no XBR_VULKAN_FOUND in {cache}'
+                else:
+                    return {'asked': True,
+                            'available': verdict.strip().upper() in _TRUTHY,
+                            'reason': cache_value(cache, 'XBR_VULKAN_UNAVAILABLE_REASON') or '',
+                            'loader': cache_value(cache, 'Vulkan_LIBRARY') or '',
+                            'dxc': cache_value(cache, 'XBR_DXC') or '',
+                            'spirv_val': cache_value(cache, 'XBR_SPIRV_VAL') or ''}
+    finally:
+        # Only this run's own leaf.  `ignore_errors` because a probe tree another process
+        # still holds open must not turn a diagnostic cleanup into a failure.
+        if probe_dir is not None:
+            shutil.rmtree(probe_dir, ignore_errors=True)
+        if created_parent:
+            # Remove the parent again only when it is empty (`rmdir` refuses otherwise), so
+            # a concurrent run's leaf keeps it alive.  It is a no-op when the parent was
+            # already there before this run, which is the promise: never delete it out from
+            # under anyone.
+            try:
+                parent.rmdir()
+            except OSError:
+                pass
+        # The probe's own output is kept: a probe that could not answer is the one thing
+        # here that needs a second look, and its output names the toolkit's own status line.
+        # LAST WRITER WINS: two concurrent runs may each write it, and it is diagnostic
+        # evidence with `capability:` on stdout as the authoritative statement.
+        PROBE_LOG.parent.mkdir(parents=True, exist_ok=True)
+        PROBE_LOG.write_text(output, encoding='utf-8', errors='replace')
+    return {'asked': False, 'available': True, 'reason': reason, 'loader': '', 'dxc': '',
+            'spirv_val': ''}
+
+
+def capability_line(capability):
+    """The ONE `capability:` line, so every build log shows the detection state.
+
+    A capability that could not be DETERMINED is named as such rather than folded into
+    either verdict: the corpus stays required, and pretending that is "Vulkan available"
+    would hide the reason.
+    """
+    if not capability['asked']:
+        return (f'capability: undetermined -- {capability["reason"]} '
+                f'(see {PROBE_LOG.relative_to(root)}); the retail corpus stays required and '
+                f'is validated as before')
+    if capability['available']:
+        return (f'capability: Vulkan available (loader {capability["loader"]}; '
+                f'dxc {capability["dxc"]}; spirv-val {capability["spirv_val"]})')
+    return f'capability: Vulkan unavailable ({capability["reason"]})'
+
+
+def corpus_off_line(capability):
+    """The `corpus   :` line of a build that compiles the generated empty corpus."""
+    return (f'Vulkan unavailable ({capability["reason"]}) -- this build compiles the '
+            f'generated empty corpus (nv2a_vsh_program_count = 0); the retail corpus is '
+            f'not compiled')
+
+
+def report_corpus_line(capability, retail_required):
+    """Print the ONE `corpus   :` line, and refuse a corpus this build may not compile.
+
+    THE single place either entry reports and checks the corpus, so the build flow and
+    `--check-corpus-only` cannot drift apart.  `retail_required` is the caller's decision:
+    the fresh capability, or the caller's own `--expect-capability-on`.  When it is True the
+    R1 guard runs here -- BEFORE the configure step, which is the first thing that mutates
+    anything, so a stale corpus never reaches the compiler -- and refuses when the corpus is
+    missing or the inputs that produced it have moved.  When it is False there is no retail
+    corpus to validate in this build: the line names the generated empty corpus that is
+    compiled instead, because an empty table is not a validated retail corpus and "no
+    corpus" must never be read as validated provenance.
+    """
+    if not retail_required:
+        print(f'corpus   : {corpus_off_line(capability)}')
+        return
+    print(f'corpus   : {check_corpus_provenance(BOUND_TOOLKIT, BOUND_TOOLKIT_FROM)}')
+
+
 # ── preflight ────────────────────────────────────────────────────────────────
 # The toolkit is resolved ONCE, before anything is printed or touched: it is what
 # CMake links (via the build tree's cache), what the generator reads, and what the
 # guard compares against, so the `toolkit  :` line below reports the bound tree
-# rather than a third path that could silently disagree with both.
-BOUND_TOOLKIT, BOUND_TOOLKIT_FROM = resolve_bound_toolkit()
+# rather than a third path that could silently disagree with both.  `--toolkit` names
+# that tree explicitly, for the ONE caller that already knows which toolkit it links (the
+# configure that called `--check-corpus-only`): resolving through the MAIN build tree's
+# cache instead would answer about -- and refuse over -- a toolkit that configure never
+# named, and could write a probe tree into a build/ it does not own.
+if args.toolkit is not None:
+    BOUND_TOOLKIT, BOUND_TOOLKIT_FROM = named_toolkit(args.toolkit)
+else:
+    BOUND_TOOLKIT, BOUND_TOOLKIT_FROM = resolve_bound_toolkit()
+
+if args.check_corpus_only:
+    # The entry the game's CMakeLists.txt calls from inside its capability-ON configure, and
+    # the same question a caller can ask by hand.  It answers and exits: no preflight, no
+    # configure of the game, no build, and no write to the corpus.  `--expect-capability-on`
+    # runs the corpus guard UNCONDITIONALLY, because the caller has already decided the
+    # capability is on -- so a disagreement between this probe and that decision can never
+    # SKIP the validation.  `--toolkit` and `--probe-parent` bind the check to the calling
+    # configure's OWN toolkit and build tree, so a second build tree neither inherits a
+    # conflict from `build/`'s cache nor places its probe there.  The toolkit is REPORTED
+    # here for the reason the full flow reports it: a check that validated against one tree
+    # while the caller links another would be internally consistent and describe the wrong
+    # SPIR-V, so which tree was used -- and how it was named -- is part of the answer.
+    print(f'toolkit  : {BOUND_TOOLKIT} ({BOUND_TOOLKIT_FROM})')
+    CHECK_CAPABILITY = probe_capability(BOUND_TOOLKIT, args.probe_parent)
+    print(capability_line(CHECK_CAPABILITY))
+    report_corpus_line(CHECK_CAPABILITY,
+                       CHECK_CAPABILITY['available'] or args.expect_capability_on)
+    raise SystemExit(0)
 
 report = jsrf_build.preflight(args.parallel, toolkit=(BOUND_TOOLKIT, BOUND_TOOLKIT_FROM))
 print(f'python   : {report["python"]} ({report["python_version"]})')
@@ -383,9 +720,13 @@ if not report['ok']:
         print(f'PREFLIGHT FAILED: {problem}')
     raise SystemExit('Preflight failed; nothing was built or regenerated.')
 
-# BEFORE configure: the corpus is what the build compiles, and the configure step
-# is the first thing that mutates anything.  A stale corpus must never get that far.
-print(f'corpus   : {check_corpus_provenance(BOUND_TOOLKIT, BOUND_TOOLKIT_FROM)}')
+# The capability this run acts on, asked of the toolkit ITSELF (see `probe_capability`), so
+# the decision is fresh: no cached verdict of this repository's or the build tree's decides
+# anything here.  What it decides is whether the retail corpus is required at all -- and the
+# `corpus   :` line below is the ONE place that answers it.
+CAPABILITY = probe_capability(BOUND_TOOLKIT)
+print(capability_line(CAPABILITY))
+report_corpus_line(CAPABILITY, CAPABILITY['available'])
 
 if not args.allow_regeneration:
     # Recovery regeneration can erase current ABI instrumentation, so it is off

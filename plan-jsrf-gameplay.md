@@ -106,7 +106,18 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
   cache/environment disagreement), and checks the owned tool tree's own `CMAKE_HOME_DIRECTORY`
   against it. A different worker's regression fails eight weakening mutants of the new gates with a
   comment-only control green, and the real scratch gate shows a whitespace content edit refused
-  before configure and cleared by regeneration. V5/V6 acceptance is unchanged; R2 has not started.
+  before configure and cleared by regeneration. V5/V6 acceptance is unchanged.
+
+- **R2 is done: a build without the Vulkan toolchain compiles an honest empty corpus** (TR §31.25).
+  The toolkit publishes ONE bound capability decision (loader, headers, `dxc` and `spirv-val` must
+  all EXIST; `XBR_VULKAN_FOUND` is a FORCE-refreshed cache BOOL with
+  `XBR_VULKAN_UNAVAILABLE_REASON`), the game's configure branches once on it — capability on: the
+  real corpus is required, named `just shaders` when absent, and validated inside that configure;
+  capability off: a generated empty table (`nv2a_vsh_program_count = 0`) under `<build>/empty-corpus`
+  is compiled even when a retail corpus is present — and the build guard decides the capability
+  fresh, so no cached verdict can pick a mode. A different worker's regression fails four mutants of
+  the branch logic; the no-SDK configure succeeds and links the real game, and the SDK-present
+  no-corpus configure still refuses naming `just shaders`. R3 has not started.
 
 **Owner review accepted V5 and V6** at game `2a350ec` / toolkit `5668278` (2026-10-15).
 R1–R5 below are approved follow-ups, not reasons to reopen those milestones. The review was a code
@@ -172,16 +183,44 @@ real scratch gate: the baseline supported build accepts; a whitespace content ed
 regeneration rebuilds the owned tool from the current sources and re-records the identity; the build
 accepts again. A tool-only replacement and a cache-versus-environment toolkit mismatch both refuse.
 
-### R2: an empty corpus when the Vulkan SDK is absent
+### R2: an empty corpus when the Vulkan SDK is absent — DONE (TR §31.25)
 
-Vulkan is optional. If Vulkan or dxc is unavailable, generate an empty table at configure time
-(`nv2a_vsh_program_count = 0`) and print that status; program batches use CPU interpretation.
-With Vulkan and dxc available, a missing corpus remains a fatal error naming `just shaders`.
+Vulkan is optional. If Vulkan or its shader toolchain is unavailable, an empty table is generated at
+configure time (`nv2a_vsh_program_count = 0`) with a clear status; program batches use the CPU
+interpreter. With the toolchain available, a missing corpus remains a fatal error naming
+`just shaders`.
 
-**Gate:** a scripted configure with `VULKAN_SDK` unset, Vulkan/dxc unavailable and no corpus succeeds
-and reports the empty corpus; a configure with Vulkan available and no corpus still refuses with
-`just shaders`. A different worker writes both configure tests. Quote the deciding branch mutations
-and positive controls. Run these in scratch configurations; do not remove the owner's local corpus.
+- ONE bound capability decides the mode. The toolkit's `cmake/XbrVulkan.cmake` requires the loader,
+  its headers, `dxc` and `spirv-val` to EXIST (a cached path that no longer exists is not a
+  toolchain) and publishes `XBR_VULKAN_FOUND` as a FORCE-refreshed cache BOOL plus
+  `XBR_VULKAN_UNAVAILABLE_REASON` naming the failed check — recomputed on every configure, so the
+  game, the build guard and any parent project read one value and no earlier configure's verdict
+  survives.
+- The game's configure branches once on it. Capability ON: the retail corpus is required (absent =
+  FATAL naming `just shaders`), its provenance is validated INSIDE that configure
+  (`scripts/build-jsrf.py --check-corpus-only --expect-capability-on`), and the corpus-dependent test
+  targets are registered as before. Capability OFF: a generated empty table is written under
+  `<build>/empty-corpus` and compiled instead, even when a retail corpus is present, and the
+  corpus/Vulkan-dependent tests are not registered. One `JSRF_CORPUS_SOURCES` /
+  `JSRF_CORPUS_INCLUDE_DIR` pair feeds every target, so the branches cannot drift.
+- The build guard decides the capability FRESH: it configures the shipped probe project
+  `scripts/cmake/vulkan-capability` under `build/`, forwarding the controls the configure will see,
+  and reads the verdict from that probe's cache; an undetermined probe is fail-safe (the retail
+  corpus stays required). Capability OFF prints the empty-corpus status and needs no corpus, no owned
+  tool and no `VULKAN_SDK`.
+- Offline `just shaders` still needs `dxc`/`spirv-val`. The empty table is an honest absence of
+  compiled programs, never a claim that a retail table passed R1/V5/V6, and nothing is translated or
+  compiled at run time.
+
+**Gate (met).** Capability OFF, with and without a corpus: the supported configure exits 0, reports
+`Vulkan/unavailable: …`, generates a table with `nv2a_vsh_program_count = 0`, compiles only that
+file, and links the real game (`jsrf_recomp.exe`, exit 0); the retail corpus is byte-untouched.
+Capability ON with no corpus: the configure fails naming `just shaders`, and the guard refuses before
+configure without creating a build tree. Capability ON with the corpus: the configure validates it,
+and a corpus whose `tool.sha256` moved makes the configure — and a later rebuild with no reconfigure —
+fail rather than compile. OFF→ON→OFF in one build tree flips both the cached value and the compiled
+corpus source. A different worker's regression (10 scripted cases, 176 tests with the R1 suites)
+detects four mutants of the branch logic, and a direct `cmake -S . -B build` cannot bypass the guard.
 
 ### R3: include culled program batches in miss accounting
 

@@ -2087,19 +2087,39 @@ class BuildGuardTests(unittest.TestCase):
 
     def test_the_guard_runs_before_cmake_configure(self):
         """The ordering, asserted on the shipped text (the observable form lives in
-        `BuildEntryRefusalTests`, which runs the real script against a stub project)."""
+        `BuildEntryRefusalTests`, which runs the real script against a stub project).
+
+        R2 gave this script a SECOND `cmake -S` call -- `probe_capability` configures the
+        shipped capability probe project to decide the mode freshly -- so the anchor is the
+        GAME's configure invocation, spelled in full, and not whichever `cmake -S` comes
+        first in the file.  The intent is unchanged: the corpus guard is CALLED before that
+        configure, so a stale corpus never reaches a step that has already mutated something.
+        """
         text = BUILD_JSRF.read_text(encoding='utf-8')
-        self.assertEqual(text.count("'cmake', '-S'"), 1,
-                         'the configure command line moved; this ordering fixture must '
+        game_configure = "'cmake', '-S', '.', '-B', 'build'"
+        self.assertEqual(text.count(game_configure), 1,
+                         'the game configure command line moved; this ordering fixture must '
                          'follow it')
-        configure = text.index("'cmake', '-S'")
+        configure = text.index(game_configure)
         self.assertEqual(text.count('check_corpus_provenance(BOUND_TOOLKIT'), 1)
         self.assertLess(text.index('check_corpus_provenance(BOUND_TOOLKIT'), configure,
-                        'the corpus guard must be CALLED before `cmake -S`, so a stale '
-                        'corpus never reaches a configure step')
-        self.assertLess(text.index('BOUND_TOOLKIT, BOUND_TOOLKIT_FROM = resolve_bound_toolkit()'),
-                        text.index('corpus   : {check_corpus_provenance('),
-                        'the bound toolkit must be resolved before the guard is called')
+                        'the corpus guard must be CALLED before the game `cmake -S`, so a '
+                        'stale corpus never reaches a configure step')
+        # R2 moved that call into `report_corpus_line`, the ONE place both entries print and
+        # check the corpus through, so the guard's call site is no longer a top-level
+        # statement between the resolve and the configure: the build flow reaches it at the
+        # `report_corpus_line(CAPABILITY, ...)` call, which is asserted below to precede the
+        # game configure -- and the ONE bound toolkit must be resolved before either call
+        # site (the definition itself sits above them so both entries can read it).
+        guard_call = 'report_corpus_line(CAPABILITY'
+        self.assertLess(text.index(guard_call), configure,
+                        'the line that calls the corpus guard must run before the game '
+                        '`cmake -S`')
+        resolve = text.index('BOUND_TOOLKIT, BOUND_TOOLKIT_FROM = resolve_bound_toolkit()')
+        for call in ('report_corpus_line(CHECK_CAPABILITY', guard_call):
+            self.assertLess(resolve, text.index(call),
+                            'the bound toolkit must be resolved before the line that calls '
+                            f'the guard is used ({call})')
 
     def test_the_guard_uses_the_shared_entry_point(self):
         text = BUILD_JSRF.read_text(encoding='utf-8')

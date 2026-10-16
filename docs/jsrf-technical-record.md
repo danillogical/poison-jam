@@ -3118,7 +3118,6 @@ reproducibility: the recorded hash names the binary that ran, and the toolchain'
 two equivalent builds are two identities. (6) The corpus and its provenance stay retail-derived,
 untracked and ignored, as V5 established.
 
-
 **Independent Codex acceptance of R1 repair (`c6eaf6b`).** The original counterexamples were
 re-run against production functions: matching corpus accepted; changed tool hash refused for both
 files; a tool hash missing from both files refused; an actual executable copied privately and made
@@ -3135,3 +3134,113 @@ and Muse security review. All 13 outgoing blob versions were independently audit
 paths, no secret-pattern hits, largest 234548 bytes. Both repositories were clean and synchronized;
 toolkit remains `5668278`. No runtime, validation, fidelity or performance claim is added.
 R1 is accepted for continuation to R2; V5/V6 acceptance is unchanged.
+
+### §31.25 R2: a build without the Vulkan toolchain compiles an honest empty corpus (2026-10-15)
+
+**Status: R2 done; awaiting independent Codex review.** V5/V6 and the R1 repair remain accepted;
+toolkit `b20ddba` carries the one supporting change.
+
+**The defect.** Vulkan is optional in the toolkit, but the game's configure demanded
+`src/recomp/gen/shaders/*.c` unconditionally: measured before R2, a configure with Vulkan effectively
+unavailable and no corpus failed at `src/recomp/gen/shaders is not tracked: … run `just shaders`` —
+a checkout without the SDK could not be configured or built at all, even though the back end is a stub
+in that configuration. The game also re-derived the toolkit's capability by hand
+(`if(XBR_DXC AND XBR_SPIRV_VAL AND Vulkan_LIBRARY)`) because `XBR_VULKAN_FOUND` was a plain variable
+in the toolkit subdirectory's scope, and the toolkit's own check accepted a cached `dxc`/`spirv-val`
+path that no longer existed.
+
+**One bound decision.** `xboxrecomp/cmake/XbrVulkan.cmake` (toolkit `b20ddba`) runs
+`find_package(Vulkan)` unconditionally, requires the loader library, its headers, `dxc` and
+`spirv-val` to EXIST, names the first failing check, and publishes the verdict as the cache BOOL
+`XBR_VULKAN_FOUND`, FORCE-refreshed on every configure, with `XBR_VULKAN_UNAVAILABLE_REASON` (cache
+STRING) naming the failed check. A cache entry is the channel because a subdirectory's plain variable
+never reaches its parent; FORCE is what makes a stale verdict impossible. The game's `CMakeLists.txt`
+reads that one value instead of re-deriving it.
+
+**Two branches, one corpus.** After `add_subdirectory`, the game's configure branches once:
+
+- **capability ON** — the retail corpus is required (absent = FATAL naming `just shaders`) and its
+  provenance is validated INSIDE that configure by the shipped guard
+  (`scripts/build-jsrf.py --check-corpus-only --expect-capability-on --toolkit ${XBOXRECOMP_DIR}
+  --probe-parent ${CMAKE_BINARY_DIR}`), whose output is quoted in a FATAL when it fails. A real corpus
+  therefore cannot reach the compiler unvalidated — not through `just build`, not through
+  `just shaders`, and not through a direct `cmake -S . -B build`; `--expect-capability-on` also means a
+  disagreement between the guard's own probe and the configure cannot skip the check. Every provenance
+  input (the two corpus files, the owned tool in each layout, the three translator sources, an
+  environment override) is a `CMAKE_CONFIGURE_DEPENDS` entry, so a later build without a reconfigure
+  reconfigures and re-validates instead of compiling a corpus that moved.
+- **capability OFF** — a minimal empty table is generated at configure time into
+  `<build>/empty-corpus/nv2a_vsh_programs.{c,h}` (`file(CONFIGURE …)`: an unchanged configure does not
+  even bump its timestamps) and compiled instead. `nv2a_vsh_program_count = 0` with one sentinel entry
+  (a zero-length array is not valid C), no provenance block, the same declarations as the real header,
+  and `<build>/empty-corpus` — not the source corpus dir — on the include path. The retail corpus is
+  neither globbed nor included nor compiled EVEN WHEN PRESENT, and the corpus/Vulkan-dependent test
+  targets are not registered. The status line says so, and that program batches fall back to the
+  executor's CPU interpreter.
+
+**The guard's capability is asked fresh, never read from a cache.** `scripts/build-jsrf.py`
+configures the shipped probe project `scripts/cmake/vulkan-capability` (a `project(… NONE)` that
+includes the toolkit's `XbrVulkan.cmake`) into a fresh `mkdtemp` leaf under `build/vulkan-capability`,
+forwarding `XBOXRECOMP_DIR` and the game cache's `XBR_DXC`, `XBR_SPIRV_VAL`, `XBR_VK_SW_ICD`,
+`CMAKE_DISABLE_FIND_PACKAGE_Vulkan`, `Vulkan_LIBRARY`, `Vulkan_INCLUDE_DIR`, `Vulkan_DIR` and
+`CMAKE_PREFIX_PATH`, and reads the verdict from the probe's own cache (log:
+`logs/vulkan-capability-probe.log`). A probe that cannot answer is fail-safe — `capability:
+undetermined …` and the retail corpus stays required. A probe PROJECT rather than `cmake -P` is
+required because CMake's `FindVulkan` calls `add_library`, which is not scriptable (measured).
+`--check-corpus-only [--expect-capability-on]` answers and exits: no preflight, no configure of the
+game, no build, no write to the corpus.
+
+**Evidence on the final source** (scratch `xbr-mac/r2-scratch`, `game/` junctioned, toolkit copy
+pristine, the ignored lifted tree copied in — disclosed as a prerequisite so an unrelated
+generated-code failure cannot pass as the corpus decision):
+
+| case | observed |
+| --- | --- |
+| OFF, no corpus | configure exit 0; `Vulkan/unavailable: the Vulkan loader and headers were not found …`; `empty-corpus/nv2a_vsh_programs.c` ends `const size_t nv2a_vsh_program_count = 0;`; the exe project compiles exactly that file, 0 `gen\shaders` references; cache `XBR_VULKAN_FOUND:BOOL=FALSE` |
+| OFF, real corpus present | the same, and the corpus copy's sha256 and mtime are unchanged; nothing written under `src/recomp/gen/shaders/` |
+| OFF, full link | `cmake --build build-off --config Release --target jsrf_recomp` → exit 0, `jsrf_recomp.exe` `d2a8b545…` (17.5 MB): the empty table satisfies the real `nv2a_vsh_aot.h` interface and links into the game |
+| ON, corpus + owned tool | configure exit 0; `Vulkan/available: … validated in this configure … compiled (1 file(s) from src/recomp/gen/shaders).`; 0 `empty-corpus` references |
+| ON, corpus whose `tool.sha256` moved | configure FAILS, quoting the guard's `tool.sha256 differs` problems and `just shaders` — the corpus cannot be compiled unvalidated |
+| ON, no corpus | configure exits 1 at the corpus FATAL naming `just shaders`; `--check-corpus-only` exits 1 with `capability: Vulkan available …` and creates no build tree |
+| OFF→ON→OFF, one build tree | cache FALSE→TRUE→FALSE and the compiled corpus source `empty-corpus`→`gen\shaders`→`empty-corpus`, no stale reference left in the current target |
+
+A different worker's regression (`tests/test_optional_vulkan.py`, registered as
+`jsrf_optional_vulkan`) drives the real configure, guard and probe in temp trees and asserts those
+outcomes plus the partial-toolchain case (loader found, `dxc` at a nonexistent path → OFF with the
+reason naming dxc). Its mutants are detected: **M-A** restores the unconditional missing-corpus FATAL
+(three cases red, the no-SDK gate among them), **M-B** turns the capability-ON refusal into warnings
+(the configure succeeds → the SDK-present/no-corpus case red), **M-C** declares one program in the
+empty table, and **M-C2** makes the OFF branch compile the stale corpus as well (both red), with a
+comment-only control green. R1's ordering fixture was re-anchored on the game's own configure (R2 adds
+the probe's second `cmake -S`), and all eight R1 mutants remain detected.
+
+**Gates on the final tree.** `just build` clean (`corpus : schema 2, 128 programs, 126 distinct, tool
+… 375c7fb9…`; 45 targets, 85 tests; `capability: Vulkan available (loader …; dxc …; spirv-val …)`; the
+real cache now records `XBR_VULKAN_FOUND:BOOL=TRUE`); focused suites **176/176 OK**, no skips; the real
+table 126/126 with no `--skip-spirv`; `just check` → `check: all checkers passed`; full
+software-Vulkan CTest **85/85 passed**, 387.6 s, no skips (`jsrf_optional_vulkan` #56, 110.3 s;
+`jsrf_vsh_aot_provenance` #55, 44.2 s). No gameplay run: this step is configure/build tooling, and no
+runtime path, corpus byte or SPIR-V byte changed.
+
+**Reviews.** Security (Muse 1.3 high): no vulnerability — argument-vector execution throughout, no
+interpolation of environment or cache text into command lines, writes confined to the repository's
+own build/log output, every undetermined input fail-closed; its one real finding (two concurrent guard
+runs deleting each other's probe directory — availability only) is fixed by giving each run a unique
+`mkdtemp` leaf and never deleting the shared parent. Code (Opus 5.5): no P0/P1, one real P2 and three
+P3s, all fixed — a moved corpus now forces a reconfigure instead of being compiled, the empty table is
+written only when its content changes, the probe is asked the same loader-hint questions the configure
+answers, `--toolkit`/`--probe-parent` bind the in-configure check to the configure's own toolkit and
+build directory, and an uncreatable probe tree is reported as `undetermined` rather than a traceback.
+
+**Limits.** (1) Capability OFF is an honest absence of compiled programs: no fidelity, performance or
+validation claim, and it does not rehearse V7's N3 requirement (loader insertion witness and counters)
+— program batches run on the CPU interpreter. (2) Capability OFF unregisters the corpus/Vulkan
+dependent CTest cases (`jsrf_vsh_aot`, its two controls, `jsrf_vsh_aot_malformed`,
+`jsrf_gpu_backend_parity_vk`, and the V6 conformance gate): disclosed rather than reported passing.
+(3) `just shaders` still needs `dxc`/`spirv-val` and the SDK hint; it is the offline step that
+compiles the retail corpus, and the empty table is never a claim that a retail table passed R1/V5/V6.
+(4) The guard's own sources are not configure dependencies, so hardening the guard does not by itself
+force a reconfigure, and `CMAKE_CONFIGURE_DEPENDS` entries are paths rather than globs. (5) `build/`
+and `logs/` stay trusted local trees, and the pre-existing trust that whoever can write the toolkit
+executes code at configure time now includes one extra probe configure. (6) The tests need the ignored
+lifted tree; they disclose that prerequisite, and never copy original assets or saves.

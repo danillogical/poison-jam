@@ -70,10 +70,14 @@ regen:
 # nv2a_vsh_hlsl, compile it to SPIR-V with the Vulkan SDK's dxc, validate it
 # with spirv-val, and emit src/recomp/gen/shaders/. Retail-derived and
 # gitignored, like src/recomp/gen itself, so a fresh checkout must run this
-# before CMake can configure. Offline and deterministic; `--check` re-generates
-# into a temporary directory and compares BYTE FOR BYTE instead of writing --
-# no field is exempt, so the recorded tool identity (a decisive field: the
-# binary whose sha256 the corpus records) has to match too.
+# before CMake can configure -- but only where Vulkan and its shader tools are
+# available: without them the configure generates an empty corpus instead
+# (`nv2a_vsh_program_count = 0`) and prints that status, so this recipe (which
+# needs `dxc` and `spirv-val`, and `VULKAN_SDK` for the SDK hint) is what a
+# capability-off build does NOT need. Offline and deterministic; `--check`
+# re-generates into a temporary directory and compares BYTE FOR BYTE instead of
+# writing -- no field is exempt, so the recorded tool identity (a decisive
+# field: the binary whose sha256 the corpus records) has to match too.
 shaders:
     {{python}} -X utf8 scripts/gen-shaders.py
 
