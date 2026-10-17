@@ -367,8 +367,9 @@ and makes no new performance claim. Codex independently passed the actual fault/
 reproduced M1/M2/M3 failures and baseline/restored passes, and verified the final N3 archive's source
 identity and loader witness. The next separate item is batched readback; no other N4 item is accepted.
 
-**N4.2 is repaired and awaiting independent acceptance at toolkit `4832f62` / game `70ecf0f` +
-these records** (TR §31.34): publication outcome explicit at every coherence boundary, one bounded
+**N4.2 at toolkit `4832f62` / game `70ecf0f` + records `fe09e5e` remains rejected pending
+abandoned-batch ordering repair** (independent review, TR §31.35). The caller repair works:
+publication outcome explicit at every coherence boundary, one bounded
 retry, then a coherence stop propagated to the flip, target replacement, texture aliasing and the
 executor's CPU consumers (`Nv2aBackend.stopped`). A different worker's caller gate
 (`jsrf_vk_readback_callers`, 15 properties/297 checks; red on the pre-fix source) drives the actual
@@ -432,6 +433,20 @@ built in the shared checkout against a pre-final backend, contrary to the packet
 were re-run privately against the final source, and only the re-runs are relied on), and a bounded
 split/over-cap property that replaces the old "unreachable" claim. The owner-authorized review-confirmed reset's one repair cycle is consumed by this packet; no
 later N4 item starts before independent acceptance. This changes no milestone or owner stop condition.
+
+**Next: order staging writes after an abandoned batch (TR §31.35).** The independent original
+reproduction now stops safely, and five Vulkan gates plus the executor test pass. However, if an
+earlier batch records a 4-byte copy then fails its pack-set allocation, the next batch can reuse
+staging offset 0 in the same command buffer with no transfer-write dependency between writes.
+Independent valid-dimension command recording shows the 64 MiB abandoned copy overlapping the next
+16 KiB copy before any submit, wait or relevant barrier. Normal control is green; a private
+error-branch barrier control removes the hazard. This is necessary correctness ordering within
+N4.2, not the separate narrower-barrier optimization. A different worker must add the first-batch-
+fails/next-batch-reuses regression and private final-source mutant proof. The existing split gate
+fails the second batch and misses this ordering. Also qualify memory guarantees per published
+target rectangle: a later failure can leave earlier targets published, so stopping is not whole-
+frame atomicity. One review-confirmed repair cycle is renewed, carrying only 6 remaining operation
+slots and all prior spending; no later plan item starts before independent acceptance.
 
 #### R4: measure pipeline-cache pressure (part of N4)
 

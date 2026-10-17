@@ -4305,6 +4305,68 @@ and `clears` do not. The load direction (16→32-bit expansion per target per fl
 are untouched and were not re-measured.
 
 PUSHED_TO: origin / BRANCH: main / COMMIT: 4832f6247fc9d1de56341f6bcb876125a40c8b37 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 891bca2..4832f62, toolkit pushed first, synchronized.
-PUSHED_TO: origin / BRANCH: master / COMMIT: 70ecf0f (the gates) together with this records commit / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward from 78cbb39, game pushed after the toolkit; the exact records-commit hash is recorded in the packet's completion report (outside git).
+
+### 31.35 N4.2 caller repair verified; abandoned-batch staging writes still unordered (2026-10-17)
+
+**Independent review rejects N4.2 pending one ordering repair.** Fetched game `fe09e5e` (gates
+`70ecf0f`) and toolkit `4832f62`, clean and synchronized. The prior caller defect IS repaired:
+the original private reproduction rebuilt against final backend
+`0d6ac8b54f73f160aaba980228a27f912d959dbfba03298337ed09155936c11d` now stops after two injected
+allocation failures with frame 0, `ok=0`, dirty retained and stale 0; next load makes no upload.
+The 496 unpublished bytes are not presented as a new frame. Independent limited-token CTests:
+five Vulkan tests **5/5, 27.56 s**, executor **1/1, 0.03 s**. Inspected final full receipt
+`final-ctest-n42r3.txt`: **91/91, 439.53 s**. Private caller baseline is red 12 properties /
+114 of 297 checks; repaired green 15 properties / 297 checks. Unsafe-flip mutant A2 is red
+4 properties / 29 checks, restored green. Actual N3 archive `20261017-035814-457-keyscript-n42r-e2e-val`
+contains Khronos insertion at log lines 857/1288, implicit OBS hook 877/1298, final errors 0,
+known warnings 10, program misses 0 and incomplete 0. Those passes do not cover the defect below.
+
+**Remaining defect:** `vb_targets_flush` leaves already-recorded copies in its command buffer
+after `!batch_ok`, then continues to a later group whose slices start again at 0. If that next
+group begins with a 4-byte copy, `vb_transfer_cmd`/`vb_cmd` introduce no ordering while already
+recording. The destination write ranges overlap without an intervening memory dependency; the
+final host-read barrier follows both and cannot order the writes relative to one another.
+Recovery after the flush returns is too late. The code review noticed this as "Outside this
+patch"; it is still in N4.2's implementation and blocks acceptance. Vulkan requires a memory
+dependency between write-after-write accesses (official specification, Synchronization and Cache
+Control: https://docs.vulkan.org/spec/latest/chapters/synchronization.html).
+
+**Independent deciding experiment:** private `C:/Users/logic/xbr-mac/n42-codex-ordering` includes
+actual production bodies through the caller fixture, records real `vb_flip` commands through
+controlled Vulkan pointers, and tracks overlapping transfer destinations until a relevant
+memory dependency or completed fence. Shapes are within production limits: 4096x4096 BGRA32
+(64 MiB), 4096x4096 RGB565 (32 MiB), then 64x64 BGRA32 (16 KiB), disjoint fixture guest ranges.
+The first batch fills 96 MiB. Its pack allocation fails once AFTER the first copy was recorded.
+
+- Normal control exit 0: two image copies, zero hazards, three published targets, frame 1.
+- Failure exit 1: same command buffer/destination, earlier range `[0,67108864)`, next
+  `[0,16384)`, one descriptor failure, **zero submits, zero waits**, no dependency between writes.
+  Three targets eventually publish and frame advances, `rb_incomplete=0`; counters miss the race.
+- Private control adds `vb_barrier()` only before the abandoned-batch continuation: same injected
+  failure exit 0, zero hazards, all targets publish. Control backend SHA-256
+  `77ea858c8381b43f14224c9b83f9928a5da30b578767fd9e2a30e40a5813830c`.
+
+This is a deterministic command-order proof, not an observation of physical GPU corruption or a
+validation-layer error. No shared source/executable was changed. The earlier split gate fails
+the SECOND batch after the first succeeds, and does not decide this reversed failure sequence.
+
+**Codex advice and scope:** order partial staging writes before any subsequent overlapping reuse,
+or leave the flush and perform bounded recovery before advancing. Audit host staging and device
+pack-buffer dependencies and slot changes. Use a different worker's behavioral range/mask/order
+gate with success and first-batch-failure controls, baseline red / private mutant red / restored
+green, retaining the existing caller/CPU/exact-byte/ring/fault/parity/AOT gates and final build,
+CTest/check and N3 witness. This is a correctness barrier, not the later narrower-barrier item.
+Correct the broad "last frame" wording: earlier batches can publish before a later failure;
+the stop preserves unpublished targets but does not provide whole-frame atomicity.
+
+**Renewal:** the previous defect is fixed and this newly confirmed dependency gap has a passing
+private repair control, so there is meaningful progress rather than an unchanged-failure loop.
+Owner's review-confirmed reset grants one bounded repair cycle assigned to the next successor's
+first packet, zero additional unassigned cycles, carrying only **6 remaining operation slots**.
+Exactly one rejecting STOP decision closes completed operation `op_0mvc7gaus816d239ce8983763` in
+run `run_0mvc7ejigbd9edeee476a0012`. Before admission lineage is 14 operations / 5 repair cycles;
+after admission 15 / 6, with 5 operation slots left. Preserve prior decisions and owner stop
+conditions. Stop after this repair for Codex acceptance; do not start a later N4 item.
+PUSHED_TO: origin / BRANCH: master / COMMIT: 70ecf0f (the gates) together with fe09e5ee944a9ae4963a7a6f1d8ddfa39bfe3670 (the §31.34 records) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 78cbb39..fe09e5e, game pushed after the toolkit, synchronized at that checkpoint.
 
 

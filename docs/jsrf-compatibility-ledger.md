@@ -38,6 +38,13 @@ host API); list the one that decides fidelity first.
 
 ## Entries
 
+**Latest L62 review (2026-10-17, TR §31.35):** the caller-propagation defect below is fixed, but
+toolkit `4832f62` / game `fe09e5e` is not accepted for N4.2. A partially recorded abandoned batch
+can race the next batch's reuse of the same staging offsets; explicit ordering or bounded recovery
+before reuse is required. A private command recorder confirms the missing dependency and a
+private barrier control closes it. Earlier successful batches can already have published before a
+later failure, so the stop preserves unpublished targets, not an atomic last whole frame.
+
 `Active` says when the path is in effect. Paths are toolkit (`xboxrecomp/`) unless marked game.
 
 **L62 review qualification (2026-10-17, TR §31.33):** N4.2's candidate at toolkit `891bca2`
