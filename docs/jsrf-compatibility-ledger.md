@@ -38,6 +38,29 @@ host API); list the one that decides fidelity first.
 
 ## Entries
 
+**L62 N4.4 (2026-10-17, TR §31.40):** the Vulkan back end no longer makes one `VkDeviceMemory` per
+resource. A resource takes a RANGE out of a pool block (toolkit `ecbaca4`), pooled by
+`(memoryTypeIndex, linear|non-linear)` so an image and a buffer never share a block and
+`bufferImageGranularity` can never apply between neighbours: render targets, self-sample snapshots,
+depth images, textures, the 1x1 white image, the ring's slot streams, the standalone slice buffers
+and the readback staging pair. Dedicated allocations remain, each reason counted --
+`requires`/`prefersDedicatedAllocation`, a range over 64 MiB, a pool at its block or 256 MiB reserve
+budget, a full pool table, and a host-visible type without coherence. A range's offset is
+`max(mr->alignment, 256)`; flush/invalidate clip to the sub-allocation and widen to whole
+`nonCoherentAtomSize` atoms; a range is reused only when nothing that could still read it is
+recording or in flight (releases park in a bounded list and fold back after the drain); at most one
+empty block ≤ 4 MiB per pool is retained; failed allocate/create/bind/map release exactly what they
+took. `nv2a_vk_backend_memory_stats()` publishes the counters and the `[GPUVK]` line reports them.
+Decided by a new gate compiling the production bodies with stubbed Vulkan (9 properties / 265 checks,
+70/70 anchors, ten private mutants red plus an orchestrator overlay) and a real-driver case (byte-exact
+targets/textures/depth/snapshot through image churn), with the retained gates migrated by a different
+worker. Independent code review found and fixed one real accounting defect, a retention policy that
+never fired and gate gaps; the security/native-lifetime review found no High/Medium defect. No
+frame-rate gain or regression is claimed: the game's own 560 s workload makes 10 `vkAllocateMemory`
+calls for 232 ranges, and the N2 windows are dominated by the host's power state (the same baseline
+exe measured 41.37 and 23.13 presents/s within one session). Next separate item: the persisted
+pipeline cache/R4.
+
 **L62 latest acceptance (2026-10-17, TR §31.39):** N4.3 accepted at toolkit `5af1c48` / game
 gate `4e09019`, records `1b0e291`. Normal-path barrier scopes narrow; layout values and both
 broad safety guards stay unchanged. Independent tests and synchronization-validation negative

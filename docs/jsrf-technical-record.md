@@ -4850,5 +4850,213 @@ final N3 witness. No persisted cache/R4, N6 or R5 in the operation. Same run ret
 and 0 unassigned repair cycles before next dispatch; after it 3. No allowance reset. All owner
 stop conditions remain.
 
+### §31.40 N4.4: sub-allocated device memory (2026-10-17)
+
+**What changed.** The Vulkan back end allocated one `VkDeviceMemory` per resource, bound at offset
+0. It now takes a range out of a pool block. Toolkit `ecbaca49b506854977474660cc0f11fdaaaf21da`
+(backend `9e650e633374679aae4186bb9b8b825db58b5ca1ad2255807b74f315c0bea96f`, header
+`b6e615e14c68218925b15168a554a944a2cb8938b1a2cf2a67d2d7cbdfa48d5f`); game
+`3f4e82f` (new gate `tests/test_vk_suballoc_gate.c` `6eab1487979a349681ec17bcda15a2d05646c26d0a9a9d943244a27ff713406c`,
+probe `scripts/vk-suballoc-gate.py` `08b3640589acf94ce97342146635c27cda52b106f610cabc408ec8bc82f0437c`,
+the `--suballoc` mode of `tests/test_gpu_backend_parity_vk.c` `c485faae1cfaf279…`,
+`CMakeLists.txt` `1954a4f1c07a7a01…`, and the migrated gates `tests/test_vk_ring_fault_gate.c`
+`dc6797046d95ce89011eb59d1dd2111f9048111f95d29c805078802e68f9da02` and
+`tests/test_vk_sync_scope_gate.c` `074e15bc258e3452…`).
+
+**What is pooled, and what is not.** Pooled: render targets, self-sample snapshots, depth images
+and textures -- the churn path, one image per guest-byte hash change -- plus the 1x1 white image, all
+optimal-tiling, so in a non-linear pool; and in the linear pools the ring's slot streams, the
+standalone slice buffers `vb_stream` allocates for a slice over half the slot stream, and the readback
+staging pair (`rb_buf` host-visible cached, `pack_buf` device-local). Honest qualification: the ring's
+three 16 MiB streams ARE ranges of the linear host-visible pool but each gets its own exact-size block
+(`VB_POOL_SHARE_MAX` is 8 MiB), so pooling changes nothing for them -- the reduction measured on the
+game's own workload comes from the image classes and the small slice buffers. Dedicated allocations
+survive, each reason counted separately: `requiresDedicatedAllocation` and
+`prefersDedicatedAllocation` (from optional `vkGet{Image,Buffer}MemoryRequirements2` queries whose
+absence means "not available", the request then being pooled), a range over `VB_POOL_MAX_BLOCK`
+(64 MiB), a pool at its six-block or 256 MiB reserve budget, a full pool table, and a host-visible
+memory type without `HOST_COHERENT` (a pooled host-visible block is mapped as a whole, and one range
+of it could not be flushed without touching its neighbours).
+
+**Contracts.** A range's offset is `max(mr->alignment, VB_POOL_ALIGN)` (256); the type is chosen from
+`memoryTypeBits` and the property flags exactly as before (want, then fallback); a pool's identity is
+`(memoryTypeIndex, linear|non-linear)`, so an image and a buffer never share a block and
+`bufferImageGranularity` can never apply between neighbours; every `VkDeviceSize` addition and round-up
+goes through overflow-checked helpers. Ownership is explicit -- `VbAlloc` names the memory object, the
+binding offset, the range size and the pool/block indices (-1 for a dedicated allocation bound at 0) --
+and a host-visible block is mapped once at creation, so a buffer's pointer is that mapping plus the
+range's offset. `vb_mem_flush`/`vb_mem_invalidate` clip to the sub-allocation and widen to whole
+`nonCoherentAtomSize` atoms on a non-coherent type, so a neighbouring live range's bytes are never
+touched; the publication now invalidates the staging range itself instead of `VK_WHOLE_SIZE`, and a
+flush that cannot happen stops the submission rather than letting the device read stale bytes. A range
+is handed out again only when nothing that could still read it is recording or in flight; a release
+that is not goes to a bounded park list, keeping its block's `used` so the block cannot be retired, and
+is folded back after the drain -- an over-budget release is abandoned and never reused. At most one
+empty block per pool no larger than `VB_POOL_KEEP_EMPTY` (4 MiB) is retained; the rest are retired, and
+only ever when `used == 0`. Allocate/create/bind/map failures release exactly what they took and leave
+the caller's allocation unusable. New public `nv2a_vk_backend_memory_stats()` (blocks, ranges, reuse
+hits, dedicated per reason, allocation calls, releases, parked/peak/lost, reserved/used/free/largest/
+padding/metadata/peak bytes, failure and rollback counts, write-once `first_shared_block` /
+`first_reuse_*` latches) is reported in the periodic `[GPUVK]` line, so a run's stderr keeps the
+deciding event. The write-once failure latch, the submission ring, N4.2's one bounded retry and
+per-target publication, N4.3's scoped barriers and layout values, the CPU fallback, the bit-exact guest
+bytes and the executor's `stopped` contract are unchanged. Baseline honesty: one allocation per resource
+was correct, only less efficient; the ring stream already sub-allocated slices inside a per-slot buffer
+and still does -- N4.4 sub-allocates the device allocations themselves.
+
+**Deciding gate.** `jsrf_vk_suballoc_gate` compiles the production bodies verbatim with every Vulkan
+entry point stubbed (no GPU, no ICD, no skip path): **9 properties / 265 checks, 70 of 70 probe anchors
+present**, exit 0/1. It decides that eleven images cost ONE `vkAllocateMemory` (cross-checked against
+its own stub count), that ranges share a block at distinct alignment-satisfying non-overlapping offsets,
+that incompatible `memoryTypeBits` never share one, that an image and a buffer with identical
+requirements never share one, that a released range is reused and coalesced (the mixed-alignment case:
+a 64 KiB request at alignment 65536 against a released 128 KiB range must leave its head `[4096, 65536)`
+free with `padding == 0`), that oversized and dedicated-requiring/preferring requests get a dedicated
+allocation carrying their `VkMemoryDedicatedAllocateInfo`, that a range a recording or a pending
+submission may still read is never handed out (its mapped bytes must be byte-identical afterwards) and
+that an over-budget parked release is never reused, that retirement and the retention policy behave,
+that injected allocate/create/bind/map failures roll back, and that the non-coherent flush/invalidate
+window is exact. A fixture-owned ledger of the extents the fixture itself took oracles `used_bytes`,
+`free_bytes + padding_bytes == Σ live blocks − used`, and `largest_free`. `scripts/vk-suballoc-gate.py`
+re-reads the same bytes at build time and fails the build (exit 2) when an anchor moves.
+`jsrf_vk_suballoc_device` is the real-driver case (software ICD, skips 77 like its siblings): it ran
+(0.95 s in the full suite), compares every guest byte of several targets of both formats, a texture,
+depth and the self-sampling snapshot against its own plan and the CPU executor while the texture path
+re-creates images, and decides the reduction from counters observed across the driver's entry points
+throughout the churn (`8 re-creations: ranges=8 reuse_hits=7 released=8 alloc_calls=0`); the allocator's
+own assertions are never the oracle for bytes.
+
+**Independent verification and mutations.** The gates were written by a worker distinct from the
+production change, and the retained gates whose meaning pooling changes were migrated by that same
+distinct worker with their decisions re-derived, not deleted: the readback fault and ordering gates'
+staging pair is now two ranges of one block and one allocation, the ring gate decides
+free-list-versus-parked from reuse and the park counters, the caller gate reaches `VbAlloc`, and the
+scope gate replaces the old "offset 0" expectation with alignment, kind, block and overlap compliance at
+every bind. Private weakening mutants, built outside both repositories with the mutant's own directory
+first on the include path, are red on the gate -- m1 alignment ignored, m2 `memoryTypeBits` ignored,
+m3 linear/non-linear pools merged, m4 eager reuse, m5 rollback broken, m6 dedicated requirement
+ignored, m8 padding double-count, m9 alignment floor removed, m10 retirement removed -- and m7 pooling
+disabled is the optimization-positive control: every byte check stays green while its allocation,
+sharing and reuse claims fail. The orchestrator's own independent overlay (the free-range containment
+check removed) fails property 2 on the free-list extent check with the restored source green.
+
+**Reviews and the repairs they caused.** The code review found one real defect -- `vb_block_take_free`
+counted a free range's aligned head as padding while also leaving it on the free list, so
+`padding_bytes` was permanently overstated and `free_bytes` understated -- plus an empty-block retention
+policy that could never fire (`VB_POOL_KEEP_EMPTY` below the smallest block the sizing rule could make),
+a sizing rule that over-reserved large ranges (a 9 MiB slice took a 64 MiB block where the pre-change
+code allocated 9 MiB), tautological accounting checks, and gate gaps (no cross-bind overlap check, a
+block scan that stopped at `nblocks`, no alignment below the floor, park and retirement untested). All
+were repaired in one bounded round and the gate grew the cases that decide them. The
+security/native-memory-lifetime review found **no High or Medium defect**: it traced the park-before-
+reuse gate over every release path, the retirement rule, the ownership moves through the garbage list,
+the parked ranges pinning their blocks, the mapping arithmetic, the rollback paths and the optional
+loader lookups as sound; its two Low hardening notes (an unchecked overflow in the atom widen, an index
+bounds check in the release) were applied. Neither review found a routing or model change;
+`.omp/config.yml` was untouched. Reports: gates/migrations from the test worker, reviews from two
+further distinct agents; the production worker owned only the backend.
+
+**Build, CTest and checks on the frozen source.** Guarded build `python -X utf8 scripts/build-jsrf.py`:
+success, executable `d657ca5b1ecc4bdcce53d9737f0a80e774eec9bb7d22dfa04beed878ef51d82a`, and
+`build/Release/build-source.json` records exactly the two backend hashes above plus the unchanged
+retail corpus (128 programs, 126 distinct; nothing regenerated). Full CTest through
+`python C:/Users/logic/xbr-mac/ctest-limited.py --output-on-failure`: **96 of 96 passed in 617.18 s**
+(receipt `C:/Users/logic/xbr-mac/n44-ctest-final.txt`), including the two new cases (`jsrf_vk_suballoc_gate`
+0.01 s, `jsrf_vk_suballoc_device` 0.95 s -- it RAN, it did not skip), the migrated ring/readback/scope
+gates, the retained real-device cases, the AOT set and the eight V6 conformance cases; no `Skipped` and
+no `Not Run` line appears, and `xbox_guest_meter` passed on its first run (the documented flake rerun was
+not needed). `just check` on the final tree: passed (exit 0, receipt
+`C:/Users/logic/xbr-mac/n44-check-final.txt`), including the real retail corpus
+`entries=126 recompiled_and_matched=126 ascending=yes duplicates=0 xbe_distinct=126 problems=0` and its
+SPIR-V validation; no unchanged translator output was regenerated.
+
+**N2 (matched 60 s Garage windows, `config/key-scripts/garage-bench.json`, RTX 4070 Laptop, one game at a
+time, same runner/profile/settings/instrumentation).** The windows are reported with the host's own
+power state, because it turned out to dominate them: the same *baseline* executable measured 41.37 and
+23.13 presents/s in two windows of this session, the second taken while the only CPU consumer was the
+game itself (sampled per process: `jsrf_recomp` 13.7-14.4 % of 20 cores, host total ~15 %). Interleaved
+controls on a PRIVATE PRESERVED BASELINE (the accepted exe `11ce8b03` and its own `build-source.json`,
+copied out of the archived before-bench run; the shared `build/Release` executable was never replaced)
+give the matched comparison:
+
+| window | exe | presents/s | p50 | p90 | p99 | stalls | aliased | host CPU (perf%) |
+|---|---|---|---|---|---|---|---|---|
+| before-bench-1 | `11ce8b03` | 42.82 | 23.62 | 24.82 | 27.55 | 0 | 0/2569 | n/a |
+| before-bench-3 | `11ce8b03` | 42.87 | 23.59 | 24.81 | 28.01 | 0 | 0/2572 | n/a |
+| before-bench-4 | `11ce8b03` | 43.48 | 22.40 | 24.27 | 26.53 | 0 | 0/2609 | n/a |
+| ctrl-baseline-1 | `11ce8b03` | 41.37 | 24.01 | 26.19 | 30.10 | 0 | 0/2479 | 114-123 |
+| ctrl-baseline-2 | `11ce8b03` | 23.13 | 43.65 | 47.79 | 51.73 | 0 | 0/1387 | 101-102 |
+| after-bench-1 | `d657ca5b` | 47.67 | 20.29 | 22.40 | 25.89 | 0 | 0/2860 | n/a |
+| after-bench-2 | `d657ca5b` | 28.90 | 34.23 | 42.29 | 50.73 | 0 | 0/1734 | n/a (host busy: ~13 cores in Chrome) |
+| after-bench-3 | `d657ca5b` | 37.27 | 22.39 | 41.93 | 47.74 | 0 | 0/2236 | n/a (host busy: Chrome) |
+| after-bench-4 | `d657ca5b` | 26.70 | 38.01 | 43.13 | 48.23 | 0 | 0/1601 | n/a |
+| after-bench-5 | `d657ca5b` | 23.75 | 41.90 | 46.31 | 50.34 | 1 | 0/1425 | 100-101 |
+| after-bench-8 | `d657ca5b` | 24.65 | 40.32 | 46.30 | 54.03 | 0 | 0/1479 | 100-101 |
+
+Two further runs produced no window and are excluded, preserved not smoothed: `n44-before-bench-2`
+(baseline exe, exit `3221225477`, `ran_s 59.1`, `keyscript_incomplete`, 0-5 steps then skipped) and
+`n44-after-bench-6`/`n44-after-bench-7` (final exe, exit `3221225477`, `ran_s 56.9`/`54.6`, same
+signature). That startup access violation is the PRE-EXISTING one N4.3 disclosed and left causally
+unresolved -- it occurs on the baseline executable and on the pre-change builds archived earlier the same
+day, so this packet neither fixes it nor attributes it, and its three occurrences today (one before any
+edit, two on the final source) are recorded rather than omitted. **No gain and no regression is
+claimed:** the machine's power state swings the same executable by 79 % (41.37 -> 23.13), the matched
+comparison inside one state is 23.13 (baseline) against 23.75 and 24.65 (final source), and the change's
+own activity on this workload is far too small to matter -- **232 ranges, 10 `vkAllocateMemory` calls, 4
+pools, 0 dedicated allocations, 0 reuse hits, 2 releases, 0 parked, 0 retired, 80 MiB reserved / 75.4 MiB
+used / 4.6 MiB free / 0 padding / 23 392 B metadata, 0 allocation, bind or map failures** over the whole
+560 s run (pre-change that was 232 allocations). The allocation reduction is real and is decided by the
+gate and the real-device case, not by presents/s. Readback/synchronisation metrics for the same windows:
+`submits=57 271`, `max_inflight=3`, `reuse_waits=614`, `drain_waits=56 657`, `splits=36 923`,
+`rb_batches=19 733`, `rb_packs=39 465`, `rb_incomplete=0`.
+
+**N3 bounded stock e2e on the final source** (`20261017-131536-178-keyscript-n44-n3-e2e-val`): stock
+`config/key-scripts/e2e.json`, 620 s bound, Vulkan back end, exploratory profile, exe `d657ca5b…`, device
+RTX 4070, isolated disposable save root (`--save-root` inside the run archive). `VK_INSTANCE_LAYERS` and
+`VK_LOADER_DEBUG` were **exported into the game's environment by putting them on the invoking command
+itself** (`VK_INSTANCE_LAYERS=… VK_LOADER_DEBUG=layer python … scripts/key-script-run.py …`, which is what
+the runner passes to the child) and also passed to the runner as overrides; the run's `result.json`
+records the overrides `['RECOMP_GPU_BACKEND=vulkan', 'VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation', 'VK_LOADER_DEBUG=layer']`. The loader's
+own insertion lines, quoted from that run's `jsrf_run.log` (158 loader lines):
+
+    [Vulkan Loader] INFO | LAYER:   Insert instance layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+    [Vulkan Loader] INFO | LAYER:   Inserted device layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+
+A second, identical run (`20261017-134310-654-keyscript-n44-n3-e2e-val2`) was taken with the packet's
+literal `export VK_INSTANCE_LAYERS=… VK_LOADER_DEBUG=layer` in the invoking shell plus the same runner
+overrides, and the same outcome and counters (`keyscript_complete`, `exit 1`, `ran_s 620.5`,
+`validation_errors=0`, `validation_warnings=10`, `vsh_misses=0`, `rb_incomplete=0`, 17 220 flips, 49 740
+submissions, 10 `vkAllocateMemory` calls for 232 ranges). That second run's log carries NO loader trace
+lines (0 lines containing `Vulkan Loader`) although `VK_LOADER_DEBUG=layer` was exported and passed as an
+override, while its validation layer was demonstrably inserted and active (the 10 warnings were counted
+through that layer's own debug messenger). The loader trace is therefore quoted from the first run, and
+the two runs' environment forms are stated as they were rather than merged.
+
+Disclosed, not set by this packet: the same log lists an inserted `VK_LAYER_OBS_HOOK` instance and device
+layer (`C:\ProgramData\obs-studio-hook\graphics-hook64.dll`) and the driver's own `VK_LAYER_NV_present`
+and `VK_LAYER_NV_optimus` instance layers. Outcome `keyscript_complete`; 0 ICALL lines, 0 ABI failures,
+0 fatal, 0 `still_rejecting`; `validation_errors=0` and `validation_warnings=10` (all the known
+`vkCreateGraphicsPipelines(): … Vertex attribute at location 1/7/8 not consumed by vertex shader`);
+`vsh_misses=0`, `vsh_identity_fail=0`, `vsh_declines=0`, `rc_fallback=0`, `tex_undecodable=0`,
+`rb_incomplete=0`, `rb_copies=0` (so this run does not exercise the 4-byte straight-copy publication
+path; the pack case's own 32-bit targets do); 19 733 flips, 2 278 992 draws, 714 719 735 triangles,
+39 465 published readbacks (`rb_batches=19 733`, all 16-bit: `rb_packs=39 465`), 57 271 submissions with
+`max_inflight=3`, `dropped_tris=8`, `skipped=0`, and the same memory counters as the bench run (10
+`vkAllocateMemory` calls for 232 ranges). Termination was bounded and deliberate --
+`killed_at_deadline_or_failure: true`, `exit_code 1`, `ran_s 620.6` -- not a normal game exit, and this is
+a loader-witnessed normal-path run, not a fidelity proof. Ordinary validation is not synchronization
+validation: the N4.3 paths fixture with its negative control remains the evidence for that, and this run
+claims neither.
+
+**Limits.** Every injected failure in the gates is a stubbed driver return value, never real pool
+exhaustion or device loss; the gate's non-coherent and dedicated paths are driven by controlled stub
+memory types and `VkMemoryDedicatedRequirements`, not by a device that really reports them. The
+reuse/coalescing properties are decided on the fixture's own workload and by the real-device case's
+churn, not by the game's own run -- the game's Garage workload reuses NO range (0 reuse hits), because
+its live targets and textures stay cached; the reduction it shows is sharing live ranges in one block.
+The pre-existing guest-memory publish bounds concern recorded by N4.2's security review is untouched and
+NOT fixed here, and the excluded startup access violation above remains causally unresolved. The persisted
+pipeline cache/R4, N6 and R5 remain open, and nothing later than N4.4 was started.
+
 
 

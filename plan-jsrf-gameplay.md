@@ -323,6 +323,34 @@ Readbacks take 202–211 s of a 560 s run, and V1 submits and fence-waits simply
 - sub-allocated memory;
 - a persisted pipeline cache.
 
+**N4.4 sub-allocated memory is implemented and validated** (2026-10-17, TR §31.40; toolkit
+`ecbaca4`, game gate `3f4e82f`). The back end no longer makes one `VkDeviceMemory` per resource:
+a resource takes a RANGE out of a pool block, pooled by `(memoryTypeIndex, linear|non-linear)` so an
+image and a buffer never share a block and `bufferImageGranularity` can never apply between
+neighbours. Pooled classes: render targets, self-sample snapshots, depth images, textures (the churn
+path), the 1x1 white image, the ring's slot streams, the standalone slice buffers and the readback
+staging pair. Dedicated allocations remain with a counted reason each (`requires`/`prefers`
+dedicated, a range over 64 MiB, a pool at its block or reserve budget, a full pool table, a
+host-visible type without coherence) -- and note that the three 16 MiB ring streams land in their own
+exact-size blocks, so the reduction comes from the image classes and the small slice buffers, not
+from them. A range is reused only when nothing that could still read it is recording or in flight
+(releases park in a bounded list and fold back after the drain); at most one empty block ≤ 4 MiB per
+pool is retained; allocate/create/bind/map failures release exactly what they took;
+flush/invalidate clip to the sub-allocation and widen to whole `nonCoherentAtomSize` atoms. Decided
+by `jsrf_vk_suballoc_gate` (9 properties / 265 checks / 70 anchors, no skip, ten private mutants red
+plus an orchestrator overlay) and the real-driver `jsrf_vk_suballoc_device` (byte-exact targets,
+textures, depth and snapshot through image churn), with the retained ring/readback/caller/scope gates
+migrated by a worker distinct from the production change. Independent code review found one real
+defect (a double-counted free-range head made `padding_bytes` dishonest) plus a retention policy
+that never fired and gate gaps -- all repaired; the security/native-lifetime review found no
+High/Medium defect. Full CTest **96/96** and `just check` green on the frozen source; N2 shows no
+gain or regression (the change makes 10 `vkAllocateMemory` calls for 232 ranges on the game's own
+560 s workload, and the windows are dominated by the host's power state -- the same baseline exe
+measured 41.37 and 23.13 presents/s within one session); the N3 bounded stock e2e ran with
+`validation_errors=0` and the loader's own insertion line quoted. **The next separate operation is
+the persisted pipeline cache/R4, then N6 and R5 in the approved order.** Nothing later than N4.4 was
+started.
+
 **N4.3 independently accepted at toolkit `5af1c48` / game gate `4e09019`, records `1b0e291`**
 (2026-10-17, TR §§31.38–31.39). Every normal-path barrier in the Vulkan back end now carries the stage and access scopes its
 producer and consumers actually need (`vb_dep`/`vb_image_dep`; `vb_image_barrier` is gone and all seven
