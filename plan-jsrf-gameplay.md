@@ -367,8 +367,9 @@ and makes no new performance claim. Codex independently passed the actual fault/
 reproduced M1/M2/M3 failures and baseline/restored passes, and verified the final N3 archive's source
 identity and loader witness. The next separate item is batched readback; no other N4 item is accepted.
 
-**N4.2 is implemented at toolkit `891bca2` (game-side gates and records in the same operation),
-pending independent Codex review** (TR §31.32). The flip's readback now stages every dirty target
+**N4.2 at toolkit `891bca2` / game `505f798` is rejected pending a coherence repair**
+(independent Codex review, 2026-10-17; TR §31.33). The implementation and normal-path
+measurements below are retained as candidate evidence, not acceptance. The flip's readback stages every dirty target
 through ONE bounded pair of buffers — a host-visible slice buffer and a device-local pack buffer,
 grown on demand up to a 96 MiB cap with 4-byte-aligned tight rows — and packs a 16-bit target with
 the ahead-of-time compute kernel `cs_pack` (new tracked `src/video/shaders/nv2a_vk_pack.hlsl`,
@@ -402,6 +403,20 @@ narrower barriers and layouts, sub-allocated memory, the persisted pipeline cach
 
 Measure each with N2. Parity tests must stay green. Each code subitem gets a different worker's
 gate and deciding mutation evidence.
+
+**Next: bounded N4.2 repair, before narrower barriers.** Independent execution of the actual
+`vb_flip` after an injected pack descriptor-allocation failure advances the frame with 496 guest
+bytes stale, then `vb_target_load` reloads those old bytes over the unpublished target. The normal
+control publishes both targets exactly; both existing readback CTests still pass. Retaining dirty
+does not protect a flip, eviction/replacement or guest-memory consumer. Propagate publication
+failure through all those callers; complete bounded recovery at the boundary or stop explicitly
+before stale reload, release, consumption or successful frame acknowledgement. Cover staging
+allocation failures too. A different worker must write caller-level gates and final-source private
+mutation proofs; the original success mutants were built in the shared checkout, contrary to the
+packet, and predate the final backend. Preserve the restored clean trees and correct the receipts.
+The owner-authorized review-confirmed reset grants one repair cycle for this bounded packet,
+carrying the 7 remaining operation slots and all prior spending (TR §31.33); no later item starts
+before independent acceptance. This changes no milestone or owner stop condition.
 
 #### R4: measure pipeline-cache pressure (part of N4)
 

@@ -40,6 +40,13 @@ host API); list the one that decides fidelity first.
 
 `Active` says when the path is in effect. Paths are toolkit (`xboxrecomp/`) unless marked game.
 
+**L62 review qualification (2026-10-17, TR §31.33):** N4.2's candidate at toolkit `891bca2`
+is not accepted. After a pack allocation failure, retaining dirty does not preserve its callers'
+coherence contract: a flip advances and makes the unpublished target stale, the next load reads
+old guest bytes, and replacement/alias consumers also assume the flush succeeded. A bounded
+caller-level failure/recovery repair is next; the normal-path measurements and tests below do
+not establish correctness on that path. N4.1's acceptance is unchanged.
+
 ### CPU and translation
 
 | ID | Path | Class | Where | Active | Note / upgrade when |

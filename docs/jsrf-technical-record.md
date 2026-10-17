@@ -4058,4 +4058,57 @@ work, the halved PCIe readback traffic and the bounded staging, not by a frame-r
 
 PUSHED_TO: origin / BRANCH: main / COMMIT: 891bca220666749fc94fc18c139d30dc97d77e6d / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward f41c0d2..891bca2, toolkit pushed first, synchronized.
 
+### 31.33 N4.2 independent review: failed publication crosses its callers' coherence boundary (2026-10-17)
+
+**Candidate rejected:** game `505f798` / toolkit `891bca2`, fetched clean and synchronized with
+origin. The normal-path work and measurements in §31.32 remain candidate evidence. They do not
+close the failure-path defect below. N4.1's acceptance remains intact.
+
+`vb_targets_flush` skips a batch when its pack descriptor allocation fails, preserving dirty and
+leaving `g.ok` true. Its caller `vb_flip` nevertheless submits/drains, marks every used target
+stale and increments the frame. The next target load expands OLD guest bytes into the GPU image
+whose newer bytes were never published. Source inspection also shows target replacement/eviction
+flushes then releases unconditionally, and the overlapping texture path proceeds to read guest
+memory after the unsuccessful flush. A dirty bit alone is not a coherent retry contract.
+
+Codex independently compiled the production bodies through the existing injected-driver fixture,
+with a private caller-level main invoking actual `vb_flip` and `vb_target_load` (outside both
+repositories). Backend SHA-256 `d26a8ff9355eb5957d6c1959f14929374c35dce3b9b9bb829eb88a9788a0e772`.
+Success control: exit 0, frame 1, `ok=1`, two readbacks, zero wrong guest bytes, target clean and
+stale as expected. Injected `VK_ERROR_OUT_OF_POOL_MEMORY`: exit 1, frame 1, `ok=1`, zero
+readbacks, **496 wrong guest bytes**, target dirty AND stale. Next load: `rt_loads=1`, dirty 1,
+stale 0: old guest bytes are uploaded while the newer target remains unpublished. This proves
+the CPU-side state/publication defect with a stubbed driver outcome, not a physical GPU OOM.
+Private source/build and control/failure logs are under `C:/Users/logic/xbr-mac/n42-codex-boundary`.
+The existing real readback and injected fault CTests independently pass **2/2 in 2.93 s** via
+the limited-token helper; their manual-flush retry coverage misses the caller sequence.
+
+**Evidence corrections.** The four original success-path mutation logs show red results, but
+their `n42mut/run-mutant.sh` copies mutants into the shared toolkit and builds shared game/build,
+contrary to the packet's private-scratch rule. The script pins backend `a39b1df4`, before final
+`d26a8ff9`. Current trees are restored and clean; no Codex mutation touched production files.
+Require private final-source baseline/red/restored proof in the repair. Also, a single target's
+64 MiB maximum does not make a 96 MiB multi-target split unreachable: up to 16 dirty targets
+contribute. That path remains unproven, rather than established unreachable.
+
+**Codex advice:** make publication success explicit and propagate it through flip, target
+replacement/eviction, aliases and CPU consumers. Recover within a bounded coherence boundary or
+stop/propagate failure before stale reload, release, guest consumption or normal frame success.
+Audit staging allocation failures and partial-command/staging lifetime as well as descriptor
+failure. Do not accept preserving dirty alone or CPU fallback against stale guest bytes. A
+different worker writes deciding caller-level fault/recovery tests and private final-source
+mutants, keeping real exact-byte, ring and fault gates green. Guarded build, final CTest/check,
+N2 as applicable and fresh N3 e2e with actual loader insertion witness remain required. Stop after
+this repair for Codex acceptance; narrower barriers and every later item remain pending.
+
+**Review-confirmed allowance renewal:** the installed skill's owner-authorized reset rule applies
+after the independent reproduction and Codex advice above. Operation `op_0mvbxgq02bf74241d39516bf9`
+in run `run_0mvbtl9id73ee084b8486253d` receives one rejecting STOP decision, closing that exhausted
+repair allowance without inventing a human blocker. A linked successor carries only the **7
+remaining operation slots** and receives **one renewed repair cycle assigned to its first packet**,
+consumed on admission (zero additional unassigned cycles). Lineage spending before that packet is
+13 operations / 4 repair cycles; after admission it is 14 / 5 with 6 operation slots remaining.
+No old decision is rewritten, no unchanged failure is retried in a loop, and rotation itself
+grants no budget. All owner stop conditions and Windows toolkit-first push rules remain.
+
 
