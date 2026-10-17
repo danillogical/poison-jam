@@ -5058,5 +5058,8 @@ The pre-existing guest-memory publish bounds concern recorded by N4.2's security
 NOT fixed here, and the excluded startup access violation above remains causally unresolved. The persisted
 pipeline cache/R4, N6 and R5 remain open, and nothing later than N4.4 was started.
 
+PUSHED_TO: origin / BRANCH: main / COMMIT: ecbaca49b506854977474660cc0f11fdaaaf21da / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 5af1c48..ecbaca4, toolkit pushed first, clean and synchronized (origin/main == ecbaca4); upstream untouched (push URL DISABLED).
+PUSHED_TO: origin / BRANCH: master / COMMIT: 3f4e82f (N4.4 gates), 3a3ac7a (N4.4 records) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 9fd8e05..3a3ac7a, clean and synchronized (origin/master == 3a3ac7a). Every outgoing blob version in each repository's own object store was audited for secrets, forbidden paths and blobs over 100 MB: toolkit 2 blobs / game 23 objects, 0 secret hits, no `game/` or retail-derived path, largest blob 397 393 bytes.
+
 
 
