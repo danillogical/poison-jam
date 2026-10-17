@@ -4725,9 +4725,50 @@ single rerun (receipt `receipts/flake-rerun-xbox_guest_meter.txt`, exit 0, 0.34 
 `entries=126 recompiled_and_matched=126 ascending=yes duplicates=0 xbe_distinct=126 problems=0` and its
 SPIR-V validation, and the stop-chain checker. No unchanged translator output was regenerated.
 
-**N2 and the bounded N3 e2e.** The matched quiet N2 windows (three before, three after, same device and
-script) and the bounded stock N3 e2e with the Khronos layer are recorded in the follow-up records commit
-for this packet, with their archives, hashes and loader witnesses.
+**N2 (three quiet 60 s Garage windows per side, `config/key-scripts/garage-bench.json`, RTX 4070, the
+same runner, device and instrumentation, one game at a time, no pooling and no historical control).**
+Before, on the accepted exe `46c4ffe9…` (which already contains N4.2): 43.93 / 44.00 / 44.33 →
+**median 44.00 presents/s** (range 0.40; p50 22.21, p90 24.18, p99 26.87 ms; 0 stalls and 0 aliased polls
+in all three). After, on `11ce8b03…`: 42.87 / 43.95 / 45.30 → **median 43.95 presents/s** (range 2.43;
+p50 22.24, p90 24.20, p99 26.24 ms; 0 stalls and 0 aliased polls in all three). **No performance claim in
+either direction**: the medians differ by 0.1 %, the percentile medians by about 0.1–0.6 %, and the after
+range spans the before range on both sides — the frame's cost is dominated by the readback drain this
+item does not touch, so the removed dependency-graph work is not visible in presents/s. One further after
+window (`n43-after-bench-1`, 2026-10-17 08:54) crashed at t = 59.4 s with exit `3221225477` during the
+pre-bench intro, before the window, so it produced no bench data and is excluded from the three. It is
+the plan's DOCUMENTED pre-existing startup crash, not an N4.3 effect: the identical signature
+(`3221225477`, `ran_s 59.4`, `keyscript_incomplete`, same phase, same `[GPU]` summary shape, and a healthy
+backend line with `validation_errors=0 vsh_misses=0 rb_incomplete=0`) is archived twice on the PRE-change
+build (`logs/runs/20261016-175740-883-keyscript-n4-post-vk-1` at 59.4 s and
+`20261016-180805-012-keyscript-n4-post-vk-3` at 57.7 s) and in older 2026-10-11/12 archives. The crash is
+recorded, not smoothed over. Receipts: the six `bench.json` files of those windows.
+
+**N3 bounded e2e on the final source** (`20261017-092457-314-keyscript-n43-n3-e2e-val`): stock
+`config/key-scripts/e2e.json`, 620 s bound, Vulkan back end, exploratory profile, exe `11ce8b03…`
+(identical to the built and committed bytes), device RTX 4070, isolated disposable save root. The run
+started from a CLEAN tree: its archived `project.patch`, `project-status.txt`, `toolkit.patch` and
+`toolkit-status.txt` are all empty and `project_archived` is true, so the archive pins the exact
+repository state. `VK_INSTANCE_LAYERS` and `VK_LOADER_DEBUG` were set AND exported in the invoking shell
+and also passed to the runner; the run's `result.json` records the overrides
+`['RECOMP_GPU_BACKEND=vulkan', 'VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation', 'VK_LOADER_DEBUG=layer']`.
+The loader's own insertion lines, quoted from that run's `jsrf_run.log` (158 loader lines):
+
+    [Vulkan Loader] INFO | LAYER:   Insert instance layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+    [Vulkan Loader] INFO | LAYER:   Inserted device layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+
+Disclosed, not set by this packet: the same log lists an inserted `VK_LAYER_OBS_HOOK` instance and device
+layer (`C:\ProgramData\obs-studio-hook\graphics-hook64.dll`) — a third-party implicit layer present on
+this host. Outcome `keyscript_complete`; 0 ICALL lines, 0 ABI failures, 0 fatal, 0 `still_rejecting`;
+`validation_errors=0` and `validation_warnings=10` (all the known
+`vkCreateGraphicsPipelines(): … Vertex attribute at location 1/7/8 not consumed by vertex shader`);
+`vsh_misses=0`, `vsh_identity_fail=0`, `vsh_declines=0`, `rc_fallback=0`, `tex_undecodable=0`,
+`rt_copies=0`, `rb_copies=0`, `rb_incomplete=0`; 24 954 flips, 25 159 presents, 2 822 622 draws,
+910 777 691 triangles, 49 907 published readbacks (`rb_batches=24 954`, all 16-bit: `rb_packs=49 907`, so
+this run does NOT exercise the 4-byte straight-copy publication path — the sync-scope gate's C4/C5 pairs
+and the sync-paths gate's own counters, plus the retained pack case's 32-bit targets, do), 72 937
+submissions with `max_inflight=3` and 47 320 mid-frame splits. Termination was bounded and deliberate —
+`killed_at_deadline_or_failure: true`, `exit_code 1`, `ran_s 620.6` — not a normal game exit, and this is
+a loader-witnessed normal-path run, not a fidelity proof.
 
 **Limits.** The injected failures of the retained gates remain stubbed driver return values, never real
 pool exhaustion or device loss. The scope gate's staging bytes are supplied by its fixture, so it decides
