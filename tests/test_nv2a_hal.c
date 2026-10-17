@@ -794,11 +794,13 @@ static int run_ordered_constant_contract(void)
 /* ── Executor CPU-consumer gate: a back end that reports stopped ───────────
  *
  * A back end may stop publishing: it could not write a frame's render targets
- * into guest memory, so guest memory still holds the LAST frame it did publish
- * (`Nv2aBackend.stopped`, kernel/nv2a_backend.h). While that is true no CPU path
+ * into guest memory, so guest memory still holds THE LAST BYTES IT PUBLISHED FOR
+ * EACH TARGET RECTANGLE (`Nv2aBackend.stopped`, kernel/nv2a_backend.h). Earlier
+ * batches of the same flush may already have published before a later one failed,
+ * so this is per target, not whole-frame atomicity. While that is true no CPU path
  * in the executor may consume guest framebuffer memory -- a clear or a batch
- * rasterised on the CPU would overwrite published pixels with a frame nothing
- * published, and presenting guest memory would show that wrong frame.
+ * rasterised on the CPU would overwrite published pixels with bytes nothing
+ * published, and presenting guest memory would show that wrong picture.
  *
  * This contract drives the REAL executor over the commit seam (owner walk ->
  * registered consumer -> nv2a_pb_exec) with a back end whose `stopped` is a

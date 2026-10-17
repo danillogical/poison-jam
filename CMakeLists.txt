@@ -695,6 +695,102 @@ if(BUILD_TESTING)
                        "compiles the toolkit's Vulkan back end, which this build does not "
                        "(${XBR_VULKAN_UNAVAILABLE_REASON})")
     endif()
+    # ── N4.2's readback publication, as its ORDERING sees it ─────────────────────────────────
+    # The fault gate above decides that a batch whose pack descriptor set could not be allocated
+    # submits nothing and publishes nothing, and that its targets stay dirty. It cannot decide the
+    # third thing that failure path has to get right: what the group had ALREADY recorded. Those
+    # copies stay in the open recording and are submitted with the next submission the back end
+    # makes -- which is the NEXT group's -- and the next group's slice offsets start at 0 again,
+    # because a group's slices are laid out from its own first target. So its offset-0 write lands
+    # on the same g.rb_buf bytes the abandoned recording's LAST write wrote, and that last write is
+    # one of two classes: a 4-byte target's own image copy, or a 16-bit target's pack-output buffer
+    # copy (g.pack_buf -> g.rb_buf). Either way it is a write-after-write pair inside one command
+    # buffer, which Vulkan requires a memory dependency to order, and nothing else provides one --
+    # the batch's own barrier is into VK_PIPELINE_STAGE_HOST_BIT with VK_ACCESS_HOST_READ_BIT, and
+    # it is recorded after BOTH writes anyway. The pack kernel's own write into g.pack_buf is NOT
+    # the vulnerable class: the pack path records its broad vb_barrier() between its dispatch and
+    # the buffer copy that reads it, so pack-buffer-versus-pack-buffer reuse is ordered by
+    # construction, and the case quotes that barrier as its control.
+    #
+    # The same abandonment leaves a second, harder-to-see dependency on the DEVICE pack buffer: the
+    # abandoned recording's buffer copy READ g.pack_buf (the packed slice it moved to the staging
+    # buffer), and the next group's first target -- when it is 16-bit -- records a pack dispatch
+    # that WRITES those same pack buffer bytes, because a group's slice offsets start at 0 again.
+    # That is a write-after-read pair on g.pack_buf, and what it needs from a barrier is an
+    # EXECUTION dependency: stages only, no access mask. A log of writes alone cannot see it at all,
+    # so this case records reads too and decides that arrow separately.
+    #
+    # This case decides exactly that, from the recorded command stream: it drives three three- or
+    # four-target scenarios -- one whose abandoned recording ends in a 4-byte image copy, one in a
+    # 16-bit target's pack-output buffer copy, and one whose abandoned recording's buffer copy read
+    # the pack buffer that the next group rewrites -- through the flush, the recover boundary and
+    # the real flip, makes one pack-set allocation fail (at a chosen call, or every one of them),
+    # records every read, write, barrier, submit and fence wait with a sequence number, and reports
+    # for every pair of overlapping accesses to the same buffer whether a barrier strictly between
+    # them -- or a submission whose fence wait completed, across recordings -- orders the later one
+    # after the earlier. The deciding check is that the reuse really happened AND that nothing is
+    # left unordered, for the write-after-write and the write-after-read arrows alike. Cross-
+    # recording ordering is deliberately stricter than Vulkan (it requires a completed fence wait),
+    # so the gate decides this implementation and fails safe rather than accepting every valid
+    # alternative.
+    #
+    # Built exactly like the fault gate: NO copy of the algorithm. Its translation unit #includes
+    # the toolkit's src/video/nv2a_vk_backend.c with XBR_VK_BACKEND defined, so the bodies under
+    # test are the production ones, and the toolkit is NOT linked (the five external symbols it
+    # references are stubbed in the test, and every Vulkan entry point the driven paths reach is a
+    # static function pointer the test points at its own recording stubs; the injected allocation
+    # failure is a stub return value, not real GPU OOM). scripts/vk-readback-ordering-gate.py
+    # re-reads the same bytes at BUILD time: a definition, struct field or global the fixture binds
+    # to that is gone fails the BUILD (exit 2). Like the callers' probe it also runs against the
+    # PRE-FIX source, so the repair's own seam is probed as markers the test prints rather than
+    # anchors it requires.
+    #
+    # No SKIP_RETURN_CODE and no skip path: the seam is inside the translation unit, so the case
+    # always runs and exits 0 or 1.
+    if(XBR_VULKAN_FOUND)
+        find_package(Vulkan QUIET)
+        if(NOT Vulkan_INCLUDE_DIRS)
+            message(FATAL_ERROR
+                "Vulkan is available (XBR_VULKAN_FOUND) but find_package(Vulkan) found no "
+                "include directory here; the readback ordering-gate test compiles "
+                "src/video/nv2a_vk_backend.c, which needs <vulkan/vulkan.h>.")
+        endif()
+        set(VK_RB_ORDER_DIR "${CMAKE_CURRENT_BINARY_DIR}/vk-readback-ordering-gate")
+        set(VK_RB_ORDER_SOURCE "${XBOXRECOMP_DIR}/src/video/nv2a_vk_backend.c")
+        set(VK_RB_ORDER_PROBE "${CMAKE_CURRENT_SOURCE_DIR}/scripts/vk-readback-ordering-gate.py")
+        set(VK_RB_ORDER_HEADER "${VK_RB_ORDER_DIR}/vk_readback_ordering_gate_seam.h")
+        # A non-zero exit here fails the build, which is the point: a seam that moved must break
+        # the build rather than quietly turn the case into something else.
+        add_custom_command(
+            OUTPUT "${VK_RB_ORDER_HEADER}" "${VK_RB_ORDER_DIR}/vk_readback_ordering_gate_seam.txt"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${VK_RB_ORDER_DIR}"
+            COMMAND "${_jsrf_python}" -X utf8 "${VK_RB_ORDER_PROBE}"
+                    --source "${VK_RB_ORDER_SOURCE}"
+                    --header "${VK_RB_ORDER_HEADER}"
+                    --manifest "${VK_RB_ORDER_DIR}/vk_readback_ordering_gate_seam.txt"
+            DEPENDS "${VK_RB_ORDER_SOURCE}" "${VK_RB_ORDER_PROBE}"
+            COMMENT "vk_readback_ordering_gate: probing nv2a_vk_backend.c for the seam the ordering regression binds to"
+            VERBATIM)
+        add_custom_target(jsrf_vk_readback_ordering_gate_probe DEPENDS "${VK_RB_ORDER_HEADER}")
+        add_executable(jsrf_vk_readback_ordering_gate_test
+                       tests/test_vk_readback_ordering_gate.c)
+        # xbox_video is what generates the SPIR-V headers the back end includes; the probe target
+        # writes the seam header the test includes.
+        add_dependencies(jsrf_vk_readback_ordering_gate_test
+                         jsrf_vk_readback_ordering_gate_probe xbox_video)
+        target_include_directories(jsrf_vk_readback_ordering_gate_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/video
+            ${Vulkan_INCLUDE_DIRS}
+            "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv"
+            "${VK_RB_ORDER_DIR}")
+        target_link_libraries(jsrf_vk_readback_ordering_gate_test PRIVATE ${CMAKE_DL_LIBS})
+        add_test(NAME jsrf_vk_readback_ordering_gate COMMAND jsrf_vk_readback_ordering_gate_test)
+        set_tests_properties(jsrf_vk_readback_ordering_gate PROPERTIES TIMEOUT 300)
+    else()
+        message(STATUS "Vulkan/unavailable: jsrf_vk_readback_ordering_gate is not registered -- "
+                       "it compiles the toolkit's Vulkan back end, which this build does not "
+                       "(${XBR_VULKAN_UNAVAILABLE_REASON})")
+    endif()
     # ── V6: the vertex-program conformance gate (plan-jsrf-gameplay.md, step V6) ─────────────
     # Authored by a worker distinct from V5's authors, and it asks a different question from V5's
     # gate: not "is the generated retail corpus self-consistent" but "does the offline translation
