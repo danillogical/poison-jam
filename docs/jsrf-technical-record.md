@@ -3693,3 +3693,24 @@ The current bridge run has 9 operation slots but **zero remediation cycles** rem
 withholds acceptance and requests owner authorization for one additional repair cycle; neither
 rotation nor a successor run may silently reset limits. No batched-readback packet is authorized.
 
+**Owner policy update (2026-10-16).** The owner requested: "Update the plan orchestrator to allow
+a reset after confirming the review and adding it's own advice." The installed orchestration skill's
+Codex Plan reference now permits an exhausted allowance to be renewed for one bounded in-scope
+repair after independent confirmation and Codex's own written assessment, repair advice, gates
+and stopping condition. The skill validator passed. Prior decisions and cumulative spending remain;
+context rotation alone grants nothing, and hard caps, deadlines and owner stop conditions still apply.
+
+For this finding the confirmation is the five-production-function reproduction and passing private
+early-guard control above. Codex's advice is to guard immediately after reserve before stream access
+in BOTH target and texture uploads, then audit command-begin/transfer helpers so a failed begin or
+wait cannot be followed by slot writes, pool/command reset or invalid recording. Keep initialization
+valid without reviving a failed backend. A different worker must add failure-injection regressions
+for both upload paths and relevant begin/transfer propagation, with successful-path controls and
+mutations removing the decisive guards. Preserve the existing lifetime/parity/V5/V6 gates and
+witness final N3 validation. This is the same N4.1 repair, not the batched-readback step.
+
+One renewed repair cycle is assigned to the linked successor's first repair operation and is consumed
+by its admission. The closed escalated run and its single review decision remain unchanged; the
+successor carries the 9 remaining operation slots, with zero additional unassigned repair cycles.
+No operation-limit reset, duplicate decision or direct bridge-journal edit is authorized.
+
