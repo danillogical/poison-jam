@@ -6875,6 +6875,431 @@ static int run_readback_pack(void)
     return 0;
 }
 
+/* ── The sub-allocated memory gate (--suballoc) ───────────────────────────
+ *
+ * The claim (plan item N4.4): the back end's device memory is sub-allocated out of a few
+ * vkAllocateMemory'd blocks -- one pool per (memory type, linear/non-linear) pair -- instead of
+ * one allocation per resource, while every guest byte it writes stays the byte this file's plan
+ * says. Two claims, then, in one run:
+ *
+ *   1. The bytes. The two frames of the --readback-pack fixture drive this change too: seven
+ *      targets in both formats, the odd rectangle, the padded rows, the texture window that U
+ *      samples out of TFL, and the self-sampling snapshot. Each target's whole RB_REGION is
+ *      compared with this file's own plan, then the identical frames are replayed against the
+ *      CPU executor and the two passes' bytes are compared with each other. A pool that handed
+ *      a resource the wrong range, or an offset that walked it into its neighbour's bytes,
+ *      changes one of those bytes. The depth path runs the file's own absolute cases
+ *      (run_depth_order/run_depth_clear, gate = 1), which decide their bytes with expect32
+ *      against constants rather than against the CPU executor.
+ *   2. The reduction, from the allocator's own counters. The texture is the churn path: its
+ *      image is re-created whenever the guest bytes under it hash differently, and before this
+ *      item each re-creation was a fresh vkAllocateMemory. The loop below rewrites the
+ *      fixture's texture source region and re-runs the sampler draw N_TEXTURE_CHURN times, so
+ *      the same resource is destroyed and re-created that many times; the gate then requires
+ *      those re-creations to have taken ranges out of the pools whose alloc_calls grew by
+ *      strictly fewer than N_TEXTURE_CHURN -- the naive count, stated in the check. The memory
+ *      claims are read from nv2a_vk_backend_memory_stats(), and every field of that struct is
+ *      printed for the workload (the churn loop prints its own six), so a failure carries its
+ *      own numbers.
+ *
+ * The counters decide only the allocation claims: the byte oracle is always the plan, the CPU
+ * executor and this file's constants, never the allocator. A mode of its own because it
+ * installs the Vulkan back end itself, drives its own frames, and reports its own PASS line;
+ * like its siblings it skips (77) only when the back end cannot be installed on a software
+ * device. */
+
+#define N_TEXTURE_CHURN 8u           /* the re-creations the allocation reduction is decided over */
+#define SUB_TEX_BYTES   (16u * 128u) /* that texture: 16 rows of its pitch of 128 bytes */
+
+/* A signed difference, so a gauge that shrank prints as a negative number and never as a
+ * wrapped unsigned one. */
+static long long sub_diff(uint64_t cur, uint64_t base)
+{
+    return cur >= base ? (long long)(cur - base) : -(long long)(base - cur);
+}
+
+/* Every field of nv2a_vk_backend_memory_stats, m1 against m0: the counters that only ever grow
+ * as their difference, the gauges, peaks and byte counts as a signed difference beside the
+ * value they stand at in m1, and the write-once latches as they stand in m1 (the difference of
+ * a value written once is either zero or a wrap, so it is not printed as one). */
+static void sub_mem_print(const char *tag, const Nv2aVkMemoryStats *base,
+                          const Nv2aVkMemoryStats *cur)
+{
+    printf("  [memory %s] cumulative, m1-m0: blocks=%llu blocks_retired=%llu ranges=%llu "
+           "reuse_hits=%llu dedicated=%llu\n", tag,
+           (unsigned long long)(cur->blocks - base->blocks),
+           (unsigned long long)(cur->blocks_retired - base->blocks_retired),
+           (unsigned long long)(cur->ranges - base->ranges),
+           (unsigned long long)(cur->reuse_hits - base->reuse_hits),
+           (unsigned long long)(cur->dedicated - base->dedicated));
+    printf("             dedicated reasons, m1-m0: required=%llu prefer=%llu oversize=%llu "
+           "noroom=%llu nohost=%llu\n",
+           (unsigned long long)(cur->dedicated_required - base->dedicated_required),
+           (unsigned long long)(cur->dedicated_prefer - base->dedicated_prefer),
+           (unsigned long long)(cur->dedicated_oversize - base->dedicated_oversize),
+           (unsigned long long)(cur->dedicated_noroom - base->dedicated_noroom),
+           (unsigned long long)(cur->dedicated_nohost - base->dedicated_nohost));
+    printf("             m1-m0: alloc_calls=%llu released=%llu parked_lost=%llu "
+           "alloc_failures=%llu bind_failures=%llu map_failures=%llu rollbacks=%llu "
+           "fallbacks=%llu\n", (unsigned long long)(cur->alloc_calls - base->alloc_calls),
+           (unsigned long long)(cur->released - base->released),
+           (unsigned long long)(cur->parked_lost - base->parked_lost),
+           (unsigned long long)(cur->alloc_failures - base->alloc_failures),
+           (unsigned long long)(cur->bind_failures - base->bind_failures),
+           (unsigned long long)(cur->map_failures - base->map_failures),
+           (unsigned long long)(cur->rollbacks - base->rollbacks),
+           (unsigned long long)(cur->fallbacks - base->fallbacks));
+    printf("             at m1, signed change from m0 in parentheses: pools=%lld(%llu) "
+           "parked=%lld(%llu) parked_peak=%lld(%llu)\n", sub_diff(cur->pools, base->pools),
+           (unsigned long long)cur->pools, sub_diff(cur->parked, base->parked),
+           (unsigned long long)cur->parked, sub_diff(cur->parked_peak, base->parked_peak),
+           (unsigned long long)cur->parked_peak);
+    printf("             bytes at m1, signed change from m0 in parentheses: reserved_bytes=%lld"
+           "(%llu) used_bytes=%lld(%llu) free_bytes=%lld(%llu) largest_free=%lld(%llu) "
+           "padding_bytes=%lld(%llu)\n", sub_diff(cur->reserved_bytes, base->reserved_bytes),
+           (unsigned long long)cur->reserved_bytes,
+           sub_diff(cur->used_bytes, base->used_bytes), (unsigned long long)cur->used_bytes,
+           sub_diff(cur->free_bytes, base->free_bytes), (unsigned long long)cur->free_bytes,
+           sub_diff(cur->largest_free, base->largest_free), (unsigned long long)cur->largest_free,
+           sub_diff(cur->padding_bytes, base->padding_bytes),
+           (unsigned long long)cur->padding_bytes);
+    printf("             m1: metadata_bytes=%llu dedicated_bytes=%llu peak_used=%llu\n",
+           (unsigned long long)cur->metadata_bytes, (unsigned long long)cur->dedicated_bytes,
+           (unsigned long long)cur->peak_used);
+    printf("             write-once latches at m1: first_shared_block=%llu (kind %llu) "
+           "first_reuse_off=%llu first_reuse_block=%llu\n",
+           (unsigned long long)cur->first_shared_block,
+           (unsigned long long)cur->first_shared_block_kind,
+           (unsigned long long)cur->first_reuse_off, (unsigned long long)cur->first_reuse_block);
+}
+
+/* rb_claim_eq/rb_claim_atleast cover equality and "at least"; a bounded claim (fewer than, at
+ * most) has its own line here, with this mode's own name on the failure. */
+static int sub_claim_bound(const char *what, uint64_t got, uint64_t bound, int strict)
+{
+    int ok = strict ? got < bound : got <= bound;
+
+    printf("      %-52s got %-8llu want %s%-8llu %s\n", what, (unsigned long long)got,
+           strict ? "<" : "<=", (unsigned long long)bound, ok ? "ok" : "FAIL");
+    if (!ok)
+        fprintf(stderr, "FAIL: suballoc gate -- %s: nv2a_vk_backend_memory_stats reports %llu "
+                        "where the gate needs %s %llu\n", what, (unsigned long long)got,
+                strict ? "<" : "<=", (unsigned long long)bound);
+    return ok;
+}
+
+static int run_suballoc(void)
+{
+    Nv2aVkMemoryStats m0, m1, c0, c1;
+    Nv2aVkReadbackStats rb0, rb, prev, d;
+    RbPlan plan[RB_NSURF];
+    RbDirty p2[RB_NPATCH];
+    RbWant w0, w1, w2;
+    uint8_t *snap0[RB_NSURF], *snap1[RB_NSURF];
+    const uint32_t tex_va = k_rb_surf[RB_TFL].va + RB_FL_WIN_OFF;   /* the sampler's texture */
+    uint64_t d_blocks, d_ranges, d_reuse, d_allocs, d_dedicated;
+    uint64_t k_blocks, k_ranges, k_reuse, k_released, k_allocs, k_dedicated;
+    unsigned i, n;
+    int ok = 1;
+
+    if (!getenv("RECOMP_VK_DEVICE")) _putenv_s("RECOMP_VK_DEVICE", "llvmpipe");
+    if (!getenv("RECOMP_GPU_BACKEND")) _putenv_s("RECOMP_GPU_BACKEND", "vulkan");
+    fflush(stdout);
+    if (nv2a_vk_backend_install() != 0) {
+        puts("SKIP: gpu_backend_parity_vk --suballoc -- the Vulkan back end could not be installed "
+             "on a software device (no Vulkan, no matching device, or an elevated process: the "
+             "loader ignores VK_DRIVER_FILES there)");
+        return 77;
+    }
+
+    memset(snap0, 0, sizeof snap0);
+    memset(snap1, 0, sizeof snap1);
+    memset(&m0, 0, sizeof m0);
+    memset(&m1, 0, sizeof m1);
+    nv2a_vk_backend_readback_stats(&rb0);
+    printf("-- sub-allocated memory gate (%u targets, %u of them 5:6:5, %u frames, %u texture "
+           "re-creations) --\n", (unsigned)RB_NSURF, rb_n16(), (unsigned)RB_FRAMES,
+           (unsigned)N_TEXTURE_CHURN);
+    puts("-- gate fixtures --");
+    ok &= rb_fixture(RB_FRAMES);
+
+    w0 = rb_want(k_rb_stage0, (unsigned)(sizeof k_rb_stage0 / sizeof k_rb_stage0[0]));
+    w1 = rb_want(k_rb_stage1, (unsigned)(sizeof k_rb_stage1 / sizeof k_rb_stage1[0]));
+    w2 = rb_want(p2, rb_stage2(p2));
+
+    /* The workload's baseline, read after the install so the install's own allocations (the
+     * ring's slots) are not counted as a change the workload made. */
+    nv2a_vk_backend_memory_stats(&m0);
+    printf("  [memory baseline] blocks=%llu ranges=%llu alloc_calls=%llu dedicated=%llu "
+           "reserved=%llu used=%llu free=%llu\n", (unsigned long long)m0.blocks,
+           (unsigned long long)m0.ranges, (unsigned long long)m0.alloc_calls,
+           (unsigned long long)m0.dedicated, (unsigned long long)m0.reserved_bytes,
+           (unsigned long long)m0.used_bytes, (unsigned long long)m0.free_bytes);
+
+    /* ── pass 1: the Vulkan back end, bytes first ──────────────────────── */
+    puts("-- pass 1: the Vulkan back end --");
+    rb_reset();
+    prev = rb0;
+
+    rb_frame0_draws();
+    rb_frame0_sample();
+
+    puts("-- the mid-frame flush (the sampled window's target) --");
+    rb_plan0(plan);
+    ok &= rb_check("TFL: published by the flush the texture bind forced", RB_TFL, &plan[RB_TFL], 0);
+    ok &= rb_check_unpublished("suballoc");
+    nv2a_vk_backend_readback_stats(&rb);
+    rb_sub(&rb, &prev, &d);
+    rb_print("stage 0", &d);
+    ok &= rb_stage_counts("the mid-frame flush", &w0, &d);
+    prev = rb;
+
+    rb_flip("suballoc gate: frame 0's flip");
+    puts("-- frame 0's flip --");
+    for (i = 0; i < RB_NSURF; i++) {
+        char what[128];
+
+        if (i == RB_U) {
+            /* The texture U samples out of TFL: the file's own convention allows a sampled
+             * UNORM target one step per channel (GATE_TEX_TOL), and U's window is a flat
+             * colour, so the tolerance carries no part of the byte claim. */
+            RbPlan u;
+
+            memset(&u, 0, sizeof u);
+            rb_box(&u, 8, 8, 24, 24, RB_C32_FL);
+            _snprintf(what, sizeof what, "U: the window sampled from TFL, as published");
+            ok &= rb_check(what, RB_U, &u, GATE_TEX_TOL);
+        } else {
+            _snprintf(what, sizeof what, "%s: this frame's drawing, published by the flip",
+                      k_rb_surf[i].name);
+            ok &= rb_check(what, i, &plan[i], 0);
+        }
+    }
+    nv2a_vk_backend_readback_stats(&rb);
+    rb_sub(&rb, &prev, &d);
+    rb_print("stage 1", &d);
+    ok &= rb_stage_counts("frame 0's flip (6 dirty targets, both formats)", &w1, &d);
+    prev = rb;
+    for (i = 0; i < RB_NSURF; i++)
+        snap0[i] = snapshot_va(k_rb_surf[i].va, RB_REGION);
+
+    rb_frame1_draws();
+    puts("-- frame 1's flip (three targets re-loaded and patched) --");
+    rb_plan0(plan);
+    for (i = 0; i < RB_NPATCH; i++)
+        rb_box(&plan[k_rb_patch[i].idx], k_rb_patch[i].x0, k_rb_patch[i].y0, k_rb_patch[i].x1,
+               k_rb_patch[i].y1, k_rb_patch[i].argb);
+    /* U's box comes from the sampling draw of frame 0; no frame-1 draw touches U, so the
+     * snapshot of U taken at frame 0's flip is the check below -- the self-sampling case. */
+    rb_box(&plan[RB_U], 8, 8, 24, 24, RB_C32_FL);
+    for (i = 0; i < RB_NSURF; i++) {
+        char what[128];
+        unsigned j, patched = 0;
+
+        for (j = 0; j < RB_NPATCH; j++)
+            if (k_rb_patch[j].idx == i)
+                patched = 1;
+        if (patched) {
+            _snprintf(what, sizeof what, "%s: the patch over its own published bytes",
+                      k_rb_surf[i].name);
+            ok &= rb_check(what, i, &plan[i], 0);
+        } else {
+            _snprintf(what, sizeof what, "%s: untouched by frame 1, so unchanged",
+                      k_rb_surf[i].name);
+            ok &= rb_check_against(what, i, snap0[i], 0);
+        }
+    }
+    nv2a_vk_backend_readback_stats(&rb);
+    rb_sub(&rb, &prev, &d);
+    rb_print("stage 2", &d);
+    ok &= rb_stage_counts("frame 1's flip (3 patched targets)", &w2, &d);
+    for (i = 0; i < RB_NSURF; i++)
+        snap1[i] = snapshot_va(k_rb_surf[i].va, RB_REGION);
+
+    /* The depth buffer: a pooled image of its own class, with the file's absolute cases as the
+     * oracle (expect32 against this file's constants). */
+    puts("-- the depth path (a pooled depth image) --");
+    ok &= run_depth_order("suballoc", 1);
+    ok &= run_depth_clear("suballoc", 1);
+
+    /* ── the texture churn: the same resource re-created N_TEXTURE_CHURN times ────────────
+     *
+     * The back end re-creates a texture image when the guest bytes under it hash differently.
+     * The loop rewrites the fixture's sampler source region (the 16 rows of pitch 128 that U
+     * samples out of TFL, wholly inside TFL's own RB_REGION), with a pattern that differs every
+     * iteration, and re-runs the fixture's texture draw. TFL itself was published by frame 1's
+     * flip and is not dirty here, so the texture bind does not re-flush the target over the
+     * bytes this loop writes: what the texture is created from is what this loop wrote. The
+     * counters below are this loop's own, so the reduction is decided over the re-creations
+     * alone, not over the fixture's first creation. */
+    puts("-- the texture churn (pooled reuse under re-created resources) --");
+    nv2a_vk_backend_memory_stats(&c0);
+    for (n = 0; n < N_TEXTURE_CHURN; n++) {
+        uint32_t col = 0xFF000000u | ((uint32_t)n * 0x00010101u) | 0x0000FFu;
+        unsigned j;
+
+        for (j = 0; j < SUB_TEX_BYTES; j += 4u)
+            *(uint32_t *)(G(tex_va) + j) = col;         /* a different hash every iteration */
+        rb_frame0_sample();                             /* the same texture address, re-bound */
+        /* Drain the ring between re-creations. A texture image released while a recording is
+         * open is PARKED, not handed out (that is the allocator's lifetime rule, and the unit
+         * gate decides it); the flip's fence wait is what folds the parked range back into its
+         * block, so the next iteration's re-creation is the reuse this loop is here to reach.
+         * The flip publishes the dirty TARGETS, not the texture source region this loop writes,
+         * so the bytes the next image is created from are still the ones written above. */
+        rb_flip("suballoc: the churn iteration's flip (drains the ring, folding the parked "
+                "releases)");
+    }
+    nv2a_vk_backend_memory_stats(&c1);
+    k_blocks = c1.blocks - c0.blocks;
+    k_ranges = c1.ranges - c0.ranges;
+    k_reuse = c1.reuse_hits - c0.reuse_hits;
+    k_released = c1.released - c0.released;
+    k_allocs = c1.alloc_calls - c0.alloc_calls;
+    k_dedicated = c1.dedicated - c0.dedicated;
+    printf("  [churn] %u re-creations: ranges=%llu reuse_hits=%llu released=%llu alloc_calls=%llu "
+           "blocks=%llu dedicated=%llu\n", (unsigned)N_TEXTURE_CHURN,
+           (unsigned long long)k_ranges, (unsigned long long)k_reuse,
+           (unsigned long long)k_released, (unsigned long long)k_allocs,
+           (unsigned long long)k_blocks, (unsigned long long)k_dedicated);
+    {
+        char line[160];
+
+        _snprintf(line, sizeof line, "the %u re-creations (N_TEXTURE_CHURN) each took a pool range: "
+                  "ranges_delta >= N_TEXTURE_CHURN", (unsigned)N_TEXTURE_CHURN,
+                  (unsigned)N_TEXTURE_CHURN);
+        ok &= rb_claim_atleast(line, k_ranges, (uint64_t)N_TEXTURE_CHURN);
+        _snprintf(line, sizeof line, "alloc_calls_delta < N_TEXTURE_CHURN: fewer than %u "
+                  "vkAllocateMemory calls for those %u re-creations (one per resource would be %u)",
+                  (unsigned)N_TEXTURE_CHURN, (unsigned)N_TEXTURE_CHURN, (unsigned)N_TEXTURE_CHURN);
+        ok &= sub_claim_bound(line, k_allocs, (uint64_t)N_TEXTURE_CHURN, 1);
+    }
+
+    /* ── the workload's memory counters ─────────────────────────────────── */
+    nv2a_vk_backend_memory_stats(&m1);
+    d_blocks = m1.blocks - m0.blocks;
+    d_ranges = m1.ranges - m0.ranges;
+    d_reuse = m1.reuse_hits - m0.reuse_hits;
+    d_allocs = m1.alloc_calls - m0.alloc_calls;
+    d_dedicated = m1.dedicated - m0.dedicated;
+    puts("-- the allocator's own counters (nv2a_vk_backend_memory_stats, m1 read against m0) --");
+    sub_mem_print("workload", &m0, &m1);
+    puts("-- the memory claims, from the counters above --");
+    /* The ring's streams, the staging pair and the fixture's first targets are already pooled
+     * by the time m0 is read, so the workload's own window can legitimately need NO new block
+     * at all: what the reduction claim has to decide is that its ranges cost far fewer
+     * allocations than one per resource. */
+    ok &= rb_claim_atleast("ranges_delta >= 1: the workload really took pooled ranges",
+                           d_ranges, 1);
+    ok &= sub_claim_bound("alloc_calls_delta + dedicated_delta <= ranges_delta / 2: the "
+                          "workload's ranges cost at most half as many allocations as resources "
+                          "(one per resource would be ranges_delta)",
+                          d_allocs + d_dedicated, d_ranges / 2u, 0);
+    ok &= rb_claim_atleast("ranges_delta >= 2 * blocks_delta: several resources shared a block",
+                           d_ranges, 2u * d_blocks);
+    /* The latch is a POOL index, so 0 is a perfectly good answer; "unset" is (uint32_t)-1. */
+    ok &= rb_claim_eq("m1.first_shared_block != (uint32_t)-1: at least two live ranges were in "
+                      "one block (the sharing evidence on the real driver)",
+                      m1.first_shared_block != (uint32_t)-1 ? 1u : 0u, 1u);
+    ok &= rb_claim_eq("alloc_calls_delta == blocks_delta + dedicated_delta: the counter is the "
+                      "allocator's own", d_allocs, d_blocks + d_dedicated);
+    ok &= rb_claim_atleast("reuse_hits_delta >= 1: a range was taken from a freed range, not the "
+                           "bump", d_reuse, 1);
+    ok &= rb_claim_eq("m1.parked_lost == 0: no range was parked permanently", m1.parked_lost, 0);
+    ok &= sub_claim_bound("used_bytes <= reserved_bytes: no pool block is over-committed",
+                          m1.used_bytes, m1.reserved_bytes, 0);
+    ok &= rb_claim_eq("free_bytes + used_bytes == reserved_bytes: the byte accounting closes",
+                      m1.free_bytes + m1.used_bytes, m1.reserved_bytes);
+    if (d_dedicated) {
+        uint64_t req = m1.dedicated_required - m0.dedicated_required;
+        uint64_t pref = m1.dedicated_prefer - m0.dedicated_prefer;
+        uint64_t over = m1.dedicated_oversize - m0.dedicated_oversize;
+        uint64_t room = m1.dedicated_noroom - m0.dedicated_noroom;
+        uint64_t host = m1.dedicated_nohost - m0.dedicated_nohost;
+
+        printf("  [dedicated] %llu dedicated allocation(s), reason deltas: required=%llu prefer=%llu "
+               "oversize=%llu noroom=%llu nohost=%llu; bytes=%llu (m1), fallbacks=%llu\n",
+               (unsigned long long)d_dedicated, (unsigned long long)req,
+               (unsigned long long)pref, (unsigned long long)over, (unsigned long long)room,
+               (unsigned long long)host, (unsigned long long)m1.dedicated_bytes,
+               (unsigned long long)(m1.fallbacks - m0.fallbacks));
+        if (!req && !pref && !over && !room && !host)
+            printf("  [dedicated] no reason counter moved: a pool block's allocation failed over "
+                   "once to a dedicated allocation (%llu fallback(s))\n",
+                   (unsigned long long)(m1.fallbacks - m0.fallbacks));
+    } else
+        puts("  [dedicated] dedicated_delta == 0: every resource of this workload fitted a pool "
+             "(not required of the change: a large staging buffer may legitimately go dedicated)");
+    if (g_rb_bad)
+        ok = 0;
+
+    /* ── pass 2: the same frames against the CPU executor ──────────────── */
+    puts("-- pass 2: the same frames against the CPU executor --");
+    nv2a_backend_register(NULL);
+    /* rb_reset() prefills every fixture target again, which is also what clears the churn
+     * loop's writes out of TFL's region: pass 2 starts from the fixture's own state. */
+    rb_reset();
+
+    rb_frame0_draws();
+    rb_frame0_sample();
+    rb_plan0(plan);
+    ok &= rb_check("TFL: the flush (software executor)", RB_TFL, &plan[RB_TFL], 0);
+    /* rb_check_unpublished is pass 1's alone: it checks what the GPU may NOT have published
+     * yet, and the CPU executor has no publication -- it writes guest memory as it draws. */
+    rb_flip("suballoc gate: frame 0's flip (software)");
+    for (i = 0; i < RB_NSURF; i++) {
+        char what[128];
+
+        if (i == RB_U) {
+            RbPlan u;
+
+            memset(&u, 0, sizeof u);
+            rb_box(&u, 8, 8, 24, 24, RB_C32_FL);
+            _snprintf(what, sizeof what, "U (software): the sampled window's colour");
+            ok &= rb_check(what, RB_U, &u, GATE_TEX_TOL);   /* the sampler's step, as above */
+        } else {
+            _snprintf(what, sizeof what, "%s (software): the plan, by the other rasteriser",
+                      k_rb_surf[i].name);
+            ok &= rb_check(what, i, &plan[i], 0);
+        }
+        _snprintf(what, sizeof what, "%s: byte for byte what the Vulkan back end left (incl. the "
+                  "self-sampled U)", k_rb_surf[i].name);
+        ok &= rb_check_against(what, i, snap0[i], 0);
+    }
+    rb_frame1_draws();
+    rb_plan0(plan);
+    for (i = 0; i < RB_NPATCH; i++)
+        rb_box(&plan[k_rb_patch[i].idx], k_rb_patch[i].x0, k_rb_patch[i].y0, k_rb_patch[i].x1,
+               k_rb_patch[i].y1, k_rb_patch[i].argb);
+    rb_box(&plan[RB_U], 8, 8, 24, 24, RB_C32_FL);
+    for (i = 0; i < RB_NSURF; i++) {
+        char what[128];
+
+        _snprintf(what, sizeof what, "%s (software): the plan after frame 1", k_rb_surf[i].name);
+        ok &= rb_check(what, i, &plan[i], 0);
+        _snprintf(what, sizeof what, "%s: byte for byte what the Vulkan back end left after "
+                  "frame 1", k_rb_surf[i].name);
+        ok &= rb_check_against(what, i, snap1[i], 0);
+    }
+    if (g_rb_bad)
+        ok = 0;
+
+    for (i = 0; i < RB_NSURF; i++) {
+        free(snap0[i]);
+        free(snap1[i]);
+    }
+    fflush(stdout);
+    if (!ok) {
+        fprintf(stderr, "FAIL: gpu_backend_parity_vk --suballoc\n");
+        return 1;
+    }
+    puts("PASS: gpu_backend_parity_vk --suballoc (every target's, the sampled texture's and the "
+         "depth buffer's guest bytes were the plan's in both passes over two frames, the pool "
+         "churn re-created the texture 8 times for fewer than 8 vkAllocateMemory calls, and the "
+         "counters that decided it are printed above)");
+    return 0;
+}
+
 /* ── main ────────────────────────────────────────────────────────────────── */
 int main(int argc, char **argv)
 {
@@ -6939,6 +7364,22 @@ int main(int argc, char **argv)
      * device, like the rest of this file. */
     if (argc > 1 && strcmp(argv[1], "--readback-pack") == 0) {
         int rc = run_readback_pack();
+        fflush(stdout);
+        nv2a_set_commit_consumer(NULL);
+        VirtualFree(pbmem, 0, MEM_RELEASE);
+        free(instance); free(ramin); free(ram);
+        xbox_MemoryLayoutShutdown();
+        return rc;
+    }
+
+    /* The sub-allocated-memory gate is a mode of its own for the same reason: it installs the
+     * Vulkan back end, drives its own frames through it -- with the fixture's texture re-created
+     * N_TEXTURE_CHURN times so the pools' churn and reuse are really reached -- checks the bytes
+     * against this file's own plan and then against the CPU executor, and decides the allocation
+     * reduction from nv2a_vk_backend_memory_stats(). It reports its own PASS line and exits 77
+     * when there is no software device, like the rest of this file. */
+    if (argc > 1 && strcmp(argv[1], "--suballoc") == 0) {
+        int rc = run_suballoc();
         fflush(stdout);
         nv2a_set_commit_consumer(NULL);
         VirtualFree(pbmem, 0, MEM_RELEASE);

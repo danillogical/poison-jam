@@ -616,7 +616,8 @@ static void gate_world(void)
 
     g.dev = (VkDevice)hnew();
     g.queue = (VkQueue)hnew();
-    /* One memory type that satisfies every request, so vb_alloc's probes always land. */
+    /* One memory type that satisfies every request, so the allocator's probes always land
+     * (host-visible and coherent, so a pooled host range is coherent and never dedicated). */
     g.mp.memoryTypeCount = 1;
     g.mp.memoryTypes[0].propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
                                       | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
@@ -1062,26 +1063,47 @@ static void success_case(int sixteen_first, const char *tag)
           "fence waits %u, fence resets %u, pool resets %u, slot 0 pending %d, npending %u, "
           "drain_waits %llu", c.waits, c.fence_resets, c.pool_resets, g.slots[0].pending,
           g.npending, (unsigned long long)g.st.drain_waits);
-    check(c.invalidates == 1u && c.invalidate_range.memory == g.rb_mem
-          && c.invalidate_range.size == VK_WHOLE_SIZE,
-          "the staging memory was invalidated exactly once, whole, before the memcpys",
-          "invalidates %u, memory %p (pair %p), size %s", c.invalidates,
-          (void *)c.invalidate_range.memory, (void *)g.rb_mem,
-          c.invalidate_range.size == VK_WHOLE_SIZE ? "VK_WHOLE_SIZE" : "not whole");
+    /* N4.4: the publication invalidates its own range (vb_mem_invalidate(&g.rb_mem, 0,
+     * g.rb_mem.size)), not the whole VkDeviceMemory -- the pair no longer owns one. The same
+     * decision (the batch invalidated the staging bytes once, over exactly the pair's range,
+     * before the memcpys) now names the range's offset and size. */
+    check(c.invalidates == 1u && c.invalidate_range.memory == g.rb_mem.mem
+          && c.invalidate_range.offset == g.rb_mem.off
+          && c.invalidate_range.size == g.rb_mem.size,
+          "the staging range was invalidated exactly once, whole, before the memcpys",
+          "invalidates %u, memory %p (pair %p), offset %llu (pair %llu), size %llu (pair %llu)",
+          c.invalidates, (void *)c.invalidate_range.memory, (void *)g.rb_mem.mem,
+          (unsigned long long)c.invalidate_range.offset, (unsigned long long)g.rb_mem.off,
+          (unsigned long long)c.invalidate_range.size, (unsigned long long)g.rb_mem.size);
 
     /* the staging pair */
-    check(g.rb_buf != VK_NULL_HANDLE && g.pack_buf != VK_NULL_HANDLE && g.rb_mem != VK_NULL_HANDLE
-          && g.pack_mem != VK_NULL_HANDLE && g.rb_ptr == g_stage
+    /* N4.4: g.rb_mem / g.pack_mem are VbAllocs, and a pooled host-visible range's pointer is
+     * its block's single mapping plus the range's offset -- no longer necessarily the arena
+     * itself, and no longer necessarily offset 0. */
+    check(g.rb_buf != VK_NULL_HANDLE && g.pack_buf != VK_NULL_HANDLE
+          && g.rb_mem.mem != VK_NULL_HANDLE && g.pack_mem.mem != VK_NULL_HANDLE
+          && g.rb_ptr == g_stage + g.rb_mem.off
+          && g.rb_mem.off % VB_POOL_ALIGN == 0
           && g.rb_cap == (VkDeviceSize)GATE_RB_CAP,
-          "one staging pair was made, and its mapped pointer is the one vkMapMemory handed back",
-          "rb %p/%p, pack %p/%p, rb_ptr %p (arena %p), capacity %llu", (void *)g.rb_buf,
-          (void *)g.rb_mem, (void *)g.pack_buf, (void *)g.pack_mem, (void *)g.rb_ptr,
-          (void *)g_stage, (unsigned long long)g.rb_cap);
-    check(c.buffers == 2u && c.allocs == 2u && c.maps == 1u && c.frees == 0u
-          && c.buffer_destroys == 0u,
-          "exactly two buffers and two allocations, nothing freed",
-          "vkCreateBuffer %u, vkAllocateMemory %u, vkMapMemory %u, frees %u, destroys %u",
-          c.buffers, c.allocs, c.maps, c.frees, c.buffer_destroys);
+          "one staging pair was made, and its pointer is the block's mapping plus its range's "
+          "aligned offset",
+          "rb %p/%p, pack %p/%p, rb_ptr %p (arena %p + %llu), capacity %llu", (void *)g.rb_buf,
+          (void *)g.rb_mem.mem, (void *)g.pack_buf, (void *)g.pack_mem.mem, (void *)g.rb_ptr,
+          (void *)g_stage, (unsigned long long)g.rb_mem.off,
+          (unsigned long long)g.rb_cap);
+    /* N4.4 re-derivation: the pair's two buffers are both linear and, in this world's one
+     * memory type, of the same pool -- so they take two ranges of ONE block and the driver is
+     * handed one allocation for the pair, mapped once (the block's type is host-visible).
+     * Nothing is freed: the block outlives both ranges. */
+    check(c.buffers == 2u && c.allocs == 1u && c.maps == 1u && c.frees == 0u
+          && c.buffer_destroys == 0u && g.rb_mem.pool >= 0 && g.rb_mem.pool == g.pack_mem.pool
+          && g.rb_mem.mem == g.pack_mem.mem && g.rb_mem.off != g.pack_mem.off
+          && g.pack_mem.off % VB_POOL_ALIGN == 0,
+          "exactly two buffers, two ranges of one pool block, one allocation, nothing freed",
+          "vkCreateBuffer %u, vkAllocateMemory %u, vkMapMemory %u, frees %u, destroys %u, "
+          "rb %p@%llu, pack %p@%llu, pool %d", c.buffers, c.allocs, c.maps, c.frees,
+          c.buffer_destroys, (void *)g.rb_mem.mem, (unsigned long long)g.rb_mem.off,
+          (void *)g.pack_mem.mem, (unsigned long long)g.pack_mem.off, g.rb_mem.pool);
 
     /* the publication itself */
     check_guest(tag, &s, 1);
@@ -1236,7 +1258,9 @@ static void pair_case(void)
 {
     Scenario s;
     VkBuffer rb0 = VK_NULL_HANDLE, pk0 = VK_NULL_HANDLE;
-    VkDeviceMemory rm0 = VK_NULL_HANDLE, pm0 = VK_NULL_HANDLE;
+    VbAlloc rm0, pm0;                          /* N4.4: the pair's memory is a VbAlloc */
+    memset(&rm0, 0, sizeof rm0);
+    memset(&pm0, 0, sizeof pm0);
     uint8_t *ptr0 = NULL;
     VkDeviceSize cap0 = 0;
     char what[110];
@@ -1254,12 +1278,14 @@ static void pair_case(void)
     rb0 = g.rb_buf; pk0 = g.pack_buf; rm0 = g.rb_mem; pm0 = g.pack_mem;
     ptr0 = g.rb_ptr; cap0 = g.rb_cap;
     check(c.buffers == 2u && rb0 != VK_NULL_HANDLE && pk0 != VK_NULL_HANDLE
-          && rm0 != VK_NULL_HANDLE && pm0 != VK_NULL_HANDLE && cap0 == (VkDeviceSize)GATE_RB_CAP,
+          && rm0.mem != VK_NULL_HANDLE && pm0.mem != VK_NULL_HANDLE
+          && cap0 == (VkDeviceSize)GATE_RB_CAP,
           "the warm-up publication made exactly one staging pair and nothing since",
-          "vkCreateBuffer %u, rb %p/%p, pack %p/%p, capacity %llu", c.buffers, (void *)rb0,
-          (void *)rm0, (void *)pk0, (void *)pm0, (unsigned long long)cap0);
-    check(g.rb_ptr == g_stage && c.frees == 0u && c.buffer_destroys == 0u,
-          "its mapped pointer is the arena, and nothing of it was freed",
+          "vkCreateBuffer %u, rb %p/%p@%llu, pack %p/%p@%llu, capacity %llu", c.buffers,
+          (void *)rb0, (void *)rm0.mem, (unsigned long long)rm0.off, (void *)pk0,
+          (void *)pm0.mem, (unsigned long long)pm0.off, (unsigned long long)cap0);
+    check(g.rb_ptr == g_stage + g.rb_mem.off && c.frees == 0u && c.buffer_destroys == 0u,
+          "its pointer is the arena plus its range's offset, and nothing of it was freed",
           "rb_ptr %p (arena %p), frees %u, buffer destroys %u", (void *)g.rb_ptr,
           (void *)g_stage, c.frees, c.buffer_destroys);
 
@@ -1270,8 +1296,9 @@ static void pair_case(void)
     c.ds_fail_at = 1;
     vb_targets_flush(s.ts, s.n);
 
-    check(g.rb_buf == rb0 && g.pack_buf == pk0 && g.rb_mem == rm0 && g.pack_mem == pm0
-          && g.rb_ptr == ptr0 && g.rb_cap == cap0,
+    check(g.rb_buf == rb0 && g.pack_buf == pk0 && g.rb_mem.mem == rm0.mem
+          && g.rb_mem.off == rm0.off && g.pack_mem.mem == pm0.mem
+          && g.pack_mem.off == pm0.off && g.rb_ptr == ptr0 && g.rb_cap == cap0,
           "the failed call left the pair's handles, pointer and capacity exactly as they were",
           "rb %p/%p, pack %p/%p, rb_ptr %p/%p, capacity %llu/%llu", (void *)g.rb_buf,
           (void *)rb0, (void *)g.pack_buf, (void *)pk0, (void *)g.rb_ptr, (void *)ptr0,

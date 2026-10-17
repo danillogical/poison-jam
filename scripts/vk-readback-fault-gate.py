@@ -60,7 +60,7 @@ REQUIRED = [
     ("the pack push block", "typedef struct { uint32_t rect[4], dst[4]; } VbPackPush;"),
     ("the host-visible staging buffer field", "VkBuffer rb_buf;"),
     ("the device-local pack buffer field", "VkBuffer pack_buf;"),
-    ("the staging pair's memory fields", "VkDeviceMemory pack_mem;"),
+    ("the staging pair's memory fields", "VbAlloc pack_mem;"),
     ("the staging pair's mapped pointer", "uint8_t *rb_ptr;"),
     ("the staging pair's capacity", "VkDeviceSize rb_cap;"),
     ("the pack set layout field", "VkDescriptorSetLayout dsl_pack;"),
@@ -82,9 +82,9 @@ REQUIRED = [
     ("vb_slot_submit", "static void vb_slot_submit(void)"),
     ("vb_drain", "static void vb_drain(void)"),
     ("vb_host_buffer", "static int vb_host_buffer(VkDeviceSize size, VkBufferUsageFlags usage, "
-                       "int cached, VkBuffer *buf, VkDeviceMemory *mem, uint8_t **ptr)"),
+                       "int cached, VkBuffer *buf, VbAlloc *mem, uint8_t **ptr)"),
     ("vb_device_buffer", "static int vb_device_buffer(VkDeviceSize size, "
-                         "VkBufferUsageFlags usage, VkBuffer *buf, VkDeviceMemory *mem)"),
+                         "VkBufferUsageFlags usage, VkBuffer *buf, VbAlloc *mem)"),
     ("the public readback stats accessor",
      "void nv2a_vk_backend_readback_stats(Nv2aVkReadbackStats *out)"),
 ]

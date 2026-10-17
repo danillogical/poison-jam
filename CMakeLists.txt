@@ -414,6 +414,20 @@ if(BUILD_TESTING)
                      COMMAND jsrf_gpu_backend_parity_vk_test --readback-pack)
             set_tests_properties(jsrf_vk_readback_pack PROPERTIES TIMEOUT 600 SKIP_RETURN_CODE 77
                 ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd};VK_ICD_FILENAMES=${_vk_icd};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
+            # N4.4's own real-device case, written by a different worker from the change it
+            # decides: the memory sub-allocator's pooling has to hold on a real driver, not only
+            # against stubs. It drives the same readback fixture's frames -- several targets of
+            # both formats, a texture the sampler reads, a depth buffer and the self-sampling
+            # snapshot -- compares every guest byte against the gate's own plan and against the
+            # CPU executor, forces the texture path to re-create its image repeatedly so pool
+            # churn and reuse are genuinely reached, and decides the allocation-call reduction
+            # from nv2a_vk_backend_memory_stats() observed across that churn (ranges taken while
+            # alloc_calls grows by strictly fewer than the re-creations, plus the write-once
+            # first_shared_block latch). It skips (77) exactly like its siblings.
+            add_test(NAME jsrf_vk_suballoc_device
+                     COMMAND jsrf_gpu_backend_parity_vk_test --suballoc)
+            set_tests_properties(jsrf_vk_suballoc_device PROPERTIES TIMEOUT 600 SKIP_RETURN_CODE 77
+                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd};VK_ICD_FILENAMES=${_vk_icd};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
         else()
             add_test(NAME jsrf_gpu_backend_parity_vk
                      COMMAND jsrf_gpu_backend_parity_vk_test --skip "XBR_VK_SW_ICD is not set")
@@ -424,11 +438,14 @@ if(BUILD_TESTING)
             add_test(NAME jsrf_vk_readback_pack
                      COMMAND jsrf_gpu_backend_parity_vk_test --skip "XBR_VK_SW_ICD is not set")
             set_tests_properties(jsrf_vk_readback_pack PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
+            add_test(NAME jsrf_vk_suballoc_device
+                     COMMAND jsrf_gpu_backend_parity_vk_test --skip "XBR_VK_SW_ICD is not set")
+            set_tests_properties(jsrf_vk_suballoc_device PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
         endif()
     else()
-        message(STATUS "Vulkan/unavailable: jsrf_gpu_backend_parity_vk, jsrf_vk_frames_in_flight and "
-                       "jsrf_vk_readback_pack are not registered -- they run against the Vulkan back "
-                       "end, which is a stub in this build")
+        message(STATUS "Vulkan/unavailable: jsrf_gpu_backend_parity_vk, jsrf_vk_frames_in_flight, "
+                       "jsrf_vk_readback_pack and jsrf_vk_suballoc_device are not registered -- "
+                       "they run against the Vulkan back end, which is a stub in this build")
     endif()
     # V5's gating test: the ahead-of-time vertex-program corpus against the live Vulkan back end.
     # Authored by a different worker from the two production authors (plan rule N5). It links the
@@ -554,6 +571,82 @@ if(BUILD_TESTING)
         set_tests_properties(jsrf_vk_ring_fault_gate PROPERTIES TIMEOUT 300)
     else()
         message(STATUS "Vulkan/unavailable: jsrf_vk_ring_fault_gate is not registered -- it "
+                       "compiles the toolkit's Vulkan back end, which this build does not "
+                       "(${XBR_VULKAN_UNAVAILABLE_REASON})")
+    endif()
+    # ── N4.4's memory sub-allocation, as its deciding gate ──────────────────────────────────
+    # The back end allocated one VkDeviceMemory per resource, bound at offset 0. N4.4 pools
+    # them: several images or buffers with compatible requirements live in ONE block at
+    # distinct, alignment-satisfying, non-overlapping ranges; a released range is handed out
+    # again when nothing that could still read it is recording or in flight; a request that
+    # cannot be pooled (oversized, requires/prefers dedicated, no coherent host type, pool
+    # budgets exhausted) becomes a dedicated allocation with its VkMemoryDedicatedAllocateInfo
+    # in pNext. This case decides all of it from the allocator's own state and from
+    # nv2a_vk_backend_memory_stats(): the sharing and the reduction in vkAllocateMemory calls
+    # (cross-checked against the fixture's own stub count), memory-type and alignment
+    # correctness at every bind, the image/buffer pool separation, reuse and coalescing with
+    # honest byte counters, the dedicated reasons and their pNext, delayed reuse while a
+    # recording or a pending submission is live (the fixture writes a pattern into the parked
+    # range's mapped bytes and requires them byte-identical), rollback on injected
+    # vkAllocateMemory / vkCreateImage / vkCreateBuffer / vkBind*Memory / vkMapMemory failures,
+    # and the non-coherent flush/invalidate widening to whole nonCoherentAtomSize atoms.
+    #
+    # It compiles NO COPY of the algorithm: its translation unit #includes the toolkit's
+    # src/video/nv2a_vk_backend.c with XBR_VK_BACKEND defined, so the bodies under test are the
+    # production ones, and the toolkit is NOT linked (the five external symbols it references
+    # are stubbed in the test, and every Vulkan entry point -- including the optional
+    # vkGet*MemoryRequirements2 / flush / invalidate / unmap lookups through
+    # vkGetDeviceProcAddr -- is a static function pointer the test points at its own stubs).
+    # scripts/vk-suballoc-gate.py re-reads the same bytes at BUILD time: a type, field,
+    # constant, function signature or counter the fixture binds to that is gone fails the BUILD
+    # (exit 2), and the markers it derives are reported by the property that needs them.
+    #
+    # No ICD and no environment: every Vulkan entry point is a stub and every allocation is a
+    # handle the fixture made up. There is no --skip and no SKIP_RETURN_CODE -- the seam is
+    # inside the translation unit, so the case always runs, and an injected
+    # VK_ERROR_OUT_OF_DEVICE_MEMORY is a stub's return value, never real device loss.
+    if(XBR_VULKAN_FOUND)
+        find_package(Vulkan QUIET)
+        if(NOT Vulkan_INCLUDE_DIRS)
+            message(FATAL_ERROR
+                "Vulkan is available (XBR_VULKAN_FOUND) but find_package(Vulkan) found no "
+                "include directory here; the sub-allocation gate compiles "
+                "src/video/nv2a_vk_backend.c, which needs <vulkan/vulkan.h>.")
+        endif()
+        set(VK_SUBALLOC_GATE_DIR "${CMAKE_CURRENT_BINARY_DIR}/vk-suballoc-gate")
+        set(VK_SUBALLOC_GATE_SOURCE "${XBOXRECOMP_DIR}/src/video/nv2a_vk_backend.c")
+        set(VK_SUBALLOC_GATE_DECLS "${XBOXRECOMP_DIR}/src/video/nv2a_vk_backend.h")
+        set(VK_SUBALLOC_GATE_PROBE "${CMAKE_CURRENT_SOURCE_DIR}/scripts/vk-suballoc-gate.py")
+        set(VK_SUBALLOC_GATE_HEADER "${VK_SUBALLOC_GATE_DIR}/vk_suballoc_gate_seam.h")
+        # A non-zero exit here fails the build, which is the point: a seam that moved must break
+        # the build rather than quietly turn the case into something else.
+        add_custom_command(
+            OUTPUT "${VK_SUBALLOC_GATE_HEADER}" "${VK_SUBALLOC_GATE_DIR}/vk_suballoc_gate_seam.txt"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${VK_SUBALLOC_GATE_DIR}"
+            COMMAND "${_jsrf_python}" -X utf8 "${VK_SUBALLOC_GATE_PROBE}"
+                    --source "${VK_SUBALLOC_GATE_SOURCE}"
+                    --decls "${VK_SUBALLOC_GATE_DECLS}"
+                    --header "${VK_SUBALLOC_GATE_HEADER}"
+                    --manifest "${VK_SUBALLOC_GATE_DIR}/vk_suballoc_gate_seam.txt"
+            DEPENDS "${VK_SUBALLOC_GATE_SOURCE}" "${VK_SUBALLOC_GATE_DECLS}"
+                    "${VK_SUBALLOC_GATE_PROBE}"
+            COMMENT "vk_suballoc_gate: probing nv2a_vk_backend.c for the seam the gate binds to"
+            VERBATIM)
+        add_custom_target(jsrf_vk_suballoc_gate_probe DEPENDS "${VK_SUBALLOC_GATE_HEADER}")
+        add_executable(jsrf_vk_suballoc_gate_test tests/test_vk_suballoc_gate.c)
+        # xbox_video is what generates the SPIR-V headers the back end includes; the probe target
+        # writes the seam header the test includes.
+        add_dependencies(jsrf_vk_suballoc_gate_test jsrf_vk_suballoc_gate_probe xbox_video)
+        target_include_directories(jsrf_vk_suballoc_gate_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/video
+            ${Vulkan_INCLUDE_DIRS}
+            "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv"
+            "${VK_SUBALLOC_GATE_DIR}")
+        target_link_libraries(jsrf_vk_suballoc_gate_test PRIVATE ${CMAKE_DL_LIBS})
+        add_test(NAME jsrf_vk_suballoc_gate COMMAND jsrf_vk_suballoc_gate_test)
+        set_tests_properties(jsrf_vk_suballoc_gate PROPERTIES TIMEOUT 300)
+    else()
+        message(STATUS "Vulkan/unavailable: jsrf_vk_suballoc_gate is not registered -- it "
                        "compiles the toolkit's Vulkan back end, which this build does not "
                        "(${XBR_VULKAN_UNAVAILABLE_REASON})")
     endif()

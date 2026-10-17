@@ -100,7 +100,7 @@ REQUIRED = [
     ("the pack pipeline field", "VkPipeline pipe_pack;"),
     ("the device-local pack buffer field", "VkBuffer pack_buf;"),
     ("the host-visible staging buffer field", "VkBuffer rb_buf;"),
-    ("the staging buffer's memory field", "VkDeviceMemory rb_mem;"),
+    ("the staging buffer's memory field", "VbAlloc rb_mem;"),
     ("the staging pair's mapped pointer", "uint8_t *rb_ptr;"),
     ("the staging pair's capacity", "VkDeviceSize rb_cap;"),
     ("the 1x1 white texture", "VbImage white;"),
@@ -133,12 +133,17 @@ REQUIRED = [
     ("vb_fail", "static void vb_fail(const char *what, VkResult r)"),
     ("vb_guest", "static uint8_t *vb_guest(uint32_t va)"),
     ("vb_scratch", "static uint32_t *vb_scratch(size_t px)"),
-    ("vb_alloc", "static VkDeviceMemory vb_alloc(const VkMemoryRequirements *mr, "
-                 "VkMemoryPropertyFlags want, VkMemoryPropertyFlags fallback)"),
+    ("vb_mem_take", "static int vb_mem_take(const VkMemoryRequirements *mr, "
+                    "VkMemoryPropertyFlags want, VkMemoryPropertyFlags fallback, "
+                    "int nonlinear, int requires_dedicated, int prefers_dedicated, "
+                    "const VkImage *dedicated_image, const VkBuffer *dedicated_buffer, "
+                    "VbAlloc *out)"),
+    ("vb_mem_give", "static void vb_mem_give(VbAlloc *a)"),
+    ("vb_pool_gc", "static void vb_pool_gc(void)"),
     ("vb_host_buffer", "static int vb_host_buffer(VkDeviceSize size, VkBufferUsageFlags usage, "
-                       "int cached, VkBuffer *buf, VkDeviceMemory *mem, uint8_t **ptr)"),
+                       "int cached, VkBuffer *buf, VbAlloc *mem, uint8_t **ptr)"),
     ("vb_device_buffer", "static int vb_device_buffer(VkDeviceSize size, "
-                         "VkBufferUsageFlags usage, VkBuffer *buf, VkDeviceMemory *mem)"),
+                         "VkBufferUsageFlags usage, VkBuffer *buf, VbAlloc *mem)"),
     ("vb_discard", "static void vb_discard(VbGarbage e)"),
     ("vb_image_discard", "static void vb_image_discard(VbImage *im)"),
     ("vb_slot_wait", "static int vb_slot_wait(unsigned i)"),

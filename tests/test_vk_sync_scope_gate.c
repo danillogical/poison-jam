@@ -279,6 +279,7 @@
 #define GATE_MAX_IMGS  64
 #define GATE_MAX_VIEWS 64
 #define GATE_MAX_FBS   16
+#define GATE_MAX_BIND  64
 #define GATE_NOTGT     0xFFFFFFFFu
 
 /* ── The recording ─────────────────────────────────────────────────────────────────── */
@@ -395,6 +396,13 @@ typedef struct {
     VkImageView samp_view;          /* the sampled image the last descriptor write bound */
     VkImageLayout samp_layout;
     unsigned samp_binding;
+    /* N4.4: every bind the driven world made, and whether it complied with the allocator's own
+     * rules (a range's offset aligned to VB_POOL_ALIGN and to the requirement's alignment,
+     * inside a live block, and never overlapping a live range of the same block). */
+    unsigned binds_img, binds_buf, bind_violations;
+    VkDeviceMemory bind_img_mem[GATE_MAX_BIND], bind_buf_mem[GATE_MAX_BIND];
+    VkDeviceSize bind_img_off[GATE_MAX_BIND], bind_buf_off[GATE_MAX_BIND];
+    char bind_violation[192];
     /* what the fixture supplied, as the device executing the last submitted recording */
     unsigned supply_calls, supply_writes;
     /* the stream. `seq` orders every access and barrier; `rec` counts the recordings (one per
@@ -438,6 +446,86 @@ typedef struct {
 } GateCtl;
 
 static GateCtl c;
+
+/* The allocator's own rules, applied to every bind this fixture sees. A violation is counted
+ * and named, not raised: property 5 asserts the count is zero. */
+/* N4.4: what both requirement stubs report. The size is deliberately NOT a multiple of the
+ * alignment, so a block that packs ranges without aligning them (the mutant the private
+ * campaign builds) lands on offsets that are not multiples of the alignment, and the bind
+ * property below can decide it. */
+#define GATE_BIND_SIZE  4100u
+
+static void bind_note(int is_image, VkDeviceMemory mem, VkDeviceSize off, VkDeviceSize align)
+{
+    unsigned p, b, i, n;
+    int found = 0;
+
+    if (is_image) {
+        n = c.binds_img < GATE_MAX_BIND ? c.binds_img : GATE_MAX_BIND - 1u;
+        c.bind_img_mem[n] = mem;
+        c.bind_img_off[n] = off;
+        c.binds_img++;
+    } else {
+        n = c.binds_buf < GATE_MAX_BIND ? c.binds_buf : GATE_MAX_BIND - 1u;
+        c.bind_buf_mem[n] = mem;
+        c.bind_buf_off[n] = off;
+        c.binds_buf++;
+    }
+    if (off % VB_POOL_ALIGN || (align && off % align)) {
+        c.bind_violations++;
+        snprintf(c.bind_violation, sizeof c.bind_violation,
+                 "%s bound at offset %llu: not a multiple of %llu (pool floor %u)",
+                 is_image ? "an image" : "a buffer", (unsigned long long)off,
+                 (unsigned long long)(align ? align : (VkDeviceSize)VB_POOL_ALIGN),
+                 (unsigned)VB_POOL_ALIGN);
+    }
+    for (p = 0; p < VB_POOLS && !found; p++) {
+        for (b = 0; b < g.pools[p].nblocks && !found; b++) {
+            if (g.pools[p].blocks[b].mem != mem)
+                continue;
+            found = 1;
+            if (off + GATE_BIND_SIZE > g.pools[p].blocks[b].size) {
+                c.bind_violations++;
+                snprintf(c.bind_violation, sizeof c.bind_violation,
+                         "the range [%llu, %llu) runs past its block's %llu bytes",
+                         (unsigned long long)off,
+                         (unsigned long long)(off + GATE_BIND_SIZE),
+                         (unsigned long long)g.pools[p].blocks[b].size);
+            }
+            if (is_image != (g.pools[p].nonlinear != 0)) {
+                c.bind_violations++;
+                snprintf(c.bind_violation, sizeof c.bind_violation,
+                         "a%s resource is bound into a %s pool",
+                         is_image ? "n image" : " buffer",
+                         g.pools[p].nonlinear ? "non-linear (image)" : "linear (buffer)");
+            }
+        }
+    }
+    if (!found) {
+        c.bind_violations++;
+        snprintf(c.bind_violation, sizeof c.bind_violation,
+                 "%s bound to memory %p, which is no live block of this back end",
+                 is_image ? "an image" : " a buffer", (void *)mem);
+    }
+    /* No two live ranges of one block may overlap. */
+    for (i = 0; i + 1u < (is_image ? c.binds_img : c.binds_buf) && i < GATE_MAX_BIND; i++) {
+        const VkDeviceMemory *m = is_image ? c.bind_img_mem : c.bind_buf_mem;
+        const VkDeviceSize *o = is_image ? c.bind_img_off : c.bind_buf_off;
+        unsigned j;
+
+        for (j = i + 1u; j < (is_image ? c.binds_img : c.binds_buf) && j < GATE_MAX_BIND; j++) {
+            if (m[i] != m[j])
+                continue;
+            if (o[i] < o[j] + GATE_BIND_SIZE && o[j] < o[i] + GATE_BIND_SIZE) {
+                c.bind_violations++;
+                snprintf(c.bind_violation, sizeof c.bind_violation,
+                         "two %ss bound to overlapping ranges [%llu] and [%llu] of one block",
+                         is_image ? "image" : "buffer", (unsigned long long)o[i],
+                         (unsigned long long)o[j]);
+            }
+        }
+    }
+}
 
 static uint8_t *g_guest;                        /* xbox_GetMemoryOffset()'s answer */
 static uint8_t *g_stage;                        /* what vkMapMemory hands back */
@@ -905,15 +993,16 @@ static void VKAPI_CALL gate_image_requirements(VkDevice device, VkImage img,
                                                VkMemoryRequirements *req)
 {
     (void)device; (void)img;
-    req->size = 4096u;
-    req->alignment = 16u;
+    req->size = GATE_BIND_SIZE;
+    req->alignment = 4096u;
     req->memoryTypeBits = 1u;
 }
 
 static VkResult VKAPI_CALL gate_image_bind(VkDevice device, VkImage img, VkDeviceMemory mem,
                                            VkDeviceSize offset)
 {
-    (void)device; (void)img; (void)mem; (void)offset;
+    (void)device; (void)img;
+    bind_note(1, mem, offset, 4096u);       /* the requirement stub's own alignment */
     return VK_SUCCESS;
 }
 
@@ -1367,15 +1456,16 @@ static void VKAPI_CALL gate_buffer_requirements(VkDevice device, VkBuffer buf,
                                                 VkMemoryRequirements *req)
 {
     (void)device; (void)buf;
-    req->size = 4096u;
-    req->alignment = 16u;
+    req->size = GATE_BIND_SIZE;
+    req->alignment = 4096u;
     req->memoryTypeBits = 1u;
 }
 
 static VkResult VKAPI_CALL gate_buffer_bind(VkDevice device, VkBuffer buf, VkDeviceMemory mem,
                                             VkDeviceSize offset)
 {
-    (void)device; (void)buf; (void)mem; (void)offset;
+    (void)device; (void)buf;
+    bind_note(0, mem, offset, 4096u);
     return VK_SUCCESS;
 }
 
@@ -1821,7 +1911,9 @@ static void gate_supply(void)
         if (a->rec != c.subs[c.nsubs - 1u].rec || a->is_image || !a->is_write
             || a->buf != g.rb_buf || a->tgt >= 2u)
             continue;
-        fill_stage_slice(g_stage + a->off, (size_t)a->size, c.tgt_mark[a->tgt]);
+        /* N4.4: the staging buffer is a range of a pool block, so the device's writes land at
+         * the block's mapping plus the range's offset plus the slice's offset in the range. */
+        fill_stage_slice(g_stage + g.rb_mem.off + a->off, (size_t)a->size, c.tgt_mark[a->tgt]);
         c.supply_writes++;
     }
     c.supply_calls++;
@@ -1841,7 +1933,8 @@ static void gate_world(void)
 
     g.dev = (VkDevice)hnew();
     g.queue = (VkQueue)hnew();
-    /* One memory type that satisfies every request, so vb_alloc's probes always land. */
+    /* One memory type that satisfies every request, so the allocator's probes always land
+     * (host-visible and coherent, so a pooled host range is coherent and never dedicated). */
     g.mp.memoryTypeCount = 1;
     g.mp.memoryTypes[0].propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
                                       | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
@@ -3082,11 +3175,12 @@ static void prop4(void)
           "nothing was recorded into the dead command buffer, and no entry point the driven "
           "paths do not reach was called",
           "dead records %u, other calls %u", c.dead_records, c.other_calls);
-    check(g.rb_cap == (VkDeviceSize)(1u << 20) && g.rb_ptr == g_stage,
-          "the staging pair was made once, by the production's own reserve, and mapped onto the "
-          "fixture's arena",
-          "capacity %llu, rb_ptr %p (arena %p)", (unsigned long long)g.rb_cap, (void *)g.rb_ptr,
-          (void *)g_stage);
+    check(g.rb_cap == (VkDeviceSize)(1u << 20) && g.rb_mem.mem != VK_NULL_HANDLE
+          && g.rb_ptr == g_stage + g.rb_mem.off && g.rb_mem.off % VB_POOL_ALIGN == 0,
+          "the staging pair was made once, by the production's own reserve, as an aligned range "
+          "of a pool block mapped onto the fixture's arena",
+          "capacity %llu, rb_ptr %p (arena %p + %llu)", (unsigned long long)g.rb_cap,
+          (void *)g.rb_ptr, (void *)g_stage, (unsigned long long)g.rb_mem.off);
 
     /* The bytes: what guest memory holds is the pattern the device was supplied with, for every
      * target, and NOT the pattern of the other target or of the pre-publication guest bytes --
@@ -3115,6 +3209,44 @@ static void prop4(void)
     }
 
     verdict("4 no failure path", chk, bad);
+}
+
+/* ── 5. the binds N4.4's allocator handed out ────────────────────────────────────────────
+ *
+ * N4.4 moved every resource's memory into a pool, so the offsets a resource binds at are no
+ * longer 0. What this property decides is the rule that replaced that expectation: every
+ * offset is a multiple of the allocator's own VB_POOL_ALIGN and of the requirement's
+ * alignment, the range fits inside a live block, the block's kind matches the resource's kind
+ * (an image never sits in a linear pool and a buffer never in a non-linear one), and no two
+ * live ranges of one block overlap. The old "offset 0" assertion would have to be deleted to
+ * compile; this is what it decided, re-derived for the pooled allocator. */
+static void prop5(void)
+{
+    unsigned i, shared = 0;
+    int chk = g_checks, bad = g_check_failures;
+
+    section("5. the memory every bind was given: aligned, inside its block, never overlapping");
+    check(c.binds_img > 0u && c.binds_buf > 0u,
+          "the driven world really bound images and buffers", "%u image(s), %u buffer(s)",
+          c.binds_img, c.binds_buf);
+    check(c.bind_violations == 0u,
+          "every bind satisfies the allocator's own rules (alignment, kind, block, no overlap)",
+          "%u violation(s): %s", c.bind_violations, c.bind_violation);
+    for (i = 0; i < c.binds_img && i < GATE_MAX_BIND; i++) {
+        unsigned j;
+
+        for (j = 0; j < c.binds_buf && j < GATE_MAX_BIND; j++)
+            if (c.bind_img_mem[i] == c.bind_buf_mem[j])
+                shared = 1;
+    }
+    check(shared == 0u,
+          "no image and no buffer ever share one block (the linear/non-linear separation)",
+          "");
+    note("the driven world bound %u image range(s) and %u buffer range(s); the first image "
+         "offsets are %llu, %llu, %llu (VB_POOL_ALIGN %u)", c.binds_img, c.binds_buf,
+         (unsigned long long)c.bind_img_off[0], (unsigned long long)c.bind_img_off[1],
+         (unsigned long long)c.bind_img_off[2], (unsigned)VB_POOL_ALIGN);
+    verdict("5 the binds' offsets and blocks", chk, bad);
 }
 
 /* ── The five symbols the toolkit file needs, and nothing else of the toolkit ───────── */
@@ -3189,6 +3321,7 @@ int main(void)
     prop2();
     prop3();
     prop4();
+    prop5();
 
     for (i = 0; i < VB_SLOTS; i++)
         free(g_stream[i]);

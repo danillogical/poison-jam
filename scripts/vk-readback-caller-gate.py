@@ -115,10 +115,10 @@ REQUIRED = [
                          "VkDeviceSize *off)"),
     ("the host-visible buffer maker", "static int vb_host_buffer(VkDeviceSize size, "
                                       "VkBufferUsageFlags usage, int cached, VkBuffer *buf, "
-                                      "VkDeviceMemory *mem, uint8_t **ptr)"),
+                                      "VbAlloc *mem, uint8_t **ptr)"),
     ("the device-local buffer maker", "static int vb_device_buffer(VkDeviceSize size, "
                                       "VkBufferUsageFlags usage, VkBuffer *buf, "
-                                      "VkDeviceMemory *mem)"),
+                                      "VbAlloc *mem)"),
     ("the public readback stats accessor",
      "void nv2a_vk_backend_readback_stats(Nv2aVkReadbackStats *out)"),
     # The four boundaries the case drives. Their signatures are the case's whole interface to

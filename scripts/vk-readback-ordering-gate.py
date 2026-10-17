@@ -76,9 +76,9 @@ REQUIRED = [
     ("the pack push layout field", "VkPipelineLayout layout_pack;"),
     ("the pack pipeline field", "VkPipeline pipe_pack;"),
     ("the device-local pack buffer field", "VkBuffer pack_buf;"),
-    ("the pack buffer's memory field", "VkDeviceMemory pack_mem;"),
+    ("the pack buffer's memory field", "VbAlloc pack_mem;"),
     ("the host-visible staging buffer field", "VkBuffer rb_buf;"),
-    ("the staging buffer's memory field", "VkDeviceMemory rb_mem;"),
+    ("the staging buffer's memory field", "VbAlloc rb_mem;"),
     ("the staging pair's mapped pointer", "uint8_t *rb_ptr;"),
     ("the staging pair's capacity", "VkDeviceSize rb_cap;"),
     ("the frame counter", "uint32_t frame;"),
@@ -109,9 +109,9 @@ REQUIRED = [
     ("vb_slot_submit", "static void vb_slot_submit(void)"),
     ("vb_drain", "static void vb_drain(void)"),
     ("vb_host_buffer", "static int vb_host_buffer(VkDeviceSize size, VkBufferUsageFlags usage, "
-                       "int cached, VkBuffer *buf, VkDeviceMemory *mem, uint8_t **ptr)"),
+                       "int cached, VkBuffer *buf, VbAlloc *mem, uint8_t **ptr)"),
     ("vb_device_buffer", "static int vb_device_buffer(VkDeviceSize size, "
-                         "VkBufferUsageFlags usage, VkBuffer *buf, VkDeviceMemory *mem)"),
+                         "VkBufferUsageFlags usage, VkBuffer *buf, VbAlloc *mem)"),
     ("the public readback stats accessor",
      "void nv2a_vk_backend_readback_stats(Nv2aVkReadbackStats *out)"),
 ]

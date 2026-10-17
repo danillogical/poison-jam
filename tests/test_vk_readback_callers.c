@@ -918,7 +918,8 @@ static void gate_world(void)
 
     g.dev = (VkDevice)hnew();
     g.queue = (VkQueue)hnew();
-    /* One memory type that satisfies every request, so vb_alloc's probes always land. */
+    /* One memory type that satisfies every request, so the allocator's probes always land
+     * (host-visible and coherent, so a pooled host range is coherent and never dedicated). */
     g.mp.memoryTypeCount = 1;
     g.mp.memoryTypes[0].propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
                                       | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
@@ -960,7 +961,11 @@ static void wire_target(VbTarget *t, uint32_t va, uint32_t pitch, uint32_t bpp,
     t->dx1 = dx1;
     t->dy1 = dy1;
     t->im.img = (VkImage)hnew();
-    t->im.mem = (VkDeviceMemory)hnew();
+    /* N4.4: VbImage.mem is a VbAlloc now. The fixture's target is "already bound", so it
+     * carries a made-up handle and a dedicated shape (pool/block -1, offset 0). */
+    t->im.mem.mem = (VkDeviceMemory)hnew();
+    t->im.mem.pool = -1;
+    t->im.mem.block = -1;
     t->im.view = (VkImageView)hnew();
     t->last_use = 1;
 }
@@ -1781,15 +1786,17 @@ static void prop_target_for_reshape(int transient)
         check_guest_unchanged("6 the permanent reshape failure",
                               "the newer image was never published");
         check(g.targets[0].im.img == before.im.img && g.targets[0].im.view == before.im.view
-              && g.targets[0].im.mem == before.im.mem && g.targets[0].used == 1
+              && g.targets[0].im.mem.mem == before.im.mem.mem
+              && g.targets[0].im.mem.off == before.im.mem.off && g.targets[0].used == 1
               && g.targets[0].va == before.va && g.targets[0].pitch == before.pitch
               && g.targets[0].bpp == before.bpp && g.targets[0].w == before.w
               && g.targets[0].h == before.h,
               "the target was NOT released: its image handles and shape are untouched",
               "img %p (was %p), view %p (was %p), mem %p (was %p), pitch %u (was %u), "
               "h %u (was %u)", (void *)g.targets[0].im.img, (void *)before.im.img,
-              (void *)g.targets[0].im.view, (void *)before.im.view, (void *)g.targets[0].im.mem,
-              (void *)before.im.mem, g.targets[0].pitch, before.pitch, g.targets[0].h, before.h);
+              (void *)g.targets[0].im.view, (void *)before.im.view,
+              (void *)g.targets[0].im.mem.mem, (void *)before.im.mem.mem,
+              g.targets[0].pitch, before.pitch, g.targets[0].h, before.h);
         check(g.targets[0].dirty == 1 && g.targets[0].dx0 == T16_DX0 && g.targets[0].dy0 == T16_DY0
               && g.targets[0].dx1 == T16_DX1 && g.targets[0].dy1 == T16_DY1,
               "its dirty rectangle is intact too, so the newer pixels are still publishable",
@@ -1869,7 +1876,9 @@ static void prop_target_for_evict(int transient)
         g.targets[i].h = T16_H;
         g.targets[i].dirty = 0;
         g.targets[i].im.img = (VkImage)hnew();
-        g.targets[i].im.mem = (VkDeviceMemory)hnew();
+        g.targets[i].im.mem.mem = (VkDeviceMemory)hnew();
+        g.targets[i].im.mem.pool = -1;
+        g.targets[i].im.mem.block = -1;
         g.targets[i].im.view = (VkImageView)hnew();
         g.targets[i].last_use = 2u + i;                 /* targets[0] is the least used */
     }

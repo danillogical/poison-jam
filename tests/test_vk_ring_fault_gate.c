@@ -486,7 +486,8 @@ static void gate_world(void)
 
     g.dev = (VkDevice)hnew();
     g.queue = (VkQueue)hnew();
-    /* One memory type that satisfies every request, so vb_alloc's probes always land. */
+    /* One memory type that satisfies every request, so the allocator's probes always land
+     * (host-visible and coherent, so a pooled host range is coherent and never dedicated). */
     g.mp.memoryTypeCount = 1;
     g.mp.memoryTypes[0].propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
                                       | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
@@ -767,9 +768,13 @@ static void prop3(void)
     check(c.decodes == 1, "3b: the stubbed decoder ran once", "%u decode(s)", c.decodes);
     check(c.waits == 1, "3b: the path waited the slot it was about to record into", "%u wait(s)",
           c.waits);
-    check(c.images == 1 && e->im.img == c.last_image && c.allocs == 1,
-          "3b: the texture's image was created and bound", "%u image(s), %u allocation(s)",
-          c.images, c.allocs);
+    /* N4.4: the image's memory comes from a pool block, so one vkAllocateMemory serves it --
+     * the same decision the pre-N4.4 "one allocation" assertion made, now reading the pool. */
+    check(c.images == 1 && e->im.img == c.last_image && c.allocs == 1
+          && e->im.mem.mem != VK_NULL_HANDLE && e->im.mem.pool >= 0,
+          "3b: the texture's image was created and bound into a pool block, one allocation",
+          "%u image(s), %u allocation(s), pool %d, offset %llu", c.images, c.allocs,
+          e->im.mem.pool, (unsigned long long)e->im.mem.off);
     check(c.copies == 1, "3b: the slice was copied into the texture exactly once", "%u copy(ies)",
           c.copies);
     check(c.copy_cb == g.slots[0].cmd, "3b: the copy was recorded in the slot's own buffer",
@@ -957,6 +962,9 @@ static void prop6(void)
     VkDeviceSize off = 0;
     uint8_t *p;
     uint64_t before, after;
+    Nv2aVkMemoryStats m0, ms;
+    VbAlloc probe_range;
+    VkMemoryRequirements pmr;
     int chk = g_checks, bad = g_check_failures;
 
     section("6. an oversized slice whose begin fails must not hand back freed memory");
@@ -970,14 +978,17 @@ static void prop6(void)
     g.slots[0].stream_off = 0;
     memcpy(g_snap, g.slots[0].stream_ptr, VB_SLOT_STREAM);
     before = hash_bytes(g.slots[0].stream_ptr, VB_SLOT_STREAM);
+    nv2a_vk_backend_memory_stats(&m0);      /* the sub-allocator's counters are cumulative */
 
     /* Larger than half a slot's stream, so vb_stream cannot use the slot's own stream: it
      * allocates a dedicated buffer and then calls vb_cmd -- whose begin fails here. */
     p = vb_stream(VB_SLOT_STREAM, &buf, &off);
 
     after = hash_bytes(g.slots[0].stream_ptr, VB_SLOT_STREAM);
+    /* N4.4: the branch's buffer is a pooled host-visible range of a block that was made (and
+     * mapped whole) once, so the same counts now decide "one buffer, one block, one mapping". */
     check(c.buffers == 1 && c.allocs == 1 && c.maps == 1,
-          "the branch allocated, bound and mapped exactly one dedicated buffer",
+          "the branch made exactly one buffer, one pool block and one mapping of it",
           "%u buffer(s), %u allocation(s), %u mapping(s)", c.buffers, c.allocs, c.maps);
     check(g.ok == 0 && c.begins == 1, "the begin that branch performs really failed",
           "begins %u, g.ok %d", c.begins, g.ok);
@@ -988,13 +999,57 @@ static void prop6(void)
           "VB_GATE_HAS_FAILED_LATCH 0");
 #endif
     check(p == NULL, "the call returned NULL: no caller-visible slice at all", "%p", (void *)p);
-    check(c.frees == 1, "its memory was freed exactly once before it returned", "%u free(s)",
-          c.frees);
+    /* N4.4: the branch's buffer takes a RANGE out of a pool block, so releasing it calls no
+     * vkFreeMemory at all -- the block outlives the range. The old "frees == 1" asserted that
+     * the failure released exactly what it took and left nothing live. Its replacement has to
+     * distinguish "the range is on its block's FREE LIST" from "the range was PARKED", because
+     * both keep used_bytes and bump released. Two signals decide it: the park counters (a
+     * release that was parked increments parked; this one must not, because the fixture's world
+     * has nothing recording and nothing pending), and the reuse itself -- the next request of
+     * the same size must come back at the SAME offset as a free-range reuse, which a parked
+     * range cannot do. */
+    check(c.frees == 0u,
+          "no vkFreeMemory was called: the range goes back to its pool block, not to the driver",
+          "%u free(s)", c.frees);
+    nv2a_vk_backend_memory_stats(&ms);
+    check(ms.parked == m0.parked && ms.parked_lost == 0u,
+          "the release was NOT parked: nothing was recording and nothing was pending",
+          "parked %llu -> %llu, parked_lost %llu", (unsigned long long)m0.parked,
+          (unsigned long long)ms.parked, (unsigned long long)ms.parked_lost);
+    check(ms.used_bytes == m0.used_bytes && ms.blocks == m0.blocks + 1u
+          && ms.released == m0.released + 1u && ms.ranges == m0.ranges + 1u,
+          "the range is back in the block's accounting: the same bytes are live, the branch's "
+          "one block was made, and the release was counted",
+          "used_bytes %llu -> %llu, blocks %llu -> %llu, released %llu -> %llu",
+          (unsigned long long)m0.used_bytes, (unsigned long long)ms.used_bytes,
+          (unsigned long long)m0.blocks, (unsigned long long)ms.blocks,
+          (unsigned long long)m0.released, (unsigned long long)ms.released);
+    /* The decisive part: the same size again, out of the same pool, at the freed range's own
+     * offset, counted as a free-range reuse, and with no further block made. */
+    pmr.size = VB_SLOT_STREAM;
+    pmr.alignment = VB_STREAM_ALIGN;
+    pmr.memoryTypeBits = 1u;
+    memset(&probe_range, 0, sizeof probe_range);
+    check(vb_mem_take(&pmr, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                             | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                             | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      0, 0, 0, NULL, NULL, &probe_range) == 1,
+          "a request of the same size succeeds", "");
+    nv2a_vk_backend_memory_stats(&ms);
+    check(probe_range.off == 0u && probe_range.size >= (VkDeviceSize)VB_SLOT_STREAM
+          && ms.reuse_hits == m0.reuse_hits + 1u && ms.blocks == m0.blocks + 1u,
+          "it IS the freed range, taken from the block's free list: the release put it back, it "
+          "was not parked",
+          "off %llu, size %llu, reuse_hits %llu -> %llu, blocks %llu",
+          (unsigned long long)probe_range.off, (unsigned long long)probe_range.size,
+          (unsigned long long)m0.reuse_hits, (unsigned long long)ms.reuse_hits,
+          (unsigned long long)ms.blocks);
     check(c.buffer_destroys == 1, "its buffer was destroyed exactly once", "%u destruction(s)",
           c.buffer_destroys);
-    check(c.buffers == c.buffer_destroys && c.allocs == c.frees,
-          "nothing that branch allocated is still live", "buffers %u/%u, memory %u/%u",
-          c.buffers, c.buffer_destroys, c.allocs, c.frees);
+    check(c.buffers == c.buffer_destroys,
+          "nothing that branch allocated is still live", "buffers %u/%u",
+          c.buffers, c.buffer_destroys);
     check(g.slots[0].stream_off == 0 && memcmp(g_snap, g.slots[0].stream_ptr, VB_SLOT_STREAM) == 0,
           "no slot's stream was touched by the failed branch",
           "stream_off %llu, checksum 0x%016llX -> 0x%016llX, %zu bytes differ",

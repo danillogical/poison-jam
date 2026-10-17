@@ -1309,7 +1309,8 @@ static void gate_world(const GateTarget *const *def, unsigned ndef, uint32_t tai
 
     g.dev = (VkDevice)hnew();
     g.queue = (VkQueue)hnew();
-    /* One memory type that satisfies every request, so vb_alloc's probes always land. */
+    /* One memory type that satisfies every request, so the allocator's probes always land
+     * (host-visible and coherent, so a pooled host range is coherent and never dedicated). */
     g.mp.memoryTypeCount = 1;
     g.mp.memoryTypes[0].propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
                                       | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
@@ -3282,14 +3283,25 @@ static void prop5(void)
           o.reuses, o.unordered);
 
     snprintf(what, sizeof what, "5 exactly one staging pair was made, and nothing was freed");
-    check(c.buffers == 2u && c.allocs == 2u && c.maps == 1u && c.frees == 0u
+    /* N4.4 re-derivation: the pair's two buffers are both linear and, in this world's one
+     * memory type, of the same pool -- two ranges of ONE block, one allocation for the pair,
+     * mapped once. Nothing is freed, and the host buffer's pointer is that block's mapping
+     * plus its range's aligned offset. */
+    check(c.buffers == 2u && c.allocs == 1u && c.maps == 1u && c.frees == 0u
           && c.buffer_destroys == 0u && g.ngarbage == 0u && g.rb_buf != VK_NULL_HANDLE
-          && g.pack_buf != VK_NULL_HANDLE && g.rb_ptr == g_stage
+          && g.pack_buf != VK_NULL_HANDLE && g.rb_mem.mem != VK_NULL_HANDLE
+          && g.pack_mem.mem != VK_NULL_HANDLE && g.rb_mem.pool >= 0
+          && g.rb_mem.pool == g.pack_mem.pool && g.rb_mem.mem == g.pack_mem.mem
+          && g.rb_mem.off != g.pack_mem.off
+          && g.rb_ptr == g_stage + g.rb_mem.off && g.rb_mem.off % VB_POOL_ALIGN == 0
           && g.rb_cap == VB_READBACK_MAX, what,
           "vkCreateBuffer %u, vkAllocateMemory %u, vkMapMemory %u, frees %u, destroys %u, held "
-          "garbage %llu, rb %p/%p, pack %p, rb_ptr %p (arena %p), capacity %llu", c.buffers,
+          "garbage %llu, rb %p/%p@%llu (pool %d), pack %p/%p@%llu (pool %d), rb_ptr %p (arena "
+          "%p), capacity %llu", c.buffers,
           c.allocs, c.maps, c.frees, c.buffer_destroys, (unsigned long long)g.ngarbage,
-          (void *)g.rb_buf, (void *)g.rb_mem, (void *)g.pack_buf, (void *)g.rb_ptr,
+          (void *)g.rb_buf, (void *)g.rb_mem.mem, (unsigned long long)g.rb_mem.off,
+          g.rb_mem.pool, (void *)g.pack_buf, (void *)g.pack_mem.mem,
+          (unsigned long long)g.pack_mem.off, g.pack_mem.pool, (void *)g.rb_ptr,
           (void *)g_stage, (unsigned long long)g.rb_cap);
 
     verdict("5 the success control", chk, bad);
