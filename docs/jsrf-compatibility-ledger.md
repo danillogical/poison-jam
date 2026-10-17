@@ -47,6 +47,20 @@ old guest bytes, and replacement/alias consumers also assume the flush succeeded
 caller-level failure/recovery repair is next; the normal-path measurements and tests below do
 not establish correctness on that path. N4.1's acceptance is unchanged.
 
+**L62 repair (2026-10-17, TR §31.34):** the bounded caller-level repair is at toolkit `4832f62` /
+game `70ecf0f`. `vb_targets_flush` now reports its publication outcome; a coherence boundary (the
+flip, a target release/reshape, an overlapping guest-memory texture) retries a failed publication
+exactly once after refreshing the ring and otherwise stops the back end before any stale reload,
+release, guest consumption or frame acknowledgement; and the new `Nv2aBackend.stopped` keeps the
+executor's CPU paths from clearing, rasterising or presenting over the last frame the back end did
+publish. The path classes in this row are unchanged: the same ahead-of-time `cs_pack` kernel is the
+one 16-bit publication path, targets are still cached per guest surface and loaded on first use
+after a flip, and the staging pair stays bounded. Normal-path bytes and the measured
+0.564 → 0.132 ms/flip host publication are untouched. No performance claim is made: three N2 Garage
+windows on the repaired build measure a median 43.87 presents/s against the archived candidate set's
+44.72, run 1 (43.08) below that set's range, and the two sets are neither interleaved nor taken at the
+same time of day, so no cause is inferred in either direction. Pending independent acceptance.
+
 ### CPU and translation
 
 | ID | Path | Class | Where | Active | Note / upgrade when |

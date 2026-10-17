@@ -4111,4 +4111,200 @@ consumed on admission (zero additional unassigned cycles). Lineage spending befo
 No old decision is rewritten, no unchanged failure is retried in a loop, and rotation itself
 grants no budget. All owner stop conditions and Windows toolkit-first push rules remain.
 
+### §31.34 N4.2 repair: a failed publication stops before it crosses a coherence boundary (2026-10-17)
+
+Toolkit `4832f62` (the repair) on top of `891bca2`; the game-side gates at `70ecf0f` on top of
+`78cbb39`, and these records in the commit after it. The candidate `891bca2` / `505f798` stays
+REJECTED (§31.33): its normal-path measurements and its tests remain candidate evidence, and nothing
+here reopens them.
+
+**Hash convention.** Working-tree file hashes below are CRLF, as checked out on Windows; `git show
+<rev>:<path>` blob hashes are LF. The pre-fix backend source is therefore `d26a8ff9…` as a
+working-tree file and `1d556fa8…` as the LF blob the private overlays compiled.
+
+**The defect.** `vb_targets_flush` skipped a batch whose pack descriptor set could not be allocated,
+left its targets dirty and left `g.ok` true. Its callers assumed the batch had been published:
+`vb_flip` submitted, drained, marked EVERY used target stale and advanced `g.frame`, so the next
+`vb_target_load` uploaded the OLD guest bytes over the newer image that had never been published;
+`vb_target_for` flushed and then released a reshaped or LRU-evicted target unconditionally, dropping
+the only copy of pixels guest memory never got; `vb_texture`'s overlapping-guest-texture loop flushed
+and then decoded and cached a texture from guest bytes a live target had superseded. Latching
+`g.ok = 0` and letting the executor's CPU path carry on is not a repair either: it draws a frame
+nothing published on top of the last frame the back end did publish.
+
+**The repair.** Publication is now explicit at every coherence boundary. `vb_targets_flush` returns
+whether any target in its list is left dirty, with its failure behaviour otherwise unchanged (an
+abandoned batch submits nothing, publishes nothing, latches nothing, and leaves every publication
+counter unchanged) — that is what keeps the accepted fault gate's expectations valid. A boundary —
+the flip, a target release/reshape, an overlapping guest-memory texture — calls it through
+`vb_targets_flush_recover`, which on failure refreshes the ring (`vb_slot_submit()` then `vb_drain()`,
+resubmitting the abandoned batch's staging-only recording) and retries EXACTLY ONCE; a target still
+dirty after the retry is counted as `readback_incomplete` and the boundary stops the back end
+(`vb_stop`: one message line, then the `[GPUVK]` stats line carrying the real `rb_incomplete`, with
+`g.ok = 0` and `g.failed = 1` latched and nothing freed, reset, submitted or destroyed). So:
+
+- on the flip's stop path nothing is marked stale and `g.frame` does not advance, so no later load can
+  upload old guest bytes over an unpublished newer image, and a second flip publishes nothing;
+- `vb_target_for` returns NULL without releasing, reshaping or creating when its target cannot be
+  published, so the newer image survives;
+- `vb_texture` returns `VK_NULL_HANDLE` instead of decoding superseded guest bytes;
+- staging-pair failures (`vb_readback_reserve`) are covered exactly like descriptor-set failures;
+- the retry can never publish twice (an abandoned batch published nothing, and a published target is
+  clean and skipped), never loops and never re-enters.
+
+**CPU consumers.** `Nv2aBackend` gains a trailing optional `int (*stopped)(void)`; the Vulkan back end
+reports `g.failed || !g.ok` and D3D11 passes NULL. While it reports stopped the executor performs no
+clear (`clear_surface`), no CPU rasterisation (`raster_batch`, `raster_batch_program`) and no present,
+present-hash trace or frame dump (`NV097_FLIP_STALL`), because guest memory holds the last frame the
+back end published and its unpublished frame supersedes anything the CPU would write. The
+guest-visible swap accounting still runs (`flip_read = flip_write`, `flip_stalls++`,
+`xbox_Nv2aFrameCounterFlip()`, the host-side window frame statistics), so no guest path hangs.
+
+**Unchanged.** The `vb_reserve`/`vb_stream` freeze-on-failed-wait/begin/submit latch and its "nothing
+pending is written, reset or freed" rule; the exact 5:6:5 TRUNCATION; BGRA32; row stride, pitch and
+padding; odd rectangles and sentinels; multiple targets and immediate guest publication; the bounded
+staging pair and the three-slot ring. No shader is compiled or translated at run time. No narrower
+barrier/layout work, sub-allocation, pipeline cache/R4, N6, R5 or D3D11 work. No milestone semantics
+changed.
+
+**The deciding caller gate** (`jsrf_vk_readback_callers`): `tests/test_vk_readback_callers.c`
+(`231d73ae…`) with `scripts/vk-readback-caller-gate.py` and its CMake block, authored by a worker
+distinct from the production change. It `#include`s the toolkit's `src/video/nv2a_vk_backend.c`
+verbatim, points every Vulkan entry point the driven paths reach at its own stub, and drives only the
+callers (`vb_flip`, `vb_target_load`, `vb_target_for`, `vb_texture`), observing `g.frame`, `g.ok`,
+`g.failed`, the targets' `dirty`/`stale`, the publication counters, the recorded command buffers and
+the guest bytes. **On the final source `0d6ac8b5…`: 15 properties, 297 checks, green. On the pre-fix
+source (`1d556fa8…`): RED — 12 of 15 properties, 114 of 297 checks**, with the defect quoted
+(`g.frame 1 (wanted 0)`; `dirty 1, stale 1 (wanted 0)`; one `vkAllocateDescriptorSets` attempt and no
+retry; the next load recording `vkCmdCopyBufferToImage`, `rt_loads 0 -> 1`, and the bytes it uploaded
+identical to the pre-publication image). Property 0 and the success control pass on both sources, so
+a red run is the defect and not the fixture. The injections are stub return values
+(`VK_ERROR_OUT_OF_POOL_MEMORY` from `vkAllocateDescriptorSets`, `VK_ERROR_OUT_OF_DEVICE_MEMORY` from
+`vkCreateBuffer`), never real GPU OOM.
+
+**The multi-batch split: corrected and covered.** The candidate's statement that the
+`>VB_READBACK_MAX` split is unreachable because one target is at most 64 MiB was wrong — one target is
+bounded by `vb_target_for`'s 4096-per-dimension cap, but up to 16 dirty targets contribute to a group.
+The gate now covers it through a labelled private capacity seam (`GATE_GUEST` 1 MiB → 160 MiB,
+`GATE_STAGE` 1 MiB → 96 MiB): property 12 — two 64 MiB dirty 4-byte rectangles (128 MiB, disjoint
+footprints) split into two batches that each publish exactly once (2 begins/2 submits/2 waits/2
+invalidates; `readbacks`, `batches` and `copies` +2; `bytes` +134 217 728; 0 of 167 772 160 guest bytes
+differ; 0 bytes written outside the rectangles; `incomplete` +0; `g.frame` +1), the staging pair
+grown once to 64 MiB and reused by both batches (`vkCreateBuffer 2`, `vkMapMemory 1`, no destroy, no
+free), with the call trace placing batch 1's publish before batch 2's recording; property 12b — the
+same split with `vkAllocateDescriptorSets` failing from the second call on: batch 1's rectangle lands
+exactly, the second target stays dirty, `incomplete` +1, `g.frame` 0, nothing stale, nothing released,
+the retry visible as three allocation attempts; property 13 — a single over-cap dirty target (a
+synthetic 8192×8192 4-byte rectangle, which `vb_target_for` could never produce, at an address outside
+the guest arena) is never staged: the flip publishes the other target exactly, leaves the synthetic one
+dirty with its image and rectangle intact, counts it `incomplete` +1 and stops. The twelve
+pre-existing properties keep identical verdicts and check counts.
+
+**Executor CPU-consumer gate** (`jsrf_nv2a_hal`, new case in `tests/test_nv2a_hal.c`, `ee379459…`, a
+third worker): a back end whose `stopped` reports 1 must leave the 64×64 surface byte-identical, count
+no clear, rasterise no triangle, write no pixel and present no frame — while the guest's swap still
+completes (`flip_stalls` +1) — for both a back end that handles nothing (the CPU fallback) and one
+that handles everything; its `stopped = 0` controls must clear, rasterise, count, deliver and present.
+Removing the executor's four gate sites in a private toolkit copy turns it RED with exactly nine
+failing assertions while every control stays green.
+
+**Private final-source mutation receipts** (`C:/Users/logic/xbr-mac/n42fix/mutants/matrix.tsv`, 11 rows,
+every row carrying `revision_sha256 = 0d6ac8b5…`; one mutant at a time against a private copy, never
+the shared tree): A1 outcome never reported, A2 unsafe flip, A3 unsafe replacement, A4 unsafe
+consumer, A5 no retry/no accounting, B1 skipped publication, B2 wrong slice, B3 overwide rows, B5 the
+group never splits, B6 the staging pair re-made per batch — each RED on exactly the property its defect
+breaks, with every restored row exit 0 at the same sha256. B4 rounding pack is invisible to the caller
+gate (which supplies the staging bytes a copy engine or the pack kernel would have written), so it was
+decided by the real-device `jsrf_vk_readback_pack` case in a private build whose generated pack SPIR-V
+header was replaced: mutant shader `5555bd35…` → header `857916b9…` → `T16A 3904`, `T16B 273`,
+`T16P 4096` of 32 768 bytes wrong, `T16A: (0,0) is 0x1044, the plan says 0x0823`; restored header
+`e75bc7af…` → PASS.
+
+**Process correction, restated.** The candidate's four success-path mutants were produced by copying
+them into the SHARED toolkit and building the shared `game/build` against backend `a39b1df4`
+(`xbr-mac/n42mut/run-mutant.sh`). That violates the private-scratch rule and is not relied on; those
+same four mutations were re-run from the final source in a private overlay (B1 skipped publication, B2
+wrong slice, B3 overwide rows and B4 the rounding pack), and that is what the matrix above records —
+every row is a private-overlay run against `0d6ac8b5…`.
+
+**Reviews.** An independent code review and the configured security/native-memory-lifetime review read
+the diff. Findings and dispositions: `rb_incomplete` could never reach a `[GPUVK]` line, because every
+flip after a stop returns before the report (fixed: `vb_stop` prints the stats line itself); one
+comment misnamed which trace stops (fixed); the periodic report's `dump_surface_bmp()` still reads
+guest memory after a stop (comment added — it is a diagnostic dump of the last published frame, not a
+presentation); and one hardening note — re-registering a back end after a stop would clear the
+executor's guard, which has no production trigger (`nv2a_vk_backend_install` registers once and is
+idempotent, and the only other `nv2a_backend_register` callers are test fixtures) and is therefore
+recorded as a deliberate non-change rather than a new executor-side latch that would change the
+registration semantics the fixtures rely on.
+
+**Validation on the final source.** Guarded build `python -X utf8 scripts/build-jsrf.py` → success;
+executable `ac14cce325a87d64870b220ea159d0bea6039eb0cdfd93c8369ff8ee17f54637`; backend `0d6ac8b5…`;
+executor `45122e34…`. Targeted gates, all green: the caller gate (15 properties/297 checks; 7.39 s in
+the shared suite and 23.55 s in its private harness), `jsrf_vk_readback_fault_gate` (7 properties, 138
+checks, expectations unchanged), `jsrf_vk_readback_pack` (real device, lavapipe),
+`jsrf_vk_ring_fault_gate`, `jsrf_vk_frames_in_flight` (19.20 s), `jsrf_gpu_backend_parity_vk` (14.77 s),
+the V6 conformance cases and the whole AOT suite (16/16, 113.05 s). Full CTest through
+`python C:/Users/logic/xbr-mac/ctest-limited.py --output-on-failure` on the tree that carries these
+records: **100 % of 91 tests passed** in 439.53 s, receipt
+`C:/Users/logic/xbr-mac/final-ctest-n42r3.txt` (the earlier `final-ctest-n42r.txt` and
+`final-ctest-n42r2.txt` runs passed 91/91 on the candidate and pre-record source/test bytes and are kept
+as intermediate evidence); `just check` passed on that same frozen tree, receipt
+`C:/Users/logic/xbr-mac/final-check-n42r3.txt`, including the real corpus
+`entries=126 recompiled_and_matched=126 ascending=yes duplicates=0 xbe_distinct=126 problems=0` and its
+SPIR-V validation (the earlier `final-check-n42r*.txt` receipts predate the final record wording). No
+Skip77/NotRun anywhere, and no unchanged translator output was regenerated.
+
+**N3 bounded e2e on the final source** (`20261017-035814-457-keyscript-n42r-e2e-val`, 620 s bound,
+Vulkan, exploratory, exe `ac14cce3…`, backend `0d6ac8b5…`, toolkit `4832f62`, device RTX 4070): the
+stock `config/key-scripts/e2e.json` completed (`keyscript_complete`), 0 ICALL lines, 0 ABI failures,
+0 fatal, `validation_errors=0`, `validation_warnings=10` (all the known
+`vkCreateGraphicsPipelines(): … Vertex attribute at location 1/7/8 not consumed by vertex shader`),
+`vsh_misses=0`, `vsh_identity_fail=0`, `vsh_declines=0`, `rc_fallback=0`, `tex_undecodable=0`,
+31 522 flips / 31 522 published batches, 63 043 packed readbacks (all 16-bit: `rb_copies=0`, so this
+run does NOT exercise the 4-byte straight-copy publication path — the caller gate's 4-byte targets and
+the pack gate's 32-bit targets do), `rb_incomplete=0`, 2 910 178 draws, 31 786 presents. Both overrides
+were set AND exported in the invoking shell and are recorded in the run's `result.json`
+(`['RECOMP_GPU_BACKEND=vulkan', 'VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation', 'VK_LOADER_DEBUG=layer']`);
+the loader's own insertion lines, quoted from that run's log (158 loader lines):
+
+    [Vulkan Loader] INFO | LAYER:   Insert instance layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+    [Vulkan Loader] INFO | LAYER:   Inserted device layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+
+Disclosed as environment noise, not an override this packet set: the same log's loader output also
+lists an inserted `VK_LAYER_OBS_HOOK` instance layer
+(`C:\ProgramData\obs-studio-hook\graphics-hook64.dll`), a third-party implicit layer present on this
+host. The game was stopped at the run's 620 s bound (`process.exit_code 1`,
+`killed_at_deadline_or_failure: true`, `ran_s 620.4`): a bounded, deliberate termination, not a normal
+game exit, and it supports no claim beyond the script completing and the counters above. No fidelity
+claim is made.
+
+**N2 (three quiet 60 s Garage windows on the RTX 4070, `config/key-scripts/garage-bench.json`, same
+runner and instrumentation).** After, on the repaired build exe `ac14cce3…` (Vulkan, exploratory):
+`20261017-041027-143-keyscript-n42r-bench-1` **43.08** presents/s, `-041949-827-…-2` **43.87**,
+`-042912-299-…-3` **44.50** → **median 43.87** (range 43.08–44.50), p50 22.12–23.37 ms, p90
+24.19–24.45, p99 26.35–29.99, 0 stalls and 0 aliased polls in all three. Before: the **archived**
+candidate set of §31.32 on exe `328fe9bf` — not a fresh rebuild — 44.72 median (44.28–45.08), p50
+22.05–22.24, 0 stalls, 0 aliased polls. The repair's only normal-path addition is an O(1) `stopped`
+predicate at each clear/batch entry and each flip (everything else is failure-path only). The after
+median is 1.9 % below the before median and after run 1 (43.08) sits below the before set's floor
+(44.28); the two sets are not interleaved — the before set was taken earlier the same day — so no
+cause is inferred, and an interleaved control would need a rebuild of the candidate and was not run.
+**No performance claim is made in either direction**: no counter attributes a cost to the added
+predicate, and p50/p90/p99, the zero stalls and the zero aliased polls are close between the sets.
+
+**Limits.** The injected failures are stubbed driver return values, never a real GPU OOM or a real
+device loss. The caller gate supplies the staging bytes a copy engine or the pack kernel would have
+written, so shader arithmetic is decided only by the real-device pack case. After a stop nothing drains:
+the ring's last partial recording is deliberately neither submitted nor drained, and the dead command
+buffer may reference objects later freed (never executed, validation-only surface). The periodic
+report's `dump_surface_bmp()` and the framebuffer window's `RECOMP_FB_VA` pinned path still read guest
+memory on their own clock by design (diagnostic, not presentation). `nv2a_pb_exec_counters.draws` still
+advances for a stopped batch because the dispatch is counted before the gate; `tris_drawn`, `pixels`
+and `clears` do not. The load direction (16→32-bit expansion per target per flip) and the ring drain
+are untouched and were not re-measured.
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: 4832f6247fc9d1de56341f6bcb876125a40c8b37 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 891bca2..4832f62, toolkit pushed first, synchronized.
+PUSHED_TO: origin / BRANCH: master / COMMIT: 70ecf0f (the gates) together with this records commit / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward from 78cbb39, game pushed after the toolkit; the exact records-commit hash is recorded in the packet's completion report (outside git).
+
 

@@ -367,7 +367,21 @@ and makes no new performance claim. Codex independently passed the actual fault/
 reproduced M1/M2/M3 failures and baseline/restored passes, and verified the final N3 archive's source
 identity and loader witness. The next separate item is batched readback; no other N4 item is accepted.
 
-**N4.2 at toolkit `891bca2` / game `505f798` is rejected pending a coherence repair**
+**N4.2 is repaired and awaiting independent acceptance at toolkit `4832f62` / game `70ecf0f` +
+these records** (TR §31.34): publication outcome explicit at every coherence boundary, one bounded
+retry, then a coherence stop propagated to the flip, target replacement, texture aliasing and the
+executor's CPU consumers (`Nv2aBackend.stopped`). A different worker's caller gate
+(`jsrf_vk_readback_callers`, 15 properties/297 checks; red on the pre-fix source) drives the actual
+callers and an executor case in `jsrf_nv2a_hal` decides the CPU-consumer half; eleven private
+final-source mutants plus the real-device rounding mutant are in the receipts, and the bounded
+multi-batch split is now covered instead of being called unreachable. `jsrf_vk_readback_fault_gate`'s
+expectations are unchanged. Full CTest 91/91, `just check` passed, one bounded N3 e2e with
+`rb_incomplete=0`, and three N2 Garage windows whose median (43.87) sits below the archived candidate
+set's (44.72) with no attributable cause — no performance claim in either direction. Still open in N4: narrower
+barriers and layouts, sub-allocated memory, the persisted pipeline cache and R4. **History, for the
+rejection this repair answers:**
+
+**N4.2 at toolkit `891bca2` / game `505f798` was rejected pending a coherence repair**
 (independent Codex review, 2026-10-17; TR §31.33). The implementation and normal-path
 measurements below are retained as candidate evidence, not acceptance. The flip's readback stages every dirty target
 through ONE bounded pair of buffers — a host-visible slice buffer and a device-local pack buffer,
@@ -404,19 +418,20 @@ narrower barriers and layouts, sub-allocated memory, the persisted pipeline cach
 Measure each with N2. Parity tests must stay green. Each code subitem gets a different worker's
 gate and deciding mutation evidence.
 
-**Next: bounded N4.2 repair, before narrower barriers.** Independent execution of the actual
-`vb_flip` after an injected pack descriptor-allocation failure advances the frame with 496 guest
-bytes stale, then `vb_target_load` reloads those old bytes over the unpublished target. The normal
-control publishes both targets exactly; both existing readback CTests still pass. Retaining dirty
-does not protect a flip, eviction/replacement or guest-memory consumer. Propagate publication
-failure through all those callers; complete bounded recovery at the boundary or stop explicitly
-before stale reload, release, consumption or successful frame acknowledgement. Cover staging
-allocation failures too. A different worker must write caller-level gates and final-source private
-mutation proofs; the original success mutants were built in the shared checkout, contrary to the
-packet, and predate the final backend. Preserve the restored clean trees and correct the receipts.
-The owner-authorized review-confirmed reset grants one repair cycle for this bounded packet,
-carrying the 7 remaining operation slots and all prior spending (TR §31.33); no later item starts
-before independent acceptance. This changes no milestone or owner stop condition.
+**N4.2's coherence repair is done at toolkit `4832f62` / game `70ecf0f`** (TR §31.34), before any
+narrower barrier. The defect it answers: an injected pack descriptor-allocation failure let the actual
+`vb_flip` advance the frame with 496 guest bytes stale, and the next `vb_target_load` reloaded those
+old bytes over the unpublished target. Retaining dirty protected nothing. The repair reports the
+publication outcome from the flush, retries a boundary failure exactly once after refreshing the ring,
+and otherwise stops the back end before any stale reload, release, guest consumption or frame
+acknowledgement; the stop is propagated to the executor's CPU paths through `Nv2aBackend.stopped`.
+Staging allocation failures are covered with the same path. The deciding tests come from workers
+distinct from the production change, run against the final source in private overlays: the
+caller-level gate, the executor case, eleven mutants (the candidate's four success-path mutants were
+built in the shared checkout against a pre-final backend, contrary to the packet; those four mutations
+were re-run privately against the final source, and only the re-runs are relied on), and a bounded
+split/over-cap property that replaces the old "unreachable" claim. The owner-authorized review-confirmed reset's one repair cycle is consumed by this packet; no
+later N4 item starts before independent acceptance. This changes no milestone or owner stop condition.
 
 #### R4: measure pipeline-cache pressure (part of N4)
 
