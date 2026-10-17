@@ -230,6 +230,15 @@ same time of day, so no cause is inferred in either direction. Pending independe
 
 ## Known defects (not classes — fix or record a class when they bite)
 
+**L62 review update, 2026-10-17 (TR §31.41): N4.4 is not independently accepted.** Toolkit
+`ecbaca4` loses an allocation's only ownership record when the parked-release list overflows
+during failed-bind rollback. Codex's real-caller controlled-stub proof creates/destroys all 65
+images but leaves 65,536 bytes used after the drain; required-dedicated allocations free 64 of
+65 handles. Idle and private never-bound rollback controls release all ranges. The green gate's
+property 6c explicitly permits this leak, so it cannot satisfy leak-free rollback. Repair this
+capacity/ownership defect and complete matched N2 evidence before pipeline cache/R4. The prior
+N4.1–N4.3 acceptance remains; no change to fidelity classification or runtime compilation policy.
+
 | ID | Defect | Where | Effect | Status |
 |---|---|---|---|---|
 | D1 | Every DMA_PUT write lost bit 16: the mask `0x1FFEFFFF` came from reading `0x100410` (`NV_PFB_WBC`, the write-buffer flush) as DMA_PUT | `src/nv2a/nv2a_core.c` `NV_USER_DMA_PUT` write; game `docs/jsrf-kick-get-contract.md:60` | once the ring passes 64 KB the walk stops 64 KB short | **Fixed** 2026-09-30, toolkit `b857665`: PUT stored as written, latch removed; contract doc corrected |

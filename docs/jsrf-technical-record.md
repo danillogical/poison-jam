@@ -5061,5 +5061,85 @@ pipeline cache/R4, N6 and R5 remain open, and nothing later than N4.4 was starte
 PUSHED_TO: origin / BRANCH: main / COMMIT: ecbaca49b506854977474660cc0f11fdaaaf21da / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 5af1c48..ecbaca4, toolkit pushed first, clean and synchronized (origin/main == ecbaca4); upstream untouched (push URL DISABLED).
 PUSHED_TO: origin / BRANCH: master / COMMIT: 3f4e82f (N4.4 gates), 3a3ac7a (N4.4 records) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 9fd8e05..3a3ac7a, clean and synchronized (origin/master == 3a3ac7a). Every outgoing blob version in each repository's own object store was audited for secrets, forbidden paths and blobs over 100 MB: toolkit 2 blobs / game 23 objects, 0 secret hits, no `game/` or retail-derived path, largest blob 397 393 bytes.
 
+### 31.41 N4.4 independent review: parked-release overflow leaks failed-bind allocations (2026-10-17)
+
+**Acceptance withheld.** Reviewed `op_0mvcms9rr136893e495f94ed6`, turn 3 of
+`run_0mvccvfhh6a016c316b6eca67`, game `fd09501` / toolkit `ecbaca4`, fetched clean and
+synchronized. The implementation report in §31.40 is superseded as an acceptance claim. Last
+independently accepted checkpoint remains N4.3, toolkit `5af1c48` / game records `9fd8e05`.
+
+**New independently reproduced defect.** `vb_image_create` gives its allocation back after a
+failed bind. While a recording is open, `vb_mem_give` parks at most 64 releases. The excess
+branch increments `parked_lost` and zeroes the allocation's only owner. The backend remains
+usable. After recording closes, the real `vb_garbage_drain` destroys the images and recovers
+only the saved ranges. A lost pooled range pins its block; a lost dedicated handle cannot be
+freed. The packet required leak-free rollback, while gate property 6c explicitly expects this
+permanent leak. Counting it is not a safe capacity policy.
+
+Codex's private production-body caller proof (`C:/Users/logic/xbr-mac/n44-codex-leak/proof.c`)
+uses controlled Vulkan stubs from the existing gate, then calls actual `vb_image_create` 65
+times with 64 KiB requirements and injected bind failures and actual `vb_garbage_drain`:
+
+| scenario | allocation/free calls | used bytes after drain | lost ranges | exit |
+|---|---|---|---|---|
+| idle, pooled | 1 / 0 (bounded empty block retained) | 0 | 0 | 0 |
+| recording open, pooled | 2 / 0 | 65,536 | 1 | 1 |
+| idle, required dedicated | 65 / 65 | 0 | 0 | 0 |
+| recording open, required dedicated | 65 / 64 | 65,536 | 1 | 1 |
+
+All 65 created images are destroyed in each scenario, with no submission left pending and
+`g.ok == 1`. Private counterfactual source changes only the failed image-bind rollback to
+immediately release its never-bound allocation, then clears that allocation before discarding
+the image: all four cases pass, pooled uses one block with no live bytes, dedicated frees all
+65 handles. This localizes the ownership error; it is not a complete production repair or
+permission to release anything recorded or in flight. Shared production sources/executable
+were untouched. Final proof receipts are `proof-0-0.txt`, `proof-1-0.txt`, `proof-0-1.txt`,
+`proof-1-1.txt` and corresponding `control-*.txt` in that private directory. Initial proof
+development errors (unwired stubs, one-shot requirements and fixture capacity, then control
+generator newline matching) were corrected before these results; they are not game failures.
+
+Source SHA-256 `9e650e633374679aae4186bb9b8b825db58b5ca1ad2255807b74f315c0bea96f` matches the
+unmodified private source. Existing gate hash
+`6eab1487979a349681ec17bcda15a2d05646c26d0a9a9d943244a27ff713406c`; independent proof hash
+`4cf02d917a6cdd6d150e3acd7be6204ae3c592cc52bfca641d8b052c9f3e44fa`; private control source
+`c2178f1a7ca1b64771b1e2f1aa92114e207d74578b2068a02d8f027ee942f868`.
+
+**Other independently checked evidence.** Ten Vulkan CTests passed through the limited-rights
+helper, no skips, 33.59 s. Existing private mutants were re-executed: real baseline exit 0,
+M1–M10 each exit 1, restored real exit 0 (9 properties / 265 checks); M5 fails eight checks in
+property 7 and M7 is the optimization control. These do not cover the newly demonstrated
+capacity defect. The full-suite receipt is 96/96 in 675.46 s (earlier 617.18 s). N3 run
+`20261017-131536-178-keyscript-n44-n3-e2e-val` has actual Khronos instance/device insertions at
+log lines 857/1288, errors 0, known warnings 10, program misses 0, incomplete readbacks 0.
+Archived/current exe hash both
+`d657ca5b1ecc4bdcce53d9737f0a80e774eec9bb7d22dfa04beed878ef51d82a`; keyscript complete,
+bounded termination exit 1 / 620.6 s, not natural exit or fidelity proof. The second run has no
+loader trace and cannot replace the first witness.
+
+**N2 evidence limit.** Three original quiet before windows exist. The late comparison in
+§31.40 contains only one baseline and two final windows, and does not complete a matched
+three-window gate. Timing drift is observed; its cause is unresolved. Do not assert that
+power state caused it, that no regression exists, or that similar startup exits prove one
+common crash cause or exclude this change. Retain excluded AV evidence and complete three
+controlled baseline/final pairs on the final repair before accepting N4.4.
+
+**Own repair advice and authorized reset accounting.** Repair N4.4 only: preserve ownership at
+release capacity, distinguish never-published rollback from live GPU references, use bounded
+admission/backpressure or safe retained ownership, and never trade the leak for early reuse,
+unbounded growth or stale publication. A different worker must decide >64 failures on real
+image/buffer callers, pooled and dedicated, recording/pending/idle, successful controls,
+capacity pressure and failed waits. Old source must fail the new oracle; private final-source
+capacity/ownership and early-reuse mutants must fail, restored final must pass. Preserve all
+prior byte/lifetime gates, full CTest/check, final N3 loader witness and controlled N2 evidence.
+Stop after this repair for Codex review; no cache/R4, N6 or R5 yet. Full advice and report stay
+outside git at `C:/Users/logic/.omp-bridge/reports/poison-jam/n44-codex-review-20261017.md`.
+Record one STOP for the reviewed operation. The owner's review-confirmed reset permits one
+new repair allowance for this newly proved defect after meaningful progress. Carry all three
+remaining operation slots into the linked successor, zero extra unassigned repair cycles;
+the first repair admission consumes the renewed cycle even if bridge bookkeeping calls it a
+first operation. Cumulative spending 17 operations / 6 repairs before admission, 18 / 7 after,
+two operation slots then remain. Preserve prior decisions and stop conditions; no repeated
+reset for an unchanged defect. Windows unsigned audited clean FF pushes remain toolkit first.
+
 
 

@@ -323,7 +323,21 @@ Readbacks take 202–211 s of a 560 s run, and V1 submits and fence-waits simply
 - sub-allocated memory;
 - a persisted pipeline cache.
 
-**N4.4 sub-allocated memory is implemented and validated** (2026-10-17, TR §31.40; toolkit
+**N4.4 is implemented, but independent acceptance is blocked** (2026-10-17, TR §31.41).
+Codex reproduced a rollback leak in toolkit `ecbaca4`: 65 failed image binds during an open
+recording overflow the 64-entry parked-release list. After the real garbage drain all images
+are destroyed, but 65,536 bytes remain owned by nobody; the dedicated variant frees only 64 of
+65 allocations. Idle controls pass, and a private never-bound rollback control closes both
+failures. The existing gate explicitly permits this leak, so its green result does not satisfy
+the required leak-free rollback contract. The next operation must repair N4.4, with a different
+worker's capacity/ownership gate and private negative controls, before any pipeline cache/R4,
+N6 or R5 work. Last independently accepted checkpoint remains N4.3 (toolkit `5af1c48`, game
+records `9fd8e05`). N2 also needs three matched baseline/final windows: observed timing drift
+does not establish its cause, and the late comparison has only one baseline and two final
+samples. Preserve the startup AVs as causally unresolved. See TR §31.41 for independent proof,
+repair advice and the review-confirmed allowance accounting.
+
+**N4.4 implementation report, superseded as acceptance by the review above** (TR §31.40; toolkit
 `ecbaca4`, game gate `3f4e82f`). The back end no longer makes one `VkDeviceMemory` per resource:
 a resource takes a RANGE out of a pool block, pooled by `(memoryTypeIndex, linear|non-linear)` so an
 image and a buffer never share a block and `bufferImageGranularity` can never apply between
@@ -344,11 +358,12 @@ migrated by a worker distinct from the production change. Independent code revie
 defect (a double-counted free-range head made `padding_bytes` dishonest) plus a retention policy
 that never fired and gate gaps -- all repaired; the security/native-lifetime review found no
 High/Medium defect. Full CTest **96/96** and `just check` green on the frozen source; N2 shows no
-gain or regression (the change makes 10 `vkAllocateMemory` calls for 232 ranges on the game's own
-560 s workload, and the windows are dominated by the host's power state -- the same baseline exe
-measured 41.37 and 23.13 presents/s within one session); the N3 bounded stock e2e ran with
+established gain or regression (the change makes 10 `vkAllocateMemory` calls for 232 ranges on
+the game's own 560 s workload; the same baseline exe measured 41.37 and 23.13 presents/s within
+one session, but the cause of the drift is unresolved); the N3 bounded stock e2e ran with
 `validation_errors=0` and the loader's own insertion line quoted. **The next separate operation is
-the persisted pipeline cache/R4, then N6 and R5 in the approved order.** Nothing later than N4.4 was
+the N4.4 ownership/capacity repair and matched measurement, then persisted pipeline cache/R4,
+N6 and R5 in the approved order.** Nothing later than N4.4 was
 started.
 
 **N4.3 independently accepted at toolkit `5af1c48` / game gate `4e09019`, records `1b0e291`**
