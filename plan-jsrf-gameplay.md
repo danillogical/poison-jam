@@ -342,8 +342,11 @@ path, narrower barriers and layouts, sub-allocated memory, the persisted pipelin
 timeout; its `g.ok` guard is after the write. The analogous texture-upload path needs the same
 early-stop audit. The normal lifetime gate passes, but it does not inject that failed wait.
 Acceptance and the next N4 item are withheld. A private early-guard control passes; production
-code has not been changed by this review. The bridge has zero remediation cycles remaining;
-one additional bounded repair cycle requires owner authorization, without resetting other limits.
+code has not been changed by this review. **Owner policy update (2026-10-16):** the Plan Orchestrator
+may renew an exhausted repair allowance after independently confirming the review and recording its
+own concrete repair advice. Those conditions are met for this finding (TR §31.30); one bounded
+N4.1 repair packet is authorized. Keep prior decisions and spending, the 9 remaining operation slots,
+all other limits and the existing stop conditions; no next N4 item before acceptance.
 
 Measure each with N2. Parity tests must stay green. Each code subitem gets a different worker's
 gate and deciding mutation evidence.
