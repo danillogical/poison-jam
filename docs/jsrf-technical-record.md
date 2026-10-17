@@ -3823,3 +3823,36 @@ publishes nothing further) is unchanged and itself unrehearsed. After a latch no
 garbage list freezes at the failing call's entries (bounded, nothing freed); the dead buffer may
 reference objects that are later freed, which is never executed and therefore validation-only surface.
 
+**Independent Codex acceptance (2026-10-16).** Both repositories fetched clean and synchronized at
+game `389a03a` / toolkit `f41c0d2`. Codex reviewed the repair, included-production-source fault test
+and build-time probe, then independently ran the real software-Vulkan lifetime gate (18.98 s) and
+fault gate (0.26 s): both passed, no skips. The latter exercises 9 properties and 105 checks with
+controlled driver outcomes; it is not a real GPU timeout. Independently re-executed scratch variants
+reported their compiled source identities: baseline/restored `03da3147…` exit 0; callers-only
+`dc69aaae…` exit 0 (the entry refusal remains decisive); M1 `a244b1b6…` exit 1, 3 properties / 8 checks
+failed; M2 `b04f7d58…` exit 1, 3 properties / 16 checks failed; M3 `b5d5d95d…` exit 1, 1 property /
+1 check failed. The reported distinction between redundant caller guards and the combined decisive
+mutation is preserved, not counted as a false pass of the behavior gate.
+
+The inspected named final CTest receipt (`final-ctest-n4r.txt`) records 88/88 passed in 443.91 s;
+the post-record checker receipt includes the real corpus 126/126. These receipts were inspected,
+not independently rerun in full. The final N3 archive `20261016-212431-655-keyscript-n4r-e2e-val2`
+reclassifies EXPLORATORY, zero UNKNOWN/MISSING; its recorded backend hash is the actual final
+`03da3147b4cdb5828094a09c24feea3890af0e05628edbf79e94ba5b643e7715`, and its executable hash matches
+`37d9c75e…` above. Codex verified the actual Khronos insertion lines and final counters: 0 validation
+errors, the known 10 warnings, 0 program misses/identity failures/declines. The script completed and
+the game was stopped at 620.5 s (process exit 1); this is not a normal game-exit claim.
+
+Actual transcripts confirm different fix/test/mutation workers on OpenCode DeepSeek, code review
+on Opus 5.5 and security review on Muse 1.3, no recorded fallback. Every outgoing repair blob was
+independently audited in its own repository (game 6, toolkit 1), zero secret hits, forbidden paths or
+oversized blobs. Both commits are unsigned, without co-author/signature trailers.
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: f41c0d24295caf3bc62f87b7a64baf08bc14c259 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: synchronized fast-forward, toolkit pushed first.
+PUSHED_TO: origin / BRANCH: master / COMMIT: 389a03a5160534a69314963593dc4f749a391e05 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: synchronized fast-forward, after toolkit.
+
+N4.1 is accepted on this repaired state. The next packet may cover only the separate batched-readback
+item; the prior 43.40 presents/s measurement remains attributed to `c5f3696`, and no new performance
+claim or repair of the unrelated startup crash is inferred. Eight operation slots remain before the
+next dispatch; the renewed repair cycle has been consumed, with no extra unassigned cycles.
+

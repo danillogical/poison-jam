@@ -323,8 +323,8 @@ Readbacks take 202–211 s of a 560 s run, and V1 submits and fence-waits simply
 - sub-allocated memory;
 - a persisted pipeline cache.
 
-**N4.1 is implemented, was rejected on a failed-wait lifetime defect, and is repaired; independent
-acceptance is pending** (toolkit `c5f3696` plus the repair `f41c0d2`, TR §§31.29–31.31). A ring of
+**N4.1 is independently accepted at game `389a03a` / toolkit `f41c0d2`, after repairing the
+failed-wait lifetime defect** (TR §§31.29–31.31). A ring of
 three submission slots, each owning its command recording, fence,
 descriptor pool and 16 MiB upload stream; a submission is issued without waiting for the ones before
 it; a draw entry splits a frame once the recording slot holds 2 MiB of stream or 32 descriptor sets
@@ -338,12 +338,12 @@ median against 33.48 before** (frame p50 22.4 ms against 29.9 ms). Full CTest 87
 are green. Still open in N4: one batched readback per flip without the CPU convert on the critical
 path, narrower barriers and layouts, sub-allocated memory, the persisted pipeline cache and R4.
 
-**Independent review, 2026-10-16 (TR §31.30):** a controlled failure-path reproduction shows
+**Review history, 2026-10-16 (TR §31.30):** a controlled failure-path reproduction showed
 `vb_target_load` writes into a still-pending slot's stream after `vb_reserve` encounters a fence
 timeout; its `g.ok` guard is after the write. The analogous texture-upload path needs the same
 early-stop audit. The normal lifetime gate passes, but it does not inject that failed wait.
-Acceptance and the next N4 item are withheld. A private early-guard control passes; production
-code has not been changed by this review. **Owner policy update (2026-10-16):** the Plan Orchestrator
+That candidate was rejected. A private early-guard control passed; the repair below closes the
+confirmed defect. **Owner policy update (2026-10-16):** the Plan Orchestrator
 may renew an exhausted repair allowance after independently confirming the review and recording its
 own concrete repair advice. Those conditions are met for this finding (TR §31.30); one bounded
 N4.1 repair packet is authorized. Keep prior decisions and spending, the 9 remaining operation slots,
@@ -363,7 +363,9 @@ pointers: green on the repaired source (9 properties, 105 checks), red on `c5f36
 **88/88**, `just check` passed, and a bounded e2e under N3 completed with `validation_errors=0`, the
 known 10 unused-attribute warnings, `vsh_misses=0` and the loader's insertion line quoted. The 43.40
 presents/s N2 figure above remains the `c5f3696` measurement: this repair changes failure paths only
-and makes no new performance claim. Awaiting independent acceptance.
+and makes no new performance claim. Codex independently passed the actual fault/lifetime gates,
+reproduced M1/M2/M3 failures and baseline/restored passes, and verified the final N3 archive's source
+identity and loader witness. The next separate item is batched readback; no other N4 item is accepted.
 
 Measure each with N2. Parity tests must stay green. Each code subitem gets a different worker's
 gate and deciding mutation evidence.
