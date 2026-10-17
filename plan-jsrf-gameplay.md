@@ -434,19 +434,25 @@ were re-run privately against the final source, and only the re-runs are relied 
 split/over-cap property that replaces the old "unreachable" claim. The owner-authorized review-confirmed reset's one repair cycle is consumed by this packet; no
 later N4 item starts before independent acceptance. This changes no milestone or owner stop condition.
 
-**Next: order staging writes after an abandoned batch (TR §31.35).** The independent original
-reproduction now stops safely, and five Vulkan gates plus the executor test pass. However, if an
-earlier batch records a 4-byte copy then fails its pack-set allocation, the next batch can reuse
-staging offset 0 in the same command buffer with no transfer-write dependency between writes.
-Independent valid-dimension command recording shows the 64 MiB abandoned copy overlapping the next
-16 KiB copy before any submit, wait or relevant barrier. Normal control is green; a private
-error-branch barrier control removes the hazard. This is necessary correctness ordering within
-N4.2, not the separate narrower-barrier optimization. A different worker must add the first-batch-
-fails/next-batch-reuses regression and private final-source mutant proof. The existing split gate
-fails the second batch and misses this ordering. Also qualify memory guarantees per published
-target rectangle: a later failure can leave earlier targets published, so stopping is not whole-
-frame atomicity. One review-confirmed repair cycle is renewed, carrying only 6 remaining operation
-slots and all prior spending; no later plan item starts before independent acceptance.
+**N4.2's ordering repair is done at toolkit `cd638d4` (on `4832f62`) / game gate `acf20ff`**
+(TR §31.36), before any narrower barrier. The defect it answers (§31.35): a group whose pack
+descriptor set could not be allocated left its already-recorded copies in the open recording, and the
+next group's slices start at offset 0 again, so its 4-byte copy — or a 16-bit target's pack-output
+copy — rewrote the same staging bytes with no memory dependency between the two writes. ONE added
+`vb_barrier()` at the abandonment point orders every write the abandoned group had recorded before
+anything recorded after it, on both staging buffers, and covers the pack buffer's
+read-before-a-later-write class; no counter, retry, stop, publication, slot or ownership semantic
+changed and no success path was touched. A different worker's gate `jsrf_vk_readback_ordering_gate`
+(14 verdicts / 275 checks) decides it from the recorded command stream — stage and access masks,
+destination ranges, command buffers and slot/fence state, with write-after-write and write-after-read
+classes — red on the pre-fix source (10 properties, 23 of 275 checks) and on two private weakening
+mutants of the final source, green restored at the identical sha256; the retained caller, fault, ring,
+executor, real-device pack, parity and AOT/V6 gates stay green, full CTest is 92/92 in 441.05 s,
+`just check` passes with the real corpus at 126/126, and a bounded N3 e2e on the pushed, clean-tree
+executable is loader-witnessed and clean. The guest-memory guarantee is now stated per published target
+rectangle: an earlier batch can publish before a later one fails, so the stop preserves the unpublished
+targets and is not whole-frame atomicity. The owner-authorized review-confirmed reset's one renewed
+repair cycle is consumed by this packet; no later N4 item starts before independent acceptance.
 
 #### R4: measure pipeline-cache pressure (part of N4)
 

@@ -4369,4 +4369,145 @@ after admission 15 / 6, with 5 operation slots left. Preserve prior decisions an
 conditions. Stop after this repair for Codex acceptance; do not start a later N4 item.
 PUSHED_TO: origin / BRANCH: master / COMMIT: 70ecf0f (the gates) together with fe09e5ee944a9ae4963a7a6f1d8ddfa39bfe3670 (the §31.34 records) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 78cbb39..fe09e5e, game pushed after the toolkit, synchronized at that checkpoint.
 
+### §31.36 N4.2 ordering repair: an abandoned batch's staging writes are ordered before their reuse (2026-10-17)
+
+**Repair recorded; N4.2 itself stays REJECTED pending independent acceptance.** §31.32's candidate and
+§31.34's caller repair remain candidate evidence; §31.35's finding is answered here, and no later N4
+item was opened. One added line of executable code in the whole repair, in
+`src/video/nv2a_vk_backend.c` inside `vb_targets_flush`'s `if (!batch_ok)` branch, immediately before
+`i = j; continue;`: `vb_barrier();` — the file's deliberately broad barrier
+(`VK_PIPELINE_STAGE_ALL_COMMANDS_BIT -> VK_PIPELINE_STAGE_ALL_COMMANDS_BIT`,
+`VK_ACCESS_MEMORY_WRITE_BIT -> VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT`).
+
+**The defect it answers (from §31.35).** A group whose pack descriptor set could not be allocated left
+its already-recorded copies in the open recording and the flush continued to the next group, whose
+slice offsets start at 0 again: a 4-byte target's `vkCmdCopyImageToBuffer` — or a 16-bit target's
+pack-output `vkCmdCopyBuffer` — wrote the same `g.rb_buf` bytes with no memory dependency between the
+two writes, because the batch's own HOST_READ barrier is recorded after BOTH and so cannot order them
+against each other. Vulkan requires a memory dependency between write-after-write accesses
+(synchronization chapter, https://docs.vulkan.org/spec/latest/chapters/synchronization.html).
+
+**Repair scope.** The added barrier is reached only with `g.ok == 1` (`vb_fail`, which the failed
+allocation calls, only counts and prints) and outside any pass, so it records into the live command
+buffer of the current slot, not the dead one. It orders every write the abandoned group had recorded —
+the 4-byte image copies and the pack path's output copies, on the host-visible slice buffer and the
+device-local pack buffer alike — before anything recorded after it, and its stage scopes cover the
+pack buffer's read-before-a-later-write class as well. Nothing else changed: no counter, retry, stop,
+publication, slot-transition or deferred-ownership semantics, and no success path gained a barrier. No
+narrower/targeted barrier was introduced; that remains N4's separate open item. The same pass qualified
+the over-broad "guest memory keeps its last published frame" wording in `nv2a_vk_backend.c` (file
+header, `readback_incomplete`, the recover preamble, `vb_stop` and its message, `vb_stopped`, and the
+two stop messages), `nv2a_vk_backend.h`, `src/kernel/nv2a_backend.h` (`Nv2aBackend.stopped`) and
+`src/kernel/nv2a_pb_exec.c`: a flush publishes batch by batch, so earlier batches can already be in
+guest memory when a later one fails — the stop preserves the UNPUBLISHED targets, leaves each target
+rectangle at the last bytes published for it, and is NOT whole-frame atomicity. No whole-frame
+transaction was added and no milestone semantics changed. Identities: backend working-tree sha256
+`c710be7bf99a721b6abbf275d549b230da6e7b4b0e48ab833a06663346e9c528` (CRLF; the gate compiles these
+bytes), committed blob sha256 `6cae1f824e0f1acb6fdc52f0b27171ccf484881ed4631d67a9b0c5c806abc1cc`
+(LF); `nv2a_vk_backend.h` `75f893e8…`/blob `82fd8a21…`; `nv2a_backend.h` `95116006…`;
+`nv2a_pb_exec.c` `7694e6bb…`; toolkit commit `cd638d42821c74ee4245ed6c98ba896e5461f3f7`.
+
+**Deciding gate, written by a different worker.** `jsrf_vk_readback_ordering_gate`
+(`tests/test_vk_readback_ordering_gate.c` sha256 `104b0573…`, `scripts/vk-readback-ordering-gate.py`
+sha256 `9559c0c5…`, one added CMake block, +96 lines) compiles the production backend verbatim
+(`XBR_VK_BACKEND` + `#include "nv2a_vk_backend.c"`), stubs every Vulkan entry point as a recording
+function pointer, needs no ICD and has no skip path, and fails the BUILD when a seam it binds to moved
+(build-time probe, 69 anchors; the repair's own seam is a printed marker, so the pre-fix source still
+builds). It records every write, read, barrier, submit and fence wait with a sequence number and
+decides, for every pair of overlapping accesses to the same buffer, whether a barrier strictly between
+them — or, across recordings, a completed fence wait — orders the later one, quoting stages, access
+masks, destination ranges, buffer handles, command buffers and slot/fence state. Write-after-write
+needs the barrier's second access scope to cover the later write; write-after-read needs only the stage
+scopes, an execution dependency. Fixtures use production-legal dimensions (4096x4096 BGRA32 64 MiB,
+4096x4096 RGB565 32 MiB packed to 32 MiB, 4096x2048, 128x64, 64x64) chosen so that a group's slices
+fill the 96 MiB `VB_READBACK_MAX` exactly and the next target starts a second group at offset 0 again;
+the pack failure is injected through the stub's `vkAllocateDescriptorSets` return value, after the
+first copy was recorded, not by real pool exhaustion. Fourteen verdicts, 275 checks, GREEN on the
+repaired source; the PRE-FIX baseline is RED on 10 properties, 23 of 275 checks, quoting
+`UNORDERED #2/vkCmdCopyImageToBuffer and #4/vkCmdCopyImageToBuffer in recording 1: no barrier strictly
+between them orders the later write after the earlier one` and
+`WAR UNORDERED read #4/vkCmdCopyBuffer (pack output read) and write #9/vkCmdDispatch …`, with the
+probe's abandonment-barrier marker reading `abandonment barrier 0`. Two private weakening mutants of
+the FINAL source are RED — the added call replaced by a HOST_READ-only barrier (10 properties, 21
+checks: the destination stage cannot cover the later writer, and the destination access cannot cover a
+write) and the call deleted (baseline's set) — and the restored source is GREEN at the identical
+sha256. Private receipts: `C:/Users/logic/xbr-mac/n42order/receipts/matrix.tsv` and the per-run logs;
+no shared source, build tree or executable was mutated for any mutant.
+
+**Independent reviews (two agents, distinct from the production and gate workers).** The code review
+found no blocking defect — the barrier is recorded into the live buffer, correctly placed between the
+abandoned writes and everything after them, and sufficient under Vulkan's WAW rules — and raised four
+non-blocking weaknesses, all resolved or recorded: the gate's ordering predicate accepted any write bit
+in the destination access (it now requires the barrier's second access scope to cover the later
+access); two hazard classes were undecided (the pack buffer's read-before-later-write class is now
+recorded and decided by a third scenario, and the pack buffer's write-against-write reuse is ordered by
+the pack path's own barrier by construction and is quoted as a control); a stale comment in the probe
+script; and a receipts line count. It also stated, as asked, that cross-recording ordering in the gate
+is deliberately stricter than Vulkan (it requires a completed fence wait), so the gate decides this
+implementation and fails safe. The security/native-memory-lifetime review found no new hazard and no
+lifetime change: the added barrier allocates, frees, resets, submits and waits for nothing; an
+abandoned or stopped recording is intentionally not submitted, reset or freed, and every post-stop
+free path is unreachable (so the direction is leak, never use-after-free); the changed stderr strings
+carry no format-string or injection risk. It recorded one pre-existing, out-of-scope
+defence-in-depth gap — the publish `memcpy` has no guest-RAM bounds check — which this repair neither
+widens nor narrows; see Limits.
+
+**Gates (all on the frozen tree).** Guarded build `python -X utf8 scripts/build-jsrf.py` succeeded with
+the executable `46c4ffe9d98ba876a68b7fba43710dee99263c381e39e1caeecac8f69a786009`
+(`receipts/build-final.txt`). Full CTest through
+`python C:/Users/logic/xbr-mac/ctest-limited.py --output-on-failure` — the elevated-session route the
+software-ICD tests need — **92/92 in 441.05 s** (`receipts/final-ctest-n42o.txt`), including the new
+`jsrf_vk_readback_ordering_gate` (2.82 s) and every retained gate: `jsrf_vk_readback_fault_gate` with
+unchanged expectations, `jsrf_vk_readback_callers` (15 properties / 297 checks),
+`jsrf_vk_ring_fault_gate`, `jsrf_nv2a_hal`, `jsrf_vk_readback_pack` (real device),
+`jsrf_vk_frames_in_flight` (17.40 s), `jsrf_gpu_backend_parity_vk` (14.90 s), the V6 conformance set and
+the AOT/provenance set. No `Skip77` and no NotRun anywhere, and no unchanged translator output was
+regenerated. `just check` passed with the real retail corpus unchanged
+(`entries=126 recompiled_and_matched=126 ascending=yes duplicates=0 xbe_distinct=126 problems=0`,
+`receipts/final-check-n42o.txt`).
+
+**N3 witness.** Run `20261017-065204-433-keyscript-n42o-final-e2e` — stock `config/key-scripts/e2e.json`,
+620 s bound, Vulkan back end, exploratory profile, exe `46c4ffe9…` (identical to the built and pushed
+bytes), device RTX 4070, isolated disposable save root. The run started from a CLEAN tree: its archived
+`project.patch` and `project-status.txt` are both empty and `project_archived` is true, so the archive
+pins the exact repository state. `VK_INSTANCE_LAYERS` and `VK_LOADER_DEBUG` were set AND exported in the
+invoking shell and also passed to the runner; the run's `result.json` records the overrides
+`['RECOMP_GPU_BACKEND=vulkan', 'VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation',
+'VK_LOADER_DEBUG=layer']`. The loader's own insertion lines, quoted from that run's `jsrf_run.log`
+(57 297 lines):
+
+    [Vulkan Loader] INFO | LAYER:   Insert instance layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+    [Vulkan Loader] INFO | LAYER:   Inserted device layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+
+Disclosed, not set by this packet: the same log lists an inserted `VK_LAYER_OBS_HOOK` instance and
+device layer (`C:\ProgramData\obs-studio-hook\graphics-hook64.dll`) — a third-party implicit layer
+present on this host. Outcome `keyscript_complete`; 0 ICALL lines, 0 ABI failures, 0 fatal, 0
+`still_rejecting`; `validation_errors=0` and `validation_warnings=10` (all the known
+`vkCreateGraphicsPipelines(): … Vertex attribute at location 1/7/8 not consumed by vertex shader`);
+`vsh_misses=0`, `vsh_identity_fail=0`, `vsh_declines=0`, `rc_fallback=0`, `tex_undecodable=0`,
+`rt_copies=0`, `rb_copies=0`, `rb_incomplete=0`; 26 298 flips, 26 517 presents, 2 976 248 draws, 52 595
+published readbacks, 76 972 submissions, max 3 in flight. Termination was bounded and deliberate —
+`killed_at_deadline_or_failure: true`, `exit_code 1`, `ran_s 620.6` — not a normal game exit, and this
+is a loader-witnessed normal-path run, not a fidelity proof.
+
+**Limits.** The injected failures are stubbed driver return values, never real pool exhaustion or a
+real device loss. The gate decides the RECORDED command stream; its staging bytes are supplied by the
+fixture at each batch's fence wait, so it decides ordering, ranges, masks and slot/fence state, not the
+bytes a real copy engine or the pack kernel produces (shader arithmetic is decided by the real-device
+`jsrf_vk_readback_pack` case). Cross-recording ordering in the gate is stricter than Vulkan, as above.
+This e2e's readbacks were all 16-bit (`rb_copies=0`), so it does not exercise the 4-byte straight-copy
+publication path the deciding gate covers with `vkCmdCopyImageToBuffer`. A medium, pre-existing
+defence-in-depth gap remains open and out of this packet's scope: the publish `memcpy` writes to
+`vb_guest(t->va)` plus rectangle offsets with no guest-RAM bounds check and no cross-check that the
+rectangle lies inside the surface, so a hostile pushbuffer crafting pitch/VA/clip could drive a
+successful publish outside the intended surface; the repair adds no validation and changes nothing
+there. The security review's one low nit is a fail-closed message truncation in the gate's own fixture.
+`vb_frames_in_flight`/parity timings and the 43.87 vs 44.72 presents/s comparison of §31.34 are
+measurements of their own commits: this repair changes one failure-path barrier, keeps the same
+executable bytes on every success path and makes no new performance claim. Models and fallback chains
+were not changed and no fallback was observable in any transcript; `.omp/config.yml` is untouched.
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: cd638d42821c74ee4245ed6c98ba896e5461f3f7 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 4832f62..cd638d4, synchronized (origin/main == cd638d4).
+PUSHED_TO: origin / BRANCH: master / COMMIT: acf20ff74dc58fa757de1ff716c0cd93f4e2e431 (the ordering gate and its CMake/probe files) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward d520693..acf20ff, game pushed after the toolkit, both trees clean and synchronized at that checkpoint; the §31.36 records commit follows and is pushed with its receipt recorded in the packet's completion report, which lives outside git.
+
 

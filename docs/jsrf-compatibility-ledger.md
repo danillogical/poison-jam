@@ -38,6 +38,20 @@ host API); list the one that decides fidelity first.
 
 ## Entries
 
+**L62 ordering repair (2026-10-17, TR §31.36):** toolkit `cd638d4` (on `4832f62`) adds ONE
+`vb_barrier()` in `vb_targets_flush`'s abandoned-batch branch, game gate `acf20ff` adds
+`jsrf_vk_readback_ordering_gate` (14 verdicts / 275 checks: red on the pre-fix source, red on two
+private weakening mutants of the final source, green restored), and the wording of the guest-memory
+guarantee in the toolkit's comments, `nv2a_vk_backend.h`, `kernel/nv2a_backend.h` and
+`kernel/nv2a_pb_exec.c` now states it per published target rectangle. An abandoned batch's
+already-recorded staging writes are ordered before the next group's reuse of the same offsets — the
+4-byte copy and the pack path's output copy into the host-visible slice buffer, plus the pack buffer's
+read-before-a-later-write class — with every counter, retry, stop, publication and deferred-ownership
+semantic unchanged and no success path touched. Earlier batches can already have published when a
+later one fails, so the stop preserves the UNPUBLISHED targets and is not whole-frame atomicity. No
+narrower barriers, suballocation, pipeline cache or later N4 item is in this change. Pending
+independent acceptance.
+
 **Latest L62 review (2026-10-17, TR §31.35):** the caller-propagation defect below is fixed, but
 toolkit `4832f62` / game `fe09e5e` is not accepted for N4.2. A partially recorded abandoned batch
 can race the next batch's reuse of the same staging offsets; explicit ordering or bounded recovery
