@@ -4508,6 +4508,58 @@ executable bytes on every success path and makes no new performance claim. Model
 were not changed and no fallback was observable in any transcript; `.omp/config.yml` is untouched.
 
 PUSHED_TO: origin / BRANCH: main / COMMIT: cd638d42821c74ee4245ed6c98ba896e5461f3f7 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 4832f62..cd638d4, synchronized (origin/main == cd638d4).
-PUSHED_TO: origin / BRANCH: master / COMMIT: acf20ff74dc58fa757de1ff716c0cd93f4e2e431 (the ordering gate and its CMake/probe files) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward d520693..acf20ff, game pushed after the toolkit, both trees clean and synchronized at that checkpoint; the §31.36 records commit follows and is pushed with its receipt recorded in the packet's completion report, which lives outside git.
+PUSHED_TO: origin / BRANCH: master / COMMIT: acf20ff74dc58fa757de1ff716c0cd93f4e2e431 (the ordering gate) and 801df8b8f0374adc6d11119d21df7b77b4935a2d (the §31.36 records) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward d520693..acf20ff..801df8b, game pushed after toolkit, clean synchronized at the independently fetched checkpoint.
+
+### 31.37 N4.2 independently accepted; next narrower barriers (2026-10-17)
+
+**Accepted:** toolkit `cd638d4`, game gate `acf20ff` / records `801df8b`, fetched clean and
+synchronized. Both confirmed defects are closed; preserve §§31.33 and 31.35 as review history.
+The final production diff adds one executable `vb_barrier()` on the allocation-failure branch,
+before staging offsets can be reused. Other changes qualify per-target publication in comments
+and diagnostics. This changes no successful-path command or byte-producing code, and claims no
+new timing result. It is a correctness barrier; N4's narrower-barrier optimization remains next.
+
+**Independent deciding checks:** Codex rebuilt its original private command-order reproduction
+against final backend SHA-256 `c710be7bf99a721b6abbf275d549b230da6e7b4b0e48ab833a06663346e9c528`:
+the injected first-batch failure now exits 0 with zero unordered overlaps, three image copies,
+three published targets and frame 1. No shared source or owner executable was mutated. Independent
+limited-token CTests: **6/6 in 29.68 s**, including real pack, lifetime, ring failure, readback
+failure, caller and new ordering gates. Codex also re-ran private baseline / mis-scoped barrier /
+deleted barrier / repaired binaries: **1 / 1 / 1 / 0 exit codes**. Baseline and deleted each
+fail 10 properties / 23 checks; mis-scoped fails 10 / 21. Each red run has **6 of 27 WAW pairs
+and 3 of 6 WAR pairs unordered**; final green has **0 of 27 and 0 of 6**, 14 properties / 275
+checks. Inspected stage/access/range/sequence predicates, so the mis-scoped barrier fails despite
+being present. Final private repaired backend equals production byte for byte. New test hash
+`104b05735d364abb6e25d7a52dd0c111712dca38b4353664992687d1d84f22b6`.
+
+**Receipts independently inspected:** full final **92/92, 441.05 s**, final checker and
+post-record doc-sensitive CTests; no redundant full suite run was needed after the focused
+independent checks. Distinct production/test/reviewer assignments and review fixes verified from
+transcripts; per-agent model fields are unavailable, so routing claims remain configuration-derived.
+The gate's cross-recording check is intentionally stricter than general Vulkan, a disclosed
+coverage restriction rather than a false pass. Prior private format-mutation evidence applies to
+the unchanged byte-producing paths; no claim those older rows were rerun on the one-line fix.
+
+**N3 archive verified:** `20261017-065204-433-keyscript-n42o-final-e2e` reclassifies exploratory,
+zero UNKNOWN/MISSING, stock script complete. Actual Khronos instance/device insertion lines
+857/1288; implicit OBS hook at 877/1298 disclosed. Errors 0, known warnings 10, program misses /
+identity failures / declines / fallback / incomplete 0. Archived backend/executor hashes match
+current code and executable `46c4ffe9d98ba876a68b7fba43710dee99263c381e39e1caeecac8f69a786009`.
+Clean project archive pins `acf20ff`; later `801df8b` is docs only. Exit 1 at deliberate 620.6 s
+deadline is not normal exit or fidelity proof. Prior 43.87 / 44.72 N2 medians remain inconclusive
+measurements of their own commits, with no new performance claim for this error-only repair.
+
+**Audit and limits:** Codex independently scanned all changed blobs in each correct object store:
+toolkit 4 / game 7, zero secret hits, forbidden paths or oversized blobs; intended origin remotes,
+unsigned commits without co-author/signature trailers, upstream push DISABLED. Per-target
+publication is not whole-frame atomicity; stubbed failures are not physical GPU OOM observations.
+The pre-existing guest-write bounds concern reported by security review is recorded, not claimed
+fixed by this bounded ordering change. No new D3D11 work or runtime compilation/translation.
+
+**Next:** exactly one pre-approved operation for N4.3 narrower barriers/layouts, a different
+worker's deciding test and private mutants, matched quiet N2 before/after and final N3 witness.
+No suballocation, persisted cache/R4, N6 or R5 in that operation. Current run retains 5 operation
+slots and zero unassigned repair cycles before next admission (lineage 15 operations / 6 repair
+cycles); ordinary CONTINUE authorizes the next increment, no allowance reset or rotation credit.
 
 

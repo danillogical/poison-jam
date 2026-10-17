@@ -38,6 +38,12 @@ host API); list the one that decides fidelity first.
 
 ## Entries
 
+**L62 current acceptance (2026-10-17, TR §31.37):** N4.2 accepted at toolkit `cd638d4` / game
+gate `acf20ff`, records `801df8b`. The caller/reload defect and abandoned-batch ordering defect
+below are independently closed. Private baseline and weakened barriers fail; final source and
+original reproductions pass. Publication remains per target rectangle, not atomic for a whole
+frame. Normal-path efficiency measurements make no frame-rate claim. Next: narrower barriers.
+
 **L62 ordering repair (2026-10-17, TR §31.36):** toolkit `cd638d4` (on `4832f62`) adds ONE
 `vb_barrier()` in `vb_targets_flush`'s abandoned-batch branch, game gate `acf20ff` adds
 `jsrf_vk_readback_ordering_gate` (14 verdicts / 275 checks: red on the pre-fix source, red on two

@@ -323,6 +323,16 @@ Readbacks take 202–211 s of a 560 s run, and V1 submits and fence-waits simply
 - sub-allocated memory;
 - a persisted pipeline cache.
 
+**Latest independent acceptance (2026-10-17): N4.2 is accepted at toolkit `cd638d4` / game
+`acf20ff` with records `801df8b`** (TR §31.37). The two confirmed failure-path defects are
+closed; historical rejected candidates and their repair evidence remain below. Codex's original
+ordering reproduction now passes, six targeted Vulkan CTests pass independently, private baseline
+and both weakening mutants fail on actual ordering semantics and the restored source passes
+(14 properties / 275 checks). Full-suite receipt 92/92, final checks and the loader-witnessed
+bounded N3 archive are verified. No frame-rate gain is claimed. **Next separate operation:
+N4.3 narrower barriers and layouts**, then sub-allocated memory, persisted pipeline cache/R4,
+N6 and R5 in the approved order. No later item is accepted by this review.
+
 **N4.1 is independently accepted at game `389a03a` / toolkit `f41c0d2`, after repairing the
 failed-wait lifetime defect** (TR §§31.29–31.31). A ring of
 three submission slots, each owning its command recording, fence,
