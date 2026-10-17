@@ -367,6 +367,39 @@ and makes no new performance claim. Codex independently passed the actual fault/
 reproduced M1/M2/M3 failures and baseline/restored passes, and verified the final N3 archive's source
 identity and loader witness. The next separate item is batched readback; no other N4 item is accepted.
 
+**N4.2 is implemented at toolkit `891bca2` (game-side gates and records in the same operation),
+pending independent Codex review** (TR §31.32). The flip's readback now stages every dirty target
+through ONE bounded pair of buffers — a host-visible slice buffer and a device-local pack buffer,
+grown on demand up to a 96 MiB cap with 4-byte-aligned tight rows — and packs a 16-bit target with
+the ahead-of-time compute kernel `cs_pack` (new tracked `src/video/shaders/nv2a_vk_pack.hlsl`,
+built and `spirv-val`'d by the existing `xbr_add_spirv` rule as `-T cs_6_0`, nothing compiled at
+run time), so the host only memcpy's rows into guest memory. The per-target `w*h*4` readback
+buffers and the per-pixel 5:6:5 truncation loop are gone, and a 16-bit target's PCIe readback
+traffic halves. The bytes did not change: the kernel computes
+`(r8>>3)<<11 | (g8>>2)<<5 | (b8>>3)`, the same truncation the deleted loop computed from the
+guest's little-endian `B|G<<8|R<<16|A<<24` word, and 4-byte targets keep the byte-for-byte row
+copy. The queue family the back end picks must now have `VK_QUEUE_COMPUTE_BIT` as well as
+graphics: a device without one is passed over and the executor's CPU rasteriser remains the
+fallback, because there is ONE 16-bit publication path and not a second, untestable
+CPU-truncation branch. A pack descriptor-set allocation that fails no longer publishes a
+half-recorded batch — the batch is skipped whole and its targets stay dirty and are retried.
+Measured on the RTX 4070 over three quiet 60 s Garage windows each: host publication **0.564 →
+0.132 ms per flip** and fence wait **5.333 → 5.10–5.45 ms per flip** (the pack's added GPU work
+did not grow the drain), whole flush 5.91 → 5.43/5.26/5.62 ms — but presents/s **did not move**
+(45.20 → 44.72 median, inside the before runs' own 44.03–46.35 spread), so this makes **no
+frame-rate claim**: the removed host work was absorbed by idle time in the frame loop, and the
+drain (which this item does not target) still dominates the flush. Gates, both authored by workers
+other than the production change: `jsrf_vk_readback_pack` (the real back end on lavapipe over two
+frames and a mid-frame alias flush, seven targets including a pitch-padded 16-bit one, an odd
+21×13 dirty rectangle and both formats in one flip, every published byte compared with the CPU
+executor and the truncation boundary constants recomputed in the fixture; four mutants — rounding
+pack, skipped publish, slice-0 publish, over-wide rows — each fail it) and
+`jsrf_vk_readback_fault_gate` (a deterministic pack-set allocation failure: 7 properties, 138
+checks, with the pre-fix plain-`break` mutant failing 5 of them while the success-path controls
+stay green). Full CTest 90/90 and `just check` pass, and the N3 bounded e2e under the Khronos
+layer is clean (0 validation errors, the known 10 warnings, 0 program misses). Still open in N4:
+narrower barriers and layouts, sub-allocated memory, the persisted pipeline cache and R4.
+
 Measure each with N2. Parity tests must stay green. Each code subitem gets a different worker's
 gate and deciding mutation evidence.
 

@@ -3856,3 +3856,206 @@ item; the prior 43.40 presents/s measurement remains attributed to `c5f3696`, an
 claim or repair of the unrelated startup crash is inferred. Eight operation slots remain before the
 next dispatch; the renewed repair cycle has been consumed, with no extra unassigned cycles.
 
+### §31.32 N4.2: the flip's readback is packed on the GPU (2026-10-17)
+
+Toolkit `891bca2` on top of `f41c0d2`; the game-side gate and these records on top of `479837a`.
+
+**What was already there.** `vb_targets_flush` already queued every dirty target's
+`vkCmdCopyImageToBuffer` into one submission and drained once. That batching is NOT this item. What
+cost host time was what followed it: for a 16-bit target the published bytes were produced by a
+per-pixel host loop (`t->bpp == 2`), and every target owned its own full-size host readback buffer.
+
+**Where the flush's time went before** (counters-only build of the accepted source, exe `1ea785bd`,
+run `20261016-223221-992-keyscript-n42-diag-vk-1`, RTX 4070, the Garage window): 27 335 flips,
+54 669 readbacks (exactly two dirty targets per flip), 0 stalls, 0 aliased polls. Per flip:
+record 0.017 ms, fence wait **5.33 ms**, host publish **0.564 ms** — 5.91 ms of a 22.18 ms p50
+frame. Every dirty target was 16-bit (`rb_px16 = 16 794 316 800` pixels, `rb_px32 = 0`, 33.6 GB of
+5:6:5 bytes) at ~1.09e9 pixels/s through that loop. So the ceiling this item could buy was ~2.5 %
+of frame time, and the drain — 90 % of the flush — was out of scope by the packet's own terms
+(no narrower barriers, no deferred publication).
+
+**What changed.** The publication stages into ONE bounded pair of buffers, grown on demand and
+never past a 96 MiB cap: a host-visible slice buffer (`g.rb_buf`, `TRANSFER_DST`) and a
+device-local pack buffer (`g.pack_buf`, `STORAGE_BUFFER|TRANSFER_SRC`; a compute shader writing
+host memory over PCIe can cost more than the loop this removes). A batch is every dirty target
+whose 4-byte-aligned slice still fits, recorded as one submission: 4-byte targets copied straight
+out of their image with tight rows (`bufferRowLength = rect width`), 16-bit targets dispatched
+through `cs_pack` and then moved to the host buffer by one `vkCmdCopyBuffer` per slice — followed
+by one barrier, one submit, one fence wait (the whole ring drained, as before) and a per-row
+memcpy into guest RAM. A target whose slice cannot be staged keeps `dirty` and is retried; a batch
+whose pack descriptor set cannot be allocated is skipped whole (nothing submitted, nothing
+published). Replaced staging pairs go through `vb_discard`, so a submission still in flight keeps
+the buffers it reads. The per-target `w*h*4` readback buffers and the truncation loop are gone,
+and a 16-bit target's PCIe readback traffic falls from 4 to 2 bytes per pixel.
+
+`cs_pack` is new tracked HLSL (`src/video/shaders/nv2a_vk_pack.hlsl`), compiled and
+`spirv-val`'d ahead of time by the existing `xbr_add_spirv` rule as `-T cs_6_0` with no invert-y;
+nothing is compiled or translated at run time. One thread packs a pixel pair:
+`[numthreads(8,8,1)]`, dispatch `(ceil(w/16), ceil(h/8))`, row stride `round_up(rect_w*2, 4)` in
+the staging buffer so every store is a 4-byte-aligned uint32 (a 16-bit store would need the
+optional 16-bit-storage feature); an odd width leaves the second pixel of the last pair out of
+range and its two slack bytes are written but never published.
+
+**Why the bytes are the same.** The kernel computes
+`(r8>>3)<<11 | (g8>>2)<<5 | (b8>>3)` from the channels a `B8G8R8A8_UNORM` load returns — the same
+TRUNCATION the deleted loop computed from the guest's little-endian `B|G<<8|R<<16|A<<24` word
+(`((c>>8)&0xF800)|((c>>5)&0x07E0)|((c>>3)&0x001F)`, derivation in the shader's header comment) —
+never a rounding or normalised conversion. The byte recovery `(uint)(saturate(x)*255.0 + 0.5)` is
+exact for all 256 values (the float error is ~1e-5, so it survives fp16 fetch precision and FMA
+contraction).
+
+**Ring and lifetime rules kept.** `g.ok` is checked after `vb_transfer_cmd()` and after each
+`vb_reserve`; each pack takes `vb_reserve(0, 1)` before its descriptor-set allocation so the pool
+budget cannot be over-committed; every command is recorded through `vb_cmd()`/`vb_transfer_cmd()`
+so a latched failure records into `g.dead`; a batch is published only after its own
+`vb_slot_submit()` + `vb_drain()`.
+
+**Capability requirement (one decision, no second path).** The pack needs a compute dispatch, so
+`vb_graphics_family` returns the first family with `VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT`
+and `vb_pick_device`'s `usable` test requires it; a device whose graphics family has no compute is
+reported ` unusable (graphics family has no compute, which the readback's pack kernel needs)` and
+passed over, and the executor's CPU rasteriser remains the fallback. There is exactly ONE 16-bit
+publication path — a rarely-taken CPU-truncation branch would be untestable here.
+
+**Reviews.** An independent code review and the configured security/native-memory-lifetime review
+(Opus 5.5 and Muse 1.3 respectively, no fallback) read the diff. Both found the same decisive
+defect: on a `vkAllocateDescriptorSets` failure inside a pack batch, `vb_fail` does not clear
+`g.ok`, so the batch still ran its barrier, submit, drain and publish and marked never-recorded
+slices clean — stale bytes into guest memory, never retried. Fixed by a batch-local `batch_ok`
+that skips the submit and the publish and leaves every target in the batch dirty; `g.ok`/`g.failed`
+are deliberately not latched. Review nits fixed: `readback_batches` is now one per published batch
+(it was `submits - subs0`, which also counted ring-advance submits), and the pack/copy counters
+were moved from the record loop into the publish loop so they cannot report a batch that never
+reached its submit — the `Nv2aVkReadbackStats` docs now say all of `readbacks`, `batches`,
+`packed`, `packed_pixels`, `copied`, `bytes` describe PUBLISHED work and `wait_ns` is the
+publication's own submit+wait. The security review separately verified the staging/guest
+arithmetic (4-byte alignment of every slice and copy size, `rect_w*2+3` and `rect_w*4` cannot
+overflow, growth doubles to the cap, guest writes bounded to each target's own rectangle, padding
+untouched), the mapped-range invalidation, the pool budget, and every failure path (failed wait,
+begin, submit, allocation, growth-vs-inflight) with no other defect.
+
+**The deciding regression** (`jsrf_vk_readback_pack`, authored by a worker distinct from the
+production change; CTest on lavapipe, no skip taken, 0.26 s in the full suite). It drives the real
+back end over two frames and a mid-frame alias flush with seven targets: a 64×64 pitch-128 16-bit
+target filled with a truncation-boundary colour plus five 8×8 blocks, an odd 21×13 dirty rectangle
+at (3,5), a 16-bit target with four bytes of row padding per row, three 4-byte targets, and a
+texture-aliased target published by the mid-frame flush. Every target's whole 32 KB region is
+compared byte-for-byte against a plan built from the gate's own rectangles, with `0x5A` sentinels
+proving padding, same-row neighbours and the row below stay untouched, and the CPU executor
+replays the same pushbuffers as a second pass. Positive controls come from
+`nv2a_vk_backend_readback_stats()` with the run's own expected values (`packed == 5`,
+`packed_pixels == 8625`, `copied == 5`, `readbacks == 10`, `bytes == 47698`, `batches == 3`,
+`frames == 2`), each with its own FAIL line; before any 16-bit publication `packed == copied == 0`.
+The boundary constants are recomputed in the fixture (6 constants, 4 of them discriminate against
+rounding; `080408` and `FFFFFF` are labelled shared-value controls). Mutants, each with the
+compiled file's sha256: rounding pack (shader `b3dc786c…`) fails on a DIFFERING colour —
+`T16A: (0,0) is 0x1044, the plan says 0x0823 (from 0xFF0F071F)`; a 16-bit target marked clean
+without copying (`1613fdd0…`) fails every immediate byte check (`is 0x5A5A, the plan says
+0x0823`); every target published from slice 0 (`e1e35887…`) fails the per-target checks
+(`T16B: (3,5) is 0x0823, the plan says 0x1106`); 16-bit rows copied `rect_w*4` bytes (`5b17f802…`)
+fails the sentinel checks (`byte 8192 is 0x06, the plan says 0x5A`). Baseline and restored rows
+are green with identical sha256.
+
+**The failure-path gate** (`jsrf_vk_readback_fault_gate`, a different worker again, 0.36 s): it
+compiles the production bodies verbatim with stubbed Vulkan entry points (the
+`jsrf_vk_ring_fault_gate` method, with a build-time probe that fails the BUILD if a definition,
+field or constant it binds to moves: 45 of 45 anchors) and injects `VK_ERROR_OUT_OF_POOL_MEMORY`
+from `vkAllocateDescriptorSets`. 7 properties, 138 checks: the success control publishes exactly
+the two rectangles and counts them; a failure with the 16-bit target first and with the 4-byte
+target first submits nothing, publishes nothing, leaves guest memory byte-identical (checksum
+compared over 1 MiB) and both targets dirty, and latches nothing; the retry publishes both
+rectangles correctly; the staging pair is not replaced or freed under a live submission. The
+deciding mutant — the pre-fix plain `break` (`b66a8353…`) — fails 5 of 7 properties (49/138
+checks) with `guest memory is byte-identical: nothing was published FAIL (496 of 1048576 bytes
+differ)` and `both targets are still dirty FAIL (16-bit dirty 0, 4-byte dirty 0)`; a second
+mutant that counts packs/bytes while recording (`296fa6bf…`) fails 3 of 7, which is what made the
+counter placement decisive.
+
+**N2 (three quiet 60 s Garage windows each, RTX 4070, same script/profile/settings).** Before, on
+the accepted build exe `37d9c75e`: `20261016-220253-829`, `-221216-471`, `-222139-065` →
+**45.20 presents/s median** (44.03–46.35), p50 21.76–22.22 ms, 0 stalls, 0 aliased polls. After,
+on exe `328fe9bf`: `20261017-011458-923`, `-012421-508`, `-013344-192` → **44.72 presents/s
+median** (44.28–45.08), p50 22.05–22.24 ms, 0 stalls, 0 aliased polls.
+
+| run | flips | readbacks | packed | copied | publish ms/flip | wait ms/flip | flush ms/flip |
+|---|---|---|---|---|---|---|---|
+| before, diag `…-223221-992` | 27 335 | 54 669 | 0 (host loop) | 0 | 0.564 | 5.333 | 5.911 |
+| after `…-011458-923` | 27 871 | 55 741 | 55 741 | 0 | 0.132 | 5.268 | 5.434 |
+| after `…-012421-508` | 28 092 | 56 183 | 56 183 | 0 | 0.132 | 5.098 | 5.262 |
+| after `…-013344-192` | 27 214 | 54 427 | 54 427 | 0 | 0.133 | 5.448 | 5.615 |
+
+**N2 verdict: no measurable change — not a win and not a demonstrable regression.** Every after
+run lies inside the before runs' own 44.03–46.35 spread, and the medians differ by −1.1 %, smaller
+than that spread; p50 moved +0.4 %. The counters say the host conversion is gone (0.564 → 0.132 ms
+per flip) and that the pack's added GPU work did NOT grow the drain (5.333 → 5.268/5.098/5.448 ms
+per flip; a growth would have been reported as a regression). The honest reading is that the
+0.43 ms/flip removed was absorbed by idle time in the frame loop, so it was not what bounded this
+window's cadence — which also means the remaining drain will not move this metric by itself.
+
+**Validation on the final source.** Full CTest through
+`python C:/Users/logic/xbr-mac/ctest-limited.py --output-on-failure`: **100 % of 90 tests passed**
+in 490.63 s, including `jsrf_vk_readback_pack` (#15), `jsrf_vk_readback_fault_gate` (#21),
+`jsrf_vk_frames_in_flight` (#14), `jsrf_vk_ring_fault_gate` (#20), `jsrf_gpu_backend_parity_vk`
+(#13), `jsrf_vsh_aot` (#16) and the V6 conformance cases. `just check` passed, including the real
+corpus (`entries=126 recompiled_and_matched=126 ascending=yes duplicates=0 xbe_distinct=126
+problems=0`) and its SPIR-V validation. The N3 bounded stock e2e on the final exe under the
+Khronos validation layer: `20261017-015757-227-keyscript-n42-e2e-val2` (620 s bound, Vulkan,
+exploratory, exe `328fe9bf`, game `479837a` + this change, toolkit `f41c0d2` + `891bca2`):
+`keyscript_complete`, 0 ICALL lines, 0 ABI failures, 0 fatal, `validation_errors=0`,
+`validation_warnings=10` (all `vkCreateGraphicsPipelines(): … Vertex attribute at location 1/7/8
+not consumed by vertex shader`, the same ten benign warnings V7 recorded), `vsh_misses=0`,
+`vsh_identity_fail=0`, `vsh_declines=0`, `rc_fallback=0`, `tex_undecodable=0`, 25 643 flips /
+51 285 readbacks, all 51 285 packed on the GPU with 0 copied and 15.75e9 pixels, `rb_batches ==
+flips`, 75 003 submissions (`splits=48 697`, `overflows=662`, `reuse_waits=662`,
+`max_inflight=3`), `rb_publish_ms/flips = 0.135`. The overrides are recorded in the run's
+`result.json` (`VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation`, `VK_LOADER_DEBUG=layer`) and were
+also exported in the invoking shell; the loader's own insertion lines, quoted from that run's log:
+
+    [Vulkan Loader] INFO | LAYER:   Insert instance layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+    [Vulkan Loader] INFO | LAYER:   Inserted device layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+
+The game was stopped at the run's 620 s bound (`process.exit_code 1`,
+`killed_at_deadline_or_failure: true`, `ran_s 620.4`): this is a bounded, deliberate termination,
+not a normal game exit, and it supports no claim beyond the script completing and the counters
+above. **Runner observation (recorded, not explained, as in §31.31):** the first attempt of this
+same command (`20261017-014407-428-keyscript-n42-e2e-val`) also completed `keyscript_complete`
+with 0 ICALL lines, 0 ABI failures, 0 fatal, `validation_errors=0` and the same ten warnings
+(26 308 flips, 52 615 readbacks all packed, 76 987 submissions, `max_inflight=3`,
+`rb_publish_ms/flips = 0.136`, `rb_wait_ms/flips = 6.551`, `vsh_misses=0`) — so the layer was
+active — but its log carried no loader debug output; two 25 s probe runs in between did capture
+158 loader lines each, so the difference is not the env override path. No mechanism was
+established. Both N3 attempts are on record here — the rerun's own counters are the 25 643 /
+51 285 / 0.135 set quoted above — and the acceptance witness is quoted from the rerun because it
+is the one that carries the loader's own insertion lines.
+
+**Pre-commit archives vs the commits (reconciled by measurement, not by assumption).** Every
+after-bench and N3 archive records the tree state it ran on: `repository_identities.project.
+patch_sha256 7691ee7d…` (the game-side gates, scripts and CMake registration) and `…toolkit.
+patch_sha256 fa8110d4…`, and both archived patch files hash back to exactly those recorded values.
+Measured against the commits: (1) the committed game diff for `CMakeLists.txt tests/ scripts/` is
+**byte-identical** to the archived `project.patch` (59 100 bytes, newline-normalised); (2) the
+committed toolkit diff `f41c0d2..891bca2` restricted to everything EXCEPT
+`src/video/shaders/nv2a_vk_pack.hlsl` is **byte-identical** to the archived `toolkit.patch`
+(45 343 bytes both) — the archived patch cannot contain that file at all, because the runner's
+`git diff` never shows an untracked file and the archive's own `toolkit-status.txt` lists it as
+`?? src/video/shaders/nv2a_vk_pack.hlsl`; (3) that file is cited separately by content, sha256
+`a3e1abfb125470ad943a3e29d3c63097dc01caa5acdf94f2d5436382b467ce34` (3 892 bytes), identical in the
+tree the runs used and in the commit. The records themselves (this section, L62 and the plan) are
+additions on top of the exact trees those runs used, so the archives' recorded source state and the
+commits differ only by those records.
+
+**Limits.** No live GPU timeout or allocation failure was exercised: the fixed failure path is
+decided by injected stub return values, not by a real OOM. The `>VB_READBACK_MAX` multi-batch
+split is unreachable in a fixture (the largest possible single slice is a 4096×4096 4-byte target
+= 64 MiB) and is therefore unexercised. The "no per-pixel CPU conversion" half is decided by the
+back end's own accounting (publication-only counters) plus a source that no longer contains such a
+loop; a back end that converted on the host *and* reported packs would be indistinguishable to a
+black-box gate. The load direction is untouched: `vb_target_load` still expands 16→32 bits per
+pixel into an upload stream slice, once per target per flip (`rt_loads` ≈ 2 per flip), and that is
+a separate, unrequested item. The ring drain (~24 % of frame time) is not addressed here by design.
+The Garage's 45 presents/s frame time did not move, so this change is justified by the removed host
+work, the halved PCIe readback traffic and the bounded staging, not by a frame-rate result.
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: 891bca220666749fc94fc18c139d30dc97d77e6d / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward f41c0d2..891bca2, toolkit pushed first, synchronized.
+
+

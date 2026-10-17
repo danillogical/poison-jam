@@ -5873,6 +5873,1008 @@ static int run_frames_in_flight(void)
     return 0;
 }
 
+/* ── The batched-readback pack gate (--readback-pack) ─────────────────────
+ *
+ * The claim (plan item N4.2): "one batched flip readback, without the per-pixel CPU
+ * conversion on the critical path". The back end's publication (nv2a_vk_backend.c,
+ * vb_targets_flush) now truncates a 16-bit target to 5:6:5 in a compute kernel
+ * (shaders/nv2a_vk_pack.hlsl) and the host only memcpy's rows into guest memory; a 4-byte
+ * target keeps an image-to-buffer copy. The prior batching -- every dirty target of a flip
+ * in one submission -- is older work: this gate checks it as a precondition (`batches`), not
+ * as the claim.
+ *
+ * Why this needs a gate of its own: the conversion moved from the host to the GPU, and no
+ * other check in this file can tell the two apart. The existing 16-bit checks
+ * (run_roundtrip16, the ring gate's R16) use colours such as RED, which a rounding packer
+ * reproduces exactly. A packer that rounds (HLSL's float-to-uint conversion rounds) is the
+ * most likely slip here and is invisible to every colour those checks use.
+ *
+ * The gate drives the real seam, exactly as the --frames-in-flight case does:
+ * nv2a_vk_backend_install() and guest pushbuffers through nv2a_submit_pending(). Nothing
+ * here re-implements the back end's lifecycle, writes into its state, or reads anything but
+ * nv2a_vk_backend_readback_stats(); those counters are cumulative and never rate-limited,
+ * so they decide acceptance (the [GPUVK] log line is rate-limited and is not consulted).
+ *
+ * Two frames, and one line per check:
+ *
+ *   1. 16-bit targets with real bytes. T16A is 64x64 at pitch 128 (its own width); T16P is
+ *      64x64 of pixels at pitch 132, so every row carries four bytes of padding the back end
+ *      must not write. Every byte of every target's prefilled RB_REGION is compared with the
+ *      gate's own plan: the drawn rectangle holds the colour's truncated 5:6:5 word and
+ *      everything else the 0x5A sentinel the gate wrote -- which covers T16P's padding bytes,
+ *      the pixels beside a dirty rectangle in its own row, and the rows below a target. The
+ *      CPU executor re-checks the same plan with its own rasteriser (put_pixel truncates by
+ *      the same shifts), and the two passes' bytes are compared with each other.
+ *   2. The truncation boundary colours: five flat blocks inside a full-surface fill of a
+ *      sixth, with the expected words stated as constants (k_rb_bound) and re-derived in the
+ *      fixture from (r,g,b) by two independent spellings. Four of the six differ between
+ *      truncation and rounding, so a rounding packer names the colour it broke; the other two
+ *      are shared-value controls, and the fixture says so instead of counting them as
+ *      boundary evidence.
+ *   3. An odd dirty rectangle. T16B's clip is 21x13 at (3,5) -- odd x0, odd width and odd
+ *      height. The plan compares every byte of the target and of its prefilled region, so a
+ *      packer that publishes one halfword too many or too few (what an odd width tempts) is a
+ *      FAIL that names the byte.
+ *   4. Several targets and both formats in one flip: six dirty targets -- 64x64, 21x13, 32x48
+ *      and 32x32, two pixel sizes and two pitches -- each checked against its own plan. A
+ *      staging slice or offset taken from another target's publication lands here.
+ *   5. The mid-frame flush. U samples a 16x16 window of TFL, which is drawn and still dirty
+ *      in the same frame, so the back end must publish TFL before it reads that texture. The
+ *      gate reads TFL's guest bytes the moment that push is submitted -- no flip has happened
+ *      -- and requires every other target to be untouched, which says the flush published
+ *      exactly TFL.
+ *   6. The bytes at the flip, read directly after pb_flip() returns, and a second frame that
+ *      patches three already-published targets: each must be re-loaded from its own published
+ *      bytes and only the patch published again, byte for byte.
+ *   7. The positive controls, from nv2a_vk_backend_readback_stats(): packed >= 1 and packed
+ *      == the 16-bit targets the gate dirtied, packed_pixels == the pixels its own rectangles
+ *      cover, copied >= 1 and copied == its 4-byte targets, readbacks == the targets it
+ *      dirtied, bytes nonzero and == its own byte count, batches >= 1 and == the publications
+ *      it forced. Each is its own line with its own FAIL.
+ *
+ * Coverage limits, stated rather than faked: the >VB_READBACK_MAX multi-batch split is
+ * unreachable in a fixture -- the largest single slice a target can have is a 4096x4096
+ * 4-byte target, 64 MiB, under the 96 MiB cap, and a fixture would need more than 96 MiB of
+ * dirty targets at once -- so the gate never exercises it. wait_ns/publish_ns are printed,
+ * not asserted: they are timing, and the claim is about bytes. */
+
+#define RB_BASE        0x01000000u   /* the gate's own 16 MB region, as the ring gate's */
+#define RB_REGION      0x8000u       /* bytes prefilled per target and compared in full */
+#define RB_SENTINEL    0x5Au
+#define RB_BOXES       16u
+#define RB_FRAMES      2u            /* flips this gate drives, each published by a flip */
+#define RB_MIN_SPAN    8             /* every quad spans at least this in both axes, or the CPU
+                                      * executor reads the batch as object-space geometry and
+                                      * skips it (nv2a_pb_exec.c, batch_is_screen_space) */
+
+enum { RB_T16A, RB_T16B, RB_T16P, RB_T32A, RB_T32B, RB_TFL, RB_U, RB_NSURF };
+
+typedef struct {
+    const char *name;
+    uint32_t va;
+    int bpp, pitch;             /* SET_SURFACE_FORMAT_COLOR's pixel size, SET_SURFACE_PITCH */
+    int tw, th;                 /* what the back end makes of those: pitch/bpp columns and
+                                 * clip_y+clip_h rows (nv2a_vk_backend.c, vb_target_for) */
+    int cx, cy, cw, ch;         /* the clip rectangle -- and, for a draw or a clear, the dirty
+                                 * rectangle the back end marks (vb_scissor) */
+} RbSurf;
+
+static const RbSurf k_rb_surf[RB_NSURF] = {
+    /* name   address                   bpp pitch  tw    th      clip  x   y   w   h */
+    { "T16A", RB_BASE + 0x00000000u,     2, 128,  64,   64,          0,  0, 64, 64 },
+    { "T16B", RB_BASE + 0x00010000u,     2, 128,  64,   5 + 13,      3,  5, 21, 13 },
+    { "T16P", RB_BASE + 0x00020000u,     2, 132,  66,   64,          0,  0, 64, 64 },
+    { "T32A", RB_BASE + 0x00030000u,     4, 256,  64,   64,          0,  0, 64, 64 },
+    { "T32B", RB_BASE + 0x00040000u,     4, 128,  32,   48,          0,  0, 32, 48 },
+    { "TFL",  RB_BASE + 0x00050000u,     4, 128,  32,   3 + 25,      2,  3, 28, 25 },
+    { "U",    RB_BASE + 0x00060000u,     4, 128,  32,   32,          0,  0, 32, 32 },
+};
+
+/* The region a target's bytes are checked over must hold the largest target there is
+ * (T32A: 64 rows of 256 bytes) and must not run into the next target's address. */
+typedef char rb_region_holds_the_largest_target[((int)RB_REGION >= 64 * 256) ? 1 : -1];
+typedef char rb_region_stays_inside_its_target[((int)RB_REGION < 0x10000) ? 1 : -1];
+/* T16P's pitch leaves exactly 4 bytes of padding per row, and T16B's rectangle is odd on
+ * every axis: those are the two cases the plan's arithmetic exists for. */
+typedef char rb_padding_is_real[(132 > 64 * 2) ? 1 : -1];
+typedef char rb_rect_is_odd[((21 % 2) && (13 % 2) && (3 % 2)) ? 1 : -1];
+typedef char rb_region_covers_every_rect[((int)RB_REGION > 64 * 256) ? 1 : -1];
+
+/* The 5:6:5 constants, derived here and not taken from the back end. c is 0xAARRGGBB with R
+ * at bits 16-23, G at 8-15, B at 0-7; a 16-bit target of this back end stores
+ *
+ *   trunc(c) = ((c>>8) & 0xF800) | ((c>>5) & 0x07E0) | ((c>>3) & 0x001F)
+ *
+ * which is exactly what nv2a_pb_exec.c's put_pixel stores, and what this file's trunc565
+ * spells. A packer that ROUNDS instead normalises each channel to the top of its range:
+ *
+ *   round(c) = (round(R/255*31) << 11) | (round(G/255*63) << 5) | round(B/255*31)
+ *
+ * with the arithmetic worked out per colour:
+ *
+ *   (0F,07,1F) trunc 1<<11 | 1<<5 | 3   = 0x0823   round 2<<11 |  2<<5 |  4 = 0x1044
+ *   (1F,3F,1F) trunc 3<<11 |15<<5 | 3   = 0x19E3   round 4<<11 | 16<<5 |  4 = 0x2204
+ *   (F8,FC,F8) trunc 31<<11|63<<5 |31   = 0xFFFF   round 30<<11| 62<<5 |30 = 0xF7DE
+ *   (07,03,07) trunc 0     | 0    | 0   = 0x0000   round 1<<11 |  1<<5 |  1 = 0x0821
+ *   (08,04,08) trunc 1<<11 | 1<<5 | 1   = 0x0821   round 0x800 | 0x20  |  1 = 0x0821
+ *   (FF,FF,FF) trunc                     = 0xFFFF   round                     = 0xFFFF
+ *
+ * The first four DISCARD bits, so a rounder is a FAIL that names them; the last two are
+ * shared-value controls -- they pin the exact word a correct packer produces but can never
+ * discriminate against rounding, which is why the fixture counts the discriminating ones
+ * separately. `trunc565` and a second, independent spelling recompute both columns at run
+ * time, so a wrong constant in this table is a FAIL rather than a passing gate. */
+typedef struct { uint32_t r, g, b, trunc_word, round_word; } RbBound;
+
+static const RbBound k_rb_bound[6] = {
+    { 0x0F, 0x07, 0x1F, 0x0823, 0x1044 },
+    { 0x1F, 0x3F, 0x1F, 0x19E3, 0x2204 },
+    { 0xF8, 0xFC, 0xF8, 0xFFFF, 0xF7DE },
+    { 0x07, 0x03, 0x07, 0x0000, 0x0821 },
+    { 0x08, 0x04, 0x08, 0x0821, 0x0821 },   /* a control: truncation and rounding agree */
+    { 0xFF, 0xFF, 0xFF, 0xFFFF, 0xFFFF },   /* a control: truncation and rounding agree */
+};
+
+/* Every colour the gate draws with, all distinct (gate_seen() re-checks that as they are
+ * used). The boundary blocks are the k_rb_bound colours; the rest are one target each, so a
+ * stray publication is a wrong pixel rather than an unobserved one. */
+#define RB_C16_ODD    0xFF112233u   /* T16B, the odd rectangle */
+#define RB_C16_PAD    0xFF445566u   /* T16P, the padded rows */
+#define RB_C16_PATCH  0xFFCC3311u   /* frame 1's patch into T16A */
+#define RB_C16_PATCH2 0xFF2299DDu   /* frame 1's patch into T16P */
+#define RB_C32_A      0xFF778899u   /* T32A */
+#define RB_C32_A2     0xFFAABBCCu   /* ... and its inset box */
+#define RB_C32_B      0xFFDDEE11u   /* T32B, the second size */
+#define RB_C32_B2     0xFF123456u   /* ... and its inset box */
+#define RB_C32_PATCH  0xFF998877u   /* frame 1's patch into T32A */
+#define RB_C32_FL     0xFF3F7FBFu   /* TFL, and so the value the sampled window shows in U */
+#define RB_C32_WHITE  0xFFFFFFFFu   /* the sampler draws' diffuse (a multiplier, not a colour) */
+
+/* The window U samples: 16x16 A8R8G8B8 at (8 rows, column 2) of TFL, i.e. bytes
+ * [8*128+8, 8*128+8+16*64), wholly inside TFL's drawn rectangle. */
+#define RB_FL_WIN_ROW 8
+#define RB_FL_WIN_COL 2
+#define RB_FL_WIN_OFF (RB_FL_WIN_ROW * 128 + RB_FL_WIN_COL * 4)
+
+static int rb_argb(unsigned i)
+{
+    const RbBound *b = &k_rb_bound[i];
+    return (int)(0xFF000000u | (b->r << 16) | (b->g << 8) | b->b);
+}
+
+/* How many of the table's targets are 5:6:5, for the banner and the fixture. */
+static unsigned rb_n16(void)
+{
+    unsigned i, n = 0;
+
+    for (i = 0; i < RB_NSURF; i++)
+        if (k_rb_surf[i].bpp == 2)
+            n++;
+    return n;
+}
+
+/* ── The plan, and comparing guest memory with it ─────────────────────────
+ *
+ * The plan is the gate's own statement of what a target must hold when the publication is
+ * done: the sentinel everywhere in [va, va + RB_REGION), and each box's colour inside its
+ * rectangle, in draw order. `src` (optional) keeps the ARGB each expected pixel came from,
+ * so a FAIL can name the colour a wrong byte belongs to. */
+typedef struct { int x0, y0, x1, y1; uint32_t argb; } RbBox;
+typedef struct { unsigned n; RbBox box[RB_BOXES]; } RbPlan;
+
+static int g_rb_bad;                 /* the fixture itself broke (set by the guards below) */
+
+static void rb_fail(const char *what)
+{
+    if (!g_rb_bad)
+        fprintf(stderr, "FAIL: readback gate -- the gate's own fixture is wrong (%s): the "
+                        "checks below would not mean what they say\n", what);
+    g_rb_bad = 1;
+}
+
+static void rb_box(RbPlan *p, int x0, int y0, int x1, int y1, uint32_t argb)
+{
+    if (p->n >= RB_BOXES) {
+        rb_fail("a plan overflowed its box list");
+        return;
+    }
+    p->box[p->n].x0 = x0; p->box[p->n].y0 = y0;
+    p->box[p->n].x1 = x1; p->box[p->n].y1 = y1;
+    p->box[p->n].argb = argb;
+    p->n++;
+}
+
+/* A clip rectangle of a draw group. Frame 0 programs the target's own clip from the table;
+ * frame 1's patch draws program a narrower one, which is what makes the flip's dirty
+ * rectangle the patch: for a draw or a clear the back end marks the CLIP rectangle
+ * (nv2a_vk_backend.c, vb_scissor), not the quad's bounds. */
+typedef struct { int x, y, w, h; } RbClip;
+
+/* One flat quad of a target's clip rectangle or of a box inside it: one draw, and a span of
+ * at least RB_MIN_SPAN on both axes (see the constant's note). The quad must be inside the
+ * clip, or the back end would clip it and the plan -- which paints the whole box -- would
+ * disagree with a correct back end. */
+static void rb_surface(unsigned idx, const RbClip *over);   /* defined below */
+
+static void rb_quad_clip(unsigned idx, const RbClip *over, int x0, int y0, int x1, int y1,
+                         uint32_t argb)
+{
+    const RbSurf *s = &k_rb_surf[idx];
+    int cx = over ? over->x : s->cx, cy = over ? over->y : s->cy;
+    int cw = over ? over->w : s->cw, ch = over ? over->h : s->ch;
+
+    if (x0 < cx || y0 < cy || x1 > cx + cw || y1 > cy + ch || x1 > s->tw || y1 > s->th
+        || x0 < 0 || y0 < 0 || x1 - x0 < RB_MIN_SPAN || y1 - y0 < RB_MIN_SPAN) {
+        rb_fail("a quad left its clip rectangle or is under RB_MIN_SPAN on an axis");
+        return;
+    }
+    if (!gate_seen(argb)) {
+        fprintf(stderr, "FAIL: readback gate -- colour 0x%08X is drawn twice: a pixel can no "
+                        "longer be attributed to the draw that produced it\n", argb);
+        g_rb_bad = 1;
+        return;
+    }
+    gate_need_room();                /* may split the push, which restarts the registers */
+    rb_surface(idx, over);
+    gate_quad((float)x0, (float)y0, (float)x1, (float)y1, 0.5f, argb);
+}
+
+static void rb_quad(unsigned idx, int x0, int y0, int x1, int y1, uint32_t argb)
+{
+    rb_quad_clip(idx, NULL, x0, y0, x1, y1, argb);
+}
+
+/* What the NV2A registers this gate believes are set, so a draw only re-emits what changed.
+ * gate_baseline() -- and so every push split -- invalidates the belief, which is why this
+ * also consults g_gate_st.surf (set by every surface emitter). */
+static struct { uint32_t va; int cx, cy, cw, ch, bpp, pitch; } g_rb_reg;
+
+static void rb_surface(unsigned idx, const RbClip *over)
+{
+    const RbSurf *s = &k_rb_surf[idx];
+    int cx = over ? over->x : s->cx, cy = over ? over->y : s->cy;
+    int cw = over ? over->w : s->cw, ch = over ? over->h : s->ch;
+
+    if (g_gate_st.surf == s->va && g_rb_reg.va == s->va && g_rb_reg.cx == cx
+        && g_rb_reg.cy == cy && g_rb_reg.cw == cw && g_rb_reg.ch == ch
+        && g_rb_reg.bpp == s->bpp && g_rb_reg.pitch == s->pitch)
+        return;
+    pb(0x0200, ((uint32_t)cw << 16) | (uint32_t)cx);         /* CLIP_H: x0 | width */
+    pb(0x0204, ((uint32_t)ch << 16) | (uint32_t)cy);         /* CLIP_V: y0 | height */
+    pb(0x0208, s->bpp == 2 ? 0x0103u : 0x0108u);             /* R5G6B5 / A8R8G8B8 */
+    pb(0x020C, (uint32_t)s->pitch);                          /* PITCH: not width*bpp for T16P */
+    pb(0x0210, s->va);                                       /* COLOR_OFFSET */
+    g_gate_st.surf = s->va;
+    g_rb_reg.va = s->va; g_rb_reg.cx = cx; g_rb_reg.cy = cy;
+    g_rb_reg.cw = cw; g_rb_reg.ch = ch;
+    g_rb_reg.bpp = s->bpp; g_rb_reg.pitch = s->pitch;
+}
+
+static void rb_build(uint8_t *dst, uint32_t *src, unsigned idx, const RbPlan *p)
+{
+    const RbSurf *s = &k_rb_surf[idx];
+    unsigned b, x, y;
+
+    memset(dst, RB_SENTINEL, RB_REGION);
+    if (src)
+        for (y = 0; y < (unsigned)s->th; y++)
+            for (x = 0; x < (unsigned)s->tw; x++)
+                src[y * (unsigned)s->tw + x] = 0x5A5A5A5Au;
+    for (b = 0; b < p->n; b++) {
+        const RbBox *k = &p->box[b];
+
+        for (y = (unsigned)k->y0; y < (unsigned)k->y1; y++)
+            for (x = (unsigned)k->x0; x < (unsigned)k->x1; x++) {
+                size_t off = (size_t)y * s->pitch + (size_t)x * s->bpp;
+
+                if (s->bpp == 4) {
+                    uint32_t v = k->argb;
+                    memcpy(dst + off, &v, 4);
+                } else {
+                    uint16_t v = trunc565(k->argb);
+                    memcpy(dst + off, &v, 2);
+                }
+                if (src)
+                    src[y * (unsigned)s->tw + x] = k->argb;
+            }
+    }
+}
+
+/* Compare one target's guest bytes with `want` (RB_REGION bytes): every pixel of the target
+ * in its own format and at its own pitch with `tol` per unpacked channel (0 means byte for
+ * byte, so a 5:6:5 word must match exactly), and every other byte of the region exactly.
+ * `ref` names what `want` is -- the gate's plan, or the other pass's bytes -- so a FAIL says
+ * which side it is disagreeing with. */
+static int rb_compare(const char *what, unsigned idx, const uint8_t *want,
+                      const uint32_t *want_src, int tol, const char *ref)
+{
+    const RbSurf *s = &k_rb_surf[idx];
+    const uint8_t *got = G(s->va);
+    unsigned x, y, bad = 0, shown = 0;
+    size_t i, tail;
+
+    for (y = 0; y < (unsigned)s->th; y++)
+        for (x = 0; x < (unsigned)s->tw; x++) {
+            size_t off = (size_t)y * s->pitch + (size_t)x * s->bpp;
+            int wrong;
+
+            if (tol == 0)
+                wrong = s->bpp == 4 ? *(const uint32_t *)(got + off) != *(const uint32_t *)(want + off)
+                                    : *(const uint16_t *)(got + off) != *(const uint16_t *)(want + off);
+            else {
+                int a[4], b[4];
+                unpack(got + off, (uint32_t)s->bpp, a);
+                unpack(want + off, (uint32_t)s->bpp, b);
+                wrong = maxdiff(a, b, 1) > tol;
+            }
+            if (!wrong)
+                continue;
+            if (shown++ < 3) {
+                uint32_t gv = s->bpp == 4 ? *(const uint32_t *)(got + off)
+                                          : *(const uint16_t *)(got + off);
+                uint32_t wv = s->bpp == 4 ? *(const uint32_t *)(want + off)
+                                          : *(const uint16_t *)(want + off);
+                fprintf(stderr, "      %s: (%u,%u) is 0x%0*X, %s says 0x%0*X",
+                        s->name, x, y, s->bpp == 4 ? 8 : 4, gv, ref, s->bpp == 4 ? 8 : 4, wv);
+                if (want_src) {
+                    uint32_t from = want_src[y * (unsigned)s->tw + x];
+                    if (from == 0x5A5A5A5Au)
+                        fputs(" (the sentinel)\n", stderr);
+                    else
+                        fprintf(stderr, " (from 0x%08X)\n", from);
+                } else
+                    fputc('\n', stderr);
+            }
+            bad++;
+        }
+    tail = (size_t)s->pitch * (size_t)s->th;
+    for (i = tail; i < RB_REGION; i++)
+        if (got[i] != want[i]) {
+            if (shown++ < 3)
+                fprintf(stderr, "      %s: byte %llu is 0x%02X, %s says 0x%02X\n", s->name,
+                        (unsigned long long)i, got[i], ref, want[i]);
+            bad++;
+        }
+    printf("      %-56s %s (%u bytes wrong)\n", what, bad ? "FAIL" : "ok", bad);
+    if (bad)
+        fprintf(stderr, "FAIL: readback gate -- %s: %u bytes of %s's %u do not match %s\n",
+                what, bad, s->name, (unsigned)RB_REGION, ref);
+    return bad == 0;
+}
+
+/* The plan check: build the expected bytes, compare, and (on a FAIL) name the colour each
+ * wrong pixel came from. */
+static int rb_check(const char *what, unsigned idx, const RbPlan *p, int tol)
+{
+    const RbSurf *s = &k_rb_surf[idx];
+    uint8_t *want = (uint8_t *)malloc(RB_REGION);
+    uint32_t *src = (uint32_t *)malloc((size_t)s->tw * s->th * 4u);
+    int ok;
+
+    if (!want) {
+        fprintf(stderr, "FAIL: readback gate -- could not build the plan for %s\n", s->name);
+        return 0;
+    }
+    rb_build(want, src, idx, p);
+    ok = rb_compare(what, idx, want, src, tol, "the plan");
+    free(want);
+    free(src);
+    return ok;
+}
+
+/* Compare one target with bytes another pass left there (a snapshot). Any difference is a
+ * disagreement between the two passes about the same pushbuffers, so there is no colour to
+ * name: `want_src` is NULL. */
+static int rb_check_against(const char *what, unsigned idx, const uint8_t *want, int tol)
+{
+    return rb_compare(what, idx, want, NULL, tol, "the Vulkan back end");
+}
+
+/* A target nothing has drawn into since the last publication must still hold its sentinel:
+ * the empty plan is exactly that. */
+static int rb_check_untouched(const char *what, unsigned idx)
+{
+    RbPlan p;
+
+    memset(&p, 0, sizeof p);
+    return rb_check(what, idx, &p, 0);
+}
+
+/* ── What the publication must have done ─────────────────────────────────
+ *
+ * Computed from the gate's own rectangles and the surfaces' own pitch and pixel size -- not
+ * order, and compared with the deltas of nv2a_vk_backend_readback_stats(). */
+
+/* A rectangle one publication covers: the dirty rectangle a stage's targets carry. */
+typedef struct { unsigned idx; int x0, y0, x1, y1; } RbDirty;
+
+/* The one publication the mid-frame flush makes: TFL alone, its whole dirty rectangle. */
+static const RbDirty k_rb_stage0[] = { { RB_TFL, 2, 3, 30, 28 } };
+/* The flip of frame 0: every target, in draw order. Each target is drawn under exactly one
+ * clip rectangle, so its published rectangle IS that clip (checked by the fixture). */
+static const RbDirty k_rb_stage1[] = {
+    { RB_T16A, 0, 0, 64, 64 }, { RB_T16B, 3, 5, 24, 18 }, { RB_T16P, 0, 0, 64, 64 },
+    { RB_T32A, 0, 0, 64, 64 }, { RB_T32B, 0, 0, 32, 48 }, { RB_U, 0, 0, 32, 32 }
+};
+/* The flip of frame 1 is the three patches, from the same table the draws come from:
+ * rb_stage2() below. */
+
+typedef struct {
+    uint64_t readbacks, batches, packed, packed_pixels, copied, bytes;
+} RbWant;
+
+static RbWant rb_want(const RbDirty *d, unsigned n)
+{
+    RbWant w;
+    unsigned i;
+
+    memset(&w, 0, sizeof w);
+    for (i = 0; i < n; i++) {
+        const RbSurf *s = &k_rb_surf[d[i].idx];
+        uint64_t rw = (uint64_t)(d[i].x1 - d[i].x0), rh = (uint64_t)(d[i].y1 - d[i].y0);
+
+        w.readbacks++;
+        if (s->bpp == 2) {
+            w.packed++;
+            w.packed_pixels += rw * rh;
+        } else
+            w.copied++;
+        w.bytes += rw * (uint64_t)s->bpp * rh;
+    }
+    /* One bounded batch carries a whole stage this small: VB_READBACK_MAX is 96 MiB and the
+     * largest stage here is 6 targets of 64 KiB at most. A publication that made one
+     * submission per target would report more, which is what stage's batches claim catches. */
+    w.batches = 1;
+    return w;
+}
+
+static void rb_sub(const Nv2aVkReadbackStats *a, const Nv2aVkReadbackStats *b,
+                   Nv2aVkReadbackStats *out)
+{
+    out->readbacks = a->readbacks - b->readbacks;
+    out->batches = a->batches - b->batches;
+    out->packed = a->packed - b->packed;
+    out->packed_pixels = a->packed_pixels - b->packed_pixels;
+    out->copied = a->copied - b->copied;
+    out->bytes = a->bytes - b->bytes;
+    out->wait_ns = a->wait_ns - b->wait_ns;
+    out->publish_ns = a->publish_ns - b->publish_ns;
+}
+
+static void rb_print(const char *tag, const Nv2aVkReadbackStats *s)
+{
+    printf("  [%s] readbacks=%llu batches=%llu packed=%llu packed_pixels=%llu copied=%llu "
+           "bytes=%llu wait_ms=%.1f publish_ms=%.1f\n", tag,
+           (unsigned long long)s->readbacks, (unsigned long long)s->batches,
+           (unsigned long long)s->packed, (unsigned long long)s->packed_pixels,
+           (unsigned long long)s->copied, (unsigned long long)s->bytes,
+           (double)s->wait_ns / 1e6, (double)s->publish_ns / 1e6);
+}
+
+static int rb_claim_eq(const char *what, uint64_t got, uint64_t want)
+{
+    int ok = got == want;
+
+    printf("      %-56s got %-8llu want %-8llu %s\n", what, (unsigned long long)got,
+           (unsigned long long)want, ok ? "ok" : "FAIL");
+    if (!ok)
+        fprintf(stderr, "FAIL: readback gate -- %s: nv2a_vk_backend_readback_stats reports %llu, "
+                        "the gate's own count is %llu\n", what, (unsigned long long)got,
+                (unsigned long long)want);
+    return ok;
+}
+
+static int rb_claim_atleast(const char *what, uint64_t got, uint64_t want)
+{
+    int ok = got >= want;
+
+    printf("      %-56s got %-8llu want >=%-8llu %s\n", what, (unsigned long long)got,
+           (unsigned long long)want, ok ? "ok" : "FAIL");
+    if (!ok)
+        fprintf(stderr, "FAIL: readback gate -- %s: nv2a_vk_backend_readback_stats reports %llu, "
+                        "the gate needs at least %llu\n", what, (unsigned long long)got,
+                (unsigned long long)want);
+    return ok;
+}
+
+/* The counters a stage must show, each with its own line and its own FAIL. */
+static int rb_stage_counts(const char *what, const RbWant *w, const Nv2aVkReadbackStats *d)
+{
+    int ok = 1;
+    char line[96];
+
+    printf("    %s:\n", what);
+    if (w->packed)
+        ok &= rb_claim_atleast("packed >= 1: 16-bit targets went through the GPU pack kernel",
+                               d->packed, 1);
+    if (w->copied)
+        ok &= rb_claim_atleast("copied >= 1: the 4-byte path ran", d->copied, 1);
+    ok &= rb_claim_atleast("batches >= 1: the publication made a submission", d->batches, 1);
+    ok &= rb_claim_eq("readbacks == the targets this stage dirtied", d->readbacks, w->readbacks);
+    ok &= rb_claim_eq("packed == this stage's 5:6:5 targets", d->packed, w->packed);
+    ok &= rb_claim_eq("packed_pixels == the pixels this stage's rectangles cover",
+                      d->packed_pixels, w->packed_pixels);
+    ok &= rb_claim_eq("copied == this stage's A8R8G8B8 targets", d->copied, w->copied);
+    ok &= rb_claim_eq("bytes == this stage's own byte count", d->bytes, w->bytes);
+    _snprintf(line, sizeof line, "batches == 1: %s was one batched publication", what);
+    ok &= rb_claim_eq(line, d->batches, w->batches);
+    return ok;
+}
+
+/* ── The frames ─────────────────────────────────────────────────────────── */
+static void rb_flip(const char *what)
+{
+    pb_begin();
+    gate_baseline();
+    pb_flip();
+    gate_submit(what);
+}
+
+/* Frame 0's draws: every target once, under its own clip rectangle. T16A is the boundary
+ * colours -- a full-surface fill of the first, then the other five as 8x8 blocks inside it --
+ * and the rest are one flat fill each, with an inset box on the 4-byte targets so a slice or
+ * an offset taken from another target's publication is a wrong pixel in the middle of a
+ * target as well as at its edges. */
+static void rb_frame0_draws(void)
+{
+    pb_begin();
+    gate_baseline();
+
+    rb_quad(RB_T16A, 0, 0, 64, 64, (uint32_t)rb_argb(0));
+    rb_quad(RB_T16A, 8, 0, 16, 8, (uint32_t)rb_argb(1));
+    rb_quad(RB_T16A, 16, 0, 24, 8, (uint32_t)rb_argb(2));
+    rb_quad(RB_T16A, 24, 0, 32, 8, (uint32_t)rb_argb(3));
+    rb_quad(RB_T16A, 32, 0, 40, 8, (uint32_t)rb_argb(4));
+    rb_quad(RB_T16A, 40, 0, 48, 8, (uint32_t)rb_argb(5));
+
+    rb_quad(RB_T16B, 3, 5, 24, 18, RB_C16_ODD);
+    rb_quad(RB_T16P, 0, 0, 64, 64, RB_C16_PAD);
+
+    rb_quad(RB_T32A, 0, 0, 64, 64, RB_C32_A);
+    rb_quad(RB_T32A, 16, 16, 32, 32, RB_C32_A2);
+    rb_quad(RB_T32B, 0, 0, 32, 48, RB_C32_B);
+    rb_quad(RB_T32B, 8, 8, 24, 32, RB_C32_B2);
+
+    rb_quad(RB_TFL, 2, 3, 30, 28, RB_C32_FL);
+
+    gate_submit("readback gate: frame 0's draws");
+}
+
+/* The draw that makes the back end publish TFL mid-frame: U samples a 16x16 window of TFL,
+ * which is drawn and still dirty, so the texture bind forces the flush. It is a push of its
+ * own, so the guest bytes can be read the moment it is submitted -- no flip in between. */
+static void rb_frame0_sample(void)
+{
+    const RbSurf *fl = &k_rb_surf[RB_TFL];
+
+    pb_begin();
+    gate_baseline();
+    gate_need_room();
+    rb_surface(RB_U, NULL);
+    gate_tex(fl->va + RB_FL_WIN_OFF, 0x12, 16, 16, 128, FILTER_NEAREST);
+    gate_quad_uv(8.0f, 8.0f, 24.0f, 24.0f, 0.5f, RB_C32_WHITE, 0.0f, 0.0f, 16.0f, 16.0f);
+    gate_tex_none();
+    gate_submit("readback gate: the sampled window of TFL");
+}
+
+/* Frame 1: a patch into three targets that frame 0's flip published. Each patch programs a
+ * clip of its own -- narrower than the target's -- so the flip publishes the patch rectangle
+ * alone (the back end marks the clip, not the quad), and every byte outside it must still be
+ * what frame 0 left: that is what makes the second frame a re-load check as well as a
+ * publication check. */
+typedef struct { unsigned idx; RbClip clip; int x0, y0, x1, y1; uint32_t argb; } RbPatch;
+
+static const RbPatch k_rb_patch[3] = {
+    { RB_T16A, { 40, 40,  8, 12 }, 40, 40, 48, 52, RB_C16_PATCH },
+    { RB_T16P, {  4,  4,  8,  8 },  4,  4, 12, 12, RB_C16_PATCH2 },
+    { RB_T32A, {  8,  8, 16, 16 },  8,  8, 24, 24, RB_C32_PATCH },
+};
+#define RB_NPATCH ((unsigned)(sizeof k_rb_patch / sizeof k_rb_patch[0]))
+
+static void rb_frame1_draws(void)
+{
+    unsigned i;
+
+    pb_begin();
+    gate_baseline();
+    for (i = 0; i < RB_NPATCH; i++)
+        rb_quad_clip(k_rb_patch[i].idx, &k_rb_patch[i].clip, k_rb_patch[i].x0, k_rb_patch[i].y0,
+                     k_rb_patch[i].x1, k_rb_patch[i].y1, k_rb_patch[i].argb);
+    pb_flip();
+    gate_submit("readback gate: frame 1's patches and flip");
+}
+
+/* The stage-2 dirty rectangles, from the same table the draws come from. */
+static unsigned rb_stage2(RbDirty *d)
+{
+    unsigned i;
+
+    for (i = 0; i < RB_NPATCH; i++) {
+        d[i].idx = k_rb_patch[i].idx;
+        d[i].x0 = k_rb_patch[i].clip.x;
+        d[i].y0 = k_rb_patch[i].clip.y;
+        d[i].x1 = k_rb_patch[i].clip.x + k_rb_patch[i].clip.w;
+        d[i].y1 = k_rb_patch[i].clip.y + k_rb_patch[i].clip.h;
+    }
+    return RB_NPATCH;
+}
+
+static void rb_plan0(RbPlan *p)
+{
+    unsigned i;
+
+    for (i = 0; i < RB_NSURF; i++)
+        p[i].n = 0;
+    rb_box(&p[RB_T16A], 0, 0, 64, 64, (uint32_t)rb_argb(0));
+    rb_box(&p[RB_T16A], 8, 0, 16, 8, (uint32_t)rb_argb(1));
+    rb_box(&p[RB_T16A], 16, 0, 24, 8, (uint32_t)rb_argb(2));
+    rb_box(&p[RB_T16A], 24, 0, 32, 8, (uint32_t)rb_argb(3));
+    rb_box(&p[RB_T16A], 32, 0, 40, 8, (uint32_t)rb_argb(4));
+    rb_box(&p[RB_T16A], 40, 0, 48, 8, (uint32_t)rb_argb(5));
+    rb_box(&p[RB_T16B], 3, 5, 24, 18, RB_C16_ODD);
+    rb_box(&p[RB_T16P], 0, 0, 64, 64, RB_C16_PAD);
+    rb_box(&p[RB_T32A], 0, 0, 64, 64, RB_C32_A);
+    rb_box(&p[RB_T32A], 16, 16, 32, 32, RB_C32_A2);
+    rb_box(&p[RB_T32B], 0, 0, 32, 48, RB_C32_B);
+    rb_box(&p[RB_T32B], 8, 8, 24, 32, RB_C32_B2);
+    rb_box(&p[RB_TFL], 2, 3, 30, 28, RB_C32_FL);
+    /* U is completed by the sampling draw, so rb_plan0 leaves it empty and the checks below
+     * add its one box where the sampler is in the plan. */
+}
+
+/* Every target drawn by frame 0 except TFL is still unpublished at the mid-frame flush, so
+ * guest memory there must still be the sentinel -- U included: the sampling draw only records
+ * into its own image, and the flush published TFL alone. */
+static int rb_check_unpublished(const char *tag)
+{
+    static const unsigned k_other[] = { RB_T16A, RB_T16B, RB_T16P, RB_T32A, RB_T32B, RB_U };
+    unsigned i;
+    int ok = 1;
+
+    for (i = 0; i < sizeof k_other / sizeof k_other[0]; i++) {
+        char what[128];
+        _snprintf(what, sizeof what, "%s: %s is untouched (the flush published TFL alone)",
+                  tag, k_rb_surf[k_other[i]].name);
+        ok &= rb_check_untouched(what, k_other[i]);
+    }
+    return ok;
+}
+
+/* ── The fixtures ───────────────────────────────────────────────────────── */
+static int rb_fixture(unsigned frames)
+{
+    unsigned i, bad = 0, disc = 0;
+    int ok = 1;
+    char line[160];
+    RbDirty p2[RB_NPATCH];
+    unsigned n2;
+    RbWant w0, w1, w2;
+
+    /* The constants: recomputed here from (r,g,b) by two spellings -- this file's trunc565
+     * and shifts written out again -- and by the rounding formula, and compared with the
+     * table. A constant this disagrees with would make every check below agree with the back
+     * end for the wrong reason. */
+    for (i = 0; i < 6; i++) {
+        const RbBound *b = &k_rb_bound[i];
+        uint32_t c = 0xFF000000u | (b->r << 16) | (b->g << 8) | b->b;
+        uint16_t t1 = trunc565(c);
+        uint16_t t2 = (uint16_t)(((b->r >> 3) << 11) | ((b->g >> 2) << 5) | (b->b >> 3));
+        uint16_t r1 = (uint16_t)(((uint32_t)((b->r * 31u + 127u) / 255u) << 11)
+                               | ((uint32_t)((b->g * 63u + 127u) / 255u) << 5)
+                               |  (uint32_t)((b->b * 31u + 127u) / 255u));
+
+        if (t1 != b->trunc_word || t2 != b->trunc_word || r1 != b->round_word) {
+            bad++;
+            fprintf(stderr, "FAIL: readback gate -- the constant for (0x%02X,0x%02X,0x%02X) is "
+                            "wrong: the table says trunc=0x%04X round=0x%04X, trunc565 gives "
+                            "0x%04X, the shifts give 0x%04X, rounding gives 0x%04X\n", b->r, b->g,
+                    b->b, b->trunc_word, b->round_word, t1, t2, r1);
+        }
+        if (b->trunc_word != b->round_word)
+            disc++;
+    }
+    printf("      %-56s %s (%u of 6 constants wrong, %u discriminate against rounding)\n",
+           "the 5:6:5 boundary constants, recomputed here", bad ? "FAIL" : "ok", bad, disc);
+    if (disc < 4) {
+        fprintf(stderr, "FAIL: readback gate -- only %u of the table's colours tell truncation "
+                        "from rounding: the gate could not decide the packer's arithmetic\n", disc);
+        ok = 0;
+    }
+    ok &= bad == 0;
+
+    /* The geometry: the published rectangle of a stage must be what the frame drew into that
+     * target -- the target's clip for frame 0, a box inside it for frame 1 -- or the plans
+     * below would be checking a rectangle the back end was never asked to publish. */
+    bad = 0;
+    for (i = 0; i < sizeof k_rb_stage1 / sizeof k_rb_stage1[0]; i++) {
+        const RbSurf *s = &k_rb_surf[k_rb_stage1[i].idx];
+        if (k_rb_stage1[i].x0 != s->cx || k_rb_stage1[i].y0 != s->cy
+            || k_rb_stage1[i].x1 != s->cx + s->cw || k_rb_stage1[i].y1 != s->cy + s->ch)
+            bad++;
+    }
+    if (bad) {
+        fprintf(stderr, "FAIL: readback gate -- %u of frame 0's targets were drawn under more "
+                        "than one clip rectangle: the published rectangle is not the plan's\n", bad);
+        ok = 0;
+    }
+    if (k_rb_stage0[0].x0 != k_rb_surf[RB_TFL].cx || k_rb_stage0[0].y0 != k_rb_surf[RB_TFL].cy
+        || k_rb_stage0[0].x1 != k_rb_surf[RB_TFL].cx + k_rb_surf[RB_TFL].cw
+        || k_rb_stage0[0].y1 != k_rb_surf[RB_TFL].cy + k_rb_surf[RB_TFL].ch) {
+        fprintf(stderr, "FAIL: readback gate -- the mid-frame flush's plan is not TFL's whole "
+                        "dirty rectangle\n");
+        ok = 0;
+    }
+    /* Frame 1's patches: each programs the clip the plan names, inside its target's own clip
+     * and strictly narrower than it (or the second flip would publish no rectangle the first
+     * one did not, and frame 1's counters would decide nothing). */
+    bad = 0;
+    for (i = 0; i < RB_NPATCH; i++) {
+        const RbPatch *p = &k_rb_patch[i];
+        const RbSurf *s = &k_rb_surf[p->idx];
+
+        if (p->clip.x != p->x0 || p->clip.y != p->y0 || p->clip.w != p->x1 - p->x0
+            || p->clip.h != p->y1 - p->y0 || p->clip.x < s->cx || p->clip.y < s->cy
+            || p->clip.x + p->clip.w > s->cx + s->cw
+            || p->clip.y + p->clip.h > s->cy + s->ch
+            || p->clip.w < RB_MIN_SPAN || p->clip.h < RB_MIN_SPAN
+            || p->clip.w * p->clip.h >= s->cw * s->ch)
+            bad++;
+    }
+    if (bad) {
+        fprintf(stderr, "FAIL: readback gate -- %u of frame 1's patches is not a narrower "
+                        "rectangle inside its target's clip\n", bad);
+        ok = 0;
+    }
+    printf("      %-56s %s\n",
+           "every published rectangle is the rectangle the frame drew",
+           ok ? "ok" : "FAIL");
+
+    /* What the publication must do, from the gate's own rectangles. */
+    n2 = rb_stage2(p2);
+    w0 = rb_want(k_rb_stage0, (unsigned)(sizeof k_rb_stage0 / sizeof k_rb_stage0[0]));
+    w1 = rb_want(k_rb_stage1, (unsigned)(sizeof k_rb_stage1 / sizeof k_rb_stage1[0]));
+    w2 = rb_want(p2, n2);
+    _snprintf(line, sizeof line,
+              "the run's own plan: %llu publications %llu of them 5:6:5, %llu packed pixels, "
+              "%llu copied, %llu bytes, %llu batches, %u frames",
+              (unsigned long long)(w0.readbacks + w1.readbacks + w2.readbacks),
+              (unsigned long long)(w0.packed + w1.packed + w2.packed),
+              (unsigned long long)(w0.packed_pixels + w1.packed_pixels + w2.packed_pixels),
+              (unsigned long long)(w0.copied + w1.copied + w2.copied),
+              (unsigned long long)(w0.bytes + w1.bytes + w2.bytes),
+              (unsigned long long)(w0.batches + w1.batches + w2.batches), frames);
+    printf("      %s\n", line);
+    ok &= (w0.packed_pixels + w1.packed_pixels + w2.packed_pixels) > 0
+       && (w0.bytes + w1.bytes + w2.bytes) > 0;
+    /* More than one flip, or the publication would only ever be the first one's. */
+    if (frames < 2u) {
+        fprintf(stderr, "FAIL: readback gate -- the run drives %u flip(s): the second frame's "
+                        "re-load and re-publication would not happen\n", frames);
+        ok = 0;
+    }
+    if (!ok)
+        fprintf(stderr, "FAIL: readback gate -- the run's plan is empty: the counters below "
+                        "could not decide anything\n");
+    return ok;
+}
+
+/* ── The mode ───────────────────────────────────────────────────────────── */
+static void rb_reset(void)
+{
+    unsigned i;
+
+    gate_reset_region();
+    for (i = 0; i < RB_NSURF; i++)
+        prefill_va(k_rb_surf[i].va, RB_REGION, RB_SENTINEL);
+    g_rb_reg.va = 0u;
+    g_rb_bad = 0;
+}
+
+static int run_readback_pack(void)
+{
+    Nv2aVkReadbackStats rb0, rb, prev, d;
+    Nv2aVkRingStats r0, r1;
+    RbPlan plan[RB_NSURF];
+    RbDirty p2[RB_NPATCH];
+    RbWant w0, w1, w2;
+    uint8_t *snap0[RB_NSURF], *snap1[RB_NSURF];
+    unsigned i;
+    int ok = 1;
+
+    if (!getenv("RECOMP_VK_DEVICE")) _putenv_s("RECOMP_VK_DEVICE", "llvmpipe");
+    if (!getenv("RECOMP_GPU_BACKEND")) _putenv_s("RECOMP_GPU_BACKEND", "vulkan");
+    fflush(stdout);
+    if (nv2a_vk_backend_install() != 0) {
+        puts("SKIP: gpu_backend_parity_vk --readback-pack -- the Vulkan back end could not be "
+             "installed on a software device (no Vulkan, no matching device, or an elevated "
+             "process: the loader ignores VK_DRIVER_FILES there)");
+        return 77;
+    }
+
+    memset(snap0, 0, sizeof snap0);
+    memset(snap1, 0, sizeof snap1);
+    nv2a_vk_backend_readback_stats(&rb0);
+    printf("-- batched readback pack gate (%u targets, %u of them 5:6:5, %u frames) --\n",
+           (unsigned)RB_NSURF, rb_n16(), (unsigned)RB_FRAMES);
+    puts("-- gate fixtures --");
+    ok &= rb_fixture(RB_FRAMES);
+
+    w0 = rb_want(k_rb_stage0, (unsigned)(sizeof k_rb_stage0 / sizeof k_rb_stage0[0]));
+    w1 = rb_want(k_rb_stage1, (unsigned)(sizeof k_rb_stage1 / sizeof k_rb_stage1[0]));
+    w2 = rb_want(p2, rb_stage2(p2));
+
+    /* ── pass 1: the Vulkan back end ───────────────────────────────────── */
+    puts("-- pass 1: the Vulkan back end --");
+    rb_reset();
+    nv2a_vk_backend_ring_stats(&r0);
+    prev = rb0;
+
+    rb_frame0_draws();
+    rb_frame0_sample();
+
+    /* 5. The mid-frame flush, read at once: TFL's bytes are in guest memory before any flip,
+     *    and no other target has been published. */
+    puts("-- the mid-frame flush (the sampled window's target) --");
+    rb_plan0(plan);
+    ok &= rb_check("TFL: published by the flush the texture bind forced", RB_TFL, &plan[RB_TFL], 0);
+    ok &= rb_check_unpublished("vulkan");
+    nv2a_vk_backend_readback_stats(&rb);
+    rb_sub(&rb, &prev, &d);
+    rb_print("stage 0", &d);
+    ok &= rb_stage_counts("the mid-frame flush", &w0, &d);
+    memcpy(&prev, &rb, sizeof prev);
+
+    /* 6. Frame 0's flip: every target checked directly after the flip returned. */
+    rb_flip("readback gate: frame 0's flip");
+    puts("-- frame 0's flip --");
+    for (i = 0; i < RB_NSURF; i++) {
+        char what[128];
+        RbPlan u = plan[RB_U];
+
+        if (i == RB_U) {
+            /* The one surface a sampler is in the path of: the file's own convention allows a
+             * sampled UNORM one step per channel (k_gate_tol_vk), and U's window is a flat
+             * colour, so nothing about the flush's evidence rests on the tolerance. */
+            _snprintf(what, sizeof what, "U: the window sampled from TFL, as published");
+            memset(&u, 0, sizeof u);
+            rb_box(&u, 8, 8, 24, 24, RB_C32_FL);
+            ok &= rb_check(what, RB_U, &u, GATE_TEX_TOL);
+        } else {
+            _snprintf(what, sizeof what, "%s: this frame's drawing, published by the flip",
+                      k_rb_surf[i].name);
+            ok &= rb_check(what, i, &plan[i], 0);
+        }
+    }
+    nv2a_vk_backend_readback_stats(&rb);
+    rb_sub(&rb, &prev, &d);
+    rb_print("stage 1", &d);
+    ok &= rb_stage_counts("frame 0's flip (6 dirty targets, both formats)", &w1, &d);
+    memcpy(&prev, &rb, sizeof prev);
+    for (i = 0; i < RB_NSURF; i++)
+        snap0[i] = snapshot_va(k_rb_surf[i].va, RB_REGION);
+
+    /* Frame 1: the patches, and the load of the targets that a flip made stale. */
+    rb_frame1_draws();
+    puts("-- frame 1's flip (three targets re-loaded and patched) --");
+    rb_plan0(plan);
+    for (i = 0; i < RB_NPATCH; i++)
+        rb_box(&plan[k_rb_patch[i].idx], k_rb_patch[i].x0, k_rb_patch[i].y0, k_rb_patch[i].x1,
+               k_rb_patch[i].y1, k_rb_patch[i].argb);
+    /* U's box comes from the sampling draw of frame 0; no frame-1 draw touches U. */
+    rb_box(&plan[RB_U], 8, 8, 24, 24, RB_C32_FL);
+    for (i = 0; i < RB_NSURF; i++) {
+        char what[128];
+        unsigned j, patched = 0;
+
+        for (j = 0; j < RB_NPATCH; j++)
+            if (k_rb_patch[j].idx == i)
+                patched = 1;
+        if (patched) {
+            _snprintf(what, sizeof what, "%s: the patch over its own published bytes",
+                      k_rb_surf[i].name);
+            ok &= rb_check(what, i, &plan[i], 0);
+        } else {
+            _snprintf(what, sizeof what, "%s: untouched by frame 1, so unchanged",
+                      k_rb_surf[i].name);
+            ok &= rb_check_against(what, i, snap0[i], 0);
+        }
+    }
+    nv2a_vk_backend_readback_stats(&rb);
+    rb_sub(&rb, &prev, &d);
+    rb_print("stage 2", &d);
+    ok &= rb_stage_counts("frame 1's flip (3 patched targets)", &w2, &d);
+    for (i = 0; i < RB_NSURF; i++)
+        snap1[i] = snapshot_va(k_rb_surf[i].va, RB_REGION);
+
+    /* 7. The positive controls, over the whole run. */
+    puts("-- the publication's counters (cumulative, from nv2a_vk_backend_readback_stats) --");
+    nv2a_vk_backend_ring_stats(&r1);
+    ok &= rb_claim_eq("frames == the flips this run made", r1.frames - r0.frames, RB_FRAMES);
+    rb_print("run", &rb);
+    ok &= rb_claim_atleast("packed >= 1: the GPU packed a 16-bit target at least once",
+                           rb.packed, 1);
+    ok &= rb_claim_atleast("copied >= 1: the 4-byte copy path ran at least once", rb.copied, 1);
+    ok &= rb_claim_atleast("batches >= 1: the publication made a submission", rb.batches, 1);
+    ok &= rb_claim_eq("readbacks == every target this run dirtied, stage by stage",
+                      rb.readbacks, w0.readbacks + w1.readbacks + w2.readbacks);
+    ok &= rb_claim_eq("packed == this run's 5:6:5 targets",
+                      rb.packed, w0.packed + w1.packed + w2.packed);
+    ok &= rb_claim_eq("packed_pixels == the pixels this run's rectangles cover",
+                      rb.packed_pixels, w0.packed_pixels + w1.packed_pixels + w2.packed_pixels);
+    ok &= rb_claim_eq("copied == this run's A8R8G8B8 targets",
+                      rb.copied, w0.copied + w1.copied + w2.copied);
+    ok &= rb_claim_eq("bytes == this run's own byte count",
+                      rb.bytes, w0.bytes + w1.bytes + w2.bytes);
+    ok &= rb_claim_atleast("bytes > 0: guest memory really was written", rb.bytes, 1);
+    ok &= rb_claim_eq("batches == the publications this run forced",
+                      rb.batches, w0.batches + w1.batches + w2.batches);
+    if (g_rb_bad)
+        ok = 0;
+
+    /* ── pass 2: the same frames against the CPU executor ──────────────── */
+    puts("-- pass 2: the same frames against the CPU executor --");
+    nv2a_backend_register(NULL);
+    rb_reset();
+
+    rb_frame0_draws();
+    rb_frame0_sample();
+    rb_plan0(plan);
+    ok &= rb_check("TFL: the flush (software executor)", RB_TFL, &plan[RB_TFL], 0);
+    /* rb_check_unpublished is pass 1's alone: it checks what the GPU may NOT have published
+     * yet, and the CPU executor has no publication -- it writes guest memory as it draws. */
+    rb_flip("readback gate: frame 0's flip (software)");
+    for (i = 0; i < RB_NSURF; i++) {
+        char what[128];
+
+        if (i == RB_U) {
+            RbPlan u;
+
+            memset(&u, 0, sizeof u);
+            rb_box(&u, 8, 8, 24, 24, RB_C32_FL);
+            _snprintf(what, sizeof what, "U (software): the sampled window's colour");
+            ok &= rb_check(what, RB_U, &u, GATE_TEX_TOL);   /* the sampler's step, as above */
+        } else {
+            _snprintf(what, sizeof what, "%s (software): the plan, by the other rasteriser",
+                      k_rb_surf[i].name);
+            ok &= rb_check(what, i, &plan[i], 0);
+        }
+        _snprintf(what, sizeof what, "%s: byte for byte what the Vulkan back end left",
+                  k_rb_surf[i].name);
+        ok &= rb_check_against(what, i, snap0[i], 0);
+    }
+    rb_frame1_draws();
+    rb_plan0(plan);
+    for (i = 0; i < RB_NPATCH; i++)
+        rb_box(&plan[k_rb_patch[i].idx], k_rb_patch[i].x0, k_rb_patch[i].y0, k_rb_patch[i].x1,
+               k_rb_patch[i].y1, k_rb_patch[i].argb);
+    rb_box(&plan[RB_U], 8, 8, 24, 24, RB_C32_FL);
+    for (i = 0; i < RB_NSURF; i++) {
+        char what[128];
+
+        _snprintf(what, sizeof what, "%s (software): the plan after frame 1", k_rb_surf[i].name);
+        ok &= rb_check(what, i, &plan[i], 0);
+        _snprintf(what, sizeof what, "%s: byte for byte what the Vulkan back end left after "
+                  "frame 1", k_rb_surf[i].name);
+        ok &= rb_check_against(what, i, snap1[i], 0);
+    }
+    if (g_rb_bad)
+        ok = 0;
+
+    for (i = 0; i < RB_NSURF; i++) {
+        free(snap0[i]);
+        free(snap1[i]);
+    }
+    fflush(stdout);
+    if (!ok) {
+        fprintf(stderr, "FAIL: gpu_backend_parity_vk --readback-pack\n");
+        return 1;
+    }
+    puts("PASS: gpu_backend_parity_vk --readback-pack (every target's published bytes were the "
+         "plan's in both passes, the 16-bit ones through the GPU pack kernel with the "
+         "truncation boundary colours intact, and the counters matched the gate's own count)");
+    return 0;
+}
+
 /* ── main ────────────────────────────────────────────────────────────────── */
 int main(int argc, char **argv)
 {
@@ -5923,6 +6925,20 @@ int main(int argc, char **argv)
      * software device, like the rest of this file. */
     if (argc > 1 && strcmp(argv[1], "--frames-in-flight") == 0) {
         int rc = run_frames_in_flight();
+        fflush(stdout);
+        nv2a_set_commit_consumer(NULL);
+        VirtualFree(pbmem, 0, MEM_RELEASE);
+        free(instance); free(ramin); free(ram);
+        xbox_MemoryLayoutShutdown();
+        return rc;
+    }
+
+    /* The batched-readback pack gate is a mode of its own for the same reason: it installs
+     * the Vulkan back end, drives its own frames through it, then replays them against the
+     * CPU executor, and reports its own PASS line. It exits 77 when there is no software
+     * device, like the rest of this file. */
+    if (argc > 1 && strcmp(argv[1], "--readback-pack") == 0) {
+        int rc = run_readback_pack();
         fflush(stdout);
         nv2a_set_commit_consumer(NULL);
         VirtualFree(pbmem, 0, MEM_RELEASE);

@@ -399,6 +399,21 @@ if(BUILD_TESTING)
                      COMMAND jsrf_gpu_backend_parity_vk_test --frames-in-flight)
             set_tests_properties(jsrf_vk_frames_in_flight PROPERTIES TIMEOUT 900 SKIP_RETURN_CODE 77
                 ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd};VK_ICD_FILENAMES=${_vk_icd};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
+            # N4.2's own gate, written by a different worker from the change it decides: the
+            # flip's readback publishes every dirty target through one bounded staging buffer
+            # and, for a 16-bit target, truncates it to 5:6:5 in a GPU compute pack kernel
+            # instead of a per-pixel loop on the host. It drives the real seam, checks every
+            # byte of seven targets (padded pitches, odd dirty rectangles, both formats in one
+            # flip, the mid-frame flush of an aliased texture's target, and a second frame's
+            # re-load) against its own plan and against the CPU executor, and decides the
+            # negative from the new nv2a_vk_backend_readback_stats() counters -- CPU-converted
+            # bytes and a GPU-truncated pack differ only in the low bits, so the truncation
+            # boundary colours it draws are what make the claim decidable. It skips (77)
+            # exactly like its siblings.
+            add_test(NAME jsrf_vk_readback_pack
+                     COMMAND jsrf_gpu_backend_parity_vk_test --readback-pack)
+            set_tests_properties(jsrf_vk_readback_pack PROPERTIES TIMEOUT 600 SKIP_RETURN_CODE 77
+                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd};VK_ICD_FILENAMES=${_vk_icd};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
         else()
             add_test(NAME jsrf_gpu_backend_parity_vk
                      COMMAND jsrf_gpu_backend_parity_vk_test --skip "XBR_VK_SW_ICD is not set")
@@ -406,11 +421,14 @@ if(BUILD_TESTING)
             add_test(NAME jsrf_vk_frames_in_flight
                      COMMAND jsrf_gpu_backend_parity_vk_test --skip "XBR_VK_SW_ICD is not set")
             set_tests_properties(jsrf_vk_frames_in_flight PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
+            add_test(NAME jsrf_vk_readback_pack
+                     COMMAND jsrf_gpu_backend_parity_vk_test --skip "XBR_VK_SW_ICD is not set")
+            set_tests_properties(jsrf_vk_readback_pack PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
         endif()
     else()
-        message(STATUS "Vulkan/unavailable: jsrf_gpu_backend_parity_vk and jsrf_vk_frames_in_flight are "
-                       "not registered -- they run against the Vulkan back end, which is a stub in "
-                       "this build")
+        message(STATUS "Vulkan/unavailable: jsrf_gpu_backend_parity_vk, jsrf_vk_frames_in_flight and "
+                       "jsrf_vk_readback_pack are not registered -- they run against the Vulkan back "
+                       "end, which is a stub in this build")
     endif()
     # V5's gating test: the ahead-of-time vertex-program corpus against the live Vulkan back end.
     # Authored by a different worker from the two production authors (plan rule N5). It links the
@@ -536,6 +554,72 @@ if(BUILD_TESTING)
         set_tests_properties(jsrf_vk_ring_fault_gate PROPERTIES TIMEOUT 300)
     else()
         message(STATUS "Vulkan/unavailable: jsrf_vk_ring_fault_gate is not registered -- it "
+                       "compiles the toolkit's Vulkan back end, which this build does not "
+                       "(${XBR_VULKAN_UNAVAILABLE_REASON})")
+    endif()
+    # ── N4.2's readback publication, as its failure-path gate ────────────────────────────────
+    # The success-path gate (jsrf_vk_readback_pack) runs the pack kernel on a real device and
+    # compares pixels; it cannot reach the branch this one exists for. In vb_targets_flush a
+    # batch's pack descriptor set can fail to allocate (vkAllocateDescriptorSets returns
+    # VK_ERROR_OUT_OF_POOL_MEMORY), and the pre-fix code simply broke out of the record loop:
+    # vb_fail does not clear g.ok, so the batch still ran its barrier, its vkQueueSubmit, its
+    # fence wait and its publish loop, marking every staged target clean from staging bytes that
+    # nothing had written -- for the 16-bit target because its dispatch was never recorded, and
+    # for every target after it because its copy never ran. This case injects exactly that
+    # VkResult from a stub and asserts the batch submits nothing, publishes nothing, leaves guest
+    # memory byte-identical and leaves both targets dirty; that a succeeding retry then publishes
+    # both rectangles exactly; and that the staging pair is neither freed nor replaced under the
+    # recording the failure left open. No success-path run can reach any of it -- the project
+    # rejected the N4.1 back end for precisely this class of defect (docs/jsrf-technical-record.md
+    # §31.30), so the failure path needs its own deciding evidence.
+    #
+    # It compiles NO COPY of the algorithm: its translation unit #includes the toolkit's
+    # src/video/nv2a_vk_backend.c with XBR_VK_BACKEND defined, so the bodies under test are the
+    # production ones, and the toolkit is NOT linked (the five external symbols it references are
+    # stubbed in the test, and every Vulkan entry point is a static function pointer the test
+    # points at its own stubs). scripts/vk-readback-fault-gate.py re-reads the same bytes at BUILD
+    # time: a definition, struct field or global the fixture binds to that is gone fails the BUILD
+    # (exit 2), and the three markers it derives are what the pre-fix source is reported against
+    # (the pre-fix source must still build, so it is a failed check, never a skip).
+    if(XBR_VULKAN_FOUND)
+        find_package(Vulkan QUIET)
+        if(NOT Vulkan_INCLUDE_DIRS)
+            message(FATAL_ERROR
+                "Vulkan is available (XBR_VULKAN_FOUND) but find_package(Vulkan) found no "
+                "include directory here; the readback fault-gate test compiles "
+                "src/video/nv2a_vk_backend.c, which needs <vulkan/vulkan.h>.")
+        endif()
+        set(VK_RB_GATE_DIR "${CMAKE_CURRENT_BINARY_DIR}/vk-readback-fault-gate")
+        set(VK_RB_GATE_SOURCE "${XBOXRECOMP_DIR}/src/video/nv2a_vk_backend.c")
+        set(VK_RB_GATE_PROBE "${CMAKE_CURRENT_SOURCE_DIR}/scripts/vk-readback-fault-gate.py")
+        set(VK_RB_GATE_HEADER "${VK_RB_GATE_DIR}/vk_readback_fault_gate_seam.h")
+        # A non-zero exit here fails the build, which is the point: a seam that moved must break
+        # the build rather than quietly turn the case into something else.
+        add_custom_command(
+            OUTPUT "${VK_RB_GATE_HEADER}" "${VK_RB_GATE_DIR}/vk_readback_fault_gate_seam.txt"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${VK_RB_GATE_DIR}"
+            COMMAND "${_jsrf_python}" -X utf8 "${VK_RB_GATE_PROBE}"
+                    --source "${VK_RB_GATE_SOURCE}"
+                    --header "${VK_RB_GATE_HEADER}"
+                    --manifest "${VK_RB_GATE_DIR}/vk_readback_fault_gate_seam.txt"
+            DEPENDS "${VK_RB_GATE_SOURCE}" "${VK_RB_GATE_PROBE}"
+            COMMENT "vk_readback_fault_gate: probing nv2a_vk_backend.c for the seam the regression binds to"
+            VERBATIM)
+        add_custom_target(jsrf_vk_readback_fault_gate_probe DEPENDS "${VK_RB_GATE_HEADER}")
+        add_executable(jsrf_vk_readback_fault_gate_test tests/test_vk_readback_fault_gate.c)
+        # xbox_video is what generates the SPIR-V headers the back end includes; the probe target
+        # writes the seam header the test includes.
+        add_dependencies(jsrf_vk_readback_fault_gate_test jsrf_vk_readback_fault_gate_probe xbox_video)
+        target_include_directories(jsrf_vk_readback_fault_gate_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/video
+            ${Vulkan_INCLUDE_DIRS}
+            "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv"
+            "${VK_RB_GATE_DIR}")
+        target_link_libraries(jsrf_vk_readback_fault_gate_test PRIVATE ${CMAKE_DL_LIBS})
+        add_test(NAME jsrf_vk_readback_fault_gate COMMAND jsrf_vk_readback_fault_gate_test)
+        set_tests_properties(jsrf_vk_readback_fault_gate PROPERTIES TIMEOUT 300)
+    else()
+        message(STATUS "Vulkan/unavailable: jsrf_vk_readback_fault_gate is not registered -- it "
                        "compiles the toolkit's Vulkan back end, which this build does not "
                        "(${XBR_VULKAN_UNAVAILABLE_REASON})")
     endif()
