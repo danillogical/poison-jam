@@ -4619,6 +4619,1260 @@ static int run_four_textures(void)
     return ok;
 }
 
+/* ── The submission-ring lifetime gate (--frames-in-flight) ────────────────
+ *
+ * The back end runs a bounded ring of submission slots (nv2a_vk_backend.h,
+ * Nv2aVkRingStats): each slot owns one command recording, one fence, one descriptor pool and
+ * one upload stream; a submission is issued WITHOUT waiting for it; and the host reaches a
+ * fence only to reuse a slot that is still in flight, to publish guest memory (a flip's
+ * read-back, a target flush or release) or on device error. That is a claim about lifetimes,
+ * and it is worth nothing unless one run can show all four of these at once:
+ *
+ *   - real overlap, from the ring's own counters: two slots were outstanding at once
+ *     (max_in_flight >= 2), a frame was submitted in more than one part (splits >= 1), the
+ *     ring wrapped (submissions > frames), and the host performed a fence wait on an occupied
+ *     slot (reuse_waits >= 1) and while publishing guest memory (drain_waits >= 1), with
+ *     nothing left in flight after each flip's publish. Every one of those is asserted below
+ *     and each has a line of its own saying what it means. They are the host's own accounting,
+ *     as the header documents: in_flight/max_in_flight say "issued without waiting for the
+ *     ones before it", not "the device was still executing", and the wait counters count the
+ *     waits performed. The run drives 12 + slots frames (read at run time, so more frames than
+ *     the ring has slots, and a one-slot ring -- or a submit that waits for its own fence,
+ *     which is no ring at all -- fails the claims and says which one never happened).
+ *
+ *   - the work really reached the back end, also from the ring's counters: every draw reserves
+ *     one descriptor set against its recording slot, and a slot holds VB_SLOT_SETS
+ *     (VB_SPLIT_SETS * 64 = 2048) of them and VB_SLOT_STREAM (VB_SPLIT_BYTES * 8 = 16 MiB) of
+ *     upload stream before vb_reserve has to move to the next slot, which submits the one it
+ *     leaves. So a run that carried N draws CANNOT show fewer than N / VB_SLOT_SETS - slots
+ *     submissions, and it also cannot show fewer than (N * 144 bytes) / VB_SPLIT_BYTES - slots
+ *     from the six 24-byte vertices each of those draws hands the back end. The gate computes
+ *     both bounds from the draws the executor counted and FAILS on them, printing the bound,
+ *     the observed counters and the executor's own count -- a workload whose draws were dropped
+ *     by the executor (this gate exists because one was: 17992 batches a frame counted, 8 draws
+ *     reaching the back end) shows a tiny number of submissions instead and is caught here as
+ *     well as by every per-cell colour below. Which threshold moved the slot is on the record
+ *     too: `splits` are submissions begun at a draw entry, `overflows` the ones begun because
+ *     the stream or the descriptor pool was full.
+ *
+ *   - guest-visible correctness, checked against the CPU executor: the run is executed twice,
+ *     the same pushbuffers first against the Vulkan back end and then against the CPU executor
+ *     the rest of this file trusts, and every surface of every frame is checked against that
+ *     frame's plan in BOTH passes. Each expectation is arithmetic this file states (see the
+ *     note on each check); the CPU pass is what proves the arithmetic, since the flat fills,
+ *     the per-cell colours, the clears and the round trips come back out of the CPU executor
+ *     as the plan says, rather than the plan being a table that merely agrees with the back
+ *     end. On top of that the two passes are compared with each other: every surface a sampler
+ *     does not touch must be byte-identical (gate_hash_* below), and the sampled ones must
+ *     agree within the step a sampled UNORM is allowed. The correctness is checked in the
+ *     frames where targets, textures, depth buffers and framebuffers are evicted and released
+ *     while submissions are still pending as well as in the quiet ones.
+ *
+ *   - attributable content: every draw writes a colour no other draw of that frame and no draw
+ *     of any other frame ever writes, so a stream slice, a descriptor set or a constant block
+ *     coming from the wrong submission cannot land unnoticed: the counters say the ring
+ *     overlapped, and the colours say it overlapped the right things. A cell's colour encodes
+ *     (frame, target, cell), and gate_seen() fails the run if any two colours it uses repeat.
+ *
+ * The gate drives the REAL seam: nv2a_vk_backend_install() and guest pushbuffers through
+ * nv2a_submit_pending(), the same one the rest of this file uses. Nothing here re-implements
+ * the ring's lifecycle, nothing writes into the back end's state, and the ring is read only
+ * through nv2a_vk_backend_ring_stats().
+ *
+ * Per frame, in guest-memory terms (all addresses are the gate's own 16 MB of guest RAM):
+ *
+ *   1. the auxiliary surfaces, each fully drawn with this frame's own colour and checked after
+ *      the flip: GATE_DST samples GATE_SRC's published bytes (frame 0 samples what was
+ *      pre-filled there, since no flip has happened yet, which pins the load path too);
+ *      GATE_SRC is this frame's own drawing, which this frame's flip publishes; GATE_HEAVY is a
+ *      1024x1024 fill whose read-back at the flip is 4 MB (the device is still busy with it
+ *      while the host records the next slots, which is what keeps a submission in flight across
+ *      a slot reuse); GATE_R32/GATE_R16 are the read-back/re-load round trip (even frames draw
+ *      the whole surface, odd frames one 16x16 corner over the previous frame's bytes, which
+ *      must have survived both the flush and the reload); and GATE_PROBE is the depth order: A
+ *      at ZFAR, then a nearer B at ZNEAR, and C at ZMID in a submission much later in the same
+ *      frame, which must still be rejected -- a depth buffer whose content was dropped between
+ *      two submissions would let C through;
+ *   2. every grid target, GATE_NGRID of them: cleared (colour, depth and stencil in one clear,
+ *      at that target's zeta for this segment) and then drawn cell by cell -- each cell is one
+ *      draw and so one descriptor set -- until all of its cells have been considered, 1024 of
+ *      them per target at 8x8 pixels each. Two things follow from that cell size and both
+ *      matter: an 8-pixel span is what makes the executor's screen-space test accept the batch
+ *      at all (a smaller quad is read as object-space geometry and skipped -- the note on
+ *      gate_cells), and the cells tile the 256x256 surface exactly, so every pixel of every
+ *      target has a name in the plan below;
+ *   3. the cells a frame leaves undrawn must still show that frame's clear colour, and which
+ *      cells those are walks with the frame, so a cell left over from an earlier frame (a
+ *      target that was not really re-cleared, or was flushed or reloaded at the wrong moment)
+ *      is a wrong pixel rather than an unobserved one;
+ *   4. GATE_TTGT's first GATE_NTEX cells are sampled through GATE_NTEX distinct textures, each
+ *      written into guest memory just before the draw that samples it, so the texture cache
+ *      (VB_MAX_TEXTURES 512) is pushed over and an evicted texture is re-uploaded while the
+ *      ring has submissions in flight. The rotating zetas (GATE_ZN of them > VB_MAX_DEPTHS 8,
+ *      GATE_ZSEG segments per target, so GATE_NGRID * GATE_ZSEG > 64 (target, depth) pairs)
+ *      release depth images and framebuffers at the same time, and the targets themselves
+ *      (GATE_NGRID grid + GATE_AUX_TGT auxiliary > VB_MAX_TARGETS 16) release the least
+ *      recently used target, flushed to guest memory, with this frame's submissions pending;
+ *   5. the flip, and then every pixel of every surface above is checked against what the frame
+ *      drew, and the ring's counters are printed.
+ *
+ * The frame's draw count is what makes the ring split, and it is fixed by construction rather
+ * than by watching the counters: each cell draw hands the back end six 24-byte vertices, so
+ * GATE_NGRID * GATE_DRAWN_CELLS draws carry at least 2 MiB of stream (VB_SPLIT_BYTES) and at
+ * least 32 descriptor sets (VB_SPLIT_SETS) in every frame. The compile-time assertions below
+ * pin both, so a later edit of the constants cannot quietly make the run vacuous.
+ *
+ * What this is built to catch (the mutants it was written against): a submit that waits for
+ * its own fence (the old behaviour) never has two slots in flight, so it fails max_in_flight,
+ * reuse_waits and the wrap's own FAIL line, while every colour check still passes -- the
+ * failure is on the overlap claim, not on the content. A slot reused before its fence was
+ * observed rewrites the stream, the descriptor pool or the command buffer of a submission that
+ * is still executing, so it fails the reuse_waits claim (when the fence is no longer observed
+ * at all) or the per-cell colours, the round trips and the depth probe (when it is reset before
+ * the fence), because the data underneath a running submission changed. And a workload that
+ * silently stops reaching the back end -- the failure this gate was repaired for, where the
+ * executor counted 17992 batches a frame while the back end drew 8 -- fails the per-cell
+ * colours, the reach bound in the counters and the pass-against-pass comparison. */
+
+#define GATE_BASE         0x01000000u   /* the gate's own region, 16 MB into guest RAM */
+#define GATE_NGRID        16u           /* grid targets, every one of them drawn every frame */
+#define GATE_GRID_W       256u
+#define GATE_GRID(i)      (GATE_BASE + (uint32_t)(i) * 0x00040000u)   /* 256x256 A8R8G8B8 */
+#define GATE_CELL_PX      8u            /* a drawn cell is an 8x8 pixel square of its target */
+#define GATE_GRID_ROW     (GATE_GRID_W / GATE_CELL_PX)                /* 32 cells across */
+#define GATE_GRID_CELLS   (GATE_GRID_ROW * GATE_GRID_ROW)             /* 1024 cells per target */
+#define GATE_TTGT         (GATE_NGRID - 1u)   /* its cells are the ones sampled through textures */
+#define GATE_SKIP_MOD     63u           /* one cell in 63 is left undrawn: it must show the clear */
+#define GATE_DRAWN_CELLS  (GATE_GRID_CELLS - (GATE_GRID_CELLS / GATE_SKIP_MOD + 1u))
+#define GATE_AUX_TGT      6u            /* DST, SRC, R32, R16, PROBE, HEAVY */
+#define GATE_ZSEG         6u            /* zeta segments per grid target */
+#define GATE_ZN           10u           /* depth buffers the grid zetas rotate through (> 8) */
+#define GATE_NZ           (GATE_ZN + 1u) /* ... plus GATE_ZP, the probe's own */
+#define GATE_NTEX         520u          /* distinct textures bound and sampled per frame */
+#define GATE_TEX(i)       (GATE_BASE + 0x00C00000u + (uint32_t)(i) * 0x00001000u)
+#define GATE_SRC          (GATE_BASE + 0x00400000u)     /* 64x64x4, published by each flip */
+#define GATE_DST          (GATE_BASE + 0x00410000u)     /* 64x64x4, samples GATE_SRC */
+#define GATE_R32          (GATE_BASE + 0x00420000u)     /* 64x64x4 */
+#define GATE_R16          (GATE_BASE + 0x00440000u)     /* 64x64x2, pitch 128 */
+#define GATE_PROBE        (GATE_BASE + 0x00460000u)     /* 64x64x4, drawn against GATE_ZP */
+#define GATE_HEAVY        (GATE_BASE + 0x00600000u)     /* 1024x1024x4: a 4 MB read-back per flip */
+#define GATE_HEAVY_W      1024u
+#define GATE_VB           (GATE_BASE + 0x00A00000u)     /* this push's vertices, 24 bytes each */
+#define GATE_VB_VERTS     (0x00020000u / 24u)           /* 128 KB per push */
+#define GATE_Z(i)         (GATE_BASE + 0x00B00000u + (uint32_t)(i) * 0x00001000u)
+#define GATE_ZP           GATE_Z(GATE_ZN)               /* the probe's own: no grid clear touches it */
+#define GATE_PB_WORDS     (0x4000u / 4u)                /* the pushbuffer window, in words */
+#define GATE_PB_LIMIT     3000u                         /* split the push well before the window ends */
+#define GATE_SEEN         (1u << 20)                    /* the gate's colour set */
+#define GATE_MAXFRAMES    64u                           /* the gate's per-frame tables */
+#define GATE_NHASH        (3u + GATE_TTGT)              /* surfaces compared between the passes by hash */
+#define GATE_NCMP         3u                            /* ... and the ones compared pixel by pixel */
+
+/* The back end's split thresholds and what one draw costs it, so that the size of a frame's
+ * workload can be checked against them at compile time (below). vb_maybe_split submits a slot
+ * once it holds VB_SPLIT_BYTES of upload stream or VB_SPLIT_SETS descriptor sets, and a slot
+ * itself holds VB_SLOT_SETS = VB_SPLIT_SETS * 64 sets and VB_SLOT_STREAM = VB_SPLIT_BYTES * 8 of
+ * stream before vb_reserve has to move to the next slot: those are the two numbers the reach
+ * claim below is computed from. GATE_DRAW_BYTES is the least a cell draw hands the back end --
+ * six vertices of 24 bytes -- which is what makes the stream bound conservative. */
+#define GATE_SPLIT_BYTES  (2u * 1024u * 1024u)
+#define GATE_SPLIT_SETS   32u
+#define GATE_SLOT_SETS    (GATE_SPLIT_SETS * 64u)       /* 2048 descriptor sets per slot */
+#define GATE_SLOT_STREAM  (GATE_SPLIT_BYTES * 8u)       /* 16 MiB of stream per slot */
+#define GATE_DRAW_BYTES   144u                          /* 6 vertices * 24 bytes */
+
+/* The pressure the gate applies has to exceed the caches the back end documents -- 16 targets,
+ * 512 textures, 8 depth buffers, 64 framebuffers -- or the eviction paths never run, and a
+ * frame's workload has to cross both split thresholds or the ring never advances. Fixed at
+ * compile time so a later edit of the constants above cannot quietly stop exercising them. */
+typedef char gate_targets_exceed_cache[(GATE_NGRID + GATE_AUX_TGT > 16u) ? 1 : -1];
+typedef char gate_textures_exceed_cache[(GATE_NTEX > 512u) ? 1 : -1];
+typedef char gate_depths_exceed_cache[(GATE_ZN > 8u) ? 1 : -1];
+typedef char gate_fbs_exceed_cache[(GATE_NGRID * GATE_ZSEG > 64u) ? 1 : -1];
+typedef char gate_frame_crosses_bytes[(GATE_NGRID * GATE_DRAWN_CELLS * GATE_DRAW_BYTES
+                                       >= GATE_SPLIT_BYTES) ? 1 : -1];
+typedef char gate_frame_crosses_sets[(GATE_NGRID * GATE_DRAWN_CELLS >= GATE_SPLIT_SETS) ? 1 : -1];
+
+enum {
+    GA_DST_CLEAR, GA_SRC, GA_HVY, GA_PROBE_CLR, GA_PA, GA_PB, GA_PC,
+    GA_R32_FULL, GA_R32_CORNER, GA_R16_FULL, GA_R16_CORNER, GA_PREV_SRC, GA_N
+};
+
+static struct {
+    unsigned frame;
+    uint32_t aux[GA_N];                          /* this frame's auxiliary colours */
+    uint32_t clear;                              /* this frame's grid clear colour */
+    uint32_t cell[GATE_NGRID][GATE_GRID_CELLS];  /* what each cell holds this frame; 0: not drawn */
+    unsigned cleared[GATE_NGRID];
+    uint32_t texseq;                             /* textures bound so far this frame */
+    unsigned pushes;
+    int pb_fail, dup;
+} g_gate;
+
+/* What the NV2A registers are believed to hold, so a draw only re-emits what changed. A push
+ * split invalidates all of it (the split starts from the baseline), which is why nothing here
+ * has to survive across pushes. */
+static struct {
+    uint32_t surf, zeta, tex_va, tex_fmt, tex_w, tex_h, tex_pitch, tex_filter;
+    int tex_on;
+} g_gate_st;
+static uint32_t g_gate_vb;                       /* the next free vertex index in this push */
+static uint32_t g_gate_seen[GATE_SEEN];
+static unsigned g_gate_seen_n;
+
+/* Colours. A cell's channels are even and an auxiliary colour's are odd, so a cell colour can
+ * never be taken for the grid's clear colour or an auxiliary one; each family expands its index
+ * in base 121 per channel, so it is injective in that index. A cell's index encodes
+ * (frame, target, cell) -- 16 frames x 65536 cells -- so the colour identifies the draw that
+ * produced a pixel. gate_seen() re-checks that on every colour the run actually uses. */
+static uint32_t gate_rgb(uint32_t idx)
+{
+    return 0xFF000000u | ((8u + 2u * (idx % 121u)) << 16)
+                       | ((8u + 2u * ((idx / 121u) % 121u)) << 8)
+                       |  (8u + 2u * ((idx / 14641u) % 121u));
+}
+static uint32_t gate_aux_rgb(uint32_t idx)
+{
+    return 0xFF000000u | ((9u + 2u * (idx % 121u)) << 16)
+                       | ((9u + 2u * ((idx / 121u) % 121u)) << 8)
+                       |  (9u + 2u * ((idx / 14641u) % 121u));
+}
+static uint32_t gate_cell(unsigned n, uint32_t t, uint32_t c)
+{
+    return gate_rgb((uint32_t)n * 65536u + t * GATE_GRID_CELLS + c);
+}
+static uint32_t gate_aux(unsigned n, unsigned j)
+{
+    return gate_aux_rgb(256u + (uint32_t)n * 16u + (uint32_t)j);
+}
+static uint32_t gate_clr(unsigned n) { return gate_aux_rgb(512u + (uint32_t)n); }
+
+/* A8R8G8B8 to R5G6B5 by truncation: the conversion the back end's read-back of a 16-bit target
+ * uses, and the one this file's run_roundtrip16 pins from the other side (RED -> 0xF800). */
+static uint16_t trunc565(uint32_t argb)
+{
+    return (uint16_t)(((argb >> 8) & 0xF800u) | ((argb >> 5) & 0x07E0u) | ((argb >> 3) & 0x001Fu));
+}
+
+/* Remember a colour the run is about to draw with. A repeat would mean the gate can no longer
+ * tell which draw produced a pixel, so it fails there and then. */
+static int gate_seen(uint32_t col)
+{
+    uint32_t i = ((col * 2654435761u) >> 13) & (GATE_SEEN - 1u);
+    unsigned probes = 0;
+
+    while (g_gate_seen[i] && probes++ < GATE_SEEN) {
+        if (g_gate_seen[i] == col)
+            return 0;
+        i = (i + 1u) & (GATE_SEEN - 1u);
+    }
+    g_gate_seen[i] = col;
+    g_gate_seen_n++;
+    return 1;
+}
+static void gate_seen_fail(uint32_t col)
+{
+    if (g_gate.dup)
+        return;
+    g_gate.dup = 1;
+    fprintf(stderr, "FAIL: ring gate -- colour 0x%08X is used twice: a pixel can no longer be "
+                    "attributed to the draw that produced it\n", col);
+}
+
+/* ── The pushbuffer: one draw per cell, every draw its own draw ───────────── */
+static void gate_unknown(void)
+{
+    g_gate_st.surf = 0xFFFFFFFFu;
+    g_gate_st.zeta = 0xFFFFFFFFu;
+    g_gate_st.tex_va = 0u;
+    g_gate_st.tex_on = 0;
+}
+
+/* The state every push starts from: nothing inherited from the previous push, no zeta, stage 0
+ * off, depth test and write off, the vertex layout the gate always uses (24-byte vertices, a
+ * float3 position, a D3DCOLOR diffuse and a float2 uv at 16, so every draw is one format). */
+static void gate_baseline(void)
+{
+    pb_reset_state();
+    pb_vertex_format(GATE_VB, 1);
+    pb(0x1B0C, 0);
+    pb(0x0394, f2u(0.0f));                     /* CLIP_MIN z */
+    pb(0x0398, f2u(16777215.0f));              /* CLIP_MAX z: the depth scale draws use */
+    g_gate_vb = 0;
+    gate_unknown();
+}
+
+static void gate_submit(const char *what)
+{
+    int ok;
+
+    if (!g_pbn)
+        return;
+    g_gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET] = 0;
+    g_gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_PUT] = g_pbn * 4u;
+    ok = nv2a_submit_pending(g_gpu);
+    g_gate.pushes++;
+    if (!ok) {
+        g_gate.pb_fail = 1;
+        fprintf(stderr, "FAIL: pushbuffer rejected (%s): %s, subchannel %u method 0x%04X param 0x%08X, get 0x%X\n",
+                what, nv2a_submit_diagnostic(g_gpu->pfifo.submit_diag),
+                g_gpu->pfifo.submit_diag_subchannel, g_gpu->pfifo.submit_diag_method,
+                g_gpu->pfifo.submit_diag_param, g_gpu->pfifo.submit_diag_get);
+    }
+}
+
+/* A submission of this frame, on purpose: the ring sees the same thing a guest's next DMA kick
+ * would, and the frame stays one frame. */
+static void gate_push_split(void)
+{
+    gate_submit("ring gate (push split)");
+    pb_begin();
+    gate_baseline();
+}
+static void gate_need_room(void)
+{
+    /* A push boundary is transparent to the NV2A registers, but the recording is restarted from
+     * the baseline, so the room check has to leave enough for the next draw group (states plus
+     * its quads) -- 48 vertices and 128 words covers every group this gate emits. */
+    if (g_pbn + 128u > GATE_PB_LIMIT || g_gate_vb + 48u > GATE_VB_VERTS)
+        gate_push_split();
+}
+
+static void gate_surface(uint32_t va, uint32_t w, uint32_t h, uint32_t bpp)
+{
+    if (g_gate_st.surf == va)
+        return;
+    g_gate_st.surf = va;
+    pb_surface(va, w, h, bpp);
+}
+static void gate_zeta(uint32_t z)
+{
+    if (g_gate_st.zeta == z)
+        return;
+    g_gate_st.zeta = z;
+    pb(0x0214, z);
+}
+/* Bind stage 0 to a texture; the same block with another address costs one method. */
+static void gate_tex(uint32_t va, uint32_t fmt, uint32_t w, uint32_t h, uint32_t pitch,
+                     uint32_t filter)
+{
+    if (g_gate_st.tex_on && g_gate_st.tex_fmt == fmt && g_gate_st.tex_w == w
+        && g_gate_st.tex_h == h && g_gate_st.tex_pitch == pitch
+        && g_gate_st.tex_filter == filter) {
+        if (g_gate_st.tex_va != va) {
+            g_gate_st.tex_va = va;
+            pb(0x1B00, va);
+        }
+        return;
+    }
+    g_gate_st.tex_on = 1;
+    g_gate_st.tex_va = va; g_gate_st.tex_fmt = fmt; g_gate_st.tex_w = w;
+    g_gate_st.tex_h = h; g_gate_st.tex_pitch = pitch; g_gate_st.tex_filter = filter;
+    pb_texture_on(va, fmt, w, h, pitch, filter);
+}
+static void gate_tex_none(void)
+{
+    if (!g_gate_st.tex_on)
+        return;
+    g_gate_st.tex_on = 0;
+    pb(0x1B0C, 0);
+}
+static void gate_tex_data(uint32_t tx, uint32_t col)
+{
+    uint32_t *p = (uint32_t *)G(GATE_TEX(tx));
+    unsigned i;
+
+    for (i = 0; i < 64u; i++)
+        p[i] = col;
+}
+
+/* One quad as one draw of its own, from the push's vertex buffer. The vertices are in guest
+ * memory now and the back end copies them into the recording slot's stream as it records, so
+ * the same guest addresses serve the next push. */
+static void gate_quad_uv(float x0, float y0, float x1, float y1, float z, uint32_t diffuse,
+                         float u0, float v0, float u1, float v1)
+{
+    uint32_t first = g_gate_vb;
+
+    if (first + 6u > GATE_VB_VERTS || g_pbn + 8u > GATE_PB_WORDS) {
+        fprintf(stderr, "FAIL: ring gate -- the pushbuffer ran out of room inside a draw\n");
+        g_gate.pb_fail = 1;
+        return;
+    }
+    g_gate_vb = first + 6u;
+    put_vertex_z(GATE_VB, (int)(first + 0u), x0, y0, z, diffuse, u0, v0);
+    put_vertex_z(GATE_VB, (int)(first + 1u), x1, y0, z, diffuse, u1, v0);
+    put_vertex_z(GATE_VB, (int)(first + 2u), x0, y1, z, diffuse, u0, v1);
+    put_vertex_z(GATE_VB, (int)(first + 3u), x1, y0, z, diffuse, u1, v0);
+    put_vertex_z(GATE_VB, (int)(first + 4u), x1, y1, z, diffuse, u1, v1);
+    put_vertex_z(GATE_VB, (int)(first + 5u), x0, y1, z, diffuse, u0, v1);
+    pb_draw_range(first, 6);
+}
+static void gate_quad(float x0, float y0, float x1, float y1, float z, uint32_t diffuse)
+{
+    gate_quad_uv(x0, y0, x1, y1, z, diffuse, 0.5f, 0.5f, 0.5f, 0.5f);
+}
+
+/* The depth buffer a grid target's cell segment uses: several are alive at once (more than the
+ * depth cache holds), and rotating them per segment and per frame makes the (target, depth)
+ * pairs -- the framebuffers -- churn too. The rotation stays inside GATE_ZN of them so that the
+ * probe's own depth buffer (GATE_ZP) is never a grid target's, and no grid clear can wipe the
+ * depth A and B left behind for C to be tested against -- that interference, and not the depth
+ * logic, is what made the original version of this gate fail its probe on some frames. */
+static uint32_t gate_zeta_for(uint32_t t, unsigned n, uint32_t seg)
+{
+    return GATE_Z((t * GATE_ZSEG + seg + (uint32_t)n) % GATE_ZN);
+}
+
+/* Clear a grid target for this frame: the whole surface becomes the frame's clear colour, and
+ * the clear carries the target's depth so a depth image of this size exists too. */
+static void gate_grid_clear(uint32_t t, unsigned n)
+{
+    if (g_gate.cleared[t])
+        return;
+    g_gate.cleared[t] = 1;
+    gate_need_room();
+    gate_zeta(gate_zeta_for(t, n, 0));
+    gate_surface(GATE_GRID(t), GATE_GRID_W, GATE_GRID_W, 4);
+    pb(0x1D8C, 0xFFFFFF00u);                   /* the depth clear value: far, stencil 0 */
+    pb_clear_flags(g_gate.clear, 0xF3u);       /* colour, depth and stencil, in one clear */
+}
+
+/* Which cells a frame leaves undrawn. They must still show that frame's clear colour, which is
+ * how the check catches a target that was not really re-cleared -- or was flushed or reloaded at
+ * the wrong moment -- and catches a cell left over from an earlier frame. The phase walks with
+ * the frame (11 is coprime with 63), so a cell the frame leaves alone is one an earlier or later
+ * frame draws. */
+static int gate_cell_undrawn(unsigned n, uint32_t t, uint32_t c)
+{
+    return ((c + 11u * n + 5u * t) % GATE_SKIP_MOD) == 0u;
+}
+
+/* Draw every cell of grid target `t` that this frame keeps: one draw, one descriptor set and one
+ * place in the vertex buffer per cell. `textured` binds and samples a distinct texture for the
+ * target's first GATE_NTEX cells (each written just before the push that samples it), which is
+ * what pushes the texture cache over.
+ *
+ * The quad covers the whole 8x8 cell, and the span is what makes the draw reach the back end at
+ * all: the executor's screen-space test (nv2a_pb_exec.c, batch_is_screen_space) reads a batch
+ * whose vertices span less than OBJECT_SPACE_SPAN (8) in BOTH axes as object-space geometry and
+ * skips it -- as a fixed-function batch it would be transformed by a composite matrix this gate
+ * never sets. The original version of this gate drew an inset quad inside a 4x4 cell, a span of
+ * 2, so all 17984 of its cell draws a frame were counted by the executor and silently dropped:
+ * the back end drew 8 quads a frame, never split (splits=0) and never overlapped
+ * (max_in_flight=1). At 8 pixels the cells still tile the 256x256 surface exactly, so the check
+ * below can name every pixel. */
+static void gate_cells(uint32_t t, int textured)
+{
+    uint32_t c;
+
+    for (c = 0; c < GATE_GRID_CELLS; c++) {
+        uint32_t seg, gx, gy, col;
+
+        if (gate_cell_undrawn(g_gate.frame, t, c))
+            continue;
+        seg = (c * GATE_ZSEG) / GATE_GRID_CELLS;
+        gx = (c % GATE_GRID_ROW) * GATE_CELL_PX;
+        gy = (c / GATE_GRID_ROW) * GATE_CELL_PX;
+        col = gate_cell(g_gate.frame, t, c);
+
+        gate_need_room();
+        if (!gate_seen(col))
+            gate_seen_fail(col);
+        g_gate.cell[t][c] = col;
+        /* A push split restarted the recording from the baseline, so the surface is re-emitted
+         * here rather than once per target: after a split this is the first thing the draw needs
+         * and the tracked state says so. */
+        gate_surface(GATE_GRID(t), GATE_GRID_W, GATE_GRID_W, 4);
+        gate_zeta(gate_zeta_for(t, g_gate.frame, seg));
+        if (textured && g_gate.texseq < GATE_NTEX) {
+            /* A sampled cell: the cell's own colour goes into the texture *and* is what the plan
+             * expects to come back, so the diffuse has to be white -- the combiner a never
+             * programmed back end runs multiplies the texel by the diffuse, and drawing with the
+             * colour in both places would land the square of it (this is exactly what the first
+             * version of this gate did: 0xFFEC120A came back as 0xFFDA0100, every channel squared
+             * and divided by 255). The texture is written into guest memory before the draw, so
+             * the back end uploads this cell's colour on the bind the draw forces. */
+            gate_tex(GATE_TEX(g_gate.texseq), 0x12, 8, 8, 32, FILTER_NEAREST);
+            gate_tex_data(g_gate.texseq, col);
+            g_gate.texseq++;
+            gate_quad((float)gx, (float)gy,
+                      (float)(gx + GATE_CELL_PX), (float)(gy + GATE_CELL_PX), 0.5f, 0xFFFFFFFFu);
+        } else {
+            gate_tex_none();
+            gate_quad((float)gx, (float)gy,
+                      (float)(gx + GATE_CELL_PX), (float)(gy + GATE_CELL_PX), 0.5f, col);
+        }
+    }
+}
+
+/* The probe's third quad: a z between A's and B's, in a submission later than theirs, so the
+ * depth buffer of the two earlier submissions must still be there or the quad wins. */
+static void gate_probe_c(void)
+{
+    gate_need_room();
+    gate_zeta(GATE_ZP);
+    gate_surface(GATE_PROBE, 64, 64, 4);
+    pb(0x030C, 1); pb(0x0354, 0x201u); pb(0x035C, 1);
+    gate_quad(0.0f, 0.0f, 64.0f, 64.0f, ZMID, g_gate.aux[GA_PC]);
+    pb(0x030C, 0); pb(0x035C, 0);
+}
+
+static void gate_draw_frame(unsigned n)
+{
+    uint32_t t;
+    unsigned i;
+
+    memset(g_gate.cell, 0, sizeof g_gate.cell);
+    memset(g_gate.cleared, 0, sizeof g_gate.cleared);
+    g_gate.frame = n;
+    g_gate.texseq = 0;
+    g_gate.pushes = 0;
+    for (i = 0; i < (unsigned)GA_N; i++)
+        g_gate.aux[i] = gate_aux(n, (unsigned)i);
+    g_gate.clear = gate_clr(n);
+
+    pb_begin();
+    gate_baseline();
+
+    /* (1a) GATE_DST samples GATE_SRC's bytes. Frame 0 has no earlier flip: the bytes were
+     * pre-filled with a colour no other frame uses, and the sampler must show exactly that. */
+    gate_need_room();
+    gate_surface(GATE_DST, 64, 64, 4);
+    pb_clear_flags(g_gate.aux[GA_DST_CLEAR], 0xF0u);
+    gate_tex(GATE_SRC, 0x12, 64, 64, 64u * 4u, FILTER_NEAREST);
+    gate_quad_uv(0.0f, 0.0f, 64.0f, 64.0f, 0.5f, 0xFFFFFFFFu, 0.0f, 0.0f, 64.0f, 64.0f);
+
+    /* (1b) GATE_SRC: this frame's drawing, published by this frame's flip. */
+    gate_need_room();
+    gate_tex_none();
+    gate_surface(GATE_SRC, 64, 64, 4);
+    pb_clear_flags(g_gate.aux[GA_SRC], 0xF0u);
+    gate_quad(0.0f, 0.0f, 64.0f, 64.0f, 0.5f, g_gate.aux[GA_SRC]);
+
+    /* (1c) GATE_HEAVY: the 1024x1024 fill whose read-back at the flip is 4 MB. */
+    gate_need_room();
+    gate_surface(GATE_HEAVY, GATE_HEAVY_W, GATE_HEAVY_W, 4);
+    pb_clear_flags(g_gate.aux[GA_HVY], 0xF0u);
+    gate_quad(0.0f, 0.0f, 1024.0f, 1024.0f, 0.5f, g_gate.aux[GA_HVY]);
+
+    /* (1d) The round trips: the whole surface on even frames, one corner over the previous
+     * frame's published bytes on odd ones. */
+    gate_need_room();
+    gate_surface(GATE_R32, 64, 64, 4);
+    if ((n & 1u) == 0u) {
+        pb_clear_flags(g_gate.aux[GA_R32_FULL], 0xF0u);
+        gate_quad(0.0f, 0.0f, 64.0f, 64.0f, 0.5f, g_gate.aux[GA_R32_FULL]);
+    } else {
+        gate_quad(8.0f, 8.0f, 24.0f, 24.0f, 0.5f, g_gate.aux[GA_R32_CORNER]);
+    }
+    gate_need_room();
+    gate_surface(GATE_R16, 64, 64, 2);
+    if ((n & 1u) == 0u) {
+        pb_clear_flags(trunc565(g_gate.aux[GA_R16_FULL]), 0xF0u);
+        gate_quad(0.0f, 0.0f, 64.0f, 64.0f, 0.5f, g_gate.aux[GA_R16_FULL]);
+    } else {
+        gate_quad(8.0f, 8.0f, 24.0f, 24.0f, 0.5f, g_gate.aux[GA_R16_CORNER]);
+    }
+
+    /* (1e) The depth probe: A (far) and B (near) now; C (between them) much later in the frame,
+     * after the grid traffic below has split this frame's recording many times over. The cells
+     * are not depth tested -- a 256x256 depth buffer is shared by every target of that size, so
+     * a test across targets would be comparing depths of different surfaces -- and the probe's
+     * own depth buffer, GATE_ZP, is the one no grid target uses. */
+    gate_need_room();
+    gate_zeta(GATE_ZP);
+    gate_surface(GATE_PROBE, 64, 64, 4);
+    pb(0x1D8C, 0xFFFFFF00u);
+    pb_clear_flags(g_gate.aux[GA_PROBE_CLR], 0xF3u);
+    pb(0x030C, 1); pb(0x0354, 0x201u); pb(0x035C, 1);
+    gate_quad(0.0f, 0.0f, 64.0f, 64.0f, ZFAR, g_gate.aux[GA_PA]);
+    gate_quad(0.0f, 0.0f, 64.0f, 64.0f, ZNEAR, g_gate.aux[GA_PB]);
+    pb(0x030C, 0); pb(0x035C, 0);
+
+    /* (2) Every grid target: cleared -- colour, depth and stencil, at that target's zeta for
+     * this segment, so a depth image and a (target, depth) framebuffer of this size exist for
+     * each -- and then all of its cells drawn, one draw and one descriptor set per cell. That is
+     * GATE_NGRID * GATE_DRAWN_CELLS draws a frame, which is what crosses both split thresholds
+     * (see the assertions at the top), and the eviction pressure the rest of the comment
+     * describes: GATE_NGRID + GATE_AUX_TGT targets against a 16-entry target cache, GATE_ZN
+     * zetas against 8 depth entries, GATE_NGRID * GATE_ZSEG framebuffers against 64, and the
+     * 520 textures of GATE_TTGT against 512. The probe's C goes in after the first target, so
+     * many submissions separate it from A and B. */
+    for (t = 0; t < (uint32_t)GATE_NGRID; t++) {
+        gate_grid_clear(t, n);
+        gate_cells(t, t == (uint32_t)GATE_TTGT);
+        if (t == 0u)
+            gate_probe_c();
+    }
+
+    /* The frame's end: every target drawn since the last flip goes back to guest memory, which
+     * is where every check below reads it. */
+    pb_flip();
+    gate_submit("ring gate (flip)");
+}
+
+/* ── What the frame must have left in guest memory ───────────────────────── */
+static int gate_close(uint32_t a, uint32_t b, int tol)
+{
+    int i;
+
+    if (!tol)
+        return a == b;
+    for (i = 0; i < 4; i++) {
+        int d = (int)((a >> (8 * i)) & 0xFFu) - (int)((b >> (8 * i)) & 0xFFu);
+        if (d > tol || d < -tol)
+            return 0;
+    }
+    return 1;
+}
+
+static unsigned gate_all32(const char *what, uint32_t va, uint32_t w, uint32_t h, uint32_t want,
+                           int tol)
+{
+    const uint8_t *px = G(va);
+    unsigned x, y, bad = 0, shown = 0;
+
+    for (y = 0; y < h; y++)
+        for (x = 0; x < w; x++) {
+            uint32_t got = px32(px, w, (int)x, (int)y);
+            if (!gate_close(got, want, tol)) {
+                if (shown++ < 3)
+                    fprintf(stderr, "      %s: (%u,%u) is 0x%08X, want 0x%08X%s\n", what, x, y, got,
+                            want, tol ? " (within 1 step)" : "");
+                bad++;
+            }
+        }
+    printf("      %-52s %s (%u of %u pixels wrong)\n", what, bad ? "FAIL" : "ok", bad, w * h);
+    return bad;
+}
+
+/* The whole surface must be `outside`, except the rectangle [x0,x1) x [y0,y1), which must hold
+ * `inside` (an empty rectangle for the frames that draw the whole surface). `tol` is the
+ * per-channel slack the pass is allowed (0 for the Vulkan back end's flat colours). */
+static unsigned gate_two32(const char *what, uint32_t va, uint32_t w, uint32_t h, uint32_t outside,
+                           uint32_t inside, int x0, int y0, int x1, int y1, int tol)
+{
+    const uint8_t *px = G(va);
+    unsigned x, y, bad = 0, shown = 0;
+
+    for (y = 0; y < h; y++)
+        for (x = 0; x < w; x++) {
+            uint32_t want = ((int)x >= x0 && (int)x < x1 && (int)y >= y0 && (int)y < y1) ? inside
+                                                                                         : outside;
+            uint32_t got = px32(px, w, (int)x, (int)y);
+            if (!gate_close(got, want, tol)) {
+                if (shown++ < 3)
+                    fprintf(stderr, "      %s: (%u,%u) is 0x%08X, want 0x%08X\n", what, x, y, got, want);
+                bad++;
+            }
+        }
+    printf("      %-52s %s (%u of %u pixels wrong)\n", what, bad ? "FAIL" : "ok", bad, w * h);
+    return bad;
+}
+/* The same for a 5:6:5 surface, in 8-bit channels: unpack() expands both words the way the rest
+ * of this file does, and `tol` is the resulting per-channel slack (0 against the back end, whose
+ * truncation this file pins in run_roundtrip16 with RED -> 0xF800; TOL_565 against the CPU
+ * executor, whose rounding is the file's own tolerance). */
+static unsigned gate_two16(const char *what, uint32_t va, uint32_t w, uint32_t h, uint16_t outside,
+                           uint16_t inside, int x0, int y0, int x1, int y1, int tol)
+{
+    const uint8_t *px = G(va);
+    unsigned x, y, bad = 0, shown = 0;
+
+    for (y = 0; y < h; y++)
+        for (x = 0; x < w; x++) {
+            uint16_t want16 = ((int)x >= x0 && (int)x < x1 && (int)y >= y0 && (int)y < y1) ? inside
+                                                                                           : outside;
+            uint16_t got16 = (uint16_t)px16(px, w, (int)x, (int)y);
+            int want[4], got[4];
+
+            unpack((const uint8_t *)&want16, 2, want);
+            unpack((const uint8_t *)&got16, 2, got);
+            if (maxdiff(got, want, 1) > tol) {
+                if (shown++ < 3)
+                    fprintf(stderr, "      %s: (%u,%u) is 0x%04X, want 0x%04X\n", what, x, y, got16, want16);
+                bad++;
+            }
+        }
+    printf("      %-52s %s (%u of %u pixels wrong)\n", what, bad ? "FAIL" : "ok", bad, w * h);
+    return bad;
+}
+
+/* Every pixel of every grid target is either the colour of the cell that contains it -- the 8x8
+ * cells tile the 256x256 surface exactly, so there is no pixel the plan does not name -- or, for
+ * the cells this frame left undrawn, this frame's clear colour. A cell drawn in an earlier frame
+ * and not in this one shows up here as the clear being wrong; a target that was flushed,
+ * reloaded or re-cleared at the wrong moment shows up as either. The one target whose draws were
+ * sampled through a texture is allowed GATE_TEX_TOL steps per channel, because that value went
+ * through a UNORM sampler -- the only path in this gate the arithmetic cannot pin exactly. */
+static unsigned gate_check_grid(const char *pass, int tol)
+{
+    unsigned t, x, y, bad = 0, shown = 0, total = 0;
+
+    for (t = 0; t < GATE_NGRID; t++) {
+        const uint8_t *px = G(GATE_GRID(t));
+        int cell_tol = ((int)t == (int)GATE_TTGT) ? tol : 0;
+
+        for (y = 0; y < GATE_GRID_W; y++)
+            for (x = 0; x < GATE_GRID_W; x++) {
+                uint32_t got = px32(px, GATE_GRID_W, (int)x, (int)y);
+                uint32_t want = g_gate.cell[t][(y / GATE_CELL_PX) * GATE_GRID_ROW
+                                              + (x / GATE_CELL_PX)];
+
+                if (!want)
+                    want = g_gate.clear;
+                if (!gate_close(got, want, cell_tol)) {
+                    if (shown++ < 3)
+                        fprintf(stderr, "      [%s] grid target %u: (%u,%u) is 0x%08X, want 0x%08X\n",
+                                pass, t, x, y, got, want);
+                    bad++;
+                }
+                total++;
+            }
+    }
+    printf("      [%s] %-48s %s (%u of %u pixels wrong)\n", pass,
+           "grids: every pixel its cell's colour, or the frame's clear",
+           bad ? "FAIL" : "ok", bad, total);
+    return bad;
+}
+
+/* The CPU pass's probe check: every pixel of GATE_PROBE must be one of the three quads' own
+ * colours -- A's, B's or C's -- which pins the probe's colour attribution and its clears without
+ * asserting a depth order the executor does not implement on this path (see the note in
+ * gate_check_frame). The line reports which quad the executor's last-draw-wins behaviour left,
+ * so the difference from the back end is on the record rather than hidden in a tolerance. */
+static int gate_probe_any(const char *pass)
+{
+    static const int want_i[3] = { GA_PA, GA_PB, GA_PC };
+    const uint8_t *px = G(GATE_PROBE);
+    unsigned x, y, bad = 0, seen[3] = { 0u, 0u, 0u }, shown = 0;
+    int k;
+
+    for (y = 0; y < 64u; y++)
+        for (x = 0; x < 64u; x++) {
+            uint32_t got = px32(px, 64u, (int)x, (int)y);
+            int hit = -1;
+
+            for (k = 0; k < 3; k++)
+                if (gate_close(got, g_gate.aux[want_i[k]], 0))
+                    hit = k;
+            if (hit < 0) {
+                if (shown++ < 3)
+                    fprintf(stderr, "      [%s] probe: (%u,%u) is 0x%08X, which is none of A, B or C\n",
+                            pass, x, y, got);
+                bad++;
+            } else {
+                seen[hit]++;
+            }
+        }
+    printf("      [%s] %-48s %s (%u of 4096 pixels wrong; kept %u A, %u B, %u C)\n", pass,
+           "probe: every pixel is one of the three probe quads' colours",
+           bad ? "FAIL" : "ok", bad, seen[0], seen[1], seen[2]);
+    return bad == 0;
+}
+
+/* The tolerances each pass's arithmetic is allowed against the plan: [sampled, rasterised,
+ * 5:6:5]. On the Vulkan back end every rasterised surface is the plan's colour exactly (which
+ * the run shows: every check below is exact on that pass except the two the sampler touches),
+ * and a sampled UNORM is allowed one step. On the CPU executor -- the pass that proves the
+ * arithmetic -- the file's own software tolerances apply (TOL_8888 for an 8888 surface, TOL_565
+ * for a 5:6:5 one, the same ones check_parity uses on this executor's reference pixels). */
+static const int k_gate_tol_vk[3]  = { 1, 0, 0 };
+static const int k_gate_tol_cpu[3] = { 1, TOL_8888, TOL_565 };
+#define GATE_TEX_TOL 1
+
+static int gate_check_frame(unsigned n, const char *pass, const int tol[3])
+{
+    char what[128];
+    int ok = 1;
+
+    ok &= gate_check_grid(pass, GATE_TEX_TOL) == 0;
+
+    _snprintf(what, sizeof what, "[%s] heavy: this frame's own 1024x1024 fill", pass);
+    ok &= gate_all32(what, GATE_HEAVY, GATE_HEAVY_W, GATE_HEAVY_W, g_gate.aux[GA_HVY], tol[1]) == 0;
+
+    /* SRC is cleared and drawn with the same colour, so a frame that lost either one, or drew
+     * it late, or published the wrong buffer, is a wrong pixel. */
+    _snprintf(what, sizeof what, "[%s] SRC: what this frame drew", pass);
+    ok &= gate_all32(what, GATE_SRC, 64, 64, g_gate.aux[GA_SRC], tol[1]) == 0;
+
+    /* The sampler path: DST holds GATE_SRC's *published* bytes, so frame n must show what frame
+     * n-1's flip wrote there -- and frame 0 must show what was pre-filled before any flip, which
+     * pins the load of a target from guest memory as well as its store. */
+    _snprintf(what, sizeof what, "[%s] DST: %s, through a texture", pass,
+              n ? "the previous flip's SRC" : "the bytes pre-filled into SRC");
+    ok &= gate_all32(what, GATE_DST, 64, 64,
+                     n ? gate_aux(n - 1u, GA_SRC) : gate_aux(0, GA_PREV_SRC), tol[0]) == 0;
+
+    /* The depth order: B is nearer than A over the same pixels and both are drawn now, so B's
+     * colour is what a depth buffer that survived shows. C is drawn at ZMID in a submission much
+     * later in the frame, after the depth clear of A/B's segment and after many splits; a depth
+     * buffer whose contents were dropped between two submissions -- or re-created from another
+     * size's bytes -- would let C through and leave C's colour there instead. On the back end
+     * that is an absolute check: all three quads cover the whole surface, so the whole surface
+     * must be B's colour, exactly. The CPU pass is the exception, and deliberately so: this
+     * file's own convention is that the software executor's depth handling on these
+     * pre-transformed screen-space batches is informational (main runs the depth cases against
+     * the executor only under "-- information only: the software executor on the absolute cases
+     * --"), and it in fact keeps the last quad drawn. So there the probe is checked for what the
+     * executor does claim: every pixel is one of the three probe quads' own colours, and the run
+     * reports which of them it kept. */
+    if (tol == k_gate_tol_vk) {
+        _snprintf(what, sizeof what, "[%s] probe: A (far), nearer B (kept), C between (rejected)", pass);
+        ok &= gate_all32(what, GATE_PROBE, 64, 64, g_gate.aux[GA_PB], tol[1]) == 0;
+    } else {
+        ok &= gate_probe_any(pass);
+    }
+
+    if ((n & 1u) == 0u) {
+        /* The whole surface drawn and cleared this frame. */
+        _snprintf(what, sizeof what, "[%s] R32: this frame's read-back", pass);
+        ok &= gate_two32(what, GATE_R32, 64, 64, g_gate.aux[GA_R32_FULL],
+                         g_gate.aux[GA_R32_FULL], 0, 0, 0, 0, tol[1]) == 0;
+        _snprintf(what, sizeof what, "[%s] R16: this frame's read-back, 5:6:5", pass);
+        ok &= gate_two16(what, GATE_R16, 64, 64, trunc565(g_gate.aux[GA_R16_FULL]),
+                         trunc565(g_gate.aux[GA_R16_FULL]), 0, 0, 0, 0, tol[2]) == 0;
+    } else {
+        /* Only the corner is drawn: every other byte must still be the previous frame's, which
+         * means the flip published it, the target was reloaded from those bytes, and the load
+         * did not disturb them. */
+        _snprintf(what, sizeof what, "[%s] R32: the previous frame's bytes survived the re-load", pass);
+        ok &= gate_two32(what, GATE_R32, 64, 64, gate_aux(n - 1u, GA_R32_FULL),
+                         g_gate.aux[GA_R32_CORNER], 8, 8, 24, 24, tol[1]) == 0;
+        _snprintf(what, sizeof what, "[%s] R16: the previous frame's 5:6:5 words survived the re-load",
+                  pass);
+        ok &= gate_two16(what, GATE_R16, 64, 64, trunc565(gate_aux(n - 1u, GA_R16_FULL)),
+                         trunc565(g_gate.aux[GA_R16_CORNER]), 8, 8, 24, 24, tol[2]) == 0;
+    }
+    return ok;
+}
+
+/* ── The gate's own fixtures and claims ─────────────────────────────────── */
+static int gate_claim(const char *what, int hold)
+{
+    printf("      %-52s %s\n", what, hold ? "ok" : "FAIL");
+    if (!hold)
+        fprintf(stderr, "FAIL: ring gate -- %s (the counters above are the evidence)\n", what);
+    return hold;
+}
+
+static int gate_fixture(unsigned frames, unsigned slots)
+{
+    unsigned n, j, bad = 0, sampled = 0;
+    int ok = 1;
+    char line[160];
+
+    /* The two colour families never meet: a cell colour can never be taken for the grid's clear
+     * colour or an auxiliary one. The mask is the low bit of the three colour bytes only (0x0001
+     * in each of R, G and B): the alpha byte is 0xFF on every one of these colours, so a mask
+     * that included it would call every colour odd. gate_rgb's channels are 8 + 2k and
+     * gate_aux_rgb's are 9 + 2k, so the two are disjoint by construction. Spot-checked over the
+     * whole index range; the values the run actually uses are checked as it uses them. */
+    for (n = 0; n < 121u * 121u; n += 977u) {
+        if (gate_rgb(n) & 0x00010101u)
+            bad++;
+        if ((gate_aux_rgb(n) & 0x00010101u) != 0x00010101u)
+            bad++;
+        sampled += 2u;
+    }
+    printf("      %-52s %s (%u of %u sampled indices wrong)\n",
+           "cell colours even, auxiliary colours odd", bad ? "FAIL" : "ok", bad, sampled);
+    ok &= bad == 0;
+
+    /* The auxiliary and clear colours of every frame, before any of them is drawn: a repeat
+     * would mean the gate cannot tell two of its own surfaces apart. */
+    bad = 0;
+    for (n = 0; n < frames; n++) {
+        if (!gate_seen(gate_clr(n)))
+            bad++;
+        for (j = 0; j < (unsigned)GA_N; j++)
+            if (!gate_seen(gate_aux(n, j)))
+                bad++;
+    }
+    printf("      %-52s %s (%u of %u repeated)\n",
+           "every auxiliary and clear colour of the run is distinct", bad ? "FAIL" : "ok", bad,
+           frames * ((unsigned)GA_N + 1u));
+    ok &= bad == 0;
+
+    /* The pressure this run applies, against the caches the back end documents (VB_MAX_TARGETS
+     * 16, VB_MAX_TEXTURES 512, VB_MAX_DEPTHS 8, VB_MAX_FBS 64), and the size of a frame's
+     * workload against the two thresholds that move the ring to its next slot. The compile-time
+     * assertions above pin the arithmetic; these lines report it. */
+    _snprintf(line, sizeof line,
+              "pressure per frame: %u targets, %u textures, %u depth buffers, %u (target, depth) pairs",
+              GATE_NGRID + GATE_AUX_TGT, GATE_NTEX, GATE_NZ, GATE_NGRID * GATE_ZSEG);
+    ok &= gate_claim(line, GATE_NGRID + GATE_AUX_TGT > 16u && GATE_NTEX > 512u && GATE_NZ > 8u
+                           && GATE_NGRID * GATE_ZSEG > 64u);
+    _snprintf(line, sizeof line,
+              "a frame crosses both split thresholds: %u cell draws, %u KB of stream, %u sets "
+              "(thresholds %u KB, %u sets)",
+              GATE_NGRID * GATE_DRAWN_CELLS,
+              (unsigned)(GATE_NGRID * GATE_DRAWN_CELLS * GATE_DRAW_BYTES / 1024u),
+              GATE_NGRID * GATE_DRAWN_CELLS,
+              (unsigned)(GATE_SPLIT_BYTES / 1024u), (unsigned)GATE_SPLIT_SETS);
+    ok &= gate_claim(line, GATE_NGRID * GATE_DRAWN_CELLS * GATE_DRAW_BYTES >= GATE_SPLIT_BYTES
+                           && GATE_NGRID * GATE_DRAWN_CELLS >= GATE_SPLIT_SETS);
+    _snprintf(line, sizeof line, "the run: %u frames, %u cell draws, %u colours",
+              frames, frames * GATE_NGRID * GATE_DRAWN_CELLS,
+              frames * (GATE_NGRID * GATE_DRAWN_CELLS + (unsigned)GA_N + 1u));
+    /* Thousands of draws and thousands of descriptor sets over the run, as the gate's own
+     * contract asks: the frame's 16112 draws a frame are well over that on their own. */
+    ok &= gate_claim(line, frames * GATE_NGRID * GATE_DRAWN_CELLS >= 4000u);
+
+    _snprintf(line, sizeof line, "the ring has %u slots and the run drives %u frames", slots, frames);
+    ok &= gate_claim(line, slots >= 2 && frames > slots);
+    ok &= gate_claim("the frame count fits the gate's per-frame tables", frames <= GATE_MAXFRAMES);
+    return ok;
+}
+
+/* ── The two passes, and what is compared between them ─────────────────────
+ *
+ * The run is executed twice with the same frames: pass 1 against the Vulkan back end, where the
+ * ring's counters and the overlap claims come from, and pass 2 against the CPU executor. Both
+ * passes check every surface against the plan (gate_check_frame), and that is where the plan's
+ * arithmetic is proved rather than merely agreed with: on the executor the flat fills, the
+ * per-cell colours, the clears and the round trips come out of a completely different rasteriser
+ * and must still be the plan's values. On top of that the two passes are compared with each
+ * other, so that a frame whose plan check both passes satisfy is not the only evidence:
+ *
+ *   - the surfaces no sampler and no depth path touches are hashed in pass 1 and must come back
+ *     byte for byte in pass 2. A hash is enough because the plan check already names every pixel
+ *     of every surface, so a mismatch only has to say *that* the passes differ, and keeping
+ *     120 MB of pixels would say nothing more.
+ *   - the rest are compared pixel by pixel: the sampled cells of GATE_TTGT (one target in an
+ *     otherwise hashed grid), GATE_DST, whose whole point is that it is sampled, and GATE_R16, a
+ *     5:6:5 target -- the file's own tolerances cover a sampler and the executor's 5:6:5
+ *     conversion (which run_roundtrip16 pins for the back end: RED -> 0xF800). Their pixels for
+ *     every frame of pass 1 are kept, which is a few hundred KB a frame. GATE_PROBE is not among
+ *     them: the executor's depth path on these batches is informational (see gate_check_frame),
+ *     so its pixels differ from the back end's by design rather than by a step. */
+static void gate_hash_surface(unsigned k, uint32_t *va, uint32_t *w, uint32_t *h, const char **what)
+{
+    static char names[GATE_NHASH][48];
+
+    if (k == 0u) {
+        *va = GATE_HEAVY; *w = GATE_HEAVY_W; *h = GATE_HEAVY_W;
+        _snprintf(names[k], sizeof names[k], "heavy %ux%u", GATE_HEAVY_W, GATE_HEAVY_W);
+    } else if (k == 1u) {
+        *va = GATE_SRC; *w = *h = 64u;
+        _snprintf(names[k], sizeof names[k], "SRC 64x64");
+    } else if (k == 2u) {
+        *va = GATE_R32; *w = *h = 64u;
+        _snprintf(names[k], sizeof names[k], "R32 64x64");
+    } else {
+        uint32_t t = k - 3u;
+        *va = GATE_GRID(t); *w = *h = GATE_GRID_W;
+        _snprintf(names[k], sizeof names[k], "grid target %u %ux%u", t, GATE_GRID_W, GATE_GRID_W);
+    }
+    *what = names[k];
+}
+
+static uint64_t gate_hash_va(uint32_t va, uint32_t w, uint32_t h)
+{
+    const uint8_t *p = G(va);
+    size_t n = (size_t)w * h * 4u, i;
+    uint64_t hh = 1469598103934665603ull;
+
+    for (i = 0; i < n; i++) {
+        hh ^= p[i];
+        hh *= 1099511628211ull;
+    }
+    return hh;
+}
+
+static uint64_t g_gate_hash[GATE_MAXFRAMES][GATE_NHASH];
+static unsigned g_gate_hash_same;
+
+static void gate_hash_frame(unsigned n)
+{
+    unsigned k;
+
+    for (k = 0; k < GATE_NHASH; k++) {
+        uint32_t va, w, h;
+        const char *what;
+        gate_hash_surface(k, &va, &w, &h, &what);
+        g_gate_hash[n][k] = gate_hash_va(va, w, h);
+    }
+}
+
+static int gate_hash_compare(unsigned n)
+{
+    unsigned k;
+    int ok = 1;
+
+    for (k = 0; k < GATE_NHASH; k++) {
+        uint32_t va, w, h;
+        const char *what;
+        uint64_t hh;
+
+        gate_hash_surface(k, &va, &w, &h, &what);
+        hh = gate_hash_va(va, w, h);
+        if (hh == g_gate_hash[n][k]) {
+            g_gate_hash_same++;
+            continue;
+        }
+        fprintf(stderr, "      frame %u: the %s surface is not byte for byte what the Vulkan back "
+                        "end left (0x%016llX there, 0x%016llX from the CPU executor): one of the two "
+                        "is not drawing what the frame's plan says, although both passed their own "
+                        "check against it\n", n, what,
+                (unsigned long long)g_gate_hash[n][k], (unsigned long long)hh);
+        ok = 0;
+    }
+    return ok;
+}
+
+/* The surfaces the passes are compared on pixel by pixel, with what each one's tolerance is.
+ * `tol` is in unpacked 8-bit channels, so a 5:6:5 surface is compared the way the rest of this
+ * file compares one. */
+typedef struct { const char *what; uint32_t va, w, h, bpp; int tol; } GateCmp;
+static const GateCmp k_gate_cmp[GATE_NCMP] = {
+    { "DST (sampled from the previous flip's SRC)", GATE_DST, 64u, 64u, 4u, GATE_TEX_TOL },
+    { "R16 (a 5:6:5 target)", GATE_R16, 64u, 64u, 2u, TOL_565 },
+    { "the sampled grid target", GATE_GRID(GATE_TTGT), GATE_GRID_W, GATE_GRID_W, 4u, GATE_TEX_TOL }
+};
+static uint8_t *g_gate_px[GATE_MAXFRAMES][GATE_NCMP];
+static unsigned g_gate_px_same;
+
+static int gate_px_store(unsigned n)
+{
+    unsigned k;
+    int ok = 1;
+
+    for (k = 0; k < GATE_NCMP; k++) {
+        const GateCmp *c = &k_gate_cmp[k];
+        size_t nbytes = (size_t)c->w * c->h * c->bpp;
+
+        free(g_gate_px[n][k]);
+        g_gate_px[n][k] = (uint8_t *)malloc(nbytes);
+        if (!g_gate_px[n][k]) {
+            fprintf(stderr, "FAIL: ring gate -- could not keep the Vulkan pass's %s pixels: the "
+                            "comparison against the CPU executor would not be made\n", c->what);
+            ok = 0;
+            continue;
+        }
+        memcpy(g_gate_px[n][k], G(c->va), nbytes);
+    }
+    return ok;
+}
+
+static int gate_px_compare(unsigned n)
+{
+    unsigned k;
+    int ok = 1;
+
+    for (k = 0; k < GATE_NCMP; k++) {
+        const GateCmp *c = &k_gate_cmp[k];
+        const uint8_t *ref = g_gate_px[n][k], *got = G(c->va);
+        unsigned x, y, bad = 0, shown = 0;
+        size_t stride = (size_t)c->w * c->bpp;
+
+        if (!ref)
+            continue;
+        for (y = 0; y < c->h; y++)
+            for (x = 0; x < c->w; x++) {
+                int a[4], b[4], d;
+
+                unpack(ref + y * stride + (size_t)x * c->bpp, c->bpp, a);
+                unpack(got + y * stride + (size_t)x * c->bpp, c->bpp, b);
+                d = maxdiff(a, b, 1);
+                if (d > c->tol) {
+                    if (shown++ < 3)
+                        fprintf(stderr, "      frame %u: %s: (%u,%u) is %d,%d,%d,%d, the Vulkan back "
+                                        "end left %d,%d,%d,%d (differs by %d, allowed %d)\n", n, c->what,
+                                x, y, b[0], b[1], b[2], b[3], a[0], a[1], a[2], a[3], d, c->tol);
+                    bad++;
+                }
+            }
+        if (bad) {
+            fprintf(stderr, "      frame %u: %s differs from the Vulkan back end's pixels in %u of %u\n",
+                    n, c->what, bad, c->w * c->h);
+            ok = 0;
+        } else {
+            g_gate_px_same++;
+        }
+    }
+    return ok;
+}
+
+/* Both passes start from the same guest memory: the gate's own 16 MB zeroed, with GATE_SRC
+ * pre-filled with the colour frame 0's DST draw must sample (there has been no flip yet). */
+static void gate_reset_region(void)
+{
+    uint32_t *px = (uint32_t *)G(GATE_SRC);
+    unsigned i;
+
+    memset(G(GATE_BASE), 0, 0x01000000u);
+    for (i = 0; i < 64u * 64u; i++)
+        px[i] = gate_aux(0, GA_PREV_SRC);
+    /* The colour set is the run's provenance; pass 2 draws exactly the same colours again. */
+    memset(g_gate_seen, 0, sizeof g_gate_seen);
+    g_gate_seen_n = 0;
+    g_gate.dup = 0;
+}
+
+/* ── The mode ───────────────────────────────────────────────────────────── */
+static int run_frames_in_flight(void)
+{
+    Nv2aPbExecCounters cb, ca, pf;
+    Nv2aVkRingStats r0, r;
+    unsigned frames, done, n;
+    uint64_t batches, need, stream_bytes;
+    int ok = 1;
+
+    if (!getenv("RECOMP_VK_DEVICE")) _putenv_s("RECOMP_VK_DEVICE", "llvmpipe");
+    if (!getenv("RECOMP_GPU_BACKEND")) _putenv_s("RECOMP_GPU_BACKEND", "vulkan");
+    fflush(stdout);
+    if (nv2a_vk_backend_install() != 0) {
+        puts("SKIP: gpu_backend_parity_vk --frames-in-flight -- the Vulkan back end could not be "
+             "installed on a software device (no Vulkan, no matching device, or an elevated "
+             "process: the loader ignores VK_DRIVER_FILES there)");
+        return 77;
+    }
+
+    nv2a_vk_backend_ring_stats(&r0);
+    frames = 12u + r0.slots;         /* more frames than the ring has slots, and at least twelve */
+    printf("-- submission-ring lifetime gate (%u slot%s, %u frames, %u grid targets of %ux%u, "
+           "%u cell draws a frame) --\n", r0.slots, r0.slots == 1u ? "" : "s", frames, GATE_NGRID,
+           GATE_GRID_W, GATE_GRID_W, GATE_NGRID * GATE_DRAWN_CELLS);
+    gate_reset_region();
+    puts("-- gate fixtures --");
+    ok &= gate_fixture(frames, r0.slots);
+
+    /* Pass 1: the Vulkan back end. The counters are read after every frame, so the overlap, the
+     * wrap and the drain are visible frame by frame, and the guest-memory checks run right after
+     * the flip that published each frame. */
+    puts("-- pass 1: the Vulkan back end (each frame: draw, flip, then every surface checked) --");
+    memset(&cb, 0, sizeof cb);
+    nv2a_pb_exec_counters(&cb);
+    for (n = 0; n < frames; n++) {
+        memset(&pf, 0, sizeof pf); memset(&ca, 0, sizeof ca);
+        nv2a_pb_exec_counters(&pf);
+        gate_draw_frame(n);
+        nv2a_pb_exec_counters(&ca);
+        nv2a_vk_backend_ring_stats(&r);
+        printf("  frame %2u: %2u pushes, %6u draws %4u clears %u flips; ring: in_flight=%u "
+               "max_in_flight=%u submissions=%llu reuse_waits=%llu drain_waits=%llu splits=%llu "
+               "overflows=%llu frames=%llu\n",
+               n, g_gate.pushes, (uint32_t)(ca.draws - pf.draws), (uint32_t)(ca.clears - pf.clears),
+               (uint32_t)(ca.flip_stalls - pf.flip_stalls), r.in_flight, r.max_in_flight,
+               (unsigned long long)r.submissions, (unsigned long long)r.reuse_waits,
+               (unsigned long long)r.drain_waits, (unsigned long long)r.splits,
+               (unsigned long long)r.overflows, (unsigned long long)r.frames);
+        ok &= gate_check_frame(n, "vulkan", k_gate_tol_vk);
+        gate_hash_frame(n);
+        ok &= gate_px_store(n);
+        if (g_gate.dup)
+            ok = 0;                     /* a repeated colour: the pixels are no longer attributable */
+        /* The packet's own claim, on every flip: publishing guest memory drains the ring. */
+        if (r.in_flight != 0u) {
+            fprintf(stderr, "FAIL: ring gate -- %u slot(s) are still in flight after frame %u's flip "
+                            "published guest memory\n", r.in_flight, n);
+            ok = 0;
+        }
+        if (g_gate.pb_fail) {
+            ok = 0;                     /* the workload itself broke: the rest would be meaningless */
+            break;
+        }
+    }
+    done = n;
+    nv2a_pb_exec_counters(&ca);
+    batches = (uint64_t)(ca.draws - cb.draws);
+    nv2a_vk_backend_ring_stats(&r);
+
+    /* The evidence, from the back end's own counters, not from a log line. */
+    puts("-- counters (nv2a_vk_backend_ring_stats, cumulative over pass 1) --");
+    printf("  [ring] slots=%u in_flight=%u max_in_flight=%u submissions=%llu reuse_waits=%llu "
+           "drain_waits=%llu splits=%llu overflows=%llu frames=%llu\n",
+           r.slots, r.in_flight, r.max_in_flight, (unsigned long long)r.submissions,
+           (unsigned long long)r.reuse_waits, (unsigned long long)r.drain_waits,
+           (unsigned long long)r.splits, (unsigned long long)r.overflows,
+           (unsigned long long)r.frames);
+    printf("  [gate] %u of %u frames ran, %u colours used, %llu batches counted by the executor "
+           "(a frame is %u cell draws plus the auxiliaries)\n",
+           done, frames, g_gate_seen_n, (unsigned long long)batches, GATE_NGRID * GATE_DRAWN_CELLS);
+
+    puts("-- the ring's claim, from its own counters --");
+    ok &= gate_claim("max_in_flight >= 2: two submissions were issued without waiting for one another",
+                     r.max_in_flight >= 2u);
+    ok &= gate_claim("submissions > frames: the ring really wrapped", r.submissions > r.frames);
+    ok &= gate_claim("splits >= 1: a frame was submitted in more than one part", r.splits >= 1u);
+    ok &= gate_claim("reuse_waits >= 1: a fence was waited on before reusing an occupied slot",
+                     r.reuse_waits >= 1u);
+    ok &= gate_claim("drain_waits >= 1: a fence was waited on while publishing guest memory",
+                     r.drain_waits >= 1u);
+    ok &= gate_claim("frames == the flips this run asked for", r.frames == (uint64_t)frames);
+
+    /* The reach, from the same counters. Every draw reserves one descriptor set against its slot
+     * and writes at least GATE_DRAW_BYTES of vertices into that slot's stream, and a slot holds
+     * GATE_SLOT_SETS sets and GATE_SLOT_STREAM of stream before vb_reserve has to submit it and
+     * move on. So `batches` draws cannot leave the ring below either bound, and a workload whose
+     * draws did not reach the back end -- the failure this gate was repaired for -- fails here
+     * with both numbers printed, as well as in every per-cell colour above. */
+    need = batches / GATE_SLOT_SETS;
+    if (need > (uint64_t)r.slots) need -= r.slots; else need = 0;
+    printf("  [bound] %llu batches / %u sets a slot = at least %llu submissions to carry them\n",
+           (unsigned long long)batches, (unsigned)GATE_SLOT_SETS, (unsigned long long)need);
+    ok &= gate_claim("the draws reached the back end: submissions >= batches/VB_SLOT_SETS - slots",
+                     r.submissions >= need);
+    stream_bytes = batches * GATE_DRAW_BYTES;
+    need = stream_bytes / GATE_SLOT_STREAM;
+    if (need > (uint64_t)r.slots) need -= r.slots; else need = 0;
+    printf("  [bound] %llu batches x %u bytes = %llu MB of stream / %u MB a slot = %llu submissions, "
+           "observed %llu (this bound is weak by construction -- the run's stream is only %llu slots' "
+           "worth -- so it is reported, not asserted: the set bound above is the reach claim)\n",
+           (unsigned long long)batches, (unsigned)GATE_DRAW_BYTES,
+           (unsigned long long)(stream_bytes >> 20), (unsigned)(GATE_SLOT_STREAM >> 20),
+           (unsigned long long)need, (unsigned long long)r.submissions,
+           (unsigned long long)(stream_bytes / GATE_SLOT_STREAM));
+    fflush(stdout);
+
+    /* The back end's own [GPUVK] line is rate-limited to one every 10 s, so wait that window out
+     * and flip once more: the line is cumulative, so it then carries this whole run -- one frame
+     * more than the claims above, which is this flush flip itself. */
+    if (r.submissions) {
+        Sleep(10300);
+        pb_begin(); pb_flip();
+        gate_submit("ring gate ([GPUVK] counter flush)");
+    }
+
+    /* Pass 2: the same frames against the CPU executor, the pixels the rest of this file trusts.
+     * The plan is checked here too -- which is what proves its arithmetic instead of merely
+     * agreeing with the back end -- and then the surfaces a sampler does not touch are compared
+     * with pass 1's byte for byte. */
+    puts("-- pass 2: the same frames against the CPU executor (plan proved, then compared) --");
+    nv2a_backend_register(NULL);
+    gate_reset_region();
+    for (n = 0; n < done; n++) {
+        gate_draw_frame(n);
+        ok &= gate_check_frame(n, "software", k_gate_tol_cpu);
+        ok &= gate_hash_compare(n);
+        ok &= gate_px_compare(n);
+        if (g_gate.pb_fail) { ok = 0; break; }
+    }
+    printf("  [passes] %u of %u surfaces the sampler and the depth path do not touch are byte for "
+           "byte what the Vulkan back end left; %u of %u compared pixel by pixel are within their "
+           "step, over %u frames\n", g_gate_hash_same, done * (unsigned)GATE_NHASH,
+           g_gate_px_same, done * (unsigned)GATE_NCMP, done);
+    for (n = 0; n < done; n++) {
+        unsigned k;
+
+        for (k = 0; k < (unsigned)GATE_NCMP; k++) {
+            free(g_gate_px[n][k]);
+            g_gate_px[n][k] = NULL;
+        }
+    }
+
+    fflush(stdout);
+    if (!ok) {
+        fprintf(stderr, "FAIL: gpu_backend_parity_vk --frames-in-flight\n");
+        return 1;
+    }
+    puts("PASS: gpu_backend_parity_vk --frames-in-flight (the ring overlapped submissions, the work "
+         "reached it, and every frame's guest bytes held what that frame drew in both passes)");
+    return 0;
+}
+
 /* ── main ────────────────────────────────────────────────────────────────── */
 int main(int argc, char **argv)
 {
@@ -4662,6 +5916,20 @@ int main(int argc, char **argv)
     if (!nv2a_pb_exec_consumer_registered()) { fprintf(stderr, "FAIL: executor not registered\n"); return 1; }
     nv2a_backend_register(NULL);
     write_guest_data();
+
+    /* The submission-ring lifetime gate is a mode of its own: it installs the Vulkan back end
+     * itself, runs its own frames through it, then replays the identical frames against the CPU
+     * executor and compares the two, and reports its own PASS line. It exits 77 when there is no
+     * software device, like the rest of this file. */
+    if (argc > 1 && strcmp(argv[1], "--frames-in-flight") == 0) {
+        int rc = run_frames_in_flight();
+        fflush(stdout);
+        nv2a_set_commit_consumer(NULL);
+        VirtualFree(pbmem, 0, MEM_RELEASE);
+        free(instance); free(ramin); free(ram);
+        xbox_MemoryLayoutShutdown();
+        return rc;
+    }
 
     /* (a) CPU references: every parity case, then the cases whose CPU result is informational. */
     puts("-- software executor --");

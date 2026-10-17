@@ -128,8 +128,11 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
   transform it on the CPU. Counter meanings are unchanged, a culled batch does no setup, allocation or
   submission, and the deciding fixture proves the ordering with a per-batch delta plus a mutation that
   cannot distinguish it any other way. Codex independently reproduced the passing gate, the old-ordering
-  mutation failure and the restored pass. **Paused at the owner's request after R3.** N2 is next only
-  when the owner resumes; N2 remains a prerequisite of V7.
+  mutation failure and the restored pass. **The owner's pause was lifted on 2026-10-16** ("V7 is done
+  now, continue the plan"); the plan resumed with the approved sequence, as the owner's own commits
+  then recorded: N2 (`1a1563e`), V7 under N3 and the Vulkan play option (`550342f`), and the launcher
+  default (`b1df807`). R3's acceptance above is unchanged and none of that work was reopened; N4's
+  first subitem is recorded below.
 
 **Owner review accepted V5 and V6** at game `2a350ec` / toolkit `5668278` (2026-10-15).
 R1–R5 below are approved follow-ups, not reasons to reopen those milestones. The review was a code
@@ -319,6 +322,20 @@ Readbacks take 202–211 s of a 560 s run, and V1 submits and fence-waits simply
 - narrower barriers;
 - sub-allocated memory;
 - a persisted pipeline cache.
+
+**N4.1 is done: bounded frames in flight with per-frame streams and descriptor pools** (toolkit
+`c5f3696`, TR §31.29). A ring of three submission slots, each owning its command recording, fence,
+descriptor pool and 16 MiB upload stream; a submission is issued without waiting for the ones before
+it; a draw entry splits a frame once the recording slot holds 2 MiB of stream or 32 descriptor sets
+and the next slot is free; the host reaches a fence only to reuse an occupied slot, to publish guest
+memory (a flip's readback, a target flush or release) or on a device error. A different worker's gate
+`jsrf_vk_frames_in_flight` drives the real back end over 15 frames (241 981 batches, 1:1 with the
+back end's own draw counter), checks every frame's guest bytes against the CPU executor, and fails if
+the ring did not really overlap; it fails on both deciding mutants (a restored unconditional wait,
+and reuse without observing the fence, which segfaults). N2 on the same RTX 4070: **43.40 presents/s
+median against 33.48 before** (frame p50 22.4 ms against 29.9 ms). Full CTest 87/87 and `just check`
+are green. Still open in N4: one batched readback per flip without the CPU convert on the critical
+path, narrower barriers and layouts, sub-allocated memory, the persisted pipeline cache and R4.
 
 Measure each with N2. Parity tests must stay green. Each code subitem gets a different worker's
 gate and deciding mutation evidence.

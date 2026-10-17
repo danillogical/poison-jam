@@ -3438,6 +3438,14 @@ comparable, so performance is now measured in a fixed window.
   - the D3D11 backend cannot be pointed at the RTX 4070, so no D3D11/NVIDIA row exists.
 - **From here on,** performance claims use this benchmark (plan N2).
 
+**Comparability, measured 2026-10-16 (N4.1).** A fresh control on the SAME exe (`e116ad4f…`), device
+(RTX 4070), driver string and script measured **33.48 presents/s** (median of three 60 s windows:
+`20261016-162400-003`, `-163322-757`, `-164245-452`; `readback_ms`/flip 10.6 ms; 21 209 flips in 556 s)
+against the 11.07 recorded above (24.4 ms/flip; 8 038 flips). The `bench-start.png` of both is the same
+Garage view, so this is not a different scene: the archived row was measured in a roughly 2.3–3× slower
+machine state and is **not comparable with fresh numbers**. The three archived rows still compare against
+each other; a fresh measurement needs its own same-device control, which is what §31.29 does.
+
 ### §31.28 V7: Vulkan acceptance, and V8's play option (2026-10-16)
 
 All runs are exploratory, with disposable saves, on exe `e116ad4f…` (the R3 build, unchanged since).
@@ -3498,3 +3506,136 @@ stable. Still open: the slower frame rate (N4) and owner acceptance (V8).
 `play-jsrf-d3d11.bat` calls it with `d3d11` and passes every other argument through, so D3D11 stays
 available as the reference. `play-jsrf.bat d3d11` does the same. The key-script runner's own default
 (`DEFAULT_ENV`) is unchanged, so archived evidence keeps its meaning.
+
+### §31.29 N4.1: bounded frames in flight (2026-10-16)
+
+Plan N4's first bullet, on top of V7. Toolkit `c5f3696` (pushed to origin/main). The pre-change build
+is the same checkout's R3 exe `e116ad4f…`; the measured build is `ec4bc150…` (the MSVC link is not
+reproducible, so that hash is per-build, not per-source).
+
+**What changed.** The Vulkan back end recorded one command buffer and submitted and waited on it at
+every flip, at every target flush and at any stream or descriptor-pool overflow. It now runs a
+**bounded ring of three submission slots** (`VB_SLOTS`). Each slot owns one command recording, one
+`VkFence`, one `VkDescriptorPool` (2048 sets) and one host-visible 16 MiB upload stream, plus the
+`bound_pipe` of its recording; only the slot being recorded is written to. `pending == 0` (its fence
+not yet observed; fences are created unsignaled, as `vkQueueSubmit` requires) is the whole definition
+of a free slot. A submission is issued WITHOUT waiting for the ones before it; the host reaches a
+fence in only three places: reusing an occupied slot, publishing guest memory (a flip's readback, a
+target flush or release, install) and a device error, where `g.ok = 0` freezes the back end and
+nothing is freed, reset or reused.
+
+**Why the ordering is sound.** Vulkan defines no implicit execution or memory dependency between
+submissions (vkspec §7.2), so every submission ends with the existing broad barrier
+(`ALL_COMMANDS`/`MEMORY_WRITE` → `ALL_COMMANDS`/`MEMORY_READ|WRITE`) recorded *outside* any render
+pass, whose second synchronization scope is every command later in submission order (vkspec,
+`vkCmdPipelineBarrier`). That orders an earlier submission's attachment and transfer writes against a
+later one's attachment reads and writes, later render-pass `LOAD_OP_LOAD` reads and later
+`vkCmdCopyImageToBuffer` reads — including two submissions that blend into one target. The ownership
+invariant that makes reuse sound is that **a submission references only its own slot's stream and its
+own descriptor pool**: a frame splits only at a draw entry, before that draw's stream slices exist;
+`vb_transfer_cmd` never splits; and `vb_stream` never moves the slot — a slice over half a slot's
+stream, or one that no longer fits what is left of it, gets a buffer of its own (vertices, indices,
+transfer source, uniform block) whose destruction waits for a whole-ring drain. Waiting one slot's
+fence is therefore enough before rewriting its stream or resetting its pool. Objects that recorded
+commands may still use are held until nothing is being recorded and no submission is in flight,
+exactly as before.
+
+**Overlap.** `vb_maybe_split()` runs at the top of `vb_draw`/`vb_clear`/`vb_draw_program` and submits
+the recording slot once it holds `VB_SPLIT_BYTES` (2 MiB, an eighth of a slot's stream) or
+`VB_SPLIT_SETS` (32 descriptor sets) and the next slot is free, so the device works on the earlier part
+of a frame while the host records the rest. `vb_reserve` is the hard bound: a stream or pool overflow
+advances the slot (waiting only if the slot it moves into is still in flight). The per-draw vertex cap
+and the program-batch reserve bound keep the values they had with one 32 MiB stream. The counters the
+records cite kept their meanings; `submits` still counts submitted command buffers, and the new
+`splits`, `overflows`, `reuse_waits`, `drain_waits` and `max_inflight` are reported by
+`nv2a_vk_backend_ring_stats()` and in the periodic `[GPUVK]` line. They are host-side accounting —
+outstanding (submitted, unwaited) slots and fence waits performed — not timestamped proof of
+device-side overlap, and `vb_drain` counts one wait per slot.
+
+**The gate** (`jsrf_vk_frames_in_flight`, authored by a different worker, registered in
+`CMakeLists.txt`, run on lavapipe): 15 frames of 16 112 cell draws plus auxiliaries. The executor
+counted 241 981 batches and the back end drew 241 981 — 1:1, which is what makes the run non-vacuous
+(the first version of the fixture drew tiny non-screen-space batches that the executor drops while
+still counting them: 17 992 counted against 8 drawn). It checks every frame's guest bytes after the
+flip (grids, a 1024² fill, SRC/DST, R32/R16 read-back and re-load, a depth-order probe), per-frame
+constants that encode (frame, target, cell) with a no-repeat check, a target sampled as a texture on
+the next frame, eviction/release pressure (22 targets > 16, 520 textures > 512, 11 depth buffers > 8,
+96 (target, depth) pairs > 64) and compares 270 of 270 surfaces byte-for-byte with the CPU executor
+plus 45 of 45 pixel-by-pixel. From `nv2a_vk_backend_ring_stats()` it asserts `max_in_flight >= 2`,
+`submissions > frames`, `splits >= 1`, `reuse_waits >= 1`, `drain_waits >= 1`, `frames == flips`,
+`in_flight == 0` after each flip's publish and `submissions >= batches / VB_SLOT_SETS - slots`, each
+failing with a readable line. Green run: `slots=3 in_flight=0 max_in_flight=3 submissions=376
+reuse_waits=60 drain_waits=316 splits=210 overflows=60 frames=15`.
+
+**Deciding mutations** (private scratch `C:\Users\logic\xbr-mac\n4mut`, never committed; each mutant
+was copied over the toolkit source, built, run, and the production file restored from a saved copy and
+sha256-verified before anything else ran):
+
+| Variant | backend sha256 | Gate |
+|---|---|---|
+| Baseline | `99c7c21f…` | PASS (ctest exit 0) |
+| A: `vb_slot_submit` waits for its own fence (the pre-change behaviour) | `9065f5d1…` | FAIL, ctest exit 8 — `max_in_flight >= 2`, `reuse_waits >= 1` and `drain_waits >= 1` all FAIL, with `max_in_flight=1 submissions=7621 splits=7515 reuse_waits=0 drain_waits=0` |
+| B: `vb_slot_wait` skips the fence wait and resets/reuses the slot's pool, stream and held objects anyway | `a93fc0ed…` | FAIL, ctest exit 8 — `***Exception: SegFault 7.39 sec` |
+| Restored baseline | `99c7c21f…` | PASS (the same counters as the baseline) |
+
+Mutant A keeps every content check passing and is caught only by the overlap/vacuity claims; mutant B
+is caught as a crash from using resources a pending submission still owns.
+
+**Reviews.** A resource-lifetime/ordering review (three passes) found fences created *signaled* and
+submitted as such (`VUID-vkQueueSubmit-fence-00063`) — fixed by creating them unsignaled with
+`pending == 0` as the only notion of a free slot — and recording into a command buffer after a failed
+fence wait — fixed by `g.ok` guards after every wait that can happen inside a draw (`vb_target_for`,
+`vb_target_create`, `vb_target_load`, the flush loop, `vb_begin_pass`, `vb_depth_for`, `vb_tex_upload`,
+`vb_texture`, the three draw entries) — plus a `poolSizeCount` typo that edit introduced; its final
+verdict was `sound`. The configured security review of the changed native-resource lifetime/error
+paths reported the same post-wait sites and a `vkBeginCommandBuffer` failure that did not stop the back
+end (both fixed), with no premature reuse, host-memory unsafety or unbounded growth on the success
+paths. The independent code review found a host slice that could be bound as a **uniform buffer from a
+buffer created without uniform usage** (fixed by adding `VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT`),
+per-upload dedicated allocations when a slot's stream was full (fixed by reserving in
+`vb_target_load`/`vb_tex_upload`), and counter wording that overstated what the numbers prove (fixed,
+plus a new `overflows` counter).
+
+**N2 (fresh, matched: same device, script, profile and quiet machine; three 60 s Garage windows each;
+0 aliased polls and 0 stalls in every run).** Before: exe `e116ad4f…`, runs
+`20261016-162400-003`/`-163322-757`/`-164245-452`, **33.48 presents/s median** (33.35–34.67), p50
+29.9 ms. After: exe `ec4bc150…`, runs `20261016-183337-668`/`-184300-416`/`-185223-046`, **43.40
+presents/s median** (42.07–43.60), p50 22.4 ms: **+29.6 %** in presents/s and −25 % in p50 frame time.
+The after runs' own counters show the ring working in the real workload — `splits` ≈ 1.2 per flip,
+`overflows` and `reuse_waits` in the hundreds, `max_inflight=3` — and the validation-layer run below
+reports `validation_errors=0`. The remaining mandatory wait is the flip's readback itself (guest
+memory must be published before its consumers see it); the comparability note in §31.27 explains why
+the archived N2 rows cannot be compared with fresh ones.
+
+**The known one-off crash recurred, twice, under load.** Two of the first three after-benchmark
+attempts (`20261016-175740-883`, `20261016-180805-012`) exited at 57.7 s and 59.4 s with
+`exit_code 0xC0000005` after a `[EXCEPTION first-chance] … fault=0x10000FFBE (read)` during an asset
+preload — the same signature, timetable and fault address as the one-off recorded and deliberately not
+repaired in this file's V4 survey ("A one-off crash, recorded and not repaired"). Those two attempts
+overlapped a subagent's CTest/lavapipe workload; six later 90 s trials on a quiet machine (three with
+the split rule, three with it disabled) and all six quiet runs since have been clean, and the same
+script's immediate rerun (`20261016-175842-197`) ran the full bound. The event is therefore recorded
+here as recurring under heavy concurrent CPU load, not as a new class and not as repaired by this
+packet.
+
+**Acceptance runs on the final source (N3).** The stock `e2e.json` completed on both:
+
+- **e2e smoke**: `20261016-190211-665-keyscript-n4-e2e-vk` (580 s bound, Vulkan, exploratory,
+  exe `ec4bc150…`): `keyscript_complete`, 0 ICALL lines, 0 ABI failures, 0 fatal, `vsh_misses=0`,
+  `vsh_hits=1 470 241`, `rc_fallback=0`, 36 332 flips with 107 068 submissions (`splits=70 072`,
+  `overflows=663`, `reuse_waits=663`, `max_inflight=3`).
+- **N3 validation run**: `20261016-191154-335-keyscript-n4-n3-val` (620 s bound, Vulkan,
+  `VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation` **and** `VK_LOADER_DEBUG=layer`, exploratory, the
+  same exe): `keyscript_complete`, 0 ICALL lines, 0 ABI failures, 0 fatal, `validation_errors=0`,
+  `validation_warnings=10` (all `vkCreateGraphicsPipelines(): … Vertex attribute at location 1/7/8 not
+  consumed by vertex shader`, the same ten benign warnings V7 recorded: dxc removes reads the program
+  never uses), `vsh_misses=0`, `vsh_hits=1 361 554`, `rc_fallback=0`, 25 663 flips with 75 086
+  submissions (`splits=48 760`, `max_inflight=3`). The loader's own insertion lines, quoted from the
+  run log:
+
+      [Vulkan Loader] INFO | LAYER:   Insert instance layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+      [Vulkan Loader] INFO | LAYER:   Inserted device layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+
+  Both ran on a quiet machine, one at a time, with disposable saves; the performance runs above were
+  kept separate (no validation layer, no `VK_LOADER_DEBUG`).
+

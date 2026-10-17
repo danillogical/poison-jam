@@ -385,14 +385,32 @@ if(BUILD_TESTING)
             add_test(NAME jsrf_gpu_backend_parity_vk COMMAND jsrf_gpu_backend_parity_vk_test)
             set_tests_properties(jsrf_gpu_backend_parity_vk PROPERTIES TIMEOUT 300 SKIP_RETURN_CODE 77
                 ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd};VK_ICD_FILENAMES=${_vk_icd};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
+            # The submission-ring lifetime gate, its own case because it asks a different question
+            # from the parity case above: the ring is only sound if submissions really overlap, and
+            # the guest-visible result is still right while targets, textures and depth buffers are
+            # evicted and released. It drives the real seam (installs the back end itself), runs
+            # 12 + slots frames of thousands of draws a frame -- sized from the ring's own slot
+            # count, read at run time -- asserts the overlap claim from nv2a_vk_backend_ring_stats()
+            # and the reach of the workload from the same counters, and then replays the identical
+            # frames against the CPU executor so every frame's pixels are checked against that
+            # reference as well. A generous timeout: it is much longer than the parity case. It
+            # skips (77) exactly like its sibling.
+            add_test(NAME jsrf_vk_frames_in_flight
+                     COMMAND jsrf_gpu_backend_parity_vk_test --frames-in-flight)
+            set_tests_properties(jsrf_vk_frames_in_flight PROPERTIES TIMEOUT 900 SKIP_RETURN_CODE 77
+                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd};VK_ICD_FILENAMES=${_vk_icd};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
         else()
             add_test(NAME jsrf_gpu_backend_parity_vk
                      COMMAND jsrf_gpu_backend_parity_vk_test --skip "XBR_VK_SW_ICD is not set")
             set_tests_properties(jsrf_gpu_backend_parity_vk PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
+            add_test(NAME jsrf_vk_frames_in_flight
+                     COMMAND jsrf_gpu_backend_parity_vk_test --skip "XBR_VK_SW_ICD is not set")
+            set_tests_properties(jsrf_vk_frames_in_flight PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
         endif()
     else()
-        message(STATUS "Vulkan/unavailable: jsrf_gpu_backend_parity_vk is not registered -- it runs "
-                       "against the Vulkan back end, which is a stub in this build")
+        message(STATUS "Vulkan/unavailable: jsrf_gpu_backend_parity_vk and jsrf_vk_frames_in_flight are "
+                       "not registered -- they run against the Vulkan back end, which is a stub in "
+                       "this build")
     endif()
     # V5's gating test: the ahead-of-time vertex-program corpus against the live Vulkan back end.
     # Authored by a different worker from the two production authors (plan rule N5). It links the
