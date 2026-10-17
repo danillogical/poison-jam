@@ -476,6 +476,69 @@ if(BUILD_TESTING)
                        "jsrf_vsh_aot_malformed are not registered -- they link and exercise the "
                        "retail vertex-program corpus, which this build does not compile")
     endif()
+    # ── N4.1's repair, as a deciding failure-injection regression ────────────────────────────
+    # The bounded three-slot submission ring was rejected for one defect: vb_reserve can advance
+    # the cursor into a slot that is still pending (the GPU's), and the fence wait that advance
+    # performs can fail -- and the upload paths then wrote guest pixels into that pending slot's
+    # mapped stream, destroying bytes an in-flight submission may still be reading. This case
+    # drives that exact scenario (the wait returns VK_TIMEOUT from a controlled stub) and asserts
+    # the pending slot's whole 16 MiB stream is byte-identical afterwards, with no fence reset, no
+    # descriptor pool reset, no submit and no copy; that a failed vkBeginCommandBuffer leaves the
+    # slot unrecordable; and that every later recording call goes to the discard buffer instead.
+    #
+    # It compiles NO COPY of the algorithm: its translation unit #includes the toolkit's
+    # src/video/nv2a_vk_backend.c with XBR_VK_BACKEND defined, so the bodies under test are the
+    # production ones, and the toolkit is NOT linked (the five external symbols it references are
+    # stubbed in the test). scripts/vk-ring-fault-gate.py reads the same file at BUILD time, fails
+    # the BUILD (not a skip) when a definition, the slot struct or a ring constant the fixture uses
+    # is gone, and derives the seam markers the test compiles against -- the pre-fix source must
+    # still build, because the case has to run against it and report the defect per property.
+    #
+    # No ICD and no environment: every Vulkan entry point the paths reach is a stub. There is no
+    # --skip and no SKIP_RETURN_CODE -- the seam is inside the translation unit, so the case always
+    # runs, and a seam it cannot find is a FAILED CHECK, never Not Run.
+    if(XBR_VULKAN_FOUND)
+        find_package(Vulkan QUIET)
+        if(NOT Vulkan_INCLUDE_DIRS)
+            message(FATAL_ERROR
+                "Vulkan is available (XBR_VULKAN_FOUND) but find_package(Vulkan) found no "
+                "include directory here; the ring fault-gate test compiles "
+                "src/video/nv2a_vk_backend.c, which needs <vulkan/vulkan.h>.")
+        endif()
+        set(VK_RING_GATE_DIR "${CMAKE_CURRENT_BINARY_DIR}/vk-ring-fault-gate")
+        set(VK_RING_GATE_SOURCE "${XBOXRECOMP_DIR}/src/video/nv2a_vk_backend.c")
+        set(VK_RING_GATE_PROBE "${CMAKE_CURRENT_SOURCE_DIR}/scripts/vk-ring-fault-gate.py")
+        set(VK_RING_GATE_HEADER "${VK_RING_GATE_DIR}/vk_ring_fault_gate_seam.h")
+        # A non-zero exit here fails the build, which is the point: a seam that moved must break
+        # the build rather than quietly turn the case into something else.
+        add_custom_command(
+            OUTPUT "${VK_RING_GATE_HEADER}" "${VK_RING_GATE_DIR}/vk_ring_fault_gate_seam.txt"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${VK_RING_GATE_DIR}"
+            COMMAND "${_jsrf_python}" -X utf8 "${VK_RING_GATE_PROBE}"
+                    --source "${VK_RING_GATE_SOURCE}"
+                    --header "${VK_RING_GATE_HEADER}"
+                    --manifest "${VK_RING_GATE_DIR}/vk_ring_fault_gate_seam.txt"
+            DEPENDS "${VK_RING_GATE_SOURCE}" "${VK_RING_GATE_PROBE}"
+            COMMENT "vk_ring_fault_gate: probing nv2a_vk_backend.c for the seam the regression binds to"
+            VERBATIM)
+        add_custom_target(jsrf_vk_ring_fault_gate_probe DEPENDS "${VK_RING_GATE_HEADER}")
+        add_executable(jsrf_vk_ring_fault_gate_test tests/test_vk_ring_fault_gate.c)
+        # xbox_video is what generates the SPIR-V headers the back end includes; the probe target
+        # writes the seam header the test includes.
+        add_dependencies(jsrf_vk_ring_fault_gate_test jsrf_vk_ring_fault_gate_probe xbox_video)
+        target_include_directories(jsrf_vk_ring_fault_gate_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/video
+            ${Vulkan_INCLUDE_DIRS}
+            "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv"
+            "${VK_RING_GATE_DIR}")
+        target_link_libraries(jsrf_vk_ring_fault_gate_test PRIVATE ${CMAKE_DL_LIBS})
+        add_test(NAME jsrf_vk_ring_fault_gate COMMAND jsrf_vk_ring_fault_gate_test)
+        set_tests_properties(jsrf_vk_ring_fault_gate PROPERTIES TIMEOUT 300)
+    else()
+        message(STATUS "Vulkan/unavailable: jsrf_vk_ring_fault_gate is not registered -- it "
+                       "compiles the toolkit's Vulkan back end, which this build does not "
+                       "(${XBR_VULKAN_UNAVAILABLE_REASON})")
+    endif()
     # ── V6: the vertex-program conformance gate (plan-jsrf-gameplay.md, step V6) ─────────────
     # Authored by a worker distinct from V5's authors, and it asks a different question from V5's
     # gate: not "is the generated retail corpus self-consistent" but "does the offline translation

@@ -323,8 +323,9 @@ Readbacks take 202–211 s of a 560 s run, and V1 submits and fence-waits simply
 - sub-allocated memory;
 - a persisted pipeline cache.
 
-**N4.1 is implemented but NOT independently accepted: a failed-wait lifetime defect remains** (toolkit
-`c5f3696`, TR §31.29). A ring of three submission slots, each owning its command recording, fence,
+**N4.1 is implemented, was rejected on a failed-wait lifetime defect, and is repaired; independent
+acceptance is pending** (toolkit `c5f3696` plus the repair `f41c0d2`, TR §§31.29–31.31). A ring of
+three submission slots, each owning its command recording, fence,
 descriptor pool and 16 MiB upload stream; a submission is issued without waiting for the ones before
 it; a draw entry splits a frame once the recording slot holds 2 MiB of stream or 32 descriptor sets
 and the next slot is free; the host reaches a fence only to reuse an occupied slot, to publish guest
@@ -347,6 +348,22 @@ may renew an exhausted repair allowance after independently confirming the revie
 own concrete repair advice. Those conditions are met for this finding (TR §31.30); one bounded
 N4.1 repair packet is authorized. Keep prior decisions and spending, the 9 remaining operation slots,
 all other limits and the existing stop conditions; no next N4 item before acceptance.
+
+**Repair, 2026-10-16 (toolkit `f41c0d2`; TR §31.31).** The two upload paths now freeze before any
+slot-resource access (`if (!g.ok) return;` immediately after their `vb_reserve`); `vb_stream` refuses a
+slice outright once the failure latch is set, and its oversized-slice branch frees its own dedicated
+buffer and returns NULL instead of handing back a pointer into it when the begin it performs failed
+(found by independent review); a failed `vkBeginCommandBuffer` no longer marks the slot recording and a
+dead recording buffer takes its place; a render pass is ended in the buffer that began it; and the
+flush's barrier goes through `vb_cmd()`. A different worker's deciding regression
+`jsrf_vk_ring_fault_gate` compiles the production bodies verbatim (no copy, build-time probe, no skip
+path, no GPU needed) and injects the timeout and begin failures through the back end's own function
+pointers: green on the repaired source (9 properties, 105 checks), red on `c5f3696` (properties 1, 2,
+4, 5a, 5b, 6, 7), and red on three weakening mutants with the restored source green. Full CTest
+**88/88**, `just check` passed, and a bounded e2e under N3 completed with `validation_errors=0`, the
+known 10 unused-attribute warnings, `vsh_misses=0` and the loader's insertion line quoted. The 43.40
+presents/s N2 figure above remains the `c5f3696` measurement: this repair changes failure paths only
+and makes no new performance claim. Awaiting independent acceptance.
 
 Measure each with N2. Parity tests must stay green. Each code subitem gets a different worker's
 gate and deciding mutation evidence.

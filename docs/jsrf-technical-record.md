@@ -3714,3 +3714,112 @@ by its admission. The closed escalated run and its single review decision remain
 successor carries the 9 remaining operation slots, with zero additional unassigned repair cycles.
 No operation-limit reset, duplicate decision or direct bridge-journal edit is authorized.
 
+### §31.31 N4.1 repair: a failed wait still permitted a pending-stream write (2026-10-16)
+
+Toolkit `f41c0d2` (repair) on top of `c5f3696` (the ring). The deciding regression is game-side:
+`jsrf_vk_ring_fault_gate` (`tests/test_vk_ring_fault_gate.c` with the build-time probe
+`scripts/vk-ring-fault-gate.py`). The rejected candidate was toolkit `c5f3696` / game `adc2c1b`.
+
+**The defect.** `vb_reserve` can advance the cursor into a slot that is still `pending` (the GPU's),
+and the fence wait that advance performs can fail: `vb_slot_wait` sets `g.ok = 0` and correctly leaves
+the slot pending, its fence unreset and its pool/stream accounting intact. `vb_target_load` and
+`vb_tex_upload` nevertheless called `vb_stream` and wrote guest pixels into that pending slot's mapped
+16 MiB stream; their `g.ok` check came only before recording the copy, which cannot undo a write.
+Reproduced twice: by a private harness of five verbatim production functions (normal wait control
+passes; an injected `VK_TIMEOUT` leaves `ok=0 pending=1` but changes a sentinel byte, exit 1; a private
+early-guard control exits 0), and by the new gate against the pre-fix source, where property 1 reports
+`4077 of 16777216 bytes differ` and `stream_off 0 -> 4096`, and property 2 reports 4085 bytes with one
+image created for the aborted upload.
+
+**The repair.** (1) `vb_target_load` and `vb_tex_upload` return immediately after their `vb_reserve`
+when `g.ok` is 0 — before `vb_stream`, before a byte is written. (2) `vb_stream` refuses at entry once
+the failure latch is set, so a latch that appears during a multi-slice draw cannot hand out later
+slices, and its oversized-slice branch frees its own fresh buffer and returns NULL when the begin it
+performs failed; an independent review found that otherwise `vb_discard` frees that buffer immediately
+(a failed begin no longer marks the slot recording) and the branch returned a pointer into freed
+memory. (3) A failed `vkBeginCommandBuffer` latches `g.failed` (write-once, with `g.ok = 0`) and leaves
+the slot's command buffer untouched; recording goes to `g.dead`, one extra command buffer begun once at
+install and never ended, submitted or reset, so any stray `vkCmd*`, transfer or barrier is valid and
+discarded. (4) `g.pass_cmd` remembers the buffer that began an open render pass and ends that buffer.
+(5) The flush's post-loop barrier goes through `vb_cmd()`. (6) `vb_create_defaults` cannot revive a
+latched failure at install (it refuses, and its post-submit check is `g.failed || !g.ok`) and takes its
+copy's command buffer from `vb_transfer_cmd()`. `vb_slot_wait`'s failure path is otherwise unchanged:
+`pending` stays 1, no fence/pool/stream reset, nothing freed.
+
+**The deciding regression.** `jsrf_vk_ring_fault_gate` (CTest, `TIMEOUT 300`, no `SKIP_RETURN_CODE`, no
+`--skip`, no ICD or environment: it always runs and exits 0 or 1, never 77). Its translation unit
+`#include`s `src/video/nv2a_vk_backend.c` with `XBR_VK_BACKEND` defined, so the bodies under test are
+the production ones and nothing can drift; the probe reads the same bytes at build time and fails the
+BUILD if a definition, the slot struct or a ring constant the fixture uses is gone; every Vulkan entry
+point is a static function pointer the test points at stubs, and the injected `VK_TIMEOUT`/begin
+failures are stub return values, not a real device timeout. Properties: 1 target-load failed wait, 2
+texture-upload failed wait, 3a/3b normal controls, 4 failed begin and its control, 5a/5b post-failure
+recording and a pending slot with the device gone, 6 an oversized slice whose begin fails, 7 the latch
+mid-draw. Green on the repaired source: **9 properties, 105 checks**, exit 0 — property 1 compares the
+pending slot's whole 16 MiB stream byte-for-byte and count-asserts no fence reset, no pool reset, no
+submit and no copy; property 6 asserts the call returns NULL with exactly one free and one destroy and
+nothing live; property 7 asserts both the ring and oversized slices are NULL with no buffer,
+allocation, mapping, offset move or write, and nothing begun, reset or submitted. No group is
+indeterministic: no device, no clock, no threads, and failure output carries the differing byte count
+and both checksums.
+
+**Mutation matrix (private scratch trees; the test prints the sha256 of the bytes it compiled and every
+row matched the file built).** Independent worker:
+
+| Variant | backend sha256 | exit | failing properties |
+|---|---|---|---|
+| repaired (baseline) | `03da3147…` | 0 | none |
+| M1a: the callers' early guards deleted only | `dc69aaae…` | 0 | none — measured inert: `vb_stream`'s entry refusal is what stops the write |
+| M1: those guards plus `vb_stream`'s entry refusal deleted | `a244b1b6…` | 1 | 1, 2, 7 |
+| M2: a failed begin arms the slot and returns its own buffer | `b04f7d58…` | 1 | 4, 5a, 6 |
+| M3: the oversized-slice refusal deleted (the dangling-pointer form) | `b5d5d95d…` | 1 | 6 |
+| restored | `03da3147…` | 0 | none (run output byte-identical to the baseline) |
+
+Two measured deviations from the brief's expectations are recorded rather than smoothed over: M1 has to
+remove `vb_stream`'s own refusal to be decisive for properties 1/2 (M1a alone is inert, which the
+test's header predicted), and M2 also reddens property 6 because that fixture keys on the same latch.
+The test's own author independently measured the same pattern in a first scratch tree with its own
+variant names (pre-fix source red on 1, 2, 4, 5a, 5b, 6, 7; "callers' guards only" inert; "callers plus
+the entry refusal" red on 1, 2, 7; "oversized refusal deleted" red on 6; failed-begin mutant red on 4,
+5a; restored green), and the second tree's rows each printed the sha256 of the bytes compiled, matching
+the file built. No test or shared-tree edit was made by either worker.
+
+**Reviews.** An independent code review found the dangling dedicated-slice path above (fixed, M3 is its
+mutant) and two comment/nit items (fixed); its earlier hazard pass had found the signaled-fence and
+post-wait-recording defects now fixed in `c5f3696`/`f41c0d2`. The configured security review of the
+changed native-resource failure paths ended `sound` (mapped-stream arithmetic, garbage gating, command
+buffer state, post-failure API use and install semantics), with one benign note: a single
+`vkAllocateDescriptorSets` attempt could still follow a `vb_stream`-internal begin failure — the new
+entry refusal removes even that.
+
+**Validation on the final source.** `jsrf_vk_frames_in_flight` passes (17.3 s), the full suite is
+**88/88** through `python C:/Users/logic/xbr-mac/ctest-limited.py --output-on-failure`, and `just check`
+passes. The bounded e2e under N3 (`20261016-212431-655-keyscript-n4r-e2e-val2`, 620 s bound,
+exploratory, exe `37d9c75e…`, game `47255e5` + the repair patch, device RTX 4070) completed:
+`keyscript_complete`, 0 ICALL lines, 0 ABI failures, 0 fatal, `validation_errors=0`,
+`validation_warnings=10` (all `vkCreateGraphicsPipelines … Vertex attribute at location 1/7/8 not
+consumed by vertex shader`, the same ten benign ones V7 recorded), `vsh_misses=0`, `vsh_hits=1 419 520`,
+`rc_fallback=0`, 26 657 flips / 78 056 submissions (`splits=50 736`, `max_inflight=3`). The loader's own
+insertion lines, quoted from that run's log:
+
+    [Vulkan Loader] INFO | LAYER:   Insert instance layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+    [Vulkan Loader] INFO | LAYER:   Inserted device layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+
+**Runner observation (recorded, not explained).** The first N3 attempt
+(`20261016-211121-778-keyscript-n4r-e2e-val`, same command shape) ran `keyscript_complete` with
+`validation_errors=0` and the same ten warnings — so the layer was active — but its log carried no
+loader debug output at all (0 lines against 158 in the successful runs). It was rerun with
+`VK_LOADER_DEBUG=layer` also exported in the invoking shell, which produced the witness above. Whether
+the difference is the runner's override handling or something else was not established; the witness
+line for the record comes from the rerun.
+
+**No new performance claim.** The 43.40 presents/s N2 figure belongs to `c5f3696`; this repair adds two
+`g.ok`/latch tests per slice, two NULL refusals and one command buffer allocated at install — failure
+paths only.
+
+**Limits.** No live GPU timeout was exercised: the injected failures are stub return values, which is
+what makes the case deterministic; the real-device behaviour of a failed wait (a frozen back end that
+publishes nothing further) is unchanged and itself unrehearsed. After a latch nothing drains, so the
+garbage list freezes at the failing call's entries (bounded, nothing freed); the dead buffer may
+reference objects that are later freed, which is never executed and therefore validation-only surface.
+
