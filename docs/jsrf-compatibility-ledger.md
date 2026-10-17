@@ -38,6 +38,12 @@ host API); list the one that decides fidelity first.
 
 ## Entries
 
+**L62 latest acceptance (2026-10-17, TR §31.39):** N4.3 accepted at toolkit `5af1c48` / game
+gate `4e09019`, records `1b0e291`. Normal-path barrier scopes narrow; layout values and both
+broad safety guards stay unchanged. Independent tests and synchronization-validation negative
+control pass. No measurable frame-rate gain; one startup crash remains causally unresolved.
+Next separate item: N4.4 suballocated memory. N4.2's prior acceptance is retained.
+
 **L62 N4.3 (2026-10-17, TR §31.38):** toolkit `5af1c48` narrows every normal-path barrier of the
 Vulkan back end to the stage and access scopes its producer and consumers actually need
 (`vb_dep`/`vb_image_dep`; `vb_image_barrier` removed and all seven layout transitions scoped, with no

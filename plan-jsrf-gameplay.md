@@ -323,8 +323,8 @@ Readbacks take 202–211 s of a 560 s run, and V1 submits and fence-waits simply
 - sub-allocated memory;
 - a persisted pipeline cache.
 
-**N4.3 implemented at toolkit `5af1c48` (this packet), awaiting independent acceptance** (TR
-§31.38). Every normal-path barrier in the Vulkan back end now carries the stage and access scopes its
+**N4.3 independently accepted at toolkit `5af1c48` / game gate `4e09019`, records `1b0e291`**
+(2026-10-17, TR §§31.38–31.39). Every normal-path barrier in the Vulkan back end now carries the stage and access scopes its
 producer and consumers actually need (`vb_dep`/`vb_image_dep`; `vb_image_barrier` is gone and all seven
 layout transitions are scoped, with no layout VALUE changed), while two sites stay deliberately broad:
 the per-submission barrier in `vb_slot_submit` and N4.2's abandonment barrier in
@@ -336,8 +336,13 @@ mutants; `jsrf_vk_sync_paths_gate`: real device, per-site mask census, reachabil
 published bytes, 6 properties / 119 checks, 11 private mutants, plus a synchronization-validation run
 with a mutant that makes the layer report hazards and a safe-but-broad mutant that does not), with the
 retained ring and readback-ordering gates migrated by a different worker to the new helper and to the
-abandonment barrier as the decider for the abandoned-group classes. **This report does not accept
-N4.3**: the next separate operation after independent acceptance is sub-allocated memory, then the
+abandonment barrier as the decider for the abandoned-group classes. Codex independently passed all
+eight Vulkan gates, re-ran the private scope mutants, and verified a real synchronization-validation
+negative control (four hazards on the unsafe source, none on final source). The full suite had one
+documented `xbox_guest_meter` timing failure that passed its allowed rerun; it was not 94/94 on
+the first run. Matched N2 medians 44.00 → 43.95 show no speed claim. One excluded pre-window
+startup crash remains causally unresolved; a similar pre-change exit/phase does not prove its cause
+or exclude this change. The next separate operation is **N4.4 sub-allocated memory**, then the
 persisted pipeline cache/R4, N6 and R5 in the approved order. Nothing later than N4.3 was started.
 
 **Latest independent acceptance (2026-10-17): N4.2 is accepted at toolkit `cd638d4` / game

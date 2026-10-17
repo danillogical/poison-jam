@@ -4783,7 +4783,72 @@ memory, the persisted pipeline cache and R4 remain open in N4, and no later item
 record.
 
 PUSHED_TO: origin / BRANCH: main / COMMIT: 5af1c4824697517ad68a4b75213fd6483fd17561 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward cd638d4..5af1c48, toolkit pushed first, synchronized (origin/main == 5af1c48).
-PUSHED_TO: origin / BRANCH: master / COMMIT: 4e09019cf5287a9ca81ff0c432353f478ed407d2 (the N4.3 gates, CMake and records) and 8463caf50b5ff64002820f2c25c982049f9bbce2 (this section's N2/N3 receipts) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 1317e26..8463caf, game pushed after the toolkit, clean and synchronized at the independently fetched checkpoint. The records-only commit that adds these receipt lines follows that range and is itself pushed on its own; its hash is recorded in the packet's completion report rather than here, because a commit cannot name its own hash.
+PUSHED_TO: origin / BRANCH: master / COMMIT: 4e09019cf5287a9ca81ff0c432353f478ed407d2 (N4.3 gates), 8463caf50b5ff64002820f2c25c982049f9bbce2 (N2/N3 records), 1b0e2914effb9fbe0d2f85052c110a6f5536740b (push receipts) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 1317e26..1b0e291, toolkit first, clean synchronized at the independently fetched checkpoint.
+
+### 31.39 N4.3 independently accepted with timing and crash limits retained (2026-10-17)
+
+**Accepted:** toolkit `5af1c48` / game gate `4e09019`, records `1b0e291`, fetched clean and
+synchronized. Reviewed full production diff: stage/access-scoped helpers at the intended sites,
+seven migrated image transitions with the same layout values, and both broad submission and
+abandoned-batch guards retained. Attachment LOAD reads and transfer clear-to-load writes stay
+covered. Ring, ownership, publication and bounded stop/retry semantics are unchanged.
+
+**Independent execution:** limited-token `jsrf_vk_` CTests **8/8, 31.72 s**, no skips, covering
+real lifetime/readback plus ring/fault/caller/ordering and both new synchronization gates. Private
+scope mutants M1–M9 re-executed: **1/1/1/1/1/1/1/0/1** exit codes. M1–M7 catch the changed access
+or layout defect; comment-only M8 stays green. M9's broad replacement has zero unordered hazards
+but fails the optimization-positive controls, as it should. Final scope gate: 115 pairs decided,
+0 unordered, 5 properties / 77 checks; final real paths gate: 6 properties / 119 checks.
+
+Codex separately ran the real paths fixture under Khronos synchronization validation through the
+medium-integrity helper. Final source passes without validation errors; private unsafe M1 fails
+and the layer reports **four READ_AFTER_WRITE hazards**. Safe-but-broad M9 has zero validation
+errors and fails only narrow-form checks. Thus neither mere barrier presence nor an unverified
+validation setting decides this result. Raw independent logs are outside git under
+`C:/Users/logic/xbr-mac/n43-codex-tests`. The first disposable harness's non-native ICD path was
+corrected to the exact working repository environment; no skip/setup failure counted as a pass.
+No production or shared test source/executable was mutated.
+
+Final source SHA-256 `a3cd2cec71f6e6264258d8c5b9b28f20f3659546f96b827930db5aa2bb5847bf` and
+exe `11ce8b039f5b5694f3d432867817114c9656c6d2d1f56132464d77992a7e50ba` match the final archive.
+Inspected distinct production/test/maintenance and code/security review assignments. Retained
+gate migrations fix both review findings without removing their general dependency predicates;
+the broader abandonment guard is now explicitly the deciding cover for those classes. Per-agent
+model/fallback claims remain configuration-derived because transcripts expose no model field.
+
+**Full-suite accounting:** `final-ctest-n43.txt` is **93/94, 518.03 s**, sole failure the known
+`xbox_guest_meter` timing flake. The plan permits one rerun; the named rerun receipt is **1/1,
+0.37 s**. This is not a claim the first suite was 94/94. Final checker/corpus 126/126 inspected.
+Focused independent checks were rerun; a duplicate full suite was unnecessary.
+
+**N2 verified:** all six copied bench receipts hash-match their archived `bench.json`, same
+RTX 4070 Laptop, 60 s windows, exact before `46c4ffe9` and after `11ce8b03` executables. Before
+43.9337 / 44.0010 / 44.3335 presents/s, after 42.8670 / 43.9504 / 45.3004: medians **44.00 →
+43.95**, wider after spread, zero stalls/aliased polls. No measurable gain or attributed regression.
+
+**Crash qualification:** the excluded after run `20261017-085421-561` exited `0xC0000005` at
+59.4 s, before the benchmark step, as its actual result records. Similar startup failures precede
+this change, but the same exit code/phase and healthy GPU counters do not prove the same cause
+or exclude an N4.3 contribution. Its cause remains unresolved. Three valid after windows and
+the final e2e complete; acceptance makes no crash-fix or general stability claim.
+
+**N3 verified:** `20261017-092457-314-keyscript-n43-n3-e2e-val` reclassifies exploratory, no
+UNKNOWN/MISSING, stock script complete. Actual Khronos insertion 857/1288, implicit OBS hook
+877/1298 disclosed. Final errors 0, known warnings 10, miss/identity/decline/fallback/incomplete
+0; 24,954 flips / 49,907 packed readbacks, 72,937 submits / max in flight 3. Source/exe match;
+deliberate 620.6 s deadline/exit 1 is not normal exit or fidelity. This e2e uses ordinary validation;
+the independent fixture above separately verifies synchronization validation with a negative control.
+
+**Audit/limits:** all changed blob versions independently scanned in the correct stores:
+toolkit 1 / game 13, zero secret hits, forbidden paths or oversized blobs. Intended origin branches,
+unsigned commits/no co-author or signature trailers, toolkit-first pushes verified. Pre-existing
+guest-write bounds risk remains disclosed and unfixed, not widened by these mask changes.
+
+**Next only N4.4 suballocated memory:** different production/test authors, meaningful alignment,
+memory-type, lifetime and failure gates with private mutation proofs, fresh quiet N2 controls,
+final N3 witness. No persisted cache/R4, N6 or R5 in the operation. Same run retains 4 operations
+and 0 unassigned repair cycles before next dispatch; after it 3. No allowance reset. All owner
+stop conditions remain.
 
 
 
