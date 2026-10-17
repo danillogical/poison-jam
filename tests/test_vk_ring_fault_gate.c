@@ -1013,8 +1013,10 @@ static void prop6(void)
           "%u free(s)", c.frees);
     nv2a_vk_backend_memory_stats(&ms);
     check(ms.parked == m0.parked && ms.parked_lost == 0u,
-          "the release was NOT parked: nothing was recording and nothing was pending",
-          "parked %llu -> %llu, parked_lost %llu", (unsigned long long)m0.parked,
+          "the release was neither parked nor refused (parked_lost counts a release the full "
+          "park list REFUSED, not one that was parked): nothing was recording and nothing was "
+          "pending",
+          "parked %llu -> %llu, refused (parked_lost) %llu", (unsigned long long)m0.parked,
           (unsigned long long)ms.parked, (unsigned long long)ms.parked_lost);
     check(ms.used_bytes == m0.used_bytes && ms.blocks == m0.blocks + 1u
           && ms.released == m0.released + 1u && ms.ranges == m0.ranges + 1u,

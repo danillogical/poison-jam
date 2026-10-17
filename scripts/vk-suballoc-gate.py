@@ -16,12 +16,13 @@ what the test binds to is not there.
     custom command and the build.  It never skips and never warns-and-continues: a moved or
     renamed seam must break the build, not silently turn the case into something else.
 
-  * The allocator's BEHAVIOUR is probed as a set of markers rather than required.  The
+    The allocator's BEHAVIOUR is probed as a set of markers rather than required.  The
     markers in the generated header name the parts of the design the gate's checks decide
-    (a free list, the parked-release list, the dedicated pNext, the optional Requirements2
-    lookups, the atom-size widening, the write-once reuse and sharing latches, block
-    retirement, flush).  A marker that is 0 is reported by the property that needs it, as a
-    FAILED CHECK naming it, not as a skip: the gate's verdict stays 0 or 1.
+    (a free list, the parked-release list, the bounded park list's refusal that retains the
+    range, the dedicated pNext, the optional Requirements2 lookups, the atom-size widening,
+    the write-once reuse and sharing latches, block retirement, flush).  A marker that is 0 is
+    reported by the property that needs it, as a FAILED CHECK naming it, not as a skip: the
+    gate's verdict stays 0 or 1.
 
 Outputs (both declared to CMake as one custom command):
   --header    vk_suballoc_gate_seam.h    the markers + both sources' identity, #included
@@ -149,6 +150,13 @@ def probe(c_text, h_text):
         # handed out (the bounded list of the interface's rule 6).
         "VB_GATE_HAS_PARK": int("s_pool_pending" in f and "parked_lost" in f
                                 and "parked_peak" in c_text),
+        # The bounded park list's admission failure is a REFUSAL, not a drop: the range stays
+        # counted live in its block and reaches no free list (nothing freed, nothing handed
+        # out), and a never-referenced rollback release is handed a path that releases the
+        # range at once (vb_mem_give_now) instead of parking it. The refusal is reached
+        # through a by-value vb_garbage_free entry the drain drops, so no VbAlloc survives
+        # it. ABSENT means the source still clears the caller's handle and drops the range.
+        "VB_GATE_HAS_REFUSE_PARK": int("vb_mem_give_now" in f and "s_pool_pending" in f),
         # A dedicated allocation carries its VkMemoryDedicatedAllocateInfo in pNext.
         "VB_GATE_HAS_DEDICATED_PNEXT":
             int(c_text.count("VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO") >= 1),

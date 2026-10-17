@@ -7205,7 +7205,8 @@ static int run_suballoc(void)
                       "allocator's own", d_allocs, d_blocks + d_dedicated);
     ok &= rb_claim_atleast("reuse_hits_delta >= 1: a range was taken from a freed range, not the "
                            "bump", d_reuse, 1);
-    ok &= rb_claim_eq("m1.parked_lost == 0: no range was parked permanently", m1.parked_lost, 0);
+    ok &= rb_claim_eq("m1.parked_lost == 0: no release was refused (the bounded park list never "
+                      "overflowed, so no range was ever left to it)", m1.parked_lost, 0);
     ok &= sub_claim_bound("used_bytes <= reserved_bytes: no pool block is over-committed",
                           m1.used_bytes, m1.reserved_bytes, 0);
     ok &= rb_claim_eq("free_bytes + used_bytes == reserved_bytes: the byte accounting closes",

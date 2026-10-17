@@ -36,11 +36,19 @@
  *      cannot get a coherent host type is dedicated too (`dedicated_nohost`), five
  *      `VB_POOL_MAX_BLOCK` requests exhaust the pool's `VB_POOL_RESERVE` and the pool stops
  *      growing there, and every dedicated reason counter sums to `dedicated`.
- *   6. delayed reuse -- a range released while a recording is open, and one released while a
- *      submission is pending, is NOT handed out again; the fixture writes a pattern into that
- *      range's mapped bytes before the release and requires them byte-identical afterwards;
- *      once the recording is closed, the ring drained and `vb_pool_gc()` has run, the range
- *      IS the one handed out next.
+ *   6. delayed reuse, and the bounded park list -- a range released while a recording is
+ *      open, and one released while a submission is pending, is NOT handed out again; the
+ *      fixture writes a pattern into that range's mapped bytes before the release and
+ *      requires them byte-identical afterwards; once the recording is closed, the ring
+ *      drained and `vb_pool_gc()` has run, the range IS the one handed out next. The park
+ *      list is BOUNDED (`VB_POOL_PENDING`): a release while the ring is busy is parked, and
+ *      one the full list cannot admit is REFUSED -- the range stays counted live in its block
+ *      (`used`/`live`, or `dedicated_bytes`) and reaches no free list, so nothing is freed
+ *      and nothing is handed out; the refusal is counted by `parked`/`parked_lost` and the
+ *      back end latches stopped. Production reaches the refusal through a by-value
+ *      `vb_garbage_free` entry the drain then drops, so the retained range is what survives,
+ *      not a `VbAlloc` anyone keeps. Counting a dropped range as `parked_lost` and clearing
+ *      the caller's only handle is the defect this decides.
  *   7. rollback -- injected `vkAllocateMemory`, `vkCreateImage`/`vkCreateBuffer`,
  *      `vkBindImageMemory`/`vkBindBufferMemory` and `vkMapMemory` failures each release
  *      exactly what was taken, leave the caller's `VbAlloc` unusable, free nothing twice, and
@@ -52,6 +60,19 @@
  *      neighbour; a non-coherent allocation's window is widened to whole
  *      `nonCoherentAtomSize` atoms and clipped to the allocation, so it never covers a byte
  *      the allocation does not own.
+ *  10. a bounded rollback burst -- more than `VB_POOL_PENDING` failed image binds through
+ *      `vb_image_create` while a recording is open and while a submission is pending (pooled:
+ *      one block, one allocation; and required-dedicated: one allocation per failure), more
+ *      than `VB_POOL_PENDING` failed binds and maps through `vb_device_buffer`/`vb_host_buffer`
+ *      while recording, and more than `VB_POOL_PENDING` failed PAIRS through
+ *      `vb_readback_reserve` (each one's host half made, its device half failed, and its
+ *      abandoned host buffer destroyed with its range released at once), and the ordinary
+ *      resource retirement beyond that capacity: every failure releases exactly what it took,
+ *      nothing is parked or lost, after the drain `used_bytes == 0`, allocations and frees
+ *      balance, and no block pins a released range. The successful controls (the same paths
+ *      with nothing injected, a pair the previous successful reserve still holds, and 65+
+ *      resources destroyed through the production discard path) stay green: no
+ *      byte/lifetime/dependency decision is weakened to accommodate the allocator.
  *
  * The production bodies are the toolkit's own
  * ------------------------------------------
@@ -84,9 +105,15 @@
  *
  * Expected verdicts
  * -----------------
- * The N4.4 source passes every property. The pre-N4.4 source does not build this case at all
- * (the probe's anchors are the allocator's own names), which is the honest verdict for a gate
- * that binds to a design that does not exist yet. Each weakening mutant of the N4.4 source
+ * The repaired source passes every property. The pre-repair source BUILDS and RUNS against
+ * this case -- every symbol, field and call it names exists in both -- and FAILS the deciding
+ * checks: a burst of more than `VB_POOL_PENDING` never-referenced rollbacks is not bounded,
+ * because the release the full park list cannot hold is counted `parked_lost` and the caller's
+ * only `VbAlloc` is cleared; the range is then neither reusable nor freed, so `used_bytes`
+ * never returns to 0 and dedicated allocations outnumber their frees by one per burst. The
+ * park-list control is the same failure on the ordinary release path: the 65th `vb_mem_give`
+ * is dropped instead of refused, the caller's handle is cleared, and the back end is never
+ * stopped. Each weakening mutant of the repaired source
  * named in the packet -- alignment ignored, memoryTypeBits ignored, linear and non-linear
  * pools merged, a range reused while a recording or a submission is live, a broken rollback,
  * a dedicated requirement ignored -- fails the property that decides it, and a source that
@@ -114,7 +141,10 @@
 #define GX_BUFS       8u                     /* the byte workload's buffer count */
 #define GX_PATTERN    0x9E3779B97F4A7C15ull
 #define GX_MAX_MEM    128
-#define GX_MAX_OBJ    128
+#define GX_MAX_OBJ    256                    /* the largest world records 65 readback pairs
+                                              * (65 x host+device buffers = 130 objects) plus
+                                              * a control pair, so the requirement each created
+                                              * object reports is always its own */
 #define GX_MAX_LIVE   256
 #define GX_MAX_BIND   128
 
@@ -146,6 +176,12 @@ typedef struct {                           /* a created image or buffer, with th
     VkDeviceSize size, align;
     uint32_t bits;
     int requires_ded, prefers_ded;
+    /* The range this object was SUCCESSFULLY bound to. A bind that returned a failure did not
+     * bind anything, so it is not recorded here -- and the destroy stub can then ask whether
+     * this range had already been released when the destroy ran. */
+    int bound;
+    VkDeviceMemory bind_mem;
+    VkDeviceSize bind_off, bind_size;
 } GxObj;
 
 typedef struct { VkDeviceMemory mem; VkDeviceSize off, size; } GxLive;
@@ -207,6 +243,60 @@ static GxSpec g_spec;                      /* what the NEXT created object repor
 static GxSpec g_spec_default;
 static uint8_t *g_snap;                    /* a range's bytes, copied before a call */
 
+/* ── The fixture's ordering log ──────────────────────────────────────────────────────────
+ *
+ * The stubs are the only place the fixture can watch production DESTROY an object and RELEASE
+ * the range that object named, so every one of them appends an event here. Two ordering rules
+ * the allocator's ownership split rests on are decided from that log and from the block state
+ * the destroy sees at the moment it is called:
+ *
+ *   - a bind the fixture's own check refuses (wrong alignment, wrong pool kind, a range that
+ *     overlaps a live one) is a VETO event;
+ *   - an object successfully bound to a range must be DESTROYed while that range is still
+ *     live. The destroy stub asks whether the range is ALREADY released -- in its block's
+ *     free list, or its memory already handed to vkFreeMemory -- and counts a violation if it
+ *     is. Swapping an object's `vkDestroy*` and its range's release (`vb_mem_give_now`) in a
+ *     fail path is exactly what this sees;
+ *   - and no range may be handed to a NEW object before the object that held it is destroyed:
+ *     a BIND of a range already bound to another object requires a DESTROY of that object in
+ *     between. */
+
+enum {
+    GXE_BIND_IMG, GXE_BIND_BUF, GXE_DESTROY_IMG, GXE_DESTROY_BUF, GXE_DESTROY_VIEW,
+    GXE_FREE, GXE_UNMAP, GXE_VETO
+};
+
+typedef struct {
+    unsigned kind;
+    uintptr_t handle;                      /* the object, or the memory for FREE/UNMAP */
+    VkDeviceMemory mem;                    /* the range a bind named */
+    VkDeviceSize off, size;
+    unsigned seq;
+} GxEvent;
+
+#define GX_MAX_EVENT 4096
+
+static GxEvent g_events[GX_MAX_EVENT];
+static unsigned g_nevents;                 /* reset with every world */
+static unsigned g_seq;
+static unsigned g_order_bad;               /* destroy-after-release and reuse-before-destroy,
+                                            * cumulative over the whole run */
+static char g_order_why[256];
+
+static void gx_note(unsigned kind, uintptr_t handle, VkDeviceMemory mem, VkDeviceSize off,
+                    VkDeviceSize size)
+{
+    if (g_nevents >= GX_MAX_EVENT)
+        return;
+    g_events[g_nevents].kind = kind;
+    g_events[g_nevents].handle = handle;
+    g_events[g_nevents].mem = mem;
+    g_events[g_nevents].off = off;
+    g_events[g_nevents].size = size;
+    g_events[g_nevents].seq = ++g_seq;
+    g_nevents++;
+}
+
 /* ── The fixture's own ledger of what it took ──────────────────────────────────────────
  *
  * Every take this fixture makes is recorded here with the EXACT range the allocator handed
@@ -219,7 +309,8 @@ typedef struct {
     VkDeviceMemory mem;
     VkDeviceSize off, size;
     int parked;                             /* released while the ring was busy */
-    int lost;                               /* the park list could not hold it: never reusable */
+    int lost;                               /* the release dropped it: the caller's VbAlloc was
+                                             * cleared and the range is never reusable */
 } GxLedger;
 
 static GxLedger g_ledger[GX_MAX_LIVE];
@@ -237,8 +328,11 @@ static void ledger_add(const VbAlloc *a)
     g_nledger++;
 }
 
-/* The fixture's own mirror of the rule it decides: the release that the bounded park list
- * cannot hold is never reusable, so it stays in the ledger for good. */
+/* The fixture's own mirror of the rule it decides: a release that CLEARS the caller's
+ * `VbAlloc` while the ring was busy handed the range to nobody -- the caller lost it and the
+ * range is never reusable -- so it stays in the ledger as lost for good. A release that keeps
+ * its owner (the caller's `VbAlloc` still names the range) is NOT lost: the range stays live
+ * and owned, which is what the fixture asserts instead. */
 static void ledger_lost(const VbAlloc *a)
 {
     unsigned i;
@@ -419,6 +513,93 @@ static GxMem *mem_by_handle(VkDeviceMemory mem)
     return NULL;
 }
 
+/* Has [off, off+size) of `mem` already been RELEASED? A pooled range is released when it
+ * joins its block's free list (or its whole block is gone: the memory reached vkFreeMemory); a
+ * dedicated allocation is released when vkFreeMemory took it. This is the state the destroy
+ * stub consults, and it is the only observation the fixture makes BETWEEN two statements of
+ * one production call -- precisely what decides the destroy/release ordering. */
+static int gx_range_released(VkDeviceMemory mem, VkDeviceSize off, VkDeviceSize size)
+{
+    unsigned p, b, i;
+    GxMem *m;
+
+    if (!mem || !size)
+        return 0;
+    m = mem_by_handle(mem);
+    if (m && m->frees)
+        return 1;
+    for (p = 0; p < VB_POOLS; p++) {
+        for (b = 0; b < VB_POOL_BLOCKS; b++) {
+            const VbBlock *bl = &g.pools[p].blocks[b];
+
+            if (bl->mem != mem)
+                continue;
+            for (i = 0; i < bl->nfree && i < (unsigned)VB_POOL_FREE_MAX; i++)
+                if (bl->free_list[i].off < off + size
+                    && off < bl->free_list[i].off + bl->free_list[i].size)
+                    return 1;
+        }
+    }
+    return 0;
+}
+
+/* An object is being destroyed: log it, and count a violation if the range it was bound to
+ * had already been released (the destroy/release swap). */
+static void gx_order_destroy(const GxObj *o, unsigned kind, uintptr_t handle, const char *what)
+{
+    gx_note(kind, handle, o ? o->bind_mem : VK_NULL_HANDLE, o ? o->bind_off : 0,
+            o ? o->bind_size : 0);
+    if (o && o->bound && gx_range_released(o->bind_mem, o->bind_off, o->bind_size)) {
+        g_order_bad++;
+        if (!g_order_why[0])
+            snprintf(g_order_why, sizeof g_order_why,
+                     "the %s at %p was destroyed after its range [%llu, %llu) of %p had already "
+                     "been released", what, (void *)handle, (unsigned long long)o->bind_off,
+                     (unsigned long long)(o->bind_off + o->bind_size), (void *)o->bind_mem);
+    }
+}
+
+/* An object is being bound: log it, remember the range, and count a violation if this range
+ * was bound to a DIFFERENT object that was never destroyed (a range handed out while its old
+ * owner still names it). */
+static void gx_order_bind(GxObj *o, unsigned kind, uintptr_t handle, VkDeviceMemory mem,
+                          VkDeviceSize off, VkDeviceSize size)
+{
+    unsigned n, i;
+
+    gx_note(kind, handle, mem, off, size);
+    n = g_nevents;
+    if (o) {
+        o->bound = 1;
+        o->bind_mem = mem;
+        o->bind_off = off;
+        o->bind_size = size;
+    }
+    for (i = 0; i + 1u < n; i++) {
+        unsigned j;
+        int destroyed = 0;
+
+        if (g_events[i].kind != GXE_BIND_IMG && g_events[i].kind != GXE_BIND_BUF)
+            continue;
+        if (g_events[i].mem != mem || g_events[i].off != off || g_events[i].handle == handle)
+            continue;
+        for (j = i + 1u; j < n; j++)
+            if (g_events[j].handle == g_events[i].handle
+                && (g_events[j].kind == GXE_DESTROY_IMG
+                    || g_events[j].kind == GXE_DESTROY_BUF))
+                destroyed = 1;
+        if (!destroyed) {
+            g_order_bad++;
+            if (!g_order_why[0])
+                snprintf(g_order_why, sizeof g_order_why,
+                         "the range [%llu, %llu) of %p was bound to %p while the object at %p "
+                         "that also names it was never destroyed",
+                         (unsigned long long)off, (unsigned long long)(off + size), (void *)mem,
+                         (void *)handle, (void *)g_events[i].handle);
+        }
+    }
+}
+
 static void spec(VkDeviceSize size, VkDeviceSize align, uint32_t bits, int req, int pref)
 {
     g_spec.size = size;
@@ -486,6 +667,7 @@ static void VKAPI_CALL gx_free(VkDevice device, VkDeviceMemory mem,
     GxMem *m = mem_by_handle(mem);
 
     (void)device; (void)alloc;
+    gx_note(GXE_FREE, (uintptr_t)mem, mem, 0, 0);
     if (!m) {
         sx.double_frees++;
         return;
@@ -543,6 +725,7 @@ static void VKAPI_CALL gx_unmap(VkDevice device, VkDeviceMemory mem)
 {
     (void)device; (void)mem;
     sx.unmaps++;
+    gx_note(GXE_UNMAP, (uintptr_t)mem, mem, 0, 0);
 }
 
 static VkResult VKAPI_CALL gx_flush(VkDevice device, uint32_t count,
@@ -788,6 +971,7 @@ static VkResult VKAPI_CALL gx_bind_image(VkDevice device, VkImage img, VkDeviceM
                                          VkDeviceSize off)
 {
     GxObj *o = obj_by_image(img);
+    unsigned v0 = sx.bind_violations;
 
     (void)device;
     sx.binds_img++;
@@ -800,6 +984,10 @@ static VkResult VKAPI_CALL gx_bind_image(VkDevice device, VkImage img, VkDeviceM
         gx_check_bind(1, mem, off, o->size, o->align, o->bits);
     else
         gx_check_bind(1, mem, off, 0, 0, 0xFFu);
+    if (sx.bind_violations != v0)
+        gx_note(GXE_VETO, (uintptr_t)img, mem, off, o ? o->size : 0);
+    if (sx.bind_image_result == VK_SUCCESS)
+        gx_order_bind(o, GXE_BIND_IMG, (uintptr_t)img, mem, off, o ? o->size : 0);
     return sx.bind_image_result;
 }
 
@@ -807,6 +995,7 @@ static VkResult VKAPI_CALL gx_bind_buffer(VkDevice device, VkBuffer buf, VkDevic
                                           VkDeviceSize off)
 {
     GxObj *o = obj_by_buffer(buf);
+    unsigned v0 = sx.bind_violations;
 
     (void)device;
     sx.binds_buf++;
@@ -819,6 +1008,10 @@ static VkResult VKAPI_CALL gx_bind_buffer(VkDevice device, VkBuffer buf, VkDevic
         gx_check_bind(0, mem, off, o->size, o->align, o->bits);
     else
         gx_check_bind(0, mem, off, 0, 0, 0xFFu);
+    if (sx.bind_violations != v0)
+        gx_note(GXE_VETO, (uintptr_t)buf, mem, off, o ? o->size : 0);
+    if (sx.bind_buffer_result == VK_SUCCESS)
+        gx_order_bind(o, GXE_BIND_BUF, (uintptr_t)buf, mem, off, o ? o->size : 0);
     return sx.bind_buffer_result;
 }
 
@@ -838,15 +1031,17 @@ static VkResult VKAPI_CALL gx_create_view(VkDevice device, const VkImageViewCrea
 static void VKAPI_CALL gx_destroy_image(VkDevice device, VkImage img,
                                         const VkAllocationCallbacks *alloc)
 {
-    (void)device; (void)img; (void)alloc;
+    (void)device; (void)alloc;
     sx.destroys_img++;
+    gx_order_destroy(obj_by_image(img), GXE_DESTROY_IMG, (uintptr_t)img, "image");
 }
 
 static void VKAPI_CALL gx_destroy_buffer(VkDevice device, VkBuffer buf,
                                          const VkAllocationCallbacks *alloc)
 {
-    (void)device; (void)buf; (void)alloc;
+    (void)device; (void)alloc;
     sx.destroys_buf++;
+    gx_order_destroy(obj_by_buffer(buf), GXE_DESTROY_BUF, (uintptr_t)buf, "buffer");
 }
 
 static void VKAPI_CALL gx_destroy_view(VkDevice device, VkImageView view,
@@ -854,6 +1049,7 @@ static void VKAPI_CALL gx_destroy_view(VkDevice device, VkImageView view,
 {
     (void)device; (void)view; (void)alloc;
     sx.destroys_view++;
+    gx_note(GXE_DESTROY_VIEW, (uintptr_t)view, VK_NULL_HANDLE, 0, 0);
 }
 
 /* The allocator resolves its optional entry points through vkGetDeviceProcAddr. The fixture
@@ -980,6 +1176,17 @@ static void note(const char *fmt, ...)
     fflush(stdout);
 }
 
+/* The ordering assertion: every object the stubs saw successfully bound to a range was
+ * destroyed while that range was still live (and no range was handed to a new object while an
+ * object that never got destroyed still named it). Non-tautological: swapping an object's
+ * `vkDestroy*` and its range's release in a fail path makes the destroy stub see the range
+ * already free, and this check goes red. */
+static void check_destroy_order(const char *what)
+{
+    check(g_order_bad == 0, what, "%u violation(s)%s%s", g_order_bad,
+          g_order_bad ? ", first: " : "", g_order_bad ? g_order_why : "");
+}
+
 /* ── The world ───────────────────────────────────────────────────────────────────────── */
 
 static void gate_world(void)
@@ -999,6 +1206,8 @@ static void gate_world(void)
     g_nobj = 0;
     g_nlive = 0;
     g_nledger = 0;
+    g_nevents = 0;                         /* the ordering log is per world; g_order_bad and
+                                            * g_order_why accumulate over the whole run */
 
     g.dev = (VkDevice)hnew();
     g.queue = (VkQueue)hnew();
@@ -2092,6 +2301,28 @@ static void prop5(void)
 
 /* ── 6. delayed reuse ────────────────────────────────────────────────────────────────── */
 
+static void clear_latch(void)
+{
+    /* The fixture's own scenario, not production's: a latched failure would otherwise stop
+     * the next take in a gate that is deliberately driving failures. */
+#if VB_GATE_HAS_FAILED_LATCH
+    g.failed = 0;
+#endif
+    g.ok = 1;
+}
+
+/* Close the recording, empty the ring and let the pool collect: the production drain path
+ * (vb_garbage_drain) destroys what the discard path queued and folds what was parked, and
+ * vb_pool_gc retires the empty blocks beyond the retention budget. Used after every burst
+ * whose releases only wait for the ring to drain. */
+static void drain_busy(void)
+{
+    g.slots[g.cur].recording = 0;
+    g.npending = 0;
+    vb_garbage_drain();
+    vb_pool_gc();
+}
+
 static void prop6(void)
 {
     Nv2aVkMemoryStats m;
@@ -2198,16 +2429,25 @@ static void prop6(void)
     check(m.parked_lost == 0, "6: nothing was parked permanently", "parked_lost %llu",
           (unsigned long long)m.parked_lost);
 
-    /* 6c: a full park list. VB_POOL_PENDING releases can be parked; the one after them cannot
-     * be held, and the allocator's rule is that it is then never handed out again and never
-     * freed -- the one leak it may have. The fixture fills the list while a submission is
-     * pending, checks the excess range is not reusable, and checks that nothing was freed. */
+    /* 6c: the park list is BOUNDED, and a release it cannot hold is REFUSED.
+     * VB_POOL_PENDING releases can be parked while the ring is busy; the one after them must be
+     * REFUSED -- the range stays counted live in its block (`used`/`live`, or
+     * `dedicated_bytes`), receives no free range and is not handed out, nothing is freed, the
+     * refusal is counted by `parked`/`parked_lost`, and the back end latches stopped. Production
+     * reaches this refusal through a by-value `vb_garbage_free` entry, and the drain drops that
+     * copy: the retained range is what survives, not a `VbAlloc` anyone keeps. The old rule,
+     * which counted a dropped range `parked_lost` and cleared the caller's only handle, is the
+     * defect this decides. */
+    if (!VB_GATE_HAS_REFUSE_PARK)
+        check(0, "a release the park list cannot hold is refused, not dropped "
+                 "(VB_GATE_HAS_REFUSE_PARK)", "");
     gate_world();
     {
         VbAlloc r[VB_POOL_PENDING + 1];
+        VbAlloc refused, extra;
         VbBlock *bl = NULL;
-        VkDeviceSize lost_off = 0;
-        unsigned i, n = VB_POOL_PENDING + 1u;
+        VkDeviceSize refused_off = 0;
+        unsigned i, n = VB_POOL_PENDING + 1u, cleared = 0;
         int ok_take = 1;
 
         mr = mr_of(4096u, VB_POOL_ALIGN, GX_BIT_HOST);
@@ -2219,81 +2459,155 @@ static void prop6(void)
             ledger_add(&r[i]);
         }
         check(ok_take == 1, "6c: every range was taken (one block holds them all)",
-              "%u of %u, blocks %llu", i, n,
-              (unsigned long long)(i ? 1u : 0u));
+              "%u of %u", i, n);
         nv2a_vk_backend_memory_stats(&m);
         check(m.blocks == 1u && sx.allocs == 1u,
               "alloc: VB_POOL_PENDING + 1 ranges cost one block", "blocks %llu, %u call(s)",
               (unsigned long long)m.blocks, sx.allocs);
-        lost_off = r[n - 1u].off;             /* the last one is the one the list cannot hold */
+        refused_off = r[n - 1u].off;          /* the last is the one the list cannot admit */
         bl = block_of(&r[0], NULL);           /* the block, before the gives zero the VbAllocs */
-        ledger_lost(&r[n - 1u]);              /* the fixture mirrors the bounded-list rule */
         g.npending = 1;                       /* a submission is in flight: gives park */
-        for (i = 0; i < n; i++) {
+        for (i = 0; i + 1u < n; i++) {
             ledger_give(&r[i]);
             vb_mem_give(&r[i]);
+            if (r[i].mem == VK_NULL_HANDLE)
+                cleared++;
         }
+        check(cleared == (unsigned)VB_POOL_PENDING,
+              "6c: every admitted release went to the park list and cleared the caller's handle",
+              "%u of %u", cleared, (unsigned)VB_POOL_PENDING);
+        refused = r[n - 1u];
+        vb_mem_give(&r[n - 1u]);
+        /* The fixture's own oracle: only a release that CLEARED the caller's VbAlloc handed the
+         * range to nobody -- the old rule. A refusal that retains the range (leaving the
+         * VbAlloc it was handed untouched) is not a lost range. */
+        if (r[n - 1u].mem == VK_NULL_HANDLE)
+            ledger_lost(&refused);
         nv2a_vk_backend_memory_stats(&m);
         check(m.parked_peak == (uint64_t)VB_POOL_PENDING && m.parked == (uint64_t)n,
-              "6c: the park list filled to its budget and then refused the excess",
+              "6c: the park list filled to its budget and admitted no more",
               "parked %llu, peak %llu, budget %u", (unsigned long long)m.parked,
               (unsigned long long)m.parked_peak, (unsigned)VB_POOL_PENDING);
         check(m.parked_lost == 1u,
-              "6c: the range the list could not hold is counted as lost, not fabricated",
+              "6c: the refusal is counted as a capacity failure, not a fabricated leak",
               "parked_lost %llu", (unsigned long long)m.parked_lost);
-        check(sx.frees == 0u && m.blocks == 1u,
-              "6c: nothing was freed and no block was retired for it", "%u free(s), blocks %llu",
-              sx.frees, (unsigned long long)m.blocks);
-        check(m.used_bytes == ledger_sum(),
-              "6c: the lost range still counts as live bytes (it is never handed out again)",
-              "used_bytes %llu, ledger %llu", (unsigned long long)m.used_bytes,
-              (unsigned long long)ledger_sum());
-
-        /* Drain: the parked ones fold back, the lost one must not. */
-        g.npending = 0;
-        vb_pool_gc();
-        ledger_drain();
-        nv2a_vk_backend_memory_stats(&m);
-        check(m.used_bytes == 4096u && ledger_sum() == 4096u,
-              "6c: after the drain only the lost range is still live",
-              "used_bytes %llu, ledger %llu", (unsigned long long)m.used_bytes,
-              (unsigned long long)ledger_sum());
+        check(r[n - 1u].mem != VK_NULL_HANDLE && r[n - 1u].mem == refused.mem
+              && r[n - 1u].off == refused_off && r[n - 1u].size == refused.size,
+              "6c: the VbAlloc handed directly to the refusal still names its range: the refusal "
+              "touches no owner (production reaches it through a by-value entry nothing keeps)",
+              "mem %p (wanted %p), off %llu (wanted %llu)", (void *)r[n - 1u].mem,
+              (void *)refused.mem, (unsigned long long)r[n - 1u].off,
+              (unsigned long long)refused_off);
+#if VB_GATE_HAS_FAILED_LATCH
+        check(g.ok == 0 && g.failed == 1,
+              "6c: the back end latched stopped: a refused release is terminal, announced once",
+              "ok %d, failed %d", g.ok, g.failed);
+#else
+        check(0, "6c: the back end latches stopped on a refused release "
+                 "(VB_GATE_HAS_FAILED_LATCH)", "");
+#endif
+        check(sx.frees == 0u && sx.double_frees == 0,
+              "6c: nothing was freed for the refused release",
+              "%u free(s), %u double free(s)", sx.frees, sx.double_frees);
         {
             unsigned k;
             int covered = 0;
 
             for (k = 0; bl && k < bl->nfree; k++)
-                if (bl->free_list[k].off < lost_off + 4096u
-                    && lost_off < bl->free_list[k].off + bl->free_list[k].size)
+                if (bl->free_list[k].off < refused_off + 4096u
+                    && refused_off < bl->free_list[k].off + bl->free_list[k].size)
                     covered = 1;
             check(covered == 0,
-                  "6c: no free range covers the lost range: it is never reusable",
-                  "lost [%llu, %llu), nfree %u", (unsigned long long)lost_off,
-                  (unsigned long long)(lost_off + 4096u), bl ? bl->nfree : 0u);
+                  "6c: no free range covers the refused range: it is never handed out",
+                  "refused [%llu, %llu), nfree %u", (unsigned long long)refused_off,
+                  (unsigned long long)(refused_off + 4096u), bl ? bl->nfree : 0u);
         }
-        check_free_lists("6c: the block's numbers still add up with the lost range in used");
-        check(take(&mr, GX_WANT_HOST, GX_WANT_HOSTVIS, 0, &r[0]) == 1,
-              "6c: a following request still succeeds", "");
+        check(m.used_bytes == ledger_sum() && ledger_has(&refused),
+              "6c: the refused range keeps counting as live bytes",
+              "used_bytes %llu, ledger %llu", (unsigned long long)m.used_bytes,
+              (unsigned long long)ledger_sum());
+        {
+            unsigned k;
+            int lost_entry = 0;
+
+            for (k = 0; k < g_nledger; k++)
+                if (g_ledger[k].lost)
+                    lost_entry = 1;
+            check(lost_entry == 0,
+                  "6c: the ledger has NO lost entry: no range was orphaned",
+                  "%d lost entry(ies) of %u", lost_entry, g_nledger);
+        }
+        check_free_lists("6c: the block's numbers still add up with the refused range in used");
+
+        /* THE BUSY-RING CHECK, decided from the block and the ledger BEFORE any vb_pool_gc: with
+         * a submission still in flight, each of the parked ranges and the refused range is still
+         * counted live in the block and NONE of them is on a free list, and a request made now
+         * is handed none of them. (Production's vb_pool_gc returns early while stopped, so the
+         * check this replaces -- placed AFTER that call -- was satisfied by the early return and
+         * not by the busy ring; this one cannot be.) */
+        {
+            unsigned k, j, live = 0, covered = 0;
+            int handed_a_held = 0;
+
+            for (k = 0; k < g_nledger; k++) {
+                int hit = 0;
+
+                if (!bl || g_ledger[k].mem != bl->mem)
+                    continue;
+                live++;
+                for (j = 0; bl && j < bl->nfree; j++)
+                    if (bl->free_list[j].off < g_ledger[k].off + g_ledger[k].size
+                        && g_ledger[k].off < bl->free_list[j].off + bl->free_list[j].size)
+                        hit = 1;
+                if (hit)
+                    covered++;
+            }
+            check(live == (int)n && covered == 0,
+                  "6c: with the ring still busy, every parked and refused range is still live "
+                  "in the block and NONE is on a free list",
+                  "%d of %u live in the block, %d covered by a free range, nfree %u", live, n,
+                  covered, bl ? bl->nfree : 0u);
+            check(bl && bl->used == (VkDeviceSize)n * 4096u,
+                  "6c: the block's `used` still counts every parked and refused range",
+                  "used %llu, wanted %llu", bl ? (unsigned long long)bl->used : 0ull,
+                  (unsigned long long)(n * 4096u));
+
+            memset(&extra, 0, sizeof extra);
+            check(take(&mr, GX_WANT_HOST, GX_WANT_HOSTVIS, 0, &extra) == 1,
+                  "6c: a request while the ring is still busy still succeeds", "");
+            for (k = 0; k < g_nledger; k++)
+                if (g_ledger[k].mem == extra.mem && g_ledger[k].off == extra.off)
+                    handed_a_held = 1;
+            check(!handed_a_held && extra.off != refused_off,
+                  "6c: and it is handed NONE of the parked or refused ranges: they stay out "
+                  "while the ring is busy",
+                  "off %llu, refused %llu, mem %p", (unsigned long long)extra.off,
+                  (unsigned long long)refused_off, (void *)extra.mem);
+            ledger_add(&extra);
+        }
         nv2a_vk_backend_memory_stats(&m);
-        check(r[0].off != lost_off && m.reuse_hits >= 1u,
-              "6c: and it is served from the folded parked ranges, not the lost one",
-              "off %llu vs the lost %llu, reuse_hits %llu", (unsigned long long)r[0].off,
-              (unsigned long long)lost_off, (unsigned long long)m.reuse_hits);
+        check(sx.frees == 0u && m.used_bytes == ledger_sum(),
+              "6c: with the ring still busy nothing is freed and every range is still live",
+              "%u free(s), used_bytes %llu, ledger %llu", sx.frees,
+              (unsigned long long)m.used_bytes, (unsigned long long)ledger_sum());
+
+        /* The fixture's own world continues: clear the latch and drain so the next property
+         * starts clean (this is the fixture's device, not production's decision). */
+        clear_latch();
+        g.npending = 0;
+        vb_pool_gc();
+        ledger_drain();
+        nv2a_vk_backend_memory_stats(&m);
+        check(m.parked_lost == 1u && sx.frees == 0u && m.used_bytes == ledger_sum(),
+              "6c: after the fixture's drain the refusal is history and nothing leaked further",
+              "parked_lost %llu, %u free(s), used_bytes %llu, ledger %llu",
+              (unsigned long long)m.parked_lost, sx.frees,
+              (unsigned long long)m.used_bytes, (unsigned long long)ledger_sum());
     }
     verdict("6 delayed reuse", chk, bad);
 }
 
 /* ── 7. rollback on injected failures ────────────────────────────────────────────────── */
-
-static void clear_latch(void)
-{
-    /* The fixture's own scenario, not production's: a latched failure would otherwise stop
-     * the next take in a gate that is deliberately driving failures. */
-#if VB_GATE_HAS_FAILED_LATCH
-    g.failed = 0;
-#endif
-    g.ok = 1;
-}
 
 static void prop7(void)
 {
@@ -2504,10 +2818,11 @@ static void prop7(void)
     check(sx.maps_after_free == 0, "7i: nothing was mapped after a free",
           "%u map(s) after free", sx.maps_after_free);
 
-    /* 7k: the same rollback with a recording open. The range cannot go back to the free list
-     * while a recording may still read it, so it must be PARKED: it still counts as live, the
-     * next request does not get it, and only after the recording is closed and the pool has
-     * collected is it handed out again. */
+    /* 7k: the same rollback with a recording open. The image's range was NEVER referenced --
+     * the bind failed, so no recorded command can name it -- so it does not wait for the ring:
+     * it goes straight back to its block (nothing is parked) and the next request gets it while
+     * the recording is still open. That is the ownership split this gate decides: only a
+     * still-referenced release is parked. */
     gate_world();
     mr = mr_of(64u * 1024u, VB_POOL_ALIGN, GX_BIT_DEV);
     check(take(&mr, GX_WANT_DEV, 0, 1, &a) == 1, "7k: a filler range", "");
@@ -2523,28 +2838,26 @@ static void prop7(void)
     check(first_off == 64u * 1024u, "7k: the failed bind named the range after the filler",
           "offset %llu", (unsigned long long)first_off);
     nv2a_vk_backend_memory_stats(&m);
-    check(m.used_bytes == 128u * 1024u && m.parked >= 1u && m.parked_peak >= 1u,
-          "7k: the range is PARKED, not reused: it still counts as live bytes",
-          "used_bytes %llu (the filler plus the parked range), parked %llu, peak %llu",
+    check(m.used_bytes == 64u * 1024u && m.parked == 0u && m.parked_peak == 0u,
+          "7k: the never-referenced range went straight back (only the filler is live), with "
+          "nothing parked", "used_bytes %llu, parked %llu, peak %llu",
           (unsigned long long)m.used_bytes, (unsigned long long)m.parked,
           (unsigned long long)m.parked_peak);
-    check(sx.frees == 0u && m.blocks == 1u,
-          "7k: nothing was freed", "%u free(s), blocks %llu", sx.frees,
-          (unsigned long long)m.blocks);
+    check(sx.frees == 0u && m.blocks == 1u && m.parked_lost == 0u,
+          "7k: nothing was freed, no block was retired and nothing was lost",
+          "%u free(s), blocks %llu, lost %llu", sx.frees, (unsigned long long)m.blocks,
+          (unsigned long long)m.parked_lost);
     clear_latch();
     check(take(&mr, GX_WANT_DEV, 0, 1, &b) == 1, "7k: a request while the recording is open", "");
-    check(b.off != first_off,
-          "7k: it does NOT get the parked range", "off %llu vs the parked %llu",
-          (unsigned long long)b.off, (unsigned long long)first_off);
-    /* Drain: close the recording, let the pool collect, and the parked range comes back. */
+    check(b.off == first_off && b.mem == a.mem,
+          "7k: it IS the range the failed bind named -- released, not parked",
+          "off %llu (the rolled-back %llu), mem %p (the block %p)", (unsigned long long)b.off,
+          (unsigned long long)first_off, (void *)b.mem, (void *)a.mem);
+    /* Let the ring drain so nothing a source parked here could reach the next property (the
+     * fixture's two ranges stay live; their blocks are not empty). */
     g.slots[g.cur].recording = 0;
     g.npending = 0;
     vb_pool_gc();
-    check(take(&mr, GX_WANT_DEV, 0, 1, &b) == 1, "7k: a request after the drain", "");
-    check(b.off == first_off && b.mem == a.mem,
-          "7k: now it IS the parked range -- parked, then folded, then reused",
-          "off %llu (the parked %llu), mem %p (the block %p)", (unsigned long long)b.off,
-          (unsigned long long)first_off, (void *)b.mem, (void *)a.mem);
 
     /* 7j: the control: every one of these paths succeeds when nothing is injected. */
     gate_world();
@@ -2566,6 +2879,9 @@ static void prop7(void)
           "7j: control -- nothing was freed twice or mapped after a free", "%u double free(s)",
           sx.double_frees);
     (void)b;
+    check_destroy_order("7: every object bound to a range was destroyed before that range was "
+                        "released, and no range was handed out while its old owner still named "
+                        "it");
     verdict("7 rollback on injected failures", chk, bad);
 }
 
@@ -2818,6 +3134,454 @@ static void prop9(void)
     verdict("9 retirement and the retention policy", chk, bad);
 }
 
+/* ── 10. a burst of rollbacks through the production callers ──────────────────────────── */
+
+/* One burst of 65 failed image binds through the production `vb_image_create`, while the ring
+ * is busy (`pending` selects a pending submission, otherwise an open recording), all pooled
+ * (`requires_ded == 0`: the bind-failure rollback) or all required-dedicated. Every check
+ * names the scenario with `tag`. */
+static void bind_burst(const char *tag, int pending, int requires_ded)
+{
+    Nv2aVkMemoryStats m;
+    VbImage im;
+    unsigned i, n = 65u, dimg0;
+    char what[160];
+
+    gate_world();
+    if (!requires_ded) {
+        /* A carrier image sizes ONE block big enough for the whole burst: a 2 MiB requirement
+         * makes an 8 MiB block, and 65 x 64 KiB ranges fit in it. It is released before the
+         * recording opens, so the burst's ranges all come out of that one block. */
+        VbImage carrier;
+
+        spec(2u << 20, VB_POOL_ALIGN, GX_BIT_DEV, 0, 0);
+        if (vb_image_create(&carrier, 16u, 16u, VK_FORMAT_B8G8R8A8_UNORM,
+                            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                            VK_IMAGE_ASPECT_COLOR_BIT) != 1) {
+            snprintf(what, sizeof what, "%s: the carrier image was created", tag);
+            check(0, what, "");
+            return;
+        }
+        vb_image_discard(&carrier);
+    }
+    dimg0 = sx.destroys_img;
+    sx.bind_image_result = VK_ERROR_OUT_OF_DEVICE_MEMORY;  /* every bind fails: a stub result */
+    if (pending)
+        g.npending = 1;
+    else
+        g.slots[g.cur].recording = 1;
+    for (i = 0; i < n; i++) {
+        spec(64u * 1024u, VB_POOL_ALIGN, GX_BIT_DEV, requires_ded, 0);
+        if (vb_image_create(&im, 64u, 64u, VK_FORMAT_B8G8R8A8_UNORM,
+                            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                            VK_IMAGE_ASPECT_COLOR_BIT) != 0)
+            break;
+    }
+    snprintf(what, sizeof what, "%s: all %u failed binds rolled back", tag, n);
+    check(i == n, what, "%u of %u rolled back", i, n);
+
+    nv2a_vk_backend_memory_stats(&m);
+    if (requires_ded) {
+        snprintf(what, sizeof what, "%s: %u dedicated allocations, all counted", tag, n);
+        check(m.dedicated == n && sx.allocs == n, what, "dedicated %llu, %u alloc(s)",
+              (unsigned long long)m.dedicated, sx.allocs);
+    } else {
+        snprintf(what, sizeof what, "alloc %s: the burst cost one block and one allocation",
+                 tag);
+        check(sx.allocs == 1u && m.blocks == 1u, what, "%u alloc(s), blocks %llu", sx.allocs,
+              (unsigned long long)m.blocks);
+    }
+    snprintf(what, sizeof what, "%s: nothing never-referenced is parked or lost", tag);
+    check(m.parked == 0u && m.parked_peak == 0u && m.parked_lost == 0u, what,
+          "parked %llu, peak %llu, lost %llu", (unsigned long long)m.parked,
+          (unsigned long long)m.parked_peak, (unsigned long long)m.parked_lost);
+    snprintf(what, sizeof what, "bytes %s: no rolled-back range is still live", tag);
+    check(m.used_bytes == 0u, what, "used_bytes %llu after %u rollback(s)",
+          (unsigned long long)m.used_bytes, n);
+    if (requires_ded) {
+        snprintf(what, sizeof what,
+                 "%s: every dedicated allocation was freed at once, none twice", tag);
+        check(sx.frees == n && sx.double_frees == 0, what,
+              "%u free(s) for %u allocation(s), %u double free(s)", sx.frees, n,
+              sx.double_frees);
+    } else {
+        snprintf(what, sizeof what,
+                 "%s: no vkFreeMemory for a range that is not an allocation", tag);
+        check(sx.frees == 0u && sx.double_frees == 0, what, "%u free(s), %u double free(s)",
+              sx.frees, sx.double_frees);
+        check_free_lists("10: the block's free ranges still add up after the burst");
+    }
+
+    drain_busy();
+    nv2a_vk_backend_memory_stats(&m);
+    snprintf(what, sizeof what, "%s: the %u half-made images were discarded at the drain", tag,
+             n);
+    check(sx.destroys_img == dimg0 + n, what, "%u destroy(s) for %u images",
+          sx.destroys_img - dimg0, n);
+    snprintf(what, sizeof what, "%s: after the drain nothing is live, parked or lost", tag);
+    check(m.used_bytes == 0u && m.parked == 0u && m.parked_peak == 0u && m.parked_lost == 0u,
+          what, "used_bytes %llu, parked %llu, peak %llu, lost %llu",
+          (unsigned long long)m.used_bytes, (unsigned long long)m.parked,
+          (unsigned long long)m.parked_peak, (unsigned long long)m.parked_lost);
+    snprintf(what, sizeof what, "%s: allocations and frees balance, none twice", tag);
+    check(m.alloc_calls == (uint64_t)sx.frees && sx.double_frees == 0, what,
+          "%llu alloc_call(s), %u free(s), %u double free(s)",
+          (unsigned long long)m.alloc_calls, sx.frees, sx.double_frees);
+    if (requires_ded) {
+        snprintf(what, sizeof what, "%s: every dedicated allocation was released", tag);
+        check(m.blocks == 0u && sx.frees == n, what, "blocks %llu, %u free(s) for %u "
+              "dedicated allocations", (unsigned long long)m.blocks, sx.frees, n);
+    } else {
+        snprintf(what, sizeof what,
+                 "alloc %s: the empty over-budget block retired -- nothing pins a range", tag);
+        check(m.blocks == 1u && m.blocks_retired == 1u && sx.frees == 1u
+              && pools_reserved() == 0u, what,
+              "blocks %llu (created), retired %llu, %u free(s), reserved %llu",
+              (unsigned long long)m.blocks, (unsigned long long)m.blocks_retired, sx.frees,
+              (unsigned long long)pools_reserved());
+    }
+}
+
+static void prop10(void)
+{
+    Nv2aVkMemoryStats m;
+    VbImage carrier, ims[65];
+    VkBuffer buf = VK_NULL_HANDLE;
+    VbAlloc mem;
+    uint8_t *ptr = NULL;
+    unsigned i, n = 0;
+    int chk = g_checks, bad = g_check_failures;
+
+    section("10. a burst of rollbacks through the production callers is bounded and loses "
+            "nothing");
+    note("every VkResult below is a stub's return value: no device is lost and no allocation "
+         "of this process ever failed");
+
+    /* 10a/10b/10c: 65 failed image binds through vb_image_create while a recording is open and
+     * while a submission is pending -- pooled (one 8 MiB block, one vkAllocateMemory, 64 KiB
+     * ranges) and required-dedicated (one allocation per failure). */
+    bind_burst("10a (pooled, recording)", 0, 0);
+    bind_burst("10b (pooled, pending)", 1, 0);
+    bind_burst("10c (dedicated, recording)", 0, 1);
+
+    /* 10d: 65 failed BINDS through vb_device_buffer while a recording is open. */
+    gate_world();
+    spec(4096u, VB_POOL_ALIGN, GX_BIT_DEV, 0, 0);
+    sx.bind_buffer_result = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+    g.slots[g.cur].recording = 1;
+    {
+        unsigned failed = 0;
+        VbAlloc bmem;
+
+        memset(&bmem, 0, sizeof bmem);
+        for (i = 0; i < 65u; i++) {
+            buf = VK_NULL_HANDLE;
+            if (vb_device_buffer(4096u, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, &buf, &bmem) == 0
+                && buf == VK_NULL_HANDLE && bmem.mem == VK_NULL_HANDLE)
+                failed++;
+        }
+        check(failed == 65u, "10d: every device-buffer bind failure rolled back cleanly (no "
+              "buffer, no memory handed back)", "%u of 65", failed);
+    }
+    nv2a_vk_backend_memory_stats(&m);
+    check(sx.allocs == 1u && m.blocks == 1u,
+          "alloc 10d: the device-buffer burst cost one block and one allocation",
+          "%u alloc(s), blocks %llu", sx.allocs, (unsigned long long)m.blocks);
+    check(m.parked == 0u && m.parked_peak == 0u && m.parked_lost == 0u,
+          "10d: no device-buffer release was parked or lost", "parked %llu, peak %llu, "
+          "lost %llu", (unsigned long long)m.parked, (unsigned long long)m.parked_peak,
+          (unsigned long long)m.parked_lost);
+    check(m.used_bytes == 0u && sx.frees == 0u,
+          "bytes 10d: every rolled-back 4 KiB range is back in the block",
+          "used_bytes %llu, %u free(s)", (unsigned long long)m.used_bytes, sx.frees);
+    check(sx.destroys_buf == 65u && sx.double_frees == 0,
+          "10d: every half-made buffer was destroyed exactly once",
+          "%u destroy(s), %u double free(s)", sx.destroys_buf, sx.double_frees);
+    check_free_lists("10d: the block's free ranges still add up");
+    drain_busy();
+    nv2a_vk_backend_memory_stats(&m);
+    check(m.used_bytes == 0u && m.parked_lost == 0u && sx.frees == 0u && m.dedicated == 0u,
+          "10d: after the drain the kept block holds nothing and nothing was freed",
+          "used_bytes %llu, lost %llu, %u free(s)", (unsigned long long)m.used_bytes,
+          (unsigned long long)m.parked_lost, sx.frees);
+
+    /* 10e: 65 failed MAPS through vb_host_buffer while a recording is open. A request whose
+     * only admissible type is host-visible and NOT coherent cannot be pooled (no flush window
+     * over it could be bounded), so it is dedicated: one allocation per failure, and each must
+     * be released exactly once. */
+    gate_world();
+    sx.map_result = VK_ERROR_MEMORY_MAP_FAILED;
+    g.slots[g.cur].recording = 1;
+    {
+        unsigned failed = 0;
+
+        for (i = 0; i < 65u; i++) {
+            spec(4096u, VB_POOL_ALIGN, GX_BIT_NC, 0, 0);
+            buf = VK_NULL_HANDLE;
+            ptr = (uint8_t *)0x1;
+            if (vb_host_buffer(4096u, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 0, &buf, &mem, &ptr)
+                    == 0 && buf == VK_NULL_HANDLE && mem.mem == VK_NULL_HANDLE && ptr == NULL)
+                failed++;
+        }
+        check(failed == 65u, "10e: every host-buffer map failure rolled back cleanly",
+              "%u of 65", failed);
+    }
+    nv2a_vk_backend_memory_stats(&m);
+    check(sx.allocs == 65u && m.dedicated == 65u && m.dedicated_nohost == 65u,
+          "10e: the burst is 65 dedicated (no-coherent-host) allocations",
+          "%u alloc(s), dedicated %llu, nohost %llu", sx.allocs,
+          (unsigned long long)m.dedicated, (unsigned long long)m.dedicated_nohost);
+    check(m.parked == 0u && m.parked_peak == 0u && m.parked_lost == 0u && m.used_bytes == 0u,
+          "bytes 10e: a failed map's dedicated memory is released, not parked or lost",
+          "parked %llu, peak %llu, lost %llu, used_bytes %llu", (unsigned long long)m.parked,
+          (unsigned long long)m.parked_peak, (unsigned long long)m.parked_lost,
+          (unsigned long long)m.used_bytes);
+    check(sx.frees == 65u && sx.double_frees == 0 && sx.maps == 0u,
+          "10e: exact alloc/free balance for the map rollbacks",
+          "%u free(s) for %u allocation(s), %u double free(s), %u map(s) succeeded", sx.frees,
+          sx.allocs, sx.double_frees, sx.maps);
+    check(sx.destroys_buf == 65u && sx.maps_after_free == 0,
+          "10e: every half-made buffer was destroyed and nothing was mapped after a free",
+          "%u destroy(s), %u map(s) after free", sx.destroys_buf, sx.maps_after_free);
+    drain_busy();
+    nv2a_vk_backend_memory_stats(&m);
+    check(m.used_bytes == 0u && sx.frees == 65u && m.dedicated_bytes == 0u,
+          "10e: after the drain nothing is live and every dedicated byte was given back",
+          "used_bytes %llu, %u free(s), dedicated_bytes %llu",
+          (unsigned long long)m.used_bytes, sx.frees, (unsigned long long)m.dedicated_bytes);
+
+    /* 10f: the successful control of the image path: 65 resources created in one recording and
+     * destroyed through the production discard path, with nothing injected. */
+    gate_world();
+    spec(2u << 20, VB_POOL_ALIGN, GX_BIT_DEV, 0, 0);
+    check(vb_image_create(&carrier, 16u, 16u, VK_FORMAT_B8G8R8A8_UNORM,
+                          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                          VK_IMAGE_ASPECT_COLOR_BIT) == 1,
+          "10f: control -- the carrier image succeeds", "");
+    vb_image_discard(&carrier);
+    g.slots[g.cur].recording = 1;
+    for (i = 0; i < 65u; i++) {
+        spec(64u * 1024u, VB_POOL_ALIGN, GX_BIT_DEV, 0, 0);
+        if (vb_image_create(&ims[n], 64u, 64u, VK_FORMAT_B8G8R8A8_UNORM,
+                            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                            VK_IMAGE_ASPECT_COLOR_BIT) != 1)
+            break;
+        n++;
+    }
+    check(n == 65u, "10f: control -- 65 successful image creations in one recording",
+          "%u of 65", n);
+    nv2a_vk_backend_memory_stats(&m);
+    check(sx.allocs == 1u && m.blocks == 1u && m.used_bytes == 65ull * 64ull * 1024ull
+          && m.parked == 0u,
+          "10f: 65 live ranges in the carrier's one block, with nothing parked",
+          "%u alloc(s), blocks %llu, used_bytes %llu, parked %llu", sx.allocs,
+          (unsigned long long)m.blocks, (unsigned long long)m.used_bytes,
+          (unsigned long long)m.parked);
+    for (i = 0; i < n; i++)
+        vb_image_discard(&ims[i]);     /* the ordinary discard path, while recording */
+    check(sx.frees == 0u,
+          "10f: discarding while recording frees no driver allocation yet", "%u free(s)",
+          sx.frees);
+    drain_busy();
+    nv2a_vk_backend_memory_stats(&m);
+    check(m.used_bytes == 0u && m.blocks_retired == 1u && sx.frees == 1u
+          && m.parked_lost == 0u && sx.double_frees == 0,
+          "10f: every range was released and the empty over-budget block retired once",
+          "used_bytes %llu, retired %llu, %u free(s), lost %llu",
+          (unsigned long long)m.used_bytes, (unsigned long long)m.blocks_retired, sx.frees,
+          (unsigned long long)m.parked_lost);
+    check_free_lists("10f: the retired pool holds no orphaned free range");
+
+    /* 10g: the host-buffer and device-buffer controls: usable, byte-intact resources, then
+     * retired through the production discard path. */
+    gate_world();
+    {
+        VkBuffer hbuf = VK_NULL_HANDLE, dbuf = VK_NULL_HANDLE;
+        VbAlloc hmem, dmem;
+        uint8_t *hptr = NULL;
+        uint64_t h0, h1;
+        VbGarbage e;
+
+        spec(4096u, VB_POOL_ALIGN, GX_BIT_HOST, 0, 0);
+        memset(&hmem, 0, sizeof hmem);
+        if (vb_host_buffer(4096u, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 0, &hbuf, &hmem, &hptr)
+                == 1 && hbuf != VK_NULL_HANDLE && hptr && hmem.mem != VK_NULL_HANDLE) {
+            fill_bytes(hptr, 4096u, 0x5A5Au);
+            h0 = hash_bytes(hptr, 4096u);
+            h1 = hash_bytes(hptr, 4096u);
+            check(h0 == h1,
+                  "10g: control -- the mapped host range is byte-intact as it is written",
+                  "checksum 0x%016llX -> 0x%016llX", (unsigned long long)h0,
+                  (unsigned long long)h1);
+            memset(&e, 0, sizeof e);
+            e.buf = hbuf;
+            e.mem = hmem;
+            vb_discard(e);
+        } else {
+            check(0, "10g: control -- the host buffer is created, bound and mapped", "");
+        }
+        spec(4096u, VB_POOL_ALIGN, GX_BIT_DEV, 0, 0);
+        memset(&dmem, 0, sizeof dmem);
+        if (vb_device_buffer(4096u, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, &dbuf, &dmem) == 1
+            && dbuf != VK_NULL_HANDLE && dmem.mem != VK_NULL_HANDLE) {
+            memset(&e, 0, sizeof e);
+            e.buf = dbuf;
+            e.mem = dmem;
+            vb_discard(e);
+        } else {
+            check(0, "10g: control -- the device buffer is created and bound", "");
+        }
+        nv2a_vk_backend_memory_stats(&m);
+        check(m.parked == 0u && sx.double_frees == 0,
+              "10g: control -- nothing is parked and nothing is freed twice",
+              "parked %llu, %u double free(s)", (unsigned long long)m.parked, sx.double_frees);
+        drain_busy();
+        nv2a_vk_backend_memory_stats(&m);
+        check(m.used_bytes == 0u && sx.maps_after_free == 0,
+              "10g: control -- after the drain nothing is live and nothing was mapped after a "
+              "free", "used_bytes %llu, %u map(s) after free",
+              (unsigned long long)m.used_bytes, sx.maps_after_free);
+    }
+    /* 10h: the FOURTH converted call site -- vb_readback_reserve's failed pair. One reserve
+     * makes TWO buffers in its own call: the HOST one (vb_host_buffer: bound and mapped) and
+     * the DEVICE one (vb_device_buffer). While a recording is open the device half is made to
+     * fail and the pair is abandoned: the host buffer is destroyed and its range released AT
+     * ONCE, never parked, so 65 failed reserves in a row cannot fill the bounded park list.
+     * (The pre-repair source sends that release through the conservative path: it parks the
+     * range, overflows the list and drops the 65th.)
+     *
+     * A pair a PREVIOUS successful reserve holds must be untouched: not freed, not replaced and
+     * not on any free list -- and once it is retired through the production discard path and
+     * the ring has drained, nothing of any of this is live.
+     *
+     * The injection that fails the device half is an ALLOCATION-count injection: the fixture's
+     * DEFAULT spec carries the device buffer's requirement (the host buffer consumes the one
+     * `spec()` sets), so g_spec_default.bits = GX_BIT_HOST puts the device half in the same
+     * host-visible pool as its host half, and alloc_fail_at makes vkAllocateMemory fail from
+     * that half's pooled-block attempt on, including its once-permitted dedicated fallback. The
+     * HOST half of each reserve is made, bound and mapped first and is never the one that
+     * fails: the checks below require exactly one bind per iteration, 65 recorded fallbacks and
+     * 65 zero-returning calls. */
+    {
+        VbAlloc rb0, pk0;
+        VkDeviceSize cap0;
+        VbGarbage e;
+        unsigned failed = 0, dr0;
+
+        gate_world();
+        g.slots[g.cur].recording = 1;                  /* the ring is busy: a release parks */
+        g_spec_default.bits = GX_BIT_DEV;              /* the device half may take type 0 */
+        spec(0u, VB_POOL_ALIGN, GX_BIT_HOST, 0, 0);    /* the host half wants a host type */
+        check(vb_readback_reserve((1u << 20) + 4096u) == 1,
+              "10h: control -- a reserve with nothing injected makes its pair", "");
+        rb0 = g.rb_mem;
+        pk0 = g.pack_mem;
+        cap0 = g.rb_cap;
+        nv2a_vk_backend_memory_stats(&m);
+        check(g.rb_buf != VK_NULL_HANDLE && g.pack_buf != VK_NULL_HANDLE
+              && rb0.mem != VK_NULL_HANDLE && pk0.mem != VK_NULL_HANDLE
+              && m.used_bytes == (uint64_t)(rb0.size + pk0.size),
+              "10h: the pair is real and both of its ranges are live",
+              "rb %p/%p, pack %p/%p, used_bytes %llu for %llu + %llu", (void *)g.rb_buf,
+              (void *)rb0.mem, (void *)g.pack_buf, (void *)pk0.mem,
+              (unsigned long long)m.used_bytes, (unsigned long long)rb0.size,
+              (unsigned long long)pk0.size);
+        dr0 = sx.destroys_buf;
+
+        /* Every following reserve: the stub makes the device half's allocation fail -- both the
+         * pooled block and its once-permitted dedicated fallback -- so vb_mem_take returns 0,
+         * vb_device_buffer returns 0 and the reserve must abandon the pair. The host half must
+         * NOT be the one that fails: the checks below require exactly one bind per iteration
+         * (the host buffer's) and 65 zero-returning calls. */
+        g_spec_default.bits = GX_BIT_HOST;   /* the device half lands in the host-visible pool */
+        sx.alloc_fail_at = 3u;               /* calls 1 and 2 are the control pair's two blocks */
+        sx.alloc_fail_times = 1000u;
+        for (i = 0; i < 65u; i++) {
+            spec(0u, VB_POOL_ALIGN, GX_BIT_HOST, 0, 0);
+            if (vb_readback_reserve((2u << 20) + 4096u) == 0)
+                failed++;
+        }
+        check(failed == 65u, "10h: every reserve whose device half fails returns 0",
+              "%u of 65", failed);
+
+        nv2a_vk_backend_memory_stats(&m);
+        check(m.parked == 0u && m.parked_peak == 0u && m.parked_lost == 0u,
+              "10h: nothing a failed reserve released was parked or lost -- it went back at "
+              "once, past the park budget", "parked %llu, peak %llu, lost %llu",
+              (unsigned long long)m.parked, (unsigned long long)m.parked_peak,
+              (unsigned long long)m.parked_lost);
+        check(sx.frees == 0u && sx.double_frees == 0,
+              "10h: nothing was freed early and nothing was freed twice", "%u free(s), %u "
+              "double free(s)", sx.frees, sx.double_frees);
+        check(g.rb_buf != VK_NULL_HANDLE && g.pack_buf != VK_NULL_HANDLE
+              && g.rb_mem.mem == rb0.mem && g.rb_mem.off == rb0.off
+              && g.pack_mem.mem == pk0.mem && g.pack_mem.off == pk0.off && g.rb_cap == cap0,
+              "10h: the previous pair is untouched: not freed, not replaced, not shrunk",
+              "rb %p/%p (%llu), pack %p/%p (%llu), cap %llu (was %llu)",
+              (void *)g.rb_buf, (void *)rb0.mem, (unsigned long long)rb0.off,
+              (void *)g.pack_buf, (void *)pk0.mem, (unsigned long long)pk0.off,
+              (unsigned long long)g.rb_cap, (unsigned long long)cap0);
+        check(!gx_range_released(rb0.mem, rb0.off, rb0.size)
+              && !gx_range_released(pk0.mem, pk0.off, pk0.size)
+              && m.used_bytes == (uint64_t)(rb0.size + pk0.size),
+              "10h: the previous pair's ranges are still live and on no free list",
+              "used_bytes %llu for %llu + %llu, rb free %d, pack free %d",
+              (unsigned long long)m.used_bytes, (unsigned long long)rb0.size,
+              (unsigned long long)pk0.size,
+              gx_range_released(rb0.mem, rb0.off, rb0.size),
+              gx_range_released(pk0.mem, pk0.off, pk0.size));
+        check(sx.destroys_buf == dr0 + 2u * 65u,
+              "10h: both half-made buffers of every failed reserve were destroyed (the device "
+              "one in its own maker, the host one by the reserve's failure path)",
+              "%u destroy(s) for 65 pairs", sx.destroys_buf - dr0);
+        check(sx.creates_buf == sx.destroys_buf + 2u,
+              "10h: exactly the previous pair's two buffers are still alive",
+              "%u created, %u destroyed", sx.creates_buf, sx.destroys_buf);
+        check(m.fallbacks == 65u && sx.binds_buf == 67u,
+              "10h: it is the DEVICE half that failed: every reserve recorded its fallback, and "
+              "only the HOST buffer of each pair was bound",
+              "fallbacks %llu, %u bind(s) for the control pair plus 65 hosts",
+              (unsigned long long)m.fallbacks, sx.binds_buf);
+
+        /* Retire the previous pair through the production discard path and drain. */
+        g.slots[g.cur].recording = 0;
+        memset(&e, 0, sizeof e);
+        e.buf = g.rb_buf; e.mem = g.rb_mem;
+        vb_discard(e);
+        memset(&e, 0, sizeof e);
+        e.buf = g.pack_buf; e.mem = g.pack_mem;
+        vb_discard(e);
+        g.rb_buf = VK_NULL_HANDLE;
+        g.pack_buf = VK_NULL_HANDLE;
+        memset(&g.rb_mem, 0, sizeof g.rb_mem);
+        memset(&g.pack_mem, 0, sizeof g.pack_mem);
+        g.rb_cap = 0;
+        drain_busy();
+        nv2a_vk_backend_memory_stats(&m);
+        check(m.used_bytes == 0u && m.parked == 0u && m.parked_peak == 0u
+              && m.parked_lost == 0u && sx.double_frees == 0,
+              "10h: after the safe drain nothing is live, parked or lost",
+              "used_bytes %llu, parked %llu, peak %llu, lost %llu, %u double free(s)",
+              (unsigned long long)m.used_bytes, (unsigned long long)m.parked,
+              (unsigned long long)m.parked_peak, (unsigned long long)m.parked_lost,
+              sx.double_frees);
+        check((uint64_t)sx.allocs - m.alloc_failures
+              == (uint64_t)sx.frees + (m.blocks - m.blocks_retired),
+              "10h: allocations and frees balance -- every successful allocation is a live "
+              "block or was freed exactly once",
+              "%u alloc(s) - %llu failure(s) vs %u free(s) + %llu live block(s) "
+              "(%llu made, %llu retired)", sx.allocs, (unsigned long long)m.alloc_failures,
+              sx.frees, (unsigned long long)(m.blocks - m.blocks_retired),
+              (unsigned long long)m.blocks, (unsigned long long)m.blocks_retired);
+    }
+
+    check_destroy_order("10: every object bound to a range was destroyed before that range was "
+                        "released, and no range was handed out while its old owner still named "
+                        "it");
+
+    verdict("10 a bounded rollback burst", chk, bad);
+}
+
 static uint8_t *g_guest;
 
 ptrdiff_t xbox_GetMemoryOffset(void)
@@ -2902,6 +3666,7 @@ int main(void)
     prop7();
     prop8();
     prop9();
+    prop10();
 
     for (i = 0; i < GX_MAX_MEM; i++)
         free(g_mem[i].arena);
@@ -2920,7 +3685,11 @@ int main(void)
            "vkAllocateMemory calls, memory types and kinds never mix, released ranges are "
            "reused and coalesced with honest counters, dedicated requests carry their pNext, "
            "a range a recording or a pending submission may still read is never handed out, "
-           "every injected failure rolls back cleanly, and the flush windows are exact\n",
+           "the park list is bounded and a release it cannot admit is refused -- the range "
+           "stays counted live in its block and reaches no free list, so nothing is freed and "
+           "nothing is handed out -- every injected failure rolls back cleanly (a burst of "
+           "more than VB_POOL_PENDING of them loses nothing), and the flush windows are "
+           "exact\n",
            g_props, g_checks);
     return 0;
 }

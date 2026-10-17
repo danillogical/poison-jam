@@ -5143,5 +5143,209 @@ reset for an unchanged defect. Windows unsigned audited clean FF pushes remain t
 
 PUSHED_TO: origin / BRANCH: master / COMMIT: 59d0e33c9ed10ee7342dd9247dbfe01a1eddb15c / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: successful unsigned clean fast-forward fd09501..59d0e33; three outgoing documentation blobs audited in the game object store, largest 404195 bytes, zero secret hits, only plan/TR/ledger paths. Toolkit ecbaca4 is unchanged, clean and synchronized, so no toolkit commit or push was needed for this records-only review.
 
+### §31.42 N4.4 repair: release ownership survives rollback and a full park list (2026-10-17)
 
+**Starting state and the record correction.** This operation is the ONE renewed repair allowance
+of `run_0mvcw0nza216599429433b15c`, admitted after the independent review in §31.41. Correction
+carried from that review: the operation the report of the rejected packet should have named is
+`op_0mvcms9rr136893e495f94ed6` (generation 7, turn 3 of `run_0mvccvfhh6a016c316b6eca67`), NOT the
+preceding N4.3 operation; the reviewer's STOP for it is `dec_0mvcvzxpza270765af4ddb44d`. Last
+independently accepted checkpoint remains N4.3 (toolkit `5af1c48` / game records `9fd8e05`).
+Starting trees: toolkit `ecbaca4`, game `02945a50b206a8ea67c74b5bf85441a0d9689c01`, both fetched
+clean and synchronized. The implementation report in §31.40 stays historical: its statement that
+"an over-budget release is abandoned and never reused" (line 4894) describes the code the review
+rejected, and §31.41 plus this section supersede it.
+
+**The defect (§31.41) and what the repair changed.** `vb_image_create` gave its allocation back
+through `vb_mem_give` after a failed `vkBindImageMemory`. While a recording was open that call
+parked the release in the 64-entry `s_pool_pending[]`; the excess branch incremented `parked_lost`
+and cleared the caller's only `VbAlloc`, so the range was never reusable and never freed (65
+failed binds leaked 65 536 bytes pooled, or one `VkDeviceMemory` handle dedicated). The repair is
+a bounded ownership split, not a bigger list:
+
+- **A never-referenced release never parks.** New `vb_mem_give_now(VbAlloc *)` releases at once for
+  an allocation nothing recorded or in flight can name: a failed bind (the object is unbound by
+  definition) and, after the object is destroyed first, a failed map on the buffer or image that
+  call had just made; plus the staging pair `vb_readback_reserve` builds and abandons inside its
+  own call (`vb_garbage_free_now`, a thin wrapper over the new `vb_garbage_destroy`). A burst of
+  rollbacks therefore cannot fill the bounded list, and the range is reusable immediately.
+- **Destroy before release, everywhere.** `vb_host_buffer`/`vb_device_buffer` now destroy the
+  possibly-bound buffer BEFORE the range goes back (the pre-repair order released a bound range
+  first), and the deferred-destroy queue's own order (framebuffer, pipeline, view, image, buffer,
+  then the range) is now explicit and asserted.
+- **A full park list refuses instead of dropping.** `vb_mem_give`'s excess branch counts `parked`
+  and `parked_lost`, reports through `vb_fail`, then stops the back end write-once through the
+  existing `vb_stop` and returns WITHOUT touching the caller's `VbAlloc`. The range keeps being
+  counted live in its block (`used`/`live`, or `dedicated_bytes`) and reaches no free list:
+  nothing is freed, nothing is handed out, nothing can be reused early. Production reaches this
+  branch only through `vb_garbage_free`'s by-value entry (dropped by the drain) or `vb_stream`'s
+  dead-recording branch, so it is a bounded safety net, not an observed behaviour: with every
+  busy-time release now never-referenced, at most one entry can ever park in a sound process.
+- **Counters and documentation.** `released` now counts ADMITTED releases only (a refusal is
+  counted by `parked`/`parked_lost` alone); `parked_lost` is documented as a capacity refusal
+  that retains the range's ownership and stops the back end, never as a silently abandoned range;
+  no counter, struct field, constant or signature was renamed, added or reordered.
+
+**Identities (frozen repair).** Toolkit `src/video/nv2a_vk_backend.c`
+`197bf83ecea4c9e8cb1f2f2a8208c603dd3088a36418a9cdabed543e78b00f0f` (pre-repair
+`9e650e633374679aae4186bb9b8b825db58b5ca1ad2255807b74f315c0bea96f`), `nv2a_vk_backend.h`
+`3b8081fdf88cf9b438e3f443e236926497d2ab4a3f079d869aaf4a97237a5be1`; game
+`tests/test_vk_suballoc_gate.c` `9ad4745439bae7f3415eb5f327eb3e7149347fa0f8e1b119ae62172961bb6ad9`,
+`scripts/vk-suballoc-gate.py` `00bde834d02d006d73fa724a4369ec3f7faf6b2a51d712c4c6d606c3f5cbe05f`,
+`tests/test_gpu_backend_parity_vk.c` `7ddd6eb0f1129990fe1f100dc78ac6e29d9f0c1ce72954da937bcb765e3e2fd2`,
+`tests/test_vk_ring_fault_gate.c` `984da5e45be729f97bf38c2ca44506a2148a75ef33b01cdb4a08b79e94a71d60`;
+executable `57f69c7ff90d9cff0ee85249c072720ab8e346be76b79ffb255f12fb7ec107ea`. Guarded build
+(`python -X utf8 scripts/build-jsrf.py`, 70.04 s, success): the same retail corpus, schema 2,
+128 programs / 126 distinct, tool `375c7fb901109bfd51eecacda919e115db942aeb65e4fb9efbda6c7bb9aefb0e`,
+nothing regenerated and nothing compiled at run time.
+
+**The deciding regression, on the production bodies.** The gate compiles the toolkit's back end
+verbatim with controlled Vulkan stubs. It now drives the REAL callers: `vb_image_create` (pooled
+and required-dedicated, recording open and submission pending), `vb_device_buffer` bind failures,
+`vb_host_buffer` map failures and `vb_readback_reserve`'s failed pair, each more than
+`VB_POOL_PENDING` times; property 6c was replaced by the refusal contract (the range stays live in
+the block, on no free list, `used_bytes` keeps it, the back end latched stopped, no lost ledger
+entry) and its busy-ring decision is now taken from the block and the ledger BEFORE any
+`vb_pool_gc`, so production's stopped early-return cannot satisfy it; property 7k now decides that
+a never-referenced failed bind is released, not parked; a stub event log asserts every
+destroy-before-release. Verdicts: pre-repair `ecbaca4` source (`9e650e63…`) BUILDS, RUNS and exits
+1 — `FAIL: 3 of 10 properties failed (35 of 336 checks failed)`, including the refusal's
+keep-ownership check, the stop latch, the lost ledger entry, 10a/10b `parked 65, peak 64, lost 1`
+with `used_bytes 65536` after the drain, 10c `65 allocs / 64 frees`, 10d/10e and 10h; repaired
+source exits 0 — `PASS: vk_suballoc_gate: 10 properties, 335 checks`. The probe reports 70 of 70
+required anchors and every marker present against BOTH sources (exit 0), so the "old source fails"
+verdict is behavioural, not a seam refusal. Receipts: `C:/Users/logic/xbr-mac/n44r/old.out`,
+`new.out`, `probe-old.log`, `probe-new.log`.
+
+**Private final-source mutants** (`C:/Users/logic/xbr-mac/n44r-mut/MUTATION-RECORD.txt`, 11
+targets, nothing written inside either repository). Restored frozen source: PASS 10/335.
+`m1-overflow-drop` (the rejected rule restored) red on 6c's ownership, latch and no-lost-entry
+checks; `m2-rollback-parked` (the failed bind parks again) red on 7k and 10a/10b/10c;
+`m3-eager-release` (release while the ring is busy) red on 17 property-6 checks; `m4-release-before-destroy`
+red on exactly the two ordering checks (property 7 and 10); `m5-refusal-clears-owner` red on 6c's
+ownership and no-lost-entry checks with the latch check still green; `m6-never-referenced-parked`
+red on 10a-10e/10h and 7k. Migrated controls re-run against the repaired source: readback fault
+gate restored PASS (7 properties / 138 checks) vs `m7-pooling-disabled` red on the re-derived
+"two buffers, two ranges of one pool block, one allocation"; sync scope gate restored PASS (6/80)
+vs `m1-alignment-ignored` red on property 5's bind rule. Two expectations stayed green and are
+disclosed rather than smoothed: no weakening confined to `vb_mem_give`'s refusal branch can make
+property 10 red (its bursts all go through `vb_mem_give_now`; `m6` is the mutant that reaches
+them), and the 6a/6b byte-identity checks cannot see an eager release because this fixture writes
+nothing into the released range between the give and the next take -- the hand-out checks decide
+it. That second gap is a limit of the fixture, recorded below.
+
+**Reviews and the repairs they caused.** The independent code review (the configured `reviewer`
+role was rate-limited, HTTP 429 with a ~32 h retry-after, so a general-purpose OMP agent performed
+the review -- model fallback disclosed; the security/native-lifetime review ran on its configured
+role) confirmed the ownership split, the destroy-before-release ordering and the gate's decisions,
+and found no correctness defect: its findings were D1/D2 (documentation that overstated who keeps a
+refused range), D3 (a 6c check satisfied by production's early return rather than by the busy
+ring), D4 (no accounting coverage of `vb_readback_reserve`'s failed pair), D5 (destroy-before-release
+not observable by the fixture) and D6 (a pre-existing garbage-list realloc drop, out of scope). The
+security/native-lifetime review found **no High or Medium defect** -- no use-after-free, early
+reuse, double release or dangling handle on any release path, and the never-referenced
+classifications sound -- with four Low findings, of which L1 (a refused release was counted in
+`released`), L2/D1/D2 (wording) and its L3 (= D4) were applied. Applied in one bounded round, with
+the frozen hashes above: D1/D2/L2 wording, L1's counter placement, D3's replaced check (shown red
+against a release-while-busy mutant instead of by a `vb_pool_gc` early return), D4's new property
+10h (12 checks driving the readback reserve's failed pair past the park budget), and D5's event-log
+oracle (red against the swapped-order mutant). Not applied, recorded here as limits: review Low L4
+(`gate_world` still assumes rather than asserts that no release is parked across worlds) and D6.
+
+**Validation on the frozen tree.** Ten `jsrf_vk_` gates through
+`python C:/Users/logic/xbr-mac/ctest-limited.py -R jsrf_vk_`: 10 of 10 passed in 34.48 s, including
+`jsrf_vk_suballoc_gate` (10 properties / 335 checks) and the real `jsrf_vk_suballoc_device` case
+(0.97 s, it RAN, it did not skip -- byte-exact targets/textures/depth/snapshot through image
+churn). Full CTest through the same helper: **96 of 96 passed in 451.21 s**, exit 0, no `Skipped`
+and no `Not Run` line, `xbox_guest_meter` green on its first run (no documented-flake rerun
+needed); receipt `C:/Users/logic/xbr-mac/n44r-ctest-frozen.txt`. `just check`: exit 0, including
+the real retail corpus `entries=126 recompiled_and_matched=126 ascending=yes duplicates=0
+xbe_distinct=126 problems=0`; receipt `C:/Users/logic/xbr-mac/n44r-check.txt`.
+
+**N3 bounded stock e2e on the frozen exe** `20261017-152351-649-keyscript-n44r-n3-e2e-val`: stock
+`config/key-scripts/e2e.json`, 620 s bound, Vulkan back end, exploratory profile, isolated
+disposable save root (verified `disposable: true`), RTX 4070. The invoking shell exported
+`VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation` and `VK_LOADER_DEBUG=layer` and the same two were
+passed to the runner, whose `result.json` records the overrides
+`['RECOMP_GPU_BACKEND=vulkan', 'VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation', 'VK_LOADER_DEBUG=layer']`.
+From THAT run's `jsrf_run.log` (158 loader lines), quoted verbatim:
+
+    [Vulkan Loader] INFO | LAYER:   Insert instance layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+    [Vulkan Loader] INFO | LAYER:   Inserted device layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+
+Disclosed, not set by this packet: the same log lists inserted `VK_LAYER_OBS_HOOK`
+(`C:\ProgramData\obs-studio-hook\graphics-hook64.dll`) and the driver's `VK_LAYER_NV_present` and
+`VK_LAYER_NV_optimus` instance and device layers. Counters: `validation_errors=0`,
+`validation_warnings=10` (the known `vkCreateGraphicsPipelines` "attribute not consumed"
+warnings), `vsh_misses=0`, `vsh_identity_fail=0`, `vsh_declines=0`, `rc_fallback=0`,
+`tex_undecodable=0`, `rb_incomplete=0`, `rb_copies=0`, `icall=0`, `fatal=0`,
+`still_rejecting=0`, flips 32 352, draws 2 878 108, submits 95 130, `max_inflight=3`,
+`reuse_waits=662`, `drain_waits=94 468`, `splits=62 115`, `dropped_tris=8`, `skipped=0`; memory
+`mem_pools=4 mem_blocks=10 mem_alloc_calls=10 mem_ranges=232 mem_dedicated=0 mem_reuse=0
+mem_released=2 mem_parked=0 mem_parked_peak=0 mem_parked_lost=0 mem_reserved_bytes=83886080
+mem_used_bytes=79101952 mem_free_bytes=4784128 mem_padding_bytes=0 mem_metadata_bytes=23392
+mem_alloc_failures=0 mem_bind_failures=0 mem_map_failures=0 mem_rollbacks=0 mem_fallbacks=0`.
+Outcome `keyscript_complete`, `script_ok: true`, termination bounded and deliberate
+(`killed_at_deadline_or_failure: true`, `exit_code 1`, `ran_s 620.4`) -- not a natural exit and
+not a fidelity proof. Ordinary validation is not synchronization validation: the N4.3 fixture with
+its negative control remains that evidence, and this run claims neither.
+
+**N2, six valid windows: three fresh interleaved baseline/final pairs.** `n44r-pN-baseline` runs
+the accepted N4.3 executable `11ce8b03` (its own private preserved build
+`C:/Users/logic/xbr-mac/n44-baseline-build/Release` with its own `build-source.json`) through the
+private runner copy `C:/Users/logic/xbr-mac/n44-baseline-runner.py` (SHA-256
+`85fc92e8acc9ac6b9d8cc5f7613f82b888188a8b75c6c9390b6f25b44a8ae48e`: the repository's
+`scripts/key-script-run.py` with only ROOT/BUILD pointed at that private directory plus a
+`sys.path` insert, so runner, settings, profile and script are identical); `n44r-pN-final` runs the
+frozen repair `57f69c7f` through `scripts/key-script-run.py`. Both sides use
+`config/key-scripts/garage-bench.json`, the RTX 4070, one game at a time, and a 15 s host sampler
+(`n44r-hostlog.ps1` -> `n44r-bench-host.log`, 213 samples). The shared `build/Release` executable
+was never replaced by the baseline.
+
+| pair | window | exe | presents/s | p50 | p90 | p99 | max | stalls>100 ms | aliased/increments | host cpu_perf | gpu sm MHz | gpu W |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | `20261017-153452-024` | `11ce8b03` | 43.4834 | 22.39 | 24.30 | 27.42 | 55.66 | 0 | 0/2609 | 136.2-138.9 | 1005-1110 | 13.7-14.4 |
+| 1 | `20261017-154419-438` | `57f69c7f` | 42.9343 | 22.22 | 26.07 | 35.85 | 53.89 | 0 | 0/2576 | 105.0-113.7 | 1005-1080 | 15.2-16.5 |
+| 2 | `20261017-155347-742` | `11ce8b03` | 41.6004 | 23.94 | 25.94 | 28.32 | 50.10 | 0 | 0/2496 | 135.4-138.5 | 1065-1110 | 13.7-14.4 |
+| 2 | `20261017-160310-378` | `57f69c7f` | 46.5010 | 21.68 | 23.76 | 26.28 | 54.63 | 0 | 0/2790 | 134.3-136.2 | 1035-1125 | 14.3-15.9 |
+| 3 | `20261017-161236-358` | `11ce8b03` | 42.3507 | 23.84 | 25.15 | 27.91 | 57.41 | 0 | 0/2541 | 132.5-136.4 | 990-1080 | 13.8-15.1 |
+| 3 | `20261017-162158-902` | `57f69c7f` | 45.1677 | 22.04 | 23.90 | 26.01 | 46.87 | 0 | 0/2710 | 133.5-135.0 | 1035-1080 | 15.5-15.7 |
+
+Medians: baseline `11ce8b03` 42.3507 (41.6004-43.4834), p50 23.84 / p90 25.15 / p99 27.91; final
+`57f69c7f` 45.1677 (42.9343-46.5010), p50 22.04 / p90 23.90 / p99 26.01. Six valid windows were
+attempted and every one produced a window; no run failed and no startup access violation occurred
+in any of them (an observation, not evidence about that pre-existing crash). All six are
+`keyscript_complete` with `RECOMP_GPU_BACKEND=vulkan`, `max_inflight=3`, 0 stalls over 100 ms and
+0 aliased polls. The three final windows' allocation/sync counters are identical (the values in
+the N3 paragraph above, `mem_used_bytes` 78 967 808 in the bench runs); the baseline executable
+predates the allocator's counters, and its ring/readback counters scale with its frames (pair 1:
+submits 80 330, `rb_batches` 27 425, `rb_packs` 54 849, `rb_incomplete=0` against the final's
+83 560 / 28 500 / 56 999 / 0). Read as an observation: the host's power state was matched within
+1.5 % of `cpu_perf` in pairs 2 and 3, and those windows read 46.5010 and 45.1677 against 41.6004
+and 42.3507 with p50 1.8-2.3 ms lower, while the one mismatched pair (the final window in a lower
+boost state, 105-114 against 136-139) read 42.9343 against 43.4834. **No gain, no regression and
+no power-state causality is claimed**: the cause of that side difference -- a real effect, window
+order, or a state variable this harness does not measure -- is not established, and the same
+baseline executable measured 41.37 and 23.13 presents/s within one session in §31.40. Everything
+here is a stub-free real-device observation at one screen, on the RTX 4070 only.
+
+**Limits.** Every injected failure in the gate and in the mutants is a stubbed driver return
+value: no real pool exhaustion, device loss or host OOM was reproduced, so the refusal path is
+decided by the fixture and, in production, is unreachable at scale (at most one entry from
+`vb_stream`'s dead-recording branch can ever park in a sound process). The 6a/6b byte-identity
+checks cannot decide an eager release under this fixture (it writes nothing into the released
+range before the next take), so the hand-out checks are what decide it. Two review Lows are left
+as recorded limits: `gate_world` assumes rather than asserts that no release is parked across
+worlds, and `vb_discard`'s realloc-failure path still drops a whole deferred entry while the back
+end keeps running (pre-existing, host-OOM only, the range stays counted live, outside this
+repair's contract). The pre-existing startup access violation and the pre-existing guest-write
+publish bounds concern are untouched. No persisted pipeline cache/R4, N6 or R5 work was started.
+
+**Owner boundary (2026-10-17).** The owner amended the run's authority: "stop when N4 is
+completed". Continuing through N6 and R5 is overridden; only the remaining N4 item -- the
+persisted pipeline cache/R4, if Codex dispatches it as its own bounded operation -- may follow,
+and once every N4 gate is independently accepted and its commits and pushes are complete the run
+records closure and stops. No N6, R5 or later plan item without a new owner instruction. Durable
+amendment: `C:/Users/logic/.omp-bridge/reports/poison-jam/owner-stop-after-n4-20261017.md`. This
+adds no operation slots, no repair cycles and no planning phase, and accepts no work.
 
