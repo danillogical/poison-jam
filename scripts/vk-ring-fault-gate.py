@@ -58,8 +58,10 @@ REQUIRED = [
     ("vb_cmd", "static VkCommandBuffer vb_cmd(void)"),
     ("vb_transfer_cmd", "static VkCommandBuffer vb_transfer_cmd(void)"),
     ("vb_barrier", "static void vb_barrier(void)"),
-    ("vb_image_barrier", "static void vb_image_barrier(VkImage img, VkImageAspectFlags aspect, "
-                         "VkImageLayout from, VkImageLayout to)"),
+    ("vb_image_dep", "static void vb_image_dep(VkImage img, VkImageAspectFlags aspect, "
+                     "VkImageLayout from, VkImageLayout to, VkPipelineStageFlags src_stage, "
+                     "VkAccessFlags src_access, VkPipelineStageFlags dst_stage, "
+                     "VkAccessFlags dst_access)"),
     ("vb_image_create", "static int vb_image_create(VbImage *im, uint32_t w, uint32_t h, "
                         "VkFormat fmt, VkImageUsageFlags usage, VkImageAspectFlags aspect)"),
     ("vb_target_load", "static void vb_target_load(VbTarget *t)"),

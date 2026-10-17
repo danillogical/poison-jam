@@ -38,6 +38,29 @@ host API); list the one that decides fidelity first.
 
 ## Entries
 
+**L62 N4.3 (2026-10-17, TR §31.38):** toolkit `5af1c48` narrows every normal-path barrier of the
+Vulkan back end to the stage and access scopes its producer and consumers actually need
+(`vb_dep`/`vb_image_dep`; `vb_image_barrier` removed and all seven layout transitions scoped, with no
+layout VALUE changed — targets/depth/snapshot stay GENERAL, textures keep
+TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL). The destination scope carries
+COLOR_ATTACHMENT_READ (the render pass is created with `loadOp = LOAD`) and TRANSFER_WRITE (a target
+created and left stale is loaded by a copy in the same submission). TWO sites stay deliberately broad
+and are not optimized: the per-submission barrier in `vb_slot_submit`, which is what makes
+cross-submission ordering defined, and N4.2's abandonment barrier in `vb_targets_flush`, which is now
+the ONLY ordering for the abandoned group's pack-buffer write-after-write, its staging copy against the
+next group's pack-output copy, and its pack-buffer read against the next dispatch. The game's ring
+fault and readback ordering gates were migrated by a different worker (the ordering gate's three
+"pack path's own barrier" controls now assert the abandonment barrier and stay deciding: red without
+it, 31 of 275 checks); two new gates authored by further distinct workers decide the change
+(`jsrf_vk_sync_scope_gate` 115 hazard pairs / 0 unordered, 5 properties 77 checks, 9 private mutants;
+`jsrf_vk_sync_paths_gate` on lavapipe: per-site mask census, nonzero reachability counters and exact
+published bytes, 6 properties 119 checks, 11 private mutants), and a synchronization-validation run
+with a mis-scoped mutant reporting hazards while a safe-but-broad mutant reports none. Full CTest 93/94
+with the plan's documented `xbox_guest_meter` flake passing on its documented rerun, `just check`
+passed with the real corpus at 126/126. Still open in N4: sub-allocated memory and the persisted
+pipeline cache/R4. No frame-rate claim; guest publication remains per target rectangle. Awaiting
+independent acceptance.
+
 **L62 current acceptance (2026-10-17, TR §31.37):** N4.2 accepted at toolkit `cd638d4` / game
 gate `acf20ff`, records `801df8b`. The caller/reload defect and abandoned-batch ordering defect
 below are independently closed. Private baseline and weakened barriers fail; final source and

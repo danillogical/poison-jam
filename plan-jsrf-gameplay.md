@@ -323,6 +323,23 @@ Readbacks take 202–211 s of a 560 s run, and V1 submits and fence-waits simply
 - sub-allocated memory;
 - a persisted pipeline cache.
 
+**N4.3 implemented at toolkit `5af1c48` (this packet), awaiting independent acceptance** (TR
+§31.38). Every normal-path barrier in the Vulkan back end now carries the stage and access scopes its
+producer and consumers actually need (`vb_dep`/`vb_image_dep`; `vb_image_barrier` is gone and all seven
+layout transitions are scoped, with no layout VALUE changed), while two sites stay deliberately broad:
+the per-submission barrier in `vb_slot_submit` and N4.2's abandonment barrier in
+`vb_targets_flush`. The changed sites, their producer/consumer argument, the retained broad sites and
+what is deliberately NOT claimed are in the packet's dependency argument, kept outside git with the
+N4.3 receipts. Decided by two new gates authored by workers distinct from the production change
+(`jsrf_vk_sync_scope_gate`: 115 hazard pairs decided, 0 unordered, 5 properties / 77 checks, 9 private
+mutants; `jsrf_vk_sync_paths_gate`: real device, per-site mask census, reachability counters and exact
+published bytes, 6 properties / 119 checks, 11 private mutants, plus a synchronization-validation run
+with a mutant that makes the layer report hazards and a safe-but-broad mutant that does not), with the
+retained ring and readback-ordering gates migrated by a different worker to the new helper and to the
+abandonment barrier as the decider for the abandoned-group classes. **This report does not accept
+N4.3**: the next separate operation after independent acceptance is sub-allocated memory, then the
+persisted pipeline cache/R4, N6 and R5 in the approved order. Nothing later than N4.3 was started.
+
 **Latest independent acceptance (2026-10-17): N4.2 is accepted at toolkit `cd638d4` / game
 `acf20ff` with records `801df8b`** (TR §31.37). The two confirmed failure-path defects are
 closed; historical rejected candidates and their repair evidence remain below. Codex's original

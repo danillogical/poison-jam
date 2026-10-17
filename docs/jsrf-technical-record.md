@@ -4562,4 +4562,184 @@ No suballocation, persisted cache/R4, N6 or R5 in that operation. Current run re
 slots and zero unassigned repair cycles before next admission (lineage 15 operations / 6 repair
 cycles); ordinary CONTINUE authorizes the next increment, no allowance reset or rotation credit.
 
+### §31.38 N4.3: narrower Vulkan barriers and precisely scoped layout transitions (2026-10-17)
+
+**Implemented; STOP for independent review.** The plan's N4 "narrower barriers" subitem, one listed N4
+item, no later item. Every normal-path barrier in the toolkit's Vulkan back end now records the stage and
+access scopes of the producer and of the consumers it actually orders, instead of the previous
+`ALL_COMMANDS -> ALL_COMMANDS`, `MEMORY_WRITE -> MEMORY_READ|MEMORY_WRITE` pair. No layout VALUE changed;
+no counter, ring, publication, stop or ownership semantic changed; no new toolkit file; no runtime
+translation or compilation.
+
+**The helpers and the scopes.** `vb_dep(src_stage, src_access, dst_stage, dst_access)` records a
+`VkMemoryBarrier`; `vb_image_barrier` was replaced by
+`vb_image_dep(img, aspect, from, to, src_stage, src_access, dst_stage, dst_access)`, the same layout
+transition with explicit scopes. `VB_STAGE_IMAGE_DST` / `VB_ACCESS_IMAGE_DST` name every stage and access
+the back end touches a target, depth or texture image from; `VB_STAGE_ATTACH` / `VB_ACCESS_ATTACH_WRITE`
+name a render pass's attachment writes; `VB_STAGE_DEPTH` / `VB_ACCESS_DEPTH` the depth-stencil
+consumers. `VB_ACCESS_IMAGE_DST` carries `COLOR_ATTACHMENT_READ` because the render pass is created with
+`loadOp = LOAD`, so a pass READS its colour attachment's previous contents, and `TRANSFER_WRITE` because
+`vb_target_for` creates a target and leaves it `stale`, so `vb_setup` loads it with
+`vkCmdCopyBufferToImage` in the SAME submission — a write-after-write the old `MEMORY_READ|WRITE` covered
+and the scoped destination set must keep covering. Both were found by review of the first draft, not by
+the gate.
+
+**Sites changed (S1–S9 of the packet's dependency argument, kept outside git in the plan N4.3 records).**
+`vb_end_pass` (the pass's colour and depth-stencil writes before every later access to that image);
+`vb_target_load` (the load copy's transfer write); `vb_target_create` (the create clear, plus its
+`UNDEFINED -> GENERAL` transition scoped TOP_OF_PIPE/0 -> TRANSFER/TRANSFER_WRITE); `vb_depth_for` (the
+far/stencil clear and its transition, destination scoped to the two fragment-test stages); the readback's
+pack `vkCmdDispatch` -> `vkCmdCopyBuffer` pair (COMPUTE_SHADER/SHADER_WRITE -> TRANSFER/TRANSFER_READ);
+the readback publish barrier's SOURCE stage (COMPUTE_SHADER|TRANSFER instead of ALL_COMMANDS; its access
+masks and HOST destination unchanged); the self-sampling snapshot copy in `vb_texture` (its write before
+the draws that sample it, before the next copy's read of the target image and before that copy's write of
+the same snapshot image); and all seven layout transitions (texture upload, the 1x1 white texture, the
+target/depth/snapshot creates), each naming its own source and destination scope.
+
+**Retained broad, deliberately.** The per-submission barrier in `vb_slot_submit` — the only thing that
+makes cross-submission ordering defined, including blending into one target from two submissions and the
+readback staging buffer's write-after-write when a later batch restarts its slice offsets at 0 — and the
+abandonment barrier in `vb_targets_flush`'s `if (!batch_ok)` branch, which N4.2 accepted. Because the pack
+path's own barrier is now scoped to its dispatch -> copy pair, the abandonment barrier is the ONLY
+ordering for three classes on the abandoned path (two pack dispatches reusing the same `g.pack_buf` bytes
+across an abandoned group; an abandoned group's `g.rb_buf` copy against the next group's pack-output copy;
+and the abandoned group's `vkCmdCopyBuffer` read of `g.pack_buf` against the next group's dispatch write),
+and the retained ordering gate now decides them against it.
+
+**Why the scoped forms are sufficient.** The Vulkan specification (Synchronization and Cache Control,
+https://vulkan.lunarg.com/doc/view/1.4.304.1/windows/antora/spec/latest/chapters/synchronization.html)
+says a barrier's first synchronization scope is "the pipeline stages specified in that mask and any
+logically earlier stages", while "its first access scope only includes memory accesses performed by
+pipeline stages explicitly specified in the source stage mask" (and symmetrically for the destination). So
+a write-after-read arrow needs only the stage scopes — FRAGMENT_SHADER is logically earlier than
+LATE_FRAGMENT_TESTS and COLOR_ATTACHMENT_OUTPUT, which is what orders a draw's sample of the self-snapshot
+image against the next snapshot copy — while availability/visibility needs each access bit named at a
+named stage. The render pass's implicit external dependencies carry no access mask, so the explicit
+barriers are what a pass's attachment read (`loadOp = LOAD`) and a later copy or sample depend on. The
+pack buffer's reuse inside one batch is disjoint by construction, across batches it is separated by that
+batch's submit plus `vb_drain`, and across an abandoned group by the retained abandonment barrier.
+
+**Retained gates migrated by a different worker (clean cutover, no shim).** `vb_image_barrier` no longer
+exists, so `scripts/vk-ring-fault-gate.py`'s required anchor and the call in
+`tests/test_vk_ring_fault_gate.c` moved to `vb_image_dep` with the same semantic content
+(UNDEFINED -> GENERAL, TOP_OF_PIPE/0 -> TRANSFER/TRANSFER_WRITE); that gate's nine properties and 105
+checks are unchanged and green (private receipt, exit 0). The three checks in
+`tests/test_vk_readback_ordering_gate.c` that asserted the pack path's own barrier was the broad one are
+re-expressed against the barrier that orders those pairs now — the abandonment barrier, with its broad
+ALL_COMMANDS/MEMORY shape asserted explicitly — and the now-dead `gate_barrier_between()` locator is
+deleted; the general write-after-write, write-after-read and cross-recording decisions were not touched.
+The adapted gate is GREEN on the final source (14 properties, 275 checks, 2.77 s in the suite) and RED on
+a private copy with the abandonment `vb_barrier();` deleted (11 of 14 properties, 31 of 275 checks — the
+pre-fix red set plus property 1b, which the adaptation promotes from a control to a deciding check) and
+RED on a private copy whose abandonment barrier was replaced by a narrower one (11 of 14, 29 checks).
+
+**New deciding gates, each authored by a worker distinct from the production change.**
+`jsrf_vk_sync_scope_gate` (`tests/test_vk_sync_scope_gate.c` sha256
+`4b73e1f21ad7fcdff54df947c8d50102f0ce13bdc272cb48ea8b0e4ba507fb65`,
+`scripts/vk-sync-scope-gate.py` sha256 `ffafa47eaf9a1b00b09b9c938edb9d5e326adfa2535f5e2c5d379d8912de86dd`,
++115 lines of CMake): no GPU, no ICD, no skip path, exit 0/1. It compiles the production back end verbatim
+with recording stubs over every Vulkan entry point, drives the production bodies that record each changed
+barrier, and decides from the recorded stream that each site's scopes are exactly the production macros'
+own values (126/126 anchors, 6/6 macro values; the probe fails the BUILD, exit 2, when one moved or
+changed), that every pair of conflicting accesses to the same resource and subresource has an intervening
+barrier covering BOTH sides — **115 pairs decided over six hazard classes, 0 unordered** — that every
+recorded access's image layout equals the tracked layout and every transition's `oldLayout` equals it (10
+transitions, 44 layout-checked accesses, 6 sampled descriptors), and that the only ALL_COMMANDS barriers
+are the four per-submission ones. GREEN: **5 properties, 77 checks**. Nine private mutants (one private
+backend copy per row, never the shared tree): mis-scoping S2/S1/S3/S4/S5 turns exactly its class red
+(C2 / C3 / C4 / C5 / C3 — 1, 18, 1, 3, 1 unordered pairs); removing a layout transition turns the layout
+class red (S6: 2 wrong layouts, 4 bad descriptors; S7: 10 / 30 / 4); replacing S1/S7/S8 with the broad
+`vb_barrier()` turns the "narrow form is in force" property red (9 broad barriers for 4 submissions) while
+every hazard class stays green; and a comment-only control is green.
+
+`jsrf_vk_sync_paths_gate` (`tests/test_vk_sync_paths_gate.c` sha256
+`d07c51d813e0aec7d5d6816e0870b783f25e79c32540cbf9be1287ba0a6f9aad`,
+`scripts/vk-sync-paths-gate.py` sha256 `2501017e18dc76b0f9095c0786e7eaf0c25cdfc7f2c47539399a2ec770431264`):
+the real device (software ICD, lavapipe) installed through the production `nv2a_vk_backend_install()` and
+observed through forwarders over the real driver entry points, so the scopes it decides are the ones the
+driver really received. It drives repeated draws, a 16-bit and a 4-byte target, depth/stencil ordering, a
+texture upload and a magnified sample, a self-sampling snapshot and three flips that pack and copy in one
+flush. It requires each changed site to have recorded its exact masks at least once (S1 5, S2 13, S3 3,
+S4 3, S5 1, S6 texture 2 / white 2, S7 4, S8 1; targets 4 / depth 1 / snapshot 1 creation transitions; 24
+memory and 10 image barriers, **0 unclassified**; one ALL_COMMANDS barrier per submission, always last
+before `vkEndCommandBuffer`, none inside an open pass), the reachability counters to be nonzero
+(`rt_loads 5, tex_uploads 1, rt_copies 1, rt_aliases …, readback_packs 3, readback_copies 3,
+max_inflight ≥ 2`), and the published guest bytes to equal its own exact expectation — the 16-bit
+truncation, a partial scissor's untouched halfwords, depth order, replicated texel blocks, the snapshot's
+derived value and frame-2/3 load-then-redraw byte-identity. GREEN on lavapipe: **6 properties, 119 checks**
+(2.0 s in the suite), exit 0. Eleven private mutants: M1–M5 (mis-scoped S2/S1/S3/S4/S5) and M6/M7
+(removed transitions) each turn their property red (4/4/5/5/5 and 2/2 failed checks); M8 comment-only is
+green; M9 (broad substitution) fails only the narrow-form properties (9 checks) with every hazard class
+green; M10 (one published byte changed in the publication memcpy) is caught ONLY by the byte property, and
+M11 (the draw entry no longer splits) ONLY by the reachability property — so the properties are not
+redundant with one another. The case reports the back end's own validation counters and makes no
+synchronization-validation claim of its own.
+
+**Synchronization validation, with its own positive control (this packet's receipts).** The final-source
+paths gate was run with the Khronos layer and synchronization validation enabled
+(`VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation`, modern switch `VK_LAYER_VALIDATE_SYNC=1`, and the
+software ICD): exit 0, `PASS: 6 properties, 119 checks`, zero validation errors and warnings in the
+fixture window, and the loader's own insertion lines quoted from that run
+
+    [Vulkan Loader] INFO | LAYER:   Insert instance layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+    [Vulkan Loader] INFO | LAYER:   Inserted device layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+
+That the layer was really checking synchronization is shown by two private controls of the same fixture:
+the mis-scoped mutant M1 makes it report **4 `READ_AFTER_WRITE hazard detected` errors** (three on
+`vkCmdCopyImageToBuffer`, one on `vkCmdCopyImage`) in the fixture window, while the broad-barrier mutant
+M9 — which is SAFE Vulkan but fails the gate's narrow-form properties — reports **0** errors. So the clean
+final-source result is a real check, not ordinary validation wearing its name.
+
+**Reviews, all by agents distinct from the production and gate authors.** The code review confirmed no
+uncovered access pair and no VUID-visible mistake, and found two blocking breaks in the GAME repo and
+three comment overclaims, each fixed: the ring fault gate's anchor and call (migrated, above); the three
+ordering-gate control checks (adapted, above); the pack-dispatch comment now names the abandonment
+barrier on the abandoned path; the snapshot/texture transition comments no longer claim a compute sampler
+exists (the bits stay, documented as a deliberate superset for the sampler class); and the file's top
+comment now states the layout facts per image (a target is attachment + sampled image + copy source; a
+depth image is attachment + transfer destination; the snapshot is copy destination + sampled image) and
+that some destination scopes are deliberate supersets. The security/native-memory-lifetime review found
+no blocking issue: no create/allocate/free/map in the new code, no lifetime or ownership change
+(lifetime here is fence-based, so a narrower visibility scope cannot create a use-after-free the broad
+one prevented), the failure/stop paths and the executor's `stopped` contract untouched, and the
+pre-existing publish `memcpy` guest-bounds gap neither widened nor narrowed (still recorded as
+out-of-scope, as N4.2 recorded it). Neither review found a routing or model change; `.omp/config.yml` was
+not touched, and no fallback was observable.
+
+**Validation on the frozen tree.** Guarded build `python -X utf8 scripts/build-jsrf.py`: success
+(`logs/build-current.log`), executable `11ce8b039f5b5694f3d432867817114c9656c6d2d1f56132464d77992a7e50ba`
+(18 814 976 bytes); `build/Release/build-source.json` records this tree's sources, including the toolkit
+backend at `a3cd2cec71f6e6264258d8c5b9b28f20f3659546f96b827930db5aa2bb5847bf` and this CMakeLists.txt at
+`a3336549840f1d06a6bb27a55a739d3b5d3db33e1b957d4f7c134f020ef4c4ae`, and the vsh tool identity and retail
+corpus are unchanged (128 programs, 126 distinct; no regeneration). Full CTest through
+`python C:/Users/logic/xbr-mac/ctest-limited.py --output-on-failure`: **93 of 94 passed in 518.03 s**
+(receipt `receipts/final-ctest-n43.txt`), including both new cases (`jsrf_vk_sync_scope_gate` 0.06 s,
+`jsrf_vk_sync_paths_gate` 2.01 s — the real-device case RAN, it did not skip), the adapted
+`jsrf_vk_readback_ordering_gate` (2.77 s) and the migrated `jsrf_vk_ring_fault_gate` (0.31 s), the retained
+exact-byte real-device cases (`jsrf_vk_frames_in_flight` 17.26 s, `jsrf_vk_readback_pack`, the caller and
+fault gates), Vulkan parity (14.92 s), the AOT set and the eight V6 conformance cases. The single failure
+is `xbox_guest_meter`, the plan's DOCUMENTED known flake (timing-sensitive); it passed on the documented
+single rerun (receipt `receipts/flake-rerun-xbox_guest_meter.txt`, exit 0, 0.34 s). No `Skipped` and no
+`Not Run` line appears anywhere in the receipt. `just check`: passed (receipt
+`receipts/final-check-n43.txt`), including the real retail corpus
+`entries=126 recompiled_and_matched=126 ascending=yes duplicates=0 xbe_distinct=126 problems=0` and its
+SPIR-V validation, and the stop-chain checker. No unchanged translator output was regenerated.
+
+**N2 and the bounded N3 e2e.** The matched quiet N2 windows (three before, three after, same device and
+script) and the bounded stock N3 e2e with the Khronos layer are recorded in the follow-up records commit
+for this packet, with their archives, hashes and loader witnesses.
+
+**Limits.** The injected failures of the retained gates remain stubbed driver return values, never real
+pool exhaustion or device loss. The scope gate's staging bytes are supplied by its fixture, so it decides
+ordering, ranges, masks and layouts — not the bytes a real copy engine or the pack kernel produces; those
+are decided by the real-device cases. The paths gate's fixture is purpose-built, so it decides the
+changed sites' scopes and the published bytes for its own scenario, not the whole game's workload (the
+retained frames-in-flight and pack cases cover the real workload's bytes). This change makes **no
+frame-rate claim**: it removes work from the frame's dependency graph, and whether that shows up as
+presents/s is decided by the N2 windows recorded with this packet, not by the argument. The guest-memory
+publish bounds concern recorded by N4.2's security review is untouched and NOT fixed here. Sub-allocated
+memory, the persisted pipeline cache and R4 remain open in N4, and no later item is accepted by this
+record.
+
+
 

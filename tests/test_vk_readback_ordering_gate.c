@@ -29,16 +29,18 @@
  * `dstAccessMask = HOST_READ`, into VK_PIPELINE_STAGE_HOST_BIT -- is recorded AFTER both writes,
  * and its destination access is a host READ, which does not order two device writes.
  *
- * The pack KERNEL's own write into g.pack_buf is NOT the vulnerable class, and this case says so
- * rather than treating every staging write alike: the pack path records its broad `vb_barrier()`
- * (ALL_COMMANDS/MEMORY_WRITE -> ALL_COMMANDS/MEMORY_READ|MEMORY_WRITE) immediately between its
- * dispatch and the buffer copy that reads it, so a later dispatch reusing those g.pack_buf bytes
- * is ordered by construction. Scenario B quotes that barrier as the control, and the properties
- * that decide are about the last g.rb_buf write. The device may therefore execute the abandoned
- * copy after the new one, and the host's memcpy publishes bytes the abandoned group wrote over
- * the new group's image: guest memory silently holds the wrong rectangle. This is a
- * write-after-write hazard inside one command buffer, and it is a correctness bug independent of
- * what the host reads afterwards.
+ * The pack KERNEL's write into g.pack_buf is ordered differently from the staging copies, and this
+ * case says so rather than treating every staging write alike: the pack path's own barrier -- the
+ * one between its dispatch and the buffer copy that reads that slice -- now orders ONLY that
+ * dispatch's write before that copy's read (`COMPUTE_SHADER/SHADER_WRITE ->
+ * TRANSFER/TRANSFER_READ`), so it does NOT cover the pack buffer's reuse across an abandoned group
+ * boundary -- a later dispatch writing the g.pack_buf bytes an abandoned group's copy read. The
+ * broad abandonment barrier the repair records covers that class, and this case decides it on that
+ * barrier (1c and 1d). What the defect breaks is the g.rb_buf class: the last staging write the
+ * abandoned recording left behind. The device may execute it after the new group's own copy, and
+ * the host's memcpy then publishes bytes the abandoned group wrote over the new group's image, so
+ * guest memory silently holds the wrong rectangle. This is a write-after-write hazard inside one
+ * command buffer, and it is a correctness bug independent of what the host reads afterwards.
  *
  * The repair is exactly one ordering command at the abandonment point: `vb_barrier();`, the
  * file's own broad ALL_COMMANDS->ALL_COMMANDS, MEMORY_WRITE->(MEMORY_READ|MEMORY_WRITE) barrier,
@@ -200,21 +202,24 @@
  *      no barrier is between them at all, so the reuse is unordered.
  *   1b. the failing pass, 16-bit third target (the pack-buffer variant of scenario A) --
  *      the third target's pack dispatch writes g.pack_buf [0, 8192) and its vkCmdCopyBuffer
- *      overwrites g.rb_buf [0, 8192) after the abandoned T0 copy. The reuse is real and ordered;
- *      the case quotes the barrier that orders it and says which one it is (the pack path's own,
- *      also present pre-fix, which is why this variant is a control and not a deciding one).
+ *      overwrites g.rb_buf [0, 8192) after the abandoned T0 copy. The reuse is real and ordered,
+ *      and the barrier that orders it is the broad abandonment barrier -- the pack path's own
+ *      barrier no longer covers it, because it names the dispatch's write and the copy's read of
+ *      that slice and no destination write. This variant therefore decides the repair too. RED on
+ *      the pre-fix source and on both mutants.
  *   1c. the failing pass, scenario B     -- the abandoned recording's last write is TC's
  *      pack-OUTPUT buffer copy into g.rb_buf [0, 33554432), and TE's image copy writes the same
  *      buffer's bytes at [0, 67108864) in the SAME command buffer with no submit or wait between
  *      them. The case asserts: both writes were recorded and the failure came after them; that
  *      copy is the recording's last write before the abandonment; the abandoned dispatch's
- *      g.pack_buf write is ordered by the pack path's own barrier (quoted -- the control that
- *      makes pack-buffer-versus-pack-buffer reuse safe by construction); the abandoned group
- *      submitted and waited for nothing of its own, its recording still open in slot 0; the reuse
- *      is real, exactly one barrier lies between the two g.rb_buf writes, and it is the broad
- *      abandonment barrier with the masks and stages quoted; TE was published exactly once from
- *      its own bytes while TC and TD stayed dirty; and the failure is not a device loss. RED on
- *      the pre-fix source and on both mutants.
+ *      g.pack_buf write is separated from the next group's staging write by the broad abandonment
+ *      barrier (the pack path's own barrier orders only that dispatch's write before the copy that
+ *      reads its slice, so the pack-buffer class across a group boundary is the abandonment
+ *      barrier's job); the abandoned group submitted and waited for nothing of its own, its
+ *      recording still open in slot 0; the reuse is real, exactly one barrier lies between the two
+ *      g.rb_buf writes, and it is the broad abandonment barrier with the masks and stages quoted;
+ *      TE was published exactly once from its own bytes while TC and TD stayed dirty; and the
+ *      failure is not a device loss. RED on the pre-fix source and on both mutants.
  *   1d. the failing pass, scenario C     -- the abandoned recording read g.pack_buf [0, 33554432)
  *      through TC2's buffer copy, and the NEXT group's own dispatch writes those same bytes, in
  *      the same command buffer with no barrier between them pre-fix: the write-after-READ pair.
@@ -222,7 +227,8 @@
  *      recorded in full, that the next group's dispatch writes exactly those bytes, that the pair
  *      is decided (WAR pairs 1, war_unordered 0) by the abandonment barrier covering both stages
  *      with NO access mask consulted, that the two dispatches' own reuse of the pack buffer is
- *      ordered by the pack path's own barrier by construction (the quoted control), that the
+ *      ordered by the broad abandonment barrier -- the pack path's own barrier covers neither of
+ *      those pairs, since it names one dispatch's write and the read of its own slice -- that the
  *      abandoned batch submitted nothing of its own, that TF published exactly its own bytes while
  *      TX, TC2 and TD2 stayed dirty, and that the failure is not a device loss. RED on the pre-fix
  *      source and on both mutants.
@@ -278,26 +284,30 @@
  *
  * Expected verdicts
  * -----------------
- * The repaired source passes every property (14 verdicts, 275 checks). The PRE-FIX source (the
- * same file with the added `vb_barrier();` reverted) is measured to FAIL 10 of the 14 -- properties
- * 0, 1a, 1c, 1d, 3, 3b, 3c, 4, 4c and 4d, 23 of the 275 checks: the write-after-write cases on the
- * deciding check (an overlapping reuse with no barrier between the two writes), 1d and 3c also on
- * the write-after-READ check (no barrier covering the reader's stage and the later writer's), and 0
- * on the marker the repair adds. It PASSES 1b, 2, 4b and 5 -- 1b and 4b because their reuses are
- * ordered by construction (the pack path's own barrier, quoted) or absent altogether, 2 and 5
- * because the publication's bookkeeping (which target was published, from which slice) is not what
- * the defect breaks. Those four controls passing is the sanity anchor that separates "the defect"
- * from "the fixture".
+ * The repaired source passes every property (14 verdicts, 275 checks). The same file with the
+ * abandonment `vb_barrier();` deleted -- the recording this case exists to reject -- is measured to
+ * FAIL 11 of the 14: properties 0, 1a, 1b, 1c, 1d, 3, 3b, 3c, 4, 4c and 4d, 31 of the 275 checks.
+ * The write-after-write cases fail on the deciding check (an overlapping reuse with no barrier
+ * between the two writes), 1d and 3c also on the write-after-READ check (no barrier covering the
+ * reader's stage and the later writer's), and 0 on the marker the repair adds. 1b is RED there too:
+ * its reuse is the abandoned group's staging copy against the next group's pack-output copy, and
+ * the pack path's own barrier -- COMPUTE_SHADER/SHADER_WRITE -> TRANSFER/TRANSFER_READ -- orders
+ * only that dispatch's write before the copy that reads its slice, so with the abandonment barrier
+ * gone nothing names the pack-output copy's own write. It PASSES 2, 4b and 5 -- 4b because its
+ * reuse is absent altogether (its failure precedes every write of the group), 2 and 5 because the
+ * publication's bookkeeping (which target was published, from which slice) is not what the defect
+ * breaks. Those three controls passing is the sanity anchor that separates "the defect" from "the
+ * fixture".
  *
- * The mutant rows are in the report: with the added call replaced in place by a barrier whose
- * destination is VK_PIPELINE_STAGE_HOST_BIT with VK_ACCESS_HOST_READ_BIT, and with the call
- * deleted outright, the same 10 properties are RED. The narrow-barrier mutant is the one that
- * shows why the check is the recorded stream and not the presence of a call: a HOST_READ
- * destination and a HOST destination stage order neither of the two arrows, so 1a and 1c are RED
- * even though a barrier sits exactly where the repair's does (their "exactly one barrier lies
- * strictly between" checks pass there, and only the ordering does not), and 1d/3c/4d are RED on the
- * WAR check for that mutant too -- because the HOST destination stage does not cover COMPUTE
- * SHADER, which is what the write-after-read arrow needs.
+ * The mutant rows are in the report, and both mutants are RED on the same 11 properties: with the
+ * call deleted outright, 31 of the 275 checks; with it replaced in place by a barrier whose
+ * destination is VK_PIPELINE_STAGE_HOST_BIT with VK_ACCESS_HOST_READ_BIT, 29 of the 275. The
+ * narrow-barrier mutant is the one that shows why the check is the recorded stream and not the
+ * presence of a call: a HOST_READ destination and a HOST destination stage order neither of the two
+ * arrows, so 1a and 1c are RED even though a barrier sits exactly where the repair's does (their
+ * "exactly one barrier lies strictly between" checks pass there, and only the ordering does not),
+ * and 1d/3c/4d are RED on the WAR check for that mutant too -- because the HOST destination stage
+ * does not cover COMPUTE SHADER, which is what the write-after-read arrow needs.
  *
  * There is no skip mode and no SKIP_RETURN_CODE in the build: the seam is inside this translation
  * unit, so the case always runs, and anything it cannot do (a missing seam, a failed allocation)
@@ -397,8 +407,11 @@
  *
  * TC2's abandoned buffer copy also writes g.rb_buf [0, 32 MiB), which TF's own copy writes again:
  * the write-after-write class is decided here too. And the two 16-bit dispatches write the same
- * g.pack_buf bytes, ordered by the pack path's own barrier -- the quoted control, as everywhere
- * else. The fourth footprint ends exactly where the other scenarios' do. */
+ * g.pack_buf bytes, across the abandoned group boundary: that class -- and the abandoned dispatch's
+ * g.pack_buf write against the next group's commands in general -- is ordered by the abandonment
+ * barrier, not by the pack path's own one, which is COMPUTE_SHADER/SHADER_WRITE ->
+ * TRANSFER/TRANSFER_READ and orders a dispatch's write before the copy that reads that slice. The
+ * fourth footprint ends exactly where the other scenarios' do. */
 #define TC2_VA      0u                                      /* TC2 is staged FIRST, at offset 0 */
 #define TC2_PITCH   8192u
 #define TC2_W       4096u
@@ -1575,8 +1588,8 @@ static const RecBar *gate_ordering_barrier_war(const RecRead *a, const RecWrite 
     return NULL;
 }
 
-/* How many barriers of that recording were recorded strictly between the two writes; and the
- * nth of them, for the case that has to name WHICH barrier it is looking at. */
+/* How many barriers of that recording were recorded strictly between the two writes, for the
+ * checks that state how many lie there. */
 static unsigned gate_barriers_between(const RecWrite *a, const RecWrite *b)
 {
     unsigned i, n = 0;
@@ -1586,21 +1599,6 @@ static unsigned gate_barriers_between(const RecWrite *a, const RecWrite *b)
             && c.bars_rec[i].seq < b->seq)
             n++;
     return n;
-}
-
-static const RecBar *gate_barrier_between(const RecWrite *a, const RecWrite *b, unsigned nth)
-{
-    unsigned i;
-
-    for (i = 0; i < c.nbars; i++) {
-        const RecBar *r = &c.bars_rec[i];
-
-        if (r->rec != a->rec || r->seq <= a->seq || r->seq >= b->seq)
-            continue;
-        if (nth-- == 0u)
-            return r;
-    }
-    return NULL;
 }
 
 /* The submission-and-fence-wait boundary that orders the later recording after the earlier one,
@@ -2314,27 +2312,38 @@ static void prop1b(void)
     check(o.reuses == 1u && w0 && w2 && w2->cb == w0->cb && o.unordered == 0u, what,
           "reuses %u, unordered %u; T0: %s; third target: %s", o.reuses, o.unordered, ra, rb);
 
-    /* Which barrier orders it, quoted: this variant's reuse is ordered by the pack path's own
-     * barrier in BOTH sources, which is why 1b cannot separate the repair from the pre-fix
-     * source -- the case says so rather than pretending otherwise. The barrier the pack path
-     * records is the one between ITS dispatch and the buffer copy that reads it. */
-    r = (wd && w2) ? gate_barrier_between(wd, w2, 0u) : NULL;
-    snprintf(what, sizeof what, "1b the barrier the pack path records between its dispatch and "
-                                "its buffer copy also orders the abandoned copy's write");
-    check(r && w0 && w2 && gate_stage_covers(r->src, VK_PIPELINE_STAGE_TRANSFER_BIT)
-          && gate_access_covers(r->srca, VK_ACCESS_TRANSFER_WRITE_BIT)
-          && gate_stage_covers(r->dst, VK_PIPELINE_STAGE_TRANSFER_BIT) && gate_has_write(r->dsta),
-          what, "srcStage 0x%08X srcAccess 0x%08X -> dstStage 0x%08X dstAccess 0x%08X",
-          r ? (unsigned)r->src : 0u, r ? (unsigned)r->srca : 0u, r ? (unsigned)r->dst : 0u,
-          r ? (unsigned)r->dsta : 0u);
-    note("barriers recorded between the abandoned copy and the packed slice's buffer copy: %u; "
-         "the pack path's own (srcStage 0x%08X srcAccess 0x%08X -> dstStage 0x%08X dstAccess "
-         "0x%08X) already orders the reuse here, so 1b PASSES on the pre-fix source too. The "
-         "variant that separates the repair from it is 1a, whose reuse has no other barrier "
-         "between the two writes",
-         (w0 && w2) ? gate_barriers_between(w0, w2) : 0u,
-         r ? (unsigned)r->src : 0u, r ? (unsigned)r->srca : 0u, r ? (unsigned)r->dst : 0u,
-         r ? (unsigned)r->dsta : 0u);
+    /* Which barrier orders it, quoted: the abandoned group's own copy into the staging buffer and
+     * the buffer copy that reuses those bytes with the next group's pack output. The pack path's
+     * own barrier -- the one between ITS dispatch and the buffer copy that reads that slice -- is
+     * deliberately narrower than this pair: COMPUTE_SHADER/SHADER_WRITE -> TRANSFER/TRANSFER_READ
+     * orders that dispatch's write before the copy's READ of that slice and names no destination
+     * write, so it cannot order this reuse. The barrier that has to cover it is the broad
+     * abandonment barrier the repair records at the !batch_ok branch, and this variant therefore
+     * decides the repair exactly as 1a does. */
+    r = (w0 && w2) ? gate_ordering_barrier(w0, w2) : NULL;
+    snprintf(what, sizeof what, "1b the broad abandonment barrier orders the abandoned copy's "
+                                "write against the pack-output copy that reuses those bytes");
+    check(r && r->src == VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+          && r->dst == VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+          && r->srca == VK_ACCESS_MEMORY_WRITE_BIT
+          && r->dsta == (VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT), what,
+          "%s (wanted srcStage ALL_COMMANDS 0x%08X srcAccess MEMORY_WRITE 0x%08X -> dstStage "
+          "ALL_COMMANDS 0x%08X dstAccess READ|WRITE 0x%08X)",
+          r ? "srcStage/access and dstStage/access as required" : "NO ordering barrier between "
+          "them at all", (unsigned)VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+          (unsigned)VK_ACCESS_MEMORY_WRITE_BIT, (unsigned)VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+          (unsigned)(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT));
+    if (r)
+        note("the barrier that orders them: recording %u, srcStage 0x%08X srcAccess 0x%08X -> "
+             "dstStage 0x%08X dstAccess 0x%08X (buffer %p, ranges [0, %llu) and [0, %llu))",
+             r->rec, (unsigned)r->src, (unsigned)r->srca, (unsigned)r->dst, (unsigned)r->dsta,
+             (void *)g.rb_buf, (unsigned long long)T0_SLICE, (unsigned long long)T2P_SLICE);
+    note("barriers recorded between the abandoned copy and the packed slice's buffer copy: %u; the "
+         "pack path's own (COMPUTE_SHADER/SHADER_WRITE -> TRANSFER/TRANSFER_READ) is one of them, "
+         "but it orders the dispatch's write before the copy's READ of that slice and does not "
+         "name that copy's write into g.rb_buf, so the reuse is ordered by the abandonment barrier "
+         "-- which the pre-fix source records nowhere, so 1b is RED there as well",
+         (w0 && w2) ? gate_barriers_between(w0, w2) : 0u);
 
     verdict("1b the failing pass, 16-bit third target (pack buffers)", chk, bad);
 }
@@ -2411,19 +2420,27 @@ static void prop1c(void)
           "the write before the failed allocation at #%u is #%u/%s", c.ds_fail_seq,
           last ? last->seq : 0u, last ? last->how : "(none)");
 
-    /* The pack path's own barrier, quoted: it is the control that makes pack-buffer-versus-
-     * pack-buffer reuse safe by construction -- a later dispatch reusing those pack-buffer bytes
-     * is ordered after this one by this barrier -- so the abandoned dispatch's write is never the
-     * vulnerable one. The vulnerable one is the copy into g.rb_buf below. */
-    r = (wd && wc) ? gate_barrier_between(wd, wc, 0u) : NULL;
-    snprintf(what, sizeof what, "1c the abandoned dispatch's pack-buffer write is ordered by the "
-                                "pack path's own barrier, before its buffer copy");
-    check(r && gate_stage_covers(r->src, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT)
-          && gate_access_covers(r->srca, VK_ACCESS_SHADER_WRITE_BIT)
-          && gate_stage_covers(r->dst, VK_PIPELINE_STAGE_TRANSFER_BIT) && gate_has_write(r->dsta),
-          what, "srcStage 0x%08X srcAccess 0x%08X -> dstStage 0x%08X dstAccess 0x%08X",
-          r ? (unsigned)r->src : 0u, r ? (unsigned)r->srca : 0u, r ? (unsigned)r->dst : 0u,
-          r ? (unsigned)r->dsta : 0u);
+    /* The abandoned dispatch's pack-buffer write against what follows the abandonment. The pack
+     * path's own barrier -- between this dispatch and the buffer copy that reads its slice -- is
+     * now COMPUTE_SHADER/SHADER_WRITE -> TRANSFER/TRANSFER_READ: it orders the dispatch's write
+     * before that copy's READ of the slice, names no destination write, and so cannot order the
+     * reuse of pack-buffer bytes ACROSS a group boundary. What orders that class is the broad
+     * abandonment barrier the repair records before it steps over the group -- which is why the
+     * abandoned group's device writes are never the vulnerable ones. The vulnerable one is the
+     * copy into g.rb_buf below, decided on the reuse itself. */
+    r = (wd && we) ? gate_ordering_barrier(wd, we) : NULL;
+    snprintf(what, sizeof what, "1c the abandoned dispatch's pack-buffer write is separated from "
+                                "the next group's staging write by the broad abandonment barrier");
+    check(r && r->src == VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+          && r->dst == VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+          && r->srca == VK_ACCESS_MEMORY_WRITE_BIT
+          && r->dsta == (VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT), what,
+          "%s (wanted srcStage ALL_COMMANDS 0x%08X srcAccess MEMORY_WRITE 0x%08X -> dstStage "
+          "ALL_COMMANDS 0x%08X dstAccess READ|WRITE 0x%08X)",
+          r ? "srcStage/access and dstStage/access as required" : "NO ordering barrier between "
+          "them at all", (unsigned)VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+          (unsigned)VK_ACCESS_MEMORY_WRITE_BIT, (unsigned)VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+          (unsigned)(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT));
 
     check_nothing_submitted("1c", wc, we);
     snprintf(what, sizeof what, "1c the whole pass recorded into ONE command buffer: the abandoned "
@@ -2578,18 +2595,25 @@ static void prop1d(void)
          "abandonment barrier (unordered %u of %u write/write pairs)",
          (unsigned long long)TC2_SLICE, o.unordered, o.reuses);
 
-    /* The 16-bit dispatches' own reuse of the pack buffer, ordered by the pack path's own barrier:
-     * the control this case quotes wherever it describes that class. */
-    r = (wd && fd) ? gate_barrier_between(wd, fd, 0u) : NULL;
+    /* The two dispatches' own reuse of the pack buffer, across the abandoned group: the abandoned
+     * dispatch's write is ordered after the next group's by the broad abandonment barrier, not by
+     * the pack path's own one -- that one is COMPUTE_SHADER/SHADER_WRITE -> TRANSFER/TRANSFER_READ
+     * and orders a single dispatch's write before the copy that reads that slice, which is why the
+     * class the writes alone cannot show needs the abandonment barrier. */
+    r = (wd && fd) ? gate_ordering_barrier(wd, fd) : NULL;
     snprintf(what, sizeof what, "1d the two dispatches write the same pack buffer bytes, and the "
-                                "pack path's own barrier orders them by construction");
-    check(r && gate_stage_covers(r->src, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT)
-          && gate_access_covers(r->srca, VK_ACCESS_SHADER_WRITE_BIT)
-          && gate_stage_covers(r->dst, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT)
-          && gate_access_covers(r->dsta, VK_ACCESS_SHADER_WRITE_BIT), what,
-          "srcStage 0x%08X srcAccess 0x%08X -> dstStage 0x%08X dstAccess 0x%08X",
-          r ? (unsigned)r->src : 0u, r ? (unsigned)r->srca : 0u, r ? (unsigned)r->dst : 0u,
-          r ? (unsigned)r->dsta : 0u);
+                                "broad abandonment barrier orders the later one after the "
+                                "abandoned one");
+    check(r && r->src == VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+          && r->dst == VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+          && r->srca == VK_ACCESS_MEMORY_WRITE_BIT
+          && r->dsta == (VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT), what,
+          "%s (wanted srcStage ALL_COMMANDS 0x%08X srcAccess MEMORY_WRITE 0x%08X -> dstStage "
+          "ALL_COMMANDS 0x%08X dstAccess READ|WRITE 0x%08X)",
+          r ? "srcStage/access and dstStage/access as required" : "NO ordering barrier between "
+          "them at all", (unsigned)VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+          (unsigned)VK_ACCESS_MEMORY_WRITE_BIT, (unsigned)VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+          (unsigned)(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT));
 
     check_nothing_submitted("1d", tw, fd);
     check_dirty("1d", &s, 3u);

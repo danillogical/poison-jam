@@ -16,7 +16,7 @@
  * This translation unit #includes the toolkit's src/video/nv2a_vk_backend.c with
  * XBR_VK_BACKEND defined, so every function driven here -- vb_reserve, vb_stream,
  * vb_slot_wait, vb_slot_advance, vb_slot_submit, vb_cmd, vb_transfer_cmd, vb_barrier,
- * vb_image_barrier, vb_target_load, vb_tex_upload -- is compiled from the production
+ * vb_image_dep, vb_target_load, vb_tex_upload -- is compiled from the production
  * source, verbatim. Nothing is copied, so nothing can drift: the build recompiles these
  * bodies whenever that file changes, and tests/../scripts/vk-ring-fault-gate.py probes the
  * same bytes at build time and FAILS THE BUILD (exit 2) if a definition, the slot struct,
@@ -51,7 +51,7 @@
  *      slot's command buffer is not ended (nor reset again). A control where begin
  *      succeeds returns the slot's own command buffer with recording == 1.
  *   5. after a failure, recording stays valid -- vb_cmd, vb_transfer_cmd, vb_barrier and
- *      vb_image_barrier all record into the same discard buffer and never touch a slot's
+ *      vb_image_dep all record into the same discard buffer and never touch a slot's
  *      command buffer; and a current slot that is still pending after a failed wait is
  *      neither reset nor begun into.
  *   6. an oversized slice whose begin fails -- the dedicated-buffer branch of vb_stream
@@ -887,13 +887,14 @@ static void prop5(void)
     a = vb_cmd();
     b = vb_transfer_cmd();
     vb_barrier();
-    vb_image_barrier((VkImage)hnew(), VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                     VK_IMAGE_LAYOUT_GENERAL);
+    vb_image_dep((VkImage)hnew(), VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                 VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
+                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
 
     check(a == dead && b == dead, "vb_cmd and vb_transfer_cmd return the same buffer", "");
     check(c.barriers == 1 && c.barrier_cb == dead, "vb_barrier records into it", "%u barrier(s)",
           c.barriers);
-    check(c.imgbarriers == 1 && c.imgbarrier_cb == dead, "vb_image_barrier records into it",
+    check(c.imgbarriers == 1 && c.imgbarrier_cb == dead, "vb_image_dep records into it",
           "%u image barrier(s)", c.imgbarriers);
     check(c.resets == resets_after && c.ends == ends_after && c.begins == begins_after,
           "no slot's command buffer was reset, ended or begun again",

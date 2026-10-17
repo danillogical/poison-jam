@@ -791,6 +791,121 @@ if(BUILD_TESTING)
                        "it compiles the toolkit's Vulkan back end, which this build does not "
                        "(${XBR_VULKAN_UNAVAILABLE_REASON})")
     endif()
+    # ── N4.3: the synchronization-scope and sync-paths gates (plan-jsrf-gameplay.md) ─────────
+    # N4.3 narrowed every normal-path barrier in the toolkit's Vulkan back end to the stage and
+    # access scopes of the producer and of the consumers it actually orders, and left two sites
+    # deliberately broad (the per-submission barrier in vb_slot_submit, which is what makes
+    # cross-submission ordering defined, and the readback abandonment barrier in vb_targets_flush).
+    # These are the two cases that decide it, both written by workers distinct from the production
+    # change and from each other's verification:
+    #
+    #   jsrf_vk_sync_scope_gate -- NO GPU, no ICD, no skip path. Its translation unit #includes the
+    #   toolkit's src/video/nv2a_vk_backend.c verbatim with recording stubs over every Vulkan entry
+    #   point, drives the production bodies that record each changed barrier (target load, pass end,
+    #   target/depth create, texture upload, self-snapshot, the pack dispatch -> buffer copy pair and
+    #   the publish barrier), and decides from the recorded stream: each site's scopes are exactly
+    #   the ones its producer/consumer argument names (bound to the production macros' own values);
+    #   for every pair of conflicting accesses to the same resource and subresource an intervening
+    #   barrier covers BOTH sides, per hazard class, each with a positive count so no class can pass
+    #   vacuously; every recorded access's image layout equals the tracked layout and every
+    #   transition's oldLayout equals it; and the narrow form is really in force -- the only
+    #   ALL_COMMANDS barriers are the per-submission ones, one per submitted recording.
+    #
+    #   jsrf_vk_sync_paths_gate -- the real device (software ICD, lavapipe), installed through the
+    #   production nv2a_vk_backend_install() and observed through forwarders over the real driver
+    #   entry points, so the masks it decides are the ones the driver really received. It drives
+    #   repeated draws, a 16-bit and a 4-byte target, depth/stencil, a texture upload and a sample,
+    #   a self-sampling snapshot and a flip that packs and copies in one flush; it requires each
+    #   changed site to have recorded its exact masks at least once, requires the reachability
+    #   counters to be nonzero, and checks the published guest bytes against its own exact
+    #   expectation (the 16-bit truncation included).
+    #
+    # Built like the readback ordering gate: the probe scripts re-read the same backend bytes at
+    # BUILD time and fail the build (exit 2) when an anchor moved or a scope macro's value changed;
+    # a marker that is 0 is a printed failed check, never a build error, so the pre-change source
+    # still builds and is reported against. The private mutation receipts for these cases (9 mutants
+    # for the scope gate, 11 for the paths gate, with a comment-only control green in each) are in
+    # the plan N4.3 records.
+    if(XBR_VULKAN_FOUND)
+        find_package(Vulkan QUIET)
+        if(NOT Vulkan_INCLUDE_DIRS)
+            message(FATAL_ERROR
+                "Vulkan is available (XBR_VULKAN_FOUND) but find_package(Vulkan) found no "
+                "include directory here; the N4.3 sync-gate tests compile "
+                "src/video/nv2a_vk_backend.c, which needs <vulkan/vulkan.h>.")
+        endif()
+        set(VK_SYNC_DIR "${CMAKE_CURRENT_BINARY_DIR}/vk-sync-scope-gate")
+        set(VK_SYNC_SOURCE "${XBOXRECOMP_DIR}/src/video/nv2a_vk_backend.c")
+        set(VK_SYNC_PROBE "${CMAKE_CURRENT_SOURCE_DIR}/scripts/vk-sync-scope-gate.py")
+        set(VK_SYNC_HEADER "${VK_SYNC_DIR}/vk_sync_scope_gate_seam.h")
+        # A non-zero exit here fails the build, which is the point: a seam that moved must break
+        # the build rather than quietly turn the case into something else.
+        add_custom_command(
+            OUTPUT "${VK_SYNC_HEADER}" "${VK_SYNC_DIR}/vk_sync_scope_gate_seam.txt"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${VK_SYNC_DIR}"
+            COMMAND "${_jsrf_python}" -X utf8 "${VK_SYNC_PROBE}"
+                    --source "${VK_SYNC_SOURCE}"
+                    --header "${VK_SYNC_HEADER}"
+                    --manifest "${VK_SYNC_DIR}/vk_sync_scope_gate_seam.txt"
+            DEPENDS "${VK_SYNC_SOURCE}" "${VK_SYNC_PROBE}"
+            COMMENT "vk_sync_scope_gate: probing nv2a_vk_backend.c for the seam and scope macros this gate binds to"
+            VERBATIM)
+        add_custom_target(jsrf_vk_sync_scope_gate_probe DEPENDS "${VK_SYNC_HEADER}")
+        add_executable(jsrf_vk_sync_scope_gate_test tests/test_vk_sync_scope_gate.c)
+        add_dependencies(jsrf_vk_sync_scope_gate_test
+                         jsrf_vk_sync_scope_gate_probe xbox_video)
+        target_include_directories(jsrf_vk_sync_scope_gate_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/video
+            ${Vulkan_INCLUDE_DIRS}
+            "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv"
+            "${VK_SYNC_DIR}")
+        target_link_libraries(jsrf_vk_sync_scope_gate_test PRIVATE ${CMAKE_DL_LIBS})
+        # No SKIP_RETURN_CODE and no skip path: the seam is inside the translation unit, so the case
+        # always runs and exits 0 or 1.
+        add_test(NAME jsrf_vk_sync_scope_gate COMMAND jsrf_vk_sync_scope_gate_test)
+        set_tests_properties(jsrf_vk_sync_scope_gate PROPERTIES TIMEOUT 300)
+
+        set(VK_SYNC_PATHS_DIR "${CMAKE_CURRENT_BINARY_DIR}/vk-sync-paths-gate")
+        set(VK_SYNC_PATHS_PROBE "${CMAKE_CURRENT_SOURCE_DIR}/scripts/vk-sync-paths-gate.py")
+        set(VK_SYNC_PATHS_HEADER "${VK_SYNC_PATHS_DIR}/vk_sync_paths_gate_seam.h")
+        add_custom_command(
+            OUTPUT "${VK_SYNC_PATHS_HEADER}" "${VK_SYNC_PATHS_DIR}/vk_sync_paths_gate_seam.txt"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${VK_SYNC_PATHS_DIR}"
+            COMMAND "${_jsrf_python}" -X utf8 "${VK_SYNC_PATHS_PROBE}"
+                    --source "${VK_SYNC_SOURCE}"
+                    --header "${VK_SYNC_PATHS_HEADER}"
+                    --manifest "${VK_SYNC_PATHS_DIR}/vk_sync_paths_gate_seam.txt"
+            DEPENDS "${VK_SYNC_SOURCE}" "${VK_SYNC_PATHS_PROBE}"
+            COMMENT "vk_sync_paths_gate: probing nv2a_vk_backend.c for the seam this real-device gate binds to"
+            VERBATIM)
+        add_custom_target(jsrf_vk_sync_paths_gate_probe DEPENDS "${VK_SYNC_PATHS_HEADER}")
+        add_executable(jsrf_vk_sync_paths_gate_test tests/test_vk_sync_paths_gate.c)
+        add_dependencies(jsrf_vk_sync_paths_gate_test
+                         jsrf_vk_sync_paths_gate_probe xbox_video)
+        target_include_directories(jsrf_vk_sync_paths_gate_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/video
+            ${Vulkan_INCLUDE_DIRS}
+            "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv"
+            "${VK_SYNC_PATHS_DIR}")
+        target_link_libraries(jsrf_vk_sync_paths_gate_test PRIVATE ${CMAKE_DL_LIBS})
+        # It skips (77) exactly like its siblings when no software ICD is configured or when the
+        # back end cannot be installed -- notably in an elevated process, where the loader ignores
+        # VK_DRIVER_FILES. The skip is the case's own decision and prints its reason.
+        if(XBR_VK_SW_ICD)
+            file(TO_NATIVE_PATH "${XBR_VK_SW_ICD}" _vk_icd_sync)
+            add_test(NAME jsrf_vk_sync_paths_gate COMMAND jsrf_vk_sync_paths_gate_test)
+            set_tests_properties(jsrf_vk_sync_paths_gate PROPERTIES TIMEOUT 600 SKIP_RETURN_CODE 77
+                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd_sync};VK_ICD_FILENAMES=${_vk_icd_sync};RECOMP_VK_DEVICE=llvmpipe")
+        else()
+            add_test(NAME jsrf_vk_sync_paths_gate
+                     COMMAND jsrf_vk_sync_paths_gate_test --skip "XBR_VK_SW_ICD is not set")
+            set_tests_properties(jsrf_vk_sync_paths_gate PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
+        endif()
+    else()
+        message(STATUS "Vulkan/unavailable: jsrf_vk_sync_scope_gate and jsrf_vk_sync_paths_gate are "
+                       "not registered -- they compile the toolkit's Vulkan back end, which this "
+                       "build does not (${XBR_VULKAN_UNAVAILABLE_REASON})")
+    endif()
     # ── V6: the vertex-program conformance gate (plan-jsrf-gameplay.md, step V6) ─────────────
     # Authored by a worker distinct from V5's authors, and it asks a different question from V5's
     # gate: not "is the generated retail corpus self-consistent" but "does the offline translation
