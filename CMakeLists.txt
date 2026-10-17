@@ -623,6 +623,78 @@ if(BUILD_TESTING)
                        "compiles the toolkit's Vulkan back end, which this build does not "
                        "(${XBR_VULKAN_UNAVAILABLE_REASON})")
     endif()
+    # ── N4.2's readback coherence, as its CALLERS see it ─────────────────────────────────────
+    # The gate above decides the flush's own failure behaviour: a batch whose pack descriptor set
+    # could not be allocated submits nothing, publishes nothing and leaves its targets dirty. It
+    # cannot decide what the CALLERS did with that outcome, and that was the second half of the
+    # defect: vb_flip submitted, drained, marked every used target stale and advanced g.frame even
+    # though the publication had failed, so the next vb_target_load uploaded old guest bytes over
+    # the target whose newer pixels were never published; vb_target_for flushed and then released
+    # the target unconditionally on a reshape or an LRU eviction, destroying the only copy of
+    # pixels guest memory never got; and vb_texture's overlapping-guest-texture loop flushed and
+    # carried on, decoding and caching a texture from guest bytes a live target had superseded.
+    # This case drives those four callers and asserts, for each injection, that a failed
+    # publication is retried exactly once and then stops the back end: no frame advance, no stale
+    # mark, no release, no decode, no load of the bytes it never published.
+    #
+    # Built exactly like the fault gate: NO copy of the algorithm. Its translation unit #includes
+    # the toolkit's src/video/nv2a_vk_backend.c with XBR_VK_BACKEND defined, so the bodies under
+    # test are the production ones, and the toolkit is NOT linked (the five external symbols it
+    # references are stubbed in the test, and every Vulkan entry point the driven paths reach is a
+    # static function pointer the test points at its own stubs; both injected failures --
+    # vkAllocateDescriptorSets and vkCreateBuffer -- are stub return values, not real GPU OOM).
+    # scripts/vk-readback-caller-gate.py re-reads the same bytes at BUILD time: a definition,
+    # struct field or global the fixture binds to that is gone fails the BUILD (exit 2). Unlike
+    # the fault gate's probe it also runs against the PRE-FIX source, so the repair's own seam is
+    # probed as markers the test prints rather than anchors it requires; the four callers'
+    # signatures are the interface and are required.
+    #
+    # No SKIP_RETURN_CODE and no skip path: the seam is inside the translation unit, so the case
+    # always runs and exits 0 or 1.
+    if(XBR_VULKAN_FOUND)
+        find_package(Vulkan QUIET)
+        if(NOT Vulkan_INCLUDE_DIRS)
+            message(FATAL_ERROR
+                "Vulkan is available (XBR_VULKAN_FOUND) but find_package(Vulkan) found no "
+                "include directory here; the readback caller-gate test compiles "
+                "src/video/nv2a_vk_backend.c, which needs <vulkan/vulkan.h>.")
+        endif()
+        set(VK_RB_CALLERS_DIR "${CMAKE_CURRENT_BINARY_DIR}/vk-readback-callers")
+        set(VK_RB_CALLERS_SOURCE "${XBOXRECOMP_DIR}/src/video/nv2a_vk_backend.c")
+        set(VK_RB_CALLERS_HDRSOURCE "${XBOXRECOMP_DIR}/src/video/nv2a_vk_backend.h")
+        set(VK_RB_CALLERS_PROBE "${CMAKE_CURRENT_SOURCE_DIR}/scripts/vk-readback-caller-gate.py")
+        set(VK_RB_CALLERS_HEADER "${VK_RB_CALLERS_DIR}/vk_readback_caller_gate_seam.h")
+        # A non-zero exit here fails the build, which is the point: a seam that moved must break
+        # the build rather than quietly turn the case into something else.
+        add_custom_command(
+            OUTPUT "${VK_RB_CALLERS_HEADER}" "${VK_RB_CALLERS_DIR}/vk_readback_caller_gate_seam.txt"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${VK_RB_CALLERS_DIR}"
+            COMMAND "${_jsrf_python}" -X utf8 "${VK_RB_CALLERS_PROBE}"
+                    --source "${VK_RB_CALLERS_SOURCE}"
+                    --backend-header "${VK_RB_CALLERS_HDRSOURCE}"
+                    --header "${VK_RB_CALLERS_HEADER}"
+                    --manifest "${VK_RB_CALLERS_DIR}/vk_readback_caller_gate_seam.txt"
+            DEPENDS "${VK_RB_CALLERS_SOURCE}" "${VK_RB_CALLERS_HDRSOURCE}" "${VK_RB_CALLERS_PROBE}"
+            COMMENT "vk_readback_callers: probing nv2a_vk_backend.c for the seam the caller regression binds to"
+            VERBATIM)
+        add_custom_target(jsrf_vk_readback_callers_probe DEPENDS "${VK_RB_CALLERS_HEADER}")
+        add_executable(jsrf_vk_readback_callers_test tests/test_vk_readback_callers.c)
+        # xbox_video is what generates the SPIR-V headers the back end includes; the probe target
+        # writes the seam header the test includes.
+        add_dependencies(jsrf_vk_readback_callers_test jsrf_vk_readback_callers_probe xbox_video)
+        target_include_directories(jsrf_vk_readback_callers_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/video
+            ${Vulkan_INCLUDE_DIRS}
+            "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv"
+            "${VK_RB_CALLERS_DIR}")
+        target_link_libraries(jsrf_vk_readback_callers_test PRIVATE ${CMAKE_DL_LIBS})
+        add_test(NAME jsrf_vk_readback_callers COMMAND jsrf_vk_readback_callers_test)
+        set_tests_properties(jsrf_vk_readback_callers PROPERTIES TIMEOUT 300)
+    else()
+        message(STATUS "Vulkan/unavailable: jsrf_vk_readback_callers is not registered -- it "
+                       "compiles the toolkit's Vulkan back end, which this build does not "
+                       "(${XBR_VULKAN_UNAVAILABLE_REASON})")
+    endif()
     # ── V6: the vertex-program conformance gate (plan-jsrf-gameplay.md, step V6) ─────────────
     # Authored by a worker distinct from V5's authors, and it asks a different question from V5's
     # gate: not "is the generated retail corpus self-consistent" but "does the offline translation

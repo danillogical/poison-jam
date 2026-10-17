@@ -74,8 +74,7 @@ REQUIRED = [
     ("vb_readback_slice", "static VkDeviceSize vb_readback_slice(const VbTarget *t, "
                           "uint32_t *row_stride)"),
     ("vb_readback_reserve", "static int vb_readback_reserve(VkDeviceSize bytes)"),
-    ("vb_targets_flush", "static void vb_targets_flush(VbTarget **ts, unsigned n)"),
-    ("vb_target_flush", "static void vb_target_flush(VbTarget *t)"),
+    ("vb_targets_flush", "static int vb_targets_flush(VbTarget **ts, unsigned n)"),
     ("vb_transfer_cmd", "static VkCommandBuffer vb_transfer_cmd(void)"),
     ("vb_cmd", "static VkCommandBuffer vb_cmd(void)"),
     ("vb_barrier", "static void vb_barrier(void)"),
@@ -90,8 +89,17 @@ REQUIRED = [
      "void nv2a_vk_backend_readback_stats(Nv2aVkReadbackStats *out)"),
 ]
 
-FLUSH_START = "static void vb_targets_flush(VbTarget **ts, unsigned n)"
-FLUSH_END = "static void vb_target_flush(VbTarget *t)"
+# The repair adds a return value to the flush and removes the one-target wrapper that used to
+# follow it, so the slice's delimiters are the flush's new signature and the next definition that
+# still exists. The slice therefore also spans the three new seam functions between them
+# (vb_stop, vb_readback_recover, vb_targets_flush_recover). That is deliberate and the markers
+# below are unaffected: none of the six publication counters appears in those three (the seam
+# counts readback_incomplete instead), and the first `vb_slot_submit();` in the slice is still
+# the publication boundary inside the flush -- the recovery's own submit comes after it. With
+# these two strings the probe still asserts exactly what it always did, and it does not break
+# again if a definition is inserted between them.
+FLUSH_START = "static int vb_targets_flush(VbTarget **ts, unsigned n)"
+FLUSH_END = "static void vb_target_load(VbTarget *t)"
 
 
 def flat(text):

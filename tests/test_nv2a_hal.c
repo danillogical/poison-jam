@@ -791,6 +791,344 @@ static int run_ordered_constant_contract(void)
     return ok;
 }
 
+/* ── Executor CPU-consumer gate: a back end that reports stopped ───────────
+ *
+ * A back end may stop publishing: it could not write a frame's render targets
+ * into guest memory, so guest memory still holds the LAST frame it did publish
+ * (`Nv2aBackend.stopped`, kernel/nv2a_backend.h). While that is true no CPU path
+ * in the executor may consume guest framebuffer memory -- a clear or a batch
+ * rasterised on the CPU would overwrite published pixels with a frame nothing
+ * published, and presenting guest memory would show that wrong frame.
+ *
+ * This contract drives the REAL executor over the commit seam (owner walk ->
+ * registered consumer -> nv2a_pb_exec) with a back end whose `stopped` is a
+ * fixture flag, and observes both halves of the gate:
+ *
+ *   - the CPU-consumer half, with a back end that handles NOTHING (no clear, no
+ *     draw, no flip): the executor would otherwise fall back to the CPU for both
+ *     the clear and the batch. "Wrote nothing into guest RAM" and "advanced no
+ *     CPU raster counter" are observations here, not tautologies.
+ *   - the delivery half, with a back end that handles everything: a stopped back
+ *     end must not be handed the clear or the batch either.
+ *
+ * Each half carries its own negative control -- the SAME pushbuffer with
+ * `stopped` reporting 0 -- which must clear, rasterise and count. That contrast
+ * is the observation channel; without it the stopped assertions could pass on a
+ * pushbuffer that never did anything.
+ *
+ * Instrumented, and what could not be: the toolkit's own
+ * xbox_FramebufferWindowPresent (fb_present.c) is a no-op in this process -- it
+ * returns immediately unless xbox_FramebufferWindowStart() opened a window
+ * (RECOMP_FB_WINDOW), and its present serial only advances on that path -- so
+ * counting the REAL call is not possible without opening a window. This fixture
+ * therefore provides the window seam itself (the nine externs below) and counts
+ * the present. That observes the executor's CALL, which is exactly what the gate
+ * suppresses; it does not observe fb_present's internals, which are unchanged.
+ */
+#define XBOX_BASE_ADDRESS 0x00010000u
+extern ptrdiff_t xbox_GetMemoryOffset(void);
+extern BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size);
+extern void xbox_MemoryLayoutShutdown(void);
+
+static uint32_t g_window_presents;
+
+void xbox_FramebufferWindowSet(uint32_t fb_va, uint32_t pitch)
+{ (void)fb_va; (void)pitch; }
+void xbox_FramebufferWindowPresent(uint32_t fb_va, uint32_t pitch)
+{ (void)fb_va; (void)pitch; ++g_window_presents; }
+void xbox_FramebufferWindowStart(void) {}
+void xbox_FramebufferWindowSetTitle(const uint16_t *name, int max_chars)
+{ (void)name; (void)max_chars; }
+void xbox_FramebufferWindowFrameStats(uint32_t draws) { (void)draws; }
+int xbox_FramebufferKeyDown(int vk) { (void)vk; return 0; }
+uint32_t xbox_FramebufferPresentSerial(void) { return 0; }
+unsigned long long xbox_FramebufferPresentHash(void) { return 0; }
+int xbox_FramebufferDumpBmp(const char *path) { (void)path; return 0; }
+
+/* What the fixture's back end reports through `stopped`. */
+static uint32_t g_gate_stopped;
+static int gate_stopped(void) { return (int)g_gate_stopped; }
+
+/* A back end that DELIVERS: it handles the clear, the batch and the flip, so the
+ * executor hands them over instead of doing the work itself. */
+static uint32_t g_gate_clears, g_gate_draws, g_gate_flips;
+static void gate_clear(const Nv2aSurface *s, const Nv2aRenderState *rs,
+                       uint32_t flags, uint32_t argb, uint32_t zstencil)
+{ (void)s; (void)rs; (void)flags; (void)argb; (void)zstencil; ++g_gate_clears; }
+static void gate_draw(const Nv2aSurface *s, const Nv2aBatch *b)
+{ (void)s; (void)b; ++g_gate_draws; }
+static void gate_flip(void) { ++g_gate_flips; }
+static const Nv2aBackend g_delivering_backend = {
+    gate_clear, gate_draw, gate_flip, NULL, gate_stopped
+};
+
+/* A back end that handles NOTHING but still reports `stopped`. Every CPU path in
+ * the executor is then live, which is what makes the guest-memory and raster
+ * counter assertions below observations. */
+static const Nv2aBackend g_cpu_fallback_backend = {
+    NULL, NULL, NULL, NULL, gate_stopped
+};
+
+#define GATE_SURF_VA     0x00400000u
+#define GATE_VB_VA       0x00420000u
+#define GATE_SURF_W      64u
+#define GATE_SURF_H      64u
+#define GATE_SURF_BPP    4u
+#define GATE_SURF_PITCH  (GATE_SURF_W * GATE_SURF_BPP)
+#define GATE_SURF_BYTES  (GATE_SURF_PITCH * GATE_SURF_H)
+#define GATE_CLEAR_ARG   0xFF204060u
+#define GATE_TRI_ARG     0xFFE0A020u
+#define GATE_SENTINEL    0x5Au
+
+static void gate_put_vertex(uint32_t i, float x, float y, uint32_t argb)
+{
+    uint8_t *v = (uint8_t *)xbox_GetMemoryOffset() + GATE_VB_VA + (size_t)i * 24u;
+    float *f = (float *)v;
+    f[0] = x; f[1] = y; f[2] = 0.5f;
+    memcpy(v + 12, &argb, 4);
+    f[4] = 0.0f; f[5] = 0.0f;
+}
+
+/* One frame's worth of work: surface + clear, one screen-space triangle, flip.
+ * Returns the word count. */
+static uint32_t gate_build_sequence(uint32_t *out)
+{
+    uint32_t w = 0;
+#define GPB(m, v) do { out[w++] = (1u << 18) | (uint32_t)(m); out[w++] = (uint32_t)(v); } while (0)
+    GPB(0x0000u, 0x6u);                          /* SET_OBJECT: NV097 on subchannel 0 */
+    GPB(0x0200u, GATE_SURF_W << 16);             /* CLIP_H: x0 = 0, width 64 */
+    GPB(0x0204u, GATE_SURF_H << 16);             /* CLIP_V: y0 = 0, height 64 */
+    GPB(0x0208u, 0x0108u);                       /* SET_SURFACE_FORMAT: A8R8G8B8 linear */
+    GPB(0x020Cu, GATE_SURF_PITCH);               /* PITCH: 256 */
+    GPB(0x0210u, GATE_SURF_VA);                  /* COLOR_OFFSET */
+    GPB(0x1D90u, GATE_CLEAR_ARG);                /* SET_COLOR_CLEAR_VALUE */
+    GPB(0x1D94u, 0xF0u);                         /* CLEAR_SURFACE: colour */
+    GPB(0x1720u, GATE_VB_VA);                    /* attribute 0 offset */
+    GPB(0x1760u, 2u | (3u << 4) | (24u << 8));   /*   float2, stride 24 */
+    GPB(0x172Cu, GATE_VB_VA + 12u);              /* attribute 3 offset (diffuse) */
+    GPB(0x176Cu, 0u | (4u << 4) | (24u << 8));   /*   D3DCOLOR, stride 24 */
+    GPB(0x1744u, 0u);                            /* attribute 9 unused */
+    GPB(0x1784u, 0u);
+    GPB(0x1B0Cu, 0u);                            /* texture stage 0 disabled */
+    GPB(0x17FCu, 5u);                            /* BEGIN: TRIANGLES */
+    GPB(0x1810u, (2u << 24) | 0u);               /* DRAW_ARRAYS: 3 vertices from 0 */
+    GPB(0x17FCu, 0u);                            /* END: the batch is drawn here */
+    GPB(0x0130u, 0u);                            /* FLIP_STALL */
+#undef GPB
+    return w;
+}
+
+static int gate_submit(NV2AState *gpu, uint32_t *pb, uint32_t words)
+{
+    gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_GET] = 0;
+    gpu->pfifo.regs[NV_PFIFO_CACHE1_DMA_PUT] = words * 4u;
+    return nv2a_submit_pending(gpu);
+}
+
+static int run_stopped_backend_consumer_contract(void)
+{
+    const uint32_t ram_size = 64u * 1024u * 1024u;
+    uint8_t *ram = (uint8_t *)calloc(1, ram_size);
+    uint8_t *ramin = (uint8_t *)calloc(1, 1024u * 1024u);
+    uint8_t *instance = (uint8_t *)calloc(1, 0x20000u);
+    uint32_t *pb = (uint32_t *)VirtualAlloc(NULL, 0x2000,
+                                            MEM_RESERVE | MEM_COMMIT,
+                                            PAGE_READWRITE);
+    static uint8_t xbe[0x2000];
+    NV2AState *gpu;
+    uint8_t *surf, *pristine;
+    uint32_t words;
+    int laid_out = 0;
+    int ok = 1;
+
+    if (!ram || !ramin || !instance || !pb) return 0;
+
+    /* Real guest RAM. The CPU paths this contract must observe write through
+     * xbox_GetMemoryOffset(), which is NULL until the memory layout exists, so
+     * this fixture initialises it the way test_gpu_backend_parity.c does: a
+     * synthetic, section-less XBE is enough. */
+    *(uint32_t *)(xbe + 0x0104) = XBOX_BASE_ADDRESS;
+    *(uint32_t *)(xbe + 0x0108) = 0x1000;
+    *(uint32_t *)(xbe + 0x0120) = XBOX_BASE_ADDRESS + 0x200;
+    if (!xbox_MemoryLayoutInit(xbe, sizeof xbe)) {
+        fprintf(stderr, "FAIL stopped-backend: xbox_MemoryLayoutInit\n");
+        goto done;
+    }
+    laid_out = 1;
+    surf = (uint8_t *)xbox_GetMemoryOffset() + GATE_SURF_VA;
+    pristine = (uint8_t *)malloc(GATE_SURF_BYTES);
+    if (!pristine) { ok = 0; goto done; }
+
+    nv2a_reset_standalone_for_test();
+    gpu = nv2a_init_standalone(ram, ram_size, ramin, 1024u * 1024u);
+    if (!gpu) { free(pristine); ok = 0; goto done; }
+    if (!nv2a_set_pushbuffer_window(gpu, (uint8_t *)pb, 0, 0x2000)
+     || !nv2a_bind_instance_memory(0x83fe0000u, instance, 0x20000u)) {
+        free(pristine); ok = 0; goto done;
+    }
+    {
+        uint32_t *pair = (uint32_t *)(instance + 0x6u * 8u);
+        uint32_t *object = (uint32_t *)(instance + (0x300u << 4));
+        pair[0] = 0x6u; pair[1] = NV_RAMHT_STATUS | 0x300u;
+        object[0] = 0x97u; object[1] = object[2] = object[3] = 0;
+    }
+    _putenv_s("RECOMP_PB_EXEC", "1");
+    nv2a_pb_exec_register_commit_consumer();
+    if (!nv2a_pb_exec_consumer_registered()) {
+        fprintf(stderr, "FAIL stopped-backend: executor did not register\n");
+        free(pristine); ok = 0; goto done;
+    }
+
+    gate_put_vertex(0,  8.0f,  8.0f, GATE_TRI_ARG);
+    gate_put_vertex(1, 56.0f, 12.0f, GATE_TRI_ARG);
+    gate_put_vertex(2, 20.0f, 58.0f, GATE_TRI_ARG);
+    memset(pb, 0, 0x2000);
+    words = gate_build_sequence(pb);
+
+    /* (A) The CPU-consumer half, stopped. A back end that handles nothing, so
+     * the executor would otherwise clear and rasterise into guest memory. */
+    {
+        Nv2aPbExecCounters b, a;
+        uint32_t window_before;
+        memset(surf, GATE_SENTINEL, GATE_SURF_BYTES);
+        memcpy(pristine, surf, GATE_SURF_BYTES);
+        g_gate_stopped = 1;
+        nv2a_backend_register(&g_cpu_fallback_backend);
+        memset(&b, 0, sizeof b); memset(&a, 0, sizeof a);
+        nv2a_pb_exec_counters(&b);
+        window_before = g_window_presents;
+        ok &= exec_check((uint32_t)gate_submit(gpu, pb, words), 1,
+                         "stopped/cpu: pushbuffer accepted");
+        nv2a_pb_exec_counters(&a);
+        ok &= exec_check((uint32_t)memcmp(pristine, surf, GATE_SURF_BYTES), 0,
+                         "stopped/cpu: guest surface bytes unchanged");
+        ok &= exec_check(a.clears - b.clears, 0, "stopped/cpu: no clear counted");
+        ok &= exec_check(a.tris_drawn - b.tris_drawn, 0,
+                         "stopped/cpu: no triangle rasterised");
+        ok &= exec_check((uint32_t)(a.pixels - b.pixels), 0,
+                         "stopped/cpu: no pixel written");
+        ok &= exec_check(g_window_presents - window_before, 0,
+                         "stopped/cpu: no frame presented");
+        /* The guest's own swap still completes: the gate stops the HOST's
+         * consumption of guest memory, not the guest's swap accounting. */
+        ok &= exec_check(a.flip_stalls - b.flip_stalls, 1,
+                         "stopped/cpu: the guest's swap still completed");
+    }
+
+    /* (B) The observation channel: the SAME sequence and back end with `stopped`
+     * reporting 0 must clear, rasterise and present. */
+    {
+        Nv2aPbExecCounters b, a;
+        uint32_t window_before, corner, i, tri_px = 0;
+        memset(surf, GATE_SENTINEL, GATE_SURF_BYTES);
+        memcpy(pristine, surf, GATE_SURF_BYTES);
+        g_gate_stopped = 0;
+        nv2a_backend_register(&g_cpu_fallback_backend);
+        memset(&b, 0, sizeof b); memset(&a, 0, sizeof a);
+        nv2a_pb_exec_counters(&b);
+        window_before = g_window_presents;
+        ok &= exec_check((uint32_t)gate_submit(gpu, pb, words), 1,
+                         "running/cpu: pushbuffer accepted");
+        nv2a_pb_exec_counters(&a);
+        ok &= exec_check((uint32_t)(memcmp(pristine, surf, GATE_SURF_BYTES) != 0), 1,
+                         "running/cpu: the CPU path wrote the surface");
+        ok &= exec_check(a.clears - b.clears, 1, "running/cpu: the clear counted");
+        ok &= exec_check(a.tris_drawn - b.tris_drawn >= 1, 1,
+                         "running/cpu: a triangle was rasterised");
+        ok &= exec_check(a.pixels > b.pixels, 1, "running/cpu: pixels were written");
+        ok &= exec_check(g_window_presents - window_before, 1,
+                         "running/cpu: the flip presented a frame");
+        memcpy(&corner, surf, 4);
+        ok &= exec_check(corner, GATE_CLEAR_ARG,
+                         "running/cpu: pixel 0 is the clear colour");
+        for (i = 0; i < GATE_SURF_W * GATE_SURF_H; ++i) {
+            uint32_t px;
+            memcpy(&px, surf + (size_t)i * 4u, 4);
+            if (px == GATE_TRI_ARG) ++tri_px;
+        }
+        ok &= exec_check(tri_px > 0, 1,
+                         "running/cpu: the batch's colour is on the surface");
+    }
+
+    /* (C) The delivery half, stopped: a back end that handles everything must
+     * not be handed the clear or the batch either. The flip is still delivered --
+     * the executor calls it before it can know the outcome. */
+    {
+        Nv2aPbExecCounters b, a;
+        uint32_t clears_before = g_gate_clears, draws_before = g_gate_draws;
+        uint32_t flips_before = g_gate_flips, window_before = g_window_presents;
+        g_gate_stopped = 1;
+        nv2a_backend_register(&g_delivering_backend);
+        memset(&b, 0, sizeof b); memset(&a, 0, sizeof a);
+        nv2a_pb_exec_counters(&b);
+        ok &= exec_check((uint32_t)gate_submit(gpu, pb, words), 1,
+                         "stopped/back-end: pushbuffer accepted");
+        nv2a_pb_exec_counters(&a);
+        ok &= exec_check(g_gate_clears - clears_before, 0,
+                         "stopped/back-end: the clear was not delivered");
+        ok &= exec_check(g_gate_draws - draws_before, 0,
+                         "stopped/back-end: the batch was not delivered");
+        ok &= exec_check(g_gate_flips - flips_before, 1,
+                         "stopped/back-end: the flip was still delivered");
+        ok &= exec_check(g_window_presents - window_before, 0,
+                         "stopped/back-end: no frame presented");
+        ok &= exec_check(a.tris_drawn - b.tris_drawn, 0,
+                         "stopped/back-end: no triangle drawn (back end or CPU)");
+        ok &= exec_check((uint32_t)(a.pixels - b.pixels), 0,
+                         "stopped/back-end: no CPU pixel written");
+    }
+
+    /* (D) The delivery channel's control: `stopped` reporting 0 must hand the
+     * clear and the batch over and present the frame. */
+    {
+        Nv2aPbExecCounters b, a;
+        uint32_t clears_before = g_gate_clears, draws_before = g_gate_draws;
+        uint32_t flips_before = g_gate_flips, window_before = g_window_presents;
+        g_gate_stopped = 0;
+        nv2a_backend_register(&g_delivering_backend);
+        memset(&b, 0, sizeof b); memset(&a, 0, sizeof a);
+        nv2a_pb_exec_counters(&b);
+        ok &= exec_check((uint32_t)gate_submit(gpu, pb, words), 1,
+                         "running/back-end: pushbuffer accepted");
+        nv2a_pb_exec_counters(&a);
+        ok &= exec_check(g_gate_clears - clears_before, 1,
+                         "running/back-end: the clear was delivered");
+        ok &= exec_check(g_gate_draws - draws_before, 1,
+                         "running/back-end: the batch was delivered");
+        /* The back end's own batch is counted too, which is why the stopped
+         * assertion above can say "no triangle drawn" without qualification. */
+        ok &= exec_check(a.tris_drawn - b.tris_drawn, 1,
+                         "running/back-end: the delivered batch was counted");
+        ok &= exec_check(g_gate_flips - flips_before, 1,
+                         "running/back-end: the flip was delivered");
+        ok &= exec_check(g_window_presents - window_before, 1,
+                         "running/back-end: the flip presented a frame");
+    }
+
+    /* The member the executor reads is live on the registered struct. The REAL
+     * Vulkan back end's struct is file-static in nv2a_vk_backend.c and the only
+     * way to register it is nv2a_vk_backend_install(), which creates a Vulkan
+     * device and registers globally -- this fixture is deliberately device-free
+     * (that path is jsrf_gpu_backend_parity_vk's), so `vb_stopped` cannot be
+     * reached from here and is not asserted. */
+    ok &= exec_check(nv2a_backend_current() == &g_delivering_backend, 1,
+                     "stopped/back-end: the fixture's back end is registered");
+    ok &= exec_check(nv2a_backend_current()->stopped != NULL, 1,
+                     "stopped/back-end: the registered back end carries `stopped`");
+
+    nv2a_backend_register(NULL);
+    nv2a_set_commit_consumer(NULL);
+    free(pristine);
+
+done:
+    VirtualFree(pb, 0, MEM_RELEASE);
+    free(instance);
+    free(ramin);
+    free(ram);
+    if (laid_out) xbox_MemoryLayoutShutdown();
+    return ok;
+}
+
 int main(void)
 {
     int ok = 1;
@@ -800,6 +1138,9 @@ int main(void)
     ok &= run_executor_instrument_contract();
     ok &= run_executor_clear_contract();
     ok &= run_ordered_constant_contract();
+    /* Last: it initialises and shuts down the guest memory layout, which the
+     * cases above do not use (their guest memory pointer is NULL). */
+    ok &= run_stopped_backend_consumer_contract();
     if (!ok) { fprintf(stderr, "FAIL: committed-method consumer contract\n"); return 1; }
     puts("PASS: committed-method consumer (owner path -> real executor)");
     return 0;
