@@ -3639,3 +3639,57 @@ packet.
   Both ran on a quiet machine, one at a time, with disposable saves; the performance runs above were
   kept separate (no validation layer, no `VK_LOADER_DEBUG`).
 
+### §31.30 N4.1 independent rejection: a failed wait still permits a pending-stream write (2026-10-16)
+
+**N4.1 is not accepted.** Game `adc2c1b` / toolkit `c5f3696` were fetched clean and synchronized.
+The independent software-Vulkan `jsrf_vk_frames_in_flight` run passed in 19.18 s, with the reported
+270/270 exact surfaces and 45/45 pixel comparisons. The archived final CTest receipt is 87/87 in
+484.54 s; the final checker receipt includes the real corpus 126/126. Codex recomputed the N2
+medians from all six actual `bench.json` records (33.4843 before, 43.4007 after), verified the
+N3 loader insertion lines in the actual log, and reclassified both acceptance archives as
+EXPLORATORY with zero UNKNOWN/MISSING results. None of these success-path checks proves safe
+failure handling.
+
+**Deciding defect (P2).** `vb_reserve` can advance to an occupied slot; `vb_slot_wait` times out,
+sets `g.ok = 0`, and correctly leaves that slot pending. But `vb_target_load` immediately calls
+`vb_stream` and copies the guest pixels into its returned pointer before testing `g.ok`. If the
+pending slot still has room, this overwrites its mapped stream while its GPU work can still read it.
+The guard before recording the copy is too late. `vb_tex_upload` has the same reserve-then-write
+ordering and needs the same audit; draw paths already guard immediately after reserve.
+
+**Reproduction and positive control.** A standalone offline-built harness uses five unmodified
+production function bodies (`vb_slot_wait`, `vb_slot_advance`, `vb_reserve`, `vb_stream`,
+`vb_target_load`). Only the surrounding submission/driver outcomes are controlled stubs: current
+slot full, next slot pending but with stream capacity, a one-pixel target, and `vkWaitForFences`
+returning SUCCESS or TIMEOUT. This is a controlled production-code failure-path test, not a live
+GPU timeout or an explanation of the two startup crashes recorded in §31.29.
+
+```
+SUCCESS: waits=1 reset=1 ok=1 pending=0 stream_changed=1 first_byte=CC copies=1
+TIMEOUT: waits=1 reset=0 ok=0 pending=1 stream_changed=1 first_byte=CC copies=0
+positive_control=PASS timeout_preserves_pending_stream=FAIL
+```
+
+The production-body harness exits 1. A private proposed control adds only an early `g.ok` return
+immediately after `vb_reserve` in `vb_target_load`; it exits 0: success still uploads, while TIMEOUT
+leaves the pending stream's sentinel byte `5A` unchanged and records no GPU copy. No production
+repository code, original assets or saves were changed by the reproduction. This proves a concrete
+repair point; it does not claim the full backend is repaired.
+
+**Other evidence.** Actual worker transcripts confirm distinct gate authors on OpenCode DeepSeek,
+ordinary/hazard reviewers on Opus 5.5, and security review on Muse 1.3, no recorded fallback.
+Codex audited every outgoing candidate blob in the correct repository (game 5, toolkit 2), zero
+secret hits, forbidden paths or oversized blobs. The original mutations A/B were verified from
+their source copies and full logs: immediate wait fails the overlap assertions; bypassed fence
+wait crashes. These do not exercise the timeout-freeze condition reproduced above.
+
+**Required bounded repair before continuation:** stop before touching any slot-owned stream/pool/
+command recording after a failed wait; audit both upload paths and failure propagation through
+command-begin/transfer helpers; have a different worker add a deciding failed-wait regression,
+with a successful-wait positive control and a weakening mutation. Re-run the lifetime/parity gates
+and relevant final validation. Keep all other N4 items out of the repair packet.
+
+The current bridge run has 9 operation slots but **zero remediation cycles** remaining. Codex
+withholds acceptance and requests owner authorization for one additional repair cycle; neither
+rotation nor a successor run may silently reset limits. No batched-readback packet is authorized.
+

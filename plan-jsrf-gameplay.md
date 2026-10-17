@@ -323,7 +323,7 @@ Readbacks take 202–211 s of a 560 s run, and V1 submits and fence-waits simply
 - sub-allocated memory;
 - a persisted pipeline cache.
 
-**N4.1 is done: bounded frames in flight with per-frame streams and descriptor pools** (toolkit
+**N4.1 is implemented but NOT independently accepted: a failed-wait lifetime defect remains** (toolkit
 `c5f3696`, TR §31.29). A ring of three submission slots, each owning its command recording, fence,
 descriptor pool and 16 MiB upload stream; a submission is issued without waiting for the ones before
 it; a draw entry splits a frame once the recording slot holds 2 MiB of stream or 32 descriptor sets
@@ -336,6 +336,14 @@ and reuse without observing the fence, which segfaults). N2 on the same RTX 4070
 median against 33.48 before** (frame p50 22.4 ms against 29.9 ms). Full CTest 87/87 and `just check`
 are green. Still open in N4: one batched readback per flip without the CPU convert on the critical
 path, narrower barriers and layouts, sub-allocated memory, the persisted pipeline cache and R4.
+
+**Independent review, 2026-10-16 (TR §31.30):** a controlled failure-path reproduction shows
+`vb_target_load` writes into a still-pending slot's stream after `vb_reserve` encounters a fence
+timeout; its `g.ok` guard is after the write. The analogous texture-upload path needs the same
+early-stop audit. The normal lifetime gate passes, but it does not inject that failed wait.
+Acceptance and the next N4 item are withheld. A private early-guard control passes; production
+code has not been changed by this review. The bridge has zero remediation cycles remaining;
+one additional bounded repair cycle requires owner authorization, without resetting other limits.
 
 Measure each with N2. Parity tests must stay green. Each code subitem gets a different worker's
 gate and deciding mutation evidence.
