@@ -4782,5 +4782,8 @@ publish bounds concern recorded by N4.2's security review is untouched and NOT f
 memory, the persisted pipeline cache and R4 remain open in N4, and no later item is accepted by this
 record.
 
+PUSHED_TO: origin / BRANCH: main / COMMIT: 5af1c4824697517ad68a4b75213fd6483fd17561 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward cd638d4..5af1c48, toolkit pushed first, synchronized (origin/main == 5af1c48).
+PUSHED_TO: origin / BRANCH: master / COMMIT: 4e09019cf5287a9ca81ff0c432353f478ed407d2 (the N4.3 gates, CMake and records) and 8463caf50b5ff64002820f2c25c982049f9bbce2 (this section's N2/N3 receipts) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 1317e26..8463caf, game pushed after the toolkit, clean and synchronized at the independently fetched checkpoint. The records-only commit that adds these receipt lines follows that range and is itself pushed on its own; its hash is recorded in the packet's completion report rather than here, because a commit cannot name its own hash.
+
 
 
