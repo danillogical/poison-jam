@@ -38,6 +38,13 @@ host API); list the one that decides fidelity first.
 
 ## Entries
 
+**L62 N4 complete (2026-10-18, TR §31.44):** toolkit `6c3cd84` persists the Vulkan pipeline
+cache (`RECOMP_VK_PIPELINE_CACHE`; default a per-device file under `%LOCALAPPDATA%\xboxrecomp`,
+`off` disables it) and counts `pipe_evictions`. Only the driver's builds of ahead-of-time SPIR-V
+are cached; nothing new is translated or compiled. A bad, foreign or refused file starts cold, a
+blob the loader would reject is never written, and every other real-backend test runs with the
+cache off. No eviction and no frame-rate gain were observed.
+
 **L62 latest acceptance (2026-10-17, TR §31.43):** N4.4 accepted at toolkit `03aaae8` / game
 gate `e4cb724` (repair, TR §31.42). A never-referenced release no longer parks, every object is
 destroyed before its range is released, and a full park list refuses with ownership kept and the

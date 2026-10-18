@@ -312,7 +312,7 @@ Original step text:
 Add a Vulkan option to `play-jsrf.bat` (`play-jsrf.bat vulkan`) and ask the owner to play. The default
 backend switches only after the owner accepts; D3D11 is removed later.
 
-### N4: Vulkan readback and synchronisation (after V7)
+### N4: Vulkan readback and synchronisation — DONE (TR §§31.42–31.44)
 
 Readbacks take 202–211 s of a 560 s run, and V1 submits and fence-waits simply. Work V1's list in the
 `nv2a_vk_backend.c` header:
@@ -322,6 +322,13 @@ Readbacks take 202–211 s of a 560 s run, and V1 submits and fence-waits simply
 - narrower barriers;
 - sub-allocated memory;
 - a persisted pipeline cache.
+
+**N4 is complete** (2026-10-18, TR §31.44). The last item, the persisted pipeline cache plus R4,
+landed at toolkit `6c3cd84` / game gate `2253927`. The driver's builds of the ahead-of-time SPIR-V
+persist in a per-device file and a corrupt or foreign file starts cold. R4 measured no pressure:
+the e2e workload creates 41-42 pipelines against `VB_MAX_PIPES` 256, so `pipe_evictions` stays 0.
+A warm cache gives no measurable gain in the Garage benchmark, because every pipeline is created
+before the window.
 
 **N4.4 independently accepted at toolkit `03aaae8` / game gate `e4cb724`** (2026-10-17,
 TR §§31.42–31.43). The repair releases a never-referenced allocation at once, destroys every
@@ -537,7 +544,7 @@ rectangle: an earlier batch can publish before a later one fails, so the stop pr
 targets and is not whole-frame atomicity. The owner-authorized review-confirmed reset's one renewed
 repair cycle is consumed by this packet; no later N4 item starts before independent acceptance.
 
-#### R4: measure pipeline-cache pressure (part of N4)
+#### R4: measure pipeline-cache pressure (part of N4) — DONE (TR §31.44)
 
 Program pipelines are keyed by program hash and render state; `VB_MAX_PIPES` is 256. Read the
 `pipelines=` values near the start, middle and end of the archived

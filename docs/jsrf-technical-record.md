@@ -5384,3 +5384,122 @@ own gated step.
 
 PUSHED_TO: origin / BRANCH: main / COMMIT: 03aaae814dcfb28c6c283eb1856dcf2c1df3ce0a / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward ecbaca4..03aaae8, toolkit pushed first, clean and synchronized; 2 outgoing blobs (largest 239 744 bytes), 0 secret hits; upstream untouched (push URL DISABLED).
 PUSHED_TO: origin / BRANCH: master / COMMIT: 2a8b9ea (with e4cb724 repair gate, 3a4155d helpers) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 02945a5..2a8b9ea, clean and synchronized; 10 outgoing blobs (largest 424 527 bytes), 0 secret hits, no `game/` or retail-derived path.
+
+### §31.44 N4 complete: the persisted pipeline cache and R4 (2026-10-18)
+
+**R4, measured first.** `pipelines=` counts creations. It reads 2 / 41 / 42 (start / middle /
+end, max 42) in `20261014-165814-809-keyscript-e2e-vk-v5r`, and 2 / 42 / 42 in
+`20261017-152351-649-keyscript-n44r-n3-e2e-val`. That is far below `VB_MAX_PIPES` 256, so the LRU
+never evicts and the limit stays.
+
+**The change (toolkit `6c3cd84`, `nv2a_vk_backend.c`).**
+
+- **The knob.** `RECOMP_VK_PIPELINE_CACHE`:
+  - unset on Windows, the cache lives in
+    `%LOCALAPPDATA%\xboxrecomp\vk-pipeline-cache-<vendor>-<device>.bin`;
+  - `off` or `0` disables it;
+  - any other value is a path, used as given.
+- **The file** is our header (magic, version, length, CRC-32) around `vkGetPipelineCacheData`'s
+  blob.
+- **Load rejects** (counted, and the cache starts empty): a short file, wrong magic or version,
+  over 64 MiB, a length mismatch, a CRC mismatch, a malformed Vulkan header, or a different
+  vendor/device/UUID. A file the driver refuses is retried empty. A missing file is a quiet cold
+  start.
+- **Saving.** Runs end by deadline kill, so `vb_flip` saves at most every 10 s after new pipelines:
+  - `<path>.<pid>.tmp` is opened first;
+  - the image is checked with the loader's own parse;
+  - then it is renamed over the target.
+- **Save failures.** A blob the loader would reject is never written. Three failures in a row stop
+  saving for the run. Log lines are capped at 8.
+- **Reporting.** The load prints one line, `[GPUVK] pipeline cache: <path> loaded=<bytes>|cold|rejected(<reason>)`
+  or `off`. The stats line gains `pipe_evictions`, `pcache_loaded`, `pcache_saves`,
+  `pcache_save_failures` and `pcache_rejects`.
+
+Nothing new is translated or compiled: the driver already built these pipelines from the
+ahead-of-time SPIR-V.
+
+**Gates (game `2253927`), written by a worker other than the implementer:**
+
+- **`jsrf_vk_pcache_gate`** drives the production load, save and eviction paths with stubbed
+  Vulkan: 11 properties / 202 checks.
+- **`jsrf_vk_pcache_device`** (lavapipe) decides that lavapipe's malformed blob is refused before
+  it is written. Lavapipe reports a 32-byte size, then writes 20 bytes with a truncated UUID.
+  It reports no creation-feedback hits, so the positive reload is not demonstrable there, and the
+  test says so.
+- **`jsrf_vk_pcache_device_hw`** (RTX 4070) decides the round trip:
+  - cold run: 4 of 6 creation-feedback hits (the NVIDIA driver serves some pipelines from its own
+    cache);
+  - after reload: 6 of 6 hits, `loaded` 38 484 bytes, 0 rejects.
+- **Every other real-backend test** runs with `RECOMP_VK_PIPELINE_CACHE=off`.
+
+**Deciding mutants** (each red; the unmodified source is green):
+
+- skip the load (also red on hardware: 4 of 6 hits);
+- skip the CRC check;
+- drop the eviction count;
+- save without the dirty check;
+- write the target in place;
+- skip the pre-write parse;
+- no failure latch;
+- a default name without the device ids.
+
+**Review.** An independent code review (Opus; the implementer and the test author were Sonnet)
+found no P0. It found two P1s:
+
+- the default file was shared by every device and process;
+- the lavapipe case passed without proving a round trip.
+
+It found three P2s:
+
+- a saved blob the loader would reject;
+- gaps in the atomic-replace and returned-size tests;
+- unbounded failed-save retries and logging.
+
+It also listed P3 nits. All were fixed in one round, then re-gated. Not done:
+
+- a faster CRC (performance is not a goal; about 1.8 ms per MiB at the 64 MiB cap);
+- multi-level parent directory creation for a user path.
+
+**Validation on the final tree.** Full CTest 99/99 and `just check` green; executable
+`791aeaaeccad5c6da96693a9524d1434dfc18cbffed748246ef9eccc86084622`.
+
+**N3 e2e** `20261018-104754-956-keyscript-n4c-n3-e2e-val2`: stock `e2e.json`, Vulkan on the RTX
+4070, cache `off`, exploratory. The loader's own lines, quoted:
+
+    [Vulkan Loader] INFO | LAYER:   Insert instance layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+    [Vulkan Loader] INFO | LAYER:   Inserted device layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+
+Result: `keyscript_complete`, `validation_errors=0`, `validation_warnings=10` (the known
+"attribute not consumed" warnings), `vsh_misses=0`, `vsh_identity_fail=0`, `pipe_evictions=0`,
+icall 0, fatal 0. The bounded deadline kill is deliberate.
+
+An earlier run with the cache on, `20261017-184949-085-keyscript-n4c-n3-e2e-val`, has the same
+counters and `pcache_saves=8`. Its log holds no loader lines at all, so validation is not witnessed
+there, and the cause is unknown.
+
+**N2: three interleaved cold/warm pairs** on the RTX 4070, `garage-bench.json`, same executable.
+Cold runs use a fresh file each; warm runs use the file the cache-on e2e wrote (921 731 bytes,
+`loaded=921731`, `pcache_warm: true`).
+
+| pair | cold | warm |
+|---|---|---|
+| 1 | `20261017-190011-278` 13.67 | `20261017-191013-480` 13.80 |
+| 2 | `20261017-192015-957` 13.80 | `20261017-193018-365` 13.73 |
+| 3 | `20261017-194020-856` 13.73 | `20261017-195023-318` 13.73 |
+
+Medians: cold 13.73 presents/s (p50 about 72 ms), warm 13.73.
+
+No gain is claimed: all 41 pipelines are created long before the benchmark window, so a warm cache
+can only shorten start-up. The absolute rate is a third of §31.42's 42-46. The host was the cause,
+not the code: the preserved N4.3 baseline executable, which read 41.6-43.5 in §31.42, read 12.63
+the next morning (`20261018-103553-919-keyscript-n4c-drift-baseline`). The host state behind that
+drift is not measured.
+
+**N4 is complete:** frames in flight, batched readback, narrowed barriers, sub-allocated memory,
+and the persisted pipeline cache with R4. Next, by owner direction (2026-10-17):
+
+1. merge upstream xboxrecomp v0.14.0 and regenerate;
+2. port reJSRF's toolkit discovery fixes;
+3. triage reJSRF's game-side render and lock fixes against this executor and back end.
+
+N6 and R5 remain in the plan.
