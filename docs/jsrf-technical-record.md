@@ -5503,3 +5503,6 @@ and the persisted pipeline cache with R4. Next, by owner direction (2026-10-17):
 3. triage reJSRF's game-side render and lock fixes against this executor and back end.
 
 N6 and R5 remain in the plan.
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: 6c3cd84c8e5853cc4ca39205526da2a45b5cc9b4 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 03aaae8..6c3cd84, toolkit pushed first, clean and synchronized; 2 outgoing blobs (largest 255 106 bytes), 0 secret hits; upstream untouched (push URL DISABLED).
+PUSHED_TO: origin / BRANCH: master / COMMIT: 1dd0b11 (with gate 2253927) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward de44496..1dd0b11, clean and synchronized; 8 outgoing blobs (largest 431 195 bytes), 0 secret hits, no `game/` or retail-derived path.
