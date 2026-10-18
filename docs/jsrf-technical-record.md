@@ -5349,3 +5349,35 @@ records closure and stops. No N6, R5 or later plan item without a new owner inst
 amendment: `C:/Users/logic/.omp-bridge/reports/poison-jam/owner-stop-after-n4-20261017.md`. This
 adds no operation slots, no repair cycles and no planning phase, and accepts no work.
 
+### §31.43 N4.4 accepted: an independent review of the repair (2026-10-17)
+
+**Verdict: accepted** at toolkit `03aaae8` / game `e4cb724`. The reviewer was the Mac-side Claude
+session (Opus), a different model than the OMP implementer, working from both commits' full diffs
+and §31.42's receipts. It confirmed the four repair rules against the source:
+
+- the fail paths of `vb_host_buffer`/`vb_device_buffer` destroy the buffer before
+  `vb_mem_give_now`;
+- `vb_image_create`'s bind failure releases through `vb_mem_give_now`, then discards the image;
+- `vb_readback_reserve`'s abandoned pair goes through `vb_garbage_free_now`;
+- `vb_mem_give` counts `released` only on an admitted release, and its refusal branch reports,
+  stops the back end and returns without clearing the caller's `VbAlloc`.
+
+The deciding gate (pre-repair red on 35 of 336 checks, repaired green on 10 properties / 335
+checks, six private mutants red) and the 96/96 CTest stand as §31.42 records them.
+
+**Low findings, recorded as limits, not repaired:**
+
+1. **The refusal's announcement is unreachable in production.** `vb_stop` returns at once when
+   `g.failed` is set. The only production caller that can reach the park or refuse branch is
+   `vb_stream`'s `if (g.failed)` branch, so the back end has already failed there and `vb_stop`
+   neither announces nor dumps the stats line. The ownership rule still holds.
+2. **The park list is dead in live runs.** With every busy-time rollback now never-referenced,
+   the N3 e2e and the six N2 windows all report `mem_parked=0`, `mem_parked_peak=0`. The bounded
+   list is a safety net decided only by the fixture.
+3. **`VB_GATE_HAS_REFUSE_PARK` is a substring probe** of the toolkit source, not a structural
+   check, so a comment containing the marker would satisfy it.
+
+**Scope.** N4.4 is complete; N4 still needs the persisted pipeline cache/R4. The owner's
+"stop when N4 is completed" bounded the OMP run. The owner has since directed this session to
+finish N4, merge upstream xboxrecomp v0.14.0, and port reJSRF's applicable fixes, each as its
+own gated step.

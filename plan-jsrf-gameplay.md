@@ -323,7 +323,15 @@ Readbacks take 202–211 s of a 560 s run, and V1 submits and fence-waits simply
 - sub-allocated memory;
 - a persisted pipeline cache.
 
-**N4.4 is implemented, but independent acceptance is blocked** (2026-10-17, TR §31.41).
+**N4.4 independently accepted at toolkit `03aaae8` / game gate `e4cb724`** (2026-10-17,
+TR §§31.42–31.43). The repair releases a never-referenced allocation at once, destroys every
+object before its range goes back, and refuses (keeping ownership and stopping the back end)
+instead of dropping when the park list is full. Its pre-repair source fails the gate (35 of 336
+checks) and the repaired source passes (10 properties / 335 checks); full CTest 96/96. A review
+by a different model than the implementer found no correctness defect; its three Low findings are
+recorded as limits in §31.43. Next separate item: the persisted pipeline cache/R4, which completes N4.
+
+**History: N4.4's acceptance was first blocked** (2026-10-17, TR §31.41).
 Codex reproduced a rollback leak in toolkit `ecbaca4`: 65 failed image binds during an open
 recording overflow the 64-entry parked-release list. After the real garbage drain all images
 are destroyed, but 65,536 bytes remain owned by nobody; the dedicated variant frees only 64 of

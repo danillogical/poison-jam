@@ -38,6 +38,13 @@ host API); list the one that decides fidelity first.
 
 ## Entries
 
+**L62 latest acceptance (2026-10-17, TR §31.43):** N4.4 accepted at toolkit `03aaae8` / game
+gate `e4cb724` (repair, TR §31.42). A never-referenced release no longer parks, every object is
+destroyed before its range is released, and a full park list refuses with ownership kept and the
+back end stopped. Limits: the refusal's stats announcement is unreachable in production, the park
+list stays empty in live runs, and the gate's marker probe is a substring match. No frame-rate
+gain or regression is claimed. Next separate item: the persisted pipeline cache/R4.
+
 **L62 N4.4 (2026-10-17, TR §31.40):** the Vulkan back end no longer makes one `VkDeviceMemory` per
 resource. A resource takes a RANGE out of a pool block (toolkit `ecbaca4`), pooled by
 `(memoryTypeIndex, linear|non-linear)` so an image and a buffer never share a block and
