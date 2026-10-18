@@ -1,25 +1,2 @@
-# OMP 18.9.0 project settings; IDs use the installed catalog's spelling.
-modelRoleStorage: project
-modelRoles:
-  plan: anthropic/claude-opus-5-5:high
-  default: opencode-go/deepseek-v4.1-flash:high
-  task: opencode-go/deepseek-v4.1-flash:high
-  smol: opencode-go/deepseek-v4.1-flash:low
-  slow: opencode-go/deepseek-v4.1-flash:max
-  commit: opencode-go/deepseek-v4.1-flash:low
-  tiny: opencode-go/deepseek-v4.1-flash:low
-  memory: opencode-go/deepseek-v4.1-flash:low
-  judge: opencode-go/deepseek-v4.1-flash:low
-retry:
-  fallbackChains:
-    plan: []
-    advisor:
-      - opencode-go/deepseek-v4.1-flash:max
-    vision:
-      - opencode-go/deepseek-v4.1-flash:max
-task:
-  agentModelOverrides:
-    task: opencode-go/deepseek-v4.1-flash:high
-    scout: opencode-go/deepseek-v4.1-flash:low
-    sonic: opencode-go/deepseek-v4.1-flash:low
-    security-reviewer: "muse-code/muse-spark-1.3:high, opencode-go/deepseek-v4.1-flash:max"
+# Inherit model roles, agent routing and fallbacks from the global OMP configuration.
+modelRoleStorage: global
