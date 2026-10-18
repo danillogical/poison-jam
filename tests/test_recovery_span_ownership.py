@@ -80,7 +80,7 @@ import bisect
 # SHRUNK 2026-10-11 by 1 entry: 0x10A0E0, widened over its switch for stop 43 (config/stop-chain.json).
 # SHRUNK 2026-10-11 by 4 more: 0xAEE80, 0xD02D0, 0x110B20 and 0x11FE90, narrowed to their own exits by the table-scan batch.
 # SHRUNK 2026-10-12 by 1: 0x52050, end 0x52088 -> 0x5208C so its tail jmp and pop/ret exit are inside (stop 50, the pause-menu freeze).
-KNOWN_OPEN = {int(x, 16) for x in """11105 1F000 20760 2A000 4037C 44000 45DB0 73C20 A76E0 C7D40 E0710 E0CF0 EC0B0 F02F0 127810 142400 1783D0 180038""".split()}
+KNOWN_OPEN = {int(x, 16) for x in """11105 1F000 2A000 4037C 44000 45DB0 73C20 A76E0 C7D40 E0710 E0CF0 EC0B0 F02F0 127810 142400 1783D0 180038""".split()}
 
 
 def boundary_stub_calls(text, entries, unresolved):
@@ -110,6 +110,8 @@ class SpanOwnershipTest(unittest.TestCase):
         if not rec.is_file():
             self.skipTest('recovered.c not generated')
         self.text = rec.read_text(encoding='utf-8')
+        self.generated = (ROOT / 'src/recomp/gen/recomp_0000.c').read_text(encoding='utf-8')
+        self.dispatch = (ROOT / 'src/recomp/gen/recomp_dispatch.c').read_text(encoding='utf-8')
         self.entries = {int(e['start'], 16): int(e['end'], 16) for e in
                         json.loads((ROOT / 'config/recovered-functions.json').read_text(encoding='utf-8'))}
         self.unresolved = {int(k, 16) for k in json.loads(
@@ -150,6 +152,20 @@ class SpanOwnershipTest(unittest.TestCase):
     def test_4c400_is_a_recovered_entry_not_a_stub(self):
         self.assertEqual(self.entries[0x4C400], 0x4C8A1)
         self.assertNotIn(0x4C400, self.unresolved)
+
+    def test_nv2a_packet_labels_are_not_recovery_entries(self):
+        """The NV2A packet labels belong to generated sub_00041BF0."""
+        false_entries = (0x41E24, 0x41E40, 0x41E48, 0x41E4C,
+                         0x41E50, 0x41E54, 0x41E5C)
+        self.assertTrue(set(false_entries).isdisjoint(self.entries))
+        manual = json.loads((ROOT / 'config/manual-functions.json').read_text())
+        self.assertTrue(all('0x%08X' % x not in manual for x in false_entries))
+        self.assertIn('Original: 0x00041BF0 - 0x0004259C', self.generated)
+        self.assertIn('{ 0x00041BF0u, (recomp_func_t)sub_00041BF0 }', self.dispatch)
+        self.assertNotIn('body_00041E', self.text)
+        self.assertNotIn('sub_00041E', self.text)
+        for x in (0x41E5C, 0x41E9C):
+            self.assertIn('goto loc_%08X' % x, self.generated)
 
     def test_handler_table_methods_own_their_spans(self):
         # Handler table 0x1F9888 methods: each starts its own entry and none of

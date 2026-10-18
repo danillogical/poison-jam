@@ -33,6 +33,27 @@ MANIFEST = ROOT / 'docs' / 'reviews' / 'p0-7-generation-provenance.json'
 BASELINE = ROOT / 'docs' / 'reviews' / 'p0-full-generated-baseline.json'
 
 
+def filesystem_generated_outputs() -> set[str]:
+    """Return the generated C/H files that are present on disk.
+
+    This inventory intentionally does not call ``generated_tree_hashes()``:
+    that helper uses the preservation baseline as its path list, so a newly
+    emitted file could be omitted from both the baseline and the manifest and
+    still appear to pass.  The inventory is the independent completeness
+    oracle for the preservation records.
+    """
+    outputs: set[str] = set()
+    for directory in (ROOT / 'src' / 'recomp' / 'gen',
+                      ROOT / 'src' / 'recomp' / 'recovered'):
+        for path in directory.rglob('*'):
+            if path.is_file() and path.suffix.lower() in {'.c', '.h'}:
+                outputs.add(path.relative_to(ROOT).as_posix())
+    # This tracked regression source is part of the generated-output contract
+    # recorded by both the baseline and the provenance manifest.
+    outputs.add('tests/lifter-regressions.c')
+    return outputs
+
+
 class ManifestTests(unittest.TestCase):
     """AC1: the manifest identifies inputs, generators, outputs and markers."""
 
@@ -68,10 +89,13 @@ class ManifestTests(unittest.TestCase):
             with self.subTest(flag=required):
                 self.assertIn(required, command)
 
-    def test_manifest_records_all_seventeen_outputs(self):
+    def test_manifest_records_the_complete_generated_output_inventory(self):
         baseline = json.loads(BASELINE.read_text(encoding='utf-8'))['files']
-        self.assertEqual(len(baseline), 17)
-        self.assertEqual(set(self.manifest['generated_outputs']), set(baseline))
+        recorded = set(self.manifest['generated_outputs'])
+        actual = filesystem_generated_outputs()
+        self.assertEqual(recorded, set(baseline))
+        self.assertEqual(set(baseline), actual,
+                         'baseline must cover every generated C/H output on disk')
 
     def test_manifest_records_ownership_split(self):
         ownership = self.manifest['ownership']
@@ -155,6 +179,16 @@ class NegativeControlTests(unittest.TestCase):
         result = provenance.check_manifest(bad)
         self.assertFalse(result['ok'])
         self.assertTrue(any(name in p for p in result['problems']), result['problems'])
+
+    def test_baseline_omission_of_a_present_output_is_rejected(self):
+        """A baseline and manifest must not silently agree on a reduced tree."""
+        baseline = json.loads(BASELINE.read_text(encoding='utf-8'))['files']
+        actual = filesystem_generated_outputs()
+        self.assertEqual(set(baseline), actual)
+        omitted = next(iter(actual))
+        reduced = set(baseline) - {omitted}
+        self.assertNotEqual(reduced, actual,
+                            f'control mutation unexpectedly retained {omitted}')
 
     def test_missing_manifest_cannot_pass(self):
         for value in (None, 'not a manifest', [], 0):
@@ -313,6 +347,12 @@ class WritePreservationTests(unittest.TestCase):
 
 
 class LiveTreeTests(unittest.TestCase):
+    def test_filesystem_inventory_is_complete(self):
+        baseline = json.loads(BASELINE.read_text(encoding='utf-8'))['files']
+        current = filesystem_generated_outputs()
+        self.assertEqual(current, set(baseline),
+                         'a newly emitted or missing generated file requires a baseline review')
+
     def test_generated_tree_matches_the_preservation_baseline(self):
         baseline = json.loads(BASELINE.read_text(encoding='utf-8'))['files']
         current = provenance.generated_tree_hashes()

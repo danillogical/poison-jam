@@ -30,7 +30,7 @@ audio fidelity and save/resume come later. Hardware fidelity is not claimed by e
 - **Gum's tutorial is reached** with closed-loop `goto` steering (TR §§31.8–31.9,
   `config/key-scripts/gum-tutorial.json`).
 - **The pause menu works:** stops 50–52 and a 25-function omitted-function batch (TR §31.10).
-  77 ambiguous fatal targets remain in `config/recovery-unresolved.json`; repair each when a run
+  72 ambiguous fatal targets remain after C3 regeneration in `config/recovery-unresolved.json`; repair each when a run
   reaches it.
 - **Controller:** an Xbox One controller works through XInput, with rumble (toolkit `e365e04`).
 - **Ported from andeecollard/jsrf-recomp** (TR §31.11), both confirmed by the owner in play:
@@ -139,6 +139,51 @@ R1–R5 below are approved follow-ups, not reasons to reopen those milestones. T
 review; it did not rebuild the Windows checkout or re-read its run logs.
 
 ## Remaining work, pre-approved by the owner (2026-10-15)
+
+### Current execution amendment: upstream and reJSRF cleanup (owner, 2026-10-18)
+
+N4 is finished and pushed (toolkit `6c3cd84`, game `699bc46`). The owner resumed the
+approved A1–D5 cleanup directly on this Windows laptop; this supersedes the earlier
+stop after N4 and the cleanup report's Mac/scp workflow. The reports in ignored
+`logs/reports/` are session evidence, not additional files to publish.
+
+Execute the remaining cleanup in this order, without a new planning phase for the
+already approved steps:
+
+1. **C3, in progress:** finish the v0.14.0 regeneration checkpoint on toolkit
+   `merge-v0.14.0` (`ee2e0cd`): guarded build and warning review, refreshed generation
+   provenance and baseline, `just check`, full software-Vulkan CTest through the
+   limited-rights wrapper, then the bounded cache-off Vulkan e2e smoke. Classify
+   any earliest fatal/ICALL against original XBE instructions; never suppress it.
+   Static gates now pass: build, `just check`, full limited-rights CTest 99/99 and
+   independent mutation controls (TR §31.45). **The smoke failed before the first
+   frame**, in original AC'97 reset loop `0x1A6F88`; no ICALL/fatal is not a pass.
+   **C3-RR diagnosis is the next bounded operation:** compare original XBE and
+   old/current native code, establish the reset model/ownership contract, and
+   return a minimal source-backed repair proposal and independently authored gate
+   design. No production edits or C4 work in that diagnostic operation. The old
+   compiler omitted this loop; the regenerated backedge preserves it. Preserve
+   TR §1's AC'97 model ruling and L20; do not bypass the loop or enable a synthetic
+   readiness/field pin. Authorize any subsequent model repair as its own packet.
+2. **C4:** independent merge/recovery review, Vulkan e2e with both N3 loader insertion
+   witnesses, D3D11 reference e2e and viewed logos/Corn/Garage/pause frames, N2 with
+   a same-session archived-executable baseline, then TR/L02/L62/AGENTS records.
+   Fast-forward toolkit main only after acceptance and audited pushes: toolkit
+   origin first, then game origin.
+3. **D1:** port the MIT reJSRF toolkit discovery fixes `58f7166`, `0c32a78`,
+   `982cd28`, `7c58ec6`, `6a38c01`, explaining any part already covered by upstream
+   `34f5e1c`; retain attribution in commit bodies. Skip the performance-only ports.
+4. **D2:** regenerate and classify only D1's deltas, with C3 and C4 gates.
+5. **D3–D4:** triage reJSRF's game-side fixes against our LLE executor and Vulkan,
+   then gather the required scene evidence on both backends and view the frames.
+6. **D5:** plan applicable items as separate gated steps, with a different test
+   author, then records and audited pushes. New design is planned only here when
+   the preceding evidence establishes what is applicable.
+
+One step per OMP operation, one subagent and one game run at a time. N1's stop list,
+unsigned commits without trailers, compile-time translation, preservation of assets
+and saves, and no new D3D11 work remain in force. N6 and R5 follow this owner-directed
+cleanup rather than interrupting it.
 
 **N1, the execution rule: these steps are the approved plan.** Execute them in order, directly. Don't
 open a separate planning phase or start a headless planner for them; the previous operation stalled

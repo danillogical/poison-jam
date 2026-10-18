@@ -36,6 +36,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -102,9 +103,10 @@ class RealDefectTests(unittest.TestCase):
     def finder_without(self, without=()):
         entries = [checker.Entry(record) for record in self.records
                    if int(record['start'], 16) not in set(without)]
+        omitted = set(without)
         return checker.HiddenEntryFinder(self.image, self.database, entries,
-                                         self.pointer_sites, self.own,
-                                         self.dispatched)
+                                         self.pointer_sites, self.own - omitted,
+                                         self.dispatched - omitted)
 
     def _evaluate(self, finder, start, end, args=0):
         return finder.evaluate(checker.Entry(
@@ -232,7 +234,6 @@ class GateTests(unittest.TestCase):
         address is removed, which is what the manifest looked like when the
         defect was live.
         """
-        import tempfile
         records = json.loads((ROOT / 'config' / 'recovered-functions.json').read_text())
         injected = 0
         kept = []
@@ -256,6 +257,21 @@ class GateTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0,
                             f'the gate passed a defective manifest:\n{result.stdout}')
         self.assertIn('0x0007DBD0', result.stdout)
+
+    def test_gate_fails_on_shadowed_manifest_entry(self) -> None:
+        """The CLI gate must also reject a span consuming a live body."""
+        records = json.loads((ROOT / 'config' / 'recovered-functions.json').read_text())
+        records.append({'start': '0x00055670', 'end': '0x00055800',
+                        'stack_args': 0})
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'manifest.json'
+            path.write_text(json.dumps(records), encoding='utf-8')
+            result = subprocess.run(
+                [sys.executable, '-X', 'utf8', str(CHECKER), '--manifest', str(path)],
+                cwd=ROOT, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0,
+                            f'the gate passed a SHADOWED manifest:\n{result.stdout}')
+        self.assertIn('0x000556D0', result.stdout)
 
     def test_no_baseline_file_exists(self) -> None:
         """A baseline here would be a suppressed defect population, not a gate."""

@@ -130,8 +130,6 @@ void jsrf_test_194210_reentry(void)
 }
 
 static uint32_t calls_97c50;
-static uint16_t last_out_port;
-static uint8_t last_out_value;
 
 void jsrf_test_97C50(void)
 {
@@ -139,12 +137,19 @@ void jsrf_test_97C50(void)
     g_esp += 4u;
 }
 
-void xbox_outb(uint16_t port, uint8_t value) { last_out_port = port; last_out_value = value; }
-void xbox_outw(uint16_t port, uint16_t value) { (void)port; (void)value; }
-void xbox_outl(uint16_t port, uint32_t value) { (void)port; (void)value; }
-uint8_t xbox_inb(uint16_t port) { (void)port; return 0; }
-uint16_t xbox_inw(uint16_t port) { (void)port; return 0; }
-uint32_t xbox_inl(uint16_t port) { (void)port; return 0; }
+uint32_t xbox_PortIn(uint32_t port, int width)
+{
+    (void)port;
+    (void)width;
+    return 0;
+}
+
+void xbox_PortOut(uint32_t port, uint32_t value, int width)
+{
+    fprintf(stderr, "unexpected unified port write: port=%08X value=%08X width=%d\n",
+            port, value, width);
+    abort();
+}
 
 void jsrf_test_KeQuerySystemTime(void)
 {

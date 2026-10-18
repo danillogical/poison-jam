@@ -1040,5 +1040,65 @@ class DurationCapTests(unittest.TestCase):
                          'the launcher must use the classifier\'s constant')
 
 
+class V0140ProfileControlTests(unittest.TestCase):
+    """Independent evidence gate for the merged port pin and host controls."""
+
+    def test_field_pin_exact_one_is_exploratory(self):
+        result = classify_settings(settings(RECOMP_GPU_ACK='0', RECOMP_PORT_FIELD_PIN='1'))
+        self.assertEqual(result['classification'], EXPLORATORY)
+        self.assertTrue(any('RECOMP_PORT_FIELD_PIN' in r for r in result['reasons']))
+
+    def test_strict_launcher_refuses_armed_field_pin(self):
+        with self.assertRaises(ProfileError):
+            validate_launch_profile(STRICT, '', settings(
+                RECOMP_GPU_ACK='0', RECOMP_PORT_FIELD_PIN='1'))
+
+    def test_runtime_inert_values_do_not_arm_field_pin(self):
+        # kernel_hal.c uses strcmp(value, "1"), not atoi, truthiness or trimming.
+        for value in ('', '0', '01', 'true', '1 ', ' 1', '+1', '-1', '2'):
+            with self.subTest(value=value):
+                entries = settings(RECOMP_GPU_ACK='0', RECOMP_PORT_FIELD_PIN=value)
+                self.assertEqual(classify_settings(entries)['classification'], STRICT)
+                result = validate_launch_profile(STRICT, '', entries)
+                self.assertEqual(result['classification'], STRICT)
+
+    def test_absent_field_pin_keeps_strict_control(self):
+        self.assertEqual(validate_launch_profile(
+            STRICT, '', settings(RECOMP_GPU_ACK='0'))['classification'], STRICT)
+
+    def test_field_pin_name_is_case_insensitive(self):
+        self.assertEqual(classify_settings(settings(
+            RECOMP_GPU_ACK='0', recomp_port_field_pin='1'))['classification'], EXPLORATORY)
+
+    def test_duplicate_case_spellings_are_unknown(self):
+        entries = settings(RECOMP_GPU_ACK='0') + [
+            {'name': 'RECOMP_PORT_FIELD_PIN', 'value': '0'},
+            {'name': 'recomp_port_field_pin', 'value': '1'},
+        ]
+        self.assertEqual(classify_settings(entries)['classification'], UNKNOWN)
+        with self.assertRaises(ProfileError):
+            validate_launch_profile(STRICT, '', entries)
+
+    def test_exploratory_launcher_records_armed_field_pin(self):
+        self.assertEqual(validate_launch_profile(EXPLORATORY, '', settings(
+            RECOMP_GPU_ACK='0', RECOMP_PORT_FIELD_PIN='1'))['classification'], EXPLORATORY)
+
+    def test_real_host_feature_controls_do_not_supply_synthetic_completion(self):
+        controls = {
+            'RECOMP_SAVE_DIR': r'C:\isolated-run\save-root',
+            'RECOMP_MKB': '1', 'RECOMP_MKB_ACC': '0.2', 'RECOMP_MKB_DZ': '0.1',
+            'RECOMP_MKB_FULL': '1', 'RECOMP_MKB_INI': r'C:\isolated-run\input.ini',
+            'RECOMP_MKB_INVERT_Y': '1', 'RECOMP_MKB_SENS': '2',
+            'RECOMP_MKB_SWAP_STICKS': '1', 'RECOMP_HEADLESS': '1',
+            'RECOMP_AUDIO_BUF_COUNT': '4', 'RECOMP_AUDIO_BUF_SAMPLES': '1024',
+            'RECOMP_PRESENT_VSYNC': '1', 'RECOMP_WINDOW_SCALE': '2',
+        }
+        for name, value in controls.items():
+            with self.subTest(control=name):
+                result = validate_launch_profile(STRICT, '', settings(
+                    RECOMP_GPU_ACK='0', **{name: value}))
+                self.assertEqual(result['classification'], STRICT)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

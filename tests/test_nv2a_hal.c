@@ -823,7 +823,8 @@ static int run_ordered_constant_contract(void)
  * returns immediately unless xbox_FramebufferWindowStart() opened a window
  * (RECOMP_FB_WINDOW), and its present serial only advances on that path -- so
  * counting the REAL call is not possible without opening a window. This fixture
- * therefore provides the window seam itself (the nine externs below) and counts
+ * therefore provides the window seam itself (the nine externs below; the key
+ * state comes from the input library's own keyboard table) and counts
  * the present. That observes the executor's CALL, which is exactly what the gate
  * suppresses; it does not observe fb_present's internals, which are unchanged.
  */
@@ -842,10 +843,10 @@ void xbox_FramebufferWindowStart(void) {}
 void xbox_FramebufferWindowSetTitle(const uint16_t *name, int max_chars)
 { (void)name; (void)max_chars; }
 void xbox_FramebufferWindowFrameStats(uint32_t draws) { (void)draws; }
-int xbox_FramebufferKeyDown(int vk) { (void)vk; return 0; }
 uint32_t xbox_FramebufferPresentSerial(void) { return 0; }
 unsigned long long xbox_FramebufferPresentHash(void) { return 0; }
 int xbox_FramebufferDumpBmp(const char *path) { (void)path; return 0; }
+void xbox_FramebufferWindowSetAA(uint32_t sy) { (void)sy; }
 
 /* What the fixture's back end reports through `stopped`. */
 static uint32_t g_gate_stopped;

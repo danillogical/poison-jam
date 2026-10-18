@@ -380,10 +380,11 @@
  },
  {
   "start": "0x00020760",
-  "end": "0x00020803",
+  "end": "0x000208E2",
   "section": ".text",
   "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00020803 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00020760..0x00020803, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00020803 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00020760..0x00020803, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. C3 (2026-10-18): widened from 0x00020803 (which is inside the 6-byte `mov dword ptr [esi], 0` at 0x00020801) to 0x000208E2: the body has three exits, ret 0x10 at 0x00020811, 0x000208B7 and 0x000208DF (so stack_args 16), and a switch at 0x000207BB through the table at 0x000208E4 (index bytes at 0x000208F4) whose arms 0x000207C2, 0x00020814, 0x000208BA and 0x000208DB lie inside; the tables and NOP padding run to the next entry 0x00020900. The previous full pass generated the tail as separate functions (0x00020803, 0x00020806, 0x00020814, 0x000208BA, 0x000208DB); the v0.14.0 database lists 0x00020760..0x00020900 as one entry, so those pieces are no longer generated and the truncated body reached traps at 0x00020807, 0x000208DB and 0x000208DD.",
+  "stack_args": 16
  },
  {
   "start": "0x00020900",
@@ -1153,10 +1154,10 @@
  },
  {
   "start": "0x0002D080",
-  "end": "0x0002D1E0",
+  "end": "0x0002D221",
   "section": ".text",
   "kind": "routine",
-  "evidence": "A method of the function-pointer table at 0x001EC0F0. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_0002D1E0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x0002D080 at sub_0002D1E0. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x0002D080..0x0002D1E0, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
+  "evidence": "A method of the function-pointer table at 0x001EC0F0. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_0002D1E0 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x0002D080 at sub_0002D1E0. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x0002D080..0x0002D1E0, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. C3 (2026-10-18): widened from 0x0002D1E0 (inside the `call 0x255c0` at 0x0002D1DC) to 0x0002D221: exits are plain ret at 0x0002D13D, 0x0002D1D9, 0x0002D1F7 and 0x0002D220, and the switch at 0x0002D098 through the table at 0x0002D224 has its arms (0x0002D09F, 0x0002D13E, 0x0002D1F8, ...) inside; NOP padding follows the table to 0x0002D240. The previous full pass generated 0x0002D1E0 and 0x0002D1F8 as separate functions; the v0.14.0 database does not, so the truncated body fell off its end.",
   "stack_args": 0
  },
  {
@@ -2305,55 +2306,6 @@
   "stack_args": 4
  },
  {
-  "start": "0x00041E24",
-  "end": "0x00041E40",
-  "section": ".text",
-  "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00041BF0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00041E24..0x00041E40, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
- },
- {
-  "start": "0x00041E40",
-  "end": "0x00041E48",
-  "section": ".text",
-  "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00041BF0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00041E40..0x00041E48, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
- },
- {
-  "start": "0x00041E48",
-  "end": "0x00041E4C",
-  "section": ".text",
-  "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00041BF0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00041E48..0x00041E4C, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
- },
- {
-  "start": "0x00041E4C",
-  "end": "0x00041E50",
-  "section": ".text",
-  "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00041BF0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00041E4C..0x00041E50, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
- },
- {
-  "start": "0x00041E50",
-  "end": "0x00041E54",
-  "section": ".text",
-  "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00041BF0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00041E50..0x00041E54, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
- },
- {
-  "start": "0x00041E54",
-  "end": "0x00041E5C",
-  "section": ".text",
-  "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00041BF0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00041E54..0x00041E5C, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
- },
- {
-  "start": "0x00041E5C",
-  "end": "0x00041E9C",
-  "section": ".text",
-  "kind": "routine",
-  "evidence": "Recovered because the alias fold had redirected its dispatch to sub_00041BF0 while the address is a complete function: its body terminates before the alias's own end, and 0x00151C40 (Release, dispatched to QueryInterface) and 0x00151CA0 are both cases where a virtual call then enters the wrong function and faults. The underlying defect is in tools/recomp/translator.py -- an abutting alias is folded even when it is a complete function -- so this is the complete workaround, pruned by recover-functions.py refusing entries it cannot lift standalone. Body 0x00041E5C..0x00041E9C, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
- },
- {
   "start": "0x000425D0",
   "end": "0x00042745",
   "section": ".text",
@@ -2858,10 +2810,10 @@
  },
  {
   "start": "0x0004B0E0",
-  "end": "0x0004B134",
+  "end": "0x0004B135",
   "section": ".text",
   "kind": "routine",
-  "evidence": "A method of the function-pointer table at 0x001F9AE8. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_0004B134 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x0004B0E0 at sub_0004B134. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x0004B0E0..0x0004B134, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21."
+  "evidence": "A method of the function-pointer table at 0x001F9AE8. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_0004B134 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x0004B0E0 at sub_0004B134. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x0004B0E0..0x0004B134, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21. C3 (2026-10-18): widened from 0x0004B134 to 0x0004B135 so the body includes its own final `ret` at 0x0004B134 (NOP padding follows to 0x0004B140). The previous full pass generated that lone ret as sub_0004B134 and this body fell through into it; the v0.14.0 database has no entry there, so the truncated body fell off its end without returning."
  },
  {
   "start": "0x0004B140",
@@ -26157,5 +26109,821 @@
   "kind": "routine",
   "stack_args": 16,
   "evidence": "Found by over-run scan, not by a run: no run has reached it yet. It sat inside the declared span [0x00162580, 0x00162900) of manifest entry 0x00162580, whose own complete recursive-descent walk ends at 0x0016259F (check-hidden-entries.py OVER_RUN), so no entry owned it and an indirect call to it would trap with `[ICALL] Failed to resolve VA 0x001626C0`; 0x00162580 is narrowed to 0x0016259F in the same batch (narrowings.json). Reached from outside the over-run: direct `jmp 0x1626c0` at 0x0016292D (manifest entry 0x00162900). None of the runtime tables (recovered switch, manual-functions.json, generated dispatch) resolves it. Start boundary: `ret 0x10` at 0x001626BA, then 3 padding byte(s) 0x001626BD-0x001626BF. It begins `mov ecx, dword ptr [esp + 8]; push ebx; push ebp; push esi`. It has 1 reachable return(s), each `ret 0x10` (0x001628F6). stack_args 16: a `ret` with that immediate is reached at depth 0 on a modelled path, the gating identity scripts/check-stack-depth.py uses. End 0x001628F9 is one byte past the last reachable instruction, followed by 7 padding byte(s) to 0x00162900. A recursive-descent walk from the start (the Analyzer of scripts/check-stack-depth.py) reaches 150 instructions; every in-body branch target (0x0016271C-0x001628F0) lies inside the extent; no jump table. Validated read-only on a temporary manifest (repository manifest plus this batch): scripts/check-stack-depth.py PROVED/OK (no DEFECT anywhere), scripts/check-hidden-entries.py CLEAN, and it lifts standalone through the translator."
+ },
+ {
+  "start": "0x00040300",
+  "end": "0x00040328",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00040300 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by 909090 padding, pointer at 0x001C4338, 0x001CA570 (data); first instructions `push esi ; mov esi, ecx`; body 0x00040300..0x00040328 by recursive descent from the entry (next known start 0x00040330); exits ret [4].",
+  "stack_args": 4
+ },
+ {
+  "start": "0x00080320",
+  "end": "0x0008033E",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00080320 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by 909090 padding, pointer at 0x001CCFF8 (data); first instructions `push esi ; mov esi, ecx`; body 0x00080320..0x0008033E by recursive descent from the entry (next known start 0x00080340); exits ret [4].",
+  "stack_args": 4
+ },
+ {
+  "start": "0x00101A70",
+  "end": "0x00101BA4",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database has no entry at 0x00101A70 (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so nothing dispatches it. The address is a complete function: preceded by 909090 padding, pointer at 0x0021FFB4 (data); first instructions `push esi ; mov esi, ecx`; body 0x00101A70..0x00101BA4: exits ret 4 at 0x00101B3F and 0x00101BA1, switch at 0x00101AA9 through the table at 0x00101BA4 (index bytes at 0x00101BB0) whose arms 0x00101AB0 and 0x00101B42 lie inside; NOP padding after the tables, next entry 0x00101BC0 (the arm 0x00101B42 keeps its own database entry); exits ret [4] tail jmp to 0x00101BA0.",
+  "stack_args": 4
+ },
+ {
+  "start": "0x00169010",
+  "end": "0x0016901A",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00169010 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E3A5C (data); first instructions `sub dword ptr [esp + 4], 4 ; jmp 0x168310`; body 0x00169010..0x0016901A by recursive descent from the entry (next known start 0x00169020); tail jmp to 0x00168310.",
+  "stack_args": 12
+ },
+ {
+  "start": "0x001753D0",
+  "end": "0x001754B9",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001753D0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by 909090 padding, pointer at 0x001E3EA8 (data); tail-jumped to from 0x00175BB5; first instructions `mov eax, dword ptr [esp + 8] ; cmp eax, 0x1e4c94`; body 0x001753D0..0x001754B9 by recursive descent from the entry (next known start 0x001754C0); exits ret [12].",
+  "stack_args": 12
+ },
+ {
+  "start": "0x00175BB0",
+  "end": "0x00175BBA",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00175BB0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E3E98 (data); first instructions `sub dword ptr [esp + 4], 4 ; jmp 0x1753d0`; body 0x00175BB0..0x00175BBA by recursive descent from the entry (next known start 0x00175BC0); tail jmp to 0x001753D0.",
+  "stack_args": 12
+ },
+ {
+  "start": "0x00177B10",
+  "end": "0x00177B4C",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00177B10 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by 909090 padding, tail-jumped to from 0x0018A577, 0x0018A7D9, 0x0018A803; first instructions `push ecx ; push esi`; body 0x00177B10..0x00177B4C by recursive descent from the entry (next known start 0x00177B50); exits ret [0].",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00186C20",
+  "end": "0x00186C28",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00186C20 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E4DB0, 0x001E4DD4 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00186C20..0x00186C28 by recursive descent from the entry (next known start 0x00186C40); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00186CA0",
+  "end": "0x00186CA8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00186CA0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E4E64, 0x001E4E88 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x121d0`; body 0x00186CA0..0x00186CA8 by recursive descent from the entry (next known start 0x00186CC0); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00186CE0",
+  "end": "0x00186CE8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00186CE0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E4ED0, 0x001E4F20 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00186CE0..0x00186CE8 by recursive descent from the entry (next known start 0x00186D00); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00186DB0",
+  "end": "0x00186DB8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00186DB0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E5020 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00186DB0..0x00186DB8 by recursive descent from the entry (next known start 0x00186DD0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00186DF0",
+  "end": "0x00186DFB",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00186DF0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E5068 (data); first instructions `mov ecx, dword ptr [ebp - 0x114] ; jmp 0x11000`; body 0x00186DF0..0x00186DFB by recursive descent from the entry (next known start 0x00186E10); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00186E30",
+  "end": "0x00186E38",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00186E30 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E50B0 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00186E30..0x00186E38 by recursive descent from the entry (next known start 0x00186E50); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187120",
+  "end": "0x00187128",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187120 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E54DC, 0x001E5500 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00187120..0x00187128 by recursive descent from the entry (next known start 0x00187140); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001871A0",
+  "end": "0x001871A8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001871A0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E55B4, 0x001E55D8, 0x001E55FC, 0x001E5644 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x001871A0..0x001871A8 by recursive descent from the entry (next known start 0x001871C0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001871E0",
+  "end": "0x001871E8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001871E0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E568C, 0x001E56B0, 0x001E56D4, 0x001E571C (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x121d0`; body 0x001871E0..0x001871E8 by recursive descent from the entry (next known start 0x00187200); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187240",
+  "end": "0x00187248",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187240 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E57D0, 0x001E5860 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x121d0`; body 0x00187240..0x00187248 by recursive descent from the entry (next known start 0x00187260); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001874B0",
+  "end": "0x001874BB",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001874B0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E5E90 (data); first instructions `mov ecx, dword ptr [ebp - 0x680] ; jmp 0x11000`; body 0x001874B0..0x001874BB by recursive descent from the entry (next known start 0x001874D0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187530",
+  "end": "0x00187538",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187530 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E5F94, 0x001E5FB8 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x121d0`; body 0x00187530..0x00187538 by recursive descent from the entry (next known start 0x00187550); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001875B0",
+  "end": "0x001875B8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001875B0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E603C (data); first instructions `mov ecx, dword ptr [ebp - 0x80] ; jmp 0x121d0`; body 0x001875B0..0x001875B8 by recursive descent from the entry (next known start 0x001875D0); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001875F0",
+  "end": "0x001875F8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001875F0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E6084 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x48180`; body 0x001875F0..0x001875F8 by recursive descent from the entry (next known start 0x00187610); tail jmp to 0x00048180.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187650",
+  "end": "0x00187658",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187650 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E60F0 (data); first instructions `mov ecx, dword ptr [ebp - 0x1c] ; jmp 0x11000`; body 0x00187650..0x00187658 by recursive descent from the entry (next known start 0x00187670); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001876D0",
+  "end": "0x001876D8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001876D0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E61A4, 0x001E61C8 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x121d0`; body 0x001876D0..0x001876D8 by recursive descent from the entry (next known start 0x001876F0); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187770",
+  "end": "0x00187778",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187770 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E627C (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x121d0`; body 0x00187770..0x00187778 by recursive descent from the entry (next known start 0x00187790); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187940",
+  "end": "0x00187948",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187940 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E6460, 0x001E6484 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00187940..0x00187948 by recursive descent from the entry (next known start 0x00187960); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187A00",
+  "end": "0x00187A08",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187A00 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E6538 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x121d0`; body 0x00187A00..0x00187A08 by recursive descent from the entry (next known start 0x00187A20); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187A80",
+  "end": "0x00187A88",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187A80 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E65B0 (data); first instructions `mov ecx, dword ptr [ebp - 0x80] ; jmp 0x121d0`; body 0x00187A80..0x00187A88 by recursive descent from the entry (next known start 0x00187AA0); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187B20",
+  "end": "0x00187B28",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187B20 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E666C (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x121d0`; body 0x00187B20..0x00187B28 by recursive descent from the entry (next known start 0x00187B40); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187B80",
+  "end": "0x00187B8B",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187B80 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E66CC (data); first instructions `mov ecx, dword ptr [ebp - 0x198] ; jmp 0x121d0`; body 0x00187B80..0x00187B8B by recursive descent from the entry (next known start 0x00187BA0); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187C20",
+  "end": "0x00187C28",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187C20 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E6798 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00187C20..0x00187C28 by recursive descent from the entry (next known start 0x00187C40); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187C70",
+  "end": "0x00187C78",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187C70 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E67F0, 0x001E6814 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00187C70..0x00187C78 by recursive descent from the entry (next known start 0x00187C90); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187D20",
+  "end": "0x00187D28",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187D20 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E6A48 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00187D20..0x00187D28 by recursive descent from the entry (next known start 0x00187D40); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187D60",
+  "end": "0x00187D68",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187D60 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E6A90, 0x001E6AB4 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x121d0`; body 0x00187D60..0x00187D68 by recursive descent from the entry (next known start 0x00187D80); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187DA0",
+  "end": "0x00187DA8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187DA0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E6AFC (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x121d0`; body 0x00187DA0..0x00187DA8 by recursive descent from the entry (next known start 0x00187DC0); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187E40",
+  "end": "0x00187E48",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187E40 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E6B98, 0x001E6BBC (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00187E40..0x00187E48 by recursive descent from the entry (next known start 0x00187E60); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187EA0",
+  "end": "0x00187EA8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187EA0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E6C4C (data); first instructions `mov ecx, dword ptr [ebp - 0x1c] ; jmp 0x86460`; body 0x00187EA0..0x00187EA8 by recursive descent from the entry (next known start 0x00187EC0); tail jmp to 0x00086460.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00187FB0",
+  "end": "0x00187FB8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00187FB0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E6D60, 0x001E6D84, 0x001E6DA8, 0x001E6DCC (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00187FB0..0x00187FB8 by recursive descent from the entry (next known start 0x00187FD0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001882F0",
+  "end": "0x001882F8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001882F0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E735C, 0x001E7380 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x001882F0..0x001882F8 by recursive descent from the entry (next known start 0x00188310); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001883E0",
+  "end": "0x001883E8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001883E0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E74D4 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x001883E0..0x001883E8 by recursive descent from the entry (next known start 0x00188400); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001885B0",
+  "end": "0x001885BB",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001885B0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E7674 (data); first instructions `mov ecx, dword ptr [ebp - 0xd0] ; jmp 0x11000`; body 0x001885B0..0x001885BB by recursive descent from the entry (next known start 0x001885D0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001887C0",
+  "end": "0x001887C8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001887C0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E797C, 0x001E79A0 (data); first instructions `mov ecx, dword ptr [ebp - 0x20] ; jmp 0x11000`; body 0x001887C0..0x001887C8 by recursive descent from the entry (next known start 0x001887E0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188860",
+  "end": "0x00188868",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188860 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E7AC0 (data); first instructions `mov ecx, dword ptr [ebp - 0x1c] ; jmp 0xc4e50`; body 0x00188860..0x00188868 by recursive descent from the entry (next known start 0x00188880); tail jmp to 0x000C4E50.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001888E0",
+  "end": "0x001888E8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001888E0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E7B44 (data); first instructions `mov ecx, dword ptr [ebp - 0x28] ; jmp 0x11000`; body 0x001888E0..0x001888E8 by recursive descent from the entry (next known start 0x00188900); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188940",
+  "end": "0x00188948",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188940 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E7BB8, 0x001E7BDC, 0x001E7C00, 0x001E7C24 (data); first instructions `mov ecx, dword ptr [ebp - 0x28] ; jmp 0xc6b90`; body 0x00188940..0x00188948 by recursive descent from the entry (next known start 0x00188960); tail jmp to 0x000C6B90.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188A10",
+  "end": "0x00188A18",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188A10 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E7D24 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xe7eb0`; body 0x00188A10..0x00188A18 by recursive descent from the entry (next known start 0x00188A30); tail jmp to 0x000E7EB0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188AB0",
+  "end": "0x00188AB8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188AB0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E7DE0, 0x001E7E04 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00188AB0..0x00188AB8 by recursive descent from the entry (next known start 0x00188AD0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188AF0",
+  "end": "0x00188AF8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188AF0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E7E4C, 0x001E7E70 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xe7eb0`; body 0x00188AF0..0x00188AF8 by recursive descent from the entry (next known start 0x00188B10); tail jmp to 0x000E7EB0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188B30",
+  "end": "0x00188B38",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188B30 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E7EB8 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xc7240`; body 0x00188B30..0x00188B38 by recursive descent from the entry (next known start 0x00188B50); tail jmp to 0x000C7240.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188B80",
+  "end": "0x00188B88",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188B80 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E7F10, 0x001E7F34 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00188B80..0x00188B88 by recursive descent from the entry (next known start 0x00188BA0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188BC0",
+  "end": "0x00188BC8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188BC0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E7F7C, 0x001E7FA0 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xe7eb0`; body 0x00188BC0..0x00188BC8 by recursive descent from the entry (next known start 0x00188BE0); tail jmp to 0x000E7EB0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188C00",
+  "end": "0x00188C08",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188C00 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E7FE8, 0x001E800C (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xe7eb0`; body 0x00188C00..0x00188C08 by recursive descent from the entry (next known start 0x00188C20); tail jmp to 0x000E7EB0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188C60",
+  "end": "0x00188C68",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188C60 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8078 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00188C60..0x00188C68 by recursive descent from the entry (next known start 0x00188C80); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188CA0",
+  "end": "0x00188CA8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188CA0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E80C0, 0x001E80E4 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00188CA0..0x00188CA8 by recursive descent from the entry (next known start 0x00188CC0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188CE0",
+  "end": "0x00188CE8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188CE0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E812C, 0x001E8150 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00188CE0..0x00188CE8 by recursive descent from the entry (next known start 0x00188D00); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188D20",
+  "end": "0x00188D28",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188D20 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8198, 0x001E81BC (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00188D20..0x00188D28 by recursive descent from the entry (next known start 0x00188D40); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188D60",
+  "end": "0x00188D68",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188D60 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8204, 0x001E8228 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xe7eb0`; body 0x00188D60..0x00188D68 by recursive descent from the entry (next known start 0x00188D80); tail jmp to 0x000E7EB0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188DA0",
+  "end": "0x00188DA8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188DA0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8270, 0x001E8294 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xcc680`; body 0x00188DA0..0x00188DA8 by recursive descent from the entry (next known start 0x00188DC0); tail jmp to 0x000CC680.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188E20",
+  "end": "0x00188E28",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188E20 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8350 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xc7240`; body 0x00188E20..0x00188E28 by recursive descent from the entry (next known start 0x00188E40); tail jmp to 0x000C7240.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188E70",
+  "end": "0x00188E78",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188E70 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E83A8 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xc7240`; body 0x00188E70..0x00188E78 by recursive descent from the entry (next known start 0x00188E90); tail jmp to 0x000C7240.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188EE0",
+  "end": "0x00188EE8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188EE0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8424 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xc7240`; body 0x00188EE0..0x00188EE8 by recursive descent from the entry (next known start 0x00188F00); tail jmp to 0x000C7240.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188F30",
+  "end": "0x00188F38",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188F30 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E847C, 0x001E84A0 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00188F30..0x00188F38 by recursive descent from the entry (next known start 0x00188F50); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188F70",
+  "end": "0x00188F78",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188F70 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E84E8, 0x001E850C (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00188F70..0x00188F78 by recursive descent from the entry (next known start 0x00188F90); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00188FD0",
+  "end": "0x00188FD8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00188FD0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E85A4, 0x001E85C8 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xe7eb0`; body 0x00188FD0..0x00188FD8 by recursive descent from the entry (next known start 0x00188FF0); tail jmp to 0x000E7EB0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189030",
+  "end": "0x00189038",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189030 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8634 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00189030..0x00189038 by recursive descent from the entry (next known start 0x00189050); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189070",
+  "end": "0x00189078",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189070 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E867C, 0x001E86A0 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00189070..0x00189078 by recursive descent from the entry (next known start 0x00189090); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001890B0",
+  "end": "0x001890B8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001890B0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E86E8, 0x001E870C (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xe7eb0`; body 0x001890B0..0x001890B8 by recursive descent from the entry (next known start 0x001890D0); tail jmp to 0x000E7EB0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001890F0",
+  "end": "0x001890F8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001890F0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8754, 0x001E8778 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xe7eb0`; body 0x001890F0..0x001890F8 by recursive descent from the entry (next known start 0x00189110); tail jmp to 0x000E7EB0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189130",
+  "end": "0x00189138",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189130 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E87C0, 0x001E87E4 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00189130..0x00189138 by recursive descent from the entry (next known start 0x00189150); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189170",
+  "end": "0x00189178",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189170 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E882C (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00189170..0x00189178 by recursive descent from the entry (next known start 0x00189190); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001891B0",
+  "end": "0x001891B8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001891B0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8874, 0x001E8898 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x001891B0..0x001891B8 by recursive descent from the entry (next known start 0x001891D0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001891F0",
+  "end": "0x001891F8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001891F0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E88E0, 0x001E8904 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x001891F0..0x001891F8 by recursive descent from the entry (next known start 0x00189210); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189230",
+  "end": "0x00189238",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189230 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E894C (data); first instructions `mov ecx, dword ptr [ebp - 0x14] ; jmp 0xe7eb0`; body 0x00189230..0x00189238 by recursive descent from the entry (next known start 0x00189250); tail jmp to 0x000E7EB0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001892B0",
+  "end": "0x001892B8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001892B0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E89DC (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x001892B0..0x001892B8 by recursive descent from the entry (next known start 0x001892D0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001892F0",
+  "end": "0x001892F8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001892F0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8A24, 0x001E8A48 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xe7eb0`; body 0x001892F0..0x001892F8 by recursive descent from the entry (next known start 0x00189310); tail jmp to 0x000E7EB0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189350",
+  "end": "0x00189358",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189350 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8ABC, 0x001E8AE0 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00189350..0x00189358 by recursive descent from the entry (next known start 0x00189370); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189390",
+  "end": "0x00189398",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189390 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8B28, 0x001E8B4C (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00189390..0x00189398 by recursive descent from the entry (next known start 0x001893B0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001893D0",
+  "end": "0x001893D8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001893D0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8B94 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xc7240`; body 0x001893D0..0x001893D8 by recursive descent from the entry (next known start 0x001893F0); tail jmp to 0x000C7240.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189420",
+  "end": "0x00189428",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189420 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8BEC, 0x001E8C10 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00189420..0x00189428 by recursive descent from the entry (next known start 0x00189440); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189480",
+  "end": "0x00189488",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189480 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8CA0, 0x001E8CC4 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00189480..0x00189488 by recursive descent from the entry (next known start 0x001894A0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001894C0",
+  "end": "0x001894C8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001894C0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8D0C (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x001894C0..0x001894C8 by recursive descent from the entry (next known start 0x001894E0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189580",
+  "end": "0x00189588",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189580 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8E58, 0x001E8E7C (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0xfd9b0`; body 0x00189580..0x00189588 by recursive descent from the entry (next known start 0x001895A0); tail jmp to 0x000FD9B0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189600",
+  "end": "0x00189608",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189600 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8F40 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00189600..0x00189608 by recursive descent from the entry (next known start 0x00189620); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189690",
+  "end": "0x00189698",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189690 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E8FD4 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x121d0`; body 0x00189690..0x00189698 by recursive descent from the entry (next known start 0x001896B0); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189710",
+  "end": "0x00189718",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189710 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E9090 (data); first instructions `mov ecx, dword ptr [ebp - 0x80] ; jmp 0x121d0`; body 0x00189710..0x00189718 by recursive descent from the entry (next known start 0x00189730); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189750",
+  "end": "0x00189758",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189750 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E90FC (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x121d0`; body 0x00189750..0x00189758 by recursive descent from the entry (next known start 0x00189770); tail jmp to 0x000121D0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x001899D0",
+  "end": "0x001899D8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x001899D0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E94E4, 0x001E9508 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x001899D0..0x001899D8 by recursive descent from the entry (next known start 0x001899F0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189DA0",
+  "end": "0x00189DA8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189DA0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E9A24 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00189DA0..0x00189DA8 by recursive descent from the entry (next known start 0x00189DC0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189F50",
+  "end": "0x00189F58",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189F50 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E9C3C, 0x001E9C60 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00189F50..0x00189F58 by recursive descent from the entry (next known start 0x00189F70); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x00189FD0",
+  "end": "0x00189FD8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x00189FD0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001E9CF8 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; jmp 0x11000`; body 0x00189FD0..0x00189FD8 by recursive descent from the entry (next known start 0x00189FF0); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0018A360",
+  "end": "0x0018A368",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x0018A360 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001EA15C (data); first instructions `mov ecx, dword ptr [ebp - 0x80] ; jmp 0x11000`; body 0x0018A360..0x0018A368 by recursive descent from the entry (next known start 0x0018A380); tail jmp to 0x00011000.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0018A410",
+  "end": "0x0018A418",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x0018A410 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001EA334, 0x001EA37C, 0x001EA3A0 (data); first instructions `lea ecx, [ebp - 0x50] ; jmp 0x1606e0`; body 0x0018A410..0x0018A418 by recursive descent from the entry (next known start 0x0018A430); tail jmp to 0x001606E0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0018A4D0",
+  "end": "0x0018A4D8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x0018A4D0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001EA5D4, 0x001EA5F8 (data); first instructions `lea ecx, [ebp - 0x50] ; jmp 0x1606e0`; body 0x0018A4D0..0x0018A4D8 by recursive descent from the entry (next known start 0x0018A4F0); tail jmp to 0x001606E0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0018A5A0",
+  "end": "0x0018A5A8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x0018A5A0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001EA7F8, 0x001EA81C (data); first instructions `lea ecx, [ebp - 0x50] ; jmp 0x1606e0`; body 0x0018A5A0..0x0018A5A8 by recursive descent from the entry (next known start 0x0018A5C0); tail jmp to 0x001606E0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0018A650",
+  "end": "0x0018A658",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x0018A650 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001EA9AC (data); first instructions `lea ecx, [ebp - 0x50] ; jmp 0x1606e0`; body 0x0018A650..0x0018A658 by recursive descent from the entry (next known start 0x0018A670); tail jmp to 0x001606E0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0018A680",
+  "end": "0x0018A68B",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x0018A680 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001EA988, 0x001EAA54 (data); first instructions `mov ecx, dword ptr [ebp - 0x10] ; add ecx, 0x1c`; body 0x0018A680..0x0018A68B by recursive descent from the entry (next known start 0x0018A6A0); tail jmp to 0x0017ABF0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0018A6F0",
+  "end": "0x0018A6F8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x0018A6F0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001EAAC8, 0x001EAAEC (data); first instructions `lea ecx, [ebp - 0x50] ; jmp 0x1606e0`; body 0x0018A6F0..0x0018A6F8 by recursive descent from the entry (next known start 0x0018A710); tail jmp to 0x001606E0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0018A820",
+  "end": "0x0018A828",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x0018A820 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001EADD8, 0x001EADFC, 0x001EAE20 (data); first instructions `lea ecx, [ebp - 0x50] ; jmp 0x1606e0`; body 0x0018A820..0x0018A828 by recursive descent from the entry (next known start 0x0018A840); tail jmp to 0x001606E0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0018A9B0",
+  "end": "0x0018A9B8",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x0018A9B0 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001EB0A0 (data); first instructions `lea ecx, [ebp - 0x50] ; jmp 0x1606e0`; body 0x0018A9B0..0x0018A9B8 by recursive descent from the entry (next known start 0x0018A9D0); tail jmp to 0x001606E0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0018AA30",
+  "end": "0x0018AA38",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x0018AA30 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001EB154 (data); first instructions `lea ecx, [ebp - 0x50] ; jmp 0x1606e0`; body 0x0018AA30..0x0018AA38 by recursive descent from the entry (next known start 0x0018AA50); tail jmp to 0x001606E0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0018AB10",
+  "end": "0x0018AB18",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x0018AB10 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001EB2BC (data); first instructions `lea ecx, [ebp - 0x50] ; jmp 0x1606e0`; body 0x0018AB10..0x0018AB18 by recursive descent from the entry (next known start 0x0018AB30); tail jmp to 0x001606E0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0018AB70",
+  "end": "0x0018AB78",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x0018AB70 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001EB378, 0x001EB39C (data); first instructions `lea ecx, [ebp - 0x50] ; jmp 0x1606e0`; body 0x0018AB70..0x0018AB78 by recursive descent from the entry (next known start 0x0018AB90); tail jmp to 0x001606E0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0018AC00",
+  "end": "0x0018AC08",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x0018AC00 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001EB584 (data); first instructions `lea ecx, [ebp - 0x50] ; jmp 0x1606e0`; body 0x0018AC00..0x0018AC08 by recursive descent from the entry (next known start 0x0018AC20); tail jmp to 0x001606E0.",
+  "stack_args": 0
  }
 ]

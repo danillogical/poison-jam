@@ -5506,3 +5506,139 @@ N6 and R5 remain in the plan.
 
 PUSHED_TO: origin / BRANCH: main / COMMIT: 6c3cd84c8e5853cc4ca39205526da2a45b5cc9b4 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 03aaae8..6c3cd84, toolkit pushed first, clean and synchronized; 2 outgoing blobs (largest 255 106 bytes), 0 secret hits; upstream untouched (push URL DISABLED).
 PUSHED_TO: origin / BRANCH: master / COMMIT: 1dd0b11 (with gate 2253927) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward de44496..1dd0b11, clean and synchronized; 8 outgoing blobs (largest 431 195 bytes), 0 secret hits, no `game/` or retail-derived path.
+
+### §31.45 C3: static gates pass; AC’97 startup gate remains open (2026-10-18)
+
+The owner resumed cleanup C3–C4 and D1–D5 directly on Windows. N4 remains complete
+(§31.44); this does not reopen it. Toolkit `merge-v0.14.0` is `ee2e0cd`: merge
+`0828592`, SetAA test seams `a4cd862`, and low-RAM surface-write guard repair
+`ee2e0cd`. Toolkit main/origin remain `6c3cd84` until the C4 acceptance gate.
+
+**Regeneration inventory.** The inherited full pass has 5,922 generated functions
+and 9,078 dispatch entries (old: 5,740 and 8,917). Its 302 dropped functions are
+classified in the ignored C3 archive; 484 are added. The C3 seeds restore 101
+alias-folded helpers and `0x101A70`, retire ten stale manual pins, repair the
+`0xF800D`/`0xF8041` internal labels, and widen `0x20760`, `0x2D080`, `0x4B0E0`.
+The reJSRF #93 leads `0x162490`, `0x1780D0`, `0x7BDD0` resolve; `0x77000` does
+not reproduce. Zero unresolved full-pass stubs is distinct from the 72 explicit
+recovery traps that remain fatal. Final local recovery count is 3,391 with zero
+duplicate definitions; the seven further removals below explain the change from
+the inherited 3,398/73 inventory.
+
+**Gate-driven repairs.** The first guarded build linked the game but failed the
+11c1 fixture on `xbox_PortOut`. The recovery generator and fixture now use the
+merged toolkit's unified `xbox_PortIn(port,width)` / `xbox_PortOut(port,value,width)`
+interface. Unexpected fixture OUT aborts; the deciding 11c1 path does not use it.
+The fixture reports 2,197 checks. No runtime stub or successful device response
+was added to the game.
+
+The first complete CTest run passed 96/99 in 570.58 s. The failures were the
+FCMOV old-lift mutation matcher, recovery-span ownership, and hidden-entry
+historical replay. The positive FCMOV behavior was already correct; its negative
+control now matches the merged lifter's operand-bearing comments and still
+compiles/runs the old broken lift, requiring failure.
+
+The span gate exposed a genuine false-recovery chain: `0x41E24`, `0x41E40`,
+`0x41E48`, `0x41E4C`, `0x41E50`, `0x41E54`, `0x41E5C` are internal instructions
+of the original `sub_00041BF0` (`0x41BF0..0x4259C`). They are retired from the
+recovered/manual manifests, not widened into invented functions. The corresponding
+aligned data values at `0x1C42F8..0x1C4318` encode count-one NV2A packets (methods
+`0x1E24`, `0x1E40..0x1E5C`), not executable-entry evidence. The full generated owner
+and its real `0x41E5C`/`0x41E9C` branch labels remain. Regenerating recovery removes
+the now-unreferenced `0x41E9C` trap; actual unresolved dependencies stay fatal.
+The stale `0x20760` known-open allowance also shrank because its C3 span is fixed.
+
+The hidden-entry self-check now reproduces historical missing resolution in all
+three sources: recovery manifest, generated-body set, and dispatch set. Current
+full-pass bodies otherwise legitimately change those controls from HIDDEN_ENTRY
+to SHADOWED. Normal gate evaluation still uses the actual tree, and SHADOWED
+remains a gating class; default CLI output now names its deciding addresses.
+A different worker authored the new span and CLI regressions.
+
+**Provenance and overrides.** The strict baseline/manifest still protect 17 local
+outputs. The absent unresolved-stub file (the full pass emits it only for a
+nonempty unresolved set) and obsolete 11b4b4 fixture are retired with dated reasons;
+the two existing AOT shader-corpus C/H files previously omitted from the inventory
+are now protected. The independent test inventories actual C/H outputs and detects
+omission from both records; presence, hash and ABI-marker checks remain decisive.
+No shader corpus was rebuilt during this migration.
+
+Fifteen new upstream environment variables blocked override drift. Their definitions
+are now classified in the run-profile document. Only exact `RECOMP_PORT_FIELD_PIN=1`
+adds the synthetic field pin and is exploratory; inert spellings remain inert, and
+duplicate keys remain UNKNOWN. Host input, save-root and SDL presentation/audio
+controls are documented without enabling them or changing any saves. Independent
+profile gates passed all 56 tests. Private controls: old classifier 4 failures/8;
+final 0; missing classification 4, truthiness 8, case-sensitive key 4, trimmed value
+2 assertion failures; restored 0, with no test errors or skips. Mutation copies are
+outside the repositories under `xbr-mac/c3-profile-mutations`.
+
+**Measured rebuild requirements.** The successful-path regeneration stages total
+715.0 s: toolkit disasm 194.2, funcid 1.3, ABI 1.0, game disasm 284.0, full regeneration
+199.2, boundary relift 0.5, recovery 34.5, ABI deltas 0.3. Recorded attempts total
+1,158.1 s, including failed/intermediate attempts: this is not one flawless timed
+end-to-end run. It requires the original local XBE, fresh toolkit/game analysis,
+reviewed seeds, the ignored runtime/recovery output and offline Vulkan corpus tools.
+The archived storage sample is 49,596,384 B recomp output, 65,205,668 B game analysis,
+67,212,320 B toolkit disassembly, 3,159,365 B funcid, 2,490,306 B ABI and 1,018 B
+recomp metadata, with 35,115,036,672 B free. C4 must update AGENTS and the ledgers
+with these attempt boundaries and current requirements.
+
+**Current gate state:** final repaired guarded build passed (54 targets, 99 CTests),
+zero C4310/compile/link errors, 18 MSB8028 intermediate-directory warnings. Executable
+SHA-256 `01a8cda689d9b0c6fc4f30c3fb6a369d292f7e41ce770d3431c0b87860133c28`.
+`just check` passed, including all 126 distinct retail vertex programs. Full
+limited-rights CTest passed **99/99 in 666.04 s**, without skips or reruns. The
+cache-off smoke failed at startup as detailed below. C3/C4 remain unaccepted and
+neither repository's cleanup code is pushed.
+Existing limits remain: rare recovered fall-through/ABI findings are not proven safe
+by zero runtime hits, and exploratory completion cannot prove hardware fidelity.
+
+
+**Independent mutation evidence.** The separately authored span and hidden-entry
+regressions pass on final and restored source. Four private controls each fail
+with one assertion failure, zero errors and zero skips: omit generated-body and
+dispatch resolution from historical replay; hide SHADOWED deciding addresses;
+remove SHADOWED from GATING; restore the seven false recovered/manual entries.
+Final checker SHA-256 `c652622d7d3970153a88a74d7685d0d90afe2f6238a25c07f114e49ace5f677a`,
+hidden test `f62ab09c0af5bdf07849a98fda70863e747c905c393f81a384d8f076544a4af9`,
+span test `a535def7ddb3fb70a4c6aedeff7ab917e4db135df614e49bc4bb553a0aa3cf96`.
+The private relocated checker copies have separate hashes in the ignored receipt;
+these are not claimed as the production file hashes. No shared source was swapped.
+
+**C3 runtime gate FAILED.** Run `20261018-141756-714-keyscript-c3-regen-e2e-vk`
+used the executable above, RTX 4070, stock `e2e.json`, cache off, exploratory profile.
+Its requested budget was 620 s, but step 0 failed its 300 s title deadline:
+`keyscript_incomplete`, 301.2 s, zero frames/presents, ICALL 0, fatal 0. The runner
+then killed only its own PID 35724. The save-root witnesses both verify the private
+run directory. Absence of a fatal with no progress is not a pass or coverage proof.
+
+A PID/image-verified diagnostic capture suspended that process for 0.825 s and
+resumed it successfully. Frozen thread context places the main thread 31428 at
+host `0x7FF61158EEC0`, module base `0x7FF6107F0000`, RVA `0xD9EEC0`.
+The archived linker map resolves `sub_001A6F52+0x190`; llvm-symbolizer against the
+archived executable/PDB resolves `recomp_0005.c:56083`, the backedge of
+`loc_001A6F88`. This diagnostic minidump holds host contexts/stacks/module data,
+**not a canonical guest-RAM capture**: it cannot establish guest memory values or
+satisfy the dump-mapping gate. No guest-RAM claim is made from it.
+
+Original XBE instructions at `0x1A6F6F` write reset bit 2 at the selected channel's
+`0xFEC0010B`-relative register, `0x1A6F7F` reads once into CL, and `0x1A6F88` tests
+CL with `jne 0x1A6F88`. That loop does not reload the register. The old backed-up C
+and current C function differ only by the regenerated `RECOMP_BACKEDGE()` call.
+The archived **C2** executable's native code reads/masks the byte at
+`0x140D19C98..0x140D19CA5` and proceeds directly to the following code: its empty
+register loop is absent. The current native executable retains the loop at
+`0x140D9EEC0..0x140D9EED7`, including the conditional preemption call. This establishes
+that old C2 completion did not test that original loop's reset-completion contract;
+it does not establish every cause of the device state that now enters the loop.
+
+**Next bounded rung: C3-RR diagnosis, before C4.** Establish the actual register
+contract and current ownership against original instructions and primary device
+sources, compare the two native binaries, and propose a minimal model repair plus
+an independent behavioral/mutation gate. Preserve the §1 AC'97 hunk ruling and
+L20 codec-ready relation. Do not remove backedge preemption, force CL to zero,
+turn on FIELD_PIN or AC97_READY, or arm the dormant reset trap as an unexplained
+completion shortcut. Any change to that trap/model requires its own explicit
+packet and compatible handling of tick writes and shared single-step ownership.
+No runtime repair or C4 acceptance has happened yet.

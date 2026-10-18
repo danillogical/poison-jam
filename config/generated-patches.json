@@ -89,27 +89,11 @@
    "reason": "record the guest store at 0x001A1FA7 before it happens"
   },
   {
-   "after": "/* 0x00054750 has its own recovered body (L02); the translation pass's \"not detected\" trap for the same address is replaced by this comment so the two definitions cannot collide at link time (LNK2005). */\n",
-   "before": "void sub_00054750(void) { recomp_icall_fail_log(0x00054750u); g_esp += 4; /* 0x00054750: not detected */ }\n",
-   "file": "recomp_stubs_unresolved.c",
-   "id": "remove-54750-stub",
-   "ledger": "L02",
-   "reason": "0x00054750 was recovered as its own body (config/recovered-functions.json), so the translation pass's \"not detected\" trap for the same address became a duplicate symbol: LNK2005 sub_00054750 already defined in recovered.obj. recomp_stubs_unresolved.c is translation-owned, so recover-functions.py cannot remove it (its line 179 says so); this patch is the sanctioned mechanism and scripts/patch-generated.py re-applies it after every regeneration. It implements L02: the recovered body must replace the generated translation for this address. Deletion is written as a replacement to an empty string."
-  },
-  {
    "id": "remove-b5f3a-dispatch",
    "file": "recomp_dispatch.c",
    "before": "    { 0x000B5F3Au, (recomp_func_t)sub_000B5F3A },\n",
    "after": "    /* 0x000B5F3A is an internal label of sub_000B5EB0, not an entry; its dispatch tuple is removed so it cannot name an undefined symbol (LNK2001). */\n",
    "reason": "0x000B5F3A is an internal label of the function at 0x000B5EB0, not an entry: it is reached by fallthrough from 0x000B5EB0's own jump-table arm 0xB5F16, its only raw dword sits in packed .data, and nothing branches to it. The reviewed manifest no longer carries it (config/recovered-functions.json, ledger L02), so the generated dispatch tuple named a symbol nothing defines and the link failed with LNK2001. Removing the tuple also requires the companion patch `fix-dispatch-table-size`; see that entry for why. recomp_dispatch.c is translation-owned, so these patches are the sanctioned mechanism and patch-generated.py re-applies them after every regeneration.",
-   "ledger": "L02"
-  },
-  {
-   "id": "remove-30800-dispatch",
-   "file": "recomp_dispatch.c",
-   "before": "    { 0x00030800u, (recomp_func_t)sub_00030800 },\n",
-   "after": "    /* 0x00030800 is the loop-exit label of sub_000307A0, not an entry; its dispatch tuple is removed so it cannot name an undefined symbol (LNK2001). */\n",
-   "reason": "0x00030800 is an internal label of the function at 0x000307A0, not an entry: it is the target of that function's `je 0x30800` at 0x000307F2, it uses the esi/edi the 0x000307A0 prologue and loop set up and pops the ESI/EDI that prologue pushed, no call, jmp or immediate anywhere in the image references it, and its only aligned dword (0x0022BBF8) is a bit mask in a .data mask run. The reviewed manifest no longer carries it (config/recovered-functions.json, ledger L02; stop 37), so the generated dispatch tuple names a symbol nothing defines and the link would fail with LNK2001. Same shape as `remove-b5f3a-dispatch`; the derived table size from `fix-dispatch-table-size` keeps the count right. recomp_dispatch.c is translation-owned, so this patch is the sanctioned mechanism and patch-generated.py re-applies it after every regeneration.",
    "ledger": "L02"
   },
   {
@@ -121,11 +105,27 @@
    "ledger": "L02"
   },
   {
+   "id": "remove-f800d-f8041-alias-dispatch",
+   "file": "recomp_dispatch.c",
+   "before": "    { 0x000F800Du, (recomp_func_t)recomp_alias_000F800D },\n    { 0x000F8041u, (recomp_func_t)recomp_alias_000F8041 },\n",
+   "after": "    /* 0x000F800D and 0x000F8041 are interior labels of sub_000F7F00, not entries; their alias tuples are removed so they stay undispatchable. */\n",
+   "reason": "0x000F800D and 0x000F8041 are interior labels of the recovered sub_000F7F00 (config/recovered-functions.json, span 0x000F7F00..0x000F807C), not entries: 0x000F800D is the target of `je 0xf800d` at 0x000F7FE6 and 0x000F8041 of `je 0xf8041` at 0x000F7FDC and 0x000F802E, both continue with the ebx the 0x000F7F00 prologue set up, and both reach that function's `pop ebx; add esp, 0x70; ret 4` epilogue. The v0.14.0 function database (regeneration of 2026-10-18) lists them as tail_jump_alias entries, so the full pass emits alias wrappers that call sub_000F8000 -- itself an interior label pinned in config/manual-functions.json and defined nowhere -- and the link failed with LNK2019: unresolved external symbol sub_000F8000 referenced in function recomp_alias_000F800D. Same shape as `remove-f8000-dispatch`; the derived table size from `fix-dispatch-table-size` keeps the count right. recomp_dispatch.c is translation-owned, so this patch is the sanctioned mechanism. This patch removes the two dispatch tuples.",
+   "ledger": "L02"
+  },
+  {
+   "id": "remove-f800d-f8041-alias-wrappers",
+   "file": "recomp_dispatch.c",
+   "before": "static void recomp_alias_000F800D(void) { recomp_alias_observe(18u); sub_000F8000(); }\nstatic void recomp_alias_000F8041(void) { recomp_alias_observe(19u); sub_000F8000(); }\n",
+   "after": "/* 0x000F800D and 0x000F8041: alias wrappers removed with their dispatch tuples (interior labels of sub_000F7F00). */\n",
+   "reason": "0x000F800D and 0x000F8041 are interior labels of the recovered sub_000F7F00 (config/recovered-functions.json, span 0x000F7F00..0x000F807C), not entries: 0x000F800D is the target of `je 0xf800d` at 0x000F7FE6 and 0x000F8041 of `je 0xf8041` at 0x000F7FDC and 0x000F802E, both continue with the ebx the 0x000F7F00 prologue set up, and both reach that function's `pop ebx; add esp, 0x70; ret 4` epilogue. The v0.14.0 function database (regeneration of 2026-10-18) lists them as tail_jump_alias entries, so the full pass emits alias wrappers that call sub_000F8000 -- itself an interior label pinned in config/manual-functions.json and defined nowhere -- and the link failed with LNK2019: unresolved external symbol sub_000F8000 referenced in function recomp_alias_000F800D. Same shape as `remove-f8000-dispatch`; the derived table size from `fix-dispatch-table-size` keeps the count right. recomp_dispatch.c is translation-owned, so this patch is the sanctioned mechanism. This patch removes the two wrappers, which are the references to the undefined sub_000F8000; their observer slots 18 and 19 stay allocated and unused.",
+   "ledger": "L02"
+  },
+  {
    "id": "remove-100041-body-label-dispatch",
    "file": "recomp_dispatch.c",
-   "before": "    { 0x00100041u, (recomp_func_t)sub_00100041 },\n    { 0x00100047u, (recomp_func_t)sub_00100047 },\n    { 0x0010004Au, (recomp_func_t)sub_0010004A },\n    { 0x0010004Du, (recomp_func_t)sub_0010004D },\n    { 0x00100053u, (recomp_func_t)sub_00100053 },\n    { 0x00100055u, (recomp_func_t)sub_00100055 },\n    { 0x00100058u, (recomp_func_t)sub_00100058 },\n    { 0x0010005Au, (recomp_func_t)sub_0010005A },\n",
+   "before": "    { 0x00100041u, (recomp_func_t)recomp_alias_00100041 },\n",
    "after": "    /* 0x00100041..0x0010005A are internal labels in sub_000FFFD0, not dispatchable entries. */\n",
-   "reason": "The original disassembly has one body beginning at 0x000FFFD0 and ending at 0x001005B5. The eight generated tuples 0x00100041, 0x00100047, 0x0010004A, 0x0010004D, 0x00100053, 0x00100055, 0x00100058 and 0x0010005A are instruction labels within that body; their standalone recovered wrappers were removed from config/recovered-functions.json after the 0x000FFFD0 ABI failure exposed the old truncated span. recomp_dispatch.c is translation-owned, so this durable patch removes the stale tuples after regeneration.",
+   "reason": "The original disassembly has one body beginning at 0x000FFFD0 and ending at 0x001005B5. The eight generated tuples 0x00100041, 0x00100047, 0x0010004A, 0x0010004D, 0x00100053, 0x00100055, 0x00100058 and 0x0010005A are instruction labels within that body; their standalone recovered wrappers were removed from config/recovered-functions.json after the 0x000FFFD0 ABI failure exposed the old truncated span. recomp_dispatch.c is translation-owned, so this durable patch removes the stale tuples after regeneration. Since the v0.14.0 regeneration (2026-10-18) the function database no longer lists 0x00100047..0x0010005A at all, and keeps 0x00100041 only as a tail_jump_alias whose owner chain resolves past the recovered 0x000FFFD0 to 0x001005F0, so the full pass dispatches it to recomp_alias_00100041, which would run sub_001005F0 from its start. The patch now removes that one alias tuple; the label stays undispatchable.",
    "ledger": "L02"
   },
   {

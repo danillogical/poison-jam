@@ -86,16 +86,17 @@ array whose high bytes happen to be `0x90`.
 |---|---|---|
 | `HIDDEN_ENTRY` | body provably ends early, and the over-run holds an evidenced entry that **does not resolve at runtime** | **FAILS** |
 | `OVERLAP` | body provably ends early, and the over-run holds an address **another manifest entry starts at** | **FAILS** |
+| `SHADOWED` | body provably ends early, and the over-run holds an evidenced entry **with its own generated body** | **FAILS** |
 | `MISDISPATCH` | body provably ends early, and the over-run holds an evidenced entry that **resolves to a different symbol** | reported |
 | `OVER_RUN` | body provably ends early and the over-run is not padding, but no evidenced entry was found | reported |
 | `UNQUALIFIED` | a candidate exists, but the container's walk has an opaque exit or a fall-off | reported |
 | `CLEAN` | no over-run, or the over-run is only alignment padding | pass |
 
-`HIDDEN_ENTRY` and `OVERLAP` are the gating classes and need **no baseline**, for
+`HIDDEN_ENTRY`, `OVERLAP` and `SHADOWED` are the gating classes and need **no baseline**, for
 the same reason `scripts/check-stack-depth.py` gates only its `STACK_ARGS` class:
 each is a property of this entry's own bytes plus one other address's independent
-reference, with no whole-program reasoning required.  Both are unambiguous --
-a trap the runtime cannot resolve, or two spans that overlap.
+reference, with no whole-program reasoning required. Each proves an over-wide
+container; the consumed address may be missing, recovered or already generated.
 
 `MISDISPATCH` is the separate population `docs/jsrf-technical-record.md` §12
 identified: an alias shim **does** resolve, so `check-table-targets.py` cannot see
@@ -479,12 +480,11 @@ def selfcheck(build_finder) -> int:
     """Positive and negative controls over the real XBE bytes.
 
     Each case is a defect that actually happened, replayed at its pre-fix span.
-    The pre-fix *manifest* state is reproduced by building the finder without the
-    consumed addresses, because the committed manifest now carries their repairs
-    -- otherwise the same span would legitimately report `OVERLAP` (the consumed
-    address is a manifest entry now) and the control would drift every time a
-    repair lands.  Reproducing the pre-fix state keeps the control asserting the
-    verdict the defect was diagnosed under.
+    The pre-fix resolution state is reproduced by building the finder without the
+    consumed addresses in the manifest, generated-body and dispatch sets. The
+    current tree carries their repairs, so otherwise the same span legitimately
+    reports `OVERLAP` or `SHADOWED`. Reproducing the pre-fix state keeps the
+    control asserting the verdict the defect was diagnosed under.
 
     The corrected form must come back clean, because a control that fires on both
     the bad and the good span would prove nothing.
@@ -532,7 +532,7 @@ def main() -> int:
                         help='positive/negative controls over the real defects')
     parser.add_argument('--json', action='store_true',
                         help='emit machine-readable results')
-    parser.add_argument('--show', default='HIDDEN_ENTRY,OVERLAP',
+    parser.add_argument('--show', default='HIDDEN_ENTRY,OVERLAP,SHADOWED',
                         help='comma-separated verdicts to list')
     parser.add_argument('--show-all', action='store_true',
                         help='list every non-CLEAN verdict')
@@ -553,16 +553,18 @@ def main() -> int:
     def build_finder(without=frozenset()):
         """A finder over this manifest, optionally pretending some repairs are absent.
 
-        `without` holds addresses to treat as *not yet recovered*, which is how
-        `--selfcheck` replays a defect at its pre-fix span even though the
-        committed manifest now carries the repair.
+        `without` holds addresses to treat as *not yet resolved*, which is how
+        `--selfcheck` replays a defect at its pre-fix span even after a new full
+        translation emits the formerly missing bodies. Remove every resolution
+        source for this control; the normal gate still uses the actual tree.
         """
         if not without:
             return HiddenEntryFinder(image, database, entries, pointer_sites,
                                      own_bodies, dispatched)
         kept = [entry for entry in entries if entry.start not in without]
         return HiddenEntryFinder(image, database, kept, pointer_sites,
-                                 own_bodies, dispatched)
+                                 own_bodies - without,
+                                 dispatched - without)
 
     if args.selfcheck:
         return selfcheck(build_finder)

@@ -53,6 +53,10 @@ GP_INPUT_PERTURB = 'RECOMP_APU_GP_INPUT_PERTURB'
 # one binary is the controlled test of benign chunking vs starvation. Any value
 # changes the walk's rejection behaviour, so presence is exploratory.
 NV2A_PACKET_CAP = 'RECOMP_NV2A_PACKET_CAP'
+# The runtime arms the synthetic 0x80C0 answer only for the literal value "1".
+# Other values are inert and must not become exploratory merely because the
+# variable name is present.
+PORT_FIELD_PIN = 'RECOMP_PORT_FIELD_PIN'
 
 # Retired semantic overrides: names that once changed guest-visible behavior,
 # whose implementation was deliberately deleted, and which active policy still
@@ -414,6 +418,10 @@ def classify_settings(entries: Any) -> dict[str, Any]:
             active.append(f'{GPU_ACK} is enabled; only the exact value "0" disables it')
         else:
             active.append(f'{GPU_ACK} defaults to enabled when absent')
+
+    if values.get(PORT_FIELD_PIN.casefold()) == '1':
+        active.append(
+            f'{PORT_FIELD_PIN}=1 supplies a synthetic 0x80C0 field-state answer')
 
     for name, reason in (
         (AC97_READY, 'was: forced the AC97 codec-ready bit; the runtime no longer reads it'),

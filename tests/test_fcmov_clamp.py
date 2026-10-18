@@ -109,7 +109,9 @@ class ClampTest(unittest.TestCase):
 
     def test_negative_control_old_lift_fails(self):
         bodies = _bodies()
-        old = {k: re.sub(r"if \([^\n]*\) fp_top\(\) = fp_st1\(\); /\* (fcmovn?e) \*/",
+        # Current lifter comments include operand text; the old lift emitted
+        # only an FPU comment. Keep this as a behavioral negative control.
+        old = {k: re.sub(r"if \([^\n]*\) fp_top\(\) = fp_st1\(\); /\* (fcmovn?e) [^*]+\*/",
                          r"/* FPU: \1 st(0), st(1) */", v)
                for k, v in bodies.items()}
         self.assertTrue(all("/* FPU: fcmov" in v for v in old.values()))
