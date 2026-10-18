@@ -5381,3 +5381,6 @@ checks, six private mutants red) and the 96/96 CTest stand as §31.42 records th
 "stop when N4 is completed" bounded the OMP run. The owner has since directed this session to
 finish N4, merge upstream xboxrecomp v0.14.0, and port reJSRF's applicable fixes, each as its
 own gated step.
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: 03aaae814dcfb28c6c283eb1856dcf2c1df3ce0a / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward ecbaca4..03aaae8, toolkit pushed first, clean and synchronized; 2 outgoing blobs (largest 239 744 bytes), 0 secret hits; upstream untouched (push URL DISABLED).
+PUSHED_TO: origin / BRANCH: master / COMMIT: 2a8b9ea (with e4cb724 repair gate, 3a4155d helpers) / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 02945a5..2a8b9ea, clean and synchronized; 10 outgoing blobs (largest 424 527 bytes), 0 secret hits, no `game/` or retail-derived path.
