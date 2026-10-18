@@ -165,6 +165,11 @@ already approved steps:
    compiler omitted this loop; the regenerated backedge preserves it. Preserve
    TR §1's AC'97 model ruling and L20; do not bypass the loop or enable a synthetic
    readiness/field pin. Authorize any subsequent model repair as its own packet.
+   The first diagnostic report confirms the cause but its repair proposal is
+   **not accepted** (TR §31.46): handler ordering is reversed, its reset-bit test
+   contradicts the cited contract, and its writable-page window can miss a
+   concurrent reset. The next operation corrects that proposal and its deciding
+   gates, read-only; implementation remains separately authorized after review.
 2. **C4:** independent merge/recovery review, Vulkan e2e with both N3 loader insertion
    witnesses, D3D11 reference e2e and viewed logos/Corn/Garage/pause frames, N2 with
    a same-session archived-executable baseline, then TR/L02/L62/AGENTS records.

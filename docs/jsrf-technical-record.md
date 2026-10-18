@@ -5642,3 +5642,55 @@ turn on FIELD_PIN or AC97_READY, or arm the dormant reset trap as an unexplained
 completion shortcut. Any change to that trap/model requires its own explicit
 packet and compatible handling of tick writes and shared single-step ownership.
 No runtime repair or C4 acceptance has happened yet.
+
+### §31.46 C3-RR diagnostic review: cause confirmed, proposal withheld (2026-10-18)
+
+The read-only OMP operation `op_0mvec8cn956cffcfef0e00e1d` confirmed §31.45's
+AC'97 startup cause and changed neither production tree. Its ignored report is
+`logs/reports/c3-rr-diagnosis-2026-10-18.md`. C3 and C4 remain unaccepted.
+
+Codex independently checked the source, native evidence and pinned primary device
+sources. The repair proposal needs correction before implementation:
+
+- `AddVectoredExceptionHandler(1,...)` inserts the newest handler first, per
+  Microsoft's API contract. Registering the game handler before layout init does
+  not establish the claimed game-first logging storm after a later AC'97 handler
+  is registered. Handling independent of order may still be useful, but requires
+  its own evidence. The report and existing equal-priority ordering comments
+  must not be treated as proof of registration order.
+- Pinned xemu `reset_bm_regs` retains prior CR masked by `0x1C`, clearing both run
+  and reset bits, and resets the channel's descriptor/index/count/status state.
+  The proposal's test explicitly preserving RPBM on reset contradicts its source.
+  Clearing only RR after depositing the new byte also loses prior control state.
+- Making a shared page writable for one thread's single step permits another
+  accessor to miss the trap and latch reset still set. Calling that exposure low
+  does not close the exact startup failure contract. Atomic GC/GS updates alone
+  do not fix missed access routing.
+- Original `0x1A73F8..0x1A740D` reads exactly two startup dwords, `0x10` and `0x70`.
+  The adjacent `0x2000` is not proven to be a third table element. Pinned
+  `ac97_int.h` defines PI/PO/MC/SO indices 0/1/2/7; valid register ownership is
+  established from those definitions and actual caller bounds, not a stride sweep.
+
+Primary references:
+[Microsoft VEH insertion](https://learn.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-addvectoredexceptionhandler),
+[pinned xemu AC97](https://github.com/xemu-project/xemu/blob/2799183ecc5119269be01c340d0c9465dbb04d02/hw/audio/ac97.c),
+[channel definitions](https://github.com/xemu-project/xemu/blob/2799183ecc5119269be01c340d0c9465dbb04d02/hw/audio/ac97_int.h).
+The AC97 source hash agrees with §3's pin (`bd2a95fd...ee554b`). These references
+supply device behavior; no GPL source is being ported into this MIT project.
+
+The next bounded operation corrects the report/proposal and deterministic gate
+contract, without code changes. Codex advice includes assessing the existing
+APU/OHCI MMIO decoder with permanently inaccessible guest mapping, private backing
+and serialized model access, so no shared writable window is needed. This is a
+candidate requiring opcode/width/bounds, reentrancy, reset-state and L20/tick
+analysis; it is not a tested implementation or permission for runtime translation.
+A later code packet needs a different test author and old/final/mutant/restored
+proof, followed by the still-open C3 runtime gate. No C4 work or push is authorized.
+
+**Reviewer identity verified.** The report initially called its runtime identity
+unobserved. Codex located native child session `01a150f5-3cf8-72a3-9fe9-536576568b5e`
+(`ReviewC3Rr`), linked to the primary task call naming agent `reviewer`. It records
+`workbuddy-ai/deepseek-v4.1-flash`, `resolvedModelIsFallback=false`, thinking level
+`max`; all 64 assistant messages use that provider/model. This closes the routing
+evidence gap without claiming the review was correct. Exact extraction and source
+hashes are in the ignored Codex review receipts.
