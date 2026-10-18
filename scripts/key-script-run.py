@@ -277,6 +277,16 @@ def bench_device(log_text):
     return m.group(1) if m else None
 
 
+def bench_pcache(log_text):
+    """The Vulkan pipeline cache's load outcome from the run log: `off`, `cold`,
+    `loaded=<bytes>` or `rejected(<reason>)`; None when the back end printed no such line."""
+    m = re.search(r"\[GPUVK\] pipeline cache: (?:off\b.*|.+? (loaded=\d+|cold|rejected\(.*\)))\s*$",
+                  log_text or "", re.M)
+    if not m:
+        return None
+    return m.group(1) or "off"
+
+
 class ScriptError(Exception):
     pass
 
@@ -1438,7 +1448,9 @@ class Run:
                "requested_seconds": o["seconds"], "poll_ms": o["poll_ms"]}
         rec.update(bench_stats(intervals, duration, poll["presents"], aliased, poll))
         rec.update({"backend": ctx.get("backend"), "exe_sha256": ctx.get("exe_sha256"),
-                    "device": bench_device(log_text)})
+                    "device": bench_device(log_text),
+                    "pcache_env": ctx.get("pcache_env"), "pcache": bench_pcache(log_text)})
+        rec["pcache_warm"] = (rec["pcache"] or "").startswith("loaded=")
         path = self.out / "bench.json"
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -1947,7 +1959,8 @@ def main(argv=None):
     guest = GuestMemory(proc.pid, out / "jsrf_recomp.map")
     run = Run(out, proc, live, Window(), args.seconds, t0, log, guest)
     run.bench_context = {"backend": env.get("RECOMP_GPU_BACKEND") or "cpu",
-                         "exe_sha256": artifact_sha256["jsrf_recomp.exe"]}
+                         "exe_sha256": artifact_sha256["jsrf_recomp.exe"],
+                         "pcache_env": env.get("RECOMP_VK_PIPELINE_CACHE") or "default"}
 
     results = []
     script_ok = True

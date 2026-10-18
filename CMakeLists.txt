@@ -384,7 +384,7 @@ if(BUILD_TESTING)
             file(TO_NATIVE_PATH "${XBR_VK_SW_ICD}" _vk_icd)
             add_test(NAME jsrf_gpu_backend_parity_vk COMMAND jsrf_gpu_backend_parity_vk_test)
             set_tests_properties(jsrf_gpu_backend_parity_vk PROPERTIES TIMEOUT 300 SKIP_RETURN_CODE 77
-                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd};VK_ICD_FILENAMES=${_vk_icd};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
+                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd};VK_ICD_FILENAMES=${_vk_icd};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe;RECOMP_VK_PIPELINE_CACHE=off")
             # The submission-ring lifetime gate, its own case because it asks a different question
             # from the parity case above: the ring is only sound if submissions really overlap, and
             # the guest-visible result is still right while targets, textures and depth buffers are
@@ -398,7 +398,7 @@ if(BUILD_TESTING)
             add_test(NAME jsrf_vk_frames_in_flight
                      COMMAND jsrf_gpu_backend_parity_vk_test --frames-in-flight)
             set_tests_properties(jsrf_vk_frames_in_flight PROPERTIES TIMEOUT 900 SKIP_RETURN_CODE 77
-                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd};VK_ICD_FILENAMES=${_vk_icd};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
+                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd};VK_ICD_FILENAMES=${_vk_icd};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe;RECOMP_VK_PIPELINE_CACHE=off")
             # N4.2's own gate, written by a different worker from the change it decides: the
             # flip's readback publishes every dirty target through one bounded staging buffer
             # and, for a 16-bit target, truncates it to 5:6:5 in a GPU compute pack kernel
@@ -413,7 +413,7 @@ if(BUILD_TESTING)
             add_test(NAME jsrf_vk_readback_pack
                      COMMAND jsrf_gpu_backend_parity_vk_test --readback-pack)
             set_tests_properties(jsrf_vk_readback_pack PROPERTIES TIMEOUT 600 SKIP_RETURN_CODE 77
-                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd};VK_ICD_FILENAMES=${_vk_icd};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
+                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd};VK_ICD_FILENAMES=${_vk_icd};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe;RECOMP_VK_PIPELINE_CACHE=off")
             # N4.4's own real-device case, written by a different worker from the change it
             # decides: the memory sub-allocator's pooling has to hold on a real driver, not only
             # against stubs. It drives the same readback fixture's frames -- several targets of
@@ -427,7 +427,7 @@ if(BUILD_TESTING)
             add_test(NAME jsrf_vk_suballoc_device
                      COMMAND jsrf_gpu_backend_parity_vk_test --suballoc)
             set_tests_properties(jsrf_vk_suballoc_device PROPERTIES TIMEOUT 600 SKIP_RETURN_CODE 77
-                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd};VK_ICD_FILENAMES=${_vk_icd};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
+                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd};VK_ICD_FILENAMES=${_vk_icd};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe;RECOMP_VK_PIPELINE_CACHE=off")
         else()
             add_test(NAME jsrf_gpu_backend_parity_vk
                      COMMAND jsrf_gpu_backend_parity_vk_test --skip "XBR_VK_SW_ICD is not set")
@@ -465,7 +465,7 @@ if(BUILD_TESTING)
             file(TO_NATIVE_PATH "${XBR_VK_SW_ICD}" _vk_icd_aot)
             add_test(NAME jsrf_vsh_aot COMMAND jsrf_vsh_aot_test)
             set_tests_properties(jsrf_vsh_aot PROPERTIES TIMEOUT 300 SKIP_RETURN_CODE 77
-                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd_aot};VK_ICD_FILENAMES=${_vk_icd_aot};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
+                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd_aot};VK_ICD_FILENAMES=${_vk_icd_aot};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe;RECOMP_VK_PIPELINE_CACHE=off")
             # The gating test's own negative controls, as separate cases: they prove the
             # checks are load-bearing. Each reports the CHECK's verdict as its exit status --
             # 1 when the check correctly failed the injected defect (the expected, load-bearing
@@ -480,7 +480,7 @@ if(BUILD_TESTING)
                 TIMEOUT 300
                 PASS_REGULAR_EXPRESSION "correctly FAILED the simulated defect"
                 FAIL_REGULAR_EXPRESSION "MISSED the simulated defect"
-                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd_aot};VK_ICD_FILENAMES=${_vk_icd_aot};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
+                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd_aot};VK_ICD_FILENAMES=${_vk_icd_aot};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe;RECOMP_VK_PIPELINE_CACHE=off")
         else()
             add_test(NAME jsrf_vsh_aot COMMAND jsrf_vsh_aot_test --skip "XBR_VK_SW_ICD is not set")
             set_tests_properties(jsrf_vsh_aot PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
@@ -504,7 +504,7 @@ if(BUILD_TESTING)
         if(XBR_VK_SW_ICD)
             file(TO_NATIVE_PATH "${XBR_VK_SW_ICD}" _vk_icd_mal)
             set_tests_properties(jsrf_vsh_aot_malformed PROPERTIES
-                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd_mal};VK_ICD_FILENAMES=${_vk_icd_mal};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
+                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd_mal};VK_ICD_FILENAMES=${_vk_icd_mal};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe;RECOMP_VK_PIPELINE_CACHE=off")
         endif()
     else()
         message(STATUS "Vulkan/unavailable: jsrf_vsh_aot, jsrf_vsh_aot_control1/2 and "
@@ -645,6 +645,65 @@ if(BUILD_TESTING)
         target_link_libraries(jsrf_vk_suballoc_gate_test PRIVATE ${CMAKE_DL_LIBS})
         add_test(NAME jsrf_vk_suballoc_gate COMMAND jsrf_vk_suballoc_gate_test)
         set_tests_properties(jsrf_vk_suballoc_gate PROPERTIES TIMEOUT 300)
+
+        # The persisted VkPipelineCache and the pipeline table's eviction counter, decided from the
+        # specification against stubbed Vulkan. Like the gate above it compiles NO COPY of the
+        # algorithm: its translation unit #includes the toolkit's src/video/nv2a_vk_backend.c with
+        # XBR_VK_BACKEND defined and drives the production callers (vb_create_pipeline_objects,
+        # vb_pipeline, vb_flip), so a symbol, field or counter that moves breaks the BUILD. It
+        # decides every rejection reason of the cache file and the load line, the valid round trip,
+        # the off / 0 knob and the device-specific default name, the save gating (dirty, interval,
+        # one write, the temporary file opened before the fetch and atomically renamed over the
+        # target), the pre-write parse, the second call's size handling, the three-failure latch,
+        # the log cap, and the 257th pipeline key evicting exactly one. No ICD and no environment:
+        # there is no skip path.
+        add_executable(jsrf_vk_pcache_gate_test tests/test_vk_pcache_gate.c)
+        add_dependencies(jsrf_vk_pcache_gate_test xbox_video)
+        target_include_directories(jsrf_vk_pcache_gate_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/video
+            ${Vulkan_INCLUDE_DIRS}
+            "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv")
+        target_link_libraries(jsrf_vk_pcache_gate_test PRIVATE ${CMAKE_DL_LIBS})
+        add_test(NAME jsrf_vk_pcache_gate COMMAND jsrf_vk_pcache_gate_test)
+        set_tests_properties(jsrf_vk_pcache_gate PROPERTIES TIMEOUT 300)
+
+        # The same feature on a real driver. jsrf_vk_pcache_device installs the production back end
+        # on the software ICD: a driver whose cache blob is well-formed must round-trip it (the
+        # pipeline-cache hit bit of VkPipelineCreationFeedback after a reload from the file), one
+        # whose blob is malformed -- lavapipe's is -- must have the save refused (no file, one
+        # failure, saving stopped), and the case prints which of the two it decided.
+        # jsrf_vk_pcache_device_hw is the hardware case: the loader's default devices with
+        # RECOMP_VK_DEVICE naming a GPU (XBR_VK_HW_DEVICE, default NVIDIA), it must decide the full
+        # round trip with creation-feedback hits, and it skips (77) when the selected device is a CPU
+        # device or no device can be installed, like vk_smoke_hw.
+        add_executable(jsrf_vk_pcache_device_test tests/test_vk_pcache_device.c)
+        add_dependencies(jsrf_vk_pcache_device_test xbox_video)
+        target_include_directories(jsrf_vk_pcache_device_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/video
+            ${Vulkan_INCLUDE_DIRS}
+            "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv")
+        target_link_libraries(jsrf_vk_pcache_device_test PRIVATE ${CMAKE_DL_LIBS})
+        if(XBR_VK_SW_ICD)
+            file(TO_NATIVE_PATH "${XBR_VK_SW_ICD}" _vk_icd_pcache)
+            add_test(NAME jsrf_vk_pcache_device COMMAND jsrf_vk_pcache_device_test)
+            set_tests_properties(jsrf_vk_pcache_device PROPERTIES TIMEOUT 600 SKIP_RETURN_CODE 77
+                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd_pcache};VK_ICD_FILENAMES=${_vk_icd_pcache};RECOMP_VK_DEVICE=llvmpipe")
+        else()
+            add_test(NAME jsrf_vk_pcache_device
+                     COMMAND jsrf_vk_pcache_device_test --skip "XBR_VK_SW_ICD is not set")
+            set_tests_properties(jsrf_vk_pcache_device PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
+        endif()
+        if(NOT XBR_VK_HW_DEVICE)
+            set(XBR_VK_HW_DEVICE "NVIDIA")
+        endif()
+        add_test(NAME jsrf_vk_pcache_device_hw COMMAND jsrf_vk_pcache_device_test --hw)
+        set_tests_properties(jsrf_vk_pcache_device_hw PROPERTIES TIMEOUT 120 SKIP_RETURN_CODE 77
+            ENVIRONMENT "RECOMP_VK_DEVICE=${XBR_VK_HW_DEVICE}")
+        # A caller's own ICD override must not leak into the hardware variant.
+        if(NOT CMAKE_VERSION VERSION_LESS 3.22)
+            set_tests_properties(jsrf_vk_pcache_device_hw PROPERTIES
+                ENVIRONMENT_MODIFICATION "VK_DRIVER_FILES=unset:;VK_ICD_FILENAMES=unset:")
+        endif()
     else()
         message(STATUS "Vulkan/unavailable: jsrf_vk_suballoc_gate is not registered -- it "
                        "compiles the toolkit's Vulkan back end, which this build does not "
@@ -988,7 +1047,7 @@ if(BUILD_TESTING)
             file(TO_NATIVE_PATH "${XBR_VK_SW_ICD}" _vk_icd_sync)
             add_test(NAME jsrf_vk_sync_paths_gate COMMAND jsrf_vk_sync_paths_gate_test)
             set_tests_properties(jsrf_vk_sync_paths_gate PROPERTIES TIMEOUT 600 SKIP_RETURN_CODE 77
-                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd_sync};VK_ICD_FILENAMES=${_vk_icd_sync};RECOMP_VK_DEVICE=llvmpipe")
+                ENVIRONMENT "VK_DRIVER_FILES=${_vk_icd_sync};VK_ICD_FILENAMES=${_vk_icd_sync};RECOMP_VK_DEVICE=llvmpipe;RECOMP_VK_PIPELINE_CACHE=off")
         else()
             add_test(NAME jsrf_vk_sync_paths_gate
                      COMMAND jsrf_vk_sync_paths_gate_test --skip "XBR_VK_SW_ICD is not set")
@@ -1094,7 +1153,7 @@ if(BUILD_TESTING)
 
         file(TO_NATIVE_PATH "${XBR_VK_SW_ICD}" _vk_icd_conf)
         set(_vsh_conf_env
-            "VK_DRIVER_FILES=${_vk_icd_conf};VK_ICD_FILENAMES=${_vk_icd_conf};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe")
+            "VK_DRIVER_FILES=${_vk_icd_conf};VK_ICD_FILENAMES=${_vk_icd_conf};RECOMP_GPU_BACKEND=vulkan;RECOMP_VK_DEVICE=llvmpipe;RECOMP_VK_PIPELINE_CACHE=off")
         set(_vsh_conf_tool "$<TARGET_FILE:nv2a_vsh_hlsl>")
 
         if(XBR_VK_SW_ICD)
