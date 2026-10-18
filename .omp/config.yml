@@ -1,2 +1,4 @@
-# Inherit model roles, agent routing and fallbacks from the global OMP configuration.
-modelRoleStorage: global
+# Override only the planner; inherit all other routing and fallbacks globally.
+modelRoleStorage: project
+modelRoles:
+  plan: muse-code/wonder-1.0:medium
