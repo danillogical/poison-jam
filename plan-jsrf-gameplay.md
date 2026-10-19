@@ -168,8 +168,16 @@ already approved steps:
    The first diagnostic report confirms the cause but its repair proposal is
    **not accepted** (TR §31.46): handler ordering is reversed, its reset-bit test
    contradicts the cited contract, and its writable-page window can miss a
-   concurrent reset. The next operation corrects that proposal and its deciding
-   gates, read-only; implementation remains separately authorized after review.
+   concurrent reset. The corrected report removes that writable window, but
+   remains **rejected** (TR §31.47): it invents four additional channel controls,
+   omits observable reset state, and locks individual callbacks rather than a
+   whole decoded transaction. Codex authorizes one bounded C3-RR implementation
+   packet under its own corrected contract: four source-backed channels,
+   register-visible reset effects, inaccessible Windows mapping with private
+   state, whole-transaction serialization, preserved L20 and POSIX behavior,
+   and a different worker's behavioral/mutation gate. Preserve existing A2H
+   regression coverage. A newly exposed DMA/audio stop is a new horizon to
+   classify, never permission to manufacture progress. No C4 or push yet.
 2. **C4:** independent merge/recovery review, Vulkan e2e with both N3 loader insertion
    witnesses, D3D11 reference e2e and viewed logos/Corn/Garage/pause frames, N2 with
    a same-session archived-executable baseline, then TR/L02/L62/AGENTS records.

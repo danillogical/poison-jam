@@ -5694,3 +5694,60 @@ unobserved. Codex located native child session `01a150f5-3cf8-72a3-9fe9-53657656
 `max`; all 64 assistant messages use that provider/model. This closes the routing
 evidence gap without claiming the review was correct. Exact extraction and source
 hashes are in the ignored Codex review receipts.
+
+### §31.47 C3-RR corrected proposal review and bounded repair (2026-10-18)
+
+Operation `op_0mveed2p730a66d6607a1a913` completed read-only. Codex fetched both
+repositories and verified clean game `e5c16a2` (ahead four of origin `699bc46`)
+and toolkit `merge-v0.14.0` at `ee2e0cd`; main/origin remain `6c3cd84`.
+No new build, test or runtime result follows from a design report.
+
+The corrected report fixes VEH ordering and eliminates the proposed shared
+writable-page window. Its CR prior-state rule is now correct. It is still not
+an accepted implementation contract:
+
+- Eight array slots do not establish eight channel controls. The pinned Xbox
+  model defines PI/PO/MC/SO at indices 0/1/2/7. Adjacent table data supplies no
+  additional caller bound. Reserved locations retain their previous storage
+  behavior; they must not receive invented reset semantics.
+- Reset's observable register effects cannot be omitted merely because the
+  resulting halted status changes a guest branch. Separate register reset from
+  absent DMA/audio work. Do not manufacture DMA progress to recover completion.
+- The shared decoder calls read and write separately for a memory RMW. Locks
+  inside those callbacks do not serialize that whole operation with the tick.
+  Use one leaf transaction lock across decoding/service and each host update.
+- The proposed removal of legacy A2H/AC97 overlap fixtures is unnecessary to
+  introduce a different production owner. Preserve their assertions for this
+  bounded change, keeping the dormant legacy trap unarmed in production.
+- A non-reset write of `0x1D` already reads back `0x1D` before repair; all six
+  proposed rows cannot be red. Prior RR-set state is not constructible through
+  the corrected public CR write path. Distinguish valid live sequences from
+  private model-state injection. Archived RVA `0xD9EEC0` identifies the old
+  executable only, not a mandatory address after relinking.
+
+Codex additionally consulted the [Intel ICH4 datasheet, 290744-001, May 2002]
+(https://www.intel.com/content/dam/www/public/us/en/documents/datasheets/82801db-io-controller-hub-4-datasheet.pdf),
+§§14.2.1–14.2.7, printed pp.482–486. Its related NABM interface corroborates
+reset of channel registers while retaining interrupt enables, self-clearing RR,
+and halted status. It is not an MCPX channel-address specification; Xbox mapping
+still comes from the pinned xemu source in §31.46. Reset while running is
+undefined in Intel's contract; xemu's deterministic handling is an emulator
+policy, not hardware fidelity evidence. No GPL implementation is being ported.
+
+The next authorized packet implements only C3-RR using Codex's corrected
+contract, with independent test authorship, real Windows ownership, fail-closed
+decoding, deterministic concurrency controls and quoted old/final/mutant/restored
+results. Preserve POSIX's current mapped GC/GS path unless it is migrated fully;
+moving only its tick to private state would disconnect guest writes. Preserve
+L20 without adopting unconditional ready bits. Register-visible reset must not
+stand in for DMA data, interrupts or audio processing. A new stop must be
+classified and returned, not suppressed. C3/C4 remain unaccepted; no cleanup
+push is authorized.
+
+**Second reviewer route independently checked:** native child
+`01a15126-9b03-7396-8225-3782974340d0` records reviewer/slow,
+`workbuddy-ai/deepseek-v4.1-flash:max`, fallback false. At Codex inspection its
+120 assistant records all use that provider/model (the report's count 66 was
+stale). Its last assistant record has stop reason `stop`. JSONL SHA-256:
+`4cece28917d8d6f1d0a1559d72042575532ec734797440ccd79f3f7d82ca8410`.
+Configured routing and a completed review do not prove the design correct.
