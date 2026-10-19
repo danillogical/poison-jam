@@ -213,13 +213,14 @@ same time of day, so no cause is inferred in either direction. Pending independe
 
 | ID | Path | Class | Where | Active | Note / upgrade when |
 |---|---|---|---|---|---|
-| L20 | AC'97 codec-ready bit, `GS.bit8 := GC.bit1` | Emulated | `src/kernel/xbox_memory_layout.c` | always | admitted (TR §3) |
+| L20 | AC'97 codec-ready bit, `GS.bit8 := GC.bit1` | Emulated | `src/kernel/xbox_memory_layout.c` | always | admitted (TR §3); Windows: the relation and its registers live in the C3-RR NABM owner's private state (TR §31.48), POSIX keeps the mapped aperture and tick |
 | L21 | GP DSP56300 (xemu port) | Emulated | `src/apu/dsp/` | with `RECOMP_APU_TRAP` | clears DirectSound's pending word (TR §4) |
 | L22 | APU voice processor | Emulated | `src/apu/apu_vp.c` | with `RECOMP_APU_TRAP` | VP memory accesses use the GP's translation (`src/apu/apu_watch.c:540`); an unmapped access reads zero, writes nothing and logs `[VPDMA]` |
 | L23 | `PIO_FREE` answers `0x80` | Stubbed | `src/apu/apu_vp.c:556-557` | with `RECOMP_APU_TRAP` | "pretend queue is empty"; model it only if a wait depends on its value (TR §4) |
 | L24 | GP/EP register reads answer zero | Stubbed | APU register map | with `RECOMP_APU_TRAP` | run profiles, feature enablement |
 | L25 | Speaker mixdown: 5.1 fold of the DirectSound speaker buses (centre and rear −3 dB, LFE −6 dB, 3D front pair as is, 3D rear pair −3 dB); effect sends from bin 10 up are dropped | Approximated | `src/apu/apu_mixdown.c:101` | always; `RECOMP_APU_MIXDOWN_ALL=2` even/odd, `0` two bins | Mercenaries-Recompiled's fold for when the EP does not run |
 | L26 | Host audio output | Wrapped | XAudio2 path | always | — |
+| L63 | AC'97 NABM bus-master channel control/reset: an RR-carrying control-byte write keeps `prior_cr & 0x1C` (RR and RPBM cleared, the interrupt enables retained), zeroes BDBAR/CIV/LVI/PICB/PIV and leaves the channel halted (SR = DCH, read-only); a write without RR stores `value & 0x1F`; SR keeps its read-only bits and clears FIFOE/BCIS/LVBCI on write-1, LVI keeps five bits, a dword BDBAR clears its two low bits; `GLOB_CNT`/`GLOB_STA` are plain storage except `GLOB_STA.bit8 := GLOB_CNT.bit1` | Emulated | `src/kernel/xbox_memory_layout.c` (Windows owner) with `src/platform/mmio_decode.h` decoding the faulting access | always (Windows) | TR §§31.48-31.49; run-profile admission §"AC'97 NABM channel-reset owner"; four defined blocks only (PI/PO/MC/SO), reserved CR-shaped bytes stay storage, no W1C/read-only policy on the global status (the unrequested one was removed), and no DMA/audio/interrupt engine exists behind the channel, so the halt bit is never cleared |
 
 ### Input
 

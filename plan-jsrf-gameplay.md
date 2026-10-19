@@ -171,13 +171,48 @@ already approved steps:
    concurrent reset. The corrected report removes that writable window, but
    remains **rejected** (TR §31.47): it invents four additional channel controls,
    omits observable reset state, and locks individual callbacks rather than a
-   whole decoded transaction. Codex authorizes one bounded C3-RR implementation
+   whole decoded transaction. Codex authorized one bounded C3-RR implementation
    packet under its own corrected contract: four source-backed channels,
    register-visible reset effects, inaccessible Windows mapping with private
    state, whole-transaction serialization, preserved L20 and POSIX behavior,
    and a different worker's behavioral/mutation gate. Preserve existing A2H
    regression coverage. A newly exposed DMA/audio stop is a new horizon to
    classify, never permission to manufacture progress. No C4 or push yet.
+   **C3-RR repair and its gate's defects are closed (TR §§31.48–31.49); C3 remains
+   unaccepted.** The toolkit's shared decoder gained a factored probe (effective
+   start/width/bounds validated before any service; the `mod == 0` SIB-base-5
+   disp32 fixed; register-only, segment/LOCK and unsupported forms refused
+   without side effects) and the Windows NABM owner keeps the 4 KB page
+   permanently inaccessible with private state under one leaf lock, models the
+   register-visible channel reset for PI/PO/MC/SO with the pinned source's SR
+   read-only/W1C, LVI five-bit and BDBAR `~3` rules, and keeps `GLOB_CNT`/
+   `GLOB_STA` as plain storage except the L20 derived bit. The 2026-10-19 resume
+   fixed the confirmed defects: the Windows-only arm/shutdown calls are now
+   guarded (P1), the misleading init comment is corrected, an unrequested
+   `GLOB_STA` W1C/RO policy was removed so the approved storage contract is
+   restored, and the fixture seams fail safe when unarmed. The independently
+   authored gate (89 checks, ONE CTest case) drives real faulting guest stores
+   for SR/LVI/BDBAR/L20 including partial and overlapping writes; every deciding
+   mutant was refreshed against the final model, decoder and gate source outside
+   both repositories and each fails a named predicate with 0 harness
+   errors/skips, while the pre-repair plain-storage control fails 21 rows as
+   value assertions. Final guarded build (0 compile/link errors, 0 C4310, 18
+   known MSB8028), `just check`, and the full limited-rights CTest **100/100 in
+   526 s** pass. POSIX: the changed unit adds no POSIX error and the guards remove
+   exactly the two implicit-declaration errors; the file retains 41 pre-existing
+   Windows-shim errors on both HEAD and final, so this unit did not POSIX-compile
+   before either (unrelated, recorded). The stock Vulkan smoke
+   (`20261019-002247-673-keyscript-c3-rr-resume-e2e-vk`, exe `9f6c43b6…`, 11.8 s)
+   still stops on the separately classified horizon: `[ICALL] invalid target
+   0x00700010 ... return=00193EB7` with `[AC97] serviced=40 refused=0` and the
+   L20 witness live, 0 frames, exit `0xE0424943`. Original-XBE bytes place the
+   site at `0x193EB5 call eax` (`eax = [esi+0x1c4]` at `0x193E62`) inside the
+   function starting at `0x193D90` in the XBE's D3D section; the target is in the
+   runtime's fake guest RW-data area (`FAKE_RWDATA_VA` 0x00700000), not code.
+   What installed that pointer, and whether the halted SR state changes this D3D8
+   path, are UNPROVEN; no SR=0 ablation was built. Register/reset-gate closure is
+   not whole-C3 acceptance. C3/C4 remain unaccepted; the next decision is
+   Codex's.
 2. **C4:** independent merge/recovery review, Vulkan e2e with both N3 loader insertion
    witnesses, D3D11 reference e2e and viewed logos/Corn/Garage/pause frames, N2 with
    a same-session archived-executable baseline, then TR/L02/L62/AGENTS records.

@@ -5751,3 +5751,183 @@ push is authorized.
 stale). Its last assistant record has stop reason `stop`. JSONL SHA-256:
 `4cece28917d8d6f1d0a1559d72042575532ec734797440ccd79f3f7d82ca8410`.
 Configured routing and a completed review do not prove the design correct.
+
+### §31.48 C3-RR repair: the AC'97 NABM owner (2026-10-18)
+
+The bounded repair for the cause established in §31.45–§31.47. Toolkit
+`src/platform/mmio_decode.h` and `src/kernel/xbox_memory_layout.c`; the game gains only a test
+module and records. No game production source change, no push, C3/C4 still unaccepted.
+
+**The decoder is factored from the service.** `mmio_decode(ctx, mmio_insn_t*)` fills a descriptor
+(form, width, direction, operands, the memory operand's EFFECTIVE START, instruction length) and
+mutates nothing; `mmio_execute` performs the access and advances `Rip`; `mmio_emulate` is the
+two-line composition, so OHCI's call path is unchanged. Unsupported opcodes, register-only forms
+(`mod == 3`), segment/LOCK prefixes and ADC/SBB return 0 with no side effect and no `Rip` advance.
+The effective address is computed, never assumed to be the fault address, because a boundary fault
+names the later page. Three defects were fixed in the same code: the `mod == 0` SIB whose base field
+is 5 did not count its disp32; the SIB base dropped REX.B; and the two-operand ALU direction (CMP's
+operand order, hence the flags a following jcc reads) is now carried explicitly. The first two were
+found by the independent gate's bring-up, the third by review of the refactor.
+
+**The owner.** The 4 KB page at guest `0xFEC00000` is made `PAGE_NOACCESS` and every access is
+decoded and applied to a private register file under ONE leaf lock that spans the whole decoded
+instruction (including a read-modify-write's read and write) and each host transaction. State, lock
+and handler are live before the page is protected, and the ack worker switches to the model before
+the page disappears. `[AC97] serviced/refused/max_service_us` is one bounded counter line (at most
+once a second, only when a counter changes); the counters themselves are the record.
+
+Modelled: the four defined bus-master blocks (PI/PO/MC/SO at page `0x100/0x110/0x120/0x170`) — an
+RR-carrying control-byte write keeps `prior_cr & 0x1C` (RR and RPBM cleared, interrupt enables
+retained), zeroes BDBAR/CIV/LVI/PICB/PIV and leaves the channel halted (SR = DCH, read-only); a write
+without RR stores `value & 0x1F`; an SR byte keeps its read-only bits (DCH/CELV) and clears
+FIFOE/BCIS/LVBCI on a write of 1, an LVI byte keeps five bits, and a dword BDBAR clears its two low
+bits (all three rules are the pinned source's). `GLOB_CNT` is stored as written and `GLOB_STA` is
+stored as written except bit 8, which is its bit 1 level (L20), re-derived on every write whose
+bytes overlap either global and once per tick. Everything else in the region keeps its previous
+storage behaviour, including the reserved CR-shaped bytes `0x3B/0x4B/0x5B/0x6B`, and `peek_readable`
+declines the page. Deliberately absent: any DMA engine, descriptor fetch, CIV/PIV movement, audio
+output or interrupt delivery — so nothing manufactures progress, and a channel is halted because the
+engine behind it does not exist. POSIX keeps the mapped aperture and the tick; the legacy dormant
+single-step trap, its seams and the A2H overlap fixture are untouched and never armed in production.
+The run-profile admission record and its limits are in `docs/jsrf-run-profiles.md`.
+
+**Independent gate (different author).** `tests/ac97_reset_gate.c`, 89 checks, registered as ONE
+CTest case (`jsrf_ac97_reset_gate`; the earlier duplicate same-command registration was removed
+because it added no coverage). It drives the production path — real faulting stores and loads at
+guest `0xFEC00xxx` against the protected page, with `VirtualQuery` evidence of the protection — and
+uses the test seams only for state no public write can produce (a prior control byte with RR set, a
+tick-visible split between the globals, and pre-arm/post-shutdown misuse). Deciding rows cover the
+RR reset contract and its prior-versus-incoming discrimination, the complete reset register set, the
+reserved CR-shaped bytes staying plain storage, SR read-only plus write-one-to-clear, the LVI
+five-bit mask, BDBAR's `~3` dword mask, `GLOB_CNT` plain storage, `GLOB_STA` storage plus L20
+(change, clear, partial and overlapping writes), the tick re-deriving both directions, the
+two-thread serial-outcome rows, and the refusal/refusal-counter rows. Measured final
+`checks=89 failed=0 harness_errors=0 skips=0`; restored is identical. The earlier 62-check,
+two-case, five-red, nine-mutant and "101/101 twice" claims in this uncommitted draft were superseded
+by the resume packet (§31.49) and must not be cited. The gate also caught, in its own authored
+source, the C2-era `[reg+disp]`-only probe discipline that exposed the SIB bug.
+
+**Gates.** Final resume-packet receipts are in §31.49: guarded build 55 targets, 100 CTests,
+0 compile/link errors, **no C4310**, the 18 known MSB8028 (the three legacy
+`xboxrecomp/tests/a2h_slotw_fixture_test.c` warnings were not re-listed because that project was not
+recompiled; no new warning came from a changed translation unit), `just check` exit 0 (its
+`check-stack-depth.py` reports 58 non-failing `SUSPICIOUS` adjudication items, pre-existing), and
+full limited-rights CTest **100/100 in 526.23 s**, no skips. Only one archived full-suite run is
+independently confirmed; the earlier "101/101 twice" claim is withdrawn, and the removed duplicate
+registration is why the count is 100 rather than 101. One stock Vulkan smoke,
+`20261019-002247-673-keyscript-c3-rr-resume-e2e-vk`, executable
+`9f6c43b62c7e89762154646890927f14c09146ad50207cf31a8e8ec97c690b5e`, cache off, private saves,
+11.8 s.
+
+**The smoke stop, classified.** The AC'97 stall is gone: the owner arms, `[A3A] ac97 witness:
+gc=0x00000002 gs=0x00000100` shows the codec-ready relation working through the model, and the run
+reaches 11.8 s of guest work with `[AC97] serviced=40 refused=0 max_service_us=0` — forty decoded
+AC'97 accesses, none refused — where the old build was stuck at ~3 s with zero frames. It then stops
+on **`[ICALL] invalid target 0x00700010 tid=676 esp=007BFF9C return=00193EB7`** (exit `0xE0424943`,
+0 frames, 0 fatal). Original-XBE bytes read for this packet: the return address belongs to the
+enclosing function that starts at `0x193D90`, inside the XBE's **D3D** section (the statically linked
+XDK D3D8 library; `0x18CB40..0x19E348`), not the DSOUND section (`0x19E340`+). In that function `esi`
+is the `ecx` this-pointer, `mov eax, [esi + 0x1c4]` is at `0x193E62`, the value is tested for zero,
+and `call eax` is at `0x193EB5`; the field is read after the GPU handshake loop at
+`0x193E40-0x193E50` and the indirect call at `0x193E5C` (`call [0x1c4014]`). The enclosing function
+is called from `0x194300`, `0x194A72`, `0x194EEF` and `0x196C0B`, all in the same section.
+`0x00700010` lies inside the runtime's own fake guest RW-data area (`FAKE_RWDATA_VA` = `0x00700000`),
+i.e. a data address, not code. What installed that value in the field is **UNPROVEN** (the dumped
+`.text` disassembly does not cover the D3D section, and the result proves an invalid target, not its
+cause); the failing access is guest RAM on a worker thread, not the NABM page, and the counters show
+no refused or misplaced AC'97 access. The archived C2 build reached the title with 0 ICALL, but that
+comparison varies the generator and the toolkit together, so it does not establish causality;
+whether the truthful halted SR state changes this D3D8 path is equally UNPROVEN. The control that
+would settle it is a diagnostic build holding SR at zero, which the packet forbids as a fix; no such
+ablation was built. Per the packet this is a **new horizon to classify, not to suppress**.
+
+**Runtime identity.** The configured reviewer ran as agent `reviewer`, role `slow`, resolved
+`workbuddy-ai/deepseek-v4.1-flash:max`, `resolvedModelIsFallback: false`, thinking level `max` — read
+from its native child session
+(`~/.omp/agent/sessions/-Repos-poison-jam/2026-10-18T21-28-07-043Z_01a150ea-2e83-733d-bb86-5d47e4a37e57/ReviewAc97Repair.jsonl`,
+SHA-256 `286b7051e644da5fb87671fde3f38c53b1021634e37fc57c9e011c530ca34e90`), not guessed from the task
+return object. It returned before the owner's pause: it confirmed the decoder and owner contracts and
+the gate's production path, and **refuted one property** — `ac97m_arm();`/`ac97m_shutdown();` are
+called outside the `#if defined(_WIN32)` block that defines them, so the POSIX build breaks (P1).
+That is why this packet committed nothing; its full findings, coverage holes and the first resumption
+action are in `logs/reports/c3-rr-pause-handoff-2026-10-18.md`.
+
+### §31.49 C3-RR resume: implementation and gate defects closed; C3 still open (2026-10-19)
+
+The owner resumed the paused operation after an OMP upgrade and authorized one bounded repair of the
+confirmed implementation and gate defects only (packet
+`logs/reports/c3-rr-resume-packet-2026-10-18.md`). Toolkit `merge-v0.14.0` at `ee2e0cd` and game
+master `f17b35c` were preserved; no revert, regeneration, C4 work, push or fast-forward happened.
+
+**Implementation defects closed** (toolkit `src/kernel/xbox_memory_layout.c`):
+
+- The Windows-only `ac97m_arm()`/`ac97m_shutdown()` calls are now inside `#if defined(_WIN32)`
+  (`:3807-3809`, `:6155-6157`), so a non-Windows build no longer sees an undeclared function. The
+  POSIX mapped GC/GS tick is unchanged (`:1953-1990`), as are the whole-transaction leaf lock,
+  permanent `PAGE_NOACCESS`, private state, truthful reset/halting and the legacy A2H fixture.
+- The init comment no longer claims the ack worker "is already running": the model, lock and VEH
+  exist before `xbox_Nv2aAckStart()` creates the worker below, so its first tick already reads the
+  model; POSIX keeps the mapped aperture.
+- An unrequested `GLOB_STA` dword W1C/read-only policy was removed with its dead constants
+  (`AC97M_GS_WCLEAR`, `AC97M_GS_RO`, `AC97M_GS_VALID`). The approved contract is restored: both
+  globals are plain storage, and `GLOB_STA` bit 8 is always `GLOB_CNT` bit 1. One post-write overlap
+  test re-derives the bit after any supported width (1/2/4/8) whose bytes touch either register,
+  which also covers writes that straddle `0x12B`/`0x12E`/`0x131`; no other bit is masked.
+- The fixture seams are fail-safe: `Seed` no-ops and `Peek` returns 0 when the model is not armed
+  (before init, after shutdown), so the uninitialised lock is never entered, and both validate
+  `size` in {1,2,4} and an overflow-safe in-page range. Signatures and the production path are
+  unchanged.
+
+**Gate and mutation receipts.** `tests/ac97_reset_gate.c` (different author; 89 checks, ONE CTest
+case; the duplicate same-command registration and its "count stability" claim were removed) now
+decides, through real faulting guest stores, the SR read-only/write-one-to-clear byte rule, the LVI
+five-bit mask, BDBAR's `~3` dword mask, `GLOB_CNT` plain storage and `GLOB_STA` storage plus L20
+(change, clear, partial and overlapping writes), both directions of the tick's re-derivation, and
+pre-arm/post-shutdown seam misuse. Every deciding mutation was rebuilt outside both repositories
+against the FINAL model, FINAL decoder and FINAL gate source (scratch root
+`C:/Users/logic/xbr-mac/c3-rr-mutants-resume/`; manifest with per-copy sha256 of layout, decoder and
+gate). Final and restored: `checks=89 failed=0 harness_errors=0 skips=0`. The pre-repair control
+(plain storage with the seams intact) fails 21 rows as **value** assertions
+(`PO CR reset: expected 0x00, got 0x02`), never as a missing API or compile failure. Each mutant
+turns a named predicate red with 0 harness errors and 0 skips: no RR mask (12 rows), incoming
+instead of prior state (`expected 0x00, got 0x1C`), omitted reset fields
+(`reset BDBAR: expected 0, got 0xDEADBEEF`), reserved-byte masking (`expected 0x02, got 0x00`),
+split transaction lock (8/8 runs, both thread-start orders, torn `cr=0x1C` through a pre-created
+named-event rendezvous), writable page (`Protect=0x4`), forced L20, lost L20 (write path and tick),
+tick-sync no-op (both new tick rows red), accepted out-of-page access (`refused 0 -> 0`,
+`serviced 149 -> 150`), and the re-added global-status W1C policy
+(`expected 0x0000FEFF, got 0x00000000`). Removing the seam guards crashes before any assertion and
+is reported as such, not as a predicate. Decoder `mmio_decode.h` sha256
+`5ef7de18722c11b2f53b9cd9cf2773b42bf76ce811e0432565ba02e916b2f161`; production layout
+`da6273251a41b98314625f2608a2b111e7491896e9db42768e596bc550d775ce`; gate
+`d2cbf0b06ac39aec6dfb313ef3cc7ed3fa27755fa37f62238420a95071ac47d6`.
+
+**POSIX.** With a minimal local WSL Ubuntu toolchain (gcc 15.2.0, libc headers), the ACTUAL
+`xbox_memory_layout.c` compilation unit was compiled with the toolkit's own non-MSVC policy
+(`-Werror=implicit-function-declaration`) and include paths. HEAD `ee2e0cd` and the final source both
+report the same 41 pre-existing errors (Windows shim/types: `MemoryBarrier`, `InterlockedOr/And`,
+`GetModuleHandleExA`, `RtlCaptureStackBackTrace`, `IMAGE_DOS_HEADER`, `THREADENTRY32`, `CONTEXT`,
+`ProcessorCONTEXT.Rip`, ...), so this translation unit did **not** POSIX-compile before this change
+either. The deciding A/B/C control: deleting exactly the two guard pairs adds exactly the two
+`implicit declaration of function 'ac97m_arm'`/`'ac97m_shutdown'` errors (43 total). The change
+therefore adds no POSIX error and closes exactly P1; a full POSIX build remains blocked by the 41
+pre-existing gaps, which this packet does not claim to fix. Receipts:
+`C:/Users/logic/xbr-mac/c3-rr-posix/`.
+
+**Review.** A configured reviewer distinct from both authors re-ran the final gate
+(`checks=89 failed=0`) and checked the implementation, gate and every mutant log against the pinned
+source; it found no blocker and two evidence caveats (a timing-sensitive lost-L20 mutant and a
+manifest quote), both resolved before the final gates: the lost-L20 mutant now removes the
+derivation everywhere and the tick-sync mutant is decided by the new rows. Native route read from
+its child session
+`~/.omp/agent/sessions/-Repos-poison-jam/2026-10-19T05-12-19-939Z_01a15293-2ee3-7504-ae31-d59ac31dad2c/ReviewC3RrRepair2.jsonl`:
+`opencode-go/muse-spark-1.3-contributor:xhigh`, `resolvedModelIsFallback: false`.
+
+**Gates and runtime.** Guarded build: 55 targets, 100 CTests, 0 compile/link errors, no C4310, the 18
+known MSB8028, no new warning from a changed translation unit; `just check` all passed; full
+limited-rights CTest **100/100 in 526.23 s**, no skips; `jsrf_ac97_reset_gate` 89/0/0/0 inside it.
+One stock cache-off Vulkan smoke (`20261019-002247-673-keyscript-c3-rr-resume-e2e-vk`, executable
+`9f6c43b62c7e89762154646890927f14c09146ad50207cf31a8e8ec97c690b5e`, 11.8 s) reproduces the newly
+classified `0x00700010` / `0x193EB7` ICALL with `serviced=40 refused=0` and the L20 witness live.
+**C3 remains failed and unaccepted**: the reset gate and this device repair are not whole-C3
+acceptance, and the ICALL's cause is unresolved. No push was performed.

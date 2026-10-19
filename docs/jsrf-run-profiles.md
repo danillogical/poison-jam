@@ -480,6 +480,43 @@ admission is a statement that the model is admissible as strict evidence, not a 
 it is implemented. Its implementation is the subject of a packet, which must still satisfy
 its own adequacy and acceptance rules.
 
+#### AC'97 NABM channel-reset owner (implemented 2026-10-18)
+
+Class: **device state the hardware presents in response to the guest's own write**. DSOUND's
+channel reset stores `2` (RR) into a bus-master control byte and then reads that byte once; on
+hardware the reset completes inside the write, so the read returns RR clear. This is not synthetic
+completion: nothing here answers a poll *instead of* the work the poll requests — the reset **is**
+the write's completion, and the value read back is the state the device presents. The deciding
+record is the model's register state (lossless by construction, bounded by the page), not a log.
+
+Sources (the packet that implemented it cites them; no GPL implementation is ported):
+
+- pinned xemu `hw/audio/ac97.c` @ `2799183ecc5119269be01c340d0c9465dbb04d02`, SHA-256
+  `bd2a95fdd9f90f0c7391fd0c83ebc7768179296a50b6a056839a22ec49ee554b`: `CR_RR 2`; the control-register
+  write path calls `reset_bm_regs()` when RR is set; `reset_bm_regs()` keeps `cr & 0x1C`
+  (`IOCE|FEIE|LVBIE`), zeroes `bdbar/civ/lvi/picb/piv`, sets `SR = SR_DCH` (halted) and invalidates
+  the descriptor state; the read path returns the stored `cr`;
+- Intel ICH4 datasheet 290744-001 (May 2002), §§14.2.1–14.2.7, printed pp. 482–486: corroborates the
+  related NABM contract (channel-register reset, interrupt enables retained, self-clearing RR,
+  halted status). **Applicability limit: it is not an MCPX channel-address specification** — the
+  Xbox channel map comes from the pinned xemu source (`ac97_int.h` PI/PO/MC/SO at indices 0/1/2/7),
+  and reset-while-running is *undefined* there, so any deterministic choice for that case would be
+  model policy rather than hardware evidence.
+
+Recorded limits of the implementation, so none is mistaken for fidelity: the four defined bus-master
+blocks only (reserved CR-shaped bytes 0x3B/0x4B/0x5B/0x6B stay plain storage); no DMA engine, audio
+output or interrupt delivery exists behind the channel, so the halt bit is read-only and is never
+cleared, CIV/PIV are not advanced, no descriptor is fetched and no completion is manufactured; the
+codec-ready relation remains `GLOB_STA.bit8 := GLOB_CNT.bit1` (the row above), re-derived on any
+write whose bytes overlap either global and once per tick; xemu's unconditional `GS_S0CR` read is
+**not** adopted. The two globals are otherwise PLAIN STORAGE: `GLOB_CNT` exactly as written (a
+deliberate divergence from xemu's `TODO`-marked handling of reset-request writes, which is what
+keeps the relation observable) and `GLOB_STA` every bit as written except the derived bit, with no
+write-one-to-clear or read-only policy. The remaining channel write rules are source-backed at
+byte/dword granularity: SR keeps its read-only bits (DCH/CELV) and clears FIFOE/BCIS/LVBCI on
+write-1, LVI keeps five bits, and a dword BDBAR clears its two low bits. Windows only: the POSIX
+build keeps the mapped aperture and the existing tick.
+
 **Any model added from now on must meet the evidence rule and record its sources.** A packet
 may **cite** this section; it must not amend its criteria or this table to suit itself. An
 admission recorded here is a policy determination about *evidence eligibility* only — it

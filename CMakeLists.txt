@@ -1533,6 +1533,18 @@ if(BUILD_TESTING)
         TIMEOUT 60 ENVIRONMENT "JSRF_TRACE_A2H_SLOTW=1")
     add_test(NAME jsrf_a2h_slotw_fixture_gate_off COMMAND jsrf_a2h_slotw_fixture_test)
     set_tests_properties(jsrf_a2h_slotw_fixture_gate_off PROPERTIES TIMEOUT 60)
+    # C3-RR AC'97 channel-reset gate. Drives the PRODUCTION NABM owner (real faulting
+    # stores/loads through the guest mapping at guest 0xFEC00xxx against the protected
+    # page) and asserts the values read back. Seams are only for state the public
+    # register interface cannot reach. Exactly one CTest case is registered.
+    add_executable(jsrf_ac97_reset_gate tests/ac97_reset_gate.c)
+    target_include_directories(jsrf_ac97_reset_gate PRIVATE
+        ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/kernel
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/gen)
+    target_link_libraries(jsrf_ac97_reset_gate PRIVATE xboxrecomp)
+    add_test(NAME jsrf_ac97_reset_gate COMMAND jsrf_ac97_reset_gate
+        ${CMAKE_CURRENT_SOURCE_DIR}/game/default.xbe)
+    set_tests_properties(jsrf_ac97_reset_gate PROPERTIES TIMEOUT 120)
 
     add_executable(jsrf_gpu_smoke tests/native_gpu_smoke.c)
     target_link_libraries(jsrf_gpu_smoke PRIVATE d3d11 dxgi dxguid)
