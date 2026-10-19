@@ -206,8 +206,10 @@ already approved steps:
    still stops on the separately classified horizon: `[ICALL] invalid target
    0x00700010 ... return=00193EB7` with `[AC97] serviced=40 refused=0` and the
    L20 witness live, 0 frames, exit `0xE0424943`. Original-XBE bytes place the
-   site at `0x193EB5 call eax` (`eax = [esi+0x1c4]` at `0x193E62`) inside the
-   function starting at `0x193D90` in the XBE's D3D section; the target is in the
+   site at `0x193EB5 call eax` (`eax = [esi+0x1c4]` at `0x193E62`) in the code
+   block at `0x193E40`, reached by `jmp` from the body entered at `0x193D90` in
+   the XBE's D3D section (`functions.json` ends that entry at `0x193E34`, so the
+   site is in the recorded gap and is not separately named); the target is in the
    runtime's fake guest RW-data area (`FAKE_RWDATA_VA` 0x00700000), not code.
    What installed that pointer, and whether the halted SR state changes this D3D8
    path, are UNPROVEN; no SR=0 ablation was built. Register/reset-gate closure is

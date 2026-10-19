@@ -5772,8 +5772,9 @@ found by the independent gate's bring-up, the third by review of the refactor.
 **The owner.** The 4 KB page at guest `0xFEC00000` is made `PAGE_NOACCESS` and every access is
 decoded and applied to a private register file under ONE leaf lock that spans the whole decoded
 instruction (including a read-modify-write's read and write) and each host transaction. State, lock
-and handler are live before the page is protected, and the ack worker switches to the model before
-the page disappears. `[AC97] serviced/refused/max_service_us` is one bounded counter line (at most
+and handler are live before the page is protected, and the page becomes inaccessible before
+`xbox_Nv2aAckStart()` creates the ack worker, so the worker's first tick already runs against the
+model (see §31.49). `[AC97] serviced/refused/max_service_us` is one bounded counter line (at most
 once a second, only when a counter changes); the counters themselves are the record.
 
 Modelled: the four defined bus-master blocks (PI/PO/MC/SO at page `0x100/0x110/0x120/0x170`) — an
@@ -5824,13 +5825,16 @@ gc=0x00000002 gs=0x00000100` shows the codec-ready relation working through the 
 reaches 11.8 s of guest work with `[AC97] serviced=40 refused=0 max_service_us=0` — forty decoded
 AC'97 accesses, none refused — where the old build was stuck at ~3 s with zero frames. It then stops
 on **`[ICALL] invalid target 0x00700010 tid=676 esp=007BFF9C return=00193EB7`** (exit `0xE0424943`,
-0 frames, 0 fatal). Original-XBE bytes read for this packet: the return address belongs to the
-enclosing function that starts at `0x193D90`, inside the XBE's **D3D** section (the statically linked
-XDK D3D8 library; `0x18CB40..0x19E348`), not the DSOUND section (`0x19E340`+). In that function `esi`
-is the `ecx` this-pointer, `mov eax, [esi + 0x1c4]` is at `0x193E62`, the value is tested for zero,
-and `call eax` is at `0x193EB5`; the field is read after the GPU handshake loop at
-`0x193E40-0x193E50` and the indirect call at `0x193E5C` (`call [0x1c4014]`). The enclosing function
-is called from `0x194300`, `0x194A72`, `0x194EEF` and `0x196C0B`, all in the same section.
+0 frames, 0 fatal). Original-XBE bytes read for this packet: the return address belongs to the code
+block at `0x193E40`-`0x193EE1`, reached by the `jmp 0x193e40` at `0x193E32` from the body whose entry
+is `0x193D90`, inside the XBE's **D3D** section (the statically linked XDK D3D8 library;
+`0x18CB40..0x19E348`), not the DSOUND section (`0x19E340`+). `functions.json` records that entry as
+ending at `0x193E34`, so the executed block lies in the recorded gap and is not attributed here to a
+separately named function. In that block `esi` is the `ecx` this-pointer, `mov eax, [esi + 0x1c4]` is
+at `0x193E62`, the value is tested for zero, and `call eax` is at `0x193EB5`; the field is read after
+the GPU handshake loop at `0x193E40-0x193E50` and the indirect call at `0x193E5C`
+(`call [0x1c4014]`). The entry at `0x193D90` is called from `0x194300`, `0x194A72`, `0x194EEF` and
+`0x196C0B`, all in the same section.
 `0x00700010` lies inside the runtime's own fake guest RW-data area (`FAKE_RWDATA_VA` = `0x00700000`),
 i.e. a data address, not code. What installed that value in the field is **UNPROVEN** (the dumped
 `.text` disassembly does not cover the D3D section, and the result proves an invalid target, not its
@@ -5897,7 +5901,11 @@ named-event rendezvous), writable page (`Protect=0x4`), forced L20, lost L20 (wr
 tick-sync no-op (both new tick rows red), accepted out-of-page access (`refused 0 -> 0`,
 `serviced 149 -> 150`), and the re-added global-status W1C policy
 (`expected 0x0000FEFF, got 0x00000000`). Removing the seam guards crashes before any assertion and
-is reported as such, not as a predicate. Decoder `mmio_decode.h` sha256
+is reported as such, not as a predicate. Evidence boundary: the two tick rows are private-state rows
+(the split is not constructible through the public write path) and are guarded against the
+background ack worker; the tick-sync mutant disables the derivation in both the fixture and worker
+ticks. They therefore decide that the derivation exists, not which tick performs it, and no
+write-versus-tick divergence mutant was built (no motivating defect). Decoder `mmio_decode.h` sha256
 `5ef7de18722c11b2f53b9cd9cf2773b42bf76ce811e0432565ba02e916b2f161`; production layout
 `da6273251a41b98314625f2608a2b111e7491896e9db42768e596bc550d775ce`; gate
 `d2cbf0b06ac39aec6dfb313ef3cc7ed3fa27755fa37f62238420a95071ac47d6`.
@@ -5915,10 +5923,14 @@ pre-existing gaps, which this packet does not claim to fix. Receipts:
 `C:/Users/logic/xbr-mac/c3-rr-posix/`.
 
 **Review.** A configured reviewer distinct from both authors re-ran the final gate
-(`checks=89 failed=0`) and checked the implementation, gate and every mutant log against the pinned
-source; it found no blocker and two evidence caveats (a timing-sensitive lost-L20 mutant and a
-manifest quote), both resolved before the final gates: the lost-L20 mutant now removes the
-derivation everywhere and the tick-sync mutant is decided by the new rows. Native route read from
+(`checks=89 failed=0`) and checked the implementation hunks, the gate and every mutant log against
+the pinned source; it found no blocker and two evidence caveats (a timing-sensitive lost-L20 mutant
+and a manifest quote), both resolved before the final gates: the lost-L20 mutant now removes the
+derivation everywhere and the tick-sync mutant is decided by the new rows. Its stated limit: it did
+not re-audit the inherited `mmio_decode.h` decoder factoring beyond the REX.B fix. The toolkit commit
+carries that pre-pause work with the repair (786 insertions / 120 deletions across both files; §31.48
+describes it), so the commit's decoder half is preserved-and-gated, not independently re-reviewed in
+this packet. Native route read from
 its child session
 `~/.omp/agent/sessions/-Repos-poison-jam/2026-10-19T05-12-19-939Z_01a15293-2ee3-7504-ae31-d59ac31dad2c/ReviewC3RrRepair2.jsonl`:
 `opencode-go/muse-spark-1.3-contributor:xhigh`, `resolvedModelIsFallback: false`.
