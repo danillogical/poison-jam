@@ -6008,3 +6008,79 @@ changed-source smoke. No new ICALL fix, C4 or push in that packet. Register/rese
 repair and whole C3 remain unaccepted. The linked supervision renewal carries
 unused operation slots and grants one independently justified repair allowance;
 its own assessment/accounting is in the ignored Codex review, not an implicit reset.
+
+### §31.51 C3-RR qword write repair, width gate and reviewer routing (2026-10-19)
+
+The bounded repair for §31.50's demonstrated defect. Toolkit
+`src/kernel/xbox_memory_layout.c` only; the game gains only gate rows and records. No game
+production change, no push, C3/C4 unaccepted.
+
+**The defect and the fix.** The NABM owner accepted the shared decoder's eight-byte memory operand,
+but `ac97m_wr` narrowed the value to `uint32_t` before `ac97m_apply_write`, whose extraction then
+shifted a 32-bit value by 32 or more for the upper bytes: the high word was lost and the shifts were
+undefined. Repair: `ac97m_apply_write` takes `uint64_t`, `ac97m_wr` passes the decoded value
+unchanged, and every byte is `(uint8_t)((val >> (8u * (unsigned)i)) & 0xFFu)` for `i < size` with
+`size` in {1,2,4,8} (maximum shift 56), so all widths are defined and ordinary storage keeps all
+eight bytes. The BDBAR rule (`val & ~3`) now applies to the first dword of a write starting at a
+channel base with `size >= 4`, with the following bytes keeping the normal per-byte rules in
+increasing address order; width 4 behaviour is byte-for-byte unchanged. The read path already
+composed eight bytes and is unchanged. Also closed: the Windows armed ack-worker branch printed and
+flushed the `[A3A]` witness while holding `s_ac97m_lock`; it now decides the once-only flag and
+snapshots both register values under the lock, releases it, and only then prints/flushes the same
+snapshot exactly once (verified in the final run: one `[A3A]` line).
+
+**Independent gate (different author).** `tests/ac97_reset_gate.c` grew from 89 to **132 checks**,
+still ONE CTest case. New rows are real faulting guest accesses through the protected page:
+a qword store/load of `0x1122334455667788` at page `0x200`; eight byte, two dword and four word
+readbacks of that write; an independent 64-bit read assembled from two 32-bit stores
+(`0x0123456789ABCDEF`); `0x8000000000000001`, zero and `0xFFFFFFFFFFFFFFFF` round-trips; 64-bit
+neighbour sentinels and untouched `GLOB_CNT`/`GLOB_STA`/CAS; narrower-width positives in both
+directions; and qword writes over `GLOB_CNT`/`GLOB_STA` (`0x12C` -> GC `0x00000000`, GS
+`0xFFFFFEFF`; straddle at `0x12E` -> GC `0xAA020002`, GS `0xAAAA0100`, CAS low bytes stored) plus a
+qword starting at a channel base (BDBAR `0xFFFFFFF8`, `CIV/LVI/SR` dword `0x11011344`). Expectations
+are hand-derived from the contract; the seam is used only for setup. Final and restored:
+`checks=132 failed=0 harness_errors=0 skips=0`.
+
+**Controls (outside both repositories, `C:/Users/logic/xbr-mac/c3-rr-qword-mutants/`).** The exact
+historical source `c395db3` links and runs with the final gate and fails the deciding row as a
+**value** assertion: `expected 0x1122334455667788, got 0x5566778855667788`
+(`checks=132 failed=18`). New mutants, each one deliberate change, each red on a named predicate with
+0 harness errors and skips: truncate-to-32 (`got 0x0000000055667788`), repeated low word
+(`got 0x5566778855667788`), zeroed high word (`got 0x0000000055667788`), and read-narrow (qword
+loads red while all byte/dword/word readback rows stay green, which is what separates a write defect
+from a read defect). The prior control set was refreshed from the final model with each mutation's
+semantic idea re-applied and still decides its own row (M0 24, M1 12, M2 6, M3 5, M4 8, M5 1 across
+8 deterministic runs with both start orders and the unreachable `cr=0x1C`, M6 43, M7 8, M8 12,
+M8b 2, M9 3, M10 3 with the drifted `0xAAAA0000` actual explained by the new qword overlap row, M11
+a crash before assertions with no summary — reported as a crash, never as a value predicate).
+Hashes: layout `c97e387ff2591d045f5eee8527948d69cd8d8c7f95dd5b15e1b7a84ec6b7083b`, decoder
+`5ef7de18722c11b2f53b9cd9cf2773b42bf76ce811e0432565ba02e916b2f161` (identical in every copy), gate
+`bdcecfc4399bc3e5f6fd07d170e7f585a686bd21efbc42a30e77cd1a690d1aec`, final gate binary `e8fc91fa…`.
+
+**Reviewer routing (corrected).** The configured reviewer is invoked through the supported per-task
+`agent: reviewer` selection; the task tool carries it inside each `tasks[]` item (a top-level
+`agent` field is ignored and silently defaults to the generic `task` agent). The first dispatch of
+this packet placed it at the top level, resolved to the generic native `task` on
+`opencode-go/muse-spark-1.3-contributor:xhigh`, and was **cancelled without counting its review**.
+The re-dispatch's native child session (`01a15339-93db-7632-87a8-589845fa0508`, parent
+`01a15293-2ee3-7504-ae31-d59ac31dad2c`) records `agent: reviewer`, `agentSource: bundled`,
+`modelRole: slow`, resolved `workbuddy-ai/deepseek-v4.1-flash:max`,
+`resolvedModelIsFallback: false`, thinking level `max` — the
+existing configured reviewer/slow binding, no fallback, no config change. It re-ran the final gate
+(132/0/0/0), verified the sources, expectations and every raw log, found no patch-introduced defect
+(confidence 0.94), and recorded one pre-existing, patch-independent observation: a write that
+straddles a block end (e.g. a qword at page `0x12A`) still bypasses the CR rule for its byte at
+`0x12B`, exactly as before this packet and untested by the gate.
+
+**Gates and runtime.** Guarded build: 55 targets, 100 CTests, 0 compile/link errors, no C4310, the 18
+known MSB8028, no new warning from a changed translation unit (the gate recompiled; the toolkit TU
+was up to date from the implementation author's build of the unchanged source). `just check` passed;
+full limited-rights CTest **100/100 in 574.30 s**, no skips, `jsrf_ac97_reset_gate` 132/0/0/0 inside
+it. One changed-source cache-off Vulkan smoke,
+`20261019-032447-223-keyscript-c3-rr-qword-e2e-vk`, executable
+`83823e5ce6cf9731fc0ae7f1fb6dfa7fc11f6756a90add73deb006ff42748c67`, 11.8 s, `[AC97] serviced=40
+refused=0`, `[A3A] ac97 witness` once, then the unchanged separately classified stop
+`[ICALL] invalid target 0x00700010 tid=22604 esp=007BFF9C return=00193EB7`, 0 frames, exit
+`0xE0424943`. The archive's `build-source.json` records this run's own source identity (gate
+`bdcecfc4…`, layout `c97e387f…`, decoder `5ef7de18…`). The qword repair neither caused nor fixes
+that ICALL, whose cause remains UNPROVEN, and whole C3 remains failed and unaccepted.

@@ -178,50 +178,53 @@ already approved steps:
    and a different worker's behavioral/mutation gate. Preserve existing A2H
    regression coverage. A newly exposed DMA/audio stop is a new horizon to
    classify, never permission to manufacture progress. No C4 or push yet.
-   **C3-RR remains open after independent Codex review (TR §31.50); C3 is
-   unaccepted.** The previous repair closed the listed portability and gate
-   holes, but a new real-access probe shows an accepted eight-byte store is
-   corrupted: `1122334455667788` reads back `5566778855667788` while the 89-check
-   gate passes. The write callback narrows to 32 bits. Repair full-width handling
-   and add a different author's real-access regression before the next ICALL
-   investigation. The review task also used native task/Muse routing rather than
-   the configured reviewer route; verify actual reviewer dispatch before claiming
-   that requirement. No C4 or push. The toolkit's shared decoder gained a factored probe (effective
-   start/width/bounds validated before any service; the `mod == 0` SIB-base-5
-   disp32 fixed; register-only, segment/LOCK and unsupported forms refused
-   without side effects) and the Windows NABM owner keeps the 4 KB page
-   permanently inaccessible with private state under one leaf lock, models the
-   register-visible channel reset for PI/PO/MC/SO with the pinned source's SR
+   **C3-RR: accepted widths repaired and independently reviewed (TR §§31.50–31.51);
+   C3 still unaccepted.** Codex's probe showed an accepted eight-byte store was
+   corrupted: `1122334455667788` read back `5566778855667788` while the 89-check
+   gate passed, because the write callback narrowed the value to 32 bits before
+   the byte extraction (shifts ≥ 32 were undefined). The 2026-10-19 qword repair
+   carries `uint64_t` through every accepted width (1/2/4/8) with defined shifts,
+   keeps all eight bytes in ordinary storage, extends the BDBAR dword rule to a
+   wider write's first dword, and moves the `[A3A]` witness snapshot/once-flag
+   under the leaf lock with the print/flush after release. A different author's
+   gate grew to 132 checks (ONE CTest case): real faulting qword store/load with
+   nonmatching words, separate byte/dword/word readback, an independent 64-bit
+   read assembled from two 32-bit stores, edge/zero/ones values, neighbour
+   isolation, narrower-width positives and qword GC/GS overlap/L20. The historical
+   `c395db3` source fails the deciding row as a value assertion
+   (`expected 0x1122334455667788, got 0x5566778855667788`); final and restored pass
+   132/0/0/0; truncation, repeated-low-word, zero-high-word and read-narrow mutants
+   each fail a named predicate with 0 harness errors and skips, and the refreshed
+   prior controls still decide their own rows (M11 remains a crash, not a value
+   predicate). The configured reviewer was invoked through the supported per-task
+   `agent: reviewer` selection; its native session records `modelRole: slow`,
+   `workbuddy-ai/deepseek-v4.1-flash:max`, `resolvedModelIsFallback: false`,
+   thinking `max`, and it found no patch defect. An earlier mis-dispatched generic
+   task review was cancelled and not counted. Final guarded build (0 compile/link
+   errors, 0 C4310, 18 known MSB8028), `just check`, and the full limited-rights
+   CTest **100/100 in 574 s** pass. The toolkit's shared decoder keeps its factored
+   probe (effective start/width/bounds validated before any service; the
+   `mod == 0` SIB-base-5 disp32 fixed; register-only, segment/LOCK and unsupported
+   forms refused without side effects) and the Windows NABM owner keeps the 4 KB
+   page permanently inaccessible with private state under one leaf lock, models
+   the register-visible channel reset for PI/PO/MC/SO with the pinned source's SR
    read-only/W1C, LVI five-bit and BDBAR `~3` rules, and keeps `GLOB_CNT`/
-   `GLOB_STA` as plain storage except the L20 derived bit. The 2026-10-19 resume
-   fixed the confirmed defects: the Windows-only arm/shutdown calls are now
-   guarded (P1), the misleading init comment is corrected, an unrequested
-   `GLOB_STA` W1C/RO policy was removed so the approved storage contract is
-   restored, and the fixture seams fail safe when unarmed. The independently
-   authored gate (89 checks, ONE CTest case) drives real faulting guest stores
-   for SR/LVI/BDBAR/L20 including partial and overlapping writes; every deciding
-   mutant was refreshed against the final model, decoder and gate source outside
-   both repositories and each fails a named predicate with 0 harness
-   errors/skips, while the pre-repair plain-storage control fails 21 rows as
-   value assertions. Final guarded build (0 compile/link errors, 0 C4310, 18
-   known MSB8028), `just check`, and the full limited-rights CTest **100/100 in
-   526 s** pass. POSIX: the changed unit adds no POSIX error and the guards remove
-   exactly the two implicit-declaration errors; the file retains 41 pre-existing
-   Windows-shim errors on both HEAD and final, so this unit did not POSIX-compile
-   before either (unrelated, recorded). The stock Vulkan smoke
-   (`20261019-002247-673-keyscript-c3-rr-resume-e2e-vk`, exe `9f6c43b6…`, 11.8 s)
-   still stops on the separately classified horizon: `[ICALL] invalid target
+   `GLOB_STA` as plain storage except the L20 derived bit. POSIX: the changed unit
+   adds no POSIX error and the guards remove exactly the two implicit-declaration
+   errors; the file retains 41 pre-existing Windows-shim errors on both HEAD and
+   final (unrelated, recorded). The stock Vulkan smoke
+   (`20261019-032447-223-keyscript-c3-rr-qword-e2e-vk`, exe `83823e5c…`, 11.8 s)
+   stops on the unchanged separately classified horizon: `[ICALL] invalid target
    0x00700010 ... return=00193EB7` with `[AC97] serviced=40 refused=0` and the
-   L20 witness live, 0 frames, exit `0xE0424943`. Original-XBE bytes place the
-   site at `0x193EB5 call eax` (`eax = [esi+0x1c4]` at `0x193E62`) in the code
-   block at `0x193E40`, reached by `jmp` from the body entered at `0x193D90` in
-   the XBE's D3D section (`functions.json` ends that entry at `0x193E34`, so the
-   site is in the recorded gap and is not separately named); the target is in the
-   runtime's fake guest RW-data area (`FAKE_RWDATA_VA` 0x00700000), not code.
-   What installed that pointer, and whether the halted SR state changes this D3D8
-   path, are UNPROVEN; no SR=0 ablation was built. Register/reset-gate closure is
-   not whole-C3 acceptance. C3/C4 remain unaccepted; the next decision is
-   Codex's.
+   L20 witness live, 0 frames, exit `0xE0424943`. The qword repair did not cause
+   and does not fix that ICALL. Original-XBE bytes place the site at
+   `0x193EB5 call eax` (`eax = [esi+0x1c4]` at `0x193E62`) in the code block at
+   `0x193E40`, reached by `jmp` from the body entered at `0x193D90` in the XBE's
+   D3D section; the target is in the runtime's fake guest RW-data area
+   (`FAKE_RWDATA_VA` 0x00700000), not code. What installed that pointer, and
+   whether the halted SR state changes this D3D8 path, are UNPROVEN; no SR=0
+   ablation was built. Register/reset/width repair is not whole-C3 acceptance.
+   C3/C4 remain unaccepted; the next decision is Codex's.
 2. **C4:** independent merge/recovery review, Vulkan e2e with both N3 loader insertion
    witnesses, D3D11 reference e2e and viewed logos/Corn/Garage/pause frames, N2 with
    a same-session archived-executable baseline, then TR/L02/L62/AGENTS records.

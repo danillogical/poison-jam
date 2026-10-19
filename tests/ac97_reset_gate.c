@@ -169,6 +169,35 @@ static uint32_t g32_load(uint32_t page_off)
     MemoryBarrier();
     return v;
 }
+static void g16_store(uint32_t page_off, uint16_t v)
+{
+    volatile uint16_t *p = (volatile uint16_t *)(g_page + page_off);
+    *p = v;
+    MemoryBarrier();
+}
+
+static uint16_t g16_load(uint32_t page_off)
+{
+    volatile uint16_t *p = (volatile uint16_t *)(g_page + page_off);
+    uint16_t v = *p;
+    MemoryBarrier();
+    return v;
+}
+
+static void g64_store(uint32_t page_off, uint64_t v)
+{
+    volatile uint64_t *p = (volatile uint64_t *)(g_page + page_off);
+    *p = v;
+    MemoryBarrier();
+}
+
+static uint64_t g64_load(uint32_t page_off)
+{
+    volatile uint64_t *p = (volatile uint64_t *)(g_page + page_off);
+    uint64_t v = *p;
+    MemoryBarrier();
+    return v;
+}
 
 /* Snapshot one full channel block through REAL guest loads: BDBAR (dword at
  * block+0x00), CIV (+0x04), LVI (+0x05), SR (word +0x06), PICB (word +0x08),
@@ -307,6 +336,212 @@ static void case_unit_prior_1f_reset(void)
     g8_store(NAC97_PO + 0x0B, 0x02); /* the probe is still a REAL faulting store */
     got = g8_load(NAC97_PO + 0x0B);
     CHECK(got == 0x1C, "unit-policy prior 0x1F reset: expected 0x1C, got 0x%02X", got);
+}
+
+/* ── qword width regression ──────────────────────────────────────────────────
+ * REAL faulting 8-byte stores/loads through the guest mapping (the same
+ * one-instruction discipline as g8/g32: one volatile access plus a compiler
+ * barrier). Every expectation below is computed BY HAND from the contract in
+ * this file's header -- never from a production helper -- so a
+ * truncation/repeated-low-word/zeroed-high-word defect reads back a different
+ * VALUE. Offsets 0x1F8-0x26F are ordinary storage: no block rule and no
+ * global overlap apply. The pre-repair source fails the deciding row with
+ * 0x5566778855667788 (its 32-bit value shifted by 32 or more is undefined and
+ * in practice repeats bytes 0-3). */
+#define NAC97_QWORD_OFF  0x200u
+#define NAC97_QWORD_VAL  0x1122334455667788ull
+
+/* Deciding qword row: nonmatching upper/lower words must both survive. */
+static void case_qword_deciding_store_load(void)
+{
+    uint64_t got;
+    current_case = "qword-deciding-store-load";
+    g64_store(NAC97_QWORD_OFF, NAC97_QWORD_VAL);
+    got = g64_load(NAC97_QWORD_OFF);
+    CHECK(got == NAC97_QWORD_VAL,
+          "qword store/load 0x1122334455667788 at 0x200: expected 0x1122334455667788, got 0x%016llX",
+          (unsigned long long)got);
+}
+
+/* Separate narrow readback after the qword write: a write-path defect corrupts
+ * these too, while a read-path-only defect (MQ4) leaves them green and turns
+ * only the qword load red. Hand-split bytes of 0x1122334455667788. */
+static void case_qword_byte_dword_readback(void)
+{
+    static const uint8_t kWant[8] = { 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11 };
+    static const uint16_t kWantW[4] = { 0x7788, 0x5566, 0x3344, 0x1122 };
+    uint32_t lo, hi;
+    int i;
+    current_case = "qword-byte-dword-readback";
+    g64_store(NAC97_QWORD_OFF, NAC97_QWORD_VAL);
+    for (i = 0; i < 8; i++) {
+        uint8_t b = g8_load(NAC97_QWORD_OFF + (uint32_t)i);
+        CHECK(b == kWant[i], "qword byte %d of 0x1122334455667788: expected 0x%02X, got 0x%02X",
+              i, kWant[i], b);
+    }
+    lo = g32_load(NAC97_QWORD_OFF);
+    CHECK(lo == 0x55667788u, "qword low dword: expected 0x55667788, got 0x%08X", lo);
+    hi = g32_load(NAC97_QWORD_OFF + 4u);
+    CHECK(hi == 0x11223344u, "qword high dword: expected 0x11223344, got 0x%08X", hi);
+    for (i = 0; i < 4; i++) {
+        uint16_t w = g16_load(NAC97_QWORD_OFF + (uint32_t)(i * 2));
+        CHECK(w == kWantW[i], "qword word %d of 0x1122334455667788: expected 0x%04X, got 0x%04X",
+              i, kWantW[i], w);
+    }
+}
+
+/* Edge values: upper bit + low bit, all zero, all ones; each with at least one
+ * narrow cross-check. */
+static void case_qword_edge_values(void)
+{
+    uint64_t got;
+    uint32_t dlo, dhi;
+    uint8_t b0, b7;
+    current_case = "qword-edge-values";
+    g64_store(0x210u, 0x8000000000000001ull);
+    got = g64_load(0x210u);
+    CHECK(got == 0x8000000000000001ull,
+          "qword 0x8000000000000001 round-trip: expected 0x8000000000000001, got 0x%016llX",
+          (unsigned long long)got);
+    dlo = g32_load(0x210u);
+    CHECK(dlo == 0x00000001u, "qword 0x8000000000000001 low dword: expected 0x00000001, got 0x%08X", dlo);
+    dhi = g32_load(0x210u + 4u);
+    CHECK(dhi == 0x80000000u, "qword 0x8000000000000001 high dword: expected 0x80000000, got 0x%08X", dhi);
+    b0 = g8_load(0x210u);
+    CHECK(b0 == 0x01u, "qword 0x8000000000000001 byte 0: expected 0x01, got 0x%02X", b0);
+    b7 = g8_load(0x210u + 7u);
+    CHECK(b7 == 0x80u, "qword 0x8000000000000001 byte 7: expected 0x80, got 0x%02X", b7);
+    g64_store(0x220u, 0ull);
+    got = g64_load(0x220u);
+    CHECK(got == 0ull, "qword zero round-trip: expected 0x0000000000000000, got 0x%016llX",
+          (unsigned long long)got);
+    dlo = g32_load(0x220u);
+    CHECK(dlo == 0u, "qword zero low dword: expected 0x00000000, got 0x%08X", dlo);
+    g64_store(0x230u, 0xFFFFFFFFFFFFFFFFull);
+    got = g64_load(0x230u);
+    CHECK(got == 0xFFFFFFFFFFFFFFFFull,
+          "qword ones round-trip: expected 0xFFFFFFFFFFFFFFFF, got 0x%016llX",
+          (unsigned long long)got);
+    b0 = g8_load(0x230u + 3u);
+    CHECK(b0 == 0xFFu, "qword ones byte 3: expected 0xFF, got 0x%02X", b0);
+    dhi = g32_load(0x230u + 4u);
+    CHECK(dhi == 0xFFFFFFFFu, "qword ones high dword: expected 0xFFFFFFFF, got 0x%08X", dhi);
+}
+
+/* Neighbor isolation: 64-bit sentinels fork the target; the target store must
+ * leave them byte-identical and must not disturb GLOB_CNT/GLOB_STA/CAS. */
+static void case_qword_neighbor_isolation(void)
+{
+    uint32_t gc0, gs0, cas0;
+    uint64_t pre, post;
+    current_case = "qword-neighbor-isolation";
+    g64_store(0x1F8u, 0xA5A5A5A5A5A5A5A5ull);
+    g64_store(0x208u, 0x5A5A5A5A5A5A5A5Aull);
+    gc0 = g32_load(NAC97_GC);
+    gs0 = g32_load(NAC97_GS);
+    cas0 = g32_load(NAC97_CAS);
+    g64_store(NAC97_QWORD_OFF, NAC97_QWORD_VAL);
+    pre = g64_load(0x1F8u);
+    CHECK(pre == 0xA5A5A5A5A5A5A5A5ull,
+          "qword pre-neighbour intact: expected 0xA5A5A5A5A5A5A5A5, got 0x%016llX",
+          (unsigned long long)pre);
+    post = g64_load(0x208u);
+    CHECK(post == 0x5A5A5A5A5A5A5A5Aull,
+          "qword post-neighbour intact: expected 0x5A5A5A5A5A5A5A5A, got 0x%016llX",
+          (unsigned long long)post);
+    CHECK(g32_load(NAC97_GC) == gc0, "qword at 0x200 keeps GLOB_CNT: expected 0x%08X, got 0x%08X",
+          gc0, g32_load(NAC97_GC));
+    CHECK(g32_load(NAC97_GS) == gs0, "qword at 0x200 keeps GLOB_STA: expected 0x%08X, got 0x%08X",
+          gs0, g32_load(NAC97_GS));
+    CHECK(g32_load(NAC97_CAS) == cas0, "qword at 0x200 keeps CAS: expected 0x%08X, got 0x%08X",
+          cas0, g32_load(NAC97_CAS));
+}
+
+/* Narrower-width positives: byte/word/dword writes assemble every byte
+ * position, then one qword load proves the composition. */
+static void case_qword_narrow_widths(void)
+{
+    static const uint8_t kB[8] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0x98 };
+    static const uint16_t kW[4] = { 0x1111, 0x2222, 0x3333, 0x4444 };
+    uint64_t got;
+    int i;
+    current_case = "qword-narrow-widths";
+    for (i = 0; i < 8; i++)
+        g8_store(0x240u + (uint32_t)i, kB[i]);
+    got = g64_load(0x240u);
+    CHECK(got == 0x98BAFECAEFBEADDEull,
+          "qword from 8 byte stores: expected 0x98BAFECAEFBEADDE, got 0x%016llX",
+          (unsigned long long)got);
+    for (i = 0; i < 4; i++)
+        g16_store(0x240u + (uint32_t)(i * 2), kW[i]);
+    got = g64_load(0x240u);
+    CHECK(got == 0x4444333322221111ull,
+          "qword from 4 word stores: expected 0x4444333322221111, got 0x%016llX",
+          (unsigned long long)got);
+    g32_store(0x240u, 0x89ABCDEFu);
+    g32_store(0x240u + 4u, 0x01234567u);
+    got = g64_load(0x240u);
+    CHECK(got == 0x0123456789ABCDEFull,
+          "qword from 2 dword stores: expected 0x0123456789ABCDEF, got 0x%016llX",
+          (unsigned long long)got);
+}
+
+/* Supported global overlap with a qword: every covered byte is stored plainly,
+ * then GLOB_STA bit 8 is re-derived as the level of GLOB_CNT bit 1. The
+ * aligned qword at 0x12C covers GC bytes 0-3 and GS bytes 0-3 (CAS at 0x134
+ * is outside the half-open range and must not move); the straddling qword at
+ * 0x12E covers GC bytes 2-3, all of GS and CAS bytes 0-1, so GC bytes 0-1
+ * (and hence GC bit 1) are pre-seeded. */
+static void case_qword_global_overlap(void)
+{
+    uint32_t gc, gs, cas;
+    current_case = "qword-global-overlap";
+    xbox_Ac97ModelFixtureSeed(NAC97_GC, 0x00000000u, 4);
+    xbox_Ac97ModelFixtureSeed(NAC97_GS, 0x00000000u, 4);
+    xbox_Ac97ModelFixtureSeed(NAC97_CAS, 0xA5A5A5A5u, 4);
+    xbox_Ac97ModelFixtureTick();
+    g64_store(NAC97_GC, 0xFFFFFFFF00000000ull);
+    gc = g32_load(NAC97_GC);
+    CHECK(gc == 0x00000000u, "qword 0xFFFFFFFF00000000 at 0x12C: GC expected 0x00000000, got 0x%08X", gc);
+    gs = g32_load(NAC97_GS);
+    CHECK(gs == 0xFFFFFEFFu, "qword 0xFFFFFFFF00000000 at 0x12C: GS expected 0xFFFFFEFF, got 0x%08X", gs);
+    cas = g32_load(NAC97_CAS);
+    CHECK(cas == 0xA5A5A5A5u, "qword at 0x12C keeps CAS: expected 0xA5A5A5A5, got 0x%08X", cas);
+    /* Straddle with GC bit1 SET: bytes 0x12C/0x12D keep the seeded 0x02/0x00,
+     * the qword supplies 0x12E=0x02 0x12F=0xAA 0x130=0x00 0x131=0x00
+     * 0x132=0xAA 0x133=0xAA 0x134=0xAA 0x135=0xAA; the sync then sets GS bit8. */
+    xbox_Ac97ModelFixtureSeed(NAC97_GC, 0x00000002u, 4);
+    xbox_Ac97ModelFixtureSeed(NAC97_GS, 0x00000000u, 4);
+    xbox_Ac97ModelFixtureSeed(NAC97_CAS, 0xA5A5A5A5u, 4);
+    xbox_Ac97ModelFixtureTick();
+    g64_store(0x12Eu, 0xAAAAAAAA0000AA02ull);
+    gc = g32_load(NAC97_GC);
+    CHECK(gc == 0xAA020002u, "qword 0xAAAAAAAA0000AA02 at 0x12E: GC expected 0xAA020002, got 0x%08X", gc);
+    gs = g32_load(NAC97_GS);
+    CHECK(gs == 0xAAAA0100u, "qword 0xAAAAAAAA0000AA02 at 0x12E: GS expected 0xAAAA0100, got 0x%08X", gs);
+    cas = g32_load(NAC97_CAS);
+    CHECK(cas == 0xA5A5AAAAu, "qword at 0x12E stores CAS low bytes: expected 0xA5A5AAAA, got 0x%08X", cas);
+}
+
+/* A qword starting at a block base masks only its first dword (val & ~3);
+ * bytes past it take the normal per-byte rules in increasing address order.
+ * Value 0x11001344FFFFFFFB at MC+0x00: BDBAR 0xFFFFFFFB -> 0xFFFFFFF8, CIV
+ * keeps 0x44, LVI 0x13 is already 5-bit, SR low 0x00 is a no-op on the seeded
+ * 0x0001, SR high keeps 0x11. */
+static void case_qword_bdbar_first_dword(void)
+{
+    uint32_t bdbar, civlvi, civ, lvi;
+    current_case = "qword-bdbar-first-dword";
+    seed_channel(NAC97_MC, 0, 0, 0, 0x0001, 0, 0, 0x00);
+    g64_store(NAC97_MC, 0x11001344FFFFFFFBull);
+    bdbar = g32_load(NAC97_MC);
+    CHECK(bdbar == 0xFFFFFFF8u, "qword at block base masks BDBAR: expected 0xFFFFFFF8, got 0x%08X", bdbar);
+    civ = g8_load(NAC97_MC + 0x04);
+    CHECK(civ == 0x44u, "qword CIV byte past BDBAR: expected 0x44, got 0x%02X", civ);
+    lvi = g8_load(NAC97_MC + 0x05);
+    CHECK(lvi == 0x13u, "qword LVI byte past BDBAR: expected 0x13, got 0x%02X", lvi);
+    civlvi = g32_load(NAC97_MC + 0x04);
+    CHECK(civlvi == 0x11011344u, "qword CIV/LVI/SR dword: expected 0x11011344, got 0x%08X", civlvi);
 }
 
 /* ── SR / LVI / BDBAR deciding rows ───────────────────────────────────────────
@@ -590,7 +825,7 @@ static void case_tick_derives_set(void)
      * worker's per-tick sync (which would heal the split if it fired between
      * the fixture tick and the load): the seed+tick+load runs back-to-back 8
      * times and only the last CHECKs, so a no-op tick fails deterministically
-     * while a working tick passes. Count stays 89. */
+     * while a working tick passes. (Count grows with the qword rows below.) */
     {
         int i;
         gs = 0;
@@ -1161,6 +1396,17 @@ int main(int argc, char **argv)
     case_positive_nonrr_write();
     /* Labelled private unit-policy coverage (seam-seeded prior). */
     case_unit_prior_1f_reset();
+    /* Qword width regression: REAL 8-byte stores/loads at ordinary storage
+     * (no block/global overlap), their independent narrow readback, edge
+     * values, neighbour isolation, narrow-width positives and supported
+     * global overlap (real accesses; expectations hand-computed). */
+    case_qword_deciding_store_load();
+    case_qword_byte_dword_readback();
+    case_qword_edge_values();
+    case_qword_neighbor_isolation();
+    case_qword_narrow_widths();
+    case_qword_global_overlap();
+    case_qword_bdbar_first_dword();
     /* SR / LVI / BDBAR deciding rows (pinned xemu expectations). */
     case_sr_readonly_w1c();
     case_lvi_mask();
