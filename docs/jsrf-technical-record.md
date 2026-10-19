@@ -6023,11 +6023,21 @@ unchanged, and every byte is `(uint8_t)((val >> (8u * (unsigned)i)) & 0xFFu)` fo
 `size` in {1,2,4,8} (maximum shift 56), so all widths are defined and ordinary storage keeps all
 eight bytes. The BDBAR rule (`val & ~3`) now applies to the first dword of a write starting at a
 channel base with `size >= 4`, with the following bytes keeping the normal per-byte rules in
-increasing address order; width 4 behaviour is byte-for-byte unchanged. The read path already
+increasing address order; width 4 behaviour is byte-for-byte unchanged. The BDBAR mask is
+offset-anchored — it applies when the write STARTS at the channel base — while the GC/GS L20 sync is
+range-anchored and fires for any width that overlaps either global; the gate asserts the
+starting-offset form only. A write that merely overlaps a BDBAR dword without starting there (e.g. a
+qword at page `0x12A` whose byte at `0x12B` is the CR byte) keeps the pre-existing per-byte/plain
+behaviour it had before this packet, and that pre-existing asymmetry is recorded, not asserted. The
+read path already
 composed eight bytes and is unchanged. Also closed: the Windows armed ack-worker branch printed and
 flushed the `[A3A]` witness while holding `s_ac97m_lock`; it now decides the once-only flag and
 snapshots both register values under the lock, releases it, and only then prints/flushes the same
-snapshot exactly once (verified in the final run: one `[A3A]` line).
+snapshot exactly once. The printed values themselves vary with gate ordering, because the witness
+fires on whichever tick first observes GC bit 1 (observed in the same build:
+`gc=0xAA020002 gs=0xAAAA0100` in `final-run.log`, `gc=0x00000002 gs=0xFFFFFFFF` in
+`restored-run.log`, `gc=0x00000002 gs=0x00000100` in `old-run.log`); the snapshot semantics and the
+once-only property are what the repair fixes, and neither varies.
 
 **Independent gate (different author).** `tests/ac97_reset_gate.c` grew from 89 to **132 checks**,
 still ONE CTest case. New rows are real faulting guest accesses through the protected page:
@@ -6061,8 +6071,9 @@ Hashes: layout `c97e387ff2591d045f5eee8527948d69cd8d8c7f95dd5b15e1b7a84ec6b7083b
 `agent: reviewer` selection; the task tool carries it inside each `tasks[]` item (a top-level
 `agent` field is ignored and silently defaults to the generic `task` agent). The first dispatch of
 this packet placed it at the top level, resolved to the generic native `task` on
-`opencode-go/muse-spark-1.3-contributor:xhigh`, and was **cancelled without counting its review**.
-The re-dispatch's native child session (`01a15339-93db-7632-87a8-589845fa0508`, parent
+`opencode-go/muse-spark-1.3-contributor:xhigh`, and was **cancelled** (`proc://ReviewQwordRepair/kill`)
+with its output discarded: no analysis from it is used or counted anywhere in this packet. The
+re-dispatch's native child session (`01a15339-93db-7632-87a8-589845fa0508`, parent
 `01a15293-2ee3-7504-ae31-d59ac31dad2c`) records `agent: reviewer`, `agentSource: bundled`,
 `modelRole: slow`, resolved `workbuddy-ai/deepseek-v4.1-flash:max`,
 `resolvedModelIsFallback: false`, thinking level `max` — the
