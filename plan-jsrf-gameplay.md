@@ -178,8 +178,15 @@ already approved steps:
    and a different worker's behavioral/mutation gate. Preserve existing A2H
    regression coverage. A newly exposed DMA/audio stop is a new horizon to
    classify, never permission to manufacture progress. No C4 or push yet.
-   **C3-RR repair and its gate's defects are closed (TR §§31.48–31.49); C3 remains
-   unaccepted.** The toolkit's shared decoder gained a factored probe (effective
+   **C3-RR remains open after independent Codex review (TR §31.50); C3 is
+   unaccepted.** The previous repair closed the listed portability and gate
+   holes, but a new real-access probe shows an accepted eight-byte store is
+   corrupted: `1122334455667788` reads back `5566778855667788` while the 89-check
+   gate passes. The write callback narrows to 32 bits. Repair full-width handling
+   and add a different author's real-access regression before the next ICALL
+   investigation. The review task also used native task/Muse routing rather than
+   the configured reviewer route; verify actual reviewer dispatch before claiming
+   that requirement. No C4 or push. The toolkit's shared decoder gained a factored probe (effective
    start/width/bounds validated before any service; the `mod == 0` SIB-base-5
    disp32 fixed; register-only, segment/LOCK and unsupported forms refused
    without side effects) and the Windows NABM owner keeps the 4 KB page

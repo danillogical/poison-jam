@@ -5935,6 +5935,11 @@ its child session
 `~/.omp/agent/sessions/-Repos-poison-jam/2026-10-19T05-12-19-939Z_01a15293-2ee3-7504-ae31-d59ac31dad2c/ReviewC3RrRepair2.jsonl`:
 `opencode-go/muse-spark-1.3-contributor:xhigh`, `resolvedModelIsFallback: false`.
 
+**Routing correction from Codex (§31.50):** this was a generic native `task`,
+not an invocation of the configured reviewer role. Its name and review assignment
+did not select that role. The route above is accurate; calling it the configured
+reviewer is not. The Workbuddy reviewer setting was unchanged.
+
 **Gates and runtime.** Guarded build: 55 targets, 100 CTests, 0 compile/link errors, no C4310, the 18
 known MSB8028, no new warning from a changed translation unit; `just check` all passed; full
 limited-rights CTest **100/100 in 526.23 s**, no skips; `jsrf_ac97_reset_gate` 89/0/0/0 inside it.
@@ -5943,3 +5948,63 @@ One stock cache-off Vulkan smoke (`20261019-002247-673-keyscript-c3-rr-resume-e2
 classified `0x00700010` / `0x193EB7` ICALL with `serviced=40 refused=0` and the L20 witness live.
 **C3 remains failed and unaccepted**: the reset gate and this device repair are not whole-C3
 acceptance, and the ICALL's cause is unresolved. No push was performed.
+
+### §31.50 Codex review: accepted qword stores corrupt data; repair not accepted
+
+Operation `op_0mvest7g30d20b8ae72588329` returned clean local game `a79aaf0`
+(including `a06b4b5`) and toolkit `c395db3` on `merge-v0.14.0`; neither was pushed.
+Codex fetched both origins, checked source hashes against the refreshed manifest,
+and independently ran the final/restored gate: **89 checks, 0 failures/errors/skips**.
+Selected private controls reproduced assertion failures: incoming-not-prior M2 = 6,
+split transaction M5 = 1, restored global W1C M10 = 3, all without harness errors
+or skips. The archived full-suite log has 91 ordinary passes and 9 pass-reason
+records, no failures. These are real results, but not complete width coverage.
+
+**New deciding defect.** `ac97m_veh` accepts the shared decoder's eight-byte
+memory operand. `ac97m_wr` then casts its `uint64_t` value to `uint32_t` before
+`ac97m_apply_write`, whose loop shifts that 32-bit value by 32 or more for the
+upper bytes. This loses data and invokes undefined shift behavior. Codex compiled
+a private probe against the final production toolkit libraries, using a real
+faulting volatile store and load at the ordinary-storage page offset `0x200`:
+
+```text
+QWORD-REAL-FAULT expected=1122334455667788 actual=5566778855667788
+control32=AABBCCDD serviced=4 refused=0
+probe_exit=1
+```
+
+The page was owned by the production handler, which serviced rather than refused
+the access. The 32-bit positive passes; the existing 89-check gate also passes.
+This is demonstrated silent corruption, not a claim that the current stock smoke
+uses that operand width or that it caused the separate ICALL. Reproduction source,
+build/run logs and script are outside git under `xbr-mac/c3-rr-codex-qword/` and
+`xbr-mac/c3-rr-codex-qword-probe.py`. No shared production file was modified for
+the probe, no game was launched, and no original asset or save was written.
+
+**Reviewer selection was not satisfied.** Native `ReviewC3RrRepair2` session init
+identifies `agent=task`, resolved `opencode-go/muse-spark-1.3-contributor:xhigh`,
+fallback false. Its parent task call supplied a name/review assignment without
+an agent/model-role selector. That is an independent review assignment, but not
+the configured reviewer invocation. Implementation and test workers also used
+native task/Muse in distinct sessions. Do not infer role selection from task names
+or substitute a generic task while claiming the configured reviewer requirement.
+The configured Workbuddy/slow setting was not changed.
+
+**Classification independently checked.** Original XBE disassembly confirms
+`0x193E62` loads `[esi+0x1c4]` and `0x193EB5` calls EAX, returning to `0x193EB7`.
+The archive records one invalid target `0x00700010`, zero frames, 11.8 seconds and
+exit `0xE0424943`. Its D3D section attribution is correct; pointer installation
+and SR causality remain unproved. The POSIX A/B/C result is a differential repair
+of two declarations amid 41 pre-existing compile errors, not a passing POSIX build.
+M11 crashes before assertions and must not be included in a blanket claim that
+every mutant failed a named value predicate with zero errors.
+
+**Next bounded repair:** preserve full-width values and defined shifts through
+the accepted MMIO write path, add a different author's real eight-byte regression
+with independent byte/dword readback and narrower-width positives, refresh affected
+final-source mutation evidence, and invoke/verify the actual configured reviewer.
+Correct these record limits, then final source-bound checks and at most one
+changed-source smoke. No new ICALL fix, C4 or push in that packet. Register/reset
+repair and whole C3 remain unaccepted. The linked supervision renewal carries
+unused operation slots and grants one independently justified repair allowance;
+its own assessment/accounting is in the ignored Codex review, not an implicit reset.
