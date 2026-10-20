@@ -23,16 +23,16 @@
  "generation_mode": "Step-2b full regeneration 2026-10-20 with xboxrecomp 7544264 (jumps with no label in the emitting body and no symbol at the target become RECOMP_JUMP_TRAP at their site; an alias whose fold owner starts after it keeps no body and dispatches through a fatal wrapper): existing C3 toolkit and game analysis databases (disasm not rerun), full pass with --backedge-yield, generated-patches.json, boundary relifts (new 0x0011BA00 and 0x000D58E0 fixes), reviewed recovery seeds (0x0011B660 end tightened; 0x0006FE40, 0x000C42E0, 0x0011B680 recovered; false 0x00070027 retired) and ABI deltas, before the guarded build",
  "generators": {
   "project": {
-   "dirty": true,
-   "revision": "ba47e8aaa87b9004674e7a4fa4d53aff92712f31",
+   "dirty": false,
+   "revision": "3638f8024c4fbc24c365f5a27d63049980c87de4",
    "state": "MEASURED",
-   "status_sha256": "cd973aa74fd60ed0d196c2053f048bed4ad915dfa53285497fe80ba6246fe78b"
+   "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
   "scripts/recover-functions.py": "4cab6b7325e42b62651f31a7948709b115f631eec5b13b2447dc9367600b40d5",
   "scripts/relift-selected.py": "09f3ba3f2e9c9e4f7ca9d388d690a13b8e9370bba7faa103518c21bdb8bc6590",
   "toolkit": {
    "dirty": false,
-   "revision": "754426404d7b6e149cb1486d48dde05b087c39c7",
+   "revision": "51fcb8563a384fbe69a8386a14e89f6f5666f030",
    "state": "MEASURED",
    "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
@@ -41,9 +41,9 @@
  },
  "inputs": {
   "config/boundary-fixes.json": {
-   "bytes": 4064,
+   "bytes": 4116,
    "present": true,
-   "sha256": "23994f2eca2984e21799fa0992c45caa53e2299d572923e8e802b6d8430f330d"
+   "sha256": "5182fc95c37c1ea3a29ddbf1c512c7b37c7ee637196e8d2aeab2782b2be67c0b"
   },
   "config/manual-functions.json": {
    "bytes": 112271,
