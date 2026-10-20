@@ -225,6 +225,17 @@ already approved steps:
    whether the halted SR state changes this D3D8 path, are UNPROVEN; no SR=0
    ablation was built. Register/reset/width repair is not whole-C3 acceptance.
    C3/C4 remain unaccepted; the next decision is Codex's.
+   **C3-ICALL diagnosis is done (TR §31.52), read-only.** The called field is static
+   BSS in the D3D section (`esi=0x0019D468` is past the section's file-backed size),
+   the containing `0x193D90` is a recovered function whose body is byte-identical
+   before and after regeneration, and the call site discards the ordinal-145 return
+   value. The qword repair cannot be the cause; the stop is co-extensive with the
+   AC'97 `ac97m_` toolkit patch but that correlation spans archives differing in more
+   than one variable. **What wrote `0x00700010` into `0x0019D62C` is UNPROVEN** (no
+   ICALL archive ships a dump). Next instrument: a hardware write breakpoint on the
+   host mapping of guest `0x0019D62C` against the archived exe/pdb, or a `peek` chain
+   (`["0x0019D468","0x1C4"]`) to localise the write to a step interval. No repair, no
+   C4 and no push until that writer is named.
 2. **C4:** independent merge/recovery review, Vulkan e2e with both N3 loader insertion
    witnesses, D3D11 reference e2e and viewed logos/Corn/Garage/pause frames, N2 with
    a same-session archived-executable baseline, then TR/L02/L62/AGENTS records.

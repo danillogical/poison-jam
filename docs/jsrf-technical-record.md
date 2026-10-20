@@ -6095,3 +6095,61 @@ refused=0`, `[A3A] ac97 witness` once, then the unchanged separately classified 
 `0xE0424943`. The archive's `build-source.json` records this run's own source identity (gate
 `bdcecfc4…`, layout `c97e387f…`, decoder `5ef7de18…`). The qword repair neither caused nor fixes
 that ICALL, whose cause remains UNPROVEN, and whole C3 remains failed and unaccepted.
+
+### §31.52 C3-ICALL diagnosis: the target's field is BSS, the writer is unproven (2026-10-19)
+
+A bounded read-only diagnosis of the stop in §31.51, with no production edit in either
+repository and no game run. Its first draft was independently reviewed and **two of its claims
+were rejected**; the corrected findings are below, and the rejected reasoning is recorded so it
+is not repeated.
+
+**Verified.** The call site is `0x193EB5 call eax` with `eax = [esi+0x1c4]` loaded at `0x193E62`
+and the fatal return at `0x193EB7` (original XBE, `inspect-jsrf.py disasm`). `esi = 0x0019D468`
+lies at section offset `0x10928` of the D3D section, beyond its `0x0000E6B0` file-backed size, so
+both the object and the field `0x0019D62C` are in the zero-filled BSS tail: static storage with no
+file-backed initializer, not a heap object. The containing function `0x00193D90-0x00193EE2` is a
+**recovered** function (`config/recovered-functions.json`, section `D3D`), emitted as
+`body_00193D90`; no generated chunk covers it. Its bodies, its only caller `0x00196C0B` and the
+helper `0x00193D10` are byte-identical between the pre-regeneration archive's own source
+(`20261018-121035-472\source.zip`) and the current tree, so the regeneration did not change this
+code. The preceding call `0x193E5C call dword ptr [0x1c4014]` resolves through `0x80000091` to
+kernel ordinal 145 = `KeSetEvent`, and its first argument is the event header at `esi+0x1C8`, the
+dword immediately above the called field. The call site **discards** that call's return value:
+after `call eax` the code reloads `dl` from the stack and ends `xor eax,eax` on both branches, so
+the ordinal's 0-vs-1 return cannot distinguish runs at guest level — it only reports which bridge
+path fired.
+
+**Corrected after review.** (a) The draft claimed the stop was "newly exposed by the C3
+regeneration", using `20261018-141756` as a negative control. That control does not hold: that
+archive carried **no toolkit patch at all** (`toolkit.patch` empty), and it **did** execute the
+call path — `[RECOVERED] 0x00193D90 returned` plus 89 detailed `ordinal 145 ... ret=0x00193E62`
+lines over 301.2 s — so it reached the function and read 0 from the field. (b) The draft claimed
+AC'97 state was not causal because `141756` had the witness but no ICALL; in fact all three
+relevant logs carry the identical `[A3A] ac97 witness: gc=0x00000002 gs=0x00000100`, and neither
+`141756` nor `184102` contains any `[AC97] serviced=` line. That stated contrast did not exist.
+
+**What survives.** The qword repair cannot be the cause: `c395db3..fc6e2ea` is one commit on one
+file changing only AC'97 register write widths and the `[A3A]` lock scope, and it writes only
+`s_ac97m_regs[]` — guest-visible as registers, never a guest code pointer. Scanning all 331 run
+archives, `0x00700010` occurs in exactly five, all in the C3-RR era (`20261018-184102`, `185419`,
+`190934`, `20261019-002247`, `20261019-032447`) and in none earlier. The stop is **co-extensive
+with the presence of an `ac97m_` toolkit patch**: every archive carrying one hits it, and no
+archive without one does. That is a correlation over archives that differ in more than one
+variable, not a causal chain.
+
+**Unproven.** What wrote `0x00700010` into guest `0x0019D62C` is UNPROVEN: none of the five ICALL
+archives contains a `.dmp` or `dump/` directory (the non-ICALL `141756` does ship a 139 MB
+`frozen-startup\process.dmp`, a different horizon). `0x00700010 = 0x00700000 + 0x10` and
+`0x00700000` is the toolkit's `FAKE_RWDATA_VA`, reached by the guest via
+`fs:[0x28] -> 0x00760000 -> [0x00760028]`; a RenderWare-sourced pointer landing there is a
+plausible inference, and no toolkit code writes it, so the writer is most likely guest code — both
+unproven. Whether the halted AC'97 SR state changes this D3D8 path is likewise UNPROVEN.
+
+**Next instrument.** The ICALL archives ship the exact `jsrf_recomp.exe` and `.pdb`, so a 4-byte
+hardware write breakpoint on the host mapping of guest VA `0x0019D62C`, logging the writing RIP and
+guest return address (first write wins), names the writer directly. A cheaper partial alternative
+already in the driver is `peek` with a pointer `chain`
+(`{"peek": {"name": "dev_call", "chain": ["0x0019D468", "0x1C4"], "size": 4}}`), which reads guest
+memory without changing guest state and can localise the write to a step interval without naming
+the instruction. Neither may be replaced by suppressing the ICALL, bypassing the AC'97 model, or a
+synthetic readiness pin. C3 and C4 remain unaccepted.
