@@ -236,6 +236,20 @@ already approved steps:
    host mapping of guest `0x0019D62C` against the archived exe/pdb, or a `peek` chain
    (`["0x0019D468","0x1C4"]`) to localise the write to a step interval. No repair, no
    C4 and no push until that writer is named.
+   **The writer of the field is now named (TR §31.53).** One bounded exploratory run
+   (`20261019-213447-432-a2h-slotw-writer`, the same executable `83823e5c…` as the failing
+   smoke) used the toolkit's shipped `JSRF_TRACE_A2H_SLOTW` slot-write watch, which armed on
+   `slot=0019D62C` across all 29 views and recorded a single slot hit on tid 13564:
+   `pre=00000000 -> post=00700010`, `range=GAME_MODULE`, native RIP `0x7FF6BE1CB68D` =
+   `sub_0018CE30 + 0x5D`, which is `0x0018CE3A mov dword ptr [ecx+0x242c], eax` — the only
+   store to that field in the XBE and in the generated tree, executed with `eax=0x00700010`,
+   through the canonical alias, with a coherent terminal read. **UNPROVEN and now the next
+   question: what supplied `0x00700010`.** The setter's only static caller (`sub_0015F9E0`,
+   via `sub_00012210`) pushes 0, the indirect dispatch route was not observed, and the value's
+   origin remains open. Absence claims are invalid in that archive (`concurrent_overlap=15`),
+   and `[AC97] serviced=7` here vs `40` earlier means it is not comparable on the AC'97
+   variable. The store is a legitimate setter, so this is a bad value, not yet a bad store;
+   C3 and C4 remain UNACCEPTED and no repair is authorized.
 2. **C4:** independent merge/recovery review, Vulkan e2e with both N3 loader insertion
    witnesses, D3D11 reference e2e and viewed logos/Corn/Garage/pause frames, N2 with
    a same-session archived-executable baseline, then TR/L02/L62/AGENTS records.

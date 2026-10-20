@@ -6153,3 +6153,113 @@ already in the driver is `peek` with a pointer `chain`
 memory without changing guest state and can localise the write to a step interval without naming
 the instruction. Neither may be replaced by suppressing the ICALL, bypassing the AC'97 model, or a
 synthetic readiness pin. C3 and C4 remain unaccepted.
+
+### §31.53 C3-ICALL: the writer of 0x0019D62C is named (2026-10-19)
+
+One bounded exploratory run named the store that §31.52 left UNPROVEN, using an instrument the
+toolkit already ships. No production edit in either repository; the finding is observation only,
+and C3/C4 remain unaccepted.
+
+**Instrument.** `JSRF_TRACE_A2H_SLOTW` — the A2h live slot-write watch
+(`xboxrecomp/src/kernel/xbox_memory_layout.c:4257-5574`, gate and constants in the header at
+`:562-583`). It is not a debug register: it makes the slot's 4 KB page read-only in the canonical
+view **and all 28 mirrors** (`:5283-5339`), records the faulting store, single-steps it, and
+re-protects. It derives the slot at ARM from `MEM32(0x0019DCE0)` (a runtime pointer to the
+software_device object) plus `0x242C` by checked 32-bit addition (`:5238-5252`), re-derives it at
+TERMINAL (`:5440-5450`), and publishes a fixed 1024-slot event ledger whose `seq` is written last
+(`:4347-4375`). The game's collector archives that ledger by symbol
+(`tools/harness/collect.c:2059-2068`, `GUEST_SLOTW_EVENT ... rip=%016llX`), so the deciding
+record is a durable artifact rather than a log line. `xbox_A2hSlotWatchTerminal` runs from the
+fatal ICALL hook (`src/recomp_manual.c:100-104`) before `RaiseException`.
+
+The two cheaper alternatives were rejected for stated reasons. A `peek` chain samples only at
+script step boundaries (`POLL_SECONDS = 0.25` s, `scripts/key-script-run.py:168`), and this run
+shows the field read 0 at kernel calls #2/#5 and `0x00700010` at #7 on one thread — a window of a
+few guest instructions, which a boundary sampler cannot bracket. A static scan of the generated
+and recovered sources finds 78 candidate `MEM32(... + 0x1c4)` stores, which cannot decide.
+
+**Run.** `scripts/run-jsrf.py --seconds 60 --label a2h-slotw-writer --profile exploratory`, with
+`JSRF_TRACE_A2H_SLOTW=1` and `RECOMP_KERNEL_LOG_BUDGET=100000`, reproducing the baseline's other
+switches (`RECOMP_APU_TRAP=1`, `RECOMP_PB_EXEC=1`, `RECOMP_GPU_BACKEND=vulkan`,
+`RECOMP_VK_PIPELINE_CACHE=off`). `RECOMP_WATCH` was deliberately NOT set: `:2578` records that the
+two page watchers protect pages of the same table and would fight. Archive
+`20261019-213447-432-a2h-slotw-writer`, executable
+`83823e5ce6cf9731fc0ae7f1fb6dfa7fc11f6756a90add73deb006ff42748c67` — **the same executable as the
+failing §31.51 smoke**, so this is a controlled reproduction, not a different build. It reached
+the same stop: `[ICALL] invalid target 0x00700010 tid=26484 esp=007BFF9C return=00193EB7`, exit
+`0xE0424943`, 27.7 s.
+
+**VERIFIED — the writer.** The watch armed on exactly the intended slot, all 29 views:
+`[A2HSLOTW] armed base=0019B200 slot=0019D62C page=0019D000 off=62C aliases=29/29
+mask=1FFFFFFF`. It recorded one slot hit, a consecutive pair on tid 13564 at the same fault
+address: the pre-open fault record `pre=00000000 post=00000000` and the post-store step record
+`pre=00000000 post=00700010`, both `range=1` (`RANGE_GAME_MODULE`). The terminal read agrees with
+the recorded write (`coherence verdict=1`, i.e. COHERENT), the reconciliation is `records=3
+counted=3 complete=1`, and `dropped_events=0`, `cross_mismatch=0`, `protect_failed=0`,
+`publish_failed=0`.
+
+The native RIP `0x7FF6BE1CB68D` resolves, through the archived `jsrf_recomp.map` at preferred base
+`0x140000000` (RVA `0xD0B68D`), to `sub_0018CE30 + 0x5D`. Disassembling the archived executable
+there gives `mov dword ptr [rdx + rax], ecx` (`89 0C 02`), preceded by
+`lea edx, [rax + 0x242c]` and by the RIP-relative load of `g_xbox_mem_offset` — the canonical
+alias, confirming the store went through `XBOX_PTR`. The guest instruction it implements is
+`0x0018CE3A mov dword ptr [ecx + 0x242c], eax` in `sub_0018CE30`
+(`src/recomp/gen/recomp_0005.c:1255-1263`, `MEM32(ecx + 0x242C) = eax` with
+`ecx = MEM32(0x19DCE0)`). That is the **only** store to `+0x242C` in the original XBE and the only
+one in the generated tree, and it executed with `eax = 0x00700010`. So the writer of the field is
+named at instruction level: **guest code, `sub_0018CE30` at `0x0018CE3A`, canonical alias,
+`0x00000000 -> 0x00700010`.**
+
+Two independent checks agree that the facility was looking at the right object. The arm base
+`0x0019B200` is `MEM32(0x0019DCE0)`, the software_device pointer, not the faulting `esi`
+`0x0019D468` (the context); the two differ by `0x2268` and the header's own identity
+`context+0x1C4 == software_device+0x242C` holds exactly (`0x19D468 + 0x1C4 = 0x19D62C` and
+`0x19B200 + 0x242C = 0x19D62C`). The facility's own install-write positive also fired
+(`installer_control_hits=1`).
+
+**Corrected during review.** (a) `alias=1` is the **canonical** view, not a mirror: the alias index
+is `owning_alias`'s `i + 1` over `g_a2h_slotw_pages[]`, whose element 0 is canonical
+(`:4814-4822`, `:5313`), and the fault address `0x001AD62C` is the canonical host VA
+(`slot + g_memory_offset`). An earlier verbal reading of "mirror alias 1" was wrong. (b) The
+`kind=1` record is published **before the page is opened**, not "at the fault before the store":
+the value appears only in the `kind=2` step record, and `pre` is the slot pre-read at `:5053`.
+(c) `sub_0018CE30`'s callers are exactly two static tail-jumps
+(`recomp_0003.c:54653`, `:54666`) **plus one indirect route** through the dispatch table
+(`recomp_dispatch.c:8268`); only the static statement is proven.
+
+**UNPROVEN — the value's provenance.** `sub_0018CE30` is a setter, and its only static caller
+`sub_0015F9E0` (`recomp_0003.c:54634-54668`) maps argument 0 to `0x15F9D0`, argument `0xFFFFFFFF`
+to 0, and passes anything else through. That caller's only static call site
+(`recomp_0000.c:3827`, inside `sub_00012210`) pushes `ebx`, which is zeroed at `0x1224F` and not
+rewritten before the call at `0x12319`, so **the static path supplies 0, not `0x00700010`**. The
+indirect dispatch route was not observed, and an XBE scan for `0x0018CE30` / `0x0015F9E0`
+literals finds none (only the installer constant `0x15F9D0` at `0x15F9E9`). What supplied
+`0x00700010` is therefore UNPROVEN; `0x00700010 = FAKE_RWDATA_VA + 0x10` remains a plausible
+RenderWare origin and nothing more.
+
+**Claim boundary, stated because the run cannot support more.** Absence claims are invalid in this
+archive: `concurrent_overlap=15` alone sets `absence_rows_valid=0`
+(`tools/harness/collect.c:2109-2112`), and `first_touch_overflow=1` with
+`first_touch_dropped=1915` means the page census covers 2427 of 3250 distinct addresses. So "no
+other write touched the slot" is unsupported, even though the single recorded positive is sound
+(a single-tid, single-instruction capture with `complete=1` and a coherent terminal read). The
+`positive_records_valid=1` field is a hardcoded literal in the collector, not a derived verdict,
+and is not cited as evidence. Two further latched facts bar promotion of this run:
+`unexpected_exception=434` and `range_unknown=2` (RIPs `0x7FF857BDCC71`/`75`, `same_image=0`).
+The arm was **deferred** — `MEM32(0x0019DCE0)` was 0 at start (`jsrf_run.log:102`) and the watch
+armed later at kernel ordinal 166 (`:830`), before the guest work that faults at `:5066`; that is
+an ordering argument, not a proof, and the pre-arm interval is unobservable in principle here.
+
+**Not a defect claim.** The store is a legitimate setter; a bad *value* in a callback slot is not a
+bad store. The slot is the D3D poll-callback field `m_pVerticalBlankCallback`, and re-initialisation
+is not excluded — though `pre=0` and the absence of a second slot write mean such an explanation
+would have to be this same single store. Whether the halted AC'97 SR state changes this D3D8 path
+remains UNPROVEN, and this run is **not comparable** to the earlier archive on that variable
+(`[AC97] serviced=7` here against `serviced=40` there). No ICALL was suppressed, no AC'97 model was
+bypassed, no synthetic readiness pin was enabled (`JSRF_ALLOW_UNRESOLVED` absent, kernel thunk
+bridge 120/120 with 0 stubs, profile classified exploratory).
+
+**Next decision, not taken here.** The field's writer is now named, so the remaining question is
+the value's provenance: which caller reaches the setter with `0x00700010`, given that the one static
+site pushes 0. That is a new bounded diagnosis, not a repair, and C3/C4 stay unaccepted until the
+owner or Codex decides.
