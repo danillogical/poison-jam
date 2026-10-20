@@ -48,6 +48,20 @@ void recomp_icall_fail_log(uint32_t va)
         RaiseException(0xE0424943u, EXCEPTION_NONCONTINUABLE, 0, NULL);
 }
 
+/* A jump the generator could not express (RECOMP_JUMP_TRAP): its target is
+ * neither a label in the jumping body nor a function with its own symbol. There
+ * is no correct place to continue, so name both ends and fail the way an
+ * unresolved call does (0xE0424943); abort() if JSRF_ALLOW_UNRESOLVED let that
+ * return, because falling through is exactly the silent behaviour this replaces. */
+void recomp_jump_trap(uint32_t site, uint32_t target)
+{
+    fprintf(stderr, "[JUMP] untranslatable jump at 0x%08X to 0x%08X tid=%lu esp=%08X\n",
+        site, target, GetCurrentThreadId(), g_esp);
+    fflush(stderr);
+    recomp_icall_fail_log(target);
+    abort();
+}
+
 void recomp_icall_not_code_log(uint32_t va)
 {
     fprintf(stderr, "[ICALL] invalid target 0x%08X tid=%lu esp=%08X return=%08X\n",

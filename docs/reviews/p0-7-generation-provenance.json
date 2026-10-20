@@ -2,63 +2,63 @@
  "checker_version": "jsrf-generation-provenance/1",
  "full_translation_command": "python -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/gen --game-name \"Jet Set Radio Future\" --manual-functions config/manual-functions.json --exclude-manual src/recomp_manual.c --trace-functions config/trace-functions.json --backedge-yield",
  "generated_outputs": {
-  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "34a9ebc3a443dd7883853689da59b34cf885e9934fb4f9aa5cc43a9a4e852632",
-  "src/recomp/gen/recomp_0000.c": "a0732b92d6c4b1abe465966d30cbfdcf3c7a372492137b38b905bcd01513b4e0",
-  "src/recomp/gen/recomp_0001.c": "0b1ebae351bf69fe4e6c63053570ef9c9a2e1514e466dede96f140355cfe686b",
-  "src/recomp/gen/recomp_0002.c": "64a501090712e89a90f4976cd155978a0ef9db09eb57badfabe8cef3e516b262",
+  "src/recomp/gen/fixtures/recomp_stubs_recovery_test.c": "f0006b2504a83beeb77338239ce887c9046c90baf17b5531a41cf75535ea4c13",
+  "src/recomp/gen/recomp_0000.c": "1dd06da387561cd7fc459b38c5d4d58f5b1ddf93dfcb42e99edf72d6c0183fb9",
+  "src/recomp/gen/recomp_0001.c": "9858fd14d6bef569e32c0ba03f90d7d4a0b77e13af31963370966f721155a4e6",
+  "src/recomp/gen/recomp_0002.c": "79267141ae6a52a9282749fb611022eea374caffdcaa7ed09dfc11d284a15c4c",
   "src/recomp/gen/recomp_0003.c": "e91d81393eda225052c632f9f49384c86365f55aa087157610fade8087dabb3f",
   "src/recomp/gen/recomp_0004.c": "cae1504f447e8c23b2004a68c9ca5612153791c0fd522ed6bcfceab0425050b1",
   "src/recomp/gen/recomp_0005.c": "ed5b516c89df51bf445d0219f9b130a098f2921242576a9222bbac1679ce54df",
   "src/recomp/gen/recomp_abi_deltas.c": "ff6e0748c926cf187d0766c124955f600896a3ebc3eca7f47e24e58c162a16cb",
-  "src/recomp/gen/recomp_dispatch.c": "bf206382a2f9b39c73542db08964b33dd5986443a71f1270e3d5673ec4492165",
-  "src/recomp/gen/recomp_funcs.h": "d3c01598026d262897386e45c965b73630c21e15bf7dff44bf4f07ad31502f24",
-  "src/recomp/gen/recomp_stubs_recovery.c": "8c232ff0929c789ce3b3aebb2a9f28bab80ecbe24b38ed3844f4f9ef495ea0a7",
-  "src/recomp/gen/recomp_types.h": "d8e03805ce0cd07f3b324b5392e096daab446f29b463753f17f9bb45066cadcc",
+  "src/recomp/gen/recomp_dispatch.c": "65eeed2ef2ea475e87b7e4725814fc7c8d92129b74b3a2a7ba5544bb3a34ba4e",
+  "src/recomp/gen/recomp_funcs.h": "56aefdfd51edf084c1539615ac9314f65f92ce9f56d95ba7592f65ac8b07099c",
+  "src/recomp/gen/recomp_stubs_recovery.c": "85ba4e429a10b69dd167af61d6eebd67e91e33cdd6ac9071c1482240e93b02de",
+  "src/recomp/gen/recomp_types.h": "6d8bb9f4634df4b3e1e2c229e8e3f00c296f32772528037595b2c766c8e73d44",
   "src/recomp/gen/shaders/nv2a_vsh_programs.c": "c71e02ec118a05a3c548cd1514fe52e3b194ec3d4b915032ac21b445ae8b54d4",
   "src/recomp/gen/shaders/nv2a_vsh_programs.h": "6ffdf27eb474bdc8a4e273803ab522eb9fdf4bc14556ee7b7a219a2dc13b1254",
-  "src/recomp/recovered/recovered.c": "e20a675d7cb49196d6cf1923ca5565bd51431564514f5e206d3938f77d30798a",
-  "src/recomp/recovered/recovered_11c1_test.c": "654517e3473dc96130ddfc9fa4f9c41ec8df5052513184707bc64613d135afca",
+  "src/recomp/recovered/recovered.c": "3f7c8033b7667e9974a66c7ccf72d986115ac05fb58bc4cee1ea02f9cae2145b",
+  "src/recomp/recovered/recovered_11c1_test.c": "374c7e3ce1125d3546bcf10cc4b142d39c51f4b8cb3963ee31a4675759f2a921",
   "tests/lifter-regressions.c": "7c0e49de18f7f47346d0e7509f631c231a45473247cad0b14450df6032f227a2"
  },
- "generation_mode": "Step-2 full regeneration 2026-10-20 with xboxrecomp 35c6537 (tail jumps to tail_jump_alias entries that kept a body, or have a recovered/manual definition, lifted as tail calls): existing C3 toolkit and game analysis databases (disasm not rerun), full pass with --backedge-yield, generated-patches.json, boundary relifts, reviewed recovery seeds and ABI deltas; the only generated change from the C3 tree is 20 previously deleted jumps now tail calls, before the guarded build",
+ "generation_mode": "Step-2b full regeneration 2026-10-20 with xboxrecomp 7544264 (jumps with no label in the emitting body and no symbol at the target become RECOMP_JUMP_TRAP at their site; an alias whose fold owner starts after it keeps no body and dispatches through a fatal wrapper): existing C3 toolkit and game analysis databases (disasm not rerun), full pass with --backedge-yield, generated-patches.json, boundary relifts (new 0x0011BA00 and 0x000D58E0 fixes), reviewed recovery seeds (0x0011B660 end tightened; 0x0006FE40, 0x000C42E0, 0x0011B680 recovered; false 0x00070027 retired) and ABI deltas, before the guarded build",
  "generators": {
   "project": {
    "dirty": true,
-   "revision": "068ae2b259a01b73cbb6e67715d2d3e878476944",
+   "revision": "ba47e8aaa87b9004674e7a4fa4d53aff92712f31",
    "state": "MEASURED",
-   "status_sha256": "d178e9910077e2dae72575fc3093412fb6d738ea0201f9beac17389dec883240"
+   "status_sha256": "cd973aa74fd60ed0d196c2053f048bed4ad915dfa53285497fe80ba6246fe78b"
   },
-  "scripts/recover-functions.py": "b6e0e5803dda1e87d7d3182045a0defec7e4a063ebf9fb13e3cb43352d0e1590",
-  "scripts/relift-selected.py": "c7baca30418e1817f9615c4cf4b4ffa843eb777b77133f71e34bee2e3b51d993",
+  "scripts/recover-functions.py": "4cab6b7325e42b62651f31a7948709b115f631eec5b13b2447dc9367600b40d5",
+  "scripts/relift-selected.py": "09f3ba3f2e9c9e4f7ca9d388d690a13b8e9370bba7faa103518c21bdb8bc6590",
   "toolkit": {
    "dirty": false,
-   "revision": "35c6537b8feee2700bea58a2863eb39b16f89f19",
+   "revision": "754426404d7b6e149cb1486d48dde05b087c39c7",
    "state": "MEASURED",
    "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
-  "tools/recomp/lifter.py": "0a227a48c1b89286001cea3958ec24404c70a95cfa57f7985bfa9350296bce38",
-  "tools/recomp/translator.py": "1e268b54494be83519550055ff9ee0218a485140d5f6c8d28baf42a8dd87bd4a"
+  "tools/recomp/lifter.py": "1acbcd19a383e3eb5dcf5939758cfbe270554682df09cfaad31c83211cb93f80",
+  "tools/recomp/translator.py": "270d181b24cf20863fb86a8e3263eccfe12c77c1d9a04a3030c5728f1d05dfad"
  },
  "inputs": {
   "config/boundary-fixes.json": {
-   "bytes": 2989,
+   "bytes": 4064,
    "present": true,
-   "sha256": "59cce1fe5a124dded9d1724a54b002f672c56e66e10e798a921a5b361bff782d"
+   "sha256": "23994f2eca2984e21799fa0992c45caa53e2299d572923e8e802b6d8430f330d"
   },
   "config/manual-functions.json": {
-   "bytes": 112205,
+   "bytes": 112271,
    "present": true,
-   "sha256": "da2a6b4f5de3f9e04b3db51c2a2c028c50accc88043bc479b30a4bd5207c67ee"
+   "sha256": "7164ae73e9fd145a5fd84e7b435ec2d5a3b946a0e7ef81bdeec199e32c6ad581"
   },
   "config/recovered-functions.json": {
-   "bytes": 3372076,
+   "bytes": 3374442,
    "present": true,
-   "sha256": "52093d208a92b41d68513a0d98f8c28071d545128a78578049f289ce7e848855"
+   "sha256": "8f412c42f2bd7927df1b7897f475276b5978b87575eba64223a686ae24905f31"
   },
   "config/recovery-unresolved.json": {
-   "bytes": 2381,
+   "bytes": 2843,
    "present": true,
-   "sha256": "218b55871d9917c03acf4a97b3b9635cdb271afc191e7c3d900dabc15d1ac465"
+   "sha256": "3cfae29ddcb19aaeb31424a15968a1750c5157c77a906d2bd638930cccd77a6b"
   },
   "game/default.xbe": {
    "bytes": 2281472,
@@ -91,9 +91,9 @@
    "sha256": "e0d4325b40a12259aef360e01f7cb19c3d1a08bbc7a964bc5c321b99670c9891"
   },
   "tools/disasm/output/functions.recovered.json": {
-   "bytes": 6252151,
+   "bytes": 6254648,
    "present": true,
-   "sha256": "894f7494508603b5f62c375342487e735d4845fb81597f92a62049e4d8994855"
+   "sha256": "ad4fce5fbe7ef9b5c019884bffc6eab1177d7d763718c6e243da2288260c6fdc"
   }
  },
  "known_unknowns": [],
@@ -160,19 +160,19 @@
    },
    "src/recomp/recovered/recovered.c": {
     "markers": {
-     "JSRF_ABI_CONTINUE": 10173,
-     "RECOMP_ABI_CALL": 12129,
+     "JSRF_ABI_CONTINUE": 10179,
+     "RECOMP_ABI_CALL": 12133,
      "RECOMP_GENERATED_CODE": 1,
-     "g_seh_ebp": 5925
+     "g_seh_ebp": 5927
     },
     "present": true
    }
   },
   "totals": {
-   "JSRF_ABI_CONTINUE": 10173,
-   "RECOMP_ABI_CALL": 12140,
+   "JSRF_ABI_CONTINUE": 10179,
+   "RECOMP_ABI_CALL": 12144,
    "RECOMP_GENERATED_CODE": 4,
-   "g_seh_ebp": 5931
+   "g_seh_ebp": 5933
   }
  },
  "purpose": "Provenance for the generated tree. Establishes what produced the current bytes; it is NOT a claim that the old generation is reproducible.",

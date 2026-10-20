@@ -4302,11 +4302,11 @@
   "stack_args": 4
  },
  {
-  "start": "0x00070027",
+  "start": "0x0006FE40",
   "end": "0x00070057",
   "section": ".text",
   "kind": "routine",
-  "evidence": "A method of the function-pointer table at 0x001F8670. Every entry in that table is a function entry in the database, so this address is a function entry by construction; a switch table fails that test because its targets are case labels inside one function. The translation pass classified it detection_method=tail_jump_alias and folded it into sub_00070000 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x00070027 at sub_00070000. A virtual call then enters the wrong function -- 0x00151C40 is Release but was dispatched to QueryInterface, which read a stale stack word as a riid pointer. Recovered so the address keeps its own body and its own dispatch entry. Body 0x00070027..0x00070057, end tightened to the next function entry inside the alias range. Evidence: report-deepseek.md, 2026-09-21.",
+  "evidence": "A thiscall routine with no database entry, entered by `jmp 0x6fe40` at 0x00071122 (the tail of recovered 0x00071100, whose tail call therefore hit the sub_0006FE40 recovery trap). Original XBE: `ret 4` at 0x0006FE38 and NOP padding 0x0006FE3B-0x0006FE3F before it; prologue `sub esp,0x64; push ebx; push ebp; mov ebp,ecx`; one loop whose head is 0x0006FFA0 (back edge `jne 0x6ffa0` at 0x00070047) with internal targets 0x00070038 and 0x0007003B; epilogue `pop edi; pop esi; pop ebp; pop ebx; add esp,0x64; ret 4` ending at 0x00070057, then NOP padding. stack_args 4 from the ret immediate. Supersedes the false entry 0x00070027, which sat mid-way through this body's argument setup for `call 0x3d610` (`push ecx` between `fadd` and `fstp [esp]`) and was seeded from the dword 0x00070027 at 0x001F8670, part of a packed .data run (00050025 FFFFFFFF 00060026 FFFFFFFF 00070027 000B0081 00080028 ...) rather than a function-pointer table. Step 2b, 2026-10-20.",
   "stack_args": 4
  },
  {
@@ -14668,10 +14668,10 @@
  },
  {
   "start": "0x0011B660",
-  "end": "0x0011BA00",
+  "end": "0x0011B680",
   "section": ".text",
   "kind": "routine",
-  "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001D7D00, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_0011BA00 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x0011B660 at sub_0011BA00. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x0011B660..0x0011BA00. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21). STACK_ARGS CORRECTED 0 -> 4 (2026-10-05, third session). The key was present and the value was wrong: `scripts/check-stack-depth.py`, a new reachable-stack-depth CFG validator, reports this entry as its only gating class. The body's own control flow has exactly one reachable exit, `ret 4` (C2 04 00) at 0x0011B67B, reached at stack depth 0 relative to the entry. A `ret N` removes 4+N bytes, and `scripts/recover-functions.py` asserts `g_esp == before_stack + 4 + stack_args` after the body, so stack_args must equal the ret immediate: 4, not 0. Nothing reaches this address by tail jump, so the wrapper's contract is a call contract and the old value was simply never exercised -- the address appears in no archived run's log (0 of 122 jsrf_run.log files, checked for the `returned; ABI verified` line, an `ABI FAILURE` line and any textual mention). Derived from the original bytes and independently reproduced by a second worker with its own capstone CFG walker (20/20 confirmed); the wrapper text and the `esp += 4 + N; return;` body line were both read back from src/recomp/recovered/recovered.c.",
+  "evidence": "A COM vtable method: an entry of the function-pointer table at 0x001D7D00, whose entries are a run of distinct .text addresses stored by a constructor, so it is a function entry by definition. The translation pass read that table as a switch table, classified this address detection_method=tail_jump_alias and folded it into sub_0011BA00 under the ff4d442 abutting-alias rule, deleting the body and pointing the dispatch tuple 0x0011B660 at sub_0011BA00. A virtual call then enters the wrong function, and where the fold target calls the same slot again the guest self-recurses until the host stack overflows. Recovered so the address keeps its own body and its own dispatch entry. Body runs 0x0011B660..0x0011BA00. Evidence: logs/runs/20260921-161002-066-vtable-class-recovered/ and the alias-fold findings in report-deepseek.md (2026-09-21). STACK_ARGS CORRECTED 0 -> 4 (2026-10-05, third session). The key was present and the value was wrong: `scripts/check-stack-depth.py`, a new reachable-stack-depth CFG validator, reports this entry as its only gating class. The body's own control flow has exactly one reachable exit, `ret 4` (C2 04 00) at 0x0011B67B, reached at stack depth 0 relative to the entry. A `ret N` removes 4+N bytes, and `scripts/recover-functions.py` asserts `g_esp == before_stack + 4 + stack_args` after the body, so stack_args must equal the ret immediate: 4, not 0. Nothing reaches this address by tail jump, so the wrapper's contract is a call contract and the old value was simply never exercised -- the address appears in no archived run's log (0 of 122 jsrf_run.log files, checked for the `returned; ABI verified` line, an `ABI FAILURE` line and any textual mention). Derived from the original bytes and independently reproduced by a second worker with its own capstone CFG walker (20/20 confirmed); the wrapper text and the `esp += 4 + N; return;` body line were both read back from src/recomp/recovered/recovered.c.\n\nREPAIRED 2026-10-20 (step 2b, over-wide span). The declared end 0x0011BA00 swallowed a separate function. Original XBE: this body's only exit is `ret 4` (C2 04 00) at 0x0011B67B, NOP padding at 0x0011B67E-0x0011B67F, then a new thiscall function at 0x0011B680 (`mov al,[0x251ee8]; test al,4; push esi; mov esi,ecx`) that the case arm at 0x0011BA59 enters with `jmp 0x11b680` at 0x0011BA5C. End tightened to 0x0011B680; 0x0011B680 is recovered as its own entry. stack_args 4 unchanged.",
   "stack_args": 4
  },
  {
@@ -26924,6 +26924,22 @@
   "section": ".text",
   "kind": "routine",
   "evidence": "C3 (v0.14.0 regeneration, 2026-10-18): the new function database lists 0x0018AC00 as a tail_jump_alias (previously cc_boundary/imm_ref/tail_jump_target and generated as its own body), so the full pass dispatches it through an alias wrapper that runs a different function from its start. The address is a complete function: preceded by cccccc padding, pointer at 0x001EB584 (data); first instructions `lea ecx, [ebp - 0x50] ; jmp 0x1606e0`; body 0x0018AC00..0x0018AC08 by recursive descent from the entry (next known start 0x0018AC20); tail jmp to 0x001606E0.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x000C42E0",
+  "end": "0x000C44C9",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "The seventh entry (dword at 0x00216168) of the .data handler table 0x00216150..0x00216168, whose seven dwords are all .text function starts (0x000C40A0 0x000C3E60 0x000C3F30 0x000C41D0 0x000C41F0 0x000C42A0 0x000C42E0). Original XBE: `ret` at 0x000C42DA and NOP padding 0x000C42DB-0x000C42DF before it; every exit is a plain `ret` (0x000C43D4, 0x000C4405, 0x000C449A, 0x000C44B6, 0x000C44C8), then NOP padding 0x000C44C9-0x000C44CF before sub_000C44D0. C2 generated it as sub_000C42E0. In C3 the database labels it tail_jump_alias and the abutting-alias rule folded it onto sub_000C44D0, a constructor that starts after it, so the dispatch tuple ran the wrong function once its stale manual pin was removed. stack_args 0. Step 2b, 2026-10-20.",
+  "stack_args": 0
+ },
+ {
+  "start": "0x0011B680",
+  "end": "0x0011BA00",
+  "section": ".text",
+  "kind": "routine",
+  "evidence": "A complete thiscall function entered by `jmp 0x11b680` at 0x0011BA5C (switch arm 0x0011BA33 of sub_0011BA00). Original XBE: preceded by 0x0011B660's `ret 4` at 0x0011B67B and NOP padding 0x0011B67E-0x0011B67F; begins `mov al,[0x251ee8]; test al,4; push esi; mov esi,ecx`; exits are `ret` at 0x0011B9E7 and 0x0011B9FF and tail jumps to 0x0011B290, 0x0011B2F0 and 0x0011B3A0; the next function starts at 0x0011BA00 (`push esi; mov esi,ecx`). The C3 database labels it tail_jump_alias, the abutting-alias rule folded it onto sub_0011BA00 (which starts after it), and the recovered 0x0011B660 span covered its bytes, so nothing defined it and the jump at 0x0011BA5C was deleted. stack_args 0 from the plain `ret` exits. Step 2b, 2026-10-20.",
   "stack_args": 0
  }
 ]

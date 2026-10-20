@@ -337,6 +337,10 @@ if _stale_fixture.exists():
     ' * binary always fails the link. */\n'
     +'\n'.join(recovery_stubs)+'\n',encoding='utf-8')
 pending={a:name for a,name in translator.lifter.referenced_calls.items() if name not in defined or name in traps}
+# A jump the lifter could not keep is a fatal RECOMP_JUMP_TRAP at its site: an
+# unresolved dependency of the reviewed body, listed for review like a trapped call.
+for (_f,_t),_c in translator.lifter.dead_gotos.items():
+    pending.setdefault(_t,f'sub_{_t:08X}')
 (root/'config/recovery-unresolved.json').write_text(json.dumps({f'0x{a:08X}':n for a,n in sorted(pending.items())},indent=2)+'\n')
 # External definitions include generated recovery bodies as well as manual CRT.
 manual_path=root/'config/manual-functions.json'

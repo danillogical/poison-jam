@@ -38,5 +38,15 @@
   "start": "0x000C2700",
   "end": "0x000C272D",
   "evidence": "check-hidden-entries.py reports OVERLAP for 0x000C2700-0x000C276F: the declared end 0x000C276F swallows the separate evidenced entry 0x000C2730, and the body actually ends at 0x000C272D. The original XBE settles it: `ret` at 0x000C2724, a two-instruction tail (`mov [ecx+0x34],2` then `ret` at 0x000C272C), then NOP padding at 0x000C272D-0x000C272F, then a clean prologue at 0x000C2730 (`sub esp,0x18; push esi; mov esi,ecx`). The same defect appears on four sibling entries (sub_000C2480, sub_000C2500, sub_000C2560, sub_000C25D0) which all also declare end 0x000C276F; this fix corrects the one whose span the gate flagged, and the siblings are recorded as residue rather than fixed speculatively. Evidence: logs/runs/20261007-223953-965-title008-frames-late (`[ICALL] Failed to resolve VA 0x000C2730`, fatal 0xE0424943); disassembly of the original XBE; 2026-10-07."
+ },
+ {
+  "start": "0x0011BA00",
+  "end": "0x0011BAAC",
+  "evidence": "Switch on [esi+0x44]: `cmp eax,7; ja 0x11baaa; jmp [eax*4+0x11baac]` at 0x0011BA06-0x0011BA0F. The 8-entry table at 0x0011BAAC holds 0x0011BA16 0x0011BA1D 0x0011BA6A 0x0011BA33 0x0011BAAA 0x0011BA61 0x0011BA73 0x0011BA97, then NOP padding; the arms and the shared exit `pop esi; ret` at 0x0011BAAA are internal. The raw split ended the body at 0x0011BA97, so the default `ja 0x11baaa` and the arms' `je 0x11baaa` left the function. Code ends at 0x0011BAAC, where the table begins. Step 2b, 2026-10-20."
+ },
+ {
+  "start": "0x000D58E0",
+  "end": "0x000D59FE",
+  "evidence": "`push esi; mov esi,ecx` at 0x000D58E0 after `ret` at 0x000D58DF. Its own `je 0xd59bd` at 0x000D597A and `je 0xd59fc` at 0x000D59AF reach 0x000D59BD (`push edi`, which pops esi at 0x000D59FC without having pushed it) and the shared `pop esi; ret` at 0x000D59FC-0x000D59FD, so 0x000D59BD continues this frame rather than starting a function. Body ends after the `ret` at 0x000D59FD; NOP padding from 0x000D59FE. Step 2b, 2026-10-20."
  }
 ]
