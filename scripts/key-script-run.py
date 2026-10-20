@@ -71,8 +71,10 @@ press reached the guest at all, which a frame cannot.
 Output goes to `logs/runs/<YYYYMMDD-HHMMSS-mmm>-keyscript-<label>/`, the same archive tree as
 `run-jsrf.py`: frames, save root, jsrf_run.log, keyscript.log, result.json and a metadata.json
 (exe hash, project/toolkit revision and dirty state, env switches, exploratory profile, log hash)
-so `check-stop-chain.py` accepts the run as a citation.  The save root is private to the run, so
-the default save images are never touched.  No RECOMP_PAD_* switch is set: the pad is driven
+so `check-stop-chain.py` accepts the run as a citation.  The save root is private to the run and is also
+passed as RECOMP_SAVE_DIR (the path layer would otherwise keep using game\\UDATA, which has saves), and
+the runtime's `[SAVE] udata_root=` line must land inside it or the run fails verification; the default
+save images are never touched.  No RECOMP_PAD_* switch is set: the pad is driven
 through the emulated USB path, not injected.
 
 Usage:  python -X utf8 scripts/key-script-run.py <label> <seconds> <script.json> [KEY=VALUE ...]
@@ -1894,9 +1896,16 @@ def main(argv=None):
 
     env.update(DEFAULT_ENV)
     env.update({"JSRF_LOG_PATH": str(logpath), "RECOMP_FB_DUMP": str(live)})
+    # The path layer falls back to game\UDATA when the save dir has no UDATA, so name the
+    # private root as RECOMP_SAVE_DIR too; a caller's own value (env or KEY=VALUE) wins.
+    save_dir_source = "caller" if env.get("RECOMP_SAVE_DIR") else "runner"
+    if save_dir_source == "runner":
+        env["RECOMP_SAVE_DIR"] = str((out / "save").resolve())
     for kv in args.overrides:
         k, v = kv.split("=", 1)
         env[k] = v
+        if k == "RECOMP_SAVE_DIR":
+            save_dir_source = "caller"
     effective_settings = run_jsrf.environment_settings(env)
     try:
         profile_record = run_jsrf.make_profile_record("exploratory", inherited_settings, effective_settings, "")
@@ -1938,6 +1947,8 @@ def main(argv=None):
         "save_root": {"archive_root": str(out.resolve()),
                       "expected_resolved_path": str((out / "save").resolve()),
                       "observed_resolved_path": None, "observed_path_layer_root": None,
+                      "recomp_save_dir": env["RECOMP_SAVE_DIR"], "recomp_save_dir_source": save_dir_source,
+                      "observed_udata_root": None, "observed_tdata_root": None,
                       "disposable": True, "verified": False},
         "key_script": {"path": str(args.script), "sha256": file_sha256(args.script)},
         "sources": run_jsrf.source_entries(),
@@ -2033,7 +2044,11 @@ def main(argv=None):
     log_text = logpath.read_text(encoding="utf-8", errors="replace") if logpath.is_file() else ""
     metadata["run_log_sha256"] = file_sha256(logpath) if logpath.is_file() else None
     seen, layer, verified = run_jsrf.save_root_observation(log_text, metadata["save_root"]["expected_resolved_path"])
-    metadata["save_root"].update(observed_resolved_path=seen, observed_path_layer_root=layer, verified=verified)
+    udata_root, tdata_root, folders_ok = run_jsrf.save_folder_observation(
+        log_text, metadata["save_root"]["expected_resolved_path"])
+    metadata["save_root"].update(observed_resolved_path=seen, observed_path_layer_root=layer,
+                                 observed_udata_root=udata_root, observed_tdata_root=tdata_root,
+                                 verified=verified and folders_ok)
     (out / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     log("=== end script_ok=%s ran=%.1fs killed=%s exit=%s ===" % (
         result["script_ok"], run.elapsed(), killed, proc.returncode))

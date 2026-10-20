@@ -555,6 +555,64 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, i
         printf("[SAVE] path_layer_root=%s\n", save_root_utf8);
         fflush(stdout);
     }
+    {
+        /* The title's save folders translate through the same path layer. With
+         * RECOMP_SAVE_DIR set they must land under it: an unset or ignored root
+         * would let a run write the shipped game\UDATA. Unset (owner play), the
+         * translation is only reported. */
+        static const char *const user_paths[2] = {
+            "\\Device\\Harddisk0\\Partition1\\UDATA\\5345000a",
+            "\\Device\\Harddisk0\\Partition1\\TDATA\\5345000a" };
+        static const char *const user_labels[2] = { "udata_root", "tdata_root" };
+        extern BOOL xbox_translate_path(const char *xbox_path,
+                                        WCHAR *host_path_buf, DWORD buf_size);
+        const char *save_dir_env = getenv("RECOMP_SAVE_DIR");
+        BOOL enforce = save_dir_env && save_dir_env[0];
+        WCHAR private_root[MAX_PATH];
+        size_t private_len = 0;
+        BOOL layer_ok = TRUE;
+        if (enforce) {
+            WCHAR raw[MAX_PATH];
+            DWORD full = 0;
+            if (MultiByteToWideChar(CP_UTF8, 0, save_dir_env, -1, raw, MAX_PATH))
+                full = GetFullPathNameW(raw, MAX_PATH, private_root, NULL);
+            if (full == 0 || full >= MAX_PATH) {
+                layer_ok = FALSE;
+            } else {
+                for (WCHAR *p = private_root; *p; p++)
+                    if (*p == L'/') *p = L'\\';
+                private_len = wcslen(private_root);
+                while (private_len > 3 && private_root[private_len - 1] == L'\\')
+                    private_root[--private_len] = L'\0';
+            }
+        }
+        for (int k = 0; k < 2; k++) {
+            WCHAR translated[MAX_PATH], full_path[MAX_PATH];
+            char utf8[JSRF_SAVE_ROOT_UTF8_CAP];
+            DWORD err = ERROR_SUCCESS;
+            if (!xbox_translate_path(user_paths[k], translated, MAX_PATH) ||
+                !GetFullPathNameW(translated, MAX_PATH, full_path, NULL) ||
+                !jsrf_save_root_to_utf8(full_path, utf8, sizeof(utf8), &err)) {
+                fprintf(stderr, "[SAVE] %s unavailable\n", user_labels[k]);
+                layer_ok = FALSE;
+                continue;
+            }
+            printf("[SAVE] %s=%s\n", user_labels[k], utf8);
+            if (enforce && layer_ok &&
+                !(_wcsnicmp(full_path, private_root, private_len) == 0 &&
+                  full_path[private_len] == L'\\'))
+                layer_ok = FALSE;
+        }
+        fflush(stdout);
+        if (enforce && !layer_ok) {
+            fprintf(stderr, "[SAVE] udata_layer=FAIL: save folders are not under RECOMP_SAVE_DIR=%s\n",
+                    save_dir_env);
+            xbox_kernel_shutdown();
+            xbox_MemoryLayoutShutdown();
+            free(xbe_data);
+            return 2;
+        }
+    }
     xbox_kernel_bridge_init();
     nv2a_hook_init(g_xbox_mem_offset);
 

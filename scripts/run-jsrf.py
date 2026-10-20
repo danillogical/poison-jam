@@ -40,7 +40,8 @@ PROBES = {
     'gpu-mmio-owner', 'gpu-mmio-lifecycle', 'gpu-ptimer-runtime',
     'gpu-submit-supported', 'gpu-submit-bound', 'gpu-submit-blocked',
 }
-ENV_KEYS = ('RECOMP_WATCHDOG_SECS', 'JSRF_LOG_PATH', 'JSRF_COLLECTED', 'RECOMP_GPU_ACK')
+ENV_KEYS = ('RECOMP_WATCHDOG_SECS', 'JSRF_LOG_PATH', 'JSRF_COLLECTED', 'RECOMP_GPU_ACK',
+            'RECOMP_SAVE_DIR')
 ARTIFACTS = (
     'jsrf_recomp.exe', 'jsrf_recomp.pdb', 'jsrf_recomp.map',
     'jsrf_collect.exe', 'jsrf_collect.pdb', 'build-source.json',
@@ -253,6 +254,20 @@ def save_root_observation(log: str, expected_path: str) -> tuple[str | None, str
     return resolved_path, path_layer_path, verified
 
 
+def save_folder_observation(log: str, expected_root: str) -> tuple[str | None, str | None, bool]:
+    """Require the title's UDATA and TDATA folders to translate under the private save root."""
+    udata = re.findall(r'(?m)^\[SAVE\] udata_root=(.+?)\r?$', log)
+    tdata = re.findall(r'(?m)^\[SAVE\] tdata_root=(.+?)\r?$', log)
+    udata_root = udata[0].strip() if len(udata) == 1 else None
+    tdata_root = tdata[0].strip() if len(tdata) == 1 else None
+    root = ntpath.normcase(ntpath.normpath(expected_root)).rstrip('\\') + '\\'
+
+    def inside(path: str | None) -> bool:
+        return path is not None and ntpath.normcase(ntpath.normpath(path)).startswith(root)
+
+    return udata_root, tdata_root, inside(udata_root) and inside(tdata_root)
+
+
 def classify_exit(result: dict) -> int:
     if result.get('outcome') == 'collector_failure':
         return 2
@@ -320,6 +335,11 @@ def main() -> int:
         (run_dir / 'toolkit-status.txt').write_text(run_git(TOOLKIT, 'status', '--porcelain'), encoding='utf-8')
         project_archived = archive_project_state(run_dir)
         os.environ['JSRF_COLLECTED'] = '1'
+        # The kernel path layer keeps using game\UDATA when the save dir has none, so the
+        # private root must also be named as RECOMP_SAVE_DIR; a caller's own value wins.
+        save_dir_source = 'caller' if os.environ.get('RECOMP_SAVE_DIR') else 'runner'
+        if save_dir_source == 'runner':
+            os.environ['RECOMP_SAVE_DIR'] = resolved_save_root
         if args.probe.startswith('gpu-'):
             os.environ['RECOMP_GPU_ACK'] = '0'
         os.environ['JSRF_LOG_PATH'] = str(run_dir / 'jsrf_run.log')
@@ -365,6 +385,10 @@ def main() -> int:
                 'expected_resolved_path': resolved_save_root,
                 'observed_resolved_path': None,
                 'observed_path_layer_root': None,
+                'recomp_save_dir': os.environ['RECOMP_SAVE_DIR'],
+                'recomp_save_dir_source': save_dir_source,
+                'observed_udata_root': None,
+                'observed_tdata_root': None,
                 'disposable': True,
                 'verified': False,
             },
@@ -398,11 +422,17 @@ def main() -> int:
             log, resolved_save_root)
         metadata['save_root']['observed_resolved_path'] = observed_root
         metadata['save_root']['observed_path_layer_root'] = observed_path_layer
+        observed_udata, observed_tdata, folders_verified = save_folder_observation(
+            log, resolved_save_root)
+        metadata['save_root']['observed_udata_root'] = observed_udata
+        metadata['save_root']['observed_tdata_root'] = observed_tdata
+        save_root_verified = save_root_verified and folders_verified
         metadata['save_root']['verified'] = save_root_verified
         if not save_root_verified:
             result['save_root_verified'] = False
             result['save_root_reason'] = (
-                'runtime did not report exactly one matching resolved save root')
+                'runtime did not report exactly one matching resolved save root '
+                'with UDATA and TDATA inside it')
         else:
             result['save_root_verified'] = True
         if log_path.is_file():
