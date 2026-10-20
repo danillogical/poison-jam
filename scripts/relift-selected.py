@@ -11,7 +11,7 @@ import sys
 root=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(root.parent/'xboxrecomp'))
 from tools.recomp import config
-from tools.recomp.translator import FunctionTranslator
+from tools.recomp.translator import FunctionTranslator, emitted_entries
 from tools.recomp.disasm import Disassembler
 
 data=(root/'game/default.xbe').read_bytes()
@@ -66,6 +66,10 @@ if mode=='trace':
         t=FunctionTranslator(data,db,labels,trace_functions=trace_addresses)
     unknown=[f'0x{a:08X}' for a in sorted(trace_addresses) if a not in db]
     if unknown: raise RuntimeError('not in the function database: '+', '.join(unknown))
+# Same callable view as the full pass, read back from its chunks; see
+# scripts/recover-functions.py.
+t.lifter.callable_entries=(emitted_entries(str(root/'src/recomp/gen'))
+    |{int(a,16) for a in json.loads((root/'config/manual-functions.json').read_text())})
 selected=[]
 for path in (root/'src/recomp/gen').glob('recomp_*.c'):
     source=path.read_text();edits=[]
@@ -91,6 +95,8 @@ for path in (root/'src/recomp/gen').glob('recomp_*.c'):
         if not wanted:continue
         generated=t.translate_function(a,db[a])
         if not generated or '/* TODO:' in generated:raise RuntimeError(f'Incomplete relift {a:08X}')
+        missed=[f'0x{f:08X}->0x{g:08X}' for (f,g),c in t.lifter.dead_gotos.items() if c]
+        if missed:raise RuntimeError('Tail jumps deleted instead of lifted: '+', '.join(missed))
         assert re.search(r'void '+re.escape(match[2])+r'\(void\)',generated),f'Symbol changed at {a:08X}'
         edits.append((match.start(),end,generated+'\n'))
         selected.append(f'0x{a:08X}')

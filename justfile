@@ -119,6 +119,7 @@ check:
     {{python}} -X utf8 scripts/check-stack-depth.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-hidden-entries.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-dispatch-table.py; if ($LASTEXITCODE -ne 0) { exit 1 }
+    {{python}} -X utf8 scripts/check-dead-gotos.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-sse-unordered.py; if ($LASTEXITCODE -ne 0) { exit 1 }
     {{python}} -X utf8 scripts/check-stop-chain.py --quiet; if ($LASTEXITCODE -ne 0) { exit 1 }
     # The REAL retail table, not the synthetic fixtures: every entry recompiled from its

@@ -1352,6 +1352,17 @@ if(BUILD_TESTING)
     add_test(NAME jsrf_hidden_entries
         COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_hidden_entries.py)
     set_tests_properties(jsrf_hidden_entries PROPERTIES TIMEOUT 900)
+    # A jump to an entry with its own symbol must be a tail call, never a deleted goto.
+    # check-dead-gotos.py scans the generated and recovered trees for the validator's
+    # deleted-jump comment; its test pins each callable shape against a synthetic tree and
+    # asserts the current tree is clean. The thunk test compiles the real sub_00169000
+    # (`sub [esp+4],4; jmp 0x168230`) against a stand-in callee with `ret 8` and checks the
+    # callee is entered and esp ends 12 above entry; it fails on the pre-fix lift.
+    add_test(NAME jsrf_check_dead_gotos
+        COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_check_dead_gotos.py)
+    add_test(NAME jsrf_tail_thunk_169000
+        COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_tail_thunk_169000.py)
+    set_tests_properties(jsrf_tail_thunk_169000 PROPERTIES TIMEOUT 120)
     # P0.7 generation provenance.  Registered here because it was NOT: the checker was
     # wired into `just check` only, so `just test` could not catch a provenance failure,
     # and the gate stayed red for 73 commits without a session noticing (measured
