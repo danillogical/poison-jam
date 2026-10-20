@@ -1352,17 +1352,30 @@ if(BUILD_TESTING)
     add_test(NAME jsrf_hidden_entries
         COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_hidden_entries.py)
     set_tests_properties(jsrf_hidden_entries PROPERTIES TIMEOUT 900)
-    # A jump to an entry with its own symbol must be a tail call, never a deleted goto.
-    # check-dead-gotos.py scans the generated and recovered trees for the validator's
-    # deleted-jump comment; its test pins each callable shape against a synthetic tree and
-    # asserts the current tree is clean. The thunk test compiles the real sub_00169000
-    # (`sub [esp+4],4; jmp 0x168230`) against a stand-in callee with `ret 8` and checks the
-    # callee is entered and esp ends 12 above entry; it fails on the pre-fix lift.
+    # A jump to an entry with its own symbol must be a tail call, never a deleted goto or
+    # a trap. check-dead-gotos.py scans the generated and recovered trees: any `(void)0`
+    # deleted-jump comment fails, as does any RECOMP_JUMP_TRAP whose target has a symbol of
+    # its own; its test pins each shape against a synthetic tree written in the spellings the
+    # generator uses and asserts the current tree is clean. The thunk test compiles the real
+    # sub_00169000 (`sub [esp+4],4; jmp 0x168230`) against a stand-in callee with `ret 8` and
+    # checks the callee is entered and esp ends 12 above entry; it fails on the pre-fix lift.
     add_test(NAME jsrf_check_dead_gotos
         COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_check_dead_gotos.py)
     add_test(NAME jsrf_tail_thunk_169000
         COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_tail_thunk_169000.py)
     set_tests_properties(jsrf_tail_thunk_169000 PROPERTIES TIMEOUT 120)
+    # An alias folded onto an owner that starts after it would dispatch to a different
+    # function. The test pins 0xC42E0/0x11B680 as their own dispatch entries and compiles each
+    # after-owner alias wrapper as generated: it must abort and never reach the owner.
+    add_test(NAME jsrf_alias_dispatch
+        COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_alias_dispatch.py)
+    set_tests_properties(jsrf_alias_dispatch PROPERTIES TIMEOUT 120)
+    # Save isolation: the runner's observation parser, its RECOMP_SAVE_DIR default and
+    # caller-override recording (through the real main() with the launch replaced), and the
+    # refusal block compiled out of src/main.c.
+    add_test(NAME jsrf_save_isolation
+        COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_save_isolation.py)
+    set_tests_properties(jsrf_save_isolation PROPERTIES TIMEOUT 120)
     # P0.7 generation provenance.  Registered here because it was NOT: the checker was
     # wired into `just check` only, so `just test` could not catch a provenance failure,
     # and the gate stayed red for 73 commits without a session noticing (measured
@@ -1481,7 +1494,8 @@ if(BUILD_TESTING)
     # fixtures are temp-dir isolated and never write the repository.
     add_test(NAME jsrf_vsh_aot_provenance
         COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_vsh_aot_provenance.py)
-    set_tests_properties(jsrf_vsh_aot_provenance PROPERTIES TIMEOUT 120)
+    # It takes about 60 s alone and over 120 s beside the rest of the suite.
+    set_tests_properties(jsrf_vsh_aot_provenance PROPERTIES TIMEOUT 300)
     # R2's gating test: the corpus seam of a build WITHOUT the Vulkan toolchain.  Registered
     # UNCONDITIONALLY, and deliberately so: it is the gate of the branch that exists BECAUSE
     # the capability can be OFF, and gating it on XBR_VULKAN_FOUND would leave exactly that

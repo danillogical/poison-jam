@@ -50,7 +50,10 @@ def _compiler():
               r"C:\Program Files\LLVM\bin\clang.exe"):
         if c and Path(c).exists():
             return c
-    raise unittest.SkipTest("no C compiler")
+    # A skip is counted as a pass by CTest; a missing compiler must fail loudly.
+    raise AssertionError("no C compiler found (clang, gcc or "
+                         r"C:\Program Files\LLVM\bin\clang.exe); this test "
+                         "cannot run, which is a failure, not a skip")
 
 
 HARNESS = r'''
