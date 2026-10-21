@@ -280,7 +280,10 @@ already approved steps:
    A different-author committed-stream and real-Vulkan gate now exists
    (TR §31.59): game `576fa7af39b13c27c134128f07233297416f5016`, test-only, 56
    gate CTests and a 21-mutant private harness against the frozen toolkit. It is a
-   candidate pending Codex review; the four coverage scripts are step 3, and
+   rejected candidate pending a bounded test-only repair (TR §31.60): supported
+   mode 5 escapes its gate, and the mutation helper deletes a pre-existing work
+   directory. Preserve the frozen production while repairing these gate defects;
+   the four coverage scripts are step 3, and
    production remains ungated and unpushed until the gate is accepted.
    No BUMPENVMAP or texgen implementation is accepted yet.
 6. **D5:** plan applicable items as separate gated steps, with a different test

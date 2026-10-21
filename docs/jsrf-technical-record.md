@@ -6619,3 +6619,38 @@ first-record immutability and report retention.
 **Limits.** Lavapipe only (no hardware GPU); the Vulkan half proves the refusal/recording site,
 not pixels. Stream fixtures use a synthetic instance and pushbuffer, not the title. No
 production defect was found. These are local gate results; acceptance is Codex's.
+
+### §31.60 D4 gate review: supported mode 5 is untested; work directory is deleted (2026-10-21)
+
+The step-2 gate candidate is rejected for two independently reproduced defects.
+Toolkit production `2bcdc30` remains unchanged; these findings concern game test
+code `576fa7a` and its mutation helper.
+
+- `case_rc_supported_modes` claims modes 0 through 5 but its two batches only
+  select 0, 1, 2, 3 and 4. Codex compiled a private mutation changing the real
+  refusal rule from `m > 5` to `m > 4`. The deciding real-Vulkan case still
+  passes (`STILL-PASS`, 0/1 mutants detected); the pristine and restored controls
+  pass, and the shared toolkit is unchanged. This is a concrete missing
+  boundary, not a claim of a production mode-5 defect. The earlier 21-mutant
+  results remain their actual results; they do not cover this additional defect.
+- `scripts/pbcov-mutants.py --work` recursively deletes an existing target
+  directory before source copying. In an explicitly confined disposable probe,
+  Codex placed a sentinel in its own scratch target, intercepted the first copy
+  call and observed `existing_sentinel_preserved=False`. No original asset,
+  save or unrelated user file was touched. A helper for private experiments must
+  refuse an existing directory or establish ownership before deleting it.
+
+Codex independently reran the registered coverage gate: 56/56 pass, 0 skips,
+2.49 s. The reported full 160/160 receipt was inspected, not rerun in this review.
+The fresh gate author's native transcript confirms `opencode-go/deepseek-v4.1-flash`,
+high, fallback false. Production, features, scripts and pushes remain pending.
+
+**Next:** a different-from-production test author repairs the supported-mode
+fixture, adds the escaping mutant, and makes work-directory preservation a
+deciding regression; production stays frozen. Require the old gate to miss the
+mode-5 mutant and the repaired gate to reject it, valid-source positive controls,
+an unchanged pre-existing sentinel and tested owned scratch cleanup. Then final
+focused/full checks and independent review before step 3. The exhausted repair
+allowance may be renewed under the skill's confirmed-review rule for this newly
+demonstrated gate defect, retaining the six unused operation slots and all prior
+spending; no operation-slot or context-based reset is authorized.
