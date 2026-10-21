@@ -40,10 +40,12 @@ USAGE
 
     --toolkit     toolkit to copy (default $XBOXRECOMP_DIR or ../xboxrecomp)
     --expect-commit  required toolkit HEAD (default: the frozen D4 commit)
-    --work        private build area (default: a fresh temp directory)
+    --work        private build area to CREATE (must not already exist;
+                  default: a fresh owned temp directory)
     --generator   CMake generator (default: "Visual Studio 18 2026")
     --no-vk       skip the Vulkan mutants and the Vulkan target
-    --keep        keep the private work area (for inspection)
+    --keep        keep the private work area (for inspection); without it the
+                  owned root is removed on success and on failure
 """
 
 from __future__ import annotations
@@ -52,6 +54,7 @@ import argparse
 import hashlib
 import os
 import pathlib
+import secrets
 import shutil
 import subprocess
 import sys
@@ -361,6 +364,18 @@ MUTANTS = [
         old="        if (m == 3 && ((cube_mask >> st) & 1u)) {",
         new="        if (m == 3) {                   /* MUTANT: cube exception dropped */",
     ),
+    dict(
+        name="vk-supported-mode5-rejected",
+        group="Vulkan refusal coverage",
+        target="vk",
+        file="src/video/nv2a_vk_rc_coverage.h",
+        case="rc_supported_modes",
+        expect="supported mode 5 stage 0 draws without fallback",
+        why="mode 5 is supported at every stage and must not be reclassified "
+            "as a refusal",
+        old="        if (m > 5) {",
+        new="        if (m > 4) {                   /* MUTANT: mode 5 rejected */",
+    ),
 ]
 
 # Cases re-run on the pristine baseline (each mutant's own case, plus one key
@@ -467,6 +482,116 @@ def run_case(exe: pathlib.Path, case: str, target: str, icd, extra_env=None):
     return run([exe, "--case", case], env=env, timeout=300)
 
 
+# ── Owned work area ──────────────────────────────────────────────────────────
+#
+# --work names WHERE this invocation may put its private copies; it does not
+# grant ownership of a path that already exists.  Only a directory this
+# invocation created (and stamped below) is ever removed, and only after its
+# resolved path, directory identity and marker still match.  A caller's
+# pre-existing directory or file is refused before the first copy.
+
+OWNERSHIP_MARKER = ".pbcov-mutants-owned"
+
+
+class WorkAreaRefused(RuntimeError):
+    """The --work path is not a path this invocation is allowed to own."""
+
+
+class OwnedWorkArea:
+    def __init__(self, path: pathlib.Path, game: pathlib.Path,
+                 toolkit: pathlib.Path):
+        self.path = path
+        self.resolved = path.resolve()
+        self.game = game.resolve()
+        self.toolkit = toolkit.resolve()
+        self.token = secrets.token_hex(16)
+        self.identity: tuple[int, int] | None = None
+
+    def stamp(self) -> None:
+        """Write the ownership marker and record the directory identity."""
+        (self.path / OWNERSHIP_MARKER).write_text(
+            "pbcov-mutants owned work area\n"
+            f"pid {os.getpid()}\n"
+            f"token {self.token}\n",
+            encoding="utf-8", newline="\n")
+        st = self.path.stat()
+        self.identity = (st.st_dev, st.st_ino)
+
+    def _still_owned(self) -> bool:
+        """True only for the exact, unchanged directory this run created."""
+        try:
+            if self.path.is_symlink():
+                return False
+            if self.path.resolve() != self.resolved:
+                return False
+            st = self.path.stat()
+            if self.identity is None or (st.st_dev, st.st_ino) != self.identity:
+                return False
+            marker = self.path / OWNERSHIP_MARKER
+            if marker.is_symlink() or not marker.is_file():
+                return False
+            if self.token not in marker.read_text(encoding="utf-8",
+                                                  errors="replace"):
+                return False
+        except OSError:
+            return False
+        # Never a filesystem root ...
+        if self.resolved.parent == self.resolved:
+            return False
+        if self.resolved.anchor and self.resolved == pathlib.Path(self.resolved.anchor):
+            return False
+        # ... nor the game/toolkit root, nor an ancestor of either.
+        for guarded in (self.game, self.toolkit):
+            if self.resolved == guarded or guarded.is_relative_to(self.resolved):
+                return False
+        return True
+
+    def release(self, keep: bool) -> bool:
+        """Remove the owned root (or, with --keep, report where it is)."""
+        if keep:
+            print(f"work area kept: {self.path}")
+            return True
+        if not self._still_owned():
+            print(f"work area NOT removed (ownership changed): {self.path}",
+                  file=sys.stderr)
+            return False
+        try:
+            shutil.rmtree(self.path)
+        except OSError as exc:
+            print(f"work area NOT removed ({exc}): {self.path}", file=sys.stderr)
+            return False
+        return True
+
+
+def acquire_work_area(args, game: pathlib.Path,
+                      toolkit: pathlib.Path) -> OwnedWorkArea:
+    """Create and stamp a fresh work area; never remove a caller's path."""
+    if args.work is None:
+        root = pathlib.Path(tempfile.mkdtemp(prefix="pbcov-mutants-"))
+    else:
+        root = args.work.resolve()
+        if root.is_symlink() or root.exists():
+            raise WorkAreaRefused(
+                f"--work {root} already exists; refusing to modify or remove a "
+                f"path this invocation did not create. Choose a new path.")
+        try:
+            root.mkdir(parents=True, exist_ok=False)
+        except OSError as exc:
+            raise WorkAreaRefused(
+                f"could not create --work {root}: {exc}") from exc
+    owned = OwnedWorkArea(root, game, toolkit)
+    try:
+        owned.stamp()
+    except OSError as exc:
+        if args.keep:
+            print(f"work area kept: {root}")
+        else:
+            shutil.rmtree(root, ignore_errors=True)
+        raise WorkAreaRefused(
+            f"could not record ownership of {root}: {exc}") from exc
+    return owned
+
+
 # ── Harness ──────────────────────────────────────────────────────────────────
 
 def main(argv=None) -> int:
@@ -475,7 +600,9 @@ def main(argv=None) -> int:
     ap.add_argument("--toolkit", type=pathlib.Path,
                     default=pathlib.Path(os.environ.get("XBOXRECOMP_DIR", GAME.parent / "xboxrecomp")))
     ap.add_argument("--expect-commit", default=FROZEN_COMMIT)
-    ap.add_argument("--work", type=pathlib.Path, default=None)
+    ap.add_argument("--work", type=pathlib.Path, default=None,
+                    help="private build area to create; it must not exist yet "
+                         "(default: a fresh temp directory)")
     ap.add_argument("--generator", default="Visual Studio 18 2026")
     ap.add_argument("--icd", type=pathlib.Path, default=None,
                     help="software Vulkan ICD manifest (default: $XBR_VK_SW_ICD or the local lavapipe)")
@@ -517,17 +644,24 @@ def main(argv=None) -> int:
         return 2
     shared_hashes = {rel: sha256(toolkit / rel) for rel in PROTECTED}
 
-    work = args.work
-    if work is None:
-        work = pathlib.Path(tempfile.mkdtemp(prefix="pbcov-mutants-"))
-    else:
-        work = work.resolve()
-        if work.exists():
-            shutil.rmtree(work)
-        work.mkdir(parents=True)
-    work.mkdir(parents=True, exist_ok=True)
-    print(f"work area: {work}")
+    try:
+        owned = acquire_work_area(args, game, toolkit)
+    except WorkAreaRefused as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    print(f"work area: {owned.path}")
+    # The owned root exists from here on: every return and every exception
+    # leaves through the finally, which removes exactly that root unless
+    # --keep asked for inspection.
+    try:
+        return _run_owned(args, mutants, toolkit, game, head, status,
+                          shared_hashes, owned.path)
+    finally:
+        owned.release(args.keep)
 
+
+def _run_owned(args, mutants, toolkit, game, head, status, shared_hashes,
+               work) -> int:
     # ICD: explicit, environment, the existing build's cache, then the local default.
     icd = args.icd
     if icd is None:
@@ -760,10 +894,6 @@ def main(argv=None) -> int:
           "a record's payload writes against its `valid` bit, and a concurrent torn read; "
           "the observable equivalent (claimed-record immutability and report retention) is "
           "decided by the first-*-overwrite and report-reset mutants above.")
-    if args.keep or not (all_ok and restored_ok and shared_ok):
-        print(f"work area kept: {work}")
-    else:
-        shutil.rmtree(work, ignore_errors=True)
     return 0 if (all_ok and restored_ok and shared_ok) else 1
 
 

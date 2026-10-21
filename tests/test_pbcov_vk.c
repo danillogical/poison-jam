@@ -313,17 +313,39 @@ static int case_rc_cube_mode3(void)
 static int case_rc_supported_modes(void)
 {
     const Nv2aVkRcCoverage *c;
+    uint64_t draws_at_start = g.st.rc_draws;
+    uint32_t stage, mode;
+    char what[96];
 
-    /* All 5-bit modes 0..3 in one batch, then 2..5 in another, no cubes. */
-    draw_rc(0u | (1u << 5) | (2u << 10) | (3u << 15), 0u);
-    draw_rc((2u << 5) | (3u << 10) | (4u << 15), 0u);
-    c = nv2a_vk_rc_coverage();
-    chk_u64("modes 0..5 are supported: no fallback", g.st.rc_fallback, 0u);
-    chk_u64("modes 0..5 are supported: ledger total 0", c->total, 0u);
-    chk_u64("no reason counted", c->mode_gt5 + c->cube_mode3, 0u);
-    chk_u32("no first refusal", c->first_valid, 0u);
-    chk(g.st.rc_draws >= 2u, "both supported batches took the rc pipeline",
-        "rc_draws %llu", (unsigned long long)g.st.rc_draws);
+    /* Every 5-bit mode 0..5 is supported at every stage 0..3, with no cube
+     * texture. Each draw carries exactly one mode, in exactly one stage (the
+     * other three stages are 0), so a boundary that refuses mode 5 anywhere
+     * cannot hide behind another stage's supported modes. */
+    for (stage = 0; stage < 4; stage++) {
+        for (mode = 0; mode <= 5; mode++) {
+            uint32_t program = mode << (stage * 5);
+            uint64_t before = g.st.rc_draws;
+
+            draw_rc(program, 0u);
+            _snprintf(what, sizeof what,
+                      "supported mode %u stage %u draws without fallback",
+                      (unsigned)mode, (unsigned)stage);
+            what[sizeof what - 1] = '\0';
+            chk(g.st.rc_draws == before + 1u, what, "rc_draws %llu -> %llu",
+                (unsigned long long)before,
+                (unsigned long long)g.st.rc_draws);
+            c = nv2a_vk_rc_coverage();
+            chk_u64("supported sweep: no fallback", g.st.rc_fallback, 0u);
+            chk_u64("supported sweep: ledger total 0", c->total, 0u);
+            chk_u64("supported sweep: reason counters 0",
+                    c->mode_gt5 + c->cube_mode3, 0u);
+            chk_u32("supported sweep: no first refusal", c->first_valid, 0u);
+        }
+    }
+    chk(g.st.rc_draws == draws_at_start + 24u,
+        "the sweep took the rc pipeline exactly 24 times",
+        "rc_draws %llu -> %llu", (unsigned long long)draws_at_start,
+        (unsigned long long)g.st.rc_draws);
     return 0;
 }
 

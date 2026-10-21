@@ -1452,6 +1452,12 @@ if(BUILD_TESTING)
     add_test(NAME jsrf_check_graffiti_run COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_check_graffiti_run.py)
     add_test(NAME jsrf_check_progression_run COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_check_progression_run.py)
     add_test(NAME jsrf_fcmov_clamp COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_fcmov_clamp.py)
+    # The mutation harness owns only the work area it creates. This drives its
+    # actual main() with the copy boundary stubbed: an existing --work path is
+    # never deleted, and a failed fresh run removes exactly its own root.
+    add_test(NAME jsrf_pbcov_workdir_helper
+        COMMAND python -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_pbcov_workdir.py)
+    set_tests_properties(jsrf_pbcov_workdir_helper PROPERTIES TIMEOUT 120)
     # The NV2A method-inventory generator writes TWO tracked files (this repo's
     # docs/jsrf-nv2a-method-inventory.md and the toolkit's nv2a_method_table.c)
     # and parses argv by hand.  `--help` used to fall through that hand parsing,
