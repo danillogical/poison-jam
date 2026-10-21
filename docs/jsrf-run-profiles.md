@@ -262,7 +262,11 @@ first sample; no guest write), `RECOMP_WATCH`, `RECOMP_WATCH_RAW`, `RECOMP_WATCH
 writing thread, native RIP and, for a host thread, its native frames to each watch report); from the 2026-09-28 fork fixes:
 `RECOMP_FFP_TRACE` and `RECOMP_TRACE_FLIP` (executor tracing), and `RECOMP_GUEST_METER` (counts host
 threads inside lifted guest code; changes no guest state or scheduling); from 2026-09-30:
-`RECOMP_PB_EXEC_VERBOSE` (executor logging, `nv2a_pb_exec.c:61`); from the upstream v0.13 merge:
+`RECOMP_PB_EXEC_VERBOSE` (executor logging, `nv2a_pb_exec.c:61`); `RECOMP_PB_COVERAGE`, exact `1`
+only: retained batch counts and write-once first-instance records for fixed-function texgen/texture
+matrices, stage texture modes >= 6 (with the bump-environment registers), lit batches with specular
+or a spot light, and the Vulkan rc-fallback reasons, plus a `[PBCOV]` line from the executor report;
+nothing is rendered differently and no guest state changes; from the upstream v0.13 merge:
 `RECOMP_FRAME_TRACE` and `RECOMP_FRAME_TRACE_METHODS` (flag-file-armed per-frame trace),
 `RECOMP_FB_DUMP_FLIPS` (a BMP per flip), `RECOMP_VSH_TRACE` and `RECOMP_VSH_DUMP` (vertex-program
 tracing and program dumps), `RECOMP_VSH_HLSL_DUMP` (each translated vertex shader's HLSL, once), `RECOMP_PB_REPORT_MS` (cadence of the ack-thread GPU report; under the MMIO
