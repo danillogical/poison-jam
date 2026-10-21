@@ -6573,3 +6573,49 @@ with zero unknown/missing profiles. This verifies repair progress, not whole-D4
 acceptance. The next increment is a fresh test author's actual committed-stream
 and Vulkan-backend fixtures, weakening mutants in private source copies, and full
 regression checks before any candidate push or long coverage run.
+
+### §31.59 D4 step 2: independent committed-stream and Vulkan gate candidate (2026-10-21)
+
+The independent gate for the D4 coverage diagnostics now exists. It was authored by a worker
+distinct from the three production/integration authors, and the toolkit stayed frozen at
+`2bcdc3081362341b92a9efb8afad00bdfd005c85`. Game candidate
+`576fa7af39b13c27c134128f07233297416f5016` is test-only: `tests/test_pbcov_stream.c`,
+`tests/test_pbcov_vk.c`, `scripts/pbcov-mutants.py` and 56 CTest registrations. It is not
+accepted yet; Codex review is next, and the four coverage scripts remain step 3.
+
+**What it drives, and what decides.**
+
+- `test_pbcov_stream.c` runs 39 cases, one process each, through the real owner path: guest RAM,
+  a synthetic section-less XBE for the memory layout, `nv2a_init_standalone`, the pushbuffer
+  window, the instance RAMHT binding, the commit consumer and real pushbuffer words through
+  `nv2a_submit_pending`. It reads the production `nv2a_pb_exec_coverage()` ledger. Coverage:
+  fixed-function texgen and texture matrices for all four stages with per-stage association and
+  exact counters/overlap; stage modes >= 6 with batch/incidence/histogram splits and one count
+  for GPU and CPU-fallback program batches; lit specular/spot and their overlap; first-record and
+  report immutability; selected vertex-program word by accepted slot/component/port; the exact-1
+  gate and first-sample rule; admitted-undelivered versus committed-zero availability; rejected
+  stream rollback; nonzero-subchannel filtering; stopped/sub-minimum guards; every entry form.
+- `test_pbcov_vk.c` runs 9 cases on real lavapipe, includes the production
+  `nv2a_vk_backend.c`, installs the production back end and calls its draw/fallback site. It
+  asserts `g.st.rc_fallback` equals the production coverage ledger's total, that the two reason
+  counters sum to it exclusively, the per-stage/reason priority, first-refusal immutability,
+  modes 0..5 supported (mode-3-cube exception), and modes 6/7 still refused.
+- `scripts/pbcov-mutants.py` copies the toolkit and game privately, applies one named textual
+  mutation at a time, builds only the gate targets, and requires the gate to fail with its named
+  semantic assertion (never a compile error, skip or crash), then restores and requires the
+  frozen baseline to pass. The shared checkout's HEAD, status and protected-file hashes are
+  checked before and after every mutant.
+
+**Evidence run.** Focused gate 56/56 in 2.4 s, zero skipped. Full limited-rights CTest
+**160/160 in 444.13 s**, zero skipped, including the 56 new entries. `just check` green.
+Private mutants **21/21 decided by their named assertion**, restored baseline PASS, shared
+toolkit unchanged PASS. The mutation set covers the historical stage-1-only, first-record
+mutability/live availability and selected-word provenance defects, plus dropped hooks,
+histogram/batch double counts, report reset, presence-gating, ignored-subchannel pollution and
+the Vulkan recording/reason/cube-exception/first-refusal properties. Inherently unobservable:
+single-thread payload/valid ordering and torn concurrent reads; the observable equivalents are
+first-record immutability and report retention.
+
+**Limits.** Lavapipe only (no hardware GPU); the Vulkan half proves the refusal/recording site,
+not pixels. Stream fixtures use a synthetic instance and pushbuffer, not the title. No
+production defect was found. These are local gate results; acceptance is Codex's.
