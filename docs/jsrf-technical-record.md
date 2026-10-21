@@ -6490,3 +6490,20 @@ incomplete script. No mode-6+ batch was observed; that is not evidence of absenc
 
 **Next:** Codex review of the repair, then the different author's production-path fixtures and
 mutations. No feature work, D completion or push yet.
+
+**Independent review: rejected pending selected-word provenance repair.** Codex
+reran the earlier source-body assertions: the repaired stage-1 and retention
+cases pass; archived old-source assertions still fail with their positive
+control passing. A second probe compiles `vp_program_method` and the repaired
+latch/note bodies verbatim with production headers. The availability boolean
+currently tests whether any of methods `0xB00/04/08/0C` arrived, rather than
+whether dword 0 of the selected program slot was written. Uploading slot 0 then
+selecting untouched slot 17 gives word 0, seen 1 (expected 0); uploading dword 0
+through `0xB10` gives word `0x12345678`, seen 0 (expected 1). The matched slot-0
+`0xB00` positive control passes. These are state/provenance predicate
+reproductions, not full committed-submission tests. The repair smoke independently
+reclassifies EXPLORATORY with zero unknown/missing profiles; `jsrf_nv2a_registers`
+again passes 1/1 despite this metadata defect. The repair is not accepted or
+pushed. Next bounded repair must track actual accepted upload slot/component,
+freeze availability for the selected first word, preserve rendering/admission,
+then return for review before the different-author gate.

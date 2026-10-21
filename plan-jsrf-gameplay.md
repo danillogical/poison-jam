@@ -273,7 +273,9 @@ already approved steps:
    false zeros and a first-batch delivery mask changed after publication. A local,
    unpushed repair candidate now covers all four stages, freezes per-word
    availability with each first record and keeps live delivery state separate; it
-   remains ungated pending Codex review and the different-author gate. No
+   closes the reproduced stage-1 and retention cases but still mislabels selected
+   vertex-program-word availability (Codex rejection, TR §31.57). Repair that
+   provenance before the different-author gate and four coverage scripts. No
    BUMPENVMAP or texgen implementation is accepted yet.
 6. **D5:** plan applicable items as separate gated steps, with a different test
    author, then records and audited pushes. New design is planned only here when
