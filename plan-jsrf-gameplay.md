@@ -286,9 +286,14 @@ already approved steps:
    owned-only cleanup plus a focused regression. Codex independently accepted the
    repaired gate (TR §31.61): focused 57/57, escaping mode-5 mutant now detected,
    old-helper negative control confirmed, full-suite 161/161 receipt verified.
-   Next is the audited toolkit-first checkpoint and step 3's four cache-off
-   Vulkan coverage scripts, with counts and first-event availability recorded.
-   No BUMPENVMAP or texgen implementation is accepted yet.
+   The accepted gate is pushed; step 3's four cache-off Vulkan coverage scripts
+   have now run (TR §31.62): texgen/texture-matrix use is positive in all four,
+   specular lighting is positive, and **no stage-mode>=6 batch or Vulkan rc
+   fallback was observed**, so the handoff's replanning trigger applies. The
+   conditional step-6 criterion is met but step 6 still waits for bump and its
+   gate. Next is fixture-driven BUMPENVMAP (steps 4/5); in-game confirmation
+   waits for the optional owner-assisted step 8. No BUMPENVMAP or texgen
+   implementation is accepted yet.
 6. **D5:** plan applicable items as separate gated steps, with a different test
    author, then records and audited pushes. New design is planned only here when
    the preceding evidence establishes what is applicable.

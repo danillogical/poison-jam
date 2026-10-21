@@ -6710,3 +6710,42 @@ coverage scripts with source/run identities, counts and retained availability.
 
 PUSHED_TO: origin / BRANCH: main / COMMIT: 2bcdc3081362341b92a9efb8afad00bdfd005c85 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 1394777..2bcdc30, toolkit first; three diagnostic commits, 10 outgoing blobs, largest 268393 bytes, zero secret hits, only five reviewed kernel/video source paths. Upstream and nworkers untouched (push URLs DISABLED).
 PUSHED_TO: origin / BRANCH: master / COMMIT: 94b9427a12f16f1f29ba2280e1f8e401f940a6ad / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward ffc9a32..94b9427 after toolkit; 13 commits, 27 outgoing blobs, largest 519650 bytes, zero secret hits, all per-commit paths limited to reviewed test/helper/CMake/plan/TR/profile records. No game assets, generated/recovered retail code or oversized blobs. Clean intended branches; final just check passed, focused gate 57/57 independently rerun, full 161/161 receipt verified.
+
+### §31.62 D3–D4 coverage measured: texgen/matrix present, no bump batch observed (2026-10-21)
+
+The accepted coverage diagnostics (toolkit `2bcdc30`, game `972665a`) were run over the four
+existing keyboard scripts on Vulkan with `RECOMP_PB_COVERAGE=1` and the pipeline cache off. All
+four are **EXPLORATORY** (`check-run-profile.py`: 0 unknown/missing), same executable
+`11a6818a…`, build-source `27e94662…`, toolkit/project revisions matching the accepted trees, and
+both SAVE roots inside each run's private archive. They are keyboard routes, not fidelity
+evidence.
+
+| Run | Script | `script_ok`/steps | last `[PBCOV]` snapshot (counts are lower bounds within 31–46 flips of the end) |
+|---|---|---|---|
+| `20261021-152045-759-keyscript-d4-coverage-e2e-vk` | e2e | true / 72 | texgen 255573, texmat 262624, overlap 255573, stage>=6 0, lit specular 71335, spot 0 |
+| `20261021-153135-147-keyscript-d4-coverage-skate-vk` | skate | true / 71 | texgen 364240, texmat 369282, overlap 364240, stage>=6 0, lit specular 39724, spot 0 |
+| `20261021-154209-085-keyscript-d4-coverage-gameplay-vk` | gameplay | true / 45 | texgen 324430, texmat 328544, overlap 324430, stage>=6 0, lit specular 24466, spot 0 |
+| `20261021-155245-468-keyscript-d4-coverage-gum-tutorial-vk` | gum-tutorial | true / 93 | texgen 333990, texmat 338258, overlap 333990, stage>=6 0, lit specular 67939, spot 0 |
+
+- **Texgen and texture matrices are live in all four runs.** `texgen_seen=7777` means S/T/R were
+  delivered for all four stages; the Q bits stay clear (TEXGEN_Q is not admitted). The first
+  texture matrix/enable snapshot is stage 0 only (`matrix_seen=…FFFF`, enable raw 1); stage 1
+  matrix methods are admitted but had not been delivered before that claim, and stages 2/3 are not
+  admitted. The first `first_c` state has lighting and specular enabled, light mask 1 (light 0
+  infinite), no spot light; the spot parameter words are UNKNOWN (not admitted), not observed
+  zeros.
+- **No batch with any stage mode >= 6 appeared, and no Vulkan rc fallback**
+  (`stage_ge6=0`, `first_b=none`, `rc_fallback=0` in every report). The handoff's replanning trigger
+  applies: fixture-driven BUMPENVMAP remains steps 4/5, and in-game confirmation waits for the
+  optional owner-assisted step 8. This is not evidence of absence in unvisited scenes.
+- The count (a) texgen/matrix criterion is positive, so the **conditional step-6 criterion is met**;
+  no texgen implementation is attempted here.
+- Specular lighting is positive but spot lighting is zero; lighting/ADXM stay deferred.
+- No fatal, invalid ICALL, `[JUMP]`/`[ALIAS]`, backend stop or validation-error line appeared.
+  Scenes actually reached: title/menu/intro 00–12, gameplay start, movement/jump, pause map
+  (Garage is only a map label), skate street/rail, and the gum location with talk key presses; the
+  viewed gum frames show no visible dialogue box, so a tutorial conversation is not confirmed.
+- Corpus/identity: no run was rebuilt from unaccepted sources; no owner save or asset was used.
+
+**Next:** step 4/5, fixture-driven BUMPENVMAP with its own different-author gate. Step 6 (texgen)
+waits until bump and its gate land. D is not complete.
