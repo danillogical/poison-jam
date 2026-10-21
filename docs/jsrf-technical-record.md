@@ -6375,3 +6375,6 @@ for the thunk; this section is the record they mean.
 
 **C3 and C4 are accepted.** Pushes follow (receipts below). D1 is next.
 
+PUSHED_TO: origin / BRANCH: main / COMMIT: 51fcb8563a384fbe69a8386a14e89f6f5666f030 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 6c3cd84..51fcb85 (131 commits: the v0.14.0 merge, ee2e0cd, the C3-RR AC'97 repair, the tail-jump and trap fixes and their tests), toolkit pushed first, clean and synchronized; 480 outgoing blobs (largest 434 429 bytes), 0 secret hits, no retail-derived path; upstream untouched (push URL DISABLED).
+PUSHED_TO: origin / BRANCH: master / COMMIT: cebd1f9 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 699bc46..cebd1f9 (18 commits: the C3 seeds and gates, C3-RR gates and records, the C4 review repairs, save isolation and the C3/C4 records), clean and synchronized; 79 outgoing blobs (largest 3 347 497 bytes), 0 secret hits, no `game/` or retail-derived path.
+
