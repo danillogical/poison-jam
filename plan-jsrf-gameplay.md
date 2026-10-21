@@ -276,9 +276,12 @@ already approved steps:
    closes the reproduced stage-1 and retention cases. A further local, unpushed
    repair now ties vertex-program word availability to the accepted upload slot and
    component and freezes the selected start with the claim (TR §31.58). Codex
-   independently reproduced the repaired cases and source-matched smoke identity;
-   next is the different-author committed-submission and mutation gate. Production
-   remains ungated and unpushed until that gate is independently accepted.
+   independently reproduced the repaired cases and source-matched smoke identity.
+   A different-author committed-stream and real-Vulkan gate now exists
+   (TR §31.59): game `576fa7af39b13c27c134128f07233297416f5016`, test-only, 56
+   gate CTests and a 21-mutant private harness against the frozen toolkit. It is a
+   candidate pending Codex review; the four coverage scripts are step 3, and
+   production remains ungated and unpushed until the gate is accepted.
    No BUMPENVMAP or texgen implementation is accepted yet.
 6. **D5:** plan applicable items as separate gated steps, with a different test
    author, then records and audited pushes. New design is planned only here when
