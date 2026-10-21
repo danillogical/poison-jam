@@ -6707,3 +6707,6 @@ not rerun wholesale by Codex. Native gate-repair identity is confirmed as
 contract. This does not accept rendering features, gameplay coverage or D4/D5
 completion. Next: audited toolkit-first checkpoint, then the four cache-off Vulkan
 coverage scripts with source/run identities, counts and retained availability.
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: 2bcdc3081362341b92a9efb8afad00bdfd005c85 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 1394777..2bcdc30, toolkit first; three diagnostic commits, 10 outgoing blobs, largest 268393 bytes, zero secret hits, only five reviewed kernel/video source paths. Upstream and nworkers untouched (push URLs DISABLED).
+PUSHED_TO: origin / BRANCH: master / COMMIT: 94b9427a12f16f1f29ba2280e1f8e401f940a6ad / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward ffc9a32..94b9427 after toolkit; 13 commits, 27 outgoing blobs, largest 519650 bytes, zero secret hits, all per-commit paths limited to reviewed test/helper/CMake/plan/TR/profile records. No game assets, generated/recovered retail code or oversized blobs. Clean intended branches; final just check passed, focused gate 57/57 independently rerun, full 161/161 receipt verified.
