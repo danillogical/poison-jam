@@ -6455,3 +6455,38 @@ rendering and gate-off behavior. Then a different author's production-path
 fixtures and private final-source mutations, followed by the four coverage
 scripts. No feature implementation, D completion or candidate push yet.
 
+
+### §31.57 D4 coverage repair candidate: all-stage predicates and frozen first records (2026-10-21)
+
+Bounded repair of the defects in §31.56. Toolkit candidate `44c59a93c5a2f4c41d804efb833e5e6118059455` (local, unpushed,
+ungated) changes only `nv2a_backend.h`, `nv2a_pb_exec.c` and one comment in
+`nv2a_vk_backend.c`. It is not accepted work: the different-author gate and the four coverage
+scripts are still owed.
+
+**What changed.**
+
+- Texgen now samples all four stages (`0x3C0 + 0x10*s + 0x04*c`, four components), matrix enable
+  is a per-stage word (`0x420 + 0x04*s`, not a bitfield), and texture matrices are per stage
+  (`0x6C0 + 0x40*s`, 16 dwords). The local xemu `478b4f49` handlers supplied the strides as
+  facts only.
+- The live delivery map (`s_pb_seen`) is separate from every first record. A claim copies the
+  raw values and the per-word `*_seen` masks at that instant and is never rewritten; the version
+  is 2.
+- Availability is explicit per word: texgen Q, texture matrices for stages 2/3, the
+  bump-environment words for stage 0, and every spot/light parameter word are not admitted by
+  `nv2a_method_table.c`. Their raw zeros are UNKNOWN, and their seen bits stay clear. Admission,
+  rendering, rejected-stream rollback and fallbacks are unchanged.
+- The shared probe now reports, for the decided cases: old source red on stage-1 texgen,
+  stage-1 matrix and post-claim mask mutation (`567d8f20…` body); repaired source green on the
+  same assertions (`9809c563…` body); the restored old source red again.
+
+**Validation.** Guarded build succeeded with no warning in the changed region; focused CTest
+`nv2a` 9/9, `vk_` 15/15 and parity 3/3 passed; `just check` passed; `gpu-submit-supported`
+reached `probe_gpu` with `normal_exit`; one 240 s cache-off Vulkan smoke with coverage on
+(`20261021-130854-752-keyscript-d4-step1-repair-cov-e2e-vk`, EXPLORATORY) showed
+`texgen_seen=7777`, `mat_enable_seen=F`, `matrix_seen=…FFFF` (stages 0/1), `enable_seen=7`,
+`stage_ge6=0`, `rc_fallback=0`, 0 ICALL/fatal, saves inside the run root, and a bounded
+incomplete script. No mode-6+ batch was observed; that is not evidence of absence in gameplay.
+
+**Next:** Codex review of the repair, then the different author's production-path fixtures and
+mutations. No feature work, D completion or push yet.
