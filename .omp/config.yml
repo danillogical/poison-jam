@@ -1,4 +1,4 @@
 # Override only the planner; inherit all other routing and fallbacks globally.
 modelRoleStorage: project
 modelRoles:
-  plan: muse-code/wonder-1.0:medium
+  plan: anthropic/claude-opus-5-5:high
