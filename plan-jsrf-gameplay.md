@@ -275,8 +275,10 @@ already approved steps:
    availability with each first record and keeps live delivery state separate; it
    closes the reproduced stage-1 and retention cases. A further local, unpushed
    repair now ties vertex-program word availability to the accepted upload slot and
-   component and freezes the selected start with the claim (TR §31.58). It remains
-   ungated pending Codex review and the different-author committed-submission gate.
+   component and freezes the selected start with the claim (TR §31.58). Codex
+   independently reproduced the repaired cases and source-matched smoke identity;
+   next is the different-author committed-submission and mutation gate. Production
+   remains ungated and unpushed until that gate is independently accepted.
    No BUMPENVMAP or texgen implementation is accepted yet.
 6. **D5:** plan applicable items as separate gated steps, with a different test
    author, then records and audited pushes. New design is planned only here when

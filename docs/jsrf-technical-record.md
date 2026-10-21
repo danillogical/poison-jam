@@ -6558,3 +6558,18 @@ evidence of absence in gameplay.
 
 **Next:** Codex review, then the different author's committed-submission fixtures and
 private mutations. No feature work, coverage scripts, D completion or push yet.
+
+**Independent repair review: sufficient to advance to the gate.** Codex inspected
+the two production-file changes and reran all eight selected-word cases, the
+stage-1/first-retention checks and the diagnostic subchannel probe: all pass on
+`2bcdc30`. Archived `44c59a9` still fails the selected-word negatives with its
+matched positive passing (body `9809c563…`, correcting the repair report's
+`567d8f20…` label); archived `4203fda` still fails the stage-1/retention negatives
+with its positive passing. These are body-level reproductions. The current
+`jsrf_nv2a_hal` CTest independently passes 1/1. The archived smoke's build-source
+hashes for the executor and ledger header match the current files; its toolkit
+patch hash matches the committed diff, and its profile reclassifies EXPLORATORY
+with zero unknown/missing profiles. This verifies repair progress, not whole-D4
+acceptance. The next increment is a fresh test author's actual committed-stream
+and Vulkan-backend fixtures, weakening mutants in private source copies, and full
+regression checks before any candidate push or long coverage run.
