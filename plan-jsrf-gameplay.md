@@ -150,7 +150,7 @@ stop after N4 and the cleanup report's Mac/scp workflow. The reports in ignored
 Execute the remaining cleanup in this order, without a new planning phase for the
 already approved steps:
 
-1. **C3, in progress:** finish the v0.14.0 regeneration checkpoint on toolkit
+1. **C3 — DONE (TR §31.54):** finish the v0.14.0 regeneration checkpoint on toolkit
    `merge-v0.14.0` (`ee2e0cd`): guarded build and warning review, refreshed generation
    provenance and baseline, `just check`, full software-Vulkan CTest through the
    limited-rights wrapper, then the bounded cache-off Vulkan e2e smoke. Classify
@@ -250,7 +250,14 @@ already approved steps:
    and `[AC97] serviced=7` here vs `40` earlier means it is not comparable on the AC'97
    variable. The store is a legitimate setter, so this is a bad value, not yet a bad store;
    C3 and C4 remain UNACCEPTED and no repair is authorized.
-2. **C4:** independent merge/recovery review, Vulkan e2e with both N3 loader insertion
+   **C3 accepted (owner-directed takeover, 2026-10-20; TR §31.54).** The value came from a lift
+   defect, not the game: the regenerated adjustor thunk `sub_00169000` lost its `jmp 0x168230`, so the
+   guest stack stayed 8 bytes low and `sub_0005F350` popped the caller's `edi` (`0x00700010`) into the
+   `ebx` that `sub_00012210` hands the setter. Toolkit `35c6537` makes a jump to a target with its own
+   symbol a tail call; `7544264` makes every other untranslatable jump a fatal named trap and refuses
+   to fold an alias onto a later owner. Game `141c23a` applies the independent C4 review's repairs,
+   `1211173` keeps automated runs' saves in their private root, and `3638f80`/`ba47e8a` gate it all.
+2. **C4 — DONE (TR §31.54):** independent merge/recovery review, Vulkan e2e with both N3 loader insertion
    witnesses, D3D11 reference e2e and viewed logos/Corn/Garage/pause frames, N2 with
    a same-session archived-executable baseline, then TR/L02/L62/AGENTS records.
    Fast-forward toolkit main only after acceptance and audited pushes: toolkit

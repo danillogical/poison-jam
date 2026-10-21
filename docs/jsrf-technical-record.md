@@ -6263,3 +6263,115 @@ bridge 120/120 with 0 stubs, profile classified exploratory).
 the value's provenance: which caller reaches the setter with `0x00700010`, given that the one static
 site pushes 0. That is a new bounded diagnosis, not a repair, and C3/C4 stay unaccepted until the
 owner or Codex decides.
+
+### §31.54 C3 and C4 accepted: a deleted tail jump, its repair, and the acceptance runs (2026-10-20)
+
+The owner put the Mac-side Claude session back in charge after §31.53. It worked on the laptop over
+ssh. Every code step's gate was written by a different worker than the code, and every gate has a
+red control. This section supersedes §31.53's "UNPROVEN" value question. The toolkit commit
+`35c6537`, `scripts/check-dead-gotos.py` and the generated baseline's update reason cite "TR 31.53"
+for the thunk; this section is the record they mean.
+
+**The cause, VERIFIED.**
+
+- **The latch run.** A temporary, uncommitted write-once latch in the generated `sub_0018CE30`
+  (`20261019-233947-923-step1-latch`, restored afterwards; `.text` and `.data` identical to the
+  archived exe) recorded the single call: `[esp]=0x0001231E`, `esp=0x00F7FF00`, `ebx=0x00700010`.
+  So the setter was reached from `sub_00012210`'s only static call site at `0x12319`.
+- **The shifted stack.** Kernel-call stack depths place the 8-byte shift inside `sub_00012210`'s
+  call to `0x5F350`, after `call 0x116EC0`.
+- **The deleted jump.** The ICALL at `0x116F46` pushes 8 bytes and reaches the adjustor thunk
+  `sub_00169000` (`sub dword ptr [esp+4],4; jmp 0x168230`). The regenerated lift had emitted that
+  as `MEM32(esp+4) -= 4; (void)0; /* goto loc_00168230 - dead code */`, so the callee's `ret 8`
+  never ran.
+- **The register.** `sub_0005F350`'s `pop edi/esi/ebx` then read shifted slots, and the caller's
+  `edi`, `0x00700010`, became the `ebx` pushed into the wrapper `sub_0015F9E0` and stored by the
+  setter.
+- **Not game behaviour.** The pre-C3 tree lifted the thunk as a tail call. The cause is not
+  FAKE_RWDATA/TLS modelling, and the back-edge hooks the C3 pass added (0 before, 3,597 after) are
+  inert without `RECOMP_GUEST_SERIAL`.
+- **The toolkit cause.** `_is_external_target` (`tools/recomp/lifter.py`) treated targets the
+  regenerated database classes `tail_jump_alias` as intra-function, and the translator's label
+  validator turned the jump into `(void)0`. The rule predates C3; C3's database reclassified
+  `0x168230`, `0x168310` and `0x177B10` (INFERRED for the reclassification).
+
+**Repairs.**
+
+- **Toolkit `35c6537`.** A jump leaving its function becomes a tail call when the target has its
+  own symbol (an emitted body, or a manual/recovered definition). This fixed 20 sites: the thunk,
+  recovered `body_00169010`, six C++ EH funclets jumping to `0x177B10`, and 12 others.
+- **Toolkit `7544264`, after an independent C4 review.**
+  - Every remaining untranslatable jump is a fatal `RECOMP_JUMP_TRAP(site, target)`: 28 sites,
+    including the three recovered `__except` bodies, which trap again as they did in C2.
+  - An alias whose folded owner starts after it gets a fatal wrapper: 11 aliases (ledger L64).
+- **Tests.** `6971a4b` and `51fcb85` hold the toolkit tests.
+- **Game `ba47e8a`.** The recover and relift scripts follow the same rule.
+- **Game `141c23a` (the review's P1s).**
+  - **Restored as their own functions:** `0xC42E0` (slot 7 of handler table `0x216150`; it had
+    folded onto the constructor at `0xC44D0`) and `0x11B680`.
+  - **Recovered and retired:** `0x6FE40..0x70057` recovered; the false `0x70027` retired (its "table"
+    is packed 16-bit data).
+  - **Boundary fixes:** `0xD58E0..0xD59FE` and `0x11BA00..0x11BAAC`.
+  - **Result:** 3,393 recovered entries; 0 silent deleted jumps remain.
+- **Game `1211173`: save isolation.** With `RECOMP_SAVE_DIR` unset, v0.14.0's path rule keeps UDATA
+  and TDATA in `game\` when the save root has none, so a run that saved would have written
+  `game\UDATA`.
+  - Runners now set `RECOMP_SAVE_DIR` to the run's private root.
+  - `main.c` prints `[SAVE] udata_root`/`tdata_root` and refuses to start when they land outside it.
+  - Run verification requires both lines inside the root.
+  - Owner play is unchanged.
+
+**Gates.**
+
+| Gate | Green on the fix | Red control |
+|---|---|---|
+| `tools/recomp/test_tail_jump_to_alias_body.py` | 13 cases pass | 6 fail on `35c6537`; a mutant that folds after-owner aliases fails |
+| `check-dead-gotos.py` (in `just check`) | 0 silent, 28 traps, 0 callable | the previous tree: 35 silent |
+| `test_alias_dispatch.py` | passes | 14 failures on the previous tree |
+| `test_tail_thunk_169000.py` | passes | the pre-fix lift leaves esp 8 bytes low with `calls=0` |
+| `test_save_isolation.py` (36 cases) | passes | five mutants red |
+
+- **Suite:** full limited-rights CTest **104/104 in 527.66 s** (`logs\ctest-c4-final.log`);
+  `just check` green.
+- **Known timeout:** `jsrf_vsh_aot_provenance` takes about 60 s alone and over 120 s beside the rest
+  of the suite, so its timeout is now 300 s.
+
+**Acceptance runs.**
+
+- **Slot check** `20261020-013608-530-s4-slotw-check`: the vblank-callback slot now receives
+  `0x0015F9D0`, the default callback. This rests on the recorded write; terminal coherence was not
+  derived.
+- **Final-exe N3 Vulkan e2e** `20261020-141554-623-keyscript-c4-final-n3-e2e-vk`, quoted from its
+  `jsrf_run.log`:
+
+      [Vulkan Loader] INFO | LAYER:   Insert instance layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+      [Vulkan Loader] INFO | LAYER:   Inserted device layer "VK_LAYER_KHRONOS_validation" (C:\VulkanSDK\1.4.357.0\Bin\VkLayer_khronos_validation.dll)
+
+  Result: `keyscript_complete`, `validation_errors=0`, `validation_warnings=10` (the known ones),
+  `vsh_misses=0`, `pipe_evictions=0`, 0 ICALL, 0 fatal, no `[JUMP]` or `[ALIAS-ICALL]` line, and
+  `[SAVE] udata_root` inside the run's private save root.
+- **D3D11 reference e2e** `20261020-015004-763-keyscript-c4-e2e-d3d11`: `keyscript_complete`. Its
+  main menu, Corn's dialogue, the Garage start and the pause map match the Vulkan run
+  `20261020-013942-411-keyscript-c4-n3-e2e-vk`; the only differences are animation timing. Both
+  runs used the executable before `7544264`, whose changes only turn already-unreached deleted
+  jumps into traps.
+- **Save isolation** `20261020-124155-792-keyscript-save-iso-e2e-vk`: the game's save landed in the
+  run's root, and `game\UDATA` listings and timestamps were identical before and after.
+- **N2 on the pre-trap executable,** three interleaved pairs on the RTX 4070:
+  - final 13.65 / 13.63 / 13.57 presents/s (median 13.63);
+  - baseline, the preserved N4.3 executable, 12.53 / 12.77 / 12.62 (median 12.62);
+  - 0 aliased polls.
+
+  This is an observation; no performance claim, since the host has drifted between sessions.
+
+**Limits.**
+
+- The 28 traps and 11 fatal wrappers are not reached on the e2e path. The review classed about 19
+  traps as data decoded as code; the rest are interior labels of recovered functions.
+- `test_check_dead_gotos.py` still skips without a generated tree.
+- The archive validator `scripts/jsrf_run_profile.py` does not yet read the new
+  `observed_udata_root`.
+- Exploratory profile: no fidelity claim.
+
+**C3 and C4 are accepted.** Pushes follow (receipts below). D1 is next.
+

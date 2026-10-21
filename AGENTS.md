@@ -203,8 +203,9 @@ python -m tools.recomp game/default.xbe --all --split 1000 --gen-dir src/recomp/
 4. `python -X utf8 scripts\gen-abi-deltas.py`.
 5. `just check` and `just test`.
 
-A rebuild from nothing has not yet been measured end to end; record its requirements
-when it is. Clear stale analysis JSON inputs before measuring a clean full regeneration.
+A rebuild from nothing takes about 12 minutes of successful stages (TR §31.45: toolkit
+disasm 194 s, game disasm 284 s, full pass about 200 s, recovery 35 s, the rest under 5 s)
+and about 0.3 GB. Clear stale analysis JSON inputs before measuring a clean full regeneration.
 Full-pass functions, declarations, dispatch and unresolved stubs must come from the
 same pass. `--backedge-yield` emits serial guest preemption points (L34); targeted
 relifts omit it because older chunk headers may lack the macro.

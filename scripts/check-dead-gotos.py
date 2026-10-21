@@ -13,7 +13,7 @@ spellings have existed:
              counted, unless the target has a symbol of its own: such a jump
              should have been a tail call (the adjustor thunk `sub_00169000`,
              `sub dword ptr [esp+4], 4; jmp 0x168230`, returned without the
-             callee's `ret 8` and left the guest stack 8 bytes low, TR 31.53).
+             callee's `ret 8` and left the guest stack 8 bytes low, TR 31.54).
 
 Trap targets are classified by what the tree has at that address, first match
 winning:
