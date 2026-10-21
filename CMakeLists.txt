@@ -355,6 +355,71 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/gen)
     target_link_libraries(jsrf_nv2a_hal_test PRIVATE xboxrecomp)
     add_test(NAME jsrf_nv2a_hal COMMAND jsrf_nv2a_hal_test)
+    # ── D4 coverage diagnostics, the committed-stream deciding gate ──────────────────────────
+    # Authored by a worker distinct from the production change. It drives the real owner path
+    # (guest RAM / XBE layout / instance RAMHT / commit consumer / real pushbuffer words) and
+    # reads the executor's own nv2a_pb_exec_coverage() ledger. One process per case because the
+    # gate is sampled once per process: the environment variants below are therefore separate
+    # CTest entries, not one case that tries to flip the environment. The exact-1 gate must be
+    # the environment's decision, so the on cases carry RECOMP_PB_COVERAGE=1 and the off
+    # variants carry unset / empty / 0 / 01 / true.
+    add_executable(jsrf_pbcov_stream_test tests/test_pbcov_stream.c)
+    target_include_directories(jsrf_pbcov_stream_test PRIVATE
+        ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/recomp/gen)
+    target_link_libraries(jsrf_pbcov_stream_test PRIVATE xboxrecomp)
+    set(PBCOV_STREAM_CASES
+        ff_neither ff_texgen_only ff_texgen_zero_seen ff_texmat_only ff_both_stage_assoc
+        ff_stage1_only ff_stage2_enable_no_matrix ff_stage3_enable_only
+        ff_stage3_texgen_only
+        stage6_isolated stage7_isolated stage6_7_multi stage_batch_vs_incidence
+        stage_program_path_count stage_first_retained
+        lit_nonqualifying lit_specular_only lit_spot_only lit_both_and_immutable
+        first_records_immutable report_retained
+        vp_port_0b00 vp_port_0b10 vp_port_0b70 vp_cursor_advance
+        vp_component_unavailable vp_zero_observed vp_upload_past_end
+        vp_start_out_of_range
+        gate_on_identity subchannel_guard rejected_stream_rollback
+        guards_stopped guards_sub_minimum entry_forms vtable_legacy_init)
+    foreach(_case IN LISTS PBCOV_STREAM_CASES)
+        add_test(NAME jsrf_pbcov_stream_${_case}
+                 COMMAND jsrf_pbcov_stream_test --case ${_case})
+        set_tests_properties(jsrf_pbcov_stream_${_case} PROPERTIES TIMEOUT 120
+            ENVIRONMENT "RECOMP_PB_COVERAGE=1")
+    endforeach()
+    # The first-sample cases set/clear the variable themselves, but their CTest entries still
+    # start from an off environment so the fixture, not the parent, decides the first sample.
+    add_test(NAME jsrf_pbcov_stream_gate_first_on_wins
+             COMMAND jsrf_pbcov_stream_test --case gate_first_sample_on_wins)
+    set_tests_properties(jsrf_pbcov_stream_gate_first_on_wins PROPERTIES TIMEOUT 120
+        ENVIRONMENT "RECOMP_PB_COVERAGE=1")
+    add_test(NAME jsrf_pbcov_stream_gate_first_off_wins
+             COMMAND jsrf_pbcov_stream_test --case gate_first_sample_off_wins)
+    set_tests_properties(jsrf_pbcov_stream_gate_first_off_wins PROPERTIES TIMEOUT 120)
+    # Off variants: unset, empty, 0, 01, true. The case also checks that CTest's value is not
+    # the exact-1 gate, so a mis-wired environment cannot pass as an "off" case.
+    if(NOT CMAKE_VERSION VERSION_LESS 3.22)
+        add_test(NAME jsrf_pbcov_stream_gate_unset
+                 COMMAND jsrf_pbcov_stream_test --case gate_off)
+        set_tests_properties(jsrf_pbcov_stream_gate_unset PROPERTIES TIMEOUT 120
+            ENVIRONMENT_MODIFICATION "RECOMP_PB_COVERAGE=unset:")
+    else()
+        add_test(NAME jsrf_pbcov_stream_gate_unset
+                 COMMAND jsrf_pbcov_stream_test --case gate_off)
+        set_tests_properties(jsrf_pbcov_stream_gate_unset PROPERTIES TIMEOUT 120
+            ENVIRONMENT "RECOMP_PB_COVERAGE=")
+    endif()
+    foreach(_variant empty: 0 01 true)
+        if(_variant STREQUAL "empty:")
+            set(_env "RECOMP_PB_COVERAGE=")
+            set(_name jsrf_pbcov_stream_gate_empty)
+        else()
+            set(_env "RECOMP_PB_COVERAGE=${_variant}")
+            set(_name jsrf_pbcov_stream_gate_${_variant})
+        endif()
+        add_test(NAME ${_name} COMMAND jsrf_pbcov_stream_test --case gate_off)
+        set_tests_properties(${_name} PROPERTIES TIMEOUT 120 ENVIRONMENT "${_env}")
+    endforeach()
     add_executable(jsrf_gpu_backend_parity_test tests/test_gpu_backend_parity.c)
     target_include_directories(jsrf_gpu_backend_parity_test PRIVATE
         ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a
@@ -703,6 +768,76 @@ if(BUILD_TESTING)
         if(NOT CMAKE_VERSION VERSION_LESS 3.22)
             set_tests_properties(jsrf_vk_pcache_device_hw PROPERTIES
                 ENVIRONMENT_MODIFICATION "VK_DRIVER_FILES=unset:;VK_ICD_FILENAMES=unset:")
+        endif()
+
+        # ── D4 Vulkan rc-refusal coverage, the real-device deciding gate ─────────────────────
+        # Authored by a worker distinct from the production change. It #includes the production
+        # src/video/nv2a_vk_backend.c with XBR_VK_BACKEND defined, installs on the software ICD,
+        # and drives the production vb_draw/fallback site: `g.st.rc_fallback` must equal the
+        # production ledger's total, the two reason counters must sum to it exclusively, and the
+        # first refusal must be frozen. One process per case because both gates (the executor's
+        # and the header's) are sampled once per process; the RECOMP_PB_COVERAGE variants are
+        # therefore separate CTest entries. A failed install when the environment names an ICD is
+        # a FAILURE in the case itself, never a skip.
+        add_executable(jsrf_pbcov_vk_test tests/test_pbcov_vk.c)
+        add_dependencies(jsrf_pbcov_vk_test xbox_video)
+        target_include_directories(jsrf_pbcov_vk_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/video
+            ${Vulkan_INCLUDE_DIRS}
+            "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv")
+        target_link_libraries(jsrf_pbcov_vk_test PRIVATE ${CMAKE_DL_LIBS})
+        set(PBCOV_VK_CASES
+            rc_unsupported_modes rc_cube_mode3 rc_supported_modes rc_priority
+            rc_first_report rc_vtable)
+        if(XBR_VK_SW_ICD)
+            file(TO_NATIVE_PATH "${XBR_VK_SW_ICD}" _vk_icd_pbcov)
+            set(_pbcov_vk_env
+                "VK_DRIVER_FILES=${_vk_icd_pbcov};VK_ICD_FILENAMES=${_vk_icd_pbcov};RECOMP_VK_DEVICE=llvmpipe;RECOMP_VK_PIPELINE_CACHE=off")
+            foreach(_case IN LISTS PBCOV_VK_CASES)
+                add_test(NAME jsrf_pbcov_vk_${_case}
+                         COMMAND jsrf_pbcov_vk_test --case ${_case})
+                set_tests_properties(jsrf_pbcov_vk_${_case} PROPERTIES TIMEOUT 300
+                    ENVIRONMENT "${_pbcov_vk_env};RECOMP_PB_COVERAGE=1")
+            endforeach()
+            # Gate-off variants: the renderer still refuses, the diagnostics stay empty.
+            # unset / empty / 0 / 01 / true are all inert; the case also checks that CTest's
+            # value is not the exact-1 gate, so a mis-wired entry cannot pass as "off".
+            if(NOT CMAKE_VERSION VERSION_LESS 3.22)
+                add_test(NAME jsrf_pbcov_vk_rc_gate_unset
+                         COMMAND jsrf_pbcov_vk_test --case rc_gate_off)
+                set_tests_properties(jsrf_pbcov_vk_rc_gate_unset PROPERTIES TIMEOUT 300
+                    ENVIRONMENT "${_pbcov_vk_env}"
+                    ENVIRONMENT_MODIFICATION "RECOMP_PB_COVERAGE=unset:")
+            endif()
+            add_test(NAME jsrf_pbcov_vk_rc_gate_empty
+                     COMMAND jsrf_pbcov_vk_test --case rc_gate_off)
+            set_tests_properties(jsrf_pbcov_vk_rc_gate_empty PROPERTIES TIMEOUT 300
+                ENVIRONMENT "${_pbcov_vk_env};RECOMP_PB_COVERAGE=")
+            foreach(_variant 0 01 true)
+                add_test(NAME jsrf_pbcov_vk_rc_gate_${_variant}
+                         COMMAND jsrf_pbcov_vk_test --case rc_gate_off)
+                set_tests_properties(jsrf_pbcov_vk_rc_gate_${_variant} PROPERTIES TIMEOUT 300
+                    ENVIRONMENT "${_pbcov_vk_env};RECOMP_PB_COVERAGE=${_variant}")
+            endforeach()
+            # First-sample cases set the variable themselves; the CTest environment deliberately
+            # starts on the opposite side, so the process, not the parent, decides the first sample.
+            add_test(NAME jsrf_pbcov_vk_rc_first_sample_on_wins
+                     COMMAND jsrf_pbcov_vk_test --case rc_first_sample_on_wins)
+            set_tests_properties(jsrf_pbcov_vk_rc_first_sample_on_wins PROPERTIES TIMEOUT 300
+                ENVIRONMENT "${_pbcov_vk_env};RECOMP_PB_COVERAGE=1")
+            add_test(NAME jsrf_pbcov_vk_rc_first_sample_off_wins
+                     COMMAND jsrf_pbcov_vk_test --case rc_first_sample_off_wins)
+            set_tests_properties(jsrf_pbcov_vk_rc_first_sample_off_wins PROPERTIES TIMEOUT 300
+                ENVIRONMENT "${_pbcov_vk_env};RECOMP_PB_COVERAGE=0")
+        else()
+            foreach(_case IN LISTS PBCOV_VK_CASES
+                    rc_gate_unset rc_gate_empty rc_gate_0 rc_gate_01 rc_gate_true
+                    rc_first_sample_on_wins rc_first_sample_off_wins)
+                add_test(NAME jsrf_pbcov_vk_${_case}
+                         COMMAND jsrf_pbcov_vk_test --skip "XBR_VK_SW_ICD is not set")
+                set_tests_properties(jsrf_pbcov_vk_${_case} PROPERTIES TIMEOUT 20
+                    SKIP_RETURN_CODE 77)
+            endforeach()
         endif()
     else()
         message(STATUS "Vulkan/unavailable: jsrf_vk_suballoc_gate is not registered -- it "
