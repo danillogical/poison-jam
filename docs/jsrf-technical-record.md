@@ -6413,3 +6413,45 @@ PUSHED_TO: origin / BRANCH: main / COMMIT: 13947770f0ab5e79d109e03e0b4ec16c7c7e2
 
 Next: D3–D4, triaging reJSRF's game-side fixes against our LLE executor and Vulkan back end.
 
+### §31.56 D4 coverage prerequisite: initial candidate rejected (2026-10-21)
+
+Toolkit `4203fda` / game classification `d5ea04f` are local, unpushed coverage
+instrumentation candidates, not accepted work. Codex independently compiled the
+candidate's `pb_coverage_batch` and `pb_coverage_note_method` bodies verbatim in
+a small state harness, with the production ledger header and admission table.
+This tests the actual predicate bodies, not a full pushbuffer submission:
+
+- Stage-0 positive control: texgen=1, texmat=1, first_valid=1, exit 0.
+- Stage-1-only texgen (`0x3D0=0x8511`): texgen=0, first_valid=0, exit 1.
+- Stage-1-only matrix enable (`0x424=1`): texmat=0, first_valid=0, exit 1.
+- After a mode-6 batch claims `first_b`, delivering `0x1B38` changes its
+  `bump_seen_mask` from 0 to 2 while valid remains 1: first-state retention fails.
+
+Local xemu source `478b4f496102379c7eaa7f3ec10e714a703c4300`,
+`hw/xbox/nv2a/pgraph/pgraph.c`, defines texgen slots by a 16-byte stride, matrix
+enable slots by a four-byte stride, and four 16-word texture matrices. The
+candidate instead checks only stage 0, interpreting its one enable register as
+a four-stage bitmask. The toolkit's unchanged admission table admits both of
+the stage-1 methods above. Their misses therefore cannot be excused as absent
+admission. Other raw fields really are unavailable through this seam: the same
+production table rejects bump matrix/scale/offset methods `0x1B28/38/3C`. Their
+zeros must be distinguished from observed zero values; diagnostic work must
+not silently change admission or rendering to obtain them.
+
+Codex reran `jsrf_nv2a_registers` through the limited-rights wrapper: 1/1 pass.
+The gate-on smoke reclassifies EXPLORATORY, with no unknown/missing profile;
+both archived key scripts have `script_ok=false` at their 240 s bound. These
+are bounded smoke observations, not completed gameplay coverage or fidelity.
+The implementer's native transcript records `opencode-go/deepseek-v4.1-flash`,
+thinking high, fallback false. Configured reviewer transcripts record
+`workbuddy-ai/step-5-preview`, high, fallback false; both attempts returned 429
+and produced no independent review. Codex's reproduction supplies the present
+independent rejection, not acceptance of the other predicates.
+
+**Next:** bounded diagnostic repair: all four stage predicates and retained
+raw state; a separate current delivery bitmap copied into an immutable first
+snapshot; explicit availability for undelivered fields. Preserve admission,
+rendering and gate-off behavior. Then a different author's production-path
+fixtures and private final-source mutations, followed by the four coverage
+scripts. No feature implementation, D completion or candidate push yet.
+

@@ -268,6 +268,11 @@ already approved steps:
 4. **D2 — DONE, no delta (TR §31.55):** regenerate and classify only D1's deltas, with C3 and C4 gates.
 5. **D3–D4:** triage reJSRF's game-side fixes against our LLE executor and Vulkan,
    then gather the required scene evidence on both backends and view the frames.
+   **Coverage prerequisite pending (2026-10-21, TR §31.56):** the first local
+   instrumentation candidate is rejected: stage-1-only texgen/matrix use gives
+   false zeros and a first-batch delivery mask changes after publication. Repair
+   those diagnostics before the different-author gate and four coverage scripts;
+   no BUMPENVMAP or texgen implementation is accepted yet.
 6. **D5:** plan applicable items as separate gated steps, with a different test
    author, then records and audited pushes. New design is planned only here when
    the preceding evidence establishes what is applicable.
