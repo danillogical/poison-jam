@@ -6691,3 +6691,19 @@ by their named assertion; restored baseline PASS; shared toolkit unchanged
 PASS. The mode-5 evidence and old-helper red control are in the ignored
 `logs/reports/d4-step2-repair-private/` tree. `just check` is run on the final
 tree. No production defect was found; no gameplay coverage is claimed.
+
+**Independent acceptance of the coverage gate.** Codex reviewed the repaired
+24-draw supported-mode sweep, refusal assertions, work-area acquisition/release
+guards and six-case helper regression. It independently reran the focused suite:
+57/57, no skips, 2.83 s. A fresh private mode-5 mutant run now fails its named
+semantic assertion with pristine/restored positives and the shared toolkit
+unchanged; the previously retained old-fixture run still documents its escape.
+The helper regression against the archived old helper again exits 1 (two failed
+assertions, three errors and its deliberate real-root skip); the repaired helper
+passes. The full 161/161 receipt and final 22/22 mutation receipt were inspected,
+not rerun wholesale by Codex. Native gate-repair identity is confirmed as
+`opencode-go/deepseek-v4.1-flash`, high, fallback false. The diagnostics at toolkit
+`2bcdc30` and game gate `972665a` are accepted for their bounded observational
+contract. This does not accept rendering features, gameplay coverage or D4/D5
+completion. Next: audited toolkit-first checkpoint, then the four cache-off Vulkan
+coverage scripts with source/run identities, counts and retained availability.

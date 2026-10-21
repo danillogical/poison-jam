@@ -283,9 +283,11 @@ already approved steps:
    rejected boundary (TR §31.60) is repaired in TR §31.61: all modes 0..5 at all
    four stages are drawn and decided per draw, the mode-5 mutant is in the
    private table (22 mutants), and the helper refuses existing work paths with
-   owned-only cleanup plus a focused regression. The gate remains a candidate
-   pending Codex review; the four coverage scripts are step 3, and
-   production remains ungated and unpushed until the gate is accepted.
+   owned-only cleanup plus a focused regression. Codex independently accepted the
+   repaired gate (TR §31.61): focused 57/57, escaping mode-5 mutant now detected,
+   old-helper negative control confirmed, full-suite 161/161 receipt verified.
+   Next is the audited toolkit-first checkpoint and step 3's four cache-off
+   Vulkan coverage scripts, with counts and first-event availability recorded.
    No BUMPENVMAP or texgen implementation is accepted yet.
 6. **D5:** plan applicable items as separate gated steps, with a different test
    author, then records and audited pushes. New design is planned only here when
