@@ -6507,3 +6507,54 @@ again passes 1/1 despite this metadata defect. The repair is not accepted or
 pushed. Next bounded repair must track actual accepted upload slot/component,
 freeze availability for the selected first word, preserve rendering/admission,
 then return for review before the different-author gate.
+
+### §31.58 D4 coverage repair 2: selected program-word provenance and committed-seam raw state (2026-10-21)
+
+Third local candidate for the D4 coverage prerequisite; ungated and unpushed. Toolkit
+`2bcdc3081362341b92a9efb8afad00bdfd005c85` changes only `nv2a_backend.h` and
+`nv2a_pb_exec.c`. It is not accepted: Codex review, then a different author's
+production-path fixtures and mutations, are still owed.
+
+**Defect (§31.57 review).** `first_b.vp_first_word_seen` OR-ed the delivery of methods
+`0x0B00/04/08/0C` across every program slot. Selecting an unwritten slot reported an
+unobserved zero, a component-0 write through `0x0B10..0x0B70` was missed, and a
+component-1..3 write could claim dword 0. It is diagnostic metadata, not a rendering defect.
+
+**Repair.**
+
+- `vp_program_method` marks `s_pb_vp_word0[slot]` only inside its existing
+  `prog_load < NV2A_VSH_SLOTS` block and only for `slot % 4 == 0`, i.e. the accepted
+  component-0 write and the cursor slot it actually landed in. A dropped out-of-range
+  upload or another component cannot set it; a legitimate zero upload does, so an
+  observed zero stays distinct from UNKNOWN.
+- `first_b` gains `vp_start`; word, slot and availability are read together at the claim
+  and frozen. Ledger version 3.
+- Coverage counters and first-record raw values now read a committed-seam shadow copied
+  by `pb_coverage_note_method` after the nonzero-subchannel filter. `s_reg` is still
+  written before that filter (existing renderer behaviour, unchanged), but a filtered
+  method can no longer move a counter or seed a first record.
+- Rendering, the subchannel filter, the interpreter, the program cursor and method
+  admission are unchanged; gate-off writes nothing.
+
+**Local checks.** Codex's selected-word probe, retargeted to the production bodies: old
+source red on unwritten-selected-slot, alternate port `0x0B10` and other-component; the
+repaired source green on those plus zero-upload, out-of-range and later-update/
+current-selection controls. The earlier all-stage and first-record-retention probe stays
+green after adapting its injection to the committed seam (assertions unchanged); the
+archived old source stays red. A body-level subchannel probe shows the old shadow counting
+a filtered-subchannel write (texgen 1) and the repaired shadow not counting it (0). These
+are predicate/state-body checks, not committed-submission or gameplay evidence.
+
+**Validation and smoke.** Guarded build succeeded with no warning in the changed region;
+focused CTest `nv2a` 9/9, `vk_` 15/15, parity 3/3 passed; `just check` passed;
+`gpu-submit-supported` reached `probe_gpu` with `normal_exit`. One 240 s cache-off Vulkan
+smoke with coverage on (`20261021-132905-377-keyscript-d4-step1-vp-repair-cov-e2e-vk`,
+EXPLORATORY, 0 unknown/missing) showed `texgen_seen=7777`, `mat_enable_seen=F`,
+`matrix_seen=000000000000FFFF` (stage 0's sixteen words at that claim only),
+`enable_seen=7`, `stage_ge6=0`, `rc_fallback=0`, 0 ICALL/fatal, saves inside the run root.
+The run's toolkit patch sha is exactly `git diff 44c59a9 2bcdc30`. The keyscript is
+bounded and incomplete (`script_ok=false`), and no mode-6 batch was observed; neither is
+evidence of absence in gameplay.
+
+**Next:** Codex review, then the different author's committed-submission fixtures and
+private mutations. No feature work, coverage scripts, D completion or push yet.
