@@ -6378,3 +6378,38 @@ for the thunk; this section is the record they mean.
 PUSHED_TO: origin / BRANCH: main / COMMIT: 51fcb8563a384fbe69a8386a14e89f6f5666f030 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 6c3cd84..51fcb85 (131 commits: the v0.14.0 merge, ee2e0cd, the C3-RR AC'97 repair, the tail-jump and trap fixes and their tests), toolkit pushed first, clean and synchronized; 480 outgoing blobs (largest 434 429 bytes), 0 secret hits, no retail-derived path; upstream untouched (push URL DISABLED).
 PUSHED_TO: origin / BRANCH: master / COMMIT: cebd1f9 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 699bc46..cebd1f9 (18 commits: the C3 seeds and gates, C3-RR gates and records, the C4 review repairs, save isolation and the C3/C4 records), clean and synchronized; 79 outgoing blobs (largest 3 347 497 bytes), 0 secret hits, no `game/` or retail-derived path.
 
+### §31.55 D1 and D2: the reJSRF discovery fixes are ported and change nothing in JSRF (2026-10-21)
+
+**D1, toolkit `4dec5ea..1394777`.** Five MIT-licensed fixes from `nworkers/xboxrecomp` were ported.
+The original SHAs now live on that fork's `rejsrf-v0.13` branch; the ports were taken from the
+patch-identical `rejsrf-v0.14` rebase. Attribution is in each commit body.
+
+| Source | Ours | Decision |
+|---|---|---|
+| `58f7166` + reachability fix `20a269e` | `4dec5ea` | Mostly covered by upstream `34f5e1c`. The late tail-jump pass now also runs after the fork's late orphan passes. |
+| `0c32a78` | `69fe559` | The fork's `_pass_cond_branch_orphans_after` already took jcc from final bodies. New: a jcc target whose block ends in an indirect jmp. |
+| `982cd28` | `926b44a` | Ported unchanged: recovered switch arms are scanned for switches of their own. |
+| `7c58ec6` | `83ead08` | Ported unchanged: a recovered body's arms get entries inside its range. |
+| `6a38c01` | `1394777` | Partly ported. Our stubs already report through `recomp_icall_fail_log` and stay fatal (`0xE0424943`). Only the `_stub_definition` helper and a test were taken. The opt-in silent hook was not, because it would make stubs non-fatal by default. |
+
+**Not ported:** the prerequisite pass `10f2f96`. On JSRF it adds only alias entries at `0xB8A60`
+(ambiguous, deliberately unresolved) and `0xB9270` (already recovered). A jump into an
+unexamined interior already becomes a fatal `RECOMP_JUMP_TRAP`.
+
+**Tests.** Toolkit pytest: 915 passed, 4 skipped, 1 failed. The failure is the known
+`test_lifter_rep_compare_flags` negative control, and `main` has the same one. The 15 new tests are
+the source authors' tests, adapted; their late-pass and arm-entry cases fail against the previous
+toolkit.
+
+**D2.** The disassembler on JSRF gives 8,608 functions, byte-identical output to the previous
+toolkit. A full regeneration (`just regen`, boundary relift, recovery, ABI deltas, all exit 0) gives
+a generated and recovered tree **byte-identical** to the one before: 16 files, 0 changed. Its JUMPS
+and ALIASES reports match §31.54, and no config changed. D1 touched no runtime or template source,
+so the guarded build and `just check` pass and no new runtime run is needed. On our base, the JSRF
+cases these fixes were written for were already handled by upstream v0.14.0, the fork's own passes
+and the game's recovered seeds.
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: 13947770f0ab5e79d109e03e0b4ec16c7c7e2b30 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 51fcb85..1394777, 5 commits, 11 outgoing blobs (largest 205 556 bytes), 0 secret hits; upstream and nworkers untouched (push URLs DISABLED).
+
+Next: D3–D4, triaging reJSRF's game-side fixes against our LLE executor and Vulkan back end.
+

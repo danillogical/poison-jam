@@ -262,10 +262,10 @@ already approved steps:
    a same-session archived-executable baseline, then TR/L02/L62/AGENTS records.
    Fast-forward toolkit main only after acceptance and audited pushes: toolkit
    origin first, then game origin.
-3. **D1:** port the MIT reJSRF toolkit discovery fixes `58f7166`, `0c32a78`,
+3. **D1 — DONE (TR §31.55):** port the MIT reJSRF toolkit discovery fixes `58f7166`, `0c32a78`,
    `982cd28`, `7c58ec6`, `6a38c01`, explaining any part already covered by upstream
    `34f5e1c`; retain attribution in commit bodies. Skip the performance-only ports.
-4. **D2:** regenerate and classify only D1's deltas, with C3 and C4 gates.
+4. **D2 — DONE, no delta (TR §31.55):** regenerate and classify only D1's deltas, with C3 and C4 gates.
 5. **D3–D4:** triage reJSRF's game-side fixes against our LLE executor and Vulkan,
    then gather the required scene evidence on both backends and view the frames.
 6. **D5:** plan applicable items as separate gated steps, with a different test
