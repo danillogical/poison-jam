@@ -6654,3 +6654,40 @@ focused/full checks and independent review before step 3. The exhausted repair
 allowance may be renewed under the skill's confirmed-review rule for this newly
 demonstrated gate defect, retaining the six unused operation slots and all prior
 spending; no operation-slot or context-based reset is authorized.
+
+### §31.61 D4 gate repair: mode 5 exercised and work-area ownership (2026-10-21)
+
+Test-only repair of §31.60. Toolkit production remains frozen at
+`2bcdc3081362341b92a9efb8afad00bdfd005c85`; game candidate
+`972665ac66b932060ec142ae989dd129e8e14a42` changes only the Vulkan gate fixture,
+the mutation helper and one new helper regression/CTest. It is a candidate
+pending Codex review; the four coverage scripts remain step 3.
+
+- `case_rc_supported_modes` now draws every mode 0..5 at every stage 0..3 (24
+  draws), one mode per draw, with a per-draw assertion that the production
+  `rc_draws` increments by one and that `rc_fallback`, the ledger total/reasons
+  and `first_valid` stay zero. The earlier case drew only modes 0–4; the
+  supported-mode claim is now actually exercised. Cube-mode3 and mode6/7
+  refusal cases are unchanged.
+- The mutation table gains `vk-supported-mode5-rejected` (`if (m > 5)` →
+  `if (m > 4)` in the real shared header). The old gate (`576fa7a`) passes that
+  compilable mutant (`STILL-PASS`, recorded); the repaired gate fails it with
+  `supported mode 5 stage 0 draws without fallback`; the restored source
+  passes. The earlier 21-mutant results remain their named properties only.
+- `pbcov-mutants.py --work` now refuses an existing path without deleting it,
+  creates and stamps a new owned root, and removes only that root after
+  checking its resolved path, directory identity and marker. The default temp
+  root is still fresh and owned.
+- `tests/test_pbcov_workdir.py` drives the actual helper entry with the copy
+  boundary stubbed: an existing sentinel survives refusal before any copy, a
+  failed fresh run removes only its owned root, `--keep` leaves it, and a real
+  repository root is never offered to the pre-repair helper. The old helper
+  fails these checks (`failures=2, errors=3`); the repaired helper passes all
+  six (the real-game-root case is skipped for the old helper by design).
+
+**Evidence.** Focused gate **57/57** in 2.75 s, zero skipped. Full limited-rights
+CTest **161/161 in 488.41 s**, zero skipped. Private mutants **22/22** decided
+by their named assertion; restored baseline PASS; shared toolkit unchanged
+PASS. The mode-5 evidence and old-helper red control are in the ignored
+`logs/reports/d4-step2-repair-private/` tree. `just check` is run on the final
+tree. No production defect was found; no gameplay coverage is claimed.
