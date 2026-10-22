@@ -6907,3 +6907,30 @@ skipped, 677.54 s**; `just check` green on the final tree.
 unpushed pending Codex verification. No Mac/MoltenVK run. Remaining debt is unchanged (measured
 suballoc oracle, POSIX handle lifetime, vsh scratch race/log, parity warnings, fixtures-only shim
 test, 16 KiB subcase). D4 incomplete; step 4 waits.
+
+### §31.66 Preflight gate repair independently accepted (2026-10-22)
+
+Codex independently inspected the final configured-project binding and reran the exact private
+counterexample that escaped `58cd601`. With the corpus source cleared, the repaired gate now fails
+specifically on `missing corpus binding`; the shared source remained unchanged. The different
+gate worker's native transcript confirms the configured task role, high effort and no fallback.
+
+The full limited-rights CTest receipt at `ab0ef14` is **162/162, zero skipped, 677.54 s**, with a
+successful guarded build and `just check`. Codex made one final announcement-only integration
+correction: the fixtures-only message now names the full-runtime blocks it actually omits on
+every host, rather than also calling the Windows save-root and committed-stream fixtures omitted
+when their earlier Windows guards still register them. No test selection or runtime code changed.
+After that correction, the guarded build passed and Codex reran the complete G1 CTest **1/1 in
+76.40 s**: pristine and both restores passed, all three private mutations failed for the intended
+reasons, actual conformance-project binding supplied the consumer's table, and the shared input
+hashes remained identical. Final CMake SHA-256 is
+`649d346cbe60ffa1815bb14a58cc17e3180e220ce9b7dfba76c48be62a2be9b9`; the gate source remains
+`46e0d23999efda2259579154363e09fc0f115c2d458f348fcacdbcab5fd13d74`.
+
+The Windows portability test/disclosure repair is accepted. The old rejected candidate is
+retained as history; only the repaired final tree is the accepted checkpoint. This accepts no
+Mac runtime or new MoltenVK result. Open findings remain: test-oracle padding/dedicated accounting,
+POSIX handle safety, shared scratch under parallel CTest and the parity-test warnings. Existing
+allocator-gate property 2d already exercises a nonzero padding value with the production stats
+function; it is a useful positive control for the next bounded investigation, not a measurement
+of the historical MoltenVK 1,792 bytes. D4 remains incomplete.

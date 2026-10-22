@@ -15,10 +15,12 @@ different-author `JSRF_FIXTURES_ONLY=ON` gate. Codex rejected the first candidat
 G1 corpus-binding hole and a fixtures-only disclosure gap; the repair now derives the
 compiled corpus from the real configured conformance project, adds the cleared-corpus
 mutant, and announces the exclusions in the branch fixtures-only actually executes
-(TR §31.65). Full CTest **162/162, zero skipped, 677.54 s**, `just check` green; the
-repaired candidate is local and awaits Codex verification.
-Next after that verification: a measured MoltenVK suballoc-oracle investigation, then the
-POSIX handle-lifetime and vsh scratch-race/warning debt, before step 4 (BUMPENVMAP
+(TR §31.65). Codex independently verified the repaired binding gate and accepted the
+preflight test/disclosure repair (TR §31.66). Full CTest **162/162, zero skipped,
+677.54 s**; the final announcement-only correction also passed the guarded build and
+the complete G1 gate. Next: controlled suballocation-oracle checks on Windows, then the
+POSIX handle-lifetime and vsh scratch-race/warning debt; the historical MoltenVK numbers
+remain unverified until a Mac receipt exists. These precede step 4 (BUMPENVMAP
 CPU/AOT-Vulkan) and the different-author step-5 gate. No D completion.
 
 ## Objective

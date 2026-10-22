@@ -1923,8 +1923,7 @@ if(BUILD_TESTING)
         # retail XBE, the lifted tree, archived runs or the retail corpus (or, for
         # jsrf_optional_vulkan and jsrf_vsh_aot_provenance, a Windows tool layout), so they are
         # not registered here.  A case that needs an optional module (duckdb) skips itself.
-        message(STATUS "Fixtures-only: the Win32-only C++ fixtures are not registered -- "
-                       "jsrf_save_root, jsrf_recovery_11c1, all jsrf_pbcov_stream_* cases, "
+        message(STATUS "Fixtures-only: the full-runtime C++ fixture blocks are not registered -- "
                        "jsrf_fence_release_runtime*, jsrf_apu_watch_fixture_*, "
                        "jsrf_collect_arming_gate_on/off, jsrf_a2h_slotw_fixture_*, "
                        "jsrf_ac97_reset_gate and jsrf_native_gpu_warp -- because fixtures-only "
