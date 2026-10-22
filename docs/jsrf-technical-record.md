@@ -7224,6 +7224,12 @@ orchestrator: **sentinel fall-through** → 21 FAIL (`multi(any, {NULL}) is WAIT
 **`obj_pin` for self** → 3 FAIL (`multi(any, {own value, unsignalled event}) times out after the
 close (-1) FAIL`); **skip release on failure** → invisible to the plain binary but
 `LeakSanitizer: 118400 byte(s) leaked in 200 allocation(s)`, site `obj_alloc` ← `CreateEventA`.
+The orchestrator re-derived the counts from the **committed** blobs rather than trusting the gate
+report: the CRLF-normalised `git show HEAD:src/platform/win32_compat.c` is `7d25e6b7…`, and the
+committed test sources give plain **251/0** and ASAN **44/0** exit 0. Leak detection was proven live
+in that same build shape by running the skip-release mutant, which reports and exits 1 where the
+repaired shim reports nothing; two synthetic leak controls did not trip LSan (one stayed reachable
+from a live stack slot, one was optimised away), which is why the mutant is the control of record.
 Preserved: the original unsafe shim `110e169` is still RED on both required negatives (SIGSEGV on the
 invalid address; 19 false-accept rows then `double free or corruption`), the committed test sources
 still give 175/0 and 22/0 against the repaired shim, and the three pre-existing POSIX programs pass
