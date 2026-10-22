@@ -7251,4 +7251,4 @@ smoke carries because the executable and every Windows-relevant input are provab
 gameplay was run. Linux observations only; no Mac result. D4 remains incomplete; step 4 waits.
 
 PUSHED_TO: none (candidate held for independent Codex review) / BRANCH: master / COMMIT:
-toolkit b06bd36546e7bec75f17ca9677d7b55a8d59e01a; game (this record commit) / RESULT: local commits only; no push, no force, toolkit first then game.
+toolkit b06bd36546e7bec75f17ca9677d7b55a8d59e01a; game a97db34 / RESULT: local commits only; no push, no force, toolkit first then game.
