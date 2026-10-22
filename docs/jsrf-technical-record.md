@@ -6936,3 +6936,48 @@ function; it is a useful positive control for the next bounded investigation, no
 of the historical MoltenVK 1,792 bytes. D4 remains incomplete.
 
 PUSHED_TO: origin / BRANCH: master / COMMIT: 81a032aaf4884a0326ed6fc03075dbf268a71250 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward f1963fb..81a032a (three retained commits, final repaired tree independently accepted); clean and synchronized after push, 15 outgoing blobs, largest 539185 bytes, zero secrets, only the reviewed CMake/test/profile/macOS-doc/plan/TR paths, no forbidden or oversized assets. Final guarded build, complete G1 with all three negative controls, and `just check` passed after the announcement-only integration correction; full 162/162 receipt is at ab0ef14. Toolkit unchanged and synchronized at 110e169e989b8466c84af31872c030b3571c8b4d; no toolkit push needed.
+
+### §31.67 Test-portability debt: allocator oracles, parallel scratch locks, parity warnings (2026-10-22)
+
+Bounded test-only repair of the Windows-exposed review findings. No runtime/backend/POSIX code
+changed; toolkit stays `110e169`. Candidate local/unpushed until Codex verifies.
+
+- **Suballocation oracle (P2a).** The workload gate now asserts
+  `reserved == used + free + padding` instead of omitting padding. The old form was short by
+  exactly the padding on a controlled production-allocator case: a 256-byte bump followed by a
+  2048-aligned take yields **padding 1792**, `4194304 = 2304 + 1792 + 4190208`; the corrected
+  oracle passes, the old `free+used==reserved` fails by 1792, and each deliberately
+  misaccounted field is rejected. Existing property 2d's 57344-byte padding still passes.
+  **The historical MoltenVK 1792 attribution remains INFERENCE** — this controlled Windows case
+  did not measure a Mac.
+- **Allocation-reduction claim (P2b).** The double count is removed:
+  `alloc_calls_delta - dedicated_delta <= ranges_delta/2` (pooled block allocations), with the
+  existing identity `alloc_calls == blocks + dedicated` and a new success-path identity
+  `dedicated == required+prefer+oversize+noroom+nohost+fallbacks`. On the controlled case the
+  old `alloc_calls + dedicated` form fails (3 > 1) and the corrected form passes (1 <= 1).
+  Real llvmpipe and NVIDIA `--suballoc` workloads report `padding=0`, `dedicated=0`, so they pass
+  both old forms and cannot decide the mutations; they still pass all guest-byte, readback,
+  reuse, lifetime and parked-loss checks. The controlled allocator case is the deciding evidence.
+- **Parallel scratch.** `RESOURCE_LOCK` now applies on Windows for `^jsrf_vsh_conformance` and
+  `^jsrf_vsh_aot($|_control)`; the non-Windows `TEMP` override remains separate. Actual CTest
+  metadata shows 12 of 15 vsh tests locked (the malformed/table/provenance tests use different
+  paths). Two sequential `ctest -j4 -R "^jsrf_vsh_conformance"` runs passed 9/9 each and the AOT
+  family passed 6/6. **Limit:** CTest's `RESOURCE_LOCK` serializes tests within one ctest
+  process; two independent ctest processes started concurrently still shared `%TEMP%\
+  vsh_conformance` and one observed a deterministic-looking X3 empty-output failure. No
+  cross-process claim is made; unique per-process scratch paths or an external lock would be a
+  further test-source change.
+- **Warnings.** `rr_a_sum_deciding` now uses integer `sum`/`prod` (no `abs(float)`), and the
+  unused `_snprintf` argument is dropped; the deciding predicate is unchanged. Installed
+  clang-cl 23.1.2 reports no diagnostic at the repaired sites (an old-form control emits
+  `-Wabsolute-value` at 2760; it does not diagnose `_snprintf` arity, but MSVC `/W4` reports
+  C4474 on the old extra argument and none on the final file). The MSVC build has no warning
+  from the file.
+- **Evidence.** Focused `jsrf_vk_suballoc_gate` 1/1 (all 11 properties, 357 checks; the
+  `--padding-1792` mode 22 checks), `jsrf_vk_suballoc_device` 1/1 on llvmpipe, parallel
+  conformance 9/9 twice and AOT 6/6, full limited CTest **162/162, zero skipped, 652.13 s**.
+  Private old-predicate copies fail on the controlled case; restored copies and shared hashes
+  pass/unchanged. No Mac claim; the MoltenVK skip remains.
+
+**Next:** the separate final preflight operation for POSIX handle-lifetime validation on WSL
+(native cc, no CMake install/SSH); then D4 step 4. D4 remains incomplete.

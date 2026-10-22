@@ -18,10 +18,14 @@ mutant, and announces the exclusions in the branch fixtures-only actually execut
 (TR §31.65). Codex independently verified the repaired binding gate and accepted the
 preflight test/disclosure repair (TR §31.66). Full CTest **162/162, zero skipped,
 677.54 s**; the final announcement-only correction also passed the guarded build and
-the complete G1 gate. Next: controlled suballocation-oracle checks on Windows, then the
-POSIX handle-lifetime and vsh scratch-race/warning debt; the historical MoltenVK numbers
-remain unverified until a Mac receipt exists. These precede step 4 (BUMPENVMAP
-CPU/AOT-Vulkan) and the different-author step-5 gate. No D completion.
+the complete G1 gate. The bounded Windows test-debt repair (TR §31.67) now corrects the
+allocator padding/dedicated oracles, applies the shared-scratch RESOURCE_LOCK on Windows and
+removes the two parity warnings; a controlled 1792-byte allocator case decides the old forms
+while the real llvmpipe/NVIDIA workloads report zero padding/dedicated. The MoltenVK suballoc
+skip remains explicit debt (historical 1792 is still an inference), and CTest locks do not
+coordinate separate ctest processes. A separate final preflight operation validates POSIX
+handle lifetime on WSL before step 4 (BUMPENVMAP CPU/AOT-Vulkan) and the different-author
+step-5 gate. No D completion.
 
 ## Objective
 

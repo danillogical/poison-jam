@@ -2733,7 +2733,8 @@ static int rr_a_sum_deciding(const RrCase *c)
     for (s = 0; s < n; s++) {
         uint32_t aicw = c->rc.alpha_icw[s], aocw = c->rc.alpha_ocw[s], afl = aocw >> 12;
         uint32_t dst = (aocw >> 8) & 0xFu;
-        float qab, qcd, sum, prod;
+        float qab, qcd;
+        int sum, prod;
 
         if (!dst || (afl & 4u))
             continue;
@@ -7166,8 +7167,7 @@ static int run_suballoc(void)
         char line[160];
 
         _snprintf(line, sizeof line, "the %u re-creations (N_TEXTURE_CHURN) each took a pool range: "
-                  "ranges_delta >= N_TEXTURE_CHURN", (unsigned)N_TEXTURE_CHURN,
-                  (unsigned)N_TEXTURE_CHURN);
+                  "ranges_delta >= N_TEXTURE_CHURN", (unsigned)N_TEXTURE_CHURN);
         ok &= rb_claim_atleast(line, k_ranges, (uint64_t)N_TEXTURE_CHURN);
         _snprintf(line, sizeof line, "alloc_calls_delta < N_TEXTURE_CHURN: fewer than %u "
                   "vkAllocateMemory calls for those %u re-creations (one per resource would be %u)",
@@ -7191,10 +7191,11 @@ static int run_suballoc(void)
      * allocations than one per resource. */
     ok &= rb_claim_atleast("ranges_delta >= 1: the workload really took pooled ranges",
                            d_ranges, 1);
-    ok &= sub_claim_bound("alloc_calls_delta + dedicated_delta <= ranges_delta / 2: the "
-                          "workload's ranges cost at most half as many allocations as resources "
-                          "(one per resource would be ranges_delta)",
-                          d_allocs + d_dedicated, d_ranges / 2u, 0);
+    ok &= sub_claim_bound("alloc_calls_delta - dedicated_delta <= ranges_delta / 2: the workload's "
+                          "pooled ranges cost at most half as many block allocations as ranges "
+                          "(dedicated resources are accounted separately; one per resource would "
+                          "be ranges_delta)",
+                          d_allocs - d_dedicated, d_ranges / 2u, 0);
     ok &= rb_claim_atleast("ranges_delta >= 2 * blocks_delta: several resources shared a block",
                            d_ranges, 2u * d_blocks);
     /* The latch is a POOL index, so 0 is a perfectly good answer; "unset" is (uint32_t)-1. */
@@ -7209,8 +7210,10 @@ static int run_suballoc(void)
                       "overflowed, so no range was ever left to it)", m1.parked_lost, 0);
     ok &= sub_claim_bound("used_bytes <= reserved_bytes: no pool block is over-committed",
                           m1.used_bytes, m1.reserved_bytes, 0);
-    ok &= rb_claim_eq("free_bytes + used_bytes == reserved_bytes: the byte accounting closes",
-                      m1.free_bytes + m1.used_bytes, m1.reserved_bytes);
+    ok &= rb_claim_eq("free_bytes + used_bytes + padding_bytes == reserved_bytes: the byte "
+                      "accounting closes, including the allocator's separately reported alignment "
+                      "padding",
+                      m1.free_bytes + m1.used_bytes + m1.padding_bytes, m1.reserved_bytes);
     if (d_dedicated) {
         uint64_t req = m1.dedicated_required - m0.dedicated_required;
         uint64_t pref = m1.dedicated_prefer - m0.dedicated_prefer;
@@ -7228,6 +7231,21 @@ static int run_suballoc(void)
             printf("  [dedicated] no reason counter moved: a pool block's allocation failed over "
                    "once to a dedicated allocation (%llu fallback(s))\n",
                    (unsigned long long)(m1.fallbacks - m0.fallbacks));
+        /* Each dedicated allocation increments exactly one reason counter (required, preferred,
+         * oversize, pool slot exhausted, non-coherent host-visible, or a block-creation fallback).
+         * A failed vkAllocateMemory after a fallback has a reason but no dedicated count, so the
+         * identity is asserted on the success path; the failure delta is printed rather than
+         * hidden. */
+        if (m1.alloc_failures == m0.alloc_failures) {
+            uint64_t fallback = m1.fallbacks - m0.fallbacks;
+
+            ok &= rb_claim_eq("dedicated_delta == required+prefer+oversize+noroom+nohost+fallbacks: "
+                              "every dedicated allocation has one recorded reason",
+                              d_dedicated, req + pref + over + room + host + fallback);
+        } else {
+            printf("  [dedicated] allocation failures moved (%llu); reason identity not asserted\n",
+                   (unsigned long long)(m1.alloc_failures - m0.alloc_failures));
+        }
     } else
         puts("  [dedicated] dedicated_delta == 0: every resource of this workload fitted a pool "
              "(not required of the change: a large staging buffer may legitimately go dedicated)");

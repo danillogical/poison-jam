@@ -1960,17 +1960,21 @@ if(BUILD_TESTING)
     # so the backslash lands in the file name, not in a sibling of the directory).
     if(NOT WIN32)
         file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/test-tmp")
-        get_directory_property(_jsrf_all_tests TESTS)
-        foreach(_jsrf_t IN LISTS _jsrf_all_tests)
-            if(_jsrf_t MATCHES "^jsrf_")
-                set_property(TEST ${_jsrf_t} APPEND PROPERTY
-                    ENVIRONMENT "TEMP=${CMAKE_BINARY_DIR}/test-tmp/")
-            endif()
-            # The conformance cases write their fixtures to one shared scratch directory, so
-            # `ctest -j` would let them overwrite each other.
-            if(_jsrf_t MATCHES "^jsrf_vsh_conformance")
-                set_property(TEST ${_jsrf_t} APPEND PROPERTY RESOURCE_LOCK jsrf_vsh_conformance_scratch)
-            endif()
-        endforeach()
     endif()
+    get_directory_property(_jsrf_all_tests TESTS)
+    foreach(_jsrf_t IN LISTS _jsrf_all_tests)
+        if(NOT WIN32 AND _jsrf_t MATCHES "^jsrf_")
+            set_property(TEST ${_jsrf_t} APPEND PROPERTY
+                ENVIRONMENT "TEMP=${CMAKE_BINARY_DIR}/test-tmp/")
+        endif()
+        # These families write one shared scratch path under TEMP, so `ctest -j` would let
+        # them overwrite each other. The lock must apply on EVERY host: Windows uses the
+        # process TEMP directory just as POSIX does, and the previous NOT WIN32 scope left
+        # the Windows parallel case unprotected.
+        if(_jsrf_t MATCHES "^jsrf_vsh_conformance")
+            set_property(TEST ${_jsrf_t} APPEND PROPERTY RESOURCE_LOCK jsrf_vsh_conformance_scratch)
+        elseif(_jsrf_t MATCHES "^jsrf_vsh_aot($|_control)")
+            set_property(TEST ${_jsrf_t} APPEND PROPERTY RESOURCE_LOCK jsrf_vsh_aot_scratch)
+        endif()
+    endforeach()
 endif()

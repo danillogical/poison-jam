@@ -73,6 +73,15 @@
  *      with nothing injected, a pair the previous successful reserve still holds, and 65+
  *      resources destroyed through the production discard path) stay green: no
  *      byte/lifetime/dependency decision is weakened to accommodate the allocator.
+ *  11. the padding term, exactly -- a 256-byte bump followed by a 2048-aligned take spends
+ *      exactly 1792 bytes aligning, and both byte-oracle forms are evaluated on the
+ *      production counters: `free + used == reserved` (the parity gate's old form) fails, short
+ *      by exactly those 1792 bytes, while `free + used + padding == reserved` passes; the
+ *      corrected form is shown to reject used/free/padding each misaccounted by 1, so it is
+ *      not a check that cannot fail. A dedicated allocation taken on top decides the other old
+ *      form on real counters: `alloc_calls + dedicated <= ranges/2` counts the dedicated
+ *      allocation twice and fails (3 > 1), while `alloc_calls - dedicated` passes (1 <= 1).
+ *      `--padding-1792` runs this property alone; no argument runs everything.
  *
  * The production bodies are the toolkit's own
  * ------------------------------------------
@@ -3582,6 +3591,156 @@ static void prop10(void)
     verdict("10 a bounded rollback burst", chk, bad);
 }
 
+/* ── 11. the padding term, decided on production counters ──────────────────────────────
+ *
+ * Property 2d already shows a real 57344-byte pad. This case is the bounded, exact one the
+ * parity gate's byte oracle is judged on: a 256-byte take leaves the block's bump cursor at
+ * 256, and a take whose own alignment is 2048 cannot use [256, 2048), so the cursor jumps to
+ * 2048 -- exactly 1792 bytes of padding, a number the fixture can state independently of the
+ * allocator. It then evaluates both oracle forms on the allocator's OWN published counters:
+ *
+ *     old (the parity gate before this repair):  free + used           == reserved
+ *     corrected:                                 free + used + padding == reserved
+ *
+ * The old form is short by exactly the padding, so it fails on this case while the corrected
+ * one passes; and the corrected form is shown to reject deliberately misaccounted used, free
+ * and padding values, so it is not a check that cannot fail. A dedicated allocation is then
+ * taken as well, and the same counters decide the parity gate's OTHER old form: counting the
+ * dedicated allocation in the reduction bound twice (`alloc_calls + dedicated`) fails on these
+ * numbers (3 > 1) where the corrected `alloc_calls - dedicated` passes (1 <= 1). Each old form
+ * is therefore decided by production counters, not by a copy of the expression. */
+static int gx_bytes_close(uint64_t reserved, uint64_t used, uint64_t free_b, uint64_t padding)
+{
+    return used + free_b + padding == reserved;
+}
+
+static int gx_bytes_close_old(uint64_t reserved, uint64_t used, uint64_t free_b)
+{
+    return used + free_b == reserved;
+}
+
+static void prop11(void)
+{
+    Nv2aVkMemoryStats m, m0;
+    VkMemoryRequirements mr;
+    VbAlloc a, b, d;
+    VbBlock *b1 = NULL;
+    uint64_t dr, db, da, dd;
+    int chk = g_checks, bad = g_check_failures;
+
+    section("11. exactly 1792 bytes of padding: the corrected byte oracle passes, the old one "
+            "cannot");
+
+    gate_world();
+    nv2a_vk_backend_memory_stats(&m0);     /* gate_world cleared the counters, so all zero */
+
+    /* 256 bytes at the pooling floor: the bump cursor goes 0 -> 256. */
+    mr = mr_of(256u, VB_POOL_ALIGN, GX_BIT_DEV);
+    check(take(&mr, GX_WANT_DEV, 0, 1, &a) == 1, "11: a 256-byte range at the pooling floor", "");
+
+    /* A 2048-byte-aligned take cannot use [256, 2048), so it lands at 2048. */
+    mr = mr_of(2048u, 2048u, GX_BIT_DEV);
+    check(take(&mr, GX_WANT_DEV, 0, 1, &b) == 1,
+          "11: a 2048-byte range at alignment 2048, after the 256-byte bump", "");
+    ledger_add(&a);
+    ledger_add(&b);
+
+    b1 = block_of(&a, NULL);
+    nv2a_vk_backend_memory_stats(&m);
+    check(a.off == 0 && b.off == 2048u,
+          "11: the second range starts at 2048, past the 256-byte first range", "offsets %llu "
+          "and %llu", (unsigned long long)a.off, (unsigned long long)b.off);
+    check(b1 != NULL && b1->padding == 1792u,
+          "11: the block's own padding counter is exactly 1792 bytes",
+          "padding %llu", b1 ? (unsigned long long)b1->padding : 0ull);
+    check(m.padding_bytes == 1792u,
+          "11: the published padding_bytes is that same 1792 -- the counter is honest",
+          "padding_bytes %llu", (unsigned long long)m.padding_bytes);
+    check(m.reserved_bytes == m.used_bytes + m.padding_bytes + m.free_bytes,
+          "11: reserved = used + padding + free, with the 1792 in it",
+          "%llu = %llu + %llu + %llu", (unsigned long long)m.reserved_bytes,
+          (unsigned long long)m.used_bytes, (unsigned long long)m.padding_bytes,
+          (unsigned long long)m.free_bytes);
+    check(m.free_bytes + m.padding_bytes == pools_reserved() - m.used_bytes
+          && m.used_bytes == ledger_sum(),
+          "11: and from the fixture's own numbers (observed blocks and the extents it took)",
+          "free+padding %llu+%llu vs %llu-%llu; used %llu vs ledger %llu",
+          (unsigned long long)m.free_bytes, (unsigned long long)m.padding_bytes,
+          (unsigned long long)pools_reserved(), (unsigned long long)m.used_bytes,
+          (unsigned long long)m.used_bytes, (unsigned long long)ledger_sum());
+
+    /* Both oracle forms, evaluated on those same production counters. */
+    check(gx_bytes_close(m.reserved_bytes, m.used_bytes, m.free_bytes, m.padding_bytes),
+          "11: the corrected oracle (free + used + padding == reserved) PASSES on the "
+          "production counters", "");
+    check(!gx_bytes_close_old(m.reserved_bytes, m.used_bytes, m.free_bytes),
+          "11: the old oracle (free + used == reserved) FAILS on them -- it is short by the "
+          "padding", "free+used %llu vs reserved %llu, short by %llu",
+          (unsigned long long)(m.free_bytes + m.used_bytes),
+          (unsigned long long)m.reserved_bytes,
+          (unsigned long long)(m.reserved_bytes - (m.free_bytes + m.used_bytes)));
+    check(m.reserved_bytes - (m.free_bytes + m.used_bytes) == 1792u,
+          "11: and its whole error is exactly the 1792 bytes the old form omits",
+          "%llu", (unsigned long long)(m.reserved_bytes - (m.free_bytes + m.used_bytes)));
+
+    /* No blanket success: the corrected form rejects each single-field misaccounting. */
+    check(!gx_bytes_close(m.reserved_bytes, m.used_bytes + 1u, m.free_bytes, m.padding_bytes),
+          "11: the corrected oracle rejects used += 1", "");
+    check(!gx_bytes_close(m.reserved_bytes, m.used_bytes, m.free_bytes + 1u, m.padding_bytes),
+          "11: the corrected oracle rejects free += 1", "");
+    check(!gx_bytes_close(m.reserved_bytes, m.used_bytes, m.free_bytes, m.padding_bytes - 1u),
+          "11: the corrected oracle rejects padding -= 1", "");
+    check(!gx_bytes_close(m.reserved_bytes, m.used_bytes, m.free_bytes, 0u),
+          "11: the corrected oracle rejects the old form's dropped padding", "");
+    check(!gx_bytes_close_old(m.reserved_bytes, m.used_bytes + 1u, m.free_bytes - 1u),
+          "11: and the old oracle cannot be made to pass by moving bytes between its two terms",
+          "");
+
+    /* A dedicated allocation on top: production counters that decide the parity gate's
+     * dedicated double-count form. Two pooled ranges, one block allocation, one dedicated. */
+    mr = mr_of(4096u, VB_POOL_ALIGN, GX_BIT_DEV);
+    check(take_named(&mr, GX_WANT_DEV, 0, 1, 1, 0, NULL, NULL, &d) == 1,
+          "11: a requires-dedicated range is allocated on its own", "");
+    nv2a_vk_backend_memory_stats(&m);
+    dr = m.ranges - m0.ranges;
+    db = m.blocks - m0.blocks;
+    da = m.alloc_calls - m0.alloc_calls;
+    dd = m.dedicated - m0.dedicated;
+    check(dr == 2u && db == 1u && da == 2u && dd == 1u,
+          "11: the counters show two pooled ranges in one block and one dedicated allocation",
+          "ranges %llu, blocks %llu, alloc_calls %llu, dedicated %llu",
+          (unsigned long long)dr, (unsigned long long)db, (unsigned long long)da,
+          (unsigned long long)dd);
+    check(da - dd <= dr / 2u,
+          "11: the corrected reduction form (alloc_calls - dedicated <= ranges/2) PASSES",
+          "%llu <= %llu", (unsigned long long)(da - dd), (unsigned long long)(dr / 2u));
+    check(!(da + dd <= dr / 2u),
+          "11: the old reduction form (alloc_calls + dedicated, dedicated counted twice) FAILS "
+          "on the same counters", "%llu > %llu",
+          (unsigned long long)(da + dd), (unsigned long long)(dr / 2u));
+    check(m.dedicated == m.dedicated_required + m.dedicated_prefer + m.dedicated_oversize
+          + m.dedicated_noroom + m.dedicated_nohost
+          + (m.fallbacks - m0.fallbacks),
+          "11: the dedicated reason identity holds on this success path (every dedicated "
+          "allocation has one recorded reason)",
+          "dedicated %llu vs required %llu + prefer %llu + oversize %llu + noroom %llu + "
+          "nohost %llu + fallbacks %llu", (unsigned long long)m.dedicated,
+          (unsigned long long)m.dedicated_required, (unsigned long long)m.dedicated_prefer,
+          (unsigned long long)m.dedicated_oversize, (unsigned long long)m.dedicated_noroom,
+          (unsigned long long)m.dedicated_nohost,
+          (unsigned long long)(m.fallbacks - m0.fallbacks));
+    check(m.padding_bytes == 1792u && m.reserved_bytes == m.used_bytes + m.padding_bytes
+          + m.free_bytes,
+          "11: the padding and the byte identity still hold with a dedicated allocation in the "
+          "same counters", "padding %llu, %llu = %llu + %llu + %llu",
+          (unsigned long long)m.padding_bytes, (unsigned long long)m.reserved_bytes,
+          (unsigned long long)m.used_bytes, (unsigned long long)m.padding_bytes,
+          (unsigned long long)m.free_bytes);
+    check_free_lists("11: the free list, used and padding still account for the bump");
+
+    verdict("11 the 1792-byte padding oracle", chk, bad);
+}
+
 static uint8_t *g_guest;
 
 ptrdiff_t xbox_GetMemoryOffset(void)
@@ -3619,9 +3778,22 @@ void nv2a_rc_unpack(uint32_t argb, float out[4])
 
 /* ── The run ─────────────────────────────────────────────────────────────────────────── */
 
-int main(void)
+int main(int argc, char **argv)
 {
     unsigned i;
+    int focused = 0;
+
+    /* Minimal case selection: no argument runs every property (the CTest case), and
+     * `--padding-1792` runs only property 11 -- the single controlled case that decides the
+     * parity gate's byte-oracle and dedicated-reduction forms on production counters. */
+    if (argc > 1) {
+        if (argc == 2 && strcmp(argv[1], "--padding-1792") == 0) {
+            focused = 1;
+        } else {
+            fprintf(stderr, "usage: %s [--padding-1792]\n", argv[0]);
+            return 2;
+        }
+    }
 
     printf("vk_suballoc_gate: the Vulkan back end's memory sub-allocator, against the "
            "toolkit's own nv2a_vk_backend.c\n");
@@ -3637,36 +3809,43 @@ int main(void)
 
     gate_wire();
     gate_world();                          /* the fixture's own device, before the preconditions */
-    seam_section();
 
-    section("preconditions of the fixture");
-    check(g.mp.memoryTypeCount == 4,
-          "the fixture's device has the four memory types the scenarios select between", "");
-    check(sizeof(VbAlloc) >= sizeof(VkDeviceMemory),
-          "a VbAlloc is at least a memory handle wide", "%zu", sizeof(VbAlloc));
-    check(VB_POOL_ALIGN == 256u && VB_POOL_MIN_BLOCK == (1u << 20)
-          && VB_POOL_MAX_BLOCK == (64u << 20) && VB_POOL_RESERVE == (256u << 20)
-          && VB_POOL_SHARE_MAX == (8u << 20) && VB_POOL_KEEP_EMPTY == (4u << 20),
-          "the pool constants are the ones this fixture sizes its requests from",
-          "align %u, min %u, max %u, reserve %u, share %u, keep-empty %u",
-          (unsigned)VB_POOL_ALIGN, (unsigned)VB_POOL_MIN_BLOCK, (unsigned)VB_POOL_MAX_BLOCK,
-          (unsigned)VB_POOL_RESERVE, (unsigned)VB_POOL_SHARE_MAX,
-          (unsigned)VB_POOL_KEEP_EMPTY);
-    check(GX_ATOM > 1u && (GX_ATOM & (GX_ATOM - 1u)) == 0u && GX_ATOM <= (unsigned)VB_POOL_ALIGN,
-          "the fixture's atom size is a power of two no larger than the pooling alignment "
-          "(so a widened window is observable inside one range)",
-          "atom %u, VB_POOL_ALIGN %u", (unsigned)GX_ATOM, (unsigned)VB_POOL_ALIGN);
+    if (focused) {
+        prop11();
+    } else {
+        seam_section();
 
-    prop1();
-    prop2();
-    prop3();
-    prop4();
-    prop5();
-    prop6();
-    prop7();
-    prop8();
-    prop9();
-    prop10();
+        section("preconditions of the fixture");
+        check(g.mp.memoryTypeCount == 4,
+              "the fixture's device has the four memory types the scenarios select between", "");
+        check(sizeof(VbAlloc) >= sizeof(VkDeviceMemory),
+              "a VbAlloc is at least a memory handle wide", "%zu", sizeof(VbAlloc));
+        check(VB_POOL_ALIGN == 256u && VB_POOL_MIN_BLOCK == (1u << 20)
+              && VB_POOL_MAX_BLOCK == (64u << 20) && VB_POOL_RESERVE == (256u << 20)
+              && VB_POOL_SHARE_MAX == (8u << 20) && VB_POOL_KEEP_EMPTY == (4u << 20),
+              "the pool constants are the ones this fixture sizes its requests from",
+              "align %u, min %u, max %u, reserve %u, share %u, keep-empty %u",
+              (unsigned)VB_POOL_ALIGN, (unsigned)VB_POOL_MIN_BLOCK, (unsigned)VB_POOL_MAX_BLOCK,
+              (unsigned)VB_POOL_RESERVE, (unsigned)VB_POOL_SHARE_MAX,
+              (unsigned)VB_POOL_KEEP_EMPTY);
+        check(GX_ATOM > 1u && (GX_ATOM & (GX_ATOM - 1u)) == 0u
+              && GX_ATOM <= (unsigned)VB_POOL_ALIGN,
+              "the fixture's atom size is a power of two no larger than the pooling alignment "
+              "(so a widened window is observable inside one range)",
+              "atom %u, VB_POOL_ALIGN %u", (unsigned)GX_ATOM, (unsigned)VB_POOL_ALIGN);
+
+        prop1();
+        prop2();
+        prop3();
+        prop4();
+        prop5();
+        prop6();
+        prop7();
+        prop8();
+        prop9();
+        prop10();
+        prop11();
+    }
 
     for (i = 0; i < GX_MAX_MEM; i++)
         free(g_mem[i].arena);
@@ -3680,16 +3859,26 @@ int main(void)
                         "failed)\n", g_prop_failures, g_props, g_check_failures, g_checks);
         return 1;
     }
-    printf("PASS: vk_suballoc_gate: %d properties, %d checks -- resources share blocks at "
-           "alignment-satisfying, non-overlapping offsets with a real reduction in "
-           "vkAllocateMemory calls, memory types and kinds never mix, released ranges are "
-           "reused and coalesced with honest counters, dedicated requests carry their pNext, "
-           "a range a recording or a pending submission may still read is never handed out, "
-           "the park list is bounded and a release it cannot admit is refused -- the range "
-           "stays counted live in its block and reaches no free list, so nothing is freed and "
-           "nothing is handed out -- every injected failure rolls back cleanly (a burst of "
-           "more than VB_POOL_PENDING of them loses nothing), and the flush windows are "
-           "exact\n",
-           g_props, g_checks);
+    if (focused) {
+        printf("PASS: vk_suballoc_gate --padding-1792: %d checks -- the production allocator "
+               "spent exactly 1792 bytes aligning a 2048-aligned take after a 256-byte bump, "
+               "reserved = used + padding + free holds on its published counters, the "
+               "corrected byte oracle passes where the old padding-less form is short by "
+               "exactly 1792, each misaccounted field is rejected, and the old dedicated "
+               "double-count reduction form fails (alloc_calls + dedicated = 3 > 1) where the "
+               "corrected form passes (1 <= 1)\n", g_checks);
+    } else {
+        printf("PASS: vk_suballoc_gate: %d properties, %d checks -- resources share blocks at "
+               "alignment-satisfying, non-overlapping offsets with a real reduction in "
+               "vkAllocateMemory calls, memory types and kinds never mix, released ranges are "
+               "reused and coalesced with honest counters, dedicated requests carry their pNext, "
+               "a range a recording or a pending submission may still read is never handed out, "
+               "the park list is bounded and a release it cannot admit is refused -- the range "
+               "stays counted live in its block and reaches no free list, so nothing is freed and "
+               "nothing is handed out -- every injected failure rolls back cleanly (a burst of "
+               "more than VB_POOL_PENDING of them loses nothing), and the flush windows are "
+               "exact\n",
+               g_props, g_checks);
+    }
     return 0;
 }
