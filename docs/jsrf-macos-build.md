@@ -67,10 +67,12 @@ named after the GPU, so choose with `RECOMP_VK_DRIVER=MoltenVK` or `RECOMP_VK_DR
   - `jsrf_nv2a_hal`: the NV2A MMIO hook is Windows-only.
   - `jsrf_inplace_event_bridge`: the fixture needs POSIX providers of
     `xbox_FramebufferWindow*`, the video player and `xa2_*`/`mcpx_apu_*` that live in the SDL2 and
-    XAudio2 sources, so it is not registered here. The POSIX `ResetEvent` crash this entry used to
-    name is repaired: an unpublished handle value is rejected with `ERROR_INVALID_HANDLE` /
-    `WAIT_FAILED` instead of dereferenced (TR §31.71), and the fixture's header-validation case now
-    returns a failure rather than faulting.
+    XAudio2 sources, so it does not link here and is not registered. The POSIX `ResetEvent` crash
+    this entry used to name is repaired **as measured by the native probe**: an unpublished handle
+    value is rejected with `ERROR_INVALID_HANDLE` / `WAIT_FAILED` instead of dereferenced
+    (TR §31.71). The fixture's own header-validation case was **not executed** -- it cannot be
+    built on this host -- so what it now returns is untested here; the shim's rejection of that
+    value is what was measured.
   - the Direct3D 11 parity tests;
   - the `vsh_aot` tests, which need the retail corpus.
   - `jsrf_save_root`: Win32 save-root path layer and shell32/advapi32.

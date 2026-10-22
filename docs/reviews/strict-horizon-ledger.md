@@ -191,13 +191,11 @@ Runs 20261004-014344-804-f5-hook-600 (600 s: disclaimer, logo phase 13 hold 618/
 
 ## 2026-10-22 - POSIX handle-safety repair / runtime liveness smoke
 
-The POSIX Win32 shim now validates a handle against a live-handle registry before dereferencing
+The POSIX Win32 shim now validates a handle against a live-handle registry before dereferencing it
 (toolkit `7c46fa6`), so the repair changes host handle lifetime only: no guest-visible value, switch
 or emulated path moved, and the strict horizon does not move. One bounded strict launch checked that
-the rebuilt runtime still starts and reaches guest code: `20261022-101153-213-posix-handles-smoke`,
-8 s, `RECOMP_GPU_ACK=0`, `RECOMP_GPU_BACKEND=vulkan`, `RECOMP_VK_PIPELINE_CACHE=off`, isolated save
-root verified, RTX 4070 (`driver: NVIDIA (616.92)`). **NOT REACHED** - `diagnostic_deadline`, 39.23 s,
-checkpoints `memory_ready` and `guest_entry`, 36 native threads, 325 named frames, 1 GPU snapshot,
-0 invalid ICALLs, 0 `[FATAL]`, 0 ABI failures, `[AC97] serviced=40 refused=0`. This row establishes
-liveness of the rebuilt binary only; it is not a gameplay, fidelity or e2e claim, and the earlier
-620 s NVIDIA e2e remains the previous gameplay evidence.
+the rebuilt runtime still starts and reaches guest code. Recorded in the table shape W14 requires:
+
+| Date | Game | Toolkit | Run ID | Horizon event | First stop site(s) | Stop (UTC) |
+|---|---|---|---|---|---|---|
+| 2026-10-22 | `2ff34cc` | `110e169` | `20261022-101153-213-posix-handles-smoke` | **NOT REACHED** - `diagnostic_deadline` at 39.23 s with 0 invalid ICALLs and 0 `[FATAL]`; checkpoints `memory_ready` and `guest_entry`, 36 native threads, 325 named frames, `[AC97] serviced=40 refused=0`. Strict (`RECOMP_GPU_ACK=0`), `RECOMP_GPU_BACKEND=vulkan`, `RECOMP_VK_PIPELINE_CACHE=off`, isolated save root, exe `c7c6e292`. A POSIX-shim liveness check only: no fidelity, gameplay or horizon claim | none (deadline) | 17:13:00.7 |

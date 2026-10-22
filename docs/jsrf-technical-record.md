@@ -7126,7 +7126,13 @@ contract does not forbid. No general race freedom is claimed.
 (175 checks, `sha256 63e061fd…`) and `test_handle_lifetime_asan.c` (22 checks,
 `sha256 0750ad9e…`), registered in the existing standalone POSIX project (the ASAN target behind a
 real `-fsanitize=address` compile test) and built directly with the installed WSL `cc` because no
-CMake exists there. Final shim `sha256 094e7884…`: **plain 175/0, ASAN 22/0** (leaks on, no
+CMake exists there. That target compiles the shim sources INTO itself with the sanitizer on
+(toolkit `0f3e7af`) instead of linking the `platform` library, which `add_subdirectory` had already
+built unsanitized: an instrumented test linked against an uninstrumented shim diagnoses only the
+test's own code, and every defect the target exists to catch happens in the shim. In that exact
+shape the linked image carries the sanitizer's symbol references and the controls still decide --
+pristine 22/0, early-release a LeakSanitizer leak, bypass and no-withdraw an AddressSanitizer
+heap-use-after-free. Final shim `sha256 094e7884…`: **plain 175/0, ASAN 22/0** (leaks on, no
 suppression), reproduced independently by the orchestrator. Private weakening controls, all
 re-run by the orchestrator: **bypass** (lookup skips the registry) → SIGSEGV on the plain binary and
 heap-use-after-free under ASAN; **no-withdraw** (entry never unlinked) → SIGSEGV with 5 FAIL rows
@@ -7145,10 +7151,12 @@ providers of `xbox_FramebufferWindow*`, `xbox_VideoIsPlaying`/`PlayFile` and `xa
 live in the SDL2 and XAudio2 sources, and the WSL image has no SDL2/epoxy/OpenSSL headers, no CMake
 and no pkg-config; 35 undefined references remain. Installing them is out of scope. The **old
 exclusion reason is now stale and corrected** in the game `CMakeLists.txt` and
-`docs/jsrf-macos-build.md`: the header-validation case passes a non-event guest VA as a handle, and
-the final shim returns `FALSE`/`WAIT_FAILED` for it instead of faulting. The registration stays off
-Windows because of the missing POSIX link providers, not a crash. No Mac run was made and no Mac
-result is claimed.
+`docs/jsrf-macos-build.md`: the case passes a non-event guest VA as a handle, and the shim now
+returns `FALSE`/`WAIT_FAILED` for a value it never published instead of dereferencing it — measured
+by the native probe, not by running the fixture, which cannot be built here. **What that fixture's
+own header-validation case now returns is untested on this host**; only the shim's rejection of the
+value was measured. The registration stays off Windows because of the missing POSIX link providers,
+not a crash. No Mac run was made and no Mac result is claimed.
 
 **Validation (this host).** Guarded `just build` succeeded (0 compile/link errors, 0 C4310, 18 known
 MSB8028), executable `sha256 c7c6e292…`; targeted Windows `jsrf_inplace_event_bridge` (4.16 s),
@@ -7162,5 +7170,5 @@ outcome `diagnostic_deadline` — a liveness check, not a fidelity or e2e claim.
 NVIDIA e2e remains the previous Windows gameplay evidence. D4 remains incomplete; step 4 waits.
 
 PUSHED_TO: none (candidate held for independent Codex review) / BRANCH: master / COMMIT:
-toolkit 7c46fa693ba03a9bf4b05ea609bb307a298a9bfc; game 2102a869fa2e0fda8161f6d15ee57ef4409440cf (records) and d67ef8f (ledgers) / RESULT: local commits only; no push, no force, toolkit first then game.
+toolkit 7c46fa693ba03a9bf4b05ea609bb307a298a9bfc and 0f3e7af (ASAN target); game 2102a869fa2e0fda8161f6d15ee57ef4409440cf, d67ef8f (ledgers), aac7ea9 and this record commit / RESULT: local commits only; no push, no force, toolkit first then game.
 
