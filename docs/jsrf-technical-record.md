@@ -6934,3 +6934,5 @@ POSIX handle safety, shared scratch under parallel CTest and the parity-test war
 allocator-gate property 2d already exercises a nonzero padding value with the production stats
 function; it is a useful positive control for the next bounded investigation, not a measurement
 of the historical MoltenVK 1,792 bytes. D4 remains incomplete.
+
+PUSHED_TO: origin / BRANCH: master / COMMIT: 81a032aaf4884a0326ed6fc03075dbf268a71250 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward f1963fb..81a032a (three retained commits, final repaired tree independently accepted); clean and synchronized after push, 15 outgoing blobs, largest 539185 bytes, zero secrets, only the reviewed CMake/test/profile/macOS-doc/plan/TR paths, no forbidden or oversized assets. Final guarded build, complete G1 with all three negative controls, and `just check` passed after the announcement-only integration correction; full 162/162 receipt is at ab0ef14. Toolkit unchanged and synchronized at 110e169e989b8466c84af31872c030b3571c8b4d; no toolkit push needed.
