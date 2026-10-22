@@ -35,8 +35,8 @@ exactly one lifetime reference (the draft's release-only-on-final-close leak is 
 different author's native gate decides it: plain 175/0 and ASAN 22/0 on that shim, with bypass,
 no-withdraw and early-release mutants red (the last only under LeakSanitizer) and the original
 committed source red on both required rows. **Codex then rejected that candidate for a measured
-regression (TR §31.72):** `WaitForMultipleObjects(Ex)` rejected the supported `NULL`/`(HANDLE)-2`/
-`(HANDLE)-1` sentinels with `WAIT_FAILED`/error 0 and did not resolve the calling thread's own value
+regression (TR §31.72):** `WaitForMultipleObjects(Ex)` rejected the supported `(HANDLE)-2`/
+`(HANDLE)-1` sentinels with `WAIT_FAILED`/error 0 (the `NULL` controls passed) and did not resolve the calling thread's own value
 after its public close, because the gates never called a multi-object wait at all. The bounded repair
 classifies sentinels explicitly, routes ordinary values through the same self-aware `thread_pin` the
 single wait uses, and releases every pin on every exit; the extended gate is plain **251/0** and ASAN
@@ -47,11 +47,12 @@ a dependency-limited WSL host (35 undefined references against the SDL2/XAudio2 
 a Mac is untested rather than claimed to fail; the stale crash reason is corrected in
 `CMakeLists.txt` and the macOS doc, and the fixture's own header-validation case has still not been
 executed on any POSIX host. Windows: guarded build, six targeted event/DPC/callback/save/fence runs each a
-single `-R` pattern (no alternation), full limited CTest **162/162 in 523.49 s** with the full log
+single `-R` pattern (no alternation), full limited CTest **162/162 in 524.32 s** with the full log
 retained, and `just check` green; the bounded strict 8 s Vulkan smoke carries because the Windows
 executable and every Windows-relevant input are byte-unchanged (the repaired file is POSIX-only). The MoltenVK suballoc skip remains explicit
 debt (historical 1792 is still an inference), and CTest locks do not coordinate separate ctest
-processes. The candidate is held locally for independent Codex review; no push. Next is D4 step 4
+processes. Codex independently accepted the repaired POSIX checkpoint (TR §31.73), including actual
+final-source native gates and private negative controls. Next is D4 step 4
 (BUMPENVMAP CPU/AOT-Vulkan) and then the different-author step-5 gate. The paused D4 allowance
 remains four normal operations and zero repair cycles. No D completion.
 

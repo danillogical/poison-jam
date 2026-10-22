@@ -27,8 +27,8 @@ python3 ../xboxrecomp/tools/posix_check.py native python cross
   separately. Only `tests/win32_compat_posix` carries the handle-provenance regressions
   (`win32_handle_lifetime_posix_test`, plus `win32_handle_lifetime_asan_test` where the compiler has
   `-fsanitize=address`), which is where the POSIX handle contract is decided (TR §31.71);
-  `tests/win32_thread_posix` is unchanged and still covers the thread-suspend shim only. Neither has
-  been built or run on a Mac.
+  `tests/win32_thread_posix` is unchanged and still covers the thread-suspend shim only. This repair and its new handle
+  gates have been validated on Ubuntu WSL; they have not been built or run on a Mac.
 
 ## Game: portable tests only
 

@@ -7258,3 +7258,44 @@ gameplay was run. Linux observations only; no Mac result. D4 remains incomplete;
 
 PUSHED_TO: none (candidate held for independent Codex review) / BRANCH: master / COMMIT:
 toolkit b06bd36546e7bec75f17ca9677d7b55a8d59e01a; game a97db34 / RESULT: local commits only; no push, no force, toolkit first then game.
+
+
+### §31.73 POSIX handle checkpoint independently accepted (2026-10-22)
+
+Codex independently inspected toolkit `b06bd36546e7bec75f17ca9677d7b55a8d59e01a` and the
+retained registry/ASAN-target commits. Wait entries explicitly distinguish supported sentinels
+from failed real-handle resolution, route ordinary values through the self-aware pin, and drop
+acquired pins on success, timeout, alertable completion and partial-resolution failure.
+
+Compiled directly against the actual final shim on Ubuntu WSL, Codex's original 12 pseudo/null
+multi-wait rows now pass; its synchronized closed-self probe returns `WAIT_TIMEOUT` in single,
+multi and Ex forms. The persistent plain gate passes **251/251**, the instrumented ASAN gate
+**44/44**, and pre-existing compat/interlocked/thread tests pass **15/28/8** checks. Against
+the pre-repair source the expanded plain gate fails 21 rows. Private final-source controls that
+reject sentinels or replace self-aware resolution with ordinary lookup fail 21 and 3 rows;
+removing partial-failure unpins leaves all 44 ASAN return-value rows green but LeakSanitizer
+reports **118400 bytes in 200 allocations** and exits 1. Shared source is unchanged after these
+scratch-only controls. Final compiler-input shim SHA-256
+`7d25e6b7d408ea8b262262cf56aace2a0b557fe515d3ad99eda7aa542b62cf3b`.
+The separate configured gate author's route and absence of fallback were verified.
+
+The final retained Windows receipt is **162/162, zero failures/skips, 524.32 s**. Guarded build,
+individual targeted event/DPC/callback/save/fence receipts and final `just check` pass; the new
+packet uses no alternation in CTest `-R`. Codex independently reclassified the archived 8-second
+smoke as STRICT with no unknown/missing profile; current and archived executable hashes both
+match `c7c6e292e03394b9cbae35930beacaa9d8b9a0805a7b45f2bc1f5c429de45ccb`. Only POSIX runtime
+code changed, so the earlier bounded Windows liveness observation carries; no new gameplay or
+fidelity claim follows.
+
+Acceptance covers the measured POSIX provenance/lifetime and multi-wait contracts. It does not
+prove arbitrary race freedom or Mac behavior. Pointer-value reuse remains possible, borrowed
+file accessors require caller synchronization across close, and the full in-place event bridge
+fixture remains unvalidated on POSIX. The Mac guide now distinguishes the observed WSL dependency
+blocker from untested Mac integration. Historical MoltenVK suballocation accounting and its skip
+remain debt, and CTest resource locks still coordinate only one CTest process.
+
+The portability preflight is complete within these bounds. The owner-authorized next operation
+is D4 step 4, fixture-driven CPU/AOT-Vulkan BUMPENVMAP and luminance, followed by step 5's
+separate-author gate. D4 is incomplete. Carry exactly four normal operations and zero repair
+cycles from the paused lineage; the preflight's nine operations/five repair allowances are
+separate and fully spent. No model/provider/role/effort/fallback changes are authorized here.
