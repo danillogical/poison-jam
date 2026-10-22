@@ -421,6 +421,9 @@ if(BUILD_TESTING)
         ${XBOXRECOMP_DIR}/src/kernel)
     target_link_libraries(jsrf_save_root_test PRIVATE shell32 advapi32)
     add_test(NAME jsrf_save_root COMMAND jsrf_save_root_test)
+    else()
+        message(STATUS "jsrf_save_root is not registered off Windows -- it exercises the Win32 "
+                       "save-root path layer and links shell32/advapi32")
     endif()
     add_executable(jsrf_crt_test tests/test_memmove.c src/jsrf_crt.c)
     target_include_directories(jsrf_crt_test PRIVATE src)
@@ -450,6 +453,9 @@ if(BUILD_TESTING)
     target_include_directories(jsrf_recovery_11c1_test PRIVATE
         ${JSRF_GEN_INCLUDE_DIR})
     add_test(NAME jsrf_recovery_11c1 COMMAND jsrf_recovery_11c1_test)
+    else()
+        message(STATUS "jsrf_recovery_11c1 is not registered here (off Windows or fixtures-only) "
+                       "-- it needs the recovered/generated retail seed and Win32 semantics")
     endif()
     add_executable(jsrf_service_chain_test tests/test_service_chain.c)
     add_test(NAME jsrf_service_chain COMMAND jsrf_service_chain_test)
@@ -542,6 +548,11 @@ if(BUILD_TESTING)
         add_test(NAME ${_name} COMMAND jsrf_pbcov_stream_test --case gate_off)
         set_tests_properties(${_name} PROPERTIES TIMEOUT 120 ENVIRONMENT "${_env}")
     endforeach()
+    else()
+        message(STATUS "jsrf_pbcov_stream_* (the D4 committed-stream coverage gate, all cases) is "
+                       "not registered off Windows -- it drives the Win32 guest-memory/window "
+                       "layout, VEH guards and the commit consumer; the real-Vulkan pbcov cases "
+                       "remain registered separately")
     endif()
     # This one runs the pushbuffers through the Direct3D 11 back end and exits 0 after printing
     # SKIP when it cannot create a device, which off Windows is always: a green no-op, so it is
@@ -621,13 +632,15 @@ if(BUILD_TESTING)
             # alloc_calls grows by strictly fewer than the re-creations, plus the write-once
             # first_shared_block latch). It skips (77) exactly like its siblings.
             if(JSRF_VK_TEST_MOLTENVK)
-                # MoltenVK answers prefersDedicatedAllocation for the workload's resources, so the
-                # back end (correctly) takes 11 dedicated allocations where the gate requires
-                # pooling to cost at most half as many allocations as ranges (measured 24 > 5),
-                # and the readback byte accounting reads 1792 bytes off (63110912 vs 63112704).
+                # Two independent test-oracle defects, not a proven allocator leak: the pool claim
+                # free+used==reserved omits the backend's separately reported padding (1792 bytes
+                # is consistent with padding, inferred, not measured on Mac here), and the budget
+                # adds dedicated allocations to alloc_calls while a later assertion already
+                # includes them (double count; measured 24 > 5). Keep the skip until the oracle is
+                # repaired and a measured MoltenVK run decides it; the backend is not changed.
                 add_test(NAME jsrf_vk_suballoc_device
                          COMMAND jsrf_gpu_backend_parity_vk_test --skip
-                         "MoltenVK prefers dedicated allocations, so the pooling-reduction expectations of this gate do not apply (measured: 24 allocations where <= 5 is required)")
+                         "MoltenVK test-oracle debt: pool accounting omits padding and the budget double-counts dedicated allocations (measured: 24 allocations where <= 5 is required); not a proven backend defect")
                 set_tests_properties(jsrf_vk_suballoc_device PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
             else()
             add_test(NAME jsrf_vk_suballoc_device
@@ -1821,6 +1834,14 @@ if(BUILD_TESTING)
     add_test(NAME jsrf_optional_vulkan
         COMMAND ${JSRF_PYTHON} -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_optional_vulkan.py)
     set_tests_properties(jsrf_optional_vulkan PROPERTIES TIMEOUT 300)
+    # G1: exercise the SHIPPED `JSRF_FIXTURES_ONLY=ON` configure in a tracked-source-only
+    # scratch tree (no generated/recovered/game/retail inputs). It runs the real configure,
+    # inspects the selected empty corpus and compiles/runs a consumer of that table, then
+    # privately mutates the capability branch and the fixtures-only branch and requires both
+    # to fail. Its own configure needs only CMake, the real toolkit and the Vulkan SDK.
+    add_test(NAME jsrf_fixtures_only
+        COMMAND ${JSRF_PYTHON} -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_fixtures_only.py)
+    set_tests_properties(jsrf_fixtures_only PROPERTIES TIMEOUT 300 SKIP_RETURN_CODE 77)
     if(WIN32)
     # A2h-arming-coverage-attribution C1/C2.  The fixture lives in the toolkit's tests/
     # directory, like tests/apu_watch_fixture_test.c and tests/kernel_inplace_event_test.c,
@@ -1890,12 +1911,23 @@ if(BUILD_TESTING)
     # WARP gives an explicit portable reference; hardware is run by the capture script.
     add_test(NAME jsrf_native_gpu_warp COMMAND jsrf_gpu_smoke --warp)
     set_tests_properties(jsrf_native_gpu_warp PROPERTIES TIMEOUT 15)
+    else()
+        message(STATUS "jsrf_fence_release_runtime*, jsrf_apu_watch_fixture_*, "
+                       "jsrf_a2h_slotw_fixture_*, jsrf_ac97_reset_gate and jsrf_native_gpu_warp "
+                       "are not registered off Windows -- they need Win32 VEH/page-protection "
+                       "semantics, the Windows APU/D3D host paths, or a Direct3D 11 device")
     endif()
     else()
         # Fixtures-only: the pure-Python CTests whose inputs are all tracked.  The rest read the
         # retail XBE, the lifted tree, archived runs or the retail corpus (or, for
         # jsrf_optional_vulkan and jsrf_vsh_aot_provenance, a Windows tool layout), so they are
         # not registered here.  A case that needs an optional module (duckdb) skips itself.
+        message(STATUS "Fixtures-only: these Python CTests are not registered -- "
+                       "key_script_run, fcmov_clamp, pbcov_workdir_helper, nv2a_inventory_guard, "
+                       "recovery_span_ownership, stack_depth, hidden_entries, check_dead_gotos, "
+                       "tail_thunk_169000, alias_dispatch, generation_provenance, dispatch_table, "
+                       "stop_chain, vsh_aot_provenance and optional_vulkan; each reads retail "
+                       "XBE/generated/archived inputs or the Windows tool layout")
         set(_jsrf_pytests gpu_inspection logq bench_summary check_graffiti_run
             check_progression_run vsh_aot_table vsh_run_gate save_isolation run_exercised)
         # These two import numpy at module level, so they are only registered where it exists.

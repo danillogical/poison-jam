@@ -7,14 +7,15 @@ operations; `docs/jsrf-run-profiles.md` owns evidence classification;
 owns shortcuts; `config/stop-chain.json` owns stops.
 
 **Owner resume and portability preflight (2026-10-22):** the owner resumed after the D4
-step-3 pause and ordered Windows validation of the macOS changes first. The guarded build
-and a bounded keyscript are green (RTX 4070, new driver suffix, VSH misses 0, no
-ICALL/fatal), but full CTest is 160/161 (`jsrf_optional_vulkan`'s M-A anchor is stale
-after the `JSRF_FIXTURES_ONLY` CMake change) and `just check` flags the new
-`RECOMP_VK_DRIVER` as unclassified (TR §31.63). Next is the requested different-worker
-read-only review of toolkit `52af52e`/`9f03bfa`/`110e169` and game `401d8c5`/`40353d6`;
-the two findings need their own bounded repairs/gates before step 4
-(BUMPENVMAP CPU/AOT-Vulkan), then the different-author step-5 gate.
+step-3 pause and ordered Windows validation of the macOS changes first. The independent
+read-only review accepted the portability subset with conditions (TR §31.63–31.64). The
+bounded repair is now in: the M-A anchor, `RECOMP_VK_DRIVER` classification, grouped honest
+exclusion messages, the suballoc debt relabel, the POSIX cache documentation, and a
+different-author `JSRF_FIXTURES_ONLY=ON` gate. Full CTest **162/162, zero skipped,
+559.42 s**, `just check` green; the candidate is local and awaits Codex verification.
+Next after that verification: a measured MoltenVK suballoc-oracle investigation, then the
+POSIX handle-lifetime and vsh scratch-race/warning debt, before step 4 (BUMPENVMAP
+CPU/AOT-Vulkan) and the different-author step-5 gate. No D completion.
 
 ## Objective
 

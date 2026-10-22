@@ -6819,3 +6819,52 @@ subset). The two findings above are its inputs; step 4 waits. No production or t
 packet, and D4 is not complete.
 
 PUSHED_TO: origin / BRANCH: master / COMMIT: 4bd44f659d3ee18236bee1681c2d11d545e91fde / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 40353d6..4bd44f6 (1 records commit: the Windows portability preflight findings, TR §31.63 and plan), clean and synchronized; 2 outgoing blobs (largest 529937 bytes), 0 secret hits, only plan-jsrf-gameplay.md and docs/jsrf-technical-record.md, no game/ or retail-derived path; toolkit unchanged at 110e169e989b8466c84af31872c030b3571c8b4d = origin/main.
+
+### §31.64 Preflight repair: honest exclusions, driver classification, and a fixtures-only gate (2026-10-22)
+
+Bounded test/docs repair of the two preflight regressions and the review's disclosure/portability
+findings. Toolkit stays `110e169`; game candidate is local and unpushed until Codex verifies it.
+No runtime, shim, allocator, suballoc-oracle, concurrency or portability-feature code changed.
+
+- **C1 M-A anchor.** `tests/test_optional_vulkan.py` now anchors on
+  `if(XBR_VULKAN_FOUND AND NOT JSRF_FIXTURES_ONLY)` and replaces it with
+  `if(TRUE AND NOT JSRF_FIXTURES_ONLY)`, removing only the capability test and preserving the
+  fixtures-only axis; the docstring matches. The focused `jsrf_optional_vulkan` passes
+  (122.51 s); the independent test author measured anchor count 1, M-A detected with three failing
+  children, comment-only control green, and M-B/M-C/M-C2 unchanged.
+- **C2 `RECOMP_VK_DRIVER`.** Added to the feature-enablement table beside `RECOMP_VK_DEVICE`: it
+  filters by `driverName`/`driverInfo`, composes with the device filter, is inactive when
+  empty/unset, never matches a device that cannot report driver properties, supplies no guest
+  value, and no match leaves the CPU path. No classifier weakening; `just check` is green.
+- **C3 exclusion honesty.** CMake now prints grouped STATUS messages for the previously silent
+  families (`jsrf_save_root`, `jsrf_recovery_11c1`, all `jsrf_pbcov_stream_*`, fence/APU/A2H/
+  AC'97/native-GPU) and for the fixtures-only Python omissions. `docs/jsrf-macos-build.md` records
+  the full inventory and rewords the configure promise; skips for known defects stay explicit
+  debt.
+- **C4 suballoc label.** The skip and doc now say the 63,110,912 vs 63,112,704 (~1,792-byte)
+  difference is consistent with the allocator's separately reported `padding_bytes` omitted by the
+  pool claim, plus a double-counted dedicated allocation in the budget. That is a test-oracle
+  finding and a stated inference, not measured on a Mac here; the skip remains until a measured
+  investigation. No backend change.
+- **C5 pipeline cache.** The run-profile row now documents the actual POSIX defaults:
+  `$XDG_CACHE_HOME` when absolute, else `~/Library/Caches` on macOS or `~/.cache` elsewhere, off
+  when neither variable nor `HOME` is usable; Windows keeps `%LOCALAPPDATA%`.
+- **G1 fixtures-only gate.** New `tests/test_fixtures_only.py`, registered as
+  `jsrf_fixtures_only`, copies only 273 tracked files to a temp tree (no `src/recomp/gen`,
+  `src/recomp/recovered`, `game/` or retail corpus), runs a real
+  `-DJSRF_FIXTURES_ONLY=ON -DBUILD_TESTING=ON` configure with the capability ON, checks the
+  generated empty corpus (`nv2a_vsh_program_count = 0`), no `jsrf_recomp`/`jsrf_collect` projects,
+  and compiles/runs a consumer of the selected table (`count=0 found=0`). A private line-111
+  mutant removing `AND NOT JSRF_FIXTURES_ONLY` and a generated-tree negative control both fail;
+  restored baseline passes; shared hashes unchanged. Focused 43.83 s.
+
+**Validation (this host).** Guarded `just build` succeeded, 162 registered tests. Full limited CTest
+**162/162, zero failed/skipped, 559.42 s**; `just check` green. The C1 and G1 focused receipts are
+above. No Mac/MoltenVK run was made and no Mac outcome is claimed.
+
+**Remaining debt/open findings (not repaired here):** measured MoltenVK suballoc oracle
+investigation (padding and dedicated double count); POSIX handle lifetime (`ResetEvent` and
+friends; `jsrf_inplace_event_bridge` stays unregistered off Windows); vsh shared-scratch `-j` race
+and `jsrf_vsh_aot` log name (lock only non-Windows today); parity warnings around 2760/7170;
+fixtures-only POSIX shim test not run by a runner; 16 KiB-page subcase still PASS with a skipped
+case. D4 remains incomplete; step 4 waits.
