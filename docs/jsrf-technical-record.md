@@ -7050,3 +7050,5 @@ Source SHA-256 is `659f39a0b58314ddcf6c9e5b7bb48d607ee6ae2322168a70aab43cdb384af
 The safe next increment is lifetime-aware validation against known live shim handles, with
 different-author native POSIX regressions; a range check or magic/kind word at an arbitrary pointer
 is insufficient. These are Linux observations, not Mac runtime evidence. D4 remains incomplete.
+
+PUSHED_TO: origin / BRANCH: master / COMMIT: 21f1f0df777594aa1cc98919135601b840255bc0 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 9695d81..21f1f0d (three retained commits, final bound gate independently accepted); clean and synchronized, 15 outgoing blobs, largest 548695 bytes, zero secrets, only reviewed CMake/test/macOS-doc/plan/TR paths, no forbidden or oversized blobs. Final code has full limited CTest 162/162 and `just check` green; Codex's actual shared-header controls and production-allocator case passed, and record-only hooks passed before push. Toolkit unchanged and synchronized at 110e169e989b8466c84af31872c030b3571c8b4d; no toolkit push needed.
