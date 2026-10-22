@@ -1528,9 +1528,12 @@ if(BUILD_TESTING)
                        "and spirv-val are all needed to compile its fixtures (${XBR_VULKAN_UNAVAILABLE_REASON})")
     endif()
 
-    # Off Windows the toolkit's ResetEvent (src/platform/win32_compat.c) dereferences the handle it is
-    # given, where Windows returns FALSE for an invalid one; the fixture's header-validation case
-    # passes the bridge a non-event guest VA as a handle and crashes there.
+    # Off Windows this fixture does not link: the POSIX providers of xbox_FramebufferWindow*,
+    # xbox_VideoIsPlaying/PlayFile, xa2_* and mcpx_apu_* live in the SDL2/XAudio2 sources, which a
+    # Linux host needs SDL2, OpenSSL and the vendored qemu shim headers to build. The crash this
+    # guard used to name -- the toolkit's POSIX ResetEvent dereferencing the non-event guest VA the
+    # header-validation case passes as a handle -- is repaired: a value the shim never published is
+    # rejected with ERROR_INVALID_HANDLE / WAIT_FAILED instead of dereferenced (TR §31.71).
     if(WIN32)
     add_executable(jsrf_inplace_event_test
         ${XBOXRECOMP_DIR}/tests/kernel_inplace_event_test.c)
@@ -1541,8 +1544,9 @@ if(BUILD_TESTING)
     add_test(NAME jsrf_inplace_event_bridge COMMAND jsrf_inplace_event_test)
     set_tests_properties(jsrf_inplace_event_bridge PROPERTIES TIMEOUT 20)
     else()
-        message(STATUS "jsrf_inplace_event_bridge is not registered off Windows -- the toolkit's "
-                       "POSIX ResetEvent crashes on the invalid handle its header-validation case passes")
+        message(STATUS "jsrf_inplace_event_bridge is not registered off Windows -- the fixture needs "
+                       "the SDL2/OpenSSL/qemu-shim POSIX providers this host does not build "
+                       "(the POSIX ResetEvent crash it used to name is repaired, TR §31.71)")
     endif()
     add_executable(jsrf_dpc_queue_test
         ${XBOXRECOMP_DIR}/tests/kernel_dpc_queue_test.c)

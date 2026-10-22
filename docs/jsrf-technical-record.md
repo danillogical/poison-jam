@@ -7081,3 +7081,86 @@ before D4 steps 4–5 after role availability/authorization and supported bridge
 The last accepted Windows checkpoint remains 162/162 CTests; this draft has no validation claim.
 
 PUSHED_TO: origin / BRANCH: master / COMMIT: aea24021469b61e621accd6a63be384a5445bfdc / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward c62e879..aea2402; clean intended documentation checkpoint, two reviewed plan/TR blobs (largest 551336 bytes), zero secrets and no forbidden or oversized paths. Record-only hooks passed; no code or new runtime validation claimed. Toolkit draft preserved uncommitted; no toolkit push.
+
+### §31.71 POSIX handle safety: a live-handle registry with lifetime pins (2026-10-22)
+
+The `ResetEvent` defect in §31.69–31.70 is repaired, with the lifetime design corrected and a
+different author's native gate. Sources: toolkit `110e169e989b8466c84af31872c030b3571c8b4d`
+plus this repair; game `2ff34cc5405877df1409fd3ec8d2838672aef4b6` plus these records.
+
+**Cause.** On POSIX a `HANDLE` *is* the `w32_object *` the shim allocates, and every public entry
+point cast the caller's value and dereferenced it; `CloseHandle` released whatever it was handed.
+`K_EVENT == 0` made a zeroed block read as a valid event. Measured with Ubuntu WSL `cc` (gcc 15.2),
+Linux only, core dumps disabled, bounded alarms: original source `9fda5b43…` segfaults on
+`ResetEvent((HANDLE)0x03fffffe)` (exit 139) and **accepts** a zeroed 4 KiB `calloc` block
+(`=1 error=0`, exit 2). The ordinary create/wait/reset/set/close control passed before and after.
+
+**Repair.** `w32_object` carries an intrusive bucket link and two counts; a 256-bucket table keyed
+by the handle's own value is the only authority for liveness. `refcount` is total lifetime
+references (public aliases plus internal pins: an API call's pin, a thread trampoline, a timer
+helper) and `public_refs` counts public aliases only. A pin is taken under the same lock that
+decides liveness, so a lookup either wins before a concurrent withdrawal or fails after it — never
+pins a freed object — and nothing is dereferenced before the pin succeeds. **Every successful public
+close drops exactly one lifetime reference, final or not**, and the last close unlinks the value
+before that release. That is the correction to the interrupted draft, whose withdraw returned an
+object only on the final close and would have leaked a reference on every non-final alias close;
+its helpers were also disconnected from allocation, the APIs and `CloseHandle`. Audited entry
+points: event set/reset/pulse, semaphore release, mutex release, single and multiple waits (every
+handle pinned once before the polling loop; a bad entry fails the call instead of being skipped),
+`GetThreadId`, `GetExitCodeThread`, resume/suspend/terminate, thread priorities, `QueueUserAPC`,
+timer-queue change/delete, waitable-timer set/cancel, `MapViewOfFileEx`, the fd/path helpers,
+`CloseHandle` and `DuplicateHandle`. Failures are `FALSE`/`NULL`/`(DWORD)-1`/`WAIT_FAILED` with
+`ERROR_INVALID_HANDLE` (and `ERROR_INVALID_PARAMETER` for a NULL out-parameter). Pseudo handles,
+the process-heap sentinel, the opaque 32-bit guest token mapping and the native Windows path are
+unchanged; `thread_pin` resolves the calling thread's own object directly, so `SuspendThread(self)`
+and waits on a thread's own value keep working after the guest closed the public handle.
+
+Retained semantics, recorded rather than glossed: `DuplicateHandle` still returns the **same value**
+(the guest ABI maps tokens by value), so a duplicate is an alias usable until the last public alias
+closes; `w32_handle_fd`/`_path` are **borrowed** views whose result is not lifetime-protected past
+the lookup, as with a raw fd; a freed value can be reused by a later allocation at the same address
+and then names a different object, which the value-is-pointer scheme makes unavoidable and the
+contract does not forbid. No general race freedom is claimed.
+
+**Gate (different author, `PosixGateAuthor`).** `tests/win32_compat_posix/test_handle_lifetime.c`
+(175 checks, `sha256 63e061fd…`) and `test_handle_lifetime_asan.c` (22 checks,
+`sha256 0750ad9e…`), registered in the existing standalone POSIX project (the ASAN target behind a
+real `-fsanitize=address` compile test) and built directly with the installed WSL `cc` because no
+CMake exists there. Final shim `sha256 094e7884…`: **plain 175/0, ASAN 22/0** (leaks on, no
+suppression), reproduced independently by the orchestrator. Private weakening controls, all
+re-run by the orchestrator: **bypass** (lookup skips the registry) → SIGSEGV on the plain binary and
+heap-use-after-free under ASAN; **no-withdraw** (entry never unlinked) → SIGSEGV with 5 FAIL rows
+including `a second CloseHandle of the same value returns FALSE` and `WaitForSingleObject on the
+closed value returns WAIT_FAILED`; **early-release** (non-final close skips the release) → invisible
+to the plain binary but **LeakSanitizer: `Direct leak of 59200 byte(s) in 100 object(s)`**, which is
+why the ASAN companion is load-bearing rather than decorative. The original committed shim is RED on
+both required rows (SIGSEGV on the invalid address; 19 false-accept rows then
+`double free or corruption` on the zeroed block) and fails the full plain run at 52 pass / 2 FAIL.
+Pre-existing `win32_compat_posix/test_main.c`, `test_interlocked.c` and
+`win32_thread_posix/test_main.c` all build and pass against the final shim.
+
+**`jsrf_inplace_event_bridge` integration: measured, still not registered off Windows.** The fixture
+and every toolkit source it needs compile, but it cannot be *linked* on this Linux host: the POSIX
+providers of `xbox_FramebufferWindow*`, `xbox_VideoIsPlaying`/`PlayFile` and `xa2_*`/`mcpx_apu_*`
+live in the SDL2 and XAudio2 sources, and the WSL image has no SDL2/epoxy/OpenSSL headers, no CMake
+and no pkg-config; 35 undefined references remain. Installing them is out of scope. The **old
+exclusion reason is now stale and corrected** in the game `CMakeLists.txt` and
+`docs/jsrf-macos-build.md`: the header-validation case passes a non-event guest VA as a handle, and
+the final shim returns `FALSE`/`WAIT_FAILED` for it instead of faulting. The registration stays off
+Windows because of the missing POSIX link providers, not a crash. No Mac run was made and no Mac
+result is claimed.
+
+**Validation (this host).** Guarded `just build` succeeded (0 compile/link errors, 0 C4310, 18 known
+MSB8028), executable `sha256 c7c6e292…`; targeted Windows `jsrf_inplace_event_bridge` (4.16 s),
+`jsrf_dpc_queue_bridge`, `jsrf_callback_reentry`, `jsrf_save_root` and the fence-release pair all
+pass; full limited CTest **162/162, zero failed/skipped, 665.83 s**; `just check` green including the
+real retail `check-vsh-aot-table` (126/126). One bounded 8 s strict Vulkan smoke
+(`20261022-101153-213-posix-handles-smoke`, `RECOMP_GPU_ACK=0`, pipeline cache off, isolated save
+root verified): RTX 4070 `driver: NVIDIA (616.92)`, checkpoints `memory_ready`/`guest_entry`,
+36 native threads, 325 named frames, **zero ICALL and zero FATAL**, `[AC97] serviced=40 refused=0`,
+outcome `diagnostic_deadline` — a liveness check, not a fidelity or e2e claim. The earlier 620 s
+NVIDIA e2e remains the previous Windows gameplay evidence. D4 remains incomplete; step 4 waits.
+
+PUSHED_TO: none (candidate held for independent Codex review) / BRANCH: master / COMMIT:
+toolkit 7c46fa693ba03a9bf4b05ea609bb307a298a9bfc; game (this record commit) / RESULT: local commits only; no push, no force, toolkit first then game.
+

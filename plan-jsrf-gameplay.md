@@ -28,13 +28,22 @@ and the controlled gate. Private header mutations recompile both consumers and f
 controlled gate; the zero-padding/dedicated llvmpipe workload still passes those mutations. Codex
 independently accepted the bound test-debt repair (TR §31.69). The
 MoltenVK suballoc skip remains explicit debt (historical 1792 is still an inference), and CTest
-locks do not coordinate separate ctest processes. **Blocked:** the final POSIX handle-safety
-preflight stopped on configured OMP provider usage exhaustion before integration or tests
-(TR §31.70). Its unfinished toolkit edit is preserved; Codex independently replayed the native
-negative cases and both defects remain. Restore the configured role or obtain exact owner
-authorization for settings changes before another operation. Then finish and verify the POSIX
-repair before step 4 (BUMPENVMAP CPU/AOT-Vulkan) and the different-author step-5 gate. The paused
-D4 allowance remains four normal operations and zero repair cycles. No D completion.
+locks do not coordinate separate ctest processes. **POSIX handle safety repaired (TR §31.71):**
+the interrupted preflight's defect is closed — a live-handle registry validates provenance before any
+dereference, pins are atomic with the liveness decision, and every successful public close drops
+exactly one lifetime reference (the draft's release-only-on-final-close leak is corrected). A
+different author's native gate decides it: plain 175/0 and ASAN 22/0 on the final shim, with bypass,
+no-withdraw and early-release mutants red (the last only under LeakSanitizer) and the original
+committed source red on both required rows; the pre-existing POSIX compat, interlocked and thread
+projects still pass. `jsrf_inplace_event_bridge` stays unregistered off Windows for a **measured**
+reason (missing SDL2/OpenSSL/qemu-shim POSIX link providers), not the now-repaired crash, and the
+stale crash reason is corrected in `CMakeLists.txt` and the macOS doc. Windows: guarded build,
+targeted event/DPC/callback/save tests, full limited CTest **162/162** and `just check` green, one
+bounded strict 8 s Vulkan smoke with zero ICALL/FATAL. The MoltenVK suballoc skip remains explicit
+debt (historical 1792 is still an inference), and CTest locks do not coordinate separate ctest
+processes. The candidate is held locally for independent Codex review; no push. Next is D4 step 4
+(BUMPENVMAP CPU/AOT-Vulkan) and then the different-author step-5 gate. The paused D4 allowance
+remains four normal operations and zero repair cycles. No D completion.
 
 ## Objective
 

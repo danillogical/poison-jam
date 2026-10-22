@@ -24,7 +24,9 @@ python3 ../xboxrecomp/tools/posix_check.py native python cross
   known ones also fail: `nv2a_core.c` and `vm_reuse_test.c`, both because of `__try`. They fail the
   same way without the macOS changes.
 - `posix_check` does not run `tests/win32_compat_posix` or `tests/win32_thread_posix`; build those
-  separately.
+  separately. Both projects' CMakeLists now also carry the handle-provenance regressions
+  (`win32_handle_lifetime_posix_test`, plus `win32_handle_lifetime_asan_test` where the compiler has
+  `-fsanitize=address`), which is where the POSIX handle contract is decided (TR §31.71).
 
 ## Game: portable tests only
 
@@ -63,7 +65,12 @@ named after the GPU, so choose with `RECOMP_VK_DRIVER=MoltenVK` or `RECOMP_VK_DR
 - **`jsrf_vk_pcache_device_hw`** skips: MoltenVK reports no pipeline-cache hits.
 - **Not registered:**
   - `jsrf_nv2a_hal`: the NV2A MMIO hook is Windows-only.
-  - `jsrf_inplace_event_bridge`: the POSIX `ResetEvent` dereferences a non-event handle.
+  - `jsrf_inplace_event_bridge`: the fixture needs POSIX providers of
+    `xbox_FramebufferWindow*`, the video player and `xa2_*`/`mcpx_apu_*` that live in the SDL2 and
+    XAudio2 sources, so it is not registered here. The POSIX `ResetEvent` crash this entry used to
+    name is repaired: an unpublished handle value is rejected with `ERROR_INVALID_HANDLE` /
+    `WAIT_FAILED` instead of dereferenced (TR §31.71), and the fixture's header-validation case now
+    returns a failure rather than faulting.
   - the Direct3D 11 parity tests;
   - the `vsh_aot` tests, which need the retail corpus.
   - `jsrf_save_root`: Win32 save-root path layer and shell32/advapi32.
