@@ -188,3 +188,16 @@ Toolkit dbeb284 records alignment gaps and carves aligned pieces from free block
 ## 2026-10-05 - F5 long runs
 
 Runs 20261004-014344-804-f5-hook-600 (600 s: disclaimer, logo phase 13 hold 618/720) and 20261004-020802-181-f5-long-1500 (1500 s: disclaimer held to the last frame; logo object gone and fade mid-step at the end of the dump; the guest wrote JSRF_FATAL.ERR at ~950 s with no OOM, caller of 0x6F730 not yet named). No strict run; no strict-horizon move. Ledger L14-L18, L20-L25, L39, L40. Not the title screen; not a fidelity or liveness claim.
+
+## 2026-10-22 - POSIX handle-safety repair / runtime liveness smoke
+
+The POSIX Win32 shim now validates a handle against a live-handle registry before dereferencing
+(toolkit `7c46fa6`), so the repair changes host handle lifetime only: no guest-visible value, switch
+or emulated path moved, and the strict horizon does not move. One bounded strict launch checked that
+the rebuilt runtime still starts and reaches guest code: `20261022-101153-213-posix-handles-smoke`,
+8 s, `RECOMP_GPU_ACK=0`, `RECOMP_GPU_BACKEND=vulkan`, `RECOMP_VK_PIPELINE_CACHE=off`, isolated save
+root verified, RTX 4070 (`driver: NVIDIA (616.92)`). **NOT REACHED** - `diagnostic_deadline`, 39.23 s,
+checkpoints `memory_ready` and `guest_entry`, 36 native threads, 325 named frames, 1 GPU snapshot,
+0 invalid ICALLs, 0 `[FATAL]`, 0 ABI failures, `[AC97] serviced=40 refused=0`. This row establishes
+liveness of the rebuilt binary only; it is not a gameplay, fidelity or e2e claim, and the earlier
+620 s NVIDIA e2e remains the previous gameplay evidence.
