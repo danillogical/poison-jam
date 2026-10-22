@@ -6868,3 +6868,42 @@ friends; `jsrf_inplace_event_bridge` stays unregistered off Windows); vsh shared
 and `jsrf_vsh_aot` log name (lock only non-Windows today); parity warnings around 2760/7170;
 fixtures-only POSIX shim test not run by a runner; 16 KiB-page subcase still PASS with a skipped
 case. D4 remains incomplete; step 4 waits.
+
+### §31.65 G1 binding and C3 disclosure correction (2026-10-22)
+
+Codex rejected candidate `58cd601` for a G1 evidence hole: a private tracked-only tree with
+`set(JSRF_CORPUS_SOURCES "${_jsrf_empty_dir}/nv2a_vsh_programs.c")` cleared to `""` still passed,
+because the consumer hard-coded `<build>/empty-corpus/nv2a_vsh_programs.c`; the real configured
+`jsrf_vsh_conformance_test.vcxproj` then compiled no corpus source. It also found the new C++
+exclusion group was placed in a branch that a fixtures-only configure never evaluates.
+
+**Repair (candidate local, unpushed).**
+
+- `tests/test_fixtures_only.py` now parses the actual configured
+  `jsrf_vsh_conformance_test.vcxproj` `ClCompile` entries, requires exactly one entry resolving to
+  the generated empty table (missing/duplicate/wrong table fail separately), checks the include
+  binding where the project declares one, and compiles/runs the consumer against that derived path.
+  A third private control clears `JSRF_CORPUS_SOURCES`; the gate fails with
+  `missing corpus binding: jsrf_vsh_conformance_test.vcxproj has no ClCompile entry for the
+  generated empty corpus …`. The line-111 capability mutant, the generated-tree negative control,
+  source-only input absence and shared-hash controls are retained; baseline/restored pass.
+- CMake now prints the C++ exclusion groups in the branch a fixtures-only configure actually
+  executes (fence/APU-watch/collect-arming/A2H/AC97/native-GPU), adds `collect_arming_gate_on/off`
+  to the off-Windows group, and discloses that `jsrf_fixtures_only` itself is not registered in
+  fixtures-only mode (needs a tracked checkout/Windows tool layout; avoids recursion). The macOS
+  doc inventory and wording match. The G1 gate asserts those groups appear in the real fixtures-only
+  configure output, not merely in CMake source text. No test selection changed.
+
+**Evidence.** Final `tests/test_fixtures_only.py` sha256
+`46e0d23999efda2259579154363e09fc0f115c2d458f348fcacdbcab5fd13d74`; CMakeLists
+`f873ebfd8f40ec1988b32b36cb103547108cc991a5e55c6c5c3b34cc7082888e`. Focused
+`jsrf_fixtures_only` 1/1 in 66.23 s: baseline PASS binding the actual project entry
+(`empty-corpus/nv2a_vsh_programs.c`, consumer `count=0 found=0`), line-111/gen-tree/cleared-corpus
+mutants rejected, restores PASS, shared hashes unchanged. Focused R2 `jsrf_optional_vulkan` 1/1 in
+118.08 s; M-A anchor unchanged. Guarded build succeeded; full limited CTest **162/162, zero
+skipped, 677.54 s**; `just check` green on the final tree.
+
+**Status.** `58cd601` remains a rejected local candidate in history; the new candidate is local and
+unpushed pending Codex verification. No Mac/MoltenVK run. Remaining debt is unchanged (measured
+suballoc oracle, POSIX handle lifetime, vsh scratch race/log, parity warnings, fixtures-only shim
+test, 16 KiB subcase). D4 incomplete; step 4 waits.

@@ -15,14 +15,27 @@ Vulkan capability is ON.  The configure must:
   * write no build description that names `src/recomp/gen`,
     `src/recomp/recovered` or `game/`, and generate the empty table itself;
   * configure neither `jsrf_recomp` nor `jsrf_collect`;
-  * leave the portable tests configured (`BUILD_TESTING=ON`).
+  * leave the portable tests configured (`BUILD_TESTING=ON`);
+  * wire the generated empty table into the REAL configured fixture target:
+    `jsrf_vsh_conformance_test.vcxproj` must list exactly one `ClCompile`
+    entry for it (no missing, duplicate or retail table), and the project's
+    own include list must bind the generated table's directory when it
+    declares one;
+  * print the advertised fixtures-only exclusion groups
+    (`jsrf_fence_release_runtime`, `jsrf_apu_watch_fixture`,
+    `jsrf_collect_arming_gate_on/off`, `jsrf_a2h_slotw_fixture`,
+    `jsrf_ac97_reset_gate`, `jsrf_native_gpu_warp`, and its own
+    `jsrf_fixtures_only` reason) in the real configure output.
 
 The evidence is never a re-implementation of the branch: it is a real
 configure's exit code, its forwarded output, the cache it wrote, the files it
-generated, the project list it produced and a real compile+link+run of a tiny
-consumer of the generated table with the host compiler.  The consumer includes
-the generated header, checks `nv2a_vsh_program_count == 0` and performs lookups
-that must all return NULL, so it proves the selected TABLE, not file presence.
+generated, the project it configured and a real compile+link+run of a tiny
+consumer of the generated table with the host compiler.  The table path is
+DERIVED from the fixture project's own `ClCompile` entry, not hard-coded, so a
+configure that compiles some other file (or none) cannot pass.  The consumer
+includes the generated header, checks `nv2a_vsh_program_count == 0` and
+performs lookups that must all return NULL, so it proves the selected TABLE,
+not file presence.
 
 MUTATION CONTROLS (private copies only)
 =======================================
@@ -36,6 +49,12 @@ the tracked scratch tree:
     the file OFF (`if(JSRF_FIXTURES_ONLY)` -> `if(FALSE)`), so the configure
     starts reading the source tree's generated directory.  The gate must FAIL
     on a generated-tree reference in the build description.
+  * M-CORPUS: clear the empty-corpus source
+    (`set(JSRF_CORPUS_SOURCES "")`) while leaving the table generation and
+    include dir intact.  A configure alone still succeeds and still prints the
+    empty-corpus STATUS line, so only the fixture project's binding proof can
+    reject it: the gate must FAIL with the named "missing corpus binding"
+    assertion.
   * restore: with the pristine bytes written back, the gate must PASS again.
 
 The shared `CMakeLists.txt` and `tests/test_optional_vulkan.py` hashes are
@@ -43,7 +62,7 @@ recorded before and after and must be identical.
 
 EXIT STATUS
 ===========
-0  the gate passed (baseline and restored pass; both mutants fail)
+0  the gate passed (baseline and restored pass; all three mutants fail)
 1  a real gate failure (or a shared-source change)
 77 only when this host genuinely lacks CMake, git, the toolkit or the Vulkan
    SDK (the reason is printed)
@@ -94,6 +113,27 @@ FIXTURES_ANCHOR = ('if(JSRF_FIXTURES_ONLY)\n'
                    '    set(RECOMP_GEN_SOURCES "")')
 FIXTURES_MUTANT = ('if(FALSE)\n'
                    '    set(RECOMP_GEN_SOURCES "")')
+
+# The empty-corpus branch's source variable.  Clearing it leaves the configure
+# succeeding and the STATUS line untouched, so only the fixture project's own
+# `ClCompile` binding can catch it.
+CORPUS_ANCHOR = ('    set(JSRF_CORPUS_SOURCES "${_jsrf_empty_dir}/nv2a_vsh_programs.c")\n'
+                 '    set(JSRF_CORPUS_INCLUDE_DIR "${_jsrf_empty_dir}")')
+CORPUS_MUTANT = ('    set(JSRF_CORPUS_SOURCES "")\n'
+                 '    set(JSRF_CORPUS_INCLUDE_DIR "${_jsrf_empty_dir}")')
+
+# The real fixture target whose project must bind the empty corpus.
+FIXTURE_PROJECT = 'jsrf_vsh_conformance_test.vcxproj'
+CORPUS_BASENAME = 'nv2a_vsh_programs.c'
+
+# The exclusion groups the fixtures-only configure must ADVERTISE in its own
+# output (not merely in CMakeLists.txt), plus its reason for not registering
+# this gate itself.
+C3_GROUPS = ('jsrf_fence_release_runtime', 'jsrf_apu_watch_fixture',
+             'jsrf_collect_arming_gate_on/off', 'jsrf_a2h_slotw_fixture',
+             'jsrf_ac97_reset_gate', 'jsrf_native_gpu_warp')
+C3_SELF = ('jsrf_fixtures_only itself is also not registered in this mode',
+           'needs the Windows tool layout', 'would recurse')
 
 CONSUMER_C = r'''
 #include <stdint.h>
@@ -316,6 +356,93 @@ def mutate(tree, anchor, replacement, what):
         fail(f'the {what} mutant is byte-identical to the shipped file')
 
 
+# ── the configured fixture project: the corpus BINDING ──────────────────────
+def resolve_project_path(project, value):
+    """Resolve a vcxproj `Include=`/include-list entry against the project."""
+    raw = (value or '').strip().strip('"')
+    if not raw or raw.startswith('%(', 0):
+        return None
+    candidate = Path(raw)
+    if not candidate.is_absolute():
+        candidate = project.parent / candidate
+    return Path(os.path.normpath(str(candidate)))
+
+
+def fixture_corpus_binding(project, table_c, label):
+    """Prove the configured fixture project compiles the generated empty table.
+
+    The `ClCompile` list is the project's own binding: exactly one entry must
+    resolve to `table_c`, no other `nv2a_vsh_programs.c` may appear (a retail
+    table would be the wrong binding), and the project's include list must bind
+    `table_c`'s directory where it declares one.  Returns the resolved path, so
+    the consumer is compiled against what the fixture project actually builds.
+    """
+    text = read_exact(project)
+    entries = re.findall(r'<ClCompile\s+Include="([^"]+)"', text)
+    table_key = norm_path(str(table_c))
+    corpus = []
+    wrong = []
+    for entry in entries:
+        resolved = resolve_project_path(project, entry)
+        if resolved is None:
+            continue
+        if norm_path(str(resolved)) == table_key:
+            corpus.append(resolved)
+        elif resolved.name.casefold() == CORPUS_BASENAME:
+            wrong.append(str(resolved))
+    if wrong:
+        fail(f'{label}: wrong corpus binding: {project.name} compiles '
+             f'{", ".join(sorted(set(wrong)))} instead of the generated empty '
+             f'table {table_c}')
+    if not corpus:
+        names = ', '.join(sorted({Path(entry).name for entry in entries})) or 'none'
+        fail(f'{label}: missing corpus binding: {project.name} has no ClCompile '
+             f'entry for the generated empty corpus {table_c} '
+             f'(ClCompile entries: {names})')
+    if len(corpus) > 1:
+        fail(f'{label}: duplicate corpus binding: {project.name} lists the '
+             f'generated empty corpus {len(corpus)} times '
+             f'({", ".join(str(path) for path in corpus)})')
+    corpus_path = corpus[0]
+    if not corpus_path.is_file():
+        fail(f'{label}: the fixture project binds {corpus_path}, which does not '
+             'exist')
+    try:
+        identical = corpus_path.samefile(table_c)
+    except OSError as exc:
+        fail(f'{label}: cannot compare {corpus_path} with {table_c}: {exc}')
+    if not identical:
+        fail(f'{label}: wrong corpus binding: {corpus_path} is not the '
+             f'generated empty table {table_c}')
+
+    include_lists = re.findall(
+        r'<AdditionalIncludeDirectories>([^<]*)</AdditionalIncludeDirectories>',
+        text)
+    if include_lists:
+        table_dir = norm_path(str(table_c.parent))
+        unbound = []
+        for index, value in enumerate(include_lists):
+            if not value.strip():
+                continue
+            resolved = [resolve_project_path(project, part)
+                        for part in value.split(';')]
+            if not any(resolved_path is not None
+                       and norm_path(str(resolved_path)) == table_dir
+                       for resolved_path in resolved):
+                unbound.append(index)
+        if unbound:
+            fail(f'{label}: the fixture project does not bind the generated '
+                 f'empty-corpus include directory {table_c.parent} in its '
+                 f'AdditionalIncludeDirectories ({len(unbound)} of '
+                 f'{len(include_lists)} list(s): {unbound}); the bound table '
+                 'header may not be includable')
+    else:
+        print(f'{label}: note: {project.name} declares no '
+              'AdditionalIncludeDirectories; the empty-corpus include comes '
+              'from the target')
+    return corpus_path
+
+
 # ── the gate ────────────────────────────────────────────────────────────────
 def run_gate(tree, build_name, label):
     build = tree / build_name
@@ -354,6 +481,18 @@ def run_gate(tree, build_name, label):
     if 'retail NV2A vertex-program corpus is required' in text:
         fail(f'{label}: the configure took the capability-ON retail-corpus '
              f'branch; output:\n{tail(text)}')
+
+    # C3: the configure's own output must ADVERTISE every exclusion group it
+    # implements, and its reason for not registering this gate in this mode.
+    missing_groups = [group for group in C3_GROUPS if group not in text]
+    if missing_groups:
+        fail(f'{label}: the configure output does not advertise the '
+             f'fixtures-only exclusion group(s) {missing_groups}; output:\n'
+             f'{tail(text)}')
+    missing_self = [needle for needle in C3_SELF if needle not in text]
+    if missing_self:
+        fail(f'{label}: the configure output does not state the jsrf_fixtures_only '
+             f'self-exclusion reason ({missing_self}); output:\n{tail(text)}')
 
     # The generated table itself, in BUILD output, declaring zero programs.
     table_c = build / 'empty-corpus' / 'nv2a_vsh_programs.c'
@@ -400,24 +539,41 @@ def run_gate(tree, build_name, label):
     if not ctest.is_file() or 'add_test(' not in read_exact(ctest):
         fail(f'{label}: BUILD_TESTING produced no CTest registration')
 
-    # Real compile+link+run of a consumer of the SELECTED table.
-    consumer_print = run_consumer(tree, build, label)
-    print(f'{label}: PASS (configure rc=0, empty table at '
-          f'{build / "empty-corpus"}, consumer: {consumer_print})')
-    return {'build': build, 'consumer': consumer_print, 'status': text}
+    # The BINDING: the real fixture target CMake configured must compile the
+    # generated empty table, and nothing else, and its include list must bind
+    # that table's directory.  The consumer below uses THIS resolved path.
+    fixture_projects = sorted(build.rglob(FIXTURE_PROJECT))
+    if not fixture_projects:
+        fail(f'{label}: the fixtures-only configure did not generate the fixture '
+             f'target {FIXTURE_PROJECT}; the empty corpus is unbound')
+    if len(fixture_projects) > 1:
+        fail(f'{label}: the configure generated {len(fixture_projects)} '
+             f'{FIXTURE_PROJECT} projects: '
+             f'{", ".join(str(path) for path in fixture_projects)}')
+    fixture_project = fixture_projects[0]
+    corpus_path = fixture_corpus_binding(fixture_project, table_c, label)
+
+    # Real compile+link+run of a consumer of the table the FIXTURE PROJECT binds.
+    consumer_print = run_consumer(tree, build, corpus_path, label)
+    print(f'{label}: PASS (configure rc=0, {fixture_project.name} binds '
+          f'{corpus_path}, consumer: {consumer_print})')
+    return {'build': build, 'consumer': consumer_print, 'status': text,
+            'fixture': fixture_project.name, 'corpus': corpus_path}
 
 
-def run_consumer(tree, build, label):
+def run_consumer(tree, build, corpus_path, label):
     probe = tree.parent / 'consumer-probe'
     probe.mkdir(parents=True, exist_ok=True)
     (probe / 'CMakeLists.txt').write_text(CONSUMER_CMAKE, encoding='utf-8',
                                           newline='\n')
     (probe / 'consumer.c').write_text(CONSUMER_C, encoding='utf-8', newline='\n')
     built = probe / 'build'
+    # `corpus_path` came from the fixture project's own ClCompile entry; the
+    # include dir is derived beside it, never hard-coded under <build>.
     completed = run(['cmake', '-S', str(probe), '-B', str(built),
-                     f'-DJSRF_TABLE_C={build / "empty-corpus" / "nv2a_vsh_programs.c"}',
+                     f'-DJSRF_TABLE_C={corpus_path}',
                      f'-DJSRF_CONSUMER_C={probe / "consumer.c"}',
-                     f'-DJSRF_EMPTY_DIR={build / "empty-corpus"}',
+                     f'-DJSRF_EMPTY_DIR={corpus_path.parent}',
                      f'-DJSRF_TOOLKIT={TOOLKIT}'], timeout=600)
     if completed.returncode != 0:
         fail(f'{label}: the consumer project did not configure:\n'
@@ -521,7 +677,29 @@ def main():
             'negative control (fixtures-only reads src/recomp/gen)',
             'references the ignored generated/recovered tree')
 
-        # 5. The shared sources were inputs only.
+        # 5. M-CORPUS: clear the empty-corpus source while leaving the table
+        # generation and include dir intact.  The configure still succeeds and
+        # still prints the empty-corpus STATUS, so only the fixture project's
+        # own ClCompile binding can reject it.
+        stage = 'mutant-corpus'
+        corpus_tree = make_tree(scratch / 'corpus' / 'tree', tracked)
+        mutate(corpus_tree, CORPUS_ANCHOR, CORPUS_MUTANT, 'empty-corpus source')
+        expect_gate_failure(
+            lambda: run_gate(corpus_tree, 'build-corpus-mutant',
+                             'mutant-corpus'),
+            'M-CORPUS (empty-corpus source cleared)',
+            'missing corpus binding')
+
+        # 6. Restore the pristine bytes and require PASS again.
+        stage = 'corpus-restored'
+        write_exact(corpus_tree / 'CMakeLists.txt', pristine_cmake)
+        if sha256_file(corpus_tree / 'CMakeLists.txt') != \
+                shared_before['CMakeLists.txt']:
+            fail('the restored corpus-tree CMakeLists.txt is not byte-identical '
+                 'to the shipped file')
+        run_gate(corpus_tree, 'build-corpus-restored', 'corpus-restored')
+
+        # 7. The shared sources were inputs only.
         stage = 'shared-hashes'
         shared_after = {relative: sha256_file(ROOT / relative)
                         for relative in SHARED_INPUTS}
@@ -532,10 +710,11 @@ def main():
         shutil.rmtree(scratch, ignore_errors=True)
 
     print('G1 PASS: fixtures-only configure selected the generated empty corpus, '
-          'configured neither jsrf_recomp nor jsrf_collect, linked and ran its '
-          'consumer (count=0, no lookup hit), rejected the line-111 mutant and '
-          'the generated-tree negative control, and left the shared sources '
-          'byte-identical.')
+          'configured neither jsrf_recomp nor jsrf_collect, advertised every '
+          'C3 exclusion group, bound the empty table in the real fixture '
+          'project, linked and ran its consumer (count=0, no lookup hit), '
+          'rejected the line-111, generated-tree and cleared-corpus mutants, '
+          'and left the shared sources byte-identical.')
     return 0
 
 

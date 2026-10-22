@@ -1913,15 +1913,25 @@ if(BUILD_TESTING)
     set_tests_properties(jsrf_native_gpu_warp PROPERTIES TIMEOUT 15)
     else()
         message(STATUS "jsrf_fence_release_runtime*, jsrf_apu_watch_fixture_*, "
-                       "jsrf_a2h_slotw_fixture_*, jsrf_ac97_reset_gate and jsrf_native_gpu_warp "
-                       "are not registered off Windows -- they need Win32 VEH/page-protection "
-                       "semantics, the Windows APU/D3D host paths, or a Direct3D 11 device")
+                       "jsrf_collect_arming_gate_on/off, jsrf_a2h_slotw_fixture_*, "
+                       "jsrf_ac97_reset_gate and jsrf_native_gpu_warp are not registered off "
+                       "Windows -- they need Win32 VEH/page-protection semantics, the Windows "
+                       "APU/collector/D3D host paths, or a Direct3D 11 device")
     endif()
     else()
         # Fixtures-only: the pure-Python CTests whose inputs are all tracked.  The rest read the
         # retail XBE, the lifted tree, archived runs or the retail corpus (or, for
         # jsrf_optional_vulkan and jsrf_vsh_aot_provenance, a Windows tool layout), so they are
         # not registered here.  A case that needs an optional module (duckdb) skips itself.
+        message(STATUS "Fixtures-only: the Win32-only C++ fixtures are not registered -- "
+                       "jsrf_save_root, jsrf_recovery_11c1, all jsrf_pbcov_stream_* cases, "
+                       "jsrf_fence_release_runtime*, jsrf_apu_watch_fixture_*, "
+                       "jsrf_collect_arming_gate_on/off, jsrf_a2h_slotw_fixture_*, "
+                       "jsrf_ac97_reset_gate and jsrf_native_gpu_warp -- because fixtures-only "
+                       "skips the generated/recovered and Win32 guest-memory/VEH/collector/D3D "
+                       "blocks. jsrf_fixtures_only itself is also not registered in this mode: it "
+                       "configures a scratch checkout of the shipped tree and needs the Windows "
+                       "tool layout, and registering it here would recurse")
         message(STATUS "Fixtures-only: these Python CTests are not registered -- "
                        "key_script_run, fcmov_clamp, pbcov_workdir_helper, nv2a_inventory_guard, "
                        "recovery_span_ownership, stack_depth, hidden_entries, check_dead_gotos, "

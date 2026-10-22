@@ -11,8 +11,12 @@ step-3 pause and ordered Windows validation of the macOS changes first. The inde
 read-only review accepted the portability subset with conditions (TR §31.63–31.64). The
 bounded repair is now in: the M-A anchor, `RECOMP_VK_DRIVER` classification, grouped honest
 exclusion messages, the suballoc debt relabel, the POSIX cache documentation, and a
-different-author `JSRF_FIXTURES_ONLY=ON` gate. Full CTest **162/162, zero skipped,
-559.42 s**, `just check` green; the candidate is local and awaits Codex verification.
+different-author `JSRF_FIXTURES_ONLY=ON` gate. Codex rejected the first candidate for a
+G1 corpus-binding hole and a fixtures-only disclosure gap; the repair now derives the
+compiled corpus from the real configured conformance project, adds the cleared-corpus
+mutant, and announces the exclusions in the branch fixtures-only actually executes
+(TR §31.65). Full CTest **162/162, zero skipped, 677.54 s**, `just check` green; the
+repaired candidate is local and awaits Codex verification.
 Next after that verification: a measured MoltenVK suballoc-oracle investigation, then the
 POSIX handle-lifetime and vsh scratch-race/warning debt, before step 4 (BUMPENVMAP
 CPU/AOT-Vulkan) and the different-author step-5 gate. No D completion.

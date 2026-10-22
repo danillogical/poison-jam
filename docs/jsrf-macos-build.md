@@ -71,9 +71,12 @@ named after the GPU, so choose with `RECOMP_VK_DRIVER=MoltenVK` or `RECOMP_VK_DR
   - all `jsrf_pbcov_stream_*` cases (the D4 committed-stream coverage gate): Win32 guest
     memory/window layout, VEH guards and the commit consumer. The real-Vulkan `jsrf_pbcov_vk_*`
     cases remain registered where Vulkan is available.
-  - `jsrf_fence_release_runtime*`, `jsrf_apu_watch_fixture_*`, `jsrf_a2h_slotw_fixture_*`,
-    `jsrf_ac97_reset_gate` and `jsrf_native_gpu_warp`: Win32 VEH/page-protection semantics, the
-    Windows APU/D3D host paths, or a Direct3D 11 device.
+  - `jsrf_fence_release_runtime*`, `jsrf_apu_watch_fixture_*`,
+    `jsrf_collect_arming_gate_on/off`, `jsrf_a2h_slotw_fixture_*`, `jsrf_ac97_reset_gate` and
+    `jsrf_native_gpu_warp`: Win32 VEH/page-protection semantics, the Windows APU/collector/D3D
+    host paths, or a Direct3D 11 device.
+  - in a fixtures-only configure, `jsrf_fixtures_only` itself: it configures a scratch checkout
+    of the shipped tree and needs the Windows tool layout; registering it there would recurse.
   - in a fixtures-only configure, these Python tests are omitted because they read the retail
     XBE, generated/archived inputs or a Windows tool layout: `key_script_run`, `fcmov_clamp`,
     `pbcov_workdir_helper`, `nv2a_inventory_guard`, `recovery_span_ownership`, `stack_depth`,
