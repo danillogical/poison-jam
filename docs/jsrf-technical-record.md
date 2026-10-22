@@ -7438,3 +7438,10 @@ claim is made. This first admission consumed one carried normal slot: D4 stands 
 3 historical repair allowances**, leaving **2 normal operations / 0 repair cycles**; the nine
 preflight operations/five repair allowances stay separate and closed; the paused lineage and the
 failed attempt's sole REQUEST_HUMAN decision are preserved.
+
+**Deliberately unpushed.** The candidate commits are local only and have NO `PUSHED_TO` line, by
+instruction: toolkit `2a3c1e9` (modes 6/7) and `5e38bb4` (`stage_ge6` bucket comment), game
+`0ccd335` (test/mutant rebase and records), `270279b` (stage-0 fallback fixture and record
+corrections) and `08103d7` (durable-tree smoke receipt). They stay unpushed until step 5's
+different-author deciding gate and Codex acceptance; their absence from origin is intended, not a
+lost or failed push. The `PUSHED_TO:` line above belongs to the earlier blocked-checkpoint commit.

@@ -60,10 +60,12 @@ independently in the CPU executor (`rc_stage_fetch`) and in the ahead-of-time Vu
 (`fetch`), with the bump matrix/scale/offset and `SET_SHADER_OTHER_STAGE_INPUT` admitted, shadowed
 and transported per draw, stage 0's discarded words left at their D3D default, and the shared
 refusal rule moved from `> 5` to `> 7` so modes 8..31 and stage-3 cube still fall back. Windows:
-guarded build, full limited CTest **162/162 in 517.47 s** with the full log retained, `just check`
+guarded build, full limited CTest **162/162 in 518.59 s** with the full log retained, `just check`
 green including the real corpus re-derivation, 22/22 mutation mutants decided by their named
-assertions, and a bounded 8 s strict Vulkan smoke with pipeline cache off and an isolated save root
-that also registers the executor; no validation layer was inserted, so no validation claim is made.
+assertions, and **three** bounded 8 s strict Vulkan smokes with pipeline cache off and an isolated
+save root — two with the executor registered, the third on the committed tree with empty patch
+hashes — plus one discarded first attempt whose save-root override was a self-inflicted invocation
+error. No validation layer was inserted, so no validation claim is made.
 **This is not the deciding gate.** The step-5 author must differ from the implementation author and
 must write an independent formula oracle, decide the `w`-divide divergence with a `w != 1` case,
 prove CPU/Vulkan pixel agreement on a bump fixture, and fail each negative control with a named
