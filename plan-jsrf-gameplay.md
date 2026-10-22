@@ -21,9 +21,12 @@ preflight test/disclosure repair (TR §31.66). Full CTest **162/162, zero skippe
 the complete G1 gate. The bounded Windows test-debt repair (TR §31.67) now corrects the
 allocator padding/dedicated oracles, applies the shared-scratch RESOURCE_LOCK on Windows and
 removes the two parity warnings; a controlled 1792-byte allocator case decides the old forms
-while the real llvmpipe/NVIDIA workloads report zero padding/dedicated. The MoltenVK suballoc
-skip remains explicit debt (historical 1792 is still an inference), and CTest locks do not
-coordinate separate ctest processes. A separate final preflight operation validates POSIX
+while the real llvmpipe/NVIDIA workloads report zero padding/dedicated. Codex rejected the
+first candidate because the controlled gate held copies rather than the workload predicates;
+the repaired test-only `tests/vk_suballoc_oracles.h` is now called by both the real workload
+and the controlled gate, and private header mutations recompile and fail both consumers. The
+MoltenVK suballoc skip remains explicit debt (historical 1792 is still an inference), and CTest
+locks do not coordinate separate ctest processes. A separate final preflight operation validates POSIX
 handle lifetime on WSL before step 4 (BUMPENVMAP CPU/AOT-Vulkan) and the different-author
 step-5 gate. No D completion.
 

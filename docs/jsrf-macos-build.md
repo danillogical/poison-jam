@@ -110,6 +110,8 @@ Here, that also means:
 **Suballocation note (2026-10-22).** The pool oracle now includes the allocator's separately
 reported padding, and the workload gate no longer double-counts dedicated allocations; a
 controlled Windows allocator case produces exactly 1,792 bytes of padding and decides both old
-forms. This does **not** clear the MoltenVK skip: its dedicated-preference behaviour still defeats
+forms; the controlled gate and the real workload now call the same test-only predicates in
+`tests/vk_suballoc_oracles.h`, and a private header mutation recompiles both. This does **not**
+clear the MoltenVK skip: its dedicated-preference behaviour still defeats
 the pooling-budget claim, and no measured MoltenVK run has re-evaluated it. The historical 1,792
 attribution remains an inference, and the skip stays explicit debt until a Mac run decides it.

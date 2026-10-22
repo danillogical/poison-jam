@@ -582,9 +582,11 @@ if(BUILD_TESTING)
     # failure, so there is nothing for this test to ask, and an unregistered test is honest where a
     # green no-op would not be.
     if(XBR_VULKAN_FOUND)
-        add_executable(jsrf_gpu_backend_parity_vk_test tests/test_gpu_backend_parity_vk.c)
+        add_executable(jsrf_gpu_backend_parity_vk_test tests/test_gpu_backend_parity_vk.c
+            tests/vk_suballoc_oracles.h)
         target_include_directories(jsrf_gpu_backend_parity_vk_test PRIVATE
             ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests
             ${JSRF_GEN_INCLUDE_DIR})
         target_link_libraries(jsrf_gpu_backend_parity_vk_test PRIVATE xboxrecomp)
         if(JSRF_VK_TEST_ICD)
@@ -857,7 +859,8 @@ if(BUILD_TESTING)
             COMMENT "vk_suballoc_gate: probing nv2a_vk_backend.c for the seam the gate binds to"
             VERBATIM)
         add_custom_target(jsrf_vk_suballoc_gate_probe DEPENDS "${VK_SUBALLOC_GATE_HEADER}")
-        add_executable(jsrf_vk_suballoc_gate_test tests/test_vk_suballoc_gate.c)
+        add_executable(jsrf_vk_suballoc_gate_test tests/test_vk_suballoc_gate.c
+            tests/vk_suballoc_oracles.h)
         # xbox_video is what generates the SPIR-V headers the back end includes; the probe target
         # writes the seam header the test includes.
         add_dependencies(jsrf_vk_suballoc_gate_test jsrf_vk_suballoc_gate_probe xbox_video)
@@ -865,6 +868,7 @@ if(BUILD_TESTING)
             ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/video
             ${Vulkan_INCLUDE_DIRS}
             "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv"
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests
             "${VK_SUBALLOC_GATE_DIR}")
         target_link_libraries(jsrf_vk_suballoc_gate_test PRIVATE ${CMAKE_DL_LIBS})
         add_test(NAME jsrf_vk_suballoc_gate COMMAND jsrf_vk_suballoc_gate_test)

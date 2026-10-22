@@ -74,13 +74,18 @@
  *      resources destroyed through the production discard path) stay green: no
  *      byte/lifetime/dependency decision is weakened to accommodate the allocator.
  *  11. the padding term, exactly -- a 256-byte bump followed by a 2048-aligned take spends
- *      exactly 1792 bytes aligning, and both byte-oracle forms are evaluated on the
- *      production counters: `free + used == reserved` (the parity gate's old form) fails, short
- *      by exactly those 1792 bytes, while `free + used + padding == reserved` passes; the
- *      corrected form is shown to reject used/free/padding each misaccounted by 1, so it is
- *      not a check that cannot fail. A dedicated allocation taken on top decides the other old
- *      form on real counters: `alloc_calls + dedicated <= ranges/2` counts the dedicated
- *      allocation twice and fails (3 > 1), while `alloc_calls - dedicated` passes (1 <= 1).
+ *      exactly 1792 bytes aligning. This property's DECIDING checks are the shared bodies in
+ *      `tests/vk_suballoc_oracles.h`, the same functions the real workload's gate
+ *      (`tests/test_gpu_backend_parity_vk.c`, run_suballoc) decides with: on the production
+ *      counters `vk_suballoc_bytes_close` passes while the padding-less expected-old form
+ *      (`gx_bytes_close_old`, kept for display) is short by exactly those 1792 bytes; the
+ *      shared body rejects used/free/padding each misaccounted by 1, so it is not a check that
+ *      cannot fail. A dedicated allocation taken on top decides the shared
+ *      `vk_suballoc_reduction_close` on the controlled pooled+dedicated deltas (1 <= 1) while
+ *      the expected-old `alloc_calls + dedicated <= ranges/2` counts the dedicated allocation
+ *      twice and fails (3 > 1), and the shared `vk_suballoc_dedicated_reasons_close` decides
+ *      the reason identity. A private mutation of the shared header therefore has to change
+ *      BOTH this gate and the workload gate: there is no gate-local copy to fall back on.
  *      `--padding-1792` runs this property alone; no argument runs everything.
  *
  * The production bodies are the toolkit's own
@@ -137,6 +142,12 @@
 #include "nv2a_vk_backend.c"           /* the production bodies, verbatim */
 
 #include "vk_suballoc_gate_seam.h"     /* derived from the same source at build time */
+
+/* The SAME oracle bodies the real workload's gate decides with (test-only header, included by
+ * tests/test_gpu_backend_parity_vk.c's run_suballoc). Property 11 below calls these as its
+ * deciding checks: this fixture owns the scenario, the shared header owns the predicate, so a
+ * defect in either the counters or the predicate cannot be masked by a gate-local copy. */
+#include "vk_suballoc_oracles.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -3597,23 +3608,23 @@ static void prop10(void)
  * parity gate's byte oracle is judged on: a 256-byte take leaves the block's bump cursor at
  * 256, and a take whose own alignment is 2048 cannot use [256, 2048), so the cursor jumps to
  * 2048 -- exactly 1792 bytes of padding, a number the fixture can state independently of the
- * allocator. It then evaluates both oracle forms on the allocator's OWN published counters:
+ * allocator. It then calls the SHARED oracle bodies from `vk_suballoc_oracles.h` -- the same
+ * ones tests/test_gpu_backend_parity_vk.c's run_suballoc decides with -- on the allocator's OWN
+ * published counters:
  *
- *     old (the parity gate before this repair):  free + used           == reserved
- *     corrected:                                 free + used + padding == reserved
+ *     shared (the deciding check):               vk_suballoc_bytes_close
+ *     the parity gate's old form, display only:  free + used           == reserved
  *
- * The old form is short by exactly the padding, so it fails on this case while the corrected
- * one passes; and the corrected form is shown to reject deliberately misaccounted used, free
- * and padding values, so it is not a check that cannot fail. A dedicated allocation is then
- * taken as well, and the same counters decide the parity gate's OTHER old form: counting the
- * dedicated allocation in the reduction bound twice (`alloc_calls + dedicated`) fails on these
- * numbers (3 > 1) where the corrected `alloc_calls - dedicated` passes (1 <= 1). Each old form
- * is therefore decided by production counters, not by a copy of the expression. */
-static int gx_bytes_close(uint64_t reserved, uint64_t used, uint64_t free_b, uint64_t padding)
-{
-    return used + free_b + padding == reserved;
-}
-
+ * The old form is short by exactly the padding, so `gx_bytes_close_old` (kept here solely as
+ * the expected-old characterization) fails on this case while the shared body passes; and the
+ * shared body is shown to reject deliberately misaccounted used, free and padding values, so it
+ * is not a check that cannot fail. A dedicated allocation is then taken as well, and the same
+ * counters decide the parity gate's dedicated forms through the shared bodies: the
+ * double-counting `alloc_calls + dedicated <= ranges/2` (expected-old math, display only) fails
+ * on these numbers (3 > 1) where the shared `vk_suballoc_reduction_close` passes (1 <= 1), and
+ * `vk_suballoc_dedicated_reasons_close` decides the reason identity. Each old form is decided
+ * by production counters, but the PASS/FAIL verdicts that decide this property are the shared
+ * header's; deleting or changing a shared body changes this gate and the workload gate alike. */
 static int gx_bytes_close_old(uint64_t reserved, uint64_t used, uint64_t free_b)
 {
     return used + free_b == reserved;
@@ -3628,8 +3639,8 @@ static void prop11(void)
     uint64_t dr, db, da, dd;
     int chk = g_checks, bad = g_check_failures;
 
-    section("11. exactly 1792 bytes of padding: the corrected byte oracle passes, the old one "
-            "cannot");
+    section("11. exactly 1792 bytes of padding: the SHARED byte oracle passes and the "
+            "expected-old form cannot");
 
     gate_world();
     nv2a_vk_backend_memory_stats(&m0);     /* gate_world cleared the counters, so all zero */
@@ -3656,11 +3667,13 @@ static void prop11(void)
     check(m.padding_bytes == 1792u,
           "11: the published padding_bytes is that same 1792 -- the counter is honest",
           "padding_bytes %llu", (unsigned long long)m.padding_bytes);
-    check(m.reserved_bytes == m.used_bytes + m.padding_bytes + m.free_bytes,
-          "11: reserved = used + padding + free, with the 1792 in it",
-          "%llu = %llu + %llu + %llu", (unsigned long long)m.reserved_bytes,
-          (unsigned long long)m.used_bytes, (unsigned long long)m.padding_bytes,
-          (unsigned long long)m.free_bytes);
+    check(vk_suballoc_bytes_close(m.reserved_bytes, m.used_bytes, m.free_bytes,
+                                  m.padding_bytes),
+          "11: the SHARED byte oracle (reserved - used - free == padding) PASSES on the "
+          "production counters, with the 1792 in it",
+          "%llu - %llu - %llu vs %llu", (unsigned long long)m.reserved_bytes,
+          (unsigned long long)m.used_bytes, (unsigned long long)m.free_bytes,
+          (unsigned long long)m.padding_bytes);
     check(m.free_bytes + m.padding_bytes == pools_reserved() - m.used_bytes
           && m.used_bytes == ledger_sum(),
           "11: and from the fixture's own numbers (observed blocks and the extents it took)",
@@ -3669,13 +3682,14 @@ static void prop11(void)
           (unsigned long long)pools_reserved(), (unsigned long long)m.used_bytes,
           (unsigned long long)m.used_bytes, (unsigned long long)ledger_sum());
 
-    /* Both oracle forms, evaluated on those same production counters. */
-    check(gx_bytes_close(m.reserved_bytes, m.used_bytes, m.free_bytes, m.padding_bytes),
-          "11: the corrected oracle (free + used + padding == reserved) PASSES on the "
-          "production counters", "");
+    /* The shared header body is the DECIDING check; the old form is display-only math. */
+    check(vk_suballoc_bytes_close(m.reserved_bytes, m.used_bytes, m.free_bytes,
+                                  m.padding_bytes),
+          "11: the SHARED byte oracle vk_suballoc_bytes_close PASSES on the production "
+          "counters (the same body run_suballoc decides with)", "");
     check(!gx_bytes_close_old(m.reserved_bytes, m.used_bytes, m.free_bytes),
-          "11: the old oracle (free + used == reserved) FAILS on them -- it is short by the "
-          "padding", "free+used %llu vs reserved %llu, short by %llu",
+          "11: expected-old math only (display): free + used == reserved FAILS on them -- it is "
+          "short by the padding", "free+used %llu vs reserved %llu, short by %llu",
           (unsigned long long)(m.free_bytes + m.used_bytes),
           (unsigned long long)m.reserved_bytes,
           (unsigned long long)(m.reserved_bytes - (m.free_bytes + m.used_bytes)));
@@ -3683,15 +3697,18 @@ static void prop11(void)
           "11: and its whole error is exactly the 1792 bytes the old form omits",
           "%llu", (unsigned long long)(m.reserved_bytes - (m.free_bytes + m.used_bytes)));
 
-    /* No blanket success: the corrected form rejects each single-field misaccounting. */
-    check(!gx_bytes_close(m.reserved_bytes, m.used_bytes + 1u, m.free_bytes, m.padding_bytes),
-          "11: the corrected oracle rejects used += 1", "");
-    check(!gx_bytes_close(m.reserved_bytes, m.used_bytes, m.free_bytes + 1u, m.padding_bytes),
-          "11: the corrected oracle rejects free += 1", "");
-    check(!gx_bytes_close(m.reserved_bytes, m.used_bytes, m.free_bytes, m.padding_bytes - 1u),
-          "11: the corrected oracle rejects padding -= 1", "");
-    check(!gx_bytes_close(m.reserved_bytes, m.used_bytes, m.free_bytes, 0u),
-          "11: the corrected oracle rejects the old form's dropped padding", "");
+    /* No blanket success: the SHARED body rejects each single-field misaccounting. */
+    check(!vk_suballoc_bytes_close(m.reserved_bytes, m.used_bytes + 1u, m.free_bytes,
+                                   m.padding_bytes),
+          "11: the SHARED byte oracle rejects used += 1", "");
+    check(!vk_suballoc_bytes_close(m.reserved_bytes, m.used_bytes, m.free_bytes + 1u,
+                                   m.padding_bytes),
+          "11: the SHARED byte oracle rejects free += 1", "");
+    check(!vk_suballoc_bytes_close(m.reserved_bytes, m.used_bytes, m.free_bytes,
+                                   m.padding_bytes - 1u),
+          "11: the SHARED byte oracle rejects padding -= 1", "");
+    check(!vk_suballoc_bytes_close(m.reserved_bytes, m.used_bytes, m.free_bytes, 0u),
+          "11: the SHARED byte oracle rejects the old form's dropped padding", "");
     check(!gx_bytes_close_old(m.reserved_bytes, m.used_bytes + 1u, m.free_bytes - 1u),
           "11: and the old oracle cannot be made to pass by moving bytes between its two terms",
           "");
@@ -3711,31 +3728,44 @@ static void prop11(void)
           "ranges %llu, blocks %llu, alloc_calls %llu, dedicated %llu",
           (unsigned long long)dr, (unsigned long long)db, (unsigned long long)da,
           (unsigned long long)dd);
-    check(da - dd <= dr / 2u,
-          "11: the corrected reduction form (alloc_calls - dedicated <= ranges/2) PASSES",
-          "%llu <= %llu", (unsigned long long)(da - dd), (unsigned long long)(dr / 2u));
+    check(vk_suballoc_reduction_close(da, dd, dr),
+          "11: the SHARED reduction oracle vk_suballoc_reduction_close PASSES on the "
+          "controlled pooled+dedicated deltas (alloc_calls - dedicated <= ranges/2)",
+          "%llu - %llu <= %llu/2", (unsigned long long)da, (unsigned long long)dd,
+          (unsigned long long)dr);
     check(!(da + dd <= dr / 2u),
-          "11: the old reduction form (alloc_calls + dedicated, dedicated counted twice) FAILS "
-          "on the same counters", "%llu > %llu",
+          "11: expected-old math only (display): alloc_calls + dedicated, the dedicated "
+          "allocation counted twice, FAILS on the same counters", "%llu > %llu",
           (unsigned long long)(da + dd), (unsigned long long)(dr / 2u));
-    check(m.dedicated == m.dedicated_required + m.dedicated_prefer + m.dedicated_oversize
-          + m.dedicated_noroom + m.dedicated_nohost
-          + (m.fallbacks - m0.fallbacks),
-          "11: the dedicated reason identity holds on this success path (every dedicated "
-          "allocation has one recorded reason)",
+    check(!vk_suballoc_reduction_close(da + dd, dd, dr),
+          "11: and the SHARED reduction oracle rejects that double-counted value passed as "
+          "alloc_calls", "%llu - %llu > %llu/2", (unsigned long long)(da + dd),
+          (unsigned long long)dd, (unsigned long long)dr);
+    check(vk_suballoc_dedicated_reasons_close(m.dedicated, m.dedicated_required,
+                                              m.dedicated_prefer, m.dedicated_oversize,
+                                              m.dedicated_noroom, m.dedicated_nohost,
+                                              m.fallbacks - m0.fallbacks),
+          "11: the SHARED dedicated-reasons oracle vk_suballoc_dedicated_reasons_close PASSES "
+          "on the controlled dedicated counters (every dedicated allocation has one reason)",
           "dedicated %llu vs required %llu + prefer %llu + oversize %llu + noroom %llu + "
           "nohost %llu + fallbacks %llu", (unsigned long long)m.dedicated,
           (unsigned long long)m.dedicated_required, (unsigned long long)m.dedicated_prefer,
           (unsigned long long)m.dedicated_oversize, (unsigned long long)m.dedicated_noroom,
           (unsigned long long)m.dedicated_nohost,
           (unsigned long long)(m.fallbacks - m0.fallbacks));
-    check(m.padding_bytes == 1792u && m.reserved_bytes == m.used_bytes + m.padding_bytes
-          + m.free_bytes,
-          "11: the padding and the byte identity still hold with a dedicated allocation in the "
-          "same counters", "padding %llu, %llu = %llu + %llu + %llu",
+    check(!vk_suballoc_dedicated_reasons_close(m.dedicated + 1u, m.dedicated_required,
+                                               m.dedicated_prefer, m.dedicated_oversize,
+                                               m.dedicated_noroom, m.dedicated_nohost,
+                                               m.fallbacks - m0.fallbacks),
+          "11: the SHARED dedicated-reasons oracle rejects an unaccounted dedicated "
+          "allocation", "dedicated+1 %llu", (unsigned long long)(m.dedicated + 1u));
+    check(vk_suballoc_bytes_close(m.reserved_bytes, m.used_bytes, m.free_bytes,
+                                  m.padding_bytes),
+          "11: the SHARED byte oracle still passes with a dedicated allocation in the same "
+          "counters", "padding %llu, %llu - %llu - %llu = %llu",
           (unsigned long long)m.padding_bytes, (unsigned long long)m.reserved_bytes,
-          (unsigned long long)m.used_bytes, (unsigned long long)m.padding_bytes,
-          (unsigned long long)m.free_bytes);
+          (unsigned long long)m.used_bytes, (unsigned long long)m.free_bytes,
+          (unsigned long long)m.padding_bytes);
     check_free_lists("11: the free list, used and padding still account for the bump");
 
     verdict("11 the 1792-byte padding oracle", chk, bad);
@@ -3861,12 +3891,14 @@ int main(int argc, char **argv)
     }
     if (focused) {
         printf("PASS: vk_suballoc_gate --padding-1792: %d checks -- the production allocator "
-               "spent exactly 1792 bytes aligning a 2048-aligned take after a 256-byte bump, "
-               "reserved = used + padding + free holds on its published counters, the "
-               "corrected byte oracle passes where the old padding-less form is short by "
-               "exactly 1792, each misaccounted field is rejected, and the old dedicated "
-               "double-count reduction form fails (alloc_calls + dedicated = 3 > 1) where the "
-               "corrected form passes (1 <= 1)\n", g_checks);
+               "spent exactly 1792 bytes aligning a 2048-aligned take after a 256-byte bump; "
+               "the SHARED oracles from vk_suballoc_oracles.h pass on its published counters "
+               "(vk_suballoc_bytes_close with the padding, vk_suballoc_reduction_close on the "
+               "controlled pooled+dedicated deltas, vk_suballoc_dedicated_reasons_close on the "
+               "dedicated counters), each misaccounted byte field is rejected by the shared "
+               "byte body, and the display-only expected-old forms are short by exactly 1792 "
+               "and double count the dedicated allocation (alloc_calls + dedicated = 3 > 1)\n",
+               g_checks);
     } else {
         printf("PASS: vk_suballoc_gate: %d properties, %d checks -- resources share blocks at "
                "alignment-satisfying, non-overlapping offsets with a real reduction in "

@@ -6981,3 +6981,41 @@ changed; toolkit stays `110e169`. Candidate local/unpushed until Codex verifies.
 
 **Next:** the separate final preflight operation for POSIX handle-lifetime validation on WSL
 (native cc, no CMake install/SSH); then D4 step 4. D4 remains incomplete.
+
+### §31.68 Oracle binding: the controlled gate calls the workload's actual predicates (2026-10-22)
+
+Codex rejected candidate `4793a1d` for an unbound gate, not for backend arithmetic: the workload
+oracle fix was mathematically correct and the controlled 1792-padding case was valid, but
+`tests/test_vk_suballoc_gate.c` kept its own copies (`gx_bytes_close`, inline
+`alloc_calls - dedicated <= ranges/2`) and never called the predicates used by
+`tests/test_gpu_backend_parity_vk.c:run_suballoc`. A private change to the actual workload
+predicates therefore could not fail the controlled gate.
+
+**Binding.** New test-only `tests/vk_suballoc_oracles.h` owns the three predicates:
+`vk_suballoc_bytes_close` (reserved - used - free == padding, overflow-safe),
+`vk_suballoc_reduction_close` (alloc_calls >= dedicated and the pooled form), and
+`vk_suballoc_dedicated_reasons_close` (one reason per dedicated allocation). `run_suballoc` calls
+those exact bodies through `sub_claim_oracle`; property 11 of the controlled gate includes the
+header and calls the same bodies as its deciding checks. The old forms remain display-only
+(`gx_bytes_close_old`, inline double-count) and are never the positive decider. Both CMake targets
+list the header and its include directory, so a header edit recompiles both consumers.
+
+**Private final-source controls (outside `%TEMP%`, because MSBuild there drops incremental header
+tracking — MSB8029 was observed).** Mutating only the shared header:
+
+- drop padding (`return used + free == reserved`): both `test_vk_suballoc_gate.c` and
+  `test_gpu_backend_parity_vk.c` recompiled (object hashes changed); the controlled gate exits 1
+  on 3/24 checks with the shared byte-oracle assertion; restored header passes. The llvmpipe
+  workload still passes because it reports `padding=0`/`dedicated=0`, so the controlled case is
+  the deciding evidence.
+- restore dedicated double count (`alloc_calls + dedicated <= ranges/2`): both consumers recompile;
+  the gate exits 1 on the shared reduction assertion (2 - 1 <= 2/2 fails); restored header passes.
+- Shared header SHA `9ccaf2216a2debba89e2b44d4207c58bb0c5af94b6d4411303d3c92c52587ea6` unchanged
+  after restore; gate source `5eb4b56c65960c2d373df6453c80b6fb738fc895e9ff0db45a94cd1163c19ad9`.
+
+**Real evidence.** `jsrf_vk_suballoc_gate` 11 properties/359 checks; `--padding-1792` 24 checks
+with `reserved 4194304 = 2304 + 1792 + 4190208`; real llvmpipe `--suballoc` passes with
+`padding=0`, `dedicated=0` and all guest-byte/readback/lifetime checks. Guarded build, full
+limited CTest and `just check` are run on the final tree. No Mac/MoltenVK run; the historical
+1,792 attribution remains an inference and the MoltenVK skip remains debt. Candidate local and
+unpushed; D4 remains incomplete.

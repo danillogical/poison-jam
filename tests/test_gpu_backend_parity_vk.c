@@ -65,6 +65,7 @@
 #include "d3d/d3d8_swizzle.h"
 #include "video/nv2a_vk_backend.h"
 #include "recomp_types.h"
+#include "vk_suballoc_oracles.h"
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -6989,6 +6990,17 @@ static int sub_claim_bound(const char *what, uint64_t got, uint64_t bound, int s
     return ok;
 }
 
+/* A shared workload-oracle verdict (tests/vk_suballoc_oracles.h), with this mode's own name on
+ * the failure; the operands are printed by sub_mem_print and the call's own diagnostics. */
+static int sub_claim_oracle(const char *what, int passed)
+{
+    printf("      %-52s %s\n", what, passed ? "ok" : "FAIL");
+    if (!passed)
+        fprintf(stderr, "FAIL: suballoc gate -- %s: the shared workload oracle rejected the "
+                        "production counters\n", what);
+    return passed;
+}
+
 static int run_suballoc(void)
 {
     Nv2aVkMemoryStats m0, m1, c0, c1;
@@ -7191,11 +7203,10 @@ static int run_suballoc(void)
      * allocations than one per resource. */
     ok &= rb_claim_atleast("ranges_delta >= 1: the workload really took pooled ranges",
                            d_ranges, 1);
-    ok &= sub_claim_bound("alloc_calls_delta - dedicated_delta <= ranges_delta / 2: the workload's "
-                          "pooled ranges cost at most half as many block allocations as ranges "
-                          "(dedicated resources are accounted separately; one per resource would "
-                          "be ranges_delta)",
-                          d_allocs - d_dedicated, d_ranges / 2u, 0);
+    ok &= sub_claim_oracle("alloc_calls_delta - dedicated_delta <= ranges_delta / 2: the "
+                           "workload's pooled ranges cost at most half as many block allocations "
+                           "as ranges (shared workload oracle)",
+                           vk_suballoc_reduction_close(d_allocs, d_dedicated, d_ranges));
     ok &= rb_claim_atleast("ranges_delta >= 2 * blocks_delta: several resources shared a block",
                            d_ranges, 2u * d_blocks);
     /* The latch is a POOL index, so 0 is a perfectly good answer; "unset" is (uint32_t)-1. */
@@ -7210,10 +7221,11 @@ static int run_suballoc(void)
                       "overflowed, so no range was ever left to it)", m1.parked_lost, 0);
     ok &= sub_claim_bound("used_bytes <= reserved_bytes: no pool block is over-committed",
                           m1.used_bytes, m1.reserved_bytes, 0);
-    ok &= rb_claim_eq("free_bytes + used_bytes + padding_bytes == reserved_bytes: the byte "
-                      "accounting closes, including the allocator's separately reported alignment "
-                      "padding",
-                      m1.free_bytes + m1.used_bytes + m1.padding_bytes, m1.reserved_bytes);
+    ok &= sub_claim_oracle("free_bytes + used_bytes + padding_bytes == reserved_bytes: the byte "
+                           "accounting closes, including the allocator's separately reported "
+                           "alignment padding (shared workload oracle)",
+                           vk_suballoc_bytes_close(m1.reserved_bytes, m1.used_bytes,
+                                                   m1.free_bytes, m1.padding_bytes));
     if (d_dedicated) {
         uint64_t req = m1.dedicated_required - m0.dedicated_required;
         uint64_t pref = m1.dedicated_prefer - m0.dedicated_prefer;
@@ -7239,9 +7251,12 @@ static int run_suballoc(void)
         if (m1.alloc_failures == m0.alloc_failures) {
             uint64_t fallback = m1.fallbacks - m0.fallbacks;
 
-            ok &= rb_claim_eq("dedicated_delta == required+prefer+oversize+noroom+nohost+fallbacks: "
-                              "every dedicated allocation has one recorded reason",
-                              d_dedicated, req + pref + over + room + host + fallback);
+            ok &= sub_claim_oracle("dedicated_delta == required+prefer+oversize+noroom+nohost+"
+                                   "fallbacks: every dedicated allocation has one recorded reason "
+                                   "(shared workload oracle)",
+                                   vk_suballoc_dedicated_reasons_close(d_dedicated, req, pref,
+                                                                       over, room, host,
+                                                                       fallback));
         } else {
             printf("  [dedicated] allocation failures moved (%llu); reason identity not asserted\n",
                    (unsigned long long)(m1.alloc_failures - m0.alloc_failures));
