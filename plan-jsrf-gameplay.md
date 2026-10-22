@@ -52,12 +52,24 @@ retained, and `just check` green; the bounded strict 8 s Vulkan smoke carries be
 executable and every Windows-relevant input are byte-unchanged (the repaired file is POSIX-only). The MoltenVK suballoc skip remains explicit
 debt (historical 1792 is still an inference), and CTest locks do not coordinate separate ctest
 processes. Codex independently accepted the repaired POSIX checkpoint (TR §31.73), including actual
-final-source native gates and private negative controls. **D4 step 4 is blocked (TR §31.74):**
-the configured WorkBuddy primary hit a usage limit during source inspection, before any edits,
-worker, build or run. Restore configured role availability or obtain exact owner settings
-authorization before another operation. The next work remains BUMPENVMAP CPU/AOT-Vulkan and then
-the different-author step-5 gate. After the consumed inspection attempt, the carried D4 allowance
-is three normal operations and zero repair cycles; no slot was refunded. No D completion.
+final-source native gates and private negative controls. The provider block that stopped the first
+step-4 attempt (TR §31.74) was cleared by the owner's explicit selection of
+`workbuddy-ai/deepseek-v4.1-flash-sg` for every global role. **D4 step 4 now has an implementation
+candidate (TR §31.75):** combiner texture modes 6 BUMPENVMAP and 7 BUMPENVMAP_LUM are implemented
+independently in the CPU executor (`rc_stage_fetch`) and in the ahead-of-time Vulkan uber-shader
+(`fetch`), with the bump matrix/scale/offset and `SET_SHADER_OTHER_STAGE_INPUT` admitted, shadowed
+and transported per draw, stage 0's discarded words left at their D3D default, and the shared
+refusal rule moved from `> 5` to `> 7` so modes 8..31 and stage-3 cube still fall back. Windows:
+guarded build, full limited CTest **162/162 in 517.47 s** with the full log retained, `just check`
+green including the real corpus re-derivation, 22/22 mutation mutants decided by their named
+assertions, and a bounded 8 s strict Vulkan smoke with pipeline cache off and an isolated save root
+that also registers the executor; no validation layer was inserted, so no validation claim is made.
+**This is not the deciding gate.** The step-5 author must differ from the implementation author and
+must write an independent formula oracle, decide the `w`-divide divergence with a `w != 1` case,
+prove CPU/Vulkan pixel agreement on a bump fixture, and fail each negative control with a named
+assertion. No in-game bump correction is claimed: the smokes say nothing about the title's own bump
+state. This first admission consumed one carried normal slot, so the D4 allowance is now two normal
+operations and zero repair cycles, with no slot refunded. No D4 or D completion.
 
 ## Objective
 

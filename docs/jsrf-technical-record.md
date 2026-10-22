@@ -7323,3 +7323,94 @@ allowances remain separate and fully spent. D4 is incomplete. Step 4's implement
 independent formula/pixel gate remain next; nothing was published as a bump-mapping fix.
 
 PUSHED_TO: origin / BRANCH: master / COMMIT: 76431bf6a276e78cf05f33c3937c2a6d3de42f47 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward d270a73..76431bf; clean documentation-only blocker checkpoint, two reviewed plan/TR blobs (largest 572554 bytes), zero secrets, no forbidden or oversized paths; record-only hooks passed. Toolkit unchanged and synchronized at b06bd36546e7bec75f17ca9677d7b55a8d59e01a; no new runtime validation or implementation claimed.
+
+### §31.75 D4 step 4: BUMPENVMAP and BUMPENVMAP_LUM implemented in the CPU combiner and the AOT Vulkan uber-shader (2026-10-22)
+
+The owner resumed step 4 after selecting `workbuddy-ai/deepseek-v4.1-flash-sg` for every global
+role. One configured production worker, `BumpEnvImplementer` (agent class `task`, session
+`01a1653d-b7ec-73a7-8523-708a8da7ee7d`, model read from its own session record), wrote the CPU and
+Vulkan bodies; the primary coordinated, verified and wrote the records plus one comment-only
+clarification. No model/provider/role/effort/fallback setting was changed or substituted.
+
+**Facts, from primary sources, xemu read as FACTS ONLY (GPL; no code copied).** `psh.c` supplies
+`sign3` (`x *= 255; x >= 128 ? (x-256)/127 : x/127`), the delta source (the SOURCE texel's blue in
+x, green in y, and its unsigned red as the luminance term), the column-major `mat2 * vec2` product,
+the post-source perturbation of the stage's 2D coordinate, the all-four-channel
+`bumpScale*lum + bumpOffset` multiply, the `input_tex` source rule (stage 1 → 0; stages 2/3 from
+`NV_PGRAPH_SHADERCTL`), and the `assert(i >= 1)` that makes stage 0 invalid. `pgraph.c` supplies the
+register facts: the stage-0 words are DISCARDED by the handler (so stage 0 keeps the D3D default
+0.0), the matrix arrives in the method order m00, m01, m11, m10, and scale/offset are
+`0x1B38`/`0x1B3C + 0x40*stage`. The previous diagnostic zeros were UNKNOWN because the methods were
+never admitted, not because the state was zero: that is now decided by transport.
+
+**Implementation.** Toolkit `nv2a_combiner.h` gains `bump_mat[4][4]`, `bump_scale[4]`,
+`bump_offset[4]` and `other_stage_input`. `nv2a_pb_exec.c` admits `SET_TEXTURE_SET_BUMP_ENV_MAT`
+(`0x1B28+4i`), `_SCALE` (`0x1B38`), `_OFFSET` (`0x1B3C`) and `SET_SHADER_OTHER_STAGE_INPUT`
+(`0x1E78`), de-swizzles the matrix into the canonical `[m00, m01, m10, m11]` row, discards stage 0,
+and implements modes 6/7 inside `rc_stage_fetch`, which now takes every stage's result table. Every
+stage's row is initialised to the NONE value `(0,0,0,1)` and filled in ascending order, so a later
+bump stage reads a real earlier texel and an absent stage reads NONE rather than stale bytes.
+`rc_bump_source` also bounds-checks: a nibble naming a stage that is not strictly earlier means "no
+source", so no index can leave the array. `nv2a_vk_backend.c` grows `VbRcConstants` 528 → 640 with
+`bumpmat`/`bumpscl`/`bumpofs`/`misc` at 528/592/608/624, asserts `sizeof` and every `offsetof`,
+transports all four groups per draw, and widens the stage-0 texture bind from `m > 3` to `m > 7`
+because a bump stage samples a texture of its own. `nv2a_vk_rc.hlsl` mirrors the same four groups
+in `RcConsts`, adds `sign3`/`bump_src`, implements modes 6/7 in `fetch`, and fills `tt[0..3]`
+ascending in `ps_rc`. `nv2a_vk_rc_coverage.h` moves the single shared refusal rule from `m > 5` to
+`m > 7`, keeping the `mode_gt5` field name and report label for ABI/report stability with a comment
+saying so; the stage-3 cube rule and every other unsupported reason are unchanged. Nothing is
+compiled or translated at run time: the uber-shader is still built ahead of time by
+`xbr_add_spirv`, and no runtime shader-compilation path was added.
+
+**Game side, feature-required only.** `tests/test_pbcov_vk.c` moves its "unsupported" fixtures from
+mode 6/7 to mode 8 and sweeps modes 0..7 at every stage (rc draws 24 → 32), preserving each
+assertion's meaning; `scripts/pbcov-mutants.py`'s `vk-supported-mode5-rejected` anchor follows the
+source to `if (m > 7)` → `if (m > 4)` with the same name, case and purpose;
+`tests/test_gpu_backend_parity_vk.c` gets a comment-only correction (its oracle does not model 6/7,
+so its generator still emits 0..4). No assets, saves, retail/generated code or corpus changed and no
+regeneration ran.
+
+**Development evidence, explicitly not the gate.** Two throwaway probes in gitignored
+`build/probe-bump/`: `probe.c` links the real `nv2a_pb_exec.c` bodies and `probe_vk.c` drives the
+real back end on the RTX 4070; both report `PROBE PASSED (0 failures)` on the same fixture. The
+fixture is decisive about the du/dv assignment (source texel `(L, G=64, B=32)` with a 4× matrix
+samples texel `(5,6)`, where an earlier swapped oracle also landed on texel 4 and could not
+discriminate), about the canonical row versus its transpose (`m01` moves V only, `m10` moves U only),
+about the all-channel luminance multiply, and about stage 0's discarded registers. The mutation
+harness, run against a private copy because it refuses a dirty shared checkout, decides
+**22/22 mutants by their named assertions** with the restored baseline green and the shared toolkit
+unchanged. Both probes were written by the same author as the implementation, so their agreement is
+a cross-check, not an independent oracle.
+
+**Windows receipts.** `just build` succeeded (57 targets / 162 tests derived, identity recorded,
+Vulkan capability present); full limited CTest **162/162 in 517.47 s**, exit 0, full log retained;
+`just check` green including the real corpus re-derivation (126/126). Bounded 8 s strict Vulkan
+smoke `20261022-142342-065-d4step4-bump-smoke2` (`RECOMP_GPU_ACK=0`, pipeline cache off, runner-owned
+isolated save root): `diagnostic_deadline` at the requested deadline, checkpoints passed, save root
+verified, GPU report ok, one snapshot, 333 named frames, RTX 4070, no fatal/ICALL/backend stop, no
+validation layer inserted and therefore no validation claim. **Limit:** `RECOMP_PB_EXEC` is unset in
+that profile and the back end says so, so a second 8 s strict smoke with `RECOMP_PB_EXEC=1`
+(`20261022-144033-946-d4step4-bump-smoke3-pbexec`) was run: executor registered, same deadline, same
+checkpoints and save-root verification, no fatal/ICALL, and no bump or rc counters in its log. These
+smokes show the new paths do not break launch, admission or the back end; they show NOTHING about
+the title's own bump state.
+
+**Divergences step 5 must decide.** (1) This code divides the stage coordinate by `w` before adding
+the delta, matching the file's existing modes 1/2; xemu's BUMPENVMAP samples `pT.xy + dsdt` with no
+divide while its own PROJECT2D uses `textureProj`, so xemu is internally inconsistent there and
+every fixture here has `w = 1`. (2) xemu uses the source texel's `bg` directly for signed (snorm)
+bump inputs and `sign3` otherwise; this repository's `rc_texel` decodes UNORM only, so `sign3` is
+uniform. (3) Cube textures on a bump stage use the face-0 projection precedent from modes 1/2/4;
+xemu asserts 2D/3D there. (4) The delta is applied after this back end's `ts.xy` scale rather than
+xemu's rect remap. (5) Sampler clamping/border behaviour is unchanged and unclaimed.
+
+**Step 5, a different author, must** write an independent formula oracle without reading these
+bodies, decide divergence 1 with a `w != 1` case, prove CPU/Vulkan pixel agreement on a bump fixture
+where the perturbed texel is visible in the readback rather than only in a counter, and fail with a
+named assertion on each negative control (zero matrix, transpose, du/dv swapped, luminance scale
+dropped, stage-0 discarded registers), plus an explicit statement that modes 8..31 and stage-3 cube
+still take the fallback. No in-game bump correction, D4 completion, D5 completion or hardware-fidelity
+claim is made. This first admission consumed one carried normal slot: D4 stands at **8 operations /
+3 historical repair allowances**, leaving **2 normal operations / 0 repair cycles**; the nine
+preflight operations/five repair allowances stay separate and closed; the paused lineage and the
+failed attempt's sole REQUEST_HUMAN decision are preserved.

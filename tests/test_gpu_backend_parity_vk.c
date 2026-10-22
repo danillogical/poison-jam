@@ -2082,7 +2082,9 @@ static int rc_sweep_check(const char *label, const uint8_t *px)
  *     checked property of the state, not a hope about the generator.
  *   - stage modes 0..4 on stages 0-2 and 0/4 on stage 3: vb_rc_supported never routes a draw to the
  *     stage-0 fallback (which would not run ps_rc at all), and the CPU never reads the zero it
- *     returns for a mode above 5. Mode 5 (CLIPPLANE) is covered by the deterministic cases.
+ *     returns for a mode above 7. Mode 5 (CLIPPLANE) is covered by the deterministic cases, and so
+ *     are the bump-environment modes 6/7 (the CPU probe and the Vulkan probe in the step-4 record):
+ *     this suite's oracle does not model them, so the generator still emits 0..4 only.
  *   - the encodings both implementations define: scale/bias values map_out knows, destinations that
  *     cannot collide within one stage, no alpha write over a blue-to-alpha write, final-combiner
  *     mappings identity/invert only, r1/r0 readable only once written, E*F not readable by E/F.

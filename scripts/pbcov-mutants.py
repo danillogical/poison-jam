@@ -373,7 +373,7 @@ MUTANTS = [
         expect="supported mode 5 stage 0 draws without fallback",
         why="mode 5 is supported at every stage and must not be reclassified "
             "as a refusal",
-        old="        if (m > 5) {",
+        old="        if (m > 7) {",
         new="        if (m > 4) {                   /* MUTANT: mode 5 rejected */",
     ),
 ]

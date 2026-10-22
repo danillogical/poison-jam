@@ -255,7 +255,9 @@ static int case_rc_unsupported_modes(void)
     const Nv2aVkRcCoverage *c;
     Nv2aVkRcCoverage first;
 
-    draw_rc(6u, 0u);                             /* stage 0 mode 6 */
+    /* Mode 8 is the first dot-product mode, and the first still refused now
+     * that the bump-environment modes 6 and 7 are interpreted. */
+    draw_rc(8u, 0u);                             /* stage 0 mode 8 */
     c = nv2a_vk_rc_coverage();
     chk_u64("one fallback in the production counter", g.st.rc_fallback, 1u);
     chk_u64("ledger total equals the production counter", c->total,
@@ -264,12 +266,12 @@ static int case_rc_unsupported_modes(void)
     chk_u64("cube reason not counted", c->cube_mode3, 0u);
     chk_u32("first reason", c->first_reason, 1u);
     chk_u32("first stage", c->first_stage, 0u);
-    chk_u32("first mode", c->first_mode, 6u);
-    chk_u32("first raw stage_program", c->first_stage_program, 6u);
+    chk_u32("first mode", c->first_mode, 8u);
+    chk_u32("first raw stage_program", c->first_stage_program, 8u);
     chk_u32("first cube mask", c->first_cube_mask, 0u);
     first = *c;
 
-    draw_rc(7u << 15, 0u);                       /* stage 3 mode 7 */
+    draw_rc(8u << 15, 0u);                       /* stage 3 mode 8 */
     c = nv2a_vk_rc_coverage();
     chk_u64("both fallbacks in the production counter", g.st.rc_fallback, 2u);
     chk_u64("ledger total follows", c->total, 2u);
@@ -317,12 +319,13 @@ static int case_rc_supported_modes(void)
     uint32_t stage, mode;
     char what[96];
 
-    /* Every 5-bit mode 0..5 is supported at every stage 0..3, with no cube
+    /* Every 5-bit mode 0..7 is supported at every stage 0..3, with no cube
      * texture. Each draw carries exactly one mode, in exactly one stage (the
-     * other three stages are 0), so a boundary that refuses mode 5 anywhere
-     * cannot hide behind another stage's supported modes. */
+     * other three stages are 0), so a boundary that refuses mode 7 anywhere
+     * cannot hide behind another stage's supported modes. Modes 6 and 7 are
+     * the bump-environment pair; 8 is the first mode still refused. */
     for (stage = 0; stage < 4; stage++) {
-        for (mode = 0; mode <= 5; mode++) {
+        for (mode = 0; mode <= 7; mode++) {
             uint32_t program = mode << (stage * 5);
             uint64_t before = g.st.rc_draws;
 
@@ -342,8 +345,8 @@ static int case_rc_supported_modes(void)
             chk_u32("supported sweep: no first refusal", c->first_valid, 0u);
         }
     }
-    chk(g.st.rc_draws == draws_at_start + 24u,
-        "the sweep took the rc pipeline exactly 24 times",
+    chk(g.st.rc_draws == draws_at_start + 32u,
+        "the sweep took the rc pipeline exactly 32 times",
         "rc_draws %llu -> %llu", (unsigned long long)draws_at_start,
         (unsigned long long)g.st.rc_draws);
     return 0;
@@ -354,8 +357,8 @@ static int case_rc_priority(void)
     const Nv2aVkRcCoverage *c;
 
     /* Batch A: stage 0 mode 3 with a cube refuses as the cube reason before the
-     * scan can reach stage 1's mode 7 (stages are scanned 0..3). */
-    draw_rc(3u | (7u << 5), 1u);                 /* stage0 cube, stage1 mode7 */
+     * scan can reach stage 1's mode 8 (stages are scanned 0..3). */
+    draw_rc(3u | (8u << 5), 1u);                 /* stage0 cube, stage1 mode8 */
     c = nv2a_vk_rc_coverage();
     chk_u64("first batch refused", c->total, 1u);
     chk_u32("stage order: earlier cube beats a later mode>5",
@@ -364,8 +367,8 @@ static int case_rc_priority(void)
     chk_u64("cube reason", c->cube_mode3, 1u);
     chk_u64("mode reason still zero", c->mode_gt5, 0u);
 
-    /* Batch B: at one stage, mode > 5 is tested before the cube bit. */
-    draw_rc(6u | (3u << 5), 1u);                 /* stage0 mode6 + cube */
+    /* Batch B: at one stage, mode > 7 is tested before the cube bit. */
+    draw_rc(8u | (3u << 5), 1u);                 /* stage0 mode8 + cube */
     c = nv2a_vk_rc_coverage();
     chk_u64("second batch refused", c->total, 2u);
     chk_u64("per-stage order: mode>5 is checked before cube", c->mode_gt5, 1u);
@@ -380,9 +383,9 @@ static int case_rc_first_report(void)
     const Nv2aVkRcCoverage *c;
     Nv2aVkRcCoverage before, after_first, after_second;
 
-    draw_rc(6u, 0u);                             /* mode > 5 */
+    draw_rc(8u, 0u);                             /* mode > 7 */
     draw_rc(3u << 10, 1u << 2);                  /* cube-mode 3 */
-    draw_rc(7u << 15, 0u);                       /* another mode > 5 */
+    draw_rc(8u << 15, 0u);                       /* another mode > 7 */
     c = nv2a_vk_rc_coverage();
     chk_u64("three refusals", c->total, 3u);
     chk_u64("production counter follows", (uint64_t)g.st.rc_fallback, c->total);
@@ -392,7 +395,7 @@ static int case_rc_first_report(void)
     chk_u64("cube count", c->cube_mode3, 1u);
     chk_u32("first refusal is the first batch", c->first_reason, 1u);
     chk_u32("first stage", c->first_stage, 0u);
-    chk_u32("first mode", c->first_mode, 6u);
+    chk_u32("first mode", c->first_mode, 8u);
     before = *c;
 
     {
@@ -424,7 +427,7 @@ static int case_rc_gate_off(void)
 
     chk(!(v && v[0] == '1' && v[1] == '\0'),
         "CTest env is not the exact-1 gate", "got '%s'", v ? v : "(unset)");
-    draw_rc(6u, 0u);
+    draw_rc(8u, 0u);                             /* a mode still refused */
     c = nv2a_vk_rc_coverage();
     /* The production refusal still happens and is still counted by the back
      * end's own aggregate; only the diagnostic ledger stays untouched. */
@@ -465,7 +468,7 @@ static int case_rc_first_sample_on_wins(void)
     _putenv_s("RECOMP_PB_COVERAGE", "1");
     chk(nv2a_vk_rc_coverage_enabled() == 1, "the first sample is on");
     _putenv_s("RECOMP_PB_COVERAGE", "0");         /* too late */
-    draw_rc(6u, 0u);
+    draw_rc(8u, 0u);                             /* a mode still refused */
     c = nv2a_vk_rc_coverage();
     chk_u64("the first sample cannot be flipped off", c->total, 1u);
     chk_u32("and it still claims its first record", c->first_valid, 1u);
@@ -479,7 +482,7 @@ static int case_rc_first_sample_off_wins(void)
     _putenv_s("RECOMP_PB_COVERAGE", "0");
     chk(nv2a_vk_rc_coverage_enabled() == 0, "the first sample is off");
     _putenv_s("RECOMP_PB_COVERAGE", "1");         /* too late */
-    draw_rc(6u, 0u);
+    draw_rc(8u, 0u);                             /* a mode still refused */
     c = nv2a_vk_rc_coverage();
     chk_u64("the first sample cannot be flipped on", c->total, 0u);
     chk_u32("and no record is claimed", c->first_valid, 0u);
