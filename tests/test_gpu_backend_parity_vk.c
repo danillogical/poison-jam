@@ -4097,7 +4097,7 @@ static void build_rc_four(void)
 
 /* One submission, one target, three draws with DIFFERENT state, so the back end's uniform-block
  * offsets must be distinct and correctly aligned and its descriptor sets reused:
- *   A: a combiner batch the back end cannot translate (stage 0's mode is 7, which vb_rc_supported
+ *   A: a combiner batch the back end cannot translate (stage 0's mode is 8, which vb_rc_supported
  *      rejects), so the GPU draws it through its stage-0 pipeline while the CPU executor still runs
  *      the combiners. This combiner never reads a texture result and the stage-0 pipeline samples
  *      white, so both produce the vertex colour: the stage-0 and combiner pipelines coexist in one
@@ -4139,9 +4139,9 @@ static void build_rc_multi(void)
             rc_vertex(vb, i * 6u + j, x, y, RC_DIFFUSE, RC_SPECULAR, t);
         }
     }
-    /* A: mode 7 on stage 0, so the back end falls back to its stage-0 pipeline. */
+    /* A: mode 8 on stage 0, so the back end falls back to its stage-0 pipeline. */
     pb(0x1E60, 1u);
-    pb(0x1E70, 7u);
+    pb(0x1E70, 8u);
     pb(0x0AC0, (RC_V0 << 24) | (RC_C1 << 16));
     pb(0x1E40, RC_R0 << 8);
     pb(0x0260, 0); pb(0x0AA0, 0);

@@ -7362,13 +7362,24 @@ saying so; the stage-3 cube rule and every other unsupported reason are unchange
 compiled or translated at run time: the uber-shader is still built ahead of time by
 `xbr_add_spirv`, and no runtime shader-compilation path was added.
 
-**Game side, feature-required only.** `tests/test_pbcov_vk.c` moves its "unsupported" fixtures from
-mode 6/7 to mode 8 and sweeps modes 0..7 at every stage (rc draws 24 → 32), preserving each
-assertion's meaning; `scripts/pbcov-mutants.py`'s `vk-supported-mode5-rejected` anchor follows the
-source to `if (m > 7)` → `if (m > 4)` with the same name, case and purpose;
-`tests/test_gpu_backend_parity_vk.c` gets a comment-only correction (its oracle does not model 6/7,
-so its generator still emits 0..4). No assets, saves, retail/generated code or corpus changed and no
-regeneration ran.
+**Game side, feature-required only, by the same author as the implementation.** `tests/test_pbcov_vk.c`
+moves its "unsupported" fixtures from mode 6/7 to mode 8 and sweeps modes 0..7 at every stage (rc
+draws 24 → 32), preserving each assertion's meaning; `scripts/pbcov-mutants.py`'s
+`vk-supported-mode5-rejected` anchor follows the source to `if (m > 7)` → `if (m > 4)` with the same
+name, case and purpose; `tests/test_gpu_backend_parity_vk.c` needed two changes the primary made —
+a comment correction (its oracle does not model 6/7, so its generator still emits 0..4) and, because
+batch A used stage-0 mode 7 purely to force the stage-0 pipeline fallback, that trigger moved to
+mode 8, which restores the "stage-0 and combiner pipelines coexist in one frame" property the
+fixture documents rather than silently losing it. `BumpEnvImplementer` wrote the toolkit change AND
+this test/mutant rebase, so all of it is **same-author test maintenance**: none of it is an
+independent gate, and the step-5 formula/pixel gate by a different author still does not exist. No
+assets, saves, retail/generated code or corpus changed and no regeneration ran.
+
+The executor's `stage_ge6` / `stage_mode_hist` counters were deliberately NOT changed: they still
+count `m >= 6`, which is the accepted measurement history, and `tests/test_pbcov_stream.c`'s
+`case_entry_forms` still observes stage-0 mode 6 as a bump batch. Only their comments changed, to
+say the bucket is diagnostic over the title's state — modes 6/7 are now interpreted and 8..31 are
+still refused — so a later reader cannot mistake it for a refusal count.
 
 **Development evidence, explicitly not the gate.** Two throwaway probes in gitignored
 `build/probe-bump/`: `probe.c` links the real `nv2a_pb_exec.c` bodies and `probe_vk.c` drives the
@@ -7391,9 +7402,12 @@ verified, GPU report ok, one snapshot, 333 named frames, RTX 4070, no fatal/ICAL
 validation layer inserted and therefore no validation claim. **Limit:** `RECOMP_PB_EXEC` is unset in
 that profile and the back end says so, so a second 8 s strict smoke with `RECOMP_PB_EXEC=1`
 (`20261022-144033-946-d4step4-bump-smoke3-pbexec`) was run: executor registered, same deadline, same
-checkpoints and save-root verification, no fatal/ICALL, and no bump or rc counters in its log. These
-smokes show the new paths do not break launch, admission or the back end; they show NOTHING about
-the title's own bump state.
+checkpoints and save-root verification, no fatal/ICALL, and no bump or rc counters in its log. A
+first attempt in this operation (`20261022-142308-537-d4step4-bump-smoke`) is DISCARDED: it set
+`RECOMP_SAVE_DIR` outside the runner's own root, so the verifier reported `save_root_verified: false`
+and it is not a strict run and has no horizon row — a self-inflicted invocation error, not a bump or
+runner defect. These smokes show the new paths do not break launch, admission or the back end; they
+show NOTHING about the title's own bump state.
 
 **Divergences step 5 must decide.** (1) This code divides the stage coordinate by `w` before adding
 the delta, matching the file's existing modes 1/2; xemu's BUMPENVMAP samples `pT.xy + dsdt` with no
@@ -7401,8 +7415,15 @@ divide while its own PROJECT2D uses `textureProj`, so xemu is internally inconsi
 every fixture here has `w = 1`. (2) xemu uses the source texel's `bg` directly for signed (snorm)
 bump inputs and `sign3` otherwise; this repository's `rc_texel` decodes UNORM only, so `sign3` is
 uniform. (3) Cube textures on a bump stage use the face-0 projection precedent from modes 1/2/4;
-xemu asserts 2D/3D there. (4) The delta is applied after this back end's `ts.xy` scale rather than
-xemu's rect remap. (5) Sampler clamping/border behaviour is unchanged and unclaimed.
+xemu asserts 2D/3D there. (4) Rect-texture remap: xemu applies its `norm%d` remap to the perturbed
+coordinate, while this back end applies the delta in the stage coordinate's own space and lets
+`ts.xy` convert a linear format to normalized units afterwards. Those are NOT in conflict for the
+two format classes this repository decodes — `rc_texel` samples a swizzled format at the coordinate
+directly after scaling it by width/height, and samples a linear format in texel units, while
+`ts.xy` is 1.0 for a swizzled texture and 1/width for a linear one, so `(t/q + dsdt) * ts.xy` and
+`rc_texel`'s own scaling agree in both cases — but a rect texture is the one class where the two
+conventions could diverge, and no fixture here uses one. (5) Sampler clamping/border behaviour is
+unchanged and unclaimed.
 
 **Step 5, a different author, must** write an independent formula oracle without reading these
 bodies, decide divergence 1 with a `w != 1` case, prove CPU/Vulkan pixel agreement on a bump fixture
