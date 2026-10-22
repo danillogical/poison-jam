@@ -6,6 +6,10 @@ operations; `docs/jsrf-run-profiles.md` owns evidence classification;
 `docs/jsrf-technical-record.md` (TR) owns established findings; `docs/jsrf-compatibility-ledger.md`
 owns shortcuts; `config/stop-chain.json` owns stops.
 
+**Owner pause (2026-10-21):** paused after independently verified D4 step-3 coverage
+(TR 31.62). OMP is idle; do not dispatch the next packet until the owner resumes.
+Next: step 4 CPU/AOT-Vulkan BUMPENVMAP, then the different-author step-5 gate.
+
 ## Objective
 
 A playable opening-area slice on a **native Vulkan build with no code translated or compiled at run

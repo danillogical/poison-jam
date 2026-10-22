@@ -6734,8 +6734,11 @@ evidence.
   admitted. The first `first_c` state has lighting and specular enabled, light mask 1 (light 0
   infinite), no spot light; the spot parameter words are UNKNOWN (not admitted), not observed
   zeros.
-- **No batch with any stage mode >= 6 appeared, and no Vulkan rc fallback**
-  (`stage_ge6=0`, `first_b=none`, `rc_fallback=0` in every report). The handoff's replanning trigger
+- **No stage mode >= 6 was observed through the last periodic snapshots, and no Vulkan rc
+  fallback was reported** (`stage_ge6=0`, `first_b=none`, `rc_fallback=0` in every report).
+  The unreported terminal tails remain UNKNOWN; zero snapshots do not prove whole-run absence.
+  `RECOMP_GPU_ACK` was absent (enabled by default), so classification is EXPLORATORY. No
+  validation layer was enabled and no validation pass is claimed. The handoff's replanning trigger
   applies: fixture-driven BUMPENVMAP remains steps 4/5, and in-game confirmation waits for the
   optional owner-assisted step 8. This is not evidence of absence in unvisited scenes.
 - The count (a) texgen/matrix criterion is positive, so the **conditional step-6 criterion is met**;
@@ -6751,3 +6754,11 @@ evidence.
 waits until bump and its gate land. D is not complete.
 
 PUSHED_TO: origin / BRANCH: master / COMMIT: f49bd325c28ede5e067337db05442a2d8da550a6 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 7115372..f49bd32 (1 commit: the D4 step-3 four-run coverage measurements, TR §31.62 and plan next-step), clean and synchronized; 2 outgoing blobs (largest 523783 bytes), 0 secret hits, only docs/jsrf-technical-record.md and plan-jsrf-gameplay.md, no game/ or retail-derived path; toolkit unchanged at 2bcdc3081362341b92a9efb8afad00bdfd005c85 = origin/main.
+
+**Owner pause (2026-10-21):** Codex independently verified the four measurement archives,
+artifact/log hashes, all 250 recorded source inputs, private SAVE roots, profiles and retained
+counts, and viewed the pause-map, skate, gameplay and gum captures. Step 3 is accepted only as
+exploratory measurement. Pause before step 4; no BUMPENVMAP or texgen implementation has begun.
+Resume with fixture-driven CPU/AOT-Vulkan BUMPENVMAP (step 4), then its different-author gate
+(step 5), conditional texgen/matrices and separate gate (step 6), then records/final checks (7).
+D remains incomplete. No next packet is authorized while the owner pause is in effect.
