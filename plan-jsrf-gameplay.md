@@ -6,9 +6,15 @@ operations; `docs/jsrf-run-profiles.md` owns evidence classification;
 `docs/jsrf-technical-record.md` (TR) owns established findings; `docs/jsrf-compatibility-ledger.md`
 owns shortcuts; `config/stop-chain.json` owns stops.
 
-**Owner pause (2026-10-21):** paused after independently verified D4 step-3 coverage
-(TR 31.62). OMP is idle; do not dispatch the next packet until the owner resumes.
-Next: step 4 CPU/AOT-Vulkan BUMPENVMAP, then the different-author step-5 gate.
+**Owner resume and portability preflight (2026-10-22):** the owner resumed after the D4
+step-3 pause and ordered Windows validation of the macOS changes first. The guarded build
+and a bounded keyscript are green (RTX 4070, new driver suffix, VSH misses 0, no
+ICALL/fatal), but full CTest is 160/161 (`jsrf_optional_vulkan`'s M-A anchor is stale
+after the `JSRF_FIXTURES_ONLY` CMake change) and `just check` flags the new
+`RECOMP_VK_DRIVER` as unclassified (TR §31.63). Next is the requested different-worker
+read-only review of toolkit `52af52e`/`9f03bfa`/`110e169` and game `401d8c5`/`40353d6`;
+the two findings need their own bounded repairs/gates before step 4
+(BUMPENVMAP CPU/AOT-Vulkan), then the different-author step-5 gate.
 
 ## Objective
 
