@@ -7303,3 +7303,21 @@ separate and fully spent. No model/provider/role/effort/fallback changes are aut
 PUSHED_TO: origin / BRANCH: main / COMMIT: b06bd36546e7bec75f17ca9677d7b55a8d59e01a / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 110e169..b06bd36; three independently accepted source/test commits, eight outgoing blobs (largest 87951 bytes), zero secrets, only reviewed POSIX shim/gate/CMake paths, no forbidden or oversized objects, clean and synchronized. Upstream/nworkers remain push DISABLED.
 
 PUSHED_TO: origin / BRANCH: master / COMMIT: 6d506f1e3f5e9ea074d8270019e9c7523334092c / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 2ff34cc..6d506f1 after toolkit; eight retained source/record commits, nineteen outgoing blobs (largest 570230 bytes), zero secrets, only reviewed CMake/macOS-doc/TR/plan/ledger paths, no forbidden or oversized objects. Final code has full limited CTest 162/162 and just check green; independent native/ASAN controls pass. Record-only acceptance hooks passed; clean and synchronized.
+
+
+### §31.74 D4 step 4 blocked before implementation by configured provider quota (2026-10-22)
+
+The owner-resumed D4 step-4 operation stopped during source inspection when the configured
+WorkBuddy primary returned HTTP 429 usage exhaustion. Codex independently inspected its actual
+transcript and both checkouts: no implementation edit, production worker, new build/test/run or
+candidate exists. Both trees remained clean and synchronized at toolkit `b06bd36` / game
+`d270a73`, the accepted portability checkpoint. Lifecycle completion is not implementation success.
+
+The configured role is unavailable; under the orchestrator skill's human-owned model policy,
+restore access or obtain exact owner settings authorization before resuming. No provider/model/
+role/effort/fallback substitution, automatic retry or allowance reset was admitted. The attempted
+operation consumed one carried D4 slot: cumulative seven D4 operations/three historical repair
+allowances, with exactly **three normal operations and zero repair cycles remaining**. The earlier
+paused lineage and its sole decisions are preserved; the nine preflight operations/five repair
+allowances remain separate and fully spent. D4 is incomplete. Step 4's implementation and step 5's
+independent formula/pixel gate remain next; nothing was published as a bump-mapping fix.

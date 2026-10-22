@@ -52,9 +52,12 @@ retained, and `just check` green; the bounded strict 8 s Vulkan smoke carries be
 executable and every Windows-relevant input are byte-unchanged (the repaired file is POSIX-only). The MoltenVK suballoc skip remains explicit
 debt (historical 1792 is still an inference), and CTest locks do not coordinate separate ctest
 processes. Codex independently accepted the repaired POSIX checkpoint (TR §31.73), including actual
-final-source native gates and private negative controls. Next is D4 step 4
-(BUMPENVMAP CPU/AOT-Vulkan) and then the different-author step-5 gate. The paused D4 allowance
-remains four normal operations and zero repair cycles. No D completion.
+final-source native gates and private negative controls. **D4 step 4 is blocked (TR §31.74):**
+the configured WorkBuddy primary hit a usage limit during source inspection, before any edits,
+worker, build or run. Restore configured role availability or obtain exact owner settings
+authorization before another operation. The next work remains BUMPENVMAP CPU/AOT-Vulkan and then
+the different-author step-5 gate. After the consumed inspection attempt, the carried D4 allowance
+is three normal operations and zero repair cycles; no slot was refunded. No D completion.
 
 ## Objective
 
