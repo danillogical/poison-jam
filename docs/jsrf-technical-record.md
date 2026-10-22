@@ -7407,7 +7407,10 @@ first attempt in this operation (`20261022-142308-537-d4step4-bump-smoke`) is DI
 `RECOMP_SAVE_DIR` outside the runner's own root, so the verifier reported `save_root_verified: false`
 and it is not a strict run and has no horizon row — a self-inflicted invocation error, not a bump or
 runner defect. These smokes show the new paths do not break launch, admission or the back end; they
-show NOTHING about the title's own bump state.
+show NOTHING about the title's own bump state. A third 8 s strict smoke,
+`20261022-150316-836-d4step4-bump-smoke4-final` (exe `3a5a59fd`), was run after the record commits with
+both `patch_sha256` values empty, so its receipt matches the durable tree: same deadline, same
+checkpoints and save-root verification, no fatal or ICALL, and again no bump or rc counters.
 
 **Divergences step 5 must decide.** (1) This code divides the stage coordinate by `w` before adding
 the delta, matching the file's existing modes 1/2; xemu's BUMPENVMAP samples `pT.xy + dsdt` with no
