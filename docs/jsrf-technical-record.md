@@ -7145,11 +7145,13 @@ both required rows (SIGSEGV on the invalid address; 19 false-accept rows then
 Pre-existing `win32_compat_posix/test_main.c`, `test_interlocked.c` and
 `win32_thread_posix/test_main.c` all build and pass against the final shim.
 
-**`jsrf_inplace_event_bridge` integration: measured, still not registered off Windows.** The fixture
-and every toolkit source it needs compile, but it cannot be *linked* on this Linux host: the POSIX
-providers of `xbox_FramebufferWindow*`, `xbox_VideoIsPlaying`/`PlayFile` and `xa2_*`/`mcpx_apu_*`
-live in the SDL2 and XAudio2 sources, and the WSL image has no SDL2/epoxy/OpenSSL headers, no CMake
-and no pkg-config; 35 undefined references remain. Installing them is out of scope. The **old
+**`jsrf_inplace_event_bridge` integration: unvalidated, still not registered off Windows.** The
+fixture and every toolkit source it needs compile, but it cannot be *linked* on the measured
+Ubuntu WSL host: the POSIX providers of `xbox_FramebufferWindow*`, `xbox_VideoIsPlaying`/`PlayFile`
+and `xa2_*`/`mcpx_apu_*` live in the SDL2 and XAudio2 sources, and that image has no SDL2/epoxy/
+OpenSSL headers, no CMake and no pkg-config; 35 undefined references remain. Installing them is out
+of scope. **A Mac is untested**: no Mac build or run was attempted, and nothing here claims a Mac
+host carrying the SDL2 prerequisites the macOS guide already lists would fail the same way. The **old
 exclusion reason is now stale and corrected** in the game `CMakeLists.txt` and
 `docs/jsrf-macos-build.md`: the case passes a non-event guest VA as a handle, and the shim now
 returns `FALSE`/`WAIT_FAILED` for a value it never published instead of dereferencing it — measured
@@ -7170,5 +7172,83 @@ outcome `diagnostic_deadline` — a liveness check, not a fidelity or e2e claim.
 NVIDIA e2e remains the previous Windows gameplay evidence. D4 remains incomplete; step 4 waits.
 
 PUSHED_TO: none (candidate held for independent Codex review) / BRANCH: master / COMMIT:
-toolkit 7c46fa693ba03a9bf4b05ea609bb307a298a9bfc and 0f3e7af (ASAN target); game 2102a869fa2e0fda8161f6d15ee57ef4409440cf, d67ef8f (ledgers), aac7ea9 and this record commit / RESULT: local commits only; no push, no force, toolkit first then game.
+toolkit 7c46fa693ba03a9bf4b05ea609bb307a298a9bfc, 0f3e7af (ASAN target) and b06bd36546e7bec75f17ca9677d7b55a8d59e01a (multi-wait); game 2102a869fa2e0fda8161f6d15ee57ef4409440cf, d67ef8f, aac7ea9, 9673b3d / RESULT: local commits only; no push, no force, toolkit first then game.
 
+### §31.72 Multi-object waits: sentinel classification and self-aware resolution (2026-10-22)
+
+Codex independently **rejected** the §31.71 candidate for a measured regression (R1), and this
+bounded repair closes it. Sources: toolkit `0f3e7af` plus this repair; game `9673b3d` plus these
+records.
+
+**The defect.** `WaitForMultipleObjects(Ex)` resolved each handle with `obj_pin()` and used a NULL
+pin to mean "this entry is satisfied", then rejected every non-NULL input whose pin was NULL. The
+supported sentinels `NULL`, `(HANDLE)-2` and `(HANDLE)-1` took that NULL-pin path and tripped the
+failure test, so a wait mixing a real event with `NtCurrentThread` returned `WAIT_FAILED` with
+last-error **0** — even in a wait-any whose first real event was already signalled — where the
+single-object wait has always answered `WAIT_OBJECT_0`. Separately, ordinary values went through
+`obj_pin`, which consults only the public registry, while the single wait used `thread_pin`, which
+also resolves the calling thread's own object; so after the guest closed the public handle for its
+own thread, single waits worked and multi-waits failed. Measured by Codex on the actual shim: 12
+mixed pseudo/real rows old 12/12 pass, candidate 8 fail; closed-self single/multi/Ex old
+`0x102`/`0x102`/`0x102`, candidate `0x102`/`0xffffffff`/`0xffffffff`. The §31.71 gates passed on that
+candidate because **neither test source called `WaitForMultipleObjects` at all** — a hole exactly
+where the defect was.
+
+**The repair** (`src/platform/win32_compat.c`, SHA-256 `7d25e6b7…`; pre-repair `094e7884…`). A wait
+entry is an explicit classification — `{ w32_object *obj; int sentinel; }` — not a bare pointer.
+`wait_entry_resolve` marks `NULL`, `PSEUDO_CURRENT_THREAD` and `PSEUDO_CURRENT_PROCESS` as sentinels
+and succeeds for them; every other value goes through **`thread_pin`**, the same self/lifetime-aware
+resolution the single wait uses, so an unpublished, forged, dead or wrong-kind value still fails with
+`ERROR_INVALID_HANDLE`. `wait_entry_ready` answers a sentinel "ready" and asks a pinned object for its
+own state, so a failed lookup can never read as satisfied. The entry array is zeroed before
+resolution and `wait_entry_release` runs on **every** exit — success, timeout, alertable completion
+and mid-resolution failure — dropping exactly the pins taken. Pins are still acquired once for the
+whole wait, so the lookup/close TOCTOU stays closed; the registry, the pseudo single-wait semantics,
+the handle ABI and the wait-all consumption model are unchanged, and native Windows is untouched.
+
+**Gate (different author, `PosixMultiwaitGate`).** Both persistent tests extended:
+`test_handle_lifetime.c` `sha256 434d1730…` (251 checks) and `test_handle_lifetime_asan.c`
+`sha256 bae7d4dd…` (44 checks). Repaired shim: **plain 251/0 and ASAN 44/0** (leaks on, no
+suppression); pre-repair source `83e7be99…`: **230/21 FAIL** plain and 40/4 ASAN, first deciding
+lines `multi(any, {(HANDLE)-2}) is WAIT_OBJECT_0 FAIL` and the `err=0` index row. New rows cover
+every sentinel in any/all × `Ex`/non-`Ex`, alone and mixed with a real event, asserting the return
+value *and* that the last error is not `ERROR_INVALID_HANDLE`; anti-"everything ready" controls where
+`{unsignalled event, sentinel}` in wait-all must still `WAIT_TIMEOUT`; the own `GetCurrentThread()`
+value after its alias closed in any/all/`Ex` with the same value from another thread failing
+`WAIT_FAILED`+6; forged, zeroed, `(HANDLE)-3` and closed values in head and tail position of
+any/all × `Ex`/non-`Ex` returning `WAIT_FAILED`+`ERROR_INVALID_HANDLE` with live entries still usable
+afterwards; `count==0`/`handles==NULL`/`count==65` → `ERROR_INVALID_PARAMETER` with `count==64`
+accepted; and under ASAN 100 rounds of each exit path plus a 100-round `WAIT_IO_COMPLETION` exit
+driven by a real APC. Private controls, the two deciding ones independently re-run by the
+orchestrator: **sentinel fall-through** → 21 FAIL (`multi(any, {NULL}) is WAIT_OBJECT_0 FAIL`);
+**`obj_pin` for self** → 3 FAIL (`multi(any, {own value, unsignalled event}) times out after the
+close (-1) FAIL`); **skip release on failure** → invisible to the plain binary but
+`LeakSanitizer: 118400 byte(s) leaked in 200 allocation(s)`, site `obj_alloc` ← `CreateEventA`.
+Preserved: the original unsafe shim `110e169` is still RED on both required negatives (SIGSEGV on the
+invalid address; 19 false-accept rows then `double free or corruption`), the committed test sources
+still give 175/0 and 22/0 against the repaired shim, and the three pre-existing POSIX programs pass
+(15/0, 28/0, 8/0). Codex's own two probe programs, re-run unmodified against the repair: 12/12 with
+`FAILURES=0`, and closed-self `0x102`/`0x102`/`0x102`.
+
+**Evidence corrections (R2).** The macOS guide claimed **both** standalone projects carry the handle
+gates; only `tests/win32_compat_posix` does, and `tests/win32_thread_posix` is unchanged. The guide
+and the game `CMakeLists.txt` generalised a measured dependency-limited WSL link failure into a macOS
+claim: the text now separates what was measured (that WSL image, 35 undefined references against the
+SDL2/XAudio2 POSIX providers) from what is untested (a Mac, where nothing was built or run and a host
+carrying the documented SDL2 prerequisites is not claimed to fail), keeps the exclusion as explicit
+**unvalidated POSIX integration**, and states that the fixture's own header-validation case has still
+not been executed on any POSIX host. Two targeted `ctest` receipts from the previous session used
+`|` inside `-R` and are **excluded**; every targeted run in this packet is one literal pattern with
+its own log and exit code, and the previous report's `665.83 s` "final" figure is corrected there as
+superseded by its own session's `558.87 s`.
+
+**Validation (this host).** Guarded build exit 0 (0 compile/link errors, 0 C4310, 18 known MSB8028);
+Windows executable byte-identical to the archived smoke's `c7c6e292…` because the repaired file is
+POSIX-only. Full limited CTest **exit 0, 162/162, zero failed/skipped, 523.49 s**, full log retained
+at `logs/posix-repair-ctest-full.log`. Six targeted runs, each a single `-R` pattern, all exit 0.
+`just check` exit 0 including the real retail corpus check (126/126). The earlier 8 s strict Vulkan
+smoke carries because the executable and every Windows-relevant input are provably unchanged; no new
+gameplay was run. Linux observations only; no Mac result. D4 remains incomplete; step 4 waits.
+
+PUSHED_TO: none (candidate held for independent Codex review) / BRANCH: master / COMMIT:
+toolkit b06bd36546e7bec75f17ca9677d7b55a8d59e01a; game (this record commit) / RESULT: local commits only; no push, no force, toolkit first then game.

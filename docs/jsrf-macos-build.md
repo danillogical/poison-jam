@@ -24,9 +24,11 @@ python3 ../xboxrecomp/tools/posix_check.py native python cross
   known ones also fail: `nv2a_core.c` and `vm_reuse_test.c`, both because of `__try`. They fail the
   same way without the macOS changes.
 - `posix_check` does not run `tests/win32_compat_posix` or `tests/win32_thread_posix`; build those
-  separately. Both projects' CMakeLists now also carry the handle-provenance regressions
+  separately. Only `tests/win32_compat_posix` carries the handle-provenance regressions
   (`win32_handle_lifetime_posix_test`, plus `win32_handle_lifetime_asan_test` where the compiler has
-  `-fsanitize=address`), which is where the POSIX handle contract is decided (TR §31.71).
+  `-fsanitize=address`), which is where the POSIX handle contract is decided (TR §31.71);
+  `tests/win32_thread_posix` is unchanged and still covers the thread-suspend shim only. Neither has
+  been built or run on a Mac.
 
 ## Game: portable tests only
 
@@ -65,14 +67,20 @@ named after the GPU, so choose with `RECOMP_VK_DRIVER=MoltenVK` or `RECOMP_VK_DR
 - **`jsrf_vk_pcache_device_hw`** skips: MoltenVK reports no pipeline-cache hits.
 - **Not registered:**
   - `jsrf_nv2a_hal`: the NV2A MMIO hook is Windows-only.
-  - `jsrf_inplace_event_bridge`: the fixture needs POSIX providers of
-    `xbox_FramebufferWindow*`, the video player and `xa2_*`/`mcpx_apu_*` that live in the SDL2 and
-    XAudio2 sources, so it does not link here and is not registered. The POSIX `ResetEvent` crash
-    this entry used to name is repaired **as measured by the native probe**: an unpublished handle
-    value is rejected with `ERROR_INVALID_HANDLE` / `WAIT_FAILED` instead of dereferenced
-    (TR §31.71). The fixture's own header-validation case was **not executed** -- it cannot be
-    built on this host -- so what it now returns is untested here; the shim's rejection of that
-    value is what was measured.
+  - `jsrf_inplace_event_bridge`: **unvalidated POSIX integration, kept out of the off-Windows
+    registration.** What is *measured* is a dependency-limited Ubuntu WSL host: the fixture and
+    every toolkit source it needs compile there, but the POSIX providers of
+    `xbox_FramebufferWindow*`, the video player and `xa2_*`/`mcpx_apu_*` live in the SDL2 and
+    XAudio2 sources, and that image has no SDL2/epoxy/OpenSSL headers, no CMake and no pkg-config,
+    so linking leaves 35 undefined references. What is *not* measured is a Mac: no Mac build or run
+    was attempted, and this guide does not claim that a Mac host with the SDL2 prerequisites this
+    document already asks for would fail the same way — its dependency set is simply untested. The
+    POSIX `ResetEvent` crash this entry used to name is repaired **as measured by the native probe**:
+    an unpublished handle value is rejected with `ERROR_INVALID_HANDLE` / `WAIT_FAILED` instead of
+    dereferenced (TR §31.71). The fixture's own header-validation case was **not executed** on any
+    POSIX host, so what it now returns is untested; only the shim's rejection of that value was
+    measured. Re-registering this fixture off Windows needs actual integration evidence, not a
+    repaired crash reason.
   - the Direct3D 11 parity tests;
   - the `vsh_aot` tests, which need the retail corpus.
   - `jsrf_save_root`: Win32 save-root path layer and shell32/advapi32.
