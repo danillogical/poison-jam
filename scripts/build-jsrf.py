@@ -220,7 +220,7 @@ def corpus_dxc():
             'VULKAN_SDK is not set, so the corpus provenance cannot be re-derived: the '
             'recorded dxc version and flags are part of what makes the SPIR-V current. '
             f'Install the Vulkan SDK and set VULKAN_SDK; then {prov.REMEDY}.')
-    dxc = Path(sdk) / 'Bin' / 'dxc.exe'
+    dxc = gen_shaders.vulkan_sdk_bin(sdk) / ('dxc' + gen_shaders.EXE_SUFFIX)
     if not dxc.is_file():
         raise SystemExit(
             f'{dxc} is not there (VULKAN_SDK={sdk}), so the corpus provenance cannot be '

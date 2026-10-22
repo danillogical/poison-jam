@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 /* The core references the renderer, but these tests must never dispatch a draw. */
 int pgraph_d3d11_method(int subchannel, uint32_t method, uint32_t param)
@@ -941,12 +944,22 @@ int main(void)
                     "USER 1025-method packet commits exactly once");
 
         memset(pb, 0, 0x2000); pb[0x3fe] = (2u << 18) | 0x100u; pb[0x3ff] = 1;
+#ifdef _WIN32
+        if (1) {
+#else
+        /* The span below straddles a 4 KiB page edge; a host with larger pages (macOS arm64:
+         * 16 KiB) cannot make just that page unreadable. */
+        if (sysconf(_SC_PAGESIZE) != 0x1000) {
+            fprintf(stderr, "SKIP: USER unreadable span (host page size is not 4 KiB)\n");
+        } else {
+#endif
         ok &= check(VirtualProtect((uint8_t *)pb + 0x1000, 0x1000,
                                    PAGE_NOACCESS, &old_protect), 1,
                     "USER unreadable page installed");
         submit_reset(gpu, 0xff8, 0x1004);
         REJECT_CASE("USER unreadable span", 0xff8, 0x1004, "unreadable_pushbuffer");
         VirtualProtect((uint8_t *)pb + 0x1000, 0x1000, old_protect, &old_protect);
+        }
 
         /* PUT is a plain ring offset with no latch bits.  JSRF's
          * set-bit-16-and-spin at 0x00191270 targets 0x100410, NV_PFB_WBC,

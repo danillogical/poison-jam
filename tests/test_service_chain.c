@@ -6,7 +6,13 @@
  * reread 0x400700.  The callbacks are counted test seams.  They do not make
  * either dependency, 0x00197AAC, or the production loop recoverable.
  */
+#ifdef _WIN32
 #include <windows.h>
+#else
+#include "platform/win32_compat.h"
+#include <string.h>
+#define ZeroMemory(p, n) memset((p), 0, (n))
+#endif
 #include <stdint.h>
 #include <stdio.h>
 

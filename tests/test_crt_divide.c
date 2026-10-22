@@ -6,7 +6,11 @@
  * each XBE body preserves are unchanged. Divisors above 32 bits are the cases
  * the generated bodies got wrong, so they are the bulk of the table. */
 #include <stdio.h>
+#ifdef JSRF_FIXTURES_ONLY
+#include "recomp_types.h"
+#else
 #include "recomp/gen/recomp_types.h"
+#endif
 
 ptrdiff_t g_xbox_mem_offset;
 RECOMP_TLS uint32_t g_eax, g_esp, g_ecx, g_edx, g_ebx, g_esi, g_edi;

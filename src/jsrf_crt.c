@@ -1,4 +1,8 @@
+#ifdef JSRF_FIXTURES_ONLY
+#include "recomp_types.h"
+#else
 #include "recomp/gen/recomp_types.h"
+#endif
 #include <stdio.h>
 
 /* 0x0017CEC0: CRT memmove, confirmed by the XBE's overlap check and

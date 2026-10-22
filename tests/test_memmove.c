@@ -1,5 +1,9 @@
 #include <stdio.h>
+#ifdef JSRF_FIXTURES_ONLY
+#include "recomp_types.h"
+#else
 #include "recomp/gen/recomp_types.h"
+#endif
 
 ptrdiff_t g_xbox_mem_offset;
 RECOMP_TLS uint32_t g_eax, g_esp;

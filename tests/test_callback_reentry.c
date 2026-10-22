@@ -5,7 +5,13 @@
  * not treat a raw Win32 event as that object.  Production helpers stay
  * unresolved.
  */
+#ifdef _WIN32
 #include <windows.h>
+#else
+#include "platform/win32_compat.h"
+#include <string.h>
+#define ZeroMemory(p, n) memset((p), 0, (n))
+#endif
 #include <stdint.h>
 #include <stdio.h>
 

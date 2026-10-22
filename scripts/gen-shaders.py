@@ -126,10 +126,28 @@ OUT_DIR = ROOT / 'src/recomp/gen/shaders'
 C_NAME = 'nv2a_vsh_programs.c'
 H_NAME = 'nv2a_vsh_programs.h'
 
+# Executables carry `.exe` on Windows only.
+EXE_SUFFIX = '.exe' if os.name == 'nt' else ''
+
+
+def vulkan_sdk_bin(sdk):
+    """The Vulkan SDK's tool directory: `Bin` on Windows, `bin` on the other hosts' SDKs.
+
+    The spelling the host's own SDK uses is tried first and the other one second; when
+    neither exists the host's spelling is returned, so the caller's missing-tool refusal
+    names it.  On Windows this is `<sdk>/Bin`, as it always was.
+    """
+    names = ('Bin', 'bin') if os.name == 'nt' else ('bin', 'Bin')
+    for name in names:
+        if (Path(sdk) / name).is_dir():
+            return Path(sdk) / name
+    return Path(sdk) / names[0]
+
+
 # The two executable layouts a CMake build tree can leave behind: multi-config
 # (Visual Studio) and single-config.  Only the owned build tree below uses this.
-_TOOL_SUFFIXES = (('src', 'video', 'Release', 'nv2a_vsh_hlsl.exe'),
-                  ('src', 'video', 'nv2a_vsh_hlsl.exe'))
+_TOOL_SUFFIXES = (('src', 'video', 'Release', 'nv2a_vsh_hlsl' + EXE_SUFFIX),
+                  ('src', 'video', 'nv2a_vsh_hlsl' + EXE_SUFFIX))
 
 # The game's build tree.  It is named here for the CMakeCache lookup that binds
 # the toolkit, NOT as a place to look for the host tool: `just build` relinks
@@ -976,12 +994,12 @@ def locate_vulkan_tools():
     if not sdk:
         die('VULKAN_SDK is not set: this corpus is compiled offline with the Vulkan SDK\'s '
             'dxc and spirv-val, so install the SDK and set VULKAN_SDK to its root.')
-    bin_dir = Path(sdk) / 'Bin'
-    for exe in ('dxc.exe', 'spirv-val.exe'):
+    bin_dir = vulkan_sdk_bin(sdk)
+    for exe in ('dxc' + EXE_SUFFIX, 'spirv-val' + EXE_SUFFIX):
         if not (bin_dir / exe).is_file():
             die(f'{bin_dir / exe} is not there: VULKAN_SDK={sdk} does not carry the shader '
-                f'tools this generator needs (dxc.exe, spirv-val.exe).')
-    return bin_dir / 'dxc.exe', bin_dir / 'spirv-val.exe'
+                f'tools this generator needs (dxc{EXE_SUFFIX}, spirv-val{EXE_SUFFIX}).')
+    return bin_dir / ('dxc' + EXE_SUFFIX), bin_dir / ('spirv-val' + EXE_SUFFIX)
 
 
 def host_argv(host, bin_path, mask, out_path):

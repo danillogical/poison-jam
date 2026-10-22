@@ -1274,10 +1274,14 @@ static void prop_knob(void)
         write_file(defp, file, sizeof file);
         write_file(oldp, file, sizeof file);
         set_env("LOCALAPPDATA", app);
+#if !defined(_WIN32)
+        /* Off Windows the default folder is $XDG_CACHE_HOME (else ~/Library/Caches or ~/.cache),
+         * so the same device-specific file is looked up under it. */
+        set_env("XDG_CACHE_HOME", app);
+#endif
         world(NULL);
         check(bring_up_logged(&line) == 0, "bring-up with the knob unset", "");
         stats(&ps);
-#if defined(_WIN32)
         check(ps.cache_enabled == 1u && ps.cache_loaded_bytes == 4096u && S.init_size[0] == 4096u
               && line_is(line, "[GPUVK] pipeline cache: %s loaded=4096", defp),
               "unset on Windows: %LOCALAPPDATA%\\xboxrecomp\\vk-pipeline-cache-000010de-00002684.bin "
@@ -1326,18 +1330,6 @@ static void prop_knob(void)
             free(b1);
             remove(defp2);
         }
-#else
-        (void)want;
-        check(ps.cache_enabled == 0u && ps.cache_loaded_bytes == 0u && S.init_size[0] == 0u
-              && line_is(line, "[GPUVK] pipeline cache: off"),
-              "unset off Windows: disabled, nothing read", "enabled=%u", ps.cache_enabled);
-        free(line);
-        make_pipe(0);
-        elapse();
-        vb_flip();
-        check(S.data_fetches == 0u && file_is(defp, blob, 4096),
-              "unset off Windows: nothing written and the file that was there is untouched", "");
-#endif
         remove(defp);
         remove(oldp);
         pc_rmdir(dir);
