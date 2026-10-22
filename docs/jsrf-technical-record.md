@@ -7052,3 +7052,30 @@ different-author native POSIX regressions; a range check or magic/kind word at a
 is insufficient. These are Linux observations, not Mac runtime evidence. D4 remains incomplete.
 
 PUSHED_TO: origin / BRANCH: master / COMMIT: 21f1f0df777594aa1cc98919135601b840255bc0 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 9695d81..21f1f0d (three retained commits, final bound gate independently accepted); clean and synchronized, 15 outgoing blobs, largest 548695 bytes, zero secrets, only reviewed CMake/test/macOS-doc/plan/TR paths, no forbidden or oversized blobs. Final code has full limited CTest 162/162 and `just check` green; Codex's actual shared-header controls and production-allocator case passed, and record-only hooks passed before push. Toolkit unchanged and synchronized at 110e169e989b8466c84af31872c030b3571c8b4d; no toolkit push needed.
+
+
+### §31.70 POSIX repair interrupted by configured provider usage exhaustion (2026-10-22)
+
+The bounded POSIX handle-safety operation ended before implementation or validation when the
+configured primary OMP provider returned HTTP 429 (`Go usage limit exceeded`). Its lifecycle
+completion is not a completed repair. No different-author gate report or new Windows test result
+exists. Game code remains the accepted checkpoint; toolkit `110e169` has a preserved uncommitted
+127-line registry-helper draft in `src/platform/win32_compat.c`. None of the helpers is connected
+to allocation, public handle APIs or close. It is unfinished and unaccepted; no toolkit code was
+committed or pushed.
+
+Codex independently compiled the actual changed shim with Ubuntu WSL's installed cc and replayed
+the bounded native probe: ordinary event control passes (exit 0), the invalid address still
+terminates (exit 11), and a zeroed non-object is still wrongly accepted (exit 2). Source SHA-256
+`669eab0fb7ae0fd0ef56c1c5a9f585c70ccfbbc69cf6d27d41b4450eceed33d2`. These are Linux observations,
+not Mac evidence. Preserve the draft for completion; its alias-withdraw helper also requires
+review so every successful close releases one public lifetime reference, including non-final
+alias closes.
+
+The configured role is blocked for owner handling under the orchestrator skill's human-owned
+model policy. No substitute role/provider/model, automatic retry or allowance renewal is
+admitted for this unresolved external blocker. The preflight has consumed seven operations and
+four repair allowances; none remains. The separate paused D4 lineage retains exactly four normal
+operations and zero repair cycles. Resume the POSIX repair and its required independent gate
+before D4 steps 4–5 after role availability/authorization and supported bridge reconciliation.
+The last accepted Windows checkpoint remains 162/162 CTests; this draft has no validation claim.

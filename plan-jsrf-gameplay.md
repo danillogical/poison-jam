@@ -28,9 +28,13 @@ and the controlled gate. Private header mutations recompile both consumers and f
 controlled gate; the zero-padding/dedicated llvmpipe workload still passes those mutations. Codex
 independently accepted the bound test-debt repair (TR §31.69). The
 MoltenVK suballoc skip remains explicit debt (historical 1792 is still an inference), and CTest
-locks do not coordinate separate ctest processes. A separate final preflight operation validates POSIX
-handle lifetime on WSL before step 4 (BUMPENVMAP CPU/AOT-Vulkan) and the different-author
-step-5 gate. No D completion.
+locks do not coordinate separate ctest processes. **Blocked:** the final POSIX handle-safety
+preflight stopped on configured OMP provider usage exhaustion before integration or tests
+(TR §31.70). Its unfinished toolkit edit is preserved; Codex independently replayed the native
+negative cases and both defects remain. Restore the configured role or obtain exact owner
+authorization for settings changes before another operation. Then finish and verify the POSIX
+repair before step 4 (BUMPENVMAP CPU/AOT-Vulkan) and the different-author step-5 gate. The paused
+D4 allowance remains four normal operations and zero repair cycles. No D completion.
 
 ## Objective
 
