@@ -7019,3 +7019,34 @@ with `reserved 4194304 = 2304 + 1792 + 4190208`; real llvmpipe `--suballoc` pass
 limited CTest and `just check` are run on the final tree. No Mac/MoltenVK run; the historical
 1,792 attribution remains an inference and the MoltenVK skip remains debt. Candidate local and
 unpushed; D4 remains incomplete.
+
+### §31.69 Bound allocator-oracle repair independently accepted; POSIX failure reproduced (2026-10-22)
+
+Codex independently verified that both `run_suballoc` and the controlled allocator fixture include
+and call `tests/vk_suballoc_oracles.h`. The controlled production-allocator case passes all 24
+checks with exactly 1,792 bytes of padding and a dedicated allocation. In a separate native WSL
+C test compiled from the actual shared header, pristine/restored inputs pass, dropping padding
+fails the byte predicate, and restoring the dedicated double count fails the reduction predicate
+(exit sequence 0/1/1/0). This supplements the different author's private Windows header-edit
+rebuild receipts: both fixture objects recompile, and the controlled gate rejects each mutation.
+The llvmpipe workload remains green on those mutations because its padding and dedicated counts
+are zero; it is not the deciding negative control.
+
+The final source receipt at `1c8bc4a` is **162/162 CTests, zero skipped, 695.58 s**, a successful
+guarded build and `just check`. The first full run failed G1 while the new shared header was still
+untracked; after staging the header, the focused G1 and final full suite passed without weakening
+the test. The bound test-debt repair is accepted: correct allocation oracles, shared scratch locks
+within one CTest invocation, and the two parity warning fixes. Separate CTest processes remain
+uncoordinated; no broader race-freedom or Mac result is claimed. The historical MoltenVK 1,792
+bytes remain unverified and its suballocation test remains skipped.
+
+**Next repair, independently reproduced.** With toolkit `110e169`, Codex compiled the actual
+`win32_compat.c` plus the exit-hook source using Ubuntu WSL's installed `cc`, with core dumps
+disabled and a bounded subprocess alarm. The ordinary event create/wait/reset/set/close control
+passes. `ResetEvent((HANDLE)0x03FFFFFE)` terminates the subprocess (WSL exit 11). A separately
+allocated zeroed 4 KiB non-object is wrongly accepted by `ResetEvent` (TRUE, last-error 0), because
+`K_EVENT == 0` and the shim dereferences the supplied pointer before validating its provenance.
+Source SHA-256 is `659f39a0b58314ddcf6c9e5b7bb48d607ee6ae2322168a70aab43cdb384aff1d`.
+The safe next increment is lifetime-aware validation against known live shim handles, with
+different-author native POSIX regressions; a range check or magic/kind word at an arbitrary pointer
+is insufficient. These are Linux observations, not Mac runtime evidence. D4 remains incomplete.

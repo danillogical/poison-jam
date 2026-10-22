@@ -24,7 +24,9 @@ removes the two parity warnings; a controlled 1792-byte allocator case decides t
 while the real llvmpipe/NVIDIA workloads report zero padding/dedicated. Codex rejected the
 first candidate because the controlled gate held copies rather than the workload predicates;
 the repaired test-only `tests/vk_suballoc_oracles.h` is now called by both the real workload
-and the controlled gate, and private header mutations recompile and fail both consumers. The
+and the controlled gate. Private header mutations recompile both consumers and fail the
+controlled gate; the zero-padding/dedicated llvmpipe workload still passes those mutations. Codex
+independently accepted the bound test-debt repair (TR §31.69). The
 MoltenVK suballoc skip remains explicit debt (historical 1792 is still an inference), and CTest
 locks do not coordinate separate ctest processes. A separate final preflight operation validates POSIX
 handle lifetime on WSL before step 4 (BUMPENVMAP CPU/AOT-Vulkan) and the different-author
