@@ -7162,5 +7162,5 @@ outcome `diagnostic_deadline` — a liveness check, not a fidelity or e2e claim.
 NVIDIA e2e remains the previous Windows gameplay evidence. D4 remains incomplete; step 4 waits.
 
 PUSHED_TO: none (candidate held for independent Codex review) / BRANCH: master / COMMIT:
-toolkit 7c46fa693ba03a9bf4b05ea609bb307a298a9bfc; game (this record commit) / RESULT: local commits only; no push, no force, toolkit first then game.
+toolkit 7c46fa693ba03a9bf4b05ea609bb307a298a9bfc; game 2102a869fa2e0fda8161f6d15ee57ef4409440cf (records) and d67ef8f (ledgers) / RESULT: local commits only; no push, no force, toolkit first then game.
 
