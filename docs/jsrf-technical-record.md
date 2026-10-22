@@ -7299,3 +7299,7 @@ is D4 step 4, fixture-driven CPU/AOT-Vulkan BUMPENVMAP and luminance, followed b
 separate-author gate. D4 is incomplete. Carry exactly four normal operations and zero repair
 cycles from the paused lineage; the preflight's nine operations/five repair allowances are
 separate and fully spent. No model/provider/role/effort/fallback changes are authorized here.
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: b06bd36546e7bec75f17ca9677d7b55a8d59e01a / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward 110e169..b06bd36; three independently accepted source/test commits, eight outgoing blobs (largest 87951 bytes), zero secrets, only reviewed POSIX shim/gate/CMake paths, no forbidden or oversized objects, clean and synchronized. Upstream/nworkers remain push DISABLED.
+
+PUSHED_TO: origin / BRANCH: master / COMMIT: 6d506f1e3f5e9ea074d8270019e9c7523334092c / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 2ff34cc..6d506f1 after toolkit; eight retained source/record commits, nineteen outgoing blobs (largest 570230 bytes), zero secrets, only reviewed CMake/macOS-doc/TR/plan/ledger paths, no forbidden or oversized objects. Final code has full limited CTest 162/162 and just check green; independent native/ASAN controls pass. Record-only acceptance hooks passed; clean and synchronized.
