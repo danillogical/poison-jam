@@ -6817,3 +6817,5 @@ Ledger rows: L18, L21–L24, L57/L58, L62. Exploratory only; no fidelity claim.
 `110e169` and game `401d8c5`/`40353d6` (Windows behavior, honest macOS skips/exclusions, portability
 subset). The two findings above are its inputs; step 4 waits. No production or test was patched in this
 packet, and D4 is not complete.
+
+PUSHED_TO: origin / BRANCH: master / COMMIT: 4bd44f659d3ee18236bee1681c2d11d545e91fde / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 40353d6..4bd44f6 (1 records commit: the Windows portability preflight findings, TR §31.63 and plan), clean and synchronized; 2 outgoing blobs (largest 529937 bytes), 0 secret hits, only plan-jsrf-gameplay.md and docs/jsrf-technical-record.md, no game/ or retail-derived path; toolkit unchanged at 110e169e989b8466c84af31872c030b3571c8b4d = origin/main.
