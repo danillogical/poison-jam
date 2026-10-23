@@ -7624,3 +7624,109 @@ admission10operations/5historical repair allowances, zero normal slots/zero repa
 cycles. Full step5 remains a separate pending gate with no automatic normal-slot
 renewal. Preserve all earlier runs and their sole decisions; preflight accounting
 stays separate. Candidate commits remain local and unpushed.
+
+### 31.78 — The CPU bump fixture is genuinely portable, and the control harness owns only what it creates
+
+Bounded test-tool repair under run `run_0mvkakqvk5b481bf948a47013`, after Codex
+rejected the §31.77 candidate for two new defects. The R1/R2 production repair is
+untouched and still stands on Codex's own rebuilt probe and the eight focused
+Windows cases. One configured gate-tool worker (`BumpFocusedGate`) owned the
+fixture/helper changes, their two regressions and the minimal registration; the
+primary owned the independent reproductions, integration, every Windows
+validation run and this record. No production bump, format, refusal or texgen
+change; no model, provider, effort, role or fallback change.
+
+**R3 — the artificial refusal is gone, and the fixture really builds off
+Windows.** Current source, real WSL GCC 15.2.0, the configure's fixtures-only
+include set plus the forced `tests/compat/jsrf_test_compat.h`: exit1 with
+`#error "this fixture follows the repository's Windows-only test harness"` at
+`tests/test_bumpenv_q_cpu.c:111`. Because the target is registered inside
+`BUILD_TESTING` and `XBR_VULKAN_FOUND` with no `WIN32` guard, a supported
+Vulkan-enabled macOS fixtures-only build fails deterministically. The refusal is
+deleted; the only real host dependency was three symbols
+(`QueryPerformanceCounter`, `QueryPerformanceFrequency`,
+`InterlockedCompareExchange64`) that the toolkit's `platform` library already
+provides off Windows — the same library `jsrf_service_chain_test` links. The
+CMake change is one `if(NOT WIN32)` link line for that library; the target's
+position, its five cases and the whole Vulkan half are unchanged, and Windows
+still links nothing extra. All five CPU cases now compile, link and pass from a
+real Linux binary against the same production `rc_stage_fetch`, so the portable
+build decides the same rule the Windows build does. No Mac run is claimed: the
+macOS path is the same shipped branch, argued from the condition, not measured.
+
+The new `tests/test_bumpenv_fixture_portability.py` decides this rather than
+asserting it. It parses the shipped target's source list and its five `add_test`
+names (a missing target or case is a hard FAIL), resolves a real POSIX compiler,
+compiles the fixture and every extracted source with the target's flags and
+include dirs, links, and requires a `PASS bumpenv_q_cpu[<case>]` line from a real
+binary per case. A compile or link failure fails the test; only a host with no
+POSIX compiler skips, and CTest is given `SKIP_RETURN_CODE 77` so a skip is never
+a pass. Stale prose was corrected at the same time: B crosses off `(6,4)` to
+`(5,4)` and C stays on `(6,4)` — the assertions already said so.
+
+**R4 — the helper no longer deletes a scratch child it did not create.**
+Reproduced through the real `main`/`run_control` path with only the copy boundary
+stubbed: a pre-existing `--workdir` holding
+`toolkit-bind-guard/preexisting-unrelated-sentinel.txt` lost both, and the copy
+boundary was still reached. The cause was `mkdir(exist_ok=True)` on an existing
+root, containment validated only after creation, and an unconditional `rmtree`
+of an existing `toolkit-<control>` child; the fixed default sibling had the same
+exposure. `scripts/bumpenv-q-controls.py` now follows the accepted
+`pbcov-mutants.py` ownership contract without importing or reopening it: an
+existing `--workdir` (directory, file or symlink) is refused before anything is
+modified; the default is a fresh unique sibling created with `exist_ok=False`
+outside both repos and outside `%TEMP%`; resolved containment, ancestor, `%TEMP%`
+and root/anchor constraints are validated before any `mkdir`; an ownership
+marker plus `(st_dev, st_ino)` identity gates removal, which is skipped and
+reported when ownership or resolved identity changed; and a pre-existing
+`toolkit-<name>`/`build-<name>` inside the owned root is a harness error rather
+than a path to clean. Every return path releases through `finally`, `--keep`
+exists, and all mutation specs, marker strings, case names, exit codes and the
+shared-hash printing are unchanged. Both controls were then rerun from their own
+fresh owned roots and both were `RESULT: PASS` with named RED assertions, distinct
+baseline/mutated/restored executable hashes, forced object/SPIR-V rebuilds and
+byte-identical shared toolkit hashes before and after.
+
+The new `tests/test_bumpenv_controls_workdir.py` has eleven cases and detects the
+defect it exists for: against `HEAD`'s helper it is 6 failures / 4 errors with the
+named one being `"reached the copy boundary after deleting the caller's child" !=
+2`, and against the repaired helper it is 11/11 OK. It covers refusal of an
+existing root, its child and sentinel, a file, a disposable repo root, the real
+game root and an ancestor, a path inside the repo and a path under `%TEMP%` with
+nothing created, cleanup blocked by a changed or missing marker, a mocked-runner
+success that removes only the owned root, `--keep`, and the default root's
+placement. Its success case is labelled a mocked runner: no compile and no
+control verdict is claimed from it.
+
+**Receipts on the settled tree.** Guarded build exit0, 59 targets / 172 tests
+derived, corpus 128/126 unchanged. Focused Windows 8/8 in 1.63 s on pinned
+llvmpipe LLVM 23.1.2 type4, with the unchanged CPU/Vulkan rows and binding
+witness (modes 4/5 uploads 0 cached 0; 1/2/3/6/7 upload and cache once). Both new
+tests pass under CTest. Full limited CTest **172/172 in 570.38 s**, exit0.
+`just check` green including `entries=126 recompiled_and_matched=126
+ascending=yes duplicates=0 xbe_distinct=126 problems=0`. One earlier attempt used
+a `-R` regex containing `|`, which `cmd.exe` consumed so no ctest ran; it was
+discarded rather than read as a result, and the two tests were rerun as separate
+single-name regexes. The strict smoke was **carried, not rerun**, on verified
+identical runtime identity (`jsrf_recomp.exe ca550e78…`, `jsrf_collect.exe
+cb90b7e3…`, `game/default.xbe fd190557…`, all matching run
+`20261022-173449-960-d4step4q-repair-smoke`): it proves bounded launch and
+executor-registration liveness only and reaches no bump batch, so no fidelity
+claim follows.
+
+**Limits.** No Mac run. The portability test's POSIX branch was exercised only
+structurally; WSL was the branch that ran. The workdir success case is mocked.
+Full step 5 remains pending and unclaimed, with signed bump inputs, cube/volume
+textures on a bump stage and rect-texture remap still open, and modes 8..31 and
+stage-3 cube still on the fallback. No D4 or D5 completion, no in-game bump
+correction, no hardware fidelity.
+
+**Accounting.** This admission consumed both the one carried normal slot and the
+one renewed repair allowance: cumulative D4 **10 operations / 5 historical repair
+allowances**, **zero normal slots, zero repair cycles**. The renewal came from
+Codex's independently confirmed review under the skill's reset rule, not from a
+new human repair instruction; §31.77's reading of the prior grant is corrected
+here, as is the notion that its "not step 5" opening excluded a differently
+authored focused gate. No refund, reset or extension; the preflight 9/5 stays
+separate; every earlier run and sole decision is preserved; commits remain local
+and unpushed. Report: `logs/reports/d4-step4-fixture-safety-repair-2026-10-22.md`.

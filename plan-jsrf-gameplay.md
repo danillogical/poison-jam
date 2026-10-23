@@ -99,9 +99,10 @@ pixel agreement where the perturbed texel is visible in the readback, and old-re
 (snorm) bump inputs, cube/volume bump stages and rect-texture remap remain open, and modes 8..31 and
 stage-3 cube still fall back. No in-game bump correction is claimed: the smokes say nothing about the
 title's own bump state. This repair admission consumed one carried normal slot and the single granted
-repair allowance (the grant is the owner's repair-packet instruction for this operation, not a renewal
-asserted here), so the D4 allowance is now **one normal operation and zero repair cycles**, with no
-slot refunded or added. No D4 or D completion.
+repair allowance, so the D4 allowance was then **one normal operation and zero repair cycles**, with no
+slot refunded or added. No D4 or D completion. *Correction (TR §31.78): that grant came from Codex's
+skill-confirmed review of an independently reproduced defect, not from a new human repair-packet
+instruction; the earlier wording here said otherwise.*
 
 **Codex review of that repair (TR §31.77):** the production q/binding fixes pass
 Codex's freshly rebuilt actual-CPU probe and all eight focused Windows tests,
@@ -115,10 +116,27 @@ the concrete bounded repair advice is in
 `logs/reports/d4-step4-fixture-safety-codex-review-2026-10-22.md`. The next packet
 repairs only these fixture/tool issues, preserving production and local history.
 The skill-confirmed NEW review renews one exhausted repair allowance and carries
-the one remaining normal slot, adding no operation slot. Its admission will spend
-both: cumulative D4 **10 operations / 5 historical repair allowances**, then
-**zero normal slots / zero repair cycles**. Full step 5 remains pending and cannot
-silently take a fresh normal allowance. No feature publication or completion.
+the one remaining normal slot, adding no operation slot. Its admission spends
+both: cumulative D4 **10 operations / 5 historical repair allowances**, and
+**zero normal slots / zero repair cycles** remain. Full step 5 remains pending and
+cannot silently take a fresh normal allowance. No feature publication or
+completion.
+
+**Fixture/tool repair landed (TR §31.78, report
+`logs/reports/d4-step4-fixture-safety-repair-2026-10-22.md`):** the CPU fixture's
+artificial non-Windows `#error` is gone and all five cases now compile, link and
+pass from a real Linux binary against the same production `rc_stage_fetch`; the
+only real host dependency was the toolkit's `platform` shim, linked by one
+`if(NOT WIN32)` line. The control harness now refuses an existing scratch root,
+validates resolved containment before creating anything, records an ownership
+marker and directory identity, and removes only a root it created — the earlier
+run's own `toolkit-<control>` child can no longer be deleted. Both new regressions
+fail against the pre-repair code and pass now; the focused Windows 8/8, the full
+limited CTest **172/172**, `just check` and two fresh-scratch controls (each RED on
+named assertions then GREEN) all pass on the settled tree. Full step 5 is still a
+separate, differently-authored gate and is not started; the strict smoke was
+carried on verified identical runtime identity and says nothing about bump
+sampling.
 
 ## Objective
 

@@ -970,6 +970,12 @@ if(BUILD_TESTING)
             ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/kernel
             ${XBOXRECOMP_DIR}/src/nv2a ${JSRF_GEN_INCLUDE_DIR})
         target_link_libraries(jsrf_bumpenv_q_cpu_test PRIVATE ${CMAKE_DL_LIBS})
+        if(NOT WIN32)
+            # QueryPerformanceCounter/Frequency and InterlockedCompareExchange64 live in the
+            # toolkit's POSIX primitive layer, which is the same `platform` library the other
+            # portable fixtures link; Windows gets them from the CRT and links nothing extra.
+            target_link_libraries(jsrf_bumpenv_q_cpu_test PRIVATE platform)
+        endif()
         foreach(_case bump_zero_matrix bump_displacement bump_positive_delta bump_lum
                 project2d_control)
             add_test(NAME jsrf_bumpenv_q_cpu_${_case}
@@ -1710,6 +1716,20 @@ if(BUILD_TESTING)
     add_test(NAME jsrf_pbcov_workdir_helper
         COMMAND ${JSRF_PYTHON} -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_pbcov_workdir.py)
     set_tests_properties(jsrf_pbcov_workdir_helper PROPERTIES TIMEOUT 120)
+    # The BUMPENVMAP control harness owns only the work area it creates. This
+    # drives its real main() with the copy/build boundary stubbed: an existing
+    # --workdir (including one holding a toolkit-<control>/ child) is refused
+    # byte-unchanged, and a fresh owned root is removed exactly once.
+    add_test(NAME jsrf_bumpenv_controls_workdir
+        COMMAND ${JSRF_PYTHON} -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_bumpenv_controls_workdir.py)
+    set_tests_properties(jsrf_bumpenv_controls_workdir PROPERTIES TIMEOUT 120)
+    # The CPU fixture must build OFF Windows, so this decides that for real: it
+    # compiles, links and runs the shipped fixture sources with a POSIX compiler
+    # (WSL GCC on Windows) and requires all five cases to print PASS. It skips
+    # (return 77) only when no POSIX compiler exists at all.
+    add_test(NAME jsrf_bumpenv_fixture_portability
+        COMMAND ${JSRF_PYTHON} -X utf8 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_bumpenv_fixture_portability.py)
+    set_tests_properties(jsrf_bumpenv_fixture_portability PROPERTIES TIMEOUT 300 SKIP_RETURN_CODE 77)
     # The NV2A method-inventory generator writes TWO tracked files (this repo's
     # docs/jsrf-nv2a-method-inventory.md and the toolkit's nv2a_method_table.c)
     # and parses argv by hand.  `--help` used to fall through that hand parsing,

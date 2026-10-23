@@ -7,7 +7,10 @@
  * tests/test_pbcov_stream.c includes the real executor headers and links the
  * real library). It does NOT claim committed-stream coverage, and it does not
  * claim pixel coverage: no rasteriser runs. It asserts the fetch rule itself,
- * which is the thing the repair changed.
+ * which is the thing the repair changed. The fixture is host-portable: it
+ * allocates its arena with calloc, includes the real executor, and needs only
+ * the toolkit's `platform` shim off Windows for the QPC/Interlocked seams --
+ * no rasteriser and no Windows guest-memory/VEH setup.
  *
  * Authored by a worker distinct from the production change.
  *
@@ -30,7 +33,7 @@
  *   (6,4) = R 0x20+0x60=0x80, G 0x18+0x20=0x38, B 0x30+0x60+0x20=0xB0
  *         = 0xFF8038B0      <- the stage-1 texel the bump modes must select
  *   (5,4) = R 0x20+0x50=0x70, G 0x38,          B 0x30+0x50+0x20=0xA0
- *         = 0xFF7038A0      <- the crossing case's perturbed texel
+ *         = 0xFF7038A0      <- B's perturbed texel (the delta moves the sample off (6,4))
  *   (3,2) = R 0x20+0x30=0x50, G 0x18+0x10=0x28, B 0x30+0x30+0x10=0x70
  *         = 0xFF502870      <- PROJECT2D at (6,4)/q=2, and the mutation's texel
  *   (2,3) = R 0x20+0x20=0x40, G 0x18+0x18=0x30, B 0x30+0x20+0x18=0x68
@@ -51,13 +54,13 @@
  *                                    dsdt.y = m01*du + m11*dv
  *
  *   A zero matrix            dsdt = (0, 0)
- *   B [-0.25, 0.125, 0.125, 0.5]   (stays inside texel (6,4) for both q)
+ *   B [-0.25, 0.125, 0.125, 0.5]   (moves off (6,4) to (5,4) for both q)
  *       dsdt.x = (-0.25)(0.8188976) + 0.125(0.3779528)
  *              = -0.2047244 + 0.0472441 = -0.1574803
  *       dsdt.y = 0.125(0.8188976) + 0.5(0.3779528)
  *              =  0.1023622 + 0.1889764 =  0.2913386
  *       (6,4) + that = (5.8425197, 4.2913386) -> floor (5,4) = 0xFF7038A0
- *   C [0.5, 0.125, 0.5, 0.5]  (the "delta really applied" case: it crosses)
+ *   C [0.5, 0.125, 0.5, 0.5]  (the "delta really applied" case: it stays on (6,4))
  *       dsdt.x = 0.5(0.8188976) + 0.5(0.3779528)
  *              = 0.4094488 + 0.1889764 = 0.5984252
  *       dsdt.y = 0.125(0.8188976) + 0.5(0.3779528) = 0.2913386
@@ -106,10 +109,6 @@
 #include <string.h>
 #include <stdarg.h>
 #include <math.h>
-
-#if !defined(_WIN32)
-#error "this fixture follows the repository's Windows-only test harness"
-#endif
 
 #define ARENA_BYTES 0x00080000u
 #define TEX_VA      0x00020000u
@@ -278,9 +277,9 @@ static int case_bump_zero_matrix(void)
 
 static int case_bump_displacement(void)
 {
-    /* B: a small matrix whose perturbed coordinate stays inside texel (5,4)
-     * for BOTH q -- the delta moves off (6,4), so a delta that was dropped
-     * fails here too. Hand-derived above. */
+    /* B: a small matrix whose perturbed coordinate moves off (6,4) into
+     * texel (5,4) for BOTH q -- so a delta that was dropped fails here too.
+     * Hand-derived above. */
     static const float m[4] = { -0.25f, 0.125f, 0.125f, 0.5f };
     bump_pair("mode6 displacement", 6u, m, 0.0f, 0.0f, 0xFF7038A0u);
     return 0;
@@ -288,9 +287,10 @@ static int case_bump_displacement(void)
 
 static int case_bump_positive_delta(void)
 {
-    /* C: the same deltas with a positive m00 land back on texel (6,4), so
-     * the pair B/C brackets the boundary from both sides: a delta that is
-     * applied moves the sample, and one that is dropped cannot satisfy both. */
+    /* C: the same deltas with a positive m00 stay on texel (6,4), so the
+     * pair B/C brackets the boundary from both sides: B moves the sample off
+     * (6,4) and C leaves it there, so a delta that is dropped cannot satisfy
+     * both. */
     static const float m[4] = { 0.5f, 0.125f, 0.5f, 0.5f };
     bump_pair("mode6 positive delta", 6u, m, 0.0f, 0.0f, 0xFF8038B0u);
     return 0;

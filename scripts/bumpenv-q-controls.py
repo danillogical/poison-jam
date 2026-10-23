@@ -24,14 +24,26 @@ in the record rather than run by every `ctest` invocation.
     python -X utf8 scripts/bumpenv-q-controls.py --control q-divide
     python -X utf8 scripts/bumpenv-q-controls.py --control bind-guard
     python -X utf8 scripts/bumpenv-q-controls.py --control all
+    python -X utf8 scripts/bumpenv-q-controls.py --control q-divide --keep
 
-The scratch directory defaults to `tmp-bumpenv-controls`, a sibling of the game
-checkout, and must live outside both repos AND outside %TEMP%: MSBuild's
-incremental build is unreliable under the temporary directory (MSB8029), and a
-restore that silently reused a mutated object would then be reported as a
-GREEN/FAIL verdict about the product instead of a harness bug. For the same
-reason the restore half deletes the focused targets' objects and executables
-before rebuilding and asserts the restored executables really changed.
+The scratch directory defaults to a FRESH `tmp-bumpenv-controls-<token>` sibling
+of the game checkout and must live outside both repos AND outside %TEMP%:
+MSBuild's incremental build is unreliable under the temporary directory
+(MSB8029), and a restore that silently reused a mutated object would then be
+reported as a GREEN/FAIL verdict about the product instead of a harness bug. For
+the same reason the restore half deletes the focused targets' objects and
+executables before rebuilding and asserts the restored executables really
+changed.
+
+Ownership: `--workdir` names WHERE this invocation may create its scratch tree;
+it does NOT grant ownership of a path that already exists. A `--workdir` that
+exists at all (directory, file or symlink) is refused, untouched, with exit 2,
+and a fresh default root is created with `mkdir(exist_ok=False)`. The root is
+stamped with an ownership marker and its `(st_dev, st_ino)` identity, and it is
+removed only when that marker, the resolved path and the identity all still
+match. Nothing inside the root is ever `rmtree`d: a `toolkit-<control>/` or
+`build-<control>/` that already exists is a harness bug (exit 3), never a path
+to delete. `--keep` leaves the owned root in place and prints its path.
 
 Exit status: 0 when every requested control was RED then GREEN as required,
 1 when a control did not behave, 2 on a usage/setup error, 3 when the harness
@@ -42,6 +54,7 @@ meaning the restored sources were never recompiled).
 import argparse
 import hashlib
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -128,10 +141,160 @@ class HarnessError(Exception):
     """The harness itself is broken -- never a verdict about the product."""
 
 
+# ── Owned work area ──────────────────────────────────────────────────────────
+#
+# --workdir names WHERE this invocation may put its private copies; it does not
+# grant ownership of a path that already exists. Only a directory this
+# invocation created (and stamped below) is ever removed, and only after its
+# resolved path, directory identity and marker still match. A caller's
+# pre-existing directory or file is refused before the first copy.
+
+OWNERSHIP_MARKER = ".bumpenv-q-controls-owned"
+
+
+class WorkAreaRefused(RuntimeError):
+    """The --workdir path is not a path this invocation is allowed to own."""
+
+
+class OwnedWorkArea:
+    def __init__(self, path, game, toolkit):
+        self.path = Path(path)
+        self.resolved = self.path.resolve()
+        self.game = Path(game).resolve()
+        self.toolkit = Path(toolkit).resolve()
+        self.token = secrets.token_hex(16)
+        self.identity = None
+
+    def stamp(self):
+        """Write the ownership marker and record the directory identity."""
+        (self.path / OWNERSHIP_MARKER).write_text(
+            "bumpenv-q-controls owned work area\n"
+            f"pid {os.getpid()}\n"
+            f"token {self.token}\n",
+            encoding="utf-8", newline="\n")
+        st = self.path.stat()
+        self.identity = (st.st_dev, st.st_ino)
+
+    def contains(self, path):
+        """True only for a path inside this owned root (resolved)."""
+        try:
+            p = Path(path).resolve()
+        except OSError:
+            return False
+        return p == self.resolved or self.resolved in p.parents
+
+    def _still_owned(self):
+        """True only for the exact, unchanged directory this run created."""
+        try:
+            if self.path.is_symlink():
+                return False
+            if self.path.resolve() != self.resolved:
+                return False
+            st = self.path.stat()
+            if self.identity is None or (st.st_dev, st.st_ino) != self.identity:
+                return False
+            marker = self.path / OWNERSHIP_MARKER
+            if marker.is_symlink() or not marker.is_file():
+                return False
+            if self.token not in marker.read_text(encoding="utf-8",
+                                                  errors="replace"):
+                return False
+        except OSError:
+            return False
+        # Never a filesystem root ...
+        if self.resolved.parent == self.resolved:
+            return False
+        if self.resolved.anchor and self.resolved == Path(self.resolved.anchor):
+            return False
+        # ... nor the game/toolkit root, nor an ancestor of either.
+        for guarded in (self.game, self.toolkit):
+            if self.resolved == guarded or guarded in self.resolved.parents:
+                return False
+        return True
+
+    def release(self, keep):
+        """Remove the owned root (or, with --keep, report where it is)."""
+        if keep:
+            print(f"work area kept: {self.path}")
+            return True
+        if not self._still_owned():
+            print(f"work area NOT removed (ownership changed): {self.path}",
+                  file=sys.stderr)
+            return False
+        try:
+            shutil.rmtree(self.path)
+        except OSError as exc:
+            print(f"work area NOT removed ({exc}): {self.path}", file=sys.stderr)
+            return False
+        return True
+
+
+def _validate_root(root, game, toolkit):
+    """Refuse a resolved root that must never be owned; called BEFORE mkdir."""
+    root = Path(root).resolve()
+    for guarded in (game, toolkit):
+        if root == guarded or root.is_relative_to(guarded):
+            raise WorkAreaRefused(
+                f"refusing to work inside a repo: {root}")
+        if guarded.is_relative_to(root):
+            raise WorkAreaRefused(
+                f"refusing to own an ancestor of a repo: {root}")
+    temp_root = Path(tempfile.gettempdir()).resolve()
+    if root == temp_root or root.is_relative_to(temp_root):
+        raise WorkAreaRefused(
+            f"refusing to work under the temporary directory: {root}\n"
+            f"  MSBuild will not trust an incremental build there (MSB8029), "
+            f"which can leave a stale object behind a restore.")
+    if root.parent == root or (root.anchor and root == Path(root.anchor)):
+        raise WorkAreaRefused(f"refusing to own a filesystem root: {root}")
+
+
+def acquire_work_area(args, game, toolkit):
+    """Create and stamp a fresh work area; never remove a caller's path."""
+    if args.workdir is not None:
+        given = Path(args.workdir)
+        if given.is_symlink() or given.exists():
+            raise WorkAreaRefused(
+                f"--workdir {given} already exists; refusing to modify or remove "
+                f"a path this invocation did not create. Choose a new path.")
+        root = given.resolve()
+        _validate_root(root, game, toolkit)
+        try:
+            root.mkdir(parents=True, exist_ok=False)
+        except OSError as exc:
+            raise WorkAreaRefused(
+                f"could not create --workdir {root}: {exc}") from exc
+    else:
+        # NOT tempfile.mkdtemp(): MSBuild refuses to trust an incremental build
+        # under %TEMP% (MSB8029), and a build it will not trust incrementally is
+        # exactly how a stale mutated object survives a restore. A fresh unique
+        # sibling of the game checkout keeps the build out of %TEMP% and out of
+        # both repos.
+        root = (Path(game).parent
+                / ("tmp-bumpenv-controls-" + secrets.token_hex(8))).resolve()
+        _validate_root(root, game, toolkit)
+        try:
+            root.mkdir(parents=True, exist_ok=False)
+        except OSError as exc:
+            raise WorkAreaRefused(
+                f"could not create the scratch root {root}: {exc}") from exc
+    owned = OwnedWorkArea(root, game, toolkit)
+    try:
+        owned.stamp()
+    except OSError as exc:
+        if args.keep:
+            print(f"work area kept: {root}")
+        else:
+            shutil.rmtree(root, ignore_errors=True)
+        raise WorkAreaRefused(
+            f"could not record ownership of {root}: {exc}") from exc
+    return owned
+
+
 TARGETS = ["jsrf_bumpenv_q_cpu_test", "jsrf_bumpenv_q_vk_test"]
 
 
-def force_rebuild(build_dir, targets=TARGETS):
+def force_rebuild(build_dir, targets=TARGETS, owned=None):
     """Delete the focused targets' objects and executables before a build.
 
     Both test translation units #include production sources that CMake does
@@ -142,7 +305,15 @@ def force_rebuild(build_dir, targets=TARGETS):
     that tracking is exactly what is unreliable here (it is what MSB8029
     disables under %TEMP%). Removing the objects makes the recompile
     unconditional, so a stale binary cannot masquerade as a RED or a GREEN.
+
+    Every deletion here is a file-level unlink inside the private build tree,
+    so the build directory must be inside the owned root first; anything else
+    is a harness bug, not a path to clean.
     """
+    if owned is not None and not owned.contains(build_dir):
+        raise HarnessError(
+            f"refusing to clean {build_dir}: it is outside the owned work area "
+            f"{owned.path}")
     removed = []
     for t in targets:
         d = build_dir / f"{t}.dir"
@@ -307,14 +478,23 @@ def expect_green(build_dir, case, env, prefix):
 
 # ── One control ─────────────────────────────────────────────────────────────
 
-def run_control(name, workdir, shared_before):
+def run_control(name, workdir, shared_before, owned=None):
     spec = CONTROLS[name]
     print(f"\n{'=' * 78}\ncontrol: {name} -- {spec['title']}\n{'=' * 78}")
 
     copy = workdir / f"toolkit-{name}"
     build = workdir / f"build-{name}"
-    if copy.exists():
-        shutil.rmtree(copy)
+    # These live INSIDE the owned root and this invocation creates them, so a
+    # pre-existing one means the harness (or a caller) put something there that
+    # this run did not create. That is a harness bug, never a path to delete.
+    for d in (copy, build):
+        if owned is not None and not owned.contains(d):
+            raise HarnessError(
+                f"{name}: {d} is outside the owned work area {owned.path}")
+        if d.exists() or d.is_symlink():
+            raise HarnessError(
+                f"{name}: {d} already exists inside the owned work area; refusing "
+                f"to remove a path this run did not create")
     copy_toolkit(copy)
 
     rc, _ = configure_private_build(build, copy)
@@ -341,7 +521,7 @@ def run_control(name, workdir, shared_before):
 
     env = vk_env()
     ok = True
-    force_rebuild(build)
+    force_rebuild(build, owned=owned)
     rc, _ = build_targets(build, TARGETS)
     if rc != 0:
         print("  CONTROL FAILED: the private build failed (a compile error is not RED)")
@@ -378,7 +558,7 @@ def run_control(name, workdir, shared_before):
 
     # The recompile is made unconditional, so the restored verdict cannot be
     # a stale mutated object being reused (see force_rebuild's note).
-    force_rebuild(build)
+    force_rebuild(build, owned=owned)
     rc, _ = build_targets(build, TARGETS)
     if rc != 0:
         print("  CONTROL FAILED: the restored build failed")
@@ -402,42 +582,47 @@ def run_control(name, workdir, shared_before):
     return bool(ok)
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--control", default="all",
                     choices=sorted(CONTROLS) + ["all"])
     ap.add_argument("--workdir", default=None,
-                    help="private scratch directory (default: a "
-                         "tmp-bumpenv-controls sibling of the game checkout, "
-                         "outside both repos and outside %TEMP%)")
-    args = ap.parse_args()
+                    help="private scratch directory to CREATE; it must not exist "
+                         "yet (default: a fresh tmp-bumpenv-controls-<token> "
+                         "sibling of the game checkout, outside both repos and "
+                         "outside %TEMP%)")
+    ap.add_argument("--keep", action="store_true",
+                    help="keep the owned scratch directory and print its path")
+    args = ap.parse_args(argv)
 
     if not (TOOLKIT / "CMakeLists.txt").is_file():
         print(f"not a toolkit checkout: {TOOLKIT}", file=sys.stderr)
         return 2
 
-    if args.workdir:
-        workdir = Path(args.workdir).resolve()
-        workdir.mkdir(parents=True, exist_ok=True)
-    else:
-        # NOT tempfile.mkdtemp(): MSBuild refuses to trust an incremental build
-        # under %TEMP% (MSB8029), and a build it will not trust incrementally is
-        # exactly how a stale mutated object survives a restore.
-        workdir = (GAME.parent / "tmp-bumpenv-controls").resolve()
-        workdir.mkdir(parents=True, exist_ok=True)
-    for root in (GAME, TOOLKIT):
-        if workdir == root or root in workdir.parents:
-            print(f"refusing to work inside a repo: {workdir}", file=sys.stderr)
-            return 2
-    temp_root = Path(tempfile.gettempdir()).resolve()
-    if workdir == temp_root or temp_root in workdir.parents:
-        print(f"refusing to work under the temporary directory: {workdir}\n"
-              f"  MSBuild will not trust an incremental build there (MSB8029), "
-              f"which can leave a stale object behind a restore.",
-              file=sys.stderr)
+    try:
+        owned = acquire_work_area(args, GAME, TOOLKIT)
+    except WorkAreaRefused as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
         return 2
-    print(f"private scratch directory: {workdir}")
+    print(f"private scratch directory: {owned.path}")
 
+    keep = args.keep
+    try:
+        try:
+            return _run_controls(args, owned)
+        except HarnessError as exc:
+            print(f"\nHARNESS ERROR: {exc}", file=sys.stderr)
+            print("This is a bug in the harness, not a verdict about the product: "
+                  "no RED/GREEN claim from this run is sound.", file=sys.stderr)
+            # Keep the tree: the diagnosis needs the copies and build logs.
+            keep = True
+            return 3
+    finally:
+        owned.release(keep)
+
+
+def _run_controls(args, owned):
+    workdir = owned.path
     shared_before = production_hashes()
     print("\nshared toolkit production files, BEFORE:")
     for rel, h in shared_before.items():
@@ -445,14 +630,8 @@ def main():
 
     names = sorted(CONTROLS) if args.control == "all" else [args.control]
     ok = True
-    try:
-        for name in names:
-            ok &= run_control(name, workdir, shared_before)
-    except HarnessError as exc:
-        print(f"\nHARNESS ERROR: {exc}", file=sys.stderr)
-        print("This is a bug in the harness, not a verdict about the product: "
-              "no RED/GREEN claim from this run is sound.", file=sys.stderr)
-        return 3
+    for name in names:
+        ok &= run_control(name, workdir, shared_before, owned)
 
     shared_after = production_hashes()
     print("\nshared toolkit production files, AFTER:")
