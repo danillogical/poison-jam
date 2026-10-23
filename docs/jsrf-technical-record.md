@@ -8045,7 +8045,13 @@ texture matrices (step 6).
 as a NOP (the interpreter's identity swizzle is 0x1B, not 0xE4). The walk admits
 vertex-array offsets only for attributes 0–5, 9 and 10.
 
-**State.** D4 step 5 is DONE locally. Nothing is pushed: toolkit 3 ahead, game 15 ahead
-once this record is committed. Publication waits on the owner's confirmation, with audits,
-toolkit first, then game. Steps 6 (texgen/texture matrices) and 7 (records and pushes), D5
-and the optional step 8 remain.
+**State.** D4 step 5 is DONE and published on the owner's confirmation (2026-10-23), toolkit
+first, then game. The outgoing ranges were audited per repository before the push: game
+`origin/master..HEAD` was 54 blobs (largest 627,433 bytes) and toolkit `origin/main..HEAD` 10 blobs
+(largest 274,770 bytes), zero secret-pattern hits in both, and no asset, save, generated retail code,
+corpus or oversized path. Steps 6 (texgen/texture matrices) and 7 (records), D5 and the optional
+step 8 remain.
+
+PUSHED_TO: origin / BRANCH: main / COMMIT: d9153fd55b89954ae9ce3fc567e377388c4266d6 / REMOTE_URL: https://github.com/danillogical/xboxrecomp.git / RESULT: fast-forward b06bd36..d9153fd; D4 step-4 modes 6/7 implementation and its q/binding repair (2a3c1e9, 5e38bb4, d9153fd), 10 audited blobs, zero secrets; upstream and nworkers push URLs remain DISABLED.
+
+PUSHED_TO: origin / BRANCH: master / COMMIT: 87c6eb3c16f75191bf08f89c46b0cc1c0d658672 / REMOTE_URL: https://github.com/danillogical/poison-jam.git / RESULT: fast-forward 3a3879f..87c6eb3; D4 step-4 records and gates, the step-5 gate f708c39 and its records, 54 audited blobs, zero secrets, no forbidden or oversized paths.

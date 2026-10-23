@@ -211,8 +211,8 @@ destinations sample their 2D base, and no CPU fallback for modes 8..31. No runti
 made, so no in-game bump claim. On 2026-10-23 the owner retired OMP and the omp-bridge for
 this work; step 5 was driven by Claude Code subagents one at a time under the owner's
 direct authorization, with orchestrator gating, and the OMP allowance accounting above no
-longer governs. Nothing is pushed (toolkit 3 ahead, game 15 ahead); publication waits on
-owner confirmation, audits first, toolkit then game. Next: step 6 (texgen/texture
+longer governs. Published 2026-10-23 on the owner's confirmation after audits, toolkit
+`d9153fd` then game `87c6eb3` (receipts in TR §31.82). Next: step 6 (texgen/texture
 matrices), then step 7 (records and pushes), D5 and the optional owner-assisted step 8.
 
 ## Objective
@@ -502,7 +502,7 @@ already approved steps:
    conditional step-6 criterion is met but step 6 still waits for bump and its
    gate. BUMPENVMAP steps 4/5 are done locally (TR §§31.75–31.82): the modes 6/7
    implementation and its committed-stream CPU/Vulkan gate, with five limitations
-   ledgered; nothing is pushed. Next is step 6 (texgen/texture matrices); in-game
+   ledgered; published (TR §31.82). Next is step 6 (texgen/texture matrices); in-game
    confirmation waits for the optional owner-assisted step 8. No texgen implementation
    is accepted yet.
 6. **D5:** plan applicable items as separate gated steps, with a different test
