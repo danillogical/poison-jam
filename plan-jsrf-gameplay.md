@@ -186,6 +186,19 @@ with a supplied `platform` source and does not execute a non-Windows CMake graph
 that branch remains source-inspected. Full step 5 is still a separate,
 differently-authored gate and is not started, and its normal allowance is not renewed.
 
+**Codex accepted the bounded cleanup repair (TR §31.81):** sole ACCEPT
+`dec_0mvkhiiu73f9b2c5a25ae3c9f` closes `op_0mvkd50m8ba933c7b3a87dd1a` under
+`run_0mvkd2iugf018a7ecc0c8ff52`. Codex's original actual-helper replacement/junction
+probes preserve all sentinels, the old helper fails four semantic cases versus
+final17/17 with no skips, and all ten focused CTests pass independently in12.30s.
+The retained final full suite is172/172529.14s. This accepts fixture/control-tool
+correctness within its sequential contract; the complete committed-stream/formula/
+CPU+Vulkan pixel gate is still step5, so no feature publication or D4/D5 completion.
+All candidate commits stay local and unpushed. Cumulative D4 remains11operations/
+6historicalrepair allowances, zero normal slots/zero repair cycles; no allowance
+is renewed by successful acceptance. Next: obtain one bounded normal-operation
+allowance for the separate fullstep5 gate, preserving current model settings.
+
 ## Objective
 
 A playable opening-area slice on a **native Vulkan build with no code translated or compiled at run

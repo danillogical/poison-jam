@@ -7893,3 +7893,47 @@ allowances**, **zero normal slots, zero repair cycles**. No refund, extension or
 new run; the preflight 9/5 stays separate; every earlier run and sole decision is
 preserved; the commits remain local and unpushed. Report:
 `logs/reports/d4-step4-rebuild-ownership-repair-2026-10-22.md`.
+
+### 31.81 — Codex independently accepts the bounded cleanup repair
+
+Sole ACCEPT `dec_0mvkhiiu73f9b2c5a25ae3c9f` closes operation
+`op_0mvkd50m8ba933c7b3a87dd1a`, run `run_0mvkd2iugf018a7ecc0c8ff52`.
+Own complete review: `logs/reports/d4-step4-cleanup-codex-acceptance-2026-10-22.md`.
+Both origins fetched, clean game31321ee (ahead12) and toolkitd9153fd (ahead3),
+owner forks and disabled upstream/nworkers pushes verified. The initial game
+fetch connection reset was resolved by one successful bounded retry. Bridge tools
+briefly disappeared then returned before the sole decision; no alternative
+journal mutation, duplicate review or operation was used. Actual parent/worker
+routes are configured workbuddy-ai/deepseek-v4.1-flash-sg/high without substitution.
+
+Codex reran its original actual-helper probe: an existing root is refused intact,
+root release and forced rebuild both refuse a replacement directory, and an actual
+Windows junction target is refused with link and foreign sentinel preserved.
+Codex separately ran the final seventeen ownership cases on the committed old
+helper and final helper: old exits1 with four semantic failures; final17/17 OK,
+no skips. Intact-identity stamp cleanup and ordinary fresh-owned forced rebuild
+positive controls still pass. The LF Git blob and CRLF Windows receipt were
+verified text-identical after Codex corrected an initial raw-hash assertion.
+Own probe data only; no real user directory or source was offered for removal.
+
+Independent focused CTest10/10 in12.30s includes actual WSL compilation/all five
+CPU cases, the seventeen ownership cases and real llvmpipe q/luminance/projection/
+binding witnesses. Retained full limited CTest172/172529.14s, guarded build,
+just-check126/126 corpus and both fresh-scratch private q-divide/bind-guard named
+RED/restoredGREEN controls were inspected, not rerun in full by Codex. Current
+runtime exe/collector/XBE hashes independently match the carried strict smoke;
+no new bump batch, gameplay, fidelity or horizon claim follows.
+
+The acceptance is limited to the bounded repair. Current ownership and exact
+targets are validated before forced cleanup; failed stamping uses recorded root
+identity. Arbitrary concurrent path swaps remain outside the sequential contract.
+Nested junction behavior relies on this runtime's observed removal semantics.
+Native source compilation is measured on WSL, not a Mac or a non-Windows CMake
+graph. Fullstep5's independent committed-stream/formula/CPU+Vulkan pixel gate,
+signed bump inputs, cube/volume and rect remap remain pending. No feature
+publication, D4 or D5 completion. All outgoing candidate commits remain local.
+
+Cumulative D4 is11operations/6historicalrepair allowances, zero normal slots/zero
+repair cycles; preflight9/5 remains separate. Successful acceptance renews no
+allowance. The next fullstep5 gate needs one newly authorized normal operation;
+do not silently start a new run or change human-owned model/provider/role settings.
