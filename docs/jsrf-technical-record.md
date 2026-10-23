@@ -7458,7 +7458,13 @@ instruction: toolkit `2a3c1e9` (modes 6/7) and `5e38bb4` (`stage_ge6` bucket com
 `0ccd335` (test/mutant rebase and records), `270279b` (stage-0 fallback fixture and record
 corrections) and `08103d7` (durable-tree smoke receipt). They stay unpushed until step 5's
 different-author deciding gate and Codex acceptance; their absence from origin is intended, not a
-lost or failed push. The `PUSHED_TO:` line above belongs to the earlier blocked-checkpoint commit.
+lost or failed push. The outgoing range was audited per repository rather than over the whole history:
+game `origin/master..HEAD` is 22 blobs with a 593,731-byte largest blob and toolkit `origin/main..HEAD`
+is 20 blobs with a 274,770-byte largest blob, both well under the 100 MB limit, and
+`scripts/secret-audit.py` over exactly those blobs reports `TOTAL HITS: 0` for each. (A whole-history
+scan for comparison reports two `openssh_key` hits, both literal pattern text inside
+`scripts/secret-audit.py` and one old review document quoting it, in no outgoing commit.) No asset,
+save, generated retail code or corpus blob is in either range. The `PUSHED_TO:` line above belongs to the earlier blocked-checkpoint commit.
 
 ### §31.76 D4 step 4 repair: the bump coordinate stops dividing by texture q, and the binding predicate becomes the sampled-mode set (2026-10-22)
 
@@ -7481,7 +7487,7 @@ while q=2 selected `(3,2)` (96/64/5). The repair adds the delta to the stage's o
 to the exact set `{1,2,3,6,7}`.
 
 **Focused different-author gate.** New game tests `tests/test_bumpenv_q_cpu.c`,
-`tests/test_bumpenv_q_vk.c` and `tests/bumpenv-q-private-control.py`, authored by a worker distinct from
+`tests/test_bumpenv_q_vk.c` and `scripts/bumpenv-q-controls.py`, authored by a worker distinct from
 both the production author and the primary. Expectations are hand-derived from a gate-defined 8x8
 linear gradient (R identifies x, G identifies y), with `sign3` deltas `du = 104/127`, `dv = 48/127` and
 `lum = 64/255`: zero matrix → `(6,4)` = `0xFF8038B0`; matrix `[-0.25,0.125,0.125,0.5]` → `(5,4)` =
