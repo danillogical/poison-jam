@@ -7564,3 +7564,63 @@ different-author focused gate, its `OBJECT_DEPENDS` registration and the private
 the records commit that carries this section. They stay unpushed until step 5's different-author
 deciding gate and independent Codex acceptance; their absence from origin is intended, not a lost or
 failed push.
+
+### 31.77 — Codex confirms the production repair; rejects two new fixture/tool defects
+
+Codex independently reviewed operation `op_0mvk3sc0ufb39663d99cd2f3a` under
+`run_0mvk3qrksee43402c8979f9fe`, fetched both origins and verified clean local
+game `0a1ba973bda33e22a7bbff7085421df057e6d048` (ahead7) and toolkit
+`d9153fd55b89954ae9ce3fc567e377388c4266d6` (ahead3), with owner-fork origins
+and toolkit upstream/nworkers pushes disabled. Nothing was pushed.
+
+The q/binding production repair is sound within its measured scope. Codex rebuilt
+its own actual-production CPU probe: all four mode6/7 q1/q2 literal-RGB rows now
+pass and all 18 legal stage1..3 bump methods remain admitted. Codex reran all
+eight focused Windows cases, 8/8 in1.46s; the actual Vulkan driver is pinned
+llvmpipe LLVM23.1.2. Bump q1/q2, displacement, luminance, PROJECT2D projection and
+the exact sampled binding membership are witnessed by actual pixels/state.
+The CPU half still uses a direct-helper seam; this is not the full committed-
+stream pixel gate. The retained 170/170,550.19s suite/checker receipts were
+inspected, not independently repeated in full. The strict smoke reaches no bump
+batch and carries no bump/fidelity claim. Actual configured parent and both
+workers use workbuddy-ai/deepseek-v4.1-flash-sg/high without observed substitution.
+
+**R3, reproduced portability regression.** The new CPU fixture is inside
+BUILD_TESTING/XBR_VULKAN_FOUND without a WIN32 guard, but its source explicitly
+emits `#error` off Windows. WSL GCC preprocessing with the actual fixtures-only
+template include and forced compatibility header exits1 at that directive.
+The supported Vulkan-enabled macOS fixtures-only build therefore encounters the
+same explicit refusal; no Mac run is claimed. A Windows-only G1 configure does
+not test this host condition. Prefer an actual native build/run of the helper
+with the artificial refusal removed; otherwise document and guard a demonstrated
+remaining host dependency rather than declaring a green portable gate.
+
+**R4, reproduced scratch-data deletion.** The new manual mutation helper accepts
+an existing explicit/default root, then removes its existing toolkit-<control>
+child without establishing ownership. Codex's actual-main-path probe created a
+harmless pre-existing child/sentinel and stopped before toolkit copying/building;
+the helper had already deleted both. No user data was probed or removed. Repair
+must validate paths before mutation, use fresh owned roots or verified ownership,
+preserve existing roots/children on refusal and refuse cleanup after ownership or
+resolved identity changes. The existing pbcov helper's ownership contract is the
+local reference. These findings concern new gate tooling, not the production
+q/binding formulas.
+
+Sole STOP decision `dec_0mvkahpy93eec0dd14c7fb9a8`; own detailed assessment,
+concrete advice, required safety/native/Windows/control checks and stopping
+condition: `logs/reports/d4-step4-fixture-safety-codex-review-2026-10-22.md`.
+Deciding probes: `logs/reports/codex-bump-repair-review.py`/`.log`, artifacts
+`codex-bump-repair-review-0scdnjam`. Shared executor/HLSL/backend bytes remained
+unchanged. No production redesign, texgen, full step5 or push is authorized by
+this bounded repair.
+
+**Accounting correction and next admission.** The earlier review-confirmed
+allowance was granted by Codex under the skill's reset rule, not by a new human
+repair instruction as §31.76's wording says. This NEW independently confirmed
+review permits renewal of only one exhausted repair allowance, carrying the one
+remaining normal slot and adding no operation slot. The linked successor's first
+repair consumes both even if the bridge counts a first turn: cumulative D4 after
+admission10operations/5historical repair allowances, zero normal slots/zero repair
+cycles. Full step5 remains a separate pending gate with no automatic normal-slot
+renewal. Preserve all earlier runs and their sole decisions; preflight accounting
+stays separate. Candidate commits remain local and unpushed.

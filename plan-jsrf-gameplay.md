@@ -103,6 +103,23 @@ repair allowance (the grant is the owner's repair-packet instruction for this op
 asserted here), so the D4 allowance is now **one normal operation and zero repair cycles**, with no
 slot refunded or added. No D4 or D completion.
 
+**Codex review of that repair (TR §31.77):** the production q/binding fixes pass
+Codex's freshly rebuilt actual-CPU probe and all eight focused Windows tests,
+including llvmpipe pixels and binding-state witnesses. The candidate is still
+rejected for two new test-tool defects: the CPU fixture is registered off Windows
+but explicitly emits a non-Windows `#error` (reproduced with WSL GCC), and the
+manual control helper deletes a pre-existing scratch child without ownership
+(reproduced using a harmless Codex-created sentinel). Sole STOP decision
+`dec_0mvkahpy93eec0dd14c7fb9a8` closes operation `op_0mvk3sc0ufb39663d99cd2f3a`;
+the concrete bounded repair advice is in
+`logs/reports/d4-step4-fixture-safety-codex-review-2026-10-22.md`. The next packet
+repairs only these fixture/tool issues, preserving production and local history.
+The skill-confirmed NEW review renews one exhausted repair allowance and carries
+the one remaining normal slot, adding no operation slot. Its admission will spend
+both: cumulative D4 **10 operations / 5 historical repair allowances**, then
+**zero normal slots / zero repair cycles**. Full step 5 remains pending and cannot
+silently take a fresh normal allowance. No feature publication or completion.
+
 ## Objective
 
 A playable opening-area slice on a **native Vulkan build with no code translated or compiled at run
