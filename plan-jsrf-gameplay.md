@@ -151,6 +151,36 @@ operation slot and one repair allowance; its admission yields cumulative D4
 **11 operations / 6 historical repair allowances, zero normal slots / zero repair
 cycles**. Full step 5 remains pending; its normal allowance is not renewed.
 
+**Forced-cleanup ownership repaired (TR §31.80, report
+`logs/reports/d4-step4-rebuild-ownership-repair-2026-10-22.md`):** the deciding path
+from §31.79 is closed in the existing helper, with no production change. Before the
+first removal, `force_rebuild` now requires a supplied ownership proof (`owned=None`
+is a named refusal, not a bypass), requires `_still_owned()` to hold now — the
+replaced-identity/changed-marker case root release already refused — and validates
+every exact deletion target, so a `*.dir` that is a symlink or junction is refused
+rather than followed and each target must resolve inside the valid owned root. All
+targets are planned and validated before any `rmtree`/`unlink`, a removal `OSError`
+becomes a `HarnessError` that keeps its path and message, and a genuinely owned fresh
+root still gets the same recursive `*.dir` removals, exe/SPIR-V unlinks and identical
+printout. The sequential invariant is stated, not race freedom. The existing
+ownership module now has fifteen cases: the replaced-root/foreign-marker/sentinel,
+missing-proof and redirected-junction cases fail against the pre-repair helper on
+outcome (the replacement's sentinel, exe and `.dir` were all gone) and pass now,
+the junction case is not skipped on this host, and the eleven earlier cases and a
+normal fresh-owned control are retained. Windows: focused 10/10 in 11.16 s with the
+real llvmpipe device and WSL compile/link witnesses, both private controls RED on
+named assertions then GREEN from their own fresh owned roots with distinct
+baseline/mutated/restored hashes and byte-identical shared toolkit hashes, guarded
+build 59 targets / 172 tests, full limited CTest **172/172 in 531.64 s** on the
+final tree (564.95 s on the same source before the last prose edit), `just check`
+green with `entries=126 recompiled_and_matched=126`. The strict smoke is carried on
+matching runtime identity (`jsrf_recomp.exe ca550e78…`, `jsrf_collect.exe cb90b7e3…`,
+`game/default.xbe fd190557…`); it says nothing about bump sampling. The portability
+test's own prose now states what it actually does — it compiles parsed source lists
+with a supplied `platform` source and does not execute a non-Windows CMake graph, so
+that branch remains source-inspected. Full step 5 is still a separate,
+differently-authored gate and is not started, and its normal allowance is not renewed.
+
 ## Objective
 
 A playable opening-area slice on a **native Vulkan build with no code translated or compiled at run

@@ -29,10 +29,12 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import inspect
+import io
 import os
 import pathlib
 import secrets
 import shutil
+import subprocess
 import sys
 import tempfile
 import types
@@ -338,6 +340,223 @@ class WorkdirOwnershipTest(unittest.TestCase):
         finally:
             if owned.path.exists():
                 shutil.rmtree(owned.path, ignore_errors=True)
+
+    # ── force_rebuild: the ownership proof must hold before ANY removal ─────
+    #
+    # force_rebuild recursively removes each focused `*.dir`, the focused
+    # executables and the generated SPIR-V, so it needs the same proof final
+    # root release uses. These cases hand it disposable owned trees only.
+
+    @staticmethod
+    def force_rebuild_error(module, build, owned):
+        """Call force_rebuild; return the exception it raised, or None."""
+        try:
+            module.force_rebuild(build, owned=owned)
+        except Exception as exc:  # the exception TYPE is the assertion
+            return exc
+        return None
+
+    @staticmethod
+    def owned_area(module, root, name="owned"):
+        """A fresh, stamped, disposable owned work area."""
+        args = types.SimpleNamespace(workdir=str(root / name), keep=False)
+        return module.acquire_work_area(args, GAME, TOOLKIT)
+
+    @staticmethod
+    def focused_tree(build, targets, label):
+        """The real deletion targets: `*.dir` trees, exes and SPIR-V."""
+        trees = {}
+        for t in targets:
+            tree = build / f"{t}.dir"
+            (tree / "nested").mkdir(parents=True, exist_ok=True)
+            (tree / "object.obj").write_text(f"{label} {t}\n", encoding="utf-8")
+            (tree / "nested" / "object.obj").write_text(
+                f"{label} {t}\n", encoding="utf-8")
+            (tree / "sentinel.txt").write_text(
+                f"{label} {t}\n", encoding="utf-8")
+            (build / "Release").mkdir(parents=True, exist_ok=True)
+            (build / "Release" / f"{t}.exe").write_text(
+                f"{label} {t}\n", encoding="utf-8")
+            trees[t] = tree
+        spirv = build / "xboxrecomp" / "src" / "video" / "spirv"
+        spirv.mkdir(parents=True, exist_ok=True)
+        for name in ("xbr_nv2a_vk_rc_vs.spv", "xbr_nv2a_vk_rc_ps.spv"):
+            (spirv / name).write_text(f"{label} {name}\n", encoding="utf-8")
+        return trees
+
+    def test_force_rebuild_refuses_a_replaced_owned_root(self):
+        """The defect: contains() stayed true after the root was replaced."""
+        module = load_helper(HELPER)
+        self.assertTrue(hasattr(module, "OwnedWorkArea"),
+                        "the helper must expose the ownership API")
+        with scratch_root() as root:
+            owned = self.owned_area(module, root)
+            build = owned.path / "build-bind-guard"
+            self.focused_tree(build, module.TARGETS, "original")
+            original_dir = build / f"{module.TARGETS[0]}.dir"
+            self.assertTrue((original_dir / "sentinel.txt").is_file())
+
+            # Move the genuinely owned root aside and put a DIFFERENT directory
+            # at the same pathname, holding a foreign marker and its own tree.
+            moved = root / "moved-aside"
+            owned.path.rename(moved)
+            replacement = owned.path
+            replacement.mkdir()
+            (replacement / MARKER_NAME).write_text(
+                "foreign owner\ntoken deadbeef\n", encoding="utf-8")
+            replacement_build = replacement / "build-bind-guard"
+            replacement_trees = self.focused_tree(
+                replacement_build, module.TARGETS, "replacement")
+            sentinel = replacement_trees[module.TARGETS[0]] / "sentinel.txt"
+            exe = (replacement_build / "Release"
+                   / f"{module.TARGETS[0]}.exe")
+            self.assertFalse(owned._still_owned(),
+                             "a replaced root is no longer owned")
+
+            error = self.force_rebuild_error(module, replacement_build, owned)
+            survived = (sentinel.is_file(), exe.is_file(),
+                        replacement_trees[module.TARGETS[0]].is_dir())
+            self.assertIsInstance(
+                error, module.HarnessError,
+                f"force_rebuild must refuse a replaced root with a named "
+                f"HarnessError, not delete the replacement's files; raised "
+                f"{error!r}; replacement sentinel/exe/dir present: {survived}")
+            text = str(error)
+            self.assertIn(str(owned.path), text,
+                          "the refusal must name the work area root")
+            self.assertTrue(
+                "ownership" in text or "no longer" in text
+                or "owned work area" in text,
+                f"the refusal must name the ownership failure: {text}")
+            self.assertTrue(sentinel.is_file(),
+                            "the replacement's sentinel must survive")
+            self.assertTrue(exe.is_file(),
+                            "the replacement's executable must survive")
+            self.assertTrue(replacement_trees[module.TARGETS[0]].is_dir(),
+                            "the replacement's object tree must survive")
+            self.assertTrue(moved.is_dir(),
+                            "the moved-aside original must be untouched")
+
+    def test_force_rebuild_without_an_ownership_proof_is_refused(self):
+        """owned=None must not be a bypass: no proof, no deletion."""
+        module = load_helper(HELPER)
+        with scratch_root() as root:
+            build = root / "unproven" / "build-bind-guard"
+            trees = self.focused_tree(build, module.TARGETS, "unproven")
+            sentinel = trees[module.TARGETS[0]] / "sentinel.txt"
+            exe = build / "Release" / f"{module.TARGETS[0]}.exe"
+
+            error = self.force_rebuild_error(module, build, None)
+            survived = (sentinel.is_file(), exe.is_file(),
+                        trees[module.TARGETS[0]].is_dir())
+            self.assertIsInstance(
+                error, module.HarnessError,
+                f"force_rebuild must refuse to clean without an ownership "
+                f"proof, not delete the targets; raised {error!r}; "
+                f"sentinel/exe/dir present: {survived}")
+            text = str(error)
+            self.assertTrue(
+                "no owned work area" in text or "ownership proof" in text,
+                f"the refusal must name the missing ownership proof: {text}")
+            self.assertIn("nothing was removed", text)
+            self.assertTrue(sentinel.is_file(), "nothing may be removed")
+            self.assertTrue(exe.is_file(), "nothing may be removed")
+            self.assertTrue(trees[module.TARGETS[0]].is_dir(),
+                            "nothing may be removed")
+
+    def test_force_rebuild_refuses_a_redirected_deletion_target(self):
+        """A `*.dir` junction/symlink to a foreign directory must be refused."""
+        module = load_helper(HELPER)
+        target = module.TARGETS[0]
+        with scratch_root() as root:
+            owned = self.owned_area(module, root)
+            build = owned.path / "build-bind-guard"
+            build.mkdir(parents=True)
+            foreign = root / "foreign"
+            foreign.mkdir()
+            sentinel = foreign / "sentinel.txt"
+            sentinel.write_text("foreign data\n", encoding="utf-8")
+            link = build / f"{target}.dir"
+            if os.name == "nt":
+                created = subprocess.run(
+                    ["cmd", "/c", "mklink", "/J", str(link), str(foreign)],
+                    capture_output=True, text=True)
+                if created.returncode != 0:
+                    self.skipTest(
+                        "this host cannot create a junction: "
+                        + (created.stderr or created.stdout).strip())
+            else:
+                try:
+                    os.symlink(foreign, link, target_is_directory=True)
+                except (OSError, NotImplementedError) as exc:
+                    self.skipTest(f"this host cannot create a directory "
+                                  f"symlink: {exc}")
+            # A real second target the call must not reach either.
+            other = self.focused_tree(
+                build, [module.TARGETS[1]], "redirect")
+            other_tree = other[module.TARGETS[1]]
+
+            error = self.force_rebuild_error(module, build, owned)
+            followed = sorted(p.name for p in foreign.iterdir())
+            self.assertIsInstance(
+                error, module.HarnessError,
+                f"force_rebuild must refuse a redirected `{target}.dir` with a "
+                f"named HarnessError, not follow it; raised {error!r}; foreign "
+                f"contents: {followed}; sentinel present: {sentinel.is_file()}")
+            self.assertIn(str(link), str(error),
+                          "the refusal must name the offending target")
+            self.assertTrue(sentinel.is_file(),
+                            "the foreign sentinel must survive")
+            self.assertEqual(sentinel.read_text(encoding="utf-8"),
+                             "foreign data\n",
+                             "the foreign directory must not be modified")
+            self.assertTrue(link.is_symlink()
+                            or getattr(link, "is_junction", lambda: False)(),
+                            "the link itself must be left in place")
+            self.assertEqual(followed, ["sentinel.txt"],
+                             "the foreign directory must be left exactly as it "
+                             "was: no target may be followed into it")
+            self.assertTrue(other_tree.is_dir(),
+                            "a refusal must happen before the first removal")
+
+    def test_force_rebuild_removes_only_the_owned_focused_targets(self):
+        """The normal fresh-owned path must keep working, exactly as before."""
+        module = load_helper(HELPER)
+        self.assertTrue(hasattr(module, "OwnedWorkArea"),
+                        "the helper must expose the ownership API")
+        with scratch_root() as root:
+            owned = self.owned_area(module, root)
+            build = owned.path / "build-bind-guard"
+            trees = self.focused_tree(build, module.TARGETS, "fresh")
+            spirv = build / "xboxrecomp" / "src" / "video" / "spirv"
+            sibling = root / "sibling"
+            sibling.mkdir()
+            sibling_sentinel = sibling / "sentinel.txt"
+            sibling_sentinel.write_text("not mine\n", encoding="utf-8")
+
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                result = module.force_rebuild(build, owned=owned)
+
+            self.assertIsNone(result, "the fresh-owned call returns normally")
+            for t in module.TARGETS:
+                self.assertFalse(trees[t].exists(),
+                                 f"{t}.dir must be removed recursively")
+                self.assertFalse((build / "Release" / f"{t}.exe").exists(),
+                                 f"{t}.exe must be removed")
+            self.assertEqual(sorted(p.name for p in spirv.iterdir()), [],
+                             "the generated SPIR-V must be removed")
+            printed = out.getvalue()
+            self.assertIn("forced recompile: removed", printed,
+                          "the existing printout must be preserved")
+            for t in module.TARGETS:
+                self.assertIn(f"{t}.dir/", printed)
+                self.assertIn(f"{t}.exe", printed)
+            self.assertIn("xbr_nv2a_vk_rc_vs.spv", printed)
+            self.assertTrue(sibling_sentinel.is_file(),
+                            "a file outside the owned root must survive")
+            self.assertEqual(sibling_sentinel.read_text(encoding="utf-8"),
+                             "not mine\n")
 
 
 if __name__ == "__main__":

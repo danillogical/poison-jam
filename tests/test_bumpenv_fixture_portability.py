@@ -10,10 +10,14 @@ link failure is a FAILURE of this test with the compiler's own output, never a
 skip.
 
 On Windows the compiler is the WSL GCC (``wsl -e bash -lc 'command -v gcc'``):
-a real Linux build, not a simulation, and the same ``if(NOT WIN32)`` CMake
-branch a macOS or Linux host takes.  The macOS registration is therefore
-exercised by the same shipped CMake branch, but no Mac run is claimed by this
-file -- only the host this test runs on is actually compiled.
+a real Linux build, not a simulation.  What it decides is the FIXTURE's
+portability, not CMake's: this file parses the shipped source list and
+registration out of ``CMakeLists.txt``, supplies the ``platform`` translation
+unit itself (see ``PLATFORM_SOURCE`` below), and invokes the compiler directly.
+It does NOT configure or build a non-Windows CMake target graph, so it cannot
+detect a broken ``if(NOT WIN32)`` branch in CMake -- that branch is verified by
+source inspection only.  No Mac run is claimed by this file; only the host this
+test runs on is actually compiled.
 
 The only skip is "no POSIX compiler exists at all", which is reported as a
 skip naming exactly what is missing; a skip is never a pass.

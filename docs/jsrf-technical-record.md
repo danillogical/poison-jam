@@ -7770,3 +7770,111 @@ slot plus one repair allowance for this bounded cleanup repair. Its admission
 consumes both: cumulative D4 **11operations/6historicalrepair allowances**, then
 **zero normal slots/zero repair cycles**. Fullstep5/later texgen normal allowances
 are not renewed. Preserve all earlier sole decisions and separate preflight9/5.
+
+### 31.80 — Forced cleanup now requires current ownership and exact targets
+
+Bounded test-tool repair under run `run_0mvkd2iugf018a7ecc0c8ff52`, closing the
+deciding path of §31.79. No production change: the R1/R2 rendering repair, the
+portable CPU fixture and the scratch-root ownership contract are untouched, and
+the shared toolkit stayed byte-identical (`b87f0ad0…`, `313509a3…`, `d13cbb54…`
+before and after). One configured gate-tool worker (`BumpFocusedGate`) owned the
+helper's cleanup checks and the focused additions to the existing ownership
+module; the primary owned the independent reproduction, every Windows validation
+run and this record. No model, provider, effort, role or fallback change.
+
+**The defect, reproduced by the primary before any edit.** `force_rebuild` ran
+`owned.contains(build_dir)` — a lexical containment test against the original
+root pathname — and then removed each focused `*.dir` recursively plus the
+executables and generated SPIR-V. Move the owned root aside and put a different
+directory at the same pathname holding a foreign marker and a focused build tree,
+and containment still held while identity and marker no longer did. With the
+pre-repair helper preserved as `logs/d4step4g/prerepair-bumpenv-q-controls.py`
+(sha256 `7e9ae9ac…`), the primary's own probe through the real `acquire_work_area`
+and `force_rebuild` reported
+`{"refused": false, "still_owned": false, "release_removed_root": false,
+"sentinel_survives": false, "dir_survives": false, "exe_survives": false}`: root
+release refused the replacement while forced cleanup deleted its `.dir`, sentinel
+and executable. Only disposable probe data was involved.
+
+**Repair.** `force_rebuild` now, in order and before the first removal: refuses a
+missing ownership proof (`owned=None` is a named `HarnessError`, no longer a
+bypass); refuses when `_still_owned()` is false, naming the root and the changed
+identity/path/marker; keeps the containment check; plans every exact deletion
+target (each `*.dir`, each focused `.exe`, each `xbr_nv2a_vk_rc_*`); refuses a
+recursive target that is itself a symlink or Windows junction instead of following
+it; resolves every target and refuses one that lands outside the valid owned root;
+and only then removes. A removal `OSError` becomes a `HarnessError` carrying the
+path and message, so a failed cleanup keeps its diagnosis instead of a traceback.
+A genuinely owned fresh root gets exactly the previous removals, the same
+`forced recompile: removed …` line and the same return. The docstring now says the
+cleanup removes private `*.dir` trees recursively and calls this a sequential
+invariant, not race freedom. The module's ownership paragraph no longer claims
+nothing inside the root is ever removed.
+
+**Regression, and that it decides the defect.** The existing
+`tests/test_bumpenv_controls_workdir.py` gained four cases and three helpers; the
+eleven earlier cases are unchanged. Against the pre-repair helper it is
+`Ran 15 tests … FAILED (failures=3)`: the replaced-root case reports `None` rather
+than a `HarnessError` with the replacement's sentinel, exe and `.dir` all absent
+(`(False, False, False)`); the missing-proof case the same; the junction case
+raises a bare `OSError('Cannot call rmtree on a symbolic link')` from Python's own
+removal routine rather than the named refusal. The fourth case is the
+no-regression control and passes on both. On the repaired helper it is
+`Ran 15 tests … OK` with no skips — the junction case really creates a `mklink /J`
+here — and the primary's probe now reports
+`{"refused": true, "still_owned": false, "sentinel_survives": true,
+"dir_survives": true, "exe_survives": true}` with the refusal naming
+`ownership proof failed for the work area …`.
+
+**Receipts on the settled tree.** Focused Windows 10/10 in 11.16 s on the pinned
+software ICD with device `llvmpipe (LLVM 23.1.2, 256 bits) (type 4, api 1.4.354)`,
+including the WSL compile/link/run of the five CPU cases; the `vk_bump_q` verbose
+run shows `readbacks=1 rb_copies=1 validation_errors=0`. Both private controls ran
+from their own fresh owned roots and each was `RESULT: PASS`, exit 0: `q-divide`
+RED on `bump q=2 selects the SAME hand-derived texel (no PROJECT2D divide)` (three
+CPU cases) and `mode7 q=2 R is the same texel and the same luminance` plus the two
+Vulkan texel assertions, with `project2d_control` GREEN under the mutation; then
+all six GREEN after restore. `bind-guard` RED on `mode 4 must not upload its stage
+texture` and `mode 5 must not upload its stage texture`, then GREEN on
+`vk_bind_witness`. Baseline/mutated/restored executable hashes differ in both
+runs (`2baffb0c…`/`38bd2d77…`/`59530e2a…` CPU and
+`6fd245f8…`/`b07d32df…`/`20da1806…` VK for `q-divide`; `be43e724…`/`2ff23d66…`/
+`cb7eb065…` and `a5f50c42…`/`c41033fb…`/`ab443721…` for `bind-guard`), so neither
+verdict can be a stale binary, and the forced rebuild printed the recursive
+`*.dir/` removals before every build. Guarded build exit 0, 59 targets / **172**
+tests derived, corpus 128/126 unchanged. Full limited CTest **172/172 in 531.64 s**,
+exit 0, re-run after the last prose edit; the earlier run on the same source was
+172/172 in 564.95 s. `just check` green including `entries=126 recompiled_and_matched=126
+ascending=yes duplicates=0 xbe_distinct=126 problems=0`.
+
+**Scope claims corrected.** `tests/test_bumpenv_fixture_portability.py` now states
+what it decides: it parses the shipped source list and registration, supplies the
+`platform` translation unit itself and invokes a real POSIX compiler, so it
+compiles the fixture's sources but does **not** configure or build a non-Windows
+CMake target graph — that `if(NOT WIN32)` branch is source-inspected only. The
+earlier prose claiming it exercised the CMake branch is corrected; no new CMake
+harness was added.
+
+**Limits.** The strict smoke was **carried, not rerun**, on verified identical
+runtime identity (`jsrf_recomp.exe ca550e78…`, `jsrf_collect.exe cb90b7e3…`,
+`game/default.xbe fd190557…`, all matching run
+`20261022-173449-960-d4step4q-repair-smoke`): bounded launch and
+executor-registration liveness only, reaching no bump batch, so no fidelity claim
+follows. The cleanup invariant is sequential: validation and removal are separate
+steps and a directory swapped between them is not detected; no race freedom is
+claimed. Only the deletion target itself is validated; a junction nested deeper
+inside a `*.dir` tree is not separately checked, and the measured reason that is
+not a foreign-deletion path here is Python's own behaviour: `shutil.rmtree` removes
+such a junction entry rather than descending into its target (probed directly — the
+foreign sentinel survived and the tree was removed). That is a measured
+observation about this runtime, not a guarantee about every future one. Full step 5
+remains pending and unclaimed, with signed bump inputs, cube/volume textures on a
+bump stage and rect-texture remap still open, and modes 8..31 and stage-3 cube
+still on the fallback.
+
+**Accounting.** This admission consumed the one renewed operation slot and the one
+renewed repair allowance: cumulative D4 **11 operations / 6 historical repair
+allowances**, **zero normal slots, zero repair cycles**. No refund, extension or
+new run; the preflight 9/5 stays separate; every earlier run and sole decision is
+preserved; the commits remain local and unpushed. Report:
+`logs/reports/d4-step4-rebuild-ownership-repair-2026-10-22.md`.

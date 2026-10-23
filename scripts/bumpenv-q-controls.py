@@ -41,9 +41,12 @@ exists at all (directory, file or symlink) is refused, untouched, with exit 2,
 and a fresh default root is created with `mkdir(exist_ok=False)`. The root is
 stamped with an ownership marker and its `(st_dev, st_ino)` identity, and it is
 removed only when that marker, the resolved path and the identity all still
-match. Nothing inside the root is ever `rmtree`d: a `toolkit-<control>/` or
-`build-<control>/` that already exists is a harness bug (exit 3), never a path
-to delete. `--keep` leaves the owned root in place and prints its path.
+match. No pre-existing `toolkit-<control>/` or `build-<control>/` is ever
+removed: one that already exists is a harness bug (exit 3), never a path to
+delete. The forced-recompile cleanup does remove the focused targets
+recursively, but only after the same ownership proof and an exact per-target
+resolution check, and never by following a link. `--keep` leaves the owned root
+in place and prints its path.
 
 Exit status: 0 when every requested control was RED then GREEN as required,
 1 when a control did not behave, 2 on a usage/setup error, 3 when the harness
@@ -294,6 +297,14 @@ def acquire_work_area(args, game, toolkit):
 TARGETS = ["jsrf_bumpenv_q_cpu_test", "jsrf_bumpenv_q_vk_test"]
 
 
+def _is_link(path):
+    """True for a symlink, or for a Windows junction (Python 3.12+)."""
+    if path.is_symlink():
+        return True
+    is_junction = getattr(path, "is_junction", None)
+    return bool(is_junction and is_junction())
+
+
 def force_rebuild(build_dir, targets=TARGETS, owned=None):
     """Delete the focused targets' objects and executables before a build.
 
@@ -306,23 +317,46 @@ def force_rebuild(build_dir, targets=TARGETS, owned=None):
     disables under %TEMP%). Removing the objects makes the recompile
     unconditional, so a stale binary cannot masquerade as a RED or a GREEN.
 
-    Every deletion here is a file-level unlink inside the private build tree,
-    so the build directory must be inside the owned root first; anything else
-    is a harness bug, not a path to clean.
+    The cleanup is NOT a set of file-level unlinks: every focused `*.dir` is a
+    private object tree and is removed RECURSIVELY, along with the focused
+    executables and the uber-shader's generated SPIR-V. So, before the first
+    removal, this function requires a supplied ownership proof whose current
+    identity, resolved path and ownership marker still match -- ``owned=None``
+    is a refusal, not a bypass -- keeps the build directory inside that root,
+    and checks EVERY exact deletion target: a `*.dir` that is itself a
+    symlink/junction, or any target that resolves outside the owned root, is a
+    harness bug, never a path to clean. All targets are validated first and
+    removed afterwards, so a refusal leaves every target intact.
+
+    That is a sequential invariant, not race freedom: validation and removal
+    are two steps, and a directory swapped in between them is not detected. A
+    failed proof is never compensated for with unconditional removal.
     """
-    if owned is not None and not owned.contains(build_dir):
+    if owned is None:
+        raise HarnessError(
+            f"refusing to clean {build_dir}: no owned work area was supplied, "
+            f"so there is no ownership proof for the deletion targets; "
+            f"nothing was removed")
+    if not owned._still_owned():
+        raise HarnessError(
+            f"refusing to clean {build_dir}: ownership proof failed for the "
+            f"work area {owned.path} -- it is no longer the directory this run "
+            f"created (its identity, resolved path or ownership marker "
+            f"changed); nothing was removed")
+    if not owned.contains(build_dir):
         raise HarnessError(
             f"refusing to clean {build_dir}: it is outside the owned work area "
             f"{owned.path}")
-    removed = []
+    # Plan every deletion FIRST, so the ownership checks below and the removals
+    # further down act on exactly the same paths. The order matches the
+    # original per-target removal order, so the printout is unchanged.
+    planned = []
     for t in targets:
         d = build_dir / f"{t}.dir"
-        if d.exists():
-            shutil.rmtree(d)
-            removed.append(d.name + "/")
+        if d.exists() or _is_link(d):
+            planned.append(("tree", d))
         for exe in (build_dir / "Release").glob(f"{t}.exe"):
-            exe.unlink()
-            removed.append(exe.name)
+            planned.append(("file", exe))
     # The uber-shader's SPIR-V is produced by xbr_add_spirv as a custom
     # command keyed on the HLSL's timestamp. A restored HLSL copied back with
     # `copy2` keeps the SHARED file's older mtime, so dxc would not rerun and
@@ -331,8 +365,40 @@ def force_rebuild(build_dir, targets=TARGETS, owned=None):
     # regeneration unconditional, exactly like deleting the test objects.
     spirv = build_dir / "xboxrecomp" / "src" / "video" / "spirv"
     for gen in sorted(spirv.glob("xbr_nv2a_vk_rc_*")):
-        gen.unlink()
-        removed.append(gen.name)
+        planned.append(("file", gen))
+
+    for kind, target in planned:
+        if kind == "tree" and _is_link(target):
+            raise HarnessError(
+                f"refusing to clean {target}: it is a symlink or junction, not "
+                f"a real directory inside the owned work area {owned.path}; "
+                f"nothing was removed")
+        try:
+            resolved = target.resolve()
+        except OSError as exc:
+            raise HarnessError(
+                f"refusing to clean {target}: it could not be resolved ({exc}); "
+                f"nothing was removed") from exc
+        if not owned.contains(resolved):
+            raise HarnessError(
+                f"refusing to clean {target}: it resolves to {resolved}, which "
+                f"is outside the owned work area {owned.path}; "
+                f"nothing was removed")
+
+    removed = []
+    for kind, target in planned:
+        try:
+            if kind == "tree":
+                shutil.rmtree(target)
+                removed.append(target.name + "/")
+            else:
+                target.unlink()
+                removed.append(target.name)
+        except OSError as exc:
+            raise HarnessError(
+                f"could not clean {target}: {exc}\n"
+                f"  the forced recompile did not complete, so no RED/GREEN "
+                f"verdict from this run is sound") from exc
     print("\nforced recompile: removed "
           + (", ".join(removed) if removed else "nothing (already absent)"))
 
