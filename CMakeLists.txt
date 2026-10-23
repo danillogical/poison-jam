@@ -554,6 +554,39 @@ if(BUILD_TESTING)
                        "layout, VEH guards and the commit consumer; the real-Vulkan pbcov cases "
                        "remain registered separately")
     endif()
+    # ── BUMPENVMAP / BUMPENVMAP_LUM, the committed-stream D4 step-5 deciding gate ────────────
+    # Authored by a worker distinct from the production change and from the step-4 focused
+    # gate. Real pushbuffer words through nv2a_submit_pending (RECOMP_PB_EXEC=1) drive the
+    # executor's method decoding, its CPU vertex-program interpreter and the production CPU
+    # rasteriser and sampler from the linked toolkit library; each pixel read back from the
+    # guest surface must equal a hand-derived literal (tests/bumpenv_stream_cases.h). The Vulkan
+    # half (jsrf_bumpenv_stream_vk_*, registered with the other Vulkan gates) replays the
+    # executor's own batch into the production vb_draw and checks the same literals. One
+    # process per case: the executor and the NV2A core are process-wide.
+    set(BUMPENV_STREAM_CASES
+        mode6_signed_du mode6_signed_dv mode6_asymmetric_matrix mode6_stage2_source
+        mode7_luminance mode7_saturation mode7_stage3_source
+        bump_q_ignored project2d_q_divides
+        refusal_dot_modes refusal_cube_mode3
+        limitation_stage3_texture limitation_rect_bump limitation_signed_source
+        limitation_cube_volume_dest)
+    if(WIN32)
+    add_executable(jsrf_bumpenv_stream_test tests/test_bumpenv_stream.c
+        tests/bumpenv_stream_fixture.c)
+    target_include_directories(jsrf_bumpenv_stream_test PRIVATE
+        ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a
+        ${JSRF_GEN_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+    target_link_libraries(jsrf_bumpenv_stream_test PRIVATE xboxrecomp)
+    foreach(_case IN LISTS BUMPENV_STREAM_CASES)
+        add_test(NAME jsrf_bumpenv_stream_${_case}
+                 COMMAND jsrf_bumpenv_stream_test --case ${_case})
+        set_tests_properties(jsrf_bumpenv_stream_${_case} PROPERTIES TIMEOUT 120)
+    endforeach()
+    else()
+        message(STATUS "jsrf_bumpenv_stream_* (the D4 step-5 committed-stream bump gate) is not "
+                       "registered off Windows -- it drives the Win32 guest-memory layout and "
+                       "the commit consumer, as jsrf_pbcov_stream_* does")
+    endif()
     # This one runs the pushbuffers through the Direct3D 11 back end and exits 0 after printing
     # SKIP when it cannot create a device, which off Windows is always: a green no-op, so it is
     # not registered there (jsrf_gpu_backend_parity_vk is the Vulkan sibling that runs).
@@ -1006,6 +1039,50 @@ if(BUILD_TESTING)
                 set_tests_properties(jsrf_bumpenv_q_vk_${_case} PROPERTIES TIMEOUT 20
                     SKIP_RETURN_CODE 77)
             endforeach()
+        endif()
+        # ── BUMPENVMAP / BUMPENVMAP_LUM, the D4 step-5 gate's Vulkan half ────────────────────
+        # Its input is the batch the production executor built from the committed stream: the
+        # fixture submits real pushbuffer words, a capture vtable at the executor's back-end seam
+        # records each batch and hands that same pointer to the production vb_draw (#included
+        # with XBR_VK_BACKEND), and the pixel read back after vb_flip must equal the literal the
+        # CPU half also checks. The production texture decoder is linked, not stubbed. Refusals
+        # are read from g.st.rc_fallback and the production refusal ledger, whose reason needs
+        # RECOMP_PB_COVERAGE=1. The #included production files get OBJECT_DEPENDS for the same
+        # reason as the q gate above.
+        set_source_files_properties(tests/test_bumpenv_stream_vk.c PROPERTIES
+            OBJECT_DEPENDS
+            "${XBOXRECOMP_DIR}/src/video/nv2a_vk_backend.c;${XBOXRECOMP_DIR}/src/video/nv2a_vk_rc_coverage.h")
+        if(WIN32)
+        add_executable(jsrf_bumpenv_stream_vk_test tests/test_bumpenv_stream_vk.c
+            tests/bumpenv_stream_fixture.c)
+        add_dependencies(jsrf_bumpenv_stream_vk_test xbox_video)
+        target_include_directories(jsrf_bumpenv_stream_vk_test PRIVATE
+            ${XBOXRECOMP_DIR}/src ${XBOXRECOMP_DIR}/src/nv2a ${XBOXRECOMP_DIR}/src/video
+            ${JSRF_GEN_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests
+            ${Vulkan_INCLUDE_DIRS}
+            "${CMAKE_BINARY_DIR}/xboxrecomp/src/video/spirv")
+        target_link_libraries(jsrf_bumpenv_stream_vk_test PRIVATE xboxrecomp ${CMAKE_DL_LIBS})
+        if(JSRF_VK_TEST_ICD)
+            file(TO_NATIVE_PATH "${JSRF_VK_TEST_ICD}" _vk_icd_bstream)
+            set(_bstream_vk_env
+                "VK_DRIVER_FILES=${_vk_icd_bstream};VK_ICD_FILENAMES=${_vk_icd_bstream};${JSRF_VK_TEST_SELECT};RECOMP_VK_PIPELINE_CACHE=off;RECOMP_PB_COVERAGE=1")
+            foreach(_case IN LISTS BUMPENV_STREAM_CASES)
+                add_test(NAME jsrf_bumpenv_stream_vk_${_case}
+                         COMMAND jsrf_bumpenv_stream_vk_test --case ${_case})
+                set_tests_properties(jsrf_bumpenv_stream_vk_${_case} PROPERTIES TIMEOUT 300
+                    SKIP_RETURN_CODE 77 ENVIRONMENT "${_bstream_vk_env}")
+            endforeach()
+        else()
+            foreach(_case IN LISTS BUMPENV_STREAM_CASES)
+                add_test(NAME jsrf_bumpenv_stream_vk_${_case}
+                         COMMAND jsrf_bumpenv_stream_vk_test --skip "XBR_VK_SW_ICD is not set")
+                set_tests_properties(jsrf_bumpenv_stream_vk_${_case} PROPERTIES TIMEOUT 20
+                    SKIP_RETURN_CODE 77)
+            endforeach()
+        endif()
+        else()
+            message(STATUS "jsrf_bumpenv_stream_vk_* is not registered off Windows -- its "
+                           "committed-stream fixture drives the Win32 guest-memory layout")
         endif()
         # ── D4 Vulkan rc-refusal coverage, the real-device deciding gate ─────────────────────
         # Authored by a worker distinct from the production change. It #includes the production

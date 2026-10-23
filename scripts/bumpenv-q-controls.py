@@ -26,6 +26,18 @@ in the record rather than run by every `ctest` invocation.
     python -X utf8 scripts/bumpenv-q-controls.py --control all
     python -X utf8 scripts/bumpenv-q-controls.py --control q-divide --keep
 
+The step-5 committed-stream gate (tests/test_bumpenv_stream.c, its Vulkan half
+tests/test_bumpenv_stream_vk.c and the literals in tests/bumpenv_stream_cases.h)
+adds six controls, each applied to the CPU executor AND the AOT HLSL where the
+rule lives in both, and each run against the new focused stream cases:
+matrix-swap (m01 <-> m10), unsigned-delta (no sign3), drop-lum (mode 7's
+k = 1), stream-q-divide (the bump path divides by q again), wrong-source
+(SET_SHADER_OTHER_STAGE_INPUT ignored, the previous stage used) and refusal-gt8
+(the refusal threshold moved to > 8). Their Vulkan cases need the software ICD,
+which the loader ignores in an elevated process, so from an elevated session
+run this script through a limited-rights runner (run-limited.py beside
+ctest-limited.py in the Windows host's xbr-mac tools directory).
+
 The scratch directory defaults to a FRESH `tmp-bumpenv-controls-<token>` sibling
 of the game checkout and must live outside both repos AND outside %TEMP%:
 MSBuild's incremental build is unreliable under the temporary directory
@@ -69,36 +81,45 @@ from pathlib import Path
 GAME = Path(__file__).resolve().parent.parent
 TOOLKIT = (GAME / ".." / "xboxrecomp").resolve()
 
-# The three production files the primary's repair touched. Read-only here.
+# The production files the controls mutate (the step-4 repair's three, plus the
+# shared refusal rule the refusal-gt8 control moves). Read-only here.
 PRODUCTION = [
     "src/kernel/nv2a_pb_exec.c",
     "src/video/nv2a_vk_backend.c",
     "src/video/shaders/nv2a_vk_rc.hlsl",
+    "src/video/nv2a_vk_rc_coverage.h",
 ]
 
 # ── The controls ────────────────────────────────────────────────────────────
-# Each mutation is ONE exact textual replacement. `red_cases` is the set of
-# focused cases that must fail, and `red_markers` the assertion text that must
-# appear in the failure (a named assertion, never a crash or a skip).
+# Each mutation is a list of exact textual replacements, each of which must
+# match exactly once. `*_cases` is the set of focused cases that must fail, and
+# `*_markers` the assertion text that must appear in each failure (a named
+# assertion, never a crash or a skip). The step-4 q gate's cases are
+# `cpu_cases`/`vk_cases`; the step-5 stream gate's are `stream_cases`
+# (jsrf_bumpenv_stream_*) and `stream_vk_cases` (jsrf_bumpenv_stream_vk_*), with
+# `stream_still_green`/`stream_vk_still_green` for the controls that must keep
+# passing under the mutation.
+
+# The step-4 repair's bump-path divide, reused by the stream gate's control.
+Q_DIVIDE_EDITS = [
+    # CPU executor: the repaired line, and the divide put back.
+    ("src/kernel/nv2a_pb_exec.c",
+     "rc_texel(t, 0, c[0] + dsdt[0], c[1] + dsdt[1], out);",
+     "rc_texel(t, 0, c[0] / q + dsdt[0], c[1] / q + dsdt[1], out);"),
+    # The AOT uber-shader: the same rule, in HLSL. The SPIR-V is rebuilt by
+    # the build's own xbr_add_spirv rule; nothing is compiled at run time.
+    # One replacement, so no new declaration is needed: the divide is spelled
+    # inline exactly as the pre-repair source spelled it.
+    ("src/video/shaders/nv2a_vk_rc.hlsl",
+     "tx.SampleLevel(sm, float2(t.x + dsdt.x, t.y + dsdt.y) * ts.xy, 0)",
+     "tx.SampleLevel(sm, float2(t.x / (t.w != 0.0 ? t.w : 1.0) + dsdt.x, "
+     "t.y / (t.w != 0.0 ? t.w : 1.0) + dsdt.y) * ts.xy, 0)"),
+]
 
 CONTROLS = {
     "q-divide": {
         "title": "restore PROJECT2D's /q divide on the bump paths",
-        "edits": [
-            # CPU executor: the repaired line, and the divide put back.
-            ("src/kernel/nv2a_pb_exec.c",
-             "rc_texel(t, 0, c[0] + dsdt[0], c[1] + dsdt[1], out);",
-             "rc_texel(t, 0, c[0] / q + dsdt[0], c[1] / q + dsdt[1], out);"),
-            # The AOT uber-shader: the same rule, in HLSL. The SPIR-V is
-            # rebuilt by the build's own xbr_add_spirv rule; nothing is
-            # compiled at run time.
-            # One replacement, so no new declaration is needed: the divide is
-            # spelled inline exactly as the pre-repair source spelled it.
-            ("src/video/shaders/nv2a_vk_rc.hlsl",
-             "tx.SampleLevel(sm, float2(t.x + dsdt.x, t.y + dsdt.y) * ts.xy, 0)",
-             "tx.SampleLevel(sm, float2(t.x / (t.w != 0.0 ? t.w : 1.0) + dsdt.x, "
-             "t.y / (t.w != 0.0 ? t.w : 1.0) + dsdt.y) * ts.xy, 0)"),
-        ],
+        "edits": Q_DIVIDE_EDITS,
         "cpu_cases": ["bump_zero_matrix", "bump_displacement",
                       "bump_positive_delta", "bump_lum"],
         "cpu_markers": [
@@ -129,7 +150,154 @@ CONTROLS = {
         ],
         "cpu_still_green": [],
     },
+
+    # ── The step-5 committed-stream gate's controls ─────────────────────────
+    "matrix-swap": {
+        "title": "transpose the bump matrix (m01 <-> m10) on both renderers",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "dsdt[0] = m[0] * du + m[2] * dv;",
+             "dsdt[0] = m[0] * du + m[1] * dv;"),
+            ("src/kernel/nv2a_pb_exec.c",
+             "dsdt[1] = m[1] * du + m[3] * dv;",
+             "dsdt[1] = m[2] * du + m[3] * dv;"),
+            ("src/video/shaders/nv2a_vk_rc.hlsl",
+             "dsdt.x = bm.x * du + bm.z * dv;",
+             "dsdt.x = bm.x * du + bm.y * dv;"),
+            ("src/video/shaders/nv2a_vk_rc.hlsl",
+             "dsdt.y = bm.y * du + bm.w * dv;",
+             "dsdt.y = bm.z * du + bm.w * dv;"),
+        ],
+        "stream_cases": ["mode6_asymmetric_matrix", "mode6_signed_du"],
+        "stream_markers": [
+            "stage 1 asymmetric matrix, du only",
+            "stage 1 asymmetric matrix, dv only",
+            "du byte 0x80 is -128/127, not -1",
+        ],
+        "stream_vk_cases": ["mode6_asymmetric_matrix", "mode6_signed_du"],
+        "stream_vk_markers": [
+            "stage 1 asymmetric matrix, du only",
+            "stage 1 asymmetric matrix, dv only",
+            "du byte 0x80 is -128/127, not -1",
+        ],
+    },
+    "unsigned-delta": {
+        "title": "read du/dv as unsigned UNORM (no sign3) on both renderers",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "du = rc_sign3(tprev[src][2]);", "du = tprev[src][2];"),
+            ("src/kernel/nv2a_pb_exec.c",
+             "dv = rc_sign3(tprev[src][1]);", "dv = tprev[src][1];"),
+            ("src/video/shaders/nv2a_vk_rc.hlsl",
+             "du = sign3(earlier[src].z);", "du = earlier[src].z;"),
+            ("src/video/shaders/nv2a_vk_rc.hlsl",
+             "dv = sign3(earlier[src].y);", "dv = earlier[src].y;"),
+        ],
+        "stream_cases": ["mode6_signed_du", "mode6_signed_dv"],
+        "stream_markers": [
+            "du byte 0x7F is +1", "du byte 0x81 is -1",
+            "dv byte 0x7F is +1", "dv byte 0x81 is -1",
+        ],
+        "stream_vk_cases": ["mode6_signed_du", "mode6_signed_dv"],
+        "stream_vk_markers": [
+            "du byte 0x7F is +1", "du byte 0x81 is -1",
+            "dv byte 0x7F is +1", "dv byte 0x81 is -1",
+        ],
+    },
+    "drop-lum": {
+        "title": "mode 7 ignores its luminance factor (k = 1) on both renderers",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "float k = s_gpu.rc.bump_scale[st] * lum + s_gpu.rc.bump_offset[st];",
+             "float k = 1.0f;"),
+            ("src/video/shaders/nv2a_vk_rc.hlsl",
+             "s *= rc.bumpscl[st] * lum + rc.bumpofs[st];",
+             "s *= 1.0;"),
+        ],
+        "stream_cases": ["mode7_luminance", "mode7_saturation", "mode7_stage3_source"],
+        "stream_markers": [
+            "stage 1 mode 7 multiplies every channel by scale*lum + offset",
+            "mode 7 k = -0.5 reads zero through UNSIGNED_IDENTITY",
+            "stage 3 mode 7 reads stage 1 when bits 20-23 = 1",
+        ],
+        "stream_vk_cases": ["mode7_luminance", "mode7_saturation",
+                            "mode7_stage3_source"],
+        "stream_vk_markers": [
+            "stage 1 mode 7 multiplies every channel by scale*lum + offset",
+            "mode 7 k = -0.5 reads zero through UNSIGNED_IDENTITY",
+            "stage 3 mode 7 reads stage 1 when bits 20-23 = 1",
+        ],
+    },
+    "stream-q-divide": {
+        "title": "the bump path divides by q again (stream gate)",
+        "edits": Q_DIVIDE_EDITS,
+        "stream_cases": ["bump_q_ignored"],
+        "stream_markers": [
+            "stage 1 mode 6 at q = 2 samples (s, t) + dsdt",
+            "stage 1 mode 7 at q = 2 keeps texel and luminance",
+        ],
+        "stream_vk_cases": ["bump_q_ignored"],
+        "stream_vk_markers": [
+            "stage 1 mode 6 at q = 2 samples (s, t) + dsdt",
+            "stage 1 mode 7 at q = 2 keeps texel and luminance",
+        ],
+        # PROJECT2D itself is untouched and must keep dividing.
+        "stream_still_green": ["project2d_q_divides"],
+        "stream_vk_still_green": ["project2d_q_divides"],
+    },
+    "wrong-source": {
+        "title": "ignore SET_SHADER_OTHER_STAGE_INPUT: read the previous stage",
+        "edits": [
+            ("src/kernel/nv2a_pb_exec.c",
+             "src = (s_gpu.rc.other_stage_input >> (st == 2 ? 16 : 20)) & 0xFu;",
+             "src = (uint32_t)st - 1u;"),
+            ("src/video/shaders/nv2a_vk_rc.hlsl",
+             "src = (rc.misc.x >> (st == 2 ? 16 : 20)) & 0xF;",
+             "src = st - 1;"),
+        ],
+        "stream_cases": ["mode6_stage2_source", "mode7_stage3_source"],
+        "stream_markers": [
+            "stage 2 reads stage 0 when OTHER_STAGE_INPUT bits 16-19 = 0",
+            "stage 3 mode 7 reads stage 1 when bits 20-23 = 1",
+        ],
+        "stream_vk_cases": ["mode6_stage2_source", "mode7_stage3_source"],
+        "stream_vk_markers": [
+            "stage 2 reads stage 0 when OTHER_STAGE_INPUT bits 16-19 = 0",
+            "stage 3 mode 7 reads stage 1 when bits 20-23 = 1",
+        ],
+    },
+    "refusal-gt8": {
+        "title": "move the refusal threshold to > 8 (mode 8 treated as bump)",
+        "edits": [
+            ("src/video/nv2a_vk_rc_coverage.h", "if (m > 7) {", "if (m > 8) {"),
+            ("src/video/shaders/nv2a_vk_rc.hlsl",
+             "if (m == 6 || m == 7) {", "if (m == 6 || m == 7 || m == 8) {"),
+            ("src/kernel/nv2a_pb_exec.c",
+             "case 6: case 7: {", "case 6: case 7: case 8: {"),
+        ],
+        "stream_cases": ["refusal_dot_modes"],
+        "stream_markers": [
+            "mode 8 at stage 1 is refused: the CPU stage reads zero",
+        ],
+        "stream_vk_cases": ["refusal_dot_modes"],
+        "stream_vk_markers": [
+            "vk refuses a stage mode 8..31 (rc_fallback, reason 1)",
+        ],
+    },
 }
+
+# CTest prefixes for each case group, in the order the groups are run.
+RED_GROUPS = [
+    ("cpu_cases", "cpu_markers", "jsrf_bumpenv_q_cpu_"),
+    ("vk_cases", "vk_markers", "jsrf_bumpenv_q_vk_"),
+    ("stream_cases", "stream_markers", "jsrf_bumpenv_stream_"),
+    ("stream_vk_cases", "stream_vk_markers", "jsrf_bumpenv_stream_vk_"),
+]
+GREEN_GROUPS = [
+    ("cpu_still_green", "jsrf_bumpenv_q_cpu_"),
+    ("stream_still_green", "jsrf_bumpenv_stream_"),
+    ("stream_vk_still_green", "jsrf_bumpenv_stream_vk_"),
+]
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -324,7 +492,8 @@ def acquire_work_area(args, game, toolkit):
     return owned
 
 
-TARGETS = ["jsrf_bumpenv_q_cpu_test", "jsrf_bumpenv_q_vk_test"]
+TARGETS = ["jsrf_bumpenv_q_cpu_test", "jsrf_bumpenv_q_vk_test",
+           "jsrf_bumpenv_stream_test", "jsrf_bumpenv_stream_vk_test"]
 
 
 def _is_link(path):
@@ -629,12 +798,12 @@ def run_control(name, workdir, shared_before, owned=None):
             f"{name}: the mutated build produced byte-identical executables; the "
             f"mutation never reached the compiler")
 
-    for case in spec["cpu_cases"]:
-        ok &= expect_red(build, case, spec["cpu_markers"], env, "jsrf_bumpenv_q_cpu_")
-    for case in spec["vk_cases"]:
-        ok &= expect_red(build, case, spec["vk_markers"], env, "jsrf_bumpenv_q_vk_")
-    for case in spec["cpu_still_green"]:
-        ok &= expect_green(build, case, env, "jsrf_bumpenv_q_cpu_")
+    for cases, markers, prefix in RED_GROUPS:
+        for case in spec.get(cases, []):
+            ok &= expect_red(build, case, spec.get(markers, []), env, prefix)
+    for cases, prefix in GREEN_GROUPS:
+        for case in spec.get(cases, []):
+            ok &= expect_green(build, case, env, prefix)
 
     # Restore: re-copy the pristine files from the shared checkout.
     print("\nrestoring the private copy from the shared checkout (read-only there):")
@@ -671,10 +840,14 @@ def run_control(name, workdir, shared_before, owned=None):
                   f"binary (build-path/timestamp dependent); the hash CHANGED, "
                   f"which is what proves the recompile")
 
-    for case in spec["cpu_cases"] + spec["cpu_still_green"]:
-        ok &= expect_green(build, case, env, "jsrf_bumpenv_q_cpu_")
-    for case in spec["vk_cases"]:
-        ok &= expect_green(build, case, env, "jsrf_bumpenv_q_vk_")
+    # Restored: every case the mutation turned RED, and every control that had
+    # to stay green, must pass again.
+    for cases, _markers, prefix in RED_GROUPS:
+        for case in spec.get(cases, []):
+            ok &= expect_green(build, case, env, prefix)
+    for cases, prefix in GREEN_GROUPS:
+        for case in spec.get(cases, []):
+            ok &= expect_green(build, case, env, prefix)
     return bool(ok)
 
 
