@@ -264,6 +264,14 @@ sampled-mode set `{1,2,3,6,7}`, so PASSTHRU and CLIPPLANE upload and bind no ima
 bump-mapping fix claim: the bounded smokes never reached a bump batch, so in-game correction is
 unmeasured.
 
+**Bump-environment limitations pinned by the step-5 gate (2026-10-23, TR §31.82):** no new shortcut class and no new row; each line below is a limitation of L62's bump path observed through the committed stream, recorded as a limitation and not as correctness.
+
+- Stage 3 binds no texture: the committed walk rejects stage-3 texture offset 0x1BC0 and format 0x1BC4, so a stage-3 bump sample reads the unbound white texel; only stage-3 luminance and source selection are visible in pixels, the stage-3 matrix is not observable and a stage-3 cube is unreachable through the stream.
+- Rect remap on a bump stage is unreachable: linear/rect textures are accepted only at stage 0, and stage 1/2 CONTROL1 and IMAGE_RECT (0x1B50/0x1B5C/0x1B90/0x1B9C) are rejected by the walk.
+- Signed bump source formats are not implemented: G8B8/V8U8 (format colour 0x28) is decoded by neither renderer and reads white (Vulkan `tex_undecodable` > 0).
+- Cube and volume bump destinations sample their 2D base (cube face 0 or volume base) and Vulkan does not refuse them.
+- The CPU executor has no fallback for modes 8..31: the stage reads a zero texel, while Vulkan refuses them through `rc_fallback` reason 1.
+
 **Handle-safety preflight (2026-10-22, TR §31.71):** no new shortcut class and no new row. The POSIX
 Win32 shim now validates a handle against a live-handle registry before dereferencing it (toolkit
 `7c46fa6`), which changes host handle lifetime only: the emulated hardware, every guest-visible value

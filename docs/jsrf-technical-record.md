@@ -7937,3 +7937,115 @@ Cumulative D4 is11operations/6historicalrepair allowances, zero normal slots/zer
 repair cycles; preflight9/5 remains separate. Successful acceptance renews no
 allowance. The next fullstep5 gate needs one newly authorized normal operation;
 do not silently start a new run or change human-owned model/provider/role settings.
+
+### 31.82 — D4 step 5: the committed-stream BUMPENVMAP gate (2026-10-23)
+
+Game `f708c39` "tests: decide BUMPENVMAP modes 6/7 through the committed stream on CPU
+and Vulkan" is the separate, differently-authored step-5 gate that §31.75–31.81 left
+pending. It changes no production code: toolkit production stays at `d9153fd`
+(step-4 commits `2a3c1e9`, `5e38bb4`, `d9153fd`; pre-step-4 origin `b06bd36`). Its author
+is distinct from the production author and from the step-4 focused-gate author. Files:
+`tests/test_bumpenv_stream.c`, `tests/test_bumpenv_stream_vk.c`,
+`tests/bumpenv_stream_fixture.{c,h}`, `tests/bumpenv_stream_cases.h`, `CMakeLists.txt`
+(15 `jsrf_bumpenv_stream_<case>` and 15 `jsrf_bumpenv_stream_vk_<case>` tests) and
+`scripts/bumpenv-q-controls.py` (six new controls).
+
+**Process.** On 2026-10-23 the owner retired OMP and the omp-bridge for this work. Step 5
+was driven by Claude Code subagents, one at a time, under the owner's direct
+authorization, with orchestrator gating standing in for Codex acceptance. The OMP
+supervision run `run_0mvkd2iugf018a7ecc0c8ff52` is closed and untouched, its sole ACCEPT
+`dec_0mvkhiiu73f9b2c5a25ae3c9f` preserved. The OMP operation and repair-allowance
+accounting of §§31.76–31.81 no longer governs this work.
+
+**What the gate does.**
+- The CPU half sends real pushbuffer words through `nv2a_submit_pending` with
+  `RECOMP_PB_EXEC=1`. It links the toolkit library, so the production executor,
+  `sample_tex` and the real `nv2a_backend_decode_texture` are used (no decoder stub), and
+  it reads three pixels from the guest surface.
+- The Vulkan half `#include`s the production `nv2a_vk_backend.c`, also links the real
+  decoder, and registers a capture vtable whose `draw` records the batch the executor built
+  from the same stream and passes that pointer to the production `vb_draw`
+  (`draw_program` NULL, so the executor transforms). It reads back after `vb_flip` on
+  llvmpipe and also asserts the batch's stage program, other-stage-input and bump state,
+  `rc_draws`/`rc_fallback`, and the refusal ledger's reason, stage and mode.
+- Every pixel is a literal ARGB value whose derivation is written in
+  `tests/bumpenv_stream_cases.h`; each half checks the literal independently.
+- Rules used (xemu 478b4f49 read for facts only): stage 1 reads stage 0, stage 2 reads
+  OTHER_STAGE_INPUT bits 16–19, stage 3 reads bits 20–23, earlier stages only; du = sign3(B),
+  dv = sign3(G); dsdt = (m00·du+m10·dv, m01·du+m11·dv), with method words in the order
+  m00, m01, m11, m10; no q divide on the bump modes, PROJECT2D divides; mode 7
+  k = scale·lum+offset on every channel including alpha; no stage clamp, combiner input
+  max(x,0), final output saturated. The gate makes no real-hardware fixed-point claim.
+
+**Cases (15).** `mode6_signed_du` and `mode6_signed_dv` (bytes 0x00/0x7F/0x80/0x81/0xFF),
+`mode6_asymmetric_matrix` (stages 1 and 2; a swap gives a named different literal),
+`mode6_stage2_source`, `mode7_luminance`, `mode7_saturation`, `mode7_stage3_source`,
+`bump_q_ignored` (q 2/4/0.5, modes 6/7, stages 1/2), `project2d_q_divides` (positive
+control), `refusal_dot_modes` (modes 8/17/31: the CPU stage reads zero, Vulkan falls back
+with reason 1; mode 7 admitted), `refusal_cube_mode3` (Vulkan reason 2) and four limitation
+cases, `limitation_stage3_texture`, `limitation_rect_bump`, `limitation_signed_source` and
+`limitation_cube_volume_dest`, which pin the behaviour listed below.
+
+**Evidence (Windows, 2026-10-23, run by the orchestrator).**
+- `just build`: `Build succeeded`. `just check`: `check: all checkers passed`,
+  `entries=126 recompiled_and_matched=126 ... problems=0`.
+- New CPU half 15/15. All `jsrf_bumpenv_` tests through `ctest-limited.py`: 40/40 in
+  20.48 s, none skipped.
+- **Old-red.** The CPU half against a private clone of toolkit `b06bd36`: 12/15 fail on
+  named assertions; the three green are the PROJECT2D, mode-3-cube and rect controls. The
+  Vulkan half cannot compile against `b06bd36` (it reads the step-4 `Nv2aCombiner` bump
+  fields), which is not evidence. A header-compatible old-behaviour toolkit was therefore
+  built: `d9153fd` with `nv2a_pb_exec.c`, `nv2a_vk_backend.c`, `nv2a_vk_rc.hlsl`,
+  `nv2a_vk_rc_coverage.h` and `nv2a_backend.h` reverted to `b06bd36`, keeping the step-4
+  `nv2a_combiner.h`. On real llvmpipe it gave 12/15 fail on named assertions, with the same
+  three controls green.
+- **Private controls** through `scripts/bumpenv-q-controls.py`, run un-elevated from fresh
+  owned scratch roots: q-divide, bind-guard, matrix-swap, unsigned-delta, drop-lum,
+  stream-q-divide, wrong-source and refusal-gt8 each reported `RESULT: PASS` (RED on named
+  assertions, then GREEN after restore), with "the shared toolkit is byte-identical: it was
+  never written". Under stream-q-divide, `project2d_q_divides` stayed green.
+- **Independent oracle.** The orchestrator recomputed 16 sampled literals from the stated
+  rules in scratch Python, including the 0x80/0xFF signed boundaries, the asymmetric matrix
+  and its swap, the four saturation values and the three stage-3 luminance sources: 16/16
+  match.
+- Full limited CTest on the final tree: `100% tests passed out of 202`,
+  `Total Test time (real) = 603.34 sec`. The author's earlier run was 202/202 in 612.28 s.
+- No production defect was found.
+
+**Exposed limitations (recorded as limitations, not correctness; ledger entries in the
+compatibility ledger).**
+1. Stage 3 cannot bind a texture through the committed walk: it rejects the stage-3
+   texture offset 0x1BC0 and format 0x1BC4, so a stage-3 bump sample reads the unbound
+   white texel. Only stage-3 luminance and source selection are visible in pixels; the
+   stage-3 matrix is not observable, and a stage-3 cube is unreachable through the stream.
+2. Linear/rect textures are accepted only at stage 0, and stage 1/2 CONTROL1 and
+   IMAGE_RECT (0x1B50/0x1B5C/0x1B90/0x1B9C) are rejected by the walk, so rect-coordinate
+   remap on a bump stage is unreachable.
+3. G8B8/V8U8 (format colour 0x28) is decoded by neither renderer and reads white (Vulkan
+   `tex_undecodable` > 0), so signed/SNORM bump input is not implemented.
+4. Cube and volume bump destinations sample their 2D base (cube face 0 or volume base) and
+   Vulkan does not refuse them.
+5. The CPU executor has no fallback for modes 8..31: the stage reads a zero texel. Vulkan
+   refuses them through `rc_fallback` reason 1.
+
+**What this proves.** Within the committed-stream paths the walk admits, the CPU executor
+and the Vulkan uber-shader agree with the stated rules, pixel for pixel, for modes 6 and 7
+(signed delta decode, matrix order, per-stage source, luminance and saturation, q
+independence) and refuse the unsupported modes as listed. The old-behaviour toolkit
+decides the cases and each private control is decisive.
+
+**What it does not prove.** Hardware fixed-point behaviour; any in-game bump correction (no
+runtime run was made for step 5, and the bounded strict smoke carried in §§31.80/31.81 says
+nothing about bump sampling; the optional owner-assisted step 8 remains the only route to
+that); anything about the five limitations above beyond the pinned behaviour; texgen and
+texture matrices (step 6).
+
+**Noticed outside scope (not acted on).** `tests/test_pbcov_stream.c`
+`emit_program_mov_final` (about line 772) is commented as MOV oPos, v0, but its words decode
+as a NOP (the interpreter's identity swizzle is 0x1B, not 0xE4). The walk admits
+vertex-array offsets only for attributes 0–5, 9 and 10.
+
+**State.** D4 step 5 is DONE locally. Nothing is pushed: toolkit 3 ahead, game 15 ahead
+once this record is committed. Publication waits on the owner's confirmation, with audits,
+toolkit first, then game. Steps 6 (texgen/texture matrices) and 7 (records and pushes), D5
+and the optional step 8 remain.

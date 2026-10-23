@@ -199,6 +199,22 @@ All candidate commits stay local and unpushed. Cumulative D4 remains11operations
 is renewed by successful acceptance. Next: obtain one bounded normal-operation
 allowance for the separate fullstep5 gate, preserving current model settings.
 
+**D4 step 5 DONE locally (TR §31.82, 2026-10-23):** game `f708c39` is the separate,
+differently-authored committed-stream gate for BUMPENVMAP modes 6/7: 15 cases on the CPU
+executor and 15 on the Vulkan uber-shader (llvmpipe), literal pixel expectations, old-red
+against the pre-step-4 behaviour (12/15 on both halves), eight decisive private controls,
+an independent 16/16 oracle and full limited CTest 202/202 in 603.34 s with `just check`
+green. It changes no production code (toolkit stays `d9153fd`) and found no production
+defect. Five limitations are exposed and ledgered, not claimed as correct: no stage-3
+texture bind, no rect remap on a bump stage, no signed (V8U8) bump source, cube/volume
+destinations sample their 2D base, and no CPU fallback for modes 8..31. No runtime run was
+made, so no in-game bump claim. On 2026-10-23 the owner retired OMP and the omp-bridge for
+this work; step 5 was driven by Claude Code subagents one at a time under the owner's
+direct authorization, with orchestrator gating, and the OMP allowance accounting above no
+longer governs. Nothing is pushed (toolkit 3 ahead, game 15 ahead); publication waits on
+owner confirmation, audits first, toolkit then game. Next: step 6 (texgen/texture
+matrices), then step 7 (records and pushes), D5 and the optional owner-assisted step 8.
+
 ## Objective
 
 A playable opening-area slice on a **native Vulkan build with no code translated or compiled at run
@@ -484,9 +500,11 @@ already approved steps:
    specular lighting is positive, and **no stage-mode>=6 batch or Vulkan rc
    fallback was observed**, so the handoff's replanning trigger applies. The
    conditional step-6 criterion is met but step 6 still waits for bump and its
-   gate. Next is fixture-driven BUMPENVMAP (steps 4/5); in-game confirmation
-   waits for the optional owner-assisted step 8. No BUMPENVMAP or texgen
-   implementation is accepted yet.
+   gate. BUMPENVMAP steps 4/5 are done locally (TR §§31.75–31.82): the modes 6/7
+   implementation and its committed-stream CPU/Vulkan gate, with five limitations
+   ledgered; nothing is pushed. Next is step 6 (texgen/texture matrices); in-game
+   confirmation waits for the optional owner-assisted step 8. No texgen implementation
+   is accepted yet.
 6. **D5:** plan applicable items as separate gated steps, with a different test
    author, then records and audited pushes. New design is planned only here when
    the preceding evidence establishes what is applicable.
